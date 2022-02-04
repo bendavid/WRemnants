@@ -101,7 +101,7 @@ def build_graph(df, dataset):
         results.append(nominal)
 
         # slice 101 elements starting from 0 and clip values at += 10.0
-        df = df.Define("pdfWeights_tensor", "wremnants::clip_tensor(wremnants::vec_to_tensor_t<float, 101>(LHEPdfWeight), 10.)")
+        df = df.Define("pdfWeights_tensor", "wremnants::clip_tensor(wremnants::vec_to_tensor_t<double, 101>(LHEPdfWeight), 10.)")
 
         pdfNNPDF31 = df.HistoBoost("pdfNNPDF31", nominal_axes, [*nominal_cols, "pdfWeights_tensor"])
         results.append(pdfNNPDF31)
@@ -114,6 +114,8 @@ def build_graph(df, dataset):
 
         #TODO check that I actually have a consistent version of functions.h and functionsWMass.h
         #TODO convert _get_fullMuonSFvariation_splitIso to produce a tensor natively
+
+        # extra assignment is to force the correct return type
         df = df.Define("effStatTnP_tensor", "Eigen::TensorFixedSize<double, Eigen::Sizes<1248>> res = (nominal_weight/weight_fullMuonSF)*wremnants::vec_to_tensor_t<double, 1248>(wremnants::_get_fullMuonSFvariation_splitIso(624, goodMuons_pt0 ,goodMuons_eta0,goodMuons_charge0,-1,-1,eraVFP,passIso)); return res;")
 
         effStatTnP = df.HistoBoost("effStatTnP", nominal_axes, [*nominal_cols, "effStatTnP_tensor"])
