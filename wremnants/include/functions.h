@@ -1,10 +1,11 @@
 #ifndef WREMNANTS_FUNCTIONS_H
 #define WREMNANTS_FUNCTIONS_H
 
+
 // #include <stdio.h>
 // #include <stdlib.h>
 #include <iostream>
-#include <cstdlib> //as stdlib.h                 
+#include <cstdlib> //as stdlib.h
 #include <cstdio>
 #include <limits>
 #include <map>
@@ -15,12 +16,10 @@
 #include "Math/GenVector/LorentzVector.h"
 #include "Math/GenVector/PtEtaPhiM4D.h"
 #include "TRandom3.h"
-#include <eigen3/Eigen/Dense>
-#include <eigen3/unsupported/Eigen/CXX11/Tensor>
 
 #include "defines.h"
 
-namespace wremnants {
+namespace wrem {
 
 using namespace std;
 
@@ -32,30 +31,45 @@ typedef ROOT::Math::LorentzVector<ROOT::Math::PtEtaPhiM4D<double> > PtEtaPhiMVec
 //   return rdf::Sum<double>(column);
 // }
 
+template <typename T>
+T cropLargeValue(const T& wgt, const double max) {
+  // max is already a positive number, no need to check or take absolute value here
+  return static_cast<T>(std::copysign(1.0, wgt) * std::min<T>(std::abs(wgt), max));
+}
+
+template <typename T>
+T removeLargeValue(const T& wgt, const T& max, const T& valueToZero = 0.0) {
+    // max is already a positive number, no need to check or take absolute value here
+    // std::cout << typeid(T).name() << std::endl;
+    // std::cout << wgt << " " << max << " " << valueToZero << std::endl;
+    return (std::abs(wgt) < max) ? wgt : valueToZero;
+}
+
+
 double genWeightLargeClipped(const double& wgt, const double& max) {
 
   // max is already a positive number, no need to check or take absolute value here
-  return static_cast<double>(std::copysign(1.0,wgt) * std::min<double>(std::abs(wgt),max));
-  
+  return static_cast<double>(std::copysign(1.0, wgt) * std::min<double>(std::abs(wgt), max));
+
 }
 
 double genWeightLargeRemoved(const double& wgt, const double& max) {
 
   // max is already a positive number, no need to check or take absolute value here
   return (std::abs(wgt) < max) ? wgt : 0.0;
-  
+
 }
 
 template <typename T>
-ROOT::VecOps::RVec<int> indices(const ROOT::VecOps::RVec<T>& vec, const int start = 0) {
-    ROOT::VecOps::RVec<int> res(vec.size(), 0);
+Vec_i indices(const ROOT::VecOps::RVec<T>& vec, const int start = 0) {
+    Vec_i res(vec.size(), 0);
     std::iota(std::begin(res), std::end(res), start);
     return res;
 }
 
 // Can return a std::array
-ROOT::VecOps::RVec<int> indices(const size_t size, const int start = 0) {
-    ROOT::VecOps::RVec<int> res(size, 0);
+Vec_i indices(const size_t size, const int start = 0) {
+    Vec_i res(size, 0);
     std::iota(std::begin(res), std::end(res), start);
     return res;
 }
@@ -88,7 +102,7 @@ Vec_f shiftVar(const Vec_f& var, float shift = 0.0) {
     res[i] = var[i] * (1 + shift);
   }
   return res;
-  
+
 }
 
 Vec_f smearAndShiftVar(const Vec_f& var, float shift = 0.0, float smear = 0.0) {
@@ -98,7 +112,7 @@ Vec_f smearAndShiftVar(const Vec_f& var, float shift = 0.0, float smear = 0.0) {
     res[i] = var[i] * (1 + shift + smear * rand_smear->Gaus(0.,1.));
   }
   return res;
-  
+
 }
 
 double deltaPhi(float phi1, float phi2) {
@@ -250,12 +264,12 @@ Vec_b chargedParticleByEventParity(const ULong64_t& event, const Vec_b& plus, co
 
   if (isOddEvent(event)) return plus;
   else                   return minus;
-  
+
 }
 
 Vec_b goodMuonTriggerCandidate(const Vec_i& TrigObj_id, const Vec_f& TrigObj_pt, const Vec_f& TrigObj_l1pt, const Vec_f& TrigObj_l2pt, const Vec_i& TrigObj_filterBits) {
 
-   Vec_b res(TrigObj_id.size(),false); // initialize to 0   
+   Vec_b res(TrigObj_id.size(),false); // initialize to 0
    for (unsigned int i = 0; i < res.size(); ++i) {
        if (TrigObj_id[i]  != 13 ) continue;
        if (TrigObj_pt[i]   < 24.) continue;
@@ -273,7 +287,7 @@ Vec_b hasTriggerMatch(const Vec_f& eta, const Vec_f& phi, const Vec_f& TrigObj_e
    Vec_b res(eta.size(),false); // initialize to 0
    for (unsigned int i = 0; i < res.size(); ++i) {
       for (unsigned int jtrig = 0; jtrig < TrigObj_eta.size(); ++jtrig) {
-	  // use deltaR*deltaR < 0.3*0.3, to be faster 
+	  // use deltaR*deltaR < 0.3*0.3, to be faster
           if (deltaR2(eta[i], phi[i], TrigObj_eta[jtrig], TrigObj_phi[jtrig]) < 0.09) {
               res[i] = true;
               break; // exit loop on trigger objects, and go to next muon
@@ -292,7 +306,7 @@ bool hasTriggerMatch(const float& eta, const float& phi, const Vec_f& TrigObj_et
     if (deltaR2(eta, phi, TrigObj_eta[jtrig], TrigObj_phi[jtrig]) < 0.09) return true;
   }
   return false;
-  
+
 }
 
 Vec_b cleanJetsFromMuons(const Vec_f& Jet_eta, const Vec_f& Jet_phi, const Vec_f& Muon_eta, const Vec_f& Muon_phi) {
@@ -337,6 +351,16 @@ Vec_b cleanJetsFromLeptons(const Vec_f& Jet_eta, const Vec_f& Jet_phi, const Vec
    return res;
 }
 
+template <typename T>
+ROOT::VecOps::RVec<T> absoluteValue(const ROOT::VecOps::RVec<T> & val) {
+
+  ROOT::VecOps::RVec<T> res(val.size(), 0.0); // initialize to 0
+  for (unsigned int i = 0; i < res.size(); ++i) {
+    res[i] = std::abs(val[i]);
+  }
+  return res;
+
+}
 
 Vec_f absoluteValue(const Vec_f& val) {
 
@@ -357,6 +381,21 @@ Vec_i absoluteValue(const Vec_i& val) {
   return res;
 
 }
+
+template <typename T>
+ROOT::VecOps::RVec<T> truncateAndCropVector(const ROOT::VecOps::RVec<T>& vec, double maxVal, unsigned int numberOfCells = -1, unsigned int minIndex = 0) {
+
+    if (numberOfCells < 0 or numberOfCells > vec.size())
+        numberOfCells = vec.size();
+    ROOT::VecOps::RVec<T> res(std::begin(vec)+minIndex, std::begin(vec)+numberOfCells);
+    for (unsigned int i = 0; i < res.size(); ++i) {
+        res[i] = cropLargeValue(res[i], maxVal);
+    }
+    return res;
+
+}
+
+
 
 TRandom3 *randy = NULL;
 
@@ -419,7 +458,7 @@ float pt_4(float pt1, float phi1, float pt2, float phi2, float pt3, float phi3, 
     phi4 -= phi1;
     return hypot(pt1 + pt2 * std::cos(phi2) + pt3 * std::cos(phi3) + pt4 * std::cos(phi4), pt2*std::sin(phi2) + pt3*std::sin(phi3) + pt4*std::sin(phi4));
 }
- 
+
 float mass_4(float pt1, float eta1, float phi1, float m1, float pt2, float eta2, float phi2, float m2, float pt3, float eta3, float phi3, float m3, float pt4, float eta4, float phi4, float m4) {
     typedef ROOT::Math::LorentzVector<ROOT::Math::PtEtaPhiM4D<double> > PtEtaPhiMVector;
     PtEtaPhiMVector p41(pt1,eta1,phi1,m1);
@@ -444,7 +483,7 @@ float mt_lllv(float ptl1, float phil1, float ptl2, float phil2, float ptl3, floa
 }
 
 
-float mtw_wz3l(float pt1, float eta1, float phi1, float m1, float pt2, float eta2, float phi2, float m2, float pt3, float eta3, float phi3, float m3, float mZ1, float met, float metphi) 
+float mtw_wz3l(float pt1, float eta1, float phi1, float m1, float pt2, float eta2, float phi2, float m2, float pt3, float eta3, float phi3, float m3, float mZ1, float met, float metphi)
 {
     if (abs(mZ1 - mass_2(pt1,eta1,phi1,m1,pt2,eta2,phi2,m2)) < 0.01) return mt_2(pt3,phi3,met,metphi);
     if (abs(mZ1 - mass_2(pt1,eta1,phi1,m1,pt3,eta3,phi3,m3)) < 0.01) return mt_2(pt2,phi2,met,metphi);
@@ -460,7 +499,7 @@ float mt_lu_cart(float lep_pt, float lep_phi, float u_x, float u_y)
     return sqrt(2*lep_pt*sqrt(u*u+lep_pt*lep_pt+2*uDotLep) + 2*uDotLep + 2*lep_pt*lep_pt);
 }
 
-float u1_2(float met_pt, float met_phi, float ref_pt, float ref_phi) 
+float u1_2(float met_pt, float met_phi, float ref_pt, float ref_phi)
 {
     float met_px = met_pt*std::cos(met_phi), met_py = met_pt*std::sin(met_phi);
     float ref_px = ref_pt*std::cos(ref_phi), ref_py = ref_pt*std::sin(ref_phi);
@@ -485,7 +524,7 @@ double parallelProjection(float phi, float ptRef, float phiRef) {
 double parallelProjectionLepBoson(const Vec_f& pt, const Vec_f& phi, bool useSecondElement = true) {
     // special case of function above where reference is W/Z and a lepton is used
     // the boson is lep+lep2, so it is more convenient to pass the two leptons rather than the precooked boson
-    
+
     int id1 = 0;
     int id2 = 1;
     if (useSecondElement) {
@@ -500,8 +539,8 @@ double parallelProjectionLepBoson(const Vec_f& pt, const Vec_f& phi, bool useSec
 }
 
 double parallelProjectionLepBoson(const float pt1, const float phi1, const float pt2, const float phi2) {
-    // as above, but passing explicitly the components, so no ambiguity to select the lepton to project on the Z 
-    
+    // as above, but passing explicitly the components, so no ambiguity to select the lepton to project on the Z
+
     TVector2 lep_unity(std::cos(phi1), std::sin(phi2));
     TVector2 boson(pt2*std::cos(phi2), pt2*std::sin(phi2)); // start defining boson as the pther lepton
     boson += (pt1*lep_unity); // before summing get lepton with actual magnitude
@@ -567,7 +606,7 @@ Vec_b valueOutsideRange(const Vec_f& value, float low, float high) {
 //==================================================
 
 float varLepPlusFromPair(float var1, int pdgid1, float var2, int pdgid2) {
-  
+
   // pdg ID > 0 for particles, i.e. negative leptons
   // check that two leptons have opposite charge, return dummy value if not
   if (pdgid1*pdgid2 > 0) return -9999.0;
@@ -579,7 +618,7 @@ float varLepPlusFromPair(float var1, int pdgid1, float var2, int pdgid2) {
 
 //==================================================
 float varLepMinusFromPair(float var1, int pdgid1, float var2, int pdgid2) {
-  
+
   // pdg ID > 0 for particles, i.e. negative leptons
   // check that two leptons have opposite charge, return dummy value if not
   if (pdgid1*pdgid2 > 0) return -9999.0;
@@ -591,7 +630,7 @@ float varLepMinusFromPair(float var1, int pdgid1, float var2, int pdgid2) {
 
 //==================================================
 float varChargedLepFromPair(int requestedCharge, float var1, int pdgid1, float var2, int pdgid2) {
-  
+
   // requestedCharge must be > 0 for positive charge and < 0 otherwise
 
   // pdg ID > 0 for particles, i.e. negative leptons
@@ -605,7 +644,7 @@ float varChargedLepFromPair(int requestedCharge, float var1, int pdgid1, float v
 //==================================================
 TRandom3 *randy_v2 = NULL;
 double randomVarFromPair(float var1, float var2) {
-  
+
   // pdg ID > 0 for particles, i.e. negative leptons
   // check that two leptons have opposite charge, return 0 if not
   if (!randy_v2) randy_v2 = new TRandom3(0);
@@ -620,17 +659,6 @@ double ptDiffCharge(float pt1, int charge1, float pt2, int charge2) {
   else             return pt2-pt1;
 
 }
-
-template <size_t T, typename P>
-Eigen::TensorFixedSize<double, Eigen::Sizes<T>> toTensor(ROOT::VecOps::RVec<P>& vec) {
-    if (vec.size() < T)
-        throw std::out_of_range("RVec size is less than the tensor size requested");
-    Eigen::TensorFixedSize<double, Eigen::Sizes<T>> res;
-    std::copy(std::begin(vec), std::begin(vec)+T, res.data());
-    return res;
-}
-
-
 
 
 

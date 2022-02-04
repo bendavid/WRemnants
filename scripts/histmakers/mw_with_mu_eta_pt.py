@@ -24,7 +24,7 @@ import numba
 
 
 #TODO add the right arguments here
-ROOT.wremnants.initializeScaleFactors(wremnants.data_dir, wremnants.data_dir + "/testMuonSF/scaleFactorProduct_28Oct2021_nodz_dxybs_genMatchDR01.root") #other args
+ROOT.wrem.initializeScaleFactors(wremnants.data_dir, wremnants.data_dir + "/testMuonSF/scaleFactorProduct_28Oct2021_nodz_dxybs_genMatchDR01.root")
 
 datasets = wremnants.datasets2016.allDatasets(istest=False)
 
@@ -68,11 +68,11 @@ def build_graph(df, dataset):
 
     df = df.Define("goodMuons_pfRelIso04_all0", "Muon_pfRelIso04_all[goodMuons][0]")
 
-    df = df.Define("transverseMass", "wremnants::mt_2(goodMuons_pt0, goodMuons_phi0, MET_pt, MET_phi)")
+    df = df.Define("transverseMass", "wrem::mt_2(goodMuons_pt0, goodMuons_phi0, MET_pt, MET_phi)")
 
     df = df.Define("vetoElectrons", "Electron_pt > 10 && Electron_cutBased > 0 && abs(Electron_eta) < 2.4 && abs(Electron_dxy) < 0.05 && abs(Electron_dz)< 0.2")
 
-    df = df.Define("goodCleanJets", "Jet_jetId >= 6 && (Jet_pt > 50 || Jet_puId >= 4) && Jet_pt > 30 && abs(Jet_eta) < 2.4 && wremnants::cleanJetsFromLeptons(Jet_eta,Jet_phi,Muon_eta[vetoMuons],Muon_phi[vetoMuons],Electron_eta[vetoElectrons],Electron_phi[vetoElectrons])")
+    df = df.Define("goodCleanJets", "Jet_jetId >= 6 && (Jet_pt > 50 || Jet_puId >= 4) && Jet_pt > 30 && abs(Jet_eta) < 2.4 && wrem::cleanJetsFromLeptons(Jet_eta,Jet_phi,Muon_eta[vetoMuons],Muon_phi[vetoMuons],Electron_eta[vetoElectrons],Electron_phi[vetoElectrons])")
 
     df = df.Define("passMT", "transverseMass >= 40.0")
 
@@ -87,13 +87,13 @@ def build_graph(df, dataset):
         results.append(nominal)
     else:
         #TODO what's the right tag here?
-        df = df.DefinePerSample("eraVFP", "wremnants::GToH")
+        df = df.DefinePerSample("eraVFP", "wrem::GToH")
 
-        df = df.Define("weight_pu", "wremnants::puw_2016UL_era(Pileup_nTrueInt,eraVFP)")
-        df = df.Define("weight_fullMuonSF", "wremnants::_get_fullMuonSF(goodMuons_pt0 ,goodMuons_eta0,goodMuons_charge0,-1,-1,eraVFP,passIso)")
-        df = df.Define("weight_newMuonPrefiringSF", "wremnants::_get_newMuonPrefiringSF(Muon_eta,Muon_pt,Muon_phi,Muon_looseId,eraVFP)")
-        df = df.Define("weight_tnpRecoSF", "wremnants::_get_tnpRecoSF(goodMuons_pt0 ,goodMuons_eta0,goodMuons_charge0,-1,-1,eraVFP,0, wremnants::reco)")
-        df = df.Define("weight_tnpTrackingSF", "_get_tnpTrackingSF(goodMuons_pt0 ,goodMuons_eta0,goodMuons_charge0,-1,-1,eraVFP)")
+        df = df.Define("weight_pu", "wrem::puw_2016UL_era(Pileup_nTrueInt,eraVFP)")
+        df = df.Define("weight_fullMuonSF", "wrem::_get_fullMuonSF(goodMuons_pt0 ,goodMuons_eta0,goodMuons_charge0,-1,-1,eraVFP,passIso)")
+        df = df.Define("weight_newMuonPrefiringSF", "wrem::_get_newMuonPrefiringSF(Muon_eta,Muon_pt,Muon_phi,Muon_looseId,eraVFP)")
+        df = df.Define("weight_tnpRecoSF", "wrem::_get_tnpRecoSF(goodMuons_pt0 ,goodMuons_eta0,goodMuons_charge0,-1,-1,eraVFP,0, wrem::reco)")
+        df = df.Define("weight_tnpTrackingSF", "wrem::_get_tnpTrackingSF(goodMuons_pt0 ,goodMuons_eta0,goodMuons_charge0,-1,-1,eraVFP)")
 
         df = df.Define("nominal_weight", "weight*weight_pu*weight_fullMuonSF*weight_newMuonPrefiringSF*weight_tnpRecoSF*weight_tnpTrackingSF")
 
@@ -101,13 +101,13 @@ def build_graph(df, dataset):
         results.append(nominal)
 
         # slice 101 elements starting from 0 and clip values at += 10.0
-        df = df.Define("pdfWeights_tensor", "wremnants::clip_tensor(wremnants::vec_to_tensor_t<double, 101>(LHEPdfWeight), 10.)")
+        df = df.Define("pdfWeights_tensor", "wrem::clip_tensor(wrem::vec_to_tensor_t<double, 101>(LHEPdfWeight), 10.)")
 
         pdfNNPDF31 = df.HistoBoost("pdfNNPDF31", nominal_axes, [*nominal_cols, "pdfWeights_tensor"])
         results.append(pdfNNPDF31)
 
         # slice 2 elements starting from 101
-        df = df.Define("pdfWeightsAS_tensor", "wremnants::vec_to_tensor_t<double, 2>(LHEPdfWeight, 101)")
+        df = df.Define("pdfWeightsAS_tensor", "wrem::vec_to_tensor_t<double, 2>(LHEPdfWeight, 101)")
 
         alphaS002NNPDF31 = df.HistoBoost("alphaS002NNPDF31", nominal_axes, [*nominal_cols, "pdfWeightsAS_tensor"])
         results.append(alphaS002NNPDF31)
@@ -116,7 +116,7 @@ def build_graph(df, dataset):
         #TODO convert _get_fullMuonSFvariation_splitIso to produce a tensor natively
 
         # extra assignment is to force the correct return type
-        df = df.Define("effStatTnP_tensor", "Eigen::TensorFixedSize<double, Eigen::Sizes<1248>> res = (nominal_weight/weight_fullMuonSF)*wremnants::vec_to_tensor_t<double, 1248>(wremnants::_get_fullMuonSFvariation_splitIso(624, goodMuons_pt0 ,goodMuons_eta0,goodMuons_charge0,-1,-1,eraVFP,passIso)); return res;")
+        df = df.Define("effStatTnP_tensor", "Eigen::TensorFixedSize<double, Eigen::Sizes<1248>> res = (nominal_weight/weight_fullMuonSF)*wrem::vec_to_tensor_t<double, 1248>(wrem::_get_fullMuonSFvariation_splitIso(624, goodMuons_pt0 ,goodMuons_eta0,goodMuons_charge0,-1,-1,eraVFP,passIso)); return res;")
 
         effStatTnP = df.HistoBoost("effStatTnP", nominal_axes, [*nominal_cols, "effStatTnP_tensor"])
         results.append(effStatTnP)

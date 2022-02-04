@@ -6,7 +6,7 @@
 #include <eigen3/unsupported/Eigen/CXX11/Tensor>
 
 
-namespace wremnants {
+namespace wrem {
 
 
 template<std::ptrdiff_t N, typename V>
