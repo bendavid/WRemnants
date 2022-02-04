@@ -86,7 +86,7 @@ def build_graph(df, dataset):
         #TODO what's the right tag here?
         df = df.DefinePerSample("eraVFP", "wremnants::GToH")
 
-        df = df.Define("nominal_weight", "using namespace wremnants; return puw_2016UL_era(Pileup_nTrueInt,eraVFP)*_get_fullMuonSF(Muon_pt[goodMuons][0],Muon_eta[goodMuons][0],Muon_charge[goodMuons][0],-1,-1,eraVFP,Muon_pfRelIso04_all[goodMuons][0]<0.15)*_get_newMuonPrefiringSF(Muon_eta,Muon_pt,Muon_phi,Muon_looseId,eraVFP)*_get_tnpRecoSF(Muon_pt[goodMuons][0],Muon_eta[goodMuons][0],Muon_charge[goodMuons][0],-1,-1,eraVFP,0,reco)*_get_tnpTrackingSF(Muon_pt[goodMuons][0],Muon_eta[goodMuons][0],Muon_charge[goodMuons][0],-1,-1,eraVFP);") #plus the rest of it
+        df = df.Define("nominal_weight", "using namespace wremnants; return weight*puw_2016UL_era(Pileup_nTrueInt,eraVFP)*_get_fullMuonSF(Muon_pt[goodMuons][0],Muon_eta[goodMuons][0],Muon_charge[goodMuons][0],-1,-1,eraVFP,Muon_pfRelIso04_all[goodMuons][0]<0.15)*_get_newMuonPrefiringSF(Muon_eta,Muon_pt,Muon_phi,Muon_looseId,eraVFP)*_get_tnpRecoSF(Muon_pt[goodMuons][0],Muon_eta[goodMuons][0],Muon_charge[goodMuons][0],-1,-1,eraVFP,0,reco)*_get_tnpTrackingSF(Muon_pt[goodMuons][0],Muon_eta[goodMuons][0],Muon_charge[goodMuons][0],-1,-1,eraVFP);") #plus the rest of it
 
     nominal_weight_col = "nominal_weight"
 
