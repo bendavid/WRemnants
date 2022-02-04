@@ -23,11 +23,13 @@ import lz4.frame
 import numba
 
 
-#TODO add the right arguments here
 ROOT.wrem.initializeScaleFactors(wremnants.data_dir, wremnants.data_dir + "/testMuonSF/scaleFactorProduct_28Oct2021_nodz_dxybs_genMatchDR01.root")
 
 datasets = wremnants.datasets2016.allDatasets(istest=False)
 
+
+wprocs = ["WplusmunuPostVFP", "WplusmunuPostVFP"]
+zprocs = ["ZmumuPostVFP"]
 
 # standard regular axes
 axis_eta = hist.axis.Regular(48, -2.4, 2.4, name = "eta")
@@ -86,16 +88,14 @@ def build_graph(df, dataset):
         nominal = df.HistoBoost("nominal", nominal_axes, nominal_cols)
         results.append(nominal)
     else:
-        #TODO what's the right tag here?
         df = df.DefinePerSample("eraVFP", "wrem::GToH")
 
         df = df.Define("weight_pu", "wrem::puw_2016UL_era(Pileup_nTrueInt,eraVFP)")
         df = df.Define("weight_fullMuonSF", "wrem::_get_fullMuonSF(goodMuons_pt0 ,goodMuons_eta0,goodMuons_charge0,-1,-1,eraVFP,passIso)")
         df = df.Define("weight_newMuonPrefiringSF", "wrem::_get_newMuonPrefiringSF(Muon_eta,Muon_pt,Muon_phi,Muon_looseId,eraVFP)")
-        df = df.Define("weight_tnpRecoSF", "wrem::_get_tnpRecoSF(goodMuons_pt0 ,goodMuons_eta0,goodMuons_charge0,-1,-1,eraVFP,0, wrem::reco)")
-        df = df.Define("weight_tnpTrackingSF", "wrem::_get_tnpTrackingSF(goodMuons_pt0 ,goodMuons_eta0,goodMuons_charge0,-1,-1,eraVFP)")
+        df = df.Define("weight_tnpTrackingRecoSF", "wrem::_get_tnpTrackingRecoSF(goodMuons_pt0 ,goodMuons_eta0,goodMuons_charge0,-1,-1,eraVFP)")
 
-        df = df.Define("nominal_weight", "weight*weight_pu*weight_fullMuonSF*weight_newMuonPrefiringSF*weight_tnpRecoSF*weight_tnpTrackingSF")
+        df = df.Define("nominal_weight", "weight*weight_pu*weight_fullMuonSF*weight_newMuonPrefiringSF*weight_tnpTrackingRecoSF")
 
         nominal = df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "nominal_weight"])
         results.append(nominal)
@@ -112,7 +112,6 @@ def build_graph(df, dataset):
         alphaS002NNPDF31 = df.HistoBoost("alphaS002NNPDF31", nominal_axes, [*nominal_cols, "pdfWeightsAS_tensor"])
         results.append(alphaS002NNPDF31)
 
-        #TODO check that I actually have a consistent version of functions.h and functionsWMass.h
         #TODO convert _get_fullMuonSFvariation_splitIso to produce a tensor natively
 
         # extra assignment is to force the correct return type
@@ -121,12 +120,44 @@ def build_graph(df, dataset):
         effStatTnP = df.HistoBoost("effStatTnP", nominal_axes, [*nominal_cols, "effStatTnP_tensor"])
         results.append(effStatTnP)
 
+        df = df.Define("effSystIsoTnP_weight", "(nominal_weight/weight_fullMuonSF)*_get_fullMuonSF_dataAltSig_splitIso(1,goodMuons_pt0 ,goodMuons_eta0,goodMuons_charge0,-1,-1,eraVFP,passIso)")
 
+        effSystIsoTnP = df.HistoBoost("effSystIsoTnP", nominal_axes, [*nominal_cols, "effSystIsoTnP_weight"])
+        results.append(effSystIsoTnP)
 
+        df = df.Define("effSystTrigAndIdipTnP_weight", "(nominal_weight/weight_fullMuonSF)*_get_fullMuonSF_dataAltSig_splitIso(0,goodMuons_pt0 ,goodMuons_eta0,goodMuons_charge0,-1,-1,eraVFP,passIso)")
 
+        effSystTrigAndIdipTnP = df.HistoBoost("effSystTrigAndIdipTnP", nominal_axes, [*nominal_cols, "effSystTrigAndIdipTnP_weight"])
+        results.append(effSystIsoTnP)
 
+        #FIXME skipping EffTrackingRecoTnP_ since it's not consistently defined yet
 
+        # extra assignment is to force the correct return type
+        df = df.Define("muonL1PrefireStat_tensor", "Eigen::TensorFixedSize<double, Eigen::Sizes<11>> res = (nominal_weight/weight_newMuonPrefiringSF)*wrem::vec_to_tensor_t<double, 11>(wrem::_get_newMuonPrefiringSFvariationStat(11,Muon_eta,Muon_pt,Muon_phi,Muon_looseId,eraVFP)); return res;")
 
+        muonL1PrefireStat = df.HistoBoost("muonL1PrefireStat", nominal_axes, [*nominal_cols, "muonL1PrefireStat_tensor"])
+        results.append(muonL1PrefireStat)
+
+        # extra assignment is to force the correct return type
+        df = df.Define("muonL1PrefireSyst_tensor", "Eigen::TensorFixedSize<double, Eigen::Sizes<3>> res = (nominal_weight/weight_newMuonPrefiringSF)*wrem::vec_to_tensor_t<double, 3>(wrem::_get_newMuonPrefiringSFvariationSyst(Muon_eta,Muon_pt,Muon_phi,Muon_looseId,eraVFP)); return res;")
+
+        muonL1PrefireSyst = df.HistoBoost("muonL1PrefireSyst", nominal_axes, [*nominal_cols, "muonL1PrefireSyst_tensor"])
+        results.append(muonL1PrefireSyst)
+
+        if dataset.name in wprocs:
+            nmassweights = 21
+        elif dataset.name in zprocs:
+            # FIXME switch to the right samples which actually contain the mass weights in a known place
+            #nmassweights = 23
+            nmassweights = 0
+        else:
+            nmassweights = 0
+
+        if nmassweights > 0:
+            df = df.Define("massWeight_tensor", f"wrem::vec_to_tensor_t<double, {nmassweights}>(MEParamWeight)")
+
+            massWeight = df.HistoBoost("massWeight", nominal_axes, [*nominal_cols, "massWeight_tensor"])
+            results.append(massWeight)
 
     return results, weightsum
 
