@@ -66,6 +66,8 @@ def build_graph(df, dataset):
     df = df.Define("goodMuons_phi0", "Muon_phi[goodMuons][0]")
     df = df.Define("goodMuons_charge0", "Muon_charge[goodMuons][0]")
 
+    df = df.Define("goodMuons_pfRelIso04_all0", "Muon_pfRelIso04_all[goodMuons][0]")
+
     df = df.Define("transverseMass", "wremnants::mt_2(goodMuons_pt0, goodMuons_phi0, MET_pt, MET_phi)")
 
     df = df.Define("vetoElectrons", "Electron_pt > 10 && Electron_cutBased > 0 && abs(Electron_eta) < 2.4 && abs(Electron_dxy) < 0.05 && abs(Electron_dz)< 0.2")
@@ -76,22 +78,33 @@ def build_graph(df, dataset):
 
     df = df.Filter("passMT || Sum(goodCleanJets)>=1")
 
-    df = df.Define("passIso", "Muon_pfRelIso04_all[goodMuons][0] < 0.15")
+    df = df.Define("passIso", "goodMuons_pfRelIso04_all0 < 0.15")
 
-    nominal_cols = ("goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT")
+    nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
 
     if dataset.is_data:
-        df = df.DefinePerSample("nominal_weight", "1.0")
+        nominal = df.HistoBoost("nominal", nominal_axes, nominal_cols)
+        results.append(nominal)
     else:
         #TODO what's the right tag here?
         df = df.DefinePerSample("eraVFP", "wremnants::GToH")
 
-        df = df.Define("nominal_weight", "using namespace wremnants; return weight*puw_2016UL_era(Pileup_nTrueInt,eraVFP)*_get_fullMuonSF(Muon_pt[goodMuons][0],Muon_eta[goodMuons][0],Muon_charge[goodMuons][0],-1,-1,eraVFP,Muon_pfRelIso04_all[goodMuons][0]<0.15)*_get_newMuonPrefiringSF(Muon_eta,Muon_pt,Muon_phi,Muon_looseId,eraVFP)*_get_tnpRecoSF(Muon_pt[goodMuons][0],Muon_eta[goodMuons][0],Muon_charge[goodMuons][0],-1,-1,eraVFP,0,reco)*_get_tnpTrackingSF(Muon_pt[goodMuons][0],Muon_eta[goodMuons][0],Muon_charge[goodMuons][0],-1,-1,eraVFP);") #plus the rest of it
+        df = df.Define("weight_pu", "wremnants::puw_2016UL_era(Pileup_nTrueInt,eraVFP)")
+        df = df.Define("weight_fullMuonSF", "wremnants::_get_fullMuonSF(goodMuons_pt0 ,goodMuons_eta0,goodMuons_charge0,-1,-1,eraVFP,passIso)")
+        df = df.Define("weight_newMuonPrefiringSF", "wremnants::_get_newMuonPrefiringSF(Muon_eta,Muon_pt,Muon_phi,Muon_looseId,eraVFP)")
+        df = df.Define("weight_tnpRecoSF", "wremnants::_get_tnpRecoSF(goodMuons_pt0 ,goodMuons_eta0,goodMuons_charge0,-1,-1,eraVFP,0, wremnants::reco)")
+        df = df.Define("weight_tnpTrackingSF", "_get_tnpTrackingSF(goodMuons_pt0 ,goodMuons_eta0,goodMuons_charge0,-1,-1,eraVFP)")
 
-    nominal_weight_col = "nominal_weight"
+        df = df.Define("nominal_weight", "weight*weight_pu*weight_fullMuonSF*weight_newMuonPrefiringSF*weight_tnpRecoSF*weight_tnpTrackingSF")
 
-    nominal = df.HistoBoost("nominal", nominal_axes, [*nominal_cols, nominal_weight_col])
-    results.append(nominal)
+        nominal_weight_col = "nominal_weight"
+
+        nominal = df.HistoBoost("nominal", nominal_axes, [*nominal_cols, nominal_weight_col])
+        results.append(nominal)
+
+
+
+
 
     return results, weightsum
 
