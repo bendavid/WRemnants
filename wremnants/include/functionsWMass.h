@@ -648,33 +648,6 @@ void initializeScaleFactors(const string &datadir, const string& _filename_allSF
 
   _file_allSF.Close(); // should work since we used TH1F::SetDirectory(0) to detach histogram from file
 
-  // new prefiring from Jan
-  std::string _filename_prefiringNew = datadir + "/testMuonSF/L1MuonPrefiringParametriations_histograms.root";
-  TFile _file_prefiringNew = TFile(_filename_prefiringNew.c_str(), "read");
-  if (!_file_prefiringNew.IsOpen()) {
-    std::cerr << "WARNING: Failed to open prefiring file " << _filename_prefiringNew << "\n";
-    exit(EXIT_FAILURE);
-  }
-  std::cout << "INFO >>> Initializing histograms for prefiring from file " << _filename_prefiringNew << std::endl;
-  for (auto& era : runEraNames) {
-    // std::cout << era.second << std::endl;
-    if (era.first == H) {
-      hMuonPrefiringNew[era.first] = *(dynamic_cast<TH2D*>(_file_prefiringNew.Get("L1prefiring_muonparam_2016H")));
-      hMuonPrefiringNew[era.first].SetDirectory(0);
-    } else if (era.first != GToH) {
-      // BG should be like preVFP, but more data was used to derive corrections
-      //hMuonPrefiringNew[era.first] = *(dynamic_cast<TH2D*>(_file_prefiringNew.Get("L1prefiring_muonparam_2016preVFP")));
-      hMuonPrefiringNew[era.first] = *(dynamic_cast<TH2D*>(_file_prefiringNew.Get("L1prefiring_muonparam_2016BG")));
-      hMuonPrefiringNew[era.first].SetDirectory(0);
-    } else {
-      hMuonPrefiringNew[GToH] = *(dynamic_cast<TH2D*>(_file_prefiringNew.Get("L1prefiring_muonparam_2016postVFP")));
-      hMuonPrefiringNew[GToH].SetDirectory(0);
-    }
-  }
-  hMuonPrefiringNew_hotspot = (dynamic_cast<TH2D*>(_file_prefiringNew.Get("L1prefiring_muonparam_2016_hotspot")));
-  hMuonPrefiringNew_hotspot->SetDirectory(0);
-  _file_prefiringNew.Close();
-
 }
 
 ////=====================================================================================

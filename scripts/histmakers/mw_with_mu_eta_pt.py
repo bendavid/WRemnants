@@ -27,6 +27,9 @@ ROOT.wrem.initializeScaleFactors(wremnants.data_dir, wremnants.data_dir + "/test
 
 datasets = wremnants.datasets2016.allDatasets(istest=False)
 
+era = "GToH"
+
+muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 
 wprocs = ["WplusmunuPostVFP", "WplusmunuPostVFP"]
 zprocs = ["ZmumuPostVFP"]
@@ -43,6 +46,12 @@ axis_passIso = hist.axis.Boolean(name = "passIso")
 axis_passMT = hist.axis.Boolean(name = "passMT")
 
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
+
+# extra axes which can be used to label tensor_axes
+
+down_up_axis = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "down-up variation")
+
+down_nom_up_axis = hist.axis.Regular(3, -1.5, 1.5, underflow=False, overflow=False, name = "down-nominal-up variation")
 
 
 def build_graph(df, dataset):
@@ -88,11 +97,11 @@ def build_graph(df, dataset):
         nominal = df.HistoBoost("nominal", nominal_axes, nominal_cols)
         results.append(nominal)
     else:
-        df = df.DefinePerSample("eraVFP", "wrem::GToH")
+        df = df.DefinePerSample("eraVFP", f"wrem::{era}")
 
         df = df.Define("weight_pu", "wrem::puw_2016UL_era(Pileup_nTrueInt,eraVFP)")
         df = df.Define("weight_fullMuonSF", "wrem::_get_fullMuonSF(goodMuons_pt0 ,goodMuons_eta0,goodMuons_charge0,-1,-1,eraVFP,passIso)")
-        df = df.Define("weight_newMuonPrefiringSF", "wrem::_get_newMuonPrefiringSF(Muon_eta,Muon_pt,Muon_phi,Muon_looseId,eraVFP)")
+        df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_eta", "Muon_pt", "Muon_phi", "Muon_looseId"])
         df = df.Define("weight_tnpTrackingRecoSF", "wrem::_get_tnpTrackingRecoSF(goodMuons_pt0 ,goodMuons_eta0,goodMuons_charge0,-1,-1,eraVFP)")
 
         df = df.Define("nominal_weight", "weight*weight_pu*weight_fullMuonSF*weight_newMuonPrefiringSF*weight_tnpTrackingRecoSF")
@@ -132,16 +141,14 @@ def build_graph(df, dataset):
 
         #FIXME skipping EffTrackingRecoTnP_ since it's not consistently defined yet
 
-        # extra assignment is to force the correct return type
-        df = df.Define("muonL1PrefireStat_tensor", "Eigen::TensorFixedSize<double, Eigen::Sizes<11>> res = (nominal_weight/weight_newMuonPrefiringSF)*wrem::vec_to_tensor_t<double, 11>(wrem::_get_newMuonPrefiringSFvariationStat(11,Muon_eta,Muon_pt,Muon_phi,Muon_looseId,eraVFP)); return res;")
+        df = df.Define("muonL1PrefireStat_tensor", muon_prefiring_helper_stat, ["Muon_eta", "Muon_pt", "Muon_phi", "Muon_looseId", "nominal_weight"])
 
-        muonL1PrefireStat = df.HistoBoost("muonL1PrefireStat", nominal_axes, [*nominal_cols, "muonL1PrefireStat_tensor"])
+        muonL1PrefireStat = df.HistoBoost("muonL1PrefireStat", nominal_axes, [*nominal_cols, "muonL1PrefireStat_tensor"], tensor_axes = ["muon prefiring eta-phi regions", down_up_axis])
         results.append(muonL1PrefireStat)
 
-        # extra assignment is to force the correct return type
-        df = df.Define("muonL1PrefireSyst_tensor", "Eigen::TensorFixedSize<double, Eigen::Sizes<3>> res = (nominal_weight/weight_newMuonPrefiringSF)*wrem::vec_to_tensor_t<double, 3>(wrem::_get_newMuonPrefiringSFvariationSyst(Muon_eta,Muon_pt,Muon_phi,Muon_looseId,eraVFP)); return res;")
+        df = df.Define("muonL1PrefireSyst_tensor", muon_prefiring_helper_syst, ["Muon_eta", "Muon_pt", "Muon_phi", "Muon_looseId", "nominal_weight"])
 
-        muonL1PrefireSyst = df.HistoBoost("muonL1PrefireSyst", nominal_axes, [*nominal_cols, "muonL1PrefireSyst_tensor"])
+        muonL1PrefireSyst = df.HistoBoost("muonL1PrefireSyst", nominal_axes, [*nominal_cols, "muonL1PrefireSyst_tensor"], tensor_axes = [down_up_axis])
         results.append(muonL1PrefireSyst)
 
         # n.b. this is the W analysis so mass weights shouldn't be propagated
