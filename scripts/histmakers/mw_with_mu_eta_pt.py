@@ -110,13 +110,15 @@ def build_graph(df, dataset):
         results.append(nominal)
 
         # slice 101 elements starting from 0 and clip values at += 10.0
-        df = df.Define("pdfWeights_tensor", "wrem::clip_tensor(wrem::vec_to_tensor_t<double, 101>(LHEPdfWeight), 10.)")
+        # extra assignment is to force the correct return type
+        df = df.Define("pdfWeights_tensor", "auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, 101>(LHEPdfWeight), 10.); res = nominal_weight*res; return res;")
 
         pdfNNPDF31 = df.HistoBoost("pdfNNPDF31", nominal_axes, [*nominal_cols, "pdfWeights_tensor"])
         results.append(pdfNNPDF31)
 
         # slice 2 elements starting from 101
-        df = df.Define("pdfWeightsAS_tensor", "wrem::vec_to_tensor_t<double, 2>(LHEPdfWeight, 101)")
+        # extra assignment is to force the correct return type
+        df = df.Define("pdfWeightsAS_tensor", "auto res = wrem::vec_to_tensor_t<double, 2>(LHEPdfWeight, 101); res = nominal_weight*res; return res;")
 
         alphaS002NNPDF31 = df.HistoBoost("alphaS002NNPDF31", nominal_axes, [*nominal_cols, "pdfWeightsAS_tensor"])
         results.append(alphaS002NNPDF31)
