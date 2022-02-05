@@ -154,7 +154,8 @@ def build_graph(df, dataset):
         # n.b. this is the W analysis so mass weights shouldn't be propagated
         # on the Z samples
         if dataset.name in wprocs:
-            df = df.Define("massWeight_tensor", "wrem::vec_to_tensor_t<double, 21>(MEParamWeight)")
+            # extra assignment is to force the correct return type
+            df = df.Define("massWeight_tensor", "auto res = wrem::vec_to_tensor_t<double, 21>(MEParamWeight); res = nominal_weight*res; return res;")
 
             massWeight = df.HistoBoost("massWeight", nominal_axes, [*nominal_cols, "massWeight_tensor"])
             results.append(massWeight)
