@@ -124,7 +124,7 @@ def build_graph(df, dataset):
         #TODO convert _get_fullMuonSFvariation_splitIso to produce a tensor natively
 
         # extra assignment is to force the correct return type
-        df = df.Define("effStatTnP_tensor", "Eigen::TensorFixedSize<double, Eigen::Sizes<1248>> res = (nominal_weight/weight_fullMuonSF)*wrem::vec_to_tensor_t<double, 1248>(wrem::_get_fullMuonSFvariation_splitIso(624, goodMuons_pt0 ,goodMuons_eta0,goodMuons_charge0,-1,-1,eraVFP,passIso)); return res;")
+        df = df.Define("effStatTnP_tensor", "auto res = wrem::vec_to_tensor_t<double, 1248>(wrem::_get_fullMuonSFvariation_splitIso(624, goodMuons_pt0 ,goodMuons_eta0,goodMuons_charge0,-1,-1,eraVFP,passIso)); res = (nominal_weight/weight_fullMuonSF)*res; return res;")
 
         effStatTnP = df.HistoBoost("effStatTnP", nominal_axes, [*nominal_cols, "effStatTnP_tensor"])
         results.append(effStatTnP)
