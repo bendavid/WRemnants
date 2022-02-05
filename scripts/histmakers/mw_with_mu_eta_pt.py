@@ -20,8 +20,6 @@ import narf
 import wremnants
 import hist
 import lz4.frame
-import numba
-
 
 ROOT.wrem.initializeScaleFactors(wremnants.data_dir, wremnants.data_dir + "/testMuonSF/scaleFactorProduct_28Oct2021_nodz_dxybs_genMatchDR01.root")
 
@@ -161,6 +159,14 @@ def build_graph(df, dataset):
 
             massWeight = df.HistoBoost("massWeight", nominal_axes, [*nominal_cols, "massWeight_tensor"])
             results.append(massWeight)
+
+            netabins = 4
+            df = df.Define("muonScaleDummy4Bins2e4", f"dummyScaleFromMassWeights<{netabins}, 21>(massWeight_tensor, goodMuons_eta0, 2.e-4)")
+            scale_etabins_axis = hist.axis.Regular(4, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
+            dummyMuonScaleSyst = df.HistoBoost("muonScaleSyst", nominal_axes, [*nominal_cols, "muonScaleDummy4Bins2e4"], 
+                tensor_axes=[down_up_axis, scale_etabins_axis])
+            results.append(dummyMuonScaleSyst)
+
 
     return results, weightsum
 
