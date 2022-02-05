@@ -22,6 +22,7 @@ public:
     }
 
   static bool is_hotspot(float eta, float phi) {
+    // region with problematic chambers where prefiring probabilities are measured separately
     if (eta > 1.24 and eta < 1.6 and phi > 2.44346 and phi < 2.79253) {
       return true;
     }
@@ -41,11 +42,11 @@ public:
       if (not looseId[i]) continue;
       if (is_hotspot(eta[i], phi[i])) {
         const double plateau = std::clamp(hMuonPrefiringNew_hotspot.GetBinContent(1, 3), 0., 1.);
-        prefiringProbability = plateau/(TMath::Exp( (pt[i] - hMuonPrefiringNew_hotspot.GetBinContent(1, 1)) / hMuonPrefiringNew_hotspot.GetBinContent(1, 2) ) + 1);
+        prefiringProbability = plateau/(std::exp( (pt[i] - hMuonPrefiringNew_hotspot.GetBinContent(1, 1)) / hMuonPrefiringNew_hotspot.GetBinContent(1, 2) ) + 1);
       } else {
-        prefireBin = std::max(1, std::min(hprefire.GetXaxis()->FindFixBin(fabs(eta[i])), nBins));
+        prefireBin = std::clamp(hprefire.GetXaxis()->FindFixBin(std::fabs(eta[i])), 1, nBins);
         const double plateau = std::clamp(hprefire.GetBinContent(prefireBin, 3), 0., 1.);
-        prefiringProbability = plateau/(TMath::Exp( (pt[i] - hprefire.GetBinContent(prefireBin, 1)) / hprefire.GetBinContent(prefireBin, 2) ) + 1);
+        prefiringProbability = plateau/(std::exp( (pt[i] - hprefire.GetBinContent(prefireBin, 1)) / hprefire.GetBinContent(prefireBin, 2) ) + 1);
       }
       sf *= (1.0 - prefiringProbability);
     }
@@ -96,7 +97,7 @@ public:
         plateau_err = hMuonPrefiringNew_hotspot.GetBinError(1, 3);
 
       } else {
-        const int prefireBin = std::max(1, std::min(hprefire.GetXaxis()->FindFixBin(fabs(eta[i])), nBins));
+        const int prefireBin = std::clamp(hprefire.GetXaxis()->FindFixBin(std::fabs(eta[i])), 1, nBins);
         // standard case, index from histogram bin
         idx = prefireBin - 1;
         plateau_raw    = hprefire.GetBinContent(prefireBin, 3);
@@ -150,7 +151,7 @@ public:
         plateau_raw    = hMuonPrefiringNew_hotspot.GetBinContent(1, 3);
 
       } else {
-        const int prefireBin = std::max(1, std::min(hprefire.GetXaxis()->FindFixBin(fabs(eta[i])), nBins));
+        const int prefireBin = std::clamp(hprefire.GetXaxis()->FindFixBin(std::fabs(eta[i])), 1, nBins);
         plateau_raw    = hprefire.GetBinContent(prefireBin, 3);
       }
 
