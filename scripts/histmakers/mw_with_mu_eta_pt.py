@@ -31,7 +31,7 @@ era = "GToH"
 
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 
-wprocs = ["WplusmunuPostVFP", "WplusmunuPostVFP"]
+wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP"]
 zprocs = ["ZmumuPostVFP"]
 
 # standard regular axes
