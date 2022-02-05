@@ -144,17 +144,10 @@ def build_graph(df, dataset):
         muonL1PrefireSyst = df.HistoBoost("muonL1PrefireSyst", nominal_axes, [*nominal_cols, "muonL1PrefireSyst_tensor"])
         results.append(muonL1PrefireSyst)
 
+        # n.b. this is the W analysis so mass weights shouldn't be propagated
+        # on the Z samples
         if dataset.name in wprocs:
-            nmassweights = 21
-        elif dataset.name in zprocs:
-            # FIXME switch to the right samples which actually contain the mass weights in a known place
-            #nmassweights = 23
-            nmassweights = 0
-        else:
-            nmassweights = 0
-
-        if nmassweights > 0:
-            df = df.Define("massWeight_tensor", f"wrem::vec_to_tensor_t<double, {nmassweights}>(MEParamWeight)")
+            df = df.Define("massWeight_tensor", "wrem::vec_to_tensor_t<double, 21>(MEParamWeight)")
 
             massWeight = df.HistoBoost("massWeight", nominal_axes, [*nominal_cols, "massWeight_tensor"])
             results.append(massWeight)
