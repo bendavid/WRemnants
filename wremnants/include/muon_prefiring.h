@@ -8,16 +8,28 @@ namespace wrem {
 class muon_prefiring_helper {
 public:
 
-  muon_prefiring_helper(const TH2D &parms, const TH2D &hotspotparms) :
-    parameters_(std::make_shared<TH2D>(parms)),
-    hotspot_parameters_(std::make_shared<TH2D>(hotspotparms)) {
+  muon_prefiring_helper(const TH2D &parms, const TH2D &hotspotparms) {
 
-      parameters_->SetDirectory(0);
-      hotspot_parameters_->SetDirectory(0);
+      TH2D *parms_copy = new TH2D(parms);
+      TH2D *hotspot_parms_copy = new TH2D(hotspotparms);
 
+      // detach the newly created histograms since we manage their ownership ourselves
+      parms_copy->SetDirectory(0);
+      hotspot_parms_copy->SetDirectory(0);
+
+      parameters_.reset(parms_copy);
+      hotspot_parameters_.reset(hotspot_parms_copy);
     }
 
-  double operator() (const Vec_f& eta, const Vec_f& pt, const Vec_f& phi, const Vec_b& looseId) {
+  static bool is_hotspot(float eta, float phi) {
+    // region with problematic chambers where prefiring probabilities are measured separately
+    if (eta > 1.24 and eta < 1.6 and phi > 2.44346 and phi < 2.79253) {
+      return true;
+    }
+    return false;
+  }
+
+  double operator() (const Vec_f& eta, const Vec_f& pt, const Vec_f& phi, const Vec_b& looseId) const {
     double sf = 1.0;
 
     const TH2D &hprefire = *parameters_;
@@ -28,26 +40,26 @@ public:
     double prefiringProbability = 0.0;
     for (unsigned int i = 0; i < eta.size(); ++i) {
       if (not looseId[i]) continue;
-      if (eta[i] > 1.24 and eta[i] < 1.6 and phi[i] > 2.44346 and phi[i] < 2.79253) {
+      if (is_hotspot(eta[i], phi[i])) {
         const double plateau = std::clamp(hMuonPrefiringNew_hotspot.GetBinContent(1, 3), 0., 1.);
-        prefiringProbability = plateau/(TMath::Exp( (pt[i] - hMuonPrefiringNew_hotspot.GetBinContent(1, 1)) / hMuonPrefiringNew_hotspot.GetBinContent(1, 2) ) + 1);
+        prefiringProbability = plateau/(std::exp( (pt[i] - hMuonPrefiringNew_hotspot.GetBinContent(1, 1)) / hMuonPrefiringNew_hotspot.GetBinContent(1, 2) ) + 1);
       } else {
-        prefireBin = std::max(1, std::min(hprefire.GetXaxis()->FindFixBin(fabs(eta[i])), nBins));
+        prefireBin = std::clamp(hprefire.GetXaxis()->FindFixBin(std::fabs(eta[i])), 1, nBins);
         const double plateau = std::clamp(hprefire.GetBinContent(prefireBin, 3), 0., 1.);
-        prefiringProbability = plateau/(TMath::Exp( (pt[i] - hprefire.GetBinContent(prefireBin, 1)) / hprefire.GetBinContent(prefireBin, 2) ) + 1);
+        prefiringProbability = plateau/(std::exp( (pt[i] - hprefire.GetBinContent(prefireBin, 1)) / hprefire.GetBinContent(prefireBin, 2) ) + 1);
       }
       sf *= (1.0 - prefiringProbability);
     }
     return sf;
   }
 
-  const std::shared_ptr<TH2D> &parameters() const { return parameters_; }
-  const std::shared_ptr<TH2D> &hotspot_parameters() const { return hotspot_parameters_; }
+  const std::shared_ptr<const TH2D> &parameters() const { return parameters_; }
+  const std::shared_ptr<const TH2D> &hotspot_parameters() const { return hotspot_parameters_; }
 
 private:
 
-  std::shared_ptr<TH2D> parameters_;
-  std::shared_ptr<TH2D> hotspot_parameters_;
+  std::shared_ptr<const TH2D> parameters_;
+  std::shared_ptr<const TH2D> hotspot_parameters_;
 };
 
 template <std::size_t NEtaBins>
@@ -60,7 +72,7 @@ public:
   muon_prefiring_helper_stat(const muon_prefiring_helper &other) :
     parameters_(other.parameters()), hotspot_parameters_(other.hotspot_parameters()) {}
 
-  value_type operator() (const Vec_f& eta, const Vec_f& pt, const Vec_f& phi, const Vec_b& looseId, double nominal_weight = 1.0) {
+  value_type operator() (const Vec_f& eta, const Vec_f& pt, const Vec_f& phi, const Vec_b& looseId, double nominal_weight = 1.0) const {
 
     value_type res;
     res.setConstant(nominal_weight);
@@ -78,14 +90,14 @@ public:
       double plateau_raw;
       double plateau_err;
 
-      if (eta[i] > 1.24 and eta[i] < 1.6 and phi[i] > 2.44346 and phi[i] < 2.79253) {
+      if (muon_prefiring_helper::is_hotspot(eta[i], phi[i])) {
         // hotspot index is the last one
         idx = NEtaBins;
         plateau_raw    = hMuonPrefiringNew_hotspot.GetBinContent(1, 3);
         plateau_err = hMuonPrefiringNew_hotspot.GetBinError(1, 3);
 
       } else {
-        const int prefireBin = std::max(1, std::min(hprefire.GetXaxis()->FindFixBin(fabs(eta[i])), nBins));
+        const int prefireBin = std::clamp(hprefire.GetXaxis()->FindFixBin(std::fabs(eta[i])), 1, nBins);
         // standard case, index from histogram bin
         idx = prefireBin - 1;
         plateau_raw    = hprefire.GetBinContent(prefireBin, 3);
@@ -105,8 +117,8 @@ public:
   }
 
 private:
-  std::shared_ptr<TH2D> parameters_;
-  std::shared_ptr<TH2D> hotspot_parameters_;
+  std::shared_ptr<const TH2D> parameters_;
+  std::shared_ptr<const TH2D> hotspot_parameters_;
 
 };
 
@@ -119,7 +131,7 @@ public:
   muon_prefiring_helper_syst(const muon_prefiring_helper &other) :
     parameters_(other.parameters()), hotspot_parameters_(other.hotspot_parameters()) {}
 
-  value_type operator() (const Vec_f& eta, const Vec_f& pt, const Vec_f& phi, const Vec_b& looseId, double nominal_weight = 1.0) {
+  value_type operator() (const Vec_f& eta, const Vec_f& pt, const Vec_f& phi, const Vec_b& looseId, double nominal_weight = 1.0) const {
 
     value_type res;
     res.setConstant(nominal_weight);
@@ -135,12 +147,11 @@ public:
 
       double plateau_raw;
 
-      if (eta[i] > 1.24 and eta[i] < 1.6 and phi[i] > 2.44346 and phi[i] < 2.79253) {
-        // hotspot index is the last one
+      if (muon_prefiring_helper::is_hotspot(eta[i], phi[i])) {
         plateau_raw    = hMuonPrefiringNew_hotspot.GetBinContent(1, 3);
 
       } else {
-        const int prefireBin = std::max(1, std::min(hprefire.GetXaxis()->FindFixBin(fabs(eta[i])), nBins));
+        const int prefireBin = std::clamp(hprefire.GetXaxis()->FindFixBin(std::fabs(eta[i])), 1, nBins);
         plateau_raw    = hprefire.GetBinContent(prefireBin, 3);
       }
 
@@ -157,8 +168,8 @@ public:
   }
 
 private:
-  std::shared_ptr<TH2D> parameters_;
-  std::shared_ptr<TH2D> hotspot_parameters_;
+  std::shared_ptr<const TH2D> parameters_;
+  std::shared_ptr<const TH2D> hotspot_parameters_;
 
 };
 
