@@ -9,7 +9,7 @@ template <size_t ETABINS, size_t T>
 Eigen::TensorFixedSize<double, Eigen::Sizes<2, ETABINS>> dummyScaleFromMassWeights(
     Eigen::TensorFixedSize<double, Eigen::Sizes<T>>& weights, double eta, double scale, bool isW=true) {
     const double refMass = isW ? 80351.81229 : 91153.50974;
-    const size_t centralIdx = isW ? 10 : 11;
+    const size_t centralIdx = 10;
     const double scaleMeV = refMass*scale;
     const int step10MeV = static_cast<int>(scaleMeV/10)+1;
     if (centralIdx+step10MeV > T-1)
