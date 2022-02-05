@@ -10,4 +10,6 @@ ROOT.gInterpreter.Declare('#include "utils.h"')
 
 from .datasets import datasets2016
 
+from .muon_prefiring import make_muon_prefiring_helpers
+
 data_dir = f"{pathlib.Path(__file__).parent}/data/"
