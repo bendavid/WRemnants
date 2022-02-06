@@ -1,5 +1,6 @@
 import ROOT
 import pathlib
+import hist
 
 ROOT.gInterpreter.Declare('#include "muon_prefiring.h"')
 
@@ -31,3 +32,9 @@ def make_muon_prefiring_helpers(filename = data_dir + "/testMuonSF/L1MuonPrefiri
     helper_syst = ROOT.wrem.muon_prefiring_helper_syst(helper)
 
     return helper, helper_stat, helper_syst
+
+@ROOT.pythonization("muon_prefiring_helper_stat<", ns="wrem", is_prefix=True)
+def pythonize_rdataframe(klass):
+    # add axes corresponding to the tensor dimensions
+    klass.tensor_axes = (hist.axis.Integer(0, klass.NVar, underflow=False, overflow=False, name = "muon prefiring eta-phi regions"),
+                         hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "down-up variation"))

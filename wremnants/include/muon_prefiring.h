@@ -58,7 +58,8 @@ class muon_prefiring_helper_stat {
 
 public:
 
-  using value_type = Eigen::TensorFixedSize<double, Eigen::Sizes<NEtaBins + 1, 2>>;
+  static constexpr std::size_t NVar = NEtaBins + 1;
+  using value_type = Eigen::TensorFixedSize<double, Eigen::Sizes<NVar, 2>>;
 
   muon_prefiring_helper_stat(const muon_prefiring_helper &other) :
     parameters_(other.parameters()), hotspot_parameters_(other.hotspot_parameters()) {}
