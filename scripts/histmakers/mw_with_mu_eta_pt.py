@@ -29,7 +29,7 @@ era = "GToH"
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 
 wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP"]
-zprocs = ["ZmumuPostVFP", "ZmumuPostVFP"]
+zprocs = ["ZmumuPostVFP", "ZtautauPostVFP"]
 
 # standard regular axes
 axis_eta = hist.axis.Regular(48, -2.4, 2.4, name = "eta")
