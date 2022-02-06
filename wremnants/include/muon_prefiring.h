@@ -1,7 +1,8 @@
 #ifndef WREMNANTS_MUON_PREFIRING_H
 #define WREMNANTS_MUON_PREFIRING_H
 
-#include "TFile.h"
+#include "TH2D.h"
+#include "utils.h"
 
 namespace wrem {
 
