@@ -48,6 +48,69 @@ public:
 
 };
 
+template<class ArgType>
+struct nonzero_helper {
+  using ArrayType =  Eigen::Array<typename Eigen::Index,
+                 Eigen::Dynamic,
+                 1,
+                 Eigen::ColMajor,
+                 ArgType::MaxSizeAtCompileTime,
+                 1>;
+};
+
+template<class ArgType>
+class nonzero_functor {
+  const ArgType &m_vec;
+public:
+  using ArrayType = typename nonzero_helper<ArgType>::ArrayType;
+
+  nonzero_functor(const ArgType& arg) : m_vec(arg) {}
+
+  typename Eigen::Index operator() (Eigen::Index row) const {
+    const bool cached = lastrow_ == (row - 1);
+    lastrow_ = row;
+    if (cached) {
+      for (Eigen::Index i = lastidx_ + 1; i < m_vec.rows(); ++i) {
+        if (m_vec[i] != 0) {
+          lastidx_ = i;
+          return i;
+        }
+      }
+    }
+    else {
+      for (Eigen::Index i = 0, count = 0; i < m_vec.rows(); ++i) {
+        if (m_vec[i] != 0) {
+          if (count++ == row) {
+            lastidx_ = i;
+            return i;
+          }
+        }
+      }
+    }
+    return -1;
+  }
+
+private:
+  mutable Eigen::Index lastrow_ = -1;
+  mutable Eigen::Index lastidx_ = -1;
+};
+
+template <class ArgType>
+Eigen:: CwiseNullaryOp<nonzero_functor<ArgType>, typename nonzero_functor<ArgType>::ArrayType>
+make_nonzero(const Eigen::ArrayBase<ArgType>& arg)
+{
+  using ArrayType = typename nonzero_helper<ArgType>::ArrayType;
+  static_assert(ArrayType::ColsAtCompileTime == 1);
+  std::size_t size;
+  if constexpr (std::is_same_v<typename ArrayType::Scalar, bool>) {
+    size = arg.count();
+  }
+  else {
+    size = (arg != 0).count();
+  }
+  return ArrayType::NullaryExpr(size, 1, nonzero_functor<ArgType>(arg.derived()));
+}
+
 }
 
 #endif
