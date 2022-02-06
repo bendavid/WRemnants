@@ -96,7 +96,8 @@ def getDatasets(maxFiles=-1, filt=None):
         ZttPostVFP, ttbarlnuPostVFP, ttbarlqPostVFP, wwPostVFP]
 
     if filt:
-        return filter(filt, allPostVFP)
+        print("Filtering")
+        return list(filter(filt, allPostVFP))
 
     return allPostVFP
 

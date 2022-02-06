@@ -5,6 +5,7 @@ ROOT.gInterpreter.AddIncludePath(f"{pathlib.Path(__file__).parent}/include/")
 
 ROOT.gInterpreter.Declare('#include "functions.h"')
 ROOT.gInterpreter.Declare('#include "muonCorr.h"')
+ROOT.gInterpreter.Declare('#include "theoryTools.h"')
 ROOT.gInterpreter.Declare('#include "functionsWMass.h"')
 ROOT.gInterpreter.Declare('#include "pileupWeights.h"')
 ROOT.gInterpreter.Declare('#include "utils.h"')
