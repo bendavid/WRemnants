@@ -11,11 +11,11 @@ Eigen::TensorFixedSize<double, Eigen::Sizes<2, ETABINS>> dummyScaleFromMassWeigh
     const double refMass = isW ? 80351.81229 : 91153.50974;
     const size_t centralIdx = 10;
     const double scaleMeV = refMass*scale;
-    const int step10MeV = static_cast<int>(scaleMeV/10)+1;
-    if (centralIdx+step10MeV > T-1)
+    const int step10MeV = std::floor(scaleMeV/10.)+1;
+    if (centralIdx-step10MeV < 0)
         throw std::out_of_range("Maximum allowed range for momentum scale uncertainty is 100 MeV!");
     // Find weight (10 MeV steps) closest, but smaller than desired scale, then scale down
-    const double scaleFac = scaleMeV/(10*step10MeV);
+    const double scaleFac = scaleMeV/(10.*step10MeV);
 
     Eigen::TensorFixedSize<double, Eigen::Sizes<2, ETABINS>> outWeights;
     outWeights.setConstant(1.);
