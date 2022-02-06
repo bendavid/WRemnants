@@ -3,6 +3,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--nThreads", type=int, help="number of threads", default=None)
 parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
+parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=None)
 args = parser.parse_args()
 
 import ROOT
@@ -22,7 +23,9 @@ import lz4.frame
 
 ROOT.wrem.initializeScaleFactors(wremnants.data_dir, wremnants.data_dir + "/testMuonSF/scaleFactorProduct_28Oct2021_nodz_dxybs_genMatchDR01.root")
 
-datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles)
+filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
+datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None)
+print("filt", filt, [x for x in datasets])
 
 era = "GToH"
 
@@ -141,6 +144,14 @@ def build_graph(df, dataset):
         # n.b. this is the W analysis so mass weights shouldn't be propagated
         # on the Z samples (but can still use it for dummy muon scale)
         if dataset.name in wprocs or dataset.name in zprocs:
+            df = df.Define("prefsrLeps", "wrem::prefsrLeptons(GenPart_status, GenPart_statusFlags, GenPart_pdgId, GenPart_genPartIdxMother)")
+            df = df.Define("genl", "ROOT::Math::PtEtaPhiMVector(GenPart_pt[prefsrLeps[0]], GenPart_eta[prefsrLeps[0]], GenPart_phi[prefsrLeps[0]], GenPart_mass[prefsrLeps[0]])")
+            df = df.Define("genlanti", "ROOT::Math::PtEtaPhiMVector(GenPart_pt[prefsrLeps[1]], GenPart_eta[prefsrLeps[1]], GenPart_phi[prefsrLeps[1]], GenPart_mass[prefsrLeps[1]])")
+            df = df.Define("genV", "ROOT::Math::PxPyPzEVector(genl)+ROOT::Math::PxPyPzEVector(genlanti)")
+            df = df.Define("ptVgen", "genV.pt()")
+            ptv_axis = hist.axis.Regular(60, 0, 60, name="ptVgen")
+            ptV = df.HistoBoost("genPtV", [ptv_axis], ["ptVgen", "weight"])
+
             # slice 101 elements starting from 0 and clip values at += 10.0
             df = df.Define("pdfWeights_tensor", "auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, 101>(LHEPdfWeight), 10.); res = nominal_weight*res; return res;")
 
