@@ -35,7 +35,7 @@ def getDatasets(maxFiles=-1, filt=None):
     BR_TAUToMU = 0.17394
     ZttPostVFP = narf.Dataset(name = "ZtautauPostVFP",
         filepaths = makeFilelist(
-            ["/scratch/shared/NanoAOD/DYJetsToTauTau_postVFP/*.root"], maxFiles),
+            ["/scratch/shared/originalNANO/DYJetsToTauTau_postVFP/*/*.root"], maxFiles),
         is_data = False,
         # At least one tau->e or mu decay, so everything that's not all other decays
         xsec = ZmmPostVFP.xsec*(1.-(1.-(BR_TAUToMU+0.1782)**2)),
@@ -92,7 +92,7 @@ def getDatasets(maxFiles=-1, filt=None):
     )
 
     allPostVFP = [dataPostVFP, WpmunuPostVFP, WmmunuPostVFP, WptaunuPostVFP, WmtaunuPostVFP, ZmmPostVFP, 
-        ttbarlnuPostVFP, ttbarlqPostVFP, wwPostVFP]
+        ZttPostVFP, ttbarlnuPostVFP, ttbarlqPostVFP, wwPostVFP]
 
     if filt:
         return filter(filt, allPostVFP)

@@ -2,7 +2,7 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--nThreads", type=int, help="number of threads", default=None)
-parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=None)
+parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
 args = parser.parse_args()
 
 import ROOT
@@ -23,7 +23,7 @@ import lz4.frame
 
 ROOT.wrem.initializeScaleFactors(wremnants.data_dir, wremnants.data_dir + "/testMuonSF/scaleFactorProduct_28Oct2021_nodz_dxybs_genMatchDR01.root")
 
-datasets = wremnants.datasets2016.getDatasets(maxFiles=-1)
+datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles)
 
 era = "GToH"
 
@@ -62,12 +62,11 @@ def build_graph(df, dataset):
 
     weightsum = df.SumAndCount("weight")
 
+    df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
+
     df = df.Define("vetoMuons", "Muon_pt > 10 && Muon_looseId && abs(Muon_eta) < 2.4 && abs(Muon_dxybs) < 0.05")
-
     df = df.Filter("Sum(vetoMuons) == 1")
-
     df = df.Define("goodMuons", "vetoMuons && Muon_mediumId && Muon_isGlobal")
-
     df = df.Filter("Sum(goodMuons) == 1")
 
     df = df.Define("goodMuons_pt0", "Muon_pt[goodMuons][0]")
@@ -84,16 +83,19 @@ def build_graph(df, dataset):
     df = df.Define("goodCleanJets", "Jet_jetId >= 6 && (Jet_pt > 50 || Jet_puId >= 4) && Jet_pt > 30 && abs(Jet_eta) < 2.4 && wrem::cleanJetsFromLeptons(Jet_eta,Jet_phi,Muon_eta[vetoMuons],Muon_phi[vetoMuons],Electron_eta[vetoElectrons],Electron_phi[vetoElectrons])")
 
     df = df.Define("passMT", "transverseMass >= 40.0")
-
     df = df.Filter("passMT || Sum(goodCleanJets)>=1")
-
     df = df.Define("passIso", "goodMuons_pfRelIso04_all0 < 0.15")
+
+    df = df.Define("goodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_pt,TrigObj_l1pt,TrigObj_l2pt,TrigObj_filterBits)")
+    df = df.Filter("wrem::hasTriggerMatch(goodMuons_eta0,goodMuons_phi0,TrigObj_eta[goodTrigObjs],TrigObj_phi[goodTrigObjs])")
+    df = df.Filter("Flag_globalSuperTightHalo2016Filter && Flag_EcalDeadCellTriggerPrimitiveFilter && Flag_goodVertices && Flag_HBHENoiseIsoFilter && Flag_HBHENoiseFilter && Flag_BadPFMuonFilter")
 
     nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
 
     if dataset.is_data:
         nominal = df.HistoBoost("nominal", nominal_axes, nominal_cols)
         results.append(nominal)
+
     else:
         df = df.DefinePerSample("eraVFP", f"wrem::{era}")
 
