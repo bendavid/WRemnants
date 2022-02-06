@@ -1,25 +1,17 @@
 #ifndef WREMNANTS_MUON_PREFIRING_H
 #define WREMNANTS_MUON_PREFIRING_H
 
-#include "TFile.h"
+#include "TH2D.h"
+#include "utils.h"
 
 namespace wrem {
 
 class muon_prefiring_helper {
 public:
 
-  muon_prefiring_helper(const TH2D &parms, const TH2D &hotspotparms) {
-
-      TH2D *parms_copy = new TH2D(parms);
-      TH2D *hotspot_parms_copy = new TH2D(hotspotparms);
-
-      // detach the newly created histograms since we manage their ownership ourselves
-      parms_copy->SetDirectory(0);
-      hotspot_parms_copy->SetDirectory(0);
-
-      parameters_.reset(parms_copy);
-      hotspot_parameters_.reset(hotspot_parms_copy);
-    }
+  muon_prefiring_helper(const TH2D &parms, const TH2D &hotspotparms) :
+    parameters_(make_shared_TH1<const TH2D>(parms)),
+    hotspot_parameters_(make_shared_TH1<const TH2D>(hotspotparms)) {}
 
   static bool is_hotspot(float eta, float phi) {
     // region with problematic chambers where prefiring probabilities are measured separately
@@ -67,7 +59,8 @@ class muon_prefiring_helper_stat {
 
 public:
 
-  using value_type = Eigen::TensorFixedSize<double, Eigen::Sizes<NEtaBins + 1, 2>>;
+  static constexpr std::size_t NVar = NEtaBins + 1;
+  using value_type = Eigen::TensorFixedSize<double, Eigen::Sizes<NVar, 2>>;
 
   muon_prefiring_helper_stat(const muon_prefiring_helper &other) :
     parameters_(other.parameters()), hotspot_parameters_(other.hotspot_parameters()) {}
