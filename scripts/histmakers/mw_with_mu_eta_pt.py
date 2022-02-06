@@ -154,15 +154,15 @@ def build_graph(df, dataset):
             results.append(alphaS002NNPDF31)
 
             isW = dataset.name in wprocs
-            nweights = 21 if isW else 23
-            df = df.Define("massWeight_tensor", f"auto res = wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight); res = nominal_weight*res; return res;")
-
-            if isW:
-                massWeight = df.HistoBoost("massWeight", nominal_axes, [*nominal_cols, "massWeight_tensor"])
-                results.append(massWeight)
-
-            # Don't think it makes sense to apply the mass weights to scale leptons from tau decays...
+            # Don't think it makes sense to apply the mass weights to scale leptons from tau decays, and it doesn't have MEParamWeight for now anyway
             if not "tau" in dataset.name:
+                nweights = 21 if isW else 23
+                df = df.Define("massWeight_tensor", f"auto res = wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight); res = nominal_weight*res; return res;")
+
+                if isW:
+                    massWeight = df.HistoBoost("massWeight", nominal_axes, [*nominal_cols, "massWeight_tensor"])
+                    results.append(massWeight)
+
                 netabins = 4
                 df = df.Define("muonScaleDummy4Bins2e4", f"dummyScaleFromMassWeights<{netabins}, {nweights}>(massWeight_tensor, goodMuons_eta0, 2.e-4, {str(isW).lower()})")
                 scale_etabins_axis = hist.axis.Regular(4, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
