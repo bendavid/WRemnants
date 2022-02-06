@@ -2,16 +2,15 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--nThreads", type=int, help="number of threads", default=None)
+parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
 args = parser.parse_args()
 
 import ROOT
 ROOT.gInterpreter.ProcessLine(".O3")
-if args.nThreads is not None:
-    if args.nThreads > 1:
-        ROOT.ROOT.EnableImplicitMT(args.nThreads)
-else:
+if not args.nThreads:
     ROOT.ROOT.EnableImplicitMT()
-
+elif args.nThreads != 1:
+    ROOT.ROOT.EnableImplicitMT(args.nThreads)
 
 import pickle
 import gzip
@@ -20,19 +19,17 @@ import narf
 import wremnants
 import hist
 import lz4.frame
-import numba
-
 
 ROOT.wrem.initializeScaleFactors(wremnants.data_dir, wremnants.data_dir + "/testMuonSF/scaleFactorProduct_28Oct2021_nodz_dxybs_genMatchDR01.root")
 
-datasets = wremnants.datasets2016.allDatasets(istest=False)
+datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles)
 
 era = "GToH"
 
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 
-wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP"]
-zprocs = ["ZmumuPostVFP"]
+wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP"]
+zprocs = ["ZmumuPostVFP", "ZtautauPostVFP"]
 
 # standard regular axes
 axis_eta = hist.axis.Regular(48, -2.4, 2.4, name = "eta")
@@ -64,12 +61,11 @@ def build_graph(df, dataset):
 
     weightsum = df.SumAndCount("weight")
 
+    df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
+
     df = df.Define("vetoMuons", "Muon_pt > 10 && Muon_looseId && abs(Muon_eta) < 2.4 && abs(Muon_dxybs) < 0.05")
-
     df = df.Filter("Sum(vetoMuons) == 1")
-
     df = df.Define("goodMuons", "vetoMuons && Muon_mediumId && Muon_isGlobal")
-
     df = df.Filter("Sum(goodMuons) == 1")
 
     df = df.Define("goodMuons_pt0", "Muon_pt[goodMuons][0]")
@@ -86,16 +82,19 @@ def build_graph(df, dataset):
     df = df.Define("goodCleanJets", "Jet_jetId >= 6 && (Jet_pt > 50 || Jet_puId >= 4) && Jet_pt > 30 && abs(Jet_eta) < 2.4 && wrem::cleanJetsFromLeptons(Jet_eta,Jet_phi,Muon_eta[vetoMuons],Muon_phi[vetoMuons],Electron_eta[vetoElectrons],Electron_phi[vetoElectrons])")
 
     df = df.Define("passMT", "transverseMass >= 40.0")
-
     df = df.Filter("passMT || Sum(goodCleanJets)>=1")
-
     df = df.Define("passIso", "goodMuons_pfRelIso04_all0 < 0.15")
+
+    df = df.Define("goodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_pt,TrigObj_l1pt,TrigObj_l2pt,TrigObj_filterBits)")
+    df = df.Filter("wrem::hasTriggerMatch(goodMuons_eta0,goodMuons_phi0,TrigObj_eta[goodTrigObjs],TrigObj_phi[goodTrigObjs])")
+    df = df.Filter("Flag_globalSuperTightHalo2016Filter && Flag_EcalDeadCellTriggerPrimitiveFilter && Flag_goodVertices && Flag_HBHENoiseIsoFilter && Flag_HBHENoiseFilter && Flag_BadPFMuonFilter")
 
     nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
 
     if dataset.is_data:
         nominal = df.HistoBoost("nominal", nominal_axes, nominal_cols)
         results.append(nominal)
+
     else:
         df = df.DefinePerSample("eraVFP", f"wrem::{era}")
 
@@ -108,20 +107,6 @@ def build_graph(df, dataset):
 
         nominal = df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "nominal_weight"])
         results.append(nominal)
-
-        # slice 101 elements starting from 0 and clip values at += 10.0
-        # extra assignment is to force the correct return type
-        df = df.Define("pdfWeights_tensor", "auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, 101>(LHEPdfWeight), 10.); res = nominal_weight*res; return res;")
-
-        pdfNNPDF31 = df.HistoBoost("pdfNNPDF31", nominal_axes, [*nominal_cols, "pdfWeights_tensor"])
-        results.append(pdfNNPDF31)
-
-        # slice 2 elements starting from 101
-        # extra assignment is to force the correct return type
-        df = df.Define("pdfWeightsAS_tensor", "auto res = wrem::vec_to_tensor_t<double, 2>(LHEPdfWeight, 101); res = nominal_weight*res; return res;")
-
-        alphaS002NNPDF31 = df.HistoBoost("alphaS002NNPDF31", nominal_axes, [*nominal_cols, "pdfWeightsAS_tensor"])
-        results.append(alphaS002NNPDF31)
 
         #TODO convert _get_fullMuonSFvariation_splitIso to produce a tensor natively
 
@@ -154,13 +139,37 @@ def build_graph(df, dataset):
         results.append(muonL1PrefireSyst)
 
         # n.b. this is the W analysis so mass weights shouldn't be propagated
-        # on the Z samples
-        if dataset.name in wprocs:
-            # extra assignment is to force the correct return type
-            df = df.Define("massWeight_tensor", "auto res = wrem::vec_to_tensor_t<double, 21>(MEParamWeight); res = nominal_weight*res; return res;")
+        # on the Z samples (but can still use it for dummy muon scale)
+        if dataset.name in wprocs or dataset.name in zprocs:
+            # slice 101 elements starting from 0 and clip values at += 10.0
+            df = df.Define("pdfWeights_tensor", "auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, 101>(LHEPdfWeight), 10.); res = nominal_weight*res; return res;")
 
-            massWeight = df.HistoBoost("massWeight", nominal_axes, [*nominal_cols, "massWeight_tensor"])
-            results.append(massWeight)
+            pdfNNPDF31 = df.HistoBoost("pdfNNPDF31", nominal_axes, [*nominal_cols, "pdfWeights_tensor"])
+            results.append(pdfNNPDF31)
+
+            # slice 2 elements starting from 101
+            df = df.Define("pdfWeightsAS_tensor", "auto res = wrem::vec_to_tensor_t<double, 2>(LHEPdfWeight, 101); res = nominal_weight*res; return res;")
+
+            alphaS002NNPDF31 = df.HistoBoost("alphaS002NNPDF31", nominal_axes, [*nominal_cols, "pdfWeightsAS_tensor"])
+            results.append(alphaS002NNPDF31)
+
+            isW = dataset.name in wprocs
+            nweights = 21 if isW else 23
+            df = df.Define("massWeight_tensor", f"auto res = wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight); res = nominal_weight*res; return res;")
+
+            if isW:
+                massWeight = df.HistoBoost("massWeight", nominal_axes, [*nominal_cols, "massWeight_tensor"])
+                results.append(massWeight)
+
+            # Don't think it makes sense to apply the mass weights to scale leptons from tau decays...
+            if not "tau" in dataset.name:
+                netabins = 4
+                df = df.Define("muonScaleDummy4Bins2e4", f"dummyScaleFromMassWeights<{netabins}, {nweights}>(massWeight_tensor, goodMuons_eta0, 2.e-4, {str(isW).lower()})")
+                scale_etabins_axis = hist.axis.Regular(4, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
+                dummyMuonScaleSyst = df.HistoBoost("muonScaleSyst", nominal_axes, [*nominal_cols, "muonScaleDummy4Bins2e4"], 
+                    tensor_axes=[down_up_axis, scale_etabins_axis])
+                results.append(dummyMuonScaleSyst)
+
 
     return results, weightsum
 
