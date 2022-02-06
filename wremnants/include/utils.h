@@ -28,6 +28,26 @@ T clip_tensor(const T &tensor, const typename T::Scalar &thres) {
   return tensor.cwiseMax(-thres).cwiseMin(thres);
 }
 
+// like std::make_shared but detach the TH1-derived object from the current directory
+template< class T, class... Args >
+std::shared_ptr<T> make_shared_TH1( Args&&... args ) {
+  using hist_t = std::decay_t<T>;
+  hist_t *hist = new hist_t(std::forward<Args>(args)...);
+  hist->SetDirectory(nullptr);
+  return std::shared_ptr<T>(hist);
+}
+
+template <typename T>
+class EigenRVecView : public Eigen::Map<const Eigen::Array<T, Eigen::Dynamic, 1>> {
+
+private:
+  using base_t = Eigen::Map<const Eigen::Array<T, Eigen::Dynamic, 1>>;
+
+public:
+  EigenRVecView(const ROOT::VecOps::RVec<T> &vec) : base_t(vec.data(), vec.size()) {}
+
+};
+
 }
 
 #endif
