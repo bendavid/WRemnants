@@ -30,6 +30,8 @@ datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt 
 era = "GToH"
 
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
+scetlibCorr_helper = wremnants.makeScetlibCorrHelper()
+print(scetlibCorr_helper)
 
 wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP"]
 zprocs = ["ZmumuPostVFP", "ZtautauPostVFP"]
@@ -150,6 +152,12 @@ def build_graph(df, dataset):
             df = df.Define("genlanti", "ROOT::Math::PtEtaPhiMVector(GenPart_pt[prefsrLeps[1]], GenPart_eta[prefsrLeps[1]], GenPart_phi[prefsrLeps[1]], GenPart_mass[prefsrLeps[1]])")
             df = df.Define("genV", "ROOT::Math::PxPyPzEVector(genl)+ROOT::Math::PxPyPzEVector(genlanti)")
             df = df.Define("ptVgen", "genV.pt()")
+            df = df.Define("massVgen", "genV.mass()")
+            df = df.Define("yVgen", "genV.Rapidity()")
+
+            df = df.Define("scetlibWeight_tensor", scetlibCorr_helper, ["massVgen", "yVgen", "ptVgen"])
+            scetlibUnc = df.HistoBoost("scetlibUnc", nominal_axes, [*nominal_cols, "scetlibWeight_tensor"])
+            results.append(scetlibUnc)
 
             # TODO: Order this so the syst axes are better labeled
             df = df.Define("scaleWeights_tensor", "auto res = wrem::vec_to_tensor_t<double, 9>(LHEScaleWeight); res = nominal_weight*res; return res;")
