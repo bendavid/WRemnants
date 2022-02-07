@@ -17,6 +17,8 @@ Eigen::TensorFixedSize<int, Eigen::Sizes<2>> prefsrLeptons(const wrem::EigenRVec
     auto others = leptons && (motherV || status23) && fromHardProcess;
     
     // If there are status = 746 leptons, they came from photos and are pre-FSR
+    // (but still need to check the mother in case photos was applied to other particles in the
+    // event, and in case of radiation from taus and their decay products)
     auto photos = leptons && status746 && motherV;
     auto all = photos || others;
 
