@@ -20,12 +20,12 @@ import narf
 import wremnants
 import hist
 import lz4.frame
+import logging
 
 ROOT.wrem.initializeScaleFactors(wremnants.data_dir, wremnants.data_dir + "/testMuonSF/scaleFactorProduct_28Oct2021_nodz_dxybs_genMatchDR01.root")
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None)
-print("filt", filt, [x for x in datasets])
 
 era = "GToH"
 
@@ -46,12 +46,13 @@ axis_passIso = hist.axis.Boolean(name = "passIso")
 axis_passMT = hist.axis.Boolean(name = "passMT")
 
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
+ptV_axis = hist.axis.Variable([0.0, 2.9, 4.7, 6.7, 9.0, 11.8, 15.3, 20.1, 27.2, 40.2, 13000.0], name="genPtV")
 
 # extra axes which can be used to label tensor_axes
 
-down_up_axis = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "down-up variation")
+down_up_axis = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "downUpVar")
 
-down_nom_up_axis = hist.axis.Regular(3, -1.5, 1.5, underflow=False, overflow=False, name = "down-nominal-up variation")
+down_nom_up_axis = hist.axis.Regular(3, -1.5, 1.5, underflow=False, overflow=False, name = "downUpNomVar")
 
 
 def build_graph(df, dataset):
@@ -149,8 +150,11 @@ def build_graph(df, dataset):
             df = df.Define("genlanti", "ROOT::Math::PtEtaPhiMVector(GenPart_pt[prefsrLeps[1]], GenPart_eta[prefsrLeps[1]], GenPart_phi[prefsrLeps[1]], GenPart_mass[prefsrLeps[1]])")
             df = df.Define("genV", "ROOT::Math::PxPyPzEVector(genl)+ROOT::Math::PxPyPzEVector(genlanti)")
             df = df.Define("ptVgen", "genV.pt()")
-            ptv_axis = hist.axis.Regular(60, 0, 60, name="ptVgen")
-            ptV = df.HistoBoost("genPtV", [ptv_axis], ["ptVgen", "weight"])
+
+            # TODO: Order this so the syst axes are better labeled
+            df = df.Define("scaleWeights_tensor", "auto res = wrem::vec_to_tensor_t<double, 9>(LHEScaleWeight); res = nominal_weight*res; return res;")
+            scaleHist = df.HistoBoost("qcdScale", nominal_axes+[ptV_axis], [*nominal_cols, "ptVgen", "scaleWeights_tensor"])
+            results.append(scaleHist)
 
             # slice 101 elements starting from 0 and clip values at += 10.0
             df = df.Define("pdfWeights_tensor", "auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, 101>(LHEPdfWeight), 10.); res = nominal_weight*res; return res;")
