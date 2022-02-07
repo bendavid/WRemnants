@@ -24,9 +24,11 @@ Eigen::TensorFixedSize<int, Eigen::Sizes<2>> prefsrLeptons(const wrem::EigenRVec
     if (photos.count() == 2) {
         selected = wrem::make_nonzero(photos);
     }
-    else {
+    else if (all.count() == 2) {
         selected = wrem::make_nonzero(all);
     }
+    else
+        throw std::range_error("Expected to find 2 pre-FSR leptons, but found " + std::to_string(all.count()));
     auto ids = pdgId(selected);
     bool partIdx = ids[0] > 0;
     Eigen::TensorFixedSize<int, Eigen::Sizes<2>> out;
