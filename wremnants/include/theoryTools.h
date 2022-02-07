@@ -17,7 +17,7 @@ Eigen::TensorFixedSize<int, Eigen::Sizes<2>> prefsrLeptons(const wrem::EigenRVec
     auto others = leptons && (motherV || status23) && fromHardProcess;
     
     // If there are status = 746 leptons, they came from photos and are pre-FSR
-    auto photos = leptons && status746;
+    auto photos = leptons && status746 && motherV;
     auto all = photos || others;
 
     Eigen::Array<Eigen::Index, 2, 1> selected;
@@ -27,8 +27,9 @@ Eigen::TensorFixedSize<int, Eigen::Sizes<2>> prefsrLeptons(const wrem::EigenRVec
     else if (all.count() == 2) {
         selected = wrem::make_nonzero(all);
     }
-    else
-        throw std::range_error("Expected to find 2 pre-FSR leptons, but found " + std::to_string(all.count()));
+    else {
+        throw std::range_error("Expected to find 2 pre-FSR leptons, but found " + std::to_string(all.count()) + ", " + std::to_string(photos.count()));
+    }
     auto ids = pdgId(selected);
     bool partIdx = ids[0] > 0;
     Eigen::TensorFixedSize<int, Eigen::Sizes<2>> out;
