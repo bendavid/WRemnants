@@ -56,17 +56,6 @@ std::shared_ptr<T> make_shared_TH1( Args&&... args ) {
   return std::shared_ptr<T>(hist);
 }
 
-template <typename T>
-class EigenRVecView : public Eigen::Map<const Eigen::Array<T, Eigen::Dynamic, 1>> {
-
-private:
-  using base_t = Eigen::Map<const Eigen::Array<T, Eigen::Dynamic, 1>>;
-
-public:
-  EigenRVecView(const ROOT::VecOps::RVec<T> &vec) : base_t(vec.data(), vec.size()) {}
-
-};
-
 template <typename ArgType, typename = std::enable_if_t<std::is_same_v<typename ArgType::Scalar, bool>>>
 auto tensor_count(const ArgType &arg) {
   return arg.template cast<std::size_t>().sum();
@@ -229,7 +218,6 @@ auto fancy_index(const ArgType &arg, const IndexType &idxs) {
 template<class ArgType, class MaskType>
 auto bool_index(const ArgType &arg, const MaskType &mask) {
   return fancy_index(arg, make_nonzero_tensor(mask));
-//   return make_nonzero_tensor(mask);
 }
 
 template<typename ArgTypeIf, typename ArgTypeThen, typename ArgTypeElse>
