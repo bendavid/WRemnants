@@ -4,9 +4,95 @@
 
 #include <eigen3/Eigen/Dense>
 #include <eigen3/unsupported/Eigen/CXX11/Tensor>
+#include "defines.h"
 
 namespace wrem {
 
+float mt_2(float pt1, float phi1, float pt2, float phi2) {
+    return std::sqrt(2*pt1*pt2*(1-std::cos(phi1-phi2)));
+}
+
+double deltaPhi(float phi1, float phi2) {
+    double result = phi1 - phi2;
+    while (result > M_PI) result -= 2.0*M_PI;
+    while (result <= -1.0*M_PI) result += 2.0*M_PI;
+    return result;
+}
+
+double deltaR2(float eta1, float phi1, float eta2, float phi2) {
+    double deta = eta1-eta2;
+    double dphi = deltaPhi(phi1,phi2);
+    return deta*deta + dphi*dphi;
+}
+
+Vec_b cleanJetsFromLeptons(const Vec_f& Jet_eta, const Vec_f& Jet_phi, const Vec_f& Muon_eta, const Vec_f& Muon_phi, const Vec_f& Electron_eta, const Vec_f& Electron_phi) {
+
+   Vec_b res(Jet_eta.size(), true); // initialize to true and set to false whenever the jet overlaps with a muon
+
+   for (unsigned int ij = 0; ij < res.size(); ++ij) {
+
+     for (unsigned int im = 0; im < Muon_eta.size(); ++im) {
+       if (deltaR2(Jet_eta[ij], Jet_phi[ij], Muon_eta[im], Muon_phi[im]) < 0.16) { // cone DR = 0.4
+	 res[ij] = false;
+	 break;
+       }
+     }
+
+     if (res[ij]) {
+       for (unsigned int ie = 0; ie < Electron_eta.size(); ++ie) {
+	 if (deltaR2(Jet_eta[ij], Jet_phi[ij], Electron_eta[ie], Electron_phi[ie]) < 0.16) { // cone DR = 0.4
+	   res[ij] = false;
+	   break;
+	 }
+       }
+     }
+
+   }
+
+   return res;
+}
+
+Vec_b goodMuonTriggerCandidate(const Vec_i& TrigObj_id, const Vec_f& TrigObj_pt, const Vec_f& TrigObj_l1pt, const Vec_f& TrigObj_l2pt, const Vec_i& TrigObj_filterBits) {
+
+   Vec_b res(TrigObj_id.size(),false); // initialize to 0
+   for (unsigned int i = 0; i < res.size(); ++i) {
+       if (TrigObj_id[i]  != 13 ) continue;
+       if (TrigObj_pt[i]   < 24.) continue;
+       if (TrigObj_l1pt[i] < 22.) continue;
+       if (! (( TrigObj_filterBits[i] & 8) || (TrigObj_l2pt[i] > 10. && (TrigObj_filterBits[i] & 2) )) ) continue;
+       res[i] = true;
+   }
+   // res will be goodTrigObjs in RDF
+   // e.g. RDF::Define("goodTrigObjs","goodMuonTriggerCandidate(TrigObj_id,TrigObj_pt,TrigObj_l1pt,TrigObj_l2pt,TrigObj_filterBits)")
+   return res;
+}
+
+Vec_b hasTriggerMatch(const Vec_f& eta, const Vec_f& phi, const Vec_f& TrigObj_eta, const Vec_f& TrigObj_phi) {
+
+   Vec_b res(eta.size(),false); // initialize to 0
+   for (unsigned int i = 0; i < res.size(); ++i) {
+      for (unsigned int jtrig = 0; jtrig < TrigObj_eta.size(); ++jtrig) {
+	  // use deltaR*deltaR < 0.3*0.3, to be faster
+          if (deltaR2(eta[i], phi[i], TrigObj_eta[jtrig], TrigObj_phi[jtrig]) < 0.09) {
+              res[i] = true;
+              break; // exit loop on trigger objects, and go to next muon
+          }
+      }
+   }
+   // res will be triggerMatchedMuons in RDF, like
+   // RDF::Define("triggerMatchedMuons","hasTriggerMatch(Muon_eta,Muon_phi,TrigObj_eta[goodTrigObjs],TrigObj_phi[goodTrigObjs])")
+   return res;
+
+}
+
+bool hasTriggerMatch(const float& eta, const float& phi, const Vec_f& TrigObj_eta, const Vec_f& TrigObj_phi) {
+
+  for (unsigned int jtrig = 0; jtrig < TrigObj_eta.size(); ++jtrig) {
+    if (deltaR2(eta, phi, TrigObj_eta[jtrig], TrigObj_phi[jtrig]) < 0.09) return true;
+  }
+  return false;
+
+}
 
 template<std::ptrdiff_t N, typename V>
 auto vec_to_tensor(const V &vec, std::size_t start = 0) {
