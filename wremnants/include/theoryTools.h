@@ -5,39 +5,76 @@
 
 namespace wrem {
 
-Eigen::TensorFixedSize<int, Eigen::Sizes<2>> prefsrLeptons(const wrem::EigenRVecView<int>& status,
-        const wrem::EigenRVecView<int>& statusFlags, const wrem::EigenRVecView<int>& pdgId, const wrem::EigenRVecView<int>& motherIdx) {
-    auto leptons = pdgId.abs() >= 11 && pdgId.abs() <= 16;
-    auto status746 = status == 746;
-    auto status23 = status == 23;
-    auto motherV = pdgId(motherIdx) == 23 || pdgId(motherIdx).abs() == 24;
-    auto fromHardProcess = statusFlags.unaryExpr([](int x) { return x & (1 << 8); }).cast<bool>();
+Eigen::TensorFixedSize<int, Eigen::Sizes<2>> prefsrLeptons(const ROOT::VecOps::RVec<int>& status,
+        const ROOT::VecOps::RVec<int>& statusFlags, const ROOT::VecOps::RVec<int>& pdgId, const ROOT::VecOps::RVec<int>& motherIdx) {
+
+  const std::size_t ngenparts = status.size();
+
+
+  std::array<std::size_t, 2> photos_idxs;
+  std::array<std::size_t, 2> all_idxs;
+  std::size_t nphotos = 0;
+  std::size_t nall = 0;
+  for (std::size_t i = 0; i < ngenparts; ++i) {
+    const int &istatus = status[i];
+    const int &istatusFlags = statusFlags[i];
+    const int &ipdgId = pdgId[i];
+    const int &imotherIdx = motherIdx[i];
+
+    const int absPdgId = std::abs(ipdgId);
+
+    const bool is_lepton = absPdgId >= 11 && absPdgId <= 16;
+    const bool is_status746 = istatus == 746;
+    const bool is_status23 = istatus == 23;
+    const int &motherPdgId = pdgId[imotherIdx];
+    const bool is_motherV = motherPdgId == 23 || std::abs(motherPdgId) == 24;
+
+    const bool is_photos = is_lepton && is_status746 && is_motherV;
+
+
+    const bool is_fromHardProcess = istatusFlags & ( 1 << 8 );
 
     // TODO: Is there a way to relax the fromHardProcess condition?
-    auto others = leptons && (motherV || status23) && fromHardProcess;
-    
+    const bool is_other = is_lepton && (is_motherV || is_status23) && is_fromHardProcess;
+
     // If there are status = 746 leptons, they came from photos and are pre-FSR
     // (but still need to check the mother in case photos was applied to other particles in the
     // event, and in case of radiation from taus and their decay products)
-    auto photos = leptons && status746 && motherV;
-    auto all = photos || others;
+    const bool is_all = is_photos || is_other;
 
-    Eigen::Array<Eigen::Index, 2, 1> selected;
-    if (photos.count() == 2) {
-        selected = wrem::make_nonzero(photos);
+    if (is_photos) {
+      if (nphotos < 2) {
+        photos_idxs[nphotos] = i;
+      }
+      ++nphotos;
     }
-    else if (all.count() == 2) {
-        selected = wrem::make_nonzero(all);
+
+    if (is_all) {
+      if (nall < 2) {
+        all_idxs[nall] = i;
+      }
+      ++nall;
     }
-    else {
-        throw std::range_error("Expected to find 2 pre-FSR leptons, but found " + std::to_string(all.count()) + ", " + std::to_string(photos.count()));
-    }
-    auto ids = pdgId(selected);
-    bool partIdx = ids[0] > 0;
-    Eigen::TensorFixedSize<int, Eigen::Sizes<2>> out;
-    out(0) = selected(partIdx);
-    out(1) = selected(!partIdx);
-    return out;
+  }
+
+  std::array<std::size_t, 2> selected_idxs;
+  if (nphotos == 2) {
+    selected_idxs = photos_idxs;
+  }
+  else if (nall == 2) {
+    selected_idxs = all_idxs;
+  }
+  else {
+    throw std::range_error("Expected to find 2 pre-FSR leptons, but found " + std::to_string(nall) + ", " + std::to_string(nphotos));
+  }
+
+  std::array<int, 2> selected_pdgids = { pdgId[selected_idxs[0]], pdgId[selected_idxs[1]] };
+  const bool partIdx = selected_pdgids[0] > 0;
+  Eigen::TensorFixedSize<int, Eigen::Sizes<2>> out;
+  out(0) = selected_idxs[partIdx];
+  out(1) = selected_idxs[!partIdx];
+  return out;
+
 }
 
 } 
