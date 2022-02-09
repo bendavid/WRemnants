@@ -22,8 +22,6 @@ import hist
 import lz4.frame
 import logging
 
-ROOT.wrem.initializeScaleFactors(wremnants.data_dir, wremnants.data_dir + "/testMuonSF/scaleFactorProduct_28Oct2021_nodz_dxybs_genMatchDR01.root")
-
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None)
 
@@ -32,6 +30,8 @@ era = "GToH"
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 scetlibCorr_helper = wremnants.makeScetlibCorrHelper()
 print(scetlibCorr_helper)
+
+#assert(0)
 
 wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP"]
 zprocs = ["ZmumuPostVFP", "ZtautauPostVFP"]
@@ -56,6 +56,8 @@ down_up_axis = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, na
 
 down_nom_up_axis = hist.axis.Regular(3, -1.5, 1.5, underflow=False, overflow=False, name = "downNomUpVar")
 
+
+muon_efficiency_helper, muon_efficiency_helper_stat, muon_efficiency_helper_syst = wremnants.make_muon_efficiency_helpers(era = era, max_pt = axis_pt.edges[-1])
 
 def build_graph(df, dataset):
     results = []
@@ -105,31 +107,22 @@ def build_graph(df, dataset):
         df = df.DefinePerSample("eraVFP", f"wrem::{era}")
 
         df = df.Define("weight_pu", "wrem::puw_2016UL_era(Pileup_nTrueInt,eraVFP)")
-        df = df.Define("weight_fullMuonSF", "wrem::_get_fullMuonSF(goodMuons_pt0 ,goodMuons_eta0,goodMuons_charge0,-1,-1,eraVFP,passIso)")
+        df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0", "passIso"])
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_eta", "Muon_pt", "Muon_phi", "Muon_looseId"])
-        df = df.Define("weight_tnpTrackingRecoSF", "wrem::_get_tnpTrackingRecoSF(goodMuons_pt0 ,goodMuons_eta0,goodMuons_charge0,-1,-1,eraVFP)")
 
-        df = df.Define("nominal_weight", "weight*weight_pu*weight_fullMuonSF*weight_newMuonPrefiringSF*weight_tnpTrackingRecoSF")
+        df = df.Define("nominal_weight", "weight*weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF")
 
         nominal = df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "nominal_weight"])
         results.append(nominal)
 
-        #TODO convert _get_fullMuonSFvariation_splitIso to produce a tensor natively
+        df = df.Define("effStatTnP_tensor", muon_efficiency_helper_stat, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0", "passIso", "nominal_weight"])
 
-        # extra assignment is to force the correct return type
-        df = df.Define("effStatTnP_tensor", "auto res = wrem::vec_to_tensor_t<double, 1248>(wrem::_get_fullMuonSFvariation_splitIso(624, goodMuons_pt0 ,goodMuons_eta0,goodMuons_charge0,-1,-1,eraVFP,passIso)); res = (nominal_weight/weight_fullMuonSF)*res; return res;")
-
-        effStatTnP = df.HistoBoost("effStatTnP", nominal_axes, [*nominal_cols, "effStatTnP_tensor"])
+        effStatTnP = df.HistoBoost("effStatTnP", nominal_axes, [*nominal_cols, "effStatTnP_tensor"], tensor_axes = muon_efficiency_helper_stat.tensor_axes)
         results.append(effStatTnP)
 
-        df = df.Define("effSystIsoTnP_weight", "(nominal_weight/weight_fullMuonSF)*_get_fullMuonSF_dataAltSig_splitIso(1,goodMuons_pt0 ,goodMuons_eta0,goodMuons_charge0,-1,-1,eraVFP,passIso)")
+        df = df.Define("effSystIsoTnP_weight", muon_efficiency_helper_syst, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0", "passIso", "nominal_weight"])
 
-        effSystIsoTnP = df.HistoBoost("effSystIsoTnP", nominal_axes, [*nominal_cols, "effSystIsoTnP_weight"])
-        results.append(effSystIsoTnP)
-
-        df = df.Define("effSystTrigAndIdipTnP_weight", "(nominal_weight/weight_fullMuonSF)*_get_fullMuonSF_dataAltSig_splitIso(0,goodMuons_pt0 ,goodMuons_eta0,goodMuons_charge0,-1,-1,eraVFP,passIso)")
-
-        effSystTrigAndIdipTnP = df.HistoBoost("effSystTrigAndIdipTnP", nominal_axes, [*nominal_cols, "effSystTrigAndIdipTnP_weight"])
+        effSystIsoTnP = df.HistoBoost("effSystIsoTnP", nominal_axes, [*nominal_cols, "effSystIsoTnP_weight"], tensor_axes = muon_efficiency_helper_syst.tensor_axes)
         results.append(effSystIsoTnP)
 
         #FIXME skipping EffTrackingRecoTnP_ since it's not consistently defined yet
