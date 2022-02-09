@@ -1,9 +1,6 @@
 #ifndef WREMNANTS_MUON_EFFICIENCIES_H
 #define WREMNANTS_MUON_EFFICIENCIES_H
 
-#include "TH2D.h"
-#include "utils.h"
-
 namespace wrem {
 
 // TODO use enums for integer/boolean/category axes so that the code is less error-prone?
@@ -19,17 +16,6 @@ public:
 
     }
 
-
-//   auto const &sf_idip_trig_iso(float pt, float eta, int charge, int idx_eff_type, int idx_nom_alt) const {
-    //TODO indices for with_trigger and nom_alt are in principle known at compile time
-
-//     return sf_idip_trig_iso_->at(sf_idip_trig_iso_->template axis<0>().index(eta),
-//                                 sf_idip_trig_iso_->template axis<1>().index(pt),
-//                                 sf_idip_trig_iso_->template axis<2>().index(charge),
-//                                 idx_eff_type,
-//                                 idx_nom_alt);
-//   }
-
   auto const &sf_trackingreco(float eta, int charge, int idx_nom_alt) const {
     //TODO index for nom_alt are in principle known at compile time
 
@@ -37,31 +23,6 @@ public:
                                 sf_tracking_reco_->template axis<1>().index(charge),
                                 idx_nom_alt);
   }
-
-//   auto const &sf_idip(float pt, float eta, int charge, int idx_nom_alt) const {
-//     return sf_idip_trig_iso(pt, eta, charge, idip_idx_, idx_nom_alt);
-//   }
-//
-//   auto const &sf_idip_trig(float pt, float eta, int charge, int idx_nom_alt) const {
-//     return sf_idip_trig_iso(pt, eta, charge, idx_idip_trig_, idx_nom_alt);
-//   }
-//
-//   auto const &sf_iso_nontriggering(float pt, float eta, int charge, bool pass_iso, int idx_nom_alt) const {
-//     bool idx_eff_type = pass_iso ? idx_iso_nontriggering_ : idx_antiiso_nontriggering_;
-//     return sf_idip_trig_iso((pt, eta, charge, idx_eff_type, idx_nom_alt);
-//   }
-//
-//   auto const &sf_iso_triggering(float pt, float eta, int charge, bool pass_iso, int idx_nom_alt) const {
-//     bool idx_eff_type = pass_iso ? idx_iso_triggering_ : idx_antiiso_triggering_;
-//     return sf_idip_trig_iso((pt, eta, charge, idx_eff_type, idx_nom_alt);
-//   }
-//
-//   double nominal_scale_factor_triggering(float pt, float eta, int charge, bool pass_iso) const {
-//     const double idiptrig = sf_idip_trig_iso_product(pt, eta, charge, idx_nom_).value();
-//     const double trackingreco = sf_trackingreco(eta, charge, idx_nom_).value();
-//
-//     return idiptrig*trackingreco;
-//   }
 
   double scale_factor_product(float pt, float eta, int charge, bool pass_iso, bool with_trigger, int idx_nom_alt) const {
     auto const eta_idx = sf_idip_trig_iso_->template axis<0>().index(eta);
@@ -213,22 +174,22 @@ public:
 
 };
 
-// // specialization for two-lepton case
-// template<int NEtaBins, int NPtBins, typename HIST_IDIPTRIGISO, typename HIST_TRACKINGRECO>
-// class muon_efficiency_helper<true, NEtaBins, NPtBins, HIST_IDIPTRIGISO, HIST_TRACKINGRECO> : public muon_efficiency_helper_base<NEtaBins, NPtBins, HIST_IDIPTRIGISO, HIST_TRACKINGRECO> {
-//
-// public:
-//
-//   using base_t = muon_efficiency_helper_base<NEtaBins, NPtBins, HIST_IDIPTRIGISO, HIST_TRACKINGRECO>;
-//
-//   // inherit constructor
-//   using base_t::base_t;
-//
-//   //TODO implement operator()
-//
-//
-//
-// };
+// specialization for two-lepton case
+template<int NEtaBins, int NPtBins, typename HIST_IDIPTRIGISO, typename HIST_TRACKINGRECO>
+class muon_efficiency_helper<true, NEtaBins, NPtBins, HIST_IDIPTRIGISO, HIST_TRACKINGRECO> : public muon_efficiency_helper_base<NEtaBins, NPtBins, HIST_IDIPTRIGISO, HIST_TRACKINGRECO> {
+
+public:
+
+  using base_t = muon_efficiency_helper_base<NEtaBins, NPtBins, HIST_IDIPTRIGISO, HIST_TRACKINGRECO>;
+
+  // inherit constructor
+  using base_t::base_t;
+
+  //TODO implement operator()
+
+
+
+};
 
 // base template for one lepton case
 template<bool do_other, int NEtaBins, int NPtBins, typename HIST_IDIPTRIGISO, typename HIST_TRACKINGRECO>
