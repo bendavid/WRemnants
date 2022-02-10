@@ -12,6 +12,11 @@ git remote add wmass-central git@github.com:WMass/WRemnants.git
 git push -f origin main
 ```
 
+Get updates from the central repository (and main branch)
+```bash
+git pull --recurse-submodules wmass-central main
+```
+    
 Run the code
 ```bash
 singularity run /scratch/singularity/pythonrootarchdevrolling # needs to be on lxplus8s10
