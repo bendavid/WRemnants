@@ -27,7 +27,7 @@ def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange):
     ax1.set_ylim(ylim)
     return fig,ax1,ax2
 
-def addLegend(ax, ncols=2, extra_text=None):
+def addLegend(ax, ncols = 1, extra_text=None):
     has_extra_text = extra_text is not None
     handles, labels = ax.get_legend_handles_labels()
     
@@ -49,7 +49,7 @@ def addLegend(ax, ncols=2, extra_text=None):
     ax.legend(handles=handles, labels=labels, prop={'size' : 20*(0.7 if shape == 1 else 1.3)}, ncol=ncols, loc='upper right')
 
 def makeStackPlotWithRatio(histInfo, stackedProcs, label="nominal", unstacked=None, xlabel="", ylabel="Events/bin", 
-                rrange=[0.9, 1.1], ymax=None, xlim=None, binwnorm=None, select={}, nlegcols=2, action=None, extra_text=None):
+                rrange=[0.9, 1.1], ymax=None, xlim=None, binwnorm=None, select={}, action=None, extra_text=None):
     stack = [action(histInfo[k][label][select]) for k in stackedProcs if histInfo[k][label]]
     colors = [histInfo[k]["color"] for k in stackedProcs if histInfo[k][label]]
     labels = [histInfo[k]["label"] for k in stackedProcs if histInfo[k][label]]
@@ -87,12 +87,18 @@ def makeStackPlotWithRatio(histInfo, stackedProcs, label="nominal", unstacked=No
                 ax=ax2
             )
 
-    addLegend(ax1, nlegcols, extra_text)
+    addLegend(ax1, extra_text)
     return fig
 
-def makePlotWithRatioToRef(hists, labels, colors, xlabel="", ylabel="Events/bin", rlabel="x/nominal",
-                rrange=[0.9, 1.1], ymax=None, xlim=None, nlegcols=2, binwnorm=None):
-
+def makePlotWithRatioToRef(hists, labels, colors, xlabel="", ylabel="Events/bin", rlabel="bugfix/bugged",
+                rrange=[0.9, 1.1], ymax=None, xlim=None, binwnorm=None, baseline=None, autorrange=None):
+    if baseline:
+        ratio_plots_starting_idx = 0
+    else:
+        ratio_plots_starting_idx = 1
+    ratio_hists = [hh.divideHists(h, hists[0], cutoff=0.00001) for h in hists[ratio_plots_starting_idx:]]
+#    if autorrange:
+#        rrange = [min([x.values().min() for x in ratio_hists]), max(
     fig, ax1, ax2 = figureWithRatio(hists[0], xlabel, ylabel, [0, ymax] if ymax else None, rlabel, rrange, xlim=xlim)
     
     hep.histplot(
@@ -107,15 +113,15 @@ def makePlotWithRatioToRef(hists, labels, colors, xlabel="", ylabel="Events/bin"
     
     if len(hists) > 1:
         hep.histplot(
-                [hh.divideHists(h, hists[0], cutoff=1e-10) for h in hists],
+                ratio_hists,
             histtype="step",
-            color=colors,
-            label=labels,
+            color=colors[ratio_plots_starting_idx:],
+            label=labels[ratio_plots_starting_idx:],
             yerr=False,
             stack=False,
             ax=ax2,
         )
         
-    addLegend(ax1, nlegcols)
+    addLegend(ax1)
     return fig
 
