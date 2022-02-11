@@ -10,16 +10,15 @@ singularity run /scratch/singularity/pythonrootarchdevrolling # needs to be on l
 Get the code (after forking from the central WMass repository)
 ```bash
 MY_GIT_USER=$(git config user.github)
-git clone --recurse-submodules https://github.com/$MY_GIT_USER/WRemnants.git
+git clone --recurse-submodules git@github.com:$MY_GIT_USER/WRemnants.git
 cd WRemnants/
-git remote set-url origin git@github.com:$MY_GIT_USER/WRemnants.git
 git remote add upstream git@github.com:WMass/WRemnants.git
 ```
 
 Get updates from the central repository (and main branch)
 ```bash
 git pull --recurse-submodules upstream main
-git push origin main
+git push --recurse-submodules origin main
 ```
     
 Run the code
