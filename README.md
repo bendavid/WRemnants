@@ -2,24 +2,28 @@
 
 ## Instructions:
 
+Activate the singularity image (before getting the code or running it)
+```bash
+singularity run /scratch/singularity/pythonrootarchdevrolling # needs to be on lxplus8s10
+```
+    
 Get the code (after forking from the central WMass repository)
 ```bash
-git clone --recursive https://github.com/WMass/WRemnants.git
-cd WRemnants/
 MY_GIT_USER=$(git config user.github)
+git clone --recurse-submodules https://github.com/$MY_GIT_USER/WRemnants.git
+cd WRemnants/
 git remote set-url origin git@github.com:$MY_GIT_USER/WRemnants.git
-git remote add wmass-central git@github.com:WMass/WRemnants.git
-git push -f origin main
+git remote add upstream git@github.com:WMass/WRemnants.git
 ```
 
 Get updates from the central repository (and main branch)
 ```bash
-git pull --recurse-submodules wmass-central main
+git pull --recurse-submodules upstream main
+git push origin main
 ```
     
 Run the code
 ```bash
-singularity run /scratch/singularity/pythonrootarchdevrolling # needs to be on lxplus8s10
 source WRemnants/setup.sh
 python WRemnants/scripts/histmakers/mw_with_mu_eta_pt.py
 ```
