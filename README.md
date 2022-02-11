@@ -18,7 +18,7 @@ git remote add upstream git@github.com:WMass/WRemnants.git
 Get updates from the central repository (and main branch)
 ```bash
 git pull --recurse-submodules upstream main
-git push --recurse-submodules origin main
+git push origin main
 ```
     
 Run the code
