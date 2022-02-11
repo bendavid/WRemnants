@@ -35,15 +35,9 @@ def define_prefsr_vars(df):
     df = df.Define("yVgen", "genV.Rapidity()")
     df = df.Define("absYVgen", "std::fabs(yVgen)")
     df = df.Define("chargeVgen", "GenPart_pdgId[prefsrLeps[0]] + GenPart_pdgId[prefsrLeps[1]]")
-    df = df.Define("csSineCosThetaPhi", "wrem::csSineCosThetaPhi(genl, genlanti)")
-    return df
-
-def define_scale_tensor(df):
     # convert vector of scale weights to 3x3 tensor and clip weights to |weight|<10.
     df = df.Define("scaleWeights_tensor", "wrem::makeScaleTensor(LHEScaleWeight, 10.);")
-    df = df.Define("scaleWeights_tensor_wnom", "auto res = scaleWeights_tensor; res = nominal_weight*res; return res;")
-
-    return df
+    df = df.Define("csSineCosThetaPhi", "wrem::csSineCosThetaPhi(genl, genlanti)")
 
 def make_scale_hist(df, axes, cols):
     scaleHist = df.HistoBoost("qcdScale", axes, [*cols, "scaleWeights_tensor_wnom"], tensor_axes=scale_tensor_axes)
@@ -65,7 +59,6 @@ def define_and_make_pdf_hists(df, axes, cols, pdfset="nnpdf31"):
 
     return pdfHist, alphaSHist
 
-
 def define_scetlib_corr(df, weight_expr, helper):
     df = df.Define("nominal_weight_uncorr", weight_expr)
     df = df.Define("scetlibWeight_tensor", scetlibCorr_helper, ["chargeVgen", "massVgen", "yVgen", "ptVgen", "nominal_weight_uncorr"])
@@ -86,6 +79,7 @@ def moments_to_angular_coeffs(hist_moments_scales):
     norm_vals = np.where( vals==0., 1., vals)
 
     # e.g. from arxiv:1708.00008 eq. 2.13
+    # x[1:] corresponds to A_0, ... , A_7
     offsets = np.array([0., 4., 0., 0., 0., 0., 0., 0., 0.])
     scales = np.array([1., -10., 5., 10., 4., 4., 5., 5., 4.])
 
