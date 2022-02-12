@@ -91,6 +91,9 @@ def build_graph(df, dataset):
 
     nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
 
+    events_pass = df.Count()
+    results.append(events_pass)
+
     #nominal = df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "weight"])
     #results.append(nominal)
 
@@ -113,7 +116,8 @@ def build_graph(df, dataset):
             results.append(pdfNNPDF31)
         else:
             if args.useBoost:
-                pdfNNPDF31 = df.HistoBoost(f"pdfNNPDF31_{ihist}", nominal_axes + [axis_pdfsyst_idx], nominal_cols + [ "pdfsyst_idx", "pdfWeights_rvec"])
+                #pdfNNPDF31 = df.HistoBoost(f"pdfNNPDF31_{ihist}", nominal_axes + [axis_pdfsyst_idx], nominal_cols + [ "pdfsyst_idx", "pdfWeights_rvec"])
+                pdfNNPDF31 = df.HistoBoost(f"pdfNNPDF31_{ihist}", [axis_pdfsyst_idx] + nominal_axes , [ "pdfsyst_idx" ] + nominal_cols + [ "pdfWeights_rvec"])
                 results.append(pdfNNPDF31)
             else:
                 print("ROOT path")
@@ -122,7 +126,8 @@ def build_graph(df, dataset):
                         pdfNNPDF31 = df.HistoND((f"pdfNNPDF31_{ipdf}_{ihist}", "", 5, [48, 29, 2, 2, 2], [-2.4, 26.,-2.,-0.5, -0.5], [2.4, 55., 2., 1.5, 1.5]), nominal_cols + [ f"pdfWeights_{ipdf}"])
                         results.append(pdfNNPDF31)
                 else:
-                    pdfNNPDF31 = df.HistoND((f"pdfNNPDF31_{ihist}", "", 6, [48, 29, 2, 2, 2, 103], [-2.4, 26.,-2.,-0.5, -0.5, -0.5], [2.4, 55., 2., 1.5, 1.5, 102.5]), nominal_cols + [ "pdfsyst_idx", "pdfWeights_rvec"])
+                    #pdfNNPDF31 = df.HistoND((f"pdfNNPDF31_{ihist}", "", 6, [48, 29, 2, 2, 2, 103], [-2.4, 26.,-2.,-0.5, -0.5, -0.5], [2.4, 55., 2., 1.5, 1.5, 102.5]), nominal_cols + [ "pdfsyst_idx", "pdfWeights_rvec"])
+                    pdfNNPDF31 = df.HistoND((f"pdfNNPDF31_{ihist}", "", 6, [103, 48, 29, 2, 2, 2], [-0.5, -2.4, 26.,-2.,-0.5, -0.5], [102.5, 2.4, 55., 2., 1.5, 1.5]), ["pdfsyst_idx"] + nominal_cols + ["pdfWeights_rvec"])
                     results.append(pdfNNPDF31)
 
 
@@ -132,6 +137,8 @@ def build_graph(df, dataset):
 time_to_graph_setup = time.time()
 
 resultdict = narf.build_and_run(datasets, build_graph)
+
+print(resultdict)
 
 print("init time:", time_to_graph_setup-time0)
 
