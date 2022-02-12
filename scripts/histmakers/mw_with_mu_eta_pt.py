@@ -25,7 +25,7 @@ import logging
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None)
 
-era = "GToH"
+era = "2016PostVFP"
 
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 scetlibCorr_helper = wremnants.makeScetlibCorrHelper()
@@ -59,6 +59,8 @@ down_nom_up_axis = hist.axis.Regular(3, -1.5, 1.5, underflow=False, overflow=Fal
 
 
 muon_efficiency_helper, muon_efficiency_helper_stat, muon_efficiency_helper_syst = wremnants.make_muon_efficiency_helpers(era = era, max_pt = axis_pt.edges[-1])
+
+pileup_helper = wremnants.make_pileup_helper(era = era)
 
 def build_graph(df, dataset):
     results = []
@@ -105,9 +107,7 @@ def build_graph(df, dataset):
         results.append(nominal)
 
     else:
-        df = df.DefinePerSample("eraVFP", f"wrem::{era}")
-
-        df = df.Define("weight_pu", "wrem::puw_2016UL_era(Pileup_nTrueInt,eraVFP)")
+        df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
         df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0", "passIso"])
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_eta", "Muon_pt", "Muon_phi", "Muon_looseId"])
 
