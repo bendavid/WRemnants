@@ -155,7 +155,7 @@ def build_graph(df, dataset):
             scetlibUnc = df.HistoBoost("scetlibUnc", nominal_axes, [*nominal_cols, "scetlibWeight_tensor"], tensor_axes=scetlibCorr_helper.tensor_axes)
             results.append(scetlibUnc)
 
-            df = df.Define("csSineCosThetaPhi", "csSineCosThetaPhi(genl, genlanti)")
+            df = df.Define("csSineCosThetaPhi", "wrem::csSineCosThetaPhi(genl, genlanti)")
             df = df.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["absYVgen", "ptVgen", "genVcharge", "csSineCosThetaPhi"])
             qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", nominal_axes+[ptV_axis], [*nominal_cols, "ptVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
             results.append(qcdScaleByHelicityUnc)
@@ -188,7 +188,7 @@ def build_graph(df, dataset):
                     results.append(massWeight)
 
                 netabins = 4
-                df = df.Define("muonScaleDummy4Bins2e4", f"dummyScaleFromMassWeights<{netabins}, {nweights}>(massWeight_tensor, goodMuons_eta0, 2.e-4, {str(isW).lower()})")
+                df = df.Define("muonScaleDummy4Bins2e4", f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(massWeight_tensor, goodMuons_eta0, 2.e-4, {str(isW).lower()})")
                 scale_etabins_axis = hist.axis.Regular(4, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
                 dummyMuonScaleSyst = df.HistoBoost("muonScaleSyst", nominal_axes, [*nominal_cols, "muonScaleDummy4Bins2e4"], 
                     tensor_axes=[down_up_axis, scale_etabins_axis])

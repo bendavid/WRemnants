@@ -1,3 +1,6 @@
+#ifndef WREMNANTS_THEORYTOOLS_H
+#define WREMNANTS_THEORYTOOLS_H
+
 #include <eigen3/Eigen/Dense>
 #include <eigen3/unsupported/Eigen/CXX11/Tensor>
 #include <ROOT/RVec.hxx>
@@ -79,4 +82,5 @@ Eigen::TensorFixedSize<int, Eigen::Sizes<2>> prefsrLeptons(const ROOT::VecOps::R
 
 } 
 
+#endif
 

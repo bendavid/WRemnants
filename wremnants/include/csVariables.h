@@ -1,9 +1,15 @@
+#ifndef WREMNANTS_CSVARIABLES_H
+#define WREMNANTS_CSVARIABLES_H
+
+
 #include "Math/GenVector/Boost.h"
 #include "Math/Vector4D.h"
 #include "Math/Vector3D.h"
 #include "TLorentzVector.h"
 #include <ROOT/RVec.hxx>
 #include <iostream>
+
+namespace wrem {
 
 typedef ROOT::Math::PxPyPzEVector PxPyPzEVector;
 typedef ROOT::Math::PxPyPzMVector PxPyPzMVector;
@@ -55,3 +61,7 @@ std::array<double, 4> csSineCosThetaPhi(PtEtaPhiMVector& lplus, PtEtaPhiMVector&
     std::array<double, 4> angles = {sintheta, costheta, sinphi, cosphi};
     return angles;
 }
+
+}
+
+#endif
