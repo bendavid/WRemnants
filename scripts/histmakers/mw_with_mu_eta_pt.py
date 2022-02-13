@@ -29,7 +29,7 @@ era = "GToH"
 
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 scetlibCorr_helper = wremnants.makeScetlibCorrHelper()
-print(scetlibCorr_helper)
+qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper()
 
 #assert(0)
 
@@ -48,7 +48,8 @@ axis_passIso = hist.axis.Boolean(name = "passIso")
 axis_passMT = hist.axis.Boolean(name = "passMT")
 
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
-ptV_axis = hist.axis.Variable([0.0, 2.9, 4.7, 6.7, 9.0, 11.8, 15.3, 20.1, 27.2, 40.2, 13000.0], name="genPtV")
+print(qcdScaleByHelicity_helper.tensor_axes)
+ptV_axis = qcdScaleByHelicity_helper.hist.axes["ptVgen"]
 
 # extra axes which can be used to label tensor_axes
 
@@ -147,10 +148,17 @@ def build_graph(df, dataset):
             df = df.Define("ptVgen", "genV.pt()")
             df = df.Define("massVgen", "genV.mass()")
             df = df.Define("yVgen", "genV.Rapidity()")
+            df = df.Define("absYVgen", "genV.Rapidity()")
+            df = df.Define("genVcharge", "std::copysign(1.0, GenPart_pdgId[prefsrLeps[0]]+GenPart_pdgId[prefsrLeps[1]])")
 
             df = df.Define("scetlibWeight_tensor", scetlibCorr_helper, ["massVgen", "yVgen", "ptVgen"])
-            scetlibUnc = df.HistoBoost("scetlibUnc", nominal_axes, [*nominal_cols, "scetlibWeight_tensor"])
+            scetlibUnc = df.HistoBoost("scetlibUnc", nominal_axes, [*nominal_cols, "scetlibWeight_tensor"], tensor_axes=scetlibCorr_helper.tensor_axes)
             results.append(scetlibUnc)
+
+            df = df.Define("csSineCosThetaPhi", "csSineCosThetaPhi(genl, genlanti)")
+            df = df.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["absYVgen", "ptVgen", "genVcharge", "csSineCosThetaPhi"])
+            qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", nominal_axes+[ptV_axis], [*nominal_cols, "ptVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
+            results.append(qcdScaleByHelicityUnc)
 
             # TODO: Order this so the syst axes are better labeled
             df = df.Define("scaleWeights_tensor", "auto res = wrem::vec_to_tensor_t<double, 9>(LHEScaleWeight); res = nominal_weight*res; return res;")
