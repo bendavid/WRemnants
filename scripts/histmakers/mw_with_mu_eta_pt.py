@@ -108,20 +108,15 @@ def build_graph(df, dataset):
     nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
 
     if dataset.is_data:
-        print("nominal data")
         nominal = df.HistoBoost("nominal", nominal_axes, nominal_cols)
-        print("done nominal data")
         results.append(nominal)
 
     else:
-        print("do weights")
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
         df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0", "passIso"])
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_eta", "Muon_pt", "Muon_phi", "Muon_looseId"])
 
         df = df.Define("nominal_weight", "weight*weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF")
-
-        print("done weights")
 
         nominal = df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "nominal_weight"])
         results.append(nominal)
@@ -166,9 +161,7 @@ def build_graph(df, dataset):
             results.append(scetlibUnc)
 
             df = df.Define("scaleWeights_tensor", "wrem::makeScaleTensor(LHEScaleWeight);")
-            print("do scale weight hist")
             scaleHist = df.HistoBoost("qcdScale", nominal_axes+[axis_ptVgen], [*nominal_cols, "ptVgen", "scaleWeights_tensor"])
-            print("done scale weight hist")
             results.append(scaleHist)
 
             df = df.Define("csSineCosThetaPhi", "wrem::csSineCosThetaPhi(genl, genlanti)")
