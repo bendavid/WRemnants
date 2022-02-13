@@ -83,3 +83,9 @@ def addSystAxis(h, size=1, offset=0):
     hnew[...] = np.stack((newvals, newvars), axis=-1)
     return hnew
 
+def clipNegativeVals(h):
+    hnew = hist.Hist(*h.axes, storage=hist.storage.Weight())
+    vals = h.values()
+    vals[vals<0] = 0
+    hnew[...] = np.stack((vals, h.variances()), axis=-1)
+    return hnew
