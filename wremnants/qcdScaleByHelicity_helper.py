@@ -11,11 +11,12 @@ def makeQCDScaleByHelicityHelper(input_path=f"{data_dir}/angularCoefficients"):
     charge_axis = hist.axis.Regular(
         2, -2, 2, name="chargeVgen", underflow=False, overflow=False
     )
-    mur_axis = hist.axis.Regular(
-        3, -1.5, 1.5, name="muRDownNomUp", underflow=False, overflow=False
+    # this puts the bin centers at 0.5, 1.0, 2.0
+    mur_axis = hist.axis.Variable(
+        [0.25, 0.75, 1.25, 2.75], name="muRfact", underflow=False, overflow=False
     )
-    muf_axis = hist.axis.Regular(
-        3, -1.5, 1.5, name="muFDownNomUp", underflow=False, overflow=False
+    muf_axis = hist.axis.Variable(
+        [0.25, 0.75, 1.25, 2.75], name="muFfact", underflow=False, overflow=False
     )
     coeff_axis = hist.axis.Integer(
         0, 9, name="coeff", overflow=False, underflow=False
