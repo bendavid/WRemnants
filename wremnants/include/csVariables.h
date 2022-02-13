@@ -33,7 +33,16 @@ Vector unitBoostedVector(ROOT::Math::Boost& boostOp, PxPyPzEVector& vec) {
     return Vector(boostvec.x(), boostvec.y(), boostvec.z()).Unit();
 }
 
-std::array<double, 4> csSineCosThetaPhi(PtEtaPhiMVector& lplus, PtEtaPhiMVector& lminus) {
+struct CSVars {
+
+  double sintheta;
+  double costheta;
+  double sinphi;
+  double cosphi;
+
+};
+
+CSVars csSineCosThetaPhi(PtEtaPhiMVector& lplus, PtEtaPhiMVector& lminus) {
     PxPyPzEVector lplusv(lplus);
     PxPyPzEVector dilepton = lplusv + PxPyPzEVector(lminus);
     const int zsign = std::copysign(1.0, dilepton.z());
@@ -58,7 +67,7 @@ std::array<double, 4> csSineCosThetaPhi(PtEtaPhiMVector& lplus, PtEtaPhiMVector&
     double sinphi = dot(csYaxis, lplusboost);
     double cosphi = dot(csXaxis, lplusboost);
 
-    std::array<double, 4> angles = {sintheta, costheta, sinphi, cosphi};
+    CSVars angles = {sintheta, costheta, sinphi, cosphi};
     return angles;
 }
 

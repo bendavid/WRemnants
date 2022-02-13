@@ -48,8 +48,12 @@ axis_passIso = hist.axis.Boolean(name = "passIso")
 axis_passMT = hist.axis.Boolean(name = "passMT")
 
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
+
+#axis_yVgen = hist.axis.Variable([0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4, 10], name = "yVgen")
+#axis_ptVgen = hist.axis.Variable([0, 2, 3, 4, 4.75, 5.5, 6.5, 8, 9, 10, 12, 14, 16, 18, 20, 23, 27, 32, 40, 55, 100], name = "ptVgen")
+
 print(qcdScaleByHelicity_helper.tensor_axes)
-ptV_axis = qcdScaleByHelicity_helper.hist.axes["ptVgen"]
+axis_ptVgen = qcdScaleByHelicity_helper.hist.axes["ptVgen"]
 
 # extra axes which can be used to label tensor_axes
 
@@ -63,6 +67,7 @@ muon_efficiency_helper, muon_efficiency_helper_stat, muon_efficiency_helper_syst
 pileup_helper = wremnants.make_pileup_helper(era = era)
 
 def build_graph(df, dataset):
+    print("build graph")
     results = []
 
     if dataset.is_data:
@@ -103,15 +108,20 @@ def build_graph(df, dataset):
     nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
 
     if dataset.is_data:
+        print("nominal data")
         nominal = df.HistoBoost("nominal", nominal_axes, nominal_cols)
+        print("done nominal data")
         results.append(nominal)
 
     else:
+        print("do weights")
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
         df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0", "passIso"])
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_eta", "Muon_pt", "Muon_phi", "Muon_looseId"])
 
         df = df.Define("nominal_weight", "weight*weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF")
+
+        print("done weights")
 
         nominal = df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "nominal_weight"])
         results.append(nominal)
@@ -149,21 +159,22 @@ def build_graph(df, dataset):
             df = df.Define("massVgen", "genV.mass()")
             df = df.Define("yVgen", "genV.Rapidity()")
             df = df.Define("absYVgen", "genV.Rapidity()")
-            df = df.Define("genVcharge", "std::copysign(1.0, GenPart_pdgId[prefsrLeps[0]]+GenPart_pdgId[prefsrLeps[1]])")
+            df = df.Define("genVcharge", "std::copysign(1.0, GenPart_pdgId[prefsrLeps[0]] + GenPart_pdgId[prefsrLeps[1]])")
 
-            df = df.Define("scetlibWeight_tensor", scetlibCorr_helper, ["massVgen", "yVgen", "ptVgen"])
+            df = df.Define("scetlibWeight_tensor", scetlibCorr_helper, ["massVgen", "yVgen", "ptVgen", "nominal_weight"])
             scetlibUnc = df.HistoBoost("scetlibUnc", nominal_axes, [*nominal_cols, "scetlibWeight_tensor"], tensor_axes=scetlibCorr_helper.tensor_axes)
             results.append(scetlibUnc)
 
-            df = df.Define("csSineCosThetaPhi", "wrem::csSineCosThetaPhi(genl, genlanti)")
-            df = df.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["absYVgen", "ptVgen", "genVcharge", "csSineCosThetaPhi"])
-            qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", nominal_axes+[ptV_axis], [*nominal_cols, "ptVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
-            results.append(qcdScaleByHelicityUnc)
-
-            # TODO: Order this so the syst axes are better labeled
-            df = df.Define("scaleWeights_tensor", "auto res = wrem::vec_to_tensor_t<double, 9>(LHEScaleWeight); res = nominal_weight*res; return res;")
-            scaleHist = df.HistoBoost("qcdScale", nominal_axes+[ptV_axis], [*nominal_cols, "ptVgen", "scaleWeights_tensor"])
+            df = df.Define("scaleWeights_tensor", "wrem::makeScaleTensor(LHEScaleWeight);")
+            print("do scale weight hist")
+            scaleHist = df.HistoBoost("qcdScale", nominal_axes+[axis_ptVgen], [*nominal_cols, "ptVgen", "scaleWeights_tensor"])
+            print("done scale weight hist")
             results.append(scaleHist)
+
+            df = df.Define("csSineCosThetaPhi", "wrem::csSineCosThetaPhi(genl, genlanti)")
+            df = df.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["absYVgen", "ptVgen", "genVcharge", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
+            qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", nominal_axes+[axis_ptVgen], [*nominal_cols, "ptVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
+            results.append(qcdScaleByHelicityUnc)
 
             # slice 101 elements starting from 0 and clip values at += 10.0
             df = df.Define("pdfWeights_tensor", "auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, 101>(LHEPdfWeight), 10.); res = nominal_weight*res; return res;")
