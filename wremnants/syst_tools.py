@@ -8,7 +8,7 @@ def scale_hist_to_variations(scale_hist):
     nom_scale_hist = scale_hist[{"muRfact" : s[1.j:1.j+1], "muFfact" : s[1.j:1.j+1]}]
 
     # select nominal QCD scales and project down to nominal axes
-    nom_hist = nom_scale_hist[{"ptVgen" : s[::hist.sum], "chargeVgen" : s[::hist.sum], "muRfact" : s[1.j], "muFfact" : s[1.j], "helicity" : s[::hist.sum] }]
+    nom_hist = nom_scale_hist[{"ptVgen" : s[::hist.sum], "chargeVgen" : s[::hist.sum], "helicity" : s[::hist.sum], "muRfact" : s[1.j], "muFfact" : s[1.j] }]
 
 
 
