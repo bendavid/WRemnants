@@ -15,5 +15,6 @@ from .muon_efficiencies import make_muon_efficiency_helpers
 from .scetlib_corrections import makeScetlibCorrHelper
 from .qcdScaleByHelicity_helper import makeQCDScaleByHelicityHelper
 from .pileup import make_pileup_helper
+from .syst_tools import scale_hist_to_variations
 
 data_dir = f"{pathlib.Path(__file__).parent}/data/"
