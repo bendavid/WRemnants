@@ -12,8 +12,9 @@ def makeQCDScaleByHelicityHelper(input_path=f"{data_dir}/angularCoefficients"):
     axis_chargeVgen = hist.axis.Regular(
         2, -2, 2, name="chargeVgen", underflow=False, overflow=False
     )
+    # integer axis for -1 through 7
     axis_helicity = hist.axis.Integer(
-        -1, 9, name="helicity", overflow=False, underflow=False
+        -1, 8, name="helicity", overflow=False, underflow=False
     )
     f = uproot.open(f"{input_path}/fractions_minus_2022.root")
     nom = f["unpol_minus_nominal"].to_hist()
