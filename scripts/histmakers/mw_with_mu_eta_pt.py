@@ -206,6 +206,5 @@ resultdict = narf.build_and_run(datasets, build_graph)
 fname = "mw_with_mu_eta_pt.pkl.lz4"
 
 print("writing output")
-#with gzip.open(fname, "wb") as f:
 with lz4.frame.open(fname, "wb") as f:
-    pickle.dump(resultdict, f)
+    pickle.dump(resultdict, f, protocol = pickle.HIGHEST_PROTOCOL)
