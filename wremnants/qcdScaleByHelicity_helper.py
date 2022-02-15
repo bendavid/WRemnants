@@ -4,6 +4,7 @@ import pathlib
 import hist
 import narf
 from .correctionsTensor_helper import makeCorrectionsTensor
+from .theory_tools import scale_tensor_axes
 
 data_dir = f"{pathlib.Path(__file__).parent}/data/"
 
@@ -11,20 +12,13 @@ def makeQCDScaleByHelicityHelper(input_path=f"{data_dir}/angularCoefficients"):
     axis_chargeVgen = hist.axis.Regular(
         2, -2, 2, name="chargeVgen", underflow=False, overflow=False
     )
-    # this puts the bin centers at 0.5, 1.0, 2.0
-    axis_muRfact = hist.axis.Variable(
-        [0.25, 0.75, 1.25, 2.75], name="muRfact", underflow=False, overflow=False
-    )
-    axis_muFfact = hist.axis.Variable(
-        [0.25, 0.75, 1.25, 2.75], name="muFfact", underflow=False, overflow=False
-    )
     axis_helicity = hist.axis.Integer(
         -1, 9, name="helicity", overflow=False, underflow=False
     )
     f = uproot.open(f"{input_path}/fractions_minus_2022.root")
     nom = f["unpol_minus_nominal"].to_hist()
     axis_yVgen, axis_ptVgen = [hist.axis.Variable(ax.edges, name=name) for ax,name in zip(nom.axes, ["yVgen", "ptVgen"])]
-    corrh = hist.Hist(axis_yVgen, axis_ptVgen, axis_chargeVgen, axis_helicity, axis_muRfact, axis_muFfact)
+    corrh = hist.Hist(axis_yVgen, axis_ptVgen, axis_chargeVgen, axis_helicity, *scale_tensor_axes)
 
     for i,charge in enumerate(["minus", "plus"]):
         f = uproot.open(f"{input_path}/fractions_{charge}_2022.root")
