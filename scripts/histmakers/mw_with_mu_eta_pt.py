@@ -54,6 +54,7 @@ nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
 
 print(qcdScaleByHelicity_helper.tensor_axes)
 axis_ptVgen = qcdScaleByHelicity_helper.hist.axes["ptVgen"]
+axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
 
 # extra axes which can be used to label tensor_axes
 
@@ -154,7 +155,7 @@ def build_graph(df, dataset):
             df = df.Define("massVgen", "genV.mass()")
             df = df.Define("yVgen", "genV.Rapidity()")
             df = df.Define("absYVgen", "genV.Rapidity()")
-            df = df.Define("genVcharge", "std::copysign(1.0, GenPart_pdgId[prefsrLeps[0]] + GenPart_pdgId[prefsrLeps[1]])")
+            df = df.Define("chargeVgen", "std::copysign(1.0, GenPart_pdgId[prefsrLeps[0]] + GenPart_pdgId[prefsrLeps[1]])")
 
             df = df.Define("scetlibWeight_tensor", scetlibCorr_helper, ["massVgen", "yVgen", "ptVgen", "nominal_weight"])
             scetlibUnc = df.HistoBoost("scetlibUnc", nominal_axes, [*nominal_cols, "scetlibWeight_tensor"], tensor_axes=scetlibCorr_helper.tensor_axes)
@@ -165,8 +166,8 @@ def build_graph(df, dataset):
             results.append(scaleHist)
 
             df = df.Define("csSineCosThetaPhi", "wrem::csSineCosThetaPhi(genl, genlanti)")
-            df = df.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["absYVgen", "ptVgen", "genVcharge", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
-            qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", nominal_axes+[axis_ptVgen], [*nominal_cols, "ptVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
+            df = df.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
+            qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", nominal_axes+[axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
             results.append(qcdScaleByHelicityUnc)
 
             # slice 101 elements starting from 0 and clip values at += 10.0
