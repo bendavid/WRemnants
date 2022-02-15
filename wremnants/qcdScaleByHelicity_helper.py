@@ -8,28 +8,28 @@ from .correctionsTensor_helper import makeCorrectionsTensor
 data_dir = f"{pathlib.Path(__file__).parent}/data/"
 
 def makeQCDScaleByHelicityHelper(input_path=f"{data_dir}/angularCoefficients"):
-    charge_axis = hist.axis.Regular(
+    axis_chargeVgen = hist.axis.Regular(
         2, -2, 2, name="chargeVgen", underflow=False, overflow=False
     )
     # this puts the bin centers at 0.5, 1.0, 2.0
-    mur_axis = hist.axis.Variable(
+    axis_muRfact = hist.axis.Variable(
         [0.25, 0.75, 1.25, 2.75], name="muRfact", underflow=False, overflow=False
     )
-    muf_axis = hist.axis.Variable(
+    axis_muFfact = hist.axis.Variable(
         [0.25, 0.75, 1.25, 2.75], name="muFfact", underflow=False, overflow=False
     )
-    coeff_axis = hist.axis.Integer(
-        0, 9, name="coeff", overflow=False, underflow=False
+    axis_helicity = hist.axis.Integer(
+        -1, 9, name="helicity", overflow=False, underflow=False
     )
     f = uproot.open(f"{input_path}/fractions_minus_2022.root")
     nom = f["unpol_minus_nominal"].to_hist()
-    axes = [hist.axis.Variable(ax.edges, name=name) for ax,name in zip(nom.axes, ["yVgen", "ptVgen"])]
-    corrh = hist.Hist(*axes, charge_axis, mur_axis, muf_axis, coeff_axis)
+    axis_yVgen, axis_ptVgen = [hist.axis.Variable(ax.edges, name=name) for ax,name in zip(nom.axes, ["yVgen", "ptVgen"])]
+    corrh = hist.Hist(axis_yVgen, axis_ptVgen, axis_chargeVgen, axis_helicity, axis_muRfact, axis_muFfact)
 
     for i,charge in enumerate(["minus", "plus"]):
         f = uproot.open(f"{input_path}/fractions_{charge}_2022.root")
         for k,coeff in enumerate(["unpol"] + [f"a{m}" for m in range(8)]):
-            corrh.view(flow=True)[...,i,1,1,k] = f[f"{coeff}_{charge}_nominal"].to_hist().values(flow=True)
+            corrh.view(flow=True)[...,i, k, 1, 1] = f[f"{coeff}_{charge}_nominal"].to_hist().values(flow=True)
             for j,muR in enumerate(["muRDown", "", "muRUp"]):
                 for l,muF in enumerate(["muFDown", "", "muFUp"]):
                     if muR != "" and muF == "":
@@ -44,7 +44,7 @@ def makeQCDScaleByHelicityHelper(input_path=f"{data_dir}/angularCoefficients"):
                         continue
 
                     rthist = f[f"{coeff}_{charge}_{name}"].to_hist()
-                    corrh.view(flow=True)[...,i,j,l,k] = rthist.values(flow=True)
+                    corrh.view(flow=True)[...,i, k, j, l] = rthist.values(flow=True)
 
     #should be uniformly 1.0 for 1+cos^2 theta term
     corrh.values(flow=True)[...,0] = 1.0
