@@ -47,7 +47,7 @@ def makeQCDScaleByHelicityHelper(input_path=f"{data_dir}/angularCoefficients"):
                     corrh.view(flow=True)[...,i, k, j, l] = rthist.values(flow=True)
 
     #should be uniformly 1.0 for 1+cos^2 theta term
-    corrh.values(flow=True)[...,0] = 1.0
-    corrh.variances(flow=True)[...,0] = 0.0
+    corrh.values(flow=True)[...,0, :, :] = 1.0
+    corrh.variances(flow=True)[...,0, :, :] = 0.0
 
     return makeCorrectionsTensor(corrh, ROOT.wrem.QCDScaleByHelicityCorrectionsHelper, tensor_rank=3)
