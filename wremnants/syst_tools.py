@@ -1,6 +1,5 @@
 import hist
-#import boost_histogram as bh
-
+import numpy as np
 
 def scale_hist_to_variations(scale_hist):
 
@@ -12,10 +11,11 @@ def scale_hist_to_variations(scale_hist):
     nom_hist = nom_scale_hist[{"ptVgen" : s[::hist.sum], "chargeVgen" : s[::hist.sum], "muRfact" : s[1.j], "muFfact" : s[1.j], "helicity" : s[::hist.sum] }]
 
 
+
     # difference between a given scale and the nominal, plus the sum
     # this emulates the "weight if idx else nominal" logic and corresponds to the decorrelated
     # variations
     scale_variation_hist = hist.Hist(*scale_hist.axes, storage = scale_hist._storage_type(), name = scale_hist.name + "_variations",
-                data = scale_hist.view(flow=True) - nom_scale_hist.view(flow=True) + nom_hist.view(flow=True)[..., None, None, None, None, None])
+                data = scale_hist.view(flow=True) - nom_scale_hist.view(flow=True) + nom_hist.view(flow=True)[..., np.newaxis, np.newaxis, np.newaxis, np.newaxis, np.newaxis])
 
     return scale_variation_hist
