@@ -6,6 +6,7 @@
 #include <cmath>
 #include "traits.h"
 #include "csVariables.h"
+#include "theoryTools.h"
 
 namespace wrem {
 

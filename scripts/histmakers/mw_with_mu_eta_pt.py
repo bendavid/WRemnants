@@ -162,7 +162,7 @@ def build_graph(df, dataset):
             results.append(scetlibUnc)
 
             df = df.Define("scaleWeights_tensor", "wrem::makeScaleTensor(LHEScaleWeight);")
-            scaleHist = df.HistoBoost("qcdScale", nominal_axes+[axis_ptVgen], [*nominal_cols, "ptVgen", "scaleWeights_tensor"])
+            scaleHist = df.HistoBoost("qcdScale", nominal_axes+[axis_ptVgen], [*nominal_cols, "ptVgen", "scaleWeights_tensor"], tensor_axes = wremnants.scale_tensor_axes)
             results.append(scaleHist)
 
             df = df.Define("csSineCosThetaPhi", "wrem::csSineCosThetaPhi(genl, genlanti)")
