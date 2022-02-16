@@ -15,13 +15,14 @@ def massWeightNames(matches=None):
     # If name is "" it won't be stored
     return [x if not matches or any(y in x for y in matches) else "" for x in names]
 
-def pdfNames(cardTool, pdf, skipFirst=False):
-    size = 103
+def pdfNames(cardTool, pdf, skipFirst=True):
+    size = 101
     names = cardTool.mirrorNames(f"pdf{{i}}{pdf}", size)
     if skipFirst:
         names[0] = ""
         names[size] = ""
-    if pdf == "NNPDF31":
+    # TODO: This is probably not needed anymore, check with low PU
+    if False and pdf == "NNPDF31":
         names[size-2] = "pdfAlphas002Up"
         names[size-1] = "pdfAlphas002Down"
         # Drop the mirrored alphaS variations
