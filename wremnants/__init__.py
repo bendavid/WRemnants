@@ -15,6 +15,6 @@ from .scetlib_corrections import makeScetlibCorrHelper
 from .qcdScaleByHelicity_helper import makeQCDScaleByHelicityHelper
 from .pileup import make_pileup_helper
 from .syst_tools import scale_hist_to_variations
-from .theory_tools import scale_tensor_axes
+from .theory_tools import scale_tensor_axes, define_prefsr_vars
 
 data_dir = f"{pathlib.Path(__file__).parent}/data/"
