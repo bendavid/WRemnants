@@ -42,9 +42,10 @@ def moments_to_angular_coeffs(hist_moments_scales):
 
     vals = hist_moments_scales_m1.values(flow=True)
 
-    # replace zero values to avoid NaN
+    # replace zero values to avoid warnings
     norm_vals = np.where( vals==0., 1., vals)
 
+    # e.g. from arxiv:1708.00008 eq. 2.13
     offsets = np.array([0., 4., 0., 0., 0., 0., 0., 0., 0.])
     scales = np.array([1., -10., 5., 10., 4., 4., 5., 5., 4.])
 
@@ -52,8 +53,15 @@ def moments_to_angular_coeffs(hist_moments_scales):
     offsets = offsets[:, np.newaxis, np.newaxis]
     scales = scales[:, np.newaxis, np.newaxis]
 
+    view = hist_moments_scales.view(flow=True)
+
+    coeffs = scales*view / norm_vals + offsets
+
+    # replace values in zero-xsec regions (otherwise A0 is spuriously set to 4.0 from offset)
+    coeffs = np.where(vals == 0., 0.*view, coeffs)
+
     hist_coeffs_scales = hist.Hist(*hist_moments_scales.axes, storage = hist_moments_scales._storage_type(), name = "hist_coeffs_scales",
-        data = scales*hist_moments_scales.view(flow=True) / norm_vals + offsets
+        data = coeffs
     )
 
 
