@@ -86,8 +86,7 @@ public:
         return angular;
     }
 
-    tensor_t operator() (double yV, double ptV, int qV, const CSVars &csvars, const scale_tensor_t &scale_tensor, double nominal_weight = 1.0) {
-
+    tensor_t operator() (double mV, double yV, double ptV, int qV, const CSVars &csvars, const scale_tensor_t &scale_tensor, double nominal_weight = 1.0) {
         // pure angular terms without angular coeffs multiplied through
         const auto angular = csAngularFactors(csvars);
 
@@ -95,7 +94,7 @@ public:
 
         constexpr std::array<Eigen::Index, 3> broadcastscales = { 1, nmur, nmuf };
         // now multiplied through by angular coefficients (1.0 for 1+cos^2theta term)
-        const tensor_t angular_with_coeffs = angular.broadcast(broadcastscales)*TensorCorrectionsHelper3D<T>::get_tensor(yV, ptV, qV);
+        const tensor_t angular_with_coeffs = angular.broadcast(broadcastscales)*base_t::get_tensor(mV, yV, ptV, qV);
 
         // denominator for each scale combination
         constexpr std::array<Eigen::Index, 1> helicitydims = { 0 };
