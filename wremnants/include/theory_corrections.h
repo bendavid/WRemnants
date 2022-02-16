@@ -56,6 +56,7 @@ public:
         const double cosPhiCS = csvars.cosphi;
 
         const double sin2ThetaCS = 2.*sinThetaCS*cosThetaCS;
+        const double sin2PhiCS = 2.*sinPhiCS*cosPhiCS;
         const double cos2ThetaCS = 1. - 2.*sinThetaCS*sinThetaCS;
         const double cos2PhiCS= 1. - 2.*sinPhiCS*sinPhiCS;
         small_tensor_t angular;
@@ -66,7 +67,7 @@ public:
         angular(3, 0, 0) = 0.5*sinThetaCS*sinThetaCS*cos2PhiCS;
         angular(4, 0, 0) = sinThetaCS*cosPhiCS;
         angular(5, 0, 0) = cosThetaCS;
-        angular(6, 0, 0) = sinThetaCS*sinThetaCS*sin2ThetaCS;
+        angular(6, 0, 0) = sinThetaCS*sinThetaCS*sin2ThetaCS; //WRONG
         angular(7, 0, 0) = sin2ThetaCS*sinPhiCS;
         angular(8, 0, 0) = sinThetaCS*sinPhiCS;
 
