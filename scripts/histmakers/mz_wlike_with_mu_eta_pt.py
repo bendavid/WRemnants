@@ -29,18 +29,12 @@ era = "2016PostVFP"
 
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 
-# TODO make these properly configurable for Z
+# TODO make this properly configurable for Z
 #scetlibCorr_helper = wremnants.makeScetlibCorrHelper()
-#qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper()
-#axis_ptVgen = qcdScaleByHelicity_helper.hist.axes["ptVgen"]
-#axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
 
-# TODO revert to the above inferred version once the theory stuff is fixed
-axis_ptVgen = hist.axis.Variable(
-    [0, 2, 3, 4, 4.75, 5.5, 6.5, 8, 9, 10, 12, 14, 16, 18, 20, 23, 27, 32, 40, 55, 100], name = "ptVgen"
-)
-
-#assert(0)
+qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = True)
+axis_ptVgen = qcdScaleByHelicity_helper.hist.axes["ptVgen"]
+axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
 
 wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP"]
 zprocs = ["ZmumuPostVFP", "ZtautauPostVFP"]
@@ -168,20 +162,25 @@ def build_graph(df, dataset):
         # on the Z samples (but can still use it for dummy muon scale)
         if dataset.name in wprocs or dataset.name in zprocs:
 
-            df = wremnants.define_prefsr_vars(df)
+            isW = dataset.name in wprocs
+            isZ = dataset.name in zprocs
 
-            # TODO restore this in an appropriate way
-            #df = df.Define("scetlibWeight_tensor", scetlibCorr_helper, ["massVgen", "yVgen", "ptVgen", "nominal_weight"])
-            #scetlibUnc = df.HistoBoost("scetlibUnc", nominal_axes, [*nominal_cols, "scetlibWeight_tensor"], tensor_axes=scetlibCorr_helper.tensor_axes)
-            #results.append(scetlibUnc)
+            df = wremnants.define_prefsr_vars(df)
 
             scaleHist = df.HistoBoost("qcdScale", nominal_axes+[axis_ptVgen], [*nominal_cols, "ptVgen", "scaleWeights_tensor"], tensor_axes = wremnants.scale_tensor_axes)
             results.append(scaleHist)
 
-            # TODO restore this in an appropriate way
-            #df = df.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
-            #qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", nominal_axes+[axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
-            #results.append(qcdScaleByHelicityUnc)
+            # currently SCETLIB corrections are applicable to W-only, and helicity-split scales are only valid for one of W or Z at a time
+            # TODO make this work for both simultaneously as needed
+            if isZ:
+                # TODO restore this in an appropriate way for Z
+                #df = df.Define("scetlibWeight_tensor", scetlibCorr_helper, ["massVgen", "yVgen", "ptVgen", "nominal_weight"])
+                #scetlibUnc = df.HistoBoost("scetlibUnc", nominal_axes, [*nominal_cols, "scetlibWeight_tensor"], tensor_axes=scetlibCorr_helper.tensor_axes)
+                #results.append(scetlibUnc)
+
+                df = df.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
+                qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", nominal_axes+[axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
+                results.append(qcdScaleByHelicityUnc)
 
             # slice 101 elements starting from 0 and clip values at += 10.0
             df = df.Define("pdfWeights_tensor", "auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, 101>(LHEPdfWeight), 10.); res = nominal_weight*res; return res;")
@@ -195,8 +194,6 @@ def build_graph(df, dataset):
             alphaS002NNPDF31 = df.HistoBoost("alphaS002NNPDF31", nominal_axes, [*nominal_cols, "pdfWeightsAS_tensor"])
             results.append(alphaS002NNPDF31)
 
-            isW = dataset.name in wprocs
-            isZ = dataset.name in zprocs
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays, and it doesn't have MEParamWeight for now anyway
             if not "tau" in dataset.name:
                 nweights = 21 if isW else 23
