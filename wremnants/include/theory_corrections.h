@@ -19,11 +19,16 @@ public:
     TensorCorrectionsHelper3D(T&& corrections) :
         correctionHist_(std::make_shared<const T>(std::move(corrections))) {}
 
-    tensor_t operator() (double x, double y, double z, double nominal_weight = 1.0) {
+    template<typename X, typename Y, typename Z>
+    const tensor_t &get_tensor(const X &x, const Y &y, const Z &z) {
         auto xbin = correctionHist_->template axis<0>().index(x);
         auto ybin = correctionHist_->template axis<1>().index(y);
         auto zbin = correctionHist_->template axis<2>().index(z);
-        return nominal_weight*correctionHist_->at(xbin, ybin, zbin).data();
+        return correctionHist_->at(xbin, ybin, zbin).data();
+    }
+
+    tensor_t operator() (double x, double y, double z, double nominal_weight = 1.0) {
+        return nominal_weight*get_tensor(x, y, z);
     }
 private:
     std::shared_ptr<const T> correctionHist_;
@@ -68,7 +73,7 @@ public:
         return angular;
     }
 
-    tensor_t operator() (double yV, double ptV, double qV, const CSVars &csvars, const scale_tensor_t &scale_tensor, double nominal_weight = 1.0) {
+    tensor_t operator() (double yV, double ptV, int qV, const CSVars &csvars, const scale_tensor_t &scale_tensor, double nominal_weight = 1.0) {
 
         // pure angular terms without angular coeffs multiplied through
         const auto angular = csAngularFactors(csvars);
@@ -77,7 +82,7 @@ public:
 
         constexpr std::array<Eigen::Index, 3> broadcastscales = { 1, nmur, nmuf };
         // now multiplied through by angular coefficients (1.0 for 1+cos^2theta term)
-        const tensor_t angular_with_coeffs = angular.broadcast(broadcastscales)*TensorCorrectionsHelper3D<T>::operator()(yV, ptV, qV);
+        const tensor_t angular_with_coeffs = angular.broadcast(broadcastscales)*TensorCorrectionsHelper3D<T>::get_tensor(yV, ptV, qV);
 
         // denominator for each scale combination
         constexpr std::array<Eigen::Index, 1> helicitydims = { 0 };
