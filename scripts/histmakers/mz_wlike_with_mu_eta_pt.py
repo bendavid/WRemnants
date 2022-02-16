@@ -21,6 +21,7 @@ import wremnants
 import hist
 import lz4.frame
 import logging
+import math
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None)
@@ -49,6 +50,20 @@ axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, nam
 
 nominal_axes = [axis_eta, axis_pt, axis_charge]
 
+
+# extra axes for dilepton validation plots
+axis_mll = hist.axis.Regular(24, 60., 120., name = "mll")
+axis_yll = hist.axis.Regular(40, -4.0, 4.0, name = "yll")
+
+axis_ptll = hist.axis.Variable(
+    [0, 2, 3, 4, 4.75, 5.5, 6.5, 8, 9, 10, 12, 14, 16, 18, 20, 23, 27, 32, 40, 55, 100], name = "ptll"
+)
+
+axis_costhetastarll = hist.axis.Regular(20, -1., 1., name = "costhetastarll")
+axis_phistarll = hist.axis.Regular(20, -math.pi, math.pi, circular = True, name = "phistarll")
+
+dilepton_axes = [axis_mll, axis_yll, axis_ptll, axis_costhetastarll, axis_phistarll]
+
 # extra axes which can be used to label tensor_axes
 
 down_up_axis = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "downUpVar")
@@ -56,6 +71,8 @@ down_up_axis = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, na
 muon_efficiency_helper, muon_efficiency_helper_stat, muon_efficiency_helper_syst = wremnants.make_muon_efficiency_helpers(era = era, max_pt = axis_pt.edges[-1], is_w_like = True)
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
+
+#def add_plots_with_systematics
 
 def build_graph(df, dataset):
     print("build graph")
@@ -96,21 +113,6 @@ def build_graph(df, dataset):
 
     df = df.Filter("NonTrigMuon_pt > 26.")
 
-    df = df.Define("TrigMuon_mom4", "ROOT::Math::PtEtaPhiMVector(TrigMuon_pt, TrigMuon_eta, TrigMuon_phi, wrem::muon_mass)")
-    df = df.Define("NonTrigMuon_mom4", "ROOT::Math::PtEtaPhiMVector(NonTrigMuon_pt, NonTrigMuon_eta, NonTrigMuon_phi, wrem::muon_mass)")
-    df = df.Define("Z_mom4", "ROOT::Math::PxPyPzEVector(TrigMuon_mom4)+ROOT::Math::PxPyPzEVector(NonTrigMuon_mom4)")
-    df = df.Define("ptZ", "Z_mom4.pt()")
-    df = df.Define("massZ", "Z_mom4.mass()")
-    df = df.Define("yZ", "Z_mom4.Rapidity()")
-    df = df.Define("absYZ", "std::fabs(yZ)")
-
-    df = df.Filter("massZ >= 60. && massZ < 120.")
-
-    #TODO improve this to include muon mass?
-    df = df.Define("transverseMass", "wrem::mt_wlike_nano(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, MET_pt, MET_phi)")
-
-    df = df.Filter("transverseMass >= 40.")
-
     df = df.Define("vetoElectrons", "Electron_pt > 10 && Electron_cutBased > 0 && abs(Electron_eta) < 2.4 && abs(Electron_dxy) < 0.05 && abs(Electron_dz)< 0.2")
 
     df = df.Filter("Sum(vetoElectrons) == 0")
@@ -119,22 +121,51 @@ def build_graph(df, dataset):
     df = df.Filter("wrem::hasTriggerMatch(TrigMuon_eta,TrigMuon_phi,TrigObj_eta[goodTrigObjs],TrigObj_phi[goodTrigObjs])")
     df = df.Filter("Flag_globalSuperTightHalo2016Filter && Flag_EcalDeadCellTriggerPrimitiveFilter && Flag_goodVertices && Flag_HBHENoiseIsoFilter && Flag_HBHENoiseFilter && Flag_BadPFMuonFilter")
 
-    nominal_cols = ["TrigMuon_eta", "TrigMuon_pt", "TrigMuon_charge"]
 
-    if dataset.is_data:
-        nominal = df.HistoBoost("nominal", nominal_axes, nominal_cols)
-        results.append(nominal)
+    df = df.Define("TrigMuon_mom4", "ROOT::Math::PtEtaPhiMVector(TrigMuon_pt, TrigMuon_eta, TrigMuon_phi, wrem::muon_mass)")
+    df = df.Define("NonTrigMuon_mom4", "ROOT::Math::PtEtaPhiMVector(NonTrigMuon_pt, NonTrigMuon_eta, NonTrigMuon_phi, wrem::muon_mass)")
+    df = df.Define("Z_mom4", "ROOT::Math::PxPyPzEVector(TrigMuon_mom4)+ROOT::Math::PxPyPzEVector(NonTrigMuon_mom4)")
+    df = df.Define("ptZ", "Z_mom4.pt()")
+    df = df.Define("massZ", "Z_mom4.mass()")
+    df = df.Define("yZ", "Z_mom4.Rapidity()")
+    df = df.Define("absYZ", "std::fabs(yZ)")
 
-    else:
+    df = df.Define("csSineCosThetaPhiZ", "TrigMuon_charge == -1 ? wrem::csSineCosThetaPhi(TrigMuon_mom4, NonTrigMuon_mom4) : wrem::csSineCosThetaPhi(NonTrigMuon_mom4, TrigMuon_mom4)")
+
+    df = df.Define("cosThetaStarZ", "csSineCosThetaPhiZ.costheta")
+    df = df.Define("phiStarZ", "std::atan2(csSineCosThetaPhiZ.sinphi, csSineCosThetaPhiZ.cosphi)")
+
+
+    if not dataset.is_data:
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
         df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["TrigMuon_pt", "TrigMuon_eta", "TrigMuon_charge", "NonTrigMuon_pt", "NonTrigMuon_eta", "NonTrigMuon_charge"])
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_eta", "Muon_pt", "Muon_phi", "Muon_looseId"])
 
         df = df.Define("nominal_weight", "weight*weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF")
+    else:
+        df = df.DefinePerSample("nominal_weight", "1.0")
 
-        nominal = df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "nominal_weight"])
-        results.append(nominal)
+    # dilepton plots go here, before mass or transverse mass cuts
+    df_dilepton = df
+    df_dilepton = df_dilepton.Filter("TrigMuon_pt > 26.")
 
+    dilepton_cols = ["massZ", "yZ", "ptZ", "cosThetaStarZ", "phiStarZ"]
+    dilepton = df_dilepton.HistoBoost("dilepton", dilepton_axes, [*dilepton_cols, "nominal_weight"])
+    results.append(dilepton)
+
+    df = df.Filter("massZ >= 60. && massZ < 120.")
+
+    #TODO improve this to include muon mass?
+    df = df.Define("transverseMass", "wrem::mt_wlike_nano(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, MET_pt, MET_phi)")
+
+    df = df.Filter("transverseMass >= 40.")
+
+    nominal_cols = ["TrigMuon_eta", "TrigMuon_pt", "TrigMuon_charge"]
+
+    nominal = df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "nominal_weight"])
+    results.append(nominal)
+
+    if not dataset.is_data:
         # TODO fix the helpers for w-like
         df = df.Define("effStatTnP_tensor", muon_efficiency_helper_stat, ["TrigMuon_pt", "TrigMuon_eta", "TrigMuon_charge", "NonTrigMuon_pt", "NonTrigMuon_eta", "NonTrigMuon_charge", "nominal_weight"])
 
