@@ -155,7 +155,7 @@ def build_graph(df, dataset):
 
             # currently SCETLIB corrections are applicable to W-only, and helicity-split scales are only valid for one of W or Z at a time
             # TODO make this work for both simultaneously as needed
-            if isw:
+            if isW:
                 df = df.Define("scetlibWeight_tensor", scetlibCorr_helper, ["massVgen", "yVgen", "ptVgen", "nominal_weight"])
                 scetlibUnc = df.HistoBoost("scetlibUnc", nominal_axes, [*nominal_cols, "scetlibWeight_tensor"], tensor_axes=scetlibCorr_helper.tensor_axes)
                 results.append(scetlibUnc)
