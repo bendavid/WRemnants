@@ -14,7 +14,7 @@ from .muon_efficiencies import make_muon_efficiency_helpers
 from .scetlib_corrections import makeScetlibCorrHelper
 from .qcdScaleByHelicity_helper import makeQCDScaleByHelicityHelper
 from .pileup import make_pileup_helper
-from .syst_tools import scale_hist_to_variations
+from .syst_tools import scale_helicity_hist_to_variations
 from .theory_tools import axis_helicity, scale_tensor_axes, define_prefsr_vars, moments_to_angular_coeffs
 
 data_dir = f"{pathlib.Path(__file__).parent}/data/"

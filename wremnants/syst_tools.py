@@ -1,7 +1,7 @@
 import hist
 import numpy as np
 
-def scale_hist_to_variations(scale_hist):
+def scale_helicity_hist_to_variations(scale_hist):
 
     s = hist.tag.Slicer()
     # select nominal QCD scales, but keep the sliced axis at size 1 for broadcasting

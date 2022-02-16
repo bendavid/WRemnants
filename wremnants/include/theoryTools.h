@@ -122,6 +122,7 @@ helicity_scale_tensor_t makeHelicityMomentScaleTensor(const CSVars &csvars, cons
   const double cos2ThetaCS = 1. - 2.*sinThetaCS*sinThetaCS;
   const double cos2PhiCS= 1. - 2.*sinPhiCS*sinPhiCS;
 
+  // computing moments e.g. as used in arxiv:1708.00008 eq. 2.13
   Eigen::TensorFixedSize<double, Eigen::Sizes<nhelicity, 1, 1>> moments;
   moments(0, 0, 0) = 1.;
   moments(1, 0, 0) = cosThetaCS*cosThetaCS;
