@@ -36,10 +36,6 @@ axis_ptVgen = hist.axis.Variable(
 axis_chargeVgen = hist.axis.Regular(
     2, -2, 2, name="chargeVgen", underflow=False, overflow=False
 )
-# integer axis for -1 through 7
-axis_helicity = hist.axis.Integer(
-    -1, 8, name="helicity", overflow=False, underflow=False
-)
 
 wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP"]
 zprocs = ["ZmumuPostVFP", "ZtautauPostVFP"]
@@ -67,7 +63,7 @@ def build_graph(df, dataset):
     results.append(nominal_gen)
 
     df = df.Define("helicity_moments_scale_tensor", "wrem::makeHelicityMomentScaleTensor(csSineCosThetaPhi, scaleWeights_tensor, weight)")
-    helicity_moments_scale = df.HistoBoost("helicity_moments_scale", nominal_axes, [*nominal_cols, "helicity_moments_scale_tensor"], tensor_axes = [axis_helicity, *wremnants.scale_tensor_axes])
+    helicity_moments_scale = df.HistoBoost("helicity_moments_scale", nominal_axes, [*nominal_cols, "helicity_moments_scale_tensor"], tensor_axes = [wremnants.axis_helicity, *wremnants.scale_tensor_axes])
     results.append(helicity_moments_scale)
 
     return results, weightsum
