@@ -11,20 +11,26 @@
 namespace wrem {
 
 template <typename T>
-class TensorCorrectionsHelper3D {
-
-typedef typename T::storage_type::value_type::tensor_t tensor_t;
+class TensorCorrectionsHelper {
 
 public:
-    TensorCorrectionsHelper3D(T&& corrections) :
+
+    using hist_t = T;
+    using tensor_t = typename T::storage_type::value_type::tensor_t;
+
+    TensorCorrectionsHelper(T&& corrections) :
         correctionHist_(std::make_shared<const T>(std::move(corrections))) {}
 
-    template<typename X, typename Y, typename Z>
-    const tensor_t &get_tensor(const X &x, const Y &y, const Z &z) {
-        auto xbin = correctionHist_->template axis<0>().index(x);
-        auto ybin = correctionHist_->template axis<1>().index(y);
-        auto zbin = correctionHist_->template axis<2>().index(z);
-        return correctionHist_->at(xbin, ybin, zbin).data();
+    // helper for bin lookup which implements the compile-time loop over axes
+    template<typename... Xs, std::size_t... Idxs>
+    const tensor_t &get_tensor_impl(std::index_sequence<Idxs...>, const Xs&... xs) {
+      return correctionHist_->at(correctionHist_->template axis<Idxs>().index(xs)...).data();
+    }
+
+    // variadic templated bin lookup
+    template<typename... Xs>
+    const tensor_t &get_tensor(const Xs&... xs) {
+        return get_tensor_impl(std::index_sequence_for<Xs...>{}, xs...);
     }
 
     tensor_t operator() (double x, double y, double z, double nominal_weight = 1.0) {
@@ -35,7 +41,9 @@ private:
 };
 
 template <typename T>
-class QCDScaleByHelicityCorrectionsHelper : public TensorCorrectionsHelper3D<T> {
+class QCDScaleByHelicityCorrectionsHelper : public TensorCorrectionsHelper<T> {
+
+using base_t = TensorCorrectionsHelper<T>;
 
 using tensor_t = typename T::storage_type::value_type::tensor_t;
 static constexpr auto sizes = narf::tensor_traits<tensor_t>::sizes;
@@ -43,10 +51,14 @@ static constexpr auto nhelicity = sizes[0];
 static constexpr auto nmur = sizes[1];
 static constexpr auto nmuf = sizes[2];
 
+
 using small_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<nhelicity, 1, 1>>;
 
+
 public:
-    QCDScaleByHelicityCorrectionsHelper(T&& corrections) : TensorCorrectionsHelper3D<T>(std::move(corrections)) {}
+
+    //inherit constructor
+    using base_t::base_t;
 
     small_tensor_t csAngularFactors(const CSVars &csvars) {
 
