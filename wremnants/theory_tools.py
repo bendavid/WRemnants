@@ -4,6 +4,11 @@ import numpy as np
 
 ROOT.gInterpreter.Declare('#include "theoryTools.h"')
 
+# integer axis for -1 through 7
+axis_helicity = hist.axis.Integer(
+    -1, 8, name="helicity", overflow=False, underflow=False
+)
+
 # this puts the bin centers at 0.5, 1.0, 2.0
 axis_muRfact = hist.axis.Variable(
     [0.25, 0.75, 1.25, 2.75], name="muRfact", underflow=False, overflow=False
