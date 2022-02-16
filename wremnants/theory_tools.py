@@ -1,5 +1,6 @@
 import ROOT
 import hist
+import numpy as np
 
 ROOT.gInterpreter.Declare('#include "theoryTools.h"')
 
@@ -21,8 +22,34 @@ def define_prefsr_vars(df):
     df = df.Define("ptVgen", "genV.pt()")
     df = df.Define("massVgen", "genV.mass()")
     df = df.Define("yVgen", "genV.Rapidity()")
-    df = df.Define("absYVgen", "genV.Rapidity()")
+    df = df.Define("absYVgen", "std::fabs(yVgen)")
     df = df.Define("chargeVgen", "GenPart_pdgId[prefsrLeps[0]] + GenPart_pdgId[prefsrLeps[1]]")
     df = df.Define("scaleWeights_tensor", "wrem::makeScaleTensor(LHEScaleWeight);")
+    df = df.Define("csSineCosThetaPhi", "wrem::csSineCosThetaPhi(genl, genlanti)")
 
     return df
+
+def moments_to_angular_coeffs(hist_moments_scales):
+    s = hist.tag.Slicer()
+
+    # select constant term, leaving dummy axis for broadcasting
+    hist_moments_scales_m1 = hist_moments_scales[{"helicity" : s[-1j:-1j+1]}]
+
+    vals = hist_moments_scales_m1.values(flow=True)
+
+    # replace zero values to avoid NaN
+    norm_vals = np.where( vals==0., 1., vals)
+
+    offsets = np.array([0., 4., 0., 0., 0., 0., 0., 0., 0.])
+    scales = np.array([1., -10., 5., 10., 4., 4., 5., 5., 4.])
+
+    # for broadcasting
+    offsets = offsets[:, np.newaxis, np.newaxis]
+    scales = scales[:, np.newaxis, np.newaxis]
+
+    hist_coeffs_scales = hist.Hist(*hist_moments_scales.axes, storage = hist_moments_scales._storage_type(), name = "hist_coeffs_scales",
+        data = scales*hist_moments_scales.view(flow=True) / norm_vals + offsets
+    )
+
+
+    return hist_coeffs_scales
