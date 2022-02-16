@@ -3,15 +3,17 @@ import boost_histogram as bh
 import numpy as np
 
 def valsAndVariances(h1, h2, allowBroadcast):
-    if not allowBroadcast or len(h1.axes) == len(h2.axes):
-        return (h1.values(), h2.values(), h1.variances(), h2.variances())
-    # Should probably check that all other axes are the same
-    elif allowBroadcast and len(h1.axes) == len(h2.axes)-1 and h2.axes[-1].name == "systIdx":
-        return (h1.values()[...,np.newaxis], h2.values(), h1.variances()[...,np.newaxis], h2.variances())
-    elif allowBroadcast and len(h1.axes)-1 == len(h2.axes) and h1.axes[-1].name == "systIdx":
-        return (h1.values(), h2.values()[...,np.newaxis], h1.variances(), h2.variances()[...,np.newaxis])
-    else:
+    if not allowBroadcast and len(h1.axes) != len(h2.axes):
         raise ValueError("Incompatible hists for math operation")
+    if len(h1.axes) == len(h2.axes):
+        return (h1.values(), h2.values(), h1.variances(), h2.variances())
+    else:
+        hto = h1 if len(h1.shape) > len(h2.shape) else h2
+        hfrom = h2 if len(h1.shape) > len(h2.shape) else h1
+        # The transpose is because numpy works right to left in broadcasting, and we've put the
+        # syst axis on the right
+        return (hto.values(), np.broadcast_to(hfrom.values().T, hto.shape[::-1]).T, 
+                hto.variances(), np.broadcast_to(hfrom.variances().T, hto.shape[::-1]).T)
 
 def broadcastOutHist(h1, h2):
     if len(h1.axes) == len(h2.axes):
@@ -63,16 +65,10 @@ def mirrorHist(hvar, hnom, cutoff=0.1):
     return hnew
 
 def extendHistByMirror(hvar, hnom):
-    axes = hvar.axes
-    if axes[-1].name != "systIdx":
-        hvar = addSystAxis(hvar)
-    mirror = mirrorHist(hvar, hnom)
-    offset = axes[-1].edges[0]
-    ax = hist.axis.Regular(2*axes[-1].size, offset, 2*axes[-1].size+offset, name=axes[-1].name)
-    hnew = hist.Hist(*axes[:-1], ax, storage=hist.storage.Weight())
-    vals = np.concatenate((hvar.values(), mirror.values()), axis=-1)
-    varis = np.concatenate((hvar.variances(), mirror.variances()), axis=-1) 
-    hnew[...] = np.stack((vals, varis), axis=-1)
+    hmirror = mirrorHist(hvar, hnom)
+    mirrorAx = hist.axis.Integer(0,2, name="mirror", overflow=False, underflow=False)
+    hnew = hist.Hist(*hvar.axes, mirrorAx, storage=hvar._storage_type())
+    hnew.view(flow=True)[...] = np.stack((hvar.view(flow=True), hmirror.view(flow=True)), axis=-1)
     return hnew
 
 def addSystAxis(h, size=1, offset=0):
