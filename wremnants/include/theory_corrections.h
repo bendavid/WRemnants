@@ -79,7 +79,7 @@ public:
         angular(3, 0, 0) = 0.5*sinThetaCS*sinThetaCS*cos2PhiCS;
         angular(4, 0, 0) = sinThetaCS*cosPhiCS;
         angular(5, 0, 0) = cosThetaCS;
-        angular(6, 0, 0) = sinThetaCS*sinThetaCS*sin2ThetaCS; //WRONG
+        angular(6, 0, 0) = sinThetaCS*sinThetaCS*sin2PhiCS;
         angular(7, 0, 0) = sin2ThetaCS*sinPhiCS;
         angular(8, 0, 0) = sinThetaCS*sinPhiCS;
 
