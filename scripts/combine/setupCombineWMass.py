@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from wremnants import CardTool,theoryTools
+from wremnants import CardTool,theory_tools
 from wremnants import histselections as sel
 from wremnants.datasets.datagroups import datagroups2016
 import argparse
@@ -20,7 +20,7 @@ if not os.path.isdir(args.outfolder):
 
 datagroups = datagroups2016(args.inputFile)
 templateDir = f"{scriptdir}/Templates/WMass"
-cardTool = CardTool.CardTool(f"{args.outfolder}/Wmass.txt")
+cardTool = CardTool.CardTool(os.path.abspath(f"{args.outfolder}/Wmass.txt"))
 cardTool.setNominalTemplate(f"{templateDir}/main.txt")
 cardTool.setOutfile(f"{args.outfolder}/WMassCombineInput.root")
 cardTool.setDatagroups(datagroups)
@@ -28,7 +28,7 @@ cardTool.setDatagroups(datagroups)
 #TODO: Change the mirrorNames function so it gives the right order for multiple axes
 cardTool.addSystematic("pdfNNPDF31", 
     processes=cardTool.filteredProcesses(lambda x: x[0] == "W" or x == "Fake"),
-    outNames=theoryTools.pdfNames(cardTool, "NNPDF31"),
+    outNames=theory_tools.pdfNames(cardTool, "NNPDF31"),
     mirror=True,
     group="pdfNNPDF31",
     # TODO: give this a proper name
@@ -51,13 +51,13 @@ for name,num in zip(["effSystIsoTnP", "effStatTnP",], [2, 624*4]):
 #    #)
 #    #cardTool.addSystematic("qcdScale", 
 #    #    processes=cardTool.filteredProcesses(lambda x: "Z" in x[0]),
-#    #    outNames=theoryTools.qcdScaleNames(),
+#    #    outNames=theory_tools.qcdScaleNames(),
 #    #    group="QCDscale",
 #    #)
 #else:
 #    cardTool.addSystematic("qcdScale", 
 #        processes=cardTool.filteredProcesses(lambda x: "W" in x[0] or "DY" in x[:2]),
-#        outNames=theoryTools.qcdScaleNames(),
+#        outNames=theory_tools.qcdScaleNames(),
 #        group="QCDscale",
 #    )
 cardTool.addSystematic("muonScaleSyst", 
@@ -70,7 +70,7 @@ cardTool.addSystematic("muonScaleSyst",
 cardTool.addSystematic("massWeight", 
     # TODO: Add the mass weights to the tau samples
     processes=cardTool.filteredProcesses(lambda x: "W" in x[0] and "mu" in x),
-    outNames=theoryTools.massWeightNames(["massShift100MeV"]),
+    outNames=theory_tools.massWeightNames(["massShift100MeV"]),
     group="massShift",
     groupFilter=lambda x: x == "massShift100MeV",
     mirror=False,
