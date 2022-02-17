@@ -82,7 +82,7 @@ Eigen::TensorFixedSize<int, Eigen::Sizes<2>> prefsrLeptons(const ROOT::VecOps::R
 
 using scale_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<3, 3>>;
 
-scale_tensor_t makeScaleTensor(const Vec_f &scale_weights) {
+scale_tensor_t makeScaleTensor(const Vec_f &scale_weights, double thres) {
   // from nanoaod doc lines (do I trust them?)
 //[0] is mur=0.5 muf=0.5; [1] is mur=0.5 muf=1; [2] is mur=0.5 muf=2; [3] is mur=1 muf=0.5 ; [4] is mur=1 muf=1; [5] is mur=1 muf=2; [6] is mur=2 muf=0.5; [7] is mur=2 muf=1 ; [8] is mur=2 muf=2)*
 
@@ -99,7 +99,8 @@ scale_tensor_t makeScaleTensor(const Vec_f &scale_weights) {
   res(2, 1) = scale_weights[7]; //mur=2.0 muf=1.0;
   res(2, 2) = scale_weights[8]; //mur=2.0 muf=2.0;
 
-  return res;
+  // clip large weights
+  return clip_tensor(res, thres);
 
 
 }
