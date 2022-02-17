@@ -42,7 +42,7 @@ struct CSVars {
 
 };
 
-CSVars csSineCosThetaPhi(PtEtaPhiMVector& lplus, PtEtaPhiMVector& lminus) {
+CSVars csSineCosThetaPhi(const PtEtaPhiMVector& lplus, const PtEtaPhiMVector& lminus) {
     PxPyPzEVector lplusv(lplus);
     PxPyPzEVector dilepton = lplusv + PxPyPzEVector(lminus);
     const int zsign = std::copysign(1.0, dilepton.z());
