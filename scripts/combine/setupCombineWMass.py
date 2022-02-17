@@ -24,7 +24,6 @@ cardTool = CardTool.CardTool(f"{args.outfolder}/Wmass_{{chan}}.txt")
 cardTool.setNominalTemplate(f"{templateDir}/main.txt")
 cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/WMassCombineInput.root"))
 cardTool.setDatagroups(datagroups)
-cardTool.setSpacing(28)
 
 #TODO: Change the mirrorNames function so it gives the right order for multiple axes
 cardTool.addSystematic("pdfNNPDF31", 
