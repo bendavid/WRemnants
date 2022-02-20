@@ -6,7 +6,9 @@ def fakeHistABCD(h):
     return hh.multiplyHists(
         hh.divideHists(h[{"passIso" : True, "passMT" : False}], 
             h[{"passIso" : False, "passMT" : True}],
-                where=h[{"passIso" : False, "passMT" : True}].values()>1),
+                cutoff=1
+            ),
+                #where=h[{"passIso" : False, "passMT" : True}].values(flow=True)>1),
         h[{"passIso" : False, "passMT" : False}], 
     )
 

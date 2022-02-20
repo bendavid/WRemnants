@@ -6,31 +6,33 @@ def valsAndVariances(h1, h2, allowBroadcast):
     if not allowBroadcast and len(h1.axes) != len(h2.axes):
         raise ValueError("Incompatible hists for math operation")
     if len(h1.axes) == len(h2.axes):
-        return (h1.values(), h2.values(), h1.variances(), h2.variances())
+        return (h1.values(flow=True), h2.values(flow=True), h1.variances(flow=True), h2.variances(flow=True))
     else:
-        hto = h1 if len(h1.shape) > len(h2.shape) else h2
-        hfrom = h2 if len(h1.shape) > len(h2.shape) else h1
+        outshape = h1.view(flow=True).shape if len(h1.shape) > len(h2.shape) else h2.view(flow=True).shape
         # The transpose is because numpy works right to left in broadcasting, and we've put the
         # syst axis on the right
-        return (hto.values(), np.broadcast_to(hfrom.values().T, hto.shape[::-1]).T, 
-                hto.variances(), np.broadcast_to(hfrom.variances().T, hto.shape[::-1]).T)
+        return [np.broadcast_to(x.T, outshape[::-1]).T for x in \
+            [h1.values(flow=True), h2.values(flow=True), h1.variances(flow=True), h2.variances(flow=True)]]
 
 def broadcastOutHist(h1, h2):
     if len(h1.axes) == len(h2.axes):
         return h1 if h1.axes[-1].size > h2.axes[-1].size else h2
     return h1 if len(h1.axes) > len(h2.axes) else h2
 
-def divideHists(h1, h2, where=True, allowBroadcast=True):
+def divideHists(h1, h2, cutoff=1, allowBroadcast=True):
     h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2, allowBroadcast)
    
     # To get the broadcast shape right
     outh = h1 if not allowBroadcast else broadcastOutHist(h1, h2)
-    val = np.divide(h1vals, h2vals, out=np.zeros_like(outh), where=where)
+    out = np.ones_like(h2vals)
+    # By the argument that 0/0 = 1
+    out[np.abs(h1vals-h2vals) < cutoff] = 1.
+    val = np.divide(h1vals, h2vals, out=out, where=(h2vals>cutoff) & (h1vals>cutoff))
     relvars = relVariances(h1vals, h2vals, h1vars, h2vars)
     var = val*sum(relVariances(h1vals, h2vals, h1vars, h2vars))
     var *= val
-    newh = hist.Hist(*outh.axes, storage=hist.storage.Weight())
-    newh[...] = np.stack((val, var), axis=-1)
+    newh = hist.Hist(*outh.axes, storage=hist.storage.Weight(),
+            data=np.stack((val, var), axis=-1))
     return newh
 
 def relVariances(h1vals, h2vals, h1vars, h2vars):
@@ -48,25 +50,29 @@ def multiplyHists(h1, h2, allowBroadcast=True):
     var = val*val*sum(relVariances(h1vals, h2vals, h1vars, h2vars))
 
     outh = h1 if not allowBroadcast else broadcastOutHist(h1, h2)
-    newh = hist.Hist(*outh.axes, storage=hist.storage.Weight())
-    newh[...] = np.stack((val, var), axis=-1)
+    newh = hist.Hist(*outh.axes, storage=hist.storage.Weight(),
+            data=np.stack((val, var), axis=-1))
     return newh
 
 def addHists(h1, h2, allowBroadcast=True):
     h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2, allowBroadcast)
     outh = h1 if not allowBroadcast else broadcastOutHist(h1, h2)
 
-    newh = hist.Hist(*outh.axes, storage=hist.storage.Weight())
-    newh[...] = np.stack((h1vals+h2vals, h1vars+h2vars), axis=-1)
+    newh = hist.Hist(*outh.axes, storage=hist.storage.Weight(),
+            data=np.stack((h1vals+h2vals, h1vars+h2vars), axis=-1))
     return newh
 
-def mirrorHist(hvar, hnom, cutoff=0.1):
-    hnew = multiplyHists(divideHists(hnom, hvar, where=np.abs(hvar.values())>cutoff), hnom)
+def mirrorHist(hvar, hnom, cutoff=1):
+    div = divideHists(hnom, hvar, cutoff)
+    hnew = multiplyHists(div, hnom)
+    print("hnew is", hnew.sum())
     return hnew
 
 def extendHistByMirror(hvar, hnom):
     hmirror = mirrorHist(hvar, hnom)
     mirrorAx = hist.axis.Integer(0,2, name="mirror", overflow=False, underflow=False)
+    print("Ratio of yields for nom and var", hvar.sum().value/hnom.sum().value)
+    print("Ratio of yields for var and mirror:", hvar.sum().value/hmirror.sum().value)
     hnew = hist.Hist(*hvar.axes, mirrorAx, storage=hvar._storage_type())
     hnew.view(flow=True)[...] = np.stack((hvar.view(flow=True), hmirror.view(flow=True)), axis=-1)
     return hnew

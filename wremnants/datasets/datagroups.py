@@ -4,14 +4,22 @@ from wremnants.datasets import datasets2016
 import logging
 import lz4.frame
 import pickle
+import uproot
 
 class datagroups(object):
     def __init__(self, infile):
-        with lz4.frame.open(infile) as f:
-            self.results = pickle.load(f)
+        if ".root" not in infile[-5:]:
+            with lz4.frame.open(infile) as f:
+                self.results = pickle.load(f)
+            self.rtfile = None
+        else:
+            self.rtfile = uproot.open(infile)
+            self.results = None
+
         if self.datasets:
             self.data = [x for x in self.datasets.values() if x.is_data]
-        self.lumi = sum([self.results[x.name]["lumi"] for x in self.data])
+
+        self.lumi = 1 if not self.results else sum([self.results[x.name]["lumi"] for x in self.data])
         self.groups = {}
         self.nominalName = "nominal"
 
@@ -46,6 +54,18 @@ class datagroups(object):
             if selectSignal and group[label]:
                 group[label] = group["signalOp"](group[label])
 
+    #TODO: Better organize to avoid duplicated code
+    def setHistsCombine(self, histname, procsToRead=None, label=None):
+        if label == None:
+            label = "hist"
+        if not procsToRead:
+            procsToRead = self.groups.keys()
+
+        for procName, group in self.groups.items():
+            group[label] = None
+            if procName in procsToRead:
+                group[label] = self.rtfile[histname].to_hist()
+
     def readHist(self, histname, proc, scaleOp=None, forceNonzero=True):
         output = self.results[proc.name]["output"]
         if histname not in output:
@@ -58,9 +78,12 @@ class datagroups(object):
             scale = scale*scaleOp(proc)
         return h*scale
 
-
     def datagroupsForHist(self, histname, procsToRead=None, label="", dataHist="", selectSignal=True, forceNonzero=True):
-        self.setHists(histname, procsToRead, label, dataHist, selectSignal, forceNonzero)
+        if self.rtfile:
+            self.setHistsCombine(histname, procsToRead, label)
+        else:
+            self.setHists(histname, procsToRead, label, dataHist, selectSignal, forceNonzero)
+
         return self.groups
 
     def resultsDict(self):
