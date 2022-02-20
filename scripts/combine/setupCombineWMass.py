@@ -20,27 +20,31 @@ if not os.path.isdir(args.outfolder):
 
 datagroups = datagroups2016(args.inputFile)
 templateDir = f"{scriptdir}/Templates/WMass"
-cardTool = CardTool.CardTool(os.path.abspath(f"{args.outfolder}/Wmass.txt"))
+cardTool = CardTool.CardTool(f"{args.outfolder}/Wmass_{{chan}}.txt")
 cardTool.setNominalTemplate(f"{templateDir}/main.txt")
-cardTool.setOutfile(f"{args.outfolder}/WMassCombineInput.root")
+cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/WMassCombineInput.root"))
 cardTool.setDatagroups(datagroups)
+cardTool.setSpacing(28)
 
 #TODO: Change the mirrorNames function so it gives the right order for multiple axes
 cardTool.addSystematic("pdfNNPDF31", 
     processes=cardTool.filteredProcesses(lambda x: x[0] == "W" or x == "Fake"),
-    outNames=theory_tools.pdfNames(cardTool, "NNPDF31"),
     mirror=True,
     group="pdfNNPDF31",
-    # TODO: give this a proper name
     systAxes=["tensor_axis_0"],
+    labelsByAxis=["pdf{i}NNPDF31"],
+    # Needs to be a tuple, since for multiple axis it would be (ax1, ax2, ax3)...
+    skipEntries=[(0, 0), (0,1)],
 )
 for name,num in zip(["effSystIsoTnP", "effStatTnP",], [2, 624*4]):
     axes = ["idiptrig-iso"] if num == 2 else ["SF eta", "SF pt", "SF charge", "idiptrig-iso"]
+    axlabels = ["IDIPTrig"] if num == 2 else ["eta", "pt", "q", "Trig"]
     cardTool.addSystematic(name, 
-        outNames=cardTool.mirrorNames(f"{name}{{i}}", num),
         mirror=True,
         group=name,
         systAxes=axes,
+        labelsByAxis=axlabels,
+        baseName=name+"_",
         processes=cardTool.filteredProcesses(lambda x: x != "Data"),
     )
 #if args.qcdByHelicity:
@@ -60,13 +64,13 @@ for name,num in zip(["effSystIsoTnP", "effStatTnP",], [2, 624*4]):
 #        outNames=theory_tools.qcdScaleNames(),
 #        group="QCDscale",
 #    )
-cardTool.addSystematic("muonScaleSyst", 
-    processes=cardTool.filteredProcesses(lambda x: "W" in x[0] and "mu" in x),
-    outNames=cardTool.mirrorNames("muonScale4Bins1em4", 4),
-    group="massScale",
-    systAxes=["downUpVar", "scaleEtaSlice"],
-    scale=0.5,
-)
+#cardTool.addSystematic("muonScaleSyst", 
+#    processes=cardTool.filteredProcesses(lambda x: "W" in x[0] and "mu" in x),
+#    group="muonScale",
+#    baseName="CMS_scale_m_",
+#    systAxes=["downUpVar", "scaleEtaSlice"],
+#    labelsByAxis=["downUpVar", "ieta"],
+#)
 cardTool.addSystematic("massWeight", 
     # TODO: Add the mass weights to the tau samples
     processes=cardTool.filteredProcesses(lambda x: "W" in x[0] and "mu" in x),

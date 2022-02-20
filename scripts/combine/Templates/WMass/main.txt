@@ -2,13 +2,13 @@ imax 1
 jmax *
 kmax *
 ##----------------------------------
-shapes *  *  ${inputfile} x_$$PROCESS x_$$PROCESS_$$SYSTEMATIC
+shapes *  *  ${inputfile} x_$$PROCESS_$$CHANNEL x_$$PROCESS_$$SYSTEMATIC_$$CHANNEL
 ##----------------------------------
 bin   ${channel} 
 observation    -1
 ##----------------------------------
-bin                                     ${channelPerProc}
-process                                 ${processes}
-process                                 ${labels}
-rate                                    ${rates}
+bin                                                     ${channelPerProc}
+process                                                 ${processes}
+process                                                 ${labels}
+rate                                                    ${rates}
 ##----------------------------------
