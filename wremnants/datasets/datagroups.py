@@ -4,7 +4,9 @@ from wremnants.datasets import datasets2016
 import logging
 import lz4.frame
 import pickle
-import uproot
+import narf
+#import uproot
+import ROOT
 
 class datagroups(object):
     def __init__(self, infile):
@@ -13,13 +15,13 @@ class datagroups(object):
                 self.results = pickle.load(f)
             self.rtfile = None
         else:
-            self.rtfile = uproot.open(infile)
+            self.rtfile = ROOT.TFile.Open(infile)
             self.results = None
 
         if self.datasets:
             self.data = [x for x in self.datasets.values() if x.is_data]
 
-        self.lumi = 1 if not self.results else sum([self.results[x.name]["lumi"] for x in self.data])
+        self.lumi = 1 if not self.results else sum([self.results[x.name]["lumi"] for x in self.data if x.name in self.results])
         self.groups = {}
         self.nominalName = "nominal"
 
@@ -64,7 +66,10 @@ class datagroups(object):
         for procName, group in self.groups.items():
             group[label] = None
             if procName in procsToRead:
-                group[label] = self.rtfile[histname].to_hist()
+                # If using uproot (but then you can't name the axes)
+                # group[label] = self.rtfile.Get(histname].to_hist()
+                # TODO: Make axis names configurable
+                group[label] = narf.root_to_hist(self.rtfile.Get(histname), axis_names=["eta", "pt"])
 
     def readHist(self, histname, proc, scaleOp=None, forceNonzero=True):
         output = self.results[proc.name]["output"]
