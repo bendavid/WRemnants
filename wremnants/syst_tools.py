@@ -15,8 +15,12 @@ def scale_helicity_hist_to_variations(scale_hist):
     # difference between a given scale and the nominal, plus the sum
     # this emulates the "weight if idx else nominal" logic and corresponds to the decorrelated
     # variations
-    name = "variations" if not scale_hist.name else f"{scale_hist.name}_variations"
-    scale_variation_hist = hist.Hist(*scale_hist.axes, storage = scale_hist._storage_type(), name = name,
+    if scale_hist.name is None:
+        out_name = "scale_helicity_variations"
+    else:
+        out_name = scale_hist.name + "_variations"
+
+    scale_variation_hist = hist.Hist(*scale_hist.axes, storage = scale_hist._storage_type(), name = out_name,
                 data = scale_hist.view(flow=True) - nom_scale_hist.view(flow=True) + nom_hist.view(flow=True)[..., np.newaxis, np.newaxis, np.newaxis, np.newaxis, np.newaxis])
 
     return scale_variation_hist
