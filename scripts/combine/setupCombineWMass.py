@@ -64,13 +64,13 @@ for name,num in zip(["effSystIsoTnP", "effStatTnP",], [2, 624*4]):
 #        outNames=theory_tools.qcdScaleNames(),
 #        group="QCDscale",
 #    )
-#cardTool.addSystematic("muonScaleSyst", 
-#    processes=cardTool.filteredProcesses(lambda x: "W" in x[0] and "mu" in x),
-#    group="muonScale",
-#    baseName="CMS_scale_m_",
-#    systAxes=["downUpVar", "scaleEtaSlice"],
-#    labelsByAxis=["downUpVar", "ieta"],
-#)
+cardTool.addSystematic("muonScaleSyst", 
+    processes=cardTool.filteredProcesses(lambda x: "W" in x[0] and "mu" in x),
+    group="muonScale",
+    baseName="CMS_scale_m_",
+    systAxes=["downUpVar", "scaleEtaSlice"],
+    labelsByAxis=["downUpVar", "ieta"],
+)
 cardTool.addSystematic("massWeight", 
     # TODO: Add the mass weights to the tau samples
     processes=cardTool.filteredProcesses(lambda x: "W" in x[0] and "mu" in x),

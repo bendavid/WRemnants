@@ -86,7 +86,7 @@ def makePlotsWithRatioToRef(hists, labels, colors, xlabel="", ylabel="Events/bin
             histtype="step",
             color=colors[1:],
             label=labels[1:],
-            yerr=True,
+            yerr=False,
             stack=False,
             ax=ax2
         )
