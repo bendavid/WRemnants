@@ -1,7 +1,7 @@
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--nThreads", type=int, help="number of threads", default=None)
+parser.add_argument("-j", "--nThreads", type=int, help="number of threads", default=None)
 parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
 parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=None)
 args = parser.parse_args()
@@ -179,14 +179,15 @@ def build_graph(df, dataset):
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays, and it doesn't have MEParamWeight for now anyway
             if not "tau" in dataset.name:
                 nweights = 21 if isW else 23
-                df = df.Define("massWeight_tensor", f"auto res = wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight); res = nominal_weight*res; return res;")
+                df = df.Define("massWeight_tensor", f"wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight)")
+                df = df.Define("massWeight_tensor_wnom", f"auto res = massWeight_tensor; res = nominal_weight*res; return res;")
 
                 if isW:
-                    massWeight = df.HistoBoost("massWeight", nominal_axes, [*nominal_cols, "massWeight_tensor"])
+                    massWeight = df.HistoBoost("massWeight", nominal_axes, [*nominal_cols, "massWeight_tensor_wnom"])
                     results.append(massWeight)
 
                 netabins = 4
-                df = df.Define("muonScaleDummy4Bins2e4", f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(massWeight_tensor, goodMuons_eta0, 2.e-4, {str(isW).lower()})")
+                df = df.Define("muonScaleDummy4Bins2e4", f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(nominal_weight, massWeight_tensor, goodMuons_eta0, 2.e-4, {str(isW).lower()})")
                 scale_etabins_axis = hist.axis.Regular(4, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
                 dummyMuonScaleSyst = df.HistoBoost("muonScaleSyst", nominal_axes, [*nominal_cols, "muonScaleDummy4Bins2e4"], 
                     tensor_axes=[down_up_axis, scale_etabins_axis])
