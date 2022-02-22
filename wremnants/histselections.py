@@ -21,6 +21,7 @@ def signalHistWmass(h, charge=None):
         sel.update({"charge" : -1j if charge < 0 else 1j})
     return h[sel]
 
+# TODO: Not all hists are made with these axes
 def signalHistLowPileupW(h):
     return h[{"iso" : 0.j, "mt" : hist.rebin(10)}]
 
