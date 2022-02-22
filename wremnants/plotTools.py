@@ -4,7 +4,7 @@ from wremnants import boostHistHelpers as hh
 from wremnants import histselections as sel
 hep.style.use(hep.style.ROOT)
 
-def makeStackPlotWithRatio(obs, histInfo, stackedProcs, label="nominal", unstacked=None, xlabel="", ylabel="Events/bin", 
+def makeStackPlotWithRatio(obs, histInfo, stackedProcs, unstacked=None, label="nominal", xlabel="", ylabel="Events/bin", 
                 rrange=[0.9, 1.1], scale=8.5e6):
     width=3 if "unrolled" in obs else 1
     fig = plt.figure(figsize=(8*width,8))
@@ -29,9 +29,7 @@ def makeStackPlotWithRatio(obs, histInfo, stackedProcs, label="nominal", unstack
     )
     
     if unstacked:
-        if not ratioHist:
-            ratioHist = label
-        unstack = op(histInfo[unstacked][ratioHist])
+        unstack = op(histInfo[unstacked][label])
         hep.histplot(
             unstack,
             yerr=True, 
