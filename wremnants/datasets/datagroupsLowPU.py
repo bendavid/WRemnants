@@ -63,13 +63,18 @@ class datagroupsLowPU(datagroups):
         if proc.is_data:
             return 1
         return self.lumi
-        
 
-    def readHist(self, histname, proc, axisNames, scaleOp=None, forceNonzero=True):
-        readname = f"{histname}_{proc.name}"
+    def histName(self, baseName, proc, syst):
+        if proc == "Wmunu":
+            baseName = baseName.replace("reco", "gen_reco")
+        base = f"{baseName}_{proc}"
+        return base if syst == "nominal" else f"{base}_{syst}_syst"
+
+    def readHist(self, baseName, procName, syst, axisNames, scaleOp=None, forceNonzero=True):
+        readname = self.histName(baseName, procName, syst)
         rthist = self.rtfile.Get(readname)
         if not rthist:
-            raise ValueError(f"Histogram {readname} not found for process {proc.name}")
+            raise ValueError(f"Histogram {readname} not found for process {procName}")
         h = narf.root_to_hist(rthist, axis_names=axisNames)
         if forceNonzero:
             h = hh.clipNegativeVals(h)

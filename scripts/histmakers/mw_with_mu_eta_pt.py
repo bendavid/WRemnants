@@ -150,7 +150,7 @@ def build_graph(df, dataset):
 
             df = wremnants.define_prefsr_vars(df)
 
-            scaleHist = df.HistoBoost("qcdScale", nominal_axes+[axis_ptVgen], [*nominal_cols, "ptVgen", "scaleWeights_tensor"], tensor_axes = wremnants.scale_tensor_axes)
+            scaleHist = df.HistoBoost("qcdScale", nominal_axes+[axis_ptVgen], [*nominal_cols, "ptVgen", "scaleWeights_tensor_wnom"], tensor_axes = wremnants.scale_tensor_axes)
             results.append(scaleHist)
 
             # currently SCETLIB corrections are applicable to W-only, and helicity-split scales are only valid for one of W or Z at a time
@@ -180,7 +180,7 @@ def build_graph(df, dataset):
             if not "tau" in dataset.name:
                 nweights = 21 if isW else 23
                 df = df.Define("massWeight_tensor", f"wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight)")
-                df = df.Define("massWeight_tensor_wnom", f"auto res = massWeight_tensor; res = nominal_weight*res; return res;")
+                df = df.Define("massWeight_tensor_wnom", "auto res = massWeight_tensor; res = nominal_weight*res; return res;")
 
                 if isW:
                     massWeight = df.HistoBoost("massWeight", nominal_axes, [*nominal_cols, "massWeight_tensor_wnom"])

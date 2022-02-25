@@ -29,12 +29,13 @@ class CardTool(object):
         self.cardContent = {}
         self.cardGroups = ""
         self.nominalTemplate = ""
-        self.spacing = 20
+        self.spacing = 28
         self.fakeName = "Fake"
         self.dataName = "Data"
         self.nominalName = "nominal"
         self.datagroups = None
         self.unconstrainedProcesses = None
+        self.buildHistNameFunc = None
         #self.loadArgs = {"operation" : "self.loadProcesses (reading hists from file)"}
 
     # Function call to load hists for processes (e.g., read from a ROOT file)
@@ -208,13 +209,14 @@ class CardTool(object):
             self.outfile = outfile
 
     def writeOutput(self):
-        self.procDict = self.datagroups.datagroupsForHist(histname=self.nominalName, label=self.nominalName)
+        self.procDict = self.datagroups.datagroupsForHist(
+            baseName="", proc=self.nominalName, syst=syst, label=self.nominalName)
         self.writeForProcesses(self.nominalName, processes=self.procDict.keys(), label=self.nominalName)
         self.loadNominalCard()
         self.writeLnNSystematics()
         for syst in self.systematics.keys():
             processes=self.systematics[syst]["processes"]
-            self.procDict = self.datagroups.datagroupsForHist(histname=syst, label="syst",
+            self.procDict = self.datagroups.datagroupsForHist(self.histName, syst, label="syst",
                 dataHist=self.nominalName, procsToRead=processes)
             self.writeForProcesses(syst, label="syst", processes=processes)
         self.writeCard()
