@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-from wremnants import CardTool,theoryTools
-from wremnants import combineDatasets as data
+from wremnants import CardTool,theory_tools
+from wremnants.datasets.datagroupsLowPU import datagroupsLowPU
 from wremnants import histselections as sel
 import argparse
 import os
+import pathlib
+
+scriptdir = f"{pathlib.Path(__file__).parent}"
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-o", "--outfolder", type=str, default="/scratch/kelong/CombineStudies")
@@ -15,33 +18,30 @@ args = parser.parse_args()
 if not os.path.isdir(args.outfolder):
     os.mkdir(args.outfolder)
 
+def histName(proc, syst, variable="mt_reco_pf"):
+    if proc == "Wmunu":
+        variable = "mt_gen_reco_pf"
+    base = f"{variable}_{proc}"
+    return base if syst == "nominal" else f"{base}_{syst}_syst"
+
+datagroups = datagroupsLowPU(args.inputFile)
 templateDir = "Templates/LowPileupW"
 cardTool = CardTool.CardTool(f"{args.outfolder}/LowPileupW.txt")
-cardTool.setInputFile(args.inputFile)
-cardTool.setNominalTemplate(f"{templateDir}/main.txt")
-cardTool.setOutfile(f"{args.outfolder}/LowPileupWCombineInput.root")
-cardTool.setProcesses(data.processDictLowPileup(
-    signalPtSplit=[0, 9, 20, 37, 60, 89, r"$\infty$"], removeUnsplit=True).keys()
-)
-# Best to keep this a multiple of 4
-cardTool.setSpacing(28)
-cardTool.setSignalOperation(sel.signalHistLowPileupW)
-cardTool.setLoadProcesses(data.fillLowPileupProcDictFromRoot,
-    extraArgs={"makeVariable" : 
-        {"qTreco" : [0.0, 5.0, 9.0, 15.0, 20.0, 25.0, 37.0, 45.0, 60.0, 89.0, 150.],
-        "iso" : [0, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.6, 0.65, 100]}
-    }
-)
-cardTool.addFakeEstimate(sel.fakeHistIsoRegion)
-cardTool.setUnconstrainedProcs([cardTool.getFakeName()]+cardTool.filteredProcesses(lambda x: "ToMuNu" in x))
-cardTool.setScaleMC(0.199)
 
-cardTool.addSystematic("PDF", 
-    processes=cardTool.filteredProcesses(lambda x: "W" in x),
-    outNames=theoryTools.pdfNames(cardTool, "NNPDF31", skipFirst=True),
-    mirror=True,
-    group="pdfNNPDF31",
-)
+templateDir = f"{scriptdir}/Templates/LowPileupW"
+cardTool = CardTool.CardTool(f"{args.outfolder}/LowPileupW_{{chan}}.txt")
+cardTool.setNominalTemplate(f"{templateDir}/main.txt")
+cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/LowPileupWCombineInput.root"))
+cardTool.setDatagroups(datagroups)
+cardTool.setBuildHistNameFunction(histName)
+cardTool.setUnconstrainedProcs([cardTool.getFakeName(), "Wmunu"])
+
+#cardTool.addSystematic("PDF", 
+#    processes=cardTool.filteredProcesses(lambda x: "W" in x),
+#    outNames=theoryTools.pdfNames(cardTool, "NNPDF31", skipFirst=True),
+#    mirror=True,
+#    group="pdfNNPDF31",
+#)
 #if args.qcdByHelicity:
 #    #cardTool.addSystematic("minnloQCDUncByHelicity", 
 #    #    processes=cardTool.filteredProcesses(lambda x: "W" in x[0]),
