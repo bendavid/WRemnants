@@ -18,12 +18,6 @@ args = parser.parse_args()
 if not os.path.isdir(args.outfolder):
     os.mkdir(args.outfolder)
 
-def histName(proc, syst, variable="mt_reco_pf"):
-    if proc == "Wmunu":
-        variable = "mt_gen_reco_pf"
-    base = f"{variable}_{proc}"
-    return base if syst == "nominal" else f"{base}_{syst}_syst"
-
 datagroups = datagroupsLowPU(args.inputFile)
 templateDir = "Templates/LowPileupW"
 cardTool = CardTool.CardTool(f"{args.outfolder}/LowPileupW.txt")
@@ -33,15 +27,18 @@ cardTool = CardTool.CardTool(f"{args.outfolder}/LowPileupW_{{chan}}.txt")
 cardTool.setNominalTemplate(f"{templateDir}/main.txt")
 cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/LowPileupWCombineInput.root"))
 cardTool.setDatagroups(datagroups)
-cardTool.setBuildHistNameFunction(histName)
+cardTool.setHistName("mt_reco_pf")
 cardTool.setUnconstrainedProcs([cardTool.getFakeName(), "Wmunu"])
 
-#cardTool.addSystematic("PDF", 
-#    processes=cardTool.filteredProcesses(lambda x: "W" in x),
-#    outNames=theoryTools.pdfNames(cardTool, "NNPDF31", skipFirst=True),
-#    mirror=True,
-#    group="pdfNNPDF31",
-#)
+cardTool.addSystematic("PDF", 
+    processes=cardTool.filteredProcesses(lambda x: x[0] == "W" or x == "Fake"),
+    mirror=True,
+    group="pdfNNPDF31",
+    systAxes=["systAx"],
+    labelsByAxis=["pdf{i}NNPDF31"],
+    # Needs to be a tuple, since for multiple axis it would be (ax1, ax2, ax3)...
+    skipEntries=[(0, 0), (0,1)],
+)
 #if args.qcdByHelicity:
 #    #cardTool.addSystematic("minnloQCDUncByHelicity", 
 #    #    processes=cardTool.filteredProcesses(lambda x: "W" in x[0]),

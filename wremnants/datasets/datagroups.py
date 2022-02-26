@@ -32,7 +32,7 @@ class datagroups(object):
         return self.lumi*1000*proc.xsec/self.results[proc.name]["weight_sum"]
 
     def setHists(self, baseName, syst, procsToRead=None, label=None, nominalIfMissing=True, 
-            selectSignal=True, forceNonzero=True, axisNames=["eta", "pt"]):
+            selectSignal=True, forceNonzero=True):
         if label == None:
             label = "hist"
         if not procsToRead:
@@ -45,10 +45,10 @@ class datagroups(object):
             for member in group["members"]:
                 scale = group["scale"] if "scale" in group else None
                 try:
-                    h = self.readHist(baseName, procName, syst, member, axisNames=axisNames, scaleOp=scale, forceNonzero=forceNonzero)
+                    h = self.readHist(baseName, member, syst, scaleOp=scale, forceNonzero=forceNonzero)
                 except ValueError as e:
                     if nominalIfMissing:
-                        h = self.readHist(baseName, procName, self.nominalName, member, axisNames=axisNames, scaleOp=scale, forceNonzero=forceNonzero)
+                        h = self.readHist(baseName, member, self.nominalName, scaleOp=scale, forceNonzero=forceNonzero)
                     else:
                         logging.warning(str(e))
                         continue
@@ -57,7 +57,10 @@ class datagroups(object):
                 group[label] = group["signalOp"](group[label])
 
     #TODO: Better organize to avoid duplicated code
-    def setHistsCombine(self, histname, procsToRead=None, label=None, axisNames=["eta", "pt"]):
+    def setHistsCombine(self, baseName, syst, procsToRead=None, label=None):
+        if baseName == "x":
+            axisNames=["eta", "pt"]
+
         if label == None:
             label = "hist"
         if not procsToRead:
@@ -66,17 +69,15 @@ class datagroups(object):
         for procName, group in self.groups.items():
             group[label] = None
             if procName in procsToRead:
-                # If using uproot (but then you can't name the axes)
-                # group[label] = self.rtfile.Get(histname].to_hist()
-                # TODO: Make axis names configurable
-                group[label] = narf.root_to_hist(self.rtfile.Get(histname), axis_names=axisNames)
+                histName = "_".join([baseName, procName, syst])
+                group[label] = narf.root_to_hist(self.rtfile.Get(baseName), axis_names=axisNames)
 
-    def datagroupsForHist(self, histname, syst, procsToRead=None, label="", dataHist="", selectSignal=True, 
-            forceNonzero=True, axisNames=["eta", "pt"]):
+    def datagroupsForHist(self, baseName, syst, procsToRead=None, label="", dataHist="", selectSignal=True, 
+            forceNonzero=True):
         if self.rtfile and self.combine:
-            self.setHistsCombine(histname, syst, procsToRead, label, axisNames=axisNames)
+            self.setHistsCombine(baseName, syst, procsToRead, label)
         else:
-            self.setHists(histname, syst, procsToRead, label, dataHist, selectSignal, forceNonzero, axisNames=axisNames)
+            self.setHists(baseName, syst, procsToRead, label, dataHist, selectSignal, forceNonzero)
 
         return self.groups
 
@@ -145,11 +146,11 @@ class datagroups2016(datagroups):
     def histName(self, baseName, procName, syst):
         return syst
     
-    def readHist(self, baseName, procName, syst, scaleOp=None, forceNonzero=True, axisNames=["eta", "pt"]):
-        output = self.results[procName]["output"]
-        histname = self.histName(baseName, procName, syst)
+    def readHist(self, baseName, proc, syst, scaleOp=None, forceNonzero=True):
+        output = self.results[proc.name]["output"]
+        histname = self.histName(baseName, proc.name, syst)
         if histname not in output:
-            raise ValueError(f"Histogram {histname} not found for process {procName}")
+            raise ValueError(f"Histogram {histname} not found for process {proc.name}")
         h = output[histname]
         if forceNonzero:
             h = hh.clipNegativeVals(h)

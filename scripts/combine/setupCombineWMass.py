@@ -25,7 +25,6 @@ cardTool.setNominalTemplate(f"{templateDir}/main.txt")
 cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/WMassCombineInput.root"))
 cardTool.setDatagroups(datagroups)
 
-#TODO: Change the mirrorNames function so it gives the right order for multiple axes
 cardTool.addSystematic("pdfNNPDF31", 
     processes=cardTool.filteredProcesses(lambda x: x[0] == "W" or x == "Fake"),
     mirror=True,
