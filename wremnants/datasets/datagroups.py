@@ -33,8 +33,8 @@ class datagroups(object):
 
     def setHists(self, baseName, syst, procsToRead=None, label=None, nominalIfMissing=True, 
             selectSignal=True, forceNonzero=True):
-        if not label:
-            label = syst if syst else baseName
+        if label == None:
+            label = "hist"
         if not procsToRead:
             procsToRead = self.groups.keys()
 
@@ -57,39 +57,28 @@ class datagroups(object):
                 group[label] = group["signalOp"](group[label])
 
     #TODO: Better organize to avoid duplicated code
-    def setHistsCombine(self, baseName, syst, channel, procsToRead=None, label=None):
-        #TODO Set axis names properly
+    def setHistsCombine(self, baseName, syst, procsToRead=None, label=None):
         if baseName == "x":
             axisNames=["eta", "pt"]
 
-        if not label:
-            label = syst
+        if label == None:
+            label = "hist"
         if not procsToRead:
             procsToRead = self.groups.keys()
 
         for procName in procsToRead:
             group = self.groups[procName]
             group[label] = None
-            name = self.histNameCombine(procName, baseName, syst, channel)
-            rthist = self.rtfile.Get(name)
-            if not rthist:
-                raise RuntimeError(f"Failed to load hist {name} from file")
-            group[label] = narf.root_to_hist(rthist, axis_names=axisNames)
+            if procName in procsToRead:
+                histName = "_".join([baseName, procName, syst])
+                group[label] = narf.root_to_hist(self.rtfile.Get(baseName), axis_names=axisNames)
 
-    def histNameCombine(self, procName, baseName, syst, channel):
-        name = f"{baseName}_{procName}"
-        if syst != "nominal":
-            name += "_"+syst
-        if channel:
-            name += "_"+channel
-        return name
-
-    def loadHistsForDatagroups(self, baseName, syst, procsToRead=None, channel="", label="", nominalIfMissing=True,
-            selectSignal=True, forceNonzero=True):
+    def datagroupsForHist(self, baseName, syst, procsToRead=None, label="", dataHist="", selectSignal=True, 
+            forceNonzero=True):
         if self.rtfile and self.combine:
-            self.setHistsCombine(baseName, syst, channel, procsToRead, label)
+            self.setHistsCombine(baseName, syst, procsToRead, label)
         else:
-            self.setHists(baseName, syst, procsToRead, label, nominalIfMissing, selectSignal, forceNonzero)
+            self.setHists(baseName, syst, procsToRead, label, dataHist, selectSignal, forceNonzero)
 
     def getDatagroups(self):
         return self.groups

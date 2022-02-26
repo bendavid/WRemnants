@@ -29,20 +29,8 @@ cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/{name}CombineInput.root")
 cardTool.setDatagroups(datagroups)
 cardTool.setSpacing(36)
 
-print("All processes", cardTool.allMCProcesses())
-single_v_samples = cardTool.filteredProcesses(lambda x: x[0] in ["W", "Z"])
-single_v_and_fake_samples = cardTool.filteredProcesses(lambda x: x[0] in ["W", "Z"] or x == "Fake")
-single_vmu_samples = list(filter(lambda x: "mu" in x, single_v_samples))
-signal_samples = list(filter(lambda x: x[0] == ("Z" if args.wlike else "W"), single_vmu_samples))
-signal_samples_inctau = list(filter(lambda x: x[0] == ("Z" if args.wlike else "W"), single_v_samples))
-print("Single V samples", single_v_samples)
-print("Single Vmu samples", single_vmu_samples)
-print("signal samples", signal_samples)
-print("single_c_fake_samples", single_v_and_fake_samples)
-
-pdfName = theory_tools.pdfMap[args.pdf]["name"]
-cardTool.addSystematic(pdfName, 
-    processes=single_v_and_fake_samples,
+cardTool.addSystematic("pdfNNPDF31", 
+    processes=cardTool.filteredProcesses(lambda x: x[0] == "W" or x == "Fake"),
     mirror=True,
     group=pdfName,
     systAxes=["tensor_axis_0"],
