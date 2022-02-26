@@ -65,14 +65,11 @@ def addHists(h1, h2, allowBroadcast=True):
 def mirrorHist(hvar, hnom, cutoff=1):
     div = divideHists(hnom, hvar, cutoff)
     hnew = multiplyHists(div, hnom)
-    print("hnew is", hnew.sum())
     return hnew
 
 def extendHistByMirror(hvar, hnom):
     hmirror = mirrorHist(hvar, hnom)
     mirrorAx = hist.axis.Integer(0,2, name="mirror", overflow=False, underflow=False)
-    print("Ratio of yields for nom and var", hvar.sum().value/hnom.sum().value)
-    print("Ratio of yields for var and mirror:", hvar.sum().value/hmirror.sum().value)
     hnew = hist.Hist(*hvar.axes, mirrorAx, storage=hvar._storage_type())
     hnew.view(flow=True)[...] = np.stack((hvar.view(flow=True), hmirror.view(flow=True)), axis=-1)
     return hnew

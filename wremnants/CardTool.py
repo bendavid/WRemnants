@@ -36,6 +36,7 @@ class CardTool(object):
         self.datagroups = None
         self.unconstrainedProcesses = None
         self.buildHistNameFunc = None
+        self.histName = "x"
         #self.loadArgs = {"operation" : "self.loadProcesses (reading hists from file)"}
 
     # Function call to load hists for processes (e.g., read from a ROOT file)
@@ -67,9 +68,9 @@ class CardTool(object):
             return self.predictedProces
         return list(filter(lambda x: x != self.dataName, self.procDict.keys()))
 
-    #def setInputFile(self, infile):
-    #    if type(infile) == str:
-    #        self.inputFile = ROOT.TFile(infile)
+    def setHistName(self, histName):
+        self.histName = histName
+
     def isData(self, procInfo):
         return all([x.is_data for x in procInfo["members"]])
 
@@ -141,6 +142,10 @@ class CardTool(object):
             axNames.append("mirror")
             axLabels.append("mirror")
 
+        print("Looking at syst", syst)
+        if not all([name in [ax.name for ax in hvar.axes] for name in axNames]):
+            raise ValueError(f"Failed to find axis names '{str(systAxes)} in hist. " \
+                f"Axes in hist are {str([ax.name for ax in hvar.axes])}")
         entries = list(itertools.product(*[range(hvar.axes[ax].size) for ax in axNames]))
         
         if len(systInfo["outNames"]) == 0:
@@ -168,9 +173,9 @@ class CardTool(object):
     def variationName(self, proc, name):
         proc = proc if proc != self.dataName else "data_obs"
         if name == self.nominalName:
-            return f"x_{proc}"
+            return f"{self.histName}_{proc}"
         else:
-            return f"x_{proc}_{name}"
+            return f"{self.histName}_{proc}_{name}"
 
     # This logic used to be more complicated, leaving the function here for now even
     # though it's trivial
@@ -210,7 +215,7 @@ class CardTool(object):
 
     def writeOutput(self):
         self.procDict = self.datagroups.datagroupsForHist(
-            baseName="", proc=self.nominalName, syst=syst, label=self.nominalName)
+            baseName=self.histName, syst=self.nominalName, label=self.nominalName)
         self.writeForProcesses(self.nominalName, processes=self.procDict.keys(), label=self.nominalName)
         self.loadNominalCard()
         self.writeLnNSystematics()
@@ -218,6 +223,7 @@ class CardTool(object):
             processes=self.systematics[syst]["processes"]
             self.procDict = self.datagroups.datagroupsForHist(self.histName, syst, label="syst",
                 dataHist=self.nominalName, procsToRead=processes)
+            #print("procDict is", self.procDict)
             self.writeForProcesses(syst, label="syst", processes=processes)
         self.writeCard()
 
