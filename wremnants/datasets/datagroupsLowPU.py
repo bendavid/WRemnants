@@ -23,7 +23,8 @@ class datagroupsLowPU(datagroups):
             ),
             Fake=dict(
                 members = list(self.datasets.values()),
-                scale = lambda x: 0.13*(1. if x.is_data else -1),
+                #scale = lambda x: 0.13*(1. if x.is_data else -1),
+                scale = lambda x: 2.3*(1. if x.is_data else -1),
                 label = "Nonprompt",
                 color = "grey",
                 signalOp = sel.fakeHistIsoRegion,
@@ -66,7 +67,7 @@ class datagroupsLowPU(datagroups):
         return self.lumi
 
     def histName(self, baseName, proc, syst):
-        if proc in ["WplusJetsToMuNu", "WminusJetsToMuNu"]:
+        if proc in ["WplusJetsToMuNu", "WminusJetsToMuNu"] and "gen" not in baseName:
             baseName = baseName.replace("reco", "gen_reco")
         base = f"{baseName}_{proc}"
         return base if syst == "nominal" else f"{base}_{syst}_syst"

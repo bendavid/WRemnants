@@ -29,9 +29,7 @@ def makeStackPlotWithRatio(obs, histInfo, stackedProcs, label="nominal", unstack
     )
     
     if unstacked:
-        if not ratioHist:
-            ratioHist = label
-        unstack = op(histInfo[unstacked][ratioHist])
+        unstack = op(histInfo[unstacked][label])
         hep.histplot(
             unstack,
             yerr=True, 
