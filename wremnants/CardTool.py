@@ -71,6 +71,9 @@ class CardTool(object):
     def setHistName(self, histName):
         self.histName = histName
 
+    def isData(self, procInfo):
+        return all([x.is_data for x in procInfo["members"]])
+
     def isData(self, procName):
         return any([x.is_data for x in self.datagroups.groups[procName]["members"]])
 
@@ -152,9 +155,7 @@ class CardTool(object):
             axNames.append("mirror")
             axLabels.append("mirror")
 
-        if systInfo["action"]:
-            hvar = systInfo["action"](hvar, **systInfo["actionArgs"])
-
+        print("Looking at syst", syst)
         if not all([name in [ax.name for ax in hvar.axes] for name in axNames]):
             raise ValueError(f"Failed to find axis names '{str(systAxes)} in hist. " \
                 f"Axes in hist are {str([ax.name for ax in hvar.axes])}")
@@ -229,16 +230,15 @@ class CardTool(object):
             self.outfile = outfile
 
     def writeOutput(self):
-        self.datagroups.loadHistsForDatagroups(
+        self.procDict = self.datagroups.datagroupsForHist(
             baseName=self.histName, syst=self.nominalName, label=self.nominalName)
-        self.procDict = self.datagroups.getDatagroups()
         self.writeForProcesses(self.nominalName, processes=self.procDict.keys(), label=self.nominalName)
         self.loadNominalCard()
         self.writeLnNSystematics()
         for syst in self.systematics.keys():
             processes=self.systematics[syst]["processes"]
-            self.datagroups.loadHistsForDatagroups(self.histName, syst, label="syst",
-                procsToRead=processes)
+            self.procDict = self.datagroups.datagroupsForHist(histname=syst, label="syst",
+                dataHist=self.nominalName, procsToRead=processes)
             self.writeForProcesses(syst, label="syst", processes=processes)
         self.writeCard()
 
