@@ -97,7 +97,8 @@ class CardTool(object):
         self.lnNSystematics.update({name : {"size" : size, "processes" : processes}})
 
     def addSystematic(self, name, systAxes, outNames=None, skipEntries=None, labelsByAxis=None, 
-                        baseName="", mirror=False, scale=1, processes=None, group=None, groupFilter=None):
+                        baseName="", mirror=False, scale=1, processes=None, group=None, noConstraint=False,
+                        action=None, actionArgs={}, systNameReplace=[], groupFilter=None):
         if not processes:
             processes = self.predictedProcesses()
         self.systematics.update({
@@ -108,9 +109,12 @@ class CardTool(object):
                 "labelsByAxis" : systAxes if not labelsByAxis else labelsByAxis,
                 "group" : group,
                 "groupFilter" : groupFilter,
-                # Might support this again later...
                 "scale" : scale,
                 "mirror" : mirror,
+                "action" : action,
+                "actionArgs" : actionArgs,
+                "systNameReplace" : systNameReplace,
+                "noConstraint" : noConstraint,
                 "skipEntries" : [] if not skipEntries else skipEntries
             }
         })
@@ -125,6 +129,12 @@ class CardTool(object):
             return axLabel.format(i=entry)
         return axLabel+str(entry)
 
+    def excludeSystEntry(self, entry, skipEntries):
+        for skipEntry in skipEntries:
+            # Can use -1 to exclude all values of an axis
+            if all(y == -1 or x == y for x,y in zip(entry, skipEntry)):
+                return True
+        return False
 
     def systHists(self, hvar, syst):
         if syst == self.nominalName:
@@ -142,7 +152,9 @@ class CardTool(object):
             axNames.append("mirror")
             axLabels.append("mirror")
 
-        print("Looking at syst", syst)
+        if systInfo["action"]:
+            hvar = systInfo["action"](hvar, **systInfo["actionArgs"])
+
         if not all([name in [ax.name for ax in hvar.axes] for name in axNames]):
             raise ValueError(f"Failed to find axis names '{str(systAxes)} in hist. " \
                 f"Axes in hist are {str([ax.name for ax in hvar.axes])}")
@@ -150,11 +162,14 @@ class CardTool(object):
         
         if len(systInfo["outNames"]) == 0:
             for entry in entries:
-                if "skipEntries" in systInfo and entry in systInfo["skipEntries"]:
+                if "skipEntries" in systInfo and self.excludeSystEntry(entry, systInfo["skipEntries"]):
                     systInfo["outNames"].append("")
                 else:
                     name = systInfo["baseName"]
                     name += "".join([self.systLabelForAxis(al, entry[i]) for i,al in enumerate(axLabels)])
+                    if "systNameReplace" in systInfo and systInfo["systNameReplace"]:
+                        for rep in systInfo["systNameReplace"]:
+                            name = name.replace(*rep)
                     # Obviously there is a nicer way to do this...
                     if "Up" in name:
                         name = name.replace("Up", "")+"Up"
@@ -242,24 +257,26 @@ class CardTool(object):
                 self.cardContent[chan] += f'{name.ljust(self.spacing)}lnN{" "*(self.spacing-3)}{"".join(include)}\n'
 
     def fillCardWithSyst(self, syst):
-        scale = self.systematics[syst]["scale"]
-        procs = self.systematics[syst]["processes"]
+        systInfo = self.systematics[syst]
+        scale = systInfo["scale"]
+        procs = systInfo["processes"]
         nondata = self.predictedProcesses()
         names = [x[:-2] if "Up" in x[-2:] else (x[:-4] if "Down" in x[-4:] else x) 
-                    for x in filter(lambda x: x != "", self.systematics[syst]["outNames"])]
+                    for x in filter(lambda x: x != "", systInfo["outNames"])]
         include = [(str(scale) if x in procs else "-").ljust(self.spacing) for x in nondata]
 
         # Deduplicate while keeping order
         systNames = list(dict.fromkeys(names))
         for systname in systNames:
+            shape = "shape" if not systInfo["noConstraint"] else "shapeNoConstraint"
             for chan in self.channels:
-                self.cardContent[chan] += f"{systname.ljust(self.spacing)}{'shape'.ljust(self.spacing)}{''.join(include)}\n"
+                self.cardContent[chan] += f"{systname.ljust(self.spacing)}{shape.ljust(self.spacing)}{''.join(include)}\n"
 
-        group = self.systematics[syst]["group"]
+        group = systInfo["group"]
         if group:
             # TODO: Make more general
-            label = "group" if not "massShift" in systNames[0] else "noiGroup"
-            filt = self.systematics[syst]["groupFilter"]
+            label = "group" if not systInfo["noConstraint"] else "noiGroup"
+            filt = systInfo["groupFilter"]
             members = " ".join(systNames if not filt else filter(filt, systNames))
             self.cardGroups += f"\n{group} {label} = {members}"
 
