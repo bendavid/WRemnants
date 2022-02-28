@@ -155,7 +155,9 @@ class CardTool(object):
             axNames.append("mirror")
             axLabels.append("mirror")
 
-        print("Looking at syst", syst)
+        if systInfo["action"]:
+            hvar = systInfo["action"](hvar, **systInfo["actionArgs"])
+
         if not all([name in [ax.name for ax in hvar.axes] for name in axNames]):
             raise ValueError(f"Failed to find axis names '{str(systAxes)} in hist. " \
                 f"Axes in hist are {str([ax.name for ax in hvar.axes])}")

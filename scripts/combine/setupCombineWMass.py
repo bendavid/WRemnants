@@ -40,13 +40,6 @@ cardTool.addSystematic("pdfNNPDF31",
     skipEntries=[(0, -1)],
 )
 
-cardTool.addSystematic(f"alphaS002{pdfName}", 
-    processes=single_v_and_fake_samples,
-    mirror=False,
-    group=pdfName,
-    systAxes=["tensor_axis_0"],
-    outNames=[pdfName+"AlphaSUp", pdfName+"AlphaSDown"],
-    scale=0.75,
 )
 for name,num in zip(["effSystIsoTnP", "effStatTnP",], [2, 624*4]):
     axes = ["idiptrig-iso"] if num == 2 else ["SF eta", "SF pt", "SF charge", "idiptrig-iso"]
@@ -82,7 +75,7 @@ if "Pt" in args.qcdScale:
 cardTool.addSystematic("qcdScaleByHelicity", 
     action=syst_tools.scale_helicity_hist_to_variations,
     actionArgs=scaleActionArgs,
-    processes=signal_samples,
+    processes=cardTool.filteredProcesses(lambda x: "W" in x[0]),
     group=scaleGroupName,
     systAxes=scaleSystAxes,
     labelsByAxis=scaleLabelsByAxis,
