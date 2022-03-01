@@ -80,15 +80,13 @@ def build_graph(df, dataset):
 
     df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
 
-    isW = dataset.name in wprocs
-    isZ = dataset.name in zprocs
     if dataset.is_data:
         #TODO corrections not available for data yet
         df = df.Alias("Muon_correctedPt", "Muon_cvhbsPt")
         df = df.Alias("Muon_correctedEta", "Muon_cvhbsEta")
         df = df.Alias("Muon_correctedPhi", "Muon_cvhbsPhi")
         df = df.Alias("Muon_correctedCharge", "Muon_cvhbsCharge")
-    elif isW or isZ:
+    elif dataset.name in wprocs or dataset.name in zprocs:
         df = wremnants.define_corrected_muons(df, calibration_helper)
     else:
         # no track refit available for background monte carlo samples and this is "good enough"
@@ -203,16 +201,16 @@ def build_graph(df, dataset):
                 massWeight = df.HistoBoost("massWeight", nominal_axes, [*nominal_cols, "massWeight_tensor_wnom"])
                 results.append(massWeight)
 
+            nweights = 21 if isW else 23
+            df = df.Define("massWeight_tensor", f"wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight)")
+            df = df.Define("massWeight_tensor_wnom", "auto res = massWeight_tensor; res = nominal_weight*res; return res;")
+
+            if isW:
+                massWeight = df.HistoBoost("massWeight", nominal_axes, [*nominal_cols, "massWeight_tensor_wnom"])
+                results.append(massWeight)
+
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:
-                nweights = 21 if isW else 23
-                df = df.Define("massWeight_tensor", f"wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight)")
-                df = df.Define("massWeight_tensor_wnom", f"auto res = massWeight_tensor; res = nominal_weight*res; return res;")
-
-                if isW:
-                    massWeight = df.HistoBoost("massWeight", nominal_axes, [*nominal_cols, "massWeight_tensor_wnom"])
-                    results.append(massWeight)
-
                 if False:
                     netabins = 4
                     df = df.Define("muonScaleDummy4Bins2e4", f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(nominal_weight, massWeight_tensor, goodMuons_eta0, 2.e-4, {str(isW).lower()})")
@@ -225,6 +223,7 @@ def build_graph(df, dataset):
                     scale_etabins_axis = hist.axis.Regular(4, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
                     dummyMuonScaleSyst = df.HistoBoost("muonScaleSyst", nominal_axes, [*nominal_cols, "muonScaleDummy1Bin1e4"], 
                         tensor_axes=[down_up_axis, scale_etabins_axis])
+
                 results.append(dummyMuonScaleSyst)
 
             df = df.Define("Muon_cvhbsMomCov", "wrem::splitNestedRVec(Muon_cvhbsMomCov_Vals, Muon_cvhbsMomCov_Counts)")
