@@ -72,6 +72,8 @@ muon_efficiency_helper, muon_efficiency_helper_stat, muon_efficiency_helper_syst
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
 
+calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
+
 #def add_plots_with_systematics
 
 def build_graph(df, dataset):
@@ -87,9 +89,24 @@ def build_graph(df, dataset):
 
     df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
 
-    df = df.Define("vetoMuons", "Muon_pt > 10 && Muon_looseId && abs(Muon_eta) < 2.4 && abs(Muon_dxybs) < 0.05")
-    df = df.Filter("Sum(vetoMuons) == 2")
+    if dataset.is_data:
+        #TODO corrections not available for data yet
+        df = df.Alias("Muon_correctedPt", "Muon_cvhbsPt")
+        df = df.Alias("Muon_correctedEta", "Muon_cvhbsEta")
+        df = df.Alias("Muon_correctedPhi", "Muon_cvhbsPhi")
+        df = df.Alias("Muon_correctedCharge", "Muon_cvhbsCharge")
+    elif dataset.name in wprocs or dataset.name in zprocs:
+        df = wremnants.define_corrected_muons(df, calibration_helper)
+    else:
+        # no track refit available for background monte carlo samples and this is "good enough"
+        df = df.Alias("Muon_correctedPt", "Muon_pt")
+        df = df.Alias("Muon_correctedEta", "Muon_eta")
+        df = df.Alias("Muon_correctedPhi", "Muon_phi")
+        df = df.Alias("Muon_correctedCharge", "Muon_charge")
 
+    df = df.Define("vetoMuonsPre", "Muon_looseId && abs(Muon_dxybs) < 0.05")
+    df = df.Define("vetoMuons", "vetoMuonsPre && Muon_correctedPt > 10. && abs(Muon_correctedEta) < 2.4")
+    df = df.Filter("Sum(vetoMuons) == 2")
 
     df = df.Define("goodMuons", "vetoMuons && Muon_mediumId && Muon_isGlobal && Muon_pfRelIso04_all < 0.15")
     df = df.Filter("Sum(goodMuons) == 2")
@@ -98,18 +115,18 @@ def build_graph(df, dataset):
     df = df.Define("TrigMuon_charge", "event % 2 == 0 ? -1 : 1")
     df = df.Define("NonTrigMuon_charge", "-TrigMuon_charge")
 
-    df = df.Define("trigMuons", "goodMuons && Muon_charge == TrigMuon_charge")
-    df = df.Define("nonTrigMuons", "goodMuons && Muon_charge == NonTrigMuon_charge")
+    df = df.Define("trigMuons", "goodMuons && Muon_correctedCharge == TrigMuon_charge")
+    df = df.Define("nonTrigMuons", "goodMuons && Muon_correctedCharge == NonTrigMuon_charge")
 
     df = df.Filter("Sum(trigMuons) == 1 && Sum(nonTrigMuons) == 1")
 
-    df = df.Define("TrigMuon_pt", "Muon_pt[trigMuons][0]")
-    df = df.Define("TrigMuon_eta", "Muon_eta[trigMuons][0]")
-    df = df.Define("TrigMuon_phi", "Muon_phi[trigMuons][0]")
+    df = df.Define("TrigMuon_pt", "Muon_correctedPt[trigMuons][0]")
+    df = df.Define("TrigMuon_eta", "Muon_correctedEta[trigMuons][0]")
+    df = df.Define("TrigMuon_phi", "Muon_correctedPhi[trigMuons][0]")
 
-    df = df.Define("NonTrigMuon_pt", "Muon_pt[nonTrigMuons][0]")
-    df = df.Define("NonTrigMuon_eta", "Muon_eta[nonTrigMuons][0]")
-    df = df.Define("NonTrigMuon_phi", "Muon_phi[nonTrigMuons][0]")
+    df = df.Define("NonTrigMuon_pt", "Muon_correctedPt[nonTrigMuons][0]")
+    df = df.Define("NonTrigMuon_eta", "Muon_correctedEta[nonTrigMuons][0]")
+    df = df.Define("NonTrigMuon_phi", "Muon_correctedPhi[nonTrigMuons][0]")
 
     df = df.Filter("NonTrigMuon_pt > 26.")
 
@@ -139,7 +156,7 @@ def build_graph(df, dataset):
     if not dataset.is_data:
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
         df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["TrigMuon_pt", "TrigMuon_eta", "TrigMuon_charge", "NonTrigMuon_pt", "NonTrigMuon_eta", "NonTrigMuon_charge"])
-        df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_eta", "Muon_pt", "Muon_phi", "Muon_looseId"])
+        df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId"])
 
         df = df.Define("nominal_weight", "weight*weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF")
     else:
@@ -179,12 +196,12 @@ def build_graph(df, dataset):
 
         #FIXME skipping EffTrackingRecoTnP_ since it's not consistently defined yet
 
-        df = df.Define("muonL1PrefireStat_tensor", muon_prefiring_helper_stat, ["Muon_eta", "Muon_pt", "Muon_phi", "Muon_looseId", "nominal_weight"])
+        df = df.Define("muonL1PrefireStat_tensor", muon_prefiring_helper_stat, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId", "nominal_weight"])
 
         muonL1PrefireStat = df.HistoBoost("muonL1PrefireStat", nominal_axes, [*nominal_cols, "muonL1PrefireStat_tensor"], tensor_axes = muon_prefiring_helper_stat.tensor_axes)
         results.append(muonL1PrefireStat)
 
-        df = df.Define("muonL1PrefireSyst_tensor", muon_prefiring_helper_syst, ["Muon_eta", "Muon_pt", "Muon_phi", "Muon_looseId", "nominal_weight"])
+        df = df.Define("muonL1PrefireSyst_tensor", muon_prefiring_helper_syst, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId", "nominal_weight"])
 
         muonL1PrefireSyst = df.HistoBoost("muonL1PrefireSyst", nominal_axes, [*nominal_cols, "muonL1PrefireSyst_tensor"], tensor_axes = [down_up_axis])
         results.append(muonL1PrefireSyst)
@@ -225,21 +242,42 @@ def build_graph(df, dataset):
             alphaS002NNPDF31 = df.HistoBoost("alphaS002NNPDF31", nominal_axes, [*nominal_cols, "pdfWeightsAS_tensor"])
             results.append(alphaS002NNPDF31)
 
-            # Don't think it makes sense to apply the mass weights to scale leptons from tau decays, and it doesn't have MEParamWeight for now anyway
+            nweights = 21 if isW else 23
+            df = df.Define("massWeight_tensor", f"auto res = wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight); res = nominal_weight*res; return res;")
+            df = df.Define("massWeight_tensor_wnom", f"auto res = massWeight_tensor; res = nominal_weight*res; return res;")
+
+            if isZ:
+                massWeight = df.HistoBoost("massWeight", nominal_axes, [*nominal_cols, "massWeight_tensor_wnom"])
+                results.append(massWeight)
+
+            # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:
-                nweights = 21 if isW else 23
-                df = df.Define("massWeight_tensor", f"auto res = wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight); res = nominal_weight*res; return res;")
-
-                if isZ:
-                    massWeight = df.HistoBoost("massWeight", nominal_axes, [*nominal_cols, "massWeight_tensor"])
-                    results.append(massWeight)
-
                 netabins = 4
-                df = df.Define("muonScaleDummy4Bins2e4", f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(massWeight_tensor, TrigMuon_eta, 2.e-4, {str(isW).lower()})")
+                df = df.Define("muonScaleDummy4Bins2e4", f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(nominal_weight, massWeight_tensor, TrigMuon_eta, 2.e-4, {str(isW).lower()})")
                 scale_etabins_axis = hist.axis.Regular(4, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
                 dummyMuonScaleSyst = df.HistoBoost("muonScaleSyst", nominal_axes, [*nominal_cols, "muonScaleDummy4Bins2e4"], 
                     tensor_axes=[down_up_axis, scale_etabins_axis])
                 results.append(dummyMuonScaleSyst)
+
+            df = df.Define("Muon_cvhbsMomCov", "wrem::splitNestedRVec(Muon_cvhbsMomCov_Vals, Muon_cvhbsMomCov_Counts)")
+
+            df = df.Define("muonScaleSyst_responseWeights_tensor", calibration_uncertainty_helper,
+                           ["Muon_correctedPt",
+                            "Muon_correctedEta",
+                            "Muon_correctedPhi",
+                            "Muon_correctedCharge",
+                            "Muon_genPartIdx",
+                            "Muon_cvhbsMomCov",
+                            "vetoMuonsPre",
+                            "GenPart_pt",
+                            "GenPart_eta",
+                            "GenPart_phi",
+                            "GenPart_pdgId",
+                            "GenPart_statusFlags",
+                            "nominal_weight"])
+
+            dummyMuonScaleSyst_responseWeights = df.HistoBoost("muonScaleSyst_responseWeights", nominal_axes, [*nominal_cols, "muonScaleSyst_responseWeights_tensor"], tensor_axes = calibration_uncertainty_helper.tensor_axes)
+            results.append(dummyMuonScaleSyst_responseWeights)
 
 
     return results, weightsum
