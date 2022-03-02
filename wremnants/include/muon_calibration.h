@@ -221,7 +221,7 @@ private:
     const Eigen::Matrix<double, 3, 3> covinv = covd.inverse();
     const double covdet = covd.determinant();
 
-    const double lnp = 0.5*deltaparms.transpose()*covinv*deltaparms;
+    const double lnp = -0.5*deltaparms.transpose()*covinv*deltaparms;
 
     // no need to initialize since all elements are explicit filled
     out_tensor_t res;
@@ -255,7 +255,7 @@ private:
         const Eigen::Matrix<double, 3, 3> covinvalt = covdalt.inverse();
         const double covdetalt = covdalt.determinant();
 
-        const double lnpalt = 0.5*deltaparmsalt.transpose()*covinvalt*deltaparmsalt;
+        const double lnpalt = -0.5*deltaparmsalt.transpose()*covinvalt*deltaparmsalt;
 
         const double weight = std::sqrt(covdet/covdetalt)*std::exp(lnpalt - lnp);
 
