@@ -96,19 +96,11 @@ cardTool.addSystematic("muonScaleSyst",
     labelsByAxis=["downUpVar", "ieta"],
 )
 cardTool.addSystematic("muonL1PrefireSyst", 
-    processes=cardTool.allMCProcesses(),
+    processes=cardTool.filteredProcesses(lambda x: x != "Data"),
     group="muonPrefire",
-    baseName="CMS_prefire_syst_m",
-    systAxes=["downUpVar"],
-    labelsByAxis=["downUpVar"],
-)
-# TODO: Allow to be appended to previous group
-cardTool.addSystematic("muonL1PrefireStat", 
-    processes=cardTool.allMCProcesses(),
-    group="muonPrefire",
-    baseName="CMS_prefire_stat_m_",
-    systAxes=["downUpVar", "etaPhiRegion"],
-    labelsByAxis=["downUpVar", "etaPhiReg"],
+    baseName="CMS_scale_m_",
+    systAxes=["downUpVar", "scaleEtaSlice"],
+    labelsByAxis=["downUpVar", "ieta"],
 )
 cardTool.addSystematic("massWeight", 
     # TODO: Add the mass weights to the tau samples
