@@ -57,26 +57,37 @@ class datagroups(object):
                 group[label] = group["signalOp"](group[label])
 
     #TODO: Better organize to avoid duplicated code
-    def setHistsCombine(self, baseName, syst, procsToRead=None, label=None):
+    def setHistsCombine(self, baseName, syst, channel, procsToRead=None, label=None):
+        #TODO Set axis names properly
         if baseName == "x":
             axisNames=["eta", "pt"]
 
-        if label == None:
-            label = "hist"
+        if not label:
+            label = syst
         if not procsToRead:
             procsToRead = self.groups.keys()
 
         for procName in procsToRead:
             group = self.groups[procName]
             group[label] = None
-            if procName in procsToRead:
-                histName = "_".join([baseName, procName, syst])
-                group[label] = narf.root_to_hist(self.rtfile.Get(baseName), axis_names=axisNames)
+            name = self.histNameCombine(procName, baseName, syst, channel)
+            rthist = self.rtfile.Get(name)
+            if not rthist:
+                raise RuntimeError(f"Failed to load hist {name} from file")
+            group[label] = narf.root_to_hist(rthist, axis_names=axisNames)
 
-    def datagroupsForHist(self, baseName, syst, procsToRead=None, label="", dataHist="", selectSignal=True, 
-            forceNonzero=True):
+    def histNameCombine(self, procName, baseName, syst, channel):
+        name = f"{baseName}_{procName}"
+        if syst != "nominal":
+            name += "_"+syst
+        if channel:
+            name += "_"+channel
+        return name
+
+    def datagroupsForHist(self, baseName, syst, procsToRead=None, channel="", label="", dataHist="", 
+            selectSignal=True, forceNonzero=True):
         if self.rtfile and self.combine:
-            self.setHistsCombine(baseName, syst, procsToRead, label)
+            self.setHistsCombine(baseName, syst, channel, procsToRead, label)
         else:
             self.setHists(baseName, syst, procsToRead, label, dataHist, selectSignal, forceNonzero)
 
@@ -99,7 +110,7 @@ class datagroups(object):
         self.groups[name][refname] = sum([self.groups[x][name] for x in self.groups.keys() if x not in exclude+[name]])
 
 class datagroups2016(datagroups):
-    def __init__(self, infile, combine=False, wlike=False):
+    def __init__(self, infile, combine=False):
         self.datasets = {x.name : x for x in datasets2016.getDatasets()}
         super().__init__(infile, combine)
         self.groups =  {

@@ -14,6 +14,7 @@ import hist
 import lz4.frame
 import logging
 import math
+from wremnants import theory_tools
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--nThreads", type=int, help="number of threads", default=None)
@@ -163,6 +164,16 @@ def build_graph(df, dataset):
         df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["TrigMuon_pt", "TrigMuon_eta", "TrigMuon_charge", "NonTrigMuon_pt", "NonTrigMuon_eta", "NonTrigMuon_charge"])
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId"])
 
+        if dataset.name in wprocs or dataset.name in zprocs:
+            df = wremnants.define_prefsr_vars(df)
+
+        applyScetlibCorr = False
+        weight_expr = "weight*weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF"
+        if dataset.name in zprocs and applyScetlibCorr:
+            results.extend(theory_tools.define_and_apply_scetlib_corr(df, weight_expr))
+        else:
+            df = df.Define("nominal_weight", weight_expr)
+
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")
 
@@ -222,7 +233,9 @@ def build_graph(df, dataset):
                 helper=scetlibCorrZ_helper if isZ else scetlibCorrW_helper))
 
             df = theory_tools.define_scale_tensor(df)
-            results.append(theory_tools.make_scale_hist(df, [*nominal_axes, axis_ptVgen], [*nominal_cols, "ptVgen"]))
+
+            scaleHist = df.HistoBoost("qcdScale", nominal_axes+[axis_ptVgen], [*nominal_cols, "ptVgen", "scaleWeights_tensor"], tensor_axes = wremnants.scale_tensor_axes)
+            results.append(scaleHist)
 
             if isZ:
                 df = df.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
