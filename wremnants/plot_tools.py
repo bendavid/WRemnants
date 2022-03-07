@@ -61,7 +61,7 @@ def makeStackPlotWithRatio(obs, histInfo, stackedProcs, label="nominal", unstack
     ax1.legend(reversed(handles), reversed(labels), prop={'size' : 20*(0.7 if width == 1 else 1.3)}, ncol=2, loc='upper right')
     return fig
 
-def makePlotsWithRatioToRef(hists, labels, colors, xlabel="", ylabel="Events/bin", 
+def makePlotWithRatioToRef(hists, labels, colors, xlabel="", ylabel="Events/bin", 
                 rrange=[0.9, 1.1], scale=8.5e6):
     # For unrolled hists, maybe not the most elegant way but it kinda works
     width = 1 if hists[0].axes[0].size < 500 else 3

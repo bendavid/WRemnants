@@ -21,6 +21,7 @@ import wremnants
 import hist
 import lz4.frame
 import logging
+from wremnants import theory_tools
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None)
@@ -135,7 +136,15 @@ def build_graph(df, dataset):
         df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0", "passIso"])
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId"])
 
-        df = df.Define("nominal_weight", "weight*weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF")
+        if dataset.name in wprocs or dataset.name in zprocs:
+            df = wremnants.define_prefsr_vars(df)
+
+        applyScetlibCorr = True
+        weight_expr = "weight*weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF"
+        if dataset.name in wprocs and applyScetlibCorr:
+            results.extend(theory_tools.define_and_apply_scetlib_corr(df, weight_expr))
+        else:
+            df = df.Define("nominal_weight", weight_expr)
 
         nominal = df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "nominal_weight"])
         results.append(nominal)
@@ -165,21 +174,16 @@ def build_graph(df, dataset):
         # n.b. this is the W analysis so mass weights shouldn't be propagated
         # on the Z samples (but can still use it for dummy muon scale)
         if dataset.name in wprocs or dataset.name in zprocs:
-
             isW = dataset.name in wprocs
 
-            df = wremnants.define_prefsr_vars(df)
-
+            df = wremnants.define_scale_tensor(df)
             scaleHist = df.HistoBoost("qcdScale", nominal_axes+[axis_ptVgen], [*nominal_cols, "ptVgen", "scaleWeights_tensor_wnom"], tensor_axes = wremnants.scale_tensor_axes)
             results.append(scaleHist)
 
             # currently SCETLIB corrections are applicable to W-only, and helicity-split scales are only valid for one of W or Z at a time
             # TODO make this work for both simultaneously as needed
             if isW:
-                df = df.Define("scetlibWeight_tensor", scetlibCorr_helper, ["massVgen", "yVgen", "ptVgen", "nominal_weight"])
-                scetlibUnc = df.HistoBoost("scetlibUnc", nominal_axes, [*nominal_cols, "scetlibWeight_tensor"], tensor_axes=scetlibCorr_helper.tensor_axes)
-                results.append(scetlibUnc)
-
+                # TODO: Should have consistent order here with the scetlib correction function
                 df = df.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
                 qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", nominal_axes+[axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
                 results.append(qcdScaleByHelicityUnc)

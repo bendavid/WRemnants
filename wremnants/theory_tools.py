@@ -29,12 +29,23 @@ def define_prefsr_vars(df):
     df = df.Define("yVgen", "genV.Rapidity()")
     df = df.Define("absYVgen", "std::fabs(yVgen)")
     df = df.Define("chargeVgen", "GenPart_pdgId[prefsrLeps[0]] + GenPart_pdgId[prefsrLeps[1]]")
+    df = df.Define("csSineCosThetaPhi", "wrem::csSineCosThetaPhi(genl, genlanti)")
+    return df
+
+def define_scale_tensor(df):
     # convert vector of scale weights to 3x3 tensor and clip weights to |weight|<10.
     df = df.Define("scaleWeights_tensor", "wrem::makeScaleTensor(LHEScaleWeight, 10.);")
     df = df.Define("scaleWeights_tensor_wnom", "auto res = scaleWeights_tensor; res = nominal_weight*res; return res;")
-    df = df.Define("csSineCosThetaPhi", "wrem::csSineCosThetaPhi(genl, genlanti)")
 
     return df
+
+def define_and_apply_scetlib_corr(df, weight_expr):
+    df = df.Define("nominal_weight_uncorr", weight_expr)
+    df = df.Define("scetlibWeight_tensor", scetlibCorr_helper, ["chargeVgen", "massVgen", "yVgen", "ptVgen", "nominal_weight_uncorr"])
+    scetlibUnc = df.HistoBoost("scetlibUnc", nominal_axes, [*nominal_cols, "scetlibWeight_tensor"], tensor_axes=scetlibCorr_helper.tensor_axes)
+    df = df.Define("nominal_weight", "scetlibWeight_tensor(0)")
+    nominal_uncorr = df.HistoBoost("nominal_uncorr", nominal_axes, [*nominal_cols, "nominal_weight_uncorr"])
+    return (nominal_uncorr, scetlibUnc)
 
 def moments_to_angular_coeffs(hist_moments_scales):
     s = hist.tag.Slicer()
