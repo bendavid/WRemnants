@@ -27,6 +27,7 @@ ROOT::VecOps::RVec<ROOT::VecOps::RVec<T>> splitNestedRVec(const ROOT::VecOps::RV
   return res;
 }
 
+template <std::ptrdiff_t NJac = 3, std::ptrdiff_t NReplicas = 0>
 class CVHCorrectorSingle {
 public:
 
@@ -52,38 +53,62 @@ public:
     float x;
     parmtree->SetBranchAddress("x", &x);
 
+    std::array<float, NReplicas> xrep;
+    if (NReplicas>0) {
+      parmtree->SetBranchAddress("xreplicas", xrep.data());
+    }
+
     x_->reserve(parmtree->GetEntries());
+    xreplicas_->resize(parmtree->GetEntries(), NReplicas);
 
     for (long long ientry=0; ientry < parmtree->GetEntries(); ++ientry) {
       parmtree->GetEntry(ientry);
       x_->push_back(x);
+
+      if (NReplicas > 0) {
+        for (std::ptrdiff_t irep = 0; irep < NReplicas; ++irep) {
+          (*xreplicas_)(ientry, irep) = xrep[irep];
+        }
+      }
     }
   }
 
 
-  std::pair<V, int> operator() (float pt, float eta, float phi, int charge, const RVec<int> &idxs, const RVec<float> &jac) {
+  std::pair<V, int> operator() (float pt, float eta, float phi, int charge, const RVec<int> &idxs, const RVec<float> &jac) const {
 
     if (pt < 0.) {
       return std::make_pair<V, int>(V(), -99);
     }
 
+    const Eigen::Matrix<double, 3, 1> curvmom = CurvMom(pt, eta, phi, charge);
+
+    return CorMomCharge(curvmom, idxs, jac, *x_);
+  }
+
+protected:
+
+  Eigen::Matrix<double, 3, 1> CurvMom(float pt, float eta, float phi, int charge) const {
     const double theta = 2.*std::atan(std::exp(-double(eta)));
     const double lam = M_PI_2 - theta;
     const double p = double(pt)/std::sin(theta);
     const double qop = double(charge)/p;
 
-    const Eigen::Matrix<double, 3, 1> curvmom(qop, lam, phi);
+    return Eigen::Matrix<double, 3, 1>(qop, lam, phi);
+  }
+
+  template<typename U>
+  std::pair<V, int> CorMomCharge(const Eigen::Matrix<double, 3, 1> &curvmom, const RVec<int> &idxs, const RVec<float> &jac, const U &parms) const {
 
     const auto nparms = idxs.size();
 
-    const Eigen::Map<const Eigen::Matrix<float, 3, Eigen::Dynamic, Eigen::RowMajor>> jacMap(jac.data(), 3, nparms);
+    const Eigen::Map<const Eigen::Matrix<float, NJac, Eigen::Dynamic, Eigen::RowMajor>> jacMap(jac.data(), NJac, nparms);
 
     Eigen::VectorXd xtrk(nparms);
     for (unsigned int i = 0; i < nparms; ++i) {
-      xtrk[i] = (*x_)[(*idxmap_)[idxs[i]]];
+      xtrk[i] = parms[(*idxmap_)[idxs[i]]];
     }
 
-    const Eigen::Matrix<double, 3, 1> curvmomcor = curvmom + jacMap.cast<double>()*xtrk;
+    const Eigen::Matrix<double, 3, 1> curvmomcor = curvmom + jacMap.template topRows<3>().template cast<double>()*xtrk;
 
     const double qopcor = curvmomcor[0];
     const double lamcor = curvmomcor[1];
@@ -101,14 +126,54 @@ public:
 
   }
 
-protected:
-
   std::shared_ptr<std::vector<unsigned int>> idxmap_ = std::make_shared<std::vector<unsigned int>>();
   std::shared_ptr<std::vector<double>> x_ = std::make_shared<std::vector<double>>();
+  std::shared_ptr<Eigen::MatrixXd> xreplicas_ = std::make_shared<Eigen::MatrixXd>();
 };
 
 
-class CVHCorrector : public CVHCorrectorSingle {
+class CVHCorrectorValidation : public CVHCorrectorSingle<5, 0> {
+public:
+  using base_t = CVHCorrectorSingle<5, 0>;
+
+  using V = typename base_t::V;
+
+  using base_t::base_t;
+
+  std::pair<V, int> operator() (const RVec<float> &refParms, const RVec<unsigned int> &idxs, const RVec<float> &jac) const {
+
+    const Eigen::Matrix<double, 3, 1> curvmom(refParms[0], refParms[1], refParms[2]);
+
+    return CorMomCharge(curvmom, idxs, jac, *base_t::x_);
+  }
+};
+
+template <std::ptrdiff_t NReplicas>
+class CVHCorrectorReplicas : public CVHCorrectorSingle<5, NReplicas> {
+public:
+  using base_t = CVHCorrectorSingle<5, NReplicas>;
+
+  using V = typename base_t::V;
+
+  using base_t::base_t;
+
+  std::array<std::pair<V, int>, NReplicas> operator() (const RVec<float> &refParms, const RVec<unsigned int> &idxs, const RVec<float> &jac) const {
+
+    std::array<std::pair<V, int>, NReplicas> res;
+
+    const Eigen::Matrix<double, 3, 1> curvmom(refParms[0], refParms[1], refParms[2]);
+
+    for (std::ptrdiff_t irep = 0; irep < NReplicas; ++irep) {
+      res[irep] = CorMomCharge(curvmom, idxs, jac, base_t::xreplicas_->col(irep));
+    }
+
+    return res;
+
+  }
+};
+
+
+class CVHCorrector : public CVHCorrectorSingle<> {
 public:
 
 
@@ -217,7 +282,7 @@ private:
     Eigen::Matrix<double, 3, 3> covd = covMap.cast<double>();
     // fill in lower triangular part of the matrix, which is stored as zeros to save space
     covd.triangularView<Eigen::Lower>() = covd.triangularView<Eigen::Upper>().transpose();
-
+    
     const Eigen::Matrix<double, 3, 3> covinv = covd.inverse();
     const double covdet = covd.determinant();
 
