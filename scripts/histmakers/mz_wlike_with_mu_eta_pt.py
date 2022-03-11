@@ -31,8 +31,8 @@ era = "2016PostVFP"
 
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 
-# TODO make this properly configurable for Z
-#scetlibCorr_helper = wremnants.makeScetlibCorrHelper()
+scetlibCorrZ_helper = wremnants.makeScetlibCorrHelper(isW=False)
+scetlibCorrW_helper = wremnants.makeScetlibCorrHelper(isW=True)
 
 qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = True)
 axis_ptVgen = qcdScaleByHelicity_helper.hist.axes["ptVgen"]
@@ -156,6 +156,9 @@ def build_graph(df, dataset):
     df = df.Define("phiStarZ", "std::atan2(csSineCosThetaPhiZ.sinphi, csSineCosThetaPhiZ.cosphi)")
 
 
+    isW = dataset.name in wprocs
+    isZ = dataset.name in zprocs
+
     if not dataset.is_data:
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
         df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["TrigMuon_pt", "TrigMuon_eta", "TrigMuon_charge", "NonTrigMuon_pt", "NonTrigMuon_eta", "NonTrigMuon_charge"])
@@ -164,10 +167,10 @@ def build_graph(df, dataset):
         if dataset.name in wprocs or dataset.name in zprocs:
             df = wremnants.define_prefsr_vars(df)
 
-        applyScetlibCorr = False
+        applyScetlibCorr = True
         weight_expr = "weight*weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF"
-        if dataset.name in zprocs and applyScetlibCorr:
-            results.extend(theory_tools.define_and_apply_scetlib_corr(df, weight_expr))
+        if isZ or isW and applyScetlibCorr:
+            df = theory_tools.define_scetlib_corr(df, weight_expr, scetlibCorrZ_helper if isZ else scetlibCorrW_helper)
         else:
             df = df.Define("nominal_weight", weight_expr)
 
@@ -181,6 +184,11 @@ def build_graph(df, dataset):
     dilepton_cols = ["massZ", "yZ", "ptZ", "cosThetaStarZ", "phiStarZ"]
     dilepton = df_dilepton.HistoBoost("dilepton", dilepton_axes, [*dilepton_cols, "nominal_weight"])
     results.append(dilepton)
+
+    if isW or isZ:
+        results.extend(theory_tools.make_scetlibCorr_hists(df_dilepton, "dilepton", dilepton_axes, dilepton_cols, 
+            scetlibCorrZ_helper if isZ else scetlibCorrW_helper)
+        )
 
     df = df.Filter("massZ >= 60. && massZ < 120.")
 
@@ -220,10 +228,9 @@ def build_graph(df, dataset):
 
         # n.b. this is the W analysis so mass weights shouldn't be propagated
         # on the Z samples (but can still use it for dummy muon scale)
-        if dataset.name in wprocs or dataset.name in zprocs:
-
-            isW = dataset.name in wprocs
-            isZ = dataset.name in zprocs
+        if isW or isZ:
+            results.extend(theory_tools.make_scetlibCorr_hists(df, "nominal", axes=nominal_axes, cols=nominal_cols, 
+                scetlibCorr_helper=scetlibCorrZ_helper if isZ else scetlibCorrW_helper))
 
             df = theory_tools.define_scale_tensor(df)
 
