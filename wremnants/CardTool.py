@@ -71,9 +71,6 @@ class CardTool(object):
     def setHistName(self, histName):
         self.histName = histName
 
-    def isData(self, procInfo):
-        return all([x.is_data for x in procInfo["members"]])
-
     def isData(self, procName):
         return any([x.is_data for x in self.datagroups.groups[procName]["members"]])
 
@@ -239,8 +236,14 @@ class CardTool(object):
         self.writeLnNSystematics()
         for syst in self.systematics.keys():
             processes=self.systematics[syst]["processes"]
+<<<<<<< HEAD
             self.procDict = self.datagroups.datagroupsForHist(histname=syst, label="syst",
                 dataHist=self.nominalName, procsToRead=processes)
+=======
+            self.procDict = self.datagroups.datagroupsForHist(self.histName, syst, label="syst",
+                procsToRead=processes)
+            #print("procDict is", self.procDict)
+>>>>>>> 8e3c32b (Setting up W-like fit, updating plotting)
             self.writeForProcesses(syst, label="syst", processes=processes)
         self.writeCard()
 

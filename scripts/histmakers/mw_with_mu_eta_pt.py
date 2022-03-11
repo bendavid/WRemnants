@@ -30,8 +30,7 @@ era = "2016PostVFP"
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 scetlibCorrZ_helper = wremnants.makeScetlibCorrHelper(isW=False)
 scetlibCorrW_helper = wremnants.makeScetlibCorrHelper(isW=True)
-qcdScaleByHelicity_Zhelper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = True)
-qcdScaleByHelicity_Whelper = wremnants.makeQCDScaleByHelicityHelper()
+qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper()
 
 wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP"]
 zprocs = ["ZmumuPostVFP", "ZtautauPostVFP"]
@@ -49,11 +48,8 @@ axis_passMT = hist.axis.Boolean(name = "passMT")
 
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
 
-axis_ptVgen = qcdScaleByHelicity_Whelper.hist.axes["ptVgen"]
-axis_absYVgen = hist.axis.Variable(
-    [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4, 10], name = "absYVgen"
-)
-axis_chargeVgen = qcdScaleByHelicity_Whelper.hist.axes["chargeVgen"]
+axis_ptVgen = qcdScaleByHelicity_helper.hist.axes["ptVgen"]
+axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
 
 # extra axes which can be used to label tensor_axes
 
@@ -81,13 +77,15 @@ def build_graph(df, dataset):
 
     df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
 
+    isW = dataset.name in wprocs
+    isZ = dataset.name in zprocs
     if dataset.is_data:
         #TODO corrections not available for data yet
         df = df.Alias("Muon_correctedPt", "Muon_cvhbsPt")
         df = df.Alias("Muon_correctedEta", "Muon_cvhbsEta")
         df = df.Alias("Muon_correctedPhi", "Muon_cvhbsPhi")
         df = df.Alias("Muon_correctedCharge", "Muon_cvhbsCharge")
-    elif dataset.name in wprocs or dataset.name in zprocs:
+    elif isW or isZ:
         df = wremnants.define_corrected_muons(df, calibration_helper)
     else:
         # no track refit available for background monte carlo samples and this is "good enough"
@@ -139,13 +137,14 @@ def build_graph(df, dataset):
         df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0", "passIso"])
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId"])
 
-        if dataset.name in wprocs or dataset.name in zprocs:
-            df = wremnants.define_prefsr_vars(df)
-
         applyScetlibCorr = True
         weight_expr = "weight*weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF"
-        if dataset.name in wprocs and applyScetlibCorr:
-            results.extend(theory_tools.define_and_apply_scetlib_corr(df, weight_expr))
+        if isW or isZ:
+            df = wremnants.define_prefsr_vars(df)
+            if applyScetlibCorr:
+                df = theory_tools.define_scetlib_corr(df, weight_expr, scetlibCorrZ_helper if isZ else scetlibCorrW_helper)
+                results.extend(theory_tools.make_scetlibCorr_hists(df, "nominal", axes=nominal_axes, cols=nominal_cols, 
+                    scetlibCorr_helper=scetlibCorrZ_helper if isZ else scetlibCorrW_helper))
         else:
             df = df.Define("nominal_weight", weight_expr)
 
@@ -176,9 +175,9 @@ def build_graph(df, dataset):
 
         # n.b. this is the W analysis so mass weights shouldn't be propagated
         # on the Z samples (but can still use it for dummy muon scale)
-        if dataset.name in wprocs or dataset.name in zprocs:
-            isW = dataset.name in wprocs
-            df = wremnants.define_scale_tensor(df)
+        if isW or isZ:
+
+            df = theory_tools.define_scale_tensor(df)
             scaleHist = df.HistoBoost("qcdScale", nominal_axes+[axis_ptVgen], [*nominal_cols, "ptVgen", "scaleWeights_tensor_wnom"], tensor_axes = wremnants.scale_tensor_axes)
             results.append(scaleHist)
 

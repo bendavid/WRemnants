@@ -33,8 +33,8 @@ class datagroups(object):
 
     def setHists(self, baseName, syst, procsToRead=None, label=None, nominalIfMissing=True, 
             selectSignal=True, forceNonzero=True):
-        if label == None:
-            label = "hist"
+        if not label:
+            label = syst
         if not procsToRead:
             procsToRead = self.groups.keys()
 
@@ -84,12 +84,12 @@ class datagroups(object):
             name += "_"+channel
         return name
 
-    def datagroupsForHist(self, baseName, syst, procsToRead=None, channel="", label="", dataHist="", 
+    def datagroupsForHist(self, baseName, syst, procsToRead=None, channel="", label="", nominalIfMissing=True,
             selectSignal=True, forceNonzero=True):
         if self.rtfile and self.combine:
             self.setHistsCombine(baseName, syst, channel, procsToRead, label)
         else:
-            self.setHists(baseName, syst, procsToRead, label, dataHist, selectSignal, forceNonzero)
+            self.setHists(baseName, syst, procsToRead, label, nominalIfMissing, selectSignal, forceNonzero)
 
     def getDatagroups(self):
         return self.groups
@@ -110,7 +110,7 @@ class datagroups(object):
         self.groups[name][refname] = sum([self.groups[x][name] for x in self.groups.keys() if x not in exclude+[name]])
 
 class datagroups2016(datagroups):
-    def __init__(self, infile, combine=False):
+    def __init__(self, infile, combine=False, wlike=False):
         self.datasets = {x.name : x for x in datasets2016.getDatasets()}
         super().__init__(infile, combine)
         self.groups =  {
@@ -126,7 +126,7 @@ class datagroups2016(datagroups):
                 color = "lightblue",
                 signalOp = sel.signalHistWmass if not wlike else None,
             ),   
-            "Ztautau" : dict(
+            "Ztt" : dict(
                 members = [self.datasets["ZtautauPostVFP"]],
                 label = r"Z$\to\tau\tau$",
                 color = "darkblue",

@@ -167,10 +167,10 @@ def build_graph(df, dataset):
         if dataset.name in wprocs or dataset.name in zprocs:
             df = wremnants.define_prefsr_vars(df)
 
-        applyScetlibCorr = False
+        applyScetlibCorr = True
         weight_expr = "weight*weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF"
-        if dataset.name in zprocs and applyScetlibCorr:
-            results.extend(theory_tools.define_and_apply_scetlib_corr(df, weight_expr))
+        if isZ or isW and applyScetlibCorr:
+            df = theory_tools.define_scetlib_corr(df, weight_expr, scetlibCorrZ_helper if isZ else scetlibCorrW_helper)
         else:
             df = df.Define("nominal_weight", weight_expr)
 
@@ -230,7 +230,7 @@ def build_graph(df, dataset):
         # on the Z samples (but can still use it for dummy muon scale)
         if isW or isZ:
             results.extend(theory_tools.make_scetlibCorr_hists(df, "nominal", axes=nominal_axes, cols=nominal_cols, 
-                helper=scetlibCorrZ_helper if isZ else scetlibCorrW_helper))
+                scetlibCorr_helper=scetlibCorrZ_helper if isZ else scetlibCorrW_helper))
 
             df = theory_tools.define_scale_tensor(df)
 
