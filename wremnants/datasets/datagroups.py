@@ -33,8 +33,8 @@ class datagroups(object):
 
     def setHists(self, baseName, syst, procsToRead=None, label=None, nominalIfMissing=True, 
             selectSignal=True, forceNonzero=True):
-        if label == None:
-            label = "hist"
+        if not label:
+            label = syst
         if not procsToRead:
             procsToRead = self.groups.keys()
 
@@ -53,7 +53,7 @@ class datagroups(object):
                         logging.warning(str(e))
                         continue
                 group[label] = h if not group[label] else hh.addHists(h, group[label])
-            if selectSignal and group[label]:
+            if selectSignal and group[label] and "signalOp" in group and group["signalOp"]:
                 group[label] = group["signalOp"](group[label])
 
     #TODO: Better organize to avoid duplicated code
@@ -84,12 +84,12 @@ class datagroups(object):
             name += "_"+channel
         return name
 
-    def datagroupsForHist(self, baseName, syst, procsToRead=None, channel="", label="", dataHist="", 
+    def datagroupsForHist(self, baseName, syst, procsToRead=None, channel="", label="", nominalIfMissing=True,
             selectSignal=True, forceNonzero=True):
         if self.rtfile and self.combine:
             self.setHistsCombine(baseName, syst, channel, procsToRead, label)
         else:
-            self.setHists(baseName, syst, procsToRead, label, dataHist, selectSignal, forceNonzero)
+            self.setHists(baseName, syst, procsToRead, label, nominalIfMissing, selectSignal, forceNonzero)
 
         return self.groups
 
@@ -100,7 +100,7 @@ class datagroups(object):
         return self.groups.keys()
 
 class datagroups2016(datagroups):
-    def __init__(self, infile, combine=False):
+    def __init__(self, infile, combine=False, wlike=False):
         self.datasets = {x.name : x for x in datasets2016.getDatasets()}
         super().__init__(infile, combine)
         self.groups =  {
@@ -108,55 +108,69 @@ class datagroups2016(datagroups):
                 members = [self.datasets["dataPostVFP"]],
                 color = "black",
                 label = "Data",
-                signalOp = sel.signalHistWmass,
-            ),
-            "Fake" : dict(
-                members = list(self.datasets.values()),
-                scale = lambda x: 1. if x.is_data else -1,
-                label = "Nonprompt",
-                color = "grey",
-                signalOp = sel.fakeHistABCD,
+                signalOp = sel.signalHistWmass if not wlike else None,
             ),
             "Zmumu" : dict(
                 members = [self.datasets["ZmumuPostVFP"]],
                 label = r"Z$\to\mu\mu$",
                 color = "lightblue",
-                signalOp = sel.signalHistWmass,
+                signalOp = sel.signalHistWmass if not wlike else None,
             ),   
-            "Wtau" : dict(
-                members = [self.datasets["WminustaunuPostVFP"], self.datasets["WplustaunuPostVFP"]],
-                label = r"W$^{\pm}\to\tau\nu$",
-                color = "orange",
-                signalOp = sel.signalHistWmass,
-            ),
-            "Wmunu" : dict(
-                members = [self.datasets["WminusmunuPostVFP"], self.datasets["WplusmunuPostVFP"]],
-                label = r"W$^{\pm}\to\mu\nu$",
-                color = "darkred",
-                signalOp = sel.signalHistWmass,
-            ),
             "Ztt" : dict(
                 members = [self.datasets["ZtautauPostVFP"]],
                 label = r"Z$\to\tau\tau$",
                 color = "darkblue",
-                signalOp = sel.signalHistWmass,
+                signalOp = sel.signalHistWmass if not wlike else None,
             ), 
-            "Top" : dict(
-                members = [self.datasets["TTSemileptonicPostVFP"], self.datasets["TTLeptonicPostVFP"]],
-                label = "Top",
-                color = "green",
-                signalOp = sel.signalHistWmass,
-            ), 
-            "Diboson" : dict(
-                members = [self.datasets["WWPostVFP"]],
-                label = "Diboson",
-                color = "pink",
-                signalOp = sel.signalHistWmass,
-            ), 
-        } 
+        }
+        if not wlike:
+            self.groups.update({
+                "Fake" : dict(
+                    members = list(self.datasets.values()),
+                    scale = lambda x: 1. if x.is_data else -1,
+                    label = "Nonprompt",
+                    color = "grey",
+                    signalOp = sel.fakeHistABCD,
+                ),
+                "Wtau" : dict(
+                    members = [self.datasets["WminustaunuPostVFP"], self.datasets["WplustaunuPostVFP"]],
+                    label = r"W$^{\pm}\to\tau\nu$",
+                    color = "orange",
+                    signalOp = sel.signalHistWmass,
+                ),
+                "Wmunu" : dict(
+                    members = [self.datasets["WminusmunuPostVFP"], self.datasets["WplusmunuPostVFP"]],
+                    label = r"W$^{\pm}\to\mu\nu$",
+                    color = "darkred",
+                    signalOp = sel.signalHistWmass,
+                ),
+                "Top" : dict(
+                    members = [self.datasets["TTSemileptonicPostVFP"], self.datasets["TTLeptonicPostVFP"]],
+                    label = "Top",
+                    color = "green",
+                    signalOp = sel.signalHistWmass,
+                ), 
+                "Diboson" : dict(
+                    members = [self.datasets["WWPostVFP"]],
+                    label = "Diboson",
+                    color = "pink",
+                    signalOp = sel.signalHistWmass,
+                ), 
+            })
+        else:
+            self.groups["Other"] = dict(
+                members = [x for x in self.datasets.values() if not x.is_data and x.name not in ["ZmumuPostVFP", "ZtautauPostVFP"]],
+                label = "Other",
+                color = "grey",
+            )
 
     def histName(self, baseName, procName, syst):
-        return syst
+        # This is kind of hacky to deal with the different naming from combine
+        if baseName != "x" and (syst == "" or syst == self.nominalName):
+            return baseName
+        if (baseName == "" or baseName == "x") and syst:
+            return syst
+        return "_".join([baseName,syst])
     
     def readHist(self, baseName, proc, syst, scaleOp=None, forceNonzero=True):
         output = self.results[proc.name]["output"]
@@ -170,3 +184,4 @@ class datagroups2016(datagroups):
         if scaleOp:
             scale = scale*scaleOp(proc)
         return h*scale
+

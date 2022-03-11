@@ -13,21 +13,34 @@ parser.add_argument("-o", "--outfolder", type=str, default="/scratch/kelong/Comb
 parser.add_argument("-i", "--inputFile", type=str, required=True)
 parser.add_argument("--qcdScale", choices=["byHelicityPt", "byPt", "integrated"], default="byHelicityPt", 
         help="Decorrelation for QCDscale (additionally always by charge)")
+parser.add_argument("--wlike", action='store_true', help="Run W-like analysis of mZ")
 args = parser.parse_args()
 
 if not os.path.isdir(args.outfolder):
     os.mkdir(args.outfolder)
 
-datagroups = datagroups2016(args.inputFile)
+datagroups = datagroups2016(args.inputFile, wlike=args.wlike)
 templateDir = f"{scriptdir}/Templates/WMass"
-cardTool = CardTool.CardTool(f"{args.outfolder}/Wmass_{{chan}}.txt")
+name = "WMass" if not args.wlike else "ZMassWLike"
+cardTool = CardTool.CardTool(f"{args.outfolder}/{name}_{{chan}}.txt")
 cardTool.setNominalTemplate(f"{templateDir}/main.txt")
-cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/WMassCombineInput.root"))
+cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/{name}CombineInput.root"))
 cardTool.setDatagroups(datagroups)
 cardTool.setSpacing(36)
 
+print("All processes", cardTool.allMCProcesses())
+single_v_samples = cardTool.filteredProcesses(lambda x: x[0] in ["W", "Z"])
+single_v_and_fake_samples = cardTool.filteredProcesses(lambda x: x[0] in ["W", "Z"] or x == "Fake")
+single_vmu_samples = list(filter(lambda x: "mu" in x, single_v_samples))
+signal_samples = list(filter(lambda x: x[0] == ("Z" if args.wlike else "W"), single_vmu_samples))
+signal_samples_inctau = list(filter(lambda x: x[0] == ("Z" if args.wlike else "W"), single_v_samples))
+print("Single V samples", single_v_samples)
+print("Single Vmu samples", single_vmu_samples)
+print("signal samples", signal_samples)
+print("single_c_fake_samples", single_v_and_fake_samples)
+
 cardTool.addSystematic("pdfNNPDF31", 
-    processes=cardTool.filteredProcesses(lambda x: x[0] == "W" or x == "Fake"),
+    processes=single_v_and_fake_samples,
     mirror=True,
     group="pdfNNPDF31",
     systAxes=["tensor_axis_0"],
@@ -41,7 +54,7 @@ for name,num in zip(["effSystIsoTnP", "effStatTnP",], [2, 624*4]):
     axlabels = ["IDIPTrig"] if num == 2 else ["eta", "pt", "q", "Trig"]
     cardTool.addSystematic(name, 
         mirror=True,
-        group=name,
+        group="muon_eff",
         systAxes=axes,
         labelsByAxis=axlabels,
         baseName=name+"_",
@@ -70,7 +83,7 @@ if "Pt" in args.qcdScale:
 cardTool.addSystematic("qcdScaleByHelicity", 
     action=syst_tools.scale_helicity_hist_to_variations,
     actionArgs=scaleActionArgs,
-    processes=cardTool.filteredProcesses(lambda x: "W" in x[0]),
+    processes=signal_samples,
     group=scaleGroupName,
     systAxes=scaleSystAxes,
     labelsByAxis=scaleLabelsByAxis,
@@ -84,23 +97,31 @@ cardTool.addSystematic("qcdScaleByHelicity",
     )
 
 cardTool.addSystematic("muonScaleSyst", 
-    processes=cardTool.filteredProcesses(lambda x: "W" in x[0] and "mu" in x),
+    processes=single_vmu_samples,
     group="muonScale",
     baseName="CMS_scale_m_",
     systAxes=["downUpVar", "scaleEtaSlice"],
     labelsByAxis=["downUpVar", "ieta"],
 )
 cardTool.addSystematic("muonL1PrefireSyst", 
-    processes=cardTool.filteredProcesses(lambda x: x != "Data"),
+    processes=cardTool.allMCProcesses(),
     group="muonPrefire",
-    baseName="CMS_scale_m_",
-    systAxes=["downUpVar", "scaleEtaSlice"],
-    labelsByAxis=["downUpVar", "ieta"],
+    baseName="CMS_prefire_syst_m",
+    systAxes=["downUpVar"],
+    labelsByAxis=["downUpVar"],
+)
+# TODO: Allow to be appended to previous group
+cardTool.addSystematic("muonL1PrefireStat", 
+    processes=cardTool.allMCProcesses(),
+    group="muonPrefire",
+    baseName="CMS_prefire_stat_m_",
+    systAxes=["downUpVar", "etaPhiRegion"],
+    labelsByAxis=["downUpVar", "etaPhiReg"],
 )
 cardTool.addSystematic("massWeight", 
     # TODO: Add the mass weights to the tau samples
-    processes=cardTool.filteredProcesses(lambda x: "W" in x[0] and "mu" in x),
-    outNames=theory_tools.massWeightNames(["massShift100MeV"]),
+    processes=signal_samples_inctau,
+    outNames=theory_tools.massWeightNames(["massShift100MeV"], wlike=args.wlike),
     group="massShift",
     groupFilter=lambda x: x == "massShift100MeV",
     mirror=False,
@@ -108,11 +129,13 @@ cardTool.addSystematic("massWeight",
     noConstraint=True,
     systAxes=["tensor_axis_0"],
 )
-cardTool.addLnNSystematic("CMS_Fakes", processes=["Fake"], size=1.05)
-cardTool.addLnNSystematic("CMS_Top", processes=["Top"], size=1.06)
-cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16)
-# This needs to be handled by shifting the norm before subtracting from the fakes
+# TODO: This needs to be handled by shifting the norm before subtracting from the fakes
 # cardTool.addSystematic("lumi", outNames=["", "lumiDown", "lumiUp"], group="luminosity")
-# TODO: Allow to be appended to previous group
+if not args.wlike:
+    cardTool.addLnNSystematic("CMS_Fakes", processes=["Fake"], size=1.05)
+    cardTool.addLnNSystematic("CMS_Top", processes=["Top"], size=1.06)
+    cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16)
+else:
+    cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
 cardTool.writeOutput()
 

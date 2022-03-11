@@ -71,11 +71,11 @@ class CardTool(object):
     def setHistName(self, histName):
         self.histName = histName
 
-    def isData(self, procInfo):
-        return all([x.is_data for x in procInfo["members"]])
+    def isData(self, procName):
+        return any([x.is_data for x in self.datagroups.groups[procName]["members"]])
 
-    def isMC(self, procInfo):
-        return any([x.is_data for x in procInfo["members"]])
+    def isMC(self, procName):
+        return not self.isData(procName)
 
     def addFakeEstimate(self, estimate):
         self.fakeEstimate = estimate
@@ -87,7 +87,7 @@ class CardTool(object):
         return list(filter(filterExpr, self.datagroups.processes()))
 
     def allMCProcesses(self):
-        return self.filteredProcesses(lambda x: self.isMC(proc))
+        return self.filteredProcesses(lambda x: self.isMC(x))
 
     def mirrorNames(self, baseName, size, offset=0):
         names = [""]*offset + [f"{baseName.format(i=i%size)}{'Up' if i % 2 else 'Down'}" for i in range(size*2)]
@@ -237,7 +237,7 @@ class CardTool(object):
         for syst in self.systematics.keys():
             processes=self.systematics[syst]["processes"]
             self.procDict = self.datagroups.datagroupsForHist(self.histName, syst, label="syst",
-                dataHist=self.nominalName, procsToRead=processes)
+                procsToRead=processes)
             #print("procDict is", self.procDict)
             self.writeForProcesses(syst, label="syst", processes=processes)
         self.writeCard()
@@ -278,7 +278,12 @@ class CardTool(object):
             label = "group" if not systInfo["noConstraint"] else "noiGroup"
             filt = systInfo["groupFilter"]
             members = " ".join(systNames if not filt else filter(filt, systNames))
-            self.cardGroups += f"\n{group} {label} = {members}"
+            group_expr = f"{group} {label} ="
+            if group_expr in self.cardGroups:
+                idx = self.cardGroups.index(group_expr)+len(group_expr)
+                self.cardGroups = self.cardGroups[:idx] + " " + members + " " + self.cardGroups[idx:]
+            else:
+                self.cardGroups += f"\n{group_expr} {members}"
 
     def setUnconstrainedProcs(self, procs):
         self.unconstrainedProcesses = procs
