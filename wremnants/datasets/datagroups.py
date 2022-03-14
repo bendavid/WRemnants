@@ -34,7 +34,7 @@ class datagroups(object):
     def setHists(self, baseName, syst, procsToRead=None, label=None, nominalIfMissing=True, 
             selectSignal=True, forceNonzero=True):
         if not label:
-            label = syst
+            label = syst if syst else baseName
         if not procsToRead:
             procsToRead = self.groups.keys()
 
@@ -98,6 +98,16 @@ class datagroups(object):
 
     def processes(self):
         return self.groups.keys()
+
+    def addUncorrectedProc(self, refname, name="uncorr", label="Uncorrected", color="red", exclude=["Data"]):
+        self.datagroupsForHist(refname, syst=name)
+        self.groups[name] = dict(
+            label=label,
+            color=color,
+            members=[],
+        )
+        self.groups[name][refname] = sum([self.groups[x][name] for x in self.groups.keys() if x not in exclude+[name]])
+        return self.groups
 
 class datagroups2016(datagroups):
     def __init__(self, infile, combine=False, wlike=False):

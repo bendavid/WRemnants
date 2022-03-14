@@ -7,19 +7,19 @@ import math
 import numpy as np
 hep.style.use(hep.style.ROOT)
 
-def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange):
+def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None):
     hax = href.axes[0]
     width = math.ceil(hax.size/400)
-    print(width)
     fig = plt.figure(figsize=(8*width,8))
     ax1 = fig.add_subplot(4, 1, (1, 3)) 
     ax2 = fig.add_subplot(4, 1, 4) 
 
-    ax1.set_xlabel("")
     ax2.set_xlabel(xlabel)
+    ax1.set_xlabel(" ")
     ax1.set_ylabel(ylabel)
     ax1.set_xticklabels([])
-    xlim = [href.axes[0].edges[0], href.axes[0].edges[href.axes[0].size-1]]
+    if not xlim:
+        xlim = [href.axes[0].edges[0], href.axes[0].edges[href.axes[0].size-1]]
     ax1.set_xlim(xlim)
     ax2.set_xlim(xlim)
     ax2.set_ylabel(rlabel, fontsize=22)
@@ -31,12 +31,10 @@ def addLegend(ax, extra_text=None):
     has_extra_text = extra_text is not None
     handles, labels = ax.get_legend_handles_labels()
     
-    print(list(labels))
     if has_extra_text:
         #handles.append(patches.Patch(color='none', label=extra_text))
         ax.plot([], [], ' ', ' ')
 
-    print(list(labels))
     shape = np.divide(*ax.get_figure().get_size_inches())
     #TODO: The goal is to leave the data in order, but it should be less hacky
     handles[:] = reversed(handles)
@@ -46,17 +44,15 @@ def addLegend(ax, extra_text=None):
         labels.insert(math.floor(len(labels)/2), ' ')
     #handles= reversed(handles)
     #labels= reversed(labels)
-    print(list(labels))
-    print("Shape", shape)
     ax.legend(handles=handles, labels=labels, prop={'size' : 20*(0.7 if shape == 1 else 1.3)}, ncol=2, loc='upper right')
 
 def makeStackPlotWithRatio(histInfo, stackedProcs, label="nominal", unstacked=None, xlabel="", ylabel="Events/bin", 
-                rrange=[0.9, 1.1], scale=8.5e6, binwnorm=False, select={}, action=None, extra_text=None):
+                rrange=[0.9, 1.1], scale=8.5e6, xlim=None, binwnorm=None, select={}, action=None, extra_text=None):
     stack = [action(histInfo[k][label][select]) for k in stackedProcs if histInfo[k][label]]
     colors = [histInfo[k]["color"] for k in stackedProcs if histInfo[k][label]]
     labels = [histInfo[k]["label"] for k in stackedProcs if histInfo[k][label]]
 
-    fig, ax1, ax2 = figureWithRatio(stack[0], xlabel, ylabel, [0, scale], "Data/Pred.", rrange)
+    fig, ax1, ax2 = figureWithRatio(stack[0], xlabel, ylabel, [0, scale], "Data/Pred.", rrange, xlim=xlim)
             
     hep.histplot(
         stack,
@@ -93,7 +89,7 @@ def makeStackPlotWithRatio(histInfo, stackedProcs, label="nominal", unstacked=No
     return fig
 
 def makePlotWithRatioToRef(hists, labels, colors, xlabel="", ylabel="Events/bin", 
-                rrange=[0.9, 1.1], scale=8.5e6):
+                rrange=[0.9, 1.1], scale=8.5e6, xlim=None):
     # For unrolled hists, maybe not the most elegant way but it kinda works
     width = 1 if hists[0].axes[0].size < 500 else 3
     fig = plt.figure(figsize=(8*width,8))
@@ -124,7 +120,8 @@ def makePlotWithRatioToRef(hists, labels, colors, xlabel="", ylabel="Events/bin"
     ax2.set_xlabel(xlabel)
     ax1.set_ylabel(ylabel)
     ax1.set_xticklabels([])
-    xlim = [hists[0].axes[0].edges[0], hists[0].axes[0].edges[hists[0].axes[0].size-1]]
+    if not xlim:
+        xlim = [hists[0].axes[0].edges[0], hists[0].axes[0].edges[hists[0].axes[0].size-1]]
     ax1.set_xlim(xlim)
     ax2.set_xlim(xlim)
     ax2.set_ylabel("data/pred.", fontsize=22)

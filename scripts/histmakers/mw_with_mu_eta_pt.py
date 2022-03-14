@@ -145,7 +145,7 @@ def build_graph(df, dataset):
             if applyScetlibCorr:
                 df = theory_tools.define_scetlib_corr(df, weight_expr, scetlibCorrZ_helper if isZ else scetlibCorrW_helper)
                 results.extend(theory_tools.make_scetlibCorr_hists(df, "nominal", axes=nominal_axes, cols=nominal_cols, 
-                    scetlibCorr_helper=scetlibCorrZ_helper if isZ else scetlibCorrW_helper))
+                    helper=scetlibCorrZ_helper if isZ else scetlibCorrW_helper))
         else:
             df = df.Define("nominal_weight", weight_expr)
 

@@ -39,13 +39,16 @@ def define_scale_tensor(df):
 
     return df
 
-def define_and_apply_scetlib_corr(df, weight_expr):
+def define_scetlib_corr(df, weight_expr, helper):
     df = df.Define("nominal_weight_uncorr", weight_expr)
-    df = df.Define("scetlibWeight_tensor", scetlibCorr_helper, ["chargeVgen", "massVgen", "yVgen", "ptVgen", "nominal_weight_uncorr"])
-    scetlibUnc = df.HistoBoost("scetlibUnc", nominal_axes, [*nominal_cols, "scetlibWeight_tensor"], tensor_axes=scetlibCorr_helper.tensor_axes)
+    df = df.Define("scetlibWeight_tensor", helper, ["chargeVgen", "massVgen", "yVgen", "ptVgen", "nominal_weight_uncorr"])
     df = df.Define("nominal_weight", "scetlibWeight_tensor(0)")
-    nominal_uncorr = df.HistoBoost("nominal_uncorr", nominal_axes, [*nominal_cols, "nominal_weight_uncorr"])
-    return (nominal_uncorr, scetlibUnc)
+    return df
+
+def make_scetlibCorr_hists(df, name, axes, cols, helper):
+    nominal_uncorr = df.HistoBoost(f"{name}_uncorr", axes, [*cols, "nominal_weight_uncorr"])
+    unc = df.HistoBoost("scetlibUnc" if name == "nominal" else f"{name}_scetlibUnc", axes, [*cols, "scetlibWeight_tensor"], tensor_axes=helper.tensor_axes)
+    return (nominal_uncorr, unc)
 
 def moments_to_angular_coeffs(hist_moments_scales):
     s = hist.tag.Slicer()
