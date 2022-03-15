@@ -18,6 +18,7 @@ import gzip
 
 import narf
 import wremnants
+from wremnants import theory_tools
 import hist
 import lz4.frame
 import logging
@@ -53,11 +54,12 @@ def build_graph(df, dataset):
     print(dataset.name)
     results = []
 
-    df = df.Define("weight", "std::copysign(1.0, genWeight)")
+    df = df.Define("nominal_weight", "std::copysign(1.0, genWeight)")
 
-    weightsum = df.SumAndCount("weight")
+    weightsum = df.SumAndCount("nominal_weight")
 
     df = wremnants.define_prefsr_vars(df)
+    df = theory_tools.define_scale_tensor(df)
 
     if dataset.name in zprocs:
         nominal_axes = [axis_massZgen, axis_absYVgen, axis_ptVgen, axis_chargeZgen]
@@ -69,7 +71,7 @@ def build_graph(df, dataset):
     nominal_gen = df.HistoBoost("nominal_gen", nominal_axes, nominal_cols)
     results.append(nominal_gen)
 
-    df = df.Define("helicity_moments_scale_tensor", "wrem::makeHelicityMomentScaleTensor(csSineCosThetaPhi, scaleWeights_tensor, weight)")
+    df = df.Define("helicity_moments_scale_tensor", "wrem::makeHelicityMomentScaleTensor(csSineCosThetaPhi, scaleWeights_tensor, nominal_weight)")
     helicity_moments_scale = df.HistoBoost("helicity_moments_scale", nominal_axes, [*nominal_cols, "helicity_moments_scale_tensor"], tensor_axes = [wremnants.axis_helicity, *wremnants.scale_tensor_axes])
     results.append(helicity_moments_scale)
 
