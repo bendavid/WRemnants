@@ -20,13 +20,17 @@ parser.add_argument("-c", "--channel", type=str, choices=["plus", "minus", "all"
 parser.add_argument("-p", "--outpath", type=str, default=os.path.expanduser("~/www/WMassAnalysis"), help="Base path for output")
 parser.add_argument("-f", "--outfolder", type=str, default="test", help="Subfolder for output")
 parser.add_argument("-r", "--rrange", type=float, nargs=2, default=[0.9, 1.1], help="y range for ratio plot")
+parser.add_argument("--ymax", type=float, help="Max value for y axis (if not specified, range set automatically)")
 args = parser.parse_args()
 
 groups = datagroups2016(args.infile, wlike=args.wlike)
-histInfo = groups.datagroupsForHist(args.baseName, syst="")
+groups.loadHistsForDatagroups(args.baseName, syst="")
+
 if args.addUncorrected:
-	histInfo = groups.datagroupsForHist(args.baseName, syst="uncorr")
-	histInfo = groups.addUncorrectedProc(args.baseName, "uncorr")
+	groups.loadHistsForDatagroups(args.baseName, syst="uncorr")
+	groups.addUncorrectedProc(args.baseName, "uncorr", label=r"No N$^{3}$LL Corr.")
+
+histInfo = groups.getDatagroups()
 
 prednames = [x for x in histInfo.keys() if x not in ["Data", "uncorr"]]
 select = {} if args.channel == "all" else {"select" : -1.j if args.channel == "minus" else 1.j}
@@ -45,19 +49,18 @@ xlabels = {
 	"unrolled" : r"(p$_{T}^{\ell}$, $\eta^{\ell}$) bin",
 }
 
-scales = {
-	"pt" : 9e6 if not args.wlike else 2e6,
-	"eta" : 5e6 if not args.wlike else 2e5,
-	"unrolled" : 1.8e5 if not args.wlike else 1.5e4,
-}
+#scales = {
+#	"pt" : 9e6 if not args.wlike else 2e6,
+#	"eta" : 5e6 if not args.wlike else 2e5,
+#	"unrolled" : 1.8e5 if not args.wlike else 1.5e4,
+#}
 
 for h in args.hists:
 	action = sel.unrolledHist if "unrolled" in h else lambda x: x.project(h)
 	unstacked = ["Data"]
 	if args.addUncorrected:
 		unstacked.insert(0, "uncorr")
-	scale = scales[h]*(1. if args.channel == "all" else 0.5)
-	fig = plot_tools.makeStackPlotWithRatio(histInfo, prednames, label=args.baseName, scale=scale, action=action, unstacked=unstacked, 
+	fig = plot_tools.makeStackPlotWithRatio(histInfo, prednames, label=args.baseName, ymax=args.ymax, action=action, unstacked=unstacked, 
 			xlabel=xlabels[h], ylabel="Events/bin", rrange=args.rrange, select=select) 
 	plt.savefig("/".join([outpath, f"{h}_{args.channel}.pdf"]), bbox_inches='tight')
 	plt.savefig("/".join([outpath, f"{h}_{args.channel}.png"]), bbox_inches='tight')

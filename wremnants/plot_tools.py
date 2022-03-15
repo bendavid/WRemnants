@@ -24,7 +24,10 @@ def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None):
     ax2.set_xlim(xlim)
     ax2.set_ylabel(rlabel, fontsize=22)
     ax2.set_ylim(rrange)
-    ax1.set_ylim(ylim)
+    if ylim:
+        ax1.set_ylim(ylim)
+    else:
+        ax1.autoscale(axis='y')
     return fig,ax1,ax2
 
 def addLegend(ax, extra_text=None):
@@ -47,12 +50,12 @@ def addLegend(ax, extra_text=None):
     ax.legend(handles=handles, labels=labels, prop={'size' : 20*(0.7 if shape == 1 else 1.3)}, ncol=2, loc='upper right')
 
 def makeStackPlotWithRatio(histInfo, stackedProcs, label="nominal", unstacked=None, xlabel="", ylabel="Events/bin", 
-                rrange=[0.9, 1.1], scale=8.5e6, xlim=None, binwnorm=None, select={}, action=None, extra_text=None):
+                rrange=[0.9, 1.1], ymax=None, xlim=None, binwnorm=None, select={}, action=None, extra_text=None):
     stack = [action(histInfo[k][label][select]) for k in stackedProcs if histInfo[k][label]]
     colors = [histInfo[k]["color"] for k in stackedProcs if histInfo[k][label]]
     labels = [histInfo[k]["label"] for k in stackedProcs if histInfo[k][label]]
 
-    fig, ax1, ax2 = figureWithRatio(stack[0], xlabel, ylabel, [0, scale], "Data/Pred.", rrange, xlim=xlim)
+    fig, ax1, ax2 = figureWithRatio(stack[0], xlabel, ylabel, [0, ymax] if ymax else None, "Data/Pred.", rrange, xlim=xlim)
             
     hep.histplot(
         stack,
@@ -89,7 +92,7 @@ def makeStackPlotWithRatio(histInfo, stackedProcs, label="nominal", unstacked=No
     return fig
 
 def makePlotWithRatioToRef(hists, labels, colors, xlabel="", ylabel="Events/bin", 
-                rrange=[0.9, 1.1], scale=8.5e6, xlim=None):
+                rrange=[0.9, 1.1], ymax=None, xlim=None):
     # For unrolled hists, maybe not the most elegant way but it kinda works
     width = 1 if hists[0].axes[0].size < 500 else 3
     fig = plt.figure(figsize=(8*width,8))
@@ -126,7 +129,8 @@ def makePlotWithRatioToRef(hists, labels, colors, xlabel="", ylabel="Events/bin"
     ax2.set_xlim(xlim)
     ax2.set_ylabel("data/pred.", fontsize=22)
     ax2.set_ylim(rrange)
-    ax1.set_ylim([0, scale])
+    if ymax:
+        ax1.set_ylim([0, ymax])
     handles, labels = ax1.get_legend_handles_labels()
     ax1.legend(reversed(handles), reversed(labels), prop={'size' : 20*(0.7 if width == 1 else 1.3)}, ncol=2, loc='upper right')
     return fig
