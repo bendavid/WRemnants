@@ -84,13 +84,14 @@ class datagroups(object):
             name += "_"+channel
         return name
 
-    def datagroupsForHist(self, baseName, syst, procsToRead=None, channel="", label="", nominalIfMissing=True,
+    def loadHistsForDatagroups(self, baseName, syst, procsToRead=None, channel="", label="", nominalIfMissing=True,
             selectSignal=True, forceNonzero=True):
         if self.rtfile and self.combine:
             self.setHistsCombine(baseName, syst, channel, procsToRead, label)
         else:
             self.setHists(baseName, syst, procsToRead, label, nominalIfMissing, selectSignal, forceNonzero)
 
+    def getDatagroups(self):
         return self.groups
 
     def resultsDict(self):
@@ -100,14 +101,13 @@ class datagroups(object):
         return self.groups.keys()
 
     def addUncorrectedProc(self, refname, name="uncorr", label="Uncorrected", color="red", exclude=["Data"]):
-        self.datagroupsForHist(refname, syst=name)
+        self.loadHistsForDatagroups(refname, syst=name)
         self.groups[name] = dict(
             label=label,
             color=color,
             members=[],
         )
         self.groups[name][refname] = sum([self.groups[x][name] for x in self.groups.keys() if x not in exclude+[name]])
-        return self.groups
 
 class datagroups2016(datagroups):
     def __init__(self, infile, combine=False, wlike=False):
