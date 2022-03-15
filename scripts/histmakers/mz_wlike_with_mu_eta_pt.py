@@ -22,6 +22,7 @@ import hist
 import lz4.frame
 import logging
 import math
+from wremnants import theory_tools
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None)
@@ -30,8 +31,8 @@ era = "2016PostVFP"
 
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 
-# TODO make this properly configurable for Z
-#scetlibCorr_helper = wremnants.makeScetlibCorrHelper()
+scetlibCorrZ_helper = wremnants.makeScetlibCorrHelper(isW=False)
+scetlibCorrW_helper = wremnants.makeScetlibCorrHelper(isW=True)
 
 qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = True)
 axis_ptVgen = qcdScaleByHelicity_helper.hist.axes["ptVgen"]
@@ -155,12 +156,24 @@ def build_graph(df, dataset):
     df = df.Define("phiStarZ", "std::atan2(csSineCosThetaPhiZ.sinphi, csSineCosThetaPhiZ.cosphi)")
 
 
+    isW = dataset.name in wprocs
+    isZ = dataset.name in zprocs
+
     if not dataset.is_data:
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
         df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["TrigMuon_pt", "TrigMuon_eta", "TrigMuon_charge", "NonTrigMuon_pt", "NonTrigMuon_eta", "NonTrigMuon_charge"])
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId"])
 
-        df = df.Define("nominal_weight", "weight*weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF")
+        if dataset.name in wprocs or dataset.name in zprocs:
+            df = wremnants.define_prefsr_vars(df)
+
+        applyScetlibCorr = True
+        weight_expr = "weight*weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF"
+        if isZ or isW and applyScetlibCorr:
+            df = theory_tools.define_scetlib_corr(df, weight_expr, scetlibCorrZ_helper if isZ else scetlibCorrW_helper)
+        else:
+            df = df.Define("nominal_weight", weight_expr)
+
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")
 
@@ -171,6 +184,11 @@ def build_graph(df, dataset):
     dilepton_cols = ["massZ", "yZ", "ptZ", "cosThetaStarZ", "phiStarZ"]
     dilepton = df_dilepton.HistoBoost("dilepton", dilepton_axes, [*dilepton_cols, "nominal_weight"])
     results.append(dilepton)
+
+    if isW or isZ:
+        results.extend(theory_tools.make_scetlibCorr_hists(df_dilepton, "dilepton", dilepton_axes, dilepton_cols, 
+            scetlibCorrZ_helper if isZ else scetlibCorrW_helper)
+        )
 
     df = df.Filter("massZ >= 60. && massZ < 120.")
 
@@ -210,24 +228,16 @@ def build_graph(df, dataset):
 
         # n.b. this is the W analysis so mass weights shouldn't be propagated
         # on the Z samples (but can still use it for dummy muon scale)
-        if dataset.name in wprocs or dataset.name in zprocs:
+        if isW or isZ:
+            results.extend(theory_tools.make_scetlibCorr_hists(df, "nominal", axes=nominal_axes, cols=nominal_cols, 
+                helper=scetlibCorrZ_helper if isZ else scetlibCorrW_helper))
 
-            isW = dataset.name in wprocs
-            isZ = dataset.name in zprocs
-
-            df = wremnants.define_prefsr_vars(df)
+            df = theory_tools.define_scale_tensor(df)
 
             scaleHist = df.HistoBoost("qcdScale", nominal_axes+[axis_ptVgen], [*nominal_cols, "ptVgen", "scaleWeights_tensor"], tensor_axes = wremnants.scale_tensor_axes)
             results.append(scaleHist)
 
-            # currently SCETLIB corrections are applicable to W-only, and helicity-split scales are only valid for one of W or Z at a time
-            # TODO make this work for both simultaneously as needed
             if isZ:
-                # TODO restore this in an appropriate way for Z
-                #df = df.Define("scetlibWeight_tensor", scetlibCorr_helper, ["massVgen", "yVgen", "ptVgen", "nominal_weight"])
-                #scetlibUnc = df.HistoBoost("scetlibUnc", nominal_axes, [*nominal_cols, "scetlibWeight_tensor"], tensor_axes=scetlibCorr_helper.tensor_axes)
-                #results.append(scetlibUnc)
-
                 df = df.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
                 qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", nominal_axes+[axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
                 results.append(qcdScaleByHelicityUnc)
