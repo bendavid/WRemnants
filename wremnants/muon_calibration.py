@@ -13,7 +13,9 @@ def make_muon_calibration_helpers(filename = data_dir + "/calibration/correction
 
     uncertainty_hist = get_dummy_uncertainties()
     uncertainty_hist_cpp = narf.hist_to_pyroot_boost(uncertainty_hist, tensor_rank = 2)
-    uncertainty_helper = ROOT.wrem.calibration_uncertainty_helper[type(uncertainty_hist_cpp)](ROOT.std.move(uncertainty_hist_cpp))
+    # min gen pt = 9 GeV to avoid threshold effects
+    # max weight = 10 to protect against outliers
+    uncertainty_helper = ROOT.wrem.calibration_uncertainty_helper[type(uncertainty_hist_cpp)](ROOT.std.move(uncertainty_hist_cpp), 9., 10.)
 
     down_up_axis = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "downUpVar")
     uncertainty_helper.tensor_axes = (uncertainty_hist.axes["calvar"], down_up_axis)

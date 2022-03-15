@@ -204,7 +204,9 @@ public:
 
   using out_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<nvars, 2>>;
 
-  calibration_uncertainty_helper(HIST &&hist) : hist_(std::make_shared<const HIST>(std::move(hist))) {}
+  calibration_uncertainty_helper(HIST &&hist, double minGenPt, double maxWeight) : hist_(std::make_shared<const HIST>(std::move(hist))),
+                                                                                  minGenPt_(minGenPt),
+                                                                                  maxWeight_(maxWeight) {}
 
   out_tensor_t operator() (const RVec<float> &pts,
                       const RVec<float> &etas,
@@ -242,8 +244,13 @@ public:
         continue;
       }
 
-      // matched genparts should be status muons, but we need to explicitly check if they are prompt
+      // matched genparts should be status 1 muons, but we need to explicitly check if they are prompt
       if (!(genStatusFlags[genidx] & 0x01)) {
+        continue;
+      }
+      
+      // minimum gen pt cut to avoid threshold effects from reco pt cut for track refit during nano production
+      if (minGenPt_ >= 0. && genPts[genidx] < minGenPt_) {
         continue;
       }
 
@@ -324,7 +331,33 @@ private:
 
         const double weight = std::sqrt(covdet/covdetalt)*std::exp(lnpalt - lnp);
 
-        res(ivar, idownup) = weight;
+        if (false) {
+          if (std::isnan(weight) || std::isinf(weight) || std::fabs(weight) == 0.) {
+            std::cout << "invalid weight: " << weight << std::endl;
+            std::cout << "pt " << pt << std::endl;
+            std::cout << "genPt " << genPt << std::endl;
+            std::cout << "qop " << qop << std::endl;
+            std::cout << "genqop " << genqop << std::endl;
+            std::cout << "qoperr " << std::sqrt(covd(0,0)) << std::endl;
+            std::cout << "lam " << lam << std::endl;
+            std::cout << "genlam " << genlam << std::endl;
+            std::cout << "lamerr " << std::sqrt(covd(1,1)) << std::endl;
+            std::cout << "phi " << phi << std::endl;
+            std::cout << "genlam " << genPhi << std::endl;
+            std::cout << "phierr " << std::sqrt(covd(2,2)) << std::endl;
+            std::cout << "covdet " << covdet << std::endl;
+            std::cout << "covdetalt " << covdet << std::endl;
+            std::cout << "lnp " << lnp << std::endl;
+            std::cout << "lnpalt " << lnpalt << std::endl;
+            std::cout << "covd\n" << covd << std::endl;
+            std::cout << "covdalt\n" << covdalt << std::endl;
+            std::cout << "covinv\n" << covinv << std::endl;
+            std::cout << "covinvalt\n" << covinvalt << std::endl;
+          }
+        }
+        
+        // protect against outliers
+        res(ivar, idownup) = std::min(weight, maxWeight_);
 
       }
     }
@@ -333,6 +366,8 @@ private:
   }
 
   std::shared_ptr<const HIST> hist_;
+  double minGenPt_;
+  double maxWeight_;
 
 };
 
