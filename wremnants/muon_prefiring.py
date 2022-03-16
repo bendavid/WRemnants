@@ -10,14 +10,16 @@ def make_muon_prefiring_helpers(filename = data_dir + "/testMuonSF/L1MuonPrefiri
 
     fin = ROOT.TFile.Open(filename);
 
-    if era == "H":
-        hparameters = fin.Get("L1prefiring_muonparam_2016H")
-    elif era != "GToH":
-        # BG should be like preVFP, but more data was used to derive corrections
-        #hMuonPrefiringNew[era] = *(dynamic_cast<TH2D*>(_file_prefiringNew.Get("L1prefiring_muonparam_2016preVFP")));
-        hparameters = fin.Get("L1prefiring_muonparam_2016BG")
-    else:
-        hparameters = fin.Get("L1prefiring_muonparam_2016postVFP")
+    eradict = { "2016H" : "2016H",
+               #"2016PreVFP", "2016preVFP",
+               # BG should be like preVFP, but more data was used to derive corrections
+               "2016PreVFP" : "2016BG"  ,
+               "2016PostVFP" : "2016postVFP"
+               }
+
+    eratag = eradict[era]
+
+    hparameters = fin.Get(f"L1prefiring_muonparam_{eratag}")
 
     netabins = hparameters.GetXaxis().GetNbins()
 
@@ -36,5 +38,5 @@ def make_muon_prefiring_helpers(filename = data_dir + "/testMuonSF/L1MuonPrefiri
 @ROOT.pythonization("muon_prefiring_helper_stat<", ns="wrem", is_prefix=True)
 def pythonize_rdataframe(klass):
     # add axes corresponding to the tensor dimensions
-    klass.tensor_axes = (hist.axis.Integer(0, klass.NVar, underflow=False, overflow=False, name = "muon prefiring eta-phi regions"),
-                         hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "down-up variation"))
+    klass.tensor_axes = (hist.axis.Integer(0, klass.NVar, underflow=False, overflow=False, name="etaPhiRegion", label = "muon prefiring eta-phi regions"),
+                         hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name="downUpVar"))
