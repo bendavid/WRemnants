@@ -126,7 +126,7 @@ class datagroups2016(datagroups):
                 color = "lightblue",
                 signalOp = sel.signalHistWmass if not wlike else None,
             ),   
-            "Ztt" : dict(
+            "Ztautau" : dict(
                 members = [self.datasets["ZtautauPostVFP"]],
                 label = r"Z$\to\tau\tau$",
                 color = "darkblue",

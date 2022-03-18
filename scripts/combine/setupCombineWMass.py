@@ -49,6 +49,14 @@ cardTool.addSystematic("pdfNNPDF31",
     # -1 means all possible values of the mirror axis
     skipEntries=[(0, -1)],
 )
+cardTool.addSystematic("alphaS002NNPDF31", 
+    processes=single_v_and_fake_samples,
+    mirror=False,
+    group="pdfNNPDF31",
+    systAxes=["tensor_axis_0"],
+    outNames=["alphaS002NNPDF31Up", "alphaS002NNPDF31Down"],
+    scale=0.75,
+)
 for name,num in zip(["effSystIsoTnP", "effStatTnP",], [2, 624*4]):
     axes = ["idiptrig-iso"] if num == 2 else ["SF eta", "SF pt", "SF charge", "idiptrig-iso"]
     axlabels = ["IDIPTrig"] if num == 2 else ["eta", "pt", "q", "Trig"]
