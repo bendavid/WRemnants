@@ -101,14 +101,12 @@ def qcdScaleNames():
     return ["_".join(["QCDscale", s]) if s != "" else s for s in shifts]
 
 def massWeightNames(matches=None, wlike=False):
-    central=11
+    central=10
     nweights=21
     names = [f"massShift{int(abs(central-i)*10)}MeV{'Down' if i < central else 'Up'}" for i in range(nweights)]
-    
     if wlike:
-        # This is the PDG uncertainty
-        names.extend(["massShift2p1MeVDown", "massShift2p1MeVUp"])
-
+        # These are the Z width variations
+        names.extend(["", ""])
     # If name is "" it won't be stored
     return [x if not matches or any(y in x for y in matches) else "" for x in names]
 
