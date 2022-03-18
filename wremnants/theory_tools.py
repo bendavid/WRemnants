@@ -93,10 +93,13 @@ def qcdScaleNames():
     shifts = ["muRmuFDown", "muRDown", "", "muFDown", "", "muFUp", "muRUp", "", "muRmuFUp"]
     return ["_".join(["QCDscale", s]) if s != "" else s for s in shifts]
 
-def massWeightNames(matches=None):
+def massWeightNames(matches=None, wlike=False):
     central=10
     nweights=21
     names = [f"massShift{int(abs(central-i)*10)}MeV{'Down' if i < central else 'Up'}" for i in range(nweights)]
+    if wlike:
+        # These are the Z width variations
+        names.extend(["", ""])
     # If name is "" it won't be stored
     return [x if not matches or any(y in x for y in matches) else "" for x in names]
 
