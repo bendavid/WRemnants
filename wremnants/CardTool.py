@@ -229,21 +229,16 @@ class CardTool(object):
             self.outfile = outfile
 
     def writeOutput(self):
-        self.procDict = self.datagroups.datagroupsForHist(
+        self.datagroups.loadHistsForDatagroups(
             baseName=self.histName, syst=self.nominalName, label=self.nominalName)
+        self.procDict = self.datagroups.getDatagroups()
         self.writeForProcesses(self.nominalName, processes=self.procDict.keys(), label=self.nominalName)
         self.loadNominalCard()
         self.writeLnNSystematics()
         for syst in self.systematics.keys():
             processes=self.systematics[syst]["processes"]
-<<<<<<< HEAD
-            self.procDict = self.datagroups.datagroupsForHist(histname=syst, label="syst",
-                dataHist=self.nominalName, procsToRead=processes)
-=======
-            self.procDict = self.datagroups.datagroupsForHist(self.histName, syst, label="syst",
+            self.datagroups.loadHistsForDatagroups(self.histName, syst, label="syst",
                 procsToRead=processes)
-            #print("procDict is", self.procDict)
->>>>>>> 8e3c32b (Setting up W-like fit, updating plotting)
             self.writeForProcesses(syst, label="syst", processes=processes)
         self.writeCard()
 
