@@ -35,7 +35,7 @@ axis_absYVgen = hist.axis.Variable(
     [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4, 10], name = "absYVgen"
 )
 axis_ptVgen = hist.axis.Variable(
-    [0, 2, 3, 4, 4.75, 5.5, 6.5, 8, 9, 10, 12, 14, 16, 18, 20, 23, 27, 32, 40, 55, 100], name = "ptVgen"
+    list(range(41))+[45, 50, 55, 60, 75, 100], name = "ptVgen"
 )
 axis_chargeWgen = hist.axis.Regular(
     2, -2, 2, name="chargeVgen", underflow=False, overflow=False
@@ -68,7 +68,7 @@ def build_graph(df, dataset):
 
     nominal_cols = ["massVgen", "absYVgen", "ptVgen", "chargeVgen"]
 
-    nominal_gen = df.HistoBoost("nominal_gen", nominal_axes, nominal_cols)
+    nominal_gen = df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols, "nominal_weight"])
     results.append(nominal_gen)
 
     df = df.Define("helicity_moments_scale_tensor", "wrem::makeHelicityMomentScaleTensor(csSineCosThetaPhi, scaleWeights_tensor, nominal_weight)")
