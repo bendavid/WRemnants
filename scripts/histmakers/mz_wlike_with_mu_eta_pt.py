@@ -233,9 +233,7 @@ def build_graph(df, dataset):
                 scetlibCorr_helper=scetlibCorrZ_helper if isZ else scetlibCorrW_helper))
 
             df = theory_tools.define_scale_tensor(df)
-
-            scaleHist = df.HistoBoost("qcdScale", nominal_axes+[axis_ptVgen], [*nominal_cols, "ptVgen", "scaleWeights_tensor"], tensor_axes = wremnants.scale_tensor_axes)
-            results.append(scaleHist)
+            results.append(theory_tools.make_scale_hist(df, [*nominal_axes, axis_ptVgen], [*nominal_cols, "ptVgen"]))
 
             if isZ:
                 df = df.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
@@ -252,20 +250,11 @@ def build_graph(df, dataset):
                 massWeight = df.HistoBoost("massWeight", nominal_axes, [*nominal_cols, "massWeight_tensor_wnom"])
                 results.append(massWeight)
 
-            nweights = 21 if isW else 23
-            df = df.Define("massWeight_tensor", f"auto res = wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight); res = nominal_weight*res; return res;")
-            df = df.Define("massWeight_tensor_wnom", f"auto res = massWeight_tensor; res = nominal_weight*res; return res;")
-
-            if isZ:
-                massWeight = df.HistoBoost("massWeight", nominal_axes, [*nominal_cols, "massWeight_tensor_wnom"])
-                results.append(massWeight)
-
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:
-                netabins = 4
-                df = df.Define("muonScaleDummy4Bins2e4", f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(nominal_weight, massWeight_tensor, TrigMuon_eta, 2.e-4, {str(isW).lower()})")
-                scale_etabins_axis = hist.axis.Regular(4, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
-                dummyMuonScaleSyst = df.HistoBoost("muonScaleSyst", nominal_axes, [*nominal_cols, "muonScaleDummy4Bins2e4"], 
+                df = df.Define("muonScaleDummy", f"wrem::dummyScaleFromMassWeights<{args.muScaleBins}, {nweights}>(nominal_weight, massWeight_tensor, TrigMuon_eta, {args.muScaleMag}, {str(isW).lower()})")
+                scale_etabins_axis = hist.axis.Regular(args.muScaleBins, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
+                dummyMuonScaleSyst = df.HistoBoost("muonScaleSyst", nominal_axes, [*nominal_cols, "muonScaleDummy"], 
                     tensor_axes=[down_up_axis, scale_etabins_axis])
                 results.append(dummyMuonScaleSyst)
 
