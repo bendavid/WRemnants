@@ -84,12 +84,53 @@ def getDatasets(maxFiles=-1, filt=None):
             xsec = 365.64,
     )
 
+    # TODO: these samples and cross sections are preliminary
+    singleTop_schanLepDecaysPostVFP = narf.Dataset(name = "SingleTschanLepDecaysPostVFP",
+        filepaths = makeFilelist(
+                ["/scratch/shared/originalNANO/SingleTop_schan_lepDecays_postVFP/*.root"], maxFiles),
+            is_data = False,
+            xsec = 3.74,
+    )
+
+    singleTop_tWAntitopPostVFP = narf.Dataset(name = "SingleTtWAntitopPostVFP",
+        filepaths = makeFilelist(
+                ["/scratch/shared/originalNANO/SingleTop_tW_antitop_noFullyHadronic_postVFP/*.root"], maxFiles),
+            is_data = False,
+            xsec = 19.55,
+    )
+    singleTop_tchanAntitopPostVFP = narf.Dataset(name = "SingleTtchanAntitopPostVFP",
+        filepaths = makeFilelist(
+                ["/scratch/shared/originalNANO/SingleTop_tchan_antitop_inclusive_postVFP/*.root"], maxFiles),
+            is_data = False,
+            xsec = 70.79,
+    )
+    singleTop_tchanTopPostVFP = narf.Dataset(name = "SingleTtchanTopPostVFP",
+        filepaths = makeFilelist(
+                ["/scratch/shared/originalNANO/SingleTop_tchan_top_inclusive_postVFP/*.root"], maxFiles),
+            is_data = False,
+            xsec = 119.71,
+    )    
+
     # TODO: should really use the specific decay channels
     wwPostVFP = narf.Dataset(name = "WWPostVFP",
         filepaths = makeFilelist(
                 ["/scratch/shared/originalNANO/WW_inclusive_postVFP/*.root"], maxFiles),
             is_data = False,
             xsec = 75.8,
+    )
+
+    wzPostVFP = narf.Dataset(name = "WZPostVFP",
+        filepaths = makeFilelist(
+                ["/scratch/shared/originalNANO/WZ_inclusive_postVFP/*.root"], maxFiles),
+            is_data = False,
+            xsec = 27.6,
+    )
+
+    zz2l2nuPostVFP = narf.Dataset(name = "ZZ2l2nuPostVFP",
+        filepaths = makeFilelist(
+                ["/scratch/shared/originalNANO/ZZ_2l2nu_postVFP/*.root"], maxFiles),
+            is_data = False,
+            xsec = 0.564,
     )
 
     allPostVFP = [dataPostVFP, WpmunuPostVFP, WmmunuPostVFP, WptaunuPostVFP, WmtaunuPostVFP, ZmmPostVFP, 
