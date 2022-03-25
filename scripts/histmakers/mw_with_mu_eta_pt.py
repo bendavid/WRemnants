@@ -2,7 +2,8 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-j", "--nThreads", type=int, help="number of threads", default=None)
-parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
+parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
+parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
 parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=None)
 parser.add_argument("--noMuonCorr", action="store_true", help="Don't use corrected pt-eta-phi-charge")
 parser.add_argument("--noScetlibCorr", dest="applyScetlibCorr", action="store_false", help="Don't use Scetlib corrections")
