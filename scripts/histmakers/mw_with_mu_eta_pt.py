@@ -31,7 +31,8 @@ era = "2016PostVFP"
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 scetlibCorrZ_helper = wremnants.makeScetlibCorrHelper(isW=False)
 scetlibCorrW_helper = wremnants.makeScetlibCorrHelper(isW=True)
-qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper()
+qcdScaleByHelicity_Zhelper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = True)
+qcdScaleByHelicity_Whelper = wremnants.makeQCDScaleByHelicityHelper()
 
 wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP"]
 zprocs = ["ZmumuPostVFP", "ZtautauPostVFP"]
@@ -49,8 +50,11 @@ axis_passMT = hist.axis.Boolean(name = "passMT")
 
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
 
-axis_ptVgen = qcdScaleByHelicity_helper.hist.axes["ptVgen"]
-axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
+axis_ptVgen = qcdScaleByHelicity_Whelper.hist.axes["ptVgen"]
+axis_absYVgen = hist.axis.Variable(
+    [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4, 10], name = "absYVgen"
+)
+axis_chargeVgen = qcdScaleByHelicity_Whelper.hist.axes["chargeVgen"]
 
 # extra axes which can be used to label tensor_axes
 
@@ -183,11 +187,11 @@ def build_graph(df, dataset):
 
             # currently SCETLIB corrections are applicable to W-only, and helicity-split scales are only valid for one of W or Z at a time
             # TODO make this work for both simultaneously as needed
-            if isW:
-                # TODO: Should have consistent order here with the scetlib correction function
-                df = df.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
-                qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", nominal_axes+[axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
-                results.append(qcdScaleByHelicityUnc)
+            helicity_helper = qcdScaleByHelicity_Zhelper if isZ else qcdScaleByHelicity_Whelper
+            # TODO: Should have consistent order here with the scetlib correction function
+            df = df.Define("helicityWeight_tensor", helicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
+            qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", [*nominal_axes, axis_absYVgen, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "absYVgen", "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=helicity_helper.tensor_axes)
+            results.append(qcdScaleByHelicityUnc)
 
             results.extend(theory_tools.define_and_make_pdf_hists(df, nominal_axes, nominal_cols))
 

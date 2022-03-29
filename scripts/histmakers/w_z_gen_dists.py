@@ -1,8 +1,10 @@
 import argparse
-import narf
-import wremnants
 import pickle
 import gzip
+import ROOT
+ROOT.gInterpreter.ProcessLine(".O3")
+import narf
+import wremnants
 from wremnants import theory_tools
 import hist
 import lz4.frame
@@ -16,8 +18,6 @@ parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over pr
 parser.add_argument("--pdfs", type=str, nargs="*", default=["nnpdf31"], choices=theory_tools.pdfMap.keys(), help="PDF sets to produce error hists for")
 args = parser.parse_args()
 
-import ROOT
-ROOT.gInterpreter.ProcessLine(".O3")
 if not args.nThreads:
     ROOT.ROOT.EnableImplicitMT()
 elif args.nThreads != 1:
@@ -44,6 +44,10 @@ axis_chargeZgen = hist.axis.Integer(
     0, 1, name="chargeVgen", underflow=False, overflow=False
 )
 
+qcdScaleByHelicity_Zhelper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = True)
+qcdScaleByHelicity_Whelper = wremnants.makeQCDScaleByHelicityHelper()
+
+print("Did we fail yet?")
 wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP"]
 zprocs = ["ZmumuPostVFP", "ZtautauPostVFP"]
 
@@ -60,12 +64,19 @@ def build_graph(df, dataset):
     df = theory_tools.define_prefsr_vars(df)
     df = theory_tools.define_scale_tensor(df)
 
+    nominal_cols = ["massVgen", "absYVgen", "ptVgen", "chargeVgen"]
+
     if dataset.name in zprocs:
         nominal_axes = [axis_massZgen, axis_absYVgen, axis_ptVgen, axis_chargeZgen]
+        helicity_helper = qcdScaleByHelicity_Zhelper
     else:
         nominal_axes = [axis_massWgen, axis_absYVgen, axis_ptVgen, axis_chargeWgen]
+        helicity_helper = qcdScaleByHelicity_Whelper
 
-    nominal_cols = ["massVgen", "absYVgen", "ptVgen", "chargeVgen"]
+    df = df.Define("helicityWeight_tensor", helicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
+    qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", nominal_axes, [*nominal_cols, "helicityWeight_tensor"], tensor_axes=helicity_helper.tensor_axes)
+    results.append(qcdScaleByHelicityUnc)
+
     results.append(theory_tools.make_scale_hist(df, nominal_axes, nominal_cols))
     for pdf in args.pdfs:
         results.extend(theory_tools.define_and_make_pdf_hists(df, nominal_axes, nominal_cols, pdfset=pdf))
