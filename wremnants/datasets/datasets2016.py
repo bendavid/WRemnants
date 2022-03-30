@@ -75,6 +75,7 @@ def getDatasets(maxFiles=-1, filt=None):
                 ["/scratch/shared/originalNANO/TTbar_2l2nu_postVFP/*.root"], maxFiles),
             is_data = False,
             xsec = 88.29,
+            group = "Top",
     )
 
     ttbarlqPostVFP = narf.Dataset(name = "TTSemileptonicPostVFP",
@@ -82,6 +83,7 @@ def getDatasets(maxFiles=-1, filt=None):
                 ["/scratch/shared/originalNANO/TTbar_SemiLeptonic_postVFP/*.root"], maxFiles),
             is_data = False,
             xsec = 365.64,
+            group = "Top",
     )
 
     # TODO: these samples and cross sections are preliminary
@@ -90,6 +92,7 @@ def getDatasets(maxFiles=-1, filt=None):
                 ["/scratch/shared/originalNANO/SingleTop_schan_lepDecays_postVFP/*.root"], maxFiles),
             is_data = False,
             xsec = 3.74,
+            group = "Top",
     )
 
     singleTop_tWAntitopPostVFP = narf.Dataset(name = "SingleTtWAntitopPostVFP",
@@ -97,18 +100,21 @@ def getDatasets(maxFiles=-1, filt=None):
                 ["/scratch/shared/originalNANO/SingleTop_tW_antitop_noFullyHadronic_postVFP/*.root"], maxFiles),
             is_data = False,
             xsec = 19.55,
+            group = "Top",
     )
     singleTop_tchanAntitopPostVFP = narf.Dataset(name = "SingleTtchanAntitopPostVFP",
         filepaths = makeFilelist(
                 ["/scratch/shared/originalNANO/SingleTop_tchan_antitop_inclusive_postVFP/*.root"], maxFiles),
             is_data = False,
             xsec = 70.79,
+            group = "Top",
     )
     singleTop_tchanTopPostVFP = narf.Dataset(name = "SingleTtchanTopPostVFP",
         filepaths = makeFilelist(
                 ["/scratch/shared/originalNANO/SingleTop_tchan_top_inclusive_postVFP/*.root"], maxFiles),
             is_data = False,
             xsec = 119.71,
+            group = "Top",
     )    
 
     # TODO: should really use the specific decay channels
@@ -117,6 +123,7 @@ def getDatasets(maxFiles=-1, filt=None):
                 ["/scratch/shared/originalNANO/WW_inclusive_postVFP/*.root"], maxFiles),
             is_data = False,
             xsec = 75.8,
+            group = "Diboson",
     )
 
     wzPostVFP = narf.Dataset(name = "WZPostVFP",
@@ -124,6 +131,7 @@ def getDatasets(maxFiles=-1, filt=None):
                 ["/scratch/shared/originalNANO/WZ_inclusive_postVFP/*.root"], maxFiles),
             is_data = False,
             xsec = 27.6,
+            group = "Diboson",
     )
 
     zz2l2nuPostVFP = narf.Dataset(name = "ZZ2l2nuPostVFP",
@@ -131,10 +139,15 @@ def getDatasets(maxFiles=-1, filt=None):
                 ["/scratch/shared/originalNANO/ZZ_2l2nu_postVFP/*.root"], maxFiles),
             is_data = False,
             xsec = 0.564,
+            group = "Diboson",
     )
 
-    allPostVFP = [dataPostVFP, WpmunuPostVFP, WmmunuPostVFP, WptaunuPostVFP, WmtaunuPostVFP, ZmmPostVFP, 
-        ZttPostVFP, ttbarlnuPostVFP, ttbarlqPostVFP, wwPostVFP]
+    allPostVFP = [dataPostVFP,
+                  WpmunuPostVFP, WmmunuPostVFP, WptaunuPostVFP, WmtaunuPostVFP,
+                  ZmmPostVFP, ZttPostVFP,
+                  ttbarlnuPostVFP, ttbarlqPostVFP,
+                  singleTop_schanLepDecaysPostVFP, singleTop_tWAntitopPostVFP, singleTop_tchanAntitopPostVFP, singleTop_tchanTopPostVFP,
+                  wwPostVFP, wzPostVFP, zz2l2nuPostVFP]
 
     if filt:
         return list(filter(filt, allPostVFP))

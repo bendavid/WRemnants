@@ -18,7 +18,7 @@ Each independent fit has a separate driver script in this directory. The driver 
 Different driver scripts may have special configuration arguments, but all require an input file and output folder. For the W mass, the simplest running command is:
 
 ```bash
-python3 ./scripts/combine/setupCombineWmass.py -i mw_with_mu_eta_pt.pkl.lz4 -o outputFolder
+python3 ./scripts/combine/setupCombineWMass.py -i mw_with_mu_eta_pt.pkl.lz4 -o outputFolder
 ```
 
 Additional options are available to configure some systematics. The full list can be obtained with ```./scripts/combine/setupCombineWmass.py --help```
