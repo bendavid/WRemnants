@@ -155,13 +155,15 @@ class datagroups2016(datagroups):
                     signalOp = sel.signalHistWmass,
                 ),
                 "Top" : dict(
-                    members = [self.datasets["TTSemileptonicPostVFP"], self.datasets["TTLeptonicPostVFP"]],
+                    #members = [self.datasets["TTSemileptonicPostVFP"], self.datasets["TTLeptonicPostVFP"]],
+                    members = list(filter(lambda y: y.group == "Top", self.datasets.values())),
                     label = "Top",
                     color = "green",
                     signalOp = sel.signalHistWmass,
                 ), 
                 "Diboson" : dict(
-                    members = [self.datasets["WWPostVFP"]],
+                    #members = [self.datasets["WWPostVFP"]],
+                    members = list(filter(lambda y: y.group == "Diboson", self.datasets.values())),
                     label = "Diboson",
                     color = "pink",
                     signalOp = sel.signalHistWmass,
