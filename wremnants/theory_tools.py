@@ -93,8 +93,12 @@ def moments_to_angular_coeffs(hist_moments_scales):
     scales = np.array([1., -10., 5., 10., 4., 4., 5., 5., 4.])
 
     # for broadcasting
-    offsets = offsets[:, np.newaxis, np.newaxis]
-    scales = scales[:, np.newaxis, np.newaxis]
+    hel_ax_idx = list(hist_moments_scales.axes).index(hist_moments_scales.axes["helicity"])
+    ntrailing_ax = hist_moments_scales.ndim - hel_ax_idx - 1
+    if ntrailing_ax:
+        new_axes = tuple(range(offsets.ndim, offsets.ndim+ntrailing_ax))
+        offsets = np.expand_dims(offsets, axis=new_axes)
+        scales = np.expand_dims(scales, axis=new_axes)
 
     view = hist_moments_scales.view(flow=True)
 

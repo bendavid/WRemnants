@@ -91,3 +91,13 @@ def clipNegativeVals(h):
     vals[vals<0] = 0
     hnew[...] = np.stack((vals, h.variances(flow=True)), axis=-1)
     return hnew
+
+def makeAbsHist(h, axis_name):
+    ax = h.axes[axis_name]
+    axidx = list(h.axes).index(ax)
+    abs_ax = hist.axis.Variable(ax.edges[ax.index(0.):], name=axis_name)
+    hnew = hist.Hist(*h.axes[:axidx], abs_ax, *h.axes[axidx+1:], storage=hist.storage.Weight())
+    
+    s = hist.tag.Slicer()
+    hnew[...] = h[{axis_name : s[ax.index(0):]}].view() + np.flip(h[{axis_name : s[:ax.index(0)]}].view(), axis=axidx)
+    return hnew
