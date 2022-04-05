@@ -38,7 +38,7 @@ def makeScetlibCorrHelper(filename=f"{data_dir}/N3LLCorrections/inclusive_{{proc
 
     return makeCorrectionsTensor(corrh, ROOT.wrem.TensorCorrectionsHelper, tensor_rank=1)
 
-def readScetlibHist(path, pt_axis=None):
+def readScetlibHist(path, pt_axis=None, add_nonsing=True, flip_y_sign=False):
     f = np.load(path, allow_pickle=True)
     var_axis = hist.axis.Integer(f["bins"][0][0], f["bins"][0][-1], name="vars")
     mass_axis = hist.axis.Variable(f["bins"][1], name="mass")
@@ -58,4 +58,14 @@ def readScetlibHist(path, pt_axis=None):
     scetlibh = hist.Hist(var_axis,mass_axis,y_axis,pt_axis, storage=storage)
     scetlibh[...,:h.shape[-1]] = vals
 
+    if add_nonsing:
+        nonsing = readScetlibHist(path.replace(".npz", "_nons.npz"), pt_axis, False)
+        scetlibh = scetlibh + nonsing
+
+    if flip_y_sign:
+        mid = y_axis.index(0)
+        s = hist.tag.Slicer()
+        scetlibh[{"y" : s[mid:]}] = scetlibh[{"y" : s[mid:]}].view()*-1
+
     return scetlibh 
+
