@@ -1,14 +1,19 @@
 import argparse
 import pickle
 import gzip
-
+import ROOT
+ROOT.gInterpreter.ProcessLine(".O3")
+if not args.nThreads:
+    ROOT.ROOT.EnableImplicitMT()
+elif args.nThreads != 1:
+    ROOT.ROOT.EnableImplicitMT(args.nThreads)
 import narf
 import wremnants
+from wremnants import theory_tools
 import hist
 import lz4.frame
 import logging
 import math
-from wremnants import theory_tools
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--nThreads", type=int, help="number of threads", default=None)
@@ -17,13 +22,6 @@ parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over pr
 parser.add_argument("--muScaleMag", type=float, default=1e-4, help="Magnitude of dummy muon scale uncertainty")
 parser.add_argument("--muScaleBins", type=int, default=1, help="Number of bins for muon scale uncertainty")
 args = parser.parse_args()
-
-import ROOT
-ROOT.gInterpreter.ProcessLine(".O3")
-if not args.nThreads:
-    ROOT.ROOT.EnableImplicitMT()
-elif args.nThreads != 1:
-    ROOT.ROOT.EnableImplicitMT(args.nThreads)
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None)
