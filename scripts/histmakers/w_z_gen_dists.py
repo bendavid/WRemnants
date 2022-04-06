@@ -3,6 +3,10 @@ import pickle
 import gzip
 import ROOT
 ROOT.gInterpreter.ProcessLine(".O3")
+if not args.nThreads:
+    ROOT.ROOT.EnableImplicitMT()
+elif args.nThreads != 1:
+    ROOT.ROOT.EnableImplicitMT(args.nThreads)
 import narf
 import wremnants
 from wremnants import theory_tools
