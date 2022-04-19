@@ -25,7 +25,7 @@ import logging
 import math
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
-datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None)
+datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, mode="gen")
 
 axis_massWgen = hist.axis.Variable([0., math.inf], name="massVgen")
 
@@ -62,7 +62,7 @@ wprocs_bugfix = [
     "WminusmunuPostVFP_bugfix",
     "WminusmunuPostVFP_bugfix_slc7",
     "WplusmunuPostVFP_bugfix_slc7",
-    "WplusmunuPostVFP_bugfix_h2",
+    "WplusmunuPostVFP_bugfix_reweight_h2",
 ]
 wprocs = [*wprocs_bugged, *wprocs_bugfix]
 wprocs_bugged_to_check = [ # mu only for making comparison plots between bugged and bugfix samples
@@ -74,11 +74,6 @@ zprocs_bugfix = ["ZmumuPostVFP_bugfix", "ZmumuPostVFP_bugfix_slc7"]
 zprocs = [*zprocs_bugged, *zprocs_bugfix]
 zprocs_bugged_to_check = ["ZmumuPostVFP"]
 
-time_loading_finished = time.time()
-loading_time = time_loading_finished - time_start
-print("time it takes to load datasets: ", loading_time)
-
-
 def build_graph(df, dataset):
     print("build graph")
     print(dataset.name)
@@ -87,7 +82,7 @@ def build_graph(df, dataset):
     if dataset.is_data:
         df = df.DefinePerSample("weight", "1.0")
     else:
-        if "h2" in dataset.name:
+        if "reweight_h2" in dataset.name:
             df = df.Define("weight", "H2BugFixWeight*std::copysign(1.0, genWeight)")
         else:
             df = df.Define("weight", "std::copysign(1.0, genWeight)")
@@ -135,7 +130,7 @@ def build_graph(df, dataset):
 
 resultdict = narf.build_and_run(datasets, build_graph)
 
-fname = "w_z_gen_dists_h2fix.pkl.lz4"
+fname = "w_z_gen_dists_reweight_h2.pkl.lz4"
 
 print("writing output")
 with lz4.frame.open(fname, "wb") as f:

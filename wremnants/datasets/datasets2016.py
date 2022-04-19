@@ -14,7 +14,7 @@ def makeFilelist(paths, maxFiles=-1, eos=False):
         filelist.extend(glob.glob(path) if not eos else buildXrdFileList(path, "eoscms.cern.ch"))
     return filelist if maxFiles < 0 else filelist[:maxFiles]
 
-def getDatasets(maxFiles=-1, filt=None):
+def getDatasets(maxFiles=-1, filt=None, mode=None):
     dataPostVFP = narf.Dataset(name = "dataPostVFP",
         filepaths = makeFilelist(["/scratch/shared/NanoAOD/TrackRefitv1/SingleMuon/Run2016F_postVFP_220223_222034/*/*.root",
             "/scratch/shared/NanoAOD/TrackRefitv1/SingleMuon/Run2016G_220223_222128/*/*.root",
@@ -77,7 +77,7 @@ def getDatasets(maxFiles=-1, filt=None):
         xsec = 11572.19,
     )
 
-    WpmunuPostVFP_bugfix_h2 = narf.Dataset(name = "WplusmunuPostVFP_bugfix_h2",
+    WpmunuPostVFP_bugfix_rweight_h2 = narf.Dataset(name = "WplusmunuPostVFP_bugfix_reweight_h2",
         filepaths = makeFilelist(
             ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoAOD/WplusJetsToMuNu_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV8MCPreVFPWeightFix/220413_121251/*/*.root"], maxFiles),
         is_data = False,
@@ -101,8 +101,6 @@ def getDatasets(maxFiles=-1, filt=None):
         filepaths = makeFilelist(
 #            ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/WminusToMuNu_svn3900_BugFix_TuneCP5_13TeV-powheg-MiNNLO-pythia8-photos/RunIISummer15wmLHEGS/220405_221010/000*/*.root"], maxFiles),
             ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/WminusToMuNu_svn3900_slc7_BugFix_TuneCP5_13TeV-powheg-MiNNLO-pythia8-photos/RunIISummer15wmLHEGS/220408_235902/*/*.root"], maxFiles),
->>>>>>> ecb2c1f (reverting unwanted changes when merging with upstream)
->>>>>>> ea03059 (Add some combine scripts)
             is_data = False,
             xsec = 8562.66,
     )
@@ -144,6 +142,19 @@ def getDatasets(maxFiles=-1, filt=None):
     )
 
     allPostVFP = [
+        dataPostVFP, 
+        WpmunuPostVFP,
+        WmmunuPostVFP,
+        WptaunuPostVFP,
+        WmtaunuPostVFP,
+        ZmmPostVFP,
+        ZttPostVFP,
+        ttbarlnuPostVFP,
+        ttbarlqPostVFP,
+        wwPostVFP
+    ]
+
+    allPostVFP_gen = [
         dataPostVFP,
         WpmunuPostVFP,
         WmmunuPostVFP,
@@ -151,7 +162,7 @@ def getDatasets(maxFiles=-1, filt=None):
         WmmunuPostVFP_bugfix,
         WmmunuPostVFP_bugfix_slc7,
         WpmunuPostVFP_bugfix_slc7,
-        WpmunuPostVFP_bugfix_h2,
+        WpmunuPostVFP_bugfix_reweight_h2,
         WptaunuPostVFP,
         WmtaunuPostVFP,
         ZmmPostVFP,
@@ -160,12 +171,19 @@ def getDatasets(maxFiles=-1, filt=None):
         ZttPostVFP,
         ttbarlnuPostVFP,
         ttbarlqPostVFP,
-        wwPostVFP]
+        wwPostVFP
+    ]
 
-    if filt:
-        return list(filter(filt, allPostVFP))
-
-    return allPostVFP
+    if mode != "gen":
+        if filt:
+            return list(filter(filt, allPostVFP))
+        else:
+            return allPostVFP
+     else:
+        if filt:
+            return list(filter(filt, allPostVFP_gen))
+        else:
+            return allPostVFP_gen
 
 def buildXrdFileList(path, xrd):
     xrdpath = path[path.find('/store'):]
