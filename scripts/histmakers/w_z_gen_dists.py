@@ -38,7 +38,6 @@ axis_ptVgen = hist.axis.Variable(
     [0, 2, 3, 4, 4.75, 5.5, 6.5, 8, 9, 10, 12, 14, 16, 18, 20, 23, 27, 32, 40, 55, 100], name = "ptVgen"
 )
 
-axis_ptVgen = hist.axis.Regular(120, 0., 120., name="ptVgen")
 
 axis_chargeWgen = hist.axis.Regular(
     2, -2, 2, name="chargeVgen", underflow=False, overflow=False
