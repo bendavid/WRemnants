@@ -7,7 +7,7 @@ from .correctionsTensor_helper import makeCorrectionsTensor
 
 data_dir = f"{pathlib.Path(__file__).parent}/data/"
 
-def makeScetlibCorrHelper(filename=f"{data_dir}/N3LLCorrections/inclusive_{{process}}_pT.npz"):
+def makeScetlibCorrHelper(filename=f"{data_dir}/N3LLCorrections/inclusive_{{process}}_pT.npz", isW=True):
     corrf_Wp = np.load(filename.format(process="Wp"), allow_pickle=True)
     corrf_Wm = np.load(filename.format(process="Wm"), allow_pickle=True)
     bins = corrf_Wp["bins"]

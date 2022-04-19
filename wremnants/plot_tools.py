@@ -7,16 +7,15 @@ import math
 import numpy as np
 hep.style.use(hep.style.ROOT)
 
-def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange):
+def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None):
     hax = href.axes[0]
     width = math.ceil(hax.size/400)
-    print(width)
     fig = plt.figure(figsize=(8*width,8))
     ax1 = fig.add_subplot(4, 1, (1, 3)) 
     ax2 = fig.add_subplot(4, 1, 4) 
 
-    ax1.set_xlabel("")
     ax2.set_xlabel(xlabel)
+    ax1.set_xlabel(" ")
     ax1.set_ylabel(ylabel)
     ax1.set_xticklabels([])
     xlim = [href.axes[0].edges[0], href.axes[0].edges[href.axes[0].size-1]]
@@ -97,8 +96,6 @@ def makePlotWithRatioToRef(hists, labels, colors, xlabel="", ylabel="Events/bin"
     else:
         ratio_plots_starting_idx = 1
     ratio_hists = [hh.divideHists(h, hists[0], cutoff=0.00001) for h in hists[ratio_plots_starting_idx:]]
-#    if autorrange:
-#        rrange = [min([x.values().min() for x in ratio_hists]), max(
     fig, ax1, ax2 = figureWithRatio(hists[0], xlabel, ylabel, [0, ymax] if ymax else None, rlabel, rrange, xlim=xlim)
     
     hep.histplot(
