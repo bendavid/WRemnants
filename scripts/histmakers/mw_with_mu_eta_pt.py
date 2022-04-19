@@ -16,7 +16,6 @@ elif args.nThreads != 1:
 
 import narf
 import wremnants
-from wremnants import theory_tools
 import hist
 import lz4.frame
 import logging
@@ -61,6 +60,10 @@ down_up_axis = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, na
 down_nom_up_axis = hist.axis.Regular(3, -1.5, 1.5, underflow=False, overflow=False, name = "downNomUpVar")
 
 calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
+
+muon_efficiency_helper, muon_efficiency_helper_stat, muon_efficiency_helper_syst = wremnants.make_muon_efficiency_helpers(era = era, max_pt = axis_pt.edges[-1])
+
+pileup_helper = wremnants.make_pileup_helper(era = era)
 
 def build_graph(df, dataset):
     print("build graph", dataset.name)
@@ -188,7 +191,6 @@ def build_graph(df, dataset):
 
             results.extend(theory_tools.define_and_make_pdf_hists(df, nominal_axes, nominal_cols))
 
->>>>>>> ea03059 (Add some combine scripts)
             nweights = 21 if isW else 23
             df = df.Define("massWeight_tensor", f"wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight)")
             df = df.Define("massWeight_tensor_wnom", "auto res = massWeight_tensor; res = nominal_weight*res; return res;")

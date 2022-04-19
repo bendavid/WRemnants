@@ -67,7 +67,7 @@ class datagroupsLowPU(datagroups):
         return self.lumi
         
     def histName(self, baseName, proc, syst):
-        if proc in ["WplusJetsToMuNu", "WminusJetsToMuNu"]:
+        if proc in ["WplusJetsToMuNu", "WminusJetsToMuNu"] and "gen" not in baseName:
             baseName = baseName.replace("reco", "gen_reco")
         base = f"{baseName}_{proc}"
         return base if syst == "nominal" else f"{base}_{syst}_syst"
