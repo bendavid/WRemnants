@@ -1,5 +1,7 @@
 import argparse
-
+import pickle
+import gzip
+import ROOT
 parser = argparse.ArgumentParser()
 parser.add_argument("-j", "--nThreads", type=int, help="number of threads", default=None)
 parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
@@ -11,22 +13,18 @@ parser.add_argument("--noScaleFactors", action="store_true", help="Don't use sca
 parser.add_argument("--noScetlibCorr", dest="applyScetlibCorr", action="store_false", help="Don't use Scetlib corrections")
 args = parser.parse_args()
 
-import ROOT
 ROOT.gInterpreter.ProcessLine(".O3")
 if not args.nThreads:
     ROOT.ROOT.EnableImplicitMT()
 elif args.nThreads != 1:
     ROOT.ROOT.EnableImplicitMT(args.nThreads)
 
-import pickle
-import gzip
-
 import narf
 import wremnants
+from wremnants import theory_tools
 import hist
 import lz4.frame
 import logging
-from wremnants import theory_tools
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None)
@@ -39,7 +37,8 @@ noScaleFactors = args.noScaleFactors
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 scetlibCorrZ_helper = wremnants.makeScetlibCorrHelper(isW=False)
 scetlibCorrW_helper = wremnants.makeScetlibCorrHelper(isW=True)
-qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper()
+qcdScaleByHelicity_Zhelper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = True)
+qcdScaleByHelicity_Whelper = wremnants.makeQCDScaleByHelicityHelper()
 
 wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP"]
 zprocs = ["ZmumuPostVFP", "ZtautauPostVFP"]
@@ -57,8 +56,11 @@ axis_passMT = hist.axis.Boolean(name = "passMT")
 
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
 
-axis_ptVgen = qcdScaleByHelicity_helper.hist.axes["ptVgen"]
-axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
+axis_ptVgen = qcdScaleByHelicity_Whelper.hist.axes["ptVgen"]
+axis_absYVgen = hist.axis.Variable(
+    [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4, 10], name = "absYVgen"
+)
+axis_chargeVgen = qcdScaleByHelicity_Whelper.hist.axes["chargeVgen"]
 
 # extra axes which can be used to label tensor_axes
 
@@ -197,28 +199,17 @@ def build_graph(df, dataset):
         if isW or isZ:
 
             df = theory_tools.define_scale_tensor(df)
-            scaleHist = df.HistoBoost("qcdScale", nominal_axes+[axis_ptVgen], [*nominal_cols, "ptVgen", "scaleWeights_tensor_wnom"], tensor_axes = wremnants.scale_tensor_axes)
-            results.append(scaleHist)
+            results.append(theory_tools.make_scale_hist(df, [*nominal_axes, axis_ptVgen], [*nominal_cols, "ptVgen"]))
 
             # currently SCETLIB corrections are applicable to W-only, and helicity-split scales are only valid for one of W or Z at a time
             # TODO make this work for both simultaneously as needed
-            if isW:
-                # TODO: Should have consistent order here with the scetlib correction function
-                df = df.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
-                qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", nominal_axes+[axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
-                results.append(qcdScaleByHelicityUnc)
+            helicity_helper = qcdScaleByHelicity_Zhelper if isZ else qcdScaleByHelicity_Whelper
+            # TODO: Should have consistent order here with the scetlib correction function
+            df = df.Define("helicityWeight_tensor", helicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
+            qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", [*nominal_axes, axis_absYVgen, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "absYVgen", "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=helicity_helper.tensor_axes)
+            results.append(qcdScaleByHelicityUnc)
 
-            # slice 101 elements starting from 0 and clip values at += 10.0
-            df = df.Define("pdfWeights_tensor", "auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, 101>(LHEPdfWeight), 10.); res = nominal_weight*res; return res;")
-
-            pdfNNPDF31 = df.HistoBoost("pdfNNPDF31", nominal_axes, [*nominal_cols, "pdfWeights_tensor"])
-            results.append(pdfNNPDF31)
-
-            # slice 2 elements starting from 101
-            df = df.Define("pdfWeightsAS_tensor", "auto res = wrem::vec_to_tensor_t<double, 2>(LHEPdfWeight, 101); res = nominal_weight*res; return res;")
-
-            alphaS002NNPDF31 = df.HistoBoost("alphaS002NNPDF31", nominal_axes, [*nominal_cols, "pdfWeightsAS_tensor"])
-            results.append(alphaS002NNPDF31)
+            results.extend(theory_tools.define_and_make_pdf_hists(df, nominal_axes, nominal_cols))
 
             nweights = 21 if isW else 23
             df = df.Define("massWeight_tensor", f"wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight)")
