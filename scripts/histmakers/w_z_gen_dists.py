@@ -1,13 +1,4 @@
 import argparse
-import narf
-import wremnants
-import pickle
-import gzip
-from wremnants import theory_tools
-import hist
-import lz4.frame
-import logging
-import math
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--nThreads", type=int, help="number of threads", default=None)
@@ -25,7 +16,7 @@ elif args.nThreads != 1:
 
 import pickle
 import gzip
-
+from wremnants import theory_tools
 import narf
 import wremnants
 import hist

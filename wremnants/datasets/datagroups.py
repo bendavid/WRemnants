@@ -34,7 +34,7 @@ class datagroups(object):
     def setHists(self, baseName, syst, procsToRead=None, label=None, nominalIfMissing=True, 
             selectSignal=True, forceNonzero=True):
         if not label:
-            label = syst
+            label = syst if syst else baseName
         if not procsToRead:
             procsToRead = self.groups.keys()
 
@@ -84,7 +84,7 @@ class datagroups(object):
             name += "_"+channel
         return name
 
-    def datagroupsForHist(self, baseName, syst, procsToRead=None, channel="", label="", nominalIfMissing=True,
+    def loadHistsForDatagroups(self, baseName, syst, procsToRead=None, channel="", label="", nominalIfMissing=True,
             selectSignal=True, forceNonzero=True):
         if self.rtfile and self.combine:
             self.setHistsCombine(baseName, syst, channel, procsToRead, label)
