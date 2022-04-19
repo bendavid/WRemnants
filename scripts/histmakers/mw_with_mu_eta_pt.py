@@ -2,23 +2,24 @@ import argparse
 import pickle
 import gzip
 import ROOT
+parser = argparse.ArgumentParser()
+parser.add_argument("-j", "--nThreads", type=int, help="number of threads", default=None)
+parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
+parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=None)
+args = parser.parse_args()
+
 ROOT.gInterpreter.ProcessLine(".O3")
 if not args.nThreads:
     ROOT.ROOT.EnableImplicitMT()
 elif args.nThreads != 1:
     ROOT.ROOT.EnableImplicitMT(args.nThreads)
+
 import narf
 import wremnants
 from wremnants import theory_tools
 import hist
 import lz4.frame
 import logging
-
-parser = argparse.ArgumentParser()
-parser.add_argument("-j", "--nThreads", type=int, help="number of threads", default=None)
-parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
-parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=None)
-args = parser.parse_args()
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None)
@@ -139,7 +140,7 @@ def build_graph(df, dataset):
         df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0", "passIso"])
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId"])
 
-        applyScetlibCorr = True
+        applyScetlibCorr = False
         weight_expr = "weight*weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF"
         if isW or isZ:
             df = wremnants.define_prefsr_vars(df)
@@ -147,6 +148,8 @@ def build_graph(df, dataset):
                 df = theory_tools.define_scetlib_corr(df, weight_expr, scetlibCorrZ_helper if isZ else scetlibCorrW_helper)
                 results.extend(theory_tools.make_scetlibCorr_hists(df, "nominal", axes=nominal_axes, cols=nominal_cols, 
                     helper=scetlibCorrZ_helper if isZ else scetlibCorrW_helper))
+            else:
+                df = df.Define("nominal_weight", weight_expr)
         else:
             df = df.Define("nominal_weight", weight_expr)
 
