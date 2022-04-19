@@ -29,7 +29,8 @@ era = "2016PostVFP"
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 scetlibCorrZ_helper = wremnants.makeScetlibCorrHelper(isW=False)
 scetlibCorrW_helper = wremnants.makeScetlibCorrHelper(isW=True)
-qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper()
+qcdScaleByHelicity_Zhelper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = True)
+qcdScaleByHelicity_Whelper = wremnants.makeQCDScaleByHelicityHelper()
 
 wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP"]
 zprocs = ["ZmumuPostVFP", "ZtautauPostVFP"]
@@ -145,7 +146,7 @@ def build_graph(df, dataset):
             if applyScetlibCorr:
                 df = theory_tools.define_scetlib_corr(df, weight_expr, scetlibCorrZ_helper if isZ else scetlibCorrW_helper)
                 results.extend(theory_tools.make_scetlibCorr_hists(df, "nominal", axes=nominal_axes, cols=nominal_cols, 
-                    scetlibCorr_helper=scetlibCorrZ_helper if isZ else scetlibCorrW_helper))
+                    helper=scetlibCorrZ_helper if isZ else scetlibCorrW_helper))
         else:
             df = df.Define("nominal_weight", weight_expr)
 
