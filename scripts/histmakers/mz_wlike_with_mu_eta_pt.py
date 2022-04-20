@@ -1,14 +1,12 @@
 import argparse
 import pickle
 import gzip
-
 import ROOT
 ROOT.gInterpreter.ProcessLine(".O3")
 if not args.nThreads:
     ROOT.ROOT.EnableImplicitMT()
 elif args.nThreads != 1:
     ROOT.ROOT.EnableImplicitMT(args.nThreads)
-
 import narf
 import wremnants
 from wremnants import theory_tools
@@ -16,7 +14,6 @@ import hist
 import lz4.frame
 import logging
 import math
-from wremnants import theory_tools
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--nThreads", type=int, help="number of threads", default=None)
@@ -232,7 +229,7 @@ def build_graph(df, dataset):
         # on the Z samples (but can still use it for dummy muon scale)
         if isW or isZ:
             results.extend(theory_tools.make_scetlibCorr_hists(df, "nominal", axes=nominal_axes, cols=nominal_cols, 
-                scetlibCorr_helper=scetlibCorrZ_helper if isZ else scetlibCorrW_helper))
+                helper=scetlibCorrZ_helper if isZ else scetlibCorrW_helper))
 
             df = theory_tools.define_scale_tensor(df)
             results.append(theory_tools.make_scale_hist(df, [*nominal_axes, axis_ptVgen], [*nominal_cols, "ptVgen"]))

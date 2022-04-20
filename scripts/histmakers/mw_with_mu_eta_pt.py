@@ -16,10 +16,10 @@ elif args.nThreads != 1:
 
 import narf
 import wremnants
+from wremnants import theory_tools
 import hist
 import lz4.frame
 import logging
-from wremnants import theory_tools
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None)
@@ -60,11 +60,12 @@ down_up_axis = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, na
 
 down_nom_up_axis = hist.axis.Regular(3, -1.5, 1.5, underflow=False, overflow=False, name = "downNomUpVar")
 
-calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
 
 muon_efficiency_helper, muon_efficiency_helper_stat, muon_efficiency_helper_syst = wremnants.make_muon_efficiency_helpers(era = era, max_pt = axis_pt.edges[-1])
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
+
+calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
 
 def build_graph(df, dataset):
     print("build graph", dataset.name)
@@ -139,7 +140,7 @@ def build_graph(df, dataset):
         df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0", "passIso"])
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId"])
 
-        applyScetlibCorr = True
+        applyScetlibCorr = False
         weight_expr = "weight*weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF"
         if isW or isZ:
             df = wremnants.define_prefsr_vars(df)
@@ -147,6 +148,8 @@ def build_graph(df, dataset):
                 df = theory_tools.define_scetlib_corr(df, weight_expr, scetlibCorrZ_helper if isZ else scetlibCorrW_helper)
                 results.extend(theory_tools.make_scetlibCorr_hists(df, "nominal", axes=nominal_axes, cols=nominal_cols, 
                     helper=scetlibCorrZ_helper if isZ else scetlibCorrW_helper))
+            else:
+                df = df.Define("nominal_weight", weight_expr)
         else:
             df = df.Define("nominal_weight", weight_expr)
 
@@ -184,11 +187,11 @@ def build_graph(df, dataset):
 
             # currently SCETLIB corrections are applicable to W-only, and helicity-split scales are only valid for one of W or Z at a time
             # TODO make this work for both simultaneously as needed
-            if isW:
-                # TODO: Should have consistent order here with the scetlib correction function
-                df = df.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
-                qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", nominal_axes+[axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
-                results.append(qcdScaleByHelicityUnc)
+            helicity_helper = qcdScaleByHelicity_Zhelper if isZ else qcdScaleByHelicity_Whelper
+            # TODO: Should have consistent order here with the scetlib correction function
+            df = df.Define("helicityWeight_tensor", helicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
+            qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", [*nominal_axes, axis_absYVgen, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "absYVgen", "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=helicity_helper.tensor_axes)
+            results.append(qcdScaleByHelicityUnc)
 
             results.extend(theory_tools.define_and_make_pdf_hists(df, nominal_axes, nominal_cols))
 
@@ -202,17 +205,17 @@ def build_graph(df, dataset):
 
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:
-                if False:
+                if True:
                     netabins = 4
                     df = df.Define("muonScaleDummy4Bins2e4", f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(nominal_weight, massWeight_tensor, goodMuons_eta0, 2.e-4, {str(isW).lower()})")
-                    scale_etabins_axis = hist.axis.Regular(4, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
-                    dummyMuonScaleSyst = df.HistoBoost("muonScaleSyst", nominal_axes, [*nominal_cols, "muonScaleDummy4Bins2e4"], 
+                    scale_etabins_axis = hist.axis.Regular(netabins, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
+                    dummyMuonScaleSyst = df.HistoBoost("muonScaleSyst", nominal_axes, [*nominal_cols, "muonScaleDummy4Bins2e4"],
                         tensor_axes=[down_up_axis, scale_etabins_axis])
                 else:
                     netabins = 1
                     df = df.Define("muonScaleDummy1Bin1e4", f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(nominal_weight, massWeight_tensor, goodMuons_eta0, 1.e-4, {str(isW).lower()})")
-                    scale_etabins_axis = hist.axis.Regular(4, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
-                    dummyMuonScaleSyst = df.HistoBoost("muonScaleSyst", nominal_axes, [*nominal_cols, "muonScaleDummy1Bin1e4"], 
+                    scale_etabins_axis = hist.axis.Regular(netabins, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
+                    dummyMuonScaleSyst = df.HistoBoost("muonScaleSyst", nominal_axes, [*nominal_cols, "muonScaleDummy1Bin1e4"],
                         tensor_axes=[down_up_axis, scale_etabins_axis])
 
                 results.append(dummyMuonScaleSyst)
@@ -236,6 +239,9 @@ def build_graph(df, dataset):
 
             dummyMuonScaleSyst_responseWeights = df.HistoBoost("muonScaleSyst_responseWeights", nominal_axes, [*nominal_cols, "muonScaleSyst_responseWeights_tensor"], tensor_axes = calibration_uncertainty_helper.tensor_axes)
             results.append(dummyMuonScaleSyst_responseWeights)
+
+
+
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)
