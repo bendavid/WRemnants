@@ -33,9 +33,9 @@ def signalHistWmass(h, charge=None):
 # TODO: Not all hists are made with these axes
 def signalHistLowPileupW(h):
     if not "qTgen" in [ax.name for ax in h.axes]:
-        return h[{"iso" : 0.j, "mt" : hist.rebin(10)}]
+        return h[{"iso" : 0}]
     s = hist.tag.Slicer()
-    return h[{"iso" : 0.j, "mt" : hist.rebin(10), "qTgen" : s[::hist.sum]}]
+    return h[{"iso" : 0, "qTgen" : s[::hist.sum]}]
 
 def unrolledHist(h, obs=["pt", "eta"]):
     bins = np.multiply(*[a.size for a in h.axes[:2]])

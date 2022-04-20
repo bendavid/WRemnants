@@ -18,24 +18,26 @@ def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None):
     ax1.set_xlabel(" ")
     ax1.set_ylabel(ylabel)
     ax1.set_xticklabels([])
-    xlim = [href.axes[0].edges[0], href.axes[0].edges[href.axes[0].size-1]]
+    if not xlim:
+        xlim = [href.axes[0].edges[0], href.axes[0].edges[href.axes[0].size-1]]
     ax1.set_xlim(xlim)
     ax2.set_xlim(xlim)
     ax2.set_ylabel(rlabel, fontsize=22)
     ax2.set_ylim(rrange)
-    ax1.set_ylim(ylim)
+    if ylim:
+        ax1.set_ylim(ylim)
+    else:
+        ax1.autoscale(axis='y')
     return fig,ax1,ax2
 
-def addLegend(ax, ncols = 2, extra_text=None):
+def addLegend(ax, ncols=2, extra_text=None):
     has_extra_text = extra_text is not None
     handles, labels = ax.get_legend_handles_labels()
     
-    print(list(labels))
     if has_extra_text:
         #handles.append(patches.Patch(color='none', label=extra_text))
         ax.plot([], [], ' ', ' ')
 
-    print(list(labels))
     shape = np.divide(*ax.get_figure().get_size_inches())
     #TODO: The goal is to leave the data in order, but it should be less hacky
     handles[:] = reversed(handles)
@@ -52,9 +54,8 @@ def makeStackPlotWithRatio(histInfo, stackedProcs, label="nominal", unstacked=No
     stack = [action(histInfo[k][label][select]) for k in stackedProcs if histInfo[k][label]]
     colors = [histInfo[k]["color"] for k in stackedProcs if histInfo[k][label]]
     labels = [histInfo[k]["label"] for k in stackedProcs if histInfo[k][label]]
-
-    fig, ax1, ax2 = figureWithRatio(stack[0], xlabel, ylabel, [0, scale], "Data/Pred.", rrange)
-            
+    fig, ax1, ax2 = figureWithRatio(stack[0], xlabel, ylabel, [0, ymax] if ymax else None, "Data/Pred.", rrange, xlim=xlim)
+    
     hep.histplot(
         stack,
         histtype="fill",
