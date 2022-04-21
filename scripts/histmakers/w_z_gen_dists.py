@@ -1,10 +1,13 @@
 import argparse
+from wremnants import theory_tools
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--nThreads", type=int, help="number of threads", default=None)
 parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
 parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=["Wplus", "Wminus", "Zmumu", "Ztautau"])
 parser.add_argument("--pdfs", type=str, nargs="*", default=["nnpdf31"], choices=theory_tools.pdfMap.keys(), help="PDF sets to produce error hists for")
+#parser.add_argument(
+#    "--samples
 args = parser.parse_args()
 
 import ROOT
@@ -16,7 +19,6 @@ elif args.nThreads != 1:
 
 import pickle
 import gzip
-from wremnants import theory_tools
 import narf
 import wremnants
 import hist
@@ -88,31 +90,20 @@ def build_graph(df, dataset):
             df = df.Define("weight", "std::copysign(1.0, genWeight)")
     weightsum = df.SumAndCount("weight")
 
-    df = df.Define("nominal_weight", "std::copysign(1.0, genWeight)")
+    weightsum = df.SumAndCount("weight")
 
-    weightsum = df.SumAndCount("nominal_weight")
-
-    df = theory_tools.define_prefsr_vars(df)
     df = theory_tools.define_scale_tensor(df)
 
     if dataset.name in zprocs:
         nominal_axes = [axis_massZgen, axis_absYVgen, axis_ptVgen, axis_chargeZgen]
-        helicity_helper = qcdScaleByHelicity_Zhelper
+#        helicity_helper = qcdScaleByHelicity_Zhelper
     else:
         nominal_axes = [axis_massWgen, axis_absYVgen, axis_ptVgen, axis_chargeWgen]
-        helicity_helper = qcdScaleByHelicity_Whelper
+#        helicity_helper = qcdScaleByHelicity_Whelper
 
     nominal_cols = ["massVgen", "absYVgen", "ptVgen", "chargeVgen"]
-    results.append(theory_tools.make_scale_hist(df, nominal_axes, nominal_cols))
-    for pdf in args.pdfs:
-        results.extend(theory_tools.define_and_make_pdf_hists(df, nominal_axes, nominal_cols, pdfset=pdf))
-
     if not dataset.is_data:
         df = wremnants.define_prefsr_vars(df)
-        df = df.Define("helicity_moments_scale_tensor", "wrem::makeHelicityMomentScaleTensor(csSineCosThetaPhi, scaleWeights_tensor, weight)")
-        helicity_moments_scale = df.HistoBoost("helicity_moments_scale", nominal_axes, [*nominal_cols, "helicity_moments_scale_tensor"], tensor_axes = [wremnants.axis_helicity, *wremnants.scale_tensor_axes])
-        results.append(helicity_moments_scale)
-
     if dataset.name == 'WplusmunuPostVFP':
         df = df.Define('ptPrefsrMuon', 'genlanti.pt()')
         df = df.Define('etaPrefsrMuon', 'genlanti.eta()')
@@ -126,6 +117,18 @@ def build_graph(df, dataset):
     if not dataset.is_data:
         nominal_gen = df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols, "weight"])
         results.append(nominal_gen)
+
+    results.append(theory_tools.make_scale_hist(df, nominal_axes, nominal_cols))
+
+    for pdf in args.pdfs:
+        results.extend(theory_tools.define_and_make_pdf_hists(df, nominal_axes, nominal_cols, pdfset=pdf))
+
+    if not dataset.is_data:
+
+        df = df.Define("helicity_moments_scale_tensor", "wrem::makeHelicityMomentScaleTensor(csSineCosThetaPhi, scaleWeights_tensor, weight)")
+        helicity_moments_scale = df.HistoBoost("helicity_moments_scale", nominal_axes, [*nominal_cols, "helicity_moments_scale_tensor"], tensor_axes = [wremnants.axis_helicity, *wremnants.scale_tensor_axes])
+        results.append(helicity_moments_scale)
+
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)

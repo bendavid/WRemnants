@@ -70,6 +70,13 @@ def getDatasets(maxFiles=-1, filt=None, mode=None):
         xsec = 11572.19,
     )
     
+    WpmunuPostVFP_bugfix = narf.Dataset(name = "WplusmunuPostVFP_bugfix",
+        filepaths = makeFilelist(
+            ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/WplusToMuNu_svn3900_BugFix_TuneCP5_13TeV-powheg-MiNNLO-pythia8-photos/RunIISummer15wmLHEGS/220307_235720/000*/*.root"], maxFiles),
+        is_data = False,
+        xsec = 11572.19,
+    )
+
     WpmunuPostVFP_bugfix_slc7 = narf.Dataset(name = "WplusmunuPostVFP_bugfix_slc7",
         filepaths = makeFilelist(
             ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/WplusToMuNu_svn3900_slc7_BugFix_TuneCP5_13TeV-powheg-MiNNLO-pythia8-photos/RunIISummer15wmLHEGS/*/*/*.root"], maxFiles),
@@ -77,7 +84,7 @@ def getDatasets(maxFiles=-1, filt=None, mode=None):
         xsec = 11572.19,
     )
 
-    WpmunuPostVFP_bugfix_rweight_h2 = narf.Dataset(name = "WplusmunuPostVFP_bugfix_reweight_h2",
+    WpmunuPostVFP_bugfix_reweight_h2 = narf.Dataset(name = "WplusmunuPostVFP_bugfix_reweight_h2",
         filepaths = makeFilelist(
             ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoAOD/WplusJetsToMuNu_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV8MCPreVFPWeightFix/220413_121251/*/*.root"], maxFiles),
         is_data = False,
@@ -179,7 +186,7 @@ def getDatasets(maxFiles=-1, filt=None, mode=None):
             return list(filter(filt, allPostVFP))
         else:
             return allPostVFP
-     else:
+    else:
         if filt:
             return list(filter(filt, allPostVFP_gen))
         else:
