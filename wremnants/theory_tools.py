@@ -41,7 +41,7 @@ def define_prefsr_vars(df):
 def define_scale_tensor(df):
     # convert vector of scale weights to 3x3 tensor and clip weights to |weight|<10.
     df = df.Define("scaleWeights_tensor", "wrem::makeScaleTensor(LHEScaleWeight, 10.);")
-    df = df.Define("scaleWeights_tensor_wnom", "auto res = scaleWeights_tensor; res = nominal_weight*res; return res;")
+    df = df.Define("scaleWeights_tensor_wnom", "auto res = scaleWeights_tensor; res = weight*res; return res;")
 
     return df
 
