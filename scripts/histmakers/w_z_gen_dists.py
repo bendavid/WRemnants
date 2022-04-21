@@ -1,30 +1,29 @@
 import argparse
-from wremnants import theory_tools
+import pickle
+import gzip
+import ROOT
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--nThreads", type=int, help="number of threads", default=None)
-parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
-parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=["Wplus", "Wminus", "Zmumu", "Ztautau"])
-parser.add_argument("--pdfs", type=str, nargs="*", default=["nnpdf31"], choices=theory_tools.pdfMap.keys(), help="PDF sets to produce error hists for")
-#parser.add_argument(
-#    "--samples
-args = parser.parse_args()
+initargs,_ = parser.parse_known_args()
 
-import ROOT
 ROOT.gInterpreter.ProcessLine(".O3")
-if not args.nThreads:
+if not initargs.nThreads:
     ROOT.ROOT.EnableImplicitMT()
-elif args.nThreads != 1:
-    ROOT.ROOT.EnableImplicitMT(args.nThreads)
-
-import pickle
-import gzip
+elif init.args.nThreads != 1:
+    ROOT.ROOT.EnableImplicitMT(initargs.nThreads)
 import narf
 import wremnants
+from wremnants import theory_tools
 import hist
 import lz4.frame
 import logging
 import math
+
+parser.add_argument("--pdfs", type=str, nargs="*", default=["nnpdf31"], choices=theory_tools.pdfMap.keys(), help="PDF sets to produce error hists for")
+parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
+parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=["Wplus", "Wminus", "Zmumu", "Ztautau"])
+args = parser.parse_args()
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, mode="gen")

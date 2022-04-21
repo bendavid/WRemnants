@@ -21,9 +21,12 @@ class datagroups(object):
 
         if self.datasets:
             self.data = [x for x in self.datasets.values() if x.is_data]
+            if self.data:
+                self.lumi = sum([self.results[x.name]["lumi"] for x in self.data if x.name in self.results])
 
         self.groups = {}
-        self.lumi = 1 if not self.results else sum([self.results[x.name]["lumi"] for x in self.data if x.name in self.results])
+        if not self.lumi:
+            self.lumi = 1
         self.nominalName = "nominal"
 
     def processScaleFactor(self, proc):
@@ -93,6 +96,13 @@ class datagroups(object):
 
     def getDatagroups(self):
         return self.groups
+
+    def getDatagroupsForHist(self, histName):
+        filled = {}
+        for k, v in self.groups.items():
+            if histName in v:
+                filled[k] = v
+        return filled
 
     def resultsDict(self):
         return self.results

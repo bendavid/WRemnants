@@ -1,6 +1,7 @@
 import ROOT
 import hist
 import numpy as np
+from wremnants import boostHistHelpers as hh
 
 ROOT.gInterpreter.Declare('#include "theoryTools.h"')
 
@@ -19,11 +20,41 @@ axis_muFfact = hist.axis.Variable(
 
 scale_tensor_axes = (axis_muRfact, axis_muFfact)
 
-pdfMap = {"nnpdf31" : {
+pdfMap = {
+        "nnpdf31" : {
             "name" : "pdfNNPDF31",
             "branch" : "LHEPdfWeight",
-            },
-        }
+            "combine" : "symHessian",
+            "entries" : 101,
+            "alphas" : ["LHEPdfWeight[101]", "LHEPdfWeight[102]"],
+        },
+        "ct18" : {
+            # This has CT18 + CT18Z in it :-/
+            "name" : "pdfCT18",
+            "branch" : "LHEPdfWeightAltSet18",
+            "combine" : "asymHessian",
+            "entries" : 58,
+            "alphas" : ["LHEPdfWeightAltSet18[59]", "LHEPdfWeightAltSet18[60]"],
+			"alphaRange" : "002",
+        },
+        "mmht" : {
+            "name" : "pdfMMHT",
+            "branch" : "LHEPdfWeightAltSet19",
+            "combine" : "asymHessian",
+            "entries" : 51,
+        	"alphas" : ["LHEPdfWeightAltSet20[1]", "LHEPdfWeightAltSet20[2]"],
+			"alphaRange" : "001",
+        },
+		"nnpdf30" : {
+			"name" : "pdfNNPDF30",
+			"branch" : "LHEPdfWeightAltSet13",
+			"nhessian" : 100,
+			"onlyW" : True,
+			"truncate" : False,
+			"alphas" : ["LHEPdfWeightAltSet15[0]", "LHEPdfWeightAltSet16[0]"],
+			"alphaRange" : "001",
+		},
+}
 
 def define_prefsr_vars(df):
     df = df.Define("prefsrLeps", "wrem::prefsrLeptons(GenPart_status, GenPart_statusFlags, GenPart_pdgId, GenPart_genPartIdxMother)")
@@ -50,21 +81,23 @@ def make_scale_hist(df, axes, cols):
     return scaleHist
 
 def define_and_make_pdf_hists(df, axes, cols, pdfset="nnpdf31"):
-    # slice 101 elements starting from 0 and clip values at += 10.0
-    pdfName = pdfMap[pdfset]["name"]
-    pdfBranch = pdfMap[pdfset]["branch"]
+    pdfInfo = pdfMap[pdfset]
+    pdfName = pdfInfo["name"]
+    pdfBranch = pdfInfo["branch"]
     tensorName = f"{pdfName}Weights_tensor"
     tensorASName = f"{pdfName}ASWeights_tensor"
+    entries = pdfInfo["entries"]
 
-    df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, 101>({pdfBranch}), 10.); res = nominal_weight*res; return res;")
+    df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, {entries}>({pdfBranch}), 10.); res = nominal_weight*res; return res;")
     pdfHist= df.HistoBoost(pdfName, axes, [*cols, tensorName])
 
-    # slice 2 elements starting from 101
-    df = df.Define(tensorASName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, 2>({pdfBranch}, 101), 10.); res = nominal_weight*res; return res;")
+    df = df.Define(tensorASName, "Eigen::TensorFixedSize<double, Eigen::Sizes<2>> res; "
+            f"res(0) = {pdfInfo['alphas'][0]}; "
+            f"res(1) = {pdfInfo['alphas'][1]}; "
+            "return wrem::clip_tensor(res, 10.)")
     alphaSHist = df.HistoBoost(f"alphaS002{pdfName}", axes, [*cols, tensorASName])
 
     return pdfHist, alphaSHist
-
 
 def define_scetlib_corr(df, weight_expr, helper):
     df = df.Define("nominal_weight_uncorr", weight_expr)
@@ -151,3 +184,30 @@ def pdfNames(cardTool, pdf, skipFirst=True):
         names[size*2-1] = ""
     return names
 
+def pdfSymmetricShifts(hdiff, axis_name):
+    sq = hh.multiplyHists(hdiff, hdiff)
+    ss = sq[{axis_name : hist.sum}]
+    rss = hh.sqrtHist(ss)
+    return rss, rss
+
+def pdfAsymmetricShifts(hdiff, axis_name):
+    # Assuming that the last axis is the syst axis
+    # TODO: add some check to verify this
+    def shiftHist(vals, varis, hdiff, axis_name):
+        hnew = hdiff.copy()[{axis_name : hist.sum}]
+        vals, varis = hh.multiplyWithVariance(vals, vals, varis, varis)
+        ss = np.stack((np.sum(vals, axis=-1), np.sum(varis, axis=-1)), axis=-1)
+        hnew[...] = ss
+        return hh.sqrtHist(hnew)
+
+    upshift = shiftHist(hdiff.values()[...,1::2], hdiff.variances()[...,1::2], hdiff, axis_name)
+    downshift = shiftHist(hdiff.values()[...,2::2], hdiff.variances()[...,2::2], hdiff, axis_name)
+    return upshift, downshift
+
+def hessianPdfUnc(h, axis_name="tensor_axis_0", symmetric=True, scale=1.):
+    diff = hh.addHists(h, -1*h[{axis_name : 0}])*scale
+    shiftFunc = pdfSymmetricShifts if symmetric else pdfAsymmetricShifts
+    rssUp, rssDown = shiftFunc(diff, axis_name)
+    hUp = hh.addHists(h[{axis_name : 0}], rssUp)
+    hDown = hh.addHists(h[{axis_name : 0}], -1*rssDown)
+    return hUp, hDown
