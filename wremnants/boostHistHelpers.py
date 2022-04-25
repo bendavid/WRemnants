@@ -22,12 +22,12 @@ def broadcastOutHist(h1, h2):
 
 def divideHists(h1, h2, cutoff=1, allowBroadcast=True):
     h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2, allowBroadcast)
-   
     # To get the broadcast shape right
     outh = h1 if not allowBroadcast else broadcastOutHist(h1, h2)
     # By the argument that 0/0 = 1
     out = np.ones_like(h2vals)
-    val = np.divide(h1vals, h2vals, out=out, where=(np.abs(h2vals)>cutoff) & (np.abs(h1vals)>cutoff))
+    out[np.abs(h2vals) < cutoff] = 1.
+    val = np.divide(h1vals, h2vals, out=out, where=((np.abs(h2vals)>cutoff) & (np.abs(h1vals)>cutoff)))
     relvars = relVariances(h1vals, h2vals, h1vars, h2vars)
     var = val*sum(relVariances(h1vals, h2vals, h1vars, h2vars))
     var *= val
@@ -90,6 +90,16 @@ def clipNegativeVals(h):
     vals = h.values(flow=True)
     vals[vals<0] = 0
     hnew[...] = np.stack((vals, h.variances(flow=True)), axis=-1)
+    return hnew
+
+def makeAbsHist(h, axis_name):
+    ax = h.axes[axis_name]
+    axidx = list(h.axes).index(ax)
+    abs_ax = hist.axis.Variable(ax.edges[ax.index(0.):], name=axis_name)
+    hnew = hist.Hist(*h.axes[:axidx], abs_ax, *h.axes[axidx+1:], storage=hist.storage.Weight())
+    
+    s = hist.tag.Slicer()
+    hnew[...] = h[{axis_name : s[ax.index(0):]}].view() + np.flip(h[{axis_name : s[:ax.index(0)]}].view(), axis=axidx)
     return hnew
 
 def makeAbsHist(h, axis_name):
