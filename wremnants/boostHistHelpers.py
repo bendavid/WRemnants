@@ -47,8 +47,8 @@ def relVariances(h1vals, h2vals, h1vars, h2vars):
     return (rel1, rel2)
 
 def sqrtHist(h):
-    rootval = np.sqrt(h.values())
-    relvar = relVariance(h.values(), h.variances())
+    rootval = np.sqrt(h.values(flow=True))
+    relvar = relVariance(h.values(flow=True), h.variances(flow=True))
     newvar = 0.5*rootval*rootval*relvar
     rooth = h.copy()
     rooth[...] = np.stack((rootval, newvar), axis=-1)
