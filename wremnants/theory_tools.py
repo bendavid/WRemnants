@@ -41,7 +41,7 @@ def define_prefsr_vars(df):
 def define_scale_tensor(df):
     # convert vector of scale weights to 3x3 tensor and clip weights to |weight|<10.
     df = df.Define("scaleWeights_tensor", "wrem::makeScaleTensor(LHEScaleWeight, 10.);")
-    df = df.Define("scaleWeights_tensor_wnom", "auto res = scaleWeights_tensor; res = nominal_weight*res; return res;")
+    df = df.Define("scaleWeights_tensor_wnom", "auto res = scaleWeights_tensor; res = weight*res; return res;")
 
     return df
 
@@ -88,7 +88,7 @@ def moments_to_angular_coeffs(hist_moments_scales):
     # replace zero values to avoid warnings
     norm_vals = np.where( vals==0., 1., vals)
 
-    # e.g. from arxiv:1708.00008 eq. 2.13
+    # e.g. from arxiv:1708.00008 eq. 2.13, note A_0 is NOT the const term!
     offsets = np.array([0., 4., 0., 0., 0., 0., 0., 0., 0.])
     scales = np.array([1., -10., 5., 10., 4., 4., 5., 5., 4.])
 

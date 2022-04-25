@@ -65,7 +65,7 @@ class datagroupsLowPU(datagroups):
         if proc.is_data:
             return 1
         return self.lumi
-
+        
     def histName(self, baseName, proc, syst):
         if proc in ["WplusJetsToMuNu", "WminusJetsToMuNu"] and "gen" not in baseName:
             baseName = baseName.replace("reco", "gen_reco")
@@ -81,7 +81,6 @@ class datagroupsLowPU(datagroups):
             axisNames = ["qTreco", "qTgen", "iso", "charge", "mt"]
         if syst != "nominal":
             axisNames.append("systAx")
-
         rthist = self.rtfile.Get(readname)
         if not rthist:
             raise ValueError(f"Histogram {readname} not found for process {proc.name}")
