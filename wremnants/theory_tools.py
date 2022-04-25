@@ -1,7 +1,9 @@
 import ROOT
 import hist
 import numpy as np
+import copy
 from wremnants import boostHistHelpers as hh
+import logging
 
 ROOT.gInterpreter.Declare('#include "theoryTools.h"')
 
@@ -56,6 +58,57 @@ pdfMap = {
 		},
 }
 
+pdfMapExtended = copy.deepcopy(pdfMap)
+pdfMapExtended["ct18"]["branch"] = "LHEPdfWeightAltSet11"
+pdfMapExtended["ct18"]["alphas"] = ["LHEPdfWeightAltSet11[59]", "LHEPdfWeightAltSet11[62]"]
+pdfMapExtended["mmht"]["branch"] = "LHEPdfWeightAltSet13"
+pdfMapExtended["mmht"]["alphas"] = ["LHEPdfWeightAltSet14[1]", "LHEPdfWeightAltSet14[2]"]
+pdfMapExtended.update({
+    "nnpdf40" : {
+        "name" : "pdfNNPDF40",
+        "branch" : "LHEPdfWeightAltSet3",
+        "combine" : "symHessian",
+        "entries" : 53,
+        "alphas" : ["LHEPdfWeightAltSet3[51]", "LHEPdfWeightAltSet3[52]"],
+        "alphasRange" : "002", # TODO: IS that true?
+    },
+    "pdf4lhc21" : {
+        "name" : "pdfPDF4LHC21",
+        "branch" : "LHEPdfWeightAltSet10",
+        "combine" : "symHessian",
+        "entries" : 41,
+        "alphas" : ["LHEPdfWeightAltSet10[41]", "LHEPdfWeightAltSet10[42]"],
+        "alphasRange" : "002", # TODO: IS that true?
+    },
+    "msht20" : {
+        "name" : "pdfMSHT20",
+        "branch" : "LHEPdfWeightAltSet12",
+        "combine" : "symHessian",
+        "entries" : 51,
+        "alphas" : ["LHEPdfWeight[51]", "LHEPdfWeightAltSet12[52]"],
+        "alphasRange" : "002", # TODO: IS that true?
+    },
+    "atlasWZj20" : {
+        "name" : "pdfATLASWZJ20",
+        "branch" : "LHEPdfWeightAltSet19",
+        "combine" : "symHessian",
+        "entries" : 33,
+        "alphas" : ["LHEPdfWeight[41]", "LHEPdfWeight[42]"],
+        "alphasRange" : "002", # TODO: IS that true?
+    },
+
+
+})
+
+only_central_pdf_datasets = [
+    "Wplusmunu_bugfix",
+    "Wminusmunu_bugfix",
+]
+
+extended_pdf_datasets = [
+    "Wminusmunu_bugfix_newprod"
+]
+
 def define_prefsr_vars(df):
     df = df.Define("prefsrLeps", "wrem::prefsrLeptons(GenPart_status, GenPart_statusFlags, GenPart_pdgId, GenPart_genPartIdxMother)")
     df = df.Define("genl", "ROOT::Math::PtEtaPhiMVector(GenPart_pt[prefsrLeps[0]], GenPart_eta[prefsrLeps[0]], GenPart_phi[prefsrLeps[0]], GenPart_mass[prefsrLeps[0]])")
@@ -72,7 +125,7 @@ def define_prefsr_vars(df):
 def define_scale_tensor(df):
     # convert vector of scale weights to 3x3 tensor and clip weights to |weight|<10.
     df = df.Define("scaleWeights_tensor", "wrem::makeScaleTensor(LHEScaleWeight, 10.);")
-    df = df.Define("scaleWeights_tensor_wnom", "auto res = scaleWeights_tensor; res = weight*res; return res;")
+    df = df.Define("scaleWeights_tensor_wnom", "auto res = scaleWeights_tensor; res = nominal_weight*res; return res;")
 
     return df
 
@@ -80,8 +133,13 @@ def make_scale_hist(df, axes, cols):
     scaleHist = df.HistoBoost("qcdScale", axes, [*cols, "scaleWeights_tensor_wnom"], tensor_axes=scale_tensor_axes)
     return scaleHist
 
-def define_and_make_pdf_hists(df, axes, cols, pdfset="nnpdf31"):
-    pdfInfo = pdfMap[pdfset]
+def define_and_make_pdf_hists(df, axes, cols, dataset, pdfset="nnpdf31"):
+    infoMap = pdfMap if dataset not in extended_pdf_datasets else pdfMapExtended
+
+    if (pdfset != "nnpdf31" and dataset in only_central_pdf_datasets) or pdfset not in infoMap:
+        logging.info(f"Skipping PDF {pdfset} for dataset {dataset}")
+        return []
+    pdfInfo = infoMap[pdfset]
     pdfName = pdfInfo["name"]
     pdfBranch = pdfInfo["branch"]
     tensorName = f"{pdfName}Weights_tensor"
@@ -200,8 +258,8 @@ def pdfAsymmetricShifts(hdiff, axis_name):
         hnew[...] = ss
         return hh.sqrtHist(hnew)
 
-    upshift = shiftHist(hdiff.values()[...,1::2], hdiff.variances()[...,1::2], hdiff, axis_name)
-    downshift = shiftHist(hdiff.values()[...,2::2], hdiff.variances()[...,2::2], hdiff, axis_name)
+    upshift = shiftHist(hdiff.values(flow=True)[...,1::2], hdiff.variances(flow=True)[...,1::2], hdiff, axis_name)
+    downshift = shiftHist(hdiff.values(flow=True)[...,2::2], hdiff.variances(flow=True)[...,2::2], hdiff, axis_name)
     return upshift, downshift
 
 def hessianPdfUnc(h, axis_name="tensor_axis_0", symmetric=True, scale=1.):
