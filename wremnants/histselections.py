@@ -36,6 +36,9 @@ def signalHistLowPileupW(h):
         return h[{"iso" : 0}]
     s = hist.tag.Slicer()
     return h[{"iso" : 0, "qTgen" : s[::hist.sum]}]
+    
+def signalHistLowPileupZ(h):
+    return h
 
 def unrolledHist(h, obs=["pt", "eta"]):
     bins = np.multiply(*[a.size for a in h.axes[:2]])
