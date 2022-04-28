@@ -255,7 +255,7 @@ class datagroupsLowPU_Z_old(datagroups):
         if proc.is_data:
             return 1
         return self.lumi
-
+        
     def histName(self, baseName, proc, syst):
         if proc in ["DYmumu_MiNNLO"] and "gen" not in baseName:
             baseName = baseName.replace("reco", "gen_reco") # m_reco --> m_gen_reco
@@ -290,7 +290,7 @@ m_recoilunc_stat_nom_para_data_m1   : qTBinGen::qTBinReco_para_data_m1::m_ll::Re
 
         if syst != "nominal":
             axisNames.append("systAx")
-            
+
         rthist = self.rtfile.Get(readname)
         if not rthist:
             raise ValueError(f"Histogram {readname} not found for process {proc.name}")

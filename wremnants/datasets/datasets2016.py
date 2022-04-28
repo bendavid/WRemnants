@@ -14,7 +14,7 @@ def makeFilelist(paths, maxFiles=-1, eos=False):
         filelist.extend(glob.glob(path) if not eos else buildXrdFileList(path, "eoscms.cern.ch"))
     return filelist if maxFiles < 0 else filelist[:maxFiles]
 
-def getDatasets(maxFiles=-1, filt=None):
+def getDatasets(maxFiles=-1, filt=None, mode=None):
     dataPostVFP = narf.Dataset(name = "dataPostVFP",
         filepaths = makeFilelist(["/scratch/shared/NanoAOD/TrackRefitv1/SingleMuon/Run2016F_postVFP_220223_222034/*/*.root",
             "/scratch/shared/NanoAOD/TrackRefitv1/SingleMuon/Run2016G_220223_222128/*/*.root",
@@ -28,6 +28,27 @@ def getDatasets(maxFiles=-1, filt=None):
     ZmmPostVFP = narf.Dataset(name = "ZmumuPostVFP",
         filepaths = makeFilelist(
             ["/scratch/shared/NanoAOD/TrackRefitv1/DYJetsToMuMu_M-50_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV8MCPostVFPWeightFix/*/*/*.root"], maxFiles),
+        is_data = False,
+        xsec = 1976.1,
+    )
+
+    ZmmPostVFP_bugfix = narf.Dataset(name = "ZmumuPostVFP_bugfix",
+        filepaths = makeFilelist(
+            ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/DYJetsToMuMu_svn3900_BugFix_TuneCP5_13TeV-powheg-MiNNLO-pythia8-photos/RunIISummer15wmLHEGS/*/*/*.root"], maxFiles),
+        is_data = False,
+        xsec = 1976.1,
+    )
+
+    ZmmPostVFP_bugfix_slc7 = narf.Dataset(name = "ZmumuPostVFP_bugfix_slc7",
+        filepaths = makeFilelist(
+            ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/DYJetsToMuMu_svn3900_slc7_BugFix_TuneCP5_13TeV-powheg-MiNNLO-pythia8-photos/RunIISummer15wmLHEGS/*/*/*.root"], maxFiles),
+        is_data = False,
+        xsec = 1976.1,
+    )
+
+    ZmmPostVFP_bugfix = narf.Dataset(name = "ZmumuPostVFP_bugfix",
+        filepaths = makeFilelist(
+            ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/DYJetsToMuMu_svn3900_BugFix_TuneCP5_13TeV-powheg-MiNNLO-pythia8-photos/RunIISummer15wmLHEGS/*/*/*.root"], maxFiles),
         is_data = False,
         xsec = 1976.1,
     )
@@ -49,9 +70,44 @@ def getDatasets(maxFiles=-1, filt=None):
         xsec = 11572.19,
     )
     
+    WpmunuPostVFP_bugfix = narf.Dataset(name = "WplusmunuPostVFP_bugfix",
+        filepaths = makeFilelist(
+            ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/WplusToMuNu_svn3900_BugFix_TuneCP5_13TeV-powheg-MiNNLO-pythia8-photos/RunIISummer15wmLHEGS/220307_235720/000*/*.root"], maxFiles),
+        is_data = False,
+        xsec = 11572.19,
+    )
+
+    WpmunuPostVFP_bugfix_slc7 = narf.Dataset(name = "WplusmunuPostVFP_bugfix_slc7",
+        filepaths = makeFilelist(
+            ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/WplusToMuNu_svn3900_slc7_BugFix_TuneCP5_13TeV-powheg-MiNNLO-pythia8-photos/RunIISummer15wmLHEGS/*/*/*.root"], maxFiles),
+        is_data = False,
+        xsec = 11572.19,
+    )
+
+    WpmunuPostVFP_bugfix_reweight_h2 = narf.Dataset(name = "WplusmunuPostVFP_bugfix_reweight_h2",
+        filepaths = makeFilelist(
+            ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoAOD/WplusJetsToMuNu_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV8MCPreVFPWeightFix/220413_121251/*/*.root"], maxFiles),
+        is_data = False,
+        xsec = 11572.19,
+    )
     WmmunuPostVFP = narf.Dataset(name = "WminusmunuPostVFP",
         filepaths = makeFilelist(
-                ["/scratch/shared/NanoAOD/TrackRefitv1/WminusJetsToMuNu_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV8MCPostVFPWeightFix/*/*/*.root"], maxFiles),
+            ["/scratch/shared/NanoAOD/TrackRefitv1/WminusJetsToMuNu_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV8MCPostVFPWeightFix/*/*/*.root"], maxFiles),
+            is_data = False,
+            xsec = 8562.66,
+    )
+
+    WmmunuPostVFP_bugfix = narf.Dataset(name = "WminusmunuPostVFP_bugfix",
+        filepaths = makeFilelist(
+            ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/WminusToMuNu_svn3900_BugFix_TuneCP5_13TeV-powheg-MiNNLO-pythia8-photos/RunIISummer15wmLHEGS/220307_235846/000*/*.root"], maxFiles),
+            is_data = False,
+            xsec = 8562.66,
+    )
+
+    WmmunuPostVFP_bugfix_slc7 = narf.Dataset(name = "WminusmunuPostVFP_bugfix_slc7",
+        filepaths = makeFilelist(
+#            ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/WminusToMuNu_svn3900_BugFix_TuneCP5_13TeV-powheg-MiNNLO-pythia8-photos/RunIISummer15wmLHEGS/220405_221010/000*/*.root"], maxFiles),
+            ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/WminusToMuNu_svn3900_slc7_BugFix_TuneCP5_13TeV-powheg-MiNNLO-pythia8-photos/RunIISummer15wmLHEGS/220408_235902/*/*.root"], maxFiles),
             is_data = False,
             xsec = 8562.66,
     )
@@ -92,13 +148,49 @@ def getDatasets(maxFiles=-1, filt=None):
             xsec = 75.8,
     )
 
-    allPostVFP = [dataPostVFP, WpmunuPostVFP, WmmunuPostVFP, WptaunuPostVFP, WmtaunuPostVFP, ZmmPostVFP, 
-        ZttPostVFP, ttbarlnuPostVFP, ttbarlqPostVFP, wwPostVFP]
+    allPostVFP = [
+        dataPostVFP, 
+        WpmunuPostVFP,
+        WmmunuPostVFP,
+        WptaunuPostVFP,
+        WmtaunuPostVFP,
+        ZmmPostVFP,
+        ZttPostVFP,
+        ttbarlnuPostVFP,
+        ttbarlqPostVFP,
+        wwPostVFP
+    ]
 
-    if filt:
-        return list(filter(filt, allPostVFP))
+    allPostVFP_gen = [
+        dataPostVFP,
+        WpmunuPostVFP,
+        WmmunuPostVFP,
+        WpmunuPostVFP_bugfix,
+        WmmunuPostVFP_bugfix,
+        WmmunuPostVFP_bugfix_slc7,
+        WpmunuPostVFP_bugfix_slc7,
+        WpmunuPostVFP_bugfix_reweight_h2,
+        WptaunuPostVFP,
+        WmtaunuPostVFP,
+        ZmmPostVFP,
+        ZmmPostVFP_bugfix,
+        ZmmPostVFP_bugfix_slc7,
+        ZttPostVFP,
+        ttbarlnuPostVFP,
+        ttbarlqPostVFP,
+        wwPostVFP
+    ]
 
-    return allPostVFP
+    if mode != "gen":
+        if filt:
+            return list(filter(filt, allPostVFP))
+        else:
+            return allPostVFP
+    else:
+        if filt:
+            return list(filter(filt, allPostVFP_gen))
+        else:
+            return allPostVFP_gen
 
 def buildXrdFileList(path, xrd):
     xrdpath = path[path.find('/store'):]
