@@ -23,7 +23,7 @@ class datagroups(object):
             self.data = [x for x in self.datasets.values() if x.is_data]
 
         self.groups = {}
-        self.lumi = 1 if not self.results else sum([self.results[x.name]["lumi"] for x in self.data if x.name in self.results])
+        #self.lumi = 1 if not self.results else sum([self.results[x.name]["lumi"] for x in self.data if x.name in self.results])
         self.nominalName = "nominal"
 
     def processScaleFactor(self, proc):
