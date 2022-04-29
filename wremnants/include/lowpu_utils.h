@@ -21,7 +21,7 @@ Vec_i inverse(Vec_b tag) {
 }
 
 
-Vec_i hasTriggerMatch_(const Vec_f& eta, const Vec_f& phi, const Vec_f& TrigObj_eta, const Vec_f& TrigObj_phi) {
+Vec_i hasTriggerMatchLowPU(const Vec_f& eta, const Vec_f& phi, const Vec_f& TrigObj_eta, const Vec_f& TrigObj_phi) {
 
    Vec_i res(eta.size(),0); // initialize to 0
    for (unsigned int i = 0; i < res.size(); ++i) {
