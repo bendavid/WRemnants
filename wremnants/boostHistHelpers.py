@@ -35,19 +35,33 @@ def divideHists(h1, h2, cutoff=1, allowBroadcast=True):
             data=np.stack((val, var), axis=-1))
     return newh
 
+def relVariance(hvals, hvars, cutoff=1e-3):
+    nonzero = np.abs(hvals) > cutoff
+    out = np.copy(hvars)
+    np.divide(hvars, hvals*hvals, out=out, where=nonzero),
+    return out
+
 def relVariances(h1vals, h2vals, h1vars, h2vars):
-    h1nonzero = np.abs(h1vals) > 1e-3
-    h2nonzero = np.abs(h2vals) > 1e-3
-    rel1 = np.divide(np.divide(h1vars, h1vals, out=np.zeros_like(h1vals), where=h1nonzero),
-            h1vals, out=np.zeros_like(h1vals), where=h1nonzero)
-    rel2 = np.divide(np.divide(h2vars, h2vals, out=np.zeros_like(h2vals), where=h2nonzero), 
-            h2vals, out=np.zeros_like(h2vals), where=h2nonzero)
+    rel1 = relVariance(h1vals, h1vars)
+    rel2 = relVariance(h2vals, h2vars)
     return (rel1, rel2)
+
+def sqrtHist(h):
+    rootval = np.sqrt(h.values(flow=True))
+    relvar = relVariance(h.values(flow=True), h.variances(flow=True))
+    newvar = 0.5*rootval*rootval*relvar
+    rooth = h.copy()
+    rooth[...] = np.stack((rootval, newvar), axis=-1)
+    return rooth
+
+def multiplyWithVariance(vals1, vals2, vars1, vars2):
+    val = vals1*vals2
+    var = val*val*sum(relVariances(vals1, vals2, vars1, vars2))
+    return val, var
 
 def multiplyHists(h1, h2, allowBroadcast=True):
     h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2, allowBroadcast)
-    val = h1vals*h2vals
-    var = val*val*sum(relVariances(h1vals, h2vals, h1vars, h2vars))
+    val,var = multiplyWithVariance(h1vals, h2vals, h1vars, h2vars)
 
     outh = h1 if not allowBroadcast else broadcastOutHist(h1, h2)
     newh = hist.Hist(*outh.axes, storage=hist.storage.Weight(),
