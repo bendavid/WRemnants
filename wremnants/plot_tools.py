@@ -91,7 +91,8 @@ def makeStackPlotWithRatio(histInfo, stackedProcs, label="nominal", unstacked=No
     return fig
 
 def makePlotWithRatioToRef(hists, labels, colors, xlabel="", ylabel="Events/bin", rlabel="bugfix/bugged",
-                rrange=[0.9, 1.1], ymax=None, xlim=None, nlegcols=2, binwnorm=None, baseline=None, autorrange=None):
+                rrange=[0.9, 1.1], ymax=None, xlim=None, nlegcols=2, binwnorm=None, alpha=1.,
+                baseline=None, autorrange=None):
     if baseline:
         ratio_plots_starting_idx = 0
     else:
@@ -107,6 +108,7 @@ def makePlotWithRatioToRef(hists, labels, colors, xlabel="", ylabel="Events/bin"
         stack=False,
         ax=ax1,
         binwnorm=binwnorm,
+        alpha=alpha,
     )
     
     if len(hists) > 1:
@@ -118,6 +120,7 @@ def makePlotWithRatioToRef(hists, labels, colors, xlabel="", ylabel="Events/bin"
             yerr=False,
             stack=False,
             ax=ax2,
+            alpha=alpha,
         )
         
     addLegend(ax1, nlegcols)
