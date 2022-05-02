@@ -4,8 +4,13 @@ import gzip
 import ROOT
 parser = argparse.ArgumentParser()
 parser.add_argument("-j", "--nThreads", type=int, help="number of threads", default=None)
+parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
+parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
 parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
 parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=None)
+parser.add_argument("--noMuonCorr", action="store_true", help="Don't use corrected pt-eta-phi-charge")
+parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency and prefiring")
+parser.add_argument("--noScetlibCorr", dest="applyScetlibCorr", action="store_false", help="Don't use Scetlib corrections")
 args = parser.parse_args()
 
 ROOT.gInterpreter.ProcessLine(".O3")
@@ -24,7 +29,10 @@ import logging
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None)
 
-era = "2016PostVFP"
+era = args.era
+noMuonCorr = args.noMuonCorr
+applyScetlibCorr = args.applyScetlibCorr
+noScaleFactors = args.noScaleFactors 
 
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 scetlibCorrZ_helper = wremnants.makeScetlibCorrHelper(isW=False)
@@ -82,20 +90,26 @@ def build_graph(df, dataset):
 
     isW = dataset.name in wprocs
     isZ = dataset.name in zprocs
-    if dataset.is_data:
-        #TODO corrections not available for data yet
-        df = df.Alias("Muon_correctedPt", "Muon_cvhbsPt")
-        df = df.Alias("Muon_correctedEta", "Muon_cvhbsEta")
-        df = df.Alias("Muon_correctedPhi", "Muon_cvhbsPhi")
-        df = df.Alias("Muon_correctedCharge", "Muon_cvhbsCharge")
-    elif isW or isZ:
-        df = wremnants.define_corrected_muons(df, calibration_helper)
-    else:
-        # no track refit available for background monte carlo samples and this is "good enough"
+    if noMuonCorr:
         df = df.Alias("Muon_correctedPt", "Muon_pt")
         df = df.Alias("Muon_correctedEta", "Muon_eta")
         df = df.Alias("Muon_correctedPhi", "Muon_phi")
         df = df.Alias("Muon_correctedCharge", "Muon_charge")
+    else:
+        if dataset.is_data:
+            #TODO corrections not available for data yet
+            df = df.Alias("Muon_correctedPt", "Muon_cvhbsPt")
+            df = df.Alias("Muon_correctedEta", "Muon_cvhbsEta")
+            df = df.Alias("Muon_correctedPhi", "Muon_cvhbsPhi")
+            df = df.Alias("Muon_correctedCharge", "Muon_cvhbsCharge")
+        elif isW or isZ:
+            df = wremnants.define_corrected_muons(df, calibration_helper)
+        else:
+            # no track refit available for background monte carlo samples and this is "good enough"
+            df = df.Alias("Muon_correctedPt", "Muon_pt")
+            df = df.Alias("Muon_correctedEta", "Muon_eta")
+            df = df.Alias("Muon_correctedPhi", "Muon_phi")
+            df = df.Alias("Muon_correctedCharge", "Muon_charge")
 
     # n.b. charge = -99 is a placeholder for invalid track refit/corrections (mostly just from tracks below
     # the pt threshold of 8 GeV in the nano production)
@@ -140,8 +154,10 @@ def build_graph(df, dataset):
         df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0", "passIso"])
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId"])
 
-        applyScetlibCorr = False
-        weight_expr = "weight*weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF"
+        weight_expr = "weight*weight_pu*weight_newMuonPrefiringSF"
+        if not noScaleFactors:
+            weight_expr += "*weight_fullMuonSF_withTrackingReco"
+        
         if isW or isZ:
             df = wremnants.define_prefsr_vars(df)
             if applyScetlibCorr:
@@ -247,6 +263,8 @@ def build_graph(df, dataset):
 resultdict = narf.build_and_run(datasets, build_graph)
 
 fname = "mw_with_mu_eta_pt.pkl.lz4"
+if args.postfix:
+    fname = fname.replace(".pkl.lz4", f"_{args.postfix}.pkl.lz4")
 
 print("writing output")
 with lz4.frame.open(fname, "wb") as f:
