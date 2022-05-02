@@ -14,7 +14,7 @@ def makeFilelist(paths, maxFiles=-1, eos=False):
         filelist.extend(glob.glob(path) if not eos else buildXrdFileList(path, "eoscms.cern.ch"))
     return filelist if maxFiles < 0 else filelist[:maxFiles]
 
-def getDatasets(maxFiles=-1, filt=None):
+def getDatasets(maxFiles=-1, filt=None, mode=None):
     dataPostVFP = narf.Dataset(name = "dataPostVFP",
         filepaths = makeFilelist(["/scratch/shared/NanoAOD/TrackRefitv1/SingleMuon/Run2016F_postVFP_220223_222034/*/*.root",
             "/scratch/shared/NanoAOD/TrackRefitv1/SingleMuon/Run2016G_220223_222128/*/*.root",
@@ -30,6 +30,34 @@ def getDatasets(maxFiles=-1, filt=None):
             ["/scratch/shared/NanoAOD/TrackRefitv1/DYJetsToMuMu_M-50_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV8MCPostVFPWeightFix/*/*/*.root"], maxFiles),
         is_data = False,
         xsec = 1976.1,
+    )
+
+    Zmm_bugfix = narf.Dataset(name = "Zmumu_bugfix",
+        filepaths = makeFilelist(
+            ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/DYJetsToMuMu_svn3900_BugFix_TuneCP5_13TeV-powheg-MiNNLO-pythia8-photos/RunIISummer15wmLHEGS/*/*/*.root"], maxFiles),
+        is_data = False,
+        xsec = 2001.9,
+    )
+
+    Zmm_bugfix_newprod = narf.Dataset(name = "Zmumu_newprod",
+        filepaths = makeFilelist(
+            ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/DYJetsToMuMu_svn3900_newprod_BugFix_TuneCP5_13TeV-powheg-MiNNLO-pythia8-photos/*/*/*/*.root"], maxFiles),
+        is_data = False,
+        xsec = 2001.9,
+    )
+
+    Zmm_bugfix_slc7 = narf.Dataset(name = "Zmumu_bugfix_slc7",
+        filepaths = makeFilelist(
+            ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/DYJetsToMuMu_svn3900_slc7_BugFix_TuneCP5_13TeV-powheg-MiNNLO-pythia8-photos/RunIISummer15wmLHEGS/*/*/*.root"], maxFiles),
+        is_data = False,
+        xsec = 1976.1,
+    )
+
+    Zmm_bugfix = narf.Dataset(name = "Zmumu_bugfix",
+        filepaths = makeFilelist(
+            ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/DYJetsToMuMu_svn3900_BugFix_TuneCP5_13TeV-powheg-MiNNLO-pythia8-photos/RunIISummer15wmLHEGS/*/*/*.root"], maxFiles),
+        is_data = False,
+        xsec = 2001.1,
     )
 
     BR_TAUToMU = 0.1739
@@ -49,11 +77,40 @@ def getDatasets(maxFiles=-1, filt=None):
         xsec = 11572.19,
     )
     
+    Wpmunu_bugfix = narf.Dataset(name = "Wplusmunu_bugfix",
+        filepaths = makeFilelist(
+            ["/scratch/shared/NanoGen/WplusToMuNu_svn3900_slc7_BugFix_TuneCP5_13TeV-powheg-MiNNLO-pythia8-photos/*/*.root"], maxFiles),
+        is_data = False,
+        xsec = 11765.9,
+    )
+
+    Wpmunu_bugfix_reweight_h2 = narf.Dataset(name = "Wplusmunu_bugfix_reweight_h2",
+        filepaths = makeFilelist(
+            ["/scratch/shared/NanoGen/WplusToMuNu_svn3900_slc7_ReweightToBugFix_TuneCP5_13TeV-powheg-MiNNLO-pythia8-photos/220413_121251/000*/*.root"], maxFiles),
+        is_data = False,
+        xsec = 11572.19,
+    )
+
     WmmunuPostVFP = narf.Dataset(name = "WminusmunuPostVFP",
         filepaths = makeFilelist(
-                ["/scratch/shared/NanoAOD/TrackRefitv1/WminusJetsToMuNu_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV8MCPostVFPWeightFix/*/*/*.root"], maxFiles),
+            ["/scratch/shared/NanoAOD/TrackRefitv1/WminusJetsToMuNu_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV8MCPostVFPWeightFix/*/*/*.root"], maxFiles),
             is_data = False,
             xsec = 8562.66,
+    )
+
+    Wmmunu_bugfix = narf.Dataset(name = "Wminusmunu_bugfix",
+        filepaths = makeFilelist(
+            ["/scratch/shared/NanoGen/WminusToMuNu_svn3900_BugFix_TuneCP5_13TeV-powheg-MiNNLO-pythia8-photos/*/*.root", 
+                "/scratch/shared/NanoGen/WminusToMuNu_svn3900_slc7_BugFix_TuneCP5_13TeV-powheg-MiNNLO-pythia8-photos/*/*.root"], maxFiles),
+            is_data = False,
+            xsec = 8703.87,
+    )
+
+    Wmmunu_bugfix_newprod = narf.Dataset(name = "Wminusmunu_bugfix_newprod",
+        filepaths = makeFilelist(
+            ["/scratch/shared/NanoGen//WminusToMuNu_svn3900_newprod_BugFix_TuneCP5_13TeV-powheg-MiNNLO-pythia8-photos/220421_232301/*/*.root"], maxFiles),
+            is_data = False,
+            xsec = 8703.87,
     )
 
     WptaunuPostVFP = narf.Dataset(name = "WplustaunuPostVFP",
@@ -149,10 +206,21 @@ def getDatasets(maxFiles=-1, filt=None):
                   singleTop_schanLepDecaysPostVFP, singleTop_tWAntitopPostVFP, singleTop_tchanAntitopPostVFP, singleTop_tchanTopPostVFP,
                   wwPostVFP, wzPostVFP, zz2l2nuPostVFP]
 
-    if filt:
-        return list(filter(filt, allPostVFP))
+    allPostVFP_gen = allPostVFP[1:]
+    allPostVFP_gen.extend([
+        Zmm_bugfix_slc7,
+        Zmm_bugfix_newprod,
+        Wmmunu_bugfix,
+        Wmmunu_bugfix_newprod,
+        Wpmunu_bugfix,
+        Wpmunu_bugfix_reweight_h2,
+    ])
 
-    return allPostVFP
+    samples = allPostVFP if mode != "gen" else allPostVFP_gen
+    if filt:
+        return list(filter(filt, samples))
+    else:
+        return samples
 
 def buildXrdFileList(path, xrd):
     xrdpath = path[path.find('/store'):]

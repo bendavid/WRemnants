@@ -57,6 +57,9 @@ class CardTool(object):
 
     def setDatagroups(self, datagroups):
         self.datagroups = datagroups 
+        
+    def setChannels(self, channels):
+        self.channels = channels
 
     def setNominalTemplate(self, template):
         if not os.path.isfile(template):
