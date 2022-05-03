@@ -3,7 +3,7 @@ import boost_histogram as bh
 import numpy as np
 from functools import reduce
 
-def valsAndVariances(h1, h2, allowBroadcast):
+def valsAndVariances(h1, h2, allowBroadcast=True, transpose=True):
     if not allowBroadcast and len(h1.axes) != len(h2.axes):
         raise ValueError("Incompatible hists for math operation")
     if len(h1.axes) == len(h2.axes):
@@ -12,8 +12,9 @@ def valsAndVariances(h1, h2, allowBroadcast):
         outshape = h1.view(flow=True).shape if len(h1.shape) > len(h2.shape) else h2.view(flow=True).shape
         # The transpose is because numpy works right to left in broadcasting, and we've put the
         # syst axis on the right
-        return [np.broadcast_to(x.T, outshape[::-1]).T for x in \
-            [h1.values(flow=True), h2.values(flow=True), h1.variances(flow=True), h2.variances(flow=True)]]
+        res = [np.broadcast_to(x.T if transpose else x, outshape[::-1] if transpose else outshape) for x in \
+                [h1.values(flow=True), h2.values(flow=True), h1.variances(flow=True), h2.variances(flow=True)]]
+        return [x.T for x in res] if transpose else res
 
 def broadcastOutHist(h1, h2):
     if len(h1.axes) == len(h2.axes):
@@ -59,8 +60,8 @@ def multiplyWithVariance(vals1, vals2, vars1, vars2):
     var = val*val*sum(relVariances(vals1, vals2, vars1, vars2))
     return val, var
 
-def multiplyHists(h1, h2, allowBroadcast=True):
-    h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2, allowBroadcast)
+def multiplyHists(h1, h2, allowBroadcast=True, transpose=True):
+    h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2, allowBroadcast, transpose)
     val,var = multiplyWithVariance(h1vals, h2vals, h1vars, h2vars)
 
     outh = h1 if not allowBroadcast else broadcastOutHist(h1, h2)
@@ -77,7 +78,7 @@ def addHists(h1, h2, allowBroadcast=True):
     return newh
 
 def sumHists(hists):
-    return reduce(addHists)
+    return reduce(addHists, hists)
 
 def mirrorHist(hvar, hnom, cutoff=1):
     div = divideHists(hnom, hvar, cutoff)

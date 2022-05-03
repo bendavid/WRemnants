@@ -34,3 +34,15 @@ def scale_helicity_hist_to_variations(scale_hist, sum_helicity=False, sum_ptV=Fa
                 name = out_name, data = systhist)
 
     return scale_variation_hist
+
+def define_mass_weights(df, isW, nominal_axes=None, nominal_cols=None):
+    #nweights = 21 if isW else 23
+    nweights = 21
+    df = df.Define("massWeight_tensor", f"wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight)")
+    df = df.Define("massWeight_tensor_wnom", "auto res = massWeight_tensor; res = nominal_weight*res; return res;")
+
+    hist = None
+    if nominal_axes and nominal_cols:
+        hist = df.HistoBoost("massWeight", nominal_axes, [*nominal_cols, "massWeight_tensor_wnom"])
+
+    return df, hist
