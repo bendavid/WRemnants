@@ -5,6 +5,8 @@ from wremnants import histselections as sel
 import argparse
 import os
 import pathlib
+import hist
+import numpy as np
 
 scriptdir = f"{pathlib.Path(__file__).parent}"
 
@@ -13,7 +15,7 @@ parser.add_argument("-o", "--outfolder", type=str, default="/scratch/jaeyserm/Co
 parser.add_argument("-i", "--inputFile", type=str, default="")
 parser.add_argument("--noScaleHelicitySplit", dest="qcdByHelicity", action='store_false', 
         help="Don't split QCD scale into helicity coefficients")
-parser.add_argument("--qcdScale", choices=["byHelicityPt", "byPt", "integrated", "byHelicity"], default="byHelicityPt", 
+parser.add_argument("--qcdScale", choices=["byHelicityPt", "byPt", "integrated", "byHelicity"], default="integrated", 
         help="Decorrelation for QCDscale (additionally always by charge)")
 parser.add_argument("--flavor", type=str, help="Flavor (ee or mumu)", default=None, required=True)
 args = parser.parse_args()
@@ -68,6 +70,7 @@ cardTool.setDataName(dataName)
 cardTool.setUnconstrainedProcs(unconstrainedProcs)
 
 
+'''
 pdfName = theory_tools.pdfMap["nnpdf31"]["name"]
 cardTool.addSystematic(pdfName, 
     processes=unconstrainedProcs,
@@ -125,6 +128,73 @@ cardTool.addSystematic("qcdScaleByHelicity",
         ("muR0muF1", "muRDown"), ("muR1muF0", "muFDown"), ("muR1muF2", "muFUp")],
     baseName="QCDscale_",
     )
+
+
+'''
+
+def scale_recoil_hist_to_variations(scale_hist):
+
+    # scale_hist = recoil_gen, recoil_reco, recoil_reco_pert, mll, systIdx (=qT bin variations)
+    # recoil_gen already removed
+
+    # BASE: sum over qT bins, RECO only --> (RECO, M)
+    # NOM: RECO only, in bins of qT --> (RECO, M, QT)
+    # PERT: RECOpert only, in bins of qT --> (RECOpert, M, QT)
+    # --> VAR = NOM(extended) - NOM + PERT
+    
+    s = hist.tag.Slicer()
+    base = scale_hist[{"recoil_stat_unc_var" : s[::hist.sum], "recoil_reco_pert" : s[::hist.sum]}] # sum over qT, remove the qT axis == (RECO, M)
+    nom = scale_hist[{"recoil_reco_pert" : s[::hist.sum]}] # sum over qT (perturbed)  == (RECO, M, IDX)
+    pert = scale_hist[{"recoil_reco" : s[::hist.sum]}] # sum over qT == (RECO_PERT, M, IDX)
+    
+    #print(scale_hist)
+    
+    out_name = "recoilStat_variations"
+    
+    # up
+    # 4 D hist
+    #  base.view(flow=True)[..., np.newaxis] --> indentical copies of the nominal
+    scale_variation_hist_up = hist.Hist(*pert.axes, storage = scale_hist._storage_type(), name = out_name+"Up",
+                data = pert.view(flow=True) - nom.view(flow=True) + base.view(flow=True)[..., np.newaxis])
+       
+    scale_variation_hist_dw = hist.Hist(*pert.axes, storage = scale_hist._storage_type(), name = out_name+"Down",
+                data = - scale_variation_hist_up.view(flow=True) +  base.view(flow=True)[..., np.newaxis] +  base.view(flow=True)[..., np.newaxis] )
+       
+    
+
+                 
+    #hmirror = hh.mirrorHist(scale_variation_hist_up, nom)
+    mirrorAx = hist.axis.Integer(0,2, name="mirror", overflow=False, underflow=False)
+    hnew = hist.Hist(*scale_variation_hist_up.axes, mirrorAx, storage=scale_variation_hist_up._storage_type(), name = out_name)
+    hnew.view(flow=True)[...] = np.stack((scale_variation_hist_up.view(flow=True), scale_variation_hist_dw.view(flow=True)), axis=-1)
+    
+    return hnew      
+
+
+recoil_vars = [(1,2), (1,3), (1,4),   (2,2), (2,3),   (3,2), (3,3), (3,4),    (4,2), (4,3)]
+for k in recoil_vars:
+
+    continue
+    cardTool.addSystematic("recoilStatUnc_%d_%d" % (k[0], k[1]),
+        processes=unconstrainedProcs,
+        mirror = False,
+        group = "recoilStatUnc",
+        systAxes = ["recoil_stat_unc_var"],
+        labelsByAxis = ["recoilStatUnc_%d_%d_{i}" % (k[0], k[1])],
+        action=scale_recoil_hist_to_variations,
+        #actionArgs=scaleActionArgs,
+        # Needs to be a tuple, since for multiple axis it would be (ax1, ax2, ax3)...
+    )
+
+cardTool.addSystematic("prefireCorr",
+    processes=unconstrainedProcs,
+    mirror = False,
+    group = "prefireCorr",
+    baseName="CMS_prefire_syst_m",
+    systAxes = ["downUpVar"],
+    labelsByAxis = ["downUpVar"],
+    )
+    
 
 
 #cardTool.addSystematic("PDF", 

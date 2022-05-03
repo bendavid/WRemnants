@@ -103,8 +103,10 @@ axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
 
 
 # unfolding axes
-axis_recoil_reco = hist.axis.Variable([0, 5, 10, 15, 20, 30, 40, 50, 60, 75, 90, 10000], name = "recoil_reco")
-axis_recoil_gen = hist.axis.Variable([0.0, 10.0, 20.0, 40.0, 60.0, 90.0, 10000], name = "recoil_gen")
+axis_recoil_reco = hist.axis.Variable([0, 5, 10, 15, 20, 30, 40, 50, 60, 75, 90, 10000], name = "recoil_reco", underflow=False)
+axis_recoil_gen = hist.axis.Variable([0.0, 10.0, 20.0, 40.0, 60.0, 90.0, 10000], name = "recoil_gen", underflow=False)
+
+axis_recoil_reco_pert = hist.axis.Variable([0, 5, 10, 15, 20, 30, 40, 50, 60, 75, 90, 10000], name = "recoil_reco_pert", underflow=False)
 
 # axes for final cards/fitting
 reco_mll_axes = [axis_recoil_reco, axis_mll]
@@ -124,6 +126,10 @@ qTbins_vec = ROOT.std.vector["float"]()
 for v in qTbins: qTbins_vec.push_back(v)
 setattr(ROOT.wrem, "qTbins", qTbins_vec)
 
+
+#axis_recoil_stat_unc = hist.axis.Integer(0, len(qTbins)*11, underflow=False, overflow=False, name = "recoil_stat_unc_var")
+#axis_recoil_stat_unc = hist.axis.Regular(len(qTbins)*11, 0, len(qTbins)*11, underflow=False, overflow=False, name = "recoil_stat_unc_var")
+axis_recoil_stat_unc = hist.axis.Regular(len(qTbins), 0, len(qTbins), underflow=False, overflow=False, name = "recoil_stat_unc_var")
 
 def build_graph(df, dataset):
 
@@ -367,7 +373,16 @@ def build_graph(df, dataset):
     
         gen_reco_mll_cols = ["ptVgen", "recoil_corr_magn", "massZ"]
         results.append(df.HistoBoost("gen_reco_mll", gen_reco_mll_axes, [*gen_reco_mll_cols, "nominal_weight"]))
+        
+        
+        #nweights = 21 if isW else 23
+        nweights = 23
+        df = df.Define("massWeight_tensor", f"auto res = wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight); res = nominal_weight*res; return res;")
+        df = df.Define("massWeight_tensor_wnom", f"auto res = massWeight_tensor; res = nominal_weight*res; return res;")
+        massWeight = df.HistoBoost("massWeight", gen_reco_mll_axes, [*nominal_cols, "massWeight_tensor_wnom"])
+        results.append(massWeight)
     
+        # pdfs
         results.extend(theory_tools.define_and_make_pdf_hists(df, gen_reco_mll_axes, gen_reco_mll_cols, hname="gen_reco_mll"))
         
         #df = theory_tools.define_scale_tensor(df)
@@ -379,6 +394,39 @@ def build_graph(df, dataset):
         results.append(qcdScaleByHelicityUnc)
 
 
+        # recoil stat uncertainty
+        df = df.Define("recoil_corr_stat_idx", "wrem::indices_(%d, 0)" % (len(qTbins)))
+        recoil_vars = [(1,2), (1,3), (1,4),   (2,2), (2,3),   (3,2), (3,3), (3,4),    (4,2), (4,3)]
+        for k in recoil_vars:
+            df = df.Define("recoil_corr_stat_unc_%d_%d" % (k[0], k[1]), "wrem::recoilCorrectionBinned_StatUnc(recoil_uncorr_para, recoil_uncorr_perp, qTbin, %d, %d)" % (k[0], k[1]))
+            results.append(df.HistoBoost("gen_reco_mll_recoilStatUnc_%d_%d" % (k[0], k[1]), [axis_recoil_gen, axis_recoil_reco, axis_recoil_reco_pert, axis_mll, axis_recoil_stat_unc], ["ptVgen", "recoil_corr_magn", "recoil_corr_stat_unc_%d_%d" % (k[0], k[1]), "massZ", "recoil_corr_stat_idx", "nominal_weight"]))
+        
+        
+        # lepton efficiencies
+            
+        '''
+        lepSF_HLT_DATA_stat_syst    : lepSF_HLT_var_mu(1, Muon_pt_corr[goodLeptons], Muon_eta[goodLeptons], Muon_charge[goodLeptons]): mcOnly
+        lepSF_HLT_DATA_syst_syst    : lepSF_HLT_var_mu(2, Muon_pt_corr[goodLeptons], Muon_eta[goodLeptons], Muon_charge[goodLeptons]): mcOnly
+        lepSF_HLT_MC_stat_syst      : lepSF_HLT_var_mu(-1, Muon_pt_corr[goodLeptons], Muon_eta[goodLeptons], Muon_charge[goodLeptons]): mcOnly
+        lepSF_HLT_MC_syst_syst      : lepSF_HLT_var_mu(-2, Muon_pt_corr[goodLeptons], Muon_eta[goodLeptons], Muon_charge[goodLeptons]): mcOnly
+
+        lepSF_ISO_stat_syst         : lepSF_ISO_var_mu(1, Muon_pt_corr[goodLeptons], Muon_eta[goodLeptons], Muon_charge[goodLeptons]): mcOnly
+        lepSF_ISO_DATA_syst_syst    : lepSF_ISO_var_mu(2, Muon_pt_corr[goodLeptons], Muon_eta[goodLeptons], Muon_charge[goodLeptons]): mcOnly
+        lepSF_ISO_MC_syst_syst      : lepSF_ISO_var_mu(-2, Muon_pt_corr[goodLeptons], Muon_eta[goodLeptons], Muon_charge[goodLeptons]): mcOnly
+
+        lepSF_IDIP_stat_syst        : lepSF_IDIP_var_mu(1, Muon_pt_corr[goodLeptons], Muon_eta[goodLeptons], Muon_charge[goodLeptons]): mcOnly
+        lepSF_IDIP_DATA_syst_syst   : lepSF_IDIP_var_mu(2, Muon_pt_corr[goodLeptons], Muon_eta[goodLeptons], Muon_charge[goodLeptons]): mcOnly
+        lepSF_IDIP_MC_syst_syst     : lepSF_IDIP_var_mu(-2, Muon_pt_corr[goodLeptons], Muon_eta[goodLeptons], Muon_charge[goodLeptons]): mcOnly
+        '''
+                
+                
+        
+        # prefire
+        df = df.Define("prefireCorr_syst", "wrem::prefireCorr_syst(Jet_pt, Jet_eta, Jet_phi, Jet_muEF, Jet_neEmEF, Jet_chEmEF, Photon_pt, Photon_eta, Photon_phi, Lep_pt, Lep_eta, Lep_phi)")
+        df = df.Define("prefireCorr_syst_tensor", "Eigen::TensorFixedSize<double, Eigen::Sizes<2>> res; auto w = nominal_weight*prefireCorr_syst; std::copy(std::begin(w), std::end(w), res.data()); return res;")
+        results.append(df.HistoBoost("gen_reco_mll_prefireCorr", [*gen_reco_mll_axes], [*gen_reco_mll_cols, "prefireCorr_syst_tensor"], tensor_axes = [down_up_axis]))
+
+        
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)

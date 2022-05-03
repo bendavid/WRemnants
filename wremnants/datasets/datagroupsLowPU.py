@@ -16,8 +16,8 @@ def signalOp(h):
 class datagroupsLowPU_Z(datagroups):
     def __init__(self, infile, combine=False, flavor=""):
         self.datasets = {x.name : x for x in datasetsLowPU.getDatasets()}
-        super().__init__(infile, combine)
         self.lumi = 0.199269742
+        super().__init__(infile, combine)
         self.hists = {} # container storing temporary histograms
         self.groups = dict(
             TTbar=dict(

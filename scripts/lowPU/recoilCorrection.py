@@ -1467,8 +1467,9 @@ def doFit_2Gauss_data(outDir, qTbin, qTbinMinGeV, qTbinMaxGeV, hist_data, hist_b
             if getParamIdx(p.GetName(), floatingParams) > -1: val = var[getParamIdx(p.GetName(), floatingParams)]
             else: val = p.getVal()
             hOut.SetBinContent(qTbin, iPar+1, iVar+2, val)
-            print(iVar, iPar, p.GetName(), val)
+            print(iPar+1, iVar+2, p.GetName(), val)
 
+    sys.exit()
  
   
 def doFit_bkg(outDir, qTbin, qTbinMinGeV, qTbinMaxGeV, hist, name, label, cfg):
@@ -2019,10 +2020,10 @@ def doRecoilFits_Z():
         #doFit_bkg(outDir + "/bkg/perp/", iBin, qTbinMinGeV, qTbinMaxGeV, hist, "bkg_perp", "Backgrounds", cfg)
         
         hist = h_mc_para.ProjectionY("mc_para_bin%d" % iBin, iBin, iBin)
-        doFit_2Gauss_DY(outDir + "/mc/para/", iBin, qTbinMinGeV, qTbinMaxGeV, hist, "mc_para", label_mc, cfg, h_para_mc)
+        #doFit_2Gauss_DY(outDir + "/mc/para/", iBin, qTbinMinGeV, qTbinMaxGeV, hist, "mc_para", label_mc, cfg, h_para_mc)
         
         hist = h_mc_perp.ProjectionY("mc_perp_bin%d" % iBin, iBin, iBin)
-        doFit_2Gauss_DY(outDir + "/mc/perp/", iBin, qTbinMinGeV, qTbinMaxGeV, hist, "mc_perp", label_mc, cfg, h_perp_mc)
+        #doFit_2Gauss_DY(outDir + "/mc/perp/", iBin, qTbinMinGeV, qTbinMaxGeV, hist, "mc_perp", label_mc, cfg, h_perp_mc)
         
         hist_data = h_data_para.ProjectionY("data_para_bin%d" % iBin, iBin, iBin)
         hist_bkg = h_bkg_para.ProjectionY("bkg_para_bin%d" % iBin, iBin, iBin)
@@ -2030,7 +2031,7 @@ def doRecoilFits_Z():
         
         hist_data = h_data_perp.ProjectionY("data_perp_bin%d" % iBin, iBin, iBin)
         hist_bkg = h_bkg_perp.ProjectionY("bkg_perp_bin%d" % iBin, iBin, iBin)
-        doFit_2Gauss_data(outDir + "/data/perp/", iBin, qTbinMinGeV, qTbinMaxGeV, hist_data, hist_bkg, "data_perp", "Data", cfg, h_perp_data)
+        #doFit_2Gauss_data(outDir + "/data/perp/", iBin, qTbinMinGeV, qTbinMaxGeV, hist_data, hist_bkg, "data_perp", "Data", cfg, h_perp_data)
 
 
     fOut_ = "wremnants/data/lowPU/recoil_fits_Z.root"
