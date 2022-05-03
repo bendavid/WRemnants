@@ -209,7 +209,7 @@ def build_graph(df, dataset):
             qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", [*nominal_axes, axis_absYVgen, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "absYVgen", "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=helicity_helper.tensor_axes)
             results.append(qcdScaleByHelicityUnc)
 
-            results.extend(theory_tools.define_and_make_pdf_hists(df, nominal_axes, nominal_cols))
+            results.extend(theory_tools.define_and_make_pdf_hists(df, nominal_axes, nominal_cols, dataset))
 
             nweights = 21 if isW else 23
             df = df.Define("massWeight_tensor", f"wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight)")

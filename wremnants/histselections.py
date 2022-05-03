@@ -5,11 +5,11 @@ import numpy as np
 def fakeHistABCD(h):
     return hh.multiplyHists(
         hh.divideHists(h[{"passIso" : True, "passMT" : False}], 
-            h[{"passIso" : False, "passMT" : True}],
+            h[{"passIso" : False, "passMT" : False}],
                 cutoff=1
             ),
                 #where=h[{"passIso" : False, "passMT" : True}].values(flow=True)>1),
-        h[{"passIso" : False, "passMT" : False}], 
+        h[{"passIso" : False, "passMT" : True}], 
     )
 
 def fakeHistIsoRegion(h, scale=1.):

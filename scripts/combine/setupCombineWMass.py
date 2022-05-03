@@ -38,7 +38,7 @@ signal_samples_inctau = list(filter(lambda x: x[0] == ("Z" if args.wlike else "W
 print("Single V samples", single_v_samples)
 print("Single Vmu samples", single_vmu_samples)
 print("signal samples", signal_samples)
-print("single_c_fake_samples", single_v_and_fake_samples)
+print("single_v_fake_samples", single_v_and_fake_samples)
 
 pdfName = theory_tools.pdfMap[args.pdf]["name"]
 cardTool.addSystematic(pdfName, 
