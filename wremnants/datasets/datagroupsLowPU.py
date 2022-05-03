@@ -10,7 +10,7 @@ import ROOT
 import hist
 
 def signalOp(h):
-    print(h)
+    #print(h)
     return h
 
 class datagroupsLowPU_Z(datagroups):
@@ -104,10 +104,10 @@ class datagroupsLowPU_Z(datagroups):
         
         
     def histName(self, baseName, procName, syst):
-        #print(baseName)
+        
         if baseName == "reco_mll" and (procName == "DYmumu" or procName == "DYee"): 
             baseName = "gen_reco_mll"
-        
+        #print(baseName, procName)
         
         # This is kind of hacky to deal with the different naming from combine
         if baseName != "x" and (syst == "" or syst == self.nominalName):
@@ -120,10 +120,11 @@ class datagroupsLowPU_Z(datagroups):
     def readHist(self, baseName, proc, syst = "", scaleOp=None, forceNonzero=True):
         output = self.results[proc.name]["output"]
         histname = self.histName(baseName, proc.name, syst)
-        #print(baseName, proc, histname)
+        #print(baseName, proc, histname, syst)
         if histname not in output:
             raise ValueError(f"Histogram {histname} not found for process {proc.name}")
         h = output[histname]
+        #print(h)
         if forceNonzero:
             h = hh.clipNegativeVals(h)
         scale = self.processScaleFactor(proc)

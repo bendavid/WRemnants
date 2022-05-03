@@ -29,7 +29,7 @@ class CardTool(object):
         self.cardContent = {}
         self.cardGroups = ""
         self.nominalTemplate = ""
-        self.spacing = 28
+        self.spacing = 35
         self.fakeName = "Fake"
         self.dataName = "Data"
         self.nominalName = "nominal"

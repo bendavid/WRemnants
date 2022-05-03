@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from wremnants import CardTool,theory_tools
+from wremnants import CardTool,theory_tools,syst_tools
 from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_Z
 from wremnants import histselections as sel
 import argparse
@@ -13,6 +13,8 @@ parser.add_argument("-o", "--outfolder", type=str, default="/scratch/jaeyserm/Co
 parser.add_argument("-i", "--inputFile", type=str, default="")
 parser.add_argument("--noScaleHelicitySplit", dest="qcdByHelicity", action='store_false', 
         help="Don't split QCD scale into helicity coefficients")
+parser.add_argument("--qcdScale", choices=["byHelicityPt", "byPt", "integrated", "byHelicity"], default="byHelicityPt", 
+        help="Decorrelation for QCDscale (additionally always by charge)")
 parser.add_argument("--flavor", type=str, help="Flavor (ee or mumu)", default=None, required=True)
 args = parser.parse_args()
 
@@ -58,13 +60,71 @@ if not doInclusive:
 templateDir = f"{scriptdir}/Templates/LowPileupW"
 cardTool = CardTool.CardTool(f"{args.outfolder}/LowPU_Z{args.flavor}.txt")
 cardTool.setNominalTemplate(f"{templateDir}/main.txt")
-print(f"{templateDir}/main.txt")
 cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/LowPU_Z{args.flavor}.root"))
 cardTool.setDatagroups(datagroups)
 cardTool.setHistName("reco_mll") # for signal gen_reco_mll
 cardTool.setChannels(["all"])
 cardTool.setDataName(dataName)
 cardTool.setUnconstrainedProcs(unconstrainedProcs)
+
+
+pdfName = theory_tools.pdfMap["nnpdf31"]["name"]
+cardTool.addSystematic(pdfName, 
+    processes=unconstrainedProcs,
+    mirror=True,
+    group=pdfName,
+    systAxes=["tensor_axis_0"],
+    labelsByAxis=[pdfName.replace("pdf", "pdf{i}")],
+    # Needs to be a tuple, since for multiple axis it would be (ax1, ax2, ax3)...
+    # -1 means all possible values of the mirror axis
+    skipEntries=[(0, -1)],
+)
+
+cardTool.addSystematic(f"alphaS002{pdfName}", 
+    processes=unconstrainedProcs,
+    mirror=False,
+    group=pdfName,
+    systAxes=["tensor_axis_0"],
+    outNames=[pdfName+"AlphaSUp", pdfName+"AlphaSDown"],
+    scale=0.75,
+)
+
+
+
+scaleSystAxes = ["chargeVgen", "muRfact", "muFfact"]  ##  "ptVgen", "chargeVgen", "helicityWeight_tensor"
+scaleLabelsByAxis = ["q", "muR", "muF"]
+scaleGroupName = "QCDscale"
+scaleActionArgs = {"sum_ptV" : True, "sum_helicity" : True}
+scaleSkipEntries = [(-1, 1, 1), (-1, 0, 2), (-1, 2, 0)]
+# TODO: reuse some code here
+if "Helicity" in args.qcdScale:
+    scaleActionArgs.pop("sum_helicity")
+    scaleGroupName += "ByHelicity"
+    scaleSystAxes.insert(0, "helicity")
+    scaleLabelsByAxis.insert(0, "Coeff")
+    scaleSkipEntries = [(-1, *x) for x in scaleSkipEntries]
+if "Pt" in args.qcdScale:
+    scaleActionArgs.pop("sum_ptV")
+    scaleGroupName += "ByPtV"
+    scaleSystAxes.insert(0, "ptVgen")
+    scaleLabelsByAxis.insert(0, "genPtV")
+    scaleSkipEntries = [(-1, *x) for x in scaleSkipEntries]
+
+cardTool.addSystematic("qcdScaleByHelicity", 
+    action=syst_tools.scale_helicity_hist_to_variations,
+    actionArgs=scaleActionArgs,
+    processes=unconstrainedProcs,
+    group=scaleGroupName,
+    systAxes=scaleSystAxes,
+    labelsByAxis=scaleLabelsByAxis,
+    # Exclude all combinations where muR = muF = 1 (nominal) or where
+    # they are extreme values (ratio = 4 or 1/4)
+    skipEntries=scaleSkipEntries,
+    # This is hacky but it's the best idea I have for now...
+    systNameReplace=[("muR2muF2", "muRmuFUp"), ("muR0muF0", "muRmuFDown"), ("muR2muF1", "muRUp"), 
+        ("muR0muF1", "muRDown"), ("muR1muF0", "muFDown"), ("muR1muF2", "muFUp")],
+    baseName="QCDscale_",
+    )
 
 
 #cardTool.addSystematic("PDF", 

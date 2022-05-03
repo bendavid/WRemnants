@@ -1,9 +1,6 @@
 import ROOT
 import hist
 import numpy as np
-import copy
-from wremnants import boostHistHelpers as hh
-import logging
 
 ROOT.gInterpreter.Declare('#include "theoryTools.h"')
 
@@ -22,8 +19,7 @@ axis_muFfact = hist.axis.Variable(
 
 scale_tensor_axes = (axis_muRfact, axis_muFfact)
 
-pdfMap = {
-        "nnpdf31" : {
+pdfMap = {"nnpdf31" : {
             "name" : "pdfNNPDF31",
             "branch" : "LHEPdfWeight",
             "combine" : "symHessian",
@@ -127,12 +123,12 @@ def define_prefsr_vars(df):
 def define_scale_tensor(df):
     # convert vector of scale weights to 3x3 tensor and clip weights to |weight|<10.
     df = df.Define("scaleWeights_tensor", "wrem::makeScaleTensor(LHEScaleWeight, 10.);")
-    df = df.Define("scaleWeights_tensor_wnom", "auto res = scaleWeights_tensor; res = nominal_weight*res; return res;")
+    df = df.Define("scaleWeights_tensor_wnom", "auto res = scaleWeights_tensor; res = weight*res; return res;")
 
     return df
 
-def make_scale_hist(df, axes, cols):
-    scaleHist = df.HistoBoost("qcdScale", axes, [*cols, "scaleWeights_tensor_wnom"], tensor_axes=scale_tensor_axes)
+def make_scale_hist(df, axes, cols, hname=""):
+    scaleHist = df.HistoBoost("qcdScale" if hname=="" else f"{hname}_qcdScale", axes, [*cols, "scaleWeights_tensor_wnom"], tensor_axes=scale_tensor_axes)
     return scaleHist
 
 def pdf_info_map(dataset, pdfset):
@@ -155,14 +151,12 @@ def define_and_make_pdf_hists(df, axes, cols, dataset, pdfset="nnpdf31", storeUn
     tensorASName = f"{pdfName}ASWeights_tensor"
     entries = pdfInfo["entries"] if storeUnc else 1
 
-    df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, {entries}>({pdfBranch}), 10.); res = nominal_weight*res; return res;")
-    pdfHist= df.HistoBoost(pdfName, axes, [*cols, tensorName])
+    df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, 101>({pdfBranch}), 10.); res = nominal_weight*res; return res;")
+    pdfHist= df.HistoBoost(pdfName if hname=="" else f"{hname}_{pdfName}",axes, [*cols, tensorName])
 
-    df = df.Define(tensorASName, "Eigen::TensorFixedSize<double, Eigen::Sizes<2>> res; "
-            f"res(0) = {pdfInfo['alphas'][0]}; "
-            f"res(1) = {pdfInfo['alphas'][1]}; "
-            "return wrem::clip_tensor(res, 10.)")
-    alphaSHist = df.HistoBoost(f"alphaS002{pdfName}", axes, [*cols, tensorASName])
+    # slice 2 elements starting from 101
+    df = df.Define(tensorASName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, 2>({pdfBranch}, 101), 10.); res = nominal_weight*res; return res;")
+    alphaSHist = df.HistoBoost(f"alphaS002{pdfName}" if hname=="" else f"{hname}_alphaS002{pdfName}", axes, [*cols, tensorASName])
 
     return pdfHist, alphaSHist
 
