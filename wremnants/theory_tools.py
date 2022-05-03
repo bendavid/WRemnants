@@ -103,10 +103,12 @@ pdfMapExtended.update({
 only_central_pdf_datasets = [
     "Wplusmunu_bugfix",
     "Wminusmunu_bugfix",
+    "Zmumu_bugfix",
+    "Zmumu_bugfix_slc7",
 ]
 
 extended_pdf_datasets = [
-    "Wminusmunu_bugfix_newprod"
+    "Wminusmunu_bugfix_newprod",
 ]
 
 def define_prefsr_vars(df):
@@ -133,18 +135,25 @@ def make_scale_hist(df, axes, cols):
     scaleHist = df.HistoBoost("qcdScale", axes, [*cols, "scaleWeights_tensor_wnom"], tensor_axes=scale_tensor_axes)
     return scaleHist
 
-def define_and_make_pdf_hists(df, axes, cols, dataset, pdfset="nnpdf31"):
+def pdf_info_map(dataset, pdfset):
     infoMap = pdfMap if dataset not in extended_pdf_datasets else pdfMapExtended
 
     if (pdfset != "nnpdf31" and dataset in only_central_pdf_datasets) or pdfset not in infoMap:
-        logging.info(f"Skipping PDF {pdfset} for dataset {dataset}")
+        raise ValueError(f"Skipping PDF {pdfset} for dataset {dataset}")
+    return infoMap[pdfset]
+
+def define_and_make_pdf_hists(df, axes, cols, dataset, pdfset="nnpdf31", storeUnc=True):
+    try:
+        pdfInfo = pdf_info_map(dataset, pdfset)
+    except ValueError as e:
+        logging.info(e)
         return []
-    pdfInfo = infoMap[pdfset]
+
     pdfName = pdfInfo["name"]
     pdfBranch = pdfInfo["branch"]
     tensorName = f"{pdfName}Weights_tensor"
     tensorASName = f"{pdfName}ASWeights_tensor"
-    entries = pdfInfo["entries"]
+    entries = pdfInfo["entries"] if storeUnc else 1
 
     df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, {entries}>({pdfBranch}), 10.); res = nominal_weight*res; return res;")
     pdfHist= df.HistoBoost(pdfName, axes, [*cols, tensorName])
@@ -157,16 +166,39 @@ def define_and_make_pdf_hists(df, axes, cols, dataset, pdfset="nnpdf31"):
 
     return pdfHist, alphaSHist
 
-def define_scetlib_corr(df, weight_expr, helper):
-    df = df.Define("nominal_weight_uncorr", weight_expr)
+def pdf_central_weight(dataset, pdfset):
+    pdfInfo = pdf_info_map(dataset, pdfset)
+    pdfBranch = pdfInfo["branch"]
+    return f"{pdfBranch}[0]"
+
+def define_scetlib_corr(df, weight_expr, helper, modify_central_weight=True):
+    if modify_central_weight:
+        df = df.Define("nominal_weight_uncorr", weight_expr)
+    else:
+        df = df.Define("nominal_weight", weight_expr)
+        df = df.Alias("nominal_weight_uncorr", "nominal_weight")
+
     df = df.Define("scetlibWeight_tensor", helper, ["chargeVgen", "massVgen", "yVgen", "ptVgen", "nominal_weight_uncorr"])
-    df = df.Define("nominal_weight", "scetlibWeight_tensor(0)")
+    df = df.Define("scetlibCentralWeight", "scetlibWeight_tensor(0)")
+
+    if modify_central_weight:
+        df = df.Alias("nominal_weight", "scetlibWeightCentral")
     return df
 
-def make_scetlibCorr_hists(df, name, axes, cols, helper):
-    nominal_uncorr = df.HistoBoost(f"{name}_uncorr", axes, [*cols, "nominal_weight_uncorr"])
-    unc = df.HistoBoost("scetlibUnc" if name == "nominal" else f"{name}_scetlibUnc", axes, [*cols, "scetlibWeight_tensor"], tensor_axes=helper.tensor_axes)
-    return (nominal_uncorr, unc)
+def make_scetlibCorr_hists(df, name, axes, cols, helper, modify_central_weight=True, skipUncertainties=False):
+    res = []
+    if modify_central_weight:
+        nominal_uncorr = df.HistoBoost(f"{name}_uncorr", axes, [*cols, "nominal_weight_uncorr"])
+        res.append(nominal_uncorr)
+
+    if skipUncertainties:
+        nominal = df.HistoBoost("scetlibCorr", axes, [*cols, "scetlibWeightCentral"])
+        res.append(nominal)
+    else:
+        unc = df.HistoBoost("scetlibUnc" if name == "nominal" else f"{name}_scetlibUnc", axes, [*cols, "scetlibWeight_tensor"], tensor_axes=helper.tensor_axes)
+        res.append(unc)
+
+    return res
 
 def moments_to_angular_coeffs(hist_moments_scales):
     s = hist.tag.Slicer()
@@ -216,7 +248,7 @@ def qcdScaleNames():
     return ["_".join(["QCDscale", s]) if s != "" else s for s in shifts]
 
 def massWeightNames(matches=None, wlike=False):
-    central=11
+    central=10
     nweights=21
     names = [f"massShift{int(abs(central-i)*10)}MeV{'Down' if i < central else 'Up'}" for i in range(nweights)]
     
@@ -241,6 +273,9 @@ def pdfNames(cardTool, pdf, skipFirst=True):
         names[size*2-2] = ""
         names[size*2-1] = ""
     return names
+
+def pdfNamesAsymHessian(entries):
+    return ["pdf{i}{shift}".format(i=j/2, shift="Up" if i % 2 else "Down") for j in range(entries)]
 
 def pdfSymmetricShifts(hdiff, axis_name):
     sq = hh.multiplyHists(hdiff, hdiff)

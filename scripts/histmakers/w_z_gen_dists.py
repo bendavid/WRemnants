@@ -14,7 +14,7 @@ elif init.args.nThreads != 1:
     ROOT.ROOT.EnableImplicitMT(initargs.nThreads)
 import narf
 import wremnants
-from wremnants import theory_tools
+from wremnants import theory_tools,syst_tools
 import hist
 import lz4.frame
 import logging
@@ -26,6 +26,7 @@ parser.add_argument("--pdfs", type=str, nargs="*", default=["nnpdf31"], choices=
 parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
 parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=["Wplus", "Wminus", "Zmumu", "Ztautau"])
 parser.add_argument("--skipAngularCoeffs", action='store_true', help="Skip the conversion of helicity moments to angular coeff fractions")
+parser.add_argument("--singleLeptonHists", action='store_true', help="Also store single lepton kinematics")
 args = parser.parse_args()
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
@@ -39,7 +40,8 @@ axis_absYVgen = hist.axis.Variable(
     [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4, 10], name = "absYVgen"
 )
 axis_ptVgen = hist.axis.Variable(
-    [0, 2, 3, 4, 4.75, 5.5, 6.5, 8, 9, 10, 12, 14, 16, 18, 20, 23, 27, 32, 40, 55, 100], name = "ptVgen"
+#    [0, 2, 3, 4, 4.75, 5.5, 6.5, 8, 9, 10, 12, 14, 16, 18, 20, 23, 27, 32, 40, 55, 100], name = "ptVgen"
+    range(0,121), name = "ptVgen"
 )
 
 
@@ -62,11 +64,10 @@ wprocs_bugged = [
     "WplustaunuPostVFP"
 ]
 wprocs_bugfix = [
-    "WplusmunuPostVFP_bugfix", 
-    "WminusmunuPostVFP_bugfix",
-    "WminusmunuPostVFP_bugfix_slc7",
-    "WplusmunuPostVFP_bugfix_slc7",
-    "WplusmunuPostVFP_bugfix_reweight_h2",
+    "Wplusmunu_bugfix", 
+    "Wminusmunu_bugfix_newprod",
+    "Wplusmunu_bugfix",
+    "Wplusmunu_bugfix_reweight_h2",
 ]
 wprocs = [*wprocs_bugged, *wprocs_bugfix]
 wprocs_bugged_to_check = [ # mu only for making comparison plots between bugged and bugfix samples
@@ -101,15 +102,16 @@ def build_graph(df, dataset):
     nominal_cols = ["massVgen", "absYVgen", "ptVgen", "chargeVgen"]
     df = wremnants.define_prefsr_vars(df)
 
-    if dataset.name == 'WplusmunuPostVFP':
-        df = df.Define('ptPrefsrMuon', 'genlanti.pt()')
-        df = df.Define('etaPrefsrMuon', 'genlanti.eta()')
-    elif dataset.name == 'WminusmunuPostVFP' or 'ZmumuPostVFP' in dataset.name:
-        df = df.Define('ptPrefsrMuon', 'genl.pt()')
-        df = df.Define('etaPrefsrMuon', 'genl.eta()')
-    if dataset.name in ['WplusmunuPostVFP', 'WminusmunuPostVFP'] or 'ZmumuPostVFP' in dataset.name:
-        nominal_cols = [*nominal_cols, 'etaPrefsrMuon', 'ptPrefsrMuon']
-        nominal_axes = [*nominal_axes, axis_l_eta_gen, axis_l_pt_gen]
+    if args.singleLeptonHists:
+        if dataset.name == 'WplusmunuPostVFP':
+            df = df.Define('ptPrefsrMuon', 'genlanti.pt()')
+            df = df.Define('etaPrefsrMuon', 'genlanti.eta()')
+        elif dataset.name == 'WminusmunuPostVFP' or 'ZmumuPostVFP' in dataset.name:
+            df = df.Define('ptPrefsrMuon', 'genl.pt()')
+            df = df.Define('etaPrefsrMuon', 'genl.eta()')
+        if dataset.name in ['WplusmunuPostVFP', 'WminusmunuPostVFP'] or 'ZmumuPostVFP' in dataset.name:
+            nominal_cols = [*nominal_cols, 'etaPrefsrMuon', 'ptPrefsrMuon']
+            nominal_axes = [*nominal_axes, axis_l_eta_gen, axis_l_pt_gen]
 
     nominal_gen = df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols, "nominal_weight"])
     results.append(nominal_gen)
@@ -119,17 +121,20 @@ def build_graph(df, dataset):
     for pdf in args.pdfs:
         results.extend(theory_tools.define_and_make_pdf_hists(df, nominal_axes, nominal_cols, dataset.name, pdfset=pdf))
 
-    if not dataset.is_data:
+    if dataset.name != "Zmumu_bugfix":
+        df, masswhist = syst_tools.define_mass_weights(df, isW, *masswargs)
+        if masswhist:
+            results.append(masswhist)
 
-        df = df.Define("helicity_moments_scale_tensor", "wrem::makeHelicityMomentScaleTensor(csSineCosThetaPhi, scaleWeights_tensor, nominal_weight)")
-        helicity_moments_scale = df.HistoBoost("helicity_moments_scale", nominal_axes, [*nominal_cols, "helicity_moments_scale_tensor"], tensor_axes = [wremnants.axis_helicity, *wremnants.scale_tensor_axes])
-        results.append(helicity_moments_scale)
+    df = df.Define("helicity_moments_scale_tensor", "wrem::makeHelicityMomentScaleTensor(csSineCosThetaPhi, scaleWeights_tensor, nominal_weight)")
+    helicity_moments_scale = df.HistoBoost("helicity_moments_scale", nominal_axes, [*nominal_cols, "helicity_moments_scale_tensor"], tensor_axes = [wremnants.axis_helicity, *wremnants.scale_tensor_axes])
+    results.append(helicity_moments_scale)
 
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)
 
-fname = "w_z_gen_dists_reweight_h2.pkl.lz4"
+fname = "w_z_gen_dists.pkl.lz4"
 
 print("writing output")
 with lz4.frame.open(fname, "wb") as f:

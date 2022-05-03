@@ -37,6 +37,7 @@ class CardTool(object):
         self.unconstrainedProcesses = None
         self.buildHistNameFunc = None
         self.histName = "x"
+        self.pseudoData = None
         #self.loadArgs = {"operation" : "self.loadProcesses (reading hists from file)"}
 
     # Function call to load hists for processes (e.g., read from a ROOT file)
@@ -47,6 +48,9 @@ class CardTool(object):
     
     def getFakeName(self):
         return self.fakeName
+
+    def setPseudodata(self, pseudodata):
+        self.pseudoData = pseudodata
 
     # Needs to be increased from default for long proc names
     def setSpacing(self, spacing):
@@ -184,12 +188,9 @@ class CardTool(object):
         for entry in entries:
             sel = {ax : binnum for ax,binnum in zip(axNames, entry)}
             variations.append(hvar[sel])
-            #print(sel)
-            #print("Sum is", hvar[sel].sum())
         return systInfo["outNames"], variations            
 
     def variationName(self, proc, name):
-        proc = proc if proc != self.dataName else "data_obs"
         if name == self.nominalName:
             return f"{self.histName}_{proc}"
         else:
@@ -215,6 +216,17 @@ class CardTool(object):
             if name != "":
                 self.writeHist(var, self.variationName(proc, name))
 
+    def addPseudodata(self, processes):
+        self.datagroups.loadHistsForDatagroups(
+            baseName=self.pseudoData, syst="", label=self.pseudoData,
+            procsToRead=processes)
+        hists = [self.procDict[proc][self.pseudoData] for proc in processes]
+        hdata = hh.sumHists(hists)
+        # Kind of hacky, but in case the alt hist has uncertainties
+        if "systIdx" in [ax.name for ax in hdata.axes]:
+            hdata = hdata[{"systIdx" : 0 }]
+        self.writeHist(hdata, self.pseudoData+"_sum")
+
     def writeForProcesses(self, syst, processes, label):
         for process in processes:
             hvar = self.procDict[process][label]
@@ -238,6 +250,9 @@ class CardTool(object):
         self.writeForProcesses(self.nominalName, processes=self.procDict.keys(), label=self.nominalName)
         self.loadNominalCard()
         self.writeLnNSystematics()
+        if self.pseudoData:
+            self.addPseudodata(self.predictedProcesses())
+
         for syst in self.systematics.keys():
             processes=self.systematics[syst]["processes"]
             self.datagroups.loadHistsForDatagroups(self.histName, syst, label="syst",
@@ -311,17 +326,20 @@ class CardTool(object):
                 "rates" : "-1".ljust(self.spacing)*nprocs,
                 #"inputfile" : self.outfile.file_path,
                 "inputfile" : self.outfile.GetName(),
+                "dataName" : self.dataName,
+                "histName" : self.histName,
+                "pseudodataHist" : self.pseudoData+"_sum" if self.pseudoData else self.histName
             }
             self.cardContent[chan] = OutputTools.readTemplate(self.nominalTemplate, args)
         
     def writeHistByCharge(self, h, name, charges=["plus", "minus"]):
-        for i,charge in enumerate(self.channels):
-            hout = narf.hist_to_root(h[{"charge" : i}])
+        for charge in self.channels:
+            q = 1. if charge == "plus" else -1
+            hout = narf.hist_to_root(h[{"charge" : h.axes["charge"].index(q)}])
             hout.SetName(name+f"_{charge}")
             hout.Write()
 
     def writeHistWithCharges(self, h, name):
-        print("As boost", h.sum())
         hout = narf.hist_to_root(h)
         #self.outfile[name] = h
         hout.SetName(name)
