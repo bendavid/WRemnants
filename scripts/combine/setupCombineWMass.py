@@ -24,7 +24,7 @@ parser.add_argument("-p", "--pseudoData", type=str, help="Hist to use as pseudod
 args = parser.parse_args()
 
 if not os.path.isdir(args.outfolder):
-    os.mkdir(args.outfolder)
+    os.makedirs(args.outfolder)
 
 datagroups = datagroups2016(args.inputFile, wlike=args.wlike)
 templateDir = f"{scriptdir}/Templates/WMass"
