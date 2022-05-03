@@ -25,8 +25,10 @@ class datagroups(object):
                 self.lumi = sum([self.results[x.name]["lumi"] for x in self.data if x.name in self.results])
 
         self.groups = {}
+
         if not self.lumi:
             self.lumi = 1
+            
         self.nominalName = "nominal"
 
     def processScaleFactor(self, proc):
@@ -165,13 +167,13 @@ class datagroups2016(datagroups):
                     signalOp = sel.signalHistWmass,
                 ),
                 "Top" : dict(
-                    members = [self.datasets["TTSemileptonicPostVFP"], self.datasets["TTLeptonicPostVFP"]],
+                    members = list(filter(lambda y: y.group == "Top", self.datasets.values())),
                     label = "Top",
                     color = "green",
                     signalOp = sel.signalHistWmass,
                 ), 
                 "Diboson" : dict(
-                    members = [self.datasets["WWPostVFP"]],
+                    members = list(filter(lambda y: y.group == "Diboson", self.datasets.values())),
                     label = "Diboson",
                     color = "pink",
                     signalOp = sel.signalHistWmass,
