@@ -2,29 +2,35 @@ import argparse
 import pickle
 import gzip
 import ROOT
+
 parser = argparse.ArgumentParser()
-parser.add_argument("-j", "--nThreads", type=int, help="number of threads", default=None)
-parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
-parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
-parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
-parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=None)
-parser.add_argument("--noMuonCorr", action="store_true", help="Don't use corrected pt-eta-phi-charge")
-parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency and prefiring")
-parser.add_argument("--noScetlibCorr", dest="applyScetlibCorr", action="store_false", help="Don't use Scetlib corrections")
-args = parser.parse_args()
+parser.add_argument("--nThreads", type=int, help="number of threads", default=None)
+initargs,_ = parser.parse_known_args()
 
 ROOT.gInterpreter.ProcessLine(".O3")
-if not args.nThreads:
+if not initargs.nThreads:
     ROOT.ROOT.EnableImplicitMT()
-elif args.nThreads != 1:
-    ROOT.ROOT.EnableImplicitMT(args.nThreads)
-
+elif init.args.nThreads != 1:
+    ROOT.ROOT.EnableImplicitMT(initargs.nThreads)
 import narf
 import wremnants
-from wremnants import theory_tools
+from wremnants import theory_tools,syst_tools
 import hist
 import lz4.frame
 import logging
+import math
+import time
+
+logging.basicConfig(level=logging.INFO)
+
+parser.add_argument("--pdfs", type=str, nargs="*", default=["nnpdf31"], choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for (first is central set)")
+parser.add_argument("--altPdfOnlyCentral", action='store_true', help="Only store central value for alternate PDF sets")
+parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
+parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name")
+parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")
+parser.add_argument("--scetlibCorr", choices=["altHist", "noUnc", "full", "altHistNoUnc"], help="Save hist for SCETlib correction with/without uncertainties, with/without modifying central weight")
+parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
+args = parser.parse_args()
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None)
@@ -57,9 +63,6 @@ axis_passMT = hist.axis.Boolean(name = "passMT")
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
 
 axis_ptVgen = qcdScaleByHelicity_Whelper.hist.axes["ptVgen"]
-axis_absYVgen = hist.axis.Variable(
-    [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4, 10], name = "absYVgen"
-)
 axis_chargeVgen = qcdScaleByHelicity_Whelper.hist.axes["chargeVgen"]
 
 # extra axes which can be used to label tensor_axes
@@ -159,13 +162,25 @@ def build_graph(df, dataset):
             weight_expr += "*weight_fullMuonSF_withTrackingReco"
         
         if isW or isZ:
+            if args.pdfs[0] != "nnpdf31":
+                weight_expr = f"{weight_expr}*{theory_tools.pdf_central_weight(dataset.name, args.pdfs[0])}"
+
             df = wremnants.define_prefsr_vars(df)
-            if applyScetlibCorr:
-                df = theory_tools.define_scetlib_corr(df, weight_expr, scetlibCorrZ_helper if isZ else scetlibCorrW_helper)
+
+            modify_central_weight = args.scetlibCorr in ["altHist", "altHistNoUnc"]
+
+            if args.scetlibCorr:
+                df = theory_tools.define_scetlib_corr(df, weight_expr, scetlibCorrZ_helper if isZ else scetlibCorrW_helper,
+                    modify_central_weight=args.scetlibCorr in ["full", "noUnc"], skipUncertainties=args.scetlibCorr in ["noUnc", "altHistNoUnc"])
                 results.extend(theory_tools.make_scetlibCorr_hists(df, "nominal", axes=nominal_axes, cols=nominal_cols, 
-                    helper=scetlibCorrZ_helper if isZ else scetlibCorrW_helper))
+                    helper=scetlibCorrZ_helper if isZ else scetlibCorrW_helper,
+                    modify_central_weight=args.scetlibCorr in ["full", "noUnc"], skipUncertainties=args.scetlibCorr in ["noUnc", "altHistNoUnc"]))
             else:
                 df = df.Define("nominal_weight", weight_expr)
+
+            for i, pdf in enumerate(args.pdfs):
+                withUnc = i == 0 or not args.altPdfOnlyCentral
+                results.extend(theory_tools.define_and_make_pdf_hists(df, nominal_axes, nominal_cols, dataset.name, pdf, withUnc))
         else:
             df = df.Define("nominal_weight", weight_expr)
 
@@ -203,26 +218,24 @@ def build_graph(df, dataset):
 
             # currently SCETLIB corrections are applicable to W-only, and helicity-split scales are only valid for one of W or Z at a time
             # TODO make this work for both simultaneously as needed
-            helicity_helper = qcdScaleByHelicity_Zhelper if isZ else qcdScaleByHelicity_Whelper
-            # TODO: Should have consistent order here with the scetlib correction function
-            df = df.Define("helicityWeight_tensor", helicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
-            qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", [*nominal_axes, axis_absYVgen, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "absYVgen", "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=helicity_helper.tensor_axes)
-            results.append(qcdScaleByHelicityUnc)
+            if not args.skipHelicity:
+                helicity_helper = qcdScaleByHelicity_Zhelper if isZ else qcdScaleByHelicity_Whelper
+                # TODO: Should have consistent order here with the scetlib correction function
+                df = df.Define("helicityWeight_tensor", helicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
+                qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=helicity_helper.tensor_axes)
+                results.append(qcdScaleByHelicityUnc)
 
-            results.extend(theory_tools.define_and_make_pdf_hists(df, nominal_axes, nominal_cols, dataset))
-
-            nweights = 21 if isW else 23
-            df = df.Define("massWeight_tensor", f"wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight)")
-            df = df.Define("massWeight_tensor_wnom", "auto res = massWeight_tensor; res = nominal_weight*res; return res;")
-
-            if isW:
-                massWeight = df.HistoBoost("massWeight", nominal_axes, [*nominal_cols, "massWeight_tensor_wnom"])
-                results.append(massWeight)
+            masswargs = (nominal_axes, nominal_cols) if isW else (None, None)
+            df, masswhist = syst_tools.define_mass_weights(df, isW, *masswargs)
+            if masswhist:
+                results.append(masswhist)
 
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:
+                # TODO: Move to syst_tools
                 if True:
                     netabins = 4
+                    nweights = 21
                     df = df.Define("muonScaleDummy4Bins2e4", f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(nominal_weight, massWeight_tensor, goodMuons_eta0, 2.e-4, {str(isW).lower()})")
                     scale_etabins_axis = hist.axis.Regular(netabins, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
                     dummyMuonScaleSyst = df.HistoBoost("muonScaleSyst", nominal_axes, [*nominal_cols, "muonScaleDummy4Bins2e4"],
@@ -266,6 +279,8 @@ fname = "mw_with_mu_eta_pt.pkl.lz4"
 if args.postfix:
     fname = fname.replace(".pkl.lz4", f"_{args.postfix}.pkl.lz4")
 
-print("writing output")
+time0 = time.time()
+print("writing output...")
 with lz4.frame.open(fname, "wb") as f:
     pickle.dump(resultdict, f, protocol = pickle.HIGHEST_PROTOCOL)
+print("Output", time.time()-time0)

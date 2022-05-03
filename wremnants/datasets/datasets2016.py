@@ -8,10 +8,10 @@ lumicsv = f"{pathlib.Path(__file__).parent.parent}/data/bylsoutput.csv"
 lumijson = f"{pathlib.Path(__file__).parent.parent}/data/Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.txt"
 
 #TODO add the rest of the samples!
-def makeFilelist(paths, maxFiles=-1, eos=False):
+def makeFilelist(paths, maxFiles=-1):
     filelist = []
     for path in paths:
-        filelist.extend(glob.glob(path) if not eos else buildXrdFileList(path, "eoscms.cern.ch"))
+        filelist.extend(glob.glob(path) if path[:4] != "/eos" else buildXrdFileList(path, "eoscms.cern.ch"))
     return filelist if maxFiles < 0 else filelist[:maxFiles]
 
 def getDatasets(maxFiles=-1, filt=None, mode=None):
@@ -34,30 +34,16 @@ def getDatasets(maxFiles=-1, filt=None, mode=None):
 
     Zmm_bugfix = narf.Dataset(name = "Zmumu_bugfix",
         filepaths = makeFilelist(
-            ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/DYJetsToMuMu_svn3900_BugFix_TuneCP5_13TeV-powheg-MiNNLO-pythia8-photos/RunIISummer15wmLHEGS/*/*/*.root"], maxFiles),
-        is_data = False,
-        xsec = 2001.9,
-    )
-
-    Zmm_bugfix_newprod = narf.Dataset(name = "Zmumu_newprod",
-        filepaths = makeFilelist(
-            ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/DYJetsToMuMu_svn3900_newprod_BugFix_TuneCP5_13TeV-powheg-MiNNLO-pythia8-photos/*/*/*/*.root"], maxFiles),
+            ["/scratch/shared/NanoGen/DYJetsToMuMu_svn3900_BugFix_TuneCP5_13TeV-powheg-MiNNLO-pythia8-photos/RunIISummer15wmLHEGS/*/*/*.root"], maxFiles),
         is_data = False,
         xsec = 2001.9,
     )
 
     Zmm_bugfix_slc7 = narf.Dataset(name = "Zmumu_bugfix_slc7",
         filepaths = makeFilelist(
-            ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/DYJetsToMuMu_svn3900_slc7_BugFix_TuneCP5_13TeV-powheg-MiNNLO-pythia8-photos/RunIISummer15wmLHEGS/*/*/*.root"], maxFiles),
+            ["/scratch/shared/NanoGen/DYJetsToMuMu_svn3900_slc7_BugFix_TuneCP5_13TeV-powheg-MiNNLO-pythia8-photos/RunIISummer15wmLHEGS/*/*/*.root"], maxFiles),
         is_data = False,
-        xsec = 1976.1,
-    )
-
-    Zmm_bugfix = narf.Dataset(name = "Zmumu_bugfix",
-        filepaths = makeFilelist(
-            ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/DYJetsToMuMu_svn3900_BugFix_TuneCP5_13TeV-powheg-MiNNLO-pythia8-photos/RunIISummer15wmLHEGS/*/*/*.root"], maxFiles),
-        is_data = False,
-        xsec = 2001.1,
+        xsec = 2001.9,
     )
 
     BR_TAUToMU = 0.1739
@@ -208,12 +194,12 @@ def getDatasets(maxFiles=-1, filt=None, mode=None):
 
     allPostVFP_gen = allPostVFP[1:]
     allPostVFP_gen.extend([
+        Zmm_bugfix,
         Zmm_bugfix_slc7,
-        Zmm_bugfix_newprod,
         Wmmunu_bugfix,
         Wmmunu_bugfix_newprod,
         Wpmunu_bugfix,
-        Wpmunu_bugfix_reweight_h2,
+        #Wpmunu_bugfix_reweight_h2,
     ])
 
     samples = allPostVFP if mode != "gen" else allPostVFP_gen
