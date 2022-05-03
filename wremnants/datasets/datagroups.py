@@ -21,8 +21,8 @@ class datagroups(object):
 
         if self.datasets:
             self.data = [x for x in self.datasets.values() if x.is_data]
-            if self.data:
-                self.lumi = sum([self.results[x.name]["lumi"] for x in self.data if x.name in self.results])
+            #if self.data:
+            #    self.lumi = sum([self.results[x.name]["lumi"] for x in self.data if x.name in self.results])
 
         self.groups = {}
 

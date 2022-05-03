@@ -153,14 +153,17 @@ class CardTool(object):
         if "labelsByAxis" in systInfo:
             systAxesLabels = systInfo["labelsByAxis"]
 
+        # Jan: moved above the mirror action, as this action can cause mirroring
+        if systInfo["action"]:
+            hvar = systInfo["action"](hvar, **systInfo["actionArgs"])
+            
         axNames = systAxes[:]
         axLabels = systAxesLabels[:]
         if hvar.axes[-1].name == "mirror":
             axNames.append("mirror")
             axLabels.append("mirror")
 
-        if systInfo["action"]:
-            hvar = systInfo["action"](hvar, **systInfo["actionArgs"])
+        
 
         if not all([name in [ax.name for ax in hvar.axes] for name in axNames]):
             raise ValueError(f"Failed to find axis names '{str(systAxes)} in hist. " \

@@ -162,6 +162,19 @@ Vec_f trigFilter(Vec_f tag, Vec_f trigMatch) {
 
 
 
+Vec_i indices_(const Vec_f& vec, const int& start = 0) {
+    Vec_i res(vec.size(), 0);
+    std::iota(std::begin(res), std::end(res), start);
+    return res;
+}
+
+Vec_i indices_(const int& size, const int& start = 0) {
+    Vec_i res(size, 0);
+    std::iota(std::begin(res), std::end(res), start);
+    return res;
+}
+
+
 }
 
 
