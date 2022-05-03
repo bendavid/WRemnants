@@ -5,16 +5,22 @@ from wremnants.datasets.datagroups import datagroups2016
 import argparse
 import os
 import pathlib
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 scriptdir = f"{pathlib.Path(__file__).parent}"
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-o", "--outfolder", type=str, default="/scratch/kelong/CombineStudies")
 parser.add_argument("-i", "--inputFile", type=str, required=True)
-parser.add_argument("--qcdScale", choices=["byHelicityPt", "byPt", "integrated"], default="byHelicityPt", 
+parser.add_argument("--qcdScale", choices=["byHelicityPt", "byPt", "integrated", "ByCharge"], default="byHelicityPt", 
         help="Decorrelation for QCDscale (additionally always by charge)")
 parser.add_argument("--wlike", action='store_true', help="Run W-like analysis of mZ")
+parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow)")
 parser.add_argument("--pdf", type=str, default="nnpdf31", choices=theory_tools.pdfMap.keys(), help="PDF to use")
+parser.add_argument("-b", "--fitObs", type=str, default="nominal", help="Observable to fit")
+parser.add_argument("-p", "--pseudoData", type=str, help="Hist to use as pseudodata")
 args = parser.parse_args()
 
 if not os.path.isdir(args.outfolder):
@@ -29,28 +35,39 @@ cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/{name}CombineInput.root")
 cardTool.setDatagroups(datagroups)
 cardTool.setSpacing(36)
 
-print("All processes", cardTool.allMCProcesses())
+logging.info(f"All processes {cardTool.allMCProcesses()}")
 single_v_samples = cardTool.filteredProcesses(lambda x: x[0] in ["W", "Z"])
 single_v_and_fake_samples = cardTool.filteredProcesses(lambda x: x[0] in ["W", "Z"] or x == "Fake")
 single_vmu_samples = list(filter(lambda x: "mu" in x, single_v_samples))
 signal_samples = list(filter(lambda x: x[0] == ("Z" if args.wlike else "W"), single_vmu_samples))
 signal_samples_inctau = list(filter(lambda x: x[0] == ("Z" if args.wlike else "W"), single_v_samples))
-print("Single V samples", single_v_samples)
-print("Single Vmu samples", single_vmu_samples)
-print("signal samples", signal_samples)
-print("single_c_fake_samples", single_v_and_fake_samples)
+logging.info("Single V samples: {single_v_samples}")
+logging.info("Signal samples: {signal_samples}")
 
-pdfName = theory_tools.pdfMap[args.pdf]["name"]
-cardTool.addSystematic(pdfName, 
-    processes=single_v_and_fake_samples,
-    mirror=True,
-    group=pdfName,
-    systAxes=["tensor_axis_0"],
-    labelsByAxis=[pdfName.replace("pdf", "pdf{i}")],
-    # Needs to be a tuple, since for multiple axis it would be (ax1, ax2, ax3)...
-    # -1 means all possible values of the mirror axis
-    skipEntries=[(0, -1)],
-)
+if args.pseudoData:
+    cardTool.setPseudodata(args.pseudoData)
+
+pdfInfo = theory_tools.pdf_info_map(signal_samples[0], args.pdf)
+pdfName = pdfInfo["name"]
+if pdfInfo["combine"] == "symHessian":
+    cardTool.addSystematic(pdfName, 
+        processes=single_v_and_fake_samples,
+        mirror=True,
+        group=pdfName,
+        systAxes=["tensor_axis_0"],
+        labelsByAxis=[pdfName.replace("pdf", "pdf{i}")],
+        # Needs to be a tuple, since for multiple axis it would be (ax1, ax2, ax3)...
+        # -1 means all possible values of the mirror axis
+        skipEntries=[(0, -1)],
+    )
+else:
+    cardTool.addSystematic(pdfName, 
+        processes=single_v_and_fake_samples,
+        mirror=False,
+        group=pdfName,
+        systAxes=["tensor_axis_0"],
+        outNames=theory_tools.pdfNamesAsymHessian(pdfInfo["entries"])
+    )
 
 cardTool.addSystematic(f"alphaS002{pdfName}", 
     processes=single_v_and_fake_samples,
@@ -60,20 +77,26 @@ cardTool.addSystematic(f"alphaS002{pdfName}",
     outNames=[pdfName+"AlphaSUp", pdfName+"AlphaSDown"],
     scale=0.75,
 )
-for name,num in zip(["effSystIsoTnP", "effStatTnP",], [2, 624*4]):
-    axes = ["idiptrig-iso"] if num == 2 else ["SF eta", "SF pt", "SF charge", "idiptrig-iso"]
-    axlabels = ["IDIPTrig"] if num == 2 else ["eta", "pt", "q", "Trig"]
-    cardTool.addSystematic(name, 
-        mirror=True,
-        group="muon_eff",
-        systAxes=axes,
-        labelsByAxis=axlabels,
-        baseName=name+"_",
-        processes=cardTool.filteredProcesses(lambda x: x != "Data"),
-    )
+if not args.noEfficiencyUnc:
+    for name,num in zip(["effSystIsoTnP", "effStatTnP",], [2, 624*4]):
+        axes = ["idiptrig-iso"] if num == 2 else ["SF eta", "SF pt", "SF charge", "idiptrig-iso"]
+        axlabels = ["IDIPTrig"] if num == 2 else ["eta", "pt", "q", "Trig"]
+        cardTool.addSystematic(name, 
+            mirror=True,
+            group="muon_eff",
+            systAxes=axes,
+            labelsByAxis=axlabels,
+            baseName=name+"_",
+            processes=cardTool.filteredProcesses(lambda x: x != "Data"),
+        )
 
+inclusiveScale = args.qcdScale == "integrated"
 scaleSystAxes = ["chargeVgen", "muRfact", "muFfact"] 
 scaleLabelsByAxis = ["q", "muR", "muF"]
+if inclusiveScale:
+    scaleSystAxes.pop(0)
+    scaleLabelsByAxis.pop(0)
+
 scaleGroupName = "QCDscale"
 scaleActionArgs = {"sum_ptV" : True, "sum_helicity" : True}
 scaleSkipEntries = [(-1, 1, 1), (-1, 0, 2), (-1, 2, 0)]
@@ -91,9 +114,13 @@ if "Pt" in args.qcdScale:
     scaleLabelsByAxis.insert(0, "genPtV")
     scaleSkipEntries = [(-1, *x) for x in scaleSkipEntries]
 
-cardTool.addSystematic("qcdScaleByHelicity", 
-    action=syst_tools.scale_helicity_hist_to_variations,
-    actionArgs=scaleActionArgs,
+print("Inclusive scale", inclusiveScale)
+print(scaleActionArgs if not inclusiveScale else None)
+print(scaleLabelsByAxis)
+
+cardTool.addSystematic("qcdScaleByHelicity" if not inclusiveScale else "qcdScale",
+    action=syst_tools.scale_helicity_hist_to_variations if not inclusiveScale else None,
+    actionArgs=scaleActionArgs if not inclusiveScale else None,
     processes=signal_samples,
     group=scaleGroupName,
     systAxes=scaleSystAxes,
@@ -106,6 +133,7 @@ cardTool.addSystematic("qcdScaleByHelicity",
         ("muR0muF1", "muRDown"), ("muR1muF0", "muFDown"), ("muR1muF2", "muFUp")],
     baseName="QCDscale_",
     )
+
 
 cardTool.addSystematic("muonScaleSyst", 
     processes=single_vmu_samples,

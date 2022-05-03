@@ -51,7 +51,7 @@ class datagroups(object):
                     h = self.readHist(baseName, member, syst, scaleOp=scale, forceNonzero=forceNonzero)
                 except ValueError as e:
                     if nominalIfMissing:
-                        h = self.readHist(baseName, member, self.nominalName, scaleOp=scale, forceNonzero=forceNonzero)
+                        h = self.readHist(self.nominalName, member, "", scaleOp=scale, forceNonzero=forceNonzero)
                     else:
                         logging.warning(str(e))
                         continue
