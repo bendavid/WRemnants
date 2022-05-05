@@ -169,14 +169,12 @@ def build_graph(df, dataset):
 
             df = wremnants.define_prefsr_vars(df)
 
-            modify_central_weight = args.scetlibCorr in ["altHist", "altHistNoUnc"]
-
             if args.scetlibCorr:
                 df = theory_tools.define_scetlib_corr(df, weight_expr, scetlibCorrZ_helper if isZ else scetlibCorrW_helper,
-                    modify_central_weight=args.scetlibCorr in ["full", "noUnc"])
+                    corr_type=args.scetlibCorr)
                 results.extend(theory_tools.make_scetlibCorr_hists(df, "nominal", axes=nominal_axes, cols=nominal_cols, 
                     helper=scetlibCorrZ_helper if isZ else scetlibCorrW_helper,
-                    modify_central_weight=args.scetlibCorr in ["full", "noUnc"], skipUncertainties=args.scetlibCorr in ["noUnc", "altHistNoUnc"]))
+                    corr_type=args.scetlibCorr))
             else:
                 df = df.Define("nominal_weight", weight_expr)
 

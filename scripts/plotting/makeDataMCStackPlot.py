@@ -32,7 +32,9 @@ variation.add_argument("--selectEntires", type=str, help="entries to read from t
 
 args = parser.parse_args()
 
-if args.selectAxis or args.selectEntries:
+addVariation = hasattr(args, "varName") and args.varName
+
+if addVariation and (args.selectAxis or args.selectEntries):
     if not (args.selectAxis and args.selectEntries):
         raise ValueError("Must --selectAxis and --selectEntires together")
     if len(args.varlabel) != 1 and (len(args.varLabel) != len(args.selectAxis) or len(args.varLabel) != len(args.selectEntries)):
@@ -43,7 +45,6 @@ groups.loadHistsForDatagroups(args.baseName, syst="")
 
 exclude = ["Data"]
 
-addVariation = hasattr(args, "varName") and args.varName
 if addVariation:
     groups.loadHistsForDatagroups("", syst=args.varName)
     groups.addSummedProc(args.baseName, name=args.varName, label=args.varLabel[0])
