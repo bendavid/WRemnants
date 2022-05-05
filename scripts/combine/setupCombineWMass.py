@@ -14,7 +14,7 @@ scriptdir = f"{pathlib.Path(__file__).parent}"
 parser = argparse.ArgumentParser()
 parser.add_argument("-o", "--outfolder", type=str, default="/scratch/kelong/CombineStudies")
 parser.add_argument("-i", "--inputFile", type=str, required=True)
-parser.add_argument("--qcdScale", choices=["byHelicityPt", "byPt", "integrated", "ByCharge"], default="byHelicityPt", 
+parser.add_argument("--qcdScale", choices=["byHelicityPt", "byPt", "integrated",], default="byHelicityPt", 
         help="Decorrelation for QCDscale (additionally always by charge)")
 parser.add_argument("--wlike", action='store_true', help="Run W-like analysis of mZ")
 parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow)")
