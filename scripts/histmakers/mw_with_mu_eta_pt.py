@@ -23,12 +23,15 @@ import time
 
 logging.basicConfig(level=logging.INFO)
 
+parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
 parser.add_argument("--pdfs", type=str, nargs="*", default=["nnpdf31"], choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for (first is central set)")
 parser.add_argument("--altPdfOnlyCentral", action='store_true', help="Only store central value for alternate PDF sets")
 parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
 parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name")
 parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")
 parser.add_argument("--scetlibCorr", choices=["altHist", "noUnc", "full", "altHistNoUnc"], help="Save hist for SCETlib correction with/without uncertainties, with/without modifying central weight")
+parser.add_argument("--noMuonCorr", action="store_true", help="Don't use corrected pt-eta-phi-charge")
+parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency and prefiring")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
 args = parser.parse_args()
 
@@ -37,7 +40,6 @@ datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt 
 
 era = args.era
 noMuonCorr = args.noMuonCorr
-applyScetlibCorr = args.applyScetlibCorr
 noScaleFactors = args.noScaleFactors 
 
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
@@ -171,7 +173,7 @@ def build_graph(df, dataset):
 
             if args.scetlibCorr:
                 df = theory_tools.define_scetlib_corr(df, weight_expr, scetlibCorrZ_helper if isZ else scetlibCorrW_helper,
-                    modify_central_weight=args.scetlibCorr in ["full", "noUnc"], skipUncertainties=args.scetlibCorr in ["noUnc", "altHistNoUnc"])
+                    modify_central_weight=args.scetlibCorr in ["full", "noUnc"])
                 results.extend(theory_tools.make_scetlibCorr_hists(df, "nominal", axes=nominal_axes, cols=nominal_cols, 
                     helper=scetlibCorrZ_helper if isZ else scetlibCorrW_helper,
                     modify_central_weight=args.scetlibCorr in ["full", "noUnc"], skipUncertainties=args.scetlibCorr in ["noUnc", "altHistNoUnc"]))
