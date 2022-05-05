@@ -49,6 +49,9 @@ if args.pseudoData:
 
 pdfInfo = theory_tools.pdf_info_map(signal_samples[0], args.pdf)
 pdfName = pdfInfo["name"]
+
+addVariation = hasattr(args, "varName") and args.varName
+
 if pdfInfo["combine"] == "symHessian":
     cardTool.addSystematic(pdfName, 
         processes=single_v_and_fake_samples,

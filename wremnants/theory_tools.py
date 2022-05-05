@@ -171,7 +171,9 @@ def pdf_central_weight(dataset, pdfset):
     pdfBranch = pdfInfo["branch"]
     return f"{pdfBranch}[0]"
 
-def define_scetlib_corr(df, weight_expr, helper, modify_central_weight=True):
+def define_scetlib_corr(df, weight_expr, helper, corr_type):
+    modify_central_weight = corr_type in ["altHist", "altHistNoUnc"]
+
     if modify_central_weight:
         df = df.Define("nominal_weight_uncorr", weight_expr)
     else:
@@ -185,7 +187,10 @@ def define_scetlib_corr(df, weight_expr, helper, modify_central_weight=True):
         df = df.Alias("nominal_weight", "scetlibCentralWeight")
     return df
 
-def make_scetlibCorr_hists(df, name, axes, cols, helper, modify_central_weight=True, skipUncertainties=False):
+def make_scetlibCorr_hists(df, name, axes, cols, helper, corr_type):
+    modify_central_weight = corr_type in ["altHist", "altHistNoUnc"]
+    skipUncertainties = corr_type in ["noUnc", "altHistNoUnc"]
+
     res = []
     if modify_central_weight:
         nominal_uncorr = df.HistoBoost(f"{name}_uncorr", axes, [*cols, "nominal_weight_uncorr"])
@@ -275,7 +280,9 @@ def pdfNames(cardTool, pdf, skipFirst=True):
     return names
 
 def pdfNamesAsymHessian(entries):
-    return ["pdf{i}{shift}".format(i=int(j/2), shift="Up" if j % 2 else "Down") for j in range(entries)]
+    pdfNames = [""] # Skip central weight
+    pdfNames.extend(["pdf{i}{shift}".format(i=int(j/2), shift="Up" if j % 2 else "Down") for j in range(entries-1)])
+    return pdfNames
 
 def pdfSymmetricShifts(hdiff, axis_name):
     sq = hh.multiplyHists(hdiff, hdiff)
