@@ -11,6 +11,8 @@ parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over pr
 parser.add_argument("--noMuonCorr", action="store_true", help="Don't use corrected pt-eta-phi-charge")
 parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency and prefiring")
 parser.add_argument("--noScetlibCorr", dest="applyScetlibCorr", action="store_false", help="Don't use Scetlib corrections")
+parser.add_argument("--eta", type=str, help="Eta binning as 'nbins,min,max' (only uniform for now)", default="48,-2.4,2.4")
+parser.add_argument("--pt", type=str, help="Pt binning as 'nbins,min,max' (only uniform for now)", default="29,26.,55.")
 args = parser.parse_args()
 
 ROOT.gInterpreter.ProcessLine(".O3")
@@ -43,9 +45,22 @@ qcdScaleByHelicity_Whelper = wremnants.makeQCDScaleByHelicityHelper()
 wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP"]
 zprocs = ["ZmumuPostVFP", "ZtautauPostVFP"]
 
+# custom template binning
+# round as precaution because e.g. sometimes 2.4 gets read as 2.3999 in python (1 digit would be enough but just in case)
+tokens_eta = args.eta.split(',')
+template_neta = int(tokens_eta[0])
+template_mineta = round(float(tokens_eta[1]), 2)
+template_maxeta = round(float(tokens_eta[2]), 2)
+print(f"Eta binning: {template_neta} bins from {template_mineta} to {template_maxeta}")
+tokens_pt = args.pt.split(',')
+template_npt = int(tokens_pt[0])
+template_minpt = round(float(tokens_pt[1]), 2)
+template_maxpt = round(float(tokens_pt[2]), 2)
+print(f"Pt binning: {template_npt} bins from {template_minpt} to {template_maxpt}")
+
 # standard regular axes
-axis_eta = hist.axis.Regular(48, -2.4, 2.4, name = "eta")
-axis_pt = hist.axis.Regular(29, 26., 55., name = "pt")
+axis_eta = hist.axis.Regular(template_neta, template_mineta, template_maxeta, name = "eta")
+axis_pt = hist.axis.Regular(template_npt, template_minpt, template_maxpt, name = "pt")
 
 # categorical axes in python bindings always have an overflow bin, so use a regular
 # axis for the charge
