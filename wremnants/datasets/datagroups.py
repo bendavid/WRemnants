@@ -53,7 +53,8 @@ class datagroups(object):
                     h = self.readHist(baseName, member, syst, scaleOp=scale, forceNonzero=forceNonzero)
                 except ValueError as e:
                     if nominalIfMissing:
-                        h = self.readHist(baseName, member, self.nominalName, scaleOp=scale, forceNonzero=forceNonzero)
+                        logging.info(f"{str(e)}. Using nominal hist {self.nominalName} instead")
+                        h = self.readHist(self.nominalName, member, "", scaleOp=scale, forceNonzero=forceNonzero)
                     else:
                         logging.warning(str(e))
                         continue
@@ -112,7 +113,7 @@ class datagroups(object):
     def processes(self):
         return self.groups.keys()
 
-    def addUncorrectedProc(self, refname, name="uncorr", label="Uncorrected", color="red", exclude=["Data"]):
+    def addSummedProc(self, refname, name, label, color="red", exclude=["Data"]):
         self.loadHistsForDatagroups(refname, syst=name)
         self.groups[name] = dict(
             label=label,
@@ -120,6 +121,15 @@ class datagroups(object):
             members=[],
         )
         self.groups[name][refname] = sum([self.groups[x][name] for x in self.groups.keys() if x not in exclude+[name]])
+
+    def copyWithAction(self, action, name, refproc, refname, label, color):
+        self.groups[name] = dict(
+            label=label,
+            color=color,
+            members=[],
+        )
+        self.groups[name][refname] = action(self.groups[refproc][refname])
+
 
 class datagroups2016(datagroups):
     def __init__(self, infile, combine=False, wlike=False):
