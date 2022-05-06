@@ -10,6 +10,7 @@ import numpy as np
 import collections.abc
 import os
 import itertools
+import re
 
 logging.basicConfig(level=logging.INFO)
 
@@ -38,8 +39,26 @@ class CardTool(object):
         self.buildHistNameFunc = None
         self.histName = "x"
         self.pseudoData = None
+        self.excludeSyst = None
+        self.keepSyst = None # to override previous one with exceptions for special cases
         #self.loadArgs = {"operation" : "self.loadProcesses (reading hists from file)"}
 
+    ## Functions to customize systs to be added in card, mainly for tests
+    def setCustomSystForCard(self, exclude=None, keep=None):
+        if exclude: self.excludeSyst = re.compile(exclude)
+        if keep:    self.keepSyst    = re.compile(keep)
+        
+    def isExcludedNuisance(self, name):
+        # note, re.match search for a match from the beginning, so if x="test" x.match("mytestPDF1") will NOT match 
+        # might use re.search instead to be able to match from anywhere inside the name
+        if self.excludeSyst != None and self.excludeSyst.match(name):
+            if self.keepSyst != None and self.keepSyst.match(name):
+                return False
+            else:
+                print(">>>>> Excluding nuisance: ", name)
+                return True
+        else:
+            return False
     # Function call to load hists for processes (e.g., read from a ROOT file)
     # Extra args will be passed to each call
     def setLoadDatagroups(self, datagroups, extraArgs={}):
@@ -285,6 +304,8 @@ class CardTool(object):
 
         # Deduplicate while keeping order
         systNames = list(dict.fromkeys(names))
+        systnamesPruned = [s for s in systNames if not self.isExcludedNuisance(s)]
+        systNames = systnamesPruned[:]
         for systname in systNames:
             shape = "shape" if not systInfo["noConstraint"] else "shapeNoConstraint"
             for chan in self.channels:
@@ -295,13 +316,15 @@ class CardTool(object):
             # TODO: Make more general
             label = "group" if not systInfo["noConstraint"] else "noiGroup"
             filt = systInfo["groupFilter"]
-            members = " ".join(systNames if not filt else filter(filt, systNames))
-            group_expr = f"{group} {label} ="
-            if group_expr in self.cardGroups:
-                idx = self.cardGroups.index(group_expr)+len(group_expr)
-                self.cardGroups = self.cardGroups[:idx] + " " + members + " " + self.cardGroups[idx:]
-            else:
-                self.cardGroups += f"\n{group_expr} {members}"
+            systNamesForGroup = list(systNames if not filt else filter(filt, systNames))
+            if len(systNamesForGroup):
+                members = " ".join(systNamesForGroup)
+                group_expr = f"{group} {label} ="
+                if group_expr in self.cardGroups:
+                    idx = self.cardGroups.index(group_expr)+len(group_expr)
+                    self.cardGroups = self.cardGroups[:idx] + " " + members + " " + self.cardGroups[idx:]
+                else:
+                    self.cardGroups += f"\n{group_expr} {members}"
 
     def setUnconstrainedProcs(self, procs):
         self.unconstrainedProcesses = procs

@@ -31,7 +31,7 @@ parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over pr
 parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")
 parser.add_argument("--scetlibCorr", choices=["altHist", "noUnc", "full", "altHistNoUnc"], help="Save hist for SCETlib correction with/without uncertainties, with/without modifying central weight")
 parser.add_argument("--noMuonCorr", action="store_true", help="Don't use corrected pt-eta-phi-charge")
-parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency and prefiring")
+parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
 parser.add_argument("--eta", type=str, help="Eta binning as 'nbins,min,max' (only uniform for now)", default="48,-2.4,2.4")
 parser.add_argument("--pt", type=str, help="Pt binning as 'nbins,min,max' (only uniform for now)", default="29,26.,55.")
