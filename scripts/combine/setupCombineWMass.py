@@ -14,13 +14,16 @@ scriptdir = f"{pathlib.Path(__file__).parent}"
 parser = argparse.ArgumentParser()
 parser.add_argument("-o", "--outfolder", type=str, default="/scratch/kelong/CombineStudies")
 parser.add_argument("-i", "--inputFile", type=str, required=True)
-parser.add_argument("--qcdScale", choices=["byHelicityPt", "byPt", "integrated",], default="byHelicityPt", 
+parser.add_argument("--qcdScale", choices=["byHelicityPt", "byPt", "integrated"], default="byHelicityPt", 
         help="Decorrelation for QCDscale (additionally always by charge)")
 parser.add_argument("--wlike", action='store_true', help="Run W-like analysis of mZ")
 parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow)")
 parser.add_argument("--pdf", type=str, default="nnpdf31", choices=theory_tools.pdfMap.keys(), help="PDF to use")
 parser.add_argument("-b", "--fitObs", type=str, default="nominal", help="Observable to fit")
 parser.add_argument("-p", "--pseudoData", type=str, help="Hist to use as pseudodata")
+parser.add_argument("-x",  "--excludeNuisances", type=str, default="", help="Regular expression to exclude some systematics from the datacard")
+parser.add_argument("-k",  "--keepNuisances", type=str, default="", help="Regular expression to keep some systematics, overriding --excludeNuisances. Can be used to keep only some systs while excluding all the others with '.*'")
+
 args = parser.parse_args()
 
 if not os.path.isdir(args.outfolder):
@@ -34,6 +37,7 @@ cardTool.setNominalTemplate(f"{templateDir}/main.txt")
 cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/{name}CombineInput.root"))
 cardTool.setDatagroups(datagroups)
 cardTool.setSpacing(36)
+cardTool.setCustomSystForCard(args.excludeNuisances, args.keepNuisances)
 
 logging.info(f"All processes {cardTool.allMCProcesses()}")
 single_v_samples = cardTool.filteredProcesses(lambda x: x[0] in ["W", "Z"])
