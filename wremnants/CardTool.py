@@ -120,7 +120,8 @@ class CardTool(object):
         return names
 
     def addLnNSystematic(self, name, size, processes):
-        self.lnNSystematics.update({name : {"size" : size, "processes" : processes}})
+        if not self.isExcludedNuisance(name):
+            self.lnNSystematics.update({name : {"size" : size, "processes" : processes}})
 
     def addSystematic(self, name, systAxes, outNames=None, skipEntries=None, labelsByAxis=None, 
                         baseName="", mirror=False, scale=1, processes=None, group=None, noConstraint=False,
