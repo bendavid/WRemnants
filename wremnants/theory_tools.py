@@ -1,6 +1,9 @@
 import ROOT
 import hist
 import numpy as np
+import copy
+from wremnants import boostHistHelpers as hh
+import logging
 
 ROOT.gInterpreter.Declare('#include "theoryTools.h"')
 
@@ -115,6 +118,7 @@ def define_prefsr_vars(df):
     df = df.Define("ptVgen", "genV.pt()")
     df = df.Define("massVgen", "genV.mass()")
     df = df.Define("yVgen", "genV.Rapidity()")
+    df = df.Define("phiVgen", "genV.Phi()")
     df = df.Define("absYVgen", "std::fabs(yVgen)")
     df = df.Define("chargeVgen", "GenPart_pdgId[prefsrLeps[0]] + GenPart_pdgId[prefsrLeps[1]]")
     df = df.Define("csSineCosThetaPhi", "wrem::csSineCosThetaPhi(genl, genlanti)")
@@ -138,7 +142,7 @@ def pdf_info_map(dataset, pdfset):
         raise ValueError(f"Skipping PDF {pdfset} for dataset {dataset}")
     return infoMap[pdfset]
 
-def define_and_make_pdf_hists(df, axes, cols, dataset, pdfset="nnpdf31", storeUnc=True):
+def define_and_make_pdf_hists(df, axes, cols, dataset, pdfset="nnpdf31", storeUnc=True, hname=""):
     try:
         pdfInfo = pdf_info_map(dataset, pdfset)
     except ValueError as e:

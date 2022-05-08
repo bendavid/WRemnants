@@ -16,6 +16,8 @@ import narf
 import numpy as np
 
 from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_Z
+from wremnants.datasets.datagroups import datagroups2016
+
 
 w = ROOT.RooWorkspace("w", "")
 
@@ -1469,7 +1471,7 @@ def doFit_2Gauss_data(outDir, qTbin, qTbinMinGeV, qTbinMaxGeV, hist_data, hist_b
             hOut.SetBinContent(qTbin, iPar+1, iVar+2, val)
             print(iPar+1, iVar+2, p.GetName(), val)
 
-    sys.exit()
+
  
   
 def doFit_bkg(outDir, qTbin, qTbinMinGeV, qTbinMaxGeV, hist, name, label, cfg):
@@ -1926,6 +1928,7 @@ def doRecoilFits_Z():
     
     
     outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/recoilCorrection/fits_Z_new/"
+    outDir = "/eos/user/j/jaeyserm/www/wmass/highPU/recoilCorrection/fits_Z/"
     
     functions.prepareDir(outDir, False)
     functions.prepareDir(outDir + "/data/", False)
@@ -1939,10 +1942,14 @@ def doRecoilFits_Z():
     functions.prepareDir(outDir + "/bkg/perp/")
     
     print("Load Boost histograms")
-    b_data_para = groups_mumu.readProc("recoil_uncorr_para_qt", "SingleMuon") + groups_ee.readProc("recoil_uncorr_para_qt", "SingleElectron")
-    b_data_perp = groups_mumu.readProc("recoil_uncorr_perp_qt", "SingleMuon") + groups_ee.readProc("recoil_uncorr_perp_qt", "SingleElectron")
-    b_mc_para = groups_mumu.readProc("recoil_uncorr_para_qt", "DYmumu") + groups_ee.readProc("recoil_uncorr_para_qt", "DYee")
-    b_mc_perp = groups_mumu.readProc("recoil_uncorr_perp_qt", "DYmumu") + groups_ee.readProc("recoil_uncorr_perp_qt", "DYee")
+    dataName = "SingleMuon"
+    signalName = "DYmumu"
+    dataName = "Data"
+    signalName = "Zmumu"
+    b_data_para = groups_mumu.readProc("recoil_uncorr_para_qt", dataName) # + groups_ee.readProc("recoil_uncorr_para_qt", "SingleElectron")
+    b_data_perp = groups_mumu.readProc("recoil_uncorr_perp_qt", dataName) # + groups_ee.readProc("recoil_uncorr_perp_qt", "SingleElectron")
+    b_mc_para = groups_mumu.readProc("recoil_uncorr_para_qt", signalName) # + groups_ee.readProc("recoil_uncorr_para_qt", "DYee")
+    b_mc_perp = groups_mumu.readProc("recoil_uncorr_perp_qt", signalName) # + groups_ee.readProc("recoil_uncorr_perp_qt", "DYee")
     
     b_bkg_para, b_bkg_perp = None, None
     for bkg in bkg_procs:
@@ -2020,10 +2027,10 @@ def doRecoilFits_Z():
         #doFit_bkg(outDir + "/bkg/perp/", iBin, qTbinMinGeV, qTbinMaxGeV, hist, "bkg_perp", "Backgrounds", cfg)
         
         hist = h_mc_para.ProjectionY("mc_para_bin%d" % iBin, iBin, iBin)
-        #doFit_2Gauss_DY(outDir + "/mc/para/", iBin, qTbinMinGeV, qTbinMaxGeV, hist, "mc_para", label_mc, cfg, h_para_mc)
+        doFit_2Gauss_DY(outDir + "/mc/para/", iBin, qTbinMinGeV, qTbinMaxGeV, hist, "mc_para", label_mc, cfg, h_para_mc)
         
         hist = h_mc_perp.ProjectionY("mc_perp_bin%d" % iBin, iBin, iBin)
-        #doFit_2Gauss_DY(outDir + "/mc/perp/", iBin, qTbinMinGeV, qTbinMaxGeV, hist, "mc_perp", label_mc, cfg, h_perp_mc)
+        doFit_2Gauss_DY(outDir + "/mc/perp/", iBin, qTbinMinGeV, qTbinMaxGeV, hist, "mc_perp", label_mc, cfg, h_perp_mc)
         
         hist_data = h_data_para.ProjectionY("data_para_bin%d" % iBin, iBin, iBin)
         hist_bkg = h_bkg_para.ProjectionY("bkg_para_bin%d" % iBin, iBin, iBin)
@@ -2031,10 +2038,11 @@ def doRecoilFits_Z():
         
         hist_data = h_data_perp.ProjectionY("data_perp_bin%d" % iBin, iBin, iBin)
         hist_bkg = h_bkg_perp.ProjectionY("bkg_perp_bin%d" % iBin, iBin, iBin)
-        #doFit_2Gauss_data(outDir + "/data/perp/", iBin, qTbinMinGeV, qTbinMaxGeV, hist_data, hist_bkg, "data_perp", "Data", cfg, h_perp_data)
+        doFit_2Gauss_data(outDir + "/data/perp/", iBin, qTbinMinGeV, qTbinMaxGeV, hist_data, hist_bkg, "data_perp", "Data", cfg, h_perp_data)
 
 
-    fOut_ = "wremnants/data/lowPU/recoil_fits_Z.root"
+    #fOut_ = "wremnants/data/lowPU/recoil_fits_Z.root"
+    fOut_ = "wremnants/data/recoil_fits_Z.root"
     fOut = ROOT.TFile(fOut_, "RECREATE")
     
     h_para_data.Write()
@@ -3034,11 +3042,13 @@ def doRecoilFits_fine(cat, met, label, qTbins):
 
 if __name__ == "__main__":
 
-    groups_mumu = datagroupsLowPU_Z("mz_lowPU_mumu.pkl.lz4")
-    groups_ee = datagroupsLowPU_Z("mz_lowPU_ee.pkl.lz4")
+    #groups_mumu = datagroupsLowPU_Z("mz_lowPU_mumu.pkl.lz4")
+    #groups_ee = datagroupsLowPU_Z("mz_lowPU_ee.pkl.lz4")
+    
+    groups_mumu = datagroups2016("mz_wlike_with_mu_eta_pt.pkl.lz4", wlike=True)
 
-    bkg_procs = ['EWK', 'TTbar']
-    #bkg_procs = ['EWK']
+    bkg_procs = ['EWK', 'TTbar'] # lowPU
+    bkg_procs = ['EWK', 'Top'] # highPU
     label = "DY #rightarrow #mu^{+}#mu^{#minus} #plus e^{+}e^{#minus}"
     
     

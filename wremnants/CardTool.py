@@ -194,6 +194,7 @@ class CardTool(object):
         return systInfo["outNames"], variations            
 
     def variationName(self, proc, name):
+        #proc = proc if proc != self.dataName else "data_obs"
         if name == self.nominalName:
             return f"{self.histName}_{proc}"
         else:
@@ -257,6 +258,7 @@ class CardTool(object):
             self.addPseudodata(self.predictedProcesses())
 
         for syst in self.systematics.keys():
+            print(syst)
             processes=self.systematics[syst]["processes"]
             self.datagroups.loadHistsForDatagroups(self.histName, syst, label="syst",
                 procsToRead=processes)
@@ -331,7 +333,7 @@ class CardTool(object):
                 "inputfile" : self.outfile.GetName(),
                 "dataName" : self.dataName,
                 "histName" : self.histName,
-                "pseudodataHist" : self.pseudoData+"_sum" if self.pseudoData else self.histName
+                "pseudodataHist" : self.pseudoData+"_sum" if self.pseudoData else f"{self.histName}_{self.dataName}"
             }
             self.cardContent[chan] = OutputTools.readTemplate(self.nominalTemplate, args)
         
@@ -345,7 +347,7 @@ class CardTool(object):
     def writeHistWithCharges(self, h, name):
         hout = narf.hist_to_root(h)
         #self.outfile[name] = h
-        hout.SetName(name)
+        hout.SetName(name+"_all")
         hout.Write()
     
     def writeHist(self, h, name):

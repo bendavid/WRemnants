@@ -7,6 +7,7 @@ import os
 import pathlib
 import hist
 import numpy as np
+import scripts.lowPU.config as lowPUcfg
 
 scriptdir = f"{pathlib.Path(__file__).parent}"
 
@@ -18,6 +19,8 @@ parser.add_argument("--noScaleHelicitySplit", dest="qcdByHelicity", action='stor
 parser.add_argument("--qcdScale", choices=["byHelicityPt", "byPt", "integrated", "byHelicity"], default="integrated", 
         help="Decorrelation for QCDscale (additionally always by charge)")
 parser.add_argument("--flavor", type=str, help="Flavor (ee or mumu)", default=None, required=True)
+parser.add_argument("--fittype", choices=["differential", "wmass", "wlike", "inclusive"], default="differential", 
+        help="Fit type, defines POI and fit observable (recoil or mT)")
 args = parser.parse_args()
 
 if not os.path.isdir(args.outfolder):
@@ -26,54 +29,75 @@ if not os.path.isdir(args.outfolder):
 if args.inputFile == "": args.inputFile = "mz_lowPU_%s.pkl.lz4" % args.flavor
 
 datagroups = datagroupsLowPU_Z(args.inputFile, flavor=args.flavor)
+
+unconstrainedProcs = [] # POIs
+constrainedProcs = []   # constrained signal procs
+bkgDataProcs = []       # all the rest + data
+
 if args.flavor == "mumu":
     dataName = "SingleMuon"
-    groups = ["TTbar", "EWK", "SingleMuon", "DYmumu"]
+    bkgDataProcs = ["TTbar", "EWK", "SingleMuon"] # , "DYmumu"
 if args.flavor == "ee":
     dataName = "SingleElectron"
-    groups = ["TTbar", "EWK", "SingleElectron", "DYee"]
+    bkgDataProcs = ["TTbar", "EWK", "SingleElectron"] # , "DYee"
 
-recoBins = [0, 5, 10, 15, 20, 30, 40, 50, 60, 75, 90, 10000]
-genBins = [0.0, 10.0, 20.0, 40.0, 60.0, 90.0, 10000]
-unconstrainedProcs = [] # all gen bins
-unconstrainedProc = "DYmumu" if args.flavor == "mumu" else "DYee"
-doInclusive = False
-if not doInclusive:
-    proc_base = dict(datagroups.groups[unconstrainedProc]) 
+recoBins = lowPUcfg.bins_recoil_reco
+genBins = lowPUcfg.bins_recoil_gen
+
+
+histName = ""
+QCDscale = ""
+if args.fittype == "differential" or args.fittype == "wmass":
+    histName = "reco_mll" # for signal gen_reco_mll
+
+    proc_base = dict(datagroups.groups["DYmumu" if args.flavor == "mumu" else "DYee"]) # load the base process (DYmumu or DYee)
     for i in range(len(genBins)-1): # add gen bin processes
     
         proc_name = "DY_genBin%d" % (i+1)
         proc_genbin = dict(proc_base)
         proc_genbin['signalOp'] = lambda x, i=i: x[{"recoil_gen" : i}] # index correct? Start from 1?
         datagroups.groups[proc_name] = proc_genbin
-        unconstrainedProcs.append(proc_name)
+        if args.fittype == "differential": unconstrainedProcs.append(proc_name)
+        elif args.fittype == "wmass": constrainedProcs.append(proc_name)
+    if args.fittype == "differential": QCDscale = "integral"
+    elif args.fittype == "wmass": QCDscale = "byHelicityPt"
 
-    # remove Zmumu processes
-    del datagroups.groups[unconstrainedProc]
+elif args.fittype == "wlike":
+    histName = "mt"
+    constrainedProcs.append("DYmumu" if args.flavor == "mumu" else "DYee")
+    QCDscale = "integral"
+elif args.fittype == "inclusive":
+    histName = "reco_mll"
+    unconstrainedProcs.append("DYmumu" if args.flavor == "mumu" else "DYee")
+    QCDscale = "integral"
     
-    # remove non-used procs (hack)
-    toDel = []
-    for group in datagroups.groups: 
-        if not group in groups+unconstrainedProcs: toDel.append(group)
-    for group in toDel: del datagroups.groups[group]
- 
 
+print(constrainedProcs)
+print(unconstrainedProcs)
+  
+# hack: remove non-used procs/groups, as there can be more procs/groups defined than defined above
+toDel = []
+for group in datagroups.groups: 
+    if not group in constrainedProcs+unconstrainedProcs+bkgDataProcs: toDel.append(group)
+for group in toDel: del datagroups.groups[group]    
 
 templateDir = f"{scriptdir}/Templates/LowPileupW"
-cardTool = CardTool.CardTool(f"{args.outfolder}/LowPU_Z{args.flavor}.txt")
+cardTool = CardTool.CardTool(f"{args.outfolder}/LowPU_Z{args.flavor}_{args.fittype}.txt")
 cardTool.setNominalTemplate(f"{templateDir}/main.txt")
-cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/LowPU_Z{args.flavor}.root"))
+cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/LowPU_Z{args.flavor}_{args.fittype}.root"))
 cardTool.setDatagroups(datagroups)
-cardTool.setHistName("reco_mll") # for signal gen_reco_mll
+cardTool.setHistName(histName) 
 cardTool.setChannels(["all"])
 cardTool.setDataName(dataName)
 cardTool.setUnconstrainedProcs(unconstrainedProcs)
 
+DY_procs = cardTool.filteredProcesses(lambda x: "DY" in x)
+#print(DY_procs)
 
-'''
+
 pdfName = theory_tools.pdfMap["nnpdf31"]["name"]
 cardTool.addSystematic(pdfName, 
-    processes=unconstrainedProcs,
+    processes=DY_procs,
     mirror=True,
     group=pdfName,
     systAxes=["tensor_axis_0"],
@@ -84,7 +108,7 @@ cardTool.addSystematic(pdfName,
 )
 
 cardTool.addSystematic(f"alphaS002{pdfName}", 
-    processes=unconstrainedProcs,
+    processes=DY_procs,
     mirror=False,
     group=pdfName,
     systAxes=["tensor_axis_0"],
@@ -99,14 +123,13 @@ scaleLabelsByAxis = ["q", "muR", "muF"]
 scaleGroupName = "QCDscale"
 scaleActionArgs = {"sum_ptV" : True, "sum_helicity" : True}
 scaleSkipEntries = [(-1, 1, 1), (-1, 0, 2), (-1, 2, 0)]
-# TODO: reuse some code here
-if "Helicity" in args.qcdScale:
+if "Helicity" in QCDscale:
     scaleActionArgs.pop("sum_helicity")
     scaleGroupName += "ByHelicity"
     scaleSystAxes.insert(0, "helicity")
     scaleLabelsByAxis.insert(0, "Coeff")
     scaleSkipEntries = [(-1, *x) for x in scaleSkipEntries]
-if "Pt" in args.qcdScale:
+if "Pt" in QCDscale:
     scaleActionArgs.pop("sum_ptV")
     scaleGroupName += "ByPtV"
     scaleSystAxes.insert(0, "ptVgen")
@@ -116,7 +139,7 @@ if "Pt" in args.qcdScale:
 cardTool.addSystematic("qcdScaleByHelicity", 
     action=syst_tools.scale_helicity_hist_to_variations,
     actionArgs=scaleActionArgs,
-    processes=unconstrainedProcs,
+    processes=DY_procs,
     group=scaleGroupName,
     systAxes=scaleSystAxes,
     labelsByAxis=scaleLabelsByAxis,
@@ -130,7 +153,6 @@ cardTool.addSystematic("qcdScaleByHelicity",
     )
 
 
-'''
 
 def scale_recoil_hist_to_variations(scale_hist):
 
@@ -174,9 +196,8 @@ def scale_recoil_hist_to_variations(scale_hist):
 recoil_vars = [(1,2), (1,3), (1,4),   (2,2), (2,3),   (3,2), (3,3), (3,4),    (4,2), (4,3)]
 for k in recoil_vars:
 
-    continue
     cardTool.addSystematic("recoilStatUnc_%d_%d" % (k[0], k[1]),
-        processes=unconstrainedProcs,
+        processes=DY_procs,
         mirror = False,
         group = "recoilStatUnc",
         systAxes = ["recoil_stat_unc_var"],
@@ -186,51 +207,52 @@ for k in recoil_vars:
         # Needs to be a tuple, since for multiple axis it would be (ax1, ax2, ax3)...
     )
 
+
 cardTool.addSystematic("prefireCorr",
-    processes=unconstrainedProcs,
+    processes=DY_procs,
     mirror = False,
-    group = "prefireCorr",
-    baseName="CMS_prefire_syst_m",
+    group="prefire17",
+    baseName="CMS_prefire17_syst_m",
     systAxes = ["downUpVar"],
     labelsByAxis = ["downUpVar"],
+)
+
+
+if args.fittype == "wlike" or args.fittype == "wmass":
+
+    cardTool.addSystematic("massWeight", 
+        processes=constrainedProcs,
+        outNames=theory_tools.massWeightNames(["massShift100MeV"], wlike=False),
+        group="massShift",
+        groupFilter=lambda x: x == "massShift100MeV",
+        mirror=False,
+        #TODO: Name this
+        noConstraint=True,
+        systAxes=["tensor_axis_0"],
     )
     
 
 
-#cardTool.addSystematic("PDF", 
-#    processes=cardTool.filteredProcesses(lambda x: x[0] == "W" or x == "Fake"),
-#    mirror=True,
-#    group="pdfNNPDF31",
-#    systAxes=["systAx"],
-#    labelsByAxis=["pdf{i}NNPDF31"],
-#    # Needs to be a tuple, since for multiple axis it would be (ax1, ax2, ax3)...
-#    skipEntries=[(0, 0), (0,1)],
-#)
-#if args.qcdByHelicity:
-#    #cardTool.addSystematic("minnloQCDUncByHelicity", 
-#    #    processes=cardTool.filteredProcesses(lambda x: "W" in x[0]),
-#    #    outNames=qcdByHelicityLabels(),
-#    #    group="QCDscaleByHelicity",
-#    #)
-#    #cardTool.addSystematic("qcdScale", 
-#    #    processes=cardTool.filteredProcesses(lambda x: "Z" in x[0]),
-#    #    outNames=theoryTools.qcdScaleNames(),
-#    #    group="QCDscale",
-#    #)
-#else:
-#    cardTool.addSystematic("qcdScale", 
-#        processes=cardTool.filteredProcesses(lambda x: "W" in x[0] or "DY" in x[:2]),
-#        outNames=theoryTools.qcdScaleNames(),
-#        group="QCDscale",
-#    )
-#cardTool.addLnNSystematic("CMS_Fakes", processes=["Fake"], size=1.05)
-#cardTool.addLnNSystematic("CMS_Top", processes=["Top"], size=1.06)
-#cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16)
+for lepEff in ["lepSF_HLT_DATA_stat", "lepSF_HLT_DATA_syst", "lepSF_HLT_MC_stat", "lepSF_HLT_MC_syst", "lepSF_ISO_stat", "lepSF_ISO_DATA_syst", "lepSF_ISO_MC_syst", "lepSF_IDIP_stat", "lepSF_IDIP_DATA_syst", "lepSF_IDIP_MC_syst"]:
+    cardTool.addSystematic(lepEff,
+        processes=DY_procs,
+        mirror = True,
+        group="lepton_eff",
+        baseName=lepEff,
+        systAxes = ["tensor_axis_0"],
+        labelsByAxis = [""],
+    )
+
+
+
+
+cardTool.addLnNSystematic("CMS_Top", processes=["TTbar"], size=1.06)
+cardTool.addLnNSystematic("CMS_VV", processes=["EWK"], size=1.16)
 # This needs to be handled by shifting the norm before subtracting from the fakes
 # cardTool.addSystematic("lumi", outNames=["", "lumiDown", "lumiUp"], group="luminosity")
 # TODO: Allow to be appended to previous group
 
-cardTool.addLnNSystematic("CMS_lumi", processes=cardTool.allMCProcesses(), size=1.02)
+cardTool.addLnNSystematic("CMS_lumi_lowPU", processes=cardTool.allMCProcesses(), size=1.02)
 
 cardTool.writeOutput()
 

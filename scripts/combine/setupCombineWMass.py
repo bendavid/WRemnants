@@ -34,6 +34,7 @@ cardTool.setNominalTemplate(f"{templateDir}/main.txt")
 cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/{name}CombineInput.root"))
 cardTool.setDatagroups(datagroups)
 cardTool.setSpacing(36)
+cardTool.setChannels(["all"])
 
 logging.info(f"All processes {cardTool.allMCProcesses()}")
 single_v_samples = cardTool.filteredProcesses(lambda x: x[0] in ["W", "Z"])
@@ -46,6 +47,7 @@ logging.info("Signal samples: {signal_samples}")
 
 if args.pseudoData:
     cardTool.setPseudodata(args.pseudoData)
+
 
 pdfInfo = theory_tools.pdf_info_map(signal_samples[0], args.pdf)
 pdfName = pdfInfo["name"]
@@ -157,6 +159,7 @@ cardTool.addSystematic("muonL1PrefireStat",
     systAxes=["downUpVar", "etaPhiRegion"],
     labelsByAxis=["downUpVar", "etaPhiReg"],
 )
+
 cardTool.addSystematic("massWeight", 
     # TODO: Add the mass weights to the tau samples
     processes=signal_samples_inctau,
@@ -168,6 +171,8 @@ cardTool.addSystematic("massWeight",
     noConstraint=True,
     systAxes=["tensor_axis_0"],
 )
+
+
 # TODO: This needs to be handled by shifting the norm before subtracting from the fakes
 # cardTool.addSystematic("lumi", outNames=["", "lumiDown", "lumiUp"], group="luminosity")
 if not args.wlike:
@@ -176,5 +181,6 @@ if not args.wlike:
     cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16)
 else:
     cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
+cardTool.addLnNSystematic("CMS_lumi", processes=cardTool.allMCProcesses(), size=1.02)
 cardTool.writeOutput()
 
