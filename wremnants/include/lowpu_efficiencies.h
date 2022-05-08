@@ -295,7 +295,7 @@ Vec_f lepSF_HLT_var_mu(int varType, Vec_f pt, Vec_f eta, Vec_i q) {
     // varType: 1=stat DATA, 2=syst DATA, -1=stat MC, -2=syst MC
 
 	Vec_f res(120, 0);
-	double nom = lepSF_HLT(pt, eta, q, 13, 0, 0, 0); // nominal
+	double nom = lepSF_HLT_q(pt, eta, q, 13, 0, 0, 0); // nominal
 
 	int c = 0;
 	for(int iEta=1; iEta <= 12; iEta++) {

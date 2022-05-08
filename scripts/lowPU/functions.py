@@ -51,3 +51,16 @@ def parseProc(groups, histCfg, procName, syst="", rebin=1):
 
     print("Get histogram %s, yield=%d" % (label, rhist.Integral()))
     return rhist
+    
+    
+
+def Rebin(h, newbins, binWidth=True):
+
+    if isinstance(newbins, int):
+        h.Rebin(newbins)
+        return h
+    else:
+        mybins = array.array('d', newbins)
+        h1 = h.Rebin(len(mybins)-1, h.GetName(), mybins)
+        if binWidth: h1.Scale(1, "width")
+        return h1
