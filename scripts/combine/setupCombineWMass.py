@@ -23,7 +23,7 @@ parser.add_argument("-b", "--fitObs", type=str, default="nominal", help="Observa
 parser.add_argument("-p", "--pseudoData", type=str, help="Hist to use as pseudodata")
 parser.add_argument("-x",  "--excludeNuisances", type=str, default="", help="Regular expression to exclude some systematics from the datacard")
 parser.add_argument("-k",  "--keepNuisances", type=str, default="", help="Regular expression to keep some systematics, overriding --excludeNuisances. Can be used to keep only some systs while excluding all the others with '.*'")
-
+parser.add_argument("--skipOtherChargeSyst", dest="skipOtherChargeSyst" , action="store_true",   help="Skip saving histograms and writing nuisance in datacard for systs defined for a given charge but applied on the channel with the other charge")
 args = parser.parse_args()
 
 if not os.path.isdir(args.outfolder):
@@ -38,6 +38,8 @@ cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/{name}CombineInput.root")
 cardTool.setDatagroups(datagroups)
 cardTool.setSpacing(36)
 cardTool.setCustomSystForCard(args.excludeNuisances, args.keepNuisances)
+if args.skipOtherChargeSyst:
+    cardTool.setSkipOtherChargeSyst()
 
 logging.info(f"All processes {cardTool.allMCProcesses()}")
 single_v_samples = cardTool.filteredProcesses(lambda x: x[0] in ["W", "Z"])
