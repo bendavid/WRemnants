@@ -100,8 +100,8 @@ class CardTool(object):
         names = [""]*offset + [f"{baseName.format(i=i%size)}{'Up' if i % 2 else 'Down'}" for i in range(size*2)]
         return names
 
-    def addLnNSystematic(self, name, size, processes):
-        self.lnNSystematics.update({name : {"size" : size, "processes" : processes}})
+    def addLnNSystematic(self, name, size, processes, group=None):
+        self.lnNSystematics.update({name : {"size" : size, "processes" : processes, "group" : group}})
 
     def addSystematic(self, name, systAxes, outNames=None, skipEntries=None, labelsByAxis=None, 
                         baseName="", mirror=False, scale=1, processes=None, group=None, noConstraint=False,
@@ -278,6 +278,15 @@ class CardTool(object):
             for chan in self.channels:
                 self.cardContent[chan] += f'{name.ljust(self.spacing)}lnN{" "*(self.spacing-3)}{"".join(include)}\n'
 
+            group = info["group"]
+            if group:
+                group_expr = f"{group} group ="
+                if group_expr in self.cardGroups:
+                    idx = self.cardGroups.index(group_expr)+len(group_expr)
+                    self.cardGroups = self.cardGroups[:idx] + " " + name + " " + self.cardGroups[idx:]
+                else:
+                    self.cardGroups += f"\n{group_expr} {name}"
+
     def fillCardWithSyst(self, syst):
         systInfo = self.systematics[syst]
         scale = systInfo["scale"]
@@ -293,6 +302,7 @@ class CardTool(object):
             shape = "shape" if not systInfo["noConstraint"] else "shapeNoConstraint"
             for chan in self.channels:
                 self.cardContent[chan] += f"{systname.ljust(self.spacing)}{shape.ljust(self.spacing)}{''.join(include)}\n"
+
 
         group = systInfo["group"]
         if group:
