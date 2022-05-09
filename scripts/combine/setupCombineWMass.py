@@ -14,7 +14,7 @@ scriptdir = f"{pathlib.Path(__file__).parent}"
 parser = argparse.ArgumentParser()
 parser.add_argument("-o", "--outfolder", type=str, default="/scratch/kelong/CombineStudies")
 parser.add_argument("-i", "--inputFile", type=str, required=True)
-parser.add_argument("--qcdScale", choices=["byHelicityPt", "byPt", "integrated", "ByCharge"], default="byHelicityPt", 
+parser.add_argument("--qcdScale", choices=["byHelicityPt", "byPt", "integrated",], default="byHelicityPt", 
         help="Decorrelation for QCDscale (additionally always by charge)")
 parser.add_argument("--wlike", action='store_true', help="Run W-like analysis of mZ")
 parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow)")
@@ -42,15 +42,17 @@ single_v_and_fake_samples = cardTool.filteredProcesses(lambda x: x[0] in ["W", "
 single_vmu_samples = list(filter(lambda x: "mu" in x, single_v_samples))
 signal_samples = list(filter(lambda x: x[0] == ("Z" if args.wlike else "W"), single_vmu_samples))
 signal_samples_inctau = list(filter(lambda x: x[0] == ("Z" if args.wlike else "W"), single_v_samples))
-logging.info("Single V samples: {single_v_samples}")
-logging.info("Signal samples: {signal_samples}")
+logging.info(f"Single V samples: {single_v_samples}")
+logging.info(f"Signal samples: {signal_samples}")
 
 if args.pseudoData:
     cardTool.setPseudodata(args.pseudoData)
 
-
 pdfInfo = theory_tools.pdf_info_map(signal_samples[0], args.pdf)
 pdfName = pdfInfo["name"]
+
+addVariation = hasattr(args, "varName") and args.varName
+
 if pdfInfo["combine"] == "symHessian":
     cardTool.addSystematic(pdfName, 
         processes=single_v_and_fake_samples,

@@ -194,7 +194,6 @@ class CardTool(object):
         return systInfo["outNames"], variations            
 
     def variationName(self, proc, name):
-        #proc = proc if proc != self.dataName else "data_obs"
         if name == self.nominalName:
             return f"{self.histName}_{proc}"
         else:

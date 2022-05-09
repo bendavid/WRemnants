@@ -39,7 +39,6 @@ datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt 
 
 era = args.era
 noMuonCorr = args.noMuonCorr
-applyScetlibCorr = args.applyScetlibCorr
 noScaleFactors = args.noScaleFactors 
 
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
@@ -169,14 +168,12 @@ def build_graph(df, dataset):
 
             df = wremnants.define_prefsr_vars(df)
 
-            modify_central_weight = args.scetlibCorr in ["altHist", "altHistNoUnc"]
-
             if args.scetlibCorr:
                 df = theory_tools.define_scetlib_corr(df, weight_expr, scetlibCorrZ_helper if isZ else scetlibCorrW_helper,
-                    modify_central_weight=args.scetlibCorr in ["full", "noUnc"], skipUncertainties=args.scetlibCorr in ["noUnc", "altHistNoUnc"])
+                    corr_type=args.scetlibCorr)
                 results.extend(theory_tools.make_scetlibCorr_hists(df, "nominal", axes=nominal_axes, cols=nominal_cols, 
                     helper=scetlibCorrZ_helper if isZ else scetlibCorrW_helper,
-                    modify_central_weight=args.scetlibCorr in ["full", "noUnc"], skipUncertainties=args.scetlibCorr in ["noUnc", "altHistNoUnc"]))
+                    corr_type=args.scetlibCorr))
             else:
                 df = df.Define("nominal_weight", weight_expr)
 
