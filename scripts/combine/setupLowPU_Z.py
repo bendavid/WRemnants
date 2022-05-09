@@ -106,7 +106,6 @@ cardTool.addSystematic(pdfName,
     # -1 means all possible values of the mirror axis
     skipEntries=[(0, -1)],
 )
-
 cardTool.addSystematic(f"alphaS002{pdfName}", 
     processes=DY_procs,
     mirror=False,
@@ -153,7 +152,6 @@ cardTool.addSystematic("qcdScaleByHelicity",
     )
 
 
-
 def scale_recoil_hist_to_variations(scale_hist):
 
     # scale_hist = recoil_gen, recoil_reco, recoil_reco_pert, mll, systIdx (=qT bin variations)
@@ -195,24 +193,22 @@ def scale_recoil_hist_to_variations(scale_hist):
 
 recoil_vars = [(1,2), (1,3), (1,4),   (2,2), (2,3),   (3,2), (3,3), (3,4),    (4,2), (4,3)]
 for k in recoil_vars:
-
+    
     cardTool.addSystematic("recoilStatUnc_%d_%d" % (k[0], k[1]),
         processes=DY_procs,
         mirror = False,
-        group = "recoilStatUnc",
+        group = "CMS_recoil_stat",
         systAxes = ["recoil_stat_unc_var"],
         labelsByAxis = ["recoilStatUnc_%d_%d_{i}" % (k[0], k[1])],
         action=scale_recoil_hist_to_variations,
-        #actionArgs=scaleActionArgs,
-        # Needs to be a tuple, since for multiple axis it would be (ax1, ax2, ax3)...
     )
 
 
 cardTool.addSystematic("prefireCorr",
     processes=DY_procs,
     mirror = False,
-    group="prefire17",
-    baseName="CMS_prefire17_syst_m",
+    group="CMS_prefire17",
+    baseName="CMS_prefire17",
     systAxes = ["downUpVar"],
     labelsByAxis = ["downUpVar"],
 )
@@ -232,12 +228,11 @@ if args.fittype == "wlike" or args.fittype == "wmass":
     )
     
 
-
 for lepEff in ["lepSF_HLT_DATA_stat", "lepSF_HLT_DATA_syst", "lepSF_HLT_MC_stat", "lepSF_HLT_MC_syst", "lepSF_ISO_stat", "lepSF_ISO_DATA_syst", "lepSF_ISO_MC_syst", "lepSF_IDIP_stat", "lepSF_IDIP_DATA_syst", "lepSF_IDIP_MC_syst"]:
     cardTool.addSystematic(lepEff,
         processes=DY_procs,
         mirror = True,
-        group="lepton_eff",
+        group="CMS_lepton_eff",
         baseName=lepEff,
         systAxes = ["tensor_axis_0"],
         labelsByAxis = [""],
@@ -246,14 +241,7 @@ for lepEff in ["lepSF_HLT_DATA_stat", "lepSF_HLT_DATA_syst", "lepSF_HLT_MC_stat"
 
 
 
-cardTool.addLnNSystematic("CMS_Top", processes=["TTbar"], size=1.06)
-cardTool.addLnNSystematic("CMS_VV", processes=["EWK"], size=1.16)
-# This needs to be handled by shifting the norm before subtracting from the fakes
-# cardTool.addSystematic("lumi", outNames=["", "lumiDown", "lumiUp"], group="luminosity")
-# TODO: Allow to be appended to previous group
-
-cardTool.addLnNSystematic("CMS_lumi_lowPU", processes=cardTool.allMCProcesses(), size=1.02)
-
+cardTool.addLnNSystematic("CMS_Top", processes=["TTbar"], size=1.06, group="CMS_bkg_norm")
+cardTool.addLnNSystematic("CMS_VV", processes=["EWK"], size=1.16, group="CMS_bkg_norm")
+cardTool.addLnNSystematic("CMS_lumi_lowPU", processes=cardTool.allMCProcesses(), size=1.02, group="CMS_lumi_lowPU")
 cardTool.writeOutput()
-
-
