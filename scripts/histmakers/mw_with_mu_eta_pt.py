@@ -33,8 +33,8 @@ parser.add_argument("--scetlibCorr", choices=["altHist", "noUnc", "full", "altHi
 parser.add_argument("--noMuonCorr", action="store_true", help="Don't use corrected pt-eta-phi-charge")
 parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
-parser.add_argument("--eta", type=str, help="Eta binning as 'nbins,min,max' (only uniform for now)", default="48,-2.4,2.4")
-parser.add_argument("--pt", type=str, help="Pt binning as 'nbins,min,max' (only uniform for now)", default="29,26.,55.")
+parser.add_argument("--eta", nargs=3, type=float, help="Eta binning as 'nbins min max' (only uniform for now)", default=[48,-2.4,2.4])
+parser.add_argument("--pt", nargs=3, type=float, help="Pt binning as 'nbins,min,max' (only uniform for now)", default=[29,26.,55.])
 args = parser.parse_args()
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
@@ -55,16 +55,16 @@ zprocs = ["ZmumuPostVFP", "ZtautauPostVFP"]
 
 # custom template binning
 # round as precaution because e.g. sometimes 2.4 gets read as 2.3999 in python (1 digit would be enough but just in case)
-tokens_eta = args.eta.split(',')
-template_neta = int(tokens_eta[0])
-template_mineta = round(float(tokens_eta[1]), 2)
-template_maxeta = round(float(tokens_eta[2]), 2)
+template_neta = int(args.eta[0])
+template_mineta = args.eta[1]
+template_maxeta = args.eta[2]
 print(f"Eta binning: {template_neta} bins from {template_mineta} to {template_maxeta}")
-tokens_pt = args.pt.split(',')
-template_npt = int(tokens_pt[0])
-template_minpt = round(float(tokens_pt[1]), 2)
-template_maxpt = round(float(tokens_pt[2]), 2)
+template_npt = int(args.pt[0])
+template_minpt = args.pt[1]
+template_maxpt = args.pt[2]
 print(f"Pt binning: {template_npt} bins from {template_minpt} to {template_maxpt}")
+
+quit()
 
 # standard regular axes
 axis_eta = hist.axis.Regular(template_neta, template_mineta, template_maxeta, name = "eta")
