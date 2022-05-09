@@ -90,7 +90,7 @@ if not args.noEfficiencyUnc:
         axlabels = ["IDIPTrig"] if num == 2 else ["eta", "pt", "q", "Trig"]
         cardTool.addSystematic(name, 
             mirror=True,
-            group="muon_eff",
+            group="muon_eff_syst" if "Syst" in name else "muon_eff_stat", # TODO: for now better checking them separately
             systAxes=axes,
             labelsByAxis=axlabels,
             baseName=name+"_",

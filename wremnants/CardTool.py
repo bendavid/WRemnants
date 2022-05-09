@@ -28,7 +28,7 @@ class CardTool(object):
         self.addMirrorForSyst = {}
         self.channels = ["plus", "minus"]
         self.cardContent = {}
-        self.cardGroups = ""
+        self.cardGroups = {}
         self.nominalTemplate = ""
         self.spacing = 28
         self.fakeName = "Fake"
@@ -42,7 +42,10 @@ class CardTool(object):
         self.excludeSyst = None
         self.keepSyst = None # to override previous one with exceptions for special cases
         #self.loadArgs = {"operation" : "self.loadProcesses (reading hists from file)"}
-
+        self.chargeIdDict = {"minus" : {"val" : -1, "id" : "q0", "badId" : "q1"},
+                             "plus"  : {"val" : 1., "id" : "q1", "badId" : "q0"}
+                             }
+        
     ## Functions to customize systs to be added in card, mainly for tests
     def setCustomSystForCard(self, exclude=None, keep=None):
         if exclude: self.excludeSyst = re.compile(exclude)
@@ -285,7 +288,7 @@ class CardTool(object):
             with open(self.cardName.format(chan=chan), "w") as card:
                 card.write(self.cardContent[chan])
                 card.write("\n")
-                card.write(self.cardGroups)
+                card.write(self.cardGroups[chan])
 
     def writeLnNSystematics(self):
         nondata = self.predictedProcesses()
@@ -310,22 +313,26 @@ class CardTool(object):
         for systname in systNames:
             shape = "shape" if not systInfo["noConstraint"] else "shapeNoConstraint"
             for chan in self.channels:
-                self.cardContent[chan] += f"{systname.ljust(self.spacing)}{shape.ljust(self.spacing)}{''.join(include)}\n"
+                # do not write systs which should only apply to other charge, to simplify card
+                if self.chargeIdDict[chan]["badId"] not in systname:
+                    self.cardContent[chan] += f"{systname.ljust(self.spacing)}{shape.ljust(self.spacing)}{''.join(include)}\n"
 
         group = systInfo["group"]
         if group:
             # TODO: Make more general
             label = "group" if not systInfo["noConstraint"] else "noiGroup"
             filt = systInfo["groupFilter"]
-            systNamesForGroup = list(systNames if not filt else filter(filt, systNames))
-            if len(systNamesForGroup):
-                members = " ".join(systNamesForGroup)
-                group_expr = f"{group} {label} ="
-                if group_expr in self.cardGroups:
-                    idx = self.cardGroups.index(group_expr)+len(group_expr)
-                    self.cardGroups = self.cardGroups[:idx] + " " + members + " " + self.cardGroups[idx:]
-                else:
-                    self.cardGroups += f"\n{group_expr} {members}"
+            for chan in self.channels:                
+                systNamesForGroupPruned = [s for s in systNames if self.chargeIdDict[chan]["badId"] not in s]
+                systNamesForGroup = list(systNamesForGroupPruned if not filt else filter(filt, systNamesForGroupPruned))
+                if len(systNamesForGroup):
+                    members = " ".join(systNamesForGroup)
+                    group_expr = f"{group} {label} ="
+                    if group_expr in self.cardGroups[chan]:
+                        idx = self.cardGroups[chan].index(group_expr)+len(group_expr)
+                        self.cardGroups[chan] = self.cardGroups[chan][:idx] + " " + members + " " + self.cardGroups[chan][idx:]
+                    else:
+                        self.cardGroups[chan] += f"\n{group_expr} {members}"
 
     def setUnconstrainedProcs(self, procs):
         self.unconstrainedProcesses = procs
@@ -355,10 +362,12 @@ class CardTool(object):
                 "pseudodataHist" : self.pseudoData+"_sum" if self.pseudoData else f"{self.histName}_{self.dataName}"
             }
             self.cardContent[chan] = OutputTools.readTemplate(self.nominalTemplate, args)
-        
-    def writeHistByCharge(self, h, name, charges=["plus", "minus"]):
+            self.cardGroups[chan] = ""
+            
+    def writeHistByCharge(self, h, name):
         for charge in self.channels:
-            q = 1. if charge == "plus" else -1
+            if self.chargeIdDict[charge]["badId"] in name: continue
+            q = self.chargeIdDict[charge]["val"]
             hout = narf.hist_to_root(h[{"charge" : h.axes["charge"].index(q)}])
             hout.SetName(name+f"_{charge}")
             hout.Write()
