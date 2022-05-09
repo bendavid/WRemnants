@@ -42,9 +42,15 @@ class CardTool(object):
         self.excludeSyst = None
         self.keepSyst = None # to override previous one with exceptions for special cases
         #self.loadArgs = {"operation" : "self.loadProcesses (reading hists from file)"}
-        self.chargeIdDict = {"minus" : {"val" : -1, "id" : "q0", "badId" : "q1"},
-                             "plus"  : {"val" : 1., "id" : "q1", "badId" : "q0"}
+        self.keepOtherChargeSyst = True
+        self.chargeIdDict = {"minus" : {"val" : -1, "id" : "q0", "badId" : None},
+                             "plus"  : {"val" : 1., "id" : "q1", "badId" : None}
                              }
+        
+    def setSkipOtherChargeSyst(self):
+        self.keepOtherChargeSyst = False
+        self.chargeIdDict["plus"]["badId"] = "q0"
+        self.chargeIdDict["minus"]["badId"] = "q1"
         
     ## Functions to customize systs to be added in card, mainly for tests
     def setCustomSystForCard(self, exclude=None, keep=None):
@@ -314,7 +320,7 @@ class CardTool(object):
             shape = "shape" if not systInfo["noConstraint"] else "shapeNoConstraint"
             for chan in self.channels:
                 # do not write systs which should only apply to other charge, to simplify card
-                if self.chargeIdDict[chan]["badId"] not in systname:
+                if self.keepOtherChargeSyst or self.chargeIdDict[chan]["badId"] not in systname:
                     self.cardContent[chan] += f"{systname.ljust(self.spacing)}{shape.ljust(self.spacing)}{''.join(include)}\n"
 
         group = systInfo["group"]
@@ -322,8 +328,11 @@ class CardTool(object):
             # TODO: Make more general
             label = "group" if not systInfo["noConstraint"] else "noiGroup"
             filt = systInfo["groupFilter"]
-            for chan in self.channels:                
-                systNamesForGroupPruned = [s for s in systNames if self.chargeIdDict[chan]["badId"] not in s]
+            for chan in self.channels:
+                if self.keepOtherChargeSyst:
+                    systNamesForGroupPruned = systNames[:]
+                else:
+                    systNamesForGroupPruned = [s for s in systNames if self.chargeIdDict[chan]["badId"] not in s]
                 systNamesForGroup = list(systNamesForGroupPruned if not filt else filter(filt, systNamesForGroupPruned))
                 if len(systNamesForGroup):
                     members = " ".join(systNamesForGroup)
@@ -366,7 +375,7 @@ class CardTool(object):
             
     def writeHistByCharge(self, h, name):
         for charge in self.channels:
-            if self.chargeIdDict[charge]["badId"] in name: continue
+            if not self.keepOtherChargeSyst and self.chargeIdDict[charge]["badId"] in name: continue
             q = self.chargeIdDict[charge]["val"]
             hout = narf.hist_to_root(h[{"charge" : h.axes["charge"].index(q)}])
             hout.SetName(name+f"_{charge}")
