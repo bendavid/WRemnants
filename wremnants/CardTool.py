@@ -64,7 +64,7 @@ class CardTool(object):
             if self.keepSyst != None and self.keepSyst.match(name):
                 return False
             else:
-                print(">>>>> Excluding nuisance: ", name)
+                logging.info(f">>>>> Excluding nuisance: {name}")
                 return True
         else:
             return False
