@@ -90,7 +90,7 @@ public:
         return angular;
     }
 
-    tensor_t operator() (double mV, double yV, double ptV, int qV, const CSVars &csvars, const scale_tensor_t &scale_tensor, double nominal_weight = 1.0) {
+    tensor_t operator() (double mV, double yV, double ptV, int qV, const CSVars &csvars, const scale_tensor_t &scale_tensor, double nominal_weight) {
         // pure angular terms without angular coeffs multiplied through
         const auto angular = csAngularFactors(csvars);
 
