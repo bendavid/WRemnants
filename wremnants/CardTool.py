@@ -255,8 +255,11 @@ class CardTool(object):
 
         for syst in self.systematics.keys():
             processes=self.systematics[syst]["processes"]
+            # In general the truncating of negative bins is to avoid low stat negative weight issues
+            # For the helicity hist, the content really can be negative. Would be good to deal with
+            # this more generally
             self.datagroups.loadHistsForDatagroups(self.histName, syst, label="syst",
-                procsToRead=processes)
+                procsToRead=processes, forceNonzero=syst != "qcdScaleByHelicity")
             self.writeForProcesses(syst, label="syst", processes=processes)
         self.writeCard()
 
@@ -328,7 +331,7 @@ class CardTool(object):
                 "inputfile" : self.outfile.GetName(),
                 "dataName" : self.dataName,
                 "histName" : self.histName,
-                "pseudodataHist" : self.pseudoData+"_sum" if self.pseudoData else f"{self.histName}_{self.dataName}"
+                "pseudodataHist" : self.pseudoData+"_sum" if self.pseudoData else self.histName
             }
             self.cardContent[chan] = OutputTools.readTemplate(self.nominalTemplate, args)
         
