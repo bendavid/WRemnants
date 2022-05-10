@@ -50,9 +50,8 @@ pdfMap = {
 		"nnpdf30" : {
 			"name" : "pdfNNPDF30",
 			"branch" : "LHEPdfWeightAltSet13",
-			"nhessian" : 100,
-			"onlyW" : True,
-			"truncate" : False,
+            "combine" : "symHessian",
+			"entries" : 100,
 			"alphas" : ["LHEPdfWeightAltSet15[0]", "LHEPdfWeightAltSet16[0]"],
 			"alphaRange" : "001",
 		},
