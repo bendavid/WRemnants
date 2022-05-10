@@ -50,9 +50,8 @@ pdfMap = {
 		"nnpdf30" : {
 			"name" : "pdfNNPDF30",
 			"branch" : "LHEPdfWeightAltSet13",
-			"nhessian" : 100,
-			"onlyW" : True,
-			"truncate" : False,
+            "combine" : "symHessian",
+			"entries" : 100,
 			"alphas" : ["LHEPdfWeightAltSet15[0]", "LHEPdfWeightAltSet16[0]"],
 			"alphaRange" : "001",
 		},
@@ -171,9 +170,7 @@ def pdf_central_weight(dataset, pdfset):
     pdfBranch = pdfInfo["branch"]
     return f"{pdfBranch}[0]"
 
-def define_scetlib_corr(df, weight_expr, helper, corr_type):
-    modify_central_weight = corr_type in ["altHist", "altHistNoUnc"]
-
+def define_scetlib_corr(df, weight_expr, helper, modify_central_weight=True):
     if modify_central_weight:
         df = df.Define("nominal_weight_uncorr", weight_expr)
     else:
@@ -184,20 +181,17 @@ def define_scetlib_corr(df, weight_expr, helper, corr_type):
     df = df.Define("scetlibCentralWeight", "scetlibWeight_tensor(0)")
 
     if modify_central_weight:
-        df = df.Alias("nominal_weight", "scetlibCentralWeight")
+        df = df.Alias("nominal_weight", "scetlibWeightCentral")
     return df
 
-def make_scetlibCorr_hists(df, name, axes, cols, helper, corr_type):
-    modify_central_weight = corr_type in ["altHist", "altHistNoUnc"]
-    skipUncertainties = corr_type in ["noUnc", "altHistNoUnc"]
-
+def make_scetlibCorr_hists(df, name, axes, cols, helper, modify_central_weight=True, skipUncertainties=False):
     res = []
     if modify_central_weight:
         nominal_uncorr = df.HistoBoost(f"{name}_uncorr", axes, [*cols, "nominal_weight_uncorr"])
         res.append(nominal_uncorr)
 
     if skipUncertainties:
-        nominal = df.HistoBoost("scetlibCorr", axes, [*cols, "scetlibCentralWeight"])
+        nominal = df.HistoBoost("scetlibCorr", axes, [*cols, "scetlibWeightCentral"])
         res.append(nominal)
     else:
         unc = df.HistoBoost("scetlibUnc" if name == "nominal" else f"{name}_scetlibUnc", axes, [*cols, "scetlibWeight_tensor"], tensor_axes=helper.tensor_axes)
@@ -280,9 +274,8 @@ def pdfNames(cardTool, pdf, skipFirst=True):
     return names
 
 def pdfNamesAsymHessian(entries):
-    pdfNames = [""] # Skip central weight
-    pdfNames.extend(["pdf{i}{shift}".format(i=int(j/2), shift="Up" if j % 2 else "Down") for j in range(entries-1)])
-    return pdfNames
+    return ["pdf{i}{shift}".format(i=j/2, shift="Up" if i % 2 else "Down") for j in range(entries)]
+
 
 def pdfSymmetricShifts(hdiff, axis_name):
     sq = hh.multiplyHists(hdiff, hdiff)

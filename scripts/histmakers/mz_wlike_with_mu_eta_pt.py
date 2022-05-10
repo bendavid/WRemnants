@@ -180,9 +180,11 @@ def build_graph(df, dataset):
 
             df = wremnants.define_prefsr_vars(df)
 
+            modify_central_weight = args.scetlibCorr in ["altHist", "altHistNoUnc"]
+
             if args.scetlibCorr:
                 df = theory_tools.define_scetlib_corr(df, weight_expr, scetlibCorr_helper,
-                    corr_type=args.scetlibCorr)
+                    modify_central_weight=modify_central_weight)
             else:
                 df = df.Define("nominal_weight", weight_expr)
         else:
@@ -201,8 +203,11 @@ def build_graph(df, dataset):
 
     if (isW or isZ) and args.scetlibCorr:
         
+        modify_central_weight = args.scetlibCorr in ["altHist", "altHistNoUnc"]
         results.extend(theory_tools.make_scetlibCorr_hists(df_dilepton, "dilepton", dilepton_axes, dilepton_cols, 
-            scetlibCorr_helper, corr_type=args.scetlibCorr
+            scetlibCorr_helper,
+            modify_central_weight=modify_central_weight, 
+            skipUncertainties=args.scetlibCorr in ["noUnc", "altHistNoUnc"])
         )
 
     df = df.Filter("massZ >= 60. && massZ < 120.")
