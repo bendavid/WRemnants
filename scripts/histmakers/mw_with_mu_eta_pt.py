@@ -42,7 +42,6 @@ datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt 
 
 era = args.era
 noMuonCorr = args.noMuonCorr
-noScaleFactors = args.noScaleFactors 
 
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 scetlibCorrZ_helper = wremnants.makeScetlibCorrHelper(isW=False)
@@ -175,7 +174,7 @@ def build_graph(df, dataset):
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId"])
 
         weight_expr = "weight*weight_pu*weight_newMuonPrefiringSF"
-        if not noScaleFactors:
+        if not args.noScaleFactors:
             weight_expr += "*weight_fullMuonSF_withTrackingReco"
         
         if isW or isZ:
