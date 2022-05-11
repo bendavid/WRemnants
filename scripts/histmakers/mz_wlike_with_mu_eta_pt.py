@@ -31,6 +31,8 @@ parser.add_argument("--muScaleMag", type=float, default=1e-4, help="Magnitude of
 parser.add_argument("--muScaleBins", type=int, default=1, help="Number of bins for muon scale uncertainty")
 parser.add_argument("--scetlibCorr", choices=["altHist", "noUnc", "full", "altHistNoUnc"], help="Save hist for SCETlib correction with/without uncertainties, with/without modifying central weight")
 parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")
+parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
+parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
 args = parser.parse_args()
 
@@ -202,7 +204,7 @@ def build_graph(df, dataset):
     if (isW or isZ) and args.scetlibCorr:
         
         results.extend(theory_tools.make_scetlibCorr_hists(df_dilepton, "dilepton", dilepton_axes, dilepton_cols, 
-            scetlibCorr_helper, corr_type=args.scetlibCorr
+            scetlibCorr_helper, corr_type=args.scetlibCorr)
         )
 
     df = df.Filter("massZ >= 60. && massZ < 120.")
@@ -246,8 +248,8 @@ def build_graph(df, dataset):
         if isW or isZ:
             if args.scetlibCorr:
                 results.extend(theory_tools.make_scetlibCorr_hists(df, "nominal", axes=nominal_axes, cols=nominal_cols, 
-                    helper=scetlibCorr_helper,
-                    modify_central_weight=args.scetlibCorr in ["full", "noUnc"], skipUncertainties=args.scetlibCorr in ["noUnc", "altHistNoUnc"]))
+                    helper=scetlibCorr_helper, corr_type=args.scetlibCorr)
+                )
 
             df = theory_tools.define_scale_tensor(df)
             results.append(theory_tools.make_scale_hist(df, [*nominal_axes, axis_ptVgen], [*nominal_cols, "ptVgen"]))
@@ -263,9 +265,10 @@ def build_graph(df, dataset):
                 withUnc = i == 0 or not args.altPdfOnlyCentral
                 results.extend(theory_tools.define_and_make_pdf_hists(df, nominal_axes, nominal_cols, dataset.name, pdf, withUnc))
 
-            nweights = 21 if isW else 23
-            df = df.Define("massWeight_tensor", f"auto res = wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight); res = nominal_weight*res; return res;")
-            df = df.Define("massWeight_tensor_wnom", f"auto res = massWeight_tensor; res = nominal_weight*res; return res;")
+            masswargs = (nominal_axes, nominal_cols) if not isW else (None, None)
+            df, masswhist = syst_tools.define_mass_weights(df, isW, *masswargs)
+            if masswhist:
+                results.append(masswhist)
 
             if isZ:
                 massWeight = df.HistoBoost("massWeight", nominal_axes, [*nominal_cols, "massWeight_tensor_wnom"])
@@ -273,10 +276,15 @@ def build_graph(df, dataset):
 
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:
-                df = df.Define("muonScaleDummy", f"wrem::dummyScaleFromMassWeights<{args.muScaleBins}, {nweights}>(nominal_weight, massWeight_tensor, TrigMuon_eta, {args.muScaleMag}, {str(isW).lower()})")
-                scale_etabins_axis = hist.axis.Regular(args.muScaleBins, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
-                dummyMuonScaleSyst = df.HistoBoost("muonScaleSyst", nominal_axes, [*nominal_cols, "muonScaleDummy"], 
+                # TODO: Move to syst_tools
+                netabins = args.muonCorrEtaBins
+                nweights = 21
+                mag = args.muonCorrMag
+                df = df.Define(f"muonScaleDummy{netabins}Bins", f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(nominal_weight, massWeight_tensor, TrigMuon_eta, {mag}, {str(isW).lower()})")
+                scale_etabins_axis = hist.axis.Regular(netabins, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
+                dummyMuonScaleSyst = df.HistoBoost("muonScaleSyst", nominal_axes, [*nominal_cols, f"muonScaleDummy{netabins}Bins"],
                     tensor_axes=[down_up_axis, scale_etabins_axis])
+
                 results.append(dummyMuonScaleSyst)
 
             df = df.Define("Muon_cvhbsMomCov", "wrem::splitNestedRVec(Muon_cvhbsMomCov_Vals, Muon_cvhbsMomCov_Counts)")

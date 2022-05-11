@@ -21,6 +21,7 @@ parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficie
 parser.add_argument("--pdf", type=str, default="nnpdf31", choices=theory_tools.pdfMap.keys(), help="PDF to use")
 parser.add_argument("-b", "--fitObs", type=str, default="nominal", help="Observable to fit")
 parser.add_argument("-p", "--pseudoData", type=str, help="Hist to use as pseudodata")
+parser.add_argument("--scaleMuonCorr", type=float, default=1.0, help="Scale up/down dummy muon scale uncertainty by this factor")
 args = parser.parse_args()
 
 if not os.path.isdir(args.outfolder):
@@ -144,6 +145,7 @@ cardTool.addSystematic("muonScaleSyst",
     baseName="CMS_scale_m_",
     systAxes=["downUpVar", "scaleEtaSlice"],
     labelsByAxis=["downUpVar", "ieta"],
+    scale = args.scaleMuonCorr,
 )
 cardTool.addSystematic("muonL1PrefireSyst", 
     processes=cardTool.allMCProcesses(),
