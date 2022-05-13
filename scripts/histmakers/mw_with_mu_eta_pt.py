@@ -163,11 +163,9 @@ def build_graph(df, dataset):
             weight_expr += "*weight_fullMuonSF_withTrackingReco"
         
         if isW or isZ:
-            if args.pdfs[0] != "nnpdf31":
-                weight_expr = f"{weight_expr}*{theory_tools.pdf_central_weight(dataset.name, args.pdfs[0])}"
-
+            df = df.Define("nominal_pdf_cen", theory_tools.pdf_central_weight(dataset.name, args.pdfs[0]))
+            weight_expr = f"{weight_expr}*nominal_pdf_cen"
             df = wremnants.define_prefsr_vars(df)
-
             modify_central_weight = args.scetlibCorr in ["altHist", "altHistNoUnc"]
 
             if args.scetlibCorr:
@@ -234,9 +232,9 @@ def build_graph(df, dataset):
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:
                 # TODO: Move to syst_tools
-                if True:
+                nweights = 21
+                if False:
                     netabins = 4
-                    nweights = 21
                     df = df.Define("muonScaleDummy4Bins2e4", f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(nominal_weight, massWeight_tensor, goodMuons_eta0, 2.e-4, {str(isW).lower()})")
                     scale_etabins_axis = hist.axis.Regular(netabins, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
                     dummyMuonScaleSyst = df.HistoBoost("muonScaleSyst", nominal_axes, [*nominal_cols, "muonScaleDummy4Bins2e4"],

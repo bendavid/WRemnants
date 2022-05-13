@@ -38,6 +38,7 @@ pdfMap = {
             "entries" : 58,
             "alphas" : ["LHEPdfWeightAltSet18[59]", "LHEPdfWeightAltSet18[60]"],
 			"alphaRange" : "002",
+            "scale": 1/1.645
         },
         "mmht" : {
             "name" : "pdfMMHT",
@@ -141,7 +142,7 @@ def pdf_info_map(dataset, pdfset):
         raise ValueError(f"Skipping PDF {pdfset} for dataset {dataset}")
     return infoMap[pdfset]
 
-def define_and_make_pdf_hists(df, axes, cols, dataset, pdfset="nnpdf31", storeUnc=True):
+def define_and_make_pdf_hists(df, axes, cols, dataset, pdfset="nnpdf31", storeUnc=True, cenPDF=True):
     try:
         pdfInfo = pdf_info_map(dataset, pdfset)
     except ValueError as e:
@@ -154,7 +155,8 @@ def define_and_make_pdf_hists(df, axes, cols, dataset, pdfset="nnpdf31", storeUn
     tensorASName = f"{pdfName}ASWeights_tensor"
     entries = pdfInfo["entries"] if storeUnc else 1
 
-    df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, {entries}>({pdfBranch}), 10.); res = nominal_weight*res; return res;")
+    df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, {entries}>({pdfBranch}), 10.); res = nominal_weight/nominal_pdf_cen*res; return res;")
+
     pdfHist= df.HistoBoost(pdfName, axes, [*cols, tensorName])
 
     df = df.Define(tensorASName, "Eigen::TensorFixedSize<double, Eigen::Sizes<2>> res; "
@@ -274,7 +276,7 @@ def pdfNames(cardTool, pdf, skipFirst=True):
     return names
 
 def pdfNamesAsymHessian(entries):
-    return ["pdf{i}{shift}".format(i=j/2, shift="Up" if i % 2 else "Down") for j in range(entries)]
+    return ["pdf{i}{shift}".format(i=int(j/2), shift="Up" if j % 2 else "Down") for j in range(entries)]
 
 
 def pdfSymmetricShifts(hdiff, axis_name):
