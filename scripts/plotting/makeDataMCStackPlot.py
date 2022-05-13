@@ -16,7 +16,6 @@ parser = argparse.ArgumentParser()
 parser.add_argument("infile", help="Output file of the analysis stage, containing ND boost histograms")
 parser.add_argument("--wlike", action='store_true', help="Make W like plots")
 parser.add_argument("-n", "--baseName", type=str, help="Histogram name in the file (e.g., 'nominal')", default="nominal")
-parser.add_argument("--addVariation", type=str, help="Add distribution from variation to plots")
 parser.add_argument("--hists", type=str, nargs='+', help="List of histograms to plot")
 parser.add_argument("-c", "--channel", type=str, choices=["plus", "minus", "all"], default="all", help="Select channel to plot")
 parser.add_argument("-p", "--outpath", type=str, default=os.path.expanduser("~/www/WMassAnalysis"), help="Base path for output")
@@ -44,9 +43,20 @@ if addVariation and (args.selectAxis or args.selectEntries):
 groups = datagroups2016(args.infile, wlike=args.wlike)
 groups.loadHistsForDatagroups(args.baseName, syst="")
 
-if args.addVariation:
-	groups.loadHistsForDatagroups(args.baseName, syst="uncorr")
-	groups.addUncorrectedProc(args.baseName, "uncorr", label=r"No N$^{3}$LL Corr.")
+exclude = ["Data"]
+
+if addVariation:
+    groups.loadHistsForDatagroups("", syst=args.varName)
+    groups.addSummedProc(args.baseName, name=args.varName, label=args.varLabel[0])
+    if not args.selectAxis:
+        exclude.append(args.varName)
+    else:
+        for label,ax,entry in zip(args.varLabel, args.selectAxis, args.selectEntries):
+            select = lambda x: x[{ax : entry}]
+            name = args.varName+str(entry)
+            groups.copyWithAction(label, name=name, refproc=args.varName, 
+                label=label, color='green')
+            exclude.append(name)
 
 histInfo = groups.getDatagroups()
 

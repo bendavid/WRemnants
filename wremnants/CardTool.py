@@ -331,7 +331,7 @@ class CardTool(object):
                 "inputfile" : self.outfile.GetName(),
                 "dataName" : self.dataName,
                 "histName" : self.histName,
-                "pseudodataHist" : self.pseudoData+"_sum" if self.pseudoData else self.histName
+                "pseudodataHist" : self.pseudoData+"_sum" if self.pseudoData else f"{self.histName}_{self.dataName}"
             }
             self.cardContent[chan] = OutputTools.readTemplate(self.nominalTemplate, args)
         

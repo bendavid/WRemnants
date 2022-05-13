@@ -55,6 +55,7 @@ class datagroups(object):
                     foundExact = True
                 except ValueError as e:
                     if nominalIfMissing:
+                        logging.info(f"{str(e)}. Using nominal hist {self.nominalName} instead")
                         h = self.readHist(self.nominalName, member, "", scaleOp=scale, forceNonzero=forceNonzero)
                     else:
                         logging.warning(str(e))
@@ -63,6 +64,7 @@ class datagroups(object):
             if selectSignal and group[label] and "signalOp" in group and group["signalOp"]:
                 group[label] = group["signalOp"](group[label])
         # Avoid situation where the nominal is read for all processes for this syst
+        if syst == "": foundExact = True
         if not foundExact:
             raise ValueError(f"Did not find systematic {syst} for any processes!")
 

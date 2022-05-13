@@ -23,16 +23,16 @@ import time
 
 logging.basicConfig(level=logging.INFO)
 
+parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
 parser.add_argument("--pdfs", type=str, nargs="*", default=["nnpdf31"], choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for (first is central set)")
 parser.add_argument("--altPdfOnlyCentral", action='store_true', help="Only store central value for alternate PDF sets")
 parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
 parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name")
 parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")
 parser.add_argument("--scetlibCorr", choices=["altHist", "noUnc", "full", "altHistNoUnc"], help="Save hist for SCETlib correction with/without uncertainties, with/without modifying central weight")
+parser.add_argument("--noMuonCorr", action="store_true", help="Don't use corrected pt-eta-phi-charge")
+parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency and prefiring")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
-parser.add_argument("--era", type=str, help="era when the dataset was taken", default="2016PostVFP")
-parser.add_argument("--noMuonCorr", type=int, default=1)
-parser.add_argument("--noScaleFactors", type=int, default=1)
 args = parser.parse_args()
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
@@ -166,14 +166,13 @@ def build_graph(df, dataset):
             df = df.Define("nominal_pdf_cen", theory_tools.pdf_central_weight(dataset.name, args.pdfs[0]))
             weight_expr = f"{weight_expr}*nominal_pdf_cen"
             df = wremnants.define_prefsr_vars(df)
-            modify_central_weight = args.scetlibCorr in ["altHist", "altHistNoUnc"]
 
             if args.scetlibCorr:
                 df = theory_tools.define_scetlib_corr(df, weight_expr, scetlibCorrZ_helper if isZ else scetlibCorrW_helper,
-                    modify_central_weight=args.scetlibCorr in ["full", "noUnc"], skipUncertainties=args.scetlibCorr in ["noUnc", "altHistNoUnc"])
+                    corr_type=args.scetlibCorr)
                 results.extend(theory_tools.make_scetlibCorr_hists(df, "nominal", axes=nominal_axes, cols=nominal_cols, 
                     helper=scetlibCorrZ_helper if isZ else scetlibCorrW_helper,
-                    modify_central_weight=args.scetlibCorr in ["full", "noUnc"], skipUncertainties=args.scetlibCorr in ["noUnc", "altHistNoUnc"]))
+                    corr_type=args.scetlibCorr))
             else:
                 df = df.Define("nominal_weight", weight_expr)
 

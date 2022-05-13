@@ -38,7 +38,6 @@ pdfMap = {
             "entries" : 58,
             "alphas" : ["LHEPdfWeightAltSet18[59]", "LHEPdfWeightAltSet18[60]"],
 			"alphaRange" : "002",
-            "scale": 1/1.645
         },
         "mmht" : {
             "name" : "pdfMMHT",
@@ -142,7 +141,7 @@ def pdf_info_map(dataset, pdfset):
         raise ValueError(f"Skipping PDF {pdfset} for dataset {dataset}")
     return infoMap[pdfset]
 
-def define_and_make_pdf_hists(df, axes, cols, dataset, pdfset="nnpdf31", storeUnc=True, cenPDF=True):
+def define_and_make_pdf_hists(df, axes, cols, dataset, pdfset="nnpdf31", storeUnc=True):
     try:
         pdfInfo = pdf_info_map(dataset, pdfset)
     except ValueError as e:
@@ -172,7 +171,9 @@ def pdf_central_weight(dataset, pdfset):
     pdfBranch = pdfInfo["branch"]
     return f"{pdfBranch}[0]"
 
-def define_scetlib_corr(df, weight_expr, helper, modify_central_weight=True):
+def define_scetlib_corr(df, weight_expr, helper, corr_type):
+    modify_central_weight = corr_type in ["altHist", "altHistNoUnc"]
+
     if modify_central_weight:
         df = df.Define("nominal_weight_uncorr", weight_expr)
     else:
@@ -183,17 +184,20 @@ def define_scetlib_corr(df, weight_expr, helper, modify_central_weight=True):
     df = df.Define("scetlibCentralWeight", "scetlibWeight_tensor(0)")
 
     if modify_central_weight:
-        df = df.Alias("nominal_weight", "scetlibWeightCentral")
+        df = df.Alias("nominal_weight", "scetlibCentralWeight")
     return df
 
-def make_scetlibCorr_hists(df, name, axes, cols, helper, modify_central_weight=True, skipUncertainties=False):
+def make_scetlibCorr_hists(df, name, axes, cols, helper, corr_type):
+    modify_central_weight = corr_type in ["altHist", "altHistNoUnc"]
+    skipUncertainties = corr_type in ["noUnc", "altHistNoUnc"]
+
     res = []
     if modify_central_weight:
         nominal_uncorr = df.HistoBoost(f"{name}_uncorr", axes, [*cols, "nominal_weight_uncorr"])
         res.append(nominal_uncorr)
 
     if skipUncertainties:
-        nominal = df.HistoBoost("scetlibCorr", axes, [*cols, "scetlibWeightCentral"])
+        nominal = df.HistoBoost("scetlibCorr", axes, [*cols, "scetlibCentralWeight"])
         res.append(nominal)
     else:
         unc = df.HistoBoost("scetlibUnc" if name == "nominal" else f"{name}_scetlibUnc", axes, [*cols, "scetlibWeight_tensor"], tensor_axes=helper.tensor_axes)
@@ -276,8 +280,9 @@ def pdfNames(cardTool, pdf, skipFirst=True):
     return names
 
 def pdfNamesAsymHessian(entries):
-    return ["pdf{i}{shift}".format(i=int(j/2), shift="Up" if j % 2 else "Down") for j in range(entries)]
-
+    pdfNames = [""] # Skip central weight
+    pdfNames.extend(["pdf{i}{shift}".format(i=int(j/2), shift="Up" if j % 2 else "Down") for j in range(entries-1)])
+    return pdfNames
 
 def pdfSymmetricShifts(hdiff, axis_name):
     sq = hh.multiplyHists(hdiff, hdiff)
