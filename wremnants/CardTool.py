@@ -254,7 +254,7 @@ class CardTool(object):
         self.loadNominalCard()
         if self.pseudoData:
             self.addPseudodata(self.predictedProcesses())
-            
+
         if statOnly:
             # add dummy uncertainty, necessary for combineTF
             nondata = self.predictedProcesses()
@@ -269,6 +269,7 @@ class CardTool(object):
                 self.datagroups.loadHistsForDatagroups(self.histName, syst, label="syst",
                     procsToRead=processes, forceNonzero=syst != "qcdScaleByHelicity")
                 self.writeForProcesses(syst, label="syst", processes=processes)
+        
         self.writeCard()
 
     def writeCard(self):

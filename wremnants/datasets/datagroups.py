@@ -43,6 +43,7 @@ class datagroups(object):
         if not procsToRead:
             procsToRead = self.groups.keys()
 
+        foundExact = False
         for procName in procsToRead:
             group = self.groups[procName]
             group[label] = None
@@ -51,6 +52,7 @@ class datagroups(object):
                 scale = group["scale"] if "scale" in group else None
                 try:
                     h = self.readHist(baseName, member, syst, scaleOp=scale, forceNonzero=forceNonzero)
+                    foundExact = True
                 except ValueError as e:
                     if nominalIfMissing:
                         logging.info(f"{str(e)}. Using nominal hist {self.nominalName} instead")
@@ -61,6 +63,9 @@ class datagroups(object):
                 group[label] = h if not group[label] else hh.addHists(h, group[label])
             if selectSignal and group[label] and "signalOp" in group and group["signalOp"]:
                 group[label] = group["signalOp"](group[label])
+        # Avoid situation where the nominal is read for all processes for this syst
+        if not foundExact:
+            raise ValueError(f"Did not find systematic {syst} for any processes!")
 
     #TODO: Better organize to avoid duplicated code
     def setHistsCombine(self, baseName, syst, channel, procsToRead=None, label=None):
