@@ -4,7 +4,7 @@ import gzip
 import ROOT
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--nThreads", type=int, help="number of threads", default=None)
+parser.add_argument("-j", "--nThreads", type=int, help="number of threads", default=None)
 initargs,_ = parser.parse_known_args()
 
 ROOT.gInterpreter.ProcessLine(".O3")
@@ -232,7 +232,7 @@ def build_graph(df, dataset):
                 results.append(masswhist)
 
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
-            if False and not "tau" in dataset.name:
+            if not "tau" in dataset.name:
                 # TODO: Move to syst_tools
                 netabins = args.muonCorrEtaBins
                 nweights = 21
