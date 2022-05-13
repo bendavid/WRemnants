@@ -267,7 +267,7 @@ class CardTool(object):
                 print(syst)
                 processes=self.systematics[syst]["processes"]
                 self.datagroups.loadHistsForDatagroups(self.histName, syst, label="syst",
-                    procsToRead=processes)
+                    procsToRead=processes, forceNonzero=syst != "qcdScaleByHelicity")
                 self.writeForProcesses(syst, label="syst", processes=processes)
         self.writeCard()
 
@@ -363,11 +363,11 @@ class CardTool(object):
     def writeHistWithCharges(self, h, name):
         hout = narf.hist_to_root(h)
         #self.outfile[name] = h
-        hout.SetName(name+"_all")
+        hout.SetName(f"{name}_{self.channels[0]}")
         hout.Write()
     
     def writeHist(self, h, name):
-        if self.channels[0] != "all":
+        if self.channels[0] == "plus" and self.channels[1] == "minus":
             self.writeHistByCharge(h, name)
         else:
             self.writeHistWithCharges(h, name)

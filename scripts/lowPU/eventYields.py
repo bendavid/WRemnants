@@ -47,7 +47,10 @@ if __name__ == "__main__":
     flavor = "mumu"
     #flavor = "ee"
 
+    fIn = ROOT.TFile("/home/j/jaeyserm/combine/CMSSW_10_6_20/src/LowPU/LowPU_Z%s_differential_combineOutput.root" % fitcfg)
       
+      
+    sys.exit()  
     groups = datagroupsLowPU_Z("mz_lowPU_%s.pkl.lz4" % flavor)
 
     if flavor == "mumu":

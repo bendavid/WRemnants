@@ -775,7 +775,68 @@ if __name__ == "__main__":
     functions.prepareDir(outDir)
       
     groups = datagroupsLowPU_Z("mz_lowPU_%s.pkl.lz4" % flavor, flavor=flavor)
+    '''
+Hist(
+  Variable([0, 10, 20, 40, 60, 90, 150], underflow=False, name='recoil_gen', label='recoil_gen'),
+  Variable([0, 5, 10, 15, 20, 30, 40, 50, 60, 75, 90, 150], underflow=False, name='recoil_reco', label='recoil_reco'),
+  Regular(60, 60, 120, underflow=False, overflow=False, name='mll', label='mll'),
+  storage=Weight()) # Sum: WeightedSum(value=129572, variance=6830.79) (WeightedSum(value=130605, variance=6892.9) with flow)
+Hist(
+  Variable([0, 10, 20, 40, 60, 90, 150], underflow=False, name='recoil_gen', label='recoil_gen'),
+  Variable([0, 5, 10, 15, 20, 30, 40, 50, 60, 75, 90, 150], underflow=False, name='recoil_reco', label='recoil_reco'),
+  Regular(60, 60, 120, underflow=False, overflow=False, name='mll', label='mll'),
+  Integer(0, 1, underflow=False, overflow=False, name='chargeVgen', label='chargeVgen'),
+  Variable([0.25, 0.75, 1.25, 2.75], underflow=False, overflow=False, name='muRfact', label='muRfact'),
+  Variable([0.25, 0.75, 1.25, 2.75], underflow=False, overflow=False, name='muFfact', label='muFfact'),
+  storage=Weight()) # Sum: WeightedSum(value=1.16049e+06, variance=78538) (WeightedSum(value=1.16988e+06, variance=79112.9) with flow)
+
+    '''
     
+    label = "test"
+    import hist
+    import numpy as np
+    s = hist.tag.Slicer()
+    groups.setHists("gen_reco_mll", "", label=label, procsToRead=["DYmumu"], selectSignal=False, forceNonzero=False)
+    bhist_ = groups.groups["DYmumu"][label]
+    bhist_ = bhist_[{"recoil_gen" : s[5]}]
+    print(bhist_.sum())
+    
+    
+    label = "test1"
+    groups.setHists("gen_reco_mll_qcdScaleByHelicity", "", label=label, procsToRead=["DYmumu"], selectSignal=False, forceNonzero=False)
+    bhist = groups.groups["DYmumu"][label]
+    
+    
+    
+    #nom_scale_hist = bhist[{"recoil_gen" : s[5], "muRfact" : s[1], "muFfact" : s[1], "helicity" : s[::hist.sum], "ptVgen" : s[::hist.sum], "chargeVgen" : s[::hist.sum]}]
+    nom_scale_hist = bhist[{"recoil_gen" : s[5], "muRfact" : s[1.j], "muFfact" : s[1.j], "helicity" : s[::hist.sum], "ptVgen" : s[::hist.sum], "chargeVgen" : s[0.j]}]
+    print(nom_scale_hist.sum())
+    
+    sys.exit()
+    # select nominal QCD scales, but keep the sliced axis at size 1 for broadcasting
+    nom_scale_hist = bhist[{"muRfact" : s[1.j:1.j+1], "muFfact" : s[1.j:1.j+1]}]
+    
+    # select nominal QCD scales and project down to nominal axes
+    nom_hist = nom_scale_hist[{"ptVgen" : s[::hist.sum], "chargeVgen" : s[::hist.sum], "helicity" : s[::hist.sum], "muRfact" : s[1.j], "muFfact" : s[1.j] }]
+    
+    bhist = bhist[{"helicity" : s[::hist.sum]}]
+    nom_scale_hist = nom_scale_hist[{"helicity" : s[::hist.sum]}]
+    bhist = bhist[{"ptVgen" : s[::hist.sum]}]
+    nom_scale_hist = nom_scale_hist[{"ptVgen" : s[::hist.sum]}]
+    
+    print(nom_hist)
+    print(bhist)
+    expd = bhist.ndim - nom_hist.ndim # muFfact muRfact chargeVgen
+    print(expd) # 3
+    expandnom = np.expand_dims(nom_hist.view(flow=True), [expd+i for i in range(expd)])
+    systhist = bhist.view(flow=True) - nom_scale_hist.view(flow=True) + expandnom
+
+    scale_variation_hist = hist.Hist(*bhist.axes, storage = bhist._storage_type(), name = "test", data = systhist)
+
+    
+    #print(nom_scale_hist)
+    #print(scale_variation_hist)
+    sys.exit()
 
 
     if flavor == "mumu":

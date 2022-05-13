@@ -13,6 +13,7 @@ import functions
 import lz4.frame
 import pickle
 import narf
+import hist
 
 from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_Z
 from wremnants.datasets.datagroups import datagroups2016
@@ -722,8 +723,329 @@ def singlePlot(histCfg, fOut, xMin, xMax, yMin, yMax, xLabel, yLabel, logY=True,
     canvas.Close()
 
 
+def plotHighLowPU():
 
+    s = hist.tag.Slicer()
 	
+    # lowPU
+    nvtx_lowPU = list(range(1, 7))
+    flavor = "mumu"
+    groups_lowPU_pfmet = datagroupsLowPU_Z("mz_lowPU_%s_pfmet.pkl.lz4" % flavor, flavor=flavor)
+    groups_lowPU_deepmet = datagroupsLowPU_Z("mz_lowPU_%s_deepmet.pkl.lz4" % flavor, flavor=flavor)
+    
+    # highPU
+    nvtx_highPU = list(range(5, 40))
+    groups_highPU_pfmet = datagroups2016("mz_wlike_with_mu_eta_pt_pfmet.pkl.lz4")
+    groups_highPU_deepmet = datagroups2016("mz_wlike_with_mu_eta_pt_deepmet.pkl.lz4")
+    
+    if False:
+    
+        # overlap of NPV (data)
+        groups_lowPU_pfmet.setHists("npv", "", label="npv", procsToRead=["SingleMuon"], selectSignal=False)
+        bhist_lowPU = groups_lowPU_pfmet.groups["SingleMuon"]["npv"]
+        rhist_lowPU = narf.hist_to_root(bhist_lowPU)
+        print(bhist_lowPU)
+        
+        groups_highPU_pfmet.setHists("npv", "", label="npv", procsToRead=["Data"], selectSignal=False)
+        bhist_highPU = groups_highPU_pfmet.groups["Data"]["npv"]
+        rhist_highPU = narf.hist_to_root(bhist_highPU)
+        print(bhist_highPU)
+        
+        rhist_highPU_line = copy.deepcopy(rhist_highPU)
+        rhist_highPU.SetLineColor(ROOT.kBlack)
+        rhist_highPU.SetLineWidth(2)
+        rhist_highPU.SetFillColor(ROOT.TColor.GetColor(248, 206, 104))
+
+        rhist_highPU_line.SetLineWidth(2)
+        rhist_highPU_line.SetLineColor(ROOT.kBlack)
+        rhist_highPU_line.SetLineStyle(2)
+        
+        rhist_lowPU.SetLineColor(ROOT.kBlack)
+        rhist_lowPU.SetLineWidth(2)
+        rhist_lowPU.SetFillColor(ROOT.TColor.GetColor(100, 192, 232))
+
+        cfg = {
+
+            'logy'              : True,
+            'logx'              : False,
+            
+            'xmin'              : 1,
+            'xmax'              : 50,
+            'ymin'              : 1e2,
+            'ymax'              : 1e7,
+                
+            'xtitle'            : "N_{VTX}",
+            'ytitle'            : "Events",
+                
+            'topRight'          : "13 TeV", 
+            'topLeft'           : "#bf{CMS} #scale[0.7]{#it{Preliminary}}",
+
+        }
+
+        leg = ROOT.TLegend(.20, 0.78, .55, .90)
+        leg.SetBorderSize(0)
+        leg.SetFillStyle(0)
+        leg.SetTextSize(0.035)
+        leg.AddEntry(rhist_highPU, "High PU, 16.8 fb^{-1} (2016)", "F")
+        leg.AddEntry(rhist_lowPU, "Low PU, 200 pb^{-1} (2017)", "F")
+        
+        plotter.cfg = cfg
+        canvas = plotter.canvas()
+        dummy = plotter.dummy()
+        canvas.SetGrid()
+        dummy.Draw("HIST")
+       
+        rhist_highPU.Draw("HIST SAME")
+        rhist_lowPU.Draw("HIST SAME")
+        rhist_highPU_line.Draw("HIST SAME")
+        leg.Draw("SAME")
+        
+        plotter.aux(canvas)  
+        ROOT.gPad.SetTickx()
+        ROOT.gPad.SetTicky()
+        ROOT.gPad.RedrawAxis()  
+        canvas.SaveAs("%s/npv.png" % outDir)
+        canvas.SaveAs("%s/npv.pdf" % outDir)
+        canvas.Close()
+  
+
+    # resolution vs NPV
+    if False:
+    
+        groups_lowPU_pfmet.setHists("recoil_uncorr_perp_npv", "", label="recoil_uncorr_para_npv", procsToRead=["SingleMuon"], selectSignal=False)
+        bhist_lowPU_pfmet = groups_lowPU_pfmet.groups["SingleMuon"]["recoil_uncorr_para_npv"]
+        
+        groups_lowPU_deepmet.setHists("recoil_uncorr_perp_npv", "", label="recoil_uncorr_para_npv", procsToRead=["SingleMuon"], selectSignal=False)
+        bhist_lowPU_deepmet = groups_lowPU_deepmet.groups["SingleMuon"]["recoil_uncorr_para_npv"]
+        
+        groups_highPU_pfmet.setHists("recoil_uncorr_perp_npv", "", label="recoil_uncorr_para_npv", procsToRead=["Data"], selectSignal=False)
+        bhist_highPU_pfmet = groups_highPU_pfmet.groups["Data"]["recoil_uncorr_para_npv"]
+        
+        groups_highPU_deepmet.setHists("recoil_uncorr_perp_npv", "", label="recoil_uncorr_para_npv", procsToRead=["Data"], selectSignal=False)
+        bhist_highPU_deepmet = groups_highPU_deepmet.groups["Data"]["recoil_uncorr_para_npv"]
+        
+        g_lowPU_pfmet = ROOT.TGraphErrors()
+        g_lowPU_pfmet.SetName("g_lowPU_pfmet")
+        g_lowPU_deepmet = ROOT.TGraphErrors()
+        g_lowPU_deepmet.SetName("g_lowPU_deepmet")
+        g_highPU_pfmet = ROOT.TGraphErrors()
+        g_highPU_pfmet.SetName("g_highPU_pfmet")
+        g_highPU_deepmet = ROOT.TGraphErrors()
+        g_highPU_deepmet.SetName("g_highPU_deepmet")
+        
+        for i, npv in enumerate(nvtx_lowPU):
+        
+            b = narf.hist_to_root(bhist_lowPU_pfmet[{"recoil_npv": s[npv]}])
+            g_lowPU_pfmet.SetPoint(i, npv, b.GetRMS())
+            g_lowPU_pfmet.SetPointError(i, 0, b.GetRMSError())
+            print(b.GetMean(), b.GetRMS())
+            
+            b = narf.hist_to_root(bhist_lowPU_deepmet[{"recoil_npv": s[npv]}])
+            g_lowPU_deepmet.SetPoint(i, npv, b.GetRMS())
+            g_lowPU_deepmet.SetPointError(i, 0, b.GetRMSError())
+            print(b.GetMean(), b.GetRMS())
+        
+        for i, npv in enumerate(nvtx_highPU):
+        
+            b = narf.hist_to_root(bhist_highPU_pfmet[{"recoil_npv": s[npv]}])
+            g_highPU_pfmet.SetPoint(i, npv, b.GetRMS())
+            g_highPU_pfmet.SetPointError(i, 0, b.GetRMSError())
+            print(b.GetMean(), b.GetRMS())
+            
+            b = narf.hist_to_root(bhist_highPU_deepmet[{"recoil_npv": s[npv]}])
+            g_highPU_deepmet.SetPoint(i, npv, b.GetRMS())
+            g_highPU_deepmet.SetPointError(i, 0, b.GetRMSError())
+            print(b.GetMean(), b.GetRMS())
+     
+
+  
+        leg = ROOT.TLegend(.20, 0.70, .50, .90)
+        leg.SetBorderSize(0)
+        leg.SetFillStyle(0)
+        leg.SetTextSize(0.03)
+
+        g_lowPU_pfmet.SetLineColor(ROOT.kBlack)
+        g_lowPU_pfmet.SetMarkerColor(ROOT.kBlack)
+        g_lowPU_pfmet.SetMarkerStyle(8)
+        g_lowPU_pfmet.SetMarkerSize(1)
+        g_lowPU_pfmet.SetLineWidth(2)
+        
+        g_lowPU_deepmet.SetLineColor(ROOT.kRed)
+        g_lowPU_deepmet.SetMarkerColor(ROOT.kRed)
+        g_lowPU_deepmet.SetMarkerStyle(8)
+        g_lowPU_deepmet.SetMarkerSize(1)
+        g_lowPU_deepmet.SetLineWidth(2)
+        
+        g_highPU_pfmet.SetLineColor(ROOT.kBlue)
+        g_highPU_pfmet.SetMarkerColor(ROOT.kBlue)
+        g_highPU_pfmet.SetMarkerStyle(8)
+        g_highPU_pfmet.SetMarkerSize(1)
+        g_highPU_pfmet.SetLineWidth(2)
+        
+        g_highPU_deepmet.SetLineColor(ROOT.kGreen+1)
+        g_highPU_deepmet.SetMarkerColor(ROOT.kGreen+1)
+        g_highPU_deepmet.SetMarkerStyle(8)
+        g_highPU_deepmet.SetMarkerSize(1)
+        g_highPU_deepmet.SetLineWidth(2)
+        
+        leg.AddEntry(g_lowPU_pfmet, "LowPU PF MET", "LP")
+        leg.AddEntry(g_lowPU_deepmet, "LowPU DeepMET", "LP")
+        leg.AddEntry(g_highPU_pfmet, "HighPU PF MET", "LP")
+        leg.AddEntry(g_highPU_deepmet, "HighPU DeepMET", "LP")
+
+        cfg = {
+
+            'logy'              : False,
+            'logx'              : False,
+            
+            'xmin'              : 0,
+            'xmax'              : 40,
+            'ymin'              : 0,
+            'ymax'              : 35, 
+                
+            'xtitle'            : "N_{VTX}",
+            'ytitle'            : "#sigma(U_{#perp} ) (GeV)",
+                
+            'topRight'          : "13 TeV", 
+            'topLeft'           : "#bf{CMS} #scale[0.7]{#it{Preliminary}}",
+
+        }
+        
+
+        plotter.cfg = cfg
+        canvas = plotter.canvas()
+        dummy = plotter.dummy()
+            
+        ## top panel
+        canvas.cd()
+        canvas.SetGrid()
+        dummy.Draw("HIST")
+            
+        g_lowPU_pfmet.Draw("SAME LP")
+        g_lowPU_deepmet.Draw("SAME LP")
+        g_highPU_pfmet.Draw("SAME LP")
+        g_highPU_deepmet.Draw("SAME LP")
+        leg.Draw("SAME")
+        
+        
+        plotter.aux()  
+        ROOT.gPad.SetTickx()
+        ROOT.gPad.SetTicky()
+        ROOT.gPad.RedrawAxis()  
+        
+        latex = ROOT.TLatex()
+        latex.SetNDC()
+        latex.SetTextSize(0.04)
+        latex.SetTextColor(1)
+        latex.SetTextFont(42)
+        latex.DrawLatex(0.6, 0.5, "")
+
+        ROOT.gPad.SetTickx()
+        ROOT.gPad.SetTicky()
+        ROOT.gPad.RedrawAxis()
+        canvas.SaveAs("%s/resolution_nvtx.png" % outDir)
+        canvas.SaveAs("%s/resolution_nvtx.pdf" % outDir)
+        canvas.Close()
+ 
+    # resolution
+    if True:
+    
+        # overlap of NPV (data)
+        groups_lowPU_pfmet.setHists("recoil_uncorr_perp", "", label="recoil_uncorr_perp", procsToRead=["SingleMuon"], selectSignal=False)
+        bhist_lowPU_pfmet = groups_lowPU_pfmet.groups["SingleMuon"]["recoil_uncorr_perp"]
+        rhist_lowPU_pfmet = narf.hist_to_root(bhist_lowPU_pfmet)
+        
+        groups_lowPU_deepmet.setHists("recoil_uncorr_perp", "", label="recoil_uncorr_perp", procsToRead=["SingleMuon"], selectSignal=False)
+        bhist_lowPU_deepmet = groups_lowPU_deepmet.groups["SingleMuon"]["recoil_uncorr_perp"]
+        rhist_lowPU_deepmet = narf.hist_to_root(bhist_lowPU_deepmet)
+        
+        groups_highPU_pfmet.setHists("recoil_uncorr_perp", "", label="recoil_uncorr_perp", procsToRead=["Data"], selectSignal=False)
+        bhist_highPU = groups_highPU_pfmet.groups["Data"]["recoil_uncorr_perp"]
+        rhist_highPU = narf.hist_to_root(bhist_highPU)
+        
+        groups_highPU_deepmet.setHists("recoil_uncorr_perp", "", label="recoil_uncorr_perp", procsToRead=["Data"], selectSignal=False)
+        bhist_highPU_deepmet = groups_highPU_deepmet.groups["Data"]["recoil_uncorr_perp"]
+        rhist_highPU_deepmet = narf.hist_to_root(bhist_highPU_deepmet)
+        
+        
+        rhist_lowPU_pfmet.SetLineColor(ROOT.kBlack)
+        rhist_lowPU_pfmet.SetMarkerColor(ROOT.kBlack)
+        rhist_lowPU_pfmet.SetMarkerStyle(8)
+        rhist_lowPU_pfmet.SetMarkerSize(1)
+        rhist_lowPU_pfmet.SetLineWidth(2)
+        
+        rhist_lowPU_deepmet.SetLineColor(ROOT.kRed)
+        rhist_lowPU_deepmet.SetMarkerColor(ROOT.kRed)
+        rhist_lowPU_deepmet.SetMarkerStyle(8)
+        rhist_lowPU_deepmet.SetMarkerSize(1)
+        rhist_lowPU_deepmet.SetLineWidth(2)
+        
+        rhist_highPU.SetLineColor(ROOT.kBlue)
+        rhist_highPU.SetMarkerColor(ROOT.kBlue)
+        rhist_highPU.SetMarkerStyle(8)
+        rhist_highPU.SetMarkerSize(1)
+        rhist_highPU.SetLineWidth(2)
+        
+        rhist_highPU_deepmet.SetLineColor(ROOT.kGreen+1)
+        rhist_highPU_deepmet.SetMarkerColor(ROOT.kGreen+1)
+        rhist_highPU_deepmet.SetMarkerStyle(8)
+        rhist_highPU_deepmet.SetMarkerSize(1)
+        rhist_highPU_deepmet.SetLineWidth(2)
+        
+        rhist_lowPU_pfmet.Scale(1./rhist_lowPU_pfmet.Integral())
+        rhist_lowPU_deepmet.Scale(1./rhist_lowPU_deepmet.Integral())
+        rhist_highPU.Scale(1./rhist_highPU.Integral())
+        rhist_highPU_deepmet.Scale(1./rhist_highPU_deepmet.Integral())
+
+        cfg = {
+
+            'logy'              : False,
+            'logx'              : False,
+            
+            'xmin'              : -50,
+            'xmax'              : 50,
+            'ymin'              : 0,
+            'ymax'              : 0.07,
+                
+            'xtitle'            : "U_{#perp}   (GeV)",
+            'ytitle'            : "Events",
+                
+            'topRight'          : "13 TeV", 
+            'topLeft'           : "#bf{CMS} #scale[0.7]{#it{Preliminary}}",
+
+        }
+
+        leg = ROOT.TLegend(.20, 0.70, .50, .90)
+        leg.SetBorderSize(0)
+        leg.SetFillStyle(0)
+        leg.SetTextSize(0.03)
+        leg.AddEntry(rhist_lowPU_pfmet, "LowPU PF MET", "L")
+        leg.AddEntry(rhist_lowPU_deepmet, "LowPU DeepMET", "L")
+        leg.AddEntry(rhist_highPU, "HighPU PF MET", "L")
+        leg.AddEntry(rhist_highPU_deepmet, "HighPU DeepMET", "L")
+
+        
+        plotter.cfg = cfg
+        canvas = plotter.canvas()
+        dummy = plotter.dummy()
+        canvas.SetGrid()
+        dummy.Draw("HIST")
+       
+        rhist_lowPU_pfmet.Draw("HIST SAME")
+        rhist_lowPU_deepmet.Draw("HIST SAME")
+        rhist_highPU.Draw("HIST SAME")
+        rhist_highPU_deepmet.Draw("HIST SAME")
+        leg.Draw("SAME")
+        
+        plotter.aux(canvas)  
+        ROOT.gPad.SetTickx()
+        ROOT.gPad.SetTicky()
+        ROOT.gPad.RedrawAxis()  
+        canvas.SaveAs("%s/resolution_perp.png" % outDir)
+        canvas.SaveAs("%s/resolution_perp.pdf" % outDir)
+        canvas.Close()
+   
+     
 if __name__ == "__main__":
 
     outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/ComparisonHighPU"
@@ -734,93 +1056,9 @@ if __name__ == "__main__":
     MC_SF = 1.0
     #if flavor == "mumu": MC_SF = 1.026
 
-    functions.prepareDir(outDir)
-      
-    # lowPU
-    nvtx_lowPU = list(range(1, 8))
-    flavor = "mumu"
-    groups_lowPU = datagroupsLowPU_Z("mz_lowPU_%s.pkl.lz4" % flavor, flavor=flavor)
-    
-    # highPU
-    nvtx_highPU = list(range(1, 8))
-    groups_highPU = datagroups2016("mz_wlike_with_mu_eta_pt.pkl.lz4")
-    
-    
-    # overlap of NPV (data)
-    groups_lowPU.setHists("npv", "", label="npv", procsToRead=["SingleMuon"], selectSignal=False)
-    bhist_lowPU = groups_lowPU.groups["SingleMuon"]["npv"]
-    rhist_lowPU = narf.hist_to_root(bhist_lowPU)
-    print(bhist_lowPU)
-    
-    groups_highPU.setHists("npv", "", label="npv", procsToRead=["Data"], selectSignal=False)
-    bhist_highPU = groups_highPU.groups["Data"]["npv"]
-    rhist_highPU = narf.hist_to_root(bhist_highPU)
-    print(bhist_highPU)
-    
-    rhist_highPU_line = copy.deepcopy(rhist_highPU)
-    rhist_highPU.SetLineColor(ROOT.kBlack)
-    rhist_highPU.SetLineWidth(2)
-    rhist_highPU.SetFillColor(ROOT.TColor.GetColor(248, 206, 104))
-    
-    
-    rhist_highPU_line.SetLineWidth(2)
-    rhist_highPU_line.SetLineColor(ROOT.kBlack)
-    rhist_highPU_line.SetLineStyle(2)
-    
-    rhist_lowPU.SetLineColor(ROOT.kBlack)
-    rhist_lowPU.SetLineWidth(2)
-    rhist_lowPU.SetFillColor(ROOT.TColor.GetColor(100, 192, 232))
+    functions.prepareDir(outDir, remove=False)
+    plotHighLowPU()
 
-
-    # default cfg
-    cfg = {
-
-        'logy'              : True,
-        'logx'              : False,
-        
-        'xmin'              : 1,
-        'xmax'              : 50,
-        'ymin'              : 1e2,
-        'ymax'              : 1e7,
-            
-        'xtitle'            : "N_{VTX}",
-        'ytitle'            : "Events",
-            
-        'topRight'          : "13 TeV", 
-        'topLeft'           : "#bf{CMS} #scale[0.7]{#it{Preliminary}}",
-
-    }
-    
-    
-    leg = ROOT.TLegend(.20, 0.78, .55, .90)
-    leg.SetBorderSize(0)
-    leg.SetFillStyle(0)
-    leg.SetTextSize(0.035)
-    
-    leg.AddEntry(rhist_highPU, "High PU, 16.8 fb^{-1} (2016)", "F")
-    leg.AddEntry(rhist_lowPU, "Low PU, 200 pb^{-1} (2017)", "F")
-    
-    plotter.cfg = cfg
-    canvas = plotter.canvas()
-    dummy = plotter.dummy()
-    canvas.SetGrid()
-    dummy.Draw("HIST")
-   
-    rhist_highPU.Draw("HIST SAME")
-    rhist_lowPU.Draw("HIST SAME")
-    rhist_highPU_line.Draw("HIST SAME")
-    leg.Draw("SAME")
-    
-    plotter.aux(canvas)  
-    ROOT.gPad.SetTickx()
-    ROOT.gPad.SetTicky()
-    ROOT.gPad.RedrawAxis()  
-    
-
-
-    canvas.SaveAs("%s/npv.png" % outDir)
-    canvas.SaveAs("%s/npv.pdf" % outDir)
-    canvas.Close()
 
    
     

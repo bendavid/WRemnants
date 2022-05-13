@@ -59,11 +59,12 @@ def parseHist1D(fIn, hName, bins):
     
 def doRecoilPlot(flavor="mumu", fitcfg="mumu", fitmode="prefit", ratio=1.06):
 
-    fIn = ROOT.TFile("/home/j/jaeyserm/combine/CMSSW_10_6_20/src/LowPU/LowPU_Z%s_output.root" % fitcfg)
+    fIn = ROOT.TFile("/home/j/jaeyserm/combine/CMSSW_10_6_20/src/LowPU/LowPU_Z%s_differential_combineOutput.root" % fitcfg)
     outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/Combine/Z/fit_%s" % fitcfg
     functions.prepareDir(outDir, remove=False)
     
     resTree = fIn.Get("fitresults")
+    resTree.GetEntry(0)
     
     if flavor == "mumu":
         dataLabel = "Data (#mu^{#plus}#mu^{#minus})"
@@ -83,7 +84,27 @@ def doRecoilPlot(flavor="mumu", fitcfg="mumu", fitmode="prefit", ratio=1.06):
     sigUncs = [0.035796, 0.072002, 0.050658, 0.059626, 0.057034, 0.060837]
     sigUncs = [0.041657, 0.052776, 0.039676, 0.050306, 0.052252, 0.065191]
     
-
+    # extract the uncertainties
+    name = "nuisance_group_impact_pmaskedexp"
+    #name = "nuisance_group_impact_pmaskedexpnorm"
+    #name = "nuisance_group_impact_mu"
+        
+    impact_hist = fIn.Get(name)
+    xIdx = range(1, impact_hist.GetNbinsX()+1)
+    xLabels = [impact_hist.GetXaxis().GetBinLabel(i) for i in range(1, impact_hist.GetNbinsX()+1)]    
+    xIdx = [x for _,x in sorted(zip(xLabels,xIdx))]
+    sigUncs = []
+    for i,iBin in enumerate(xIdx):
+        xLabel = xLabels[iBin-1]
+        #print(xLabel)
+        #print(getattr(resTree, "%s" % xLabel))
+        err = getattr(resTree, "%s_err" % xLabel) / getattr(resTree, "%s" % xLabel)
+        #err = getattr(resTree, "%s_err" % xLabel.replace("_mu", "_pmaskedexpnorm")) / getattr(resTree, "%s" % xLabel.replace("_mu", "_pmaskedexpnorm"))
+        #err = getattr(resTree, "%s_err" % xLabel)
+        sigUncs.append(err)
+    
+    #print(sigUncs)
+    #sys.exit()
 
     
     leg = ROOT.TLegend(.17, 0.57, .9, .85)
@@ -148,7 +169,7 @@ def doRecoilPlot(flavor="mumu", fitcfg="mumu", fitmode="prefit", ratio=1.06):
         
         # append the signal strength uncertainties
         if fitmode == "postfit":
-            for iBin in range(0, h_err.GetNbinsX()+1):
+            for iBin in range(1, h_err.GetNbinsX()+1):
             
                 nom = h_err.GetBinContent(iBin)
                 err = h_err.GetBinError(iBin)
@@ -212,7 +233,10 @@ def doRecoilPlot(flavor="mumu", fitcfg="mumu", fitmode="prefit", ratio=1.06):
         h_gen_sig.SetLineColor(ROOT.kBlack)
         h_gen_sig.SetLineWidth(1)
         h_gen_sig.SetLineStyle(1)
+        print("iGenBin", iGenBin, "%d" % h_gen_sig.Integral())
         h_gen_sig.Scale(1, "width")
+        
+        
 
         
         leg.AddEntry(h_gen_sig, "%s, p_{T}^{Z, gen} #in [%d, %d] GeV" % (signalLabel, lowPUcfg.bins_recoil_gen[iGenBin-1], lowPUcfg.bins_recoil_gen[iGenBin]), "F")
@@ -528,6 +552,180 @@ def doTransverseMassPlot(flavor="mumu", fitcfg="mumu", fitmode="prefit", ratio=1
     canvas.Close()    
      
     
+def extractUncertainties(flavor="mumu", fitcfg="mumu", fitmode="prefit", ratio=1.06):
+
+    fIn = ROOT.TFile("/home/j/jaeyserm/combine/CMSSW_10_6_20/src/LowPU/LowPU_Z%s_differential_combineOutput.root" % fitcfg)
+    outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/Combine/Z/fit_%s" % fitcfg
+    functions.prepareDir(outDir, remove=False)
+    
+    resTree = fIn.Get("fitresults")
+    
+    if flavor == "mumu":
+        dataLabel = "Data (#mu^{#plus}#mu^{#minus})"
+        signalLabel = "DY#rightarrow#mu^{#plus}#mu^{#minus}"
+        
+    if flavor == "ee":
+        dataLabel = "Data (e^{#plus}e^{#minus})"
+        signalLabel = "DY#rightarrowe^{#plus}e^{#minus}"
+        
+    if fitcfg == "mumu": label = "Muon channel"
+    elif fitcfg == "ee": label = "Electron channel"
+    else: label = "Muon + electron channels"
+
+    
+    tree = fIn.Get("fitresults")
+    tree.GetEntry(0)
+    
+    name = "nuisance_group_impact_mu"
+    impact_hist = fIn.Get(name) # nuisance_group_impact_nois
+    xLabels = sorted([impact_hist.GetXaxis().GetBinLabel(i) for i in range(1, impact_hist.GetNbinsX()+1)])
+
+    print("%s\t%s\t%s\t%s" % ("        ", "mu", "s_abs", "s_norm"))
+    for i, xLabel in enumerate(xLabels):
+    
+        err_mu = getattr(tree, "%s_err" % xLabel)
+        err_abs = getattr(tree, "%s_err" % xLabel.replace("_mu", "_pmaskedexp")) / getattr(tree, "%s" % xLabel.replace("_mu", "_pmaskedexp"))
+        err_norm = getattr(tree, "%s_err" % xLabel.replace("_mu", "_pmaskedexpnorm")) / getattr(tree, "%s" % xLabel.replace("_mu", "_pmaskedexpnorm"))
+        print("%s\t%.2f\t%.2f\t%.2f" % (xLabel.replace("_mu", ""), 100.*err_mu, 100.*err_abs, 100.*err_norm))
+    
+   
+def plotImpactsVsPt(flavor="mumu", fitcfg="mumu", impact_type = "mu"):
+
+    fIn = ROOT.TFile("/home/j/jaeyserm/combine/CMSSW_10_6_20/src/LowPU/LowPU_Z%s_differential_combineOutput.root" % fitcfg)
+    outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/Combine/Z/fit_%s" % fitcfg
+    functions.prepareDir(outDir, remove=False)
+    
+    tree = fIn.Get("fitresults")
+    tree.GetEntry(0)
+    
+    recoil_gen = [0.0, 10.0, 20.0, 40.0, 60.0, 90.0, 150]
+    
+    
+    if impact_type == "abs": 
+        name = "nuisance_group_impact_pmaskedexp"
+        suffix = "abs"
+        lab = "#sigma_{abs}"
+    elif impact_type == "norm": 
+        name = "nuisance_group_impact_pmaskedexpnorm"
+        suffix = "norm"
+        lab = "#sigma_{norm}"
+    else: 
+        name = "nuisance_group_impact_mu"
+        suffix = "mu"
+        lab = "#mu"
+        
+    impact_hist = fIn.Get(name)
+    xIdx = range(1, impact_hist.GetNbinsX()+1)
+    xLabels = [impact_hist.GetXaxis().GetBinLabel(i) for i in range(1, impact_hist.GetNbinsX()+1)]
+    yLabels = [impact_hist.GetYaxis().GetBinLabel(i) for i in range(1, impact_hist.GetNbinsY()+1)]
+    
+    xIdx = [x for _,x in sorted(zip(xLabels,xIdx))]
+
+    scale = 100
+    rounded = 2
+    dfs = []
+    graphs = {}
+    
+    for k,yLabel in enumerate(yLabels):
+        
+        g = ROOT.TGraph()
+        g.SetName(yLabel)
+        g.SetTitle(yLabel)
+        for i,iBin in enumerate(xIdx): g.SetPoint(i, 0.5*(recoil_gen[i]+recoil_gen[i+1]), 100.*impact_hist.GetBinContent(iBin, k+1))
+       
+        graphs[yLabel] = g
+        
+    # total
+    g = ROOT.TGraph()
+    g.SetName("total")
+    g.SetTitle("Total")
+    for i,iBin in enumerate(xIdx):
+        xLabel = xLabels[iBin-1]
+        if impact_type == "abs": err = getattr(tree, "%s_err" % xLabel.replace("_mu", "_pmaskedexp")) / getattr(tree, "%s" % xLabel.replace("_mu", "_pmaskedexp"))
+        elif impact_type == "norm": err = getattr(tree, "%s_err" % xLabel.replace("_mu", "_pmaskedexpnorm")) / getattr(tree, "%s" % xLabel.replace("_mu", "_pmaskedexpnorm"))
+        else: err = getattr(tree, "%s_err" % xLabel)
+        g.SetPoint(i, 0.5*(recoil_gen[i]+recoil_gen[i+1]), 100.*err)
+    graphs["total"] = g
+    
+    ######################################
+    c = ROOT.TCanvas("c", "c", 1000, 750)
+    c.SetTopMargin(0.06)
+    c.SetRightMargin(0.05)
+    c.SetLeftMargin(0.15)
+    c.SetBottomMargin(0.14)
+    c.SetLogy()
+    
+    # dummy
+    dummy = ROOT.TH1D("h", "h", 1, 0, 200)
+    dummy.GetXaxis().SetTitle("p_{T}^{GEN}(Z) (GeV)")
+    dummy.GetXaxis().SetRangeUser(0, 200)
+    dummy.GetXaxis().SetTitleFont(43)
+    dummy.GetXaxis().SetTitleSize(40)
+    dummy.GetXaxis().SetLabelFont(43)
+    dummy.GetXaxis().SetLabelSize(35)
+    dummy.GetXaxis().SetTitleOffset(1.1*dummy.GetXaxis().GetTitleOffset())
+    dummy.GetXaxis().SetLabelOffset(1.2*dummy.GetXaxis().GetLabelOffset())
+    dummy.GetYaxis().SetTitle("Impact on %s (%%)" % lab)
+    dummy.GetYaxis().SetRangeUser(0.1, 10)
+    dummy.GetYaxis().SetTitleFont(43)
+    dummy.GetYaxis().SetTitleSize(40)
+    dummy.GetYaxis().SetLabelFont(43)
+    dummy.GetYaxis().SetLabelSize(35)
+    dummy.GetYaxis().SetTitleOffset(1.4*dummy.GetYaxis().GetTitleOffset())
+    dummy.GetYaxis().SetLabelOffset(1.4*dummy.GetYaxis().GetLabelOffset())
+    dummy.Draw("HIST")
+    
+    leg = ROOT.TLegend(.7, 0.30, .95, .8)
+    leg.SetBorderSize(0)
+    leg.SetFillStyle(0)
+    leg.SetTextSize(0.03)
+    #leg.SetNColumns(3)
+    leg.SetMargin(0.7*leg.GetMargin())
+
+    colors = [ROOT.kBlack, ROOT.kRed, ROOT.kBlue, ROOT.kGreen, ROOT.kOrange, ROOT.kMagenta, ROOT.kCyan, ROOT.kGray, ROOT.kYellow, ROOT.kSpring]
+    graphs_plot = ["total", "QCDscale", "CMS_lumi_lowPU", "stat", "CMS_recoil_stat", "pdfNNPDF31", "binByBinStat", "CMS_lepton_eff", "CMS_bkg_norm", "CMS_prefire17"]
+    for i, grName in enumerate(graphs_plot):
+    
+        g = graphs[grName]
+        g.SetLineWidth(2)
+        g.SetLineColor(colors[i])
+        g.SetMarkerStyle(8)
+        g.SetMarkerSize(1)
+        g.SetMarkerColor(colors[i])
+        g.Draw("SAME LP")
+        leg.AddEntry(g, g.GetTitle(), "LP")
+
+    leg.Draw("SAME")
+    c.Modify()
+    c.Update()
+    
+    ROOT.gPad.SetTickx()
+    ROOT.gPad.SetTicky()
+    ROOT.gPad.RedrawAxis()
+    
+    latex = ROOT.TLatex()
+    latex.SetNDC()
+    latex.SetTextSize(0.05)
+    latex.SetTextColor(1)
+    latex.SetTextFont(42)
+    latex.SetTextAlign(30)
+    tr = 1.-c.GetRightMargin()
+    latex.DrawLatex(tr, 0.94, "199 pb^{#minus1} (13 TeV)")
+    latex.SetTextAlign(13)
+    latex.SetTextFont(42)
+    latex.SetTextSize(0.05)
+    latex.DrawLatex(0.15, 0.985, "#bf{CMS} #scale[0.7]{#it{Preliminary}}")
+    
+    
+    latex.SetTextAlign(13)
+    latex.SetTextFont(42)
+    latex.SetTextSize(0.045)
+    latex.DrawLatex(0.70, 0.88, "DY #rightarrow #mu^{#plus}#mu^{#minus}")
+
+    c.SaveAs("%s/impacts_%s.png" % (outDir, suffix))
+    c.SaveAs("%s/impacts_%s.pdf" % (outDir, suffix))
+    c.Close()  
+ 
 if __name__ == "__main__":
     
     mZbins = 60 # make auto
@@ -536,10 +734,18 @@ if __name__ == "__main__":
     bins_recoil_reco[-1] = 150
     
     
-    doTransverseMassPlot()
+    #doTransverseMassPlot()
     
-    doRecoilPlot(flavor="mumu", fitcfg="mumu", fitmode="prefit", ratio=1.03)
+    doRecoilPlot(flavor="mumu", fitcfg="mumu", fitmode="prefit", ratio=1.06)
     #doRecoilPlot(flavor="ee", fitcfg="ee", fitmode="prefit", ratio=1.03)
     
-    doRecoilPlot(flavor="mumu", fitcfg="mumu", fitmode="postfit", ratio=1.11)
+    #doRecoilPlot(flavor="mumu", fitcfg="mumu", fitmode="postfit", ratio=1.11)
     #doRecoilPlot(flavor="ee", fitcfg="ee", fitmode="postfit", ratio=1.11)
+    
+    
+    #extractUncertainties()
+    
+    
+    #plotImpactsVsPt(impact_type = "mu")
+    #plotImpactsVsPt(impact_type = "abs")
+    #plotImpactsVsPt(impact_type = "norm")
