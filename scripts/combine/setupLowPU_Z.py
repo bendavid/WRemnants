@@ -21,6 +21,8 @@ parser.add_argument("--qcdScale", choices=["byHelicityPt", "byPt", "integrated",
 parser.add_argument("--flavor", type=str, help="Flavor (ee or mumu)", default=None, required=True)
 parser.add_argument("--fittype", choices=["differential", "wmass", "wlike", "inclusive"], default="differential", 
         help="Fit type, defines POI and fit observable (recoil or mT)")
+parser.add_argument("--xsec", dest="xsec", action='store_true', 
+        help="Write card for masked xsec normalization")
 args = parser.parse_args()
 
 if not os.path.isdir(args.outfolder):
@@ -33,13 +35,16 @@ datagroups = datagroupsLowPU_Z(args.inputFile, flavor=args.flavor)
 unconstrainedProcs = [] # POIs
 constrainedProcs = []   # constrained signal procs
 bkgDataProcs = []       # all the rest + data
-
+suffix = ""
 if args.flavor == "mumu":
     dataName = "SingleMuon"
     bkgDataProcs = ["TTbar", "EWK", "SingleMuon"] # , "DYmumu"
 if args.flavor == "ee":
     dataName = "SingleElectron"
     bkgDataProcs = ["TTbar", "EWK", "SingleElectron"] # , "DYee"
+if args.xsec:
+    suffix = "_xsec"
+    bkgDataProcs = [bkgDataProcs[-1]] # keep data_obs
 
 recoBins = lowPUcfg.bins_recoil_reco
 genBins = lowPUcfg.bins_recoil_gen
@@ -72,8 +77,6 @@ elif args.fittype == "inclusive":
     QCDscale = "integral"
     
 
-print(constrainedProcs)
-print(unconstrainedProcs)
   
 # hack: remove non-used procs/groups, as there can be more procs/groups defined than defined above
 toDel = []
@@ -82,17 +85,16 @@ for group in datagroups.groups:
 for group in toDel: del datagroups.groups[group]    
 
 templateDir = f"{scriptdir}/Templates/LowPileupW"
-cardTool = CardTool.CardTool(f"{args.outfolder}/LowPU_Z{args.flavor}_{args.fittype}.txt")
+cardTool = CardTool.CardTool(f"{args.outfolder}/LowPU_Z{args.flavor}_{args.fittype}{suffix}.txt")
 cardTool.setNominalTemplate(f"{templateDir}/main.txt")
-cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/LowPU_Z{args.flavor}_{args.fittype}.root"))
+cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/LowPU_Z{args.flavor}_{args.fittype}{suffix}.root"))
 cardTool.setDatagroups(datagroups)
 cardTool.setHistName(histName) 
-cardTool.setChannels(["all"])
+cardTool.setChannels([f"{args.flavor}{suffix}"])
 cardTool.setDataName(dataName)
 cardTool.setUnconstrainedProcs(unconstrainedProcs)
 
 DY_procs = cardTool.filteredProcesses(lambda x: "DY" in x)
-#print(DY_procs)
 
 
 pdfName = theory_tools.pdfMap["nnpdf31"]["name"]
@@ -117,11 +119,12 @@ cardTool.addSystematic(f"alphaS002{pdfName}",
 
 
 
-scaleSystAxes = ["chargeVgen", "muRfact", "muFfact"]  ##  "ptVgen", "chargeVgen", "helicityWeight_tensor"
+
+scaleSystAxes = ["chargeVgen", "muRfact", "muFfact"]  ##  "ptVgen", "chargeVgen", "helicityWeight_tensor" ## charge = 0?
 scaleLabelsByAxis = ["q", "muR", "muF"]
 scaleGroupName = "QCDscale"
 scaleActionArgs = {"sum_ptV" : True, "sum_helicity" : True}
-scaleSkipEntries = [(-1, 1, 1), (-1, 0, 2), (-1, 2, 0)]
+scaleSkipEntries = [(-1, 1, 1), (-1, 0, 2), (-1, 2, 0)] 
 if "Helicity" in QCDscale:
     scaleActionArgs.pop("sum_helicity")
     scaleGroupName += "ByHelicity"
@@ -191,27 +194,45 @@ def scale_recoil_hist_to_variations(scale_hist):
     return hnew      
 
 
-recoil_vars = [(1,2), (1,3), (1,4),   (2,2), (2,3),   (3,2), (3,3), (3,4),    (4,2), (4,3)]
-for k in recoil_vars:
-    
-    cardTool.addSystematic("recoilStatUnc_%d_%d" % (k[0], k[1]),
+if not args.xsec:
+   
+    recoil_vars = [(1,2), (1,3), (1,4),   (2,2), (2,3),   (3,2), (3,3), (3,4),    (4,2), (4,3)]
+    for k in recoil_vars:
+        
+        cardTool.addSystematic("recoilStatUnc_%d_%d" % (k[0], k[1]),
+            processes=DY_procs,
+            mirror = False,
+            group = "CMS_recoil_stat",
+            systAxes = ["recoil_stat_unc_var"],
+            labelsByAxis = ["recoilStatUnc_%d_%d_{i}" % (k[0], k[1])],
+            action=scale_recoil_hist_to_variations,
+        )
+
+
+    cardTool.addSystematic("prefireCorr",
         processes=DY_procs,
         mirror = False,
-        group = "CMS_recoil_stat",
-        systAxes = ["recoil_stat_unc_var"],
-        labelsByAxis = ["recoilStatUnc_%d_%d_{i}" % (k[0], k[1])],
-        action=scale_recoil_hist_to_variations,
+        group="CMS_prefire17",
+        baseName="CMS_prefire17",
+        systAxes = ["downUpVar"],
+        labelsByAxis = ["downUpVar"],
     )
-
-
-cardTool.addSystematic("prefireCorr",
-    processes=DY_procs,
-    mirror = False,
-    group="CMS_prefire17",
-    baseName="CMS_prefire17",
-    systAxes = ["downUpVar"],
-    labelsByAxis = ["downUpVar"],
-)
+    
+    for lepEff in ["lepSF_HLT_DATA_stat", "lepSF_HLT_DATA_syst", "lepSF_HLT_MC_stat", "lepSF_HLT_MC_syst", "lepSF_ISO_stat", "lepSF_ISO_DATA_syst", "lepSF_ISO_MC_syst", "lepSF_IDIP_stat", "lepSF_IDIP_DATA_syst", "lepSF_IDIP_MC_syst"]:
+        
+        
+        cardTool.addSystematic(lepEff,
+            processes=DY_procs,
+            mirror = True,
+            group="CMS_lepton_eff",
+            baseName=lepEff,
+            systAxes = ["tensor_axis_0"],
+            labelsByAxis = [""],
+        )
+        
+    cardTool.addLnNSystematic("CMS_Top", processes=["TTbar"], size=1.06, group="CMS_bkg_norm")
+    cardTool.addLnNSystematic("CMS_VV", processes=["EWK"], size=1.16, group="CMS_bkg_norm")
+    cardTool.addLnNSystematic("CMS_lumi_lowPU", processes=cardTool.allMCProcesses(), size=1.02, group="CMS_lumi_lowPU")
 
 
 if args.fittype == "wlike" or args.fittype == "wmass":
@@ -228,20 +249,5 @@ if args.fittype == "wlike" or args.fittype == "wmass":
     )
     
 
-for lepEff in ["lepSF_HLT_DATA_stat", "lepSF_HLT_DATA_syst", "lepSF_HLT_MC_stat", "lepSF_HLT_MC_syst", "lepSF_ISO_stat", "lepSF_ISO_DATA_syst", "lepSF_ISO_MC_syst", "lepSF_IDIP_stat", "lepSF_IDIP_DATA_syst", "lepSF_IDIP_MC_syst"]:
-    cardTool.addSystematic(lepEff,
-        processes=DY_procs,
-        mirror = True,
-        group="CMS_lepton_eff",
-        baseName=lepEff,
-        systAxes = ["tensor_axis_0"],
-        labelsByAxis = [""],
-    )
 
-
-
-
-cardTool.addLnNSystematic("CMS_Top", processes=["TTbar"], size=1.06, group="CMS_bkg_norm")
-cardTool.addLnNSystematic("CMS_VV", processes=["EWK"], size=1.16, group="CMS_bkg_norm")
-cardTool.addLnNSystematic("CMS_lumi_lowPU", processes=cardTool.allMCProcesses(), size=1.02, group="CMS_lumi_lowPU")
 cardTool.writeOutput()

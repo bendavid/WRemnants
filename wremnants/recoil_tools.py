@@ -45,7 +45,7 @@ class Recoil:
         self.axis_recoil_para = hist.axis.Regular(1000, -500, 500, name = "recoil_para")
         self.axis_recoil_perp = hist.axis.Regular(1000, -500, 500, name = "recoil_perp")
         self.axis_qT = hist.axis.Variable(self.recoil_qTbins, name = "recoil_qT")
-        self.axis_npv = hist.axis.Regular(50, 0, 50, name = "recoil_npv")
+        self.axis_npv = hist.axis.Regular(50, 0.5, 50.5, name = "recoil_npv")
 
 
     def recoil_setup_Z(self, df, results, met_pt, met_phi, leptons_pt, leptons_phi, leptons_uncorr_pt, makeHists=True):
@@ -56,7 +56,7 @@ class Recoil:
         df = df.Define("qT", "Z_mom2.R()")
         
         df = df.Alias("MET_uncorr_pt", met_pt)
-        df = df.Alias("MET_uncorr_phi", met_phi) # DeepMETResolutionTune_phi
+        df = df.Alias("MET_uncorr_phi", met_phi)
 
         df = df.Define("MET_corr_lep", "wrem::METLeptonCorrection(MET_uncorr_pt, MET_uncorr_phi, %s, %s, %s)" % (leptons_pt, leptons_uncorr_pt, leptons_phi))
         df = df.Define("MET_corr_lep_pt", "MET_corr_lep[0]")
