@@ -122,7 +122,9 @@ def build_graph(df, dataset):
         results.extend(theory_tools.define_and_make_pdf_hists(df, nominal_axes, nominal_cols, dataset.name, pdfset=pdf))
 
     if dataset.name != "Zmumu_bugfix":
-        df, masswhist = syst_tools.define_mass_weights(df, isW, *masswargs)
+        isW = dataset.name in wprocs
+
+        df, masswhist = syst_tools.define_mass_weights(df, isW, nominal_axes, nominal_cols)
         if masswhist:
             results.append(masswhist)
 
