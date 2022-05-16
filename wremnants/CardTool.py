@@ -166,6 +166,7 @@ class CardTool(object):
             raise ValueError(f"Failed to find axis names '{str(systAxes)} in hist. " \
                 f"Axes in hist are {str([ax.name for ax in hvar.axes])}")
         entries = list(itertools.product(*[range(hvar.axes[ax].size) for ax in axNames]))
+
         
         if len(systInfo["outNames"]) == 0:
             for entry in entries:
@@ -183,6 +184,8 @@ class CardTool(object):
                     elif "Down" in name:
                         name = name.replace("Down", "")+"Down"
                     systInfo["outNames"].append(name)
+            if not len(systInfo["outNames"]):
+                raise RuntimeError(f"All entries for syst {syst} were skipped!")
 
         variations = []
         for entry in entries:
