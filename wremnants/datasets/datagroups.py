@@ -64,7 +64,6 @@ class datagroups(object):
             if selectSignal and group[label] and "signalOp" in group and group["signalOp"]:
                 group[label] = group["signalOp"](group[label])
         # Avoid situation where the nominal is read for all processes for this syst
-        if syst == "": foundExact = True
         if not foundExact:
             raise ValueError(f"Did not find systematic {syst} for any processes!")
 
