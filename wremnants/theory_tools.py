@@ -38,6 +38,7 @@ pdfMap = {
             "entries" : 58,
             "alphas" : ["LHEPdfWeightAltSet18[59]", "LHEPdfWeightAltSet18[60]"],
 			"alphaRange" : "002",
+            "scale" : 1/1.645 # Convert from 95% CL to 68%
         },
         "mmht" : {
             "name" : "pdfMMHT",
