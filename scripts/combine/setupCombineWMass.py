@@ -109,8 +109,8 @@ scale_action = lambda h: h[{"ptVgen" : hist.sum}]
 scaleActionArgs = {}
 
 if not inclusiveScale:
-    scaleSystAxes.insert("chargeVgen", 0)
-    scaleLabelsByAxis.insert("q", 0)
+    scaleSystAxes.insert(0, "chargeVgen")
+    scaleLabelsByAxis.insert(0, "q")
     scaleSkipEntries = [(-1, *x) for x in scaleSkipEntries]
 
 # TODO: reuse some code here
