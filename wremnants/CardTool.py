@@ -78,7 +78,7 @@ class CardTool(object):
             if self.keepSyst != None and self.keepSyst.match(name):
                 return False
             else:
-                logging.info(f">>>>> Excluding nuisance: {name}")
+                logging.info(f"   Excluding nuisance: {name}")
                 return True
         else:
             return False
@@ -402,26 +402,26 @@ class CardTool(object):
             self.cardContent[chan] = OutputTools.readTemplate(self.nominalTemplate, args)
             self.cardGroups[chan] = ""
             
-    def writeHistByCharge(self, h, name, setZeroStatUnc=False):
+    def writeHistByCharge(self, h, name):
         for charge in self.channels:
             if not self.keepOtherChargeSyst and self.chargeIdDict[charge]["badId"] in name: continue
             q = self.chargeIdDict[charge]["val"]
             hout = narf.hist_to_root(h[{"charge" : h.axes["charge"].index(q)}])
-            if setZeroStatUnc:
-                OutputTools.resetBinError(hout)
             hout.SetName(name+f"_{charge}")
             hout.Write()
 
-    def writeHistWithCharges(self, h, name, setZeroStatUnc=False):
+    def writeHistWithCharges(self, h, name):
         hout = narf.hist_to_root(h)
         #self.outfile[name] = h
-        if setZeroStatUnc:
-            OutputTools.resetBinError(hout)
         hout.SetName(name)
         hout.Write()
     
     def writeHist(self, h, name, setZeroStatUnc=False):
+        if setZeroStatUnc:
+            hist_no_error = h.copy()
+            hist_no_error.variances(flow=True)[...] = 0.
+            h = hist_no_error
         if self.channels[0] != "all":
-            self.writeHistByCharge(h, name, setZeroStatUnc)
+            self.writeHistByCharge(h, name)
         else:
-            self.writeHistWithCharges(h, name, setZeroStatUnc)
+            self.writeHistWithCharges(h, name)

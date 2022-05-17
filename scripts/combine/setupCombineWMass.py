@@ -76,7 +76,7 @@ if pdfInfo["combine"] == "symHessian":
         # Needs to be a tuple, since for multiple axis it would be (ax1, ax2, ax3)...
         # -1 means all possible values of the mirror axis
         skipEntries=[(0, -1)],
-        passToFakes=passSystToFakes
+        passToFakes=passSystToFakes,
     )
 else:
     cardTool.addSystematic(pdfName, 
@@ -85,7 +85,7 @@ else:
         group=pdfName,
         systAxes=["tensor_axis_0"],
         outNames=theory_tools.pdfNamesAsymHessian(pdfInfo["entries"]),
-        passToFakes=passSystToFakes
+        passToFakes=passSystToFakes,
         scale=pdfInfo["scale"] if "scale" in pdfInfo else 1,
     )
 
@@ -96,7 +96,7 @@ cardTool.addSystematic(f"alphaS002{pdfName}",
     systAxes=["tensor_axis_0"],
     outNames=[pdfName+"AlphaSUp", pdfName+"AlphaSDown"],
     scale=0.75,
-    passToFakes=passSystToFakes
+    passToFakes=passSystToFakes,
 )
 if not args.noEfficiencyUnc:
     for name,num in zip(["effSystIsoTnP", "effStatTnP",], [2, 624*4]):
@@ -109,8 +109,7 @@ if not args.noEfficiencyUnc:
             labelsByAxis=axlabels,
             baseName=name+"_",
             processes=cardTool.allMCProcesses(),
-            passToFakes=passSystToFakes
-
+            passToFakes=passSystToFakes,
         )
 
 inclusiveScale = args.qcdScale == "integrated"
@@ -166,7 +165,7 @@ cardTool.addSystematic(scale_hist,
     systNameReplace=[("muR2muF2", "muRmuFUp"), ("muR0muF0", "muRmuFDown"), ("muR2muF1", "muRUp"), 
         ("muR0muF1", "muRDown"), ("muR1muF0", "muFDown"), ("muR1muF2", "muFUp")],
     baseName="QCDscale_",
-    passToFakes=passSystToFakes
+    passToFakes=passSystToFakes,
     )
 
 cardTool.addSystematic("muonScaleSyst", 
@@ -175,7 +174,7 @@ cardTool.addSystematic("muonScaleSyst",
     baseName="CMS_scale_m_",
     systAxes=["downUpVar", "scaleEtaSlice"],
     labelsByAxis=["downUpVar", "ieta"],
-    passToFakes=passSystToFakes
+    passToFakes=passSystToFakes,
     scale = args.scaleMuonCorr,
 )
 cardTool.addSystematic("muonL1PrefireSyst", 
@@ -184,7 +183,7 @@ cardTool.addSystematic("muonL1PrefireSyst",
     baseName="CMS_prefire_syst_m",
     systAxes=["downUpVar"],
     labelsByAxis=["downUpVar"],
-    passToFakes=passSystToFakes
+    passToFakes=passSystToFakes,
 )
 # TODO: Allow to be appended to previous group ## FIXME: doesn't it do it already?
 cardTool.addSystematic("muonL1PrefireStat", 
@@ -193,7 +192,7 @@ cardTool.addSystematic("muonL1PrefireStat",
     baseName="CMS_prefire_stat_m_",
     systAxes=["downUpVar", "etaPhiRegion"],
     labelsByAxis=["downUpVar", "etaPhiReg"],
-    passToFakes=passSystToFakes
+    passToFakes=passSystToFakes,
 )
 cardTool.addSystematic("massWeight", 
     # TODO: Add the mass weights to the tau samples ## FIXME: isn't it done?
@@ -205,7 +204,7 @@ cardTool.addSystematic("massWeight",
     #TODO: Name this
     noConstraint=True,
     systAxes=["tensor_axis_0"],
-    passToFakes=passSystToFakes
+    passToFakes=passSystToFakes,
 )
 # TODO: This needs to be handled by shifting the norm before subtracting from the fakes
 #cardTool.addSystematic("lumi", outNames=["", "lumiDown", "lumiUp"], group="luminosity")
