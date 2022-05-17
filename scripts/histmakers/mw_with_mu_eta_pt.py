@@ -165,9 +165,8 @@ def build_graph(df, dataset):
             weight_expr += "*weight_fullMuonSF_withTrackingReco"
         
         if isW or isZ:
-            if args.pdfs[0] != "nnpdf31":
-                weight_expr = f"{weight_expr}*{theory_tools.pdf_central_weight(dataset.name, args.pdfs[0])}"
-
+            df = df.Define("nominal_pdf_cen", theory_tools.pdf_central_weight(dataset.name, args.pdfs[0]))
+            weight_expr = f"{weight_expr}*nominal_pdf_cen"
             df = wremnants.define_prefsr_vars(df)
 
             if args.scetlibCorr:

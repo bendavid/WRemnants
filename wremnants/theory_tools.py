@@ -155,7 +155,8 @@ def define_and_make_pdf_hists(df, axes, cols, dataset, pdfset="nnpdf31", storeUn
     tensorASName = f"{pdfName}ASWeights_tensor"
     entries = pdfInfo["entries"] if storeUnc else 1
 
-    df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, {entries}>({pdfBranch}), 10.); res = nominal_weight*res; return res;")
+    df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, {entries}>({pdfBranch}), 10.); res = nominal_weight/nominal_pdf_cen*res; return res;")
+
     pdfHist= df.HistoBoost(pdfName, axes, [*cols, tensorName])
 
     df = df.Define(tensorASName, "Eigen::TensorFixedSize<double, Eigen::Sizes<2>> res; "
