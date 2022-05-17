@@ -37,6 +37,7 @@ pdfMap = {"nnpdf31" : {
             "entries" : 58,
             "alphas" : ["LHEPdfWeightAltSet18[59]", "LHEPdfWeightAltSet18[60]"],
 			"alphaRange" : "002",
+            "scale" : 1/1.645 # Convert from 95% CL to 68%
         },
         "mmht" : {
             "name" : "pdfMMHT",
@@ -154,8 +155,10 @@ def define_and_make_pdf_hists(df, axes, cols, dataset, pdfset="nnpdf31", storeUn
     tensorASName = f"{pdfName}ASWeights_tensor"
     entries = pdfInfo["entries"] if storeUnc else 1
 
-    df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, 101>({pdfBranch}), 10.); res = nominal_weight*res; return res;")
-    pdfHist= df.HistoBoost(pdfName if hname=="" else f"{hname}_{pdfName}",axes, [*cols, tensorName])
+
+    df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, {entries}>({pdfBranch}), 10.); res = nominal_weight/nominal_pdf_cen*res; return res;")
+
+    pdfHist= df.HistoBoost(pdfName, axes, [*cols, tensorName])
 
     # slice 2 elements starting from 101
     df = df.Define(tensorASName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, 2>({pdfBranch}, 101), 10.); res = nominal_weight*res; return res;")
