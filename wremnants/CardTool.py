@@ -31,11 +31,12 @@ class CardTool(object):
         self.cardGroups = {}
         self.nominalTemplate = ""
         self.spacing = 28
-        self.fakeName = "Fake"
+        self.fakeName = "Fake" # but better to set it explicitly
         self.dataName = "Data"
         self.nominalName = "nominal"
         self.datagroups = None
         self.unconstrainedProcesses = None
+        self.noStatUncProcesses = None
         self.buildHistNameFunc = None
         self.histName = "x"
         self.pseudoData = None
@@ -51,6 +52,19 @@ class CardTool(object):
         self.keepOtherChargeSyst = False
         self.chargeIdDict["plus"]["badId"] = "q0"
         self.chargeIdDict["minus"]["badId"] = "q1"
+
+    def setProcsNoStatUnc(self, procs, resetList=True):
+        if self.noStatUncProcesses == None or resetList:
+            self.noStatUncProcesses = []
+        if isinstance(procs, str):
+            self.noStatUncProcesses.append(procs)
+        elif isinstance(procs, list):
+            self.noStatUncProcesses.extend(procs)
+        else:
+            raise ValueError("In setNoStatUncForProcs(): expecting string or list argument")            
+
+    def getProcsNoStatUnc(self):
+        return self.noStatUncProcesses
         
     ## Functions to customize systs to be added in card, mainly for tests
     def setCustomSystForCard(self, exclude=None, keep=None):
@@ -68,12 +82,16 @@ class CardTool(object):
                 return True
         else:
             return False
+        
     # Function call to load hists for processes (e.g., read from a ROOT file)
     # Extra args will be passed to each call
     def setLoadDatagroups(self, datagroups, extraArgs={}):
         self.datagroups = datagroups
         self.loadArgs = extraArgs
     
+    def setFakeName(self, name):
+        self.fakeName = name
+
     def getFakeName(self):
         return self.fakeName
 
@@ -127,16 +145,18 @@ class CardTool(object):
     def mirrorNames(self, baseName, size, offset=0):
         names = [""]*offset + [f"{baseName.format(i=i%size)}{'Up' if i % 2 else 'Down'}" for i in range(size*2)]
         return names
-
+    
     def addLnNSystematic(self, name, size, processes):
         if not self.isExcludedNuisance(name):
             self.lnNSystematics.update({name : {"size" : size, "processes" : processes}})
 
     def addSystematic(self, name, systAxes, outNames=None, skipEntries=None, labelsByAxis=None, 
                         baseName="", mirror=False, scale=1, processes=None, group=None, noConstraint=False,
-                        action=None, actionArgs={}, systNameReplace=[], groupFilter=None):
+                        action=None, actionArgs={}, systNameReplace=[], groupFilter=None, passToFakes=False):
         if not processes:
-            processes = self.predictedProcesses()
+            processes = self.allMCProcesses()
+        if passToFakes and self.getFakeName() not in processes:
+            processes.append(self.getFakeName())
         self.systematics.update({
             name : { "outNames" : [] if not outNames else outNames,
                 "baseName" : baseName,
@@ -241,9 +261,12 @@ class CardTool(object):
         if len(var_names) != len(variations):
             logging.warning("The number of variations doesn't match the number of names for "
                 f"process {proc}, syst {syst}. Found {len(var_names)} names and {len(variations)} variations.")
+        setZeroStatUnc = False
+        if proc in self.noStatUncProcesses:
+            setZeroStatUnc = True
         for name, var in zip(var_names, variations):
             if name != "":
-                self.writeHist(var, self.variationName(proc, name))
+                self.writeHist(var, self.variationName(proc, name), setZeroStatUnc=setZeroStatUnc)
 
     def addPseudodata(self, processes):
         self.datagroups.loadHistsForDatagroups(
@@ -376,22 +399,26 @@ class CardTool(object):
             self.cardContent[chan] = OutputTools.readTemplate(self.nominalTemplate, args)
             self.cardGroups[chan] = ""
             
-    def writeHistByCharge(self, h, name):
+    def writeHistByCharge(self, h, name, setZeroStatUnc=False):
         for charge in self.channels:
             if not self.keepOtherChargeSyst and self.chargeIdDict[charge]["badId"] in name: continue
             q = self.chargeIdDict[charge]["val"]
             hout = narf.hist_to_root(h[{"charge" : h.axes["charge"].index(q)}])
+            if setZeroStatUnc:
+                OutputTools.resetBinError(hout)
             hout.SetName(name+f"_{charge}")
             hout.Write()
 
-    def writeHistWithCharges(self, h, name):
+    def writeHistWithCharges(self, h, name, setZeroStatUnc=False):
         hout = narf.hist_to_root(h)
         #self.outfile[name] = h
+        if setZeroStatUnc:
+            OutputTools.resetBinError(hout)
         hout.SetName(name)
         hout.Write()
     
-    def writeHist(self, h, name):
+    def writeHist(self, h, name, setZeroStatUnc=False):
         if self.channels[0] != "all":
-            self.writeHistByCharge(h, name)
+            self.writeHistByCharge(h, name, setZeroStatUnc)
         else:
-            self.writeHistWithCharges(h, name)
+            self.writeHistWithCharges(h, name, setZeroStatUnc)
