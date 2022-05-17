@@ -1321,7 +1321,7 @@ def doFit_2Gauss_data(outDir, qTbin, qTbinMinGeV, qTbinMaxGeV, hist_data, hist_b
     # store the normalisations and normalize
     int_bkg = hist_bkg.Integral()
     int_data = hist_data.Integral()
-    hist_bkg.Scale(1./int_bkg)
+    if int_bkg > 0: hist_bkg.Scale(1./int_bkg)
     hist_data.Scale(1./int_data)
     
     
@@ -1334,7 +1334,13 @@ def doFit_2Gauss_data(outDir, qTbin, qTbinMinGeV, qTbinMaxGeV, hist_data, hist_b
     
     # background-only fit (parameters are frozen after)
     doFit_bkg(outDir, qTbin, qTbinMinGeV, qTbinMaxGeV, hist_bkg, name, label, cfg)
-    pdf_bkg = w.obj("pdf_bkg_qTbin%d" % qTbin)
+    pdf_bkg = w.obj("pdf_%s_qTbin%d" % (name, qTbin))
+    
+    #recoil = ROOT.RooRealVar("recoil", "Recoil parallel (GeV)", 0, -500, 500) # independent var needed for CDF
+    #rdh_bkg = ROOT.RooDataHist("rdh_bkg_qTbin%d" % qTbin, "", ROOT.RooArgList(recoil), ROOT.RooFit.Import(hist))
+    #pdf_bkg = ROOT.RooNDKeysPdf("pdf_bkg_%s_qTbin%d" % (name, qTbin), "", ROOT.RooArgList(recoil), hist_bkg, "", 0.2, 2)
+    
+    #pdf_bkg.Print()
     
 
     # signal pdf
@@ -1482,23 +1488,63 @@ def doFit_bkg(outDir, qTbin, qTbinMinGeV, qTbinMaxGeV, hist, name, label, cfg):
     label = "Backgrounds (simulation)"
     
     #hist.Rebin(2)
-    hist.Scale(1./hist.Integral())
+    if hist.Integral() > 0: hist.Scale(1./hist.Integral())
     cfg['ymax'] = 1.75*hist.GetMaximum()
     
     qTlabel = "%.1f < q_{T} < %.1f GeV" % (qTbinMinGeV, qTbinMaxGeV)
     outName = "%s_%sGeV" % (str("%.1f" % qTbinMinGeV).replace(".", "p"), str("%.1f" % qTbinMaxGeV).replace(".", "p"))
-
+    
+    
+    '''
     recoil = ROOT.RooRealVar("recoil", "Recoil parallel (GeV)", 0, -500, 500) # independent var needed for CDF
+    rdh_bkg = ROOT.RooDataHist("rdh_bkg_qTbin%d" % qTbin, "", ROOT.RooArgList(recoil), ROOT.RooFit.Import(hist))
+    pdf = ROOT.RooNDKeysPdf("pdf_%s_qTbin%d" % (name, qTbin), "", ROOT.RooArgList(recoil), hist, "ma", 0.2, 2)
+    
+    
+    #recoil = ROOT.RooRealVar("recoil", "Recoil parallel (GeV)", 0, -500, 500) # independent var needed for CDF
     mean1 = ROOT.RooRealVar("mean1_bkg_qTbin%d" % qTbin, "", hist.GetMean(), -400, 100)
-    mean2 = ROOT.RooRealVar("mean2_bkg_qTbin%d" % qTbin, "", hist.GetMean(), -400, 100)
-    sigma1 = ROOT.RooRealVar("sigma1_bkg_qTbin%d" % qTbin, "", hist.GetRMS()/2, 0.1, 100)
-    sigma2 = ROOT.RooRealVar("sigma2_bkg_qTbin%d" % qTbin, "", hist.GetRMS()*2, 0.1, 100)
-    norm = ROOT.RooRealVar("norm_bkg_qTbin%d" % qTbin, "", 0.9, 0, 1) # first Gauss = ttbar
+    mean2 = ROOT.RooRealVar("mean2_bkg_qTbin%d" % qTbin, "", 0)
+    sigma1 = ROOT.RooRealVar("sigma1_bkg_qTbin%d" % qTbin, "", hist.GetRMS(), 0.1, 100)
+    sigma2 = ROOT.RooRealVar("sigma2_bkg_qTbin%d" % qTbin, "", hist.GetRMS(), 0.1, 100)
+    norm = ROOT.RooRealVar("norm_bkg_qTbin%d" % qTbin, "", 0.5, 0, 1) # first Gauss = ttbar
+
     gauss1 = ROOT.RooGaussian("gauss1_bkg_qTbin%d" % qTbin, "", recoil, mean1, sigma1)
     gauss2 = ROOT.RooGaussian("gauss2_bkg_qTbin%d" % qTbin, "", recoil, mean2, sigma2)
     pdf = ROOT.RooAddPdf("pdf_bkg_qTbin%d" % qTbin, '', ROOT.RooArgList(gauss1, gauss2), ROOT.RooArgList(norm))
     rdh_bkg = ROOT.RooDataHist("rdh_bkg_qTbin%d" % qTbin, "", ROOT.RooArgList(recoil), ROOT.RooFit.Import(hist))
     fitRes = pdf.fitTo(rdh_bkg, ROOT.RooFit.SumW2Error(ROOT.kTRUE), ROOT.RooFit.Save(ROOT.kTRUE))
+    '''
+    '''
+    recoil = ROOT.RooRealVar("recoil", "Recoil parallel (GeV)", 0, -500, 500) # independent var needed for CDF
+    mean1 = ROOT.RooRealVar("mean1_bkg_qTbin%d" % qTbin, "", hist.GetMean(), -400, 100)
+    mean2 = ROOT.RooRealVar("mean2_bkg_qTbin%d" % qTbin, "", hist.GetMean(), -400, 100)
+    mean3 = ROOT.RooRealVar("mean3_bkg_qTbin%d" % qTbin, "", 0) # fixed mean at 0
+    sigma1 = ROOT.RooRealVar("sigma1_bkg_qTbin%d" % qTbin, "", hist.GetRMS()/2, 0.1, 100)
+    sigma2 = ROOT.RooRealVar("sigma2_bkg_qTbin%d" % qTbin, "", hist.GetRMS()*2, 0.1, 100)
+    sigma3 = ROOT.RooRealVar("sigma3_bkg_qTbin%d" % qTbin, "", hist.GetRMS()/2, 0.1, 100)
+    norm = ROOT.RooRealVar("norm_bkg_qTbin%d" % qTbin, "", 0.8, 0, 1) # first Gauss = ttbar
+    norm1 = ROOT.RooRealVar("norm1_bkg_qTbin%d" % qTbin, "", 0.05, 0, 1) # first Gauss = ttbar
+    gauss1 = ROOT.RooGaussian("gauss1_bkg_qTbin%d" % qTbin, "", recoil, mean1, sigma1)
+    gauss2 = ROOT.RooGaussian("gauss2_bkg_qTbin%d" % qTbin, "", recoil, mean2, sigma2)
+    gauss3 = ROOT.RooGaussian("gauss3_bkg_qTbin%d" % qTbin, "", recoil, mean3, sigma3)
+    pdf = ROOT.RooAddPdf("pdf_bkg_qTbin%d" % qTbin, '', ROOT.RooArgList(gauss1, gauss2, gauss3), ROOT.RooArgList(norm, norm1))
+    rdh_bkg = ROOT.RooDataHist("rdh_bkg_qTbin%d" % qTbin, "", ROOT.RooArgList(recoil), ROOT.RooFit.Import(hist))
+    fitRes = pdf.fitTo(rdh_bkg, ROOT.RooFit.SumW2Error(ROOT.kTRUE), ROOT.RooFit.Save(ROOT.kTRUE))
+    '''
+    
+
+    recoil = ROOT.RooRealVar("recoil", "Recoil parallel (GeV)", 0, -500, 500) # independent var needed for CDF
+    mean1 = ROOT.RooRealVar("mean1_%s_qTbin%d" % (name, qTbin), "", hist.GetMean(), -400, 100)
+    mean2 = ROOT.RooRealVar("mean2_%s_qTbin%d" % (name, qTbin), "", hist.GetMean(), -400, 100)
+    sigma1 = ROOT.RooRealVar("sigma1_%s_qTbin%d" % (name, qTbin), "", hist.GetRMS()/2, 0.1, 100)
+    sigma2 = ROOT.RooRealVar("sigma2_%s_qTbin%d" % (name, qTbin), "", hist.GetRMS()*2, 0.1, 100)
+    norm = ROOT.RooRealVar("norm_%s_qTbin%d" % (name, qTbin), "", 0.9, 0, 1) # first Gauss = ttbar
+    gauss1 = ROOT.RooGaussian("gauss1_%s_qTbin%d" % (name, qTbin), "", recoil, mean1, sigma1)
+    gauss2 = ROOT.RooGaussian("gauss2_%s_qTbin%d" % (name, qTbin), "", recoil, mean2, sigma2)
+    pdf = ROOT.RooAddPdf("pdf_%s_qTbin%d" % (name, qTbin), '', ROOT.RooArgList(gauss1, gauss2), ROOT.RooArgList(norm))
+    rdh_bkg = ROOT.RooDataHist("rdh_%s_qTbin%d" % (name, qTbin), "", ROOT.RooArgList(recoil), ROOT.RooFit.Import(hist))
+    fitRes = pdf.fitTo(rdh_bkg, ROOT.RooFit.SumW2Error(ROOT.kTRUE), ROOT.RooFit.Save(ROOT.kTRUE))
+
  
     # freeze the PDF
     mean1.setConstant(ROOT.kTRUE)
@@ -1508,8 +1554,11 @@ def doFit_bkg(outDir, qTbin, qTbinMinGeV, qTbinMaxGeV, hist, name, label, cfg):
     norm.setConstant(ROOT.kTRUE)
  
     w.Import(pdf)
+   
 
     plotter.cfg = cfg
+    cfg['xmin'] = -500
+    cfg['xmax'] = 500
     canvas, padT, padB = plotter.canvasRatio()
     dummyT, dummyB, dummyL = plotter.dummyRatio()
     
@@ -1566,8 +1615,8 @@ def doFit_bkg(outDir, qTbin, qTbinMinGeV, qTbinMaxGeV, hist, name, label, cfg):
     canvas.Modify()
     canvas.Update()
     canvas.Draw()
-    canvas.SaveAs("%s/recoil_%s.png" % (outDir, outName))
-    canvas.SaveAs("%s/recoil_%s.pdf" % (outDir, outName))
+    canvas.SaveAs("%s/%03d_recoil_%s.png" % (outDir, qTbin, outName))
+    canvas.SaveAs("%s/%03d_recoil_%s.pdf" % (outDir, qTbin, outName))
 
     ROOT.RooMsgService.instance().setGlobalKillBelow(ROOT.RooFit.WARNING)   
 
@@ -1921,14 +1970,181 @@ def doFit_DSCB(outDir, qTbin, qTbinMinGeV, qTbinMaxGeV, hist, name, label, met, 
     
     #return mean1.getVal(), sigma1.getVal(), norm1.getVal(), mean2.getVal(), sigma2.getVal(), norm2.getVal()
   
+def doFit_2Gauss_DY__(outDir, qTbin, qTbinMinGeV, qTbinMaxGeV, hist, name, label, cfg, hOut=None, refittedPdf=None):
+    
 
+    if qTbinMinGeV < 30: xMin,xMax = -100, 100
+    elif qTbinMinGeV < 60: xMin,xMax = -150, 50
+    elif qTbinMinGeV < 100: xMin,xMax = -200, 50
+    else: xMin,xMax = -500, 0
+    if "perp" in name: xMin,xMax = -100, 100
+    
+    #hist = hist.Rebin(1)
+    hist.Scale(1./hist.Integral())    
+    
+    qT = 0.5*(qTbinMinGeV + qTbinMaxGeV)
+    
+
+    qTlabel = "%.1f < q_{T} < %.1f GeV" % (qTbinMinGeV, qTbinMaxGeV)
+    outName = "%s_%sGeV" % (str("%.1f" % qTbinMinGeV).replace(".", "p"), str("%.1f" % qTbinMaxGeV).replace(".", "p"))
+    if "_gen" in outDir: qTlabel = qTlabel.replace("q_{T}", "q_{T}^{GEN}")
+
+    cfg['xmin'], cfg['xmax'] = xMin, xMax
+    cfg['ymax'] = 1.75*hist.GetMaximum()
+    
+
+
+    recoil = ROOT.RooRealVar("recoil", "Recoil parallel (GeV)", 0, -500, 500)
+    mean = ROOT.RooRealVar("mean", "", 0, -500, 500)
+    sigma1 = ROOT.RooRealVar("sigma1", "", 5, 0.1, 100)
+    sigma2 = ROOT.RooRealVar("sigma2", "", 5, 0.1, 100)
+    norm = ROOT.RooRealVar("norm", "", 0, 0, 1)
+    gauss1 = ROOT.RooGaussian("gauss1", "gauss1", recoil, mean, sigma1)
+    gauss2 = ROOT.RooGaussian("gauss2", "gauss2", recoil, mean, sigma2)
+    pdf = ROOT.RooAddPdf("pdf", '', ROOT.RooArgList(gauss1, gauss2), ROOT.RooArgList(norm)) # sum of 2 Gaussians
+    rdh = ROOT.RooDataHist("rdh", "", ROOT.RooArgList(recoil), ROOT.RooFit.Import(hist))
+    
+    params = [mean, sigma1, sigma2, norm]
+    
+    mean.setVal(hist.GetMean())
+    #mean.setConstant(ROOT.kTRUE)
+        
+    norm.setVal(0.6)
+    #norm.setConstant(ROOT.kTRUE)
+        
+    sigma1.setVal(hist.GetRMS()/1.5)
+    #sigma1.setConstant(ROOT.kTRUE)
+        
+    sigma2.setVal(hist.GetRMS()*1.5)
+    #sigma2.setConstant(ROOT.kTRUE)
+        
+    if "perp" in name:
+        mean.setVal(0)
+        mean.setConstant(ROOT.kTRUE)
+
+
+    # ML fit
+    fitRes = pdf.fitTo(rdh, ROOT.RooFit.SumW2Error(ROOT.kTRUE), ROOT.RooFit.Save(ROOT.kTRUE)) # ROOT.RooFit.Extended(ROOT.kTRUE), 
+   
+        
+    print("***** Summary for qTbin %d  *****" % qTbin)
+    fitRes.floatParsFinal().Print("s")
+
+    
+    if hOut != None:
+        for iPar, p in enumerate(params):
+            hOut.SetBinContent(qTbin, iPar+1, 1, p.getVal())
+            hOut.SetBinContent(qTbin, iPar+1, 0, p.getError())
+
+
+    plotter.cfg = cfg
+    canvas, padT, padB = plotter.canvasRatio()
+    dummyT, dummyB, dummyL = plotter.dummyRatio()
+    
+    
+    ## TOP PAD ##
+    canvas.cd()
+    padT.Draw()
+    padT.cd()
+    dummyT.Draw("HIST")
+    
+    ROOT.RooMsgService.instance().setGlobalKillBelow(ROOT.RooFit.ERROR)
+    plt = recoil.frame()
+    rdh.plotOn(plt)
+    gauss1.plotOn(plt, ROOT.RooFit.LineColor(ROOT.kBlue), ROOT.RooFit.Normalization(norm.getVal(), ROOT.RooAbsReal.NumEvent), ROOT.RooFit.LineStyle(ROOT.kDashed))
+    gauss2.plotOn(plt, ROOT.RooFit.LineColor(ROOT.kGreen), ROOT.RooFit.Normalization(1.-norm.getVal(), ROOT.RooAbsReal.NumEvent), ROOT.RooFit.LineStyle(ROOT.kDashed))
+    
+    pdf.plotOn(plt, ROOT.RooFit.VisualizeError(fitRes, 1), ROOT.RooFit.Name("errorband"), ROOT.RooFit.FillColor(ROOT.kOrange))
+    pdf.plotOn(plt, ROOT.RooFit.LineColor(ROOT.kRed))
+    histpull = plt.pullHist()
+    chi2 = plt.chiSquare() 
+    
+    if refittedPdf != None: 
+        refittedPdf.plotOn(plt, ROOT.RooFit.LineColor(ROOT.kCyan))
+        histpull_refit = plt.pullHist()
+        
+        
+    latex = ROOT.TLatex()
+    latex.SetNDC()
+    latex.SetTextSize(0.040)
+    latex.SetTextColor(1)
+    latex.SetTextFont(42)
+    latex.DrawLatex(0.20, 0.85, label)
+    latex.DrawLatex(0.20, 0.80, qTlabel)
+    latex.DrawLatex(0.20, 0.75, "Mean = %.3f #pm %.3f" % (hist.GetMean(), hist.GetMeanError()))
+    latex.DrawLatex(0.20, 0.70, "RMS = %.3f #pm %.3f" % (hist.GetRMS(), hist.GetRMSError()))
+        
+    latex.DrawLatex(0.60, 0.85, "#mu = %.3f #pm %.3f" % (mean.getVal(), mean.getError()))
+    latex.DrawLatex(0.60, 0.80, "#sigma_{1} = %.3f #pm %.3f" % (sigma1.getVal(), sigma1.getError()))
+    latex.DrawLatex(0.60, 0.75, "#sigma_{2} = %.3f #pm %.3f" % (sigma2.getVal(), sigma2.getError()))
+    latex.DrawLatex(0.60, 0.70, "N = %.3f #pm %.3f" % (norm.getVal(), norm.getError()))
+    latex.DrawLatex(0.60, 0.65, "#chi^{2}/ndof = %.3f" % chi2)
+
+    plt.Draw("SAME")
+    plotter.auxRatio()
+       
+    ## BOTTOM PAD ##
+    canvas.cd()
+    padB.Draw()
+    padB.cd()
+    dummyB.Draw("HIST")
+    
+    plt = recoil.frame()
+    plt.addPlotable(histpull, "P")
+    if refittedPdf != None: plt.addPlotable(histpull_refit, "P")
+
+    plt.Draw("SAME")
+        
+    line = ROOT.TLine(120, 0, 140, 0)
+    line.SetLineColor(ROOT.kBlue+2)
+    line.SetLineWidth(2)
+    line.Draw("SAME")
+
+    canvas.Modify()
+    canvas.Update()
+    canvas.Draw()
+    canvas.SaveAs("%s/%03d_recoil_%s.png" % (outDir, qTbin, outName))
+    canvas.SaveAs("%s/%03d_recoil_%s.pdf" % (outDir, qTbin, outName))
+
+    ROOT.RooMsgService.instance().setGlobalKillBelow(ROOT.RooFit.WARNING)   
+
+    dummyB.Delete()
+    dummyT.Delete()
+    padT.Delete()
+    padB.Delete()
+    
+    if hOut == None: return
+    
+    # diagonalize covariance matrix and store perturbations
+    floatingParams = fitRes.floatParsFinal() # floating parameters
+    variations = diagonalize(fitRes)
+    
+    for iVar, var in enumerate(variations):
+        for iPar, p in enumerate(params):
+            if getParamIdx(p.GetName(), floatingParams) > -1: val = var[getParamIdx(p.GetName(), floatingParams)]
+            else: val = p.getVal()
+            hOut.SetBinContent(qTbin, iPar+1, iVar+2, val)
+            print(iVar, iPar, p.GetName(), val)
+
+
+def readProc(hName, procName):
+
+    label = "%s_%s" % (hName, procName)
+    print(groups_mumu.groups)
+    groups_mumu.setHists(hName, "", label=label, procsToRead=[procName], selectSignal=False)
+    bhist = groups_mumu.groups[procName][label]
+    return bhist
+    #print(bhist)
+    #rhist = narf.hist_to_root(bhist)
+    #rhist.SetName(label)
+    #return rhist
 
 def doRecoilFits_Z():
     
     
     
     outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/recoilCorrection/fits_Z_new/"
-    outDir = "/eos/user/j/jaeyserm/www/wmass/highPU/recoilCorrection/fits_Z/"
+    #outDir = "/eos/user/j/jaeyserm/www/wmass/highPU/recoilCorrection/fits_Z/"
     
     functions.prepareDir(outDir, False)
     functions.prepareDir(outDir + "/data/", False)
@@ -1944,21 +2160,30 @@ def doRecoilFits_Z():
     print("Load Boost histograms")
     dataName = "SingleMuon"
     signalName = "DYmumu"
-    dataName = "Data"
-    signalName = "Zmumu"
-    b_data_para = groups_mumu.readProc("recoil_uncorr_para_qt", dataName) # + groups_ee.readProc("recoil_uncorr_para_qt", "SingleElectron")
-    b_data_perp = groups_mumu.readProc("recoil_uncorr_perp_qt", dataName) # + groups_ee.readProc("recoil_uncorr_perp_qt", "SingleElectron")
-    b_mc_para = groups_mumu.readProc("recoil_uncorr_para_qt", signalName) # + groups_ee.readProc("recoil_uncorr_para_qt", "DYee")
-    b_mc_perp = groups_mumu.readProc("recoil_uncorr_perp_qt", signalName) # + groups_ee.readProc("recoil_uncorr_perp_qt", "DYee")
+    #dataName = "Data"
+    #signalName = "Zmumu"
+
+    b_data_para = readProc("recoil_uncorr_para_qt", dataName) 
+    b_data_perp = readProc("recoil_uncorr_perp_qt", dataName)
+    b_mc_para = readProc("recoil_uncorr_para_qt", signalName) 
+    b_mc_perp = readProc("recoil_uncorr_perp_qt", signalName)
     
+    #b_data_para = groups_mumu.readProc("recoil_uncorr_para_qt", dataName) # + groups_ee.readProc("recoil_uncorr_para_qt", "SingleElectron")
+    #b_data_perp = groups_mumu.readProc("recoil_uncorr_perp_qt", dataName) # + groups_ee.readProc("recoil_uncorr_perp_qt", "SingleElectron")
+    #b_mc_para = groups_mumu.readProc("recoil_uncorr_para_qt", signalName) # + groups_ee.readProc("recoil_uncorr_para_qt", "DYee")
+    #b_mc_perp = groups_mumu.readProc("recoil_uncorr_perp_qt", signalName) # + groups_ee.readProc("recoil_uncorr_perp_qt", "DYee")
+    
+
     b_bkg_para, b_bkg_perp = None, None
     for bkg in bkg_procs:
     
-        b_para = groups_mumu.readProc("recoil_uncorr_para_qt", bkg)
+        #b_para = groups_mumu.readProc("recoil_uncorr_para_qt", bkg)
+        b_para = readProc("recoil_uncorr_para_qt", bkg)
         if b_bkg_para == None: b_bkg_para = b_para
         else: b_bkg_para += b_para
     
-        b_perp = groups_mumu.readProc("recoil_uncorr_perp_qt", bkg)
+        #b_perp = groups_mumu.readProc("recoil_uncorr_perp_qt", bkg)
+        b_perp = readProc("recoil_uncorr_perp_qt", bkg)
         if b_bkg_perp == None: b_bkg_perp = b_perp
         else: b_bkg_perp += b_perp
       
@@ -1970,7 +2195,10 @@ def doRecoilFits_Z():
     h_data_perp = narf.hist_to_root(b_data_perp)
     h_mc_perp = narf.hist_to_root(b_mc_perp)
     h_bkg_perp = narf.hist_to_root(b_bkg_perp)
-        
+
+    #h_data_para.Add(h_bkg_para, -1)
+    #h_data_perp.Add(h_bkg_perp, -1)
+    
     # normalize the data and total MC to 1
     '''
     h_data_para.Scale(1./h_data_para.Integral())
@@ -2026,6 +2254,20 @@ def doRecoilFits_Z():
         #hist = h_bkg_perp.ProjectionY("bkg_perp_bin%d" % iBin, iBin, iBin)
         #doFit_bkg(outDir + "/bkg/perp/", iBin, qTbinMinGeV, qTbinMaxGeV, hist, "bkg_perp", "Backgrounds", cfg)
         
+        
+        #hist = h_mc_para.ProjectionY("mc_para_bin%d" % iBin, iBin, iBin)
+        #doFit_2Gauss_DY__(outDir + "/mc/para/", iBin, qTbinMinGeV, qTbinMaxGeV, hist, "mc_para", label_mc, cfg, h_para_mc)
+        
+        #hist = h_mc_perp.ProjectionY("mc_perp_bin%d" % iBin, iBin, iBin)
+        #doFit_2Gauss_DY__(outDir + "/mc/perp/", iBin, qTbinMinGeV, qTbinMaxGeV, hist, "mc_perp", label_mc, cfg, h_perp_mc)
+        
+        #hist_data = h_data_para.ProjectionY("data_para_bin%d" % iBin, iBin, iBin)
+        #doFit_2Gauss_DY__(outDir + "/data/para/", iBin, qTbinMinGeV, qTbinMaxGeV, hist_data, "data_para", "Data", cfg, h_para_data)
+        
+        #hist_data = h_data_perp.ProjectionY("data_perp_bin%d" % iBin, iBin, iBin)
+        #doFit_2Gauss_DY__(outDir + "/data/perp/", iBin, qTbinMinGeV, qTbinMaxGeV, hist_data, "data_perp", "Data", cfg, h_perp_data)
+        
+        
         hist = h_mc_para.ProjectionY("mc_para_bin%d" % iBin, iBin, iBin)
         doFit_2Gauss_DY(outDir + "/mc/para/", iBin, qTbinMinGeV, qTbinMaxGeV, hist, "mc_para", label_mc, cfg, h_para_mc)
         
@@ -2036,13 +2278,14 @@ def doRecoilFits_Z():
         hist_bkg = h_bkg_para.ProjectionY("bkg_para_bin%d" % iBin, iBin, iBin)
         doFit_2Gauss_data(outDir + "/data/para/", iBin, qTbinMinGeV, qTbinMaxGeV, hist_data, hist_bkg, "data_para", "Data", cfg, h_para_data)
         
+  
         hist_data = h_data_perp.ProjectionY("data_perp_bin%d" % iBin, iBin, iBin)
         hist_bkg = h_bkg_perp.ProjectionY("bkg_perp_bin%d" % iBin, iBin, iBin)
         doFit_2Gauss_data(outDir + "/data/perp/", iBin, qTbinMinGeV, qTbinMaxGeV, hist_data, hist_bkg, "data_perp", "Data", cfg, h_perp_data)
+        
 
-
-    #fOut_ = "wremnants/data/lowPU/recoil_fits_Z.root"
-    fOut_ = "wremnants/data/recoil_fits_Z.root"
+    fOut_ = "wremnants/data/lowPU/recoil_fits_Z.root"
+    #fOut_ = "wremnants/data/recoil_fits_Z.root"
     fOut = ROOT.TFile(fOut_, "RECREATE")
     
     h_para_data.Write()
@@ -3037,22 +3280,199 @@ def doRecoilFits_fine(cat, met, label, qTbins):
     fOut.Close()
     print("Written to %s" % fOut_)
 
-     
+    
+
+def doPlots_MET_qTbins():
+
+    label = "MET_corr_rec_pt_qt"
+    outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/recoilCorrection/MET_plots_qT/"
+    
+    functions.prepareDir(outDir, True)
+    
+    l_data = "SingleMuon"
+    l_dy = "DYmumu"
+    l_ttbar = "TTbar"
+    l_ewk = "EWK"
+
+    b_data = readProc(label, l_data) 
+    b_dy = readProc(label, l_dy)
+    b_ttbar = readProc(label, l_ttbar)
+    b_ewk = readProc(label, l_ewk)
+
+    h_data = narf.hist_to_root(b_data)
+    h_dy = narf.hist_to_root(b_dy)
+    h_ttbar = narf.hist_to_root(b_ttbar)
+    h_ewk = narf.hist_to_root(b_ewk)
+
+    yRatio = 1.3
+
+    cfg = {
+
+        'logy'              : True,
+        'logx'              : False,
+    
+        'xmin'              : 0,
+        'xmax'              : 100,
+        'ymin'              : 1e-2,
+        'ymax'              : 1e7,
+        
+        'xtitle'            : "MET (GeV)",
+        'ytitle'            : "Events / 1 GeV",
+        
+        'topRight'          : "199 pb^{#minus1} (13 TeV)", 
+        'topLeft'           : "#bf{CMS} #scale[0.7]{#it{Preliminary}}",
+        
+        'ratiofraction'     : 0.25,
+        'ytitleR'           : "Ratio",
+        'yminR'             : 1-(yRatio-1), # 0.7
+        'ymaxR'             : yRatio, # 1.3
+    }   
+    
+    label_mc = "DY #rightarrow #mu^{+}#mu^{#minus} #plus e^{+}e^{#minus}"
+    
+
+    
+    for iBin in range(1, h_data.GetNbinsX()+1):
+    
+        qTbinMinGeV, qTbinMaxGeV = h_data.GetXaxis().GetBinLowEdge(iBin), h_data.GetXaxis().GetBinLowEdge(iBin+1)
+        qT = h_data.GetXaxis().GetBinCenter(iBin)
+        
+        qTlabel = "%.1f < q_{T} < %.1f GeV" % (qTbinMinGeV, qTbinMaxGeV)
+        outName = "%s_%sGeV" % (str("%.1f" % qTbinMinGeV).replace(".", "p"), str("%.1f" % qTbinMaxGeV).replace(".", "p"))
+        
+        print("***************** Do iBin %d [%f,%f]" % (iBin, qTbinMinGeV, qTbinMaxGeV))
+        
+        hist_data = h_data.ProjectionY("data_bin%d" % iBin, iBin, iBin)
+        hist_dy = h_dy.ProjectionY("dy_bin%d" % iBin, iBin, iBin)
+        hist_ttbar = h_ttbar.ProjectionY("ttbar_bin%d" % iBin, iBin, iBin)
+        hist_ewk = h_ewk.ProjectionY("ewk_bin%d" % iBin, iBin, iBin)
+        hist_data.Rebin(2)
+        hist_dy.Rebin(2)
+        hist_ttbar.Rebin(2)
+        hist_ewk.Rebin(2)
+        
+        hist_procs = [hist_ewk, hist_ttbar, hist_dy]
+        
+        print(hist_ttbar.Integral())
+        
+        sf = hist_data.Integral() / (hist_dy.Integral() + hist_ttbar.Integral() + hist_ewk.Integral())
+
+        leg = ROOT.TLegend(.20, 0.88-(3+2)*0.05, .5, .88)
+        leg.SetBorderSize(0)
+        leg.SetFillStyle(0)
+        leg.SetTextSize(0.040)
+        
+        leg.AddEntry(hist_data, groups_mumu.groups[l_data]['label'], "PE")
+
+        st = ROOT.THStack()
+        st.SetName("stack")
+        h_bkg = hist_data.Clone("bkg_nominal")
+        h_bkg.Reset("ACE")
+        for i,proc in enumerate([l_ewk, l_ttbar, l_dy]):
+        
+            hist = hist_procs[i]
+            hist.Scale(sf)
+            hist.SetFillColor(groups_mumu.groups[proc]['color'])
+            hist.SetLineColor(ROOT.kBlack)
+            hist.SetLineWidth(1)
+            hist.SetLineStyle(1)
+            
+            leg.AddEntry(hist, groups_mumu.groups[proc]['label'], "F")
+            st.Add(hist)
+            h_bkg.Add(hist)
+           
+        h_bkg.SetLineColor(ROOT.kBlack)
+        h_bkg.SetFillColor(0)
+        h_bkg.SetLineWidth(2)
+        
+        int_bkg = h_bkg.Integral()
+
+        hist_data.SetLineColor(ROOT.kBlack)
+        hist_data.SetMarkerStyle(20)
+        hist_data.SetMarkerColor(ROOT.kBlack)
+        hist_data.SetLineColor(ROOT.kBlack)
+
+        h_err = h_bkg.Clone("syst")
+        h_err.SetFillColor(ROOT.kBlack)
+        h_err.SetMarkerSize(0)
+        h_err.SetLineWidth(0)
+        h_err.SetFillStyle(3004)    
+        leg.AddEntry(h_err, "Stat. + Syst. Unc.", "F")
+        
+        h_bkg_ratio = h_bkg.Clone("h_bkg_ratio") # nominal point, need to remove stat. error
+        h_err_ratio = h_err.Clone("syst_ratio")
+        h_err_ratio.Divide(h_bkg_ratio)
+        
+        
+        # Data/MC ratio (the error bars represent the data uncertainty)
+        h_ratio = hist_data.Clone("h_ratio")
+        for i in range(h_bkg .GetNbinsX()+1): h_bkg.SetBinError(i, 0) # set MC errors to zero
+        h_ratio.Divide(h_bkg)
+        h_ratio.SetMarkerStyle(20)
+        h_ratio.SetMarkerSize(0.7)
+        h_ratio.SetMarkerColor(ROOT.kBlack)
+        h_ratio.SetLineColor(ROOT.kBlack)
+        h_ratio.SetLineWidth(1)
+
+        
+
+        plotter.cfg = cfg
+        canvas, padT, padB = plotter.canvasRatio()
+        dummyT, dummyB, dummyL = plotter.dummyRatio()
+            
+        ## top panel
+        canvas.cd()
+        padT.Draw()
+        padT.cd()
+        padT.SetGrid()
+        dummyT.Draw("HIST")
+            
+        st.Draw("HIST SAME")
+        
+        h_err.Draw("E2 SAME")
+        h_bkg.Draw("HIST SAME")
+        hist_data.Draw("PE SAME")
+        leg.Draw("SAME")
+        
+        plotter.auxRatio()  
+        ROOT.gPad.SetTickx()
+        ROOT.gPad.SetTicky()
+        ROOT.gPad.RedrawAxis()  
+        
+
+        ## bottom panel
+        canvas.cd()
+        padB.Draw()
+        padB.SetFillStyle(0)
+        padB.cd()
+        dummyB.Draw("HIST")
+        dummyL.Draw("SAME")
+        
+        h_ratio.Draw("P SAME") # E2 SAME
+        h_err_ratio.Draw("E2 SAME")
+
+        ROOT.gPad.SetTickx()
+        ROOT.gPad.SetTicky()
+        ROOT.gPad.RedrawAxis()
+
+        canvas.SaveAs("%s/%03d_qT_%s.png" % (outDir, iBin, outName))
+        canvas.SaveAs("%s/%03d_qT_%s.pdf" % (outDir, iBin, outName))
+        canvas.Close()        
 
 
 if __name__ == "__main__":
 
-    #groups_mumu = datagroupsLowPU_Z("mz_lowPU_mumu.pkl.lz4")
+    groups_mumu = datagroupsLowPU_Z("mz_lowPU_mumu.pkl.lz4", flavor="mumu")
     #groups_ee = datagroupsLowPU_Z("mz_lowPU_ee.pkl.lz4")
     
-    groups_mumu = datagroups2016("mz_wlike_with_mu_eta_pt.pkl.lz4", wlike=True)
+    #groups_mumu = datagroups2016("mz_wlike_with_mu_eta_pt.pkl.lz4", wlike=True)
 
     bkg_procs = ['EWK', 'TTbar'] # lowPU
-    bkg_procs = ['EWK', 'Top'] # highPU
+    #bkg_procs = ['EWK', 'Top'] # highPU
     label = "DY #rightarrow #mu^{+}#mu^{#minus} #plus e^{+}e^{#minus}"
     
     
-
+    #doPlots_MET_qTbins()
     doRecoilFits_Z()
     #autoFit()
     #doRecoilFits_fine(cat, met, label, qTbins)

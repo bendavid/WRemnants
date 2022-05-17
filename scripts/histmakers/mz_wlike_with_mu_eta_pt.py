@@ -66,7 +66,7 @@ nominal_axes = [axis_eta, axis_pt, axis_charge]
 
 
 # extra axes for dilepton validation plots
-axis_mll = hist.axis.Regular(24, 60., 120., name = "mll", underflow=False, overflow=False)
+axis_mll = hist.axis.Regular(24, 60., 120., name = "mll")
 axis_yll = hist.axis.Regular(40, -4.0, 4.0, name = "yll")
 
 axis_ptll = hist.axis.Variable(

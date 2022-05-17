@@ -25,6 +25,8 @@ class Recoil:
         elif type_ == "lowPU":
         
             self.recoil_qTbins = list(drange(0, 30, 0.5)) + list(range(30, 60, 2)) + list(range(60, 100, 5)) + list(range(100, 210, 10)) + [10000]
+            self.recoil_qTbins = list(range(0, 50, 5)) + list(range(50, 100, 10)) + list(range(100, 200, 25)) + [10000]
+            print(self.recoil_qTbins)
             rInput_binned = "wremnants/data/lowPU/recoil_fits_Z.root"
             rInput_parametric = ""
             
@@ -82,9 +84,9 @@ class Recoil:
             results.append(df.HistoBoost("recoil_uncorr_para_qT", [self.axis_recoil_perp], ["recoil_uncorr_para_qT", "nominal_weight"]))
             results.append(df.HistoBoost("recoil_uncorr_perp", [self.axis_recoil_perp], ["recoil_uncorr_perp", "nominal_weight"]))
             
-            results.append(df.HistoBoost("recoil_uncorr_magn_qt", [self.axis_npv, self.axis_recoil_magn], ["qT", "recoil_uncorr_magn", "nominal_weight"]))
-            results.append(df.HistoBoost("recoil_uncorr_para_qt", [self.axis_npv, self.axis_recoil_para], ["qT", "recoil_uncorr_para", "nominal_weight"]))
-            results.append(df.HistoBoost("recoil_uncorr_perp_qt", [self.axis_npv, self.axis_recoil_perp], ["qT", "recoil_uncorr_perp", "nominal_weight"]))
+            results.append(df.HistoBoost("recoil_uncorr_magn_qt", [self.axis_qT, self.axis_recoil_magn], ["qT", "recoil_uncorr_magn", "nominal_weight"]))
+            results.append(df.HistoBoost("recoil_uncorr_para_qt", [self.axis_qT, self.axis_recoil_para], ["qT", "recoil_uncorr_para", "nominal_weight"]))
+            results.append(df.HistoBoost("recoil_uncorr_perp_qt", [self.axis_qT, self.axis_recoil_perp], ["qT", "recoil_uncorr_perp", "nominal_weight"]))
             
             results.append(df.HistoBoost("recoil_uncorr_magn_npv", [self.axis_npv, self.axis_recoil_magn], ["PV_npvs", "recoil_uncorr_magn", "nominal_weight"]))
             results.append(df.HistoBoost("recoil_uncorr_para_npv", [self.axis_npv, self.axis_recoil_para], ["PV_npvs", "recoil_uncorr_para", "nominal_weight"]))
@@ -92,6 +94,7 @@ class Recoil:
 
             results.append(df.HistoBoost("qT", [self.axis_qT], ["qT", "nominal_weight"]))
             results.append(df.HistoBoost("npv", [self.axis_npv], ["PV_npvs", "nominal_weight"]))
+            
         
         return df
 
@@ -110,6 +113,8 @@ class Recoil:
             df = df.Define("MET_corr_rec", "wrem::METCorrection(MET_corr_lep_pt, MET_corr_lep_phi, recoil_corr_para, recoil_corr_perp, qT, Z_mom2.Phi()) ")
             df = df.Define("MET_corr_rec_pt", "MET_corr_rec[0]")
             df = df.Define("MET_corr_rec_phi", "MET_corr_rec[1]")
+            
+            results.append(df.HistoBoost("GenMET_pt", [self.axis_MET_pt], ["GenMET_pt", "nominal_weight"]))
 
         else:
             df = df.Alias("recoil_corr_magn", "recoil_uncorr_magn")
@@ -124,6 +129,7 @@ class Recoil:
         results.append(df.HistoBoost("recoil_corr_para_qT", [self.axis_recoil_perp], ["recoil_corr_para_qT", "nominal_weight"]))
         results.append(df.HistoBoost("recoil_corr_perp", [self.axis_recoil_perp], ["recoil_corr_perp", "nominal_weight"]))
         results.append(df.HistoBoost("MET_corr_rec_pt", [self.axis_MET_pt], ["MET_corr_rec_pt", "nominal_weight"]))
+        results.append(df.HistoBoost("MET_corr_rec_pt_qt", [self.axis_qT, self.axis_MET_pt], ["qT", "MET_corr_rec_pt", "nominal_weight"]))
 
         return df
         

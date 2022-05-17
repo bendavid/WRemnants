@@ -22,25 +22,25 @@ class datagroupsLowPU_Z(datagroups):
             TTbar=dict(
                 members = [self.datasets[x] for x in ["TTTo2L2Nu", "TTToSemiLeptonic"]],
                 label = "TTbar",
-                color=ROOT.TColor.GetColor(222, 90, 106),
+                color="#DE5A6A", #ROOT.TColor.GetColor(222, 90, 106),
                 signalOp = None,
             ),
             EWK=dict(
                 members = [self.datasets[x] for x in ["DYtautau", "WplusJetsToMuNu", "WminusJetsToMuNu", "WplusJetsToTauNu", "WminusJetsToTauNu", "WplusJetsToENu", "WminusJetsToENu", "WZTo3LNu", "WWTo2L2Nu", "ZZ"]],
                 label="EWK (Z #rightarrow #tau#tau, W, VV)",
-                color=ROOT.TColor.GetColor(100, 192, 232),
+                color="#64C0E8", #ROOT.TColor.GetColor(100, 192, 232),
                 signalOp = None,
             ),
             DYmumu=dict(
                 members=[self.datasets["DYmumu"]],
                 label=r"DY #rightarrow #mu^{#plus}#mu^{#minus} (MiNNLO)",
-                color=ROOT.TColor.GetColor(248, 206, 104),
+                color="#F8CE68", #ROOT.TColor.GetColor(248, 206, 104),
                 signalOp = None,
             ),
             DYee=dict(
                 members=[self.datasets["DYee"]],
                 label=r"DY #rightarrow e^{#plus}e^{#minus} (MiNNLO)",
-                color=ROOT.TColor.GetColor(248, 206, 104),
+                color="#F8CE68",
                 signalOp = None,
             ),
             
@@ -48,31 +48,31 @@ class datagroupsLowPU_Z(datagroups):
             DYtautau=dict(
                 members = [self.datasets[x] for x in ["DYtautau"]],
                 label="DYtautau",
-                color=ROOT.TColor.GetColor(100, 192, 232),
+                color="#64C0E8",
                 signalOp = None,
             ),
             WJets=dict(
                 members = [self.datasets[x] for x in ["WplusJetsToMuNu", "WminusJetsToMuNu", "WplusJetsToTauNu", "WminusJetsToTauNu", "WplusJetsToENu", "WminusJetsToENu"]],
                 label="WJets",
-                color=ROOT.TColor.GetColor(100, 192, 232),
+                color="#64C0E8",
                 signalOp = None,
             ),
             WZTo3LNu=dict(
                 members = [self.datasets[x] for x in ["WZTo3LNu"]],
                 label="WZTo3LNu",
-                color=ROOT.TColor.GetColor(100, 192, 232),
+                color="#64C0E8",
                 signalOp = None,
             ),
             WWTo2L2Nu=dict(
                 members = [self.datasets[x] for x in ["WWTo2L2Nu"]],
                 label="WWTo2L2Nu",
-                color=ROOT.TColor.GetColor(100, 192, 232),
+                color="#64C0E8",
                 signalOp = None,
             ),
             ZZ=dict(
                 members = [self.datasets[x] for x in ["ZZ"]],
                 label="ZZ",
-                color=ROOT.TColor.GetColor(100, 192, 232),
+                color="#64C0E8",
                 signalOp = None,
             ),
             
@@ -84,7 +84,7 @@ class datagroupsLowPU_Z(datagroups):
                 SingleMuon=dict(
                     members=[self.datasets["singlemuon"]],
                     label="Data",
-                    color=ROOT.kBlack,
+                    color="#000000",
                     signalOp = None,
                 ),
             )
@@ -93,7 +93,7 @@ class datagroupsLowPU_Z(datagroups):
                 SingleElectron=dict(
                     members=[self.datasets["singleelectron"]],
                     label="Data",
-                    color=ROOT.kBlack,
+                    color="#000000",
                     signalOp = None,
                 ),
             )
