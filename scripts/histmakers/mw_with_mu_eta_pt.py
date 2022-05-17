@@ -4,7 +4,7 @@ import gzip
 import ROOT
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--nThreads", type=int, help="number of threads", default=None)
+parser.add_argument("-j", "--nThreads", type=int, help="number of threads", default=None)
 initargs,_ = parser.parse_known_args()
 
 ROOT.gInterpreter.ProcessLine(".O3")
@@ -32,6 +32,8 @@ parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdSca
 parser.add_argument("--scetlibCorr", choices=["altHist", "noUnc", "full", "altHistNoUnc"], help="Save hist for SCETlib correction with/without uncertainties, with/without modifying central weight")
 parser.add_argument("--noMuonCorr", action="store_true", help="Don't use corrected pt-eta-phi-charge")
 parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency")
+parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
+parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
 parser.add_argument("--eta", nargs=3, type=float, help="Eta binning as 'nbins min max' (only uniform for now)", default=[48,-2.4,2.4])
 parser.add_argument("--pt", nargs=3, type=float, help="Pt binning as 'nbins,min,max' (only uniform for now)", default=[29,26.,55.])
@@ -178,9 +180,8 @@ def build_graph(df, dataset):
             weight_expr += "*weight_fullMuonSF_withTrackingReco"
         
         if isW or isZ:
-            if args.pdfs[0] != "nnpdf31":
-                weight_expr = f"{weight_expr}*{theory_tools.pdf_central_weight(dataset.name, args.pdfs[0])}"
-
+            df = df.Define("nominal_pdf_cen", theory_tools.pdf_central_weight(dataset.name, args.pdfs[0]))
+            weight_expr = f"{weight_expr}*nominal_pdf_cen"
             df = wremnants.define_prefsr_vars(df)
 
             if args.scetlibCorr:
@@ -247,19 +248,13 @@ def build_graph(df, dataset):
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:
                 # TODO: Move to syst_tools
+                netabins = args.muonCorrEtaBins
                 nweights = 21
-                if False:
-                    netabins = 4
-                    df = df.Define("muonScaleDummy4Bins2e4", f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(nominal_weight, massWeight_tensor, goodMuons_eta0, 2.e-4, {str(isW).lower()})")
-                    scale_etabins_axis = hist.axis.Regular(netabins, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
-                    dummyMuonScaleSyst = df.HistoBoost("muonScaleSyst", nominal_axes, [*nominal_cols, "muonScaleDummy4Bins2e4"],
-                        tensor_axes=[down_up_axis, scale_etabins_axis])
-                else:
-                    netabins = 1
-                    df = df.Define("muonScaleDummy1Bin1e4", f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(nominal_weight, massWeight_tensor, goodMuons_eta0, 1.e-4, {str(isW).lower()})")
-                    scale_etabins_axis = hist.axis.Regular(netabins, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
-                    dummyMuonScaleSyst = df.HistoBoost("muonScaleSyst", nominal_axes, [*nominal_cols, "muonScaleDummy1Bin1e4"],
-                        tensor_axes=[down_up_axis, scale_etabins_axis])
+                mag = args.muonCorrMag
+                df = df.Define(f"muonScaleDummy{netabins}Bins", f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(nominal_weight, massWeight_tensor, goodMuons_eta0, {mag}, {str(isW).lower()})")
+                scale_etabins_axis = hist.axis.Regular(netabins, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
+                dummyMuonScaleSyst = df.HistoBoost("muonScaleSyst", nominal_axes, [*nominal_cols, f"muonScaleDummy{netabins}Bins"],
+                    tensor_axes=[down_up_axis, scale_etabins_axis])
 
                 results.append(dummyMuonScaleSyst)
 

@@ -6,6 +6,7 @@ import argparse
 import os
 import pathlib
 import logging
+import hist
 
 logging.basicConfig(level=logging.INFO)
 
@@ -14,7 +15,7 @@ scriptdir = f"{pathlib.Path(__file__).parent}"
 parser = argparse.ArgumentParser()
 parser.add_argument("-o", "--outfolder", type=str, default="/scratch/kelong/CombineStudies")
 parser.add_argument("-i", "--inputFile", type=str, required=True)
-parser.add_argument("--qcdScale", choices=["byHelicityPt", "byPt", "integrated"], default="byHelicityPt", 
+parser.add_argument("--qcdScale", choices=["byHelicityPt", "byPt", "byCharge", "integrated",], default="byHelicityPt", 
         help="Decorrelation for QCDscale (additionally always by charge)")
 parser.add_argument("--wlike", action='store_true', help="Run W-like analysis of mZ")
 parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow)")
@@ -27,6 +28,7 @@ parser.add_argument("--qcdProcessName", dest="qcdProcessName" , type=str, defaul
 parser.add_argument("--noStatUncFakes", dest="noStatUncFakes" , action="store_true",   help="Set bin error for QCD background templates to 0, to check MC stat uncertainties for signal only")
 parser.add_argument("--skipOtherChargeSyst", dest="skipOtherChargeSyst" , action="store_true",   help="Skip saving histograms and writing nuisance in datacard for systs defined for a given charge but applied on the channel with the other charge")
 parser.add_argument("--skipSignalSystOnFakes", dest="skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
+parser.add_argument("--scaleMuonCorr", type=float, default=1.0, help="Scale up/down dummy muon scale uncertainty by this factor")
 args = parser.parse_args()
 
 if not os.path.isdir(args.outfolder):
@@ -84,6 +86,7 @@ else:
         systAxes=["tensor_axis_0"],
         outNames=theory_tools.pdfNamesAsymHessian(pdfInfo["entries"]),
         passToFakes=passSystToFakes
+        scale=pdfInfo["scale"] if "scale" in pdfInfo else 1,
     )
 
 cardTool.addSystematic(f"alphaS002{pdfName}", 
@@ -111,36 +114,47 @@ if not args.noEfficiencyUnc:
         )
 
 inclusiveScale = args.qcdScale == "integrated"
-scaleSystAxes = ["chargeVgen", "muRfact", "muFfact"] 
-scaleLabelsByAxis = ["q", "muR", "muF"]
-if inclusiveScale:
-    scaleSystAxes.pop(0)
-    scaleLabelsByAxis.pop(0)
+helicity = "Helicity" in args.qcdScale
 
+scale_hist = "qcdScale"
+scaleSystAxes = ["muRfact", "muFfact"] 
+scaleLabelsByAxis = ["muR", "muF"]
 scaleGroupName = "QCDscale"
-scaleActionArgs = {"sum_ptV" : True, "sum_helicity" : True}
-scaleSkipEntries = [(-1, 1, 1), (-1, 0, 2), (-1, 2, 0)]
+scale_action_args = None
+scaleSkipEntries = [(1, 1), (0, 2), (2, 0)]
+scale_action = lambda h: h[{"ptVgen" : hist.sum}]
+scaleActionArgs = {}
+
+if not inclusiveScale:
+    scaleSystAxes.insert(0, "chargeVgen")
+    scaleLabelsByAxis.insert(0, "q")
+    scaleSkipEntries = [(-1, *x) for x in scaleSkipEntries]
+
 # TODO: reuse some code here
-if "Helicity" in args.qcdScale:
+if "Pt" in args.qcdScale:
+    scale_action = None
+    scaleActionArgs = {"sum_helicity" : True}
+    scaleGroupName += "ByPtV"
+    scaleSystAxes.insert(0, "ptVgen")
+    scaleLabelsByAxis.insert(0, "genPtV")
+    scaleSkipEntries = [(-1, *x) for x in scaleSkipEntries]
+
+if helicity:
+    scale_hist = "qcdScaleByHelicity"
+    scale_action = syst_tools.scale_helicity_hist_to_variations 
     scaleActionArgs.pop("sum_helicity")
     scaleGroupName += "ByHelicity"
     scaleSystAxes.insert(0, "helicity")
     scaleLabelsByAxis.insert(0, "Coeff")
-    scaleSkipEntries = [(-1, *x) for x in scaleSkipEntries]
-if "Pt" in args.qcdScale:
-    scaleActionArgs.pop("sum_ptV")
-    scaleGroupName += "ByPtV"
-    scaleSystAxes.insert(0, "ptVgen")
-    scaleLabelsByAxis.insert(0, "genPtV")
     scaleSkipEntries = [(-1, *x) for x in scaleSkipEntries]
 
 print("Inclusive scale", inclusiveScale)
 print(scaleActionArgs if not inclusiveScale else None)
 print(scaleLabelsByAxis)
 
-cardTool.addSystematic("qcdScaleByHelicity" if not inclusiveScale else "qcdScale",
-    action=syst_tools.scale_helicity_hist_to_variations if not inclusiveScale else None,
-    actionArgs=scaleActionArgs if not inclusiveScale else None,
+cardTool.addSystematic(scale_hist,
+    action=scale_action,
+    actionArgs=scaleActionArgs,
     processes=signal_samples,
     group=scaleGroupName,
     systAxes=scaleSystAxes,
@@ -155,7 +169,6 @@ cardTool.addSystematic("qcdScaleByHelicity" if not inclusiveScale else "qcdScale
     passToFakes=passSystToFakes
     )
 
-
 cardTool.addSystematic("muonScaleSyst", 
     processes=single_vmu_samples,
     group="muonScale",
@@ -163,6 +176,7 @@ cardTool.addSystematic("muonScaleSyst",
     systAxes=["downUpVar", "scaleEtaSlice"],
     labelsByAxis=["downUpVar", "ieta"],
     passToFakes=passSystToFakes
+    scale = args.scaleMuonCorr,
 )
 cardTool.addSystematic("muonL1PrefireSyst", 
     processes=cardTool.allMCProcesses(),
