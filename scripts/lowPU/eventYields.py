@@ -47,7 +47,9 @@ if __name__ == "__main__":
     flavor = "mumu"
     #flavor = "ee"
 
-    fIn = ROOT.TFile("/home/j/jaeyserm/combine/CMSSW_10_6_20/src/LowPU/LowPU_Z%s_differential_combineOutput.root" % fitcfg)
+    fIn = ROOT.TFile("/home/j/jaeyserm/combine/CMSSW_10_6_20/src/LowPU/LowPU_Zmumu_differential_combineOutput.root")
+    
+    
       
       
     sys.exit()  
