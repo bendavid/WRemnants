@@ -41,6 +41,7 @@ class CardTool(object):
         self.histName = "x"
         self.pseudoData = None
         self.excludeSyst = None
+        self.writeByCharge = True
         self.keepSyst = None # to override previous one with exceptions for special cases
         #self.loadArgs = {"operation" : "self.loadProcesses (reading hists from file)"}
         self.keepOtherChargeSyst = True
@@ -110,6 +111,9 @@ class CardTool(object):
         
     def setChannels(self, channels):
         self.channels = channels
+        
+    def setWriteByCharge(self, writeByCharge):
+        self.writeByCharge = writeByCharge
 
     def setNominalTemplate(self, template):
         if not os.path.isfile(template):
@@ -440,7 +444,7 @@ class CardTool(object):
             hist_no_error = h.copy()
             hist_no_error.variances(flow=True)[...] = 0.
             h = hist_no_error
-        if self.channels[0] != "all":
+        if self.writeByCharge:    
             self.writeHistByCharge(h, name)
         else:
             self.writeHistWithCharges(h, name)
