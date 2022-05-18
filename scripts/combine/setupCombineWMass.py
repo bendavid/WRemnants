@@ -20,8 +20,14 @@ parser.add_argument("--qcdScale", choices=["byHelicityPt", "byPt", "byCharge", "
 parser.add_argument("--wlike", action='store_true', help="Run W-like analysis of mZ")
 parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow)")
 parser.add_argument("--pdf", type=str, default="nnpdf31", choices=theory_tools.pdfMap.keys(), help="PDF to use")
-parser.add_argument("-b", "--fitObs", type=str, default="nominal", help="Observable to fit")
+parser.add_argument("-b", "--fitObs", type=str, default="nominal", help="Observable to fit") # TODO: what does it do?
 parser.add_argument("-p", "--pseudoData", type=str, help="Hist to use as pseudodata")
+parser.add_argument("-x",  "--excludeNuisances", type=str, default="", help="Regular expression to exclude some systematics from the datacard")
+parser.add_argument("-k",  "--keepNuisances", type=str, default="", help="Regular expression to keep some systematics, overriding --excludeNuisances. Can be used to keep only some systs while excluding all the others with '.*'")
+parser.add_argument("--qcdProcessName", dest="qcdProcessName" , type=str, default="Fake",   help="Name for QCD process")
+parser.add_argument("--noStatUncFakes", dest="noStatUncFakes" , action="store_true",   help="Set bin error for QCD background templates to 0, to check MC stat uncertainties for signal only")
+parser.add_argument("--skipOtherChargeSyst", dest="skipOtherChargeSyst" , action="store_true",   help="Skip saving histograms and writing nuisance in datacard for systs defined for a given charge but applied on the channel with the other charge")
+parser.add_argument("--skipSignalSystOnFakes", dest="skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
 parser.add_argument("--scaleMuonCorr", type=float, default=1.0, help="Scale up/down dummy muon scale uncertainty by this factor")
 args = parser.parse_args()
 
@@ -35,20 +41,25 @@ cardTool = CardTool.CardTool(f"{args.outfolder}/{name}_{{chan}}.txt")
 cardTool.setNominalTemplate(f"{templateDir}/main.txt")
 cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/{name}CombineInput.root"))
 cardTool.setDatagroups(datagroups)
+cardTool.setFakeName(args.qcdProcessName)
 cardTool.setSpacing(36)
-cardTool.setChannels(["all"])
+cardTool.setProcsNoStatUnc(procs=args.qcdProcessName, resetList=False)
+cardTool.setCustomSystForCard(args.excludeNuisances, args.keepNuisances)
+if args.skipOtherChargeSyst:
+    cardTool.setSkipOtherChargeSyst()
+if args.pseudoData:
+    cardTool.setPseudodata(args.pseudoData)
 
+passSystToFakes = not args.skipSignalSystOnFakes
+    
 logging.info(f"All processes {cardTool.allMCProcesses()}")
 single_v_samples = cardTool.filteredProcesses(lambda x: x[0] in ["W", "Z"])
-single_v_and_fake_samples = cardTool.filteredProcesses(lambda x: x[0] in ["W", "Z"] or x == "Fake")
 single_vmu_samples = list(filter(lambda x: "mu" in x, single_v_samples))
 signal_samples = list(filter(lambda x: x[0] == ("Z" if args.wlike else "W"), single_vmu_samples))
 signal_samples_inctau = list(filter(lambda x: x[0] == ("Z" if args.wlike else "W"), single_v_samples))
 logging.info(f"Single V samples: {single_v_samples}")
 logging.info(f"Signal samples: {signal_samples}")
 
-if args.pseudoData:
-    cardTool.setPseudodata(args.pseudoData)
 
 pdfInfo = theory_tools.pdf_info_map(signal_samples[0], args.pdf)
 pdfName = pdfInfo["name"]
@@ -57,7 +68,7 @@ addVariation = hasattr(args, "varName") and args.varName
 
 if pdfInfo["combine"] == "symHessian":
     cardTool.addSystematic(pdfName, 
-        processes=single_v_and_fake_samples,
+        processes=single_v_samples,
         mirror=True,
         group=pdfName,
         systAxes=["tensor_axis_0"],
@@ -65,24 +76,27 @@ if pdfInfo["combine"] == "symHessian":
         # Needs to be a tuple, since for multiple axis it would be (ax1, ax2, ax3)...
         # -1 means all possible values of the mirror axis
         skipEntries=[(0, -1)],
+        passToFakes=passSystToFakes,
     )
 else:
     cardTool.addSystematic(pdfName, 
-        processes=single_v_and_fake_samples,
+        processes=single_v_samples,
         mirror=False,
         group=pdfName,
         systAxes=["tensor_axis_0"],
         outNames=theory_tools.pdfNamesAsymHessian(pdfInfo["entries"]),
+        passToFakes=passSystToFakes,
         scale=pdfInfo["scale"] if "scale" in pdfInfo else 1,
     )
 
 cardTool.addSystematic(f"alphaS002{pdfName}", 
-    processes=single_v_and_fake_samples,
+    processes=single_v_samples,
     mirror=False,
     group=pdfName,
     systAxes=["tensor_axis_0"],
     outNames=[pdfName+"AlphaSUp", pdfName+"AlphaSDown"],
     scale=0.75,
+    passToFakes=passSystToFakes,
 )
 if not args.noEfficiencyUnc:
     for name,num in zip(["effSystIsoTnP", "effStatTnP",], [2, 624*4]):
@@ -90,11 +104,12 @@ if not args.noEfficiencyUnc:
         axlabels = ["IDIPTrig"] if num == 2 else ["eta", "pt", "q", "Trig"]
         cardTool.addSystematic(name, 
             mirror=True,
-            group="muon_eff",
+            group="muon_eff_syst" if "Syst" in name else "muon_eff_stat", # TODO: for now better checking them separately
             systAxes=axes,
             labelsByAxis=axlabels,
             baseName=name+"_",
-            processes=cardTool.filteredProcesses(lambda x: x != "Data"),
+            processes=cardTool.allMCProcesses(),
+            passToFakes=passSystToFakes,
         )
 
 inclusiveScale = args.qcdScale == "integrated"
@@ -150,6 +165,7 @@ cardTool.addSystematic(scale_hist,
     systNameReplace=[("muR2muF2", "muRmuFUp"), ("muR0muF0", "muRmuFDown"), ("muR2muF1", "muRUp"), 
         ("muR0muF1", "muRDown"), ("muR1muF0", "muFDown"), ("muR1muF2", "muFUp")],
     baseName="QCDscale_",
+    passToFakes=passSystToFakes,
     )
 
 cardTool.addSystematic("muonScaleSyst", 
@@ -158,6 +174,7 @@ cardTool.addSystematic("muonScaleSyst",
     baseName="CMS_scale_m_",
     systAxes=["downUpVar", "scaleEtaSlice"],
     labelsByAxis=["downUpVar", "ieta"],
+    passToFakes=passSystToFakes,
     scale = args.scaleMuonCorr,
 )
 cardTool.addSystematic("muonL1PrefireSyst", 
@@ -166,18 +183,20 @@ cardTool.addSystematic("muonL1PrefireSyst",
     baseName="CMS_prefire_syst_m",
     systAxes=["downUpVar"],
     labelsByAxis=["downUpVar"],
+    passToFakes=passSystToFakes,
 )
-# TODO: Allow to be appended to previous group
+# TODO: Allow to be appended to previous group ## FIXME: doesn't it do it already?
 cardTool.addSystematic("muonL1PrefireStat", 
     processes=cardTool.allMCProcesses(),
     group="muonPrefire",
     baseName="CMS_prefire_stat_m_",
     systAxes=["downUpVar", "etaPhiRegion"],
     labelsByAxis=["downUpVar", "etaPhiReg"],
+    passToFakes=passSystToFakes,
 )
 
 cardTool.addSystematic("massWeight", 
-    # TODO: Add the mass weights to the tau samples
+    # TODO: Add the mass weights to the tau samples ## FIXME: isn't it done?
     processes=signal_samples_inctau,
     outNames=theory_tools.massWeightNames(["massShift100MeV"], wlike=args.wlike),
     group="massShift",
@@ -186,13 +205,14 @@ cardTool.addSystematic("massWeight",
     #TODO: Name this
     noConstraint=True,
     systAxes=["tensor_axis_0"],
+    passToFakes=passSystToFakes,
 )
 
 
 # TODO: This needs to be handled by shifting the norm before subtracting from the fakes
-# cardTool.addSystematic("lumi", outNames=["", "lumiDown", "lumiUp"], group="luminosity")
+#cardTool.addSystematic("lumi", outNames=["", "lumiDown", "lumiUp"], group="luminosity")
 if not args.wlike:
-    cardTool.addLnNSystematic("CMS_Fakes", processes=["Fake"], size=1.05)
+    cardTool.addLnNSystematic("CMS_Fakes", processes=[args.qcdProcessName], size=1.05)
     cardTool.addLnNSystematic("CMS_Top", processes=["Top"], size=1.06)
     cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16)
 else:
