@@ -19,7 +19,8 @@ class datagroups(object):
             self.rtfile = ROOT.TFile.Open(infile)
             self.results = None
 
-        if self.datasets:
+        self.lumi = None
+        if self.datasets and self.results:
             self.data = [x for x in self.datasets.values() if x.is_data]
             if self.data:
                 self.lumi = sum([self.results[x.name]["lumi"] for x in self.data if x.name in self.results])
