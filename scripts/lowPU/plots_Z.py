@@ -771,7 +771,7 @@ if __name__ == "__main__":
     MC_SF = 1.0
     if flavor == "mumu": MC_SF = 1.026
 
-    outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/Z%s/plots_new_1/" % flavor
+    outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/Z%s/plots_new_2/" % flavor
     functions.prepareDir(outDir)
       
     groups = datagroupsLowPU_Z("mz_lowPU_%s.pkl.lz4" % flavor, flavor=flavor)
@@ -798,6 +798,8 @@ if __name__ == "__main__":
     
     singlePlot({"name": "massZ", "axis": "mll" }, "massZ_nolog", 60, 120, 0, 2.5e4, "m(l, l) (GeV)", "Events", logY=False)
     singlePlot({"name": "massZ", "axis": "mll" }, "massZ", 60, 120, 1e0, 1e6, "m(l, l) (GeV)", "Events")
+    mZ_bins = [60, 65, 70, 72, 74, 76, 78, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 102, 104, 106, 108, 110, 115, 120]
+    singlePlot({"name": "massZ", "axis": "mll" }, "massZ_binned", 60, 120, 1e0, 1e6, "m(l, l) (GeV)", "Events", rebin=mZ_bins, yRatio = 1.15)
     
     mT_bins = [0, 10, 15, 20, 25, 30, 35,] + list(range(40, 100, 2)) + [102, 104, 106, 108, 110, 115, 120, 125, 130, 140, 160, 200]
     singlePlot({"name": "mt", "axis": "mt" }, "mt", 0, 200, 1e-1, 1e6, "m_{T}  (GeV)", "Events", rebin=mT_bins)
