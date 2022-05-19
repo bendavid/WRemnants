@@ -128,11 +128,13 @@ def build_graph(df, dataset):
         if not dataset.is_data: 
         
             df = df.Define("Muon_pt_corr", "wrem::applyRochesterMC(Muon_pt, Muon_eta, Muon_phi, Muon_charge, Muon_genPartIdx, GenPart_pt, Muon_nTrackerLayers)")
+            #df = df.Alias("Muon_pt_corr", "Muon_pt")
             df = df.Filter("HLT_Mu17")
             
         else: 
         
             df = df.Define("Muon_pt_corr", "wrem::applyRochesterData(Muon_pt, Muon_eta, Muon_phi, Muon_charge)")
+            #df = df.Alias("Muon_pt_corr", "Muon_pt")
             df = df.Filter("HLT_HIMu17")
             
         
@@ -233,7 +235,11 @@ def build_graph(df, dataset):
     df = df.Filter("massZ > 60 && massZ < 120")
     
     if not dataset.is_data:
-        df = df.Define("nominal_weight", "weight*SFMC")
+        if dataset.name == "DYmumu" or dataset.name == "DYee":
+            df = df.Define("nominal_pdf_cen", theory_tools.pdf_central_weight(dataset.name, "nnpdf31"))
+            df = df.Define("nominal_weight", "weight*SFMC*nominal_pdf_cen")
+        else: 
+            df = df.Define("nominal_weight", "weight*SFMC")
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")
 

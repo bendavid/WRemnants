@@ -92,6 +92,9 @@ cardTool.setDatagroups(datagroups)
 cardTool.setHistName(histName) 
 cardTool.setChannels([f"{args.flavor}{suffix}"])
 cardTool.setDataName(dataName)
+cardTool.setProcsNoStatUnc(procs=[])
+cardTool.setSpacing(36)
+cardTool.setWriteByCharge(False)
 cardTool.setUnconstrainedProcs(unconstrainedProcs)
 
 DY_procs = cardTool.filteredProcesses(lambda x: "DY" in x)
@@ -219,7 +222,6 @@ if not args.xsec:
     )
     
     for lepEff in ["lepSF_HLT_DATA_stat", "lepSF_HLT_DATA_syst", "lepSF_HLT_MC_stat", "lepSF_HLT_MC_syst", "lepSF_ISO_stat", "lepSF_ISO_DATA_syst", "lepSF_ISO_MC_syst", "lepSF_IDIP_stat", "lepSF_IDIP_DATA_syst", "lepSF_IDIP_MC_syst"]:
-        
         
         cardTool.addSystematic(lepEff,
             processes=DY_procs,
