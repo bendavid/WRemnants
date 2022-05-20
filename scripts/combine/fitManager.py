@@ -73,17 +73,24 @@ def prepareChargeFit(options, charges=["plus"]):
         if options.fitSingleCharge:
             print("I am going to run fit for single charge {ch}".format(ch=charges[0]))
         else:
-            print("Cards for W+ and W- done. Combining them now...")
+            print("I found the cards for W+ and W-. Combining them now...")
 
         combinedCard = "{d}/{b}_{s}.txt".format(d=os.path.abspath(cardSubfolderFullName), b=binname, s=cardkeyname)
         ccCmd = "combineCards.py --noDirPrefix {cards} > {combinedCard} ".format(cards=' '.join(['{ch}={dcfile}'.format(ch=channels[i],dcfile=card) for i,card in enumerate(datacards)]), combinedCard=combinedCard)
         ## run the commands: need cmsenv in the combinetf release
         print 
-        print 
-        safeSystem(ccCmd, dryRun=options.dryRun)
-        print("New combined card in ",combinedCard)
+        print
+        if args.skip_card:
+            safeSystem(ccCmd, dryRun=True)
+            print("Unmodified combined card in ",combinedCard)
+        else:
+            safeSystem(ccCmd, dryRun=options.dryRun)
+            print("New combined card in ",combinedCard)
         print
 
+        if options.doOnlyCard:
+            return
+        
         txt2hdf5Cmd = 'text2hdf5.py {cf} --dataset {dn} --X-allow-no-signal'.format(cf=combinedCard, dn=options.dataname)
             
         if not options.doSystematics:
@@ -166,6 +173,8 @@ if __name__ == "__main__":
     parser.add_argument(       '--no-bbb'  , dest='noBBB', default=False, action='store_true', help='Do not use bin-by-bin uncertainties')
     parser.add_argument(       '--correlate-xsec-stat'  , dest='noCorrelateXsecStat', default=True, action='store_false', help='If given, use option --correlateXsecStat when using bin-by-bin uncertainties (for mass measurements it should not be needed because we do not use prefit cross sections)')
     parser.add_argument('-d',  '--dry-run'  , dest='dryRun', default=False, action='store_true', help='Do not execute command to make cards or fit')
+    parser.add_argument(       '--doOnlyCard'  , dest='doOnlyCard', default=False, action='store_true', help='Do only card and exit (equivalent to using --no-text2hdf5 and --no-combinetf together)')
+    parser.add_argument(       '--no-card', dest='skip_card' , default=False, action='store_true', help='Go directly to fit part without regenerating the card (can also skip text2hdf5 with --no-text2hdf5), useful when editing the card manually for tests')
     parser.add_argument(       '--no-text2hdf5'  , dest='skip_text2hdf5', default=False, action='store_true', help='skip running text2hdf5.py at the end, only prints command (useful if hdf5 file already exists, or for tests)')
     parser.add_argument(       '--no-combinetf'  , dest='skip_combinetf', default=False, action='store_true', help='skip running combinetf.py at the end, just print command (useful for tests)')
     parser.add_argument(       '--skip-fit-data', dest='skipFitData' , default=False, action='store_true', help='If True, fit only Asimov')
@@ -225,11 +234,11 @@ if __name__ == "__main__":
         for charge in fitCharges:
             prepareChargeFit(args, charges=[charge])
             print('-'*30)
-            print("Done fitting charge {ch}".format(ch=charge))
+            print("Done with charge {ch}".format(ch=charge))
             print('-'*30)
 
     if args.combineCharges and len(fitCharges)==2:
         combineCharges(args)                
         print('-'*30)
-        print("Done fitting charge combination")
+        print("Done with charge combination")
         print('-'*30)

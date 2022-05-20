@@ -99,7 +99,7 @@ cardTool.addSystematic(f"alphaS002{pdfName}",
     passToFakes=passSystToFakes,
 )
 if not args.noEfficiencyUnc:
-    for name,num in zip(["effSystIsoTnP", "effStatTnP",], [2, 624*4]):
+    for name,num in zip(["effSystTnP", "effStatTnP",], [2, 624*4]):
         axes = ["idiptrig-iso"] if num == 2 else ["SF eta", "SF pt", "SF charge", "idiptrig-iso"]
         axlabels = ["IDIPTrig"] if num == 2 else ["eta", "pt", "q", "Trig"]
         cardTool.addSystematic(name, 
