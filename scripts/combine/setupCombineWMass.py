@@ -17,6 +17,7 @@ parser.add_argument("-o", "--outfolder", type=str, default="/scratch/kelong/Comb
 parser.add_argument("-i", "--inputFile", type=str, required=True)
 parser.add_argument("--qcdScale", choices=["byHelicityPt", "byPt", "byCharge", "integrated",], default="byHelicityPt", 
         help="Decorrelation for QCDscale (additionally always by charge)")
+parser.add_argument("--rebinPtV", type=int, default=0, help="Rebin axis with gen boson pt by this value (default does nothing)")
 parser.add_argument("--wlike", action='store_true', help="Run W-like analysis of mZ")
 parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow)")
 parser.add_argument("--pdf", type=str, default="nnpdf31", choices=theory_tools.pdfMap.keys(), help="PDF to use")
@@ -132,7 +133,8 @@ if not inclusiveScale:
 # TODO: reuse some code here
 if "Pt" in args.qcdScale:
     scale_action = None
-    scaleActionArgs = {"sum_helicity" : True}
+    if args.rebinPtV:
+        scale_action = lambda h: h[{"ptVgen" : hist.rebin(args.rebinPtV)}]
     scaleGroupName += "ByPtV"
     scaleSystAxes.insert(0, "ptVgen")
     scaleLabelsByAxis.insert(0, "genPtV")
@@ -141,7 +143,7 @@ if "Pt" in args.qcdScale:
 if helicity:
     scale_hist = "qcdScaleByHelicity"
     scale_action = syst_tools.scale_helicity_hist_to_variations 
-    scaleActionArgs.pop("sum_helicity")
+    scaleActionArgs = {"rebinPtV" : args.rebinPtV}
     scaleGroupName += "ByHelicity"
     scaleSystAxes.insert(0, "helicity")
     scaleLabelsByAxis.insert(0, "Coeff")
