@@ -170,7 +170,7 @@ if helicity:
     scaleSystAxes.insert(0, "helicity")
     scaleLabelsByAxis.insert(0, "Coeff")
     scaleSkipEntries = [(-1, *x) for x in scaleSkipEntries] # need to add a -1 for each axis element added before
-    
+
 print("Inclusive scale", inclusiveScale)
 print(scaleActionArgs if not inclusiveScale else None)
 print(scaleLabelsByAxis)
