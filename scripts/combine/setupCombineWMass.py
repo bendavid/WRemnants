@@ -7,6 +7,7 @@ import os
 import pathlib
 import logging
 import hist
+import copy
 
 logging.basicConfig(level=logging.INFO)
 
@@ -15,11 +16,11 @@ scriptdir = f"{pathlib.Path(__file__).parent}"
 parser = argparse.ArgumentParser()
 parser.add_argument("-o", "--outfolder", type=str, default="/scratch/kelong/CombineStudies")
 parser.add_argument("-i", "--inputFile", type=str, required=True)
-parser.add_argument("--qcdScale", choices=["byHelicityPt", "byPt", "byCharge", "integrated",], default="byHelicityPt", 
-        help="Decorrelation for QCDscale (additionally always by charge)")
+parser.add_argument("--qcdScale", choices=["byHelicityPtAndByPt", "byHelicityPt", "byPt", "byCharge", "integrated",], default="byHelicityPt", 
+        help="Decorrelation for QCDscale (additionally always by charge). With 'byHelicityPtAndByPt' two independent histograms are stored, split and not split by helicities (for tests)")
 parser.add_argument("--rebinPtV", type=int, default=0, help="Rebin axis with gen boson pt by this value (default does nothing)")
 parser.add_argument("--wlike", action='store_true', help="Run W-like analysis of mZ")
-parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow)")
+parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow). Equivalent to --excludeNuisances '.*effSystTnP|.*effStatTnP' ")
 parser.add_argument("--pdf", type=str, default="nnpdf31", choices=theory_tools.pdfMap.keys(), help="PDF to use")
 parser.add_argument("-b", "--fitObs", type=str, default="nominal", help="Observable to fit") # TODO: what does it do?
 parser.add_argument("-p", "--pseudoData", type=str, help="Hist to use as pseudodata")
@@ -121,25 +122,46 @@ scaleSystAxes = ["muRfact", "muFfact"]
 scaleLabelsByAxis = ["muR", "muF"]
 scaleGroupName = "QCDscale"
 scale_action_args = None
+# Exclude all combinations where muR = muF = 1 (nominal) or where
+# they are extreme values (ratio = 4 or 1/4)
 scaleSkipEntries = [(1, 1), (0, 2), (2, 0)]
-scale_action = lambda h: h[{"ptVgen" : hist.sum}]
-scaleActionArgs = {}
+# This is hacky but it's the best idea I have for now...
+systNameReplaceVec = [("muR2muF2", "muRmuFUp"), ("muR0muF0", "muRmuFDown"), ("muR2muF1", "muRUp"), 
+                      ("muR0muF1", "muRDown"), ("muR1muF0", "muFDown"), ("muR1muF2", "muFUp")]
 
-if not inclusiveScale:
-    scaleSystAxes.insert(0, "chargeVgen")
-    scaleLabelsByAxis.insert(0, "q")
-    scaleSkipEntries = [(-1, *x) for x in scaleSkipEntries]
+if inclusiveScale:
+    scale_action = lambda h: h[{"ptVgen" : hist.sum}]
+    scaleActionArgs = {}
 
-# TODO: reuse some code here
 if "Pt" in args.qcdScale:
-    scale_action = None
-    if args.rebinPtV:
-        scale_action = lambda h: h[{"ptVgen" : hist.rebin(args.rebinPtV)}]
+    scale_action = syst_tools.scale_helicity_hist_to_variations
+    scaleActionArgs = {"hasNoHelicity" : True, "rebinPtV" : args.rebinPtV}
     scaleGroupName += "ByPtV"
     scaleSystAxes.insert(0, "ptVgen")
     scaleLabelsByAxis.insert(0, "genPtV")
-    scaleSkipEntries = [(-1, *x) for x in scaleSkipEntries]
+    scaleSystAxes.insert(0, "chargeVgen")
+    scaleLabelsByAxis.insert(0, "genQ")
+    scaleSkipEntries = [(-1, -1, *x) for x in scaleSkipEntries] # need to add a -1 for each axis element added before
 
+    if args.qcdScale == "byHelicityPtAndByPt":
+        # note: the following uses a different histogram compared to the one for helicity splitting
+        # when integrating on the coefficients for the helicity split version they should give the same results modulo statistical fluctuations
+        print("Option --qcdScale byHelicityPtAndByPt was chosen: doing additional qcdScale histogram for tests")
+        print(scaleActionArgs)
+        print(scaleLabelsByAxis)
+        cardTool.addSystematic("qcdScale",
+                               action=scale_action,
+                               actionArgs=copy.deepcopy(scaleActionArgs),
+                               processes=signal_samples,
+                               group=scaleGroupName,
+                               systAxes=scaleSystAxes[:],         #["chargeVgen", "ptVgen", "muRfact", "muFfact"],   # to avoid that it is modified below
+                               labelsByAxis=scaleLabelsByAxis[:], # ["genQ", "genPtV", "muR", "muF"], # to avoid that it is modified below
+                               skipEntries=scaleSkipEntries[:],
+                               systNameReplace=systNameReplaceVec,
+                               baseName="QCDscaleByPt_",
+                               passToFakes=passSystToFakes,
+    )
+    
 if helicity:
     scale_hist = "qcdScaleByHelicity"
     scale_action = syst_tools.scale_helicity_hist_to_variations 
@@ -147,8 +169,8 @@ if helicity:
     scaleGroupName += "ByHelicity"
     scaleSystAxes.insert(0, "helicity")
     scaleLabelsByAxis.insert(0, "Coeff")
-    scaleSkipEntries = [(-1, *x) for x in scaleSkipEntries]
-
+    scaleSkipEntries = [(-1, *x) for x in scaleSkipEntries] # need to add a -1 for each axis element added before
+    
 print("Inclusive scale", inclusiveScale)
 print(scaleActionArgs if not inclusiveScale else None)
 print(scaleLabelsByAxis)
@@ -163,9 +185,7 @@ cardTool.addSystematic(scale_hist,
     # Exclude all combinations where muR = muF = 1 (nominal) or where
     # they are extreme values (ratio = 4 or 1/4)
     skipEntries=scaleSkipEntries,
-    # This is hacky but it's the best idea I have for now...
-    systNameReplace=[("muR2muF2", "muRmuFUp"), ("muR0muF0", "muRmuFDown"), ("muR2muF1", "muRUp"), 
-        ("muR0muF1", "muRDown"), ("muR1muF0", "muFDown"), ("muR1muF2", "muFUp")],
+    systNameReplace=systNameReplaceVec,
     baseName="QCDscale_",
     passToFakes=passSystToFakes,
     )
