@@ -267,7 +267,7 @@ class CardTool(object):
         if proc in self.noStatUncProcesses:
             setZeroStatUnc = True
         for name, var in zip(var_names, variations):
-            if name != "":                
+            if name != "":
                 self.writeHist(var, self.variationName(proc, name), setZeroStatUnc=setZeroStatUnc)
 
     def addPseudodata(self, processes):
