@@ -1,7 +1,7 @@
 import hist
 import numpy as np
 
-def scale_helicity_hist_to_variations(scale_hist, sum_helicity=False, sum_ptV=False):
+def scale_helicity_hist_to_variations(scale_hist, sum_helicity=False, sum_ptV=False, rebinPtV=0):
 
     s = hist.tag.Slicer()
     # select nominal QCD scales, but keep the sliced axis at size 1 for broadcasting
@@ -10,6 +10,10 @@ def scale_helicity_hist_to_variations(scale_hist, sum_helicity=False, sum_ptV=Fa
     # select nominal QCD scales and project down to nominal axes
     nom_hist = nom_scale_hist[{"ptVgen" : s[::hist.sum], "chargeVgen" : s[::hist.sum], "helicity" : s[::hist.sum], "muRfact" : s[1.j], "muFfact" : s[1.j] }]
 
+    if rebinPtV > 0:
+        scale_hist = scale_hist[{"ptVgen" : s[::hist.rebin(rebinPtV)]}]
+        nom_scale_hist = nom_scale_hist[{"ptVgen" : s[::hist.rebin(rebinPtV)]}]
+    
     if sum_helicity:
         scale_hist = scale_hist[{"helicity" : s[::hist.sum]}]
         nom_scale_hist = nom_scale_hist[{"helicity" : s[::hist.sum]}]
