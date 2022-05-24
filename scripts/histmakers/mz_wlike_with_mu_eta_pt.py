@@ -252,7 +252,7 @@ def build_graph(df, dataset):
                 )
 
             df = theory_tools.define_scale_tensor(df)
-            results.append(theory_tools.make_scale_hist(df, [*nominal_axes, axis_ptVgen], [*nominal_cols, "ptVgen"]))
+            results.append(theory_tools.make_scale_hist(df, [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen"]))
 
             if isZ and not args.skipHelicity:
                 # TODO: Should have consistent order here with the scetlib correction function
