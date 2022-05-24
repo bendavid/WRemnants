@@ -2,7 +2,7 @@ import hist
 import numpy as np
 
 def scale_helicity_hist_to_variations(scale_hist, sum_helicity=False, sum_ptV=False, hasNoHelicity=False, rebinPtV=0):
-    # hasNoHelicity=True allows for usage with QCD scale histograms made with no helicity splitting (also no gen charge)
+    # hasNoHelicity=True allows for usage with QCD scale histograms made with no helicity splitting
     
     s = hist.tag.Slicer()
     # select nominal QCD scales, but keep the sliced axis at size 1 for broadcasting
