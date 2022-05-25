@@ -97,7 +97,7 @@ cardTool.addSystematic(f"alphaS002{pdfName}",
     group=pdfName,
     systAxes=["tensor_axis_0"],
     outNames=[pdfName+"AlphaSUp", pdfName+"AlphaSDown"],
-    scale=0.75,
+    scale=0.75, # TODO: this depends on the set, should be provided in theory_tools.py
     passToFakes=passSystToFakes,
 )
 if not args.noEfficiencyUnc:
@@ -180,6 +180,7 @@ cardTool.addSystematic(scale_hist,
     actionArgs=scaleActionArgs,
     processes=signal_samples,
     group=scaleGroupName,
+    splitGroup={f"{scaleGroupName}_coeff{i}" : f".*Coeff{i}" for i in range(9)}, # key is the new group name to make it unique, value is the pattern to filter nuisances
     systAxes=scaleSystAxes,
     labelsByAxis=scaleLabelsByAxis,
     # Exclude all combinations where muR = muF = 1 (nominal) or where

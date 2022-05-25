@@ -23,39 +23,39 @@ axis_muFfact = hist.axis.Variable(
 scale_tensor_axes = (axis_muRfact, axis_muFfact)
 
 pdfMap = {
-        "nnpdf31" : {
-            "name" : "pdfNNPDF31",
-            "branch" : "LHEPdfWeight",
-            "combine" : "symHessian",
-            "entries" : 101,
-            "alphas" : ["LHEPdfWeight[101]", "LHEPdfWeight[102]"],
-        },
-        "ct18" : {
-            # This has CT18 + CT18Z in it :-/
-            "name" : "pdfCT18",
-            "branch" : "LHEPdfWeightAltSet18",
-            "combine" : "asymHessian",
-            "entries" : 58,
-            "alphas" : ["LHEPdfWeightAltSet18[59]", "LHEPdfWeightAltSet18[60]"],
-			"alphaRange" : "002",
-            "scale" : 1/1.645 # Convert from 95% CL to 68%
-        },
-        "mmht" : {
-            "name" : "pdfMMHT",
-            "branch" : "LHEPdfWeightAltSet19",
-            "combine" : "asymHessian",
-            "entries" : 51,
-        	"alphas" : ["LHEPdfWeightAltSet20[1]", "LHEPdfWeightAltSet20[2]"],
-			"alphaRange" : "001",
-        },
-		"nnpdf30" : {
-			"name" : "pdfNNPDF30",
-			"branch" : "LHEPdfWeightAltSet13",
-            "combine" : "symHessian",
-			"entries" : 100,
-			"alphas" : ["LHEPdfWeightAltSet15[0]", "LHEPdfWeightAltSet16[0]"],
-			"alphaRange" : "001",
-		},
+    "nnpdf31" : {
+        "name" : "pdfNNPDF31",
+        "branch" : "LHEPdfWeight",
+        "combine" : "symHessian",
+        "entries" : 101,
+        "alphas" : ["LHEPdfWeight[101]", "LHEPdfWeight[102]"],
+    },
+    "ct18" : {
+        # This has CT18 + CT18Z in it :-/
+        "name" : "pdfCT18",
+        "branch" : "LHEPdfWeightAltSet18",
+        "combine" : "asymHessian",
+        "entries" : 58,
+        "alphas" : ["LHEPdfWeightAltSet18[59]", "LHEPdfWeightAltSet18[60]"],
+	"alphaRange" : "002",
+        "scale" : 1/1.645 # Convert from 95% CL to 68%
+    },
+    "mmht" : {
+        "name" : "pdfMMHT",
+        "branch" : "LHEPdfWeightAltSet19",
+        "combine" : "asymHessian",
+        "entries" : 51,
+        "alphas" : ["LHEPdfWeightAltSet20[1]", "LHEPdfWeightAltSet20[2]"],
+	"alphaRange" : "001",
+    },
+    "nnpdf30" : {
+	"name" : "pdfNNPDF30",
+	"branch" : "LHEPdfWeightAltSet13",
+        "combine" : "symHessian",
+	"entries" : 100,
+	"alphas" : ["LHEPdfWeightAltSet15[0]", "LHEPdfWeightAltSet16[0]"],
+	"alphaRange" : "001",
+    },
 }
 
 pdfMapExtended = copy.deepcopy(pdfMap)
