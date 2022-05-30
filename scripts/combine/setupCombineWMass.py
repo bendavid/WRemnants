@@ -31,6 +31,7 @@ parser.add_argument("--noStatUncFakes", dest="noStatUncFakes" , action="store_tr
 parser.add_argument("--skipOtherChargeSyst", dest="skipOtherChargeSyst" , action="store_true",   help="Skip saving histograms and writing nuisance in datacard for systs defined for a given charge but applied on the channel with the other charge")
 parser.add_argument("--skipSignalSystOnFakes", dest="skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
 parser.add_argument("--scaleMuonCorr", type=float, default=1.0, help="Scale up/down dummy muon scale uncertainty by this factor")
+parser.add_argument("--correlateEffStatIsoByCharge", action='store_true', help="Correlate isolation efficiency uncertanties between the two charges (by default they are decorrelated)")
 args = parser.parse_args()
 
 if not os.path.isdir(args.outfolder):
@@ -67,6 +68,16 @@ pdfInfo = theory_tools.pdf_info_map(signal_samples[0], args.pdf)
 pdfName = pdfInfo["name"]
 
 addVariation = hasattr(args, "varName") and args.varName
+
+# TODO: This needs to be handled by shifting the norm before subtracting from the fakes
+cardTool.addSystematic("luminosity",
+                       processes=cardTool.allMCProcesses(),
+                       outNames=["lumiDown", "lumiUp"],
+                       group="luminosity",
+                       systAxes=["downUpVar"],
+                       labelsByAxis=["downUpVar"],
+                       passToFakes=passSystToFakes)
+#cardTool.addLnNSystematic("CMS_Lumi2016", processes=cardTool.allMCProcesses(), size=1.012)
 
 if pdfInfo["combine"] == "symHessian":
     cardTool.addSystematic(pdfName, 
@@ -112,6 +123,7 @@ if not args.noEfficiencyUnc:
             baseName=name+"_",
             processes=cardTool.allMCProcesses(),
             passToFakes=passSystToFakes,
+            systNameReplace=[("q0Trig0", "Trig0"), ("q1Trig0", "Trig0")] if args.correlateEffStatIsoByCharge else []
         )
 
 inclusiveScale = args.qcdScale == "integrated"
@@ -180,7 +192,7 @@ cardTool.addSystematic(scale_hist,
     actionArgs=scaleActionArgs,
     processes=signal_samples,
     group=scaleGroupName,
-    splitGroup={f"{scaleGroupName}_coeff{i}" : f".*Coeff{i}" for i in range(9)}, # key is the new group name to make it unique, value is the pattern to filter nuisances
+    # splitGroup={f"{scaleGroupName}_coeff{i}" : f".*Coeff{i}" for i in range(9)}, # key is the new group name to make it unique, value is the pattern to filter nuisances
     systAxes=scaleSystAxes,
     labelsByAxis=scaleLabelsByAxis,
     # Exclude all combinations where muR = muF = 1 (nominal) or where
@@ -229,8 +241,6 @@ cardTool.addSystematic("massWeight",
     systAxes=["tensor_axis_0"],
     passToFakes=passSystToFakes,
 )
-# TODO: This needs to be handled by shifting the norm before subtracting from the fakes
-#cardTool.addSystematic("lumi", outNames=["", "lumiDown", "lumiUp"], group="luminosity")
 if not args.wlike:
     cardTool.addLnNSystematic("CMS_Fakes", processes=[args.qcdProcessName], size=1.05)
     cardTool.addLnNSystematic("CMS_Top", processes=["Top"], size=1.06)
