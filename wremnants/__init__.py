@@ -4,6 +4,7 @@ import pathlib
 ROOT.gInterpreter.AddIncludePath(f"{pathlib.Path(__file__).parent}/include/")
 
 ROOT.gInterpreter.Declare('#include "muonCorr.h"')
+ROOT.gInterpreter.Declare('#include "histoScaling.h"')
 ROOT.gInterpreter.Declare('#include "utils.h"')
 ROOT.gInterpreter.Declare('#include "csVariables.h"')
 
