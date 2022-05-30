@@ -34,6 +34,8 @@ parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdSca
 parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
 parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
+parser.add_argument("--eta", nargs=3, type=float, help="Eta binning as 'nbins min max' (only uniform for now)", default=[48,-2.4,2.4])
+parser.add_argument("--pt", nargs=3, type=float, help="Pt binning as 'nbins,min,max' (only uniform for now)", default=[29,26.,55.])
 args = parser.parse_args()
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
@@ -52,9 +54,19 @@ axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
 wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP"]
 zprocs = ["ZmumuPostVFP", "ZtautauPostVFP"]
 
+# custom template binning
+template_neta = int(args.eta[0])
+template_mineta = args.eta[1]
+template_maxeta = args.eta[2]
+print(f"Eta binning: {template_neta} bins from {template_mineta} to {template_maxeta}")
+template_npt = int(args.pt[0])
+template_minpt = args.pt[1]
+template_maxpt = args.pt[2]
+print(f"Pt binning: {template_npt} bins from {template_minpt} to {template_maxpt}")
+
 # standard regular axes
-axis_eta = hist.axis.Regular(48, -2.4, 2.4, name = "eta")
-axis_pt = hist.axis.Regular(29, 26., 55., name = "pt")
+axis_eta = hist.axis.Regular(template_neta, template_mineta, template_maxeta, name = "eta")
+axis_pt = hist.axis.Regular(template_npt, template_minpt, template_maxpt, name = "pt")
 
 # categorical axes in python bindings always have an overflow bin, so use a regular
 # axis for the charge
