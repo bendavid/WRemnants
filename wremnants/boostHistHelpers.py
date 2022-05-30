@@ -21,6 +21,7 @@ def broadcastOutHist(h1, h2):
         return h1 if h1.axes[-1].size > h2.axes[-1].size else h2
     return h1 if len(h1.axes) > len(h2.axes) else h2
 
+# returns h1/h2
 def divideHists(h1, h2, cutoff=1, allowBroadcast=True):
     h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2, allowBroadcast)
     # To get the broadcast shape right
