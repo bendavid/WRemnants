@@ -69,15 +69,17 @@ pdfName = pdfInfo["name"]
 
 addVariation = hasattr(args, "varName") and args.varName
 
-# TODO: This needs to be handled by shifting the norm before subtracting from the fakes
-cardTool.addSystematic("luminosity",
-                       processes=cardTool.allMCProcesses(),
-                       outNames=["lumiDown", "lumiUp"],
-                       group="luminosity",
-                       systAxes=["downUpVar"],
-                       labelsByAxis=["downUpVar"],
-                       passToFakes=passSystToFakes)
-#cardTool.addLnNSystematic("CMS_Lumi2016", processes=cardTool.allMCProcesses(), size=1.012)
+if args.wlike:
+    # TOCHECK: no fakes here, most likely
+    cardTool.addLnNSystematic("luminosity", processes=cardTool.allMCProcesses(), size=1.012)
+else:
+    cardTool.addSystematic("luminosity",
+                           processes=cardTool.allMCProcesses(),
+                           outNames=["lumiDown", "lumiUp"],
+                           group="luminosity",
+                           systAxes=["downUpVar"],
+                           labelsByAxis=["downUpVar"],
+                           passToFakes=passSystToFakes)
 
 if pdfInfo["combine"] == "symHessian":
     cardTool.addSystematic(pdfName, 
