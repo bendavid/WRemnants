@@ -35,10 +35,10 @@ pdfMap = {
             "name" : "pdfCT18",
             "branch" : "LHEPdfWeightAltSet18",
             "combine" : "asymHessian",
-            "entries" : 58,
+            "entries" : 59,
             "alphas" : ["LHEPdfWeightAltSet18[59]", "LHEPdfWeightAltSet18[60]"],
 			"alphaRange" : "002",
-            "scale" : 1/1.645 # Convert from 95% CL to 68%
+            "scale" : 1/1.645 # Convert from 90% CL to 68%
         },
         "mmht" : {
             "name" : "pdfMMHT",
@@ -52,7 +52,7 @@ pdfMap = {
 			"name" : "pdfNNPDF30",
 			"branch" : "LHEPdfWeightAltSet13",
             "combine" : "symHessian",
-			"entries" : 100,
+			"entries" : 101,
 			"alphas" : ["LHEPdfWeightAltSet15[0]", "LHEPdfWeightAltSet16[0]"],
 			"alphaRange" : "001",
 		},
