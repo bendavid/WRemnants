@@ -41,6 +41,7 @@ class CardTool(object):
         self.histName = "x"
         self.pseudoData = None
         self.excludeSyst = None
+        self.writeByCharge = True
         self.keepSyst = None # to override previous one with exceptions for special cases
         #self.loadArgs = {"operation" : "self.loadProcesses (reading hists from file)"}
         self.keepOtherChargeSyst = True
@@ -110,6 +111,9 @@ class CardTool(object):
         
     def setChannels(self, channels):
         self.channels = channels
+        
+    def setWriteByCharge(self, writeByCharge):
+        self.writeByCharge = writeByCharge
 
     def setNominalTemplate(self, template):
         if not os.path.isfile(template):
@@ -145,10 +149,10 @@ class CardTool(object):
     def mirrorNames(self, baseName, size, offset=0):
         names = [""]*offset + [f"{baseName.format(i=i%size)}{'Up' if i % 2 else 'Down'}" for i in range(size*2)]
         return names
-    
-    def addLnNSystematic(self, name, size, processes):
+
+    def addLnNSystematic(self, name, size, processes, group=None, groupFilter=None):
         if not self.isExcludedNuisance(name):
-            self.lnNSystematics.update({name : {"size" : size, "processes" : processes}})
+            self.lnNSystematics.update({name : {"size" : size, "processes" : processes, "group" : group, "groupFilter" : groupFilter}})
 
     def addSystematic(self, name, systAxes, outNames=None, skipEntries=None, labelsByAxis=None, 
                         baseName="", mirror=False, scale=1, processes=None, group=None, noConstraint=False,
@@ -202,14 +206,17 @@ class CardTool(object):
         if "labelsByAxis" in systInfo:
             systAxesLabels = systInfo["labelsByAxis"]
 
+        # Jan: moved above the mirror action, as this action can cause mirroring
+        if systInfo["action"]:
+            hvar = systInfo["action"](hvar, **systInfo["actionArgs"])
+            
         axNames = systAxes[:]
         axLabels = systAxesLabels[:]
         if hvar.axes[-1].name == "mirror":
             axNames.append("mirror")
             axLabels.append("mirror")
 
-        if systInfo["action"]:
-            hvar = systInfo["action"](hvar, **systInfo["actionArgs"])
+        
 
         if not all([name in [ax.name for ax in hvar.axes] for name in axNames]):
             raise ValueError(f"Failed to find axis names '{str(systAxes)} in hist. " \
@@ -299,24 +306,30 @@ class CardTool(object):
         else:
             self.outfile = outfile
 
-    def writeOutput(self):
+    def writeOutput(self, statOnly=False):
         self.datagroups.loadHistsForDatagroups(
             baseName=self.histName, syst=self.nominalName, label=self.nominalName)
         self.procDict = self.datagroups.getDatagroups()
         self.writeForProcesses(self.nominalName, processes=self.procDict.keys(), label=self.nominalName)
         self.loadNominalCard()
-        self.writeLnNSystematics()
         if self.pseudoData:
             self.addPseudodata(self.predictedProcesses())
 
-        for syst in self.systematics.keys():
-            processes=self.systematics[syst]["processes"]
-            # In general the truncating of negative bins is to avoid low stat negative weight issues
-            # For the helicity hist, the content really can be negative. Would be good to deal with
-            # this more generally
-            self.datagroups.loadHistsForDatagroups(self.histName, syst, label="syst",
-                procsToRead=processes, forceNonzero=syst != "qcdScaleByHelicity")
-            self.writeForProcesses(syst, label="syst", processes=processes)
+        if statOnly:
+            # add dummy uncertainty, necessary for combineTF
+            nondata = self.predictedProcesses()
+            include = [("1.00001").ljust(self.spacing) for x in nondata]
+            for chan in self.channels:
+                self.cardContent[chan] += f'{("dummy").ljust(self.spacing)}lnN{" "*(self.spacing-3)}{"".join(include)}\n'
+        else:
+            self.writeLnNSystematics()
+            for syst in self.systematics.keys():
+                print(syst)
+                processes=self.systematics[syst]["processes"]
+                self.datagroups.loadHistsForDatagroups(self.histName, syst, label="syst",
+                    procsToRead=processes, forceNonzero=syst != "qcdScaleByHelicity")
+                self.writeForProcesses(syst, label="syst", processes=processes)
+        
         self.writeCard()
 
     def writeCard(self):
@@ -330,13 +343,33 @@ class CardTool(object):
         nondata = self.predictedProcesses()
         for name,info in self.lnNSystematics.items():
             include = [(str(info["size"]) if x in info["processes"] else "-").ljust(self.spacing) for x in nondata]
+            group = info["group"]
+            groupFilter = info["groupFilter"]
             for chan in self.channels:
-                self.cardContent[chan] += f'{name.ljust(self.spacing)}lnN{" "*(self.spacing-3)}{"".join(include)}\n'
+                if self.keepOtherChargeSyst or self.chargeIdDict[chan]["badId"] not in name:
+                    self.cardContent[chan] += f'{name.ljust(self.spacing)}lnN{" "*(self.spacing-3)}{"".join(include)}\n'
+                    if group:
+                        self.addSystToGroup(group, groupFilter, chan, name)
+                    
+    def addSystToGroup(self, groupName, groupFilter, chan, systName, label="group"):
+    
+        if self.isExcludedNuisance(systName): return
+        if len(list(filter(groupFilter, [systName]))):
+            group_expr = f"{groupName} {label} ="
+            if group_expr in self.cardGroups[chan]:
+                idx = self.cardGroups[chan].index(group_expr)+len(group_expr)
+                self.cardGroups[chan] = self.cardGroups[chan][:idx] + " " + systName + self.cardGroups[chan][idx:]
+            else:
+                self.cardGroups[chan] += f"\n{group_expr} {systName}"        
+                        
 
     def fillCardWithSyst(self, syst):
         systInfo = self.systematics[syst]
         scale = systInfo["scale"]
         procs = systInfo["processes"]
+        group = systInfo["group"]
+        groupFilter = systInfo["groupFilter"]
+        label = "group" if not systInfo["noConstraint"] else "noiGroup"
         nondata = self.predictedProcesses()
         names = [x[:-2] if "Up" in x[-2:] else (x[:-4] if "Down" in x[-4:] else x) 
                     for x in filter(lambda x: x != "", systInfo["outNames"])]
@@ -347,31 +380,14 @@ class CardTool(object):
         systnamesPruned = [s for s in systNames if not self.isExcludedNuisance(s)]
         systNames = systnamesPruned[:]
         for systname in systNames:
+            #print(systname)
             shape = "shape" if not systInfo["noConstraint"] else "shapeNoConstraint"
             for chan in self.channels:
                 # do not write systs which should only apply to other charge, to simplify card
                 if self.keepOtherChargeSyst or self.chargeIdDict[chan]["badId"] not in systname:
                     self.cardContent[chan] += f"{systname.ljust(self.spacing)}{shape.ljust(self.spacing)}{''.join(include)}\n"
-
-        group = systInfo["group"]
-        if group:
-            # TODO: Make more general
-            label = "group" if not systInfo["noConstraint"] else "noiGroup"
-            filt = systInfo["groupFilter"]
-            for chan in self.channels:
-                if self.keepOtherChargeSyst:
-                    systNamesForGroupPruned = systNames[:]
-                else:
-                    systNamesForGroupPruned = [s for s in systNames if self.chargeIdDict[chan]["badId"] not in s]
-                systNamesForGroup = list(systNamesForGroupPruned if not filt else filter(filt, systNamesForGroupPruned))
-                if len(systNamesForGroup):
-                    members = " ".join(systNamesForGroup)
-                    group_expr = f"{group} {label} ="
-                    if group_expr in self.cardGroups[chan]:
-                        idx = self.cardGroups[chan].index(group_expr)+len(group_expr)
-                        self.cardGroups[chan] = self.cardGroups[chan][:idx] + " " + members + " " + self.cardGroups[chan][idx:]
-                    else:
-                        self.cardGroups[chan] += f"\n{group_expr} {members}"
+                    if group:
+                        self.addSystToGroup(group, groupFilter, chan, systname, label=label)
 
     def setUnconstrainedProcs(self, procs):
         self.unconstrainedProcesses = procs
@@ -414,7 +430,7 @@ class CardTool(object):
     def writeHistWithCharges(self, h, name):
         hout = narf.hist_to_root(h)
         #self.outfile[name] = h
-        hout.SetName(name)
+        hout.SetName(f"{name}_{self.channels[0]}")
         hout.Write()
     
     def writeHist(self, h, name, setZeroStatUnc=False):
@@ -422,7 +438,7 @@ class CardTool(object):
             hist_no_error = h.copy()
             hist_no_error.variances(flow=True)[...] = 0.
             h = hist_no_error
-        if self.channels[0] != "all":
+        if self.writeByCharge:    
             self.writeHistByCharge(h, name)
         else:
             self.writeHistWithCharges(h, name)

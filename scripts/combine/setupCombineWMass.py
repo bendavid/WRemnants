@@ -196,6 +196,7 @@ cardTool.addSystematic("muonL1PrefireStat",
     labelsByAxis=["downUpVar", "etaPhiReg"],
     passToFakes=passSystToFakes,
 )
+
 cardTool.addSystematic("massWeight", 
     # TODO: Add the mass weights to the tau samples ## FIXME: isn't it done?
     processes=signal_samples_inctau,
@@ -208,6 +209,8 @@ cardTool.addSystematic("massWeight",
     systAxes=["tensor_axis_0"],
     passToFakes=passSystToFakes,
 )
+
+
 # TODO: This needs to be handled by shifting the norm before subtracting from the fakes
 #cardTool.addSystematic("lumi", outNames=["", "lumiDown", "lumiUp"], group="luminosity")
 if not args.wlike:
@@ -216,5 +219,6 @@ if not args.wlike:
     cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16)
 else:
     cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
+cardTool.addLnNSystematic("CMS_lumi", processes=cardTool.allMCProcesses(), size=1.02)
 cardTool.writeOutput()
 
