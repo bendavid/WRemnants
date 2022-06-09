@@ -285,8 +285,9 @@ class CardTool(object):
         hists = [self.procDict[proc][self.pseudoData] for proc in processes]
         hdata = hh.sumHists(hists)
         # Kind of hacky, but in case the alt hist has uncertainties
-        if "systIdx" in [ax.name for ax in hdata.axes]:
-            hdata = hdata[{"systIdx" : 0 }]
+        for systAxName in ["systIdx", "tensor_axis_0"]:
+            if systAxName in [ax.name for ax in hdata.axes]:
+                hdata = hdata[{systAxName : 0 }] 
         self.writeHist(hdata, self.pseudoData+"_sum")
 
     def writeForProcesses(self, syst, processes, label):
