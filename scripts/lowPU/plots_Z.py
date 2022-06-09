@@ -17,13 +17,6 @@ import narf
 from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_Z
 
 
-def Rebin(h, newbins):
-
-    ''' Rebin with un-even bins '''
-    mybins = array.array('d', newbins)
-    h1 = h.Rebin(len(mybins)-1, h.GetName(), mybins)
-    return h1
-
 
 def doOverlow(h):
 
@@ -335,20 +328,14 @@ def recoilStatUncertainty(systName, sysHists, rebin):
 def parseProc(histCfg, procName, syst="", rebin=1):
 
     axis = histCfg['axis']
-    hNames = histCfg['name'].split(",")
-
+    hName = histCfg['name']
     
-    bhist = None
-    for hName in hNames:
-        
-        bhist = groups.readProc(hName, procName, axis=axis)
-        if bhist == None: continue
-        label = "%s_%s" % (hName, procName)
-        break
-        
-    print(bhist)
+    label = "%s_%s" % (hName, procName)
+    groups.setHists(hName, "", label=label, procsToRead=[procName], selectSignal=False)
+    bhist = groups.groups[procName][label]
+    #print(bhist)
     rhist = narf.hist_to_root(bhist)
-    rhist.Rebin(rebin)
+    rhist = functions.Rebin(rhist, rebin)
     rhist.SetName(label)
     rhist = doOverlow(rhist)
     
@@ -371,7 +358,7 @@ def parseHists(histCfg, leg, rebin=1, projectionx=[], noData=False):
     for i,proc in enumerate(procs):
     
         hist = parseProc(histCfg, proc, rebin=rebin)
-        hist.SetFillColor(groups.groups[proc]['color'])
+        hist.SetFillColor(ROOT.TColor.GetColor(groups.groups[proc]['color']))
         hist.SetLineColor(ROOT.kBlack)
         hist.SetLineWidth(1)
         hist.SetLineStyle(1)
@@ -784,10 +771,20 @@ if __name__ == "__main__":
     MC_SF = 1.0
     if flavor == "mumu": MC_SF = 1.026
 
-    outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/Z%s/plots_new_1/" % flavor
+    outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/Z%s/plots_new_2/" % flavor
     functions.prepareDir(outDir)
       
-    groups = datagroupsLowPU_Z("mz_lowPU_%s.pkl.lz4" % flavor)
+    groups = datagroupsLowPU_Z("mz_lowPU_%s.pkl.lz4" % flavor, flavor=flavor)
+    
+    if False: # Gen MET
+    
+        label = "test"
+        groups.setHists("GenMET_pt", "", label=label, procsToRead=["DYmumu"], selectSignal=False, forceNonzero=False)
+        bhist = groups.groups["DYmumu"][label]
+        print(bhist)
+        sys.exit()
+        
+        
 
     if flavor == "mumu":
     
@@ -801,7 +798,11 @@ if __name__ == "__main__":
     
     singlePlot({"name": "massZ", "axis": "mll" }, "massZ_nolog", 60, 120, 0, 2.5e4, "m(l, l) (GeV)", "Events", logY=False)
     singlePlot({"name": "massZ", "axis": "mll" }, "massZ", 60, 120, 1e0, 1e6, "m(l, l) (GeV)", "Events")
+    mZ_bins = [60, 65, 70, 72, 74, 76, 78, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 102, 104, 106, 108, 110, 115, 120]
+    singlePlot({"name": "massZ", "axis": "mll" }, "massZ_binned", 60, 120, 1e0, 1e6, "m(l, l) (GeV)", "Events", rebin=mZ_bins, yRatio = 1.15)
     
+    mT_bins = [0, 10, 15, 20, 25, 30, 35,] + list(range(40, 100, 2)) + [102, 104, 106, 108, 110, 115, 120, 125, 130, 140, 160, 200]
+    singlePlot({"name": "mt", "axis": "mt" }, "mt", 0, 200, 1e-1, 1e6, "m_{T}  (GeV)", "Events", rebin=mT_bins)
     
     singlePlot({"name": "yZ", "axis": "yll" }, "yZ", -2.5, 2.5, 1e1, 1e6, "Rapidity (l, l)", "Events", rebin=1)
     singlePlot({"name": "ptZ", "axis": "ptll" }, "ptZ", 0, 300, 1e0, 1e5, "p_{T}(l, l) (GeV)", "Events", rebin=1)
@@ -825,7 +826,8 @@ if __name__ == "__main__":
     singlePlot({"name": "noTrigMatch", "axis": "lin" }, "noTrigMatch", 0, 5, 100, 1e7, "Number of matched triggered objects", "Events", rebin=1)
     
     
-    singlePlot({"name": "qT", "axis": "qT" }, "qT", 0, 300, 0.1, 1e6, "q_{T} (GeV)", "Events", rebin=1)
+    singlePlot({"name": "qT", "axis": "recoil_qT" }, "qT", 0, 300, 0.1, 1e6, "q_{T} (GeV)", "Events", rebin=1)
+    singlePlot({"name": "npv", "axis": "recoil_npv" }, "npv", 0, 20, 1e1, 1e7, "Number of primary vertices", "Events", rebin=1)
     
     singlePlot({"name": "MET_uncorr_pt", "axis": "MET_pt" }, "MET_uncorr_pt", 0, 100, 1, 1e7, "MET (uncorrected)", "Events", rebin=2)
     singlePlot({"name": "MET_corr_lep_pt", "axis": "MET_pt" }, "MET_corr_lep_pt", 0, 100, 1, 1e7, "MET (lepton corrected)", "Events", rebin=2)
@@ -833,11 +835,14 @@ if __name__ == "__main__":
     
     singlePlot({"name": "recoil_uncorr_magn", "axis": "recoil_magn" }, "recoil_uncorr_magn", 0, 300, 1e0, 1e6, "Recoil (magnitude)", "Events", rebin=5)
     singlePlot({"name": "recoil_uncorr_para", "axis": "recoil_para" }, "recoil_uncorr_para", -200, 100, 1e0, 1e6, "Recoil (parallel)", "Events", rebin=5)
-    singlePlot({"name": "recoil_uncorr_perp", "axis": "recoil_perp" }, "recoil_uncorr_perp", -100, 100, 1e0, 1e6, "Recoil (perpendicular)", "Events", rebin=2)
+    singlePlot({"name": "recoil_uncorr_perp", "axis": "recoil_perp" }, "recoil_uncorr_perp", -200, 200, 1e0, 1e6, "Recoil (perpendicular)", "Events", rebin=5)
     
     
     singlePlot({"name": "recoil_corr_magn", "axis": "recoil_magn" }, "recoil_corr_magn", 0, 300, 1e-1, 1e6, "|U| (GeV)", "Events", rebin=5)
     singlePlot({"name": "recoil_corr_para", "axis": "recoil_para" }, "recoil_corr_para", -200, 100, 1e-1, 1e6, "U_{#parallel} (GeV)", "Events", rebin=5)
     singlePlot({"name": "recoil_corr_para_qT", "axis": "recoil_perp" }, "recoil_corr_para_qT", -100, 100, 1e-1, 1e6, "U_{#parallel} + q_{T} (GeV)", "Events", rebin=5)
-    singlePlot({"name": "recoil_corr_perp", "axis": "recoil_perp" }, "recoil_corr_perp", -100, 100, 1e-1, 1e6, "U_{#perp}  (GeV)", "Events", rebin=5)
+    singlePlot({"name": "recoil_corr_perp", "axis": "recoil_perp" }, "recoil_corr_perp", -200, 200, 1e-1, 1e6, "U_{#perp}  (GeV)", "Events", rebin=5)
+    
+    
+    
     

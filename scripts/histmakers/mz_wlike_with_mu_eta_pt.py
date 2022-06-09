@@ -39,6 +39,8 @@ args = parser.parse_args()
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None)
 
+ROOT.gInterpreter.Declare('#include "lowpu_recoil.h"')
+
 era = "2016PostVFP"
 
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
@@ -85,6 +87,14 @@ muon_efficiency_helper, muon_efficiency_helper_stat, muon_efficiency_helper_syst
 pileup_helper = wremnants.make_pileup_helper(era = era)
 
 calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
+
+
+
+
+# recoil initialization
+from wremnants import recoil_tools
+recoilHelper = recoil_tools.Recoil("highPU")
+
 
 #def add_plots_with_systematics
 
@@ -192,7 +202,13 @@ def build_graph(df, dataset):
 
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")
-
+        
+        
+    # recoil calibration
+    df = recoilHelper.recoil_setup_Z(df, results, "MET_pt", "MET_phi", "Muon_pt[goodMuons]", "Muon_phi[goodMuons]", "Muon_pt[goodMuons]")
+    df = recoilHelper.recoil_apply_Z(df, results, dataset.name, ["ZmumuPostVFP"])  # produces corrected MET as MET_corr_rec_pt/phi
+  
+   
     # dilepton plots go here, before mass or transverse mass cuts
     df_dilepton = df
     df_dilepton = df_dilepton.Filter("TrigMuon_pt > 26.")
@@ -210,7 +226,7 @@ def build_graph(df, dataset):
     df = df.Filter("massZ >= 60. && massZ < 120.")
 
     #TODO improve this to include muon mass?
-    df = df.Define("transverseMass", "wrem::mt_wlike_nano(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, MET_pt, MET_phi)")
+    df = df.Define("transverseMass", "wrem::mt_wlike_nano(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, MET_corr_rec_pt, MET_corr_rec_phi)")
 
     df = df.Filter("transverseMass >= 40.")
 

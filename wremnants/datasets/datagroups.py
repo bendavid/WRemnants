@@ -12,6 +12,7 @@ import re
 class datagroups(object):
     def __init__(self, infile, combine=False):
         self.combine = combine
+        self.lumi = 1.
         if ".root" not in infile[-5:]:
             with lz4.frame.open(infile) as f:
                 self.results = pickle.load(f)
@@ -25,7 +26,6 @@ class datagroups(object):
             self.data = [x for x in self.datasets.values() if x.is_data]
             if self.data:
                 self.lumi = sum([self.results[x.name]["lumi"] for x in self.data if x.name in self.results])
-
         self.groups = {}
 
         if not self.lumi:
@@ -146,7 +146,8 @@ class datagroups2016(datagroups):
     def __init__(self, infile, combine=False, wlike=False, pseudodata_pdfset = None):
         self.datasets = {x.name : x for x in datasets2016.getDatasets()}
         super().__init__(infile, combine)
-        self.groups = {
+        self.hists = {} # container storing temporary histograms
+        self.groups =  {
             "Data" : dict(
                 members = [self.datasets["dataPostVFP"]],
                 color = "black",
@@ -164,7 +165,7 @@ class datagroups2016(datagroups):
                 label = r"Z$\to\tau\tau$",
                 color = "darkblue",
                 signalOp = sel.signalHistWmass if not wlike else None,
-            ), 
+            ),            
         }
         if pseudodata_pdfset:
             self.groups[f"pdf{pseudodata_pdfset.upper()}_sum"] = dict(
@@ -232,4 +233,3 @@ class datagroups2016(datagroups):
         if scaleOp:
             scale = scale*scaleOp(proc)
         return h*scale
-

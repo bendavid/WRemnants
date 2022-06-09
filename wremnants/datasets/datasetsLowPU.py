@@ -3,6 +3,8 @@ import os
 import pathlib
 
 lumijson = f"{pathlib.Path(__file__).parent.parent}/data/lowPU/Cert_306896-307082_13TeV_PromptReco_Collisions17_JSON_LowPU_lowPU_suppressedHighPULS.txt"
+lumicsv_mu = f"{pathlib.Path(__file__).parent.parent}/data/lowPU/bylsoutput_HLT_HIMu17.csv"
+lumicsv_el = f"{pathlib.Path(__file__).parent.parent}/data/lowPU/bylsoutput_HLT_HIEle20.csv"
 
 def findEOS(basedir, regex = ""):
     
@@ -139,18 +141,18 @@ def getDatasets(maxFiles=-1, filt=None):
         
         
         narf.Dataset(
-            filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v2_skim/SingleMuon/"),
+            filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v2/SingleMuon/"),
             name="singlemuon",
-            xsec=1.,
             is_data=True,
-            lumi_json = lumijson
+            lumi_json = lumijson,
+            lumi_csv = lumicsv_mu
         ),
         narf.Dataset(
-            filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v2_skim/HighEGJet/"),
+            filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v2/HighEGJet/"),
             name="singleelectron",
-            xsec=1.,
             is_data=True,
-            lumi_json = lumijson
+            lumi_json = lumijson,
+            lumi_csv = lumicsv_el
         ),
     ]
 

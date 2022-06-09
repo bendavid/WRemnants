@@ -330,6 +330,53 @@ auto scalar_select(const ArgTypeIf &cond, const ArgTypeThen &arg0, const ArgType
   return cond.reshape(shape).broadcast(broadcast).select(arg0, arg1);
 }
 
+
+// Breit-Wigner mass weights
+const double MZ_GEN_ = 91153.509740726733;
+const double GAMMAZ_GEN_ = 2493.2018986110700;
+const double MW_GEN_ = 80351.812293789408;
+const double GAMMAW_GEN_ = 2090.4310808144846;
+
+double computeBreitWignerWeight(double massVgen, double offset, int type) {
+    
+    double MV_GEN_ = 0;
+    double GAMMAV_GEN_ = 0;
+    if(type == 0) {
+        MV_GEN_ = MZ_GEN_;
+        GAMMAV_GEN_ = GAMMAZ_GEN_;
+    }
+    else {
+        MV_GEN_ = MW_GEN_;
+        GAMMAV_GEN_ = GAMMAW_GEN_;
+    }
+
+    double targetMass = MV_GEN_ + offset;
+    //double gamma_cen = std::sqrt(MV_GEN_*MV_GEN_*(MV_GEN_*MV_GEN_+GAMMAV_GEN_*GAMMAV_GEN_));
+    //double gamma = std::sqrt(targetMass*targetMass*(targetMass*targetMass+GAMMAV_GEN_*GAMMAV_GEN_));
+    double s_hat = massVgen*massVgen*1000*1000;
+    double offshell = s_hat - MV_GEN_*MV_GEN_;
+    double offshellOffset = s_hat - targetMass*targetMass;
+    double weight = (offshell*offshell + GAMMAV_GEN_*GAMMAV_GEN_*MV_GEN_*MV_GEN_) / (offshellOffset*offshellOffset + GAMMAV_GEN_*GAMMAV_GEN_*targetMass*targetMass);
+    return weight;
+}
+
+Vec_f breitWignerWeights(double massVgen, int type=0) {
+    
+    // Z -> type=0
+    // W -> type=1
+    
+    Vec_f res(21, 1);
+    double offset = -100;
+    for(int i=0; i<= 21; i++) {
+        
+        offset = -100 + i*10;
+        res[i] = computeBreitWignerWeight(massVgen, offset, type);
+        //cout << i << " " << offset << " " << res[i] << endl;
+    }
+
+    return res;
+}
+
 }
 
 

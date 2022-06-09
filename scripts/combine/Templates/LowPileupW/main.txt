@@ -2,7 +2,8 @@ imax 1
 jmax *
 kmax *
 ##----------------------------------
-shapes *  *  ${inputfile} reco_mll_$$PROCESS reco_mll_$$PROCESS_$$SYSTEMATIC
+shapes *  *  ${inputfile} ${histName}_$$PROCESS_$$CHANNEL ${histName}_$$PROCESS_$$SYSTEMATIC_$$CHANNEL
+shapes data_obs * ${inputfile} ${pseudodataHist}_$$CHANNEL 
 ##----------------------------------
 bin   ${channel} 
 observation    -1

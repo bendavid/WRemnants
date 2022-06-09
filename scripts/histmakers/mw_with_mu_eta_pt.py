@@ -23,7 +23,6 @@ import time
 
 logging.basicConfig(level=logging.INFO)
 
-parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
 parser.add_argument("--pdfs", type=str, nargs="*", default=["nnpdf31"], choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for (first is central set)")
 parser.add_argument("--altPdfOnlyCentral", action='store_true', help="Only store central value for alternate PDF sets")
 parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
