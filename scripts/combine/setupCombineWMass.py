@@ -165,7 +165,7 @@ if "Pt" in args.qcdScale:
         print(scaleLabelsByAxis)
         cardTool.addSystematic("qcdScale",
                                action=scale_action,
-                               actionArgs=scaleActionArgs.copy, # to avoid possible undesired updates below
+                               actionArgs=copy.deepcopy(scaleActionArgs), # to avoid possible undesired updates below
                                processes=signal_samples,
                                group=scaleGroupName,
                                systAxes=scaleSystAxes[:],
