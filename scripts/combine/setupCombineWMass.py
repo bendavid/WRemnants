@@ -144,12 +144,12 @@ systNameReplaceVec = [("muR2muF2", "muRmuFUp"), ("muR0muF0", "muRmuFDown"), ("mu
                       ("muR0muF1", "muRDown"), ("muR1muF0", "muFDown"), ("muR1muF2", "muFUp")]
 
 if inclusiveScale:
-    scale_action = lambda h: h[{"ptVgen" : hist.sum}]
-    scaleActionArgs = {}
+    scale_action = syst_tools.scale_helicity_hist_to_variations
+    scaleActionArgs = {"sum_axis" : ["ptVgen"]}
 
 if "Pt" in args.qcdScale:
     scale_action = syst_tools.scale_helicity_hist_to_variations
-    scaleActionArgs = {"hasNoHelicity" : True, "rebinPtV" : args.rebinPtV}
+    scaleActionArgs = {"rebinPtV" : args.rebinPtV}
     scaleGroupName += "ByPtV"
     scaleSystAxes.insert(0, "ptVgen")
     scaleLabelsByAxis.insert(0, "genPtV")
@@ -165,11 +165,11 @@ if "Pt" in args.qcdScale:
         print(scaleLabelsByAxis)
         cardTool.addSystematic("qcdScale",
                                action=scale_action,
-                               actionArgs=copy.deepcopy(scaleActionArgs),
+                               actionArgs=scaleActionArgs.copy, # to avoid possible undesired updates below
                                processes=signal_samples,
                                group=scaleGroupName,
-                               systAxes=scaleSystAxes[:],         #["chargeVgen", "ptVgen", "muRfact", "muFfact"],   # to avoid that it is modified below
-                               labelsByAxis=scaleLabelsByAxis[:], # ["genQ", "genPtV", "muR", "muF"], # to avoid that it is modified below
+                               systAxes=scaleSystAxes[:],
+                               labelsByAxis=scaleLabelsByAxis[:],
                                skipEntries=scaleSkipEntries[:],
                                systNameReplace=systNameReplaceVec,
                                baseName="QCDscaleByPt_",
