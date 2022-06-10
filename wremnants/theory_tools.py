@@ -35,10 +35,10 @@ pdfMap = {
         "name" : "pdfCT18",
         "branch" : "LHEPdfWeightAltSet18",
         "combine" : "asymHessian",
-        "entries" : 58,
+        "entries" : 59,
         "alphas" : ["LHEPdfWeightAltSet18[59]", "LHEPdfWeightAltSet18[60]"],
 	"alphaRange" : "002",
-        "scale" : 1/1.645 # Convert from 95% CL to 68%
+        "scale" : 1/1.645 # Convert from 90% CL to 68%
     },
     "mmht" : {
         "name" : "pdfMMHT",
@@ -52,7 +52,7 @@ pdfMap = {
 	"name" : "pdfNNPDF30",
 	"branch" : "LHEPdfWeightAltSet13",
         "combine" : "symHessian",
-	"entries" : 100,
+	"entries" : 101,
 	"alphas" : ["LHEPdfWeightAltSet15[0]", "LHEPdfWeightAltSet16[0]"],
 	"alphaRange" : "001",
     },
@@ -119,6 +119,7 @@ def define_prefsr_vars(df):
     df = df.Define("ptVgen", "genV.pt()")
     df = df.Define("massVgen", "genV.mass()")
     df = df.Define("yVgen", "genV.Rapidity()")
+    df = df.Define("phiVgen", "genV.Phi()")
     df = df.Define("absYVgen", "std::fabs(yVgen)")
     df = df.Define("chargeVgen", "GenPart_pdgId[prefsrLeps[0]] + GenPart_pdgId[prefsrLeps[1]]")
     df = df.Define("csSineCosThetaPhi", "wrem::csSineCosThetaPhi(genl, genlanti)")
@@ -131,8 +132,8 @@ def define_scale_tensor(df):
 
     return df
 
-def make_scale_hist(df, axes, cols):
-    scaleHist = df.HistoBoost("qcdScale", axes, [*cols, "scaleWeights_tensor_wnom"], tensor_axes=scale_tensor_axes)
+def make_scale_hist(df, axes, cols, hname=""):
+    scaleHist = df.HistoBoost("qcdScale" if hname=="" else f"{hname}_qcdScale", axes, [*cols, "scaleWeights_tensor_wnom"], tensor_axes=scale_tensor_axes)
     return scaleHist
 
 def pdf_info_map(dataset, pdfset):
@@ -142,7 +143,7 @@ def pdf_info_map(dataset, pdfset):
         raise ValueError(f"Skipping PDF {pdfset} for dataset {dataset}")
     return infoMap[pdfset]
 
-def define_and_make_pdf_hists(df, axes, cols, dataset, pdfset="nnpdf31", storeUnc=True):
+def define_and_make_pdf_hists(df, axes, cols, dataset, pdfset="nnpdf31", storeUnc=True, hname=""):
     try:
         pdfInfo = pdf_info_map(dataset, pdfset)
     except ValueError as e:
@@ -157,13 +158,13 @@ def define_and_make_pdf_hists(df, axes, cols, dataset, pdfset="nnpdf31", storeUn
 
     df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, {entries}>({pdfBranch}), 10.); res = nominal_weight/nominal_pdf_cen*res; return res;")
 
-    pdfHist= df.HistoBoost(pdfName, axes, [*cols, tensorName])
+    pdfHist = df.HistoBoost(pdfName if hname=="" else f"{hname}_{pdfName}", axes, [*cols, tensorName])
 
     df = df.Define(tensorASName, "Eigen::TensorFixedSize<double, Eigen::Sizes<2>> res; "
             f"res(0) = {pdfInfo['alphas'][0]}; "
             f"res(1) = {pdfInfo['alphas'][1]}; "
             "return wrem::clip_tensor(res, 10.)")
-    alphaSHist = df.HistoBoost(f"alphaS002{pdfName}", axes, [*cols, tensorASName])
+    alphaSHist = df.HistoBoost(f"alphaS002{pdfName}" if hname=="" else f"{hname}_alphaS002{pdfName}", axes, [*cols, tensorASName])
 
     return pdfHist, alphaSHist
 

@@ -23,6 +23,7 @@ import time
 
 logging.basicConfig(level=logging.INFO)
 
+parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
 parser.add_argument("--pdfs", type=str, nargs="*", default=["nnpdf31"], choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for (first is central set)")
 parser.add_argument("--altPdfOnlyCentral", action='store_true', help="Only store central value for alternate PDF sets")
 parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
@@ -40,6 +41,8 @@ args = parser.parse_args()
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None)
+
+ROOT.gInterpreter.Declare('#include "lowpu_recoil.h"')
 
 era = "2016PostVFP"
 
@@ -97,6 +100,14 @@ muon_efficiency_helper, muon_efficiency_helper_stat, muon_efficiency_helper_syst
 pileup_helper = wremnants.make_pileup_helper(era = era)
 
 calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
+
+
+
+
+# recoil initialization
+from wremnants import recoil_tools
+recoilHelper = recoil_tools.Recoil("highPU")
+
 
 #def add_plots_with_systematics
 
@@ -204,7 +215,13 @@ def build_graph(df, dataset):
 
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")
-
+        
+        
+    # recoil calibration
+    df = recoilHelper.recoil_setup_Z(df, results, "MET_pt", "MET_phi", "Muon_pt[goodMuons]", "Muon_phi[goodMuons]", "Muon_pt[goodMuons]")
+    df = recoilHelper.recoil_apply_Z(df, results, dataset.name, ["ZmumuPostVFP"])  # produces corrected MET as MET_corr_rec_pt/phi
+  
+   
     # dilepton plots go here, before mass or transverse mass cuts
     df_dilepton = df
     df_dilepton = df_dilepton.Filter("TrigMuon_pt > 26.")
@@ -222,7 +239,7 @@ def build_graph(df, dataset):
     df = df.Filter("massZ >= 60. && massZ < 120.")
 
     #TODO improve this to include muon mass?
-    df = df.Define("transverseMass", "wrem::mt_wlike_nano(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, MET_pt, MET_phi)")
+    df = df.Define("transverseMass", "wrem::mt_wlike_nano(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, MET_corr_rec_pt, MET_corr_rec_phi)")
 
     df = df.Filter("transverseMass >= 40.")
 

@@ -55,14 +55,14 @@ if args.pseudoData:
 
 passSystToFakes = not args.skipSignalSystOnFakes
     
-logging.info(f"All processes {cardTool.allMCProcesses()}")
 single_v_samples = cardTool.filteredProcesses(lambda x: x[0] in ["W", "Z"])
 single_vmu_samples = list(filter(lambda x: "mu" in x, single_v_samples))
 signal_samples = list(filter(lambda x: x[0] == ("Z" if args.wlike else "W"), single_vmu_samples))
 signal_samples_inctau = list(filter(lambda x: x[0] == ("Z" if args.wlike else "W"), single_v_samples))
+
+logging.info(f"All MC processes {cardTool.allMCProcesses()}")
 logging.info(f"Single V samples: {single_v_samples}")
 logging.info(f"Signal samples: {signal_samples}")
-
 
 pdfInfo = theory_tools.pdf_info_map(signal_samples[0], args.pdf)
 pdfName = pdfInfo["name"]
@@ -71,7 +71,7 @@ addVariation = hasattr(args, "varName") and args.varName
 
 if args.wlike:
     # TOCHECK: no fakes here, most likely
-    cardTool.addLnNSystematic("luminosity", processes=cardTool.allMCProcesses(), size=1.012)
+    cardTool.addLnNSystematic("luminosity", processes=cardTool.allMCProcesses(), size=1.012, group="luminosiy")
 else:
     cardTool.addSystematic("luminosity",
                            processes=cardTool.allMCProcesses(),
@@ -231,6 +231,7 @@ cardTool.addSystematic("muonL1PrefireStat",
     labelsByAxis=["downUpVar", "etaPhiReg"],
     passToFakes=passSystToFakes,
 )
+
 cardTool.addSystematic("massWeight", 
     # TODO: Add the mass weights to the tau samples ## FIXME: isn't it done?
     processes=signal_samples_inctau,
@@ -249,5 +250,6 @@ if not args.wlike:
     cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16)
 else:
     cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
+cardTool.addLnNSystematic("CMS_lumi", processes=cardTool.allMCProcesses(), size=1.02)
 cardTool.writeOutput()
 
