@@ -9,6 +9,7 @@ ROOT.gInterpreter.Declare('#include "utils.h"')
 ROOT.gInterpreter.Declare('#include "csVariables.h"')
 
 from .datasets import datasets2016
+from .datasets import datasetsLowPU
 
 from .muon_prefiring import make_muon_prefiring_helpers
 from .muon_efficiencies import make_muon_efficiency_helpers

@@ -10,16 +10,21 @@ namespace wrem {
     
 TFile *recoil_fits_Z_param = new TFile("wremnants/data/lowPU/recoil_fits_Z_param_refit.root", "READ");
 //TFile *recoil_fits_Z_param_refit = new TFile("wremnants/data/lowPU/recoil_fits_Z_param_refit.root", "READ");
-TFile *recoil_fits_Z = new TFile("wremnants/data/lowPU/recoil_fits_Z.root", "READ");
+//TFile *recoil_fits_Z = new TFile("wremnants/data/lowPU/recoil_fits_Z.root", "READ");
+//TFile *recoil_fits_Z = new TFile("wremnants/data/lowPU/recoil_fits_Z.root", "READ");
 std::map<std::string, TH3D*> recoil_hists;
 std::map<std::string, TH1D*> recoil_hists_param;
-
+    
 std::vector<float> qTbins;
 
-void recoil_init() {
+void recoil_init(char* name) {
     
     TH3D *h3;
     TH1D *h1;
+    
+    
+    TFile *recoil_fits_Z = new TFile(name, "READ");
+    
     /*
     for(TKey *key: ROOT::RangeStaticCast<TKey*>(*recoil_fits_Z->GetListOfKeys())) {
         
@@ -282,35 +287,45 @@ class GaussianSum {
 
 
 // recoil correction
-Vec_f recoilCorrectionBinned(double pU1, double pU2, double qTbinIdx) {
+Vec_f recoilCorrectionBinned(double pU1, double pU2, double qTbinIdx, int corrType=0, int corrParam=1) {
     
     Vec_f res(3, 0);
+    //cout << pU1 << " " << pU2 << " " << qTbinIdx << endl; 
     
     res[1] = pU1;
     res[2] = pU2;
     res[0] = std::hypot(res[1], res[2]);
     
     TH3D *h3;
+    int corrIdx = 1;
     
     GaussianSum u1_data;
     h3 = recoil_hists["para_data"];
-    u1_data.addTerm(h3->GetBinContent(qTbinIdx+1, 1, 1), h3->GetBinContent(qTbinIdx+1, 2, 1), h3->GetBinContent(qTbinIdx+1, 4, 1));
-    u1_data.addTerm(h3->GetBinContent(qTbinIdx+1, 1, 1), h3->GetBinContent(qTbinIdx+1, 3, 1), 1.-h3->GetBinContent(qTbinIdx+1, 4, 1));
+    corrIdx = 1;
+    if(corrType == 1) corrIdx = corrParam;
+    u1_data.addTerm(h3->GetBinContent(qTbinIdx+1, 1, corrIdx), h3->GetBinContent(qTbinIdx+1, 2, corrIdx), h3->GetBinContent(qTbinIdx+1, 4, corrIdx));
+    u1_data.addTerm(h3->GetBinContent(qTbinIdx+1, 1, corrIdx), h3->GetBinContent(qTbinIdx+1, 3, corrIdx), 1.-h3->GetBinContent(qTbinIdx+1, 4, corrIdx));
     
     GaussianSum u2_data;
     h3 = recoil_hists["perp_data"];
-    u2_data.addTerm(h3->GetBinContent(qTbinIdx+1, 1, 1), h3->GetBinContent(qTbinIdx+1, 2, 1), h3->GetBinContent(qTbinIdx+1, 4, 1));
-    u2_data.addTerm(h3->GetBinContent(qTbinIdx+1, 1, 1), h3->GetBinContent(qTbinIdx+1, 3, 1), 1.-h3->GetBinContent(qTbinIdx+1, 4, 1));
+    corrIdx = 1;
+    if(corrType == 2) corrIdx = corrParam;
+    u2_data.addTerm(h3->GetBinContent(qTbinIdx+1, 1, corrIdx), h3->GetBinContent(qTbinIdx+1, 2, corrIdx), h3->GetBinContent(qTbinIdx+1, 4, corrIdx));
+    u2_data.addTerm(h3->GetBinContent(qTbinIdx+1, 1, corrIdx), h3->GetBinContent(qTbinIdx+1, 3, corrIdx), 1.-h3->GetBinContent(qTbinIdx+1, 4, corrIdx));
     
     GaussianSum u1_mc;
     h3 = recoil_hists["para_mc"];
-    u1_mc.addTerm(h3->GetBinContent(qTbinIdx+1, 1, 1), h3->GetBinContent(qTbinIdx+1, 2, 1), h3->GetBinContent(qTbinIdx+1, 4, 1));
-    u1_mc.addTerm(h3->GetBinContent(qTbinIdx+1, 1, 1), h3->GetBinContent(qTbinIdx+1, 3, 1), 1.-h3->GetBinContent(qTbinIdx+1, 4, 1));
+    corrIdx = 1;
+    if(corrType == 3) corrIdx = corrParam;
+    u1_mc.addTerm(h3->GetBinContent(qTbinIdx+1, 1, corrIdx), h3->GetBinContent(qTbinIdx+1, 2, corrIdx), h3->GetBinContent(qTbinIdx+1, 4, corrIdx));
+    u1_mc.addTerm(h3->GetBinContent(qTbinIdx+1, 1, corrIdx), h3->GetBinContent(qTbinIdx+1, 3, corrIdx), 1.-h3->GetBinContent(qTbinIdx+1, 4, corrIdx));
     
     GaussianSum u2_mc;
     h3 = recoil_hists["perp_mc"];
-    u2_mc.addTerm(h3->GetBinContent(qTbinIdx+1, 1, 1), h3->GetBinContent(qTbinIdx+1, 2, 1), h3->GetBinContent(qTbinIdx+1, 4, 1));
-    u2_mc.addTerm(h3->GetBinContent(qTbinIdx+1, 1, 1), h3->GetBinContent(qTbinIdx+1, 3, 1), 1.-h3->GetBinContent(qTbinIdx+1, 4, 1));
+    corrIdx = 1;
+    if(corrType == 4) corrIdx = corrParam;
+    u2_mc.addTerm(h3->GetBinContent(qTbinIdx+1, 1, corrIdx), h3->GetBinContent(qTbinIdx+1, 2, corrIdx), h3->GetBinContent(qTbinIdx+1, 4, corrIdx));
+    u2_mc.addTerm(h3->GetBinContent(qTbinIdx+1, 1, corrIdx), h3->GetBinContent(qTbinIdx+1, 3, corrIdx), 1.-h3->GetBinContent(qTbinIdx+1, 4, corrIdx));
     
     double pVal_u1_mc = u1_mc.evalCDF(pU1);
     double pVal_u2_mc = u2_mc.evalCDF(pU2);
@@ -326,7 +341,7 @@ Vec_f recoilCorrectionBinned(double pU1, double pU2, double qTbinIdx) {
     res[2] = pU2_data;
     res[0] = std::hypot(res[1], res[2]);
 
-	return res;	
+	return res;
 }
 
 // recoil correction
@@ -441,6 +456,128 @@ Vec_f METCorrection(double MET_pt, double MET_phi, double rec_para, double rec_p
   
 	return res;
 }
+
+/*
+Vec_f METCorrection_StatUnc(double MET_pt, double MET_phi, double rec_para, double rec_perp, double V_pt, double V_phi) {
+
+    Vec_f res(2, 0);
+
+        
+    double lMX = -V_pt*cos(V_phi) - rec_para*cos(V_phi) + rec_perp*sin(V_phi);
+    double lMY = -V_pt*sin(V_phi) - rec_para*sin(V_phi) - rec_perp*cos(V_phi);
+
+        
+    res[0] = sqrt(lMX*lMX + lMY*lMY);
+    if(lMX > 0) res[1] = atan(lMY/lMX);
+    else res[1] = (fabs(lMY)/lMY)*3.14159265 + atan(lMY/lMX);
+  
+	return res;
+}*/
+
+
+
+// recoil correction
+Vec_f recoilCorrectionBinned_magn_StatUnc(Vec_f pU, int qTbinIdx) {
+    
+    int nqTbins = qTbins.size();
+    Vec_f res(nqTbins, -1);
+    res[qTbinIdx] = pU[0];
+	return res;
+}
+
+
+Vec_f recoilCorrectionBinned_MET_StatUnc(Vec_f pU, int qTbinIdx, double MET_pt, double MET_phi, double V_pt, double V_phi) {
+    
+    int nqTbins = qTbins.size();
+    Vec_f res(nqTbins, -1);
+    
+            
+    double lMX = -V_pt*cos(V_phi) - pU[1]*cos(V_phi) + pU[2]*sin(V_phi);
+    double lMY = -V_pt*sin(V_phi) - pU[1]*sin(V_phi) - pU[2]*cos(V_phi);
+
+    res[qTbinIdx] = sqrt(lMX*lMX + lMY*lMY);
+	return res;
+}
+
+
+Vec_f recoilCorrectionBinned_mt_StatUnc(Vec_f met, int qTbinIdx, float pt, float phi, float ptOther, float phiOther, float phimet) {
+    
+    int nqTbins = qTbins.size();
+    Vec_f res(nqTbins, -1);
+    
+    TVector2 pl = TVector2();
+    pl.SetMagPhi(ptOther,phiOther);
+
+    TVector2 met_wlike = TVector2();
+    met_wlike.SetMagPhi(met[qTbinIdx],phimet);
+    met_wlike = pl + met_wlike;
+
+    res[qTbinIdx] = std::sqrt(2*pt*met_wlike.Mod()*(1-std::cos(phi-met_wlike.Phi())));  
+	return res;
+}
+
+
+
+
+
+
+// recoil correction
+/*
+Vec_f recoilCorrectionBinned_StatUnc(double pU1, double pU2, double qTbinIdx, int corrType, int corrIdx) {
+    
+    int nqTbins = qTbins.size();
+
+    Vec_f t(3, -1);
+    Vec_f res(nqTbins, -1); // per qT bin
+    
+    t = recoilCorrectionBinned(pU1, pU2, qTbinIdx, corrType, corrIdx);
+    res[qTbinIdx] = t[0];
+    
+	return res;
+}
+
+
+Vec_recoilType recoilCorrectionBinned_StatUnc(double pU1, double pU2, double qTbinIdx, int corrType, int corrIdx) {
+    
+    int nqTbins = qTbins.size();
+
+    Vec_f t(3, -1);
+    
+    RecoilType tmp;
+    tmp.pu1 = 0;
+    tmp.pu2 = 0;
+    
+    Vec_recoilType res(nqTbins, tmp);
+    
+    t = recoilCorrectionBinned(pU1, pU2, qTbinIdx, corrType, corrIdx);
+    res[qTbinIdx].pu1 = t[1];
+    res[qTbinIdx].pu1 = t[2];
+    
+	return res;
+}
+
+Vec_f recoilCorrectionBinned_magn_StatUnc(Vec_recoilType pU) {
+    
+    unsigned size = pU.size();
+    Vec_f res(size, -1);
+    
+    for(unsigned int i=0; i < size; i++) {
+        res[i] = sqrt(pU[i].pu1*pU[i].pu1 + pU[i].pu2*pU[i].pu2);
+    }
+
+	return res;
+}
+
+*/
+Vec_f recoilCorrectionBinned_StatUnc(double pU1, double pU2, int qTbinIdx, int corrType, int corrIdx) {
+    
+    Vec_f res = recoilCorrectionBinned(pU1, pU2, qTbinIdx, corrType, corrIdx);
+	return res;
+}
+
+
+
+
 
 
 }

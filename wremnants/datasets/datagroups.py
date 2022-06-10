@@ -7,10 +7,12 @@ import pickle
 import narf
 #import uproot
 import ROOT
+import re
 
 class datagroups(object):
     def __init__(self, infile, combine=False):
         self.combine = combine
+        self.lumi = 1.
         if ".root" not in infile[-5:]:
             with lz4.frame.open(infile) as f:
                 self.results = pickle.load(f)
@@ -19,11 +21,11 @@ class datagroups(object):
             self.rtfile = ROOT.TFile.Open(infile)
             self.results = None
 
-        if self.datasets:
+        self.lumi = None
+        if self.datasets and self.results:
             self.data = [x for x in self.datasets.values() if x.is_data]
             if self.data:
                 self.lumi = sum([self.results[x.name]["lumi"] for x in self.data if x.name in self.results])
-
         self.groups = {}
 
         if not self.lumi:
@@ -68,7 +70,8 @@ class datagroups(object):
             raise ValueError(f"Did not find systematic {syst} for any processes!")
 
     #TODO: Better organize to avoid duplicated code
-    def setHistsCombine(self, baseName, syst, channel, procsToRead=None, label=None):
+    def setHistsCombine(self, baseName, syst, channel, procsToRead=None, excluded_procs=[], label=None):
+        if type(excluded_procs) == str: excluded_procs = excluded_procs.split(",")
         #TODO Set axis names properly
         if baseName == "x":
             axisNames=["eta", "pt"]
@@ -76,7 +79,7 @@ class datagroups(object):
         if not label:
             label = syst
         if not procsToRead:
-            procsToRead = self.groups.keys()
+            procsToRead = list(filter(lambda x: x not in excluded_procs, self.groups.keys()))
 
         for procName in procsToRead:
             group = self.groups[procName]
@@ -93,17 +96,20 @@ class datagroups(object):
             name += "_"+syst
         if channel:
             name += "_"+channel
+        if re.search("^pdf.*_sum", procName): # for pseudodata from alternative pdfset
+            return("_".join([procName, channel])) 
         return name
 
-    def loadHistsForDatagroups(self, baseName, syst, procsToRead=None, channel="", label="", nominalIfMissing=True,
-            selectSignal=True, forceNonzero=True):
+    def loadHistsForDatagroups(self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="", nominalIfMissing=True,
+            selectSignal=True, forceNonzero=True, pseudodata=False):
         if self.rtfile and self.combine:
-            self.setHistsCombine(baseName, syst, channel, procsToRead, label)
+            self.setHistsCombine(baseName, syst, channel, procsToRead, excluded_procs, label)
         else:
             self.setHists(baseName, syst, procsToRead, label, nominalIfMissing, selectSignal, forceNonzero)
 
-    def getDatagroups(self):
-        return self.groups
+    def getDatagroups(self, excluded_procs=[]):
+        if type(excluded_procs) == str: excluded_procs = list(excluded_procs)
+        return dict(filter(lambda x: x[0] not in excluded_procs, self.groups.items()))
 
     def getDatagroupsForHist(self, histName):
         filled = {}
@@ -137,9 +143,10 @@ class datagroups(object):
 
 
 class datagroups2016(datagroups):
-    def __init__(self, infile, combine=False, wlike=False):
+    def __init__(self, infile, combine=False, wlike=False, pseudodata_pdfset = None):
         self.datasets = {x.name : x for x in datasets2016.getDatasets()}
         super().__init__(infile, combine)
+        self.hists = {} # container storing temporary histograms
         self.groups =  {
             "Data" : dict(
                 members = [self.datasets["dataPostVFP"]],
@@ -158,8 +165,13 @@ class datagroups2016(datagroups):
                 label = r"Z$\to\tau\tau$",
                 color = "darkblue",
                 signalOp = sel.signalHistWmass if not wlike else None,
-            ), 
+            ),            
         }
+        if pseudodata_pdfset:
+            self.groups[f"pdf{pseudodata_pdfset.upper()}_sum"] = dict(
+                label = f"Pseudodata pdf{pseudodata_pdfset.upper()}",
+                color = "dimgray"
+            )
         if not wlike:
             self.groups.update({
                 "Fake" : dict(
@@ -221,4 +233,3 @@ class datagroups2016(datagroups):
         if scaleOp:
             scale = scale*scaleOp(proc)
         return h*scale
-
