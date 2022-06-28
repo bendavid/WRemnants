@@ -272,6 +272,9 @@ def build_graph(df, dataset):
                 results.extend(theory_tools.make_scetlibCorr_hists(df, "nominal", axes=nominal_axes, cols=nominal_cols, 
                     helper=scetlibCorr_helper, corr_type=args.scetlibCorr)
                 )
+                results.extend(theory_tools.make_scetlibCorr_hists(df, "nominal", axes=nominal_axes, cols=nominal_cols, 
+                    helper=scetlibCorrZ_helper if isZ else scetlibCorrW_helper,
+                    corr_type=args.scetlibCorr))
 
             df = theory_tools.define_scale_tensor(df)
             results.append(theory_tools.make_scale_hist(df, [*nominal_axes, axis_ptVgen], [*nominal_cols, "ptVgen"]))

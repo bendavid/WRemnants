@@ -157,24 +157,5 @@ def makePlotWithRatioToRef(
             alpha=alpha,
         )
 
-<<<<<<< HEAD
-=======
-    endidx = len(hists) if not fill_between else 1
-    hep.histplot(
-        ratio_hists[not baseline:endidx],
-        histtype="step",
-        color=colors[not baseline:endidx],
-        label=labels[not baseline:endidx],
-        yerr=False,
-        stack=False,
-        ax=ax2,
-        alpha=alpha,
-    )
-    if fill_between and not len(hists) % 2:
-        print("Fill")
-        for h1,h2,color in zip(ratio_hists[1::2], ratio_hists[2::2], colors[1::2]):
-            ax2.fill_between(h1.axes[0].edges[:-1], h1.values(), h2.values(), step='mid', color=color, alpha=alpha)
-         
->>>>>>> 1c1aa54 (Add new samples, fix bug in W-like scetlib corr)
     addLegend(ax1, nlegcols)
     return fig

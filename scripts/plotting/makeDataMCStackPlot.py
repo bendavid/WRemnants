@@ -28,7 +28,7 @@ variation = subparsers.add_parser("variation", help="Arguments for adding variat
 variation.add_argument("--varName", type=str, help="Name of variation hist")
 variation.add_argument("--varLabel", type=str, nargs='+', help="Label(s) of variation hist for plotting")
 variation.add_argument("--selectAxis", type=str, help="If you need to select a variation axis")
-variation.add_argument("--selectEntires", type=str, help="entries to read from the selected axis")
+variation.add_argument("--selectEntries", type=int, help="entries to read from the selected axis")
 
 args = parser.parse_args()
 
