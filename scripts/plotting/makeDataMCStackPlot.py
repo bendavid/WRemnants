@@ -87,7 +87,7 @@ for h in args.hists:
     action = sel.unrolledHist if "unrolled" in h else lambda x: x.project(h)
     if addVariation:
         unstacked.insert(0, args.varName)
-    fig = plot_tools.makeStackPlotWithRatio(histInfo, prednames, label=args.baseName, ymax=args.ymax, action=action, unstacked=exclude, 
+    fig = plot_tools.makeStackPlotWithRatio(histInfo, prednames, histName=args.baseName, ymax=args.ymax, action=action, unstacked=exclude, 
             xlabel=xlabels[h], ylabel="Events/bin", rrange=args.rrange, select=select) 
     outfile = "/".join([outpath, f"{h}_{args.channel}.pdf"])
     plt.savefig(outfile, bbox_inches='tight')

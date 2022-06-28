@@ -10,7 +10,7 @@ initargs,_ = parser.parse_known_args()
 ROOT.gInterpreter.ProcessLine(".O3")
 if not initargs.nThreads:
     ROOT.ROOT.EnableImplicitMT()
-elif init.args.nThreads != 1:
+elif initargs.nThreads != 1:
     ROOT.ROOT.EnableImplicitMT(initargs.nThreads)
 import narf
 import wremnants
@@ -86,10 +86,15 @@ def build_graph(df, dataset):
     
     if dataset.is_data:
         raise RuntimeError("Running GEN analysis over data is not supported")
+
+    df = df.Define("nominal_pdf_cen", theory_tools.pdf_central_weight(dataset.name, args.pdfs[0]))
+    weight_expr = "std::copysign(1.0, genWeight)"
+    weight_expr = f"{weight_expr}*nominal_pdf_cen"
+
     if "reweight_h2" in dataset.name:
-        df = df.Define("nominal_weight", "H2BugFixWeight[0]*std::copysign(1.0, genWeight)")
-    else:
-        df = df.Define("nominal_weight", "std::copysign(1.0, genWeight)")
+        weight_expr = f"{weight_expr}*H2BugFixWeight[0]"
+
+    df = df.Define("nominal_weight", weight_expr)
     weightsum = df.SumAndCount("nominal_weight")
 
     df = theory_tools.define_scale_tensor(df)
