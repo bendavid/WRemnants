@@ -250,6 +250,5 @@ if not args.wlike:
     cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16)
 else:
     cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
-cardTool.addLnNSystematic("CMS_lumi", processes=cardTool.allMCProcesses(), size=1.02)
 cardTool.writeOutput()
 

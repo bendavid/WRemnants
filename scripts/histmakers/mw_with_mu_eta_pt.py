@@ -52,7 +52,7 @@ scetlibCorrW_helper = wremnants.makeScetlibCorrHelper(isW=True)
 qcdScaleByHelicity_Zhelper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = True)
 qcdScaleByHelicity_Whelper = wremnants.makeQCDScaleByHelicityHelper()
 
-wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP"]
+wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP", "WminusmunuPostVFP_LZMA_9", "WminusmunuPostVFP_LZ4_4"] # + ["WminusmunuPostVFP_LZMA_9", "WminusmunuPostVFP_LZ4_4"]
 zprocs = ["ZmumuPostVFP", "ZtautauPostVFP"]
 
 # custom template binning
@@ -146,7 +146,7 @@ def build_graph(df, dataset):
     df = df.Define("goodMuons_pfRelIso04_all0", "Muon_pfRelIso04_all[goodMuons][0]")
 
     #TODO improve this to include muon mass?
-    df = df.Define("transverseMass", "wrem::mt_2(goodMuons_pt0, goodMuons_phi0, MET_pt, MET_phi)")
+    df = df.Define("transverseMass", "wrem::mt_2(goodMuons_pt0, goodMuons_phi0, DeepMETResolutionTune_pt, DeepMETResolutionTune_phi)")
 
     df = df.Define("vetoElectrons", "Electron_pt > 10 && Electron_cutBased > 0 && abs(Electron_eta) < 2.4 && abs(Electron_dxy) < 0.05 && abs(Electron_dz)< 0.2")
 
@@ -286,6 +286,10 @@ def build_graph(df, dataset):
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)
+print("-"*30)
+for key in resultdict.keys():
+    print(f"Dataset {key}: unweighted events (before cut) = {resultdict[key]['event_count']}")
+    print("-"*30)
 
 fname = "mw_with_mu_eta_pt.pkl.lz4"
 if args.postfix:
