@@ -181,7 +181,7 @@ class datagroups2016(datagroups):
         }
         if pseudodata_pdfset and combine:
             self.groups[f"pdf{pseudodata_pdfset.upper()}_sum"] = dict(
-                label = f"Pseudodata pdf{pseudodata_pdfset.upper()}",
+                label = f"pdf{pseudodata_pdfset.upper()}",
                 color = "dimgray"
             )
         if not wlike:
