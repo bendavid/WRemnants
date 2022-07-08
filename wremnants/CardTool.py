@@ -215,7 +215,6 @@ class CardTool(object):
         if hvar.axes[-1].name == "mirror":
             axNames.append("mirror")
             axLabels.append("mirror")
-
         
 
         if not all([name in [ax.name for ax in hvar.axes] for name in axNames]):
@@ -324,7 +323,6 @@ class CardTool(object):
         else:
             self.writeLnNSystematics()
             for syst in self.systematics.keys():
-                print(syst)
                 processes=self.systematics[syst]["processes"]
                 self.datagroups.loadHistsForDatagroups(self.histName, syst, label="syst",
                     procsToRead=processes, forceNonzero=syst != "qcdScaleByHelicity")
