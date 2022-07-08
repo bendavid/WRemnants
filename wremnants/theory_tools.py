@@ -107,7 +107,9 @@ only_central_pdf_datasets = [
 ]
 
 extended_pdf_datasets = [
-    "Wminusmunu_bugfix_newprod",
+    "WminusmunuPostVFP",
+    "WplusmunuPostVFP",
+    "ZmumuPostVFP",
 ]
 
 def define_prefsr_vars(df):
@@ -157,15 +159,17 @@ def define_and_make_pdf_hists(df, axes, cols, dataset, pdfset="nnpdf31", storeUn
 
     df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, {entries}>({pdfBranch}), 10.); res = nominal_weight/nominal_pdf_cen*res; return res;")
 
-    pdfHist = df.HistoBoost(pdfName if hname=="" else f"{hname}_{pdfName}", axes, [*cols, tensorName])
 
     df = df.Define(tensorASName, "Eigen::TensorFixedSize<double, Eigen::Sizes<2>> res; "
             f"res(0) = {pdfInfo['alphas'][0]}; "
             f"res(1) = {pdfInfo['alphas'][1]}; "
             "return wrem::clip_tensor(res, 10.)")
-    alphaSHist = df.HistoBoost(f"alphaS002{pdfName}" if hname=="" else f"{hname}_alphaS002{pdfName}", axes, [*cols, tensorASName])
+    if cols:
+        pdfHist = df.HistoBoost(pdfName if hname=="" else f"{hname}_{pdfName}", axes, [*cols, tensorName])
+        alphaSHist = df.HistoBoost(f"alphaS002{pdfName}" if hname=="" else f"{hname}_alphaS002{pdfName}", axes, [*cols, tensorASName])
+        return pdfHist, alphaSHist
 
-    return pdfHist, alphaSHist
+    return []
 
 def pdf_central_weight(dataset, pdfset):
     pdfInfo = pdf_info_map(dataset, pdfset)

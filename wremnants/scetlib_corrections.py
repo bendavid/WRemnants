@@ -16,7 +16,7 @@ def makeScetlibCorrHelper(filename=f"{data_dir}/N3LLCorrections/inclusive_{{proc
     else:
         corrf = np.load(filename.format(process="Z"), allow_pickle=True)
         bins = corrf["bins"]
-        axis_charge = hist.axis.Integer(0, 1, underflow=False, overflow=False, name = "charge")
+        axis_charge = hist.axis.Regular(2, -1., 1., underflow=False, overflow=False, name = "charge")
 
     axis_syst = hist.axis.Regular(len(bins[0]) - 1, bins[0][0], bins[0][-1], 
                     name="systIdx", overflow=False, underflow=False)
@@ -30,6 +30,7 @@ def makeScetlibCorrHelper(filename=f"{data_dir}/N3LLCorrections/inclusive_{{proc
         corrh[0,...] = np.moveaxis(corrf_Wm["scetlibCorr3D_Wm"], 0, -1)
     else:
         corrh[0,...] = np.moveaxis(corrf["scetlibCorr3D_Z"], 0, -1)
+    print(corrh)
     corrh[:,hist.underflow,...] = 1.
     corrh[:,hist.overflow,...] = 1.
     corrh[:,:,hist.underflow,...] = 1.
