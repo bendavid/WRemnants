@@ -22,6 +22,7 @@ def make_muon_calibration_helpers(filename = data_dir + "/calibration/correction
 
     return helper, uncertainty_helper
 
+'''
 def get_dummy_uncertainties():
     axis_eta = hist.axis.Regular(48, -2.4, 2.4, name = "eta")
     axis_calvar = hist.axis.Integer(0, 6, underflow=False, overflow=False, name = "calvar")
@@ -49,6 +50,23 @@ def get_dummy_uncertainties():
 
     #mirror to positive eta
     h.values()[axis_eta.index(0.):, ...] = h.values()[:axis_eta.index(0.), ...]
+
+    # set underflow and overflow to match boundaries
+    h.values(flow=True)[0, ...] = h.values(flow=True)[1, ...]
+    h.values(flow=True)[-1, ...] = h.values(flow=True)[-2, ...]
+
+    return h
+'''
+
+def get_dummy_uncertainties():
+    axis_eta = hist.axis.Regular(48, -2.4, 2.4, name = "eta")
+    axis_calvar = hist.axis.Integer(0, 1, underflow=False, overflow=False, name = "calvar")
+    axis_calparm = hist.axis.Integer(0, 4, underflow=False, overflow=False, name = "calparm")
+
+    h = hist.Hist(axis_eta, axis_calvar, axis_calparm)
+
+    # forward b-field-like
+    h.values()[..., 0, 0] = 1e-4
 
     # set underflow and overflow to match boundaries
     h.values(flow=True)[0, ...] = h.values(flow=True)[1, ...]

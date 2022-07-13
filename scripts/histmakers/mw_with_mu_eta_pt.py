@@ -322,7 +322,20 @@ def build_graph(df, dataset):
             dummyMuonScaleSyst_responseWeights = df.HistoBoost("muonScaleSyst_responseWeights", nominal_axes, [*nominal_cols, "muonScaleSyst_responseWeights_tensor"], tensor_axes = calibration_uncertainty_helper.tensor_axes)
             results.append(dummyMuonScaleSyst_responseWeights)
 
-
+            df = df.Define("goodMuons_pt0_scaleUp", "goodMuons_pt0 * 1.0001")
+            df = df.Define("goodMuons_pt0_scaleDn", "goodMuons_pt0 / 1.0001")
+            muonScaleVariationUp = df.HistoBoost(
+                "muonScaleVariationUp", 
+                nominal_axes,
+                [nominal_cols[0], "goodMuons_pt0_scaleUp", *nominal_cols[2:], "nominal_weight"]
+            )
+            muonScaleVariationDn = df.HistoBoost(
+                "muonScaleVariationDn", 
+                nominal_axes,
+                [nominal_cols[0], "goodMuons_pt0_scaleDn", *nominal_cols[2:], "nominal_weight"]
+            )
+            results.append(muonScaleVariationUp)
+            results.append(muonScaleVariationDn)
 
     return results, weightsum
 
