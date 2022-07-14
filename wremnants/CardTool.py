@@ -367,7 +367,8 @@ class CardTool(object):
         nondata = self.predictedProcesses()
         names = [x[:-2] if "Up" in x[-2:] else (x[:-4] if "Down" in x[-4:] else x) 
                     for x in filter(lambda x: x != "", systInfo["outNames"])]
-        include = [(str(scale) if x in procs else "-").ljust(self.spacing) for x in nondata]
+        if type(scale) != dict:
+            include = [(str(scale) if x in procs else "-").ljust(self.spacing) for x in nondata]
 
         splitGroupDict = systInfo["splitGroup"]
         shape = "shape" if not systInfo["noConstraint"] else "shapeNoConstraint"
@@ -376,9 +377,15 @@ class CardTool(object):
         systNames = list(dict.fromkeys(names))
         systnamesPruned = [s for s in systNames if not self.isExcludedNuisance(s)]
         systNames = systnamesPruned[:]
-
-        for chan in self.channels:
-            for systname in systNames:
+        for systname in systNames:
+            if type(scale) == dict:
+                for reg in scale.keys():
+                    if re.match(reg, systname):
+                        thiscale = str(scale[reg])
+                        include = [(thiscale if x in procs else "-").ljust(self.spacing) for x in nondata]
+                        break # exit this inner loop when match is found, to save time
+            shape = "shape" if not systInfo["noConstraint"] else "shapeNoConstraint"
+            for chan in self.channels:
                 # do not write systs which should only apply to other charge, to simplify card
                 if self.keepOtherChargeSyst or self.chargeIdDict[chan]["badId"] not in systname:
                     self.cardContent[chan] += f"{systname.ljust(self.spacing)}{shape.ljust(self.spacing)}{''.join(include)}\n"
