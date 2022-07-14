@@ -35,10 +35,16 @@ parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdSca
 parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
 parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
+parser.add_argument("--v9", action='store_true', help="Use NanoAODv9. Default is v8")
 args = parser.parse_args()
 
-filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
+filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None)
+
+print('Use v9?', args.v9)
+
+if args.v9:
+    datasets = wremnants.datasets2016_v9.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None)
 
 ROOT.gInterpreter.Declare('#include "lowpu_recoil.h"')
 
@@ -97,11 +103,10 @@ calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibra
 from wremnants import recoil_tools
 recoilHelper = recoil_tools.Recoil("highPU")
 
-
 #def add_plots_with_systematics
 
 def build_graph(df, dataset):
-    print("build graph")
+    print("build graph for dataset:", dataset.name)
     results = []
 
     if dataset.is_data:
