@@ -115,6 +115,8 @@ cardTool.addSystematic(f"alphaS002{pdfName}",
 )
 if not args.noEfficiencyUnc:
     for name,num in zip(["effSystTnP", "effStatTnP",], [2, 624*4]):
+        ## TODO: this merged implementation for the effstat makes it very cumbersome to do things differently for iso and trigidip!!
+        ## the problem is that I would need custom actions inside based on actual nuisance names, which needs to be commanded from outside, and this is not straightforward
         axes = ["idiptrig-iso"] if num == 2 else ["SF eta", "SF pt", "SF charge", "idiptrig-iso"]
         axlabels = ["IDIPTrig"] if num == 2 else ["eta", "pt", "q", "Trig"]
         cardTool.addSystematic(name, 
@@ -125,7 +127,8 @@ if not args.noEfficiencyUnc:
             baseName=name+"_",
             processes=cardTool.allMCProcesses(),
             passToFakes=passSystToFakes,
-            systNameReplace=[("q0Trig0", "Trig0"), ("q1Trig0", "Trig0")] if args.correlateEffStatIsoByCharge else []
+            systNameReplace=[("q0Trig0", "Trig0"), ("q1Trig0", "Trig0")] if args.correlateEffStatIsoByCharge else [],
+            scale=1.0 if "Syst" in name  else {".*effStatTnP.*Trig0" : "1.414", ".*effStatTnP.*Trig1" : "1.0"} if not args.correlateEffStatIsoByCharge else 1.0 # only for iso, scale up by sqrt(2) when decorrelating between charges and efficiencies were derivied inclusively
         )
 
 inclusiveScale = args.qcdScale == "integrated"
