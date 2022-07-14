@@ -48,7 +48,8 @@ era = "2016PostVFP"
 
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 
-scetlibCorr_helper = wremnants.makeScetlibCorrHelper(isW=False)
+scetlibCorrZ_helper = wremnants.makeScetlibCorrHelper(isW=False)
+scetlibCorrW_helper = wremnants.makeScetlibCorrHelper(isW=True)
 
 qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = True)
 axis_ptVgen = qcdScaleByHelicity_helper.hist.axes["ptVgen"]
@@ -199,10 +200,10 @@ def build_graph(df, dataset):
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId"])
 
         weight_expr = "weight*weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF"
+        scetlibCorr_helper = scetlibCorrZ_helper if isZ else scetlibCorrW_helper
         if isW or isZ:
-            if args.pdfs[0] != "nnpdf31":
-                weight_expr = f"{weight_expr}*{theory_tools.pdf_central_weight(dataset.name, args.pdfs[0])}"
-
+            df = df.Define("nominal_pdf_cen", theory_tools.pdf_central_weight(dataset.name, args.pdfs[0]))
+            weight_expr = f"{weight_expr}*nominal_pdf_cen"
             df = wremnants.define_prefsr_vars(df)
 
             if args.scetlibCorr:
@@ -210,6 +211,11 @@ def build_graph(df, dataset):
                     corr_type=args.scetlibCorr)
             else:
                 df = df.Define("nominal_weight", weight_expr)
+
+            for i, pdf in enumerate(args.pdfs):
+                withUnc = i == 0 or not args.altPdfOnlyCentral
+                results.extend(theory_tools.define_and_make_pdf_hists(df, nominal_axes, None, dataset.name, pdf, withUnc))
+
         else:
             df = df.Define("nominal_weight", weight_expr)
 
@@ -220,7 +226,6 @@ def build_graph(df, dataset):
     # recoil calibration
     df = recoilHelper.recoil_setup_Z(df, results, "MET_pt", "MET_phi", "Muon_pt[goodMuons]", "Muon_phi[goodMuons]", "Muon_pt[goodMuons]")
     df = recoilHelper.recoil_apply_Z(df, results, dataset.name, ["ZmumuPostVFP"])  # produces corrected MET as MET_corr_rec_pt/phi
-  
    
     # dilepton plots go here, before mass or transverse mass cuts
     df_dilepton = df
@@ -231,7 +236,6 @@ def build_graph(df, dataset):
     results.append(dilepton)
 
     if (isW or isZ) and args.scetlibCorr:
-        
         results.extend(theory_tools.make_scetlibCorr_hists(df_dilepton, "dilepton", dilepton_axes, dilepton_cols, 
             scetlibCorr_helper, corr_type=args.scetlibCorr)
         )
@@ -239,7 +243,8 @@ def build_graph(df, dataset):
     df = df.Filter("massZ >= 60. && massZ < 120.")
 
     #TODO improve this to include muon mass?
-    df = df.Define("transverseMass", "wrem::mt_wlike_nano(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, MET_corr_rec_pt, MET_corr_rec_phi)")
+    #df = df.Define("transverseMass", "wrem::mt_wlike_nano(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, MET_corr_rec_pt, MET_corr_rec_phi)")
+    df = df.Define("transverseMass", "wrem::mt_wlike_nano(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, MET_pt, MET_phi)")
 
     df = df.Filter("transverseMass >= 40.")
 
@@ -279,6 +284,9 @@ def build_graph(df, dataset):
                 results.extend(theory_tools.make_scetlibCorr_hists(df, "nominal", axes=nominal_axes, cols=nominal_cols, 
                     helper=scetlibCorr_helper, corr_type=args.scetlibCorr)
                 )
+                results.extend(theory_tools.make_scetlibCorr_hists(df, "nominal", axes=nominal_axes, cols=nominal_cols, 
+                    helper=scetlibCorrZ_helper if isZ else scetlibCorrW_helper,
+                    corr_type=args.scetlibCorr))
 
             df = theory_tools.define_scale_tensor(df)
             results.append(theory_tools.make_scale_hist(df, [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen"]))

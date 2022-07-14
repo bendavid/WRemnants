@@ -52,7 +52,8 @@ scetlibCorrW_helper = wremnants.makeScetlibCorrHelper(isW=True)
 qcdScaleByHelicity_Zhelper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = True)
 qcdScaleByHelicity_Whelper = wremnants.makeQCDScaleByHelicityHelper()
 
-wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP", "WminusmunuPostVFP_LZMA_9", "WminusmunuPostVFP_LZ4_4"] # + ["WminusmunuPostVFP_LZMA_9", "WminusmunuPostVFP_LZ4_4"]
+wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP"]
+# for tests of NanoAOD compression need to add ["WminusmunuPostVFP_LZMA_9", "WminusmunuPostVFP_LZ4_4"]
 zprocs = ["ZmumuPostVFP", "ZtautauPostVFP"]
 
 # custom template binning
