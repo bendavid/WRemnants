@@ -110,6 +110,8 @@ def makePlotWithRatioToRef(
     ratio_hists = [hh.divideHists(h, hists[0], cutoff=0.00001) for h in hists[not baseline:]]
     fig, ax1, ax2 = figureWithRatio(hists[0], xlabel, ylabel, [0, ymax] if ymax else None, rlabel, rrange, xlim=xlim, grid_on_ratio_plot = grid)
     
+    print("WE ARE HERE!")
+
     hep.histplot(
         hists[:len(hists) - data],
         histtype="step",
@@ -144,7 +146,7 @@ def makePlotWithRatioToRef(
             alpha=alpha,
         )
         hep.histplot(
-            ratio_hists[-1],
+            hh.divideHists(data, hists[0], cutoff=1.e-6),
             histtype="errorbar",
             color=colors[-1],
             label=labels[-1],
