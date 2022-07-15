@@ -47,7 +47,8 @@ def scale_helicity_hist_to_variations(scale_hist, sum_axis=[], rebinPtV=0):
 
 
 def define_mass_weights(df, isW, nominal_axes=None, nominal_cols=None):
-    #nweights = 21 if isW else 23
+    # nweights = 21 if isW else 23
+    # from -100 to 100 MeV with 10 MeV increment
     nweights = 21
     df = df.Define("massWeight_tensor", f"wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight)")
 
