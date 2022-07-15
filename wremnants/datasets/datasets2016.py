@@ -49,6 +49,20 @@ def getDatasets(maxFiles=-1, filt=None, mode=None):
         xsec = 11765.9,
     )
     
+    WmmunuPostVFP_LZMA_9 = narf.Dataset(name = "WminusmunuPostVFP_LZMA_9",
+                                 filepaths = makeFilelist(
+                                     ["/scratch/shared/NanoAOD/TrackRefitv2/WminusJetsToMuNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP/*/*/*.root"], maxFiles),
+                                 is_data = False,
+                                 xsec = 8562.66,
+    )
+
+    WmmunuPostVFP_LZ4_4 = narf.Dataset(name = "WminusmunuPostVFP_LZ4_4",
+                                 filepaths = makeFilelist(
+                                     ["/scratch/shared/NanoAOD/TrackRefitv2_LZ4_4/WminusJetsToMuNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_LZ4_4/*/*/*.root"], maxFiles),
+                                 is_data = False,
+                                 xsec = 8562.66,
+    )
+
     WmmunuPostVFP = narf.Dataset(name = "WminusmunuPostVFP",
         filepaths = makeFilelist(
             ["/scratch/shared/NanoAOD/TrackRefitv2/WminusJetsToMuNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/*/*/*/*.root"], maxFiles),
@@ -148,6 +162,7 @@ def getDatasets(maxFiles=-1, filt=None, mode=None):
                   ttbarlnuPostVFP, ttbarlqPostVFP,
                   singleTop_schanLepDecaysPostVFP, singleTop_tWAntitopPostVFP, singleTop_tchanAntitopPostVFP, singleTop_tchanTopPostVFP,
                   wwPostVFP, wzPostVFP, zz2l2nuPostVFP]
+    # ,WmmunuPostVFP_LZ4_4,WmmunuPostVFP_LZMA_9]
 
     allPostVFP_gen = allPostVFP[1:]
 
