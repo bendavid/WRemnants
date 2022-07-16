@@ -49,7 +49,7 @@ def getDatasets(maxFiles=-1, filt=None, mode=None, nanoVersion = "v9"):
     ZttPostVFP = getNarfDataset("ZttPostVFP", maxFiles, dataDict, False, True)
 
     WpmunuPostVFP = getNarfDataset("WpmunuPostVFP", maxFiles, dataDict, False, True)
-    
+
     WmmunuPostVFP = getNarfDataset("WmmunuPostVFP", maxFiles, dataDict, False, True)
 
     WptaunuPostVFP = getNarfDataset("WptaunuPostVFP", maxFiles, dataDict, False, True)
@@ -80,6 +80,7 @@ def getDatasets(maxFiles=-1, filt=None, mode=None, nanoVersion = "v9"):
                   ttbarlnuPostVFP, ttbarlqPostVFP,
                   singleTop_schanLepDecaysPostVFP, singleTop_tWAntitopPostVFP, singleTop_tchanAntitopPostVFP, singleTop_tchanTopPostVFP,
                   wwPostVFP, wzPostVFP, zz2l2nuPostVFP]
+    # ,WmmunuPostVFP_LZ4_4,WmmunuPostVFP_LZMA_9]
 
     allPostVFP_gen = allPostVFP[1:]
 

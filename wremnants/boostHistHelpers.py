@@ -57,7 +57,7 @@ def sqrtHist(h):
     return rooth
 
 def multiplyWithVariance(vals1, vals2, vars1, vars2):
-    val = vals1*vals2
+    val = np.multiply(vals1, vals2)
     var = val*val*sum(relVariances(vals1, vals2, vars1, vars2))
     return val, var
 
