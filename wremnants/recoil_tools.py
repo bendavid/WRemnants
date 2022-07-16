@@ -5,14 +5,12 @@ import copy
 import logging
 import sys
 import decimal
-import pathlib
 
 def drange(x, y, jump):
     while x < y:
         yield float(x)
         x += decimal.Decimal(jump)
         
-data_dir = f"{pathlib.Path(__file__).parent}/data/"
         
 class Recoil:
 
@@ -21,7 +19,7 @@ class Recoil:
         if type_ == "highPU":
         
             self.recoil_qTbins = list(drange(0, 30, 0.5)) + list(range(30, 60, 2)) + list(range(60, 100, 5)) + list(range(100, 210, 10)) + [10000]
-            rInput_binned = data_dir + "recoil_fits_Z.root"
+            rInput_binned = "wremnants/data/recoil_fits_Z.root"
             rInput_parametric = ""
     
         elif type_ == "lowPU":
@@ -29,7 +27,7 @@ class Recoil:
             self.recoil_qTbins = list(drange(0, 30, 0.5)) + list(range(30, 60, 2)) + list(range(60, 100, 5)) + list(range(100, 210, 10)) + [10000]
             self.recoil_qTbins = list(range(0, 50, 5)) + list(range(50, 100, 10)) + list(range(100, 200, 25)) + [10000]
             print(self.recoil_qTbins)
-            rInput_binned = data_dir + "lowPU/recoil_fits_Z.root"
+            rInput_binned = "wremnants/data/lowPU/recoil_fits_Z.root"
             rInput_parametric = ""
             
         else: sys.exit("Recoil highPU or lowPU")
