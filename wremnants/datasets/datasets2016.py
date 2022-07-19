@@ -18,7 +18,7 @@ def makeFilelist(paths, maxFiles=-1):
 
 def getNarfDataset(sampleName, maxFiles, sampleDict, isData, isWorZ=True):
     if isData:
-        print('Sample ', sampleName, ' read from : ', sampleDict[sampleName]["filepaths"])
+        #print('Sample ', sampleName, ' read from : ', sampleDict[sampleName]["filepaths"])
         nData = narf.Dataset(name = sampleDict[sampleName]["name"],
                                    filepaths = makeFilelist(sampleDict[sampleName]["filepaths"], maxFiles),
                                    is_data = True,
@@ -27,7 +27,7 @@ def getNarfDataset(sampleName, maxFiles, sampleDict, isData, isWorZ=True):
         )
         return nData
     else:
-        print('Sample ', sampleName, ' read from : ', sampleDict[sampleName]["filepaths"])
+        #print('Sample ', sampleName, ' read from : ', sampleDict[sampleName]["filepaths"])
         nMC = narf.Dataset(name = sampleDict[sampleName]["name"],
                            filepaths = makeFilelist(sampleDict[sampleName]["filepaths"], maxFiles),
                            is_data = False,
