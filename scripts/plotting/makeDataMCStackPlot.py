@@ -73,8 +73,11 @@ if not os.path.isdir(outpath):
 
 xlabels = {
     "pt" : r"p$_{T}^{\ell}$ (GeV)",
-    "eta" : r"\eta^{\ell}$",
+    "eta" : r"$\eta^{\ell}$",
     "unrolled" : r"(p$_{T}^{\ell}$, $\eta^{\ell}$) bin",
+    "ptll" : r"p$_{T}^{\ell\ell}$ (GeV)",
+    "mll" : r"m$^{\ell\ell} (GeV)$",
+    "yll" : r"Y$^{\ell\ell}$",
 }
 
 #scales = {
