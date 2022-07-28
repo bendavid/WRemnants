@@ -26,7 +26,8 @@ def make_parser(parser=None):
     parser.add_argument("--skipSignalSystOnFakes", dest="skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
     parser.add_argument("--scaleMuonCorr", type=float, default=1.0, help="Scale up/down dummy muon scale uncertainty by this factor")
     parser.add_argument("--correlateEffStatIsoByCharge", action='store_true', help="Correlate isolation efficiency uncertanties between the two charges (by default they are decorrelated)")
-    parser.add_argument("--noHist", action='store_true', help="Skip the making of 2D histograms (root file is left untouched if existing)")
+    parser.add_argument("--noHist", action='store_true', help="Skip the making of 2D histograms (root file is left untouched if existing")
+    parser.add_argument("--muonScaleVariation", choices=["smearing_weights", "massweights"], default="smearing_weights", help="the method with whicht the distributions for the muon scale variations is derived")
     return parser
 
 def main(args):
@@ -192,14 +193,28 @@ def main(args):
     if not wlike:
         combine_helpers.add_scale_uncertainty(cardTool, "integrated", single_v_nonsig_samples, False, pdf=args.pdf, name_append="Z", scetlib=args.scetlibUnc)
 
-    cardTool.addSystematic("muonScaleSyst", 
+    msv_config_dict = {
+        "smearing_weights":{
+            "hist_name": "muonScaleSyst_responseWeights",
+            "syst_axes": ["downUpVar"],
+            "syst_axes_labels": ["downUpVar"]
+        },
+        "massweights":{
+            "hist_name": "muonScaleSyst",
+            "syst_axes": ["downUpVar", "scaleEtaSlice"],
+            "syst_axes_labels": ["downUpVar", "ieta"]
+        }
+    }
+    msv_config = msv_config_dict[args.muonScaleVariation]
+
+    cardTool.addSystematic(msv_config['hist_name'], 
         processes=single_vmu_samples,
         group="muonScale",
         baseName="CMS_scale_m_",
-        systAxes=["downUpVar", "scaleEtaSlice"],
-        labelsByAxis=["downUpVar", "ieta"],
+        systAxes=msv_config['syst_axes'],
+        labelsByAxis=msv_config['syst_axes_labels'],
         passToFakes=passSystToFakes,
-        scale = args.scaleMuonCorr,
+        scale = args.scaleMuonCorr
     )
     cardTool.addSystematic("muonL1PrefireSyst", 
         processes=cardTool.allMCProcesses(),

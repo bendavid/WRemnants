@@ -74,6 +74,7 @@ def common_parser():
     parser.add_argument("--pt", nargs=3, type=float, help="Pt binning as 'nbins,min,max' (only uniform for now)", default=[29,26.,55.])
     parser.add_argument("--no_recoil", action='store_true', help="Don't apply recoild correction")
     parser.add_argument("--no-vertex_weight", dest="vertex_weight", action='store_false', help="Do not apply reweighting of vertex z distribution in MC to match data")
+    parser.add_argument("--validationHists", action='store_true', help="make histograms used only for validations")
     return parser,initargs
 
 def common_parser_combine():
