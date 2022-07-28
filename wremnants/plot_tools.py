@@ -230,7 +230,6 @@ def makePlotWithRatioToRef(
         xlim = [hists[0].axes[0].edges[0], hists[0].axes[0].edges[-1]]
     fix_axes(ax1, ax2)
     if x_ticks_ndp: ax2.xaxis.set_major_formatter(StrMethodFormatter('{x:.' + str(x_ticks_ndp) + 'f}'))
-
     return fig
 
 def fix_axes(ax1, ax2, yscale=None):

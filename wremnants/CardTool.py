@@ -299,7 +299,7 @@ class CardTool(object):
         for entry in entries:
             sel = {ax : binnum for ax,binnum in zip(axNames, entry)}
             variations.append(hvar[sel])
-        return systInfo["outNames"], variations            
+        return systInfo["outNames"], variations
 
     def variationName(self, proc, name):
         if name == self.nominalName:

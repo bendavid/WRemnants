@@ -2,8 +2,14 @@
 #include "Math/GenVector/PtEtaPhiM4D.h"
 #include "TFile.h"
 #include "TTree.h"
+#include "TRandom.h"
 #include <eigen3/Eigen/Dense>
 #include <memory>
+#include <stdlib.h>
+#include <math.h>
+#include <fstream>
+#include <typeinfo>
+#include <algorithm>
 
 namespace wrem {
 
@@ -204,92 +210,77 @@ public:
 
   using out_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<nvars, 2>>;
 
-  calibration_uncertainty_helper(HIST &&hist, double minGenPt, double maxWeight) : hist_(std::make_shared<const HIST>(std::move(hist))),
-                                                                                  minGenPt_(minGenPt),
-                                                                                  maxWeight_(maxWeight) {}
+  calibration_uncertainty_helper(HIST &&hist, double minGenPt, double maxWeight) : 
+    hist_(std::make_shared<const HIST>(std::move(hist))),
+    minGenPt_(minGenPt),
+    maxWeight_(maxWeight) {}
 
-  out_tensor_t operator() (const RVec<float> &pts,
-                      const RVec<float> &etas,
-                      const RVec<float> &phis,
-                      const RVec<int> &charges,
-                      const RVec<int> &matchedGenIdxs,
-                      const RVec<RVec<float>> &momcovs,
-                      const RVec<int> &selection,
-                      const RVec<float> &genPts,
-                      const RVec<float> &genEtas,
-                      const RVec<float> &genPhis,
-                      const RVec<int> &genPdgIds,
-                      const RVec<int> &genStatusFlags,
-                      double nominal_weight = 1.0) const {
+  out_tensor_t operator() (
+    double qop,
+    double pt,
+    float eta,
+    float phi,
+    int charge,
+    RVec<float> &momcov,
+    double genQop,
+    float genPt,
+    float genEta,
+    float genPhi,
+    int genCharge,
+    double nominal_weight) const {
 
     //TODO move this into a helper
 
-    const std::size_t nmuons = pts.size();
-
     out_tensor_t res;
     res.setConstant(nominal_weight);
-
-    for (std::size_t i = 0; i < nmuons; ++i) {
-      if (!selection[i]) {
-        continue;
-      }
-
-      if (pts[i] < 0.) {
-        continue;
-      }
-
-      const int genidx = matchedGenIdxs[i];
-
-      if (genidx < 0) {
-        continue;
-      }
-
-      // matched genparts should be status 1 muons, but we need to explicitly check if they are prompt
-      if (!(genStatusFlags[genidx] & 0x01)) {
-        continue;
-      }
-      
-      // minimum gen pt cut to avoid threshold effects from reco pt cut for track refit during nano production
-      if (minGenPt_ >= 0. && genPts[genidx] < minGenPt_) {
-        continue;
-      }
-
-      const int gencharge = genPdgIds[genidx] > 0 ? -1 : 1;
-
-      res *= scale_res_weight(pts[i], etas[i], phis[i], charges[i], genPts[genidx], genEtas[genidx], genPhis[genidx], gencharge, momcovs[i]);
-    }
-
+    res *= scale_res_weight(qop, pt, eta, phi, charge, momcov, genQop, genPt, genEta, genPhi, genCharge);
     return res;
-
   }
 
 private:
 
-  out_tensor_t scale_res_weight(double pt, double eta, double phi, int charge, double genPt, double genEta, double genPhi, int genCharge, const RVec<float> &cov) const {
+  out_tensor_t scale_res_weight(
+    double qop, double pt, double eta, double phi, int charge, const RVec<float> &cov,
+    double genQop, double genPt, double genEta, double genPhi, int genCharge,
+    bool abQop = true, bool fullParam = true
+  ) const {
 
     const double theta = 2.*std::atan(std::exp(-double(eta)));
     const double lam = M_PI_2 - theta;
     const double p = double(pt)/std::sin(theta);
-    const double qop = double(charge)/p;
-
-    const Eigen::Vector3d parms(qop, lam, phi);
+    const double Qop = double(charge)/p;
+    const Eigen::Vector3d parms(
+      (abQop? qop : Qop),
+      (fullParam? lam : 0),
+      (fullParam? phi : 0)
+    );
 
     const double gentheta = 2.*std::atan(std::exp(-double(genEta)));
     const double genlam = M_PI_2 - gentheta;
     const double genp = double(genPt)/std::sin(gentheta);
     const double genqop = double(genCharge)/genp;
-    const double genqopt = double(genCharge)/genPt;
-
-    const Eigen::Vector3d genparms(genqop, genlam, genPhi);
+    const Eigen::Vector3d genparms(
+      (abQop? genQop : genqop),
+      (fullParam? genlam : 0),
+      (fullParam? genPhi : 0)
+    );
 
     const Eigen::Vector3d deltaparms = parms - genparms;
 
     const Eigen::Map<const Eigen::Matrix<float, 3, 3, Eigen::RowMajor>> covMap(cov.data(), 3, 3);
 
     Eigen::Matrix<double, 3, 3> covd = covMap.cast<double>();
-    // fill in lower triangular part of the matrix, which is stored as zeros to save space
-    covd.triangularView<Eigen::Lower>() = covd.triangularView<Eigen::Upper>().transpose();
-    
+
+    if (fullParam) {
+      // fill in lower triangular part of the matrix, which is stored as zeros to save space
+      covd.triangularView<Eigen::Lower>() = covd.triangularView<Eigen::Upper>().transpose();
+    } else {
+      covd.row(0) << covd(0,0), 0, 0;
+      covd.row(1) << 0, 1, 0;
+      covd.row(2) << 0, 0, 1;
+
+    }
+
     const Eigen::Matrix<double, 3, 3> covinv = covd.inverse();
     const double covdet = covd.determinant();
 
@@ -337,14 +328,10 @@ private:
             std::cout << "pt " << pt << std::endl;
             std::cout << "genPt " << genPt << std::endl;
             std::cout << "qop " << qop << std::endl;
-            std::cout << "genqop " << genqop << std::endl;
-            std::cout << "qoperr " << std::sqrt(covd(0,0)) << std::endl;
             std::cout << "lam " << lam << std::endl;
             std::cout << "genlam " << genlam << std::endl;
-            std::cout << "lamerr " << std::sqrt(covd(1,1)) << std::endl;
             std::cout << "phi " << phi << std::endl;
             std::cout << "genlam " << genPhi << std::endl;
-            std::cout << "phierr " << std::sqrt(covd(2,2)) << std::endl;
             std::cout << "covdet " << covdet << std::endl;
             std::cout << "covdetalt " << covdet << std::endl;
             std::cout << "lnp " << lnp << std::endl;
@@ -355,21 +342,69 @@ private:
             std::cout << "covinvalt\n" << covinvalt << std::endl;
           }
         }
-        
-        // protect against outliers
-        res(ivar, idownup) = std::min(weight, maxWeight_);
 
+        // protect against outliers
+        // if (weight > 0.9998 && weight < 1.0002) {cout << "smearing weight is " << weight << "covd is " << covd << std::endl;}
+        res(ivar, idownup) = std::min(weight, maxWeight_);
       }
     }
-
+    
     return res;
   }
-
   std::shared_ptr<const HIST> hist_;
   double minGenPt_;
   double maxWeight_;
 
 };
 
+    float smearGenPt(RVec<float> cov, int charge, float pt, float theta) {
+        float sigma2_qop = cov[0];
+        double sigma2_pt = pow((pt * pt / (charge * sin(theta))), 2) * sigma2_qop;
+        return gRandom -> Gaus(pt, sqrt(sigma2_pt));
+    }
+    
+    double smearGenQop(RVec<float> cov, double qop) {
+        double sigma2_qop = cov[0];
+        return gRandom -> Gaus(qop, sqrt(sigma2_qop));
+    }
 
+    int getGoodGenMuons0IdxInReco(RVec<bool> goodMuons, RVec<bool> goodMuonsByGenTruth) {
+        int first_goodGenMuon_idx_in_goodMuons = 0;
+        for (int i = 0; i < goodMuonsByGenTruth.size(); i++) {
+            if (goodMuonsByGenTruth[i]) {break;}
+            else {first_goodGenMuon_idx_in_goodMuons += 1;}
+        }
+        int goodGenMuons0_idx_in_recos = 0;
+        int num_goodMuons_found = 0;
+        for (int i = 0; i < goodMuons.size(); i++) {
+            if (goodMuons[i]) {
+                num_goodMuons_found += 1;
+                if (num_goodMuons_found == first_goodGenMuon_idx_in_goodMuons + 1) {
+                    break;
+                }
+            }
+            goodGenMuons0_idx_in_recos += 1;
+        }
+        return goodGenMuons0_idx_in_recos;
+    }
+
+    RVec<float> getCovMatForGoodMuons0(
+        RVec<float> covmat,
+        RVec<int> covmat_counts,
+        RVec<bool> goodMuons,
+        RVec<bool> goodMuonsByGenTruth
+    ) {
+        int goodGenMuons0_idx_in_recos = wrem::getGoodGenMuons0IdxInReco(
+            goodMuons, goodMuonsByGenTruth
+        );
+        int covmat_start_idx = 0;
+        for (int i = 0; i < goodGenMuons0_idx_in_recos; i++) {
+            covmat_start_idx += covmat_counts[i];
+        }
+        ROOT::VecOps::RVec<int> idxRange(9);
+        for (int i = 0; i < 9; i++) {
+            idxRange[i] = i + covmat_start_idx;
+        }
+        return Take(covmat, idxRange);
+    }
 }
