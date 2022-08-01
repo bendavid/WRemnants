@@ -1,7 +1,8 @@
 import uproot
 import hist
 import argparse
-from wremnants import theory_corrections,plot_tools,boostHistHelpers as hh
+from wremnants import theory_corrections,plot_tools,theory_tools
+from wremnants import boostHistHelpers as hh
 import pickle
 import lz4.frame
 import os
@@ -27,8 +28,21 @@ lookup = {
         },
         "absYV" : {
             "hist" : "nominal_gen",
-            "axis" : "absYVgen"
+            "axis" : "absYVgen",
+            "action" : lambda x: x[{"massVgen" : s[0:x.axes["massVgen"].size:hist.sum], "ptVgen" : s[0:40.j:hist.sum]}],
         },
+        "sigma4_ptV" : {
+            "hist" : "helicity_moments_scale",
+            "axis" : "ptVgen",
+            "action" : lambda x: theory_tools.scale_angular_moments(
+                x[{"muRfact" : 1.j, "muFfact" : 1.j, "massVgen" : s[0:x.axes["massVgen"].size:hist.sum]}])[{"helicity" : 4.j}],
+        },
+        "sigma4_ptV" : {
+            "hist" : "helicity_moments_scale",
+            "axis" : "ptVgen",
+            "action" : lambda x: theory_tools.scale_angular_moments(
+                x[{"muRfact" : 1.j, "muFfact" : 1.j, "massVgen" : s[0:x.axes["massVgen"].size:hist.sum]}])[{"helicity" : 4.j}],
+        }
     },
     "scetlib" : {
         "dirs" : {"z" : ("W"), "wp" : ("W"), "wm" : ("W")},
@@ -39,7 +53,10 @@ lookup = {
         "absYV" : {
             "hist" : "inclusive_pT_y_m_scetlib",
             "axis" : "absy",
-            "action" : lambda x: hh.makeAbsHist(x, "y"),
+            "action" : lambda x: hh.makeAbsHist(x[{"pt" : s[0:40.j:hist.sum]}], "y"),
+        },
+        "sigma4_ptV" : {
+            "axis" : "pt",
         },
     },
     "matrix_radish" : {
@@ -69,7 +86,7 @@ parser.add_argument("-dt", "--dyturbo_files", default=[], type=str, nargs='+', h
 parser.add_argument("-n", "--hist_name", type=str, choices=lookup["minnlo"].keys(), help="Observable to plot", required=True)
 parser.add_argument("-p", "--proc", type=str, choices=lookup["minnlo"]["dirs"].keys(), help="Process", required=True)
 parser.add_argument("-r", "--rrange", type=float, nargs=2, default=[0.9, 1.1], help="y range for ratio plot")
-parser.add_argument("--ymax", type=float, help="Max value for y axis (if not specified, range set automatically)")
+parser.add_argument("--ylim", type=float, nargs=2, help="Range for y axis (if not specified, range set automatically)")
 parser.add_argument("-o", "--outpath", type=str, default=os.path.expanduser("~/www/WMassAnalysis"), help="Base path for output")
 parser.add_argument("-f", "--outfolder", type=str, default="test", help="Subfolder for output")
 parser.add_argument("-a", "--name_append", type=str, help="Name to append to file name")
@@ -87,11 +104,12 @@ xlabels = {
     "ptV" : r"p$_{T}^{%s}$ (GeV)" % ("W" if "w" in args.proc else "Z"), 
     "absYV" : r"$|\mathrm{y}^{%s}|$"  % ("W" if "w" in args.proc else "Z"),
 }
+xlabels["sigma4_ptV"] = xlabels["ptV"]
 
-def transform_and_project(histND, hist_info, scale):
-    if "action" in hist_info:
-        histND = hist_info["action"](histND)
-    hist1D = histND.project(hist_info["axis"])*scale
+def transform_and_project(histND, scale, axis_name, action=None):
+    if action is not None:
+        histND = action(histND)
+    hist1D = histND.project(axis_name)*scale
     return hist1D
 
 def read_pickle_hist(proc, file_name, lookup, hist_name):
@@ -114,9 +132,8 @@ def read_pickle_hist(proc, file_name, lookup, hist_name):
 
     hist_info = lookup[hist_name]
     histND = hist_out[hist_info["hist"]]
-    return transform_and_project(histND, hist_info, scale)
-
-#def read_dyturbo_file(proc, file_name, lookup, hist_name):
+    action = hist_info["action"] if "action" in hist_info else None
+    return transform_and_project(histND, scale, hist_info["axis"], action)
 
 def read_scetlib_hist(proc, file_name, lookup, hist_name):
     charge = 0 if proc == "z" else (-1 if proc == "wp" else 1)
@@ -124,16 +141,19 @@ def read_scetlib_hist(proc, file_name, lookup, hist_name):
     if not os.path.isfile(nonsing):
         logging.warning("Didn't find the non-singular contribution. Will make comparisons without it")
         nonsing = ""
-    histND = theory_corrections.read_scetlib_hist(file_name, nonsing=nonsing, charge=charge)
+    histND = theory_corrections.read_scetlib_hist(file_name, nonsing=nonsing, charge=charge, flip_y_sign="A4" in file_name)
 
-    return transform_and_project(histND, lookup[hist_name], 1.0)
+    hist_info = lookup[hist_name]
+    action = hist_info["action"] if "action" in hist_info else None
+    return transform_and_project(histND, 1.0, hist_info["axis"], action)
 
 def read_matrix_radish_hist(proc, filename, lookup, hist_name):
     hist_info = lookup[hist_name][proc]
     histND = theory_corrections.read_matrixRadish_hist(filename, hist_info["axis"])
     scale = 1.0 if "scale" not in hist_info else hist_info["scale"]
 
-    return transform_and_project(histND, hist_info, scale)
+    action = hist_info["action"] if "action" in hist_info else None
+    return transform_and_project(histND, scale, hist_info, action)
 
 def read_hists(proc, files, lookup, hist_name):
     hists = []
@@ -183,9 +203,10 @@ for generator, label in generators_info:
         if len(hists) > 1:
             all_labels.extend([f"{label} (alt {i})" for i in range(1, len(hists[1:]+1))])
 
-all_hists = hh.rebinHistsToCommon(all_hists, axis_idx=0, keep_full_range=args.keep_full_range)
+if len(all_hists) > 1:
+    all_hists = hh.rebinHistsToCommon(all_hists, axis_idx=0, keep_full_range=args.keep_full_range)
 
-fig = plot_tools.makePlotWithRatioToRef(all_hists, colors=all_colors, labels=all_labels, alpha=0.7, ylim=[0, args.ymax] if args.ymax else None,
+fig = plot_tools.makePlotWithRatioToRef(all_hists, colors=all_colors, labels=all_labels, alpha=0.7, ylim=args.ylim,
         rrange=args.rrange, ylabel="$\sigma$/bin", xlabel=xlabels[args.hist_name], rlabel=f"x/MiNNLO", binwnorm=1.0, nlegcols=1)
 
 outname = f"TheoryCompHist_{args.proc}_{args.hist_name}" + ("_"+args.name_append if args.name_append else "")
