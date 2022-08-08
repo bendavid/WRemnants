@@ -19,7 +19,7 @@ def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None,
     grid_on_main_plot = False, grid_on_ratio_plot = False, plot_title = None
 ):
     hax = href.axes[0]
-    width = math.ceil(hax.size/400)
+    width = math.ceil(hax.size/300)
     fig = plt.figure(figsize=(8*width,8))
     ax1 = fig.add_subplot(4, 1, (1, 3)) 
     ax2 = fig.add_subplot(4, 1, 4) 
@@ -43,7 +43,7 @@ def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None,
     if plot_title: ax1.set_title(plot_title)
     return fig,ax1,ax2
 
-def addLegend(ax, ncols=2, extra_text=None):
+def addLegend(ax, ncols=2, extra_text=None, text_size=20):
     has_extra_text = extra_text is not None
     handles, labels = ax.get_legend_handles_labels()
     
@@ -60,13 +60,13 @@ def addLegend(ax, ncols=2, extra_text=None):
         labels.insert(math.floor(len(labels)/2), ' ')
     #handles= reversed(handles)
     #labels= reversed(labels)
-    ax.legend(handles=handles, labels=labels, prop={'size' : 20*(0.7 if shape == 1 else 1.3)}, ncol=ncols, loc='upper right')
+    ax.legend(handles=handles, labels=labels, prop={'size' : text_size*(0.7 if shape == 1 else 1.3)}, ncol=ncols, loc='upper right')
 
 def makeStackPlotWithRatio(
     histInfo, stackedProcs, histName="nominal", unstacked=None, 
     xlabel="", ylabel="Events/bin", rlabel = "Data/Pred.", rrange=[0.9, 1.1], ylim=None, xlim=None, nlegcols=2,
     binwnorm=None, select={},  action = (lambda x: x), extra_text=None, grid = False, plot_title = None,
-    ratio_to_data=False,
+    ratio_to_data=False, legtex_size=20,
 ):
     stack = [action(histInfo[k][histName][select]) for k in stackedProcs if histInfo[k][histName]]
     colors = [histInfo[k]["color"] for k in stackedProcs if histInfo[k][histName]]
@@ -124,7 +124,8 @@ def makeStackPlotWithRatio(
 def makePlotWithRatioToRef(
     hists, labels, colors, xlabel="", ylabel="Events/bin", rlabel="x/nominal",
     rrange=[0.9, 1.1], ylim=None, xlim=None, nlegcols=2, binwnorm=None, alpha=1.,
-    baseline=True, data=False, autorrange=None, grid = False
+    baseline=True, data=False, autorrange=None, grid = False,
+    yerr=False, legtext_size=20,
 ):
     # nominal is always at first, data is always at last, if included
     ratio_hists = [hh.divideHists(h, hists[0], cutoff=0.00001) for h in hists[not baseline:]]
@@ -137,6 +138,7 @@ def makePlotWithRatioToRef(
         label=labels[:(len(labels)- data)],
         stack=False,
         ax=ax1,
+        yerr=yerr,
         binwnorm=binwnorm,
         alpha=alpha,
     )
@@ -175,7 +177,7 @@ def makePlotWithRatioToRef(
             alpha=alpha,
         )
 
-    addLegend(ax1, nlegcols)
+    addLegend(ax1, nlegcols, legtext_size)
     return fig
 
 def make_plot_dir(outpath, outfolder):

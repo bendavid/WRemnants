@@ -12,7 +12,7 @@ dataDictV9 = {
     },
     'ZmmPostVFP' : { 'name' : "ZmumuPostVFP",
                    'filepaths' :
-                   ["/scratch/shared/NanoAOD/TrackRefitv2/DYJetsToMuMu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/*/*/*/*.root"],
+                   ["/scratch/shared/NanoAOD/TrackRefitv2_GenPartPrecision/DYJetsToMuMu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP/220729_152749/0000/*.root"],
                    'xsec' : xsec_ZmmPostVFP,
     },
     'ZttPostVFP' : { 'name' : "ZtautauPostVFP",
@@ -24,12 +24,12 @@ dataDictV9 = {
 
     'WpmunuPostVFP' : { 'name' : "WplusmunuPostVFP",
                       'filepaths' : 
-                      ["/scratch/shared/NanoAOD/TrackRefitv2/WplusJetsToMuNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/*/*/*/*.root"],
+                      ["/scratch/shared/NanoAOD/TrackRefitv2_GenPartPrecision/WplusJetsToMuNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP/220729_152523/*/*.root"],
                       'xsec' : xsec_WpmunuPostVFP
     },
     'WmmunuPostVFP' : { 'name' : "WminusmunuPostVFP",
                       'filepaths' : 
-                      ["/scratch/shared/NanoAOD/TrackRefitv2/WminusJetsToMuNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/*/*/*/*.root"],
+                      ["/scratch/shared/NanoAOD/TrackRefitv2_GenPartPrecision/WminusJetsToMuNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP/220729_152430/*/*.root"],
                       'xsec' : xsec_WmmunuPostVFP
     },
 

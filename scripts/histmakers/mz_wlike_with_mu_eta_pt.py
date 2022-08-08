@@ -14,7 +14,8 @@ elif initargs.nThreads != 1:
     ROOT.ROOT.EnableImplicitMT(initargs.nThreads)
 import narf
 import wremnants
-from wremnants import theory_tools,syst_tools,scetlib_corrections
+from wremnants import theory_tools,syst_tools,theory_corrections,common
+from wremnants import boostHistHelpers as hh
 import hist
 import lz4.frame
 import logging
@@ -30,7 +31,8 @@ parser.add_argument("--maxFiles", type=int, help="Max number of files (per datas
 parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=None)
 parser.add_argument("--muScaleMag", type=float, default=1e-4, help="Magnitude of dummy muon scale uncertainty")
 parser.add_argument("--muScaleBins", type=int, default=1, help="Number of bins for muon scale uncertainty")
-parser.add_argument("--scetlibCorr", choices=["altHist", "noUnc", "full", "altHistNoUnc"], help="Save hist for SCETlib correction with/without uncertainties, with/without modifying central weight")
+parser.add_argument("--theory_corr", nargs="*", choices=["scetlib", "dyturbo", "matrix_radish"], help="Apply corrections from indicated generator. First will be nominal correction.")
+parser.add_argument("--theory_corr_alt_only", action='store_true', help="Save hist for correction hists but don't modify central weight")
 parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")
 parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
 parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
@@ -52,8 +54,13 @@ era = "2016PostVFP"
 
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 
-scetlibCorrZ_helper = scetlib_corrections.make_corr_helper(isW=False)
-scetlibCorrW_helper = scetlib_corrections.make_corr_helper(isW=True)
+corr_helpers = {} 
+if args.theory_corr:
+    for proc in ["ZmumuPostVFP", ]:#"WplusmunuPostVFP", "WminusmunuPostVFP"]:
+        corr_helpers[proc] = {}
+        for generator in args.theory_corr:
+            fname = f"{common.data_dir}/TheoryCorrections/{generator}Corr{proc}.pkl.lz4"
+            corr_helpers[proc][generator] = theory_corrections.make_corr_helper(fname, proc, f"{generator}_minnlo_ratio")
 
 qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = True)
 axis_ptVgen = qcdScaleByHelicity_helper.hist.axes["ptVgen"]
@@ -197,6 +204,7 @@ def build_graph(df, dataset):
 
     isW = dataset.name in wprocs
     isZ = dataset.name in zprocs
+    apply_theory_corr = args.theory_corr and dataset.name in corr_helpers
 
     if not dataset.is_data:
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
@@ -204,15 +212,14 @@ def build_graph(df, dataset):
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId"])
 
         weight_expr = "weight*weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF"
-        scetlibCorr_helper = scetlibCorrZ_helper if isZ else scetlibCorrW_helper
         if isW or isZ:
             df = df.Define("nominal_pdf_cen", theory_tools.pdf_central_weight(dataset.name, args.pdfs[0]))
             weight_expr = f"{weight_expr}*nominal_pdf_cen"
             df = wremnants.define_prefsr_vars(df)
 
-            if args.scetlibCorr and isZ:
-                df = theory_tools.define_scetlib_corr(df, weight_expr, scetlibCorr_helper,
-                    corr_type=args.scetlibCorr)
+            if apply_theory_corr:
+                df = theory_tools.define_theory_corr(df, weight_expr, corr_helpers[dataset.name],
+                    generators=args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
             else:
                 df = df.Define("nominal_weight", weight_expr)
 
@@ -242,13 +249,13 @@ def build_graph(df, dataset):
     dilepton = df_dilepton.HistoBoost("dilepton", dilepton_axes, [*dilepton_cols, "nominal_weight"])
     results.append(dilepton)
 
-    #if (isW or isZ) and args.scetlibCorr:
-    if isZ and args.scetlibCorr:
-        results.extend(theory_tools.make_scetlibCorr_hists(df_dilepton, "dilepton", dilepton_axes, dilepton_cols, 
-            scetlibCorr_helper, corr_type=args.scetlibCorr)
-        )
-
     df = df.Filter("massZ >= 60. && massZ < 120.")
+
+    #if (isW or isZ) and args.scetlibCorr:
+    if apply_theory_corr:
+        results.extend(theory_tools.make_theory_corr_hists(df_dilepton, "dilepton", dilepton_axes, dilepton_cols, 
+            corr_helpers[dataset.name], args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
+        )
 
     #TODO improve this to include muon mass?
     met_vars = ("MET_pt", "MET_phi")
@@ -292,9 +299,9 @@ def build_graph(df, dataset):
         # n.b. this is the W analysis so mass weights shouldn't be propagated
         # on the Z samples (but can still use it for dummy muon scale)
         if isW or isZ:
-            if args.scetlibCorr and isZ:
-                results.extend(theory_tools.make_scetlibCorr_hists(df, "nominal", axes=nominal_axes, cols=nominal_cols, 
-                    helper=scetlibCorr_helper, corr_type=args.scetlibCorr)
+            if apply_theory_corr:
+                results.extend(theory_tools.make_theory_corr_hists(df, "nominal", axes=nominal_axes, cols=nominal_cols, 
+                    helpers=corr_helpers[dataset.name], generators=args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
                 )
 
             df = theory_tools.define_scale_tensor(df)

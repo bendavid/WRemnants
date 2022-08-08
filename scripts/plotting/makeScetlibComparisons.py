@@ -37,11 +37,11 @@ lookup = {
             "action" : lambda x: theory_tools.scale_angular_moments(
                 x[{"muRfact" : 1.j, "muFfact" : 1.j, "massVgen" : s[0:x.axes["massVgen"].size:hist.sum]}])[{"helicity" : 4.j}],
         },
-        "sigma4_ptV" : {
+        "sigma4_absYV" : {
             "hist" : "helicity_moments_scale",
-            "axis" : "ptVgen",
+            "axis" : "absYVgen",
             "action" : lambda x: theory_tools.scale_angular_moments(
-                x[{"muRfact" : 1.j, "muFfact" : 1.j, "massVgen" : s[0:x.axes["massVgen"].size:hist.sum]}])[{"helicity" : 4.j}],
+                x[{"muRfact" : 1.j, "muFfact" : 1.j, "massVgen" : s[0:x.axes["massVgen"].size:hist.sum], "ptVgen" : s[0:40.j:hist.sum]}])[{"helicity" : 4.j}],
         }
     },
     "scetlib" : {
@@ -57,6 +57,10 @@ lookup = {
         },
         "sigma4_ptV" : {
             "axis" : "pt",
+        },
+        "sigma4_absYV" : {
+            "axis" : "absy",
+            "action" : lambda x: hh.makeAbsHist(x[{"pt" : s[0:40.j:hist.sum]}], "y"),
         },
     },
     "matrix_radish" : {
@@ -105,6 +109,14 @@ xlabels = {
     "absYV" : r"$|\mathrm{y}^{%s}|$"  % ("W" if "w" in args.proc else "Z"),
 }
 xlabels["sigma4_ptV"] = xlabels["ptV"]
+xlabels["sigma4_absYV"] = xlabels["absYV"]
+
+ylabels = {
+    "sigma4_ptV" : "$\sigma_{4}$/bin",
+    "sigma4_absYV" : "$\sigma_{4}$/bin",
+    "a4_ptV" : "$\A_{4}$/bin",
+    "a4_absYV" : "$\A_{4}$/bin",
+}
 
 def transform_and_project(histND, scale, axis_name, action=None):
     if action is not None:
@@ -153,7 +165,7 @@ def read_matrix_radish_hist(proc, filename, lookup, hist_name):
     scale = 1.0 if "scale" not in hist_info else hist_info["scale"]
 
     action = hist_info["action"] if "action" in hist_info else None
-    return transform_and_project(histND, scale, hist_info, action)
+    return transform_and_project(histND, scale, hist_info["axis"], action)
 
 def read_hists(proc, files, lookup, hist_name):
     hists = []
@@ -185,6 +197,14 @@ generators_info = [
 	("dyturbo", "DYTurbo (NNLO+N$^{3}$LL)"),
 ]
 
+short_name = {
+    "minnlo" : "MiNNLO",
+    "scetlib" : "SCETlib",
+    "matrix_radish" : "MAT+Rad",
+    "dyturbo" : "DYTurbo",
+}
+
+
 generators_info.insert(0, generators_info.pop([x[0] for x in generators_info].index(args.ratio_ref)))
 
 for generator, label in generators_info:
@@ -206,8 +226,9 @@ for generator, label in generators_info:
 if len(all_hists) > 1:
     all_hists = hh.rebinHistsToCommon(all_hists, axis_idx=0, keep_full_range=args.keep_full_range)
 
+ylabel = "$\sigma$/bin" if args.hist_name not in ylabels else ylabels[args.hist_name]
 fig = plot_tools.makePlotWithRatioToRef(all_hists, colors=all_colors, labels=all_labels, alpha=0.7, ylim=args.ylim,
-        rrange=args.rrange, ylabel="$\sigma$/bin", xlabel=xlabels[args.hist_name], rlabel=f"x/MiNNLO", binwnorm=1.0, nlegcols=1)
+        rrange=args.rrange, ylabel=ylabel, xlabel=xlabels[args.hist_name], rlabel=f"x/{short_name[args.ratio_ref]}", binwnorm=1.0, nlegcols=1)
 
 outname = f"TheoryCompHist_{args.proc}_{args.hist_name}" + ("_"+args.name_append if args.name_append else "")
 plot_tools.save_pdf_and_png(outdir, outname)

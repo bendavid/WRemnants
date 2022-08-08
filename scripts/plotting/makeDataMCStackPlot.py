@@ -42,12 +42,16 @@ parser.add_argument("-a", "--name_append", type=str, help="Name to append to fil
 
 subparsers = parser.add_subparsers()
 variation = subparsers.add_parser("variation", help="Arguments for adding variation hists")
-variation.add_argument("--varName", type=str, required=True, help="Name of variation hist")
+variation.add_argument("--varName", type=str, nargs='+', required=True, help="Name of variation hist")
 variation.add_argument("--varLabel", type=str, nargs='+', required=True, help="Label(s) of variation hist for plotting")
-variation.add_argument("--selectAxis", type=str, help="If you need to select a variation axis")
+variation.add_argument("--selectAxis", type=str, nargs='+', help="If you need to select a variation axis")
 variation.add_argument("--selectEntries", type=int, nargs='+', help="entries to read from the selected axis")
+variation.add_argument("--colors", type=str, nargs='+', help="Variation colors")
 
 args = parser.parse_args()
+
+def padArray(ref, matchLength):
+    return ref+ref[-1:]*(len(matchLength)-len(ref))
 
 addVariation = hasattr(args, "varName") and args.varName is not None
 
@@ -65,23 +69,27 @@ groups.setNominalName(nominalName)
 groups.loadHistsForDatagroups(args.baseName, syst="")
 
 exclude = ["Data"]
+colors = args.colors if args.colors else ["red", "green", "blue"]
 unstack = exclude[:]
 
 if addVariation:
     logging.info(f"Adding variation {args.varName}")
-    groups.loadHistsForDatagroups(nominalName, syst=args.varName)
-    name = args.varName if args.varName != "" else nominalName
-    groups.addSummedProc(nominalName, name=name, label=args.varLabel[0], relabel=args.baseName)
-    exclude.append(name)
+    varLabels = padArray(args.varLabel, args.varName)
+    for i, (label,name,color) in enumerate(zip(varLabels, args.varName, colors)):
+        groups.loadHistsForDatagroups(nominalName, syst=name)
+        name = name if name != "" else nominalName
+        exclude.append(name)
+        groups.addSummedProc(nominalName, name=name, label=label, exclude=exclude,
+            relabel=args.baseName, color=color)
 
-    if not args.selectAxis:
-        unstack.append(name)
-    else:
-        for label,ax,entry in zip(args.varLabel, [args.selectAxis]*len(args.varLabel), args.selectEntries):
-            select = lambda x: x[{ax : entry}]
+        if not args.selectAxis:
+            unstack.append(name)
+        else:
+            entries = padArray(args.selectAxis, args.varLabel)
+            select = lambda x: x[{ax : entries[i]}]
             varname = name+str(entry)
             groups.copyWithAction(action=select, name=varname, refproc=name, 
-                refname=args.baseName, label=label, color='green')
+                refname=args.baseName, label=label, color=colors[i])
             exclude.append(varname)
             unstack.append(varname)
 
