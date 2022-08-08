@@ -14,7 +14,8 @@ elif initargs.nThreads != 1:
     ROOT.ROOT.EnableImplicitMT(initargs.nThreads)
 import narf
 import wremnants
-from wremnants import theory_tools,syst_tools
+from wremnants import theory_tools,syst_tools,common
+from wremnants import boostHistHelpers as hh
 import hist
 import lz4.frame
 import logging
@@ -24,10 +25,11 @@ logging.basicConfig(level=logging.INFO)
 
 parser.add_argument("--pdfs", type=str, nargs="*", default=["nnpdf31"], choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for")
 parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
-parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=["Wplus", "Wminus", "Zmumu", "Ztautau"])
+parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=["Wplusmu", "Wminusmu", "Zmumu"])
 parser.add_argument("--skipAngularCoeffs", action='store_true', help="Skip the conversion of helicity moments to angular coeff fractions")
 parser.add_argument("--singleLeptonHists", action='store_true', help="Also store single lepton kinematics")
 parser.add_argument("--v8", action='store_true', help="Use NanoAODv8. Default is v9")
+parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
 args = parser.parse_args()
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
@@ -135,6 +137,8 @@ def build_graph(df, dataset):
 resultdict = narf.build_and_run(datasets, build_graph)
 
 fname = "w_z_gen_dists.pkl.lz4"
+if args.postfix:
+    fname = fname.replace(".pkl.lz4", f"_{args.postfix}.pkl.lz4")
 
 print("writing output")
 with lz4.frame.open(fname, "wb") as f:
@@ -146,6 +150,9 @@ z_moments = None
 w_moments = None
 
 for key, val in resultdict.items():
+    # For now the tau samples have a different pt spectrum
+    if "tau" in key:
+        continue
     moments = val["output"]["helicity_moments_scale"]
     if key in zprocs:
         if z_moments is None:
@@ -158,5 +165,10 @@ for key, val in resultdict.items():
         else:
             w_moments += moments
 
-z_coeffs = wremnants.moments_to_angular_coeffs(z_moments)
-w_coeffs = wremnants.moments_to_angular_coeffs(w_moments)
+z_coeffs = wremnants.moments_to_angular_coeffs(hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning))
+w_coeffs = wremnants.moments_to_angular_coeffs(hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning))
+
+with lz4.frame.open("z_coeffs.pkl.lz4", "wb") as f:
+    pickle.dump(z_coeffs, f, protocol = pickle.HIGHEST_PROTOCOL)
+with lz4.frame.open("w_coeffs.pkl.lz4", "wb") as f:
+    pickle.dump(w_coeffs, f, protocol = pickle.HIGHEST_PROTOCOL)

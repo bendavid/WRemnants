@@ -39,24 +39,22 @@ def make_corr_helper_fromnp(filename=f"{data_dir}/N3LLCorrections/inclusive_{{pr
     corrh[:,hist.overflow,...] = 1.
     corrh[:,:,hist.overflow,...] = 1.
 
-    print("Shape is", corrh.shape)
-
     return makeCorrectionsTensor(corrh, ROOT.wrem.TensorCorrectionsHelper, tensor_rank=1)
 
-def make_corr_helper(filename=f"{data_dir}/N3LLCorrections/inclusive_pT_y_m.pkl.lz4", isW=True):
-    print("Filename", filename)
+def make_corr_helper(filename, proc, histname):
     with lz4.frame.open(filename) as f:
         corr = pickle.load(f)
-        corrh = corr['W' if isW else 'Z']["inclusive_pT_y_m_ratio"]
+        corrh = corr[proc][histname]
 
     return makeCorrectionsTensor(corrh, ROOT.wrem.TensorCorrectionsHelper, tensor_rank=1)
 
-def make_scetlib_minnlo_corr(minnlo_hist, scetlib_hist):
-    minnlo_rebin = minnlo_hist
-    for minnlo_ax, scetlib_ax in zip(minnlo_hist.axes, scetlib_hist.axes[:-1]):
-        minnlo_rebin = hh.rebinHist(minnlo_rebin, minnlo_ax.name, scetlib_ax.edges)
+def make_corr_from_ratio(denom_hist, num_hist):
+    rebin_axes = denom_hist.axes if len(denom_hist.axes) < len(num_hist.axes) else num_hist.axes
 
-    corrh = hh.divideHists(scetlib_hist, minnlo_rebin)
+    for i in range(min(denom_hist.ndim, num_hist.ndim)):
+        denom_hist, num_hist = hh.rebinHistsToCommon([denom_hist, num_hist], i)
+
+    corrh = hh.divideHists(num_hist, denom_hist)
     corrh[hist.underflow,...] = np.ones_like(corrh[0,...])
     corrh[hist.overflow,...] = np.ones_like(corrh[0,...])
     corrh[:,hist.underflow,...] = np.ones_like(corrh[:,0,...])
@@ -113,12 +111,13 @@ def make_a4_coeff(a4_hist, ul_hist):
     return hh.divideHists(a4_hist, ul_hist, cutoff=0.0001)
 
 def read_dyturbo_hist(filenames, path="", axis="pt"):
-    isfile = filter(lambda x: os.path.isfile(x), ["/".join([path, f]) for f in filenames])
+    isfile = list(filter(lambda x: os.path.isfile(x), ["/".join([path, f]) if path else f for f in filenames]))
 
     if not isfile:
         raise ValueError("Must pass in a valid file")
 
     hists = [read_dyturbo_file(f, axis) for f in isfile]
+    print(len(hists), hists)
     return hh.sumHists(hists)
 
 # Ignoring the scale unc for now

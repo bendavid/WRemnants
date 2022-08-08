@@ -147,8 +147,14 @@ class datagroups(object):
             color=color,
             members=[],
         )
+        tosum = []
+        for proc in filter(lambda x: x not in exclude+[name], self.groups.keys()):
+            h = self.groups[proc][name]
+            if not h:
+                raise ValueError(f"Failed to find hist for proc {proc}, histname {name}")
+            tosum.append(h)
         histname = refname if not relabel else relabel
-        self.groups[name][histname] = hh.sumHists([self.groups[x][name] for x in self.groups.keys() if x not in exclude+[name]])
+        self.groups[name][histname] = hh.sumHists(tosum)
 
     def copyWithAction(self, action, name, refproc, refname, label, color):
         self.groups[name] = dict(
