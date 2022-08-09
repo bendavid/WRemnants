@@ -53,7 +53,7 @@ def make_corr_by_helicity_helper(filename, proc, histname):
         corr = pickle.load(f)
         corrh = corr[proc][histname]
 
-    return makeCorrectionsTensor(corrh, ROOT.wrem.CentralCorrByHelicityHelper, tensor_rank=2)
+    return makeCorrectionsTensor(corrh, ROOT.wrem.CentralCorrByHelicityHelper, tensor_rank=1)
 
 def rebin_corr_hists(hists, ndim=-1):
     # Allow trailing dimensions to be different (e.g., variations)
@@ -90,17 +90,20 @@ def make_corr_by_helicity(ref_helicity_hist, target_sigmaul, target_sigma4, ndim
     target_a4_coeff = make_a4_coeff(target_sigma4, target_sigmaul)
 
     sigmaUL_ratio = hh.divideHists(target_sigmaul, ref_helicity_hist[{"helicity" : -1.j}])
-    # This is because I haven't run W+ yet
 
     corr_ax = hist.axis.Boolean(name="corr")
-    corr_coeffs = hist.Hist(*ref_coeffs.axes, corr_ax)
+    vars_ax = target_sigmaul.axes["vars"]
+    corr_coeffs = hist.Hist(*ref_coeffs.axes, corr_ax, vars_ax)
     # Corr = False is the uncorrected coeffs, corrected coeffs are scaled by the new sigma UL
     # and have the new A4
-    corr_coeffs[...,False] = ref_coeffs.values(flow=True)
+    corr_coeffs[...,False,:] = ref_coeffs.values(flow=True)[...,np.newaxis]
     # TODO: Double check in my mind if this should come before or after multiplying through by sigma_UL
-    corr_coeffs[...,4.j,True] = target_a4_coeff[{"vars" : 0}].values()
-    corr_coeffs[...,True] = hh.multiplyHists(ref_coeffs, sigmaUL_ratio).values(flow=True)
+    corr_coeffs[...,4.j,True,:] = target_a4_coeff.values()
+    # Add back the helicity dimension and keep the variation dimension from the correction
+    rescaled_coeffs = ref_coeffs.values(flow=True)[...,np.newaxis]*sigmaUL_ratio.values(flow=True)[...,np.newaxis,:]
+    corr_coeffs[...,True,:] = scaled
 
+    # This is because I haven't run W+ yet
     if corr_coeffs.axes["chargeVgen"].size == 2:
         corr_coeffs[...,1.j,:,:].view(flow=True)[...] = corr_coeffs[{"chargeVgen" : -1.j}].view(flow=True)
     return corr_coeffs
