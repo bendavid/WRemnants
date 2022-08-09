@@ -189,7 +189,11 @@ def define_theory_corr(df, weight_expr, helpers, generators, modify_central_weig
                 df = df.Define("nominal_weight", weight_expr)
                 df = df.Alias("nominal_weight_uncorr", "nominal_weight")
 
-        df = df.Define(f"{generator}Weight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "nominal_weight_uncorr"])
+        if "Helicity" in generator:
+            df = df.Define(f"{generator}Weight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "nominal_weight_uncorr"])
+        else:
+            df = df.Define(f"{generator}Weight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "nominal_weight_uncorr"])
+
         df = df.Define(f"{generator}CentralWeight", f"{generator}Weight_tensor(0)")
 
         if i == 0 and modify_central_weight:

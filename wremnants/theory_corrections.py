@@ -48,6 +48,13 @@ def make_corr_helper(filename, proc, histname):
 
     return makeCorrectionsTensor(corrh, ROOT.wrem.TensorCorrectionsHelper, tensor_rank=1)
 
+def make_corr_by_helicity_helper(filename, proc, histname):
+    with lz4.frame.open(filename) as f:
+        corr = pickle.load(f)
+        corrh = corr[proc][histname]
+
+    return makeCorrectionsTensor(corrh, ROOT.wrem.CentralCorrByHelicityHelper, tensor_rank=2)
+
 def rebin_corr_hists(hists, ndim=-1):
     # Allow trailing dimensions to be different (e.g., variations)
     ndims = min([x.ndim for x in hists]) if ndim < 0 else ndim
@@ -90,9 +97,10 @@ def make_corr_by_helicity(ref_helicity_hist, target_sigmaul, target_sigma4, ndim
     # Corr = False is the uncorrected coeffs, corrected coeffs are scaled by the new sigma UL
     # and have the new A4
     corr_coeffs[...,False] = ref_coeffs.values(flow=True)
+    # TODO: Double check in my mind if this should come before or after multiplying through by sigma_UL
+    corr_coeffs[...,4.j,True] = target_a4_coeff[{"vars" : 0}].values()
     corr_coeffs[...,True] = hh.multiplyHists(ref_coeffs, sigmaUL_ratio).values(flow=True)
 
-    corr_coeffs[...,4.j,True] = target_a4_coeff[{"vars" : 0}].values()
     if corr_coeffs.axes["chargeVgen"].size == 2:
         corr_coeffs[...,1.j,:,:].view(flow=True)[...] = corr_coeffs[{"chargeVgen" : -1.j}].view(flow=True)
     return corr_coeffs

@@ -10,6 +10,32 @@
 
 namespace wrem {
 
+const size_t NHELICITY = 9;
+typedef Eigen::TensorFixedSize<double, Eigen::Sizes<NHELICITY>> helicity_tensor;
+
+helicity_tensor csAngularFactors(const CSVars& csvars) {
+    const double sinThetaCS = csvars.sintheta;
+    const double cosThetaCS = csvars.costheta;
+    const double sinPhiCS = csvars.sinphi;
+    const double cosPhiCS = csvars.cosphi;
+
+    const double sin2ThetaCS = 2.*sinThetaCS*cosThetaCS;
+    const double sin2PhiCS = 2.*sinPhiCS*cosPhiCS;
+    const double cos2ThetaCS = 1. - 2.*sinThetaCS*sinThetaCS;
+    const double cos2PhiCS= 1. - 2.*sinPhiCS*sinPhiCS;
+    helicity_tensor angular;
+    angular(0) = 1.+cosThetaCS*cosThetaCS;
+    angular(1) = 0.5*(1. - 3.*cosThetaCS*cosThetaCS);
+    angular(2) = sin2ThetaCS*cosPhiCS;
+    angular(3) = 0.5*sinThetaCS*sinThetaCS*cos2PhiCS;
+    angular(4) = sinThetaCS*cosPhiCS;
+    angular(5) = cosThetaCS;
+    angular(6) = sinThetaCS*sinThetaCS*sin2PhiCS;
+    angular(7) = sin2ThetaCS*sinPhiCS;
+    angular(8) = sinThetaCS*sinPhiCS;
+    return angular;
+}
+
 template <typename T>
 class TensorCorrectionsHelper {
 
@@ -64,37 +90,23 @@ public:
     //inherit constructor
     using base_t::base_t;
 
-    small_tensor_t csAngularFactors(const CSVars &csvars) {
-
-        const double sinThetaCS = csvars.sintheta;
-        const double cosThetaCS = csvars.costheta;
-        const double sinPhiCS = csvars.sinphi;
-        const double cosPhiCS = csvars.cosphi;
-
-        const double sin2ThetaCS = 2.*sinThetaCS*cosThetaCS;
-        const double sin2PhiCS = 2.*sinPhiCS*cosPhiCS;
-        const double cos2ThetaCS = 1. - 2.*sinThetaCS*sinThetaCS;
-        const double cos2PhiCS= 1. - 2.*sinPhiCS*sinPhiCS;
+    // TODO: Surely this can be done better
+    small_tensor_t csAngularFactorsTensor(const CSVars &csvars) {
         small_tensor_t angular;
         // n.b. setValues is error-prone for multi-dim tensors
-        angular(0, 0, 0) = 1.+cosThetaCS*cosThetaCS;
-        angular(1, 0, 0) = 0.5*(1. - 3.*cosThetaCS*cosThetaCS);
-        angular(2, 0, 0) = sin2ThetaCS*cosPhiCS;
-        angular(3, 0, 0) = 0.5*sinThetaCS*sinThetaCS*cos2PhiCS;
-        angular(4, 0, 0) = sinThetaCS*cosPhiCS;
-        angular(5, 0, 0) = cosThetaCS;
-        angular(6, 0, 0) = sinThetaCS*sinThetaCS*sin2PhiCS;
-        angular(7, 0, 0) = sin2ThetaCS*sinPhiCS;
-        angular(8, 0, 0) = sinThetaCS*sinPhiCS;
-
+        auto angular1D = csAngularFactors(csvars);
+        for (size_t i = 0; i < NHELICITY; i++) {
+            angular(i, 0, 0) = angular1D[i];
+        }
         return angular;
     }
 
     tensor_t operator() (double mV, double yV, double ptV, int qV, const CSVars &csvars, const scale_tensor_t &scale_tensor, double nominal_weight) {
         // pure angular terms without angular coeffs multiplied through
-        const auto angular = csAngularFactors(csvars);
+        const auto angular = csAngularFactorsTensor(csvars);
 
         static_assert(sizes.size() == 3);
+        static_assert(nhelicity == NHELICITY);
 
         constexpr std::array<Eigen::Index, 3> broadcastscales = { 1, nmur, nmuf };
         // now multiplied through by angular coefficients (1.0 for 1+cos^2theta term)
@@ -112,6 +124,27 @@ public:
         return nominal_weight*scale*angular_with_coeffs/denominator;
     }
 
+};
+
+template <typename T>
+class CentralCorrByHelicityHelper : public TensorCorrectionsHelper<T> {
+using base_t = TensorCorrectionsHelper<T>;
+
+using tensor_t = typename T::storage_type::value_type::tensor_t;
+static constexpr auto sizes = narf::tensor_traits<tensor_t>::sizes;
+static constexpr auto nhelicity = sizes[0];
+
+public:
+    using base_t::base_t;
+
+    tensor_t operator() (double mV, double yV, double ptV, int qV, const CSVars &csvars, double nominal_weight) {
+        const auto angular = csAngularFactors(csvars);
+        const auto coeffs = base_t::get_tensor(mV, yV, ptV, qV);
+        auto uncorr = coeffs.chip(0, 0)*angular;
+        auto corr = coeffs.chip(0, 1)*angular;
+
+        return corr.sum()/uncorr.sum();
+    }
 };
 
 }
