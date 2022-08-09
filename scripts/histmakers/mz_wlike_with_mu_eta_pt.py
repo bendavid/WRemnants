@@ -31,7 +31,8 @@ parser.add_argument("--maxFiles", type=int, help="Max number of files (per datas
 parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=None)
 parser.add_argument("--muScaleMag", type=float, default=1e-4, help="Magnitude of dummy muon scale uncertainty")
 parser.add_argument("--muScaleBins", type=int, default=1, help="Number of bins for muon scale uncertainty")
-parser.add_argument("--theory_corr", nargs="*", choices=["scetlib", "dyturbo", "matrix_radish"], help="Apply corrections from indicated generator. First will be nominal correction.")
+parser.add_argument("--theory_corr", nargs="*", choices=["scetlib", "scetlibHelicity", "dyturbo", "matrix_radish"], 
+    help="Apply corrections from indicated generator. First will be nominal correction.")
 parser.add_argument("--theory_corr_alt_only", action='store_true', help="Save hist for correction hists but don't modify central weight")
 parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")
 parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
@@ -60,7 +61,9 @@ if args.theory_corr:
         corr_helpers[proc] = {}
         for generator in args.theory_corr:
             fname = f"{common.data_dir}/TheoryCorrections/{generator}Corr{proc}.pkl.lz4"
-            corr_helpers[proc][generator] = theory_corrections.make_corr_helper(fname, proc, f"{generator}_minnlo_ratio")
+            helper_func = getattr(theory_corrections, "make_corr_helper" if "Helicity" not in generator else "make_corr_by_helicity_helper")
+            corr_hist_name = f"{generator}_minnlo_ratio" if "Helicity" not in generator else f"{generator.replace('Helicity', '')}_minnlo_coeffs"
+            corr_helpers[proc][generator] = helper_func(fname, proc, corr_hist_name)
 
 qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = True)
 axis_ptVgen = qcdScaleByHelicity_helper.hist.axes["ptVgen"]
