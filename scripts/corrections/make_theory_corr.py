@@ -15,18 +15,18 @@ parser.add_argument("-g", "--generator", type=str, choices=["dyturbo", "scetlib"
     required=True, help="Generator used to produce correction hist")
 parser.add_argument("--outpath", type=str, default=f"{common.data_dir}/TheoryCorrections", help="Output path")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
-parser.add_argument("--proc", type=str, required=True, choices=["z", "wm", "wp"], help="Process")
+parser.add_argument("--proc", type=str, required=True, choices=["z", "w", ], help="Process")
 
 args = parser.parse_args()
 
 logging.basicConfig(level=logging.INFO)
 
 if args.proc == "z":
-    procName = "ZmumuPostVFP" 
-    charge = 0
-elif args.proc == "wm":
-    procName = "WminusmunuPostVFP" 
-    charge = -1
+    procNames = ["ZmumuPostVFP"]
+    charges = [0]
+elif args.proc == "w":
+    procName = ["WminusmunuPostVFP", "WplusmunuPostVFP"]
+    charges = [-1, 1]
 elif args.proc == "wp":
     procName = "WplusmunuPostVFP" 
     charge = 1
@@ -53,6 +53,7 @@ else:
 corrh_unc  = theory_corrections.make_corr_from_ratio(minnloh, numh)
 corrh = hist.Hist(*corrh_unc.axes, name=corrh_unc.name, storage=hist.storage.Double(), data=corrh_unc.values(flow=True))
 
+procName = "Z" if args.proc == "z" else "W"
 outfile = f"{args.outpath}/{args.generator}Corr{procName}.pkl.lz4"
 if args.postfix:
     outfile = outfile.replace(".pkl.lz4", f"_{args.postfix}.pkl.lz4")
@@ -70,5 +71,4 @@ with lz4.frame.open(outfile, "wb") as f:
 logging.info("Correction binning is")
 for ax in corrh.axes:
     logging.info(f"Axis {ax.name}: {ax.edges}")
-logging.info(f"Average correction is {corrh.sum()/np.ones_like(corrh).sum()}")
 logging.info(f"Wrote file {outfile}")
