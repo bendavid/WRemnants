@@ -133,17 +133,37 @@ using base_t = TensorCorrectionsHelper<T>;
 using tensor_t = typename T::storage_type::value_type::tensor_t;
 static constexpr auto sizes = narf::tensor_traits<tensor_t>::sizes;
 static constexpr auto nhelicity = sizes[0];
+static constexpr auto ncorrs = sizes[1];
+static constexpr auto nvars = sizes[2];
 
 public:
     using base_t::base_t;
 
     tensor_t operator() (double mV, double yV, double ptV, int qV, const CSVars &csvars, double nominal_weight) {
+        std::cout << "WERE HERE!\n";
+        static_assert(sizes.size() == 3);
+        static_assert(nhelicity == NHELICITY);
+        static_assert(ncorrs == 2);
+
         const auto angular = csAngularFactors(csvars);
         const auto coeffs = base_t::get_tensor(mV, yV, ptV, qV);
-        auto uncorr = coeffs.chip(0, 0)*angular;
-        auto corr = coeffs.chip(0, 1)*angular;
+        Eigen::TensorFixedSize<double, Eigen::Sizes<nhelicity, nvars>> uncorr_hel = coeffs.chip(0, 1)*angular;
+        Eigen::TensorFixedSize<double, Eigen::Sizes<nhelicity, nvars>> corr_hel = coeffs.chip(1, 1)*angular;
 
-        return corr.sum()/uncorr.sum();
+        constexpr std::array<Eigen::Index, 1> reduceddims = {0};
+
+        for (size_t i = 0; i < NHELICITY; i++) {
+            std::cout << "old " << uncorr_hel(i,0);
+            std::cout << "corr " << corr_hel(i,0);
+        }
+        
+        tensor_t uncorr = uncorr_hel.sum(reduceddims);
+        tensor_t corr = corr_hel.sum(reduceddims);
+
+        std::cout << "Accumulated old " << uncorr(0) << std::endl;
+        std::cout << "Accumulated new " << corr(0) << std::endl;
+
+        return corr/uncorr;
     }
 };
 
