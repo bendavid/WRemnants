@@ -7,7 +7,7 @@ import numpy as np
 import lz4.frame
 import pickle
 from .correctionsTensor_helper import makeCorrectionsTensor
-from wremnants import boostHistHelpers as hh
+from wremnants import boostHistHelpers as hh,theory_tools
 from wremnants.common import data_dir
 
 def make_corr_helper_fromnp(filename=f"{data_dir}/N3LLCorrections/inclusive_{{process}}_pT.npz", isW=True):
@@ -48,19 +48,54 @@ def make_corr_helper(filename, proc, histname):
 
     return makeCorrectionsTensor(corrh, ROOT.wrem.TensorCorrectionsHelper, tensor_rank=1)
 
-def make_corr_from_ratio(denom_hist, num_hist):
-    rebin_axes = denom_hist.axes if len(denom_hist.axes) < len(num_hist.axes) else num_hist.axes
+def rebin_corr_hists(hists, ndim=-1):
+    # Allow trailing dimensions to be different (e.g., variations)
+    ndims = min([x.ndim for x in hists]) if ndim < 0 else ndim
+    for i in range(ndims):
+        # This is a workaround for now for the fact that MiNNLO has mass binning up to
+        # Inf whereas SCETlib has 13 TeV
+        if all([h.axes[i].size == 1 for h in hists]):
+            continue
+        hists = hh.rebinHistsToCommon(hists, i)
+    return hists
 
-    for i in range(min(denom_hist.ndim, num_hist.ndim)):
-        denom_hist, num_hist = hh.rebinHistsToCommon([denom_hist, num_hist], i)
-
-    corrh = hh.divideHists(num_hist, denom_hist)
+# Assuming the 3 physics variable dimensions are first
+def set_corr_ratio_flow(corrh):
     corrh[hist.underflow,...] = np.ones_like(corrh[0,...])
     corrh[hist.overflow,...] = np.ones_like(corrh[0,...])
     corrh[:,hist.underflow,...] = np.ones_like(corrh[:,0,...])
     corrh[:,hist.overflow,...] = np.ones_like(corrh[:,0,...])
     corrh[:,:,hist.overflow,...] = np.ones_like(corrh[:,:,0,...])
     return corrh
+
+def make_corr_from_ratio(denom_hist, num_hist):
+    denom_hist, num_hist = rebin_corr_hists([denom_hist, num_hist])
+
+    corrh = hh.divideHists(num_hist, denom_hist)
+    return set_corr_ratio_flow(corrh)
+
+def make_corr_by_helicity(ref_helicity_hist, target_sigmaul, target_sigma4, ndim=3):
+    ref_helicity_hist, target_sigmaul, target_sigma4 = rebin_corr_hists([ref_helicity_hist, target_sigmaul, target_sigma4], ndim)
+    
+    ref_coeffs = theory_tools.moments_to_angular_coeffs(ref_helicity_hist)
+
+
+    target_a4_coeff = make_a4_coeff(target_sigma4, target_sigmaul)
+
+    sigmaUL_ratio = hh.divideHists(target_sigmaul, ref_helicity_hist[{"helicity" : -1.j}])
+    # This is because I haven't run W+ yet
+
+    corr_ax = hist.axis.Boolean(name="corr")
+    corr_coeffs = hist.Hist(*ref_coeffs.axes, corr_ax)
+    # Corr = False is the uncorrected coeffs, corrected coeffs are scaled by the new sigma UL
+    # and have the new A4
+    corr_coeffs[...,False] = ref_coeffs.values(flow=True)
+    corr_coeffs[...,True] = hh.multiplyHists(ref_coeffs, sigmaUL_ratio).values(flow=True)
+
+    corr_coeffs[...,4.j,True] = target_a4_coeff[{"vars" : 0}].values()
+    if corr_coeffs.axes["chargeVgen"].size == 2:
+        corr_coeffs[...,1.j,:,:].view(flow=True)[...] = corr_coeffs[{"chargeVgen" : -1.j}].view(flow=True)
+    return corr_coeffs
 
 def read_scetlib_hist(path, pt_axis=None, nonsing="auto", flip_y_sign=False, charge=None):
     f = np.load(path, allow_pickle=True)
@@ -107,8 +142,8 @@ def read_scetlib_hist(path, pt_axis=None, nonsing="auto", flip_y_sign=False, cha
 
     return scetlibh 
 
-def make_a4_coeff(a4_hist, ul_hist):
-    return hh.divideHists(a4_hist, ul_hist, cutoff=0.0001)
+def make_a4_coeff(sigma4_hist, ul_hist):
+    return hh.divideHists(sigma4_hist, ul_hist, cutoff=0.0001)
 
 def read_dyturbo_hist(filenames, path="", axis="pt"):
     isfile = list(filter(lambda x: os.path.isfile(x), ["/".join([path, f]) if path else f for f in filenames]))
@@ -117,7 +152,6 @@ def read_dyturbo_hist(filenames, path="", axis="pt"):
         raise ValueError("Must pass in a valid file")
 
     hists = [read_dyturbo_file(f, axis) for f in isfile]
-    print(len(hists), hists)
     return hh.sumHists(hists)
 
 # Ignoring the scale unc for now

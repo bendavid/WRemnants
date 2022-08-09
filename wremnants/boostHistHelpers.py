@@ -125,19 +125,25 @@ def rebinHist(h, axis_name, edges):
         raise ValueError(f"Cannot rebin histogram due to incompatible eduges for axis '{ax.name}'\n"
                             f"Edges of histogram are {ax.edges}, requested rebinning to {edges}")
         
-    new_ax = hist.axis.Variable(edges, name=ax.name, overflow=ax.traits.overflow, underflow=ax.traits.underflow)
+    overflow = ax.traits.overflow
+    underflow = ax.traits.underflow
+    flow = overflow and underflow
+    new_ax = hist.axis.Variable(edges, name=ax.name, overflow=overflow, underflow=underflow)
     axes = list(h.axes)
     axes[ax_idx] = new_ax
     
     hnew = hist.Hist(*axes, name=h.name, storage=h._storage_type())
-    sum_edges = edges if edges[-1] != ax.edges[-1] else edges[:-1]
     # Take is used because reduceat sums i:len(array) for the last entry, in the case
     # where the final bin isn't the same between the initial and rebinned histogram, you
     # want to drop this value
-    hnew.values()[...] = np.add.reduceat(h.values(), h.axes[axis_name].index(sum_edges), 
-            axis=ax_idx).take(indices=range(new_ax.size), axis=ax_idx)
-    hnew.variances()[...] = np.add.reduceat(h.variances(), h.axes[axis_name].index(sum_edges), 
-            axis=ax_idx).take(indices=range(new_ax.size), axis=ax_idx)
+    edge_idx = h.axes[axis_name].index(edges)+flow
+    if flow:
+        edge_idx = np.insert(edge_idx, 0, 0)
+
+    hnew.values(flow=flow)[...] = np.add.reduceat(h.values(flow=flow), edge_idx, 
+            axis=ax_idx).take(indices=range(new_ax.size+2*flow), axis=ax_idx)
+    hnew.variances(flow=flow)[...] = np.add.reduceat(h.variances(flow=flow), edge_idx, 
+            axis=ax_idx).take(indices=range(new_ax.size+2*flow), axis=ax_idx)
     return hnew
 
 def mergeAxes(ax1, ax2):
@@ -175,7 +181,10 @@ def findCommonBinning(hists, axis_idx):
     for ax in orig_axes[1:]:
         common_edges.intersection_update(ax.edges)
 
-    return list(sorted(common_edges))
+    edges = list(sorted(common_edges))
+    if len(edges) < 2:
+        raise ValueError("Found < 2 common edges, cannot rebin")
+    return edges
 
 def rebinHistsToCommon(hists, axis_idx, keep_full_range=False):
     orig_axes = [h.axes[axis_idx] for h in hists]
