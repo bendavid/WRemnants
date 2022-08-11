@@ -5,6 +5,7 @@ parser.add_argument("--nThreads", type=int, help="number of threads", default=No
 parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
 parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=None)
 parser.add_argument("--flavor", type=str, help="Flavor (ee or mumu)", default=None)
+parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
 args = parser.parse_args()
 
 import ROOT
@@ -24,7 +25,7 @@ import gzip
 
 import narf
 import wremnants
-from wremnants import theory_tools
+from wremnants import theory_tools,output_tools
 import hist
 import lz4.frame
 import logging
@@ -395,8 +396,4 @@ def build_graph(df, dataset):
 
 resultdict = narf.build_and_run(datasets, build_graph)
 
-fname = "mz_lowPU_%s.pkl.lz4" % flavor
-
-print("writing output")
-with lz4.frame.open(fname, "wb") as f:
-    pickle.dump(resultdict, f, protocol = pickle.HIGHEST_PROTOCOL)
+output_tools.write_analysis_output(resultdict, fname, args.postfix)

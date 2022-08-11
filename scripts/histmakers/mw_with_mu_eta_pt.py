@@ -14,7 +14,7 @@ elif init.args.nThreads != 1:
     ROOT.ROOT.EnableImplicitMT(initargs.nThreads)
 import narf
 import wremnants
-from wremnants import theory_tools,syst_tools,scetlib_corrections
+from wremnants import theory_tools,syst_tools,scetlib_corrections,output_tools
 import hist
 import lz4.frame
 import logging
@@ -292,17 +292,4 @@ def build_graph(df, dataset):
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)
-print("-"*30)
-for key in resultdict.keys():
-    print(f"Dataset {key}: unweighted events (before cut) = {resultdict[key]['event_count']}")
-    print("-"*30)
-
-fname = "mw_with_mu_eta_pt.pkl.lz4"
-if args.postfix:
-    fname = fname.replace(".pkl.lz4", f"_{args.postfix}.pkl.lz4")
-
-time0 = time.time()
-print("writing output...")
-with lz4.frame.open(fname, "wb") as f:
-    pickle.dump(resultdict, f, protocol = pickle.HIGHEST_PROTOCOL)
-print("Output", time.time()-time0)
+output_tools.write_analysis_output(resultdict, "mw_with_mu_eta_pt.pkl.lz4", args.postfix)
