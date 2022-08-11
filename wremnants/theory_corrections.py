@@ -53,7 +53,7 @@ def make_corr_by_helicity_helper(filename, proc, histname):
         corr = pickle.load(f)
         corrh = corr[proc][histname]
 
-    return makeCorrectionsTensor(corrh, ROOT.wrem.CentralCorrByHelicityHelper, tensor_rank=1)
+    return makeCorrectionsTensor(corrh, ROOT.wrem.CentralCorrByHelicityHelper, tensor_rank=3)
 
 def rebin_corr_hists(hists, ndim=-1):
     # Allow trailing dimensions to be different (e.g., variations)
@@ -68,11 +68,11 @@ def rebin_corr_hists(hists, ndim=-1):
 
 # Assuming the 3 physics variable dimensions are first
 def set_corr_ratio_flow(corrh):
-    corrh[hist.underflow,...] = np.ones_like(corrh[0,...])
-    corrh[hist.overflow,...] = np.ones_like(corrh[0,...])
-    corrh[:,hist.underflow,...] = np.ones_like(corrh[:,0,...])
-    corrh[:,hist.overflow,...] = np.ones_like(corrh[:,0,...])
-    corrh[:,:,hist.overflow,...] = np.ones_like(corrh[:,:,0,...])
+    corrh[hist.underflow,...] = np.ones_like(corrh[0,...].view(flow=True))
+    corrh[hist.overflow,...] = np.ones_like(corrh[0,...].view(flow=True))
+    corrh[:,hist.underflow,...] = np.ones_like(corrh[:,0,...].view(flow=True))
+    corrh[:,hist.overflow,...] = np.ones_like(corrh[:,0,...].view(flow=True))
+    corrh[:,:,hist.overflow,...] = np.ones_like(corrh[:,:,0,...].view(flow=True))
     return corrh
 
 def make_corr_from_ratio(denom_hist, num_hist):
@@ -101,98 +101,15 @@ def make_corr_by_helicity(ref_helicity_hist, target_sigmaul, target_sigma4, ndim
     corr_coeffs[...,4.j,True,:] = target_a4_coeff.values()
     # Add back the helicity dimension and keep the variation dimension from the correction
     rescaled_coeffs = ref_coeffs.values(flow=True)[...,np.newaxis]*sigmaUL_ratio.values(flow=True)[...,np.newaxis,:]
-    corr_coeffs[...,True,:] = scaled
+    corr_coeffs[...,True,:] = rescaled_coeffs
 
     # This is because I haven't run W+ yet
     if corr_coeffs.axes["chargeVgen"].size == 2:
         corr_coeffs[...,1.j,:,:].view(flow=True)[...] = corr_coeffs[{"chargeVgen" : -1.j}].view(flow=True)
+
+    corr_coeffs = set_corr_ratio_flow(corr_coeffs)
     return corr_coeffs
-
-def read_scetlib_hist(path, pt_axis=None, nonsing="auto", flip_y_sign=False, charge=None):
-    f = np.load(path, allow_pickle=True)
-    var_axis = hist.axis.Integer(f["bins"][0][0], f["bins"][0][-1], name="vars", flow=False)
-    mass_axis = hist.axis.Variable(f["bins"][1], name="mass")
-    y_axis = hist.axis.Variable(f["bins"][2], name="y")
-    
-    if not pt_axis:
-        pt_axis = hist.axis.Variable(f["bins"][3], name="pt")
-
-    h = f["hist"]
-    storage = hist.storage.Double()
-    axes = [mass_axis,y_axis,pt_axis,var_axis]
-    varax_idx = -1 
-    vals = np.moveaxis(h, 0, varax_idx)
-
-    if "hist_err" in f:
-        err = f["hist_err"]
-        storage = hist.storage.Weight()
-        vals = np.stack((vals, np.moveaxis(err, 0, varax_idx)), axis=-1)
-
-    if charge is not None:
-        charge_args = (2, -2., 2.) if charge != 0 else (1, 0, 1) 
-        charge_axis = hist.axis.Regular(*charge_args, flow=False, name = "charge")
-        axes.insert(-1, charge_axis)
-    
-    scetlibh = hist.Hist(*axes, storage=storage)
-    if charge is None:
-        scetlibh[...] = vals
-    else:
-        scetlibh[...,charge_axis.index(charge),:] = vals
-
-    if nonsing:
-        if nonsing == "auto":
-            nonsing = path.replace(".npz", "_nons.npz")
-        nonsing = read_scetlib_hist(nonsing, pt_axis, False, 
-                        flip_y_sign=flip_y_sign, charge=charge)
-        scetlibh = scetlibh + nonsing
-    
-    if flip_y_sign:
-        mid = y_axis.index(0)
-        s = hist.tag.Slicer()
-        scetlibh[{"y" : s[mid:]}] = scetlibh[{"y" : s[mid:]}].view()*-1
-
-    return scetlibh 
 
 def make_a4_coeff(sigma4_hist, ul_hist):
     return hh.divideHists(sigma4_hist, ul_hist, cutoff=0.0001)
 
-def read_dyturbo_hist(filenames, path="", axis="pt"):
-    isfile = list(filter(lambda x: os.path.isfile(x), ["/".join([path, f]) if path else f for f in filenames]))
-
-    if not isfile:
-        raise ValueError("Must pass in a valid file")
-
-    hists = [read_dyturbo_file(f, axis) for f in isfile]
-    return hh.sumHists(hists)
-
-# Ignoring the scale unc for now
-def read_matrixRadish_hist(filename, axname="pt"):
-    data = read_text_data(filename)
-    bins = list(set(data[:,0].flatten()))
-    
-    ax = hist.axis.Variable(bins, name=axname)
-    h = hist.Hist(ax, storage=hist.storage.Weight())
-
-    h[...] = data[:-1,1:3]
-    return h*1/1000
-    
-def read_text_data(filename):
-    data = []
-    for line in open(filename).readlines():
-        entry = line.split("#")[0]
-        entry_data = [float(i.strip()) for i in entry.split()]
-        if not entry_data:
-            continue
-        data.append(entry_data)
-    return np.array(data, dtype=float)
-
-def read_dyturbo_file(filename, axname="pt"):
-    data = read_text_data(filename)
-    # Last line is the total cross section
-    bins = list(set(data[:-1,:2].flatten()))
-    
-    ax = hist.axis.Variable(bins, name=axname)
-    h = hist.Hist(ax, storage=hist.storage.Weight())
-
-    h[...] = data[:-1,2:4]
-    return h*1/1000

@@ -1,7 +1,7 @@
 import uproot
 import hist
 import argparse
-from wremnants import theory_corrections,plot_tools,theory_tools
+from wremnants import input_tools,plot_tools,theory_tools
 from wremnants import boostHistHelpers as hh
 import pickle
 import lz4.frame
@@ -153,7 +153,7 @@ def read_scetlib_hist(proc, file_name, lookup, hist_name):
     if not os.path.isfile(nonsing):
         logging.warning("Didn't find the non-singular contribution. Will make comparisons without it")
         nonsing = ""
-    histND = theory_corrections.read_scetlib_hist(file_name, nonsing=nonsing, charge=charge, flip_y_sign="A4" in file_name)
+    histND = input_tools.read_scetlib_hist(file_name, nonsing=nonsing, charge=charge, flip_y_sign="A4" in file_name)
 
     hist_info = lookup[hist_name]
     action = hist_info["action"] if "action" in hist_info else None
@@ -161,7 +161,7 @@ def read_scetlib_hist(proc, file_name, lookup, hist_name):
 
 def read_matrix_radish_hist(proc, filename, lookup, hist_name):
     hist_info = lookup[hist_name][proc]
-    histND = theory_corrections.read_matrixRadish_hist(filename, hist_info["axis"])
+    histND = input_tools.read_matrixRadish_hist(filename, hist_info["axis"])
     scale = 1.0 if "scale" not in hist_info else hist_info["scale"]
 
     action = hist_info["action"] if "action" in hist_info else None
@@ -172,12 +172,14 @@ def read_hists(proc, files, lookup, hist_name):
     for fname in files:
         if ".pkl.lz4" in fname[-8:]:
             func = read_pickle_hist
-        if ".npz" in fname[-4:]:
+        elif ".npz" in fname[-4:] or ".pkl" in fname[-4:]:
             func = read_scetlib_hist
-        if ".dat" in fname[-4:]:
+        elif ".dat" in fname[-4:]:
             func = read_matrix_radish_hist
-        if ".txt" in fname[-4:]:
+        elif ".txt" in fname[-4:]:
             func = read_dyturbo_hist
+        else:
+            raise ValueError(f"File {fname} is not a recognized type")
         hists.append(func(proc, fname, lookup, hist_name))
     return hists
 
@@ -204,7 +206,6 @@ short_name = {
     "dyturbo" : "DYTurbo",
 }
 
-
 generators_info.insert(0, generators_info.pop([x[0] for x in generators_info].index(args.ratio_ref)))
 
 for generator, label in generators_info:
@@ -214,7 +215,7 @@ for generator, label in generators_info:
         if args.hist_name not in info:
             continue
         if generator == "dyturbo":
-            hists = [theory_corrections.read_dyturbo_hist(files, axis=info[args.hist_name]["axis"])]
+            hists = [input_tools.read_dyturbo_hist(files, axis=info[args.hist_name]["axis"])]
         else:
             hists = read_hists(args.proc, files, info, args.hist_name)
         all_hists.extend(hists)
