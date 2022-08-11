@@ -3,6 +3,7 @@ BR_TAUToE = 0.1782
 xsec_ZmmPostVFP = 2001.9
 xsec_WpmunuPostVFP = 11765.9
 xsec_WmmunuPostVFP = 8703.87
+
 dataDictV9 = {
     'dataPostVFP' : { 'name' :  "dataPostVFP",
                       'filepaths' : ["/scratch/shared/NanoAOD/TrackRefitv1/SingleMuon/Run2016F_postVFP_220223_222034/*/*.root",
@@ -101,3 +102,38 @@ dataDictV9 = {
                          'group' : "Diboson",
     }
 }
+
+###Pisa server
+dataDictV9_pisa = dataDictV9.copy()
+
+dataDictV9_pisa['dataPostVFP']['filepaths']=["/scratchnvme/wmass/NANOV9/postVFP/Run2016F_220627_141813/*/*.root", "/scratchnvme/wmass/NANOV9/postVFP/Run2016G_220627_141950//*/*.root", "/scratchnvme/wmass/NANOV9/postVFP/Run2016H_220627_142357/*/*.root"]
+
+dataDictV9_pisa['ZmmPostVFP']['filepaths']=["/scratchnvme/wmass/NANOV9/postVFP/DYJetsToMuMu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/*/*/*/*.root"]
+                   
+dataDictV9_pisa['ZttPostVFP']['filepaths']=["/scratchnvme/wmass/NANOV9/postVFP/TrackRefitv1/DYJetsToTauTau_M-50_AtLeastOneEorMuDecay_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV8MCPostVFPWeightFix/*/*/*.root"]
+                   
+dataDictV9_pisa['WpmunuPostVFP']['filepaths']=["/scratchnvme/wmass/NANOV9/postVFP/WplusJetsToMuNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/*/*/*/*.root"]
+
+dataDictV9_pisa['WmmunuPostVFP']['filepaths']=["/scratchnvme/wmass/NANOV9/postVFP/WminusJetsToMuNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/*/*/*/*.root"]
+
+dataDictV9_pisa['WptaunuPostVFP']['filepaths']=["/scratchnvme/wmass/NANOV9/postVFP/TrackRefitv1/WplusJetsToTauNu_TauToMu_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV8MCPostVFPWeightFix/*/*/*.root"]
+    
+dataDictV9_pisa['WmtaunuPostVFP']['filepaths']=["/scratchnvme/wmass/NANOV9/postVFP/TrackRefitv1/WminusJetsToTauNu_TauToMu_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV8MCPostVFPWeightFix/*/*/*.root"]
+
+dataDictV9_pisa['ttbarlnuPostVFP']['filepaths']=["/scratchnvme/wmass/NANOV9/postVFP/TTTo2L2Nu_TuneCP5_13TeV-powheg-pythia8/*.root"]
+
+dataDictV9_pisa['ttbarlqPostVFP']['filepaths']=["/scratchnvme/wmass/NANOV9/postVFP/TTToSemiLeptonic_TuneCP5_13TeV-powheg-pythia8/*.root"]
+
+dataDictV9_pisa['singleTop_schanLepDecaysPostVFP']['filepaths']=["/scratchnvme/wmass/NANOV9/postVFP/ST_s-channel_4f_leptonDecays_TuneCP5_13TeV-amcatnlo-pythia8/*.root"]
+
+dataDictV9_pisa['singleTop_tWAntitopPostVFP']['filepaths']=["/scratchnvme/wmass/NANOV9/postVFP/ST_tW_antitop_5f_NoFullyHadronicDecays_TuneCP5_13TeV-powheg-pythia8/*.root"]
+
+dataDictV9_pisa['singleTop_tchanAntitopPostVFP']['filepaths']=["/scratchnvme/wmass/NANOV9/postVFP/ST_t-channel_antitop_5f_InclusiveDecays_TuneCP5_13TeV-powheg-pythia8/*.root"]
+
+dataDictV9_pisa['singleTop_tchanTopPostVFP']['filepaths']=["/scratchnvme/wmass/NANOV9/postVFP/ST_t-channel_top_5f_InclusiveDecays_TuneCP5_13TeV-powheg-pythia8/*.root"]
+
+dataDictV9_pisa['wwPostVFP']['filepaths']=["/scratchnvme/wmass/NANOV9/postVFP/WW_TuneCP5_13TeV-pythia8/*.root"]
+
+dataDictV9_pisa['wzPostVFP']['filepaths']=["/scratchnvme/wmass/NANOV9/postVFP/WZ_TuneCP5_13TeV-pythia8/*.root"]
+
+dataDictV9_pisa['zz2l2nuPostVFP']['filepaths']=["/scratchnvme/wmass/NANOV9/postVFP/ZZTo2L2Nu_TuneCP5_13TeV_powheg_pythia8/*.root"]
