@@ -3,7 +3,10 @@ import logging
 import subprocess
 import glob
 import pathlib
-from wremnants.datasets.datasetDict_v9 import *
+import socket
+import logging
+#set the debug level for logging incase of full printout 
+from wremnants.datasets.datasetDict_v9 import dataDictV9, dataDictV9_pisa
 from wremnants.datasets.datasetDict_v8 import *
 
 lumicsv = f"{pathlib.Path(__file__).parent.parent}/data/bylsoutput.csv"
@@ -18,7 +21,7 @@ def makeFilelist(paths, maxFiles=-1):
 
 def getNarfDataset(sampleName, maxFiles, sampleDict, isData, isWorZ=True):
     if isData:
-        print('Sample ', sampleName, ' read from : ', sampleDict[sampleName]["filepaths"])
+        logging.debug('Sample ', sampleName, ' read from : ', sampleDict[sampleName]["filepaths"])
         nData = narf.Dataset(name = sampleDict[sampleName]["name"],
                                    filepaths = makeFilelist(sampleDict[sampleName]["filepaths"], maxFiles),
                                    is_data = True,
@@ -27,7 +30,7 @@ def getNarfDataset(sampleName, maxFiles, sampleDict, isData, isWorZ=True):
         )
         return nData
     else:
-        print('Sample ', sampleName, ' read from : ', sampleDict[sampleName]["filepaths"])
+        logging.debug('Sample ', sampleName, ' read from : ', sampleDict[sampleName]["filepaths"])
         nMC = narf.Dataset(name = sampleDict[sampleName]["name"],
                            filepaths = makeFilelist(sampleDict[sampleName]["filepaths"], maxFiles),
                            is_data = False,
@@ -37,7 +40,7 @@ def getNarfDataset(sampleName, maxFiles, sampleDict, isData, isWorZ=True):
         return nMC
         
 def getDatasets(maxFiles=-1, filt=None, mode=None, nanoVersion = "v9"):
-    dataDict = dataDictV9
+    dataDict = dataDictV9_pisa if socket.gethostname() == 'cmsanalysis.pi.infn.it' else dataDictV9
     if nanoVersion != "v9":
         dataDict = dataDictV8
         print('Using data dict V8')
