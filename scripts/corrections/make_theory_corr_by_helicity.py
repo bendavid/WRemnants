@@ -47,13 +47,14 @@ else:
 
 corrh  = theory_corrections.make_corr_by_helicity(minnloh, sigma_ulh, a4h)
 
-outfile = f"{args.outpath}/{args.generator}HelicityCorr{procName}.pkl.lz4"
+outName = "Z" if args.proc == "z" else "W"
+outfile = f"{args.outpath}/{args.generator}HelicityCorr{outName}.pkl.lz4"
 if args.postfix:
     outfile = outfile.replace(".pkl.lz4", f"_{args.postfix}.pkl.lz4")
 
 with lz4.frame.open(outfile, "wb") as f:
     pickle.dump({
-            procName : {
+            outName : {
                 f"{args.generator}_minnlo_coeffs" : corrh,
                 f"{args.generator}_sigma4_hist" : sigma4h,
                 f"{args.generator}_sigmaUL_hist" : sigma_ulh,
@@ -65,6 +66,5 @@ with lz4.frame.open(outfile, "wb") as f:
 logging.info("Correction binning is")
 for ax in corrh.axes:
     logging.info(f"Axis {ax.name}: {ax.edges}")
-logging.info(f"Average correction is {corrh.sum()/np.ones_like(corrh).sum()}")
 logging.info(f"Wrote file {outfile}")
 

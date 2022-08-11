@@ -40,7 +40,7 @@ parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of et
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
 parser.add_argument("--v8", action='store_true', help="Use NanoAODv8. Default is v9")
 parser.add_argument("--eta", nargs=3, type=float, help="Eta binning as 'nbins min max' (only uniform for now)", default=[48,-2.4,2.4])
-parser.add_argument("--pt", nargs=3, type=float, help="Pt binning as 'nbins,min,max' (only uniform for now)", default=[29,26.,55.])
+parser.add_argument("--pt", nargs=3, type=float, help="Pt binning as 'nbins,min,max' (only uniform for now)", default=[34,26.,60.])
 parser.add_argument("--no_recoil", action='store_true', help="Don't apply recoild correction")
 parser.add_argument("--verbose", action='store_true', help="Noisy output")
 args = parser.parse_args()
@@ -60,10 +60,10 @@ if args.theory_corr:
     for proc in ["ZmumuPostVFP", ]:#"WplusmunuPostVFP", "WminusmunuPostVFP"]:
         corr_helpers[proc] = {}
         for generator in args.theory_corr:
-            fname = f"{common.data_dir}/TheoryCorrections/{generator}Corr{proc}.pkl.lz4"
+            fname = f"{common.data_dir}/TheoryCorrections/{generator}Corr{proc[0]}.pkl.lz4"
             helper_func = getattr(theory_corrections, "make_corr_helper" if "Helicity" not in generator else "make_corr_by_helicity_helper")
             corr_hist_name = f"{generator}_minnlo_ratio" if "Helicity" not in generator else f"{generator.replace('Helicity', '')}_minnlo_coeffs"
-            corr_helpers[proc][generator] = helper_func(fname, proc, corr_hist_name)
+            corr_helpers[proc][generator] = helper_func(fname, proc[0], corr_hist_name)
 
 qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = True)
 axis_ptVgen = qcdScaleByHelicity_helper.hist.axes["ptVgen"]

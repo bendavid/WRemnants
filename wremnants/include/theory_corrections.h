@@ -90,20 +90,14 @@ public:
     //inherit constructor
     using base_t::base_t;
 
-    // TODO: Surely this can be done better
-    small_tensor_t csAngularFactorsTensor(const CSVars &csvars) {
-        small_tensor_t angular;
-        // n.b. setValues is error-prone for multi-dim tensors
-        auto angular1D = csAngularFactors(csvars);
-        for (size_t i = 0; i < NHELICITY; i++) {
-            angular(i, 0, 0) = angular1D[i];
-        }
-        return angular;
-    }
-
     tensor_t operator() (double mV, double yV, double ptV, int qV, const CSVars &csvars, const scale_tensor_t &scale_tensor, double nominal_weight) {
+        // denominator for each scale combination
+        constexpr std::array<Eigen::Index, 1> helicitydims = { 0 };
+        constexpr std::array<Eigen::Index, 3> broadcasthelicities = { nhelicity, 1, 1 };
+        constexpr std::array<Eigen::Index, 3> reshapeden = { 1, nmur, nmuf };
+
         // pure angular terms without angular coeffs multiplied through
-        const auto angular = csAngularFactorsTensor(csvars);
+        const auto angular = csAngularFactors(csvars).reshape(broadcasthelicities);
 
         static_assert(sizes.size() == 3);
         static_assert(nhelicity == NHELICITY);
@@ -112,10 +106,6 @@ public:
         // now multiplied through by angular coefficients (1.0 for 1+cos^2theta term)
         const tensor_t angular_with_coeffs = angular.broadcast(broadcastscales)*base_t::get_tensor(mV, yV, ptV, qV);
 
-        // denominator for each scale combination
-        constexpr std::array<Eigen::Index, 1> helicitydims = { 0 };
-        constexpr std::array<Eigen::Index, 3> broadcasthelicities = { nhelicity, 1, 1 };
-        constexpr std::array<Eigen::Index, 3> reshapeden = { 1, nmur, nmuf };
         auto denominator = angular_with_coeffs.sum(helicitydims).reshape(reshapeden).broadcast(broadcasthelicities);
 
         constexpr std::array<Eigen::Index, 3> reshapescale = { 1, nmur, nmuf };
@@ -136,34 +126,30 @@ static constexpr auto nhelicity = sizes[0];
 static constexpr auto ncorrs = sizes[1];
 static constexpr auto nvars = sizes[2];
 
+// TODO: Can presumably get the double type from the template param
+typedef Eigen::TensorFixedSize<double, Eigen::Sizes<nvars>> var_tensor_t;
+
 public:
     using base_t::base_t;
 
-    tensor_t operator() (double mV, double yV, double ptV, int qV, const CSVars &csvars, double nominal_weight) {
-        std::cout << "WERE HERE!\n";
+    var_tensor_t operator() (double mV, double yV, double ptV, int qV, const CSVars &csvars, double nominal_weight) {
         static_assert(sizes.size() == 3);
         static_assert(nhelicity == NHELICITY);
         static_assert(ncorrs == 2);
 
         const auto angular = csAngularFactors(csvars);
         const auto coeffs = base_t::get_tensor(mV, yV, ptV, qV);
-        Eigen::TensorFixedSize<double, Eigen::Sizes<nhelicity, nvars>> uncorr_hel = coeffs.chip(0, 1)*angular;
-        Eigen::TensorFixedSize<double, Eigen::Sizes<nhelicity, nvars>> corr_hel = coeffs.chip(1, 1)*angular;
 
+        constexpr std::array<Eigen::Index, 3> reshapedims = {nhelicity, 1, 1};
         constexpr std::array<Eigen::Index, 1> reduceddims = {0};
 
-        for (size_t i = 0; i < NHELICITY; i++) {
-            std::cout << "old " << uncorr_hel(i,0);
-            std::cout << "corr " << corr_hel(i,0);
-        }
-        
-        tensor_t uncorr = uncorr_hel.sum(reduceddims);
-        tensor_t corr = corr_hel.sum(reduceddims);
+        const auto coeffs_with_angular = coeffs*angular.reshape(reshapedims).broadcast(sizes);
+        auto uncorr_hel = coeffs_with_angular.chip(0, 1);
+        auto corr_hel = coeffs_with_angular.chip(1, 1);
 
-        std::cout << "Accumulated old " << uncorr(0) << std::endl;
-        std::cout << "Accumulated new " << corr(0) << std::endl;
+        var_tensor_t corr_weight_vars = corr_hel.sum(reduceddims)/uncorr_hel.sum(reduceddims)*nominal_weight;
 
-        return corr/uncorr;
+        return corr_weight_vars;
     }
 };
 
