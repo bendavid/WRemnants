@@ -14,7 +14,7 @@ elif initargs.nThreads != 1:
     ROOT.ROOT.EnableImplicitMT(initargs.nThreads)
 import narf
 import wremnants
-from wremnants import theory_tools,syst_tools,theory_corrections,common
+from wremnants import theory_tools,syst_tools,theory_corrections,common,output_tools
 from wremnants import boostHistHelpers as hh
 import hist
 import lz4.frame
@@ -368,12 +368,4 @@ def build_graph(df, dataset):
 
 resultdict = narf.build_and_run(datasets, build_graph)
 
-fname = "mz_wlike_with_mu_eta_pt.pkl.lz4"
-if args.postfix:
-    fname = fname.replace(".pkl.lz4", f"_{args.postfix}.pkl.lz4")
-
-time0 = time.time()
-print("writing output...")
-with lz4.frame.open(fname, "wb") as f:
-    pickle.dump(resultdict, f, protocol = pickle.HIGHEST_PROTOCOL)
-print("Output", time.time()-time0)
+output_tools.write_analysis_output(resultdict, "mz_wlike_with_mu_eta_pt.pkl.lz4", args.postfix)

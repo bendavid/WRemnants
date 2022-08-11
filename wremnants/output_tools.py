@@ -3,6 +3,9 @@ import os
 import sys 
 import subprocess
 import datetime
+import time
+import pickle
+import lz4.frame
 
 def readTemplate(templateFile, templateDict, filt=None):
     if not os.path.isfile(templateFile):
@@ -28,3 +31,14 @@ def metaInfoDict():
         meta_data["git_diff"] = subprocess.check_output(['git', 'diff'], encoding='UTF-8')
 
     return meta_data
+
+def write_analysis_output(results, outfile, postfix):
+    results.update({"meta_info" : metaInfoDict()})
+    if postfix:
+        outfile = outfile.replace(".pkl.lz4", f"_{postfix}.pkl.lz4")
+
+    time0 = time.time()
+    print("writing output...")
+    with lz4.frame.open(outfile, "wb") as f:
+        pickle.dump(results, f, protocol = pickle.HIGHEST_PROTOCOL)
+    print("Output", time.time()-time0)
