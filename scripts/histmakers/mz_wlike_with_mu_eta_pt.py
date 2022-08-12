@@ -22,8 +22,6 @@ import logging
 import math
 import time
 
-logging.basicConfig(level=logging.INFO)
-
 parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
 parser.add_argument("--pdfs", type=str, nargs="*", default=["nnpdf31"], choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for (first is central set)")
 parser.add_argument("--altPdfOnlyCentral", action='store_true', help="Only store central value for alternate PDF sets")
@@ -44,6 +42,8 @@ parser.add_argument("--pt", nargs=3, type=float, help="Pt binning as 'nbins,min,
 parser.add_argument("--no_recoil", action='store_true', help="Don't apply recoild correction")
 parser.add_argument("--verbose", action='store_true', help="Noisy output")
 args = parser.parse_args()
+
+logging.basicConfig(level=logging.INFO)
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
