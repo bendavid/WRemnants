@@ -44,14 +44,6 @@ parser.add_argument("--verbose", action='store_true', help="Noisy output")
 args = parser.parse_args()
 
 logging.basicConfig(level=logging.INFO)
-<<<<<<< Updated upstream
-=======
-
-filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
-datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None)
-
-print('Use v8?', args.v8)
->>>>>>> Stashed changes
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
@@ -262,7 +254,6 @@ def build_graph(df, dataset):
 
     df = df.Filter("massZ >= 60. && massZ < 120.")
 
-    #if (isW or isZ) and args.scetlibCorr:
     if apply_theory_corr:
         results.extend(theory_tools.make_theory_corr_hists(df_dilepton, "dilepton", dilepton_axes, dilepton_cols, 
             corr_helpers[dataset.name], args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
