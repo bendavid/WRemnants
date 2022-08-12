@@ -38,6 +38,11 @@ class datagroups(object):
             return 1
         return self.lumi*1000*proc.xsec/self.results[proc.name]["weight_sum"]
 
+    # for reading pickle files
+    # as a reminder, the ND hists with tensor axes in the pickle files are organized as
+    # pickle[procName]["output"][baseName] where
+    ## procName are grouped into datagroups
+    ## baseName takes values such as "nominal"
     def setHists(self, baseName, syst, procsToRead=None, label=None, nominalIfMissing=True, 
             selectSignal=True, forceNonzero=True):
         if not label:
@@ -84,11 +89,18 @@ class datagroups(object):
         for procName in procsToRead:
             group = self.groups[procName]
             group[label] = None
-            name = self.histNameCombine(procName, baseName, syst, channel)
-            rthist = self.rtfile.Get(name)
-            if not rthist:
-                raise RuntimeError(f"Failed to load hist {name} from file")
-            group[label] = narf.root_to_hist(rthist, axis_names=axisNames)
+            if type(channel) == str: channel = channel.split(",")
+            narf_hist = None
+            for chn in channel:
+                name = self.histNameCombine(procName, baseName, syst, chn)
+                rthist = self.rtfile.Get(name)
+                if not rthist:
+                    raise RuntimeError(f"Failed to load hist {name} from file")
+                if not narf_hist:
+                    narf_hist = narf.root_to_hist(rthist, axis_names=axisNames)
+                else:
+                    narf_hist = hh.addHists(narf_hist, narf.root_to_hist(rthist, axis_names=axisNames))
+            group[label] = narf_hist
 
     def histNameCombine(self, procName, baseName, syst, channel):
         name = f"{baseName}_{procName}"
@@ -167,9 +179,9 @@ class datagroups2016(datagroups):
                 signalOp = sel.signalHistWmass if not wlike else None,
             ),            
         }
-        if pseudodata_pdfset:
+        if pseudodata_pdfset and combine:
             self.groups[f"pdf{pseudodata_pdfset.upper()}_sum"] = dict(
-                label = f"Pseudodata pdf{pseudodata_pdfset.upper()}",
+                label = f"pdf{pseudodata_pdfset.upper()}",
                 color = "dimgray"
             )
         if not wlike:
