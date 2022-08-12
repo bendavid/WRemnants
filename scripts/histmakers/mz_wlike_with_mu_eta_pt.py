@@ -44,6 +44,14 @@ parser.add_argument("--verbose", action='store_true', help="Noisy output")
 args = parser.parse_args()
 
 logging.basicConfig(level=logging.INFO)
+<<<<<<< Updated upstream
+=======
+
+filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
+datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None)
+
+print('Use v8?', args.v8)
+>>>>>>> Stashed changes
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
