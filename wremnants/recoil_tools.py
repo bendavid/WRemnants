@@ -11,7 +11,7 @@ def drange(x, y, jump):
         yield float(x)
         x += decimal.Decimal(jump)
         
-
+        
 class Recoil:
 
     def __init__(self, type_):
