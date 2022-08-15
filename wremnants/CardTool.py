@@ -1,6 +1,6 @@
 from collections import OrderedDict
 from . import boostHistHelpers as hh
-from . import OutputTools
+from . import output_tools
 import narf
 import logging
 import ROOT
@@ -424,7 +424,7 @@ class CardTool(object):
                 "histName" : self.histName,
                 "pseudodataHist" : self.pseudoData+"_sum" if self.pseudoData else f"{self.histName}_{self.dataName}"
             }
-            self.cardContent[chan] = OutputTools.readTemplate(self.nominalTemplate, args)
+            self.cardContent[chan] = output_tools.readTemplate(self.nominalTemplate, args)
             self.cardGroups[chan] = ""
             
     def writeHistByCharge(self, h, name):
