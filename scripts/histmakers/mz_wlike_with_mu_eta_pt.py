@@ -4,24 +4,23 @@ import gzip
 import ROOT
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--nThreads", type=int, help="number of threads", default=None)
+parser.add_argument("-j", "--nThreads", type=int, help="number of threads", default=None)
 initargs,_ = parser.parse_known_args()
 
 ROOT.gInterpreter.ProcessLine(".O3")
 if not initargs.nThreads:
     ROOT.ROOT.EnableImplicitMT()
-elif init.args.nThreads != 1:
+elif initargs.nThreads != 1:
     ROOT.ROOT.EnableImplicitMT(initargs.nThreads)
 import narf
 import wremnants
-from wremnants import theory_tools,syst_tools
+from wremnants import theory_tools,syst_tools,theory_corrections,common,output_tools
+from wremnants import boostHistHelpers as hh
 import hist
 import lz4.frame
 import logging
 import math
 import time
-
-logging.basicConfig(level=logging.INFO)
 
 parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
 parser.add_argument("--pdfs", type=str, nargs="*", default=["nnpdf31"], choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for (first is central set)")
@@ -30,23 +29,25 @@ parser.add_argument("--maxFiles", type=int, help="Max number of files (per datas
 parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=None)
 parser.add_argument("--muScaleMag", type=float, default=1e-4, help="Magnitude of dummy muon scale uncertainty")
 parser.add_argument("--muScaleBins", type=int, default=1, help="Number of bins for muon scale uncertainty")
-parser.add_argument("--scetlibCorr", choices=["altHist", "noUnc", "full", "altHistNoUnc"], help="Save hist for SCETlib correction with/without uncertainties, with/without modifying central weight")
+parser.add_argument("--theory_corr", nargs="*", choices=["scetlib", "scetlibHelicity", "dyturbo", "matrix_radish"], 
+    help="Apply corrections from indicated generator. First will be nominal correction.")
+parser.add_argument("--theory_corr_alt_only", action='store_true', help="Save hist for correction hists but don't modify central weight")
 parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")
 parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
 parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
 parser.add_argument("--v8", action='store_true', help="Use NanoAODv8. Default is v9")
 parser.add_argument("--eta", nargs=3, type=float, help="Eta binning as 'nbins min max' (only uniform for now)", default=[48,-2.4,2.4])
-parser.add_argument("--pt", nargs=3, type=float, help="Pt binning as 'nbins,min,max' (only uniform for now)", default=[29,26.,55.])
+parser.add_argument("--pt", nargs=3, type=float, help="Pt binning as 'nbins,min,max' (only uniform for now)", default=[34,26.,60.])
+parser.add_argument("--no_recoil", action='store_true', help="Don't apply recoild correction")
+parser.add_argument("--verbose", action='store_true', help="Noisy output")
 args = parser.parse_args()
 
+logging.basicConfig(level=logging.INFO)
+
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
-datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None)
-
-print('Use v8?', args.v8)
-
-if args.v8:
-    datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, nanoVersion = "v8")
+datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
+    nanoVersion="v8" if args.v8 else "v9")
 
 ROOT.gInterpreter.Declare('#include "lowpu_recoil.h"')
 
@@ -54,8 +55,15 @@ era = "2016PostVFP"
 
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 
-scetlibCorrZ_helper = wremnants.makeScetlibCorrHelper(isW=False)
-scetlibCorrW_helper = wremnants.makeScetlibCorrHelper(isW=True)
+corr_helpers = {} 
+if args.theory_corr:
+    for proc in ["ZmumuPostVFP", ]:#"WplusmunuPostVFP", "WminusmunuPostVFP"]:
+        corr_helpers[proc] = {}
+        for generator in args.theory_corr:
+            fname = f"{common.data_dir}/TheoryCorrections/{generator}Corr{proc[0]}.pkl.lz4"
+            helper_func = getattr(theory_corrections, "make_corr_helper" if "Helicity" not in generator else "make_corr_by_helicity_helper")
+            corr_hist_name = f"{generator}_minnlo_ratio" if "Helicity" not in generator else f"{generator.replace('Helicity', '')}_minnlo_coeffs"
+            corr_helpers[proc][generator] = helper_func(fname, proc[0], corr_hist_name)
 
 qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = True)
 axis_ptVgen = qcdScaleByHelicity_helper.hist.axes["ptVgen"]
@@ -90,7 +98,7 @@ axis_mll = hist.axis.Regular(24, 60., 120., name = "mll")
 axis_yll = hist.axis.Regular(40, -4.0, 4.0, name = "yll")
 
 axis_ptll = hist.axis.Variable(
-    [0, 2, 3, 4, 4.75, 5.5, 6.5, 8, 9, 10, 12, 14, 16, 18, 20, 23, 27, 32, 40, 55, 100], name = "ptll"
+    [0, 2, 3, 4, 4.75, 5.5, 6.5, 8, 9, 10, 12, 14, 16, 18, 20, 23, 27, 32, 40, 55, 100, 150], name = "ptll"
 )
 
 axis_costhetastarll = hist.axis.Regular(20, -1., 1., name = "costhetastarll")
@@ -112,8 +120,9 @@ calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibra
 
 
 # recoil initialization
-from wremnants import recoil_tools
-recoilHelper = recoil_tools.Recoil("highPU")
+if not args.no_recoil:
+    from wremnants import recoil_tools
+    recoilHelper = recoil_tools.Recoil("highPU")
 
 #def add_plots_with_systematics
 
@@ -198,6 +207,7 @@ def build_graph(df, dataset):
 
     isW = dataset.name in wprocs
     isZ = dataset.name in zprocs
+    apply_theory_corr = args.theory_corr and dataset.name in corr_helpers
 
     if not dataset.is_data:
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
@@ -205,15 +215,14 @@ def build_graph(df, dataset):
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId"])
 
         weight_expr = "weight*weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF"
-        scetlibCorr_helper = scetlibCorrZ_helper if isZ else scetlibCorrW_helper
         if isW or isZ:
             df = df.Define("nominal_pdf_cen", theory_tools.pdf_central_weight(dataset.name, args.pdfs[0]))
             weight_expr = f"{weight_expr}*nominal_pdf_cen"
             df = wremnants.define_prefsr_vars(df)
 
-            if args.scetlibCorr:
-                df = theory_tools.define_scetlib_corr(df, weight_expr, scetlibCorr_helper,
-                    corr_type=args.scetlibCorr)
+            if apply_theory_corr:
+                df = theory_tools.define_theory_corr(df, weight_expr, corr_helpers[dataset.name],
+                    generators=args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
             else:
                 df = df.Define("nominal_weight", weight_expr)
 
@@ -226,11 +235,14 @@ def build_graph(df, dataset):
 
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")
+
+    results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"]))
         
         
     # recoil calibration
-    df = recoilHelper.recoil_setup_Z(df, results, "MET_pt", "MET_phi", "Muon_pt[goodMuons]", "Muon_phi[goodMuons]", "Muon_pt[goodMuons]")
-    df = recoilHelper.recoil_apply_Z(df, results, dataset.name, ["ZmumuPostVFP"])  # produces corrected MET as MET_corr_rec_pt/phi
+    if not args.no_recoil:
+        df = recoilHelper.recoil_setup_Z(df, results, "MET_pt", "MET_phi", "Muon_pt[goodMuons]", "Muon_phi[goodMuons]", "Muon_pt[goodMuons]")
+        df = recoilHelper.recoil_apply_Z(df, results, dataset.name, ["ZmumuPostVFP"])  # produces corrected MET as MET_corr_rec_pt/phi
    
     # dilepton plots go here, before mass or transverse mass cuts
     df_dilepton = df
@@ -240,16 +252,20 @@ def build_graph(df, dataset):
     dilepton = df_dilepton.HistoBoost("dilepton", dilepton_axes, [*dilepton_cols, "nominal_weight"])
     results.append(dilepton)
 
-    if (isW or isZ) and args.scetlibCorr:
-        results.extend(theory_tools.make_scetlibCorr_hists(df_dilepton, "dilepton", dilepton_axes, dilepton_cols, 
-            scetlibCorr_helper, corr_type=args.scetlibCorr)
-        )
-
     df = df.Filter("massZ >= 60. && massZ < 120.")
 
+    if apply_theory_corr:
+        results.extend(theory_tools.make_theory_corr_hists(df_dilepton, "dilepton", dilepton_axes, dilepton_cols, 
+            corr_helpers[dataset.name], args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
+        )
+
     #TODO improve this to include muon mass?
-    #df = df.Define("transverseMass", "wrem::mt_wlike_nano(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, MET_corr_rec_pt, MET_corr_rec_phi)")
-    df = df.Define("transverseMass", "wrem::mt_wlike_nano(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, MET_pt, MET_phi)")
+    met_vars = ("MET_pt", "MET_phi")
+    if not args.no_recoil:
+        df = df.Define("transverseMass_uncorr", f"wrem::mt_wlike_nano(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, {', '.join(met_vars)})")
+        met_vars = (x.replace("MET", "MET_corr_rec") for x in met_vars)
+
+    df = df.Define("transverseMass", f"wrem::mt_wlike_nano(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, {', '.join(met_vars)})")
 
     df = df.Filter("transverseMass >= 40.")
 
@@ -285,13 +301,10 @@ def build_graph(df, dataset):
         # n.b. this is the W analysis so mass weights shouldn't be propagated
         # on the Z samples (but can still use it for dummy muon scale)
         if isW or isZ:
-            if args.scetlibCorr:
-                results.extend(theory_tools.make_scetlibCorr_hists(df, "nominal", axes=nominal_axes, cols=nominal_cols, 
-                    helper=scetlibCorr_helper, corr_type=args.scetlibCorr)
+            if apply_theory_corr:
+                results.extend(theory_tools.make_theory_corr_hists(df, "nominal", axes=nominal_axes, cols=nominal_cols, 
+                    helpers=corr_helpers[dataset.name], generators=args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
                 )
-                results.extend(theory_tools.make_scetlibCorr_hists(df, "nominal", axes=nominal_axes, cols=nominal_cols, 
-                    helper=scetlibCorrZ_helper if isZ else scetlibCorrW_helper,
-                    corr_type=args.scetlibCorr))
 
             df = theory_tools.define_scale_tensor(df)
             results.append(theory_tools.make_scale_hist(df, [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen"]))
@@ -354,12 +367,4 @@ def build_graph(df, dataset):
 
 resultdict = narf.build_and_run(datasets, build_graph)
 
-fname = "mz_wlike_with_mu_eta_pt.pkl.lz4"
-if args.postfix:
-    fname = fname.replace(".pkl.lz4", f"_{args.postfix}.pkl.lz4")
-
-time0 = time.time()
-print("writing output...")
-with lz4.frame.open(fname, "wb") as f:
-    pickle.dump(resultdict, f, protocol = pickle.HIGHEST_PROTOCOL)
-print("Output", time.time()-time0)
+output_tools.write_analysis_output(resultdict, "mz_wlike_with_mu_eta_pt.pkl.lz4", args.postfix)
