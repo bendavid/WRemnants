@@ -16,7 +16,7 @@ scriptdir = f"{pathlib.Path(__file__).parent}"
 parser = argparse.ArgumentParser()
 parser.add_argument("-o", "--outfolder", type=str, default="/scratch/kelong/CombineStudies")
 parser.add_argument("-i", "--inputFile", type=str, required=True)
-parser.add_argument("--qcdScale", choices=["byHelicityPtAndByPt", "byHelicityPt", "byPt", "byCharge", "integrated",], default="byHelicityPt", 
+parser.add_argument("--qcdScale", choices=["byHelicityPtAndByPt", "byHelicityPt", "byHelicityCharge", "byPt", "byCharge", "integrated",], default="byHelicityPt", 
         help="Decorrelation for QCDscale (additionally always by charge). With 'byHelicityPtAndByPt' two independent histograms are stored, split and not split by helicities (for tests)")
 parser.add_argument("--rebinPtV", type=int, default=0, help="Rebin axis with gen boson pt by this value (default does nothing)")
 parser.add_argument("--wlike", action='store_true', help="Run W-like analysis of mZ")
@@ -53,7 +53,7 @@ if args.skipOtherChargeSyst:
 if args.pseudoData:
     cardTool.setPseudodata(args.pseudoData)
 
-passSystToFakes = not args.skipSignalSystOnFakes
+passSystToFakes = not args.wlike and not args.skipSignalSystOnFakes
     
 single_v_samples = cardTool.filteredProcesses(lambda x: x[0] in ["W", "Z"])
 single_vmu_samples = list(filter(lambda x: "mu" in x, single_v_samples))

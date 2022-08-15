@@ -22,14 +22,14 @@ def broadcastOutHist(h1, h2):
     return h1 if len(h1.axes) > len(h2.axes) else h2
 
 # returns h1/h2
-def divideHists(h1, h2, cutoff=1, allowBroadcast=True):
+def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True):
     h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2, allowBroadcast)
     # To get the broadcast shape right
     outh = h1 if not allowBroadcast else broadcastOutHist(h1, h2)
     # By the argument that 0/0 = 1
     out = np.ones_like(h2vals)
     out[np.abs(h2vals) < cutoff] = 1.
-    val = np.divide(h1vals, h2vals, out=out, where=((np.abs(h2vals)>cutoff) & (np.abs(h1vals)>cutoff)))
+    val = np.divide(h1vals, h2vals, out=out, where=np.abs(h2vals)>cutoff)
     relvars = relVariances(h1vals, h2vals, h1vars, h2vars)
     var = val*sum(relVariances(h1vals, h2vals, h1vars, h2vars))
     var *= val
@@ -111,19 +111,112 @@ def clipNegativeVals(h):
 def makeAbsHist(h, axis_name):
     ax = h.axes[axis_name]
     axidx = list(h.axes).index(ax)
-    abs_ax = hist.axis.Variable(ax.edges[ax.index(0.):], name=axis_name)
+    abs_ax = hist.axis.Variable(ax.edges[ax.index(0.):], name=f"abs{axis_name}")
     hnew = hist.Hist(*h.axes[:axidx], abs_ax, *h.axes[axidx+1:], storage=hist.storage.Weight())
     
     s = hist.tag.Slicer()
     hnew[...] = h[{axis_name : s[ax.index(0):]}].view() + np.flip(h[{axis_name : s[:ax.index(0)]}].view(), axis=axidx)
     return hnew
 
-def makeAbsHist(h, axis_name):
+def rebinHist(h, axis_name, edges):
     ax = h.axes[axis_name]
-    axidx = list(h.axes).index(ax)
-    abs_ax = hist.axis.Variable(ax.edges[ax.index(0.):], name=axis_name)
-    hnew = hist.Hist(*h.axes[:axidx], abs_ax, *h.axes[axidx+1:], storage=hist.storage.Weight())
+    ax_idx = [a.name for a in h.axes].index(axis_name)
+    if not all([x in ax.edges for x in edges]):
+        raise ValueError(f"Cannot rebin histogram due to incompatible eduges for axis '{ax.name}'\n"
+                            f"Edges of histogram are {ax.edges}, requested rebinning to {edges}")
+        
+    overflow = ax.traits.overflow
+    underflow = ax.traits.underflow
+    flow = overflow and underflow
+    new_ax = hist.axis.Variable(edges, name=ax.name, overflow=overflow, underflow=underflow)
+    axes = list(h.axes)
+    axes[ax_idx] = new_ax
     
-    s = hist.tag.Slicer()
-    hnew[...] = h[{axis_name : s[ax.index(0):]}].view() + np.flip(h[{axis_name : s[:ax.index(0)]}].view(), axis=axidx)
+    hnew = hist.Hist(*axes, name=h.name, storage=h._storage_type())
+    # Take is used because reduceat sums i:len(array) for the last entry, in the case
+    # where the final bin isn't the same between the initial and rebinned histogram, you
+    # want to drop this value
+    edge_idx = h.axes[axis_name].index(edges)+flow
+    if flow:
+        edge_idx = np.insert(edge_idx, 0, 0)
+
+    hnew.values(flow=flow)[...] = np.add.reduceat(h.values(flow=flow), edge_idx, 
+            axis=ax_idx).take(indices=range(new_ax.size+2*flow), axis=ax_idx)
+    hnew.variances(flow=flow)[...] = np.add.reduceat(h.variances(flow=flow), edge_idx, 
+            axis=ax_idx).take(indices=range(new_ax.size+2*flow), axis=ax_idx)
     return hnew
+
+def mergeAxes(ax1, ax2):
+    if ax1.edges[0] < ax2.edges[0]:
+        tmp = ax1
+        ax1 = ax2
+        ax2 = tmp
+
+    if np.array_equal(ax1.edges, ax2.edges):
+        return ax1
+
+    ax1_edges = ax1.edges
+    ax1_merge_idx = len(ax1.edges)
+    while ax1_edges[ax1_merge_idx-1] not in ax2.edges:
+        ax1_merge_idx -= 1
+
+    ax1_edges = ax1_edges[:ax1_merge_idx]
+    if not ax1_edges.size:
+        raise ValueError("Didn't find any common edges in two axes, can't merge")
+
+    merge_idx = list(ax2.edges).index(ax1_edges[-1])+1
+    if merge_idx < 1 or merge_idx > ax2.size:
+        raise ValueError("Can't merge axes unless there is a common point of intersection!"
+            f"The edges were {ax1.edges}, and {ax2.edges}")
+
+    new_edges = np.concatenate((ax1_edges, ax2.edges[merge_idx:]))
+    return hist.axis.Variable(new_edges, name=ax1.name)
+
+def findCommonBinning(hists, axis_idx):
+    if len(hists) < 2:
+        raise ValueError("Can only find common binning between > 1 hists")
+
+    orig_axes = [h.axes[axis_idx] for h in hists]
+    common_edges = set(orig_axes[0].edges)
+    for ax in orig_axes[1:]:
+        common_edges.intersection_update(ax.edges)
+
+    edges = list(sorted(common_edges))
+    if len(edges) < 2:
+        raise ValueError("Found < 2 common edges, cannot rebin")
+    return edges
+
+def rebinHistsToCommon(hists, axis_idx, keep_full_range=False):
+    orig_axes = [h.axes[axis_idx] for h in hists]
+    new_edges = findCommonBinning(hists, axis_idx)
+    rebinned_hists = [rebinHist(h, ax.name, new_edges) for h,ax in zip(hists, orig_axes)]
+
+    # TODO: This assumes that the range extension only happens in one direction,
+    # specifically, that the longer range hist has higher values
+    if keep_full_range:
+        full_hists = []
+        hists_by_max = sorted(hists, key=lambda x: x.axes[axis_idx].edges[-1])
+        new_ax = rebinned_hists[0].axes[axis_idx]
+        for h in hists_by_max:
+            new_ax = mergeAxes(new_ax, h.axes[axis_idx])
+
+        for h,rebinh in zip(hists, rebinned_hists):
+            axes = list(rebinh.axes)
+            axes[axis_idx] = new_ax
+            newh = hist.Hist(*axes, name=rebinh.name, storage=h._storage_type())
+            merge_idx = new_ax.index(rebinh.axes[axis_idx].edges[-1])
+            # TODO: true the overflow/underflow properly
+            low_vals = rebinh.view()
+            max_idx = min(h.axes[axis_idx].size, h.axes[axis_idx].index(newh.axes[axis_idx].edges[-1]))
+            vals = np.append(low_vals, np.take(h.view(), range(merge_idx, max_idx), axis_idx))
+            zero_pad_shape = list(newh.shape)
+            zero_pad_shape[axis_idx] -= vals.shape[axis_idx]
+            vals = np.append(vals, np.full(zero_pad_shape, hist.accumulators.WeightedSum(0, 0)))
+            newh[...] = vals
+            full_hists.append(newh)
+
+        new_edges = findCommonBinning(full_hists, axis_idx)
+        rebinned_hists = [rebinHist(h, h.axes[axis_idx].name, new_edges) for h in full_hists]
+
+    return rebinned_hists
+    

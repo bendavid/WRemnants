@@ -14,7 +14,7 @@ elif init.args.nThreads != 1:
     ROOT.ROOT.EnableImplicitMT(initargs.nThreads)
 import narf
 import wremnants
-from wremnants import theory_tools,syst_tools
+from wremnants import theory_tools,syst_tools,theory_corrections,output_tools
 import hist
 import lz4.frame
 import logging
@@ -29,7 +29,9 @@ parser.add_argument("--altPdfOnlyCentral", action='store_true', help="Only store
 parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
 parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name")
 parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")
-parser.add_argument("--scetlibCorr", choices=["altHist", "noUnc", "full", "altHistNoUnc"], help="Save hist for SCETlib correction with/without uncertainties, with/without modifying central weight")
+parser.add_argument("--theory_corr", nargs="*", choices=["scetlib", "scetlibHelicity", "dyturbo", "matrix_radish"], 
+    help="Apply corrections from indicated generator. First will be nominal correction.")
+parser.add_argument("--theory_corr_alt_only", action='store_true', help="Save hist for correction hists but don't modify central weight")
 parser.add_argument("--noMuonCorr", action="store_true", help="Don't use corrected pt-eta-phi-charge")
 parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency")
 parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
@@ -42,20 +44,25 @@ parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for lumin
 args = parser.parse_args()
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
-datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None)
-
-print('Use v8?', args.v8)
-if args.v8:
-    datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, nanoVersion = "v8")
+datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
+    nanoVersion="v8" if args.v8 else "v9")
 
 era = args.era
 noMuonCorr = args.noMuonCorr
 
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
-scetlibCorrZ_helper = wremnants.makeScetlibCorrHelper(isW=False)
-scetlibCorrW_helper = wremnants.makeScetlibCorrHelper(isW=True)
 qcdScaleByHelicity_Zhelper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = True)
 qcdScaleByHelicity_Whelper = wremnants.makeQCDScaleByHelicityHelper()
+
+corr_helpers = {} 
+if args.theory_corr:
+    for proc in ["ZmumuPostVFP", ]:#"WplusmunuPostVFP", "WminusmunuPostVFP"]:
+        corr_helpers[proc] = {}
+        for generator in args.theory_corr:
+            fname = f"{common.data_dir}/TheoryCorrections/{generator}Corr{proc[0]}.pkl.lz4"
+            helper_func = getattr(theory_corrections, "make_corr_helper" if "Helicity" not in generator else "make_corr_by_helicity_helper")
+            corr_hist_name = f"{generator}_minnlo_ratio" if "Helicity" not in generator else f"{generator.replace('Helicity', '')}_minnlo_coeffs"
+            corr_helpers[proc][generator] = helper_func(fname, proc[0], corr_hist_name)
 
 wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP"]
 # for tests of NanoAOD compression need to add ["WminusmunuPostVFP_LZMA_9", "WminusmunuPostVFP_LZ4_4"]
@@ -115,6 +122,7 @@ def build_graph(df, dataset):
 
     isW = dataset.name in wprocs
     isZ = dataset.name in zprocs
+    apply_theory_corr = args.theory_corr and dataset.name in corr_helpers
     if noMuonCorr:
         df = df.Alias("Muon_correctedPt", "Muon_pt")
         df = df.Alias("Muon_correctedEta", "Muon_eta")
@@ -188,12 +196,13 @@ def build_graph(df, dataset):
             weight_expr = f"{weight_expr}*nominal_pdf_cen"
             df = wremnants.define_prefsr_vars(df)
 
-            if args.scetlibCorr:
-                df = theory_tools.define_scetlib_corr(df, weight_expr, scetlibCorrZ_helper if isZ else scetlibCorrW_helper,
-                                                      corr_type=args.scetlibCorr)
-                results.extend(theory_tools.make_scetlibCorr_hists(df, "nominal", axes=nominal_axes, cols=nominal_cols, 
-                                                                   helper=scetlibCorrZ_helper if isZ else scetlibCorrW_helper,
-                                                                   corr_type=args.scetlibCorr))
+            if apply_theory_corr:
+                helper = corr_helpers[dataset.name]
+                df = theory_tools.define_theory_corr(df, weight_expr, helper,
+                    generators=args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
+                results.extend(theory_tools.make_theory_corr_hists(df_dilepton, "dilepton", dilepton_axes, dilepton_cols, 
+                    helper, args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
+                )
             else:
                 df = df.Define("nominal_weight", weight_expr)
 
@@ -292,17 +301,4 @@ def build_graph(df, dataset):
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)
-print("-"*30)
-for key in resultdict.keys():
-    print(f"Dataset {key}: unweighted events (before cut) = {resultdict[key]['event_count']}")
-    print("-"*30)
-
-fname = "mw_with_mu_eta_pt.pkl.lz4"
-if args.postfix:
-    fname = fname.replace(".pkl.lz4", f"_{args.postfix}.pkl.lz4")
-
-time0 = time.time()
-print("writing output...")
-with lz4.frame.open(fname, "wb") as f:
-    pickle.dump(resultdict, f, protocol = pickle.HIGHEST_PROTOCOL)
-print("Output", time.time()-time0)
+output_tools.write_analysis_output(resultdict, "mw_with_mu_eta_pt.pkl.lz4", args.postfix)
