@@ -1,6 +1,7 @@
 import pathlib
 import mplhep as hep
 import matplotlib.pyplot as plt
+from matplotlib import ticker
 from matplotlib import patches
 from wremnants import boostHistHelpers as hh
 from wremnants import histselections as sel
@@ -27,13 +28,15 @@ def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None,
     ax2.set_xlabel(xlabel)
     ax1.set_xlabel(" ")
     ax1.set_ylabel(ylabel)
-    ax1.set_xticklabels([])
+    #ax1.set_xticklabels([])
     if not xlim:
-        xlim = [href.axes[0].edges[0], href.axes[0].edges[href.axes[0].size-1]]
+        xlim = [href.axes[0].edges[0], href.axes[0].edges[-1]]
+        print(xlim)
     ax1.set_xlim(xlim)
     ax2.set_xlim(xlim)
     ax2.set_ylabel(rlabel, fontsize=22)
     ax2.set_ylim(rrange)
+
     if ylim:
         ax1.set_ylim(ylim)
     else:
@@ -117,8 +120,8 @@ def makeStackPlotWithRatio(
                 yerr=True if (proc == "Data" and not data_hist) else False,
                 ax=ax2
             )
-
     addLegend(ax1, nlegcols, extra_text)
+
     return fig
 
 def makePlotWithRatioToRef(
@@ -166,7 +169,7 @@ def makePlotWithRatioToRef(
             alpha=alpha,
         )
         hep.histplot(
-            hh.divideHists(data, hists[0], cutoff=1.e-6),
+            hh.divideHists(data, hists[0], cutoff=1.e-8),
             histtype="errorbar",
             color=colors[-1],
             label=labels[-1],
@@ -178,7 +181,31 @@ def makePlotWithRatioToRef(
         )
 
     addLegend(ax1, nlegcols, legtext_size)
+    
+    # This seems like a bug, but it's needed
+    if not xlim:
+        xlim = [hists[0].axes[0].edges[0], hists[0].axes[0].edges[-1]]
+    
+    redo_axis_ticks(ax1, "y")
+    redo_axis_ticks(ax2, "x")
+    redo_axis_ticks(ax1, "x", True)
+    ax1.set_xticklabels([])
+
     return fig
+
+def redo_axis_ticks(ax, axlabel, no_labels=False):
+    autoloc = ticker.AutoLocator()
+    # Need this to avoid a warning when you set the axis values manually
+    fixedloc = ticker.FixedLocator(autoloc.tick_values(*getattr(ax, f"get_{axlabel}lim")()))
+    getattr(ax, f"{axlabel}axis").set_major_locator(fixedloc)
+    ticks = getattr(ax, f"get_{axlabel}ticks")()
+    labels = [format_axis_num(x) for x in ticks] if not no_labels else []
+    getattr(ax, f"set_{axlabel}ticklabels")(labels)
+
+def format_axis_num(val):
+    if type(val) == int or val.is_integer():
+        return f"{val:.0f}"
+    return f"{x:0.3g}" if val > 10 else f"{val:0.2g}"
 
 def make_plot_dir(outpath, outfolder):
     full_outpath = "/".join([outpath, outfolder])
