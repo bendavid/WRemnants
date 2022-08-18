@@ -7,7 +7,7 @@ import pickle
 import lz4.frame
 from .correctionsTensor_helper import makeCorrectionsTensor
 from .theory_tools import scale_tensor_axes
-from . import common
+from utilities import common
 
 data_dir = f"{pathlib.Path(__file__).parent}/data/"
 

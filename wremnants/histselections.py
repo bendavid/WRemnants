@@ -1,4 +1,4 @@
-from . import boostHistHelpers as hh
+from utilities import boostHistHelpers as hh
 import hist
 import numpy as np
 

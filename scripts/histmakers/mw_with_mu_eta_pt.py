@@ -3,15 +3,8 @@ import pickle
 import gzip
 import ROOT
 
-parser = argparse.ArgumentParser()
-parser.add_argument("-j", "--nThreads", type=int, help="number of threads", default=None)
-initargs,_ = parser.parse_known_args()
+parser,initargs = common.common_parser()
 
-ROOT.gInterpreter.ProcessLine(".O3")
-if not initargs.nThreads:
-    ROOT.ROOT.EnableImplicitMT()
-elif init.args.nThreads != 1:
-    ROOT.ROOT.EnableImplicitMT(initargs.nThreads)
 import narf
 import wremnants
 from wremnants import theory_tools,syst_tools,theory_corrections,output_tools
@@ -24,20 +17,10 @@ import time
 logging.basicConfig(level=logging.INFO)
 
 parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
-parser.add_argument("--pdfs", type=str, nargs="*", default=["nnpdf31"], choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for (first is central set)")
-parser.add_argument("--altPdfOnlyCentral", action='store_true', help="Only store central value for alternate PDF sets")
-parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
-parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name")
-parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")
-parser.add_argument("--theory_corr", nargs="*", choices=["scetlib", "scetlibHelicity", "dyturbo", "matrix_radish"], 
-    help="Apply corrections from indicated generator. First will be nominal correction.")
-parser.add_argument("--theory_corr_alt_only", action='store_true', help="Save hist for correction hists but don't modify central weight")
 parser.add_argument("--noMuonCorr", action="store_true", help="Don't use corrected pt-eta-phi-charge")
 parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency")
 parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
 parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
-parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
-parser.add_argument("--v8", action='store_true', help="Use NanoAODv8. Default is v9")
 parser.add_argument("--eta", nargs=3, type=float, help="Eta binning as 'nbins min max' (only uniform for now)", default=[48,-2.4,2.4])
 parser.add_argument("--pt", nargs=3, type=float, help="Pt binning as 'nbins,min,max' (only uniform for now)", default=[29,26.,55.])
 parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for luminosity in excess to 1 (e.g. 1.012 means 1.2\%)", default=1.012)

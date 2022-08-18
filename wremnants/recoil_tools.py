@@ -5,7 +5,7 @@ import copy
 import logging
 import sys
 import decimal
-from wremnants.common import data_dir
+from utilities.common import data_dir
 
 ROOT.gInterpreter.Declare('#include "lowpu_recoil.h"')
 

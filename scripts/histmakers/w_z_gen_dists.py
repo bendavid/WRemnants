@@ -1,45 +1,20 @@
-import argparse
-import pickle
-import gzip
-import ROOT
-
-parser = argparse.ArgumentParser()
-parser.add_argument("--nThreads", type=int, help="number of threads", default=None)
-initargs,_ = parser.parse_known_args()
-
-ROOT.gInterpreter.ProcessLine(".O3")
-if not initargs.nThreads:
-    ROOT.ROOT.EnableImplicitMT()
-elif initargs.nThreads != 1:
-    ROOT.ROOT.EnableImplicitMT(initargs.nThreads)
-import narf
-import wremnants
-from wremnants import theory_tools,syst_tools,common
-from wremnants import boostHistHelpers as hh
+from utilities import boostHistHelpers as hh, common, output_tools
 import hist
-import lz4.frame
-import logging
 import math
 
-logging.basicConfig(level=logging.INFO)
+parser,initargs = common.common_parser()
 
-parser.add_argument("--pdfs", type=str, nargs="*", default=["nnpdf31"], choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for")
-parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
-parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=["Wplusmu", "Wminusmu", "Zmumu"])
+import narf
+import wremnants
+from wremnants import theory_tools,syst_tools
+
 parser.add_argument("--skipAngularCoeffs", action='store_true', help="Skip the conversion of helicity moments to angular coeff fractions")
 parser.add_argument("--singleLeptonHists", action='store_true', help="Also store single lepton kinematics")
-parser.add_argument("--v8", action='store_true', help="Use NanoAODv8. Default is v9")
-parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
 args = parser.parse_args()
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
-
-datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, mode="gen")
-
-print('Use v8?', args.v8)
-if args.v8:
-    datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, nanoVersion = "v8")
-
+datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
+    nanoVersion="v8" if args.v8 else "v9")
 
 axis_massWgen = hist.axis.Variable([0., math.inf], name="massVgen")
 
@@ -136,39 +111,32 @@ def build_graph(df, dataset):
 
 resultdict = narf.build_and_run(datasets, build_graph)
 
-fname = "w_z_gen_dists.pkl.lz4"
-if args.postfix:
-    fname = fname.replace(".pkl.lz4", f"_{args.postfix}.pkl.lz4")
-
-print("writing output")
-with lz4.frame.open(fname, "wb") as f:
-    pickle.dump(resultdict, f, protocol = pickle.HIGHEST_PROTOCOL)
+output_tools.write_analysis_output(resultdict, "w_z_gen_dists.pkl.lz4", args.postfix)
 
 print("computing angular coefficients")
 
 z_moments = None
 w_moments = None
 
-for key, val in resultdict.items():
+for dataset in datasets:
     # For now the tau samples have a different pt spectrum
-    if "tau" in key:
+    name = dataset.name
+    if "tau" in name:
         continue
-    moments = val["output"]["helicity_moments_scale"]
-    if key in zprocs:
+    moments = resultdict[name]["output"]["helicity_moments_scale"]
+    if name in zprocs:
         if z_moments is None:
             z_moments = moments
         else:
             z_moments += moments
-    elif key in wprocs:
+    elif name in wprocs:
         if w_moments is None:
             w_moments = moments
         else:
             w_moments += moments
 
-z_coeffs = wremnants.moments_to_angular_coeffs(hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning))
-w_coeffs = wremnants.moments_to_angular_coeffs(hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning))
+z_coeffs = {"Z" : wremnants.moments_to_angular_coeffs(hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning))}
+w_coeffs = {"W" : wremnants.moments_to_angular_coeffs(hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning))}
 
-with lz4.frame.open("z_coeffs.pkl.lz4", "wb") as f:
-    pickle.dump(z_coeffs, f, protocol = pickle.HIGHEST_PROTOCOL)
-with lz4.frame.open("w_coeffs.pkl.lz4", "wb") as f:
-    pickle.dump(w_coeffs, f, protocol = pickle.HIGHEST_PROTOCOL)
+output_tools.write_analysis_output(z_coeffs, "z_coeffs.pkl.lz4", args.postfix)
+output_tools.write_analysis_output(w_coeffs, "w_coeffs.pkl.lz4", args.postfix)

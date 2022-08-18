@@ -51,9 +51,8 @@ minnloh = minnloh[{"muRfact" : 1.j, "muFfact" : 1.j}]
 
 sigma_ulh = hh.sumHists([read_corr(procName, args.generator, corr_files[0]) for procName, corr_files in filesByProc.items()])
 sigma4h = hh.sumHists([read_corr(procName, args.generator, corr_files[1], isA4=True) for procName, corr_files in filesByProc.items()])
-a4h = theory_corrections.make_a4_coeff(sigma4h, sigma_ulh)
 
-corrh  = theory_corrections.make_corr_by_helicity(minnloh, sigma_ulh, a4h)
+corrh = theory_corrections.make_corr_by_helicity(minnloh, sigma_ulh, sigma4h)
 
 outName = "Z" if args.proc == "z" else "W"
 outfile = f"{args.outpath}/{args.generator}HelicityCorr{outName}.pkl.lz4"
@@ -64,7 +63,6 @@ with lz4.frame.open(outfile, "wb") as f:
     pickle.dump({
             outName : {
                 f"{args.generator}_minnlo_coeffs" : corrh,
-                f"{args.generator}_a4_hist" : a4h,
                 f"{args.generator}_sigma4_hist" : sigma4h,
                 f"{args.generator}_sigmaUL_hist" : sigma_ulh,
                 "minnlo_helicity_hist" : minnloh,
