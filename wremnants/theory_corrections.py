@@ -7,7 +7,8 @@ import numpy as np
 import lz4.frame
 import pickle
 from .correctionsTensor_helper import makeCorrectionsTensor
-from wremnants import boostHistHelpers as hh,theory_tools,common
+from utilities import boostHistHelpers as hh, common
+from wremnants import theory_tools
 
 def make_corr_helper_fromnp(filename=f"{common.data_dir}/N3LLCorrections/inclusive_{{process}}_pT.npz", isW=True):
     if isW:
@@ -58,6 +59,7 @@ def rebin_corr_hists(hists, ndim=-1):
     # Allow trailing dimensions to be different (e.g., variations)
     ndims = min([x.ndim for x in hists]) if ndim < 0 else ndim
     hists = [hh.rebinHist(h, "pt" if "pt" in h.axes.name else "ptVgen", common.ptV_binning[:-2]) for h in hists]
+    hists = [hh.rebinHist(h, "absy" if "absy" in h.axes.name else "absYVgen", common.absYV_binning[:-2]) for h in hists]
     for i in range(ndims):
         # This is a workaround for now for the fact that MiNNLO has mass binning up to
         # Inf whereas SCETlib has 13 TeV
@@ -86,21 +88,20 @@ def make_corr_by_helicity(ref_helicity_hist, target_sigmaul, target_sigma4, ndim
     
     ref_coeffs = theory_tools.moments_to_angular_coeffs(ref_helicity_hist)
 
-
     target_a4_coeff = make_a4_coeff(target_sigma4, target_sigmaul)
-
     sigmaUL_ratio = hh.divideHists(target_sigmaul, ref_helicity_hist[{"helicity" : -1.j}])
 
     corr_ax = hist.axis.Boolean(name="corr")
     vars_ax = target_sigmaul.axes["vars"]
     corr_coeffs = hist.Hist(*ref_coeffs.axes, corr_ax, vars_ax)
-    # Corr = False is the uncorrected coeffs, corrected coeffs are scaled by the new sigma UL
-    # and have the new A4
-    corr_coeffs[...,False,:] = ref_coeffs.values(flow=True)[...,np.newaxis]
-    # TODO: Double check in my mind if this should come before or after multiplying through by sigma_UL
+    # Corr = False is the uncorrected coeffs, corrected coeffs have the new A4
+    # NOTE: the corrected coeffs are multiplied through by the sigmaUL correction, so that the 
+    # new correction can be made as the ratio of the sum. To get the correct coeffs, this should
+    # be divided back out
+    corr_coeffs[...] = ref_coeffs.values(flow=True)[...,np.newaxis,np.newaxis]
     corr_coeffs[...,4.j,True,:] = target_a4_coeff.values()
     # Add back the helicity dimension and keep the variation dimension from the correction
-    rescaled_coeffs = ref_coeffs.values(flow=True)[...,np.newaxis]*sigmaUL_ratio.values(flow=True)[...,np.newaxis,:]
+    rescaled_coeffs = corr_coeffs[{"corr" : True}].values(flow=True)*sigmaUL_ratio.values(flow=True)[...,np.newaxis,:]
     corr_coeffs[...,True,:] = rescaled_coeffs
 
     corr_coeffs = set_corr_ratio_flow(corr_coeffs)

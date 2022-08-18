@@ -3,7 +3,7 @@ import mplhep as hep
 import matplotlib.pyplot as plt
 from matplotlib import ticker
 from matplotlib import patches
-from wremnants import boostHistHelpers as hh
+from utilities import boostHistHelpers as hh
 from wremnants import histselections as sel
 import math
 import numpy as np

@@ -2,7 +2,7 @@ import ROOT
 import hist
 import numpy as np
 import copy
-from wremnants import boostHistHelpers as hh
+from utilities import boostHistHelpers as hh
 import logging
 from scipy import ndimage
 
