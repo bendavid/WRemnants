@@ -26,9 +26,9 @@ def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True):
     h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2, allowBroadcast)
     # To get the broadcast shape right
     outh = h1 if not allowBroadcast else broadcastOutHist(h1, h2)
+    out = np.zeros_like(h2vals)
     # By the argument that 0/0 = 1
-    out = np.ones_like(h2vals)
-    out[np.abs(h2vals) < cutoff] = 1.
+    out[(np.abs(h2vals) < cutoff) & (np.abs(h1vals) < cutoff)] = 1.
     val = np.divide(h1vals, h2vals, out=out, where=np.abs(h2vals)>cutoff)
     relvars = relVariances(h1vals, h2vals, h1vars, h2vars)
     var = val*sum(relVariances(h1vals, h2vals, h1vars, h2vars))
@@ -136,14 +136,15 @@ def rebinHist(h, axis_name, edges):
     # Take is used because reduceat sums i:len(array) for the last entry, in the case
     # where the final bin isn't the same between the initial and rebinned histogram, you
     # want to drop this value
-    edge_idx = h.axes[axis_name].index(edges)+flow
-    if flow:
+    edges_eval = edges[:-1] if not overflow and edges[-1] == h.axes[axis_name].edges[-1] else edges
+    edge_idx = h.axes[axis_name].index(edges_eval)+underflow
+    if underflow:
         edge_idx = np.insert(edge_idx, 0, 0)
 
     hnew.values(flow=flow)[...] = np.add.reduceat(h.values(flow=flow), edge_idx, 
-            axis=ax_idx).take(indices=range(new_ax.size+2*flow), axis=ax_idx)
+            axis=ax_idx).take(indices=range(new_ax.size+underflow+overflow), axis=ax_idx)
     hnew.variances(flow=flow)[...] = np.add.reduceat(h.variances(flow=flow), edge_idx, 
-            axis=ax_idx).take(indices=range(new_ax.size+2*flow), axis=ax_idx)
+            axis=ax_idx).take(indices=range(new_ax.size+underflow+overflow), axis=ax_idx)
     return hnew
 
 def mergeAxes(ax1, ax2):

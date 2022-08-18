@@ -10,40 +10,48 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-m", "--minnlo_file", type=str, default="w_z_gen_dists.pkl.lz4", help="MiNNLO gen file, denominator in ratio") 
-parser.add_argument("-ul", "--corr_ul", type=str, required=True, help="Reference file of the corrections") 
-parser.add_argument("-a4", "--corr_a4", type=str, required=True, help="Reference file of the corrections") 
+parser.add_argument("-ul", "--corr_ul", type=str, nargs='+', required=True, help="Reference file of the corrected sigma_UL") 
+parser.add_argument("-a4", "--corr_a4", type=str, nargs='+', required=True, help="Reference file of the corrected sigma_4") 
 parser.add_argument("-g", "--generator", type=str, choices=["scetlib", ], default="scetlib",
     required=True, help="Generator used to produce correction hist")
 parser.add_argument("--outpath", type=str, default=f"{common.data_dir}/TheoryCorrections", help="Output path")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
-parser.add_argument("--proc", type=str, required=True, choices=["z", "wm", "wp"], help="Process")
+parser.add_argument("--proc", type=str, required=True, choices=["z", "w", ], help="Process")
 
 args = parser.parse_args()
 
 logging.basicConfig(level=logging.INFO)
 
+def read_corr(procName, generator, corr, isA4=False):
+    charge = 0 if procName[0] == "Z" else (1 if "Wplus" in procName else -1)
+    if args.generator == "scetlib":
+        h = input_tools.read_scetlib_hist(corr, charge=charge, flip_y_sign=isA4)
+        h = hh.makeAbsHist(h, "y")
+    else:
+        raise NotImplementedError("Only SCETlib supported so far")
+
+    return h
+
+if len(args.corr_ul) != len(args.corr_a4):
+    raise ValueError("Must pass the same number of UL and sigma4 files")
 if args.proc == "z":
-    procName = "ZmumuPostVFP" 
-    charge = 0
-elif args.proc == "wm":
-    procName = "WminusmunuPostVFP" 
-    charge = -1
-elif args.proc == "wp":
-    procName = "WplusmunuPostVFP" 
-    charge = 1
+    if len(args.corr_ul) != 1:
+        raise ValueError("Only one file expected for Z")
+    filesByProc = { "ZmumuPostVFP" : args.corr_files[0] }
+elif args.proc == "w":
+    if len(args.corr_ul) != 2:
+        raise ValueError("Requires two files for W (W+ and W-)")
+    plus_idx = 0 if "Wp" in args.corr_ul[0] else 1
+    plus_idx4 = 0 if "Wp" in args.corr_a4[0] else 1
+    filesByProc = { "WplusmunuPostVFP" : (args.corr_ul[plus_idx], args.corr_a4[plus_idx4]),
+        "WminusmunuPostVFP" : (args.corr_ul[not plus_idx], args.corr_a4[not plus_idx4])}
 
-minnloh_all = input_tools.read_and_scale(args.minnlo_file, procName, "helicity_moments_scale")
-minnloh = minnloh_all[{"muRfact" : 1.j, "muFfact" : 1.j}]
+minnloh = input_tools.read_all_and_scale(args.minnlo_file, list(filesByProc.keys()), "helicity_moments_scale")
+minnloh = minnloh[{"muRfact" : 1.j, "muFfact" : 1.j}]
 
-if args.generator == "scetlib":
-    # TODO: Fix this, excluding nonsingular is just for now
-    sigma_ulh = theory_corrections.read_scetlib_hist(args.corr_ul, charge=charge, nonsing="" if args.proc=="z" else "auto")
-    sigma_ulh = hh.makeAbsHist(sigma_ulh, "y")
-    sigma4h = theory_corrections.read_scetlib_hist(args.corr_a4, charge=charge, nonsing="" if args.proc=="z" else "auto")
-    sigma4h = hh.makeAbsHist(sigma4h, "y")
-    a4h = theory_corrections.make_a4_coeff(sigma4h, sigma_ulh)
-else:
-    raise NotImplementedError("Only SCETlib supported so far")
+sigma_ulh = hh.sumHists([read_corr(procName, args.generator, corr_files[0]) for procName, corr_files in filesByProc.items()])
+sigma4h = hh.sumHists([read_corr(procName, args.generator, corr_files[1], isA4=True) for procName, corr_files in filesByProc.items()])
+a4h = theory_corrections.make_a4_coeff(sigma4h, sigma_ulh)
 
 corrh  = theory_corrections.make_corr_by_helicity(minnloh, sigma_ulh, a4h)
 
@@ -56,6 +64,7 @@ with lz4.frame.open(outfile, "wb") as f:
     pickle.dump({
             outName : {
                 f"{args.generator}_minnlo_coeffs" : corrh,
+                f"{args.generator}_a4_hist" : a4h,
                 f"{args.generator}_sigma4_hist" : sigma4h,
                 f"{args.generator}_sigmaUL_hist" : sigma_ulh,
                 "minnlo_helicity_hist" : minnloh,
