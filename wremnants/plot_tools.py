@@ -121,6 +121,7 @@ def makeStackPlotWithRatio(
                 ax=ax2
             )
     addLegend(ax1, nlegcols, extra_text)
+    fix_axes(ax1, ax2)
 
     return fig
 
@@ -181,17 +182,21 @@ def makePlotWithRatioToRef(
         )
 
     addLegend(ax1, nlegcols, legtext_size)
+    fix_axes(ax1, ax2)
     
     # This seems like a bug, but it's needed
     if not xlim:
         xlim = [hists[0].axes[0].edges[0], hists[0].axes[0].edges[-1]]
+
+    fix_axes(ax1, ax2)
     
+    return fig
+
+def fix_axes(ax1, ax2):
     redo_axis_ticks(ax1, "y")
     redo_axis_ticks(ax2, "x")
     redo_axis_ticks(ax1, "x", True)
     ax1.set_xticklabels([])
-
-    return fig
 
 def redo_axis_ticks(ax, axlabel, no_labels=False):
     autoloc = ticker.AutoLocator()

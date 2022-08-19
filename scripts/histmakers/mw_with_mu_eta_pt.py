@@ -1,13 +1,11 @@
 import argparse
-import pickle
-import gzip
-import ROOT
+from utilities import output_tools,common
 
 parser,initargs = common.common_parser()
 
 import narf
 import wremnants
-from wremnants import theory_tools,syst_tools,theory_corrections,output_tools
+from wremnants import theory_tools,syst_tools,theory_corrections
 import hist
 import lz4.frame
 import logging
@@ -36,20 +34,6 @@ noMuonCorr = args.noMuonCorr
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 qcdScaleByHelicity_Zhelper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = True)
 qcdScaleByHelicity_Whelper = wremnants.makeQCDScaleByHelicityHelper()
-
-corr_helpers = {} 
-if args.theory_corr:
-    for proc in ["ZmumuPostVFP", ]:#"WplusmunuPostVFP", "WminusmunuPostVFP"]:
-        corr_helpers[proc] = {}
-        for generator in args.theory_corr:
-            fname = f"{common.data_dir}/TheoryCorrections/{generator}Corr{proc[0]}.pkl.lz4"
-            helper_func = getattr(theory_corrections, "make_corr_helper" if "Helicity" not in generator else "make_corr_by_helicity_helper")
-            corr_hist_name = f"{generator}_minnlo_ratio" if "Helicity" not in generator else f"{generator.replace('Helicity', '')}_minnlo_coeffs"
-            corr_helpers[proc][generator] = helper_func(fname, proc[0], corr_hist_name)
-
-wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP"]
-# for tests of NanoAOD compression need to add ["WminusmunuPostVFP_LZMA_9", "WminusmunuPostVFP_LZ4_4"]
-zprocs = ["ZmumuPostVFP", "ZtautauPostVFP"]
 
 # custom template binning
 template_neta = int(args.eta[0])
@@ -90,6 +74,9 @@ pileup_helper = wremnants.make_pileup_helper(era = era)
 
 calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
 
+# TODO: Eventually should also apply to tau samples, when the new ones are ready
+corr_helpers = theory_tools.load_corr_helpers([p for p in common.wprocs+common.zprocs if "tau" not in p], args.theory_corr)
+
 def build_graph(df, dataset):
     print("build graph", dataset.name)
     results = []
@@ -103,8 +90,8 @@ def build_graph(df, dataset):
 
     df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
 
-    isW = dataset.name in wprocs
-    isZ = dataset.name in zprocs
+    isW = dataset.name in common.wprocs
+    isZ = dataset.name in common.zprocs
     apply_theory_corr = args.theory_corr and dataset.name in corr_helpers
     if noMuonCorr:
         df = df.Alias("Muon_correctedPt", "Muon_pt")
@@ -174,26 +161,12 @@ def build_graph(df, dataset):
         if not args.noScaleFactors:
             weight_expr += "*weight_fullMuonSF_withTrackingReco"
         
-        if isW or isZ:
-            df = df.Define("nominal_pdf_cen", theory_tools.pdf_central_weight(dataset.name, args.pdfs[0]))
-            weight_expr = f"{weight_expr}*nominal_pdf_cen"
-            df = wremnants.define_prefsr_vars(df)
+        df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
 
-            if apply_theory_corr:
-                helper = corr_helpers[dataset.name]
-                df = theory_tools.define_theory_corr(df, weight_expr, helper,
-                    generators=args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
-                results.extend(theory_tools.make_theory_corr_hists(df_dilepton, "dilepton", dilepton_axes, dilepton_cols, 
-                    helper, args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
-                )
-            else:
-                df = df.Define("nominal_weight", weight_expr)
-
-            for i, pdf in enumerate(args.pdfs):
-                withUnc = i == 0 or not args.altPdfOnlyCentral
-                results.extend(theory_tools.define_and_make_pdf_hists(df, nominal_axes, nominal_cols, dataset.name, pdf, withUnc))
-        else:
-            df = df.Define("nominal_weight", weight_expr)
+        if apply_theory_corr:
+            results.extend(theory_tools.make_theory_corr_hists(df, "nominal", nominal_axes, nominal_cols, 
+                corr_helpers[dataset.name], args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
+            )
 
         nominal = df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "nominal_weight"])
         results.append(nominal)

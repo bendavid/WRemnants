@@ -1,15 +1,29 @@
 from utilities import boostHistHelpers as hh, common, output_tools
-import hist
-import math
 
 parser,initargs = common.common_parser()
 
 import narf
 import wremnants
-from wremnants import theory_tools,syst_tools
+from wremnants import theory_tools,syst_tools,theory_corrections
+import hist
+import math
+
+
+wprocs = [
+    "WplusmunuPostVFP", 
+    "WminusmunuPostVFP",
+    "WminustaunuPostVFP",
+    "WplustaunuPostVFP"
+]
+
+zprocs = ["ZmumuPostVFP", "ZtautauPostVFP"]
 
 parser.add_argument("--skipAngularCoeffs", action='store_true', help="Skip the conversion of helicity moments to angular coeff fractions")
 parser.add_argument("--singleLeptonHists", action='store_true', help="Also store single lepton kinematics")
+
+f = next((x for x in parser._actions if x.dest == "blah"), None)
+f.default = wprocs+zprocs
+
 args = parser.parse_args()
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
@@ -37,17 +51,11 @@ axis_chargeZgen = hist.axis.Integer(
     0, 1, name="chargeVgen", underflow=False, overflow=False
 )
 
-axis_l_eta_gen = hist.axis.Regular(48, -2.4, 2.4, name = "prefsr_lepton_eta_gen")
-axis_l_pt_gen = hist.axis.Regular(29, 26., 55., name = "prefsr_lepton_pt_gen")
-axes_l_gen = [axis_l_eta_gen, axis_l_pt_gen]
+axis_l_eta_gen = hist.axis.Regular(48, -2.4, 2.4, name = "eta")
+axis_l_pt_gen = hist.axis.Regular(29, 26., 55., name = "pt")
 
-wprocs = [
-    "WplusmunuPostVFP", 
-    "WminusmunuPostVFP",
-    "WminustaunuPostVFP",
-    "WplustaunuPostVFP"
-]
-zprocs = ["ZmumuPostVFP", "ZtautauPostVFP"]
+# TODO: Eventually should also apply to tau samples, when the new ones are ready
+corr_helpers = theory_tools.load_corr_helpers([p for p in wprocs+zprocs if "tau" not in p], args.theory_corr)
 
 def build_graph(df, dataset):
     print("build graph")
@@ -57,48 +65,54 @@ def build_graph(df, dataset):
     if dataset.is_data:
         raise RuntimeError("Running GEN analysis over data is not supported")
 
-    df = df.Define("nominal_pdf_cen", theory_tools.pdf_central_weight(dataset.name, args.pdfs[0]))
     weight_expr = "std::copysign(1.0, genWeight)"
-    weight_expr = f"{weight_expr}*nominal_pdf_cen"
-
     if "reweight_h2" in dataset.name:
         weight_expr = f"{weight_expr}*H2BugFixWeight[0]"
 
-    df = df.Define("nominal_weight", weight_expr)
+    df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
+
     weightsum = df.SumAndCount("nominal_weight")
 
     df = theory_tools.define_scale_tensor(df)
 
     if dataset.name in zprocs:
         nominal_axes = [axis_massZgen, axis_absYVgen, axis_ptVgen, axis_chargeZgen]
+        lep_axes = [axis_l_eta_gen, axis_l_pt_gen, axis_chargeZgen]
     else:
         nominal_axes = [axis_massWgen, axis_absYVgen, axis_ptVgen, axis_chargeWgen]
+        lep_axes = [axis_l_eta_gen, axis_l_pt_gen, axis_chargeWgen]
 
     nominal_cols = ["massVgen", "absYVgen", "ptVgen", "chargeVgen"]
-    df = wremnants.define_prefsr_vars(df)
+    lep_cols = ["etaPrefsrLep", "ptPrefsrLep", "chargeVgen"]
 
-    if args.singleLeptonHists:
-        if dataset.name == 'WplusmunuPostVFP':
-            df = df.Define('ptPrefsrMuon', 'genlanti.pt()')
-            df = df.Define('etaPrefsrMuon', 'genlanti.eta()')
-        elif dataset.name == 'WminusmunuPostVFP' or 'ZmumuPostVFP' in dataset.name:
-            df = df.Define('ptPrefsrMuon', 'genl.pt()')
-            df = df.Define('etaPrefsrMuon', 'genl.eta()')
-        if dataset.name in ['WplusmunuPostVFP', 'WminusmunuPostVFP'] or 'ZmumuPostVFP' in dataset.name:
-            nominal_cols = [*nominal_cols, 'etaPrefsrMuon', 'ptPrefsrMuon']
-            nominal_axes = [*nominal_axes, axis_l_eta_gen, axis_l_pt_gen]
+    isW = dataset.name in wprocs
+    isZ = dataset.name in zprocs
+
+    if args.singleLeptonHists and isW or isZ:
+        if isW:
+            df = df.Define('ptPrefsrLep', 'genlanti.pt()')
+            df = df.Define('etaPrefsrLep', 'genlanti.eta()')
+        else:
+            df = df.Define('ptPrefsrLep', 'genl.pt()')
+            df = df.Define('etaPrefsrLep', 'genl.eta()')
+        results.append(df.HistoBoost("nominal_genlep", lep_axes, [*lep_cols, "nominal_weight"]))
 
     nominal_gen = df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols, "nominal_weight"])
+
     results.append(nominal_gen)
 
     results.append(theory_tools.make_scale_hist(df, nominal_axes, nominal_cols))
 
-    for pdf in args.pdfs:
-        results.extend(theory_tools.define_and_make_pdf_hists(df, nominal_axes, nominal_cols, dataset.name, pdfset=pdf))
+    if args.theory_corr and dataset.name in corr_helpers:
+        results.extend(theory_tools.make_theory_corr_hists(df, "nominal_gen", nominal_axes, nominal_cols,
+            corr_helpers[dataset.name], args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
+        )
+        if args.singleLeptonHists:
+            results.extend(theory_tools.make_theory_corr_hists(df, "nominal_genlep", lep_axes, lep_cols, 
+                corr_helpers[dataset.name], args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
+            )
 
     if dataset.name != "Zmumu_bugfix":
-        isW = dataset.name in wprocs
-
         df, masswhist = syst_tools.define_mass_weights(df, isW, nominal_axes, nominal_cols)
         if masswhist:
             results.append(masswhist)

@@ -3,8 +3,8 @@ import lz4.frame
 import pickle
 import logging
 from wremnants import plot_tools, theory_corrections, theory_tools
-from wremnants import boostHistHelpers as hh
-from wremnants import common, input_tools, output_tools
+from utilities import boostHistHelpers as hh
+from utilities import common, input_tools, output_tools
 import hist
 import argparse
 
