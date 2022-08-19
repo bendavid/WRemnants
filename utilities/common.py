@@ -8,6 +8,7 @@ data_dir = f"{wremnants_dir}/data/"
 
 wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP"]
 zprocs = ["ZmumuPostVFP", "ZtautauPostVFP"]
+vprocs = wprocs+zprocs
 
 # standard regular axes
 axis_eta = hist.axis.Regular(48, -2.4, 2.4, name = "eta")
@@ -27,7 +28,7 @@ nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
 
 def common_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--nThreads", type=int, help="number of threads", default=None)
+    parser.add_argument("-j", "--nThreads", type=int, help="number of threads")
     parser.add_argument("--debug", action='store_true', help="Debug output")
     initargs,_ = parser.parse_known_args()
 
@@ -50,7 +51,7 @@ def common_parser():
     parser.add_argument("--v8", action='store_true', help="Use NanoAODv8. Default is v9")
     parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
     parser.add_argument("--theory_corr", nargs="*", choices=["scetlib", "scetlibHelicity", "dyturbo", "matrix_radish"], 
-        help="Apply corrections from indicated generator. First will be nominal correction.")
+        help="Apply corrections from indicated generator. First will be nominal correction.", default=[])
     parser.add_argument("--theory_corr_alt_only", action='store_true', help="Save hist for correction hists but don't modify central weight")
     parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")
     return parser,initargs

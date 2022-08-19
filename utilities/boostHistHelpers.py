@@ -125,9 +125,10 @@ def rebinHist(h, axis_name, edges):
         raise ValueError(f"Cannot rebin histogram due to incompatible eduges for axis '{ax.name}'\n"
                             f"Edges of histogram are {ax.edges}, requested rebinning to {edges}")
         
-    overflow = ax.traits.overflow
-    underflow = ax.traits.underflow
-    flow = overflow and underflow
+    # If you rebin to a subset of initial range, keep the overflow and underflow
+    overflow = ax.traits.overflow or edges[-1] < ax.edges[-1]
+    underflow = ax.traits.underflow or edges[0] > ax.edges[0]
+    flow = overflow or underflow
     new_ax = hist.axis.Variable(edges, name=ax.name, overflow=overflow, underflow=underflow)
     axes = list(h.axes)
     axes[ax_idx] = new_ax
