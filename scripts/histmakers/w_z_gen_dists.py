@@ -9,20 +9,12 @@ import hist
 import math
 
 
-wprocs = [
-    "WplusmunuPostVFP", 
-    "WminusmunuPostVFP",
-    "WminustaunuPostVFP",
-    "WplustaunuPostVFP"
-]
-
-zprocs = ["ZmumuPostVFP", "ZtautauPostVFP"]
-
 parser.add_argument("--skipAngularCoeffs", action='store_true', help="Skip the conversion of helicity moments to angular coeff fractions")
 parser.add_argument("--singleLeptonHists", action='store_true', help="Also store single lepton kinematics")
 
-f = next((x for x in parser._actions if x.dest == "blah"), None)
-f.default = wprocs+zprocs
+f = next((x for x in parser._actions if x.dest == "filterProcs"), None)
+if f:
+    f.default = common.vprocs
 
 args = parser.parse_args()
 
@@ -30,16 +22,16 @@ filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
     nanoVersion="v8" if args.v8 else "v9")
 
-axis_massWgen = hist.axis.Variable([0., math.inf], name="massVgen")
+axis_massWgen = hist.axis.Variable([0., math.inf], name="massVgen", flow=False)
 
 axis_massZgen = hist.axis.Regular(12, 60., 120., name="massVgen")
 
 axis_absYVgen = hist.axis.Variable(
-    [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4, 5, 10], name = "absYVgen"
+    [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4, 5], 
+    name = "absYVgen", underflow=False
 )
 axis_ptVgen = hist.axis.Variable(
-#    [0, 2, 3, 4, 4.75, 5.5, 6.5, 8, 9, 10, 12, 14, 16, 18, 20, 23, 27, 32, 40, 55, 100], name = "ptVgen"
-    range(0,121), name = "ptVgen"
+    range(0,121), name = "ptVgen", underflow=False,
 )
 
 
@@ -55,7 +47,7 @@ axis_l_eta_gen = hist.axis.Regular(48, -2.4, 2.4, name = "eta")
 axis_l_pt_gen = hist.axis.Regular(29, 26., 55., name = "pt")
 
 # TODO: Eventually should also apply to tau samples, when the new ones are ready
-corr_helpers = theory_tools.load_corr_helpers([p for p in wprocs+zprocs if "tau" not in p], args.theory_corr)
+corr_helpers = theory_tools.load_corr_helpers([p for p in common.vprocs if "tau" not in p], args.theory_corr)
 
 def build_graph(df, dataset):
     print("build graph")
@@ -64,6 +56,9 @@ def build_graph(df, dataset):
     
     if dataset.is_data:
         raise RuntimeError("Running GEN analysis over data is not supported")
+
+    isW = dataset.name in common.wprocs
+    isZ = dataset.name in common.zprocs
 
     weight_expr = "std::copysign(1.0, genWeight)"
     if "reweight_h2" in dataset.name:
@@ -75,7 +70,7 @@ def build_graph(df, dataset):
 
     df = theory_tools.define_scale_tensor(df)
 
-    if dataset.name in zprocs:
+    if isZ:
         nominal_axes = [axis_massZgen, axis_absYVgen, axis_ptVgen, axis_chargeZgen]
         lep_axes = [axis_l_eta_gen, axis_l_pt_gen, axis_chargeZgen]
     else:
@@ -84,9 +79,6 @@ def build_graph(df, dataset):
 
     nominal_cols = ["massVgen", "absYVgen", "ptVgen", "chargeVgen"]
     lep_cols = ["etaPrefsrLep", "ptPrefsrLep", "chargeVgen"]
-
-    isW = dataset.name in wprocs
-    isZ = dataset.name in zprocs
 
     if args.singleLeptonHists and isW or isZ:
         if isW:
@@ -138,19 +130,25 @@ for dataset in datasets:
     if "tau" in name:
         continue
     moments = resultdict[name]["output"]["helicity_moments_scale"]
-    if name in zprocs:
+    if name in common.zprocs:
         if z_moments is None:
             z_moments = moments
         else:
             z_moments += moments
-    elif name in wprocs:
+    elif name in common.wprocs:
         if w_moments is None:
             w_moments = moments
         else:
             w_moments += moments
 
-z_coeffs = {"Z" : wremnants.moments_to_angular_coeffs(hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning))}
-w_coeffs = {"W" : wremnants.moments_to_angular_coeffs(hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning))}
+z_moments = hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning)
+z_moments = hh.rebinHist(z_moments, axis_massZgen.name, [70, 80, 85, 90, 95, 100, 110])
+z_moments = hh.rebinHist(z_moments, axis_absYVgen.name, axis_absYVgen.edges[:-1])
+w_moments = hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning)
+w_moments = hh.rebinHist(w_moments, axis_absYVgen.name, axis_absYVgen.edges[:-1])
 
-output_tools.write_analysis_output(z_coeffs, "z_coeffs.pkl.lz4", args.postfix)
-output_tools.write_analysis_output(w_coeffs, "w_coeffs.pkl.lz4", args.postfix)
+coeffs = {"Z" : wremnants.moments_to_angular_coeffs(z_moments),
+        "W" : wremnants.moments_to_angular_coeffs(w_moments),
+}
+
+output_tools.write_analysis_output(coeffs, "w_z_coeffs.pkl.lz4", args.postfix)

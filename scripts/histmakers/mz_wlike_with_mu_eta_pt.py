@@ -80,7 +80,7 @@ pileup_helper = wremnants.make_pileup_helper(era = era)
 calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
 
 # TODO: Eventually should also apply to tau samples, when the new ones are ready
-corr_helpers = theory_tools.load_corr_helpers([p for p in common.wprocs+common.zprocs if "tau" not in p], args.theory_corr)
+corr_helpers = theory_tools.load_corr_helpers([p for p in common.vprocs if "tau" not in p], args.theory_corr)
 
 # recoil initialization
 if not args.no_recoil:
@@ -110,7 +110,7 @@ def build_graph(df, dataset):
         df = df.Alias("Muon_correctedEta", "Muon_cvhbsEta")
         df = df.Alias("Muon_correctedPhi", "Muon_cvhbsPhi")
         df = df.Alias("Muon_correctedCharge", "Muon_cvhbsCharge")
-    elif dataset.name in wprocs or dataset.name in common.zprocs:
+    elif dataset.name in common.vprocs:
         df = wremnants.define_corrected_muons(df, calibration_helper)
     else:
         # no track refit available for background monte carlo samples and this is "good enough"
