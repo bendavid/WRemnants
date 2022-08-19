@@ -3,8 +3,8 @@ import lz4.frame
 import pickle
 import logging
 from wremnants import plot_tools, theory_corrections, theory_tools
-from wremnants import boostHistHelpers as hh
-from wremnants import common, input_tools, output_tools
+from utilities import boostHistHelpers as hh
+from utilities import common, input_tools, output_tools
 import hist
 import argparse
 import os
@@ -55,7 +55,7 @@ elif args.proc == "w":
         raise ValueError("Requires two files for W (W+ and W-)")
     plus_idx = 0 if "Wp" in args.corr_files[0] else 1
     filesByProc = { "WplusmunuPostVFP" : args.corr_files[plus_idx],
-        "WminusPostVFP" : args.corr_files[0 if plus_idx else 1]}
+        "WminusmunuPostVFP" : args.corr_files[0 if plus_idx else 1]}
 
 minnloh = input_tools.read_all_and_scale(args.minnlo_file, list(filesByProc.keys()), "nominal_gen")
 

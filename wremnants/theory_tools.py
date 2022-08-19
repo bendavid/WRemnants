@@ -2,7 +2,8 @@ import ROOT
 import hist
 import numpy as np
 import copy
-from utilities import boostHistHelpers as hh
+from utilities import boostHistHelpers as hh,common
+from wremnants import theory_corrections
 import logging
 from scipy import ndimage
 
@@ -172,6 +173,32 @@ def define_and_make_pdf_hists(df, axes, cols, dataset, pdfset="nnpdf31", storeUn
         return pdfHist, alphaSHist
 
     return []
+
+def load_corr_helpers(procs, generators):
+    corr_helpers = {}
+    for proc in procs:
+        corr_helpers[proc] = {}
+        for generator in generators:
+            fname = f"{common.data_dir}/TheoryCorrections/{generator}Corr{proc[0]}.pkl.lz4"
+            helper_func = getattr(theory_corrections, "make_corr_helper" if "Helicity" not in generator else "make_corr_by_helicity_helper")
+            corr_hist_name = f"{generator}_minnlo_ratio" if "Helicity" not in generator else f"{generator.replace('Helicity', '')}_minnlo_coeffs"
+            corr_helpers[proc][generator] = helper_func(fname, proc[0], corr_hist_name)
+    return corr_helpers
+
+def define_weights_and_corrs(df, weight_expr, dataset_name, helpers, args):
+    #TODO: organize this better
+    if dataset_name in common.wprocs+common.zprocs:
+        df = df.Define("nominal_pdf_cen", pdf_central_weight(dataset_name, args.pdfs[0]))
+        weight_expr = f"{weight_expr}*nominal_pdf_cen"
+    df = define_prefsr_vars(df)
+
+    if args.theory_corr and dataset_name in helpers:
+        helper = helpers[dataset_name]
+        df = define_theory_corr(df, weight_expr, helper, generators=args.theory_corr, 
+                modify_central_weight=not args.theory_corr_alt_only)
+    else:
+        df = df.Define("nominal_weight", weight_expr)
+    return df 
 
 def pdf_central_weight(dataset, pdfset):
     pdfInfo = pdf_info_map(dataset, pdfset)

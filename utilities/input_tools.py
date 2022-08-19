@@ -2,8 +2,9 @@ import lz4.frame
 import pickle
 import numpy
 import hist
-from wremnants import boostHistHelpers as hh
+from utilities import boostHistHelpers as hh
 import numpy as np
+import logging
 
 def read_and_scale(fname, proc, histname):
     with lz4.frame.open(fname) as f:
@@ -64,12 +65,14 @@ def read_scetlib_hist(path, pt_axis=None, nonsing="auto", flip_y_sign=False, cha
     else:
         scetlibh[...,charge_axis.index(charge),:] = vals
 
-    if nonsing:
+    if nonsing and nonsing != "skip":
         if nonsing == "auto":
             nonsing = path.replace(*((".", "_nons.") if "sing" not in path else ("sing", "nons")))
-        nonsingh = read_scetlib_hist(nonsing, pt_axis, False, 
-                        flip_y_sign=flip_y_sign, charge=charge)
+        nonsingh = read_scetlib_hist(nonsing, pt_axis, nonsing="skip", 
+                    flip_y_sign=flip_y_sign, charge=charge)
         scetlibh = scetlibh + nonsingh
+    elif nonsing != "skip":
+        logging.warning("Will not include nonsingular contribution!")
     
     if flip_y_sign:
         mid = y_axis.index(0)
