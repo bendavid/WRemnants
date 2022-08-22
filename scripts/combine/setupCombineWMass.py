@@ -32,6 +32,7 @@ parser.add_argument("--skipOtherChargeSyst", dest="skipOtherChargeSyst" , action
 parser.add_argument("--skipSignalSystOnFakes", dest="skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
 parser.add_argument("--scaleMuonCorr", type=float, default=1.0, help="Scale up/down dummy muon scale uncertainty by this factor")
 parser.add_argument("--correlateEffStatIsoByCharge", action='store_true', help="Correlate isolation efficiency uncertanties between the two charges (by default they are decorrelated)")
+parser.add_argument("--doStatOnly", action="store_true", default=False, help="Set up fit to get stat-only uncertainty (currently combinetf with -S 0 doesn't work)")
 args = parser.parse_args()
 
 if not os.path.isdir(args.outfolder):
@@ -67,11 +68,30 @@ logging.info(f"Signal samples: {signal_samples}")
 pdfInfo = theory_tools.pdf_info_map(signal_samples[0], args.pdf)
 pdfName = pdfInfo["name"]
 
-addVariation = hasattr(args, "varName") and args.varName
+# keep mass weights here as first systematic, in case one wants to run stat-uncertainty only with --doStatOnly
+cardTool.addSystematic("massWeight", 
+    # TODO: Add the mass weights to the tau samples ## FIXME: isn't it done?
+    processes=signal_samples_inctau,
+    outNames=theory_tools.massWeightNames(["massShift100MeV"], wlike=args.wlike),
+    group="massShift",
+    groupFilter=lambda x: x == "massShift100MeV",
+    mirror=False,
+    #TODO: Name this
+    noConstraint=True,
+    systAxes=["tensor_axis_0"],
+    passToFakes=passSystToFakes,
+)
 
+if args.doStatOnly:
+    # print a card with only mass weights and a dummy syst
+    cardTool.addLnNSystematic("dummy", processes=cardTool.allMCProcesses()+[args.qcdProcessName], size=1.0001, group="dummy")
+    cardTool.writeOutput()
+    print("Using option --doStatOnly: the card will be created with only mass weights and a dummy LnN syst on all processes")
+    quit()
+    
 if args.wlike:
     # TOCHECK: no fakes here, most likely
-    cardTool.addLnNSystematic("luminosity", processes=cardTool.allMCProcesses(), size=1.012, group="luminosiy")
+    cardTool.addLnNSystematic("luminosity", processes=cardTool.allMCProcesses(), size=1.012, group="luminosity")
 else:
     cardTool.addSystematic("luminosity",
                            processes=cardTool.allMCProcesses(),
@@ -186,15 +206,27 @@ if "Pt" in args.qcdScale:
                                baseName="QCDscaleByPt_",
                                passToFakes=passSystToFakes,
     )
-    
+
 if helicity:
-    scale_hist = "qcdScaleByHelicity"
-    scale_action = syst_tools.scale_helicity_hist_to_variations 
-    scaleActionArgs = {"rebinPtV" : args.rebinPtV}
-    scaleGroupName += "ByHelicity"
-    scaleSystAxes.insert(0, "helicity")
-    scaleLabelsByAxis.insert(0, "Coeff")
-    scaleSkipEntries = [(-1, *x) for x in scaleSkipEntries] # need to add a -1 for each axis element added before
+    if args.qcdScale == "byHelicityCharge":
+        # mainly for tests
+        scale_hist = "qcdScaleByHelicity"
+        scale_action = syst_tools.scale_helicity_hist_to_variations 
+        scaleActionArgs = {"sum_axis" : ["ptVgen"]}
+        scaleGroupName += "ByHelicityCharge"
+        scaleSystAxes.insert(0, "chargeVgen")
+        scaleLabelsByAxis.insert(0, "genQ")
+        scaleSystAxes.insert(0, "helicity")
+        scaleLabelsByAxis.insert(0, "Coeff")
+        scaleSkipEntries = [(-1, -1, *x) for x in scaleSkipEntries] # need to add a -1 for each axis element added before
+    else:
+        scale_hist = "qcdScaleByHelicity"
+        scale_action = syst_tools.scale_helicity_hist_to_variations 
+        scaleActionArgs = {"rebinPtV" : args.rebinPtV}
+        scaleGroupName += "ByHelicity"
+        scaleSystAxes.insert(0, "helicity")
+        scaleLabelsByAxis.insert(0, "Coeff")
+        scaleSkipEntries = [(-1, *x) for x in scaleSkipEntries] # need to add a -1 for each axis element added before
 
 print("Inclusive scale", inclusiveScale)
 print(scaleActionArgs if not inclusiveScale else None)
@@ -243,23 +275,12 @@ cardTool.addSystematic("muonL1PrefireStat",
     passToFakes=passSystToFakes,
 )
 
-cardTool.addSystematic("massWeight", 
-    # TODO: Add the mass weights to the tau samples ## FIXME: isn't it done?
-    processes=signal_samples_inctau,
-    outNames=theory_tools.massWeightNames(["massShift100MeV"], wlike=args.wlike),
-    group="massShift",
-    groupFilter=lambda x: x == "massShift100MeV",
-    mirror=False,
-    #TODO: Name this
-    noConstraint=True,
-    systAxes=["tensor_axis_0"],
-    passToFakes=passSystToFakes,
-)
 if not args.wlike:
     cardTool.addLnNSystematic("CMS_Fakes", processes=[args.qcdProcessName], size=1.05)
     cardTool.addLnNSystematic("CMS_Top", processes=["Top"], size=1.06)
     cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16)
 else:
     cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
+
 cardTool.writeOutput()
 

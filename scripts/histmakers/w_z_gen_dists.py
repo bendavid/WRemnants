@@ -50,7 +50,10 @@ axis_absYVgen = hist.axis.Variable(
 )
 axis_ptVgen = hist.axis.Variable(
 #    [0, 2, 3, 4, 4.75, 5.5, 6.5, 8, 9, 10, 12, 14, 16, 18, 20, 23, 27, 32, 40, 55, 100], name = "ptVgen"
-    range(0,121), name = "ptVgen"
+    #range(0,121), name = "ptVgen"
+# 5% quantiles from aMC@NLO used in SMP-18-012
+# [0.0, 1.971, 2.949, 3.838, 4.733, 5.674, 6.684, 7.781, 8.979, 10.303, 11.777, 13.435, 15.332, 17.525, 20.115, 23.245, 27.173, 32.414, 40.151, 53.858, 13000.0]
+    [0.0, 2.95, 4.73, 6.68, 8.98, 11.78, 15.33, 20.11, 27.17, 40.15, 120], name = "ptVgen"
 )
 
 
@@ -165,10 +168,12 @@ for key, val in resultdict.items():
         else:
             w_moments += moments
 
-z_coeffs = wremnants.moments_to_angular_coeffs(hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning))
-w_coeffs = wremnants.moments_to_angular_coeffs(hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning))
+#z_coeffs = wremnants.moments_to_angular_coeffs(hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning))
+#w_coeffs = wremnants.moments_to_angular_coeffs(hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning))
+z_coeffs = wremnants.moments_to_angular_coeffs(z_moments)
+w_coeffs = wremnants.moments_to_angular_coeffs(w_moments)
 
-with lz4.frame.open("z_coeffs.pkl.lz4", "wb") as f:
+with lz4.frame.open("z_coeffs_testVpt.pkl.lz4", "wb") as f:
     pickle.dump(z_coeffs, f, protocol = pickle.HIGHEST_PROTOCOL)
-with lz4.frame.open("w_coeffs.pkl.lz4", "wb") as f:
+with lz4.frame.open("w_coeffs_testVpt.pkl.lz4", "wb") as f:
     pickle.dump(w_coeffs, f, protocol = pickle.HIGHEST_PROTOCOL)
