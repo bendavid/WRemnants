@@ -18,7 +18,7 @@ def valsAndVariances(h1, h2, allowBroadcast=True, transpose=True):
 
 def broadcastOutHist(h1, h2):
     if len(h1.axes) == len(h2.axes):
-        return h1 if h1.axes[-1].size > h2.axes[-1].size else h2
+        return h1 if h1.axes[-1].size >= h2.axes[-1].size else h2
     return h1 if len(h1.axes) > len(h2.axes) else h2
 
 # returns h1/h2
@@ -122,7 +122,7 @@ def rebinHist(h, axis_name, edges):
     ax = h.axes[axis_name]
     ax_idx = [a.name for a in h.axes].index(axis_name)
     if not all([x in ax.edges for x in edges]):
-        raise ValueError(f"Cannot rebin histogram due to incompatible eduges for axis '{ax.name}'\n"
+        raise ValueError(f"Cannot rebin histogram due to incompatible edges for axis '{ax.name}'\n"
                             f"Edges of histogram are {ax.edges}, requested rebinning to {edges}")
         
     # If you rebin to a subset of initial range, keep the overflow and underflow
