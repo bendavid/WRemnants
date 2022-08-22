@@ -111,7 +111,7 @@ def clipNegativeVals(h):
 def makeAbsHist(h, axis_name):
     ax = h.axes[axis_name]
     axidx = list(h.axes).index(ax)
-    abs_ax = hist.axis.Variable(ax.edges[ax.index(0.):], name=f"abs{axis_name}")
+    abs_ax = hist.axis.Variable(ax.edges[ax.index(0.):], underflow=False, name=f"abs{axis_name}")
     hnew = hist.Hist(*h.axes[:axidx], abs_ax, *h.axes[axidx+1:], storage=hist.storage.Weight())
     
     s = hist.tag.Slicer()

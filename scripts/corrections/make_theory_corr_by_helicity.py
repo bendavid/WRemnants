@@ -46,7 +46,7 @@ elif args.proc == "w":
     filesByProc = { "WplusmunuPostVFP" : (args.corr_ul[plus_idx], args.corr_a4[plus_idx4]),
         "WminusmunuPostVFP" : (args.corr_ul[not plus_idx], args.corr_a4[not plus_idx4])}
 
-minnloh = input_tools.read_all_and_scale(args.minnlo_file, list(filesByProc.keys()), "helicity_moments_scale")
+minnloh = input_tools.read_all_and_scale(args.minnlo_file, list(filesByProc.keys()), ["helicity_moments_scale"])[0]
 minnloh = minnloh[{"muRfact" : 1.j, "muFfact" : 1.j}]
 
 sigma_ulh = hh.sumHists([read_corr(procName, args.generator, corr_files[0]) for procName, corr_files in filesByProc.items()])
