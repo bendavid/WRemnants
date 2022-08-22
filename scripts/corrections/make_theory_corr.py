@@ -57,7 +57,7 @@ elif args.proc == "w":
     filesByProc = { "WplusmunuPostVFP" : args.corr_files[plus_idx],
         "WminusmunuPostVFP" : args.corr_files[0 if plus_idx else 1]}
 
-minnloh = input_tools.read_all_and_scale(args.minnlo_file, list(filesByProc.keys()), "nominal_gen")
+minnloh = input_tools.read_all_and_scale(args.minnlo_file, list(filesByProc.keys()), ["nominal_gen"])[0]
 
 numh = hh.sumHists([read_corr(procName, args.generator, corr_file) for procName, corr_file in filesByProc.items()])
 
