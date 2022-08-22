@@ -306,7 +306,7 @@ class CardTool(object):
         else:
             self.outfile = outfile
 
-    def writeOutput(self, statOnly=False):
+    def writeOutput(self):
         self.datagroups.loadHistsForDatagroups(
             baseName=self.histName, syst=self.nominalName, label=self.nominalName)
         self.procDict = self.datagroups.getDatagroups()
@@ -315,19 +315,12 @@ class CardTool(object):
         if self.pseudoData:
             self.addPseudodata(self.predictedProcesses())
 
-        if statOnly:
-            # add dummy uncertainty, necessary for combineTF
-            nondata = self.predictedProcesses()
-            include = [("1.00001").ljust(self.spacing) for x in nondata]
-            for chan in self.channels:
-                self.cardContent[chan] += f'{("dummy").ljust(self.spacing)}lnN{" "*(self.spacing-3)}{"".join(include)}\n'
-        else:
-            self.writeLnNSystematics()
-            for syst in self.systematics.keys():
-                processes=self.systematics[syst]["processes"]
-                self.datagroups.loadHistsForDatagroups(self.histName, syst, label="syst",
-                    procsToRead=processes, forceNonzero=syst != "qcdScaleByHelicity")
-                self.writeForProcesses(syst, label="syst", processes=processes)
+        self.writeLnNSystematics()
+        for syst in self.systematics.keys():
+            processes=self.systematics[syst]["processes"]
+            self.datagroups.loadHistsForDatagroups(self.histName, syst, label="syst",
+                                                   procsToRead=processes, forceNonzero=syst != "qcdScaleByHelicity")
+            self.writeForProcesses(syst, label="syst", processes=processes)
         
         self.writeCard()
 

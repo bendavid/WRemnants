@@ -22,7 +22,8 @@ def makeQCDScaleByHelicityHelper(is_w_like = False, filename=None):
         if is_w_like:
             filename = f"{data_dir}/angularCoefficients/z_coeffs.pkl.lz4"
         else:
-            filename = f"{data_dir}/angularCoefficients/w_coeffs.pkl.lz4"
+            #filename = f"{data_dir}/angularCoefficients/w_coeffs.pkl.lz4"
+            filename = f"{data_dir}/angularCoefficients/w_coeffs_testVpt.pkl.lz4"
 
     with lz4.frame.open(filename, "rb") as f:
         corrh = pickle.load(f)
