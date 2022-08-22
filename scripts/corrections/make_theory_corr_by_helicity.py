@@ -37,7 +37,7 @@ if len(args.corr_ul) != len(args.corr_a4):
 if args.proc == "z":
     if len(args.corr_ul) != 1:
         raise ValueError("Only one file expected for Z")
-    filesByProc = { "ZmumuPostVFP" : args.corr_files[0] }
+    filesByProc = { "ZmumuPostVFP" : (args.corr_ul[0], args.corr_a4[0]) }
 elif args.proc == "w":
     if len(args.corr_ul) != 2:
         raise ValueError("Requires two files for W (W+ and W-)")
