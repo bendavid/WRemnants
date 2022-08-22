@@ -33,6 +33,14 @@ def metaInfoDict():
     return meta_data
 
 def write_analysis_output(results, outfile, postfix):
+    print()
+    print("Unweighted events (before cut)")
+    print("-"*30)
+    for key in results.keys():
+        print(f"Dataset {key.ljust(30)}:  {results[key]['event_count']}")
+        print("-"*30)
+    print()
+
     results.update({"meta_info" : metaInfoDict()})
     if postfix:
         outfile = outfile.replace(".pkl.lz4", f"_{postfix}.pkl.lz4")

@@ -31,11 +31,8 @@ axis_absYVgen = hist.axis.Variable(
     name = "absYVgen", underflow=False
 )
 axis_ptVgen = hist.axis.Variable(
-# 5% quantiles from aMC@NLO used in SMP-18-012
-# [0.0, 1.971, 2.949, 3.838, 4.733, 5.674, 6.684, 7.781, 8.979, 10.303, 11.777, 13.435, 15.332, 17.525, 20.115, 23.245, 27.173, 32.414, 40.151, 53.858, 13000.0]
-# 10% quantiles from aMC@NLO used in SMP-18-012  
-    #[0.0, 2.95, 4.73, 6.68, 8.98, 11.78, 15.33, 20.11, 27.17, 40.15, 120], name = "ptVgen"
-    range(0,121), name = "ptVgen", underflow=False,
+    # FIXME: this binning was meant for W, should be tuned for Z  
+    common.ptV_binning, name = "ptVgen", underflow=False,
 )
 
 
@@ -145,10 +142,8 @@ for dataset in datasets:
         else:
             w_moments += moments
 
-z_moments = hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning)
 z_moments = hh.rebinHist(z_moments, axis_massZgen.name, [70, 80, 85, 90, 95, 100, 110])
 z_moments = hh.rebinHist(z_moments, axis_absYVgen.name, axis_absYVgen.edges[:-1])
-w_moments = hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning)
 w_moments = hh.rebinHist(w_moments, axis_absYVgen.name, axis_absYVgen.edges[:-1])
 
 coeffs = {"Z" : wremnants.moments_to_angular_coeffs(z_moments),
