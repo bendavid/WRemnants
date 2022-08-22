@@ -31,7 +31,6 @@ def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None,
     #ax1.set_xticklabels([])
     if not xlim:
         xlim = [href.axes[0].edges[0], href.axes[0].edges[-1]]
-        print(xlim)
     ax1.set_xlim(xlim)
     ax2.set_xlim(xlim)
     ax2.set_ylabel(rlabel, fontsize=22)
