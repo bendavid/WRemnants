@@ -19,8 +19,6 @@ parser.add_argument("--noMuonCorr", action="store_true", help="Don't use correct
 parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency")
 parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
 parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
-parser.add_argument("--eta", nargs=3, type=float, help="Eta binning as 'nbins min max' (only uniform for now)", default=[48,-2.4,2.4])
-parser.add_argument("--pt", nargs=3, type=float, help="Pt binning as 'nbins,min,max' (only uniform for now)", default=[29,26.,55.])
 parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for luminosity in excess to 1 (e.g. 1.012 means 1.2\%)", default=1.012)
 args = parser.parse_args()
 
@@ -76,6 +74,14 @@ calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibra
 
 # TODO: Eventually should also apply to tau samples, when the new ones are ready
 corr_helpers = theory_tools.load_corr_helpers([p for p in common.vprocs if "tau" not in p], args.theory_corr)
+
+# recoil initialization
+if not args.no_recoil:
+    from wremnants import recoil_tools
+    import ROOT
+    ROOT.gInterpreter.Declare('#include "lowpu_recoil.h"')
+    recoilHelper = recoil_tools.Recoil("highPU")
+
 
 def build_graph(df, dataset):
     print("build graph", dataset.name)
@@ -214,6 +220,10 @@ def build_graph(df, dataset):
                 qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=helicity_helper.tensor_axes)
                 results.append(qcdScaleByHelicityUnc)
 
+            for i, pdf in enumerate(args.pdfs):
+                withUnc = i == 0 or not args.altPdfOnlyCentral
+                results.extend(theory_tools.define_and_make_pdf_hists(df, nominal_axes, nominal_cols, dataset.name, pdf, withUnc))
+                
             masswargs = (nominal_axes, nominal_cols) if isW else (None, None)
             df, masswhist = syst_tools.define_mass_weights(df, isW, *masswargs)
             if masswhist:
