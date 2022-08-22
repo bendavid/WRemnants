@@ -17,17 +17,20 @@ def load_and_scale(res_dict, proc, histname):
     scale = res_dict[proc]["dataset"]["xsec"]/res_dict[proc]["weight_sum"]
     return h*scale
 
-def read_all_and_scale(fname, procs, histname):
+def read_all_and_scale(fname, procs, histnames):
     with lz4.frame.open(fname) as f:
         out = pickle.load(f)
 
-    h = load_and_scale(out, procs[0], histname)
-    for proc in procs[1:]:
-        h += load_and_scale(out, proc, histname)
+    hists = []
+    for histname in histnames:
+        h = load_and_scale(out, procs[0], histname)
+        for proc in procs[1:]:
+            h += load_and_scale(out, proc, histname)
+        hists.append(h)
 
-    return h
+    return hists
 
-def read_scetlib_hist(path, pt_axis=None, nonsing="auto", flip_y_sign=False, charge=None):
+def read_scetlib_hist(path, nonsing="auto", flip_y_sign=False, charge=None):
     if path[-4:] == ".npz":
         f = np.load(path, allow_pickle=True)
     elif path[-4:] == ".pkl":
@@ -37,11 +40,15 @@ def read_scetlib_hist(path, pt_axis=None, nonsing="auto", flip_y_sign=False, cha
         ValueError("File {path} is not a recognized file format")
 
     var_axis = hist.axis.Integer(f["bins"][0][0], f["bins"][0][-1], name="vars", flow=False)
-    mass_axis = hist.axis.Variable(f["bins"][1], name="mass")
+    # Won't actually have overflow/underflow, but set to match MiNNLO
+    mass_underflow = f["bins"][1][0] > 5.
+    mass_overflow = f["bins"][1][-1] < 13000.
+    mass_axis = hist.axis.Variable(f["bins"][1], name="mass", overflow=mass_overflow, underflow=mass_underflow)
     y_axis = hist.axis.Variable(f["bins"][2], name="y")
     
-    if not pt_axis:
-        pt_axis = hist.axis.Variable(f["bins"][3], name="pt")
+    # Use 0.1 here rather than 0, because the nonsingular behaves much better with a "cut" at > 0.1
+    pt_underflow = f["bins"][3][0] > 0.1
+    pt_axis = hist.axis.Variable(f["bins"][3], name="pt", underflow=pt_underflow)
 
     h = f["hist"]
     storage = hist.storage.Double()
@@ -68,9 +75,8 @@ def read_scetlib_hist(path, pt_axis=None, nonsing="auto", flip_y_sign=False, cha
     if nonsing and nonsing != "skip":
         if nonsing == "auto":
             nonsing = path.replace(*((".", "_nons.") if "sing" not in path else ("sing", "nons")))
-        nonsingh = read_scetlib_hist(nonsing, pt_axis, nonsing="skip", 
-                    flip_y_sign=flip_y_sign, charge=charge)
-        scetlibh = scetlibh + nonsingh
+        nonsingh = read_scetlib_hist(nonsing, nonsing="skip", flip_y_sign=flip_y_sign, charge=charge)
+        scetlibh = hh.addHists(scetlibh, nonsingh)
     elif nonsing != "skip":
         logging.warning("Will not include nonsingular contribution!")
     

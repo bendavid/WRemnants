@@ -223,7 +223,7 @@ def build_graph(df, dataset):
             for i, pdf in enumerate(args.pdfs):
                 withUnc = i == 0 or not args.altPdfOnlyCentral
                 results.extend(theory_tools.define_and_make_pdf_hists(df, nominal_axes, nominal_cols, dataset.name, pdf, withUnc))
-                
+
             masswargs = (nominal_axes, nominal_cols) if isW else (None, None)
             df, masswhist = syst_tools.define_mass_weights(df, isW, *masswargs)
             if masswhist:

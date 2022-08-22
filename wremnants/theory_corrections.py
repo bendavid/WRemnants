@@ -70,11 +70,21 @@ def rebin_corr_hists(hists, ndim=-1):
 
 # Assuming the 3 physics variable dimensions are first
 def set_corr_ratio_flow(corrh):
-    corrh[hist.underflow,...] = np.ones_like(corrh[0,...].view(flow=True))
-    corrh[hist.overflow,...] = np.ones_like(corrh[0,...].view(flow=True))
-    corrh[:,hist.underflow,...] = np.ones_like(corrh[:,0,...].view(flow=True))
-    corrh[:,hist.overflow,...] = np.ones_like(corrh[:,0,...].view(flow=True))
-    corrh[:,:,hist.overflow,...] = np.ones_like(corrh[:,:,0,...].view(flow=True))
+    # Probably there's a better way to do this...
+    if corrh.axes[0].traits.underflow:
+        corrh[hist.underflow,...] = np.ones_like(corrh[0,...].view(flow=True))
+    if corrh.axes[0].traits.overflow:
+        corrh[hist.overflow,...] = np.ones_like(corrh[0,...].view(flow=True))
+
+    if corrh.axes[1].traits.underflow:
+        corrh[:,hist.underflow,...] = np.ones_like(corrh[:,0,...].view(flow=True))
+    if corrh.axes[1].traits.overflow:
+        corrh[:,hist.overflow,...] = np.ones_like(corrh[:,0,...].view(flow=True))
+
+    if corrh.axes[2].traits.underflow:
+        corrh[:,:,hist.underflow,...] = np.ones_like(corrh[:,:,0,...].view(flow=True))
+    if corrh.axes[2].traits.underflow:
+        corrh[:,:,hist.overflow,...] = np.ones_like(corrh[:,:,0,...].view(flow=True))
     return corrh
 
 def make_corr_from_ratio(denom_hist, num_hist):

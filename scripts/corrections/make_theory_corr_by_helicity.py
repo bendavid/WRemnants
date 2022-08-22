@@ -37,7 +37,7 @@ if len(args.corr_ul) != len(args.corr_a4):
 if args.proc == "z":
     if len(args.corr_ul) != 1:
         raise ValueError("Only one file expected for Z")
-    filesByProc = { "ZmumuPostVFP" : args.corr_files[0] }
+    filesByProc = { "ZmumuPostVFP" : (args.corr_ul[0], args.corr_a4[0]) }
 elif args.proc == "w":
     if len(args.corr_ul) != 2:
         raise ValueError("Requires two files for W (W+ and W-)")
@@ -46,7 +46,7 @@ elif args.proc == "w":
     filesByProc = { "WplusmunuPostVFP" : (args.corr_ul[plus_idx], args.corr_a4[plus_idx4]),
         "WminusmunuPostVFP" : (args.corr_ul[not plus_idx], args.corr_a4[not plus_idx4])}
 
-minnloh = input_tools.read_all_and_scale(args.minnlo_file, list(filesByProc.keys()), "helicity_moments_scale")
+minnloh = input_tools.read_all_and_scale(args.minnlo_file, list(filesByProc.keys()), ["helicity_moments_scale"])[0]
 minnloh = minnloh[{"muRfact" : 1.j, "muFfact" : 1.j}]
 
 sigma_ulh = hh.sumHists([read_corr(procName, args.generator, corr_files[0]) for procName, corr_files in filesByProc.items()])
