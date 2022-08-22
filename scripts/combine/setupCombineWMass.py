@@ -84,7 +84,7 @@ cardTool.addSystematic("massWeight",
 
 if args.doStatOnly:
     # print a card with only mass weights and a dummy syst
-    cardTool.addLnNSystematic("dummy", processes=cardTool.allMCProcesses()+[args.qcdProcessName], size=1.0001, group="dummy")
+    cardTool.addLnNSystematic("dummy", processes=["Other"] if args.wlike else ["Top", "Diboson"], size=1.001, group="dummy")
     cardTool.writeOutput()
     print("Using option --doStatOnly: the card will be created with only mass weights and a dummy LnN syst on all processes")
     quit()
