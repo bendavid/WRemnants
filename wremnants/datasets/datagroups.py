@@ -1,7 +1,6 @@
-from wremnants import boostHistHelpers as hh
+from utilities import boostHistHelpers as hh
 from wremnants import histselections as sel
 from wremnants.datasets import datasets2016
-from wremnants import boostHistHelpers as hh
 import logging
 import lz4.frame
 import pickle
@@ -26,7 +25,7 @@ class datagroups(object):
         if self.datasets and self.results:
             self.data = [x for x in self.datasets.values() if x.is_data]
             if self.data:
-                self.lumi = hh.sumHists([self.results[x.name]["lumi"] for x in self.data if x.name in self.results])
+                self.lumi = sum([self.results[x.name]["lumi"] for x in self.data if x.name in self.results])
         self.groups = {}
 
         if not self.lumi:

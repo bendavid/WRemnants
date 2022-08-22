@@ -1,21 +1,10 @@
-import argparse
-import pickle
-import gzip
-import ROOT
+from utilities import boostHistHelpers as hh,common,output_tools
 
-parser = argparse.ArgumentParser()
-parser.add_argument("-j", "--nThreads", type=int, help="number of threads", default=None)
-initargs,_ = parser.parse_known_args()
+parser,initargs = common.common_parser()
 
-ROOT.gInterpreter.ProcessLine(".O3")
-if not initargs.nThreads:
-    ROOT.ROOT.EnableImplicitMT()
-elif initargs.nThreads != 1:
-    ROOT.ROOT.EnableImplicitMT(initargs.nThreads)
 import narf
 import wremnants
-from wremnants import theory_tools,syst_tools,theory_corrections,common,output_tools
-from wremnants import boostHistHelpers as hh
+from wremnants import theory_tools,syst_tools,theory_corrections
 import hist
 import lz4.frame
 import logging
@@ -23,24 +12,13 @@ import math
 import time
 
 parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
-parser.add_argument("--pdfs", type=str, nargs="*", default=["nnpdf31"], choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for (first is central set)")
-parser.add_argument("--altPdfOnlyCentral", action='store_true', help="Only store central value for alternate PDF sets")
-parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
-parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=None)
 parser.add_argument("--muScaleMag", type=float, default=1e-4, help="Magnitude of dummy muon scale uncertainty")
 parser.add_argument("--muScaleBins", type=int, default=1, help="Number of bins for muon scale uncertainty")
-parser.add_argument("--theory_corr", nargs="*", choices=["scetlib", "scetlibHelicity", "dyturbo", "matrix_radish"], 
-    help="Apply corrections from indicated generator. First will be nominal correction.")
-parser.add_argument("--theory_corr_alt_only", action='store_true', help="Save hist for correction hists but don't modify central weight")
-parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")
 parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
 parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
-parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
-parser.add_argument("--v8", action='store_true', help="Use NanoAODv8. Default is v9")
 parser.add_argument("--eta", nargs=3, type=float, help="Eta binning as 'nbins min max' (only uniform for now)", default=[48,-2.4,2.4])
 parser.add_argument("--pt", nargs=3, type=float, help="Pt binning as 'nbins,min,max' (only uniform for now)", default=[34,26.,60.])
 parser.add_argument("--no_recoil", action='store_true', help="Don't apply recoild correction")
-parser.add_argument("--verbose", action='store_true', help="Noisy output")
 args = parser.parse_args()
 
 logging.basicConfig(level=logging.INFO)
@@ -49,28 +27,13 @@ filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
     nanoVersion="v8" if args.v8 else "v9")
 
-ROOT.gInterpreter.Declare('#include "lowpu_recoil.h"')
-
 era = "2016PostVFP"
 
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 
-corr_helpers = {} 
-if args.theory_corr:
-    for proc in ["ZmumuPostVFP", ]:#"WplusmunuPostVFP", "WminusmunuPostVFP"]:
-        corr_helpers[proc] = {}
-        for generator in args.theory_corr:
-            fname = f"{common.data_dir}/TheoryCorrections/{generator}Corr{proc[0]}.pkl.lz4"
-            helper_func = getattr(theory_corrections, "make_corr_helper" if "Helicity" not in generator else "make_corr_by_helicity_helper")
-            corr_hist_name = f"{generator}_minnlo_ratio" if "Helicity" not in generator else f"{generator.replace('Helicity', '')}_minnlo_coeffs"
-            corr_helpers[proc][generator] = helper_func(fname, proc[0], corr_hist_name)
-
 qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = True)
 axis_ptVgen = qcdScaleByHelicity_helper.hist.axes["ptVgen"]
 axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
-
-wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP"]
-zprocs = ["ZmumuPostVFP", "ZtautauPostVFP"]
 
 # custom template binning
 template_neta = int(args.eta[0])
@@ -116,12 +79,14 @@ pileup_helper = wremnants.make_pileup_helper(era = era)
 
 calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
 
-
-
+# TODO: Eventually should also apply to tau samples, when the new ones are ready
+corr_helpers = theory_tools.load_corr_helpers([p for p in common.vprocs if "tau" not in p], args.theory_corr)
 
 # recoil initialization
 if not args.no_recoil:
     from wremnants import recoil_tools
+    import ROOT
+    ROOT.gInterpreter.Declare('#include "lowpu_recoil.h"')
     recoilHelper = recoil_tools.Recoil("highPU")
 
 #def add_plots_with_systematics
@@ -145,7 +110,7 @@ def build_graph(df, dataset):
         df = df.Alias("Muon_correctedEta", "Muon_cvhbsEta")
         df = df.Alias("Muon_correctedPhi", "Muon_cvhbsPhi")
         df = df.Alias("Muon_correctedCharge", "Muon_cvhbsCharge")
-    elif dataset.name in wprocs or dataset.name in zprocs:
+    elif dataset.name in common.vprocs:
         df = wremnants.define_corrected_muons(df, calibration_helper)
     else:
         # no track refit available for background monte carlo samples and this is "good enough"
@@ -205,8 +170,8 @@ def build_graph(df, dataset):
     df = df.Define("phiStarZ", "std::atan2(csSineCosThetaPhiZ.sinphi, csSineCosThetaPhiZ.cosphi)")
 
 
-    isW = dataset.name in wprocs
-    isZ = dataset.name in zprocs
+    isW = dataset.name in common.wprocs
+    isZ = dataset.name in common.zprocs
     apply_theory_corr = args.theory_corr and dataset.name in corr_helpers
 
     if not dataset.is_data:
@@ -215,29 +180,11 @@ def build_graph(df, dataset):
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId"])
 
         weight_expr = "weight*weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF"
-        if isW or isZ:
-            df = df.Define("nominal_pdf_cen", theory_tools.pdf_central_weight(dataset.name, args.pdfs[0]))
-            weight_expr = f"{weight_expr}*nominal_pdf_cen"
-            df = wremnants.define_prefsr_vars(df)
-
-            if apply_theory_corr:
-                df = theory_tools.define_theory_corr(df, weight_expr, corr_helpers[dataset.name],
-                    generators=args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
-            else:
-                df = df.Define("nominal_weight", weight_expr)
-
-            for i, pdf in enumerate(args.pdfs):
-                withUnc = i == 0 or not args.altPdfOnlyCentral
-                results.extend(theory_tools.define_and_make_pdf_hists(df, nominal_axes, None, dataset.name, pdf, withUnc))
-
-        else:
-            df = df.Define("nominal_weight", weight_expr)
-
+        df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")
 
     results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"]))
-        
         
     # recoil calibration
     if not args.no_recoil:
