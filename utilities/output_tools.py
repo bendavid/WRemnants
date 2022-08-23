@@ -36,13 +36,13 @@ def metaInfoDict(exclude_diff='notebooks'):
     return meta_data
 
 def write_analysis_output(results, outfile, postfix):
-    print()
-    print("Unweighted events (before cut)")
-    print("-"*30)
+    logging.debug()
+    logging.debug("Unweighted events (before cut)")
+    logging.debug("-"*30)
     for key in results.keys():
-        print(f"Dataset {key.ljust(30)}:  {results[key]['event_count']}")
-        print("-"*30)
-    print()
+        logging.debug(f"Dataset {key.ljust(30)}:  {results[key]['event_count']}")
+        logging.debug("-"*30)
+    logging.debug()
 
     results.update({"meta_info" : metaInfoDict()})
     if postfix:
