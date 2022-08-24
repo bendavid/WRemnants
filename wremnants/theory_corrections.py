@@ -87,7 +87,7 @@ def set_corr_ratio_flow(corrh):
 
     if corrh.axes[2].traits.underflow:
         corrh[:,:,hist.underflow,...] = np.ones_like(corrh[:,:,0,...].view(flow=True))
-    if corrh.axes[2].traits.underflow:
+    if corrh.axes[2].traits.overflow:
         corrh[:,:,hist.overflow,...] = np.ones_like(corrh[:,:,0,...].view(flow=True))
     return corrh
 

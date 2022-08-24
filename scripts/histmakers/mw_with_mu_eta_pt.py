@@ -74,8 +74,7 @@ pileup_helper = wremnants.make_pileup_helper(era = era)
 
 calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
 
-# TODO: Eventually should also apply to tau samples, when the new ones are ready
-corr_helpers = theory_tools.load_corr_helpers([p for p in common.vprocs if "tau" not in p], args.theory_corr)
+corr_helpers = theory_tools.load_corr_helpers(common.vprocs, args.theory_corr)
 
 def build_graph(df, dataset):
     print("build graph", dataset.name)

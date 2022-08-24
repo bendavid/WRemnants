@@ -46,8 +46,7 @@ axis_chargeZgen = hist.axis.Integer(
 axis_l_eta_gen = hist.axis.Regular(48, -2.4, 2.4, name = "eta")
 axis_l_pt_gen = hist.axis.Regular(29, 26., 55., name = "pt")
 
-# TODO: Eventually should also apply to tau samples, when the new ones are ready
-corr_helpers = theory_tools.load_corr_helpers([p for p in common.vprocs if "tau" not in p], args.theory_corr)
+corr_helpers = theory_tools.load_corr_helpers(common.vprocs, args.theory_corr)
 
 def build_graph(df, dataset):
     print("build graph")
@@ -125,10 +124,7 @@ z_moments = None
 w_moments = None
 
 for dataset in datasets:
-    # For now the tau samples have a different pt spectrum
     name = dataset.name
-    if "tau" in name:
-        continue
     moments = resultdict[name]["output"]["helicity_moments_scale"]
     if name in common.zprocs:
         if z_moments is None:
