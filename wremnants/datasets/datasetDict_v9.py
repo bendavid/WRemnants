@@ -14,12 +14,12 @@ dataDictV9 = {
     },
     'ZmmPostVFP' : { 'name' : "ZmumuPostVFP",
                    'filepaths' :
-                   ["/scratch/shared/NanoAOD/TrackRefitv2_GenPartPrecision/DYJetsToMuMu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP/220729_152749/*/*.root"],
+                    ["/scratch/shared/NanoAOD/TrackRefitv2_GenPartPrecision/DYJetsToMuMu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP/220729_152749/*/*.root"],
                    'xsec' : xsec_ZmmPostVFP,
     },
     'ZttPostVFP' : { 'name' : "ZtautauPostVFP",
                    'filepaths' : 
-                   ["/scratch/shared/NanoAOD/TrackRefitv2_GenPartPrecision/DYJetsToTauTau_M-50_AtLeastOneEorMuDecay_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP/*/*/*.root"],
+                   ["/scratch/shared/NanoAOD/TrackRefitv2_GenPartPrecision/DYJetsToTauTau_M-50_AtLeastOneEorMuDecay_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP/220823_073001/000*/*.root"],
                    # At least one tau->e or mu decay, so everything that's not all other decays
                    'xsec' : xsec_ZmmPostVFP*(1.-(1. - BR_TAUToMU - BR_TAUToE)**2),
     },
