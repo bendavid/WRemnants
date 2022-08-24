@@ -179,6 +179,9 @@ def load_corr_helpers(procs, generators):
     for proc in procs:
         corr_helpers[proc] = {}
         for generator in generators:
+            # TODO: Remove this when I also compute W
+            if "W" in proc[0] and "MSHT" in generator:
+                generator = generator.replace("MSHT20", "")
             fname = f"{common.data_dir}/TheoryCorrections/{generator}Corr{proc[0]}.pkl.lz4"
             helper_func = getattr(theory_corrections, "make_corr_helper" if "Helicity" not in generator else "make_corr_by_helicity_helper")
             corr_hist_name = f"{generator}_minnlo_ratio" if "Helicity" not in generator else f"{generator.replace('Helicity', '')}_minnlo_coeffs"
@@ -187,7 +190,7 @@ def load_corr_helpers(procs, generators):
 
 def define_weights_and_corrs(df, weight_expr, dataset_name, helpers, args):
     #TODO: organize this better
-    if dataset_name in common.wprocs+common.zprocs:
+    if dataset_name in common.vprocs:
         df = df.Define("nominal_pdf_cen", pdf_central_weight(dataset_name, args.pdfs[0]))
         weight_expr = f"{weight_expr}*nominal_pdf_cen"
     df = define_prefsr_vars(df)
@@ -207,6 +210,9 @@ def pdf_central_weight(dataset, pdfset):
 
 def define_theory_corr(df, weight_expr, helpers, generators, modify_central_weight):
     for i, generator in enumerate(generators):
+        # TODO: Remove this when I also compute W
+        if generator not in helpers:
+            generator = generator.replace("MSHT20", "")
         helper = helpers[generator]
         if i == 0:
             if modify_central_weight:
@@ -231,6 +237,9 @@ def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_cen
     res = []
     
     for i, generator in enumerate(generators):
+        # TODO: Remove this when I also compute W
+        if generator not in helpers:
+            generator = generator.replace("MSHT20", "")
         helper = helpers[generator]
         if i == 0 and modify_central_weight:
             nominal_uncorr = df.HistoBoost(f"{name}_uncorr", axes, [*cols, "nominal_weight_uncorr"])

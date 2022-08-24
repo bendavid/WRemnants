@@ -28,7 +28,6 @@ def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None,
     ax2.set_xlabel(xlabel)
     ax1.set_xlabel(" ")
     ax1.set_ylabel(ylabel)
-    #ax1.set_xticklabels([])
     if not xlim:
         xlim = [href.axes[0].edges[0], href.axes[0].edges[-1]]
     ax1.set_xlim(xlim)
@@ -68,7 +67,7 @@ def makeStackPlotWithRatio(
     histInfo, stackedProcs, histName="nominal", unstacked=None, 
     xlabel="", ylabel="Events/bin", rlabel = "Data/Pred.", rrange=[0.9, 1.1], ylim=None, xlim=None, nlegcols=2,
     binwnorm=None, select={},  action = (lambda x: x), extra_text=None, grid = False, plot_title = None,
-    ratio_to_data=False, legtex_size=20,
+    ratio_to_data=False, legtex_size=20, cms_decor="Preliminary", lumi=16.8
 ):
     stack = [action(histInfo[k][histName][select]) for k in stackedProcs if histInfo[k][histName]]
     colors = [histInfo[k]["color"] for k in stackedProcs if histInfo[k][histName]]
@@ -85,20 +84,21 @@ def makeStackPlotWithRatio(
         binwnorm=binwnorm,
     )
     
-    if unstacked:
-        data_hist = None
-        if "Data" in histInfo and ratio_to_data:
-            data_hist = action(histInfo["Data"][histName][select])
-            hep.histplot(
-                hh.divideHists(sum(stack), data_hist, cutoff=0.01),
-                histtype="step",
-                color=histInfo[stackedProcs[0]]["color"],
-                label=histInfo[stackedProcs[0]]["label"],
-                yerr=False,
-                ax=ax2
-            )
+    data_hist = None
+    if "Data" in histInfo and ratio_to_data:
+        data_hist = action(histInfo["Data"][histName][select])
+        hep.histplot(
+            hh.divideHists(sum(stack), data_hist, cutoff=0.01),
+            histtype="step",
+            color=histInfo[stackedProcs[-1]]["color"],
+            label=histInfo[stackedProcs[-1]]["label"],
+            yerr=False,
+            ax=ax2
+        )
 
-        if type(unstacked) == str: unstacked = unstacked.split(",")
+    if unstacked:
+        if type(unstacked) == str: 
+            unstacked = unstacked.split(",")
         for proc in unstacked:
             unstack = action(histInfo[proc][histName][select])
             hep.histplot(
@@ -121,6 +121,9 @@ def makeStackPlotWithRatio(
             )
     addLegend(ax1, nlegcols, extra_text)
     fix_axes(ax1, ax2)
+
+    if cms_decor:
+        hep.cms.label(ax=ax1, data=data_hist is not None, lumi=lumi, fontsize=legtex_size, label=cms_decor)
 
     return fig
 
@@ -192,6 +195,8 @@ def makePlotWithRatioToRef(
     return fig
 
 def fix_axes(ax1, ax2):
+    # and not "tau" in dataset.name TODO: Would be good to get this working
+    #ax1.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
     redo_axis_ticks(ax1, "y")
     redo_axis_ticks(ax2, "x")
     redo_axis_ticks(ax1, "x", True)
@@ -225,7 +230,7 @@ def make_plot_dir(outpath, outfolder):
 def save_pdf_and_png(outdir, basename):
     fname = f"{outdir}/{basename}.pdf"
     plt.savefig(fname, bbox_inches='tight')
-    plt.savefig(fname.replace("pdf", "png"), bbox_inches='tight')
+    plt.savefig(fname.replace(".pdf", ".png"), bbox_inches='tight')
     logging.info(f"Wrote file(s) {fname}(.png)")
 
 def write_index_and_log(outpath, logname, indexname="index.php", template_dir=f"{pathlib.Path(__file__).parent}/Templates"):

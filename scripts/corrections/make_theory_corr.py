@@ -64,9 +64,9 @@ numh = hh.sumHists([read_corr(procName, args.generator, corr_file) for procName,
 corrh_unc  = theory_corrections.make_corr_from_ratio(minnloh, numh)
 corrh = hist.Hist(*corrh_unc.axes, name=corrh_unc.name, storage=hist.storage.Double(), data=corrh_unc.values(flow=True))
 
-outfile = f"{args.outpath}/{args.generator}Corr{args.proc.upper()}.pkl.lz4"
 if args.postfix:
-    outfile = outfile.replace(".pkl.lz4", f"_{args.postfix}.pkl.lz4")
+    args.generator += args.postfix
+outfile = f"{args.outpath}/{args.generator}Corr{args.proc.upper()}.pkl.lz4"
 
 with lz4.frame.open(outfile, "wb") as f:
     pickle.dump({
