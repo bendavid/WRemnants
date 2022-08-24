@@ -6,6 +6,7 @@ import datetime
 import time
 import pickle
 import lz4.frame
+import logging
 
 def readTemplate(templateFile, templateDict, filt=None):
     if not os.path.isfile(templateFile):

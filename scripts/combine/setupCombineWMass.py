@@ -154,7 +154,7 @@ if not args.noEfficiencyUnc:
 inclusiveScale = args.qcdScale == "integrated"
 helicity = "Helicity" in args.qcdScale
 
-scale_hist = "qcdScale"
+scale_hist = "vptInclusive_qcdScale"
 scaleSystAxes = ["muRfact", "muFfact"] 
 scaleLabelsByAxis = ["muR", "muF"]
 scaleGroupName = "QCDscale"
@@ -168,17 +168,18 @@ systNameReplaceVec = [("muR2muF2", "muRmuFUp"), ("muR0muF0", "muRmuFDown"), ("mu
 
 if inclusiveScale:
     scale_action = syst_tools.scale_helicity_hist_to_variations
-    scaleActionArgs = {"sum_axis" : ["ptVgen"]}
+    scaleActionArgs = None
 
 if args.qcdScale == "byCharge":
     scale_action = syst_tools.scale_helicity_hist_to_variations
-    scaleActionArgs = {"sum_axis" : ["ptVgen"]}
+    scaleActionArgs = None
     scaleGroupName += "ByChargeV"
     scaleSystAxes.insert(0, "chargeVgen")
     scaleLabelsByAxis.insert(0, "genQ")
     scaleSkipEntries = [(-1, *x) for x in scaleSkipEntries] # need to add a -1 for each axis element added before
     
 if "Pt" in args.qcdScale:
+    scale_hist = "qcdScale"
     scale_action = syst_tools.scale_helicity_hist_to_variations
     scaleActionArgs = {"rebinPtV" : args.rebinPtV}
     scaleGroupName += "ByPtV"

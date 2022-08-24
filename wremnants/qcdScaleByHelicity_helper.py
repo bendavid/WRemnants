@@ -20,7 +20,7 @@ def makeQCDScaleByHelicityHelper(is_w_like = False, filename=None):
     if filename is None:
         #
         #filename = f"{common.data_dir}/angularCoefficients/w_z_coeffs.pkl.lz4" # Vpt binning based on common.ptV_binning
-        filename = f"{common.data_dir}/angularCoefficients/w_z_coeffs_testVpt.pkl.lz4" # Vpt binning based on common.ptV_10quantiles_binning
+        filename = f"{common.data_dir}/angularCoefficients/w_z_coeffs_genVpt10quantiles.pkl.lz4" # Vpt binning based on common.ptV_10quantiles_binning
 
     with lz4.frame.open(filename, "rb") as f:
         out = pickle.load(f)
