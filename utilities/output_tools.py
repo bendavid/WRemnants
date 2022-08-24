@@ -37,7 +37,7 @@ def metaInfoDict(exclude_diff='notebooks'):
     return meta_data
 
 def write_analysis_output(results, outfile, postfix):
-    logging.debug()
+    logging.debug("")
     logging.debug("Unweighted events (before cut)")
     logging.debug("-"*30)
     for key in results.keys():
