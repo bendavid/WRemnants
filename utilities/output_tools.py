@@ -43,7 +43,7 @@ def write_analysis_output(results, outfile, postfix):
     for key in results.keys():
         logging.debug(f"Dataset {key.ljust(30)}:  {results[key]['event_count']}")
         logging.debug("-"*30)
-    logging.debug()
+    logging.debug("")
 
     results.update({"meta_info" : metaInfoDict()})
     if postfix:
