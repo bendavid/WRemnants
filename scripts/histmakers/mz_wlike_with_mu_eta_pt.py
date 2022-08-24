@@ -33,8 +33,11 @@ era = args.era
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 
 qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = True)
-axis_ptVgen = qcdScaleByHelicity_helper.hist.axes["ptVgen"]
 axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
+axis_ptVgen = hist.axis.Variable(
+    common.ptV_10quantiles_binning, 
+    name = "ptVgen", underflow=False
+)
 
 # custom template binning
 template_neta = int(args.eta[0])

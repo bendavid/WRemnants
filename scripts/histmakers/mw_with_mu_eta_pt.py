@@ -56,8 +56,11 @@ axis_passMT = hist.axis.Boolean(name = "passMT")
 
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
 
-axis_ptVgen = qcdScaleByHelicity_Whelper.hist.axes["ptVgen"]
 axis_chargeVgen = qcdScaleByHelicity_Whelper.hist.axes["chargeVgen"]
+axis_ptVgen = hist.axis.Variable(
+    common.ptV_10quantiles_binning, 
+    name = "ptVgen", underflow=False
+)
 
 # extra axes which can be used to label tensor_axes
 
