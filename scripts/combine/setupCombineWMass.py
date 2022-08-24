@@ -168,11 +168,11 @@ systNameReplaceVec = [("muR2muF2", "muRmuFUp"), ("muR0muF0", "muRmuFDown"), ("mu
 
 if inclusiveScale:
     scale_action = syst_tools.scale_helicity_hist_to_variations
-    scaleActionArgs = None
+    scaleActionArgs = {}
 
 if args.qcdScale == "byCharge":
     scale_action = syst_tools.scale_helicity_hist_to_variations
-    scaleActionArgs = None
+    scaleActionArgs = {}
     scaleGroupName += "ByChargeV"
     scaleSystAxes.insert(0, "chargeVgen")
     scaleLabelsByAxis.insert(0, "genQ")
