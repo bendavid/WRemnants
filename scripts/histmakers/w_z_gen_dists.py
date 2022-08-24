@@ -31,10 +31,8 @@ axis_absYVgen = hist.axis.Variable(
     name = "absYVgen", underflow=False
 )
 axis_ptVgen = hist.axis.Variable(
-    # FIXME: this binning was meant for W, should be tuned for Z  
-    common.ptV_binning, name = "ptVgen", underflow=False,
+    range(0,121), name = "ptVgen", underflow=False,
 )
-
 
 axis_chargeWgen = hist.axis.Regular(
     2, -2, 2, name="chargeVgen", underflow=False, overflow=False
@@ -142,8 +140,11 @@ for dataset in datasets:
         else:
             w_moments += moments
 
+# REMINDER: common.ptV_binning is not the one using 10% quantiles, and the quantiles are not a subset of this binning, but apparently it doesn't matter
+z_moments = hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning)
 z_moments = hh.rebinHist(z_moments, axis_massZgen.name, [70, 80, 85, 90, 95, 100, 110])
 z_moments = hh.rebinHist(z_moments, axis_absYVgen.name, axis_absYVgen.edges[:-1])
+w_moments = hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning)
 w_moments = hh.rebinHist(w_moments, axis_absYVgen.name, axis_absYVgen.edges[:-1])
 
 coeffs = {"Z" : wremnants.moments_to_angular_coeffs(z_moments),

@@ -19,16 +19,8 @@ import numpy as np
 def makeQCDScaleByHelicityHelper(is_w_like = False, filename=None):
     if filename is None:
         #
-        # FIXME: for tests with binning, to be removed eventually
-        #
-        # if is_w_like:
-        #     filename = f"{data_dir}/angularCoefficients/z_coeffs.pkl.lz4"
-        #     filename = f"{data_dir}/angularCoefficients/z_coeffs_testVpt.pkl.lz4"
-        # else:
-        #     #filename = f"{data_dir}/angularCoefficients/w_coeffs.pkl.lz4"
-        #     filename = f"{data_dir}/angularCoefficients/w_coeffs_testVpt.pkl.lz4"
-        #filename = f"{common.data_dir}/angularCoefficients/w_z_coeffs.pkl.lz4"
-        filename = f"{common.data_dir}/angularCoefficients/w_z_coeffs_testVpt.pkl.lz4" # Vpt binning based on 10% quantiles (but from old aMC@NLO)
+        #filename = f"{common.data_dir}/angularCoefficients/w_z_coeffs.pkl.lz4" # Vpt binning based on common.ptV_binning
+        filename = f"{common.data_dir}/angularCoefficients/w_z_coeffs_testVpt.pkl.lz4" # Vpt binning based on common.ptV_10quantiles_binning
 
     with lz4.frame.open(filename, "rb") as f:
         out = pickle.load(f)
