@@ -109,11 +109,7 @@ only_central_pdf_datasets = [
     "Zmumu_bugfix_slc7",
 ]
 
-extended_pdf_datasets = [
-    "WminusmunuPostVFP",
-    "WplusmunuPostVFP",
-    "ZmumuPostVFP",
-]
+extended_pdf_datasets = common.vprocs
 
 def define_prefsr_vars(df):
     df = df.Define("prefsrLeps", "wrem::prefsrLeptons(GenPart_status, GenPart_statusFlags, GenPart_pdgId, GenPart_genPartIdxMother)")
@@ -175,20 +171,6 @@ def define_and_make_pdf_hists(df, axes, cols, dataset, pdfset="nnpdf31", storeUn
 
     return []
 
-def load_corr_helpers(procs, generators):
-    corr_helpers = {}
-    for proc in procs:
-        corr_helpers[proc] = {}
-        for generator in generators:
-            # TODO: Remove this when I also compute W
-            if "W" in proc[0] and "MSHT" in generator:
-                generator = generator.replace("MSHT20", "")
-            fname = f"{common.data_dir}/TheoryCorrections/{generator}Corr{proc[0]}.pkl.lz4"
-            helper_func = getattr(theory_corrections, "make_corr_helper" if "Helicity" not in generator else "make_corr_by_helicity_helper")
-            corr_hist_name = f"{generator}_minnlo_ratio" if "Helicity" not in generator else f"{generator.replace('Helicity', '')}_minnlo_coeffs"
-            corr_helpers[proc][generator] = helper_func(fname, proc[0], corr_hist_name)
-    return corr_helpers
-
 def define_weights_and_corrs(df, weight_expr, dataset_name, helpers, args):
     #TODO: organize this better
     if dataset_name in common.vprocs:
@@ -211,16 +193,16 @@ def pdf_central_weight(dataset, pdfset):
 
 def define_theory_corr(df, weight_expr, helpers, generators, modify_central_weight):
     for i, generator in enumerate(generators):
-        # TODO: Remove this when I also compute W
-        if generator not in helpers:
-            generator = generator.replace("MSHT20", "")
-        helper = helpers[generator]
         if i == 0:
             if modify_central_weight:
                 df = df.Define("nominal_weight_uncorr", weight_expr)
             else:
                 df = df.Define("nominal_weight", weight_expr)
                 df = df.Alias("nominal_weight_uncorr", "nominal_weight")
+
+        if generator not in helpers:
+            continue
+        helper = helpers[generator]
 
         if "Helicity" in generator:
             df = df.Define(f"{generator}Weight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "nominal_weight_uncorr"])
@@ -238,9 +220,8 @@ def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_cen
     res = []
     
     for i, generator in enumerate(generators):
-        # TODO: Remove this when I also compute W
         if generator not in helpers:
-            generator = generator.replace("MSHT20", "")
+            continue
         helper = helpers[generator]
         if i == 0 and modify_central_weight:
             nominal_uncorr = df.HistoBoost(f"{name}_uncorr", axes, [*cols, "nominal_weight_uncorr"])

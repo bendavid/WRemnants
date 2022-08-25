@@ -5,6 +5,7 @@ BR_TAUToE = 0.1782
 xsec_ZmmPostVFP = 2001.9
 xsec_WpmunuPostVFP = 11765.9
 xsec_WmmunuPostVFP = 8703.87
+Z_TAU_TO_LEP_RATIO = (1.-(1. - BR_TAUToMU - BR_TAUToE)**2)
 
 dataDictV9 = {
     'dataPostVFP' : { 'name' :  "dataPostVFP",
@@ -21,7 +22,7 @@ dataDictV9 = {
                    'filepaths' : 
                    ["/scratch/shared/NanoAOD/TrackRefitv2_GenPartPrecision/DYJetsToTauTau_M-50_AtLeastOneEorMuDecay_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP/220823_073001/000*/*.root"],
                    # At least one tau->e or mu decay, so everything that's not all other decays
-                   'xsec' : xsec_ZmmPostVFP*(1.-(1. - BR_TAUToMU - BR_TAUToE)**2),
+                   'xsec' : xsec_ZmmPostVFP*Z_TAU_TO_LEP_RATIO,
     },
 
     'WpmunuPostVFP' : { 'name' : "WplusmunuPostVFP",

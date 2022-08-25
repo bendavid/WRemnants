@@ -9,8 +9,6 @@ import logging
 import pathlib
 import hist
 
-template_dir = f"{pathlib.Path(__file__).parent}/Template"
-
 logging.basicConfig(level=logging.INFO)
 
 xlabels = {

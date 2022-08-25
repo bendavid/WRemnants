@@ -123,7 +123,8 @@ def makeStackPlotWithRatio(
     fix_axes(ax1, ax2)
 
     if cms_decor:
-        hep.cms.label(ax=ax1, data=data_hist is not None, lumi=lumi, fontsize=legtex_size, label=cms_decor)
+        scale = max(1, np.divide(*ax1.get_figure().get_size_inches())*0.3)
+        hep.cms.label(ax=ax1, data=data_hist is not None, lumi=lumi, fontsize=legtex_size*scale, label=cms_decor)
 
     return fig
 
