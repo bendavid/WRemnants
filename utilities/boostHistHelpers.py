@@ -185,7 +185,7 @@ def findCommonBinning(hists, axis_idx):
 
     edges = list(sorted(common_edges))
     if len(edges) < 2:
-        raise ValueError("Found < 2 common edges, cannot rebin")
+        raise ValueError(f"Found < 2 common edges, cannot rebin. Axes were {orig_axes}")
     return edges
 
 def rebinHistsToCommon(hists, axis_idx, keep_full_range=False):
