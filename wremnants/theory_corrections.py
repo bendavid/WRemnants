@@ -9,6 +9,7 @@ import pickle
 from .correctionsTensor_helper import makeCorrectionsTensor
 from utilities import boostHistHelpers as hh, common
 from wremnants import theory_tools
+import logging
 
 def make_corr_helper_fromnp(filename=f"{common.data_dir}/N3LLCorrections/inclusive_{{process}}_pT.npz", isW=True):
     if isW:
@@ -59,7 +60,10 @@ def rebin_corr_hists(hists, ndim=-1):
     # Allow trailing dimensions to be different (e.g., variations)
     ndims = min([x.ndim for x in hists]) if ndim < 0 else ndim
     hists = [hh.rebinHist(h, "pt" if "pt" in h.axes.name else "ptVgen", common.ptV_binning[:-2]) for h in hists]
-    hists = [hh.rebinHist(h, "absy" if "absy" in h.axes.name else "absYVgen", common.absYV_binning[:-2]) for h in hists]
+    try:
+        hists = [hh.rebinHist(h, "absy" if "absy" in h.axes.name else "absYVgen", common.absYV_binning[:-1]) for h in hists]
+    except ValueError as e:
+        logging.warning("Can't rebin axes to predefined binning")
     for i in range(ndims):
         # This is a workaround for now for the fact that MiNNLO has mass binning up to
         # Inf whereas SCETlib has 13 TeV
@@ -83,7 +87,7 @@ def set_corr_ratio_flow(corrh):
 
     if corrh.axes[2].traits.underflow:
         corrh[:,:,hist.underflow,...] = np.ones_like(corrh[:,:,0,...].view(flow=True))
-    if corrh.axes[2].traits.underflow:
+    if corrh.axes[2].traits.overflow:
         corrh[:,:,hist.overflow,...] = np.ones_like(corrh[:,:,0,...].view(flow=True))
     return corrh
 
