@@ -83,8 +83,7 @@ pileup_helper = wremnants.make_pileup_helper(era = era)
 
 calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
 
-# TODO: Eventually should also apply to tau samples, when the new ones are ready
-corr_helpers = theory_tools.load_corr_helpers([p for p in common.vprocs if "tau" not in p], args.theory_corr)
+corr_helpers = theory_tools.load_corr_helpers(common.vprocs, args.theory_corr)
 
 # recoil initialization
 if not args.no_recoil:
@@ -209,6 +208,10 @@ def build_graph(df, dataset):
         results.extend(theory_tools.make_theory_corr_hists(df_dilepton, "dilepton", dilepton_axes, dilepton_cols, 
             corr_helpers[dataset.name], args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
         )
+    if isZ:
+        for i, pdf in enumerate(args.pdfs):
+            # For now don't store the pdf unc and leave off the phi/theta* axes, because it explodes, should add an option for this
+            results.extend(theory_tools.define_and_make_pdf_hists(df, dilepton_axes[:-2], dilepton_cols[:-2], dataset.name, pdf, False, "dilepton"))
 
     #TODO improve this to include muon mass?
     met_vars = ("MET_pt", "MET_phi")
@@ -268,9 +271,9 @@ def build_graph(df, dataset):
                 results.append(qcdScaleByHelicityUnc)
 
 
-            for i, pdf in enumerate(args.pdfs):
-                withUnc = i == 0 or not args.altPdfOnlyCentral
-                results.extend(theory_tools.define_and_make_pdf_hists(df, nominal_axes, nominal_cols, dataset.name, pdf, withUnc))
+                for i, pdf in enumerate(args.pdfs):
+                    withUnc = i == 0 or not args.altPdfOnlyCentral
+                    results.extend(theory_tools.define_and_make_pdf_hists(df, nominal_axes, nominal_cols, dataset.name, pdf, withUnc))
 
             masswargs = (nominal_axes, nominal_cols) if not isW else (None, None)
             df, masswhist = syst_tools.define_mass_weights(df, isW, *masswargs)

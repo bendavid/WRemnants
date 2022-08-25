@@ -236,7 +236,7 @@ print(scaleLabelsByAxis)
 cardTool.addSystematic(scale_hist,
     action=scale_action,
     actionArgs=scaleActionArgs,
-    processes=signal_samples,
+    processes=signal_samples_inctau,
     group=scaleGroupName,
     # splitGroup={f"{scaleGroupName}_coeff{i}" : f".*Coeff{i}" for i in range(9)}, # key is the new group name to make it unique, value is the pattern to filter nuisances
     systAxes=scaleSystAxes,
