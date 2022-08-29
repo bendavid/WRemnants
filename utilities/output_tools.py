@@ -6,6 +6,7 @@ import datetime
 import time
 import pickle
 import lz4.frame
+import logging
 
 def readTemplate(templateFile, templateDict, filt=None):
     if not os.path.isfile(templateFile):
@@ -36,6 +37,14 @@ def metaInfoDict(exclude_diff='notebooks'):
     return meta_data
 
 def write_analysis_output(results, outfile, postfix):
+    logging.debug("")
+    logging.debug("Unweighted events (before cut)")
+    logging.debug("-"*30)
+    for key in results.keys():
+        logging.debug(f"Dataset {key.ljust(30)}:  {results[key]['event_count']}")
+        logging.debug("-"*30)
+    logging.debug("")
+
     results.update({"meta_info" : metaInfoDict()})
     if postfix:
         outfile = outfile.replace(".pkl.lz4", f"_{postfix}.pkl.lz4")

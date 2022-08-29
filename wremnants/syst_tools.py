@@ -7,15 +7,18 @@ def scale_helicity_hist_to_variations(scale_hist, sum_axis=[], rebinPtV=0):
     # select nominal QCD scales, but keep the sliced axis at size 1 for broadcasting
     nom_scale_hist = scale_hist[{"muRfact" : s[1.j:1.j+1], "muFfact" : s[1.j:1.j+1]}]
     axisNames = [ax.name for ax in scale_hist.axes]
-    hasHelicityAxis = "helicity" in axisNames
     # select nominal QCD scales and project down to nominal axes
-    if hasHelicityAxis:
-        nom_hist = nom_scale_hist[{"ptVgen" : s[::hist.sum], "chargeVgen" : s[::hist.sum], "helicity" : s[::hist.sum], "muRfact" : s[1.j], "muFfact" : s[1.j] }]
-    else:
-        nom_hist = nom_scale_hist[{"ptVgen" : s[::hist.sum], "chargeVgen" : s[::hist.sum], "muRfact" : s[1.j], "muFfact" : s[1.j] }]
+    genAxes = ["ptVgen", "chargeVgen", "helicity"]
+    nom_hist = nom_scale_hist[{"muRfact" : s[1.j], "muFfact" : s[1.j] }]
+    for genAxis in genAxes:
+        if genAxis in axisNames:
+            nom_hist = nom_hist[{genAxis : s[::hist.sum]}]
+    
+    hasHelicityAxis = "helicity" in axisNames
+    hasPtAxis = "ptVgen" in axisNames
 
     if rebinPtV > 0:
-        if "ptVgen" in axisNames:
+        if hasPtAxis:
             scale_hist = scale_hist[{"ptVgen" : s[::hist.rebin(rebinPtV)]}]
             nom_scale_hist = nom_scale_hist[{"ptVgen" : s[::hist.rebin(rebinPtV)]}]
         else:
@@ -32,7 +35,7 @@ def scale_helicity_hist_to_variations(scale_hist, sum_axis=[], rebinPtV=0):
     # this emulates the "weight if idx else nominal" logic and corresponds to the decorrelated
     # variations
     if scale_hist.name is None:
-        out_name = "scale_helicity_variations" if hasHelicityAxis else "scale_vpt_variations"
+        out_name = "scale_helicity_variations" if hasHelicityAxis else "scale_vpt_variations" if hasPtAxis else "scale_vcharge_variations"
     else:
         out_name = scale_hist.name + "_variations"
 

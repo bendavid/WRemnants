@@ -19,7 +19,7 @@ dataDictV9 = {
     },
     'ZttPostVFP' : { 'name' : "ZtautauPostVFP",
                    'filepaths' : 
-                   ["/scratch/shared/NanoAOD/TrackRefitv1/DYJetsToTauTau_M-50_AtLeastOneEorMuDecay_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV8MCPostVFPWeightFix/*/*/*.root"],
+                   ["/scratch/shared/NanoAOD/TrackRefitv2_GenPartPrecision/DYJetsToTauTau_M-50_AtLeastOneEorMuDecay_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP/*/*/*.root"],
                    # At least one tau->e or mu decay, so everything that's not all other decays
                    'xsec' : xsec_ZmmPostVFP*(1.-(1. - BR_TAUToMU - BR_TAUToE)**2),
     },
@@ -37,13 +37,13 @@ dataDictV9 = {
 
     'WptaunuPostVFP' : { 'name' : "WplustaunuPostVFP",
                          'filepaths' : 
-                         ["/scratch/shared/NanoAOD/TrackRefitv2_GenPartPrecision/WplusJetsToTauNu_TauToMu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP/220823_121429/000*/*.root"],
+                         ["/scratch/shared/NanoAOD/TrackRefitv2_GenPartPrecision/WplusJetsToTauNu_TauToMu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP/220823_121429/*/*.root"],
                          'xsec' : BR_TAUToMU*xsec_WpmunuPostVFP,
     },
     
     'WmtaunuPostVFP' : { 'name' : "WminustaunuPostVFP",
                          'filepaths' : 
-                         ["/scratch/shared/NanoAOD/TrackRefitv2_GenPartPrecision/WminusJetsToMuNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP/220729_152430/000*/*.root"],
+                         ["/scratch/shared/NanoAOD/TrackRefitv2_GenPartPrecision/WminusJetsToMuNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP/220729_152430/*/*.root"],
                          'xsec' : BR_TAUToMU*xsec_WmmunuPostVFP,
     },
     'ttbarlnuPostVFP' : { 'name' : "TTLeptonicPostVFP",

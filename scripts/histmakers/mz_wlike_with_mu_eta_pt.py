@@ -16,24 +16,28 @@ parser.add_argument("--muScaleMag", type=float, default=1e-4, help="Magnitude of
 parser.add_argument("--muScaleBins", type=int, default=1, help="Number of bins for muon scale uncertainty")
 parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
 parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
-parser.add_argument("--eta", nargs=3, type=float, help="Eta binning as 'nbins min max' (only uniform for now)", default=[48,-2.4,2.4])
-parser.add_argument("--pt", nargs=3, type=float, help="Pt binning as 'nbins,min,max' (only uniform for now)", default=[34,26.,60.])
-parser.add_argument("--no_recoil", action='store_true', help="Don't apply recoild correction")
 args = parser.parse_args()
 
 logging.basicConfig(level=logging.INFO)
+
+f = next((x for x in parser._actions if x.dest == "pt"), None)
+if f:
+    f.default = [34,26.,60.]
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
     nanoVersion="v8" if args.v8 else "v9")
 
-era = "2016PostVFP"
+era = args.era
 
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 
 qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = True)
-axis_ptVgen = qcdScaleByHelicity_helper.hist.axes["ptVgen"]
 axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
+axis_ptVgen = hist.axis.Variable(
+    common.ptV_10quantiles_binning, 
+    name = "ptVgen", underflow=False
+)
 
 # custom template binning
 template_neta = int(args.eta[0])
@@ -258,7 +262,8 @@ def build_graph(df, dataset):
 
             df = theory_tools.define_scale_tensor(df)
             results.append(theory_tools.make_scale_hist(df, [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen"]))
-
+            results.append(theory_tools.make_scale_hist(df, [*nominal_axes,              axis_chargeVgen], [*nominal_cols,           "chargeVgen"], "vptInclusive"))
+            
             if isZ and not args.skipHelicity:
                 # TODO: Should have consistent order here with the scetlib correction function
                 df = df.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
