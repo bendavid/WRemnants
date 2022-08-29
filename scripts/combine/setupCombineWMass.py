@@ -28,6 +28,7 @@ parser.add_argument("-x",  "--excludeNuisances", type=str, default="", help="Reg
 parser.add_argument("-k",  "--keepNuisances", type=str, default="", help="Regular expression to keep some systematics, overriding --excludeNuisances. Can be used to keep only some systs while excluding all the others with '.*'")
 parser.add_argument("--qcdProcessName", dest="qcdProcessName" , type=str, default="Fake",   help="Name for QCD process")
 parser.add_argument("--noStatUncFakes", dest="noStatUncFakes" , action="store_true",   help="Set bin error for QCD background templates to 0, to check MC stat uncertainties for signal only")
+parser.add_argument("--noQCDscaleFakes", dest="noQCDscaleFakes" , action="store_true",   help="Do not apply QCd scale uncertainties on fakes, mainly for debugging")
 parser.add_argument("--skipOtherChargeSyst", dest="skipOtherChargeSyst" , action="store_true",   help="Skip saving histograms and writing nuisance in datacard for systs defined for a given charge but applied on the channel with the other charge")
 parser.add_argument("--skipSignalSystOnFakes", dest="skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
 parser.add_argument("--scaleMuonCorr", type=float, default=1.0, help="Scale up/down dummy muon scale uncertainty by this factor")
@@ -47,7 +48,8 @@ cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/{name}CombineInput.root")
 cardTool.setDatagroups(datagroups)
 cardTool.setFakeName(args.qcdProcessName)
 cardTool.setSpacing(36)
-cardTool.setProcsNoStatUnc(procs=args.qcdProcessName, resetList=False)
+if args.noStatUncFakes:
+    cardTool.setProcsNoStatUnc(procs=args.qcdProcessName, resetList=False)
 cardTool.setCustomSystForCard(args.excludeNuisances, args.keepNuisances)
 if args.skipOtherChargeSyst:
     cardTool.setSkipOtherChargeSyst()
@@ -86,7 +88,7 @@ if args.doStatOnly:
     # print a card with only mass weights and a dummy syst
     cardTool.addLnNSystematic("dummy", processes=["Other"] if args.wlike else ["Top", "Diboson"], size=1.001, group="dummy")
     cardTool.writeOutput()
-    print("Using option --doStatOnly: the card will be created with only mass weights and a dummy LnN syst on all processes")
+    print("Using option --doStatOnly: the card was created with only mass weights and a dummy LnN syst on all processes")
     quit()
     
 if args.wlike:
@@ -198,14 +200,14 @@ if "Pt" in args.qcdScale:
         cardTool.addSystematic("qcdScale",
                                action=scale_action,
                                actionArgs=copy.deepcopy(scaleActionArgs), # to avoid possible undesired updates below
-                               processes=signal_samples,
+                               processes=signal_samples_inctau,
                                group=scaleGroupName,
                                systAxes=scaleSystAxes[:],
                                labelsByAxis=scaleLabelsByAxis[:],
                                skipEntries=scaleSkipEntries[:],
                                systNameReplace=systNameReplaceVec,
                                baseName="QCDscaleByPt_",
-                               passToFakes=passSystToFakes,
+                               passToFakes=False if args.noQCDscaleFakes else passSystToFakes,
         )
 
 if helicity:
@@ -246,7 +248,7 @@ cardTool.addSystematic(scale_hist,
     skipEntries=scaleSkipEntries,
     systNameReplace=systNameReplaceVec,
     baseName="QCDscale_",
-    passToFakes=passSystToFakes,
+    passToFakes=False if args.noQCDscaleFakes else passSystToFakes,
     )
 
 cardTool.addSystematic("muonScaleSyst", 
@@ -270,9 +272,18 @@ cardTool.addSystematic("muonL1PrefireSyst",
 cardTool.addSystematic("muonL1PrefireStat", 
     processes=cardTool.allMCProcesses(),
     group="muonPrefire",
-    baseName="CMS_prefire_stat_m_",
+    baseName="CMS_prefire_stat_m",
     systAxes=["downUpVar", "etaPhiRegion"],
     labelsByAxis=["downUpVar", "etaPhiReg"],
+    passToFakes=passSystToFakes,
+)
+
+cardTool.addSystematic("ecalL1Prefire", 
+    processes=cardTool.allMCProcesses(),
+    group="ecalPrefire",
+    baseName="CMS_prefire_ecal",
+    systAxes=["downUpVar"],
+    labelsByAxis=["downUpVar"],
     passToFakes=passSystToFakes,
 )
 
