@@ -100,6 +100,7 @@ def build_graph(df, dataset):
 
     isW = dataset.name in common.wprocs
     isZ = dataset.name in common.zprocs
+    isTop = dataset.group == "Top"
     apply_theory_corr = args.theory_corr and dataset.name in corr_helpers
     if noMuonCorr:
         df = df.Alias("Muon_correctedPt", "Muon_pt")
@@ -129,7 +130,7 @@ def build_graph(df, dataset):
     df = df.Filter("Sum(vetoMuons) == 1")
     df = df.Define("goodMuons", "vetoMuons && Muon_mediumId && Muon_isGlobal")
     df = df.Filter("Sum(goodMuons) == 1")
-
+    
     df = df.Define("goodMuons_pt0", "Muon_correctedPt[goodMuons][0]")
     df = df.Define("goodMuons_eta0", "Muon_correctedEta[goodMuons][0]")
     df = df.Define("goodMuons_phi0", "Muon_correctedPhi[goodMuons][0]")
@@ -151,9 +152,16 @@ def build_graph(df, dataset):
     df = df.Define("passIso", "goodMuons_pfRelIso04_all0 < 0.15")
 
     df = df.Define("goodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_pt,TrigObj_l1pt,TrigObj_l2pt,TrigObj_filterBits)")
+    # TODO: when new SF are available move to the following trigger matching
+    # df = df.Define("goodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_filterBits)")
     df = df.Filter("wrem::hasTriggerMatch(goodMuons_eta0,goodMuons_phi0,TrigObj_eta[goodTrigObjs],TrigObj_phi[goodTrigObjs])")
     df = df.Filter("Flag_globalSuperTightHalo2016Filter && Flag_EcalDeadCellTriggerPrimitiveFilter && Flag_goodVertices && Flag_HBHENoiseIsoFilter && Flag_HBHENoiseFilter && Flag_BadPFMuonFilter")
 
+    # gen match to bare muons to select only prompt muons from top processes
+    if isTop:
+        df = df.Define("postFSRmuons", "GenPart_status == 1 && (GenPart_statusFlags & 1) && abs(GenPart_pdgId) == 13")
+        df = df.Filter("wrem::hasMatchDR2(goodMuons_eta0,goodMuons_phi0,GenPart_eta[postFSRmuons],GenPart_phi[postFSRmuons],0.09)")
+    
     nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
 
     if dataset.is_data:
@@ -165,7 +173,7 @@ def build_graph(df, dataset):
         df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0", "passIso"])
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId"])
 
-        weight_expr = "weight*weight_pu*weight_newMuonPrefiringSF"
+        weight_expr = "weight*weight_pu*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom"
         if not args.noScaleFactors:
             weight_expr += "*weight_fullMuonSF_withTrackingReco"
         
@@ -201,8 +209,12 @@ def build_graph(df, dataset):
         muonL1PrefireSyst = df.HistoBoost("muonL1PrefireSyst", nominal_axes, [*nominal_cols, "muonL1PrefireSyst_tensor"], tensor_axes = [down_up_axis])
         results.append(muonL1PrefireSyst)
 
+        df = df.Define("ecalL1Prefire_tensor", f"wrem::twoPointScaling(nominal_weight, L1PreFiringWeight_ECAL_Dn, L1PreFiringWeight_ECAL_Up, L1PreFiringWeight_ECAL_Nom)")
+        ecalL1Prefire = df.HistoBoost("ecalL1Prefire", nominal_axes, [*nominal_cols, "ecalL1Prefire_tensor"], tensor_axes = [down_up_axis])
+        results.append(ecalL1Prefire)
+        
         # luminosity, done here as shape variation despite being a flat scaling so to facilitate propagating to fakes afterwards
-        df = df.Define("luminosityScaling", f"wrem::dummyScaling(nominal_weight, {args.lumiUncertainty})")
+        df = df.Define("luminosityScaling", f"wrem::constantScaling(nominal_weight, {args.lumiUncertainty})")
         luminosity = df.HistoBoost("luminosity", nominal_axes, [*nominal_cols, "luminosityScaling"], tensor_axes = [down_up_axis])
         results.append(luminosity)
                 

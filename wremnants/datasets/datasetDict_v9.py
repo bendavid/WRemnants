@@ -43,7 +43,7 @@ dataDictV9 = {
     
     'WmtaunuPostVFP' : { 'name' : "WminustaunuPostVFP",
                          'filepaths' : 
-                         ["/scratch/shared/NanoAOD/TrackRefitv2_GenPartPrecision/WminusJetsToMuNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP/220729_152430/*/*.root"],
+                         ["/scratch/shared/NanoAOD/TrackRefitv2_GenPartPrecision/WminusJetsToTauNu_TauToMu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP/220823_073247/*/*.root"],
                          'xsec' : BR_TAUToMU*xsec_WmmunuPostVFP,
     },
     'ttbarlnuPostVFP' : { 'name' : "TTLeptonicPostVFP",

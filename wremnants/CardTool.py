@@ -35,7 +35,7 @@ class CardTool(object):
         self.nominalName = "nominal"
         self.datagroups = None
         self.unconstrainedProcesses = None
-        self.noStatUncProcesses = None
+        self.noStatUncProcesses = []
         self.buildHistNameFunc = None
         self.histName = "x"
         self.pseudoData = None
@@ -54,7 +54,7 @@ class CardTool(object):
         self.chargeIdDict["minus"]["badId"] = "q1"
 
     def setProcsNoStatUnc(self, procs, resetList=True):
-        if self.noStatUncProcesses == None or resetList:
+        if resetList:
             self.noStatUncProcesses = []
         if isinstance(procs, str):
             self.noStatUncProcesses.append(procs)
@@ -156,14 +156,18 @@ class CardTool(object):
     def addSystematic(self, name, systAxes, outNames=None, skipEntries=None, labelsByAxis=None, 
                         baseName="", mirror=False, scale=1, processes=None, group=None, noConstraint=False,
                         action=None, actionArgs={}, systNameReplace=[], groupFilter=None, passToFakes=False, splitGroup={}):
+
+        processesWithSyst = []
         if not processes:
-            processes = self.allMCProcesses()
-        if passToFakes and self.getFakeName() not in processes:
-            processes.append(self.getFakeName())
+            processesWithSyst = [x for x in self.allMCProcesses()]
+        else:
+            processesWithSyst = [x for x in processes]
+        if passToFakes and self.getFakeName() not in processesWithSyst:
+            processesWithSyst.append(self.getFakeName())
         self.systematics.update({
             name : { "outNames" : [] if not outNames else outNames,
                      "baseName" : baseName,
-                     "processes" : processes,
+                     "processes" : processesWithSyst,
                      "systAxes" : systAxes,
                      "labelsByAxis" : systAxes if not labelsByAxis else labelsByAxis,
                      "group" : group,
@@ -381,20 +385,20 @@ class CardTool(object):
                 # do not write systs which should only apply to other charge, to simplify card
                 if self.keepOtherChargeSyst or self.chargeIdDict[chan]["badId"] not in systname:
                     self.cardContent[chan] += f"{systname.ljust(self.spacing)}{shape.ljust(self.spacing)}{''.join(include)}\n"
-            # unlike for LnN systs, here it is simpler to act on the list of these systs to form groups, rather than doing it syst by syst 
-            if group:
-                if self.keepOtherChargeSyst:
-                    systNamesForGroupPruned = systNames[:]
-                else:
-                    systNamesForGroupPruned = [s for s in systNames if self.chargeIdDict[chan]["badId"] not in s]
-                systNamesForGroup = list(systNamesForGroupPruned if not groupFilter else filter(groupFilter, systNamesForGroupPruned))
-                if len(systNamesForGroup):
-                    for subgroup in splitGroupDict.keys():
-                        matchre = re.compile(splitGroupDict[subgroup])
-                        systNamesForSubgroup = list(filter(lambda x: matchre.match(x),systNamesForGroup))
-                        if len(systNamesForSubgroup):
-                            members = " ".join(systNamesForSubgroup)
-                            self.addSystToGroup(subgroup, chan, members, groupLabel=label)
+                # unlike for LnN systs, here it is simpler to act on the list of these systs to form groups, rather than doing it syst by syst 
+                if group:
+                    if self.keepOtherChargeSyst:
+                        systNamesForGroupPruned = systNames[:]
+                    else:
+                        systNamesForGroupPruned = [s for s in systNames if self.chargeIdDict[chan]["badId"] not in s]
+                    systNamesForGroup = list(systNamesForGroupPruned if not groupFilter else filter(groupFilter, systNamesForGroupPruned))
+                    if len(systNamesForGroup):
+                        for subgroup in splitGroupDict.keys():
+                            matchre = re.compile(splitGroupDict[subgroup])
+                            systNamesForSubgroup = list(filter(lambda x: matchre.match(x),systNamesForGroup))
+                            if len(systNamesForSubgroup):
+                                members = " ".join(systNamesForSubgroup)
+                                self.addSystToGroup(subgroup, chan, members, groupLabel=label)
 
     def setUnconstrainedProcs(self, procs):
         self.unconstrainedProcesses = procs
