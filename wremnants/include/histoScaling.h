@@ -16,13 +16,13 @@ namespace wrem {
         
     }
 
-    Eigen::TensorFixedSize<double, Eigen::Sizes<2>> twoPointScaling(double nominal_weight, double scaleDown, double scaleUp, double scaleCentral = 1.0) {
+    Eigen::TensorFixedSize<double, Eigen::Sizes<2>> twoPointScaling(double nominal_weight, double scaleDown, double scaleUp) {
 
         Eigen::TensorFixedSize<double, Eigen::Sizes<2>> outWeights;
             
-        // Down weight, then up weight, scaleCentral might generally be 1.0 in case it was not already included in nominal_weight for all histograms
-        outWeights(0) = nominal_weight * scaleDown / scaleCentral;
-        outWeights(1) = nominal_weight * scaleUp   / scaleCentral;
+        // Down weight, then up weight, nominal_weight should not already include a centralScale weight if any
+        outWeights(0) = nominal_weight * scaleDown;
+        outWeights(1) = nominal_weight * scaleUp;
         return outWeights;
         
     }
