@@ -254,7 +254,7 @@ def build_graph(df, dataset):
         muonL1PrefireSyst = df.HistoBoost("muonL1PrefireSyst", nominal_axes, [*nominal_cols, "muonL1PrefireSyst_tensor"], tensor_axes = [down_up_axis])
         results.append(muonL1PrefireSyst)
 
-        df = df.Define("ecalL1Prefire_tensor", f"wrem::twoPointScaling(nominal_weight, L1PreFiringWeight_ECAL_Dn, L1PreFiringWeight_ECAL_Up, L1PreFiringWeight_ECAL_Nom)")
+        df = df.Define("ecalL1Prefire_tensor", f"wrem::twoPointScaling(nominal_weight/L1PreFiringWeight_ECAL_Nom, L1PreFiringWeight_ECAL_Dn, L1PreFiringWeight_ECAL_Up)")
         ecalL1Prefire = df.HistoBoost("ecalL1Prefire", nominal_axes, [*nominal_cols, "ecalL1Prefire_tensor"], tensor_axes = [down_up_axis])
         results.append(ecalL1Prefire)
         # n.b. this is the W analysis so mass weights shouldn't be propagated
