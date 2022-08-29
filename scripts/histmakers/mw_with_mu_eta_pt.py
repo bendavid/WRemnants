@@ -19,8 +19,6 @@ parser.add_argument("--noMuonCorr", action="store_true", help="Don't use correct
 parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency")
 parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
 parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
-parser.add_argument("--eta", nargs=3, type=float, help="Eta binning as 'nbins min max' (only uniform for now)", default=[48,-2.4,2.4])
-parser.add_argument("--pt", nargs=3, type=float, help="Pt binning as 'nbins,min,max' (only uniform for now)", default=[29,26.,55.])
 parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for luminosity in excess to 1 (e.g. 1.012 means 1.2\%)", default=1.012)
 args = parser.parse_args()
 
@@ -58,8 +56,11 @@ axis_passMT = hist.axis.Boolean(name = "passMT")
 
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
 
-axis_ptVgen = qcdScaleByHelicity_Whelper.hist.axes["ptVgen"]
 axis_chargeVgen = qcdScaleByHelicity_Whelper.hist.axes["chargeVgen"]
+axis_ptVgen = hist.axis.Variable(
+    common.ptV_10quantiles_binning, 
+    name = "ptVgen", underflow=False
+)
 
 # extra axes which can be used to label tensor_axes
 
@@ -75,6 +76,14 @@ pileup_helper = wremnants.make_pileup_helper(era = era)
 calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
 
 corr_helpers = theory_tools.load_corr_helpers(common.vprocs, args.theory_corr)
+
+# recoil initialization
+if not args.no_recoil:
+    from wremnants import recoil_tools
+    import ROOT
+    ROOT.gInterpreter.Declare('#include "lowpu_recoil.h"')
+    recoilHelper = recoil_tools.Recoil("highPU")
+
 
 def build_graph(df, dataset):
     print("build graph", dataset.name)
@@ -203,6 +212,7 @@ def build_graph(df, dataset):
 
             df = theory_tools.define_scale_tensor(df)
             results.append(theory_tools.make_scale_hist(df, [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen"]))
+            results.append(theory_tools.make_scale_hist(df, [*nominal_axes,              axis_chargeVgen], [*nominal_cols,           "chargeVgen"], "vptInclusive"))
 
             # currently SCETLIB corrections are applicable to W-only, and helicity-split scales are only valid for one of W or Z at a time
             # TODO make this work for both simultaneously as needed

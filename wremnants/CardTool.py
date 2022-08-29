@@ -304,7 +304,7 @@ class CardTool(object):
         else:
             self.outfile = outfile
 
-    def writeOutput(self, statOnly=False):
+    def writeOutput(self):
         self.datagroups.loadHistsForDatagroups(
             baseName=self.histName, syst=self.nominalName, label=self.nominalName)
         self.procDict = self.datagroups.getDatagroups()
@@ -313,19 +313,12 @@ class CardTool(object):
         if self.pseudoData:
             self.addPseudodata(self.predictedProcesses())
 
-        if statOnly:
-            # add dummy uncertainty, necessary for combineTF
-            nondata = self.predictedProcesses()
-            include = [("1.00001").ljust(self.spacing) for x in nondata]
-            for chan in self.channels:
-                self.cardContent[chan] += f'{("dummy").ljust(self.spacing)}lnN{" "*(self.spacing-3)}{"".join(include)}\n'
-        else:
-            self.writeLnNSystematics()
-            for syst in self.systematics.keys():
-                processes=self.systematics[syst]["processes"]
-                self.datagroups.loadHistsForDatagroups(self.histName, syst, label="syst",
-                    procsToRead=processes, forceNonzero=syst != "qcdScaleByHelicity")
-                self.writeForProcesses(syst, label="syst", processes=processes)
+        self.writeLnNSystematics()
+        for syst in self.systematics.keys():
+            processes=self.systematics[syst]["processes"]
+            self.datagroups.loadHistsForDatagroups(self.histName, syst, label="syst",
+                                                   procsToRead=processes, forceNonzero=syst != "qcdScaleByHelicity")
+            self.writeForProcesses(syst, label="syst", processes=processes)
         
         self.writeCard()
 
@@ -366,7 +359,8 @@ class CardTool(object):
         nondata = self.predictedProcesses()
         names = [x[:-2] if "Up" in x[-2:] else (x[:-4] if "Down" in x[-4:] else x) 
                     for x in filter(lambda x: x != "", systInfo["outNames"])]
-        include = [(str(scale) if x in procs else "-").ljust(self.spacing) for x in nondata]
+        if type(scale) != dict:
+            include = [(str(scale) if x in procs else "-").ljust(self.spacing) for x in nondata]
 
         splitGroupDict = systInfo["splitGroup"]
         shape = "shape" if not systInfo["noConstraint"] else "shapeNoConstraint"
@@ -375,9 +369,15 @@ class CardTool(object):
         systNames = list(dict.fromkeys(names))
         systnamesPruned = [s for s in systNames if not self.isExcludedNuisance(s)]
         systNames = systnamesPruned[:]
-
-        for chan in self.channels:
-            for systname in systNames:
+        for systname in systNames:
+            if type(scale) == dict:
+                for reg in scale.keys():
+                    if re.match(reg, systname):
+                        thiscale = str(scale[reg])
+                        include = [(thiscale if x in procs else "-").ljust(self.spacing) for x in nondata]
+                        break # exit this inner loop when match is found, to save time
+            shape = "shape" if not systInfo["noConstraint"] else "shapeNoConstraint"
+            for chan in self.channels:
                 # do not write systs which should only apply to other charge, to simplify card
                 if self.keepOtherChargeSyst or self.chargeIdDict[chan]["badId"] not in systname:
                     self.cardContent[chan] += f"{systname.ljust(self.spacing)}{shape.ljust(self.spacing)}{''.join(include)}\n"
