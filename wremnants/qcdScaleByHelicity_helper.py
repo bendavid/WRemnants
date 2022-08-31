@@ -2,13 +2,13 @@ import uproot
 import ROOT
 import pathlib
 import hist
-import narf
 import pickle
 import lz4.frame
 from .correctionsTensor_helper import makeCorrectionsTensor
 from .theory_tools import scale_tensor_axes
-
-data_dir = f"{pathlib.Path(__file__).parent}/data/"
+from utilities import common
+import logging
+import numpy as np
 
 # TODO make this configurable to work in the Z case as well
 # harmonize treatment of charge and mass axes between W and Z?
@@ -18,13 +18,16 @@ data_dir = f"{pathlib.Path(__file__).parent}/data/"
 
 def makeQCDScaleByHelicityHelper(is_w_like = False, filename=None):
     if filename is None:
-        if is_w_like:
-            filename = f"{data_dir}/angularCoefficients/z_coeffs.pkl.lz4"
-        else:
-            filename = f"{data_dir}/angularCoefficients/w_coeffs.pkl.lz4"
+        #
+        #filename = f"{common.data_dir}/angularCoefficients/w_z_coeffs.pkl.lz4" # Vpt binning based on common.ptV_binning
+        filename = f"{common.data_dir}/angularCoefficients/w_z_coeffs_genVpt10quantiles.pkl.lz4" # Vpt binning based on common.ptV_10quantiles_binning
 
     with lz4.frame.open(filename, "rb") as f:
-        corrh = pickle.load(f)
+        out = pickle.load(f)
+
+    corrh = out["Z"] if is_w_like else out["W"]
+    if np.count_nonzero(corrh[{"helicity" : -1.j}] == 0):
+        logging.warning("Zeros in sigma UL for the angular coefficients will give undefined behaviour!")
 
     # histogram has to be without errors to load the tensor directly
     corrh_noerrs = hist.Hist(*corrh.axes, storage=hist.storage.Double())

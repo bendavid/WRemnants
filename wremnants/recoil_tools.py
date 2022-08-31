@@ -8,13 +8,16 @@ import decimal
 import json
 import os
 import array
+from utilities.common import data_dir
+
+ROOT.gInterpreter.Declare('#include "lowpu_recoil.h"')
 
 def drange(x, y, jump):
     while x < y:
         yield float(x)
         x += decimal.Decimal(jump)
         
-
+        
 class Recoil:
 
     def __init__(self, type_, flavor_, met_):
@@ -24,7 +27,7 @@ class Recoil:
         self.parametric = True
    
         if type_ == "highPU":
-        
+
             #self.recoil_qTbins = list(drange(0, 30, 0.5)) + list(range(30, 60, 2)) + list(range(60, 100, 5)) + list(range(100, 210, 10)) + [10000]
             self.recoil_qTbins = list(range(0, 50, 1)) + list(range(50, 100, 5)) + list(range(100, 200, 10)) + list(range(200, 400, 20)) + [10000]
             rInput_binned = "wremnants/data/recoil_fits_Z.root"
@@ -32,6 +35,7 @@ class Recoil:
     
         elif type_ == "lowPU":
         
+
             self.recoil_qTbins = list(range(0, 30, 1)) + list(range(30, 50, 2)) + list(range(50, 100, 5)) + list(range(100, 150, 10)) + [150, 175, 200, 10000]
             self.recoil_qTbins = list(range(0, 30, 1)) + list(range(30, 50, 2)) + list(range(50, 70, 5)) + list(range(70, 150, 10)) + [150, 200, 300, 10000]
             self.recoil_qTbins = list(range(0, 50, 1)) + list(range(50, 70, 2)) + list(range(70, 100, 5)) + list(range(100, 150, 10)) + [150, 200, 300, 10000]
@@ -77,7 +81,7 @@ class Recoil:
         setattr(ROOT.wrem, "qTbins", qTbins_vec)
         
         # load recoil hists
-        ROOT.wrem.recoil_init(rInput_binned)
+        ROOT.wrem.recoil_init(rInput_binned, f"{data_dir}/lowPU/recoil_fits_Z_param_refit.root")
         
         
         # define axes
@@ -824,4 +828,4 @@ class Recoil:
             
         
         return df
-    
+
