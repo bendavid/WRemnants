@@ -187,8 +187,7 @@ def build_graph(df, dataset):
 
         weight_expr = "weight*weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF"
         if isW or isZ:
-            if args.pdfs[0] != "nnpdf31":
-                weight_expr = f"{weight_expr}*{theory_tools.pdf_central_weight(dataset.name, args.pdfs[0])}"
+            df = df.Define("nominal_pdf_cen", theory_tools.pdf_central_weight(dataset.name, args.pdfs[0]))
 
             df = wremnants.define_prefsr_vars(df)
 
@@ -205,7 +204,7 @@ def build_graph(df, dataset):
         
         
     # recoil calibration
-    df = recoilHelper.recoil_setup_Z(df, results, "MET_pt", "MET_phi", "Muon_pt[goodMuons]", "Muon_phi[goodMuons]", "Muon_pt[goodMuons]")
+    df = recoilHelper.recoil_setup_Z(df, results, "DeepMETResolutionTune_pt", "DeepMETResolutionTune_phi", "Muon_pt[goodMuons]", "Muon_phi[goodMuons]", "Muon_pt[goodMuons]")
     df = recoilHelper.recoil_apply_Z(df, results, dataset.name, ["ZmumuPostVFP"])  # produces corrected MET as MET_corr_rec_pt/phi
   
    
