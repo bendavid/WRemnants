@@ -89,7 +89,7 @@ def aux(c=None):
     latex.SetTextAlign(30) # 0 special vertical aligment with subscripts
     if "_" in cfg['topRight']: latex.DrawLatex(tr, 0.945, cfg['topRight'])
     elif "^" in cfg['topRight']: latex.DrawLatex(tr, 0.945, cfg['topRight'])
-    else: latex.DrawLatex(tr, 0.955, cfg['topRight']) # was 955 ??  945
+    else: latex.DrawLatex(tr, 0.945, cfg['topRight']) # was 955 ??  945
     
 
     latex.SetTextAlign(13)
@@ -138,7 +138,7 @@ def auxRatio():
    
 
 
-def dummyRatio(nbins = 1):
+def dummyRatio(nbins = 1, line=1):
 
     if cfg['logx']: 
         xmin = 0.999*float(cfg['xmin']) # hack to display lower/upper ticks on axis
@@ -213,7 +213,7 @@ def dummyRatio(nbins = 1):
     dummyB.GetYaxis().SetLabelOffset(1.4*dummyB.GetYaxis().GetLabelOffset())
     dummyB.GetYaxis().SetNdivisions(505)
     
-    line = ROOT.TLine(float(cfg['xmin']), 1, float(cfg['xmax']), 1)
+    line = ROOT.TLine(float(cfg['xmin']), line, float(cfg['xmax']), line)
     line.SetLineColor(ROOT.kBlue+2)
     line.SetLineWidth(2)
 
