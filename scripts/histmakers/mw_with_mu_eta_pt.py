@@ -155,19 +155,10 @@ def build_graph(df, dataset):
     df = df.Filter("Flag_globalSuperTightHalo2016Filter && Flag_EcalDeadCellTriggerPrimitiveFilter && Flag_goodVertices && Flag_HBHENoiseIsoFilter && Flag_HBHENoiseFilter && Flag_BadPFMuonFilter")
 
     nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
-    
-    df = df.Filter("passIso")
-    
-    
-    
-    
-    
 
     if dataset.is_data:
         nominal = df.HistoBoost("nominal", nominal_axes, nominal_cols)
         results.append(nominal)
-        
-        results.append(df.HistoBoost("mT_uncorr", [axis_mt, axis_charge], ["transverseMass", "Muon_charge"]))
 
     else:
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
@@ -185,21 +176,6 @@ def build_graph(df, dataset):
                 corr_helpers[dataset.name], args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
             )
 
-
-        results.append(df.HistoBoost("mT_uncorr", [axis_mt, axis_charge], ["transverseMass", "Muon_charge", "nominal_weight"]))
-        
-        if isW or isZ:
-        
-            # Breit-Wigner mass weights
-            nweights = 21
-            df = df.Define("MEParamWeight_", "wrem::breitWignerWeights(massVgen, 1)")
-            df = df.Define("massWeightBR_tensor", f"auto res = wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight_); res = nominal_weight*res; return res;")
-            results.append(df.HistoBoost("mT_uncorr_massWeightBR", [axis_mt, axis_charge], ["transverseMass", "Muon_charge", "massWeightBR_tensor"]))
-
-            df = df.Define("massWeightME_tensor", f"auto res = wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight); res = nominal_weight*res; return res;")
-            results.append(df.HistoBoost("mT_uncorr_massWeightME", [axis_mt, axis_charge], ["transverseMass", "Muon_charge", "massWeightME_tensor"]))
-        
-        '''
         nominal = df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "nominal_weight"])
         results.append(nominal)
 
@@ -289,7 +265,7 @@ def build_graph(df, dataset):
             dummyMuonScaleSyst_responseWeights = df.HistoBoost("muonScaleSyst_responseWeights", nominal_axes, [*nominal_cols, "muonScaleSyst_responseWeights_tensor"], tensor_axes = calibration_uncertainty_helper.tensor_axes)
             results.append(dummyMuonScaleSyst_responseWeights)
 
-        '''
+
 
     return results, weightsum
 
