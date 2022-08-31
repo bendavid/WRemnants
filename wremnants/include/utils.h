@@ -41,56 +41,69 @@ double deltaR2(float eta1, float phi1, float eta2, float phi2) {
     return deta*deta + dphi*dphi;
 }
 
-Vec_b cleanJetsFromLeptons(const Vec_f& Jet_eta, const Vec_f& Jet_phi, const Vec_f& Muon_eta, const Vec_f& Muon_phi, const Vec_f& Electron_eta, const Vec_f& Electron_phi) {
+Vec_i cleanJetsFromLeptons(const Vec_f& Jet_eta, const Vec_f& Jet_phi, const Vec_f& Muon_eta, const Vec_f& Muon_phi, const Vec_f& Electron_eta, const Vec_f& Electron_phi) {
 
-   Vec_b res(Jet_eta.size(), true); // initialize to true and set to false whenever the jet overlaps with a muon
+   Vec_i res(Jet_eta.size(), 1); // initialize to true and set to false whenever the jet overlaps with a muon
 
    for (unsigned int ij = 0; ij < res.size(); ++ij) {
 
      for (unsigned int im = 0; im < Muon_eta.size(); ++im) {
-       if (deltaR2(Jet_eta[ij], Jet_phi[ij], Muon_eta[im], Muon_phi[im]) < 0.16) { // cone DR = 0.4
-	 res[ij] = false;
-	 break;
-       }
+         if (deltaR2(Jet_eta[ij], Jet_phi[ij], Muon_eta[im], Muon_phi[im]) < 0.16) { // cone DR = 0.4
+             res[ij] = 0;
+             break;
+         }
      }
 
      if (res[ij]) {
-       for (unsigned int ie = 0; ie < Electron_eta.size(); ++ie) {
-	 if (deltaR2(Jet_eta[ij], Jet_phi[ij], Electron_eta[ie], Electron_phi[ie]) < 0.16) { // cone DR = 0.4
-	   res[ij] = false;
-	   break;
-	 }
-       }
+         for (unsigned int ie = 0; ie < Electron_eta.size(); ++ie) {
+             if (deltaR2(Jet_eta[ij], Jet_phi[ij], Electron_eta[ie], Electron_phi[ie]) < 0.16) { // cone DR = 0.4
+                 res[ij] = 0;
+                 break;
+             }
+         }
      }
 
    }
 
    return res;
 }
+    
+    
+Vec_i goodMuonTriggerCandidate(const Vec_i& TrigObj_id, const Vec_f& TrigObj_pt, const Vec_f& TrigObj_l1pt, const Vec_f& TrigObj_l2pt, const Vec_i& TrigObj_filterBits) {
 
-Vec_b goodMuonTriggerCandidate(const Vec_i& TrigObj_id, const Vec_f& TrigObj_pt, const Vec_f& TrigObj_l1pt, const Vec_f& TrigObj_l2pt, const Vec_i& TrigObj_filterBits) {
-
-   Vec_b res(TrigObj_id.size(),false); // initialize to 0
+   Vec_i res(TrigObj_id.size(), 0); // initialize to 0
    for (unsigned int i = 0; i < res.size(); ++i) {
        if (TrigObj_id[i]  != 13 ) continue;
        if (TrigObj_pt[i]   < 24.) continue;
        if (TrigObj_l1pt[i] < 22.) continue;
        if (! (( TrigObj_filterBits[i] & 8) || (TrigObj_l2pt[i] > 10. && (TrigObj_filterBits[i] & 2) )) ) continue;
-       res[i] = true;
+       res[i] = 1;
    }
    // res will be goodTrigObjs in RDF
    // e.g. RDF::Define("goodTrigObjs","goodMuonTriggerCandidate(TrigObj_id,TrigObj_pt,TrigObj_l1pt,TrigObj_l2pt,TrigObj_filterBits)")
    return res;
 }
 
-Vec_b hasTriggerMatch(const Vec_f& eta, const Vec_f& phi, const Vec_f& TrigObj_eta, const Vec_f& TrigObj_phi) {
+// new overloaded function to be used with new ntuples having additional trigger bits
+Vec_i goodMuonTriggerCandidate(const Vec_i& TrigObj_id, const Vec_i& TrigObj_filterBits) {
 
-   Vec_b res(eta.size(),false); // initialize to 0
+    Vec_i res(TrigObj_id.size(), 0); // initialize to 0
+    for (unsigned int i = 0; i < res.size(); ++i) {
+        if (TrigObj_id[i]  != 13 ) continue;
+        if (! ( (TrigObj_filterBits[i] & 16) || (TrigObj_filterBits[i] & 32) ) ) continue;
+        res[i] = 1;
+    }
+    return res;
+}
+
+Vec_i hasTriggerMatch(const Vec_f& eta, const Vec_f& phi, const Vec_f& TrigObj_eta, const Vec_f& TrigObj_phi) {
+
+   Vec_i res(eta.size(), 0); // initialize to 0
    for (unsigned int i = 0; i < res.size(); ++i) {
       for (unsigned int jtrig = 0; jtrig < TrigObj_eta.size(); ++jtrig) {
 	  // use deltaR*deltaR < 0.3*0.3, to be faster
           if (deltaR2(eta[i], phi[i], TrigObj_eta[jtrig], TrigObj_phi[jtrig]) < 0.09) {
-              res[i] = true;
+              res[i] = 1;
               break; // exit loop on trigger objects, and go to next muon
           }
       }

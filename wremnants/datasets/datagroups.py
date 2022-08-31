@@ -1,4 +1,4 @@
-from wremnants import boostHistHelpers as hh
+from utilities import boostHistHelpers as hh
 from wremnants import histselections as sel
 from wremnants.datasets import datasets2016
 import logging
@@ -7,6 +7,7 @@ import pickle
 import narf
 #import uproot
 import ROOT
+import re
 
 class datagroups(object):
     def __init__(self, infile, combine=False):
@@ -20,7 +21,8 @@ class datagroups(object):
             self.rtfile = ROOT.TFile.Open(infile)
             self.results = None
 
-        if self.datasets:
+        self.lumi = None
+        if self.datasets and self.results:
             self.data = [x for x in self.datasets.values() if x.is_data]
             if self.data:
                 self.lumi = sum([self.results[x.name]["lumi"] for x in self.data if x.name in self.results])
@@ -31,11 +33,19 @@ class datagroups(object):
             
         self.nominalName = "nominal"
 
+    def setNominalName(self, name):
+        self.nominalName = name
+
     def processScaleFactor(self, proc):
         if proc.is_data:
             return 1
         return self.lumi*1000*proc.xsec/self.results[proc.name]["weight_sum"]
 
+    # for reading pickle files
+    # as a reminder, the ND hists with tensor axes in the pickle files are organized as
+    # pickle[procName]["output"][baseName] where
+    ## procName are grouped into datagroups
+    ## baseName takes values such as "nominal"
     def setHists(self, baseName, syst, procsToRead=None, label=None, nominalIfMissing=True, 
             selectSignal=True, forceNonzero=True):
         if not label:
@@ -68,7 +78,8 @@ class datagroups(object):
             raise ValueError(f"Did not find systematic {syst} for any processes!")
 
     #TODO: Better organize to avoid duplicated code
-    def setHistsCombine(self, baseName, syst, channel, procsToRead=None, label=None):
+    def setHistsCombine(self, baseName, syst, channel, procsToRead=None, excluded_procs=[], label=None):
+        if type(excluded_procs) == str: excluded_procs = excluded_procs.split(",")
         #TODO Set axis names properly
         if baseName == "x":
             axisNames=["eta", "pt"]
@@ -76,16 +87,23 @@ class datagroups(object):
         if not label:
             label = syst
         if not procsToRead:
-            procsToRead = self.groups.keys()
+            procsToRead = list(filter(lambda x: x not in excluded_procs, self.groups.keys()))
 
         for procName in procsToRead:
             group = self.groups[procName]
             group[label] = None
-            name = self.histNameCombine(procName, baseName, syst, channel)
-            rthist = self.rtfile.Get(name)
-            if not rthist:
-                raise RuntimeError(f"Failed to load hist {name} from file")
-            group[label] = narf.root_to_hist(rthist, axis_names=axisNames)
+            if type(channel) == str: channel = channel.split(",")
+            narf_hist = None
+            for chn in channel:
+                name = self.histNameCombine(procName, baseName, syst, chn)
+                rthist = self.rtfile.Get(name)
+                if not rthist:
+                    raise RuntimeError(f"Failed to load hist {name} from file")
+                if not narf_hist:
+                    narf_hist = narf.root_to_hist(rthist, axis_names=axisNames)
+                else:
+                    narf_hist = hh.addHists(narf_hist, narf.root_to_hist(rthist, axis_names=axisNames))
+            group[label] = narf_hist
 
     def histNameCombine(self, procName, baseName, syst, channel):
         name = f"{baseName}_{procName}"
@@ -93,17 +111,20 @@ class datagroups(object):
             name += "_"+syst
         if channel:
             name += "_"+channel
+        if re.search("^pdf.*_sum", procName): # for pseudodata from alternative pdfset
+            return("_".join([procName, channel])) 
         return name
 
-    def loadHistsForDatagroups(self, baseName, syst, procsToRead=None, channel="", label="", nominalIfMissing=True,
-            selectSignal=True, forceNonzero=True):
+    def loadHistsForDatagroups(self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="", nominalIfMissing=True,
+            selectSignal=True, forceNonzero=True, pseudodata=False):
         if self.rtfile and self.combine:
-            self.setHistsCombine(baseName, syst, channel, procsToRead, label)
+            self.setHistsCombine(baseName, syst, channel, procsToRead, excluded_procs, label)
         else:
             self.setHists(baseName, syst, procsToRead, label, nominalIfMissing, selectSignal, forceNonzero)
 
-    def getDatagroups(self):
-        return self.groups
+    def getDatagroups(self, excluded_procs=[]):
+        if type(excluded_procs) == str: excluded_procs = list(excluded_procs)
+        return dict(filter(lambda x: x[0] not in excluded_procs, self.groups.items()))
 
     def getDatagroupsForHist(self, histName):
         filled = {}
@@ -118,14 +139,21 @@ class datagroups(object):
     def processes(self):
         return self.groups.keys()
 
-    def addSummedProc(self, refname, name, label, color="red", exclude=["Data"]):
+    def addSummedProc(self, refname, name, label, color="red", exclude=["Data"], relabel=None):
         self.loadHistsForDatagroups(refname, syst=name)
         self.groups[name] = dict(
             label=label,
             color=color,
             members=[],
         )
-        self.groups[name][refname] = sum([self.groups[x][name] for x in self.groups.keys() if x not in exclude+[name]])
+        tosum = []
+        for proc in filter(lambda x: x not in exclude+[name], self.groups.keys()):
+            h = self.groups[proc][name]
+            if not h:
+                raise ValueError(f"Failed to find hist for proc {proc}, histname {name}")
+            tosum.append(h)
+        histname = refname if not relabel else relabel
+        self.groups[name][histname] = hh.sumHists(tosum)
 
     def copyWithAction(self, action, name, refproc, refname, label, color):
         self.groups[name] = dict(
@@ -133,11 +161,10 @@ class datagroups(object):
             color=color,
             members=[],
         )
-        self.groups[name][refname] = action(self.groups[refproc][refname])
-
+        self.groups[name][refname] = action(self.groups[refproc][refname]).copy()
 
 class datagroups2016(datagroups):
-    def __init__(self, infile, combine=False, wlike=False):
+    def __init__(self, infile, combine=False, wlike=False, pseudodata_pdfset = None):
         self.datasets = {x.name : x for x in datasets2016.getDatasets()}
         super().__init__(infile, combine)
         self.hists = {} # container storing temporary histograms
@@ -161,6 +188,11 @@ class datagroups2016(datagroups):
                 signalOp = sel.signalHistWmass if not wlike else None,
             ),            
         }
+        if pseudodata_pdfset and combine:
+            self.groups[f"pdf{pseudodata_pdfset.upper()}_sum"] = dict(
+                label = f"pdf{pseudodata_pdfset.upper()}",
+                color = "dimgray"
+            )
         if not wlike:
             self.groups.update({
                 "Fake" : dict(
@@ -206,7 +238,9 @@ class datagroups2016(datagroups):
         # This is kind of hacky to deal with the different naming from combine
         if baseName != "x" and (syst == "" or syst == self.nominalName):
             return baseName
-        if (baseName == "" or baseName == "x") and syst:
+        if baseName in ["", "x", "nominal"] and syst:
+            return syst
+        if syst[:len(baseName)] == baseName:
             return syst
         return "_".join([baseName,syst])
     
@@ -222,68 +256,4 @@ class datagroups2016(datagroups):
         if scaleOp:
             scale = scale*scaleOp(proc)
         return h*scale
-        
-        
-        
-        
-class datagroups2016_mT(datagroups):
-    def __init__(self, infile, combine=False, wlike=False):
-        self.datasets = {x.name : x for x in datasets2016.getDatasets()}
-        super().__init__(infile, combine)
-        self.hists = {} # container storing temporary histograms
-        self.groups =  {
-            "Data" : dict(
-                members = [self.datasets["dataPostVFP"]],
-                color = "black",
-                label = "Data",
-                signalOp = None,
-            ),
-            "WplusJetsToMuNu" : dict(
-                members = [self.datasets["WplusmunuPostVFP"]],
-                label = r"W$^{\pm}\to\mu\nu$",
-                color = "darkred",
-                signalOp = None,
-            ),
-            "WminusJetsToMuNu" : dict(
-                members = [self.datasets["WminusmunuPostVFP"]],
-                label = r"W$^{\pm}\to\mu\nu$",
-                color = "darkred",
-                signalOp = None,
-            ),
-            "EWK" : dict(
-                members = [self.datasets["ZtautauPostVFP"], self.datasets["ZmumuPostVFP"], self.datasets["WminustaunuPostVFP"], self.datasets["WplustaunuPostVFP"]] + list(filter(lambda y: y.group == "Diboson", self.datasets.values())),
-                label = "EWK",
-                color = "darkblue",
-                signalOp = None,
-            ), 
 
-            "TTbar" : dict(
-                members = list(filter(lambda y: y.group == "Top", self.datasets.values())),
-                label = "Top",
-                color = "green",
-                signalOp = None,
-            ), 
-        }
-        
-
-    def histName(self, baseName, procName, syst):
-        # This is kind of hacky to deal with the different naming from combine
-        if baseName != "x" and (syst == "" or syst == self.nominalName):
-            return baseName
-        if (baseName == "" or baseName == "x") and syst:
-            return syst
-        return "_".join([baseName,syst])
-    
-    def readHist(self, baseName, proc, syst, scaleOp=None, forceNonzero=True):
-        print(proc, proc.name)
-        output = self.results[proc.name]["output"]
-        histname = self.histName(baseName, proc.name, syst)
-        if histname not in output:
-            raise ValueError(f"Histogram {histname} not found for process {proc.name}")
-        h = output[histname]
-        if forceNonzero:
-            h = hh.clipNegativeVals(h)
-        scale = self.processScaleFactor(proc)
-        if scaleOp:
-            scale = scale*scaleOp(proc)
-        return h*scale

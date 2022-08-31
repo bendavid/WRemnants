@@ -2,8 +2,10 @@ import ROOT
 import hist
 import numpy as np
 import copy
-from wremnants import boostHistHelpers as hh
+from utilities import boostHistHelpers as hh,common
+from wremnants import theory_corrections
 import logging
+from scipy import ndimage
 
 ROOT.gInterpreter.Declare('#include "theoryTools.h"')
 
@@ -22,39 +24,40 @@ axis_muFfact = hist.axis.Variable(
 
 scale_tensor_axes = (axis_muRfact, axis_muFfact)
 
-pdfMap = {"nnpdf31" : {
-            "name" : "pdfNNPDF31",
-            "branch" : "LHEPdfWeight",
-            "combine" : "symHessian",
-            "entries" : 101,
-            "alphas" : ["LHEPdfWeight[101]", "LHEPdfWeight[102]"],
-        },
-        "ct18" : {
-            # This has CT18 + CT18Z in it :-/
-            "name" : "pdfCT18",
-            "branch" : "LHEPdfWeightAltSet18",
-            "combine" : "asymHessian",
-            "entries" : 58,
-            "alphas" : ["LHEPdfWeightAltSet18[59]", "LHEPdfWeightAltSet18[60]"],
-			"alphaRange" : "002",
-            "scale" : 1/1.645 # Convert from 95% CL to 68%
-        },
-        "mmht" : {
-            "name" : "pdfMMHT",
-            "branch" : "LHEPdfWeightAltSet19",
-            "combine" : "asymHessian",
-            "entries" : 51,
-        	"alphas" : ["LHEPdfWeightAltSet20[1]", "LHEPdfWeightAltSet20[2]"],
-			"alphaRange" : "001",
-        },
-		"nnpdf30" : {
-			"name" : "pdfNNPDF30",
-			"branch" : "LHEPdfWeightAltSet13",
-            "combine" : "symHessian",
-			"entries" : 100,
-			"alphas" : ["LHEPdfWeightAltSet15[0]", "LHEPdfWeightAltSet16[0]"],
-			"alphaRange" : "001",
-		},
+pdfMap = {
+    "nnpdf31" : {
+        "name" : "pdfNNPDF31",
+        "branch" : "LHEPdfWeight",
+        "combine" : "symHessian",
+        "entries" : 101,
+        "alphas" : ["LHEPdfWeight[101]", "LHEPdfWeight[102]"],
+    },
+    "ct18" : {
+        # This has CT18 + CT18Z in it :-/
+        "name" : "pdfCT18",
+        "branch" : "LHEPdfWeightAltSet18",
+        "combine" : "asymHessian",
+        "entries" : 59,
+        "alphas" : ["LHEPdfWeightAltSet18[59]", "LHEPdfWeightAltSet18[60]"],
+    "alphaRange" : "002",
+        "scale" : 1/1.645 # Convert from 90% CL to 68%
+    },
+    "mmht" : {
+        "name" : "pdfMMHT",
+        "branch" : "LHEPdfWeightAltSet19",
+        "combine" : "asymHessian",
+        "entries" : 51,
+        "alphas" : ["LHEPdfWeightAltSet20[1]", "LHEPdfWeightAltSet20[2]"],
+    "alphaRange" : "001",
+    },
+    "nnpdf30" : {
+    "name" : "pdfNNPDF30",
+    "branch" : "LHEPdfWeightAltSet13",
+        "combine" : "symHessian",
+    "entries" : 101,
+    "alphas" : ["LHEPdfWeightAltSet15[0]", "LHEPdfWeightAltSet16[0]"],
+    "alphaRange" : "001",
+    },
 }
 
 pdfMapExtended = copy.deepcopy(pdfMap)
@@ -107,7 +110,9 @@ only_central_pdf_datasets = [
 ]
 
 extended_pdf_datasets = [
-    "Wminusmunu_bugfix_newprod",
+    "WminusmunuPostVFP",
+    "WplusmunuPostVFP",
+    "ZmumuPostVFP",
 ]
 
 def define_prefsr_vars(df):
@@ -124,9 +129,9 @@ def define_prefsr_vars(df):
     df = df.Define("csSineCosThetaPhi", "wrem::csSineCosThetaPhi(genl, genlanti)")
     return df
 
-def define_scale_tensor(df):
+def define_scale_tensor(df, clipWeight=10.0):
     # convert vector of scale weights to 3x3 tensor and clip weights to |weight|<10.
-    df = df.Define("scaleWeights_tensor", "wrem::makeScaleTensor(LHEScaleWeight, 10.);")
+    df = df.Define("scaleWeights_tensor", f"wrem::makeScaleTensor(LHEScaleWeight, {clipWeight});")
     df = df.Define("scaleWeights_tensor_wnom", "auto res = scaleWeights_tensor; res = nominal_weight*res; return res;")
 
     return df
@@ -157,89 +162,146 @@ def define_and_make_pdf_hists(df, axes, cols, dataset, pdfset="nnpdf31", storeUn
 
     df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, {entries}>({pdfBranch}), 10.); res = nominal_weight/nominal_pdf_cen*res; return res;")
 
-    pdfHist = df.HistoBoost(pdfName if hname=="" else f"{hname}_{pdfName}", axes, [*cols, tensorName])
 
     df = df.Define(tensorASName, "Eigen::TensorFixedSize<double, Eigen::Sizes<2>> res; "
             f"res(0) = {pdfInfo['alphas'][0]}; "
             f"res(1) = {pdfInfo['alphas'][1]}; "
             "return wrem::clip_tensor(res, 10.)")
-    alphaSHist = df.HistoBoost(f"alphaS002{pdfName}" if hname=="" else f"{hname}_alphaS002{pdfName}", axes, [*cols, tensorASName])
+    if cols:
+        pdfHist = df.HistoBoost(pdfName if hname=="" else f"{hname}_{pdfName}", axes, [*cols, tensorName])
+        alphaSHist = df.HistoBoost(f"alphaS002{pdfName}" if hname=="" else f"{hname}_alphaS002{pdfName}", axes, [*cols, tensorASName])
+        return pdfHist, alphaSHist
 
-    return pdfHist, alphaSHist
+    return []
+
+def load_corr_helpers(procs, generators):
+    corr_helpers = {}
+    for proc in procs:
+        corr_helpers[proc] = {}
+        for generator in generators:
+            # TODO: Remove this when I also compute W
+            if "W" in proc[0] and "MSHT" in generator:
+                generator = generator.replace("MSHT20", "")
+            fname = f"{common.data_dir}/TheoryCorrections/{generator}Corr{proc[0]}.pkl.lz4"
+            helper_func = getattr(theory_corrections, "make_corr_helper" if "Helicity" not in generator else "make_corr_by_helicity_helper")
+            corr_hist_name = f"{generator}_minnlo_ratio" if "Helicity" not in generator else f"{generator.replace('Helicity', '')}_minnlo_coeffs"
+            corr_helpers[proc][generator] = helper_func(fname, proc[0], corr_hist_name)
+    return corr_helpers
+
+def define_weights_and_corrs(df, weight_expr, dataset_name, helpers, args):
+    #TODO: organize this better
+    if dataset_name in common.vprocs:
+        df = df.Define("nominal_pdf_cen", pdf_central_weight(dataset_name, args.pdfs[0]))
+        weight_expr = f"{weight_expr}*nominal_pdf_cen"
+    df = define_prefsr_vars(df)
+
+    if args.theory_corr and dataset_name in helpers:
+        helper = helpers[dataset_name]
+        df = define_theory_corr(df, weight_expr, helper, generators=args.theory_corr, 
+                modify_central_weight=not args.theory_corr_alt_only)
+    else:
+        df = df.Define("nominal_weight", weight_expr)
+    return df 
 
 def pdf_central_weight(dataset, pdfset):
     pdfInfo = pdf_info_map(dataset, pdfset)
     pdfBranch = pdfInfo["branch"]
     return f"{pdfBranch}[0]"
 
-def define_scetlib_corr(df, weight_expr, helper, corr_type):
-    modify_central_weight = corr_type in ["altHist", "altHistNoUnc"]
+def define_theory_corr(df, weight_expr, helpers, generators, modify_central_weight):
+    for i, generator in enumerate(generators):
+        # TODO: Remove this when I also compute W
+        if generator not in helpers:
+            generator = generator.replace("MSHT20", "")
+        helper = helpers[generator]
+        if i == 0:
+            if modify_central_weight:
+                df = df.Define("nominal_weight_uncorr", weight_expr)
+            else:
+                df = df.Define("nominal_weight", weight_expr)
+                df = df.Alias("nominal_weight_uncorr", "nominal_weight")
 
-    if modify_central_weight:
-        df = df.Define("nominal_weight_uncorr", weight_expr)
-    else:
-        df = df.Define("nominal_weight", weight_expr)
-        df = df.Alias("nominal_weight_uncorr", "nominal_weight")
+        if "Helicity" in generator:
+            df = df.Define(f"{generator}Weight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "nominal_weight_uncorr"])
+        else:
+            df = df.Define(f"{generator}Weight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "nominal_weight_uncorr"])
 
-    df = df.Define("scetlibWeight_tensor", helper, ["chargeVgen", "massVgen", "yVgen", "ptVgen", "nominal_weight_uncorr"])
-    df = df.Define("scetlibCentralWeight", "scetlibWeight_tensor(0)")
+        df = df.Define(f"{generator}CentralWeight", f"{generator}Weight_tensor(0)")
 
-    if modify_central_weight:
-        df = df.Alias("nominal_weight", "scetlibCentralWeight")
+        if i == 0 and modify_central_weight:
+            df = df.Alias("nominal_weight", f"{generator}CentralWeight")
+
     return df
 
-def make_scetlibCorr_hists(df, name, axes, cols, helper, corr_type):
-    modify_central_weight = corr_type in ["altHist", "altHistNoUnc"]
-    skipUncertainties = corr_type in ["noUnc", "altHistNoUnc"]
-
+def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_central_weight, with_uncertainties=False):
     res = []
-    if modify_central_weight:
-        nominal_uncorr = df.HistoBoost(f"{name}_uncorr", axes, [*cols, "nominal_weight_uncorr"])
-        res.append(nominal_uncorr)
+    
+    for i, generator in enumerate(generators):
+        # TODO: Remove this when I also compute W
+        if generator not in helpers:
+            generator = generator.replace("MSHT20", "")
+        helper = helpers[generator]
+        if i == 0 and modify_central_weight:
+            nominal_uncorr = df.HistoBoost(f"{name}_uncorr", axes, [*cols, "nominal_weight_uncorr"])
+            res.append(nominal_uncorr)
+            res.append(df.HistoBoost("weight_uncorr", [hist.axis.Regular(100, -2, 2)], ["nominal_weight_uncorr"]))
 
-    if skipUncertainties:
-        nominal = df.HistoBoost("scetlibCorr", axes, [*cols, "scetlibCentralWeight"])
-        res.append(nominal)
-    else:
-        unc = df.HistoBoost("scetlibUnc" if name == "nominal" else f"{name}_scetlibUnc", axes, [*cols, "scetlibWeight_tensor"], tensor_axes=helper.tensor_axes)
-        res.append(unc)
+        hist_name = f"{generator}Corr"
+        if name != "nominal":
+            hist_name = f"{name}_{hist_name}"
+
+        if with_uncertainties:
+            hist_name += "_unc"
+            unc = df.HistoBoost(hist_name, axes, [*cols, "{generator}Weight_tensor"], tensor_axes=helper.tensor_axes)
+            res.append(unc)
+        else:
+            nominal = df.HistoBoost(hist_name, axes, [*cols, f"{generator}CentralWeight"])
+            res.append(nominal)
 
     return res
 
-def moments_to_angular_coeffs(hist_moments_scales):
-    s = hist.tag.Slicer()
+def scale_angular_moments(hist_moments_scales):
+    # e.g. from arxiv:1708.00008 eq. 2.13, note A_0 is NOT the const term!
+    scales = np.array([1., -10., 5., 10., 4., 4., 5., 5., 4.])
 
+    hel_idx = hist_moments_scales.axes.name.index("helicity")
+    scaled_vals = np.moveaxis(hist_moments_scales.view(flow=True), hel_idx, -1)*scales
+    hnew = hist.Hist(*hist_moments_scales.axes, storage=hist_moments_scales._storage_type())
+    hnew[...] = np.moveaxis(scaled_vals, -1, hel_idx) 
+    return hnew
+
+def replace_by_neighbors(vals, replace):
+    if np.count_nonzero(replace) == vals.size:
+        raise ValueError("Cannot replace all values with nearest non-zero neighbour")
+
+    indices = ndimage.distance_transform_edt(replace, return_distances=False, return_indices=True)
+    return vals[tuple(indices)]
+
+def moments_to_angular_coeffs(hist_moments_scales, cutoff=1e-5):
+    if hist_moments_scales.sum().value == 0:
+       raise ValueError("Cannot make coefficients from empty hist")
+    # broadcasting happens right to left, so move to rightmost then move back
+    hel_ax = hist_moments_scales.axes["helicity"]
+    hel_idx = hist_moments_scales.axes.name.index("helicity")
+    vals = np.moveaxis(scale_angular_moments(hist_moments_scales).view(flow=True), hel_idx, -1) 
+    
     # select constant term, leaving dummy axis for broadcasting
-    hist_moments_scales_m1 = hist_moments_scales[{"helicity" : s[-1j:-1j+1]}]
-
-    vals = hist_moments_scales_m1.values(flow=True)
-
-    # replace zero values to avoid warnings
-    norm_vals = np.where( vals==0., 1., vals)
+    unpol_idx = hel_ax.index(-1)
+    norm_vals = vals[...,unpol_idx:unpol_idx+1].value
+    norm_vals = np.where(np.abs(norm_vals) < cutoff, np.ones_like(norm_vals), norm_vals)
 
     # e.g. from arxiv:1708.00008 eq. 2.13, note A_0 is NOT the const term!
     offsets = np.array([0., 4., 0., 0., 0., 0., 0., 0., 0.])
-    scales = np.array([1., -10., 5., 10., 4., 4., 5., 5., 4.])
 
-    # for broadcasting
-    hel_ax_idx = list(hist_moments_scales.axes).index(hist_moments_scales.axes["helicity"])
-    ntrailing_ax = hist_moments_scales.ndim - hel_ax_idx - 1
-    if ntrailing_ax:
-        new_axes = tuple(range(offsets.ndim, offsets.ndim+ntrailing_ax))
-        offsets = np.expand_dims(offsets, axis=new_axes)
-        scales = np.expand_dims(scales, axis=new_axes)
-
-    view = hist_moments_scales.view(flow=True)
-
-    coeffs = scales*view / norm_vals + offsets
+    coeffs = vals / norm_vals + offsets
 
     # replace values in zero-xsec regions (otherwise A0 is spuriously set to 4.0 from offset)
-    coeffs = np.where(vals == 0., 0.*view, coeffs)
+    coeffs = np.where(np.abs(vals.value) < cutoff, np.full_like(vals, hist.accumulators.WeightedSum(0,0)), coeffs)
+    coeffs = np.moveaxis(coeffs, -1, hel_idx)
 
     hist_coeffs_scales = hist.Hist(*hist_moments_scales.axes, storage = hist_moments_scales._storage_type(), name = "hist_coeffs_scales",
         data = coeffs
     )
-
 
     return hist_coeffs_scales
 

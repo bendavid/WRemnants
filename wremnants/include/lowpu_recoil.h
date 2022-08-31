@@ -15,7 +15,6 @@ struct recoil {
     
 using Vec_recoil = ROOT::VecOps::RVec<recoil>;
     
-TFile *recoil_fits_Z_param = new TFile("wremnants/data/lowPU/recoil_fits_Z_param_refit.root", "READ");
 //TFile *recoil_fits_Z_param_refit = new TFile("wremnants/data/lowPU/recoil_fits_Z_param_refit.root", "READ");
 //TFile *recoil_fits_Z = new TFile("wremnants/data/lowPU/recoil_fits_Z.root", "READ");
 //TFile *recoil_fits_Z = new TFile("wremnants/data/lowPU/recoil_fits_Z.root", "READ");
@@ -39,6 +38,7 @@ std::map<std::string, std::vector<  std::vector<  std::vector< float > >  >> rec
 //std::map<std::string, std::map<std::string, TF1*>> recoil_param_funcs;
     
 std::vector<float> qTbins;
+
 
 //std::vector<float> qTweights{ 1.042, 0.977, 0.926, 0.914, 0.921, 0.949, 0.983, 0.973, 0.999, 1.025, 1.049, 1.005, 1.087, 1.048, 1.057, 1.068, 1.068, 1.098, 1.036, 1.049, 1.081, 1.042, 1.064, 1.052, 1.123, 1.049, 1.000, 1.028, 1.047, 1.005, 0.972, 1.032, 1.067, 1.033, 1.049, 1.004, 0.994, 1.056, 1.056, 1.013, 0.988, 0.985, 0.956, 0.986, 0.999, 1.053, 1.008, 1.032, 1.044, 0.920, 1.000, 0.921, 1.016, 0.905, 0.845 };
 //std::vector<float> qTweights{   1.041, 0.977, 0.925, 0.913, 0.920, 0.948, 0.981, 0.972, 0.997, 1.024, 1.047, 1.004, 1.085, 1.046, 1.055, 1.066, 1.066, 1.095, 1.033, 1.047, 1.078, 1.039, 1.061, 1.049, 1.120, 1.045, 0.996, 1.024, 1.042, 1.000, 0.967, 1.026, 1.060, 1.025, 1.041, 0.995, 0.984, 1.046, 1.044, 1.000, 0.974, 0.968, 0.936, 0.962, 0.971, 1.021, 0.974, 1.000, 1.011, 0.889, 0.974, 0.897, 0.998, 0.891, 1 };
@@ -78,7 +78,6 @@ void recoil_init(char* name) {
     }
     
     */
-    
 
  
     h3 = (TH3D*)recoil_fits_Z->Get("mc_para");
@@ -106,6 +105,7 @@ void recoil_init(char* name) {
     recoil_hists_param.insert({h1->GetName(), h1});
 */
 }
+
 
 
 void recoil_init_gen(char* name_W, char* name_Z) {

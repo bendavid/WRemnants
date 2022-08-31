@@ -1,4 +1,4 @@
-from . import boostHistHelpers as hh
+from utilities import boostHistHelpers as hh
 import hist
 import numpy as np
 
@@ -41,7 +41,8 @@ def signalHistLowPileupZ(h):
     return h
 
 def unrolledHist(h, obs=["pt", "eta"]):
-    bins = np.multiply(*[a.size for a in h.axes[:2]])
-    newh = hist.Hist(hist.axis.Regular(bins, 0, bins), storage=hist.storage.Weight())
-    newh[...] = np.ravel(h.project(*obs))
+    hproj = h.project(*obs)
+    bins = np.multiply(*hproj.axes.size)
+    newh = hist.Hist(hist.axis.Integer(0, bins), storage=hproj._storage_type())
+    newh[...] = np.ravel(hproj)
     return newh

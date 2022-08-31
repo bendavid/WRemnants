@@ -1,49 +1,38 @@
-import argparse
-import pickle
-import gzip
-import ROOT
+from utilities import boostHistHelpers as hh, common, output_tools
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--nThreads", type=int, help="number of threads", default=None)
-initargs,_ = parser.parse_known_args()
+parser,initargs = common.common_parser()
 
-ROOT.gInterpreter.ProcessLine(".O3")
-if not initargs.nThreads:
-    ROOT.ROOT.EnableImplicitMT()
-elif init.args.nThreads != 1:
-    ROOT.ROOT.EnableImplicitMT(initargs.nThreads)
 import narf
 import wremnants
-from wremnants import theory_tools,syst_tools
+from wremnants import theory_tools,syst_tools,theory_corrections
 import hist
-import lz4.frame
-import logging
 import math
 
-logging.basicConfig(level=logging.INFO)
 
-parser.add_argument("--pdfs", type=str, nargs="*", default=["nnpdf31"], choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for")
-parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
-parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=["Wplus", "Wminus", "Zmumu", "Ztautau"])
 parser.add_argument("--skipAngularCoeffs", action='store_true', help="Skip the conversion of helicity moments to angular coeff fractions")
 parser.add_argument("--singleLeptonHists", action='store_true', help="Also store single lepton kinematics")
+
+f = next((x for x in parser._actions if x.dest == "filterProcs"), None)
+if f:
+    f.default = common.vprocs
+
 args = parser.parse_args()
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
-datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, mode="gen")
+datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
+    nanoVersion="v8" if args.v8 else "v9")
 
-axis_massWgen = hist.axis.Variable([0., math.inf], name="massVgen")
+axis_massWgen = hist.axis.Variable([0., math.inf], name="massVgen", flow=False)
 
 axis_massZgen = hist.axis.Regular(12, 60., 120., name="massVgen")
 
 axis_absYVgen = hist.axis.Variable(
-    [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4, 10], name = "absYVgen"
+    [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4, 5], 
+    name = "absYVgen", underflow=False
 )
 axis_ptVgen = hist.axis.Variable(
-#    [0, 2, 3, 4, 4.75, 5.5, 6.5, 8, 9, 10, 12, 14, 16, 18, 20, 23, 27, 32, 40, 55, 100], name = "ptVgen"
-    range(0,121), name = "ptVgen"
+    range(0,121), name = "ptVgen", underflow=False,
 )
-
 
 axis_chargeWgen = hist.axis.Regular(
     2, -2, 2, name="chargeVgen", underflow=False, overflow=False
@@ -53,31 +42,10 @@ axis_chargeZgen = hist.axis.Integer(
     0, 1, name="chargeVgen", underflow=False, overflow=False
 )
 
-axis_l_eta_gen = hist.axis.Regular(48, -2.4, 2.4, name = "prefsr_lepton_eta_gen")
-axis_l_pt_gen = hist.axis.Regular(29, 26., 55., name = "prefsr_lepton_pt_gen")
-axes_l_gen = [axis_l_eta_gen, axis_l_pt_gen]
+axis_l_eta_gen = hist.axis.Regular(48, -2.4, 2.4, name = "eta")
+axis_l_pt_gen = hist.axis.Regular(29, 26., 55., name = "pt")
 
-wprocs_bugged = [
-    "WplusmunuPostVFP", 
-    "WminusmunuPostVFP",
-    "WminustaunuPostVFP",
-    "WplustaunuPostVFP"
-]
-wprocs_bugfix = [
-    "Wplusmunu_bugfix", 
-    "Wminusmunu_bugfix_newprod",
-    "Wplusmunu_bugfix",
-    "Wplusmunu_bugfix_reweight_h2",
-]
-wprocs = [*wprocs_bugged, *wprocs_bugfix]
-wprocs_bugged_to_check = [ # mu only for making comparison plots between bugged and bugfix samples
-    "WplusmunuPostVFP", 
-    "WminusmunuPostVFP",
-]
-zprocs_bugged = ["ZmumuPostVFP", "ZtautauPostVFP"]
-zprocs_bugfix = ["ZmumuPostVFP_bugfix", "ZmumuPostVFP_bugfix_slc7"]
-zprocs = [*zprocs_bugged, *zprocs_bugfix]
-zprocs_bugged_to_check = ["ZmumuPostVFP"]
+corr_helpers = theory_tools.load_corr_helpers(common.vprocs, args.theory_corr)
 
 def build_graph(df, dataset):
     print("build graph")
@@ -86,44 +54,55 @@ def build_graph(df, dataset):
     
     if dataset.is_data:
         raise RuntimeError("Running GEN analysis over data is not supported")
+
+    isW = dataset.name in common.wprocs
+    isZ = dataset.name in common.zprocs
+
+    weight_expr = "std::copysign(1.0, genWeight)"
     if "reweight_h2" in dataset.name:
-        df = df.Define("nominal_weight", "H2BugFixWeight[0]*std::copysign(1.0, genWeight)")
-    else:
-        df = df.Define("nominal_weight", "std::copysign(1.0, genWeight)")
+        weight_expr = f"{weight_expr}*H2BugFixWeight[0]"
+
+    df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
+
     weightsum = df.SumAndCount("nominal_weight")
 
     df = theory_tools.define_scale_tensor(df)
 
-    if dataset.name in zprocs:
+    if isZ:
         nominal_axes = [axis_massZgen, axis_absYVgen, axis_ptVgen, axis_chargeZgen]
+        lep_axes = [axis_l_eta_gen, axis_l_pt_gen, axis_chargeZgen]
     else:
         nominal_axes = [axis_massWgen, axis_absYVgen, axis_ptVgen, axis_chargeWgen]
+        lep_axes = [axis_l_eta_gen, axis_l_pt_gen, axis_chargeWgen]
 
     nominal_cols = ["massVgen", "absYVgen", "ptVgen", "chargeVgen"]
-    df = wremnants.define_prefsr_vars(df)
+    lep_cols = ["etaPrefsrLep", "ptPrefsrLep", "chargeVgen"]
 
-    if args.singleLeptonHists:
-        if dataset.name == 'WplusmunuPostVFP':
-            df = df.Define('ptPrefsrMuon', 'genlanti.pt()')
-            df = df.Define('etaPrefsrMuon', 'genlanti.eta()')
-        elif dataset.name == 'WminusmunuPostVFP' or 'ZmumuPostVFP' in dataset.name:
-            df = df.Define('ptPrefsrMuon', 'genl.pt()')
-            df = df.Define('etaPrefsrMuon', 'genl.eta()')
-        if dataset.name in ['WplusmunuPostVFP', 'WminusmunuPostVFP'] or 'ZmumuPostVFP' in dataset.name:
-            nominal_cols = [*nominal_cols, 'etaPrefsrMuon', 'ptPrefsrMuon']
-            nominal_axes = [*nominal_axes, axis_l_eta_gen, axis_l_pt_gen]
+    if args.singleLeptonHists and isW or isZ:
+        if isW:
+            df = df.Define('ptPrefsrLep', 'genlanti.pt()')
+            df = df.Define('etaPrefsrLep', 'genlanti.eta()')
+        else:
+            df = df.Define('ptPrefsrLep', 'genl.pt()')
+            df = df.Define('etaPrefsrLep', 'genl.eta()')
+        results.append(df.HistoBoost("nominal_genlep", lep_axes, [*lep_cols, "nominal_weight"]))
 
     nominal_gen = df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols, "nominal_weight"])
+
     results.append(nominal_gen)
 
     results.append(theory_tools.make_scale_hist(df, nominal_axes, nominal_cols))
 
-    for pdf in args.pdfs:
-        results.extend(theory_tools.define_and_make_pdf_hists(df, nominal_axes, nominal_cols, dataset.name, pdfset=pdf))
+    if args.theory_corr and dataset.name in corr_helpers:
+        results.extend(theory_tools.make_theory_corr_hists(df, "nominal_gen", nominal_axes, nominal_cols,
+            corr_helpers[dataset.name], args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
+        )
+        if args.singleLeptonHists:
+            results.extend(theory_tools.make_theory_corr_hists(df, "nominal_genlep", lep_axes, lep_cols, 
+                corr_helpers[dataset.name], args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
+            )
 
     if dataset.name != "Zmumu_bugfix":
-        isW = dataset.name in wprocs
-
         df, masswhist = syst_tools.define_mass_weights(df, isW, nominal_axes, nominal_cols)
         if masswhist:
             results.append(masswhist)
@@ -136,61 +115,36 @@ def build_graph(df, dataset):
 
 resultdict = narf.build_and_run(datasets, build_graph)
 
-fname = "w_z_gen_dists.pkl.lz4"
-
-print("writing output")
-with lz4.frame.open(fname, "wb") as f:
-    pickle.dump(resultdict, f, protocol = pickle.HIGHEST_PROTOCOL)
+output_tools.write_analysis_output(resultdict, "w_z_gen_dists.pkl.lz4", args.postfix)
 
 print("computing angular coefficients")
 
-z_moments_bugged = None
-z_moments_bugfix = None
-w_moments_bugged = None
-w_moments_bugfix = None
+z_moments = None
+w_moments = None
 
-if args.skipAngularCoeffs:
-    exit(0)
+for dataset in datasets:
+    name = dataset.name
+    moments = resultdict[name]["output"]["helicity_moments_scale"]
+    if name in common.zprocs:
+        if z_moments is None:
+            z_moments = moments
+        else:
+            z_moments += moments
+    elif name in common.wprocs:
+        if w_moments is None:
+            w_moments = moments
+        else:
+            w_moments += moments
 
-# TODO: This should be cleaned up
-for key, val in resultdict.items():
-    moments = val["output"]["helicity_moments_scale"]
-    if key in zprocs_bugged_to_check:
-        if z_moments_bugged is None:
-            z_moments_bugged = moments
-        else:
-            # gen level kinematics, stack tau to mu channel to increase stats
-            z_moments_bugged += moments
-    elif key in wprocs_bugged_to_check:
-        if w_moments_bugged is None:
-            w_moments_bugged = moments
-        else:
-            w_moments_bugged += moments
-    elif key in zprocs_bugfix:
-        if z_moments_bugfix is None:
-            z_moments_bugfix = moments
-        else:
-            z_moments_bugfix += moments
-    elif key in wprocs_bugfix:
-        if w_moments_bugfix is None:
-            w_moments_bugfix = moments
-        else:
-            w_moments_bugfix += moments
+# REMINDER: common.ptV_binning is not the one using 10% quantiles, and the quantiles are not a subset of this binning, but apparently it doesn't matter
+z_moments = hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning)
+z_moments = hh.rebinHist(z_moments, axis_massZgen.name, [70, 80, 85, 90, 95, 100, 110])
+z_moments = hh.rebinHist(z_moments, axis_absYVgen.name, axis_absYVgen.edges[:-1])
+w_moments = hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning)
+w_moments = hh.rebinHist(w_moments, axis_absYVgen.name, axis_absYVgen.edges[:-1])
 
+coeffs = {"Z" : wremnants.moments_to_angular_coeffs(z_moments),
+        "W" : wremnants.moments_to_angular_coeffs(w_moments),
+}
 
-if z_moments_bugged:
-    z_coeffs_bugged = wremnants.moments_to_angular_coeffs(z_moments_bugged)
-    with lz4.frame.open("z_coeffs_bugged.pkl.lz4", "wb") as f:
-        pickle.dump(z_coeffs_bugged, f, protocol = pickle.HIGHEST_PROTOCOL)
-if w_moments_bugged:
-    w_coeffs_bugged = wremnants.moments_to_angular_coeffs(w_moments_bugged)
-    with lz4.frame.open("w_coeffs_bugged.pkl.lz4", "wb") as f:
-        pickle.dump(w_coeffs_bugged, f, protocol = pickle.HIGHEST_PROTOCOL)
-if w_moments_bugfix:
-    w_coeffs_bugfix = wremnants.moments_to_angular_coeffs(w_moments_bugfix)
-    with lz4.frame.open("w_coeffs_bugfix.pkl.lz4", "wb") as f:
-        pickle.dump(w_coeffs_bugfix, f, protocol = pickle.HIGHEST_PROTOCOL)
-if z_moments_bugfix:
-    z_coeffs_bugfix = wremnants.moments_to_angular_coeffs(z_moments_bugfix)
-    with lz4.frame.open("z_coeffs_bugfix.pkl.lz4", "wb") as f:
-        pickle.dump(z_coeffs_bugfix, f, protocol = pickle.HIGHEST_PROTOCOL)
+output_tools.write_analysis_output(coeffs, "w_z_coeffs.pkl.lz4", args.postfix)
