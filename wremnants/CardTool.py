@@ -44,6 +44,7 @@ class CardTool(object):
         self.writeByCharge = True
         self.keepSyst = None # to override previous one with exceptions for special cases
         #self.loadArgs = {"operation" : "self.loadProcesses (reading hists from file)"}
+        self.lumiScale = 1.
         self.keepOtherChargeSyst = True
         self.chargeIdDict = {"minus" : {"val" : -1, "id" : "q0", "badId" : None},
                              "plus"  : {"val" : 1., "id" : "q1", "badId" : None}
@@ -63,6 +64,9 @@ class CardTool(object):
             self.noStatUncProcesses.extend(procs)
         else:
             raise ValueError("In setNoStatUncForProcs(): expecting string or list argument")            
+    
+    def setLumiScale(self, lumiScale):
+        self.lumiScale = lumiScale
 
     def getProcsNoStatUnc(self):
         return self.noStatUncProcesses
@@ -320,6 +324,13 @@ class CardTool(object):
             include = [("1.00001").ljust(self.spacing) for x in nondata]
             for chan in self.channels:
                 self.cardContent[chan] += f'{("dummy").ljust(self.spacing)}lnN{" "*(self.spacing-3)}{"".join(include)}\n'
+            for syst in self.systematics.keys(): # add the unconstrained systs
+                if not self.systematics[syst]["noConstraint"]: continue
+                print(syst)
+                processes=self.systematics[syst]["processes"]
+                self.datagroups.loadHistsForDatagroups(self.histName, syst, label="syst",
+                    procsToRead=processes, forceNonzero=syst != "qcdScaleByHelicity")
+                self.writeForProcesses(syst, label="syst", processes=processes)
         else:
             self.writeLnNSystematics()
             for syst in self.systematics.keys():
@@ -424,12 +435,14 @@ class CardTool(object):
             q = self.chargeIdDict[charge]["val"]
             hout = narf.hist_to_root(h[{"charge" : h.axes["charge"].index(q)}])
             hout.SetName(name+f"_{charge}")
+            hout.Scale(self.lumiScale)
             hout.Write()
 
     def writeHistWithCharges(self, h, name):
         hout = narf.hist_to_root(h)
         #self.outfile[name] = h
         hout.SetName(f"{name}_{self.channels[0]}")
+        hout.Scale(self.lumiScale)
         hout.Write()
     
     def writeHist(self, h, name, setZeroStatUnc=False):

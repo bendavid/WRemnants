@@ -222,3 +222,68 @@ class datagroups2016(datagroups):
         if scaleOp:
             scale = scale*scaleOp(proc)
         return h*scale
+        
+        
+        
+        
+class datagroups2016_mT(datagroups):
+    def __init__(self, infile, combine=False, wlike=False):
+        self.datasets = {x.name : x for x in datasets2016.getDatasets()}
+        super().__init__(infile, combine)
+        self.hists = {} # container storing temporary histograms
+        self.groups =  {
+            "Data" : dict(
+                members = [self.datasets["dataPostVFP"]],
+                color = "black",
+                label = "Data",
+                signalOp = None,
+            ),
+            "WplusJetsToMuNu" : dict(
+                members = [self.datasets["WplusmunuPostVFP"]],
+                label = r"W$^{\pm}\to\mu\nu$",
+                color = "darkred",
+                signalOp = None,
+            ),
+            "WminusJetsToMuNu" : dict(
+                members = [self.datasets["WminusmunuPostVFP"]],
+                label = r"W$^{\pm}\to\mu\nu$",
+                color = "darkred",
+                signalOp = None,
+            ),
+            "EWK" : dict(
+                members = [self.datasets["ZtautauPostVFP"], self.datasets["ZmumuPostVFP"], self.datasets["WminustaunuPostVFP"], self.datasets["WplustaunuPostVFP"]] + list(filter(lambda y: y.group == "Diboson", self.datasets.values())),
+                label = "EWK",
+                color = "darkblue",
+                signalOp = None,
+            ), 
+
+            "TTbar" : dict(
+                members = list(filter(lambda y: y.group == "Top", self.datasets.values())),
+                label = "Top",
+                color = "green",
+                signalOp = None,
+            ), 
+        }
+        
+
+    def histName(self, baseName, procName, syst):
+        # This is kind of hacky to deal with the different naming from combine
+        if baseName != "x" and (syst == "" or syst == self.nominalName):
+            return baseName
+        if (baseName == "" or baseName == "x") and syst:
+            return syst
+        return "_".join([baseName,syst])
+    
+    def readHist(self, baseName, proc, syst, scaleOp=None, forceNonzero=True):
+        print(proc, proc.name)
+        output = self.results[proc.name]["output"]
+        histname = self.histName(baseName, proc.name, syst)
+        if histname not in output:
+            raise ValueError(f"Histogram {histname} not found for process {proc.name}")
+        h = output[histname]
+        if forceNonzero:
+            h = hh.clipNegativeVals(h)
+        scale = self.processScaleFactor(proc)
+        if scaleOp:
+            scale = scale*scaleOp(proc)
+        return h*scale
