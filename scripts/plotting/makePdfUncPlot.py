@@ -43,13 +43,15 @@ if "Z" in args.datasets[0][0]:
     xlabels["ptVgen"] = xlabels["ptVgen"].replace("Z", "W")
     xlabels["absYVgen"] = xlabels["absYVgen"].replace("Z", "W")
 
-pdfNames = [theory_tools.pdfMapExtended[pdf]["name"] for pdf in args.pdfs]
+pdfInfo = theory_tools.pdfMapExtended 
+pdfNames = [pdfInfo[pdf]["name"] for pdf in args.pdfs]
 histNames = pdfNames if not args.baseName or "nominal" in args.baseName else [f"{args.baseName}_{pdfName}" for pdfName in pdfNames]
 pdfHists = input_tools.read_all_and_scale(args.infile, args.datasets, histNames)
 axis_label = "tensor_axis_0"
 
-uncType = [theory_tools.pdfMapExtended[pdf]["combine"] for pdf in args.pdfs]
-uncHists = [(h[{axis_label : 0}], *theory_tools.hessianPdfUnc(h, axis_label, unc)) for h,unc in zip(pdfHists, uncType)]
+uncType = [pdfInfo[pdf]["combine"] for pdf in args.pdfs]
+uncScale = [pdfInfo[pdf]["scale"] if "scale" in pdfInfo[pdf] else 1. for pdf in args.pdfs]
+uncHists = [(h[{axis_label : 0}], *theory_tools.hessianPdfUnc(h, axis_label, unc, scale)) for h,unc in zip(pdfHists, uncType, uncScale)]
 names = [(pdfName+" $\pm1\sigma$", "", "") for pdfName in pdfNames]
 cmap = cm.get_cmap("tab10")
 colors = [[cmap(i)]*3 for i in range(len(args.pdfs))]

@@ -139,8 +139,10 @@ class datagroups(object):
     def processes(self):
         return self.groups.keys()
 
-    def addSummedProc(self, refname, name, label, color="red", exclude=["Data"], relabel=None):
-        self.loadHistsForDatagroups(refname, syst=name)
+    def addSummedProc(self, refname, name, label, color="red", exclude=["Data"], relabel=None, reload=False):
+        if reload:
+            self.loadHistsForDatagroups(refname, syst=name, excluded_procs=exclude)
+
         self.groups[name] = dict(
             label=label,
             color=color,
@@ -161,7 +163,7 @@ class datagroups(object):
             color=color,
             members=[],
         )
-        self.groups[name][refname] = action(self.groups[refproc][refname]).copy()
+        self.groups[name][refname] = action(self.groups[refproc][refname])
 
 class datagroups2016(datagroups):
     def __init__(self, infile, combine=False, wlike=False, pseudodata_pdfset = None):
