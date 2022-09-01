@@ -42,7 +42,7 @@ def read_scetlib_hist(path, nonsing="auto", flip_y_sign=False, charge=None):
 
     var_axis = hist.axis.Integer(f["bins"][0][0], f["bins"][0][-1], name="vars", flow=False)
     # Won't actually have overflow/underflow, but set to match MiNNLO
-    mass_underflow = f["bins"][1][0] > 5.
+    mass_underflow = f["bins"][1][0] > 0.
     mass_overflow = f["bins"][1][-1] < 13000.
     mass_axis = hist.axis.Variable(f["bins"][1], name="mass", overflow=mass_overflow, underflow=mass_underflow)
     y_axis = hist.axis.Variable(f["bins"][2], name="y")

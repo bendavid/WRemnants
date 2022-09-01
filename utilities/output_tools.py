@@ -36,7 +36,7 @@ def metaInfoDict(exclude_diff='notebooks'):
 
     return meta_data
 
-def write_analysis_output(results, outfile, postfix):
+def analysis_debug_output(results):
     logging.debug("")
     logging.debug("Unweighted events (before cut)")
     logging.debug("-"*30)
@@ -45,9 +45,22 @@ def write_analysis_output(results, outfile, postfix):
         logging.debug("-"*30)
     logging.debug("")
 
+def write_analysis_output(results, outfile, args):
+    analysis_debug_output(results)
     results.update({"meta_info" : metaInfoDict()})
-    if postfix:
-        outfile = outfile.replace(".pkl.lz4", f"_{postfix}.pkl.lz4")
+
+    to_append = []
+    if args.theory_corr and not args.theory_corr_alt_only:
+        to_append.append(args.theory_corr[0]+"Corr")
+    if args.pdfs and not args.altPdfOnlyCentral:
+        to_append.append(args.pdfs[0])
+    if args.maxFiles > 0:
+        to_append.append(f"maxFiles{args.maxFiles}")
+    if args.postfix:
+        to_append.append(args.postfix)
+
+    if to_append:
+        outfile = outfile.replace(".pkl.lz4", f"_{'_'.join(to_append)}.pkl.lz4")
 
     time0 = time.time()
     print("writing output...")

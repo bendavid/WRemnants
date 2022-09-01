@@ -124,7 +124,8 @@ def makeStackPlotWithRatio(
 
     if cms_decor:
         scale = max(1, np.divide(*ax1.get_figure().get_size_inches())*0.3)
-        hep.cms.label(ax=ax1, data=data_hist is not None, lumi=lumi, fontsize=legtex_size*scale, label=cms_decor)
+        hep.cms.label(ax=ax1, lumi=lumi, fontsize=legtex_size*scale, 
+            label=cms_decor, data="Data" in histInfo)
 
     return fig
 

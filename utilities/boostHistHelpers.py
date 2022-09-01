@@ -221,4 +221,8 @@ def rebinHistsToCommon(hists, axis_idx, keep_full_range=False):
         rebinned_hists = [rebinHist(h, h.axes[axis_idx].name, new_edges) for h in full_hists]
 
     return rebinned_hists
-    
+   
+def projectNoFlow(h, proj_ax, exclude=[]):
+    s = hist.tag.Slicer()
+    hnoflow = h[{ax : s[0:hist.overflow:hist.sum] for ax in h.axes.name if ax not in exclude+[proj_ax]}]
+    return hnoflow.project(proj_ax)

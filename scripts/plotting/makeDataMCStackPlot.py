@@ -1,6 +1,7 @@
 from wremnants.datasets.datagroups import datagroups2016
 from wremnants import histselections as sel
-from wremnants import plot_tools
+from wremnants import plot_tools,theory_tools
+from utilities import boostHistHelpers as hh
 import matplotlib.pyplot as plt
 import argparse
 import os
@@ -22,6 +23,27 @@ xlabels = {
     "phistarll" : r"$\phi^{\star}_{\ell\ell}$",
     "recoil_MET_pt" : r"p$_{\mathrm{T}}^{miss}$ (recoil corr.)",
 }
+
+pdfInfo = theory_tools.pdfMapExtended 
+pdfNames = [pdfInfo[k]["name"] for k in pdfInfo.keys()]
+
+def pdfUnc(h, pdfName):
+    print(pdfName, list(pdfNames).index(pdfName))
+    key =  list(pdfInfo.keys())[list(pdfNames).index(pdfName)]
+    unc = pdfInfo[key]["combine"]
+    scale = pdfInfo[key]["scale"] if "scale" in pdfInfo[key] else 1.
+    print(key, pdfName, scale)
+    return theory_tools.hessianPdfUnc(h, "tensor_axis_0", unc, scale)
+
+transforms = {}
+transforms.update({pdf+"Up" : lambda h,p=pdf: pdfUnc(h, p)[0] for pdf in pdfNames})
+transforms.update({pdf+"Down" : lambda h,p=pdf: pdfUnc(h, p)[1] for pdf in pdfNames})
+transforms.update({f"dilepton_{pdf}Up" : transforms[pdf+"Up"] for pdf in pdfNames})
+transforms.update({f"dilepton_{pdf}Down" : transforms[pdf+"Down"] for pdf in pdfNames})
+transforms.update(
+    {"massWeightDown" : lambda h: h[{"tensor_axis_0" : 0}],
+    "massWeightUp" : lambda h: h[{"tensor_axis_0" : 20}]}
+)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("infile", help="Output file of the analysis stage, containing ND boost histograms")
@@ -46,6 +68,7 @@ variation.add_argument("--varLabel", type=str, nargs='+', required=True, help="L
 variation.add_argument("--selectAxis", type=str, nargs='+', help="If you need to select a variation axis")
 variation.add_argument("--selectEntries", type=int, nargs='+', help="entries to read from the selected axis")
 variation.add_argument("--colors", type=str, nargs='+', help="Variation colors")
+variation.add_argument("--transform", action='store_true', help="Apply variation-specific transformation")
 
 args = parser.parse_args()
 
@@ -80,27 +103,35 @@ if addVariation:
     logging.info(f"Adding variation {args.varName}")
     varLabels = padArray(args.varLabel, args.varName)
     for i, (label,name,color) in enumerate(zip(varLabels, args.varName, colors)):
-        groups.loadHistsForDatagroups(nominalName, syst=name)
+        name_toload = name.replace("Up", "").replace("Down", "")
         name = name if name != "" else nominalName
         exclude.append(name)
-        groups.addSummedProc(nominalName, name=name, label=label, exclude=exclude,
-            relabel=args.baseName, color=color)
+        # A bit hacky but load the hist without Up/Down, which comes from the transform
+        groups.addSummedProc(nominalName, name=name_toload, label=label, exclude=exclude,
+            relabel=args.baseName, color=color, reload=name_toload != args.baseName)
 
-        if not args.selectAxis:
-            unstack.append(name)
-        else:
-            entries = padArray(args.selectAxis, args.varLabel)
-            select = lambda x: x[{ax : entries[i]}]
-            varname = name+str(entry)
-            groups.copyWithAction(action=select, name=varname, refproc=name, 
+        varname = name_toload
+        if args.selectAxis or (args.transform and name in transforms):
+            exclude.append(name_toload)
+            if args.transform:
+                action = transforms[name]
+                varname = name
+            else:
+                entries = padArray(args.selectAxis, args.varLabel)
+                action = lambda x: x[{ax : entries[i]}]
+                varname = name+str(entry)
+
+            groups.copyWithAction(action=action, name=varname, refproc=name_toload, 
                 refname=args.baseName, label=label, color=colors[i])
-            exclude.append(varname)
-            unstack.append(varname)
+        elif (args.transform and name not in transforms):
+            logging.warning(f"No known transformation for variation {name}. No transform applied!")
+
+        exclude.append(varname)
+        unstack.append(varname)
 
 histInfo = groups.getDatagroups()
 
 prednames = [x for x in reversed(histInfo.keys()) if x not in exclude]
-print(prednames)
 select = {} if args.channel == "all" else {"select" : -1.j if args.channel == "minus" else 1.j}
 
 def collapseSyst(h):
@@ -110,7 +141,7 @@ def collapseSyst(h):
     return h
 
 for h in args.hists:
-    action = (lambda x: sel.unrolledHist(collapseSyst(x))) if "unrolled" in h else lambda x: collapseSyst(x).project(h)[::hist.rebin(args.rebin)]
+    action = (lambda x: sel.unrolledHist(collapseSyst(x))) if "unrolled" in h else lambda x: hh.projectNoFlow(collapseSyst(x), h, ["ptll"])
     fig = plot_tools.makeStackPlotWithRatio(histInfo, prednames, histName=args.baseName, ylim=args.ylim, action=action, unstacked=unstack, 
             xlabel=xlabels[h], ylabel="Events/bin", rrange=args.rrange, select=select, binwnorm=1.0,
             ratio_to_data=args.ratio_to_data, rlabel="Pred./Data" if args.ratio_to_data else "Data/Pred.",

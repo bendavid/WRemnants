@@ -143,33 +143,45 @@ def pdf_info_map(dataset, pdfset):
         raise ValueError(f"Skipping PDF {pdfset} for dataset {dataset}")
     return infoMap[pdfset]
 
-def define_and_make_pdf_hists(df, axes, cols, dataset, pdfset="nnpdf31", storeUnc=True, hname=""):
-    try:
-        pdfInfo = pdf_info_map(dataset, pdfset)
-    except ValueError as e:
-        logging.info(e)
-        return []
+def make_pdf_hists(df, dataset, axes, cols, pdfs, hname=""):
+    res = []
+    for pdf in pdfs:
+        try:
+            pdfInfo = pdf_info_map(dataset, pdf)
+        except ValueError as e:
+            logging.info(e)
+            continue
 
-    pdfName = pdfInfo["name"]
-    pdfBranch = pdfInfo["branch"]
-    tensorName = f"{pdfName}Weights_tensor"
-    tensorASName = f"{pdfName}ASWeights_tensor"
-    entries = pdfInfo["entries"] if storeUnc else 1
-
-    df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, {entries}>({pdfBranch}), 10.); res = nominal_weight/nominal_pdf_cen*res; return res;")
-
-
-    df = df.Define(tensorASName, "Eigen::TensorFixedSize<double, Eigen::Sizes<2>> res; "
-            f"res(0) = nominal_weight * {pdfInfo['alphas'][0]}; "
-            f"res(1) = nominal_weight * {pdfInfo['alphas'][1]}; "
-            "res (nominal_weight/nominal_pdf_cen) * wrem::clip_tensor(res, 10.);"
-            "return res;")
-    if cols:
+        pdfName = pdfInfo["name"]
+        tensorName = f"{pdfName}Weights_tensor"
+        tensorASName = f"{pdfName}ASWeights_tensor"
         pdfHist = df.HistoBoost(pdfName if hname=="" else f"{hname}_{pdfName}", axes, [*cols, tensorName])
-        alphaSHist = df.HistoBoost(f"alphaS002{pdfName}" if hname=="" else f"{hname}_alphaS002{pdfName}", axes, [*cols, tensorASName])
-        return pdfHist, alphaSHist
 
-    return []
+        alphaSHist = df.HistoBoost(f"alphaS002{pdfName}" if hname=="" else f"{hname}_alphaS002{pdfName}", axes, [*cols, tensorASName])
+        res.extend([pdfHist, alphaSHist])
+    return res
+
+def define_pdf_columns(df, dataset, pdfs, noAltUnc):
+    for i, pdf in enumerate(pdfs):
+        try:
+            pdfInfo = pdf_info_map(dataset, pdf)
+        except ValueError as e:
+            logging.info(e)
+            return df
+
+        pdfName = pdfInfo["name"]
+        pdfBranch = pdfInfo["branch"]
+        tensorName = f"{pdfName}Weights_tensor"
+        tensorASName = f"{pdfName}ASWeights_tensor"
+        entries = 1 if i != 0 and noAltUnc else pdfInfo["entries"]
+
+        df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, {entries}>({pdfBranch}), 10.); res = nominal_weight/nominal_pdf_cen*res; return res;")
+
+        df = df.Define(tensorASName, "Eigen::TensorFixedSize<double, Eigen::Sizes<2>> res; "
+                f"res(0) = nominal_weight*nominal_pdf_cen*{pdfInfo['alphas'][0]}; "
+                f"res(1) = nominal_weight*nominal_pdf_cen*{pdfInfo['alphas'][1]}; "
+                "return wrem::clip_tensor(res, 10.)")
+    return df
 
 def define_weights_and_corrs(df, weight_expr, dataset_name, helpers, args):
     #TODO: organize this better
@@ -194,14 +206,14 @@ def pdf_central_weight(dataset, pdfset):
 def define_theory_corr(df, weight_expr, helpers, generators, modify_central_weight):
     for i, generator in enumerate(generators):
         if i == 0:
-            if modify_central_weight:
+            if modify_central_weight and generator in helpers:
                 df = df.Define("nominal_weight_uncorr", weight_expr)
             else:
                 df = df.Define("nominal_weight", weight_expr)
                 df = df.Alias("nominal_weight_uncorr", "nominal_weight")
-
         if generator not in helpers:
             continue
+
         helper = helpers[generator]
 
         if "Helicity" in generator:
