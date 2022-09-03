@@ -18,6 +18,8 @@ def notImplemented(operation="Unknown"):
 
 class CardTool(object):
     def __init__(self, cardName="card.txt"):
+        self.skipHist = False # don't produce/write histograms, file with them already exists
+        self.outfile = None
         self.cardName = cardName
         self.systematics = {}
         self.lnNSystematics = {}
@@ -47,6 +49,11 @@ class CardTool(object):
         self.chargeIdDict = {"minus" : {"val" : -1, "id" : "q0", "badId" : None},
                              "plus"  : {"val" : 1., "id" : "q1", "badId" : None}
                              }
+
+    def skipHistograms(self):
+        self.skipHist = True
+        if len(self.noStatUncProcesses):
+            logging.info("Attention: histograms are not saved according to input options, thus statistical uncertainty won't be zeroed")
         
     def setSkipOtherChargeSyst(self):
         self.keepOtherChargeSyst = False
@@ -54,6 +61,8 @@ class CardTool(object):
         self.chargeIdDict["minus"]["badId"] = "q1"
 
     def setProcsNoStatUnc(self, procs, resetList=True):
+        if self.skipHist:
+            logging.info("Attention: trying to set statistical uncertainty to 0 for some processes, but histograms won't be saved according to input options")
         if resetList:
             self.noStatUncProcesses = []
         if isinstance(procs, str):
@@ -61,7 +70,7 @@ class CardTool(object):
         elif isinstance(procs, list):
             self.noStatUncProcesses.extend(procs)
         else:
-            raise ValueError("In setNoStatUncForProcs(): expecting string or list argument")            
+            raise ValueError("In setNoStatUncForProcs(): expecting string or list argument")
 
     def getProcsNoStatUnc(self):
         return self.noStatUncProcesses
@@ -275,10 +284,12 @@ class CardTool(object):
                 f"process {proc}, syst {syst}. Found {len(var_names)} names and {len(variations)} variations.")
         setZeroStatUnc = False
         if proc in self.noStatUncProcesses:
+            logging.info(f"Zeroing statistical uncertainty for process {proc}")
             setZeroStatUnc = True
-        for name, var in zip(var_names, variations):
-            if name != "":
-                self.writeHist(var, self.variationName(proc, name), setZeroStatUnc=setZeroStatUnc)
+        if not self.skipHist:
+            for name, var in zip(var_names, variations):
+                if name != "":
+                    self.writeHist(var, self.variationName(proc, name), setZeroStatUnc=setZeroStatUnc)
 
     def addPseudodata(self, processes):
         self.datagroups.loadHistsForDatagroups(
@@ -290,7 +301,8 @@ class CardTool(object):
         for systAxName in ["systIdx", "tensor_axis_0"]:
             if systAxName in [ax.name for ax in hdata.axes]:
                 hdata = hdata[{systAxName : 0 }] 
-        self.writeHist(hdata, self.pseudoData+"_sum")
+        if not self.skipHist:
+            self.writeHist(hdata, self.pseudoData+"_sum")
 
     def writeForProcesses(self, syst, processes, label):
         for process in processes:
@@ -303,8 +315,10 @@ class CardTool(object):
 
     def setOutfile(self, outfile):
         if type(outfile) == str:
-            self.outfile = ROOT.TFile(outfile, "recreate")
-            #self.outfile = uproot.recreate(outfile)
+            if self.skipHist:
+                self.outfile = outfile # only store name, file will not be used and doesn't need to be opened
+            else:
+                self.outfile = ROOT.TFile(outfile, "recreate")
         else:
             self.outfile = outfile
 
@@ -319,6 +333,7 @@ class CardTool(object):
 
         self.writeLnNSystematics()
         for syst in self.systematics.keys():
+            if self.isExcludedNuisance(syst): continue
             processes=self.systematics[syst]["processes"]
             self.datagroups.loadHistsForDatagroups(self.histName, syst, label="syst",
                                                    procsToRead=processes, forceNonzero=syst != "qcdScaleByHelicity")
@@ -421,8 +436,7 @@ class CardTool(object):
                 "labels" : "".join([str(x).ljust(self.spacing) for x in self.processLabels()]),
                 # Could write out the proper normalizations pretty easily
                 "rates" : "-1".ljust(self.spacing)*nprocs,
-                #"inputfile" : self.outfile.file_path,
-                "inputfile" : self.outfile.GetName(),
+                "inputfile" : self.outfile if type(self.outfile) == str  else self.outfile.GetName(),
                 "dataName" : self.dataName,
                 "histName" : self.histName,
                 "pseudodataHist" : self.pseudoData+"_sum" if self.pseudoData else f"{self.histName}_{self.dataName}"
@@ -440,7 +454,6 @@ class CardTool(object):
 
     def writeHistWithCharges(self, h, name):
         hout = narf.hist_to_root(h)
-        #self.outfile[name] = h
         hout.SetName(f"{name}_{self.channels[0]}")
         hout.Write()
     
