@@ -153,21 +153,25 @@ class CardTool(object):
         if not self.isExcludedNuisance(name):
             self.lnNSystematics.update({name : {"size" : size, "processes" : processes, "group" : group, "groupFilter" : groupFilter}})
 
+    # action will be applied to the sum of all the individual samples contributing, actionMap should be used
+    # to apply a separate action per process. this is needed for example for the scale uncertainty split
+    # by pt or helicity
     def addSystematic(self, name, systAxes, outNames=None, skipEntries=None, labelsByAxis=None, 
                         baseName="", mirror=False, scale=1, processes=None, group=None, noConstraint=False,
-                        action=None, actionArgs={}, systNameReplace=[], groupFilter=None, passToFakes=False, splitGroup={}):
+                        action=None, actionArgs={}, actionMap={}, systNameReplace=[], groupFilter=None, passToFakes=False, splitGroup={}):
 
-        processesWithSyst = []
-        if not processes:
-            processesWithSyst = [x for x in self.allMCProcesses()]
-        else:
-            processesWithSyst = [x for x in processes]
-        if passToFakes and self.getFakeName() not in processesWithSyst:
-            processesWithSyst.append(self.getFakeName())
+        # Need to make an explicit copy of the array before appending
+        procs_to_add = [x for x in (self.allMCProcesses() if not processes else processes)]
+        if passToFakes and self.getFakeName() not in procs_to_add:
+            procs_to_add.append(self.getFakeName())
+
+        if action and actionMap:
+            raise ValueError("Only one of action and actionMap args are allowed")
+
         self.systematics.update({
             name : { "outNames" : [] if not outNames else outNames,
                      "baseName" : baseName,
-                     "processes" : processesWithSyst,
+                     "processes" : procs_to_add,
                      "systAxes" : systAxes,
                      "labelsByAxis" : systAxes if not labelsByAxis else labelsByAxis,
                      "group" : group,
@@ -176,6 +180,7 @@ class CardTool(object):
                      "scale" : scale,
                      "mirror" : mirror,
                      "action" : action,
+                     "actionMap" : actionMap,
                      "actionArgs" : actionArgs,
                      "systNameReplace" : systNameReplace,
                      "noConstraint" : noConstraint,
@@ -321,9 +326,11 @@ class CardTool(object):
         for syst in self.systematics.keys():
             processes=self.systematics[syst]["processes"]
             self.datagroups.loadHistsForDatagroups(self.histName, syst, label="syst",
-                                                   procsToRead=processes, forceNonzero=syst != "qcdScaleByHelicity")
+                    procsToRead=processes, forceNonzero=syst != "qcdScaleByHelicity",
+                    preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"])
             self.writeForProcesses(syst, label="syst", processes=processes)
         
+        output_tools.writeMetaInfoToRootFile(self.outfile, exclude_diff='notebooks')
         self.writeCard()
 
     def writeCard(self):
