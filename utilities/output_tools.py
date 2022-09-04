@@ -45,6 +45,16 @@ def analysis_debug_output(results):
         logging.debug("-"*30)
     logging.debug("")
 
+def writeMetaInfoToRootFile(rtfile, exclude_diff='notebooks'):
+    import ROOT
+    meta_dict = metaInfoDict(exclude_diff)
+    d = rtfile.mkdir("meta_info")
+    d.cd()
+    
+    for key, value in meta_dict.items():
+        out = ROOT.TNamed(key, value)
+        out.Write()
+
 def write_analysis_output(results, outfile, args):
     analysis_debug_output(results)
     results.update({"meta_info" : metaInfoDict()})
