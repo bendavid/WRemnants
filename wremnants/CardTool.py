@@ -158,7 +158,8 @@ class CardTool(object):
     # by pt or helicity
     def addSystematic(self, name, systAxes, outNames=None, skipEntries=None, labelsByAxis=None, 
                         baseName="", mirror=False, scale=1, processes=None, group=None, noConstraint=False,
-                        action=None, actionArgs={}, actionMap={}, systNameReplace=[], groupFilter=None, passToFakes=False, splitGroup={}):
+                        action=None, actionArgs={}, actionMap={}, systNameReplace=[], groupFilter=None, passToFakes=False, 
+                        rename=None, splitGroup={}):
 
         # Need to make an explicit copy of the array before appending
         procs_to_add = [x for x in (self.allMCProcesses() if not processes else processes)]
@@ -184,7 +185,8 @@ class CardTool(object):
                      "actionArgs" : actionArgs,
                      "systNameReplace" : systNameReplace,
                      "noConstraint" : noConstraint,
-                     "skipEntries" : [] if not skipEntries else skipEntries
+                     "skipEntries" : [] if not skipEntries else skipEntries,
+                     "rename" : rename,
             }
         })
 
@@ -224,7 +226,6 @@ class CardTool(object):
         if hvar.axes[-1].name == "mirror":
             axNames.append("mirror")
             axLabels.append("mirror")
-        
 
         if not all([name in [ax.name for ax in hvar.axes] for name in axNames]):
             raise ValueError(f"Failed to find axis names '{str(systAxes)} in hist. " \
@@ -324,9 +325,11 @@ class CardTool(object):
 
         self.writeLnNSystematics()
         for syst in self.systematics.keys():
-            processes=self.systematics[syst]["processes"]
-            self.datagroups.loadHistsForDatagroups(self.histName, syst, label="syst",
-                    procsToRead=processes, forceNonzero=syst != "qcdScaleByHelicity",
+            systMap=self.systematics[syst]
+            systName = syst if not systMap["rename"] else systMap["rename"]
+            processes=systMap["processes"]
+            self.datagroups.loadHistsForDatagroups(self.histName, systName, label="syst",
+                    procsToRead=processes, forceNonzero=systName != "qcdScaleByHelicity",
                     preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"])
             self.writeForProcesses(syst, label="syst", processes=processes)
         
