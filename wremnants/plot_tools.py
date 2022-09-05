@@ -3,6 +3,7 @@ import mplhep as hep
 import matplotlib.pyplot as plt
 from matplotlib import ticker
 from matplotlib import patches
+from matplotlib.ticker import StrMethodFormatter # for setting number of decimal places on tick labels
 from utilities import boostHistHelpers as hh
 from wremnants import histselections as sel
 import math
@@ -37,6 +38,7 @@ def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None,
     ax1.set_ylabel(ylabel)
     ax1.set_xlim(xlim)
     ax2.set_xlim(xlim)
+    if x_ticks_ndp: ax2.xaxis.set_major_formatter(StrMethodFormatter('{x:.' + str(x_ticks_ndp) + 'f}'))
     ax2.set_ylabel(rlabel, fontsize=22)
     ax2.set_ylim(rrange)
 
@@ -195,8 +197,7 @@ def makePlotWithRatioToRef(
     if not xlim:
         xlim = [hists[0].axes[0].edges[0], hists[0].axes[0].edges[-1]]
 
-    fix_axes(ax1, ax2)
-    
+    if x_ticks_ndp: ax2.xaxis.set_major_formatter(StrMethodFormatter('{x:.' + str(x_ticks_ndp) + 'f}'))
     return fig
 
 def fix_axes(ax1, ax2):
