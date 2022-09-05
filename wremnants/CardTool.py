@@ -286,10 +286,9 @@ class CardTool(object):
         if proc in self.noStatUncProcesses:
             logging.info(f"Zeroing statistical uncertainty for process {proc}")
             setZeroStatUnc = True
-        if not self.skipHist:
-            for name, var in zip(var_names, variations):
-                if name != "":
-                    self.writeHist(var, self.variationName(proc, name), setZeroStatUnc=setZeroStatUnc)
+        for name, var in zip(var_names, variations):
+            if name != "":
+                self.writeHist(var, self.variationName(proc, name), setZeroStatUnc=setZeroStatUnc)
 
     def addPseudodata(self, processes):
         self.datagroups.loadHistsForDatagroups(
@@ -301,8 +300,7 @@ class CardTool(object):
         for systAxName in ["systIdx", "tensor_axis_0"]:
             if systAxName in [ax.name for ax in hdata.axes]:
                 hdata = hdata[{systAxName : 0 }] 
-        if not self.skipHist:
-            self.writeHist(hdata, self.pseudoData+"_sum")
+        self.writeHist(hdata, self.pseudoData+"_sum")
 
     def writeForProcesses(self, syst, processes, label):
         for process in processes:
@@ -458,6 +456,9 @@ class CardTool(object):
         hout.Write()
     
     def writeHist(self, h, name, setZeroStatUnc=False):
+        if self.skipHist:
+            logging.info("Histograms will not be written because 'skipHist' flag is set to True")
+            return
         if setZeroStatUnc:
             hist_no_error = h.copy()
             hist_no_error.variances(flow=True)[...] = 0.
