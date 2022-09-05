@@ -337,8 +337,11 @@ class CardTool(object):
                                                    procsToRead=processes, forceNonzero=syst != "qcdScaleByHelicity")
             self.writeForProcesses(syst, label="syst", processes=processes)
         
+        if self.skipHist:
+            logging.info("Histograms will not be written because 'skipHist' flag is set to True")
         self.writeCard()
 
+        
     def writeCard(self):
         for chan in self.channels:
             with open(self.cardName.format(chan=chan), "w") as card:
@@ -457,7 +460,6 @@ class CardTool(object):
     
     def writeHist(self, h, name, setZeroStatUnc=False):
         if self.skipHist:
-            logging.info("Histograms will not be written because 'skipHist' flag is set to True")
             return
         if setZeroStatUnc:
             hist_no_error = h.copy()
