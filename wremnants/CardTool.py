@@ -162,21 +162,26 @@ class CardTool(object):
         if not self.isExcludedNuisance(name):
             self.lnNSystematics.update({name : {"size" : size, "processes" : processes, "group" : group, "groupFilter" : groupFilter}})
 
+    # action will be applied to the sum of all the individual samples contributing, actionMap should be used
+    # to apply a separate action per process. this is needed for example for the scale uncertainty split
+    # by pt or helicity
     def addSystematic(self, name, systAxes, outNames=None, skipEntries=None, labelsByAxis=None, 
                         baseName="", mirror=False, scale=1, processes=None, group=None, noConstraint=False,
-                        action=None, actionArgs={}, systNameReplace=[], groupFilter=None, passToFakes=False, splitGroup={}):
+                        action=None, actionArgs={}, actionMap={}, systNameReplace=[], groupFilter=None, passToFakes=False, 
+                        rename=None, splitGroup={}):
 
-        processesWithSyst = []
-        if not processes:
-            processesWithSyst = [x for x in self.allMCProcesses()]
-        else:
-            processesWithSyst = [x for x in processes]
-        if passToFakes and self.getFakeName() not in processesWithSyst:
-            processesWithSyst.append(self.getFakeName())
+        # Need to make an explicit copy of the array before appending
+        procs_to_add = [x for x in (self.allMCProcesses() if not processes else processes)]
+        if passToFakes and self.getFakeName() not in procs_to_add:
+            procs_to_add.append(self.getFakeName())
+
+        if action and actionMap:
+            raise ValueError("Only one of action and actionMap args are allowed")
+
         self.systematics.update({
             name : { "outNames" : [] if not outNames else outNames,
                      "baseName" : baseName,
-                     "processes" : processesWithSyst,
+                     "processes" : procs_to_add,
                      "systAxes" : systAxes,
                      "labelsByAxis" : systAxes if not labelsByAxis else labelsByAxis,
                      "group" : group,
@@ -185,10 +190,12 @@ class CardTool(object):
                      "scale" : scale,
                      "mirror" : mirror,
                      "action" : action,
+                     "actionMap" : actionMap,
                      "actionArgs" : actionArgs,
                      "systNameReplace" : systNameReplace,
                      "noConstraint" : noConstraint,
-                     "skipEntries" : [] if not skipEntries else skipEntries
+                     "skipEntries" : [] if not skipEntries else skipEntries,
+                     "rename" : rename,
             }
         })
 
@@ -228,7 +235,6 @@ class CardTool(object):
         if hvar.axes[-1].name == "mirror":
             axNames.append("mirror")
             axLabels.append("mirror")
-        
 
         if not all([name in [ax.name for ax in hvar.axes] for name in axNames]):
             raise ValueError(f"Failed to find axis names '{str(systAxes)} in hist. " \
@@ -332,11 +338,14 @@ class CardTool(object):
         self.writeLnNSystematics()
         for syst in self.systematics.keys():
             if self.isExcludedNuisance(syst): continue
-            processes=self.systematics[syst]["processes"]
-            self.datagroups.loadHistsForDatagroups(self.histName, syst, label="syst",
-                                                   procsToRead=processes, forceNonzero=syst != "qcdScaleByHelicity")
-            self.writeForProcesses(syst, label="syst", processes=processes)
-        
+            systMap=self.systematics[syst]
+            systName = syst if not systMap["rename"] else systMap["rename"]
+            processes=systMap["processes"]
+            self.datagroups.loadHistsForDatagroups(self.histName, systName, label="syst",
+                    procsToRead=processes, forceNonzero=systName != "qcdScaleByHelicity",
+                    preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"])
+            self.writeForProcesses(syst, label="syst", processes=processes)    
+        output_tools.writeMetaInfoToRootFile(self.outfile, exclude_diff='notebooks')
         if self.skipHist:
             logging.info("Histograms will not be written because 'skipHist' flag is set to True")
         self.writeCard()

@@ -75,7 +75,7 @@ pileup_helper = wremnants.make_pileup_helper(era = era)
 
 calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
 
-corr_helpers = theory_tools.load_corr_helpers(common.vprocs, args.theory_corr)
+corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_corr)
 
 # recoil initialization
 if not args.no_recoil:
@@ -226,18 +226,16 @@ def build_graph(df, dataset):
             results.append(theory_tools.make_scale_hist(df, [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen"]))
             results.append(theory_tools.make_scale_hist(df, [*nominal_axes,              axis_chargeVgen], [*nominal_cols,           "chargeVgen"], "vptInclusive"))
 
-            # currently SCETLIB corrections are applicable to W-only, and helicity-split scales are only valid for one of W or Z at a time
-            # TODO make this work for both simultaneously as needed
-            if not args.skipHelicity:
+            # Don't think it really makes sense to have W and Z be the same hist name, especially because the charge axis has to be different
+            if not args.skipHelicity and isW:
                 helicity_helper = qcdScaleByHelicity_Zhelper if isZ else qcdScaleByHelicity_Whelper
                 # TODO: Should have consistent order here with the scetlib correction function
                 df = df.Define("helicityWeight_tensor", helicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
                 qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=helicity_helper.tensor_axes)
                 results.append(qcdScaleByHelicityUnc)
 
-            for i, pdf in enumerate(args.pdfs):
-                withUnc = i == 0 or not args.altPdfOnlyCentral
-                results.extend(theory_tools.define_and_make_pdf_hists(df, nominal_axes, nominal_cols, dataset.name, pdf, withUnc))
+            df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
+            results.extend(theory_tools.make_pdf_hists(df, dataset.name, nominal_axes, nominal_cols, args.pdfs))
 
             masswargs = (nominal_axes, nominal_cols) if isW else (None, None)
             df, masswhist = syst_tools.define_mass_weights(df, isW, *masswargs)
@@ -282,4 +280,4 @@ def build_graph(df, dataset):
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)
-output_tools.write_analysis_output(resultdict, "mw_with_mu_eta_pt.pkl.lz4", args.postfix)
+output_tools.write_analysis_output(resultdict, "mw_with_mu_eta_pt.pkl.lz4", args)
