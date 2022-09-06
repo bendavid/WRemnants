@@ -196,8 +196,9 @@ cardTool.addSystematic("qcdScale",
 )
 
 if args.qcdScale == "byCharge":
+    scale_hist = "qcdScale" # might also use vptInclusive_qcdScale if present (it doesn't have pt bins, so no need to rebin
     scale_action = syst_tools.scale_helicity_hist_to_variations
-    scaleActionArgs = {}
+    scaleActionArgs = {"sum_axis" : ["ptVgen"]}
     scaleGroupName += "ByChargeV"
     scaleSystAxes.insert(0, "chargeVgen")
     scaleLabelsByAxis.insert(0, "genQ")

@@ -72,6 +72,7 @@ down_nom_up_axis = hist.axis.Regular(3, -1.5, 1.5, underflow=False, overflow=Fal
 muon_efficiency_helper, muon_efficiency_helper_stat, muon_efficiency_helper_syst = wremnants.make_muon_efficiency_helpers(era = era, max_pt = axis_pt.edges[-1])
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
+vertex_helper = wremnants.make_vertex_helper(era = era)
 
 calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
 
@@ -170,13 +171,16 @@ def build_graph(df, dataset):
 
     else:
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
+        df = df.Define("weight_vtx", vertex_helper, ["GenVtx_z", "Pileup_nTrueInt"])
         df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0", "passIso"])
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId"])
 
         weight_expr = "weight*weight_pu*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom"
         if not args.noScaleFactors:
             weight_expr += "*weight_fullMuonSF_withTrackingReco"
-        
+        if args.vertex_weight:
+            weight_expr += "*weight_vtx"
+            
         df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
 
         if apply_theory_corr:
@@ -224,7 +228,8 @@ def build_graph(df, dataset):
 
             df = theory_tools.define_scale_tensor(df)
             results.append(theory_tools.make_scale_hist(df, [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen"]))
-            results.append(theory_tools.make_scale_hist(df, [*nominal_axes,              axis_chargeVgen], [*nominal_cols,           "chargeVgen"], "vptInclusive"))
+            # keep commented, can activate for tests
+            # results.append(theory_tools.make_scale_hist(df, [*nominal_axes,              axis_chargeVgen], [*nominal_cols,           "chargeVgen"], "vptInclusive"))
 
             # Don't think it really makes sense to have W and Z be the same hist name, especially because the charge axis has to be different
             if not args.skipHelicity and isW:
