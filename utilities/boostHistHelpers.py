@@ -2,6 +2,7 @@ import hist
 import boost_histogram as bh
 import numpy as np
 from functools import reduce
+import logging
 
 def valsAndVariances(h1, h2, allowBroadcast=True, transpose=True):
     if not allowBroadcast and len(h1.axes) != len(h2.axes):
@@ -12,8 +13,12 @@ def valsAndVariances(h1, h2, allowBroadcast=True, transpose=True):
         outshape = h1.view(flow=True).shape if len(h1.shape) > len(h2.shape) else h2.view(flow=True).shape
         # The transpose is because numpy works right to left in broadcasting, and we've put the
         # syst axis on the right
-        res = [np.broadcast_to(x.T if transpose else x, outshape[::-1] if transpose else outshape) for x in \
-                [h1.values(flow=True), h2.values(flow=True), h1.variances(flow=True), h2.variances(flow=True)]]
+        try:
+            res = [np.broadcast_to(x.T if transpose else x, outshape[::-1] if transpose else outshape) for x in \
+                    [h1.values(flow=True), h2.values(flow=True), h1.variances(flow=True), h2.variances(flow=True)]]
+        except ValueError as e:
+            logging.error(f"Failed to broadcast hists! h1.axes.name {h1.axes.name}, h2.axes.name {h2.axes.name}")
+            raise e
         return [x.T for x in res] if transpose else res
 
 def broadcastOutHist(h1, h2):
@@ -185,7 +190,7 @@ def findCommonBinning(hists, axis_idx):
 
     edges = list(sorted(common_edges))
     if len(edges) < 2:
-        raise ValueError("Found < 2 common edges, cannot rebin")
+        raise ValueError(f"Found < 2 common edges, cannot rebin. Axes were {orig_axes}")
     return edges
 
 def rebinHistsToCommon(hists, axis_idx, keep_full_range=False):
@@ -221,4 +226,8 @@ def rebinHistsToCommon(hists, axis_idx, keep_full_range=False):
         rebinned_hists = [rebinHist(h, h.axes[axis_idx].name, new_edges) for h in full_hists]
 
     return rebinned_hists
-    
+   
+def projectNoFlow(h, proj_ax, exclude=[]):
+    s = hist.tag.Slicer()
+    hnoflow = h[{ax : s[0:hist.overflow:hist.sum] for ax in h.axes.name if ax not in exclude+[proj_ax]}]
+    return hnoflow.project(proj_ax)

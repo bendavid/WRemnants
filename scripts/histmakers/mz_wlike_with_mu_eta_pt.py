@@ -16,6 +16,7 @@ parser.add_argument("--muScaleMag", type=float, default=1e-4, help="Magnitude of
 parser.add_argument("--muScaleBins", type=int, default=1, help="Number of bins for muon scale uncertainty")
 parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
 parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
+parser.add_argument("--csvars_hist", action='store_true', help="Add CS variables to dilepton hist")
 args = parser.parse_args()
 
 logging.basicConfig(level=logging.INFO)
@@ -62,7 +63,7 @@ nominal_axes = [axis_eta, axis_pt, axis_charge]
 
 # extra axes for dilepton validation plots
 axis_mll = hist.axis.Regular(24, 60., 120., name = "mll")
-axis_yll = hist.axis.Regular(40, -4.0, 4.0, name = "yll")
+axis_yll = hist.axis.Regular(25, -2.5, 2.5, name = "yll")
 
 axis_ptll = hist.axis.Variable(
     [0, 2, 3, 4, 4.75, 5.5, 6.5, 8, 9, 10, 12, 14, 16, 18, 20, 23, 27, 32, 40, 55, 100, 150], name = "ptll"
@@ -70,8 +71,6 @@ axis_ptll = hist.axis.Variable(
 
 axis_costhetastarll = hist.axis.Regular(20, -1., 1., name = "costhetastarll")
 axis_phistarll = hist.axis.Regular(20, -math.pi, math.pi, circular = True, name = "phistarll")
-
-dilepton_axes = [axis_mll, axis_yll, axis_ptll, axis_costhetastarll, axis_phistarll]
 
 # extra axes which can be used to label tensor_axes
 
@@ -83,7 +82,7 @@ pileup_helper = wremnants.make_pileup_helper(era = era)
 
 calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
 
-corr_helpers = theory_tools.load_corr_helpers(common.vprocs, args.theory_corr)
+corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_corr)
 
 # recoil initialization
 if not args.no_recoil:
@@ -186,6 +185,8 @@ def build_graph(df, dataset):
 
         weight_expr = "weight*weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom"
         df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
+        if isW or isZ:
+            df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")
 
@@ -200,9 +201,16 @@ def build_graph(df, dataset):
     df_dilepton = df
     df_dilepton = df_dilepton.Filter("TrigMuon_pt > 26.")
 
+    dilepton_axes = [axis_mll, axis_yll, axis_ptll, axis_costhetastarll, axis_phistarll]
     dilepton_cols = ["massZ", "yZ", "ptZ", "cosThetaStarZ", "phiStarZ"]
+    if not args.csvars_hist:
+        dilepton_axes = dilepton_axes[:-2]
+        dilepton_cols = dilepton_cols[:-2]
+    
     dilepton = df_dilepton.HistoBoost("dilepton", dilepton_axes, [*dilepton_cols, "nominal_weight"])
     results.append(dilepton)
+    if isW or isZ:
+        results.extend(theory_tools.make_pdf_hists(df_dilepton, dataset.name, dilepton_axes, dilepton_cols, args.pdfs, "dilepton"))
 
     df = df.Filter("massZ >= 60. && massZ < 120.")
 
@@ -210,10 +218,6 @@ def build_graph(df, dataset):
         results.extend(theory_tools.make_theory_corr_hists(df_dilepton, "dilepton", dilepton_axes, dilepton_cols, 
             corr_helpers[dataset.name], args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
         )
-    if isZ:
-        for i, pdf in enumerate(args.pdfs):
-            # For now don't store the pdf unc and leave off the phi/theta* axes, because it explodes, should add an option for this
-            results.extend(theory_tools.define_and_make_pdf_hists(df, dilepton_axes[:-2], dilepton_cols[:-2], dataset.name, pdf, False, "dilepton"))
 
     #TODO improve this to include muon mass?
     met_vars = ("MET_pt", "MET_phi")
@@ -267,18 +271,13 @@ def build_graph(df, dataset):
 
             df = theory_tools.define_scale_tensor(df)
             results.append(theory_tools.make_scale_hist(df, [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen"]))
-            results.append(theory_tools.make_scale_hist(df, [*nominal_axes,              axis_chargeVgen], [*nominal_cols,           "chargeVgen"], "vptInclusive"))
-            
+            results.extend(theory_tools.make_pdf_hists(df, dataset.name, nominal_axes, nominal_cols, args.pdfs))
+
             if isZ and not args.skipHelicity:
                 # TODO: Should have consistent order here with the scetlib correction function
                 df = df.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
                 qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
                 results.append(qcdScaleByHelicityUnc)
-
-
-                for i, pdf in enumerate(args.pdfs):
-                    withUnc = i == 0 or not args.altPdfOnlyCentral
-                    results.extend(theory_tools.define_and_make_pdf_hists(df, nominal_axes, nominal_cols, dataset.name, pdf, withUnc))
 
             masswargs = (nominal_axes, nominal_cols) if not isW else (None, None)
             df, masswhist = syst_tools.define_mass_weights(df, isW, *masswargs)
@@ -327,4 +326,4 @@ def build_graph(df, dataset):
 
 resultdict = narf.build_and_run(datasets, build_graph)
 
-output_tools.write_analysis_output(resultdict, "mz_wlike_with_mu_eta_pt.pkl.lz4", args.postfix)
+output_tools.write_analysis_output(resultdict, "mz_wlike_with_mu_eta_pt.pkl.lz4", args)

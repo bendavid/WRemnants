@@ -22,7 +22,7 @@ filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
     nanoVersion="v8" if args.v8 else "v9")
 
-axis_massWgen = hist.axis.Variable([0., math.inf], name="massVgen", flow=False)
+axis_massWgen = hist.axis.Variable([5., 1300.], name="massVgen", underflow=True, overflow=False)
 
 axis_massZgen = hist.axis.Regular(12, 60., 120., name="massVgen")
 
@@ -45,7 +45,7 @@ axis_chargeZgen = hist.axis.Integer(
 axis_l_eta_gen = hist.axis.Regular(48, -2.4, 2.4, name = "eta")
 axis_l_pt_gen = hist.axis.Regular(29, 26., 55., name = "pt")
 
-corr_helpers = theory_tools.load_corr_helpers(common.vprocs, args.theory_corr)
+corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_corr)
 
 def build_graph(df, dataset):
     print("build graph")
@@ -92,6 +92,8 @@ def build_graph(df, dataset):
     results.append(nominal_gen)
 
     results.append(theory_tools.make_scale_hist(df, nominal_axes, nominal_cols))
+    df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
+    results.extend(theory_tools.make_pdf_hists(df, dataset.name, nominal_axes, nominal_cols, args.pdfs))
 
     if args.theory_corr and dataset.name in corr_helpers:
         results.extend(theory_tools.make_theory_corr_hists(df, "nominal_gen", nominal_axes, nominal_cols,
@@ -115,7 +117,7 @@ def build_graph(df, dataset):
 
 resultdict = narf.build_and_run(datasets, build_graph)
 
-output_tools.write_analysis_output(resultdict, "w_z_gen_dists.pkl.lz4", args.postfix)
+output_tools.write_analysis_output(resultdict, "w_z_gen_dists.pkl.lz4", args)
 
 print("computing angular coefficients")
 
@@ -136,15 +138,16 @@ for dataset in datasets:
         else:
             w_moments += moments
 
-# REMINDER: common.ptV_binning is not the one using 10% quantiles, and the quantiles are not a subset of this binning, but apparently it doesn't matter
-z_moments = hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning)
-z_moments = hh.rebinHist(z_moments, axis_massZgen.name, [70, 80, 85, 90, 95, 100, 110])
-z_moments = hh.rebinHist(z_moments, axis_absYVgen.name, axis_absYVgen.edges[:-1])
-w_moments = hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning)
-w_moments = hh.rebinHist(w_moments, axis_absYVgen.name, axis_absYVgen.edges[:-1])
+if z_moments and w_moments:
+    # REMINDER: common.ptV_binning is not the one using 10% quantiles, and the quantiles are not a subset of this binning, but apparently it doesn't matter
+    z_moments = hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning)
+    z_moments = hh.rebinHist(z_moments, axis_massZgen.name, [70, 80, 85, 90, 95, 100, 110])
+    z_moments = hh.rebinHist(z_moments, axis_absYVgen.name, axis_absYVgen.edges[:-1])
+    w_moments = hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning)
+    w_moments = hh.rebinHist(w_moments, axis_absYVgen.name, axis_absYVgen.edges[:-1])
 
-coeffs = {"Z" : wremnants.moments_to_angular_coeffs(z_moments),
-        "W" : wremnants.moments_to_angular_coeffs(w_moments),
-}
+    coeffs = {"Z" : wremnants.moments_to_angular_coeffs(z_moments) if z_moments else None,
+            "W" : wremnants.moments_to_angular_coeffs(w_moments) if w_moments else None,
+    }
 
-output_tools.write_analysis_output(coeffs, "w_z_coeffs.pkl.lz4", args.postfix)
+    output_tools.write_analysis_output(coeffs, "w_z_coeffs.pkl.lz4", args)

@@ -56,14 +56,33 @@ def make_corr_by_helicity_helper(filename, proc, histname):
 
     return makeCorrectionsTensor(corrh, ROOT.wrem.CentralCorrByHelicityHelper, tensor_rank=3)
 
-def rebin_corr_hists(hists, ndim=-1):
+def load_corr_helpers(procs, generators):
+    corr_helpers = {}
+    for proc in procs:
+        corr_helpers[proc] = {}
+        for generator in generators:
+            fname = f"{common.data_dir}/TheoryCorrections/{generator}Corr{proc[0]}.pkl.lz4"
+            if not os.path.isfile(fname):
+                logging.warning(f"Did not find correction file for process {proc}, generator {generator}. No correction will be applied for this process!")
+                continue
+            helper_func = make_corr_helper if "Helicity" not in generator else make_corr_by_helicity_helper
+            corr_hist_name = f"{generator}_minnlo_ratio" if "Helicity" not in generator else f"{generator.replace('Helicity', '')}_minnlo_coeffs"
+            corr_helpers[proc][generator] = helper_func(fname, proc[0], corr_hist_name)
+    for generator in generators:
+        if not any([generator in corr_helpers[proc] for proc in procs]):
+            raise ValueError(f"Did not find correction for generator {generator} for any processes!")
+    return corr_helpers
+
+def rebin_corr_hists(hists, ndim=-1, use_predefined_bins=False):
     # Allow trailing dimensions to be different (e.g., variations)
     ndims = min([x.ndim for x in hists]) if ndim < 0 else ndim
-    hists = [hh.rebinHist(h, "pt" if "pt" in h.axes.name else "ptVgen", common.ptV_binning[:-2]) for h in hists]
-    try:
-        hists = [hh.rebinHist(h, "absy" if "absy" in h.axes.name else "absYVgen", common.absYV_binning[:-1]) for h in hists]
-    except ValueError as e:
-        logging.warning("Can't rebin axes to predefined binning")
+    if use_predefined_bins:
+        try:
+            hists = [hh.rebinHist(h, "pt" if "pt" in h.axes.name else "ptVgen", common.ptV_binning[:-2]) for h in hists]
+            hists = [hh.rebinHist(h, "absy" if "absy" in h.axes.name else "absYVgen", common.absYV_binning[:-1]) for h in hists]
+        except ValueError as e:
+            logging.warning("Can't rebin axes to predefined binning")
+    print("Number of dims", ndims)
     for i in range(ndims):
         # This is a workaround for now for the fact that MiNNLO has mass binning up to
         # Inf whereas SCETlib has 13 TeV
@@ -91,14 +110,14 @@ def set_corr_ratio_flow(corrh):
         corrh[:,:,hist.overflow,...] = np.ones_like(corrh[:,:,0,...].view(flow=True))
     return corrh
 
-def make_corr_from_ratio(denom_hist, num_hist):
-    denom_hist, num_hist = rebin_corr_hists([denom_hist, num_hist])
+def make_corr_from_ratio(denom_hist, num_hist, rebin=False):
+    denom_hist, num_hist = rebin_corr_hists([denom_hist, num_hist], use_predefined_bins=rebin)
 
     corrh = hh.divideHists(num_hist, denom_hist)
     return set_corr_ratio_flow(corrh)
 
 def make_corr_by_helicity(ref_helicity_hist, target_sigmaul, target_sigma4, ndim=3):
-    ref_helicity_hist, target_sigmaul, target_sigma4 = rebin_corr_hists([ref_helicity_hist, target_sigmaul, target_sigma4], ndim)
+    ref_helicity_hist, target_sigmaul, target_sigma4 = rebin_corr_hists([ref_helicity_hist, target_sigmaul, target_sigma4], ndim, True)
     
     ref_coeffs = theory_tools.moments_to_angular_coeffs(ref_helicity_hist)
 
