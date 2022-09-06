@@ -12,11 +12,7 @@ public:
   vertex_helper(const TH2D &weights) :
     vertexweights_(make_shared_TH1<const TH2D>(weights)),
         nBinsX_(make_shared<const int>(weights.GetNbinsX())),
-        nBinsY_(make_shared<const int>(weights.GetNbinsY())) {
-        // store these to avoid call to TH2 methods everytime
-        // nBinsX_ = vertexweights_.GetNbinsX();
-        // nBinsY_ = vertexweights_.GetNbinsY();
-    }
+        nBinsY_(make_shared<const int>(weights.GetNbinsY())) {}
 
     // returns the vertex weight
     double operator() (float genVtx_z, float nTrueInt) const {
