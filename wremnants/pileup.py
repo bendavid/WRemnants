@@ -55,11 +55,16 @@ def make_pileup_helper(era = None, cropHighWeight = 5.,
     for i in range(puweights.GetNbinsX() + 2):
         if mchist.GetBinContent(i) == 0.:
             puweights.SetBinContent(i, 1.)
-        mchist.SetBinContent(i, min(puweights.GetBinContent(i), cropHighWeight))
+        puweights.SetBinContent(i, min(puweights.GetBinContent(i), cropHighWeight))
 
     puweights.SetName(f"pileup_weights_{era}")
     puweights.SetTitle("")
-
+    print("")
+    print(f"PU weights for era {era}")
+    print([puweights.GetBinContent(i) for i in range(1,puweights.GetNbinsX()+1)])
+    print("")
+    print("")
+    
     helper = ROOT.wrem.pileup_helper(puweights)
 
     return helper

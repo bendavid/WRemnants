@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO)
 scriptdir = f"{pathlib.Path(__file__).parent}"
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-o", "--outfolder", type=str, default="/scratch/kelong/CombineStudies")
+parser.add_argument("-o", "--outfolder", type=str, default="/scratch/kelong/CombineStudies", help="Main output folder, with the root file storing all histograms and datacards for single charge")
 parser.add_argument("-i", "--inputFile", type=str, required=True)
 parser.add_argument("--qcdScale", choices=["byHelicityPtAndByPt", "byHelicityPt", "byHelicityCharge", "byPt", "byCharge", "integrated",], default="byHelicityPt", 
         help="Decorrelation for QCDscale (additionally always by charge). With 'byHelicityPtAndByPt' two independent histograms are stored, split and not split by helicities (for tests)")
@@ -35,16 +35,23 @@ parser.add_argument("--skipSignalSystOnFakes", dest="skipSignalSystOnFakes" , ac
 parser.add_argument("--scaleMuonCorr", type=float, default=1.0, help="Scale up/down dummy muon scale uncertainty by this factor")
 parser.add_argument("--correlateEffStatIsoByCharge", action='store_true', help="Correlate isolation efficiency uncertanties between the two charges (by default they are decorrelated)")
 parser.add_argument("--doStatOnly", action="store_true", default=False, help="Set up fit to get stat-only uncertainty (currently combinetf with -S 0 doesn't work)")
+parser.add_argument("--noHist", action='store_true', help="Skip the making of 2D histograms (root file is left untouched if existing")
 args = parser.parse_args()
 
 if not os.path.isdir(args.outfolder):
     os.makedirs(args.outfolder)
 
+if args.noHist and args.noStatUncFakes:
+    logging.warning("Option --noHist would override --noStatUncFakes. Please select only one of them")
+    quit()
+    
 datagroups = datagroups2016(args.inputFile, wlike=args.wlike)
 templateDir = f"{scriptdir}/Templates/WMass"
 name = "WMass" if not args.wlike else "ZMassWLike"
 cardTool = CardTool.CardTool(f"{args.outfolder}/{name}_{{chan}}.txt")
 cardTool.setNominalTemplate(f"{templateDir}/main.txt")
+if args.noHist:
+    cardTool.skipHistograms()
 cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/{name}CombineInput.root"))
 cardTool.setDatagroups(datagroups)
 cardTool.setFakeName(args.qcdProcessName)
