@@ -179,7 +179,7 @@ class CardTool(object):
             raise ValueError("Only one of action and actionMap args are allowed")
 
         self.systematics.update({
-            name : { "outNames" : [] if not outNames else outNames,
+            name if not rename else rename : { "outNames" : [] if not outNames else outNames,
                      "baseName" : baseName,
                      "processes" : procs_to_add,
                      "systAxes" : systAxes,
@@ -195,7 +195,7 @@ class CardTool(object):
                      "systNameReplace" : systNameReplace,
                      "noConstraint" : noConstraint,
                      "skipEntries" : [] if not skipEntries else skipEntries,
-                     "rename" : rename,
+                     "name" : name,
             }
         })
 
@@ -339,7 +339,7 @@ class CardTool(object):
         for syst in self.systematics.keys():
             if self.isExcludedNuisance(syst): continue
             systMap=self.systematics[syst]
-            systName = syst if not systMap["rename"] else systMap["rename"]
+            systName = syst if not systMap["name"] else systMap["name"]
             processes=systMap["processes"]
             self.datagroups.loadHistsForDatagroups(self.histName, systName, label="syst",
                     procsToRead=processes, forceNonzero=systName != "qcdScaleByHelicity",
