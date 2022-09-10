@@ -269,15 +269,18 @@ def build_graph(df, dataset):
                     helpers=corr_helpers[dataset.name], generators=args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
                 )
 
-            df = theory_tools.define_scale_tensor(df)
-            results.append(theory_tools.make_scale_hist(df, [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen"]))
             results.extend(theory_tools.make_pdf_hists(df, dataset.name, nominal_axes, nominal_cols, args.pdfs))
 
-            if isZ and not args.skipHelicity:
-                # TODO: Should have consistent order here with the scetlib correction function
-                df = df.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
-                qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
-                results.append(qcdScaleByHelicityUnc)
+            if isZ:
+                # there is no W backgrounds for the Wlike, make QCD scale histograms only for Z
+                # should probably remove the charge here, because the Z only has a single charge and the pt distribution does not depend on which charged lepton is selected
+                df = theory_tools.define_scale_tensor(df)
+                results.append(theory_tools.make_scale_hist(df, [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen"]))
+                if not args.skipHelicity:
+                    # TODO: Should have consistent order here with the scetlib correction function
+                    df = df.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
+                    qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
+                    results.append(qcdScaleByHelicityUnc)
 
             masswargs = (nominal_axes, nominal_cols) if not isW else (None, None)
             df, masswhist = syst_tools.define_mass_weights(df, isW, *masswargs)

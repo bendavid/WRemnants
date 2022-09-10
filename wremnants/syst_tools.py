@@ -55,7 +55,7 @@ def scale_helicity_hist_to_variations(scale_hist, sum_axis=[], rebinPtV=None):
     systhist = scale_hist.view(flow=True) - nom_scale_hist.view(flow=True) + expandnom
 
     scale_variation_hist = hist.Hist(*scale_hist.axes, storage = scale_hist._storage_type(), 
-                name = out_name, data = systhist)
+                                     name = out_name, data = systhist)
 
     return scale_variation_hist
 

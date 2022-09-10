@@ -163,10 +163,6 @@ if not args.noEfficiencyUnc:
             scale=1.0 if "Syst" in name  else {".*effStatTnP.*Iso" : "1.414", ".*effStatTnP.*IDIPTrig" : "1.0"} if not args.correlateEffStatIsoByCharge else 1.0 # only for iso, scale up by sqrt(2) when decorrelating between charges and efficiencies were derived inclusively
         )
 
-inclusiveScale = args.qcdScale == "integrated"
-helicity = "Helicity" in args.qcdScale
-
-scale_hist = "qcdScale"
 scaleSystAxes = ["muRfact", "muFfact"] 
 scaleLabelsByAxis = ["muR", "muF"]
 scaleGroupName = "QCDscale"
@@ -177,28 +173,35 @@ scaleSkipEntries = [(1, 1), (0, 2), (2, 0)]
 systNameReplaceVec = [("muR2muF2", "muRmuFUp"), ("muR0muF0", "muRmuFDown"), ("muR2muF1", "muRUp"), 
                       ("muR0muF1", "muRDown"), ("muR1muF0", "muFDown"), ("muR1muF2", "muFUp"),
                       ("genQ0", "genVminus"), ("genQ1", "genVplus")]
-scaleActionArgs = {"sum_axis" : ["ptVgen"]}
 
-scale_action_map = {proc : syst_tools.scale_helicity_hist_to_variations for proc in common.vprocs}
-
-cardTool.addSystematic("qcdScale",
-    rename="qcdScaleNonSignal",
-    action=syst_tools.scale_helicity_hist_to_variations,
-    actionArgs=scaleActionArgs,
-    processes=single_v_nonsig_samples,
-    group=f"qcdScale{'W' if args.wlike else 'Z'}",
-    systAxes=copy.deepcopy(scaleSystAxes),
-    labelsByAxis=scaleLabelsByAxis[:],
-    skipEntries=scaleSkipEntries[:],
-    systNameReplace=systNameReplaceVec[:],
-    baseName=f"QCDscale{'W' if args.wlike else 'Z'}_",
-    passToFakes=False if args.noQCDscaleFakes else passSystToFakes,
+# for Z background in W mass case (W background for Wlike is essentially 0, useless to apply QCD scales there)
+if not args.wlike:
+    cardTool.addSystematic("inclusive_qcdScale",
+                           rename="qcdScaleNonSignal",
+                           processes=single_v_nonsig_samples,
+                           group=f"qcdScale{'W' if args.wlike else 'Z'}",
+                           systAxes=copy.deepcopy(scaleSystAxes),
+                           labelsByAxis=scaleLabelsByAxis[:],
+                           skipEntries=scaleSkipEntries[:],
+                           systNameReplace=systNameReplaceVec[:],
+                           baseName=f"QCDscaleZ_",
+                           passToFakes=False if args.noQCDscaleFakes else passSystToFakes,
 )
 
+inclusiveScale = args.qcdScale == "integrated"
+helicity = "Helicity" in args.qcdScale
+
+if inclusiveScale:
+    scale_hist = "inclusive_qcdScale"
+    scale_action = None
+    scaleActionArgs = {}
+    scale_action_map = {}
+else:
+    scale_action_map = {proc : syst_tools.scale_helicity_hist_to_variations for proc in (common.zprocs if args.wlike else common.wprocs)}
+    scale_hist = "qcdScale"
+    
 if args.qcdScale == "byCharge":
-    scale_hist = "qcdScale" # might also use vptInclusive_qcdScale if present (it doesn't have pt bins, so no need to rebin
-    scale_action = syst_tools.scale_helicity_hist_to_variations
-    scaleActionArgs = {"sum_axis" : ["ptVgen"]}
+    scaleActionArgs = {"sum_axis" : ["ptVgen"]} 
     scaleGroupName += "ByChargeV"
     scaleSystAxes.insert(0, "chargeVgen")
     scaleLabelsByAxis.insert(0, "genQ")
@@ -213,24 +216,26 @@ if "Pt" in args.qcdScale:
     scaleLabelsByAxis.insert(0, "genQ")
     scaleSkipEntries = [(-1, -1, *x) for x in scaleSkipEntries] # need to add a -1 for each axis element added before
 
-    if args.qcdScale == "byHelicityPtAndByPt":
-        # note: the following uses a different histogram compared to the one for helicity splitting
-        # when integrating on the coefficients for the helicity split version they should give the same results modulo statistical fluctuations
-        print("Option --qcdScale byHelicityPtAndByPt was chosen: doing additional qcdScale histogram for tests")
-        print(scaleActionArgs)
-        print(scaleLabelsByAxis)
-        cardTool.addSystematic("qcdScale",
-                               actionMap=scale_action_map,
-                               actionArgs=copy.deepcopy(scaleActionArgs), # to avoid possible undesired updates below
-                               processes=signal_samples_inctau,
-                               group=scaleGroupName,
-                               systAxes=scaleSystAxes[:],
-                               labelsByAxis=scaleLabelsByAxis[:],
-                               skipEntries=scaleSkipEntries[:],
-                               systNameReplace=systNameReplaceVec,
-                               baseName="QCDscaleByPt_",
-                               passToFakes=False if args.noQCDscaleFakes else passSystToFakes,
-        )
+    ## keep commented for now, it is only for tests but might become useful to deal with constraints
+    ##
+    # if args.qcdScale == "byHelicityPtAndByPt":
+    #     # note: the following uses a different histogram compared to the one for helicity splitting
+    #     # when integrating on the coefficients for the helicity split version they should give the same results modulo statistical fluctuations
+    #     print("Option --qcdScale byHelicityPtAndByPt was chosen: doing additional qcdScale histogram for tests")
+    #     print(scaleActionArgs)
+    #     print(scaleLabelsByAxis)
+    #     cardTool.addSystematic("qcdScale",
+    #                            actionMap=scale_action_map,
+    #                            actionArgs=copy.deepcopy(scaleActionArgs), # to avoid possible undesired updates below
+    #                            processes=signal_samples_inctau,
+    #                            group=scaleGroupName,
+    #                            systAxes=scaleSystAxes[:],
+    #                            labelsByAxis=scaleLabelsByAxis[:],
+    #                            skipEntries=scaleSkipEntries[:],
+    #                            systNameReplace=systNameReplaceVec,
+    #                            baseName="QCDscaleByPt_",
+    #                            passToFakes=False if args.noQCDscaleFakes else passSystToFakes,
+    #     )
 
 if helicity:
     scale_hist = "qcdScaleByHelicity"

@@ -52,7 +52,7 @@ def writeMetaInfoToRootFile(rtfile, exclude_diff='notebooks'):
     d.cd()
     
     for key, value in meta_dict.items():
-        out = ROOT.TNamed(key, value)
+        out = ROOT.TNamed(str(key), str(value))
         out.Write()
 
 def write_analysis_output(results, outfile, args):
