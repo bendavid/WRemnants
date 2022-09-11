@@ -409,7 +409,7 @@ class CardTool(object):
             for chan in self.channels:
                 # do not write systs which should only apply to other charge, to simplify card
                 if self.keepOtherChargeSyst or self.chargeIdDict[chan]["badId"] not in systname:
-                    self.cardContent[chan] += f"{systname.ljust(self.spacing)}{shape.ljust(self.spacing)}{''.join(include)}\n"
+                    self.cardContent[chan] += f"{systname.ljust(self.spacing)} {shape.ljust(self.spacing)}{''.join(include)}\n"
         # unlike for LnN systs, here it is simpler to act on the list of these systs to form groups, rather than doing it syst by syst 
         if group:
             for chan in self.channels:
