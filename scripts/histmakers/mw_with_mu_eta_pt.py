@@ -147,6 +147,7 @@ def build_graph(df, dataset):
     df = df.Filter("Sum(vetoElectrons) == 0")
 
     df = df.Define("goodCleanJets", "Jet_jetId >= 6 && (Jet_pt > 50 || Jet_puId >= 4) && Jet_pt > 30 && abs(Jet_eta) < 2.4 && wrem::cleanJetsFromLeptons(Jet_eta,Jet_phi,Muon_correctedEta[vetoMuons],Muon_correctedPhi[vetoMuons],Electron_eta[vetoElectrons],Electron_phi[vetoElectrons])")
+    df = df.Define("goodCleanJetsPt45", "goodCleanJets && Jet_pt > 45")
 
     df = df.Define("passMT", "transverseMass >= 40.0")
     df = df.Filter("passMT || Sum(goodCleanJets)>=1")
@@ -169,6 +170,10 @@ def build_graph(df, dataset):
         nominal = df.HistoBoost("nominal", nominal_axes, nominal_cols)
         results.append(nominal)
 
+        dQCDbkGVar = df.Filter("passMT || Sum(goodCleanJetsPt45)>=1")
+        qcdJetPt45 = dQCDbkGVar.HistoBoost("qcdJetPt45", nominal_axes, nominal_cols)
+        results.append(qcdJetPt45)
+        
     else:
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
         df = df.Define("weight_vtx", vertex_helper, ["GenVtx_z", "Pileup_nTrueInt"])
@@ -191,6 +196,11 @@ def build_graph(df, dataset):
         nominal = df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "nominal_weight"])
         results.append(nominal)
 
+        dQCDbkGVar = df.Filter("passMT || Sum(goodCleanJetsPt45)>=1")
+        qcdJetPt45 = dQCDbkGVar.HistoBoost("qcdJetPt45", nominal_axes, [*nominal_cols, "nominal_weight"])
+        results.append(qcdJetPt45)
+
+        
         df = df.Define("effStatTnP_tensor", muon_efficiency_helper_stat, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0", "passIso", "nominal_weight"])
 
         effStatTnP = df.HistoBoost("effStatTnP", nominal_axes, [*nominal_cols, "effStatTnP_tensor"], tensor_axes = muon_efficiency_helper_stat.tensor_axes)

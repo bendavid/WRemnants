@@ -145,6 +145,7 @@ cardTool.addSystematic(f"alphaS002{pdfName}",
     scale=0.75, # TODO: this depends on the set, should be provided in theory_tools.py
     passToFakes=passSystToFakes,
 )
+
 if not args.noEfficiencyUnc:
     for name,num in zip(["effSystTnP", "effStatTnP",], [2, 624*4]):
         ## TODO: this merged implementation for the effstat makes it very cumbersome to do things differently for iso and trigidip!!
@@ -310,9 +311,20 @@ cardTool.addSystematic("ecalL1Prefire",
 )
 
 if not args.wlike:
-    cardTool.addLnNSystematic("CMS_Fakes", processes=[args.qcdProcessName], size=1.05)
+    cardTool.addLnNSystematic("CMS_Fakes", processes=[args.qcdProcessName], size=1.05, group="MultijetBkg")
     cardTool.addLnNSystematic("CMS_Top", processes=["Top"], size=1.06)
     cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16)
+
+    # FIXME: it doesn't really make sense to mirror this one since the systematic goes only in one direction
+    cardTool.addSystematic(f"qcdJetPt45", 
+                           processes=["Fake"],
+                           mirror=True,
+                           group="MultijetBkg",
+                           systAxes=[],
+                           outNames=["qcdJetPt45Down", "qcdJetPt45Up"],
+                           passToFakes=passSystToFakes,
+    )
+
 else:
     cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
 
