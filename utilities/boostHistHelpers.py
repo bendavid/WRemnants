@@ -3,6 +3,7 @@ import boost_histogram as bh
 import numpy as np
 from functools import reduce
 import logging
+import collections
 
 def valsAndVariances(h1, h2, allowBroadcast=True, transpose=True):
     if not allowBroadcast and len(h1.axes) != len(h2.axes):
@@ -229,5 +230,36 @@ def rebinHistsToCommon(hists, axis_idx, keep_full_range=False):
    
 def projectNoFlow(h, proj_ax, exclude=[]):
     s = hist.tag.Slicer()
-    hnoflow = h[{ax : s[0:hist.overflow:hist.sum] for ax in h.axes.name if ax not in exclude+[proj_ax]}]
-    return hnoflow.project(proj_ax)
+    if type(proj_ax) == str:
+        proj_ax = [proj_ax]
+    hnoflow = h[{ax : s[0:hist.overflow:hist.sum] for ax in h.axes.name if ax not in exclude+list(proj_ax)}]
+    return hnoflow.project(*proj_ax) 
+
+def syst_min_or_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=[], do_min=True):
+    if syst_ax not in h.axes.name:
+        logging.warning(f"Did not find syst axis {syst_ax} in histogram. Returning nominal!")
+        return h
+    if max(indices) > h.axes[syst_ax].size:
+        logging.warning(f"Range of indices exceeds length of syst axis '{syst_ax}.' Returning nominal!")
+        return h
+
+    systax_idx = h.axes.name.index(syst_ax)
+    if systax_idx != h.ndim-1:
+        raise ValueError("Required to have the syst axis at index -1")
+
+    if syst_ax in proj_ax:
+        proj_ax.pop(syst_ax)
+        
+    hvar = projectNoFlow(h, proj_ax+[syst_ax], exclude=no_flow)
+
+    view = np.take(hvar.view(flow=True), indices, axis=-1)
+    fullview = np.take(h.view(flow=True), indices, axis=-1)
+    
+    op = np.argmin if do_min else np.argmax
+    # Index of min/max values considering only the eventual projection
+    idx = op(view.value, axis=-1)
+    opview = fullview[(*np.indices(fullview.shape[:-1]), idx)]
+    
+    hnew = h[{syst_ax : 0}]
+    hnew[...] = opview
+    return hnew

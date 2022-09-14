@@ -40,9 +40,10 @@ def analysis_debug_output(results):
     logging.debug("")
     logging.debug("Unweighted events (before cut)")
     logging.debug("-"*30)
-    for key in results.keys():
-        logging.debug(f"Dataset {key.ljust(30)}:  {results[key]['event_count']}")
-        logging.debug("-"*30)
+    for key,val in results.items():
+        if "event_count" in val:
+            logging.debug(f"Dataset {key.ljust(30)}:  {val['event_count']}")
+            logging.debug("-"*30)
     logging.debug("")
 
 def writeMetaInfoToRootFile(rtfile, exclude_diff='notebooks'):

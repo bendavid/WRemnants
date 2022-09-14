@@ -177,6 +177,7 @@ def build_graph(df, dataset):
         if not args.noScaleFactors:
             weight_expr += "*weight_fullMuonSF_withTrackingReco"
         
+        df = syst_tools.define_efficiency_cols(df
         df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
 
         if apply_theory_corr:
