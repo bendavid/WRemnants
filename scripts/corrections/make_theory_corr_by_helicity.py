@@ -47,6 +47,16 @@ elif args.proc == "w":
         "WminusmunuPostVFP" : (args.corr_ul[not plus_idx], args.corr_a4[not plus_idx4])}
 
 minnloh = input_tools.read_all_and_scale(args.minnlo_file, list(filesByProc.keys()), ["helicity_moments_scale"])[0]
+# # TODO: Really need to reuse code here and for the inclusive corr
+# Get more stats in the correction
+add_taus = True 
+if add_taus:
+    logging.info("Combine muon and tau decay samples for increased stats")
+    from wremnants.datasets.datasetDict_v9 import Z_TAU_TO_LEP_RATIO,BR_TAUToMU
+    taus = ["WplustaunuPostVFP", "WminustaunuPostVFP"] if args.proc == "w" else ["ZtautauPostVFP"]
+    taush = input_tools.read_all_and_scale(args.minnlo_file, taus, ["helicity_moments_scale"])[0]
+    # Rescale taus to mu to effectively have more stats
+    minnloh = 0.5*(minnloh + taush/(Z_TAU_TO_LEP_RATIO if args.proc == "z" else BR_TAUToMU))
 minnloh = minnloh[{"muRfact" : 1.j, "muFfact" : 1.j}]
 
 sigma_ulh = hh.sumHists([read_corr(procName, args.generator, corr_files[0]) for procName, corr_files in filesByProc.items()])
@@ -59,19 +69,21 @@ outfile = f"{args.outpath}/{args.generator}HelicityCorr{outName}.pkl.lz4"
 if args.postfix:
     outfile = outfile.replace(".pkl.lz4", f"_{args.postfix}.pkl.lz4")
 
+out_dict = {
+    f"{args.generator}_minnlo_coeffs" : corrh,
+    f"{args.generator}_sigma4_hist" : sigma4h,
+    f"{args.generator}_sigmaUL_hist" : sigma_ulh,
+    "minnlo_helicity_hist" : minnloh,
+}
 with lz4.frame.open(outfile, "wb") as f:
-    pickle.dump({
-            outName : {
-                f"{args.generator}_minnlo_coeffs" : corrh,
-                f"{args.generator}_sigma4_hist" : sigma4h,
-                f"{args.generator}_sigmaUL_hist" : sigma_ulh,
-                "minnlo_helicity_hist" : minnloh,
-            },
+    pickle.dump({ outName : out_dict,
             "meta_data" : output_tools.metaInfoDict(),
         }, f, protocol = pickle.HIGHEST_PROTOCOL)
 
 logging.info("Correction binning is")
 for ax in corrh.axes:
     logging.info(f"Axis {ax.name}: {ax.edges}")
+helcorr = np.average(corrh[{'helicity' : -1.j, 'corr' : True}])
+logging.info(f"Average correction for sigmaUL is {helcorr}")
 logging.info(f"Wrote file {outfile}")
 

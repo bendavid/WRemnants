@@ -30,7 +30,7 @@ era = args.era
 noMuonCorr = args.noMuonCorr
 
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
-qcdScaleByHelicity_Zhelper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = True)
+#qcdScaleByHelicity_Zhelper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = True)
 qcdScaleByHelicity_Whelper = wremnants.makeQCDScaleByHelicityHelper()
 
 # custom template binning
@@ -72,10 +72,11 @@ down_nom_up_axis = hist.axis.Regular(3, -1.5, 1.5, underflow=False, overflow=Fal
 muon_efficiency_helper, muon_efficiency_helper_stat, muon_efficiency_helper_syst = wremnants.make_muon_efficiency_helpers(era = era, max_pt = axis_pt.edges[-1])
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
+vertex_helper = wremnants.make_vertex_helper(era = era)
 
 calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
 
-corr_helpers = theory_tools.load_corr_helpers(common.vprocs, args.theory_corr)
+corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_corr)
 
 # recoil initialization
 if not args.no_recoil:
@@ -100,6 +101,7 @@ def build_graph(df, dataset):
 
     isW = dataset.name in common.wprocs
     isZ = dataset.name in common.zprocs
+    isTop = dataset.group == "Top"
     apply_theory_corr = args.theory_corr and dataset.name in corr_helpers
     if noMuonCorr:
         df = df.Alias("Muon_correctedPt", "Muon_pt")
@@ -129,7 +131,7 @@ def build_graph(df, dataset):
     df = df.Filter("Sum(vetoMuons) == 1")
     df = df.Define("goodMuons", "vetoMuons && Muon_mediumId && Muon_isGlobal")
     df = df.Filter("Sum(goodMuons) == 1")
-
+    
     df = df.Define("goodMuons_pt0", "Muon_correctedPt[goodMuons][0]")
     df = df.Define("goodMuons_eta0", "Muon_correctedEta[goodMuons][0]")
     df = df.Define("goodMuons_phi0", "Muon_correctedPhi[goodMuons][0]")
@@ -151,9 +153,16 @@ def build_graph(df, dataset):
     df = df.Define("passIso", "goodMuons_pfRelIso04_all0 < 0.15")
 
     df = df.Define("goodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_pt,TrigObj_l1pt,TrigObj_l2pt,TrigObj_filterBits)")
+    # TODO: when new SF are available move to the following trigger matching
+    # df = df.Define("goodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_filterBits)")
     df = df.Filter("wrem::hasTriggerMatch(goodMuons_eta0,goodMuons_phi0,TrigObj_eta[goodTrigObjs],TrigObj_phi[goodTrigObjs])")
     df = df.Filter("Flag_globalSuperTightHalo2016Filter && Flag_EcalDeadCellTriggerPrimitiveFilter && Flag_goodVertices && Flag_HBHENoiseIsoFilter && Flag_HBHENoiseFilter && Flag_BadPFMuonFilter")
 
+    # gen match to bare muons to select only prompt muons from top processes
+    if isTop:
+        df = df.Define("postFSRmuons", "GenPart_status == 1 && (GenPart_statusFlags & 1) && abs(GenPart_pdgId) == 13")
+        df = df.Filter("wrem::hasMatchDR2(goodMuons_eta0,goodMuons_phi0,GenPart_eta[postFSRmuons],GenPart_phi[postFSRmuons],0.09)")
+    
     nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
 
     if dataset.is_data:
@@ -162,13 +171,16 @@ def build_graph(df, dataset):
 
     else:
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
+        df = df.Define("weight_vtx", vertex_helper, ["GenVtx_z", "Pileup_nTrueInt"])
         df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0", "passIso"])
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId"])
 
-        weight_expr = "weight*weight_pu*weight_newMuonPrefiringSF"
+        weight_expr = "weight*weight_pu*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom"
         if not args.noScaleFactors:
             weight_expr += "*weight_fullMuonSF_withTrackingReco"
-        
+        if args.vertex_weight:
+            weight_expr += "*weight_vtx"
+            
         df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
 
         if apply_theory_corr:
@@ -201,8 +213,12 @@ def build_graph(df, dataset):
         muonL1PrefireSyst = df.HistoBoost("muonL1PrefireSyst", nominal_axes, [*nominal_cols, "muonL1PrefireSyst_tensor"], tensor_axes = [down_up_axis])
         results.append(muonL1PrefireSyst)
 
+        df = df.Define("ecalL1Prefire_tensor", f"wrem::twoPointScaling(nominal_weight/L1PreFiringWeight_ECAL_Nom, L1PreFiringWeight_ECAL_Dn, L1PreFiringWeight_ECAL_Up)")
+        ecalL1Prefire = df.HistoBoost("ecalL1Prefire", nominal_axes, [*nominal_cols, "ecalL1Prefire_tensor"], tensor_axes = [down_up_axis])
+        results.append(ecalL1Prefire)
+        
         # luminosity, done here as shape variation despite being a flat scaling so to facilitate propagating to fakes afterwards
-        df = df.Define("luminosityScaling", f"wrem::dummyScaling(nominal_weight, {args.lumiUncertainty})")
+        df = df.Define("luminosityScaling", f"wrem::constantScaling(nominal_weight, {args.lumiUncertainty})")
         luminosity = df.HistoBoost("luminosity", nominal_axes, [*nominal_cols, "luminosityScaling"], tensor_axes = [down_up_axis])
         results.append(luminosity)
                 
@@ -211,21 +227,19 @@ def build_graph(df, dataset):
         if isW or isZ:
 
             df = theory_tools.define_scale_tensor(df)
-            results.append(theory_tools.make_scale_hist(df, [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen"]))
-            results.append(theory_tools.make_scale_hist(df, [*nominal_axes,              axis_chargeVgen], [*nominal_cols,           "chargeVgen"], "vptInclusive"))
+            results.append(theory_tools.make_scale_hist(df, nominal_axes, nominal_cols, "inclusive"))
+            if isW:
+                # Don't think it really makes sense to have W and Z be the same hist name, especially because the charge axis has to be different
+                results.append(theory_tools.make_scale_hist(df, [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen"]))
+                if not args.skipHelicity:
+                    helicity_helper = qcdScaleByHelicity_Whelper
+                    # TODO: Should have consistent order here with the scetlib correction function
+                    df = df.Define("helicityWeight_tensor", helicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
+                    qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=helicity_helper.tensor_axes)
+                    results.append(qcdScaleByHelicityUnc)
 
-            # currently SCETLIB corrections are applicable to W-only, and helicity-split scales are only valid for one of W or Z at a time
-            # TODO make this work for both simultaneously as needed
-            if not args.skipHelicity:
-                helicity_helper = qcdScaleByHelicity_Zhelper if isZ else qcdScaleByHelicity_Whelper
-                # TODO: Should have consistent order here with the scetlib correction function
-                df = df.Define("helicityWeight_tensor", helicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
-                qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=helicity_helper.tensor_axes)
-                results.append(qcdScaleByHelicityUnc)
-
-            for i, pdf in enumerate(args.pdfs):
-                withUnc = i == 0 or not args.altPdfOnlyCentral
-                results.extend(theory_tools.define_and_make_pdf_hists(df, nominal_axes, nominal_cols, dataset.name, pdf, withUnc))
+            df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
+            results.extend(theory_tools.make_pdf_hists(df, dataset.name, nominal_axes, nominal_cols, args.pdfs))
 
             masswargs = (nominal_axes, nominal_cols) if isW else (None, None)
             df, masswhist = syst_tools.define_mass_weights(df, isW, *masswargs)
@@ -270,4 +284,4 @@ def build_graph(df, dataset):
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)
-output_tools.write_analysis_output(resultdict, "mw_with_mu_eta_pt.pkl.lz4", args.postfix)
+output_tools.write_analysis_output(resultdict, "mw_with_mu_eta_pt.pkl.lz4", args)

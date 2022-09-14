@@ -38,7 +38,9 @@ def read_corr(procName, generator, corr_file):
             h = input_tools.read_dyturbo_hist(corr_file.split(":"), axis="ptVgen")
 
         charge_ax = minnloh.axes["chargeVgen"]
-        absy_ax = hist.axis.Regular(1, 0, 10, flow=True, name="absYVgen")
+        #absy_ax = hist.axis.Regular(1, 0, 10, flow=True, name="absYVgen")
+        # TODO: This is needed to match axes currently, but it's strictly correct
+        absy_ax = hist.axis.Regular(1, 0, 5, underflow=False, overflow=True, name="absYVgen")
         mass_ax = hist.axis.Regular(1, 60, 120, flow=True, name="massVgen")
         vars_ax = hist.axis.Integer(0, 1, flow=False, name="vars")
         h5D = hist.Hist(mass_ax, absy_ax, *h.axes, charge_ax, vars_ax)
@@ -58,6 +60,15 @@ elif args.proc == "w":
         "WminusmunuPostVFP" : args.corr_files[0 if plus_idx else 1]}
 
 minnloh = input_tools.read_all_and_scale(args.minnlo_file, list(filesByProc.keys()), ["nominal_gen"])[0]
+# Get more stats in the correction
+add_taus = True 
+if add_taus:
+    logging.info("Combining muon and tau decay samples for increased stats")
+    from wremnants.datasets.datasetDict_v9 import Z_TAU_TO_LEP_RATIO,BR_TAUToMU
+    taus = ["WplustaunuPostVFP", "WminustaunuPostVFP"] if args.proc == "w" else ["ZtautauPostVFP"]
+    taush = input_tools.read_all_and_scale(args.minnlo_file, taus, ["nominal_gen"])[0]
+    # Rescale taus to mu to effectively have more stats
+    minnloh = 0.5*(minnloh + taush/(Z_TAU_TO_LEP_RATIO if args.proc == "z" else BR_TAUToMU))
 
 numh = hh.sumHists([read_corr(procName, args.generator, corr_file) for procName, corr_file in filesByProc.items()])
 

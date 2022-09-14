@@ -4,6 +4,7 @@ import hist
 import narf
 import numpy as np
 import boost_histogram as bh
+import logging
 
 ROOT.gInterpreter.Declare('#include "pileup.h"')
 
@@ -55,11 +56,16 @@ def make_pileup_helper(era = None, cropHighWeight = 5.,
     for i in range(puweights.GetNbinsX() + 2):
         if mchist.GetBinContent(i) == 0.:
             puweights.SetBinContent(i, 1.)
-        mchist.SetBinContent(i, min(puweights.GetBinContent(i), cropHighWeight))
+        puweights.SetBinContent(i, min(puweights.GetBinContent(i), cropHighWeight))
 
     puweights.SetName(f"pileup_weights_{era}")
     puweights.SetTitle("")
-
+    logging.debug("")
+    logging.debug(f"PU weights for era {era}")
+    logging.debug([puweights.GetBinContent(i) for i in range(1,puweights.GetNbinsX()+1)])
+    logging.debug("")
+    logging.debug("")
+    
     helper = ROOT.wrem.pileup_helper(puweights)
 
     return helper
