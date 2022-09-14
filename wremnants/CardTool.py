@@ -18,6 +18,8 @@ def notImplemented(operation="Unknown"):
 
 class CardTool(object):
     def __init__(self, cardName="card.txt"):
+        self.skipHist = False # don't produce/write histograms, file with them already exists
+        self.outfile = None
         self.cardName = cardName
         self.systematics = {}
         self.lnNSystematics = {}
@@ -35,7 +37,7 @@ class CardTool(object):
         self.nominalName = "nominal"
         self.datagroups = None
         self.unconstrainedProcesses = None
-        self.noStatUncProcesses = None
+        self.noStatUncProcesses = []
         self.buildHistNameFunc = None
         self.histName = "x"
         self.pseudoData = None
@@ -48,6 +50,11 @@ class CardTool(object):
         self.chargeIdDict = {"minus" : {"val" : -1, "id" : "q0", "badId" : None},
                              "plus"  : {"val" : 1., "id" : "q1", "badId" : None}
                              }
+
+    def skipHistograms(self):
+        self.skipHist = True
+        if len(self.noStatUncProcesses):
+            logging.info("Attention: histograms are not saved according to input options, thus statistical uncertainty won't be zeroed")
         
     def setSkipOtherChargeSyst(self):
         self.keepOtherChargeSyst = False
@@ -55,7 +62,9 @@ class CardTool(object):
         self.chargeIdDict["minus"]["badId"] = "q1"
 
     def setProcsNoStatUnc(self, procs, resetList=True):
-        if self.noStatUncProcesses == None or resetList:
+        if self.skipHist:
+            logging.info("Attention: trying to set statistical uncertainty to 0 for some processes, but histograms won't be saved according to input options")
+        if resetList:
             self.noStatUncProcesses = []
         if isinstance(procs, str):
             self.noStatUncProcesses.append(procs)
@@ -157,17 +166,26 @@ class CardTool(object):
         if not self.isExcludedNuisance(name):
             self.lnNSystematics.update({name : {"size" : size, "processes" : processes, "group" : group, "groupFilter" : groupFilter}})
 
+    # action will be applied to the sum of all the individual samples contributing, actionMap should be used
+    # to apply a separate action per process. this is needed for example for the scale uncertainty split
+    # by pt or helicity
     def addSystematic(self, name, systAxes, outNames=None, skipEntries=None, labelsByAxis=None, 
                         baseName="", mirror=False, scale=1, processes=None, group=None, noConstraint=False,
-                        action=None, actionArgs={}, systNameReplace=[], groupFilter=None, passToFakes=False, splitGroup={}):
-        if not processes:
-            processes = self.allMCProcesses()
-        if passToFakes and self.getFakeName() not in processes:
-            processes.append(self.getFakeName())
+                        action=None, actionArgs={}, actionMap={}, systNameReplace=[], groupFilter=None, passToFakes=False, 
+                        rename=None, splitGroup={}):
+
+        # Need to make an explicit copy of the array before appending
+        procs_to_add = [x for x in (self.allMCProcesses() if not processes else processes)]
+        if passToFakes and self.getFakeName() not in procs_to_add:
+            procs_to_add.append(self.getFakeName())
+
+        if action and actionMap:
+            raise ValueError("Only one of action and actionMap args are allowed")
+
         self.systematics.update({
-            name : { "outNames" : [] if not outNames else outNames,
+            name if not rename else rename : { "outNames" : [] if not outNames else outNames,
                      "baseName" : baseName,
-                     "processes" : processes,
+                     "processes" : procs_to_add,
                      "systAxes" : systAxes,
                      "labelsByAxis" : systAxes if not labelsByAxis else labelsByAxis,
                      "group" : group,
@@ -176,10 +194,12 @@ class CardTool(object):
                      "scale" : scale,
                      "mirror" : mirror,
                      "action" : action,
+                     "actionMap" : actionMap,
                      "actionArgs" : actionArgs,
                      "systNameReplace" : systNameReplace,
                      "noConstraint" : noConstraint,
-                     "skipEntries" : [] if not skipEntries else skipEntries
+                     "skipEntries" : [] if not skipEntries else skipEntries,
+                     "name" : name,
             }
         })
 
@@ -219,7 +239,6 @@ class CardTool(object):
         if hvar.axes[-1].name == "mirror":
             axNames.append("mirror")
             axLabels.append("mirror")
-        
 
         if not all([name in [ax.name for ax in hvar.axes] for name in axNames]):
             raise ValueError(f"Failed to find axis names '{str(systAxes)} in hist. " \
@@ -275,6 +294,7 @@ class CardTool(object):
                 f"process {proc}, syst {syst}. Found {len(var_names)} names and {len(variations)} variations.")
         setZeroStatUnc = False
         if proc in self.noStatUncProcesses:
+            logging.info(f"Zeroing statistical uncertainty for process {proc}")
             setZeroStatUnc = True
         for name, var in zip(var_names, variations):
             if name != "":
@@ -303,8 +323,10 @@ class CardTool(object):
 
     def setOutfile(self, outfile):
         if type(outfile) == str:
-            self.outfile = ROOT.TFile(outfile, "recreate")
-            #self.outfile = uproot.recreate(outfile)
+            if self.skipHist:
+                self.outfile = outfile # only store name, file will not be used and doesn't need to be opened
+            else:
+                self.outfile = ROOT.TFile(outfile, "recreate")
         else:
             self.outfile = outfile
 
@@ -319,13 +341,20 @@ class CardTool(object):
 
         self.writeLnNSystematics()
         for syst in self.systematics.keys():
-            processes=self.systematics[syst]["processes"]
-            self.datagroups.loadHistsForDatagroups(self.histName, syst, label="syst",
-                                                   procsToRead=processes, forceNonzero=syst != "qcdScaleByHelicity")
-            self.writeForProcesses(syst, label="syst", processes=processes)
-        
+            if self.isExcludedNuisance(syst): continue
+            systMap=self.systematics[syst]
+            systName = syst if not systMap["name"] else systMap["name"]
+            processes=systMap["processes"]
+            self.datagroups.loadHistsForDatagroups(self.histName, systName, label="syst",
+                    procsToRead=processes, forceNonzero=systName != "qcdScaleByHelicity",
+                    preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"])
+            self.writeForProcesses(syst, label="syst", processes=processes)    
+        output_tools.writeMetaInfoToRootFile(self.outfile, exclude_diff='notebooks')
+        if self.skipHist:
+            logging.info("Histograms will not be written because 'skipHist' flag is set to True")
         self.writeCard()
 
+        
     def writeCard(self):
         for chan in self.channels:
             with open(self.cardName.format(chan=chan), "w") as card:
@@ -385,8 +414,9 @@ class CardTool(object):
                 # do not write systs which should only apply to other charge, to simplify card
                 if self.keepOtherChargeSyst or self.chargeIdDict[chan]["badId"] not in systname:
                     self.cardContent[chan] += f"{systname.ljust(self.spacing)}{shape.ljust(self.spacing)}{''.join(include)}\n"
-            # unlike for LnN systs, here it is simpler to act on the list of these systs to form groups, rather than doing it syst by syst 
-            if group:
+        # unlike for LnN systs, here it is simpler to act on the list of these systs to form groups, rather than doing it syst by syst 
+        if group:
+            for chan in self.channels:
                 if self.keepOtherChargeSyst:
                     systNamesForGroupPruned = systNames[:]
                 else:
@@ -421,8 +451,7 @@ class CardTool(object):
                 "labels" : "".join([str(x).ljust(self.spacing) for x in self.processLabels()]),
                 # Could write out the proper normalizations pretty easily
                 "rates" : "-1".ljust(self.spacing)*nprocs,
-                #"inputfile" : self.outfile.file_path,
-                "inputfile" : self.outfile.GetName(),
+                "inputfile" : self.outfile if type(self.outfile) == str  else self.outfile.GetName(),
                 "dataName" : self.dataName,
                 "histName" : self.histName,
                 "pseudodataHist" : self.pseudoData+"_sum" if self.pseudoData else f"{self.histName}_{self.dataName}"
@@ -441,12 +470,13 @@ class CardTool(object):
 
     def writeHistWithCharges(self, h, name):
         hout = narf.hist_to_root(h)
-        #self.outfile[name] = h
         hout.SetName(f"{name}_{self.channels[0]}")
         hout.Scale(self.lumiScale)
         hout.Write()
     
     def writeHist(self, h, name, setZeroStatUnc=False):
+        if self.skipHist:
+            return
         if setZeroStatUnc:
             hist_no_error = h.copy()
             hist_no_error.variances(flow=True)[...] = 0.

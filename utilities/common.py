@@ -61,4 +61,5 @@ def common_parser():
     parser.add_argument("--eta", nargs=3, type=float, help="Eta binning as 'nbins min max' (only uniform for now)", default=[48,-2.4,2.4])
     parser.add_argument("--pt", nargs=3, type=float, help="Pt binning as 'nbins,min,max' (only uniform for now)", default=[29,26.,55.])
     parser.add_argument("--no_recoil", action='store_true', help="Don't apply recoild correction")
+    parser.add_argument("--vertex_weight", action='store_true', help="Apply reweighting of vertex z distribution in MC to match data")
     return parser,initargs

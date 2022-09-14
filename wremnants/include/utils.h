@@ -123,6 +123,16 @@ bool hasTriggerMatch(const float& eta, const float& phi, const Vec_f& TrigObj_et
 
 }
 
+bool hasMatchDR2(const float& eta, const float& phi, const Vec_f& vec_eta, const Vec_f& vec_phi, const float dr2 = 0.09) {
+
+  for (unsigned int jvec = 0; jvec < vec_eta.size(); ++jvec) {
+    if (deltaR2(eta, phi, vec_eta[jvec], vec_phi[jvec]) < dr2) return true;
+  }
+  return false;
+
+}
+
+    
 template<std::ptrdiff_t N, typename V>
 auto vec_to_tensor(const V &vec, std::size_t start = 0) {
   Eigen::TensorFixedSize<typename V::value_type, Eigen::Sizes<N>> res;

@@ -47,7 +47,7 @@ class datagroups(object):
     ## procName are grouped into datagroups
     ## baseName takes values such as "nominal"
     def setHists(self, baseName, syst, procsToRead=None, label=None, nominalIfMissing=True, 
-            selectSignal=True, forceNonzero=True):
+            selectSignal=True, forceNonzero=True, preOpMap=None, preOpArgs=None):
         if not label:
             label = syst if syst else baseName
         if not procsToRead:
@@ -70,8 +70,13 @@ class datagroups(object):
                     else:
                         logging.warning(str(e))
                         continue
+
+                if preOpMap and member.name in preOpMap:
+                    h = preOpMap[member.name](h, **preOpArgs)
+
                 group[label] = h if not group[label] else hh.addHists(h, group[label])
-            if selectSignal and group[label] and "signalOp" in group and group["signalOp"]:
+
+            if selectSignal and group[label]:
                 group[label] = group["signalOp"](group[label])
         # Avoid situation where the nominal is read for all processes for this syst
         if not foundExact:
@@ -116,11 +121,11 @@ class datagroups(object):
         return name
 
     def loadHistsForDatagroups(self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="", nominalIfMissing=True,
-            selectSignal=True, forceNonzero=True, pseudodata=False):
+            selectSignal=True, forceNonzero=True, pseudodata=False, preOpMap=None, preOpArgs={}):
         if self.rtfile and self.combine:
             self.setHistsCombine(baseName, syst, channel, procsToRead, excluded_procs, label)
         else:
-            self.setHists(baseName, syst, procsToRead, label, nominalIfMissing, selectSignal, forceNonzero)
+            self.setHists(baseName, syst, procsToRead, label, nominalIfMissing, selectSignal, forceNonzero, preOpMap, preOpArgs)
 
     def getDatagroups(self, excluded_procs=[]):
         if type(excluded_procs) == str: excluded_procs = list(excluded_procs)
@@ -139,8 +144,10 @@ class datagroups(object):
     def processes(self):
         return self.groups.keys()
 
-    def addSummedProc(self, refname, name, label, color="red", exclude=["Data"], relabel=None):
-        self.loadHistsForDatagroups(refname, syst=name)
+    def addSummedProc(self, refname, name, label, color="red", exclude=["Data"], relabel=None, reload=False):
+        if reload:
+            self.loadHistsForDatagroups(refname, syst=name, excluded_procs=exclude)
+
         self.groups[name] = dict(
             label=label,
             color=color,
@@ -161,7 +168,7 @@ class datagroups(object):
             color=color,
             members=[],
         )
-        self.groups[name][refname] = action(self.groups[refproc][refname]).copy()
+        self.groups[name][refname] = action(self.groups[refproc][refname])
 
 class datagroups2016(datagroups):
     def __init__(self, infile, combine=False, wlike=False, pseudodata_pdfset = None):

@@ -2,6 +2,7 @@
 from wremnants import CardTool,theory_tools,syst_tools
 from wremnants import histselections as sel
 from wremnants.datasets.datagroups import datagroups2016
+from utilities import common
 import argparse
 import os
 import pathlib
@@ -14,11 +15,11 @@ logging.basicConfig(level=logging.INFO)
 scriptdir = f"{pathlib.Path(__file__).parent}"
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-o", "--outfolder", type=str, default="/scratch/kelong/CombineStudies")
+parser.add_argument("-o", "--outfolder", type=str, default="/scratch/kelong/CombineStudies", help="Main output folder, with the root file storing all histograms and datacards for single charge")
 parser.add_argument("-i", "--inputFile", type=str, required=True)
 parser.add_argument("--qcdScale", choices=["byHelicityPtAndByPt", "byHelicityPt", "byHelicityCharge", "byPt", "byCharge", "integrated",], default="byHelicityPt", 
         help="Decorrelation for QCDscale (additionally always by charge). With 'byHelicityPtAndByPt' two independent histograms are stored, split and not split by helicities (for tests)")
-parser.add_argument("--rebinPtV", type=int, default=0, help="Rebin axis with gen boson pt by this value (default does nothing)")
+parser.add_argument("--rebinPtV", type=float, default=0, nargs='*', help="Rebin axis with gen boson pt by this value (default does nothing)")
 parser.add_argument("--wlike", action='store_true', help="Run W-like analysis of mZ")
 parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow). Equivalent to --excludeNuisances '.*effSystTnP|.*effStatTnP' ")
 parser.add_argument("--pdf", type=str, default="nnpdf31", choices=theory_tools.pdfMap.keys(), help="PDF to use")
@@ -28,26 +29,35 @@ parser.add_argument("-x",  "--excludeNuisances", type=str, default="", help="Reg
 parser.add_argument("-k",  "--keepNuisances", type=str, default="", help="Regular expression to keep some systematics, overriding --excludeNuisances. Can be used to keep only some systs while excluding all the others with '.*'")
 parser.add_argument("--qcdProcessName", dest="qcdProcessName" , type=str, default="Fake",   help="Name for QCD process")
 parser.add_argument("--noStatUncFakes", dest="noStatUncFakes" , action="store_true",   help="Set bin error for QCD background templates to 0, to check MC stat uncertainties for signal only")
+parser.add_argument("--noQCDscaleFakes", dest="noQCDscaleFakes" , action="store_true",   help="Do not apply QCd scale uncertainties on fakes, mainly for debugging")
 parser.add_argument("--skipOtherChargeSyst", dest="skipOtherChargeSyst" , action="store_true",   help="Skip saving histograms and writing nuisance in datacard for systs defined for a given charge but applied on the channel with the other charge")
 parser.add_argument("--skipSignalSystOnFakes", dest="skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
 parser.add_argument("--scaleMuonCorr", type=float, default=1.0, help="Scale up/down dummy muon scale uncertainty by this factor")
 parser.add_argument("--correlateEffStatIsoByCharge", action='store_true', help="Correlate isolation efficiency uncertanties between the two charges (by default they are decorrelated)")
 parser.add_argument("--doStatOnly", action="store_true", default=False, help="Set up fit to get stat-only uncertainty (currently combinetf with -S 0 doesn't work)")
+parser.add_argument("--noHist", action='store_true', help="Skip the making of 2D histograms (root file is left untouched if existing")
 args = parser.parse_args()
 
 if not os.path.isdir(args.outfolder):
     os.makedirs(args.outfolder)
 
+if args.noHist and args.noStatUncFakes:
+    logging.warning("Option --noHist would override --noStatUncFakes. Please select only one of them")
+    quit()
+    
 datagroups = datagroups2016(args.inputFile, wlike=args.wlike)
 templateDir = f"{scriptdir}/Templates/WMass"
 name = "WMass" if not args.wlike else "ZMassWLike"
 cardTool = CardTool.CardTool(f"{args.outfolder}/{name}_{{chan}}.txt")
 cardTool.setNominalTemplate(f"{templateDir}/main.txt")
+if args.noHist:
+    cardTool.skipHistograms()
 cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/{name}CombineInput.root"))
 cardTool.setDatagroups(datagroups)
 cardTool.setFakeName(args.qcdProcessName)
 cardTool.setSpacing(36)
-cardTool.setProcsNoStatUnc(procs=args.qcdProcessName, resetList=False)
+if args.noStatUncFakes:
+    cardTool.setProcsNoStatUnc(procs=args.qcdProcessName, resetList=False)
 cardTool.setCustomSystForCard(args.excludeNuisances, args.keepNuisances)
 if args.skipOtherChargeSyst:
     cardTool.setSkipOtherChargeSyst()
@@ -57,12 +67,14 @@ if args.pseudoData:
 passSystToFakes = not args.wlike and not args.skipSignalSystOnFakes
     
 single_v_samples = cardTool.filteredProcesses(lambda x: x[0] in ["W", "Z"])
+single_v_nonsig_samples = cardTool.filteredProcesses(lambda x: x[0] == ("W" if args.wlike else "Z"))
 single_vmu_samples = list(filter(lambda x: "mu" in x, single_v_samples))
 signal_samples = list(filter(lambda x: x[0] == ("Z" if args.wlike else "W"), single_vmu_samples))
 signal_samples_inctau = list(filter(lambda x: x[0] == ("Z" if args.wlike else "W"), single_v_samples))
 
 logging.info(f"All MC processes {cardTool.allMCProcesses()}")
 logging.info(f"Single V samples: {single_v_samples}")
+logging.info(f"Single V no signal samples: {single_v_nonsig_samples}")
 logging.info(f"Signal samples: {signal_samples}")
 
 pdfInfo = theory_tools.pdf_info_map(signal_samples[0], args.pdf)
@@ -86,7 +98,7 @@ if args.doStatOnly:
     # print a card with only mass weights and a dummy syst
     cardTool.addLnNSystematic("dummy", processes=["Other"] if args.wlike else ["Top", "Diboson"], size=1.001, group="dummy")
     cardTool.writeOutput()
-    print("Using option --doStatOnly: the card will be created with only mass weights and a dummy LnN syst on all processes")
+    print("Using option --doStatOnly: the card was created with only mass weights and a dummy LnN syst on all processes")
     quit()
     
 if args.wlike:
@@ -138,7 +150,7 @@ if not args.noEfficiencyUnc:
         ## TODO: this merged implementation for the effstat makes it very cumbersome to do things differently for iso and trigidip!!
         ## the problem is that I would need custom actions inside based on actual nuisance names, which needs to be commanded from outside, and this is not straightforward
         axes = ["idiptrig-iso"] if num == 2 else ["SF eta", "SF pt", "SF charge", "idiptrig-iso"]
-        axlabels = ["IDIPTrig"] if num == 2 else ["eta", "pt", "q", "Trig"]
+        axlabels = ["Trig"] if num == 2 else ["eta", "pt", "q", "Trig"]  # WARNING: Trig0/Trig1 actually stands for trigger/isolation, the axis name was intended to indicate the order "axis_idiptrig_iso"
         cardTool.addSystematic(name, 
             mirror=True,
             group="muon_eff_syst" if "Syst" in name else "muon_eff_stat", # TODO: for now better checking them separately
@@ -147,86 +159,98 @@ if not args.noEfficiencyUnc:
             baseName=name+"_",
             processes=cardTool.allMCProcesses(),
             passToFakes=passSystToFakes,
-            systNameReplace=[("q0Trig0", "Trig0"), ("q1Trig0", "Trig0")] if args.correlateEffStatIsoByCharge else [],
-            scale=1.0 if "Syst" in name  else {".*effStatTnP.*Trig0" : "1.414", ".*effStatTnP.*Trig1" : "1.0"} if not args.correlateEffStatIsoByCharge else 1.0 # only for iso, scale up by sqrt(2) when decorrelating between charges and efficiencies were derivied inclusively
+            systNameReplace=[("Trig0", "IDIPTrig"), ("q0Trig1", "Iso"), ("q1Trig1", "Iso")] if args.correlateEffStatIsoByCharge else [("Trig0", "IDIPTrig"), ("Trig1", "Iso")], # replace with better names
+            scale=1.0 if "Syst" in name  else {".*effStatTnP.*Iso" : "1.414", ".*effStatTnP.*IDIPTrig" : "1.0"} if not args.correlateEffStatIsoByCharge else 1.0 # only for iso, scale up by sqrt(2) when decorrelating between charges and efficiencies were derived inclusively
         )
 
-inclusiveScale = args.qcdScale == "integrated"
-helicity = "Helicity" in args.qcdScale
-
-scale_hist = "vptInclusive_qcdScale"
 scaleSystAxes = ["muRfact", "muFfact"] 
 scaleLabelsByAxis = ["muR", "muF"]
 scaleGroupName = "QCDscale"
-scale_action_args = None
 # Exclude all combinations where muR = muF = 1 (nominal) or where
 # they are extreme values (ratio = 4 or 1/4)
 scaleSkipEntries = [(1, 1), (0, 2), (2, 0)]
 # This is hacky but it's the best idea I have for now...
 systNameReplaceVec = [("muR2muF2", "muRmuFUp"), ("muR0muF0", "muRmuFDown"), ("muR2muF1", "muRUp"), 
-                      ("muR0muF1", "muRDown"), ("muR1muF0", "muFDown"), ("muR1muF2", "muFUp")]
+                      ("muR0muF1", "muRDown"), ("muR1muF0", "muFDown"), ("muR1muF2", "muFUp"),
+                      ("genQ0", "genVminus"), ("genQ1", "genVplus")]
+
+# for Z background in W mass case (W background for Wlike is essentially 0, useless to apply QCD scales there)
+if not args.wlike:
+    cardTool.addSystematic("inclusive_qcdScale",
+                           rename="qcdScaleNonSignal",
+                           processes=single_v_nonsig_samples,
+                           group=f"qcdScale{'W' if args.wlike else 'Z'}",
+                           systAxes=copy.deepcopy(scaleSystAxes),
+                           labelsByAxis=scaleLabelsByAxis[:],
+                           skipEntries=scaleSkipEntries[:],
+                           systNameReplace=systNameReplaceVec[:],
+                           baseName=f"QCDscaleZ_",
+                           passToFakes=False if args.noQCDscaleFakes else passSystToFakes,
+)
+
+inclusiveScale = args.qcdScale == "integrated"
+helicity = "Helicity" in args.qcdScale
 
 if inclusiveScale:
-    scale_action = syst_tools.scale_helicity_hist_to_variations
+    scale_hist = "inclusive_qcdScale"
+    scale_action = None
     scaleActionArgs = {}
-
+    scale_action_map = {}
+else:
+    scale_action_map = {proc : syst_tools.scale_helicity_hist_to_variations for proc in (common.zprocs if args.wlike else common.wprocs)}
+    scale_hist = "qcdScale"
+    
 if args.qcdScale == "byCharge":
-    scale_action = syst_tools.scale_helicity_hist_to_variations
-    scaleActionArgs = {}
+    scaleActionArgs = {"sum_axis" : ["ptVgen"]} 
     scaleGroupName += "ByChargeV"
     scaleSystAxes.insert(0, "chargeVgen")
     scaleLabelsByAxis.insert(0, "genQ")
     scaleSkipEntries = [(-1, *x) for x in scaleSkipEntries] # need to add a -1 for each axis element added before
     
 if "Pt" in args.qcdScale:
-    scale_hist = "qcdScale"
-    scale_action = syst_tools.scale_helicity_hist_to_variations
     scaleActionArgs = {"rebinPtV" : args.rebinPtV}
     scaleGroupName += "ByPtV"
     scaleSystAxes.insert(0, "ptVgen")
-    scaleLabelsByAxis.insert(0, "genPtV")
+    scaleLabelsByAxis.insert(0, "PtBin")
     scaleSystAxes.insert(0, "chargeVgen")
     scaleLabelsByAxis.insert(0, "genQ")
     scaleSkipEntries = [(-1, -1, *x) for x in scaleSkipEntries] # need to add a -1 for each axis element added before
 
-    if args.qcdScale == "byHelicityPtAndByPt":
-        # note: the following uses a different histogram compared to the one for helicity splitting
-        # when integrating on the coefficients for the helicity split version they should give the same results modulo statistical fluctuations
-        print("Option --qcdScale byHelicityPtAndByPt was chosen: doing additional qcdScale histogram for tests")
-        print(scaleActionArgs)
-        print(scaleLabelsByAxis)
-        cardTool.addSystematic("qcdScale",
-                               action=scale_action,
-                               actionArgs=copy.deepcopy(scaleActionArgs), # to avoid possible undesired updates below
-                               processes=signal_samples,
-                               group=scaleGroupName,
-                               systAxes=scaleSystAxes[:],
-                               labelsByAxis=scaleLabelsByAxis[:],
-                               skipEntries=scaleSkipEntries[:],
-                               systNameReplace=systNameReplaceVec,
-                               baseName="QCDscaleByPt_",
-                               passToFakes=passSystToFakes,
-        )
+    ## keep commented for now, it is only for tests but might become useful to deal with constraints
+    ##
+    # if args.qcdScale == "byHelicityPtAndByPt":
+    #     # note: the following uses a different histogram compared to the one for helicity splitting
+    #     # when integrating on the coefficients for the helicity split version they should give the same results modulo statistical fluctuations
+    #     print("Option --qcdScale byHelicityPtAndByPt was chosen: doing additional qcdScale histogram for tests")
+    #     print(scaleActionArgs)
+    #     print(scaleLabelsByAxis)
+    #     cardTool.addSystematic("qcdScale",
+    #                            actionMap=scale_action_map,
+    #                            actionArgs=copy.deepcopy(scaleActionArgs), # to avoid possible undesired updates below
+    #                            processes=signal_samples_inctau,
+    #                            group=scaleGroupName,
+    #                            systAxes=scaleSystAxes[:],
+    #                            labelsByAxis=scaleLabelsByAxis[:],
+    #                            skipEntries=scaleSkipEntries[:],
+    #                            systNameReplace=systNameReplaceVec,
+    #                            baseName="QCDscaleByPt_",
+    #                            passToFakes=False if args.noQCDscaleFakes else passSystToFakes,
+    #     )
 
 if helicity:
+    scale_hist = "qcdScaleByHelicity"
+    scaleActionArgs = {"rebinPtV" : args.rebinPtV}
+    scaleSystAxes.insert(0, "helicity")
+    scaleLabelsByAxis.insert(0, "Coeff")
     if args.qcdScale == "byHelicityCharge":
         # mainly for tests
-        scale_hist = "qcdScaleByHelicity"
-        scale_action = syst_tools.scale_helicity_hist_to_variations 
-        scaleActionArgs = {"sum_axis" : ["ptVgen"]}
+        scaleActionArgs.update({"sum_axis" : ["ptVgen"]})
         scaleGroupName += "ByHelicityCharge"
         scaleSystAxes.insert(0, "chargeVgen")
         scaleLabelsByAxis.insert(0, "genQ")
-        scaleSystAxes.insert(0, "helicity")
-        scaleLabelsByAxis.insert(0, "Coeff")
         scaleSkipEntries = [(-1, -1, *x) for x in scaleSkipEntries] # need to add a -1 for each axis element added before
     else:
-        scale_hist = "qcdScaleByHelicity"
-        scale_action = syst_tools.scale_helicity_hist_to_variations 
-        scaleActionArgs = {"rebinPtV" : args.rebinPtV}
         scaleGroupName += "ByHelicity"
-        scaleSystAxes.insert(0, "helicity")
-        scaleLabelsByAxis.insert(0, "Coeff")
         scaleSkipEntries = [(-1, *x) for x in scaleSkipEntries] # need to add a -1 for each axis element added before
 
 print("Inclusive scale", inclusiveScale)
@@ -234,7 +258,7 @@ print(scaleActionArgs if not inclusiveScale else None)
 print(scaleLabelsByAxis)
 
 cardTool.addSystematic(scale_hist,
-    action=scale_action,
+    actionMap=scale_action_map,
     actionArgs=scaleActionArgs,
     processes=signal_samples_inctau,
     group=scaleGroupName,
@@ -246,8 +270,8 @@ cardTool.addSystematic(scale_hist,
     skipEntries=scaleSkipEntries,
     systNameReplace=systNameReplaceVec,
     baseName="QCDscale_",
-    passToFakes=passSystToFakes,
-    )
+    passToFakes=False if args.noQCDscaleFakes else passSystToFakes,
+)
 
 cardTool.addSystematic("muonScaleSyst", 
     processes=single_vmu_samples,
@@ -270,9 +294,18 @@ cardTool.addSystematic("muonL1PrefireSyst",
 cardTool.addSystematic("muonL1PrefireStat", 
     processes=cardTool.allMCProcesses(),
     group="muonPrefire",
-    baseName="CMS_prefire_stat_m_",
+    baseName="CMS_prefire_stat_m",
     systAxes=["downUpVar", "etaPhiRegion"],
     labelsByAxis=["downUpVar", "etaPhiReg"],
+    passToFakes=passSystToFakes,
+)
+
+cardTool.addSystematic("ecalL1Prefire", 
+    processes=cardTool.allMCProcesses(),
+    group="ecalPrefire",
+    baseName="CMS_prefire_ecal",
+    systAxes=["downUpVar"],
+    labelsByAxis=["downUpVar"],
     passToFakes=passSystToFakes,
 )
 

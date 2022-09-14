@@ -1,7 +1,9 @@
 import hist
 import numpy as np
+from utilities import boostHistHelpers as hh
+import collections.abc
 
-def scale_helicity_hist_to_variations(scale_hist, sum_axis=[], rebinPtV=0):
+def scale_helicity_hist_to_variations(scale_hist, sum_axis=[], rebinPtV=None):
     
     s = hist.tag.Slicer()
     # select nominal QCD scales, but keep the sliced axis at size 1 for broadcasting
@@ -17,12 +19,21 @@ def scale_helicity_hist_to_variations(scale_hist, sum_axis=[], rebinPtV=0):
     hasHelicityAxis = "helicity" in axisNames
     hasPtAxis = "ptVgen" in axisNames
 
-    if rebinPtV > 0:
-        if hasPtAxis:
+    if rebinPtV and hasPtAxis:
+        # Treat single bin array as a float
+        array_rebin = isinstance(rebinPtV, collections.abc.Sequence)
+        if array_rebin and len(rebinPtV) == 1:
+            rebinPtV = rebinPtV[0]
+            array_rebin = False
+
+        if array_rebin:
+            scale_hist = hh.rebinHist(scale_hist, "ptVgen", rebinPtV)
+            nom_scale_hist = hh.rebinHist(nom_scale_hist, "ptVgen", rebinPtV)
+        else:
             scale_hist = scale_hist[{"ptVgen" : s[::hist.rebin(rebinPtV)]}]
             nom_scale_hist = nom_scale_hist[{"ptVgen" : s[::hist.rebin(rebinPtV)]}]
-        else:
-            raise ValueError("In scale_helicity_hist_to_variations: axis 'ptVgen' not found in histogram.")
+    elif not hasPtAxis:
+        raise ValueError("In scale_helicity_hist_to_variations: axis 'ptVgen' not found in histogram.")
             
     for axis in sum_axis:
         if axis in axisNames:
@@ -44,7 +55,7 @@ def scale_helicity_hist_to_variations(scale_hist, sum_axis=[], rebinPtV=0):
     systhist = scale_hist.view(flow=True) - nom_scale_hist.view(flow=True) + expandnom
 
     scale_variation_hist = hist.Hist(*scale_hist.axes, storage = scale_hist._storage_type(), 
-                name = out_name, data = systhist)
+                                     name = out_name, data = systhist)
 
     return scale_variation_hist
 
