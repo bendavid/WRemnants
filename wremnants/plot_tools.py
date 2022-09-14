@@ -67,7 +67,7 @@ def makeStackPlotWithRatio(
     histInfo, stackedProcs, histName="nominal", unstacked=None, 
     xlabel="", ylabel="Events/bin", rlabel = "Data/Pred.", rrange=[0.9, 1.1], ylim=None, xlim=None, nlegcols=2,
     binwnorm=None, select={},  action = (lambda x: x), extra_text=None, grid = False, plot_title = None,
-    ratio_to_data=False, legtex_size=20, cms_decor="Preliminary", lumi=16.8
+    ratio_to_data=False, baseline=True, legtex_size=20, cms_decor="Preliminary", lumi=16.8
 ):
     stack = [action(histInfo[k][histName][select]) for k in stackedProcs if histInfo[k][histName]]
     colors = [histInfo[k]["color"] for k in stackedProcs if histInfo[k][histName]]
@@ -99,6 +99,17 @@ def makeStackPlotWithRatio(
     if unstacked:
         if type(unstacked) == str: 
             unstacked = unstacked.split(",")
+        ratio_ref = data_hist if data_hist else sum(stack) 
+        if baseline:
+            hep.histplot(
+                hh.divideHists(ratio_ref, ratio_ref, cutoff=1e-8),
+                histtype="step",
+                color="black",
+                yerr=False,
+                ax=ax2,
+                linewidth=2,
+            )
+
         for proc in unstacked:
             unstack = action(histInfo[proc][histName][select])
             hep.histplot(
@@ -110,13 +121,16 @@ def makeStackPlotWithRatio(
                 ax=ax1,
                 binwnorm=binwnorm,
             )
-            ratio_ref = data_hist if data_hist else sum(stack) 
+            # TODO: Add option to leave data off ratio, I guess
+            #if proc == "Data":
+            #    continue
             hep.histplot(
                 hh.divideHists(unstack, ratio_ref, cutoff=0.01),
                 histtype="errorbar" if proc == "Data" and not data_hist else "step",
                 color=histInfo[proc]["color"],
                 label=histInfo[proc]["label"],
                 yerr=True if (proc == "Data" and not data_hist) else False,
+                linewidth=2,
                 ax=ax2
             )
     addLegend(ax1, nlegcols, extra_text)
@@ -235,7 +249,7 @@ def save_pdf_and_png(outdir, basename):
     plt.savefig(fname.replace(".pdf", ".png"), bbox_inches='tight')
     logging.info(f"Wrote file(s) {fname}(.png)")
 
-def write_index_and_log(outpath, logname, indexname="index.php", template_dir=f"{pathlib.Path(__file__).parent}/Templates"):
+def write_index_and_log(outpath, logname, indexname="index.php", template_dir=f"{pathlib.Path(__file__).parent}/Templates", yield_tables=None):
     if not os.path.isfile(f"{outpath}/{indexname}"):
         shutil.copyfile(f"{template_dir}/{indexname}", f"{outpath}/{indexname}")
 
@@ -249,3 +263,9 @@ def write_index_and_log(outpath, logname, indexname="index.php", template_dir=f"
             'The command was: %s\n' % ' '.join(sys.argv) + \
             '-'*80 + '\n'
         logf.write(meta_info)
+
+        if yield_tables:
+            for k,v in yield_tables.items():
+                logf.write(f"Yield information for {k}\n")
+                logf.write("-"*80+"\n")
+                logf.write(str(v.round(2))+"\n\n")

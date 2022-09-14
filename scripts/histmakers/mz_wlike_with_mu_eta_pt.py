@@ -187,6 +187,7 @@ def build_graph(df, dataset):
         df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
         if isW or isZ:
             df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
+            df = theory_tools.define_scale_tensor(df)
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")
 
@@ -207,17 +208,20 @@ def build_graph(df, dataset):
         dilepton_axes = dilepton_axes[:-2]
         dilepton_cols = dilepton_cols[:-2]
     
-    dilepton = df_dilepton.HistoBoost("dilepton", dilepton_axes, [*dilepton_cols, "nominal_weight"])
-    results.append(dilepton)
-    if isW or isZ:
-        results.extend(theory_tools.make_pdf_hists(df_dilepton, dataset.name, dilepton_axes, dilepton_cols, args.pdfs, "dilepton"))
-
-    df = df.Filter("massZ >= 60. && massZ < 120.")
-
     if apply_theory_corr:
         results.extend(theory_tools.make_theory_corr_hists(df_dilepton, "dilepton", dilepton_axes, dilepton_cols, 
-            corr_helpers[dataset.name], args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
+            corr_helpers[dataset.name], args.theory_corr, modify_central_weight=not args.theory_corr_alt_only,
+            with_uncertainties=True)
         )
+
+    if isW or isZ:
+        results.extend(theory_tools.make_pdf_hists(df_dilepton, dataset.name, dilepton_axes, dilepton_cols, args.pdfs, "dilepton"))
+        results.append(theory_tools.make_scale_hist(df_dilepton, [*dilepton_axes, axis_ptVgen, axis_chargeVgen], [*dilepton_cols, "ptVgen", "chargeVgen"], "dilepton"))
+
+    dilepton = df_dilepton.HistoBoost("dilepton", dilepton_axes, [*dilepton_cols, "nominal_weight"])
+    results.append(dilepton)
+
+    df = df.Filter("massZ >= 60. && massZ < 120.")
 
     #TODO improve this to include muon mass?
     met_vars = ("MET_pt", "MET_phi")
@@ -266,10 +270,10 @@ def build_graph(df, dataset):
         if isW or isZ:
             if apply_theory_corr:
                 results.extend(theory_tools.make_theory_corr_hists(df, "nominal", axes=nominal_axes, cols=nominal_cols, 
-                    helpers=corr_helpers[dataset.name], generators=args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
+                    helpers=corr_helpers[dataset.name], generators=args.theory_corr, modify_central_weight=not args.theory_corr_alt_only,
+                    with_uncertainties=True)
                 )
 
-            df = theory_tools.define_scale_tensor(df)
             results.append(theory_tools.make_scale_hist(df, [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen"]))
             results.extend(theory_tools.make_pdf_hists(df, dataset.name, nominal_axes, nominal_cols, args.pdfs))
 
