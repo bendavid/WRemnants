@@ -257,6 +257,7 @@ def syst_min_or_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=[], do_min=Tr
     
     op = np.argmin if do_min else np.argmax
     # Index of min/max values considering only the eventual projection
+    # TODO: Check if it's a weighted sum or not
     idx = op(view.value, axis=-1)
     opview = fullview[(*np.indices(fullview.shape[:-1]), idx)]
     
