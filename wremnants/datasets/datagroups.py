@@ -137,6 +137,34 @@ class datagroups(object):
     def getNames(self, exclude=[]):
         return list(filter(lambda x: x not in exclude, self.groups.keys()))
 
+    def getProcNames(self, exclude_group=[]):
+        procs = []
+        for group,info in self.groups.items():
+            if group not in exclude_group:
+                for member in info["members"]:
+                    procs.append(member.name)
+        return procs
+
+    def sortByYields(self, histName):
+        def get_sum(h):
+            return h.sum() if not hasattr(h.sum(), "value") else h.sum().value
+        self.groups = dict(
+            sorted(self.groups.items(), key=lambda x: get_sum(x[1][histName]), reverse=True)
+        )
+
+    def getDatagroupsForHist(self, histName):
+        filled = {}
+        for k, v in self.groups.items():
+            if histName in v:
+                filled[k] = v
+        return filled
+
+    def resultsDict(self):
+        return self.results
+
+    def processes(self):
+        return self.groups.keys()
+
     def sortByYields(self, histName):
         def get_sum(h):
             return h.sum() if not hasattr(h.sum(), "value") else h.sum().value
@@ -171,7 +199,7 @@ class datagroups(object):
             members=[],
         )
         tosum = []
-        for proc in filter(lambda x: x not in exclude+[name], self.groups.keys()):
+        for proc in filter(lambda x: x not in exclude+[rename], self.groups.keys()):
             h = self.groups[proc][name]
             if not h:
                 raise ValueError(f"Failed to find hist for proc {proc}, histname {name}")

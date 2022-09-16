@@ -16,7 +16,7 @@ import datetime
 
 hep.style.use(hep.style.ROOT)
 
-def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None,
+def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None, 
     grid_on_main_plot = False, grid_on_ratio_plot = False, plot_title = None
 ):
     hax = href.axes[0]
@@ -39,6 +39,7 @@ def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None,
         ax1.set_ylim(ylim)
     else:
         ax1.autoscale(axis='y')
+
     if grid_on_main_plot:  ax1.grid(which = "both")
     if grid_on_ratio_plot: ax2.grid(which = "both")
     if plot_title: ax1.set_title(plot_title)
@@ -66,7 +67,7 @@ def addLegend(ax, ncols=2, extra_text=None, text_size=20):
 def makeStackPlotWithRatio(
     histInfo, stackedProcs, histName="nominal", unstacked=None, 
     xlabel="", ylabel="Events/bin", rlabel = "Data/Pred.", rrange=[0.9, 1.1], ylim=None, xlim=None, nlegcols=2,
-    binwnorm=None, select={},  action = (lambda x: x), extra_text=None, grid = False, plot_title = None,
+    binwnorm=None, select={},  action = (lambda x: x), extra_text=None, grid = False, plot_title = None, yscale=None,
     fill_between=False, ratio_to_data=False, baseline=True, legtex_size=20, cms_decor="Preliminary", lumi=16.8
 ):
     stack = [action(histInfo[k][histName][select]) for k in stackedProcs if histInfo[k][histName]]
@@ -135,9 +136,9 @@ def makeStackPlotWithRatio(
                 ax=ax2
             )
 
-        fill_between=True
         if fill_between:
-            unstacked.pop(unstacked.index("Data"))
+            if "Data" in unstacked:
+                unstacked.pop(unstacked.index("Data"))
             for up,down in zip(unstacked[::2], unstacked[1::2]):
                 unstack_up = hh.divideHists(action(histInfo[up][histName][select]), ratio_ref, 1e-6)
                 unstack_down = hh.divideHists(action(histInfo[down][histName][select]), ratio_ref, 1e-6)
@@ -147,7 +148,7 @@ def makeStackPlotWithRatio(
                     step='post', color=histInfo[up]["color"], alpha=0.5)
 
     addLegend(ax1, nlegcols, extra_text)
-    fix_axes(ax1, ax2)
+    fix_axes(ax1, ax2, yscale=yscale)
 
     if cms_decor:
         scale = max(1, np.divide(*ax1.get_figure().get_size_inches())*0.3)
@@ -160,7 +161,7 @@ def makePlotWithRatioToRef(
     hists, labels, colors, xlabel="", ylabel="Events/bin", rlabel="x/nominal",
     rrange=[0.9, 1.1], ylim=None, xlim=None, nlegcols=2, binwnorm=None, alpha=1.,
     baseline=True, data=False, autorrange=None, grid = False,
-    yerr=False, legtext_size=20,
+    yerr=False, legtext_size=20, yscale=None,
 ):
     # nominal is always at first, data is always at last, if included
     ratio_hists = [hh.divideHists(h, hists[0], cutoff=0.00001) for h in hists[not baseline:]]
@@ -213,19 +214,21 @@ def makePlotWithRatioToRef(
         )
 
     addLegend(ax1, nlegcols, legtext_size)
-    fix_axes(ax1, ax2)
     
     # This seems like a bug, but it's needed
     if not xlim:
         xlim = [hists[0].axes[0].edges[0], hists[0].axes[0].edges[-1]]
 
-    fix_axes(ax1, ax2)
+    fix_axes(ax1, ax2, yscale=yscale)
     
     return fig
 
-def fix_axes(ax1, ax2):
-    # and not "tau" in dataset.name TODO: Would be good to get this working
+def fix_axes(ax1, ax2, yscale=None):
+    #TODO: Would be good to get this working
     #ax1.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
+    if yscale:
+        ymin, ymax = ax1.get_ylim()
+        ax1.set_ylim(ymin, ymax*yscale)
     redo_axis_ticks(ax1, "y")
     redo_axis_ticks(ax2, "x")
     redo_axis_ticks(ax1, "x", True)
