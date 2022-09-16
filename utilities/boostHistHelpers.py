@@ -248,19 +248,24 @@ def syst_min_or_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=[], do_min=Tr
         raise ValueError("Required to have the syst axis at index -1")
 
     if syst_ax in proj_ax:
-        proj_ax.pop(syst_ax)
+        proj_ax.pop(proj_ax.index(syst_ax))
         
     hvar = projectNoFlow(h, proj_ax+[syst_ax], exclude=no_flow)
 
+    proj_ax_idx = h.axes.name.index(*proj_ax)
     view = np.take(hvar.view(flow=True), indices, axis=-1)
     fullview = np.take(h.view(flow=True), indices, axis=-1)
+
+    # Move project axis to second two last position so the broadcasting works
+    fullview = np.moveaxis(fullview, proj_ax_idx, -2)
     
     op = np.argmin if do_min else np.argmax
     # Index of min/max values considering only the eventual projection
     # TODO: Check if it's a weighted sum or not
     idx = op(view.value, axis=-1)
     opview = fullview[(*np.indices(fullview.shape[:-1]), idx)]
-    
+
     hnew = h[{syst_ax : 0}]
-    hnew[...] = opview
+    # Now that the syst ax has been collapsed, project axes will be at last position
+    hnew[...] = np.moveaxis(opview, -1, proj_ax_idx)
     return hnew
