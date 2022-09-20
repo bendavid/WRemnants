@@ -59,6 +59,7 @@ class datagroups(object):
             group[label] = None
 
             for member in group["members"]:
+                logging.debug(f"Looking at member {member.name}")
                 scale = group["scale"] if "scale" in group else None
                 try:
                     h = self.readHist(baseName, member, syst, scaleOp=scale, forceNonzero=forceNonzero)
@@ -76,7 +77,7 @@ class datagroups(object):
 
                 group[label] = h if not group[label] else hh.addHists(h, group[label])
 
-            if selectSignal and group[label]:
+            if selectSignal and group[label] and "signalOp" in group and group["signalOp"]:
                 group[label] = group["signalOp"](group[label])
         # Avoid situation where the nominal is read for all processes for this syst
         if not foundExact:
