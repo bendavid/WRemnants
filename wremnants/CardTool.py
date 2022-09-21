@@ -234,8 +234,6 @@ class CardTool(object):
                 skip_arr[to_lookup] += bin_lookup
             updated_skip.append(skip_arr)
 
-        print("Will skip", updated_skip)
-
         return updated_skip
 
     def systHists(self, hvar, syst):
@@ -266,7 +264,7 @@ class CardTool(object):
         if len(systInfo["outNames"]) == 0:
             for entry in entries:
                 skipEntries = None if "skipEntries" not in systInfo else self.expandSkipEntries(hvar, syst, systInfo["skipEntries"])
-                if skipEntries and self.excludeSystEntry(entry, systInfo["skipEntries"]):
+                if skipEntries and self.excludeSystEntry(entry, skipEntries):
                     systInfo["outNames"].append("")
                 else:
                     name = systInfo["baseName"]

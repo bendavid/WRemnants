@@ -1,5 +1,6 @@
 from utilities import common
 from wremnants import syst_tools
+import numpy as np
 
 def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append="", scetlib=False, use_hel_hist=False, rebin_pt=None):
     inclusiveScale = scale_type == "integrated"
@@ -32,11 +33,11 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
         
     # Determine if it should be summed over based on scale_type passed in. If not,
     # Remove it from the sum list and set names appropriately
-    def set_sum_over_axis(identifier, ax_name, group_name_app):
+    def set_sum_over_axis(identifier, ax_name):
         nonlocal sum_axes,group_name,syst_axes,syst_ax_labels
         if identifier in scale_type:
             sum_axes.remove(ax_name)
-            group_name += group_name_app
+            group_name += identifier
         elif ax_name in syst_axes:
             idx = syst_axes.index(ax_name)
             syst_axes.pop(idx)
@@ -44,8 +45,8 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
 
     # TODO: Move the axes to common and refer to axis_chargeVgen etc by their name attribute, not just
     # assuming the name is unchanged
-    for ax,iden,name in zip(sum_axes[:], ["Pt", "Charge", "Helicity"], ["ByPtV", "ByCharge", "ByHelicity"]):
-        set_sum_over_axis(iden, ax, name)
+    for ax,name in zip(sum_axes[:], ["Pt", "Charge", "Helicity"]):
+        set_sum_over_axis(name, ax)
 
     action_args = {"sum_axes" : sum_axes}
     if "Pt" in scale_type:
@@ -53,44 +54,48 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
 
     # Skip extreme muR/muF values for all bin combos (-1 = any)
     nsyst_dims = len(syst_axes)-len(sum_axes)
-    skip_entries = [(*[-1]*nsyst_dims-2,*x) for x in skip_entries]
+    skip_entries = [(*[-1]*(nsyst_dims-2),*x) for x in skip_entries]
 
     if scetlib:
+        group_name += "Resum"
         # At least I hope this is the binning... Ideally would get it from the hist, but it's not trivial here
-        binning = np.array(common.ptV_10quantiles_binning
+        binning = np.array(common.ptV_10quantiles_binning)
         pt30_idx = np.argmax(binning > 30)
         # Drop the uncertainties for < 30
-        if not helicity:
-            skip_entries.extend([(complex(0,x),*[-1]*(nsyst_dim-1)) for x in binning[:pt30_idx]])
-        else:
+        other_dims = [[-1]*(nsyst_dims-1)]
+        if helicity:
             nhel = 9
-            other_dims = [([-1,i] if "chargeVgen" in syst_axes else [i])+[-1]*2 for i in range(nhel)]
-            skip_entries.extend([(complex(0, x), *other) for other in other_dims for x in binning[:pt30_idx]])
-        card_tool.addSystematic("scetlibCorr_unc",
+            # Skip all but the 1+cos^2 term
+            other_dims = [([-1,i] if "chargeVgen" in syst_axes else [i])+[-1]*2 for i in range(1, nhel)]
+        skip_entries.extend([(complex(0, x), *other) for other in other_dims for x in binning[:pt30_idx-1]])
+        nscetlib_vars=45
+        common_args = dict(name="scetlibMSHT20Corr_unc",
             processes=samples,
-            group="QCDscale_resum",
+            group=group_name,
             systAxes=["vars"],
-            systNames=["", "resumFOScaleUp", "resumFOScaleDown"]+[""]*41,
             passToFakes=to_fakes,
+        )
+        card_tool.addSystematic(**common_args,
+            outNames=["", "resumFOScaleUp", "resumFOScaleDown"]+[""]*(nscetlib_vars-3),
             rename="scetlibCorr_resumFO", 
         )
-        card_tool.addSystematic("scetlibCorr_unc",
-            processes=samples,
-            group="QCDscale_lambda",
-            systAxes=["vars"],
-            systNames=[""]*3+["resumScaleLambdaDown", "resumScaleLambdaUp"]+[""]*39,
-            passToFakes=to_fakes,
+        card_tool.addSystematic(**common_args,
+            outNames=[""]*3+["resumScaleLambdaDown", "resumScaleLambdaUp"]+[""]*(nscetlib_vars-5),
             rename="scetlibCorr_resumLambda", 
         )
-        print("Here we are!")
-        #card_tool.addSystematic("scetlibCorr_unc",
-        #    processes=samples,
-        #    group="QCDscale_lambda",
-        #    systAxes=["vars"],
-        #    systNames=[""]*5+["resumTransitionUp", "resumTransitionDown"]+[""]*37,
-        #    passToFakes=to_fakes,
-        #    rename="scetlibCorr_resumTrans", 
-        #)
+        expanded_samples = card_tool.datagroups.getProcNames(samples)
+        card_tool.addSystematic(**common_args,
+            # TODO: Should support other variables in the fit
+            actionMap={s : lambda h: syst_tools.uncertainty_hist_from_envelope(h, ["pt", "eta"], range(5, 9)) for s in expanded_samples},
+            outNames=["resumTransitionUp", "resumTransitionDown"],
+            rename="scetlibCorr_resumTrans", 
+        )
+        card_tool.addSystematic(**common_args,
+            # TODO: Should support other variables in the fit
+            actionMap={s : lambda h: syst_tools.uncertainty_hist_from_envelope(h, ["pt", "eta"], range(9, 45)) for s in expanded_samples},
+            outNames=["resumScaleUp", "resumScaleDown"],
+            rename="scetlibCorr_resumScale", 
+        )
 
     card_tool.addSystematic(scale_hist,
         actionMap=action_map,
