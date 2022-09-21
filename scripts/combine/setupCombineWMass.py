@@ -18,6 +18,7 @@ parser.add_argument("-i", "--inputFile", type=str, required=True)
 parser.add_argument("--qcdScale", choices=["byHelicityPt", "byHelicityPtCharge", "byHelicityCharge", "byPtCharge", "byPt", "byCharge", "integrated",], default="byHelicityPtCharge", 
         help="Decorrelation for QCDscale")
 parser.add_argument("--rebinPtV", type=float, nargs='*', help="Rebin axis with gen boson pt by this value (default does nothing)")
+parser.add_argument("--scetlibUnc", action='store_true', help="Include SCETlib uncertainties")
 parser.add_argument("--wlike", action='store_true', help="Run W-like analysis of mZ")
 parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow). Equivalent to --excludeNuisances '.*effSystTnP|.*effStatTnP' ")
 parser.add_argument("--pdf", type=str, default="nnpdf31", choices=theory_tools.pdfMap.keys(), help="PDF to use")
@@ -165,9 +166,9 @@ if not args.noEfficiencyUnc:
         )
 
 to_fakes = not (args.wlike or args.noQCDscaleFakes)
-combine_helpers.add_scale_uncertainty(cardTool, args.qcdScale, signal_samples_inctau, to_fakes)
+combine_helpers.add_scale_uncertainty(cardTool, args.qcdScale, signal_samples_inctau, to_fakes, scetlib=args.scetlibUnc)
 if not args.wlike:
-    combine_helpers.add_scale_uncertainty(cardTool, "integrated", single_v_samples, False, name_append="Z")
+    combine_helpers.add_scale_uncertainty(cardTool, "integrated", single_v_samples, False, name_append="Z", scetlib=args.scetlibUnc)
 
 cardTool.addSystematic("muonScaleSyst", 
     processes=single_vmu_samples,
