@@ -21,7 +21,7 @@ parser.add_argument("--rebinPtV", type=float, nargs='*', help="Rebin axis with g
 parser.add_argument("--scetlibUnc", action='store_true', help="Include SCETlib uncertainties")
 parser.add_argument("--wlike", action='store_true', help="Run W-like analysis of mZ")
 parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow). Equivalent to --excludeNuisances '.*effSystTnP|.*effStatTnP' ")
-parser.add_argument("--pdf", type=str, default="nnpdf31", choices=theory_tools.pdfMap.keys(), help="PDF to use")
+parser.add_argument("--pdf", type=str, default="nnpdf31", choices=theory_tools.pdfMapExtended.keys(), help="PDF to use")
 parser.add_argument("-b", "--fitObs", type=str, default="nominal", help="Observable to fit") # TODO: what does it do?
 parser.add_argument("-p", "--pseudoData", type=str, help="Hist to use as pseudodata")
 parser.add_argument("-x",  "--excludeNuisances", type=str, default="", help="Regular expression to exclude some systematics from the datacard")
@@ -79,7 +79,7 @@ logging.info(f"Single V samples: {single_v_samples}")
 logging.info(f"Single V no signal samples: {single_v_nonsig_samples}")
 logging.info(f"Signal samples: {signal_samples}")
 
-pdfInfo = theory_tools.pdf_info_map(signal_samples[0], args.pdf)
+pdfInfo = theory_tools.pdf_info_map("ZmumuPostVFP", args.pdf)
 pdfName = pdfInfo["name"]
 
 # keep mass weights here as first systematic, in case one wants to run stat-uncertainty only with --doStatOnly

@@ -1,6 +1,6 @@
 import hist
 import numpy as np
-from utilities import boostHistHelpers as hh
+from utilities import boostHistHelpers as hh,common
 import collections.abc
 
 def scale_helicity_hist_to_variations(scale_hist, sum_axis=[], rebinPtV=None):
@@ -59,6 +59,16 @@ def scale_helicity_hist_to_variations(scale_hist, sum_axis=[], rebinPtV=None):
 
     return scale_variation_hist
 
+
+def uncertainty_hist_from_envelope(h, proj_ax, entries):
+    hdown = hh.syst_min_or_max_env_hist(h, proj_ax, "vars", entries, no_flow=["ptVgen"], do_min=True)
+    hup = hh.syst_min_or_max_env_hist(h, proj_ax, "vars", entries, no_flow=["ptVgen"], do_min=False)
+    hnew = hist.Hist(*h.axes[:-1], common.down_up_axis, storage=h._storage_type())
+    print("dWon is", hdown.shape)
+    print("final is", hnew.shape)
+    hnew[...,0] = hdown.view(flow=True)
+    hnew[...,1] = hup.view(flow=True)
+    return h
 
 def define_mass_weights(df, isW, nominal_axes=None, nominal_cols=None):
     # nweights = 21 if isW else 23
