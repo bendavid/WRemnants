@@ -216,6 +216,28 @@ class CardTool(object):
                 return True
         return False
 
+    def expandSkipEntries(self, h, syst, skipEntries):
+        updated_skip = []
+        for skipEntry in skipEntries:
+            nsyst_ax = len(self.systematics[syst]["systAxes"])+self.systematics[syst]["mirror"]
+            if len(skipEntry) != nsyst_ax:
+                raise ValueError(f"Error in syst {syst}. skipEntry must specify a value per axis. "
+                        f"Found {nsyst_ax} axes but {len(skipEntry)} entries were given")
+            skip_arr = np.array(skipEntry)
+            # The lookup is handled by passing an imaginary number,
+            # so detect these and then call the bin lookup on them
+            to_lookup = np.iscomplex(skip_arr)
+            if to_lookup.any():
+                bin_lookup = np.array([ax.index(x.imag) for x, ax in 
+                    zip(skipEntry, h.axes[-nsyst_ax:]) if isinstance(x, complex)])
+                skip_arr = skip_arr.real
+                skip_arr[to_lookup] += bin_lookup
+            updated_skip.append(skip_arr)
+
+        print("Will skip", updated_skip)
+
+        return updated_skip
+
     def systHists(self, hvar, syst):
         if syst == self.nominalName:
             return ([self.nominalName], [hvar])
@@ -243,7 +265,8 @@ class CardTool(object):
         
         if len(systInfo["outNames"]) == 0:
             for entry in entries:
-                if "skipEntries" in systInfo and self.excludeSystEntry(entry, systInfo["skipEntries"]):
+                skipEntries = None if "skipEntries" not in systInfo else self.expandSkipEntries(hvar, syst, systInfo["skipEntries"])
+                if skipEntries and self.excludeSystEntry(entry, systInfo["skipEntries"]):
                     systInfo["outNames"].append("")
                 else:
                     name = systInfo["baseName"]
@@ -286,7 +309,7 @@ class CardTool(object):
         logging.info(f"Writing systematic {syst} for process {proc}")
         var_names, variations = self.systHists(h, syst) 
         if len(var_names) != len(variations):
-            logging.warning("The number of variations doesn't match the number of names for "
+            logging.warning(f"The number of variations doesn't match the number of names for "
                 f"process {proc}, syst {syst}. Found {len(var_names)} names and {len(variations)} variations.")
         setZeroStatUnc = False
         if proc in self.noStatUncProcesses:
