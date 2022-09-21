@@ -64,8 +64,6 @@ def uncertainty_hist_from_envelope(h, proj_ax, entries):
     hdown = hh.syst_min_or_max_env_hist(h, proj_ax, "vars", entries, no_flow=["ptVgen"], do_min=True)
     hup = hh.syst_min_or_max_env_hist(h, proj_ax, "vars", entries, no_flow=["ptVgen"], do_min=False)
     hnew = hist.Hist(*h.axes[:-1], common.down_up_axis, storage=h._storage_type())
-    print("dWon is", hdown.shape)
-    print("final is", hnew.shape)
     hnew[...,0] = hdown.view(flow=True)
     hnew[...,1] = hup.view(flow=True)
     return h
