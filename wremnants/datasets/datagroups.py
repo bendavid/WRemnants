@@ -75,7 +75,6 @@ class datagroups(object):
 
                 if preOpMap and member.name in preOpMap:
                     logging.debug(f"Applying preOp to {member.name} after loading")
-                    print(f"Applying preOp to {member.name} after loading")
                     h = preOpMap[member.name](h, **preOpArgs)
 
                 group[label] = h if not group[label] else hh.addHists(h, group[label])
