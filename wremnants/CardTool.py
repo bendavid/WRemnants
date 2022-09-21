@@ -204,7 +204,7 @@ class CardTool(object):
 
     def systLabelForAxis(self, axLabel, entry):
         if axLabel == "mirror" or axLabel == "downUpVar":
-            return 'Up' if entry else 'Down'
+            return 'Up' if entry else 'Down'  # note, the first entry is the original, might want to call it Up if it was defined by an actual scaling up of something (e.g. efficiencies)
         if "{i}" in axLabel:
             return axLabel.format(i=entry)
         return axLabel+str(entry)
