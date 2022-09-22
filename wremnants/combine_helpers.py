@@ -5,6 +5,7 @@ import numpy as np
 def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append="", scetlib=False, use_hel_hist=False, rebin_pt=None):
     inclusiveScale = scale_type == "integrated"
     helicity = "Helicity" in scale_type
+    pt_binned = "Pt" in scale_type
 
     scale_hist = "qcdScale" if not helicity else "qcdScaleByHelicity"
     # All possible syst_axes
@@ -49,7 +50,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
         set_sum_over_axis(name, ax)
 
     action_args = {"sum_axes" : sum_axes}
-    if "Pt" in scale_type:
+    if pt_binned:
         action_args["rebinPtV"] = rebin_pt
 
     # Skip extreme muR/muF values for all bin combos (-1 = any)
@@ -59,14 +60,22 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
     if scetlib:
         group_name += "Resum"
         # At least I hope this is the binning... Ideally would get it from the hist, but it's not trivial here
-        binning = np.array(common.ptV_10quantiles_binning)
-        pt30_idx = np.argmax(binning > 30)
-        # Drop the uncertainties for < 30
-        other_dims = [[-1]*(nsyst_dims-1)]
-        if helicity:
-            # Skip only the 1+cos^2 term
-            other_dims = [(*[-1]*(nsyst_dims-4), -1.j, -1, -1)]
-        skip_entries.extend([(complex(0, x), *other) for other in other_dims for x in binning[:pt30_idx-1]])
+        other_dims = []
+
+        if pt_binned:
+            binning = np.array(common.ptV_10quantiles_binning)
+            pt30_idx = np.argmax(binning > 30)
+            # Drop the uncertainties for < 30
+            other_dims = [[-1]*(nsyst_dims-1)]
+            if helicity:
+                # Skip only the 1+cos^2 term
+                other_dims = [(*[-1]*(nsyst_dims-4), -1.j, -1, -1)]
+
+            skip_entries.extend([(complex(0, x), *other) for other in other_dims for x in binning[:pt30_idx-1]])
+        elif helicity:
+            skip_entries.append([(*[-1]*(nsyst_dims-2), -1.j, -1, -1)
+        
+        # TODO: Implement pT splitting for SCETlib
         nscetlib_vars=45
         common_args = dict(name="scetlibMSHT20Corr_unc",
             processes=samples,
@@ -103,18 +112,22 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
         # Drop the uncertainty of A5,A6,A7
         skip_entries.extend([(*[-1]*(nsyst_dims-3), complex(i), -1, -1) for i in (5,6,7)])
 
-    card_tool.addSystematic(scale_hist,
-        actionMap=action_map,
-        actionArgs=action_args,
-        processes=samples,
-        group=group_name,
-        systAxes=syst_axes,
-        labelsByAxis=syst_ax_labels,
-        # Exclude all combinations where muR = muF = 1 (nominal) or where
-        # they are extreme values (ratio = 4 or 1/4)
-        skipEntries=skip_entries,
-        systNameReplace=name_replace,
-        baseName=group_name+"_",
-        passToFakes=to_fakes,
-        rename=group_name, # Needed to allow it to be called multiple times
-    )
+    # Skip MiNNLO unc. 
+    if scetlib and not (pt_binned or helicity):
+        logging.warning("Without pT or helicity splitting, only the SCETlib uncertainty will be applied!")
+    else:
+        card_tool.addSystematic(scale_hist,
+            actionMap=action_map,
+            actionArgs=action_args,
+            processes=samples,
+            group=group_name,
+            systAxes=syst_axes,
+            labelsByAxis=syst_ax_labels,
+            # Exclude all combinations where muR = muF = 1 (nominal) or where
+            # they are extreme values (ratio = 4 or 1/4)
+            skipEntries=skip_entries,
+            systNameReplace=name_replace,
+            baseName=group_name+"_",
+            passToFakes=to_fakes,
+            rename=group_name, # Needed to allow it to be called multiple times
+        )
