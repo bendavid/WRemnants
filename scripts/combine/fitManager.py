@@ -207,11 +207,6 @@ if __name__ == "__main__":
         args.inputdir += "/"
             
     if args.cardFolder:
-        testName = args.cardFolder.rstrip("/")
-        if testName in ["plus", "minus"]:
-            # these names are already used, they contain the configurations used to make histograms
-            print("Warning: folder specified with --card-folder cannot be named as plus|minus/ (you used %s)" % args.cardFolder)
-            quit()
         if not args.cardFolder.endswith("/"):
             args.cardFolder += "/"
         cardFolderFullName = args.inputdir + args.cardFolder
