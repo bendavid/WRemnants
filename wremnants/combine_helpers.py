@@ -8,11 +8,13 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
 
     scale_hist = "qcdScale" if not helicity else "qcdScaleByHelicity"
     # All possible syst_axes
+    # TODO: Move the axes to common and refer to axis_chargeVgen etc by their name attribute, not just
+    # assuming the name is unchanged
     syst_axes = ["ptVgen", "chargeVgen", "muRfact", "muFfact"]
     syst_ax_labels = ["PtVBin", "genQ", "muR", "muF"]
     if helicity:
-        syst_axes.insert(2, "Coeff")
-        syst_ax_labels.insert(2, "helicity")
+        syst_axes.insert(2, "helicity")
+        syst_ax_labels.insert(2, "AngCoeff")
 
     group_name = f"QCDscale{name_append}"
     # Exclude all combinations where muR = muF = 1 (nominal) or where
@@ -43,8 +45,6 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
             syst_axes.pop(idx)
             syst_ax_labels.pop(idx)
 
-    # TODO: Move the axes to common and refer to axis_chargeVgen etc by their name attribute, not just
-    # assuming the name is unchanged
     for ax,name in zip(sum_axes[:], ["Pt", "Charge", "Helicity"]):
         set_sum_over_axis(name, ax)
 
@@ -64,9 +64,8 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
         # Drop the uncertainties for < 30
         other_dims = [[-1]*(nsyst_dims-1)]
         if helicity:
-            nhel = 9
-            # Skip all but the 1+cos^2 term
-            other_dims = [([-1,i] if "chargeVgen" in syst_axes else [i])+[-1]*2 for i in range(1, nhel)]
+            # Skip only the 1+cos^2 term
+            other_dims = [(*[-1]*(nsyst_dims-4), -1.j, -1, -1)]
         skip_entries.extend([(complex(0, x), *other) for other in other_dims for x in binning[:pt30_idx-1]])
         nscetlib_vars=45
         common_args = dict(name="scetlibMSHT20Corr_unc",
@@ -80,22 +79,29 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
             rename="scetlibCorr_resumFO", 
         )
         card_tool.addSystematic(**common_args,
-            outNames=[""]*3+["resumScaleLambdaDown", "resumScaleLambdaUp"]+[""]*(nscetlib_vars-5),
+            outNames=[""]*3+["resumLambdaDown", "resumLambdaUp"]+[""]*(nscetlib_vars-5),
             rename="scetlibCorr_resumLambda", 
         )
+
         expanded_samples = card_tool.datagroups.getProcNames(samples)
+        common_args["systAxes"] = ["downUpVar"]
+        common_args["labelsByAxis"] = ["downUpVar"]
         card_tool.addSystematic(**common_args,
             # TODO: Should support other variables in the fit
             actionMap={s : lambda h: syst_tools.uncertainty_hist_from_envelope(h, ["pt", "eta"], range(5, 9)) for s in expanded_samples},
-            outNames=["resumTransitionUp", "resumTransitionDown"],
+            baseName="resumTransition", 
             rename="scetlibCorr_resumTrans", 
         )
         card_tool.addSystematic(**common_args,
             # TODO: Should support other variables in the fit
             actionMap={s : lambda h: syst_tools.uncertainty_hist_from_envelope(h, ["pt", "eta"], range(9, 45)) for s in expanded_samples},
-            outNames=["resumScaleUp", "resumScaleDown"],
+            baseName="resumScale", 
             rename="scetlibCorr_resumScale", 
         )
+
+    if helicity:
+        # Drop the uncertainty of A5,A6,A7
+        skip_entries.extend([(*[-1]*(nsyst_dims-3), complex(i), -1, -1) for i in (5,6,7)])
 
     card_tool.addSystematic(scale_hist,
         actionMap=action_map,

@@ -66,7 +66,7 @@ def uncertainty_hist_from_envelope(h, proj_ax, entries):
     hnew = hist.Hist(*h.axes[:-1], common.down_up_axis, storage=h._storage_type())
     hnew[...,0] = hdown.view(flow=True)
     hnew[...,1] = hup.view(flow=True)
-    return h
+    return hnew
 
 def define_mass_weights(df, isW, nominal_axes=None, nominal_cols=None):
     # nweights = 21 if isW else 23

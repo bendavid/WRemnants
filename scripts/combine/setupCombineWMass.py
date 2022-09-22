@@ -57,7 +57,7 @@ if args.noHist:
 cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/{name}CombineInput.root"))
 cardTool.setDatagroups(datagroups)
 cardTool.setFakeName(args.qcdProcessName)
-cardTool.setSpacing(44)
+cardTool.setSpacing(52)
 if args.noStatUncFakes:
     cardTool.setProcsNoStatUnc(procs=args.qcdProcessName, resetList=False)
 cardTool.setCustomSystForCard(args.excludeNuisances, args.keepNuisances)
