@@ -223,10 +223,11 @@ class CardTool(object):
             if len(skipEntry) != nsyst_ax:
                 raise ValueError(f"Error in syst {syst}. skipEntry must specify a value per axis. "
                         f"Found {nsyst_ax} axes but {len(skipEntry)} entries were given")
-            skip_arr = np.array(skipEntry)
             # The lookup is handled by passing an imaginary number,
             # so detect these and then call the bin lookup on them
-            to_lookup = np.iscomplex(skip_arr)
+            # np.iscomplex returns false for 0.j, but still want to detect that
+            to_lookup = np.array([isinstance(x, complex) for x in skipEntry])
+            skip_arr = np.array(skipEntry)
             if to_lookup.any():
                 bin_lookup = np.array([ax.index(x.imag) for x, ax in 
                     zip(skipEntry, h.axes[-nsyst_ax:]) if isinstance(x, complex)])
@@ -256,9 +257,9 @@ class CardTool(object):
             axNames.append("mirror")
             axLabels.append("mirror")
 
-        if not all([name in [ax.name for ax in hvar.axes] for name in axNames]):
-            raise ValueError(f"Failed to find axis names '{str(systAxes)} in hist. " \
-                f"Axes in hist are {str([ax.name for ax in hvar.axes])}")
+        if not all([name in hvar.axes.name for name in axNames]):
+            raise ValueError(f"Failed to find axis names {str(axNames)} in hist for syst {syst}. " \
+                f"Axes in hist are {str(hvar.axes.name)}")
         entries = list(itertools.product(*[range(hvar.axes[ax].size) for ax in axNames]))
         
         if len(systInfo["outNames"]) == 0:
