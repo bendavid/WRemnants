@@ -59,6 +59,9 @@ axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, nam
 
 nominal_axes = [axis_eta, axis_pt, axis_charge]
 
+# axes for mT measurement
+axis_mt = hist.axis.Variable([0] + list(range(40, 110, 1)) + [110, 112, 114, 116, 118, 120, 125, 130, 140, 160, 180, 200], name = "mt",underflow=False, overflow=True)
+axis_eta_mT = hist.axis.Variable([-2.4, 2.4], name = "eta")
 
 # extra axes for dilepton validation plots
 axis_mll = hist.axis.Regular(24, 60., 120., name = "mll")
@@ -90,7 +93,8 @@ if not args.no_recoil:
     from wremnants import recoil_tools
     import ROOT
     ROOT.gInterpreter.Declare('#include "lowpu_recoil.h"')
-    recoilHelper = recoil_tools.Recoil("highPU")
+    ROOT.gInterpreter.Declare('#include "lowpu_utils.h"')
+    recoilHelper = recoil_tools.Recoil("highPU", flavor="mumu", met="RawPFMET") # DeepMETReso RawPFMET
 
 #def add_plots_with_systematics
 
@@ -189,11 +193,7 @@ def build_graph(df, dataset):
 
     results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"]))
         
-    # recoil calibration
-    if not args.no_recoil:
-        df = recoilHelper.recoil_setup_Z(df, results, "MET_pt", "MET_phi", "Muon_pt[goodMuons]", "Muon_phi[goodMuons]", "Muon_pt[goodMuons]")
-        df = recoilHelper.recoil_apply_Z(df, results, dataset.name, ["ZmumuPostVFP"])  # produces corrected MET as MET_corr_rec_pt/phi
-   
+
     # dilepton plots go here, before mass or transverse mass cuts
     df_dilepton = df
     df_dilepton = df_dilepton.Filter("TrigMuon_pt > 26.")
@@ -203,6 +203,15 @@ def build_graph(df, dataset):
     results.append(dilepton)
 
     df = df.Filter("massZ >= 60. && massZ < 120.")
+
+    # recoil calibration
+    ##df = df.Filter("RawMET_sumEt >= 1250. && RawMET_sumEt < 1500.")
+    if not args.no_recoil:
+        df = recoilHelper.setup_MET(df, results, dataset, "Muon_pt[goodMuons]", "Muon_phi[goodMuons]", "Muon_pt[goodMuons]")
+        df = recoilHelper.setup_recoil_Z(df, results)
+        df = recoilHelper.auxHists(df, results)
+        df = recoilHelper.apply_recoil_Z(df, results, dataset, ["ZmumuPostVFP"])  # produces corrected MET as MET_corr_rec_pt/phi
+        #if isZ: df = recoilHelper.recoil_Z_unc_lowPU(df, results, "", "", axis_mt, axis_mll)
 
     if apply_theory_corr:
         results.extend(theory_tools.make_theory_corr_hists(df_dilepton, "dilepton", dilepton_axes, dilepton_cols, 
@@ -217,7 +226,7 @@ def build_graph(df, dataset):
     met_vars = ("MET_pt", "MET_phi")
     if not args.no_recoil:
         df = df.Define("transverseMass_uncorr", f"wrem::mt_wlike_nano(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, {', '.join(met_vars)})")
-        met_vars = (x.replace("MET", "MET_corr_rec") for x in met_vars)
+        #met_vars = (x.replace("MET", "MET_corr_rec") for x in met_vars)
 
     df = df.Define("transverseMass", f"wrem::mt_wlike_nano(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, {', '.join(met_vars)})")
 
@@ -255,6 +264,7 @@ def build_graph(df, dataset):
         # n.b. this is the W analysis so mass weights shouldn't be propagated
         # on the Z samples (but can still use it for dummy muon scale)
         if isW or isZ:
+
             if apply_theory_corr:
                 results.extend(theory_tools.make_theory_corr_hists(df, "nominal", axes=nominal_axes, cols=nominal_cols, 
                     helpers=corr_helpers[dataset.name], generators=args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)

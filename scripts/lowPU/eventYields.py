@@ -47,9 +47,16 @@ if __name__ == "__main__":
     flavor = "mumu"
     #flavor = "ee"
 
-    fIn = ROOT.TFile("/home/j/jaeyserm/combine/CMSSW_10_6_20/src/LowPU/LowPU_Zmumu_differential_combineOutput.root")
+    fIn = ROOT.TFile("/eos/user/j/jaeyserm/www/ROOT/LowPU_Wmass_mu_RawPFMET_lumi1p0_statOnly.root")
     
+    fIn.ls()
     
+    for p in ["expproc_WplusJetsToMuNu_prefit;1", "expproc_WminusJetsToMuNu_prefit;1", "expproc_Fake_prefit;1", "expproc_VV_prefit;1", "expproc_DY_prefit;1", "expproc_WJetsToTauNu_prefit;1", "expproc_TTbar_prefit;1"]:
+    
+
+        h = fIn.Get(p)
+        print(p, h.Integral())
+    sys.exit()
       
       
     sys.exit()  

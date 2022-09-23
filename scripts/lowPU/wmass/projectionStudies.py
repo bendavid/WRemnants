@@ -163,7 +163,7 @@ def expUncPlotStat():
 
     lumis = ["1p0", "2p5", "5p0", "10p0"]
     lumis_fb = [0.2, 0.5, 1, 2]
-    met = "DeepMETReso" # 
+    met = "RawPFMET" # 
     scale=100
     group = True
     
@@ -309,16 +309,17 @@ def expUncPlotSyst():
     scale=100
     group = True
     mode = "binned"
-    header = "W^{#pm} #rightarrow #mu^{#pm}#nu, RawPFMET, %s" % mode
+    header = "W^{#pm} #rightarrow #mu^{#pm}#nu, RawPFMET"
     
     inTag = "eta_inclusive" # eta_inclusive eta_inclusive_scaledRecoil
-    outTag = "cteRecoil" # cteRecoil scaledRecoil
+    outTag = "scaledRecoil" # cteRecoil scaledRecoil
     
-    systs = ["total", "datastat", "CMS_recoil_stat", "pdfNNPDF31", "QCDscale", "muonScale", "others"]
+    systs = ["total", "datastat", "recoil_stat", "pdfNNPDF31", "QCDscale", "muonScale", "others"]
     systs_labels = ["Total", "Stat. data", "Stat. recoil", "PDF", "QCDscale", "Muon momentum scale (10^{-4})", "Others"]
-    systs = ["total", "datastat", "CMS_recoil_stat", "pdfNNPDF31", "QCDscale"]
-    systs_labels = ["Total", "Stat. data", "Stat. recoil %s" % ("(unscaled)" if not "scaled" in inTag else "(scaled, #sqrt{N})"), "PDF", "QCDscale"]
-    systs_colors = [ROOT.kBlack, ROOT.kBlue, ROOT.kRed, ROOT.kGreen+1, ROOT.kOrange+1, ROOT.kYellow, ROOT.kMagenta]
+    
+    systs = [["total"], ["datastat"], ["recoil_stat", "recoil_syst"], ["pdfNNPDF31"], ["QCDscale"], ["CMS_Fakes_norm"], ["others"]]
+    systs_labels = ["Total", "Stat. data", "Recoil tot. %s" % ("(stat. unscaled)" if not "scaled" in outTag else "(stat. scaled, #sqrt{N})"), "PDF", "QCDscale", "Fake (norm)", "Others"]
+    systs_colors = [ROOT.kBlack, ROOT.kBlue, ROOT.kRed, ROOT.kGreen+1, ROOT.kOrange+1, ROOT.kGray+2, ROOT.kMagenta]
     
     graphs = {}
     for i, syst in enumerate(systs):
@@ -329,19 +330,19 @@ def expUncPlotSyst():
         g.SetLineWidth(2)
         g.SetMarkerSize(1.5)
         g.SetMarkerStyle(8)
-        graphs[syst] = g
+        graphs[i] = g
         
 
     for i,lumi in enumerate(lumis):
     
         # data stat
-        fIn = ROOT.TFile("/home/j/jaeyserm/combine/CMSSW_10_6_20/src/lowPU_Wmass/%s/%s/LowPU_Wmass_mu_%s_lumi%s_statOnly.root" % (mode, inTag, met, lumi))
+        fIn = ROOT.TFile("/home/j/jaeyserm/combine/CMSSW_10_6_20/src/Wmass_mT/fits_scaledRecoil/lowPU_mu_%s_lumi%s_statOnly.root" % (met, lumi))
         tree = fIn.Get("fitresults")
         tree.GetEntry(0)
         unc_data_stat = getattr(tree, "massShift100MeV_err")
         fIn.Close()
         
-        fIn = ROOT.TFile("/home/j/jaeyserm/combine/CMSSW_10_6_20/src/lowPU_Wmass/%s/%s/LowPU_Wmass_mu_%s_lumi%s.root" % (mode, inTag, met, lumi))
+        fIn = ROOT.TFile("/home/j/jaeyserm/combine/CMSSW_10_6_20/src/Wmass_mT/fits_scaledRecoil/lowPU_mu_%s_lumi%s.root" % (met, lumi))
         tree = fIn.Get("fitresults")
         tree.GetEntry(0)
         unc_total = getattr(tree, "massShift100MeV_err")
@@ -352,26 +353,27 @@ def expUncPlotSyst():
         xLabels = np.array([impact_hist.GetXaxis().GetBinLabel(l) for l in range(1, impact_hist.GetNbinsX()+1)]) # POI
         yLabels = np.array([impact_hist.GetYaxis().GetBinLabel(l) for l in range(1, impact_hist.GetNbinsY()+1)]) # nuisances
         print(yLabels)
-        for k, syst in enumerate(systs):    
-        
-            g = graphs[syst]
-            if syst == "datastat": unc = unc_data_stat
-            elif syst == "total": unc = unc_total
-            elif syst in yLabels: 
-                print(syst, np.where(yLabels == syst)[0][0]+1)
-                unc = impact_hist.GetBinContent(1, int(np.where(yLabels == syst)[0][0])+1)
-            elif syst == "others": # look for the other systs and add in quadrature
-                unc = 0.
-                for l,yLabel in enumerate(yLabels):
-                    if syst not in yLabel: unc += impact_hist.GetBinContent(1, l+1)**2
-                unc**(0.5)
-            else: print("Category for syst %s not found" % syst)
+        for k, systs_ in enumerate(systs): 
+            g = graphs[k]
+            unc = 0
+            for syst in systs_:
                 
-            print(syst, unc)
+                if syst == "datastat": unc = unc_data_stat**2
+                elif syst == "total": unc = unc_total**2
+                elif syst in yLabels: 
+                    unc += impact_hist.GetBinContent(1, int(np.where(yLabels == syst)[0][0])+1)**2
+                elif syst == "others": # look for the other systs and add in quadrature
+                    for l,yLabel in enumerate(yLabels):
+                        if yLabel not in sum(systs, []):
+                            unc += impact_hist.GetBinContent(1, int(np.where(yLabels == yLabel)[0][0])+1)**2
+                            print("_> others", yLabel)
+                else: 
+                    print("ERROR Category for syst %s not found" % syst)
+                    sys.exit()
+            unc = unc**0.5
             g.SetPoint(i, lumis_fb[i], scale*unc)
       
-    outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/Projection/"
-    
+    outDir = "/eos/user/j/jaeyserm/www/wmass/studies_mT/lowPU/"
     
 
     cfg = {
@@ -394,7 +396,7 @@ def expUncPlotSyst():
     
     
     #leg = ROOT.TLegend(.40, 0.6, .90, .90)
-    leg = ROOT.TLegend(.40, 0.60, .90, .90)
+    leg = ROOT.TLegend(.40, 0.55, .90, .90)
     leg.SetBorderSize(0)
     leg.SetFillStyle(0)
     leg.SetTextSize(0.035)
@@ -407,8 +409,8 @@ def expUncPlotSyst():
     dummy.Draw("HIST")
   
     for k, syst in enumerate(systs):  
-        leg.AddEntry(graphs[syst], systs_labels[k], "LP")
-        graphs[syst].Draw("SAME LP")    
+        leg.AddEntry(graphs[k], systs_labels[k], "LP")
+        graphs[k].Draw("SAME LP")    
 
     leg.Draw("SAME")
     
@@ -416,10 +418,113 @@ def expUncPlotSyst():
     ROOT.gPad.SetTickx()
     ROOT.gPad.SetTicky()
     ROOT.gPad.RedrawAxis()  
-    canvas.SaveAs("%s/syst_%s_%s.png" % (outDir, outTag, mode))
-    canvas.SaveAs("%s/syst_%s_%s.pdf" % (outDir, outTag, mode))
+    canvas.SaveAs("%s/syst_%s.png" % (outDir, outTag))
+    canvas.SaveAs("%s/syst_%s.pdf" % (outDir, outTag))
     canvas.Close()
 
+
+
+
+def recoilUncPlot_statSyst():
+
+    lumis = ["1p0", "2p5", "5p0", "10p0"]
+    lumis_fb = [0.2, 0.5, 1, 2]
+    met = "RawPFMET"
+    scale=100
+    group = True
+    header = "W^{#pm} #rightarrow #mu^{#pm}#nu, RawPFMET"
+    
+   
+    g_tot = ROOT.TGraph()
+    g_tot.SetLineColor(ROOT.kBlack)
+    g_tot.SetMarkerColor(ROOT.kBlack)
+    g_tot.SetLineWidth(2)
+    g_tot.SetMarkerSize(1.5)
+    g_tot.SetMarkerStyle(8)
+    
+    g_stat = ROOT.TGraph()
+    g_stat.SetLineColor(ROOT.kBlue)
+    g_stat.SetMarkerColor(ROOT.kBlue)
+    g_stat.SetLineWidth(2)
+    g_stat.SetMarkerSize(1.5)
+    g_stat.SetMarkerStyle(8)
+
+    g_syst = ROOT.TGraph()
+    g_syst.SetLineColor(ROOT.kRed)
+    g_syst.SetMarkerColor(ROOT.kRed)
+    g_syst.SetLineWidth(2)
+    g_syst.SetMarkerSize(1.5)
+    g_syst.SetMarkerStyle(8)
+
+    for i,lumi in enumerate(lumis):
+    
+        name = "nuisance_group_impact_nois" if group else "nuisance_impact_nois"
+    
+
+        
+        ## scaled recoil
+        fIn = ROOT.TFile("/home/j/jaeyserm/combine/CMSSW_10_6_20/src/Wmass_mT/fits_scaledRecoil_recoilOnly/lowPU_mu_%s_lumi%s.root" % (met, lumi))
+        impact_hist = fIn.Get(name) # nuisance_group_impact_nois
+        yLabels = np.array([impact_hist.GetYaxis().GetBinLabel(l) for l in range(1, impact_hist.GetNbinsY()+1)]) # nuisances
+        unc_stat = impact_hist.GetBinContent(1, int(np.where(yLabels == "recoil_stat")[0][0])+1)
+        unc_syst = impact_hist.GetBinContent(1, int(np.where(yLabels == "recoil_syst")[0][0])+1)
+        unc = (unc_stat**2 + unc_syst**2)**0.5
+        g_tot.SetPoint(i, lumis_fb[i], scale*unc)
+        g_stat.SetPoint(i, lumis_fb[i], scale*unc_stat)
+        g_syst.SetPoint(i, lumis_fb[i], scale*unc_syst)
+      
+    outDir = "/eos/user/j/jaeyserm/www/wmass/studies_mT/lowPU/"
+    
+
+    cfg = {
+
+        'logy'              : False,
+        'logx'              : False,
+        
+        'xmin'              : 0,
+        'xmax'              : 2,
+        'ymin'              : 0,
+        'ymax'              : 10,
+            
+        'xtitle'            : "Integrated luminosity (fb^{#minus1})",
+        'ytitle'            : "Recoil uncertainty on m_{W} (MeV)",
+            
+        'topRight'          : "LowPU (13 TeV)", 
+        'topLeft'           : "#bf{CMS} #scale[0.7]{#it{Preliminary}}",
+
+    }
+    
+    
+    leg = ROOT.TLegend(.40, 0.70, .90, .90)
+    leg.SetBorderSize(0)
+    leg.SetFillStyle(0)
+    leg.SetTextSize(0.035)
+    leg.SetHeader(header)
+
+    plotter.cfg = cfg
+    canvas = plotter.canvas()
+    dummy = plotter.dummy()
+    canvas.SetGrid()
+    dummy.Draw("HIST")
+  
+    leg.AddEntry(g_tot, "Total recoil uncertainty", "LP")
+    g_tot.Draw("SAME LP")
+    
+    leg.AddEntry(g_stat, "Statistical, scaled, #sqrt{N}", "LP")
+    g_stat.Draw("SAME LP")
+    
+    leg.AddEntry(g_syst, "Systematic", "LP")
+    g_syst.Draw("SAME LP")
+
+    leg.Draw("SAME")
+    
+    plotter.aux(canvas)  
+    ROOT.gPad.SetTickx()
+    ROOT.gPad.SetTicky()
+    ROOT.gPad.RedrawAxis()  
+    canvas.SaveAs("%s/recoilImpact_statSyst.png" % (outDir))
+    canvas.SaveAs("%s/recoilImpact_statSyst.pdf" % (outDir))
+    canvas.Close()
 
 
 
@@ -430,18 +535,9 @@ def recoilUncPlot():
     met = "RawPFMET"
     scale=100
     group = True
-    header = "W^{#pm} #rightarrow #mu^{#pm}#nu, RawPFMET, #eta inclusive"
+    header = "W^{#pm} #rightarrow #mu^{#pm}#nu, RawPFMET"
     
-    inTag = "eta_inclusive_varyRecoil" # eta_inclusive eta_inclusive_varyRecoil
-    outTag = "varyRecoil" # cteRecoil varyRecoil
-    
-    systs = ["total", "datastat", "CMS_recoil_stat", "pdfNNPDF31", "QCDscale", "muonScale", "others"]
-    systs_labels = ["Total", "Stat. data", "Stat. recoil", "PDF", "QCDscale", "Muon momentum scale (10^{-4})", "Others"]
-    systs = ["total", "datastat", "CMS_recoil_stat", "pdfNNPDF31", "QCDscale"]
-    systs_labels = ["Total", "Stat. data", "Stat. recoil", "PDF", "QCDscale"]
-    systs_colors = [ROOT.kBlack, ROOT.kBlue, ROOT.kRed, ROOT.kGreen+1, ROOT.kOrange+1, ROOT.kYellow, ROOT.kMagenta]
-    
-
+   
     g_unscaled = ROOT.TGraph()
     g_unscaled.SetLineColor(ROOT.kBlue)
     g_unscaled.SetMarkerColor(ROOT.kBlue)
@@ -461,23 +557,25 @@ def recoilUncPlot():
         name = "nuisance_group_impact_nois" if group else "nuisance_impact_nois"
     
         ## unscaled recoil
-        inTag = "eta_inclusive"
-        fIn = ROOT.TFile("/home/j/jaeyserm/combine/CMSSW_10_6_20/src/lowPU_Wmass/%s/LowPU_Wmass_mu_%s_lumi%s.root" % (inTag, met, lumi))
-        impact_hist = fIn.Get(name) # nuisance_group_impact_nois
+        fIn = ROOT.TFile("/home/j/jaeyserm/combine/CMSSW_10_6_20/src/Wmass_mT/fits_cteRecoil/lowPU_mu_%s_lumi%s.root" % (met, lumi))
+        impact_hist = fIn.Get(name)
         yLabels = np.array([impact_hist.GetYaxis().GetBinLabel(l) for l in range(1, impact_hist.GetNbinsY()+1)]) # nuisances
-        unc = impact_hist.GetBinContent(1, int(np.where(yLabels == "CMS_recoil_stat")[0][0])+1)
+        unc_stat = impact_hist.GetBinContent(1, int(np.where(yLabels == "recoil_stat")[0][0])+1)
+        unc_syst = impact_hist.GetBinContent(1, int(np.where(yLabels == "recoil_syst")[0][0])+1)
+        unc = (unc_stat**2 + unc_syst**2)**0.5
         g_unscaled.SetPoint(i, lumis_fb[i], scale*unc)
         
         
         ## scaled recoil
-        inTag = "eta_inclusive_scaledRecoil"
-        fIn = ROOT.TFile("/home/j/jaeyserm/combine/CMSSW_10_6_20/src/lowPU_Wmass/%s/LowPU_Wmass_mu_%s_lumi%s.root" % (inTag, met, lumi))
+        fIn = ROOT.TFile("/home/j/jaeyserm/combine/CMSSW_10_6_20/src/Wmass_mT/fits_scaledRecoil/lowPU_mu_%s_lumi%s.root" % (met, lumi))
         impact_hist = fIn.Get(name) # nuisance_group_impact_nois
         yLabels = np.array([impact_hist.GetYaxis().GetBinLabel(l) for l in range(1, impact_hist.GetNbinsY()+1)]) # nuisances
-        unc = impact_hist.GetBinContent(1, int(np.where(yLabels == "CMS_recoil_stat")[0][0])+1)
+        unc_stat = impact_hist.GetBinContent(1, int(np.where(yLabels == "recoil_stat")[0][0])+1)
+        unc_syst = impact_hist.GetBinContent(1, int(np.where(yLabels == "recoil_syst")[0][0])+1)
+        unc = (unc_stat**2 + unc_syst**2)**0.5
         g_scaled.SetPoint(i, lumis_fb[i], scale*unc)
       
-    outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/Projection/"
+    outDir = "/eos/user/j/jaeyserm/www/wmass/studies_mT/lowPU/"
     
 
     cfg = {
@@ -487,7 +585,7 @@ def recoilUncPlot():
         
         'xmin'              : 0,
         'xmax'              : 2,
-        'ymin'              : 5,
+        'ymin'              : 0,
         'ymax'              : 20,
             
         'xtitle'            : "Integrated luminosity (fb^{#minus1})",
@@ -657,6 +755,7 @@ if __name__ == "__main__":
     #expUncPlotStat()
     expUncPlotSyst()
     #recoilUncPlot()
+    #recoilUncPlot_statSyst()
     #recoilOnlyUncPlot() # only recoil uncertainties
     
     
