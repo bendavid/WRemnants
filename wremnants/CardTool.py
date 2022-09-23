@@ -45,6 +45,7 @@ class CardTool(object):
         self.writeByCharge = True
         self.keepSyst = None # to override previous one with exceptions for special cases
         #self.loadArgs = {"operation" : "self.loadProcesses (reading hists from file)"}
+        self.lumiScale = 1.
         self.keepOtherChargeSyst = True
         self.chargeIdDict = {"minus" : {"val" : -1, "id" : "q0", "badId" : None},
                              "plus"  : {"val" : 1., "id" : "q1", "badId" : None}
@@ -70,7 +71,10 @@ class CardTool(object):
         elif isinstance(procs, list):
             self.noStatUncProcesses.extend(procs)
         else:
-            raise ValueError("In setNoStatUncForProcs(): expecting string or list argument")
+            raise ValueError("In setNoStatUncForProcs(): expecting string or list argument")            
+    
+    def setLumiScale(self, lumiScale):
+        self.lumiScale = lumiScale
 
     def getProcsNoStatUnc(self):
         return self.noStatUncProcesses
@@ -461,11 +465,13 @@ class CardTool(object):
             q = self.chargeIdDict[charge]["val"]
             hout = narf.hist_to_root(h[{"charge" : h.axes["charge"].index(q)}])
             hout.SetName(name+f"_{charge}")
+            hout.Scale(self.lumiScale)
             hout.Write()
 
     def writeHistWithCharges(self, h, name):
         hout = narf.hist_to_root(h)
         hout.SetName(f"{name}_{self.channels[0]}")
+        hout.Scale(self.lumiScale)
         hout.Write()
     
     def writeHist(self, h, name, setZeroStatUnc=False):
