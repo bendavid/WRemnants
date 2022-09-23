@@ -1,6 +1,6 @@
 import hist
 import numpy as np
-from utilities import boostHistHelpers as hh
+from utilities import boostHistHelpers as hh,common
 import collections.abc
 
 def scale_helicity_hist_to_variations(scale_hist, sum_axis=[], rebinPtV=None):
@@ -8,7 +8,7 @@ def scale_helicity_hist_to_variations(scale_hist, sum_axis=[], rebinPtV=None):
     s = hist.tag.Slicer()
     # select nominal QCD scales, but keep the sliced axis at size 1 for broadcasting
     nom_scale_hist = scale_hist[{"muRfact" : s[1.j:1.j+1], "muFfact" : s[1.j:1.j+1]}]
-    axisNames = [ax.name for ax in scale_hist.axes]
+    axisNames = scale_hist.axes.name
     # select nominal QCD scales and project down to nominal axes
     genAxes = ["ptVgen", "chargeVgen", "helicity"]
     nom_hist = nom_scale_hist[{"muRfact" : s[1.j], "muFfact" : s[1.j] }]
@@ -40,7 +40,7 @@ def scale_helicity_hist_to_variations(scale_hist, sum_axis=[], rebinPtV=None):
             scale_hist = scale_hist[{axis : s[::hist.sum]}]
             nom_scale_hist = nom_scale_hist[{axis : s[::hist.sum]}]
         else:
-            raise ValueError(f"In scale_helicity_hist_to_variations: axis '{axis}' not found in histogram.")
+            loggin.warning(f"In scale_helicity_hist_to_variations: axis '{axis}' not found in histogram.")
         
     # difference between a given scale and the nominal, plus the sum
     # this emulates the "weight if idx else nominal" logic and corresponds to the decorrelated
@@ -59,6 +59,14 @@ def scale_helicity_hist_to_variations(scale_hist, sum_axis=[], rebinPtV=None):
 
     return scale_variation_hist
 
+
+def uncertainty_hist_from_envelope(h, proj_ax, entries):
+    hdown = hh.syst_min_or_max_env_hist(h, proj_ax, "vars", entries, no_flow=["ptVgen"], do_min=True)
+    hup = hh.syst_min_or_max_env_hist(h, proj_ax, "vars", entries, no_flow=["ptVgen"], do_min=False)
+    hnew = hist.Hist(*h.axes[:-1], common.down_up_axis, storage=h._storage_type())
+    hnew[...,0] = hdown.view(flow=True)
+    hnew[...,1] = hup.view(flow=True)
+    return hnew
 
 def define_mass_weights(df, isW, nominal_axes=None, nominal_cols=None):
     # nweights = 21 if isW else 23
