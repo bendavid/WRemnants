@@ -208,7 +208,7 @@ class CardTool(object):
 
     def systLabelForAxis(self, axLabel, entry):
         if axLabel == "mirror" or axLabel == "downUpVar":
-            return 'Up' if entry else 'Down'
+            return 'Up' if entry else 'Down'  # note, the first entry is the original, might want to call it Up if it was defined by an actual scaling up of something (e.g. efficiencies)
         if "{i}" in axLabel:
             return axLabel.format(i=entry)
         return axLabel+str(entry)
@@ -413,7 +413,7 @@ class CardTool(object):
             for chan in self.channels:
                 # do not write systs which should only apply to other charge, to simplify card
                 if self.keepOtherChargeSyst or self.chargeIdDict[chan]["badId"] not in systname:
-                    self.cardContent[chan] += f"{systname.ljust(self.spacing)}{shape.ljust(self.spacing)}{''.join(include)}\n"
+                    self.cardContent[chan] += f"{systname.ljust(self.spacing)} {shape.ljust(self.spacing)}{''.join(include)}\n"
         # unlike for LnN systs, here it is simpler to act on the list of these systs to form groups, rather than doing it syst by syst 
         if group:
             for chan in self.channels:

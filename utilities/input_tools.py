@@ -5,6 +5,7 @@ import hist
 from utilities import boostHistHelpers as hh
 import numpy as np
 import logging
+import os
 
 def read_and_scale(fname, proc, histname):
     with lz4.frame.open(fname) as f:
@@ -41,7 +42,7 @@ def read_scetlib_hist(path, nonsing="auto", flip_y_sign=False, charge=None):
 
     var_axis = hist.axis.Integer(f["bins"][0][0], f["bins"][0][-1], name="vars", flow=False)
     # Won't actually have overflow/underflow, but set to match MiNNLO
-    mass_underflow = f["bins"][1][0] > 5.
+    mass_underflow = f["bins"][1][0] > 0.
     mass_overflow = f["bins"][1][-1] < 13000.
     mass_axis = hist.axis.Variable(f["bins"][1], name="mass", overflow=mass_overflow, underflow=mass_underflow)
     y_axis = hist.axis.Variable(f["bins"][2], name="y")
@@ -101,7 +102,7 @@ def read_matrixRadish_hist(filename, axname="pt"):
     data = read_text_data(filename)
     bins = list(set(data[:,0].flatten()))
     
-    ax = hist.axis.Variable(bins, name=axname)
+    ax = hist.axis.Variable(bins, name=axname, underflow=not (bins[0] == 0 and "pt" in axname))
     h = hist.Hist(ax, storage=hist.storage.Weight())
 
     h[...] = data[:-1,1:3]
@@ -122,7 +123,7 @@ def read_dyturbo_file(filename, axname="pt"):
     # Last line is the total cross section
     bins = list(set(data[:-1,:2].flatten()))
     
-    ax = hist.axis.Variable(bins, name=axname)
+    ax = hist.axis.Variable(bins, name=axname, underflow=not (bins[0] == 0 and "pt" in axname))
     h = hist.Hist(ax, storage=hist.storage.Weight())
 
     h[...] = data[:-1,2:4]
