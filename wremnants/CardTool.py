@@ -71,11 +71,11 @@ class CardTool(object):
         elif isinstance(procs, list):
             self.noStatUncProcesses.extend(procs)
         else:
-            raise ValueError("In setNoStatUncForProcs(): expecting string or list argument")            
+            raise ValueError("In setNoStatUncForProcs(): expecting string or list argument")
     
     def setLumiScale(self, lumiScale):
         self.lumiScale = lumiScale
-
+        
     def getProcsNoStatUnc(self):
         return self.noStatUncProcesses
         
