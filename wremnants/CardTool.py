@@ -220,6 +220,27 @@ class CardTool(object):
                 return True
         return False
 
+    def expandSkipEntries(self, h, syst, skipEntries):
+        updated_skip = []
+        for skipEntry in skipEntries:
+            nsyst_ax = len(self.systematics[syst]["systAxes"])+self.systematics[syst]["mirror"]
+            if len(skipEntry) != nsyst_ax:
+                raise ValueError(f"Error in syst {syst}. skipEntry must specify a value per axis. "
+                        f"Found {nsyst_ax} axes but {len(skipEntry)} entries were given")
+            # The lookup is handled by passing an imaginary number,
+            # so detect these and then call the bin lookup on them
+            # np.iscomplex returns false for 0.j, but still want to detect that
+            to_lookup = np.array([isinstance(x, complex) for x in skipEntry])
+            skip_arr = np.array(skipEntry)
+            if to_lookup.any():
+                bin_lookup = np.array([ax.index(x.imag) for x, ax in 
+                    zip(skipEntry, h.axes[-nsyst_ax:]) if isinstance(x, complex)])
+                skip_arr = skip_arr.real
+                skip_arr[to_lookup] += bin_lookup
+            updated_skip.append(skip_arr)
+
+        return updated_skip
+
     def systHists(self, hvar, syst):
         if syst == self.nominalName:
             return ([self.nominalName], [hvar])
@@ -240,14 +261,15 @@ class CardTool(object):
             axNames.append("mirror")
             axLabels.append("mirror")
 
-        if not all([name in [ax.name for ax in hvar.axes] for name in axNames]):
-            raise ValueError(f"Failed to find axis names '{str(systAxes)} in hist. " \
-                f"Axes in hist are {str([ax.name for ax in hvar.axes])}")
+        if not all([name in hvar.axes.name for name in axNames]):
+            raise ValueError(f"Failed to find axis names {str(axNames)} in hist for syst {syst}. " \
+                f"Axes in hist are {str(hvar.axes.name)}")
         entries = list(itertools.product(*[range(hvar.axes[ax].size) for ax in axNames]))
         
         if len(systInfo["outNames"]) == 0:
             for entry in entries:
-                if "skipEntries" in systInfo and self.excludeSystEntry(entry, systInfo["skipEntries"]):
+                skipEntries = None if "skipEntries" not in systInfo else self.expandSkipEntries(hvar, syst, systInfo["skipEntries"])
+                if skipEntries and self.excludeSystEntry(entry, skipEntries):
                     systInfo["outNames"].append("")
                 else:
                     name = systInfo["baseName"]
@@ -290,7 +312,7 @@ class CardTool(object):
         logging.info(f"Writing systematic {syst} for process {proc}")
         var_names, variations = self.systHists(h, syst) 
         if len(var_names) != len(variations):
-            logging.warning("The number of variations doesn't match the number of names for "
+            logging.warning(f"The number of variations doesn't match the number of names for "
                 f"process {proc}, syst {syst}. Found {len(var_names)} names and {len(variations)} variations.")
         setZeroStatUnc = False
         if proc in self.noStatUncProcesses:

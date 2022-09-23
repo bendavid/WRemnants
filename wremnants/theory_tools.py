@@ -314,8 +314,8 @@ def massWeightNames(matches=None, wlike=False):
     nweights=21
     names = [f"massShift{int(abs(central-i)*10)}MeV{'Down' if i < central else 'Up'}" for i in range(nweights)]
     
-    if wlike:
-        # This is the PDG uncertainty
+    if wlike and False:
+        # This is the PDG uncertainty (turned off for now since it doesn't seem to have been read into the nano)
         names.extend(["massShift2p1MeVDown", "massShift2p1MeVUp"])
 
     # If name is "" it won't be stored
