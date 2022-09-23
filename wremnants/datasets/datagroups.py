@@ -263,3 +263,4 @@ class datagroups2016(datagroups):
         if scaleOp:
             scale = scale*scaleOp(proc)
         return h*scale
+

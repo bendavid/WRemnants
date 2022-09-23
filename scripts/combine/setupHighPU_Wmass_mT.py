@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from wremnants import CardTool,theory_tools,syst_tools
-from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_Z
+from wremnants.datasets.datagroups import datagroups2016_mT
 from wremnants import histselections as sel
 import argparse
 import os
@@ -12,74 +12,43 @@ import scripts.lowPU.config as lowPUcfg
 scriptdir = f"{pathlib.Path(__file__).parent}"
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-o", "--outfolder", type=str, default="/scratch/jaeyserm/CombineStudies_wlike_lowPU/")
+parser.add_argument("-o", "--outfolder", type=str, default="/scratch/jaeyserm/CombineStudies_Wmass_highPU_mT")
 parser.add_argument("-i", "--inputFile", type=str, default="")
 parser.add_argument("--noScaleHelicitySplit", dest="qcdByHelicity", action='store_false', 
         help="Don't split QCD scale into helicity coefficients")
 parser.add_argument("--qcdScale", choices=["byHelicityPt", "byPt", "integrated", "byHelicity"], default="integrated", 
         help="Decorrelation for QCDscale (additionally always by charge)")
-parser.add_argument("--flavor", type=str, help="Flavor (ee or mumu)", default=None, required=True)
 parser.add_argument("--fittype", choices=["differential", "wmass", "wlike", "inclusive"], default="differential", 
         help="Fit type, defines POI and fit observable (recoil or mT)")
-parser.add_argument("--xsec", dest="xsec", action='store_true', 
-        help="Write card for masked xsec normalization")
-parser.add_argument("--met", type=str, help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")
 parser.add_argument("--statOnly", dest="statOnly", action='store_true', help="Stat-only cards")
 parser.add_argument("--lumiScale", dest="lumiScale", help="Luminosity scale", type=float, default=1.0)
+parser.add_argument("--met", type=str, help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")
 args = parser.parse_args()
 
 if not os.path.isdir(args.outfolder):
     os.mkdir(args.outfolder)
 
-if args.inputFile == "": args.inputFile = "lowPU_%s_%s.pkl.lz4" % (args.flavor, args.met)
+met = args.met # mumu, ee
+suffix = str(args.lumiScale).replace(".", "p")
+
+if args.inputFile == "": args.inputFile = "mw_with_mu_eta_pt_%s.pkl.lz4" % met
 
 
-datagroups = datagroupsLowPU_Z(args.inputFile, flavor=args.flavor)
+datagroups = datagroups2016_mT(args.inputFile)
 
 unconstrainedProcs = [] # POIs
 constrainedProcs = []   # constrained signal procs
 bkgDataProcs = []       # all the rest + data
-suffix = ""
-if args.flavor == "mumu":
-    dataName = "SingleMuon"
-    bkgDataProcs = ["TTbar", "EWK", "SingleMuon"] # , "DYmumu"
-if args.flavor == "ee":
-    dataName = "SingleElectron"
-    bkgDataProcs = ["TTbar", "EWK", "SingleElectron"] # , "DYee"
-if args.xsec:
-    suffix = "_xsec"
-    bkgDataProcs = [bkgDataProcs[-1]] # keep data_obs
-
-recoBins = lowPUcfg.bins_recoil_reco
-genBins = lowPUcfg.bins_recoil_gen
+dataName = "Data"
+bkgDataProcs = ["TTbar", "EWK", "Data"] # , "DYee"
 
 
-histName = ""
-QCDscale = ""
-if args.fittype == "differential" or args.fittype == "wmass":
-    histName = "reco_mll" # for signal gen_reco_mll
+histName = "mT_uncorr"
 
-    proc_base = dict(datagroups.groups["DYmumu" if args.flavor == "mumu" else "DYee"]) # load the base process (DYmumu or DYee)
-    for i in range(len(genBins)-1): # add gen bin processes
-    
-        proc_name = "DY_genBin%d" % (i+1)
-        proc_genbin = dict(proc_base)
-        proc_genbin['signalOp'] = lambda x, i=i: x[{"recoil_gen" : i}] # index correct? Start from 1?
-        datagroups.groups[proc_name] = proc_genbin
-        if args.fittype == "differential": unconstrainedProcs.append(proc_name)
-        elif args.fittype == "wmass": constrainedProcs.append(proc_name)
-    if args.fittype == "differential": QCDscale = "integral"
-    elif args.fittype == "wmass": QCDscale = "byHelicityPt"
+constrainedProcs.append("WplusJetsToMuNu")
+constrainedProcs.append("WminusJetsToMuNu")
 
-elif args.fittype == "wlike":
-    histName = "mT_corr_rec"
-    constrainedProcs.append("DYmumu" if args.flavor == "mumu" else "DYee")
-    QCDscale = "integral"
-elif args.fittype == "inclusive":
-    histName = "reco_mll"
-    unconstrainedProcs.append("DYmumu" if args.flavor == "mumu" else "DYee")
-    QCDscale = "integral"
-    
+
 
   
 # hack: remove non-used procs/groups, as there can be more procs/groups defined than defined above
@@ -89,18 +58,18 @@ for group in datagroups.groups:
 for group in toDel: del datagroups.groups[group]    
 
 templateDir = f"{scriptdir}/Templates/LowPileupW"
-cardTool = CardTool.CardTool(f"{args.outfolder}/LowPU_Z{args.flavor}_{args.fittype}{suffix}.txt")
+cardTool = CardTool.CardTool(f"{args.outfolder}/highPU_Wmass_{{chan}}_{met}_lumi{suffix}.txt")
 cardTool.setNominalTemplate(f"{templateDir}/main.txt")
-cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/LowPU_Z{args.flavor}_{args.fittype}{suffix}.root"))
+cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/highPU_Wmass_{met}_lumi{suffix}.root"))
 cardTool.setDatagroups(datagroups)
 cardTool.setHistName(histName) 
-cardTool.setChannels([f"{args.flavor}{suffix}"])
+##cardTool.setChannels([f"{args.flavor}"])
 cardTool.setDataName(dataName)
 cardTool.setProcsNoStatUnc(procs=[])
 cardTool.setSpacing(36)
-cardTool.setWriteByCharge(False)
-cardTool.setUnconstrainedProcs(unconstrainedProcs)
+##cardTool.setWriteByCharge(False)
 cardTool.setLumiScale(args.lumiScale)
+cardTool.setUnconstrainedProcs(unconstrainedProcs)
 
 DY_procs = cardTool.filteredProcesses(lambda x: "DY" in x)
 
@@ -162,18 +131,11 @@ cardTool.addSystematic("qcdScaleByHelicity",
     baseName="QCDscale_",
     )
 
-'''
+
 def scale_recoil_hist_to_variations(scale_hist):
-    ## "mt_recoilStatUnc", "mt", "mt_pert"
+
     # scale_hist = recoil_gen, recoil_reco, recoil_reco_pert, mll, systIdx (=qT bin variations)
     # recoil_gen already removed
-    
-    #if hName == "recoil_corr_rec_para_qT": basname_syst, axis, axis_pert = "recoil_para_qT_recoilStatUnc", "recoil_para_qT", "recoil_para_qT_pert"
-    #elif hName == "recoil_corr_rec_perp": basname_syst, axis, axis_pert = "recoil_perp_recoilStatUnc", "recoil_perp", "recoil_perp_pert"
-    #elif hName == "MET_corr_rec_pt": basname_syst, axis, axis_pert = "MET_recoilStatUnc", "recoil_MET_pt", "recoil_MET_pt_pert"
-    #elif hName == "mT_corr_rec": basname_syst, axis, axis_pert = "mt_recoilStatUnc", "mt", "mt_pert"
-    #elif hName == "recoil_corr_rec_magn": basname_syst, axis, axis_pert = "recoil_magn_recoilStatUnc", "recoil_magn", "recoil_magn_pert"
-    basname_syst, axis, axis_pert = "mt_recoilStatUnc", "mt", "mt_pert"
 
     # BASE: sum over qT bins, RECO only --> (RECO, M)
     # NOM: RECO only, in bins of qT --> (RECO, M, QT)
@@ -181,13 +143,9 @@ def scale_recoil_hist_to_variations(scale_hist):
     # --> VAR = NOM(extended) - NOM + PERT
     
     s = hist.tag.Slicer()
-    #base = scale_hist[{"recoil_stat_unc_var" : s[::hist.sum], "recoil_reco_pert" : s[::hist.sum]}] # sum over qT, remove the qT axis == (RECO, M)
-    #nom = scale_hist[{"recoil_reco_pert" : s[::hist.sum]}] # sum over qT (perturbed)  == (RECO, M, IDX)
-    #pert = scale_hist[{"recoil_reco" : s[::hist.sum]}] # sum over qT == (RECO_PERT, M, IDX)
-    base = scale_hist[{"recoil_stat_unc_var" : s[::hist.sum], axis_pert : s[::hist.sum]}] # sum over qT, remove the qT axis == (RECO, M)
-    nom = scale_hist[{axis_pert : s[::hist.sum]}] # sum over qT (perturbed)  == (RECO, M, IDX)
-    pert = scale_hist[{axis : s[::hist.sum]}] # sum over qT == (RECO_PERT, M, IDX)
-    
+    base = scale_hist[{"recoil_stat_unc_var" : s[::hist.sum], "recoil_reco_pert" : s[::hist.sum]}] # sum over qT, remove the qT axis == (RECO, M)
+    nom = scale_hist[{"recoil_reco_pert" : s[::hist.sum]}] # sum over qT (perturbed)  == (RECO, M, IDX)
+    pert = scale_hist[{"recoil_reco" : s[::hist.sum]}] # sum over qT == (RECO_PERT, M, IDX)
     
     #print(scale_hist)
     
@@ -215,21 +173,18 @@ def scale_recoil_hist_to_variations(scale_hist):
 
 if not args.xsec:
    
-    
     recoil_vars = [(1,2), (1,3), (1,4),   (2,2), (2,3),   (3,2), (3,3), (3,4),    (4,2), (4,3)]
-    recoil_vars = [(1,2),(1,3),(1,4),(1,5),  (2,2),(2,3),(2,4),  (3,2),(3,3),(3,4),(3,5),  (4,2),(4,3),(4,4)]
-    #recoil_vars = [(1,2)]
     for k in recoil_vars:
         
         cardTool.addSystematic("recoilStatUnc_%d_%d" % (k[0], k[1]),
-            processes=constrainedProcs, #DY_procs,
+            processes=DY_procs,
             mirror = False,
             group = "CMS_recoil_stat",
             systAxes = ["recoil_stat_unc_var"],
             labelsByAxis = ["recoilStatUnc_%d_%d_{i}" % (k[0], k[1])],
             action=scale_recoil_hist_to_variations,
         )
-    '''
+
 
     cardTool.addSystematic("prefireCorr",
         processes=DY_procs,
@@ -250,25 +205,26 @@ if not args.xsec:
             systAxes = ["tensor_axis_0"],
             labelsByAxis = [""],
         )
-    '''  
-    #cardTool.addLnNSystematic("CMS_Top", processes=["TTbar"], size=1.06, group="CMS_bkg_norm")
-    #cardTool.addLnNSystematic("CMS_VV", processes=["EWK"], size=1.16, group="CMS_bkg_norm")
-    #cardTool.addLnNSystematic("CMS_lumi_lowPU", processes=cardTool.allMCProcesses(), size=1.02, group="CMS_lumi_lowPU")
+        
+    cardTool.addLnNSystematic("CMS_Top", processes=["TTbar"], size=1.06, group="CMS_bkg_norm")
+    cardTool.addLnNSystematic("CMS_VV", processes=["EWK"], size=1.16, group="CMS_bkg_norm")
+    cardTool.addLnNSystematic("CMS_lumi_lowPU", processes=cardTool.allMCProcesses(), size=1.02, group="CMS_lumi_lowPU")
 
+'''
 
+#cardTool.addLnNSystematic("CMS_lumi_lowPU", processes=cardTool.allMCProcesses(), size=1.00001, group="CMS_lumi_lowPU")
 
-if args.fittype == "wlike" or args.fittype == "wmass":
-
-    cardTool.addSystematic("massWeight", 
-        processes=constrainedProcs,
-        outNames=theory_tools.massWeightNames(["massShift100MeV"], wlike=False),
-        group="massShift",
-        groupFilter=lambda x: x == "massShift100MeV",
-        mirror=False,
-        #TODO: Name this
-        noConstraint=True,
-        systAxes=["tensor_axis_0"],
-    )
+cardTool.addSystematic("massWeightME", 
+    processes=constrainedProcs,
+    outNames=theory_tools.massWeightNames(["massShift100MeV"], wlike=False),
+    group="massShift",
+    groupFilter=lambda x: x == "massShift100MeV",
+    mirror=False,
+    #TODO: Name this
+    noConstraint=True,
+    systAxes=["tensor_axis_0"],
+)
     
+
 
 cardTool.writeOutput(statOnly=args.statOnly)

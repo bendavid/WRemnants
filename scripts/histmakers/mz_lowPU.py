@@ -5,6 +5,7 @@ parser.add_argument("--nThreads", type=int, help="number of threads", default=No
 parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
 parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=None)
 parser.add_argument("--flavor", type=str, help="Flavor (ee or mumu)", default=None)
+parser.add_argument("--met", type=str, help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
 args = parser.parse_args()
 
@@ -37,6 +38,7 @@ import scripts.lowPU.config as lowPUcfg
 
 ###################################
 flavor = args.flavor # mumu, ee
+met = args.met # mumu, ee
 
 if flavor == "mumu":
 
@@ -101,7 +103,7 @@ axis_recoil_gen = hist.axis.Variable([0.0, 10.0, 20.0, 40.0, 60.0, 90.0, 150], n
 # axes for final cards/fitting
 reco_mll_axes = [axis_recoil_reco, axis_mll]
 gen_reco_mll_axes = [axis_recoil_gen, axis_recoil_reco, axis_mll]
-axis_mt = hist.axis.Regular(200, 0., 200., name = "mt")
+axis_mt = hist.axis.Regular(200, 0., 200., name = "mt", underflow=False)
 
 # extra axes which can be used to label tensor_axes
 down_up_axis = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "downUpVar")
@@ -110,7 +112,7 @@ down_up_axis = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, na
 
 # recoil initialization
 from wremnants import recoil_tools
-recoilHelper = recoil_tools.Recoil("lowPU")
+recoilHelper = recoil_tools.Recoil("lowPU", flavor, met)
 
 
 
@@ -173,20 +175,20 @@ def build_graph(df, dataset):
         else: df = df.Define("SFMC", "1.0")
     
     else:
+    
+        # undo the scale/smearing corrections, needed to correct RawMET
+        df = df.Define("Lep_pt_uncorr", "wrem::Egamma_undoCorrection(Electron_pt, Electron_eta, Electron_ecalCorr)")
 
         if not dataset.is_data: 
-            df = df.Define("Electron_pt_corr", "wrem::applyEGammaScaleSmearingUnc(0, Electron_pt, Electron_eta, Electron_dEscaleUp, Electron_dEscaleDown, Electron_dEsigmaUp, Electron_dEsigmaDown, 0)")
+            
+            df = df.Define("Electron_pt_corr", "wrem::applyEGammaScaleSmearingUnc(0, Electron_pt, Electron_eta, Electron_dEscaleUp, Electron_dEscaleDown, Electron_dEsigmaUp, Electron_dEsigmaDown, 1)")
             df = df.Filter("HLT_Ele20_WPLoose_Gsf")
             
         else: 
-            df = df.Define("Electron_pt_corr", "wrem::applyEGammaScaleSmearingUnc(1, Electron_pt, Electron_eta, Electron_dEscaleUp, Electron_dEscaleDown, Electron_dEsigmaUp, Electron_dEsigmaDown, 0)")
+            df = df.Define("Electron_pt_corr", "wrem::applyEGammaScaleSmearingUnc(1, Electron_pt, Electron_eta, Electron_dEscaleUp, Electron_dEscaleDown, Electron_dEsigmaUp, Electron_dEsigmaDown, 1)")
             df = df.Filter("HLT_HIEle20_WPLoose_Gsf")
             
             
-        # by default the E/gamma smearings are applied, but are they propagated to the MET? 
-        #df = df.Define("Electron_pt_uncorr", "wrem::Egamma_undoCorrection(Electron_pt, Electron_eta, Electron_ecalCorr)")    
-        #df = df.Alias("Electron_pt_corr", "Electron_pt")
-        
         df = df.Define("vetoElectrons", "Electron_pt_corr > 10 && Electron_cutBased > 0 && abs(Electron_eta) < 2.4")
         df = df.Filter("Sum(vetoElectrons)==2")
         
@@ -204,7 +206,7 @@ def build_graph(df, dataset):
         df = df.Define("nonTrigMatch", "wrem::inverse(trigMatch)")
         df = df.Filter("Sum(trigMatch) > 0")
         
-        df = df.Define("Lep_pt_uncorr", "Electron_pt[goodLeptons]")
+        #df = df.Define("Lep_pt_uncorr", "Electron_pt[goodLeptons]")
         df = df.Define("Lep_pt", "Electron_pt_corr[goodLeptons]")
         df = df.Define("Lep_eta", "Electron_eta[goodLeptons]")
         df = df.Define("Lep_phi", "Electron_phi[goodLeptons]")
@@ -234,6 +236,9 @@ def build_graph(df, dataset):
     df = df.Define("yZ", "Z_mom4.Rapidity()")
     df = df.Define("absYZ", "std::fabs(yZ)")
     df = df.Filter("massZ > 60 && massZ < 120")
+    
+    #df = df.Filter("MET_sumEt < 250")
+     
     
     if not dataset.is_data:
         if dataset.name == "DYmumu" or dataset.name == "DYee":
@@ -284,14 +289,20 @@ def build_graph(df, dataset):
     df = df.Define("noTrigMatch", "Sum(trigMatch)")
     results.append(df.HistoBoost("noTrigMatch", [axis_lin], ["noTrigMatch", "nominal_weight"]))
 
+    if dataset.name == "DYmumu" or dataset.name == "DYee":
+    
+        df = wremnants.define_prefsr_vars(df)
 
     # Recoil calibrations
-    #df = recoilHelper.recoil_setup_Z(df, results, "DeepMETResolutionTune_pt", "DeepMETResolutionTune_phi", "Lep_pt", "Lep_phi", "Lep_pt_uncorr")
-    df = recoilHelper.recoil_setup_Z(df, results, "MET_pt", "MET_phi", "Lep_pt", "Lep_phi", "Lep_pt_uncorr")
-    df = recoilHelper.recoil_apply_Z(df, results, dataset.name, ["DYee", "DYmumu"]) # produces corrected MET as MET_corr_rec_pt/phi
+    df = recoilHelper.recoil_setup_MET(df, results, dataset, "Lep_pt", "Lep_phi", "Lep_pt_uncorr")
+    df = recoilHelper.recoil_setup_Z(df, results, dataset.name)
+    df = recoilHelper.recoil_setup_gen(df, results, dataset)
+    df = recoilHelper.recoil_apply_Z(df, results, dataset.name, ["DYmumu", "DYee"]) # produces corrected MET as MET_corr_rec_pt/phi
     
+    
+
    
-    reco_mll_cols = ["recoil_corr_magn", "massZ"]
+    reco_mll_cols = ["recoil_corr_rec_magn", "massZ"]
     results.append(df.HistoBoost("reco_mll", reco_mll_axes, [*reco_mll_cols, "nominal_weight"]))
     
     #results.extend(theory_tools.define_and_make_pdf_hists(df, reco_mll_axes, reco_mll_cols, dataset.name, hname="reco_mll"))
@@ -310,37 +321,46 @@ def build_graph(df, dataset):
     df = df.Define("NonTrigMuon_pt", "Lep_pt[nonTrigMuons][0]")
     df = df.Define("NonTrigMuon_eta", "Lep_eta[nonTrigMuons][0]")
     df = df.Define("NonTrigMuon_phi", "Lep_phi[nonTrigMuons][0]")
-    df = df.Define("transverseMass", "wrem::mt_wlike_nano(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, MET_corr_rec_pt, MET_corr_rec_phi)")
+    df = df.Define("mT_uncorr", "wrem::mt_wlike_nano(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, MET_uncorr_pt, MET_uncorr_phi)")
+    df = df.Define("mT_corr_lep", "wrem::mt_wlike_nano(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, MET_corr_lep_pt, MET_corr_lep_phi)")
+    df = df.Define("mT_corr_xy", "wrem::mt_wlike_nano(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, MET_corr_xy_pt, MET_corr_xy_phi)")
+    df = df.Define("mT_corr_rec", "wrem::mt_wlike_nano(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, MET_corr_rec_pt, MET_corr_rec_phi)")
     #df = df.Filter("transverseMass >= 40.")
     
-    results.append(df.HistoBoost("mt", [axis_mt], ["transverseMass", "nominal_weight"]))
-    
+    results.append(df.HistoBoost("mT_uncorr", [axis_mt], ["mT_uncorr", "nominal_weight"]))
+    results.append(df.HistoBoost("mT_corr_lep", [axis_mt], ["mT_corr_lep", "nominal_weight"]))
+    results.append(df.HistoBoost("mT_corr_xy", [axis_mt], ["mT_corr_xy", "nominal_weight"]))
+    results.append(df.HistoBoost("mT_corr_rec", [axis_mt], ["mT_corr_rec", "nominal_weight"]))
     
     if dataset.is_data: return results, weightsum
     
     if dataset.name == "DYmumu" or dataset.name == "DYee":
     
-        df = wremnants.define_prefsr_vars(df)
+        #df = wremnants.define_prefsr_vars(df)
+        
+        
     
-        gen_reco_mll_cols = ["ptVgen", "recoil_corr_magn", "massZ"]
+        gen_reco_mll_cols = ["ptVgen", "recoil_corr_rec_magn", "massZ"]
         results.append(df.HistoBoost("gen_reco_mll", gen_reco_mll_axes, [*gen_reco_mll_cols, "nominal_weight"]))
         
 
         # pdfs
         results.extend(theory_tools.define_and_make_pdf_hists(df, gen_reco_mll_axes, gen_reco_mll_cols, dataset.name, hname="gen_reco_mll"))
-        results.extend(theory_tools.define_and_make_pdf_hists(df, [axis_mt], ["transverseMass"], dataset.name, hname="mt"))
+        results.extend(theory_tools.define_and_make_pdf_hists(df, [axis_mt], ["mT_corr_rec"], dataset.name, hname="mt"))
 
         # QCD scale
         df = theory_tools.define_scale_tensor(df)
         df = df.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
         qcdScaleByHelicityUnc = df.HistoBoost("gen_reco_mll_qcdScaleByHelicity", gen_reco_mll_axes+[axis_ptVgen, axis_chargeVgen], [*gen_reco_mll_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
         results.append(qcdScaleByHelicityUnc)
-        qcdScaleByHelicityUnc = df.HistoBoost("mt_qcdScaleByHelicity", [axis_mt]+[axis_ptVgen, axis_chargeVgen], ["transverseMass", "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
+        qcdScaleByHelicityUnc = df.HistoBoost("mt_qcdScaleByHelicity", [axis_mt]+[axis_ptVgen, axis_chargeVgen], ["mT_corr_rec", "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
         results.append(qcdScaleByHelicityUnc)
 
 
         # recoil stat uncertainty (for recoil, MET and mT)
-        df = recoilHelper.recoil_Z_statUnc_lowPU(df, results, axis_recoil_gen, axis_recoil_reco, axis_mt, axis_mll)
+        #df = recoilHelper.recoil_Z_statUnc_lowPU(df, results, axis_recoil_gen, axis_recoil_reco, axis_mt, axis_mll)
+        df = recoilHelper.recoil_Z_unc_lowPU(df, results, axis_recoil_gen, axis_recoil_reco, axis_mt, axis_mll)
+        
 
         # lepton efficiencies
         if dataset.name == "DYmumu":
@@ -369,7 +389,7 @@ def build_graph(df, dataset):
         df = df.Define("massWeight_tensor", f"auto res = wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight); res = nominal_weight*res; return res;")
 
         results.append(df.HistoBoost("gen_reco_mll_massWeight", gen_reco_mll_axes, [*gen_reco_mll_cols, "massWeight_tensor"]))
-        results.append(df.HistoBoost("mt_massWeight", [axis_mt], ["transverseMass", "massWeight_tensor"]))
+        results.append(df.HistoBoost("mT_corr_rec_massWeight", [axis_mt], ["mT_corr_rec", "massWeight_tensor"]))
         
     else:
     
@@ -396,4 +416,5 @@ def build_graph(df, dataset):
 
 resultdict = narf.build_and_run(datasets, build_graph)
 
+fname = "lowPU_%s_%s.pkl.lz4" % (flavor, met)
 output_tools.write_analysis_output(resultdict, fname, args.postfix)

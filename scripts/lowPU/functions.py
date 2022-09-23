@@ -1,5 +1,5 @@
 
-import sys,array,math,os,copy,shutil
+import sys,array,math,os,copy,shutil,decimal
 
 
 import ROOT
@@ -58,9 +58,18 @@ def Rebin(h, newbins, binWidth=True):
 
     if isinstance(newbins, int):
         h.Rebin(newbins)
+        if binWidth: h.Scale(1, "width")
         return h
     else:
         mybins = array.array('d', newbins)
         h1 = h.Rebin(len(mybins)-1, h.GetName(), mybins)
         if binWidth: h1.Scale(1, "width")
         return h1
+
+
+def drange(x, y, jump):
+    while x < y:
+        yield float(x)
+        #x += decimal.Decimal(jump)
+        x += jump
+        
