@@ -3,6 +3,7 @@ import mplhep as hep
 import matplotlib.pyplot as plt
 from matplotlib import ticker
 from matplotlib import patches
+from matplotlib.ticker import StrMethodFormatter # for setting number of decimal places on tick labels
 from utilities import boostHistHelpers as hh
 from wremnants import histselections as sel
 import math
@@ -17,10 +18,17 @@ import datetime
 hep.style.use(hep.style.ROOT)
 
 def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None,
-    grid_on_main_plot = False, grid_on_ratio_plot = False, plot_title = None
+    grid_on_main_plot = False, grid_on_ratio_plot = False, plot_title = None, x_ticks_ndp = None,
+    bin_density = 50
 ):
+    if not xlim:
+        xlim = [href.axes[0].edges[0], href.axes[0].edges[-1]]
     hax = href.axes[0]
-    width = math.ceil(hax.size/300)
+    xlim_range = float(xlim[1] - xlim[0])
+    original_xrange = float(hax.edges[-1] - hax.edges[0])
+    raw_width = (hax.size/float(bin_density)) * (xlim_range / original_xrange)
+    width = math.ceil(raw_width)
+
     fig = plt.figure(figsize=(8*width,8))
     ax1 = fig.add_subplot(4, 1, (1, 3)) 
     ax2 = fig.add_subplot(4, 1, 4) 
@@ -28,10 +36,9 @@ def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None,
     ax2.set_xlabel(xlabel)
     ax1.set_xlabel(" ")
     ax1.set_ylabel(ylabel)
-    if not xlim:
-        xlim = [href.axes[0].edges[0], href.axes[0].edges[-1]]
     ax1.set_xlim(xlim)
     ax2.set_xlim(xlim)
+    if x_ticks_ndp: ax2.xaxis.set_major_formatter(StrMethodFormatter('{x:.' + str(x_ticks_ndp) + 'f}'))
     ax2.set_ylabel(rlabel, fontsize=22)
     ax2.set_ylim(rrange)
 
@@ -67,12 +74,12 @@ def makeStackPlotWithRatio(
     histInfo, stackedProcs, histName="nominal", unstacked=None, 
     xlabel="", ylabel="Events/bin", rlabel = "Data/Pred.", rrange=[0.9, 1.1], ylim=None, xlim=None, nlegcols=2,
     binwnorm=None, select={},  action = (lambda x: x), extra_text=None, grid = False, plot_title = None,
-    ratio_to_data=False, legtex_size=20, cms_decor="Preliminary", lumi=16.8
+    ratio_to_data=False, legtex_size=20, cms_decor="Preliminary", lumi=16.8, bin_density = 300
 ):
     stack = [action(histInfo[k][histName][select]) for k in stackedProcs if histInfo[k][histName]]
     colors = [histInfo[k]["color"] for k in stackedProcs if histInfo[k][histName]]
     labels = [histInfo[k]["label"] for k in stackedProcs if histInfo[k][histName]]
-    fig, ax1, ax2 = figureWithRatio(stack[0], xlabel, ylabel, ylim, rlabel, rrange, xlim=xlim, grid_on_ratio_plot = grid, plot_title = plot_title)
+    fig, ax1, ax2 = figureWithRatio(stack[0], xlabel, ylabel, ylim, rlabel, rrange, xlim=xlim, grid_on_ratio_plot = grid, plot_title = plot_title, bin_density = bin_density)
     
     hep.histplot(
         stack,
@@ -133,11 +140,11 @@ def makePlotWithRatioToRef(
     hists, labels, colors, xlabel="", ylabel="Events/bin", rlabel="x/nominal",
     rrange=[0.9, 1.1], ylim=None, xlim=None, nlegcols=2, binwnorm=None, alpha=1.,
     baseline=True, data=False, autorrange=None, grid = False,
-    yerr=False, legtext_size=20,
+    yerr=False, legtext_size=20, plot_title=None, x_ticks_ndp = None, bin_density = 300
 ):
     # nominal is always at first, data is always at last, if included
     ratio_hists = [hh.divideHists(h, hists[0], cutoff=0.00001) for h in hists[not baseline:]]
-    fig, ax1, ax2 = figureWithRatio(hists[0], xlabel, ylabel, ylim, rlabel, rrange, xlim=xlim, grid_on_ratio_plot = grid)
+    fig, ax1, ax2 = figureWithRatio(hists[0], xlabel, ylabel, ylim, rlabel, rrange, xlim=xlim, grid_on_ratio_plot = grid, plot_title = plot_title, bin_density = bin_density)
     
     hep.histplot(
         hists[:len(hists) - data],
@@ -191,9 +198,9 @@ def makePlotWithRatioToRef(
     # This seems like a bug, but it's needed
     if not xlim:
         xlim = [hists[0].axes[0].edges[0], hists[0].axes[0].edges[-1]]
-
     fix_axes(ax1, ax2)
-    
+    if x_ticks_ndp: ax2.xaxis.set_major_formatter(StrMethodFormatter('{x:.' + str(x_ticks_ndp) + 'f}'))
+
     return fig
 
 def fix_axes(ax1, ax2):
