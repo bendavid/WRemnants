@@ -29,7 +29,7 @@ def findEOS(basedir, regex = ""):
 
 # TODO: Allow filtering
 # https://twiki.cern.ch/twiki/bin/viewauth/CMS/StandardModelCrossSectionsat13TeV
-def getDatasets(maxFiles=-1, filt=None):
+def getDatasets(maxFiles=-1, filt=None, flavor=""):
 
     BR_W_LEP = 3*0.1086 # PDG
 
@@ -79,20 +79,20 @@ def getDatasets(maxFiles=-1, filt=None):
 
 
         narf.Dataset(
-            name="DYmumu",
+            name="Zmumu",
             filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v2/DYJetsToMuMu_M-50_massWgtFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/"),
             xsec=2025.74, # 1976.1
             is_data=False,
         ),
         narf.Dataset(
-            name="DYee",
+            name="Zee",
             filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v2/DYJetsToEE_M-50_massWgtFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"),
             xsec=2025.74,
             is_data=False,
         ),
         
         narf.Dataset(
-            name="DYtautau",
+            name="Ztautau",
             filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v2/DYJetsToTauTau_M-50_massWgtFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"),
             xsec=2025.74,
             is_data=False,
@@ -140,29 +140,36 @@ def getDatasets(maxFiles=-1, filt=None):
         ),
         
         
-        narf.Dataset(
-            filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v2/SingleMuon/"),
-            name="singlemuon",
-            is_data=True,
-            lumi_json = lumijson,
-            lumi_csv = lumicsv_mu
-        ),
-        narf.Dataset(
-            filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v2/HighEGJet/"),
-            name="singleelectron",
-            is_data=True,
-            lumi_json = lumijson,
-            lumi_csv = lumicsv_el
-        ),
     ]
 
+    if flavor == "mu" or flavor == "mumu":
+        allProcs.append(
+        narf.Dataset(
+                filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v2/SingleMuon/"),
+                name="singlemuon",
+                is_data=True,
+                lumi_json = lumijson,
+                lumi_csv = lumicsv_mu
+            ),
+        )
+    if flavor == "e" or flavor == "ee":
+        allProcs.append(
+            narf.Dataset(
+                filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v2/HighEGJet/"),
+                name="singleelectron",
+                is_data=True,
+                lumi_json = lumijson,
+                lumi_csv = lumicsv_el
+            ),
+        )
+        
     if filt:
         return list(filter(filt, allProcs))
 
     return allProcs
 
 
-
+'''
 def getDatasets_Z(maxFiles=-1, filt=None):
     allProcs = [
         narf.Dataset(
@@ -231,3 +238,5 @@ def getDatasets_Z(maxFiles=-1, filt=None):
         return list(filter(filt, allProcs))
 
     return allProcs
+
+'''

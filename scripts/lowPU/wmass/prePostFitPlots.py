@@ -322,14 +322,26 @@ def doRecoilPlot(flavor="mumu", fitcfg="mumu", fitmode="prefit", ratio=1.08):
 
 def doTransverseMassPlot(flavor="mu", charge="plus", fitcfg="combined", fitmode="prefit", ratio=1.06):
 
-    outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/Projection/"
+    outDir = "/eos/user/j/jaeyserm/www/wmass/studies_mT/lowPU/"
     
     met = "RawPFMET"
     lumi = "1p0"
     mode = "binned"
+    
+    
+    ## get data
+    fIn_ = ROOT.TFile("/scratch/jaeyserm/CombineStudies_Wmass_mT/lowPU_mu_RawPFMET_lumi1p0_statOnly.root")
+    fIn_.ls()
+    h_data = copy.deepcopy(fIn_.Get("mT_corr_rec_SingleMuon_%s" % charge))
+    #h_data = copy.deepcopy(h_data.ProjectionX("h_data"))
+    h_data.Scale(1, "width")
+    #sys.exit()
+   
+    
+    
     #fIn = ROOT.TFile("/home/j/jaeyserm/combine/CMSSW_10_6_20/src/lowPU_Wmass/%s/eta_inclusive_recoilOnly/LowPU_Wmass_mu_%s_lumi%s.root" % (mode, met, lumi))
     #fIn = ROOT.TFile("/home/j/jaeyserm/combine/CMSSW_10_6_20/src/lowPU_Wmass/LowPU_Wmass_mu_%s_lumi%s.root" % (met, lumi))
-    fIn = ROOT.TFile("/home/j/jaeyserm/combine/CMSSW_10_6_20/src/lowPU_Wmass/LowPU_Wmass_mu_%s_lumi%s_statOnly.root" % (met, lumi))
+    fIn = ROOT.TFile("/home/j/jaeyserm/combine/CMSSW_10_6_20/src/Wmass_mT/lowPU_mu_%s_lumi%s.root" % (met, lumi))
     
     mTbins = list(range(40, 110, 1)) + [110, 112, 114, 116, 118, 120, 125, 130, 140, 160, 180, 200]
     mTbinRange = [1, 82] # assume 81 mT bins
@@ -339,21 +351,28 @@ def doTransverseMassPlot(flavor="mu", charge="plus", fitcfg="combined", fitmode=
     dataLabel = "Data (#mu^{#%s})" % charge
     signalLabel = "W^{#%s} #rightarrow #mu^{#%s}#nu" % (charge, charge)
  
-    if fitcfg == "combined": label = "Combined fit, W^{#plus} + W^{#minus}"
-    else: label = "Single fit, W^{#%s}" % fitcfg
-    label += " (recoil %s)" % mode 
+    #if fitcfg == "combined": label = "Combined fit, W^{#plus} + W^{#minus}"
+    #else: label = "Single fit, W^{#%s}" % fitcfg
+    #label += " (recoil %s)" % mode 
+    label = "W^{#%s}, %s (%s)" % (charge, met, fitmode)
 
-    leg = ROOT.TLegend(.35, 0.65, .95, .90)
+
+    leg = ROOT.TLegend(.40, 0.65, .95, .90)
     leg.SetBorderSize(0)
     leg.SetFillStyle(0)
     leg.SetTextSize(0.04)
     leg.SetNColumns(2)
-    #leg.SetMargin(0.7*leg.GetMargin())
+    
+    leg_ratio = ROOT.TLegend(.18, 0.05, .40, .90)
+    leg_ratio.SetBorderSize(0)
+    leg_ratio.SetFillStyle(0)
+    leg_ratio.SetTextSize(0.1)
+    leg_ratio.SetMargin(0.7*leg.GetMargin())
     
     
     # get data
-    h_data = fIn.Get("obs;1")
-    h_data = parseHist(h_data, mTbins, mTbinRange)
+    #h_data = fIn.Get("obs;1")
+    #h_data = parseHist(h_data, mTbins, mTbinRange)
     h_data.SetLineColor(ROOT.kBlack)
     h_data.SetMarkerStyle(20)
     h_data.SetMarkerColor(ROOT.kBlack)
@@ -388,7 +407,7 @@ def doTransverseMassPlot(flavor="mu", charge="plus", fitcfg="combined", fitmode=
     
  
     
-    h_w = fIn.Get("expproc_W%sJetsToMuNu_%s;1" % (charge, fitmode))
+    h_w = fIn.Get("expproc_WJetsToMuNu_%s;1" % (fitmode))
     h_w = parseHist(h_w, mTbins, mTbinRange)
     h_w.SetFillColor(ROOT.TColor.GetColor(248, 206, 104))
     h_w.SetLineColor(ROOT.kBlack)
@@ -412,7 +431,7 @@ def doTransverseMassPlot(flavor="mu", charge="plus", fitcfg="combined", fitmode=
     h_tot.SetLineColor(ROOT.kBlack)
     h_tot.SetFillColor(0)
     h_tot.SetLineWidth(2)
-    h_tot.Scale(1.026)
+    #h_tot.Scale(1.026)
 
 
     # ratio
@@ -420,6 +439,7 @@ def doTransverseMassPlot(flavor="mu", charge="plus", fitcfg="combined", fitmode=
     h_tot_noerr = h_tot.Clone("h_tot_noerr")
     for i in range(0, h_tot_noerr.GetNbinsX()+1): h_tot_noerr.SetBinError(i, 0)
     h_ratio.Divide(h_tot_noerr)
+    h_ratio.SetMarkerSize(0.7)
     
     # ratio err
     h_tot_err = fIn.Get("expbkg_%s;1" % fitmode)
@@ -439,7 +459,7 @@ def doTransverseMassPlot(flavor="mu", charge="plus", fitcfg="combined", fitmode=
 
     leg.SetHeader(label)
     leg.AddEntry(h_data, dataLabel, "PE")
-    leg.AddEntry(h_tot_err, "Stat. + Syst. Unc. (%s)" % fitmode, "F")
+    leg.AddEntry(h_tot_err, "Stat. + Syst. Unc.", "F")
     leg.AddEntry(h_top, "Top", "F")
     leg.AddEntry(h_ewk, "EWK (#tau, VV, DY)", "F")
     leg.AddEntry(h_fake, "Nonprompt", "F")
@@ -449,50 +469,27 @@ def doTransverseMassPlot(flavor="mu", charge="plus", fitcfg="combined", fitmode=
     
 
     ## mass variations
-    if False:
+    if True:
     
-        groups = datagroupsLowPU_Z("mz_lowPU_%s.pkl.lz4" % flavor)
-        bhist = groups.readProc("mt_massWeight", "DYmumu")
-        hist_nom = narf.hist_to_root(bhist[:, 10])
-        hist_plus_1 = narf.hist_to_root(bhist[:, 20])
-        hist_minus_1 = narf.hist_to_root(bhist[:, 0])
-        hist_plus_2 = narf.hist_to_root(bhist[:, 15])
-        hist_minus_2 = narf.hist_to_root(bhist[:, 5])
+        hist_nom = fIn_.Get("mT_corr_rec_WJetsToMuNu_%s" % (charge))
+        hist_dw = fIn_.Get("mT_corr_rec_WJetsToMuNu_massShift100MeVDown_%s" % (charge))
+        hist_up = fIn_.Get("mT_corr_rec_WJetsToMuNu_massShift100MeVUp_%s" % (charge))
         
-        hist_nom = functions.Rebin(hist_nom, mT_bins)
-        hist_plus_1 = functions.Rebin(hist_plus_1, mT_bins)
-        hist_minus_1 = functions.Rebin(hist_minus_1, mT_bins)
-        hist_plus_2 = functions.Rebin(hist_plus_2, mT_bins)
-        hist_minus_2 = functions.Rebin(hist_minus_2, mT_bins)
-
+        hist_dw.Divide(hist_nom)
+        hist_up.Divide(hist_nom)
+        
+        hist_dw = copy.deepcopy(hist_dw)
+        hist_up = copy.deepcopy(hist_up)
           
         
-        hist_plus_1.SetLineColor(ROOT.kRed)
-        hist_plus_1.SetFillColor(0)
-        hist_plus_1.SetLineWidth(2)
-        hist_minus_1.SetLineColor(ROOT.kRed)
-        hist_minus_1.SetFillColor(0)
-        hist_minus_1.SetLineWidth(2)
+        hist_dw.SetLineColor(ROOT.kBlue)
+        hist_dw.SetFillColor(0)
+        hist_dw.SetLineWidth(2)
+        hist_up.SetLineColor(ROOT.kBlue)
+        hist_up.SetFillColor(0)
+        hist_up.SetLineWidth(2)
         
-        hist_plus_2.SetLineColor(ROOT.kBlue)
-        hist_plus_2.SetFillColor(0)
-        hist_plus_2.SetLineWidth(2)
-        hist_minus_2.SetLineColor(ROOT.kBlue)
-        hist_minus_2.SetFillColor(0)
-        hist_minus_2.SetLineWidth(2)
-        
-        hist_plus_err_1 = hist_plus_1.Clone("hist_plus_err_1")
-        hist_plus_err_1.Divide(hist_nom)
-        hist_minus_err_1 = hist_minus_1.Clone("hist_minus_err_1")
-        hist_minus_err_1.Divide(hist_nom)
-        
-        hist_plus_err_2 = hist_plus_2.Clone("hist_plus_err_2")
-        hist_plus_err_2.Divide(hist_nom)
-        hist_minus_err_2 = hist_minus_2.Clone("hist_minus_err_2")
-        hist_minus_err_2.Divide(hist_nom)
-        
-        
-        leg.AddEntry(hist_plus_1, "m_{Z} #pm 100 MeV", "L")
+        leg_ratio.AddEntry(hist_up, "m_{W} #pm 100 MeV", "L")
     
 
 
@@ -533,7 +530,7 @@ def doTransverseMassPlot(flavor="mu", charge="plus", fitcfg="combined", fitmode=
     st.Draw("HIST SAME")
     h_tot_err.Draw("SAME E2")
     h_tot.Draw("HIST SAME")
-    #h_data.Draw("PE SAME")
+    h_data.Draw("PE SAME")
     leg.Draw("SAME")
     
     latex = ROOT.TLatex()
@@ -556,21 +553,21 @@ def doTransverseMassPlot(flavor="mu", charge="plus", fitcfg="combined", fitmode=
     padB.SetGrid()
     dummyB.Draw("HIST")
     dummyL.Draw("SAME")
+
+    hist_dw.Draw("HIST SAME")
+    hist_up.Draw("HIST SAME")
    
-    #h_ratio.Draw("P SAME")
+    h_ratio.Draw("P SAME")
     h_tot_err_ratio.Draw("SAME E2")
-    
-    #hist_plus_err_1.Draw("HIST SAME")
-    #hist_minus_err_1.Draw("HIST SAME")
-    #hist_plus_err_2.Draw("HIST SAME")
-    #hist_minus_err_2.Draw("HIST SAME")
+    leg_ratio.Draw()
+
 
     ROOT.gPad.SetTickx()
     ROOT.gPad.SetTicky()
     ROOT.gPad.RedrawAxis()
 
-    canvas.SaveAs("%s/wmass_%s_mT_%sCharge_%sFit_%s.png" % (outDir, fitmode, charge, fitcfg, mode))
-    canvas.SaveAs("%s/wmass_%s_mT_%sCharge_%sFit_%s.pdf" % (outDir, fitmode, charge, fitcfg, mode))
+    canvas.SaveAs("%s/mT_%s_%sCharge_%sFit.png" % (outDir, fitmode, charge, fitcfg))
+    canvas.SaveAs("%s/mT_%s_%sCharge_%sFit.pdf" % (outDir, fitmode, charge, fitcfg))
     canvas.Close()    
      
     
@@ -755,11 +752,11 @@ if __name__ == "__main__":
     bins_recoil_reco = lowPUcfg.bins_recoil_reco
     bins_recoil_reco[-1] = 150
     
-    doTransverseMassPlot(flavor="mu", charge="plus", fitcfg="combined", fitmode="prefit", ratio=1.08)
-    doTransverseMassPlot(flavor="mu", charge="minus", fitcfg="combined", fitmode="prefit", ratio=1.08)
+    doTransverseMassPlot(flavor="mu", charge="plus", fitcfg="combined", fitmode="prefit", ratio=1.11)
+    doTransverseMassPlot(flavor="mu", charge="minus", fitcfg="combined", fitmode="prefit", ratio=1.11)
     
-    doTransverseMassPlot(flavor="mu", charge="plus", fitcfg="combined", fitmode="postfit", ratio=1.08)
-    doTransverseMassPlot(flavor="mu", charge="minus", fitcfg="combined", fitmode="postfit", ratio=1.08)
+    doTransverseMassPlot(flavor="mu", charge="plus", fitcfg="combined", fitmode="postfit", ratio=1.11)
+    doTransverseMassPlot(flavor="mu", charge="minus", fitcfg="combined", fitmode="postfit", ratio=1.11)
     
     #doTransverseMassPlot()
     
