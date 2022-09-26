@@ -1,26 +1,22 @@
 import argparse
 from utilities import output_tools
-from utilities import common_lowPU as common
+from utilities import common as common
 
 parser,initargs = common.common_parser()
+parser.add_argument("--flavor", type=str, choices=["ee", "mumu"], help="Flavor (ee or mumu)", default=None)
+parser.add_argument("--met", type=str, choices=["DeepMETReso", "RawPFMET"], help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")
 args = parser.parse_args()
 
-import pickle
-import gzip
 import narf
 import wremnants
 from wremnants import theory_tools,syst_tools,theory_corrections
-import hist
-import lz4.frame
 import logging
 import math
-import sys
+import hist
 import ROOT
-
 import scripts.lowPU.config as lowPUcfg
 
-args.theory_corr = "scetlib"
-corr_helpers = theory_corrections.load_corr_helpers(["Zmumu"], ["scetlib"])
+corr_helpers = theory_corrections.load_corr_helpers(["Zmumu"], args.theory_corr)
 
 ###################################
 flavor = args.flavor # mumu, ee
@@ -41,10 +37,6 @@ ROOT.gInterpreter.Declare('#include "lowpu_rochester.h"')
 ROOT.gInterpreter.Declare('#include "lowpu_recoil.h"')
 
 
-
-
-
-
 # standard regular axes
 axis_eta = hist.axis.Regular(48, -2.4, 2.4, name = "eta")
 axis_pt = hist.axis.Regular(29, 26., 55., name = "pt")
@@ -52,8 +44,6 @@ axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, nam
 axis_mll = hist.axis.Regular(60, 60., 120., underflow=False, overflow=False, name = "mll")
 axis_yll = hist.axis.Regular(50, -2.5, 2.5, name = "yll")
 axis_ptll = hist.axis.Regular(300, 0, 300,  name = "ptll")
-axis_costhetastarll = hist.axis.Regular(20, -1., 1., name = "costhetastarll")
-axis_phistarll = hist.axis.Regular(20, -math.pi, math.pi, circular = True, name = "phistarll")
 
 axis_ptl = hist.axis.Regular(100, 0., 200., name = "ptl")
 axis_etal = hist.axis.Regular(50, -2.5, 2.5, name = "etal")
@@ -208,7 +198,7 @@ def build_graph(df, dataset):
     df = df.Filter("massZ > 60 && massZ < 120")
 
     if not dataset.is_data:
-        if dataset.name in common.zprocs:
+        if dataset.name in common.zprocs_lowpu:
             df = df.Define("nominal_pdf_cen", theory_tools.pdf_central_weight(dataset.name, "nnpdf31"))
             df = df.Define("nominal_weight", "weight*SFMC*nominal_pdf_cen")
         else: 
@@ -252,7 +242,7 @@ def build_graph(df, dataset):
     df = df.Define("noTrigMatch", "Sum(trigMatch)")
     results.append(df.HistoBoost("noTrigMatch", [axis_lin], ["noTrigMatch", "nominal_weight"]))
     
-    if dataset.name in common.vprocs:
+    if dataset.name in common.vprocs_lowpu:
         df = wremnants.define_prefsr_vars(df)
 
     # Recoil calibrations
@@ -310,7 +300,7 @@ def build_graph(df, dataset):
 
         # QCD scale
         df = theory_tools.define_scale_tensor(df)
-        df = df.Define("helicityWeight_tensor", qicdScaleByHelicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
+        df = df.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
         qcdScaleByHelicityUnc = df.HistoBoost("reco_mll_qcdScaleByHelicity", [*gen_reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mll_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
         results.append(qcdScaleByHelicityUnc)
         qcdScaleByHelicityUnc = df.HistoBoost("mt_qcdScaleByHelicity", [axis_mt, axis_ptVgen, axis_chargeVgen], ["mT_corr_rec", "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
