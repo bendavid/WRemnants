@@ -250,11 +250,8 @@ def build_graph(df, dataset):
     #df = df.Filter("massZ > 60 && massZ < 120")
 
     if not dataset.is_data: 
-        if dataset.name == "WplusJetsToMuNu" or dataset.name == "WminusJetsToMuNu":
-            df = df.Define("nominal_pdf_cen", theory_tools.pdf_central_weight(dataset.name, "nnpdf31"))
-            df = df.Define("nominal_weight", "weight*SFMC*nominal_pdf_cen")
-        else: 
-            df = df.Define("nominal_weight", "weight*SFMC")
+        weight_expr = "weight*SFMC"
+        df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")
 
@@ -274,8 +271,7 @@ def build_graph(df, dataset):
     df = df.Define("noTrigMatch", "Sum(trigMatch)")
     results.append(df.HistoBoost("noTrigMatch", [axis_lin], ["noTrigMatch", "nominal_weight"]))
 
-    if dataset.name == "WplusJetsToMuNu" or dataset.name == "WminusJetsToMuNu" or dataset.name == "WplusJetsToTauNu" or dataset.name == "WminusJetsToTauNu":
-        df = wremnants.define_prefsr_vars(df)
+    if no is_data:
 
     # Recoil calibrations
     df = recoilHelper.setup_MET(df, results, dataset, "Lep_pt", "Lep_phi", "Lep_pt_uncorr")
@@ -305,6 +301,12 @@ def build_graph(df, dataset):
         qcdScaleByHelicityUnc = df.HistoBoost("mT_corr_rec_qcdScaleByHelicity", [axis_mt, axis_charge, axis_passMT, axis_passIso, axis_ptVgen, axis_chargeVgen], ["mT_corr_rec", "Lep_charge", "passMT", "passIso", "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
         results.append(qcdScaleByHelicityUnc)
         
+    apply_theory_corr = args.theory_corr and dataset.name in corr_helpers
+    if apply_theory_corr:
+        results.extend(theory_tools.make_theory_corr_hists(df, "mll_reco", axes=gen_reco_mll_axes, cols=gen_reco_mll_cols, 
+            helpers=corr_helpers[dataset.name], generators=args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
+        )
+
     ###return results, weightsum    
     if dataset.name == "WplusJetsToMuNu" or dataset.name == "WminusJetsToMuNu":
     

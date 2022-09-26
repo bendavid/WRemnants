@@ -131,7 +131,8 @@ def main(args):
         scale=0.75,
     )
 
-    combine_helpers.add_scale_uncertainty(cardTool, args.qcdScale, constrainedProcs+unconstrainedProcs, to_fakes=False, use_hel_hist=True, scetlib=args.scetlibUnc)
+    combine_helpers.add_scale_uncertainty(cardTool, args.qcdScale, constrainedProcs+unconstrainedProcs, 
+        to_fakes=False, pdf=args.pdf, use_hel_hist=True, scetlib=args.scetlibUnc)
 
     if not args.xsec:
 

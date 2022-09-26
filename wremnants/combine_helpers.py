@@ -2,7 +2,7 @@ from utilities import common
 from wremnants import syst_tools
 import numpy as np
 
-def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append="", scetlib=False, use_hel_hist=False, rebin_pt=None):
+def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, pdf, name_append="", scetlib=False, use_hel_hist=False, rebin_pt=None):
     inclusiveScale = scale_type == "integrated"
     helicity = "Helicity" in scale_type
     pt_binned = "Pt" in scale_type
@@ -80,7 +80,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
         
         # TODO: Implement pT splitting for SCETlib
         nscetlib_vars=45
-        common_args = dict(name="scetlibMSHT20Corr_unc",
+        common_args = dict(name=f"scetlib{pdf if pdf != 'nnpdf31' else ''}Corr_unc",
             processes=samples,
             group=group_name,
             systAxes=["vars"],
@@ -98,15 +98,16 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
         expanded_samples = card_tool.datagroups.getProcNames(samples)
         common_args["systAxes"] = ["downUpVar"]
         common_args["labelsByAxis"] = ["downUpVar"]
+        axes = ["recoil_reco"] if card_tool.histName == "reco_mll" else ["pt", "eta"] 
         card_tool.addSystematic(**common_args,
             # TODO: Should support other variables in the fit
-            actionMap={s : lambda h: syst_tools.uncertainty_hist_from_envelope(h, ["pt", "eta"], range(5, 9)) for s in expanded_samples},
+            actionMap={s : lambda h: syst_tools.uncertainty_hist_from_envelope(h, axes, range(5, 9)) for s in expanded_samples},
             baseName="resumTransition", 
             rename="scetlibCorr_resumTrans", 
         )
         card_tool.addSystematic(**common_args,
             # TODO: Should support other variables in the fit
-            actionMap={s : lambda h: syst_tools.uncertainty_hist_from_envelope(h, ["pt", "eta"], range(9, 45)) for s in expanded_samples},
+            actionMap={s : lambda h: syst_tools.uncertainty_hist_from_envelope(h, axes, range(9, 45)) for s in expanded_samples},
             baseName="resumScale", 
             rename="scetlibCorr_resumScale", 
         )
