@@ -230,7 +230,8 @@ class CardTool(object):
             nsyst_ax = len(self.systematics[syst]["systAxes"])+self.systematics[syst]["mirror"]
             if len(skipEntry) != nsyst_ax:
                 raise ValueError(f"Error in syst {syst}. skipEntry must specify a value per axis. "
-                        f"Found {nsyst_ax} axes but {len(skipEntry)} entries were given")
+                        f"Found {nsyst_ax} axes ({self.systematics[syst]['systAxes']}) but {len(skipEntry)} "
+                        "entries were given")
             # The lookup is handled by passing an imaginary number,
             # so detect these and then call the bin lookup on them
             # np.iscomplex returns false for 0.j, but still want to detect that
