@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from wremnants import CardTool,theory_tools,syst_tools
+from wremnants import CardTool,theory_tools,syst_tools,combine_helpers
 from wremnants.datasets.datagroupsLowPU import datagroupsLowPU
 from utilities import common_lowPU as common
 import argparse
@@ -11,7 +11,7 @@ import numpy as np
 scriptdir = f"{pathlib.Path(__file__).parent}"
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-o", "--outfolder", type=str, default="/scratch/jaeyserm/CombineStudies_lowPU_differentialZ/")
+parser.add_argument("-o", "--outfolder", type=str, default="combineResults/lowPU/differentialZ/")
 parser.add_argument("-i", "--inputFile", type=str, default="")
 parser.add_argument("--flavor", type=str, help="Flavor (ee or mumu)", default=None, required=True)
 parser.add_argument("--fitType", choices=["differential", "wmass", "wlike", "inclusive"], default="differential", 
@@ -26,6 +26,7 @@ parser.add_argument("--doStatOnly", action="store_true", default=False,
         help="Set up fit to get stat-only uncertainty (currently combinetf with -S 0 doesn't work)")
 parser.add_argument("--qcdScale", choices=["byHelicityPtAndByPt", "byHelicityPt", "byHelicityCharge", "byPt", "byCharge", "integrated",], default="integrated", 
         help="Decorrelation for QCDscale (additionally always by charge). With 'byHelicityPtAndByPt' two independent histograms are stored, split and not split by helicities (for tests)")
+parser.add_argument("--scetlibUnc", action='store_true', help="Include SCETlib uncertainties")
 args = parser.parse_args()
 
 if not os.path.isdir(args.outfolder):
@@ -42,7 +43,8 @@ dataProc = "SingleMuon" if args.flavor == "mumu" else "SingleElectron"
 
 
 histName = "reco_mll"
-if args.fitType == "differential" or args.fitType == "wmass":
+s = hist.tag.Slicer()
+if args.fitType == "differential":
     proc_base = dict(datagroups.groups["Zmumu" if args.flavor == "mumu" else "Zee"]) # signal process (Zmumu or Zee)
     for i in range(len(common.axis_recoil_gen_ptZ)): # add gen bin processes to the dict
         proc_name = "Zmumu_genBin%d" % (i+1)
@@ -50,7 +52,11 @@ if args.fitType == "differential" or args.fitType == "wmass":
         proc_genbin['signalOp'] = lambda x, i=i: x[{"recoil_gen" : i}]
         datagroups.groups[proc_name] = proc_genbin
         if args.fitType == "differential": unconstrainedProcs.append(proc_name)
-        elif args.fitType == "wmass": constrainedProcs.append(proc_name)
+elif args.fitType == "wmass": 
+    proc_name = "Zmumu" if args.flavor == "mumu" else "Zee"
+    constrainedProcs.append(proc_name)
+    datagroups.groups[proc_name]['signalOp'] = lambda x: x[{"recoil_gen" : s[::hist.sum]}] if "recoil_gen" in x.axes.name else x
+    constrainedProcs.append(proc_name)
 elif args.fitType == "wlike":
     histName = "mT_corr_rec"
     constrainedProcs.append("Zmumu" if args.flavor == "mumu" else "Zee") # need sum over gen bins
@@ -75,6 +81,7 @@ cardTool.setNominalTemplate(f"{templateDir}/main.txt")
 cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/lowPU_Z{args.flavor}_{args.met}_{args.fitType}{suffix}.root"))
 cardTool.setDatagroups(datagroups)
 cardTool.setHistName(histName) 
+cardTool.setNominalName(histName) 
 cardTool.setChannels([f"{args.flavor}{suffix}"])
 cardTool.setDataName(dataProc)
 cardTool.setProcsNoStatUnc(procs=[])
@@ -83,7 +90,7 @@ cardTool.setWriteByCharge(False)
 cardTool.setUnconstrainedProcs(unconstrainedProcs)
 cardTool.setLumiScale(args.lumiScale)
 
-Zmumu_procs = cardTool.filteredProcesses(lambda x: "Zmumu_" in x)
+Zmumu_procs = cardTool.filteredProcesses(lambda x: "Zmumu" in x)
 Zmumu_procsIncTau = Zmumu_procs + ["Ztautau"]
 
 if args.fitType == "wlike" or args.fitType == "wmass":
@@ -107,10 +114,12 @@ if args.doStatOnly:
 
 
 pdfName = theory_tools.pdfMap["nnpdf31"]["name"]
+pdfAction = {x : lambda h: h[{"recoil_gen" : s[::hist.sum]}] for x in Zmumu_procs if "gen" not in x},
 cardTool.addSystematic(pdfName, 
     processes=Zmumu_procs,
     mirror=True,
     group=pdfName,
+    actionMap=pdfAction,
     systAxes=["tensor_axis_0"],
     labelsByAxis=[pdfName.replace("pdf", "pdf{i}")],
     # Needs to be a tuple, since for multiple axis it would be (ax1, ax2, ax3)...
@@ -120,13 +129,14 @@ cardTool.addSystematic(pdfName,
 cardTool.addSystematic(f"alphaS002{pdfName}", 
     processes=Zmumu_procs,
     mirror=False,
+    actionMap=pdfAction,
     group=pdfName,
     systAxes=["tensor_axis_0"],
     outNames=[pdfName+"AlphaSUp", pdfName+"AlphaSDown"],
     scale=0.75,
 )
 
-
+combine_helpers.add_scale_uncertainty(cardTool, args.qcdScale, constrainedProcs+unconstrainedProcs, to_fakes=False, use_hel_hist=True, scetlib=args.scetlibUnc)
 
 if not args.xsec:
 
@@ -165,7 +175,7 @@ if not args.xsec:
         )
 
     if args.fitType == "wmass":
-        cardTool.addLnNSystematic("CMS_background", processes=["Others"], size=1.15, group="CMS_background")
+        cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15, group="CMS_background")
     else:
         cardTool.addLnNSystematic("CMS_Top", processes=["TTbar"], size=1.06, group="CMS_background")
         cardTool.addLnNSystematic("CMS_VV", processes=["EWK"], size=1.16, group="CMS_background")
