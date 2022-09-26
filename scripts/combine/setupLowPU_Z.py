@@ -24,8 +24,8 @@ parser.add_argument("--statOnly", dest="statOnly", action='store_true',
 parser.add_argument("--lumiScale", dest="lumiScale", help="Luminosity scale", type=float, default=1.0)
 parser.add_argument("--doStatOnly", action="store_true", default=False, 
         help="Set up fit to get stat-only uncertainty (currently combinetf with -S 0 doesn't work)")
-parser.add_argument("--qcdScale", choices=["byHelicityPtAndByPt", "byHelicityPt", "byHelicityCharge", "byPt", "byCharge", "integrated",], default="integrated", 
-        help="Decorrelation for QCDscale (additionally always by charge). With 'byHelicityPtAndByPt' two independent histograms are stored, split and not split by helicities (for tests)")
+parser.add_argument("--qcdScale", choices=["byHelicityPt", "byHelicityPtCharge", "byHelicityCharge", "byPtCharge", "byPt", "byCharge", "integrated",], default="byHelicityPtCharge", 
+        help="Decorrelation for QCDscale")
 parser.add_argument("--scetlibUnc", action='store_true', help="Include SCETlib uncertainties")
 args = parser.parse_args()
 
@@ -55,8 +55,9 @@ if args.fitType == "differential":
 elif args.fitType == "wmass": 
     proc_name = "Zmumu" if args.flavor == "mumu" else "Zee"
     constrainedProcs.append(proc_name)
-    datagroups.groups[proc_name]['signalOp'] = lambda x: x[{"recoil_gen" : s[::hist.sum]}] if "recoil_gen" in x.axes.name else x
-    constrainedProcs.append(proc_name)
+    for proc in datagroups.groups.keys():
+        datagroups.groups[proc]['signalOp'] = \
+           lambda x: x[{ax : s[::hist.sum] for ax in ["recoil_gen", "mll",] if ax in x.axes.name}]
 elif args.fitType == "wlike":
     histName = "mT_corr_rec"
     constrainedProcs.append("Zmumu" if args.flavor == "mumu" else "Zee") # need sum over gen bins

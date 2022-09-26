@@ -2,6 +2,7 @@ import hist
 import numpy as np
 from utilities import boostHistHelpers as hh,common
 import collections.abc
+import logging
 
 def scale_helicity_hist_to_variations(scale_hist, sum_axes=[], rebinPtV=None):
     
@@ -40,7 +41,7 @@ def scale_helicity_hist_to_variations(scale_hist, sum_axes=[], rebinPtV=None):
             scale_hist = scale_hist[{axis : s[::hist.sum]}]
             nom_scale_hist = nom_scale_hist[{axis : s[::hist.sum]}]
         else:
-            loggin.warning(f"In scale_helicity_hist_to_variations: axis '{axis}' not found in histogram.")
+            logging.warning(f"In scale_helicity_hist_to_variations: axis '{axis}' not found in histogram.")
         
     # difference between a given scale and the nominal, plus the sum
     # this emulates the "weight if idx else nominal" logic and corresponds to the decorrelated

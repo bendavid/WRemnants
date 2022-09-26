@@ -29,6 +29,8 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
     scaleActionArgs = {}
     action_map = {}
     sum_axes = ["ptVgen", "chargeVgen",]
+    if card_tool.histName == "reco_mll":
+        sum_axes.append("reco_gen")
     if use_hel_hist:
         scale_hist = "qcdScaleByHelicity"
         sum_axes.append("helicity")
@@ -55,7 +57,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
         action_args["rebinPtV"] = rebin_pt
 
     # Skip extreme muR/muF values for all bin combos (-1 = any)
-    nsyst_dims = len(syst_axes)-len(sum_axes)
+    nsyst_dims = len(syst_axes)
     skip_entries = [(*[-1]*(nsyst_dims-2),*x) for x in skip_entries]
 
     if scetlib:

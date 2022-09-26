@@ -310,7 +310,7 @@ def build_graph(df, dataset):
 
         # QCD scale
         df = theory_tools.define_scale_tensor(df)
-        df = df.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
+        df = df.Define("helicityWeight_tensor", qicdScaleByHelicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
         qcdScaleByHelicityUnc = df.HistoBoost("reco_mll_qcdScaleByHelicity", [*gen_reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mll_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
         results.append(qcdScaleByHelicityUnc)
         qcdScaleByHelicityUnc = df.HistoBoost("mt_qcdScaleByHelicity", [axis_mt, axis_ptVgen, axis_chargeVgen], ["mT_corr_rec", "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
