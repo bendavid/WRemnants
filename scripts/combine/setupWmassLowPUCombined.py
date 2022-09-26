@@ -8,8 +8,6 @@ if f: f.default = "combineResults/WMassLowPUComb"
 
 args = parser.parse_args()
 
-print("Basedir", args.baseDir)
-
 base_out = args.outfolder
 lowpu_out = "/".join([base_out, "lowPU"])
 highpu_out = "/".join([base_out, "highPU"])

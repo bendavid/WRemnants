@@ -185,7 +185,7 @@ def define_pdf_columns(df, dataset, pdfs, noAltUnc):
 
 def define_weights_and_corrs(df, weight_expr, dataset_name, helpers, args):
     #TODO: organize this better
-    if dataset_name in common.vprocs:
+    if dataset_name in common.vprocs+common.vprocs_lowpu:
         df = df.Define("nominal_pdf_cen", pdf_central_weight(dataset_name, args.pdfs[0]))
         weight_expr = f"{weight_expr}*nominal_pdf_cen"
     df = define_prefsr_vars(df)
@@ -228,7 +228,7 @@ def define_theory_corr(df, weight_expr, helpers, generators, modify_central_weig
 
     return df
 
-def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_central_weight, with_uncertainties=False):
+def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_central_weight, with_uncertainties=True):
     res = []
     
     for i, generator in enumerate(generators):
@@ -246,7 +246,7 @@ def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_cen
 
         if with_uncertainties:
             hist_name += "_unc"
-            unc = df.HistoBoost(hist_name, axes, [*cols, "{generator}Weight_tensor"], tensor_axes=helper.tensor_axes)
+            unc = df.HistoBoost(hist_name, axes, [*cols, f"{generator}Weight_tensor"], tensor_axes=helper.tensor_axes)
             res.append(unc)
         else:
             nominal = df.HistoBoost(hist_name, axes, [*cols, f"{generator}CentralWeight"])

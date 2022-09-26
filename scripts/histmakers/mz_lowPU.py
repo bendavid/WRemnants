@@ -16,7 +16,7 @@ import hist
 import ROOT
 import scripts.lowPU.config as lowPUcfg
 
-corr_helpers = theory_corrections.load_corr_helpers(["Zmumu"], args.theory_corr)
+corr_helpers = theory_corrections.load_corr_helpers(common.zprocs_lowpu, args.theory_corr)
 
 ###################################
 flavor = args.flavor # mumu, ee
@@ -198,15 +198,10 @@ def build_graph(df, dataset):
     df = df.Filter("massZ > 60 && massZ < 120")
 
     if not dataset.is_data:
-        if dataset.name in common.zprocs_lowpu:
-            df = df.Define("nominal_pdf_cen", theory_tools.pdf_central_weight(dataset.name, "nnpdf31"))
-            df = df.Define("nominal_weight", "weight*SFMC*nominal_pdf_cen")
-        else: 
-            df = df.Define("nominal_weight", "weight*SFMC")
+        weight_expr = "weight*SFMC"
+        df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")
-        
-
 
     # lepton kinematics: leading/subleading, triggered/nontriggered
     df = df.Define("Lep_pt_leading", "Lep_pt[0] > Lep_pt[1] ? Lep_pt[0] : Lep_pt[1]")
@@ -242,9 +237,6 @@ def build_graph(df, dataset):
     df = df.Define("noTrigMatch", "Sum(trigMatch)")
     results.append(df.HistoBoost("noTrigMatch", [axis_lin], ["noTrigMatch", "nominal_weight"]))
     
-    if dataset.name in common.vprocs_lowpu:
-        df = wremnants.define_prefsr_vars(df)
-
     # Recoil calibrations
     df = recoilHelper.setup_MET(df, results, dataset, "Lep_pt", "Lep_phi", "Lep_pt_uncorr")
     df = recoilHelper.setup_recoil_Z(df, results)
@@ -300,12 +292,22 @@ def build_graph(df, dataset):
 
         # QCD scale
         df = theory_tools.define_scale_tensor(df)
+        results.append(theory_tools.make_scale_hist(df, [*gen_reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mll_cols, "ptVgen", "chargeVgen"]))
         df = df.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
         qcdScaleByHelicityUnc = df.HistoBoost("reco_mll_qcdScaleByHelicity", [*gen_reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mll_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
         results.append(qcdScaleByHelicityUnc)
         qcdScaleByHelicityUnc = df.HistoBoost("mt_qcdScaleByHelicity", [axis_mt, axis_ptVgen, axis_chargeVgen], ["mT_corr_rec", "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
         results.append(qcdScaleByHelicityUnc)
     
+    # TODO: Should this also be added for the mT hist?
+
+    apply_theory_corr = args.theory_corr and dataset.name in corr_helpers
+    print("Apply corr for proc", dataset.name, apply_theory_corr)
+    if apply_theory_corr:
+        results.extend(theory_tools.make_theory_corr_hists(df, "reco_mll", axes=gen_reco_mll_axes, cols=gen_reco_mll_cols, 
+            helpers=corr_helpers[dataset.name], generators=args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
+        )
+
     if dataset.name == sigProc:
     
         results.append(df.HistoBoost("reco_mll", gen_reco_mll_axes, [*gen_reco_mll_cols, "nominal_weight"]))

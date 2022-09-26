@@ -35,7 +35,6 @@ def main(args):
     outfolder = "/".join([args.baseDir, args.outfolder])
     if not os.path.isdir(outfolder):
         os.makedirs(outfolder)
-    print(f"Making folder {outfolder}")
 
     if args.noHist and args.noStatUncFakes:
         raise ValueError("Option --noHist would override --noStatUncFakes. Please select only one of them")
@@ -160,10 +159,10 @@ def main(args):
             )
 
     to_fakes = not (args.wlike or args.noQCDscaleFakes)
-    combine_helpers.add_scale_uncertainty(cardTool, args.qcdScale, signal_samples_inctau, to_fakes, scetlib=args.scetlibUnc)
+    combine_helpers.add_scale_uncertainty(cardTool, args.qcdScale, signal_samples_inctau, to_fakes, pdf=args.pdf, scetlib=args.scetlibUnc)
     # for Z background in W mass case (W background for Wlike is essentially 0, useless to apply QCD scales there)
     if not args.wlike:
-        combine_helpers.add_scale_uncertainty(cardTool, "integrated", single_v_samples, False, name_append="Z", scetlib=args.scetlibUnc)
+        combine_helpers.add_scale_uncertainty(cardTool, "integrated", single_v_samples, False, pdf=args.pdf, name_append="Z", scetlib=args.scetlibUnc)
 
     cardTool.addSystematic("muonScaleSyst", 
         processes=single_vmu_samples,
