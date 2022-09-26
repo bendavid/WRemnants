@@ -3,7 +3,7 @@ import numpy as np
 from utilities import boostHistHelpers as hh,common
 import collections.abc
 
-def scale_helicity_hist_to_variations(scale_hist, sum_axis=[], rebinPtV=None):
+def scale_helicity_hist_to_variations(scale_hist, sum_axes=[], rebinPtV=None):
     
     s = hist.tag.Slicer()
     # select nominal QCD scales, but keep the sliced axis at size 1 for broadcasting
@@ -35,7 +35,7 @@ def scale_helicity_hist_to_variations(scale_hist, sum_axis=[], rebinPtV=None):
     elif not hasPtAxis:
         raise ValueError("In scale_helicity_hist_to_variations: axis 'ptVgen' not found in histogram.")
             
-    for axis in sum_axis:
+    for axis in sum_axes:
         if axis in axisNames:
             scale_hist = scale_hist[{axis : s[::hist.sum]}]
             nom_scale_hist = nom_scale_hist[{axis : s[::hist.sum]}]

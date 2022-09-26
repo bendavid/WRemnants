@@ -9,7 +9,7 @@ import pathlib
 scriptdir = f"{pathlib.Path(__file__).parent}"
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-o", "--outfolder", type=str, default="/scratch/kelong/CombineStudies")
+parser.add_argument("-o", "--outfolder", type=str, default="combineStudies")
 parser.add_argument("-i", "--inputFile", type=str, required=True)
 parser.add_argument("--noScaleHelicitySplit", dest="qcdByHelicity", action='store_false', 
         help="Don't split QCD scale into helicity coefficients")

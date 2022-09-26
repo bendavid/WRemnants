@@ -301,8 +301,12 @@ def build_graph(df, dataset):
     if dataset.name == sigProc or dataset.name == "Ztautau":
     
         # pdfs
-        results.extend(theory_tools.define_and_make_pdf_hists(df, gen_reco_mll_axes, gen_reco_mll_cols, dataset.name, hname="reco_mll"))
-        results.extend(theory_tools.define_and_make_pdf_hists(df, [axis_mt], ["mT_corr_rec"], dataset.name, hname="mt"))
+        df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
+        if sigProc:
+            results.extend(theory_tools.make_pdf_hists(df, dataset.name, gen_reco_mll_axes, gen_reco_mll_cols, args.pdfs, "reco_mll"))
+        else:
+            results.extend(theory_tools.make_pdf_hists(df, dataset.name, reco_mll_axes, reco_mll_cols, args.pdfs, "reco_mll"))
+        results.extend(theory_tools.make_pdf_hists(df, dataset.name, [axis_mt], ["mT_corr_rec"], args.pdfs, hname="mt"))
 
         # QCD scale
         df = theory_tools.define_scale_tensor(df)
@@ -377,10 +381,5 @@ def build_graph(df, dataset):
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)
-
 fname = "lowPU_%s_%s.pkl.lz4" % (flavor, met)
-#output_tools.write_analysis_output(resultdict, fname, args)
-
-print("writing output")
-with lz4.frame.open(fname, "wb") as f:
-    pickle.dump(resultdict, f, protocol = pickle.HIGHEST_PROTOCOL)
+output_tools.write_analysis_output(resultdict, fname, args)

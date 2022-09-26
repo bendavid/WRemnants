@@ -527,13 +527,5 @@ def build_graph_cutFlow(df, dataset):
 
 
 resultdict = narf.build_and_run(datasets, build_graph)
-#resultdict = narf.build_and_run(datasets, build_graph_cutFlow)
-
-
-
 fname = "lowPU_%s_%s.pkl.lz4" % (flavor, met)
-#fname = "lowPU_%s_%s_cutFlow.pkl.lz4" % (flavor, met)
-
-print("writing output")
-with lz4.frame.open(fname, "wb") as f:
-    pickle.dump(resultdict, f, protocol = pickle.HIGHEST_PROTOCOL)
+output_tools.write_analysis_output(resultdict, fname, args)

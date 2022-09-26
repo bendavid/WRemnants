@@ -140,6 +140,10 @@ class CardTool(object):
     def setHistName(self, histName):
         self.histName = histName
 
+    def setNominalName(self, histName):
+        self.nominalName = histName
+        self.datagroups.setNominalName(histName)
+
     def isData(self, procName):
         return any([x.is_data for x in self.datagroups.groups[procName]["members"]])
 

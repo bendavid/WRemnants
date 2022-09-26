@@ -30,6 +30,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
     action_map = {}
     sum_axes = ["ptVgen", "chargeVgen",]
     if use_hel_hist:
+        scale_hist = "qcdScaleByHelicity"
         sum_axes.append("helicity")
 
     action_map = {proc : syst_tools.scale_helicity_hist_to_variations for proc in samples}
@@ -73,7 +74,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
 
             skip_entries.extend([(complex(0, x), *other) for other in other_dims for x in binning[:pt30_idx-1]])
         elif helicity:
-            skip_entries.append([(*[-1]*(nsyst_dims-2), -1.j, -1, -1)
+            skip_entries.append((*[-1]*(nsyst_dims-2), -1.j, -1, -1))
         
         # TODO: Implement pT splitting for SCETlib
         nscetlib_vars=45
