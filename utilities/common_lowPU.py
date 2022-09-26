@@ -13,10 +13,6 @@ zprocs_recoil = ["Zmumu", "Zee"]
 vprocs = wprocs+zprocs
 
 
-# unfolding axes
-axis_recoil_reco_ptZ = hist.axis.Variable([0, 5, 10, 15, 20, 30, 40, 50, 60, 75, 90, 150], name = "recoil_reco", underflow=False, overflow=True)
-axis_recoil_gen_ptZ = hist.axis.Variable([0.0, 10.0, 20.0, 40.0, 60.0, 90.0, 150], name = "recoil_gen", underflow=False, overflow=True)
-
 
 # categorical axes in python bindings always have an overflow bin, so use a regular
 # axis for the charge
