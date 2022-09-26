@@ -26,6 +26,10 @@ filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
     nanoVersion="v8" if args.v8 else "v9")
 
+if not args.no_recoil:
+    logging.warning("Recoil correction for high PU is not yet supported! Setting false")
+    args.no_recoil = True
+
 era = args.era
 noMuonCorr = args.noMuonCorr
 
@@ -171,7 +175,7 @@ def build_graph(df, dataset):
         nominal = df.HistoBoost("nominal", nominal_axes, nominal_cols)
         results.append(nominal)
         
-        if not args.no_recoil:
+        if not args.recoil:
             df = recoilHelper.setup_MET(df, results, dataset, "Muon_pt[goodMuons]", "Muon_phi[goodMuons]", "Muon_pt[goodMuons]")
             
         df = df.Define("mT_corr_rec", "wrem::mt_2(goodMuons_pt0, goodMuons_phi0, MET_corr_xy_pt, MET_corr_xy_phi)")

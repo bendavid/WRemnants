@@ -29,6 +29,11 @@ filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
     nanoVersion="v8" if args.v8 else "v9")
 
+if not args.no_recoil:
+    logging.warning("Recoil correction for high PU is not yet supported! Setting false")
+    args.no_recoil = True
+
+era = args.era
 era = args.era
 
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
