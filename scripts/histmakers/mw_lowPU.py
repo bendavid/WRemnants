@@ -82,6 +82,8 @@ axis_passIso = hist.axis.Boolean(name = "passIso")
 
 axis_MET_pt = hist.axis.Regular(300, 0, 300, name = "MET_pt", underflow=False)
 
+axis_recoil_magn = hist.axis.Regular(300, 0, 300, name = "recoil_magn", underflow=False)
+
 #axis_eta = hist.axis.Variable([0, 0.4, 0.8, 1.2, 1.6, 2.0, 2.4], name = "eta")
 axis_eta = hist.axis.Variable([-2.4, 2.4], name = "eta")
 
@@ -114,6 +116,7 @@ gen_reco_mll_axes = [axis_recoil_gen, axis_recoil_reco, axis_mll]
 #axis_mt = hist.axis.Regular(200, 0., 200., name = "mt", underflow=False)
 #axis_mt = hist.axis.Variable([0, 10, 15, 20, 25, 30, 35,] + list(range(40, 110, 1)) + [110, 112, 114, 116, 118, 120, 125, 130, 140, 160, 180, 200], name = "mt",underflow=False, overflow=True)
 axis_mt = hist.axis.Variable([0] + list(range(40, 110, 1)) + [110, 112, 114, 116, 118, 120, 125, 130, 140, 160, 180, 200], name = "mt",underflow=False, overflow=True)
+
 #axis_mt = hist.axis.Variable(list(range(40, 100, 2)), name = "mt",underflow=False, overflow=False)
 
 # extra axes which can be used to label tensor_axes
@@ -247,17 +250,15 @@ def build_graph(df, dataset):
     #df = df.Filter("massZ > 60 && massZ < 120")
 
     if not dataset.is_data: 
-        if dataset.name == "WplusJetsToMuNu" or dataset.name == "WminusJetsToMuNu":
-            df = df.Define("nominal_pdf_cen", theory_tools.pdf_central_weight(dataset.name, "nnpdf31"))
-            df = df.Define("nominal_weight", "weight*SFMC*nominal_pdf_cen")
-        else: 
-            df = df.Define("nominal_weight", "weight*SFMC")
+        weight_expr = "weight*SFMC"
+        df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")
 
     # isolation requirement
     #df = df.Filter("Lep_iso < 0.15")
     df = df.Define("passIso", "Lep_iso < 0.15")
+    
     
     #nominal_cols = ["mT_corr_rec", "Lep_abs_eta", "Lep_charge", "passIso"]
     #nominal_axes = [axis_mt, axis_eta, axis_charge, axis_passIso]
@@ -270,32 +271,22 @@ def build_graph(df, dataset):
     df = df.Define("noTrigMatch", "Sum(trigMatch)")
     results.append(df.HistoBoost("noTrigMatch", [axis_lin], ["noTrigMatch", "nominal_weight"]))
 
-    if dataset.name == "WplusJetsToMuNu" or dataset.name == "WminusJetsToMuNu" or dataset.name == "WplusJetsToTauNu" or dataset.name == "WminusJetsToTauNu":
-        df = wremnants.define_prefsr_vars(df)
+    if no is_data:
 
     # Recoil calibrations
-    df = recoilHelper.recoil_setup_MET(df, results, dataset, "Lep_pt", "Lep_phi", "Lep_pt_uncorr")
-    df = recoilHelper.recoil_setup_gen(df, results, dataset)
-    df = recoilHelper.recoil_W(df, results, dataset, ["WplusJetsToMuNu", "WminusJetsToMuNu"]) # produces corrected MET as MET_corr_rec_pt/phi
+    df = recoilHelper.setup_MET(df, results, dataset, "Lep_pt", "Lep_phi", "Lep_pt_uncorr")
+    df = recoilHelper.setup_gen(df, results, dataset, ["WplusJetsToMuNu", "WminusJetsToMuNu"])
+    df = recoilHelper.apply_recoil_W(df, results, dataset, ["WplusJetsToMuNu", "WminusJetsToMuNu"]) # produces corrected MET as MET_corr_rec_pt/phi
 
 
-    
-
-    df = df.Define("mT_uncorr", "wrem::mt_2(Lep_pt, Lep_phi, MET_uncorr_pt, MET_uncorr_phi)")
-    df = df.Define("mT_corr_xy", "wrem::mt_2(Lep_pt, Lep_phi, MET_corr_xy_pt, MET_corr_xy_phi)")
     df = df.Define("mT_corr_rec", "wrem::mt_2(Lep_pt, Lep_phi, MET_corr_rec_pt, MET_corr_rec_phi)")
+    df = df.Define("passMT", "mT_corr_rec > 40")
     
-    #df = df.Filter("mT_corr_rec > 40")
 
-    results.append(df.HistoBoost("MET_uncorr_pt", [axis_MET_pt, axis_eta, axis_charge], ["MET_uncorr_pt", "Lep_abs_eta", "Lep_charge", "nominal_weight"]))
-    results.append(df.HistoBoost("MET_corr_xy_pt", [axis_MET_pt, axis_eta, axis_charge], ["MET_corr_xy_pt", "Lep_abs_eta", "Lep_charge", "nominal_weight"]))
-    results.append(df.HistoBoost("MET_corr_rec_pt", [axis_MET_pt, axis_eta, axis_charge, axis_passIso], ["MET_corr_rec_pt", "Lep_abs_eta", "Lep_charge", "passIso", "nominal_weight"]))
-
-    results.append(df.HistoBoost("mT_uncorr", [axis_mt, axis_eta, axis_charge, axis_passIso], ["mT_uncorr", "Lep_abs_eta", "Lep_charge", "passIso", "nominal_weight"]))
-    results.append(df.HistoBoost("mT_corr_xy", [axis_mt, axis_eta, axis_charge, axis_passIso], ["mT_corr_xy", "Lep_abs_eta", "Lep_charge", "passIso", "nominal_weight"]))
-    results.append(df.HistoBoost("mT_corr_rec", [axis_mt, axis_eta, axis_charge, axis_passIso], ["mT_corr_rec", "Lep_abs_eta", "Lep_charge", "passIso", "nominal_weight"]))
-    #df = df.Define("passMT_uncorr", "mT_uncorr >= 40.0")
-      
+    results.append(df.HistoBoost("MET_corr_rec_pt", [axis_MET_pt, axis_charge, axis_passMT, axis_passIso], ["MET_corr_rec_pt", "Lep_charge", "passMT", "passIso", "nominal_weight"]))
+    results.append(df.HistoBoost("mT_corr_rec", [axis_mt, axis_charge, axis_passMT, axis_passIso], ["mT_corr_rec", "Lep_charge", "passMT", "passIso", "nominal_weight"]))      
+    results.append(df.HistoBoost("recoil_corr_rec_magn", [axis_recoil_magn, axis_charge, axis_passMT, axis_passIso], ["recoil_corr_rec_magn", "Lep_charge", "passMT", "passIso", "nominal_weight"]))
+        
     
 
     if dataset.is_data: return results, weightsum
@@ -307,19 +298,23 @@ def build_graph(df, dataset):
         # QCD scale
         df = theory_tools.define_scale_tensor(df)
         df = df.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
-        qcdScaleByHelicityUnc = df.HistoBoost("mT_corr_rec_qcdScaleByHelicity", [axis_mt, axis_eta, axis_charge, axis_passIso, axis_ptVgen, axis_chargeVgen], ["mT_corr_rec", "Lep_abs_eta", "Lep_charge", "passIso", "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
+        qcdScaleByHelicityUnc = df.HistoBoost("mT_corr_rec_qcdScaleByHelicity", [axis_mt, axis_charge, axis_passMT, axis_passIso, axis_ptVgen, axis_chargeVgen], ["mT_corr_rec", "Lep_charge", "passMT", "passIso", "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
         results.append(qcdScaleByHelicityUnc)
         
+    apply_theory_corr = args.theory_corr and dataset.name in corr_helpers
+    if apply_theory_corr:
+        results.extend(theory_tools.make_theory_corr_hists(df, "mll_reco", axes=gen_reco_mll_axes, cols=gen_reco_mll_cols, 
+            helpers=corr_helpers[dataset.name], generators=args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
+        )
+
     ###return results, weightsum    
     if dataset.name == "WplusJetsToMuNu" or dataset.name == "WminusJetsToMuNu":
     
-        # recoil stat uncertainties
-        ###df = recoilHelper.recoil_W_statUnc_lowPU(df, results, axis_charge, axis_mt, axis_eta)
-        df = recoilHelper.recoil_W_unc_lowPU(df, results, axis_charge, axis_mt, axis_eta, axis_passIso)
-        
+        # recoil uncertainties
+        df = recoilHelper.recoil_W_unc_lowPU(df, results, axis_charge, axis_mt, axis_recoil_magn, axis_eta, axis_passMT, axis_passIso)
         
         # pdfs
-        results.extend(theory_tools.define_and_make_pdf_hists(df, [axis_mt, axis_eta, axis_charge, axis_passIso], ["mT_corr_rec", "Lep_abs_eta", "Lep_charge", "passIso"], dataset.name, hname="mT_corr_rec"))        
+        results.extend(theory_tools.define_and_make_pdf_hists(df, [axis_mt, axis_charge, axis_passMT, axis_passIso], ["mT_corr_rec", "Lep_charge", "passMT", "passIso"], dataset.name, hname="mT_corr_rec"))        
 
 
         '''
@@ -352,8 +347,8 @@ def build_graph(df, dataset):
         df = df.Define("massWeight_tensor_unscaled", f"auto res = wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight); res = res; return res;")
         #results.append(df.HistoBoost("gen_reco_mll_massWeight", gen_reco_mll_axes, [*gen_reco_mll_cols, "massWeight_tensor"]))
         #results.append(df.HistoBoost("mT_uncorr_massWeight", [axis_mt, axis_eta, axis_charge], ["mT_uncorr", "Lep_abs_eta", "Lep_charge", "massWeight_tensor"]))
-        results.append(df.HistoBoost("mT_corr_xy_massWeight", [axis_mt, axis_eta, axis_charge, axis_passIso], ["mT_corr_xy", "Lep_abs_eta", "Lep_charge", "passIso", "massWeight_tensor"]))
-        results.append(df.HistoBoost("mT_corr_rec_massWeight", [axis_mt, axis_eta, axis_charge, axis_passIso], ["mT_corr_rec", "Lep_abs_eta", "Lep_charge", "passIso", "massWeight_tensor"]))
+        ###results.append(df.HistoBoost("mT_corr_xy_massWeight", [axis_mt, axis_eta, axis_charge, axis_passIso], ["mT_corr_xy", "Lep_abs_eta", "Lep_charge", "passIso", "massWeight_tensor"]))
+        results.append(df.HistoBoost("mT_corr_rec_massWeight", [axis_mt, axis_charge, axis_passMT, axis_passIso], ["mT_corr_rec", "Lep_charge", "passMT", "passIso", "massWeight_tensor"]))
 
 
 
@@ -363,7 +358,7 @@ def build_graph(df, dataset):
         mag = 1.e-4
         df = df.Define(f"muonScaleDummy{netabins}Bins", f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(nominal_weight, massWeight_tensor_unscaled, Lep_abs_eta, {mag})")
         scale_etabins_axis = hist.axis.Regular(netabins, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
-        dummyMuonScaleSyst = df.HistoBoost("mT_corr_rec_muonScaleSyst", [axis_mt, axis_eta, axis_charge, axis_passIso], ["mT_corr_rec", "Lep_abs_eta", "Lep_charge", "passIso", f"muonScaleDummy{netabins}Bins"], tensor_axes=[down_up_axis, scale_etabins_axis])
+        dummyMuonScaleSyst = df.HistoBoost("mT_corr_rec_muonScaleSyst", [axis_mt, axis_charge, axis_passMT, axis_passIso], ["mT_corr_rec", "Lep_charge", "passMT", "passIso", f"muonScaleDummy{netabins}Bins"], tensor_axes=[down_up_axis, scale_etabins_axis])
         results.append(dummyMuonScaleSyst)
 
 
@@ -529,23 +524,10 @@ def build_graph_cutFlow(df, dataset):
     
    
 
-    
-    
-    
 
-    
-        
     return results, weightsum
 
 
 resultdict = narf.build_and_run(datasets, build_graph)
-#resultdict = narf.build_and_run(datasets, build_graph_cutFlow)
-
-
-
 fname = "lowPU_%s_%s.pkl.lz4" % (flavor, met)
-#fname = "lowPU_%s_%s_cutFlow.pkl.lz4" % (flavor, met)
-
-print("writing output")
-with lz4.frame.open(fname, "wb") as f:
-    pickle.dump(resultdict, f, protocol = pickle.HIGHEST_PROTOCOL)
+output_tools.write_analysis_output(resultdict, fname, args)

@@ -38,6 +38,7 @@ std::map<std::string, std::vector<  std::vector<  std::vector< float > >  >> rec
 //std::map<std::string, std::map<std::string, TF1*>> recoil_param_funcs;
     
 std::vector<float> qTbins;
+float recoil_correction_qTmax = 1e99;
 
 
 //std::vector<float> qTweights{ 1.042, 0.977, 0.926, 0.914, 0.921, 0.949, 0.983, 0.973, 0.999, 1.025, 1.049, 1.005, 1.087, 1.048, 1.057, 1.068, 1.068, 1.098, 1.036, 1.049, 1.081, 1.042, 1.064, 1.052, 1.123, 1.049, 1.000, 1.028, 1.047, 1.005, 0.972, 1.032, 1.067, 1.033, 1.049, 1.004, 0.994, 1.056, 1.056, 1.013, 0.988, 0.985, 0.956, 0.986, 0.999, 1.053, 1.008, 1.032, 1.044, 0.920, 1.000, 0.921, 1.016, 0.905, 0.845 };
@@ -54,7 +55,8 @@ std::vector<float> qTweights { 1.041, 0.977, 0.925, 0.913, 0.920, 0.948, 0.981, 
 std::vector<float> corr_x { -0.595, -0.660, -0.548, -0.732, -0.678, -0.643, -0.390, -0.725, -0.540, -0.461, -0.677, -0.755, -0.730, -0.317, -0.340, -0.782, -0.448, -0.261, -0.643, -0.649, -0.651, -0.598, -0.260, -0.975, -0.632, -0.655, -0.760, -0.664, -0.911, -0.806, -0.858, -0.980, -0.604, -0.298, -1.037, -0.924, -0.695, -0.568, -0.633, -0.992, -1.186, -0.389, -0.987, -0.593, -0.986, -0.008, -0.155, -0.177, -0.862, -1.745, -0.844, -0.607, -0.191, -1.213, -0.317, -0.787, -1.178, -0.900, -2.065, -1.141, -1.223, -1.454, 0.331, -0.534, -0.834, 0.763, -1.153, -0.515, -0.659, -0.055, -2.063, -1.534, -0.426, 0 };
 std::vector<float> corr_y { 0.507, 0.243, 0.356, 0.229, 0.339, 0.327, 0.307, 0.382, 0.339, 0.539, 0.287, 0.281, 0.369, 0.551, 0.754, 0.009, 0.777, 0.610, 0.304, 0.336, 0.042, 0.542, 0.220, 0.550, 0.710, 0.409, 0.170, 0.138, 0.433, 0.263, 0.841, -0.268, 0.614, -0.086, 0.663, 0.293, -0.154, 1.577, 0.705, 1.028, 0.432, 0.418, 0.363, -0.001, 0.948, -0.070, 1.130, 1.444, 1.592, -0.414, 0.133, 1.050, 0.716, 1.217, 0.690, -0.025, -0.360, 0.799, -0.531, -0.327, 1.601, -0.434, -0.259, -0.576, 2.648, 0.039, 0.807, 1.053, -1.098, -0.495, 2.614, 0.960, 4.728, 0.449};
 
-
+// MET xy correction
+bool applyMETxyCorrection = false;
 std::vector<float> met_xy_corr_x_data_nom, met_xy_corr_y_data_nom, met_xy_corr_x_mc_nom, met_xy_corr_y_mc_nom;
 
 
@@ -236,10 +238,16 @@ Vec_f recoilComponentsGen(double MET_pt, double MET_phi, double lep_pt, double l
 Vec_f METXYCorrection(double MET_pt, double MET_phi, int npv, int isData) {
     
     // preserve the MET magnitude??
-    
+
     double delta;
     double pUx = MET_pt*cos(MET_phi);
     double pUy = MET_pt*sin(MET_phi);
+    
+    Vec_f res(2, 0);
+    res[0] = hypot(pUx, pUy);
+    res[1] = atan2(pUy, pUx);
+    
+    if(!applyMETxyCorrection) return res;
 
     if(isData == 1) {
     
@@ -265,7 +273,6 @@ Vec_f METXYCorrection(double MET_pt, double MET_phi, int npv, int isData) {
         pUy -= delta;     
     }
 
-    Vec_f res(2, 0);
     res[0] = hypot(pUx, pUy);
     res[1] = atan2(pUy, pUx);
     
@@ -329,6 +336,16 @@ class GaussianSum {
                 ret += norm.at(i)*std::erfc(-tmp/TMath::Sqrt2());
             }
             return 0.5*ret/totNorm;
+        }
+        
+        double eval(double val) {
+
+            double ret = 0;
+            double tmp;
+            for(unsigned int i = 0; i < mean.size(); i++) {
+                ret += norm.at(i)*TMath::Gaus(val, mean.at(i), sigma.at(i), true);
+            }
+            return ret/totNorm;
         }
         
         double findRoot(double value, double xMin, double xMax) {
@@ -965,6 +982,12 @@ GaussianSum constructParametricGauss(string tag, double qT, int syst=-1) {
                 norm = recoil_param_funcs[tag + "_norm" + to_string(i) + systLabel]->Eval(qT);
                 totNorm += norm;
             }
+            if(totNorm > 1) {
+                cout << "Total PDF norm exceeding 1, adjust (tag=" << tag << ", qT=" << qT << " syst" << syst << ")" << endl;
+                return constructParametricGauss(tag, qT); // return the nominal
+                norm = 1. - totNorm;
+                if(norm < 0) norm = 0;
+            }
             mean = recoil_param_funcs[tag + "_mean" + to_string(i) + systLabel]->Eval(qT);
             sigma = recoil_param_funcs[tag + "_sigma" + to_string(i) + systLabel]->Eval(qT);
             gauss.addTerm(mean, sigma, norm);
@@ -1012,6 +1035,8 @@ Vec_f recoilCorrectionParametric(double para, double perp, double qTbinIdx, doub
     res[1] = para;
     res[2] = perp;
     res[0] = std::hypot(res[1], res[2]);
+    
+    if(qT > recoil_correction_qTmax) qT = recoil_correction_qTmax; // protection for high qT
     //return res;
     
     int corrIdx = 1;
@@ -1027,13 +1052,17 @@ Vec_f recoilCorrectionParametric(double para, double perp, double qTbinIdx, doub
     GaussianSum dy_perp;
     
     if(systIdx != -1 and systTag == "target_para") data_para = constructParametricGauss("target_para", qT, systIdx);
+    else if(systIdx != -1 and systTag == "target_para_bkg") data_para = constructParametricGauss("target_para_bkg", qT, systIdx);
     else data_para = constructParametricGauss("target_para", qT);
     if(systIdx != -1 and systTag == "target_perp") data_perp = constructParametricGauss("target_perp", qT, systIdx);
+    else if(systIdx != -1 and systTag == "target_perp_bkg") data_perp = constructParametricGauss("target_perp_bkg", qT, systIdx);
     else data_perp = constructParametricGauss("target_perp", qT);
     if(systIdx != -1 and systTag == "source_para") dy_para = constructParametricGauss("source_para", qT, systIdx);
     else dy_para = constructParametricGauss("source_para", qT);
     if(systIdx != -1 and systTag == "source_perp") dy_perp = constructParametricGauss("source_perp", qT, systIdx);
     else dy_perp = constructParametricGauss("source_perp", qT);
+    
+     
     
     //GaussianSum data_perp = constructParametricGauss("target_perp", qT);
     //GaussianSum dy_para = constructParametricGauss("source_para", qT);
@@ -1089,6 +1118,33 @@ Vec_recoil recoilCorrectionParametricUnc(double para, double perp, double qT, st
         Vec_f ret = recoilCorrectionParametric(para, perp, 0, qT, tag, iSyst);
         res[iSyst].para = ret[1];
         res[iSyst].perp = ret[2];
+    }
+    return res;
+}
+
+
+Vec_f recoilCorrectionParametricUncWeights(double eval, double qT, string tag_nom, string tag_pert) {
+    
+    GaussianSum nom;
+    GaussianSum pert;
+    
+    if(qT > recoil_correction_qTmax) qT = recoil_correction_qTmax; // protection for high qT
+    
+    int nSysts = recoil_param_nStat[tag_pert];
+    Vec_f res(nSysts);
+    nom = constructParametricGauss(tag_nom, qT);
+    double nom_eval = nom.eval(eval);
+    double w;
+    for(int iSyst = 0; iSyst<nSysts; iSyst++) {
+
+        pert = constructParametricGauss(tag_pert, qT, iSyst);
+        w = pert.eval(eval)/nom_eval;
+        if(w < 0.2 or w > 1.8) { // protection
+            cout << "Weight too large w=" << w << " tag_pert=" << tag_pert << " qT=" << qT << " res[iSyst]=" << res[iSyst] << " nom_eval=" << nom_eval << " pert_eval" << pert.eval(eval) << endl;
+            w = 1;
+        }
+        res[iSyst] = w;        
+        //cout << tag_pert << " qT=" << qT << " res[iSyst]=" << res[iSyst] << " " << nom_eval << endl;
     }
     return res;
 }
