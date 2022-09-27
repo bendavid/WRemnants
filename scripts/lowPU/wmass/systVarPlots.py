@@ -30,14 +30,12 @@ def doPlot(flavor="mu", charge="plus", syst="", ratio=1.06):
     met = "RawPFMET"
     lumi = "1p0"
     mode = "binned"
-    fIn = ROOT.TFile("/scratch/jaeyserm/CombineStudies_Wmass/LowPU_Wmass_mu_RawPFMET_lumi1p0.root")
+    fIn = ROOT.TFile("/scratch/jaeyserm/CombineStudies_Wmass_mT/lowPU_mu_RawPFMET_lumi1p0.root")
     
-    outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/Projection/Templates/%s_%s_%s" % (met, mode, charge)
+    outDir = "/eos/user/j/jaeyserm/www/wmass/studies_mT/lowPU/syst_templates/%s_%s" % (met, charge)
     functions.prepareDir(outDir, remove=False)
     
-    mTbins = list(range(40, 110, 1)) + [110, 112, 114, 116, 118, 120, 125, 130, 140, 160, 180, 200]
-    mTbinRange = [1, 82] # assume 81 mT bins
-    if charge == "minus" and fitcfg == "combined": mTbinRange = [82, 82+81]
+
     
 
     dataLabel = "Data (#mu^{#%s})" % charge
@@ -53,17 +51,17 @@ def doPlot(flavor="mu", charge="plus", syst="", ratio=1.06):
     
 
     
-    h_base = fIn.Get("mT_corr_rec_W%sJetsToMuNu_%s;1" % (charge, charge))
-    if h_base.ClassName() == "TH2D": h_base = h_base.ProjectionX("h_base", 1, 1)
+    h_base = fIn.Get("mT_corr_rec_WJetsToMuNu_%s;1" % (charge))
+    #if h_base.ClassName() == "TH2D": h_base = h_base.ProjectionX("h_base", 1, 1)
 
     h_base.Scale(1., "width")
     h_base.SetLineColor(ROOT.kBlack)
     h_base.SetLineWidth(2)
     h_base.SetLineStyle(1)
     
-    hUp = fIn.Get("mT_corr_rec_W%sJetsToMuNu_%sUp_%s;1" % (charge, syst, charge))
+    hUp = fIn.Get("mT_corr_rec_WJetsToMuNu_%sUp_%s;1" % (syst, charge))
     if hUp.ClassName() == "TH2D": hUp = hUp.ProjectionX("hUp", 1, 1)
-    hDw = fIn.Get("mT_corr_rec_W%sJetsToMuNu_%sDown_%s;1" % (charge, syst, charge))
+    hDw = fIn.Get("mT_corr_rec_WJetsToMuNu_%sDown_%s;1" % (syst, charge))
     if hDw.ClassName() == "TH2D": hDw = hDw.ProjectionX("hDw", 1, 1)
     hUp.Scale(1., "width")
     hDw.Scale(1., "width")
@@ -81,9 +79,9 @@ def doPlot(flavor="mu", charge="plus", syst="", ratio=1.06):
     hDw_ratio.SetLineStyle(1)
     
     # mass shift
-    hUp_mass = fIn.Get("mT_corr_rec_W%sJetsToMuNu_%sUp_%s;1" % (charge, "massShift100MeV", charge))
+    hUp_mass = fIn.Get("mT_corr_rec_WJetsToMuNu_%sUp_%s;1" % ("massShift100MeV", charge))
     if hUp_mass.ClassName() == "TH2D": hUp_mass = hUp_mass.ProjectionX("hUp_mass", 1, 1)
-    hDw_mass = fIn.Get("mT_corr_rec_W%sJetsToMuNu_%sDown_%s;1" % (charge, "massShift100MeV", charge))
+    hDw_mass = fIn.Get("mT_corr_rec_WJetsToMuNu_%sDown_%s;1" % ("massShift100MeV", charge))
     if hDw_mass.ClassName() == "TH2D": hDw_mass = hDw_mass.ProjectionX("hDw_mass", 1, 1)
     hUp_mass.Scale(1., "width")
     hDw_mass.Scale(1., "width")
@@ -99,7 +97,7 @@ def doPlot(flavor="mu", charge="plus", syst="", ratio=1.06):
     hDw_mass_ratio.SetLineStyle(1)
     
     
-    leg.SetHeader(syst)
+    leg.SetHeader("W^{#%s}, %s" % (charge, syst))
     leg.AddEntry(h_base, "Base template", "L")
     leg.AddEntry(hUp_ratio, "Up variation", "L")
     leg.AddEntry(hDw_ratio, "Down variation", "L")
@@ -196,22 +194,41 @@ if __name__ == "__main__":
     
     #doPlot(flavor="mu", charge="plus", syst="massShift100MeV", ratio=1.03)
     
-    #doPlot(flavor="mu", charge="plus", syst="recoilSyst_target_para_0", ratio=1.03)
-    #doPlot(flavor="mu", charge="plus", syst="recoilSyst_target_para_1", ratio=1.03)
-    #doPlot(flavor="mu", charge="plus", syst="recoilSyst_target_para_2", ratio=1.03)
-    #doPlot(flavor="mu", charge="plus", syst="recoilSyst_target_para_3", ratio=1.03)
-    #doPlot(flavor="mu", charge="plus", syst="recoilSyst_target_para_4", ratio=1.03)
-    #doPlot(flavor="mu", charge="plus", syst="recoilSyst_target_para_5", ratio=1.03)
+    doPlot(flavor="mu", charge="plus", syst="recoil_target_para_4", ratio=1.03)
+    doPlot(flavor="mu", charge="plus", syst="recoil_target_perp_2", ratio=1.03)
+    doPlot(flavor="mu", charge="plus", syst="recoil_source_perp_0", ratio=1.03)
+    doPlot(flavor="mu", charge="plus", syst="recoil_target_perp_bkg_2", ratio=1.03)
+    
+    doPlot(flavor="mu", charge="minus", syst="recoil_target_para_4", ratio=1.03)
+    doPlot(flavor="mu", charge="minus", syst="recoil_target_perp_2", ratio=1.03)
+    doPlot(flavor="mu", charge="minus", syst="recoil_source_perp_0", ratio=1.03)
+    doPlot(flavor="mu", charge="minus", syst="recoil_target_perp_bkg_2", ratio=1.03)
+    
+    doPlot(flavor="mu", charge="plus", syst="recoil_target_perp_0", ratio=1.03)
+    doPlot(flavor="mu", charge="minus", syst="recoil_target_perp_0", ratio=1.03) # problematic
+    
+    doPlot(flavor="mu", charge="plus", syst="recoil_target_para_7", ratio=1.03) # problematic
+    doPlot(flavor="mu", charge="minus", syst="recoil_target_para_7", ratio=1.03)
+    
+    
+    
     
     
     doPlot(flavor="mu", charge="plus", syst="CMS_scale_m_ieta0", ratio=1.01)
+    doPlot(flavor="mu", charge="minus", syst="CMS_scale_m_ieta0", ratio=1.01)
     
-    #doPlot(flavor="mu", charge="plus", syst="QCDscale_q0muF", ratio=1.03)
-    #doPlot(flavor="mu", charge="plus", syst="QCDscale_q0muR", ratio=1.03)
-    #doPlot(flavor="mu", charge="plus", syst="QCDscale_q0muRmuF", ratio=1.03)
-    #doPlot(flavor="mu", charge="plus", syst="QCDscale_q1muF", ratio=1.03)
-    #doPlot(flavor="mu", charge="plus", syst="QCDscale_q1muR", ratio=1.03)
-    #doPlot(flavor="mu", charge="plus", syst="QCDscale_q1muRmuF", ratio=1.03)
+    doPlot(flavor="mu", charge="plus", syst="QCDscale_q0muF", ratio=1.03)
+    doPlot(flavor="mu", charge="plus", syst="QCDscale_q0muR", ratio=1.03)
+    doPlot(flavor="mu", charge="plus", syst="QCDscale_q0muRmuF", ratio=1.03)
+    doPlot(flavor="mu", charge="plus", syst="QCDscale_q1muF", ratio=1.03)
+    doPlot(flavor="mu", charge="plus", syst="QCDscale_q1muR", ratio=1.03)
+    doPlot(flavor="mu", charge="plus", syst="QCDscale_q1muRmuF", ratio=1.03)
+    doPlot(flavor="mu", charge="minus", syst="QCDscale_q0muF", ratio=1.03)
+    doPlot(flavor="mu", charge="minus", syst="QCDscale_q0muR", ratio=1.03)
+    doPlot(flavor="mu", charge="minus", syst="QCDscale_q0muRmuF", ratio=1.03)
+    doPlot(flavor="mu", charge="minus", syst="QCDscale_q1muF", ratio=1.03)
+    doPlot(flavor="mu", charge="minus", syst="QCDscale_q1muR", ratio=1.03)
+    doPlot(flavor="mu", charge="minus", syst="QCDscale_q1muRmuF", ratio=1.03)
     
     #doPlot(flavor="mu", charge="plus", syst="pdf100NNPDF31", ratio=1.03)
 

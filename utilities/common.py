@@ -10,6 +10,15 @@ wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "Wplust
 zprocs = ["ZmumuPostVFP", "ZtautauPostVFP"]
 vprocs = wprocs+zprocs
 
+wprocs_lowpu = ["WminusJetsToMuNu", "WminusJetsToENu", "WminusJetsToTauNu", "WplusJetsToMuNu", "WplusJetsToENu", "WplusJetsToTauNu"]
+zprocs_lowpu = ["Zmumu", "Zee", "Ztautau"]
+zprocs_recoil = ["Zmumu", "Zee"]
+vprocs_lowpu = wprocs_lowpu+zprocs_lowpu
+
+# unfolding axes for low pu
+axis_recoil_reco_ptZ = hist.axis.Variable([0, 5, 10, 15, 20, 30, 40, 50, 60, 75, 90, 150], name = "recoil_reco", underflow=False, overflow=True)
+axis_recoil_gen_ptZ = hist.axis.Variable([0.0, 10.0, 20.0, 40.0, 60.0, 90.0, 150], name = "recoil_gen", underflow=False, overflow=True)
+
 # standard regular axes
 axis_eta = hist.axis.Regular(48, -2.4, 2.4, name = "eta")
 axis_pt = hist.axis.Regular(29, 26., 55., name = "pt")
@@ -66,3 +75,20 @@ def common_parser():
     parser.add_argument("--no_recoil", action='store_true', help="Don't apply recoild correction")
     parser.add_argument("--vertex_weight", action='store_true', help="Apply reweighting of vertex z distribution in MC to match data")
     return parser,initargs
+
+def common_parser_combine():
+    from wremnants import theory_tools
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-d", "--baseDir", type=str, default="combineResults", help="base output folder")
+    parser.add_argument("-o", "--outfolder", type=str, default="", help="Main output folder, with the root file storing all histograms and datacards for single charge")
+    parser.add_argument("-i", "--inputFile", type=str)
+    parser.add_argument("--qcdScale", choices=["byHelicityPt", "byHelicityPtCharge", "byHelicityCharge", "byPtCharge", "byPt", "byCharge", "integrated",], default="byHelicityPtCharge", 
+            help="Decorrelation for QCDscale")
+    parser.add_argument("--rebinPtV", type=float, nargs='*', help="Rebin axis with gen boson pt by this value (default does nothing)")
+    parser.add_argument("--scetlibUnc", action='store_true', help="Include SCETlib uncertainties")
+    parser.add_argument("--pdf", type=str, default="nnpdf31", choices=theory_tools.pdfMapExtended.keys(), help="PDF to use")
+    parser.add_argument("-b", "--fitObs", type=str, default="nominal", help="Observable to fit") # TODO: what does it do?
+    parser.add_argument("--noQCDscaleFakes", dest="noQCDscaleFakes" , action="store_true",   help="Do not apply QCd scale uncertainties on fakes, mainly for debugging")
+    parser.add_argument("--doStatOnly", action="store_true", default=False, help="Set up fit to get stat-only uncertainty (currently combinetf with -S 0 doesn't work)")
+    parser.add_argument("--debug", action='store_true', help="Print debug output")
+    return parser

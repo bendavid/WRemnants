@@ -2,12 +2,12 @@ from utilities import common
 from wremnants import syst_tools
 import numpy as np
 
-def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append="", scetlib=False, use_hel_hist=False, rebin_pt=None):
+def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, pdf, name_append="", scetlib=False, use_hel_hist=False, rebin_pt=None):
     inclusiveScale = scale_type == "integrated"
     helicity = "Helicity" in scale_type
     pt_binned = "Pt" in scale_type
 
-    scale_hist = "qcdScale" if not helicity else "qcdScaleByHelicity"
+    scale_hist = "qcdScale" if not (helicity or use_hel_hist) else "qcdScaleByHelicity"
     # All possible syst_axes
     # TODO: Move the axes to common and refer to axis_chargeVgen etc by their name attribute, not just
     # assuming the name is unchanged
@@ -29,8 +29,10 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
     scaleActionArgs = {}
     action_map = {}
     sum_axes = ["ptVgen", "chargeVgen",]
-    if use_hel_hist:
+    if use_hel_hist or helicity:
         sum_axes.append("helicity")
+    if card_tool.histName == "reco_mll":
+        sum_axes.append("reco_gen")
 
     action_map = {proc : syst_tools.scale_helicity_hist_to_variations for proc in samples}
         
@@ -54,7 +56,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
         action_args["rebinPtV"] = rebin_pt
 
     # Skip extreme muR/muF values for all bin combos (-1 = any)
-    nsyst_dims = len(syst_axes)-len(sum_axes)
+    nsyst_dims = len(syst_axes)
     skip_entries = [(*[-1]*(nsyst_dims-2),*x) for x in skip_entries]
 
     if scetlib:
@@ -73,11 +75,11 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
 
             skip_entries.extend([(complex(0, x), *other) for other in other_dims for x in binning[:pt30_idx-1]])
         elif helicity:
-            skip_entries.append([(*[-1]*(nsyst_dims-2), -1.j, -1, -1)
+            skip_entries.append((*[-1]*(nsyst_dims-2), -1.j, -1, -1))
         
         # TODO: Implement pT splitting for SCETlib
         nscetlib_vars=45
-        common_args = dict(name="scetlibMSHT20Corr_unc",
+        common_args = dict(name=f"scetlib{pdf if pdf != 'nnpdf31' else ''}Corr_unc",
             processes=samples,
             group=group_name,
             systAxes=["vars"],
@@ -95,15 +97,16 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
         expanded_samples = card_tool.datagroups.getProcNames(samples)
         common_args["systAxes"] = ["downUpVar"]
         common_args["labelsByAxis"] = ["downUpVar"]
+        axes = ["recoil_reco"] if card_tool.histName == "reco_mll" else ["pt", "eta"] 
         card_tool.addSystematic(**common_args,
             # TODO: Should support other variables in the fit
-            actionMap={s : lambda h: syst_tools.uncertainty_hist_from_envelope(h, ["pt", "eta"], range(5, 9)) for s in expanded_samples},
+            actionMap={s : lambda h: syst_tools.uncertainty_hist_from_envelope(h, axes, range(5, 9)) for s in expanded_samples},
             baseName="resumTransition", 
             rename="scetlibCorr_resumTrans", 
         )
         card_tool.addSystematic(**common_args,
             # TODO: Should support other variables in the fit
-            actionMap={s : lambda h: syst_tools.uncertainty_hist_from_envelope(h, ["pt", "eta"], range(9, 45)) for s in expanded_samples},
+            actionMap={s : lambda h: syst_tools.uncertainty_hist_from_envelope(h, axes, range(9, 45)) for s in expanded_samples},
             baseName="resumScale", 
             rename="scetlibCorr_resumScale", 
         )

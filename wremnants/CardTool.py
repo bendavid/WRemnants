@@ -71,11 +71,11 @@ class CardTool(object):
         elif isinstance(procs, list):
             self.noStatUncProcesses.extend(procs)
         else:
-            raise ValueError("In setNoStatUncForProcs(): expecting string or list argument")            
+            raise ValueError("In setNoStatUncForProcs(): expecting string or list argument")
     
     def setLumiScale(self, lumiScale):
         self.lumiScale = lumiScale
-
+        
     def getProcsNoStatUnc(self):
         return self.noStatUncProcesses
         
@@ -109,7 +109,7 @@ class CardTool(object):
         return self.fakeName
 
     def setPseudodata(self, pseudodata):
-        self.pseudoData = pseudodata
+        self.pseudoData = pseudodata.replace("nominal", self.nominalName)
 
     # Needs to be increased from default for long proc names
     def setSpacing(self, spacing):
@@ -139,6 +139,10 @@ class CardTool(object):
 
     def setHistName(self, histName):
         self.histName = histName
+
+    def setNominalName(self, histName):
+        self.nominalName = histName
+        self.datagroups.setNominalName(histName)
 
     def isData(self, procName):
         return any([x.is_data for x in self.datagroups.groups[procName]["members"]])
@@ -226,7 +230,8 @@ class CardTool(object):
             nsyst_ax = len(self.systematics[syst]["systAxes"])+self.systematics[syst]["mirror"]
             if len(skipEntry) != nsyst_ax:
                 raise ValueError(f"Error in syst {syst}. skipEntry must specify a value per axis. "
-                        f"Found {nsyst_ax} axes but {len(skipEntry)} entries were given")
+                        f"Found {nsyst_ax} axes ({self.systematics[syst]['systAxes']}) but {len(skipEntry)} "
+                        "entries were given")
             # The lookup is handled by passing an imaginary number,
             # so detect these and then call the bin lookup on them
             # np.iscomplex returns false for 0.j, but still want to detect that

@@ -11,6 +11,25 @@ from utilities import boostHistHelpers as hh, common
 from wremnants import theory_tools
 import logging
 
+
+def load_corr_helpers(procs, generators):
+    corr_helpers = {}
+    for proc in procs:
+        corr_helpers[proc] = {}
+        for generator in generators:
+            fname = f"{common.data_dir}/TheoryCorrections/{generator}Corr{proc[0]}.pkl.lz4"
+            if not os.path.isfile(fname):
+                logging.warning(f"Did not find correction file for process {proc}, generator {generator}. No correction will be applied for this process!")
+                continue
+            helper_func = make_corr_helper if "Helicity" not in generator else make_corr_by_helicity_helper
+            corr_hist_name = f"{generator}_minnlo_ratio" if "Helicity" not in generator else f"{generator.replace('Helicity', '')}_minnlo_coeffs"
+            corr_helpers[proc][generator] = helper_func(fname, proc[0], corr_hist_name)
+    for generator in generators:
+        if not any([generator in corr_helpers[proc] for proc in procs]):
+            raise ValueError(f"Did not find correction for generator {generator} for any processes!")
+    return corr_helpers
+
+
 def make_corr_helper_fromnp(filename=f"{common.data_dir}/N3LLCorrections/inclusive_{{process}}_pT.npz", isW=True):
     if isW:
         corrf_Wp = np.load(filename.format(process="Wp"), allow_pickle=True)
