@@ -7,7 +7,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, pdf, name_ap
     helicity = "Helicity" in scale_type
     pt_binned = "Pt" in scale_type
 
-    scale_hist = "qcdScale" if not helicity else "qcdScaleByHelicity"
+    scale_hist = "qcdScale" if not (helicity or use_hel_hist) else "qcdScaleByHelicity"
     # All possible syst_axes
     # TODO: Move the axes to common and refer to axis_chargeVgen etc by their name attribute, not just
     # assuming the name is unchanged
@@ -29,11 +29,10 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, pdf, name_ap
     scaleActionArgs = {}
     action_map = {}
     sum_axes = ["ptVgen", "chargeVgen",]
+    if use_hel_hist or helicity:
+        sum_axes.append("helicity")
     if card_tool.histName == "reco_mll":
         sum_axes.append("reco_gen")
-    if use_hel_hist:
-        scale_hist = "qcdScaleByHelicity"
-        sum_axes.append("helicity")
 
     action_map = {proc : syst_tools.scale_helicity_hist_to_variations for proc in samples}
         

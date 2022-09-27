@@ -109,7 +109,7 @@ class CardTool(object):
         return self.fakeName
 
     def setPseudodata(self, pseudodata):
-        self.pseudoData = pseudodata
+        self.pseudoData = pseudodata.replace("nominal", self.nominalName)
 
     # Needs to be increased from default for long proc names
     def setSpacing(self, spacing):
