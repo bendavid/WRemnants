@@ -71,7 +71,7 @@ axis_ptVgen = hist.axis.Variable(
 axis_mt = hist.axis.Variable([0] + list(range(40, 110, 1)) + [110, 112, 114, 116, 118, 120, 125, 130, 140, 160, 180, 200], name = "mt",underflow=False, overflow=True)
 axis_eta_mT = hist.axis.Variable([-2.4, 2.4], name = "eta")
 
-muon_efficiency_helper, muon_efficiency_helper_stat, muon_efficiency_helper_syst = wremnants.make_muon_efficiency_helpers(era = era, max_pt = axis_pt.edges[-1])
+muon_efficiency_helper, muon_efficiency_helper_stat, muon_efficiency_helper_stat_tracking, muon_efficiency_helper_stat_reco, muon_efficiency_helper_syst = wremnants.make_muon_efficiency_helpers(era = era, max_pt = axis_pt.edges[-1])
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
 vertex_helper = wremnants.make_vertex_helper(era = era)
@@ -126,7 +126,9 @@ def build_graph(df, dataset):
             df = df.Alias("Muon_correctedEta", "Muon_eta")
             df = df.Alias("Muon_correctedPhi", "Muon_phi")
             df = df.Alias("Muon_correctedCharge", "Muon_charge")
-
+        
+    #standalone quantities, currently only in data and W/Z samples
+            
     # n.b. charge = -99 is a placeholder for invalid track refit/corrections (mostly just from tracks below
     # the pt threshold of 8 GeV in the nano production)
     df = df.Define("vetoMuonsPre", "Muon_looseId && abs(Muon_dxybs) < 0.05 && Muon_correctedCharge != -99")
@@ -134,13 +136,23 @@ def build_graph(df, dataset):
     df = df.Filter("Sum(vetoMuons) == 1")
     df = df.Define("goodMuons", "vetoMuons && Muon_mediumId && Muon_isGlobal")
     df = df.Filter("Sum(goodMuons) == 1")
-    
+
     df = df.Define("goodMuons_pt0", "Muon_correctedPt[goodMuons][0]")
     df = df.Define("goodMuons_eta0", "Muon_correctedEta[goodMuons][0]")
     df = df.Define("goodMuons_abseta0", "abs(goodMuons_eta0)")
     df = df.Define("goodMuons_phi0", "Muon_correctedPhi[goodMuons][0]")
     df = df.Define("goodMuons_charge0", "Muon_correctedCharge[goodMuons][0]")
 
+    if dataset.group in ["Top", "Diboson"]:
+        df = df.Alias("goodMuons_SApt0",  "goodMuons_pt0")
+        df = df.Alias("goodMuons_SAeta0", "goodMuons_eta0")
+        df = df.Alias("goodMuons_SAphi0", "goodMuons_phi0")
+    else:
+        df = df.Define("goodMuons_SApt0",  "Muon_standalonePt[goodMuons][0]")
+        df = df.Define("goodMuons_SAeta0", "Muon_standaloneEta[goodMuons][0]")
+        df = df.Define("goodMuons_SAphi0", "Muon_standalonePhi[goodMuons][0]")
+    df = df.Filter("goodMuons_SApt0 > 15.0 && deltaR2(goodMuons_SAeta0, goodMuons_SAphi0, goodMuons_eta0, goodMuons_phi0) < 0.09")
+    
     df = df.Define("goodMuons_pfRelIso04_all0", "Muon_pfRelIso04_all[goodMuons][0]")
 
     #TODO improve this to include muon mass?
@@ -157,9 +169,10 @@ def build_graph(df, dataset):
     df = df.Filter("passMT || Sum(goodCleanJets)>=1")
     df = df.Define("passIso", "goodMuons_pfRelIso04_all0 < 0.15")
 
-    df = df.Define("goodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_pt,TrigObj_l1pt,TrigObj_l2pt,TrigObj_filterBits)")
-    # TODO: when new SF are available move to the following trigger matching
-    # df = df.Define("goodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_filterBits)")
+    if dataset.group in ["Top", "Diboson"]:
+        df = df.Define("goodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_pt,TrigObj_l1pt,TrigObj_l2pt,TrigObj_filterBits)")
+    else:
+        df = df.Define("goodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_filterBits)")
     df = df.Filter("wrem::hasTriggerMatch(goodMuons_eta0,goodMuons_phi0,TrigObj_eta[goodTrigObjs],TrigObj_phi[goodTrigObjs])")
     df = df.Filter("Flag_globalSuperTightHalo2016Filter && Flag_EcalDeadCellTriggerPrimitiveFilter && Flag_goodVertices && Flag_HBHENoiseIsoFilter && Flag_HBHENoiseFilter && Flag_BadPFMuonFilter")
 
@@ -188,7 +201,7 @@ def build_graph(df, dataset):
     else:
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
         df = df.Define("weight_vtx", vertex_helper, ["GenVtx_z", "Pileup_nTrueInt"])
-        df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0", "passIso"])
+        df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso"])
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId"])
 
         weight_expr = "weight*weight_pu*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom"
@@ -222,24 +235,28 @@ def build_graph(df, dataset):
 
         
         df = df.Define("effStatTnP_tensor", muon_efficiency_helper_stat, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0", "passIso", "nominal_weight"])
-
         effStatTnP = df.HistoBoost("effStatTnP", nominal_axes, [*nominal_cols, "effStatTnP_tensor"], tensor_axes = muon_efficiency_helper_stat.tensor_axes)
         results.append(effStatTnP)
 
-        df = df.Define("effSystTnP_weight", muon_efficiency_helper_syst, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0", "passIso", "nominal_weight"])
+        df = df.Define("zero", "0")
+        df = df.Define("unity", "1")
+        df = df.Define("effStatTnP_tracking_tensor", muon_efficiency_helper_stat_tracking, ["goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "unity", "nominal_weight"])
+        effStatTnP_tracking = df.HistoBoost("effStatTnP_tracking", nominal_axes, [*nominal_cols, "effStatTnP_tracking_tensor"], tensor_axes = muon_efficiency_helper_stat_tracking.tensor_axes)
+        results.append(effStatTnP_tracking)
 
+        df = df.Define("effStatTnP_reco_tensor", muon_efficiency_helper_stat_reco, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0", "zero", "nominal_weight"])
+        effStatTnP_reco = df.HistoBoost("effStatTnP_reco", nominal_axes, [*nominal_cols, "effStatTnP_reco_tensor"], tensor_axes = muon_efficiency_helper_stat_reco.tensor_axes)
+        results.append(effStatTnP_reco)
+        
+        df = df.Define("effSystTnP_weight", muon_efficiency_helper_syst, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso", "nominal_weight"])
         effSystTnP = df.HistoBoost("effSystTnP", nominal_axes, [*nominal_cols, "effSystTnP_weight"], tensor_axes = muon_efficiency_helper_syst.tensor_axes)
         results.append(effSystTnP)
 
-        #FIXME skipping EffTrackingRecoTnP_ since it's not consistently defined yet
-
         df = df.Define("muonL1PrefireStat_tensor", muon_prefiring_helper_stat, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId", "nominal_weight"])
-
         muonL1PrefireStat = df.HistoBoost("muonL1PrefireStat", nominal_axes, [*nominal_cols, "muonL1PrefireStat_tensor"], tensor_axes = muon_prefiring_helper_stat.tensor_axes)
         results.append(muonL1PrefireStat)
 
         df = df.Define("muonL1PrefireSyst_tensor", muon_prefiring_helper_syst, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId", "nominal_weight"])
-
         muonL1PrefireSyst = df.HistoBoost("muonL1PrefireSyst", nominal_axes, [*nominal_cols, "muonL1PrefireSyst_tensor"], tensor_axes = [common.down_up_axis])
         results.append(muonL1PrefireSyst)
 
