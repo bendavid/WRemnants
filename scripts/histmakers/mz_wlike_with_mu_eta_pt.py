@@ -82,7 +82,7 @@ axis_phistarll = hist.axis.Regular(20, -math.pi, math.pi, circular = True, name 
 
 # extra axes which can be used to label tensor_axes
 
-muon_efficiency_helper, muon_efficiency_helper_stat, muon_efficiency_helper_syst = wremnants.make_muon_efficiency_helpers(era = era, max_pt = axis_pt.edges[-1], is_w_like = True)
+muon_efficiency_helper, muon_efficiency_helper_stat, muon_efficiency_helper_stat_tracking, muon_efficiency_helper_stat_reco, muon_efficiency_helper_syst = wremnants.make_muon_efficiency_helpers(era = era, max_pt = axis_pt.edges[-1], is_w_like = True)
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
 
@@ -170,8 +170,8 @@ def build_graph(df, dataset):
         df = df.Define("NonTrigMuon_SApt",  "Muon_standalonePt[nonTrigMuons][0]")
         df = df.Define("NonTrigMuon_SAeta", "Muon_standaloneEta[nonTrigMuons][0]")
         df = df.Define("NonTrigMuon_SAphi", "Muon_standalonePhi[nonTrigMuons][0]")
-    df = df.Filter("TrigMuon_SApt0 > 15.0 && deltaR2(TrigMuon_SAeta0, TrigMuon_SAphi0, goodMuons_eta0, goodMuons_phi0) < 0.09")
-    df = df.Filter("NonTrigMuon_SApt0 > 15.0 && deltaR2(NonTrigMuon_SAeta0, NonTrigMuon_SAphi0, goodMuons_eta0, goodMuons_phi0) < 0.09")
+    df = df.Filter("TrigMuon_SApt0 > 15.0 && wrem::deltaR2(TrigMuon_SAeta0, TrigMuon_SAphi0, goodMuons_eta0, goodMuons_phi0) < 0.09")
+    df = df.Filter("NonTrigMuon_SApt0 > 15.0 && wrem::deltaR2(NonTrigMuon_SAeta0, NonTrigMuon_SAphi0, goodMuons_eta0, goodMuons_phi0) < 0.09")
     
     df = df.Define("vetoElectrons", "Electron_pt > 10 && Electron_cutBased > 0 && abs(Electron_eta) < 2.4 && abs(Electron_dxy) < 0.05 && abs(Electron_dz)< 0.2")
 
