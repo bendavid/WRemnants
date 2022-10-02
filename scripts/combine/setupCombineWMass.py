@@ -141,11 +141,12 @@ def main(args):
     )
 
     if not args.noEfficiencyUnc:
-        for name,num in zip(["effSystTnP", "effStatTnP",], [2, 624*4]):
+        for name,num in zip(["effSystTnP", "effStatTnP",], [4, 624*4]):
             ## TODO: this merged implementation for the effstat makes it very cumbersome to do things differently for iso and trigidip!!
             ## the problem is that I would need custom actions inside based on actual nuisance names, which needs to be commanded from outside, and this is not straightforward
-            axes = ["idiptrig-iso"] if num == 2 else ["SF eta", "SF pt", "SF charge", "idiptrig-iso"]
-            axlabels = ["Trig"] if num == 2 else ["eta", "pt", "q", "Trig"]  # WARNING: Trig0/Trig1 actually stands for trigger/isolation, the axis name was intended to indicate the order "axis_idiptrig_iso"
+            axes = ["reco-tracking-idiptrig-iso"] if num == 4 else ["SF eta", "SF pt", "SF charge", "idiptrig-iso"]
+            axlabels = ["WPSYST"] if num == 4 else ["eta", "pt", "q", "Trig"]  # WARNING: Trig0/Trig1 actually stands for trigger/isolation, the axis name was intended to indicate the order "axis_idiptrig_iso"
+            nameReplace = [("WPSYST0", "Reco"), ("WPSYST1", "Tracking"), ("WPSYST2", "IDIPTrig"), ("WPSYST3", "Iso")] if num == 4 else [("Trig0", "IDIPTrig"), ("q0Trig1", "Iso"), ("q1Trig1", "Iso")] if args.correlateEffStatIsoByCharge else [("Trig0", "IDIPTrig"), ("Trig1", "Iso")], # replace with better names
             cardTool.addSystematic(name, 
                 mirror=True,
                 group="muon_eff_syst" if "Syst" in name else "muon_eff_stat", # TODO: for now better checking them separately
@@ -154,7 +155,7 @@ def main(args):
                 baseName=name+"_",
                 processes=cardTool.allMCProcesses(),
                 passToFakes=passSystToFakes,
-                systNameReplace=[("Trig0", "IDIPTrig"), ("q0Trig1", "Iso"), ("q1Trig1", "Iso")] if args.correlateEffStatIsoByCharge else [("Trig0", "IDIPTrig"), ("Trig1", "Iso")], # replace with better names
+                systNameReplace=nameReplace
                 scale=1.0 if "Syst" in name  else {".*effStatTnP.*Iso" : "1.414", ".*effStatTnP.*IDIPTrig" : "1.0"} if not args.correlateEffStatIsoByCharge else 1.0 # only for iso, scale up by sqrt(2) when decorrelating between charges and efficiencies were derived inclusively
             )
 

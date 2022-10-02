@@ -138,7 +138,7 @@ def make_muon_efficiency_helpers(filename = data_dir + "/testMuonSF/scaleFactorP
     sf_tracking_pyroot = narf.hist_to_pyroot_boost(sf_tracking)
     sf_reco_pyroot = narf.hist_to_pyroot_boost(sf_reco)
 
-    helper = ROOT.wrem.muon_efficiency_helper[str(is_w_like).lower(), netabins, nptbins,
+    helper = ROOT.wrem.muon_efficiency_helper[str(is_w_like).lower(),
                                               type(sf_idip_trig_iso_pyroot),
                                               type(sf_tracking_pyroot),
                                               type(sf_reco_pyroot)](
@@ -150,10 +150,6 @@ def make_muon_efficiency_helpers(filename = data_dir + "/testMuonSF/scaleFactorP
     helper_stat = ROOT.wrem.muon_efficiency_helper_stat[str(is_w_like).lower(), netabins, nptbins, type(sf_idip_trig_iso_pyroot), type(sf_tracking_pyroot), type(sf_reco_pyroot)](helper)
     helper_stat_tracking = ROOT.wrem.muon_efficiency_helper_singleStep_stat[str(is_w_like).lower(), netabins, nptbins_tracking, type(sf_idip_trig_iso_pyroot), type(sf_tracking_pyroot), type(sf_reco_pyroot)](helper)
     helper_stat_reco     = ROOT.wrem.muon_efficiency_helper_singleStep_stat[str(is_w_like).lower(), netabins, nptbins_reco,     type(sf_idip_trig_iso_pyroot), type(sf_tracking_pyroot), type(sf_reco_pyroot)](helper)
-
-    #TODO make this a categorical once we can disable overflow
-    axis_idiptrig_iso = hist.axis.Integer(0, 2, underflow = False, overflow = False, name = "idiptrig-iso") # for stat variations with idiptrig and iso
-    axis_reco_tracking_idiptrig_iso = hist.axis.Integer(0, 4, underflow = False, overflow = False, name = "reco-tracking-idiptrig-iso") # for syst variations with all steps (idiptrig is one single piece)
 
     # make new versions of these axes without overflow/underflow to index the tensor
     if isinstance(axis_eta_eff, bh.axis.Regular):
@@ -177,12 +173,16 @@ def make_muon_efficiency_helpers(filename = data_dir + "/testMuonSF/scaleFactorP
     elif isinstance(axis_pt_eff, bh.axis.Variable):
         axis_pt_eff_tensor_reco = hist.axis.Variable(axis_pt_eff_reco.edges[:nptbins_reco+1], name = axis_pt_eff_reco.name, overflow = False, underflow = False)
 
+    #TODO make this a categorical once we can disable overflow
+    axis_idiptrig_iso = hist.axis.Integer(0, 2, underflow = False, overflow = False, name = "idiptrig-iso") # for stat variations with idiptrig and iso
+    axis_reco_tracking_idiptrig_iso = hist.axis.Integer(0, 4, underflow = False, overflow = False, name = "reco-tracking-idiptrig-iso") # for syst variations with all steps (idiptrig is one single piece)
+
     # attach tensor axes to the stat helper
     helper_stat.tensor_axes = [axis_eta_eff_tensor, axis_pt_eff_tensor, axis_charge, axis_idiptrig_iso]
     helper_stat_tracking.tensor_axes = [axis_eta_eff_tensor, axis_pt_eff_tensor_tracking, axis_charge]
     helper_stat_reco.tensor_axes = [axis_eta_eff_tensor, axis_pt_eff_tensor_reco, axis_charge]
 
-    helper_syst = ROOT.wrem.muon_efficiency_helper_syst[str(is_w_like).lower(), netabins, nptbins, type(sf_idip_trig_iso_pyroot), type(sf_tracking_pyroot), type(sf_tracking_pyroot)](helper)
-    helper_syst.tensor_axes = [axis_reco_tracking_idiptrig_iso]
+    #helper_syst = ROOT.wrem.muon_efficiency_helper_syst[str(is_w_like).lower(), type(sf_idip_trig_iso_pyroot), type(sf_tracking_pyroot), type(sf_tracking_pyroot)](helper)
+    #helper_syst.tensor_axes = [axis_reco_tracking_idiptrig_iso]
 
-    return helper, helper_stat, helper_stat_tracking, helper_stat_reco, helper_syst
+    return helper, helper_stat, helper_stat_tracking, helper_stat_reco, None #helper_syst
