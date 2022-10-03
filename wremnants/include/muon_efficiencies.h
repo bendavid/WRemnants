@@ -152,7 +152,6 @@ namespace wrem {
     public:
 
         using base_t = muon_efficiency_helper_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
-
         // inherit constructor
         using base_t::base_t;
 
@@ -171,7 +170,6 @@ namespace wrem {
     public:
 
         using base_t = muon_efficiency_helper_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
-
         // inherit constructor
         using base_t::base_t;
 
@@ -290,6 +288,9 @@ namespace wrem {
     public:
 
         using base_t = muon_efficiency_helper_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
+        // inherit constructor
+        using base_t::base_t;
+
         using tensor_t = typename base_t::syst_tensor_t;
 
         muon_efficiency_helper_syst(const base_t &other) : base_t(other) {}
@@ -309,6 +310,9 @@ namespace wrem {
     public:
 
         using base_t = muon_efficiency_helper_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
+        // inherit constructor
+        using base_t::base_t;
+
         using tensor_t = typename base_t::syst_tensor_t;
 
         muon_efficiency_helper_syst(const base_t &other) : base_t(other) {}
@@ -335,12 +339,9 @@ namespace wrem {
     public:
 
         using base_t = muon_efficiency_helper_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
+        using stat_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<NEtaBins, NPtBins, 2, 2>>;
         // inherit constructor
         using base_t::base_t;
-
-        muon_efficiency_helper_stat_base(const base_t &other) : base_t(other) {}
-        
-        using stat_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<NEtaBins, NPtBins, 2, 2>>;
 
         stat_tensor_t sf_idip_trig_iso_stat_var(float pt, float eta, int charge, bool pass_iso, bool with_trigger) const {
             stat_tensor_t res;
@@ -434,15 +435,15 @@ namespace wrem {
         
     public:
         
-        using base_t = muon_efficiency_helper_stat_base<NEtaBins, NPtBins, HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
+        using base_t = muon_efficiency_helper_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
+        using stat_base_t = muon_efficiency_helper_stat_base<NEtaBins, NPtBins, HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
+        using tensor_t = typename stat_base_t::stat_tensor_t;
   
         muon_efficiency_helper_stat(const base_t &other) : base_t(other) {}
-
-        using tensor_t = typename base_t::stat_tensor_t;
         
         tensor_t operator() (float pt, float eta, int charge, bool pass_iso, double nominal_weight = 1.0) {
             constexpr bool with_trigger = true;
-            return nominal_weight*base_t::sf_idip_trig_iso_stat_var(pt, eta, charge, pass_iso, with_trigger);
+            return nominal_weight*stat_base_t::sf_idip_trig_iso_stat_var(pt, eta, charge, pass_iso, with_trigger);
         }
 
     };
@@ -454,8 +455,9 @@ namespace wrem {
 
     public:
 
-        using base_t = muon_efficiency_helper_stat_base<NEtaBins, NPtBins, HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
-        using tensor_t = typename base_t::stat_tensor_t;
+        using base_t = muon_efficiency_helper_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
+        using stat_base_t = muon_efficiency_helper_stat_base<NEtaBins, NPtBins, HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
+        using tensor_t = typename stat_base_t::stat_tensor_t;
 
         muon_efficiency_helper_stat(const base_t &other) : base_t(other) {}
 
@@ -485,13 +487,14 @@ namespace wrem {
 
     public:
 
-        using base_t = muon_efficiency_helper_stat_base<NEtaBins, NPtBins, HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
-        using tensor_t = typename base_t::stat_tensor_singleStep_t;
+        using base_t = muon_efficiency_helper_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
+        using stat_base_t = muon_efficiency_helper_stat_base<NEtaBins, NPtBins, HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
+        using tensor_t = typename stat_base_t::stat_tensor_singleStep_t;
 
         muon_efficiency_helper_singleStep_stat(const base_t &other) : base_t(other) {}
 
         tensor_t operator() (float pt, float eta, int charge, int step, double nominal_weight = 1.0) {
-            return nominal_weight*base_t::sf_singleStep_stat_var(pt, eta, charge, step);
+            return nominal_weight*stat_base_t::sf_singleStep_stat_var(pt, eta, charge, step);
         }
 
     };
@@ -503,19 +506,17 @@ namespace wrem {
 
     public:
 
-        using base_t = muon_efficiency_helper_stat_base<NEtaBins, NPtBins, HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
-        using tensor_t = typename base_t::stat_tensor_singleStep_t;
+        using base_t = muon_efficiency_helper_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
+        using stat_base_t = muon_efficiency_helper_stat_base<NEtaBins, NPtBins, HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
+        using tensor_t = typename stat_base_t::stat_tensor_singleStep_t;
 
         muon_efficiency_helper_singleStep_stat(const base_t &other) : base_t(other) {}
 
         tensor_t operator() (float trig_pt, float trig_eta, int trig_charge,
                              float nontrig_pt, float nontrig_eta, int nontrig_charge,
                              int step, double nominal_weight = 1.0) {
-
-            const tensor_t variation_trig = base_t::sf_singleStep_stat_var(trig_pt, trig_eta, trig_charge, step);
-
-            const tensor_t variation_nontrig = base_t::sf_singleStep_stat_var(nontrig_pt, nontrig_eta, nontrig_charge, step);
-
+            const tensor_t variation_trig = stat_base_t::sf_singleStep_stat_var(trig_pt, trig_eta, trig_charge, step);
+            const tensor_t variation_nontrig = stat_base_t::sf_singleStep_stat_var(nontrig_pt, nontrig_eta, nontrig_charge, step);
             return nominal_weight*variation_trig*variation_nontrig;
         }
 
