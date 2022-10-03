@@ -340,8 +340,6 @@ namespace wrem {
 
         using base_t = muon_efficiency_helper_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
         using stat_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<NEtaBins, NPtBins, 2, 2>>;
-        // inherit constructor
-        using base_t::base_t;
 
         stat_tensor_t sf_idip_trig_iso_stat_var(float pt, float eta, int charge, bool pass_iso, bool with_trigger) const {
             stat_tensor_t res;
