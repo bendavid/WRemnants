@@ -182,7 +182,10 @@ def make_muon_efficiency_helpers(filename = data_dir + "/testMuonSF/scaleFactorP
     helper_stat_tracking.tensor_axes = [axis_eta_eff_tensor, axis_pt_eff_tensor_tracking, axis_charge]
     helper_stat_reco.tensor_axes = [axis_eta_eff_tensor, axis_pt_eff_tensor_reco, axis_charge]
 
-    helper_syst = ROOT.wrem.muon_efficiency_helper_syst[str(is_w_like).lower(), type(sf_idip_trig_iso_pyroot), type(sf_tracking_pyroot), type(sf_tracking_pyroot)](helper)
+    helper_syst = ROOT.wrem.muon_efficiency_helper_syst[str(is_w_like).lower(),
+                                                        type(sf_idip_trig_iso_pyroot),
+                                                        type(sf_tracking_pyroot),
+                                                        type(sf_tracking_pyroot)](helper)
     helper_syst.tensor_axes = [axis_reco_tracking_idiptrig_iso]
 
     return helper, helper_stat, helper_stat_tracking, helper_stat_reco, helper_syst

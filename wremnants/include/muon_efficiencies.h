@@ -47,6 +47,84 @@ namespace wrem {
             return idip*iso*tracking*reco;
         }
 
+        using syst_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<4>>; // 4 bins for idip(*trigger), iso(notrig), reco, tracking, in this order
+
+        syst_tensor_t sf_syst_var(float pt, float eta, float sapt, float saeta, int charge, bool pass_iso, bool with_trigger) const {
+            syst_tensor_t res;
+
+            auto const eta_idx =     sf_idip_trig_iso_->template axis<0>().index(eta);
+            auto const pt_idx =      sf_idip_trig_iso_->template axis<1>().index(pt);
+            auto const pt_idx_reco = sf_reco_->template axis<1>().index(pt);
+            auto const saeta_idx =   sf_tracking_->template axis<0>().index(saeta);
+            auto const sapt_idx =    sf_tracking_->template axis<0>().index(sapt);
+            auto const charge_idx =  sf_idip_trig_iso_->template axis<2>().index(charge);
+            auto const eff_type_idx_idip_trig = with_trigger ? idx_idip_trig_          : idip_idx_;
+            auto const eff_type_idx_iso_pass =  with_trigger ? idx_iso_triggering_     : idx_iso_nontriggering_;
+            auto const eff_type_idx_iso_fail =  with_trigger ? idx_antiiso_triggering_ : idx_antiiso_nontriggering_;
+            auto const eff_type_idx_iso = pass_iso ? eff_type_idx_iso_pass : eff_type_idx_iso_fail;
+
+            const double sf_reco = sf_reco_->at(eta_idx,
+                                                pt_idx_reco,
+                                                charge_idx,
+                                                idx_nom_).value();
+            
+            const double sf_reco_alt = sf_reco_->at(eta_idx,
+                                                    pt_idx_reco,
+                                                    charge_idx,
+                                                    idx_alt_).value();
+            
+            const double variation_factor_reco = sf_reco_alt/sf_reco;
+            res(0) = variation_factor_reco;
+
+            const double sf_tracking = sf_tracking_->at(saeta_idx,
+                                                        sapt_idx,
+                                                        charge_idx,
+                                                        idx_nom_).value();
+    
+            const double sf_tracking_alt = sf_tracking_->at(saeta_idx,
+                                                            sapt_idx,
+                                                            charge_idx,
+                                                            idx_alt_).value();
+
+            const double variation_factor_tracking = sf_tracking_alt/sf_tracking;
+            res(1) = variation_factor_tracking;
+
+            const double sf_idip_trig = sf_idip_trig_iso_->at(eta_idx,
+                                                              pt_idx,
+                                                              charge_idx,
+                                                              eff_type_idx_idip_trig,
+                                                              idx_nom_).value();
+
+            const double sf_idip_trig_alt = sf_idip_trig_iso_->at(eta_idx,
+                                                                  pt_idx,
+                                                                  charge_idx,
+                                                                  eff_type_idx_idip_trig,
+                                                                  idx_alt_).value();
+
+            const double variation_factor_idip_trig = sf_idip_trig_alt/sf_idip_trig;
+            res(2) = variation_factor_idip_trig;
+
+            const double sf_iso = sf_idip_trig_iso_->at(eta_idx,
+                                                        pt_idx,
+                                                        charge_idx,
+                                                        eff_type_idx_iso,
+                                                        idx_nom_).value();
+            
+            const double sf_iso_alt = sf_idip_trig_iso_->at(eta_idx,
+                                                            pt_idx,
+                                                            charge_idx,
+                                                            eff_type_idx_iso,
+                                                            idx_alt_).value();
+
+            // anti-correlation between iso and anti-iso SF's is not exact, but an excellent
+            // approximation
+            const double variation_factor_iso = pass_iso ? sf_iso_alt/sf_iso : (sf_iso - (sf_iso_alt - sf_iso))/sf_iso;
+            res(3) = variation_factor_iso;
+
+            return res;
+
+        }
+
     protected:
 
         std::shared_ptr<const HIST_IDIPTRIGISO> sf_idip_trig_iso_;
@@ -113,105 +191,105 @@ namespace wrem {
     // SYST FOR EVERYTHING
     ////
     //// BASE CLASS FOR HELPER_SYST
-    template<typename HIST_IDIPTRIGISO, typename HIST_TRACKING, typename HIST_RECO>
-    class muon_efficiency_helper_syst_base:
-        public muon_efficiency_helper_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO> {
-    public:
+    // template<typename HIST_IDIPTRIGISO, typename HIST_TRACKING, typename HIST_RECO>
+    // class muon_efficiency_helper_syst_base:
+    //     public muon_efficiency_helper_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO> {
+    // public:
 
-        using base_t = muon_efficiency_helper_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
-        // inherit constructor
-        using base_t::base_t;
+    //     using base_t = muon_efficiency_helper_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
+    //     // inherit constructor
+    //     using base_t::base_t;
 
-        muon_efficiency_helper_syst_base(const base_t &other) : base_t(other) {}
+    //     muon_efficiency_helper_syst_base(const base_t &other) : base_t(other) {}
 
-        using syst_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<4>>; // 4 bins for idip(*trigger), iso(notrig), reco, tracking, in this order
+        // using syst_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<4>>; // 4 bins for idip(*trigger), iso(notrig), reco, tracking, in this order
 
-        syst_tensor_t sf_syst_var(float pt, float eta, float sapt, float saeta, int charge, bool pass_iso, bool with_trigger) const {
-            syst_tensor_t res;
+        // syst_tensor_t sf_syst_var(float pt, float eta, float sapt, float saeta, int charge, bool pass_iso, bool with_trigger) const {
+        //     syst_tensor_t res;
 
-            auto const eta_idx =     base_t::sf_idip_trig_iso_->template axis<0>().index(eta);
-            auto const pt_idx =      base_t::sf_idip_trig_iso_->template axis<1>().index(pt);
-            auto const pt_idx_reco = base_t::sf_reco_->template axis<1>().index(pt);
-            auto const saeta_idx =   base_t::sf_tracking_->template axis<0>().index(saeta);
-            auto const sapt_idx =    base_t::sf_tracking_->template axis<0>().index(sapt);
-            auto const charge_idx =  base_t::sf_idip_trig_iso_->template axis<2>().index(charge);
-            auto const eff_type_idx_idip_trig = with_trigger ? base_t::idx_idip_trig_          : base_t::idip_idx_;
-            auto const eff_type_idx_iso_pass =  with_trigger ? base_t::idx_iso_triggering_     : base_t::idx_iso_nontriggering_;
-            auto const eff_type_idx_iso_fail =  with_trigger ? base_t::idx_antiiso_triggering_ : base_t::idx_antiiso_nontriggering_;
-            auto const eff_type_idx_iso = pass_iso ? eff_type_idx_iso_pass : eff_type_idx_iso_fail;
+        //     auto const eta_idx =     base_t::sf_idip_trig_iso_->template axis<0>().index(eta);
+        //     auto const pt_idx =      base_t::sf_idip_trig_iso_->template axis<1>().index(pt);
+        //     auto const pt_idx_reco = base_t::sf_reco_->template axis<1>().index(pt);
+        //     auto const saeta_idx =   base_t::sf_tracking_->template axis<0>().index(saeta);
+        //     auto const sapt_idx =    base_t::sf_tracking_->template axis<0>().index(sapt);
+        //     auto const charge_idx =  base_t::sf_idip_trig_iso_->template axis<2>().index(charge);
+        //     auto const eff_type_idx_idip_trig = with_trigger ? base_t::idx_idip_trig_          : base_t::idip_idx_;
+        //     auto const eff_type_idx_iso_pass =  with_trigger ? base_t::idx_iso_triggering_     : base_t::idx_iso_nontriggering_;
+        //     auto const eff_type_idx_iso_fail =  with_trigger ? base_t::idx_antiiso_triggering_ : base_t::idx_antiiso_nontriggering_;
+        //     auto const eff_type_idx_iso = pass_iso ? eff_type_idx_iso_pass : eff_type_idx_iso_fail;
 
-            const double sf_reco = base_t::sf_reco_->at(eta_idx,
-                                                        pt_idx_reco,
-                                                        charge_idx,
-                                                        base_t::idx_nom_).value();
+        //     const double sf_reco = base_t::sf_reco_->at(eta_idx,
+        //                                                 pt_idx_reco,
+        //                                                 charge_idx,
+        //                                                 base_t::idx_nom_).value();
             
-            const double sf_reco_alt = base_t::sf_reco_->at(eta_idx,
-                                                            pt_idx_reco,
-                                                            charge_idx,
-                                                            base_t::idx_alt_).value();
+        //     const double sf_reco_alt = base_t::sf_reco_->at(eta_idx,
+        //                                                     pt_idx_reco,
+        //                                                     charge_idx,
+        //                                                     base_t::idx_alt_).value();
             
-            const double variation_factor_reco = sf_reco_alt/sf_reco;
-            res(0) = variation_factor_reco;
+        //     const double variation_factor_reco = sf_reco_alt/sf_reco;
+        //     res(0) = variation_factor_reco;
 
-            const double sf_tracking = base_t::sf_tracking_->at(saeta_idx,
-                                                                sapt_idx,
-                                                                charge_idx,
-                                                                base_t::idx_nom_).value();
+        //     const double sf_tracking = base_t::sf_tracking_->at(saeta_idx,
+        //                                                         sapt_idx,
+        //                                                         charge_idx,
+        //                                                         base_t::idx_nom_).value();
     
-            const double sf_tracking_alt = base_t::sf_tracking_->at(saeta_idx,
-                                                                    sapt_idx,
-                                                                    charge_idx,
-                                                                    base_t::idx_alt_).value();
+        //     const double sf_tracking_alt = base_t::sf_tracking_->at(saeta_idx,
+        //                                                             sapt_idx,
+        //                                                             charge_idx,
+        //                                                             base_t::idx_alt_).value();
 
-            const double variation_factor_tracking = sf_tracking_alt/sf_tracking;
-            res(1) = variation_factor_tracking;
+        //     const double variation_factor_tracking = sf_tracking_alt/sf_tracking;
+        //     res(1) = variation_factor_tracking;
 
-            const double sf_idip_trig = base_t::sf_idip_trig_iso_->at(eta_idx,
-                                                                      pt_idx,
-                                                                      charge_idx,
-                                                                      eff_type_idx_idip_trig,
-                                                                      base_t::idx_nom_).value();
+        //     const double sf_idip_trig = base_t::sf_idip_trig_iso_->at(eta_idx,
+        //                                                               pt_idx,
+        //                                                               charge_idx,
+        //                                                               eff_type_idx_idip_trig,
+        //                                                               base_t::idx_nom_).value();
 
-            const double sf_idip_trig_alt = base_t::sf_idip_trig_iso_->at(eta_idx,
-                                                                          pt_idx,
-                                                                          charge_idx,
-                                                                          eff_type_idx_idip_trig,
-                                                                          base_t::idx_alt_).value();
+        //     const double sf_idip_trig_alt = base_t::sf_idip_trig_iso_->at(eta_idx,
+        //                                                                   pt_idx,
+        //                                                                   charge_idx,
+        //                                                                   eff_type_idx_idip_trig,
+        //                                                                   base_t::idx_alt_).value();
 
-            const double variation_factor_idip_trig = sf_idip_trig_alt/sf_idip_trig;
-            res(2) = variation_factor_idip_trig;
+        //     const double variation_factor_idip_trig = sf_idip_trig_alt/sf_idip_trig;
+        //     res(2) = variation_factor_idip_trig;
 
-            const double sf_iso = base_t::sf_idip_trig_iso_->at(eta_idx,
-                                                                pt_idx,
-                                                                charge_idx,
-                                                                eff_type_idx_iso,
-                                                                base_t::idx_nom_).value();
+        //     const double sf_iso = base_t::sf_idip_trig_iso_->at(eta_idx,
+        //                                                         pt_idx,
+        //                                                         charge_idx,
+        //                                                         eff_type_idx_iso,
+        //                                                         base_t::idx_nom_).value();
 
-            const double sf_iso_alt = base_t::sf_idip_trig_iso_->at(eta_idx,
-                                                                    pt_idx,
-                                                                    charge_idx,
-                                                                    eff_type_idx_iso,
-                                                                    base_t::idx_alt_).value();
+        //     const double sf_iso_alt = base_t::sf_idip_trig_iso_->at(eta_idx,
+        //                                                             pt_idx,
+        //                                                             charge_idx,
+        //                                                             eff_type_idx_iso,
+        //                                                             base_t::idx_alt_).value();
 
-            // anti-correlation between iso and anti-iso SF's is not exact, but an excellent
-            // approximation
-            const double variation_factor_iso = pass_iso ? sf_iso_alt/sf_iso : (sf_iso - (sf_iso_alt - sf_iso))/sf_iso;
-            res(3) = variation_factor_iso;
+        //     // anti-correlation between iso and anti-iso SF's is not exact, but an excellent
+        //     // approximation
+        //     const double variation_factor_iso = pass_iso ? sf_iso_alt/sf_iso : (sf_iso - (sf_iso_alt - sf_iso))/sf_iso;
+        //     res(3) = variation_factor_iso;
 
-            return res;
+        //     return res;
 
-        }
+        // }
 
-    };
+    // };
         
     // base template for one lepton case
     template<bool do_other, typename HIST_IDIPTRIGISO, typename HIST_TRACKING, typename HIST_RECO>
     class muon_efficiency_helper_syst :
-        public muon_efficiency_helper_syst_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO> {
+        public muon_efficiency_helper_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO> {
 
     public:
 
-        using base_t = muon_efficiency_helper_syst_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
+        using base_t = muon_efficiency_helper_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
         using tensor_t = typename base_t::syst_tensor_t;
 
         muon_efficiency_helper_syst(const base_t &other) : base_t(other) {}
@@ -226,11 +304,11 @@ namespace wrem {
     // specialization for two-lepton case
     template<typename HIST_IDIPTRIGISO, typename HIST_TRACKING, typename HIST_RECO>
     class muon_efficiency_helper_syst<true, HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO> :
-        public muon_efficiency_helper_syst_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO> {
+        public muon_efficiency_helper_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO> {
 
     public:
 
-        using base_t = muon_efficiency_helper_syst_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
+        using base_t = muon_efficiency_helper_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
         using tensor_t = typename base_t::syst_tensor_t;
 
         muon_efficiency_helper_syst(const base_t &other) : base_t(other) {}

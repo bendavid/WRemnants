@@ -33,7 +33,7 @@ if not args.no_recoil:
 era = args.era
 noMuonCorr = args.noMuonCorr
 
-muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_stat_tracking, muon_prefiring_helper_stat_reco, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
+muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 #qcdScaleByHelicity_Zhelper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = True)
 qcdScaleByHelicity_Whelper = wremnants.makeQCDScaleByHelicityHelper()
 
