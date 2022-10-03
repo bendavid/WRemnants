@@ -33,7 +33,7 @@ if not args.no_recoil:
 era = args.era
 noMuonCorr = args.noMuonCorr
 
-muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
+muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_stat_tracking, muon_prefiring_helper_stat_reco, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 #qcdScaleByHelicity_Zhelper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = True)
 qcdScaleByHelicity_Whelper = wremnants.makeQCDScaleByHelicityHelper()
 
@@ -247,9 +247,9 @@ def build_graph(df, dataset):
         effStatTnP_reco = df.HistoBoost("effStatTnP_reco", nominal_axes, [*nominal_cols, "effStatTnP_reco_tensor"], tensor_axes = muon_efficiency_helper_stat_reco.tensor_axes)
         results.append(effStatTnP_reco)
         
-        # df = df.Define("effSystTnP_weight", muon_efficiency_helper_syst, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso", "nominal_weight"])
-        # effSystTnP = df.HistoBoost("effSystTnP", nominal_axes, [*nominal_cols, "effSystTnP_weight"], tensor_axes = muon_efficiency_helper_syst.tensor_axes)
-        # results.append(effSystTnP)
+        df = df.Define("effSystTnP_weight", muon_efficiency_helper_syst, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso", "nominal_weight"])
+        effSystTnP = df.HistoBoost("effSystTnP", nominal_axes, [*nominal_cols, "effSystTnP_weight"], tensor_axes = muon_efficiency_helper_syst.tensor_axes)
+        results.append(effSystTnP)
 
         df = df.Define("muonL1PrefireStat_tensor", muon_prefiring_helper_stat, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId", "nominal_weight"])
         muonL1PrefireStat = df.HistoBoost("muonL1PrefireStat", nominal_axes, [*nominal_cols, "muonL1PrefireStat_tensor"], tensor_axes = muon_prefiring_helper_stat.tensor_axes)
