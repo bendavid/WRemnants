@@ -56,7 +56,7 @@ namespace wrem {
             auto const pt_idx =      sf_idip_trig_iso_->template axis<1>().index(pt);
             auto const pt_idx_reco = sf_reco_->template axis<1>().index(pt);
             auto const saeta_idx =   sf_tracking_->template axis<0>().index(saeta);
-            auto const sapt_idx =    sf_tracking_->template axis<0>().index(sapt);
+            auto const sapt_idx =    sf_tracking_->template axis<1>().index(sapt);
             auto const charge_idx =  sf_idip_trig_iso_->template axis<2>().index(charge);
             auto const eff_type_idx_idip_trig = with_trigger ? idx_idip_trig_          : idip_idx_;
             auto const eff_type_idx_iso_pass =  with_trigger ? idx_iso_triggering_     : idx_iso_nontriggering_;
@@ -155,6 +155,8 @@ namespace wrem {
         // inherit constructor
         using base_t::base_t;
 
+        muon_efficiency_helper(const base_t &other) : base_t(other) {}
+        
         double operator() (float pt, float eta, float sapt, float saeta, int charge, bool pass_iso) {
             constexpr bool with_trigger = true;
             return base_t::scale_factor_product(pt, eta, sapt, saeta, charge, pass_iso, with_trigger, base_t::idx_nom_);
@@ -172,6 +174,8 @@ namespace wrem {
         using base_t = muon_efficiency_helper_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
         // inherit constructor
         using base_t::base_t;
+        
+        muon_efficiency_helper(const base_t &other) : base_t(other) {}
 
         double operator() (float trig_pt, float trig_eta, float trig_sapt, float trig_saeta, int trig_charge,
                            float nontrig_pt, float nontrig_eta, float nontrig_sapt, float nontrig_saeta, int nontrig_charge) {
@@ -184,101 +188,6 @@ namespace wrem {
         }
 
     };
-
-    ////
-    // SYST FOR EVERYTHING
-    ////
-    //// BASE CLASS FOR HELPER_SYST
-    // template<typename HIST_IDIPTRIGISO, typename HIST_TRACKING, typename HIST_RECO>
-    // class muon_efficiency_helper_syst_base:
-    //     public muon_efficiency_helper_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO> {
-    // public:
-
-    //     using base_t = muon_efficiency_helper_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
-    //     // inherit constructor
-    //     using base_t::base_t;
-
-    //     muon_efficiency_helper_syst_base(const base_t &other) : base_t(other) {}
-
-        // using syst_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<4>>; // 4 bins for idip(*trigger), iso(notrig), reco, tracking, in this order
-
-        // syst_tensor_t sf_syst_var(float pt, float eta, float sapt, float saeta, int charge, bool pass_iso, bool with_trigger) const {
-        //     syst_tensor_t res;
-
-        //     auto const eta_idx =     base_t::sf_idip_trig_iso_->template axis<0>().index(eta);
-        //     auto const pt_idx =      base_t::sf_idip_trig_iso_->template axis<1>().index(pt);
-        //     auto const pt_idx_reco = base_t::sf_reco_->template axis<1>().index(pt);
-        //     auto const saeta_idx =   base_t::sf_tracking_->template axis<0>().index(saeta);
-        //     auto const sapt_idx =    base_t::sf_tracking_->template axis<0>().index(sapt);
-        //     auto const charge_idx =  base_t::sf_idip_trig_iso_->template axis<2>().index(charge);
-        //     auto const eff_type_idx_idip_trig = with_trigger ? base_t::idx_idip_trig_          : base_t::idip_idx_;
-        //     auto const eff_type_idx_iso_pass =  with_trigger ? base_t::idx_iso_triggering_     : base_t::idx_iso_nontriggering_;
-        //     auto const eff_type_idx_iso_fail =  with_trigger ? base_t::idx_antiiso_triggering_ : base_t::idx_antiiso_nontriggering_;
-        //     auto const eff_type_idx_iso = pass_iso ? eff_type_idx_iso_pass : eff_type_idx_iso_fail;
-
-        //     const double sf_reco = base_t::sf_reco_->at(eta_idx,
-        //                                                 pt_idx_reco,
-        //                                                 charge_idx,
-        //                                                 base_t::idx_nom_).value();
-            
-        //     const double sf_reco_alt = base_t::sf_reco_->at(eta_idx,
-        //                                                     pt_idx_reco,
-        //                                                     charge_idx,
-        //                                                     base_t::idx_alt_).value();
-            
-        //     const double variation_factor_reco = sf_reco_alt/sf_reco;
-        //     res(0) = variation_factor_reco;
-
-        //     const double sf_tracking = base_t::sf_tracking_->at(saeta_idx,
-        //                                                         sapt_idx,
-        //                                                         charge_idx,
-        //                                                         base_t::idx_nom_).value();
-    
-        //     const double sf_tracking_alt = base_t::sf_tracking_->at(saeta_idx,
-        //                                                             sapt_idx,
-        //                                                             charge_idx,
-        //                                                             base_t::idx_alt_).value();
-
-        //     const double variation_factor_tracking = sf_tracking_alt/sf_tracking;
-        //     res(1) = variation_factor_tracking;
-
-        //     const double sf_idip_trig = base_t::sf_idip_trig_iso_->at(eta_idx,
-        //                                                               pt_idx,
-        //                                                               charge_idx,
-        //                                                               eff_type_idx_idip_trig,
-        //                                                               base_t::idx_nom_).value();
-
-        //     const double sf_idip_trig_alt = base_t::sf_idip_trig_iso_->at(eta_idx,
-        //                                                                   pt_idx,
-        //                                                                   charge_idx,
-        //                                                                   eff_type_idx_idip_trig,
-        //                                                                   base_t::idx_alt_).value();
-
-        //     const double variation_factor_idip_trig = sf_idip_trig_alt/sf_idip_trig;
-        //     res(2) = variation_factor_idip_trig;
-
-        //     const double sf_iso = base_t::sf_idip_trig_iso_->at(eta_idx,
-        //                                                         pt_idx,
-        //                                                         charge_idx,
-        //                                                         eff_type_idx_iso,
-        //                                                         base_t::idx_nom_).value();
-
-        //     const double sf_iso_alt = base_t::sf_idip_trig_iso_->at(eta_idx,
-        //                                                             pt_idx,
-        //                                                             charge_idx,
-        //                                                             eff_type_idx_iso,
-        //                                                             base_t::idx_alt_).value();
-
-        //     // anti-correlation between iso and anti-iso SF's is not exact, but an excellent
-        //     // approximation
-        //     const double variation_factor_iso = pass_iso ? sf_iso_alt/sf_iso : (sf_iso - (sf_iso_alt - sf_iso))/sf_iso;
-        //     res(3) = variation_factor_iso;
-
-        //     return res;
-
-        // }
-
-    // };
         
     // base template for one lepton case
     template<bool do_other, typename HIST_IDIPTRIGISO, typename HIST_TRACKING, typename HIST_RECO>
@@ -288,13 +197,14 @@ namespace wrem {
     public:
 
         using base_t = muon_efficiency_helper_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
-        // inherit constructor
-        using base_t::base_t;
 
         using tensor_t = typename base_t::syst_tensor_t;
-
+        
+        // inherit constructor
+        using base_t::base_t;
+        
         muon_efficiency_helper_syst(const base_t &other) : base_t(other) {}
-
+        
         tensor_t operator() (float pt, float eta, float sapt, float saeta, int charge, bool pass_iso, double nominal_weight = 1.0) {
             constexpr bool with_trigger = true;
             return nominal_weight*base_t::sf_syst_var(pt, eta, sapt, saeta, charge, pass_iso, with_trigger);
@@ -310,11 +220,11 @@ namespace wrem {
     public:
 
         using base_t = muon_efficiency_helper_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
-        // inherit constructor
-        using base_t::base_t;
-
         using tensor_t = typename base_t::syst_tensor_t;
 
+        // inherit constructor
+        using base_t::base_t;
+        
         muon_efficiency_helper_syst(const base_t &other) : base_t(other) {}
 
         tensor_t operator() (float trig_pt, float trig_eta, float trig_sapt, float trig_saeta, int trig_charge,
@@ -340,8 +250,11 @@ namespace wrem {
 
         using base_t = muon_efficiency_helper_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
         using stat_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<NEtaBins, NPtBins, 2, 2>>;
+        
         // inherit constructor
         using base_t::base_t;
+        
+        muon_efficiency_helper_stat_base(const base_t &other) : base_t(other) {}
 
         stat_tensor_t sf_idip_trig_iso_stat_var(float pt, float eta, int charge, bool pass_iso, bool with_trigger) const {
             stat_tensor_t res;
@@ -397,7 +310,7 @@ namespace wrem {
             stat_tensor_singleStep_t res;
             res.setConstant(1.0);
 
-            auto const sf_singleStep_ = (step == 0) ? base_t::sf_reco_ : base_t::sf_tracking_; // might be more general to read other stuff too
+            auto const &sf_singleStep_ = (step == 0) ? base_t::sf_reco_ : base_t::sf_tracking_; // might be more general to read other stuff too
             
             auto const eta_idx = sf_singleStep_->template axis<0>().index(eta);
             auto const pt_idx = sf_singleStep_->template axis<1>().index(pt);
@@ -435,11 +348,10 @@ namespace wrem {
         
     public:
         
-        using base_t = muon_efficiency_helper_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
         using stat_base_t = muon_efficiency_helper_stat_base<NEtaBins, NPtBins, HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
         using tensor_t = typename stat_base_t::stat_tensor_t;
   
-        muon_efficiency_helper_stat(const base_t &other) : base_t(other) {}
+        using stat_base_t::stat_base_t;
         
         tensor_t operator() (float pt, float eta, int charge, bool pass_iso, double nominal_weight = 1.0) {
             constexpr bool with_trigger = true;
@@ -455,11 +367,10 @@ namespace wrem {
 
     public:
 
-        using base_t = muon_efficiency_helper_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
         using stat_base_t = muon_efficiency_helper_stat_base<NEtaBins, NPtBins, HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
         using tensor_t = typename stat_base_t::stat_tensor_t;
 
-        muon_efficiency_helper_stat(const base_t &other) : base_t(other) {}
+        using stat_base_t::stat_base_t;
 
         tensor_t operator() (float trig_pt, float trig_eta, int trig_charge,
                              float nontrig_pt, float nontrig_eta, int nontrig_charge, double nominal_weight = 1.0) {
@@ -467,9 +378,9 @@ namespace wrem {
             constexpr bool without_trigger = false;
             constexpr bool pass_iso = true;
 
-            const tensor_t variation_trig = base_t::sf_idip_trig_iso_stat_var(trig_pt, trig_eta, trig_charge, pass_iso, with_trigger);
+            const tensor_t variation_trig = stat_base_t::sf_idip_trig_iso_stat_var(trig_pt, trig_eta, trig_charge, pass_iso, with_trigger);
 
-            const tensor_t variation_nontrig = base_t::sf_idip_trig_iso_stat_var(nontrig_pt, nontrig_eta, nontrig_charge, pass_iso, without_trigger);
+            const tensor_t variation_nontrig = stat_base_t::sf_idip_trig_iso_stat_var(nontrig_pt, nontrig_eta, nontrig_charge, pass_iso, without_trigger);
 
             return nominal_weight*variation_trig*variation_nontrig;
         }
@@ -487,11 +398,10 @@ namespace wrem {
 
     public:
 
-        using base_t = muon_efficiency_helper_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
         using stat_base_t = muon_efficiency_helper_stat_base<NEtaBins, NPtBins, HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
         using tensor_t = typename stat_base_t::stat_tensor_singleStep_t;
 
-        muon_efficiency_helper_singleStep_stat(const base_t &other) : base_t(other) {}
+        using stat_base_t::stat_base_t;
 
         tensor_t operator() (float pt, float eta, int charge, int step, double nominal_weight = 1.0) {
             return nominal_weight*stat_base_t::sf_singleStep_stat_var(pt, eta, charge, step);
@@ -506,11 +416,10 @@ namespace wrem {
 
     public:
 
-        using base_t = muon_efficiency_helper_base<HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
         using stat_base_t = muon_efficiency_helper_stat_base<NEtaBins, NPtBins, HIST_IDIPTRIGISO, HIST_TRACKING, HIST_RECO>;
         using tensor_t = typename stat_base_t::stat_tensor_singleStep_t;
 
-        muon_efficiency_helper_singleStep_stat(const base_t &other) : base_t(other) {}
+        using stat_base_t::stat_base_t;
 
         tensor_t operator() (float trig_pt, float trig_eta, int trig_charge,
                              float nontrig_pt, float nontrig_eta, int nontrig_charge,
