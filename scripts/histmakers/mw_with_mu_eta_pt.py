@@ -237,12 +237,11 @@ def build_graph(df, dataset):
         effStatTnP = df.HistoBoost("effStatTnP", nominal_axes, [*nominal_cols, "effStatTnP_tensor"], tensor_axes = muon_efficiency_helper_stat.tensor_axes)
         results.append(effStatTnP)
 
-        df = df.Define("zero", "0")
+        df = df.Define("zero", "0")  # so ugly and awkward, but does what I want ...
         df = df.Define("unity", "1")
         df = df.Define("effStatTnP_tracking_tensor", muon_efficiency_helper_stat_tracking, ["goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "unity", "nominal_weight"])
         effStatTnP_tracking = df.HistoBoost("effStatTnP_tracking", nominal_axes, [*nominal_cols, "effStatTnP_tracking_tensor"], tensor_axes = muon_efficiency_helper_stat_tracking.tensor_axes)
         results.append(effStatTnP_tracking)
-
         df = df.Define("effStatTnP_reco_tensor", muon_efficiency_helper_stat_reco, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0", "zero", "nominal_weight"])
         effStatTnP_reco = df.HistoBoost("effStatTnP_reco", nominal_axes, [*nominal_cols, "effStatTnP_reco_tensor"], tensor_axes = muon_efficiency_helper_stat_reco.tensor_axes)
         results.append(effStatTnP_reco)
