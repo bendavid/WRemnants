@@ -86,11 +86,11 @@ unstack = exclude[:]
 # TODO: In should select the correct hist for the transform, not just the first
 transforms = syst_tools.syst_transform_map(args.baseName, args.hists[0])
 
-if args.selectAxis:
-    axes = padArray(args.selectAxis, args.varLabel)
-    entries = padArray(args.selectEntries, args.varLabel)
-
 if addVariation:
+    if args.selectAxis and args.selectEntries:
+        axes = padArray(args.selectAxis, args.varLabel)
+        entries = padArray(args.selectEntries, args.varLabel)
+
     logging.info(f"Adding variation {args.varName}")
     varLabels = padArray(args.varLabel, args.varName)
     # If none matplotlib will pick a random color
