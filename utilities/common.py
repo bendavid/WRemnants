@@ -66,7 +66,7 @@ def common_parser():
     parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=[])
     parser.add_argument("--v8", action='store_true', help="Use NanoAODv8. Default is v9")
     parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
-    parser.add_argument("--theory_corr", nargs="*", choices=["scetlib", "scetlibMSHT20", "scetlibHelicity", "dyturbo", "matrix_radish"], 
+    parser.add_argument("--theory_corr", nargs="*", choices=["scetlib", "scetlibVars", "scetlibMSHT20", "scetlibHelicity", "dyturbo", "matrix_radish"], 
         help="Apply corrections from indicated generator. First will be nominal correction.", default=[])
     parser.add_argument("--theory_corr_alt_only", action='store_true', help="Save hist for correction hists but don't modify central weight")
     parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")
