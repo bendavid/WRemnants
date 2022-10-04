@@ -1,16 +1,15 @@
 from wremnants.datasets.datagroups import datagroups2016
 from wremnants import histselections as sel
-from wremnants import plot_tools,theory_tools
+from wremnants import plot_tools,theory_tools,syst_tools
 from utilities import boostHistHelpers as hh
 import matplotlib.pyplot as plt
+from matplotlib import cm
 import argparse
 import os
 import shutil
 import logging
 import pathlib
 import hist
-
-logging.basicConfig(level=logging.INFO)
 
 xlabels = {
     "pt" : r"p$_{T}^{\ell}$ (GeV)",
@@ -23,27 +22,6 @@ xlabels = {
     "phistarll" : r"$\phi^{\star}_{\ell\ell}$",
     "recoil_MET_pt" : r"p$_{\mathrm{T}}^{miss}$ (recoil corr.)",
 }
-
-pdfInfo = theory_tools.pdfMapExtended 
-pdfNames = [pdfInfo[k]["name"] for k in pdfInfo.keys()]
-
-def pdfUnc(h, pdfName):
-    print(pdfName, list(pdfNames).index(pdfName))
-    key =  list(pdfInfo.keys())[list(pdfNames).index(pdfName)]
-    unc = pdfInfo[key]["combine"]
-    scale = pdfInfo[key]["scale"] if "scale" in pdfInfo[key] else 1.
-    print(key, pdfName, scale)
-    return theory_tools.hessianPdfUnc(h, "tensor_axis_0", unc, scale)
-
-transforms = {}
-transforms.update({pdf+"Up" : lambda h,p=pdf: pdfUnc(h, p)[0] for pdf in pdfNames})
-transforms.update({pdf+"Down" : lambda h,p=pdf: pdfUnc(h, p)[1] for pdf in pdfNames})
-transforms.update({f"dilepton_{pdf}Up" : transforms[pdf+"Up"] for pdf in pdfNames})
-transforms.update({f"dilepton_{pdf}Down" : transforms[pdf+"Down"] for pdf in pdfNames})
-transforms.update(
-    {"massWeightDown" : lambda h: h[{"tensor_axis_0" : 0}],
-    "massWeightUp" : lambda h: h[{"tensor_axis_0" : 20}]}
-)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("infile", help="Output file of the analysis stage, containing ND boost histograms")
@@ -58,8 +36,10 @@ parser.add_argument("-f", "--outfolder", type=str, default="test", help="Subfold
 parser.add_argument("-r", "--rrange", type=float, nargs=2, default=[0.9, 1.1], help="y range for ratio plot")
 parser.add_argument("--rebin", type=int, default=1, help="Rebin (for now must be an int)")
 parser.add_argument("--ylim", type=float, nargs=2, help="Min and max values for y axis (if not specified, range set automatically)")
+parser.add_argument("--yscale", type=float, help="Scale the upper y axis by this factor (useful when auto scaling cuts off legend)")
 parser.add_argument("--xlim", type=float, nargs=2, help="min and max for x axis")
 parser.add_argument("-a", "--name_append", type=str, help="Name to append to file name")
+parser.add_argument("--debug", action='store_true', help="Print debug output")
 
 subparsers = parser.add_subparsers()
 variation = subparsers.add_parser("variation", help="Arguments for adding variation hists")
@@ -69,8 +49,11 @@ variation.add_argument("--selectAxis", type=str, nargs='+', help="If you need to
 variation.add_argument("--selectEntries", type=int, nargs='+', help="entries to read from the selected axis")
 variation.add_argument("--colors", type=str, nargs='+', help="Variation colors")
 variation.add_argument("--transform", action='store_true', help="Apply variation-specific transformation")
+variation.add_argument("--fill_between", action='store_true', help="Fill between uncertainty hists in ratio")
 
 args = parser.parse_args()
+
+logging.basicConfig(level=logging.INFO if not args.debug else logging.DEBUG)
 
 def padArray(ref, matchLength):
     return ref+ref[-1:]*(len(matchLength)-len(ref))
@@ -82,6 +65,8 @@ if addVariation and (args.selectAxis or args.selectEntries):
         raise ValueError("Must --selectAxis and --selectEntires together")
     if len(args.varLabel) != 1 and len(args.varLabel) != len(args.selectEntries):
         raise ValueError("Must specify the same number of args for --selectEntires, and --varLabel")
+    if len(args.varName) == 1 and len(args.selectEntries):
+        args.varName = padArray(args.varName, args.selectEntries)
 
 outdir = plot_tools.make_plot_dir(args.outpath, args.outfolder)
 
@@ -96,42 +81,58 @@ else:
     groups.loadHistsForDatagroups(nominalName, syst=args.baseName)
 
 exclude = ["Data"]
-colors = args.colors if hasattr(args, "colors") and args.colors else ["red", "green", "blue"]
 unstack = exclude[:]
 
+# TODO: In should select the correct hist for the transform, not just the first
+transforms = syst_tools.syst_transform_map(args.baseName, args.hists[0])
+
 if addVariation:
+    if args.selectAxis and args.selectEntries:
+        axes = padArray(args.selectAxis, args.varLabel)
+        entries = padArray(args.selectEntries, args.varLabel)
+
     logging.info(f"Adding variation {args.varName}")
     varLabels = padArray(args.varLabel, args.varName)
+    # If none matplotlib will pick a random color
+    colors = args.colors if args.colors else [cm.get_cmap("tab10")(i) for i in range(len(args.varName))]
     for i, (label,name,color) in enumerate(zip(varLabels, args.varName, colors)):
-        name_toload = name.replace("Up", "").replace("Down", "")
+        do_transform = args.transform and name in transforms
+        name_toload = name if not do_transform else transforms[name]["hist"]
         name = name if name != "" else nominalName
         exclude.append(name)
-        # A bit hacky but load the hist without Up/Down, which comes from the transform
-        groups.addSummedProc(nominalName, name=name_toload, label=label, exclude=exclude,
-            relabel=args.baseName, color=color, reload=name_toload != args.baseName)
+        load_op = {}
 
-        varname = name_toload
-        if args.selectAxis or (args.transform and name in transforms):
-            exclude.append(name_toload)
-            if args.transform:
-                action = transforms[name]
-                varname = name
-            else:
-                entries = padArray(args.selectAxis, args.varLabel)
-                action = lambda x: x[{ax : entries[i]}]
+        if args.selectAxis or do_transform:
+            transform_procs = groups.getProcNames(exclude)
+            if args.selectAxis:
+                ax = axes[i]
+                entry = entries[i]
+                action = lambda x: x[{ax : entry}] if ax in x.axes.name else x
                 varname = name+str(entry)
+            else:
+                action = transforms[name]["action"]
+                varname = name
+                if "procs" in transforms[name]:
+                    transform_procs = transforms[name]["procs"]
+            load_op = {p : action for p in transform_procs}
+        else:
+            varname = name_toload
 
-            groups.copyWithAction(action=action, name=varname, refproc=name_toload, 
-                refname=args.baseName, label=label, color=colors[i])
-        elif (args.transform and name not in transforms):
+        if (args.transform and name not in transforms):
             logging.warning(f"No known transformation for variation {name}. No transform applied!")
+
+        print(load_op)
+        groups.addSummedProc(nominalName, name=name_toload, label=label, exclude=exclude,
+            color=color, reload=name_toload != args.baseName,
+            rename=varname, preOpMap=load_op)
 
         exclude.append(varname)
         unstack.append(varname)
 
+groups.sortByYields(args.baseName)
 histInfo = groups.getDatagroups()
 
-prednames = [x for x in reversed(histInfo.keys()) if x not in exclude]
+prednames = list(reversed(groups.getNames(exclude)))
 select = {} if args.channel == "all" else {"select" : -1.j if args.channel == "minus" else 1.j}
 
 def collapseSyst(h):
@@ -140,12 +141,17 @@ def collapseSyst(h):
             return h[{ax : 0}]
     return h
 
+overflow_ax = ["ptll", "chargeVgen", "massVgen", "ptVgen"]
 for h in args.hists:
-    action = (lambda x: sel.unrolledHist(collapseSyst(x))) if "unrolled" in h else lambda x: hh.projectNoFlow(collapseSyst(x), h, ["ptll"])
-    fig = plot_tools.makeStackPlotWithRatio(histInfo, prednames, histName=args.baseName, ylim=args.ylim, action=action, unstacked=unstack, 
+    action = (lambda x: sel.unrolledHist(collapseSyst(x))) if "unrolled" in h else lambda x: hh.projectNoFlow(collapseSyst(x), h, overflow_ax)
+    fig = plot_tools.makeStackPlotWithRatio(histInfo, prednames, histName=args.baseName, ylim=args.ylim, yscale=args.yscale,
+            fill_between=args.fill_between if hasattr(args, "fill_between") else None, action=action, unstacked=unstack, 
             xlabel=xlabels[h], ylabel="Events/bin", rrange=args.rrange, select=select, binwnorm=1.0,
             ratio_to_data=args.ratio_to_data, rlabel="Pred./Data" if args.ratio_to_data else "Data/Pred.",
             xlim=args.xlim) 
     outfile = f"{h}_{args.baseName}_{args.channel}"+ (f"_{args.name_append}" if args.name_append else "")
     plot_tools.save_pdf_and_png(outdir, outfile)
-    plot_tools.write_index_and_log(outdir, outfile)
+    stack_yields = groups.make_yields_df(args.baseName, prednames)
+    unstacked_yields = groups.make_yields_df(args.baseName, unstack)
+    plot_tools.write_index_and_log(outdir, outfile, 
+        yield_tables={"Stacked processes" : stack_yields, "Unstacked processes" : unstacked_yields})
