@@ -7,7 +7,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, pdf, name_ap
     helicity = "Helicity" in scale_type
     pt_binned = "Pt" in scale_type
 
-    scale_hist = "qcdScale" if not (helicity or use_hel_hist) else "qcdScaleByHelicity"
+    scale_hist = "qcdScale_inclusive" if inclusiveScale else "qcdScale" if not (helicity or use_hel_hist) else "qcdScaleByHelicity"
     # All possible syst_axes
     # TODO: Move the axes to common and refer to axis_chargeVgen etc by their name attribute, not just
     # assuming the name is unchanged

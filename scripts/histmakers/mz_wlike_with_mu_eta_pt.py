@@ -170,8 +170,8 @@ def build_graph(df, dataset):
         df = df.Define("NonTrigMuon_SApt",  "Muon_standalonePt[nonTrigMuons][0]")
         df = df.Define("NonTrigMuon_SAeta", "Muon_standaloneEta[nonTrigMuons][0]")
         df = df.Define("NonTrigMuon_SAphi", "Muon_standalonePhi[nonTrigMuons][0]")
-    df = df.Filter("TrigMuon_SApt0 > 15.0 && wrem::deltaR2(TrigMuon_SAeta0, TrigMuon_SAphi0, goodMuons_eta0, goodMuons_phi0) < 0.09")
-    df = df.Filter("NonTrigMuon_SApt0 > 15.0 && wrem::deltaR2(NonTrigMuon_SAeta0, NonTrigMuon_SAphi0, goodMuons_eta0, goodMuons_phi0) < 0.09")
+    df = df.Filter("TrigMuon_SApt > 15.0 && wrem::deltaR2(TrigMuon_SAeta, TrigMuon_SAphi, TrigMuon_eta, TrigMuon_phi) < 0.09")
+    df = df.Filter("NonTrigMuon_SApt > 15.0 && wrem::deltaR2(NonTrigMuon_SAeta, NonTrigMuon_SAphi, NonTrigMuon_eta, NonTrigMuon_phi) < 0.09")
     
     df = df.Define("vetoElectrons", "Electron_pt > 10 && Electron_cutBased > 0 && abs(Electron_eta) < 2.4 && abs(Electron_dxy) < 0.05 && abs(Electron_dz)< 0.2")
 
@@ -271,11 +271,13 @@ def build_graph(df, dataset):
         effStatTnP = df.HistoBoost("effStatTnP", nominal_axes, [*nominal_cols, "effStatTnP_tensor"], tensor_axes = muon_efficiency_helper_stat.tensor_axes)
         results.append(effStatTnP)
 
-        df = df.Define("effStatTnP_tracking_tensor", muon_efficiency_helper_stat_tracking, ["TrigMuon_SApt", "TrigMuon_SAeta", "TrigMuon_charge", "NonTrigMuon_SApt", "NonTrigMuon_SAeta", "NonTrigMuon_charge", "nominal_weight"])
+        df = df.Define("zero", "0")  # so ugly and awkward, but does what I want ...
+        df = df.Define("unity", "1")
+        df = df.Define("effStatTnP_tracking_tensor", muon_efficiency_helper_stat_tracking, ["TrigMuon_SApt", "TrigMuon_SAeta", "TrigMuon_charge", "NonTrigMuon_SApt", "NonTrigMuon_SAeta", "NonTrigMuon_charge", "unity", "nominal_weight"])
         effStatTnP_tracking = df.HistoBoost("effStatTnP_tracking", nominal_axes, [*nominal_cols, "effStatTnP_tracking_tensor"], tensor_axes = muon_efficiency_helper_stat_tracking.tensor_axes)
         results.append(effStatTnP_tracking)
 
-        df = df.Define("effStatTnP_reco_tensor", muon_efficiency_helper_stat_reco, ["TrigMuon_pt", "TrigMuon_eta", "TrigMuon_charge", "NonTrigMuon_pt", "NonTrigMuon_eta", "NonTrigMuon_charge", "nominal_weight"])
+        df = df.Define("effStatTnP_reco_tensor", muon_efficiency_helper_stat_reco, ["TrigMuon_pt", "TrigMuon_eta", "TrigMuon_charge", "NonTrigMuon_pt", "NonTrigMuon_eta", "NonTrigMuon_charge", "zero", "nominal_weight"])
         effStatTnP_reco = df.HistoBoost("effStatTnP_reco", nominal_axes, [*nominal_cols, "effStatTnP_reco_tensor"], tensor_axes = muon_efficiency_helper_stat_reco.tensor_axes)
         results.append(effStatTnP_reco)
 

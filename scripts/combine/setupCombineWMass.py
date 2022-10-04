@@ -26,7 +26,7 @@ def make_parser(parser=None):
     parser.add_argument("--skipSignalSystOnFakes", dest="skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
     parser.add_argument("--scaleMuonCorr", type=float, default=1.0, help="Scale up/down dummy muon scale uncertainty by this factor")
     parser.add_argument("--correlateEffStatIsoByCharge", action='store_true', help="Correlate isolation efficiency uncertanties between the two charges (by default they are decorrelated)")
-    parser.add_argument("--noHist", action='store_true', help="Skip the making of 2D histograms (root file is left untouched if existing")
+    parser.add_argument("--noHist", action='store_true', help="Skip the making of 2D histograms (root file is left untouched if existing)")
     return parser
 
 def main(args):
@@ -141,12 +141,29 @@ def main(args):
     )
 
     if not args.noEfficiencyUnc:
-        for name,num in zip(["effSystTnP", "effStatTnP",], [4, 624*4]):
+        for name,num in zip(["effSystTnP", "effStatTnP", "effStatTnP_tracking", "effStatTnP_reco"], [4, 624*4, 384*2, 144*2]):
             ## TODO: this merged implementation for the effstat makes it very cumbersome to do things differently for iso and trigidip!!
             ## the problem is that I would need custom actions inside based on actual nuisance names, which needs to be commanded from outside, and this is not straightforward
-            axes = ["reco-tracking-idiptrig-iso"] if num == 4 else ["SF eta", "SF pt", "SF charge", "idiptrig-iso"]
-            axlabels = ["WPSYST"] if num == 4 else ["eta", "pt", "q", "Trig"]  # WARNING: Trig0/Trig1 actually stands for trigger/isolation, the axis name was intended to indicate the order "axis_idiptrig_iso"
-            nameReplace = [("WPSYST0", "Reco"), ("WPSYST1", "Tracking"), ("WPSYST2", "IDIPTrig"), ("WPSYST3", "Iso")] if num == 4 else [("Trig0", "IDIPTrig"), ("q0Trig1", "Iso"), ("q1Trig1", "Iso")] if args.correlateEffStatIsoByCharge else [("Trig0", "IDIPTrig"), ("Trig1", "Iso")], # replace with better names
+            if "Syst" in name:
+                axes = ["reco-tracking-idiptrig-iso"]
+                axlabels = ["WPSYST"]
+                nameReplace = [("WPSYST0", "Reco"), ("WPSYST1", "Tracking"), ("WPSYST2", "IDIPTrig"), ("WPSYST3", "Iso")]
+                scale = 1.0
+            elif "tracking" in name:
+                axes = ["SF eta", "SF pt", "SF charge"]
+                axlabels = ["eta", "pt", "q"]
+                nameReplace = [("q0", "Tracking"), ("q1", "Tracking")] # this serves two purposes: it correlates nuisances between charges and add a sensible labels to nuisances
+                scale = 1.0
+            elif "reco" in name:
+                axes = ["SF eta", "SF pt", "SF charge"]
+                axlabels = ["eta", "pt", "q"]
+                nameReplace = [("q0", "Reco"), ("q1", "Reco")] # this serves two purposes: it correlates nuisances between charges and add a sensible labels to nuisances
+                scale = 1.0
+            else:
+                axes = ["SF eta", "SF pt", "SF charge", "idiptrig-iso"]
+                axlabels = ["eta", "pt", "q", "Trig"]
+                nameReplace = [("Trig0", "IDIPTrig"), ("q0Trig1", "Iso"), ("q1Trig1", "Iso")] if args.correlateEffStatIsoByCharge else [("Trig0", "IDIPTrig"), ("Trig1", "Iso")] # replace with better names
+                scale = 1.0 if args.correlateEffStatIsoByCharge else {".*effStatTnP.*Iso" : "1.414", ".*effStatTnP.*IDIPTrig" : "1.0"} # only for iso, scale up by sqrt(2) when decorrelating between charges and efficiencies were derived inclusively
             cardTool.addSystematic(name, 
                 mirror=True,
                 group="muon_eff_syst" if "Syst" in name else "muon_eff_stat", # TODO: for now better checking them separately
@@ -155,8 +172,8 @@ def main(args):
                 baseName=name+"_",
                 processes=cardTool.allMCProcesses(),
                 passToFakes=passSystToFakes,
-                systNameReplace=nameReplace
-                scale=1.0 if "Syst" in name  else {".*effStatTnP.*Iso" : "1.414", ".*effStatTnP.*IDIPTrig" : "1.0"} if not args.correlateEffStatIsoByCharge else 1.0 # only for iso, scale up by sqrt(2) when decorrelating between charges and efficiencies were derived inclusively
+                systNameReplace=nameReplace,
+                scale=scale
             )
 
     to_fakes = not (args.wlike or args.noQCDscaleFakes)
