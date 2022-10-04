@@ -10,6 +10,9 @@ import ROOT
 import re
 import pandas as pd
 import math
+from utilities import common
+
+logger = common.child_logger(__name__)
 
 class datagroups(object):
     def __init__(self, infile, combine=False):
@@ -57,24 +60,26 @@ class datagroups(object):
 
         foundExact = False
         for procName in procsToRead:
+            logger.debug(f"Reading group {procName}")
             group = self.groups[procName]
             group[label] = None
 
             for member in group["members"]:
+                logger.debug(f"Looking at group member {member.name}")
                 scale = group["scale"] if "scale" in group else None
                 try:
                     h = self.readHist(baseName, member, syst, scaleOp=scale, forceNonzero=forceNonzero)
                     foundExact = True
                 except ValueError as e:
                     if nominalIfMissing:
-                        logging.info(f"{str(e)}. Using nominal hist {self.nominalName} instead")
+                        logger.info(f"{str(e)}. Using nominal hist {self.nominalName} instead")
                         h = self.readHist(self.nominalName, member, "", scaleOp=scale, forceNonzero=forceNonzero)
                     else:
-                        logging.warning(str(e))
+                        logger.warning(str(e))
                         continue
 
                 if preOpMap and member.name in preOpMap:
-                    logging.debug(f"Applying preOp to {member.name} after loading")
+                    logger.debug(f"Applying preOp to {member.name} after loading")
                     h = preOpMap[member.name](h, **preOpArgs)
 
                 group[label] = h if not group[label] else hh.addHists(h, group[label])

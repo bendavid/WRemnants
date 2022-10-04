@@ -30,7 +30,10 @@ def make_parser(parser=None):
     return parser
 
 def main(args):
-    logging.basicConfig(level=logging.INFO if not args.debug else logging.DEBUG)
+    logging.basicConfig()
+    base_logger = logging.getLogger("wremnants")
+    base_logger.setLevel(logging.DEBUG if args.debug else logging.INFO)
+    logger = base_logger.getChild("setupCombineWMass")
 
     outfolder = "/".join([args.baseDir, args.outfolder])
     if not os.path.isdir(outfolder):
@@ -38,10 +41,12 @@ def main(args):
 
     if args.noHist and args.noStatUncFakes:
         raise ValueError("Option --noHist would override --noStatUncFakes. Please select only one of them")
-        
-    datagroups = datagroups2016(args.inputFile, wlike=args.wlike)
+
+    wlike = args.wlike
+    datagroups = datagroups2016(args.inputFile, wlike=wlike)
+
     templateDir = f"{scriptdir}/Templates/WMass"
-    name = "WMass" if not args.wlike else "ZMassWLike"
+    name = "WMass" if not wlike else "ZMassWLike"
     cardTool = CardTool.CardTool(f"{outfolder}/{name}_{{chan}}.txt")
     cardTool.setNominalTemplate(f"{templateDir}/main.txt")
     if args.noHist:
@@ -58,19 +63,24 @@ def main(args):
     if args.pseudoData:
         cardTool.setPseudodata(args.pseudoData)
 
-    passSystToFakes = not args.wlike and not args.skipSignalSystOnFakes
+    passSystToFakes = not (wlike or args.skipSignalSystOnFakes)
         
     single_v_samples = cardTool.filteredProcesses(lambda x: x[0] in ["W", "Z"])
-    single_v_nonsig_samples = cardTool.filteredProcesses(lambda x: x[0] == ("W" if args.wlike else "Z"))
+    single_v_nonsig_samples = cardTool.filteredProcesses(lambda x: x[0] == ("W" if wlike else "Z"))
     single_vmu_samples = list(filter(lambda x: "mu" in x, single_v_samples))
-    signal_samples = list(filter(lambda x: x[0] == ("Z" if args.wlike else "W"), single_vmu_samples))
-    signal_samples_inctau = list(filter(lambda x: x[0] == ("Z" if args.wlike else "W"), single_v_samples))
+    signal_samples = list(filter(lambda x: x[0] == ("Z" if wlike else "W"), single_vmu_samples))
+    signal_samples_inctau = list(filter(lambda x: x[0] == ("Z" if wlike else "W"), single_v_samples))
 
-    logging.info(f"All MC processes {cardTool.allMCProcesses()}")
-    logging.info(f"Single V samples: {single_v_samples}")
-    logging.info(f"Single V no signal samples: {single_v_nonsig_samples}")
-    logging.info(f"Signal samples: {signal_samples}")
+    logger.info(f"All MC processes {cardTool.allMCProcesses()}")
+    logger.info(f"Single V samples: {single_v_samples}")
+    logger.info(f"Single V no signal samples: {single_v_nonsig_samples}")
+    logger.info(f"Signal samples: {signal_samples}")
 
+    if not wlike and "wlike" in args.inputFile:
+        logger.error("You appear to be running with a Wlike input file without the wlike flag! This will probably fail!")
+    elif "wlike" not in args.inputFile and args.wlike:
+        logger.error("You appear to be running with on a non-Wlike input file with the wlike flag! This will probably fail!")
+        
     pdfInfo = theory_tools.pdf_info_map("ZmumuPostVFP", args.pdf)
     pdfName = pdfInfo["name"]
 
@@ -78,7 +88,7 @@ def main(args):
     cardTool.addSystematic("massWeight", 
         # TODO: Add the mass weights to the tau samples ## FIXME: isn't it done?
         processes=signal_samples_inctau,
-        outNames=theory_tools.massWeightNames(["massShift100MeV"], wlike=args.wlike),
+        outNames=theory_tools.massWeightNames(["massShift100MeV"], wlike=wlike),
         group="massShift",
         groupFilter=lambda x: x == "massShift100MeV",
         mirror=False,
@@ -90,12 +100,12 @@ def main(args):
 
     if args.doStatOnly:
         # print a card with only mass weights and a dummy syst
-        cardTool.addLnNSystematic("dummy", processes=["Other"] if args.wlike else ["Top", "Diboson"], size=1.001, group="dummy")
+        cardTool.addLnNSystematic("dummy", processes=["Other"] if wlike else ["Top", "Diboson"], size=1.001, group="dummy")
         cardTool.writeOutput()
-        logging.info("Using option --doStatOnly: the card was created with only mass weights and a dummy LnN syst on all processes")
+        logger.info("Using option --doStatOnly: the card was created with only mass weights and a dummy LnN syst on all processes")
         quit()
         
-    if args.wlike:
+    if wlike:
         # TOCHECK: no fakes here, most likely
         cardTool.addLnNSystematic("luminosity", processes=cardTool.allMCProcesses(), size=1.012, group="luminosity")
     else:
@@ -176,10 +186,10 @@ def main(args):
                 scale=scale
             )
 
-    to_fakes = not (args.wlike or args.noQCDscaleFakes)
+    to_fakes = not (wlike or args.noQCDscaleFakes)
     combine_helpers.add_scale_uncertainty(cardTool, args.qcdScale, signal_samples_inctau, to_fakes, pdf=args.pdf, scetlib=args.scetlibUnc)
     # for Z background in W mass case (W background for Wlike is essentially 0, useless to apply QCD scales there)
-    if not args.wlike:
+    if not wlike:
         combine_helpers.add_scale_uncertainty(cardTool, "integrated", single_v_samples, False, pdf=args.pdf, name_append="Z", scetlib=args.scetlibUnc)
 
     cardTool.addSystematic("muonScaleSyst", 
@@ -217,7 +227,7 @@ def main(args):
         passToFakes=passSystToFakes,
     )
 
-    if not args.wlike:
+    if not wlike:
         cardTool.addLnNSystematic("CMS_Fakes", processes=[args.qcdProcessName], size=1.05, group="MultijetBkg")
         cardTool.addLnNSystematic("CMS_Top", processes=["Top"], size=1.06)
         cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16)

@@ -92,3 +92,12 @@ def common_parser_combine():
     parser.add_argument("--doStatOnly", action="store_true", default=False, help="Set up fit to get stat-only uncertainty (currently combinetf with -S 0 doesn't work)")
     parser.add_argument("--debug", action='store_true', help="Print debug output")
     return parser
+
+def setup_base_logger(name, debug):
+    logging.basicConfig()
+    base_logger = logging.getLogger("wremnants")
+    base_logger.setLevel(logging.DEBUG if debug else logging.INFO)
+    return base_logger.getChild(name)
+    
+def child_logger(name):
+    return logging.getLogger("wremnants").getChild(name.split(".")[-1])
