@@ -80,41 +80,40 @@ def getDatasets(maxFiles=-1, filt=None, flavor=""):
 
         narf.Dataset(
             name="Zmumu",
-            filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v2/DYJetsToMuMu_M-50_massWgtFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/"),
+            filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v3/DYJetsToMuMu_M-50_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/"),
             xsec=2025.74, # 1976.1
             is_data=False,
         ),
         narf.Dataset(
             name="Zee",
-            filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v2/DYJetsToEE_M-50_massWgtFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"),
+            filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v3/DYJetsToEE_M-50_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"),
             xsec=2025.74,
             is_data=False,
         ),
         
         narf.Dataset(
             name="Ztautau",
-            filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v2/DYJetsToTauTau_M-50_massWgtFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"),
+            filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v3/DYJetsToTauTau_M-50_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"),
             xsec=2025.74,
             is_data=False,
         ),
         
         
-        
         narf.Dataset(
             name="WminusJetsToMuNu",
-            filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v2/WminusJetsToMuNu_massWgtFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"),
+            filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v3/WminusJetsToMuNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"),
             xsec=8677.3, # 8562.66
             is_data=False,
         ),
         narf.Dataset(
             name="WminusJetsToENu",
-            filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v2/WminusJetsToENu_massWgtFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"),
+            filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v3/WminusJetsToENu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"),
             xsec=8677.3,
             is_data=False,
         ),
         narf.Dataset(
             name="WminusJetsToTauNu",
-            filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v2/WminusJetsToTauNu_massWgtFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"),
+            filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v3/WminusJetsToTauNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"),
             xsec=8677.3,
             is_data=False,
         ),
@@ -122,22 +121,86 @@ def getDatasets(maxFiles=-1, filt=None, flavor=""):
         
         narf.Dataset(
             name="WplusJetsToMuNu",
-            filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v2/WplusJetsToMuNu_massWgtFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"),
+            filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v3/WplusJetsToMuNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"),
             xsec=11811.4, # 11572.19 
             is_data=False,
         ),
         narf.Dataset(
             name="WplusJetsToENu",
-            filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v2/WplusJetsToENu_massWgtFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"),
+            filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v3/WplusJetsToENu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"),
             xsec=11572.19, # 
             is_data=False,
         ),
         narf.Dataset(
             name="WplusJetsToTauNu",
-            filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v2/WplusJetsToTauNu_massWgtFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"),
+            filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v3/WplusJetsToTauNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"),
             xsec=11572.19,
             is_data=False,
         ),
+        
+
+        #narf.Dataset(
+        #    name="Zmumu_MiNNLObug",
+        #    filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v2/DYJetsToMuMu_M-50_massWgtFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/"),
+        #    xsec=2025.74, # 1976.1
+        #    is_data=False,
+        #),
+        #narf.Dataset(
+        #    name="Zee_MiNNLObug",
+        #    filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v2/DYJetsToEE_M-50_massWgtFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"),
+        #    xsec=2025.74,
+        #    is_data=False,
+        #),
+        
+        #narf.Dataset(
+        #    name="Ztautau_MiNNLObug",
+        #    filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v2/DYJetsToTauTau_M-50_massWgtFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"),
+        #    xsec=2025.74,
+        #    is_data=False,
+        #),
+
+        
+        
+        
+        
+        #narf.Dataset(
+        #    name="WminusJetsToMuNu_MiNNLObug",
+        #    filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v2/WminusJetsToMuNu_massWgtFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"),
+        #    xsec=8677.3, # 8562.66
+        #    is_data=False,
+        #),
+        #narf.Dataset(
+        #    name="WminusJetsToENu_MiNNLObug",
+        #    filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v2/WminusJetsToENu_massWgtFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"),
+        #    xsec=8677.3,
+        #    is_data=False,
+        #),
+        #narf.Dataset(
+        #    name="WminusJetsToTauNu_MiNNLObug",
+        #    filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v2/WminusJetsToTauNu_massWgtFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"),
+        #    xsec=8677.3,
+        #    is_data=False,
+        #),
+        
+        
+        #narf.Dataset(
+        #    name="WplusJetsToMuNu_MiNNLObug",
+        #    filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v2/WplusJetsToMuNu_massWgtFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"),
+        #    xsec=11811.4, # 11572.19 
+        #    is_data=False,
+        #),
+        #narf.Dataset(
+        #    name="WplusJetsToENu_MiNNLObug",
+        #    filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v2/WplusJetsToENu_massWgtFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"),
+        #    xsec=11572.19, # 
+        #    is_data=False,
+        #),
+        #narf.Dataset(
+        #    name="WplusJetsToTauNu_MiNNLObug",
+        #    filepaths=findEOS("/scratch/shared/lowPU/NanoAOD_v2/WplusJetsToTauNu_massWgtFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"),
+        #    xsec=11572.19,
+        #    is_data=False,
+        #),
         
         
     ]
@@ -168,75 +231,3 @@ def getDatasets(maxFiles=-1, filt=None, flavor=""):
 
     return allProcs
 
-
-'''
-def getDatasets_Z(maxFiles=-1, filt=None):
-    allProcs = [
-        narf.Dataset(
-            name="TTTo2L2Nu",
-            filepaths=[],
-            xsec=1.,
-            is_data=False,
-        ),
-        narf.Dataset(
-            name="TTToSemiLeptonic",
-            filepaths=[],
-            xsec=1.,
-            is_data=False,
-        ),
-        narf.Dataset(
-            name="WWTo2L2Nu",
-            filepaths=[],
-            xsec=1.,
-            is_data=False,
-        ),
-        narf.Dataset(
-            name="WZTo3LNu",
-            filepaths=[],
-            xsec=1.,
-            is_data=False,
-        ),
-        narf.Dataset(
-            name="DYmumu_MiNNLO",
-            filepaths=[],
-            xsec=1.,
-            is_data=False,
-        ),
-        narf.Dataset(
-            name="WplusJetsToTauNu",
-            filepaths=[],
-            xsec=1.,
-            is_data=False,
-        ),
-        narf.Dataset(
-            name="WminusJetsToTauNu",
-            filepaths=[],
-            xsec=1.,
-            is_data=False,
-        ),
-        narf.Dataset(
-            name="WminusJetsToMuNu",
-            filepaths=[],
-            xsec=1.,
-            is_data=False,
-        ),
-        narf.Dataset(
-            name="WplusJetsToMuNu",
-            filepaths=[],
-            xsec=1.,
-            is_data=False,
-        ),
-        narf.Dataset(
-            filepaths=[],
-            name="singlemuon",
-            xsec=1.,
-            is_data=True,
-        ),
-    ]
-
-    if filt:
-        return list(filter(filt, allProcs))
-
-    return allProcs
-
-'''
