@@ -128,15 +128,6 @@ def make_muon_efficiency_helpers(filename = data_dir + "/testMuonSF/scaleFactorP
     nptbins = np.count_nonzero(axis_pt_eff.edges < max_pt) # if max_pt = 55 and tnp bins are [26,54,60] then it has to use 2 bins, same for [26,54,55,60]  
     nptbins_tracking = np.count_nonzero(axis_pt_eff_tracking.edges < max_pt)
     nptbins_reco = np.count_nonzero(axis_pt_eff_reco.edges < max_pt)
-    for edge in axis_pt_eff.edges:
-        if edge < max_pt:
-            nptbins += 1
-    for edge in axis_pt_eff_tracking.edges:
-        if edge < max_pt:
-            nptbins_tracking += 1
-    for edge in axis_pt_eff_reco.edges:
-        if edge < max_pt:
-            nptbins_reco += 1
 
     sf_idip_trig_iso_pyroot = narf.hist_to_pyroot_boost(sf_idip_trig_iso)
     sf_tracking_pyroot = narf.hist_to_pyroot_boost(sf_tracking)
