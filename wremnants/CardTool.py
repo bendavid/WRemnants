@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from utilities import output_tools,boostHistHelpers as hh
+from utilities import output_tools,boostHistHelpers as hh,common
 import narf
 import logging
 import ROOT
@@ -11,7 +11,7 @@ import os
 import itertools
 import re
 
-logging.basicConfig(level=logging.INFO)
+logger = common.child_logger(__name__)
 
 def notImplemented(operation="Unknown"):
     raise NotImplementedError(f"Required operation '{operation}' is not implemented!")
@@ -40,6 +40,7 @@ class CardTool(object):
         self.noStatUncProcesses = []
         self.buildHistNameFunc = None
         self.histName = "x"
+        self.nominalDim = None
         self.pseudoData = None
         self.excludeSyst = None
         self.writeByCharge = True
@@ -54,7 +55,7 @@ class CardTool(object):
     def skipHistograms(self):
         self.skipHist = True
         if len(self.noStatUncProcesses):
-            logging.info("Attention: histograms are not saved according to input options, thus statistical uncertainty won't be zeroed")
+            logger.info("Attention: histograms are not saved according to input options, thus statistical uncertainty won't be zeroed")
         
     def setSkipOtherChargeSyst(self):
         self.keepOtherChargeSyst = False
@@ -63,7 +64,7 @@ class CardTool(object):
 
     def setProcsNoStatUnc(self, procs, resetList=True):
         if self.skipHist:
-            logging.info("Attention: trying to set statistical uncertainty to 0 for some processes, but histograms won't be saved according to input options")
+            logger.info("Attention: trying to set statistical uncertainty to 0 for some processes, but histograms won't be saved according to input options")
         if resetList:
             self.noStatUncProcesses = []
         if isinstance(procs, str):
@@ -91,7 +92,7 @@ class CardTool(object):
             if self.keepSyst != None and self.keepSyst.match(name):
                 return False
             else:
-                logging.info(f"   Excluding nuisance: {name}")
+                logger.info(f"   Excluding nuisance: {name}")
                 return True
         else:
             return False
@@ -314,14 +315,14 @@ class CardTool(object):
             h = hh.extendHistByMirror(h, hnom)
         # Otherwise this is a processes not affected by the variation, don't write it out,
         # it's only needed for the fake subtraction
-        logging.info(f"Writing systematic {syst} for process {proc}")
+        logger.info(f"Writing systematic {syst} for process {proc}")
         var_names, variations = self.systHists(h, syst) 
         if len(var_names) != len(variations):
-            logging.warning(f"The number of variations doesn't match the number of names for "
+            logger.warning(f"The number of variations doesn't match the number of names for "
                 f"process {proc}, syst {syst}. Found {len(var_names)} names and {len(variations)} variations.")
         setZeroStatUnc = False
         if proc in self.noStatUncProcesses:
-            logging.info(f"Zeroing statistical uncertainty for process {proc}")
+            logger.info(f"Zeroing statistical uncertainty for process {proc}")
             setZeroStatUnc = True
         for name, var in zip(var_names, variations):
             if name != "":
@@ -378,7 +379,7 @@ class CardTool(object):
             self.writeForProcesses(syst, label="syst", processes=processes)    
         output_tools.writeMetaInfoToRootFile(self.outfile, exclude_diff='notebooks')
         if self.skipHist:
-            logging.info("Histograms will not be written because 'skipHist' flag is set to True")
+            logger.info("Histograms will not be written because 'skipHist' flag is set to True")
         self.writeCard()
 
         
@@ -504,6 +505,15 @@ class CardTool(object):
     def writeHist(self, h, name, setZeroStatUnc=False):
         if self.skipHist:
             return
+
+        if not self.nominalDim:
+            self.nominalDim = h.ndim
+            if self.nominalDim-self.writeByCharge > 3:
+                raise ValueError("Cannot write hists with > 3 dimensions as combinetf does not accept THn")
+        
+        if h.ndim != self.nominalDim:
+            raise ValueError(f"Histogram {name} does not have the correct dimensions. Found {h.ndim}, expected {self.nominalDim}")
+
         if setZeroStatUnc:
             hist_no_error = h.copy()
             hist_no_error.variances(flow=True)[...] = 0.

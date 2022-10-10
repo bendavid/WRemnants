@@ -1,7 +1,7 @@
 from wremnants.datasets.datagroups import datagroups2016
 from wremnants import histselections as sel
 from wremnants import plot_tools,theory_tools,syst_tools
-from utilities import boostHistHelpers as hh
+from utilities import boostHistHelpers as hh,common
 import matplotlib.pyplot as plt
 from matplotlib import cm
 import argparse
@@ -53,7 +53,7 @@ variation.add_argument("--fill_between", action='store_true', help="Fill between
 
 args = parser.parse_args()
 
-logging.basicConfig(level=logging.INFO if not args.debug else logging.DEBUG)
+logger = common.setup_base_logger("makeDataMCStackPlot", args.debug)
 
 def padArray(ref, matchLength):
     return ref+ref[-1:]*(len(matchLength)-len(ref))
@@ -67,6 +67,8 @@ if addVariation and (args.selectAxis or args.selectEntries):
         raise ValueError("Must specify the same number of args for --selectEntires, and --varLabel")
     if len(args.varName) == 1 and len(args.selectEntries):
         args.varName = padArray(args.varName, args.selectEntries)
+    axes = padArray(args.selectAxis, args.varLabel)
+    entries = padArray(args.selectEntries, args.varLabel)
 
 outdir = plot_tools.make_plot_dir(args.outpath, args.outfolder)
 
@@ -84,14 +86,12 @@ exclude = ["Data"]
 unstack = exclude[:]
 
 # TODO: In should select the correct hist for the transform, not just the first
-transforms = syst_tools.syst_transform_map(args.baseName, args.hists[0])
+transforms = syst_tools.syst_transform_map(nominalName, args.hists[0])
+
+histInfo = groups.getDatagroups()
 
 if addVariation:
-    if args.selectAxis and args.selectEntries:
-        axes = padArray(args.selectAxis, args.varLabel)
-        entries = padArray(args.selectEntries, args.varLabel)
-
-    logging.info(f"Adding variation {args.varName}")
+    logger.info(f"Adding variation {args.varName}")
     varLabels = padArray(args.varLabel, args.varName)
     # If none matplotlib will pick a random color
     colors = args.colors if args.colors else [cm.get_cmap("tab10")(i) for i in range(len(args.varName))]
@@ -101,9 +101,10 @@ if addVariation:
         name = name if name != "" else nominalName
         exclude.append(name)
         load_op = {}
+        action=None
 
         if args.selectAxis or do_transform:
-            transform_procs = groups.getProcNames(exclude)
+            transform_procs = groups.getProcNames(exclude_group=exclude)
             if args.selectAxis:
                 ax = axes[i]
                 entry = entries[i]
@@ -119,12 +120,16 @@ if addVariation:
             varname = name_toload
 
         if (args.transform and name not in transforms):
-            logging.warning(f"No known transformation for variation {name}. No transform applied!")
+            logger.warning(f"No known transformation for variation {name}. No transform applied!")
 
-        print(load_op)
-        groups.addSummedProc(nominalName, name=name_toload, label=label, exclude=exclude,
-            color=color, reload=name_toload != args.baseName,
-            rename=varname, preOpMap=load_op)
+        reload = name_toload != args.baseName
+        # The action map will only work if reloading, otherwise need to apply some transform
+        # to the already loaded hist
+        if load_op and reload:
+            action = None
+        groups.addSummedProc(args.baseName, name=name_toload, label=label, exclude=exclude,
+            color=color, reload=reload, rename=varname, 
+            preOpMap=load_op, action=action)
 
         exclude.append(varname)
         unstack.append(varname)
@@ -138,7 +143,7 @@ select = {} if args.channel == "all" else {"select" : -1.j if args.channel == "m
 def collapseSyst(h):
     for ax in ["systIdx", "tensor_axis_0"]:
         if ax in h.axes.name:
-            return h[{ax : 0}]
+            return h[{ax : 0}].copy()
     return h
 
 overflow_ax = ["ptll", "chargeVgen", "massVgen", "ptVgen"]
@@ -151,7 +156,7 @@ for h in args.hists:
             xlim=args.xlim) 
     outfile = f"{h}_{args.baseName}_{args.channel}"+ (f"_{args.name_append}" if args.name_append else "")
     plot_tools.save_pdf_and_png(outdir, outfile)
-    stack_yields = groups.make_yields_df(args.baseName, prednames)
-    unstacked_yields = groups.make_yields_df(args.baseName, unstack)
+    stack_yields = groups.make_yields_df(args.baseName, prednames, action)
+    unstacked_yields = groups.make_yields_df(args.baseName, unstack, action)
     plot_tools.write_index_and_log(outdir, outfile, 
         yield_tables={"Stacked processes" : stack_yields, "Unstacked processes" : unstacked_yields})

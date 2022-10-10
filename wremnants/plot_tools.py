@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib import ticker
 from matplotlib import patches
 from matplotlib.ticker import StrMethodFormatter # for setting number of decimal places on tick labels
-from utilities import boostHistHelpers as hh
+from utilities import boostHistHelpers as hh,common
 from wremnants import histselections as sel
 import math
 import numpy as np
@@ -16,6 +16,8 @@ import sys
 import datetime
 
 hep.style.use(hep.style.ROOT)
+
+logger = common.child_logger(__name__)
 
 def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None,
     grid_on_main_plot = False, grid_on_ratio_plot = False, plot_title = None, x_ticks_ndp = None,
@@ -78,11 +80,11 @@ def makeStackPlotWithRatio(
     fill_between=False, ratio_to_data=False, baseline=True, legtex_size=20, cms_decor="Preliminary", lumi=16.8,
     bin_density=300,
 ):
-    stack = [action(histInfo[k][histName][select]) for k in stackedProcs if histInfo[k][histName]]
+    stack = [action(histInfo[k][histName])[select] for k in stackedProcs if histInfo[k][histName]]
     colors = [histInfo[k]["color"] for k in stackedProcs if histInfo[k][histName]]
     labels = [histInfo[k]["label"] for k in stackedProcs if histInfo[k][histName]]
     fig, ax1, ax2 = figureWithRatio(stack[0], xlabel, ylabel, ylim, rlabel, rrange, xlim=xlim, grid_on_ratio_plot = grid, plot_title = plot_title, bin_density = bin_density)
-    
+
     hep.histplot(
         stack,
         histtype="fill",
@@ -120,6 +122,7 @@ def makeStackPlotWithRatio(
             )
 
         for proc in unstacked:
+            logger.debug(f"Plotting proc {proc}")
             unstack = action(histInfo[proc][histName][select])
             hep.histplot(
                 unstack,
@@ -145,9 +148,8 @@ def makeStackPlotWithRatio(
             )
 
         if fill_between:
-            if "Data" in unstacked:
-                unstacked.pop(unstacked.index("Data"))
-            for up,down in zip(unstacked[::2], unstacked[1::2]):
+            fill_procs = [x for x in unstacked if x != "Data"]
+            for up,down in zip(fill_procs[::2], fill_procs[1::2]):
                 unstack_up = hh.divideHists(action(histInfo[up][histName][select]), ratio_ref, 1e-6)
                 unstack_down = hh.divideHists(action(histInfo[down][histName][select]), ratio_ref, 1e-6)
                 ax2.fill_between(unstack_up.axes[0].edges, 
@@ -263,7 +265,7 @@ def make_plot_dir(outpath, outfolder):
         raise IOError(f"The path {outpath} doesn't not exist. You should create it (and possibly link it to your web area)")
         
     if not os.path.isdir(full_outpath):
-        logging.info(f"Creating folder {full_outpath}")
+        logger.info(f"Creating folder {full_outpath}")
         os.makedirs(full_outpath)
 
     return full_outpath
@@ -272,7 +274,7 @@ def save_pdf_and_png(outdir, basename):
     fname = f"{outdir}/{basename}.pdf"
     plt.savefig(fname, bbox_inches='tight')
     plt.savefig(fname.replace(".pdf", ".png"), bbox_inches='tight')
-    logging.info(f"Wrote file(s) {fname}(.png)")
+    logger.info(f"Wrote file(s) {fname}(.png)")
 
 def write_index_and_log(outpath, logname, indexname="index.php", template_dir=f"{pathlib.Path(__file__).parent}/Templates", yield_tables=None):
     if not os.path.isfile(f"{outpath}/{indexname}"):
