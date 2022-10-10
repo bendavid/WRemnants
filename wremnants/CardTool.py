@@ -163,6 +163,7 @@ class CardTool(object):
     def allMCProcesses(self):
         return self.filteredProcesses(lambda x: self.isMC(x))
 
+    # FIXME: used nowhere?
     def mirrorNames(self, baseName, size, offset=0):
         names = [""]*offset + [f"{baseName.format(i=i%size)}{'Up' if i % 2 else 'Down'}" for i in range(size*2)]
         return names
@@ -212,8 +213,10 @@ class CardTool(object):
         self.systematics[syst]["mirror"] = mirror
 
     def systLabelForAxis(self, axLabel, entry):
-        if axLabel == "mirror" or axLabel == "downUpVar":
-            return 'Up' if entry else 'Down'  # note, the first entry is the original, might want to call it Up if it was defined by an actual scaling up of something (e.g. efficiencies)
+        if axLabel == "mirror":
+            return 'Down' if entry else 'Up' # first entry is the original, call it Up since it is usually defined by an actual scaling up of something (e.g. efficiencies)
+        if axLabel == "downUpVar":
+            return 'Up' if entry else 'Down'
         if "{i}" in axLabel:
             return axLabel.format(i=entry)
         return axLabel+str(entry)
