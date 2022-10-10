@@ -4,12 +4,13 @@ import hist
 import narf
 import numpy as np
 import boost_histogram as bh
+import logging
 
 ROOT.gInterpreter.Declare('#include "muon_efficiencies.h"')
 
 data_dir = f"{pathlib.Path(__file__).parent}/data/"
 
-def make_muon_efficiency_helpers(filename = data_dir + "/testMuonSF/scaleFactorProduct_29Sept2022_vertexWeight_OSchargeExceptTracking.root", era = None, is_w_like = False, max_pt = np.inf):
+def make_muon_efficiency_helpers(filename = data_dir + "/testMuonSF/scaleFactorProduct_08Oct2022_vertexWeight_OSchargeExceptTracking.root", era = None, is_w_like = False, max_pt = np.inf):
 
     eradict = { "2016PreVFP" : "BtoF",
                 "2016PostVFP" : "GtoH" }
@@ -102,15 +103,15 @@ def make_muon_efficiency_helpers(filename = data_dir + "/testMuonSF/scaleFactorP
 
         
     # set overflow and underflow equal to adjacent bins
-    sf_tracking.view(flow=True)[0, ...] = sf_tracking.view(flow=True)[1, ...]
-    sf_tracking.view(flow=True)[axis_eta_eff_tracking.extent-1, ...] = sf_tracking.view(flow=True)[axis_eta_eff_tracking.extent-2, ...]
-    sf_tracking.view(flow=True)[:, 0, ...] = sf_tracking.view(flow=True)[:, 1, ...]
-    sf_tracking.view(flow=True)[:, axis_pt_eff_tracking.extent-1, ...] = sf_tracking.view(flow=True)[:, axis_pt_eff_tracking.extent-2, ...]
+    sf_tracking[hist.underflow,...] = sf_tracking[0,...].view(flow=True)
+    sf_tracking[hist.overflow,...]  = sf_tracking[-1,...].view(flow=True)
+    sf_tracking[:, hist.underflow,...] = sf_tracking[:, 0,...].view(flow=True)
+    sf_tracking[:, hist.overflow, ...] = sf_tracking[:,-1,...].view(flow=True)
     # set overflow and underflow equal to adjacent bins
-    sf_reco.view(flow=True)[0, ...] = sf_reco.view(flow=True)[1, ...]
-    sf_reco.view(flow=True)[axis_eta_eff_reco.extent-1, ...] = sf_reco.view(flow=True)[axis_eta_eff_reco.extent-2, ...]
-    sf_reco.view(flow=True)[:, 0, ...] = sf_reco.view(flow=True)[:, 1, ...]
-    sf_reco.view(flow=True)[:, axis_pt_eff_reco.extent-1, ...] = sf_reco.view(flow=True)[:, axis_pt_eff_reco.extent-2, ...]
+    sf_reco[hist.underflow,...] = sf_reco[0,...].view(flow=True)
+    sf_reco[hist.overflow,...]  = sf_reco[-1,...].view(flow=True)
+    sf_reco[:, hist.underflow,...] = sf_reco[:, 0,...].view(flow=True)
+    sf_reco[:, hist.overflow, ...] = sf_reco[:,-1,...].view(flow=True)
 
     
     fin.Close()
@@ -118,21 +119,15 @@ def make_muon_efficiency_helpers(filename = data_dir + "/testMuonSF/scaleFactorP
     # TODO implement a convenient way to use enums for the bool/category/nom-var axes such that
     # the C++ code is less error-prone?
 
-    netabins = axis_eta_eff.size  # this is the same also for reco and tracking, should one check explicitly?
-
+    netabins = axis_eta_eff.size
+    if any(x.size != netabins for x in [axis_eta_eff_reco, axis_eta_eff_tracking]):
+        logging.warning("In muon_efficiencies.py: number of eta bins for tracking or reco not consistent with other steps, but syst helper currently assumes it is.")
+        quit()
+        
     # exclude pt bins outside of analysis range
-    nptbins = 0
-    nptbins_tracking = 0
-    nptbins_reco = 0
-    for edge in axis_pt_eff.edges:
-        if edge < max_pt:
-            nptbins += 1
-    for edge in axis_pt_eff_tracking.edges:
-        if edge < max_pt:
-            nptbins_tracking += 1
-    for edge in axis_pt_eff_reco.edges:
-        if edge < max_pt:
-            nptbins_reco += 1
+    nptbins = np.count_nonzero(axis_pt_eff.edges < max_pt) # if max_pt = 55 and tnp bins are [26,54,60] then it has to use 2 bins, same for [26,54,55,60]  
+    nptbins_tracking = np.count_nonzero(axis_pt_eff_tracking.edges < max_pt)
+    nptbins_reco = np.count_nonzero(axis_pt_eff_reco.edges < max_pt)
 
     sf_idip_trig_iso_pyroot = narf.hist_to_pyroot_boost(sf_idip_trig_iso)
     sf_tracking_pyroot = narf.hist_to_pyroot_boost(sf_tracking)
