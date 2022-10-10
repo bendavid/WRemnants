@@ -190,7 +190,7 @@ def main(args):
     combine_helpers.add_scale_uncertainty(cardTool, args.qcdScale, signal_samples_inctau, to_fakes, pdf=args.pdf, scetlib=args.scetlibUnc)
     # for Z background in W mass case (W background for Wlike is essentially 0, useless to apply QCD scales there)
     if not wlike:
-        combine_helpers.add_scale_uncertainty(cardTool, "integrated", single_v_samples, False, pdf=args.pdf, name_append="Z", scetlib=args.scetlibUnc)
+        combine_helpers.add_scale_uncertainty(cardTool, "integrated", single_v_nonsig_samples, False, pdf=args.pdf, name_append="Z", scetlib=args.scetlibUnc)
 
     cardTool.addSystematic("muonScaleSyst", 
         processes=single_vmu_samples,
@@ -233,31 +233,14 @@ def main(args):
         cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16)
 
         # FIXME: it doesn't really make sense to mirror this one since the systematic goes only in one direction
-        # cardTool.addSystematic(f"qcdJetPt45", 
-        #                        processes=["Fake"],
-        #                        mirror=True,
-        #                        group="MultijetBkg",
-        #                        systAxes=[],
-        #                        outNames=["qcdJetPt45Down", "qcdJetPt45Up"],
-        #                        passToFakes=passSystToFakes,
-        # )
         cardTool.addSystematic(f"qcdJetPt45", 
-                            processes=["Fake"],
-                            mirror=False,
-                            group="MultijetBkg",
-                            systAxes=[],
-                            outNames=["qcdJetPt45Up"],
-                            passToFakes=passSystToFakes,
+                               processes=["Fake"],
+                               mirror=True,
+                               group="MultijetBkg",
+                               systAxes=[],
+                               outNames=["qcdJetPt45Down", "qcdJetPt45Up"],
+                               passToFakes=passSystToFakes,
         )
-        cardTool.addSystematic(f"qcdJetPt20", 
-                            processes=["Fake"],
-                            mirror=False,
-                            group="MultijetBkg",
-                            systAxes=[],
-                            outNames=["qcdJetPt20Down"],
-                            passToFakes=passSystToFakes,
-        )
-
 
     else:
         cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)

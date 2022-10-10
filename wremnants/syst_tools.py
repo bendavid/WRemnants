@@ -5,6 +5,8 @@ from wremnants import theory_tools
 import collections.abc
 import logging
 
+logger = common.child_logger(__name__)
+
 def syst_transform_map(base_hist, hist_name):
     pdfInfo = theory_tools.pdfMapExtended 
     pdfNames = [pdfInfo[k]["name"] for k in pdfInfo.keys()]
@@ -69,14 +71,15 @@ def syst_transform_map(base_hist, hist_name):
             "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", range(9,44), no_flow=["ptVgen"], do_min=True)},
     })
     for k,v in transforms.items():
-        if "QCDscale" in k or "resum" in k:
-            unc = "qcdScale" if "QCDscale" in k else "scetlibMSHT20Corr_unc"
-            v["hist"] = unc if base_hist == "nominal" else f"{base_hist}_{unc}"
+        if any([x in k for x in ["QCDscale", "resum", "pdf"]]):
             v["procs"] = common.vprocs 
+            if any([x in k for x in ["QCDscale", "resum", ]]):
+                unc = "qcdScale" if "QCDscale" in k else "scetlibMSHT20Corr_unc"
+                v["hist"] = unc if base_hist == "nominal" else f"{base_hist}_{unc}"
 
     return transforms
 
-def scale_helicity_hist_to_variations(scale_hist, sum_axis=[], rebinPtV=None):
+def scale_helicity_hist_to_variations(scale_hist, sum_axes=[], rebinPtV=None):
     
     s = hist.tag.Slicer()
     # select nominal QCD scales, but keep the sliced axis at size 1 for broadcasting
@@ -113,7 +116,7 @@ def scale_helicity_hist_to_variations(scale_hist, sum_axis=[], rebinPtV=None):
             scale_hist = scale_hist[{axis : s[::hist.sum]}]
             nom_scale_hist = nom_scale_hist[{axis : s[::hist.sum]}]
         else:
-            logging.warning(f"In scale_helicity_hist_to_variations: axis '{axis}' not found in histogram.")
+            logger.warning(f"In scale_helicity_hist_to_variations: axis '{axis}' not found in histogram.")
         
     # difference between a given scale and the nominal, plus the sum
     # this emulates the "weight if idx else nominal" logic and corresponds to the decorrelated

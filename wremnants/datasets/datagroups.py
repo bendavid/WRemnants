@@ -82,6 +82,7 @@ class datagroups(object):
                     logger.debug(f"Applying preOp to {member.name} after loading")
                     h = preOpMap[member.name](h, **preOpArgs)
 
+
                 group[label] = h if not group[label] else hh.addHists(h, group[label])
 
             if selectSignal and group[label] and "signalOp" in group and group["signalOp"]:
@@ -156,7 +157,8 @@ class datagroups(object):
         def get_sum(h):
             return h.sum() if not hasattr(h.sum(), "value") else h.sum().value
         self.groups = dict(
-            sorted(self.groups.items(), key=lambda x: get_sum(x[1][histName]), reverse=True)
+            sorted(self.groups.items(), key=lambda x: get_sum(
+                x[1][histName if histName in x[1] else "dilepton"]), reverse=True)
         )
 
     def getDatagroupsForHist(self, histName):
@@ -171,13 +173,6 @@ class datagroups(object):
 
     def processes(self):
         return self.groups.keys()
-
-    def sortByYields(self, histName):
-        def get_sum(h):
-            return h.sum() if not hasattr(h.sum(), "value") else h.sum().value
-        self.groups = dict(
-            sorted(self.groups.items(), key=lambda x: get_sum(x[1][histName]), reverse=True)
-        )
 
     def getDatagroupsForHist(self, histName):
         filled = {}
@@ -193,7 +188,7 @@ class datagroups(object):
         return self.groups.keys()
 
     def addSummedProc(self, refname, name, label, color="red", exclude=["Data"], relabel=None, 
-            reload=False, rename=None, preOpMap={}, preOpArgs={}):
+            reload=False, rename=None, action=None, preOpMap={}, preOpArgs={}):
         if reload:
             self.loadHistsForDatagroups(refname, syst=name, excluded_procs=exclude,
                 preOpMap=preOpMap, preOpArgs=preOpArgs)
@@ -210,6 +205,10 @@ class datagroups(object):
             h = self.groups[proc][name]
             if not h:
                 raise ValueError(f"Failed to find hist for proc {proc}, histname {name}")
+            if action:
+                logger.debug(f"Applying action in addSummedProc! Before sum {h.sum()}")
+                h = action(h)
+                logger.debug(f"After action sum {h.sum()}")
             tosum.append(h)
         histname = refname if not relabel else relabel
         self.groups[rename][histname] = hh.sumHists(tosum)
@@ -293,10 +292,10 @@ class datagroups2016(datagroups):
                 color = "grey",
             )
 
-    def make_yields_df(self, histName, procs):
+    def make_yields_df(self, histName, procs, action):
         def sum_and_unc(h):
             return (h.sum().value, math.sqrt(h.sum().variance))
-        df = pd.DataFrame([(k, *sum_and_unc(v[histName])) for k,v in self.groups.items() if k in procs], 
+        df = pd.DataFrame([(k, *sum_and_unc(action(v[histName]))) for k,v in self.groups.items() if k in procs], 
                 columns=["Process", "Yield", "Uncertainty"])
         return df
 
