@@ -22,8 +22,8 @@ sys.path.append(os.getcwd())
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("inputfileMC",   type=str, nargs=2, help="Input files for MC")
     parser.add_argument("outputfolder", type=str, nargs=1)
+    parser.add_argument("inputfileMC",   type=str, nargs=2, help="Input files for MC")
     parser.add_argument("labels",   type=str, nargs=2, help="Labels for efficiency plots")
     parser.add_argument(     "--rebin-y", dest="rebinY", default=1, type=int, help="To rebin y axis (pt)")
     parser.add_argument(     "--rebin-z", dest="rebinZ", default=1, type=int, help="To rebin z axis (eta)")

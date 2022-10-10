@@ -152,12 +152,12 @@ def main(args):
             elif "tracking" in name:
                 axes = ["SF eta", "SF pt", "SF charge"]
                 axlabels = ["eta", "pt", "q"]
-                nameReplace = [("q0", "Tracking"), ("q1", "Tracking")] # this serves two purposes: it correlates nuisances between charges and add a sensible labels to nuisances
+                nameReplace = [("effStatTnP_tracking", "effStatTnP"), ("q0", "Tracking"), ("q1", "Tracking")] # this serves two purposes: it correlates nuisances between charges and add a sensible labels to nuisances
                 scale = 1.0
             elif "reco" in name:
                 axes = ["SF eta", "SF pt", "SF charge"]
                 axlabels = ["eta", "pt", "q"]
-                nameReplace = [("q0", "Reco"), ("q1", "Reco")] # this serves two purposes: it correlates nuisances between charges and add a sensible labels to nuisances
+                nameReplace = [("effStatTnP_reco", "effStatTnP"), ("q0", "Reco"), ("q1", "Reco")] # this serves two purposes: it correlates nuisances between charges and add a sensible labels to nuisances
                 scale = 1.0
             else:
                 axes = ["SF eta", "SF pt", "SF charge", "idiptrig-iso"]
@@ -223,30 +223,30 @@ def main(args):
         cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16)
 
         # FIXME: it doesn't really make sense to mirror this one since the systematic goes only in one direction
-        # cardTool.addSystematic(f"qcdJetPt45", 
-        #                        processes=["Fake"],
-        #                        mirror=True,
-        #                        group="MultijetBkg",
-        #                        systAxes=[],
-        #                        outNames=["qcdJetPt45Down", "qcdJetPt45Up"],
-        #                        passToFakes=passSystToFakes,
-        # )
         cardTool.addSystematic(f"qcdJetPt45", 
-                            processes=["Fake"],
-                            mirror=False,
-                            group="MultijetBkg",
-                            systAxes=[],
-                            outNames=["qcdJetPt45Up"],
-                            passToFakes=passSystToFakes,
+                               processes=["Fake"],
+                               mirror=True,
+                               group="MultijetBkg",
+                               systAxes=[],
+                               outNames=["qcdJetPt45Down", "qcdJetPt45Up"],
+                               passToFakes=passSystToFakes,
         )
-        cardTool.addSystematic(f"qcdJetPt20", 
-                            processes=["Fake"],
-                            mirror=False,
-                            group="MultijetBkg",
-                            systAxes=[],
-                            outNames=["qcdJetPt20Down"],
-                            passToFakes=passSystToFakes,
-        )
+        # cardTool.addSystematic(f"qcdJetPt45", 
+        #                     processes=["Fake"],
+        #                     mirror=False,
+        #                     group="MultijetBkg",
+        #                     systAxes=[],
+        #                     outNames=["qcdJetPtUp"],
+        #                     passToFakes=passSystToFakes,
+        # )
+        # cardTool.addSystematic(f"qcdJetPt20", 
+        #                     processes=["Fake"],
+        #                     mirror=False,
+        #                     group="MultijetBkg",
+        #                     systAxes=[],
+        #                     outNames=["qcdJetPtDown"],
+        #                     passToFakes=passSystToFakes,
+        # )
 
 
     else:
