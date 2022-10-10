@@ -222,7 +222,7 @@ if __name__ == "__main__":
               "antiiso"      : "0.7,1.25",
               "isonotrig"    : "0.97,1.03",
               "antiisonotrig": "0.7,1.25",
-              "tracking"     : "0.99,1.01",
+              "tracking"     : "0.98,1.01",
               "reco"         : "0.94,1.02",
     }
     

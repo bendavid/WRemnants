@@ -30,6 +30,8 @@ if __name__ == "__main__":
     parser.add_argument(     "--rebin-x", dest="rebinX", default=1, type=int, help="To rebin x axis (mass)")
     parser.add_argument(     "--rebin-y", dest="rebinY", default=1, type=int, help="To rebin y axis (pt)")
     parser.add_argument(     "--rebin-z", dest="rebinZ", default=1, type=int, help="To rebin z axis (eta)")
+    parser.add_argument(     "--ybin", type=int, nargs=2, default=[0, 0], help="Bins for y axis to plot, default is to do all")
+    parser.add_argument(     "--zbin", type=int, nargs=2, default=[0, 0], help="Bins for z axis to plot, default is to do all")
     args = parser.parse_args()
 
     ROOT.TH1.SetDefaultSumw2()
@@ -66,10 +68,23 @@ if __name__ == "__main__":
 
     print(f"{hmcTot3D.GetNbinsZ()} eta bins")
     print(f"{hmcTot3D.GetNbinsY()} pt  bins")
+
+    iymin = 1
+    iymax = hmcTot3D.GetNbinsY()
+    if args.ybin[0] > 0 and args.ybin[1] > 0:
+        iymin,iymax = args.ybin
+
+    izmin = 1
+    izmax = hmcTot3D.GetNbinsZ()
+    if args.zbin[0] > 0 and args.zbin[1] > 0:
+        izmin,izmax = args.zbin
     
     for ieta in range(1, 1 + hmcTot3D.GetNbinsZ()):
+        if not (izmin <= ieta <= izmax):
+            continue
         for ipt in range(1, 1 + hmcTot3D.GetNbinsY()):
-
+            if not (iymin <= ipt <= iymax):
+                continue
             hmcTot = hmcTot3D.ProjectionX("hmcTot", ipt, ipt, ieta, ieta, "e")
             hmc = hmc3D.ProjectionX("hmc", ipt, ipt, ieta, ieta, "e")
             hdata = hdata3D.ProjectionX("hdata", ipt, ipt, ieta, ieta, "e")
@@ -85,8 +100,10 @@ if __name__ == "__main__":
             hdata.SetMarkerStyle(20)
             hdata.SetMarkerSize(1)
 
-            hmcTot.Scale(hdata.Integral()/hmcTot.Integral())
-            hmc.Scale(hdata.Integral()/hmc.Integral())
+            hmcTotScale = hdata.Integral()/hmcTot.Integral()
+            hmcTot.Scale(hmcTotScale)
+            hmcScale = hdata.Integral()/hmc.Integral()
+            hmc.Scale(hmcScale)
 
             miny, maxy =  getMinMaxMultiHisto([hdata, hmc, hmcTot], excludeEmpty=False, sumError=False)
             

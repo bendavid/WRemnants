@@ -72,19 +72,25 @@ def niceName(name):
         return "Eff.stat. {n1} {lepCh}".format(n1=num[0],lepCh=leptonCharge)
 
     elif re.match(".*QCDscale.*",name):
-        num = re.findall(r'\d+', name)
+        # expect something like QCDscalePtChargeHelicity_PtVBin1genQ0AngCoeff0muF or less 
+        # TODO: distinguish W and Z        
+        boson = "" # "W"
+        ptnum = re.findall(r'PtVBin\d+', name)
+        chargenum = re.findall(r'genQ\d+', name)
+        coeffnum = re.findall(r'AngCoeff\d+', name)
         coeffText = ""
         ptText = ""
-        if len(num) == 2:
-            ncoeff = int(num[0]) - 1
-            npt = int(num[1])
+        chargeText = ""
+        if len(ptnum):
+            ptText = f"p_{{T}} bin {ptnum[0].split("PtVBin")[1]}"
+        if len(chargenum):
+            chg = chargenum.split("genQ")[1]
+            chargeText = "-" if "genQ0" in chargenum else "+" if "genQ1" in chargenum else "" # in case Z has a different convention
+        if len(coeffnum):
+            ncoeff = int(coeffnum[0].split("AngCoeff")[1]) - 1
             coeffText = f"A_{{{ncoeff}}}"
-        elif len(num) == 1:
-            npt = int(num[0])
-        ptText = f"p_{{T}} bin {npt}"
-        Wcharge = "W+" if "plus" in name else "W-" if "minus" in name else "W"
         scale = "#mu_{R}#mu_{F}" if "muRmuF" in name else "#mu_{R}" if "muR" in name else "#mu_{F}"
-        return f"{Wcharge} {coeffText} {ptText} {scale}"
+        return f"{boson}{chargetext} {coeffText} {ptText} {scale}"
     elif "CMS_" in name:
         return name
     else:  
