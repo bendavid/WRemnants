@@ -162,12 +162,12 @@ def main(args):
             elif "tracking" in name:
                 axes = ["SF eta", "SF pt", "SF charge"]
                 axlabels = ["eta", "pt", "q"]
-                nameReplace = [("q0", "Tracking"), ("q1", "Tracking")] # this serves two purposes: it correlates nuisances between charges and add a sensible labels to nuisances
+                nameReplace = [("effStatTnP_tracking", "effStatTnP"), ("q0", "Tracking"), ("q1", "Tracking")] # this serves two purposes: it correlates nuisances between charges and add a sensible labels to nuisances
                 scale = 1.0
             elif "reco" in name:
                 axes = ["SF eta", "SF pt", "SF charge"]
                 axlabels = ["eta", "pt", "q"]
-                nameReplace = [("q0", "Reco"), ("q1", "Reco")] # this serves two purposes: it correlates nuisances between charges and add a sensible labels to nuisances
+                nameReplace = [("effStatTnP_reco", "effStatTnP"), ("q0", "Reco"), ("q1", "Reco")] # this serves two purposes: it correlates nuisances between charges and add a sensible labels to nuisances
                 scale = 1.0
             else:
                 axes = ["SF eta", "SF pt", "SF charge", "idiptrig-iso"]
@@ -241,7 +241,6 @@ def main(args):
                                outNames=["qcdJetPt45Down", "qcdJetPt45Up"],
                                passToFakes=passSystToFakes,
         )
-
     else:
         cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
 

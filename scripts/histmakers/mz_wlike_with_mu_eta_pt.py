@@ -282,8 +282,9 @@ def build_graph(df, dataset):
         effStatTnP = df.HistoBoost("effStatTnP", nominal_axes, [*nominal_cols, "effStatTnP_tensor"], tensor_axes = muon_efficiency_helper_stat.tensor_axes)
         results.append(effStatTnP)
 
-        df = df.Define("zero", "0")  # so ugly and awkward, but does what I want ...
-        df = df.Define("unity", "1")
+        # temporary solution, so ugly and awkward, but does what I want ...
+        df = df.DefinePerSample("zero", "0")
+        df = df.DefinePerSample("unity", "1")
         df = df.Define("effStatTnP_tracking_tensor", muon_efficiency_helper_stat_tracking, ["TrigMuon_SApt", "TrigMuon_SAeta", "TrigMuon_charge", "NonTrigMuon_SApt", "NonTrigMuon_SAeta", "NonTrigMuon_charge", "unity", "nominal_weight"])
         effStatTnP_tracking = df.HistoBoost("effStatTnP_tracking", nominal_axes, [*nominal_cols, "effStatTnP_tracking_tensor"], tensor_axes = muon_efficiency_helper_stat_tracking.tensor_axes)
         results.append(effStatTnP_tracking)
