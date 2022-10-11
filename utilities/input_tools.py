@@ -7,26 +7,31 @@ import numpy as np
 import logging
 import os
 
-def read_and_scale(fname, proc, histname):
+def read_and_scale(fname, proc, histname, lumi):
     with lz4.frame.open(fname) as f:
         out = pickle.load(f)
         
-    return load_and_scale(out, proc, histname)
+    return load_and_scale(out, proc, histname, lumi)
 
-def load_and_scale(res_dict, proc, histname):
+def load_and_scale(res_dict, proc, histname, lumi=False):
     h = res_dict[proc]["output"][histname]
     scale = res_dict[proc]["dataset"]["xsec"]/res_dict[proc]["weight_sum"]
+    if lumi:
+        data_keys = [p for p in res_dict.keys() if "dataset" in res_dict[p] and res_dict[p]["dataset"]["is_data"]]
+        lumi = sum([res_dict[p]["lumi"] for p in data_keys])*1000
+        scale *= lumi
     return h*scale
 
-def read_all_and_scale(fname, procs, histnames):
+def read_all_and_scale(fname, procs, histnames, lumi=False):
     with lz4.frame.open(fname) as f:
         out = pickle.load(f)
 
     hists = []
     for histname in histnames:
-        h = load_and_scale(out, procs[0], histname)
+        h = load_and_scale(out, procs[0], histname, lumi)
         for proc in procs[1:]:
-            h += load_and_scale(out, proc, histname)
+            print("Hist integral is", h.sum(flow=True), "for proc", proc)
+            h += load_and_scale(out, proc, histname, lumi)
         hists.append(h)
 
     return hists

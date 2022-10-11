@@ -3,11 +3,11 @@ from wremnants import syst_tools
 import numpy as np
 
 def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, pdf, name_append="", scetlib=False, use_hel_hist=False, rebin_pt=None):
-    inclusiveScale = scale_type == "integrated"
     helicity = "Helicity" in scale_type
     pt_binned = "Pt" in scale_type
 
-    scale_hist = "inclusive_qcdScale" if inclusiveScale else "qcdScale" if not (helicity or use_hel_hist) else "qcdScaleByHelicity"
+    scale_hist = "qcdScale" if not (helicity or use_hel_hist) else "qcdScaleByHelicity"
+
     # All possible syst_axes
     # TODO: Move the axes to common and refer to axis_chargeVgen etc by their name attribute, not just
     # assuming the name is unchanged
@@ -34,7 +34,10 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, pdf, name_ap
     if card_tool.histName == "reco_mll":
         sum_axes.append("reco_gen")
 
-    action_map = {proc : syst_tools.scale_helicity_hist_to_variations for proc in samples}
+    # NOTE: The map needs to be keyed on the base procs not the group names, which is
+    # admittedly a bit nasty
+    expanded_samples = card_tool.datagroups.getProcNames(samples)
+    action_map = {proc : syst_tools.scale_helicity_hist_to_variations for proc in expanded_samples}
         
     # Determine if it should be summed over based on scale_type passed in. If not,
     # Remove it from the sum list and set names appropriately
@@ -94,7 +97,6 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, pdf, name_ap
             rename="scetlibCorr_resumLambda", 
         )
 
-        expanded_samples = card_tool.datagroups.getProcNames(samples)
         common_args["systAxes"] = ["downUpVar"]
         common_args["labelsByAxis"] = ["downUpVar"]
         axes = ["recoil_reco"] if card_tool.histName == "reco_mll" else ["pt", "eta"] 
