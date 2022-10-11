@@ -140,8 +140,6 @@ def build_graph(df, dataset):
     # the corrected RECO muon kinematics, which is intended to be used as the nominal
     df = wremnants.define_corrected_reco_muon_kinematics(df)
     df = df.Define("goodMuons_abseta0", "abs(goodMuons_eta0)")
-    df = df.Define("goodMuons_phi0", "Muon_correctedPhi[goodMuons][0]")
-    df = df.Define("goodMuons_charge0", "Muon_correctedCharge[goodMuons][0]")
 
     if dataset.group in ["Top", "Diboson"]:
         df = df.Alias("goodMuons_SApt0",  "goodMuons_pt0")
@@ -153,80 +151,17 @@ def build_graph(df, dataset):
         df = df.Define("goodMuons_SAphi0", "Muon_standalonePhi[goodMuons][0]")
     df = df.Filter("goodMuons_SApt0 > 15.0 && wrem::deltaR2(goodMuons_SAeta0, goodMuons_SAphi0, goodMuons_eta0, goodMuons_phi0) < 0.09")
     
-    # the cvhbs RECO muon kinematics, on top of which the corrections are applied to get nominal
-    df = df.Define("goodMuons_pt0_cvhbs", "Muon_cvhbsPt[goodMuons][0]")
-    df = df.Define("goodMuons_eta0_cvhbs", "Muon_cvhbsEta[goodMuons][0]")
-    df = df.Define("goodMuons_phi0_cvhbs", "Muon_cvhbsPhi[goodMuons][0]")
-    df = df.Define("goodMuons_charge0_cvhbs", "Muon_cvhbsCharge[goodMuons][0]")
-
-    # the uncorrected RECO muon kinematics
-    df = df.Define("goodMuons_pt0_uncrct", "Muon_pt[goodMuons][0]")
-    df = df.Define("goodMuons_eta0_uncrct", "Muon_eta[goodMuons][0]")
-    df = df.Define("goodMuons_phi0_uncrct", "Muon_phi[goodMuons][0]")
-    df = df.Define("goodMuons_charge0_uncrct", "Muon_charge[goodMuons][0]")
-
-    # define GEN muon kinematics
-    #if dataset.is_data:
-    if True:
-        df = wremnants.define_gen_muons_from_reco_match(df, reco_subset = "goodMuons")
-    
     if isW or isZ:
-        # the cvhbs RECO muon kinematics, on top of which the corrections are applied to get nominal
         df = wremnants.define_cvhbs_reco_muon_kinematics(df)
-        # the uncorrected RECO muon kinematics
         df = wremnants.define_uncrct_reco_muon_kinematics(df)
-
-        # define GEN muon kinematics
         df = wremnants.get_good_gen_muons_idx_in_GenPart(df, reco_subset = "goodMuons")
-        df = wremnants.define_good_gen_muons_kinematics(df)
         df = wremnants.define_good_gen_muon_kinematics(df)
-        # calculate GEN quantities that are not in the nano
         df = wremnants.calculate_good_gen_muon_kinematics(df)
-
-        df = df.Define("covMat_goodGenMuons0",
-            ("wrem::getCovMatForGoodMuons0("
-            "    Muon_cvhbsMomCov_Vals, Muon_cvhbsMomCov_Counts," 
-            "    goodMuons, goodMuonsByGenTruth"
-            ")")
-        )
-        df = df.Define("goodMuons_pt0_gen_smeared", 
-            (
-            "wrem::smearGenPt(covMat_goodGenMuons0, goodMuons_charge0_gen, "
-            "goodMuons_pt0_gen, goodMuons_theta0_gen)"
-            )
-        )
-        df = df.Define("goodMuons_qop0_gen_smeared", 
-            "wrem::smearGenQop(covMat_goodGenMuons0, goodMuons_qop0_gen)"
-        )
-        df = df.Define("goodMuons_pt0_gen_smeared_a_la_qop", 
-            "goodMuons_charge0_gen * std::sin(goodMuons_theta0_gen) / goodMuons_qop0_gen_smeared"
-        )
-        df = df.Define("goodMuons_qop0_gen_smeared_a_la_pt", 
-            "goodMuons_charge0_gen * std::sin(goodMuons_theta0_gen) / goodMuons_pt0_gen_smeared"
-        )
-        df = df.Filter("covMat_goodGenMuons0[0] > 0 && covMat_goodGenMuons0[0] < 1")
-        df = df.Define("goodMuons_eta0_gen_smeared", "goodMuons_eta0_gen")
-        df = df.Define("goodMuons_phi0_gen_smeared", "goodMuons_phi0_gen")
-        df = df.Define("goodMuons_charge0_gen_smeared", "goodMuons_charge0_gen")
+        df = wremnants.define_gen_smeared_muon_kinematics(df)
 
         if args.validationHists:
-            # corrected RECO / GEN
-            df = df.Define("goodMuons_pt0_crctd_over_gen", "goodMuons_pt0/goodMuons_pt0_gen")
-            df = df.Define("goodMuons_eta0_crctd_over_gen", "goodMuons_eta0/goodMuons_eta0_gen")
-            df = df.Define("goodMuons_phi0_crctd_over_gen", "goodMuons_phi0/goodMuons_phi0_gen")
-            # cvhbs RECO / GEN
-            df = df.Define("goodMuons_pt0_cvhbs_over_gen", "goodMuons_pt0_cvhbs/goodMuons_pt0_gen")
-            df = df.Define("goodMuons_eta0_cvhbs_over_gen", "goodMuons_eta0_cvhbs/goodMuons_eta0_gen")
-            df = df.Define("goodMuons_phi0_cvhbs_over_gen", "goodMuons_phi0_cvhbs/goodMuons_phi0_gen")
-            # uncorrected RECO / GEN
-            df = df.Define("goodMuons_pt0_uncrct_over_gen", "goodMuons_pt0_uncrct/goodMuons_pt0_gen")
-            df = df.Define("goodMuons_eta0_uncrct_over_gen", "goodMuons_eta0_uncrct/goodMuons_eta0_gen")
-            df = df.Define("goodMuons_phi0_uncrct_over_gen", "goodMuons_phi0_uncrct/goodMuons_phi0_gen")
-            # smeared GEN / GEN
-            df = df.Define("goodMuons_pt0_gen_smeared_over_gen", "goodMuons_pt0_gen_smeared/goodMuons_pt0_gen")
-            df = df.Define("goodMuons_eta0_gen_smeared_over_gen", "goodMuons_eta0_gen_smeared/goodMuons_eta0_gen")
-            df = df.Define("goodMuons_phi0_gen_smeared_over_gen", "goodMuons_phi0_gen_smeared/goodMuons_phi0_gen")
-            df = df.Define("goodMuons_qop0_gen_smeared_over_gen", "goodMuons_qop0_gen_smeared/goodMuons_qop0_gen")
+            for reco_type in ['crctd', 'cvhbs', 'uncrct', 'gen_smeared']:
+                df = wremants.define_reco_over_gen_cols(df, reco_type)
 
     df = df.Define("goodMuons_pfRelIso04_all0", "Muon_pfRelIso04_all[goodMuons][0]")
     #TODO improve this to include muon mass?
@@ -318,31 +253,7 @@ def build_graph(df, dataset):
         results.append(nominal_gen)
         results.append(nominal_gen_smeared)
 
-        if args.validationHists:
-            nominal_cols_crctd_over_gen = [
-                "goodMuons_pt0_crctd_over_gen"
-            ]
-            nominal_cols_cvhbs_over_gen = [
-                "goodMuons_pt0_cvhbs_over_gen"
-            ]
-            nominal_cols_uncrct_over_gen = [
-                "goodMuons_pt0_uncrct_over_gen"
-            ]
-            nominal_cols_gen_smeared_over_gen = [
-                "goodMuons_pt0_gen_smeared_over_gen",
-                "goodMuons_qop0_gen_smeared_over_gen"
-            ]
-            axis_pt_reco_over_gen = hist.axis.Regular(1000, 0.9, 1.1, underflow=True, overflow=True, name = "reco_pt_over_gen")
-            axis_qop_reco_over_gen = hist.axis.Regular(1000, 0.9, 1.1, underflow=True, overflow=True, name = "reco_qop_over_gen")
-            crctd_over_gen =  df.HistoBoost("crctd_over_gen", [axis_pt_reco_over_gen], [*nominal_cols_crctd_over_gen, "nominal_weight"])
-            cvhbs_over_gen =  df.HistoBoost("cvhbs_over_gen", [axis_pt_reco_over_gen], [*nominal_cols_cvhbs_over_gen, "nominal_weight"])
-            uncrct_over_gen = df.HistoBoost("uncrct_over_gen", [axis_pt_reco_over_gen], [*nominal_cols_uncrct_over_gen, "nominal_weight"])
-            gen_smeared_over_gen = df.HistoBoost("gen_smeared_over_gen", [axis_pt_reco_over_gen, axis_qop_reco_over_gen], [*nominal_cols_gen_smeared_over_gen, "nominal_weight"])
-    
-            results.append(crctd_over_gen)
-            results.append(cvhbs_over_gen)
-            results.append(uncrct_over_gen)
-            results.append(gen_smeared_over_gen)
+        if args.validationHists: wremnants.make_reco_over_gen_hists()
 
         if not args.no_recoil:
             df = recoilHelper.setup_MET(df, results, dataset, "Muon_pt[goodMuons]", "Muon_phi[goodMuons]", "Muon_pt[goodMuons]")
@@ -415,7 +326,7 @@ def build_graph(df, dataset):
             if masswhist:
                 results.append(masswhist)
         
-            df = df.Define("unity", "1.0")
+            df = df.Define("unity_as_double", "1.0")
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:
                 # TODO: Move to syst_tools
@@ -494,7 +405,7 @@ def build_graph(df, dataset):
                 "goodMuons_eta0_gen",
                 "goodMuons_phi0_gen",
                 "goodMuons_charge0_gen",
-                "unity"
+                "unity_as_double"
                 ]
             )
 

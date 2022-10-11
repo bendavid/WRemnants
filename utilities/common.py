@@ -102,3 +102,24 @@ def setup_base_logger(name, debug):
     
 def child_logger(name):
     return logging.getLogger("wremnants").getChild(name.split(".")[-1])
+
+'''
+INPUT -------------------------------------------------------------------------
+|* (str) string: the string to be converted to list
+|
+ROUTINE -----------------------------------------------------------------------
+|* converts a string to a string element in a list
+|  - if not comma-separated, then the whole string becomes one single element
+OUTPUT ------------------------------------------------------------------------
+|* (float) string: the list-lized string
++------------------------------------------------------------------------------
+'''
+def string_to_list(string):
+	if type(string) == str:
+		string = string.split(",") # items have to be comma-separated 
+		return string
+	elif type(string) == list:
+		return string
+	else:
+		sys.exit(("string_to_list(): cannot convert an input that is "
+                  "neither a single string or a list of strings"))
