@@ -10,6 +10,7 @@ import shutil
 import logging
 import pathlib
 import hist
+import re
 
 xlabels = {
     "pt" : r"p$_{T}^{\ell}$ (GeV)",
@@ -40,6 +41,9 @@ parser.add_argument("--yscale", type=float, help="Scale the upper y axis by this
 parser.add_argument("--xlim", type=float, nargs=2, help="min and max for x axis")
 parser.add_argument("-a", "--name_append", type=str, help="Name to append to file name")
 parser.add_argument("--debug", action='store_true', help="Print debug output")
+parser.add_argument("--procFilters", type=str, nargs="*", help="Filter to plot (default no filter, only specify if you want a subset")
+parser.add_argument("--no_data", action='store_true', help="Don't plot data")
+parser.add_argument("--no_fill", action='store_true', help="Don't fill stack")
 
 subparsers = parser.add_subparsers()
 variation = subparsers.add_parser("variation", help="Arguments for adding variation hists")
@@ -73,16 +77,19 @@ if addVariation and (args.selectAxis or args.selectEntries):
 outdir = plot_tools.make_plot_dir(args.outpath, args.outfolder)
 
 groups = datagroups2016(args.infile, wlike=args.wlike)
+datasets = groups.getNames(args.procFilters)
+logger.info(f"Will plot datasets {datasets}")
+
 if not args.nominalRef:
     nominalName = args.baseName.rsplit("_", 1)[0]
     groups.setNominalName(nominalName)
-    groups.loadHistsForDatagroups(args.baseName, syst="")
+    groups.loadHistsForDatagroups(args.baseName, syst="", procsToRead=datasets)
 else:
     nominalName = args.nominalRef
     groups.setNominalName(nominalName)
-    groups.loadHistsForDatagroups(nominalName, syst=args.baseName)
+    groups.loadHistsForDatagroups(nominalName, syst=args.baseName, procsToRead=datasets)
 
-exclude = ["Data"]
+exclude = ["Data"] if not args.no_data else []
 unstack = exclude[:]
 
 # TODO: In should select the correct hist for the transform, not just the first
@@ -99,7 +106,6 @@ if addVariation:
         do_transform = args.transform and name in transforms
         name_toload = name if not do_transform else transforms[name]["hist"]
         name = name if name != "" else nominalName
-        exclude.append(name)
         load_op = {}
         action=None
 
@@ -128,17 +134,18 @@ if addVariation:
         if load_op and reload:
             action = None
         groups.addSummedProc(args.baseName, name=name_toload, label=label, exclude=exclude,
-            color=color, reload=reload, rename=varname, 
+            color=color, reload=reload, rename=varname, procsToRead=datasets,
             preOpMap=load_op, action=action)
 
         exclude.append(varname)
         unstack.append(varname)
 
-groups.sortByYields(args.baseName)
+groups.sortByYields(args.baseName, nominalName=nominalName)
 histInfo = groups.getDatagroups()
 
-prednames = list(reversed(groups.getNames(exclude)))
-select = {} if args.channel == "all" else {"select" : -1.j if args.channel == "minus" else 1.j}
+prednames = list(reversed(groups.getNames(datasets)))
+
+select = {} if args.channel == "all" else {"charge" : -1.j if args.channel == "minus" else 1.j}
 
 def collapseSyst(h):
     for ax in ["systIdx", "tensor_axis_0"]:
@@ -148,12 +155,12 @@ def collapseSyst(h):
 
 overflow_ax = ["ptll", "chargeVgen", "massVgen", "ptVgen"]
 for h in args.hists:
-    action = (lambda x: sel.unrolledHist(collapseSyst(x))) if "unrolled" in h else lambda x: hh.projectNoFlow(collapseSyst(x), h, overflow_ax)
+    action = (lambda x: sel.unrolledHist(collapseSyst(x[select]))) if "unrolled" in h else lambda x: hh.projectNoFlow(collapseSyst(x[select]), h, overflow_ax)
     fig = plot_tools.makeStackPlotWithRatio(histInfo, prednames, histName=args.baseName, ylim=args.ylim, yscale=args.yscale,
             fill_between=args.fill_between if hasattr(args, "fill_between") else None, action=action, unstacked=unstack, 
-            xlabel=xlabels[h], ylabel="Events/bin", rrange=args.rrange, select=select, binwnorm=1.0,
+            xlabel=xlabels[h], ylabel="Events/bin", rrange=args.rrange, binwnorm=1.0,
             ratio_to_data=args.ratio_to_data, rlabel="Pred./Data" if args.ratio_to_data else "Data/Pred.",
-            xlim=args.xlim) 
+            xlim=args.xlim, no_fill=args.no_fill, cms_decor="Preliminary" if not args.no_data else "Simulation Preliminary") 
     outfile = f"{h}_{args.baseName}_{args.channel}"+ (f"_{args.name_append}" if args.name_append else "")
     plot_tools.save_pdf_and_png(outdir, outfile)
     stack_yields = groups.make_yields_df(args.baseName, prednames, action)

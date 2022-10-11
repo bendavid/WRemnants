@@ -78,7 +78,7 @@ def makeStackPlotWithRatio(
     xlabel="", ylabel="Events/bin", rlabel = "Data/Pred.", rrange=[0.9, 1.1], ylim=None, xlim=None, nlegcols=2,
     binwnorm=None, select={},  action = (lambda x: x), extra_text=None, grid = False, plot_title = None, yscale=None,
     fill_between=False, ratio_to_data=False, baseline=True, legtex_size=20, cms_decor="Preliminary", lumi=16.8,
-    bin_density=300,
+    no_fill=False, bin_density=300,
 ):
     stack = [action(histInfo[k][histName])[select] for k in stackedProcs if histInfo[k][histName]]
     colors = [histInfo[k]["color"] for k in stackedProcs if histInfo[k][histName]]
@@ -87,7 +87,7 @@ def makeStackPlotWithRatio(
 
     hep.histplot(
         stack,
-        histtype="fill",
+        histtype="fill" if not no_fill else "step",
         color=colors,
         label=labels,
         stack=True,
@@ -280,9 +280,9 @@ def write_index_and_log(outpath, logname, indexname="index.php", template_dir=f"
     if not os.path.isfile(f"{outpath}/{indexname}"):
         shutil.copyfile(f"{template_dir}/{indexname}", f"{outpath}/{indexname}")
 
-    logdir = f"{outpath}/logs"
-    if not os.path.isdir(logdir):
-        os.mkdir(logdir)
+    logdir = outpath
+    #if not os.path.isdir(logdir):
+    #    os.mkdir(logdir)
 
     with open(f"{logdir}/{logname}.log", "w") as logf:
         meta_info = '-'*80 + '\n' + \
