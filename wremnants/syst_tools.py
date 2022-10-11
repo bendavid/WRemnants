@@ -1,8 +1,83 @@
 import hist
 import numpy as np
-from utilities import boostHistHelpers as hh,common
+from utilities import boostHistHelpers as hh, common
+from wremnants import theory_tools
 import collections.abc
 import logging
+
+logger = common.child_logger(__name__)
+
+def syst_transform_map(base_hist, hist_name):
+    pdfInfo = theory_tools.pdfMapExtended 
+    pdfNames = [pdfInfo[k]["name"] for k in pdfInfo.keys()]
+
+    def pdfUnc(h, pdfName):
+        key =  list(pdfInfo.keys())[list(pdfNames).index(pdfName)]
+        unc = pdfInfo[key]["combine"]
+        scale = pdfInfo[key]["scale"] if "scale" in pdfInfo[key] else 1.
+        return theory_tools.hessianPdfUnc(h, "tensor_axis_0", unc, scale)
+
+    def uncHist(unc):
+        return unc if base_hist == "nominal" else f"{base_hist}_{unc}"
+
+    transforms = {}
+    transforms.update({pdf+"Up" : {"hist" : uncHist(pdf), "action" : lambda h,p=pdf: pdfUnc(h, p)[0]} for pdf in pdfNames})
+    transforms.update({pdf+"Down" : {"hist" : uncHist(pdf), "action" : lambda h,p=pdf: pdfUnc(h, p)[1]} for pdf in pdfNames})
+    transforms.update({
+        "massShift100MeVDown" : {"hist" : "massWeight", "action" : lambda h: h[{"tensor_axis_0" : 0}]},
+        "massShift100MeVUp" : {"hist" : "massWeight", "action" : lambda h: h[{"tensor_axis_0" : 20}]},
+    })
+
+    s = hist.tag.Slicer()
+    transforms.update({
+        "QCDscale_muRmuFUp" : {
+            "action" : lambda h: h[{"muRfact" : 2.j, "muFfact" : 2.j, "ptVgen" : s[::hist.sum]}]},
+        "QCDscale_muRmuFDown" : {
+            "action" : lambda h: h[{"muRfact" : 0.5j, "muFfact" : 0.5j, "ptVgen" : s[::hist.sum]}]},
+        "QCDscale_muRUp" : {
+            "action" : lambda h: h[{"muRfact" : 2.j, "muFfact" : 1.j, "ptVgen" : s[::hist.sum]}]},
+        "QCDscale_muRDown" : {
+            "action" : lambda h: h[{"muRfact" : 0.5j, "muFfact" : 1.j, "ptVgen" : s[::hist.sum]}]},
+        "QCDscale_muFUp" : {
+            "action" : lambda h: h[{"muRfact" : 1.j, "muFfact" : 2.j, "ptVgen" : s[::hist.sum]}]},
+        "QCDscale_muFDown" : {
+            "action" : lambda h: h[{"muRfact" : 1.j, "muFfact" : 0.5j, "ptVgen" : s[::hist.sum]}]},
+        "QCDscale_cen" : {
+            "action" : lambda h: h[{"muRfact" : 1.j, "muFfact" : 1.j, "ptVgen" : s[::hist.sum]}]},
+    })
+
+    def scetlibIdx(h, i):
+        return h if not ("vars" in h.axes.name and h.axes["vars"].size > i) else h[{"vars" : i}]
+
+    def projAx(hname):
+        return [hname] if hname != "unrolled" else ["pt", "eta"]
+
+    transforms.update({
+        "resumFOScaleUp" : {
+            "action" : lambda h: scetlibIdx(h, 2)},
+        "resumFOScaleDown" : {
+            "action" : lambda h: scetlibIdx(h, 1)},
+        "resumLambdaDown" : {
+            "action" : lambda h: scetlibIdx(h, 3)},
+        "resumLambdaUp" : {
+            "action" : lambda h: scetlibIdx(h, 4)},
+        "resumTransitionMax" : {
+            "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", range(5,9), no_flow=["ptVgen"], do_min=False)},
+        "resumTransitionMin" : {
+            "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", range(5,9), no_flow=["ptVgen"], do_min=True)},
+        "resumScaleMax" : {
+            "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", range(9,44), no_flow=["ptVgen"], do_min=False)},
+        "resumScaleMin" : {
+            "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", range(9,44), no_flow=["ptVgen"], do_min=True)},
+    })
+    for k,v in transforms.items():
+        if any([x in k for x in ["QCDscale", "resum", "pdf"]]):
+            v["procs"] = common.vprocs 
+            if any([x in k for x in ["QCDscale", "resum", ]]):
+                unc = "qcdScale" if "QCDscale" in k else "scetlibMSHT20Corr_unc"
+                v["hist"] = unc if base_hist == "nominal" else f"{base_hist}_{unc}"
+
+    return transforms
 
 def scale_helicity_hist_to_variations(scale_hist, sum_axes=[], rebinPtV=None):
     
@@ -41,7 +116,7 @@ def scale_helicity_hist_to_variations(scale_hist, sum_axes=[], rebinPtV=None):
             scale_hist = scale_hist[{axis : s[::hist.sum]}]
             nom_scale_hist = nom_scale_hist[{axis : s[::hist.sum]}]
         else:
-            logging.warning(f"In scale_helicity_hist_to_variations: axis '{axis}' not found in histogram.")
+            logger.warning(f"In scale_helicity_hist_to_variations: axis '{axis}' not found in histogram.")
         
     # difference between a given scale and the nominal, plus the sum
     # this emulates the "weight if idx else nominal" logic and corresponds to the decorrelated
