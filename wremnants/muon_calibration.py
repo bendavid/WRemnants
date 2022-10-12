@@ -201,6 +201,35 @@ def transport_smearing_weights_to_reco(
         msv_sw_reco = [hh.multiplyHists(nominal_reco, x) for x in sw_per_bin_gen_smear]
         proc_hists['muonScaleSyst_responseWeights'] = hh.combineUpDownVarHists(*msv_sw_reco)
 
+def make_alt_reco_and_gen_hists(df, results, nominal_axes):
+    nominal_cols_cvhbs = [
+        "goodMuons_eta0_cvhbs", "goodMuons_pt0_cvhbs", "goodMuons_charge0_cvhbs",
+        "passIso", "passMT"
+    ]
+    nominal_cols_uncrct = [
+        "goodMuons_eta0_uncrct", "goodMuons_pt0_uncrct", "goodMuons_charge0_uncrct", 
+        "passIso", "passMT"
+    ]
+    nominal_cols_gen = [
+        "goodMuons_eta0_gen", "goodMuons_pt0_gen", "goodMuons_charge0_gen", 
+        "passIso", "passMT"
+    ]
+    nominal_cols_gen_smeared = [
+        "goodMuons_eta0_gen_smeared", "goodMuons_pt0_gen_smeared_a_la_qop", "goodMuons_charge0_gen_smeared",
+        "passIso", "passMT"
+    ]
+
+    nominal_cvhbs =       df.HistoBoost("nominal_cvhbs", nominal_axes, [*nominal_cols_cvhbs, "nominal_weight"])
+    nominal_uncrct =      df.HistoBoost("nominal_uncrct", nominal_axes, [*nominal_cols_uncrct, "nominal_weight"])
+    nominal_gen =         df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols_gen, "nominal_weight"])
+    nominal_gen_smeared = df.HistoBoost("nominal_gen_smeared", nominal_axes, [*nominal_cols_gen_smeared, "nominal_weight"])
+
+    results.append(nominal_cvhbs)
+    results.append(nominal_uncrct)
+    results.append(nominal_gen)
+    results.append(nominal_gen_smeared)
+    return [nominal_cols_cvhbs, nominal_cols_uncrct, nominal_cols_gen, nominal_cols_gen_smeared]
+
 ####################
 ## FOR VALIDATION ##
 ####################
@@ -216,7 +245,7 @@ def define_reco_over_gen_cols(df, reco_type, kinematic_vars = ['pt', 'eta']):
         )
     return df
 
-def make_reco_over_gen_hists():
+def make_reco_over_gen_hists(df, results):
     nominal_cols_crctd_over_gen = [
         "goodMuons_pt0_crctd_over_gen"
     ]
@@ -240,4 +269,56 @@ def make_reco_over_gen_hists():
     results.append(cvhbs_over_gen)
     results.append(uncrct_over_gen)
     results.append(gen_smeared_over_gen)
-   
+
+def define_cols_for_smearing_weights(df, helper_func):
+    df = df.Define("unity_as_double", "1.0")
+    df = df.Define("muonScaleSyst_smearingWeightsPerSe_tensor", helper_func,
+        [
+        "goodMuons_qop0_gen_smeared",
+        "goodMuons_pt0_gen_smeared_a_la_qop",
+        "goodMuons_eta0_gen_smeared",
+        "goodMuons_phi0_gen_smeared",
+        "goodMuons_charge0_gen_smeared",
+        "covMat_goodGenMuons0",
+        "goodMuons_qop0_gen",
+        "goodMuons_pt0_gen",
+        "goodMuons_eta0_gen",
+        "goodMuons_phi0_gen",
+        "goodMuons_charge0_gen",
+        "unity_as_double"
+        ]
+    )
+    df = df.Define("smearing_weights_down", "muonScaleSyst_smearingWeightsPerSe_tensor(0,0)")
+    df = df.Define("smearing_weights_up", "muonScaleSyst_smearingWeightsPerSe_tensor(0,1)")
+    return df
+
+def make_hists_for_smearing_weights(df, results):
+    axis_smearing_weight = hist.axis.Regular(1000, 0.9, 1.1, underflow=True, overflow=True, name = "smearing_weight")
+    smearing_weights_down = df.HistoBoost("smearing_weights_down", [*nominal_axes, axis_smearing_weight], [*nominal_cols, "smearing_weights_down"])
+    smearing_weights_up = df.HistoBoost("smearing_weights_up", [*nominal_axes, axis_smearing_weight], [*nominal_cols, "smearing_weights_up"])
+    results.append(smearing_weights_down)
+    results.append(smearing_weights_up)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
