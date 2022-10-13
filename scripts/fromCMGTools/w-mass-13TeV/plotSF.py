@@ -61,6 +61,8 @@ if __name__ == "__main__":
                       "antiisoNotrigOnly" : ["antiisonotrig"],
                       "reco"              : ["reco"],
                       "tracking"          : ["tracking"],
+                      "trigPlusOnly"      : ["triggerplus"],
+                      "trigMinusOnly"     : ["triggerminus"],
                       #"trackingReco"      : ["tracking", "reco"],
                       #"idipTrackingReco"  : ["idip", "tracking", "reco"],
                       #"trigPlusIdipTrackingReco"     : ["triggerplus", "idip", "tracking", "reco"],
