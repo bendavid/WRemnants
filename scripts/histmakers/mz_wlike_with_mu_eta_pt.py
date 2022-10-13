@@ -82,7 +82,8 @@ axis_phistarll = hist.axis.Regular(20, -math.pi, math.pi, circular = True, name 
 
 # extra axes which can be used to label tensor_axes
 
-muon_efficiency_helper, muon_efficiency_helper_stat, muon_efficiency_helper_stat_tracking, muon_efficiency_helper_stat_reco, muon_efficiency_helper_syst = wremnants.make_muon_efficiency_helpers(era = era, max_pt = axis_pt.edges[-1], is_w_like = True)
+muon_efficiency_helper, muon_efficiency_helper_stat, muon_efficiency_helper_stat_tracking, muon_efficiency_helper_stat_reco, muon_efficiency_helper_syst = wremnants.make_muon_efficiency_helpers(filename = args.sfFile, era = era, max_pt = axis_pt.edges[-1], is_w_like = True)
+print(args.sfFile)
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
 
@@ -133,8 +134,16 @@ def build_graph(df, dataset):
     df = df.Define("vetoMuonsPre", "Muon_looseId && abs(Muon_dxybs) < 0.05 && Muon_correctedCharge != -99")
     df = df.Define("vetoMuons", "vetoMuonsPre && Muon_correctedPt > 10. && abs(Muon_correctedEta) < 2.4")
     df = df.Filter("Sum(vetoMuons) == 2")
+    
+    if args.trackerMuons:
+        if dataset.group in ["Top", "Diboson"]:
+            df = df.Define("Muon_category", "Muon_isTracker")
+        else:
+            df = df.Define("Muon_category", "Muon_isTracker && Muon_innerTrackOriginalAlgo != 13 && Muon_innerTrackOriginalAlgo != 14")
+    else:
+        df = df.Define("Muon_category", "Muon_isGlobal")
 
-    df = df.Define("goodMuons", "vetoMuons && Muon_mediumId && Muon_isGlobal && Muon_pfRelIso04_all < 0.15")
+    df = df.Define("goodMuons", "vetoMuons && Muon_mediumId && Muon_category && Muon_pfRelIso04_all < 0.15")
     df = df.Filter("Sum(goodMuons) == 2")
 
     # mu- for even event numbers, mu+ for odd event numbers
@@ -265,7 +274,7 @@ def build_graph(df, dataset):
     nominal = df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "nominal_weight"])
     results.append(nominal)
 
-    if not dataset.is_data:
+    if not dataset.is_data and not args.onlyMainHistograms:
         # TODO fix the helpers for w-like
         df = df.Define("effStatTnP_tensor", muon_efficiency_helper_stat, ["TrigMuon_pt", "TrigMuon_eta", "TrigMuon_charge", "NonTrigMuon_pt", "NonTrigMuon_eta", "NonTrigMuon_charge", "nominal_weight"])
         effStatTnP = df.HistoBoost("effStatTnP", nominal_axes, [*nominal_cols, "effStatTnP_tensor"], tensor_axes = muon_efficiency_helper_stat.tensor_axes)

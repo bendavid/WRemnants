@@ -11,6 +11,9 @@ import lz4.frame
 import logging
 import math
 import time
+import pathlib
+
+data_dir = f"{pathlib.Path(__file__).parent}/../../wremnants/data/"
 
 logging.basicConfig(level=logging.INFO)
 
@@ -71,7 +74,8 @@ axis_ptVgen = hist.axis.Variable(
 axis_mt = hist.axis.Variable([0] + list(range(40, 110, 1)) + [110, 112, 114, 116, 118, 120, 125, 130, 140, 160, 180, 200], name = "mt",underflow=False, overflow=True)
 axis_eta_mT = hist.axis.Variable([-2.4, 2.4], name = "eta")
 
-muon_efficiency_helper, muon_efficiency_helper_stat, muon_efficiency_helper_stat_tracking, muon_efficiency_helper_stat_reco, muon_efficiency_helper_syst = wremnants.make_muon_efficiency_helpers(era = era, max_pt = axis_pt.edges[-1])
+muon_efficiency_helper, muon_efficiency_helper_stat, muon_efficiency_helper_stat_tracking, muon_efficiency_helper_stat_reco, muon_efficiency_helper_syst = wremnants.make_muon_efficiency_helpers(filename = args.sfFile, era = era, max_pt = axis_pt.edges[-1])
+print(args.sfFile)
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
 vertex_helper = wremnants.make_vertex_helper(era = era)
@@ -134,7 +138,14 @@ def build_graph(df, dataset):
     df = df.Define("vetoMuonsPre", "Muon_looseId && abs(Muon_dxybs) < 0.05 && Muon_correctedCharge != -99")
     df = df.Define("vetoMuons", "vetoMuonsPre && Muon_correctedPt > 10. && abs(Muon_correctedEta) < 2.4")
     df = df.Filter("Sum(vetoMuons) == 1")
-    df = df.Define("goodMuons", "vetoMuons && Muon_mediumId && Muon_isGlobal")
+    if args.trackerMuons:
+        if dataset.group in ["Top", "Diboson"]:
+            df = df.Define("Muon_category", "Muon_isTracker")
+        else:
+            df = df.Define("Muon_category", "Muon_isTracker && Muon_innerTrackOriginalAlgo != 13 && Muon_innerTrackOriginalAlgo != 14")
+    else:
+        df = df.Define("Muon_category", "Muon_isGlobal")
+    df = df.Define("goodMuons", "vetoMuons && Muon_mediumId && Muon_category")
     df = df.Filter("Sum(goodMuons) == 1")
 
     df = df.Define("goodMuons_pt0", "Muon_correctedPt[goodMuons][0]")
@@ -228,11 +239,13 @@ def build_graph(df, dataset):
             #results.append(df.HistoBoost("mT_corr_rec", [axis_mt, axis_eta_mT, axis_charge, axis_passIso], ["mT_corr_rec", "goodMuons_abseta0", "goodMuons_charge0", "passIso", "nominal_weight"]))
             #if dataset.name in ["WplusmunuPostVFP", "WminusmunuPostVFP"]: df = recoilHelper.recoil_W_unc_lowPU(df, results, axis_charge, axis_mt, axis_eta, axis_passIso)
 
+
+    if not dataset.is_data and not args.onlyMainHistograms
+        
         dQCDbkGVar = df.Filter("passMT || Sum(goodCleanJetsPt45)>=1")
         qcdJetPt45 = dQCDbkGVar.HistoBoost("qcdJetPt45", nominal_axes, [*nominal_cols, "nominal_weight"])
         results.append(qcdJetPt45)
 
-        
         df = df.Define("effStatTnP_tensor", muon_efficiency_helper_stat, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0", "passIso", "nominal_weight"])
         effStatTnP = df.HistoBoost("effStatTnP", nominal_axes, [*nominal_cols, "effStatTnP_tensor"], tensor_axes = muon_efficiency_helper_stat.tensor_axes)
         results.append(effStatTnP)

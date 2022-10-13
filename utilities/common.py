@@ -74,6 +74,19 @@ def common_parser():
     parser.add_argument("--pt", nargs=3, type=float, help="Pt binning as 'nbins,min,max' (only uniform for now)", default=[29,26.,55.])
     parser.add_argument("--no_recoil", action='store_true', help="Don't apply recoild correction")
     parser.add_argument("--no-vertex_weight", dest="vertex_weight", action='store_false', help="Do not apply reweighting of vertex z distribution in MC to match data")
+    parser.add_argument("--trackerMuons", action='store_true', help="Use tracker muons instead of global muons (need appropriate scale factors too)")
+    parser.add_argument("--onlyMainHistograms", action='store_true', help="Only produce some histograms, skipping (most) systematics to run faster when those are not needed")
+
+    commonargs,_ = parser.parse_known_args()
+
+    if commonargs.trackerMuons:
+        sfFile = "scaleFactorProduct_12Oct2022_TrackerMuons_vertexWeight_OSchargeExceptTracking.root"
+    else:
+        sfFile = "scaleFactorProduct_08Oct2022_vertexWeight_OSchargeExceptTracking.root"
+    sfFile = f"{data_dir}/testMuonSF/{sfFile}"
+
+    parser.add_argument("--sfFile", type=str, help="File with muon scale factors", default=sfFile)
+        
     return parser,initargs
 
 def common_parser_combine():
