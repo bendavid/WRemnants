@@ -286,16 +286,13 @@ def build_graph(df, dataset):
         if isW or isZ:
 
             df = theory_tools.define_scale_tensor(df)
-            results.append(theory_tools.make_scale_hist(df, nominal_axes, nominal_cols, "inclusive"))
-            if isW:
-                # Don't think it really makes sense to have W and Z be the same hist name, especially because the charge axis has to be different
-                results.append(theory_tools.make_scale_hist(df, [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen"]))
-                if not args.skipHelicity:
-                    helicity_helper = qcdScaleByHelicity_Whelper
-                    # TODO: Should have consistent order here with the scetlib correction function
-                    df = df.Define("helicityWeight_tensor", helicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
-                    qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=helicity_helper.tensor_axes)
-                    results.append(qcdScaleByHelicityUnc)
+            results.append(theory_tools.make_scale_hist(df, [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen"]))
+            if isW and not args.skipHelicity:
+                helicity_helper = qcdScaleByHelicity_Whelper
+                # TODO: Should have consistent order here with the scetlib correction function
+                df = df.Define("helicityWeight_tensor", helicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
+                qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=helicity_helper.tensor_axes)
+                results.append(qcdScaleByHelicityUnc)
 
             df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
             results.extend(theory_tools.make_pdf_hists(df, dataset.name, nominal_axes, nominal_cols, args.pdfs))

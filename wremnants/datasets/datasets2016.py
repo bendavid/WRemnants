@@ -9,6 +9,8 @@ import logging
 from wremnants.datasets.datasetDict_v9 import dataDictV9, dataDictV9_pisa
 from wremnants.datasets.datasetDict_v8 import *
 
+logger = logging.getLogger("wremnants").getChild(__name__.split(".")[-1])
+
 lumicsv = f"{pathlib.Path(__file__).parent.parent}/data/bylsoutput.csv"
 lumijson = f"{pathlib.Path(__file__).parent.parent}/data/Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.txt"
 
@@ -20,7 +22,7 @@ def makeFilelist(paths, maxFiles=-1):
     return filelist if maxFiles < 0 else filelist[:maxFiles]
 
 def getNarfDataset(sampleName, maxFiles, sampleDict, isData, isWorZ=True):
-    logging.debug(f'Sample {sampleName} read from : {sampleDict[sampleName]["filepaths"]}')
+    logger.debug(f'Sample {sampleName} read from : {sampleDict[sampleName]["filepaths"]}')
     if isData:
         nData = narf.Dataset(name = sampleDict[sampleName]["name"],
                                    filepaths = makeFilelist(sampleDict[sampleName]["filepaths"], maxFiles),
@@ -94,6 +96,6 @@ def getDatasets(maxFiles=-1, filt=None, mode=None, nanoVersion = "v9"):
 
 def buildXrdFileList(path, xrd):
     xrdpath = path[path.find('/store'):]
-    logging.debug(f"Looking for path {xrdpath}")
+    logger.debug(f"Looking for path {xrdpath}")
     f = subprocess.check_output(['xrdfs', f'root://{xrd}', 'ls', xrdpath]).decode(sys.stdout.encoding)
     return filter(lambda x: "root" in x[-4:], f.split())

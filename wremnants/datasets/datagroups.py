@@ -10,6 +10,9 @@ import ROOT
 import re
 import pandas as pd
 import math
+from utilities import common
+
+logger = common.child_logger(__name__)
 
 class datagroups(object):
     def __init__(self, infile, combine=False):
@@ -57,25 +60,28 @@ class datagroups(object):
 
         foundExact = False
         for procName in procsToRead:
+            logger.debug(f"Reading group {procName}")
             group = self.groups[procName]
             group[label] = None
 
             for member in group["members"]:
+                logger.debug(f"Looking at group member {member.name}")
                 scale = group["scale"] if "scale" in group else None
                 try:
                     h = self.readHist(baseName, member, syst, scaleOp=scale, forceNonzero=forceNonzero)
                     foundExact = True
                 except ValueError as e:
                     if nominalIfMissing:
-                        logging.info(f"{str(e)}. Using nominal hist {self.nominalName} instead")
+                        logger.info(f"{str(e)}. Using nominal hist {self.nominalName} instead")
                         h = self.readHist(self.nominalName, member, "", scaleOp=scale, forceNonzero=forceNonzero)
                     else:
-                        logging.warning(str(e))
+                        logger.warning(str(e))
                         continue
 
                 if preOpMap and member.name in preOpMap:
-                    logging.debug(f"Applying preOp to {member.name} after loading")
+                    logger.debug(f"Applying preOp to {member.name} after loading")
                     h = preOpMap[member.name](h, **preOpArgs)
+
 
                 group[label] = h if not group[label] else hh.addHists(h, group[label])
 
@@ -134,8 +140,11 @@ class datagroups(object):
         if type(excluded_procs) == str: excluded_procs = list(excluded_procs)
         return dict(filter(lambda x: x[0] not in excluded_procs, self.groups.items()))
 
-    def getNames(self, exclude=[]):
-        return list(filter(lambda x: x not in exclude, self.groups.keys()))
+    def getNames(self, matches=[], exclude=False):
+        if not exclude:
+            return list(filter(lambda x: any([re.match(expr, x) for expr in matches]), self.groups.keys()))
+        else:
+            return list(filter(lambda x: x not in matches, self.groups.keys()))
 
     def getProcNames(self, to_expand=[], exclude_group=[]):
         procs = []
@@ -147,11 +156,14 @@ class datagroups(object):
                     procs.append(member.name)
         return procs
 
-    def sortByYields(self, histName):
+    def sortByYields(self, histName, nominalName="nominal"):
         def get_sum(h):
             return h.sum() if not hasattr(h.sum(), "value") else h.sum().value
         self.groups = dict(
-            sorted(self.groups.items(), key=lambda x: get_sum(x[1][histName]), reverse=True)
+            sorted(self.groups.items(), key=lambda x: get_sum(
+                x[1][histName if histName in x[1] else nominalName])
+                    if nominalName in x[1] or histName in x[1] else 0,
+                reverse=True)
         )
 
     def getDatagroupsForHist(self, histName):
@@ -166,13 +178,6 @@ class datagroups(object):
 
     def processes(self):
         return self.groups.keys()
-
-    def sortByYields(self, histName):
-        def get_sum(h):
-            return h.sum() if not hasattr(h.sum(), "value") else h.sum().value
-        self.groups = dict(
-            sorted(self.groups.items(), key=lambda x: get_sum(x[1][histName]), reverse=True)
-        )
 
     def getDatagroupsForHist(self, histName):
         filled = {}
@@ -188,10 +193,10 @@ class datagroups(object):
         return self.groups.keys()
 
     def addSummedProc(self, refname, name, label, color="red", exclude=["Data"], relabel=None, 
-            reload=False, rename=None, preOpMap={}, preOpArgs={}):
+            procsToRead=None, reload=False, rename=None, action=None, preOpMap={}, preOpArgs={}):
         if reload:
             self.loadHistsForDatagroups(refname, syst=name, excluded_procs=exclude,
-                preOpMap=preOpMap, preOpArgs=preOpArgs)
+                procsToRead=procsToRead, preOpMap=preOpMap, preOpArgs=preOpArgs)
 
         if not rename:
             rename = name
@@ -201,10 +206,15 @@ class datagroups(object):
             members=[],
         )
         tosum = []
-        for proc in filter(lambda x: x not in exclude+[rename], self.groups.keys()):
+        procs = procsToRead if procsToRead else self.groups.keys()
+        for proc in filter(lambda x: x not in exclude+[rename], procs):
             h = self.groups[proc][name]
             if not h:
                 raise ValueError(f"Failed to find hist for proc {proc}, histname {name}")
+            if action:
+                logger.debug(f"Applying action in addSummedProc! Before sum {h.sum()}")
+                h = action(h)
+                logger.debug(f"After action sum {h.sum()}")
             tosum.append(h)
         histname = refname if not relabel else relabel
         self.groups[rename][histname] = hh.sumHists(tosum)
@@ -288,10 +298,10 @@ class datagroups2016(datagroups):
                 color = "grey",
             )
 
-    def make_yields_df(self, histName, procs):
+    def make_yields_df(self, histName, procs, action):
         def sum_and_unc(h):
             return (h.sum().value, math.sqrt(h.sum().variance))
-        df = pd.DataFrame([(k, *sum_and_unc(v[histName])) for k,v in self.groups.items() if k in procs], 
+        df = pd.DataFrame([(k, *sum_and_unc(action(v[histName]))) for k,v in self.groups.items() if k in procs], 
                 columns=["Process", "Yield", "Uncertainty"])
         return df
 
