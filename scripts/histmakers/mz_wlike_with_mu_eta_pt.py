@@ -49,11 +49,11 @@ axis_ptVgen = hist.axis.Variable(
 template_neta = int(args.eta[0])
 template_mineta = args.eta[1]
 template_maxeta = args.eta[2]
-print(f"Eta binning: {template_neta} bins from {template_mineta} to {template_maxeta}")
+logging.info(f"Eta binning: {template_neta} bins from {template_mineta} to {template_maxeta}")
 template_npt = int(args.pt[0])
 template_minpt = args.pt[1]
 template_maxpt = args.pt[2]
-print(f"Pt binning: {template_npt} bins from {template_minpt} to {template_maxpt}")
+logging.info(f"Pt binning: {template_npt} bins from {template_minpt} to {template_maxpt}")
 
 # standard regular axes
 axis_eta = hist.axis.Regular(template_neta, template_mineta, template_maxeta, name = "eta")
@@ -83,7 +83,7 @@ axis_phistarll = hist.axis.Regular(20, -math.pi, math.pi, circular = True, name 
 # extra axes which can be used to label tensor_axes
 
 muon_efficiency_helper, muon_efficiency_helper_stat, muon_efficiency_helper_stat_tracking, muon_efficiency_helper_stat_reco, muon_efficiency_helper_syst = wremnants.make_muon_efficiency_helpers(filename = args.sfFile, era = era, max_pt = axis_pt.edges[-1], is_w_like = True)
-print(args.sfFile)
+logging.info(f"SF file: {args.sfFile}")
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
 
@@ -102,7 +102,7 @@ if not args.no_recoil:
 #def add_plots_with_systematics
 
 def build_graph(df, dataset):
-    print("build graph for dataset:", dataset.name)
+    logging.info(f"build graph for dataset: {dataset.name}")
     results = []
 
     if dataset.is_data:
@@ -137,9 +137,9 @@ def build_graph(df, dataset):
     
     if args.trackerMuons:
         if dataset.group in ["Top", "Diboson"]:
-            df = df.Define("Muon_category", "Muon_isTracker")
+            df = df.Define("Muon_category", "Muon_isTracker && Muon_highPurity")
         else:
-            df = df.Define("Muon_category", "Muon_isTracker && Muon_innerTrackOriginalAlgo != 13 && Muon_innerTrackOriginalAlgo != 14")
+            df = df.Define("Muon_category", "Muon_isTracker && Muon_innerTrackOriginalAlgo != 13 && Muon_innerTrackOriginalAlgo != 14 && Muon_highPurity")
     else:
         df = df.Define("Muon_category", "Muon_isGlobal")
 
@@ -165,6 +165,12 @@ def build_graph(df, dataset):
 
     df = df.Filter("NonTrigMuon_pt > 26.")
 
+    df = df.Define("TrigMuon_isStandalone", "Muon_isStandalone[trigMuons][0]")
+    df = df.Define("NonTrigMuon_isStandalone", "Muon_isStandalone[nonTrigMuons][0]")
+    # central NanoAOD for backgrounds do not have standalone variables, therefore cannot use cut on them when running backgrounds (for now we neglect this bias)
+    # when using tracker muons the presence of standalone muons is not guaranteed, so again cannot use or cut on those (also in data or Z, regardless whether branches exist)
+    # it was verified that tracking scale factors can still be used as a function of inner track coordinates, despite having been measured versus standalone ones
+    # (this is true also in the case of global muons, no significant difference is observed applying tracking SF using inner or outer tracks)
     if dataset.group in ["Top", "Diboson"]:
         df = df.Alias("TrigMuon_SApt",  "TrigMuon_pt")
         df = df.Alias("TrigMuon_SAeta", "TrigMuon_eta")
@@ -172,6 +178,14 @@ def build_graph(df, dataset):
         df = df.Alias("NonTrigMuon_SApt",  "NonTrigMuon_pt")
         df = df.Alias("NonTrigMuon_SAeta", "NonTrigMuon_eta")
         df = df.Alias("NonTrigMuon_SAphi", "NonTrigMuon_phi")
+    elif args.trackerMuons:
+        # try to use standalone variables when possible
+        df = df.Define("TrigMuon_SApt",  "TrigMuon_isStandalone ? Muon_standalonePt[trigMuons][0] : TrigMuon_pt")
+        df = df.Define("TrigMuon_SAeta", "TrigMuon_isStandalone ? Muon_standaloneEta[trigMuons][0] : TrigMuon_eta")
+        df = df.Define("TrigMuon_SAphi", "TrigMuon_isStandalone ? Muon_standalonePhi[trigMuons][0] : TrigMuon_phi")
+        df = df.Define("NonTrigMuon_SApt",  "NonTrigMuon_isStandalone ? Muon_standalonePt[nonTrigMuons][0] : NonTrigMuon_pt")
+        df = df.Define("NonTrigMuon_SAeta", "NonTrigMuon_isStandalone ? Muon_standaloneEta[nonTrigMuons][0] : NonTrigMuon_eta")
+        df = df.Define("NonTrigMuon_SAphi", "NonTrigMuon_isStandalone ? Muon_standalonePhi[nonTrigMuons][0] : NonTrigMuon_phi")
     else:
         df = df.Define("TrigMuon_SApt",  "Muon_standalonePt[trigMuons][0]")
         df = df.Define("TrigMuon_SAeta", "Muon_standaloneEta[trigMuons][0]")
@@ -179,6 +193,9 @@ def build_graph(df, dataset):
         df = df.Define("NonTrigMuon_SApt",  "Muon_standalonePt[nonTrigMuons][0]")
         df = df.Define("NonTrigMuon_SAeta", "Muon_standaloneEta[nonTrigMuons][0]")
         df = df.Define("NonTrigMuon_SAphi", "Muon_standalonePhi[nonTrigMuons][0]")
+
+    # these next cuts are mainly needed for consistency with the reco efficiency measurement for the case with global muons
+    # note, when SA does not exist this cut is still fine because of how we define these variables
     df = df.Filter("TrigMuon_SApt > 15.0 && wrem::deltaR2(TrigMuon_SAeta, TrigMuon_SAphi, TrigMuon_eta, TrigMuon_phi) < 0.09")
     df = df.Filter("NonTrigMuon_SApt > 15.0 && wrem::deltaR2(NonTrigMuon_SAeta, NonTrigMuon_SAphi, NonTrigMuon_eta, NonTrigMuon_phi) < 0.09")
     

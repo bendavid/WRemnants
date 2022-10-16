@@ -130,9 +130,7 @@ def build_graph(df, dataset):
             df = df.Alias("Muon_correctedEta", "Muon_eta")
             df = df.Alias("Muon_correctedPhi", "Muon_phi")
             df = df.Alias("Muon_correctedCharge", "Muon_charge")
-        
-    #standalone quantities, currently only in data and W/Z samples
-            
+                    
     # n.b. charge = -99 is a placeholder for invalid track refit/corrections (mostly just from tracks below
     # the pt threshold of 8 GeV in the nano production)
     df = df.Define("vetoMuonsPre", "Muon_looseId && abs(Muon_dxybs) < 0.05 && Muon_correctedCharge != -99")
@@ -154,14 +152,25 @@ def build_graph(df, dataset):
     df = df.Define("goodMuons_phi0", "Muon_correctedPhi[goodMuons][0]")
     df = df.Define("goodMuons_charge0", "Muon_correctedCharge[goodMuons][0]")
 
+    df = df.Define("goodMuons_isStandalone", "Muon_isStandalone[goodMuons][0]")
+
+    #standalone quantities, currently only in data and W/Z samples
     if dataset.group in ["Top", "Diboson"]:
         df = df.Alias("goodMuons_SApt0",  "goodMuons_pt0")
         df = df.Alias("goodMuons_SAeta0", "goodMuons_eta0")
         df = df.Alias("goodMuons_SAphi0", "goodMuons_phi0")
+    elif args.trackerMuons:
+        # try to use standalone variables when possible
+        df = df.Define("goodMuons_SApt0",  "goodMuons_isStandalone ? Muon_standalonePt[goodMuons][0] : goodMuons_pt0")
+        df = df.Define("goodMuons_SAeta0", "goodMuons_isStandalone ? Muon_standaloneEta[goodMuons][0] : goodMuons_eta0")
+        df = df.Define("goodMuons_SAphi0", "goodMuons_isStandalone ? Muon_standalonePhi[goodMuons][0] : goodMuons_phi0")
     else:
         df = df.Define("goodMuons_SApt0",  "Muon_standalonePt[goodMuons][0]")
         df = df.Define("goodMuons_SAeta0", "Muon_standaloneEta[goodMuons][0]")
         df = df.Define("goodMuons_SAphi0", "Muon_standalonePhi[goodMuons][0]")
+
+    # the next cut is mainly needed for consistency with the reco efficiency measurement for the case with global muons
+    # note, when SA does not exist this cut is still fine because of how we define these variables
     df = df.Filter("goodMuons_SApt0 > 15.0 && wrem::deltaR2(goodMuons_SAeta0, goodMuons_SAphi0, goodMuons_eta0, goodMuons_phi0) < 0.09")
     
     df = df.Define("goodMuons_pfRelIso04_all0", "Muon_pfRelIso04_all[goodMuons][0]")
