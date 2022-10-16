@@ -80,7 +80,8 @@ def common_parser():
     commonargs,_ = parser.parse_known_args()
 
     if commonargs.trackerMuons:
-        sfFile = "scaleFactorProduct_12Oct2022_TrackerMuons_vertexWeight_OSchargeExceptTracking.root"
+        #sfFile = "scaleFactorProduct_12Oct2022_TrackerMuons_vertexWeight_OSchargeExceptTracking.root"
+        sfFile = "scaleFactorProduct_16Oct2022_TrackerMuonsHighPurity_vertexWeight_OSchargeExceptTracking.root"
     else:
         sfFile = "scaleFactorProduct_08Oct2022_vertexWeight_OSchargeExceptTracking.root"
     sfFile = f"{data_dir}/testMuonSF/{sfFile}"
