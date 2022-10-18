@@ -182,22 +182,18 @@ def define_uncrct_reco_muon_kinematics(df, kinematic_vars = ["pt", "eta", "phi",
 
 def transport_smearing_weights_to_reco(
     resultdict, procs = ['WplusmunuPostVFP', 'WminusmunuPostVFP', 'ZmumuPostVFP'],
-    proj_axes = ['pt', 'eta']
+    proj_axes = ['eta', 'pt', 'charge', 'passIso', 'passMT']
 ):
     for proc in procs:
         proc_hists = resultdict[proc]['output']
-        if 'plus' in proc.lower(): charge = 1
-        elif 'minus' in proc.lower(): charge = -1
         nominal_gen_smear = (
-            proc_hists['nominal_gen_smeared'][{'charge':hist.loc(charge)}].project(*proj_axes))
+            proc_hists['nominal_gen_smeared'].project(*proj_axes))
         msv_sw_gen_smear = [
-            (proc_hists['muonScaleSyst_responseWeights_gensmear']
-                       [{'charge':hist.loc(charge)}][...,0,0].project(*proj_axes)),
-            (proc_hists['muonScaleSyst_responseWeights_gensmear']
-                       [{'charge':hist.loc(charge)}][...,0,1].project(*proj_axes))
+            (proc_hists['muonScaleSyst_responseWeights_gensmear'][...,0,0].project(*proj_axes)),
+            (proc_hists['muonScaleSyst_responseWeights_gensmear'][...,0,1].project(*proj_axes))
         ]
         sw_per_bin_gen_smear = [hh.divideHists(x, nominal_gen_smear) for x in msv_sw_gen_smear]
-        nominal_reco = proc_hists['nominal'][{'charge':hist.loc(charge)}].project(*proj_axes)
+        nominal_reco = proc_hists['nominal'].project(*proj_axes)
         msv_sw_reco = [hh.multiplyHists(nominal_reco, x) for x in sw_per_bin_gen_smear]
         proc_hists['muonScaleSyst_responseWeights'] = hh.combineUpDownVarHists(*msv_sw_reco)
 

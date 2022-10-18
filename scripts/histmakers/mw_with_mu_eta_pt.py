@@ -225,9 +225,9 @@ def build_graph(df, dataset):
             results.extend(theory_tools.make_theory_corr_hists(df, "nominal", nominal_axes, nominal_cols, 
                 corr_helpers[dataset.name], args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
             )
-    if isW or isZ: 
-        nominal_cols_cvhbs, nominal_cols_uncrct, nominal_cols_gen, nominal_cols_gen_smeared = wremnants.make_alt_reco_and_gen_hists(df, results, nominal_axes)
-        if args.validationHists: wremnants.make_reco_over_gen_hists(df, results)
+        if isW or isZ: 
+            nominal_cols_cvhbs, nominal_cols_uncrct, nominal_cols_gen, nominal_cols_gen_smeared = wremnants.make_alt_reco_and_gen_hists(df, results, nominal_axes)
+            if args.validationHists: wremnants.make_reco_over_gen_hists(df, results)
 
         if not args.no_recoil:
             df = recoilHelper.setup_MET(df, results, dataset, "Muon_pt[goodMuons]", "Muon_phi[goodMuons]", "Muon_pt[goodMuons]")
@@ -264,11 +264,11 @@ def build_graph(df, dataset):
         df = df.Define("muonL1PrefireStat_tensor", muon_prefiring_helper_stat, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId", "nominal_weight"])
         muonL1PrefireStat = df.HistoBoost("muonL1PrefireStat", nominal_axes, [*nominal_cols, "muonL1PrefireStat_tensor"], tensor_axes = muon_prefiring_helper_stat.tensor_axes)
         results.append(muonL1PrefireStat)
-
+    
         df = df.Define("muonL1PrefireSyst_tensor", muon_prefiring_helper_syst, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId", "nominal_weight"])
         muonL1PrefireSyst = df.HistoBoost("muonL1PrefireSyst", nominal_axes, [*nominal_cols, "muonL1PrefireSyst_tensor"], tensor_axes = [common.down_up_axis])
         results.append(muonL1PrefireSyst)
-
+    
         df = df.Define("ecalL1Prefire_tensor", f"wrem::twoPointScaling(nominal_weight/L1PreFiringWeight_ECAL_Nom, L1PreFiringWeight_ECAL_Dn, L1PreFiringWeight_ECAL_Up)")
         ecalL1Prefire = df.HistoBoost("ecalL1Prefire", nominal_axes, [*nominal_cols, "ecalL1Prefire_tensor"], tensor_axes = [common.down_up_axis])
         results.append(ecalL1Prefire)
@@ -344,24 +344,24 @@ def build_graph(df, dataset):
                 results.append(dummyMuonScaleSystPerSeDown)
                 results.append(dummyMuonScaleSystPerSeUp)
 
-            df = df.Define("muonScaleSyst_responseWeights_tensor_gensmear", calibration_uncertainty_helper,
-                [
-                "goodMuons_qop0_gen_smeared",
-                "goodMuons_pt0_gen_smeared_a_la_qop",
-                "goodMuons_eta0_gen_smeared",
-                "goodMuons_phi0_gen_smeared",
-                "goodMuons_charge0_gen_smeared",
-                "covMat_goodGenMuons0",
-                "goodMuons_qop0_gen",
-                "goodMuons_pt0_gen",
-                "goodMuons_eta0_gen",
-                "goodMuons_phi0_gen",
-                "goodMuons_charge0_gen",
-                "nominal_weight"
-                ]
-            )
-            dummyMuonScaleSyst_responseWeights = df.HistoBoost("muonScaleSyst_responseWeights_gensmear", nominal_axes, [*nominal_cols_gen_smeared, "muonScaleSyst_responseWeights_tensor_gensmear"], tensor_axes = calibration_uncertainty_helper.tensor_axes)
-            results.append(dummyMuonScaleSyst_responseWeights)
+                df = df.Define("muonScaleSyst_responseWeights_tensor_gensmear", calibration_uncertainty_helper,
+                    [
+                    "goodMuons_qop0_gen_smeared",
+                    "goodMuons_pt0_gen_smeared_a_la_qop",
+                    "goodMuons_eta0_gen_smeared",
+                    "goodMuons_phi0_gen_smeared",
+                    "goodMuons_charge0_gen_smeared",
+                    "covMat_goodGenMuons0",
+                    "goodMuons_qop0_gen",
+                    "goodMuons_pt0_gen",
+                    "goodMuons_eta0_gen",
+                    "goodMuons_phi0_gen",
+                    "goodMuons_charge0_gen",
+                    "nominal_weight"
+                    ]
+                )
+                dummyMuonScaleSyst_responseWeights = df.HistoBoost("muonScaleSyst_responseWeights_gensmear", nominal_axes, [*nominal_cols_gen_smeared, "muonScaleSyst_responseWeights_tensor_gensmear"], tensor_axes = calibration_uncertainty_helper.tensor_axes)
+                results.append(dummyMuonScaleSyst_responseWeights)
             
             if args.validationHists:
                 df = wremnants.define_cols_for_smearing_weights(df, calibration_uncertainty_helper)
