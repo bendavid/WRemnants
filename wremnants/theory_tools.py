@@ -246,7 +246,7 @@ def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_cen
 
         if with_uncertainties:
             hist_name += "_unc"
-            unc = df.HistoBoost(hist_name, axes, [*cols, f"{generator}Weight_tensor"], tensor_axes=helper.tensor_axes)
+            unc = df.HistoBoost(hist_name, axes, [*cols, f"{generator}Weight_tensor"], tensor_axes=helper.tensor_axes[-1:])
             res.append(unc)
         else:
             nominal = df.HistoBoost(hist_name, axes, [*cols, f"{generator}CentralWeight"])
