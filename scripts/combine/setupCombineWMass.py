@@ -31,10 +31,7 @@ def make_parser(parser=None):
     return parser
 
 def main(args):
-    logging.basicConfig()
-    base_logger = logging.getLogger("wremnants")
-    base_logger.setLevel(logging.DEBUG if args.debug else logging.INFO)
-    logger = base_logger.getChild("setupCombineWMass")
+    logger = common.setup_base_logger('setupCombineWMass', args.debug)
 
     outfolder = "/".join([args.baseDir, args.outfolder])
     if not os.path.isdir(outfolder):
@@ -117,7 +114,6 @@ def main(args):
                             systAxes=["downUpVar"],
                             labelsByAxis=["downUpVar"],
                             passToFakes=passSystToFakes)
-
     if pdfInfo["combine"] == "symHessian":
         cardTool.addSystematic(pdfName, 
             processes=single_v_samples,
@@ -232,7 +228,6 @@ def main(args):
         labelsByAxis=["downUpVar", "etaPhiReg"],
         passToFakes=passSystToFakes,
     )
-
     cardTool.addSystematic("ecalL1Prefire", 
         processes=cardTool.allMCProcesses(),
         group="ecalPrefire",
@@ -241,7 +236,6 @@ def main(args):
         labelsByAxis=["downUpVar"],
         passToFakes=passSystToFakes,
     )
-
     if not wlike:
         cardTool.addLnNSystematic("CMS_Fakes", processes=[args.qcdProcessName], size=1.05, group="MultijetBkg")
         cardTool.addLnNSystematic("CMS_Top", processes=["Top"], size=1.06)
