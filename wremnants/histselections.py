@@ -24,8 +24,8 @@ def fakeHistIsoRegionIntGen(h, scale=1.):
     print("Slicing")
     return h[{"iso" : 0, "qTgen" : s[::hist.sum]}]
 
-def signalHistWmass(h, charge=None):
-    sel = {"passIso" : 1, "passMT" : 1}
+def signalHistWmass(h, charge=None, passIso=1, passMT=1):
+    sel = {"passIso" : passIso, "passMT" : passMT}
     if charge in [-1, 1]:
         sel.update({"charge" : -1j if charge < 0 else 1j})
     return h[sel]

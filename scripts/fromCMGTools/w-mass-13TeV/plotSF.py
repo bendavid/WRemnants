@@ -221,9 +221,9 @@ if __name__ == "__main__":
               "triggerminus" : "0.65,1.15",
               "idip"         : "0.95,1.01",
               "iso"          : "0.975,1.025",
-              "antiiso"      : "0.7,1.25",
+              "antiiso"      : "0.6,1.25",
               "isonotrig"    : "0.97,1.03",
-              "antiisonotrig": "0.7,1.25",
+              "antiisonotrig": "0.6,1.25",
               "tracking"     : "0.98,1.01",
               "reco"         : "0.94,1.02",
     }

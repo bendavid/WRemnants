@@ -13,8 +13,8 @@ import datetime
 import argparse
 from array import array
 
-import utilities
-utilities = utilities.util()
+import utilitiesCMG
+utilities = utilitiesCMG.util()
 
 ## safe batch mode
 import sys

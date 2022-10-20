@@ -1423,7 +1423,6 @@ def drawNTH1(hists=[],
     else:
         canvas.SetBottomMargin(0.15)
 
-
     h1 = hists[0]
     hnums = [hists[i] for i in range(1,len(hists))]
     frame = h1.Clone("frame")
@@ -1481,7 +1480,7 @@ def drawNTH1(hists=[],
             if h.GetBinContent(h.GetMaximumBin()) > ymax: ymax = h.GetBinContent(h.GetMaximumBin())
             if h.GetBinContent(h.GetMinimumBin()) < ymin: ymin = h.GetBinContent(h.GetMinimumBin())
         if ymin < 0: ymin = 0
-        ymax *= (ymax - ymin) * yAxisExtendConstant + ymin
+        ymax = (ymax - ymin) * yAxisExtendConstant + ymin
         
     if lowerPanelHeight:
         h1.GetXaxis().SetLabelSize(0)

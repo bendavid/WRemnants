@@ -2,6 +2,7 @@ import hist
 import pathlib
 import argparse
 import logging
+import numpy as np
 
 wremnants_dir = f"{pathlib.Path(__file__).parent}/../wremnants"
 data_dir = f"{wremnants_dir}/data/"
@@ -27,7 +28,7 @@ ptV_binning = [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 23, 27, 32, 40
 ## 5% quantiles from aMC@NLO used in SMP-18-012
 #ptV_10quantiles_binning = [0.0, 1.971, 2.949, 3.838, 4.733, 5.674, 6.684, 7.781, 8.979, 10.303, 11.777, 13.435, 15.332, 17.525, 20.115, 23.245, 27.173, 32.414, 40.151, 53.858, 13000.0]
 ## 10% quantiles from aMC@NLO used in SMP-18-012 with some rounding <== This one worked fine with toys
-ptV_10quantiles_binning = [0.0, 2.95, 4.73, 6.68, 8.98, 11.78, 15.33, 20.11, 27.17, 40.15, 120]
+ptV_10quantiles_binning = [0.0, 2.95, 4.73, 6.68, 8.98, 11.78, 15.33, 20.11, 27.17, 40.15, np.inf]
 absYV_binning = [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4]
 
 # categorical axes in python bindings always have an overflow bin, so use a regular
@@ -76,7 +77,8 @@ def common_parser():
     parser.add_argument("--no-vertex_weight", dest="vertex_weight", action='store_false', help="Do not apply reweighting of vertex z distribution in MC to match data")
     parser.add_argument("--trackerMuons", action='store_true', help="Use tracker muons instead of global muons (need appropriate scale factors too)")
     parser.add_argument("--onlyMainHistograms", action='store_true', help="Only produce some histograms, skipping (most) systematics to run faster when those are not needed")
-
+    parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4], help="Set verbosity level with logging, the larger the more verbose");
+    
     commonargs,_ = parser.parse_known_args()
 
     if commonargs.trackerMuons:
@@ -102,13 +104,56 @@ def common_parser_combine():
     parser.add_argument("--scetlibUnc", action='store_true', help="Include SCETlib uncertainties")
     parser.add_argument("--pdf", type=str, default="nnpdf31", choices=theory_tools.pdfMapExtended.keys(), help="PDF to use")
     parser.add_argument("-b", "--fitObs", type=str, default="nominal", help="Observable to fit") # TODO: what does it do?
+    parser.add_argument("--qcdProcessName", dest="qcdProcessName" , type=str, default="Fake",   help="Name for QCD process")
+    parser.add_argument("--noStatUncFakes", dest="noStatUncFakes" , action="store_true",   help="Set bin error for QCD background templates to 0, to check MC stat uncertainties for signal only")
+    parser.add_argument("--skipSignalSystOnFakes", dest="skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
     parser.add_argument("--noQCDscaleFakes", dest="noQCDscaleFakes" , action="store_true",   help="Do not apply QCd scale uncertainties on fakes, mainly for debugging")
     parser.add_argument("--doStatOnly", action="store_true", default=False, help="Set up fit to get stat-only uncertainty (currently combinetf with -S 0 doesn't work)")
     parser.add_argument("--debug", action='store_true', help="Print debug output")
     return parser
 
+class CustomFormatter(logging.Formatter):
+    """Logging Formatter to add colors and count warning / errors"""
+
+    green = "\x1b[1;32m"
+    grey = "\x1b[38;21m"
+    yellow = "\x1b[33;21m"
+    red = "\x1b[31;21m"
+    bold_red = "\x1b[31;1m"
+    reset = "\x1b[0m"
+    #format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
+    myformat = "%(levelname)s:%(name)s: %(message)s"
+
+    FORMATS = {
+        logging.DEBUG: green + myformat + reset,
+        logging.INFO: grey + myformat + reset,
+        logging.WARNING: yellow + myformat + reset,
+        logging.ERROR: red + myformat + reset,
+        logging.CRITICAL: bold_red + myformat + reset
+    }
+
+    def format(self, record):
+        log_fmt = self.FORMATS.get(record.levelno)
+        formatter = logging.Formatter(log_fmt)
+        return formatter.format(record)
+
+logging_verboseLevel = [logging.CRITICAL, logging.ERROR, logging.WARNING, logging.INFO, logging.DEBUG]
+
+def setLoggingLevel(log, verbosity):
+    log.setLevel(logging_verboseLevel[max(0, min(4, verbosity))])
+
+def setup_test_logger(name, verbosity):
+    base_logger = logging.getLogger("wremnants")
+    # set console handler
+    ch = logging.StreamHandler()
+    ch.setFormatter(CustomFormatter())
+    base_logger.addHandler(ch)
+    setLoggingLevel(base_logger, verbosity)
+    base_logger.propagate = False # to avoid propagating back to root logger, which would print messages twice
+    return base_logger.getChild(name)
+    
 def setup_base_logger(name, debug):
-    logging.basicConfig()
+    logging.basicConfig(format='%(levelname)s: %(message)s')
     base_logger = logging.getLogger("wremnants")
     base_logger.setLevel(logging.DEBUG if debug else logging.INFO)
     return base_logger.getChild(name)
