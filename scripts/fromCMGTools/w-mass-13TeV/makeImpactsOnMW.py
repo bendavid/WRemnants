@@ -25,8 +25,8 @@ sys.argv = args
 ROOT.gROOT.SetBatch(True)
 ROOT.PyConfig.IgnoreCommandLineOptions = True
 
-import utilities
-utilities = utilities.util()
+import utilitiesCMG
+utilities = utilitiesCMG.util()
 
 if __name__ == "__main__":
 

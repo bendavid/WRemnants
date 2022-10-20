@@ -15,8 +15,8 @@ from subMatrix import niceName, niceNameHEPDATA
 
 import argparse
 
-import utilities
-utilities = utilities.util()
+import utilitiesCMG
+utilities = utilitiesCMG.util()
 
 ## safe batch mode
 import sys

@@ -137,14 +137,18 @@ class datagroups(object):
             self.setHists(baseName, syst, procsToRead, label, nominalIfMissing, selectSignal, forceNonzero, preOpMap, preOpArgs)
 
     def getDatagroups(self, excluded_procs=[]):
-        if type(excluded_procs) == str: excluded_procs = list(excluded_procs)
+        if type(excluded_procs) == str:
+            excluded_procs = list(excluded_procs)
         return dict(filter(lambda x: x[0] not in excluded_procs, self.groups.items()))
 
     def getNames(self, matches=[], exclude=False):
-        if not exclude:
-            return list(filter(lambda x: any([re.match(expr, x) for expr in matches]), self.groups.keys()))
+        if not matches:
+            return list(x for x in self.groups.keys())
         else:
-            return list(filter(lambda x: x not in matches, self.groups.keys()))
+            if not exclude:
+                return list(filter(lambda x: any([re.match(expr, x) for expr in matches]), self.groups.keys()))
+            else:
+                return list(filter(lambda x: x not in matches, self.groups.keys()))
 
     def getProcNames(self, to_expand=[], exclude_group=[]):
         procs = []

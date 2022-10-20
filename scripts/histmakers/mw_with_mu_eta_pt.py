@@ -67,12 +67,16 @@ nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
 axis_chargeVgen = qcdScaleByHelicity_Whelper.hist.axes["chargeVgen"]
 axis_ptVgen = hist.axis.Variable(
     common.ptV_10quantiles_binning, 
-    name = "ptVgen", underflow=False
+    name = "ptVgen", underflow=False,
 )
 
 # axes for mT measurement
 axis_mt = hist.axis.Variable([0] + list(range(40, 110, 1)) + [110, 112, 114, 116, 118, 120, 125, 130, 140, 160, 180, 200], name = "mt",underflow=False, overflow=True)
 axis_eta_mT = hist.axis.Variable([-2.4, 2.4], name = "eta")
+
+# axes for study of fakes
+axis_mt_fakes = hist.axis.Regular(60, 0., 120., name = "mt", underflow=False, overflow=True)
+axis_njet_fakes = hist.axis.Regular(2, -0.5, 1.5, name = "Numbr of jets", underflow=False, overflow=False) # only need case with 0 jets or > 0
 
 muon_efficiency_helper, muon_efficiency_helper_stat, muon_efficiency_helper_stat_tracking, muon_efficiency_helper_stat_reco, muon_efficiency_helper_syst = wremnants.make_muon_efficiency_helpers(filename = args.sfFile, era = era, max_pt = axis_pt.edges[-1])
 print(args.sfFile)
