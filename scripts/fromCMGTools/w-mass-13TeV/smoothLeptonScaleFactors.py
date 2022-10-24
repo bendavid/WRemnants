@@ -164,7 +164,8 @@ def fitTurnOn(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit=T
 
     # hardcoded manual tuning for Erf parameters to fix failing fits
     # was based on efficiencies for SMP-18-012, need to be redone for wmass, but the idea is the one below
-    # if True:
+    # It doesn't need to be a very optimized setup, fits fail randomly sometimes so the quickest solution is the best
+    # if step == "XXX":
     #     if charge == "both":
     #         if mc == "Data":
     #             if any(key == x for x in [13,14,19,21,26,28,33,34]):
@@ -530,7 +531,7 @@ if __name__ == "__main__":
 
     outname = args.outdir[0]
     addStringToEnd(outname,"/",notAddIfEndswithMatch=True)
-    outname += f"{args.era}/{args.step}_{args.charge}/"
+    outname += f"{args.era}/{channel}_{args.step}_{args.charge}/"
     createPlotDirAndCopyPhp(outname)
     
     outfilename = f"smoothedSFandEffi_{args.step}_{args.era}_{args.charge}.root"
