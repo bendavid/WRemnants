@@ -230,8 +230,7 @@ class datagroups(object):
                 procs = [processes] if isinstance(processes, str) else [p for p in processes]
         for proc in procs:
             if proc not in self.groups.keys():
-                logger.warning(f"In setSelectOp(): process {proc} not found")
-                quit() # or continue?
+                raise ValueError(f"In setSelectOp(): process {proc} not found")
             self.groups[proc]["selectOp"] = op
         
 class datagroups2016(datagroups):
