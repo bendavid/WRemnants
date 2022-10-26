@@ -58,10 +58,9 @@ axis_pt = hist.axis.Regular(template_npt, template_minpt, template_maxpt, name =
 # axis for the charge
 axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "charge")
 
+# TODO: get from common
 axis_passIso = hist.axis.Boolean(name = "passIso")
 axis_passMT = hist.axis.Boolean(name = "passMT")
-
-
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
 
 axis_chargeVgen = qcdScaleByHelicity_Whelper.hist.axes["chargeVgen"]

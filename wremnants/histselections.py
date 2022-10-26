@@ -30,6 +30,24 @@ def signalHistWmass(h, charge=None, passIso=1, passMT=1):
         sel.update({"charge" : -1j if charge < 0 else 1j})
     return h[sel]
 
+# the following are utility wrapper functions for signalHistWmass with proper region selection
+def signalHistWmass_failMt_passIso(h, charge=None):
+    return signalHistWmass(h, charge, 1, 0)
+
+def signalHistWmass_failMt_failIso(h, charge=None):
+    return signalHistWmass(h, charge, 0, 0)
+
+def signalHistWmass_passMt_failIso(h, charge=None):
+    return signalHistWmass(h, charge, 0, 1)
+    # sel = {"passIso" : 0, "passMT" : 1}
+    # if charge in [-1, 1]:
+    #     sel.update({"charge" : -1j if charge < 0 else 1j})
+    # return h[sel]
+
+def signalHistWmass_passMt_passIso(h, charge=None):
+    return signalHistWmass(h, charge, 1, 1)
+
+
 # TODO: Not all hists are made with these axes
 def signalHistLowPileupW(h):
     if not "qTgen" in [ax.name for ax in h.axes]:

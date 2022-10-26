@@ -183,19 +183,6 @@ class datagroups(object):
     def processes(self):
         return self.groups.keys()
 
-    def getDatagroupsForHist(self, histName):
-        filled = {}
-        for k, v in self.groups.items():
-            if histName in v:
-                filled[k] = v
-        return filled
-
-    def resultsDict(self):
-        return self.results
-
-    def processes(self):
-        return self.groups.keys()
-
     def addSummedProc(self, refname, name, label, color="red", exclude=["Data"], relabel=None, 
             procsToRead=None, reload=False, rename=None, action=None, preOpMap={}, preOpArgs={}):
         if reload:
@@ -232,9 +219,33 @@ class datagroups(object):
         self.groups[name][refname] = action(self.groups[refproc][refname])
 
 class datagroups2016(datagroups):
-    def __init__(self, infile, combine=False, wlike=False, pseudodata_pdfset = None):
+    def __init__(self, infile, combine=False, wlike=False, pseudodata_pdfset = None,
+                 takeRegion=3, ## to customize what to do with regions, coded below
+    ):
         self.datasets = {x.name : x for x in datasets2016.getDatasets()}
         super().__init__(infile, combine)
+        # TODO: code cases with enums or similar?
+        # e.g. id = passIso * 1 + passMt * 2, so 3 == signal region, 2 = failIso_passMt, etc ...
+        if wlike:
+            sigOp = None
+            fakeOp = None
+        else:
+            if takeRegion == 3:
+                sigOp = sel.signalHistWmass
+                fakeOp = sel.fakeHistABCD
+            elif takeRegion == 2:
+                sigOp = sel.signalHistWmass_passMt_failIso
+                fakeOp = sigOp
+            elif takeRegion == 1:
+                sigOp = sel.signalHistWmass_failMt_passIso
+                fakeOp = sigOp
+            elif takeRegion == 0:
+                sigOp = sel.signalHistWmass_failMt_failIso
+                fakeOp = sigOp
+            else:
+                logger.warning(f"invalid argument takeRegion = {takeRegion}, must be in {range(4)}. Abort")
+                quit()
+        ###
         self.hists = {} # container storing temporary histograms
         self.groups =  {
             "Data" : dict(
