@@ -85,8 +85,8 @@ class datagroups(object):
 
                 group[label] = h if not group[label] else hh.addHists(h, group[label])
 
-            if selectSignal and group[label] and "signalOp" in group and group["signalOp"]:
-                group[label] = group["signalOp"](group[label])
+            if selectSignal and group[label] and "selectOp" in group and group["selectOp"]:
+                group[label] = group["selectOp"](group[label])
         # Avoid situation where the nominal is read for all processes for this syst
         if not foundExact:
             raise ValueError(f"Did not find systematic {syst} for any processes!")
@@ -218,33 +218,31 @@ class datagroups(object):
         )
         self.groups[name][refname] = action(self.groups[refproc][refname])
 
+    def setSelectOp(self, op, processes=None, exclude=False): 
+        if processes == None:
+            procs = self.getDatagroups()
+        else:
+            if exclude:
+                procs = self.getDatagroups(excluded_procs=processes)
+            else:
+                procs = [processes] if isinstance(processes, str) else [p for p in processes]
+        for proc in procs:
+            if proc not in self.groups.keys():
+                logger.warning(f"In setSelectOp(): process {proc} not found")
+                quit() # or continue?
+            self.groups[proc]["selectOp"] = op
+        
 class datagroups2016(datagroups):
     def __init__(self, infile, combine=False, wlike=False, pseudodata_pdfset = None,
-                 takeRegion=3, ## to customize what to do with regions, coded below
     ):
         self.datasets = {x.name : x for x in datasets2016.getDatasets()}
         super().__init__(infile, combine)
-        # TODO: code cases with enums or similar?
-        # e.g. id = passIso * 1 + passMt * 2, so 3 == signal region, 2 = failIso_passMt, etc ...
         if wlike:
             sigOp = None
             fakeOp = None
         else:
-            if takeRegion == 3:
-                sigOp = sel.signalHistWmass
-                fakeOp = sel.fakeHistABCD
-            elif takeRegion == 2:
-                sigOp = sel.signalHistWmass_passMt_failIso
-                fakeOp = sigOp
-            elif takeRegion == 1:
-                sigOp = sel.signalHistWmass_failMt_passIso
-                fakeOp = sigOp
-            elif takeRegion == 0:
-                sigOp = sel.signalHistWmass_failMt_failIso
-                fakeOp = sigOp
-            else:
-                logger.warning(f"invalid argument takeRegion = {takeRegion}, must be in {range(4)}. Abort")
-                quit()
+            sigOp = sel.signalHistWmass
+            fakeOp = sel.fakeHistABCD
         ###
         self.hists = {} # container storing temporary histograms
         self.groups =  {
@@ -252,19 +250,19 @@ class datagroups2016(datagroups):
                 members = [self.datasets["dataPostVFP"]],
                 color = "black",
                 label = "Data",
-                signalOp = sel.signalHistWmass if not wlike else None,
+                selectOp = sigOp,
             ),
             "Zmumu" : dict(
                 members = [self.datasets["ZmumuPostVFP"]],
                 label = r"Z$\to\mu\mu$",
                 color = "lightblue",
-                signalOp = sel.signalHistWmass if not wlike else None,
+                selectOp = sigOp,
             ),   
             "Ztautau" : dict(
                 members = [self.datasets["ZtautauPostVFP"]],
                 label = r"Z$\to\tau\tau$",
                 color = "darkblue",
-                signalOp = sel.signalHistWmass if not wlike else None,
+                selectOp = sigOp,
             ),            
         }
         if pseudodata_pdfset and combine:
@@ -279,31 +277,31 @@ class datagroups2016(datagroups):
                     scale = lambda x: 1. if x.is_data else -1,
                     label = "Nonprompt",
                     color = "grey",
-                    signalOp = sel.fakeHistABCD,
+                    selectOp = fakeOp,
                 ),
                 "Wtau" : dict(
                     members = [self.datasets["WminustaunuPostVFP"], self.datasets["WplustaunuPostVFP"]],
                     label = r"W$^{\pm}\to\tau\nu$",
                     color = "orange",
-                    signalOp = sel.signalHistWmass,
+                    selectOp = sigOp,
                 ),
                 "Wmunu" : dict(
                     members = [self.datasets["WminusmunuPostVFP"], self.datasets["WplusmunuPostVFP"]],
                     label = r"W$^{\pm}\to\mu\nu$",
                     color = "darkred",
-                    signalOp = sel.signalHistWmass,
+                    selectOp = sigOp,
                 ),
                 "Top" : dict(
                     members = list(filter(lambda y: y.group == "Top", self.datasets.values())),
                     label = "Top",
                     color = "green",
-                    signalOp = sel.signalHistWmass,
+                    selectOp = sigOp,
                 ), 
                 "Diboson" : dict(
                     members = list(filter(lambda y: y.group == "Diboson", self.datasets.values())),
                     label = "Diboson",
                     color = "pink",
-                    signalOp = sel.signalHistWmass,
+                    selectOp = sigOp,
                 ), 
             })
         else:
