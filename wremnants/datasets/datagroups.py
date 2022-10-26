@@ -52,7 +52,7 @@ class datagroups(object):
     ## procName are grouped into datagroups
     ## baseName takes values such as "nominal"
     def setHists(self, baseName, syst, procsToRead=None, label=None, nominalIfMissing=True, 
-            selectSignal=True, forceNonzero=True, preOpMap=None, preOpArgs=None):
+            applySelection=True, forceNonzero=True, preOpMap=None, preOpArgs=None):
         if not label:
             label = syst if syst else baseName
         if not procsToRead:
@@ -85,7 +85,9 @@ class datagroups(object):
 
                 group[label] = h if not group[label] else hh.addHists(h, group[label])
 
-            if selectSignal and group[label] and "selectOp" in group and group["selectOp"]:
+            if not applySelection and "selectOp" in group and group["selectOp"]:
+                logger.warning(f"Selection requested for process {procName} but applySelection=False, thus it will be ignored")
+            if applySelection and group[label] and "selectOp" in group and group["selectOp"]:
                 group[label] = group["selectOp"](group[label])
         # Avoid situation where the nominal is read for all processes for this syst
         if not foundExact:
@@ -130,11 +132,11 @@ class datagroups(object):
         return name
 
     def loadHistsForDatagroups(self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="", nominalIfMissing=True,
-            selectSignal=True, forceNonzero=True, pseudodata=False, preOpMap={}, preOpArgs={}):
+            applySelection=True, forceNonzero=True, pseudodata=False, preOpMap={}, preOpArgs={}):
         if self.rtfile and self.combine:
             self.setHistsCombine(baseName, syst, channel, procsToRead, excluded_procs, label)
         else:
-            self.setHists(baseName, syst, procsToRead, label, nominalIfMissing, selectSignal, forceNonzero, preOpMap, preOpArgs)
+            self.setHists(baseName, syst, procsToRead, label, nominalIfMissing, applySelection, forceNonzero, preOpMap, preOpArgs)
 
     def getDatagroups(self, excluded_procs=[]):
         if type(excluded_procs) == str:
