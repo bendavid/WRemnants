@@ -14,6 +14,7 @@ import logging
 import shutil
 import sys
 import datetime
+import json
 
 hep.style.use(hep.style.ROOT)
 
@@ -276,13 +277,12 @@ def save_pdf_and_png(outdir, basename):
     plt.savefig(fname.replace(".pdf", ".png"), bbox_inches='tight')
     logger.info(f"Wrote file(s) {fname}(.png)")
 
-def write_index_and_log(outpath, logname, indexname="index.php", template_dir=f"{pathlib.Path(__file__).parent}/Templates", yield_tables=None):
+def write_index_and_log(outpath, logname, indexname="index.php", template_dir=f"{pathlib.Path(__file__).parent}/Templates", 
+        yield_tables=None, analysis_meta_info=None):
     if not os.path.isfile(f"{outpath}/{indexname}"):
         shutil.copyfile(f"{template_dir}/{indexname}", f"{outpath}/{indexname}")
 
     logdir = outpath
-    #if not os.path.isdir(logdir):
-    #    os.mkdir(logdir)
 
     with open(f"{logdir}/{logname}.log", "w") as logf:
         meta_info = '-'*80 + '\n' + \
@@ -296,3 +296,10 @@ def write_index_and_log(outpath, logname, indexname="index.php", template_dir=f"
                 logf.write(f"Yield information for {k}\n")
                 logf.write("-"*80+"\n")
                 logf.write(str(v.round(2))+"\n\n")
+
+        if analysis_meta_info:
+            for k,analysis_info in analysis_meta_info.items():
+                logf.write('\n'+'-'*80+"\n")
+                logf.write(f"Meta info from input file {k}\n")
+                logf.write('\n'+'-'*80+"\n")
+                logf.write(json.dumps(analysis_info, indent=4).replace("\\n", "\n"))

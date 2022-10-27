@@ -1,8 +1,8 @@
 import uproot
 import hist
 import argparse
-from wremnants import input_tools,plot_tools,theory_tools
-from wremnants import boostHistHelpers as hh
+from wremnants import plot_tools,theory_tools
+from utilities import boostHistHelpers as hh,input_tools
 import pickle
 import lz4.frame
 import os
@@ -149,7 +149,8 @@ def read_pickle_hist(proc, file_name, lookup, hist_name):
 
 def read_scetlib_hist(proc, file_name, lookup, hist_name):
     charge = 0 if proc == "z" else (-1 if proc == "wp" else 1)
-    nonsing = file_name.replace(".npz", "_nons.npz")
+    ext = file_name.split(".")[-1]
+    nonsing = file_name.replace("."+ext, "_nons."+ext)
     if not os.path.isfile(nonsing):
         logging.warning("Didn't find the non-singular contribution. Will make comparisons without it")
         nonsing = ""
@@ -169,11 +170,15 @@ def read_matrix_radish_hist(proc, filename, lookup, hist_name):
 
 def read_hists(proc, files, lookup, hist_name):
     hists = []
+    meta_info = {}
     for fname in files:
         if ".pkl.lz4" in fname[-8:]:
             func = read_pickle_hist
+            meta_info = pickle.load(lz4.frame.open(fname))["meta_info"]
         elif ".npz" in fname[-4:] or ".pkl" in fname[-4:]:
             func = read_scetlib_hist
+            if ".pkl" in fname[-4:]:
+                meta_info = pickle.load(open(fname, "rb"))["meta_data"]
         elif ".dat" in fname[-4:]:
             func = read_matrix_radish_hist
         elif ".txt" in fname[-4:]:
@@ -181,7 +186,7 @@ def read_hists(proc, files, lookup, hist_name):
         else:
             raise ValueError(f"File {fname} is not a recognized type")
         hists.append(func(proc, fname, lookup, hist_name))
-    return hists
+    return hists,meta_info
 
 if not args.scetlib_files and not args.minnlo_files:
     raise ValueError("Must specify at least one filename")
@@ -208,6 +213,8 @@ short_name = {
 
 generators_info.insert(0, generators_info.pop([x[0] for x in generators_info].index(args.ratio_ref)))
 
+all_meta_info = {}
+
 for generator, label in generators_info:
     files = getattr(args, f"{generator}_files")
     if files:
@@ -217,12 +224,16 @@ for generator, label in generators_info:
         if generator == "dyturbo":
             hists = [input_tools.read_dyturbo_hist(files, axis=info[args.hist_name]["axis"])]
         else:
-            hists = read_hists(args.proc, files, info, args.hist_name)
+            hists,meta_info = read_hists(args.proc, files, info, args.hist_name)
         all_hists.extend(hists)
         all_colors.extend([info["colors"][c] for c in range(len(hists))])
         all_labels.append(label)
         if len(hists) > 1:
             all_labels.extend([f"{label} (alt {i})" for i in range(1, len(hists[1:]+1))])
+
+        if meta_info:
+            all_meta_info[generator] = meta_info
+
 
 if len(all_hists) > 1:
     all_hists = hh.rebinHistsToCommon(all_hists, axis_idx=0, keep_full_range=args.keep_full_range)
@@ -233,4 +244,4 @@ fig = plot_tools.makePlotWithRatioToRef(all_hists, colors=all_colors, labels=all
 
 outname = f"TheoryCompHist_{args.proc}_{args.hist_name}" + ("_"+args.name_append if args.name_append else "")
 plot_tools.save_pdf_and_png(outdir, outname)
-plot_tools.write_index_and_log(outdir, outname)
+plot_tools.write_index_and_log(outdir, outname, analysis_meta_info=all_meta_info)
