@@ -4,7 +4,7 @@ parser,initargs = common.common_parser()
 
 import narf
 import wremnants
-from wremnants import theory_tools,syst_tools,theory_corrections
+from wremnants import theory_tools,syst_tools,theory_corrections, muon_validation
 import hist
 import lz4.frame
 import logging
@@ -87,6 +87,7 @@ muon_efficiency_helper, muon_efficiency_helper_stat, muon_efficiency_helper_stat
 pileup_helper = wremnants.make_pileup_helper(era = era)
 
 calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
+jpsi_crctn_helper = wremnants.make_jpsi_crctn_helper()
 
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_corr)
 
@@ -103,6 +104,8 @@ if not args.no_recoil:
 def build_graph(df, dataset):
     print("build graph for dataset:", dataset.name)
     results = []
+    isW = dataset.name in common.wprocs
+    isZ = dataset.name in common.zprocs
 
     if dataset.is_data:
         df = df.DefinePerSample("weight", "1.0")
@@ -154,6 +157,9 @@ def build_graph(df, dataset):
     df = df.Define("NonTrigMuon_eta", "Muon_correctedEta[nonTrigMuons][0]")
     df = df.Define("NonTrigMuon_phi", "Muon_correctedPhi[nonTrigMuons][0]")
 
+    if isZ or dataset.is_data:
+        df = wremnants.define_cvh_muons_kinematics(df)
+        df = wremnants.define_jpsi_crctd_muons_pt(df, jpsi_crctn_helper)
     df = df.Filter("NonTrigMuon_pt > 26.")
 
     if dataset.group in ["Top", "Diboson"]:
@@ -192,15 +198,41 @@ def build_graph(df, dataset):
     df = df.Define("massZ", "Z_mom4.mass()")
     df = df.Define("yZ", "Z_mom4.Rapidity()")
     df = df.Define("absYZ", "std::fabs(yZ)")
+    if isZ or dataset.is_data:
+        df = df.Define("TrigMuon_cvh_mom4",
+            (
+                "ROOT::Math::PtEtaPhiMVector("
+                "TrigMuon_cvh_pt, TrigMuon_cvh_eta, TrigMuon_cvh_phi, wrem::muon_mass)"
+            )
+        )
+        df = df.Define("TrigMuon_jpsi_crctd_mom4",
+            (
+                "ROOT::Math::PtEtaPhiMVector("
+                "TrigMuon_jpsi_crctd_pt, TrigMuon_cvh_eta, TrigMuon_cvh_phi, wrem::muon_mass)"
+            )
+        )
+        df = df.Define("NonTrigMuon_cvh_mom4",
+            (
+                "ROOT::Math::PtEtaPhiMVector("
+                "NonTrigMuon_cvh_pt, NonTrigMuon_cvh_eta, NonTrigMuon_cvh_phi, wrem::muon_mass)"
+            )
+        )
+        df = df.Define("NonTrigMuon_jpsi_crctd_mom4",
+            (
+                "ROOT::Math::PtEtaPhiMVector("
+                "NonTrigMuon_jpsi_crctd_pt, NonTrigMuon_cvh_eta, NonTrigMuon_cvh_phi, wrem::muon_mass)"
+            )
+        )
+        df = df.Define("Z_cvh_mom4", "ROOT::Math::PxPyPzEVector(TrigMuon_cvh_mom4)+ROOT::Math::PxPyPzEVector(NonTrigMuon_cvh_mom4)")
+        df = df.Define("Z_jpsi_crctd_mom4", "ROOT::Math::PxPyPzEVector(TrigMuon_jpsi_crctd_mom4)+ROOT::Math::PxPyPzEVector(NonTrigMuon_jpsi_crctd_mom4)")
+        df = df.Define("massZ_cvh", "Z_cvh_mom4.mass()")
+        df = df.Define("massZ_jpsi_crctd", "Z_jpsi_crctd_mom4.mass()")
 
     df = df.Define("csSineCosThetaPhiZ", "TrigMuon_charge == -1 ? wrem::csSineCosThetaPhi(TrigMuon_mom4, NonTrigMuon_mom4) : wrem::csSineCosThetaPhi(NonTrigMuon_mom4, TrigMuon_mom4)")
 
     df = df.Define("cosThetaStarZ", "csSineCosThetaPhiZ.costheta")
     df = df.Define("phiStarZ", "std::atan2(csSineCosThetaPhiZ.sinphi, csSineCosThetaPhiZ.cosphi)")
 
-
-    isW = dataset.name in common.wprocs
-    isZ = dataset.name in common.zprocs
     apply_theory_corr = args.theory_corr and dataset.name in corr_helpers
 
     if not dataset.is_data:
@@ -232,6 +264,12 @@ def build_graph(df, dataset):
     
     dilepton = df_dilepton.HistoBoost("dilepton", dilepton_axes, [*dilepton_cols, "nominal_weight"])
     results.append(dilepton)
+    if isZ or dataset.is_data:
+        zmass_cvh = df_dilepton.HistoBoost("zmass_cvh", [axis_mll], ["massZ_cvh", "nominal_weight"])
+        zmass_jpsi_crctd = df_dilepton.HistoBoost("zmass_jpsi_crctd", [axis_mll], ["massZ_jpsi_crctd", "nominal_weight"])
+        results.append(zmass_cvh)
+        results.append(zmass_jpsi_crctd)
+
     if isW or isZ:
         results.extend(theory_tools.make_pdf_hists(df_dilepton, dataset.name, dilepton_axes, dilepton_cols, args.pdfs, "dilepton"))
 
@@ -357,6 +395,7 @@ def build_graph(df, dataset):
 
             df = df.Define("Muon_cvhbsMomCov", "wrem::splitNestedRVec(Muon_cvhbsMomCov_Vals, Muon_cvhbsMomCov_Counts)")
 
+            '''
             df = df.Define("muonScaleSyst_responseWeights_tensor", calibration_uncertainty_helper,
                            ["Muon_correctedPt",
                             "Muon_correctedEta",
@@ -374,6 +413,7 @@ def build_graph(df, dataset):
 
             dummyMuonScaleSyst_responseWeights = df.HistoBoost("muonScaleSyst_responseWeights", nominal_axes, [*nominal_cols, "muonScaleSyst_responseWeights_tensor"], tensor_axes = calibration_uncertainty_helper.tensor_axes)
             results.append(dummyMuonScaleSyst_responseWeights)
+            '''
 
 
     return results, weightsum
