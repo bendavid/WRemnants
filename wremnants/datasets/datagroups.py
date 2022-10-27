@@ -46,6 +46,9 @@ class datagroups(object):
             return 1
         return self.lumi*1000*proc.xsec/self.results[proc.name]["weight_sum"]
 
+    def getMetaInfo(self):
+        return self.results["meta_info"]
+
     # for reading pickle files
     # as a reminder, the ND hists with tensor axes in the pickle files are organized as
     # pickle[procName]["output"][baseName] where
@@ -141,6 +144,9 @@ class datagroups(object):
         return dict(filter(lambda x: x[0] not in excluded_procs, self.groups.items()))
 
     def getNames(self, matches=[], exclude=False):
+        if not matches:
+            return list(self.groups.keys())
+
         if not exclude:
             return list(filter(lambda x: any([re.match(expr, x) for expr in matches]), self.groups.keys()))
         else:

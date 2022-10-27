@@ -77,7 +77,7 @@ if addVariation and (args.selectAxis or args.selectEntries):
 outdir = plot_tools.make_plot_dir(args.outpath, args.outfolder)
 
 groups = datagroups2016(args.infile, wlike=args.wlike)
-datasets = groups.getNames(args.procFilters)
+datasets = groups.getNames(args.procFilters, exclude=False)
 logger.info(f"Will plot datasets {datasets}")
 
 if not args.nominalRef:
@@ -143,7 +143,9 @@ if addVariation:
 groups.sortByYields(args.baseName, nominalName=nominalName)
 histInfo = groups.getDatagroups()
 
-prednames = list(reversed(groups.getNames(datasets)))
+logger.info(f"Unstacked processes are {exclude}")
+prednames = list(reversed(groups.getNames([d for d in datasets if d not in exclude], exclude=False)))
+logger.info(f"Stacked processes are {prednames}")
 
 select = {} if args.channel == "all" else {"charge" : -1.j if args.channel == "minus" else 1.j}
 
@@ -166,4 +168,5 @@ for h in args.hists:
     stack_yields = groups.make_yields_df(args.baseName, prednames, action)
     unstacked_yields = groups.make_yields_df(args.baseName, unstack, action)
     plot_tools.write_index_and_log(outdir, outfile, 
-        yield_tables={"Stacked processes" : stack_yields, "Unstacked processes" : unstacked_yields})
+        yield_tables={"Stacked processes" : stack_yields, "Unstacked processes" : unstacked_yields},
+        analysis_meta_info={"AnalysisOutput" : groups.getMetaInfo()})
