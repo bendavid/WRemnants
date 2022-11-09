@@ -21,11 +21,15 @@ ROOT.PyConfig.IgnoreCommandLineOptions = True
 sys.path.append(os.getcwd() + "/plotUtils/")
 from utility import *
 
+from make2DEffStatVariations import effStatVariations
+
 # for a quick summary at the end
 badFitsID_data = {}
 badFitsID_mc = {}
+badFitsID_sf = {}
 badCovMatrixID_data = {}
 badCovMatrixID_mc = {}
+badCovMatrixID_sf = {}
 
 def getReducedChi2andLabel(func):
     if func.GetNDF():
@@ -62,21 +66,24 @@ def fitTurnOn(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit=T
               step=None,
               fitRange=None,
               hist_reducedChi2=0,
-              hist_ErfParam_vs_eta=0,
-              hist_ErfCovMatrix_vs_eta=0,  # TH3, eta on x and cov matrix in yz
+              hist_FuncParam_vs_eta=0,
+              hist_FuncCovMatrix_vs_eta=0,  # TH3, eta on x and cov matrix in yz
               charge = "both",
               etabins = []
               ):
-
-    # there might be some obsolete options below
+    
+    ROOT.Math.MinimizerOptions.SetDefaultMinimizer("Minuit2","Migrad")
+    ROOT.Math.MinimizerOptions.SetDefaultStrategy(2)
 
     chargeText = ""
     if charge == "plus": chargeText = "positive"
     if charge == "minus": chargeText = "negative"
 
     # some old options, might be removed
+    doingSF = True if mc == "SF" else False
     forcePol3 = False
-    forceErfAlways = True
+    forceCheb3Always = True if doingSF else False
+    forceErfAlways = False if doingSF else True
     
     originalMaxPt = hist.GetXaxis().GetBinLowEdge(1+hist.GetNbinsX())
 
@@ -127,7 +134,7 @@ def fitTurnOn(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit=T
     hist.SetStats(0)
     hist.Draw("EP")
 
-    fitopt = "QMFS+"  
+    fitopt = "FMBQS+" # add FM if using Minuit   
     maxFitRange = hist.GetXaxis().GetBinLowEdge(1+hist.GetNbinsX())
     minFitRange = hist.GetXaxis().GetBinLowEdge(1)
     if fitRange != None:
@@ -152,15 +159,35 @@ def fitTurnOn(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit=T
 
     tf1_pol1 = ROOT.TF1("tf1_pol1","pol1",minFitRange,maxFitRange)
     tf1_pol1.SetLineWidth(2)
-    tf1_pol1.SetLineColor(ROOT.kBlue)
+    tf1_pol1.SetLineColor(ROOT.kGreen+2)
 
     tf1_pol2 = ROOT.TF1("tf1_pol2","pol2",minFitRange,maxFitRange)
     tf1_pol2.SetLineWidth(2)
-    tf1_pol2.SetLineColor(ROOT.kGreen+2)
+    tf1_pol2.SetLineColor(ROOT.kRed+2)
 
-    tf1_pol3 = ROOT.TF1("tf1_pol3","pol3",minFitRange,originalMaxPt) # with pol3 use always the maximum pt
+    tf1_pol3 = ROOT.TF1("tf1_pol3","pol3",minFitRange,maxFitRange)
     tf1_pol3.SetLineWidth(2)
     tf1_pol3.SetLineColor(ROOT.kCyan+1)
+    tf1_pol3.SetParameters(1.0, 0.0, 0.0, 0.0);
+
+    tf1_cheb3 = ROOT.TF1("tf1_cheb3","cheb3",minFitRange,maxFitRange)
+    tf1_cheb3.SetLineWidth(2)
+    #tf1_cheb3.SetLineStyle(2)
+    tf1_cheb3.SetLineColor(ROOT.kRed+2)
+    tf1_cheb3.SetParameters(1.0, 0.0, 0.0, 0.0);
+    tf1_cheb3.SetParLimits(0,  0.0, 2.0);
+    tf1_cheb3.SetParLimits(1, -0.5, 0.5);
+    tf1_cheb3.SetParLimits(2, -0.5, 0.5);
+    tf1_cheb3.SetParLimits(3, -0.5, 0.5);
+
+    tf1_cheb2 = ROOT.TF1("tf1_cheb2","cheb2",minFitRange,maxFitRange)
+    tf1_cheb2.SetLineWidth(3)
+    tf1_cheb2.SetLineStyle(2)
+    tf1_cheb2.SetLineColor(ROOT.kBlue)
+    tf1_cheb2.SetParameters(1.0, 0.0, 0.0);
+    tf1_cheb2.SetParLimits(0,  0.0, 2.0);
+    tf1_cheb2.SetParLimits(1, -0.5, 0.5);
+    tf1_cheb2.SetParLimits(2, -0.5, 0.5);
 
     # hardcoded manual tuning for Erf parameters to fix failing fits
     # was based on efficiencies for SMP-18-012, need to be redone for wmass, but the idea is the one below
@@ -225,49 +252,73 @@ def fitTurnOn(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit=T
     #                 tf1_erf.SetParameter(2,5.0)
                 
     erf_fitresPtr = None
-
+    cheb3_fitresPtr = None
     # fit and draw (if required)
-    erf_fitresPtr = hist.Fit(tf1_erf,fitopt)        
-    hist.Fit(tf1_pol3,fitopt)        
-
+    # for SF draw cb3 after pol3, since they might overlap
+    if doingSF:
+        cheb3_fitresPtr = hist.Fit(tf1_cheb3,fitopt)
+        cheb2_fitresPtr = hist.Fit(tf1_cheb2,fitopt)
+        pol3_fitresPtr = hist.Fit(tf1_pol3,fitopt+"0") # do not draw pol3 here, but keep until all the mess below is cleaned
+    else:
+        erf_fitresPtr = hist.Fit(tf1_erf,fitopt)
+        pol3_fitresPtr = hist.Fit(tf1_pol3,fitopt)
     #spl = ROOT.TSpline3(hist,"b1e1")
     #spl.SetLineWidth(2)
     #spl.SetLineColor(ROOT.kRed+3)
     #spl.Draw("pclsame")
 
-    if mc in ["Data", "MC"] and erf_fitresPtr != None:
-        fitstatus = int(erf_fitresPtr)
+    fitresPtr = cheb2_fitresPtr if doingSF else erf_fitresPtr
+    if fitresPtr != None:
+        fitstatus = int(fitresPtr)
         #print "fit status: ", str(fitstatus)
-        #print "fit status: ", str(erf_fitresPtr.Status())
+        #print "fit status: ", str(fitresPtr.Status())
         # status is 0 if all is ok (if option M was used, might be 4000 in case the improve command of Minuit failed, but it is ok)
         # without M the fit sometimes fails and should be tuned by hand (option M does it in some case)
         if fitstatus != 0 and fitstatus != 4000: 
             print(f"##### WARNING: FIT HAS STATUS --> {str(fitstatus)}") 
             if mc == "Data":
                 badFitsID_data[key] = fitstatus
-            else:
+            elif mc == "MC":
                 badFitsID_mc[key] = fitstatus
-        cov = erf_fitresPtr.GetCovarianceMatrix()
-        #cov.Print()
-        #print "%s" % str(erf_fitresPtr.CovMatrix(1,1))
-        #print "Covariance matrix status = ", str(erf_fitresPtr.CovMatrixStatus())
-        # covariance matrix status code using Minuit convention : =0 not calculated, =1 approximated, =2 made pos def , =3 accurate 
-        if erf_fitresPtr.CovMatrixStatus() != 3: 
-            print(f"##### WARNING: COVARIANCE MATRIX HAS STATUS --> {str(erf_fitresPtr.CovMatrixStatus())}")
-            if mc == "Data":
-                badCovMatrixID_data[key] = erf_fitresPtr.CovMatrixStatus()
             else:
-                badCovMatrixID_mc[key] = erf_fitresPtr.CovMatrixStatus()
+                badFitsID_sf[key] = fitstatus
+            if doingSF and int(cheb2_fitresPtr) == 0:
+                print("##### Cheb2 had good status 0")
+        cov = fitresPtr.GetCovarianceMatrix()
+        #cov.Print()
+        #print "%s" % str(fitresPtr.CovMatrix(1,1))
+        #print "Covariance matrix status = ", str(fitresPtr.CovMatrixStatus())
+        # covariance matrix status code using Minuit convention : =0 not calculated, =1 approximated, =2 made pos def , =3 accurate 
+        if fitresPtr.CovMatrixStatus() != 3: 
+            print(f"##### WARNING: COVARIANCE MATRIX HAS QUALITY --> {str(fitresPtr.CovMatrixStatus())}")
+            if mc == "Data":
+                badCovMatrixID_data[key] = fitresPtr.CovMatrixStatus()
+            elif mc == "MC":
+                badCovMatrixID_mc[key] = fitresPtr.CovMatrixStatus()
+            else:
+                badCovMatrixID_sf[key] = fitresPtr.CovMatrixStatus()
+            if doingSF and cheb2_fitresPtr.CovMatrixStatus() == 3:
+                print("##### Cheb2 had good covariance matrix with quality 3")
+                
+        if hist_FuncCovMatrix_vs_eta:
+            # erf has 3 parameters, pol3 and cheb3 have 4, should be made more general
+            npar = 4 if doingSF else 3
+            for i in range(npar):
+                for j in range(npar):
+                    hist_FuncCovMatrix_vs_eta.SetBinContent(key+1,i+1,j+1,fitresPtr.CovMatrix(i,j))
 
-        if hist_ErfCovMatrix_vs_eta: 
-            # erf has 3 parameters
-            for i in range(3):
-                for j in range(3):
-                    hist_ErfCovMatrix_vs_eta.SetBinContent(key+1,i+1,j+1,erf_fitresPtr.CovMatrix(i,j))
-            
-
+    quit()
     upLeg = 0.4
-    leg = ROOT.TLegend(0.5, 0.2, 0.9, upLeg)
+    downLeg = 0.2
+    leftLeg = 0.5
+    rightLeg = 0.9
+    if mc == "SF":
+        upLeg = 0.85
+        downLeg = 0.65
+        leftLeg = 0.6
+        rightLeg = 0.9
+        
+    leg = ROOT.TLegend(leftLeg, downLeg, rightLeg, upLeg)
     leg.SetFillColor(0)
     leg.SetFillStyle(0)
     leg.SetBorderSize(0)
@@ -275,26 +326,35 @@ def fitTurnOn(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit=T
     legEntry = {}
     legEntry[tf1_erf.GetName()]  = "Erf[x]"
     legEntry[tf1_pol3.GetName()] = "pol3"
-    
-    leg.AddEntry(tf1_erf, "Erf[x]", 'LF')
-    leg.AddEntry(tf1_pol3,"pol3", "LF")
+    legEntry[tf1_cheb3.GetName()] = "cheb3"
+    legEntry[tf1_cheb2.GetName()] = "cheb2"
+    legEntry[tf1_pol1.GetName()] = "pol1"
+    legEntry[tf1_pol2.GetName()] = "pol2"
+
+    if doingSF:
+        leg.AddEntry(tf1_cheb3,  legEntry[tf1_cheb3.GetName()], 'LF')
+        leg.AddEntry(tf1_cheb2,  legEntry[tf1_cheb2.GetName()], 'LF')  
+    else:
+        leg.AddEntry(tf1_erf,  legEntry[tf1_erf.GetName()], 'LF')
+        leg.AddEntry(tf1_pol3, legEntry[tf1_pol3.GetName()], "LF")
     #leg.AddEntry(spl,"spline", "LF")
     leg.Draw('same')
-    ###################
-    # fits
-    ####################
 
     canvas.RedrawAxis("sameaxis")
 
     setTDRStyle()
     ROOT.gStyle.SetOptTitle(1)  # use histogram title with binning as canvas title
 
-    fit_erf =  hist.GetFunction(tf1_erf.GetName())
+    fit_erf =  hist.GetFunction(tf1_erf.GetName()) if not doingSF else None
     fit_pol3 = hist.GetFunction(tf1_pol3.GetName())
+    fit_cheb3 = hist.GetFunction(tf1_cheb3.GetName()) if doingSF else None
+    fit_cheb2 = hist.GetFunction(tf1_cheb2.GetName()) if doingSF else None
     
     functions = {}
     functions[tf1_erf.GetName()] = fit_erf
     functions[tf1_pol3.GetName()] = fit_pol3
+    functions[tf1_cheb3.GetName()] = fit_cheb3
+    functions[tf1_cheb2.GetName()] = fit_cheb2
     
     lat = ROOT.TLatex()
     line = ""
@@ -305,38 +365,47 @@ def fitTurnOn(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit=T
     lat.SetTextColor(1);
 
     chi2 = 1000000.0
-    funcMinChi2 = 0
+    funcMinChi2 = None
     for name in functions.keys():
+        if name == "tf1_pol3": continue
         f = functions[name]
         #print "Name: %s func %s" % (name, f)                                                                                                                    
+        if f == None: continue
         if f.GetNDF() == 0: continue
         if f.GetChisquare() < chi2:
             chi2 = f.GetChisquare()
             funcMinChi2 = f
-            #print "Function %s had the best Chi2/Ndof: %.3f/%d among non-pol3" % (funcMinChi2.GetName(),funcMinChi2.GetChisquare(),funcMinChi2.GetNDF())
-            #print "pol3 Chi2/Ndof: %.3f/%d" % (fit_pol3.GetChisquare(),fit_pol3.GetNDF())
+    if funcMinChi2 == None:
+        print("ERROR: no function found with at least 1 degree of freedom")
+        quit()
+    #print("Function %s had the best Chi2/Ndof: %.3f/%d among non-pol3" % (funcMinChi2.GetName(),funcMinChi2.GetChisquare(),funcMinChi2.GetNDF()))
+    #print("pol3 Chi2/Ndof: %.3f/%d" % (fit_pol3.GetChisquare(),fit_pol3.GetNDF()))
     if forcePol3:
         retFunc = fit_pol3
     else:
+        #print(funcMinChi2.GetName())
         nChi2Sigma = abs(funcMinChi2.GetChisquare()-funcMinChi2.GetNDF())/math.sqrt(2.0*funcMinChi2.GetNDF())  # Chi2 variance is 2*Ndof
         nChi2Sigma_pol3 = abs(fit_pol3.GetChisquare()-fit_pol3.GetNDF())/math.sqrt(2.0*fit_pol3.GetNDF()) if fit_pol3.GetNDF() else 999
         # pol3 will generally fit very well also in case of weird points
         # for good looking points, pol3 might be better because it can change curvature, while other functions cannot (which would be more physical)
         # allow non-pol3 fit to have Chi2 within 2 standard deviation from the expected one
         # in this case choose that value, otherwise use the one closer to expected Chisquare
-        if nChi2Sigma < 3:
+        if nChi2Sigma < 5.0:
             retFunc = funcMinChi2
+            #print("HERE")
         elif nChi2Sigma_pol3 < nChi2Sigma:
             retFunc = fit_pol3
         else:
             retFunc = funcMinChi2
             
     line = "Best fit: " + legEntry[retFunc.GetName()] + (" (forced)" if forcePol3 else "")
-    if forceErfAlways:
-        if retFunc.GetName() != fit_erf.GetName():
+    if forceErfAlways and retFunc.GetName() != fit_erf.GetName():
             retFunc = fit_erf
             line = "Best fit: Erf[x] (forced)"
-
+    if forceCheb3Always and retFunc.GetName() != fit_cheb3.GetName():
+            retFunc = fit_cheb3
+            line = "Best fit: cheb3 (forced)"
+            
     reducedChi2, lineChi2 = getReducedChi2andLabel(retFunc)
     if hist_reducedChi2:
         hist_reducedChi2.Fill(reducedChi2)
@@ -356,15 +425,18 @@ def fitTurnOn(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit=T
         else:
             canvas.SaveAs("{out}eff{mc}_pt_{ch}_eta{b}{charge}.{ext}".format(out=outdir,mc=mc,ch=channel,b=key,charge=tmpch,ext=ext))                            
 
-    if hist_ErfParam_vs_eta and retFunc.GetName() == tf1_erf.GetName():  
+    if hist_FuncParam_vs_eta:
         # key is the eta bin number, but starts from 0, so add 1
-        hist_ErfParam_vs_eta.SetBinContent(key+1, 1, retFunc.GetParameter(0))
-        hist_ErfParam_vs_eta.SetBinError(  key+1, 1, retFunc.GetParError(0))
-        hist_ErfParam_vs_eta.SetBinContent(key+1, 2, retFunc.GetParameter(1))
-        hist_ErfParam_vs_eta.SetBinError(  key+1, 2, retFunc.GetParError(1))
-        hist_ErfParam_vs_eta.SetBinContent(key+1, 3, retFunc.GetParameter(2))
-        hist_ErfParam_vs_eta.SetBinError(  key+1, 3, retFunc.GetParError(2))
-        
+        if doingSF:
+            for ip in range(retFunc.GetNpar()):
+                hist_FuncParam_vs_eta.SetBinContent(key+1, ip+1, retFunc.GetParameter(ip))
+                hist_FuncParam_vs_eta.SetBinError(  key+1, ip+1, retFunc.GetParError(ip))
+        else:
+            if retFunc.GetName() == tf1_erf.GetName():
+                for ip in range(retFunc.GetNpar()):
+                    hist_FuncParam_vs_eta.SetBinContent(key+1, ip+1, retFunc.GetParameter(ip))
+                    hist_FuncParam_vs_eta.SetBinError(  key+1, ip+1, retFunc.GetParError(ip))
+    
     # some last moment hand-fix for some bins if needed
     # if False:
     #     message = f">>> Warning: returning pol3 for key {key} in {mc} as interpolating function"
@@ -518,9 +590,10 @@ if __name__ == "__main__":
     parser.add_argument('-r','--pt-fit-range', dest='ptFitRange', type=float, nargs=2, default=[-1, -1], help='Pt range fo the fit: pass two values for min and max. If one of them (or both) is negative, the corresponding histogram range is used')
     parser.add_argument('-w','--width-pt',     dest='widthPt',default='0.2', type=float, help='Pt bin width for the smoothed histogram')
     parser.add_argument(     '--set-max-pt-histo',     dest='setMaxPtHisto', default='-1.0', type=float, help='Set upper pt for output histograms. If negative use default max from input histograms')
-    parser.add_argument(     '--save-TF1', dest='saveTF1',action="store_true", default=False, help='Save TF1 as well, not just TH2 with many bins (note that they are not saved when making averages between eras')
-    #parser.add_argument(    '--input-hist-names', dest='inputHistNames',default='', type='string', help='Pass comma separated list of 3  names, for eff(data),eff(MC),SF, to be used instead of the default names')
+    parser.add_argument(     '--save-TF1', dest='saveTF1',action="store_true", default=False, help='Save TF1 as well, not just TH2 with many bins')
+    parser.add_argument(    '--input-hist-names', dest='inputHistNames', default='', type=str, help='Pass comma separated list of 3  names, for eff(data),eff(MC),SF, to be used instead of the default names')
     parser.add_argument(     '--palette'  , dest='palette',      default=87, type=int, help='Set palette: default is a built-in one, 55 is kRainbow')
+    parser.add_argument(     '--skip-eff', dest='skipEff', action="store_true", default=False, help='Skip efficiencies and do only SF (to save time and if one only wants to smooth SF directly)')
     args = parser.parse_args()
 
     ROOT.TH1.SetDefaultSumw2()
@@ -539,10 +612,17 @@ if __name__ == "__main__":
     #########################################    
     #########################################    
 
+    datahistname = f"effData_{args.step}_{args.era}_{args.charge}"
+    mchistname   = f"effMC_{args.step}_{args.era}_{args.charge}"
+    sfhistname   = f"SF2D_nominal_{args.step}_{args.era}_{args.charge}"
+
+    if len(args.inputHistNames):
+        datahistname,mchistname,sfhistname = args.inputHistNames.split(",")
+    
     tf = safeOpenFile(args.inputfile[0])
-    hdata = safeGetObject(tf, f"effData_{args.step}_{args.era}_{args.charge}")
-    hmc =   safeGetObject(tf, f"effMC_{args.step}_{args.era}_{args.charge}")
-    hsf =   safeGetObject(tf, f"SF2D_nominal_{args.step}_{args.era}_{args.charge}")
+    hdata = safeGetObject(tf, datahistname)
+    hmc =   safeGetObject(tf, mchistname)
+    hsf =   safeGetObject(tf, sfhistname)
     tf.Close()
         
     etabins = [round(hdata.GetXaxis().GetBinLowEdge(i), 1) for i in range(1, 2 + hdata.GetNbinsX())]
@@ -550,36 +630,55 @@ if __name__ == "__main__":
         
     dummybins = [-0.5, 0.5, 1.5, 2.5]
     title = "parameters: [0]*TMath::Erf((x-[1])/[2])"
-    hist_ErfParam_vs_eta_data = ROOT.TH2D("hist_ErfParam_vs_eta_data",
+    hist_FuncParam_vs_eta_data = ROOT.TH2D("hist_FuncParam_vs_eta_data",
                                           title,
                                           len(etabins)-1, array('d',etabins),
                                           len(dummybins)-1, array('d',dummybins))    
-    hist_ErfParam_vs_eta_mc   = ROOT.TH2D("hist_ErfParam_vs_eta_mc",
+    hist_FuncParam_vs_eta_mc   = ROOT.TH2D("hist_FuncParam_vs_eta_mc",
                                           title,
                                           len(etabins)-1, array('d',etabins),
                                           len(dummybins)-1, array('d',dummybins))
 
-    hist_ErfCovMatrix_vs_eta_data = ROOT.TH3D("hist_ErfCovMatrix_vs_eta_data",
+    hist_FuncCovMatrix_vs_eta_data = ROOT.TH3D("hist_FuncCovMatrix_vs_eta_data",
                                               "Covariance matrix: eta on X",
                                               len(etabins)-1, array('d',etabins),
                                               len(dummybins)-1, array('d',dummybins),
                                               len(dummybins)-1, array('d',dummybins))
-    hist_ErfCovMatrix_vs_eta_mc = ROOT.TH3D("hist_ErfCovMatrix_vs_eta_mc",
+    hist_FuncCovMatrix_vs_eta_mc = ROOT.TH3D("hist_FuncCovMatrix_vs_eta_mc",
                                             "Covariance matrix: eta on X",
                                             len(etabins)-1, array('d',etabins),
                                             len(dummybins)-1, array('d',dummybins),
                                             len(dummybins)-1, array('d',dummybins))
 
+    dummybins_sf = [-0.5, 0.5, 1.5, 2.5, 3.5]
+    title_sf = "parameters: cheb3"
+    hist_FuncParam_vs_eta_sf = ROOT.TH2D("hist_FuncParam_vs_eta_sf",
+                                         title_sf,
+                                         len(etabins)-1, array('d',etabins),
+                                         len(dummybins_sf)-1, array('d',dummybins_sf))    
+    hist_FuncCovMatrix_vs_eta_sf = ROOT.TH3D("hist_FuncCovMatrix_vs_eta_sf",
+                                             "Covariance matrix: eta on X",
+                                             len(etabins)-1, array('d',etabins),
+                                             len(dummybins_sf)-1, array('d',dummybins_sf),
+                                             len(dummybins_sf)-1, array('d',dummybins_sf))
+    
     # utility histogram to show what function will be used based on some quality criterium (usually we choose Erf, but can be pol3 or something else)
-    hist_chosenFunc = ROOT.TH1D("chosenFitFunc", "Best fit function for each eta bin", 3, 0, 3)
+    hist_chosenFunc = ROOT.TH1D("chosenFitFunc", "Best fit function for each #eta bin for data or MC", 3, 0, 3)
     hist_chosenFunc.GetXaxis().SetBinLabel(1, "tf1_erf")
     hist_chosenFunc.GetXaxis().SetBinLabel(2, "tf1_pol2")
     hist_chosenFunc.GetXaxis().SetBinLabel(3, "tf1_pol3")
+    # 
+    hist_chosenFunc_SF = ROOT.TH1D("chosenFitFunc_SF", "Best fit function for each #eta bin for SF", 3, 0, 3)
+    hist_chosenFunc_SF.GetXaxis().SetBinLabel(1, "tf1_cheb3")
+    hist_chosenFunc_SF.GetXaxis().SetBinLabel(2, "tf1_pol2")
+    hist_chosenFunc_SF.GetXaxis().SetBinLabel(3, "tf1_pol3")
 
-    hist_reducedChi2_data = ROOT.TH1D("reducedChi2_data", "Reduced #chi^{2}", 20, 0, 2) # will not have many entries (~100 depending on how many eta bins)
+    hist_reducedChi2_data = ROOT.TH1D("reducedChi2_data", "Reduced #chi^{2}", 50, 0, 5) # will not have many entries (~100 depending on how many eta bins)
     hist_reducedChi2_data.StatOverflows() # use underflow and overflow to compute mean and RMS
-    hist_reducedChi2_MC = ROOT.TH1D("reducedChi2_MC", "Reduced #chi^{2}", 20, 0, 2) # will not have many entries (~100 depending on how many eta bins)
+    hist_reducedChi2_MC = ROOT.TH1D("reducedChi2_MC", "Reduced #chi^{2}", 50, 0, 5) # will not have many entries (~100 depending on how many eta bins)
     hist_reducedChi2_MC.StatOverflows() # use underflow and overflow to compute mean and RMS
+    hist_reducedChi2_sf = ROOT.TH1D("reducedChi2_sf", "Reduced #chi^{2}", 50, 0, 5) # will not have many entries (~100 depending on how many eta bins)
+    hist_reducedChi2_sf.StatOverflows() # use underflow and overflow to compute mean and RMS
 
     ######################
     # to make ratio
@@ -610,20 +709,20 @@ if __name__ == "__main__":
         maxPtHistoData = args.setMaxPtHisto
         maxPtHistoMC = args.setMaxPtHisto
 
+    nFinePtBins = int(math.ceil(maxPtHistoData - hdata.GetYaxis().GetBinLowEdge(1))/args.widthPt)
+    minPtHistoData = hdata.GetYaxis().GetBinLowEdge(1)
+    
     hdataSmoothCheck = ROOT.TH2D("hdataSmoothCheck","Data smoothed efficiency",
                                  len(etabins)-1, array('d',etabins),
-                                 int(math.ceil(maxPtHistoData - hdata.GetYaxis().GetBinLowEdge(1))/args.widthPt), # bins of 0.2 GeV
-                                 hdata.GetYaxis().GetBinLowEdge(1), maxPtHistoData)
+                                 nFinePtBins, minPtHistoData, maxPtHistoData)
                                  
     hmcSmoothCheck = ROOT.TH2D("hmcSmoothCheck","MC smoothed efficiency",
                                len(etabins)-1, array('d',etabins),
-                               int(math.ceil(maxPtHistoMC - hmc.GetYaxis().GetBinLowEdge(1))/args.widthPt),
-                               hmc.GetYaxis().GetBinLowEdge(1), maxPtHistoMC)
+                               nFinePtBins, minPtHistoData, maxPtHistoData)
                                
-    # hsfSmoothCheck = ROOT.TH2D("hsfSmoothCheck","Data/MC smoothed scale factor",
-    #                            len(etabins)-1, array('d',etabins),
-    #                            int(math.ceil(maxPtHistoData - hdata.GetYaxis().GetBinLowEdge(1))/args.widthPt),
-    #                            hdata.GetYaxis().GetBinLowEdge(1), maxPtHistoData)
+    hsfSmoothCheck = ROOT.TH2D("hsfSmoothCheck","Data/MC smoothed scale factor",
+                               len(etabins)-1, array('d',etabins),
+                               nFinePtBins, minPtHistoData, maxPtHistoData)
                                
     hdataSmoothCheck_origBinPt = ROOT.TH2D("hdataSmoothCheck_origBinPt","Data smoothed efficiency",
                                            len(etabins)-1, array('d',etabins),
@@ -633,16 +732,15 @@ if __name__ == "__main__":
                                          len(etabins)-1, array('d',etabins),
                                          len(ptbins)-1, array('d',ptbins)
                                          )
-    # hsfSmoothCheck_origBinPt = ROOT.TH2D("hsfSmoothCheck_origBinPt","Data/MC smoothed scale factor",
-    #                                      len(etabins)-1, array('d',etabins),
-    #                                      len(ptbins)-1, array('d',ptbins)
-    #                                      )
+    hsfSmoothCheck_origBinPt = ROOT.TH2D("hsfSmoothCheck_origBinPt","Data/MC smoothed scale factor",
+                                         len(etabins)-1, array('d',etabins),
+                                         len(ptbins)-1, array('d',ptbins)
+                                         )
 
     # hmc and hdata have eta on X and pt on Y
     # we select slices at constant eta and fit along pt with some function
     # let's select an error function 
 
-    ## TODO: improve the following, too much repeated code
     def make1Dhist(namePrefix, h2D, ptbins, step):
         hpt = {}
         for x in range(1, h2D.GetNbinsX()+1):
@@ -659,73 +757,76 @@ if __name__ == "__main__":
     label = args.step + (args.charge if args.charge != "both" else "")
     hmcpt = make1Dhist("hmcpt", hmc, ptbins, label)
     hdatapt = make1Dhist("hdatapt", hdata, ptbins, label)
-    #hsfpt = make1Dhist("hsfpt", hsf, ptbins, args.step)
+    hsfpt = make1Dhist("hsfpt", hsf, ptbins, args.step)
 
-    ###########################
-    # first MC
-    ###########################
     bestFit_MC = {}
-    for key in hmcpt:
-        bestFitFunc = fitTurnOn(hmcpt[key], key, outname, "MC",channel=channel,
-                                hist_chosenFunc=hist_chosenFunc, 
-                                step=args.step,
-                                fitRange=args.ptFitRange,
-                                hist_reducedChi2=hist_reducedChi2_MC,
-                                hist_ErfParam_vs_eta=hist_ErfParam_vs_eta_mc,
-                                hist_ErfCovMatrix_vs_eta=hist_ErfCovMatrix_vs_eta_mc,
-                                charge=args.charge,
-                                etabins=etabins)
-        bestFit_MC["smoothFunc_MC_ieta%d" % key] = bestFitFunc
-        for ipt in range(1, hmcSmoothCheck.GetNbinsY()+1):
-            ptval = hmcSmoothCheck.GetYaxis().GetBinCenter(ipt)
-            hmcSmoothCheck.SetBinContent(key+1,ipt, bestFitFunc.Eval(ptval))
-        for ipt in range(1, hmcSmoothCheck_origBinPt.GetNbinsY()+1):
-            ptval = hmcSmoothCheck_origBinPt.GetYaxis().GetBinCenter(ipt)
-            hmcSmoothCheck_origBinPt.SetBinContent(key+1,ipt, bestFitFunc.Eval(ptval))
-
-    ###########################
-    # now data
-    ###########################
     bestFit_Data = {}
-    for key in hdatapt:
+    if not args.skipEff:
+        ###########################
+        # first MC
+        ###########################
+        for key in hmcpt:
+            bestFitFunc = fitTurnOn(hmcpt[key], key, outname, "MC",channel=channel,
+                                    hist_chosenFunc=hist_chosenFunc, 
+                                    step=args.step,
+                                    fitRange=args.ptFitRange,
+                                    hist_reducedChi2=hist_reducedChi2_MC,
+                                    hist_FuncParam_vs_eta=hist_FuncParam_vs_eta_mc,
+                                    hist_FuncCovMatrix_vs_eta=hist_FuncCovMatrix_vs_eta_mc,
+                                    charge=args.charge,
+                                    etabins=etabins)
+            bestFit_MC["smoothFunc_MC_ieta%d" % key] = bestFitFunc
+            for ipt in range(1, hmcSmoothCheck.GetNbinsY()+1):
+                ptval = hmcSmoothCheck.GetYaxis().GetBinCenter(ipt)
+                hmcSmoothCheck.SetBinContent(key+1,ipt, bestFitFunc.Eval(ptval))
+            for ipt in range(1, hmcSmoothCheck_origBinPt.GetNbinsY()+1):
+                ptval = hmcSmoothCheck_origBinPt.GetYaxis().GetBinCenter(ipt)
+                hmcSmoothCheck_origBinPt.SetBinContent(key+1,ipt, bestFitFunc.Eval(ptval))
 
-        bestFitFunc = fitTurnOn(hdatapt[key],key,outname, "Data",channel=channel,hist_chosenFunc=hist_chosenFunc, 
+        ###########################
+        # now data
+        ###########################
+        for key in hdatapt:
+
+            bestFitFunc = fitTurnOn(hdatapt[key],key,outname, "Data",channel=channel,hist_chosenFunc=hist_chosenFunc, 
+                                    step=args.step,
+                                    fitRange=args.ptFitRange,
+                                    hist_reducedChi2=hist_reducedChi2_data,
+                                    hist_FuncParam_vs_eta=hist_FuncParam_vs_eta_data,
+                                    hist_FuncCovMatrix_vs_eta=hist_FuncCovMatrix_vs_eta_data,
+                                    charge=args.charge,
+                                    etabins=etabins)
+            bestFit_Data["smoothFunc_Data_ieta%d" % key] = bestFitFunc
+            for ipt in range(1,hdataSmoothCheck.GetNbinsY()+1):
+                ptval = hdataSmoothCheck.GetYaxis().GetBinCenter(ipt)
+                #hdataSmoothCheck.SetBinContent(key+1,ipt, a0 + a1 * ptval + a2 * ptval * ptval)
+                hdataSmoothCheck.SetBinContent(key+1,ipt, bestFitFunc.Eval(ptval))
+            for ipt in range(1,hdataSmoothCheck_origBinPt.GetNbinsY()+1):
+                ptval = hdataSmoothCheck_origBinPt.GetYaxis().GetBinCenter(ipt)
+                #hdataSmoothCheck_origBinPt.SetBinContent(key+1,ipt, a0 + a1 * ptval + a2 * ptval * ptval)
+                hdataSmoothCheck_origBinPt.SetBinContent(key+1,ipt, bestFitFunc.Eval(ptval))
+
+    # ###########################
+    # # now SF
+    # ###########################
+    bestFit_SF = {}
+    for key in hsfpt:
+        
+        bestFitFunc = fitTurnOn(hsfpt[key],key,outname, "SF",channel=channel,hist_chosenFunc=hist_chosenFunc_SF, 
                                 step=args.step,
-                                fitRange=args.ptFitRange,
-                                hist_reducedChi2=hist_reducedChi2_data,
-                                hist_ErfParam_vs_eta=hist_ErfParam_vs_eta_data,
-                                hist_ErfCovMatrix_vs_eta=hist_ErfCovMatrix_vs_eta_data,
-                                charge=args.charge,
-                                etabins=etabins)
-        bestFit_Data["smoothFunc_Data_ieta%d" % key] = bestFitFunc
-        for ipt in range(1,hdataSmoothCheck.GetNbinsY()+1):
-            ptval = hdataSmoothCheck.GetYaxis().GetBinCenter(ipt)
-            #hdataSmoothCheck.SetBinContent(key+1,ipt, a0 + a1 * ptval + a2 * ptval * ptval)
-            hdataSmoothCheck.SetBinContent(key+1,ipt, bestFitFunc.Eval(ptval))
-        for ipt in range(1,hdataSmoothCheck_origBinPt.GetNbinsY()+1):
-            ptval = hdataSmoothCheck_origBinPt.GetYaxis().GetBinCenter(ipt)
-            #hdataSmoothCheck_origBinPt.SetBinContent(key+1,ipt, a0 + a1 * ptval + a2 * ptval * ptval)
-            hdataSmoothCheck_origBinPt.SetBinContent(key+1,ipt, bestFitFunc.Eval(ptval))
-
-    # ###########################
-    # # now data/MC
-    # ###########################
-    # bestFit_SF = {}
-    # for key in hsfpt:
-
-    #     bestFitFunc = fitTurnOn(hsfpt[key],key,outname, "SF",channel=channel,hist_chosenFunc=0, 
-    #                             step=args.step,
-    #                             fitRange=args.ptFitRange, hist_reducedChi2=0,
-    #                             charge=args.charge, etabins=etabins)
-    #     bestFit_SF["smoothFunc_SF_ieta%d" % key] = bestFitFunc
-    #     for ipt in range(1,hsfSmoothCheck.GetNbinsY()+1):
-    #         ptval = hsfSmoothCheck.GetYaxis().GetBinCenter(ipt)
-    #         #hsfSmoothCheck.SetBinContent(key+1,ipt, a0 + a1 * ptval + a2 * ptval * ptval)
-    #         hsfSmoothCheck.SetBinContent(key+1,ipt, bestFitFunc.Eval(ptval))
-    #     for ipt in range(1,hsfSmoothCheck_origBinPt.GetNbinsY()+1):
-    #         ptval = hsfSmoothCheck_origBinPt.GetYaxis().GetBinCenter(ipt)
-    #         #hsfSmoothCheck_origBinPt.SetBinContent(key+1,ipt, a0 + a1 * ptval + a2 * ptval * ptval)
-    #         hsfSmoothCheck_origBinPt.SetBinContent(key+1,ipt, bestFitFunc.Eval(ptval))
+                                fitRange=args.ptFitRange, hist_reducedChi2=hist_reducedChi2_sf,
+                                hist_FuncParam_vs_eta=hist_FuncParam_vs_eta_sf,
+                                hist_FuncCovMatrix_vs_eta=hist_FuncCovMatrix_vs_eta_sf,
+                                charge=args.charge, etabins=etabins)
+        bestFit_SF["smoothFunc_SF_ieta%d" % key] = bestFitFunc
+        for ipt in range(1,hsfSmoothCheck.GetNbinsY()+1):
+            ptval = hsfSmoothCheck.GetYaxis().GetBinCenter(ipt)
+            #hsfSmoothCheck.SetBinContent(key+1,ipt, a0 + a1 * ptval + a2 * ptval * ptval)
+            hsfSmoothCheck.SetBinContent(key+1,ipt, bestFitFunc.Eval(ptval))
+        for ipt in range(1,hsfSmoothCheck_origBinPt.GetNbinsY()+1):
+            ptval = hsfSmoothCheck_origBinPt.GetYaxis().GetBinCenter(ipt)
+            #hsfSmoothCheck_origBinPt.SetBinContent(key+1,ipt, a0 + a1 * ptval + a2 * ptval * ptval)
+            hsfSmoothCheck_origBinPt.SetBinContent(key+1,ipt, bestFitFunc.Eval(ptval))
 
     #################################
     # start to make plots
@@ -736,7 +837,6 @@ if __name__ == "__main__":
     canvas = ROOT.TCanvas("canvas","",700,625)
 
     # plot original histograms
-
     drawCorrelationPlot(hmc,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),"MC efficiency%s" % zaxisRange,
                         "inputEfficiency_MC","",outname,palette=args.palette,passCanvas=canvas)
     drawCorrelationPlot(hdata,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),"Data efficiency%s" % zaxisRange,
@@ -750,11 +850,10 @@ if __name__ == "__main__":
                         "smoothEfficiency_MC","ForceTitle",outname,palette=args.palette,passCanvas=canvas)
     drawCorrelationPlot(hdataSmoothCheck,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),"Data smoothed efficiency%s" % zaxisRange,
                         "smoothEfficiency_Data","ForceTitle",outname,palette=args.palette,passCanvas=canvas)
-    #drawCorrelationPlot(hsfSmoothCheck,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),"Data/MC smoothed scale factor%s" % zaxisRangeSF,
-    #                    "smoothScaleFactorDirectly","ForceTitle",outname,palette=args.palette,passCanvas=canvas)
-
+    drawCorrelationPlot(hsfSmoothCheck,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),"Data/MC smoothed scale factor%s" % zaxisRangeSF,
+                        "smoothScaleFactorDirectly","ForceTitle",outname,palette=args.palette,passCanvas=canvas)
     # scale factor: data/MC
-    scaleFactor = ROOT.TH2D("scaleFactor","Scale factor",
+    scaleFactor = ROOT.TH2D("scaleFactor","Scale factor from smoothed efficiencies",
                             len(etabins)-1, array('d',etabins),
                             int(math.ceil((maxPtHistoData - hdata.GetYaxis().GetBinLowEdge(1))/args.widthPt)),
                             hdata.GetYaxis().GetBinLowEdge(1),maxPtHistoData)                            
@@ -773,13 +872,13 @@ if __name__ == "__main__":
     # divide before drawing the denominator, whose axis settings are modified by drawCorrelationPlot and seems to affect the ratio as well if divided afterwards
     ratioData.Divide(hdataSmoothCheck_origBinPt)
     ratioMC.Divide(hmcSmoothCheck_origBinPt)
-
+    
     drawCorrelationPlot(hmcSmoothCheck_origBinPt,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),"MC smoothed efficiency%s" % zaxisRange,
                         "smoothEfficiency_MC_origBinPt","ForceTitle",outname,palette=args.palette,passCanvas=canvas)
     drawCorrelationPlot(hdataSmoothCheck_origBinPt,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),"Data smoothed efficiency%s" % zaxisRange,
                         "smoothEfficiency_Data_origBinPt","ForceTitle",outname,palette=args.palette,passCanvas=canvas)
-    #drawCorrelationPlot(hsfSmoothCheck_origBinPt,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),"Data/MC smoothed scale factor%s" % zaxisRangeSF,
-    #                    "smoothScaleFactorDirectly_origBinPt","ForceTitle",outname,palette=args.palette,passCanvas=canvas)
+    drawCorrelationPlot(hsfSmoothCheck_origBinPt,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),"Data/MC smoothed scale factor%s" % zaxisRangeSF,
+                        "smoothScaleFactorDirectly_origBinPt","ForceTitle",outname,palette=args.palette,passCanvas=canvas)
 
     # scale factor: data/MC
     scaleFactor_origBinPt = ROOT.TH2D("scaleFactor_origBinPt","Scale factor",
@@ -813,32 +912,42 @@ if __name__ == "__main__":
     # ######################
     # # See the difference between smoothing Data and MC efficiency and taking the ratio or smoothing directly the efficiency ratio
     # ######################    
-    # ratioSF_smoothNumDen_smoothRatio = ROOT.TH2D("ratioSF_smoothNumDen_smoothRatio","SF ratio: smooth eff or ratio directly",
-    #                                              len(etabins)-1, array('d',etabins),
-    #                                              len(ptbins)-1, array('d',ptbins)
-    #                                              )
+    ratioSF_smoothNumDen_smoothRatio = ROOT.TH2D("ratioSF_smoothNumDen_smoothRatio","SF ratio: smooth eff or ratio directly",
+                                                 len(etabins)-1, array('d',etabins),
+                                                 len(ptbins)-1, array('d',ptbins)
+    )
 
-    # copyHisto(ratioSF_smoothNumDen_smoothRatio,scaleFactor_origBinPt)
-    # ratioSF_smoothNumDen_smoothRatio.Divide(hsfSmoothCheck_origBinPt)
-    # drawCorrelationPlot(ratioSF_smoothNumDen_smoothRatio,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),
-    #                     "SF ratio: smooth eff or ratio directly::0.98,1.02",
-    #                     "ratioSF_smoothNumDen_smoothRatio","ForceTitle",outname,palette=args.palette,passCanvas=canvas)
+    copyHisto(ratioSF_smoothNumDen_smoothRatio,scaleFactor_origBinPt)
+    ratioSF_smoothNumDen_smoothRatio.Divide(hsfSmoothCheck_origBinPt)
+    drawCorrelationPlot(ratioSF_smoothNumDen_smoothRatio,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),
+                        "SF ratio: smooth eff or ratio directly::0.98,1.02",
+                        "ratioSF_smoothNumDen_smoothRatio","ForceTitle",outname,palette=args.palette,passCanvas=canvas)
 
     ##############
     # Erf[x] parameter and error for data and MC efficiency
-    # before, set error of bins in gap to 0 if electrons
-    drawCorrelationPlot(hist_ErfParam_vs_eta_data,"{lep} #eta".format(lep=lepton),"Erf[x] parameter number",
+    drawCorrelationPlot(hist_FuncParam_vs_eta_data,"{lep} #eta".format(lep=lepton),"Erf[x] parameter number",
                         "parameter value",
-                        "hist_ErfParam_vs_eta_data","ForceTitle",outname,palette=args.palette,passCanvas=canvas)
-    drawCorrelationPlot(hist_ErfParam_vs_eta_mc,"{lep} #eta".format(lep=lepton),"Erf[x] parameter number",
+                        "hist_FuncParam_vs_eta_data","ForceTitle",outname,draw_both0_noLog1_onlyLog2=1,palette=args.palette,passCanvas=canvas)
+    
+    drawCorrelationPlot(hist_FuncParam_vs_eta_mc,"{lep} #eta".format(lep=lepton),"Erf[x] parameter number",
                         "parameter value",
-                        "hist_ErfParam_vs_eta_mc","ForceTitle",outname,palette=args.palette,passCanvas=canvas)
-    drawCorrelationPlot(hist_ErfParam_vs_eta_data,"{lep} #eta".format(lep=lepton),"Erf[x] parameter number",
+                        "hist_FuncParam_vs_eta_mc","ForceTitle",outname,draw_both0_noLog1_onlyLog2=1,palette=args.palette,passCanvas=canvas)
+
+    drawCorrelationPlot(hist_FuncParam_vs_eta_data,"{lep} #eta".format(lep=lepton),"Erf[x] parameter number",
                         "parameter uncertainty",
-                        "hist_ErfParamError_vs_eta_data","ForceTitle",outname,palette=args.palette,passCanvas=canvas,plotError=True)
-    drawCorrelationPlot(hist_ErfParam_vs_eta_mc,"{lep} #eta".format(lep=lepton),"Erf[x] parameter number",
+                        "hist_FuncParamError_vs_eta_data","ForceTitle",outname,draw_both0_noLog1_onlyLog2=2,palette=args.palette,passCanvas=canvas,plotError=True)
+
+    drawCorrelationPlot(hist_FuncParam_vs_eta_mc,"{lep} #eta".format(lep=lepton),"Erf[x] parameter number",
                         "parameter uncertainty",
-                        "hist_ErfParamError_vs_eta_mc","ForceTitle",outname,palette=args.palette,passCanvas=canvas,plotError=True)
+                        "hist_FuncParamError_vs_eta_mc","ForceTitle",outname,draw_both0_noLog1_onlyLog2=2,palette=args.palette,passCanvas=canvas,plotError=True)
+
+    drawCorrelationPlot(hist_FuncParam_vs_eta_sf,"{lep} #eta".format(lep=lepton),"Pol3 parameter number",
+                        "parameter value",
+                        "hist_FuncParam_vs_eta_sf","ForceTitle",outname,draw_both0_noLog1_onlyLog2=1,palette=args.palette,passCanvas=canvas)
+
+    drawCorrelationPlot(hist_FuncParam_vs_eta_sf,"{lep} #eta".format(lep=lepton),"Pol3 parameter number",
+                        "parameter uncertainty",
+                        "hist_FuncParamError_vs_eta_sf","ForceTitle",outname,draw_both0_noLog1_onlyLog2=2,palette=args.palette,passCanvas=canvas,plotError=True)
 
     
     c = ROOT.TCanvas("c","",700,700)
@@ -848,24 +957,30 @@ if __name__ == "__main__":
     c.SetLeftMargin(0.14)
     c.SetRightMargin(0.06)
     c.cd()
-    hist_chosenFunc.Scale(1./hist_chosenFunc.Integral())
-    hist_chosenFunc.GetXaxis().SetTitleOffset(1.2)
-    hist_chosenFunc.GetXaxis().SetTitleSize(0.05)
-    hist_chosenFunc.GetXaxis().SetLabelSize(0.06)
-    #hist_chosenFunc.GetXaxis().LabelsOption("v")
-    hist_chosenFunc.GetYaxis().SetTitle("Fraction of events")
-    hist_chosenFunc.GetYaxis().SetTitleOffset(1.15)
-    hist_chosenFunc.GetYaxis().SetTitleSize(0.05)
-    hist_chosenFunc.GetYaxis().SetLabelSize(0.04)
-    hist_chosenFunc.Draw("HIST")
-    for ext in ["png","pdf"]:
-        c.SaveAs("{out}bestFitFunction_{ch}.{ext}".format(out=outname,ch=channel,ext=ext))
-
+    def quickPlotTH1(c, h, outname,channel, postfix=""):
+        c.cd()
+        h.Scale(1./h.Integral())
+        h.GetXaxis().SetTitleOffset(1.2)
+        h.GetXaxis().SetTitleSize(0.05)
+        h.GetXaxis().SetLabelSize(0.06)
+        #h.GetXaxis().LabelsOption("v")
+        h.GetYaxis().SetTitle("Fraction of events")
+        h.GetYaxis().SetTitleOffset(1.15)
+        h.GetYaxis().SetTitleSize(0.05)
+        h.GetYaxis().SetLabelSize(0.04)
+        h.Draw("HIST")
+        for ext in ["png","pdf"]:
+            c.SaveAs(f"{outname}bestFitFunction{postfix}_{channel}.{ext}")
+    if not args.skipEff:
+        quickPlotTH1(c, hist_chosenFunc, outname, channel)
+    quickPlotTH1(c, hist_chosenFunc_SF, outname, channel, postfix="SF")
+        
     # now the chi2 histogram
     # put overflow in last bin
     # but get number of entries before (same as integral since we used Fill() without weights)
     entries_MC = hist_reducedChi2_MC.GetEntries()
     entries_data = hist_reducedChi2_data.GetEntries()
+    entries_sf = hist_reducedChi2_sf.GetEntries()
 
     lastBin = hist_reducedChi2_data.GetNbinsX()
     hist_reducedChi2_data.SetBinContent(lastBin, hist_reducedChi2_data.GetBinContent(lastBin) + hist_reducedChi2_data.GetBinContent(1+lastBin) )
@@ -877,10 +992,16 @@ if __name__ == "__main__":
     hist_reducedChi2_MC.SetBinError(lastBin, math.sqrt( hist_reducedChi2_MC.GetBinError(lastBin)*hist_reducedChi2_MC.GetBinError(lastBin) 
                                                      + hist_reducedChi2_MC.GetBinError(1+lastBin)*hist_reducedChi2_MC.GetBinError(1+lastBin) ) 
                                  )
+    lastBin = hist_reducedChi2_sf.GetNbinsX()
+    hist_reducedChi2_sf.SetBinContent(lastBin, hist_reducedChi2_sf.GetBinContent(lastBin) + hist_reducedChi2_sf.GetBinContent(1+lastBin) )
+    hist_reducedChi2_sf.SetBinError(lastBin, math.sqrt( hist_reducedChi2_sf.GetBinError(lastBin)*hist_reducedChi2_sf.GetBinError(lastBin) 
+                                                     + hist_reducedChi2_sf.GetBinError(1+lastBin)*hist_reducedChi2_sf.GetBinError(1+lastBin) ) 
+                                 )
 
     tmpmin,tmpmax = getMinMaxHisto(hist_reducedChi2_MC, sumError=True)
     tmpmin1,maxY = getMinMaxHisto(hist_reducedChi2_data, sumError=True)
-    maxY = max(tmpmax,maxY)
+    tmpmin2,maxY2 = getMinMaxHisto(hist_reducedChi2_sf, sumError=True)
+    maxY = max([tmpmax,maxY,maxY2])
     maxY = 1.5 * maxY
 
     hist_reducedChi2_data.GetXaxis().SetTitleOffset(1.2)
@@ -898,21 +1019,26 @@ if __name__ == "__main__":
     hist_reducedChi2_data.GetXaxis().SetTitle("#chi^{2} / NDF")
     hist_reducedChi2_data.Draw("HE")
     lat = ROOT.TLatex()
-    line1 = "entries = {0}".format(int(entries_data))
-    #line1 = "entries = {integ:.1f}".format(integ=hist_reducedChi2_data.Integral())
-    line2 = "mean    = {:.2f}".format(hist_reducedChi2_data.GetMean())
-    line3 = "rms     = {:.2f}".format(hist_reducedChi2_data.GetStdDev())
-    lat.SetNDC();
-    lat.SetTextSize(0.045);
-    lat.SetTextFont(42);
-    lat.SetTextColor(ROOT.kRed+2);
     xmin = 0.20 
     yhi = 0.85
+    lat.SetNDC();
+    lat.SetTextSize(0.045);
+    lat.SetTextFont(62);
+    lat.DrawLatex(xmin,yhi,"")
+    lat.DrawLatex(xmin,yhi-0.05,"entries")
+    lat.DrawLatex(xmin,yhi-0.1,"mean")
+    lat.DrawLatex(xmin,yhi-0.15,"rms")
+    line1 = "= {0}".format(int(entries_data))
+    line2 = "= {:.2f}".format(hist_reducedChi2_data.GetMean())
+    line3 = "= {:.2f}".format(hist_reducedChi2_data.GetStdDev())
+    lat.SetTextFont(42);
+    lat.SetTextColor(ROOT.kRed+2);
+    xmin = xmin + 0.2 
     lat.DrawLatex(xmin,yhi,"data")
     lat.DrawLatex(xmin,yhi-0.05,line1)
     lat.DrawLatex(xmin,yhi-0.1,line2)
     lat.DrawLatex(xmin,yhi-0.15,line3)
-
+    # now MC
     hist_reducedChi2_MC.SetLineWidth(2)
     hist_reducedChi2_MC.SetLineColor(ROOT.kBlack)
     hist_reducedChi2_MC.SetFillColor(ROOT.kGray)
@@ -926,20 +1052,33 @@ if __name__ == "__main__":
     hist_reducedChi2_data.Draw("HE SAME")
     c.RedrawAxis("sameaxis")
     #################
-    line1 = "entries = {0}".format(int(entries_MC))
-    #line1 = "entries = {integ:.1f}".format(integ=hist_reducedChi2_MC.Integral())
-    line2 = "mean    = {:.2f}".format(hist_reducedChi2_MC.GetMean())
-    line3 = "rms     = {:.2f}".format(hist_reducedChi2_MC.GetStdDev())
-    lat.SetNDC();
-    lat.SetTextSize(0.045);
-    lat.SetTextFont(42);
+    line1 = "= {0}".format(int(entries_MC))
+    line2 = "= {:.2f}".format(hist_reducedChi2_MC.GetMean())
+    line3 = "= {:.2f}".format(hist_reducedChi2_MC.GetStdDev())
     lat.SetTextColor(ROOT.kBlack);
-    xmin = xmin + 0.4
+    xmin = xmin + 0.2
     lat.DrawLatex(xmin,yhi,"MC")
     lat.DrawLatex(xmin,yhi-0.05,line1)
     lat.DrawLatex(xmin,yhi-0.1,line2)
     lat.DrawLatex(xmin,yhi-0.15,line3)
-
+    # now SF
+    hist_reducedChi2_sf.SetLineWidth(2)
+    hist_reducedChi2_sf.SetLineColor(ROOT.kBlue)
+    hist_reducedChi2_sf.Draw("HE SAME")
+    #######################
+    # redraw some stuff that might be covered by FillColor
+    c.RedrawAxis("sameaxis")
+    #################
+    line1 = "= {0}".format(int(entries_sf))
+    line2 = "= {:.2f}".format(hist_reducedChi2_sf.GetMean())
+    line3 = "= {:.2f}".format(hist_reducedChi2_sf.GetStdDev())
+    lat.SetTextColor(ROOT.kBlue);
+    xmin = xmin + 0.2
+    lat.DrawLatex(xmin,yhi,"SF")
+    lat.DrawLatex(xmin,yhi-0.05,line1)
+    lat.DrawLatex(xmin,yhi-0.1,line2)
+    lat.DrawLatex(xmin,yhi-0.15,line3)
+    
     for ext in ["png","pdf"]:
         c.SaveAs("{out}reducedChi2_{ch}.{ext}".format(out=outname,ch=channel,ext=ext))
 
@@ -1005,45 +1144,64 @@ if __name__ == "__main__":
                         "smoothScaleFactor_etaInterpolated","ForceTitle",
                         outname,palette=args.palette,passCanvas=canvas)
 
-
+    ###
+    ### Do eigen deconvolution on scale factors or efficiencies as appropriate
+    ### Should check that covariance matrices are well defined everywhere for this to make sense
+    sf3D = None
+    if args.skipEff:
+        print()
+        print("Running eigen decomposition ...")
+        print()
+        sf3D = effStatVariations(outname+"/eigenDecomposition/", hist_FuncCovMatrix_vs_eta_sf, hist_FuncParam_vs_eta_sf,
+                                 nFinePtBins, minPtHistoData, maxPtHistoData, smoothFunction="cheb3", suffix="SF", palette=args.palette)
+        sf3D.SetTitle("Nominal in first Z bin, eigen vars for cheb3 elsewhere")
+        print()
+        
     ###########################
     # Now save things
     ###########################
     tf = ROOT.TFile.Open(outname+outfilename,'recreate')
-    # hdataSmoothEff.Write()    
-    # hmcSmoothEff.Write()    
     hdataSmoothCheck.Write()
     hmcSmoothCheck.Write()
+    hsfSmoothCheck.Write()
     scaleFactor.Write()
     scaleFactor_etaInterpolated.Write()
     hsf.Write("scaleFactorOriginal")
     hdata.Write("efficiencyDataOriginal")
     hmc.Write("efficiencyMCOriginal")
-    hist_ErfParam_vs_eta_data.Write("hist_ErfParam_vs_eta_data")
-    hist_ErfParam_vs_eta_mc.Write("hist_ErfParam_vs_eta_mc")
-    hist_ErfCovMatrix_vs_eta_data.Write("hist_ErfCovMatrix_vs_eta_data")
-    hist_ErfCovMatrix_vs_eta_mc.Write("hist_ErfCovMatrix_vs_eta_mc")
+    hist_FuncParam_vs_eta_data.Write("hist_FuncParam_vs_eta_data")
+    hist_FuncParam_vs_eta_mc.Write("hist_FuncParam_vs_eta_mc")
+    hist_FuncParam_vs_eta_sf.Write("hist_FuncParam_vs_eta_sf")
+    hist_FuncCovMatrix_vs_eta_data.Write("hist_FuncCovMatrix_vs_eta_data")
+    hist_FuncCovMatrix_vs_eta_mc.Write("hist_FuncCovMatrix_vs_eta_mc")
+    hist_FuncCovMatrix_vs_eta_sf.Write("hist_FuncCovMatrix_vs_eta_sf")
     if args.saveTF1:
         for key in bestFit_MC:
             bestFit_MC[key].Write(key)
         for key in bestFit_Data:
             bestFit_Data[key].Write(key)
+    if sf3D:
+        sf3D.Write("SF2D_withEigenVars")
     tf.Close()
     print()
     print(f"Created file {outname+outfilename}")
     print()
 
     print("="*30)
-    print("Summary of bad fits (only for Erf)")
+    print("Summary of bad fits (Erf for data/MC and pol3 for SF)")
     print("="*30)
     print("### Bad fit status (Data/MC,  key,  fitstatus)")
     for key in sorted(badFitsID_data.keys()):
         print(f"DATA  {key}  {badFitsID_data[key]}")
     for key in sorted(badFitsID_mc.keys()):
         print(f"MC    {key}  {badFitsID_mc[key]}")
+    for key in sorted(badFitsID_sf.keys()):
+        print(f"SF    {key}  {badFitsID_sf[key]}")
     print("-"*30)
-    print("### Bad covariance matrix status (Data/MC,  key,  fitstatus).")
+    print("### Bad covariance matrix status (Data/MC/SF,  key,  covquality).")
     for key in sorted(badCovMatrixID_data.keys()):
         print(f"DATA  {key}  {badCovMatrixID_data[key]}")
     for key in sorted(badCovMatrixID_mc.keys()):
         print(f"MC  {key}  {badCovMatrixID_mc[key]}")
+    for key in sorted(badCovMatrixID_sf.keys()):
+        print(f"SF  {key}  {badCovMatrixID_sf[key]}")

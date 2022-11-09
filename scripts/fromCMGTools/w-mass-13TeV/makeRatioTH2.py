@@ -79,7 +79,7 @@ if __name__ == "__main__":
     parser.add_argument(       '--pull-error-ScaleFactor', dest='pullErrorScaleFactor', default='1.', type=float, help='Inflate the error by this factor when making the pulls (because it is assumed the inputs are uncorrelated, so the error might need a correction)')
     parser.add_argument(      '--roll1Dto2D', action="store_true",  help="Input histograms are 1D distributions to be unrolled into 2D. Need binning from option --binning-file-to-roll")
     parser.add_argument(      '--binning-file-to-roll', dest="binFileToRoll", default="", help="File with binning to roll 1D into 2D (the reco binning is used)")
-
+    parser.add_argument(      '--drawOption',  default='colz0', type=str, help='Draw option for TH2')
     args = parser.parse_args()
     
     f1 = args.file1[0]
@@ -268,7 +268,7 @@ if __name__ == "__main__":
             args.ratioRange = (hratio.GetBinContent(hratio.GetMinimumBin()), hratio.GetBinContent(hratio.GetMaximumBin()))
         zAxisTitle = zAxisTitle + "::" + str(args.ratioRange[0]) + "," + str(args.ratioRange[1])
     drawCorrelationPlot(hratio,xAxisTitle,yAxisTitle,zAxisTitle,
-                        args.outhistname,"ForceTitle",outname,0,0,False,False,False,1,palette=args.palette,passCanvas=canvas2D,drawOption="colz0")
+                        args.outhistname,"ForceTitle",outname,0,0,False,False,False,1,palette=args.palette,passCanvas=canvas2D,drawOption=args.drawOption)
     
     canvas = ROOT.TCanvas("canvas","",800,700)
     if not args.skip1DPlot:
@@ -295,7 +295,8 @@ if __name__ == "__main__":
                 "number of events",
                 f"pullDistribution_{args.outhistname}",
                 outname,
-                passCanvas=canvas
+                passCanvas=canvas,
+                fitString="gaus;LEMSQ+;;-5;5"
                 )
  
     ###########################
