@@ -41,6 +41,7 @@ if __name__ == "__main__":
     parser.add_argument(     '--palette'  , dest='palette',      default=87, type=int, help='Set palette: default is a built-in one, 55 is kRainbow')
     parser.add_argument(     '--invertPalette', dest='invertePalette', action='store_true',   help='Inverte color ordering in palette')
     parser.add_argument(     '--skip-eff', dest='skipEfficiency', action='store_true',   help='Do not plot efficiencies to save time')
+    parser.add_argument(     '--bin-pt-finely', dest='binPtFinely', default=-1, type=int, help='Bin product histograms so to increase number of pt bins')
     args = parser.parse_args()
 
     ROOT.TH1.SetDefaultSumw2()
@@ -189,19 +190,32 @@ if __name__ == "__main__":
         for era in eras:
             for sfv in sf_version:
                 prodname = f"fullSF2D_{sfv}_{key}_{era}"
+                yedges = []
                 for i,basename in enumerate(productsToMake[key]): 
                     name = f"{sfv}_{basename}"
                     if i == 0:
                         stringProduct = basename
-                        prodHistsSF[era][prodname] = copy.deepcopy(histsSF[era][name].Clone(prodname))
+                        if basename not in ["reco", "tracking"] and args.binPtFinely > 0 and histsSF[era][name].GetNbinsY() < args.binPtFinely:
+                            print(f"INFO: Going to create product histogram {prodname} with {args.binPtFinely} pt bins but same range")
+                            prodHistsSF[era][prodname] = getTH2morePtBins(histsSF[era][name], prodname, args.binPtFinely)
+                        else:
+                            prodHistsSF[era][prodname] = copy.deepcopy(histsSF[era][name].Clone(prodname))
+                        yedges = [round(prodHistsSF[era][prodname].GetYaxis().GetBinLowEdge(i), 2) for i in range(1, 2 + prodHistsSF[era][prodname].GetNbinsY())]
                     else:
                         stringProduct = stringProduct + "*" + basename
                         if histsSF[era][name].GetNbinsY() == 1:
                             multiplyByHistoWith1ptBin(prodHistsSF[era][prodname], histsSF[era][name])
                         elif not prodHistsSF[era][prodname].Multiply(histsSF[era][name]):
-                            print(f"ERROR in multiplication for prodHistsSF[{era}][{prodname}] with {name}")
-                            print(f"Nbins(X, Y) = {histsSF[era][name].GetNbinsX()},{histsSF[era][name].GetNbinsY()} ")
-                            quit()
+                            yedgesSecond = [round(histsSF[era][name].GetYaxis().GetBinLowEdge(i), 2) for i in range(1, 2 + histsSF[era][name].GetNbinsY())]
+                            # try to see if first histogram has pt edges which are a subset of the other one to attempt multiplication
+                            if all(yedgesSecond[i] in yedges for i in range(len(yedgesSecond))):
+                                print(f"WARNING: going to multiply prodHistsSF[{era}][{prodname}] with {name} using function multiplyByHistoWithLessPtBins()")
+                                multiplyByHistoWithLessPtBins(prodHistsSF[era][prodname], histsSF[era][name])
+                            else:
+                                print(f"ERROR in multiplication for prodHistsSF[{era}][{prodname}] with {name}")
+                                print(f"Nbins(X, Y) = {histsSF[era][name].GetNbinsX()},{histsSF[era][name].GetNbinsY()} ")
+                                quit()
+                                
                 prodHistsSF[era][prodname].SetTitle(f"{stringProduct}")            
                 print(f"{era}: {sfv} -> {stringProduct}")
                 
