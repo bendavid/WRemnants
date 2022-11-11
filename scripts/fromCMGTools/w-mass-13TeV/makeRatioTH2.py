@@ -285,6 +285,12 @@ if __name__ == "__main__":
         hpull = ROOT.TH1D("pulls","Distribution of pulls",100,-5,5)
         for ix in range(1,1+hinput1.GetNbinsX()):
             for iy in range(1,1+hinput1.GetNbinsY()):
+                xval = hinput1.GetXaxis().GetBinCenter(ix)
+                if xMin < xMax:
+                    if xval < xMin or xval > xMax: continue
+                yval = hinput1.GetYaxis().GetBinCenter(iy)
+                if yMin < yMax:
+                    if yval < yMin or yval > yMax: continue
                 err = math.sqrt(pow(hinput1.GetBinError(ix,iy),2) + pow(hinput2.GetBinError(ix,iy),2))
                 err *= args.pullErrorScaleFactor
                 pull = hinput1.GetBinContent(ix,iy) - hinput2.GetBinContent(ix,iy)

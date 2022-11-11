@@ -1,6 +1,8 @@
 #ifndef WREMNANTS_MUON_EFFICIENCIES_H
 #define WREMNANTS_MUON_EFFICIENCIES_H
 
+#include <boost/histogram/axis.hpp>
+
 namespace wrem {
 
     // TODO use enums for integer/boolean/category axes so that the code is less error-prone?
@@ -14,14 +16,8 @@ namespace wrem {
             sf_tracking_(std::make_shared<const HIST_TRACKING>(std::move(sf_tracking))),
             sf_reco_(std::make_shared<const HIST_RECO>(std::move(sf_reco))) {}
 
-        // FIXME: why not using a double directly as in scale_factor_product?
         auto const &sf_tracking(float saeta, float sapt, int charge, int idx_nom_alt) const {
             //TODO index for nom_alt are in principle known at compile time
-
-            ////
-            // CENTRAL VALUES
-            ////
-
             return sf_tracking_->at(sf_tracking_->template axis<0>().index(saeta),
                                     sf_tracking_->template axis<1>().index(sapt),
                                     sf_tracking_->template axis<2>().index(charge),
@@ -131,6 +127,9 @@ namespace wrem {
         std::shared_ptr<const HIST_TRACKING> sf_tracking_;
         std::shared_ptr<const HIST_RECO> sf_reco_;
 
+        // hardcoded things to keep original pt binning for tnp when using smoothed efficiencies
+        boost::histogram::axis::variable<double> originalTnpPtBins{24., 26., 28., 30., 32., 34., 36., 38., 40., 42., 44., 47., 50., 55., 60., 65.};
+        
         // cache the bin indices since the string category lookup is slow
         int idip_idx_ = sf_idip_trig_iso_->template axis<3>().index("idip");
         int idx_idip_trig_ = sf_idip_trig_iso_->template axis<3>().index("idip_trig");
@@ -270,7 +269,7 @@ namespace wrem {
 
             // overflow/underflow are attributed to adjacent bin
             auto const tensor_eta_idx = std::clamp(eta_idx, 0, NEtaBins - 1);
-            auto const tensor_pt_idx = std::clamp(pt_idx, 0, NPtBins - 1);
+            auto const tensor_pt_idx = std::clamp(base_t::originalTnpPtBins.index(pt), 0, NPtBins - 1);
 
             auto const &cell_idip_trig = base_t::sf_idip_trig_iso_->at(eta_idx,
                                                                        pt_idx,
@@ -318,7 +317,8 @@ namespace wrem {
 
             // overflow/underflow are attributed to adjacent bin
             auto const tensor_eta_idx = std::clamp(eta_idx, 0, NEtaBins - 1);
-            auto const tensor_pt_idx = std::clamp(pt_idx, 0, NPtBins - 1);
+            // this is currently used only for reco/tracking, which has no smoothing now, so the pt bins are the original tnp ones
+            auto const tensor_pt_idx = std::clamp(pt_idx, 0, NPtBins - 1); 
 
             auto const &cell_singleStep = sf_singleStep_->at(eta_idx,
                                                              pt_idx,
