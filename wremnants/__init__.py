@@ -7,6 +7,7 @@ ROOT.gInterpreter.Declare('#include "muonCorr.h"')
 ROOT.gInterpreter.Declare('#include "histoScaling.h"')
 ROOT.gInterpreter.Declare('#include "utils.h"')
 ROOT.gInterpreter.Declare('#include "csVariables.h"')
+ROOT.gInterpreter.Declare('#include "EtaPtCorrelatedEfficiency.h"')
 
 from .datasets import datasets2016
 from .datasets import datasetsLowPU

@@ -125,9 +125,15 @@ def make_muon_efficiency_helpers(filename = data_dir + "/testMuonSF/scaleFactorP
         quit()
         
     # exclude pt bins outside of analysis range
-    nptbins = np.count_nonzero(axis_pt_eff.edges < max_pt) # if max_pt = 55 and tnp bins are [26,54,60] then it has to use 2 bins, same for [26,54,55,60]  
+    #nptbins = np.count_nonzero(axis_pt_eff.edges < max_pt) # if max_pt = 55 and tnp bins are [26,54,60] then it has to use 2 bins, same for [26,54,55,60]  
+    ## temporary patch when using smoothed histograms with many more pt bins, for the tensor axis should still use the original tnp pt binning
+    originalTnpPtBins = [24., 26., 28., 30., 32., 34., 36., 38., 40., 42., 44., 47., 50., 55.0, 60., 65.]
+    nptbins = np.count_nonzero(originalTnpPtBins < max_pt)
+    logging.info(f"Using {nptbins} pt bins for idip-trig-iso SF")
     nptbins_tracking = np.count_nonzero(axis_pt_eff_tracking.edges < max_pt)
+    logging.info(f"Using {nptbins_tracking} pt bins for tracking SF")
     nptbins_reco = np.count_nonzero(axis_pt_eff_reco.edges < max_pt)
+    logging.info(f"Using {nptbins_reco} pt bins for reco SF")
 
     sf_idip_trig_iso_pyroot = narf.hist_to_pyroot_boost(sf_idip_trig_iso)
     sf_tracking_pyroot = narf.hist_to_pyroot_boost(sf_tracking)
@@ -154,18 +160,18 @@ def make_muon_efficiency_helpers(filename = data_dir + "/testMuonSF/scaleFactorP
 
     # for pt need to additionally remove the out of range bins if any
     if isinstance(axis_pt_eff, bh.axis.Regular):
-        axis_pt_eff_tensor = hist.axis.Regular(nptbins, axis_pt_eff.edges[0], axis_pt_eff.edges[nptbins], name = axis_pt_eff.name, overflow = False, underflow = False)
+        axis_pt_eff_tensor = hist.axis.Regular(nptbins, originalTnpPtBins[0], originalTnpPtBins[nptbins], name = axis_pt_eff.name, overflow = False, underflow = False)
     elif isinstance(axis_pt_eff, bh.axis.Variable):
-        axis_pt_eff_tensor = hist.axis.Variable(axis_pt_eff.edges[:nptbins+1], name = axis_pt_eff.name, overflow = False, underflow = False)
+        axis_pt_eff_tensor = hist.axis.Variable(originalTnpPtBins[:nptbins+1], name = axis_pt_eff.name, overflow = False, underflow = False)
     # repeat for tracking
     if isinstance(axis_pt_eff_tracking, bh.axis.Regular):
         axis_pt_eff_tensor_tracking = hist.axis.Regular(nptbins_tracking, axis_pt_eff_tracking.edges[0], axis_pt_eff_tracking.edges[nptbins_tracking], name = axis_pt_eff_tracking.name, overflow = False, underflow = False)
-    elif isinstance(axis_pt_eff, bh.axis.Variable):
+    elif isinstance(axis_pt_eff_tracking, bh.axis.Variable):
         axis_pt_eff_tensor_tracking = hist.axis.Variable(axis_pt_eff_tracking.edges[:nptbins_tracking+1], name = axis_pt_eff_tracking.name, overflow = False, underflow = False)
     # now also reco
     if isinstance(axis_pt_eff_reco, bh.axis.Regular):
         axis_pt_eff_tensor_reco = hist.axis.Regular(nptbins_reco, axis_pt_eff_reco.edges[0], axis_pt_eff_reco.edges[nptbins_reco], name = axis_pt_eff_reco.name, overflow = False, underflow = False)
-    elif isinstance(axis_pt_eff, bh.axis.Variable):
+    elif isinstance(axis_pt_eff_reco, bh.axis.Variable):
         axis_pt_eff_tensor_reco = hist.axis.Variable(axis_pt_eff_reco.edges[:nptbins_reco+1], name = axis_pt_eff_reco.name, overflow = False, underflow = False)
 
     #TODO make this a categorical once we can disable overflow

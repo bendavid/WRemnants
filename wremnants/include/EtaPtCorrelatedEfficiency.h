@@ -26,6 +26,7 @@ namespace wrem {
   
         EtaPtCorrelatedEfficiency(TH3D* histocov, TH2D* histoerf, double ptmin, double ptmax);
         double DoEffSyst(int etabin, double pt, double *variations, bool getDiff=false);
+        double DoEffSyst(int etabin, int ipar);
         void setPtRange(double ptmin, double ptmax) { ptmin_ = ptmin; ptmax_ = ptmax; }
         void setSmoothingFunction(const std::string& name);
     
@@ -100,8 +101,8 @@ namespace wrem {
         const unsigned int npars = transformation.rows();
         const unsigned int neigenvectors = transformation.cols(); 
         Eigen::VectorXd inparv(npars);
-        for (unsigned int ipar=0; ipar<npars; ++ipar) {
-            inparv[ipar] = inpars[ipar];
+        for (unsigned int jpar = 0; jpar < npars; ++jpar) {
+            inparv[ipar] = inpars[jpar];
         }
         // std::cout << "inparv = " << std::endl << inparv << std::endl;
         Eigen::VectorXd diagbasisv = transformation.transpose()*inparv;
@@ -112,7 +113,7 @@ namespace wrem {
 
         // transform the pars back in the original basis
         Eigen::VectorXd outparv = transformation*diagbasisv;
-        for (unsigned int ieig=0; ieig<neigenvectors; ++ieig) {
+        for (unsigned int ieig = 0; ieig < neigenvectors; ++ieig) {
             outpars[ieig] = outparv[ieig];
         }
         // std::cout << "outparv = " << std::endl << outparv << std::endl;
@@ -137,6 +138,23 @@ namespace wrem {
         return nominal;
     }
 
+    double* EtaPtCorrelatedEfficiency::DoEffSyst(int etabin, int ipar) {
+
+        if (ipar >= ndim_) {
+            std::cout << "EtaPtCorrelatedEfficiency::DoEffSyst(int etabin, int ipar):  ipar >= " << ndim_ << " (" << ipar << ")" << std::endl;
+            exit(EXIT_FAILURE);
+        }
+        double inpars[ndim_], outpars[ndim_];
+    
+        for (int jpar = 0; jpar < ndim_; ++jpar) {
+            inpars[jpar] = parhist_->GetBinContent(etabin, jpar+1);
+        }
+    
+        DoHessianShifts(etabin, ipar, inpars, outpars);
+        return outpars;
+    }
+
+    
 }
     
 #endif

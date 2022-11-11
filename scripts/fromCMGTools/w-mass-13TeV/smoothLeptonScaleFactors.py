@@ -5,6 +5,7 @@
 
 import ROOT, os, sys, re, array, math
 import argparse
+from copy import *
 
 import utilitiesCMG
 utilities = utilitiesCMG.util()
@@ -42,7 +43,7 @@ def getReducedChi2andLabel(func):
     return float(reducedChi2),lineChi2
 
 
-def copyHisto(h1, h2):
+def copyHisto(h1, h2, copyError=False):
 
     if h1.GetDimension() != h2.GetDimension():
         print(f"Error in copyHisto(): histograms have different dimensions. Dim(h1)={h1.GetDimension()}  Dim(h2)={h2.GetDimension()}. Exit")
@@ -50,13 +51,22 @@ def copyHisto(h1, h2):
 
     if h1.GetDimension() == 1:
         for ix in range(h2.GetNbinsX()+2):
+            if copyError:
                 h1.SetBinContent(ix, h2.GetBinContent(ix, iy))
                 h1.SetBinError(ix, h2.GetBinError(ix, iy))
+            else:
+                h1.SetBinContent(ix, h2.GetBinError(ix, iy))
+                h1.SetBinError(ix, 0.0)
     elif h1.GetDimension() == 2:
         for ix in range(h2.GetNbinsX()+2):
             for iy in range(h2.GetNbinsY()+2):
-                h1.SetBinContent(ix,iy, h2.GetBinContent(ix, iy))
-                h1.SetBinError(ix,iy, h2.GetBinError(ix, iy))
+                if copyError:
+                    h1.SetBinContent(ix,iy, h2.GetBinError(ix, iy))
+                    h1.SetBinError(ix,iy, 0.0)
+                else:
+                    h1.SetBinContent(ix,iy, h2.GetBinContent(ix, iy))
+                    h1.SetBinError(ix,iy, h2.GetBinError(ix, iy))
+
     else:
         print("Error in copyHisto(): function not implemented for dimension > 2. Exit")
         quit()        
@@ -71,16 +81,18 @@ def fitTurnOn(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit=T
               charge = "both",
               etabins = []
               ):
-    
-    ROOT.Math.MinimizerOptions.SetDefaultMinimizer("Minuit2","Migrad")
-    ROOT.Math.MinimizerOptions.SetDefaultStrategy(2)
 
+    doingSF = True if mc == "SF" else False
+    if doingSF:
+        ROOT.Math.MinimizerOptions.SetDefaultMinimizer("Minuit2","Migrad")
+        ROOT.Math.MinimizerOptions.SetDefaultStrategy(2)
+    else:
+        ROOT.Math.MinimizerOptions.SetDefaultMinimizer("Minuit")
+        
     chargeText = ""
     if charge == "plus": chargeText = "positive"
     if charge == "minus": chargeText = "negative"
 
-    # some old options, might be removed
-    doingSF = True if mc == "SF" else False
     forcePol3 = False
     forceCheb3Always = True if doingSF else False
     forceErfAlways = False if doingSF else True
@@ -267,7 +279,7 @@ def fitTurnOn(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit=T
     #spl.SetLineColor(ROOT.kRed+3)
     #spl.Draw("pclsame")
 
-    fitresPtr = cheb2_fitresPtr if doingSF else erf_fitresPtr
+    fitresPtr = cheb3_fitresPtr if doingSF else erf_fitresPtr
     if fitresPtr != None:
         fitstatus = int(fitresPtr)
         #print "fit status: ", str(fitstatus)
@@ -307,7 +319,6 @@ def fitTurnOn(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit=T
                 for j in range(npar):
                     hist_FuncCovMatrix_vs_eta.SetBinContent(key+1,i+1,j+1,fitresPtr.CovMatrix(i,j))
 
-    quit()
     upLeg = 0.4
     downLeg = 0.2
     leftLeg = 0.5
@@ -700,6 +711,32 @@ if __name__ == "__main__":
     copyHisto(ratioMC,hmc)
     copyHisto(ratioSF,hsf)
 
+    ######################
+    # to make ratio
+    ######################
+    pullData =  ROOT.TH2D("dataEfficiencyPull","Original/smooth Data efficiency pull",
+                           len(etabins)-1, array('d',etabins),
+                           len(ptbins)-1, array('d',ptbins)
+                           )
+    pullMC =  ROOT.TH2D("mcEfficiencyPull","Original/smooth MC efficiency pull",
+                           len(etabins)-1, array('d',etabins),
+                           len(ptbins)-1, array('d',ptbins)
+                           )
+    pullSF =  ROOT.TH2D("scaleFactorPull","Original/smooth scale factor pull",
+                         len(etabins)-1, array('d',etabins),
+                         len(ptbins)-1, array('d',ptbins)
+                         )
+
+    copyHisto(pullData, hdata)
+    copyHisto(pullMC, hmc)
+    copyHisto(pullSF, hsf)
+    errData = copy.deepcopy(hdata.Clone("errData"))
+    errMC   = copy.deepcopy(hmc.Clone("errMC"))
+    errSF   = copy.deepcopy(hsf.Clone("errSF"))
+    copyHisto(errData, hdata, copyError=True)
+    copyHisto(errMC, hmc, copyError=True)
+    copyHisto(errSF, hsf, copyError=True)
+    
     #############
     # these will be used to check the smoothed efficiency
     ###############
@@ -908,7 +945,18 @@ if __name__ == "__main__":
     drawCorrelationPlot(ratioSF,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),"scale factor ratio (original/smooth)::0.98,1.02",
                         "scaleFactorRatio","ForceTitle",outname,palette=args.palette,passCanvas=canvas)
 
-
+    pullData.Add(hdataSmoothCheck_origBinPt, -1.0)
+    pullData.Divide(errData)
+    pullMC.Add(hmcSmoothCheck_origBinPt, -1.0)
+    pullMC.Divide(errMC)
+    pullSF.Add(hsfSmoothCheck_origBinPt, -1.0)
+    pullSF.Divide(errSF)
+    drawCorrelationPlot(pullData,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),"Data eff. pull (original-smooth)/err::-5.0,5.0",
+                        "dataEfficiencyPull","ForceTitle",outname,palette=args.palette,passCanvas=canvas)
+    drawCorrelationPlot(pullMC,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),"MC eff. pull (original-smooth)/err::-5.0,5.0",
+                        "mcEfficiencyPull","ForceTitle",outname,palette=args.palette,passCanvas=canvas)
+    drawCorrelationPlot(pullSF,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),"scale factor pull (original-smooth)/err::-5.0,5.0",
+                        "scaleFactorPull","ForceTitle",outname,palette=args.palette,passCanvas=canvas)
     # ######################
     # # See the difference between smoothing Data and MC efficiency and taking the ratio or smoothing directly the efficiency ratio
     # ######################    
@@ -1148,14 +1196,16 @@ if __name__ == "__main__":
     ### Do eigen deconvolution on scale factors or efficiencies as appropriate
     ### Should check that covariance matrices are well defined everywhere for this to make sense
     sf3D = None
-    if args.skipEff:
-        print()
-        print("Running eigen decomposition ...")
-        print()
-        sf3D = effStatVariations(outname+"/eigenDecomposition/", hist_FuncCovMatrix_vs_eta_sf, hist_FuncParam_vs_eta_sf,
-                                 nFinePtBins, minPtHistoData, maxPtHistoData, smoothFunction="cheb3", suffix="SF", palette=args.palette)
-        sf3D.SetTitle("Nominal in first Z bin, eigen vars for cheb3 elsewhere")
-        print()
+    print()
+    print("Running eigen decomposition on scale factors ...")
+    print()
+    sf3D = effStatVariations(outname+"/eigenDecomposition/", hist_FuncCovMatrix_vs_eta_sf, hist_FuncParam_vs_eta_sf,
+                             nFinePtBins, minPtHistoData, maxPtHistoData, smoothFunction="cheb3", suffix="SF", palette=args.palette)
+    sf3D.SetTitle("Nominal in first Z bin, eigen vars for cheb3 elsewhere")
+    print()
+    if not args.skipEff:
+        ## TODO
+        pass
         
     ###########################
     # Now save things
