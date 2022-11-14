@@ -26,7 +26,7 @@ namespace wrem {
   
         EtaPtCorrelatedEfficiency(TH3D* histocov, TH2D* histoerf, double ptmin, double ptmax);
         double DoEffSyst(int etabin, double pt, double *variations, bool getDiff=false);
-        double DoEffSyst(int etabin, int ipar);
+        std::vector<double> DoEffSyst(int etabin, int ipar);
         void setPtRange(double ptmin, double ptmax) { ptmin_ = ptmin; ptmax_ = ptmax; }
         void setSmoothingFunction(const std::string& name);
     
@@ -138,7 +138,7 @@ namespace wrem {
         return nominal;
     }
 
-    double* EtaPtCorrelatedEfficiency::DoEffSyst(int etabin, int ipar) {
+    std::vector<double> EtaPtCorrelatedEfficiency::DoEffSyst(int etabin, int ipar) {
 
         if (ipar >= ndim_) {
             std::cout << "EtaPtCorrelatedEfficiency::DoEffSyst(int etabin, int ipar):  ipar >= " << ndim_ << " (" << ipar << ")" << std::endl;
@@ -149,9 +149,12 @@ namespace wrem {
         for (int jpar = 0; jpar < ndim_; ++jpar) {
             inpars[jpar] = parhist_->GetBinContent(etabin, jpar+1);
         }
-    
         DoHessianShifts(etabin, ipar, inpars, outpars);
-        return outpars;
+        std::vector<double> ret(ndim_, 0.0);
+        for (int jpar = 0; jpar < ndim_; ++jpar) {
+            ret[jpar] = outpars[jpar];
+        }
+        return ret;
     }
 
     
