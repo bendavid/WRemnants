@@ -62,7 +62,7 @@ def effStatVariations(outdir, covHisto, parHisto, nbins_pt, ptmin, ptmax,
     allHist = ROOT.TH3D(f"interpolationAndVars", "Nominal in first Z bin",
                         nbins_eta, etamin, etamax,
                         nbins_pt, ptmin, ptmax,
-                        npars+1, 0.5, 1.5+npars)
+                        npars+1, -0.5, 0.5+npars)
     fillTH3binFromTH2(allHist, nomiHisto, 1)
     if not skipPlot:
         drawCorrelationPlot(nomiHisto,
