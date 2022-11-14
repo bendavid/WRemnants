@@ -169,6 +169,15 @@ def fitTurnOn(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit=T
     tf1_erf.SetLineWidth(2)
     tf1_erf.SetLineColor(ROOT.kOrange+1)
 
+    tf1_erfRatio = ROOT.TF1("tf1_erfRatio","[0] * (1.0 + TMath::Erf((x-[1])/[2])) / (1.0 + TMath::Erf((x-[3])/[4]))", minFitRange, maxFitRange) 
+    tf1_erfRatio.SetParameter(0,1.0)
+    tf1_erfRatio.SetParameter(1,38)
+    tf1_erfRatio.SetParameter(2,3.0)
+    tf1_erfRatio.SetParameter(3,38)
+    tf1_erfRatio.SetParameter(4,3.0)
+    tf1_erfRatio.SetLineWidth(2)
+    tf1_erfRatio.SetLineColor(ROOT.kGreen+2)
+    
     tf1_pol1 = ROOT.TF1("tf1_pol1","pol1",minFitRange,maxFitRange)
     tf1_pol1.SetLineWidth(2)
     tf1_pol1.SetLineColor(ROOT.kGreen+2)
@@ -269,7 +278,8 @@ def fitTurnOn(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit=T
     # for SF draw cb3 after pol3, since they might overlap
     if doingSF:
         cheb3_fitresPtr = hist.Fit(tf1_cheb3,fitopt)
-        cheb2_fitresPtr = hist.Fit(tf1_cheb2,fitopt)
+        cheb2_fitresPtr = hist.Fit(tf1_cheb2,fitopt+"0")
+        erfRatio_fitresPtr = hist.Fit(tf1_erfRatio,fitopt)
         pol3_fitresPtr = hist.Fit(tf1_pol3,fitopt+"0") # do not draw pol3 here, but keep until all the mess below is cleaned
     else:
         erf_fitresPtr = hist.Fit(tf1_erf,fitopt)
@@ -341,10 +351,11 @@ def fitTurnOn(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit=T
     legEntry[tf1_cheb2.GetName()] = "cheb2"
     legEntry[tf1_pol1.GetName()] = "pol1"
     legEntry[tf1_pol2.GetName()] = "pol2"
-
+    legEntry[tf1_erfRatio.GetName()] = "erfRatio"
     if doingSF:
         leg.AddEntry(tf1_cheb3,  legEntry[tf1_cheb3.GetName()], 'LF')
-        leg.AddEntry(tf1_cheb2,  legEntry[tf1_cheb2.GetName()], 'LF')  
+        #leg.AddEntry(tf1_cheb2,  legEntry[tf1_cheb2.GetName()], 'LF')  
+        leg.AddEntry(tf1_erfRatio, legEntry[tf1_erfRatio.GetName()], 'LF')  
     else:
         leg.AddEntry(tf1_erf,  legEntry[tf1_erf.GetName()], 'LF')
         leg.AddEntry(tf1_pol3, legEntry[tf1_pol3.GetName()], "LF")
@@ -360,11 +371,13 @@ def fitTurnOn(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit=T
     fit_pol3 = hist.GetFunction(tf1_pol3.GetName())
     fit_cheb3 = hist.GetFunction(tf1_cheb3.GetName()) if doingSF else None
     fit_cheb2 = hist.GetFunction(tf1_cheb2.GetName()) if doingSF else None
+    fit_erfRatio = hist.GetFunction(tf1_erfRatio.GetName()) if doingSF else None
     
     functions = {}
     functions[tf1_erf.GetName()] = fit_erf
     functions[tf1_pol3.GetName()] = fit_pol3
     functions[tf1_cheb3.GetName()] = fit_cheb3
+    functions[tf1_erfRatio.GetName()] = fit_erfRatio
     functions[tf1_cheb2.GetName()] = fit_cheb2
     
     lat = ROOT.TLatex()
@@ -631,9 +644,14 @@ if __name__ == "__main__":
         datahistname,mchistname,sfhistname = args.inputHistNames.split(",")
     
     tf = safeOpenFile(args.inputfile[0])
-    hdata = safeGetObject(tf, datahistname)
-    hmc =   safeGetObject(tf, mchistname)
     hsf =   safeGetObject(tf, sfhistname)
+    if args.skipEff:
+        hdata = copy.deepcopy(hsf.Clone("data_dummy"))
+        hdata.Reset("ICESM")
+        hmc = copy.deepcopy(hdata.Clone("mc_dummy"))
+    else:
+        hdata = safeGetObject(tf, datahistname)
+        hmc =   safeGetObject(tf, mchistname)
     tf.Close()
         
     etabins = [round(hdata.GetXaxis().GetBinLowEdge(i), 1) for i in range(1, 2 + hdata.GetNbinsX())]

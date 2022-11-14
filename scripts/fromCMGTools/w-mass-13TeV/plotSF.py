@@ -261,13 +261,13 @@ if __name__ == "__main__":
                                 nContours=args.nContours, palette=args.palette, invertePalette=args.invertePalette)
             # abs. uncertainty (only on nominal, it should be the same for all histograms, hoping the SF and efficiencies were sane in this configuration)
             if "nominal" in n:
-                drawCorrelationPlot(histsSF[era][n], "muon #eta", "muon p_{T} (GeV)", f"Abs. uncertainty on SF",
+                drawCorrelationPlot(histsSF[era][n], "muon #eta", "muon p_{T} (GeV)", f"Abs. uncertainty on SF::0,0.015",
                                     f"absUnc_muonSF_{n}", plotLabel="ForceTitle", outdir=outdir+"absoluteStatUncertainty/",
                                     smoothPlot=False, drawProfileX=False, scaleToUnitArea=False,
                                     draw_both0_noLog1_onlyLog2=1, passCanvas=canvas, plotError=True,
                                     nContours=args.nContours, palette=args.palette, invertePalette=args.invertePalette)
                 ## rel. uncertainty
-                drawCorrelationPlot(histsSF[era][n], "muon #eta", "muon p_{T} (GeV)", f"Rel. uncertainty on SF",
+                drawCorrelationPlot(histsSF[era][n], "muon #eta", "muon p_{T} (GeV)", f"Rel. uncertainty on SF::0,0.015",
                                     f"relUnc_muonSF_{n}", plotLabel="ForceTitle", outdir=outdir+"relativeStatUncertainty/",
                                     smoothPlot=False, drawProfileX=False, scaleToUnitArea=False,
                                     draw_both0_noLog1_onlyLog2=1, passCanvas=canvas, plotRelativeError=True,
