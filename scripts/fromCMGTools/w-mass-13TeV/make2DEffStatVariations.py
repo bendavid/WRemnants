@@ -37,17 +37,44 @@ def effStatVariations(outdir, covHisto, parHisto, nbins_pt, ptmin, ptmax,
 
     systCalc = ROOT.wrem.EtaPtCorrelatedEfficiency(covHisto, parHisto, ptmin, ptmax)
     systCalc.setSmoothingFunction(smoothFunction)
-    
+
+    # one way to do it
+    tf1_func_nomi = ROOT.TF1(f"nomi_{smoothFunction}", smoothFunction, ptmin, ptmax)
+    tf1_func_var = ROOT.TF1(f"var_{smoothFunction}", smoothFunction, ptmin, ptmax)
     for ieta in range(nbins_eta):
-        #eta = parHisto.GetXaxis().GetBinCenter(ieta+1)
-        for ipt in range(nbins_pt):
-            pt = systHistos[0].GetYaxis().GetBinCenter(ipt+1)
-            relSysts = np.array([0 for i in range(npars)],dtype=float)
-            nomi = systCalc.DoEffSyst(ieta+1, pt, relSysts, getDiff=getDiff)
-            nomiHisto.SetBinContent(ieta+1, ipt+1, nomi)
-            for ivar in range(npars):
-                systHistos[ivar].SetBinContent(ieta+1, ipt+1, relSysts[ivar])
-                #print("eta = %.2f, pt = %.2f, syst = %.3f" % (eta,pt,relSysts[ivar]))
+        tf1_func_nomi.SetParameters(np.array([parHisto.GetBinContent(ieta+1, ip+1) for ip in range(npars)], dtype=np.dtype('d')))
+        vec = ROOT.std.vector["double"]()
+        vec = systCalc.DoEffSyst(ieta+1)
+        for ivar in range(npars):
+            startIndex = npars*ivar
+            # set parameters for a given hessian
+            tf1_func_var.SetParameters(np.array([vec[i] for i in range(startIndex, startIndex+npars)], dtype=np.dtype('d')))
+            # now loop on pt bins to fill the histogram from the function and its variations 
+            for ipt in range(nbins_pt):
+                pt = systHistos[0].GetYaxis().GetBinCenter(ipt+1)
+                if ivar:
+                    nomi = nomiHisto.GetBinContent(ieta+1, ipt+1)
+                else:
+                    nomi = tf1_func_nomi.Eval(pt)
+                    nomiHisto.SetBinContent(ieta+1, ipt+1, nomi)
+                syst = tf1_func_var.Eval(pt)
+                if getDiff:
+                    syst -= nomi
+                systHistos[ivar].SetBinContent(ieta+1, ipt+1, syst)
+
+    # another way to do it using a different method, but does the hessian shift for each pt bin which is dumb
+    # can be removed eventually
+    #
+    # for ieta in range(nbins_eta):
+    #     #eta = parHisto.GetXaxis().GetBinCenter(ieta+1)
+    #     for ipt in range(nbins_pt):
+    #         pt = systHistos[0].GetYaxis().GetBinCenter(ipt+1)
+    #         relSysts = np.array([0 for i in range(npars)],dtype=np.dtype('d'))
+    #         nomi = systCalc.DoEffSyst(ieta+1, pt, relSysts, getDiff=getDiff)
+    #         nomiHisto.SetBinContent(ieta+1, ipt+1, nomi)
+    #         for ivar in range(npars):
+    #             systHistos[ivar].SetBinContent(ieta+1, ipt+1, relSysts[ivar])
+    #             #print("eta = %.2f, pt = %.2f, syst = %.3f" % (eta,pt,relSysts[ivar]))
 
     ROOT.gStyle.SetOptStat(0)
     ROOT.gStyle.SetPalette(87)

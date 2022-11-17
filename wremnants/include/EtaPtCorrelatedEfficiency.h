@@ -27,6 +27,7 @@ namespace wrem {
         EtaPtCorrelatedEfficiency(TH3D* histocov, TH2D* histoerf, double ptmin, double ptmax);
         double DoEffSyst(int etabin, double pt, double *variations, bool getDiff=false);
         std::vector<double> DoEffSyst(int etabin, int ipar);
+        std::vector<double> DoEffSyst(int etabin);
         void setPtRange(double ptmin, double ptmax) { ptmin_ = ptmin; ptmax_ = ptmax; }
         void setSmoothingFunction(const std::string& name);
     
@@ -102,7 +103,7 @@ namespace wrem {
         const unsigned int neigenvectors = transformation.cols(); 
         Eigen::VectorXd inparv(npars);
         for (unsigned int jpar = 0; jpar < npars; ++jpar) {
-            inparv[ipar] = inpars[jpar];
+            inparv[jpar] = inpars[jpar];
         }
         // std::cout << "inparv = " << std::endl << inparv << std::endl;
         Eigen::VectorXd diagbasisv = transformation.transpose()*inparv;
@@ -120,6 +121,7 @@ namespace wrem {
         return;
     }
 
+    // method to return the actual function variations for all parameters filling the externally provided array "variations"
     double EtaPtCorrelatedEfficiency::DoEffSyst(int etabin, double pt, double *variations, bool getDiff=false) {
 
         double inpars[ndim_], outpars[ndim_];
@@ -138,6 +140,7 @@ namespace wrem {
         return nominal;
     }
 
+    // method to return a single row of parameters
     std::vector<double> EtaPtCorrelatedEfficiency::DoEffSyst(int etabin, int ipar) {
 
         if (ipar >= ndim_) {
@@ -157,6 +160,24 @@ namespace wrem {
         return ret;
     }
 
+    // method to return all parameters in a single vector
+    std::vector<double> EtaPtCorrelatedEfficiency::DoEffSyst(int etabin) {
+
+        double inpars[ndim_], outpars[ndim_];
+    
+        for (int jpar = 0; jpar < ndim_; ++jpar) {
+            inpars[jpar] = parhist_->GetBinContent(etabin, jpar+1);
+        }
+
+        std::vector<double> ret(ndim_*ndim_, 0.0);
+        for (int ipar = 0; ipar < ndim_; ++ipar) {
+            DoHessianShifts(etabin, ipar, inpars, outpars);
+            for (int jpar = 0; jpar < ndim_; ++jpar) {
+                ret[ipar * ndim_ + jpar] = outpars[jpar];
+            }
+        }
+        return ret;
+    }
     
 }
     
