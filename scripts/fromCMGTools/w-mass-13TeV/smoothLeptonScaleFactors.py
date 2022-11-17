@@ -1224,7 +1224,13 @@ if __name__ == "__main__":
     if not args.skipEff:
         ## TODO
         pass
-        
+
+    ## replot SF with variations as TH1
+    #for ieta in range(sf3D.GetNbinsX()):
+    #    hists = [sf3D.]   
+    #drawNTH1()
+    
+    
     ###########################
     # Now save things
     ###########################

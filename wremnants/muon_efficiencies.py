@@ -10,7 +10,8 @@ ROOT.gInterpreter.Declare('#include "muon_efficiencies.h"')
 
 data_dir = f"{pathlib.Path(__file__).parent}/data/"
 
-def make_muon_efficiency_helpers(filename = data_dir + "/testMuonSF/scaleFactorProduct_08Oct2022_vertexWeight_OSchargeExceptTracking.root", era = None, is_w_like = False, max_pt = np.inf):
+def make_muon_efficiency_helpers(filename = data_dir + "/testMuonSF/scaleFactorProduct_08Oct2022_vertexWeight_OSchargeExceptTracking.root", era = None, is_w_like = False, max_pt = np.inf,
+                                 smoothSF = ["iso"]):
 
     eradict = { "2016PreVFP" : "BtoF",
                 "2016PostVFP" : "GtoH" }
