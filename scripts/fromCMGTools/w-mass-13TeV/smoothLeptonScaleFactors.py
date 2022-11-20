@@ -3,9 +3,16 @@
 # Latest commands (check input file name)
 # python w-mass-13TeV/smoothLeptonScaleFactors.py /eos/user/m/mciprian/www/WMassAnalysis/TnP/egm_tnp_analysis/results_08Oct2022_binnedInPtEta_mass60to120/allSFs.root /eos/user/m/mciprian/www/WMassAnalysis/TnP/egm_tnp_analysis/results_08Oct2022_binnedInPtEta_mass60to120/smoothLeptonScaleFactors/ -s iso
 
-import ROOT, os, sys, re, array, math
+import os, re, array, math
 import argparse
 from copy import *
+
+import numpy as np
+import tensorflow as tf
+import hist
+import narf
+
+from functools import partial
 
 import utilitiesCMG
 utilities = utilitiesCMG.util()
@@ -24,6 +31,8 @@ from utility import *
 
 from make2DEffStatVariations import effStatVariations
 
+import wremnants
+
 # for a quick summary at the end
 badFitsID_data = {}
 badFitsID_mc = {}
@@ -31,6 +40,52 @@ badFitsID_sf = {}
 badCovMatrixID_data = {}
 badCovMatrixID_mc = {}
 badCovMatrixID_sf = {}
+
+# need to define functions as global below to avoid them being deleted out of fitTurnOnTF
+pol3_tf_scaled = None
+pol4_tf_scaled = None
+erfPol2_tf_scaled = None
+#############################################
+# some functions for tensorflow
+
+# for root to be consistent with functions passed to tensorflow
+def pol3_root(xvals, parms, xLowVal = 0.0, xFitRange = 1.0):
+    xscaled = (xvals[0] - xLowVal) / xFitRange
+    return parms[0] + parms[1]*xscaled + parms[2]*xscaled**2 + parms[3]*xscaled**3
+
+def pol4_root(xvals, parms, xLowVal = 0.0, xFitRange = 1.0):
+    xscaled = (xvals[0] - xLowVal) / xFitRange 
+    return parms[0] + parms[1]*xscaled + parms[2]*xscaled**2 + parms[3]*xscaled**3 + parms[4]*xscaled**4
+
+#by hand version
+def pol3_tf(xvals, parms):
+    xscaled = (xvals[0] - xvals[0][0])/(xvals[0][-1] - xvals[0][0])
+    return parms[0] + parms[1]*xscaled + parms[2]*xscaled**2 + parms[3]*xscaled**3
+
+def pol4_tf(xvals, parms):
+    xscaled = (xvals[0] - xvals[0][0])/(xvals[0][-1] - xvals[0][0])
+    return parms[0] + parms[1]*xscaled + parms[2]*xscaled**2 + parms[3]*xscaled**3 + parms[4]*xscaled**4
+
+def pol5_tf(xvals, parms):
+    xscaled = (xvals[0] - xvals[0][0])/(xvals[0][-1] - xvals[0][0])
+    return parms[0] + parms[1]*xscaled + parms[2]*xscaled**2 + parms[3]*xscaled**3 + parms[4]*xscaled**4 + parms[5]*xscaled**5
+
+#using tensforflow functions
+def pol3_tf_v2(xvals, parms):
+    coeffs = tf.unstack(tf.reverse(parms, axis=[0]))
+    return tf.math.polyval(coeffs, xvals[0])
+
+def erf_tf(xvals, parms):
+    return parms[0] * (1.0 + tf.math.erf( (xvals[0] - parms[1]) / parms[2] ))
+
+def erfPol2_tf(xvals, parms, xLowVal = 0.0, xFitRange = 1.0):
+    xscaled = (xvals[0] - xLowVal) / xFitRange
+    return  (parms[0] + parms[1] * xscaled + parms[2] * xscaled**2) * (1.0 + tf.math.erf( (xvals[0] - parms[3]) / parms[4] ))
+
+def erfRatio_tf(xvals, parms):
+    return parms[0] * (1.0 + tf.math.erf( (xvals[0] - parms[1]) / parms[2] )) / (1.0 + tf.math.erf( (xvals[0] - parms[3]) / parms[4] ))
+                       
+#############################################
 
 def getReducedChi2andLabel(func):
     if func.GetNDF():
@@ -71,410 +126,18 @@ def copyHisto(h1, h2, copyError=False):
         print("Error in copyHisto(): function not implemented for dimension > 2. Exit")
         quit()        
 
-
-def fitTurnOn(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit=True, 
-              step=None,
-              fitRange=None,
-              hist_reducedChi2=0,
-              hist_FuncParam_vs_eta=0,
-              hist_FuncCovMatrix_vs_eta=0,  # TH3, eta on x and cov matrix in yz
-              charge = "both",
-              etabins = []
-              ):
-
-    doingSF = True if mc == "SF" else False
-    if doingSF:
-        ROOT.Math.MinimizerOptions.SetDefaultMinimizer("Minuit2","Migrad")
-        ROOT.Math.MinimizerOptions.SetDefaultStrategy(2)
-    else:
-        ROOT.Math.MinimizerOptions.SetDefaultMinimizer("Minuit")
-        
-    chargeText = ""
-    if charge == "plus": chargeText = "positive"
-    if charge == "minus": chargeText = "negative"
-
-    forcePol3 = False
-    forceCheb3Always = True if doingSF else False
-    forceErfAlways = False if doingSF else True
-    
-    originalMaxPt = hist.GetXaxis().GetBinLowEdge(1+hist.GetNbinsX())
-
-    outdir = "{out}{mc}/".format(out=outname,mc=mc)
-    createPlotDirAndCopyPhp(outdir)
-
-    canvas = ROOT.TCanvas(f"canvas_{mc}_{key}","",700,700)
-    canvas.SetTickx(1)
-    canvas.SetTicky(1)
-    canvas.cd()
-    canvas.SetLeftMargin(0.14)
-    canvas.SetBottomMargin(0.12)
-    canvas.SetRightMargin(0.06)
-    canvas.cd()                           
-
-    setTDRStyle()
-
-    hist.SetLineColor(ROOT.kBlack)
-    hist.SetMarkerColor(ROOT.kBlack)
-    hist.SetMarkerStyle(20)
-    hist.SetMarkerSize(1)
-
-    hist.GetXaxis().SetTitle(f"{chargeText} muon p_{{T}} (GeV)")
-    hist.GetXaxis().SetTitleOffset(1.2)
-    hist.GetXaxis().SetTitleSize(0.05)
-    hist.GetXaxis().SetLabelSize(0.04)
-
-    if fitRange != None:
-        if fitRange[0] >= 0 and fitRange[1] >= 0:
-            hist.GetXaxis().SetRangeUser(fitRange[0], fitRange[1])
-        elif fitRange[0] >= 0:
-            hist.GetXaxis().SetRangeUser(fitRange[0], hist.GetXaxis().GetBinLowEdge(1+hist.GetNbinsX()))
-        elif fitRange[1] >= 0:
-            hist.GetXaxis().SetRangeUser(hist.GetXaxis().GetBinLowEdge(1),fitRange[1])
-
-    if mc == "SF":
-        hist.GetYaxis().SetTitle("Data/MC scale factor")
-    else:
-        hist.GetYaxis().SetTitle("{mc} efficiency".format(mc=mc))
-    hist.GetYaxis().SetTitleOffset(1.2)
-    hist.GetYaxis().SetTitleSize(0.05)
-    hist.GetYaxis().SetLabelSize(0.04)
-    miny,maxy = getMinMaxHisto(hist, sumError=True)
-    offset = 0.1 * (maxy - miny)
-    miny -= offset
-    maxy += offset
-    hist.GetYaxis().SetRangeUser(miny, maxy)
-    hist.SetStats(0)
-    hist.Draw("EP")
-
-    fitopt = "FMBQS+" # add FM if using Minuit   
-    maxFitRange = hist.GetXaxis().GetBinLowEdge(1+hist.GetNbinsX())
-    minFitRange = hist.GetXaxis().GetBinLowEdge(1)
-    if fitRange != None:
-        if "R" not in fitopt:
-            fitopt = "R" + fitopt
-        if fitRange[1] > 0:
-            maxFitRange = fitRange[1]
-        if fitRange[0] > 0:
-            minFitRange = fitRange[0]
-
-    ###################
-    # fits
-    ####################
-    # Erf defined here: https://root.cern.ch/doc/v608/namespaceTMath.html#a44e82992cba4684280c72679f0f39adc
-    # Erf(x) = (2/sqrt(pi)) Integral(exp(-t^2))dt between 0 and x 
-    tf1_erf = ROOT.TF1("tf1_erf", "[0]*TMath::Erf((x-[1])/[2])", minFitRange, maxFitRange) 
-    tf1_erf.SetParameter(0,1.0)
-    tf1_erf.SetParameter(1,38)
-    tf1_erf.SetParameter(2,3.0)
-    tf1_erf.SetLineWidth(2)
-    tf1_erf.SetLineColor(ROOT.kOrange+1)
-
-    tf1_erfRatio = ROOT.TF1("tf1_erfRatio","[0] * (1.0 + TMath::Erf((x-[1])/[2])) / (1.0 + TMath::Erf((x-[3])/[4]))", minFitRange, maxFitRange) 
-    tf1_erfRatio.SetParameter(0,1.0)
-    tf1_erfRatio.SetParameter(1,38)
-    tf1_erfRatio.SetParameter(2,3.0)
-    tf1_erfRatio.SetParameter(3,38)
-    tf1_erfRatio.SetParameter(4,3.0)
-    tf1_erfRatio.SetLineWidth(2)
-    tf1_erfRatio.SetLineColor(ROOT.kGreen+2)
-    
-    tf1_pol1 = ROOT.TF1("tf1_pol1","pol1",minFitRange,maxFitRange)
-    tf1_pol1.SetLineWidth(2)
-    tf1_pol1.SetLineColor(ROOT.kGreen+2)
-
-    tf1_pol2 = ROOT.TF1("tf1_pol2","pol2",minFitRange,maxFitRange)
-    tf1_pol2.SetLineWidth(2)
-    tf1_pol2.SetLineColor(ROOT.kRed+2)
-
-    tf1_pol3 = ROOT.TF1("tf1_pol3","pol3",minFitRange,maxFitRange)
-    tf1_pol3.SetLineWidth(2)
-    tf1_pol3.SetLineColor(ROOT.kCyan+1)
-    tf1_pol3.SetParameters(1.0, 0.0, 0.0, 0.0);
-
-    tf1_cheb3 = ROOT.TF1("tf1_cheb3","cheb3",minFitRange,maxFitRange)
-    tf1_cheb3.SetLineWidth(2)
-    #tf1_cheb3.SetLineStyle(2)
-    tf1_cheb3.SetLineColor(ROOT.kRed+2)
-    tf1_cheb3.SetParameters(1.0, 0.0, 0.0, 0.0);
-    tf1_cheb3.SetParLimits(0,  0.0, 2.0);
-    tf1_cheb3.SetParLimits(1, -0.5, 0.5);
-    tf1_cheb3.SetParLimits(2, -0.5, 0.5);
-    tf1_cheb3.SetParLimits(3, -0.5, 0.5);
-
-    tf1_cheb2 = ROOT.TF1("tf1_cheb2","cheb2",minFitRange,maxFitRange)
-    tf1_cheb2.SetLineWidth(3)
-    tf1_cheb2.SetLineStyle(2)
-    tf1_cheb2.SetLineColor(ROOT.kBlue)
-    tf1_cheb2.SetParameters(1.0, 0.0, 0.0);
-    tf1_cheb2.SetParLimits(0,  0.0, 2.0);
-    tf1_cheb2.SetParLimits(1, -0.5, 0.5);
-    tf1_cheb2.SetParLimits(2, -0.5, 0.5);
-
-    # hardcoded manual tuning for Erf parameters to fix failing fits
-    # was based on efficiencies for SMP-18-012, need to be redone for wmass, but the idea is the one below
-    # It doesn't need to be a very optimized setup, fits fail randomly sometimes so the quickest solution is the best
-    # if step == "XXX":
-    #     if charge == "both":
-    #         if mc == "Data":
-    #             if any(key == x for x in [13,14,19,21,26,28,33,34]):
-    #                 tf1_erf.SetParameter(1,32)
-    #             #elif any(key == x for x in [9,23,28]):
-    #             #    tf1_erf.SetParameter(1,27)
-    #             #    tf1_erf.SetParameter(2,2.0)
-    #         elif mc == "MC":
-    #             if any(key == x for x in [19,20,26,27,28,34]):
-    #                 tf1_erf.SetParameter(1,32)
-    #                 #tf1_erf.SetParameter(2,5.0)
-    #             elif any(key == x for x in [14]):
-    #                 tf1_erf.SetParameter(1,30)
-    #     elif charge == "plus":
-    #         # following commented was when using uncertainty from TnP txt file
-    #         # if mc == "Data":
-    #         #     if any(key == x for x in [12,14,22,25,35,40,6,7]):
-    #         #         tf1_erf.SetParameter(1,32)
-    #         # elif mc == "MC":
-    #         #     # following commented was used with point uncertainty equal to stat+syst from TnP
-    #         #     #if any(key == x for x in [12,14,22,25,33,35,40]):
-    #         #     #    tf1_erf.SetParameter(1,32)
-    #         #     if any(key == x for x in [12,14,22,25,33,35]):
-    #         #         tf1_erf.SetParameter(1,32)
-    #         if mc == "Data":
-    #             if any(key == x for x in [12,14,22,25,35,40,6,7, 20, 32, 41, 46]):
-    #                 tf1_erf.SetParameter(1,32)
-    #         elif mc == "MC":
-    #             # following commented was used with point uncertainty equal to stat+syst from TnP
-    #             #if any(key == x for x in [12,14,22,25,33,35,40]):
-    #             #    tf1_erf.SetParameter(1,32)
-    #             if any(key == x for x in [12,14,22,25,33,35, 8, 18, 30, 32]):
-    #                 tf1_erf.SetParameter(1,32)
-
-    #     elif charge == "minus":
-    #         if mc == "Data":
-    #             # following commented was when using uncertainty from TnP txt file
-    #             #if any(key == x for x in [2, 18,20,29,39,6, 9]):
-    #             #    tf1_erf.SetParameter(1,32)
-    #             if any(key == x for x in [2, 18, 29,39,6, 9, 4, 23, 32, 45]):
-    #                 # key 9 actually has an evident drop, should be RPC transition 
-    #                 # http://mciprian.web.cern.ch/mciprian/wmass/13TeV/scaleFactors_Final/muon/muFullData_trigger_fineBin_noMu50_MINUS/Data/effVsPt_Data_mu_eta9_minus.png
-    #                 # maybe here I should force pol3, or assign a large uncertainty
-    #                 tf1_erf.SetParameter(1,32)
-    #             # elif any(key == x for x in [2]):
-    #             #     tf1_erf.SetParameter(1,32)
-    #         elif mc == "MC":                    
-    #             # following commented was when using uncertainty from TnP txt file
-    #             # if any(key == x for x in [0,14,18,20,29,44,47]):
-    #             #     tf1_erf.SetParameter(1,32)
-    #             # # elif any(key == x for x in [0]):
-    #             # #     tf1_erf.SetParameter(1,32)
-    #             if any(key == x for x in [0, 18,20,29,44,47, 4, 6, 12, 14, 23, 32, 41, 45]):
-    #                 tf1_erf.SetParameter(1,32) 
-    #             elif any(key == x for x in [17]):
-    #                 tf1_erf.SetParameter(1,34)
-    #                 tf1_erf.SetParameter(2,5.0)
-                
-    erf_fitresPtr = None
-    cheb3_fitresPtr = None
-    # fit and draw (if required)
-    # for SF draw cb3 after pol3, since they might overlap
-    if doingSF:
-        cheb3_fitresPtr = hist.Fit(tf1_cheb3,fitopt)
-        cheb2_fitresPtr = hist.Fit(tf1_cheb2,fitopt+"0")
-        erfRatio_fitresPtr = hist.Fit(tf1_erfRatio,fitopt)
-        pol3_fitresPtr = hist.Fit(tf1_pol3,fitopt+"0") # do not draw pol3 here, but keep until all the mess below is cleaned
-    else:
-        erf_fitresPtr = hist.Fit(tf1_erf,fitopt)
-        pol3_fitresPtr = hist.Fit(tf1_pol3,fitopt)
-    #spl = ROOT.TSpline3(hist,"b1e1")
-    #spl.SetLineWidth(2)
-    #spl.SetLineColor(ROOT.kRed+3)
-    #spl.Draw("pclsame")
-
-    fitresPtr = cheb3_fitresPtr if doingSF else erf_fitresPtr
-    if fitresPtr != None:
-        fitstatus = int(fitresPtr)
-        #print "fit status: ", str(fitstatus)
-        #print "fit status: ", str(fitresPtr.Status())
-        # status is 0 if all is ok (if option M was used, might be 4000 in case the improve command of Minuit failed, but it is ok)
-        # without M the fit sometimes fails and should be tuned by hand (option M does it in some case)
-        if fitstatus != 0 and fitstatus != 4000: 
-            print(f"##### WARNING: FIT HAS STATUS --> {str(fitstatus)}") 
-            if mc == "Data":
-                badFitsID_data[key] = fitstatus
-            elif mc == "MC":
-                badFitsID_mc[key] = fitstatus
-            else:
-                badFitsID_sf[key] = fitstatus
-            if doingSF and int(cheb2_fitresPtr) == 0:
-                print("##### Cheb2 had good status 0")
-        cov = fitresPtr.GetCovarianceMatrix()
-        #cov.Print()
-        #print "%s" % str(fitresPtr.CovMatrix(1,1))
-        #print "Covariance matrix status = ", str(fitresPtr.CovMatrixStatus())
-        # covariance matrix status code using Minuit convention : =0 not calculated, =1 approximated, =2 made pos def , =3 accurate 
-        if fitresPtr.CovMatrixStatus() != 3: 
-            print(f"##### WARNING: COVARIANCE MATRIX HAS QUALITY --> {str(fitresPtr.CovMatrixStatus())}")
-            if mc == "Data":
-                badCovMatrixID_data[key] = fitresPtr.CovMatrixStatus()
-            elif mc == "MC":
-                badCovMatrixID_mc[key] = fitresPtr.CovMatrixStatus()
-            else:
-                badCovMatrixID_sf[key] = fitresPtr.CovMatrixStatus()
-            if doingSF and cheb2_fitresPtr.CovMatrixStatus() == 3:
-                print("##### Cheb2 had good covariance matrix with quality 3")
-                
-        if hist_FuncCovMatrix_vs_eta:
-            # erf has 3 parameters, pol3 and cheb3 have 4, should be made more general
-            npar = 4 if doingSF else 3
-            for i in range(npar):
-                for j in range(npar):
-                    hist_FuncCovMatrix_vs_eta.SetBinContent(key+1,i+1,j+1,fitresPtr.CovMatrix(i,j))
-
-    upLeg = 0.4
-    downLeg = 0.2
-    leftLeg = 0.5
-    rightLeg = 0.9
-    if mc == "SF":
-        upLeg = 0.85
-        downLeg = 0.65
-        leftLeg = 0.6
-        rightLeg = 0.9
-        
-    leg = ROOT.TLegend(leftLeg, downLeg, rightLeg, upLeg)
-    leg.SetFillColor(0)
-    leg.SetFillStyle(0)
-    leg.SetBorderSize(0)
-
-    legEntry = {}
-    legEntry[tf1_erf.GetName()]  = "Erf[x]"
-    legEntry[tf1_pol3.GetName()] = "pol3"
-    legEntry[tf1_cheb3.GetName()] = "cheb3"
-    legEntry[tf1_cheb2.GetName()] = "cheb2"
-    legEntry[tf1_pol1.GetName()] = "pol1"
-    legEntry[tf1_pol2.GetName()] = "pol2"
-    legEntry[tf1_erfRatio.GetName()] = "erfRatio"
-    if doingSF:
-        leg.AddEntry(tf1_cheb3,  legEntry[tf1_cheb3.GetName()], 'LF')
-        #leg.AddEntry(tf1_cheb2,  legEntry[tf1_cheb2.GetName()], 'LF')  
-        leg.AddEntry(tf1_erfRatio, legEntry[tf1_erfRatio.GetName()], 'LF')  
-    else:
-        leg.AddEntry(tf1_erf,  legEntry[tf1_erf.GetName()], 'LF')
-        leg.AddEntry(tf1_pol3, legEntry[tf1_pol3.GetName()], "LF")
-    #leg.AddEntry(spl,"spline", "LF")
-    leg.Draw('same')
-
-    canvas.RedrawAxis("sameaxis")
-
-    setTDRStyle()
-    ROOT.gStyle.SetOptTitle(1)  # use histogram title with binning as canvas title
-
-    fit_erf =  hist.GetFunction(tf1_erf.GetName()) if not doingSF else None
-    fit_pol3 = hist.GetFunction(tf1_pol3.GetName())
-    fit_cheb3 = hist.GetFunction(tf1_cheb3.GetName()) if doingSF else None
-    fit_cheb2 = hist.GetFunction(tf1_cheb2.GetName()) if doingSF else None
-    fit_erfRatio = hist.GetFunction(tf1_erfRatio.GetName()) if doingSF else None
-    
-    functions = {}
-    functions[tf1_erf.GetName()] = fit_erf
-    functions[tf1_pol3.GetName()] = fit_pol3
-    functions[tf1_cheb3.GetName()] = fit_cheb3
-    functions[tf1_erfRatio.GetName()] = fit_erfRatio
-    functions[tf1_cheb2.GetName()] = fit_cheb2
-    
-    lat = ROOT.TLatex()
-    line = ""
-    lineChi2 = ""
-    lat.SetNDC();
-    lat.SetTextSize(0.045);
-    lat.SetTextFont(42);
-    lat.SetTextColor(1);
-
-    chi2 = 1000000.0
-    funcMinChi2 = None
-    for name in functions.keys():
-        if name == "tf1_pol3": continue
-        f = functions[name]
-        #print "Name: %s func %s" % (name, f)                                                                                                                    
-        if f == None: continue
-        if f.GetNDF() == 0: continue
-        if f.GetChisquare() < chi2:
-            chi2 = f.GetChisquare()
-            funcMinChi2 = f
-    if funcMinChi2 == None:
-        print("ERROR: no function found with at least 1 degree of freedom")
-        quit()
-    #print("Function %s had the best Chi2/Ndof: %.3f/%d among non-pol3" % (funcMinChi2.GetName(),funcMinChi2.GetChisquare(),funcMinChi2.GetNDF()))
-    #print("pol3 Chi2/Ndof: %.3f/%d" % (fit_pol3.GetChisquare(),fit_pol3.GetNDF()))
-    if forcePol3:
-        retFunc = fit_pol3
-    else:
-        #print(funcMinChi2.GetName())
-        nChi2Sigma = abs(funcMinChi2.GetChisquare()-funcMinChi2.GetNDF())/math.sqrt(2.0*funcMinChi2.GetNDF())  # Chi2 variance is 2*Ndof
-        nChi2Sigma_pol3 = abs(fit_pol3.GetChisquare()-fit_pol3.GetNDF())/math.sqrt(2.0*fit_pol3.GetNDF()) if fit_pol3.GetNDF() else 999
-        # pol3 will generally fit very well also in case of weird points
-        # for good looking points, pol3 might be better because it can change curvature, while other functions cannot (which would be more physical)
-        # allow non-pol3 fit to have Chi2 within 2 standard deviation from the expected one
-        # in this case choose that value, otherwise use the one closer to expected Chisquare
-        if nChi2Sigma < 5.0:
-            retFunc = funcMinChi2
-            #print("HERE")
-        elif nChi2Sigma_pol3 < nChi2Sigma:
-            retFunc = fit_pol3
-        else:
-            retFunc = funcMinChi2
-            
-    line = "Best fit: " + legEntry[retFunc.GetName()] + (" (forced)" if forcePol3 else "")
-    if forceErfAlways and retFunc.GetName() != fit_erf.GetName():
-            retFunc = fit_erf
-            line = "Best fit: Erf[x] (forced)"
-    if forceCheb3Always and retFunc.GetName() != fit_cheb3.GetName():
-            retFunc = fit_cheb3
-            line = "Best fit: cheb3 (forced)"
-            
-    reducedChi2, lineChi2 = getReducedChi2andLabel(retFunc)
-    if hist_reducedChi2:
-        hist_reducedChi2.Fill(reducedChi2)
-    if hist_chosenFunc:
-        hist_chosenFunc.Fill(retFunc.GetName(), 1)
-    
-    xmin = 0.20 
-    yhi = 0.85
-    lat.DrawLatex(xmin, yhi, line);
-    lat.DrawLatex(xmin, yhi-0.05, lineChi2);
-    tmpch = ""
-    if charge != "both":
-        tmpch = "_" + charge
-    for ext in ["pdf","png"]:
-        if mc == "SF":
-            canvas.SaveAs("{out}sf_pt_{ch}_eta{b}{charge}.{ext}".format(out=outdir,ch=channel,b=key,charge=tmpch,ext=ext))            
-        else:
-            canvas.SaveAs("{out}eff{mc}_pt_{ch}_eta{b}{charge}.{ext}".format(out=outdir,mc=mc,ch=channel,b=key,charge=tmpch,ext=ext))                            
-
-    if hist_FuncParam_vs_eta:
-        # key is the eta bin number, but starts from 0, so add 1
-        if doingSF:
-            for ip in range(retFunc.GetNpar()):
-                hist_FuncParam_vs_eta.SetBinContent(key+1, ip+1, retFunc.GetParameter(ip))
-                hist_FuncParam_vs_eta.SetBinError(  key+1, ip+1, retFunc.GetParError(ip))
-        else:
-            if retFunc.GetName() == tf1_erf.GetName():
-                for ip in range(retFunc.GetNpar()):
-                    hist_FuncParam_vs_eta.SetBinContent(key+1, ip+1, retFunc.GetParameter(ip))
-                    hist_FuncParam_vs_eta.SetBinError(  key+1, ip+1, retFunc.GetParError(ip))
-    
-    # some last moment hand-fix for some bins if needed
-    # if False:
-    #     message = f">>> Warning: returning pol3 for key {key} in {mc} as interpolating function"
-    #     if charge == "plus":
-    #         if (mc == "MC" and any(key == x for x in [9,38])) or (mc == "Data" and any(key == x for x in [38])):
-    #             print(message)
-    #             return fit_pol3
-    #     elif charge == "minus":        
-    #         if (mc == "MC" and any(key == x for x in [9,38])) or (mc == "Data" and any(key == x for x in [9])):
-    #             print(message)
-    #             return fit_pol3
-
-    return retFunc
-
+def make1Dhist(namePrefix, h2D, ptbins, step):
+    hpt = {}
+    for x in range(1, h2D.GetNbinsX()+1):
+        binID = x-1
+        hpt[binID] = ROOT.TH1D(f"{namePrefix}_{binID}",
+                               "%s: %.4g < #eta < %.4g" % (step, h2D.GetXaxis().GetBinLowEdge(x), h2D.GetXaxis().GetBinLowEdge(x+1)),
+                               len(ptbins)-1, array('d',ptbins)
+        )
+        for y in range(1, h2D.GetNbinsY()+1):
+            hpt[binID].SetBinContent(y, h2D.GetBinContent(x,y))         
+            hpt[binID].SetBinError(y, h2D.GetBinError(x,y))
+    return hpt
 
 def smoothSpline(hist, key, outname, channel="mu", drawFit=True):
 
@@ -537,13 +200,13 @@ def smoothSpline(hist, key, outname, channel="mu", drawFit=True):
 
 def smoothSomeFile(fname,hname,outname,outfilename,channel,widthPt):
 
-    tf = ROOT.TFile.Open(fname)        
-    hist = tf.Get(hname)
+    tfile = ROOT.TFile.Open(fname)        
+    hist = tfile.Get(hname)
     if (hist == 0):
         print(f"Error: could not retrieve hist from input file {fname}. Exit")
         quit()
     hist.SetDirectory(0)
-    tf.Close()
+    tfile.Close()
 
     etabins = hist.GetXaxis().GetXbins()
     ptbins  = hist.GetYaxis().GetXbins()
@@ -580,17 +243,343 @@ def smoothSomeFile(fname,hname,outname,outfilename,channel,widthPt):
     drawCorrelationPlot(histSmooth,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),"Smoothed value::-0.2,1.2",
                         "smooth_{hn}".format(hn=hname),"ForceTitle",outname,palette=55)
 
-    tf = ROOT.TFile.Open(outname+outfilename,'recreate')
+    tfile = ROOT.TFile.Open(outname+outfilename,'recreate')
     histSmooth.Write()
     hist.Write("histOriginal")
-    tf.Close()
+    tfile.Close()
     print()
     print(f"Created file {outname+outfilename}")
     print()
     return 0
     
 ############
+
+def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit=True, 
+                step=None,
+                fitRange=None,
+                hist_reducedChi2=0,
+                hist_FuncParam_vs_eta=0,
+                hist_FuncCovMatrix_vs_eta=0,  # TH3, eta on x and cov matrix in yz
+                charge = "both",
+                etabins = []
+):
+
+    doingSF = True if mc == "SF" else False
+        
+    chargeText = ""
+    if charge == "plus": chargeText = "positive"
+    if charge == "minus": chargeText = "negative"
     
+    originalMaxPt = hist.GetXaxis().GetBinLowEdge(1+hist.GetNbinsX())
+
+    outdir = "{out}{mc}/".format(out=outname,mc=mc)
+    createPlotDirAndCopyPhp(outdir)
+
+    canvas = ROOT.TCanvas(f"canvas_{mc}_{key}","",700,700)
+    canvas.SetTickx(1)
+    canvas.SetTicky(1)
+    canvas.cd()
+    canvas.SetLeftMargin(0.14)
+    canvas.SetBottomMargin(0.12)
+    canvas.SetRightMargin(0.06)
+    canvas.cd()                           
+
+    setTDRStyle()
+
+    hist.SetLineColor(ROOT.kBlack)
+    hist.SetMarkerColor(ROOT.kBlack)
+    hist.SetMarkerStyle(20)
+    hist.SetMarkerSize(1)
+
+    hist.GetXaxis().SetTitle(f"{chargeText} muon p_{{T}} (GeV)")
+    hist.GetXaxis().SetTitleOffset(1.1)
+    hist.GetXaxis().SetTitleSize(0.05)
+    hist.GetXaxis().SetLabelSize(0.04)
+
+    if fitRange != None:
+        if fitRange[0] >= 0 and fitRange[1] >= 0:
+            hist.GetXaxis().SetRangeUser(fitRange[0], fitRange[1])
+        elif fitRange[0] >= 0:
+            hist.GetXaxis().SetRangeUser(fitRange[0], hist.GetXaxis().GetBinLowEdge(1+hist.GetNbinsX()))
+        elif fitRange[1] >= 0:
+            hist.GetXaxis().SetRangeUser(hist.GetXaxis().GetBinLowEdge(1),fitRange[1])
+
+    if mc == "SF":
+        hist.GetYaxis().SetTitle("Data/MC scale factor")
+    else:
+        hist.GetYaxis().SetTitle("{mc} efficiency".format(mc=mc))
+    hist.GetYaxis().SetTitleOffset(1.4)
+    hist.GetYaxis().SetTitleSize(0.05)
+    hist.GetYaxis().SetLabelSize(0.04)
+    miny,maxy = getMinMaxHisto(hist, sumError=True)
+    offset = 0.1 * (maxy - miny)
+    upOffset = offset * (2.5 if doingSF else 3.4)
+    miny -= offset
+    maxy += upOffset
+    hist.GetYaxis().SetRangeUser(miny, maxy)
+    hist.SetStats(0)
+    hist.Draw("EP")
+
+    maxFitRange = hist.GetXaxis().GetBinLowEdge(1+hist.GetNbinsX())
+    minFitRange = hist.GetXaxis().GetBinLowEdge(1)
+    if fitRange != None:
+        if fitRange[1] > 0:
+            maxFitRange = fitRange[1]
+        if fitRange[0] > 0:
+            minFitRange = fitRange[0]
+    ##
+    ## TODO
+    ## Unlike root, tensorflow fits use the bin centers to run the actual fit, and there is no concept of fit range
+    ## so, if one wants to fit a subset of the histogram range one needs to pass the slice of the boost histogram
+    ## currently this is not implemented
+        
+            
+    ###################
+    # fits
+    ####################
+    # Erf defined here: https://root.cern.ch/doc/v608/namespaceTMath.html#a44e82992cba4684280c72679f0f39adc
+    # Erf(x) = (2/sqrt(pi)) Integral(exp(-t^2))dt between 0 and x 
+    boost_hist = narf.root_to_hist(hist)
+
+    ###############################################################
+    fitFunction = None
+    fitres_TF = None
+    defaultFunc = ""
+    badFitsID = None
+    badCovMatrixID = None
+    
+    xFitRange = maxFitRange - minFitRange
+
+    if doingSF:
+        #binCenter1 = hist.GetXaxis().GetBinCenter(1)
+        #xHistRange = hist.GetXaxis().GetBinCenter(hist.GetNbinsX()) - binCenter1 # use bin centers for consistency with xvals in tensorflow fits
+        global pol3_tf_scaled
+        if pol3_tf_scaled == None:
+            pol3_tf_scaled = partial(pol3_root, xLowVal=minFitRange, xFitRange=xFitRange)
+        params = np.array([1.0, 0.0, 0.0, 0.0])
+        res_tf1_pol3 = narf.fit_hist(boost_hist, pol3_tf_scaled, params)
+        tf1_pol3 = ROOT.TF1("tf1_pol3", pol3_tf_scaled, minFitRange, maxFitRange, len(params))
+        tf1_pol3.SetParameters( np.array( res_tf1_pol3["x"], dtype=np.dtype('d') ) )
+        tf1_pol3.SetLineWidth(3)
+        tf1_pol3.SetLineColor(ROOT.kRed+2)
+
+        # tf1_pol3_test = ROOT.TF1("tf1_pol3_test", pol3_tf_scaled, minFitRange, maxFitRange, len(params))
+        # tf1_pol3_test.SetParameters( np.array( res_tf1_pol3["x"], dtype=np.dtype('d') ) )
+        # tf1_pol3_test.SetLineStyle(ROOT.kDashed)
+        # tf1_pol3_test.SetLineWidth(5)
+        # tf1_pol3_test.SetLineColor(ROOT.kBlue)
+        # fitopt = "FMBRQS+" # add FM if using Minuit   
+        # hist.Fit(tf1_pol3_test, fitopt)
+        
+        fitres_TF = {"pol3_tf" : res_tf1_pol3}
+        fitFunction = {
+            "pol3_tf" : {
+                "func" : tf1_pol3,
+                "leg"  : "Pol3",
+            }
+        }
+        defaultFunc = "pol3_tf"
+        badFitsID = badFitsID_sf
+        badCovMatrixID = badCovMatrixID_sf
+    else:
+        # global erfPol2_tf_scaled
+        # erfPol2_tf_scaled = partial(erfPol2_tf, xLowVal=minFitRange, xFitRange=xFitRange)
+        # params = np.array([1.0, 0.0, 0.0, 35.0, 3.0])
+        # res_tf1_erfPol2 = narf.fit_hist(boost_hist, erfPol2_tf_scaled, params)
+        # tf1_erfPol2 = ROOT.TF1("tf1_erfPol2", erfPol2_tf_scaled, minFitRange, maxFitRange, len(params))
+        # tf1_erfPol2.SetParameters( np.array( res_tf1_erfPol2["x"], dtype=np.dtype('d') ) )
+        # tf1_erfPol2.SetLineWidth(2)
+        # tf1_erfPol2.SetLineStyle(ROOT.kDashed)
+        # tf1_erfPol2.SetLineColor(ROOT.kGreen+2)
+
+        tf1_erf = ROOT.TF1("tf1_erf","[0] * (1.0 + TMath::Erf((x-[1])/[2]))", minFitRange, maxFitRange)
+        res_tf1_erf = narf.fit_hist(boost_hist, erf_tf, np.array([1.0, 35.0, 3.0]))
+        tf1_erf.SetParameters( np.array( res_tf1_erf["x"], dtype=np.dtype('d') ) )
+        tf1_erf.SetLineWidth(2)
+        tf1_erf.SetLineStyle(ROOT.kDashed)
+        tf1_erf.SetLineColor(ROOT.kBlue)
+
+        global pol4_tf_scaled
+        if pol4_tf_scaled == None:
+            pol4_tf_scaled = partial(pol4_root, xLowVal=minFitRange, xFitRange=xFitRange)        
+        params = np.array([1.0, 0.0, 0.0, 0.0, 0.0])
+        res_tf1_pol4 = narf.fit_hist(boost_hist, pol4_tf_scaled, params)
+        tf1_pol4 = ROOT.TF1("tf1_pol4", pol4_tf_scaled, minFitRange, maxFitRange, len(params))
+        tf1_pol4.SetParameters( np.array( res_tf1_pol4["x"], dtype=np.dtype('d') ) )
+        tf1_pol4.SetLineWidth(3)
+        tf1_pol4.SetLineColor(ROOT.kRed+2)
+        #
+        fitres_TF = {"erf" : res_tf1_erf,
+                     "pol4_tf" : res_tf1_pol4,
+                     #"erfPol2_tf" : res_tf1_erfPol2
+        }
+        fitFunction = {
+            "pol4_tf" : {
+                "func" : tf1_pol4,
+                "leg"  : "Pol4",
+            },
+            "erf" : {
+                "func" : tf1_erf,
+                "leg"  : "Erf",
+            },
+            # "erfPol2_tf" : {
+            #     "func" : tf1_erfPol2,
+            #     "leg"  : "ErfPol2",
+            # },
+        }
+        defaultFunc = "pol4_tf"
+        if mc == "MC":
+            badFitsID = badFitsID_mc
+            badCovMatrixID = badCovMatrixID_mc
+        else:
+            badFitsID = badFitsID_data
+            badCovMatrixID = badCovMatrixID_data
+
+    ###############################################################
+            
+    for fr in fitres_TF.keys():
+        status = fitres_TF[fr]["status"]
+        covstatus = fitres_TF[fr]["covstatus"]
+        if status:
+            print(f"Function {fr} had status {status}")
+            if key not in badFitsID.keys():
+                badFitsID[key] = {}
+            badFitsID[key][fr] = status
+        if covstatus:
+            print(f"Function {fr} had covstatus {covstatus}")
+            if key not in badCovMatrixID.keys():
+                badCovMatrixID[key] = {}
+            badCovMatrixID[key][fr] = covstatus
+
+    npar = fitFunction[defaultFunc]["func"].GetNpar()
+    
+    if hist_FuncCovMatrix_vs_eta:
+        for i in range(npar):
+            for j in range(npar):
+                hist_FuncCovMatrix_vs_eta.SetBinContent(key+1, i+1, j+1, fitres_TF[defaultFunc]["cov"][i][j])
+
+    if hist_FuncParam_vs_eta:
+        # key is the eta bin number, but starts from 0, so add 1
+        for ip in range(npar):
+            hist_FuncParam_vs_eta.SetBinContent(key+1, ip+1, fitres_TF[defaultFunc]["x"][ip])
+            hist_FuncParam_vs_eta.SetBinError(  key+1, ip+1, math.sqrt(fitres_TF[defaultFunc]["cov"][ip][ip]))
+
+    hband = ROOT.TH1D("hband", "", int((maxFitRange-minFitRange)/0.2), minFitRange, maxFitRange)
+    hband.SetStats(0)
+    hband.SetFillColor(ROOT.kGray)
+    #hband.SetFillStyle(3001)
+    for ib in range(1, hband.GetNbinsX()+1):
+        pt = hband.GetBinCenter(ib)
+        hband.SetBinContent(ib, fitFunction[defaultFunc]["func"].Eval(pt))
+    # eigen decomposition to plot alternate curves
+    #
+    # can pass full histogram, eta bin to use is set below
+    systCalc = ROOT.wrem.EtaPtCorrelatedEfficiency(hist_FuncCovMatrix_vs_eta, hist_FuncParam_vs_eta, minFitRange, maxFitRange)
+    systCalc.setSmoothingFunction(defaultFunc)    
+    vecUp = ROOT.std.vector["double"]()
+    vecUp = systCalc.DoEffSyst(key+1)
+    #systCalc.setEigenShift(-1.0); # shift down
+    #vecDown = systCalc.DoEffSyst(key+1)
+
+    ## some functions cannot be cloned, although in python it might work
+    ##
+    #tf1_func_alt = copy.deepcopy(fitFunction[defaultFunc]["func"].Clone("tf1_func_alt"))
+    #tf1_func_alt = copy.deepcopy(fitFunction[defaultFunc]["func"])
+    tf1_func_alt = ROOT.TF1()
+    tf1_func_alt.SetName("tf1_func_alt")
+    fitFunction[defaultFunc]["func"].Copy(tf1_func_alt)
+    tf1_func_alt.SetLineWidth(1)
+    for ib in range(1, hband.GetNbinsX()+1):
+        pt = hband.GetBinCenter(ib)
+        err2 = 0.0
+        for ivar in range(npar):
+            startIndex = npar*ivar
+            # set parameters for a given hessian
+            tf1_func_alt.SetParameters(np.array([vecUp[i] for i in range(startIndex, startIndex+npar)], dtype=np.dtype('d')))
+            diff = tf1_func_alt.Eval(pt) - hband.GetBinContent(ib)
+            err2 += diff * diff 
+        hband.SetBinError(ib, math.sqrt(err2))
+
+    hband.Draw("E4SAME")
+    # redraw to have them on top
+    hist.Draw("EPSAME")
+    for f in fitFunction.keys():
+        fitFunction[f]["func"].Draw("LSAME")
+        
+    colors_alt = [ROOT.kCyan+1, ROOT.kGreen+2, ROOT.kBlue, ROOT.kSpring+9, ROOT.kOrange+2, ROOT.kPink, ROOT.kViolet, ROOT.kMagenta]
+    for ivar in range(npar):
+        startIndex = npar*ivar
+        # set parameters for a given hessian
+        tf1_func_alt.SetParameters(np.array([vecUp[i] for i in range(startIndex, startIndex+npar)], dtype=np.dtype('d')))
+        #tf1_func_alt.SetLineStyle(ROOT.kDotted)
+        tf1_func_alt.SetLineColor(colors_alt[ivar])
+        tf1_func_alt.DrawCopy("LSAME") # can also not draw these lines, too busy plot otherwise
+        #tf1_func_alt.SetParameters(np.array([vecDown[i] for i in range(startIndex, startIndex+npar)], dtype=np.dtype('d')))
+        #tf1_func_alt.DrawCopy("LSAME") # can also not draw these lines, too busy plot otherwise
+        
+    #######
+    nFits = len(fitFunction.keys())
+
+    upLeg = 0.9
+    downLeg = max(0.6, upLeg - 0.06 * (nFits + 1)) # +1 to include the eror band
+    leftLeg = 0.2
+    rightLeg = 0.9
+        
+    leg = ROOT.TLegend(leftLeg, downLeg, rightLeg, upLeg)
+    leg.SetFillColor(0)
+    #leg.SetFillStyle(0)
+    leg.SetBorderSize(0)
+    leg.SetFillColorAlpha(0,0.6)
+    
+    # for chosen function
+    reducedChi2 = 0.0
+    for f in fitFunction.keys():
+        chi2 = fitres_TF[f]["loss_val"]
+        ndof = int(hist.GetNbinsX() - fitFunction[f]["func"].GetNpar())
+        legEntry = fitFunction[f]["leg"] + f"   #chi^{{2}} = {round(chi2,1)} / {ndof}"
+        chi2_nsigma = abs(chi2 - ndof) / math.sqrt(2.0 * ndof) 
+        if chi2_nsigma > 3.0:
+            legEntry += " BAD!"
+        leg.AddEntry(fitFunction[f]["func"], legEntry, 'L')  
+        if f == defaultFunc:
+            reducedChi2 = chi2/ndof
+    leg.AddEntry(hband, "Model uncertainty", 'F')
+    leg.Draw('same')
+    canvas.RedrawAxis("sameaxis")
+
+    setTDRStyle()
+    ROOT.gStyle.SetOptTitle(1)  # use histogram title with binning as canvas title
+
+    if hist_reducedChi2:
+        hist_reducedChi2.Fill(reducedChi2)
+    if hist_chosenFunc:
+        hist_chosenFunc.Fill(defaultFunc, 1)
+
+    # lat = ROOT.TLatex()
+    # line = ""
+    # lineChi2 = ""
+    # lat.SetNDC();
+    # lat.SetTextSize(0.045);
+    # lat.SetTextFont(42);
+    # lat.SetTextColor(1);        
+    # xmin = 0.20 
+    # yhi = 0.85
+    # lat.DrawLatex(xmin, yhi, line);
+    # lat.DrawLatex(xmin, yhi-0.05, lineChi2);
+    
+    tmpch = ""
+    if charge != "both":
+        tmpch = "_" + charge
+    for ext in ["pdf","png"]:
+        if mc == "SF":
+            canvas.SaveAs("{out}sf_pt_{ch}_eta{b}{charge}.{ext}".format(out=outdir,ch=channel,b=key,charge=tmpch,ext=ext))            
+        else:
+            canvas.SaveAs("{out}eff{mc}_pt_{ch}_eta{b}{charge}.{ext}".format(out=outdir,mc=mc,ch=channel,b=key,charge=tmpch,ext=ext))                            
+    
+    return fitFunction[defaultFunc]["func"]
+
+######
+
 minmaxSF = {"trigger"      : "0.65,1.15",
             "idip"         : "0.95,1.01",
             "iso"          : "0.975,1.025",
@@ -614,7 +603,7 @@ if __name__ == "__main__":
     parser.add_argument('-r','--pt-fit-range', dest='ptFitRange', type=float, nargs=2, default=[-1, -1], help='Pt range fo the fit: pass two values for min and max. If one of them (or both) is negative, the corresponding histogram range is used')
     parser.add_argument('-w','--width-pt',     dest='widthPt',default='0.2', type=float, help='Pt bin width for the smoothed histogram')
     parser.add_argument(     '--set-max-pt-histo',     dest='setMaxPtHisto', default='-1.0', type=float, help='Set upper pt for output histograms. If negative use default max from input histograms')
-    parser.add_argument(     '--save-TF1', dest='saveTF1',action="store_true", default=False, help='Save TF1 as well, not just TH2 with many bins')
+    #parser.add_argument(     '--save-TF1', dest='saveTF1',action="store_true", default=False, help='Save TF1 as well, not just TH2 with many bins')
     parser.add_argument(    '--input-hist-names', dest='inputHistNames', default='', type=str, help='Pass comma separated list of 3  names, for eff(data),eff(MC),SF, to be used instead of the default names')
     parser.add_argument(     '--palette'  , dest='palette',      default=87, type=int, help='Set palette: default is a built-in one, 55 is kRainbow')
     parser.add_argument(     '--skip-eff', dest='skipEff', action="store_true", default=False, help='Skip efficiencies and do only SF (to save time and if one only wants to smooth SF directly)')
@@ -643,16 +632,16 @@ if __name__ == "__main__":
     if len(args.inputHistNames):
         datahistname,mchistname,sfhistname = args.inputHistNames.split(",")
     
-    tf = safeOpenFile(args.inputfile[0])
-    hsf =   safeGetObject(tf, sfhistname)
+    tfile = safeOpenFile(args.inputfile[0])
+    hsf =   safeGetObject(tfile, sfhistname)
     if args.skipEff:
         hdata = copy.deepcopy(hsf.Clone("data_dummy"))
         hdata.Reset("ICESM")
         hmc = copy.deepcopy(hdata.Clone("mc_dummy"))
     else:
-        hdata = safeGetObject(tf, datahistname)
-        hmc =   safeGetObject(tf, mchistname)
-    tf.Close()
+        hdata = safeGetObject(tfile, datahistname)
+        hmc =   safeGetObject(tfile, mchistname)
+    tfile.Close()
         
     etabins = [round(hdata.GetXaxis().GetBinLowEdge(i), 1) for i in range(1, 2 + hdata.GetNbinsX())]
     ptbins =  [round(hdata.GetYaxis().GetBinLowEdge(i), 1) for i in range(1, 2 + hdata.GetNbinsY())]
@@ -794,25 +783,11 @@ if __name__ == "__main__":
 
     # hmc and hdata have eta on X and pt on Y
     # we select slices at constant eta and fit along pt with some function
-    # let's select an error function 
-
-    def make1Dhist(namePrefix, h2D, ptbins, step):
-        hpt = {}
-        for x in range(1, h2D.GetNbinsX()+1):
-            binID = x-1
-            hpt[binID] = ROOT.TH1D(f"{namePrefix}_{binID}",
-                                     "%s: %.4g < #eta < %.4g" % (step, h2D.GetXaxis().GetBinLowEdge(x), h2D.GetXaxis().GetBinLowEdge(x+1)),
-                                     len(ptbins)-1, array('d',ptbins)
-            )
-            for y in range(1, h2D.GetNbinsY()+1):
-                hpt[binID].SetBinContent(y, h2D.GetBinContent(x,y))         
-                hpt[binID].SetBinError(y, h2D.GetBinError(x,y))
-        return hpt
 
     label = args.step + (args.charge if args.charge != "both" else "")
     hmcpt = make1Dhist("hmcpt", hmc, ptbins, label)
     hdatapt = make1Dhist("hdatapt", hdata, ptbins, label)
-    hsfpt = make1Dhist("hsfpt", hsf, ptbins, args.step)
+    hsfpt = make1Dhist("hsfpt", hsf, ptbins, label)
 
     bestFit_MC = {}
     bestFit_Data = {}
@@ -821,15 +796,15 @@ if __name__ == "__main__":
         # first MC
         ###########################
         for key in hmcpt:
-            bestFitFunc = fitTurnOn(hmcpt[key], key, outname, "MC",channel=channel,
-                                    hist_chosenFunc=hist_chosenFunc, 
-                                    step=args.step,
-                                    fitRange=args.ptFitRange,
-                                    hist_reducedChi2=hist_reducedChi2_MC,
-                                    hist_FuncParam_vs_eta=hist_FuncParam_vs_eta_mc,
-                                    hist_FuncCovMatrix_vs_eta=hist_FuncCovMatrix_vs_eta_mc,
-                                    charge=args.charge,
-                                    etabins=etabins)
+            bestFitFunc = fitTurnOnTF(hmcpt[key], key, outname, "MC",channel=channel,
+                                      hist_chosenFunc=hist_chosenFunc, 
+                                      step=args.step,
+                                      fitRange=args.ptFitRange,
+                                      hist_reducedChi2=hist_reducedChi2_MC,
+                                      hist_FuncParam_vs_eta=hist_FuncParam_vs_eta_mc,
+                                      hist_FuncCovMatrix_vs_eta=hist_FuncCovMatrix_vs_eta_mc,
+                                      charge=args.charge,
+                                      etabins=etabins)
             bestFit_MC["smoothFunc_MC_ieta%d" % key] = bestFitFunc
             for ipt in range(1, hmcSmoothCheck.GetNbinsY()+1):
                 ptval = hmcSmoothCheck.GetYaxis().GetBinCenter(ipt)
@@ -843,14 +818,14 @@ if __name__ == "__main__":
         ###########################
         for key in hdatapt:
 
-            bestFitFunc = fitTurnOn(hdatapt[key],key,outname, "Data",channel=channel,hist_chosenFunc=hist_chosenFunc, 
-                                    step=args.step,
-                                    fitRange=args.ptFitRange,
-                                    hist_reducedChi2=hist_reducedChi2_data,
-                                    hist_FuncParam_vs_eta=hist_FuncParam_vs_eta_data,
-                                    hist_FuncCovMatrix_vs_eta=hist_FuncCovMatrix_vs_eta_data,
-                                    charge=args.charge,
-                                    etabins=etabins)
+            bestFitFunc = fitTurnOnTF(hdatapt[key],key,outname, "Data",channel=channel,hist_chosenFunc=hist_chosenFunc, 
+                                      step=args.step,
+                                      fitRange=args.ptFitRange,
+                                      hist_reducedChi2=hist_reducedChi2_data,
+                                      hist_FuncParam_vs_eta=hist_FuncParam_vs_eta_data,
+                                      hist_FuncCovMatrix_vs_eta=hist_FuncCovMatrix_vs_eta_data,
+                                      charge=args.charge,
+                                      etabins=etabins)
             bestFit_Data["smoothFunc_Data_ieta%d" % key] = bestFitFunc
             for ipt in range(1,hdataSmoothCheck.GetNbinsY()+1):
                 ptval = hdataSmoothCheck.GetYaxis().GetBinCenter(ipt)
@@ -867,12 +842,12 @@ if __name__ == "__main__":
     bestFit_SF = {}
     for key in hsfpt:
         
-        bestFitFunc = fitTurnOn(hsfpt[key],key,outname, "SF",channel=channel,hist_chosenFunc=hist_chosenFunc_SF, 
-                                step=args.step,
-                                fitRange=args.ptFitRange, hist_reducedChi2=hist_reducedChi2_sf,
-                                hist_FuncParam_vs_eta=hist_FuncParam_vs_eta_sf,
-                                hist_FuncCovMatrix_vs_eta=hist_FuncCovMatrix_vs_eta_sf,
-                                charge=args.charge, etabins=etabins)
+        bestFitFunc = fitTurnOnTF(hsfpt[key],key,outname, "SF",channel=channel,hist_chosenFunc=hist_chosenFunc_SF, 
+                                  step=args.step,
+                                  fitRange=args.ptFitRange, hist_reducedChi2=hist_reducedChi2_sf,
+                                  hist_FuncParam_vs_eta=hist_FuncParam_vs_eta_sf,
+                                  hist_FuncCovMatrix_vs_eta=hist_FuncCovMatrix_vs_eta_sf,
+                                  charge=args.charge, etabins=etabins)
         bestFit_SF["smoothFunc_SF_ieta%d" % key] = bestFitFunc
         for ipt in range(1,hsfSmoothCheck.GetNbinsY()+1):
             ptval = hsfSmoothCheck.GetYaxis().GetBinCenter(ipt)
@@ -1214,27 +1189,21 @@ if __name__ == "__main__":
     ### Do eigen deconvolution on scale factors or efficiencies as appropriate
     ### Should check that covariance matrices are well defined everywhere for this to make sense
     sf3D = None
-    print()
-    print("Running eigen decomposition on scale factors ...")
-    print()
-    sf3D = effStatVariations(outname+"/eigenDecomposition/", hist_FuncCovMatrix_vs_eta_sf, hist_FuncParam_vs_eta_sf,
-                             nFinePtBins, minPtHistoData, maxPtHistoData, smoothFunction="cheb3", suffix="SF", palette=args.palette)
-    sf3D.SetTitle("Nominal in first Z bin, eigen vars for cheb3 elsewhere")
+    # print()
+    # print("Running eigen decomposition on scale factors ...")
+    # print()
+    # sf3D = effStatVariations(outname+"/eigenDecomposition/", hist_FuncCovMatrix_vs_eta_sf, hist_FuncParam_vs_eta_sf,
+    #                          nFinePtBins, minPtHistoData, maxPtHistoData, smoothFunction="pol3_tf", suffix="SF", palette=args.palette)
+    # sf3D.SetTitle("Nominal in first Z bin, eigen vars elsewhere")
     print()
     if not args.skipEff:
         ## TODO
-        pass
-
-    ## replot SF with variations as TH1
-    #for ieta in range(sf3D.GetNbinsX()):
-    #    hists = [sf3D.]   
-    #drawNTH1()
-    
+        pass    
     
     ###########################
     # Now save things
     ###########################
-    tf = ROOT.TFile.Open(outname+outfilename,'recreate')
+    tfile = ROOT.TFile.Open(outname+outfilename,'recreate')
     hdataSmoothCheck.Write()
     hmcSmoothCheck.Write()
     hsfSmoothCheck.Write()
@@ -1249,14 +1218,14 @@ if __name__ == "__main__":
     hist_FuncCovMatrix_vs_eta_data.Write("hist_FuncCovMatrix_vs_eta_data")
     hist_FuncCovMatrix_vs_eta_mc.Write("hist_FuncCovMatrix_vs_eta_mc")
     hist_FuncCovMatrix_vs_eta_sf.Write("hist_FuncCovMatrix_vs_eta_sf")
-    if args.saveTF1:
-        for key in bestFit_MC:
-            bestFit_MC[key].Write(key)
-        for key in bestFit_Data:
-            bestFit_Data[key].Write(key)
+    # if args.saveTF1:
+    #     for key in bestFit_MC:
+    #         bestFit_MC[key].Write(key)
+    #     for key in bestFit_Data:
+    #         bestFit_Data[key].Write(key)
     if sf3D:
         sf3D.Write("SF2D_withEigenVars")
-    tf.Close()
+    tfile.Close()
     print()
     print(f"Created file {outname+outfilename}")
     print()
@@ -1264,7 +1233,7 @@ if __name__ == "__main__":
     print("="*30)
     print("Summary of bad fits (Erf for data/MC and pol3 for SF)")
     print("="*30)
-    print("### Bad fit status (Data/MC,  key,  fitstatus)")
+    print("### Bad fit status (Data/MC/SF,  key,  fitstatus)")
     for key in sorted(badFitsID_data.keys()):
         print(f"DATA  {key}  {badFitsID_data[key]}")
     for key in sorted(badFitsID_mc.keys()):

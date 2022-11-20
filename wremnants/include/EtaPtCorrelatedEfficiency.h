@@ -13,6 +13,7 @@
 //#include <stdio.h>
 #include <cstdlib> 
 #include <cstdio>
+#include <cmath>
 #include <iostream>
 #include <string>
 #include <fstream>
@@ -20,17 +21,100 @@
 
 namespace wrem {
 
+    // ================================================
+    // Some functions to be used for EtaPtCorrelatedEfficiency
+    // ================================================
+    // TODO:
+    // put functions in another header file
+    // write a base class to make all functions derive from, at least for polynomials
+    // write a generic class for polynomials
+    class pol3_custom {
+    public:
+        pol3_custom() {};
+        pol3_custom(const double& xMin, const double& xRange) {
+            xMinNorm_ = xMin;
+            xRangeNorm_ = xRange;
+        };
+        double operator() (double *x, double *p) {
+            double xscaled = (x[0] - xMinNorm_) / xRangeNorm_;
+            return p[0] + p[1]*xscaled + p[2]*std::pow(xscaled,2) + p[3]*std::pow(xscaled,3);
+        }
+        void setPolynomialArgument(const double& xMin, const double& xRange) {
+            xMinNorm_ = xMin;
+            xRangeNorm_ = xRange;
+        }
+        int getNparams() { return nparams_; }
+    protected:
+        // to normalize polynomial argument
+        int nparams_ = 4;
+        double xMinNorm_ = 0.0;
+        double xRangeNorm_ = 1.0;
+    };
+
+    class pol4_custom {
+    public:
+        pol4_custom() {};
+        pol4_custom(const double& xMin, const double& xRange) {
+            xMinNorm_ = xMin;
+            xRangeNorm_ = xRange;
+        };
+        double operator() (double *x, double *p) {
+            double xscaled = (x[0] - xMinNorm_) / xRangeNorm_;
+            return p[0] + p[1]*xscaled + p[2]*std::pow(xscaled,2) + p[3]*std::pow(xscaled,3) + p[4]*std::pow(xscaled,4);
+        }
+        void setPolynomialArgument(const double& xMin, const double& xRange) {
+            xMinNorm_ = xMin;
+            xRangeNorm_ = xRange;
+        }
+        int getNparams() { return nparams_; }
+    protected:
+        // to normalize polynomial argument
+        int nparams_ = 5;
+        double xMinNorm_ = 0.0;
+        double xRangeNorm_ = 1.0;
+    };
+
+    // // TODO: could use a generic polynomial using previous classes
+    // class erfPol2_custom {
+    // public:
+    //     erfPol2_custom() {};
+    //     erfPol2_custom(const double& xMin, const double& xRange) {
+    //         xMinNorm_ = xMin;
+    //         xRangeNorm_ = xRange;
+    //     };
+    //     double operator() (double *x, double *p) {
+    //         double xscaled = (x[0] - xMinNorm_) / xRangeNorm_;
+    //         return (p[0] + p[1]*xscaled + p[2]*std::pow(xscaled,2)) * (1.0 + TMath::Erf((x[0]-p[3])/p[4]));
+    //     }
+    //     void setPolynomialArgument(const double& xMin, const double& xRange) {
+    //         xMinNorm_ = xMin;
+    //         xRangeNorm_ = xRange;
+    //     }
+    //     int getNparams() { return nparams_; }
+    // protected:
+    //     // to normalize polynomial argument
+    //     int nparams_ = 5;
+    //     double xMinNorm_ = 0.0;
+    //     double xRangeNorm_ = 1.0;
+    // };
+
+    // ================================================
+    
     class EtaPtCorrelatedEfficiency {
-  
+
+        // TODO: if a destructor is explicitly defined, add copy constructor and assignment operator, even though I won't use any of those
+        
     public:
   
         EtaPtCorrelatedEfficiency(TH3D* histocov, TH2D* histoerf, double ptmin, double ptmax);
+        // ~EtaPtCorrelatedEfficiency();
         double DoEffSyst(int etabin, double pt, double *variations, bool getDiff=false);
         std::vector<double> DoEffSyst(int etabin, int ipar);
         std::vector<double> DoEffSyst(int etabin);
-        void setPtRange(double ptmin, double ptmax) { ptmin_ = ptmin; ptmax_ = ptmax; }
+        // void setPtRange(double ptmin, double ptmax) { ptmin_ = ptmin; ptmax_ = ptmax; } // not used currently, should modify function ranges accordingly
         void setSmoothingFunction(const std::string& name);
-    
+        void setEigenShift(double shift) {eigenShift_ = shift; }
+        
     protected:
 
         Eigen::MatrixXd covariance(int etabin);
@@ -42,14 +126,26 @@ namespace wrem {
         int ndim_ = 4;
         double ptmin_ = 0.0;
         double ptmax_ = 100.0;
+        double eigenShift_ = 1.0;
         TF1* function_ = nullptr;
         // list of predefined functions
-        TF1* tf1_cheb3_ = new TF1("tf1_cheb3", "cheb3", ptmin_, ptmax_);
-        TF1* tf1_cheb2_ = new TF1("tf1_cheb2", "cheb2", ptmin_, ptmax_);
+        TF1* tf1_pol3_ = new TF1("tf1_pol3_", "pol3", ptmin_, ptmax_);
+        TF1* tf1_pol2_ = new TF1("tf1_pol2_", "pol2", ptmin_, ptmax_);
+        TF1* tf1_erf_ = new TF1("tf1_erf_", "[0] * (1.0 + TMath::Erf((x-[1])/[2]))", ptmin_, ptmax_);
+        pol3_custom pol3_tf_;
+        TF1* tf1_pol3_tf_ = nullptr;
+        pol4_custom pol4_tf_;
+        TF1* tf1_pol4_tf_ = nullptr;
+        // erfPol2_custom erfPol2_tf_;
+        // TF1* tf1_erfPol2_tf_ = nullptr;
     };
 
 
-    EtaPtCorrelatedEfficiency::EtaPtCorrelatedEfficiency(TH3D* histocov, TH2D* histoerf, double ptmin, double ptmax) {
+    EtaPtCorrelatedEfficiency::EtaPtCorrelatedEfficiency(TH3D* histocov, TH2D* histoerf, double ptmin, double ptmax):
+        pol3_tf_(ptmin, ptmax),
+        pol4_tf_(ptmin, ptmax)
+        // erfPol2_tf_(ptmin, ptmax)
+    {
         covhist_ = histocov;
         int ny = covhist_->GetNbinsY();
         int nz = covhist_->GetNbinsZ();
@@ -58,17 +154,41 @@ namespace wrem {
         parhist_ = histoerf;
         ptmin_ = ptmin;
         ptmax_ = ptmax;
-        setSmoothingFunction("cheb3");
-    
+        setSmoothingFunction("pol3_tf");
     }
+    // EtaPtCorrelatedEfficiency::~EtaPtCorrelatedEfficiency() {
+    //     function_ = nullptr;
+    //     delete tf1_pol3_;
+    //     delete tf1_pol2_;
+    //     delete tf1_erf_;
+    //     delete tf1_pol3_tf_;
+    //     delete tf1_pol4_tf_;
+    // //     delete tf1_erfPol2_tf_;
+    // }
 
     void EtaPtCorrelatedEfficiency::setSmoothingFunction(const std::string& name) {
+        // TODO: if case I add more functions, find a smarte way to find the good one
         smoothFunctionName_ = name;
-        if (name.find("cheb3") != std::string::npos) {
-            function_ = tf1_cheb3_;
+        if (name.find("pol3_tf") != std::string::npos) {     
+            tf1_pol3_tf_ = new TF1("tf1_pol3_tf_", pol3_tf_, ptmin_, ptmax_, pol3_tf_.getNparams());
+            function_ = tf1_pol3_tf_;
+            ndim_ = tf1_pol3_tf_->GetNpar();
+        } else if (name.find("pol4_tf") != std::string::npos) {
+            tf1_pol4_tf_ = new TF1("tf1_pol4_tf_", pol4_tf_, ptmin_, ptmax_, pol4_tf_.getNparams());
+            function_ = tf1_pol4_tf_;
+            ndim_ = tf1_pol4_tf_->GetNpar();
+        // } else if (name.find("erfPol2_tf") != std::string::npos) {
+        //     tf1_erfPol2_tf_ = new TF1("tf1_erfPol2_tf_", erfPol2_tf_, ptmin_, ptmax_, erfPol2_tf_.getNparams());
+        //     function_ = tf1_erfPol2_tf_;
+        //     ndim_ = tf1_erfPol2_tf_->GetNpar();
+        } else if (name.find("pol3") != std::string::npos) {
+            function_ = tf1_pol3_;
             ndim_ = 4;   
-        } else if (name.find("cheb2") != std::string::npos) {
-            function_ = tf1_cheb2_;
+        } else if (name.find("pol2") != std::string::npos) {
+            function_ = tf1_pol2_;
+            ndim_ = 3;
+        } else if (name.find("erf") != std::string::npos) {
+            function_ = tf1_erf_;
             ndim_ = 3;
         } else {
             std::cout << "Smoothing function " << name << " not implemented. Abort" << std::endl;
@@ -76,7 +196,6 @@ namespace wrem {
         }
         return;
     }
-
 
     Eigen::MatrixXd EtaPtCorrelatedEfficiency::covariance(int etabin) {
         Eigen::MatrixXd covMat(ndim_, ndim_);
@@ -110,7 +229,7 @@ namespace wrem {
         // std::cout << "diagbasisv = " << std::endl << diagbasisv << std::endl;
 
         // shift one of them by the diagonal uncertainty (uncorrelated in this basis)
-        diagbasisv[ipar] += sqrt(eigenv[ipar]);
+        diagbasisv[ipar] += eigenShift_ * sqrt(eigenv[ipar]);
 
         // transform the pars back in the original basis
         Eigen::VectorXd outparv = transformation*diagbasisv;
