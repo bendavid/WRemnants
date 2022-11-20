@@ -18,7 +18,7 @@ from utility import *
 import wremnants
 
 def effStatVariations(outdir, covHisto, parHisto, nbins_pt, ptmin, ptmax,
-                      smoothFunction="cheb3", suffix=None,
+                      smoothFunction="pol3", suffix=None,
                       skipPlot=False, getDiff=True, palette=87):
 
     lepton = "Muon"
@@ -61,20 +61,6 @@ def effStatVariations(outdir, covHisto, parHisto, nbins_pt, ptmin, ptmax,
                 if getDiff:
                     syst -= nomi
                 systHistos[ivar].SetBinContent(ieta+1, ipt+1, syst)
-
-    # another way to do it using a different method, but does the hessian shift for each pt bin which is dumb
-    # can be removed eventually
-    #
-    # for ieta in range(nbins_eta):
-    #     #eta = parHisto.GetXaxis().GetBinCenter(ieta+1)
-    #     for ipt in range(nbins_pt):
-    #         pt = systHistos[0].GetYaxis().GetBinCenter(ipt+1)
-    #         relSysts = np.array([0 for i in range(npars)],dtype=np.dtype('d'))
-    #         nomi = systCalc.DoEffSyst(ieta+1, pt, relSysts, getDiff=getDiff)
-    #         nomiHisto.SetBinContent(ieta+1, ipt+1, nomi)
-    #         for ivar in range(npars):
-    #             systHistos[ivar].SetBinContent(ieta+1, ipt+1, relSysts[ivar])
-    #             #print("eta = %.2f, pt = %.2f, syst = %.3f" % (eta,pt,relSysts[ivar]))
 
     ROOT.gStyle.SetOptStat(0)
     ROOT.gStyle.SetPalette(87)
@@ -132,7 +118,7 @@ if __name__ == "__main__":
     parser.add_argument("-p", "--parTH2", dest="parameters", type=str, default="hist_FuncParam_vs_eta_sf",     help="TH2D histogram containing eta as x-axis and N parameters of fit function as y-axis")
     parser.add_argument("-s", "--suffix", type=str, default=None, help="suffix for the ROOT file and plots")
     parser.add_argument("--ptbins", default=None, nargs=3, type=str, required=True, help="Pass npt, ptmin, ptmax, for the smoothed histogram")
-    parser.add_argument("-f", "--smoothFunction", type=str, default="cheb3", choices=["cheb3"], help="Smoothing function")
+    parser.add_argument("-f", "--smoothFunction", type=str, default="pol3", choices=["pol3", "pol2", "erf"], help="Smoothing function")
     parser.add_argument(     '--plotDiff', action="store_true", help="Plot variations of the interpolation functions (alt-nomi), instead of the alternate function itself (but note that what is saved in the output file is always the alternate regardless)")    
     args = parser.parse_args()
 
