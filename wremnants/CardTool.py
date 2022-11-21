@@ -252,7 +252,7 @@ class CardTool(object):
 
     def systHists(self, hvar, syst):
         if syst == self.nominalName:
-            return ([self.nominalName], [hvar])
+            return {self.nominalName : hvar}
 
         systInfo = self.systematics[syst] 
         systAxes = systInfo["systAxes"]
@@ -295,11 +295,12 @@ class CardTool(object):
             if not len(systInfo["outNames"]):
                 raise RuntimeError(f"All entries for syst {syst} were skipped!")
 
-        variations = []
-        for entry in entries:
-            sel = {ax : binnum for ax,binnum in zip(axNames, entry)}
-            variations.append(hvar[sel])
-        return systInfo["outNames"], variations
+        variations = [hvar[{ax : binnum for ax,binnum in zip(axNames, entry)}] for entry in entries]
+        if len(variations) != len(systInfo["outNames"]):
+            logger.warning(f"The number of variations doesn't match the number of names for "
+                f"syst {syst}. Found {len(syst_info['outNames'])} names and {len(variations)} variations.")
+
+        return {name : var for name,var in zip(systInfo["outNames"], variations) if name}
 
     def variationName(self, proc, name):
         if name == self.nominalName:
@@ -312,6 +313,21 @@ class CardTool(object):
     def addMirror(self, h, proc, syst):
         return syst != self.nominalName and self.systematics[syst]["mirror"]
 
+    def checkSysts(self, hnom, var_map, thresh=0.25):
+        #if self.check_variations:
+        var_names = set([name.replace("Up", "").replace("Down", "") for name in var_map.keys() if name])
+        if len(var_names) != len(var_map.keys())/2:
+            raise ValueError(f"Invalid syst names! Expected an up/down variation for each syst. Found {var_map.keys()}")
+        for name in var_names:
+            up = var_map[name+"Up"]
+            down = var_map[name+"Down"]
+            up_relsign = np.sign(up.values()-hnom.values())
+            down_relsign = np.sign(down.values()-hnom.values())
+            vars_sameside = (up_relsign != 0) & (up_relsign == down_relsign)
+            perc_sameside = np.count_nonzero(vars_sameside)/hnom.size 
+            if perc_sameside > thresh:
+                logger.warning(f"{perc_sameside:.0%} bins are one sided for syst {name}!")
+
     def writeForProcess(self, h, proc, syst):
         if self.addMirror(h, proc, syst):
             hnom = self.procDict[proc][self.nominalName]
@@ -319,15 +335,15 @@ class CardTool(object):
         # Otherwise this is a processes not affected by the variation, don't write it out,
         # it's only needed for the fake subtraction
         logger.info(f"Writing systematic {syst} for process {proc}")
-        var_names, variations = self.systHists(h, syst) 
-        if len(var_names) != len(variations):
-            logger.warning(f"The number of variations doesn't match the number of names for "
-                f"process {proc}, syst {syst}. Found {len(var_names)} names and {len(variations)} variations.")
+        var_map = self.systHists(h, syst) 
+        # TODO: Make this optional
+        if syst != "nominal":
+            self.checkSysts(self.procDict[proc][self.nominalName], var_map)
         setZeroStatUnc = False
         if proc in self.noStatUncProcesses:
             logger.info(f"Zeroing statistical uncertainty for process {proc}")
             setZeroStatUnc = True
-        for name, var in zip(var_names, variations):
+        for name, var in var_map.items():
             if name != "":
                 self.writeHist(var, self.variationName(proc, name), setZeroStatUnc=setZeroStatUnc)
 
