@@ -74,7 +74,7 @@ def syst_transform_map(base_hist, hist_name):
         if any([x in k for x in ["QCDscale", "resum", "pdf"]]):
             v["procs"] = common.vprocs 
             if any([x in k for x in ["QCDscale", "resum", ]]):
-                unc = "qcdScale" if "QCDscale" in k else "scetlibMSHT20Corr_unc"
+                unc = "qcdScale" if "QCDscale" in k else "scetlibCorr_unc"
                 v["hist"] = unc if base_hist == "nominal" else f"{base_hist}_{unc}"
 
     return transforms

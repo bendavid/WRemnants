@@ -188,6 +188,9 @@ def define_weights_and_corrs(df, weight_expr, dataset_name, helpers, args):
     if dataset_name in common.vprocs+common.vprocs_lowpu:
         df = df.Define("nominal_pdf_cen", pdf_central_weight(dataset_name, args.pdfs[0]))
         weight_expr = f"{weight_expr}*nominal_pdf_cen"
+        if args.highptscales:
+            weight_expr = f"{weight_expr}*MEParamWeightAltSet3[0]"
+
     df = define_prefsr_vars(df)
 
     if args.theory_corr and dataset_name in helpers:

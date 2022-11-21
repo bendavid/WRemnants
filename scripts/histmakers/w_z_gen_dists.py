@@ -24,14 +24,16 @@ datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt 
 
 axis_massWgen = hist.axis.Variable([5., 1300.], name="massVgen", underflow=True, overflow=False)
 
-axis_massZgen = hist.axis.Regular(12, 60., 120., name="massVgen")
+#axis_massZgen = hist.axis.Regular(12, 60., 120., name="massVgen")
+axis_massZgen = hist.axis.Regular(10, 60., 120., name="massVgen")
 
 axis_absYVgen = hist.axis.Variable(
     [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4, 5], 
     name = "absYVgen", underflow=False
 )
 axis_ptVgen = hist.axis.Variable(
-    range(0,121), name = "ptVgen", underflow=False,
+    list(range(0,151))+[160., 190.0, 220.0, 250.0, 300.0, 400.0, 500.0, 800.0, 1500.0], 
+    name = "ptVgen", underflow=False,
 )
 
 axis_chargeWgen = hist.axis.Regular(
@@ -141,7 +143,7 @@ for dataset in datasets:
 if z_moments and w_moments:
     # REMINDER: common.ptV_binning is not the one using 10% quantiles, and the quantiles are not a subset of this binning, but apparently it doesn't matter
     z_moments = hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning)
-    z_moments = hh.rebinHist(z_moments, axis_massZgen.name, [70, 80, 85, 90, 95, 100, 110])
+    z_moments = hh.rebinHist(z_moments, axis_massZgen.name, axis_massZgen.edges[::2])
     z_moments = hh.rebinHist(z_moments, axis_absYVgen.name, axis_absYVgen.edges[:-1])
     w_moments = hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning)
     w_moments = hh.rebinHist(w_moments, axis_absYVgen.name, axis_absYVgen.edges[:-1])
