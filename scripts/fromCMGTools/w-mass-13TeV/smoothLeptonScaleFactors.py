@@ -274,35 +274,50 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
 
     outdir = "{out}{mc}/".format(out=outname,mc=mc)
     createPlotDirAndCopyPhp(outdir)
-
-    canvas = ROOT.TCanvas(f"canvas_{mc}_{key}","",700,700)
+    adjustSettings_CMS_lumi()
+    
+    leftMargin = 0.14
+    rightMargin = 0.06
+    canvas = ROOT.TCanvas(f"canvas_{mc}_{key}","",700,900)
     canvas.SetTickx(1)
     canvas.SetTicky(1)
     canvas.cd()
-    canvas.SetLeftMargin(0.14)
+    canvas.SetLeftMargin(leftMargin)
     canvas.SetBottomMargin(0.12)
-    canvas.SetRightMargin(0.06)
+    canvas.SetRightMargin(rightMargin)
     canvas.cd()                           
 
     setTDRStyle()
-
+    lowerPanelHeight = 0.3 # for bottom panel with pulls or residuals
+    canvas.SetBottomMargin(lowerPanelHeight)
+    pad2 = ROOT.TPad("pad2","pad2",0,0.,1,0.9)
+    pad2.SetTopMargin(1-lowerPanelHeight)
+    pad2.SetRightMargin(rightMargin)
+    pad2.SetLeftMargin(leftMargin)
+    pad2.SetFillColor(0)
+    pad2.SetGridy(1)
+    pad2.SetFillStyle(0)
+    
     hist.SetLineColor(ROOT.kBlack)
     hist.SetMarkerColor(ROOT.kBlack)
     hist.SetMarkerStyle(20)
     hist.SetMarkerSize(1)
+    
+    hist.GetXaxis().SetLabelSize(0)
+    hist.GetXaxis().SetTitle("")
+    # hist.GetXaxis().SetTitle(f"{chargeText} muon p_{{T}} (GeV)")
+    # hist.GetXaxis().SetTitleOffset(1.1)
+    # hist.GetXaxis().SetTitleSize(0.05)
+    # hist.GetXaxis().SetLabelSize(0.04)
 
-    hist.GetXaxis().SetTitle(f"{chargeText} muon p_{{T}} (GeV)")
-    hist.GetXaxis().SetTitleOffset(1.1)
-    hist.GetXaxis().SetTitleSize(0.05)
-    hist.GetXaxis().SetLabelSize(0.04)
-
+    maxFitRange = hist.GetXaxis().GetBinLowEdge(1+hist.GetNbinsX())
+    minFitRange = hist.GetXaxis().GetBinLowEdge(1)
     if fitRange != None:
-        if fitRange[0] >= 0 and fitRange[1] >= 0:
-            hist.GetXaxis().SetRangeUser(fitRange[0], fitRange[1])
-        elif fitRange[0] >= 0:
-            hist.GetXaxis().SetRangeUser(fitRange[0], hist.GetXaxis().GetBinLowEdge(1+hist.GetNbinsX()))
-        elif fitRange[1] >= 0:
-            hist.GetXaxis().SetRangeUser(hist.GetXaxis().GetBinLowEdge(1),fitRange[1])
+        if fitRange[1] > 0:
+            maxFitRange = fitRange[1]
+        if fitRange[0] > 0:
+            minFitRange = fitRange[0]
+    hist.GetXaxis().SetRangeUser(minFitRange, maxFitRange)
 
     if mc == "SF":
         hist.GetYaxis().SetTitle("Data/MC scale factor")
@@ -319,14 +334,6 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
     hist.GetYaxis().SetRangeUser(miny, maxy)
     hist.SetStats(0)
     hist.Draw("EP")
-
-    maxFitRange = hist.GetXaxis().GetBinLowEdge(1+hist.GetNbinsX())
-    minFitRange = hist.GetXaxis().GetBinLowEdge(1)
-    if fitRange != None:
-        if fitRange[1] > 0:
-            maxFitRange = fitRange[1]
-        if fitRange[0] > 0:
-            minFitRange = fitRange[0]
     ##
     ## TODO
     ## Unlike root, tensorflow fits use the bin centers to run the actual fit, and there is no concept of fit range
@@ -450,7 +457,16 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
             if key not in badCovMatrixID.keys():
                 badCovMatrixID[key] = {}
             badCovMatrixID[key][fr] = covstatus
-
+        ## security check on chi2, to make sure TF1 for plotting is consistent with actual fit    
+        manualChi2 = 0.0
+        for ib in range(1, 1+hist.GetNbinsX()):
+            pt = hist.GetXaxis().GetBinCenter(ib)
+            item = (hist.GetBinContent(ib) - fitFunction[fr]["func"].Eval(pt))/hist.GetBinError(ib)
+            manualChi2 += item * item
+        fitChi2 = fitres_TF[fr]["loss_val"]
+        if abs(manualChi2 - fitChi2) > 0.01:
+            print(f"{fr}: manual/fit chi2  = {manualChi2}/{fitChi2}")
+            
     npar = fitFunction[defaultFunc]["func"].GetNpar()
     
     if hist_FuncCovMatrix_vs_eta:
@@ -471,20 +487,30 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
     for ib in range(1, hband.GetNbinsX()+1):
         pt = hband.GetBinCenter(ib)
         hband.SetBinContent(ib, fitFunction[defaultFunc]["func"].Eval(pt))
-    # eigen decomposition to plot alternate curves
+
     #
-    # can pass full histogram, eta bin to use is set below
-    systCalc = ROOT.wrem.EtaPtCorrelatedEfficiency(hist_FuncCovMatrix_vs_eta, hist_FuncParam_vs_eta, minFitRange, maxFitRange)
-    systCalc.setSmoothingFunction(defaultFunc)    
-    vecUp = ROOT.std.vector["double"]()
-    vecUp = systCalc.DoEffSyst(key+1)
+    # eigen decomposition to plot alternate curves, using the C++ helper
+    #
+    ## can pass full histogram, eta bin to use is set below
+    #systCalc = ROOT.wrem.EtaPtCorrelatedEfficiency(hist_FuncCovMatrix_vs_eta, hist_FuncParam_vs_eta, minFitRange, maxFitRange)
+    #systCalc.setSmoothingFunction(defaultFunc)    
+    #vecUp = ROOT.std.vector["double"]()
+    #vecUp = systCalc.DoEffSyst(key+1)
     #systCalc.setEigenShift(-1.0); # shift down
     #vecDown = systCalc.DoEffSyst(key+1)
 
+    #can also try the eigen decomposition in the python way with numpy
+    # e, v = np.linalg.eigh(fitres_TF[defaultFunc]["cov"])
+    # altpar_i = fitrs["x"] +/- np.sqrt(e[i])*v[:, i]
+    # where altpar_i is a full set of parameters
+    
     ## some functions cannot be cloned, although in python it might work
     ##
     #tf1_func_alt = copy.deepcopy(fitFunction[defaultFunc]["func"].Clone("tf1_func_alt"))
     #tf1_func_alt = copy.deepcopy(fitFunction[defaultFunc]["func"])
+
+    # diagonalize and get eigenvalues and eigenvectors
+    e, v = np.linalg.eigh(fitres_TF[defaultFunc]["cov"])                                                                                                                                                                 
     tf1_func_alt = ROOT.TF1()
     tf1_func_alt.SetName("tf1_func_alt")
     fitFunction[defaultFunc]["func"].Copy(tf1_func_alt)
@@ -495,7 +521,9 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
         for ivar in range(npar):
             startIndex = npar*ivar
             # set parameters for a given hessian
-            tf1_func_alt.SetParameters(np.array([vecUp[i] for i in range(startIndex, startIndex+npar)], dtype=np.dtype('d')))
+            altParameters = fitres_TF[defaultFunc]["x"] + np.sqrt(e[ivar])*v[:, ivar] # this is for Up variations, Down ones could not be the mirror image
+            tf1_func_alt.SetParameters(np.array(altParameters, dtype=np.dtype('d')))
+            #tf1_func_alt.SetParameters(np.array([vecUp[i] for i in range(startIndex, startIndex+npar)], dtype=np.dtype('d')))
             diff = tf1_func_alt.Eval(pt) - hband.GetBinContent(ib)
             err2 += diff * diff 
         hband.SetBinError(ib, math.sqrt(err2))
@@ -513,15 +541,15 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
         tf1_func_alt.SetParameters(np.array([vecUp[i] for i in range(startIndex, startIndex+npar)], dtype=np.dtype('d')))
         #tf1_func_alt.SetLineStyle(ROOT.kDotted)
         tf1_func_alt.SetLineColor(colors_alt[ivar])
-        tf1_func_alt.DrawCopy("LSAME") # can also not draw these lines, too busy plot otherwise
+        #tf1_func_alt.DrawCopy("LSAME") # can also not draw these lines, too busy plot otherwise
         #tf1_func_alt.SetParameters(np.array([vecDown[i] for i in range(startIndex, startIndex+npar)], dtype=np.dtype('d')))
         #tf1_func_alt.DrawCopy("LSAME") # can also not draw these lines, too busy plot otherwise
         
     #######
     nFits = len(fitFunction.keys())
 
-    upLeg = 0.9
-    downLeg = max(0.6, upLeg - 0.06 * (nFits + 1)) # +1 to include the eror band
+    upLeg = 0.92
+    downLeg = max(0.5, upLeg - 0.06 * (nFits + 1)) # +1 to include the eror band
     leftLeg = 0.2
     rightLeg = 0.9
         
@@ -566,6 +594,109 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
     # yhi = 0.85
     # lat.DrawLatex(xmin, yhi, line);
     # lat.DrawLatex(xmin, yhi-0.05, lineChi2);
+
+    # Now the bottom panel
+    pad2.Draw()
+    pad2.cd()
+
+    frame = hist.Clone("frame")
+    frame.SetTitle("")
+    frame.GetXaxis().SetTitleOffset(1.2)
+    frame.GetXaxis().SetTitleSize(0.05)
+    frame.GetXaxis().SetLabelSize(0.04)
+    frame.SetStats(0)
+    frame.Reset("ICES")
+    frame.GetXaxis().SetRangeUser(minFitRange, maxFitRange)
+    frame.GetYaxis().SetNdivisions(5)
+    denLabel = fitFunction[defaultFunc]["leg"]
+    frame.GetYaxis().SetTitle(f"X / {denLabel}") # or Pulls
+    frame.GetYaxis().SetTitleOffset(1.4)
+    frame.GetYaxis().SetTitleSize(0.05)
+    frame.GetYaxis().SetLabelSize(0.04)
+    frame.GetYaxis().CenterTitle()
+    frame.GetXaxis().SetTitle(f"{chargeText} muon p_{{T}} (GeV)")
+
+    # to draw Pulls
+    # pulls = []
+    # defaultIndex = 0
+    # for ifunc,f in enumerate(fitFunction.keys()):
+    #     pull = copy.deepcopy(hist.Clone(f"pull_{f}"))
+    #     pull.Reset("ICESM")
+    #     pull.SetLineColor(fitFunction[f]["func"].GetLineColor())
+    #     pull.SetLineWidth(2)
+    #     pull.SetLineStyle(fitFunction[f]["func"].GetLineStyle())
+    #     if f == defaultFunc:
+    #         pull.SetFillColor(fitFunction[f]["func"].GetLineColor())
+    #         defaultIndex = ifunc
+    #     for ib in range(1, 1 + pull.GetNbinsX()):
+    #         pull.SetBinContent(ib, (hist.GetBinContent(ib) - fitFunction[f]["func"].Eval(hist.GetBinCenter(ib))) / hist.GetBinError(ib))
+    #     pulls.append(pull)
+
+    # miny, maxy = getMinMaxMultiHisto(pulls, excludeEmpty=True, sumError=False,
+    #                                        excludeUnderflow=True, excludeOverflow=True)
+    # diffy = maxy - miny
+    # offset = 0.05
+    # miny -= offset * diffy
+    # maxy += offset * diffy
+    # frame.GetYaxis().SetRangeUser(miny, maxy)
+    # frame.Draw()    
+    # for ip,p in enumerate(ratios):
+    #     drawOpt = "F" if ip == defaultIndex else "HIST"         
+    #     p.Draw(f"{drawOpt}SAME")    
+
+    ratios = []
+    defaultIndex = 0
+    den_noerr = copy.deepcopy(hband.Clone("den_noerr"))
+    den = copy.deepcopy(hband.Clone("den"))
+    den.SetTitle("")    
+    for iBin in range (1, den_noerr.GetNbinsX()+1):
+        den_noerr.SetBinError(iBin, 0.)
+    den.Divide(den_noerr)
+    for ifunc,f in enumerate(fitFunction.keys()):
+        if f == defaultFunc:
+            continue
+        ratio = copy.deepcopy(hband.Clone(f"ratio_{f}"))
+        ratio.Reset("ICESM")
+        ratio.SetMarkerSize(0)
+        ratio.SetMarkerStyle(0)
+        ratio.SetLineColor(fitFunction[f]["func"].GetLineColor())
+        ratio.SetLineWidth(2)
+        ratio.SetFillColor(0)
+        ratio.SetLineStyle(fitFunction[f]["func"].GetLineStyle())
+        for ib in range(1, 1 + ratio.GetNbinsX()):
+            xval = ratio.GetBinCenter(ib)
+            ratio.SetBinContent(ib, fitFunction[f]["func"].Eval(xval)/ den_noerr.GetBinContent(ib))
+        ratios.append(ratio)
+    # now data which is less granular
+    dataRatio = copy.deepcopy(hist.Clone("dataRatio"))
+    for ib in range(1, 1 + dataRatio.GetNbinsX()):
+        ibinDen = hband.GetXaxis().FindFixBin(dataRatio.GetBinCenter(ib))
+        denVal = hband.GetBinContent(ibinDen)
+        dataRatio.SetBinContent(ib, dataRatio.GetBinContent(ib) / denVal)
+        dataRatio.SetBinError(  ib, dataRatio.GetBinError(ib)   / denVal)
+        
+    miny, maxy = getMinMaxMultiHisto(ratios+[den, dataRatio], excludeEmpty=True, sumError=True,
+                                     excludeUnderflow=True, excludeOverflow=True)
+
+    diffy = maxy - miny
+    offset = 0.1
+    miny -= offset * diffy
+    maxy += offset * diffy
+    frame.GetYaxis().SetRangeUser(miny, maxy)
+    frame.Draw()
+    den.Draw("E4SAME")
+    denOnlyLine = copy.deepcopy(den.Clone("denOnlyLine"))
+    denOnlyLine.SetFillColor(0)
+    denOnlyLine.SetLineWidth(1)
+    denOnlyLine.SetLineColor(fitFunction[defaultFunc]["func"].GetLineColor())
+    denOnlyLine.Draw("HIST SAME")
+    for ip,p in enumerate(ratios):
+        drawOpt = "C" # like HIST but smooth curve through points
+        p.Draw(f"{drawOpt}SAME")    
+    dataRatio.Draw("EP SAME")
+    pad2.RedrawAxis("sameaxis")
+
+    #---------------------------------
     
     tmpch = ""
     if charge != "both":
@@ -578,7 +709,7 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
     
     return fitFunction[defaultFunc]["func"]
 
-######
+############################################################################
 
 minmaxSF = {"trigger"      : "0.65,1.15",
             "idip"         : "0.95,1.01",
@@ -691,11 +822,11 @@ if __name__ == "__main__":
     hist_chosenFunc_SF.GetXaxis().SetBinLabel(2, "tf1_pol2")
     hist_chosenFunc_SF.GetXaxis().SetBinLabel(3, "tf1_pol3")
 
-    hist_reducedChi2_data = ROOT.TH1D("reducedChi2_data", "Reduced #chi^{2}", 50, 0, 5) # will not have many entries (~100 depending on how many eta bins)
+    hist_reducedChi2_data = ROOT.TH1D("reducedChi2_data", "Reduced #chi^{2}", 25, 0, 5) # will not have many entries (~100 depending on how many eta bins)
     hist_reducedChi2_data.StatOverflows() # use underflow and overflow to compute mean and RMS
-    hist_reducedChi2_MC = ROOT.TH1D("reducedChi2_MC", "Reduced #chi^{2}", 50, 0, 5) # will not have many entries (~100 depending on how many eta bins)
+    hist_reducedChi2_MC = ROOT.TH1D("reducedChi2_MC", "Reduced #chi^{2}", 25, 0, 5) # will not have many entries (~100 depending on how many eta bins)
     hist_reducedChi2_MC.StatOverflows() # use underflow and overflow to compute mean and RMS
-    hist_reducedChi2_sf = ROOT.TH1D("reducedChi2_sf", "Reduced #chi^{2}", 50, 0, 5) # will not have many entries (~100 depending on how many eta bins)
+    hist_reducedChi2_sf = ROOT.TH1D("reducedChi2_sf", "Reduced #chi^{2}", 25, 0, 5) # will not have many entries (~100 depending on how many eta bins)
     hist_reducedChi2_sf.StatOverflows() # use underflow and overflow to compute mean and RMS
 
     ######################
@@ -1058,7 +1189,7 @@ if __name__ == "__main__":
     hist_reducedChi2_data.GetYaxis().SetTitle("Events")
     hist_reducedChi2_data.GetYaxis().SetRangeUser(0,maxY)
     hist_reducedChi2_data.GetXaxis().SetTitle("#chi^{2} / NDF")
-    hist_reducedChi2_data.Draw("HE")
+    hist_reducedChi2_data.Draw("HIST")
     lat = ROOT.TLatex()
     xmin = 0.20 
     yhi = 0.85
@@ -1084,13 +1215,13 @@ if __name__ == "__main__":
     hist_reducedChi2_MC.SetLineColor(ROOT.kBlack)
     hist_reducedChi2_MC.SetFillColor(ROOT.kGray)
     #hist_reducedChi2_MC.SetFillStyle(3004)
-    hist_reducedChi2_MC.Draw("HE SAME")
+    hist_reducedChi2_MC.Draw("HIST SAME")
     #######################
     # redraw some stuff that might be covered by FillColor
-    histCopy = hist_reducedChi2_MC.DrawCopy("HE SAME")
+    histCopy = hist_reducedChi2_MC.DrawCopy("HIST SAME")
     histCopy.SetFillColor(0)
     histCopy.SetFillStyle(0)
-    hist_reducedChi2_data.Draw("HE SAME")
+    hist_reducedChi2_data.Draw("HIST SAME")
     c.RedrawAxis("sameaxis")
     #################
     line1 = "= {0}".format(int(entries_MC))
@@ -1105,7 +1236,7 @@ if __name__ == "__main__":
     # now SF
     hist_reducedChi2_sf.SetLineWidth(2)
     hist_reducedChi2_sf.SetLineColor(ROOT.kBlue)
-    hist_reducedChi2_sf.Draw("HE SAME")
+    hist_reducedChi2_sf.Draw("HIST SAME")
     #######################
     # redraw some stuff that might be covered by FillColor
     c.RedrawAxis("sameaxis")
