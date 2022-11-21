@@ -232,7 +232,8 @@ namespace wrem {
         diagbasisv[ipar] += eigenShift_ * sqrt(eigenv[ipar]);
 
         // transform the pars back in the original basis
-        Eigen::VectorXd outparv = transformation*diagbasisv;
+        // Eigen::VectorXd outparv = transformation*diagbasisv;
+        Eigen::VectorXd outparv = inparv + eigenShift_ * sqrt(eigenv[ipar]) * transformation.col(ipar);
         for (unsigned int ieig = 0; ieig < neigenvectors; ++ieig) {
             outpars[ieig] = outparv[ieig];
         }

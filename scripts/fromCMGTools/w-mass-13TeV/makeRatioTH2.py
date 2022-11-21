@@ -36,6 +36,7 @@
 
 import os, array, math
 import argparse
+from copy import *
 
 ## safe batch mode
 import sys
@@ -283,6 +284,8 @@ if __name__ == "__main__":
     # making distribution of pulls
     if args.makePulls:
         hpull = ROOT.TH1D("pulls","Distribution of pulls",100,-5,5)
+        hpull2D = copy.deepcopy(hinput1.Clone("hpull2D"))
+        hpull2D.Reset("ICESM")
         for ix in range(1,1+hinput1.GetNbinsX()):
             for iy in range(1,1+hinput1.GetNbinsY()):
                 xval = hinput1.GetXaxis().GetBinCenter(ix)
@@ -294,7 +297,9 @@ if __name__ == "__main__":
                 err = math.sqrt(pow(hinput1.GetBinError(ix,iy),2) + pow(hinput2.GetBinError(ix,iy),2))
                 err *= args.pullErrorScaleFactor
                 pull = hinput1.GetBinContent(ix,iy) - hinput2.GetBinContent(ix,iy)
-                hpull.Fill(pull/err)
+                pull = pull/err
+                hpull2D.SetBinContent(ix, iy, pull)
+                hpull.Fill(pull)
 
         drawTH1(hpull, 
                 "pulls",
@@ -304,6 +309,9 @@ if __name__ == "__main__":
                 passCanvas=canvas,
                 fitString="gaus;LEMSQ+;;-5;5"
                 )
+        drawCorrelationPlot(hpull2D,xAxisTitle,yAxisTitle,"Pulls::-5,5",
+                            "pullDistribution2D_{args.outhistname}","ForceTitle",outname,0,0,
+                            False,False,False,1,palette=args.palette,passCanvas=canvas2D,drawOption=args.drawOption)
  
     ###########################
     # Now save things
