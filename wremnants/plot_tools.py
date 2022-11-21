@@ -22,7 +22,7 @@ logger = common.child_logger(__name__)
 
 def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None,
     grid_on_main_plot = False, grid_on_ratio_plot = False, plot_title = None, x_ticks_ndp = None,
-    bin_density = 300
+    bin_density = 300, logy=False, logx=False
 ):
     if not xlim:
         xlim = [href.axes[0].edges[0], href.axes[0].edges[-1]]
@@ -49,6 +49,12 @@ def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None,
         ax1.set_ylim(ylim)
     else:
         ax1.autoscale(axis='y')
+
+    if logy:
+        ax1.set_yscale('log')
+    if logx:
+        ax1.set_xscale('log')
+        ax2.set_xscale('log')
 
     if grid_on_main_plot:  ax1.grid(which = "both")
     if grid_on_ratio_plot: ax2.grid(which = "both")
@@ -173,10 +179,12 @@ def makePlotWithRatioToRef(
     rrange=[0.9, 1.1], ylim=None, xlim=None, nlegcols=2, binwnorm=None, alpha=1.,
     baseline=True, data=False, autorrange=None, grid = False,
     yerr=False, legtext_size=20, plot_title=None, x_ticks_ndp = None, bin_density = 300, yscale=None,
+    logy=False, logx=False
 ):
     # nominal is always at first, data is always at last, if included
     ratio_hists = [hh.divideHists(h, hists[0], cutoff=0.00001) for h in hists[not baseline:]]
-    fig, ax1, ax2 = figureWithRatio(hists[0], xlabel, ylabel, ylim, rlabel, rrange, xlim=xlim, grid_on_ratio_plot = grid, plot_title = plot_title, bin_density = bin_density)
+    fig, ax1, ax2 = figureWithRatio(hists[0], xlabel, ylabel, ylim, rlabel, rrange, xlim=xlim, 
+        grid_on_ratio_plot = grid, plot_title = plot_title, bin_density = bin_density, logy=logy, logx=logx)
     
     hep.histplot(
         hists[:len(hists) - data],
@@ -229,19 +237,20 @@ def makePlotWithRatioToRef(
     # This seems like a bug, but it's needed
     if not xlim:
         xlim = [hists[0].axes[0].edges[0], hists[0].axes[0].edges[-1]]
-    fix_axes(ax1, ax2)
+    fix_axes(ax1, ax2, yscale=yscale, logy=logy)
     if x_ticks_ndp: ax2.xaxis.set_major_formatter(StrMethodFormatter('{x:.' + str(x_ticks_ndp) + 'f}'))
 
     return fig
 
-def fix_axes(ax1, ax2, yscale=None):
+def fix_axes(ax1, ax2, yscale=None, logy=False):
     #TODO: Would be good to get this working
     #ax1.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
     if yscale:
         ymin, ymax = ax1.get_ylim()
         ax1.set_ylim(ymin, ymax*yscale)
-    redo_axis_ticks(ax1, "y")
-    redo_axis_ticks(ax2, "x")
+    if not logy:
+        redo_axis_ticks(ax1, "y")
+        redo_axis_ticks(ax2, "x")
     redo_axis_ticks(ax1, "x", True)
     ax1.set_xticklabels([])
 
@@ -279,9 +288,7 @@ def save_pdf_and_png(outdir, basename):
 
 def write_index_and_log(outpath, logname, indexname="index.php", template_dir=f"{pathlib.Path(__file__).parent}/Templates", 
         yield_tables=None, analysis_meta_info=None):
-    if not os.path.isfile(f"{outpath}/{indexname}"):
-        shutil.copyfile(f"{template_dir}/{indexname}", f"{outpath}/{indexname}")
-
+    shutil.copyfile(f"{template_dir}/{indexname}", f"{outpath}/{indexname}")
     logdir = outpath
 
     with open(f"{logdir}/{logname}.log", "w") as logf:

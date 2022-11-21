@@ -133,7 +133,7 @@ if addVariation:
         # to the already loaded hist
         if load_op and reload:
             action = None
-        groups.addSummedProc(args.baseName, name=name_toload, label=label, exclude=exclude,
+        groups.addSummedProc(nominalName, relabel=args.baseName, name=name_toload, label=label, exclude=exclude,
             color=color, reload=reload, rename=varname, procsToRead=datasets,
             preOpMap=load_op, action=action)
 
@@ -150,7 +150,7 @@ logger.info(f"Stacked processes are {prednames}")
 select = {} if args.channel == "all" else {"charge" : -1.j if args.channel == "minus" else 1.j}
 
 def collapseSyst(h):
-    for ax in ["systIdx", "tensor_axis_0"]:
+    for ax in ["systIdx", "tensor_axis_0", "vars"]:
         if ax in h.axes.name:
             return h[{ax : 0}].copy()
     return h

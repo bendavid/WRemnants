@@ -35,16 +35,27 @@ def read_corr(procName, generator, corr_file):
         if args.generator == "matrix_radish":
             h = input_tools.read_matrixRadish_hist(corr_file, "ptVgen")
         else:
-            h = input_tools.read_dyturbo_hist(corr_file.split(":"), axis="ptVgen")
+            h = input_tools.read_dyturbo_hist(corr_file.split(":"), axes=("y", "pt") if "2d" in corr_file else ("pt"))
+        print("Shpae", h.shape)
 
         charge_ax = minnloh.axes["chargeVgen"]
-        #absy_ax = hist.axis.Regular(1, 0, 10, flow=True, name="absYVgen")
         # TODO: This is needed to match axes currently, but it's strictly correct
         absy_ax = hist.axis.Regular(1, 0, 5, underflow=False, overflow=True, name="absYVgen")
         mass_ax = hist.axis.Regular(1, 60, 120, flow=True, name="massVgen")
-        vars_ax = hist.axis.Integer(0, 1, flow=False, name="vars")
-        h5D = hist.Hist(mass_ax, absy_ax, *h.axes, charge_ax, vars_ax)
-        h5D[...] = h.values(flow=True)[np.newaxis, np.newaxis,:,np.newaxis,np.newaxis]
+        vars_ax = h.axes["vars"] if "vars" in h.axes.name else hist.axis.Integer(0, 1, flow=False, name="vars") 
+
+        axes = [mass_ax, *h.axes, charge_ax, vars_ax]
+        if "y" in h.axes.name:
+            h = hh.makeAbsHist(h, "y")
+            axes[1] = h.axes["absy"]
+        else:
+            axes.insert(1, absy_ax)
+
+        print(len(axes))
+
+        h5D = hist.Hist(*axes)
+        # Leave off the overflow, we won't use it anyway
+        h5D[...] = np.reshape(h.values(), h5D.shape)
         numh = h5D
     return numh
 

@@ -8,15 +8,22 @@ import collections
 def valsAndVariances(h1, h2, allowBroadcast=True, transpose=True):
     if not allowBroadcast and len(h1.axes) != len(h2.axes):
         raise ValueError("Incompatible hists for math operation")
+
+    flow = True
+    for i,j in zip(h1.axes.traits, h2.axes.traits):
+        flow = i.overflow == j.overflow and i.underflow == j.underflow
+        if not flow:
+            break
+
     if len(h1.axes) == len(h2.axes):
-        return (h1.values(flow=True), h2.values(flow=True), h1.variances(flow=True), h2.variances(flow=True))
+        return (h1.values(flow=flow), h2.values(flow=flow), h1.variances(flow=flow), h2.variances(flow=flow))
     else:
-        outshape = h1.view(flow=True).shape if len(h1.shape) > len(h2.shape) else h2.view(flow=True).shape
+        outshape = h1.view(flow=flow).shape if len(h1.shape) > len(h2.shape) else h2.view(flow=flow).shape
         # The transpose is because numpy works right to left in broadcasting, and we've put the
         # syst axis on the right
         try:
             res = [np.broadcast_to(x.T if transpose else x, outshape[::-1] if transpose else outshape) for x in \
-                    [h1.values(flow=True), h2.values(flow=True), h1.variances(flow=True), h2.variances(flow=True)]]
+                    [h1.values(flow=flow), h2.values(flow=flow), h1.variances(flow=flow), h2.variances(flow=flow)]]
         except ValueError as e:
             logging.error(f"Failed to broadcast hists! h1.axes.name {h1.axes.name}, h2.axes.name {h2.axes.name}")
             raise e
@@ -116,6 +123,8 @@ def clipNegativeVals(h, clipValue=0):
 
 def makeAbsHist(h, axis_name):
     ax = h.axes[axis_name]
+    if 0 not in ax.edges:
+        raise ValueError("Can't mirror around 0 if it isn't a bin boundary")
     axidx = list(h.axes).index(ax)
     abs_ax = hist.axis.Variable(ax.edges[ax.index(0.):], underflow=False, name=f"abs{axis_name}")
     hnew = hist.Hist(*h.axes[:axidx], abs_ax, *h.axes[axidx+1:], storage=hist.storage.Weight())
@@ -150,8 +159,9 @@ def rebinHist(h, axis_name, edges):
 
     hnew.values(flow=flow)[...] = np.add.reduceat(h.values(flow=flow), edge_idx, 
             axis=ax_idx).take(indices=range(new_ax.size+underflow+overflow), axis=ax_idx)
-    hnew.variances(flow=flow)[...] = np.add.reduceat(h.variances(flow=flow), edge_idx, 
-            axis=ax_idx).take(indices=range(new_ax.size+underflow+overflow), axis=ax_idx)
+    if hnew._storage_type() == hist.storage.Weight():
+        hnew.variances(flow=flow)[...] = np.add.reduceat(h.variances(flow=flow), edge_idx, 
+                axis=ax_idx).take(indices=range(new_ax.size+underflow+overflow), axis=ax_idx)
     return hnew
 
 def mergeAxes(ax1, ax2):
@@ -190,12 +200,16 @@ def findCommonBinning(hists, axis_idx):
         common_edges.intersection_update(ax.edges)
 
     edges = list(sorted(common_edges))
+    logging.debug(f"Common edges are {common_edges}")
+
     if len(edges) < 2:
         raise ValueError(f"Found < 2 common edges, cannot rebin. Axes were {orig_axes}")
     return edges
 
 def rebinHistsToCommon(hists, axis_idx, keep_full_range=False):
     orig_axes = [h.axes[axis_idx] for h in hists]
+    for h in hists:
+        print(h.axes[axis_idx].edges)
     new_edges = findCommonBinning(hists, axis_idx)
     rebinned_hists = [rebinHist(h, ax.name, new_edges) for h,ax in zip(hists, orig_axes)]
 
@@ -219,7 +233,8 @@ def rebinHistsToCommon(hists, axis_idx, keep_full_range=False):
             vals = np.append(low_vals, np.take(h.view(), range(merge_idx, max_idx), axis_idx))
             zero_pad_shape = list(newh.shape)
             zero_pad_shape[axis_idx] -= vals.shape[axis_idx]
-            vals = np.append(vals, np.full(zero_pad_shape, hist.accumulators.WeightedSum(0, 0)))
+            vals = np.append(vals, np.full(zero_pad_shape, 
+                hist.accumulators.WeightedSum(0, 0) if newh._storage_type() == hist.storage.Weight() else 0.))
             newh[...] = vals
             full_hists.append(newh)
 

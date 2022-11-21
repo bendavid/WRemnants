@@ -31,6 +31,11 @@ lookup = {
             "axis" : "absYVgen",
             "action" : lambda x: x[{"massVgen" : s[0:x.axes["massVgen"].size:hist.sum], "ptVgen" : s[0:40.j:hist.sum]}],
         },
+        "mV" : {
+            "hist" : "nominal_gen",
+            "axis" : "massVgen",
+            "action" : lambda x: x[{"ptVgen" : s[0:40.j:hist.sum]}],
+        },
         "sigma4_ptV" : {
             "hist" : "helicity_moments_scale",
             "axis" : "ptVgen",
@@ -62,22 +67,28 @@ lookup = {
             "axis" : "absy",
             "action" : lambda x: hh.makeAbsHist(x[{"pt" : s[0:40.j:hist.sum]}], "y"),
         },
+        "mV" : { 
+            #"hist" : "inclusive_pT_y_m_scetlib",
+            "axis" : "mass",
+        },
     },
     "matrix_radish" : {
         "ptV" : {
-            "z": {
-                "axis" : "xaxis",
-            },
-            "wm" : {
-                "axis" : "xaxis",
-            },
+            "axis" : "pt",
         },
-        #"absYV" : {
-        #    "hist" : 
+        "absYV" : {
+            "axis" : "absy",
+            "action" : lambda x: hh.makeAbsHist(x, "y"),
+        }
     },
     "dyturbo" : {
         "ptV" : {
-            "axis" : "ptV",
+            "axis" : "pt",
+            "action" : None,
+        },
+        "absYV" : {
+            "axis" : "absy",
+            "action" : lambda x: hh.makeAbsHist(x[{"pt" : s[0:40.j:hist.sum]}], "y"),
         }
     },
 }
@@ -96,17 +107,24 @@ parser.add_argument("-f", "--outfolder", type=str, default="test", help="Subfold
 parser.add_argument("-a", "--name_append", type=str, help="Name to append to file name")
 parser.add_argument("--ratio_ref", type=str, default="minnlo", choices=["minnlo", "scetlib", "matrix_radish"], help="Reference hist for ratio")
 parser.add_argument("--keep_full_range", action='store_true', help="Store the full range of all hists, even if it exceeds other hist ranges")
+parser.add_argument("--no-radish", action='store_true', help="matrix-radish file doesn't have resummation")
+parser.add_argument("--logy", action='store_true', help="y axis log scale")
+parser.add_argument("--logx", action='store_true', help="x axis log scale")
 args = parser.parse_args()
+
+if not args.scetlib_files:
+    lookup["minnlo"]["absYV"]["action"] =  lambda x: x[{"massVgen" : s[0:x.axes["massVgen"].size:hist.sum]}]
 
 cmap = cm.get_cmap("tab10")
 lookup["minnlo"]["colors"] = ["red"]+[cmap(i) for i in range(len(args.minnlo_files)-1)]
 lookup["scetlib"]["colors"] = ["purple"]+[cmap(9-i) for i in range(len(args.scetlib_files)-1)]
-lookup["matrix_radish"]["colors"] = ["green"]+[cmap(i+len(args.minnlo_files)) for i in range(len(args.scetlib_files)-1)]
+lookup["matrix_radish"]["colors"] = ["green"]+[cmap(i+len(args.minnlo_files)) for i in range(len(args.matrix_radish_files)-1)]
 lookup["dyturbo"]["colors"] = ["blue"]+[cmap(i) for i in range(len(args.dyturbo_files))]
 
 xlabels = {
     "ptV" : r"p$_{T}^{%s}$ (GeV)" % ("W" if "w" in args.proc else "Z"), 
     "absYV" : r"$|\mathrm{y}^{%s}|$"  % ("W" if "w" in args.proc else "Z"),
+    "mV" : r"$m_{%s}$ (GeV)"  % ("W" if "w" in args.proc else "Z"),
 }
 xlabels["sigma4_ptV"] = xlabels["ptV"]
 xlabels["sigma4_absYV"] = xlabels["absYV"]
@@ -150,23 +168,35 @@ def read_pickle_hist(proc, file_name, lookup, hist_name):
 def read_scetlib_hist(proc, file_name, lookup, hist_name):
     charge = 0 if proc == "z" else (-1 if proc == "wp" else 1)
     ext = file_name.split(".")[-1]
-    nonsing = file_name.replace("."+ext, "_nons."+ext)
+    nonsing = file_name.replace(f".{ext}", f"_nons.{ext}")
+    if "combined_nons" in nonsing:
+        nonsing =  nonsing.replace("combined_nons", "nons_combined")
     if not os.path.isfile(nonsing):
         logging.warning("Didn't find the non-singular contribution. Will make comparisons without it")
         nonsing = ""
     histND = input_tools.read_scetlib_hist(file_name, nonsing=nonsing, charge=charge, flip_y_sign="A4" in file_name)
+    if "vars" in histND.axes.name:
+        histND = histND[{"vars" : 0}]
 
     hist_info = lookup[hist_name]
     action = hist_info["action"] if "action" in hist_info else None
-    return transform_and_project(histND, 1.0, hist_info["axis"], action)
+    return transform_and_project(histND, 1., hist_info["axis"], action)
 
 def read_matrix_radish_hist(proc, filename, lookup, hist_name):
-    hist_info = lookup[hist_name][proc]
-    histND = input_tools.read_matrixRadish_hist(filename, hist_info["axis"])
+    hist_info = lookup[hist_name]
+    histND = input_tools.read_matrixRadish_hist(filename, hist_info["axis"].replace("abs", ""))
+    if "vars" in histND.axes.name:
+        histND = histND[{"vars" : 0}]
     scale = 1.0 if "scale" not in hist_info else hist_info["scale"]
 
     action = hist_info["action"] if "action" in hist_info else None
     return transform_and_project(histND, scale, hist_info["axis"], action)
+
+def read_dyturbo_hist(proc, filename, lookup, hist_name):
+    info = lookup[hist_name]
+    axes = ("y", "pt") if "2d" in filename else [info["axis"]]
+    h = input_tools.read_dyturbo_hist(filename.split(":"), axes=axes) 
+    return transform_and_project(h, 1., info["axis"], info["action"])
 
 def read_hists(proc, files, lookup, hist_name):
     hists = []
@@ -200,7 +230,7 @@ all_colors = []
 generators_info = [
 	("minnlo", "MiNNLO (NNLO+PS)"), 
 	("scetlib", "SCETlib (N$^{3}$LL)"),
-	("matrix_radish", "MATRIX+RadISH (NNLO+N$^{3}$LL)"),
+	("matrix_radish", "MATRIX+RadISH (NNLO+N$^{3}$LL)" if not args.no_radish else "MATRIX (NNLO)"),
 	("dyturbo", "DYTurbo (NNLO+N$^{3}$LL)"),
 ]
 
@@ -220,16 +250,21 @@ for generator, label in generators_info:
     if files:
         info = lookup[generator]
         if args.hist_name not in info:
+            logger.warning(f"Failed to find hist {args.hist_name} for generator {generator}. Skipping")
             continue
-        if generator == "dyturbo":
-            hists = [input_tools.read_dyturbo_hist(files, axis=info[args.hist_name]["axis"])]
-        else:
-            hists,meta_info = read_hists(args.proc, files, info, args.hist_name)
+        hists,meta_info = read_hists(args.proc, files, info, args.hist_name)
+
         all_hists.extend(hists)
         all_colors.extend([info["colors"][c] for c in range(len(hists))])
         all_labels.append(label)
         if len(hists) > 1:
-            all_labels.extend([f"{label} (alt {i})" for i in range(1, len(hists[1:]+1))])
+            if len(hists) == 2:
+                if generator == "dyturbo":
+                    all_labels.append("DYTurbo (NNLO)")
+                if generator == "matrix_radish":
+                    all_labels.append("MATRIX (NNLO)")
+            else:
+                all_labels.extend([f"{label} (alt {i+1})" for i in range(len(hists))])
 
         if meta_info:
             all_meta_info[generator] = meta_info
@@ -240,7 +275,9 @@ if len(all_hists) > 1:
 
 ylabel = "$\sigma$/bin" if args.hist_name not in ylabels else ylabels[args.hist_name]
 fig = plot_tools.makePlotWithRatioToRef(all_hists, colors=all_colors, labels=all_labels, alpha=0.7, ylim=args.ylim,
-        rrange=args.rrange, ylabel=ylabel, xlabel=xlabels[args.hist_name], rlabel=f"x/{short_name[args.ratio_ref]}", binwnorm=1.0, nlegcols=1)
+        rrange=args.rrange, ylabel=ylabel, xlabel=xlabels[args.hist_name], rlabel=f"x/{short_name[args.ratio_ref]}", 
+        binwnorm=1.0, nlegcols=1, logy=args.logy, logx=args.logx,
+)
 
 outname = f"TheoryCompHist_{args.proc}_{args.hist_name}" + ("_"+args.name_append if args.name_append else "")
 plot_tools.save_pdf_and_png(outdir, outname)
