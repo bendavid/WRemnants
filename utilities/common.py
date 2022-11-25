@@ -118,6 +118,7 @@ def common_parser_combine():
     parser.add_argument("--noQCDscaleFakes", dest="noQCDscaleFakes" , action="store_true",   help="Do not apply QCd scale uncertainties on fakes, mainly for debugging")
     parser.add_argument("--doStatOnly", action="store_true", default=False, help="Set up fit to get stat-only uncertainty (currently combinetf with -S 0 doesn't work)")
     parser.add_argument("--debug", action='store_true', help="Print debug output")
+    parser.add_argument("--lumiScale", type=float, default=None, help="Rescale equivalent luminosity by this value (e.g. 10 means ten times more data and MC)")
     return parser
 
 class CustomFormatter(logging.Formatter):
