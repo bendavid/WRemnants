@@ -52,7 +52,7 @@ class datagroups(object):
     ## procName are grouped into datagroups
     ## baseName takes values such as "nominal"
     def setHists(self, baseName, syst, procsToRead=None, label=None, nominalIfMissing=True, 
-            applySelection=True, forceNonzero=True, preOpMap=None, preOpArgs=None):
+                 applySelection=True, forceNonzero=True, preOpMap=None, preOpArgs=None, scaleToNewLumi=-1):
         if not label:
             label = syst if syst else baseName
         if not procsToRead:
@@ -68,12 +68,12 @@ class datagroups(object):
                 logger.debug(f"Looking at group member {member.name}")
                 scale = group["scale"] if "scale" in group else None
                 try:
-                    h = self.readHist(baseName, member, syst, scaleOp=scale, forceNonzero=forceNonzero)
+                    h = self.readHist(baseName, member, syst, scaleOp=scale, forceNonzero=forceNonzero, scaleToNewLumi=scaleToNewLumi)
                     foundExact = True
                 except ValueError as e:
                     if nominalIfMissing:
                         logger.info(f"{str(e)}. Using nominal hist {self.nominalName} instead")
-                        h = self.readHist(self.nominalName, member, "", scaleOp=scale, forceNonzero=forceNonzero)
+                        h = self.readHist(self.nominalName, member, "", scaleOp=scale, forceNonzero=forceNonzero, scaleToNewLumi=scaleToNewLumi)
                     else:
                         logger.warning(str(e))
                         continue
@@ -132,11 +132,11 @@ class datagroups(object):
         return name
 
     def loadHistsForDatagroups(self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="", nominalIfMissing=True,
-            applySelection=True, forceNonzero=True, pseudodata=False, preOpMap={}, preOpArgs={}):
+                               applySelection=True, forceNonzero=True, pseudodata=False, preOpMap={}, preOpArgs={}, scaleToNewLumi=-1):
         if self.rtfile and self.combine:
             self.setHistsCombine(baseName, syst, channel, procsToRead, excluded_procs, label)
         else:
-            self.setHists(baseName, syst, procsToRead, label, nominalIfMissing, applySelection, forceNonzero, preOpMap, preOpArgs)
+            self.setHists(baseName, syst, procsToRead, label, nominalIfMissing, applySelection, forceNonzero, preOpMap, preOpArgs, scaleToNewLumi=scaleToNewLumi)
 
     def getDatagroups(self, excluded_procs=[]):
         if type(excluded_procs) == str:
@@ -329,7 +329,7 @@ class datagroups2016(datagroups):
             return syst
         return "_".join([baseName,syst])
     
-    def readHist(self, baseName, proc, syst, scaleOp=None, forceNonzero=True):
+    def readHist(self, baseName, proc, syst, scaleOp=None, forceNonzero=True, scaleToNewLumi=-1):
         output = self.results[proc.name]["output"]
         histname = self.histName(baseName, proc.name, syst)
         if histname not in output:
@@ -337,6 +337,8 @@ class datagroups2016(datagroups):
         h = output[histname]
         if forceNonzero:
             h = hh.clipNegativeVals(h)
+        if scaleToNewLumi > 0:
+            h = hh.scaleByLumi(h, scaleToNewLumi)
         scale = self.processScaleFactor(proc)
         if scaleOp:
             scale = scale*scaleOp(proc)

@@ -310,7 +310,7 @@ if __name__ == "__main__":
                 fitString="gaus;LEMSQ+;;-5;5"
                 )
         drawCorrelationPlot(hpull2D,xAxisTitle,yAxisTitle,"Pulls::-5,5",
-                            "pullDistribution2D_{args.outhistname}","ForceTitle",outname,0,0,
+                            f"pullDistribution2D_{args.outhistname}","ForceTitle",outname,0,0,
                             False,False,False,1,palette=args.palette,passCanvas=canvas2D,drawOption=args.drawOption)
  
     ###########################

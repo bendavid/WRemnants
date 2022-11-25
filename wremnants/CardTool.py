@@ -350,7 +350,7 @@ class CardTool(object):
     def addPseudodata(self, processes):
         self.datagroups.loadHistsForDatagroups(
             baseName=self.pseudoData, syst="", label=self.pseudoData,
-            procsToRead=processes)
+            procsToRead=processes, scaleToNewLumi=self.lumiScale)
         hists = [self.procDict[proc][self.pseudoData] for proc in processes]
         hdata = hh.sumHists(hists)
         # Kind of hacky, but in case the alt hist has uncertainties
@@ -379,7 +379,7 @@ class CardTool(object):
 
     def writeOutput(self):
         self.datagroups.loadHistsForDatagroups(
-            baseName=self.histName, syst=self.nominalName, label=self.nominalName)
+            baseName=self.histName, syst=self.nominalName, label=self.nominalName, scaleToNewLumi=self.lumiScale)
         self.procDict = self.datagroups.getDatagroups()
         self.writeForProcesses(self.nominalName, processes=self.procDict.keys(), label=self.nominalName)
         self.loadNominalCard()
@@ -393,8 +393,8 @@ class CardTool(object):
             systName = syst if not systMap["name"] else systMap["name"]
             processes=systMap["processes"]
             self.datagroups.loadHistsForDatagroups(self.histName, systName, label="syst",
-                    procsToRead=processes, forceNonzero=systName != "qcdScaleByHelicity",
-                    preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"])
+                                                   procsToRead=processes, forceNonzero=systName != "qcdScaleByHelicity",
+                                                   preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"], scaleToNewLumi=self.lumiScale)
             self.writeForProcesses(syst, label="syst", processes=processes)    
         output_tools.writeMetaInfoToRootFile(self.outfile, exclude_diff='notebooks')
         if self.skipHist:
@@ -512,13 +512,11 @@ class CardTool(object):
             q = self.chargeIdDict[charge]["val"]
             hout = narf.hist_to_root(h[{"charge" : h.axes["charge"].index(q)}])
             hout.SetName(name+f"_{charge}")
-            hout.Scale(self.lumiScale)
             hout.Write()
 
     def writeHistWithCharges(self, h, name):
         hout = narf.hist_to_root(h)
         hout.SetName(f"{name}_{self.channels[0]}")
-        hout.Scale(self.lumiScale)
         hout.Write()
     
     def writeHist(self, h, name, setZeroStatUnc=False):

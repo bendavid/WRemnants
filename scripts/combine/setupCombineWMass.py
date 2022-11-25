@@ -9,6 +9,7 @@ import pathlib
 import logging
 import hist
 import copy
+import math
 
 scriptdir = f"{pathlib.Path(__file__).parent}"
 
@@ -24,6 +25,7 @@ def make_parser(parser=None):
     parser.add_argument("--scaleMuonCorr", type=float, default=1.0, help="Scale up/down dummy muon scale uncertainty by this factor")
     parser.add_argument("--correlateEffStatIsoByCharge", action='store_true', help="Correlate isolation efficiency uncertanties between the two charges (by default they are decorrelated)")
     parser.add_argument("--noHist", action='store_true', help="Skip the making of 2D histograms (root file is left untouched if existing)")
+    parser.add_argument("--effStatLumiScale", type=float, default=None, help="Rescale equivalent luminosity for efficiency stat uncertainty by this value (e.g. 10 means ten times more data from tag and probe)")
     return parser
 
 def main(args):
@@ -59,7 +61,9 @@ def main(args):
         cardTool.setSkipOtherChargeSyst()
     if args.pseudoData:
         cardTool.setPseudodata(args.pseudoData)
-
+    if args.lumiScale:
+        cardTool.setLumiScale(args.lumiScale)
+        
     passSystToFakes = not (wlike or args.skipSignalSystOnFakes)
         
     single_v_samples = cardTool.filteredProcesses(lambda x: x[0] in ["W", "Z"])
@@ -171,6 +175,8 @@ def main(args):
                 axlabels = ["eta", "pt", "q", "Trig"]
                 nameReplace = [("Trig0", "IDIPTrig"), ("q0Trig1", "Iso"), ("q1Trig1", "Iso")] if args.correlateEffStatIsoByCharge else [("Trig0", "IDIPTrig"), ("Trig1", "Iso")] # replace with better names
                 scale = 1.0 if args.correlateEffStatIsoByCharge else {".*effStatTnP.*Iso" : "1.414", ".*effStatTnP.*IDIPTrig" : "1.0"} # only for iso, scale up by sqrt(2) when decorrelating between charges and efficiencies were derived inclusively
+            if args.effStatLumiScale and "Syst" not in name:
+                scale /= math.sqrt(args.effStatLumiScale)
             cardTool.addSystematic(name, 
                 mirror=True,
                 group="muon_eff_syst" if "Syst" in name else "muon_eff_stat", # TODO: for now better checking them separately
