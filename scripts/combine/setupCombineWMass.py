@@ -27,7 +27,7 @@ def make_parser(parser=None):
     parser.add_argument("--scaleMuonCorr", type=float, default=1.0, help="Scale up/down dummy muon scale uncertainty by this factor")
     parser.add_argument("--correlateEffStatIsoByCharge", action='store_true', help="Correlate isolation efficiency uncertanties between the two charges (by default they are decorrelated)")
     parser.add_argument("--noHist", action='store_true', help="Skip the making of 2D histograms (root file is left untouched if existing")
-    parser.add_argument("--muonScaleVariation", choices=["smearing_weights", "massweights"], default="smearing_weights", help="the method with whicht the distributions for the muon scale variations is derived")
+    parser.add_argument("--muonScaleVariation", choices=["smearing_weights", "massweights", "manual_pt_shift"], default="smearing_weights", help="the method with whicht the distributions for the muon scale variations is derived")
     return parser
 
 def main(args):
@@ -199,6 +199,11 @@ def main(args):
             "hist_name": "muonScaleSyst",
             "syst_axes": ["downUpVar", "scaleEtaSlice"],
             "syst_axes_labels": ["downUpVar", "ieta"]
+        },
+        "manual_pt_shift":{
+            "hist_name": "muonScaleSyst_manualShift",
+            "syst_axes": ["downUpVar"],
+            "syst_axes_labels": ["downUpVar"]
         }
     }
     msv_config = msv_config_dict[args.muonScaleVariation]
