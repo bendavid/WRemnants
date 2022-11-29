@@ -197,6 +197,14 @@ def transport_smearing_weights_to_reco(
         msv_sw_reco = [hh.multiplyHists(nominal_reco, x) for x in sw_per_bin_gen_smear]
         proc_hists['muonScaleSyst_responseWeights'] = hh.combineUpDownVarHists(*msv_sw_reco)
 
+def muon_scale_variation_from_manual_shift(
+    resultdict, procs = ['WplusmunuPostVFP', 'WminusmunuPostVFP', 'ZmumuPostVFP'],
+):
+    for proc in procs:
+        proc_hists = resultdict[proc]['output']
+        manual_shift_hists = [proc_hists['muonScaleVariationDnTenthmil'], proc_hists['muonScaleVariationUpTenthmil']]
+        proc_hists['muonScaleSyst_manualShift'] = hh.combineUpDownVarHists(*manual_shift_hists)
+
 def make_alt_reco_and_gen_hists(df, results, nominal_axes):
     nominal_cols_cvhbs = [
         "goodMuons_eta0_cvhbs", "goodMuons_pt0_cvhbs", "goodMuons_charge0_cvhbs",
@@ -236,7 +244,7 @@ def define_reco_over_gen_cols(df, reco_type, kinematic_vars = ['pt', 'eta']):
         reco_col = f"goodMuons_{var.lower()}0" if reco_type == 'crctd' \
                    else f"goodMuons_{var.lower()}0_{reco_type}"
         df = df.Define(
-            f"goodMuons_{var.lower()}0_{reco}_over_gen",
+            f"goodMuons_{var.lower()}0_{reco_type}_over_gen",
             f"{reco_col}/goodMuons_{var.lower()}0_gen"
         )
     return df
@@ -288,33 +296,9 @@ def define_cols_for_smearing_weights(df, helper_func):
     df = df.Define("smearing_weights_up", "muonScaleSyst_smearingWeightsPerSe_tensor(0,1)")
     return df
 
-def make_hists_for_smearing_weights(df, results):
-    axis_smearing_weight = hist.axis.Regular(1000, 0.9, 1.1, underflow=True, overflow=True, name = "smearing_weight")
+def make_hists_for_smearing_weights(df, nominal_axes, nominal_cols, results):
+    axis_smearing_weight = hist.axis.Regular(1000, 0.99, 1.01, underflow=True, overflow=True, name = "smearing_weight")
     smearing_weights_down = df.HistoBoost("smearing_weights_down", [*nominal_axes, axis_smearing_weight], [*nominal_cols, "smearing_weights_down"])
     smearing_weights_up = df.HistoBoost("smearing_weights_up", [*nominal_axes, axis_smearing_weight], [*nominal_cols, "smearing_weights_up"])
     results.append(smearing_weights_down)
     results.append(smearing_weights_up)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

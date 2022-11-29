@@ -121,5 +121,30 @@ def string_to_list(string):
 	elif type(string) == list:
 		return string
 	else:
-		sys.exit(("string_to_list(): cannot convert an input that is "
-                  "neither a single string or a list of strings"))
+		raise TypeError(
+            "string_to_list(): cannot convert an input that is"
+            "neither a single string nor a list of strings to a list"
+        )
+
+'''
+INPUT -------------------------------------------------------------------------
+|* list(str): a list of strings
+|
+ROUTINE -----------------------------------------------------------------------
+|* convert the list of string to a single string by join()
+|
+OUTPUT ------------------------------------------------------------------------
+|* (str): the resulted string
++------------------------------------------------------------------------------
+'''
+def list_to_string(list_str):
+	if type(list_str) == str:
+		return list_str
+	elif type(list_str) == list:
+		string = ""
+		return string.join(list_str)
+	else:
+		raise TypeError(
+            "list_to_string(): cannot convert an input that is"
+            " neither a single string or a list of strings"
+        )
