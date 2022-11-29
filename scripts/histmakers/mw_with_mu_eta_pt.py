@@ -11,6 +11,7 @@ import lz4.frame
 import logging
 import math
 import time
+from utilities import boostHistHelpers as hh
 
 logging.basicConfig(level=logging.INFO)
 
@@ -161,7 +162,7 @@ def build_graph(df, dataset):
 
         if args.validationHists:
             for reco_type in ['crctd', 'cvhbs', 'uncrct', 'gen_smeared']:
-                df = wremants.define_reco_over_gen_cols(df, reco_type)
+                df = wremnants.define_reco_over_gen_cols(df, reco_type)
 
     df = df.Define("goodMuons_pfRelIso04_all0", "Muon_pfRelIso04_all[goodMuons][0]")
     #TODO improve this to include muon mass?
@@ -343,7 +344,6 @@ def build_graph(df, dataset):
                 )
                 results.append(dummyMuonScaleSystPerSeDown)
                 results.append(dummyMuonScaleSystPerSeUp)
-
                 df = df.Define("muonScaleSyst_responseWeights_tensor_gensmear", calibration_uncertainty_helper,
                     [
                     "goodMuons_qop0_gen_smeared",
@@ -362,10 +362,29 @@ def build_graph(df, dataset):
                 )
                 dummyMuonScaleSyst_responseWeights = df.HistoBoost("muonScaleSyst_responseWeights_gensmear", nominal_axes, [*nominal_cols_gen_smeared, "muonScaleSyst_responseWeights_tensor_gensmear"], tensor_axes = calibration_uncertainty_helper.tensor_axes)
                 results.append(dummyMuonScaleSyst_responseWeights)
-            
+                '''
+                df = df.Define("muonScaleSyst_responseWeights_tensor", calibration_uncertainty_helper,
+                    [
+                    "goodMuons_qop0_gen",
+                    "goodMuons_pt0",
+                    "goodMuons_eta0",
+                    "goodMuons_phi0",
+                    "goodMuons_charge0",
+                    "covMat_goodGenMuons0",
+                    "goodMuons_qop0_gen",
+                    "goodMuons_pt0_gen",
+                    "goodMuons_eta0_gen",
+                    "goodMuons_phi0_gen",
+                    "goodMuons_charge0_gen",
+                    "nominal_weight"
+                    ]
+                )
+                dummyMuonScaleSyst_responseWeights = df.HistoBoost("muonScaleSyst_responseWeights", nominal_axes, [*nominal_cols, "muonScaleSyst_responseWeights_tensor"], tensor_axes = calibration_uncertainty_helper.tensor_axes)
+                results.append(dummyMuonScaleSyst_responseWeights)           
+                '''
             if args.validationHists:
                 df = wremnants.define_cols_for_smearing_weights(df, calibration_uncertainty_helper)
-                wremnants.make_hists_for_smearing_weights(df, results)
+                wremnants.make_hists_for_smearing_weights(df, nominal_axes, nominal_cols, results)
 
             df = df.Define("goodMuons_pt0_gen_smeared_scaleUp_mil", "goodMuons_pt0_gen_smeared_a_la_qop * 1.001")
             df = df.Define("goodMuons_pt0_gen_smeared_scaleDn_mil", "goodMuons_pt0_gen_smeared_a_la_qop / 1.001")
@@ -414,5 +433,6 @@ def build_graph(df, dataset):
 
 resultdict = narf.build_and_run(datasets, build_graph)
 wremnants.transport_smearing_weights_to_reco(resultdict)
+wremnants.muon_scale_variation_from_manual_shift(resultdict)
 
 output_tools.write_analysis_output(resultdict, "mw_with_mu_eta_pt.pkl.lz4", args)

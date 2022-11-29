@@ -242,7 +242,7 @@ private:
   out_tensor_t scale_res_weight(
     double qop, double pt, double eta, double phi, int charge, const RVec<float> &cov,
     double genQop, double genPt, double genEta, double genPhi, int genCharge,
-    bool abQop = true, bool fullParam = true
+    bool abQop = false, bool fullParam = false
   ) const {
 
     const double theta = 2.*std::atan(std::exp(-double(eta)));
@@ -301,9 +301,9 @@ private:
       const double sig = varparms(ivar, 3);
 
       // scale
-      parmvar[0] += A*genqop;
-      parmvar[0] += -e*genqop/genPt;
-      parmvar[0] += genCharge*M*genPt*genqop;
+      parmvar[0] += (abQop? A*genQop : A*genqop);
+      parmvar[0] += (abQop? -e*genQop/genPt : -e*genqop/genPt);
+      parmvar[0] += (abQop? genCharge*M*genPt*genQop : genCharge*M*genPt*genqop);
 
       // resolution
       covvar += sig*covd;
