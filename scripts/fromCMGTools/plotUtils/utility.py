@@ -9,8 +9,7 @@ from array import array
 import shutil
 from CMS_lumi import *
 
-ROOT.gInterpreter.ProcessLine(".O3")
-#ROOT.gInterpreter.ProcessLine('#include "ccFiles/systHistHelpers.cc"')
+#ROOT.gInterpreter.ProcessLine(".O3")
 
 _canvas_pull = ROOT.TCanvas("_canvas_pull","",800,800)
 
@@ -20,6 +19,21 @@ def printLine(marker='-', repeat=30):
     print(marker*repeat)
 
 #########################################################################
+
+def safeSystem(cmd, dryRun=False, quitOnFail=True):
+    print(cmd)
+    if not dryRun:
+        res = os.system(cmd)
+        if res:
+            print('-'*30)
+            print("safeSystem(): error occurred when executing the following command. Aborting")
+            print(cmd)
+            print('-'*30)
+            if quitOnFail:
+                quit()
+        return res
+    else:
+        return 0
 
 def checkHistInFile(h, hname, fname, message=""):
     if not h:
