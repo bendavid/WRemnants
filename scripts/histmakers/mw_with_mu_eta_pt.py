@@ -77,7 +77,8 @@ axis_eta_mT = hist.axis.Variable([-2.4, 2.4], name = "eta")
 axis_mt_fakes = hist.axis.Regular(60, 0., 120., name = "mt", underflow=False, overflow=True)
 axis_njet_fakes = hist.axis.Regular(2, -0.5, 1.5, name = "Numbr of jets", underflow=False, overflow=False) # only need case with 0 jets or > 0
 
-muon_efficiency_helper, muon_efficiency_helper_stat, muon_efficiency_helper_stat_tracking, muon_efficiency_helper_stat_reco, muon_efficiency_helper_syst = wremnants.make_muon_efficiency_helpers(filename = args.sfFile, era = era, max_pt = axis_pt.edges[-1])
+# TODO: add a way to select binned or smoothed SF from command option (need to call different helpers)
+muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile, era = era, max_pt = axis_pt.edges[-1])
 print(args.sfFile)
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
@@ -108,6 +109,7 @@ def build_graph(df, dataset):
     weightsum = df.SumAndCount("weight")
 
     df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
+    df = df.Filter("event % 2 == 1") # test with odd/even events
 
     isW = dataset.name in common.wprocs
     isZ = dataset.name in common.zprocs
@@ -223,11 +225,11 @@ def build_graph(df, dataset):
     else:
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
         df = df.Define("weight_vtx", vertex_helper, ["GenVtx_z", "Pileup_nTrueInt"])
-        df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso"])
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId"])
 
         weight_expr = "weight*weight_pu*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom"
         if not args.noScaleFactors:
+            df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso"])
             weight_expr += "*weight_fullMuonSF_withTrackingReco"
         if args.vertex_weight:
             weight_expr += "*weight_vtx"
@@ -258,19 +260,29 @@ def build_graph(df, dataset):
         qcdJetPt45 = dQCDbkGVar.HistoBoost("qcdJetPt45", nominal_axes, [*nominal_cols, "nominal_weight"])
         results.append(qcdJetPt45)
 
-        df = df.Define("effStatTnP_tensor", muon_efficiency_helper_stat, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0", "passIso", "nominal_weight"])
-        effStatTnP = df.HistoBoost("effStatTnP", nominal_axes, [*nominal_cols, "effStatTnP_tensor"], tensor_axes = muon_efficiency_helper_stat.tensor_axes)
-        results.append(effStatTnP)
+        for key,helper in muon_efficiency_helper_stat.items():
+            helperInputColumns = ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0"]
+            if "iso" in key:
+                helperInputColumns.extend(["passIso", "nominal_weight"])
+            else:
+                helperInputColumns.extend(["nominal_weight"])
+            df = df.Define(f"effStatTnP_{key}_tensor", helper, helperInputColumns)
+            effStatTnP = df.HistoBoost(f"effStatTnP_{key}", nominal_axes, [*nominal_cols, f"effStatTnP_{key}_tensor"], tensor_axes = helper.tensor_axes)
+            results.append(effStatTnP)
+            
+        # df = df.Define("effStatTnP_tensor", muon_efficiency_helper_stat, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0", "passIso", "nominal_weight"])
+        # effStatTnP = df.HistoBoost("effStatTnP", nominal_axes, [*nominal_cols, "effStatTnP_tensor"], tensor_axes = muon_efficiency_helper_stat.tensor_axes)
+        # results.append(effStatTnP)
 
-        # temporary solution, so ugly and awkward, but does what I want ...
-        df = df.DefinePerSample("zero", "0")
-        df = df.DefinePerSample("unity", "1")
-        df = df.Define("effStatTnP_tracking_tensor", muon_efficiency_helper_stat_tracking, ["goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "unity", "nominal_weight"])
-        effStatTnP_tracking = df.HistoBoost("effStatTnP_tracking", nominal_axes, [*nominal_cols, "effStatTnP_tracking_tensor"], tensor_axes = muon_efficiency_helper_stat_tracking.tensor_axes)
-        results.append(effStatTnP_tracking)
-        df = df.Define("effStatTnP_reco_tensor", muon_efficiency_helper_stat_reco, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0", "zero", "nominal_weight"])
-        effStatTnP_reco = df.HistoBoost("effStatTnP_reco", nominal_axes, [*nominal_cols, "effStatTnP_reco_tensor"], tensor_axes = muon_efficiency_helper_stat_reco.tensor_axes)
-        results.append(effStatTnP_reco)
+        # # temporary solution, so ugly and awkward, but does what I want ...
+        # df = df.DefinePerSample("zero", "0")
+        # df = df.DefinePerSample("unity", "1")
+        # df = df.Define("effStatTnP_tracking_tensor", muon_efficiency_helper_stat_tracking, ["goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "unity", "nominal_weight"])
+        # effStatTnP_tracking = df.HistoBoost("effStatTnP_tracking", nominal_axes, [*nominal_cols, "effStatTnP_tracking_tensor"], tensor_axes = muon_efficiency_helper_stat_tracking.tensor_axes)
+        # results.append(effStatTnP_tracking)
+        # df = df.Define("effStatTnP_reco_tensor", muon_efficiency_helper_stat_reco, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0", "zero", "nominal_weight"])
+        # effStatTnP_reco = df.HistoBoost("effStatTnP_reco", nominal_axes, [*nominal_cols, "effStatTnP_reco_tensor"], tensor_axes = muon_efficiency_helper_stat_reco.tensor_axes)
+        # results.append(effStatTnP_reco)
         
         df = df.Define("effSystTnP_weight", muon_efficiency_helper_syst, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso", "nominal_weight"])
         effSystTnP = df.HistoBoost("effSystTnP", nominal_axes, [*nominal_cols, "effSystTnP_weight"], tensor_axes = muon_efficiency_helper_syst.tensor_axes)

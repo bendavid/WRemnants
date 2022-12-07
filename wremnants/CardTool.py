@@ -313,11 +313,11 @@ class CardTool(object):
     def addMirror(self, h, proc, syst):
         return syst != self.nominalName and self.systematics[syst]["mirror"]
 
-    def checkSysts(self, hnom, var_map, thresh=0.25):
+    def checkSysts(self, hnom, var_map, proc, thresh=0.25):
         #if self.check_variations:
         var_names = set([name.replace("Up", "").replace("Down", "") for name in var_map.keys() if name])
         if len(var_names) != len(var_map.keys())/2:
-            raise ValueError(f"Invalid syst names! Expected an up/down variation for each syst. Found {var_map.keys()}")
+            raise ValueError(f"Invalid syst names for process {proc}! Expected an up/down variation for each syst. Found {var_map.keys()}")
         for name in var_names:
             up = var_map[name+"Up"]
             down = var_map[name+"Down"]
@@ -326,7 +326,7 @@ class CardTool(object):
             vars_sameside = (up_relsign != 0) & (up_relsign == down_relsign)
             perc_sameside = np.count_nonzero(vars_sameside)/hnom.size 
             if perc_sameside > thresh:
-                logger.warning(f"{perc_sameside:.0%} bins are one sided for syst {name}!")
+                logger.warning(f"{perc_sameside:.0%} bins are one sided for syst {name} and process {proc}!")
 
     def writeForProcess(self, h, proc, syst):
         if self.addMirror(h, proc, syst):
@@ -338,7 +338,7 @@ class CardTool(object):
         var_map = self.systHists(h, syst) 
         # TODO: Make this optional
         if syst != "nominal":
-            self.checkSysts(self.procDict[proc][self.nominalName], var_map)
+            self.checkSysts(self.procDict[proc][self.nominalName], var_map, proc)
         setZeroStatUnc = False
         if proc in self.noStatUncProcesses:
             logger.info(f"Zeroing statistical uncertainty for process {proc}")
