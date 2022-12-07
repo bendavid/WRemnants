@@ -152,31 +152,27 @@ def main(args):
     )
 
     if not args.noEfficiencyUnc:
-        for name,num in zip(["effSystTnP", "effStatTnP", "effStatTnP_tracking", "effStatTnP_reco"], [4, 624*4, 384*2, 144*2]):
-            ## TODO: this merged implementation for the effstat makes it very cumbersome to do things differently for iso and trigidip!!
-            ## the problem is that I would need custom actions inside based on actual nuisance names, which needs to be commanded from outside, and this is not straightforward
+        chargeDependentSteps = ["trigger"] # might add idip or others, but we may use a special treatment to decorrelate by inflating the uncertainties
+        effStatTypes = ["reco", "tracking", "idip", "trigger"] # add isolation
+        allEffTnP = [f"effStatTnP_sf_{eff}" for eff in effStatTypes] + ["effSystTnP"]
+        for name in allEffTnP:
             if "Syst" in name:
-                axes = ["reco-tracking-idiptrig-iso"]
+                axes = ["reco-tracking-idip-trigger-iso"]
                 axlabels = ["WPSYST"]
-                nameReplace = [("WPSYST0", "Reco"), ("WPSYST1", "Tracking"), ("WPSYST2", "IDIPTrig"), ("WPSYST3", "Iso")]
-                scale = 1.0
-            elif "tracking" in name:
-                axes = ["SF eta", "SF pt", "SF charge"]
-                axlabels = ["eta", "pt", "q"]
-                nameReplace = [("effStatTnP_tracking", "effStatTnP"), ("q0", "Tracking"), ("q1", "Tracking")] # this serves two purposes: it correlates nuisances between charges and add a sensible labels to nuisances
-                scale = 1.0
-            elif "reco" in name:
-                axes = ["SF eta", "SF pt", "SF charge"]
-                axlabels = ["eta", "pt", "q"]
-                nameReplace = [("effStatTnP_reco", "effStatTnP"), ("q0", "Reco"), ("q1", "Reco")] # this serves two purposes: it correlates nuisances between charges and add a sensible labels to nuisances
+                nameReplace = [("WPSYST0", "Reco"), ("WPSYST1", "Tracking"), ("WPSYST2", "IDIP"), ("WPSYST3", "Trig"), ("WPSYST4", "Iso")]
                 scale = 1.0
             else:
-                axes = ["SF eta", "SF pt", "SF charge", "idiptrig-iso"]
-                axlabels = ["eta", "pt", "q", "Trig"]
-                nameReplace = [("Trig0", "IDIPTrig"), ("q0Trig1", "Iso"), ("q1Trig1", "Iso")] if args.correlateEffStatIsoByCharge else [("Trig0", "IDIPTrig"), ("Trig1", "Iso")] # replace with better names
-                scale = 1.0 if args.correlateEffStatIsoByCharge else {".*effStatTnP.*Iso" : "1.414", ".*effStatTnP.*IDIPTrig" : "1.0"} # only for iso, scale up by sqrt(2) when decorrelating between charges and efficiencies were derived inclusively
+                axes = ["SF eta", "nPtEigenBins", "SF charge", "downUpVar"]
+                axlabels = ["eta", "pt", "q", "downUpVar"]
+                nameReplace = [] if any(x in name for x in chargeDependentSteps) else [("q0", ""), ("q1", "")]  # this part correlates nuisances between charges
+                scale = 1.0
+                if name == "iso" and not args.correlateEffStatIsoByCharge:
+                    scale = 1.414 # only for iso, scale up by sqrt(2) when decorrelating between charges and efficiencies were derived inclusively
+                    nameReplace = []
+                nameReplace = nameReplace + [("effStatTnP_sf_", "effStatTnP_")]
             if args.effStatLumiScale and "Syst" not in name:
                 scale /= math.sqrt(args.effStatLumiScale)
+
             cardTool.addSystematic(name, 
                 mirror=True,
                 group="muon_eff_syst" if "Syst" in name else "muon_eff_stat", # TODO: for now better checking them separately

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-# run all pieces
-# python w-mass-13TeV/smoothLeptonScaleFactors.py /eos/user/m/mciprian/www/WMassAnalysis/TnP/egm_tnp_analysis/results_globalMuons_ntuplesXYZ/efficiencies_ERA/mu_STEP_CHARGE/allEfficiencies_2D.root /eos/user/m/mciprian/www/WMassAnalysis/TnP/egm_tnp_analysis/results_globalMuons_ntuplesXYZ/smoothLeptonScaleFactors_TFfit_All/ --run-all -d
+# run all pieces (add -d just to print commands without running)
+# python w-mass-13TeV/smoothLeptonScaleFactors.py /eos/user/m/mciprian/www/WMassAnalysis/TnP/egm_tnp_analysis/results_globalMuons_ntuplesXYZ/efficiencies_ERA/mu_STEP_CHARGE/allEfficiencies_2D.root /eos/user/m/mciprian/www/WMassAnalysis/TnP/egm_tnp_analysis/results_globalMuons_ntuplesXYZ/smoothLeptonScaleFactors_TFfit_All/ --run-all
 #
 # merge all pieces
 # python w-mass-13TeV/smoothLeptonScaleFactors.py /eos/user/m/mciprian/www/WMassAnalysis/TnP/egm_tnp_analysis/results_globalMuons_ntuplesXYZ/efficiencies_ERA/mu_STEP_CHARGE/allEfficiencies_2D.root /eos/user/m/mciprian/www/WMassAnalysis/TnP/egm_tnp_analysis/results_globalMuons_ntuplesXYZ/smoothLeptonScaleFactors_TFfit_All/ --do-merge
@@ -13,6 +13,7 @@ from copy import *
 import numpy as np
 import tensorflow as tf
 import hist
+import boost_histogram as bh
 import narf
 import subprocess
 
@@ -32,8 +33,6 @@ ROOT.PyConfig.IgnoreCommandLineOptions = True
 
 sys.path.append(os.getcwd() + "/plotUtils/")
 from utility import *
-
-from make2DEffStatVariations import effStatVariations
 
 import wremnants
 
@@ -268,8 +267,6 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
     ###################
     # fits
     ####################
-    # Erf defined here: https://root.cern.ch/doc/v608/namespaceTMath.html#a44e82992cba4684280c72679f0f39adc
-    # Erf(x) = (2/sqrt(pi)) Integral(exp(-t^2))dt between 0 and x 
     boost_hist = narf.root_to_hist(hist)
     if histAlt:
         boost_hist_alt = narf.root_to_hist(histAlt)
@@ -296,14 +293,6 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
             tf1_pol2.SetParameters( np.array( res_tf1_pol2["x"], dtype=np.dtype('d') ) )
             tf1_pol2.SetLineWidth(3)
             tf1_pol2.SetLineColor(ROOT.kRed+2)
-
-            # tf1_pol2_test = ROOT.TF1("tf1_pol2_test", pol2_tf_scaled, minFitRange, maxFitRange, len(params))
-            # tf1_pol2_test.SetParameters( np.array( res_tf1_pol2["x"], dtype=np.dtype('d') ) )
-            # tf1_pol2_test.SetLineStyle(ROOT.kDashed)
-            # tf1_pol2_test.SetLineWidth(5)
-            # tf1_pol2_test.SetLineColor(ROOT.kBlue)
-            # fitopt = "FMBRQS+" # add FM if using Minuit   
-            # hist.Fit(tf1_pol2_test, fitopt)
 
             fitres_TF = {"pol2_tf" : res_tf1_pol2}
             fitFunction = {
@@ -371,15 +360,6 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
         badFitsID = badFitsID_sf
         badCovMatrixID = badCovMatrixID_sf
     else:
-        # global erfPol2_tf_scaled
-        # erfPol2_tf_scaled = partial(erfPol2_tf, xLowVal=minFitRange, xFitRange=xFitRange)
-        # params = np.array([1.0, 0.0, 0.0, 35.0, 3.0])
-        # res_tf1_erfPol2 = narf.fit_hist(boost_hist, erfPol2_tf_scaled, params)
-        # tf1_erfPol2 = ROOT.TF1("tf1_erfPol2", erfPol2_tf_scaled, minFitRange, maxFitRange, len(params))
-        # tf1_erfPol2.SetParameters( np.array( res_tf1_erfPol2["x"], dtype=np.dtype('d') ) )
-        # tf1_erfPol2.SetLineWidth(2)
-        # tf1_erfPol2.SetLineStyle(ROOT.kDashed)
-        # tf1_erfPol2.SetLineColor(ROOT.kGreen+2)
 
         tf1_erf = ROOT.TF1("tf1_erf","[0] * (1.0 + TMath::Erf((x-[1])/[2]))", minFitRange, maxFitRange)
         res_tf1_erf = narf.fit_hist(boost_hist, erf_tf, np.array([1.0, 35.0, 3.0]))
@@ -558,9 +538,6 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
         ndof = int(hist.GetNbinsX() - fitFunction[f]["func"].GetNpar())
         legEntry = "Nominal" if f == defaultFunc else fitFunction[f]["leg"]
         legEntry += f"   #chi^{{2}} = {round(chi2,1)} / {ndof}"
-        # chi2_nsigma = abs(chi2 - ndof) / math.sqrt(2.0 * ndof) 
-        # if chi2_nsigma > 3.0:
-        #    legEntry += " BAD!"
         chi2prob = ROOT.TMath.Prob(chi2, ndof)
         if chi2prob < 0.05:
             perc_chi2prob = 100.0 * chi2prob
@@ -808,8 +785,9 @@ minmaxSF = {"trigger"      : "0.65,1.15",
             "triggerminus" : "0.65,1.15",
             "idip"         : "0.95,1.01",
             "iso"          : "0.975,1.025",
-            #"antiiso"      : "0.6,1.25",
             "isonotrig"    : "0.97,1.03",
+            # usually one doesn't smooth antiiso efficiencies, they come directly from the iso ones after smoothing
+            #"antiiso"      : "0.6,1.25",
             #"antiisonotrig": "0.6,1.25",
             "tracking"     : "0.98,1.01",
             "reco"         : "0.94,1.02",
@@ -876,8 +854,8 @@ if __name__ == "__main__":
     parser.add_argument('-r','--pt-fit-range', dest='ptFitRange', type=float, nargs=2, default=[-1, -1], help='Pt range fo the fit: pass two values for min and max. If one of them (or both) is negative, the corresponding histogram range is used')
     parser.add_argument('-w','--width-pt',     dest='widthPt',default='0.2', type=float, help='Pt bin width for the smoothed histogram')
     parser.add_argument(     '--set-max-pt-histo',     dest='setMaxPtHisto', default='-1.0', type=float, help='Set upper pt for output histograms. If negative use default max from input histograms')
-    parser.add_argument(    '--input-hist-names', dest='inputHistNames', default='', type=str, help='Pass comma separated list of 3  names, for eff(data),eff(MC),SF, to be used instead of the default names')
-    parser.add_argument(    '--input-hist-names-alt', dest='inputHistNamesAlt', default='', type=str, help='Pass comma separated list of 2  names for alternate variations, for eff(data),SF, to be used instead of the default names')
+    parser.add_argument(    '--input-hist-names', dest='inputHistNames', default='EffData2D,EffMC2D,SF2D_nominal', type=str, help='Pass comma separated list of 3  names, for eff(data),eff(MC),SF, to be used instead of the default names')
+    parser.add_argument(    '--input-hist-names-alt', dest='inputHistNamesAlt', default='EffDataAltSig2D,SF2D_dataAltSig', type=str, help='Pass comma separated list of 2  names for alternate variations, for eff(data),SF, to be used instead of the default names')
     parser.add_argument(     '--palette'  , dest='palette',      default=87, type=int, help='Set palette: default is a built-in one, 55 is kRainbow')
     parser.add_argument(     '--skip-eff', dest='skipEff', action="store_true", default=False, help='Skip efficiencies and do only SF (to save time and if one only wants to smooth SF directly)')
     # utility option to print commands to do all files
@@ -1169,15 +1147,7 @@ if __name__ == "__main__":
             drawCorrelationPlot(hvar, "{lep} #eta".format(lep=lepton), "{lep} p_{{T}} [GeV]".format(lep=lepton), "Alternate - nominal (data efficiency)",
                                 hvar.GetName(), "ForceTitle", outfolder_eigenVars,
                                 palette=args.palette, passCanvas=canvas)
-        # now the syst
-        # MC
-        # hvar = getTH2fromTH3(hist_effMC_nomiAndAlt_etapt, "effSystVar_effMC", systBin, systBin)
-        # hvar.SetTitle("Eff. syst. nuisance")
-        # hvar.Add(hmcSmoothCheck, -1.0)
-        # drawCorrelationPlot(hvar, "{lep} #eta".format(lep=lepton), "{lep} p_{{T}} [GeV]".format(lep=lepton), "Alternate - nominal (MC efficiency)",
-        #                     hvar.GetName(), "ForceTitle", outfolder_eigenVars,
-        #                     palette=args.palette, passCanvas=canvas)
-        # data
+        # syst only for data
         systBin = hist_effData_nomiAndAlt_etapt.GetNbinsZ()
         hvar = getTH2fromTH3(hist_effData_nomiAndAlt_etapt, "effSystVar_effData", systBin, systBin)
         hvar.SetTitle("Eff. syst. nuisance")
@@ -1422,21 +1392,24 @@ if __name__ == "__main__":
     print(f"Created file {outname+outfilename}")
     print()
 
-    print("="*30)
-    print("Summary of bad fits (Erf for data/MC and pol3 for SF)")
-    print("="*30)
-    print("### Bad fit status (Data/MC/SF,  key,  fitstatus)")
-    for key in sorted(badFitsID_data.keys()):
-        print(f"DATA  {key}  {badFitsID_data[key]}")
-    for key in sorted(badFitsID_mc.keys()):
-        print(f"MC    {key}  {badFitsID_mc[key]}")
-    for key in sorted(badFitsID_sf.keys()):
-        print(f"SF    {key}  {badFitsID_sf[key]}")
-    print("-"*30)
-    print("### Bad covariance matrix status (Data/MC/SF,  key,  covquality).")
-    for key in sorted(badCovMatrixID_data.keys()):
-        print(f"DATA  {key}  {badCovMatrixID_data[key]}")
-    for key in sorted(badCovMatrixID_mc.keys()):
-        print(f"MC  {key}  {badCovMatrixID_mc[key]}")
-    for key in sorted(badCovMatrixID_sf.keys()):
-        print(f"SF  {key}  {badCovMatrixID_sf[key]}")
+    with open(outname+outfilename.replace(".root", ".txt"), "w+") as outf:
+        outf.write("="*30 + "\n")
+        outf.write("Summary of bad fits (Erf for data/MC and pol3 for SF)\n")
+        outf.write("="*30 + "\n")
+        outf.write("### Bad fit status (Data/MC/SF,  key,  fitstatus)\n")
+        for key in sorted(badFitsID_data.keys()):
+            outf.write(f"DATA  {key}  {badFitsID_data[key]}\n")
+        for key in sorted(badFitsID_mc.keys()):
+            outf.write(f"MC    {key}  {badFitsID_mc[key]}\n")
+        for key in sorted(badFitsID_sf.keys()):
+            outf.write(f"SF    {key}  {badFitsID_sf[key]}\n")
+        outf.write("-"*30 + "\n")
+        outf.write("### Bad covariance matrix status (Data/MC/SF,  key,  covquality)\n")
+        for key in sorted(badCovMatrixID_data.keys()):
+            outf.write(f"DATA  {key}  {badCovMatrixID_data[key]}\n")
+        for key in sorted(badCovMatrixID_mc.keys()):
+            outf.write(f"MC  {key}  {badCovMatrixID_mc[key]}\n")
+        for key in sorted(badCovMatrixID_sf.keys()):
+            outf.write(f"SF  {key}  {badCovMatrixID_sf[key]}\n")
+        outf.seek(0)
+        print(outf.read())

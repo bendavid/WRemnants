@@ -7,7 +7,7 @@ import numpy as np
 import logging
 import os
 
-def read_and_scale(fname, proc, histname, lumi):
+def read_and_scale(fname, proc, histname, lumi=False):
     with lz4.frame.open(fname) as f:
         out = pickle.load(f)
         
