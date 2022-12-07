@@ -35,7 +35,7 @@ namespace wrem {
             const double reco      = sf_all_->at(  eta_idx,   pt_idx, charge_idx, eff_type_idx_reco,      idx_nom_alt).value();
             const double tracking  = sf_all_->at(saeta_idx, sapt_idx, charge_idx, eff_type_idx_tracking,  idx_nom_alt).value();
             const double idip      = sf_all_->at(  eta_idx,   pt_idx, charge_idx, eff_type_idx_idip,      idx_nom_alt).value();
-            const double trig = 1.0;
+            double trig = 1.0;
             if (with_trigger) trig = sf_all_->at(  eta_idx,   pt_idx, charge_idx, eff_type_idx_trig,      idx_nom_alt).value();
             const double iso       = sf_all_->at(  eta_idx,   pt_idx, charge_idx, eff_type_idx_iso,       idx_nom_alt).value();
 
@@ -58,10 +58,10 @@ namespace wrem {
             std::array<double,5> allSF = scale_factor_array(pt_idx, eta_idx, sapt_idx, saeta_idx, charge_idx, pass_iso, with_trigger, idx_nom_alt);
             double sf = 1.0;
             for(int i = 0; i < allSF.size(); i++) {
-                std::cout << "Scale factor i = " << i << " --> " << allSF[i] << std::endl;
+                // std::cout << "Scale factor i = " << i << " --> " << allSF[i] << std::endl;
                 sf *= allSF[i];
             }
-            std::cout << "Scale factor product " << sf << std::endl;
+            // std::cout << "Scale factor product " << sf << std::endl;
             return sf;
 
             // auto const eta_idx = sf_all_->template axis<0>().index(eta);

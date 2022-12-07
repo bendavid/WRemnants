@@ -83,7 +83,6 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/scale
     # print(f"Saved file {outpkl}")
     
     sf_syst_pyroot = narf.hist_to_pyroot_boost(sf_syst)
-    #print(sf_syst_pyroot.values())
     #quit()
     
     # nomi and syst are stored in the same histogram, just use different helpers to override the () operator for now, until RDF is improved
