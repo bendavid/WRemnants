@@ -411,9 +411,9 @@ namespace wrem {
         std::shared_ptr<const HIST_SF> sf_type_;
         int NPtBins_ = sf_type_->template axis<1>().size(); // there are no overflows, so extent == size 
         // cache the bin indices since the string category lookup is slow
-        int idx_nom_ = sf_type_->template axis<4>().index(0); // axis is organized as DownVar - nomi - UpVar, with nomi centered at 0
-        // check if axis name exists in histogram, return -1 (invalid index) if not found
+        int idx_nom_ = sf_type_->template axis<4>().index(0); // input effStat axis is organized as DownVar - nomi - UpVar, with nomi centered at 0
         int isTriggerStep_ = sf_type_->template axis<3>().value(0) == "trigger"; // special treatment for the stat variation in 2 lepton case
+        // check if axis name exists in histogram, return -1 (invalid index) if not found
         int idx_iso_triggering_        = checkEffTypeInAxis(sf_type_->template axis<3>(), "iso");
         int idx_antiiso_triggering_    = checkEffTypeInAxis(sf_type_->template axis<3>(), "antiiso");
         int idx_iso_nontriggering_     = checkEffTypeInAxis(sf_type_->template axis<3>(), "isonotrig");

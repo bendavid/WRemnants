@@ -26,17 +26,12 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/scale
     axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "SF charge")
     isoEff_types = ["iso", "isonotrig", "antiiso", "antiisonotrig"]
     allEff_types = ["reco", "tracking", "idip", "trigger"] + isoEff_types
-    #eff_types = ["reco", "idip", "trigger"]
-    #axis_eff_type = hist.axis.StrCategory(eff_types, name = "eff_type")
-    #axis_isoEff_type = hist.axis.StrCategory(isoEff_types, name = "isoEff_type")
-    #axis_trackingEff_type = hist.axis.StrCategory(["tracking"], name = "trackingEff_type")
     axis_allEff_type = hist.axis.StrCategory(allEff_types, name = "allEff_type")
-    axis_nom_syst = hist.axis.Integer(0, 2, underflow = False, overflow =False, name = "nom-syst") # only one syst for now (and the nominal)
-    #axis_with_trigger = hist.axis.Boolean(name = "with_trigger")
-    axis_down_up = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "downUpVar")
+    axis_nom_syst = hist.axis.Integer(0, 2, underflow = False, overflow =False, name = "nom-syst") # only one syst for now (and the nominal in the first bin)
+    axis_down_up = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "downUpVar") # for the stat variations, to avoid stacking on same axis
 
     charges = { -1. : "minus", 1. : "plus" }
-    chargeDependentSteps = ["trigger"] # might add idip or others
+    chargeDependentSteps = ["trigger"] # might add idip or others later on
     
     fin = ROOT.TFile.Open(filename)
     if fin is None or fin.IsZombie():
@@ -58,7 +53,7 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/scale
             if hist_root is None:
                 print(f"Error: {hist_name} onot found in file {filename}")
                 quit()
-            print(f"syst: {eff_type} -> {hist_name}")
+            #print(f"syst: {eff_type} -> {hist_name}")
 
             hist_hist = narf.root_to_hist(hist_root, axis_names = ["SF eta", "SF pt", "nomi-statUpDown-syst"])
 
@@ -81,16 +76,16 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/scale
     sf_syst.view(flow=True)[:, 0, ...] = sf_syst.view(flow=True)[:, 1, ...]
     sf_syst.view(flow=True)[:, axis_pt_eff.extent-1, ...] = sf_syst.view(flow=True)[:, axis_pt_eff.extent-2, ...]
 
+    # might be convenient to store them for easier usage
     # outpkl = filename.replace(".root", ".pkl.lz4")
     # with lz4.frame.open(outpkl, "wb") as f:
     #     pickle.dump(sf_syst, f, protocol = pickle.HIGHEST_PROTOCOL)
     # print(f"Saved file {outpkl}")
-    # quit()
     
     sf_syst_pyroot = narf.hist_to_pyroot_boost(sf_syst)
-    print(sf_syst_pyroot)
-    print(sf_syst_pyroot.axis)
-    quit()
+    #print(sf_syst_pyroot.values())
+    #quit()
+    
     # nomi and syst are stored in the same histogram, just use different helpers to override the () operator for now, until RDF is improved
     helper = ROOT.wrem.muon_efficiency_smooth_helper[str(is_w_like).lower(), type(sf_syst_pyroot)]( ROOT.std.move(sf_syst_pyroot) )
     helper_syst = ROOT.wrem.muon_efficiency_smooth_helper_syst[str(is_w_like).lower(), type(sf_syst_pyroot)]( helper )
@@ -101,11 +96,11 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/scale
     ## now the EFFSTAT
     
     # for the stat histograms, an axis will contain the efficiency type, in some cases it might have a single bin (e.g. tracking, trigger)
-    # but for isolation needs more, because of the different cases iso-antiiso with/without trigger
-    # could actually stack reco-idip-trig together, but better to have the helper deal with a single histogram at a time, and have a specialization for isolation
-    # in this way the name of the (single) effType axis can be used to activate some internal behaviour as needed (for example trig won't have variation fro not triggering lepton)
+    # but for isolation needs more, because of the different cases to handle inside the helper class (iso-antiiso with/without trigger)
+    # could actually stack reco-idip-trig together, but better to have the helper deal with a single histogram at a time
+    # then there will be a specialization of the class for isolation
+    # in this way the name of the (single) effType axis can be used to activate some internal behaviour as needed (for example trigger won't have variations for not triggering lepton)
     
-    # all but tracking and isolation
     effstat_manager = {"sf_reco": {"nPtEigenBins" : 0,
                                    "axisLabels" : ["reco"],
                                    "dataMCeffVar" : False,
@@ -126,25 +121,34 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/scale
                                    "dataMCeffVar" : False,
                                    "boostHist" : None,
                                    "helper" : None},
-                       # "sf_iso": {"nPtEigenBins" : 0,
-                       #            "axisLabels" : ["iso", "isonotrig", "antiiso", "antiisonotrig"],
-                       #            "dataMCeffVar" : True,
-                       #             "boostHist" : None,
-                       #             "helper" : None},
-                       }
+                       "sf_iso_effData": {"nPtEigenBins" : 0,
+                                          "axisLabels" : ["iso", "isonotrig", "antiiso", "antiisonotrig"],
+                                          "boostHist" : None,
+                                          "helper" : None},
+                       "sf_iso_effMC": {"nPtEigenBins" : 0,
+                                        "axisLabels" : ["iso", "isonotrig", "antiiso", "antiisonotrig"],
+                                        "boostHist" : None,
+                                        "helper" : None},
+    }
 
     for effStatKey in effstat_manager.keys():
         down_nom_up_effStat_axis = None
         axis_eff_type = None
         for charge, charge_tag in charges.items():
             for eff_type in effstat_manager[effStatKey]["axisLabels"]:
-                hist_name = f"SF_nomiAndAlt_{eratag}_{eff_type}_{charge_tag}"
+                nameTag = "nomiAndAlt"
+                if "effData" in effStatKey:
+                    nameTag += "_onlyDataVar"
+                elif "effMC" in effStatKey:
+                    nameTag += "_onlyMCVar"
+                chargeTag = charge_tag if eff_type in chargeDependentSteps else "both"
+                hist_name = f"SF_{nameTag}_{eratag}_{eff_type}_{chargeTag}"
                 hist_root = fin.Get(hist_name)
-                #print(ROOT.AddressOf(hist_root))
-                # might not have a charge specific version
-                if not isinstance(hist_root, ROOT.TH1):
-                    hist_name = f"SF_nomiAndAlt_{eratag}_{eff_type}_both"
-                    hist_root = fin.Get(hist_name)
+                # print(f"stat: {effStatKey}|{eff_type} -> {hist_name}")
+                # print(ROOT.AddressOf(hist_root))
+                if hist_root is None:
+                    print(f"Error: {hist_name} onot found in file {filename}")
+                    quit()
 
                 if down_nom_up_effStat_axis is None:
                     # Z axis has nominal, 2*N effStat (first N up then N down) and one syst in the last bin
@@ -197,5 +201,5 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/scale
         helper_stat.tensor_axes = [axis_eta_eff_tensor, axis_ptEigen_eff_tensor, axis_charge, axis_down_up]
         effstat_manager[effStatKey]["helper"] = helper_stat
     ####
-    
+    # return nomi, effsyst, and a dictionary with effstat to use them by name
     return helper, helper_syst, {k : effstat_manager[k]["helper"] for k in effstat_manager.keys()}
