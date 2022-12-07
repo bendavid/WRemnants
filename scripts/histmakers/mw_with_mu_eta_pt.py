@@ -261,6 +261,8 @@ def build_graph(df, dataset):
         results.append(qcdJetPt45)
 
         for key,helper in muon_efficiency_helper_stat.items():
+            print(f"Skipping effStatTnP_{key}: debugging in progress")
+            continue
             helperInputColumns = ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0"]
             if "iso" in key:
                 helperInputColumns.extend(["passIso", "nominal_weight"])
