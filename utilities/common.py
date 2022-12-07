@@ -93,7 +93,8 @@ def common_parser():
         #sfFile = "scaleFactorProduct_12Oct2022_TrackerMuons_vertexWeight_OSchargeExceptTracking.root"
         sfFile = "scaleFactorProduct_16Oct2022_TrackerMuonsHighPurity_vertexWeight_OSchargeExceptTracking.root"
     else:
-        sfFile = "scaleFactorProduct_08Oct2022_vertexWeight_OSchargeExceptTracking.root"
+        #sfFile = "scaleFactorProduct_08Oct2022_vertexWeight_OSchargeExceptTracking.root"
+        sfFile = "allSmooth_GtoH.root" # FIXME: temporary for quick tests
     sfFile = f"{data_dir}/testMuonSF/{sfFile}"
 
     parser.add_argument("--sfFile", type=str, help="File with muon scale factors", default=sfFile)
