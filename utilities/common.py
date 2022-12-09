@@ -83,6 +83,7 @@ def common_parser():
     parser.add_argument("--no_recoil", action='store_true', help="Don't apply recoild correction")
     parser.add_argument("--no-vertex_weight", dest="vertex_weight", action='store_false', help="Do not apply reweighting of vertex z distribution in MC to match data")
     parser.add_argument("--trackerMuons", action='store_true', help="Use tracker muons instead of global muons (need appropriate scale factors too)")
+    parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers)")
     parser.add_argument("--onlyMainHistograms", action='store_true', help="Only produce some histograms, skipping (most) systematics to run faster when those are not needed")
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
                         help="Set verbosity level with logging, the larger the more verbose (currently for setup_test_logger)");
@@ -93,8 +94,10 @@ def common_parser():
         #sfFile = "scaleFactorProduct_12Oct2022_TrackerMuons_vertexWeight_OSchargeExceptTracking.root"
         sfFile = "scaleFactorProduct_16Oct2022_TrackerMuonsHighPurity_vertexWeight_OSchargeExceptTracking.root"
     else:
-        #sfFile = "scaleFactorProduct_08Oct2022_vertexWeight_OSchargeExceptTracking.root"
-        sfFile = "allSmooth_GtoH.root" # FIXME: temporary for quick tests
+        if commonargs.binnedScaleFactors:
+            sfFile = "scaleFactorProduct_08Oct2022_vertexWeight_OSchargeExceptTracking.root"
+        else:
+            sfFile = "allSmooth_GtoH.root" # FIXME: temporary for quick tests
     sfFile = f"{data_dir}/testMuonSF/{sfFile}"
 
     parser.add_argument("--sfFile", type=str, help="File with muon scale factors", default=sfFile)

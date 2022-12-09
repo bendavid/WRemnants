@@ -26,6 +26,7 @@ def make_parser(parser=None):
     parser.add_argument("--correlateEffStatIsoByCharge", action='store_true', help="Correlate isolation efficiency uncertanties between the two charges (by default they are decorrelated)")
     parser.add_argument("--noHist", action='store_true', help="Skip the making of 2D histograms (root file is left untouched if existing)")
     parser.add_argument("--effStatLumiScale", type=float, default=None, help="Rescale equivalent luminosity for efficiency stat uncertainty by this value (e.g. 10 means ten times more data from tag and probe)")
+    parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers and nuisances)")
     return parser
 
 def main(args):
@@ -87,7 +88,6 @@ def main(args):
 
     # keep mass weights here as first systematic, in case one wants to run stat-uncertainty only with --doStatOnly
     cardTool.addSystematic("massWeight", 
-        # TODO: Add the mass weights to the tau samples ## FIXME: isn't it done?
         processes=signal_samples_inctau,
         outNames=theory_tools.massWeightNames(["massShift100MeV"], wlike=wlike),
         group="massShift",
@@ -153,7 +153,7 @@ def main(args):
 
     if not args.noEfficiencyUnc:
         chargeDependentSteps = ["trigger"] # might add idip or others, but we may use a special treatment to decorrelate by inflating the uncertainties
-        effStatTypes = ["reco", "tracking", "idip", "trigger"] # add isolation
+        effStatTypes = ["reco", "tracking", "idip", "trigger", "iso_effData", "iso_effMC"] # add isolation
         allEffTnP = [f"effStatTnP_sf_{eff}" for eff in effStatTypes] + ["effSystTnP"]
         for name in allEffTnP:
             if "Syst" in name:
@@ -166,7 +166,7 @@ def main(args):
                 axlabels = ["eta", "pt", "q", "downUpVar"]
                 nameReplace = [] if any(x in name for x in chargeDependentSteps) else [("q0", ""), ("q1", "")]  # this part correlates nuisances between charges
                 scale = 1.0
-                if name == "iso" and not args.correlateEffStatIsoByCharge:
+                if "iso" in name and not args.correlateEffStatIsoByCharge:
                     scale = 1.414 # only for iso, scale up by sqrt(2) when decorrelating between charges and efficiencies were derived inclusively
                     nameReplace = []
                 nameReplace = nameReplace + [("effStatTnP_sf_", "effStatTnP_")]
@@ -174,7 +174,7 @@ def main(args):
                 scale /= math.sqrt(args.effStatLumiScale)
 
             cardTool.addSystematic(name, 
-                mirror=True,
+                mirror=True if "Syst" in name else False,
                 group="muon_eff_syst" if "Syst" in name else "muon_eff_stat", # TODO: for now better checking them separately
                 systAxes=axes,
                 labelsByAxis=axlabels,

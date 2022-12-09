@@ -261,14 +261,10 @@ def build_graph(df, dataset):
         results.append(qcdJetPt45)
 
         for key,helper in muon_efficiency_helper_stat.items():
-            print(f"Skipping effStatTnP_{key}: debugging in progress")
-            continue
-            helperInputColumns = ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0"]
             if "iso" in key:
-                helperInputColumns.extend(["passIso", "nominal_weight"])
+                df = df.Define(f"effStatTnP_{key}_tensor", helper, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0", "passIso", "nominal_weight"])
             else:
-                helperInputColumns.extend(["nominal_weight"])
-            df = df.Define(f"effStatTnP_{key}_tensor", helper, helperInputColumns)
+                df = df.Define(f"effStatTnP_{key}_tensor", helper, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0", "nominal_weight"])
             effStatTnP = df.HistoBoost(f"effStatTnP_{key}", nominal_axes, [*nominal_cols, f"effStatTnP_{key}_tensor"], tensor_axes = helper.tensor_axes)
             results.append(effStatTnP)
         
