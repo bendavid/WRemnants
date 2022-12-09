@@ -12,7 +12,7 @@ ROOT.gInterpreter.Declare('#include "muon_efficiencies_smooth.h"')
 
 data_dir = f"{pathlib.Path(__file__).parent}/data/"
 
-def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/scaleFactorProduct_08Oct2022_vertexWeight_OSchargeExceptTracking.root",
+def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSmooth_GtoH.root",
                                         era = None, is_w_like = False, max_pt = np.inf):
 
     eradict = { "2016PreVFP" : "BtoF",
@@ -186,7 +186,7 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/scale
 
         netabins = axis_eta_eff.size
         sf_stat_pyroot = narf.hist_to_pyroot_boost(effstat_manager[effStatKey]["boostHist"])
-        if effStatKey == "sf_iso":
+        if "sf_iso" in effStatKey:
             helper_stat = ROOT.wrem.muon_efficiency_smooth_helper_stat_iso[str(is_w_like).lower(), netabins, nPtEigenBins, type(sf_stat_pyroot)]( ROOT.std.move(sf_stat_pyroot) )
         else:
             helper_stat = ROOT.wrem.muon_efficiency_smooth_helper_stat[str(is_w_like).lower(), netabins, nPtEigenBins, type(sf_stat_pyroot)]( ROOT.std.move(sf_stat_pyroot) )
@@ -195,7 +195,6 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/scale
             axis_eta_eff_tensor = hist.axis.Regular(axis_eta_eff.size, axis_eta_eff.edges[0], axis_eta_eff.edges[-1], name = axis_eta_eff.name, overflow = False, underflow = False)
         elif isinstance(axis_eta_eff, bh.axis.Variable):
             axis_eta_eff_tensor = hist.axis.Variable(axis_eta_eff.size, axis_eta_eff.edges, name = axis_eta_eff.name, overflow = False, underflow = False)
-        # for pt need to additionally remove the out of range bins if any
         axis_ptEigen_eff_tensor = hist.axis.Integer(0, effstat_manager[effStatKey]["nPtEigenBins"], underflow = False, overflow =False, name = "nPtEigenBins")    
         helper_stat.tensor_axes = [axis_eta_eff_tensor, axis_ptEigen_eff_tensor, axis_charge, axis_down_up]
         effstat_manager[effStatKey]["helper"] = helper_stat
