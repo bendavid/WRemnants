@@ -549,8 +549,9 @@ def drawTH1(htmp,
             moreTextLatex="",
             skipTdrStyle=False,
             drawStatBox=True,
-            fitString="" # can be "gaus;LEMSQ+;;-5;5" 
-            ):
+            fitString="", # can be "gaus;LEMSQ+;;-5;5"
+            plotTitleLatex=""
+):
 
 
 
@@ -568,7 +569,8 @@ def drawTH1(htmp,
     canvas.SetTicky(1)
     canvas.cd()
     canvas.SetBottomMargin(0.14)
-    canvas.SetLeftMargin(0.12)
+    leftMargin = 0.12
+    canvas.SetLeftMargin(leftMargin)
     canvas.SetRightMargin(0.04)
     canvas.cd()
 
@@ -607,7 +609,15 @@ def drawTH1(htmp,
             ROOT.gStyle.SetOptStat(110010)
         else:
             ROOT.gStyle.SetOptStat(111110)
-                
+
+    if len(plotTitleLatex):
+        lat = ROOT.TLatex()
+        lat.SetNDC();
+        lat.SetTextFont(42)        
+        lat.SetTextSize(0.04)
+        lat.DrawLatex(leftMargin, 0.95, plotTitleLatex)
+
+            
     if len(moreTextLatex):
         realtext = moreTextLatex.split("::")[0]
         x1,y1,ypass,textsize = 0.75,0.8,0.08,0.035

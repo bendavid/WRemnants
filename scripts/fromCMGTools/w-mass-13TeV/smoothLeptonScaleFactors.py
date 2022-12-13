@@ -452,6 +452,11 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
     for ib in range(1, hband.GetNbinsX()+1):
         pt = hband.GetBinCenter(ib)
         val = fitFunction[defaultFunc]["func"].Eval(pt)
+        # protect against efficiency becoming larger than 1.0
+        # usually it happens because of the pol3 extrapolation for very high pt, which is not used for the analysis
+        # for MC set to slightly less than 1.0 to avoid issues with antiiso when doing 1-eff and then data/MC ratio
+        if val >= 1.0 and not doingSF:
+            val = 0.9995 if mc == "MC" else 1.0 
         hband.SetBinContent(ib, val)
         hist_nomiAndAlt_etapt.SetBinContent(key+1, ib, 1, val) # assuming the pt binning is the same, which it should, although the code should be made more robust
 
@@ -1070,6 +1075,7 @@ if __name__ == "__main__":
             for ipt in range(1, hmcSmoothCheck_origBinPt.GetNbinsY()+1):
                 ptval = hmcSmoothCheck_origBinPt.GetYaxis().GetBinCenter(ipt)
                 hmcSmoothCheck_origBinPt.SetBinContent(key+1, ipt, bestFitFunc.Eval(ptval))
+                hmcSmoothCheck_origBinPt.SetBinError(  key+1, ipt, hmc.GetBinError(key+1, ipt))
         hmcSmoothCheck = getTH2fromTH3(hist_effMC_nomiAndAlt_etapt, "hmcSmoothCheck", 1, 1)            
         hmcSmoothCheck.SetTitle("Smooth MC efficiency")
         ###########################
@@ -1093,7 +1099,8 @@ if __name__ == "__main__":
             )
             for ipt in range(1,hdataSmoothCheck_origBinPt.GetNbinsY()+1):
                 ptval = hdataSmoothCheck_origBinPt.GetYaxis().GetBinCenter(ipt)
-                hdataSmoothCheck_origBinPt.SetBinContent(key+1,ipt, bestFitFunc.Eval(ptval))
+                hdataSmoothCheck_origBinPt.SetBinContent(key+1, ipt, bestFitFunc.Eval(ptval))
+                hdataSmoothCheck_origBinPt.SetBinError(  key+1, ipt, hdata.GetBinError(key+1, ipt))
         hdataSmoothCheck = getTH2fromTH3(hist_effData_nomiAndAlt_etapt, "hdataSmoothCheck", 1, 1)
         hdataSmoothCheck.SetTitle("Smooth data efficiency")
 
@@ -1117,6 +1124,7 @@ if __name__ == "__main__":
         for ipt in range(1,hsfSmoothCheck_origBinPt.GetNbinsY()+1):
             ptval = hsfSmoothCheck_origBinPt.GetYaxis().GetBinCenter(ipt)
             hsfSmoothCheck_origBinPt.SetBinContent(key+1,ipt, bestFitFunc.Eval(ptval))
+            hsfSmoothCheck_origBinPt.SetBinError(  key+1, ipt, hsf.GetBinError(key+1, ipt))
     hsfSmoothCheck = getTH2fromTH3(hist_SF_nomiAndAlt_etapt, "hsfSmoothCheck", 1, 1)
     hsfSmoothCheck.SetTitle("Smooth scale factor")
 
@@ -1365,15 +1373,42 @@ if __name__ == "__main__":
         # finally add the data syst in last bin
         ROOT.wrem.fillTH3fromTH3(hanti_SF_nomiAndAlt_dataMCVar_etapt, hanti_SF_nomiAndAlt_onlyDataVar_etapt,
                                  hanti_SF_nomiAndAlt_dataMCVar_etapt.GetNbinsZ(), hanti_SF_nomiAndAlt_onlyDataVar_etapt.GetNbinsZ(), hanti_SF_nomiAndAlt_onlyDataVar_etapt.GetNbinsZ())
+        # for completeness make also original antiiso efficiencies and scale factors
+        hanti_effData_original = copy.deepcopy(hdata.Clone("effData_original" + hist_postfix_anti))
+        ROOT.wrem.initializeRootHistogram(hanti_effData_original, 1.0)
+        hanti_effMC_original = copy.deepcopy(hanti_effData_original.Clone("effMC_original" + hist_postfix_anti))
+        hanti_effData_original.Add(hdata, -1.0)
+        hanti_effMC_original.Add(hmc, -1.0)
+        hanti_SF_original = copy.deepcopy(hanti_effData_original.Clone("SF_original" + hist_postfix_anti))
+        hanti_SF_original.Divide(hanti_effMC_original)
+        # as the last thing, make smoothed antiiso efficiencies and scale factors with the original pt binning (uncertainties from original binned things)
+        hanti_hdataSmoothCheck_origBinPt = copy.deepcopy(hdataSmoothCheck_origBinPt.Clone("effData_smoothWithOriginalPtBins" + hist_postfix_anti))
+        ROOT.wrem.initializeRootHistogram(hanti_hdataSmoothCheck_origBinPt, 1.0)
+        hanti_hmcSmoothCheck_origBinPt = copy.deepcopy(hanti_hdataSmoothCheck_origBinPt.Clone("effMC_smoothWithOriginalPtBins" + hist_postfix_anti))
+        hanti_hdataSmoothCheck_origBinPt.Add(hdataSmoothCheck_origBinPt, -1.0)
+        hanti_hmcSmoothCheck_origBinPt.Add(hmcSmoothCheck_origBinPt, -1.0)
+        # for the SF have to divide the smooth efficiencies, cannot trivially invert the isolation sf
+        hanti_hsfSmoothCheck_origBinPt = copy.deepcopy(hanti_hdataSmoothCheck_origBinPt.Clone("SF_smoothWithOriginalPtBins" + hist_postfix_anti))
+        hanti_hsfSmoothCheck_origBinPt.Divide(hanti_hmcSmoothCheck_origBinPt)
+        # now the original dataAltSig for SF
+        hanti_SF_originalDataAltSig = copy.deepcopy(hanti_effData_original.Clone("SF_originalDataAltSig" + hist_postfix_anti))
+        ROOT.wrem.initializeRootHistogram(hanti_SF_originalDataAltSig, 1.0)
+        hanti_SF_originalDataAltSig.Add(hdataAlt, -1.0)
+        hanti_SF_originalDataAltSig.Divide(hanti_effMC_original)
+
     ###########################
     # Now save things
     ###########################
     tfile = ROOT.TFile.Open(outname+outfilename,'recreate')
-    if not args.skipEff:
-        scaleFactor.Write("SF_fromSmoothEfficiencyRatio" + hist_postfix)
     hsf.Write("SF_original" + hist_postfix)
     hdata.Write("effData_original" + hist_postfix)
     hmc.Write("effMC_original" + hist_postfix)
+    hsfAlt.Write("SF_originalDataAltSig" + hist_postfix)
+    hsfSmoothCheck_origBinPt.Write("SF_smoothWithOriginalPtBins" + hist_postfix) # this comes from direct SF smoothing (the one from efficiencies is named SF_fromSmoothEfficiencyRatio_... )
+    if not args.skipEff:
+        hdataSmoothCheck_origBinPt.Write("effData_smoothWithOriginalPtBins" + hist_postfix)
+        hmcSmoothCheck_origBinPt.Write("effMC_smoothWithOriginalPtBins" + hist_postfix)
+        scaleFactor.Write("SF_fromSmoothEfficiencyRatio" + hist_postfix)
     hist_effData_nomiAndAlt_etapt.Write("effData_nomiAndAlt" + hist_postfix)
     hist_effMC_nomiAndAlt_etapt.Write("effMC_nomiAndAlt" + hist_postfix)
     hist_SF_nomiAndAlt_etapt.Write("SF_nomiAndAlt" + hist_postfix)
@@ -1381,12 +1416,18 @@ if __name__ == "__main__":
         hist_SF_nomiAndAlt_onlyDataVar_etapt.Write()
         hist_SF_nomiAndAlt_onlyMCVar_etapt.Write()
         hist_SF_nomiAndAlt_dataMCVar_etapt.Write()
-        # TODO: create and save also the histograms with original binning for completeness
         hanti_effData.Write()
         hanti_effMC.Write()
         hanti_SF_nomiAndAlt_onlyDataVar_etapt.Write()
         hanti_SF_nomiAndAlt_onlyMCVar_etapt.Write()
         hanti_SF_nomiAndAlt_dataMCVar_etapt.Write()
+        hanti_hdataSmoothCheck_origBinPt.Write()
+        hanti_hmcSmoothCheck_origBinPt.Write()
+        hanti_hsfSmoothCheck_origBinPt.Write() # equivalent of scaleFactor histogram from ratio of smooth efficiencies (smoothing SF directly for antiiso doesn't make sense)
+        hanti_effData_original.Write()
+        hanti_effMC_original.Write()
+        hanti_SF_original.Write()
+        hanti_SF_originalDataAltSig.Write()
     tfile.Close()
     print()
     print(f"Created file {outname+outfilename}")

@@ -18,12 +18,6 @@ namespace wrem {
     
         std::array<double,5> scale_factor_array(int pt_idx, int eta_idx, int sapt_idx, int saeta_idx, int charge_idx, bool pass_iso, bool with_trigger, int idx_nom_alt) const {
 
-            // auto const eta_idx = sf_all_->template axis<0>().index(eta);
-            // auto const pt_idx = sf_all_->template axis<1>().index(pt);
-            // auto const charge_idx = sf_all_->template axis<2>().index(charge);
-            // auto const saeta_idx = sf_all_->template axis<0>().index(saeta);
-            // auto const sapt_idx = sf_all_->template axis<1>().index(sapt);
-
             auto const eff_type_idx_reco = idx_reco_;
             auto const eff_type_idx_tracking = idx_tracking_;
             auto const eff_type_idx_idip = idx_idip_;
@@ -64,29 +58,6 @@ namespace wrem {
             // std::cout << "Scale factor product " << sf << std::endl;
             return sf;
 
-            // auto const eta_idx = sf_all_->template axis<0>().index(eta);
-            // auto const pt_idx = sf_all_->template axis<1>().index(pt);
-            // auto const charge_idx = sf_all_->template axis<2>().index(charge);
-            // auto const saeta_idx = sf_all_->template axis<0>().index(saeta);
-            // auto const sapt_idx = sf_all_->template axis<1>().index(sapt);
-
-            // auto const eff_type_idx_reco = idx_reco_;
-            // auto const eff_type_idx_tracking = idx_tracking_;
-            // auto const eff_type_idx_idip = idx_idip_;
-            // auto const eff_type_idx_trig = idx_trig_;
-            // auto const eff_type_idx_iso_pass = with_trigger ? idx_iso_triggering_ : idx_iso_nontriggering_;
-            // auto const eff_type_idx_iso_fail = with_trigger ? idx_antiiso_triggering_ : idx_antiiso_nontriggering_;
-            // auto const eff_type_idx_iso = pass_iso ? eff_type_idx_iso_pass : eff_type_idx_iso_fail;
-
-            // const double reco      = sf_all_->at(  eta_idx,   pt_idx, charge_idx, eff_type_idx_reco,      idx_nom_alt).value();
-            // const double tracking  = sf_all_->at(saeta_idx, sapt_idx, charge_idx, eff_type_idx_tracking,  idx_nom_alt).value();
-            // const double idip      = sf_all_->at(  eta_idx,   pt_idx, charge_idx, eff_type_idx_idip,      idx_nom_alt).value();
-            // const double trig = 1.0;
-            // if (with_trigger) trig = sf_all_->at(  eta_idx,   pt_idx, charge_idx, eff_type_idx_trig,      idx_nom_alt).value();
-            // const double iso       = sf_all_->at(  eta_idx,   pt_idx, charge_idx, eff_type_idx_iso,       idx_nom_alt).value();
-
-            // return iso * trig * idip * tracking * reco;
-
         }
 
         using syst_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<5>>; // 5 bins for reco, tracking, idip, trigger, iso(notrig) in this order
@@ -114,43 +85,6 @@ namespace wrem {
                 
             return res;
      
-            // auto const eta_idx =     sf_all_->template axis<0>().index(eta);
-            // auto const pt_idx =      sf_all_->template axis<1>().index(pt);
-            // auto const saeta_idx =   sf_all_->template axis<0>().index(saeta);
-            // auto const sapt_idx =    sf_all_->template axis<1>().index(sapt);
-            // auto const charge_idx =  sf_all_->template axis<2>().index(charge);
-
-            // auto const eff_type_idx_reco = idx_reco_;
-            // auto const eff_type_idx_tracking = idx_tracking_;
-            // auto const eff_type_idx_idip = idx_idip_;
-            // auto const eff_type_idx_trig = idx_trig_;
-            // auto const eff_type_idx_iso_pass = with_trigger ? idx_iso_triggering_ : idx_iso_nontriggering_;
-            // auto const eff_type_idx_iso_fail = with_trigger ? idx_antiiso_triggering_ : idx_antiiso_nontriggering_;
-            // auto const eff_type_idx_iso = pass_iso ? eff_type_idx_iso_pass : eff_type_idx_iso_fail;
-
-            // const double reco      = sf_all_->at(  eta_idx,   pt_idx, charge_idx, eff_type_idx_reco,      idx_nom_).value();
-            // const double tracking  = sf_all_->at(saeta_idx, sapt_idx, charge_idx, eff_type_idx_tracking,  idx_nom_).value();
-            // const double idip      = sf_all_->at(  eta_idx,   pt_idx, charge_idx, eff_type_idx_idip,      idx_nom_).value();
-            // const double trig = 1.0;
-            // if (with_trigger) trig = sf_all_->at(  eta_idx,   pt_idx, charge_idx, eff_type_idx_trig,      idx_nom_).value();
-            // const double iso       = sf_all_->at(  eta_idx,   pt_idx, charge_idx, eff_type_idx_iso,       idx_nom_).value();
-
-            // const double reco_alt      = sf_all_->at(  eta_idx,   pt_idx, charge_idx, eff_type_idx_reco,      idx_alt_).value();
-            // const double tracking_alt  = sf_all_->at(saeta_idx, sapt_idx, charge_idx, eff_type_idx_tracking,  idx_alt_).value();
-            // const double idip_alt      = sf_all_->at(  eta_idx,   pt_idx, charge_idx, eff_type_idx_idip,      idx_alt_).value();
-            // const double trig_alt = 1.0;
-            // if (with_trigger) trig_alt = sf_all_->at(  eta_idx,   pt_idx, charge_idx, eff_type_idx_trig,      idx_alt_).value();
-            // const double iso_alt       = sf_all_->at(  eta_idx,   pt_idx, charge_idx, eff_type_idx_iso,       idx_alt_).value();
-     
-            // // fill template with systematic variations of scale factors
-            // res(0) = reco_alt / reco;
-            // res(1) = tracking_alt / tracking;
-            // res(2) = idip_alt / idip;
-            // res(3) = trig_alt / trig;
-            // res(4) = iso_alt / iso; // anticorrelation between iso and antiiso already embedded in the numbers stored in the histograms
-            // // also this comes from data efficiency variation only, so the anticorrelation in the efficiencies is preserved in the scale factors
-            // return res;
-
         }
 
     protected:
