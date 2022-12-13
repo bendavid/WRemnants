@@ -132,6 +132,7 @@ namespace wrem {
     void initializeHistogram(T& h, Long64_t nbins, double init = 0.0) {
         for (Long64_t globalBin = 0; globalBin <= nbins; globalBin++) {
             h.SetBinContent(globalBin, init);
+            h.SetBinError(globalBin, 0.0);
         }
     }
     void initializeRootHistogram(TH1& h, double init = 0.0) {

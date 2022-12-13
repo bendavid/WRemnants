@@ -62,9 +62,9 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
                 axis_pt_eff = hist_hist.axes[1]
                 # store all systs (currently only 1) with the nominal, for all efficiency steps
                 sf_syst = hist.Hist(axis_eta_eff, axis_pt_eff, axis_charge, axis_allEff_type, axis_nom_syst, name = "sf_syst", storage = hist.storage.Weight())
-            # this axis might change for different histograms, because of a different number of effstat variations
+            # this axis might change for different histograms, because of a different number of effStat variations
             axis_nomiAlt_eff = hist_hist.axes[2]
-            # could use mx_pt to remove some of the pt bins for the input histogram
+            # could use max_pt to remove some of the pt bins for the input histogram
             # extract nominal (first bin that is not underflow) and put in corresponding bin of destination (bin 0 is the first bin because no underflow)
             sf_syst.view(flow=True)[:, :, axis_charge.index(charge), axis_allEff_type.index(eff_type), 0] = hist_hist.view(flow=True)[:,:,1]
             # extract syst (last bin except overflow) and put in corresponding bin of destination (bin 1 is the second bin because no underflow)
@@ -100,24 +100,20 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
     # then there will be a specialization of the class for isolation
     # in this way the name of the (single) effType axis can be used to activate some internal behaviour as needed (for example trigger won't have variations for not triggering lepton)
     
-    effstat_manager = {"sf_reco": {"nPtEigenBins" : 0,
+    effStat_manager = {"sf_reco": {"nPtEigenBins" : 0,
                                    "axisLabels" : ["reco"],
-                                   "dataMCeffVar" : False,
                                    "boostHist" : None,
                                    "helper" : None},
                        "sf_tracking": {"nPtEigenBins" : 0,
                                        "axisLabels" : ["tracking"],
-                                       "dataMCeffVar" : False,
                                        "boostHist" : None,
                                        "helper" : None},
                        "sf_idip": {"nPtEigenBins" : 0,
                                    "axisLabels" : ["idip"],
-                                   "dataMCeffVar" : False,
                                    "boostHist" : None,
                                    "helper" : None},
                        "sf_trigger": {"nPtEigenBins" : 0,
                                    "axisLabels" : ["trigger"],
-                                   "dataMCeffVar" : False,
                                    "boostHist" : None,
                                    "helper" : None},
                        "sf_iso_effData": {"nPtEigenBins" : 0,
@@ -130,11 +126,11 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
                                         "helper" : None},
     }
 
-    for effStatKey in effstat_manager.keys():
+    for effStatKey in effStat_manager.keys():
         down_nom_up_effStat_axis = None
         axis_eff_type = None
         for charge, charge_tag in charges.items():
-            for eff_type in effstat_manager[effStatKey]["axisLabels"]:
+            for eff_type in effStat_manager[effStatKey]["axisLabels"]:
                 nameTag = "nomiAndAlt"
                 if "effData" in effStatKey:
                     nameTag += "_onlyDataVar"
@@ -152,40 +148,40 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
                 if down_nom_up_effStat_axis is None:
                     # Z axis has nominal, 2*N effStat (first N up then N down) and one syst in the last bin
                     nPtEigenBins = int(int(hist_root.GetNbinsZ() - 2)/ 2)
-                    effstat_manager[effStatKey]["nPtEigenBins"] = nPtEigenBins
+                    effStat_manager[effStatKey]["nPtEigenBins"] = nPtEigenBins
                     down_nom_up_effStat_axis = hist.axis.Regular(int(1+2*nPtEigenBins), -0.5-nPtEigenBins, 0.5+nPtEigenBins, underflow=False, overflow=False, name = "downNomUpVar")
 
                 hist_hist = narf.root_to_hist(hist_root, axis_names = ["SF eta", "SF pt", "nomi-statUpDown-syst"])
 
-                if effstat_manager[effStatKey]["boostHist"] is None:
+                if effStat_manager[effStatKey]["boostHist"] is None:
                     axis_eta_eff = hist_hist.axes[0]
                     axis_pt_eff = hist_hist.axes[1]
-                    axis_eff_type = hist.axis.StrCategory(effstat_manager[effStatKey]["axisLabels"], name = f"{effStatKey}_eff_type")
-                    effstat_manager[effStatKey]["boostHist"] = hist.Hist(axis_eta_eff, axis_pt_eff, axis_charge,
+                    axis_eff_type = hist.axis.StrCategory(effStat_manager[effStatKey]["axisLabels"], name = f"{effStatKey}_eff_type")
+                    effStat_manager[effStatKey]["boostHist"] = hist.Hist(axis_eta_eff, axis_pt_eff, axis_charge,
                                                                          axis_eff_type,
                                                                          down_nom_up_effStat_axis,
                                                                          name = effStatKey,
                                                                          storage = hist.storage.Weight())
                     
                 # extract nominal (first bin that is not underflow)
-                effstat_manager[effStatKey]["boostHist"].view(flow=True)[:, :, axis_charge.index(charge), axis_eff_type.index(eff_type), down_nom_up_effStat_axis.index(0)] = hist_hist.view(flow=True)[:,:,1]
+                effStat_manager[effStatKey]["boostHist"].view(flow=True)[:, :, axis_charge.index(charge), axis_eff_type.index(eff_type), down_nom_up_effStat_axis.index(0)] = hist_hist.view(flow=True)[:,:,1]
                 # now extract the stat variations
                 # note that for hist_hist the nominal bin of the third axis is number 1 when the underflow is active
                 for iup in range(1, 1 + nPtEigenBins):
                     # up variations
-                    effstat_manager[effStatKey]["boostHist"].view(flow=True)[:, :, axis_charge.index(charge), axis_eff_type.index(eff_type), down_nom_up_effStat_axis.index(iup)] = hist_hist.view(flow=True)[:,:,1+iup]
+                    effStat_manager[effStatKey]["boostHist"].view(flow=True)[:, :, axis_charge.index(charge), axis_eff_type.index(eff_type), down_nom_up_effStat_axis.index(iup)] = hist_hist.view(flow=True)[:,:,1+iup]
                     # down variations
                     idown = -1 * iup
-                    effstat_manager[effStatKey]["boostHist"].view(flow=True)[:, :, axis_charge.index(charge), axis_eff_type.index(eff_type), down_nom_up_effStat_axis.index(idown)] = hist_hist.view(flow=True)[:,:,1+iup+nPtEigenBins]
+                    effStat_manager[effStatKey]["boostHist"].view(flow=True)[:, :, axis_charge.index(charge), axis_eff_type.index(eff_type), down_nom_up_effStat_axis.index(idown)] = hist_hist.view(flow=True)[:,:,1+iup+nPtEigenBins]
                 
         # set overflow and underflow equal to adjacent bins
-        effstat_manager[effStatKey]["boostHist"].view(flow=True)[0, ...] = effstat_manager[effStatKey]["boostHist"].view(flow=True)[1, ...]
-        effstat_manager[effStatKey]["boostHist"].view(flow=True)[axis_eta_eff.extent-1, ...] = effstat_manager[effStatKey]["boostHist"].view(flow=True)[axis_eta_eff.extent-2, ...]
-        effstat_manager[effStatKey]["boostHist"].view(flow=True)[:, 0, ...] = effstat_manager[effStatKey]["boostHist"].view(flow=True)[:, 1, ...]
-        effstat_manager[effStatKey]["boostHist"].view(flow=True)[:, axis_pt_eff.extent-1, ...] = effstat_manager[effStatKey]["boostHist"].view(flow=True)[:, axis_pt_eff.extent-2, ...]
+        effStat_manager[effStatKey]["boostHist"].view(flow=True)[0, ...] = effStat_manager[effStatKey]["boostHist"].view(flow=True)[1, ...]
+        effStat_manager[effStatKey]["boostHist"].view(flow=True)[axis_eta_eff.extent-1, ...] = effStat_manager[effStatKey]["boostHist"].view(flow=True)[axis_eta_eff.extent-2, ...]
+        effStat_manager[effStatKey]["boostHist"].view(flow=True)[:, 0, ...] = effStat_manager[effStatKey]["boostHist"].view(flow=True)[:, 1, ...]
+        effStat_manager[effStatKey]["boostHist"].view(flow=True)[:, axis_pt_eff.extent-1, ...] = effStat_manager[effStatKey]["boostHist"].view(flow=True)[:, axis_pt_eff.extent-2, ...]
 
         netabins = axis_eta_eff.size
-        sf_stat_pyroot = narf.hist_to_pyroot_boost(effstat_manager[effStatKey]["boostHist"])
+        sf_stat_pyroot = narf.hist_to_pyroot_boost(effStat_manager[effStatKey]["boostHist"])
         if "sf_iso" in effStatKey:
             helper_stat = ROOT.wrem.muon_efficiency_smooth_helper_stat_iso[str(is_w_like).lower(), netabins, nPtEigenBins, type(sf_stat_pyroot)]( ROOT.std.move(sf_stat_pyroot) )
         else:
@@ -194,10 +190,13 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
         if isinstance(axis_eta_eff, bh.axis.Regular):
             axis_eta_eff_tensor = hist.axis.Regular(axis_eta_eff.size, axis_eta_eff.edges[0], axis_eta_eff.edges[-1], name = axis_eta_eff.name, overflow = False, underflow = False)
         elif isinstance(axis_eta_eff, bh.axis.Variable):
-            axis_eta_eff_tensor = hist.axis.Variable(axis_eta_eff.size, axis_eta_eff.edges, name = axis_eta_eff.name, overflow = False, underflow = False)
-        axis_ptEigen_eff_tensor = hist.axis.Integer(0, effstat_manager[effStatKey]["nPtEigenBins"], underflow = False, overflow =False, name = "nPtEigenBins")    
+            axis_eta_eff_tensor = hist.axis.Variable(axis_eta_eff.edges, name = axis_eta_eff.name, overflow = False, underflow = False)
+        axis_ptEigen_eff_tensor = hist.axis.Integer(0, effStat_manager[effStatKey]["nPtEigenBins"], underflow = False, overflow =False, name = "nPtEigenBins")    
         helper_stat.tensor_axes = [axis_eta_eff_tensor, axis_ptEigen_eff_tensor, axis_charge, axis_down_up]
-        effstat_manager[effStatKey]["helper"] = helper_stat
+        effStat_manager[effStatKey]["helper"] = helper_stat
+
+
+    fin.Close()
     ####
-    # return nomi, effsyst, and a dictionary with effstat to use them by name
-    return helper, helper_syst, {k : effstat_manager[k]["helper"] for k in effstat_manager.keys()}
+    # return nomi, effsyst, and a dictionary with effStat to use them by name
+    return helper, helper_syst, {k : effStat_manager[k]["helper"] for k in effStat_manager.keys()}

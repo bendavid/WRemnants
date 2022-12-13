@@ -286,6 +286,11 @@ if __name__ == "__main__":
         hpull = ROOT.TH1D("pulls","Distribution of pulls",100,-5,5)
         hpull2D = copy.deepcopy(hinput1.Clone("hpull2D"))
         hpull2D.Reset("ICESM")
+        plotTitleLatex = ""
+        if xMin < xMax:
+            plotTitleLatex += f"{round(xMin,1)} < x < {round(xMax,1)}   "
+        if yMin < yMax:
+            plotTitleLatex += f"{round(yMin,1)} < y < {round(yMax,1)}   "
         for ix in range(1,1+hinput1.GetNbinsX()):
             for iy in range(1,1+hinput1.GetNbinsY()):
                 xval = hinput1.GetXaxis().GetBinCenter(ix)
@@ -307,7 +312,8 @@ if __name__ == "__main__":
                 f"pullDistribution_{args.outhistname}",
                 outname,
                 passCanvas=canvas,
-                fitString="gaus;LEMSQ+;;-5;5"
+                fitString="gaus;LEMSQ+;;-5;5",
+                plotTitleLatex=plotTitleLatex
                 )
         drawCorrelationPlot(hpull2D,xAxisTitle,yAxisTitle,"Pulls::-5,5",
                             f"pullDistribution2D_{args.outhistname}","ForceTitle",outname,0,0,

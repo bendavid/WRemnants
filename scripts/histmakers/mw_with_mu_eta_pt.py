@@ -77,9 +77,18 @@ axis_eta_mT = hist.axis.Variable([-2.4, 2.4], name = "eta")
 axis_mt_fakes = hist.axis.Regular(60, 0., 120., name = "mt", underflow=False, overflow=True)
 axis_njet_fakes = hist.axis.Regular(2, -0.5, 1.5, name = "Numbr of jets", underflow=False, overflow=False) # only need case with 0 jets or > 0
 
-# TODO: add a way to select binned or smoothed SF from command option (need to call different helpers)
-muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile, era = era, max_pt = axis_pt.edges[-1])
-print(args.sfFile)
+if args.binnedScaleFactors:
+    logging.info("Using binned scale factors and uncertainties")
+    # add usePseudoSmoothing=True for tests with Asimov
+    muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_binned(filename = args.sfFile,
+                                                                                                                                     era = era,
+                                                                                                                                     max_pt = axis_pt.edges[-1]) 
+else:
+    logging.info("Using smoothed scale factors and uncertainties")
+    muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile,
+                                                                                                                                     era = era, max_pt =
+                                                                                                                                     axis_pt.edges[-1])
+logging.info(f"SF file: {args.sfFile}")
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
 vertex_helper = wremnants.make_vertex_helper(era = era)
@@ -109,7 +118,7 @@ def build_graph(df, dataset):
     weightsum = df.SumAndCount("weight")
 
     df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
-    df = df.Filter("event % 2 == 1") # test with odd/even events
+    #df = df.Filter("event % 2 == 1") # test with odd/even events
 
     isW = dataset.name in common.wprocs
     isZ = dataset.name in common.zprocs
