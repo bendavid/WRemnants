@@ -14,7 +14,6 @@ from .datasets import datasets2016
 from .datasets import datasetsLowPU
 
 from .muon_prefiring import make_muon_prefiring_helpers
-#from .muon_efficiencies import make_muon_efficiency_helpers
 from .muon_efficiencies_smooth import make_muon_efficiency_helpers_smooth
 from .muon_efficiencies_binned import make_muon_efficiency_helpers_binned
 from .qcdScaleByHelicity_helper import makeQCDScaleByHelicityHelper
