@@ -13,10 +13,10 @@ def read_and_scale(fname, proc, histname, lumi):
         
     return load_and_scale(out, proc, histname, lumi)
 
-def load_and_scale(res_dict, proc, histname, lumi=False):
+def load_and_scale(res_dict, proc, histname, calculate_lumi=False, scale=1.):
     h = res_dict[proc]["output"][histname]
-    scale = res_dict[proc]["dataset"]["xsec"]/res_dict[proc]["weight_sum"]
-    if lumi:
+    scale = res_dict[proc]["dataset"]["xsec"]/res_dict[proc]["weight_sum"]*scale
+    if calculate_lumi:
         data_keys = [p for p in res_dict.keys() if "dataset" in res_dict[p] and res_dict[p]["dataset"]["is_data"]]
         lumi = sum([res_dict[p]["lumi"] for p in data_keys])*1000
         scale *= lumi
@@ -93,21 +93,35 @@ def read_scetlib_hist(path, nonsing="auto", flip_y_sign=False, charge=None):
     return scetlibh 
 
 def read_dyturbo_hist(filenames, path="", axes=("y", "pt")):
-    print("Files", filenames)
     isfile = list(filter(lambda x: os.path.isfile(x), 
-        [os.path.join(f, os.path.expanduser(f)) for f in filenames]))
-    print("Valid Files", isfile)
+        [os.path.expanduser(os.path.join(path, f)) for f in filenames]))
 
     if not isfile:
         raise ValueError("Must pass in a valid file")
 
-
     hists = [read_dyturbo_file(f, axes) for f in isfile]
     if len(hists) > 1:
-        print([h.sum() for h in hists])
         hists = hh.rebinHistsToCommon(hists, 0)
 
     return hh.sumHists(hists)
+
+def expand_dyturbo_filenames(path, basename, varname, pieces=["n3ll_born", "n2ll_ct", "n2lo_vj"], append=None):
+    return [os.path.join(path, "_".join(filter(None, [basename, piece, varname, append]))+".txt") for piece in pieces]
+
+def dyturbo_varnames():
+	return ["mur{0}_muf{1}_mures{2}".format(i,j,k).replace("0", "H") for i in range(3) for j in range(3) for k in range(3) 
+		if abs(i-j) < 2 and abs(i-k) < 2 and abs(j-k) < 2 and not (i == 1 and j == 1 and k == 1)]
+
+def read_dyturbo_variations(path, basename, varnames, axes, pieces=["n3ll_born", "n2ll_ct", "n2lo_vj"], append=None):
+    central_files = expand_dyturbo_filenames(path, basename, "", pieces, append)
+    centralh = read_dyturbo_hist(central_files, axes=axes)
+    var_ax = hist.axis.Integer(0, len(varnames)+1, name="vars")
+    varh = hist.Hist(*centralh.axes, var_ax, storage=centralh._storage_type())
+    varh[...,0] = centralh.view(flow=True)
+    for i,var in enumerate(varnames):
+        filenames = expand_dyturbo_filenames(path, basename, var, pieces, append)
+        varh[...,i+1] = read_dyturbo_hist(filenames, axes=axes).view(flow=True)
+    return varh 
 
 def distribution_to_hist(data):
     next_bin = data[1:,0]
@@ -143,7 +157,7 @@ def read_dyturbo_file(filename, axnames=("y", "pt")):
     data = read_text_data(filename)
     # 2 numbers per axis + result + error
     if data.shape[1] != len(axnames)*2+2:
-        raise ValueError(f"Mismatch between number of axes advertised and found ({(data.shape[1]-2)/2} vs. {len(axnames)})")
+        raise ValueError(f"Mismatch between number of axes advertised ({len(axnames)} ==> {axnames}) and found ({(data.shape[1]-2)/2})")
 
     axes = []
     offset = True

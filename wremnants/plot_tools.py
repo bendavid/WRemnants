@@ -179,31 +179,44 @@ def makePlotWithRatioToRef(
     rrange=[0.9, 1.1], ylim=None, xlim=None, nlegcols=2, binwnorm=None, alpha=1.,
     baseline=True, data=False, autorrange=None, grid = False,
     yerr=False, legtext_size=20, plot_title=None, x_ticks_ndp = None, bin_density = 300, yscale=None,
-    logy=False, logx=False
+    logy=False, logx=False, fill_between=False,
 ):
+    if len(hists) != len(labels) or len(hists) != len(colors):
+        raise ValueError(f"Number of hists ({len(hists)}), colors ({len(colors)}), and labels ({len(labels)}) must agree!")
     # nominal is always at first, data is always at last, if included
-    ratio_hists = [hh.divideHists(h, hists[0], cutoff=0.00001) for h in hists[not baseline:]]
     fig, ax1, ax2 = figureWithRatio(hists[0], xlabel, ylabel, ylim, rlabel, rrange, xlim=xlim, 
         grid_on_ratio_plot = grid, plot_title = plot_title, bin_density = bin_density, logy=logy, logx=logx)
     
+    count = len(hists)-data
+    print("Count is", count)
     hep.histplot(
-        hists[:len(hists) - data],
+        hists[:count],
         histtype="step",
-        color=colors[:(len(colors)- data)],
-        label=labels[:(len(labels)- data)],
+        color=colors[:count],
+        label=labels[:count],
         stack=False,
         ax=ax1,
         yerr=yerr,
         binwnorm=binwnorm,
         alpha=alpha,
     )
-    
+
     if len(hists) > 1:
+        ratio_hists = [hh.divideHists(h, hists[0], cutoff=0.00001) for h in hists[not baseline:]]
+        if fill_between:
+            for up,down,color in zip(hists[1::2], hists[2::2], colors[1::2]):
+                upr = hh.divideHists(up, hists[0], 1e-6)
+                downr = hh.divideHists(down, hists[0], 1e-6)
+                ax2.fill_between(upr.axes[0].edges, 
+                        np.append(upr.values(), upr.values()[-1]), 
+                        np.append(downr.values(), upr.values()[-1]),
+                            step='post', color=color, alpha=0.5)
+
+        count = len(ratio_hists) - data if not fill_between else 1
         hep.histplot(
-            ratio_hists[:len(ratio_hists) - data],
+            ratio_hists[(not baseline):count],
             histtype="step",
-            color=colors[(not baseline):(len(colors)- data)],
-            label=labels[(not baseline):(len(labels)- data)],
+            color=colors[(not baseline):count],
             yerr=False,
             stack=False,
             ax=ax2,
