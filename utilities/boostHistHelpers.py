@@ -36,18 +36,23 @@ def broadcastOutHist(h1, h2):
 
 # returns h1/h2
 def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True):
-    h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2, allowBroadcast)
     # To get the broadcast shape right
     outh = h1 if not allowBroadcast else broadcastOutHist(h1, h2)
+
+    h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2, allowBroadcast)
     out = np.zeros_like(h2vals)
     # By the argument that 0/0 = 1
     out[(np.abs(h2vals) < cutoff) & (np.abs(h1vals) < cutoff)] = 1.
     val = np.divide(h1vals, h2vals, out=out, where=np.abs(h2vals)>cutoff)
-    relvars = relVariances(h1vals, h2vals, h1vars, h2vars)
-    var = val*sum(relVariances(h1vals, h2vals, h1vars, h2vars))
-    var *= val
-    newh = hist.Hist(*outh.axes, storage=hist.storage.Weight(),
-            data=np.stack((val, var), axis=-1))
+
+    if h1._storage_type() != hist.storage.Weight or h2._storage_type() != hist.storage.Weight:
+        newh = hist.Hist(*outh.axes, data=val)
+    else:
+        relvars = relVariances(h1vals, h2vals, h1vars, h2vars)
+        var = val*sum(relVariances(h1vals, h2vals, h1vars, h2vars))
+        var *= val
+        newh = hist.Hist(*outh.axes, storage=hist.storage.Weight(),
+                data=np.stack((val, var), axis=-1))
     return newh
 
 def relVariance(hvals, hvars, cutoff=1e-3):
@@ -127,16 +132,19 @@ def makeAbsHist(h, axis_name):
         raise ValueError("Can't mirror around 0 if it isn't a bin boundary")
     axidx = list(h.axes).index(ax)
     abs_ax = hist.axis.Variable(ax.edges[ax.index(0.):], underflow=False, name=f"abs{axis_name}")
-    hnew = hist.Hist(*h.axes[:axidx], abs_ax, *h.axes[axidx+1:], storage=hist.storage.Weight())
+    hnew = hist.Hist(*h.axes[:axidx], abs_ax, *h.axes[axidx+1:], storage=h._storage_type())
     
     s = hist.tag.Slicer()
     hnew[...] = h[{axis_name : s[ax.index(0):]}].view() + np.flip(h[{axis_name : s[:ax.index(0)]}].view(), axis=axidx)
     return hnew
 
 def rebinHist(h, axis_name, edges):
+    if type(edges) == int:
+        return h[{axis_name : hist.rebin(edges)}]
+
     ax = h.axes[axis_name]
     ax_idx = [a.name for a in h.axes].index(axis_name)
-    if not all([x in ax.edges for x in edges]):
+    if not all([np.isclose(x, ax.edges).any() for x in edges]):
         raise ValueError(f"Cannot rebin histogram due to incompatible edges for axis '{ax.name}'\n"
                             f"Edges of histogram are {ax.edges}, requested rebinning to {edges}")
         
@@ -151,11 +159,22 @@ def rebinHist(h, axis_name, edges):
     hnew = hist.Hist(*axes, name=h.name, storage=h._storage_type())
     # Take is used because reduceat sums i:len(array) for the last entry, in the case
     # where the final bin isn't the same between the initial and rebinned histogram, you
-    # want to drop this value
-    edges_eval = edges[:-1] if not overflow and edges[-1] == h.axes[axis_name].edges[-1] else edges
-    edge_idx = h.axes[axis_name].index(edges_eval)+underflow
+    # want to drop this value. Add tolerance of 1/2 min bin width to avoid numeric issues
+
+    offset = 0.5*np.min(ax.edges[1:]-ax.edges[:-1])
+
+    edges_eval = edges[:-1]+offset
+    if overflow or not np.isclose(edges[-1], ax.edges[-1]):
+        edges_eval = np.append(edges_eval, ax.edges[-1]+offset)
+
+    edge_idx = ax.index(edges_eval)
+
     if underflow:
+        edge_idx += 1
         edge_idx = np.insert(edge_idx, 0, 0)
+
+    if len(np.unique(edge_idx)) != len(edge_idx):
+        raise ValueError("Did not find a unique binning. Probably this is a numeric issue with bin boundaries")
 
     hnew.values(flow=flow)[...] = np.add.reduceat(h.values(flow=flow), edge_idx, 
             axis=ax_idx).take(indices=range(new_ax.size+underflow+overflow), axis=ax_idx)
@@ -195,11 +214,12 @@ def findCommonBinning(hists, axis_idx):
         raise ValueError("Can only find common binning between > 1 hists")
 
     orig_axes = [h.axes[axis_idx] for h in hists]
-    common_edges = set(orig_axes[0].edges)
+    # Set intersection with tolerance for floats
+    common_edges = np.array(orig_axes[0].edges)
     for ax in orig_axes[1:]:
-        common_edges.intersection_update(ax.edges)
+        common_edges = common_edges[np.isclose(np.array(ax.edges)[:,np.newaxis], common_edges).any(0)]
 
-    edges = list(sorted(common_edges))
+    edges = np.sort(common_edges)
     logging.debug(f"Common edges are {common_edges}")
 
     if len(edges) < 2:
@@ -208,8 +228,6 @@ def findCommonBinning(hists, axis_idx):
 
 def rebinHistsToCommon(hists, axis_idx, keep_full_range=False):
     orig_axes = [h.axes[axis_idx] for h in hists]
-    for h in hists:
-        print(h.axes[axis_idx].edges)
     new_edges = findCommonBinning(hists, axis_idx)
     rebinned_hists = [rebinHist(h, ax.name, new_edges) for h,ax in zip(hists, orig_axes)]
 

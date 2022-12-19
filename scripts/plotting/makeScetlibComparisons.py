@@ -110,6 +110,7 @@ parser.add_argument("--keep_full_range", action='store_true', help="Store the fu
 parser.add_argument("--no-radish", action='store_true', help="matrix-radish file doesn't have resummation")
 parser.add_argument("--logy", action='store_true', help="y axis log scale")
 parser.add_argument("--logx", action='store_true', help="x axis log scale")
+parser.add_argument("--xlim", type=float, nargs=2, help="range of the x axis")
 args = parser.parse_args()
 
 if not args.scetlib_files:
@@ -277,6 +278,7 @@ ylabel = "$\sigma$/bin" if args.hist_name not in ylabels else ylabels[args.hist_
 fig = plot_tools.makePlotWithRatioToRef(all_hists, colors=all_colors, labels=all_labels, alpha=0.7, ylim=args.ylim,
         rrange=args.rrange, ylabel=ylabel, xlabel=xlabels[args.hist_name], rlabel=f"x/{short_name[args.ratio_ref]}", 
         binwnorm=1.0, nlegcols=1, logy=args.logy, logx=args.logx,
+        xlim=args.xlim,
 )
 
 outname = f"TheoryCompHist_{args.proc}_{args.hist_name}" + ("_"+args.name_append if args.name_append else "")
