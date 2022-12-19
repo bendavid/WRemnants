@@ -21,7 +21,7 @@ mainPath = "/eos/user/m/mciprian/www/WMassAnalysis/TnP/egm_tnp_analysis/results_
 #inputhPath = mainPath
 inputhPath = "/home/m/mciprian/tnp/egm_tnp_analysis/localplots/results_globalMuons_testByCharge"
 #mainPath = "/eos/user/m/mciprian/www/WMassAnalysis/TnP/egm_tnp_analysis/results_globalMuons_ntuplesXYZ_1orMoreNvalidHitsStandalone"
-workingPoints = ["reco", "iso"]
+workingPoints = ["tracking"]
 
 tag = "plusOverMinus" # just something to name the ratio
 elements = ["plus", "minus"]
