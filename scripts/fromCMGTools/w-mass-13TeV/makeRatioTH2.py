@@ -306,6 +306,9 @@ if __name__ == "__main__":
                 hpull2D.SetBinContent(ix, iy, pull)
                 hpull.Fill(pull)
 
+        print(f"{args.outhistname}:")
+        print(f"Histogram mean = {hpull.GetMean()}")
+        print(f"Histogram RMS  = {hpull.GetStdDev()}")
         drawTH1(hpull, 
                 "pulls",
                 "number of events",
