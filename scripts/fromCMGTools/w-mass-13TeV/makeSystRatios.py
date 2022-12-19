@@ -270,7 +270,7 @@ if __name__ == "__main__":
     if args.systPostfix:
         systPostfix += f"_{args.systPostfix}"
     for p in processes:
-        if len(systList[p]) > 7:
+        if len(systList[p]) > 11:
             print("Not running drawNTH1() function to draw curves, there are too many lines ({})".format(len(systList[p])))
         else:
             drawNTH1(systList[p], systLeg[p], "Unrolled eta-p_{T} bin", "Events", f"nominalAndSyst_{p}{systPostfix}", outdir,

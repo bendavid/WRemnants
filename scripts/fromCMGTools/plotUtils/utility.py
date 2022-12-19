@@ -7,6 +7,7 @@ logging.basicConfig(level=logging.INFO)
 
 from array import array
 import shutil
+sys.path.append(os.getcwd() + "/plotUtils/")
 from CMS_lumi import *
 
 #ROOT.gInterpreter.ProcessLine(".O3")
@@ -1501,7 +1502,9 @@ def drawNTH1(hists=[],
     if colorVec != None:
         colors = colorVec
     else:
-        colors = [ROOT.kRed+2, ROOT.kBlue, ROOT.kGreen+2, ROOT.kOrange+7, ROOT.kAzure+2, ROOT.kMagenta, ROOT.kBlack]
+        colors = [ROOT.kRed+2, ROOT.kBlue, ROOT.kGreen+2, ROOT.kOrange+7,
+                  ROOT.kAzure+2, ROOT.kMagenta, ROOT.kBlack,
+                  ROOT.kViolet, ROOT.kCyan+1, ROOT.kPink+2, ROOT.kSpring-8]
     for ic,h in enumerate(hnums):
         # h.SetLineColor(colors[ic])
         # h.SetFillColor(colors[ic])
