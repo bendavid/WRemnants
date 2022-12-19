@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 
-# run all pieces (add -d just to print commands without running)
-# python w-mass-13TeV/smoothLeptonScaleFactors.py /eos/user/m/mciprian/www/WMassAnalysis/TnP/egm_tnp_analysis/results_globalMuons_ntuplesXYZ/efficiencies_ERA/mu_STEP_CHARGE/allEfficiencies_2D.root /eos/user/m/mciprian/www/WMassAnalysis/TnP/egm_tnp_analysis/results_globalMuons_ntuplesXYZ/smoothLeptonScaleFactors_TFfit_All/ --run-all
+# run all pieces (and merge)
+# python w-mass-13TeV/smoothLeptonScaleFactors.py /path/to/tnp/efficiencies_ERA/mu_STEP_CHARGE/allEfficiencies_2D.root /path/to/tnp/smoothLeptonScaleFactors/ --run-all [--do-merge]
 #
-# merge all pieces
-# python w-mass-13TeV/smoothLeptonScaleFactors.py /eos/user/m/mciprian/www/WMassAnalysis/TnP/egm_tnp_analysis/results_globalMuons_ntuplesXYZ/efficiencies_ERA/mu_STEP_CHARGE/allEfficiencies_2D.root /eos/user/m/mciprian/www/WMassAnalysis/TnP/egm_tnp_analysis/results_globalMuons_ntuplesXYZ/smoothLeptonScaleFactors_TFfit_All/ --do-merge
+# TIPS:
+# --> add -d just to print commands without running
+# --> add --do-merge to do everything in one go (remove --run-all if only merging is needed)
+# --> ERA, STEP, CHARGE are keywords that are converted internally in runFiles() when doing multiple steps
+#
 
 import os, re, array, math
 import argparse
@@ -847,7 +850,11 @@ def runFiles(args):
         print()
         safeSystem(cmd, args.dryRun)
         print()
-    
+
+    if args.doMerge:
+        mergeFiles(args)
+
+        
 if __name__ == "__main__":
             
     parser = argparse.ArgumentParser()
