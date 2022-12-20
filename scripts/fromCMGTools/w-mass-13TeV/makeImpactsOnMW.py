@@ -25,8 +25,50 @@ sys.argv = args
 ROOT.gROOT.SetBatch(True)
 ROOT.PyConfig.IgnoreCommandLineOptions = True
 
-import utilities
-utilities = utilities.util()
+import utilitiesCMG
+utilities = utilitiesCMG.util()
+
+def readNuisances(args, infile=None):
+
+    if infile is None:
+        infile = args.rootfile[0]
+
+    print(f"Starting with file {infile} ...")
+
+    nuis = []
+    if args.nuisgroups == "ALL": 
+        nuis = ["ALL"]
+    else:
+        nuis = list(args.nuisgroups.split(','))
+
+    massNuisanceName = "massShift{s}MeV".format(s=int(args.prefitUncertainty))
+    valuesAndErrors = utilities.getFromHessian(infile,params=[massNuisanceName])
+    totalUncertainty = valuesAndErrors[massNuisanceName][1] - valuesAndErrors[massNuisanceName][0]
+    if args.scaleToMeV:
+        totalUncertainty *= args.prefitUncertainty
+        print("Total m%s uncertainty: %2.1f MeV" % (boson, totalUncertainty))
+    else:
+        print("Total m%s uncertainty: %2.3f (\% of prefit)" % (boson, totalUncertainty))
+        
+    group = 'group_' if len(args.nuisgroups) else ''
+    th2name = 'nuisance_{group}impact_nois'.format(group=group)
+    hessfile = ROOT.TFile(infile,'read')
+    impMat = hessfile.Get(th2name)
+    if impMat==None:
+        print("ERROR: Cannot find the impact TH2 named ",th2name," in the input file. Maybe you didn't run --doImpacts?\nSkipping.")
+        sys.exit()
+
+    print("Histograms loaded successfully ...")
+    nuisGroup_nameVal = {}
+    for iy in range(1,impMat.GetNbinsY()+1):
+        label = impMat.GetYaxis().GetBinLabel(iy)
+        if nuis[0] != "ALL":
+            if label in nuis:
+                nuisGroup_nameVal[label] = impMat.GetBinContent(1,iy)
+        else:
+            nuisGroup_nameVal[label] = impMat.GetBinContent(1,iy)
+    return totalUncertainty,nuisGroup_nameVal
+
 
 if __name__ == "__main__":
 
@@ -48,6 +90,9 @@ if __name__ == "__main__":
     parser.add_argument(     '--showTotal', dest='showTotal' , default=False , action='store_true',   help='Show total uncertainty in plot')
     parser.add_argument(     '--prefitUncertainty'  , dest='prefitUncertainty',      default=100.0, type=float, help='prefit uncertainty on mW in MeV')
     parser.add_argument(     '--wlike', dest='isWlike', action="store_true", default=False, help="impacts for W-like analysis (it prints mZ accordingly). Default is Wmass");
+    parser.add_argument(     '--compareFile', dest='compareFile', default='', type=str, help='Additional file to compare impacts with (must have the same impact labels)')
+    parser.add_argument(     '--set-stat-alt'  , dest='setStatAlt',    default=-1.0, type=float, help='If positive, use this value for stat of the file passed with compareFile')
+    parser.add_argument(     '--legendEntries', nargs=2, type=str, help="Legend entries when comparing files", default=["Nominal", "Alternate"])
     args = parser.parse_args()
 
     # palettes:
@@ -102,43 +147,16 @@ if __name__ == "__main__":
         htmlpath = "./templates/index.php"
         shutil.copy(htmlpath, args.outdir)
 
-    print("Starting ...")
-    nuis = []
-    if args.nuisgroups == "ALL": 
-        nuis = ["ALL"]
-    else:
-        nuis = list(args.nuisgroups.split(','))
-
-    massNuisanceName = "massShift{s}MeV".format(s=int(args.prefitUncertainty))
-    valuesAndErrors = utilities.getFromHessian(args.rootfile[0],params=[massNuisanceName])
-    totalUncertainty_mW = valuesAndErrors[massNuisanceName][1] - valuesAndErrors[massNuisanceName][0]
-    if args.scaleToMeV:
-        totalUncertainty_mW *= args.prefitUncertainty
-        print("Total m%s uncertainty: %2.1f MeV" % (boson, totalUncertainty_mW))
-    else:
-        print("Total m%s uncertainty: %2.3f (\% of prefit)" % (boson, totalUncertainty_mW))
+    compare = True if len(args.compareFile) else False
         
-    group = 'group_' if len(args.nuisgroups) else ''
-    th2name = 'nuisance_{group}impact_nois'.format(group=group)
-    hessfile = ROOT.TFile(args.rootfile[0],'read')
-    impMat = hessfile.Get(th2name)
-    if impMat==None:
-        print("ERROR: Cannot find the impact TH2 named ",th2name," in the input file. Maybe you didn't run --doImpacts?\nSkipping.")
-        sys.exit()
-
-    print("Histograms loaded successfully ...")
-    nuisGroup_nameVal = {}
-    for iy in range(1,impMat.GetNbinsY()+1):
-        label = impMat.GetYaxis().GetBinLabel(iy)
-        if nuis[0] != "ALL":
-            if label in nuis:
-                nuisGroup_nameVal[label] = impMat.GetBinContent(1,iy)
-        else:
-            nuisGroup_nameVal[label] = impMat.GetBinContent(1,iy)
-    
-
+    totalUncertainty_mW, nuisGroup_nameVal = readNuisances(args, args.rootfile[0])
     if args.setStat > 0.0:
         nuisGroup_nameVal["stat"] = args.setStat
+
+    if compare:
+        totalUncertainty_mW_alt, nuisGroup_nameVal_alt = readNuisances(args, args.compareFile)
+        if args.setStatAlt > 0.0:
+            nuisGroup_nameVal_alt["stat"] = args.setStatAlt
 
     sortedGroups = sorted(nuisGroup_nameVal.keys(), key= lambda x: nuisGroup_nameVal[x])
 
@@ -152,6 +170,8 @@ if __name__ == "__main__":
 
     # new version
     h1 = ROOT.TH1D("impactsOnMw_chart","impacts of nuisance groups on m_{%s}" % boson,nbins,0,nbins)
+    if compare:
+        h2 = h1.Clone("impactsOnMw_chart_alt")
     h1.GetYaxis().SetTitle("impacts on m_{{{boson}}} {units}".format(boson=boson, units="[MeV]" if args.scaleToMeV else ""))
     h1.GetYaxis().SetTitleOffset(1.05)
     h1.GetYaxis().SetTitleSize(0.045)
@@ -163,22 +183,34 @@ if __name__ == "__main__":
         #print("%s: %2.1f" % (k,bincontent))
         h1.GetXaxis().SetBinLabel(ik+1,k)
         h1.SetBinContent(ik+1,bincontent)
+        if compare:
+            bincontentAlt = nuisGroup_nameVal_alt[k] if not args.scaleToMeV else nuisGroup_nameVal_alt[k] * args.prefitUncertainty
+            h2.SetBinContent(ik+1,bincontentAlt)
     if args.showTotal:
         h1.GetXaxis().SetBinLabel(nbins,"total")
         h1.SetBinContent(nbins,totalUncertainty_mW)
-
+        if compare:
+            h2.SetBinContent(nbins,totalUncertainty_mW_alt)
+            
     h1.GetXaxis().SetTitleOffset(1.2)
     h1.GetXaxis().SetTitleSize(0.05)
     h1.GetXaxis().SetLabelSize(0.05)
 
     h1.SetBarWidth(0.8);
     h1.SetBarOffset(0.1);
-    
     h1.SetFillColor(ROOT.kGreen-5)
     h1.SetLineColor(ROOT.kBlack)
     #h1.SetFillStyle(3001)
     h1.SetFillColorAlpha(ROOT.kGreen-5, 0.5)
-
+    if compare:
+        h2.SetBarWidth(0.4);
+        h2.SetBarOffset(0.2);
+        h2.SetFillColor(ROOT.kPink-6)
+        h2.SetLineColor(ROOT.kBlack)
+        #h2.SetFillStyle(3001)
+        h2.SetFillColorAlpha(ROOT.kPink-6, 0.5)
+        h1.GetYaxis().SetRangeUser(0.0, 1.1* max(totalUncertainty_mW_alt, totalUncertainty_mW))
+        
     cw,ch = args.canvasSize.split(',')
     c1 = ROOT.TCanvas("c1", "", int(cw), int(ch))
     #c1.SetFillColor(42)
@@ -199,7 +231,21 @@ if __name__ == "__main__":
     c1.SetTickx(1)
     c1.SetTicky(1)
     h1.Draw("hbar1")
-
+    if compare:
+        h2.Draw("hbar1 SAME")
+        leg = ROOT.TLegend(0.1,0.9,0.92,0.95)
+        leg.SetNColumns(2)
+        leg.SetFillColor(0)
+        leg.SetFillColorAlpha(0,0.6)
+        leg.SetShadowColor(0)
+        leg.SetLineColor(0)
+        leg.SetBorderSize(0)
+        leg.SetTextFont(42)
+        leg.SetTextSize(0.035)
+        leg.AddEntry(h1, args.legendEntries[0], "LF")
+        leg.AddEntry(h2, args.legendEntries[1], "LF")
+        leg.Draw("SAME")
+        
     #hval = copy.deepcopy(h1.Clone("hval"))
     hval = h1.Clone("hval")
     hval.Reset("ICESM")

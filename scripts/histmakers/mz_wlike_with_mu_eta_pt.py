@@ -34,7 +34,6 @@ if not args.no_recoil:
     args.no_recoil = True
 
 era = args.era
-era = args.era
 
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 
@@ -49,11 +48,11 @@ axis_ptVgen = hist.axis.Variable(
 template_neta = int(args.eta[0])
 template_mineta = args.eta[1]
 template_maxeta = args.eta[2]
-print(f"Eta binning: {template_neta} bins from {template_mineta} to {template_maxeta}")
+logging.info(f"Eta binning: {template_neta} bins from {template_mineta} to {template_maxeta}")
 template_npt = int(args.pt[0])
 template_minpt = args.pt[1]
 template_maxpt = args.pt[2]
-print(f"Pt binning: {template_npt} bins from {template_minpt} to {template_maxpt}")
+logging.info(f"Pt binning: {template_npt} bins from {template_minpt} to {template_maxpt}")
 
 # standard regular axes
 axis_eta = hist.axis.Regular(template_neta, template_mineta, template_maxeta, name = "eta")
@@ -82,7 +81,21 @@ axis_phistarll = hist.axis.Regular(20, -math.pi, math.pi, circular = True, name 
 
 # extra axes which can be used to label tensor_axes
 
-muon_efficiency_helper, muon_efficiency_helper_stat, muon_efficiency_helper_stat_tracking, muon_efficiency_helper_stat_reco, muon_efficiency_helper_syst = wremnants.make_muon_efficiency_helpers(era = era, max_pt = axis_pt.edges[-1], is_w_like = True)
+muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile, era = era, max_pt = axis_pt.edges[-1], is_w_like = True)
+if args.binnedScaleFactors:
+    logging.info("Using binned scale factors and uncertainties")
+    # add usePseudoSmoothing=True for tests with Asimov
+    muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_binned(filename = args.sfFile,
+                                                                                                                                     era = era,
+                                                                                                                                     max_pt = axis_pt.edges[-1],
+                                                                                                                                     is_w_like = True) 
+else:
+    logging.info("Using smoothed scale factors and uncertainties")
+    muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile,
+                                                                                                                                     era = era,
+                                                                                                                                     max_pt = axis_pt.edges[-1],
+                                                                                                                                     is_w_like = True)
+logging.info(f"SF file: {args.sfFile}")
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
 
@@ -101,7 +114,7 @@ if not args.no_recoil:
 #def add_plots_with_systematics
 
 def build_graph(df, dataset):
-    print("build graph for dataset:", dataset.name)
+    logging.info(f"build graph for dataset: {dataset.name}")
     results = []
 
     if dataset.is_data:
@@ -133,8 +146,16 @@ def build_graph(df, dataset):
     df = df.Define("vetoMuonsPre", "Muon_looseId && abs(Muon_dxybs) < 0.05 && Muon_correctedCharge != -99")
     df = df.Define("vetoMuons", "vetoMuonsPre && Muon_correctedPt > 10. && abs(Muon_correctedEta) < 2.4")
     df = df.Filter("Sum(vetoMuons) == 2")
+    
+    if args.trackerMuons:
+        if dataset.group in ["Top", "Diboson"]:
+            df = df.Define("Muon_category", "Muon_isTracker && Muon_highPurity")
+        else:
+            df = df.Define("Muon_category", "Muon_isTracker && Muon_innerTrackOriginalAlgo != 13 && Muon_innerTrackOriginalAlgo != 14 && Muon_highPurity")
+    else:
+        df = df.Define("Muon_category", "Muon_isGlobal")
 
-    df = df.Define("goodMuons", "vetoMuons && Muon_mediumId && Muon_isGlobal && Muon_pfRelIso04_all < 0.15")
+    df = df.Define("goodMuons", "vetoMuons && Muon_mediumId && Muon_category && Muon_pfRelIso04_all < 0.15")
     df = df.Filter("Sum(goodMuons) == 2")
 
     # mu- for even event numbers, mu+ for odd event numbers
@@ -156,6 +177,12 @@ def build_graph(df, dataset):
 
     df = df.Filter("NonTrigMuon_pt > 26.")
 
+    df = df.Define("TrigMuon_isStandalone", "Muon_isStandalone[trigMuons][0]")
+    df = df.Define("NonTrigMuon_isStandalone", "Muon_isStandalone[nonTrigMuons][0]")
+    # central NanoAOD for backgrounds do not have standalone variables, therefore cannot use cut on them when running backgrounds (for now we neglect this bias)
+    # when using tracker muons the presence of standalone muons is not guaranteed, so again cannot use or cut on those (also in data or Z, regardless whether branches exist)
+    # it was verified that tracking scale factors can still be used as a function of inner track coordinates, despite having been measured versus standalone ones
+    # (this is true also in the case of global muons, no significant difference is observed applying tracking SF using inner or outer tracks)
     if dataset.group in ["Top", "Diboson"]:
         df = df.Alias("TrigMuon_SApt",  "TrigMuon_pt")
         df = df.Alias("TrigMuon_SAeta", "TrigMuon_eta")
@@ -163,6 +190,14 @@ def build_graph(df, dataset):
         df = df.Alias("NonTrigMuon_SApt",  "NonTrigMuon_pt")
         df = df.Alias("NonTrigMuon_SAeta", "NonTrigMuon_eta")
         df = df.Alias("NonTrigMuon_SAphi", "NonTrigMuon_phi")
+    elif args.trackerMuons:
+        # try to use standalone variables when possible
+        df = df.Define("TrigMuon_SApt",  "TrigMuon_isStandalone ? Muon_standalonePt[trigMuons][0] : TrigMuon_pt")
+        df = df.Define("TrigMuon_SAeta", "TrigMuon_isStandalone ? Muon_standaloneEta[trigMuons][0] : TrigMuon_eta")
+        df = df.Define("TrigMuon_SAphi", "TrigMuon_isStandalone ? Muon_standalonePhi[trigMuons][0] : TrigMuon_phi")
+        df = df.Define("NonTrigMuon_SApt",  "NonTrigMuon_isStandalone ? Muon_standalonePt[nonTrigMuons][0] : NonTrigMuon_pt")
+        df = df.Define("NonTrigMuon_SAeta", "NonTrigMuon_isStandalone ? Muon_standaloneEta[nonTrigMuons][0] : NonTrigMuon_eta")
+        df = df.Define("NonTrigMuon_SAphi", "NonTrigMuon_isStandalone ? Muon_standalonePhi[nonTrigMuons][0] : NonTrigMuon_phi")
     else:
         df = df.Define("TrigMuon_SApt",  "Muon_standalonePt[trigMuons][0]")
         df = df.Define("TrigMuon_SAeta", "Muon_standaloneEta[trigMuons][0]")
@@ -170,6 +205,9 @@ def build_graph(df, dataset):
         df = df.Define("NonTrigMuon_SApt",  "Muon_standalonePt[nonTrigMuons][0]")
         df = df.Define("NonTrigMuon_SAeta", "Muon_standaloneEta[nonTrigMuons][0]")
         df = df.Define("NonTrigMuon_SAphi", "Muon_standalonePhi[nonTrigMuons][0]")
+
+    # these next cuts are mainly needed for consistency with the reco efficiency measurement for the case with global muons
+    # note, when SA does not exist this cut is still fine because of how we define these variables
     df = df.Filter("TrigMuon_SApt > 15.0 && wrem::deltaR2(TrigMuon_SAeta, TrigMuon_SAphi, TrigMuon_eta, TrigMuon_phi) < 0.09")
     df = df.Filter("NonTrigMuon_SApt > 15.0 && wrem::deltaR2(NonTrigMuon_SAeta, NonTrigMuon_SAphi, NonTrigMuon_eta, NonTrigMuon_phi) < 0.09")
     
@@ -276,29 +314,18 @@ def build_graph(df, dataset):
     nominal = df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "nominal_weight"])
     results.append(nominal)
 
-    if not dataset.is_data:
-        # TODO fix the helpers for w-like
-        df = df.Define("effStatTnP_tensor", muon_efficiency_helper_stat, ["TrigMuon_pt", "TrigMuon_eta", "TrigMuon_charge", "NonTrigMuon_pt", "NonTrigMuon_eta", "NonTrigMuon_charge", "nominal_weight"])
-        effStatTnP = df.HistoBoost("effStatTnP", nominal_axes, [*nominal_cols, "effStatTnP_tensor"], tensor_axes = muon_efficiency_helper_stat.tensor_axes)
-        results.append(effStatTnP)
+    if not dataset.is_data and not args.onlyMainHistograms:
 
-        # temporary solution, so ugly and awkward, but does what I want ...
-        df = df.DefinePerSample("zero", "0")
-        df = df.DefinePerSample("unity", "1")
-        df = df.Define("effStatTnP_tracking_tensor", muon_efficiency_helper_stat_tracking, ["TrigMuon_SApt", "TrigMuon_SAeta", "TrigMuon_charge", "NonTrigMuon_SApt", "NonTrigMuon_SAeta", "NonTrigMuon_charge", "unity", "nominal_weight"])
-        effStatTnP_tracking = df.HistoBoost("effStatTnP_tracking", nominal_axes, [*nominal_cols, "effStatTnP_tracking_tensor"], tensor_axes = muon_efficiency_helper_stat_tracking.tensor_axes)
-        results.append(effStatTnP_tracking)
-
-        df = df.Define("effStatTnP_reco_tensor", muon_efficiency_helper_stat_reco, ["TrigMuon_pt", "TrigMuon_eta", "TrigMuon_charge", "NonTrigMuon_pt", "NonTrigMuon_eta", "NonTrigMuon_charge", "zero", "nominal_weight"])
-        effStatTnP_reco = df.HistoBoost("effStatTnP_reco", nominal_axes, [*nominal_cols, "effStatTnP_reco_tensor"], tensor_axes = muon_efficiency_helper_stat_reco.tensor_axes)
-        results.append(effStatTnP_reco)
-
+        for key,helper in muon_efficiency_helper_stat.items():
+            df = df.Define(f"effStatTnP_{key}_tensor", helper, ["TrigMuon_pt", "TrigMuon_eta", "TrigMuon_charge", "NonTrigMuon_pt", "NonTrigMuon_eta", "NonTrigMuon_charge", "nominal_weight"])
+            effStatTnP = df.HistoBoost(f"effStatTnP_{key}", nominal_axes, [*nominal_cols, f"effStatTnP_{key}_tensor"], tensor_axes = helper.tensor_axes)
+            results.append(effStatTnP)
+        
         df = df.Define("effSystTnP_weight", muon_efficiency_helper_syst, ["TrigMuon_pt", "TrigMuon_eta", "TrigMuon_SApt", "TrigMuon_SAeta", "TrigMuon_charge",
                                                                           "NonTrigMuon_pt", "NonTrigMuon_eta", "NonTrigMuon_SApt", "NonTrigMuon_SAeta", "NonTrigMuon_charge",
                                                                           "nominal_weight"])
         effSystTnP = df.HistoBoost("effSystTnP", nominal_axes, [*nominal_cols, "effSystTnP_weight"], tensor_axes = muon_efficiency_helper_syst.tensor_axes)
         results.append(effSystTnP)
-
 
         df = df.Define("muonL1PrefireStat_tensor", muon_prefiring_helper_stat, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId", "nominal_weight"])
         muonL1PrefireStat = df.HistoBoost("muonL1PrefireStat", nominal_axes, [*nominal_cols, "muonL1PrefireStat_tensor"], tensor_axes = muon_prefiring_helper_stat.tensor_axes)

@@ -41,6 +41,7 @@ if __name__ == "__main__":
     parser.add_argument(     '--palette'  , dest='palette',      default=87, type=int, help='Set palette: default is a built-in one, 55 is kRainbow')
     parser.add_argument(     '--invertPalette', dest='invertePalette', action='store_true',   help='Inverte color ordering in palette')
     parser.add_argument(     '--skip-eff', dest='skipEfficiency', action='store_true',   help='Do not plot efficiencies to save time')
+    parser.add_argument(     '--bin-pt-finely', dest='binPtFinely', default=-1, type=int, help='Bin product histograms so to increase number of pt bins')
     args = parser.parse_args()
 
     ROOT.TH1.SetDefaultSumw2()
@@ -59,8 +60,10 @@ if __name__ == "__main__":
                       "isoNotrigOnly"     : ["isonotrig"],
                       "antiisoOnly"       : ["antiiso"],
                       "antiisoNotrigOnly" : ["antiisonotrig"],
-                      "reco"              : ["reco"],
-                      "tracking"          : ["tracking"],
+                      "recoOnly"              : ["reco"],
+                      "trackingOnly"          : ["tracking"],
+                      "trigPlusOnly"      : ["triggerplus"],
+                      "trigMinusOnly"     : ["triggerminus"],
                       #"trackingReco"      : ["tracking", "reco"],
                       #"idipTrackingReco"  : ["idip", "tracking", "reco"],
                       #"trigPlusIdipTrackingReco"     : ["triggerplus", "idip", "tracking", "reco"],
@@ -187,19 +190,32 @@ if __name__ == "__main__":
         for era in eras:
             for sfv in sf_version:
                 prodname = f"fullSF2D_{sfv}_{key}_{era}"
+                yedges = []
                 for i,basename in enumerate(productsToMake[key]): 
                     name = f"{sfv}_{basename}"
                     if i == 0:
                         stringProduct = basename
-                        prodHistsSF[era][prodname] = copy.deepcopy(histsSF[era][name].Clone(prodname))
+                        if basename not in ["reco", "tracking"] and args.binPtFinely > 0 and histsSF[era][name].GetNbinsY() < args.binPtFinely:
+                            print(f"INFO: Going to create product histogram {prodname} with {args.binPtFinely} pt bins but same range")
+                            prodHistsSF[era][prodname] = getTH2morePtBins(histsSF[era][name], prodname, args.binPtFinely)
+                        else:
+                            prodHistsSF[era][prodname] = copy.deepcopy(histsSF[era][name].Clone(prodname))
+                        yedges = [round(prodHistsSF[era][prodname].GetYaxis().GetBinLowEdge(i), 2) for i in range(1, 2 + prodHistsSF[era][prodname].GetNbinsY())]
                     else:
                         stringProduct = stringProduct + "*" + basename
                         if histsSF[era][name].GetNbinsY() == 1:
                             multiplyByHistoWith1ptBin(prodHistsSF[era][prodname], histsSF[era][name])
                         elif not prodHistsSF[era][prodname].Multiply(histsSF[era][name]):
-                            print(f"ERROR in multiplication for prodHistsSF[{era}][{prodname}] with {name}")
-                            print(f"Nbins(X, Y) = {histsSF[era][name].GetNbinsX()},{histsSF[era][name].GetNbinsY()} ")
-                            quit()
+                            yedgesSecond = [round(histsSF[era][name].GetYaxis().GetBinLowEdge(i), 2) for i in range(1, 2 + histsSF[era][name].GetNbinsY())]
+                            # try to see if first histogram has pt edges which are a subset of the other one to attempt multiplication
+                            if all(yedgesSecond[i] in yedges for i in range(len(yedgesSecond))):
+                                print(f"WARNING: going to multiply prodHistsSF[{era}][{prodname}] with {name} using function multiplyByHistoWithLessPtBins()")
+                                multiplyByHistoWithLessPtBins(prodHistsSF[era][prodname], histsSF[era][name])
+                            else:
+                                print(f"ERROR in multiplication for prodHistsSF[{era}][{prodname}] with {name}")
+                                print(f"Nbins(X, Y) = {histsSF[era][name].GetNbinsX()},{histsSF[era][name].GetNbinsY()} ")
+                                quit()
+                                
                 prodHistsSF[era][prodname].SetTitle(f"{stringProduct}")            
                 print(f"{era}: {sfv} -> {stringProduct}")
                 
@@ -219,9 +235,9 @@ if __name__ == "__main__":
               "triggerminus" : "0.65,1.15",
               "idip"         : "0.95,1.01",
               "iso"          : "0.975,1.025",
-              "antiiso"      : "0.7,1.25",
+              "antiiso"      : "0.6,1.25",
               "isonotrig"    : "0.97,1.03",
-              "antiisonotrig": "0.7,1.25",
+              "antiisonotrig": "0.6,1.25",
               "tracking"     : "0.98,1.01",
               "reco"         : "0.94,1.02",
     }
@@ -245,13 +261,13 @@ if __name__ == "__main__":
                                 nContours=args.nContours, palette=args.palette, invertePalette=args.invertePalette)
             # abs. uncertainty (only on nominal, it should be the same for all histograms, hoping the SF and efficiencies were sane in this configuration)
             if "nominal" in n:
-                drawCorrelationPlot(histsSF[era][n], "muon #eta", "muon p_{T} (GeV)", f"Abs. uncertainty on SF",
+                drawCorrelationPlot(histsSF[era][n], "muon #eta", "muon p_{T} (GeV)", f"Abs. uncertainty on SF::0,0.015",
                                     f"absUnc_muonSF_{n}", plotLabel="ForceTitle", outdir=outdir+"absoluteStatUncertainty/",
                                     smoothPlot=False, drawProfileX=False, scaleToUnitArea=False,
                                     draw_both0_noLog1_onlyLog2=1, passCanvas=canvas, plotError=True,
                                     nContours=args.nContours, palette=args.palette, invertePalette=args.invertePalette)
                 ## rel. uncertainty
-                drawCorrelationPlot(histsSF[era][n], "muon #eta", "muon p_{T} (GeV)", f"Rel. uncertainty on SF",
+                drawCorrelationPlot(histsSF[era][n], "muon #eta", "muon p_{T} (GeV)", f"Rel. uncertainty on SF::0,0.015",
                                     f"relUnc_muonSF_{n}", plotLabel="ForceTitle", outdir=outdir+"relativeStatUncertainty/",
                                     smoothPlot=False, drawProfileX=False, scaleToUnitArea=False,
                                     draw_both0_noLog1_onlyLog2=1, passCanvas=canvas, plotRelativeError=True,
