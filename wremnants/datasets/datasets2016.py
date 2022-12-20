@@ -6,7 +6,7 @@ import pathlib
 import socket
 import logging
 #set the debug level for logging incase of full printout 
-from wremnants.datasets.datasetDict_v9 import dataDictV9, dataDictV9_pisa
+from wremnants.datasets.datasetDict_v9 import dataDictV9, dataDictV9_pisa, dataDictV9_tnp
 from wremnants.datasets.datasetDict_v8 import *
 from wremnants.datasets.datasetDict_gen import genDataDict
 
@@ -43,14 +43,24 @@ def getNarfDataset(sampleName, maxFiles, sampleDict, isData, isWorZ=True):
         
 def getDatasets(maxFiles=-1, filt=None, mode=None, nanoVersion = "v9"):
     dataDict = dataDictV9_pisa if socket.gethostname() == 'cmsanalysis.pi.infn.it' else dataDictV9
-    if nanoVersion != "v9":
+    if nanoVersion == "v8":
         dataDict = dataDictV8
-        print('Using data dict V8')
-
+        logger.info('Using data dict V8')
+    elif nanoVersion == "tnp":
+        dataDict = dataDictV9_tnp
+        logger.info('Using data dict for Tnp')
+        
     dataPostVFP = getNarfDataset("dataPostVFP", maxFiles, dataDict, True)
 
     ZmmPostVFP = getNarfDataset("ZmmPostVFP", maxFiles, dataDict, False, True)
 
+    allPostVFP_tnp = [dataPostVFP, ZmmPostVFP]
+    if nanoVersion == "tnp":
+        if filt:
+            return list(filter(filt, allPostVFP_tnp))
+        else:
+            return allPostVFP_tnp
+    
     ZttPostVFP = getNarfDataset("ZttPostVFP", maxFiles, dataDict, False, True)
 
     WpmunuPostVFP = getNarfDataset("WpmunuPostVFP", maxFiles, dataDict, False, True)
@@ -91,6 +101,8 @@ def getDatasets(maxFiles=-1, filt=None, mode=None, nanoVersion = "v9"):
     if mode == "gen":
         samples.extend([getNarfDataset(n, maxFiles, genDataDict, False, True) for n in genDataDict.keys()])
 
+    if nanoVersion == "tnp":
+        samples = allPostVFP_tnp
     if filt:
         return list(filter(filt, samples))
     else:

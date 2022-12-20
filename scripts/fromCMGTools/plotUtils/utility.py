@@ -7,10 +7,10 @@ logging.basicConfig(level=logging.INFO)
 
 from array import array
 import shutil
+sys.path.append(os.getcwd() + "/plotUtils/")
 from CMS_lumi import *
 
-ROOT.gInterpreter.ProcessLine(".O3")
-#ROOT.gInterpreter.ProcessLine('#include "ccFiles/systHistHelpers.cc"')
+#ROOT.gInterpreter.ProcessLine(".O3")
 
 _canvas_pull = ROOT.TCanvas("_canvas_pull","",800,800)
 
@@ -20,6 +20,21 @@ def printLine(marker='-', repeat=30):
     print(marker*repeat)
 
 #########################################################################
+
+def safeSystem(cmd, dryRun=False, quitOnFail=True):
+    print(cmd)
+    if not dryRun:
+        res = os.system(cmd)
+        if res:
+            print('-'*30)
+            print("safeSystem(): error occurred when executing the following command. Aborting")
+            print(cmd)
+            print('-'*30)
+            if quitOnFail:
+                quit()
+        return res
+    else:
+        return 0
 
 def checkHistInFile(h, hname, fname, message=""):
     if not h:
@@ -440,16 +455,39 @@ def multiplyByHistoWith1ptBin(h, h1bin):
             h.SetBinError(  ix, iy, h.GetBinError(  ix, iy) * h1bin.GetBinContent(ix, 1))
 
 
-def multiplyByHistoWithLessPtBins(h, hless):
+def multiplyByHistoWithLessPtBins(h, hless, neglectUncSecond=False):
     # multiply 2D histograms when one has less pt bins
     # neglect uncertainty on histogram with less bins
     # it is assumed that the number of eta bins is the same
     for ix in range(1, 1 + h.GetNbinsX()):
         for iy in range(1, 1 + h.GetNbinsY()):
-            ybin = hless.GetYaxis().FindFixBin(h.GetYaxis().GetBinCenter())
-            h.SetBinContent(ix, iy, h.GetBinContent(ix, iy) * hless.GetBinContent(ix, ybin))
-            h.SetBinError(  ix, iy, h.GetBinError(  ix, iy) * hless.GetBinContent(ix, ybin))
+            ybin = hless.GetYaxis().FindFixBin(h.GetYaxis().GetBinCenter(iy))
+            hContent = h.GetBinContent(ix, iy)
+            hlessContent = hless.GetBinContent(ix, ybin)
+            hUnc = h.GetBinError(ix, iy)
+            hlessUnc = hless.GetBinError(ix, ybin)
+            if neglectUncSecond:
+                unc = hUnc * hlessContent
+            else:
+                # uncertainty on product assuming uncorrelated pieces
+                unc = math.sqrt(hContent*hContent*hlessUnc*hlessUnc + hlessContent*hlessContent*hUnc*hUnc) 
+            h.SetBinContent(ix, iy, hContent * hlessContent)
+            h.SetBinError(  ix, iy, unc)
 
+def getTH2morePtBins(h2, newname, nPt):
+    xedges = [round(h2.GetXaxis().GetBinLowEdge(i), 2) for i in range(1, 2 + h2.GetNbinsX())]
+    xarr = array('d', xedges)
+    h2new = ROOT.TH2D(newname, "",
+                      len(xedges) - 1, xarr,
+                      nPt, h2.GetYaxis().GetBinLowEdge(1), h2.GetYaxis().GetBinLowEdge(1+h2.GetNbinsY()))
+    for ix in range(1, 1 + h2new.GetNbinsX()):
+        for iy in range(1, 1 + h2new.GetNbinsY()):
+            ieta = h2.GetXaxis().FindFixBin(h2new.GetXaxis().GetBinCenter(ix))
+            ipt  = h2.GetYaxis().FindFixBin(h2new.GetYaxis().GetBinCenter(iy))
+            h2new.SetBinContent(ix, iy, h2.GetBinContent(ieta, ipt))
+            h2new.SetBinError(  ix, iy, h2.GetBinError(  ieta, ipt))
+    return h2new
+            
 #########################################################################
 
 def createPlotDirAndCopyPhp(outdir):
@@ -512,7 +550,9 @@ def drawTH1(htmp,
             moreTextLatex="",
             skipTdrStyle=False,
             drawStatBox=True,
-            ):
+            fitString="", # can be "gaus;LEMSQ+;;-5;5"
+            plotTitleLatex=""
+):
 
 
 
@@ -530,7 +570,8 @@ def drawTH1(htmp,
     canvas.SetTicky(1)
     canvas.cd()
     canvas.SetBottomMargin(0.14)
-    canvas.SetLeftMargin(0.12)
+    leftMargin = 0.12
+    canvas.SetLeftMargin(leftMargin)
     canvas.SetRightMargin(0.04)
     canvas.cd()
 
@@ -549,14 +590,35 @@ def drawTH1(htmp,
     # force drawing stat box
     h.SetStats(1 if drawStatBox else 0)
     h.Draw("HIST")
+    if len(fitString):
+        fitFunc,fitOpt,drawOpt,fitMin,fitMax = fitString.split(";")
+        print(f"Fitting with {fitFunc}")
+        h.Fit(fitFunc,fitOpt,drawOpt,float(fitMin),float(fitMax))
+        f1 = h.GetFunction(fitFunc)
+        f1.SetLineWidth(2)
+        #f1.SetLineStyle(9) # ROOT.kDashed == thin dashes, almost dotted
+        f1.SetLineColor(ROOT.kRed+2)
+        f1.Draw("L SAME")
+        
     canvas.RedrawAxis("sameaxis")
     if not skipTdrStyle: 
         setTDRStyle()
     # force drawing stat box
     if drawStatBox:
-        ROOT.gStyle.SetOptStat(111110)
-        ROOT.gStyle.SetOptFit(1102)
-    #    
+        if len(fitString):
+            ROOT.gStyle.SetOptFit(111)
+            ROOT.gStyle.SetOptStat(110010)
+        else:
+            ROOT.gStyle.SetOptStat(111110)
+
+    if len(plotTitleLatex):
+        lat = ROOT.TLatex()
+        lat.SetNDC();
+        lat.SetTextFont(42)        
+        lat.SetTextSize(0.04)
+        lat.DrawLatex(leftMargin, 0.95, plotTitleLatex)
+
+            
     if len(moreTextLatex):
         realtext = moreTextLatex.split("::")[0]
         x1,y1,ypass,textsize = 0.75,0.8,0.08,0.035
@@ -1423,7 +1485,6 @@ def drawNTH1(hists=[],
     else:
         canvas.SetBottomMargin(0.15)
 
-
     h1 = hists[0]
     hnums = [hists[i] for i in range(1,len(hists))]
     frame = h1.Clone("frame")
@@ -1441,7 +1502,9 @@ def drawNTH1(hists=[],
     if colorVec != None:
         colors = colorVec
     else:
-        colors = [ROOT.kRed+2, ROOT.kBlue, ROOT.kGreen+2, ROOT.kOrange+7, ROOT.kAzure+2, ROOT.kMagenta, ROOT.kBlack]
+        colors = [ROOT.kRed+2, ROOT.kBlue, ROOT.kGreen+2, ROOT.kOrange+7,
+                  ROOT.kAzure+2, ROOT.kMagenta, ROOT.kBlack,
+                  ROOT.kViolet, ROOT.kCyan+1, ROOT.kPink+2, ROOT.kSpring-8]
     for ic,h in enumerate(hnums):
         # h.SetLineColor(colors[ic])
         # h.SetFillColor(colors[ic])
@@ -1481,7 +1544,7 @@ def drawNTH1(hists=[],
             if h.GetBinContent(h.GetMaximumBin()) > ymax: ymax = h.GetBinContent(h.GetMaximumBin())
             if h.GetBinContent(h.GetMinimumBin()) < ymin: ymin = h.GetBinContent(h.GetMinimumBin())
         if ymin < 0: ymin = 0
-        ymax *= (ymax - ymin) * yAxisExtendConstant + ymin
+        ymax = (ymax - ymin) * yAxisExtendConstant + ymin
         
     if lowerPanelHeight:
         h1.GetXaxis().SetLabelSize(0)

@@ -107,7 +107,6 @@ def rebin_corr_hists(hists, ndim=-1, use_predefined_bins=False):
             hists = [hh.rebinHist(h, "absy" if "absy" in h.axes.name else "absYVgen", common.absYV_binning[:-1]) for h in hists]
         except ValueError as e:
             logging.warning("Can't rebin axes to predefined binning")
-    print("Number of dims", ndims)
     for i in range(ndims):
         # This is a workaround for now for the fact that MiNNLO has mass binning up to
         # Inf whereas SCETlib has 13 TeV

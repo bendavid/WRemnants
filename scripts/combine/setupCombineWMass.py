@@ -9,6 +9,7 @@ import pathlib
 import logging
 import hist
 import copy
+import math
 
 scriptdir = f"{pathlib.Path(__file__).parent}"
 
@@ -20,13 +21,12 @@ def make_parser(parser=None):
     parser.add_argument("-p", "--pseudoData", type=str, help="Hist to use as pseudodata")
     parser.add_argument("-x",  "--excludeNuisances", type=str, default="", help="Regular expression to exclude some systematics from the datacard")
     parser.add_argument("-k",  "--keepNuisances", type=str, default="", help="Regular expression to keep some systematics, overriding --excludeNuisances. Can be used to keep only some systs while excluding all the others with '.*'")
-    parser.add_argument("--qcdProcessName", dest="qcdProcessName" , type=str, default="Fake",   help="Name for QCD process")
-    parser.add_argument("--noStatUncFakes", dest="noStatUncFakes" , action="store_true",   help="Set bin error for QCD background templates to 0, to check MC stat uncertainties for signal only")
     parser.add_argument("--skipOtherChargeSyst", dest="skipOtherChargeSyst" , action="store_true",   help="Skip saving histograms and writing nuisance in datacard for systs defined for a given charge but applied on the channel with the other charge")
-    parser.add_argument("--skipSignalSystOnFakes", dest="skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
     parser.add_argument("--scaleMuonCorr", type=float, default=1.0, help="Scale up/down dummy muon scale uncertainty by this factor")
-    parser.add_argument("--correlateEffStatIsoByCharge", action='store_true', help="Correlate isolation efficiency uncertanties between the two charges (by default they are decorrelated)")
+    parser.add_argument("--decorrelateEffStatIsoByCharge", dest="decorrelateEffStatIsoByCharge", action='store_true', help="Don't correlate isolation efficiency uncertanties between the two charges (by default they are correlated)")
     parser.add_argument("--noHist", action='store_true', help="Skip the making of 2D histograms (root file is left untouched if existing)")
+    parser.add_argument("--effStatLumiScale", type=float, default=None, help="Rescale equivalent luminosity for efficiency stat uncertainty by this value (e.g. 10 means ten times more data from tag and probe)")
+    parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers and nuisances)")
     return parser
 
 def main(args):
@@ -62,7 +62,9 @@ def main(args):
         cardTool.setSkipOtherChargeSyst()
     if args.pseudoData:
         cardTool.setPseudodata(args.pseudoData)
-
+    if args.lumiScale:
+        cardTool.setLumiScale(args.lumiScale)
+        
     passSystToFakes = not (wlike or args.skipSignalSystOnFakes)
         
     single_v_samples = cardTool.filteredProcesses(lambda x: x[0] in ["W", "Z"])
@@ -86,7 +88,6 @@ def main(args):
 
     # keep mass weights here as first systematic, in case one wants to run stat-uncertainty only with --doStatOnly
     cardTool.addSystematic("massWeight", 
-        # TODO: Add the mass weights to the tau samples ## FIXME: isn't it done?
         processes=signal_samples_inctau,
         outNames=theory_tools.massWeightNames(["massShift100MeV"], wlike=wlike),
         group="massShift",
@@ -151,32 +152,44 @@ def main(args):
     )
 
     if not args.noEfficiencyUnc:
-        for name,num in zip(["effSystTnP", "effStatTnP", "effStatTnP_tracking", "effStatTnP_reco"], [4, 624*4, 384*2, 144*2]):
-            ## TODO: this merged implementation for the effstat makes it very cumbersome to do things differently for iso and trigidip!!
-            ## the problem is that I would need custom actions inside based on actual nuisance names, which needs to be commanded from outside, and this is not straightforward
+        chargeDependentSteps = ["trigger"] # might add idip or others, but we may use a special treatment to decorrelate by inflating the uncertainties
+        effStatTypes = ["reco", "tracking", "idip", "trigger"]
+        if args.binnedScaleFactors:
+            effStatTypes.extend(["iso"])
+        else:
+            effStatTypes.extend(["iso_effData", "iso_effMC"])
+        allEffTnP = [f"effStatTnP_sf_{eff}" for eff in effStatTypes] + ["effSystTnP"]
+        for name in allEffTnP:
             if "Syst" in name:
-                axes = ["reco-tracking-idiptrig-iso"]
+                axes = ["reco-tracking-idip-trigger-iso"]
                 axlabels = ["WPSYST"]
-                nameReplace = [("WPSYST0", "Reco"), ("WPSYST1", "Tracking"), ("WPSYST2", "IDIPTrig"), ("WPSYST3", "Iso")]
+                nameReplace = [("WPSYST0", "Reco"), ("WPSYST1", "Tracking"), ("WPSYST2", "IDIP"), ("WPSYST3", "Trig"), ("WPSYST4", "Iso")]
                 scale = 1.0
-            elif "tracking" in name:
-                axes = ["SF eta", "SF pt", "SF charge"]
-                axlabels = ["eta", "pt", "q"]
-                nameReplace = [("effStatTnP_tracking", "effStatTnP"), ("q0", "Tracking"), ("q1", "Tracking")] # this serves two purposes: it correlates nuisances between charges and add a sensible labels to nuisances
-                scale = 1.0
-            elif "reco" in name:
-                axes = ["SF eta", "SF pt", "SF charge"]
-                axlabels = ["eta", "pt", "q"]
-                nameReplace = [("effStatTnP_reco", "effStatTnP"), ("q0", "Reco"), ("q1", "Reco")] # this serves two purposes: it correlates nuisances between charges and add a sensible labels to nuisances
-                scale = 1.0
+                mirror = True
             else:
-                axes = ["SF eta", "SF pt", "SF charge", "idiptrig-iso"]
-                axlabels = ["eta", "pt", "q", "Trig"]
-                nameReplace = [("Trig0", "IDIPTrig"), ("q0Trig1", "Iso"), ("q1Trig1", "Iso")] if args.correlateEffStatIsoByCharge else [("Trig0", "IDIPTrig"), ("Trig1", "Iso")] # replace with better names
-                scale = 1.0 if args.correlateEffStatIsoByCharge else {".*effStatTnP.*Iso" : "1.414", ".*effStatTnP.*IDIPTrig" : "1.0"} # only for iso, scale up by sqrt(2) when decorrelating between charges and efficiencies were derived inclusively
+                if args.binnedScaleFactors:
+                    axes = ["SF eta", "nPtBins", "SF charge"]
+                    axlabels = ["eta", "pt", "q"]
+                    mirror = True
+                else:
+                    axes = ["SF eta", "nPtEigenBins", "SF charge", "downUpVar"]
+                    axlabels = ["eta", "pt", "q", "downUpVar"]
+                    mirror = False
+                nameReplace = [] if any(x in name for x in chargeDependentSteps) else [("q0", ""), ("q1", "")]  # this part correlates nuisances between charges
+                scale = 1.0
+                if "iso" in name and args.decorrelateEffStatIsoByCharge:
+                    scale = 1.414 # only for iso, scale up by sqrt(2) when decorrelating between charges and efficiencies were derived inclusively
+                    nameReplace = []
+                if args.binnedScaleFactors:                    
+                    nameReplace = nameReplace + [("effStatTnP_sf_", "effStatBinned_")]
+                else:
+                    nameReplace = nameReplace + [("effStatTnP_sf_", "effStatTnP_")]
+            if args.effStatLumiScale and "Syst" not in name:
+                scale /= math.sqrt(args.effStatLumiScale)
+
             cardTool.addSystematic(name, 
-                mirror=True,
-                group="muon_eff_syst" if "Syst" in name else "muon_eff_stat", # TODO: for now better checking them separately
+                mirror=True if "Syst" in name else False,
+                group="muon_eff_syst" if "Syst" in name else "muon_eff_stat",
                 systAxes=axes,
                 labelsByAxis=axlabels,
                 baseName=name+"_",
