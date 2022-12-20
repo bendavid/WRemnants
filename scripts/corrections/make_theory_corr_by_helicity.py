@@ -46,6 +46,7 @@ elif args.proc == "w":
     filesByProc = { "WplusmunuPostVFP" : (args.corr_ul[plus_idx], args.corr_a4[plus_idx4]),
         "WminusmunuPostVFP" : (args.corr_ul[not plus_idx], args.corr_a4[not plus_idx4])}
 
+# TODO: Read taus here already
 minnloh = input_tools.read_all_and_scale(args.minnlo_file, list(filesByProc.keys()), ["helicity_moments_scale"])[0]
 # # TODO: Really need to reuse code here and for the inclusive corr
 # Get more stats in the correction
