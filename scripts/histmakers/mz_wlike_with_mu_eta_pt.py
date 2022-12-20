@@ -128,10 +128,10 @@ def build_graph(df, dataset):
 
     if dataset.is_data:
         #TODO corrections not available for data yet
-        df = df.Alias("Muon_correctedPt", "Muon_cvhbsPt")
-        df = df.Alias("Muon_correctedEta", "Muon_cvhbsEta")
-        df = df.Alias("Muon_correctedPhi", "Muon_cvhbsPhi")
-        df = df.Alias("Muon_correctedCharge", "Muon_cvhbsCharge")
+        df = df.Alias("Muon_correctedPt", "Muon_cvhPt")
+        df = df.Alias("Muon_correctedEta", "Muon_cvhEta")
+        df = df.Alias("Muon_correctedPhi", "Muon_cvhPhi")
+        df = df.Alias("Muon_correctedCharge", "Muon_cvhCharge")
     elif dataset.name in common.vprocs:
         df = wremnants.define_corrected_muons(df, calibration_helper)
     else:
@@ -382,7 +382,7 @@ def build_graph(df, dataset):
 
                 results.append(dummyMuonScaleSyst)
 
-            df = df.Define("Muon_cvhbsMomCov", "wrem::splitNestedRVec(Muon_cvhbsMomCov_Vals, Muon_cvhbsMomCov_Counts)")
+            df = df.Define("Muon_cvhMomCov", "wrem::splitNestedRVec(Muon_cvhMomCov_Vals, Muon_cvhMomCov_Counts)")
 
             df = df.Define("muonScaleSyst_responseWeights_tensor", calibration_uncertainty_helper,
                            ["Muon_correctedPt",
@@ -390,7 +390,7 @@ def build_graph(df, dataset):
                             "Muon_correctedPhi",
                             "Muon_correctedCharge",
                             "Muon_genPartIdx",
-                            "Muon_cvhbsMomCov",
+                            "Muon_cvhMomCov",
                             "vetoMuonsPre",
                             "GenPart_pt",
                             "GenPart_eta",
