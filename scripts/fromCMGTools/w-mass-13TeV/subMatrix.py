@@ -13,8 +13,8 @@ import datetime
 import argparse
 from array import array
 
-import utilities
-utilities = utilities.util()
+import utilitiesCMG
+utilities = utilitiesCMG.util()
 
 ## safe batch mode
 import sys
@@ -82,7 +82,7 @@ def niceName(name):
         ptText = ""
         chargeText = ""
         if len(ptnum):
-            ptText = f"p_{{T}} bin {ptnum[0].split("PtVBin")[1]}"
+            ptText = f"p_{{T}} bin {ptnum[0].split('PtVBin')[1]}"
         if len(chargenum):
             chg = chargenum.split("genQ")[1]
             chargeText = "-" if "genQ0" in chargenum else "+" if "genQ1" in chargenum else "" # in case Z has a different convention

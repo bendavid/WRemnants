@@ -2,9 +2,7 @@
 
 # plot ratios of histogram variation over nominal
 # example
-# python w-mass-13TeV/makeSystRatios.py cards/wmass_Wnnpdf30_noPDFonZ/Wmunu_plus_shapes_pseudodataWmunuFromNNPDF31.root plots/testNanoAOD/WmassPlots/Wnnpdf30_noPDFonZ/testFit_pseudodataWmunuFromNNPDF31_alphaS1sigma/makeSystRatios/ -s ".*mass.*100MeV.*" -p "Wmunu_plus,Wtaunu_plus" -u
-
-# python w-mass-13TeV/makeSystRatios.py cards/wmass/Wnnpdf31_testTHn_testEff/Wmunu_plus_shapes.root plots/testNanoAOD/WmassPlots/Wnnpdf31_testTHn_testEff/makeSystRatios/plus/ -s ".*pdf1N.*Down" -p "Wmunu_plus,data_fakes" -u --plotStat --statUncRatio
+# python w-mass-13TeV/makeSystRatios.py /scratch/mciprian/CombineStudies/WMass/scetlibCorr_nnpdf31_testSF_trashdebug/byHelicityPtCharge_correlateEffStatIsoByCharge/WMassCombineInput.root /eos/user/m/mciprian/www/WMassAnalysis/fromMyWremnants/Wmass_fit/scetlibCorr_nnpdf31_testSF_trashdebug/byHelicityPtCharge_correlateEffStatIsoByCharge/makeSystRatios/ -s ".*effStatTnP_trigger_eta20.*q1.*" -c plus --systPostfix effStatTnP_trigger_eta20plus
 
 import re
 import os, os.path
@@ -26,7 +24,9 @@ from copy import *
 sys.path.append(os.getcwd() + "/plotUtils/")
 from utility import *
 
-def plotUnrolledHistogram(h, process, syst, outdir, canvas, hist2DforBins, yAxisTitle="syst/nomi", errorBars=False, channelCharge=None, canvasNamePrefix=""):
+def plotUnrolledHistogram(h, process, syst, outdir, canvas, hist2DforBins, yAxisTitle="syst/nomi",
+                          errorBars=False, channelCharge=None,
+                          canvasNamePrefix="", canvasFullName=None):
 
     canvas.cd()
     yTitleOffset = 0.65
@@ -98,9 +98,10 @@ def plotUnrolledHistogram(h, process, syst, outdir, canvas, hist2DforBins, yAxis
 
     if canvasNamePrefix:
         canvasNamePrefix += "_"
-    
+
+    canvasName = canvasFullName if canvasFullName else f"{canvasNamePrefix}unrolled_{process}_{syst}"
     for ext in ["png","pdf"]:
-        canvas.SaveAs(f"{outdir}{canvasNamePrefix}unrolled_{process}_{syst}.{ext}")
+        canvas.SaveAs(f"{outdir}{canvasName}.{ext}")
 
 
 if __name__ == "__main__":
@@ -108,7 +109,7 @@ if __name__ == "__main__":
     parser.add_argument("rootfile", type=str, nargs=1, help="Input root file")
     parser.add_argument("outdir",   type=str, nargs=1, help="Folder for plots")
     parser.add_argument("-s", "--systematics",    type=str, default=".*pdf.*", help="Comma separated list of syst names or regular expressions to select systematics to make ratios with nominal")
-    parser.add_argument("-p", "--processes",    type=str, default="Wmunu_plus", help="Comma separated list of processes to plot (full name please)")
+    parser.add_argument("-p", "--processes",    type=str, default="Wmunu", help="Comma separated list of processes to plot (full name please)")
     parser.add_argument(     '--nContours', dest='nContours',    default=51, type=int, help='Number of contours in palette. Default is 51 (let it be odd, so the central strip is white if not using --abs-value and the range is symmetric)')
     parser.add_argument(     '--palette'  , dest='palette',      default=55, type=int, help='Set palette: use 0 for a built-in one, 55 is kRainbow')
     parser.add_argument(     '--invertPalette', dest='invertePalette' , default=False , action='store_true',   help='Inverte color ordering in palette')
@@ -248,8 +249,8 @@ if __name__ == "__main__":
                                 palette=args.palette, nContours=args.nContours, invertePalette=args.invertePalette,
                                 passCanvas=canvas, drawOption="COLZ0")
         if doUnrolled:
-            ratio_unrolled = unroll2Dto1D(ratio, newname=f"unrolled_{name}", cropNegativeBins=False)
-            plotUnrolledHistogram(ratio_unrolled, pname, sname, outdir, canvas_unroll, ratio, errorBars=args.addErrorBars, channelCharge=args.charge)
+            ratio_unrolled = unroll2Dto1D(ratio, newname=f"unrolledRatio_{name}", cropNegativeBins=False)
+            plotUnrolledHistogram(ratio_unrolled, pname, sname, outdir, canvas_unroll, ratio, errorBars=args.addErrorBars, channelCharge=args.charge, canvasFullName=ratio_unrolled.GetName())
 
             if args.statUncRatio:
                 statUncNomi = nominals[pname].Clone(f"statUnc_{nominals[pname].GetName()}")
@@ -258,7 +259,7 @@ if __name__ == "__main__":
                 fillTH2fromTH2part(statUncAlt, alternate, fillWithError=True)
                 ratioStatUnc = statUncAlt.Clone(f"ratioStatUncSystOverNomi_{sname}")
                 ratioStatUnc.Divide(statUncNomi)
-                ratioStatUnc_unrolled = unroll2Dto1D(ratioStatUnc, newname=f"unrolled_{name}_ratioStatUnc", cropNegativeBins=False)
+                ratioStatUnc_unrolled = unroll2Dto1D(ratioStatUnc, newname=f"unrolledStatUncRatio_{name}", cropNegativeBins=False)
                 plotUnrolledHistogram(ratioStatUnc_unrolled, pname, f"{sname}_statUncRatioWithNomi", outdir, canvas_unroll, ratioStatUnc, errorBars=False, yAxisTitle="stat. uncertainty ratio: syst/nomi", channelCharge=args.charge)
     print()
 
@@ -269,7 +270,7 @@ if __name__ == "__main__":
     if args.systPostfix:
         systPostfix += f"_{args.systPostfix}"
     for p in processes:
-        if len(systList[p]) > 7:
+        if len(systList[p]) > 11:
             print("Not running drawNTH1() function to draw curves, there are too many lines ({})".format(len(systList[p])))
         else:
             drawNTH1(systList[p], systLeg[p], "Unrolled eta-p_{T} bin", "Events", f"nominalAndSyst_{p}{systPostfix}", outdir,

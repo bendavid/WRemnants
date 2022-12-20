@@ -15,8 +15,8 @@ from subMatrix import niceName, niceNameHEPDATA
 
 import argparse
 
-import utilities
-utilities = utilities.util()
+import utilitiesCMG
+utilities = utilitiesCMG.util()
 
 ## safe batch mode
 import sys
@@ -51,7 +51,7 @@ def sortParameters(params):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--infile'        , dest='infile'     , default=''        , type=str, help='file with the fitresult')
+    parser.add_argument('infile', nargs=1, type=str, help='file with the fitresult')
     parser.add_argument(      '--expected-infile'        , dest='expInfile'     , default=''        , type=str, help='file with the fitresult for expected, to plot together with observed (still to be implemented)')
     parser.add_argument('-o','--outdir', dest='outdir', default=None, type=str, help='If given, plot the pulls of the nuisances in this output directory')
     parser.add_argument("--vtol", "--val-tolerance", dest="vtol", default=0.30, type=float, help="Report nuisances whose value changes by more than this amount of sigmas")
@@ -78,7 +78,7 @@ if __name__ == "__main__":
     parser.add_argument(     '--prepare-as-covariance-matrix', dest='prepareAsCovarianceMatrix',    default=False, action='store_true', help='Sort as in subMatrix.py to get better correspondance between matrix and list of POIs and nuisance parameters, when preparing material for hepdata')
     args = parser.parse_args()
 
-    infile = args.infile
+    infile = args.infile[0]
     infile_exp = args.expInfile
     plotObsWithExp = False
     if len(infile_exp):
@@ -355,6 +355,11 @@ if __name__ == "__main__":
         if hist_fit_s_ranked != None:
             hist_fit_s = hist_fit_s_ranked
 
+        clm = 0.1 if nbins < 100 else 0.05
+        crm = 0.05 if nbins < 100 else 0.02
+        cbm = args.setBottomMargin
+        ctm = 0.1
+
         canvas_nuis.SetTickx(1)
         canvas_nuis.SetTicky(1)
         hist_fit_s.GetYaxis().SetRangeUser(ymin-args.yoffset[0],ymax+args.yoffset[1])
@@ -364,25 +369,28 @@ if __name__ == "__main__":
         hist_fit_s.SetMarkerSize(1.0)
         hist_fit_s.SetLineWidth(2)
         hist_fit_s.Draw("PE1")
-        hist_fit_s.GetXaxis().SetLabelSize(0.045 if nbins < 20 else 0.035)
-        hist_fit_s.GetXaxis().LabelsOption("v")
-
         hist_fit_s.GetYaxis().SetTitle(args.ytitle)
         hist_fit_s.GetYaxis().SetTitleSize(0.05)
         hist_fit_s.GetYaxis().SetTitleOffset(0.90)
 
-        clm = 0.1 if nbins < 100 else 0.05
-        crm = 0.05 if nbins < 100 else 0.02
-        cbm = args.setBottomMargin
-        ctm = 0.1
+        xLabelSize = 0.045 if nbins < 20 else 0.035
+        if nbins > 180:
+            xLabelSize = 0.0
+            cbm = 0.1
+            hist_fit_s.GetYaxis().SetTitleOffset(0.40)
+            hist_fit_s.SetTitle(args.uniqueString)
+        elif nbins > 120:
+            xLabelSize = 0.025
+        hist_fit_s.GetXaxis().SetLabelSize(xLabelSize)
+        hist_fit_s.GetXaxis().LabelsOption("v")
+
         canvas_nuis.SetLeftMargin(clm)
         canvas_nuis.SetRightMargin(crm)
         canvas_nuis.SetBottomMargin(cbm)
         canvas_nuis.SetTopMargin(ctm)
 
-        lat.DrawLatex(0.10, 0.92, '#bf{CMS} #it{Preliminary}')
-        #lat.DrawLatex(0.71 +(0.1-crm), 0.92, '36.3 fb^{-1} (13 TeV)')
-        lat.DrawLatex(0.71 +(0.1-crm), 0.92, '16.8 fb^{-1} (13 TeV)')
+        #lat.DrawLatex(0.10, 0.92, '#bf{CMS} #it{Preliminary}')
+        #lat.DrawLatex(0.71 +(0.1-crm), 0.92, '16.8 fb^{-1} (13 TeV)')
         line.DrawLine(0., ycen, nbins, ycen)
         line.DrawLine(0., ymax, nbins, ymax)
         line.DrawLine(0., ymin, nbins, ymin)

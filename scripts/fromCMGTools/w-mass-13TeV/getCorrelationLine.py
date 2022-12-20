@@ -14,8 +14,8 @@ from array import array
 #from subMatrix import niceName # skip for now, have to adapt the script
 from operator import itemgetter
 
-import utilities
-utilities = utilities.util()
+import utilitiesCMG
+utilities = utilitiesCMG.util()
 
 ## safe batch mode
 import sys
