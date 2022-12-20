@@ -114,6 +114,17 @@ def clipNegativeVals(h, clipValue=0):
     hnew[...] = np.stack((vals, h.variances(flow=True)), axis=-1)
     return hnew
 
+def scaleByLumi(h, scale, createNew=False):
+    if createNew:
+        hnew = hist.Hist(*h.axes, storage=hist.storage.Weight())
+        hnew.values(flow=True)[...]    = scale * h.values(flow=True)
+        hnew.variances(flow=True)[...] = scale * h.variances(flow=True)
+        return hnew
+    else:
+        h.values(flow=True)[...]    *= scale
+        h.variances(flow=True)[...] *= scale
+        return h
+    
 def makeAbsHist(h, axis_name):
     ax = h.axes[axis_name]
     axidx = list(h.axes).index(ax)

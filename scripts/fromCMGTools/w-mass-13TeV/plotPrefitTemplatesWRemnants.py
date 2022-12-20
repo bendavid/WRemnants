@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+
+# example
+# input file is the output of setupCombineWmass.py, with all TH2D inside
+#
+# python w-mass-13TeV/plotPrefitTemplatesWRemnants.py input.root outdir [--wlike]
+#
+# add --pt-range-projection to make projections in a restricted pt range (just for tests to check data/MC)
+
 import re
 import os, os.path
 import logging

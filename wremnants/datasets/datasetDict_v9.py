@@ -11,7 +11,7 @@ dataDictV9 = {
     'dataPostVFP' : { 'name' :  "dataPostVFP",
                       'filepaths' : ["/scratch/shared/NanoAOD/TrackRefitv2/NanoV9DataPostVFP/Run2016F_220627_141813/*/*.root",
                                      "/scratch/shared/NanoAOD/TrackRefitv2/NanoV9DataPostVFP/Run2016G_220627_141950/*/*.root",
-                                     "/scratch/shared/NanoAOD/TrackRefitv2/NanoV9DataPostVFP/Run2016H_220627_142357/*/*.root",]
+                                     "/scratch/shared/NanoAOD/TrackRefitv2/NanoV9DataPostVFP/Run2016H_220627_142357/*/*.root",]                      
     },
     'ZmmPostVFP' : { 'name' : "ZmumuPostVFP",
                    'filepaths' :
@@ -104,6 +104,21 @@ dataDictV9 = {
                          'xsec' : 0.564,
                          'group' : "Diboson",
     }
+}
+
+dataDictV9_tnp = {
+    'dataPostVFP' : { 'name' :  "dataPostVFP",
+                      'filepaths' : ["/scratch/shared/NanoAOD/Tnp_NanoV9/TNP_addXYZ/SingleMuon/NanoV9DataPostVFP/Run2016F_postVFP/*/*.root",
+                                     "/scratch/shared/NanoAOD/Tnp_NanoV9/TNP_addXYZ/SingleMuon/NanoV9DataPostVFP/Run2016G/*/*.root",
+                                     "/scratch/shared/NanoAOD/Tnp_NanoV9/TNP_addXYZ/SingleMuon/NanoV9DataPostVFP/Run2016H/*/*.root",]
+                      
+    },
+    'ZmmPostVFP' : { 'name' : "ZmumuPostVFP",
+                   'filepaths' :
+                    ["/scratch/shared/NanoAOD/Tnp_NanoV9/TNP_addXYZ/DYJetsToMuMu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_GenPartFix/*/*/*.root"],
+                   'xsec' : xsec_ZmmPostVFP,
+    },
+    
 }
 
 ###Pisa server

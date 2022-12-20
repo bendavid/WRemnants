@@ -52,7 +52,7 @@ class datagroups(object):
     ## procName are grouped into datagroups
     ## baseName takes values such as "nominal"
     def setHists(self, baseName, syst, procsToRead=None, label=None, nominalIfMissing=True, 
-            selectSignal=True, forceNonzero=True, preOpMap=None, preOpArgs=None):
+                 applySelection=True, forceNonzero=True, preOpMap=None, preOpArgs=None, scaleToNewLumi=-1):
         if not label:
             label = syst if syst else baseName
         if not procsToRead:
@@ -68,12 +68,12 @@ class datagroups(object):
                 logger.debug(f"Looking at group member {member.name}")
                 scale = group["scale"] if "scale" in group else None
                 try:
-                    h = self.readHist(baseName, member, syst, scaleOp=scale, forceNonzero=forceNonzero)
+                    h = self.readHist(baseName, member, syst, scaleOp=scale, forceNonzero=forceNonzero, scaleToNewLumi=scaleToNewLumi)
                     foundExact = True
                 except ValueError as e:
                     if nominalIfMissing:
                         logger.info(f"{str(e)}. Using nominal hist {self.nominalName} instead")
-                        h = self.readHist(self.nominalName, member, "", scaleOp=scale, forceNonzero=forceNonzero)
+                        h = self.readHist(self.nominalName, member, "", scaleOp=scale, forceNonzero=forceNonzero, scaleToNewLumi=scaleToNewLumi)
                     else:
                         logger.warning(str(e))
                         continue
@@ -85,8 +85,10 @@ class datagroups(object):
 
                 group[label] = h if not group[label] else hh.addHists(h, group[label])
 
-            if selectSignal and group[label] and "signalOp" in group and group["signalOp"]:
-                group[label] = group["signalOp"](group[label])
+            if not applySelection and "selectOp" in group and group["selectOp"]:
+                logger.warning(f"Selection requested for process {procName} but applySelection=False, thus it will be ignored")
+            if applySelection and group[label] and "selectOp" in group and group["selectOp"]:
+                group[label] = group["selectOp"](group[label])
         # Avoid situation where the nominal is read for all processes for this syst
         if not foundExact:
             raise ValueError(f"Did not find systematic {syst} for any processes!")
@@ -130,21 +132,25 @@ class datagroups(object):
         return name
 
     def loadHistsForDatagroups(self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="", nominalIfMissing=True,
-            selectSignal=True, forceNonzero=True, pseudodata=False, preOpMap={}, preOpArgs={}):
+                               applySelection=True, forceNonzero=True, pseudodata=False, preOpMap={}, preOpArgs={}, scaleToNewLumi=-1):
         if self.rtfile and self.combine:
             self.setHistsCombine(baseName, syst, channel, procsToRead, excluded_procs, label)
         else:
-            self.setHists(baseName, syst, procsToRead, label, nominalIfMissing, selectSignal, forceNonzero, preOpMap, preOpArgs)
+            self.setHists(baseName, syst, procsToRead, label, nominalIfMissing, applySelection, forceNonzero, preOpMap, preOpArgs, scaleToNewLumi=scaleToNewLumi)
 
     def getDatagroups(self, excluded_procs=[]):
-        if type(excluded_procs) == str: excluded_procs = list(excluded_procs)
+        if type(excluded_procs) == str:
+            excluded_procs = list(excluded_procs)
         return dict(filter(lambda x: x[0] not in excluded_procs, self.groups.items()))
 
     def getNames(self, matches=[], exclude=False):
-        if not exclude:
-            return list(filter(lambda x: any([re.match(expr, x) for expr in matches]), self.groups.keys()))
+        if not matches:
+            return list(x for x in self.groups.keys())
         else:
-            return list(filter(lambda x: x not in matches, self.groups.keys()))
+            if not exclude:
+                return list(filter(lambda x: any([re.match(expr, x) for expr in matches]), self.groups.keys()))
+            else:
+                return list(filter(lambda x: x not in matches, self.groups.keys()))
 
     def getProcNames(self, to_expand=[], exclude_group=[]):
         procs = []
@@ -165,19 +171,6 @@ class datagroups(object):
                     if nominalName in x[1] or histName in x[1] else 0,
                 reverse=True)
         )
-
-    def getDatagroupsForHist(self, histName):
-        filled = {}
-        for k, v in self.groups.items():
-            if histName in v:
-                filled[k] = v
-        return filled
-
-    def resultsDict(self):
-        return self.results
-
-    def processes(self):
-        return self.groups.keys()
 
     def getDatagroupsForHist(self, histName):
         filled = {}
@@ -227,29 +220,50 @@ class datagroups(object):
         )
         self.groups[name][refname] = action(self.groups[refproc][refname])
 
+    def setSelectOp(self, op, processes=None, exclude=False): 
+        if processes == None:
+            procs = self.getDatagroups()
+        else:
+            if exclude:
+                procs = self.getDatagroups(excluded_procs=processes)
+            else:
+                procs = [processes] if isinstance(processes, str) else [p for p in processes]
+        for proc in procs:
+            if proc not in self.groups.keys():
+                raise ValueError(f"In setSelectOp(): process {proc} not found")
+            self.groups[proc]["selectOp"] = op
+        
 class datagroups2016(datagroups):
-    def __init__(self, infile, combine=False, wlike=False, pseudodata_pdfset = None):
+    def __init__(self, infile, combine=False, wlike=False, pseudodata_pdfset = None,
+    ):
         self.datasets = {x.name : x for x in datasets2016.getDatasets()}
         super().__init__(infile, combine)
+        if wlike:
+            sigOp = None
+            fakeOp = None
+        else:
+            sigOp = sel.signalHistWmass
+            fakeOp = sel.fakeHistABCD
+        ###
         self.hists = {} # container storing temporary histograms
         self.groups =  {
             "Data" : dict(
                 members = [self.datasets["dataPostVFP"]],
                 color = "black",
                 label = "Data",
-                signalOp = sel.signalHistWmass if not wlike else None,
+                selectOp = sigOp,
             ),
             "Zmumu" : dict(
                 members = [self.datasets["ZmumuPostVFP"]],
                 label = r"Z$\to\mu\mu$",
                 color = "lightblue",
-                signalOp = sel.signalHistWmass if not wlike else None,
+                selectOp = sigOp,
             ),   
             "Ztautau" : dict(
                 members = [self.datasets["ZtautauPostVFP"]],
                 label = r"Z$\to\tau\tau$",
                 color = "darkblue",
-                signalOp = sel.signalHistWmass if not wlike else None,
+                selectOp = sigOp,
             ),            
         }
         if pseudodata_pdfset and combine:
@@ -264,31 +278,31 @@ class datagroups2016(datagroups):
                     scale = lambda x: 1. if x.is_data else -1,
                     label = "Nonprompt",
                     color = "grey",
-                    signalOp = sel.fakeHistABCD,
+                    selectOp = fakeOp,
                 ),
                 "Wtau" : dict(
                     members = [self.datasets["WminustaunuPostVFP"], self.datasets["WplustaunuPostVFP"]],
                     label = r"W$^{\pm}\to\tau\nu$",
                     color = "orange",
-                    signalOp = sel.signalHistWmass,
+                    selectOp = sigOp,
                 ),
                 "Wmunu" : dict(
                     members = [self.datasets["WminusmunuPostVFP"], self.datasets["WplusmunuPostVFP"]],
                     label = r"W$^{\pm}\to\mu\nu$",
                     color = "darkred",
-                    signalOp = sel.signalHistWmass,
+                    selectOp = sigOp,
                 ),
                 "Top" : dict(
                     members = list(filter(lambda y: y.group == "Top", self.datasets.values())),
                     label = "Top",
                     color = "green",
-                    signalOp = sel.signalHistWmass,
+                    selectOp = sigOp,
                 ), 
                 "Diboson" : dict(
                     members = list(filter(lambda y: y.group == "Diboson", self.datasets.values())),
                     label = "Diboson",
                     color = "pink",
-                    signalOp = sel.signalHistWmass,
+                    selectOp = sigOp,
                 ), 
             })
         else:
@@ -315,7 +329,7 @@ class datagroups2016(datagroups):
             return syst
         return "_".join([baseName,syst])
     
-    def readHist(self, baseName, proc, syst, scaleOp=None, forceNonzero=True):
+    def readHist(self, baseName, proc, syst, scaleOp=None, forceNonzero=True, scaleToNewLumi=-1):
         output = self.results[proc.name]["output"]
         histname = self.histName(baseName, proc.name, syst)
         if histname not in output:
@@ -323,6 +337,8 @@ class datagroups2016(datagroups):
         h = output[histname]
         if forceNonzero:
             h = hh.clipNegativeVals(h)
+        if scaleToNewLumi > 0:
+            h = hh.scaleByLumi(h, scaleToNewLumi)
         scale = self.processScaleFactor(proc)
         if scaleOp:
             scale = scale*scaleOp(proc)
