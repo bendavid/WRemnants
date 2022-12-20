@@ -59,9 +59,9 @@ def get_dummy_uncertainties():
 def define_corrected_muons(df, helper):
     # split the nested vectors
     df = df.Define("Muon_cvhmergedGlobalIdxs", "wrem::splitNestedRVec(Muon_cvhmergedGlobalIdxs_Vals, Muon_cvhmergedGlobalIdxs_Counts)")
-    df = df.Define("Muon_cvhbsJacRef", "wrem::splitNestedRVec(Muon_cvhbsJacRef_Vals, Muon_cvhbsJacRef_Counts)")
+    df = df.Define("Muon_cvhJacRef", "wrem::splitNestedRVec(Muon_cvhJacRef_Vals, Muon_cvhJacRef_Counts)")
 
-    df = df.Define("Muon_correctedMom4Charge", helper, ["Muon_cvhbsPt", "Muon_cvhbsEta", "Muon_cvhbsPhi", "Muon_cvhbsCharge", "Muon_cvhmergedGlobalIdxs", "Muon_cvhbsJacRef"])
+    df = df.Define("Muon_correctedMom4Charge", helper, ["Muon_cvhPt", "Muon_cvhEta", "Muon_cvhPhi", "Muon_cvhCharge", "Muon_cvhmergedGlobalIdxs", "Muon_cvhJacRef"])
 
     # split into individual vectors
     df = df.Define("Muon_correctedPt", "ROOT::VecOps::RVec<float> res(Muon_correctedMom4Charge.size()); std::transform(Muon_correctedMom4Charge.begin(), Muon_correctedMom4Charge.end(), res.begin(), [](const auto &x) { return x.first.Pt(); } ); return res;")
