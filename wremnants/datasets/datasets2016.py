@@ -8,6 +8,7 @@ import logging
 #set the debug level for logging incase of full printout 
 from wremnants.datasets.datasetDict_v9 import dataDictV9, dataDictV9_pisa, dataDictV9_tnp
 from wremnants.datasets.datasetDict_v8 import *
+from wremnants.datasets.datasetDict_gen import genDataDict
 
 logger = logging.getLogger("wremnants").getChild(__name__.split(".")[-1])
 
@@ -94,12 +95,12 @@ def getDatasets(maxFiles=-1, filt=None, mode=None, nanoVersion = "v9"):
                   ttbarlnuPostVFP, ttbarlqPostVFP,
                   singleTop_schanLepDecaysPostVFP, singleTop_tWAntitopPostVFP, singleTop_tchanAntitopPostVFP, singleTop_tchanTopPostVFP,
                   wwPostVFP, wzPostVFP, zz2l2nuPostVFP]
-    # ,WmmunuPostVFP_LZ4_4,WmmunuPostVFP_LZMA_9]
 
-    allPostVFP_gen = allPostVFP[1:]
-    allPostVFP_tnp = [dataPostVFP, ZmmPostVFP]
-    
-    samples = allPostVFP if mode != "gen" else allPostVFP_gen
+    samples = allPostVFP if mode != "gen" else allPostVFP[1:]
+
+    if mode == "gen":
+        samples.extend([getNarfDataset(n, maxFiles, genDataDict, False, True) for n in genDataDict.keys()])
+
     if nanoVersion == "tnp":
         samples = allPostVFP_tnp
     if filt:

@@ -59,11 +59,8 @@ public:
         return get_tensor_impl(std::index_sequence_for<Xs...>{}, xs...);
     }
 
-    //tensor_t operator() (double x, double y, double z, double nominal_weight = 1.0) {
-    //    return nominal_weight*get_tensor(x, y, z);
-    //}
-
     tensor_t operator() (double x1, double x2, double x3, int x4, double nominal_weight) {
+        //std::cout << "Args are mass " << x1 << " pt " << x2 << " y " << x3 << " charge " << x4 << std::endl;
         return nominal_weight*get_tensor(x1, x2, x3, x4);
     }
 private:

@@ -13,10 +13,10 @@ def read_and_scale(fname, proc, histname, lumi=False):
         
     return load_and_scale(out, proc, histname, lumi)
 
-def load_and_scale(res_dict, proc, histname, lumi=False):
+def load_and_scale(res_dict, proc, histname, calculate_lumi=False, scale=1.):
     h = res_dict[proc]["output"][histname]
-    scale = res_dict[proc]["dataset"]["xsec"]/res_dict[proc]["weight_sum"]
-    if lumi:
+    scale = res_dict[proc]["dataset"]["xsec"]/res_dict[proc]["weight_sum"]*scale
+    if calculate_lumi:
         data_keys = [p for p in res_dict.keys() if "dataset" in res_dict[p] and res_dict[p]["dataset"]["is_data"]]
         lumi = sum([res_dict[p]["lumi"] for p in data_keys])*1000
         scale *= lumi
@@ -30,7 +30,6 @@ def read_all_and_scale(fname, procs, histnames, lumi=False):
     for histname in histnames:
         h = load_and_scale(out, procs[0], histname, lumi)
         for proc in procs[1:]:
-            print("Hist integral is", h.sum(flow=True), "for proc", proc)
             h += load_and_scale(out, proc, histname, lumi)
         hists.append(h)
 
@@ -93,24 +92,55 @@ def read_scetlib_hist(path, nonsing="auto", flip_y_sign=False, charge=None):
 
     return scetlibh 
 
-def read_dyturbo_hist(filenames, path="", axis="pt"):
-    isfile = list(filter(lambda x: os.path.isfile(x), ["/".join([path, f]) if path else f for f in filenames]))
+def read_dyturbo_hist(filenames, path="", axes=("y", "pt")):
+    isfile = list(filter(lambda x: os.path.isfile(x), 
+        [os.path.expanduser(os.path.join(path, f)) for f in filenames]))
 
     if not isfile:
         raise ValueError("Must pass in a valid file")
 
-    hists = [read_dyturbo_file(f, axis) for f in isfile]
+    hists = [read_dyturbo_file(f, axes) for f in isfile]
+    if len(hists) > 1:
+        hists = hh.rebinHistsToCommon(hists, 0)
+
     return hh.sumHists(hists)
+
+def expand_dyturbo_filenames(path, basename, varname, pieces=["n3ll_born", "n2ll_ct", "n2lo_vj"], append=None):
+    return [os.path.join(path, "_".join(filter(None, [basename, piece, varname, append]))+".txt") for piece in pieces]
+
+def dyturbo_varnames():
+	return ["mur{0}_muf{1}_mures{2}".format(i,j,k).replace("0", "H") for i in range(3) for j in range(3) for k in range(3) 
+		if abs(i-j) < 2 and abs(i-k) < 2 and abs(j-k) < 2 and not (i == 1 and j == 1 and k == 1)]
+
+def read_dyturbo_variations(path, basename, varnames, axes, pieces=["n3ll_born", "n2ll_ct", "n2lo_vj"], append=None):
+    central_files = expand_dyturbo_filenames(path, basename, "", pieces, append)
+    centralh = read_dyturbo_hist(central_files, axes=axes)
+    var_ax = hist.axis.Integer(0, len(varnames)+1, name="vars")
+    varh = hist.Hist(*centralh.axes, var_ax, storage=centralh._storage_type())
+    varh[...,0] = centralh.view(flow=True)
+    for i,var in enumerate(varnames):
+        filenames = expand_dyturbo_filenames(path, basename, var, pieces, append)
+        varh[...,i+1] = read_dyturbo_hist(filenames, axes=axes).view(flow=True)
+    return varh 
+
+def distribution_to_hist(data):
+    next_bin = data[1:,0]
+    bin_width = next_bin-data[:-1,0]
+    data[:-1,1:] = data[:-1,1:]*bin_width[:,np.newaxis]
+    return data
 
 # Ignoring the scale unc for now
 def read_matrixRadish_hist(filename, axname="pt"):
     data = read_text_data(filename)
-    bins = list(set(data[:,0].flatten()))
+    # Multiply through by bin width
+    data = distribution_to_hist(data)
+    bins = np.unique(data[:,0])
     
     ax = hist.axis.Variable(bins, name=axname, underflow=not (bins[0] == 0 and "pt" in axname))
-    h = hist.Hist(ax, storage=hist.storage.Weight())
+    var_ax = hist.axis.Integer(0, 3, name="vars", flow=False)
+    h = hist.Hist(ax, var_ax, storage=hist.storage.Double())
 
-    h[...] = data[:-1,1:3]
+    h[...] = data[:-1, np.array([1,3,5])]
     return h*1/1000
     
 def read_text_data(filename):
@@ -123,13 +153,21 @@ def read_text_data(filename):
         data.append(entry_data)
     return np.array(data, dtype=float)
 
-def read_dyturbo_file(filename, axname="pt"):
+def read_dyturbo_file(filename, axnames=("y", "pt")):
     data = read_text_data(filename)
-    # Last line is the total cross section
-    bins = list(set(data[:-1,:2].flatten()))
-    
-    ax = hist.axis.Variable(bins, name=axname, underflow=not (bins[0] == 0 and "pt" in axname))
-    h = hist.Hist(ax, storage=hist.storage.Weight())
+    # 2 numbers per axis + result + error
+    if data.shape[1] != len(axnames)*2+2:
+        raise ValueError(f"Mismatch between number of axes advertised ({len(axnames)} ==> {axnames}) and found ({(data.shape[1]-2)/2})")
 
-    h[...] = data[:-1,2:4]
+    axes = []
+    offset = True
+    for i,name in enumerate(axnames):
+        # Normally last line is the total cross section, also possible it isn't, so check the bin ranges
+        offset = offset and data[-1,2*i] == data[0,2*i] and data[-1,2*i+1] == data[-2,2*i+1]
+        bins = sorted(list(set(data[:len(data)-offset,2*i:2*i+2].flatten())))
+        axes.append(hist.axis.Variable(bins, name=name, underflow=not (bins[0] == 0 and "pt" in name)))
+
+    h = hist.Hist(*axes, storage=hist.storage.Weight())
+
+    h[...] = np.reshape(data[:len(data)-offset,len(axes)*2:], (*h.axes.size, 2))
     return h*1/1000

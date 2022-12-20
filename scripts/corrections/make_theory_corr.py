@@ -17,6 +17,7 @@ parser.add_argument("-g", "--generator", type=str, choices=["dyturbo", "scetlib"
 parser.add_argument("--outpath", type=str, default=f"{common.data_dir}/TheoryCorrections", help="Output path")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
 parser.add_argument("--proc", type=str, required=True, choices=["z", "w", ], help="Process")
+parser.add_argument("--axes", nargs="*", type=str, default=None, help="Use only specified axes in hist")
 
 args = parser.parse_args()
 
@@ -28,23 +29,38 @@ def read_corr(procName, generator, corr_file):
         nons = "auto"
         if not os.path.isfile(corr_file.replace(".", "_nons.")):
             nons = ""
-            logging.warning("Non nonsingular file found for SCETlib. Will skip it. This is an approximation!")
+            logging.warning("No nonsingular file found for SCETlib. Will skip it. This is an approximation!")
         numh = input_tools.read_scetlib_hist(corr_file, charge=charge, nonsing=nons)
         numh = hh.makeAbsHist(numh, "y")
     else:
         if args.generator == "matrix_radish":
             h = input_tools.read_matrixRadish_hist(corr_file, "ptVgen")
         else:
-            h = input_tools.read_dyturbo_hist(corr_file.split(":"), axis="ptVgen")
+            axnames = args.axes
+            if not axnames:
+                axnames = ("y", "pt") if "2d" in corr_file else ("pt")
+            h = input_tools.read_dyturbo_hist(corr_file.split(":"), axes=axnames)
+            if "y" in h.axes.name:
+                h = hh.makeAbsHist(h, "y")
 
-        charge_ax = minnloh.axes["chargeVgen"]
-        #absy_ax = hist.axis.Regular(1, 0, 10, flow=True, name="absYVgen")
-        # TODO: This is needed to match axes currently, but it's strictly correct
-        absy_ax = hist.axis.Regular(1, 0, 5, underflow=False, overflow=True, name="absYVgen")
-        mass_ax = hist.axis.Regular(1, 60, 120, flow=True, name="massVgen")
-        vars_ax = hist.axis.Integer(0, 1, flow=False, name="vars")
-        h5D = hist.Hist(mass_ax, absy_ax, *h.axes, charge_ax, vars_ax)
-        h5D[...] = h.values(flow=True)[np.newaxis, np.newaxis,:,np.newaxis,np.newaxis]
+        # TODO: Should be a little careful because this won't include overflow, as long as the
+        # axis range is large enough, it shouldn't matter much
+        axes = []
+        for ax in minnloh.axes.name:
+            axname = ax.replace("Vgen", "")
+            if axname in h.axes.name:
+                axes.append(h.axes[axname])
+            else:
+                minnlo_ax = minnloh.axes[ax]
+                axes.append(hist.axis.Regular(1, minnlo_ax.edges[0], minnlo_ax.edges[-1], 
+                    underflow=minnlo_ax.traits.underflow, overflow=minnlo_ax.traits.overflow, name=ax))
+
+        vars_ax = h.axes["vars"] if "vars" in h.axes.name else hist.axis.Integer(0, 1, flow=False, name="vars") 
+        axes.append(vars_ax)
+
+        h5D = hist.Hist(*axes)
+        # Leave off the overflow, we won't use it anyway
+        h5D[...] = np.reshape(h.values(), h5D.shape)
         numh = h5D
     return numh
 
@@ -60,6 +76,10 @@ elif args.proc == "w":
         "WminusmunuPostVFP" : args.corr_files[0 if plus_idx else 1]}
 
 minnloh = input_tools.read_all_and_scale(args.minnlo_file, list(filesByProc.keys()), ["nominal_gen"])[0]
+
+if "y" in minnloh.axes.name:
+    minnloh = hh.makeAbsHist(minnloh, "y")
+
 # Get more stats in the correction
 add_taus = True 
 if add_taus:
@@ -67,6 +87,8 @@ if add_taus:
     from wremnants.datasets.datasetDict_v9 import Z_TAU_TO_LEP_RATIO,BR_TAUToMU
     taus = ["WplustaunuPostVFP", "WminustaunuPostVFP"] if args.proc == "w" else ["ZtautauPostVFP"]
     taush = input_tools.read_all_and_scale(args.minnlo_file, taus, ["nominal_gen"])[0]
+    if "y" in taush.axes.name:
+        taush = hh.makeAbsHist(taush, "y")
     # Rescale taus to mu to effectively have more stats
     minnloh = 0.5*(minnloh + taush/(Z_TAU_TO_LEP_RATIO if args.proc == "z" else BR_TAUToMU))
 
