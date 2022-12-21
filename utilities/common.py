@@ -43,6 +43,10 @@ axis_passMT = hist.axis.Boolean(name = "passMT")
 
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
 
+# following list is used in other scripts to track what steps are charge dependent
+# but assumes the corresponding efficiencies were made that way
+muonEfficiency_chargeDependentSteps = ["reco", "tracking", "idip", "trigger"]
+
 def getIsoMtRegionID(passIso=True, passMT=True):
     return passIso * 1 + passMT * 2
 
@@ -95,7 +99,7 @@ def common_parser():
         sfFile = "scaleFactorProduct_16Oct2022_TrackerMuonsHighPurity_vertexWeight_OSchargeExceptTracking.root"
     else:
         #sfFile = "scaleFactorProduct_08Oct2022_vertexWeight_OSchargeExceptTracking.root"
-        sfFile = "allSmooth_GtoH.root" # FIXME: temporary for quick tests
+        sfFile = "allSmooth_GtoH.root"
     sfFile = f"{data_dir}/testMuonSF/{sfFile}"
 
     parser.add_argument("--sfFile", type=str, help="File with muon scale factors", default=sfFile)

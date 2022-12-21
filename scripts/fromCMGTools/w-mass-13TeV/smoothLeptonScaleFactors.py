@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 
 # run all pieces (and merge)
-# python w-mass-13TeV/smoothLeptonScaleFactors.py /path/to/tnp/efficiencies_ERA/mu_STEP_CHARGE/allEfficiencies_2D.root /path/to/tnp/smoothLeptonScaleFactors/ --run-all [--do-merge]
+# python w-mass-13TeV/smoothLeptonScaleFactors.py /path/to/tnp/efficiencies_ERA/mu_STEP_CHARGE/allEfficiencies_2D.root /path/to/tnp/smoothLeptonScaleFactors/ --run-all [--do-merge] [--do-steps isonotrig iso triggerplus triggerminus idip idipplus idipminus tracking trackingplus trackingminus reco recoplus recominus]
+
 #
 # TIPS:
+# --> input path is usually the main folder produced by the TnP code, which contains a folder like efficiencies_GtoH/
+# --> for bookkeeping it is better to create output folder smoothLeptonScaleFactors/ where efficiencies_GtoH/ is located
 # --> add -d just to print commands without running
 # --> add --do-merge to do everything in one go (remove --run-all if only merging is needed)
 # --> ERA, STEP, CHARGE are keywords that are converted internally in runFiles() when doing multiple steps
-#
+# --> a summary of bad fits (if any) is printed on stdout for each step, but also in a txt file for easier check
+#     when running multiple steps in series. For the smoothing to make sense, status and covstatus MUST be 0 for all fits
 
 import os, re, array, math
 import argparse
@@ -51,7 +55,6 @@ badCovMatrixID_sf = {}
 pol2_tf_scaled = None
 pol3_tf_scaled = None
 pol4_tf_scaled = None
-erfPol2_tf_scaled = None
 #############################################
 # some functions for tensorflow
 
@@ -68,33 +71,8 @@ def pol4_root(xvals, parms, xLowVal = 0.0, xFitRange = 1.0):
     xscaled = (xvals[0] - xLowVal) / xFitRange 
     return parms[0] + parms[1]*xscaled + parms[2]*xscaled**2 + parms[3]*xscaled**3 + parms[4]*xscaled**4
 
-#by hand version
-def pol3_tf(xvals, parms):
-    xscaled = (xvals[0] - xvals[0][0])/(xvals[0][-1] - xvals[0][0])
-    return parms[0] + parms[1]*xscaled + parms[2]*xscaled**2 + parms[3]*xscaled**3
-
-def pol4_tf(xvals, parms):
-    xscaled = (xvals[0] - xvals[0][0])/(xvals[0][-1] - xvals[0][0])
-    return parms[0] + parms[1]*xscaled + parms[2]*xscaled**2 + parms[3]*xscaled**3 + parms[4]*xscaled**4
-
-def pol5_tf(xvals, parms):
-    xscaled = (xvals[0] - xvals[0][0])/(xvals[0][-1] - xvals[0][0])
-    return parms[0] + parms[1]*xscaled + parms[2]*xscaled**2 + parms[3]*xscaled**3 + parms[4]*xscaled**4 + parms[5]*xscaled**5
-
-#using tensforflow functions
-def pol3_tf_v2(xvals, parms):
-    coeffs = tf.unstack(tf.reverse(parms, axis=[0]))
-    return tf.math.polyval(coeffs, xvals[0])
-
 def erf_tf(xvals, parms):
     return parms[0] * (1.0 + tf.math.erf( (xvals[0] - parms[1]) / parms[2] ))
-
-def erfPol2_tf(xvals, parms, xLowVal = 0.0, xFitRange = 1.0):
-    xscaled = (xvals[0] - xLowVal) / xFitRange
-    return  (parms[0] + parms[1] * xscaled + parms[2] * xscaled**2) * (1.0 + tf.math.erf( (xvals[0] - parms[3]) / parms[4] ))
-
-def erfRatio_tf(xvals, parms):
-    return parms[0] * (1.0 + tf.math.erf( (xvals[0] - parms[1]) / parms[2] )) / (1.0 + tf.math.erf( (xvals[0] - parms[3]) / parms[2] ))
                        
 #############################################
 
@@ -792,13 +770,19 @@ minmaxSF = {"trigger"      : "0.65,1.15",
             "triggerplus"  : "0.65,1.15",
             "triggerminus" : "0.65,1.15",
             "idip"         : "0.95,1.01",
+            "idipplus"     : "0.95,1.01",
+            "idipminus"    : "0.95,1.01",
             "iso"          : "0.975,1.025",
             "isonotrig"    : "0.97,1.03",
             # usually one doesn't smooth antiiso efficiencies, they come directly from the iso ones after smoothing
             #"antiiso"      : "0.6,1.25",
             #"antiisonotrig": "0.6,1.25",
             "tracking"     : "0.98,1.01",
+            "trackingplus" : "0.98,1.01",
+            "trackingminus": "0.98,1.01",
             "reco"         : "0.94,1.02",
+            "recoplus"     : "0.94,1.02",
+            "recominus"    : "0.94,1.02",
 }
 
 
@@ -876,7 +860,7 @@ if __name__ == "__main__":
     parser.add_argument(     '--do-steps', dest='doSteps', nargs='+', default=["isonotrig", "iso", "triggerplus", "triggerminus", "idip", "tracking", "reco"], choices=list(minmaxSF.keys()), help='Working points to smooth when running --run-all or --do-merge')
     # option to merge files once they exist
     parser.add_argument(     '--do-merge', dest='doMerge', action="store_true", default=False, help='Merge efficiency files if they all exist')
-
+    
     args = parser.parse_args()
 
     ROOT.TH1.SetDefaultSumw2()
