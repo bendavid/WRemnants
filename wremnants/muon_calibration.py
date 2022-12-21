@@ -7,7 +7,7 @@ ROOT.gInterpreter.Declare('#include "muon_calibration.h"')
 
 data_dir = f"{pathlib.Path(__file__).parent}/data/"
 
-def make_muon_calibration_helpers(filename = data_dir + "/calibration/correctionResults_v207_gen.root", era = None):
+def make_muon_calibration_helpers(filename = data_dir + "/calibration/correctionResults_v701_idealgeom_gensim_flex.root", era = None):
 
     helper = ROOT.wrem.CVHCorrector(filename)
 
@@ -59,9 +59,9 @@ def get_dummy_uncertainties():
 def define_corrected_muons(df, helper):
     # split the nested vectors
     df = df.Define("Muon_cvhmergedGlobalIdxs", "wrem::splitNestedRVec(Muon_cvhmergedGlobalIdxs_Vals, Muon_cvhmergedGlobalIdxs_Counts)")
-    df = df.Define("Muon_cvhJacRef", "wrem::splitNestedRVec(Muon_cvhJacRef_Vals, Muon_cvhJacRef_Counts)")
+    df = df.Define("Muon_cvhidealJacRef", "wrem::splitNestedRVec(Muon_cvhidealJacRef_Vals, Muon_cvhidealJacRef_Counts)")
 
-    df = df.Define("Muon_correctedMom4Charge", helper, ["Muon_cvhPt", "Muon_cvhEta", "Muon_cvhPhi", "Muon_cvhCharge", "Muon_cvhmergedGlobalIdxs", "Muon_cvhJacRef"])
+    df = df.Define("Muon_correctedMom4Charge", helper, ["Muon_cvhidealPt", "Muon_cvhidealEta", "Muon_cvhidealPhi", "Muon_cvhidealCharge", "Muon_cvhmergedGlobalIdxs", "Muon_cvhidealJacRef"])
 
     # split into individual vectors
     df = df.Define("Muon_correctedPt", "ROOT::VecOps::RVec<float> res(Muon_correctedMom4Charge.size()); std::transform(Muon_correctedMom4Charge.begin(), Muon_correctedMom4Charge.end(), res.begin(), [](const auto &x) { return x.first.Pt(); } ); return res;")
