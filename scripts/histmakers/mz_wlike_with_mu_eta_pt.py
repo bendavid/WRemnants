@@ -27,7 +27,7 @@ if f:
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
-    nanoVersion="v8" if args.v8 else "v9")
+    nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path)
 
 if not args.no_recoil:
     logging.warning("Recoil correction for high PU is not yet supported! Setting false")
