@@ -124,26 +124,15 @@ def build_graph(df, dataset):
     isZ = dataset.name in common.zprocs
     isTop = dataset.group == "Top"
     apply_theory_corr = args.theory_corr and dataset.name in corr_helpers
-    if noMuonCorr:
+
+    if (isW or isZ) and not noMuonCorr:
+        df = wremnants.define_corrected_muons(df, calibration_helper)
+    #TODO corrections not available for data yet
+    else:
         df = df.Alias("Muon_correctedPt", "Muon_pt")
         df = df.Alias("Muon_correctedEta", "Muon_eta")
         df = df.Alias("Muon_correctedPhi", "Muon_phi")
         df = df.Alias("Muon_correctedCharge", "Muon_charge")
-    else:
-        if dataset.is_data:
-            #TODO corrections not available for data yet
-            df = df.Alias("Muon_correctedPt", "Muon_cvhPt")
-            df = df.Alias("Muon_correctedEta", "Muon_cvhEta")
-            df = df.Alias("Muon_correctedPhi", "Muon_cvhPhi")
-            df = df.Alias("Muon_correctedCharge", "Muon_cvhCharge")
-        elif isW or isZ:
-            df = wremnants.define_corrected_muons(df, calibration_helper)
-        else:
-            # no track refit available for background monte carlo samples and this is "good enough"
-            df = df.Alias("Muon_correctedPt", "Muon_pt")
-            df = df.Alias("Muon_correctedEta", "Muon_eta")
-            df = df.Alias("Muon_correctedPhi", "Muon_phi")
-            df = df.Alias("Muon_correctedCharge", "Muon_charge")
                     
     # n.b. charge = -99 is a placeholder for invalid track refit/corrections (mostly just from tracks below
     # the pt threshold of 8 GeV in the nano production)
