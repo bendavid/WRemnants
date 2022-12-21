@@ -46,6 +46,9 @@ class datagroups(object):
             return 1
         return self.lumi*1000*proc.xsec/self.results[proc.name]["weight_sum"]
 
+    def getMetaInfo(self):
+        return self.results["meta_info"]
+
     # for reading pickle files
     # as a reminder, the ND hists with tensor axes in the pickle files are organized as
     # pickle[procName]["output"][baseName] where

@@ -22,7 +22,8 @@ def load_corr_helpers(procs, generators):
                 logging.warning(f"Did not find correction file for process {proc}, generator {generator}. No correction will be applied for this process!")
                 continue
             helper_func = make_corr_helper if "Helicity" not in generator else make_corr_by_helicity_helper
-            corr_hist_name = f"{generator}_minnlo_ratio" if "Helicity" not in generator else f"{generator.replace('Helicity', '')}_minnlo_coeffs"
+            # Hack for now
+            corr_hist_name = get_corr_name(generator)
             corr_helpers[proc][generator] = helper_func(fname, proc[0], corr_hist_name)
     for generator in generators:
         if not any([generator in corr_helpers[proc] for proc in procs]):
@@ -75,6 +76,11 @@ def make_corr_by_helicity_helper(filename, proc, histname):
 
     return makeCorrectionsTensor(corrh, ROOT.wrem.CentralCorrByHelicityHelper, tensor_rank=3)
 
+def get_corr_name(generator):
+    # Hack for now
+    label = generator.replace("1D", "")
+    return f"{label}_minnlo_ratio" if "Helicity" not in generator else f"{label.replace('Helicity', '')}_minnlo_coeffs"
+
 def load_corr_helpers(procs, generators):
     corr_helpers = {}
     for proc in procs:
@@ -84,8 +90,8 @@ def load_corr_helpers(procs, generators):
             if not os.path.isfile(fname):
                 logging.warning(f"Did not find correction file for process {proc}, generator {generator}. No correction will be applied for this process!")
                 continue
+            corr_hist_name = get_corr_name(generator)
             helper_func = make_corr_helper if "Helicity" not in generator else make_corr_by_helicity_helper
-            corr_hist_name = f"{generator}_minnlo_ratio" if "Helicity" not in generator else f"{generator.replace('Helicity', '')}_minnlo_coeffs"
             corr_helpers[proc][generator] = helper_func(fname, proc[0], corr_hist_name)
     for generator in generators:
         if not any([generator in corr_helpers[proc] for proc in procs]):
@@ -139,7 +145,7 @@ def make_corr_by_helicity(ref_helicity_hist, target_sigmaul, target_sigma4, ndim
     
     ref_coeffs = theory_tools.moments_to_angular_coeffs(ref_helicity_hist)
 
-    target_a4_coeff = make_a4_coeff(target_sigma4, target_sigmaul)
+    target_a4_coeff = make_angular_coeff(target_sigma4, target_sigmaul)
     sigmaUL_ratio = hh.divideHists(target_sigmaul, ref_helicity_hist[{"helicity" : -1.j}])
 
     corr_ax = hist.axis.Boolean(name="corr")
@@ -158,6 +164,6 @@ def make_corr_by_helicity(ref_helicity_hist, target_sigmaul, target_sigma4, ndim
     corr_coeffs = set_corr_ratio_flow(corr_coeffs)
     return corr_coeffs
 
-def make_a4_coeff(sigma4_hist, ul_hist):
-    return hh.divideHists(sigma4_hist, ul_hist, cutoff=0.0001)
+def make_angular_coeff(sigmai_hist, ul_hist):
+    return hh.divideHists(sigmai_hist, ul_hist, cutoff=0.0001)
 
