@@ -23,7 +23,7 @@ def make_parser(parser=None):
     parser.add_argument("-k",  "--keepNuisances", type=str, default="", help="Regular expression to keep some systematics, overriding --excludeNuisances. Can be used to keep only some systs while excluding all the others with '.*'")
     parser.add_argument("--skipOtherChargeSyst", dest="skipOtherChargeSyst" , action="store_true",   help="Skip saving histograms and writing nuisance in datacard for systs defined for a given charge but applied on the channel with the other charge")
     parser.add_argument("--scaleMuonCorr", type=float, default=1.0, help="Scale up/down dummy muon scale uncertainty by this factor")
-    parser.add_argument("--decorrelateEffStatIsoByCharge", dest="decorrelateEffStatIsoByCharge", action='store_true', help="Don't correlate isolation efficiency uncertanties between the two charges (by default they are correlated)")
+    parser.add_argument("--decorrelateEffStatIsoByCharge", dest="decorrelateEffStatIsoByCharge", action='store_true', help="Don't correlate isolation efficiency uncertanties between the two charges (by default they are correlated). Obsolete option, one should rather use charge dependent efficiencies directly when they exist")
     parser.add_argument("--noHist", action='store_true', help="Skip the making of 2D histograms (root file is left untouched if existing)")
     parser.add_argument("--effStatLumiScale", type=float, default=None, help="Rescale equivalent luminosity for efficiency stat uncertainty by this value (e.g. 10 means ten times more data from tag and probe)")
     parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers and nuisances)")
@@ -152,7 +152,7 @@ def main(args):
     )
 
     if not args.noEfficiencyUnc:
-        chargeDependentSteps = ["trigger"] # might add idip or others, but we may use a special treatment to decorrelate by inflating the uncertainties
+        chargeDependentSteps = common.muonEfficiency_chargeDependentSteps
         effStatTypes = ["reco", "tracking", "idip", "trigger"]
         if args.binnedScaleFactors:
             effStatTypes.extend(["iso"])
