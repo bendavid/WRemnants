@@ -9,17 +9,18 @@ sys.path.append(os.getcwd() + "/plotUtils/")
 from plotUtils.utility import safeSystem
 
 # general settings
-dryRun = 0
+dryRun = 1
 isWlike = 0
 skipData = 1 # or set fits = ["Asimov"]
 onlyData = 0 # or set fits = ["Data"]
 fits = ["Asimov", "Data"]
 
 # what to plot
-skipHistograms = 1
+skipHistograms = 1 # prefit histograms, doesn't require having run the fit
 skipImpacts = 1
 skipNuisances = 1
-skipSystRatios = 0
+skipSystRatios = 1
+skipPostfitHistograms = 0 # prefit and postfit histograms, from fitresults.root
 
 # input and output folders
 # TODO: need a general way so that every user can use the same logic for paths
@@ -105,9 +106,8 @@ for fit in fits:
         safeSystem(command, dryRun=dryRun)
 
     ##
-    printText("NISANCES AND COSTRAINTS")
+    printText("NUISANCES AND COSTRAINTS")
     yAxisSetting = " --y-setting -1.0 -0.5 0 0.5 1.0" if fit == "Asimov" else " --y-setting -5.0 -3.0 0 3.0 5.0"
-
     command  = f"python w-mass-13TeV/diffNuisances.py {fitresultsFile} -o {mainOutdir}/diffNuisances/ "
     command += f" -a --format html --type hessian  --suffix {fit} {yAxisSetting}"
     if not skipNuisances:
@@ -116,7 +116,13 @@ for fit in fits:
             print()
             safeSystem(trueCommand, dryRun=dryRun)
 
-    
+    ##
+    printText("PREFIT AND POSTFIT HISTOGRAMS (YIELDS AND UNCERTAINTIES)")
+    command  = f"python w-mass-13TeV/postFitHistograms.py {fitresultsFile} -o {mainOutdir}/postFitHistograms/ "
+    command += f" --suffix postVFP -l 16.8 --no2Dplot" # remove --no2Dplot to add all 2D histograms
+    if not skipPostfitHistograms:
+        print()
+        safeSystem(command, dryRun=dryRun)
         
 print()
 print("THE END!")

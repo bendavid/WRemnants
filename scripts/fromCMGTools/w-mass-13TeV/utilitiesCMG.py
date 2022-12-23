@@ -1,158 +1,12 @@
 import ROOT, os, sys, re, array, math, json
 import numpy as np
 
-class templateBinning:
-    def __init__(self,etaBins=[],ptBins=[]):
-        self.etaBins = etaBins
-        self.ptBins = ptBins
-        self.Neta = len(etaBins)-1
-        self.Npt  = len(ptBins)-1
-        self.NTotBins = self.Neta * self.Npt
-
-    def printBin(self):
-        print("###########################")
-        print("Binning: eta-pt on x-y axis")
-        print("eta bins: %s" % str(self.Neta))
-        print("pt  bins: %s" % str(self.Npt))
-        print("")
-
-    def printBinAll(self):
-        print("###########################")
-        print("Binning: eta-pt on x-y axis (%d bins)" % self.NTotBins)
-        print("eta bins: %s" % str(self.Neta))
-        print("%s" % str(self.etaBins))
-        print("-"*20)
-        print("pt  bins: %s" % str(self.Npt))
-        print("%s" % str(self.ptBins))
-        print("-"*20)
-        print("")
-
-def getArrayParsingString(inputString, verbose=False, makeFloat=False):
-    # convert string [a,b,c,...] to list of a b c ...
-    tmp = inputString.replace('[','').replace(']','')
-    tmp = tmp.split(',')
-    if verbose:
-        print("Input:",inputString)
-        print("Output:",tmp)
-    if makeFloat:
-        ret = [float(x) for x in tmp]
-    else:
-        ret = tmp
-    return ret
-
-def getBinning(inputBins, whichBins="reco"):
-
-    # whichBins can be reco or gen
-    if whichBins not in ["reco", "gen"]:
-        print("Error in function getBinning(): whichBins must be 'reco' or 'gen'. Exit")
-        exit()
-
-    # case in which we are passing a file containing the binning and not directly the binning itself
-    if inputBins.startswith("file=") or re.match(".*binningPtEta.*.txt",inputBins):
-        etaPtbinningFile = inputBins.replace("file=","")
-        with open(etaPtbinningFile) as f:
-            content = f.readlines()
-        for x in content:
-            if str(x).startswith(whichBins):
-                tmpbinning = (x.split(whichBins+":")[1]).strip()
-            else:
-                continue
-        etabinning = tmpbinning.split('*')[0]    # this is like [a,b,c,...], and is of type string. We nedd to get an array  
-        ptbinning  = tmpbinning.split('*')[1]
-    else:
-        etabinning = inputBins.split('*')[0]    # this is like [a,b,c,...], and is of type string. We nedd to get an array  
-        ptbinning  = inputBins.split('*')[1]
-    etabinning = list(float(i) for i in etabinning.replace('[','').replace(']','').split(','))
-    ptbinning  = list(float(i) for i in ptbinning .replace('[','').replace(']','').split(','))
-    binning = [etabinning, ptbinning] 
-    return binning
-
-
 class util:
-
-    def __init__(self):
-        #self.cmssw_version = os.environ['CMSSW_VERSION']
-        #self.isRecentRelease = (len(self.cmssw_version) and int(self.cmssw_version.split('_')[1]) > 8)
-        self.isRecentRelease = True
 
     def checkHistInFile(self, h, hname, fname, message=""):
         if not h:
             print("Error {msg}: I couldn't find histogram {h} in file {f}".format(msg=message,h=hname,f=fname))
             quit()
-
-
-    def solvePol2(self, a,b,c):
-    
-        # calculate the discriminant
-        d = (b**2) - (4*a*c)
-    
-        if not a or d < 0:
-            return (0,0,0)
-        
-        # find two solutions
-        sol1 = (-b-math.sqrt(d))/(2*a)
-        sol2 = (-b+math.sqrt(d))/(2*a)
-    
-        bestfit = -1.*b/(2.*a)
-    
-        return (bestfit, sol1, sol2)
-    
-    def graphStyle(self, graph, style=20, color=ROOT.kOrange+7, size=1.0, titleY='-2 #Delta ln L', rangeY=(-0.01,4.0) ):
-        graph.SetMarkerStyle(style)
-        graph.SetMarkerColor(color)
-        graph.SetLineWidth  (2)
-        graph.SetMarkerSize(size)
-        graph.GetYaxis().SetTitle(titleY)
-        if rangeY:
-            graph.GetYaxis().SetRangeUser(rangeY[0], rangeY[1])
-    
-    
-    def getGraph(self, infile, par, norm, treename='limit'):
-        f = ROOT.TFile(infile,'read')
-        tree = f.Get(treename)
-        vals = []
-        normval = norm if norm else 1.
-        for ev in tree:
-            vals.append( [getattr(ev, par)/normval, 2.*ev.deltaNLL] )
-        vals = sorted(vals)
-        graph = ROOT.TGraph(len(vals), array.array('d', [x[0] for x in vals]), array.array('d', [y[1] for y in vals]) )
-        self.graphStyle(graph)
-        graph.GetXaxis().SetTitle(par)
-        graph.SetTitle('scan for '+par)
-        return graph
-
-    def getErrorFromGraph(self, graph):
-        graph.Fit('pol2')
-        tmp_fit = graph.GetFunction('pol2')
-        (best, sol1, sol2) = self.solvePol2(tmp_fit.GetParameter(2), tmp_fit.GetParameter(1), tmp_fit.GetParameter(0)-1)
-        return (best, sol1, sol2)
-
-    def getRebinned(self, ybins, charge, infile, ip):
-        histo_file = ROOT.TFile(infile, 'READ')
-    
-        pstr = 'central' if not ip else 'pdf{ip}'.format(ip=ip)
-    
-        histos = {}
-        for pol in ['left','right','long']:
-            cp = '{ch}_{pol}'.format(ch=charge,pol=pol if not pol == 'long' else 'right')
-    
-            keys = histo_file.GetListOfKeys()
-            for k in keys:
-                if 'w{ch}'.format(ch=charge) in k.GetName() and pol in k.GetName() and pstr in k.GetName():
-                    name = k.GetName()
-            histo = histo_file.Get(name)# 'w{ch}_wy_W{ch}_{pol}'.format(ch=charge, pol=pol))
-            conts = []
-            epsilon = 0.000001 
-            # val is a bin boundary, add epsilon to be sure to catch the correct bin (float can be truncated and findBin might return incorrect bin)
-            for iv, val in enumerate(ybins[cp][:-1]):
-                err = ROOT.Double()
-                istart = histo.FindBin(val+epsilon)
-                iend   = histo.FindBin(ybins[cp][iv+1]+epsilon)
-                val = histo.IntegralAndError(istart, iend-1, err)/36000. ## do not include next bin
-                conts.append(float(val))
-            histos[pol] = conts
-        histo_file.Close()
-        return histos
 
     def getXSecFromShapes(self, ybins, charge, infile, ip, nchannels=1, polarizations = ['left','right','long'], excludeYbins = [], generator='fewz3p1'):
         ## the xsec used in the templates is FEWZ 3.1
@@ -678,43 +532,6 @@ class util:
 
 #######################
 
-    def getParametersFromWS(self, ws, regexp):
-
-        ## get all the nuisance parameters from the workspace
-        pars = ws.allVars()
-        pars = ROOT.RooArgList(pars)
-        ## this has to be a loop over a range... doesn't work otherwise
-        parameters = []
-        all_parameters = []
-        pois_regexps = list(regexp.split(','))
-        ## get the parameters to scan from the list of allVars and match them
-        ## to the given regexp
-        for i in range(len(pars)):
-            tmp_name = pars[i].GetName()
-            if '_In' in tmp_name: ## those are the input parameters
-                continue
-            if tmp_name in ['CMS_th1x', 'r']: ## don't want those
-                continue
-            all_parameters.append(tmp_name)
-            for poi in pois_regexps:
-                if re.match(poi, tmp_name):
-                    parameters.append(pars[i].GetName())
-
-        return parameters
-
-    def translateWStoTF(self, pname):
-        if not 'r_' in pname:
-            return pname
-     
-        if 'Wplus' in pname or 'Wminus' in pname:
-            pnew = pname.replace('r_','')
-            pnew = pnew.split('_')
-            pnew.insert(-2, 'mu' )#if 'Wmu' in options.tensorflow else 'el')
-            pnew = '_'.join(pnew)
-            return pnew
-     
-        return -1
-
     def getFromHessian(self, infile, keepGen=False, takeEntry=0, params=[]):
         _dict = {}
         
@@ -809,17 +626,14 @@ class util:
             #np += 1
             
             #print("Loading parameter --> %s " % p.GetName())
-            #self.cmssw_version = os.environ['CMSSW_VERSION']
-            #self.isRecentRelease = (len(self.cmssw_version) and int(self.cmssw_version.split('_')[1]) > 8)
 
             if getPull and (p.GetName()+"_gen") in lok and (p.GetName()+"_err") in lok:                
                 tree.SetBranchStatus(p.GetName()+"_gen",1)
                 tree.SetBranchStatus(p.GetName()+"_err",1)
                 #print(" Making pull --> (x-x_gen)/x_err for parameter %s" % p.GetName())
                 tmp_hist_tmp = ROOT.TH1F(p.GetName()+"_tmp",p.GetName()+"_tmp", nbins, xlow, xup)
-                if self.isRecentRelease:
-                    if setStatOverflow: tmp_hist_tmp.SetStatOverflows(1)
-                    else              : tmp_hist_tmp.SetStatOverflows(0)
+                if setStatOverflow: tmp_hist_tmp.SetStatOverflows(1)
+                else              : tmp_hist_tmp.SetStatOverflows(0)
                 tmp_hist = ROOT.TH1F(p.GetName(),p.GetName(), 100, -3, 3)
                 expression = "({p}-{pgen})/{perr}".format(p=p.GetName(),pgen=p.GetName()+"_gen",perr=p.GetName()+"_err")
                 tree.Draw(expression+'>>'+p.GetName(),selection)
@@ -828,9 +642,8 @@ class util:
                 err  = tmp_hist_tmp.GetRMS()
             else:
                 tmp_hist = ROOT.TH1F(p.GetName(),p.GetName(), nbins, xlow, xup)
-                if self.isRecentRelease:
-                    if setStatOverflow: tmp_hist.SetStatOverflows(1)
-                    else              : tmp_hist.SetStatOverflows(0)
+                if setStatOverflow: tmp_hist.SetStatOverflows(1)
+                else              : tmp_hist.SetStatOverflows(0)
                 tree.Draw(p.GetName()+'>>'+p.GetName(),selection)
                 mean = tmp_hist.GetMean()
                 err  = tmp_hist.GetRMS()
@@ -922,9 +735,7 @@ class util:
 
     def getExprFromToysFast(self, name, expression, nHistBins=100000, minHist=-100., maxHist=5000., tree=None):
         tmp_hist = ROOT.TH1F(name,name, nHistBins, minHist, maxHist)
-        #self.cmssw_version = os.environ['CMSSW_VERSION']
-        #self.isRecentRelease = (len(self.cmssw_version) and int(self.cmssw_version.split('_')[1]) > 8)
-        if self.isRecentRelease: tmp_hist.SetStatOverflows(1)
+        tmp_hist.SetStatOverflows(1)
         tree.Draw(expression+'>>'+name)
         mean = tmp_hist.GetMean()
         err  = tmp_hist.GetRMS()
@@ -986,7 +797,7 @@ class util:
 
     def getExprFromHessianFast(self, name, expression, nHistBins=100000, minHist=-100., maxHist=5000., tree=None):
         tmp_hist = ROOT.TH1F(name,name, nHistBins, minHist, maxHist)
-        if self.isRecentRelease: tmp_hist.SetStatOverflows(1)
+        tmp_hist.SetStatOverflows(1)
         tree.Draw(expression+'>>'+name)
         mean = tmp_hist.GetMean()  # if this is hessian and not toys, there is just one entry, so the mean is the entry
         return mean
@@ -1047,38 +858,7 @@ class util:
         return ret
 
 
-    #################################### 
-
-    def getFromScans(self, indir):
-        _dict = {}
-        
-        for sd in os.listdir(indir):
-     
-            if 'jobs' in sd: continue
-     
-            par = self.translateWStoTF(sd) ## parameter name different than in TF
-            f = ROOT.TFile(indir+'/'+sd+'/scan_'+sd+'.root', 'read')
-            tree = f.Get('fitresults')
-     
-            vals = []
-            for ev in tree:
-                vals.append( [getattr(ev, par), 2.*ev.nllval  ] )
-            vals = sorted(vals)
-            lvals = vals[:len(vals)/2]
-            rvals = vals[len(vals)/2:]
-     
-            graph = ROOT.TGraph(len(vals), array.array('d', [x[1] for x in vals]), array.array('d', [y[0] for y in vals]) )
-     
-            best = graph.Eval(0.)
-            lgraph = ROOT.TGraph(len(lvals), array.array('d', [x[1] for x in lvals]), array.array('d', [y[0] for y in lvals]) )
-            rgraph = ROOT.TGraph(len(rvals), array.array('d', [x[1] for x in rvals]), array.array('d', [y[0] for y in rvals]) )
-            sol1  = lgraph.Eval(1.)
-            sol2  = rgraph.Eval(1.)
-     
-            _dict[par] = (best, sol1, sol2)
-     
-        return _dict
-
+    ####################################
 
     def effSigma(self, histo):
         xaxis = histo.GetXaxis()
@@ -1206,13 +986,6 @@ class util:
         #print("toyMC done")
         return histo
 
-
-    def getNEffStat(self, s):
-        a = s.split('EffStat')[1]
-        a = a.replace('minus','').replace('plus','')
-        a = a.replace('mu','').replace('el','')
-        return int(a)
-
     def getNFromString(self, s, chooseIndex=0, useAll=False):
         los = [ int(i) for i in re.findall(r'\d+', s) ]
         if len(los) == 0: return 0
@@ -1223,11 +996,6 @@ class util:
             else:
                 return los[min(chooseIndex,len(los)-1)]
         return 0
-        
-    def getChannelFromFitresults(self, fitresults):
-        t_fitres = fitresults.Get('fitresults')
-        channel = 'el' if 'ErfPar0EffStat1elminus' in t_fitres.GetListOfBranches() else 'mu'
-        return channel
 
     def wxsec(self,generator='mcatnlo'):
         # FEWZ3.1 comes from https://twiki.cern.ch/twiki/bin/viewauth/CMS/StandardModelCrossSectionsat13TeV
@@ -1240,48 +1008,4 @@ class util:
             print("ERROR! Generator ",generator," unknown. Returning 0 xsec")
             return (0,-1,-1)
         return xsec[generator]
-
-    def getL1SF(self,pt,eta,histo):
-        ret = (0,0)
-        if not histo: 
-            print("The ", histo, " is not present in the file ",rfile)
-            return ret
-        etabin = max(1, min(histo.GetNbinsX(), histo.GetXaxis().FindFixBin(eta)))
-        ptbin  = max(1, min(histo.GetNbinsY(), histo.GetYaxis().FindFixBin(pt)))
-        ret = ( histo.GetBinContent(etabin,ptbin), histo.GetBinError(etabin,ptbin) )
-        return ret
-
-    def getEffSyst(self,pdgId):
-        if abs(pdgId)==11:
-            etabins_el = array.array('f',[0.0, 1.0, 1.479, 2.0, 2.2, 2.5])
-            h1d = ROOT.TH1F('effsysth','',len(etabins_el)-1,etabins_el)
-            h1d.SetBinContent(1, 0.006)
-            h1d.SetBinContent(2, 0.008)
-            h1d.SetBinContent(3, 0.013)
-            h1d.SetBinContent(4, 0.016)
-            h1d.SetBinContent(5, 0.019)
-        elif abs(pdgId)==13:
-            etabins_mu = array.array('f',[0.0, 1.0, 1.5, 2.4])
-            h1d = ROOT.TH1F('effsysth','',len(etabins_mu)-1,etabins_mu)
-            h1d.SetBinContent(1, 0.002)
-            h1d.SetBinContent(2, 0.004)
-            h1d.SetBinContent(3, 0.014)
-        return h1d
-
-    def getExclusiveBinnedSyst(self,th1):
-        th1_excl = th1.Clone(th1.GetName()+'_exclusive')
-        for ibin in range(1,th1.GetNbinsX()+1):
-            tmp_val_sq = math.pow(th1.GetBinContent(ibin),2)
-            for inner_bin in range(1,ibin):
-                tmp_val_sq = tmp_val_sq - math.pow(th1_excl.GetBinContent(inner_bin),2)
-                if tmp_val_sq<0:
-                    print("WARNING! getExclusiveBinnedSyst cropping syst at 0. ")
-                    tmp_val_sq = 0
-                    break
-            th1_excl.SetBinContent(ibin,math.sqrt(tmp_val_sq))
-        return th1_excl
-
-    def getRochesterUncertainty(self,charge,etabin,ptbin,syst_histo,averagept):
-        ## the syst 3 is the only one with a pt-shape, so maintain it
-        return np.mean(syst_histo, axis=1)[etabin] if averagept else syst_histo[etabin,ptbin]
 
