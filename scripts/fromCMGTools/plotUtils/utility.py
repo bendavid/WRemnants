@@ -370,8 +370,7 @@ def fillTH2fromTH3zbin(h2, h3, zbin=1):
 
 #########################################################################
 
-def prepareLegend(legWidth=0.50, textSize=0.035, nColumns=3):
-    (x1,y1,x2,y2) = (.75-legWidth, .73, .85, .90)
+def prepareLegend(x1, y1, x2, y2, textSize=0.035, nColumns=3):
     leg = ROOT.TLegend(x1,y1,x2,y2)
     leg.SetNColumns(nColumns)
     leg.SetFillColor(0)
@@ -2482,7 +2481,7 @@ def drawTH1dataMCstack(h1, thestack,
         _canvas_pull.SetLeftMargin(0.12)
         _canvas_pull.SetRightMargin(0.04)
         # make pulls
-        pulltitle = "unrolled {{ch}} {pf}".format(ch="+" if "plus" in canvasName else "-", pf="postfit" if "postfit" in canvasName else "prefit")
+        pulltitle = "unrolled {ch} {pf}".format(ch="plus" if "plus" in canvasName else "minus", pf="postfit" if "postfit" in canvasName else "prefit")
         hpull = ROOT.TH1D("hpull_"+canvasName,pulltitle,51,-5,5)    
         hpull.SetStats(1)
         _canvas_pull.cd()
@@ -2503,6 +2502,7 @@ def drawTH1dataMCstack(h1, thestack,
         _canvas_pull.SaveAs(outdir + "pull_" + canvasName + ".pdf")
 
         if len(etaptbinning):
+            etaThreshold = 1.2
             _canvas_pull.SetGridx(0)
             _canvas_pull.SetGridy(0)            
             _canvas_pull.SetRightMargin(0.16)            
@@ -2518,7 +2518,7 @@ def drawTH1dataMCstack(h1, thestack,
                 if errTotDen > 0.0:
                     pullVal = (ratio.GetBinContent(i)-1)/math.sqrt(errTotDen)
                     h2pull.SetBinContent(etabin,ptbin, pullVal)
-                    if abs(etaptbinning[1][etabin]) >= 1.499: 
+                    if abs(etaptbinning[1][etabin]) >= etaThreshold: 
                         hpull.Fill(pullVal)
                         if etaptbinning[1][etabin] > 0: hpullEEp.Fill(pullVal)
                         else:                           hpullEEm.Fill(pullVal)
@@ -2542,7 +2542,7 @@ def drawTH1dataMCstack(h1, thestack,
             _canvas_pull.SetLeftMargin(0.12)
             _canvas_pull.SetRightMargin(0.04)
             hpull.Draw("HIST")
-            hpull.GetXaxis().SetTitle("pull (only |#eta| >= 1.5)")
+            hpull.GetXaxis().SetTitle("pull (only |#eta| >= %.1f)" % etaThreshold)
             hpull.GetYaxis().SetTitle("Events")
             hpullEEp.SetLineWidth(2)
             hpullEEp.SetLineColor(ROOT.kOrange+2)
@@ -2559,23 +2559,13 @@ def drawTH1dataMCstack(h1, thestack,
             legEE.SetFillStyle(0)
             legEE.SetFillColor(0)
             legEE.SetBorderSize(0)
-            legEE.AddEntry(hpull,"|#eta| >= 1.5","L")
-            legEE.AddEntry(hpullEEp,"#eta >= 1.5","LF")
-            legEE.AddEntry(hpullEEm,"#eta<= -1.5","LF")
+            legEE.AddEntry(hpull,    "|#eta| > %.1f" % etaThreshold, "L")
+            legEE.AddEntry(hpullEEp, "#eta > %.1f"   % etaThreshold,  "LF")
+            legEE.AddEntry(hpullEEm, "#eta < -%.1f"  % etaThreshold, "LF")
             legEE.Draw("same")
-            # pEEtext = ROOT.TLatex()
-            # pEEtext.SetTextSize(0.1)
-            # pEEtext.SetTextFont(42)
-            # pEEtext.SetTextColor(ROOT.kRed+2)
-            # pEEtext.DrawLatex(0.1,0.6,"#eta >=  1.5")
-            # pEEtext2 = ROOT.TLatex()
-            # pEEtext2.SetTextSize(0.1)
-            # pEEtext2.SetTextFont(42)
-            # pEEtext2.SetTextColor(ROOT.kBlue+2)
-            # pEEtext2.DrawLatex(0.1,0.3,"#eta <= -1.5")
             _canvas_pull.RedrawAxis("sameaxis")
-            _canvas_pull.SaveAs(outdir + "pull_onlyEE_" + canvasName + ".png")    
-            _canvas_pull.SaveAs(outdir + "pull_onlyEE_" + canvasName + ".pdf")
+            _canvas_pull.SaveAs(outdir + "pull_onlyEndcap_" + canvasName + ".png")    
+            _canvas_pull.SaveAs(outdir + "pull_onlyEndcap_" + canvasName + ".pdf")
                       
 ################################################################
 
