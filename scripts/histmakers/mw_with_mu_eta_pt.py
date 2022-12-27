@@ -82,7 +82,7 @@ if args.binnedScaleFactors:
     # add usePseudoSmoothing=True for tests with Asimov
     muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_binned(filename = args.sfFile,
                                                                                                                                      era = era,
-                                                                                                                                     max_pt = axis_pt.edges[-1]) 
+                                                                                                                                     max_pt = axis_pt.edges[-1], usePseudoSmoothing=True) 
 else:
     logging.info("Using smoothed scale factors and uncertainties")
     muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile,
@@ -175,7 +175,9 @@ def build_graph(df, dataset):
     # the next cut is mainly needed for consistency with the reco efficiency measurement for the case with global muons
     # note, when SA does not exist this cut is still fine because of how we define these variables
     df = df.Filter("goodMuons_SApt0 > 15.0 && wrem::deltaR2(goodMuons_SAeta0, goodMuons_SAphi0, goodMuons_eta0, goodMuons_phi0) < 0.09")
-    
+    if common.muonEfficiency_standaloneNumberOfValidHits > 0 and not args.trackerMuons and not dataset.group in ["Top", "Diboson"]:
+        df = df.Filter(f"Muon_standaloneNumberOfValidHits[goodMuons][0] >= {common.muonEfficiency_standaloneNumberOfValidHits}")
+        
     df = df.Define("goodMuons_pfRelIso04_all0", "Muon_pfRelIso04_all[goodMuons][0]")
 
     #TODO improve this to include muon mass?

@@ -210,6 +210,9 @@ def build_graph(df, dataset):
     # note, when SA does not exist this cut is still fine because of how we define these variables
     df = df.Filter("TrigMuon_SApt > 15.0 && wrem::deltaR2(TrigMuon_SAeta, TrigMuon_SAphi, TrigMuon_eta, TrigMuon_phi) < 0.09")
     df = df.Filter("NonTrigMuon_SApt > 15.0 && wrem::deltaR2(NonTrigMuon_SAeta, NonTrigMuon_SAphi, NonTrigMuon_eta, NonTrigMuon_phi) < 0.09")
+    if common.muonEfficiency_standaloneNumberOfValidHits > 0 and not args.trackerMuons and not dataset.group in ["Top", "Diboson"]:
+        nHitsSA = common.muonEfficiency_standaloneNumberOfValidHits
+        df = df.Filter(f"Muon_standaloneNumberOfValidHits[trigMuons][0] >= {nHitsSA} && Muon_standaloneNumberOfValidHits[nonTrigMuons][0] >= {nHitsSA}")
     
     df = df.Define("vetoElectrons", "Electron_pt > 10 && Electron_cutBased > 0 && abs(Electron_eta) < 2.4 && abs(Electron_dxy) < 0.05 && abs(Electron_dz)< 0.2")
 
