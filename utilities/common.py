@@ -46,6 +46,7 @@ nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
 # following list is used in other scripts to track what steps are charge dependent
 # but assumes the corresponding efficiencies were made that way
 muonEfficiency_chargeDependentSteps = ["reco", "tracking", "idip", "trigger"]
+muonEfficiency_standaloneNumberOfValidHits = 1 # to use as "var >= this" (if this=0 the define for the cut is not used at all)
 
 def getIsoMtRegionID(passIso=True, passMT=True):
     return passIso * 1 + passMT * 2
