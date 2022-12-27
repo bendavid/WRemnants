@@ -35,7 +35,7 @@ def broadcastOutHist(h1, h2):
     return h1 if len(h1.axes) > len(h2.axes) else h2
 
 # returns h1/h2
-def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True):
+def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False):
     # To get the broadcast shape right
     outh = h1 if not allowBroadcast else broadcastOutHist(h1, h2)
 
@@ -45,12 +45,15 @@ def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True):
     out[(np.abs(h2vals) < cutoff) & (np.abs(h1vals) < cutoff)] = 1.
     val = np.divide(h1vals, h2vals, out=out, where=np.abs(h2vals)>cutoff)
 
-    if h1._storage_type() != hist.storage.Weight or h2._storage_type() != hist.storage.Weight:
+    if h1._storage_type() != hist.storage.Weight() or h2._storage_type() != hist.storage.Weight():
         newh = hist.Hist(*outh.axes, data=val)
     else:
         relvars = relVariances(h1vals, h2vals, h1vars, h2vars)
-        var = val*sum(relVariances(h1vals, h2vals, h1vars, h2vars))
-        var *= val
+        if rel_unc:
+            # Treat the divisor as a constant
+            var = val*val*relvars[0]
+        else:
+            var = val*val*sum(relvars)
         newh = hist.Hist(*outh.axes, storage=hist.storage.Weight(),
                 data=np.stack((val, var), axis=-1))
     return newh
