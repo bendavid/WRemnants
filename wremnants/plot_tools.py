@@ -120,10 +120,10 @@ def makeStackPlotWithRatio(
         ratio_ref = data_hist if data_hist else sum(stack) 
         if baseline:
             hep.histplot(
-                hh.divideHists(ratio_ref, ratio_ref, cutoff=1e-8),
+                hh.divideHists(ratio_ref, ratio_ref, cutoff=1e-8, rel_unc=True),
                 histtype="step",
                 color="black",
-                yerr=False,
+                yerr=True,
                 ax=ax2,
                 linewidth=2,
             )
@@ -145,7 +145,7 @@ def makeStackPlotWithRatio(
             #if proc == "Data":
             #    continue
             hep.histplot(
-                hh.divideHists(unstack, ratio_ref, cutoff=0.01),
+                hh.divideHists(unstack, ratio_ref, cutoff=0.01, rel_unc=True),
                 histtype="errorbar" if proc == "Data" and not data_hist else "step",
                 color=histInfo[proc]["color"],
                 label=histInfo[proc]["label"],
