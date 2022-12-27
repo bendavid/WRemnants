@@ -12,6 +12,7 @@ import math
 import time
 
 parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
+parser.add_argument("--muonCorr", type=str, default="trackfit_only", choices=["lbl", "none", "trackfit_only"], help="Type of correction to apply to the muons")
 parser.add_argument("--muScaleMag", type=float, default=1e-4, help="Magnitude of dummy muon scale uncertainty")
 parser.add_argument("--muScaleBins", type=int, default=1, help="Number of bins for muon scale uncertainty")
 parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
@@ -69,7 +70,7 @@ axis_mt = hist.axis.Variable([0] + list(range(40, 110, 1)) + [110, 112, 114, 116
 axis_eta_mT = hist.axis.Variable([-2.4, 2.4], name = "eta")
 
 # extra axes for dilepton validation plots
-axis_mll = hist.axis.Regular(24, 60., 120., name = "mll")
+axis_mll = hist.axis.Regular(60, 60., 120., name = "mll")
 axis_yll = hist.axis.Regular(25, -2.5, 2.5, name = "yll")
 
 axis_ptll = hist.axis.Variable(
@@ -99,7 +100,7 @@ logging.info(f"SF file: {args.sfFile}")
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
 
-calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
+mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
 
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_corr)
 
@@ -126,20 +127,8 @@ def build_graph(df, dataset):
 
     df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
 
-    if dataset.is_data:
-        #TODO corrections not available for data yet
-        df = df.Alias("Muon_correctedPt", "Muon_cvhPt")
-        df = df.Alias("Muon_correctedEta", "Muon_cvhEta")
-        df = df.Alias("Muon_correctedPhi", "Muon_cvhPhi")
-        df = df.Alias("Muon_correctedCharge", "Muon_cvhCharge")
-    elif dataset.name in common.vprocs:
-        df = wremnants.define_corrected_muons(df, calibration_helper)
-    else:
-        # no track refit available for background monte carlo samples and this is "good enough"
-        df = df.Alias("Muon_correctedPt", "Muon_pt")
-        df = df.Alias("Muon_correctedEta", "Muon_eta")
-        df = df.Alias("Muon_correctedPhi", "Muon_phi")
-        df = df.Alias("Muon_correctedCharge", "Muon_charge")
+    calibration_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
+    df = wremnants.define_corrected_muons(df, calibration_helper, args.muonCorr, dataset)
 
     # n.b. charge = -99 is a placeholder for invalid track refit/corrections (mostly just from tracks below
     # the pt threshold of 8 GeV in the nano production)
@@ -320,6 +309,9 @@ def build_graph(df, dataset):
             df = df.Define(f"effStatTnP_{key}_tensor", helper, ["TrigMuon_pt", "TrigMuon_eta", "TrigMuon_charge", "NonTrigMuon_pt", "NonTrigMuon_eta", "NonTrigMuon_charge", "nominal_weight"])
             effStatTnP = df.HistoBoost(f"effStatTnP_{key}", nominal_axes, [*nominal_cols, f"effStatTnP_{key}_tensor"], tensor_axes = helper.tensor_axes)
             results.append(effStatTnP)
+
+        dummyMuonScaleSyst_responseWeights = df.HistoBoost("muonScaleSyst_responseWeights", nominal_axes, [*nominal_cols, "muonScaleSyst_responseWeights_tensor"], tensor_axes = calibration_uncertainty_helper.tensor_axes)
+        results.append(dummyMuonScaleSyst_responseWeights)
         
         df = df.Define("effSystTnP_weight", muon_efficiency_helper_syst, ["TrigMuon_pt", "TrigMuon_eta", "TrigMuon_SApt", "TrigMuon_SAeta", "TrigMuon_charge",
                                                                           "NonTrigMuon_pt", "NonTrigMuon_eta", "NonTrigMuon_SApt", "NonTrigMuon_SAeta", "NonTrigMuon_charge",
@@ -398,9 +390,6 @@ def build_graph(df, dataset):
                             "GenPart_pdgId",
                             "GenPart_statusFlags",
                             "nominal_weight"])
-
-            dummyMuonScaleSyst_responseWeights = df.HistoBoost("muonScaleSyst_responseWeights", nominal_axes, [*nominal_cols, "muonScaleSyst_responseWeights_tensor"], tensor_axes = calibration_uncertainty_helper.tensor_axes)
-            results.append(dummyMuonScaleSyst_responseWeights)
 
 
     return results, weightsum
