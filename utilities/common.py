@@ -86,6 +86,7 @@ def common_parser():
     parser.add_argument("--pt", nargs=3, type=float, help="Pt binning as 'nbins,min,max' (only uniform for now)", default=[29,26.,55.])
     parser.add_argument("--no_recoil", action='store_true', help="Don't apply recoild correction")
     parser.add_argument("--highptscales", action='store_true', help="Apply highptscales option in MiNNLO for better description of data at high pT")
+    parser.add_argument("--data-path", type=str, default=None, help="Access samples from eos")
     parser.add_argument("--no-vertex_weight", dest="vertex_weight", action='store_false', help="Do not apply reweighting of vertex z distribution in MC to match data")
     parser.add_argument("--trackerMuons", action='store_true', help="Use tracker muons instead of global muons (need appropriate scale factors too)")
     parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers)")

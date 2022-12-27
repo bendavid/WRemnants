@@ -27,7 +27,7 @@ args = parser.parse_args()
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
-    nanoVersion="v8" if args.v8 else "v9")
+    nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path)
 
 if not args.no_recoil:
     logging.warning("Recoil correction for high PU is not yet supported! Setting false")
@@ -124,26 +124,15 @@ def build_graph(df, dataset):
     isZ = dataset.name in common.zprocs
     isTop = dataset.group == "Top"
     apply_theory_corr = args.theory_corr and dataset.name in corr_helpers
-    if noMuonCorr:
+
+    if (isW or isZ) and not noMuonCorr:
+        df = wremnants.define_corrected_muons(df, calibration_helper)
+    #TODO corrections not available for data yet
+    else:
         df = df.Alias("Muon_correctedPt", "Muon_pt")
         df = df.Alias("Muon_correctedEta", "Muon_eta")
         df = df.Alias("Muon_correctedPhi", "Muon_phi")
         df = df.Alias("Muon_correctedCharge", "Muon_charge")
-    else:
-        if dataset.is_data:
-            #TODO corrections not available for data yet
-            df = df.Alias("Muon_correctedPt", "Muon_cvhbsPt")
-            df = df.Alias("Muon_correctedEta", "Muon_cvhbsEta")
-            df = df.Alias("Muon_correctedPhi", "Muon_cvhbsPhi")
-            df = df.Alias("Muon_correctedCharge", "Muon_cvhbsCharge")
-        elif isW or isZ:
-            df = wremnants.define_corrected_muons(df, calibration_helper)
-        else:
-            # no track refit available for background monte carlo samples and this is "good enough"
-            df = df.Alias("Muon_correctedPt", "Muon_pt")
-            df = df.Alias("Muon_correctedEta", "Muon_eta")
-            df = df.Alias("Muon_correctedPhi", "Muon_phi")
-            df = df.Alias("Muon_correctedCharge", "Muon_charge")
                     
     # n.b. charge = -99 is a placeholder for invalid track refit/corrections (mostly just from tracks below
     # the pt threshold of 8 GeV in the nano production)
@@ -332,7 +321,7 @@ def build_graph(df, dataset):
 
                 results.append(dummyMuonScaleSyst)
 
-            df = df.Define("Muon_cvhbsMomCov", "wrem::splitNestedRVec(Muon_cvhbsMomCov_Vals, Muon_cvhbsMomCov_Counts)")
+            df = df.Define("Muon_cvhMomCov", "wrem::splitNestedRVec(Muon_cvhMomCov_Vals, Muon_cvhMomCov_Counts)")
 
             df = df.Define("muonScaleSyst_responseWeights_tensor", calibration_uncertainty_helper,
                            ["Muon_correctedPt",
@@ -340,7 +329,7 @@ def build_graph(df, dataset):
                             "Muon_correctedPhi",
                             "Muon_correctedCharge",
                             "Muon_genPartIdx",
-                            "Muon_cvhbsMomCov",
+                            "Muon_cvhMomCov",
                             "vetoMuonsPre",
                             "GenPart_pt",
                             "GenPart_eta",
