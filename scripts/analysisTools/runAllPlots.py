@@ -16,10 +16,10 @@ onlyData = 0 # or set fits = ["Data"]
 fits = ["Asimov", "Data"]
 
 # what to plot
-skipHistograms = 1 # prefit histograms, doesn't require having run the fit
-skipImpacts = 1
-skipNuisances = 1
-skipSystRatios = 1
+skipHistograms = 0 # prefit histograms, doesn't require having run the fit
+skipImpacts = 0
+skipNuisances = 0
+skipSystRatios = 0
 skipPostfitHistograms = 0 # prefit and postfit histograms, from fitresults.root
 
 # input and output folders
