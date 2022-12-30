@@ -4,11 +4,11 @@
 #
 # charge combination
 #
-# python WRemnants/scripts/combine/fitManager.py -i /scratch/mciprian/CombineStudies/Wmass/abseta1p0/qcdScale_byPt/ --cf testChargeComb -c "plus,minus" --impacts-mW --comb [--skip-fit-data]
+# python WRemnants/scripts/combine/fitManager.py -i /scratch/mciprian/CombineStudies/Wmass/abseta1p0/qcdScale_byPt/ --cf testChargeComb -c "plus,minus" --comb [--skip-fit-data]
 #
 # single charge (can select a single charge as -c plus, otherwise both are done in sequence)
 #
-# python WRemnants/scripts/combine/fitManager.py -i /scratch/mciprian/CombineStudies/Wmass/abseta1p0/qcdScale_byPt/ --cf testSingleCharge -c "plus,minus" --impacts-mW --fit-single-charge [--skip-fit-data]
+# python WRemnants/scripts/combine/fitManager.py -i /scratch/mciprian/CombineStudies/Wmass/abseta1p0/qcdScale_byPt/ --cf testSingleCharge -c "plus,minus" --fit-single-charge [--skip-fit-data]
 
 import os, re, copy, math, array
 

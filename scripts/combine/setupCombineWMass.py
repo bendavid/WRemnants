@@ -183,12 +183,13 @@ def main(args):
                 if args.binnedScaleFactors:                    
                     nameReplace = nameReplace + [("effStatTnP_sf_", "effStatBinned_")]
                 else:
-                    nameReplace = nameReplace + [("effStatTnP_sf_", "effStatTnP_")]
+                    nameReplace = nameReplace + [("effStatTnP_sf_", "effStatSmooth_")]
+                nameReplace = nameReplace + [("effSystTnP", "effSyst")]
             if args.effStatLumiScale and "Syst" not in name:
                 scale /= math.sqrt(args.effStatLumiScale)
 
             cardTool.addSystematic(name, 
-                mirror=True if "Syst" in name else False,
+                mirror=mirror,
                 group="muon_eff_syst" if "Syst" in name else "muon_eff_stat",
                 systAxes=axes,
                 labelsByAxis=axlabels,

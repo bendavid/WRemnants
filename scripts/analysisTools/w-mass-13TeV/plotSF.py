@@ -5,7 +5,7 @@
 # actually, we verified that the correlation is preserved also for the SF, since isoSF and antiisoSF are found to be generally anticorrelated by more than 95% (even 99% for |eta| < 2.0) for pt < 60 GeV
 # no need to do the same also for iso with no trigger, because this splitting is relevant when there are fakes, and for the 2 lepton phase space that background is negligible
 
-# python w-mass-13TeV/plotSF.py testMuonSF/2021-05-31_allSFs_nodz_dxybs.root plots/testNanoAOD/testSF/SFeta0p1_31May2021_nodz_dxybs/globalAndPerEra/ -e 'BtoF,GtoH,B,C,D,E,F,G,H' -n 'trigger,idip,iso,antiiso,isonotrig,antiisonotrig'
+# python w-mass-13TeV/plotSF.py file.root output/folder/ -e 'GtoH' -n 'trigger,idip,iso,antiiso,isonotrig,antiisonotrig' [--make-prod] [--skip-eff]
 
 import re
 import os, os.path
@@ -29,52 +29,51 @@ from utility import *
 
 logging.basicConfig(level=logging.INFO)
 
+workingPoints_ = ['reco', 'tracking', 'idip', 'trigger', 'iso', 'isonotrig', 'veto']
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("rootfile", type=str, nargs=1)
     parser.add_argument("outdir",   type=str, nargs=1, help="Output folder (subfolder 'allSF/' created automatically inside)")
     parser.add_argument("-e", "--era",    type=str, default="BtoF,GtoH,B,C,D,E,F,G,H", help="Comma separated list of eras for SF in histogram name; default: %(default)s")
-    parser.add_argument("-n", "--sfnames", type=str, default="trigger,idip,iso,antiiso,isonotrig,antiisonotrig,tracking,reco", help="Comma separated list of SF names inside root file, which will be plotted (trigger uses both plus and minus automatically); default: %(default)s")
+    parser.add_argument("-n", "--sfnames", type=str, default="trigger,idip,iso,antiiso,isonotrig,antiisonotrig,tracking,reco", help="Comma separated list of SF names inside root file, which will be plotted; default: %(default)s")
+    parser.add_argument('-wpc','--workinPointsByCharge', default=["trigger"], nargs='*', type=str, choices=list(workingPoints_),
+                        help='Working points made by charge')
     parser.add_argument("--sf-version", dest="sfversions", type=str, default="nominal,dataAltSig", help="SF versions to plot and to use for the products, usually one would use just nominal and dataAltSig to define the systematic variation; default: %(default)s")
     parser.add_argument("--eff-version", dest="effversions", type=str, default="nominal,altSig", help="Efficiency versions to plot (nominal actually has no keyword); default: %(default)s")
     parser.add_argument(     '--nContours', dest='nContours',    default=51, type=int, help='Number of contours in palette. Default is 51')
     parser.add_argument(     '--palette'  , dest='palette',      default=87, type=int, help='Set palette: default is a built-in one, 55 is kRainbow')
     parser.add_argument(     '--invertPalette', dest='invertePalette', action='store_true',   help='Inverte color ordering in palette')
     parser.add_argument(     '--skip-eff', dest='skipEfficiency', action='store_true',   help='Do not plot efficiencies to save time')
+    parser.add_argument(     '--make-prod', dest='makeProduct', action='store_true',   help='Make and plot products of scale factors')
     parser.add_argument(     '--bin-pt-finely', dest='binPtFinely', default=-1, type=int, help='Bin product histograms so to increase number of pt bins')
     args = parser.parse_args()
 
     ROOT.TH1.SetDefaultSumw2()
 
     # products of scale factors
-    productsToMake = {"isoTrigPlus"       : ["iso",           "triggerplus",  "idip"], # "tracking"],
-                      "isoTrigMinus"      : ["iso",           "triggerminus", "idip"], # "tracking"],
-                      "isoNotrig"         : ["isonotrig",                     "idip"], # "tracking"],
-                      "noisoTrigPlus"     : [                 "triggerplus",  "idip"], # "tracking"],
-                      "noisoTrigMinus"    : [                 "triggerminus", "idip"], # "tracking"],
-                      "noisoNotrig"       : [                                 "idip"], # "tracking"],
-                      "antiisoTrigPlus"   : ["antiiso",       "triggerplus",  "idip"], # "tracking"],
-                      "antiisoTrigMinus"  : ["antiiso",       "triggerminus", "idip"], # "tracking"],
-                      "antiisoNotrig"     : ["antiisonotrig",                 "idip"], # "tracking"],
-                      "isoOnly"           : ["iso"],
-                      "isoNotrigOnly"     : ["isonotrig"],
-                      "antiisoOnly"       : ["antiiso"],
-                      "antiisoNotrigOnly" : ["antiisonotrig"],
-                      "recoOnly"              : ["reco"],
-                      "trackingOnly"          : ["tracking"],
-                      "trigPlusOnly"      : ["triggerplus"],
-                      "trigMinusOnly"     : ["triggerminus"],
-                      #"trackingReco"      : ["tracking", "reco"],
-                      #"idipTrackingReco"  : ["idip", "tracking", "reco"],
-                      #"trigPlusIdipTrackingReco"     : ["triggerplus", "idip", "tracking", "reco"],
-                      #"isoTrigPlusIdipTrackingReco"  : ["iso", "triggerplus", "idip", "tracking", "reco"],
-                      #"trigMinusIdipTrackingReco"    : ["triggerminus", "idip", "tracking", "reco"],
-                      #"isoTrigMinusIdipTrackingReco" : ["iso", "triggerminus", "idip", "tracking", "reco"],
-                      #"isoNotrigIdipTrackingReco"    : ["isonotrig", "idip", "tracking", "reco"],
-    }
-
-    #productsToMake = {"trackingReco"      : ["reco", "tracking"], # "tracking"],
-    #}
+    # should be updated to use working points by charge other than trigger
+    # on the other hand we no longer use these products, so there is no need to make them anymore
+    productsToMake = {}
+    if args.makeProduct:
+        productsToMake = {"isoTrigPlus"       : ["iso",           "triggerplus",  "idip"],
+                          "isoTrigMinus"      : ["iso",           "triggerminus", "idip"],
+                          "isoNotrig"         : ["isonotrig",                     "idip"],
+                          "noisoTrigPlus"     : [                 "triggerplus",  "idip"],
+                          "noisoTrigMinus"    : [                 "triggerminus", "idip"],
+                          "noisoNotrig"       : [                                 "idip"],
+                          "antiisoTrigPlus"   : ["antiiso",       "triggerplus",  "idip"],
+                          "antiisoTrigMinus"  : ["antiiso",       "triggerminus", "idip"],
+                          "antiisoNotrig"     : ["antiisonotrig",                 "idip"],
+                          "isoOnly"           : ["iso"],
+                          "isoNotrigOnly"     : ["isonotrig"],
+                          "antiisoOnly"       : ["antiiso"],
+                          "antiisoNotrigOnly" : ["antiisonotrig"],
+                          "recoOnly"              : ["reco"],
+                          "trackingOnly"          : ["tracking"],
+                          "trigPlusOnly"      : ["triggerplus"],
+                          "trigMinusOnly"     : ["triggerminus"],
+        }
     
     eras = args.era.split(',')
     fname = args.rootfile[0]
@@ -86,10 +85,12 @@ if __name__ == "__main__":
     
     # make folder structure
     foldersToCreate = []
-    foldersToCreate.append(outdirOriginal + productSubfolder)
+    if args.makeProduct:
+        foldersToCreate.append(outdirOriginal + productSubfolder)
     for era in eras:
         foldersToCreate.append(outdirOriginal + era + "/")
-        foldersToCreate.append(outdirOriginal + productSubfolder + era + "/")
+        if args.makeProduct:
+            foldersToCreate.append(outdirOriginal + productSubfolder + era + "/")
 
     for folder in foldersToCreate:
         createPlotDirAndCopyPhp(folder)
@@ -112,14 +113,14 @@ if __name__ == "__main__":
         print("")
         print(f"Working point: {n}")
         print("-"*30)
-        charges = ["plus", "minus"] if n == "trigger" else ["both"]
+        charges = ["plus", "minus"] if n in args.workinPointsByCharge else ["both"]
         for ch in charges:
             for era in eras:
                 tmpEra = "F_preVFP" if era == "F" else era
                 for v in sf_version:
                     hname = f"SF2D_{v}_{n}_{tmpEra}_{ch}"
                     hkey = f"{v}_{n}" 
-                    hkey += (ch if n == "trigger" else "")
+                    hkey += (ch if n in args.workinPointsByCharge else "")
                     print(f"   {hkey} -> {hname}")
                     histsSF[era][hkey] = safeGetObject(f, hname)
                 for v in eff_version:
@@ -127,7 +128,7 @@ if __name__ == "__main__":
                         realv = "" if v == "nominal" else f"{v}_"
                         hname = f"eff{dataMC}_{realv}{n}_{tmpEra}_{ch}"
                         hkey = f"{v}_{n}" 
-                        hkey += (ch if n == "trigger" else "")
+                        hkey += (ch if n in args.workinPointsByCharge else "")
                         print(f"   {hkey} -> {hname}")
                         histsEff[era][dataMC][hkey] = safeGetObject(f, hname)
     f.Close()
@@ -176,9 +177,10 @@ if __name__ == "__main__":
     for era in eras:
         prodHistsSF[era] = {}
 
-    namesForCheck = [x for x in names if x != "trigger"]
-    if "trigger" in names:
-        namesForCheck += ["triggerplus", "triggerminus"]
+    namesForCheck = [x for x in names if x not in args.workinPointsByCharge]
+    for x in args.workinPointsByCharge:
+        if x in names:
+            namesForCheck += [f"{x}plus", f"{x}minus"]
         
     for key in list(productsToMake.keys()):
         if not all(x in namesForCheck for x in productsToMake[key]):
@@ -231,8 +233,7 @@ if __name__ == "__main__":
             prodHistsSF[era][n].Write(n)
     f.Close()
 
-    minmax = {"triggerplus"  : "0.65,1.15",
-              "triggerminus" : "0.65,1.15",
+    minmax = {"trigger"      : "0.65,1.15",
               "idip"         : "0.95,1.01",
               "iso"          : "0.975,1.025",
               "antiiso"      : "0.6,1.25",
@@ -249,8 +250,9 @@ if __name__ == "__main__":
         for n in list(histsSF[era].keys()):
             version = str(n.split("_")[0])
             ntmp    = str(n.split("_")[1])
-            if ntmp in minmax.keys():
-                zrange = f"::{minmax[ntmp]}"
+            ntmpNoCharge = ntmp.replace("plus","").replace("minus","")
+            if ntmpNoCharge in minmax.keys():
+                zrange = f"::{minmax[ntmpNoCharge]}"
             else:
                 zrange = ""
                         
