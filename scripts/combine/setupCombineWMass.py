@@ -153,7 +153,8 @@ def main(args):
 
     if not args.noEfficiencyUnc:
         chargeDependentSteps = common.muonEfficiency_chargeDependentSteps
-        effStatTypes = ["reco", "tracking", "idip", "trigger"]
+        effTypesNoIso = ["reco", "tracking", "idip", "trigger"]
+        effStatTypes = [x for x in effTypesNoIso]
         if args.binnedScaleFactors:
             effStatTypes.extend(["iso"])
         else:
@@ -163,41 +164,42 @@ def main(args):
             if "Syst" in name:
                 axes = ["reco-tracking-idip-trigger-iso"]
                 axlabels = ["WPSYST"]
-                nameReplace = [("WPSYST0", "Reco"), ("WPSYST1", "Tracking"), ("WPSYST2", "IDIP"), ("WPSYST3", "Trig"), ("WPSYST4", "Iso")]
+                nameReplace = [("WPSYST0", "reco"), ("WPSYST1", "tracking"), ("WPSYST2", "idip"), ("WPSYST3", "trigger"), ("WPSYST4", "iso"), ("effSystTnP", "effSyst")]
                 scale = 1.0
                 mirror = True
+                groupName = "muon_eff_syst"
+                splitGroupDict = {f"{groupName}_{x}" : f".*effSyst.*{x}" for x in list(effTypesNoIso + ["iso"])}
+                splitGroupDict[groupName] = ".*effSyst.*" # add also the group with everything
             else:
+                nameReplace = [] if any(x in name for x in chargeDependentSteps) else [("q0", ""), ("q1", "")]  # this part correlates nuisances between charges
                 if args.binnedScaleFactors:
                     axes = ["SF eta", "nPtBins", "SF charge"]
                     axlabels = ["eta", "pt", "q"]
                     mirror = True
+                    nameReplace = nameReplace + [("effStatTnP_sf_", "effStatBinned_")]
                 else:
                     axes = ["SF eta", "nPtEigenBins", "SF charge", "downUpVar"]
                     axlabels = ["eta", "pt", "q", "downUpVar"]
                     mirror = False
-                nameReplace = [] if any(x in name for x in chargeDependentSteps) else [("q0", ""), ("q1", "")]  # this part correlates nuisances between charges
-                scale = 1.0
-                if "iso" in name and args.decorrelateEffStatIsoByCharge:
-                    scale = 1.414 # only for iso, scale up by sqrt(2) when decorrelating between charges and efficiencies were derived inclusively
-                    nameReplace = []
-                if args.binnedScaleFactors:                    
-                    nameReplace = nameReplace + [("effStatTnP_sf_", "effStatBinned_")]
-                else:
                     nameReplace = nameReplace + [("effStatTnP_sf_", "effStatSmooth_")]
-                nameReplace = nameReplace + [("effSystTnP", "effSyst")]
+                scale = 1.0
+                groupName = "muon_eff_stat"
+                splitGroupDict = {f"{groupName}_{x}" : f".*effStat.*{x}" for x in effStatTypes}
+                splitGroupDict[groupName] = ".*effStat.*" # add also the group with everything
             if args.effStatLumiScale and "Syst" not in name:
                 scale /= math.sqrt(args.effStatLumiScale)
 
             cardTool.addSystematic(name, 
                 mirror=mirror,
-                group="muon_eff_syst" if "Syst" in name else "muon_eff_stat",
+                group=groupName,
                 systAxes=axes,
                 labelsByAxis=axlabels,
                 baseName=name+"_",
                 processes=cardTool.allMCProcesses(),
                 passToFakes=passSystToFakes,
                 systNameReplace=nameReplace,
-                scale=scale
+                scale=scale,
+                splitGroup=splitGroupDict
             )
 
     to_fakes = not (wlike or args.noQCDscaleFakes)
