@@ -38,8 +38,7 @@ def make_muon_efficiency_helpers_binned(filename = data_dir + "/testMuonSF/allSm
     allEff_types = ["reco", "tracking", "idip", "trigger"] + isoEff_types
     axis_allEff_type = hist.axis.StrCategory(allEff_types, name = "allEff_type")
     axis_nom_syst = hist.axis.Integer(0, 2, underflow = False, overflow =False, name = "nom-syst") # only one syst for now (and the nominal in the first bin)
-    axis_down_up = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "downUpVar") # for the stat variations, to avoid stacking on same axis
-
+    
     charges = { -1. : "minus", 1. : "plus" }
     chargeDependentSteps = common.muonEfficiency_chargeDependentSteps
     
@@ -206,9 +205,9 @@ def make_muon_efficiency_helpers_binned(filename = data_dir + "/testMuonSF/allSm
             axis_eta_eff_tensor = hist.axis.Variable(axis_eta_eff.edges, name = axis_eta_eff.name, overflow = False, underflow = False)
         # for pt need to additionally remove the out of range bins if any
         if isinstance(axis_pt_eff, bh.axis.Regular):
-            axis_pt_eff_tensor = hist.axis.Regular(axis_pt_eff.size, axis_pt_eff.edges[0], axis_pt_eff.edges[-1], name = axis_pt_eff.name, overflow = False, underflow = False)
+            axis_pt_eff_tensor = hist.axis.Regular(axis_pt_eff.size, axis_pt_eff.edges[0], axis_pt_eff.edges[-1], name = "nPtBins", overflow = False, underflow = False)
         elif isinstance(axis_pt_eff, bh.axis.Variable):
-            axis_pt_eff_tensor = hist.axis.Variable(axis_pt_eff.edges[:nptbins+1], name = axis_pt_eff.name, overflow = False, underflow = False)
+            axis_pt_eff_tensor = hist.axis.Variable(axis_pt_eff.edges[:nptbins+1], name = "nPtBins", overflow = False, underflow = False)
 
         #print(f"{effStatKey} nPtBins-tensor = {axis_pt_eff_tensor.size}")
         helper_stat.tensor_axes = [axis_eta_eff_tensor, axis_pt_eff_tensor, axis_charge]

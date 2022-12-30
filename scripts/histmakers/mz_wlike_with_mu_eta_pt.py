@@ -312,9 +312,6 @@ def build_graph(df, dataset):
             df = df.Define(f"effStatTnP_{key}_tensor", helper, ["TrigMuon_pt", "TrigMuon_eta", "TrigMuon_charge", "NonTrigMuon_pt", "NonTrigMuon_eta", "NonTrigMuon_charge", "nominal_weight"])
             effStatTnP = df.HistoBoost(f"effStatTnP_{key}", nominal_axes, [*nominal_cols, f"effStatTnP_{key}_tensor"], tensor_axes = helper.tensor_axes)
             results.append(effStatTnP)
-
-        dummyMuonScaleSyst_responseWeights = df.HistoBoost("muonScaleSyst_responseWeights", nominal_axes, [*nominal_cols, "muonScaleSyst_responseWeights_tensor"], tensor_axes = calibration_uncertainty_helper.tensor_axes)
-        results.append(dummyMuonScaleSyst_responseWeights)
         
         df = df.Define("effSystTnP_weight", muon_efficiency_helper_syst, ["TrigMuon_pt", "TrigMuon_eta", "TrigMuon_SApt", "TrigMuon_SAeta", "TrigMuon_charge",
                                                                           "NonTrigMuon_pt", "NonTrigMuon_eta", "NonTrigMuon_SApt", "NonTrigMuon_SAeta", "NonTrigMuon_charge",
@@ -394,6 +391,8 @@ def build_graph(df, dataset):
                             "GenPart_statusFlags",
                             "nominal_weight"])
 
+            dummyMuonScaleSyst_responseWeights = df.HistoBoost("muonScaleSyst_responseWeights", nominal_axes, [*nominal_cols, "muonScaleSyst_responseWeights_tensor"], tensor_axes = calibration_uncertainty_helper.tensor_axes)
+            results.append(dummyMuonScaleSyst_responseWeights)
 
     return results, weightsum
 
