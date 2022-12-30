@@ -10,15 +10,15 @@ from plotUtils.utility import safeSystem
 
 # general settings
 dryRun = 0
-isWlike = 1
+isWlike = 0
 skipData = 1 # or set fits = ["Asimov"]
 onlyData = 0 # or set fits = ["Data"]
 fits = ["Asimov", "Data"]
 
 # what to plot
 skipHistograms = 0 # prefit histograms, can't be made also before running the fit
-skipImpacts = 0
-skipNuisances = 0
+skipImpacts = 1
+skipNuisances = 1
 skipSystRatios = 1
 skipPostfitHistograms = 1 # prefit and postfit histograms, from fitresults.root
 
@@ -28,9 +28,9 @@ what = "ZMassWLike" if isWlike else "WMass"
 
 # input and output folders
 # TODO: need a general way so that every user can use the same logic for paths
-mainInputPath = f"/scratch/mciprian/CombineStudies/{what}/smoothSF/muonCorr_none/scetlibCorr_nnpdf31/byHelicityPtCharge/" # contains the TH2 histograms for combine
+mainInputPath = f"/scratch/mciprian/CombineStudies/{what}/smoothSF/muonCorr_trackfit/scetlibCorr_nnpdf31/byHelicityPtCharge/" # contains the TH2 histograms for combine
 subFolder = "nominal" # contains the final cards and fit results
-mainOutdir = f"/eos/user/m/mciprian/www/WMassAnalysis/fromMyWremnants/{what}_fit/smoothSF/muonCorr_none/scetlibCorr_nnpdf31/byHelicityPtCharge/" # where to store plots
+mainOutdir = f"/eos/user/m/mciprian/www/WMassAnalysis/fromMyWremnants/{what}_fit/smoothSF/muonCorr_trackfit/scetlibCorr_nnpdf31/byHelicityPtCharge/" # where to store plots
 combineInputFile = f"{mainInputPath}/{what}CombineInput.root" 
 useSmoothSF = True if "smoothSF" in mainInputPath else False # FIXME: a bit hardcoded
 
