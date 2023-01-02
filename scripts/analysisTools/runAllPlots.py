@@ -9,49 +9,45 @@ sys.path.append(os.getcwd() + "/plotUtils/")
 from plotUtils.utility import safeSystem
 
 # general settings
-dryRun = 0
-isWlike = 0
+dryRun = 0   # run or just print commands
+isWlike = 0  # Wmass or Wlike
 skipData = 1 # or set fits = ["Asimov"]
 onlyData = 0 # or set fits = ["Data"]
 fits = ["Asimov", "Data"]
 
-# what to plot
+# select what to plot
 skipHistograms = 0 # prefit histograms, can't be made also before running the fit
 skipImpacts = 1
 skipNuisances = 1
 skipSystRatios = 1
 skipPostfitHistograms = 1 # prefit and postfit histograms, from fitresults.root
 
-
-## These should not be touched
-what = "ZMassWLike" if isWlike else "WMass"
-
-# input and output folders
-# TODO: need a general way so that every user can use the same logic for paths
-mainInputPath = f"/scratch/mciprian/CombineStudies/{what}/smoothSF/muonCorr_trackfit/scetlibCorr_nnpdf31/byHelicityPtCharge/" # contains the TH2 histograms for combine
+# SPECIFIC PATH CUSTOMIZED BY EACH USER (INSIDE $COMBINE_STUDIES)
+customPath = "smoothSF/muonCorr_trackfit/scetlibCorr_nnpdf31/byHelicityPtCharge/" # contains the root file with TH2
 subFolder = "nominal" # contains the final cards and fit results
-mainOutdir = f"/eos/user/m/mciprian/www/WMassAnalysis/fromMyWremnants/{what}_fit/smoothSF/muonCorr_trackfit/scetlibCorr_nnpdf31/byHelicityPtCharge/" # where to store plots
+
+##################################
+## These should not be touched
+##################################
+what = "ZMassWLike" if isWlike else "WMass"
+combine_studies_ = os.environ['COMBINE_STUDIES']
+plots_ = os.environ['PLOTS']
+commonPath = f"{combine_studies_}/{what}"
+mainInputPath = f"{commonPath}/{customPath}/" # contains the TH2 histograms for combine
+mainOutdir = f"{plots_}/fromMyWremnants/{what}_fit/{customPath}/" # where to store plots
 combineInputFile = f"{mainInputPath}/{what}CombineInput.root" 
-useSmoothSF = True if "smoothSF" in mainInputPath else False # FIXME: a bit hardcoded
+useSmoothSF = False if "binnedSF" in mainInputPath else True # FIXME: a bit hardcoded for now
+##################################
 
-##############################
-# utility functions used here
-def printText(text):
-    print("")
-    print("="*30)
-    print(text)
-    print("")
-
-##############################
-# dictionaries to customize some specific plots
-#
+#################################################
+# dictionaries to customize some specific plots #
+#################################################
 #
 # postfix for plot name and regular expression to pick histogram variations to plot
 # there are infinite combinations, so this is mainly an example for Up variations
-systRatiosDict = {"effStat_trigger_eta20_plus"  : ".*effStat.*_trigger_eta20.*q1.*Up",
+systRatiosDict = {"effStat_trigger_eta20_plus_Up"  : ".*effStat.*_trigger_eta20.*q1.*Up",
                   "pdfsAndAlphaS"  : ".*pdf(12|25|50|.*AlphaS).*Up",
 }
-
 #
 # unique string for output plot name and regular expression for nuisances used to plot pulls and constraints
 diffNuisanceDict = {"effStat_triggerPlus"  : ".*effStat.*_trigger.*q1",
@@ -70,9 +66,18 @@ if useSmoothSF:
     diffNuisanceDict["effStat_isoEffMC"] = ".*effStat.*_iso_effMC"
 else:
     diffNuisanceDict["effStat_isoSF"] = ".*effStat.*_iso"
-
+#################################################
     
 print()
+
+##############################
+# utility functions used here
+def printText(text):
+    print("")
+    print("="*30)
+    print(text)
+    print("")
+#################################################
 
 printText("PREFIT HISTOGRAMS")
 command = f"python w-mass-13TeV/plotPrefitTemplatesWRemnants.py {combineInputFile} {mainOutdir}/plotPrefitTemplatesWRemnants/"
