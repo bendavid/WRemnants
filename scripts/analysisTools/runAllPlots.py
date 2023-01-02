@@ -8,6 +8,8 @@ import ROOT, os, sys, re, array
 sys.path.append(os.getcwd() + "/plotUtils/")
 from plotUtils.utility import safeSystem
 
+#from runAllPlots_customSetting import *
+
 # general settings
 # could make these command-line options, but it would hide other necessary changes inside this script)
 dryRun = 1   # run or just print commands
@@ -23,21 +25,20 @@ skipNuisances = 1
 skipSystRatios = 1
 skipPostfitHistograms = 1 # prefit and postfit histograms, from fitresults.root
 
-# SPECIFIC PATH CUSTOMIZED BY EACH USER (INSIDE $COMBINE_STUDIES)
-customPath = "smoothSF/muonCorr_trackfit/scetlibCorr_nnpdf31/byHelicityPtCharge/" # contains the root file with TH2
+# SPECIFIC PATH CUSTOMIZED BY EACH USER (PATH INSIDE $COMBINE_STUDIES)
+customPath = "smoothSF/muonCorr_trackfit/scetlibCorr_nnpdf31/byHelicityPtCharge" # contains the root file with TH2
 subFolder = "nominal" # contains the final cards and fit results
 
 ##################################
 ## These should not be touched
 ##################################
+combine_studies_path = os.environ['COMBINE_STUDIES']
+plots_path = os.environ['PLOTS']
 what = "ZMassWLike" if isWlike else "WMass"
-combine_studies_ = os.environ['COMBINE_STUDIES']
-plots_ = os.environ['PLOTS']
-commonPath = f"{combine_studies_}/{what}"
-mainInputPath = f"{commonPath}/{customPath}/" # contains the TH2 histograms for combine
-mainOutdir = f"{plots_}/fromMyWremnants/{what}_fit/{customPath}/" # where to store plots
-combineInputFile = f"{mainInputPath}/{what}CombineInput.root" 
-useSmoothSF = False if "binnedSF" in mainInputPath else True # FIXME: a bit hardcoded for now
+inputPath = f"{combine_studies_path}/{what}/{customPath}/" # contains the TH2 histograms for combine
+outputPath = f"{plots_path}/fromMyWremnants/{what}_fit/{customPath}/" # where to store plots
+combineInputFile = f"{inputPath}/{what}CombineInput.root" 
+useSmoothSF = False if "binnedSF" in inputPath else True # FIXME: a bit hardcoded for now
 ##################################
 
 #################################################
@@ -81,7 +82,7 @@ def printText(text):
 #################################################
 
 printText("PREFIT HISTOGRAMS")
-command = f"python w-mass-13TeV/plotPrefitTemplatesWRemnants.py {combineInputFile} {mainOutdir}/plotPrefitTemplatesWRemnants/"
+command = f"python w-mass-13TeV/plotPrefitTemplatesWRemnants.py {combineInputFile} {outputPath}/plotPrefitTemplatesWRemnants/"
 if isWlike:
     command += " --wlike"
 if not skipHistograms:
@@ -92,7 +93,7 @@ if not skipHistograms:
 printText("HISTOGRAM SYST RATIOS")
 # the command below does charge plus, but it is just for example
 processes = "Zmumu" if isWlike else "Wmunu,Fake"
-command  = f"python w-mass-13TeV/makeSystRatios.py {combineInputFile} {mainOutdir}/makeSystRatios/"
+command  = f"python w-mass-13TeV/makeSystRatios.py {combineInputFile} {outputPath}/makeSystRatios/"
 command += f" -p {processes} -c plus --plotStat"
 if not skipSystRatios:
     for key,value in systRatiosDict.items():
@@ -110,13 +111,13 @@ for fit in fits:
     typedir = "hessian" if fit == "Asimov" else "data"
 
     printText(f"Running plots for {fit} fit")
-    fitresultsFile = f"{mainInputPath}/{subFolder}/fit/{typedir}/fitresults_123456789_{fit}_bbb1_cxs0.root"
+    fitresultsFile = f"{inputPath}/{subFolder}/fit/{typedir}/fitresults_123456789_{fit}_bbb1_cxs0.root"
 
     ########################################
     printText("IMPACTS")
     statImpact = "0.0710" if isWlike else "0.0230"
     # TODO: add cases for single charge (change input to --set-stat and use "--postfix charge" not to overwrite plots)
-    command = f"python w-mass-13TeV/makeImpactsOnMW.py {fitresultsFile} -o {mainOutdir}/makeImpactsOnMW/"
+    command = f"python w-mass-13TeV/makeImpactsOnMW.py {fitresultsFile} -o {outputPath}/makeImpactsOnMW/"
     command += f" --set-stat {statImpact} --showTotal --scaleToMeV"
     if not skipImpacts:
         print()
@@ -125,7 +126,7 @@ for fit in fits:
     ########################################
     printText("NUISANCES AND COSTRAINTS")
     yAxisSetting = " --y-setting -1.0 -0.5 0 0.5 1.0" if fit == "Asimov" else " --y-setting -5.0 -3.0 0 3.0 5.0"
-    command  = f"python w-mass-13TeV/diffNuisances.py {fitresultsFile} -o {mainOutdir}/diffNuisances/ "
+    command  = f"python w-mass-13TeV/diffNuisances.py {fitresultsFile} -o {outputPath}/diffNuisances/ "
     command += f" -a --format html --type hessian  --suffix {fit} {yAxisSetting}"
     if not skipNuisances:
         for key,value in diffNuisanceDict.items():
@@ -135,7 +136,7 @@ for fit in fits:
 
     ########################################
     printText("PREFIT AND POSTFIT HISTOGRAMS (YIELDS AND UNCERTAINTIES)")
-    command  = f"python w-mass-13TeV/postFitHistograms.py {fitresultsFile} -o {mainOutdir}/postFitHistograms/ "
+    command  = f"python w-mass-13TeV/postFitHistograms.py {fitresultsFile} -o {outputPath}/postFitHistograms/ "
     command += f" --suffix postVFP -l 16.8 --no2Dplot" # remove --no2Dplot to add all 2D histograms
     if not skipPostfitHistograms:
         print()
