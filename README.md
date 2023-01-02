@@ -39,6 +39,7 @@ Make the datacards for single charges and prepare the TH2 histograms for combine
 python $WREM_BASE/scripts/combine/setupCombineWMass.py -i mw_with_mu_eta_pt_scetlibCorr_nnpdf31_smoothSF_muonCorrNone_noRecoil.pkl.lz4 -d $COMBINE_STUDIES -o WMass/smoothSF/muonCorr_none/scetlibCorr_nnpdf31/byHelicityPtCharge/ --skipOtherChargeSyst
 ```
 The input file is the output of the previous step.
+Add __--wlike__ if running a Wlike analysis (and the path given to __-o__ should start with ZMassWLike, which is also the keyword to the output root file).
 
 Combine the datacards for single charges and run the fit (Asimov only)
 ```
