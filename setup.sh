@@ -9,7 +9,7 @@ elif [[ "$HOSTNAME" == *"mit.edu"* ]]; then
 fi
 echo "Created environment variable WREM_BASE=${WREM_BASE}"
 
-COMBINE_STUDIES=""
+export COMBINE_STUDIES=""
 if [[ "$HOSTNAME" == *"lxplus8s10.cern.ch"* ]]; then
     COMBINE_STUDIES="/scratch/${USER}/CombineStudies/"
 #elif [[ "$HOSTNAME" == *"mit.edu"* ]]; then
@@ -27,7 +27,7 @@ mkdir -pv ${COMBINE_STUDIES}/ZMassWLike/
 echo "Created environment variable COMBINE_STUDIES=${COMBINE_STUDIES}"
 
 # web page folder to store plots
-PLOTS="/eos/user/${USER:0:1}/${USER}/www/WMassAnalysis/"
+export PLOTS="/eos/user/${USER:0:1}/${USER}/www/WMassAnalysis/"
 mkdir -pv ${PLOTS}
 echo "Created environment variable PLOTS=${PLOTS}"
 
