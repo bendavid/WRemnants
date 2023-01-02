@@ -3,6 +3,7 @@ import pathlib
 import argparse
 import logging
 import numpy as np
+import os
 
 wremnants_dir = f"{pathlib.Path(__file__).parent}/../wremnants"
 data_dir = f"{wremnants_dir}/data/"
@@ -112,7 +113,7 @@ def common_parser():
 def common_parser_combine():
     from wremnants import theory_tools
     parser = argparse.ArgumentParser()
-    parser.add_argument("-d", "--baseDir", type=str, default="combineResults", help="base output folder")
+    parser.add_argument("-d", "--baseDir", type=str, default=os.environ["COMBINE_STUDIES"], help="base output folder")
     parser.add_argument("-o", "--outfolder", type=str, default="", help="Main output folder, with the root file storing all histograms and datacards for single charge")
     parser.add_argument("-i", "--inputFile", type=str)
     parser.add_argument("--qcdScale", choices=["byHelicityPt", "byHelicityPtCharge", "byHelicityCharge", "byPtCharge", "byPt", "byCharge", "integrated",], default="byHelicityPtCharge", 
