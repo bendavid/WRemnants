@@ -1,4 +1,4 @@
-#!/bin/env pyth
+#!/usr/bin/env python3
 
 ### Wrapper to run all plotting scripts in one go out of the fit results
 ### This runs the minimal command, which is usually sufficient
@@ -9,7 +9,8 @@ sys.path.append(os.getcwd() + "/plotUtils/")
 from plotUtils.utility import safeSystem
 
 # general settings
-dryRun = 0   # run or just print commands
+# could make these command-line options, but it would hide other necessary changes inside this script)
+dryRun = 1   # run or just print commands
 isWlike = 0  # Wmass or Wlike
 skipData = 1 # or set fits = ["Asimov"]
 onlyData = 0 # or set fits = ["Data"]
