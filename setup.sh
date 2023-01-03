@@ -1,10 +1,10 @@
 export PYTHONPATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd ):$PYTHONPATH"
 export PYTHONPATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/narf:$PYTHONPATH"
 
-WREM_BASE=""
+export WREM_BASE=""
 if [[ "$PWD" == *"/WRemnants"* ]]; then
     WREM_BASE="$PWD"
-elif [[ "$HOSTNAME" == *"mit.edu"* ]]; then
+else
     WREM_BASE="${PWD}/WRemnants"
 fi
 echo "Created environment variable WREM_BASE=${WREM_BASE}"
@@ -12,8 +12,8 @@ echo "Created environment variable WREM_BASE=${WREM_BASE}"
 export COMBINE_STUDIES=""
 if [[ "$HOSTNAME" == *"lxplus8s10.cern.ch"* ]]; then
     COMBINE_STUDIES="/scratch/${USER}/CombineStudies/"
-#elif [[ "$HOSTNAME" == *"mit.edu"* ]]; then
-#    COMBINE_STUDIES="/data/submit/cms/store/${USER}/CombineStudies/" # FIXME: EDIT PATH
+elif [[ "$HOSTNAME" == *"mit.edu"* ]]; then
+    COMBINE_STUDIES="/data/submit/${USER}/CombineStudies/"
 elif [[ "$HOSTNAME" == *"cmsanalysis.pi.infn.it"* ]]; then
     COMBINE_STUDIES="/scratchnvme/${USER}/CombineStudies/"
 else
@@ -35,13 +35,14 @@ echo "Creating links to output folders (if not existing)"
 
 plotLink="${WREM_BASE}/scripts/analysisTools/plots"
 if [ -L ${plotLink} ] && [ -e ${plotLink} ]; then
-    echo "Existing link ${plotLink} --> ${PLOTS}"
+    echo ">>> Existing link ${plotLink} --> ${PLOTS}"
 else
     ln -sv ${PLOTS} ${plotLink}
 fi
+
 combineLink="${WREM_BASE}/CombineStudies"
 if [ -L ${combineLink} ] && [ -e ${combineLink} ]; then
-    echo "Existing link ${combineLink} --> ${COMBINE_STUDIES}"
+    echo ">>> Existing link ${combineLink} --> ${COMBINE_STUDIES}"
 else
     ln -sv ${COMBINE_STUDIES} ${combineLink}
 fi

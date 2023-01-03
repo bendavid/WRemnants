@@ -7,8 +7,8 @@ logging.basicConfig(level=logging.INFO)
 
 from array import array
 import shutil
-sys.path.append(os.getcwd() + "/plotUtils/")
-from CMS_lumi import *
+#sys.path.append(os.getcwd() + "/plotUtils/")
+from scripts.analysisTools.plotUtils.CMS_lumi import *
 
 #ROOT.gInterpreter.ProcessLine(".O3")
 
@@ -492,8 +492,8 @@ def getTH2morePtBins(h2, newname, nPt):
 def createPlotDirAndCopyPhp(outdir):
     if outdir and not os.path.exists(outdir):
         os.makedirs(outdir)
-        htmlpath = "./templates/index.php"
-        shutil.copy(htmlpath, outdir)
+    htmlpath = f"{os.environ['WREM_BASE']}/scripts/analysisTools/templates/index.php"
+    shutil.copy(htmlpath, outdir)
 
 
 #########################################################################

@@ -24,8 +24,10 @@ ROOT.PyConfig.IgnoreCommandLineOptions = True
 
 from copy import *
 
-sys.path.append(os.getcwd() + "/plotUtils/")
-from utility import *
+#sys.path.append(os.getcwd() + "/plotUtils/")
+from scripts.analysisTools.plotUtils.utility import *
+#sys.path.append(f"{os.environ['WREM_BASE']}/scripts/analysisTools/plotUtils/")
+#from utility import *
 
 sys.path.append(os.getcwd())
 

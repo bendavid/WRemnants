@@ -20,14 +20,14 @@ fits = ["Asimov", "Data"]
 
 # select what to plot
 skipHistograms = 0 # prefit histograms, can't be made also before running the fit
-skipImpacts = 1
+skipImpacts = 0
 skipNuisances = 1
 skipSystRatios = 1
 skipPostfitHistograms = 1 # prefit and postfit histograms, from fitresults.root
 
 # SPECIFIC PATH CUSTOMIZED BY EACH USER (PATH INSIDE $COMBINE_STUDIES)
-customPath = "smoothSF/muonCorr_trackfit/scetlibCorr_nnpdf31/byHelicityPtCharge" # contains the root file with TH2
-subFolder = "nominal" # contains the final cards and fit results
+customPath = "smoothSF/muonCorr_none/scetlibCorr_nnpdf31/byHelicityPtCharge" # contains the root file with TH2
+subFolder = "nominal" # folder inside customPath: it contains the final cards and fit results
 
 ##################################
 ## These should not be touched
