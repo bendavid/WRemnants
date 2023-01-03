@@ -44,7 +44,7 @@ python WRemnants/scripts/combine/setupCombineWMass.py -i mw_with_mu_eta_pt_scetl
 ```
 The input file is the output of the previous step.
 Add __--wlike__ if running a Wlike analysis.
-The path specified with __-o__ is appended to the argument of option __-d__, whose default is ${COMBINE_STUDIES}/WMass/ or ${COMBINE_STUDIES}/ZMassWLike/ depending on the chosen analysis. One can also use __-d__ to pass any custom path (__-o__ is optional in that case)
+The path specified with __-o__ is appended to the argument of option __-d__, whose default is \$COMBINE_STUDIES/WMass/ or \$COMBINE_STUDIES/ZMassWLike/ depending on the chosen analysis. One can also use __-d__ to pass any custom path (__-o__ is optional in that case)
  
 Combine the datacards for single charges and run the fit (Asimov only)
 ```
