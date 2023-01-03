@@ -24,9 +24,9 @@ git push origin main
 ### Run the code
 Source the setup script.
 It will create some environment variables to ease access to some output paths:
-    - WREM_BASE: it points to ./WRemnants/ where all the code is
-    - COMBINE_STUDIES: main folder to store datacards and root files for combine
-    - PLOTS: where to store analysis plots
+ * WREM_BASE: it points to ./WRemnants/ where all the code is
+ * COMBINE_STUDIES: main folder to store datacards and root files for combine
+ * PLOTS: where to store analysis plots
 These are used to define default output paths, but users can specify their favorite one for each script.
 ```bash
 source WRemnants/setup.sh
