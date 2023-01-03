@@ -12,8 +12,9 @@ sys.argv = args
 ROOT.gROOT.SetBatch(True)
 ROOT.PyConfig.IgnoreCommandLineOptions = True
 
-sys.path.append(os.getcwd() + "/plotUtils/")
-from utility import *
+#sys.path.append(os.getcwd() + "/plotUtils/")
+#from utility import *
+from scripts.analysisTools.plotUtils.utility import *
 
 #mainPath = "/eos/user/m/mciprian/www/WMassAnalysis/TnP/egm_tnp_analysis/results_Sept2022_binnedInPtEta_mass60to120"
 #workingPoints = ["reco", "trigger", "iso"]

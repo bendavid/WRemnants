@@ -16,7 +16,6 @@ scriptdir = f"{pathlib.Path(__file__).parent}"
 def make_parser(parser=None):
     if not parser:
         parser = common.common_parser_combine()
-    parser.add_argument("--wlike", action='store_true', help="Run W-like analysis of mZ")
     parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow). Equivalent to --excludeNuisances '.*effSystTnP|.*effStatTnP' ")
     parser.add_argument("-p", "--pseudoData", type=str, help="Hist to use as pseudodata")
     parser.add_argument("-x",  "--excludeNuisances", type=str, default="", help="Regular expression to exclude some systematics from the datacard")

@@ -21,13 +21,13 @@ ROOT.PyConfig.IgnoreCommandLineOptions = True
 
 from copy import *
 
-sys.path.append(os.getcwd() + "/plotUtils/")
-from utility import *
-#from plotUtils.utility import *
+#sys.path.append(os.getcwd() + "/plotUtils/")
+#from utility import *
+from scripts.analysisTools.plotUtils.utility import *
 
 sys.path.append(os.getcwd())
 # now using the C++ version, it is much faster
-from cropNegativeTemplateBins import cropNegativeContent
+from scripts.analysisTools.tests.cropNegativeTemplateBins import cropNegativeContent
 
 logging.basicConfig(level=logging.INFO)
 

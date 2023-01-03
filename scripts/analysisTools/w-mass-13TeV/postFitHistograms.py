@@ -18,8 +18,9 @@ ROOT.PyConfig.IgnoreCommandLineOptions = True
 import utilitiesCMG
 utilities = utilitiesCMG.util()
 
-sys.path.append(os.getcwd() + "/plotUtils/")
-from utility import *
+#sys.path.append(os.getcwd() + "/plotUtils/")
+#from utility import *
+from scripts.analysisTools.plotUtils.utility import *
 
 def normalizeTH2byBinWidth(h2):
     for ix in range(1,1+h2.GetNbinsX()):
