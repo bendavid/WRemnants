@@ -9,7 +9,8 @@ else
 fi
 echo "Created environment variable WREM_BASE=${WREM_BASE}"
 
-export COMBINE_STUDIES=""
+hostNameNotFound=false
+export COMBINE_STUDIES="${WREM_BASE}/CombineStudies"
 if [[ "$HOSTNAME" == *"lxplus8s10.cern.ch"* ]]; then
     COMBINE_STUDIES="/scratch/${USER}/CombineStudies/"
 elif [[ "$HOSTNAME" == *"mit.edu"* ]]; then
@@ -17,14 +18,15 @@ elif [[ "$HOSTNAME" == *"mit.edu"* ]]; then
 elif [[ "$HOSTNAME" == *"cmsanalysis.pi.infn.it"* ]]; then
     COMBINE_STUDIES="/scratchnvme/${USER}/CombineStudies/"
 else
-    echo "Unknown hostname ${HOSTNAME}. Please update ${BASH_SOURCE}"
-    exit 0
+    echo ">>> Unknown hostname ${HOSTNAME}. Please update ${BASH_SOURCE} if you need a specific folder."
+    echo ">>> \$COMBINE_STUDIES will point to default local folder ${COMBINE_STUDIES}"
+    hostNameNotFound=true
 fi
+echo "Created environment variable COMBINE_STUDIES=${COMBINE_STUDIES}"
 
 # folders to store datacards and root files with histograms for combine
 mkdir -pv ${COMBINE_STUDIES}/WMass/
 mkdir -pv ${COMBINE_STUDIES}/ZMassWLike/
-echo "Created environment variable COMBINE_STUDIES=${COMBINE_STUDIES}"
 
 # web page folder to store plots
 export PLOTS="/eos/user/${USER:0:1}/${USER}/www/WMassAnalysis/"
@@ -40,10 +42,13 @@ else
     ln -sv ${PLOTS} ${plotLink}
 fi
 
-combineLink="${WREM_BASE}/CombineStudies"
-if [ -L ${combineLink} ] && [ -e ${combineLink} ]; then
-    echo ">>> Existing link ${combineLink} --> ${COMBINE_STUDIES}"
-else
-    ln -sv ${COMBINE_STUDIES} ${combineLink}
+# create link if $COMBINE_STUDIES was not a local folder
+if [[ "$hostNameNotFound" == false ]]; then
+    combineLink="${WREM_BASE}/CombineStudies"
+    if [ -L ${combineLink} ] && [ -e ${combineLink} ]; then
+        echo ">>> Existing link ${combineLink} --> ${COMBINE_STUDIES}"
+    else
+        ln -sv ${COMBINE_STUDIES} ${combineLink}
+    fi
 fi
 
