@@ -18,7 +18,7 @@ data_dir = f"{pathlib.Path(__file__).parent}/../../wremnants/data/"
 logging.basicConfig(level=logging.INFO)
 
 parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
-parser.add_argument("--noMuonCorr", action="store_true", help="Don't use corrected pt-eta-phi-charge")
+parser.add_argument("--muonCorr", type=str, default="trackfit_only", choices=["lbl", "none", "trackfit_only"], help="Type of correction to apply to the muons")
 parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency")
 parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
 parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
@@ -27,14 +27,13 @@ args = parser.parse_args()
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
-    nanoVersion="v8" if args.v8 else "v9")
+    nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path)
 
 if not args.no_recoil:
     logging.warning("Recoil correction for high PU is not yet supported! Setting false")
     args.no_recoil = True
 
 era = args.era
-noMuonCorr = args.noMuonCorr
 
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 #qcdScaleByHelicity_Zhelper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = True)
@@ -93,7 +92,7 @@ logging.info(f"SF file: {args.sfFile}")
 pileup_helper = wremnants.make_pileup_helper(era = era)
 vertex_helper = wremnants.make_vertex_helper(era = era)
 
-calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
+mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
 
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_corr)
 
@@ -124,26 +123,9 @@ def build_graph(df, dataset):
     isZ = dataset.name in common.zprocs
     isTop = dataset.group == "Top"
     apply_theory_corr = args.theory_corr and dataset.name in corr_helpers
-    if noMuonCorr:
-        df = df.Alias("Muon_correctedPt", "Muon_pt")
-        df = df.Alias("Muon_correctedEta", "Muon_eta")
-        df = df.Alias("Muon_correctedPhi", "Muon_phi")
-        df = df.Alias("Muon_correctedCharge", "Muon_charge")
-    else:
-        if dataset.is_data:
-            #TODO corrections not available for data yet
-            df = df.Alias("Muon_correctedPt", "Muon_cvhbsPt")
-            df = df.Alias("Muon_correctedEta", "Muon_cvhbsEta")
-            df = df.Alias("Muon_correctedPhi", "Muon_cvhbsPhi")
-            df = df.Alias("Muon_correctedCharge", "Muon_cvhbsCharge")
-        elif isW or isZ:
-            df = wremnants.define_corrected_muons(df, calibration_helper)
-        else:
-            # no track refit available for background monte carlo samples and this is "good enough"
-            df = df.Alias("Muon_correctedPt", "Muon_pt")
-            df = df.Alias("Muon_correctedEta", "Muon_eta")
-            df = df.Alias("Muon_correctedPhi", "Muon_phi")
-            df = df.Alias("Muon_correctedCharge", "Muon_charge")
+
+    calibration_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
+    df = wremnants.define_corrected_muons(df, calibration_helper, args.muonCorr, dataset)
                     
     # n.b. charge = -99 is a placeholder for invalid track refit/corrections (mostly just from tracks below
     # the pt threshold of 8 GeV in the nano production)
@@ -242,8 +224,9 @@ def build_graph(df, dataset):
             weight_expr += "*weight_fullMuonSF_withTrackingReco"
         if args.vertex_weight:
             weight_expr += "*weight_vtx"
-            
+
         df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
+        results.append(df.HistoBoost("nominal_weight", [hist.axis.Regular(200, -4, 4)], ["nominal_weight"]))
 
         if apply_theory_corr:
             results.extend(theory_tools.make_theory_corr_hists(df, "nominal", nominal_axes, nominal_cols, 
@@ -332,7 +315,7 @@ def build_graph(df, dataset):
 
                 results.append(dummyMuonScaleSyst)
 
-            df = df.Define("Muon_cvhbsMomCov", "wrem::splitNestedRVec(Muon_cvhbsMomCov_Vals, Muon_cvhbsMomCov_Counts)")
+            df = df.Define("Muon_cvhMomCov", "wrem::splitNestedRVec(Muon_cvhMomCov_Vals, Muon_cvhMomCov_Counts)")
 
             df = df.Define("muonScaleSyst_responseWeights_tensor", calibration_uncertainty_helper,
                            ["Muon_correctedPt",
@@ -340,7 +323,7 @@ def build_graph(df, dataset):
                             "Muon_correctedPhi",
                             "Muon_correctedCharge",
                             "Muon_genPartIdx",
-                            "Muon_cvhbsMomCov",
+                            "Muon_cvhMomCov",
                             "vetoMuonsPre",
                             "GenPart_pt",
                             "GenPart_eta",
