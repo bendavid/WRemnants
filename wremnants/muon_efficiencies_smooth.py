@@ -8,6 +8,8 @@ import logging
 import pickle
 import lz4.frame
 
+from utilities import common
+
 ROOT.gInterpreter.Declare('#include "muon_efficiencies_smooth.h"')
 
 data_dir = f"{pathlib.Path(__file__).parent}/data/"
@@ -31,7 +33,7 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
     axis_down_up = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "downUpVar") # for the stat variations, to avoid stacking on same axis
 
     charges = { -1. : "minus", 1. : "plus" }
-    chargeDependentSteps = ["trigger"] # might add idip or others later on
+    chargeDependentSteps = common.muonEfficiency_chargeDependentSteps
     
     fin = ROOT.TFile.Open(filename)
     if fin is None or fin.IsZombie():
