@@ -27,7 +27,7 @@ def main(args):
     if not os.path.isdir(outfolder):
         os.mkdir(outfolder)
 
-    if not args.inputFile: args.inputFile = "lowPU_%s_%s.pkl.lz4" % (args.flavor, args.met)
+    if not args.inputFile: args.inputFile = "lowPU_%s_%s_%s.pkl.lz4" % (args.flavor, args.met, args.pdf)
 
     datagroups = datagroupsLowPU(args.inputFile, flavor=args.flavor)
     unconstrainedProcs = [] # POI processes
@@ -107,7 +107,6 @@ def main(args):
         print("Using option --doStatOnly: the card was created with only mass weights and a dummy LnN syst on all processes")
         quit()
 
-
     pdfName = theory_tools.pdfMap["nnpdf31"]["name"]
     pdfAction = {x : lambda h: h[{"recoil_gen" : s[::hist.sum]}] for x in Zmumu_procs if "gen" not in x},
     cardTool.addSystematic(pdfName, 
@@ -133,7 +132,7 @@ def main(args):
 
     combine_helpers.add_scale_uncertainty(cardTool, args.qcdScale, constrainedProcs+unconstrainedProcs, 
         to_fakes=False, pdf=args.pdf, use_hel_hist=True, scetlib=args.scetlibUnc)
-
+    
     if not args.xsec:
 
         cardTool.addSystematic("prefireCorr",
@@ -145,8 +144,8 @@ def main(args):
             labelsByAxis = ["downUpVar"],
         )
         
-        recoil_vars = ["target_para", "target_perp", "source_para", "source_perp", "target_para_bkg", "target_perp_bkg"]
-        recoil_grps = ["recoil_stat", "recoil_stat", "recoil_stat", "recoil_stat", "recoil_syst", "recoil_syst"]
+        recoil_vars = ["target_para", "target_perp"] #, "source_para", "source_perp", "target_para_bkg", "target_perp_bkg"]
+        recoil_grps = ["recoil_stat", "recoil_stat"] #, "recoil_stat", "recoil_stat", "recoil_syst", "recoil_syst"]
         for i, tag in enumerate(recoil_vars):
             cardTool.addSystematic("recoilSyst_%s" % tag,
                 processes=Zmumu_procs,
@@ -173,9 +172,9 @@ def main(args):
         if args.fitType == "wmass":
             cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15, group="CMS_background")
         else:
-            cardTool.addLnNSystematic("CMS_Top", processes=["TTbar"], size=1.06, group="CMS_background")
+            cardTool.addLnNSystematic("CMS_Top", processes=["Top"], size=1.06, group="CMS_background")
             cardTool.addLnNSystematic("CMS_VV", processes=["EWK"], size=1.16, group="CMS_background")
-        
+
         cardTool.addLnNSystematic("CMS_lumi_lowPU", processes=cardTool.allMCProcesses(), size=1.02, group="CMS_lumi_lowPU")
 
 
