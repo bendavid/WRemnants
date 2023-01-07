@@ -28,6 +28,8 @@ ROOT.PyConfig.IgnoreCommandLineOptions = True
 import utilitiesCMG
 utilities = utilitiesCMG.util()
 
+from scripts.analysisTools.plotUtils.utility import *
+
 def readNuisances(args, infile=None):
 
     if infile is None:
@@ -141,11 +143,8 @@ if __name__ == "__main__":
                                              255,  0.95)
 
     boson = "Z" if args.isWlike else "W"
-    
-    if args.outdir and not os.path.exists(args.outdir):
-        os.makedirs(args.outdir)
-        htmlpath = "./templates/index.php"
-        shutil.copy(htmlpath, args.outdir)
+
+    createPlotDirAndCopyPhp(args.outdir)
 
     compare = True if len(args.compareFile) else False
         

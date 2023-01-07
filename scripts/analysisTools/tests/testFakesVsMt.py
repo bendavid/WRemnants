@@ -30,11 +30,12 @@ ROOT.PyConfig.IgnoreCommandLineOptions = True
 
 from copy import *
 
-sys.path.append(os.getcwd() + "/plotUtils/")
-from utility import *
+#sys.path.append(os.getcwd() + "/plotUtils/")
+#from utility import *
+from scripts.analysisTools.plotUtils.utility import *
 
 sys.path.append(os.getcwd())
-from cropNegativeTemplateBins import cropNegativeContent
+from scripts.analysisTools.tests.cropNegativeTemplateBins import cropNegativeContent
 
 # will use as input histograms with eta-pt-mt-charge-iso, where mT is the full distribution and iso is only low/iso
 

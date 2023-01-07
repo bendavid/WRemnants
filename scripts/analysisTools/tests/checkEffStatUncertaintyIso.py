@@ -20,8 +20,9 @@ ROOT.PyConfig.IgnoreCommandLineOptions = True
 
 from copy import *
 
-sys.path.append(os.getcwd() + "/plotUtils/")
-from utility import *
+#sys.path.append(os.getcwd() + "/plotUtils/")
+#from utility import *
+from scripts.analysisTools.plotUtils.utility import *
 
 logging.basicConfig(level=logging.INFO)
 

@@ -122,12 +122,6 @@ if __name__ == "__main__":
     parser.add_argument(     '--plotDiff', action="store_true", help="Plot variations of the interpolation functions (alt-nomi), instead of the alternate function itself (but note that what is saved in the output file is always the alternate regardless)")    
     args = parser.parse_args()
 
-    # old stuff
-    # if "EtaPtCorrelatedEfficiency_cc.so" not in ROOT.gSystem.GetLibraries():
-    #     print "Load C++ Worker"
-    #     ROOT.gROOT.ProcessLine(".include /cvmfs/cms.cern.ch/slc6_amd64_gcc530/external/eigen/3.2.2/include")
-    #     ROOT.gROOT.ProcessLine(".L %s/src/CMGTools/WMass/python/postprocessing/helpers/EtaPtCorrelatedEfficiency.cc+" % os.environ['CMSSW_BASE'])
-
     outdir = args.outdir[0]
     baseOutFileName = "effStatVariations.root" if not args.outfilename else args.outfilename
     outfilename = outdir + "/" + baseOutFileName

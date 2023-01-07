@@ -24,8 +24,10 @@ ROOT.PyConfig.IgnoreCommandLineOptions = True
 
 from copy import *
 
-sys.path.append(os.getcwd() + "/plotUtils/")
-from utility import *
+#sys.path.append(os.getcwd() + "/plotUtils/")
+from scripts.analysisTools.plotUtils.utility import *
+#sys.path.append(f"{os.environ['WREM_BASE']}/scripts/analysisTools/plotUtils/")
+#from utility import *
 
 sys.path.append(os.getcwd())
 
@@ -136,7 +138,7 @@ if __name__ == "__main__":
         legend.SetBorderSize(0)
         legend.SetNColumns(3)
 
-        leg_unrolled = prepareLegend(legWidth=0.60, textSize=0.045, nColumns=5)
+        leg_unrolled = prepareLegend(0.2,0.72,0.95,0.90, textSize=0.045, nColumns=5)
         
         hdata2D.Write("data2D")
         hdata_eta.Write()

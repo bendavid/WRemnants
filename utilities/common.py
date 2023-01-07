@@ -3,6 +3,7 @@ import pathlib
 import argparse
 import logging
 import numpy as np
+import os
 
 wremnants_dir = f"{pathlib.Path(__file__).parent}/../wremnants"
 data_dir = f"{wremnants_dir}/data/"
@@ -42,6 +43,11 @@ axis_passIso = hist.axis.Boolean(name = "passIso")
 axis_passMT = hist.axis.Boolean(name = "passMT")
 
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
+
+# following list is used in other scripts to track what steps are charge dependent
+# but assumes the corresponding efficiencies were made that way
+muonEfficiency_chargeDependentSteps = ["reco", "tracking", "idip", "trigger"]
+muonEfficiency_standaloneNumberOfValidHits = 1 # to use as "var >= this" (if this=0 the define for the cut is not used at all)
 
 def getIsoMtRegionID(passIso=True, passMT=True):
     return passIso * 1 + passMT * 2
@@ -97,7 +103,7 @@ def common_parser():
         sfFile = "scaleFactorProduct_16Oct2022_TrackerMuonsHighPurity_vertexWeight_OSchargeExceptTracking.root"
     else:
         #sfFile = "scaleFactorProduct_08Oct2022_vertexWeight_OSchargeExceptTracking.root"
-        sfFile = "allSmooth_GtoH.root" # FIXME: temporary for quick tests
+        sfFile = "allSmooth_GtoH.root"
     sfFile = f"{data_dir}/testMuonSF/{sfFile}"
 
     parser.add_argument("--sfFile", type=str, help="File with muon scale factors", default=sfFile)
@@ -107,8 +113,14 @@ def common_parser():
 def common_parser_combine():
     from wremnants import theory_tools
     parser = argparse.ArgumentParser()
-    parser.add_argument("-d", "--baseDir", type=str, default="combineResults", help="base output folder")
-    parser.add_argument("-o", "--outfolder", type=str, default="", help="Main output folder, with the root file storing all histograms and datacards for single charge")
+    parser.add_argument("--wlike", action='store_true', help="Run W-like analysis of mZ")
+    initargs,_ = parser.parse_known_args()
+    
+    tag = "WMass" if not initargs.wlike else "ZMassWLike"
+    baseDirDefault = os.environ["COMBINE_STUDIES"] + f"/{tag}/"
+    
+    parser.add_argument("-d", "--baseDir", type=str, default=baseDirDefault, help="base output folder")
+    parser.add_argument("-o", "--outfolder", type=str, default="", help="Main output folder inside baseDir, with the root file storing all histograms and datacards for single charge")
     parser.add_argument("-i", "--inputFile", type=str)
     parser.add_argument("--qcdScale", choices=["byHelicityPt", "byHelicityPtCharge", "byHelicityCharge", "byPtCharge", "byPt", "byCharge", "integrated",], default="byHelicityPtCharge", 
             help="Decorrelation for QCDscale")

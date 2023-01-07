@@ -16,14 +16,13 @@ scriptdir = f"{pathlib.Path(__file__).parent}"
 def make_parser(parser=None):
     if not parser:
         parser = common.common_parser_combine()
-    parser.add_argument("--wlike", action='store_true', help="Run W-like analysis of mZ")
     parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow). Equivalent to --excludeNuisances '.*effSystTnP|.*effStatTnP' ")
     parser.add_argument("-p", "--pseudoData", type=str, help="Hist to use as pseudodata")
     parser.add_argument("-x",  "--excludeNuisances", type=str, default="", help="Regular expression to exclude some systematics from the datacard")
     parser.add_argument("-k",  "--keepNuisances", type=str, default="", help="Regular expression to keep some systematics, overriding --excludeNuisances. Can be used to keep only some systs while excluding all the others with '.*'")
     parser.add_argument("--skipOtherChargeSyst", dest="skipOtherChargeSyst" , action="store_true",   help="Skip saving histograms and writing nuisance in datacard for systs defined for a given charge but applied on the channel with the other charge")
     parser.add_argument("--scaleMuonCorr", type=float, default=1.0, help="Scale up/down dummy muon scale uncertainty by this factor")
-    parser.add_argument("--decorrelateEffStatIsoByCharge", dest="decorrelateEffStatIsoByCharge", action='store_true', help="Don't correlate isolation efficiency uncertanties between the two charges (by default they are correlated)")
+    parser.add_argument("--decorrelateEffStatIsoByCharge", dest="decorrelateEffStatIsoByCharge", action='store_true', help="Don't correlate isolation efficiency uncertanties between the two charges (by default they are correlated). Obsolete option, one should rather use charge dependent efficiencies directly when they exist")
     parser.add_argument("--noHist", action='store_true', help="Skip the making of 2D histograms (root file is left untouched if existing)")
     parser.add_argument("--effStatLumiScale", type=float, default=None, help="Rescale equivalent luminosity for efficiency stat uncertainty by this value (e.g. 10 means ten times more data from tag and probe)")
     parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers and nuisances)")
@@ -152,8 +151,9 @@ def main(args):
     )
 
     if not args.noEfficiencyUnc:
-        chargeDependentSteps = ["trigger"] # might add idip or others, but we may use a special treatment to decorrelate by inflating the uncertainties
-        effStatTypes = ["reco", "tracking", "idip", "trigger"]
+        chargeDependentSteps = common.muonEfficiency_chargeDependentSteps
+        effTypesNoIso = ["reco", "tracking", "idip", "trigger"]
+        effStatTypes = [x for x in effTypesNoIso]
         if args.binnedScaleFactors:
             effStatTypes.extend(["iso"])
         else:
@@ -163,40 +163,42 @@ def main(args):
             if "Syst" in name:
                 axes = ["reco-tracking-idip-trigger-iso"]
                 axlabels = ["WPSYST"]
-                nameReplace = [("WPSYST0", "Reco"), ("WPSYST1", "Tracking"), ("WPSYST2", "IDIP"), ("WPSYST3", "Trig"), ("WPSYST4", "Iso")]
+                nameReplace = [("WPSYST0", "reco"), ("WPSYST1", "tracking"), ("WPSYST2", "idip"), ("WPSYST3", "trigger"), ("WPSYST4", "iso"), ("effSystTnP", "effSyst")]
                 scale = 1.0
                 mirror = True
+                groupName = "muon_eff_syst"
+                splitGroupDict = {f"{groupName}_{x}" : f".*effSyst.*{x}" for x in list(effTypesNoIso + ["iso"])}
+                splitGroupDict[groupName] = ".*effSyst.*" # add also the group with everything
             else:
+                nameReplace = [] if any(x in name for x in chargeDependentSteps) else [("q0", ""), ("q1", "")]  # this part correlates nuisances between charges
                 if args.binnedScaleFactors:
                     axes = ["SF eta", "nPtBins", "SF charge"]
                     axlabels = ["eta", "pt", "q"]
                     mirror = True
+                    nameReplace = nameReplace + [("effStatTnP_sf_", "effStatBinned_")]
                 else:
                     axes = ["SF eta", "nPtEigenBins", "SF charge", "downUpVar"]
                     axlabels = ["eta", "pt", "q", "downUpVar"]
                     mirror = False
-                nameReplace = [] if any(x in name for x in chargeDependentSteps) else [("q0", ""), ("q1", "")]  # this part correlates nuisances between charges
+                    nameReplace = nameReplace + [("effStatTnP_sf_", "effStatSmooth_")]
                 scale = 1.0
-                if "iso" in name and args.decorrelateEffStatIsoByCharge:
-                    scale = 1.414 # only for iso, scale up by sqrt(2) when decorrelating between charges and efficiencies were derived inclusively
-                    nameReplace = []
-                if args.binnedScaleFactors:                    
-                    nameReplace = nameReplace + [("effStatTnP_sf_", "effStatBinned_")]
-                else:
-                    nameReplace = nameReplace + [("effStatTnP_sf_", "effStatTnP_")]
+                groupName = "muon_eff_stat"
+                splitGroupDict = {f"{groupName}_{x}" : f".*effStat.*{x}" for x in effStatTypes}
+                splitGroupDict[groupName] = ".*effStat.*" # add also the group with everything
             if args.effStatLumiScale and "Syst" not in name:
                 scale /= math.sqrt(args.effStatLumiScale)
 
             cardTool.addSystematic(name, 
-                mirror=True if "Syst" in name else False,
-                group="muon_eff_syst" if "Syst" in name else "muon_eff_stat",
+                mirror=mirror,
+                group=groupName,
                 systAxes=axes,
                 labelsByAxis=axlabels,
                 baseName=name+"_",
                 processes=cardTool.allMCProcesses(),
                 passToFakes=passSystToFakes,
                 systNameReplace=nameReplace,
-                scale=scale
+                scale=scale,
+                splitGroup=splitGroupDict
             )
 
     to_fakes = not (wlike or args.noQCDscaleFakes)

@@ -14,11 +14,11 @@ sys.argv = args
 ROOT.gROOT.SetBatch(True)
 ROOT.PyConfig.IgnoreCommandLineOptions = True
 
-sys.path.append(os.getcwd() + "/plotUtils/")
-from utility import *
+#sys.path.append(os.getcwd() + "/plotUtils/")
+#from utility import *
+from scripts.analysisTools.plotUtils.utility import *
 
 ROOT.gStyle.SetOptStat(0)
-#ROOT.gStyle.SetOptTitle(1)
 ROOT.TH1.SetDefaultSumw2()
 
 pileupBins = [5*i for i in range(1,10)] # PU 5 to 45 (0-5 and 45-50 probably had too small statistics)
