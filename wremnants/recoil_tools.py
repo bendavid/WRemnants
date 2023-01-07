@@ -30,32 +30,6 @@ class Recoil:
    
         if type_ == "highPU":
             self.highPU = True
-            #self.recoil_qTbins = list(drange(0, 30, 0.5)) + list(range(30, 60, 2)) + list(range(60, 100, 5)) + list(range(100, 210, 10)) + [10000]
-            self.recoil_qTbins = list(range(0, 50, 1)) + list(range(50, 100, 5)) + list(range(100, 200, 10)) + list(range(200, 400, 20)) + [10000]
-            #rInput_binned = "wremnants/data/recoil_fits_Z.root"
-            rInput_binned = ""
-            rInput_parametric = ""
-            
-            self.met_xycorr_setup("wremnants/data/MET_xy_corr_coeff_%s_%s.json" % (self.flavor, self.met))
-            
-            # set the parametric forms 
-            #self.addBinned("target_para", "/eos/user/j/jaeyserm/www/wmass/highPU/recoilCorrection/recoil_mumu_%s/singlemuon_para/fits_v0/results.json" % self.met)
-            #self.addBinned("target_perp", "/eos/user/j/jaeyserm/www/wmass/highPU/recoilCorrection/recoil_mumu_%s/singlemuon_perp/fits_v0/results.json" % self.met)
-            #self.addBinned("source_para", "/eos/user/j/jaeyserm/www/wmass/highPU/recoilCorrection/recoil_mumu_%s/dymumu_para/fits_v0/results.json" % self.met)
-            #self.addBinned("source_perp", "/eos/user/j/jaeyserm/www/wmass/highPU/recoilCorrection/recoil_mumu_%s/dymumu_perp/fits_v0/results.json" % self.met)
-            
-            
-       
-            self.addParametric("target_para", "/eos/user/j/jaeyserm/www/wmass/highPU/recoilCorrection/recoil_mumu_%s/singlemuon_para/param_v2/results_refit.json" % self.met)
-            self.addParametric("target_perp", "/eos/user/j/jaeyserm/www/wmass/highPU/recoilCorrection/recoil_mumu_%s/singlemuon_perp/param_v2/results_refit.json" % self.met)
-            self.addParametric("source_para", "/eos/user/j/jaeyserm/www/wmass/highPU/recoilCorrection/recoil_mumu_%s/dymumu_para/param_v1/results_refit.json" % self.met)
-            self.addParametric("source_perp", "/eos/user/j/jaeyserm/www/wmass/highPU/recoilCorrection/recoil_mumu_%s/dymumu_perp/param_v2/results_refit.json" % self.met)
-            
-            #self.addBinned("target_para", "/eos/user/j/jaeyserm/www/wmass/highPU/recoilCorrection/recoil_mumu_PFMET/singlemuon_para/fits_v0/results.json")
-            #self.addBinned("target_perp", "/eos/user/j/jaeyserm/www/wmass/highPU/recoilCorrection/recoil_mumu_PFMET/singlemuon_perp/fits_v0/results.json" )
-            #self.addBinned("source_para", "/eos/user/j/jaeyserm/www/wmass/highPU/recoilCorrection/recoil_mumu_PFMET/dymumu_para/fits_v0/results.json")
-            #self.addBinned("source_perp", "/eos/user/j/jaeyserm/www/wmass/highPU/recoilCorrection/recoil_mumu_PFMET/dymumu_perp/fits_v0/results.json")
-            
             self.recoil_qTbins__ = list(drange(0, 500, 0.5)) + [500]
     
         elif type_ == "lowPU":
@@ -63,65 +37,37 @@ class Recoil:
             setattr(ROOT.wrem, "recoil_correction_qTmax", 200)
             
             
-            
-            self.recoil_qTbins = list(range(0, 30, 1)) + list(range(30, 50, 2)) + list(range(50, 100, 5)) + list(range(100, 150, 10)) + [150, 175, 200, 10000]
-            self.recoil_qTbins = list(range(0, 30, 1)) + list(range(30, 50, 2)) + list(range(50, 70, 5)) + list(range(70, 150, 10)) + [150, 200, 300, 10000]
             self.recoil_qTbins = list(range(0, 50, 1)) + list(range(50, 70, 2)) + list(range(70, 100, 5)) + list(range(100, 150, 10)) + [150, 200, 300, 10000]
-            #self.recoil_qTbins = [0, 0.5, 1, 1.5] + list(range(2, 50, 1)) + list(range(50, 70, 2)) + list(range(70, 100, 5)) + list(range(100, 150, 10)) + [150, 200, 300, 10000]
-            #self.recoil_qTbins = list(drange(0, 30, 0.5)) + list(range(30, 50, 1)) + list(range(50, 70, 2)) + list(range(70, 100, 5)) + list(range(100, 150, 10)) + [150, 200, 300, 10000]
-            #self.recoil_qTbins = list(range(0, 300, 1))
             self.recoil_qTbins__ = list(drange(0, 300, 0.5))
             
-            #self.recoil_qTbins = list(range(0, 20, 1)) + list(range(20, 40, 2)) + list(range(40, 55, 3)) + list(range(55, 80, 5)) + list(range(80, 100, 10)) + [100, 125, 150, 10000]
-            #print(self.recoil_qTbins)
-            
-            #rInput_binned = "wremnants/data/lowPU/recoil_fits_Z.root"
-            #rInput_binned = "/eos/user/j/jaeyserm/analysis/lowPU/recoil_mumu_DeepMET_lowPU_RoccoR_lowPU_v0_param.root"
-            #rInput_binned = "/eos/user/j/jaeyserm/analysis/lowPU/recoil_mumu_PFMET_lowPU_RoccoR_lowPU_v0_param.root"
-            #if self.flavor == "mu": self.flavor = "mumu"
-            #if self.flavor == "ee": self.flavor = "mumu"
-            #rInput_binned = "wremnants/data/lowPU/recoil_param_%s_%s.root" % ("mumu" if self.flavor == "mu" else self.flavor, self.met)
-            #rInput_parametric = ""
-            
-            self.met_xycorr_setup("wremnants/data/lowPU/MET_xy_corr_coeff_%s_%s.json" % (self.flavor, self.met))
-            
-            if self.flavor == "mu":
-                rInput_binned_gen_W = "wremnants/data/lowPU/recoil/param_mu_%s_gen.root" % self.met
-                rInput_binned_gen_Z = "wremnants/data/lowPU/recoil/param_mumu_%s_gen.root" % self.met
-                ROOT.wrem.recoil_init_gen(rInput_binned_gen_W, rInput_binned_gen_Z)
+            self.met_xycorr_setup(f"wremnants/data/recoil/lowPU/{self.flavor}_{self.met}/met_xy_correction.json") # MET XY correction
+            self.set_qT_weights(f"wremnants/data/recoil/lowPU/{self.flavor}_{self.met}/qT_reweighting.json") # qT reweigthing
+
                 
-                
-            # set the parametric forms 
-            self.addParametric("target_para", "wremnants/data/lowPU/recoil/singlemuon_para_results_refit.json")
-            self.addParametric("source_para", "wremnants/data/lowPU/recoil/dymumu_para_results_refit.json")
-            self.addParametric("target_perp", "wremnants/data/lowPU/recoil/singlemuon_perp_results_refit.json")
-            self.addParametric("source_perp", "wremnants/data/lowPU/recoil/dymumu_perp_results_refit.json")
+            # Recoil parametric
+            self.addParametric("target_para", f"wremnants/data/recoil/lowPU/{self.flavor}_{self.met}/recoil_data_para.json")
+            self.addParametric("source_para", f"wremnants/data/recoil/lowPU/{self.flavor}_{self.met}/recoil_zmumu_para.json", doUnc=False)
+            self.addParametric("target_perp", f"wremnants/data/recoil/lowPU/{self.flavor}_{self.met}/recoil_data_perp.json")
+            self.addParametric("source_perp", f"wremnants/data/recoil/lowPU/{self.flavor}_{self.met}/recoil_zmumu_perp.json", doUnc=False)
             
             # syst variations should contain target/source and para/perp, Needed for weights
-            self.addParametricUnc("target_perp_bkg", "wremnants/data/lowPU/recoil/singlemuon_perp_TTbar_results_refit.json")
-            self.addParametricUnc("target_perp_bkg", "wremnants/data/lowPU/recoil/singlemuon_perp_EWK_results_refit.json")
-            self.addParametricUnc("target_perp_bkg", "wremnants/data/lowPU/recoil/singlemuon_perp_ZZ_results_refit.json")
-            self.addParametricUnc("target_para_bkg", "wremnants/data/lowPU/recoil/singlemuon_para_TTbar_results_refit.json")
-            self.addParametricUnc("target_para_bkg", "wremnants/data/lowPU/recoil/singlemuon_para_EWK_results_refit.json")
-            self.addParametricUnc("target_para_bkg", "wremnants/data/lowPU/recoil/singlemuon_para_ZZ_results_refit.json")
+            #self.addParametricUnc("target_perp_bkg", "wremnants/data/lowPU/recoil/singlemuon_perp_TTbar_results_refit.json")
+            #self.addParametricUnc("target_perp_bkg", "wremnants/data/lowPU/recoil/singlemuon_perp_EWK_results_refit.json")
+            #self.addParametricUnc("target_perp_bkg", "wremnants/data/lowPU/recoil/singlemuon_perp_ZZ_results_refit.json")
+            #self.addParametricUnc("target_para_bkg", "wremnants/data/lowPU/recoil/singlemuon_para_TTbar_results_refit.json")
+            #self.addParametricUnc("target_para_bkg", "wremnants/data/lowPU/recoil/singlemuon_para_EWK_results_refit.json")
+            #self.addParametricUnc("target_para_bkg", "wremnants/data/lowPU/recoil/singlemuon_para_ZZ_results_refit.json")
           
             #self.addBinned("target_para", "/eos/user/j/jaeyserm/www/wmass/lowPU/recoilCorrection/recoil_mumu_RawPFMET/singlemuon_para/fits_v0/results.json")
             #self.addBinned("source_para", "/eos/user/j/jaeyserm/www/wmass/lowPU/recoilCorrection/recoil_mumu_RawPFMET/dymumu_para/fits_v0/results.json")
             #self.addBinned("target_perp", "/eos/user/j/jaeyserm/www/wmass/lowPU/recoilCorrection/recoil_mumu_RawPFMET/singlemuon_perp/fits_v1/results.json")
             #self.addBinned("source_perp", "/eos/user/j/jaeyserm/www/wmass/lowPU/recoilCorrection/recoil_mumu_RawPFMET/dymumu_perp/fits_v0/results.json")
+            
 
+            
             
         else: sys.exit("Recoil highPU or lowPU")
         
-        
-
-        # set the recoil correction bins in the analyzer
-        qTbins_vec = ROOT.std.vector["float"]()
-        for v in self.recoil_qTbins: qTbins_vec.push_back(v)
-        setattr(ROOT.wrem, "qTbins", qTbins_vec)
-        
-        # load recoil hists
-        #if rInput_binned != "": ROOT.wrem.recoil_init(rInput_binned)
         
         
         # define axes
@@ -150,18 +96,40 @@ class Recoil:
             
         
         self.axis_qTbinned = hist.axis.Variable(self.recoil_qTbins__, name = "qTbinned", underflow=False, overflow=True)
-        self.axis_qT = hist.axis.Regular(600, 0, 300, name = "qT")
+        self.axis_qT = hist.axis.Regular(600, 0, 300, name = "qT", underflow=False, overflow=False)
         
-        self.axis_recoil_magn_fine = hist.axis.Regular(300, 0, 300, name = "recoil_magn")
-        self.axis_recoil_para_fine = hist.axis.Regular(800, -500, 300, name = "recoil_para")
-        self.axis_recoil_para_qT_fine = hist.axis.Regular(600, -300, 300, name = "recoil_para_qT")
-        self.axis_recoil_perp_fine = hist.axis.Regular(600, -300, 300, name = "recoil_perp")
+        
+        bins_recoil_para_perp = [ -100, -80, -70, -60, -50, -45, -40, -38, -36, -34, -32] + list(range(-30, 30, 1)) + [30, 32, 34, 36, 38, 40, 45, 50, 60, 70, 80, 100]
+        bins_recoil_para_perp = [ -100,  -60, -50, -45, -40, -35, -30, -28, -26, -24, -22, -20, -18] + list(range(-16, 16, 1)) + [16, 18, 20, 22, 24, 26, 28, 30, 35, 40, 45, 50, 60, 100]
+        self.axis_recoil_para_perp = hist.axis.Variable(bins_recoil_para_perp, name = "recoil_para_qT", underflow=False, overflow=False) 
+        
+        self.axis_recoil_magn_fine = hist.axis.Regular(300, 0, 300, name = "recoil_magn", underflow=False, overflow=False)
+        self.axis_recoil_para_fine = hist.axis.Regular(800, -500, 300, name = "recoil_para", underflow=False, overflow=False)
+        self.axis_recoil_para_qT_fine = hist.axis.Regular(1000, -500, 500, name = "recoil_para_qT", underflow=False, overflow=False)
+        self.axis_recoil_perp_fine = hist.axis.Regular(1000, -500, 500, name = "recoil_perp", underflow=False, overflow=False)
         self.axis_MET_xy = hist.axis.Regular(200, -100, 100, name = "MET_xy")
         
         self.axis_recoil_2d_para = hist.axis.Regular(40, -10, 10, name = "axis_recoil_2d_para", underflow=False, overflow=False)
         self.axis_recoil_2d_perp = hist.axis.Regular(40, -10, 10, name = "axis_recoil_2d_perp", underflow=False, overflow=False)
 
-    def addParametric(self, tag, fIn):
+
+    def set_qT_weights(self, fIn):
+        if not os.path.exists(fIn):
+            print("qT weights file %s not found" % fIn)
+            return
+        else: 
+            print("Add qT weights %s" % fIn)
+        with open(fIn) as f: jsIn = json.load(f)
+        qTrw_bins = getattr(ROOT.wrem, "qTrw_bins")
+        qTrw_weights = getattr(ROOT.wrem, "qTrw_weights")
+        for qTbin in jsIn['qT_bins']:
+            qTrw_bins.push_back(float(qTbin))
+        for w in jsIn['weights']:
+            qTrw_weights.push_back(w)
+        setattr(ROOT.wrem, "applyqTReweighting", True)
+
+
+    def addParametric(self, tag, fIn, doUnc=True):
     
         print("Add recoil parametric set for %s" % tag)
         with open(fIn) as f: jsIn = json.load(f)
@@ -190,11 +158,12 @@ class Recoil:
             
         
         # do statistical variations
+        if not doUnc: return
         nStatVars = jsIn['nStatVars']
         recoil_param_nStat = getattr(ROOT.wrem, "recoil_param_nStat")
         recoil_param_nStat.insert((tag, nStatVars))
         for nStat in range(0, nStatVars):
-            statLabel = "stat%d" % nStat
+            statLabel = "stat%d_p" % nStat
             systLabel = "syst%d" % nStat
             for iGauss in range(1, nGauss+1):
                 
@@ -303,6 +272,8 @@ class Recoil:
         if not os.path.exists(fIn):
             print("XY correction file %s not found" % fIn)
             return
+        else: 
+            print("Add MET XY correction %s" % fIn)
         f = open(fIn)
         jsdata = json.load(f)
         loadCoeff(jsdata['x']['data']['nominal'], 'met_xy_corr_x_data_nom')
@@ -344,18 +315,7 @@ class Recoil:
         df = df.Define("MET_corr_xy_phi", "MET_corr_xy[1]")
         df = df.Define("METx_corr_xy", "MET_corr_xy_pt*cos(MET_corr_xy_phi)")
         df = df.Define("METy_corr_xy", "MET_corr_xy_pt*sin(MET_corr_xy_phi)")
-        
-        # MET unclustered correction
-        df = df.Define("METx_corr_xy_unclUp", "METx_corr_xy+MET_MetUnclustEnUpDeltaX")
-        df = df.Define("METy_corr_xy_unclUp", "METy_corr_xy+MET_MetUnclustEnUpDeltaY")
-        df = df.Define("METx_corr_xy_unclDw", "METx_corr_xy-MET_MetUnclustEnUpDeltaX")
-        df = df.Define("METy_corr_xy_unclDw", "METy_corr_xy-MET_MetUnclustEnUpDeltaY")
-        df = df.Define("MET_corr_xy_pt_unclUp", "sqrt(METx_corr_xy_unclUp*METx_corr_xy_unclUp + METy_corr_xy_unclUp*METy_corr_xy_unclUp)")
-        df = df.Define("MET_corr_xy_phi_unclUp", "atan2(METy_corr_xy_unclUp, METx_corr_xy_unclUp)")
-        df = df.Define("MET_corr_xy_pt_unclDw", "sqrt(METx_corr_xy_unclDw*METx_corr_xy_unclDw + METy_corr_xy_unclDw*METy_corr_xy_unclDw)")
-        df = df.Define("MET_corr_xy_phi_unclDw", "atan2(METy_corr_xy_unclDw, METx_corr_xy_unclDw)")
-        
-        
+
         results.append(df.HistoBoost("MET_uncorr_pt", [self.axis_MET_pt], ["MET_uncorr_pt", "nominal_weight"]))
         results.append(df.HistoBoost("MET_uncorr_phi", [self.axis_MET_phi], ["MET_uncorr_phi", "nominal_weight"]))
         results.append(df.HistoBoost("METx_uncorr", [self.axis_MET_xy], ["METx_uncorr", "nominal_weight"]))
@@ -371,14 +331,7 @@ class Recoil:
         results.append(df.HistoBoost("METx_corr_xy", [self.axis_MET_xy], ["METx_corr_xy", "nominal_weight"]))
         results.append(df.HistoBoost("METy_corr_xy", [self.axis_MET_xy], ["METy_corr_xy", "nominal_weight"]))
         
-        results.append(df.HistoBoost("MET_corr_xy_pt_unclUp", [self.axis_MET_pt], ["MET_corr_xy_pt_unclUp", "nominal_weight"]))
-        results.append(df.HistoBoost("MET_corr_xy_phi_unclUp", [self.axis_MET_phi], ["MET_corr_xy_phi_unclUp", "nominal_weight"]))
-        results.append(df.HistoBoost("MET_corr_xy_pt_unclDw", [self.axis_MET_pt], ["MET_corr_xy_pt_unclDw", "nominal_weight"]))
-        results.append(df.HistoBoost("MET_corr_xy_phi_unclDw", [self.axis_MET_phi], ["MET_corr_xy_phi_unclDw", "nominal_weight"]))
-        
-        
-        
-        # MET unclustered correction
+
            
         # histograms as function of npv, to derive/closure test the XY correction
         results.append(df.HistoBoost("METx_corr_lep_npv", [self.axis_npv, self.axis_MET_xy], ["PV_npvs", "METx_corr_lep", "nominal_weight"]))
@@ -390,7 +343,7 @@ class Recoil:
         return df
     
    
-    def setup_recoil_Z(self, df, results):
+    def setup_recoil_Z(self, df, results, dataset):
         '''
         Setup the uncorrected recoil components
         '''
@@ -425,7 +378,6 @@ class Recoil:
         df = df.Define("recoil_corr_xy_para_qT", "recoil_corr_xy[1] + qT")
         df = df.Define("recoil_corr_xy_perp", "recoil_corr_xy[2]")
         df = df.Define("recoil_corr_xy_para_qT_perp", "recoil_corr_xy[1] + qT + recoil_corr_xy[2]")
-        
    
         results.append(df.HistoBoost("recoil_uncorr_magn", [self.axis_recoil_magn], ["recoil_uncorr_magn", "nominal_weight"]))
         results.append(df.HistoBoost("recoil_uncorr_para", [self.axis_recoil_para], ["recoil_uncorr_para", "nominal_weight"]))
@@ -445,6 +397,7 @@ class Recoil:
         results.append(df.HistoBoost("recoil_corr_xy_perp", [self.axis_recoil_perp], ["recoil_corr_xy_perp", "nominal_weight"]))
         results.append(df.HistoBoost("recoil_corr_xy_para_qT_perp", [self.axis_recoil_para_qT], ["recoil_corr_xy_para_qT_perp", "nominal_weight"]))
         
+
         # for the correction, binned in qT
         results.append(df.HistoBoost("recoil_uncorr_magn_qTbinned", [self.axis_qTbinned, self.axis_recoil_magn_fine], ["qT", "recoil_uncorr_magn", "nominal_weight"]))
         results.append(df.HistoBoost("recoil_uncorr_para_qTbinned", [self.axis_qTbinned, self.axis_recoil_para_fine], ["qT", "recoil_uncorr_para", "nominal_weight"]))
@@ -462,13 +415,14 @@ class Recoil:
         results.append(df.HistoBoost("recoil_corr_xy_perp_qTbinned", [self.axis_qTbinned, self.axis_recoil_perp_fine], ["qT", "recoil_corr_xy_perp", "nominal_weight"]))
             
         results.append(df.HistoBoost("qT", [self.axis_qT], ["qT", "nominal_weight"]))
-
-
+        
+        results.append(df.HistoBoost("recoil_corr_xy_para_qTbinned_new", [self.axis_qTbinned, self.axis_recoil_para_perp], ["qT", "recoil_corr_xy_para", "nominal_weight"]))
+        results.append(df.HistoBoost("recoil_corr_xy_perp_qTbinned_new", [self.axis_qTbinned, self.axis_recoil_para_perp], ["qT", "recoil_corr_xy_perp", "nominal_weight"]))
         
         return df
 
     def auxHists(self, df, results):
-    
+        
         df = df.Define("njets", "Jet_pt.size()")
         results.append(df.HistoBoost("njets", [self.axis_njets], ["njets", "nominal_weight"]))
         
@@ -490,11 +444,10 @@ class Recoil:
         
         # correlation sumET vs qT
         results.append(df.HistoBoost("qT_sumEt", [self.axis_qTbinned, self.axis_sumEt], ["qT", "RawMET_sumEt", "nominal_weight"]))
-    
         return df
 
     def setup_gen(self, df, results, dataset, datasets_to_apply):
-    
+        
         if not dataset.name in datasets_to_apply: return df
         
         if self.flavor == "mumu" or self.flavor == "ee":
@@ -542,7 +495,7 @@ class Recoil:
 
         if dataset.name in datasets_to_apply:
             
-            if self.parametric: df = df.Define("recoil_corr_rec", "wrem::recoilCorrectionParametric(recoil_corr_xy_para, recoil_corr_xy_perp, qTbin, qT)")
+            if self.parametric: df = df.Define("recoil_corr_rec", "wrem::recoilCorrectionParametric(recoil_corr_xy_para, recoil_corr_xy_perp, qT)")
             else: df = df.Define("recoil_corr_rec", "wrem::recoilCorrectionBinned(recoil_corr_xy_para, recoil_corr_xy_perp, qTbin, qT)") # 
             df = df.Define("recoil_corr_rec_magn", "recoil_corr_rec[0]")
             df = df.Define("recoil_corr_rec_para", "recoil_corr_rec[1]")
@@ -554,6 +507,9 @@ class Recoil:
             df = df.Define("MET_corr_rec_pt", "MET_corr_rec[0]")
             df = df.Define("MET_corr_rec_phi", "MET_corr_rec[1]")
             
+            df = df.Define("qTweight_", "wrem::qTweight(qT)")
+            df = df.Define("nominal_weight_qTrw", "nominal_weight*qTweight_")
+            
         else:
             df = df.Alias("recoil_corr_rec_magn", "recoil_corr_xy_magn")
             df = df.Alias("recoil_corr_rec_para", "recoil_corr_xy_para")
@@ -562,6 +518,7 @@ class Recoil:
             df = df.Alias("MET_corr_rec_pt", "MET_corr_xy_pt")
             df = df.Alias("MET_corr_rec_phi", "MET_corr_xy_phi")
             df = df.Alias("recoil_corr_rec_para_qT_perp", "recoil_corr_xy_para_qT_perp")
+            df = df.Alias("nominal_weight_qTrw", "nominal_weight")
         
         #df = df.Filter("recoil_corr_rec_para_qT < 40 && recoil_corr_rec_para_qT > -40")
         #df = df.Filter("recoil_corr_rec_perp < 40 && recoil_corr_rec_perp > -40")
@@ -573,128 +530,76 @@ class Recoil:
         #df = df.Filter("MET_corr_rec_xy_dPhi < 3.14/2 && MET_corr_rec_xy_dPhi > -3.14/2")
         #df = df.Filter("MET_corr_rec_xy_dPhi > 3.14/2 || MET_corr_rec_xy_dPhi < -3.14/2")
         
-        df = df.Filter("qT < 150")
-        #df = df.Filter("qT < 8")
-        #df = df.Filter("qT > 7")
+        #df = df.Filter("qT < 150")
+
         
-        if dataset.name in datasets_to_apply:
-            df = df.Define("qTweight_", "wrem::qTweight(qTbin)")
-            #df = df.Define("qTweight_", "1.0")
-        else: 
-            df = df.Define("qTweight_", "1.0")
-        df = df.Define("weight_qTreweighted", "nominal_weight*qTweight_")
         
         df = df.Define("METx_corr_rec", "MET_corr_rec_pt*cos(MET_corr_rec_phi)")
         df = df.Define("METy_corr_rec", "MET_corr_rec_pt*sin(MET_corr_rec_phi)")
         
-        results.append(df.HistoBoost("qT_qTreweighted", [self.axis_qT], ["qT", "weight_qTreweighted"]))
-        results.append(df.HistoBoost("qT_qTreweighted_cut", [self.axis_qT], ["qT", "weight_qTreweighted"]))
-
-        results.append(df.HistoBoost("recoil_corr_rec_magn", [self.axis_recoil_magn], ["recoil_corr_rec_magn", "weight_qTreweighted"]))
-        results.append(df.HistoBoost("recoil_corr_rec_para", [self.axis_recoil_para], ["recoil_corr_rec_para", "weight_qTreweighted"]))
-        results.append(df.HistoBoost("recoil_corr_rec_para_qT", [self.axis_recoil_para_qT], ["recoil_corr_rec_para_qT", "weight_qTreweighted"]))
-        results.append(df.HistoBoost("recoil_corr_rec_perp", [self.axis_recoil_perp], ["recoil_corr_rec_perp", "weight_qTreweighted"]))
-        results.append(df.HistoBoost("MET_corr_rec_pt", [self.axis_MET_pt], ["MET_corr_rec_pt", "weight_qTreweighted"]))
-        results.append(df.HistoBoost("MET_corr_rec_pt_qT", [self.axis_qT, self.axis_MET_pt], ["qT", "MET_corr_rec_pt", "weight_qTreweighted"]))
-        results.append(df.HistoBoost("MET_corr_rec_phi", [self.axis_MET_phi], ["MET_corr_rec_phi", "weight_qTreweighted"]))
-        results.append(df.HistoBoost("recoil_corr_rec_para_qT_perp", [self.axis_recoil_para_qT], ["recoil_corr_rec_para_qT_perp", "weight_qTreweighted"]))
+        
+        
+        results.append(df.HistoBoost("recoil_corr_rec_magn", [self.axis_recoil_magn], ["recoil_corr_rec_magn", "nominal_weight"]))
+        results.append(df.HistoBoost("recoil_corr_rec_para", [self.axis_recoil_para], ["recoil_corr_rec_para", "nominal_weight"]))
+        results.append(df.HistoBoost("recoil_corr_rec_para_qT", [self.axis_recoil_para_qT], ["recoil_corr_rec_para_qT", "nominal_weight"]))
+        results.append(df.HistoBoost("recoil_corr_rec_perp", [self.axis_recoil_perp], ["recoil_corr_rec_perp", "nominal_weight"]))
+        results.append(df.HistoBoost("MET_corr_rec_pt", [self.axis_MET_pt], ["MET_corr_rec_pt", "nominal_weight"]))
+        results.append(df.HistoBoost("MET_corr_rec_pt_qT", [self.axis_qT, self.axis_MET_pt], ["qT", "MET_corr_rec_pt", "nominal_weight"]))
+        results.append(df.HistoBoost("MET_corr_rec_phi", [self.axis_MET_phi], ["MET_corr_rec_phi", "nominal_weight"]))
+        results.append(df.HistoBoost("recoil_corr_rec_para_qT_perp", [self.axis_recoil_para_qT], ["recoil_corr_rec_para_qT_perp", "nominal_weight"]))
         
         df = df.Define("recoil_corr_rec_para_qT_abs", "abs(recoil_corr_rec_para_qT)")
         df = df.Define("recoil_corr_rec_perp_abs", "abs(recoil_corr_rec_perp)")
-        results.append(df.HistoBoost("recoil_corr_rec_para_qT_abs", [self.axis_recoil_para_perp_abs], ["recoil_corr_rec_para_qT_abs", "weight_qTreweighted"]))
-        results.append(df.HistoBoost("recoil_corr_rec_perp_abs", [self.axis_recoil_para_perp_abs], ["recoil_corr_rec_perp_abs", "weight_qTreweighted"]))
+        results.append(df.HistoBoost("recoil_corr_rec_para_qT_abs", [self.axis_recoil_para_perp_abs], ["recoil_corr_rec_para_qT_abs", "nominal_weight"]))
+        results.append(df.HistoBoost("recoil_corr_rec_perp_abs", [self.axis_recoil_para_perp_abs], ["recoil_corr_rec_perp_abs", "nominal_weight"]))
         
         df = df.Define("recoil_corr_rec_para_plus_qt_squared", "(recoil_corr_rec_para + qT)*(recoil_corr_rec_para + qT)")
         df = df.Define("recoil_corr_rec_para_qT_squared", "recoil_corr_rec_para_qT*recoil_corr_rec_para_qT")
         df = df.Define("recoil_corr_rec_perp_squared", "recoil_corr_rec_perp*recoil_corr_rec_perp")
-        results.append(df.HistoBoost("recoil_corr_rec_para_plus_qt_squared", [self.axis_recoil_para_perp_squared], ["recoil_corr_rec_para_plus_qt_squared", "weight_qTreweighted"]))
-        results.append(df.HistoBoost("recoil_corr_rec_para_qT_squared", [self.axis_recoil_para_perp_squared], ["recoil_corr_rec_para_qT_squared", "weight_qTreweighted"]))
-        results.append(df.HistoBoost("recoil_corr_rec_perp_squared", [self.axis_recoil_para_perp_squared], ["recoil_corr_rec_perp_squared", "weight_qTreweighted"]))
+        results.append(df.HistoBoost("recoil_corr_rec_para_plus_qt_squared", [self.axis_recoil_para_perp_squared], ["recoil_corr_rec_para_plus_qt_squared", "nominal_weight"]))
+        results.append(df.HistoBoost("recoil_corr_rec_para_qT_squared", [self.axis_recoil_para_perp_squared], ["recoil_corr_rec_para_qT_squared", "nominal_weight"]))
+        results.append(df.HistoBoost("recoil_corr_rec_perp_squared", [self.axis_recoil_para_perp_squared], ["recoil_corr_rec_perp_squared", "nominal_weight"]))
         
-        results.append(df.HistoBoost("recoil_corr_rec_magn_qTbinned", [self.axis_qTbinned, self.axis_recoil_magn], ["qT", "recoil_corr_rec_magn", "weight_qTreweighted"]))
-        results.append(df.HistoBoost("recoil_corr_rec_para_qTbinned", [self.axis_qTbinned, self.axis_recoil_para], ["qT", "recoil_corr_rec_para", "weight_qTreweighted"]))
-        results.append(df.HistoBoost("recoil_corr_rec_para_qT_qTbinned", [self.axis_qTbinned, self.axis_recoil_para_qT], ["qT", "recoil_corr_rec_para_qT", "weight_qTreweighted"]))
-        results.append(df.HistoBoost("recoil_corr_rec_perp_qTbinned", [self.axis_qTbinned, self.axis_recoil_perp], ["qT", "recoil_corr_rec_perp", "weight_qTreweighted"]))
+        results.append(df.HistoBoost("recoil_corr_rec_magn_qTbinned", [self.axis_qTbinned, self.axis_recoil_magn], ["qT", "recoil_corr_rec_magn", "nominal_weight"]))
+        results.append(df.HistoBoost("recoil_corr_rec_para_qTbinned", [self.axis_qTbinned, self.axis_recoil_para], ["qT", "recoil_corr_rec_para", "nominal_weight"]))
+        results.append(df.HistoBoost("recoil_corr_rec_para_qT_qTbinned", [self.axis_qTbinned, self.axis_recoil_para_qT], ["qT", "recoil_corr_rec_para_qT", "nominal_weight"]))
+        results.append(df.HistoBoost("recoil_corr_rec_perp_qTbinned", [self.axis_qTbinned, self.axis_recoil_perp], ["qT", "recoil_corr_rec_perp", "nominal_weight"]))
         
         
-        results.append(df.HistoBoost("recoil_corr_rec_para_perp_2d", [self.axis_recoil_2d_para, self.axis_recoil_2d_perp], ["recoil_corr_rec_para_qT", "recoil_corr_rec_perp", "weight_qTreweighted"]))
+        results.append(df.HistoBoost("recoil_corr_rec_para_perp_2d", [self.axis_recoil_2d_para, self.axis_recoil_2d_perp], ["recoil_corr_rec_para_qT", "recoil_corr_rec_perp", "nominal_weight"]))
         
-        results.append(df.HistoBoost("met_recoil_uncorr", [self.axis_MET_pt, self.axis_recoil_magn], ["MET_corr_xy_pt", "recoil_corr_xy_magn", "weight_qTreweighted"]))
-        results.append(df.HistoBoost("met_recoil_corr_rec", [self.axis_MET_pt, self.axis_recoil_magn], ["MET_corr_rec_pt", "recoil_corr_rec_magn", "weight_qTreweighted"]))
+        results.append(df.HistoBoost("met_recoil_uncorr", [self.axis_MET_pt, self.axis_recoil_magn], ["MET_corr_xy_pt", "recoil_corr_xy_magn", "nominal_weight"]))
+        results.append(df.HistoBoost("met_recoil_corr_rec", [self.axis_MET_pt, self.axis_recoil_magn], ["MET_corr_rec_pt", "recoil_corr_rec_magn", "nominal_weight"]))
         
-        results.append(df.HistoBoost("METx_corr_rec", [self.axis_MET_xy], ["METx_corr_rec", "weight_qTreweighted"]))
-        results.append(df.HistoBoost("METy_corr_rec", [self.axis_MET_xy], ["METy_corr_rec", "weight_qTreweighted"]))
+        results.append(df.HistoBoost("METx_corr_rec", [self.axis_MET_xy], ["METx_corr_rec", "nominal_weight"]))
+        results.append(df.HistoBoost("METy_corr_rec", [self.axis_MET_xy], ["METy_corr_rec", "nominal_weight"]))
         
         
         df = df.Define("MET_corr_xy_ll_dPhi", "wrem::deltaPhi(MET_corr_xy_phi,Z_mom2.Phi())")
         df = df.Define("MET_corr_rec_ll_dPhi", "wrem::deltaPhi(MET_corr_rec_phi,Z_mom2.Phi())")
-        #df = df.Define("MET_corr_rec_xy_dPhi", "wrem::deltaPhi(MET_corr_rec_phi,MET_corr_xy_phi)")
         df = df.Define("ll_phi", "Z_mom2.Phi()")
-        results.append(df.HistoBoost("MET_corr_xy_ll_dPhi", [self.axis_MET_phi], ["MET_corr_xy_ll_dPhi", "weight_qTreweighted"]))
-        results.append(df.HistoBoost("MET_corr_rec_ll_dPhi", [self.axis_MET_phi], ["MET_corr_rec_ll_dPhi", "weight_qTreweighted"]))
-        results.append(df.HistoBoost("MET_corr_rec_xy_dPhi", [self.axis_MET_dphi], ["MET_corr_rec_xy_dPhi", "weight_qTreweighted"]))
-        results.append(df.HistoBoost("ll_phi", [self.axis_MET_phi], ["ll_phi", "weight_qTreweighted"]))
+        results.append(df.HistoBoost("MET_corr_xy_ll_dPhi", [self.axis_MET_phi], ["MET_corr_xy_ll_dPhi", "nominal_weight"]))
+        results.append(df.HistoBoost("MET_corr_rec_ll_dPhi", [self.axis_MET_phi], ["MET_corr_rec_ll_dPhi", "nominal_weight"]))
+        results.append(df.HistoBoost("MET_corr_rec_xy_dPhi", [self.axis_MET_dphi], ["MET_corr_rec_xy_dPhi", "nominal_weight"]))
+        results.append(df.HistoBoost("ll_phi", [self.axis_MET_phi], ["ll_phi", "nominal_weight"]))
         
-        results.append(df.HistoBoost("recoil_corr_xy_magn_cut", [self.axis_recoil_magn], ["recoil_corr_xy_magn", "weight_qTreweighted"]))
-        results.append(df.HistoBoost("recoil_corr_xy_para_cut", [self.axis_recoil_para], ["recoil_corr_xy_para", "weight_qTreweighted"]))
-        results.append(df.HistoBoost("recoil_corr_xy_para_qT_cut", [self.axis_recoil_para_qT], ["recoil_corr_xy_para_qT", "weight_qTreweighted"]))
-        results.append(df.HistoBoost("recoil_corr_xy_perp_cut", [self.axis_recoil_perp], ["recoil_corr_xy_perp", "weight_qTreweighted"]))
-        results.append(df.HistoBoost("recoil_corr_xy_para_qT_perp_cut", [self.axis_recoil_para_qT], ["recoil_corr_xy_para_qT_perp", "weight_qTreweighted"]))
-        results.append(df.HistoBoost("MET_corr_xy_pt_cut", [self.axis_MET_pt], ["MET_corr_xy_pt", "weight_qTreweighted"]))
-        results.append(df.HistoBoost("MET_corr_xy_phi_cut", [self.axis_MET_phi], ["MET_corr_xy_phi", "weight_qTreweighted"]))
+
+        # for validation, reoil plots with weighted qT spectrum
+        results.append(df.HistoBoost("qT_qTrw", [self.axis_qT], ["qT", "nominal_weight_qTrw"]))
+        results.append(df.HistoBoost("recoil_corr_rec_magn_qTrw", [self.axis_recoil_magn], ["recoil_corr_rec_magn", "nominal_weight_qTrw"]))
+        results.append(df.HistoBoost("recoil_corr_rec_para_qTrw", [self.axis_recoil_para], ["recoil_corr_rec_para", "nominal_weight_qTrw"]))
+        results.append(df.HistoBoost("recoil_corr_rec_para_qT_qTrw", [self.axis_recoil_para_qT], ["recoil_corr_rec_para_qT", "nominal_weight_qTrw"]))
+        results.append(df.HistoBoost("recoil_corr_rec_perp_qTrw", [self.axis_recoil_perp], ["recoil_corr_rec_perp", "nominal_weight_qTrw"]))
+        results.append(df.HistoBoost("MET_corr_rec_pt_qTrw", [self.axis_MET_pt], ["MET_corr_rec_pt", "nominal_weight_qTrw"]))
 
         return df
         
         
-        '''
-        if dataset_name in datasets_to_apply:
-            
-            df = df.Define("recoil_corr_rec_cut", "wrem::recoilCorrectionBinnedCut(recoil_corr_xy_para, recoil_corr_xy_perp, qTbin, qT, Lep_pt, Lep_eta, Lep_phi, MET_corr_xy_phi, Z_mom2.Phi(), MET_corr_xy_pt)")
-            df = df.Define("recoil_corr_rec_magn_cut", "recoil_corr_rec_cut[0]")
-            df = df.Define("recoil_corr_rec_para_cut", "recoil_corr_rec_cut[1]")
-            df = df.Define("recoil_corr_rec_para_qT_cut", "recoil_corr_rec_cut[1] + qT")
-            df = df.Define("recoil_corr_rec_perp_cut", "recoil_corr_rec_cut[2]")
-            df = df.Define("recoil_corr_rec_para_qT_perp_cut", "recoil_corr_rec_cut[1] + qT + recoil_corr_rec_cut[2]")
-            results.append(df.HistoBoost("test", [self.axis_MET_xy], ["recoil_corr_rec_magn_cut", "nominal_weight"]))
-
-        df = df.Define("counts", "1")
-        results.append(df.HistoBoost("counts", [self.axis_MET_xy], ["counts"]))
-        results.append(df.HistoBoost("counts_weighted", [self.axis_MET_xy], ["counts", "nominal_weight"]))
-        '''
-        
-        
-        
-        '''
-        df = df.Define("METx_rec_corr", "MET_corr_rec_pt*cos(MET_corr_rec_phi)")
-        df = df.Define("METy_rec_corr", "MET_corr_rec_pt*sin(MET_corr_rec_phi)")
-        
-        results.append(df.HistoBoost("METx_rec_corr", [self.axis_MET_xy], ["METx_rec_corr", "nominal_weight"]))
-        results.append(df.HistoBoost("METy_rec_corr", [self.axis_MET_xy], ["METy_rec_corr", "nominal_weight"]))
-        
-        results.append(df.HistoBoost("METx_rec_corr_qTbinned", [self.axis_qTbinned, self.axis_MET_xy], ["qT", "METx_rec_corr", "nominal_weight"]))
-        results.append(df.HistoBoost("METy_rec_corr_qTbinned", [self.axis_qTbinned, self.axis_MET_xy], ["qT", "METy_rec_corr", "nominal_weight"]))
-        
-        
-        if dataset_name == "singlemuon": df = df.Define("met_xy_corr", "wrem::recoilXYCorrection(MET_corr_rec_pt, MET_corr_rec_phi, qTbin, 1)")
-        else: df = df.Define("met_xy_corr", "wrem::recoilXYCorrection(MET_corr_rec_pt, MET_corr_rec_phi, qTbin, 0)")
-        df = df.Define("met_xy_corr_pt", "met_xy_corr[0]")
-        df = df.Define("met_xy_corr_phi", "met_xy_corr[1]")
-        
-        results.append(df.HistoBoost("MET_corr_rec_xy_pt", [self.axis_MET_pt], ["met_xy_corr_pt", "nominal_weight"]))
-        results.append(df.HistoBoost("MET_corr_rec_xy_phi", [self.axis_MET_phi], ["met_xy_corr_phi", "nominal_weight"]))
-        
-        df = df.Define("METx_rec_xy_corr", "met_xy_corr_pt*cos(met_xy_corr_phi)")
-        df = df.Define("METy_rec_xy_corr", "met_xy_corr_pt*sin(met_xy_corr_phi)")
-        
-        results.append(df.HistoBoost("METx_rec_xy_corr", [self.axis_MET_xy], ["METx_rec_xy_corr", "nominal_weight"]))
-        results.append(df.HistoBoost("METy_rec_xy_corr", [self.axis_MET_xy], ["METy_rec_xy_corr", "nominal_weight"]))
-        '''
-    
         
         
     def apply_recoil_W(self, df, results, dataset, datasets_to_apply, auxPlots=False): 
     
-        
+        return df   
         if dataset.name in datasets_to_apply:
             
             # goodMuons_charge0 highPU, Lep_charge lowPU
@@ -757,7 +662,7 @@ class Recoil:
     
 
     def recoil_Z_statUnc_lowPU(self, df, results, axis_recoil_gen, axis_recoil_reco, axis_mt, axis_mll):
-    
+        
         # lowPU: propagate uncertainties to recoil, MET and mT
         
         axis_recoil_stat_unc = hist.axis.Regular(len(self.recoil_qTbins), 0, len(self.recoil_qTbins), underflow=False, overflow=False, name = "recoil_stat_unc_var")
@@ -790,24 +695,24 @@ class Recoil:
             df = df.Define("recoil_corr_stat_unc_%d_%d" % (k[0], k[1]), "wrem::recoilCorrectionBinned(recoil_corr_xy_para, recoil_corr_xy_perp, qTbin, qT, %d, %d)" % (k[0], k[1]))
            
             df = df.Define("recoil_corr_magn_stat_unc_%d_%d" % (k[0], k[1]), "wrem::recoilCorrectionBinned_magn_StatUnc(recoil_corr_stat_unc_%d_%d, qTbin)" % (k[0], k[1]))
-            results.append(df.HistoBoost("gen_reco_magn_mll_recoilStatUnc_%d_%d" % (k[0], k[1]), [axis_recoil_gen, axis_recoil_reco, axis_recoil_reco_pert, axis_mll, axis_recoil_stat_unc], ["ptVgen", "recoil_corr_rec_magn", "recoil_corr_magn_stat_unc_%d_%d" % (k[0], k[1]), "massZ", "recoil_corr_stat_idx", "weight_qTreweighted"]))
+            results.append(df.HistoBoost("gen_reco_magn_mll_recoilStatUnc_%d_%d" % (k[0], k[1]), [axis_recoil_gen, axis_recoil_reco, axis_recoil_reco_pert, axis_mll, axis_recoil_stat_unc], ["ptVgen", "recoil_corr_rec_magn", "recoil_corr_magn_stat_unc_%d_%d" % (k[0], k[1]), "massZ", "recoil_corr_stat_idx", "nominal_weight"]))
             
             
             #df = df.Define("recoil_corr_para_stat_unc_%d_%d" % (k[0], k[1]), "wrem::recoilCorrectionBinned_para_StatUnc(recoil_corr_stat_unc_%d_%d, qTbin)" % (k[0], k[1]))
-            #results.append(df.HistoBoost("gen_reco_para_qT_mll_recoilStatUnc_%d_%d" % (k[0], k[1]), [self.axis_recoil_para, axis_recoil_para_pert, axis_recoil_stat_unc], ["recoil_corr_para", "recoil_corr_para_stat_unc_%d_%d" % (k[0], k[1]), "recoil_corr_stat_idx", "weight_qTreweighted"]))
+            #results.append(df.HistoBoost("gen_reco_para_qT_mll_recoilStatUnc_%d_%d" % (k[0], k[1]), [self.axis_recoil_para, axis_recoil_para_pert, axis_recoil_stat_unc], ["recoil_corr_para", "recoil_corr_para_stat_unc_%d_%d" % (k[0], k[1]), "recoil_corr_stat_idx", "nominal_weight"]))
             
-            results.append(df.HistoBoost("recoil_magn_recoilStatUnc_%d_%d" % (k[0], k[1]), [self.axis_recoil_magn, axis_recoil_magn_pert, axis_recoil_stat_unc], ["recoil_corr_rec_magn", "recoil_corr_magn_stat_unc_%d_%d" % (k[0], k[1]), "recoil_corr_stat_idx", "weight_qTreweighted"]))
+            results.append(df.HistoBoost("recoil_magn_recoilStatUnc_%d_%d" % (k[0], k[1]), [self.axis_recoil_magn, axis_recoil_magn_pert, axis_recoil_stat_unc], ["recoil_corr_rec_magn", "recoil_corr_magn_stat_unc_%d_%d" % (k[0], k[1]), "recoil_corr_stat_idx", "nominal_weight"]))
             
             
             df = df.Define("recoil_corr_para_qT_stat_unc_%d_%d" % (k[0], k[1]), "wrem::recoilCorrectionBinned_para_qT_StatUnc(recoil_corr_stat_unc_%d_%d, qTbin, qT)" % (k[0], k[1]))
-            results.append(df.HistoBoost("recoil_para_qT_recoilStatUnc_%d_%d" % (k[0], k[1]), [self.axis_recoil_para_qT, axis_recoil_para_qT_pert, axis_recoil_stat_unc], ["recoil_corr_rec_para_qT", "recoil_corr_para_qT_stat_unc_%d_%d" % (k[0], k[1]), "recoil_corr_stat_idx", "weight_qTreweighted"]))
+            results.append(df.HistoBoost("recoil_para_qT_recoilStatUnc_%d_%d" % (k[0], k[1]), [self.axis_recoil_para_qT, axis_recoil_para_qT_pert, axis_recoil_stat_unc], ["recoil_corr_rec_para_qT", "recoil_corr_para_qT_stat_unc_%d_%d" % (k[0], k[1]), "recoil_corr_stat_idx", "nominal_weight"]))
             
             df = df.Define("recoil_corr_perp_stat_unc_%d_%d" % (k[0], k[1]), "wrem::recoilCorrectionBinned_perp_StatUnc(recoil_corr_stat_unc_%d_%d, qTbin)" % (k[0], k[1]))
-            results.append(df.HistoBoost("recoil_perp_recoilStatUnc_%d_%d" % (k[0], k[1]), [self.axis_recoil_perp, axis_recoil_perp_pert, axis_recoil_stat_unc], ["recoil_corr_rec_perp", "recoil_corr_perp_stat_unc_%d_%d" % (k[0], k[1]), "recoil_corr_stat_idx", "weight_qTreweighted"]))
+            results.append(df.HistoBoost("recoil_perp_recoilStatUnc_%d_%d" % (k[0], k[1]), [self.axis_recoil_perp, axis_recoil_perp_pert, axis_recoil_stat_unc], ["recoil_corr_rec_perp", "recoil_corr_perp_stat_unc_%d_%d" % (k[0], k[1]), "recoil_corr_stat_idx", "nominal_weight"]))
             
             
             df = df.Define("recoil_corr_MET_stat_unc_%d_%d" % (k[0], k[1]), "wrem::recoilCorrectionBinned_MET_pt_StatUnc(recoil_corr_stat_unc_%d_%d, qTbin, MET_corr_xy_pt, MET_corr_xy_phi, qT, Z_mom2.Phi())" % (k[0], k[1]))
-            results.append(df.HistoBoost("MET_recoilStatUnc_%d_%d" % (k[0], k[1]), [self.axis_MET_pt, axis_MET_pert, axis_recoil_stat_unc], ["MET_corr_rec_pt", "recoil_corr_MET_stat_unc_%d_%d" % (k[0], k[1]), "recoil_corr_stat_idx", "weight_qTreweighted"]))
+            results.append(df.HistoBoost("MET_recoilStatUnc_%d_%d" % (k[0], k[1]), [self.axis_MET_pt, axis_MET_pert, axis_recoil_stat_unc], ["MET_corr_rec_pt", "recoil_corr_MET_stat_unc_%d_%d" % (k[0], k[1]), "recoil_corr_stat_idx", "nominal_weight"]))
             
             df = df.Define("recoil_corr_MET_phi_stat_unc_%d_%d" % (k[0], k[1]), "wrem::recoilCorrectionBinned_MET_phi_StatUnc(recoil_corr_stat_unc_%d_%d, qTbin, MET_corr_lep_pt, MET_corr_lep_phi, qT, Z_mom2.Phi())" % (k[0], k[1]))
             
@@ -832,26 +737,28 @@ class Recoil:
                 tag = item.first
                 nVars = recoil_param_nStat[tag]
                 # Z peak
-                #results.append(df.HistoBoost("gen_reco_magn_mll_recoilStatUnc_%d_%d" % (k[0], k[1]), [axis_recoil_gen, axis_recoil_reco, axis_recoil_reco_pert, axis_mll, axis_recoil_stat_unc], ["ptVgen", "recoil_corr_rec_magn", "recoil_corr_magn_stat_unc_%d_%d" % (k[0], k[1]), "massZ", "recoil_corr_stat_idx", "weight_qTreweighted"]))
+                #results.append(df.HistoBoost("gen_reco_magn_mll_recoilStatUnc_%d_%d" % (k[0], k[1]), [axis_recoil_gen, axis_recoil_reco, axis_recoil_reco_pert, axis_mll, axis_recoil_stat_unc], ["ptVgen", "recoil_corr_rec_magn", "recoil_corr_magn_stat_unc_%d_%d" % (k[0], k[1]), "massZ", "recoil_corr_stat_idx", "nominal_weight"]))
               
                 val = "recoil_corr_xy_para_qT" if "para" in tag else "recoil_corr_xy_perp"
                 tag_nom = "%s_%s" % ("target" if "target" in tag else "source", "para" if "para" in tag else "perp")
                 recoilWeights = f"recoilWeights_{tag}"
                 recoilTensorWeights = f"recoilTensorWeights_{tag}"
                 df = df.Define(recoilWeights, "wrem::recoilCorrectionParametricUncWeights(%s, qT,  \"%s\", \"%s\")" % (val, tag_nom, tag))
-                df = df.Define(recoilTensorWeights, "Eigen::TensorFixedSize<double, Eigen::Sizes<%d>> res; auto w = weight_qTreweighted*%s; std::copy(std::begin(w), std::end(w), res.data()); return res;" % (nVars, recoilWeights))
+                df = df.Define(recoilTensorWeights, "Eigen::TensorFixedSize<double, Eigen::Sizes<%d>> res; auto w = nominal_weight*%s; std::copy(std::begin(w), std::end(w), res.data()); return res;" % (nVars, recoilWeights))
 
 
                 for hName, col, ax in zip(hNames, cols, axes):
                     results.append(df.HistoBoost(f"{hName}_recoilSyst_{tag}", ax if isinstance(col, list) else [ax], (col if isinstance(col, list) else [col]) + [recoilTensorWeights]))
-                #sys.exit()
-                #results.append(df.HistoBoost("mT_corr_rec_recoilSyst_weight_%s" % tag, [axis_mt], ["mT_corr_rec", tmp+"_tensor"]))
-                #results.append(df.HistoBoost("recoil_corr_rec_para_qT_recoilSyst_%s" % tag, [self.axis_recoil_para_qT], ["recoil_corr_rec_para_qT", recoilTensorWeights]))
-                #results.append(df.HistoBoost("recoil_corr_rec_para_recoilSyst_%s" % tag, [self.axis_recoil_para], ["recoil_corr_rec_para", recoilTensorWeights]))
-                #results.append(df.HistoBoost("recoil_corr_rec_perp_recoilSyst_%s" % tag, [self.axis_recoil_perp], ["recoil_corr_rec_perp", recoilTensorWeights]))
-                #results.append(df.HistoBoost("recoil_corr_rec_magn_recoilSyst_%s" % tag, [self.axis_recoil_magn], ["recoil_corr_rec_magn", recoilTensorWeights]))
-                #results.append(df.HistoBoost("MET_corr_rec_pt_recoilSyst_weight_%s" % tag, [self.axis_MET_pt], ["MET_corr_rec_pt", recoilTensorWeights]))
-        
+                    
+                # qT reweighted uncertainties
+                recoilTensorWeights_qTrw = f"recoilTensorWeights_qTrw_{tag}"
+                df = df.Define(recoilTensorWeights_qTrw, "Eigen::TensorFixedSize<double, Eigen::Sizes<%d>> res; auto w = nominal_weight_qTrw*%s; std::copy(std::begin(w), std::end(w), res.data()); return res;" % (nVars, recoilWeights))
+                results.append(df.HistoBoost(f"recoil_corr_rec_magn_qTrw_recoilSyst_{tag}", [self.axis_recoil_magn], ["recoil_corr_rec_magn", recoilTensorWeights_qTrw]))
+                results.append(df.HistoBoost(f"recoil_corr_rec_para_qTrw_recoilSyst_{tag}", [self.axis_recoil_para], ["recoil_corr_rec_para", recoilTensorWeights_qTrw]))
+                results.append(df.HistoBoost(f"recoil_corr_rec_para_qT_qTrw_recoilSyst_{tag}", [self.axis_recoil_para_qT], ["recoil_corr_rec_para_qT", recoilTensorWeights_qTrw]))
+                results.append(df.HistoBoost(f"recoil_corr_rec_perp_qTrw_recoilSyst_{tag}", [self.axis_recoil_perp], ["recoil_corr_rec_perp", recoilTensorWeights_qTrw]))
+                results.append(df.HistoBoost(f"MET_corr_rec_pt_qTrw_recoilSyst_{tag}", [self.axis_MET_pt], ["MET_corr_rec_pt", recoilTensorWeights_qTrw]))
+               
         elif self.parametric and not smearWeights:
         
             recoil_param_nStat = getattr(ROOT.wrem, "recoil_param_nStat")
@@ -866,7 +773,7 @@ class Recoil:
                 # MET
                 df = df.Define("recoil_corr_MET_pt_syst_%s" % tag, "wrem::recoilCorrectionParametric_MET_pt_unc(recoil_corr_rec_syst_%s, qT, Z_mom2.Phi())" % tag)
                 df = df.Define("recoil_corr_MET_phi_syst_%s" % tag, "wrem::recoilCorrectionParametric_MET_phi_unc(recoil_corr_rec_syst_%s, qT, Z_mom2.Phi())" % tag)
-                results.append(df.HistoBoost("MET_recoilSyst_%s" % tag, [self.axis_MET_pt, axis_recoil_unc], ["recoil_corr_MET_pt_syst_%s" % tag, "recoil_corr_rec_systIdx_%s" % tag, "weight_qTreweighted"]))
+                results.append(df.HistoBoost("MET_recoilSyst_%s" % tag, [self.axis_MET_pt, axis_recoil_unc], ["recoil_corr_MET_pt_syst_%s" % tag, "recoil_corr_rec_systIdx_%s" % tag, "nominal_weight"]))
                 
                 
                 # recoil
@@ -874,17 +781,17 @@ class Recoil:
                 df = df.Define("recoil_corr_para_syst_%s" % tag, "wrem::recoilCorrectionParametric_para_unc(recoil_corr_rec_syst_%s, qT)"% tag)
                 df = df.Define("recoil_corr_perp_syst_%s" % tag, "wrem::recoilCorrectionParametric_perp_unc(recoil_corr_rec_syst_%s, qT)"% tag)
                 df = df.Define("recoil_corr_magn_syst_%s" % tag, "wrem::recoilCorrectionParametric_magn_unc(recoil_corr_rec_syst_%s, qT)"% tag)
-                results.append(df.HistoBoost("recoil_para_qT_recoilSyst_%s" % tag, [self.axis_recoil_para_qT, axis_recoil_unc], ["recoil_corr_para_qT_syst_%s" % tag, "recoil_corr_rec_systIdx_%s" % tag, "weight_qTreweighted"]))
-                results.append(df.HistoBoost("recoil_para_recoilSyst_%s" % tag, [self.axis_recoil_para, axis_recoil_unc], ["recoil_corr_para_syst_%s" % tag, "recoil_corr_rec_systIdx_%s" % tag, "weight_qTreweighted"]))
-                results.append(df.HistoBoost("recoil_perp_recoilSyst_%s" % tag, [self.axis_recoil_perp, axis_recoil_unc], ["recoil_corr_perp_syst_%s" % tag, "recoil_corr_rec_systIdx_%s" % tag, "weight_qTreweighted"]))
-                results.append(df.HistoBoost("recoil_magn_recoilSyst_%s" % tag, [self.axis_recoil_magn, axis_recoil_unc], ["recoil_corr_magn_syst_%s" % tag, "recoil_corr_rec_systIdx_%s" % tag, "weight_qTreweighted"]))
+                results.append(df.HistoBoost("recoil_para_qT_recoilSyst_%s" % tag, [self.axis_recoil_para_qT, axis_recoil_unc], ["recoil_corr_para_qT_syst_%s" % tag, "recoil_corr_rec_systIdx_%s" % tag, "nominal_weight"]))
+                results.append(df.HistoBoost("recoil_para_recoilSyst_%s" % tag, [self.axis_recoil_para, axis_recoil_unc], ["recoil_corr_para_syst_%s" % tag, "recoil_corr_rec_systIdx_%s" % tag, "nominal_weight"]))
+                results.append(df.HistoBoost("recoil_perp_recoilSyst_%s" % tag, [self.axis_recoil_perp, axis_recoil_unc], ["recoil_corr_perp_syst_%s" % tag, "recoil_corr_rec_systIdx_%s" % tag, "nominal_weight"]))
+                results.append(df.HistoBoost("recoil_magn_recoilSyst_%s" % tag, [self.axis_recoil_magn, axis_recoil_unc], ["recoil_corr_magn_syst_%s" % tag, "recoil_corr_rec_systIdx_%s" % tag, "nominal_weight"]))
                 
                 # mT
                 df = df.Define("recoil_corr_mT_recoilSyst_%s" % tag, "wrem::recoilCorrectionParametric_mT_unc(recoil_corr_MET_pt_syst_%s, recoil_corr_MET_phi_syst_%s, TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi)" % (tag, tag))
-                results.append(df.HistoBoost("mT_corr_rec_recoilSyst_%s" % tag, [axis_mt, axis_recoil_unc], ["recoil_corr_mT_recoilSyst_%s" % tag, "recoil_corr_rec_systIdx_%s" % tag, "weight_qTreweighted"]))
+                results.append(df.HistoBoost("mT_corr_rec_recoilSyst_%s" % tag, [axis_mt, axis_recoil_unc], ["recoil_corr_mT_recoilSyst_%s" % tag, "recoil_corr_rec_systIdx_%s" % tag, "nominal_weight"]))
             
                 # Z peak
-                #results.append(df.HistoBoost("gen_reco_magn_mll_recoilStatUnc_%d_%d" % (k[0], k[1]), [axis_recoil_gen, axis_recoil_reco, axis_recoil_reco_pert, axis_mll, axis_recoil_stat_unc], ["ptVgen", "recoil_corr_rec_magn", "recoil_corr_magn_stat_unc_%d_%d" % (k[0], k[1]), "massZ", "recoil_corr_stat_idx", "weight_qTreweighted"]))
+                #results.append(df.HistoBoost("gen_reco_magn_mll_recoilStatUnc_%d_%d" % (k[0], k[1]), [axis_recoil_gen, axis_recoil_reco, axis_recoil_reco_pert, axis_mll, axis_recoil_stat_unc], ["ptVgen", "recoil_corr_rec_magn", "recoil_corr_magn_stat_unc_%d_%d" % (k[0], k[1]), "massZ", "recoil_corr_stat_idx", "nominal_weight"]))
               
 
         else:
@@ -913,17 +820,17 @@ class Recoil:
                 # MET
                 df = df.Define("recoil_corr_MET_pt_stat_unc_%d_%d" % (k[0], k[1]), "wrem::recoilCorrectionBinned_MET_pt_StatUnc(recoil_corr_stat_unc_%d_%d, qTbin, MET_corr_xy_pt, MET_corr_xy_phi, qT, Z_mom2.Phi())" % (k[0], k[1]))
                 df = df.Define("recoil_corr_MET_phi_stat_unc_%d_%d" % (k[0], k[1]), "wrem::recoilCorrectionBinned_MET_phi_StatUnc(recoil_corr_stat_unc_%d_%d, qTbin, MET_corr_xy_pt, MET_corr_xy_phi, qT, Z_mom2.Phi())" % (k[0], k[1]))
-                results.append(df.HistoBoost("MET_recoilStatUnc_%d_%d" % (k[0], k[1]), [self.axis_MET_pt, axis_MET_pert, axis_recoil_stat_unc], ["MET_corr_rec_pt", "recoil_corr_MET_pt_stat_unc_%d_%d" % (k[0], k[1]), "recoil_corr_stat_idx", "weight_qTreweighted"]))
+                results.append(df.HistoBoost("MET_recoilStatUnc_%d_%d" % (k[0], k[1]), [self.axis_MET_pt, axis_MET_pert, axis_recoil_stat_unc], ["MET_corr_rec_pt", "recoil_corr_MET_pt_stat_unc_%d_%d" % (k[0], k[1]), "recoil_corr_stat_idx", "nominal_weight"]))
 
                 # recoil
                 df = df.Define("recoil_corr_para_qT_stat_unc_%d_%d" % (k[0], k[1]), "wrem::recoilCorrectionBinned_para_qT_StatUnc(recoil_corr_stat_unc_%d_%d, qTbin, qT)" % (k[0], k[1]))
                 df = df.Define("recoil_corr_para_stat_unc_%d_%d" % (k[0], k[1]), "wrem::recoilCorrectionBinned_para_StatUnc(recoil_corr_stat_unc_%d_%d, qTbin)" % (k[0], k[1]))
                 df = df.Define("recoil_corr_perp_stat_unc_%d_%d" % (k[0], k[1]), "wrem::recoilCorrectionBinned_perp_StatUnc(recoil_corr_stat_unc_%d_%d, qTbin)" % (k[0], k[1]))
                 df = df.Define("recoil_corr_magn_stat_unc_%d_%d" % (k[0], k[1]), "wrem::recoilCorrectionBinned_magn_StatUnc(recoil_corr_stat_unc_%d_%d, qTbin)" % (k[0], k[1]))
-                results.append(df.HistoBoost("recoil_para_qT_recoilStatUnc_%d_%d" % (k[0], k[1]), [self.axis_recoil_para_qT, axis_recoil_para_qT_pert, axis_recoil_stat_unc], ["recoil_corr_rec_para_qT", "recoil_corr_para_qT_stat_unc_%d_%d" % (k[0], k[1]), "recoil_corr_stat_idx", "weight_qTreweighted"]))
-                results.append(df.HistoBoost("recoil_para_recoilStatUnc_%d_%d" % (k[0], k[1]), [self.axis_recoil_para, axis_recoil_para_pert, axis_recoil_stat_unc], ["recoil_corr_rec_para", "recoil_corr_para_stat_unc_%d_%d" % (k[0], k[1]), "recoil_corr_stat_idx", "weight_qTreweighted"]))
-                results.append(df.HistoBoost("recoil_perp_recoilStatUnc_%d_%d" % (k[0], k[1]), [self.axis_recoil_perp, axis_recoil_perp_pert, axis_recoil_stat_unc], ["recoil_corr_rec_perp", "recoil_corr_perp_stat_unc_%d_%d" % (k[0], k[1]), "recoil_corr_stat_idx", "weight_qTreweighted"]))
-                results.append(df.HistoBoost("recoil_magn_recoilStatUnc_%d_%d" % (k[0], k[1]), [self.axis_recoil_magn, axis_recoil_magn_pert, axis_recoil_stat_unc], ["recoil_corr_rec_magn", "recoil_corr_magn_stat_unc_%d_%d" % (k[0], k[1]), "recoil_corr_stat_idx", "weight_qTreweighted"]))
+                results.append(df.HistoBoost("recoil_para_qT_recoilStatUnc_%d_%d" % (k[0], k[1]), [self.axis_recoil_para_qT, axis_recoil_para_qT_pert, axis_recoil_stat_unc], ["recoil_corr_rec_para_qT", "recoil_corr_para_qT_stat_unc_%d_%d" % (k[0], k[1]), "recoil_corr_stat_idx", "nominal_weight"]))
+                results.append(df.HistoBoost("recoil_para_recoilStatUnc_%d_%d" % (k[0], k[1]), [self.axis_recoil_para, axis_recoil_para_pert, axis_recoil_stat_unc], ["recoil_corr_rec_para", "recoil_corr_para_stat_unc_%d_%d" % (k[0], k[1]), "recoil_corr_stat_idx", "nominal_weight"]))
+                results.append(df.HistoBoost("recoil_perp_recoilStatUnc_%d_%d" % (k[0], k[1]), [self.axis_recoil_perp, axis_recoil_perp_pert, axis_recoil_stat_unc], ["recoil_corr_rec_perp", "recoil_corr_perp_stat_unc_%d_%d" % (k[0], k[1]), "recoil_corr_stat_idx", "nominal_weight"]))
+                results.append(df.HistoBoost("recoil_magn_recoilStatUnc_%d_%d" % (k[0], k[1]), [self.axis_recoil_magn, axis_recoil_magn_pert, axis_recoil_stat_unc], ["recoil_corr_rec_magn", "recoil_corr_magn_stat_unc_%d_%d" % (k[0], k[1]), "recoil_corr_stat_idx", "nominal_weight"]))
 
                 # mT
                 df = df.Define("recoil_corr_mt_stat_unc_%d_%d" % (k[0], k[1]), "wrem::recoilCorrectionBinned_mt_StatUnc(recoil_corr_MET_pt_stat_unc_%d_%d, recoil_corr_MET_phi_stat_unc_%d_%d, qTbin, TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi)" % (k[0], k[1], k[0], k[1]))
@@ -931,8 +838,8 @@ class Recoil:
             
                 
                 # Z peak
-                #results.append(df.HistoBoost("gen_reco_magn_mll_recoilStatUnc_%d_%d" % (k[0], k[1]), [axis_recoil_gen, axis_recoil_reco, axis_recoil_reco_pert, axis_mll, axis_recoil_stat_unc], ["ptVgen", "recoil_corr_rec_magn", "recoil_corr_magn_stat_unc_%d_%d" % (k[0], k[1]), "massZ", "recoil_corr_stat_idx", "weight_qTreweighted"]))
-                #results.append(df.HistoBoost("gen_reco_para_qT_mll_recoilStatUnc_%d_%d" % (k[0], k[1]), [self.axis_recoil_para, axis_recoil_para_pert, axis_recoil_stat_unc], ["recoil_corr_para", "recoil_corr_para_stat_unc_%d_%d" % (k[0], k[1]), "recoil_corr_stat_idx", "weight_qTreweighted"]))
+                #results.append(df.HistoBoost("gen_reco_magn_mll_recoilStatUnc_%d_%d" % (k[0], k[1]), [axis_recoil_gen, axis_recoil_reco, axis_recoil_reco_pert, axis_mll, axis_recoil_stat_unc], ["ptVgen", "recoil_corr_rec_magn", "recoil_corr_magn_stat_unc_%d_%d" % (k[0], k[1]), "massZ", "recoil_corr_stat_idx", "nominal_weight"]))
+                #results.append(df.HistoBoost("gen_reco_para_qT_mll_recoilStatUnc_%d_%d" % (k[0], k[1]), [self.axis_recoil_para, axis_recoil_para_pert, axis_recoil_stat_unc], ["recoil_corr_para", "recoil_corr_para_stat_unc_%d_%d" % (k[0], k[1]), "recoil_corr_stat_idx", "nominal_weight"]))
 
         return df
 
