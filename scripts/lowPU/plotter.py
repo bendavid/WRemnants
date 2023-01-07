@@ -156,8 +156,8 @@ def dummyRatio(nbins = 1, line=1):
 
 
     # dummy
-    dummyT = ROOT.TH1D("h1", "h", nbins, xmin, xmax)
-    dummyB = ROOT.TH1D("h2", "h", nbins, xmin, xmax)
+    dummyT = ROOT.TH1D("h1_%d" % random.randint(1e4, 1e5), "", nbins, xmin, xmax)
+    dummyB = ROOT.TH1D("h2_%d" % random.randint(1e4, 1e5), "", nbins, xmin, xmax)
     
     for i in range(0, nbins+1): dummyT.SetBinContent(i, -1e9)
     for i in range(0, nbins+1): dummyB.SetBinContent(i, -1e9)
@@ -214,7 +214,7 @@ def dummyRatio(nbins = 1, line=1):
     dummyB.GetYaxis().SetNdivisions(505)
     
     line = ROOT.TLine(float(cfg['xmin']), line, float(cfg['xmax']), line)
-    line.SetLineColor(ROOT.kBlue+2)
+    line.SetLineColor(ROOT.kRed)
     line.SetLineWidth(2)
 
     return dummyT, dummyB, line
@@ -224,14 +224,14 @@ def canvasRatio():
     
     epsilon = 0.025
 
-    c = ROOT.TCanvas("%d" % random.randint(1e4, 1e5), "c", 1000, 1000)
+    c = ROOT.TCanvas("canvas%d" % random.randint(1e4, 1e5), "", 1000, 1000)
     c.SetTopMargin(0.0)
     c.SetRightMargin(0.0)
     c.SetBottomMargin(0.0)
     c.SetLeftMargin(0.0)
 
-    pad1 = ROOT.TPad("p1","p1", 0, cfg['ratiofraction'], 1, 1)
-    pad2 = ROOT.TPad("p2","p2", 0, 0.0, 1, cfg['ratiofraction']-0.7*epsilon)
+    pad1 = ROOT.TPad("p1%d" % random.randint(1e4, 1e5), "", 0, cfg['ratiofraction'], 1, 1)
+    pad2 = ROOT.TPad("p2%d" % random.randint(1e4, 1e5), "", 0, 0.0, 1, cfg['ratiofraction']-0.7*epsilon)
 
     pad1.SetBottomMargin(epsilon)
     pad1.SetTopMargin(0.055/(1.-cfg['ratiofraction']))

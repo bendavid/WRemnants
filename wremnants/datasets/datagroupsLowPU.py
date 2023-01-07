@@ -41,6 +41,7 @@ class datagroupsLowPU(datagroups):
                 signalOp = self.signalHistSel,
             ),
             
+            
             Zmumu=dict(
                 members=[self.datasets["Zmumu"]],
                 label=r"DY #rightarrow #mu^{#plus}#mu^{#minus} (MiNNLO)",
@@ -59,6 +60,25 @@ class datagroupsLowPU(datagroups):
                 color="#64C0E8",
                 signalOp = self.signalHistSel,
             ),
+            
+            #Zmumu_MiNNLObug=dict(
+            #    members=[self.datasets["Zmumu_MiNNLObug"]],
+            #    label=r"DY #rightarrow #mu^{#plus}#mu^{#minus} (MiNNLO)",
+            #    color="#F8CE68",
+            #    signalOp = self.signalHistSel,
+            #),
+            #Zee_MiNNLObug=dict(
+            #    members=[self.datasets["Zee_MiNNLObug"]],
+            #    label=r"DY #rightarrow e^{#plus}e^{#minus} (MiNNLO)",
+            #    color="#F8CE68",
+            #    signalOp = self.signalHistSel,
+            #),
+            #Ztautau_MiNNLObug=dict(
+            #    members = [self.datasets[x] for x in ["Ztautau_MiNNLObug"]],
+            #    label=r"DY #rightarrow #tau^{#plus}#tau^{#minus} (MiNNLO)",
+            #    color="#64C0E8",
+            #    signalOp = self.signalHistSel,
+            #),
             
             WplusJetsToMuNu=dict(
                 members = [self.datasets[x] for x in ["WplusJetsToMuNu"]],
