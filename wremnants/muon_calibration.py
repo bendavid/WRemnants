@@ -8,8 +8,8 @@ ROOT.gInterpreter.Declare('#include "muon_calibration.h"')
 
 data_dir = f"{pathlib.Path(__file__).parent}/data/"
 
-def make_muon_calibration_helpers(mc_filename=data_dir+"/calibration/correctionResults_v701_idealgeom_gensim_flex.root", 
-        data_filename=data_dir+"/calibration/correctionResults_v709_recjpsidata.root", 
+def make_muon_calibration_helpers(mc_filename=data_dir+"/calibration/correctionResults_v718_idealgeom_gensim.root", 
+        data_filename=data_dir+"/calibration/correctionResults_v718_recjpsidata.root", 
         era = None):
 
     mc_helper = ROOT.wrem.CVHCorrector(mc_filename)
