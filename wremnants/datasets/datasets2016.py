@@ -25,7 +25,7 @@ def makeFilelist(paths, maxFiles=-1, format_args={}):
         filelist.extend(glob.glob(path) if path[:4] != "/eos" else buildXrdFileList(path, "eoscms.cern.ch"))
     return filelist if maxFiles < 0 else filelist[:maxFiles]
 
-def getDatasets(maxFiles=-1, filt=None, mode=None, base_path=None, nanoVersion="v9", prod_tag="TrackFitV709_NanoProdv2"):
+def getDatasets(maxFiles=-1, filt=None, mode=None, base_path=None, nanoVersion="v9", prod_tag="TrackFitV718_NanoProdv1"):
     if not base_path:
         hostname = socket.gethostname()
         if hostname == "lxplus8s10.cern.ch":
