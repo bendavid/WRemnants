@@ -18,7 +18,7 @@ data_dir = f"{pathlib.Path(__file__).parent}/../../wremnants/data/"
 logging.basicConfig(level=logging.INFO)
 
 parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
-parser.add_argument("--muonCorr", type=str, default="trackfit_only", choices=["lbl", "none", "trackfit_only"], help="Type of correction to apply to the muons")
+parser.add_argument("--muonCorr", type=str, default="lbl", choices=["lbl", "none", "trackfit_only"], help="Type of correction to apply to the muons")
 parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency")
 parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
 parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
