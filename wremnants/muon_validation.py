@@ -1,4 +1,4 @@
-import ROOT
+:mport ROOT
 import hist
 import narf
 import numpy as np
@@ -33,6 +33,8 @@ def make_jpsi_crctn_unc_helper(filepath, n_scale_params = 3, n_tot_params = 6, n
     f = uproot.open(filepath)
     cov = f['covariance_matrix'].to_hist()
     cov_scale_params = get_jpsi_scale_param_cov_mat(cov, n_scale_params, n_tot_params, n_eta_bins)
+
+    #
     w,v = np.linalg.eigh(cov_scale_params)    
     var_mat = np.sqrt(w) * v
     axis_eta = hist.axis.Regular(n_eta_bins, 0, 1, name = 'eta')
@@ -50,6 +52,7 @@ def make_jpsi_crctn_unc_helper(filepath, n_scale_params = 3, n_tot_params = 6, n
     return jpsi_crctn_unc_helper
 
 # returns the cov mat of only scale parameters in eta bins, in the form of a 2D numpy array
+# there are 3 scale params (A, e, M) + 3 resolution params for each eta bin in the jpsi calib file
 def get_jpsi_scale_param_cov_mat(cov, n_scale_params = 3, n_tot_params = 6, n_eta_bins = 24):
     cov_dim = len(cov.axes[0].edges) - 1
     if cov_dim != n_tot_params * n_eta_bins:
@@ -67,6 +70,15 @@ def get_jpsi_scale_param_cov_mat(cov, n_scale_params = 3, n_tot_params = 6, n_et
             cov.values()[irow_all_params], idx_scale_params
         )
     return cov_scale_params
+
+def define_cvh_muons_kinematics(df):
+    df = df.Define("TrigMuon_cvh_pt", "Muon_cvhPt[gooodMuons][0]")
+    df = df.Define("TrigMuon_cvh_eta", "Muon_cvhEta[trigMuons][0]")
+    df = df.Define("TrigMuon_cvh_phi", "Muon_cvhPhi[trigMuons][0]")
+    df = df.Define("NonTrigMuon_cvh_pt", "Muon_cvhPt[nonTrigMuons][0]")
+    df = df.Define("NonTrigMuon_cvh_eta", "Muon_cvhEta[nonTrigMuons][0]")
+    df = df.Define("NonTrigMuon_cvh_phi", "Muon_cvhPhi[nonTrigMuons][0]")
+    return df
 
 def define_cvh_muons_kinematics(df):
     df = df.Define("TrigMuon_cvh_pt", "Muon_cvhPt[trigMuons][0]")
