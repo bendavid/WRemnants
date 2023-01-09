@@ -21,6 +21,8 @@ parser.add_argument("--noScaleFactors", action="store_true", help="Don't use sca
 parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
 parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
 parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for luminosity in excess to 1 (e.g. 1.012 means 1.2\%)", default=1.012)
+parser.add_argument("--jpsiCrctnDataInput", type = str, default = None, help = "path to the root file for jpsi corrections on the data")
+parser.add_argument("--jpsiCrctnMCInput", type = str, default = None, help = "path to the root file for jpsi corrections on the MC")
 args = parser.parse_args()
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
@@ -78,6 +80,13 @@ pileup_helper = wremnants.make_pileup_helper(era = era)
 vertex_helper = wremnants.make_vertex_helper(era = era)
 
 calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
+
+if args.dataCrctn == 'jpsi_crctd':
+    jpsi_crctn_data_helper = wremnants.make_jpsi_crctn_helper(filepath = args.jpsiCrctnDataInput)
+    jpsi_crctn_unc_data_helper = wremnants.make_jpsi_crctn_unc_helper(filepath = args.jpsiCrctnDataInput)
+if args.MCCrctn == 'jpsi_crctd':
+    jpsi_crctn_MC_helper = wremnants.make_jpsi_crctn_helper(filepath = args.jpsiCrctnMCInput)
+    jpsi_crctn_unc_MC_helper = wremnants.make_jpsi_crctn_unc_helper(filepath = args.jpsiCrctnMCInput)
 
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_corr)
 
@@ -141,6 +150,7 @@ def build_graph(df, dataset):
     # the corrected RECO muon kinematics, which is intended to be used as the nominal
     df = wremnants.define_corrected_reco_muon_kinematics(df)
     df = df.Define("goodMuons_abseta0", "abs(goodMuons_eta0)")
+    df = df.Filter("goodMuons_SApt0 > 15.0 && wrem::deltaR2(goodMuons_SAeta0, goodMuons_SAphi0, goodMuons_eta0, goodMuons_phi0) < 0.09")
 
     if dataset.group in ["Top", "Diboson"]:
         df = df.Alias("goodMuons_SApt0",  "goodMuons_pt0")
@@ -150,7 +160,6 @@ def build_graph(df, dataset):
         df = df.Define("goodMuons_SApt0",  "Muon_standalonePt[goodMuons][0]")
         df = df.Define("goodMuons_SAeta0", "Muon_standaloneEta[goodMuons][0]")
         df = df.Define("goodMuons_SAphi0", "Muon_standalonePhi[goodMuons][0]")
-    df = df.Filter("goodMuons_SApt0 > 15.0 && wrem::deltaR2(goodMuons_SAeta0, goodMuons_SAphi0, goodMuons_eta0, goodMuons_phi0) < 0.09")
     
     if isW or isZ:
         df = wremnants.define_cvhbs_reco_muon_kinematics(df)
