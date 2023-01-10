@@ -1,6 +1,7 @@
 from utilities import common
 from wremnants import syst_tools
 import numpy as np
+import logging
 
 def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, pdf, name_append="", scetlib=False, use_hel_hist=False, rebin_pt=None):
     helicity = "Helicity" in scale_type

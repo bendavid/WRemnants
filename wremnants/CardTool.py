@@ -313,11 +313,11 @@ class CardTool(object):
     def addMirror(self, h, proc, syst):
         return syst != self.nominalName and self.systematics[syst]["mirror"]
 
-    def checkSysts(self, hnom, var_map, thresh=0.25):
+    def checkSysts(self, hnom, var_map, proc, thresh=0.25):
         #if self.check_variations:
         var_names = set([name.replace("Up", "").replace("Down", "") for name in var_map.keys() if name])
         if len(var_names) != len(var_map.keys())/2:
-            raise ValueError(f"Invalid syst names! Expected an up/down variation for each syst. Found {var_map.keys()}")
+            raise ValueError(f"Invalid syst names for process {proc}! Expected an up/down variation for each syst. Found {var_map.keys()}")
         for name in var_names:
             up = var_map[name+"Up"]
             down = var_map[name+"Down"]
@@ -326,7 +326,7 @@ class CardTool(object):
             vars_sameside = (up_relsign != 0) & (up_relsign == down_relsign)
             perc_sameside = np.count_nonzero(vars_sameside)/hnom.size 
             if perc_sameside > thresh:
-                logger.warning(f"{perc_sameside:.0%} bins are one sided for syst {name}!")
+                logger.warning(f"{perc_sameside:.0%} bins are one sided for syst {name} and process {proc}!")
 
     def writeForProcess(self, h, proc, syst):
         if self.addMirror(h, proc, syst):
@@ -338,7 +338,7 @@ class CardTool(object):
         var_map = self.systHists(h, syst) 
         # TODO: Make this optional
         if syst != "nominal":
-            self.checkSysts(self.procDict[proc][self.nominalName], var_map)
+            self.checkSysts(self.procDict[proc][self.nominalName], var_map, proc)
         setZeroStatUnc = False
         if proc in self.noStatUncProcesses:
             logger.info(f"Zeroing statistical uncertainty for process {proc}")
@@ -350,7 +350,7 @@ class CardTool(object):
     def addPseudodata(self, processes):
         self.datagroups.loadHistsForDatagroups(
             baseName=self.pseudoData, syst="", label=self.pseudoData,
-            procsToRead=processes)
+            procsToRead=processes, scaleToNewLumi=self.lumiScale)
         hists = [self.procDict[proc][self.pseudoData] for proc in processes]
         hdata = hh.sumHists(hists)
         # Kind of hacky, but in case the alt hist has uncertainties
@@ -379,7 +379,7 @@ class CardTool(object):
 
     def writeOutput(self):
         self.datagroups.loadHistsForDatagroups(
-            baseName=self.histName, syst=self.nominalName, label=self.nominalName)
+            baseName=self.histName, syst=self.nominalName, label=self.nominalName, scaleToNewLumi=self.lumiScale)
         self.procDict = self.datagroups.getDatagroups()
         self.writeForProcesses(self.nominalName, processes=self.procDict.keys(), label=self.nominalName)
         self.loadNominalCard()
@@ -393,8 +393,8 @@ class CardTool(object):
             systName = syst if not systMap["name"] else systMap["name"]
             processes=systMap["processes"]
             self.datagroups.loadHistsForDatagroups(self.histName, systName, label="syst",
-                    procsToRead=processes, forceNonzero=systName != "qcdScaleByHelicity",
-                    preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"])
+                                                   procsToRead=processes, forceNonzero=systName != "qcdScaleByHelicity",
+                                                   preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"], scaleToNewLumi=self.lumiScale)
             self.writeForProcesses(syst, label="syst", processes=processes)    
         output_tools.writeMetaInfoToRootFile(self.outfile, exclude_diff='notebooks')
         if self.skipHist:
@@ -512,13 +512,11 @@ class CardTool(object):
             q = self.chargeIdDict[charge]["val"]
             hout = narf.hist_to_root(h[{"charge" : h.axes["charge"].index(q)}])
             hout.SetName(name+f"_{charge}")
-            hout.Scale(self.lumiScale)
             hout.Write()
 
     def writeHistWithCharges(self, h, name):
         hout = narf.hist_to_root(h)
         hout.SetName(f"{name}_{self.channels[0]}")
-        hout.Scale(self.lumiScale)
         hout.Write()
     
     def writeHist(self, h, name, setZeroStatUnc=False):

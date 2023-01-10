@@ -4,11 +4,11 @@
 #
 # charge combination
 #
-# python WRemnants/scripts/combine/fitManager.py -i /scratch/mciprian/CombineStudies/Wmass/abseta1p0/qcdScale_byPt/ --cf testChargeComb -c "plus,minus" --impacts-mW --comb [--skip-fit-data]
+# python WRemnants/scripts/combine/fitManager.py -i /scratch/mciprian/CombineStudies/Wmass/abseta1p0/qcdScale_byPt/ --cf testChargeComb -c "plus,minus" --comb [--skip-fit-data]
 #
 # single charge (can select a single charge as -c plus, otherwise both are done in sequence)
 #
-# python WRemnants/scripts/combine/fitManager.py -i /scratch/mciprian/CombineStudies/Wmass/abseta1p0/qcdScale_byPt/ --cf testSingleCharge -c "plus,minus" --impacts-mW --fit-single-charge [--skip-fit-data]
+# python WRemnants/scripts/combine/fitManager.py -i /scratch/mciprian/CombineStudies/Wmass/abseta1p0/qcdScale_byPt/ --cf testSingleCharge -c "plus,minus" --fit-single-charge [--skip-fit-data]
 
 import os, re, copy, math, array
 
@@ -168,7 +168,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-i','--input', dest='inputdir', default='', type=str, help='input directory with the root files inside (cards are eventually stored in the foldr specified with option --cf)')
     parser.add_argument('--cf','--card-folder', dest='cardFolder', default='nominal', type=str, help='Subfolder created inside inputdir to store all cards and fit results in a given configuration, for better bookkeeping when doing tests')
-    parser.add_argument('-c','--charge', dest='charge', default='plus,minus', type=str, help='process given charge. default is both')
+    parser.add_argument('-c','--charge', dest='charge', default='both', choices=['plus','minus','both'], type=str, help='process given charge. default is both')
     parser.add_argument(     '--comb'   , dest='combineCharges' , default=False, action='store_true', help='Combine W+ and W-, if single cards are done')
     parser.add_argument(      '--fit-single-charge', dest='fitSingleCharge', default=False, action='store_true', help='Prepare datacard for single-charge fit. For each charge, a postfix is appended to option --postfix, so no need to add the charge explicitly')
     parser.add_argument(     '--postfix',    dest='postfix', type=str, default="", help="Postfix for .hdf5 file created with text2hdf5.py");
@@ -217,7 +217,7 @@ if __name__ == "__main__":
         fcmd.write("%s\n\n" % " ".join(sys.argv))
         fcmd.close()
 
-    fitCharges = args.charge.split(',')
+    fitCharges = ["plus", "minus"] if args.charge == "both" else [args.charge]
 
     if not args.combineCharges and not args.fitSingleCharge:
         print("Warning: must pass one option between --fit-single-charge and --comb to fit single charge or combination.")

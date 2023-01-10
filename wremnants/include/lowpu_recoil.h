@@ -11,13 +11,14 @@ namespace wrem {
 struct recoil {
   float para;
   float perp;
-};    
+};
+
+
+
     
 using Vec_recoil = ROOT::VecOps::RVec<recoil>;
     
-//TFile *recoil_fits_Z_param_refit = new TFile("wremnants/data/lowPU/recoil_fits_Z_param_refit.root", "READ");
-//TFile *recoil_fits_Z = new TFile("wremnants/data/lowPU/recoil_fits_Z.root", "READ");
-//TFile *recoil_fits_Z = new TFile("wremnants/data/lowPU/recoil_fits_Z.root", "READ");
+
 std::map<std::string, TH3D*> recoil_hists;
 std::map<std::string, TH3D*> recoil_hists_gen_W;
 std::map<std::string, TH3D*> recoil_hists_gen_Z;
@@ -34,26 +35,19 @@ std::map<std::string, int> recoil_binned_nGauss;
 std::map<std::string, std::vector<float>> recoil_binned_qTbins;
 std::map<std::string, std::vector<  std::vector<  std::vector< float > >  >> recoil_binned_components; // tag qTbin nGauss, component
 
-//std::map<std::string, TF1*> recoil_param_funcs;
-//std::map<std::string, std::map<std::string, TF1*>> recoil_param_funcs;
+
     
 std::vector<float> qTbins;
 float recoil_correction_qTmax = 1e99;
 
 
-//std::vector<float> qTweights{ 1.042, 0.977, 0.926, 0.914, 0.921, 0.949, 0.983, 0.973, 0.999, 1.025, 1.049, 1.005, 1.087, 1.048, 1.057, 1.068, 1.068, 1.098, 1.036, 1.049, 1.081, 1.042, 1.064, 1.052, 1.123, 1.049, 1.000, 1.028, 1.047, 1.005, 0.972, 1.032, 1.067, 1.033, 1.049, 1.004, 0.994, 1.056, 1.056, 1.013, 0.988, 0.985, 0.956, 0.986, 0.999, 1.053, 1.008, 1.032, 1.044, 0.920, 1.000, 0.921, 1.016, 0.905, 0.845 };
-//std::vector<float> qTweights{   1.041, 0.977, 0.925, 0.913, 0.920, 0.948, 0.981, 0.972, 0.997, 1.024, 1.047, 1.004, 1.085, 1.046, 1.055, 1.066, 1.066, 1.095, 1.033, 1.047, 1.078, 1.039, 1.061, 1.049, 1.120, 1.045, 0.996, 1.024, 1.042, 1.000, 0.967, 1.026, 1.060, 1.025, 1.041, 0.995, 0.984, 1.046, 1.044, 1.000, 0.974, 0.968, 0.936, 0.962, 0.971, 1.021, 0.974, 1.000, 1.011, 0.889, 0.974, 0.897, 0.998, 0.891, 1 };
-//std::vector<float> qTweights{  1.078, 1.029, 0.981, 0.973, 0.921, 0.929, 0.921, 0.905, 0.915, 0.925, 0.952, 0.944, 1.005, 0.956, 0.954, 0.991, 0.995, 1.000, 1.016, 1.032, 1.030, 1.065, 1.020, 0.986, 1.073, 1.097, 1.046, 1.046, 1.048, 1.062, 1.050, 1.082, 1.079, 1.052, 1.075, 1.117, 1.027, 1.040, 1.039, 1.055, 1.080, 1.075, 1.064, 1.012, 1.061, 1.061, 1.034, 1.064, 1.143, 1.095, 1.057, 1.034, 0.992, 1.001, 1.044, 1.003, 1.037, 1.048, 1.000, 1.000, 0.973, 0.961, 1.025, 1.028, 1.113, 1.004, 1.039, 1.011, 1.070, 1.010, 0.979, 1.011, 0.980, 0.989, 1.052, 1.039, 0.985, 1.108, 1.023, 0.975, 0.956, 0.952, 1.041, 0.916, 0.994, 0.926, 0.946, 0.968, 0.972, 0.932, 1.004, 0.932, 0.999, 1.047, 0.958, 0.992, 1.000, 1.011, 0.889, 0.973, 0.898, 0.997, 0.891, 1.000, 1.000 };
-
-std::vector<float> qTweights { 1.041, 0.977, 0.925, 0.913, 0.920, 0.948, 0.981, 0.972, 0.997, 1.024, 1.047, 1.004, 1.085, 1.046, 1.055, 1.066, 1.066, 1.095, 1.033, 1.047, 1.078, 1.039, 1.061, 1.049, 1.120, 1.045, 0.996, 1.024, 1.042, 1.000, 0.973, 0.961, 1.025, 1.028, 1.113, 1.004, 1.039, 1.011, 1.070, 1.010, 0.979, 1.011, 0.980, 0.989, 1.051, 1.039, 0.985, 1.108, 1.023, 0.975, 0.956, 0.952, 1.041, 0.916, 0.994, 0.926, 0.946, 0.968, 0.972, 0.932, 1.004, 0.932, 0.999, 1.047, 0.958, 0.992, 1.000, 1.011, 0.889, 0.973, 0.898, 0.997, 0.891, 1.000, 1.000, 1, 1, 1, 1, 1  };
-
-//std::vector<float> qTweights { 1.041, 0.977, 0.925, 0.913, 0.920, 0.948, 0.981, 0.972, 0.997, 1.024, 1.047, 1.004, 1.085, 1.046, 1.055, 1.066, 1.066, 1.095, 1.033, 1.047, 1.059, 1.055, 1.083, 1.010, 1.022, 0.967, 1.026, 1.060, 1.025, 1.041, 0.990, 1.026, 1.038, 0.963, 0.986, 0.968, 0.936, 0.962, 1.004, 0.932, 1.021, 0.974, 0.988, 0.926, 0.960, 1, 1, 1 };
+// qT reweighting
+bool applyqTReweighting = false;
+std::vector<float> qTrw_bins;
+std::vector<float> qTrw_weights;
 
 
 
-
-std::vector<float> corr_x { -0.595, -0.660, -0.548, -0.732, -0.678, -0.643, -0.390, -0.725, -0.540, -0.461, -0.677, -0.755, -0.730, -0.317, -0.340, -0.782, -0.448, -0.261, -0.643, -0.649, -0.651, -0.598, -0.260, -0.975, -0.632, -0.655, -0.760, -0.664, -0.911, -0.806, -0.858, -0.980, -0.604, -0.298, -1.037, -0.924, -0.695, -0.568, -0.633, -0.992, -1.186, -0.389, -0.987, -0.593, -0.986, -0.008, -0.155, -0.177, -0.862, -1.745, -0.844, -0.607, -0.191, -1.213, -0.317, -0.787, -1.178, -0.900, -2.065, -1.141, -1.223, -1.454, 0.331, -0.534, -0.834, 0.763, -1.153, -0.515, -0.659, -0.055, -2.063, -1.534, -0.426, 0 };
-std::vector<float> corr_y { 0.507, 0.243, 0.356, 0.229, 0.339, 0.327, 0.307, 0.382, 0.339, 0.539, 0.287, 0.281, 0.369, 0.551, 0.754, 0.009, 0.777, 0.610, 0.304, 0.336, 0.042, 0.542, 0.220, 0.550, 0.710, 0.409, 0.170, 0.138, 0.433, 0.263, 0.841, -0.268, 0.614, -0.086, 0.663, 0.293, -0.154, 1.577, 0.705, 1.028, 0.432, 0.418, 0.363, -0.001, 0.948, -0.070, 1.130, 1.444, 1.592, -0.414, 0.133, 1.050, 0.716, 1.217, 0.690, -0.025, -0.360, 0.799, -0.531, -0.327, 1.601, -0.434, -0.259, -0.576, 2.648, 0.039, 0.807, 1.053, -1.098, -0.495, 2.614, 0.960, 4.728, 0.449};
 
 // MET xy correction
 bool applyMETxyCorrection = false;
@@ -61,6 +55,8 @@ std::vector<float> met_xy_corr_x_data_nom, met_xy_corr_y_data_nom, met_xy_corr_x
 
 
 void recoil_init(char* name) {
+    
+        
     
     TH3D *h3;
     TH1D *h1;
@@ -151,10 +147,17 @@ int getqTbin(float qT) {
     return -1;
 }
 
-double qTweight(int qTbinIdx) {
-    
-    //return 1.;
-    return qTweights.at(qTbinIdx);
+double qTweight(float qT) {
+
+	if(not applyqTReweighting) return 1.0;
+    int idx = qTrw_bins.size()-2;
+    for(unsigned int i=0; i < qTrw_bins.size()-1; i++) {
+        if(qT >= qTrw_bins.at(i) and qT < qTrw_bins.at(i+1)) {
+            idx = i;
+            break;
+        }
+    }
+    return qTrw_weights.at(idx);
 }
 
 
@@ -239,6 +242,7 @@ Vec_f METXYCorrection(double MET_pt, double MET_phi, int npv, int isData) {
     
     // preserve the MET magnitude??
 
+    double deltaMax = 10; // protection for high/nonphysical corrections
     double delta;
     double pUx = MET_pt*cos(MET_phi);
     double pUy = MET_pt*sin(MET_phi);
@@ -254,38 +258,38 @@ Vec_f METXYCorrection(double MET_pt, double MET_phi, int npv, int isData) {
         // x
         delta = 0;
         for(int k=0; k<met_xy_corr_x_data_nom.size(); k++) delta += met_xy_corr_x_data_nom.at(k)*std::pow(npv, k);
+        if(std::abs(delta) > deltaMax) delta = 0;
         pUx -= delta;
         
         // y
         delta = 0;
         for(int k=0; k<met_xy_corr_y_data_nom.size(); k++) delta += met_xy_corr_y_data_nom.at(k)*std::pow(npv, k);
+        if(std::abs(delta) > deltaMax) delta = 0;
         pUy -= delta;    
     }
     else {
         // x
         delta = 0;
         for(int k=0; k<met_xy_corr_x_mc_nom.size(); k++) delta += met_xy_corr_x_mc_nom.at(k)*std::pow(npv, k);
+        if(std::abs(delta) > deltaMax) delta = 0;
         pUx -= delta;
         
         // y
         delta = 0;
         for(int k=0; k<met_xy_corr_y_mc_nom.size(); k++) delta += met_xy_corr_y_mc_nom.at(k)*std::pow(npv, k);
+        if(std::abs(delta) > deltaMax) delta = 0;
         pUy -= delta;     
     }
 
     res[0] = hypot(pUx, pUy);
     res[1] = atan2(pUy, pUx);
-    
+
     //cout << "** XY angles ** " << atan(pUy/pUx) << " " << res[1] << " (pUy=" << pUy << " pUx=" << pUx << ")" << endl;
     
     return res;
 }
 
 
-double recoilParameterization_sigma(double a, double b, double c, double qT) {
-    
-    return a*std::pow(qT + b, c);
-}
 
 
 
@@ -333,7 +337,7 @@ class GaussianSum {
             for(unsigned int i = 0; i < mean.size(); i++) {
                 
                 tmp = (pval-mean.at(i))/sigma.at(i);
-                ret += norm.at(i)*std::erfc(-tmp/TMath::Sqrt2());
+                ret += norm.at(i)*std::erfc(-tmp/TMath::Sqrt2()); // erfc?
             }
             return 0.5*ret/totNorm;
         }
@@ -626,8 +630,8 @@ Vec_f recoilCorrectionBinned(double pU1, double pU2, double qTbinIdx, double qT,
     //double pU1_data=  999999;
 
   
-    if(pU1_data == 999999) cout << "************* " << qT << endl;
-    if(pU2_data == 999999) cout << "************* " << qT << endl;
+    if(pU1_data == 999999) cout << "PARA ************* " << qT << endl;
+    if(pU2_data == 999999) cout << "PERP ************* " << qT << endl;
     
     
     
@@ -744,223 +748,6 @@ Vec_f recoilCorrectionBinnedWtoZ(int q, double pU1, double pU2, double qTbinIdx,
 
 
 
-// recoil correction
-Vec_f recoilCorrectionBinnedCut(double pU1, double pU2, double qTbinIdx, double qT, Vec_f lep_pt, Vec_f lep_eta, Vec_f lep_phi, double MET_phi, double lep_phi_, double MET, int corrType=0, int corrParam=1) {
-    
-    Vec_f res(3, 0);
-    //cout << pU1 << " " << pU2 << " " << qTbinIdx << endl; 
-    
-    res[1] = pU1;
-    res[2] = pU2;
-    res[0] = std::hypot(res[1], res[2]);
-    
-    TH3D *h3;
-    int corrIdx = 1;
-    
-    double norm_para_data = 1;
-    double norm_perp_data = 1;
-    double norm_para_mc = 1;
-    double norm_perp_mc = 1;
-    
-    //cout << "************* " << qT << endl;
-    
-    GaussianSum u1_data;
-    h3 = recoil_hists["data_para"];
-    corrIdx = 1;
-    if(corrType == 1) corrIdx = corrParam;
-    norm_para_data =  h3->GetBinContent(qTbinIdx+1, 10, 1);
-    //u1_data.setNorm(norm_para_data);
-    u1_data.addTerm(h3->GetBinContent(qTbinIdx+1, 1, corrIdx), h3->GetBinContent(qTbinIdx+1, 2, corrIdx), h3->GetBinContent(qTbinIdx+1, 3, corrIdx));
-    u1_data.addTerm(h3->GetBinContent(qTbinIdx+1, 4, corrIdx), h3->GetBinContent(qTbinIdx+1, 5, corrIdx), h3->GetBinContent(qTbinIdx+1, 6, corrIdx));
-    u1_data.addTerm(h3->GetBinContent(qTbinIdx+1, 7, corrIdx), h3->GetBinContent(qTbinIdx+1, 8, corrIdx), h3->GetBinContent(qTbinIdx+1, 9, corrIdx));
-    
-/*
-    if(corrType == 1) {
-        if(qTbinIdx == 40) {
-            cout << corrIdx << endl;
-            cout << h3->GetBinContent(qTbinIdx+1, 1, corrIdx) << "  " << h3->GetBinContent(qTbinIdx+1, 2, corrIdx) << "  " << h3->GetBinContent(qTbinIdx+1, 3, corrIdx) << endl;
-            cout << h3->GetBinContent(qTbinIdx+1, 4, corrIdx) << "  " << h3->GetBinContent(qTbinIdx+1, 5, corrIdx) << "  " << h3->GetBinContent(qTbinIdx+1, 6, corrIdx) << endl;
-            cout << h3->GetBinContent(qTbinIdx+1, 7, corrIdx) << "  " << h3->GetBinContent(qTbinIdx+1, 8, corrIdx) << "  " << h3->GetBinContent(qTbinIdx+1, 9, corrIdx) << endl;
-        }
-    }*/
-    /*
-    if(qT > 280) {
-        cout << "************* " << qT << " " << qTbinIdx << endl;
-    cout << h3->GetBinContent(qTbinIdx+1, 1, corrIdx) << "  " << h3->GetBinContent(qTbinIdx+1, 2, corrIdx) << "  " << h3->GetBinContent(qTbinIdx+1, 3, corrIdx) << endl;
-    cout << h3->GetBinContent(qTbinIdx+1, 4, corrIdx) << "  " << h3->GetBinContent(qTbinIdx+1, 5, corrIdx) << "  " << h3->GetBinContent(qTbinIdx+1, 6, corrIdx) << endl;
-    cout << h3->GetBinContent(qTbinIdx+1, 7, corrIdx) << "  " << h3->GetBinContent(qTbinIdx+1, 8, corrIdx) << "  " << h3->GetBinContent(qTbinIdx+1, 9, corrIdx) << endl;
-    }
-    */
-    //if(qTbinIdx == 3) {
-    //    cout << h3->GetBinContent(qTbinIdx+1, 1, corrIdx) << " " << h3->GetBinContent(qTbinIdx+1, 2, corrIdx) << " " << h3->GetBinContent(qTbinIdx+1, 3, corrIdx) << endl;
-    //}
-    
-    GaussianSum u2_data;
-    h3 = recoil_hists["data_perp"];
-    corrIdx = 1;
-    if(corrType == 2) corrIdx = corrParam;
-    norm_perp_data =  h3->GetBinContent(qTbinIdx+1, 10, 1);
-    //u2_data.setNorm(norm_perp_data);
-    u2_data.addTerm(h3->GetBinContent(qTbinIdx+1, 1, corrIdx), h3->GetBinContent(qTbinIdx+1, 2, corrIdx), h3->GetBinContent(qTbinIdx+1, 3, corrIdx));
-    u2_data.addTerm(h3->GetBinContent(qTbinIdx+1, 4, corrIdx), h3->GetBinContent(qTbinIdx+1, 5, corrIdx), h3->GetBinContent(qTbinIdx+1, 6, corrIdx));
-    u2_data.addTerm(h3->GetBinContent(qTbinIdx+1, 7, corrIdx), h3->GetBinContent(qTbinIdx+1, 8, corrIdx), h3->GetBinContent(qTbinIdx+1, 9, corrIdx));
-    
-
-    
-    GaussianSum u1_mc;
-    h3 = recoil_hists["mc_para"];
-    corrIdx = 1;
-    if(corrType == 3) corrIdx = corrParam;
-    norm_para_mc =  h3->GetBinContent(qTbinIdx+1, 10, 1);
-    //u1_mc.setNorm(norm_para_mc);
-    u1_mc.addTerm(h3->GetBinContent(qTbinIdx+1, 1, corrIdx), h3->GetBinContent(qTbinIdx+1, 2, corrIdx), h3->GetBinContent(qTbinIdx+1, 3, corrIdx));
-    u1_mc.addTerm(h3->GetBinContent(qTbinIdx+1, 4, corrIdx), h3->GetBinContent(qTbinIdx+1, 5, corrIdx), h3->GetBinContent(qTbinIdx+1, 6, corrIdx));
-    u1_mc.addTerm(h3->GetBinContent(qTbinIdx+1, 7, corrIdx), h3->GetBinContent(qTbinIdx+1, 8, corrIdx), h3->GetBinContent(qTbinIdx+1, 9, corrIdx));
-    
-
-    
-    GaussianSum u2_mc;
-    h3 = recoil_hists["mc_perp"];
-    corrIdx = 1;
-    if(corrType == 4) corrIdx = corrParam;
-    norm_perp_mc =  h3->GetBinContent(qTbinIdx+1, 10, 1);
-    //u2_mc.setNorm(norm_perp_mc);
-    u2_mc.addTerm(h3->GetBinContent(qTbinIdx+1, 1, corrIdx), h3->GetBinContent(qTbinIdx+1, 2, corrIdx), h3->GetBinContent(qTbinIdx+1, 3, corrIdx));
-    u2_mc.addTerm(h3->GetBinContent(qTbinIdx+1, 4, corrIdx), h3->GetBinContent(qTbinIdx+1, 5, corrIdx), h3->GetBinContent(qTbinIdx+1, 6, corrIdx));
-    u2_mc.addTerm(h3->GetBinContent(qTbinIdx+1, 7, corrIdx), h3->GetBinContent(qTbinIdx+1, 8, corrIdx), h3->GetBinContent(qTbinIdx+1, 9, corrIdx));
-    
-
-    
-    
-    
-    double pVal_u1_mc = u1_mc.evalCDF(pU1 + qT);
-    double pVal_u2_mc = u2_mc.evalCDF(pU2);
-    /*
-    if(qTbinIdx == 30) {
-             cout << norm_para_data << " " << norm_perp_data << " " << norm_para_mc << " " << norm_perp_mc << " " << pVal_u1_mc << " " << pVal_u2_mc << endl;
-    }
-    else return res;
-    */
-    
-    double pU1_data = u1_data.findRoot(pVal_u1_mc, -1000, 1000);
-    double pU2_data = u2_data.findRoot(pVal_u2_mc, -500, 500);
-    //double pU2_data=  999999;
-    //double pU1_data=  999999;
-    
-    cout << "***********************************************************" << endl;
-    cout << qT << " " << qTbinIdx << endl;
-    
-    cout << hypot(pU1 + qT, pU2) << " " << hypot(pU1_data, pU2_data) << endl;
-    cout << "pU1_data=" << pU1_data << " pU2_data=" << pU2_data << endl; 
-  
-    if(pU1_data == 999999) cout << "************* " << qT << endl;
-    if(pU2_data == 999999) cout << "************* " << qT << endl;
-    
-    
-    
-    //if(qTbinIdx == 1) cout << norm_para_data << " " << norm_perp_data << " " << norm_para_mc << " " << norm_perp_mc << endl;
-
-    if(pU1_data == 999999) pU1_data = pU1;
-    //else {
-    //   if(pU1_data > 0) pU1_data -= qT;
-    //   else pU1_data += qT;
-    //}
-    else pU1_data -= qT;
-    
-    if(pU2_data == 999999) pU1_data = pU2;
-    
-    
-    cout << "PARA+qT " << (pU1+qT) << " " << (pU1_data+qT) << endl; 
-    cout << "PARA " << pU1 << " " << pU1_data << endl; 
-    cout << "PERP " << pU2 << " " << pU2_data << endl; 
-    
-    cout << "lep_pt1=" << lep_pt[0] << " lep_pt2=" << lep_pt[1] << endl;  
-    cout << "lep_eta1=" << lep_eta[0] << " lep_eta2=" << lep_eta[1] << endl;  
-    cout << "lep_phi1=" << lep_phi[0] << " lep_phi2=" << lep_phi[1] << endl;  
-    cout << "MET=" << MET <<" MET_phi=" << MET_phi << " lep_phi=" << lep_phi_ << endl;  
-    cout << "***********************************************************" << endl;
-    
-    if(qT < 36.3028 and qT > 36.3024) {
-        
-        exit(0);
-    }
-    
-    // correct MC to DATA
-    res[1] = pU1_data;
-    res[2] = pU2_data;
-    res[0] = std::hypot(res[1], res[2]);
-
-	return res;
-}
-
-
-
-// recoil correction
-Vec_f recoilCorrectionBinned_old(double pU1, double pU2, double qTbinIdx, int corrType=0, int corrParam=1) {
-    
-    Vec_f res(3, 0);
-    //cout << pU1 << " " << pU2 << " " << qTbinIdx << endl; 
-    
-    res[1] = pU1;
-    res[2] = pU2;
-    res[0] = std::hypot(res[1], res[2]);
-    
-    TH3D *h3;
-    int corrIdx = 1;
-    
-    GaussianSum u1_data;
-    h3 = recoil_hists["para_data"];
-    corrIdx = 1;
-    if(corrType == 1) corrIdx = corrParam;
-    u1_data.addTerm(h3->GetBinContent(qTbinIdx+1, 1, corrIdx), h3->GetBinContent(qTbinIdx+1, 2, corrIdx), h3->GetBinContent(qTbinIdx+1, 4, corrIdx));
-    u1_data.addTerm(h3->GetBinContent(qTbinIdx+1, 1, corrIdx), h3->GetBinContent(qTbinIdx+1, 3, corrIdx), 1.-h3->GetBinContent(qTbinIdx+1, 4, corrIdx));
-    
-    GaussianSum u2_data;
-    h3 = recoil_hists["perp_data"];
-    corrIdx = 1;
-    if(corrType == 2) corrIdx = corrParam;
-    u2_data.addTerm(h3->GetBinContent(qTbinIdx+1, 1, corrIdx), h3->GetBinContent(qTbinIdx+1, 2, corrIdx), h3->GetBinContent(qTbinIdx+1, 4, corrIdx));
-    u2_data.addTerm(h3->GetBinContent(qTbinIdx+1, 1, corrIdx), h3->GetBinContent(qTbinIdx+1, 3, corrIdx), 1.-h3->GetBinContent(qTbinIdx+1, 4, corrIdx));
-    
-    GaussianSum u1_mc;
-    h3 = recoil_hists["para_mc"];
-    corrIdx = 1;
-    if(corrType == 3) corrIdx = corrParam;
-    u1_mc.addTerm(h3->GetBinContent(qTbinIdx+1, 1, corrIdx), h3->GetBinContent(qTbinIdx+1, 2, corrIdx), h3->GetBinContent(qTbinIdx+1, 4, corrIdx));
-    u1_mc.addTerm(h3->GetBinContent(qTbinIdx+1, 1, corrIdx), h3->GetBinContent(qTbinIdx+1, 3, corrIdx), 1.-h3->GetBinContent(qTbinIdx+1, 4, corrIdx));
-    
-    GaussianSum u2_mc;
-    h3 = recoil_hists["perp_mc"];
-    corrIdx = 1;
-    if(corrType == 4) corrIdx = corrParam;
-    u2_mc.addTerm(h3->GetBinContent(qTbinIdx+1, 1, corrIdx), h3->GetBinContent(qTbinIdx+1, 2, corrIdx), h3->GetBinContent(qTbinIdx+1, 4, corrIdx));
-    u2_mc.addTerm(h3->GetBinContent(qTbinIdx+1, 1, corrIdx), h3->GetBinContent(qTbinIdx+1, 3, corrIdx), 1.-h3->GetBinContent(qTbinIdx+1, 4, corrIdx));
-    
-    double pVal_u1_mc = u1_mc.evalCDF(pU1);
-    double pVal_u2_mc = u2_mc.evalCDF(pU2);
-    
-    double pU1_data = u1_data.findRoot(pVal_u1_mc, -500, 500);
-    double pU2_data = u2_data.findRoot(pVal_u2_mc, -500, 500);
-
-    if(pU1_data == 999999) pU1_data = pU1;
-    if(pU2_data == 999999) pU1_data = pU2;    
-        
-    // correct MC to DATA
-    res[1] = pU1_data;
-    res[2] = pU2_data;
-    res[0] = std::hypot(res[1], res[2]);
-
-	return res;
-}
-
-// recoil correction
-
-
-
-double recoilParameterization_mean(double a, double b, double c, double d, double e, double f, double g, double qT) {
-    
-    return (a*qT*qT*qT*qT + b*qT*qT*qT + c*qT*qT + d*qT)/(e*qT*qT*qT + f*qT*qT + g*qT + 1);
-}
 
 
 GaussianSum constructParametricGauss(string tag, double qT, int syst=-1) {
@@ -991,7 +778,7 @@ GaussianSum constructParametricGauss(string tag, double qT, int syst=-1) {
             mean = recoil_param_funcs[tag + "_mean" + to_string(i) + systLabel]->Eval(qT);
             sigma = recoil_param_funcs[tag + "_sigma" + to_string(i) + systLabel]->Eval(qT);
             gauss.addTerm(mean, sigma, norm);
-            //cout << "  iGauss=" << i << " norm=" << norm << " mean=" << mean << " sigma=" << sigma << endl;
+            //cout << " " << tag << " qT=" << qT << "  iGauss=" << i << " norm=" << norm << " mean=" << mean << " sigma=" << sigma << endl;
         }
     }
     else if (recoil_binned_nGauss.find(tag) != recoil_binned_nGauss.end()) {
@@ -1027,7 +814,7 @@ GaussianSum constructParametricGauss(string tag, double qT, int syst=-1) {
 
 
 // recoil correction
-Vec_f recoilCorrectionParametric(double para, double perp, double qTbinIdx, double qT, string systTag="", int systIdx=-1) {
+Vec_f recoilCorrectionParametric(double para, double perp, double qT, string systTag="", int systIdx=-1) {
     
     Vec_f res(3, 0);
     //cout << pU1 << " " << pU2 << " " << qTbinIdx << endl; 
@@ -1036,7 +823,7 @@ Vec_f recoilCorrectionParametric(double para, double perp, double qTbinIdx, doub
     res[2] = perp;
     res[0] = std::hypot(res[1], res[2]);
     
-    if(qT > recoil_correction_qTmax) qT = recoil_correction_qTmax; // protection for high qT
+    //if(qT > recoil_correction_qTmax) qT = recoil_correction_qTmax; // protection for high qT
     //return res;
     
     int corrIdx = 1;
@@ -1069,7 +856,7 @@ Vec_f recoilCorrectionParametric(double para, double perp, double qTbinIdx, doub
     //GaussianSum dy_perp = constructParametricGauss("source_perp", qT);
     
     
-    double pVal_para_dy = dy_para.evalCDF(para + qT);
+    double pVal_para_dy = dy_para.evalCDF(para + qT); // pdfs are parameterized on para + qT - qTcorrMean, i.e. to have mean=0
     double pVal_perp_dy = dy_perp.evalCDF(perp);
     
     
@@ -1077,8 +864,8 @@ Vec_f recoilCorrectionParametric(double para, double perp, double qTbinIdx, doub
     double perp_corr = data_perp.findRoot(pVal_perp_dy, -500, 500);
 
   
-    if(para_corr == 999999) cout << "************* " << qT << endl;
-    if(perp_corr == 999999) cout << "************* " << qT << endl;
+    if(para_corr == 999999) cout << "PARA ************* " << qT << endl;
+    if(perp_corr == 999999) cout << "PERP ************* " << qT << endl;
     
     
   
@@ -1115,7 +902,7 @@ Vec_recoil recoilCorrectionParametricUnc(double para, double perp, double qT, st
     int nSysts = recoil_param_nStat[tag];
     Vec_recoil res(nSysts);
     for(int iSyst = 0; iSyst<nSysts; iSyst++) {
-        Vec_f ret = recoilCorrectionParametric(para, perp, 0, qT, tag, iSyst);
+        Vec_f ret = recoilCorrectionParametric(para, perp, qT, tag, iSyst);
         res[iSyst].para = ret[1];
         res[iSyst].perp = ret[2];
     }
@@ -1149,85 +936,6 @@ Vec_f recoilCorrectionParametricUncWeights(double eval, double qT, string tag_no
     return res;
 }
 
-Vec_f recoilCorrectionParametric_Old(double pU1, double pU2, double qT, int corrType=0, int corrIdx=1) {
-    
-    /*
-    corrType:
-        - 0: none
-        - 1: para data
-        - 1: perp data
-        - 1: para mc
-        - 1: perp mc
-        
-    corrIdx: according to the variation/diagonalization of covariance matrix
-        
-    */
-    
-    Vec_f res(3, 0);
-    
-    res[1] = pU1;
-    res[2] = pU2;
-    res[0] = std::hypot(res[1], res[2]);
-    
-    TH1D *h1;
-    double m, s1, s2, n;
-    int sIdx = 1;
-    
-    GaussianSum u1_data;
-    h1 = recoil_hists_param["para_data"];
-    if(corrType == 1) sIdx = corrIdx;
-    m = recoilParameterization_mean(h1->GetBinContent(1, 1, sIdx), h1->GetBinContent(1, 2, sIdx), h1->GetBinContent(1, 3, sIdx), h1->GetBinContent(1, 4, sIdx), h1->GetBinContent(1, 5, sIdx), h1->GetBinContent(1, 6, sIdx), h1->GetBinContent(1, 7, sIdx), qT);
-    s1 = recoilParameterization_sigma(h1->GetBinContent(2, 1, sIdx), h1->GetBinContent(2, 2, sIdx), h1->GetBinContent(2, 3, sIdx), qT);
-    s2 = recoilParameterization_sigma(h1->GetBinContent(3, 1, sIdx), h1->GetBinContent(3, 2, sIdx), h1->GetBinContent(3, 3, sIdx), qT);
-    n = h1->GetBinContent(4, 1, sIdx);
-    u1_data.addTerm(m, s1, n);
-    u1_data.addTerm(m, s2, 1.-n);
-    
-    GaussianSum u2_data;
-    h1 = recoil_hists_param["perp_data"];
-    if(corrType == 2) sIdx = corrIdx;
-    s1 = recoilParameterization_sigma(h1->GetBinContent(2, 1, sIdx), h1->GetBinContent(2, 2, sIdx), h1->GetBinContent(2, 3, sIdx), qT);
-    s2 = recoilParameterization_sigma(h1->GetBinContent(3, 1, sIdx), h1->GetBinContent(3, 2, sIdx), h1->GetBinContent(3, 3, sIdx), qT);
-    n = h1->GetBinContent(4, 1, sIdx);
-    u2_data.addTerm(0, s1, n);
-    u2_data.addTerm(0, s2, 1.-n);
-    
-    GaussianSum u1_mc;
-    h1 = recoil_hists_param["para_mc"];
-    if(corrType == 3) sIdx = corrIdx;
-    m = recoilParameterization_mean(h1->GetBinContent(1, 1, sIdx), h1->GetBinContent(1, 2, sIdx), h1->GetBinContent(1, 3, sIdx), h1->GetBinContent(1, 4, sIdx), h1->GetBinContent(1, 5, sIdx), h1->GetBinContent(1, 6, sIdx), h1->GetBinContent(1, 7, sIdx), qT);
-    s1 = recoilParameterization_sigma(h1->GetBinContent(2, 1, sIdx), h1->GetBinContent(2, 2, sIdx), h1->GetBinContent(2, 3, sIdx), qT);
-    s2 = recoilParameterization_sigma(h1->GetBinContent(3, 1, sIdx), h1->GetBinContent(3, 2, sIdx), h1->GetBinContent(3, 3, sIdx), qT);
-    n = h1->GetBinContent(4, 1, sIdx);
-    u1_mc.addTerm(m, s1, n);
-    u1_mc.addTerm(m, s2, 1.-n);
-    
-    GaussianSum u2_mc;
-    h1 = recoil_hists_param["perp_mc"];
-    if(corrType == 4) sIdx = corrIdx;
-    s1 = recoilParameterization_sigma(h1->GetBinContent(2, 1, sIdx), h1->GetBinContent(2, 2, sIdx), h1->GetBinContent(2, 3, sIdx), qT);
-    s2 = recoilParameterization_sigma(h1->GetBinContent(3, 1, sIdx), h1->GetBinContent(3, 2, sIdx), h1->GetBinContent(3, 3, sIdx), qT);
-    n = h1->GetBinContent(4, 1, sIdx);
-    u2_mc.addTerm(0, s1, n);
-    u2_mc.addTerm(0, s2, 1.-n);
-    
-    double pVal_u1_mc = u1_mc.evalCDF(pU1);
-    double pVal_u2_mc = u2_mc.evalCDF(pU2);
-    
-    double pU1_data = u1_data.findRoot(pVal_u1_mc, -1000, 1000);
-    double pU2_data = u2_data.findRoot(pVal_u2_mc, -500, 500);
-
-    if(pU1_data == 999999) pU1_data = pU1;
-    if(pU2_data == 999999) pU1_data = pU2;    
-        
-    // correct MC to DATA
-    res[1] = pU1_data;
-    res[2] = pU2_data;
-    res[0] = std::hypot(res[1], res[2]);
-
-
-	return res;	
-}
 
 
 

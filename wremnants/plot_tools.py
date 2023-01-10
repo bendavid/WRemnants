@@ -14,6 +14,7 @@ import logging
 import shutil
 import sys
 import datetime
+import json
 
 hep.style.use(hep.style.ROOT)
 
@@ -21,7 +22,7 @@ logger = common.child_logger(__name__)
 
 def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None,
     grid_on_main_plot = False, grid_on_ratio_plot = False, plot_title = None, title_padding = 0,
-    x_ticks_ndp = None, bin_density = 300, cms_label = None
+    x_ticks_ndp = None, bin_density = 300, cms_label = None, logy=False, logx=False
 ):
     if not xlim:
         xlim = [href.axes[0].edges[0], href.axes[0].edges[-1]]
@@ -49,6 +50,12 @@ def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None,
         ax1.set_ylim(ylim)
     else:
         ax1.autoscale(axis='y')
+
+    if logy:
+        ax1.set_yscale('log')
+    if logx:
+        ax1.set_xscale('log')
+        ax2.set_xscale('log')
 
     if grid_on_main_plot:  ax1.grid(which = "both")
     if grid_on_ratio_plot: ax2.grid(which = "both")
@@ -115,10 +122,10 @@ def makeStackPlotWithRatio(
         ratio_ref = data_hist if data_hist else sum(stack) 
         if baseline:
             hep.histplot(
-                hh.divideHists(ratio_ref, ratio_ref, cutoff=1e-8),
+                hh.divideHists(ratio_ref, ratio_ref, cutoff=1e-8, rel_unc=True),
                 histtype="step",
                 color="black",
-                yerr=False,
+                yerr=True,
                 ax=ax2,
                 linewidth=2,
             )
@@ -140,7 +147,7 @@ def makeStackPlotWithRatio(
             #if proc == "Data":
             #    continue
             hep.histplot(
-                hh.divideHists(unstack, ratio_ref, cutoff=0.01),
+                hh.divideHists(unstack, ratio_ref, cutoff=0.01, rel_unc=True),
                 histtype="errorbar" if proc == "Data" and not data_hist else "step",
                 color=histInfo[proc]["color"],
                 label=histInfo[proc]["label"],
@@ -173,34 +180,49 @@ def makePlotWithRatioToRef(
     hists, labels, colors, xlabel="", ylabel="Events/bin", rlabel="x/nominal",
     rrange=[0.9, 1.1], ylim=None, xlim=None, nlegcols=2, binwnorm=None, alpha=1.,
     baseline=True, data=False, autorrange=None, grid = False,
-    yerr=False, legtext_size=20, plot_title=None, title_padding = 0,
-    x_ticks_ndp = None, bin_density = 300, yscale=None, cms_label = None
+    yerr=False, legtext_size=20, plot_title=None, x_ticks_ndp = None, bin_density = 300, yscale=None,
+    logy=False, logx=False, fill_between=False, title_padding = 0, cms_label = None
 ):
+    if len(hists) != len(labels) or len(hists) != len(colors):
+        raise ValueError(f"Number of hists ({len(hists)}), colors ({len(colors)}), and labels ({len(labels)}) must agree!")
     # nominal is always at first, data is always at last, if included
     ratio_hists = [hh.divideHists(h, hists[0], cutoff=0.00001) for h in hists[not baseline:]]
     fig, ax1, ax2 = figureWithRatio(
         hists[0], xlabel, ylabel, ylim, rlabel, rrange, xlim=xlim, 
         grid_on_ratio_plot = grid, plot_title = plot_title, title_padding=title_padding,
-        bin_density = bin_density, cms_label = cms_label
+        bin_density = bin_density, cms_label = cms_label, logy=logy, logx=logx
     )
+    
+    count = len(hists)-data
+    print("Count is", count)
     hep.histplot(
-        hists[:len(hists) - data],
+        hists[:count],
         histtype="step",
-        color=colors[:(len(colors)- data)],
-        label=labels[:(len(labels)- data)],
+        color=colors[:count],
+        label=labels[:count],
         stack=False,
         ax=ax1,
         yerr=yerr,
         binwnorm=binwnorm,
         alpha=alpha,
     )
-    
+
     if len(hists) > 1:
+        ratio_hists = [hh.divideHists(h, hists[0], cutoff=0.00001) for h in hists[not baseline:]]
+        if fill_between:
+            for up,down,color in zip(hists[1::2], hists[2::2], colors[1::2]):
+                upr = hh.divideHists(up, hists[0], 1e-6)
+                downr = hh.divideHists(down, hists[0], 1e-6)
+                ax2.fill_between(upr.axes[0].edges, 
+                        np.append(upr.values(), upr.values()[-1]), 
+                        np.append(downr.values(), upr.values()[-1]),
+                            step='post', color=color, alpha=0.5)
+
+        count = len(ratio_hists) - data if not fill_between else 1
         hep.histplot(
-            ratio_hists[:len(ratio_hists) - data],
+            ratio_hists[(not baseline):count],
             histtype="step",
-            color=colors[(not baseline):(len(colors)- data)],
-            label=labels[(not baseline):(len(labels)- data)],
+            color=colors[(not baseline):count],
             yerr=False,
             stack=False,
             ax=ax2,
@@ -234,18 +256,19 @@ def makePlotWithRatioToRef(
     # This seems like a bug, but it's needed
     if not xlim:
         xlim = [hists[0].axes[0].edges[0], hists[0].axes[0].edges[-1]]
-    fix_axes(ax1, ax2)
+    fix_axes(ax1, ax2, yscale=yscale, logy=logy)
     if x_ticks_ndp: ax2.xaxis.set_major_formatter(StrMethodFormatter('{x:.' + str(x_ticks_ndp) + 'f}'))
     return fig
 
-def fix_axes(ax1, ax2, yscale=None):
+def fix_axes(ax1, ax2, yscale=None, logy=False):
     #TODO: Would be good to get this working
     #ax1.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
     if yscale:
         ymin, ymax = ax1.get_ylim()
         ax1.set_ylim(ymin, ymax*yscale)
-    redo_axis_ticks(ax1, "y")
-    redo_axis_ticks(ax2, "x")
+    if not logy:
+        redo_axis_ticks(ax1, "y")
+        redo_axis_ticks(ax2, "x")
     redo_axis_ticks(ax1, "x", True)
     ax1.set_xticklabels([])
 
@@ -281,13 +304,10 @@ def save_pdf_and_png(outdir, basename):
     plt.savefig(fname.replace(".pdf", ".png"), bbox_inches='tight')
     logger.info(f"Wrote file(s) {fname}(.png)")
 
-def write_index_and_log(outpath, logname, indexname="index.php", template_dir=f"{pathlib.Path(__file__).parent}/Templates", yield_tables=None):
-    if not os.path.isfile(f"{outpath}/{indexname}"):
-        shutil.copyfile(f"{template_dir}/{indexname}", f"{outpath}/{indexname}")
-
+def write_index_and_log(outpath, logname, indexname="index.php", template_dir=f"{pathlib.Path(__file__).parent}/Templates", 
+        yield_tables=None, analysis_meta_info=None):
+    shutil.copyfile(f"{template_dir}/{indexname}", f"{outpath}/{indexname}")
     logdir = outpath
-    #if not os.path.isdir(logdir):
-    #    os.mkdir(logdir)
 
     with open(f"{logdir}/{logname}.log", "w") as logf:
         meta_info = '-'*80 + '\n' + \
@@ -301,3 +321,10 @@ def write_index_and_log(outpath, logname, indexname="index.php", template_dir=f"
                 logf.write(f"Yield information for {k}\n")
                 logf.write("-"*80+"\n")
                 logf.write(str(v.round(2))+"\n\n")
+
+        if analysis_meta_info:
+            for k,analysis_info in analysis_meta_info.items():
+                logf.write('\n'+'-'*80+"\n")
+                logf.write(f"Meta info from input file {k}\n")
+                logf.write('\n'+'-'*80+"\n")
+                logf.write(json.dumps(analysis_info, indent=4).replace("\\n", "\n"))

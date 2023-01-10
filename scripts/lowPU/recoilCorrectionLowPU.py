@@ -135,6 +135,455 @@ def do_ttbar_para_RawPFMET():
 
     recoilLibs.doFitMultiGauss(rFile, proc, comp, fitCfg, label, outDir_fits, recoil_qTbins, qTmax=qTmax, rebin=rebin, xMin=-200, xMax=200, ratio=True)
 
+def do_dymumu_perp_RawPFMET_zlib():
+
+    proc = "Zmumu"
+    tag = "zmumu_perp"
+    comp = "perp"
+    baseDir = "%s/%s_zlib" % (outDir, tag)
+    name = "DY #rightarrow #mu^{+}#mu^{#minus}"
+    label = "%s, %s" % (name, met)
+    functions.prepareDir(baseDir, False)
+    rebin = 1
+
+    outDir_fits_v0 = "%s/fits_v0" % baseDir
+    fitCfg = {}   
+    
+    fitCfg['mean'], fitCfg['mean_cfg'] = [0, 0, 0, 0], [0, 0, 0, 0] # 0 = floating, 1 = fixed, 2 = parametric (fixed), 3 = parametric (floating)
+    fitCfg['sigma'], fitCfg['sigma_cfg'] = [15, 5, 8, 10], [0, 0, 0, 0]
+    fitCfg['norm'], fitCfg['norm_cfg'] = [0.05, 0.20, 0.25], [0, 0, 0]
+    
+
+    recoil_qTbins = list(functions.drange(0, 50, 0.5)) +  list(range(50, 100, 1)) + list(range(100, 150, 2)) + [150]
+    
+    nGauss = len(fitCfg['mean'])
+    
+    if False: 
+        recoilLibs.doFitMultiGauss(rFile, proc, comp, fitCfg, label, outDir_fits_v0, recoil_qTbins, qTmax=150, propagate=False, rebin=rebin, singleMean=True, xMin=-100, xMax=100)
+        return
+        
+    outDir_param_v0 = "%s/param_v0" % baseDir
+    if False:
+        jsOut = {}
+        jsOut['nGauss'] = nGauss
+        outDir_param = outDir_param_v0
+        functions.prepareDir(outDir_param, True)
+        with open("%s/results.json" % outDir_fits_v0) as f: jsIn = json.load(f)
+        
+        fitF, params, cParams = "[0]*TMath::Power(x, [1]) + [2]", [5.20382e+00, 1.78386e-01, 7.51449e+00], [False, False, False]
+        recoilLibs.doFit(jsIn, jsOut, comp, "sigma1", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=150, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{1} (GeV)")
+ 
+        t = 25
+        fLeft, dfLeft  = "[0] + [1]*x + [2]*x*x + [3]*x*x*x + [4]*x*x*x*x", "[1] + 2*[2]*x + 3*[3]*x*x + 4*[4]*x*x*x"
+        fLeftEval, dfLeftEval = fLeft.replace("x", str(t)), dfLeft.replace("x", str(t))
+        fitF = "(x<{t})*1*({fLeft}) +0+ (x>{t})*1*(  ({dfLeftEval})*x + ({fLeftEval}-({dfLeftEval})*{t}) )".format(t=t, fLeft=fLeft, fLeftEval=fLeftEval, dfLeftEval=dfLeftEval)
+        params, cParams = [4.00314e+00, 6.34998e-02, -3.94494e-04, 2.83885e-05, -1.51997e-06], [False, False, False, False, False]
+        recoilLibs.doFit(jsIn, jsOut, comp, "sigma2", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=1, fitMax=150, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{2} (GeV)")
+        
+        fitF, params, cParams = "[0] + [1]*x", [7.45735e+00, 6.52883e-03], [False, False]
+        recoilLibs.doFit(jsIn, jsOut, comp, "sigma3", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=150, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{2} (GeV)")
+        
+        fitF, params, cParams = "[0]*TMath::Power(x, [1]) + [2]", [1.15048e-02, 9.60879e-01, 2.26090e+01], [False, False, False]
+        t = 25
+        fLeft, dfLeft  = "[0] + [1]*x + [2]*x*x + [3]*x*x*x + [4]*x*x*x*x", "[1] + 2*[2]*x + 3*[3]*x*x + 4*[4]*x*x*x"
+        fLeftEval, dfLeftEval = fLeft.replace("x", str(t)), dfLeft.replace("x", str(t))
+        fitF = "(x<{t})*1*({fLeft}) +0+ (x>{t})*1*(  ({dfLeftEval})*x + ({fLeftEval}-({dfLeftEval})*{t}) )".format(t=t, fLeft=fLeft, fLeftEval=fLeftEval, dfLeftEval=dfLeftEval)
+        params, cParams = [9.99069e+00, -7.11533e-02, 1.92415e-02, -1.05192e-03, 1.72908e-05], [False, False, False, False, False]
+        recoilLibs.doFit(jsIn, jsOut, comp, "sigma4", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=150, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{4} (GeV)")
+        
+
+        t = 25
+        fLeft, dfLeft  = "[0] + [1]*x + [2]*x*x + [3]*x*x*x + [4]*x*x*x*x", "[1] + 2*[2]*x + 3*[3]*x*x + 4*[4]*x*x*x"
+        fLeftEval, dfLeftEval = fLeft.replace("x", str(t)), dfLeft.replace("x", str(t))
+        fitF = "(x<{t})*1*({fLeft}) +0+ (x>{t})*1*(  ({dfLeftEval})*x + ({fLeftEval}-({dfLeftEval})*{t}) )".format(t=t, fLeft=fLeft, fLeftEval=fLeftEval, dfLeftEval=dfLeftEval)
+        params, cParams = [4.95396e-02, -2.88434e-03, 5.76138e-05, 2.54185e-06, -6.16914e-08], [True, True, True, True, True]
+        recoilLibs.doFit(jsIn, jsOut, comp, "norm1", fitF, params, outDir_param, recoil_qTbins, label, cutOffMin=0.02, cParams=cParams, fitMin=2, fitMax=60  , yMin=0, yMax=1, xMax=150, yTitle = "n_{3} (GeV)")
+        
+        fitF, params, cParams = "[0]*TMath::Exp(-[1]*x)", [2.33265e-01, 4.39271e-03], [True, True]
+        recoilLibs.doFit(jsIn, jsOut, comp, "norm2", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=150, yMin=0, yMax=1, xMax=150, yTitle = "n_{3} (GeV)")
+        
+        fitF, params, cParams = "[0]*TMath::Exp(-[1]*x)", [5.15149e-01, 1.71424e-02], [True, True]
+        recoilLibs.doFit(jsIn, jsOut, comp, "norm3", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=30, yMin=0, yMax=1, xMax=150, yTitle = "n_{3} (GeV)")
+        
+        with open("%s/results.json" % outDir_param_v0, "w") as outfile: json.dump(jsOut, outfile, indent=4)
+        return
+
+    outDir_fits_v1 = "%s/fits_v1" % baseDir
+    if False:
+        fitCfg['mean_cfg'] = [1, 1, 1, 1] # 0 = floating, 1 = fixed, 2 = parametric (fixed), 3 = parametric (floating)
+        fitCfg['sigma_cfg'] = [0, 0, 0, 0]
+        fitCfg['norm_cfg'] = [0, 2, 0]
+        fitCfg['sigma'] = [12.6, 3.8, 7.9, 13]
+        with open("%s/results.json" % outDir_param_v0) as f: jsIn = json.load(f)
+        recoilLibs.doFitMultiGauss(rFile, proc, comp, fitCfg, label, outDir_fits_v1, recoil_qTbins, funcJs=jsIn, qTmax=150, rebin=rebin, singleMean=True, xMin=-100, xMax=100)
+        return
+
+    outDir_param_v1 = "%s/param_v1" % baseDir
+    if False:
+        jsOut = {}
+        jsOut['nGauss'] = nGauss
+        outDir_param = outDir_param_v1
+        functions.prepareDir(outDir_param, True)
+        with open("%s/results.json" % outDir_fits_v1) as f: jsIn = json.load(f)
+        
+        fitF, params, cParams = "[0]*TMath::Power(x, [1]) + [2]", [5.20382e+00, 1.78386e-01, 7.51449e+00], [False, False, False]
+        recoilLibs.doFit(jsIn, jsOut, comp, "sigma1", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=150, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{1} (GeV)")
+ 
+        t = 25
+        fLeft, dfLeft  = "[0] + [1]*x + [2]*x*x + [3]*x*x*x + [4]*x*x*x*x", "[1] + 2*[2]*x + 3*[3]*x*x + 4*[4]*x*x*x"
+        fLeftEval, dfLeftEval = fLeft.replace("x", str(t)), dfLeft.replace("x", str(t))
+        fitF = "(x<{t})*1*({fLeft}) +0+ (x>{t})*1*(  ({dfLeftEval})*x + ({fLeftEval}-({dfLeftEval})*{t}) )".format(t=t, fLeft=fLeft, fLeftEval=fLeftEval, dfLeftEval=dfLeftEval)
+        params, cParams = [4.00314e+00, 6.34998e-02, -3.94494e-04, 2.83885e-05, -1.51997e-06], [False, False, False, False, False]
+        recoilLibs.doFit(jsIn, jsOut, comp, "sigma2", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=1, fitMax=150, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{2} (GeV)")
+        
+        fitF, params, cParams = "[0] + [1]*x", [7.45735e+00, 6.52883e-03], [False, False]
+        recoilLibs.doFit(jsIn, jsOut, comp, "sigma3", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=150, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{2} (GeV)")
+        
+        fitF, params, cParams = "[0]*TMath::Power(x, [1]) + [2]", [1.15048e-02, 9.60879e-01, 2.26090e+01], [False, False, False]
+        t = 25
+        fLeft, dfLeft  = "[0] + [1]*x + [2]*x*x + [3]*x*x*x + [4]*x*x*x*x", "[1] + 2*[2]*x + 3*[3]*x*x + 4*[4]*x*x*x"
+        fLeftEval, dfLeftEval = fLeft.replace("x", str(t)), dfLeft.replace("x", str(t))
+        fitF = "(x<{t})*1*({fLeft}) +0+ (x>{t})*1*(  ({dfLeftEval})*x + ({fLeftEval}-({dfLeftEval})*{t}) )".format(t=t, fLeft=fLeft, fLeftEval=fLeftEval, dfLeftEval=dfLeftEval)
+        params, cParams = [9.99069e+00, -7.11533e-02, 1.92415e-02, -1.05192e-03, 1.72908e-05], [False, False, False, False, False]
+        recoilLibs.doFit(jsIn, jsOut, comp, "sigma4", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=150, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{4} (GeV)")
+        
+
+        t = 25
+        fLeft, dfLeft  = "[0] + [1]*x + [2]*x*x + [3]*x*x*x + [4]*x*x*x*x", "[1] + 2*[2]*x + 3*[3]*x*x + 4*[4]*x*x*x"
+        fLeftEval, dfLeftEval = fLeft.replace("x", str(t)), dfLeft.replace("x", str(t))
+        fitF = "(x<{t})*1*({fLeft}) +0+ (x>{t})*1*(  ({dfLeftEval})*x + ({fLeftEval}-({dfLeftEval})*{t}) )".format(t=t, fLeft=fLeft, fLeftEval=fLeftEval, dfLeftEval=dfLeftEval)
+        params, cParams = [4.95396e-02, -2.88434e-03, 5.76138e-05, 2.54185e-06, -6.16914e-08], [True, True, True, True, True]
+        recoilLibs.doFit(jsIn, jsOut, comp, "norm1", fitF, params, outDir_param, recoil_qTbins, label, cutOffMin=0.02, cParams=cParams, fitMin=2, fitMax=60  , yMin=0, yMax=1, xMax=150, yTitle = "n_{3} (GeV)")
+        
+        fitF, params, cParams = "[0]*TMath::Exp(-[1]*x)", [2.33265e-01, 4.39271e-03], [True, True]
+        recoilLibs.doFit(jsIn, jsOut, comp, "norm2", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=150, yMin=0, yMax=1, xMax=150, yTitle = "n_{3} (GeV)")
+        
+        fitF, params, cParams = "[0]*TMath::Exp(-[1]*x)", [5.15149e-01, 1.71424e-02], [True, True]
+        recoilLibs.doFit(jsIn, jsOut, comp, "norm3", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=30, yMin=0, yMax=1, xMax=150, yTitle = "n_{3} (GeV)")
+        
+        with open("%s/results.json" % outDir_param_v1, "w") as outfile: json.dump(jsOut, outfile, indent=4)    
+        return
+
+    outDir_fits_v2 = "%s/fits_v2" % baseDir
+    if False:
+        fitCfg['mean_cfg'] = [1, 1, 1, 1] # 0 = floating, 1 = fixed, 2 = parametric (fixed), 3 = parametric (floating)
+        fitCfg['sigma_cfg'] = [0, 0, 0, 0]
+        fitCfg['norm_cfg'] = [0, 2, 2]
+        fitCfg['sigma'] = [13, 4, 7, 10]
+        with open("%s/results.json" % outDir_param_v1) as f: jsIn = json.load(f)
+        recoilLibs.doFitMultiGauss(rFile, proc, comp, fitCfg, label, outDir_fits_v2, recoil_qTbins, funcJs=jsIn, qTmax=150, rebin=rebin, singleMean=True, xMin=-100, xMax=100)
+        return
+        
+    outDir_param_v2 = "%s/param_v2" % baseDir
+    if False:
+        jsOut = {}
+        jsOut['nGauss'] = nGauss
+        outDir_param = outDir_param_v2
+        functions.prepareDir(outDir_param, True)
+        with open("%s/results.json" % outDir_fits_v2) as f: jsIn = json.load(f)
+        
+        fitF, params, cParams = "[0]*TMath::Power(x, [1]) + [2]", [5.20382e+00, 1.78386e-01, 7.51449e+00], [False, False, False]
+        recoilLibs.doFit(jsIn, jsOut, comp, "sigma1", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=150, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{1} (GeV)")
+ 
+        t = 25
+        fLeft, dfLeft  = "[0] + [1]*x + [2]*x*x + [3]*x*x*x + [4]*x*x*x*x", "[1] + 2*[2]*x + 3*[3]*x*x + 4*[4]*x*x*x"
+        fLeftEval, dfLeftEval = fLeft.replace("x", str(t)), dfLeft.replace("x", str(t))
+        fitF = "(x<{t})*1*({fLeft}) +0+ (x>{t})*1*(  ({dfLeftEval})*x + ({fLeftEval}-({dfLeftEval})*{t}) )".format(t=t, fLeft=fLeft, fLeftEval=fLeftEval, dfLeftEval=dfLeftEval)
+        params, cParams = [4.00314e+00, 6.34998e-02, -3.94494e-04, 2.83885e-05, -1.51997e-06], [False, False, False, False, False]
+        recoilLibs.doFit(jsIn, jsOut, comp, "sigma2", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=1, fitMax=150, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{2} (GeV)")
+        
+        fitF, params, cParams = "[0] + [1]*x", [7.45735e+00, 6.52883e-03], [False, False]
+        recoilLibs.doFit(jsIn, jsOut, comp, "sigma3", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=150, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{2} (GeV)")
+        
+        fitF, params, cParams = "[0]*TMath::Power(x, [1]) + [2]", [1.15048e-02, 9.60879e-01, 2.26090e+01], [False, False, False]
+        t = 25
+        fLeft, dfLeft  = "[0] + [1]*x + [2]*x*x + [3]*x*x*x + [4]*x*x*x*x", "[1] + 2*[2]*x + 3*[3]*x*x + 4*[4]*x*x*x"
+        fLeftEval, dfLeftEval = fLeft.replace("x", str(t)), dfLeft.replace("x", str(t))
+        fitF = "(x<{t})*1*({fLeft}) +0+ (x>{t})*1*(  ({dfLeftEval})*x + ({fLeftEval}-({dfLeftEval})*{t}) )".format(t=t, fLeft=fLeft, fLeftEval=fLeftEval, dfLeftEval=dfLeftEval)
+        params, cParams = [9.99069e+00, -7.11533e-02, 1.92415e-02, -1.05192e-03, 1.72908e-05], [False, False, False, False, False]
+        recoilLibs.doFit(jsIn, jsOut, comp, "sigma4", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=150, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{4} (GeV)")
+        
+
+        t = 25
+        fLeft, dfLeft  = "[0] + [1]*x + [2]*x*x + [3]*x*x*x + [4]*x*x*x*x", "[1] + 2*[2]*x + 3*[3]*x*x + 4*[4]*x*x*x"
+        fLeftEval, dfLeftEval = fLeft.replace("x", str(t)), dfLeft.replace("x", str(t))
+        fitF = "(x<{t})*1*({fLeft}) +0+ (x>{t})*1*(  ({dfLeftEval})*x + ({fLeftEval}-({dfLeftEval})*{t}) )".format(t=t, fLeft=fLeft, fLeftEval=fLeftEval, dfLeftEval=dfLeftEval)
+        params, cParams = [4.95396e-02, -2.88434e-03, 5.76138e-05, 2.54185e-06, -6.16914e-08], [True, True, True, True, True]
+        recoilLibs.doFit(jsIn, jsOut, comp, "norm1", fitF, params, outDir_param, recoil_qTbins, label, cutOffMin=0.02, cParams=cParams, fitMin=2, fitMax=60  , yMin=0, yMax=1, xMax=150, yTitle = "n_{3} (GeV)")
+        
+        fitF, params, cParams = "[0]*TMath::Exp(-[1]*x)", [2.33265e-01, 4.39271e-03], [True, True]
+        recoilLibs.doFit(jsIn, jsOut, comp, "norm2", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=150, yMin=0, yMax=1, xMax=150, yTitle = "n_{3} (GeV)")
+        
+        fitF, params, cParams = "[0]*TMath::Exp(-[1]*x)", [5.15149e-01, 1.71424e-02], [True, True]
+        recoilLibs.doFit(jsIn, jsOut, comp, "norm3", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=30, yMin=0, yMax=1, xMax=150, yTitle = "n_{3} (GeV)")
+        
+        with open("%s/results.json" % outDir_param_v2, "w") as outfile: json.dump(jsOut, outfile, indent=4)    
+        return
+        
+    outDir_fits_v3 = "%s/fits_v3" % baseDir
+    if False:
+        fitCfg['mean_cfg'] = [1, 1, 1, 1] # 0 = floating, 1 = fixed, 2 = parametric (fixed), 3 = parametric (floating)
+        fitCfg['sigma_cfg'] = [0, 0, 0, 0]
+        fitCfg['norm_cfg'] = [2, 2, 2]
+        fitCfg['sigma'] = [13, 4, 7, 10]
+        with open("%s/results.json" % outDir_param_v2) as f: jsIn = json.load(f)
+        recoilLibs.doFitMultiGauss(rFile, proc, comp, fitCfg, label, outDir_fits_v3, recoil_qTbins, funcJs=jsIn, qTmax=150, rebin=rebin, singleMean=True, xMin=-100, xMax=100)
+        return
+        
+    outDir_param_v3 = "%s/param_v3" % baseDir
+    if False:
+        jsOut = {}
+        jsOut['nGauss'] = nGauss
+        outDir_param = outDir_param_v3
+        functions.prepareDir(outDir_param, True)
+        with open("%s/results.json" % outDir_fits_v3) as f: jsIn = json.load(f)
+        
+        fitF, params, cParams = "[0]*TMath::Power(x, [1]) + [2]", [5.20382e+00, 1.78386e-01, 7.51449e+00], [False, False, False]
+        recoilLibs.doFit(jsIn, jsOut, comp, "sigma1", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=150, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{1} (GeV)")
+ 
+        t = 25
+        fLeft, dfLeft  = "[0] + [1]*x + [2]*x*x + [3]*x*x*x + [4]*x*x*x*x", "[1] + 2*[2]*x + 3*[3]*x*x + 4*[4]*x*x*x"
+        fLeftEval, dfLeftEval = fLeft.replace("x", str(t)), dfLeft.replace("x", str(t))
+        fitF = "(x<{t})*1*({fLeft}) +0+ (x>{t})*1*(  ({dfLeftEval})*x + ({fLeftEval}-({dfLeftEval})*{t}) )".format(t=t, fLeft=fLeft, fLeftEval=fLeftEval, dfLeftEval=dfLeftEval)
+        params, cParams = [4.00314e+00, 6.34998e-02, -3.94494e-04, 2.83885e-05, -1.51997e-06], [False, False, False, False, False]
+        recoilLibs.doFit(jsIn, jsOut, comp, "sigma2", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=1, fitMax=150, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{2} (GeV)")
+        
+        fitF, params, cParams = "[0] + [1]*x", [7.45735e+00, 6.52883e-03], [False, False]
+        recoilLibs.doFit(jsIn, jsOut, comp, "sigma3", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=150, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{2} (GeV)")
+        
+        fitF, params, cParams = "[0]*TMath::Power(x, [1]) + [2]", [1.15048e-02, 9.60879e-01, 2.26090e+01], [False, False, False]
+        t = 25
+        fLeft, dfLeft  = "[0] + [1]*x + [2]*x*x + [3]*x*x*x + [4]*x*x*x*x", "[1] + 2*[2]*x + 3*[3]*x*x + 4*[4]*x*x*x"
+        fLeftEval, dfLeftEval = fLeft.replace("x", str(t)), dfLeft.replace("x", str(t))
+        fitF = "(x<{t})*1*({fLeft}) +0+ (x>{t})*1*(  ({dfLeftEval})*x + ({fLeftEval}-({dfLeftEval})*{t}) )".format(t=t, fLeft=fLeft, fLeftEval=fLeftEval, dfLeftEval=dfLeftEval)
+        params, cParams = [9.99069e+00, -7.11533e-02, 1.92415e-02, -1.05192e-03, 1.72908e-05], [False, False, False, False, False]
+        recoilLibs.doFit(jsIn, jsOut, comp, "sigma4", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=150, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{4} (GeV)")
+        
+
+        t = 25
+        fLeft, dfLeft  = "[0] + [1]*x + [2]*x*x + [3]*x*x*x + [4]*x*x*x*x", "[1] + 2*[2]*x + 3*[3]*x*x + 4*[4]*x*x*x"
+        fLeftEval, dfLeftEval = fLeft.replace("x", str(t)), dfLeft.replace("x", str(t))
+        fitF = "(x<{t})*1*({fLeft}) +0+ (x>{t})*1*(  ({dfLeftEval})*x + ({fLeftEval}-({dfLeftEval})*{t}) )".format(t=t, fLeft=fLeft, fLeftEval=fLeftEval, dfLeftEval=dfLeftEval)
+        params, cParams = [4.95396e-02, -2.88434e-03, 5.76138e-05, 2.54185e-06, -6.16914e-08], [True, True, True, True, True]
+        recoilLibs.doFit(jsIn, jsOut, comp, "norm1", fitF, params, outDir_param, recoil_qTbins, label, cutOffMin=0.02, cParams=cParams, fitMin=2, fitMax=60  , yMin=0, yMax=1, xMax=150, yTitle = "n_{3} (GeV)")
+        
+        fitF, params, cParams = "[0]*TMath::Exp(-[1]*x)", [2.33265e-01, 4.39271e-03], [True, True]
+        recoilLibs.doFit(jsIn, jsOut, comp, "norm2", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=150, yMin=0, yMax=1, xMax=150, yTitle = "n_{3} (GeV)")
+        
+        fitF, params, cParams = "[0]*TMath::Exp(-[1]*x)", [5.15149e-01, 1.71424e-02], [True, True]
+        recoilLibs.doFit(jsIn, jsOut, comp, "norm3", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=30, yMin=0, yMax=1, xMax=150, yTitle = "n_{3} (GeV)")
+        
+        with open("%s/results.json" % outDir_param_v3, "w") as outfile: json.dump(jsOut, outfile, indent=4)    
+        return        
+
+    outDir_fits_v4 = "%s/fits_v4" % baseDir
+    if False:
+        fitCfg['mean_cfg'] = [1, 1, 1, 1] # 0 = floating, 1 = fixed, 2 = parametric (fixed), 3 = parametric (floating)
+        fitCfg['sigma_cfg'] = [2, 0, 0, 0]
+        fitCfg['norm_cfg'] = [2, 2, 2]
+        with open("%s/results.json" % outDir_param_v3) as f: jsIn = json.load(f)
+        recoilLibs.doFitMultiGauss(rFile, proc, comp, fitCfg, label, outDir_fits_v4, recoil_qTbins, funcJs=jsIn, qTmax=150, rebin=rebin, singleMean=True, xMin=-100, xMax=100)
+        return        
+        
+    outDir_param_v4 = "%s/param_v4" % baseDir
+    if False:
+        jsOut = {}
+        jsOut['nGauss'] = nGauss
+        outDir_param = outDir_param_v4
+        functions.prepareDir(outDir_param, True)
+        with open("%s/results.json" % outDir_fits_v4) as f: jsIn = json.load(f)
+        
+        fitF, params, cParams = "[0]*TMath::Power(x, [1]) + [2]", [5.20382e+00, 1.78386e-01, 7.51449e+00], [False, False, False]
+        recoilLibs.doFit(jsIn, jsOut, comp, "sigma1", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=150, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{1} (GeV)")
+ 
+        t = 25
+        fLeft, dfLeft  = "[0] + [1]*x + [2]*x*x + [3]*x*x*x + [4]*x*x*x*x", "[1] + 2*[2]*x + 3*[3]*x*x + 4*[4]*x*x*x"
+        fLeftEval, dfLeftEval = fLeft.replace("x", str(t)), dfLeft.replace("x", str(t))
+        fitF = "(x<{t})*1*({fLeft}) +0+ (x>{t})*1*(  ({dfLeftEval})*x + ({fLeftEval}-({dfLeftEval})*{t}) )".format(t=t, fLeft=fLeft, fLeftEval=fLeftEval, dfLeftEval=dfLeftEval)
+        params, cParams = [4.00314e+00, 6.34998e-02, -3.94494e-04, 2.83885e-05, -1.51997e-06], [False, False, False, False, False]
+        recoilLibs.doFit(jsIn, jsOut, comp, "sigma2", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=1, fitMax=150, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{2} (GeV)")
+        
+        fitF, params, cParams = "[0] + [1]*x", [7.45735e+00, 6.52883e-03], [False, False]
+        recoilLibs.doFit(jsIn, jsOut, comp, "sigma3", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=150, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{2} (GeV)")
+        
+        fitF, params, cParams = "[0]*TMath::Power(x, [1]) + [2]", [1.15048e-02, 9.60879e-01, 2.26090e+01], [False, False, False]
+        t = 25
+        fLeft, dfLeft  = "[0] + [1]*x + [2]*x*x + [3]*x*x*x + [4]*x*x*x*x", "[1] + 2*[2]*x + 3*[3]*x*x + 4*[4]*x*x*x"
+        fLeftEval, dfLeftEval = fLeft.replace("x", str(t)), dfLeft.replace("x", str(t))
+        fitF = "(x<{t})*1*({fLeft}) +0+ (x>{t})*1*(  ({dfLeftEval})*x + ({fLeftEval}-({dfLeftEval})*{t}) )".format(t=t, fLeft=fLeft, fLeftEval=fLeftEval, dfLeftEval=dfLeftEval)
+        params, cParams = [9.99069e+00, -7.11533e-02, 1.92415e-02, -1.05192e-03, 1.72908e-05], [False, False, False, False, False]
+        recoilLibs.doFit(jsIn, jsOut, comp, "sigma4", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=150, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{4} (GeV)")
+        
+
+        t = 25
+        fLeft, dfLeft  = "[0] + [1]*x + [2]*x*x + [3]*x*x*x + [4]*x*x*x*x", "[1] + 2*[2]*x + 3*[3]*x*x + 4*[4]*x*x*x"
+        fLeftEval, dfLeftEval = fLeft.replace("x", str(t)), dfLeft.replace("x", str(t))
+        fitF = "(x<{t})*1*({fLeft}) +0+ (x>{t})*1*(  ({dfLeftEval})*x + ({fLeftEval}-({dfLeftEval})*{t}) )".format(t=t, fLeft=fLeft, fLeftEval=fLeftEval, dfLeftEval=dfLeftEval)
+        params, cParams = [4.95396e-02, -2.88434e-03, 5.76138e-05, 2.54185e-06, -6.16914e-08], [True, True, True, True, True]
+        recoilLibs.doFit(jsIn, jsOut, comp, "norm1", fitF, params, outDir_param, recoil_qTbins, label, cutOffMin=0.02, cParams=cParams, fitMin=2, fitMax=60  , yMin=0, yMax=1, xMax=150, yTitle = "n_{3} (GeV)")
+        
+        fitF, params, cParams = "[0]*TMath::Exp(-[1]*x)", [2.33265e-01, 4.39271e-03], [True, True]
+        recoilLibs.doFit(jsIn, jsOut, comp, "norm2", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=150, yMin=0, yMax=1, xMax=150, yTitle = "n_{3} (GeV)")
+        
+        fitF, params, cParams = "[0]*TMath::Exp(-[1]*x)", [5.15149e-01, 1.71424e-02], [True, True]
+        recoilLibs.doFit(jsIn, jsOut, comp, "norm3", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=30, yMin=0, yMax=1, xMax=150, yTitle = "n_{3} (GeV)")
+        
+        with open("%s/results.json" % outDir_param_v4, "w") as outfile: json.dump(jsOut, outfile, indent=4)    
+        return
+
+    outDir_fits_v5 = "%s/fits_v5" % baseDir
+    if False:
+        fitCfg['mean_cfg'] = [1, 1, 1, 1] # 0 = floating, 1 = fixed, 2 = parametric (fixed), 3 = parametric (floating)
+        fitCfg['sigma_cfg'] = [2, 2, 0, 0]
+        fitCfg['norm_cfg'] = [2, 2, 2]
+        with open("%s/results.json" % outDir_param_v4) as f: jsIn = json.load(f)
+        recoilLibs.doFitMultiGauss(rFile, proc, comp, fitCfg, label, outDir_fits_v5, recoil_qTbins, funcJs=jsIn, qTmax=150, rebin=rebin, singleMean=True, xMin=-100, xMax=100)
+        return   
+        
+    outDir_param_v5 = "%s/param_v5" % baseDir
+    if False:
+        jsOut = {}
+        jsOut['nGauss'] = nGauss
+        outDir_param = outDir_param_v5
+        functions.prepareDir(outDir_param, True)
+        with open("%s/results.json" % outDir_fits_v5) as f: jsIn = json.load(f)
+
+        fitF, params, cParams = "[0]*TMath::Power(x, [1]) + [2]", [5.20382e+00, 1.78386e-01, 7.51449e+00], [False, False, False]
+        recoilLibs.doFit(jsIn, jsOut, comp, "sigma1", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=150, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{1} (GeV)")
+ 
+        t = 25
+        fLeft, dfLeft  = "[0] + [1]*x + [2]*x*x + [3]*x*x*x + [4]*x*x*x*x", "[1] + 2*[2]*x + 3*[3]*x*x + 4*[4]*x*x*x"
+        fLeftEval, dfLeftEval = fLeft.replace("x", str(t)), dfLeft.replace("x", str(t))
+        fitF = "(x<{t})*1*({fLeft}) +0+ (x>{t})*1*(  ({dfLeftEval})*x + ({fLeftEval}-({dfLeftEval})*{t}) )".format(t=t, fLeft=fLeft, fLeftEval=fLeftEval, dfLeftEval=dfLeftEval)
+        params, cParams = [4.00314e+00, 6.34998e-02, -3.94494e-04, 2.83885e-05, -1.51997e-06], [False, False, False, False, False]
+        recoilLibs.doFit(jsIn, jsOut, comp, "sigma2", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=1, fitMax=150, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{2} (GeV)")
+        
+        fitF, params, cParams = "[0] + [1]*x", [7.45735e+00, 6.52883e-03], [False, False]
+        recoilLibs.doFit(jsIn, jsOut, comp, "sigma3", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=150, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{2} (GeV)")
+        
+        fitF, params, cParams = "[0]*TMath::Power(x, [1]) + [2]", [1.15048e-02, 9.60879e-01, 2.26090e+01], [False, False, False]
+        t = 25
+        fLeft, dfLeft  = "[0] + [1]*x + [2]*x*x + [3]*x*x*x + [4]*x*x*x*x", "[1] + 2*[2]*x + 3*[3]*x*x + 4*[4]*x*x*x"
+        fLeftEval, dfLeftEval = fLeft.replace("x", str(t)), dfLeft.replace("x", str(t))
+        fitF = "(x<{t})*1*({fLeft}) +0+ (x>{t})*1*(  ({dfLeftEval})*x + ({fLeftEval}-({dfLeftEval})*{t}) )".format(t=t, fLeft=fLeft, fLeftEval=fLeftEval, dfLeftEval=dfLeftEval)
+        params, cParams = [9.99069e+00, -7.11533e-02, 1.92415e-02, -1.05192e-03, 1.72908e-05], [False, False, False, False, False]
+        recoilLibs.doFit(jsIn, jsOut, comp, "sigma4", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=150, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{4} (GeV)")
+        
+
+        t = 25
+        fLeft, dfLeft  = "[0] + [1]*x + [2]*x*x + [3]*x*x*x + [4]*x*x*x*x", "[1] + 2*[2]*x + 3*[3]*x*x + 4*[4]*x*x*x"
+        fLeftEval, dfLeftEval = fLeft.replace("x", str(t)), dfLeft.replace("x", str(t))
+        fitF = "(x<{t})*1*({fLeft}) +0+ (x>{t})*1*(  ({dfLeftEval})*x + ({fLeftEval}-({dfLeftEval})*{t}) )".format(t=t, fLeft=fLeft, fLeftEval=fLeftEval, dfLeftEval=dfLeftEval)
+        params, cParams = [4.95396e-02, -2.88434e-03, 5.76138e-05, 2.54185e-06, -6.16914e-08], [True, True, True, True, True]
+        recoilLibs.doFit(jsIn, jsOut, comp, "norm1", fitF, params, outDir_param, recoil_qTbins, label, cutOffMin=0.02, cParams=cParams, fitMin=2, fitMax=60  , yMin=0, yMax=1, xMax=150, yTitle = "n_{3} (GeV)")
+        
+        fitF, params, cParams = "[0]*TMath::Exp(-[1]*x)", [2.33265e-01, 4.39271e-03], [True, True]
+        recoilLibs.doFit(jsIn, jsOut, comp, "norm2", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=150, yMin=0, yMax=1, xMax=150, yTitle = "n_{3} (GeV)")
+        
+        fitF, params, cParams = "[0]*TMath::Exp(-[1]*x)", [5.15149e-01, 1.71424e-02], [True, True]
+        recoilLibs.doFit(jsIn, jsOut, comp, "norm3", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=30, yMin=0, yMax=1, xMax=150, yTitle = "n_{3} (GeV)")
+        
+        with open("%s/results.json" % outDir_param_v5, "w") as outfile: json.dump(jsOut, outfile, indent=4)    
+        return   
+
+    outDir_fits_v6 = "%s/fits_v6" % baseDir
+    if False:
+        fitCfg['mean_cfg'] = [1, 1, 1, 1] # 0 = floating, 1 = fixed, 2 = parametric (fixed), 3 = parametric (floating)
+        fitCfg['sigma_cfg'] = [2, 2, 2, 0]
+        fitCfg['norm_cfg'] = [2, 2, 2]
+        with open("%s/results.json" % outDir_param_v5) as f: jsIn = json.load(f)
+        recoilLibs.doFitMultiGauss(rFile, proc, comp, fitCfg, label, outDir_fits_v6, recoil_qTbins, funcJs=jsIn, qTmax=150, rebin=rebin, singleMean=True, xMin=-100, xMax=100)
+        return        
+ 
+    outDir_param_v6 = "%s/param_v6" % baseDir
+    if True:
+        jsOut = {}
+        jsOut['nGauss'] = nGauss
+        outDir_param = outDir_param_v6
+        functions.prepareDir(outDir_param, True)
+        with open("%s/results.json" % outDir_fits_v6) as f: jsIn = json.load(f)
+        
+        fitF, params, cParams = "[0]", [0.0], [True]
+        recoilLibs.doFit(jsIn, jsOut, comp, "mean1", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=40, yMin=0, yMax=1, xMax=150, yTitle = "#mu_{1} (GeV)", doFit=False)
+        recoilLibs.doFit(jsIn, jsOut, comp, "mean2", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=40, yMin=0, yMax=1, xMax=150, yTitle = "#mu_{2} (GeV)", doFit=False)
+        recoilLibs.doFit(jsIn, jsOut, comp, "mean3", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=40, yMin=0, yMax=1, xMax=150, yTitle = "#mu_{3} (GeV)", doFit=False)
+        recoilLibs.doFit(jsIn, jsOut, comp, "mean4", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=40, yMin=0, yMax=1, xMax=150, yTitle = "#mu_{4} (GeV)", doFit=False)
+        
+        
+        fitF, params, cParams = "[0]*TMath::Power(x, [1]) + [2]", [5.20382e+00, 1.78386e-01, 7.51449e+00], [False, False, False]
+        recoilLibs.doFit(jsIn, jsOut, comp, "sigma1", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=150, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{1} (GeV)")
+ 
+        t = 25
+        fLeft, dfLeft  = "[0] + [1]*x + [2]*x*x + [3]*x*x*x + [4]*x*x*x*x", "[1] + 2*[2]*x + 3*[3]*x*x + 4*[4]*x*x*x"
+        fLeftEval, dfLeftEval = fLeft.replace("x", str(t)), dfLeft.replace("x", str(t))
+        fitF = "(x<{t})*1*({fLeft}) +0+ (x>{t})*1*(  ({dfLeftEval})*x + ({fLeftEval}-({dfLeftEval})*{t}) )".format(t=t, fLeft=fLeft, fLeftEval=fLeftEval, dfLeftEval=dfLeftEval)
+        params, cParams = [4.00314e+00, 6.34998e-02, -3.94494e-04, 2.83885e-05, -1.51997e-06], [False, False, False, False, False]
+        recoilLibs.doFit(jsIn, jsOut, comp, "sigma2", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=1, fitMax=150, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{2} (GeV)")
+        
+        fitF, params, cParams = "[0] + [1]*x", [7.45735e+00, 6.52883e-03], [False, False]
+        recoilLibs.doFit(jsIn, jsOut, comp, "sigma3", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=150, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{2} (GeV)")
+        
+        fitF, params, cParams = "[0]*TMath::Power(x, [1]) + [2]", [1.15048e-02, 9.60879e-01, 2.26090e+01], [False, False, False]
+        t = 25
+        fLeft, dfLeft  = "[0] + [1]*x + [2]*x*x + [3]*x*x*x + [4]*x*x*x*x", "[1] + 2*[2]*x + 3*[3]*x*x + 4*[4]*x*x*x"
+        fLeftEval, dfLeftEval = fLeft.replace("x", str(t)), dfLeft.replace("x", str(t))
+        fitF = "(x<{t})*1*({fLeft}) +0+ (x>{t})*1*(  ({dfLeftEval})*x + ({fLeftEval}-({dfLeftEval})*{t}) )".format(t=t, fLeft=fLeft, fLeftEval=fLeftEval, dfLeftEval=dfLeftEval)
+        params, cParams = [9.99069e+00, -7.11533e-02, 1.92415e-02, -1.05192e-03, 1.72908e-05], [False, False, False, False, False]
+        recoilLibs.doFit(jsIn, jsOut, comp, "sigma4", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=150, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{4} (GeV)")
+        
+
+        t = 25
+        fLeft, dfLeft  = "[0] + [1]*x + [2]*x*x + [3]*x*x*x + [4]*x*x*x*x", "[1] + 2*[2]*x + 3*[3]*x*x + 4*[4]*x*x*x"
+        fLeftEval, dfLeftEval = fLeft.replace("x", str(t)), dfLeft.replace("x", str(t))
+        fitF = "(x<{t})*1*({fLeft}) +0+ (x>{t})*1*(  ({dfLeftEval})*x + ({fLeftEval}-({dfLeftEval})*{t}) )".format(t=t, fLeft=fLeft, fLeftEval=fLeftEval, dfLeftEval=dfLeftEval)
+        params, cParams = [4.95396e-02, -2.88434e-03, 5.76138e-05, 2.54185e-06, -6.16914e-08], [True, True, True, True, True]
+        recoilLibs.doFit(jsIn, jsOut, comp, "norm1", fitF, params, outDir_param, recoil_qTbins, label, cutOffMin=0.02, cParams=cParams, fitMin=2, fitMax=60  , yMin=0, yMax=1, xMax=150, yTitle = "n_{3} (GeV)")
+        
+        fitF, params, cParams = "[0]*TMath::Exp(-[1]*x)", [2.33265e-01, 4.39271e-03], [True, False]
+        recoilLibs.doFit(jsIn, jsOut, comp, "norm2", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=150, yMin=0, yMax=1, xMax=150, yTitle = "n_{3} (GeV)")
+        
+        fitF, params, cParams = "[0]*TMath::Exp(-[1]*x)", [5.15149e-01, 1.71424e-02], [True, False]
+        recoilLibs.doFit(jsIn, jsOut, comp, "norm3", fitF, params, outDir_param, recoil_qTbins, label, cParams=cParams, fitMin=0, fitMax=30, yMin=0, yMax=1, xMax=150, yTitle = "n_{3} (GeV)")
+        
+        with open("%s/results.json" % outDir_param, "w") as outfile: json.dump(jsOut, outfile, indent=4)    
+        #return    
+
+
+    ########################  
+    # Nominal refit
+    ########################
+    if True:
+        outDir_refit = "%s/params_refit" % baseDir
+        functions.prepareDir(outDir_refit)
+        
+        # need to get the original fit config, to not fit twice some entangled params (treat them as RooRealVar alias)
+        fitCfg['mean_cfg'] = [1, 1, 1, 1] # 0 = floating, 1 = fixed, 2 = parametric (fixed), 3 = parametric (floating)
+        fitCfg['sigma_cfg'] = [2, 2, 2, 2]
+        fitCfg['norm_cfg'] = [2, 2, 2]
+        with open("%s/results.json" % outDir_param_v6) as f: jsIn = json.load(f)
+        jsOut = recoilLibs.combinedFit(rFile, proc, comp, fitCfg, jsIn, recoil_qTbins, rebin=rebin, qTmax=120) # 120 cov matrix OK. but larger errors (though dominated by DATA)? was 100 before
+        with open("%s/results_refit.json" % outDir_refit, "w") as outfile: json.dump(jsOut, outfile, indent=4)
+        #return
+        
+
+        fitCfg['mean_cfg'] = [2, 2, 2, 2] # 0 = floating, 1 = fixed, 2 = parametric (fixed), 3 = parametric (floating)
+        fitCfg['sigma_cfg'] = [2, 2, 2, 2]
+        fitCfg['norm_cfg'] = [2, 2, 2]
+        
+        with open("%s/results_refit.json" % outDir_refit) as f: jsIn = json.load(f)
+        recoilLibs.doPlot(comp, "norm1", jsIn, outDir_refit, recoil_qTbins, label, yMin=0, yMax=1, xMax=150, yTitle = "n_{1} (GeV)")
+        recoilLibs.doPlot(comp, "norm2", jsIn, outDir_refit, recoil_qTbins, label, yMin=0, yMax=1, xMax=150, yTitle = "n_{2} (GeV)")
+        recoilLibs.doPlot(comp, "norm3", jsIn, outDir_refit, recoil_qTbins, label, yMin=0, yMax=1, xMax=150, yTitle = "n_{3} (GeV)")
+        recoilLibs.doPlot(comp, "sigma1", jsIn, outDir_refit, recoil_qTbins, label, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{1} (GeV)")
+        recoilLibs.doPlot(comp, "sigma2", jsIn, outDir_refit, recoil_qTbins, label, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{2} (GeV)")
+        recoilLibs.doPlot(comp, "sigma3", jsIn, outDir_refit, recoil_qTbins, label, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{3} (GeV)")
+        recoilLibs.doPlot(comp, "sigma4", jsIn, outDir_refit, recoil_qTbins, label, yMin=0, yMax=50, xMax=150, yTitle = "#sigma_{4} (GeV)")
+
+        outDir_refit_fits = "%s/fits_refit" % baseDir
+        recoilLibs.doFitMultiGauss(rFile, proc, comp, fitCfg, label, outDir_refit_fits, recoil_qTbins, funcJs=jsIn, qTmax=qTmax, rebin=rebin, xMin=-100, xMax=100)
+        ROOT.gROOT.Reset()
+      
+
 def do_dymumu_perp_RawPFMET():
 
     proc = "DYmumu"
@@ -149,7 +598,7 @@ def do_dymumu_perp_RawPFMET():
     outDir_fits_v0 = "%s/fits_v0" % baseDir
     fitCfg = {}   
     
-    fitCfg['mean'], fitCfg['mean_cfg'] = [0, 0, 0, 0], [1, 1, 1, 1] # 0 = floating, 1 = fixed, 2 = parametric (fixed), 3 = parametric (floating)
+    fitCfg['mean'], fitCfg['mean_cfg'] = [0, 0, 0, 0], [0, 0, 0, 0] # 0 = floating, 1 = fixed, 2 = parametric (fixed), 3 = parametric (floating)
     fitCfg['sigma'], fitCfg['sigma_cfg'] = [15, 5, 8, 10], [0, 0, 0, 0]
     fitCfg['norm'], fitCfg['norm_cfg'] = [0.05, 0.20, 0.25], [0, 0, 0]
     
@@ -2998,8 +3447,20 @@ if __name__ == "__main__":
     met = "RawPFMET" # DeepMETReso RawPFMET
     flavor = "mumu" # mu, e, mumu, ee
     
-  
-    rFile = "wremnants/data/lowPU/recoil/lowPU_%s_%s.root" % (flavor, met)
+    print("Start")
+    met = "RawPFMET" # RawPFMET DeepMETReso
+    flavor = "mumu" # mu, e, mumu, ee
+    
+
+    outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/Z%s_%s/plots/" % (flavor, met)
+    #functions.prepareDir(outDir, remove=True)
+    
+    
+    print("Open")
+    groups = datagroupsLowPU("lowPU_%s_RawPFMET_%s_nnpdf31.pkl.lz4" % (flavor, met), flavor=flavor)
+    
+    quit()
+    #rFile = "wremnants/data/lowPU/recoil/lowPU_%s_%s.root" % (flavor, met)
     #prepareFile("lowPU_%s_%s.pkl.lz4" % (flavor, met), rFile)
     #sys.exit()
     
@@ -3012,9 +3473,9 @@ if __name__ == "__main__":
     outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/recoilCorrection/recoil_%s_%s/" % (flavor, met)
     functions.prepareDir(outDir, False)
     
-    ROOT.Math.MinimizerOptions.PrintDefault()
+    #ROOT.Math.MinimizerOptions.PrintDefault()
     #sys.exit()
-    ROOT.Math.MinimizerOptions.SetDefaultPrecision(1e-15)
+    #ROOT.Math.MinimizerOptions.SetDefaultPrecision(1e-15)
     #ROOT.Math.MinimizerOptions.SetDefaultMinimizer("Minuit2")
     #ROOT.Math.MinimizerOptions.SetMinimizerAlgorithm("Fumili2") # Migrad Minimize Simplex Fumili2
 
@@ -3040,8 +3501,8 @@ min->SetTolerance(1e-14);
 
     if met == "RawPFMET":
     
-        do_dymumu_para_RawPFMET()
-        #do_dymumu_perp_RawPFMET()
+        #do_dymumu_para_RawPFMET()
+        do_dymumu_perp_RawPFMET_zlib()
         
         #do_ttbar_para_RawPFMET()
         #do_ttbar_perp_RawPFMET()
