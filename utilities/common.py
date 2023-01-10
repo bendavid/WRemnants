@@ -86,7 +86,6 @@ def common_parser():
     parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")
     parser.add_argument("--eta", nargs=3, type=float, help="Eta binning as 'nbins min max' (only uniform for now)", default=[48,-2.4,2.4])
     parser.add_argument("--pt", nargs=3, type=float, help="Pt binning as 'nbins,min,max' (only uniform for now)", default=[29,26.,55.])
-    parser.add_argument("--no_recoil", action='store_true', help="Don't apply recoild correction")
     parser.add_argument("--highptscales", action='store_true', help="Apply highptscales option in MiNNLO for better description of data at high pT")
     parser.add_argument("--data-path", type=str, default=None, help="Access samples from eos")
     parser.add_argument("--no-vertex_weight", dest="vertex_weight", action='store_false', help="Do not apply reweighting of vertex z distribution in MC to match data")
@@ -95,6 +94,7 @@ def common_parser():
     parser.add_argument("--onlyMainHistograms", action='store_true', help="Only produce some histograms, skipping (most) systematics to run faster when those are not needed")
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
                         help="Set verbosity level with logging, the larger the more verbose (currently for setup_test_logger)");
+    parser.add_argument("--met", type=str, choices=["DeepMETReso", "RawPFMET"], help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")                    
     
     commonargs,_ = parser.parse_known_args()
 

@@ -11,6 +11,7 @@ import array
 from utilities.common import data_dir
 
 ROOT.gInterpreter.Declare('#include "lowpu_recoil.h"')
+logger = logging.getLogger("wremnants").getChild(__name__.split(".")[-1])
 
 
 def drange(x, y, jump):
@@ -30,26 +31,50 @@ class Recoil:
    
         if type_ == "highPU":
             self.highPU = True
-            self.recoil_qTbins__ = list(drange(0, 500, 0.5)) + [500]
+            setattr(ROOT.wrem, "recoil_correction_qTmax", 500)
+            setattr(ROOT.wrem, "recoil_verbose", False)
+            self.recoil_qTbins = list(drange(0, 500, 0.5)) + [500]
+            
+            self.met_xycorr_setup(f"wremnants/data/recoil/highPU/{self.flavor}_{self.met}/met_xy_correction.json") # MET XY correction
+            if self.flavor == "mumu":
+                self.set_qT_weights(f"wremnants/data/recoil/highPU/{self.flavor}_{self.met}/qT_reweighting.json") # qT reweigthing
+            
+            # recoil calibrations
+            if self.met == "RawPFMET":
+                logger.info(f"Apply recoil corrections for {self.met}")
+                flavor_ = "mumu" # both mu and mumu
+                self.addParametric("target_para", f"wremnants/data/recoil/highPU/{flavor_}_{self.met}/recoil_data_para.json", doUnc=False)
+                self.addParametric("source_para", f"wremnants/data/recoil/highPU/{flavor_}_{self.met}/recoil_zmumu_para.json", doUnc=False)
+                self.addParametric("target_perp", f"wremnants/data/recoil/highPU/{flavor_}_{self.met}/recoil_data_perp.json", doUnc=False)
+                self.addParametric("source_perp", f"wremnants/data/recoil/highPU/{flavor_}_{self.met}/recoil_zmumu_perp.json", doUnc=False)
+                setattr(ROOT.wrem, "applyRecoilCorrection", True)
+            else:
+                logger.warning(f"Recoil corrections for {self.met} not available, use default XY-corrected MET")
+                setattr(ROOT.wrem, "applyRecoilCorrection", False)
     
         elif type_ == "lowPU":
-        
+            self.highPU = False
             setattr(ROOT.wrem, "recoil_correction_qTmax", 200)
-            
-            
-            self.recoil_qTbins = list(range(0, 50, 1)) + list(range(50, 70, 2)) + list(range(70, 100, 5)) + list(range(100, 150, 10)) + [150, 200, 300, 10000]
-            self.recoil_qTbins__ = list(drange(0, 300, 0.5))
+            setattr(ROOT.wrem, "recoil_verbose", False)
+            self.recoil_qTbins = list(drange(0, 300, 0.5))
             
             self.met_xycorr_setup(f"wremnants/data/recoil/lowPU/{self.flavor}_{self.met}/met_xy_correction.json") # MET XY correction
-            self.set_qT_weights(f"wremnants/data/recoil/lowPU/{self.flavor}_{self.met}/qT_reweighting.json") # qT reweigthing
+            if self.flavor == "mumu": # todo ee
+                self.set_qT_weights(f"wremnants/data/recoil/lowPU/{self.flavor}_{self.met}/qT_reweighting.json") # qT reweigthing
 
+            # recoil calibrations
+            if self.met == "RawPFMET":
+                logger.info(f"Apply recoil corrections for {self.met}")
+                flavor_ = "mumu" # both mu and mumu
+                self.addParametric("target_para", f"wremnants/data/recoil/lowPU/{flavor_}_{self.met}/recoil_data_para.json")
+                self.addParametric("source_para", f"wremnants/data/recoil/lowPU/{flavor_}_{self.met}/recoil_zmumu_para.json", doUnc=False)
+                self.addParametric("target_perp", f"wremnants/data/recoil/lowPU/{flavor_}_{self.met}/recoil_data_perp.json")
+                self.addParametric("source_perp", f"wremnants/data/recoil/lowPU/{flavor_}_{self.met}/recoil_zmumu_perp.json", doUnc=False)
+                setattr(ROOT.wrem, "applyRecoilCorrection", True)
+            else:
+                logger.warning(f"Recoil corrections for {self.met} not available, use default XY-corrected MET")
+                setattr(ROOT.wrem, "applyRecoilCorrection", False)
                 
-            # Recoil parametric
-            self.addParametric("target_para", f"wremnants/data/recoil/lowPU/{self.flavor}_{self.met}/recoil_data_para.json")
-            self.addParametric("source_para", f"wremnants/data/recoil/lowPU/{self.flavor}_{self.met}/recoil_zmumu_para.json", doUnc=False)
-            self.addParametric("target_perp", f"wremnants/data/recoil/lowPU/{self.flavor}_{self.met}/recoil_data_perp.json")
-            self.addParametric("source_perp", f"wremnants/data/recoil/lowPU/{self.flavor}_{self.met}/recoil_zmumu_perp.json", doUnc=False)
-            
             # syst variations should contain target/source and para/perp, Needed for weights
             #self.addParametricUnc("target_perp_bkg", "wremnants/data/lowPU/recoil/singlemuon_perp_TTbar_results_refit.json")
             #self.addParametricUnc("target_perp_bkg", "wremnants/data/lowPU/recoil/singlemuon_perp_EWK_results_refit.json")
@@ -95,7 +120,7 @@ class Recoil:
         
             
         
-        self.axis_qTbinned = hist.axis.Variable(self.recoil_qTbins__, name = "qTbinned", underflow=False, overflow=True)
+        self.axis_qTbinned = hist.axis.Variable(self.recoil_qTbins, name = "qTbinned", underflow=False, overflow=True)
         self.axis_qT = hist.axis.Regular(600, 0, 300, name = "qT", underflow=False, overflow=False)
         
         
@@ -115,10 +140,10 @@ class Recoil:
 
     def set_qT_weights(self, fIn):
         if not os.path.exists(fIn):
-            print("qT weights file %s not found" % fIn)
+            logger.warning(f"qT weights file {fIn} not found")
             return
         else: 
-            print("Add qT weights %s" % fIn)
+            logger.info(f"Add qT weights {fIn}")
         with open(fIn) as f: jsIn = json.load(f)
         qTrw_bins = getattr(ROOT.wrem, "qTrw_bins")
         qTrw_weights = getattr(ROOT.wrem, "qTrw_weights")
@@ -130,8 +155,12 @@ class Recoil:
 
 
     def addParametric(self, tag, fIn, doUnc=True):
-    
-        print("Add recoil parametric set for %s" % tag)
+
+        if not os.path.exists(fIn):
+            logger.warning(f"Recoil parametric file {fIn} not found")
+            return
+        else: 
+            logger.info(f"Add recoil parametric set for {tag}")
         with open(fIn) as f: jsIn = json.load(f)
         nGauss = jsIn['nGauss']
         recoil_param_nGauss = getattr(ROOT.wrem, "recoil_param_nGauss")
@@ -185,7 +214,7 @@ class Recoil:
 
     def addParametricUnc(self, tag, fIn):
     
-        print("Add recoil parametric uncertainty set for %s" % tag)
+        logger.info(f"Add recoil parametric set for {tag}")
         with open(fIn) as f: jsIn = json.load(f)
         nGauss = jsIn['nGauss']
         recoil_param_nGauss = getattr(ROOT.wrem, "recoil_param_nGauss")
@@ -256,8 +285,7 @@ class Recoil:
         recoil_binned_components.insert((tag, vec_qt))
         
         
-        
-       
+
 
     def met_xycorr_setup(self, fIn):
     
@@ -267,15 +295,13 @@ class Recoil:
             for v in range(0, npol+1): coeff.push_back(d['p%d' % v])
             setattr(ROOT.wrem, out, coeff)
 
-    
         # load the polynomial coefficients
         if not os.path.exists(fIn):
-            print("XY correction file %s not found" % fIn)
+            logger.warning(f"XY correction file {fIn} not found")
             return
         else: 
-            print("Add MET XY correction %s" % fIn)
-        f = open(fIn)
-        jsdata = json.load(f)
+            logger.info(f"Add MET XY correction {fIn}")
+        with open(fIn) as f: jsdata = json.load(f)
         loadCoeff(jsdata['x']['data']['nominal'], 'met_xy_corr_x_data_nom')
         loadCoeff(jsdata['y']['data']['nominal'], 'met_xy_corr_y_data_nom')
         loadCoeff(jsdata['x']['mc']['nominal'], 'met_xy_corr_x_mc_nom')
@@ -287,6 +313,8 @@ class Recoil:
         Define MET variables, apply lepton and XY corrections
         '''
         
+        # for the Z, leptons_pt, leptons_phi, leptons_uncorr_pt should be Vec_f with size 2
+        # for the W, it should contain only a float/double
         self.leptons_pt = leptons_pt
         self.leptons_phi = leptons_phi
         self.leptons_uncorr_pt = leptons_uncorr_pt
@@ -446,29 +474,19 @@ class Recoil:
         results.append(df.HistoBoost("qT_sumEt", [self.axis_qTbinned, self.axis_sumEt], ["qT", "RawMET_sumEt", "nominal_weight"]))
         return df
 
-    def setup_gen(self, df, results, dataset, datasets_to_apply):
+    def setup_recoil_gen(self, df, results, dataset, datasets_to_apply):
         
         if not dataset.name in datasets_to_apply: return df
         
         if self.flavor == "mumu" or self.flavor == "ee":
             df = df.Define("recoil_corr_xy_gen", "wrem::recoilComponentsGen(MET_corr_xy_pt, MET_corr_xy_phi, qT, Z_mom2.Phi(), phiVgen)")
         else:
-            if self.highPU:
-                df = df.Alias("Lep_pt", "goodMuons_pt0")
-                df = df.Alias("Lep_phi", "goodMuons_phi0")
-                df = df.Alias("Lep_charge", "goodMuons_charge0")
-                
-            df = df.Define("recoil_corr_xy_gen", "wrem::recoilComponentsGen(MET_corr_xy_pt, MET_corr_xy_phi, Lep_pt, Lep_phi, phiVgen)")
+            df = df.Define("recoil_corr_xy_gen", f"wrem::recoilComponentsGen(MET_corr_xy_pt, MET_corr_xy_phi, {self.leptons_pt}, {self.leptons_phi}, phiVgen)")
 
-        #if (dataset.name == "DYmumu" and self.flavor == "mumu") or (dataset.name == "DYee" and self.flavor == "ee"):
-        #    df = df.Define("recoil_corr_xy_gen", "wrem::recoilComponentsGen(MET_corr_xy_pt, MET_corr_xy_phi, qT, Z_mom2.Phi(), phiVgen)")
-        #elif (dataset.name in ["WplusJetsToMuNu", "WminusJetsToMuNu"] and self.flavor == "mu") or (dataset.name in ["WplusJetsToENu", "WminusJetsToENu"] and self.flavor == "e"):
-        #    df = df.Define("recoil_corr_xy_gen", "wrem::recoilComponentsGen(MET_corr_xy_pt, MET_corr_xy_phi, Lep_pt, Lep_phi, phiVgen)")
-        #else: return df
         
         # decompose MET and dilepton (for Z) or lepton (for W) along the generator boson direction
         df = df.Define("qT_gen", "ptVgen") # pre-fsr defines should be loaded
-        df = df.Define("qTbin_gen", "wrem::getqTbin(qT_gen)") 
+        #df = df.Define("qTbin_gen", "wrem::getqTbin(qT_gen)") 
         
         df = df.Define("recoil_corr_xy_magn_gen", "recoil_corr_xy_gen[0]")
         df = df.Define("recoil_corr_xy_para_gen", "recoil_corr_xy_gen[1]")
@@ -598,8 +616,7 @@ class Recoil:
         
         
     def apply_recoil_W(self, df, results, dataset, datasets_to_apply, auxPlots=False): 
-    
-        return df   
+      
         if dataset.name in datasets_to_apply:
             
             # goodMuons_charge0 highPU, Lep_charge lowPU
@@ -621,7 +638,7 @@ class Recoil:
             results.append(df.HistoBoost("recoil_corr_wz_perp", [self.axis_recoil_perp], ["recoil_corr_wz_perp", "nominal_weight"]))
             '''
             
-            if self.parametric: df = df.Define("recoil_corr_rec", "wrem::recoilCorrectionParametric(recoil_corr_xy_para_gen, recoil_corr_xy_perp_gen, qTbin_gen, qT_gen)")
+            if self.parametric: df = df.Define("recoil_corr_rec", "wrem::recoilCorrectionParametric(recoil_corr_xy_para_gen, recoil_corr_xy_perp_gen, qT_gen)")
             else: df = df.Define("recoil_corr_rec", "wrem::recoilCorrectionBinned(recoil_corr_xy_para_gen, recoil_corr_xy_perp_gen, qTbin_gen, qT_gen)")
             df = df.Define("recoil_corr_rec_magn_gen", "recoil_corr_rec[0]")
             df = df.Define("recoil_corr_rec_para_gen", "recoil_corr_rec[1]")
@@ -629,12 +646,12 @@ class Recoil:
             df = df.Define("recoil_corr_rec_perp_gen", "recoil_corr_rec[2]")
             df = df.Define("recoil_corr_rec_para_qT_perp_gen", "recoil_corr_rec[1] + qT_gen + recoil_corr_rec[2]")
             
-            df = df.Define("MET_corr_rec", "wrem::METCorrectionGen(recoil_corr_rec_para_gen, recoil_corr_rec_perp_gen, Lep_pt, Lep_phi, phiVgen) ") 
+            df = df.Define("MET_corr_rec", f"wrem::METCorrectionGen(recoil_corr_rec_para_gen, recoil_corr_rec_perp_gen, {self.leptons_pt}, {self.leptons_phi}, phiVgen) ") 
             df = df.Define("MET_corr_rec_pt", "MET_corr_rec[0]")
             df = df.Define("MET_corr_rec_phi", "MET_corr_rec[1]")
             
             # compute recoil
-            df = df.Define("recoil_corr_rec_magn", "wrem::recoilComponents(MET_corr_rec_pt, MET_corr_rec_phi, Lep_pt, Lep_phi)")
+            df = df.Define("recoil_corr_rec_magn", f"wrem::recoilComponents(MET_corr_rec_pt, MET_corr_rec_phi, {self.leptons_pt}, {self.leptons_phi})")
             
             
         else:
@@ -651,7 +668,7 @@ class Recoil:
             df = df.Define("MET_corr_rec_pt", "MET_corr_xy_pt")
             df = df.Define("MET_corr_rec_phi", "MET_corr_xy_phi")
             
-            df = df.Define("recoil_corr_rec_magn", "wrem::recoilComponents(MET_corr_xy_pt, MET_corr_xy_phi, Lep_pt, Lep_phi)")
+            df = df.Define("recoil_corr_rec_magn", f"wrem::recoilComponents(MET_corr_xy_pt, MET_corr_xy_phi, {self.leptons_pt}, {self.leptons_phi})")
         
         
         #results.append(df.HistoBoost("MET_corr_wz_pt", [self.axis_MET_pt], ["MET_corr_wz_pt", "nominal_weight"]))
