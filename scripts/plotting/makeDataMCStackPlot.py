@@ -160,7 +160,7 @@ for h in args.hists:
     action = (lambda x: sel.unrolledHist(collapseSyst(x[select]))) if "unrolled" in h else lambda x: hh.projectNoFlow(collapseSyst(x[select]), h, overflow_ax)
     fig = plot_tools.makeStackPlotWithRatio(histInfo, prednames, histName=args.baseName, ylim=args.ylim, yscale=args.yscale,
             fill_between=args.fill_between if hasattr(args, "fill_between") else None, action=action, unstacked=unstack, 
-            xlabel=xlabels[h], ylabel="Events/bin", rrange=args.rrange, binwnorm=1.0,
+            xlabel=xlabels[h], ylabel="Events/bin", rrange=args.rrange, binwnorm=1.0, lumi=groups.lumi,
             ratio_to_data=args.ratio_to_data, rlabel="Pred./Data" if args.ratio_to_data else "Data/Pred.",
             xlim=args.xlim, no_fill=args.no_fill, cms_decor="Preliminary" if not args.no_data else "Simulation Preliminary") 
     outfile = f"{h}_{args.baseName}_{args.channel}"+ (f"_{args.name_append}" if args.name_append else "")
