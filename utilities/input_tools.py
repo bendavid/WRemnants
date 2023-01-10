@@ -171,3 +171,23 @@ def read_dyturbo_file(filename, axnames=("y", "pt")):
 
     h[...] = np.reshape(data[:len(data)-offset,len(axes)*2:], (*h.axes.size, 2))
     return h*1/1000
+
+def readImpacts(rtfile, group, sort=True, add_total=True, stat=0.0):
+    histname = "nuisance_group_impact_nois" if group else "nuisance_impact_nois"
+    impacts = rtfile[histname].to_hist()
+    labels = np.array([impacts.axes[1].value(i) for i in range(impacts.axes[1].size)])
+    total = rtfile["fitresults"][impacts.axes[0].value(0)+"_err"].array()[0]
+    impacts = impacts.values()[0,:]
+    if sort:
+        order = np.argsort(impacts)
+        impacts = impacts[order]
+        labels = labels[order]
+    if add_total:
+        impacts = np.append(impacts, total)
+        labels = np.append(labels, "Total")
+
+    if stat > 0:
+        idx = np.argwhere(labels == "stat")
+        impacts[idx] = stat
+
+    return impacts,labels
