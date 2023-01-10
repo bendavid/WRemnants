@@ -1,4 +1,4 @@
-:mport ROOT
+import ROOT
 import hist
 import narf
 import numpy as np
