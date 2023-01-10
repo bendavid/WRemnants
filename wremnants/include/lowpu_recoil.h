@@ -35,7 +35,8 @@ std::map<std::string, int> recoil_binned_nGauss;
 std::map<std::string, std::vector<float>> recoil_binned_qTbins;
 std::map<std::string, std::vector<  std::vector<  std::vector< float > >  >> recoil_binned_components; // tag qTbin nGauss, component
 
-
+bool applyRecoilCorrection = false;
+bool recoil_verbose = false;
     
 std::vector<float> qTbins;
 float recoil_correction_qTmax = 1e99;
@@ -356,14 +357,14 @@ class GaussianSum {
             
             double a(xMin), b(xMax);
             
-            if(totNorm < 0.999 or totNorm > 1.001) cout << "[nGaussian::findRoot]: Total norm not equal to 1: " << totNorm  << endl;
+            if(recoil_verbose and (totNorm < 0.999 or totNorm > 1.001)) cout << "[nGaussian::findRoot]: Total norm not equal to 1: " << totNorm  << endl;
             
             double fa = this->evalCDF(a) - value;
             double fb = this->evalCDF(b) - value;
             
      
             if(fb*fa > 0) {
-                if(verbose) cout << "[nGaussian::findRoot]: initial interval does not bracket a root (fa=" << fa << ", fb=" << fb << ", pval=" << value << ", xMin=" << a << ", xMax=" << b <<  ")" << endl;
+                if(recoil_verbose) cout << "[nGaussian::findRoot]: initial interval does not bracket a root (fa=" << fa << ", fb=" << fb << ", pval=" << value << ", xMin=" << a << ", xMax=" << b <<  ")" << endl;
                 return 999999;
             }
 
@@ -472,7 +473,7 @@ class GaussianSum {
             }
             
             
-            if(verbose) cout << "[nGaussian::findRoot]: maximum iterations exceeded" << endl;
+            if(recoil_verbose) cout << "[nGaussian::findRoot]: maximum iterations exceeded" << endl;
             //return b; // return best-estimate of root
             return 999999; // return default value, reject this 
         }
@@ -823,6 +824,7 @@ Vec_f recoilCorrectionParametric(double para, double perp, double qT, string sys
     res[2] = perp;
     res[0] = std::hypot(res[1], res[2]);
     
+	if(!applyRecoilCorrection) return res;
     //if(qT > recoil_correction_qTmax) qT = recoil_correction_qTmax; // protection for high qT
     //return res;
     
@@ -848,14 +850,7 @@ Vec_f recoilCorrectionParametric(double para, double perp, double qT, string sys
     else dy_para = constructParametricGauss("source_para", qT);
     if(systIdx != -1 and systTag == "source_perp") dy_perp = constructParametricGauss("source_perp", qT, systIdx);
     else dy_perp = constructParametricGauss("source_perp", qT);
-    
-     
-    
-    //GaussianSum data_perp = constructParametricGauss("target_perp", qT);
-    //GaussianSum dy_para = constructParametricGauss("source_para", qT);
-    //GaussianSum dy_perp = constructParametricGauss("source_perp", qT);
-    
-    
+
     double pVal_para_dy = dy_para.evalCDF(para + qT); // pdfs are parameterized on para + qT - qTcorrMean, i.e. to have mean=0
     double pVal_perp_dy = dy_perp.evalCDF(perp);
     
@@ -864,30 +859,16 @@ Vec_f recoilCorrectionParametric(double para, double perp, double qT, string sys
     double perp_corr = data_perp.findRoot(pVal_perp_dy, -500, 500);
 
   
-    if(para_corr == 999999) cout << "PARA ************* " << qT << endl;
-    if(perp_corr == 999999) cout << "PERP ************* " << qT << endl;
+    if(para_corr == 999999 and recoil_verbose) cout << "PARA ************* " << qT << endl;
+    if(perp_corr == 999999 and recoil_verbose) cout << "PERP ************* " << qT << endl;
     
     
   
     if(para_corr == 999999) para_corr = para;
     else para_corr -= qT;
     
-    
-    //else pU1_data -= qT;
-    //else {
-    //   if((pU1+qT)*(pU1_data+qT) > 0) pU1_data -= qT; // SS
-    //   else pU1_data += qT; // OS
-    //}
-    //else pU1_data -= qT;
-    
-    //if((pU1+qT)*(pU1_data+qT) < 0) {
-        
-        //cout << "OS " << qT << " " << qTbinIdx << " " << pU1+qT << " " << pU1_data+qT << " " << pU2 << " " << pU2_data << endl;
-    //}
-    
     if(perp_corr == 999999) perp_corr = perp;    
         
-    // correct MC to DATA
     res[1] = para_corr;
     res[2] = perp_corr;
     res[0] = std::hypot(res[1], res[2]);
@@ -927,7 +908,7 @@ Vec_f recoilCorrectionParametricUncWeights(double eval, double qT, string tag_no
         pert = constructParametricGauss(tag_pert, qT, iSyst);
         w = pert.eval(eval)/nom_eval;
         if(w < 0.2 or w > 1.8) { // protection
-            cout << "Weight too large w=" << w << " tag_pert=" << tag_pert << " qT=" << qT << " res[iSyst]=" << res[iSyst] << " nom_eval=" << nom_eval << " pert_eval" << pert.eval(eval) << endl;
+            if(recoil_verbose) cout << "Weight too large w=" << w << " tag_pert=" << tag_pert << " qT=" << qT << " res[iSyst]=" << res[iSyst] << " nom_eval=" << nom_eval << " pert_eval" << pert.eval(eval) << endl;
             w = 1;
         }
         res[iSyst] = w;        
