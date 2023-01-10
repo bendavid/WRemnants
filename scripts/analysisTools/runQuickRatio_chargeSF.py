@@ -16,13 +16,11 @@ ROOT.PyConfig.IgnoreCommandLineOptions = True
 #from utility import *
 from scripts.analysisTools.plotUtils.utility import *
 
-#mainPath = "/eos/user/m/mciprian/www/WMassAnalysis/TnP/egm_tnp_analysis/results_Sept2022_binnedInPtEta_mass60to120"
 #workingPoints = ["reco", "trigger", "iso"]
-mainPath = "/eos/user/m/mciprian/www/WMassAnalysis/TnP/egm_tnp_analysis/results_globalMuons_testByCharge"
-#inputhPath = mainPath
-inputhPath = "/home/m/mciprian/tnp/egm_tnp_analysis/localplots/results_globalMuons_testByCharge"
-#mainPath = "/eos/user/m/mciprian/www/WMassAnalysis/TnP/egm_tnp_analysis/results_globalMuons_ntuplesXYZ_1orMoreNvalidHitsStandalone"
-workingPoints = ["tracking"]
+mainPath = "/eos/user/m/mciprian/www/WMassAnalysis/TnP/egm_tnp_analysis/results_globalMuons_ntuplesXYZ_1orMoreNvalidHitsStandalone/"
+inputhPath = mainPath
+#inputhPath = "/home/m/mciprian/tnp/egm_tnp_analysis/localplots/results_globalMuons_testByCharge"
+workingPoints = ["iso"]
 
 tag = "plusOverMinus" # just something to name the ratio
 elements = ["plus", "minus"]
@@ -38,8 +36,12 @@ xyRange = ""
 subFolder = ""
 skipAsym = True
 
-#xyRange = " --xRange 0.0 2.4"
-#subFolder = "eta_0p0To2p4"
+#xyRange = " --yRange 24 34"
+#subFolder = "pt_24To34"
+
+scriptDir = os.path.dirname(sys.argv[0])
+if len(scriptDir):
+    scriptDir += "/"
 
 for wp in workingPoints:
     for era in eras:
@@ -50,11 +52,11 @@ for wp in workingPoints:
         for n in hToPlot:
             h1 = f"{n}_{era}"
             
-            basecmd = f"python w-mass-13TeV/makeRatioTH2.py {file1} {n} {file2} {n} -o {outdir} {xyRange} -p -n ratio_{tag}_{n}_{era} -x 'Muon #eta' -y 'Muon p_{{T}} (GeV)' -z '{era} {n} ratio::0.99,1.01' --skip1DPlot -t '{ratioTitle}' --palette -1 "
+            basecmd = f"python {scriptDir}w_mass_13TeV/makeRatioTH2.py {file1} {n} {file2} {n} -o {outdir} {xyRange} -p -n ratio_{tag}_{n}_{era} -x 'Muon #eta' -y 'Muon p_{{T}} (GeV)' -z '{era} {n} ratio::0.99,1.01' --skip1DPlot -t '{ratioTitle}' --palette -1 "
             print()
             print(basecmd)
             
-            basecmd_asym = f"python w-mass-13TeV/makeRatioTH2.py {file1} {n} {file2} {n} -o {outdir} {xyRange} -a -n asymmetry_{tag}_{n}_{era} -x 'Muon #eta' -y 'Muon p_{{T}} (GeV)' -z '{era} {n} asymmetry::-0.01,0.01' --skip1DPlot -t '{asymTitle}' --palette -1 "
+            basecmd_asym = f"python {scriptDir}w_mass_13TeV/makeRatioTH2.py {file1} {n} {file2} {n} -o {outdir} {xyRange} -a -n asymmetry_{tag}_{n}_{era} -x 'Muon #eta' -y 'Muon p_{{T}} (GeV)' -z '{era} {n} asymmetry::-0.01,0.01' --skip1DPlot -t '{asymTitle}' --palette -1 "
             if not skipAsym:
                 print()
                 print(basecmd_asym)
