@@ -2,6 +2,31 @@
 #include <stdlib.h>
 
 namespace wrem {
+
+    double calculateTheta(float eta) {
+        return 2.*std::atan(std::exp(-double(eta)));
+    }
+
+    double calculateLam(float eta) {
+        double theta = calculateTheta(eta);
+        return M_PI_2 - theta;
+    }
+
+    double calculateQop(float pt, float eta, int charge) {
+        double theta = calculateTheta(eta);
+        return (charge * std::sin(theta) / double(pt));
+    }
+
+    double calculatePt(double qop, float eta, int charge) {
+        double theta = calculateTheta(eta);
+        return (charge * std::sin(theta) / qop);
+    }
+
+    double calculateDeltaQop(float pt, float deltaPt, float eta, int charge) {
+        double deltaK = -deltaPt / (pt * (pt + deltaPt));
+        return charge * std::sin(calculateTheta(eta)) * deltaK;
+    }
+
 template <typename T>
 class JpsiCorrectionsHelper {
 
@@ -13,13 +38,14 @@ public:
     static constexpr auto nUnc = sizes[sizes.size() - 1]; // 1 for cnetral value
     using out_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<nUnc, 2>>;
 
-    JpsiCorrectionsHelper(T&& corrections) :
-        correctionHist_(std::make_shared<const T>(std::move(corrections))) {}
+    JpsiCorrectionsHelper(T&& corrections, double maxWeight) :
+        correctionHist_(std::make_shared<const T>(std::move(corrections))),
+        maxWeight_(maxWeight) {}
 
     // helper for bin lookup which implements the compile-time loop over axes
     template<typename... Xs, std::size_t... Idxs>
     const tensor_t &get_tensor_impl(std::index_sequence<Idxs...>, const Xs&... xs) {
-      return correctionHist_->at(correctionHist_->template axis<Idxs>().index(xs)...).data();
+        return correctionHist_->at(correctionHist_->template axis<Idxs>().index(xs)...).data();
     }
 
     // variadic templated bin lookup
@@ -67,8 +93,8 @@ public:
         double genQop, double genPhi, int genCharge, double genEta, double genPt, //for GEN params
         double qop, double phi, int cvhCharge,
         float cvhEta, float cvhPt, float jpsiCrctdPt, // for RECO params
-        const RVec<float> &cov // for sigma on the Gaussian
-        const auto &deltaPts // for the variations
+        const RVec<float> &cov, // for sigma on the Gaussian
+        out_tensor_t &deltaPts, // for the variations
         bool abQop = false, bool fullParam = false
     ) {
         const double cvhLam = calculateLam(cvhEta);
@@ -110,17 +136,17 @@ public:
         // no need to initialize since all elements are explicit filled
         out_tensor_t res;
     
-        for (std::ptrdiff_t ivar = 0; ivar < nvars; ++ivar) {
+        for (std::ptrdiff_t ivar = 0; ivar < nUnc; ++ivar) {
 
-            deltaQopDown = calculteDeltaQop(cvhPt, deltaPts(ivar, 0), cvhEta, cvhCharge);
-            deltaQopup = calculteDeltaQop(cvhPt, deltaPts(ivar, 1), cvhEta, cvhCharge);
+            double deltaQopDown = calculteDeltaQop(cvhPt, deltaPts(ivar, 0), cvhEta, cvhCharge);
+            double deltaQopUp = calculteDeltaQop(cvhPt, deltaPts(ivar, 1), cvhEta, cvhCharge);
     
             for (std::ptrdiff_t idownup = 0; idownup < 2; ++idownup) {
                 Eigen::Vector3d parmvar = Eigen::Vector3d::Zero();   
                 const double dir = idownup == 0 ? -1. : 1.;
                 parmvar[0] =  idownup == 0 ? deltaQopDown : deltaQopUp;
                 const Eigen::Vector3d deltaparmsalt = deltaparms + dir*parmvar;
-                const Eigen::Matrix<double, 3, 3> covdalt = covd + dir*covvar;
+                const Eigen::Matrix<double, 3, 3> covdalt = covd; //+ dir*covvar;
     
                 const Eigen::Matrix<double, 3, 3> covinvalt = covdalt.inverse();
                 const double covdetalt = covdalt.determinant();
@@ -128,27 +154,6 @@ public:
                 const double lnpalt = -0.5*deltaparmsalt.transpose()*covinvalt*deltaparmsalt;
     
                 const double weight = std::sqrt(covdet/covdetalt)*std::exp(lnpalt - lnp);
-    
-                if (false) {
-                    if (std::isnan(weight) || std::isinf(weight) || std::fabs(weight) == 0.) {
-                        std::cout << "invalid weight: " << weight << std::endl;
-                        std::cout << "pt " << pt << std::endl;
-                        std::cout << "genPt " << genPt << std::endl;
-                        std::cout << "qop " << qop << std::endl;
-                        std::cout << "lam " << lam << std::endl;
-                        std::cout << "genlam " << genlam << std::endl;
-                        std::cout << "phi " << phi << std::endl;
-                        std::cout << "genlam " << genPhi << std::endl;
-                        std::cout << "covdet " << covdet << std::endl;
-                        std::cout << "covdetalt " << covdet << std::endl;
-                        std::cout << "lnp " << lnp << std::endl;
-                        std::cout << "lnpalt " << lnpalt << std::endl;
-                        std::cout << "covd\n" << covd << std::endl;
-                        std::cout << "covdalt\n" << covdalt << std::endl;
-                        std::cout << "covinv\n" << covinv << std::endl;
-                        std::cout << "covinvalt\n" << covinvalt << std::endl;
-                    }
-                }
     
             // protect against outliers
             // if (weight > 0.9998 && weight < 1.0002) {cout << "smearing weight is " << weight << "covd is " << covd << std::endl;}
@@ -160,29 +165,7 @@ public:
 
 private:
     std::shared_ptr<const T> correctionHist_;
+    double maxWeight_;
 };
 
-    double calculateTheta(float eta) {
-        return 2.*std::atan(std::exp(-double(eta)));
-    }
-
-    double calculateLam(float eta) {
-        theta = calculateTheta(eta);
-        return M_PI_2 - theta;
-    }
-
-    double calculateQop(float pt, float eta, int charge) {
-        double theta = calculateTheta(eta);
-        return (charge * std::sin(theta) / double(pt));
-    }
-
-    double calculatePt(double qop, float eta, int charge) {
-        double theta = calculateTheta(eta);
-        return (charge * std::sin(theta) / qop);
-    }
-
-    double calculateDeltaQop(float pt, float deltaPt, float eta, int charge) {
-        deltaK = -deltaPt / (pt * (pt + deltaPt));
-        return charge * std::sin(calculateTheta(eta)) * deltaK;
-    }
 }
