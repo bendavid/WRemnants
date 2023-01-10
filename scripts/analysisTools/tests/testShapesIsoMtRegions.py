@@ -35,6 +35,7 @@ from copy import *
 #sys.path.append(os.getcwd() + "/plotUtils/")
 #from utility import *
 from scripts.analysisTools.plotUtils.utility import *
+from scripts.analysisTools.w_mass_13TeV.plotPrefitTemplatesWRemnants import plotPrefitHistograms
 
 sys.path.append(os.getcwd())
 
@@ -72,6 +73,10 @@ if __name__ == "__main__":
     canvas = ROOT.TCanvas("canvas", "", 800, 700)
     cwide = ROOT.TCanvas("cwide","",2400,600)                      
     adjustSettings_CMS_lumi()
+    canvas1D = ROOT.TCanvas("canvas1D", "", 800, 900)
+
+    xAxisName = "Muon #eta"
+    yAxisName = "Muon p_{T} (GeV)"
 
     for isoMtID in args.isoMtRegion:
 
@@ -113,7 +118,8 @@ if __name__ == "__main__":
         rootHists = {}
 
         charges = args.charges
-        
+
+        hist2D = {c : {} for c in charges}
         for d in datasets:
             hnarf = histInfo[d][args.baseName]
             #print(f"{d}: {hnarf.sum()}")
@@ -123,13 +129,25 @@ if __name__ == "__main__":
                 chargeBin = 1 if charge == "minus" else 2
                 h = getTH2fromTH3(rootHists[d], f"{rootHists[d].GetName()}_{charge}", chargeBin, chargeBin)
                 h.SetTitle(f"{d} {charge}: {passMT_str} {passIso_str}")
-                drawCorrelationPlot(h, "Muon #eta", "Muon p_{T} (GeV)", f"Events",
+                drawCorrelationPlot(h, xAxisName, xAxisName, f"Events",
                                     f"{h.GetName()}", plotLabel="ForceTitle", outdir=outdir,
                                     smoothPlot=False, drawProfileX=False, scaleToUnitArea=False,
                                     draw_both0_noLog1_onlyLog2=1, passCanvas=canvas,
                                     nContours=args.nContours, palette=args.palette, invertePalette=args.invertePalette)
+                hist2D[charge][f"{d}_{charge}"] = h
                 print()
 
+        outdir_isoMtID = f"{outdir}/isoMtID_{isoMtID}/"
+        createPlotDirAndCopyPhp(outdir_isoMtID)
+                
+        for c in charges:
+            hdata2D = hist2D[c][f"Data_{c}"]        
+            hmc2D = [hist2D[c][key] for key in hist2D[c].keys() if key.split("_")[0] != "Data"]
+            outdir_dataMC = f"{outdir_isoMtID}dataMC_{c}/"
+            createPlotDirAndCopyPhp(outdir_dataMC)
+            plotPrefitHistograms(hist2D[c][f"Data_{c}"], hmc2D, outdir_dataMC, xAxisName=xAxisName, yAxisName=yAxisName,
+                                 chargeLabel=c, canvas=canvas, canvasWide=cwide, canvas1D=canvas1D)
+                
     # processes = ["WplusmunuPostVFP"]
     # hnomi = {}
     # for p in processes:

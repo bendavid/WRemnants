@@ -20,7 +20,7 @@ fits = ["Asimov", "Data"]
 
 # select what to plot
 skipHistograms = 0 # prefit histograms, can't be made also before running the fit
-skipImpacts = 0
+skipImpacts = 1
 skipNuisances = 1
 skipSystRatios = 1
 skipPostfitHistograms = 1 # prefit and postfit histograms, from fitresults.root
@@ -81,8 +81,12 @@ def printText(text):
     print("")
 #################################################
 
+scriptDir = os.path.dirname(sys.argv[0])
+if len(scriptDir):
+    scriptDir += "/"
+
 printText("PREFIT HISTOGRAMS")
-command = f"python w-mass-13TeV/plotPrefitTemplatesWRemnants.py {combineInputFile} {outputPath}/plotPrefitTemplatesWRemnants/"
+command = f"python {scriptDir}w_mass_13TeV/plotPrefitTemplatesWRemnants.py {combineInputFile} {outputPath}/plotPrefitTemplatesWRemnants/"
 if isWlike:
     command += " --wlike"
 if not skipHistograms:
@@ -93,7 +97,7 @@ if not skipHistograms:
 printText("HISTOGRAM SYST RATIOS")
 # the command below does charge plus, but it is just for example
 processes = "Zmumu" if isWlike else "Wmunu,Fake"
-command  = f"python w-mass-13TeV/makeSystRatios.py {combineInputFile} {outputPath}/makeSystRatios/"
+command  = f"python {scriptDir}w_mass_13TeV/makeSystRatios.py {combineInputFile} {outputPath}/makeSystRatios/"
 command += f" -p {processes} -c plus --plotStat"
 if not skipSystRatios:
     for key,value in systRatiosDict.items():
@@ -117,7 +121,7 @@ for fit in fits:
     printText("IMPACTS")
     statImpact = "0.0710" if isWlike else "0.0230"
     # TODO: add cases for single charge (change input to --set-stat and use "--postfix charge" not to overwrite plots)
-    command = f"python w-mass-13TeV/makeImpactsOnMW.py {fitresultsFile} -o {outputPath}/makeImpactsOnMW/"
+    command = f"python {scriptDir}w_mass_13TeV/makeImpactsOnMW.py {fitresultsFile} -o {outputPath}/makeImpactsOnMW/"
     command += f" --set-stat {statImpact} --showTotal --scaleToMeV"
     if not skipImpacts:
         print()
@@ -126,7 +130,7 @@ for fit in fits:
     ########################################
     printText("NUISANCES AND COSTRAINTS")
     yAxisSetting = " --y-setting -1.0 -0.5 0 0.5 1.0" if fit == "Asimov" else " --y-setting -5.0 -3.0 0 3.0 5.0"
-    command  = f"python w-mass-13TeV/diffNuisances.py {fitresultsFile} -o {outputPath}/diffNuisances/ "
+    command  = f"python {scriptDir}w_mass_13TeV/diffNuisances.py {fitresultsFile} -o {outputPath}/diffNuisances/ "
     command += f" -a --format html --type hessian  --suffix {fit} {yAxisSetting}"
     if not skipNuisances:
         for key,value in diffNuisanceDict.items():
@@ -136,7 +140,7 @@ for fit in fits:
 
     ########################################
     printText("PREFIT AND POSTFIT HISTOGRAMS (YIELDS AND UNCERTAINTIES)")
-    command  = f"python w-mass-13TeV/postFitHistograms.py {fitresultsFile} -o {outputPath}/postFitHistograms/ "
+    command  = f"python {scriptDir}w_mass_13TeV/postFitHistograms.py {fitresultsFile} -o {outputPath}/postFitHistograms/ "
     command += f" --suffix postVFP -l 16.8 --no2Dplot" # remove --no2Dplot to add all 2D histograms
     if not skipPostfitHistograms:
         print()
