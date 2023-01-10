@@ -282,23 +282,22 @@ class datagroups2016(datagroups):
             )
         if not wlike:
             self.groups.update({
-                "Fake" : dict(
-                    members = list(self.datasets.values()),
-                    scale = lambda x: 1. if x.is_data else -1,
-                    label = "Nonprompt",
-                    color = "grey",
-                    selectOp = fakeOp,
-                ),
-                "Wtau" : dict(
-                    members = [self.datasets["WminustaunuPostVFP"], self.datasets["WplustaunuPostVFP"]],
-                    label = r"W$^{\pm}\to\tau\nu$",
-                    color = "orange",
-                    selectOp = sigOp,
-                ),
                 "Wmunu" : dict(
                     members = [self.datasets["WminusmunuPostVFP"], self.datasets["WplusmunuPostVFP"]],
                     label = r"W$^{\pm}\to\mu\nu$",
                     color = "darkred",
+                    selectOp = sigOp,
+                ),
+                }
+            )
+            # Reorder
+            for k in ["Zmumu", "Ztautau"]:
+                self.groups[k] = self.groups.pop(k)
+            self.groups.update({
+                "Wtau" : dict(
+                    members = [self.datasets["WminustaunuPostVFP"], self.datasets["WplustaunuPostVFP"]],
+                    label = r"W$^{\pm}\to\tau\nu$",
+                    color = "orange",
                     selectOp = sigOp,
                 ),
                 "Top" : dict(
@@ -313,6 +312,13 @@ class datagroups2016(datagroups):
                     color = "pink",
                     selectOp = sigOp,
                 ), 
+                "Fake" : dict(
+                    members = list(self.datasets.values()),
+                    scale = lambda x: 1. if x.is_data else -1,
+                    label = "Nonprompt",
+                    color = "grey",
+                    selectOp = fakeOp,
+                ),
             })
         else:
             self.groups["Other"] = dict(
