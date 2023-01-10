@@ -101,8 +101,9 @@ mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper =
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_corr)
 
 # recoil initialization
-from wremnants import recoil_tools
-recoilHelper = recoil_tools.Recoil("highPU", flavor="mumu", met=args.met)
+if not args.no_recoil:
+    from wremnants import recoil_tools
+    recoilHelper = recoil_tools.Recoil("highPU", flavor="mumu", met=args.met)
 
 
 #def add_plots_with_systematics
@@ -260,12 +261,15 @@ def build_graph(df, dataset):
 
     df = df.Filter("massZ >= 60. && massZ < 120.")
 
-    # recoil calibration
-    df = recoilHelper.setup_MET(df, results, dataset, "Muon_pt[goodMuons]", "Muon_phi[goodMuons]", "Muon_pt[goodMuons]")
-    df = recoilHelper.setup_recoil_Z(df, results, dataset)
-    df = recoilHelper.auxHists(df, results)
-    df = recoilHelper.apply_recoil_Z(df, results, dataset, ["ZmumuPostVFP"])  # produces corrected MET as MET_corr_rec_pt/phi
-    #if isZ: df = recoilHelper.recoil_Z_unc_lowPU(df, results, "", "", axis_mt, axis_mll)
+    if not args.no_recoil:
+        df = recoilHelper.setup_MET(df, results, dataset, "Muon_pt[goodMuons]", "Muon_phi[goodMuons]", "Muon_pt[goodMuons]")
+        df = recoilHelper.setup_recoil_Z(df, results, dataset)
+        df = recoilHelper.auxHists(df, results)
+        df = recoilHelper.apply_recoil_Z(df, results, dataset, ["ZmumuPostVFP"])  # produces corrected MET as MET_corr_rec_pt/phi
+        #if isZ: df = recoilHelper.recoil_Z_unc_lowPU(df, results, "", "", axis_mt, axis_mll)
+    else:
+        df = df.Alias("MET_corr_rec_pt", "MET_pt")
+        df = df.Alias("MET_corr_rec_phi", "MET_phi")
 
     if apply_theory_corr:
         results.extend(theory_tools.make_theory_corr_hists(df_dilepton, "dilepton", dilepton_axes, dilepton_cols, 
@@ -283,7 +287,7 @@ def build_graph(df, dataset):
     df = df.Filter("massZ >= 60. && massZ < 120.")
 
     #TODO improve this to include muon mass?
-    met_vars = ("MET_corr_xy_pt", "MET_corr_xy_phi")
+    met_vars = ("MET_pt", "MET_phi")
     df = df.Define("transverseMass_uncorr", f"wrem::mt_wlike_nano(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, {', '.join(met_vars)})")
     results.append(df.HistoBoost("transverseMass_uncorr", [axis_mt], ["transverseMass_uncorr", "nominal_weight"]))
     met_vars = (x.replace("xy", "rec") for x in met_vars)
