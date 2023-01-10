@@ -122,7 +122,8 @@ def makeStackPlotWithRatio(
             hep.histplot(
                 hh.divideHists(ratio_ref, ratio_ref, cutoff=1e-8, rel_unc=True),
                 histtype="step",
-                color="black",
+                color="grey",
+                alpha=0.5,
                 yerr=True,
                 ax=ax2,
                 linewidth=2,
@@ -169,7 +170,7 @@ def makeStackPlotWithRatio(
 
     if cms_decor:
         scale = max(1, np.divide(*ax1.get_figure().get_size_inches())*0.3)
-        hep.cms.label(ax=ax1, lumi=lumi, fontsize=legtex_size*scale, 
+        hep.cms.label(ax=ax1, lumi=float(f"{lumi:.3g}"), fontsize=legtex_size*scale, 
             label=cms_decor, data="Data" in histInfo)
 
     return fig
