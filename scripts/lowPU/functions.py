@@ -1,12 +1,40 @@
 
 import sys,array,math,os,copy,shutil,decimal
-
+import json
 
 import ROOT
 ROOT.gROOT.SetBatch(True)
 ROOT.gStyle.SetOptStat(0)
 ROOT.gStyle.SetOptTitle(0)
 
+import narf
+import hist
+import numpy as np
+
+
+def loadJSON(jsIn):
+    with open(jsIn) as f: jsDict = json.load(f)
+    return jsDict
+
+def writeJSON(jsOut, outDict):
+    with open(jsOut, "w") as outfile: json.dump(outDict, outfile, indent=4)
+
+def parseBoostHist(groups, histCfg, procName, rebin=1):
+
+    axis = histCfg['axis']
+    hName = histCfg['name']
+    
+    label = "%s_%s" % (hName, procName)
+    groups.setHists(hName, "", label=label, procsToRead=[procName], selectSignal=False)
+    bhist = groups.groups[procName][label]
+    rhist = narf.hist_to_root(bhist)
+    rhist = Rebin(rhist, rebin)
+    rhist.SetName(label)
+    rhist = doOverlow(rhist)
+
+    print("Get histogram %s, yield=%.2f" % (label, rhist.Integral()))
+    return rhist
+ 
 
 def prepareDir(outDir, remove=True):
 
@@ -73,3 +101,14 @@ def drange(x, y, jump):
         #x += decimal.Decimal(jump)
         x += jump
         
+        
+def readBoostHistProc(datagroups, hName, procNames):
+
+    label = "%s_tmp" % (hName)
+    datagroups.setHists(hName, "", label=label, procsToRead=procNames, selectSignal=False)
+    bhist = None
+    for procName in procNames:
+        h = datagroups.groups[procName][label]
+        if bhist == None: bhist = h
+        else: bhist = bhist + h
+    return bhist 

@@ -3,7 +3,7 @@ from utilities import output_tools
 from utilities import common as common
 
 parser,initargs = common.common_parser()
-parser.add_argument("--flavor", type=str, choices=["ee", "mumu"], help="Flavor (ee or mumu)", default=None)
+parser.add_argument("--flavor", type=str, choices=["ee", "mumu"], help="Flavor (ee or mumu)", default="mumu")
 parser.add_argument("--met", type=str, choices=["DeepMETReso", "RawPFMET"], help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")
 args = parser.parse_args()
 
@@ -27,6 +27,7 @@ filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
 datasets = wremnants.datasetsLowPU.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, flavor=flavor)
 
 for d in datasets: print(d.name)
+
 
 # load lowPU specific libs
 #ROOT.gInterpreter.AddIncludePath(f"{pathlib.Path(__file__).parent}/include/")
@@ -239,15 +240,11 @@ def build_graph(df, dataset):
     
     # Recoil calibrations
     df = recoilHelper.setup_MET(df, results, dataset, "Lep_pt", "Lep_phi", "Lep_pt_uncorr")
-    df = recoilHelper.setup_recoil_Z(df, results)
-    df = recoilHelper.setup_gen(df, results, dataset, common.zprocs_recoil)
+    df = recoilHelper.setup_recoil_Z(df, results, dataset)
+    #df = recoilHelper.setup_gen(df, results, dataset, common.zprocs_recoil)
     df = recoilHelper.auxHists(df, results)
+    
     df = recoilHelper.apply_recoil_Z(df, results, dataset, common.zprocs_recoil) # produces corrected MET as MET_corr_rec_pt/phi
-    
-   
-    
-    
-    
 
     
     # W-like
@@ -280,7 +277,7 @@ def build_graph(df, dataset):
     
     
     gen_reco_mll_cols = ["ptVgen", "recoil_corr_rec_magn", "massZ"]
-    if dataset.name == sigProc or dataset.name == "Ztautau":
+    if dataset.name in common.zprocs_lowpu:
     
         # pdfs
         df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
@@ -337,13 +334,20 @@ def build_graph(df, dataset):
         results.append(df.HistoBoost("reco_mll_prefireCorr", [*gen_reco_mll_axes], [*gen_reco_mll_cols, "prefireCorr_syst_tensor"], tensor_axes = [common.down_up_axis]))
 
         
-        # Breit-Wigner mass weights
+        # mass weights (Breit-Wigner and nominal)
         nweights = 21
-        df = df.Define("MEParamWeight", "wrem::breitWignerWeights(massVgen, 0)")
-        df = df.Define("massWeight_tensor", f"auto res = wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight); res = nominal_weight*res; return res;")
+        results.append(df.HistoBoost("mll", [axis_mll], ["massZ", "nominal_weight"]))
+        if not "MiNNLObug" in dataset.name: # test of BW massweights
+            df = df.Define("massWeight_tensor", f"auto res = wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight); res = nominal_weight*res; return res;")   
+            
+            results.append(df.HistoBoost("mll_massWeight", [axis_mll], ["massZ", "massWeight_tensor"]))
+            results.append(df.HistoBoost("reco_mll_massWeight", gen_reco_mll_axes, [*gen_reco_mll_cols, "massWeight_tensor"]))
+            results.append(df.HistoBoost("mT_corr_rec_massWeight", [axis_mt], ["mT_corr_rec", "massWeight_tensor"]))
+            
+        df = df.Define("MEParamWeight_BW", "wrem::breitWignerWeights(massVgen, 0)")
+        df = df.Define("massWeight_tensor_BW", f"auto res = wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight_BW); res = nominal_weight*res; return res;")
+        results.append(df.HistoBoost("mll_massWeight_BW", [axis_mll], ["massZ", "massWeight_tensor_BW"]))
 
-        results.append(df.HistoBoost("reco_mll_massWeight", gen_reco_mll_axes, [*gen_reco_mll_cols, "massWeight_tensor"]))
-        results.append(df.HistoBoost("mT_corr_rec_massWeight", [axis_mt], ["mT_corr_rec", "massWeight_tensor"]))
         
     else:
         reco_mll_cols = ["recoil_corr_rec_magn", "massZ"]
@@ -373,5 +377,5 @@ def build_graph(df, dataset):
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)
-fname = "lowPU_%s_%s.pkl.lz4" % (flavor, met)
+fname = "lowPU_%s.pkl.lz4" % flavor
 output_tools.write_analysis_output(resultdict, fname, args)
