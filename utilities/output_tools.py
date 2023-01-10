@@ -61,7 +61,8 @@ def write_analysis_output(results, outfile, args):
     results.update({"meta_info" : metaInfoDict()})
 
     to_append = []
-    to_append.append(args.met)
+    if not args.no_recoil and hasattr(args, "met"):
+        to_append.append(args.met)
     if args.theory_corr and not args.theory_corr_alt_only:
         to_append.append(args.theory_corr[0]+"Corr")
     if args.pdfs and not args.altPdfOnlyCentral:
