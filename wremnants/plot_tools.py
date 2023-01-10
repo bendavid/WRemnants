@@ -124,7 +124,8 @@ def makeStackPlotWithRatio(
             hep.histplot(
                 hh.divideHists(ratio_ref, ratio_ref, cutoff=1e-8, rel_unc=True),
                 histtype="step",
-                color="black",
+                color="grey",
+                alpha=0.5,
                 yerr=True,
                 ax=ax2,
                 linewidth=2,

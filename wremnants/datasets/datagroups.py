@@ -242,10 +242,11 @@ class datagroups(object):
             self.groups[proc]["selectOp"] = op
         
 class datagroups2016(datagroups):
-    def __init__(self, infile, combine=False, wlike=False, pseudodata_pdfset = None,
+    def __init__(self, infile, combine=False, pseudodata_pdfset = None,
     ):
         self.datasets = {x.name : x for x in datasets2016.getDatasets()}
         super().__init__(infile, combine)
+        wlike = "wlike" in self.results["meta_info"]["command"]
         if wlike:
             sigOp = None
             fakeOp = None
