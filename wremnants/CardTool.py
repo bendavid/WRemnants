@@ -47,6 +47,7 @@ class CardTool(object):
         self.keepSyst = None # to override previous one with exceptions for special cases
         #self.loadArgs = {"operation" : "self.loadProcesses (reading hists from file)"}
         self.lumiScale = 1.
+        self.project = None
         self.keepOtherChargeSyst = True
         self.chargeIdDict = {"minus" : {"val" : -1, "id" : "q0", "badId" : None},
                              "plus"  : {"val" : 1., "id" : "q1", "badId" : None}
@@ -61,6 +62,9 @@ class CardTool(object):
         self.keepOtherChargeSyst = False
         self.chargeIdDict["plus"]["badId"] = "q0"
         self.chargeIdDict["minus"]["badId"] = "q1"
+
+    def setProjectionAxes(self, project):
+        self.project = project
 
     def setProcsNoStatUnc(self, procs, resetList=True):
         if self.skipHist:
@@ -110,6 +114,7 @@ class CardTool(object):
         return self.fakeName
 
     def setPseudodata(self, pseudodata):
+        # TODO: Remove dependence on "nominal"
         self.pseudoData = pseudodata.replace("nominal", self.nominalName)
 
     # Needs to be increased from default for long proc names
@@ -121,6 +126,8 @@ class CardTool(object):
 
     def setDatagroups(self, datagroups):
         self.datagroups = datagroups 
+        if self.nominalName:
+            self.datagroups.setNominalName(self.nominalName)
         
     def setChannels(self, channels):
         self.channels = channels
@@ -143,7 +150,8 @@ class CardTool(object):
 
     def setNominalName(self, histName):
         self.nominalName = histName
-        self.datagroups.setNominalName(histName)
+        if self.datagroups:
+            self.datagroups.setNominalName(histName)
 
     def isData(self, procName):
         return any([x.is_data for x in self.datagroups.groups[procName]["members"]])
@@ -321,7 +329,11 @@ class CardTool(object):
         for name in var_names:
             up = var_map[name+"Up"]
             down = var_map[name+"Down"]
-            up_relsign = np.sign(up.values()-hnom.values())
+            try:
+                up_relsign = np.sign(up.values()-hnom.values())
+            except ValueError as e:
+                logger.error(f"Incompatible shapes between up and down for syst {name}")
+                raise e
             down_relsign = np.sign(down.values()-hnom.values())
             vars_sameside = (up_relsign != 0) & (up_relsign == down_relsign)
             perc_sameside = np.count_nonzero(vars_sameside)/hnom.size 
@@ -337,7 +349,7 @@ class CardTool(object):
         logger.info(f"Writing systematic {syst} for process {proc}")
         var_map = self.systHists(h, syst) 
         # TODO: Make this optional
-        if syst != "nominal":
+        if syst != self.nominalName:
             self.checkSysts(self.procDict[proc][self.nominalName], var_map, proc)
         setZeroStatUnc = False
         if proc in self.noStatUncProcesses:
@@ -379,7 +391,8 @@ class CardTool(object):
 
     def writeOutput(self):
         self.datagroups.loadHistsForDatagroups(
-            baseName=self.histName, syst=self.nominalName, label=self.nominalName, scaleToNewLumi=self.lumiScale)
+            baseName=self.nominalName, syst=self.nominalName, label=self.nominalName, 
+            scaleToNewLumi=self.lumiScale)
         self.procDict = self.datagroups.getDatagroups()
         self.writeForProcesses(self.nominalName, processes=self.procDict.keys(), label=self.nominalName)
         self.loadNominalCard()
@@ -392,9 +405,10 @@ class CardTool(object):
             systMap=self.systematics[syst]
             systName = syst if not systMap["name"] else systMap["name"]
             processes=systMap["processes"]
-            self.datagroups.loadHistsForDatagroups(self.histName, systName, label="syst",
-                                                   procsToRead=processes, forceNonzero=systName != "qcdScaleByHelicity",
-                                                   preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"], scaleToNewLumi=self.lumiScale)
+            self.datagroups.loadHistsForDatagroups(self.nominalName, systName, label="syst",
+                procsToRead=processes, forceNonzero=systName != "qcdScaleByHelicity",
+                preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"], 
+                scaleToNewLumi=self.lumiScale)
             self.writeForProcesses(syst, label="syst", processes=processes)    
         output_tools.writeMetaInfoToRootFile(self.outfile, exclude_diff='notebooks')
         if self.skipHist:
@@ -522,6 +536,12 @@ class CardTool(object):
     def writeHist(self, h, name, setZeroStatUnc=False):
         if self.skipHist:
             return
+
+        if self.project:
+            axes = self.project[:]
+            if "charge" in h.axes.name:
+                axes.append("charge")
+            h = h.project(*axes)
 
         if not self.nominalDim:
             self.nominalDim = h.ndim

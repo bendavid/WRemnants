@@ -41,10 +41,6 @@ filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
     nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path)
 
-if not args.no_recoil:
-    logging.warning("Recoil correction for high PU is not yet supported! Setting false")
-    args.no_recoil = True
-
 era = args.era
 
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
@@ -77,7 +73,7 @@ axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, nam
 nominal_axes = [axis_eta, axis_pt, axis_charge]
 
 # axes for mT measurement
-axis_mt = hist.axis.Variable([0] + list(range(40, 110, 1)) + [110, 112, 114, 116, 118, 120, 125, 130, 140, 160, 180, 200], name = "mt",underflow=False, overflow=True)
+axis_mt = hist.axis.Regular(200, 0., 200., name = "mt",underflow=False, overflow=True)
 axis_eta_mT = hist.axis.Variable([-2.4, 2.4], name = "eta")
 
 # extra axes for dilepton validation plots
@@ -125,10 +121,8 @@ corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_c
 # recoil initialization
 if not args.no_recoil:
     from wremnants import recoil_tools
-    import ROOT
-    ROOT.gInterpreter.Declare('#include "lowpu_recoil.h"')
-    ROOT.gInterpreter.Declare('#include "lowpu_utils.h"')
-    recoilHelper = recoil_tools.Recoil("highPU", flavor="mumu", met="RawPFMET") # DeepMETReso RawPFMET
+    recoilHelper = recoil_tools.Recoil("highPU", flavor="mumu", met=args.met)
+
 
 #def add_plots_with_systematics
 
@@ -280,7 +274,7 @@ def build_graph(df, dataset):
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
         df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["TrigMuon_pt", "TrigMuon_eta", "TrigMuon_SApt", "TrigMuon_SAeta", "TrigMuon_charge",
                                                                                       "NonTrigMuon_pt", "NonTrigMuon_eta", "NonTrigMuon_SApt", "NonTrigMuon_SAeta", "NonTrigMuon_charge"])
-        df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId"])
+        df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId"])
 
         weight_expr = "weight*weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom"
         df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
@@ -291,7 +285,9 @@ def build_graph(df, dataset):
         df = df.DefinePerSample("nominal_weight", "1.0")
 
     results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"]))
-        
+
+    if isW or isZ:
+        df = syst_tools.define_mass_weights(df, isW)
 
     # dilepton plots go here, before mass or transverse mass cuts
     df_dilepton = df
@@ -312,23 +308,23 @@ def build_graph(df, dataset):
     if not args.csvars_hist:
         dilepton_axes = dilepton_axes[:-2]
         dilepton_cols = dilepton_cols[:-2]
+    dilepton_cols.append("TrigMuon_charge")
+    dilepton_axes.append(axis_charge)
     
     dilepton = df_dilepton.HistoBoost("dilepton", dilepton_axes, [*dilepton_cols, "nominal_weight"])
     results.append(dilepton)
 
-    if isW or isZ:
-        results.extend(theory_tools.make_pdf_hists(df_dilepton, dataset.name, dilepton_axes, dilepton_cols, args.pdfs, "dilepton"))
-
     df = df.Filter("massZ >= 60. && massZ < 120.")
 
-    # recoil calibration
-    ##df = df.Filter("RawMET_sumEt >= 1250. && RawMET_sumEt < 1500.")
     if not args.no_recoil:
         df = recoilHelper.setup_MET(df, results, dataset, "Muon_pt[goodMuons]", "Muon_phi[goodMuons]", "Muon_pt[goodMuons]")
-        df = recoilHelper.setup_recoil_Z(df, results)
+        df = recoilHelper.setup_recoil_Z(df, results, dataset)
         df = recoilHelper.auxHists(df, results)
         df = recoilHelper.apply_recoil_Z(df, results, dataset, ["ZmumuPostVFP"])  # produces corrected MET as MET_corr_rec_pt/phi
         #if isZ: df = recoilHelper.recoil_Z_unc_lowPU(df, results, "", "", axis_mt, axis_mll)
+    else:
+        df = df.Alias("MET_corr_rec_pt", "MET_pt")
+        df = df.Alias("MET_corr_rec_phi", "MET_phi")
 
     if apply_theory_corr:
         results.extend(theory_tools.make_theory_corr_hists(df_dilepton, "dilepton", dilepton_axes, dilepton_cols, 
@@ -347,12 +343,13 @@ def build_graph(df, dataset):
 
     #TODO improve this to include muon mass?
     met_vars = ("MET_pt", "MET_phi")
-    if not args.no_recoil:
-        df = df.Define("transverseMass_uncorr", f"wrem::mt_wlike_nano(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, {', '.join(met_vars)})")
-        #met_vars = (x.replace("MET", "MET_corr_rec") for x in met_vars)
+    df = df.Define("transverseMass_uncorr", f"wrem::mt_wlike_nano(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, {', '.join(met_vars)})")
+    results.append(df.HistoBoost("transverseMass_uncorr", [axis_mt], ["transverseMass_uncorr", "nominal_weight"]))
+    met_vars = (x.replace("xy", "rec") for x in met_vars)
 
     df = df.Define("transverseMass", f"wrem::mt_wlike_nano(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, {', '.join(met_vars)})")
-
+    results.append(df.HistoBoost("transverseMass", [axis_mt], ["transverseMass", "nominal_weight"]))
+    
     df = df.Filter("transverseMass >= 45.") # 40 for Wmass, thus be 45 here (roughly half the boson mass)
     
     nominal_cols = ["TrigMuon_eta", "TrigMuon_pt", "TrigMuon_charge"]
@@ -361,6 +358,10 @@ def build_graph(df, dataset):
     results.append(nominal)
 
     if not dataset.is_data and not args.onlyMainHistograms:
+
+        if isZ:
+            syst_tools.add_massweights_hist(results, df_dilepton, "dilepton", dilepton_axes, dilepton_cols)
+            results.extend(theory_tools.make_pdf_hists(df_dilepton, dataset.name, dilepton_axes, dilepton_cols, args.pdfs, "dilepton"))
 
         for key,helper in muon_efficiency_helper_stat.items():
             df = df.Define(f"effStatTnP_{key}_tensor", helper, ["TrigMuon_pt", "TrigMuon_eta", "TrigMuon_charge", "NonTrigMuon_pt", "NonTrigMuon_eta", "NonTrigMuon_charge", "nominal_weight"])
@@ -373,11 +374,11 @@ def build_graph(df, dataset):
         effSystTnP = df.HistoBoost("effSystTnP", nominal_axes, [*nominal_cols, "effSystTnP_weight"], tensor_axes = muon_efficiency_helper_syst.tensor_axes)
         results.append(effSystTnP)
 
-        df = df.Define("muonL1PrefireStat_tensor", muon_prefiring_helper_stat, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId", "nominal_weight"])
+        df = df.Define("muonL1PrefireStat_tensor", muon_prefiring_helper_stat, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId", "nominal_weight"])
         muonL1PrefireStat = df.HistoBoost("muonL1PrefireStat", nominal_axes, [*nominal_cols, "muonL1PrefireStat_tensor"], tensor_axes = muon_prefiring_helper_stat.tensor_axes)
         results.append(muonL1PrefireStat)
 
-        df = df.Define("muonL1PrefireSyst_tensor", muon_prefiring_helper_syst, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId", "nominal_weight"])
+        df = df.Define("muonL1PrefireSyst_tensor", muon_prefiring_helper_syst, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId", "nominal_weight"])
         muonL1PrefireSyst = df.HistoBoost("muonL1PrefireSyst", nominal_axes, [*nominal_cols, "muonL1PrefireSyst_tensor"], tensor_axes = [common.down_up_axis])
         results.append(muonL1PrefireSyst)
 
@@ -406,14 +407,8 @@ def build_graph(df, dataset):
                     qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
                     results.append(qcdScaleByHelicityUnc)
 
-            masswargs = (nominal_axes, nominal_cols) if not isW else (None, None)
-            df, masswhist = syst_tools.define_mass_weights(df, isW, *masswargs)
-            if masswhist:
-                results.append(masswhist)
-
             if isZ:
-                massWeight = df.HistoBoost("massWeight", nominal_axes, [*nominal_cols, "massWeight_tensor_wnom"])
-                results.append(massWeight)
+                syst_tools.add_massweights_hist(results, df, "nominal", nominal_axes, nominal_cols)
 
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:

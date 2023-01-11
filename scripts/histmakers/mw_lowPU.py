@@ -1,37 +1,19 @@
 import argparse
+from utilities import output_tools
+from utilities import common as common
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--nThreads", type=int, help="number of threads", default=None)
-parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
-parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=None)
-parser.add_argument("--flavor", type=str, help="Flavor (ee or mumu)", default=None)
-parser.add_argument("--met", type=str, help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")
+parser,initargs = common.common_parser()
+parser.add_argument("--flavor", type=str, choices=["e", "mu"], help="Flavor (ee or mumu)", default="mumu")
 args = parser.parse_args()
 
-import ROOT
-ROOT.gInterpreter.ProcessLine(".O3")
-if not args.nThreads:
-    ROOT.ROOT.EnableImplicitMT()
-elif args.nThreads != 1:
-    ROOT.ROOT.EnableImplicitMT(args.nThreads)
-
-print(ROOT.GetThreadPoolSize())
-#ROOT.DisableImplicitMT() # need to disable it first in order to correctly set the number of threads
-#ROOT.EnableImplicitMT(1)
-print(ROOT.GetThreadPoolSize())
-
-import pickle
-import gzip
 
 import narf
 import wremnants
-from wremnants import theory_tools
-import hist
-import lz4.frame
+from wremnants import theory_tools,syst_tools,theory_corrections
 import logging
 import math
-import sys
-
+import hist
+import ROOT
 import scripts.lowPU.config as lowPUcfg
 
 
@@ -39,21 +21,11 @@ import scripts.lowPU.config as lowPUcfg
 flavor = args.flavor # mu, e
 met = args.met # mumu, ee
 
-if flavor == "mu": 
- 
-    procs = ["DYmumu", "singlemuon", "DYee", "DYtautau", "TTTo2L2Nu", "TTToSemiLeptonic", "ZZ", "WZTo3LNu", "WWTo2L2Nu", "WplusJetsToMuNu", "WminusJetsToMuNu", "WplusJetsToENu", "WminusJetsToENu", "WplusJetsToTauNu", "WminusJetsToTauNu"]
-    #procs = ["WplusJetsToMuNu", "WminusJetsToMuNu"]
-    
-elif flavor == "e":
+corr_helpers = theory_corrections.load_corr_helpers(common.wprocs_lowpu, args.theory_corr)
 
-    procs = ["DYee", "singleelectron", "DYmumu", "DYtautau", "TTTo2L2Nu", "TTToSemiLeptonic", "ZZ", "WZTo3LNu", "WWTo2L2Nu", "WplusJetsToMuNu", "WminusJetsToMuNu", "WplusJetsToENu", "WminusJetsToENu", "WplusJetsToTauNu", "WminusJetsToTauNu"]
-    #procs = ["DYee"]
-    
-else: sys.exit("Flavor must be e or mu")
-
-filt = lambda x,filts=procs: any([f in x.name for f in filts]) 
-datasets = wremnants.datasetsLowPU.getDatasets(maxFiles=args.maxFiles, filt=filt)
-
+filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
+datasets = wremnants.datasetsLowPU.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, flavor=flavor)
+for d in datasets: logging.info(f"Dataset {d.name}")
 
 # load lowPU specific libs
 #ROOT.gInterpreter.AddIncludePath(f"{pathlib.Path(__file__).parent}/include/")
@@ -81,7 +53,6 @@ axis_iso = hist.axis.Regular(100, 0, 5, underflow=False, overflow=True, name = "
 axis_passIso = hist.axis.Boolean(name = "passIso")
 
 axis_MET_pt = hist.axis.Regular(300, 0, 300, name = "MET_pt", underflow=False)
-
 axis_recoil_magn = hist.axis.Regular(300, 0, 300, name = "recoil_magn", underflow=False)
 
 #axis_eta = hist.axis.Variable([0, 0.4, 0.8, 1.2, 1.6, 2.0, 2.4], name = "eta")
@@ -236,9 +207,6 @@ def build_graph(df, dataset):
    
 
     df = df.Filter("Lep_pt > 25")
-    
-    
-        
     df = df.Filter("Flag_globalSuperTightHalo2016Filter && Flag_EcalDeadCellTriggerPrimitiveFilter && Flag_goodVertices && Flag_HBHENoiseIsoFilter && Flag_HBHENoiseFilter && Flag_BadPFMuonFilter")
     
     df = df.Define("Lep1_mom4", "ROOT::Math::PtEtaPhiMVector(Lep_pt, Lep_eta, Lep_phi, Lep_mass)")
@@ -271,11 +239,10 @@ def build_graph(df, dataset):
     df = df.Define("noTrigMatch", "Sum(trigMatch)")
     results.append(df.HistoBoost("noTrigMatch", [axis_lin], ["noTrigMatch", "nominal_weight"]))
 
-    if no is_data:
 
     # Recoil calibrations
     df = recoilHelper.setup_MET(df, results, dataset, "Lep_pt", "Lep_phi", "Lep_pt_uncorr")
-    df = recoilHelper.setup_gen(df, results, dataset, ["WplusJetsToMuNu", "WminusJetsToMuNu"])
+    df = recoilHelper.setup_recoil_gen(df, results, dataset, ["WplusJetsToMuNu", "WminusJetsToMuNu"])
     df = recoilHelper.apply_recoil_W(df, results, dataset, ["WplusJetsToMuNu", "WminusJetsToMuNu"]) # produces corrected MET as MET_corr_rec_pt/phi
 
 
@@ -291,7 +258,7 @@ def build_graph(df, dataset):
 
     if dataset.is_data: return results, weightsum
 
-
+    '''
     # QCD scales same for Tau and Mu
     if dataset.name == "WplusJetsToMuNu" or dataset.name == "WminusJetsToMuNu" or dataset.name == "WplusJetsToTauNu" or dataset.name == "WminusJetsToTauNu":
     
@@ -306,15 +273,15 @@ def build_graph(df, dataset):
         results.extend(theory_tools.make_theory_corr_hists(df, "mll_reco", axes=gen_reco_mll_axes, cols=gen_reco_mll_cols, 
             helpers=corr_helpers[dataset.name], generators=args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
         )
-
+    '''
     ###return results, weightsum    
     if dataset.name == "WplusJetsToMuNu" or dataset.name == "WminusJetsToMuNu":
     
         # recoil uncertainties
-        df = recoilHelper.recoil_W_unc_lowPU(df, results, axis_charge, axis_mt, axis_recoil_magn, axis_eta, axis_passMT, axis_passIso)
+        # df = recoilHelper.recoil_W_unc_lowPU(df, results, axis_charge, axis_mt, axis_recoil_magn, axis_eta, axis_passMT, axis_passIso)
         
         # pdfs
-        results.extend(theory_tools.define_and_make_pdf_hists(df, [axis_mt, axis_charge, axis_passMT, axis_passIso], ["mT_corr_rec", "Lep_charge", "passMT", "passIso"], dataset.name, hname="mT_corr_rec"))        
+        #results.extend(theory_tools.define_and_make_pdf_hists(df, [axis_mt, axis_charge, axis_passMT, axis_passIso], ["mT_corr_rec", "Lep_charge", "passMT", "passIso"], dataset.name, hname="mT_corr_rec"))        
 
 
         '''
@@ -340,16 +307,19 @@ def build_graph(df, dataset):
         results.append(df.HistoBoost("gen_reco_mll_prefireCorr", [*gen_reco_mll_axes], [*gen_reco_mll_cols, "prefireCorr_syst_tensor"], tensor_axes = [down_up_axis]))
         '''
         
-        # Breit-Wigner mass weights
-        nweights = 21
-        df = df.Define("MEParamWeight", "wrem::breitWignerWeights(massVgen, 1)")
-        df = df.Define("massWeight_tensor", f"auto res = wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight); res = nominal_weight*res; return res;")
-        df = df.Define("massWeight_tensor_unscaled", f"auto res = wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight); res = res; return res;")
-        #results.append(df.HistoBoost("gen_reco_mll_massWeight", gen_reco_mll_axes, [*gen_reco_mll_cols, "massWeight_tensor"]))
-        #results.append(df.HistoBoost("mT_uncorr_massWeight", [axis_mt, axis_eta, axis_charge], ["mT_uncorr", "Lep_abs_eta", "Lep_charge", "massWeight_tensor"]))
-        ###results.append(df.HistoBoost("mT_corr_xy_massWeight", [axis_mt, axis_eta, axis_charge, axis_passIso], ["mT_corr_xy", "Lep_abs_eta", "Lep_charge", "passIso", "massWeight_tensor"]))
-        results.append(df.HistoBoost("mT_corr_rec_massWeight", [axis_mt, axis_charge, axis_passMT, axis_passIso], ["mT_corr_rec", "Lep_charge", "passMT", "passIso", "massWeight_tensor"]))
+        
 
+        # mass weights (Breit-Wigner and nominal)
+        nweights = 21
+        df = df.Define("massWeight_tensor", f"auto res = wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight); res = nominal_weight*res; return res;")   
+        df = df.Define("massWeight_tensor_unscaled", f"auto res = wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight); res = res; return res;")
+        #results.append(df.HistoBoost("mll_massWeight", [axis_mll], ["massZ", "massWeight_tensor"]))
+        #results.append(df.HistoBoost("reco_mll_massWeight", gen_reco_mll_axes, [*gen_reco_mll_cols, "massWeight_tensor"]))
+        results.append(df.HistoBoost("mT_corr_rec_massWeight", [axis_mt, axis_charge, axis_passMT, axis_passIso], ["mT_corr_rec", "Lep_charge", "passMT", "passIso", "massWeight_tensor"]))
+            
+        df = df.Define("MEParamWeight_BW", "wrem::breitWignerWeights(massVgen, 1)")
+        df = df.Define("massWeight_tensor_BW", f"auto res = wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight_BW); res = nominal_weight*res; return res;")
+        #results.append(df.HistoBoost("mll_massWeight_BW", [axis_mll], ["massZ", "massWeight_tensor_BW"]))
 
 
         # Muon momentum scale
@@ -529,5 +499,5 @@ def build_graph_cutFlow(df, dataset):
 
 
 resultdict = narf.build_and_run(datasets, build_graph)
-fname = "lowPU_%s_%s.pkl.lz4" % (flavor, met)
+fname = "lowPU_%s.pkl.lz4" % flavor
 output_tools.write_analysis_output(resultdict, fname, args)
