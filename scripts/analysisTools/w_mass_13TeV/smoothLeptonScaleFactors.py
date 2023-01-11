@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # run all pieces (and merge)
-# python w-mass-13TeV/smoothLeptonScaleFactors.py /path/to/tnp/efficiencies_ERA/mu_STEP_CHARGE/allEfficiencies_2D.root /path/to/tnp/smoothLeptonScaleFactors/ --run-all [--do-merge] [--do-steps isonotrig iso triggerplus triggerminus idip idipplus idipminus tracking trackingplus trackingminus reco recoplus recominus]
+# python w_mass_13TeV/smoothLeptonScaleFactors.py /path/to/tnp/efficiencies_ERA/mu_STEP_CHARGE/allEfficiencies_2D.root /path/to/tnp/smoothLeptonScaleFactors/ --run-all [--do-merge] [--do-steps isonotrig iso triggerplus triggerminus idip idipplus idipminus tracking trackingplus trackingminus reco recoplus recominus]
 
 #
 # TIPS:
@@ -774,6 +774,8 @@ minmaxSF = {"trigger"      : "0.65,1.15",
             "idipplus"     : "0.95,1.01",
             "idipminus"    : "0.95,1.01",
             "iso"          : "0.975,1.025",
+            "isoplus"      : "0.975,1.025",
+            "isominus"     : "0.975,1.025",
             "isonotrig"    : "0.97,1.03",
             # usually one doesn't smooth antiiso efficiencies, they come directly from the iso ones after smoothing
             #"antiiso"      : "0.6,1.25",
@@ -828,7 +830,7 @@ def runFiles(args):
             step = step.replace(charge, "")
         inputFile = args.inputfile[0].replace("_ERA", f"_{args.era}").replace("_STEP", f"_{step}").replace("_CHARGE", f"_{charge}")
             
-        cmd = f"python w-mass-13TeV/smoothLeptonScaleFactors.py {inputFile} {args.outdir[0]} -c {charge} -s {step}"
+        cmd = f"python w_mass_13TeV/smoothLeptonScaleFactors.py {inputFile} {args.outdir[0]} -c {charge} -s {step}"
         cmd += " --input-hist-names  EffData2D,EffMC2D,SF2D_nominal --input-hist-names-alt EffDataAltSig2D,SF2D_dataAltSig"
         if step not in ["iso", "isonotrig"]:
             cmd += " --skip-eff"
