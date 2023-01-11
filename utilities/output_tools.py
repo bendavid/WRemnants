@@ -7,6 +7,7 @@ import time
 import pickle
 import lz4.frame
 import logging
+from utilities import common
 
 def readTemplate(templateFile, templateDict, filt=None):
     if not os.path.isfile(templateFile):
@@ -71,7 +72,12 @@ def write_analysis_output(results, outfile, args):
         to_append.append(f"maxFiles{args.maxFiles}")
     if args.postfix:
         to_append.append(args.postfix)
-
+    #if args.dataCrctn:
+    #    to_append.append('data_' + args.dataCrctn)
+    #if args.MCCrctn:
+    #    to_append.append('MC_' + args.MCCrctn)
+    if args.theory_corr:
+        to_append.append(common.list_to_string(args.theory_corr))
     if to_append:
         outfile = outfile.replace(".pkl.lz4", f"_{'_'.join(to_append)}.pkl.lz4")
 

@@ -130,8 +130,13 @@ class datagroups(object):
     def histNameCombine(self, procName, baseName, syst, channel):
         return datagroups.histNameCombine(procName, baseName, syst, channel)
 
-    def loadHistsForDatagroups(self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="", nominalIfMissing=True,
-                               applySelection=True, forceNonzero=True, pseudodata=False, preOpMap={}, preOpArgs={}, scaleToNewLumi=-1):
+    def loadHistsForDatagroups(
+        self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="",
+        nominalIfMissing=True, applySelection=True, forceNonzero=True, pseudodata=False,
+        preOpMap={}, preOpArgs={}, scaleToNewLumi=-1
+    ):
+        logger.debug(f"the basename and syst is: {baseName}, {syst}")
+        logger.debug(f"The procsToRead and excludedProcs are: {procsToRead}, {excluded_procs}")
         if self.rtfile and self.combine:
             self.setHistsCombine(baseName, syst, channel, procsToRead, excluded_procs, label)
         else:
