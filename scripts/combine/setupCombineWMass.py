@@ -51,6 +51,8 @@ def main(args):
     cardTool = CardTool.CardTool(f"{outfolder}/{name}_{{chan}}.txt")
     cardTool.setNominalTemplate(f"{templateDir}/main.txt")
     cardTool.setNominalName(sel.hist_map[args.fitvar])
+    if args.fitvar != "eta_pt":
+        cardTool.setProjectionAxes([args.fitvar])
     if args.noHist:
         cardTool.skipHistograms()
     cardTool.setOutfile(os.path.abspath(f"{outfolder}/{name}CombineInput.root"))

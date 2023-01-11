@@ -47,6 +47,7 @@ class CardTool(object):
         self.keepSyst = None # to override previous one with exceptions for special cases
         #self.loadArgs = {"operation" : "self.loadProcesses (reading hists from file)"}
         self.lumiScale = 1.
+        self.project = None
         self.keepOtherChargeSyst = True
         self.chargeIdDict = {"minus" : {"val" : -1, "id" : "q0", "badId" : None},
                              "plus"  : {"val" : 1., "id" : "q1", "badId" : None}
@@ -61,6 +62,9 @@ class CardTool(object):
         self.keepOtherChargeSyst = False
         self.chargeIdDict["plus"]["badId"] = "q0"
         self.chargeIdDict["minus"]["badId"] = "q1"
+
+    def setProjectionAxes(self, project):
+        self.project = project
 
     def setProcsNoStatUnc(self, procs, resetList=True):
         if self.skipHist:
@@ -387,7 +391,8 @@ class CardTool(object):
 
     def writeOutput(self):
         self.datagroups.loadHistsForDatagroups(
-            baseName=self.nominalName, syst=self.nominalName, label=self.nominalName, scaleToNewLumi=self.lumiScale)
+            baseName=self.nominalName, syst=self.nominalName, label=self.nominalName, 
+            scaleToNewLumi=self.lumiScale)
         self.procDict = self.datagroups.getDatagroups()
         self.writeForProcesses(self.nominalName, processes=self.procDict.keys(), label=self.nominalName)
         self.loadNominalCard()
@@ -401,8 +406,9 @@ class CardTool(object):
             systName = syst if not systMap["name"] else systMap["name"]
             processes=systMap["processes"]
             self.datagroups.loadHistsForDatagroups(self.nominalName, systName, label="syst",
-                                                   procsToRead=processes, forceNonzero=systName != "qcdScaleByHelicity",
-                                                   preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"], scaleToNewLumi=self.lumiScale)
+                procsToRead=processes, forceNonzero=systName != "qcdScaleByHelicity",
+                preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"], 
+                scaleToNewLumi=self.lumiScale)
             self.writeForProcesses(syst, label="syst", processes=processes)    
         output_tools.writeMetaInfoToRootFile(self.outfile, exclude_diff='notebooks')
         if self.skipHist:
@@ -530,6 +536,12 @@ class CardTool(object):
     def writeHist(self, h, name, setZeroStatUnc=False):
         if self.skipHist:
             return
+
+        if self.project:
+            axes = self.project[:]
+            if "charge" in h.axes.name:
+                axes.append("charge")
+            h = h.project(*axes)
 
         if not self.nominalDim:
             self.nominalDim = h.ndim
