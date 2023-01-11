@@ -110,8 +110,12 @@ protected:
 
     const Eigen::Matrix<double, 3, 1> curvmomcor = curvmom + jacMap.template topRows<3>().template cast<double>()*xtrk;
 
+    if (curvmomcor.array().isNaN().any() || curvmomcor.array().isInf().any()) {
+      return std::make_pair<V, int>(V(), -99);
+    }
+
     const double qopcor = curvmomcor[0];
-    const double lamcor = curvmomcor[1];
+    const double lamcor = std::clamp(curvmomcor[1], -M_PI_2, M_PI_2);
     const double phicor = curvmomcor[2];
 
     const double pcor = 1./std::abs(qopcor);
@@ -119,7 +123,7 @@ protected:
 
     const double ptcor = pcor*std::cos(lamcor);
 
-    const double thetacor = M_PI_2 - lamcor;
+    const double thetacor = std::clamp(M_PI_2 - lamcor, 0., M_PI);
     const double etacor = -std::log(std::tan(0.5*thetacor));
 
     return std::make_pair<V, int>(V(ptcor, etacor, phicor, wrem::muon_mass), int(qcor));

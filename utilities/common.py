@@ -95,6 +95,7 @@ def common_parser():
     parser.add_argument("--onlyMainHistograms", action='store_true', help="Only produce some histograms, skipping (most) systematics to run faster when those are not needed")
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
                         help="Set verbosity level with logging, the larger the more verbose (currently for setup_test_logger)");
+    parser.add_argument("--met", type=str, choices=["DeepMETReso", "RawPFMET"], help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")                    
     
     commonargs,_ = parser.parse_known_args()
 
@@ -114,13 +115,7 @@ def common_parser_combine():
     from wremnants import theory_tools
     parser = argparse.ArgumentParser()
     parser.add_argument("--wlike", action='store_true', help="Run W-like analysis of mZ")
-    initargs,_ = parser.parse_known_args()
-    
-    tag = "WMass" if not initargs.wlike else "ZMassWLike"
-    baseDirDefault = os.environ["COMBINE_STUDIES"] + f"/{tag}/"
-    
-    parser.add_argument("-d", "--baseDir", type=str, default=baseDirDefault, help="base output folder")
-    parser.add_argument("-o", "--outfolder", type=str, default="", help="Main output folder inside baseDir, with the root file storing all histograms and datacards for single charge")
+    parser.add_argument("-o", "--outfolder", type=str, default=".", help="Output folder with the root file storing all histograms and datacards for single charge (subfolder WMass or ZMassWLike is created automatically inside)")
     parser.add_argument("-i", "--inputFile", type=str)
     parser.add_argument("--qcdScale", choices=["byHelicityPt", "byHelicityPtCharge", "byHelicityCharge", "byPtCharge", "byPt", "byCharge", "integrated",], default="byHelicityPtCharge", 
             help="Decorrelation for QCDscale")

@@ -1,0 +1,182 @@
+{
+    "nGauss": 4,
+    "mean1": {
+        "nParams": 3,
+        "func": "[0]*TMath::Power(x, [1]) + [2]",
+        "p0": 7.133244681567112e-06,
+        "p0_err": [
+            null,
+            null
+        ],
+        "p1": 3.0241462747191212,
+        "p1_err": [
+            null,
+            null
+        ],
+        "p2": 3.9229638215121287,
+        "p2_err": [
+            null,
+            null
+        ]
+    },
+    "sigma1": {
+        "nParams": 3,
+        "func": "[0]*TMath::Power(x, [1]) + [2]",
+        "p0": 6.006376434550096,
+        "p0_err": [
+            null,
+            null
+        ],
+        "p1": 0.47541432164968717,
+        "p1_err": [
+            null,
+            null
+        ],
+        "p2": 40.28316792413808,
+        "p2_err": [
+            null,
+            null
+        ]
+    },
+    "norm1": {
+        "nParams": 1,
+        "func": "[0]",
+        "p0": 0.0001207131021935207,
+        "p0_err": [
+            null,
+            null
+        ]
+    },
+    "mean2": {
+        "nParams": 3,
+        "func": "[0]*TMath::Power(x, [1]) + [2]",
+        "p0": 0.02805092354019248,
+        "p0_err": [
+            null,
+            null
+        ],
+        "p1": 1.2643272381007087,
+        "p1_err": [
+            null,
+            null
+        ],
+        "p2": 1.959330826402872,
+        "p2_err": [
+            null,
+            null
+        ]
+    },
+    "sigma2": {
+        "nParams": 3,
+        "func": "[0]*TMath::Power(x, [1]) + [2]",
+        "p0": 0.05212345702472463,
+        "p0_err": [
+            null,
+            null
+        ],
+        "p1": 0.9820428581153146,
+        "p1_err": [
+            null,
+            null
+        ],
+        "p2": 11.338461120187858,
+        "p2_err": [
+            null,
+            null
+        ]
+    },
+    "norm2": {
+        "nParams": 1,
+        "func": "[0]",
+        "p0": 0.15464949083687957,
+        "p0_err": [
+            null,
+            null
+        ]
+    },
+    "mean3": {
+        "nParams": 3,
+        "func": "[0]*TMath::Power(x, [1]) + [2]",
+        "p0": 6.522224176625618,
+        "p0_err": [
+            null,
+            null
+        ],
+        "p1": 0.18254600650022038,
+        "p1_err": [
+            null,
+            null
+        ],
+        "p2": -6.928034988062474,
+        "p2_err": [
+            null,
+            null
+        ]
+    },
+    "sigma3": {
+        "nParams": 3,
+        "func": "[0]*TMath::Power(x, [1]) + [2]",
+        "p0": 0.05736141450672507,
+        "p0_err": [
+            null,
+            null
+        ],
+        "p1": 0.8932470031835035,
+        "p1_err": [
+            null,
+            null
+        ],
+        "p2": 17.692745242304596,
+        "p2_err": [
+            null,
+            null
+        ]
+    },
+    "norm3": {
+        "nParams": 1,
+        "func": "[0]",
+        "p0": 0.6540741897589092,
+        "p0_err": [
+            null,
+            null
+        ]
+    },
+    "mean4": {
+        "nParams": 3,
+        "func": "[0]*TMath::Power(x, [1]) + [2]",
+        "p0": 0.04200766685735206,
+        "p0_err": [
+            null,
+            null
+        ],
+        "p1": 1.1810489892056097,
+        "p1_err": [
+            null,
+            null
+        ],
+        "p2": 1.8430321727893937,
+        "p2_err": [
+            null,
+            null
+        ]
+    },
+    "sigma4": {
+        "nParams": 3,
+        "func": "[0]*TMath::Power(x, [1]) + [2]",
+        "p0": 0.011404251546427935,
+        "p0_err": [
+            null,
+            null
+        ],
+        "p1": 1.315550079980865,
+        "p1_err": [
+            null,
+            null
+        ],
+        "p2": 24.49502569276174,
+        "p2_err": [
+            null,
+            null
+        ]
+    }
+}
