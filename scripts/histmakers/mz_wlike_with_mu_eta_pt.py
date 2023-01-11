@@ -253,6 +253,8 @@ def build_graph(df, dataset):
     if not args.csvars_hist:
         dilepton_axes = dilepton_axes[:-2]
         dilepton_cols = dilepton_cols[:-2]
+    dilepton_cols.append("TrigMuon_charge")
+    dilepton_axes.append(axis_charge)
     
     dilepton = df_dilepton.HistoBoost("dilepton", dilepton_axes, [*dilepton_cols, "nominal_weight"])
     results.append(dilepton)
@@ -356,6 +358,8 @@ def build_graph(df, dataset):
             if isZ:
                 massWeight = df.HistoBoost("massWeight", nominal_axes, [*nominal_cols, "massWeight_tensor_wnom"])
                 results.append(massWeight)
+                massWeight_dilep = df.HistoBoost("dilepton_massWeight", dilepton_axes, [*dilepton_cols, "massWeight_tensor_wnom"])
+                results.append(massWeight_dilep)
 
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:
