@@ -28,7 +28,7 @@ parser.add_argument(
 )
 parser.add_argument("--jpsiCrctnDataInput", type = str, default = None, help = "path to the root file for jpsi corrections on the data")
 parser.add_argument("--jpsiCrctnMCInput", type = str, default = None, help = "path to the root file for jpsi corrections on the MC")
-
+parser.add_argument("--uncertainty-hist", type=str, choices=["dilepton", "nominal"], default="nominal", help="Histogram to store uncertainties for")
 args = parser.parse_args()
 
 logging.basicConfig(level=logging.INFO)
@@ -107,7 +107,6 @@ logging.info(f"SF file: {args.sfFile}")
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
 
-calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
 if args.dataCrctn == 'jpsi_crctd':
     jpsi_crctn_data_helper = wremnants.make_jpsi_crctn_helper(filepath = args.jpsiCrctnDataInput)
     jpsi_crctn_unc_data_helper = wremnants.make_jpsi_crctn_unc_helper(filepath = args.jpsiCrctnDataInput)
@@ -290,6 +289,8 @@ def build_graph(df, dataset):
         df = syst_tools.define_mass_weights(df, isW)
 
     # dilepton plots go here, before mass or transverse mass cuts
+    df = df.Filter("massZ >= 60. && massZ < 120.")
+
     df_dilepton = df
     df_dilepton = df_dilepton.Filter("TrigMuon_pt > 26.")
 
@@ -314,8 +315,6 @@ def build_graph(df, dataset):
     dilepton = df_dilepton.HistoBoost("dilepton", dilepton_axes, [*dilepton_cols, "nominal_weight"])
     results.append(dilepton)
 
-    df = df.Filter("massZ >= 60. && massZ < 120.")
-
     if not args.no_recoil:
         df = recoilHelper.setup_MET(df, results, dataset, "Muon_pt[goodMuons]", "Muon_phi[goodMuons]", "Muon_pt[goodMuons]")
         df = recoilHelper.setup_recoil_Z(df, results, dataset)
@@ -332,14 +331,8 @@ def build_graph(df, dataset):
             with_uncertainties=True)
         )
 
-    if isW or isZ:
-        results.extend(theory_tools.make_pdf_hists(df_dilepton, dataset.name, dilepton_axes, dilepton_cols, args.pdfs, "dilepton"))
-        results.append(theory_tools.make_scale_hist(df_dilepton, [*dilepton_axes, axis_ptVgen, axis_chargeVgen], [*dilepton_cols, "ptVgen", "chargeVgen"], "dilepton"))
-
     dilepton = df_dilepton.HistoBoost("dilepton", dilepton_axes, [*dilepton_cols, "nominal_weight"])
     results.append(dilepton)
-
-    df = df.Filter("massZ >= 60. && massZ < 120.")
 
     #TODO improve this to include muon mass?
     met_vars = ("MET_pt", "MET_phi")
@@ -358,21 +351,16 @@ def build_graph(df, dataset):
     results.append(nominal)
 
     if not dataset.is_data and not args.onlyMainHistograms:
+        if args.uncertainty_hist == "nominal":
+            unc_df = df
+            unc_cols = nominal_cols
+            unc_axes = nominal_axes
+        else:
+            unc_df = df_dilepton
+            unc_cols = dilepton_cols
+            unc_axes = dilepton_axes
 
-        if isZ:
-            syst_tools.add_massweights_hist(results, df_dilepton, "dilepton", dilepton_axes, dilepton_cols)
-            results.extend(theory_tools.make_pdf_hists(df_dilepton, dataset.name, dilepton_axes, dilepton_cols, args.pdfs, "dilepton"))
-
-        for key,helper in muon_efficiency_helper_stat.items():
-            df = df.Define(f"effStatTnP_{key}_tensor", helper, ["TrigMuon_pt", "TrigMuon_eta", "TrigMuon_charge", "NonTrigMuon_pt", "NonTrigMuon_eta", "NonTrigMuon_charge", "nominal_weight"])
-            effStatTnP = df.HistoBoost(f"effStatTnP_{key}", nominal_axes, [*nominal_cols, f"effStatTnP_{key}_tensor"], tensor_axes = helper.tensor_axes)
-            results.append(effStatTnP)
-        
-        df = df.Define("effSystTnP_weight", muon_efficiency_helper_syst, ["TrigMuon_pt", "TrigMuon_eta", "TrigMuon_SApt", "TrigMuon_SAeta", "TrigMuon_charge",
-                                                                          "NonTrigMuon_pt", "NonTrigMuon_eta", "NonTrigMuon_SApt", "NonTrigMuon_SAeta", "NonTrigMuon_charge",
-                                                                          "nominal_weight"])
-        effSystTnP = df.HistoBoost("effSystTnP", nominal_axes, [*nominal_cols, "effSystTnP_weight"], tensor_axes = muon_efficiency_helper_syst.tensor_axes)
-        results.append(effSystTnP)
+        df = syst_tools.add_muon_efficiency_unc_hists(results, unc_df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, unc_axes, unc_cols)
 
         df = df.Define("muonL1PrefireStat_tensor", muon_prefiring_helper_stat, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId", "nominal_weight"])
         muonL1PrefireStat = df.HistoBoost("muonL1PrefireStat", nominal_axes, [*nominal_cols, "muonL1PrefireStat_tensor"], tensor_axes = muon_prefiring_helper_stat.tensor_axes)
@@ -395,8 +383,11 @@ def build_graph(df, dataset):
                     with_uncertainties=True)
                 )
 
-            results.append(theory_tools.make_scale_hist(df, [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen"]))
-            results.extend(theory_tools.make_pdf_hists(df, dataset.name, nominal_axes, nominal_cols, args.pdfs))
+            scale_axes = unc_axes if args.uncertainty_hist == "dilepton" else [*unc_axes, axis_ptVgen, axis_chargeVgen]
+            scale_cols = unc_cols if args.uncertainty_hist == "dilepton" else [*nominal_cols, "ptVgen", "chargeVgen"]
+            syst_tools.add_scale_hist(results, unc_df, scale_axes, scale_cols)
+            syst_tools.add_pdf_hists(results, unc_df, dataset.name, nominal_axes, nominal_cols, args.pdfs)
+
 
             if isZ:
                 # there is no W backgrounds for the Wlike, make QCD scale histograms only for Z
@@ -406,9 +397,7 @@ def build_graph(df, dataset):
                     df = df.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
                     qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
                     results.append(qcdScaleByHelicityUnc)
-
-            if isZ:
-                syst_tools.add_massweights_hist(results, df, "nominal", nominal_axes, nominal_cols)
+                syst_tools.add_massweights_hist(results, df_dilepton, "dilepton", dilepton_axes, dilepton_cols)
 
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:
