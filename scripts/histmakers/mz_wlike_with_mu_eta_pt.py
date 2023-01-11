@@ -260,6 +260,11 @@ def build_graph(df, dataset):
     results.append(dilepton)
     if isW or isZ:
         results.extend(theory_tools.make_pdf_hists(df_dilepton, dataset.name, dilepton_axes, dilepton_cols, args.pdfs, "dilepton"))
+        df = syst_tools.define_mass_weights(df, isW)
+
+        if isZ:
+            massWeight_dilep = df.HistoBoost("dilepton_massWeight", dilepton_axes, [*dilepton_cols, "massWeight_tensor_wnom"])
+            results.append(massWeight_dilep)
 
     df = df.Filter("massZ >= 60. && massZ < 120.")
 
@@ -350,16 +355,9 @@ def build_graph(df, dataset):
                     qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
                     results.append(qcdScaleByHelicityUnc)
 
-            masswargs = (nominal_axes, nominal_cols) if not isW else (None, None)
-            df, masswhist = syst_tools.define_mass_weights(df, isW, *masswargs)
-            if masswhist:
-                results.append(masswhist)
-
             if isZ:
                 massWeight = df.HistoBoost("massWeight", nominal_axes, [*nominal_cols, "massWeight_tensor_wnom"])
                 results.append(massWeight)
-                massWeight_dilep = df.HistoBoost("dilepton_massWeight", dilepton_axes, [*dilepton_cols, "massWeight_tensor_wnom"])
-                results.append(massWeight_dilep)
 
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:
