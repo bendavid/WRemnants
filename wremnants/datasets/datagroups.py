@@ -329,7 +329,7 @@ class datagroups2016(datagroups):
                 columns=["Process", "Yield", "Uncertainty"])
         return df
 
-    def histName(self, baseName, procName, syst):
+    def histName(self, baseName, procName="", syst=""):
         # This is kind of hacky to deal with the different naming from combine
         if baseName != "x" and (syst == "" or syst == self.nominalName):
             return baseName
