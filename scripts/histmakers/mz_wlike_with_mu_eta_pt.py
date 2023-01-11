@@ -248,7 +248,9 @@ def build_graph(df, dataset):
         df = df.DefinePerSample("nominal_weight", "1.0")
 
     results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"]))
-        
+
+    if isW or isZ:
+        df = syst_tools.define_mass_weights(df, isW)
 
     # dilepton plots go here, before mass or transverse mass cuts
     df_dilepton = df
@@ -262,8 +264,6 @@ def build_graph(df, dataset):
     
     dilepton = df_dilepton.HistoBoost("dilepton", dilepton_axes, [*dilepton_cols, "nominal_weight"])
     results.append(dilepton)
-    if isW or isZ:
-        results.extend(theory_tools.make_pdf_hists(df_dilepton, dataset.name, dilepton_axes, dilepton_cols, args.pdfs, "dilepton"))
 
     df = df.Filter("massZ >= 60. && massZ < 120.")
 
@@ -307,6 +307,10 @@ def build_graph(df, dataset):
     results.append(nominal)
 
     if not dataset.is_data and not args.onlyMainHistograms:
+
+        if isZ:
+            syst_tools.add_massweights_hist(results, df_dilepton, "dilepton", dilepton_axes, dilepton_cols)
+            results.extend(theory_tools.make_pdf_hists(df_dilepton, dataset.name, dilepton_axes, dilepton_cols, args.pdfs, "dilepton"))
 
         for key,helper in muon_efficiency_helper_stat.items():
             df = df.Define(f"effStatTnP_{key}_tensor", helper, ["TrigMuon_pt", "TrigMuon_eta", "TrigMuon_charge", "NonTrigMuon_pt", "NonTrigMuon_eta", "NonTrigMuon_charge", "nominal_weight"])
@@ -358,8 +362,7 @@ def build_graph(df, dataset):
                 results.append(masswhist)
 
             if isZ:
-                massWeight = df.HistoBoost("massWeight", nominal_axes, [*nominal_cols, "massWeight_tensor_wnom"])
-                results.append(massWeight)
+                syst_tools.add_massweights_hist(results, df, "nominal", nominal_axes, nominal_cols)
 
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:
