@@ -105,7 +105,7 @@ def drange(x, y, jump):
 def readBoostHistProc(datagroups, hName, procNames):
 
     label = "%s_tmp" % (hName)
-    datagroups.setHists(hName, "", label=label, procsToRead=procNames, selectSignal=False)
+    datagroups.setHists(hName, "", label=label, procsToRead=procNames)
     bhist = None
     for procName in procNames:
         h = datagroups.groups[procName][label]

@@ -4,7 +4,6 @@ from utilities import common as common
 
 parser,initargs = common.common_parser()
 parser.add_argument("--flavor", type=str, choices=["ee", "mumu"], help="Flavor (ee or mumu)", default="mumu")
-parser.add_argument("--met", type=str, choices=["DeepMETReso", "RawPFMET"], help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")
 args = parser.parse_args()
 
 import narf
@@ -25,8 +24,7 @@ sigProc = "Zmumu" if flavor == "mumu" else "Zee"
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
 datasets = wremnants.datasetsLowPU.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, flavor=flavor)
-
-for d in datasets: print(d.name)
+for d in datasets: logging.info(f"Dataset {d.name}")
 
 
 # load lowPU specific libs

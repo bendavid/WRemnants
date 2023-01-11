@@ -2,6 +2,14 @@ from utilities import boostHistHelpers as hh
 import hist
 import numpy as np
 
+hist_map = {
+    "eta_pt_unrolled" : "nominal",
+    "eta" : "nominal",
+    "pt" : "nominal",
+    "mll" : "dilepton",
+    "ptll" : "dilepton",
+}
+
 def fakeHistABCD(h):
     return hh.multiplyHists(
         hh.divideHists(h[{"passIso" : True, "passMT" : False}], 

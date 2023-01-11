@@ -145,11 +145,12 @@ def uncertainty_hist_from_envelope(h, proj_ax, entries):
     hnew[...,1] = hup.view(flow=True)
     return hnew
 
-def define_mass_weights(df, isW, nominal_axes=None, nominal_cols=None):
+def define_mass_weights(df, isW):
     # nweights = 21 if isW else 23
     # from -100 to 100 MeV with 10 MeV increment
     nweights = 21
     df = df.Define("massWeight_tensor", f"wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight)")
+    df = df.Define("massWeight_tensor_wnom", "auto res = massWeight_tensor; res = nominal_weight*res; return res;")
 
     return df
 
@@ -157,4 +158,3 @@ def add_massweights_hist(results, df, base_name, axes, cols):
     name = datagroups2016.histName(base_name, syst="massWeight")
     massWeight = df.HistoBoost(name, axes, [*cols, "massWeight_tensor_wnom"])
     results.append(massWeight)
-
