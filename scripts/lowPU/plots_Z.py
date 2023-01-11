@@ -335,9 +335,7 @@ def parseProc(histCfg, procName, syst="", rebin=1):
     hName = histCfg['name']
     
     label = "%s_%s" % (hName, procName)
-    groups.setHists(hName, "", label=label, procsToRead=[procName], selectSignal=False)
-    bhist = groups.groups[procName][label]
-    #print(bhist)
+    bhist = functions.readBoostHistProc(groups, hName, [procName])
     rhist = narf.hist_to_root(bhist)
     rhist = functions.Rebin(rhist, rebin)
     rhist.SetName(label)
@@ -361,13 +359,13 @@ def doRecoilStatSyst(histCfg, procName, hNom, h_syst, rebin):
     if procName != "Zmumu": return
 
     tags = ["target_para", "target_perp"] # , "source_para", "source_perp", "target_para_bkg", "target_perp_bkg"
-    groups.setHists(hName, "", label=hName, procsToRead=[procName], selectSignal=False)
+    groups.setHists(hName, "", label=hName, procsToRead=[procName])
     bhist_nom = groups.groups[procName][hName]
     rhist_nom = narf.hist_to_root(bhist_nom)
     for tag in tags:
         
         label = "%s_recoilSyst_%s" % (hName, tag)
-        groups.setHists(label, "", label=label, procsToRead=[procName], selectSignal=False)
+        groups.setHists(label, "", label=label, procsToRead=[procName])
         bhist_pert = groups.groups[procName][label]
 
         if procName == "SingleMuon" or procName == "SingleElectron": pass
@@ -966,28 +964,16 @@ if __name__ == "__main__":
     outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/Z%s_%s/plots_1/" % (flavor, met)
     functions.prepareDir(outDir, remove=True)
     
-    
     print("Open")
     groups = datagroupsLowPU("lowPU_%s_%s_nnpdf31.pkl.lz4" % (flavor, met), flavor=flavor)
     
     if flavor == "mumu":
-        procs = ['EWK', 'Top', 'Zmumu'] 
-        data = 'SingleMuon'
-        
-        
-    if flavor == "ee":
-    
-        procs = ['EWK', 'Top', 'Zee']
-        data = 'SingleElectron'    
-        
+        procs, data = ['EWK', 'Top', 'Zmumu'], 'SingleMuon'
 
-    
-    #label = "test"
-    #groups.setHists("reco_mll_recoilSyst_target_para", "", label=label, procsToRead=["Zmumu"], selectSignal=False)
-    #bhist = groups.groups["Zmumu"][label]
-    #print(bhist)
-    #sys.exit()
+    if flavor == "ee":
+        procs, data = ['EWK', 'Top', 'Zee'], 'SingleElectron'    
         
+   
     print("Plotting")    
     
     

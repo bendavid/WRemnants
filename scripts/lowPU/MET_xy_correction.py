@@ -170,11 +170,6 @@ def METxyCorrection(direction = "x", corrType="uncorr", polyOrderData=-1, polyOr
     
     b_data = functions.readBoostHistProc(datagroups, "MET%s_%s_npv" % (direction, corrType), [data])
     b_mc = functions.readBoostHistProc(datagroups, "MET%s_%s_npv" % (direction, corrType), procs)
-    #for proc in procs:
-    
-    #    b = readProc(datagroups, "MET%s_%s_npv" % (direction, corrType), proc)
-    #    if b_mc == None: b_mc = b
-    #    else: b_mc += b
 
     h_data = narf.hist_to_root(b_data)
     h_mc = narf.hist_to_root(b_mc)
@@ -299,9 +294,9 @@ def METxyCorrection(direction = "x", corrType="uncorr", polyOrderData=-1, polyOr
 if __name__ == "__main__":
 
     met = "RawPFMET" # PFMET, RawPFMET DeepMETReso
-    flavor = "mumu" # mu, e, mumu, ee
+    flavor = "mu" # mu, e, mumu, ee
     pdf = "nnpdf31"
-    lowPU = True
+    lowPU = False
 
     # DATA For electron channels!
     
@@ -312,7 +307,7 @@ if __name__ == "__main__":
         procs = ['EWK', 'Top', 'Zmumu'] 
         data = "SingleMuon" if flavor == "mumu" else "SingleElectron"
 
-        outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/METxy_correction/METxy_%s_%s/" % (flavor, met) # qT_reweighting_mumu_RawPFMET_nnpdf31.json
+        outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/METxy_correction/METxy_%s_%s/" % (flavor, met)
         fOut = "wremnants/data/recoil/lowPU/%s_%s/met_xy_correction.json" % (flavor, met)
         functions.prepareDir(outDir, True)
         
@@ -332,7 +327,7 @@ if __name__ == "__main__":
         METxyCorrection(direction="y", corrType="corr_xy", polyOrderData=1, polyOrderMC=1, procs=procs, data=data)
     
     else:
-        npv_max, npv_fit_min, npv_fit_max = 60, 5, 45
+        npv_max, npv_fit_min, npv_fit_max = 60, 5, 55
         
 
         if flavor == "mumu":
@@ -344,8 +339,12 @@ if __name__ == "__main__":
             procs = ["Zmumu", "Ztautau", "Wtau", "Wmunu", "Top", "Diboson"]
             data = "Data"
             
-        outDir = "/eos/user/j/jaeyserm/www/wmass/highPU/METxy_correction/METxy_%s_%s_%s/" % (flavor, met, pdf)
-        fOut = "%s/MET_xy_corr_coeff_%s_%s_%s.json" % (outDir, flavor, met, pdf)
+            for g in datagroups.groups:
+                datagroups.groups[g]['selectOp'] = None
+            
+
+        outDir = "/eos/user/j/jaeyserm/www/wmass/highPU/METxy_correction/METxy_%s_%s/" % (flavor, met)
+        fOut = "wremnants/data/recoil/highPU/%s_%s/met_xy_correction.json" % (flavor, met)
         functions.prepareDir(outDir, True)
         
         dictout = {}
