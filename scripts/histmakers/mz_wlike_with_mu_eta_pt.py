@@ -242,7 +242,9 @@ def build_graph(df, dataset):
         df = df.DefinePerSample("nominal_weight", "1.0")
 
     results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"]))
-        
+
+    if isW or isZ:
+        df = syst_tools.define_mass_weights(df, isW)
 
     # dilepton plots go here, before mass or transverse mass cuts
     df_dilepton = df
@@ -258,13 +260,6 @@ def build_graph(df, dataset):
     
     dilepton = df_dilepton.HistoBoost("dilepton", dilepton_axes, [*dilepton_cols, "nominal_weight"])
     results.append(dilepton)
-    if isW or isZ:
-        results.extend(theory_tools.make_pdf_hists(df_dilepton, dataset.name, dilepton_axes, dilepton_cols, args.pdfs, "dilepton"))
-        df = syst_tools.define_mass_weights(df, isW)
-
-        if isZ:
-            massWeight_dilep = df.HistoBoost("dilepton_massWeight", dilepton_axes, [*dilepton_cols, "massWeight_tensor_wnom"])
-            results.append(massWeight_dilep)
 
     df = df.Filter("massZ >= 60. && massZ < 120.")
 
@@ -311,6 +306,10 @@ def build_graph(df, dataset):
 
     if not dataset.is_data and not args.onlyMainHistograms:
 
+        if isZ:
+            syst_tools.add_massweights_hist(results, df_dilepton, "dilepton", dilepton_axes, dilepton_cols)
+            results.extend(theory_tools.make_pdf_hists(df_dilepton, dataset.name, dilepton_axes, dilepton_cols, args.pdfs, "dilepton"))
+
         for key,helper in muon_efficiency_helper_stat.items():
             df = df.Define(f"effStatTnP_{key}_tensor", helper, ["TrigMuon_pt", "TrigMuon_eta", "TrigMuon_charge", "NonTrigMuon_pt", "NonTrigMuon_eta", "NonTrigMuon_charge", "nominal_weight"])
             effStatTnP = df.HistoBoost(f"effStatTnP_{key}", nominal_axes, [*nominal_cols, f"effStatTnP_{key}_tensor"], tensor_axes = helper.tensor_axes)
@@ -356,8 +355,7 @@ def build_graph(df, dataset):
                     results.append(qcdScaleByHelicityUnc)
 
             if isZ:
-                massWeight = df.HistoBoost("massWeight", nominal_axes, [*nominal_cols, "massWeight_tensor_wnom"])
-                results.append(massWeight)
+                syst_tools.add_massweights_hist(results, df, "nominal", nominal_axes, nominal_cols)
 
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:
