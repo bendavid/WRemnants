@@ -28,11 +28,7 @@ args = parser.parse_args()
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
     nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path)
-
-if not args.no_recoil:
-    logging.warning("Recoil correction for high PU is not yet supported! Setting false")
-    args.no_recoil = True
-
+    
 era = args.era
 
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
@@ -68,9 +64,11 @@ axis_ptVgen = hist.axis.Variable(
     name = "ptVgen", underflow=False,
 )
 
-# axes for mT measurement
+# axes for recoil/MET
 axis_mt = hist.axis.Variable([0] + list(range(40, 110, 1)) + [110, 112, 114, 116, 118, 120, 125, 130, 140, 160, 180, 200], name = "mt",underflow=False, overflow=True)
-axis_eta_mT = hist.axis.Variable([-2.4, 2.4], name = "eta")
+axis_MET_pt = hist.axis.Regular(300, 0, 300, name = "MET_pt", underflow=False)
+axis_recoil_magn = hist.axis.Regular(300, 0, 300, name = "recoil_magn", underflow=False)
+
 
 # axes for study of fakes
 axis_mt_fakes = hist.axis.Regular(60, 0., 120., name = "mt", underflow=False, overflow=True)
@@ -99,10 +97,7 @@ corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_c
 # recoil initialization
 if not args.no_recoil:
     from wremnants import recoil_tools
-    import ROOT
-    ROOT.gInterpreter.Declare('#include "lowpu_recoil.h"')
-    ROOT.gInterpreter.Declare('#include "lowpu_utils.h"')
-    recoilHelper = recoil_tools.Recoil("highPU", flavor="mu", met="RawPFMET") # DeepMETReso RawPFMET
+    recoilHelper = recoil_tools.Recoil("highPU", flavor="mu", met=args.met)
 
 
 def build_graph(df, dataset):
@@ -173,8 +168,7 @@ def build_graph(df, dataset):
         
     df = df.Define("goodMuons_pfRelIso04_all0", "Muon_pfRelIso04_all[goodMuons][0]")
 
-    #TODO improve this to include muon mass?
-    df = df.Define("transverseMass", "wrem::mt_2(goodMuons_pt0, goodMuons_phi0, DeepMETResolutionTune_pt, DeepMETResolutionTune_phi)")
+
 
     df = df.Define("vetoElectrons", "Electron_pt > 10 && Electron_cutBased > 0 && abs(Electron_eta) < 2.4 && abs(Electron_dxy) < 0.05 && abs(Electron_dz)< 0.2")
 
@@ -182,9 +176,6 @@ def build_graph(df, dataset):
 
     df = df.Define("goodCleanJets", "Jet_jetId >= 6 && (Jet_pt > 50 || Jet_puId >= 4) && Jet_pt > 30 && abs(Jet_eta) < 2.4 && wrem::cleanJetsFromLeptons(Jet_eta,Jet_phi,Muon_correctedEta[vetoMuons],Muon_correctedPhi[vetoMuons],Electron_eta[vetoElectrons],Electron_phi[vetoElectrons])")
     df = df.Define("goodCleanJetsPt45", "goodCleanJets && Jet_pt > 45")
-
-    df = df.Define("passMT", "transverseMass >= 40.0")
-    df = df.Filter("passMT || Sum(goodCleanJets)>=1")
     df = df.Define("passIso", "goodMuons_pfRelIso04_all0 < 0.15")
 
     if dataset.group in ["Top", "Diboson"]:
@@ -200,16 +191,25 @@ def build_graph(df, dataset):
         df = df.Filter("wrem::hasMatchDR2(goodMuons_eta0,goodMuons_phi0,GenPart_eta[postFSRmuons],GenPart_phi[postFSRmuons],0.09)")
     
     nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
-
+    
     if dataset.is_data:
+        
         df = df.Define("nominal_weight", "1.0")
+
+        if not args.no_recoil:
+            df = recoilHelper.setup_MET(df, results, dataset, "goodMuons_pt0", "goodMuons_phi0", "Muon_pt[goodMuons][0]")
+            df = df.Alias("MET_corr_rec_pt", "MET_corr_xy_pt")
+            df = df.Alias("MET_corr_rec_phi", "MET_corr_xy_phi")
+        else:
+            df = df.Alias("MET_corr_rec_pt", "MET_pt")
+            df = df.Alias("MET_corr_rec_phi", "MET_phi")
+
+        df = df.Define("transverseMass", "wrem::mt_2(goodMuons_pt0, goodMuons_phi0, MET_corr_rec_pt, MET_corr_rec_phi)")
+        df = df.Define("passMT", "transverseMass >= 40.0")
+        df = df.Filter("passMT || Sum(goodCleanJets)>=1")
+
         nominal = df.HistoBoost("nominal", nominal_axes, nominal_cols)
         results.append(nominal)
-        
-        if not args.no_recoil:
-            df = recoilHelper.setup_MET(df, results, dataset, "Muon_pt[goodMuons]", "Muon_phi[goodMuons]", "Muon_pt[goodMuons]")
-            df = df.Define("mT_corr_rec", "wrem::mt_2(goodMuons_pt0, goodMuons_phi0, MET_corr_xy_pt, MET_corr_xy_phi)")
-            results.append(df.HistoBoost("mT_corr_rec", [axis_mt, axis_eta_mT, axis_charge, axis_passIso], ["mT_corr_rec", "goodMuons_abseta0", "goodMuons_charge0", "passIso"]))
 
         dQCDbkGVar = df.Filter("passMT || Sum(goodCleanJetsPt45)>=1")
         qcdJetPt45 = dQCDbkGVar.HistoBoost("qcdJetPt45", nominal_axes, nominal_cols)
@@ -218,7 +218,7 @@ def build_graph(df, dataset):
     else:
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
         df = df.Define("weight_vtx", vertex_helper, ["GenVtx_z", "Pileup_nTrueInt"])
-        df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId"])
+        df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId"])
 
         weight_expr = "weight*weight_pu*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom"
         if not args.noScaleFactors:
@@ -226,8 +226,21 @@ def build_graph(df, dataset):
             weight_expr += "*weight_fullMuonSF_withTrackingReco"
         if args.vertex_weight:
             weight_expr += "*weight_vtx"
-
+        
         df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
+        
+        if not args.no_recoil:
+            df = recoilHelper.setup_MET(df, results, dataset, "goodMuons_pt0", "goodMuons_phi0", "Muon_pt[goodMuons][0]")
+            df = recoilHelper.setup_recoil_gen(df, results, dataset, ["WplusmunuPostVFP", "WminusmunuPostVFP"])
+            df = recoilHelper.apply_recoil_W(df, results, dataset, ["WplusmunuPostVFP", "WminusmunuPostVFP"]) # produces corrected MET as MET_corr_rec_pt/phi
+        else:
+            df = df.Alias("MET_corr_rec_pt", "MET_pt")
+            df = df.Alias("MET_corr_rec_phi", "MET_phi")
+            
+        df = df.Define("transverseMass", "wrem::mt_2(goodMuons_pt0, goodMuons_phi0, MET_corr_rec_pt, MET_corr_rec_phi)")
+        df = df.Define("passMT", "transverseMass >= 40.0")
+        df = df.Filter("passMT || Sum(goodCleanJets)>=1")
+  
         results.append(df.HistoBoost("nominal_weight", [hist.axis.Regular(200, -4, 4)], ["nominal_weight"]))
 
         if apply_theory_corr:
@@ -237,16 +250,11 @@ def build_graph(df, dataset):
 
         nominal = df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "nominal_weight"])
         results.append(nominal)
+
         
-        if not args.no_recoil:
-            df = recoilHelper.setup_MET(df, results, dataset, "Muon_pt[goodMuons]", "Muon_phi[goodMuons]", "Muon_pt[goodMuons]")
-            df = recoilHelper.setup_gen(df, results, dataset, ["WplusmunuPostVFP", "WminusmunuPostVFP"])
-            df = recoilHelper.apply_W(df, results, dataset, ["WplusmunuPostVFP", "WminusmunuPostVFP"]) # produces corrected MET as MET_corr_rec_pt/phi
-
-            #df = df.Define("mT_corr_rec", "wrem::mt_2(goodMuons_pt0, goodMuons_phi0, MET_corr_rec_pt, MET_corr_rec_phi)")
-            #results.append(df.HistoBoost("mT_corr_rec", [axis_mt, axis_eta_mT, axis_charge, axis_passIso], ["mT_corr_rec", "goodMuons_abseta0", "goodMuons_charge0", "passIso", "nominal_weight"]))
-            #if dataset.name in ["WplusmunuPostVFP", "WminusmunuPostVFP"]: df = recoilHelper.recoil_W_unc_lowPU(df, results, axis_charge, axis_mt, axis_eta, axis_passIso)
-
+    if not args.no_recoil: # recoil plots
+        results.append(df.HistoBoost("MET_pt", [axis_MET_pt, axis_charge, axis_passMT, axis_passIso], ["MET_corr_rec_pt", "goodMuons_charge0", "passMT", "passIso", "nominal_weight"]))
+        results.append(df.HistoBoost("transverseMass", [axis_mt, axis_charge, axis_passMT, axis_passIso], ["transverseMass", "goodMuons_charge0", "passMT", "passIso", "nominal_weight"]))   
 
     if not dataset.is_data and not args.onlyMainHistograms:
         
@@ -266,11 +274,11 @@ def build_graph(df, dataset):
         effSystTnP = df.HistoBoost("effSystTnP", nominal_axes, [*nominal_cols, "effSystTnP_weight"], tensor_axes = muon_efficiency_helper_syst.tensor_axes)
         results.append(effSystTnP)
 
-        df = df.Define("muonL1PrefireStat_tensor", muon_prefiring_helper_stat, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId", "nominal_weight"])
+        df = df.Define("muonL1PrefireStat_tensor", muon_prefiring_helper_stat, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId", "nominal_weight"])
         muonL1PrefireStat = df.HistoBoost("muonL1PrefireStat", nominal_axes, [*nominal_cols, "muonL1PrefireStat_tensor"], tensor_axes = muon_prefiring_helper_stat.tensor_axes)
         results.append(muonL1PrefireStat)
 
-        df = df.Define("muonL1PrefireSyst_tensor", muon_prefiring_helper_syst, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_looseId", "nominal_weight"])
+        df = df.Define("muonL1PrefireSyst_tensor", muon_prefiring_helper_syst, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId", "nominal_weight"])
         muonL1PrefireSyst = df.HistoBoost("muonL1PrefireSyst", nominal_axes, [*nominal_cols, "muonL1PrefireSyst_tensor"], tensor_axes = [common.down_up_axis])
         results.append(muonL1PrefireSyst)
 
