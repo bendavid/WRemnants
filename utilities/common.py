@@ -90,6 +90,7 @@ def common_parser():
     parser.add_argument("--highptscales", action='store_true', help="Apply highptscales option in MiNNLO for better description of data at high pT")
     parser.add_argument("--data-path", type=str, default=None, help="Access samples from eos")
     parser.add_argument("--no-vertex_weight", dest="vertex_weight", action='store_false', help="Do not apply reweighting of vertex z distribution in MC to match data")
+    parser.add_argument("--validationHists", action='store_true', help="make histograms used only for validations")
     parser.add_argument("--trackerMuons", action='store_true', help="Use tracker muons instead of global muons (need appropriate scale factors too)")
     parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers)")
     parser.add_argument("--onlyMainHistograms", action='store_true', help="Only produce some histograms, skipping (most) systematics to run faster when those are not needed")
@@ -180,3 +181,49 @@ def setup_base_logger(name, debug):
     
 def child_logger(name):
     return logging.getLogger("wremnants").getChild(name.split(".")[-1])
+
+'''
+INPUT -------------------------------------------------------------------------
+|* (str) string: the string to be converted to list
+|
+ROUTINE -----------------------------------------------------------------------
+|* converts a string to a string element in a list
+|  - if not comma-separated, then the whole string becomes one single element
+OUTPUT ------------------------------------------------------------------------
+|* (float) string: the list-lized string
++------------------------------------------------------------------------------
+'''
+def string_to_list(string):
+	if type(string) == str:
+		string = string.split(",") # items have to be comma-separated 
+		return string
+	elif type(string) == list:
+		return string
+	else:
+		raise TypeError(
+            "string_to_list(): cannot convert an input that is"
+            "neither a single string nor a list of strings to a list"
+        )
+
+'''
+INPUT -------------------------------------------------------------------------
+|* list(str): a list of strings
+|
+ROUTINE -----------------------------------------------------------------------
+|* convert the list of string to a single string by join()
+|
+OUTPUT ------------------------------------------------------------------------
+|* (str): the resulted string
++------------------------------------------------------------------------------
+'''
+def list_to_string(list_str):
+	if type(list_str) == str:
+		return list_str
+	elif type(list_str) == list:
+		string = ""
+		return string.join(list_str)
+	else:
+		raise TypeError(
+            "list_to_string(): cannot convert an input that is"
+            " neither a single string or a list of strings"
+        )
