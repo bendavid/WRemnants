@@ -34,7 +34,10 @@ def main(args):
     base_logger.setLevel(logging.DEBUG if args.debug else logging.INFO)
     logger = base_logger.getChild("setupCombineWMass")
 
-    outfolder = "/".join([args.baseDir, args.outfolder])
+    tag = "WMass" if not args.wlike else "ZMassWLike"
+    baseDirDefault = f"{args.baseDir}/{tag}/"
+
+    outfolder = "/".join([baseDirDefault, args.outfolder])
     if not os.path.isdir(outfolder):
         os.makedirs(outfolder)
 
