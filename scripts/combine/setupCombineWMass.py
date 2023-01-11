@@ -16,6 +16,7 @@ scriptdir = f"{pathlib.Path(__file__).parent}"
 def make_parser(parser=None):
     if not parser:
         parser = common.common_parser_combine()
+    parser.add_argument("-v", "--fitvar", help="Variable to fit", default="eta_pt", choices=sel.hist_map.keys())
     parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow). Equivalent to --excludeNuisances '.*effSystTnP|.*effStatTnP' ")
     parser.add_argument("-p", "--pseudoData", type=str, help="Hist to use as pseudodata")
     parser.add_argument("-x",  "--excludeNuisances", type=str, default="", help="Regular expression to exclude some systematics from the datacard")
@@ -34,7 +35,10 @@ def main(args):
     base_logger.setLevel(logging.DEBUG if args.debug else logging.INFO)
     logger = base_logger.getChild("setupCombineWMass")
 
-    tag = "WMass" if not args.wlike else "ZMassWLike"
+    datagroups = datagroups2016(args.inputFile)
+    wlike = datagroups.wlike
+
+    tag = "WMass" if not wlike else "ZMassWLike"
     outfolder = f"{args.outfolder}/{tag}/"
     if not os.path.isdir(outfolder):
         os.makedirs(outfolder)
@@ -42,13 +46,13 @@ def main(args):
     if args.noHist and args.noStatUncFakes:
         raise ValueError("Option --noHist would override --noStatUncFakes. Please select only one of them")
 
-    wlike = args.wlike
-    datagroups = datagroups2016(args.inputFile)
-
     templateDir = f"{scriptdir}/Templates/WMass"
     name = "WMass" if not wlike else "ZMassWLike"
     cardTool = CardTool.CardTool(f"{outfolder}/{name}_{{chan}}.txt")
     cardTool.setNominalTemplate(f"{templateDir}/main.txt")
+    cardTool.setNominalName(sel.hist_map[args.fitvar])
+    if args.fitvar != "eta_pt":
+        cardTool.setProjectionAxes([args.fitvar])
     if args.noHist:
         cardTool.skipHistograms()
     cardTool.setOutfile(os.path.abspath(f"{outfolder}/{name}CombineInput.root"))
@@ -78,11 +82,6 @@ def main(args):
     logger.info(f"Single V no signal samples: {single_v_nonsig_samples}")
     logger.info(f"Signal samples: {signal_samples}")
 
-    if not wlike and "wlike" in args.inputFile:
-        logger.error("You appear to be running with a Wlike input file without the wlike flag! This will probably fail!")
-    elif "wlike" not in args.inputFile and args.wlike:
-        logger.error("You appear to be running with on a non-Wlike input file with the wlike flag! This will probably fail!")
-        
     pdfInfo = theory_tools.pdf_info_map("ZmumuPostVFP", args.pdf)
     pdfName = pdfInfo["name"]
 

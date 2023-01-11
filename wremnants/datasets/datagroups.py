@@ -241,8 +241,8 @@ class datagroups2016(datagroups):
     ):
         self.datasets = {x.name : x for x in datasets2016.getDatasets()}
         super().__init__(infile, combine)
-        wlike = "wlike" in self.results["meta_info"]["command"]
-        if wlike:
+        self.wlike = "wlike" in self.results["meta_info"]["command"]
+        if self.wlike:
             sigOp = None
             fakeOp = None
         else:
@@ -275,7 +275,7 @@ class datagroups2016(datagroups):
                 label = f"pdf{pseudodata_pdfset.upper()}",
                 color = "dimgray"
             )
-        if not wlike:
+        if not self.wlike:
             self.groups.update({
                 "Wmunu" : dict(
                     members = [self.datasets["WminusmunuPostVFP"], self.datasets["WplusmunuPostVFP"]],
@@ -329,7 +329,7 @@ class datagroups2016(datagroups):
                 columns=["Process", "Yield", "Uncertainty"])
         return df
 
-    def histName(self, baseName, procName, syst):
+    def histName(self, baseName, procName="", syst=""):
         # This is kind of hacky to deal with the different naming from combine
         if baseName != "x" and (syst == "" or syst == self.nominalName):
             return baseName
