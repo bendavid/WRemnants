@@ -21,7 +21,7 @@ public:
     return false;
   }
 
-  double operator() (const Vec_f& eta, const Vec_f& pt, const Vec_f& phi, const Vec_b& looseId) const {
+  double operator() (const Vec_f& eta, const Vec_f& pt, const Vec_f& phi, const Vec_i& charge, const Vec_b& looseId) const {
     double sf = 1.0;
 
     const TH2D &hprefire = *parameters_;
@@ -31,7 +31,7 @@ public:
     int prefireBin = 0;
     double prefiringProbability = 0.0;
     for (unsigned int i = 0; i < eta.size(); ++i) {
-      if (not looseId[i]) continue;
+      if (charge[i] == -99 || !looseId[i]) continue;
       if (is_hotspot(eta[i], phi[i])) {
         const double plateau = std::clamp(hMuonPrefiringNew_hotspot.GetBinContent(1, 3), 0., 1.);
         prefiringProbability = plateau/(std::exp( (pt[i] - hMuonPrefiringNew_hotspot.GetBinContent(1, 1)) / hMuonPrefiringNew_hotspot.GetBinContent(1, 2) ) + 1);
@@ -65,7 +65,7 @@ public:
   muon_prefiring_helper_stat(const muon_prefiring_helper &other) :
     parameters_(other.parameters()), hotspot_parameters_(other.hotspot_parameters()) {}
 
-  value_type operator() (const Vec_f& eta, const Vec_f& pt, const Vec_f& phi, const Vec_b& looseId, double nominal_weight = 1.0) const {
+  value_type operator() (const Vec_f& eta, const Vec_f& pt, const Vec_f& phi, const Vec_i& charge, const Vec_b& looseId, double nominal_weight = 1.0) const {
 
     value_type res;
     res.setConstant(nominal_weight);
@@ -77,7 +77,7 @@ public:
 
     for (unsigned int i = 0; i < eta.size(); ++i) {
 
-      if (not looseId[i]) continue;
+      if (charge[i] == -99 || !looseId[i]) continue;
 
       int idx;
       double plateau_raw;
@@ -124,7 +124,7 @@ public:
   muon_prefiring_helper_syst(const muon_prefiring_helper &other) :
     parameters_(other.parameters()), hotspot_parameters_(other.hotspot_parameters()) {}
 
-  value_type operator() (const Vec_f& eta, const Vec_f& pt, const Vec_f& phi, const Vec_b& looseId, double nominal_weight = 1.0) const {
+  value_type operator() (const Vec_f& eta, const Vec_f& pt, const Vec_f& phi, const Vec_i& charge, const Vec_b& looseId, double nominal_weight = 1.0) const {
 
     value_type res;
     res.setConstant(nominal_weight);
@@ -136,7 +136,7 @@ public:
 
     for (unsigned int i = 0; i < eta.size(); ++i) {
 
-      if (not looseId[i]) continue;
+      if (charge[i] == -99 || !looseId[i]) continue;
 
       double plateau_raw;
 
