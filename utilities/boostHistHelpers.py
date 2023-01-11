@@ -163,7 +163,7 @@ def rebinHist(h, axis_name, edges):
                             f"Edges of histogram are {ax.edges}, requested rebinning to {edges}")
         
     # If you rebin to a subset of initial range, keep the overflow and underflow
-    overflow = ax.traits.overflow or edges[-1] < ax.edges[-1]
+    overflow = ax.traits.overflow or edges[-1] < ax.edges[-1] 
     underflow = ax.traits.underflow or edges[0] > ax.edges[0]
     flow = overflow or underflow
     new_ax = hist.axis.Variable(edges, name=ax.name, overflow=overflow, underflow=underflow)
@@ -177,7 +177,9 @@ def rebinHist(h, axis_name, edges):
 
     offset = 0.5*np.min(ax.edges[1:]-ax.edges[:-1])
 
-    edges_eval = edges[:-1]+offset
+    edges_eval = edges+offset
+    # Last bin should be inside the boundary
+    edges_eval[-1] -= 2*offset
     if overflow or not np.isclose(edges[-1], ax.edges[-1]):
         edges_eval = np.append(edges_eval, ax.edges[-1]+offset)
 
