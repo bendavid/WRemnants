@@ -2,6 +2,7 @@ import hist
 import numpy as np
 from utilities import boostHistHelpers as hh, common
 from wremnants import theory_tools
+from wremnants.datasets.datagroups import datagroups2016
 import collections.abc
 import logging
 
@@ -152,3 +153,8 @@ def define_mass_weights(df, isW):
     df = df.Define("massWeight_tensor_wnom", "auto res = massWeight_tensor; res = nominal_weight*res; return res;")
 
     return df
+
+def add_massweights_hist(results, df, base_name, axes, cols):
+    name = datagroups2016.histName(base_name, syst="massWeight")
+    massWeight = df.HistoBoost(name, axes, [*cols, "massWeight_tensor_wnom"])
+    results.append(massWeight)
