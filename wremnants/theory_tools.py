@@ -132,34 +132,12 @@ def define_scale_tensor(df, clipWeight=10.0):
 
     return df
 
-def make_scale_hist(df, axes, cols, hname=""):
-    scaleHist = df.HistoBoost("qcdScale" if hname=="" else f"{hname}_qcdScale", axes, [*cols, "scaleWeights_tensor_wnom"], tensor_axes=scale_tensor_axes)
-    return scaleHist
-
 def pdf_info_map(dataset, pdfset):
     infoMap = pdfMap if dataset not in extended_pdf_datasets else pdfMapExtended
 
     if (pdfset != "nnpdf31" and dataset in only_central_pdf_datasets) or pdfset not in infoMap:
         raise ValueError(f"Skipping PDF {pdfset} for dataset {dataset}")
     return infoMap[pdfset]
-
-def make_pdf_hists(df, dataset, axes, cols, pdfs, hname=""):
-    res = []
-    for pdf in pdfs:
-        try:
-            pdfInfo = pdf_info_map(dataset, pdf)
-        except ValueError as e:
-            logging.info(e)
-            continue
-
-        pdfName = pdfInfo["name"]
-        tensorName = f"{pdfName}Weights_tensor"
-        tensorASName = f"{pdfName}ASWeights_tensor"
-        pdfHist = df.HistoBoost(pdfName if hname=="" else f"{hname}_{pdfName}", axes, [*cols, tensorName])
-
-        alphaSHist = df.HistoBoost(f"alphaS002{pdfName}" if hname=="" else f"{hname}_alphaS002{pdfName}", axes, [*cols, tensorASName])
-        res.extend([pdfHist, alphaSHist])
-    return res
 
 def define_pdf_columns(df, dataset, pdfs, noAltUnc):
     for i, pdf in enumerate(pdfs):
