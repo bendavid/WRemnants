@@ -4,6 +4,7 @@ import numpy as np
 from functools import reduce
 import logging
 import collections
+from . import common
 
 def valsAndVariances(h1, h2, allowBroadcast=True, transpose=True):
     if not allowBroadcast and len(h1.axes) != len(h2.axes):
@@ -321,3 +322,11 @@ def syst_min_or_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=[], do_min=Tr
         opview = np.moveaxis(opview, -1, idx)
     hnew[...] = opview
     return hnew
+
+def combineUpDownVarHists(down_hist, up_hist):
+    if up_hist.axes != down_hist.axes:
+        raise RuntimeError("input up and down histograms have different axes, can't combine")
+    else:
+        hnew = hist.Hist(*up_hist.axes, common.down_up_axis, storage=up_hist._storage_type())
+        hnew.view(flow=True)[...] = np.stack((down_hist.view(flow=True), up_hist.view(flow=True)), axis = -1)
+        return hnew

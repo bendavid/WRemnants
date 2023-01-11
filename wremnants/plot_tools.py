@@ -21,8 +21,8 @@ hep.style.use(hep.style.ROOT)
 logger = common.child_logger(__name__)
 
 def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None,
-    grid_on_main_plot = False, grid_on_ratio_plot = False, plot_title = None, x_ticks_ndp = None,
-    bin_density = 300, logy=False, logx=False
+    grid_on_main_plot = False, grid_on_ratio_plot = False, plot_title = None, title_padding = 0,
+    x_ticks_ndp = None, bin_density = 300, cms_label = None, logy=False, logx=False
 ):
     if not xlim:
         xlim = [href.axes[0].edges[0], href.axes[0].edges[-1]]
@@ -34,6 +34,7 @@ def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None,
 
     fig = plt.figure(figsize=(8*width,8))
     ax1 = fig.add_subplot(4, 1, (1, 3)) 
+    if cms_label: hep.cms.text(cms_label)
     ax2 = fig.add_subplot(4, 1, 4) 
 
     ax2.set_xlabel(xlabel)
@@ -58,7 +59,7 @@ def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None,
 
     if grid_on_main_plot:  ax1.grid(which = "both")
     if grid_on_ratio_plot: ax2.grid(which = "both")
-    if plot_title: ax1.set_title(plot_title)
+    if plot_title: ax1.set_title(plot_title, pad = title_padding)
     return fig,ax1,ax2
 
 def addLegend(ax, ncols=2, extra_text=None, text_size=20):
@@ -83,14 +84,15 @@ def addLegend(ax, ncols=2, extra_text=None, text_size=20):
 def makeStackPlotWithRatio(
     histInfo, stackedProcs, histName="nominal", unstacked=None, 
     xlabel="", ylabel="Events/bin", rlabel = "Data/Pred.", rrange=[0.9, 1.1], ylim=None, xlim=None, nlegcols=2,
-    binwnorm=None, select={},  action = (lambda x: x), extra_text=None, grid = False, plot_title = None, yscale=None,
+    binwnorm=None, select={},  action = (lambda x: x), extra_text=None, grid = False, 
+    plot_title = None, title_padding = 0, yscale=None,
     fill_between=False, ratio_to_data=False, baseline=True, legtex_size=20, cms_decor="Preliminary", lumi=16.8,
     no_fill=False, bin_density=300,
 ):
     stack = [action(histInfo[k][histName])[select] for k in stackedProcs if histInfo[k][histName]]
     colors = [histInfo[k]["color"] for k in stackedProcs if histInfo[k][histName]]
     labels = [histInfo[k]["label"] for k in stackedProcs if histInfo[k][histName]]
-    fig, ax1, ax2 = figureWithRatio(stack[0], xlabel, ylabel, ylim, rlabel, rrange, xlim=xlim, grid_on_ratio_plot = grid, plot_title = plot_title, bin_density = bin_density)
+    fig, ax1, ax2 = figureWithRatio(stack[0], xlabel, ylabel, ylim, rlabel, rrange, xlim=xlim, grid_on_ratio_plot = grid, plot_title = plot_title, title_padding = title_padding, bin_density = bin_density)
 
     hep.histplot(
         stack,
@@ -180,13 +182,17 @@ def makePlotWithRatioToRef(
     rrange=[0.9, 1.1], ylim=None, xlim=None, nlegcols=2, binwnorm=None, alpha=1.,
     baseline=True, data=False, autorrange=None, grid = False,
     yerr=False, legtext_size=20, plot_title=None, x_ticks_ndp = None, bin_density = 300, yscale=None,
-    logy=False, logx=False, fill_between=False,
+    logy=False, logx=False, fill_between=False, title_padding = 0, cms_label = None
 ):
     if len(hists) != len(labels) or len(hists) != len(colors):
         raise ValueError(f"Number of hists ({len(hists)}), colors ({len(colors)}), and labels ({len(labels)}) must agree!")
     # nominal is always at first, data is always at last, if included
-    fig, ax1, ax2 = figureWithRatio(hists[0], xlabel, ylabel, ylim, rlabel, rrange, xlim=xlim, 
-        grid_on_ratio_plot = grid, plot_title = plot_title, bin_density = bin_density, logy=logy, logx=logx)
+    ratio_hists = [hh.divideHists(h, hists[0], cutoff=0.00001) for h in hists[not baseline:]]
+    fig, ax1, ax2 = figureWithRatio(
+        hists[0], xlabel, ylabel, ylim, rlabel, rrange, xlim=xlim, 
+        grid_on_ratio_plot = grid, plot_title = plot_title, title_padding=title_padding,
+        bin_density = bin_density, cms_label = cms_label, logy=logy, logx=logx
+    )
     
     count = len(hists)-data
     print("Count is", count)
@@ -253,7 +259,6 @@ def makePlotWithRatioToRef(
         xlim = [hists[0].axes[0].edges[0], hists[0].axes[0].edges[-1]]
     fix_axes(ax1, ax2, yscale=yscale, logy=logy)
     if x_ticks_ndp: ax2.xaxis.set_major_formatter(StrMethodFormatter('{x:.' + str(x_ticks_ndp) + 'f}'))
-
     return fig
 
 def fix_axes(ax1, ax2, yscale=None, logy=False):
