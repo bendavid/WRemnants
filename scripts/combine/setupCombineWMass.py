@@ -35,9 +35,7 @@ def main(args):
     logger = base_logger.getChild("setupCombineWMass")
 
     tag = "WMass" if not args.wlike else "ZMassWLike"
-    baseDirDefault = f"{args.baseDir}/{tag}/"
-
-    outfolder = "/".join([baseDirDefault, args.outfolder])
+    outfolder = f"{args.outfolder}/{tag}/"
     if not os.path.isdir(outfolder):
         os.makedirs(outfolder)
 
@@ -45,7 +43,7 @@ def main(args):
         raise ValueError("Option --noHist would override --noStatUncFakes. Please select only one of them")
 
     wlike = args.wlike
-    datagroups = datagroups2016(args.inputFile, wlike=wlike)
+    datagroups = datagroups2016(args.inputFile)
 
     templateDir = f"{scriptdir}/Templates/WMass"
     name = "WMass" if not wlike else "ZMassWLike"
@@ -263,8 +261,10 @@ def main(args):
         cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
 
     cardTool.writeOutput()
-
+    logging.info(f"Output stored in {outfolder}")
+    
 if __name__ == "__main__":
     parser = make_parser()
     args = parser.parse_args()
     main(args)
+    
