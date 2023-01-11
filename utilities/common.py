@@ -115,8 +115,7 @@ def common_parser_combine():
     from wremnants import theory_tools
     parser = argparse.ArgumentParser()
     parser.add_argument("--wlike", action='store_true', help="Run W-like analysis of mZ")
-    parser.add_argument("-d", "--baseDir", type=str, default=".", help="base output folder (local area by default)")
-    parser.add_argument("-o", "--outfolder", type=str, default="", help="Main output folder inside baseDir, with the root file storing all histograms and datacards for single charge")
+    parser.add_argument("-o", "--outfolder", type=str, default=".", help="Output folder with the root file storing all histograms and datacards for single charge (subfolder WMass or ZMassWLike is created automatically inside)")
     parser.add_argument("-i", "--inputFile", type=str)
     parser.add_argument("--qcdScale", choices=["byHelicityPt", "byHelicityPtCharge", "byHelicityCharge", "byPtCharge", "byPt", "byCharge", "integrated",], default="byHelicityPtCharge", 
             help="Decorrelation for QCDscale")
