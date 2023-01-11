@@ -307,10 +307,10 @@ def build_graph(df, dataset):
             df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
             results.extend(theory_tools.make_pdf_hists(df, dataset.name, nominal_axes, nominal_cols, args.pdfs))
 
-            masswargs = (nominal_axes, nominal_cols) if isW else (None, None)
-            df, masswhist = syst_tools.define_mass_weights(df, isW, *masswargs)
-            if masswhist:
-                results.append(masswhist)
+            df = syst_tools.define_mass_weights(df, isW)
+            if isW:
+                massWeight = df.HistoBoost("massWeight", nominal_axes, [*nominal_cols, "massWeight_tensor_wnom"])
+                results.append(massWeight)
 
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:
