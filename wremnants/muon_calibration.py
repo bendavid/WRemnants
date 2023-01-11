@@ -147,6 +147,8 @@ def define_corrected_muons(df, helper, corr_type, dataset):
 
     return df
 
+    return df
+
 def get_good_gen_muons_idx_in_GenPart(df, reco_subset = "goodMuons"):
     df = df.Define("goodMuons_idx", f"Muon_genPartIdx[{reco_subset}]")
     df = df.Define("goodMuonsByGenTruth",
