@@ -18,8 +18,8 @@ import hist
 import hist
 import numpy as np
 
-from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_W
-
+from wremnants.datasets.datagroupsLowPU import datagroupsLowPU
+from wremnants.datasets.datagroups import datagroups2016
 
 
 def doOverlow(h):
@@ -336,7 +336,8 @@ def parseProc(histCfg, procName, syst="", rebin=1):
     charge = histCfg['charge']
     
     label = "%s_%s" % (hName, procName)
-    groups.setHists(hName, "", label=label, procsToRead=[procName], selectSignal=True)
+    print(label)
+    groups.setHists(hName, "", label=label, procsToRead=[procName])
     bhist = groups.groups[procName][label]
     
     s = hist.tag.Slicer()
@@ -345,7 +346,7 @@ def parseProc(histCfg, procName, syst="", rebin=1):
     elif charge == "minus": bhist = bhist[{"charge" : bhist.axes["charge"].index(-1)}]
     #bhist = bhist[{"eta" : s[::hist.sum]}]
     
-    #print(bhist)
+    print(bhist)
     #sys.exit()
     
     #bhist = bhist[{"passIso" : True}]
@@ -930,45 +931,76 @@ if __name__ == "__main__":
     print("Start")
     flavor = "mu"
     met = "RawPFMET" # DeepMETReso RawPFMET
-    charge = "plus" # combined plus minus
-    #flavor = "ee"
-    
-    MC_SF = 1.0
-    if flavor == "mu": MC_SF = 1.026
-    MC_SF = 1.0
-    
-    label = "W^{#%s}, %s" % (charge, met)
-    outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/W%s/plots_%s_%s/" % (flavor, charge, met)
-    functions.prepareDir(outDir, remove=True)
-    
-    print("Open")
-    groups = datagroupsLowPU_W("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
+    charge = "combined" # combined plus minus
+    lowPU = False
 
 
-    if flavor == "mu":
+
+    if lowPU:
     
-        procs = ['EWK', 'TTbar', 'WJetsToMuNu', 'Fake']
-        data = 'SingleMuon'
+        MC_SF = 1.0
+        if flavor == "mu": MC_SF = 1.026
+        MC_SF = 1.0
         
+        label = "W^{#%s}, %s" % (charge, met)
+        outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/W%s/plots_%s_%s/" % (flavor, charge, met)
+        functions.prepareDir(outDir, remove=True)
         
-    if flavor == "ee":
+        groups = datagroupsLowPU("lowPU_%s_%s_nnpdf31.pkl.lz4" % (flavor, met), flavor=flavor)
+        
+
+        if flavor == "mu":
+            procs, data = ['EWK', 'Top', 'WJetsToMuNu', 'Fake'], 'SingleMuon'
+            
+            
+        if flavor == "ee":
+            procs, data = ['EWK', 'TTbar', 'DYee'], 'SingleElectron'
+
+    else:
     
-        procs = ['EWK', 'TTbar', 'DYee']
-        data = 'SingleElectron'    
-    print("Plotting") 
+        MC_SF = 1.0
+        if flavor == "mu": MC_SF = 1.026
+        #MC_SF = 1.0
+        
+        label = "W^{#%s}, %s" % ("pm" if charge == "combined" else charge, met)
+        outDir = "/eos/user/j/jaeyserm/www/wmass/highPU/W%s/plots_%s_%s/" % (flavor, charge, met)
+        functions.prepareDir(outDir, remove=True)
     
-    
+        from wremnants import histselections as sel
+        
+        groups = datagroups2016("mw_with_mu_eta_pt_%s_nnpdf31.pkl.lz4" % met)
+        groups.groups.update({
+            "EWK" : dict(
+                    members = [groups.datasets[x] for x in ["WplustaunuPostVFP", "WminustaunuPostVFP", "ZmumuPostVFP", "ZtautauPostVFP", "ZZ2l2nuPostVFP", "WZPostVFP", "WWPostVFP"]],
+                    label = r"Z$\to\tau\tau$",
+                    color = "darkblue",
+                    selectOp = sel.signalHistWmass,
+            )
+        })
+        
+        groups.groups['Wmunu']['color'] = "#F8CE68"
+        groups.groups['EWK']['color'] = "#64C0E8"
+        groups.groups['Top']['color'] = "#DE5A6A"
+        groups.groups['Fake']['color'] = "#A9A9A9"
+        
+        groups.groups['Wmunu']['label'] = "W^{#pm} #rightarrow #tau^{#pm}#nu"
+        groups.groups['EWK']['label'] = "EWK (Z #rightarrow #mu, #tau, diboson)"
+        groups.groups['Top']['label'] = "TTbar"
+        
+        procs, data = ['EWK', 'Top',  'Wmunu', 'Fake'], 'Data'
 
     # mT
-    singlePlot({"name": "mT_corr_rec", "axis": "mt", "charge": charge }, "mT_corr_rec", 40, 200, 1e0, 1e7, "m_{T} (GeV)", "Events", rebin=1, yRatio=1.1)
-    sys.exit()
+    singlePlot({"name": "mT_corr_rec", "axis": "mt", "charge": charge }, "mT_corr_rec", 40, 200, 1e2, 1e8, "m_{T} (GeV)", "Events", rebin=1, yRatio=1.15)
+    singlePlot({"name": "mT_uncorr", "axis": "mt", "charge": charge }, "mT_corr_xy", 40, 200, 1e2, 1e8, "m_{T} (GeV)", "Events", rebin=1, yRatio=1.15)
+    
     # MET
     bins_MET = list(range(0, 10, 2)) + list(range(10, 70, 1)) + list(range(70, 150, 2)) + list(range(150, 200, 5)) + [200]
-    singlePlot({"name": "MET_corr_rec_pt", "axis": "MET_pt", "charge": charge }, "MET_corr_rec_pt", 0, 200, 1, 1e7, "MET p_{T}", "Events", rebin=bins_MET)
+    singlePlot({"name": "MET_corr_rec_pt", "axis": "MET_pt", "charge": charge }, "MET_corr_rec_pt", 0, 200, 1e2, 1e8, "MET p_{T}", "Events", rebin=bins_MET, yRatio=1.15)
+    singlePlot({"name": "MET_uncorr_pt", "axis": "MET_pt", "charge": charge }, "MET_corr_xy_pt", 0, 200, 1e2, 1e8, "MET p_{T}", "Events", rebin=bins_MET, yRatio=1.15)
     
     # recoil
     bins_recoil_magn = list(range(0, 100, 2)) + list(range(100, 150, 5)) + [150, 160, 170, 180, 190, 200]
-    singlePlot({"name": "recoil_corr_rec_magn", "axis": "recoil_magn", "charge": charge  }, "recoil_corr_rec_magn", 0, 200, 1, 1e7, "Recoil (GeV)", "Events", rebin=bins_recoil_magn, dataNorm=True)
+    singlePlot({"name": "recoil_corr_rec_magn", "axis": "recoil_magn", "charge": charge  }, "recoil_corr_rec_magn", 0, 200, 1e2, 1e8, "Recoil (GeV)", "Events", rebin=bins_recoil_magn, dataNorm=True, yRatio=1.15) # blind!
    
 
   
