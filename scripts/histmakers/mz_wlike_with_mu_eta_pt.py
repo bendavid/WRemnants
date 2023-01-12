@@ -88,8 +88,6 @@ axis_costhetastarll = hist.axis.Regular(20, -1., 1., name = "costhetastarll")
 axis_phistarll = hist.axis.Regular(20, -math.pi, math.pi, circular = True, name = "phistarll")
 
 # extra axes which can be used to label tensor_axes
-
-muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile, era = era, max_pt = axis_pt.edges[-1], is_w_like = True)
 if args.binnedScaleFactors:
     logging.info("Using binned scale factors and uncertainties")
     # add usePseudoSmoothing=True for tests with Asimov
