@@ -18,16 +18,6 @@ parser.add_argument("--muScaleBins", type=int, default=1, help="Number of bins f
 parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
 parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
 parser.add_argument("--csvars_hist", action='store_true', help="Add CS variables to dilepton hist")
-parser.add_argument(
-    "--dataCrctn", type = str, choices = [None, 'cvh', 'jpsi_crctd'],
-    default=None, help = "alternative correction to be applied to data"
-)
-parser.add_argument(
-    "--MCCrctn", type = str, choices = [None, 'cvh', 'cvhbs', 'truth', 'jpsi_crctd'], 
-    default = None, help = "alternative correction to be applied to MC"
-)
-parser.add_argument("--jpsiCrctnDataInput", type = str, default = None, help = "path to the root file for jpsi corrections on the data")
-parser.add_argument("--jpsiCrctnMCInput", type = str, default = None, help = "path to the root file for jpsi corrections on the MC")
 parser.add_argument("--uncertainty-hist", type=str, choices=["dilepton", "nominal"], default="nominal", help="Histogram to store uncertainties for")
 args = parser.parse_args()
 
@@ -107,10 +97,9 @@ logging.info(f"SF file: {args.sfFile}")
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
 
-if args.dataCrctn == 'jpsi_crctd':
-    jpsi_crctn_data_helper = wremnants.make_jpsi_crctn_helper(filepath = args.jpsiCrctnDataInput)
-    jpsi_crctn_unc_data_helper = wremnants.make_jpsi_crctn_unc_helper(filepath = args.jpsiCrctnDataInput)
-if args.MCCrctn == 'jpsi_crctd':
+if muon_corr == "mass_fit":
+    jpsi_crctn_data_helper = wremnants.make_jpsi_crctn_helper(filepath=)
+    jpsi_crctn_unc_data_helper = wremnants.make_jpsi_crctn_unc_helper(filepath=)
     jpsi_crctn_MC_helper = wremnants.make_jpsi_crctn_helper(filepath = args.jpsiCrctnMCInput)
     jpsi_crctn_unc_MC_helper = wremnants.make_jpsi_crctn_unc_helper(filepath = args.jpsiCrctnMCInput)
 mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
@@ -168,23 +157,6 @@ def build_graph(df, dataset):
     df = df.Define("nonTrigMuons", "goodMuons && Muon_correctedCharge == NonTrigMuon_charge")
 
     df = df.Filter("Sum(trigMuons) == 1 && Sum(nonTrigMuons) == 1")
-
-    df = df.Define("TrigMuon_pt", "Muon_correctedPt[trigMuons][0]")
-    df = df.Define("TrigMuon_eta", "Muon_correctedEta[trigMuons][0]")
-    df = df.Define("TrigMuon_phi", "Muon_correctedPhi[trigMuons][0]")
-
-    df = df.Define("NonTrigMuon_pt", "Muon_correctedPt[nonTrigMuons][0]")
-    df = df.Define("NonTrigMuon_eta", "Muon_correctedEta[nonTrigMuons][0]")
-    df = df.Define("NonTrigMuon_phi", "Muon_correctedPhi[nonTrigMuons][0]")
-
-    if dataset.is_data or isW or isZ:
-        df = wremnants.define_cvh_muons_kinematics(df)
-    if (args.dataCrctn == 'jpsi_crctd') and dataset.is_data:
-        df = wremnants.define_jpsi_crctd_muons_pt(df, jpsi_crctn_data_helper)
-        df = wremnants.define_jpsi_crctd_muons_pt_unc(df, jpsi_crctn_unc_data_helper)
-    if (args.MCCrctn == 'jpsi_crctd') and (isZ or isW):
-        df = wremnants.define_jpsi_crctd_muons_pt(df, jpsi_crctn_MC_helper)
-        df = wremnants.define_jpsi_crctd_muons_pt_unc(df, jpsi_crctn_unc_MC_helper)
 
     df = df.Filter("NonTrigMuon_pt > 26.")
 
@@ -244,24 +216,24 @@ def build_graph(df, dataset):
     df = df.Define("massZ", "Z_mom4.mass()")
     df = df.Define("yZ", "Z_mom4.Rapidity()")
     df = df.Define("absYZ", "std::fabs(yZ)")
-    if dataset.is_data or (isZ or isW):
-        df = df.Define("TrigMuon_cvh_mom4",
-            (
-                "ROOT::Math::PtEtaPhiMVector("
-                "TrigMuon_cvh_pt, TrigMuon_cvh_eta, TrigMuon_cvh_phi, wrem::muon_mass)"
-            )
-        )
-        df = df.Define("NonTrigMuon_cvh_mom4",
-            (
-                "ROOT::Math::PtEtaPhiMVector("
-                "NonTrigMuon_cvh_pt, NonTrigMuon_cvh_eta, NonTrigMuon_cvh_phi, wrem::muon_mass)"
-            )
-        )
-        df = df.Define("Z_cvh_mom4", "ROOT::Math::PxPyPzEVector(TrigMuon_cvh_mom4)+ROOT::Math::PxPyPzEVector(NonTrigMuon_cvh_mom4)")
-        df = df.Define("massZ_cvh", "Z_cvh_mom4.mass()")
-        if (dataset.is_data and args.dataCrctn == 'jpsi_crctd') or ((isZ or isW) and args.MCCrctn == 'jpsi_crctd'):
-            wremnants.define_jpsi_crctd_z_mass(df)
-            wremnants.define_jpsi_crctd_unc_z_mass(df)
+    #if dataset.is_data or (isZ or isW):
+    #    df = df.Define("TrigMuon_cvh_mom4",
+    #        (
+    #            "ROOT::Math::PtEtaPhiMVector("
+    #            "TrigMuon_cvh_pt, TrigMuon_cvh_eta, TrigMuon_cvh_phi, wrem::muon_mass)"
+    #        )
+    #    )
+    #    df = df.Define("NonTrigMuon_cvh_mom4",
+    #        (
+    #            "ROOT::Math::PtEtaPhiMVector("
+    #            "NonTrigMuon_cvh_pt, NonTrigMuon_cvh_eta, NonTrigMuon_cvh_phi, wrem::muon_mass)"
+    #        )
+    #    )
+    #    df = df.Define("Z_cvh_mom4", "ROOT::Math::PxPyPzEVector(TrigMuon_cvh_mom4)+ROOT::Math::PxPyPzEVector(NonTrigMuon_cvh_mom4)")
+    #    df = df.Define("massZ_cvh", "Z_cvh_mom4.mass()")
+    #    if (dataset.is_data and args.dataCrctn == 'jpsi_crctd') or ((isZ or isW) and args.MCCrctn == 'jpsi_crctd'):
+    #        wremnants.define_jpsi_crctd_z_mass(df)
+    #        wremnants.define_jpsi_crctd_unc_z_mass(df)
     df = df.Define("csSineCosThetaPhiZ", "TrigMuon_charge == -1 ? wrem::csSineCosThetaPhi(TrigMuon_mom4, NonTrigMuon_mom4) : wrem::csSineCosThetaPhi(NonTrigMuon_mom4, TrigMuon_mom4)")
 
     df = df.Define("cosThetaStarZ", "csSineCosThetaPhiZ.costheta")
@@ -276,6 +248,7 @@ def build_graph(df, dataset):
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId"])
 
         weight_expr = "weight*weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom"
+
         df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
         if isW or isZ:
             df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
@@ -295,17 +268,17 @@ def build_graph(df, dataset):
     df_dilepton = df_dilepton.Filter("TrigMuon_pt > 26.")
 
     dilepton_axes = [axis_mll, axis_yll, axis_ptll, axis_costhetastarll, axis_phistarll]
-    if (dataset.is_data and args.dataCrctn):
-        dilepton_cols = [f"massZ_{args.dataCrctn}", "yZ", "ptZ", "cosThetaStarZ", "phiStarZ"]
-        if args.dataCrctn == 'jpsi_crctd':
-            dilepton_unc_cols = [
-                f"massZ_{args.dataCrctn}", "yZ", "ptZ", "cosThetaStarZ", "phiStarZ", "massZ_jpsi_crctd_unc"]
-    elif ((isZ or isW) and args.MCCrctn):
-        dilepton_cols = [f"massZ_{args.MCCrctn}", "yZ", "ptZ", "cosThetaStarZ", "phiStarZ"]
-        if args.MCCrctn == 'jpsi_crctd':
-            dilepton_unc_cols = [f"massZ_jpsi_crctd_unc"]
-    else:
-        dilepton_cols = ["massZ", "yZ", "ptZ", "cosThetaStarZ", "phiStarZ"]
+    #if (dataset.is_data and args.dataCrctn):
+    #    dilepton_cols = [f"massZ_{args.dataCrctn}", "yZ", "ptZ", "cosThetaStarZ", "phiStarZ"]
+    #    if args.dataCrctn == 'jpsi_crctd':
+    #        dilepton_unc_cols = [
+    #            f"massZ_{args.dataCrctn}", "yZ", "ptZ", "cosThetaStarZ", "phiStarZ", "massZ_jpsi_crctd_unc"]
+    #elif ((isZ or isW) and args.MCCrctn):
+    #    dilepton_cols = [f"massZ_{args.MCCrctn}", "yZ", "ptZ", "cosThetaStarZ", "phiStarZ"]
+    #    if args.MCCrctn == 'jpsi_crctd':
+    #        dilepton_unc_cols = [f"massZ_jpsi_crctd_unc"]
+    #else:
+    dilepton_cols = ["massZ", "yZ", "ptZ", "cosThetaStarZ", "phiStarZ"]
     if not args.csvars_hist:
         dilepton_axes = dilepton_axes[:-2]
         dilepton_cols = dilepton_cols[:-2]
@@ -360,19 +333,10 @@ def build_graph(df, dataset):
             unc_cols = dilepton_cols
             unc_axes = dilepton_axes
 
-        df = syst_tools.add_muon_efficiency_unc_hists(results, unc_df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, unc_axes, unc_cols)
+        unc_df = syst_tools.add_muon_efficiency_unc_hists(results, unc_df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, unc_axes, unc_cols)
+        unc_df = syst_tools.add_muon_prefire_unc_hists(results, unc_df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, unc_axes, unc_cols)
 
-        df = df.Define("muonL1PrefireStat_tensor", muon_prefiring_helper_stat, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId", "nominal_weight"])
-        muonL1PrefireStat = df.HistoBoost("muonL1PrefireStat", nominal_axes, [*nominal_cols, "muonL1PrefireStat_tensor"], tensor_axes = muon_prefiring_helper_stat.tensor_axes)
-        results.append(muonL1PrefireStat)
-
-        df = df.Define("muonL1PrefireSyst_tensor", muon_prefiring_helper_syst, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId", "nominal_weight"])
-        muonL1PrefireSyst = df.HistoBoost("muonL1PrefireSyst", nominal_axes, [*nominal_cols, "muonL1PrefireSyst_tensor"], tensor_axes = [common.down_up_axis])
-        results.append(muonL1PrefireSyst)
-
-        df = df.Define("ecalL1Prefire_tensor", f"wrem::twoPointScaling(nominal_weight/L1PreFiringWeight_ECAL_Nom, L1PreFiringWeight_ECAL_Dn, L1PreFiringWeight_ECAL_Up)")
-        ecalL1Prefire = df.HistoBoost("ecalL1Prefire", nominal_axes, [*nominal_cols, "ecalL1Prefire_tensor"], tensor_axes = [common.down_up_axis])
-        results.append(ecalL1Prefire)
+        df = unc_df
         # n.b. this is the W analysis so mass weights shouldn't be propagated
         # on the Z samples (but can still use it for dummy muon scale)
         if isW or isZ:
@@ -387,7 +351,6 @@ def build_graph(df, dataset):
             scale_cols = unc_cols if args.uncertainty_hist == "dilepton" else [*nominal_cols, "ptVgen", "chargeVgen"]
             syst_tools.add_scale_hist(results, unc_df, scale_axes, scale_cols)
             syst_tools.add_pdf_hists(results, unc_df, dataset.name, nominal_axes, nominal_cols, args.pdfs)
-
 
             if isZ:
                 # there is no W backgrounds for the Wlike, make QCD scale histograms only for Z

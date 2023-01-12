@@ -197,3 +197,18 @@ def add_muon_efficiency_unc_hists(results, df, helper_stat, helper_syst, axes, c
     results.append(effSystTnP)
 
     return df
+
+def add_muon_prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, axes, cols):
+    df = df.Define("muonL1PrefireStat_tensor", muon_prefiring_helper_stat, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId", "nominal_weight"])
+    muonL1PrefireStat = df.HistoBoost("muonL1PrefireStat", axes, [*cols, "muonL1PrefireStat_tensor"], tensor_axes = muon_prefiring_helper_stat.tensor_axes)
+    results.append(muonL1PrefireStat)
+
+    df = df.Define("muonL1PrefireSyst_tensor", muon_prefiring_helper_syst, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId", "nominal_weight"])
+    muonL1PrefireSyst = df.HistoBoost("muonL1PrefireSyst", axes, [*cols, "muonL1PrefireSyst_tensor"], tensor_axes = [common.down_up_axis])
+    results.append(muonL1PrefireSyst)
+
+    df = df.Define("ecalL1Prefire_tensor", f"wrem::twoPointScaling(nominal_weight/L1PreFiringWeight_ECAL_Nom, L1PreFiringWeight_ECAL_Dn, L1PreFiringWeight_ECAL_Up)")
+    ecalL1Prefire = df.HistoBoost("ecalL1Prefire", axes, [*cols, "ecalL1Prefire_tensor"], tensor_axes = [common.down_up_axis])
+    results.append(ecalL1Prefire)
+
+    return df
