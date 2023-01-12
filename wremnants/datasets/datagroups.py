@@ -124,18 +124,19 @@ class datagroups(object):
                     narf_hist = hh.addHists(narf_hist, narf.root_to_hist(rthist, axis_names=axisNames))
             group[label] = narf_hist
 
-    def histNameCombine(self, procName, baseName, syst, channel):
-        name = f"{baseName}_{procName}"
-        if syst != "nominal":
-            name += "_"+syst
-        if channel:
-            name += "_"+channel
-        if re.search("^pdf.*_sum", procName): # for pseudodata from alternative pdfset
-            return("_".join([procName, channel])) 
-        return name
+    def histName(self, baseName, procName="", syst=""):
+        return datagroups.histName(baseName, procName, syst, nominalName=self.nominalName)
 
-    def loadHistsForDatagroups(self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="", nominalIfMissing=True,
-                               applySelection=True, forceNonzero=True, pseudodata=False, preOpMap={}, preOpArgs={}, scaleToNewLumi=-1):
+    def histNameCombine(self, procName, baseName, syst, channel):
+        return datagroups.histNameCombine(procName, baseName, syst, channel)
+
+    def loadHistsForDatagroups(
+        self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="",
+        nominalIfMissing=True, applySelection=True, forceNonzero=True, pseudodata=False,
+        preOpMap={}, preOpArgs={}, scaleToNewLumi=-1
+    ):
+        logger.debug(f"the basename and syst is: {baseName}, {syst}")
+        logger.debug(f"The procsToRead and excludedProcs are: {procsToRead}, {excluded_procs}")
         if self.rtfile and self.combine:
             self.setHistsCombine(baseName, syst, channel, procsToRead, excluded_procs, label)
         else:
@@ -235,14 +236,36 @@ class datagroups(object):
             if proc not in self.groups.keys():
                 raise ValueError(f"In setSelectOp(): process {proc} not found")
             self.groups[proc]["selectOp"] = op
-        
+
+    @staticmethod
+    def histName(baseName, procName="", syst="", nominalName="nominal"):
+        # This is kind of hacky to deal with the different naming from combine
+        if baseName != "x" and (syst == "" or syst == nominalName):
+            return baseName
+        if baseName in ["", "x", "nominal"] and syst:
+            return syst
+        if syst[:len(baseName)] == baseName:
+            return syst
+        return "_".join([baseName,syst])
+    
+    @staticmethod
+    def histNameCombine(procName, baseName, syst, channel):
+        name = f"{baseName}_{procName}"
+        if syst != "nominal":
+            name += "_"+syst
+        if channel:
+            name += "_"+channel
+        if re.search("^pdf.*_sum", procName): # for pseudodata from alternative pdfset
+            return("_".join([procName, channel])) 
+        return name
+
 class datagroups2016(datagroups):
     def __init__(self, infile, combine=False, pseudodata_pdfset = None,
     ):
         self.datasets = {x.name : x for x in datasets2016.getDatasets()}
         super().__init__(infile, combine)
-        wlike = "wlike" in self.results["meta_info"]["command"]
-        if wlike:
+        self.wlike = "wlike" in self.results["meta_info"]["command"]
+        if self.wlike:
             sigOp = None
             fakeOp = None
         else:
@@ -275,7 +298,7 @@ class datagroups2016(datagroups):
                 label = f"pdf{pseudodata_pdfset.upper()}",
                 color = "dimgray"
             )
-        if not wlike:
+        if not self.wlike:
             self.groups.update({
                 "Wmunu" : dict(
                     members = [self.datasets["WminusmunuPostVFP"], self.datasets["WplusmunuPostVFP"]],
@@ -329,16 +352,6 @@ class datagroups2016(datagroups):
                 columns=["Process", "Yield", "Uncertainty"])
         return df
 
-    def histName(self, baseName, procName, syst):
-        # This is kind of hacky to deal with the different naming from combine
-        if baseName != "x" and (syst == "" or syst == self.nominalName):
-            return baseName
-        if baseName in ["", "x", "nominal"] and syst:
-            return syst
-        if syst[:len(baseName)] == baseName:
-            return syst
-        return "_".join([baseName,syst])
-    
     def readHist(self, baseName, proc, syst, scaleOp=None, forceNonzero=True, scaleToNewLumi=-1):
         output = self.results[proc.name]["output"]
         histname = self.histName(baseName, proc.name, syst)

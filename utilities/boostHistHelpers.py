@@ -4,6 +4,7 @@ import numpy as np
 from functools import reduce
 import logging
 import collections
+from . import common
 
 def valsAndVariances(h1, h2, allowBroadcast=True, transpose=True):
     if not allowBroadcast and len(h1.axes) != len(h2.axes):
@@ -163,7 +164,7 @@ def rebinHist(h, axis_name, edges):
                             f"Edges of histogram are {ax.edges}, requested rebinning to {edges}")
         
     # If you rebin to a subset of initial range, keep the overflow and underflow
-    overflow = ax.traits.overflow or edges[-1] < ax.edges[-1]
+    overflow = ax.traits.overflow or edges[-1] < ax.edges[-1] 
     underflow = ax.traits.underflow or edges[0] > ax.edges[0]
     flow = overflow or underflow
     new_ax = hist.axis.Variable(edges, name=ax.name, overflow=overflow, underflow=underflow)
@@ -177,7 +178,9 @@ def rebinHist(h, axis_name, edges):
 
     offset = 0.5*np.min(ax.edges[1:]-ax.edges[:-1])
 
-    edges_eval = edges[:-1]+offset
+    edges_eval = edges+offset
+    # Last bin should be inside the boundary
+    edges_eval[-1] -= 2*offset
     if overflow or not np.isclose(edges[-1], ax.edges[-1]):
         edges_eval = np.append(edges_eval, ax.edges[-1]+offset)
 
@@ -319,3 +322,11 @@ def syst_min_or_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=[], do_min=Tr
         opview = np.moveaxis(opview, -1, idx)
     hnew[...] = opview
     return hnew
+
+def combineUpDownVarHists(down_hist, up_hist):
+    if up_hist.axes != down_hist.axes:
+        raise RuntimeError("input up and down histograms have different axes, can't combine")
+    else:
+        hnew = hist.Hist(*up_hist.axes, common.down_up_axis, storage=up_hist._storage_type())
+        hnew.view(flow=True)[...] = np.stack((down_hist.view(flow=True), up_hist.view(flow=True)), axis = -1)
+        return hnew

@@ -1,16 +1,17 @@
 import argparse
-from utilities import output_tools,common
+from utilities import output_tools, common, rdf_tools
 
 parser,initargs = common.common_parser()
 
 import narf
 import wremnants
-from wremnants import theory_tools,syst_tools,theory_corrections
+from wremnants import theory_tools,syst_tools,theory_corrections, muon_calibration
 import hist
 import lz4.frame
 import logging
 import math
 import time
+from utilities import boostHistHelpers as hh
 import pathlib
 
 data_dir = f"{pathlib.Path(__file__).parent}/../../wremnants/data/"
@@ -23,6 +24,16 @@ parser.add_argument("--noScaleFactors", action="store_true", help="Don't use sca
 parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
 parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
 parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for luminosity in excess to 1 (e.g. 1.012 means 1.2\%)", default=1.012)
+parser.add_argument(
+    "--dataCrctn", type = str, choices = [None, 'cvh', 'jpsi_crctd'],
+    default=None, help = "alternative correction to be applied to data"
+)
+parser.add_argument(
+    "--MCCrctn", type = str, choices = [None, 'cvh', 'cvhbs', 'truth', 'jpsi_crctd'], 
+    default = None, help = "alternative correction to be applied to MC"
+)
+parser.add_argument("--jpsiCrctnDataInput", type = str, default = None, help = "path to the root file for jpsi corrections on the data")
+parser.add_argument("--jpsiCrctnMCInput", type = str, default = None, help = "path to the root file for jpsi corrections on the MC")
 args = parser.parse_args()
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
@@ -92,13 +103,19 @@ vertex_helper = wremnants.make_vertex_helper(era = era)
 
 mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
 
+if args.dataCrctn == 'jpsi_crctd':
+    jpsi_crctn_data_helper = muon_validation.make_jpsi_crctn_helper(args.jpsiCrctnDataInput)
+    jpsi_crctn_unc_data_helper = muon_validation.make_jpsi_crctn_unc_helper(args.jpsiCrctnDataInput)
+if args.MCCrctn == 'jpsi_crctd':
+    jpsi_crctn_MC_helper = muon_validation.make_jpsi_crctn_helper(args.jpsiCrctnMCInput)
+    jpsi_crctn_unc_MC_helper = muon_validation.make_jpsi_crctn_unc_helper(args.jpsiCrctnMCInput)
+
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_corr)
 
 # recoil initialization
 if not args.no_recoil:
     from wremnants import recoil_tools
     recoilHelper = recoil_tools.Recoil("highPU", flavor="mu", met=args.met)
-
 
 def build_graph(df, dataset):
     print("build graph", dataset.name)
@@ -120,7 +137,7 @@ def build_graph(df, dataset):
     apply_theory_corr = args.theory_corr and dataset.name in corr_helpers
 
     calibration_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
-    df = wremnants.define_corrected_muons(df, calibration_helper, args.muonCorr, dataset)
+    df = muon_calibration.define_corrected_muons(df, calibration_helper, args.muonCorr, dataset)
                     
     # n.b. charge = -99 is a placeholder for invalid track refit/corrections (mostly just from tracks below
     # the pt threshold of 8 GeV in the nano production)
@@ -137,14 +154,8 @@ def build_graph(df, dataset):
     df = df.Define("goodMuons", "vetoMuons && Muon_mediumId && Muon_category")
     df = df.Filter("Sum(goodMuons) == 1")
 
-    df = df.Define("goodMuons_pt0", "Muon_correctedPt[goodMuons][0]")
-    df = df.Define("goodMuons_eta0", "Muon_correctedEta[goodMuons][0]")
-    df = df.Define("goodMuons_abseta0", "abs(goodMuons_eta0)")
-    df = df.Define("goodMuons_phi0", "Muon_correctedPhi[goodMuons][0]")
-    df = df.Define("goodMuons_charge0", "Muon_correctedCharge[goodMuons][0]")
-
-    df = df.Define("goodMuons_isStandalone", "Muon_isStandalone[goodMuons][0]")
-
+    # the corrected RECO muon kinematics, which is intended to be used as the nominal
+    df = wremnants.define_corrected_reco_muon_kinematics(df)
     #standalone quantities, currently only in data and W/Z samples
     if dataset.group in ["Top", "Diboson"]:
         df = df.Alias("goodMuons_SApt0",  "goodMuons_pt0")
@@ -159,6 +170,23 @@ def build_graph(df, dataset):
         df = df.Define("goodMuons_SApt0",  "Muon_standalonePt[goodMuons][0]")
         df = df.Define("goodMuons_SAeta0", "Muon_standaloneEta[goodMuons][0]")
         df = df.Define("goodMuons_SAphi0", "Muon_standalonePhi[goodMuons][0]")
+    
+    df = df.Define("goodMuons_abseta0", "abs(goodMuons_eta0)")
+    df = df.Filter("goodMuons_SApt0 > 15.0 && wrem::deltaR2(goodMuons_SAeta0, goodMuons_SAphi0, goodMuons_eta0, goodMuons_phi0) < 0.09")
+
+    df = df.Define("goodMuons_isStandalone", "Muon_isStandalone[goodMuons][0]")
+
+    if isW or isZ:
+        df = muon_calibration.define_cvh_reco_muon_kinematics(df)
+        df = muon_calibration.define_uncrct_reco_muon_kinematics(df)
+        df = muon_calibration.get_good_gen_muons_idx_in_GenPart(df, reco_subset = "goodMuons")
+        df = muon_calibration.define_good_gen_muon_kinematics(df)
+        df = muon_calibration.calculate_good_gen_muon_kinematics(df)
+        df = muon_calibration.define_gen_smeared_muon_kinematics(df)
+
+        if args.validationHists:
+            for reco_type in ['crctd', 'cvh', 'uncrct', 'gen_smeared']:
+                df = wremnants.define_reco_over_gen_cols(df, reco_type)
 
     # the next cut is mainly needed for consistency with the reco efficiency measurement for the case with global muons
     # note, when SA does not exist this cut is still fine because of how we define these variables
@@ -167,8 +195,6 @@ def build_graph(df, dataset):
         df = df.Filter(f"Muon_standaloneNumberOfValidHits[goodMuons][0] >= {common.muonEfficiency_standaloneNumberOfValidHits}")
         
     df = df.Define("goodMuons_pfRelIso04_all0", "Muon_pfRelIso04_all[goodMuons][0]")
-
-
 
     df = df.Define("vetoElectrons", "Electron_pt > 10 && Electron_cutBased > 0 && abs(Electron_eta) < 2.4 && abs(Electron_dxy) < 0.05 && abs(Electron_dz)< 0.2")
 
@@ -184,14 +210,14 @@ def build_graph(df, dataset):
         df = df.Define("goodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_filterBits)")
     df = df.Filter("wrem::hasTriggerMatch(goodMuons_eta0,goodMuons_phi0,TrigObj_eta[goodTrigObjs],TrigObj_phi[goodTrigObjs])")
     df = df.Filter("Flag_globalSuperTightHalo2016Filter && Flag_EcalDeadCellTriggerPrimitiveFilter && Flag_goodVertices && Flag_HBHENoiseIsoFilter && Flag_HBHENoiseFilter && Flag_BadPFMuonFilter")
-
+    
     # gen match to bare muons to select only prompt muons from top processes
     if isTop:
         df = df.Define("postFSRmuons", "GenPart_status == 1 && (GenPart_statusFlags & 1) && abs(GenPart_pdgId) == 13")
         df = df.Filter("wrem::hasMatchDR2(goodMuons_eta0,goodMuons_phi0,GenPart_eta[postFSRmuons],GenPart_phi[postFSRmuons],0.09)")
-    
+
     nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
-    
+
     if dataset.is_data:
         
         df = df.Define("nominal_weight", "1.0")
@@ -214,7 +240,6 @@ def build_graph(df, dataset):
         dQCDbkGVar = df.Filter("passMT || Sum(goodCleanJetsPt45)>=1")
         qcdJetPt45 = dQCDbkGVar.HistoBoost("qcdJetPt45", nominal_axes, nominal_cols)
         results.append(qcdJetPt45)
-        
     else:
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
         df = df.Define("weight_vtx", vertex_helper, ["GenVtx_z", "Pileup_nTrueInt"])
@@ -243,13 +268,16 @@ def build_graph(df, dataset):
   
         results.append(df.HistoBoost("nominal_weight", [hist.axis.Regular(200, -4, 4)], ["nominal_weight"]))
 
+        nominal = df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "nominal_weight"])
+        results.append(nominal)
+
         if apply_theory_corr:
             results.extend(theory_tools.make_theory_corr_hists(df, "nominal", nominal_axes, nominal_cols, 
                 corr_helpers[dataset.name], args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
             )
-
-        nominal = df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "nominal_weight"])
-        results.append(nominal)
+        if isW or isZ: 
+            nominal_cols_cvh, nominal_cols_uncrct, nominal_cols_gen, nominal_cols_gen_smeared = muon_calibration.make_alt_reco_and_gen_hists(df, results, nominal_axes)
+            if args.validationHists: wremnants.make_reco_over_gen_hists(df, results)
 
         
     if not args.no_recoil: # recoil plots
@@ -281,7 +309,7 @@ def build_graph(df, dataset):
         df = df.Define("muonL1PrefireSyst_tensor", muon_prefiring_helper_syst, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId", "nominal_weight"])
         muonL1PrefireSyst = df.HistoBoost("muonL1PrefireSyst", nominal_axes, [*nominal_cols, "muonL1PrefireSyst_tensor"], tensor_axes = [common.down_up_axis])
         results.append(muonL1PrefireSyst)
-
+    
         df = df.Define("ecalL1Prefire_tensor", f"wrem::twoPointScaling(nominal_weight/L1PreFiringWeight_ECAL_Nom, L1PreFiringWeight_ECAL_Dn, L1PreFiringWeight_ECAL_Up)")
         ecalL1Prefire = df.HistoBoost("ecalL1Prefire", nominal_axes, [*nominal_cols, "ecalL1Prefire_tensor"], tensor_axes = [common.down_up_axis])
         results.append(ecalL1Prefire)
@@ -293,6 +321,7 @@ def build_graph(df, dataset):
                 
         # n.b. this is the W analysis so mass weights shouldn't be propagated
         # on the Z samples (but can still use it for dummy muon scale)
+        
         if isW or isZ:
 
             df = theory_tools.define_scale_tensor(df)
@@ -307,10 +336,10 @@ def build_graph(df, dataset):
             df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
             results.extend(theory_tools.make_pdf_hists(df, dataset.name, nominal_axes, nominal_cols, args.pdfs))
 
-            masswargs = (nominal_axes, nominal_cols) if isW else (None, None)
-            df, masswhist = syst_tools.define_mass_weights(df, isW, *masswargs)
-            if masswhist:
-                results.append(masswhist)
+            df = syst_tools.define_mass_weights(df, isW)
+            if isW:
+                massWeight = df.HistoBoost("massWeight", nominal_axes, [*nominal_cols, "massWeight_tensor_wnom"])
+                results.append(massWeight)
 
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:
@@ -320,34 +349,112 @@ def build_graph(df, dataset):
                 mag = args.muonCorrMag
                 df = df.Define(f"muonScaleDummy{netabins}Bins", f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(nominal_weight, massWeight_tensor, goodMuons_eta0, {mag}, {str(isW).lower()})")
                 scale_etabins_axis = hist.axis.Regular(netabins, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
-                dummyMuonScaleSyst = df.HistoBoost("muonScaleSyst", nominal_axes, [*nominal_cols, f"muonScaleDummy{netabins}Bins"],
-                                                   tensor_axes=[common.down_up_axis, scale_etabins_axis])
-
+                dummyMuonScaleSyst_gen_smear = df.HistoBoost(
+                    "muonScaleSyst_gen_smear",
+                    nominal_axes,
+                    [*nominal_cols_gen_smeared, f"muonScaleDummy{netabins}Bins"],
+                    tensor_axes=[common.down_up_axis, scale_etabins_axis]
+                )
+                dummyMuonScaleSyst = df.HistoBoost(
+                    "muonScaleSyst",
+                    nominal_axes,
+                    [*nominal_cols, f"muonScaleDummy{netabins}Bins"],
+                    tensor_axes=[common.down_up_axis, scale_etabins_axis]
+                )
+                results.append(dummyMuonScaleSyst_gen_smear)
                 results.append(dummyMuonScaleSyst)
+                df = df.Define("unity", "1.0")
+                df = df.Define(
+                    f"muonScaleDummy{netabins}Bins_PerSe",
+                    f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(unity, massWeight_tensor, goodMuons_eta0, {mag}, {str(isW).lower()})"
+                )
+                df = df.Define("massweights_down", f"muonScaleDummy{netabins}Bins_PerSe(0,0)")
+                df = df.Define("massweights_up", f"muonScaleDummy{netabins}Bins_PerSe(1,0)")
+
+                axis_mass_weight = hist.axis.Regular(1000, 0.9, 1.1, underflow=True, overflow=True, name = "axis_mass_weight")
+                dummyMuonScaleSystPerSeDown = df.HistoBoost(
+                    "muonScaleSystPerSeDown",
+                    [axis_mass_weight],
+                    ["massweights_down"]
+                )
+                dummyMuonScaleSystPerSeUp = df.HistoBoost(
+                    "muonScaleSystPerSeUp",
+                    [axis_mass_weight],
+                    ["massweights_up"]
+                )
+                results.append(dummyMuonScaleSystPerSeDown)
+                results.append(dummyMuonScaleSystPerSeUp)
+                df = df.Define("muonScaleSyst_responseWeights_tensor_gensmear", calibration_uncertainty_helper,
+                    [
+                    "goodMuons_qop0_gen_smeared",
+                    "goodMuons_pt0_gen_smeared_a_la_qop",
+                    "goodMuons_eta0_gen_smeared",
+                    "goodMuons_phi0_gen_smeared",
+                    "goodMuons_charge0_gen_smeared",
+                    "covMat_goodGenMuons0",
+                    "goodMuons_qop0_gen",
+                    "goodMuons_pt0_gen",
+                    "goodMuons_eta0_gen",
+                    "goodMuons_phi0_gen",
+                    "goodMuons_charge0_gen",
+                    "nominal_weight"
+                    ]
+                )
+                dummyMuonScaleSyst_responseWeights = df.HistoBoost("muonScaleSyst_responseWeights_gensmear", nominal_axes, [*nominal_cols_gen_smeared, "muonScaleSyst_responseWeights_tensor_gensmear"], tensor_axes = calibration_uncertainty_helper.tensor_axes)
+                results.append(dummyMuonScaleSyst_responseWeights)
+            if args.validationHists:
+                df = wremnants.define_cols_for_smearing_weights(df, calibration_uncertainty_helper)
+                wremnants.make_hists_for_smearing_weights(df, nominal_axes, nominal_cols, results)
+
+            df = df.Define("goodMuons_pt0_gen_smeared_scaleUp_mil", "goodMuons_pt0_gen_smeared_a_la_qop * 1.001")
+            df = df.Define("goodMuons_pt0_gen_smeared_scaleDn_mil", "goodMuons_pt0_gen_smeared_a_la_qop / 1.001")
+            df = df.Define("goodMuons_pt0_scaleUp_tenthmil", "goodMuons_pt0 * 1.0001")
+            df = df.Define("goodMuons_pt0_scaleDn_tenthmil", "goodMuons_pt0 / 1.0001")
+            df = df.Define("goodMuons_pt0_gen_smeared_scaleUp_tenthmil", "goodMuons_pt0_gen_smeared_a_la_qop * 1.0001")
+            df = df.Define("goodMuons_pt0_gen_smeared_scaleDn_tenthmil", "goodMuons_pt0_gen_smeared_a_la_qop / 1.0001")
+            muonScaleVariationUpMil = df.HistoBoost(
+                "muonScaleVariationUpMil", 
+                nominal_axes,
+                [nominal_cols_gen_smeared[0], "goodMuons_pt0_gen_smeared_scaleUp_mil", *nominal_cols_gen_smeared[2:], "nominal_weight"]
+            )
+            muonScaleVariationDnMil = df.HistoBoost(
+                "muonScaleVariationDnMil", 
+                nominal_axes,
+                [nominal_cols_gen_smeared[0], "goodMuons_pt0_gen_smeared_scaleDn_mil", *nominal_cols_gen_smeared[2:], "nominal_weight"]
+            )
+            muonScaleVariationUpTenthmil = df.HistoBoost(
+                "muonScaleVariationUpTenthmil", 
+                nominal_axes,
+                [nominal_cols[0], "goodMuons_pt0_scaleUp_tenthmil", *nominal_cols[2:], "nominal_weight"]
+            )
+            muonScaleVariationDnTenthmil = df.HistoBoost(
+                "muonScaleVariationDnTenthmil", 
+                nominal_axes,
+                [nominal_cols[0], "goodMuons_pt0_scaleDn_tenthmil", *nominal_cols[2:], "nominal_weight"]
+            )
+            muonScaleVariationUpTenthmil_gen_smear = df.HistoBoost(
+                "muonScaleVariationUpTenthmil_gen_smear", 
+                nominal_axes,
+                [nominal_cols_gen_smeared[0], "goodMuons_pt0_gen_smeared_scaleUp_tenthmil", *nominal_cols_gen_smeared[2:], "nominal_weight"]
+            )
+            muonScaleVariationDnTenthmil_gen_smear = df.HistoBoost(
+                "muonScaleVariationDnTenthmil_gen_smear", 
+                nominal_axes,
+                [nominal_cols_gen_smeared[0], "goodMuons_pt0_gen_smeared_scaleDn_tenthmil", *nominal_cols_gen_smeared[2:], "nominal_weight"]
+            )
+            results.append(muonScaleVariationUpMil)
+            results.append(muonScaleVariationDnMil)
+            results.append(muonScaleVariationUpTenthmil)
+            results.append(muonScaleVariationDnTenthmil)
+            results.append(muonScaleVariationUpTenthmil_gen_smear)
+            results.append(muonScaleVariationDnTenthmil_gen_smear)
 
             df = df.Define("Muon_cvhMomCov", "wrem::splitNestedRVec(Muon_cvhMomCov_Vals, Muon_cvhMomCov_Counts)")
-
-            df = df.Define("muonScaleSyst_responseWeights_tensor", calibration_uncertainty_helper,
-                           ["Muon_correctedPt",
-                            "Muon_correctedEta",
-                            "Muon_correctedPhi",
-                            "Muon_correctedCharge",
-                            "Muon_genPartIdx",
-                            "Muon_cvhMomCov",
-                            "vetoMuonsPre",
-                            "GenPart_pt",
-                            "GenPart_eta",
-                            "GenPart_phi",
-                            "GenPart_pdgId",
-                            "GenPart_statusFlags",
-                            "nominal_weight"])
-
-            dummyMuonScaleSyst_responseWeights = df.HistoBoost("muonScaleSyst_responseWeights", nominal_axes, [*nominal_cols, "muonScaleSyst_responseWeights_tensor"], tensor_axes = calibration_uncertainty_helper.tensor_axes)
-            results.append(dummyMuonScaleSyst_responseWeights)
-
-
 
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)
+wremnants.transport_smearing_weights_to_reco(resultdict)
+wremnants.muon_scale_variation_from_manual_shift(resultdict)
+
 output_tools.write_analysis_output(resultdict, "mw_with_mu_eta_pt.pkl.lz4", args)
