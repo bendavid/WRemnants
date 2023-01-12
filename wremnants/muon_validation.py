@@ -29,7 +29,7 @@ def make_jpsi_crctn_helper(filepath):
     )
     return jpsi_crctn_helper
 
-def make_jpsi_crctn_unc_helper(filepath, n_scale_params = 3, n_tot_params = 6, n_eta_bins = 24):
+def make_jpsi_crctn_unc_helper(filepath, n_scale_params = 3, n_tot_params = 6, n_eta_bins = 48):
     f = uproot.open(filepath)
     cov = f['covariance_matrix'].to_hist()
     cov_scale_params = get_jpsi_scale_param_cov_mat(cov, n_scale_params, n_tot_params, n_eta_bins)
@@ -53,12 +53,12 @@ def make_jpsi_crctn_unc_helper(filepath, n_scale_params = 3, n_tot_params = 6, n
 
 # returns the cov mat of only scale parameters in eta bins, in the form of a 2D numpy array
 # there are 3 scale params (A, e, M) + 3 resolution params for each eta bin in the jpsi calib file
-def get_jpsi_scale_param_cov_mat(cov, n_scale_params = 3, n_tot_params = 6, n_eta_bins = 24):
+def get_jpsi_scale_param_cov_mat(cov, n_scale_params = 3, n_tot_params = 6, n_eta_bins = 48):
     cov_dim = len(cov.axes[0].edges) - 1
     if cov_dim != n_tot_params * n_eta_bins:
         raise ValueError(
-            f"dimension of the covariance matrix {cov_dim} doesn't match the input number of"
-            f"total parameters {n_tot_params} times the number ofeta bins {n_eta_bins}"
+            f"dimension of the covariance matrix {cov_dim} doesn't match the input number of "
+            f"total parameters {n_tot_params} times the number of eta bins {n_eta_bins}"
         )
     idx_first_param = np.arange(0, cov_dim, n_tot_params)
     idx_scale_params = np.sort(reduce(
@@ -70,6 +70,59 @@ def get_jpsi_scale_param_cov_mat(cov, n_scale_params = 3, n_tot_params = 6, n_et
             cov.values()[irow_all_params], idx_scale_params
         )
     return cov_scale_params
+
+# "muon" is for mw; "muons" is for wlike, for which we select one of the trig/nonTrig muons
+
+def define_cvh_muon_kinematics(df):
+    df = df.Define("goodMuon_cvh_pt", "Muon_cvhPt[gooodMuons][0]")
+    df = df.Define("goodMuon_cvh_eta", "Muon_cvhEta[goodMuons][0]")
+    df = df.Define("goodMuon_cvh_phi", "Muon_cvhPhi[goodMuons][0]")
+    return df
+
+def define_cvh_muons_kinematics(df):
+    df = df.Define("TrigMuon_cvh_pt", "Muon_cvhPt[trigMuons][0]")
+    df = df.Define("TrigMuon_cvh_eta", "Muon_cvhEta[trigMuons][0]")
+    df = df.Define("TrigMuon_cvh_phi", "Muon_cvhPhi[trigMuons][0]")
+    df = df.Define("NonTrigMuon_cvh_pt", "Muon_cvhPt[nonTrigMuons][0]")
+    df = df.Define("NonTrigMuon_cvh_eta", "Muon_cvhEta[nonTrigMuons][0]")
+    df = df.Define("NonTrigMuon_cvh_phi", "Muon_cvhPhi[nonTrigMuons][0]")
+    return df
+
+def define_jpsi_crctd_muons_pt(df, helper):
+    df = df.Define("TrigMuon_jpsi_crctd_pt", helper,
+        [
+            "TrigMuon_cvh_eta",
+            "TrigMuon_cvh_pt",
+            "TrigMuon_charge"
+        ]
+    )
+    df = df.Define("NonTrigMuon_jpsi_crctd_pt", helper,
+        [
+            "NonTrigMuon_cvh_eta",
+            "NonTrigMuon_cvh_pt",
+            "NonTrigMuon_charge"
+        ]
+    )
+    return df
+
+def define_jpsi_crctd_muons_pt_unc(df, helper):
+    df = df.Define("TrigMuon_jpsi_crctd_pt_unc", helper,
+        [
+            "TrigMuon_cvh_eta",
+            "TrigMuon_cvh_pt",
+            "TrigMuon_charge",
+            "TrigMuon_jpsi_crctd_pt"
+        ]
+    )
+    df = df.Define("NonTrigMuon_jpsi_crctd_pt_unc", helper,
+        [
+            "NonTrigMuon_cvh_eta",
+            "NonTrigMuon_cvh_pt",
+            "NonTrigMuon_charge",
+            "NonTrigMuon_jpsi_crctd_pt"
+        ]
+    )
+    return df
 
 def define_jpsi_crctd_z_mass(df):
     df = df.Define("TrigMuon_jpsi_crctd_mom4",
