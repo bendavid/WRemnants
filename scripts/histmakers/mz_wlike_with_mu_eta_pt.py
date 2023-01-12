@@ -261,10 +261,7 @@ def build_graph(df, dataset):
         df = df.Define("Z_cvh_mom4", "ROOT::Math::PxPyPzEVector(TrigMuon_cvh_mom4)+ROOT::Math::PxPyPzEVector(NonTrigMuon_cvh_mom4)")
         df = df.Define("massZ_cvh", "Z_cvh_mom4.mass()")
         if (dataset.is_data and args.dataCrctn == 'jpsi_crctd') or ((isZ or isW) and args.MCCrctn == 'jpsi_crctd'):
-            print("HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH")
-            print(df.GetColumnNames())
             df = muon_validation.define_jpsi_crctd_z_mass(df)
-            print(df.GetColumnNames())
     df = df.Define("csSineCosThetaPhiZ", "TrigMuon_charge == -1 ? wrem::csSineCosThetaPhi(TrigMuon_mom4, NonTrigMuon_mom4) : wrem::csSineCosThetaPhi(NonTrigMuon_mom4, TrigMuon_mom4)")
 
     df = df.Define("cosThetaStarZ", "csSineCosThetaPhiZ.costheta")
