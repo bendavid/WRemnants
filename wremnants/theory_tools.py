@@ -217,19 +217,17 @@ def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_cen
     for i, generator in enumerate(generators):
         if generator not in helpers:
             continue
-        helper = helpers[generator]
+        
         if i == 0 and modify_central_weight:
             nominal_uncorr = df.HistoBoost(f"{name}_uncorr", axes, [*cols, "nominal_weight_uncorr"])
             res.append(nominal_uncorr)
             res.append(df.HistoBoost("weight_uncorr", [hist.axis.Regular(100, -2, 2)], ["nominal_weight_uncorr"]))
 
-        hist_name = f"{generator}Corr"
-        if name != "nominal":
-            hist_name = f"{name}_{hist_name}"
+        hist_name = f"{name}_{generator}Corr"
 
         if with_uncertainties:
             hist_name += "_unc"
-            unc = df.HistoBoost(hist_name, axes, [*cols, f"{generator}Weight_tensor"], tensor_axes=helper.tensor_axes[-1:])
+            unc = df.HistoBoost(hist_name, axes, [*cols, f"{generator}Weight_tensor"], tensor_axes=helpers[generator].tensor_axes[-1:])
             res.append(unc)
         else:
             nominal = df.HistoBoost(hist_name, axes, [*cols, f"{generator}CentralWeight"])
