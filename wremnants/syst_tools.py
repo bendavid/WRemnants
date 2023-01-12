@@ -129,6 +129,13 @@ def scale_helicity_hist_to_variations(scale_hist, sum_axes=[], rebinPtV=None):
 
     expd = scale_hist.ndim - nom_hist.ndim
     expandnom = np.expand_dims(nom_hist.view(flow=True), [-expd+i for i in range(expd)])
+    systhist = scale_hist.view(flow=True) - nom_scale_hist.view(flow=True) + expandnom
+
+    scale_variation_hist = hist.Hist(*scale_hist.axes, storage = scale_hist._storage_type(), 
+                                     name = out_name, data = systhist)
+
+    return scale_variation_hist 
+
 def make_scale_hist(df, axes, cols, hname=""):
     scaleHist = df.HistoBoost("qcdScale" if hname=="" else f"{hname}_qcdScale", axes, [*cols, "scaleWeights_tensor_wnom"], tensor_axes=scale_tensor_axes)
     return scaleHist

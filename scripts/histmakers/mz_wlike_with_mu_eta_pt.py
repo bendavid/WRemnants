@@ -4,7 +4,7 @@ parser,initargs = common.common_parser()
 
 import narf
 import wremnants
-from wremnants import theory_tools,syst_tools,theory_corrections, muon_validation
+from wremnants import theory_tools,syst_tools,theory_corrections, muon_validation, muon_calibration
 import hist
 import lz4.frame
 import logging
@@ -130,7 +130,7 @@ def build_graph(df, dataset):
     df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
 
     calibration_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
-    df = wremnants.define_corrected_muons(df, calibration_helper, args.muonCorr, dataset)
+    df = muon_calibration.define_corrected_muons(df, calibration_helper, args.muonCorr, dataset)
 
     # n.b. charge = -99 is a placeholder for invalid track refit/corrections (mostly just from tracks below
     # the pt threshold of 8 GeV in the nano production)
@@ -284,7 +284,6 @@ def build_graph(df, dataset):
         dilepton_cols = dilepton_cols[:-2]
     dilepton_cols.append("TrigMuon_charge")
     dilepton_axes.append(axis_charge)
-    
     dilepton = df_dilepton.HistoBoost("dilepton", dilepton_axes, [*dilepton_cols, "nominal_weight"])
     results.append(dilepton)
 
