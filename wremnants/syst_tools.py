@@ -109,9 +109,7 @@ def scale_helicity_hist_to_variations(scale_hist, sum_axes=[], rebinPtV=None):
         else:
             scale_hist = scale_hist[{"ptVgen" : s[::hist.rebin(rebinPtV)]}]
             nom_scale_hist = nom_scale_hist[{"ptVgen" : s[::hist.rebin(rebinPtV)]}]
-    elif not hasPtAxis:
-        raise ValueError("In scale_helicity_hist_to_variations: axis 'ptVgen' not found in histogram.")
-            
+
     for axis in sum_axes:
         if axis in axisNames:
             scale_hist = scale_hist[{axis : s[::hist.sum]}]
@@ -129,7 +127,12 @@ def scale_helicity_hist_to_variations(scale_hist, sum_axes=[], rebinPtV=None):
 
     expd = scale_hist.ndim - nom_hist.ndim
     expandnom = np.expand_dims(nom_hist.view(flow=True), [-expd+i for i in range(expd)])
+    systhist = scale_hist.view(flow=True) - nom_scale_hist.view(flow=True) + expandnom
 
+    scale_variation_hist = hist.Hist(*scale_hist.axes, storage = scale_hist._storage_type(), 
+                                     name = out_name, data = systhist)
+
+    return scale_variation_hist
 
 def uncertainty_hist_from_envelope(h, proj_ax, entries):
     hdown = hh.syst_min_or_max_env_hist(h, proj_ax, "vars", entries, no_flow=["ptVgen"], do_min=True)
