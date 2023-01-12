@@ -76,8 +76,6 @@ def write_analysis_output(results, outfile, args):
     #    to_append.append('data_' + args.dataCrctn)
     #if args.MCCrctn:
     #    to_append.append('MC_' + args.MCCrctn)
-    if args.theory_corr:
-        to_append.append(common.list_to_string(args.theory_corr))
     if to_append:
         outfile = outfile.replace(".pkl.lz4", f"_{'_'.join(to_append)}.pkl.lz4")
 
