@@ -75,6 +75,7 @@ def define_corrected_muons(df, helper, corr_type, dataset):
         df = df.Define("Muon_correctedCharge", "ROOT::VecOps::RVec<int> res(Muon_correctedMom4Charge.size()); std::transform(Muon_correctedMom4Charge.begin(), Muon_correctedMom4Charge.end(), res.begin(), [](const auto &x) { return x.second; }); return res;")
     else:
         raise ValueError(f"Invalid correction type choice {corr_type}")
+    return df
 
     return df
 
@@ -117,7 +118,7 @@ def calculate_good_gen_muon_kinematics(df):
 def define_gen_smeared_muon_kinematics(df):
     df = df.Define("covMat_goodGenMuons0",
         ("wrem::getCovMatForGoodMuons0("
-        "    Muon_cvhbsMomCov_Vals, Muon_cvhbsMomCov_Counts," 
+        "    Muon_cvhMomCov_Vals, Muon_cvhMomCov_Counts," 
         "    goodMuons, goodMuonsByGenTruth"
         ")")
     )
@@ -150,11 +151,11 @@ def define_corrected_reco_muon_kinematics(df, kinematic_vars = ["pt", "eta", "ph
         )
     return df
 
-def define_cvhbs_reco_muon_kinematics(df, kinematic_vars = ["pt", "eta", "phi", "charge"]):
+def define_cvh_reco_muon_kinematics(df, kinematic_vars = ["pt", "eta", "phi", "charge"]):
     for var in kinematic_vars:
         df = df.Define(
-            f"goodMuons_{var.lower()}0_cvhbs",
-            f"Muon_cvhbs{var.capitalize()}[goodMuons][0]"
+            f"goodMuons_{var.lower()}0_cvh",
+            f"Muon_cvh{var.capitalize()}[goodMuons][0]"
         )
     return df
 
@@ -192,8 +193,8 @@ def muon_scale_variation_from_manual_shift(
         proc_hists['muonScaleSyst_manualShift'] = hh.combineUpDownVarHists(*manual_shift_hists)
 
 def make_alt_reco_and_gen_hists(df, results, nominal_axes):
-    nominal_cols_cvhbs = [
-        "goodMuons_eta0_cvhbs", "goodMuons_pt0_cvhbs", "goodMuons_charge0_cvhbs",
+    nominal_cols_cvh = [
+        "goodMuons_eta0_cvh", "goodMuons_pt0_cvh", "goodMuons_charge0_cvh",
         "passIso", "passMT"
     ]
     nominal_cols_uncrct = [
@@ -209,16 +210,16 @@ def make_alt_reco_and_gen_hists(df, results, nominal_axes):
         "passIso", "passMT"
     ]
 
-    nominal_cvhbs =       df.HistoBoost("nominal_cvhbs", nominal_axes, [*nominal_cols_cvhbs, "nominal_weight"])
+    nominal_cvh =       df.HistoBoost("nominal_cvh", nominal_axes, [*nominal_cols_cvh, "nominal_weight"])
     nominal_uncrct =      df.HistoBoost("nominal_uncrct", nominal_axes, [*nominal_cols_uncrct, "nominal_weight"])
     nominal_gen =         df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols_gen, "nominal_weight"])
     nominal_gen_smeared = df.HistoBoost("nominal_gen_smeared", nominal_axes, [*nominal_cols_gen_smeared, "nominal_weight"])
 
-    results.append(nominal_cvhbs)
+    results.append(nominal_cvh)
     results.append(nominal_uncrct)
     results.append(nominal_gen)
     results.append(nominal_gen_smeared)
-    return [nominal_cols_cvhbs, nominal_cols_uncrct, nominal_cols_gen, nominal_cols_gen_smeared]
+    return [nominal_cols_cvh, nominal_cols_uncrct, nominal_cols_gen, nominal_cols_gen_smeared]
 
 ####################
 ## FOR VALIDATION ##
@@ -239,8 +240,8 @@ def make_reco_over_gen_hists(df, results):
     nominal_cols_crctd_over_gen = [
         "goodMuons_pt0_crctd_over_gen"
     ]
-    nominal_cols_cvhbs_over_gen = [
-        "goodMuons_pt0_cvhbs_over_gen"
+    nominal_cols_cvh_over_gen = [
+        "goodMuons_pt0_cvh_over_gen"
     ]
     nominal_cols_uncrct_over_gen = [
         "goodMuons_pt0_uncrct_over_gen"
@@ -251,12 +252,12 @@ def make_reco_over_gen_hists(df, results):
     axis_pt_reco_over_gen = hist.axis.Regular(1000, 0.9, 1.1, underflow=True, overflow=True, name = "reco_pt_over_gen")
     axis_qop_reco_over_gen = hist.axis.Regular(1000, 0.9, 1.1, underflow=True, overflow=True, name = "reco_qop_over_gen")
     crctd_over_gen =  df.HistoBoost("crctd_over_gen", [axis_pt_reco_over_gen], [*nominal_cols_crctd_over_gen, "nominal_weight"])
-    cvhbs_over_gen =  df.HistoBoost("cvhbs_over_gen", [axis_pt_reco_over_gen], [*nominal_cols_cvhbs_over_gen, "nominal_weight"])
+    cvh_over_gen =  df.HistoBoost("cvh_over_gen", [axis_pt_reco_over_gen], [*nominal_cols_cvh_over_gen, "nominal_weight"])
     uncrct_over_gen = df.HistoBoost("uncrct_over_gen", [axis_pt_reco_over_gen], [*nominal_cols_uncrct_over_gen, "nominal_weight"])
     gen_smeared_over_gen = df.HistoBoost("gen_smeared_over_gen", [axis_pt_reco_over_gen], [*nominal_cols_gen_smeared_over_gen, "nominal_weight"])
     
     results.append(crctd_over_gen)
-    results.append(cvhbs_over_gen)
+    results.append(cvh_over_gen)
     results.append(uncrct_over_gen)
     results.append(gen_smeared_over_gen)
 
