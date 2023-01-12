@@ -80,6 +80,8 @@ namespace wrem {
             
             // order is reco-tracking-idip-trigger-iso
             for(int i = 0; i < allSF_nomi.size(); i++) {
+                // if (allSF_nomi[i] <= 0)
+                //     std::cout << "allSF_nomi/alt[" << i << "] = " << allSF_nomi[i] << "/" << allSF_alt[i] << " --> pt/eta/charge = " << pt << "/" << eta << "/" << charge << std::endl;
                 res(i) = allSF_alt[i] / allSF_nomi[i]; 
             }
                 
@@ -252,7 +254,7 @@ namespace wrem {
 
             // overflow/underflow are attributed to adjacent bin
             auto const tensor_eta_idx = std::clamp(eta_idx, 0, NEtaBins - 1);
-            auto const tensor_pt_idx =  std::clamp(pt_idx, 0, NPtBins_ - 1);
+            //auto const tensor_pt_idx =  std::clamp(pt_idx, 0, NPtBins_ - 1);
 
             auto const &cell_nomi = sf_type_->at(eta_idx,
                                                  pt_idx,
@@ -304,7 +306,7 @@ namespace wrem {
 
             // overflow/underflow are attributed to adjacent bin
             auto const tensor_eta_idx = std::clamp(eta_idx, 0, NEtaBins - 1);
-            auto const tensor_pt_idx =  std::clamp(pt_idx, 0, NPtBins_ - 1);
+            //auto const tensor_pt_idx =  std::clamp(pt_idx, 0, NPtBins_ - 1);
 
             auto const &cell_nomi = sf_type_->at(eta_idx,
                                                  pt_idx,
@@ -343,7 +345,7 @@ namespace wrem {
     protected:
 
         std::shared_ptr<const HIST_SF> sf_type_;
-        int NPtBins_ = sf_type_->template axis<1>().size(); // there are no overflows, so extent == size 
+        // int NPtBins_ = sf_type_->template axis<1>().size(); // there are no overflows, so extent == size 
         // cache the bin indices since the string category lookup is slow
         int idx_nom_ = sf_type_->template axis<4>().index(0); // input effStat axis is organized as DownVar - nomi - UpVar, with nomi centered at 0
         int isTriggerStep_ = sf_type_->template axis<3>().value(0) == "trigger"; // special treatment for the stat variation in 2 lepton case
