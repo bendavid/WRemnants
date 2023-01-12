@@ -67,6 +67,8 @@ def write_analysis_output(results, outfile, args):
         to_append.append(args.theory_corr[0]+"Corr")
     if args.pdfs and not args.altPdfOnlyCentral:
         to_append.append(args.pdfs[0])
+    if args.binnedScaleFactors:
+        to_append.append("binnedSF")
     if args.maxFiles > 0:
         to_append.append(f"maxFiles{args.maxFiles}")
     if args.postfix:
