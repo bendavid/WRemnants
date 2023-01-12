@@ -38,9 +38,8 @@ public:
     static constexpr auto nUnc = sizes[sizes.size() - 1]; // 1 for cnetral value
     using out_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<nUnc, 2>>;
 
-    JpsiCorrectionsHelper(T&& corrections, double maxWeight) :
-        correctionHist_(std::make_shared<const T>(std::move(corrections))),
-        maxWeight_(maxWeight) {}
+    JpsiCorrectionsHelper(T&& corrections) :
+        correctionHist_(std::make_shared<const T>(std::move(corrections))) {}
 
     // helper for bin lookup which implements the compile-time loop over axes
     template<typename... Xs, std::size_t... Idxs>
@@ -67,7 +66,7 @@ public:
         double k_crctd = (magnetic + material) * k + alignment;
         return (1.0 / k_crctd);
     }
-
+    /*
     // for uncertainties on pt
     out_tensor_t operator() (
         float cvh_eta, float cvh_pt, int charge, float jpsi_crctd_pt
@@ -157,15 +156,14 @@ public:
     
             // protect against outliers
             // if (weight > 0.9998 && weight < 1.0002) {cout << "smearing weight is " << weight << "covd is " << covd << std::endl;}
-                res(ivar, idownup) = std::min(weight, maxWeight_);
+                res(ivar, idownup) = weight;
             }
         }
         return res;
     }
-
+    */
 private:
     std::shared_ptr<const T> correctionHist_;
-    double maxWeight_;
 };
 
 }
