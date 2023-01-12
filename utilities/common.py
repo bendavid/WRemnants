@@ -94,6 +94,7 @@ def common_parser():
     parser.add_argument("--trackerMuons", action='store_true', help="Use tracker muons instead of global muons (need appropriate scale factors too)")
     parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers)")
     parser.add_argument("--onlyMainHistograms", action='store_true', help="Only produce some histograms, skipping (most) systematics to run faster when those are not needed")
+    parser.add_argument("-o", "--outfolder", type=str, default="", help="Output folder")
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
                         help="Set verbosity level with logging, the larger the more verbose (currently for setup_test_logger)");
     parser.add_argument("--met", type=str, choices=["DeepMETReso", "RawPFMET"], help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")                    
