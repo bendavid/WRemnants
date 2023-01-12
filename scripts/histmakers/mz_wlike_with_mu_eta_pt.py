@@ -107,7 +107,6 @@ logging.info(f"SF file: {args.sfFile}")
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
 
-calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
 if args.dataCrctn == 'jpsi_crctd':
     jpsi_crctn_data_helper = wremnants.make_jpsi_crctn_helper(filepath = args.jpsiCrctnDataInput)
     jpsi_crctn_unc_data_helper = wremnants.make_jpsi_crctn_unc_helper(filepath = args.jpsiCrctnDataInput)

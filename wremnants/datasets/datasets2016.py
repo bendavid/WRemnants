@@ -31,7 +31,7 @@ def getDatasets(maxFiles=-1, filt=None, mode=None, base_path=None, nanoVersion="
         if hostname == "lxplus8s10.cern.ch":
             base_path = "/scratch/shared/NanoAOD"
         elif "mit.edu" in hostname:
-            base_path = "/data/submit/cms/store/wmass/NanoAOD"
+            base_path = "/scratch/submit/cms/wmass/NanoAOD"
         elif socket.gethostname() == 'cmsanalysis.pi.infn.it':
             raise NotImplementedError("Implementation of common paths has not yet been implemented for the Pisa compute machine")
 
