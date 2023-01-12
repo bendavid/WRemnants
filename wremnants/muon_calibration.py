@@ -147,6 +147,23 @@ def define_corrected_muons(df, helper, corr_type, dataset):
 
     return df
 
+    if corr_type != "mass_fit":
+        df = df.Define("TrigMuon_pt", "Muon_correctedPt[trigMuons][0]")
+        df = df.Define("TrigMuon_eta", "Muon_correctedEta[trigMuons][0]")
+        df = df.Define("TrigMuon_phi", "Muon_correctedPhi[trigMuons][0]")
+
+        df = df.Define("NonTrigMuon_pt", "Muon_correctedPt[nonTrigMuons][0]")
+        df = df.Define("NonTrigMuon_eta", "Muon_correctedEta[nonTrigMuons][0]")
+        df = df.Define("NonTrigMuon_phi", "Muon_correctedPhi[nonTrigMuons][0]")
+    else:
+        df = df.Alias("TrigMuon_pt", "TrigMuon_cvh_pt")
+        df = df.Alias("TrigMuon_eta", "TrigMuon_cvh_eta")
+        df = df.Alias("TrigMuon_phi", "TrigMuon_cvh_phi")
+
+        df = df.Alias("NonTrigMuon_pt", "NonTrigMuon_cvh_pt")
+        df = df.Alias("NonTrigMuon_eta", "NonTrigMuon_cvh_eta")
+        df = df.Alias("NonTrigMuon_phi", "NonTrigMuon_cvh_phi")
+
     return df
 
 def get_good_gen_muons_idx_in_GenPart(df, reco_subset = "goodMuons"):
