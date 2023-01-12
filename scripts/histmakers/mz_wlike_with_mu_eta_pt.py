@@ -12,7 +12,7 @@ import math
 import time
 
 parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
-parser.add_argument("--muonCorr", type=str, default="trackfit_only", choices=["lbl", "none", "trackfit_only"], help="Type of correction to apply to the muons")
+parser.add_argument("--muonCorr", type=str, default="trackfit_only", choices=["lbl", "none", "mass_fit", "trackfit_only"], help="Type of correction to apply to the muons")
 parser.add_argument("--muScaleMag", type=float, default=1e-4, help="Magnitude of dummy muon scale uncertainty")
 parser.add_argument("--muScaleBins", type=int, default=1, help="Number of bins for muon scale uncertainty")
 parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
@@ -97,11 +97,12 @@ logging.info(f"SF file: {args.sfFile}")
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
 
-if muon_corr == "mass_fit":
-    jpsi_crctn_data_helper = wremnants.make_jpsi_crctn_helper(filepath=)
-    jpsi_crctn_unc_data_helper = wremnants.make_jpsi_crctn_unc_helper(filepath=)
-    jpsi_crctn_MC_helper = wremnants.make_jpsi_crctn_helper(filepath = args.jpsiCrctnMCInput)
-    jpsi_crctn_unc_MC_helper = wremnants.make_jpsi_crctn_unc_helper(filepath = args.jpsiCrctnMCInput)
+if args.muonCorr == "mass_fit":
+    jpsi_crctn_MC_helper = wremnants.make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/calibrationJMC_aftersm.root")
+    jpsi_crctn_unc_MC_helper = wremnants.make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/calibrationJMC_aftersm.root")
+    jpsi_crctn_data_helper = wremnants.make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/calibrationJDATA_aftersm.root")
+    jpsi_crctn_unc_data_helper = wremnants.make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/calibrationJDATA_aftersm.root")
+
 mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
 
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_corr)
@@ -129,8 +130,11 @@ def build_graph(df, dataset):
 
     df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
 
-    calibration_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
-    df = muon_calibration.define_corrected_muons(df, calibration_helper, args.muonCorr, dataset)
+    if args.muonCorr == "mass_fit":
+        calibration_helper = jpsi_crctn_data_helper if dataset.is_data else jpsi_crctn_MC_helper
+    else:
+        calibration_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
+    df = wremnants.define_corrected_muons(df, calibration_helper, args.muonCorr, dataset)
 
     # n.b. charge = -99 is a placeholder for invalid track refit/corrections (mostly just from tracks below
     # the pt threshold of 8 GeV in the nano production)
