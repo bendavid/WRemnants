@@ -5,7 +5,7 @@ parser,initargs = common.common_parser()
 
 import narf
 import wremnants
-from wremnants import theory_tools,syst_tools,theory_corrections
+from wremnants import theory_tools,syst_tools,theory_corrections, muon_calibration
 import hist
 import lz4.frame
 import logging
@@ -24,6 +24,14 @@ parser.add_argument("--noScaleFactors", action="store_true", help="Don't use sca
 parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
 parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
 parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for luminosity in excess to 1 (e.g. 1.012 means 1.2\%)", default=1.012)
+parser.add_argument(
+    "--dataCrctn", type = str, choices = [None, 'cvh', 'jpsi_crctd'],
+    default=None, help = "alternative correction to be applied to data"
+)
+parser.add_argument(
+    "--MCCrctn", type = str, choices = [None, 'cvh', 'cvhbs', 'truth', 'jpsi_crctd'], 
+    default = None, help = "alternative correction to be applied to MC"
+)
 parser.add_argument("--jpsiCrctnDataInput", type = str, default = None, help = "path to the root file for jpsi corrections on the data")
 parser.add_argument("--jpsiCrctnMCInput", type = str, default = None, help = "path to the root file for jpsi corrections on the MC")
 args = parser.parse_args()
@@ -96,11 +104,11 @@ vertex_helper = wremnants.make_vertex_helper(era = era)
 mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
 
 if args.dataCrctn == 'jpsi_crctd':
-    jpsi_crctn_data_helper = wremnants.make_jpsi_crctn_helper(filepath = args.jpsiCrctnDataInput)
-    jpsi_crctn_unc_data_helper = wremnants.make_jpsi_crctn_unc_helper(filepath = args.jpsiCrctnDataInput)
+    jpsi_crctn_data_helper = muon_validation.make_jpsi_crctn_helper(args.jpsiCrctnDataInput)
+    jpsi_crctn_unc_data_helper = muon_validation.make_jpsi_crctn_unc_helper(args.jpsiCrctnDataInput)
 if args.MCCrctn == 'jpsi_crctd':
-    jpsi_crctn_MC_helper = wremnants.make_jpsi_crctn_helper(filepath = args.jpsiCrctnMCInput)
-    jpsi_crctn_unc_MC_helper = wremnants.make_jpsi_crctn_unc_helper(filepath = args.jpsiCrctnMCInput)
+    jpsi_crctn_MC_helper = muon_validation.make_jpsi_crctn_helper(args.jpsiCrctnMCInput)
+    jpsi_crctn_unc_MC_helper = muon_validation.make_jpsi_crctn_unc_helper(args.jpsiCrctnMCInput)
 
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_corr)
 
@@ -129,7 +137,7 @@ def build_graph(df, dataset):
     apply_theory_corr = args.theory_corr and dataset.name in corr_helpers
 
     calibration_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
-    df = wremnants.define_corrected_muons(df, calibration_helper, args.muonCorr, dataset)
+    df = muon_calibration.define_corrected_muons(df, calibration_helper, args.muonCorr, dataset)
                     
     # n.b. charge = -99 is a placeholder for invalid track refit/corrections (mostly just from tracks below
     # the pt threshold of 8 GeV in the nano production)
@@ -148,11 +156,6 @@ def build_graph(df, dataset):
 
     # the corrected RECO muon kinematics, which is intended to be used as the nominal
     df = wremnants.define_corrected_reco_muon_kinematics(df)
-    df = df.Define("goodMuons_abseta0", "abs(goodMuons_eta0)")
-    df = df.Filter("goodMuons_SApt0 > 15.0 && wrem::deltaR2(goodMuons_SAeta0, goodMuons_SAphi0, goodMuons_eta0, goodMuons_phi0) < 0.09")
-
-    df = df.Define("goodMuons_isStandalone", "Muon_isStandalone[goodMuons][0]")
-
     #standalone quantities, currently only in data and W/Z samples
     if dataset.group in ["Top", "Diboson"]:
         df = df.Alias("goodMuons_SApt0",  "goodMuons_pt0")
@@ -168,16 +171,21 @@ def build_graph(df, dataset):
         df = df.Define("goodMuons_SAeta0", "Muon_standaloneEta[goodMuons][0]")
         df = df.Define("goodMuons_SAphi0", "Muon_standalonePhi[goodMuons][0]")
     
+    df = df.Define("goodMuons_abseta0", "abs(goodMuons_eta0)")
+    df = df.Filter("goodMuons_SApt0 > 15.0 && wrem::deltaR2(goodMuons_SAeta0, goodMuons_SAphi0, goodMuons_eta0, goodMuons_phi0) < 0.09")
+
+    df = df.Define("goodMuons_isStandalone", "Muon_isStandalone[goodMuons][0]")
+
     if isW or isZ:
-        df = wremnants.define_cvhbs_reco_muon_kinematics(df)
-        df = wremnants.define_uncrct_reco_muon_kinematics(df)
-        df = wremnants.get_good_gen_muons_idx_in_GenPart(df, reco_subset = "goodMuons")
-        df = wremnants.define_good_gen_muon_kinematics(df)
-        df = wremnants.calculate_good_gen_muon_kinematics(df)
-        df = wremnants.define_gen_smeared_muon_kinematics(df)
+        df = muon_calibration.define_cvh_reco_muon_kinematics(df)
+        df = muon_calibration.define_uncrct_reco_muon_kinematics(df)
+        df = muon_calibration.get_good_gen_muons_idx_in_GenPart(df, reco_subset = "goodMuons")
+        df = muon_calibration.define_good_gen_muon_kinematics(df)
+        df = muon_calibration.calculate_good_gen_muon_kinematics(df)
+        df = muon_calibration.define_gen_smeared_muon_kinematics(df)
 
         if args.validationHists:
-            for reco_type in ['crctd', 'cvhbs', 'uncrct', 'gen_smeared']:
+            for reco_type in ['crctd', 'cvh', 'uncrct', 'gen_smeared']:
                 df = wremnants.define_reco_over_gen_cols(df, reco_type)
 
     # the next cut is mainly needed for consistency with the reco efficiency measurement for the case with global muons
@@ -268,7 +276,7 @@ def build_graph(df, dataset):
                 corr_helpers[dataset.name], args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
             )
         if isW or isZ: 
-            nominal_cols_cvhbs, nominal_cols_uncrct, nominal_cols_gen, nominal_cols_gen_smeared = wremnants.make_alt_reco_and_gen_hists(df, results, nominal_axes)
+            nominal_cols_cvh, nominal_cols_uncrct, nominal_cols_gen, nominal_cols_gen_smeared = muon_calibration.make_alt_reco_and_gen_hists(df, results, nominal_axes)
             if args.validationHists: wremnants.make_reco_over_gen_hists(df, results)
 
         
@@ -355,7 +363,7 @@ def build_graph(df, dataset):
                 )
                 results.append(dummyMuonScaleSyst_gen_smear)
                 results.append(dummyMuonScaleSyst)
-            
+                df = df.Define("unity", "1.0")
                 df = df.Define(
                     f"muonScaleDummy{netabins}Bins_PerSe",
                     f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(unity, massWeight_tensor, goodMuons_eta0, {mag}, {str(isW).lower()})"
@@ -442,24 +450,6 @@ def build_graph(df, dataset):
             results.append(muonScaleVariationDnTenthmil_gen_smear)
 
             df = df.Define("Muon_cvhMomCov", "wrem::splitNestedRVec(Muon_cvhMomCov_Vals, Muon_cvhMomCov_Counts)")
-
-            df = df.Define("muonScaleSyst_responseWeights_tensor", calibration_uncertainty_helper,
-                           ["Muon_correctedPt",
-                            "Muon_correctedEta",
-                            "Muon_correctedPhi",
-                            "Muon_correctedCharge",
-                            "Muon_genPartIdx",
-                            "Muon_cvhMomCov",
-                            "vetoMuonsPre",
-                            "GenPart_pt",
-                            "GenPart_eta",
-                            "GenPart_phi",
-                            "GenPart_pdgId",
-                            "GenPart_statusFlags",
-                            "nominal_weight"])
-
-            dummyMuonScaleSyst_responseWeights = df.HistoBoost("muonScaleSyst_responseWeights", nominal_axes, [*nominal_cols, "muonScaleSyst_responseWeights_tensor"], tensor_axes = calibration_uncertainty_helper.tensor_axes)
-            results.append(dummyMuonScaleSyst_responseWeights)
 
     return results, weightsum
 
