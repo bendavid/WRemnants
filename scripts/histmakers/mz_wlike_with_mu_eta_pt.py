@@ -20,6 +20,8 @@ parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude 
 parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
 parser.add_argument("--csvars_hist", action='store_true', help="Add CS variables to dilepton hist")
 parser.add_argument("--uncertainty-hist", type=str, choices=["dilepton", "nominal"], default="nominal", help="Histogram to store uncertainties for")
+parser.add_argument("--finePtBinning", action='store_true', help="Use fine binning for ptll")
+parser.add_argument("--dileptonIntegrateAxes", default=[], nargs="*", choices=["ptll", "mll", "yll",], help="Collapse axes in dilepton hist (to avoid overly bloated output)")
 args = parser.parse_args()
 
 logging.basicConfig(level=logging.INFO)
@@ -71,9 +73,16 @@ axis_eta_mT = hist.axis.Variable([-2.4, 2.4], name = "eta")
 axis_mll = hist.axis.Regular(60, 60., 120., name = "mll")
 axis_yll = hist.axis.Regular(25, -2.5, 2.5, name = "yll")
 
-axis_ptll = hist.axis.Variable(
-    [0, 2, 3, 4, 4.75, 5.5, 6.5, 8, 9, 10, 12, 14, 16, 18, 20, 23, 27, 32, 40, 55, 100, 150], name = "ptll"
+axis_ptll = hist.axis.Variable(common.ptV_binning if not args.finePtBinning else range(60),
+    name = "ptll"
 )
+
+if "mll" in args.dileptonIntegrateAxes:
+    axis_mll = hist.axis.Variable([0, math.inf], name=axis_mll.name, flow=False)
+if "yll" in args.dileptonIntegrateAxes:
+    axis_yll = hist.axis.Variable([-math.inf, math.inf], name=axis_yll.name, flow=False)
+if "ptll" in args.dileptonIntegrateAxes:
+    axis_ptll = hist.axis.Variable([0, math.inf], name=axis_ptll.name, flow=False)
 
 axis_costhetastarll = hist.axis.Regular(20, -1., 1., name = "costhetastarll")
 axis_phistarll = hist.axis.Regular(20, -math.pi, math.pi, circular = True, name = "phistarll")
@@ -133,7 +142,7 @@ def build_graph(df, dataset):
         calibration_helper = jpsi_crctn_data_helper if dataset.is_data else jpsi_crctn_MC_helper
     else:
         calibration_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
-    df = muon_calibration.define_corrected_muons(df, calibration_helper, args.muonCorr, dataset, args.trackerMuons, True)
+    df = muon_calibration.define_corrected_muons(df, calibration_helper, args.muonCorr, dataset)
 
     df = muon_selections.select_veto_muons(df, True)
     df = muon_selections.select_good_muons(df, True, args.trackerMuons)

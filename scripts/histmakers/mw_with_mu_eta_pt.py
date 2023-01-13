@@ -137,7 +137,7 @@ def build_graph(df, dataset):
     apply_theory_corr = args.theory_corr and dataset.name in corr_helpers
 
     calibration_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
-    df = muon_calibration.define_corrected_muons(df, calibration_helper, args.muonCorr, dataset, args.trackerMuons)
+    df = muon_calibration.define_corrected_muons(df, calibration_helper, args.muonCorr, dataset)
 
     df = muon_selections.select_veto_muons(df, False)
     df = muon_selections.select_good_muons(df, False, args.trackerMuons)
