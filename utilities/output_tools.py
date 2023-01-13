@@ -66,16 +66,13 @@ def write_analysis_output(results, outfile, args):
         to_append.append(args.met)
     if args.theory_corr and not args.theory_corr_alt_only:
         to_append.append(args.theory_corr[0]+"Corr")
-    if args.pdfs and not args.altPdfOnlyCentral:
-        to_append.append(args.pdfs[0])
-    if args.maxFiles > 0:
-        to_append.append(f"maxFiles{args.maxFiles}")
     if args.postfix:
         to_append.append(args.postfix)
-    #if args.dataCrctn:
-    #    to_append.append('data_' + args.dataCrctn)
-    #if args.MCCrctn:
-    #    to_append.append('MC_' + args.MCCrctn)
+    if hasattr(args, "uncertainty_hist") and args.uncertainty_hist != "nominal":
+        to_append.append(args.uncertainty_hist)
+    if args.maxFiles > 0:
+        to_append.append(f"maxFiles{args.maxFiles}")
+
     if to_append:
         outfile = outfile.replace(".pkl.lz4", f"_{'_'.join(to_append)}.pkl.lz4")
 
@@ -84,7 +81,7 @@ def write_analysis_output(results, outfile, args):
 
     time0 = time.time()
     output = os.path.join(args.outfolder, outfile)
-    print(f"writing output file {output}...")
+    print(f"writing output file {output} ...")
     with lz4.frame.open(output, "wb") as f:
         pickle.dump(results, f, protocol = pickle.HIGHEST_PROTOCOL)
     print("Output", time.time()-time0)
