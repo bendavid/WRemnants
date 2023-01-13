@@ -136,25 +136,6 @@ def build_graph(df, dataset):
     df = wremnants.define_corrected_muons(df, calibration_helper, args.muonCorr, dataset, args.trackerMuons)
 
     df = df.Filter("Sum(trigMuons) == 1 && Sum(nonTrigMuons) == 1")
-
-    df = df.Define("TrigMuon_pt", "Muon_correctedPt[trigMuons][0]")
-    df = df.Define("TrigMuon_eta", "Muon_correctedEta[trigMuons][0]")
-    df = df.Define("TrigMuon_phi", "Muon_correctedPhi[trigMuons][0]")
-
-    df = df.Define("NonTrigMuon_pt", "Muon_correctedPt[nonTrigMuons][0]")
-    df = df.Define("NonTrigMuon_eta", "Muon_correctedEta[nonTrigMuons][0]")
-    df = df.Define("NonTrigMuon_phi", "Muon_correctedPhi[nonTrigMuons][0]")
-
-    if dataset.is_data or isW or isZ:
-        df = wremnants.define_cvh_muons_kinematics(df)
-    if (args.dataCrctn == 'jpsi_crctd') and dataset.is_data:
-        df = wremnants.define_jpsi_crctd_muons_pt(df, jpsi_crctn_data_helper)
-        #df = wremnants.define_jpsi_crctd_muons_pt_unc(df, jpsi_crctn_unc_data_helper)
-    if (args.MCCrctn == 'jpsi_crctd') and (isZ or isW):
-        df = wremnants.define_jpsi_crctd_muons_pt(df, jpsi_crctn_MC_helper)
-        #df = wremnants.define_jpsi_crctd_muons_pt_unc(df, jpsi_crctn_unc_MC_helper)
-
->>>>>>> davidPR
     df = df.Filter("NonTrigMuon_pt > 26.")
 
     df = df.Define("TrigMuon_isStandalone", "Muon_isStandalone[trigMuons][0]")
@@ -256,7 +237,7 @@ def build_graph(df, dataset):
     if isW or isZ:
         df = syst_tools.define_mass_weights(df, isW)
 
-    # dilepton plots go here, before mass or transverse mass cuts
+    # Move the mass cut to apply to the dilepton plot
     df = df.Filter("massZ >= 60. && massZ < 120.")
 
     df_dilepton = df
@@ -338,7 +319,7 @@ def build_graph(df, dataset):
             syst_tools.add_pdf_hists(results, unc_df, dataset.name, unc_axes, unc_cols, args.pdfs, args.uncertainty_hist)
 
             if isZ:
-                syst_tools.add_massweights_hist(results, unc_df, args.uncertainty_hist, unc_axes, unc_cols)
+                syst_tools.add_massweights_hist(results, unc_df, unc_axes, unc_cols, args.uncertainty_hist)
                 # there is no W backgrounds for the Wlike, make QCD scale histograms only for Z
                 # should probably remove the charge here, because the Z only has a single charge and the pt distribution does not depend on which charged lepton is selected
                 if not args.skipHelicity:
@@ -346,8 +327,6 @@ def build_graph(df, dataset):
                     df = df.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
                     qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
                     results.append(qcdScaleByHelicityUnc)
-
-                syst_tools.add_massweights_hist(results, unc_df, unc_axes, unc_cols, args.uncertainty_hist)
 
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:
