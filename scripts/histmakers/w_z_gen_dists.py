@@ -11,6 +11,7 @@ import math
 
 parser.add_argument("--skipAngularCoeffs", action='store_true', help="Skip the conversion of helicity moments to angular coeff fractions")
 parser.add_argument("--singleLeptonHists", action='store_true', help="Also store single lepton kinematics")
+parser.add_argument("--ewHists", action='store_true', help="Also store histograms for EW reweighting. Use with --filter horace")
 
 f = next((x for x in parser._actions if x.dest == "filterProcs"), None)
 if f:
@@ -20,7 +21,7 @@ args = parser.parse_args()
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
-    nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path)
+    nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path, mode='gen')
 
 axis_massWgen = hist.axis.Variable([5., 13000.], name="massVgen", underflow=True, overflow=False)
 
@@ -94,9 +95,24 @@ def build_graph(df, dataset):
             df = df.Define('etaPrefsrLep', 'genl.eta()')
         results.append(df.HistoBoost("nominal_genlep", lep_axes, [*lep_cols, "nominal_weight"]))
 
+    if args.ewHists and (isW or isZ):
+        df = theory_tools.define_ew_vars(df)
+        if isZ:
+            massBins = theory_tools.make_ew_binning(mass = 91.1535, width = 2.4932, initialStep=0.010)
+        else:
+            massBins = theory_tools.make_ew_binning(mass = 80.3815, width = 2.0904, initialStep=0.010)
+        ew_cols = ['ewMll', 'ewLogDeltaM']
+        axis_ewMll = hist.axis.Variable(massBins, name = "ewMll")
+        axis_ewLogDeltaM = hist.axis.Regular(100, -5, 5, name = "ewLogDeltaM")
+        ew_axes = [axis_ewMll, axis_ewLogDeltaM]
+        results.append(df.HistoBoost("nominal_ew", ew_axes, [*ew_cols, "nominal_weight"]))
+
     nominal_gen = df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols, "nominal_weight"])
 
     results.append(nominal_gen)
+
+    if 'horace' in dataset.name:
+        return results, weightsum
 
     if "LHEScaleWeight" in df.GetColumnNames():
         df = theory_tools.define_scale_tensor(df)
