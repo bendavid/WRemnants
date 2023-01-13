@@ -1,4 +1,6 @@
 xsec_ZmmPostVFP = 2001.9
+xsec_WpmunuPostVFP = 11765.9
+xsec_WmmunuPostVFP = 8703.87
 
 genDataDict = {
     'ZmumuMiNLO' : { 
@@ -10,5 +12,35 @@ genDataDict = {
                    'filepaths' :
                     ["{BASE_PATH}/DYJetsToMuMu_TuneCP5_13TeV-powheg-NNLOPS-pythia8-photos/RunIISummer15wmLHEGS/221121_114507/000*/*.root"],
                    'xsec' : 1863.,
+    },
+    'ZToMuMu_horace-lo-photos' : { 
+                   'filepaths' :
+                    ["{BASE_PATH}/ZToMuMu_TuneCP5_13TeV-horace-born-fsr-photoslow-isr-pythia/job*.root"],
+                   'xsec' : xsec_ZmmPostVFP,
+    },
+    'ZToMuMu_horace-nlo' : { 
+                   'filepaths' :
+                    ["{BASE_PATH}/ZToMuMu_TuneCP5_13TeV-horace-exp-fsr-off-isr-off/job*.root"],
+                   'xsec' : xsec_ZmmPostVFP,
+    },
+    'WplusToMuNu_horace-lo-photos' : { 
+                   'filepaths' :
+                    ["{BASE_PATH}/WplusToMuNu_TuneCP5_13TeV-horace-born-fsr-photoslow_otheroff-isr-pythia/job*.root"],
+                   'xsec' : xsec_WpmunuPostVFP,
+    },
+    'WplusToMuNu_horace-nlo' : { 
+                   'filepaths' :
+                    ["{BASE_PATH}/WplusToMuNu_TuneCP5_13TeV-horace-exp-fsr-off-isr-off/job*.root"],
+                   'xsec' : xsec_WpmunuPostVFP,
+    },
+    'WminusToMuNu_horace-lo-photos' : { 
+                   'filepaths' :
+                    ["{BASE_PATH}/WminusToMuNu_TuneCP5_13TeV-horace-born-fsr-photoslow_otheroff-isr-pythia/job*.root"],
+                   'xsec' : xsec_WmmunuPostVFP,
+    },
+    'WminusToMuNu_horace-nlo' : { 
+                   'filepaths' :
+                    ["{BASE_PATH}/WminusToMuNu_TuneCP5_13TeV-horace-exp-fsr-off-isr-off/job*.root"],
+                   'xsec' : xsec_WmmunuPostVFP,
     },
 }

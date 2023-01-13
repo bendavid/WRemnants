@@ -132,6 +132,29 @@ def define_scale_tensor(df, clipWeight=10.0):
 
     return df
 
+def define_ew_vars(df):
+    df = df.Define("ewLeptons", "wrem::ewLeptons(GenPart_status, GenPart_statusFlags, GenPart_pdgId, GenPart_genPartIdxMother, GenPart_pt, GenPart_eta, GenPart_phi)")
+    df = df.Define("ewPhotons", "wrem::ewPhotons(GenPart_status, GenPart_statusFlags, GenPart_pdgId, GenPart_pt, GenPart_eta, GenPart_phi)")
+    df = df.Define('ewMll', '(ewLeptons[0]+ewLeptons[1]).mass()')
+    df = df.Define('ewMlly', 'wrem::ewMLepPhos(ewLeptons, ewPhotons)')
+    df = df.Define('ewLogDeltaM', 'log10(ewMlly-ewMll)')
+
+    return df
+
+def make_ew_binning(mass = 91.1535, width = 2.4932, initialStep = 0.1):
+    maxVal = ROOT.Math.breitwigner_pdf(mass, width, mass)
+    bins = [mass]
+    currentMass = mass
+    while currentMass - mass < 100:
+        binSize = maxVal / ROOT.Math.breitwigner_pdf(currentMass, width, mass) * initialStep
+        currentMass += binSize
+        bins.append(currentMass)
+        lowMass = 2*mass - currentMass
+        if lowMass - binSize > 0:
+            bins.insert(0, lowMass)
+    bins.insert(0, 0.)
+    return bins
+
 def pdf_info_map(dataset, pdfset):
     infoMap = pdfMap if dataset not in extended_pdf_datasets else pdfMapExtended
 
@@ -164,6 +187,8 @@ def define_pdf_columns(df, dataset, pdfs, noAltUnc):
 def define_weights_and_corrs(df, weight_expr, dataset_name, helpers, args):
     #TODO: organize this better
     if "LHEPdfWeight" not in df.GetColumnNames():
+        df = df.DefinePerSample("nominal_pdf_cen", "1.0")
+    elif "horace" in dataset_name:
         df = df.DefinePerSample("nominal_pdf_cen", "1.0")
     elif dataset_name in common.vprocs+common.vprocs_lowpu:
         df = df.Define("nominal_pdf_cen", pdf_central_weight(dataset_name, args.pdfs[0]))

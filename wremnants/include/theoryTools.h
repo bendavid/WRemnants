@@ -142,6 +142,105 @@ helicity_scale_tensor_t makeHelicityMomentScaleTensor(const CSVars &csvars, cons
 
 }
 
+ROOT::VecOps::RVec<ROOT::Math::PxPyPzEVector> ewLeptons(const ROOT::VecOps::RVec<int>& status,
+        const ROOT::VecOps::RVec<int>& statusFlags, const ROOT::VecOps::RVec<int>& pdgId, const ROOT::VecOps::RVec<int>& motherIdx, const ROOT::VecOps::RVec<double>& pt, const ROOT::VecOps::RVec<double>& eta, const ROOT::VecOps::RVec<double>& phi) {
+
+  const std::size_t ngenparts = status.size();
+  ROOT::VecOps::RVec<ROOT::Math::PxPyPzEVector> leptons;
+
+  for (std::size_t i = 0; i < ngenparts; ++i) {
+    const int &istatus = status[i];
+    const int &istatusFlags = statusFlags[i];
+    const int &ipdgId = pdgId[i];
+
+    const int absPdgId = std::abs(ipdgId);
+
+    const bool is_lepton = absPdgId >= 11 && absPdgId <= 16;
+    const bool is_status1 = istatus == 1;
+    const bool is_status2 = istatus == 2;
+    const bool is_tau = is_status2 && absPdgId == 15;
+
+    const bool is_fromHardProcess = istatusFlags & ( 1 << 8 );
+    const bool is_prompt = istatusFlags & ( 1 << 0 );
+
+    const bool is_selected = is_lepton && (is_status1 || is_tau) && is_prompt && is_fromHardProcess;
+
+    if (is_selected) {
+      double mass = 0.;
+      switch(absPdgId) {
+        case 11:
+          mass = 5.110e-04;
+          break;
+        case 13:
+          mass = 0.10566;
+          break;
+        case 15:
+          mass = 1.77682;
+          break;
+      }
+      ROOT::Math::PtEtaPhiMVector p4(pt[i], eta[i], phi[i], mass);
+      leptons.emplace_back(p4);
+    }
+  }
+
+  int nleptons = leptons.size();
+  if (nleptons < 2) {
+    throw std::range_error("Expected to find at least 2 prompt bare leptons from hard process, but found " + std::to_string(nleptons));
+  }
+
+  std::sort(leptons.begin(), leptons.end(), [](const auto a, const auto b) {return a.pt() > b.pt(); });
+  assert(leptons[0].pt() > leptons[1].pt());
+
+  return leptons;
+
+}
+
+ROOT::VecOps::RVec<ROOT::Math::PxPyPzEVector> ewPhotons(const ROOT::VecOps::RVec<int>& status,
+        const ROOT::VecOps::RVec<int>& statusFlags, const ROOT::VecOps::RVec<int>& pdgId, const ROOT::VecOps::RVec<double>& pt, const ROOT::VecOps::RVec<double>& eta, const ROOT::VecOps::RVec<double>& phi) {
+
+  const std::size_t ngenparts = status.size();
+  ROOT::VecOps::RVec<ROOT::Math::PxPyPzEVector> photons;
+
+  for (std::size_t i = 0; i < ngenparts; ++i) {
+    const int &istatus = status[i];
+    const int &istatusFlags = statusFlags[i];
+    const int &ipdgId = pdgId[i];
+
+    const int absPdgId = std::abs(ipdgId);
+
+    const bool is_photon = absPdgId == 22;
+    const bool is_status1 = istatus == 1;
+
+    const bool is_fromHardProcess = istatusFlags & ( 1 << 8 );
+    const bool is_prompt = istatusFlags & ( 1 << 0 );
+
+    const bool is_selected   = is_photon && is_status1 && is_prompt;
+
+    if (is_selected) {
+      ROOT::Math::PtEtaPhiMVector p4(pt[i], eta[i], phi[i], 0.);
+      photons.emplace_back(p4);
+    }
+  }
+
+  return photons;
+
+}
+
+double ewMLepPhos(const ROOT::VecOps::RVec<PxPyPzEVector>& leptons, const ROOT::VecOps::RVec<PxPyPzEVector>& photons) {
+
+  ROOT::Math::PxPyPzEVector full_system(0,0,0,0);
+  for (auto &p : leptons) {
+    full_system += p;
+  }
+  for (auto &p : photons) {
+    full_system += p;
+  }
+
+  return full_system.mass();
+}
+
+
+
 } 
 
 #endif
