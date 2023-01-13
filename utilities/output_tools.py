@@ -80,7 +80,6 @@ def write_analysis_output(results, outfile, args):
         outfile = os.path.join(args.outfolder, outfile)
 
     time0 = time.time()
-    output = os.path.join(args.outfolder, outfile)
     print(f"writing output file {output} ...")
     with lz4.frame.open(output, "wb") as f:
         pickle.dump(results, f, protocol = pickle.HIGHEST_PROTOCOL)

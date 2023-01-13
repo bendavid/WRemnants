@@ -194,8 +194,8 @@ def add_scale_hist(results, df, axes, cols, base_name="nominal"):
 
 def add_qcdScaleByHelicityUnc_hist(results, df, helper, axes, cols, base_name="nominal"):
     name = datagroups2016.histName(base_name, syst="helicityWeight_tensor")
-    df = df.Define(name, helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
-    qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", axes, [*cols,"helicityWeight_tensor"], tensor_axes=helper.tensor_axes)
+    df = df.Define("helicityWeight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
+    qcdScaleByHelicityUnc = df.HistoBoost(name, axes, [*cols,"helicityWeight_tensor"], tensor_axes=helper.tensor_axes)
     results.append(qcdScaleByHelicityUnc)
 
 def add_muon_efficiency_unc_hists(results, df, helper_stat, helper_syst, axes, cols, base_name="nominal"):
