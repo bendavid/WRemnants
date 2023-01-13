@@ -76,8 +76,7 @@ def write_analysis_output(results, outfile, args):
     if to_append:
         outfile = outfile.replace(".pkl.lz4", f"_{'_'.join(to_append)}.pkl.lz4")
 
-    if args.outfolder:
-        outfile = os.path.join(args.outfolder, outfile)
+    outfile = os.path.join(args.outfolder, outfile)
 
     time0 = time.time()
     print(f"writing output file {output} ...")

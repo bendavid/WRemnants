@@ -5,7 +5,7 @@ parser,initargs = common.common_parser()
 
 import narf
 import wremnants
-from wremnants import theory_tools,syst_tools,theory_corrections, muon_calibration
+from wremnants import theory_tools,syst_tools,theory_corrections, muon_calibration, muon_selections
 import hist
 import lz4.frame
 import logging
@@ -137,25 +137,13 @@ def build_graph(df, dataset):
     apply_theory_corr = args.theory_corr and dataset.name in corr_helpers
 
     calibration_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
-    df = muon_calibration.define_corrected_muons(df, calibration_helper, args.muonCorr, dataset)
-                    
-    # n.b. charge = -99 is a placeholder for invalid track refit/corrections (mostly just from tracks below
-    # the pt threshold of 8 GeV in the nano production)
-    df = df.Define("vetoMuonsPre", "Muon_looseId && abs(Muon_dxybs) < 0.05 && Muon_correctedCharge != -99")
-    df = df.Define("vetoMuons", "vetoMuonsPre && Muon_correctedPt > 10. && abs(Muon_correctedEta) < 2.4")
-    df = df.Filter("Sum(vetoMuons) == 1")
-    if args.trackerMuons:
-        if dataset.group in ["Top", "Diboson"]:
-            df = df.Define("Muon_category", "Muon_isTracker")
-        else:
-            df = df.Define("Muon_category", "Muon_isTracker && Muon_innerTrackOriginalAlgo != 13 && Muon_innerTrackOriginalAlgo != 14")
-    else:
-        df = df.Define("Muon_category", "Muon_isGlobal")
-    df = df.Define("goodMuons", "vetoMuons && Muon_mediumId && Muon_category")
-    df = df.Filter("Sum(goodMuons) == 1")
+    df = muon_calibration.define_corrected_muons(df, calibration_helper, args.muonCorr, dataset, args.trackerMuons)
+
+    df = muon_selections.select_veto_muons(df, False)
+    df = muon_selections.select_good_muons(df, False, args.trackerMuons)
 
     # the corrected RECO muon kinematics, which is intended to be used as the nominal
-    df = wremnants.define_corrected_reco_muon_kinematics(df)
+    df = muon_calibration.define_corrected_reco_muon_kinematics(df)
     #standalone quantities, currently only in data and W/Z samples
     if dataset.group in ["Top", "Diboson"]:
         df = df.Alias("goodMuons_SApt0",  "goodMuons_pt0")
@@ -196,9 +184,7 @@ def build_graph(df, dataset):
         
     df = df.Define("goodMuons_pfRelIso04_all0", "Muon_pfRelIso04_all[goodMuons][0]")
 
-    df = df.Define("vetoElectrons", "Electron_pt > 10 && Electron_cutBased > 0 && abs(Electron_eta) < 2.4 && abs(Electron_dxy) < 0.05 && abs(Electron_dz)< 0.2")
-
-    df = df.Filter("Sum(vetoElectrons) == 0")
+    df = muon_selections.veto_electrons(df)
 
     df = df.Define("goodCleanJets", "Jet_jetId >= 6 && (Jet_pt > 50 || Jet_puId >= 4) && Jet_pt > 30 && abs(Jet_eta) < 2.4 && wrem::cleanJetsFromLeptons(Jet_eta,Jet_phi,Muon_correctedEta[vetoMuons],Muon_correctedPhi[vetoMuons],Electron_eta[vetoElectrons],Electron_phi[vetoElectrons])")
     df = df.Define("goodCleanJetsPt45", "goodCleanJets && Jet_pt > 45")
@@ -302,17 +288,7 @@ def build_graph(df, dataset):
         effSystTnP = df.HistoBoost("effSystTnP", nominal_axes, [*nominal_cols, "effSystTnP_weight"], tensor_axes = muon_efficiency_helper_syst.tensor_axes)
         results.append(effSystTnP)
 
-        df = df.Define("muonL1PrefireStat_tensor", muon_prefiring_helper_stat, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId", "nominal_weight"])
-        muonL1PrefireStat = df.HistoBoost("muonL1PrefireStat", nominal_axes, [*nominal_cols, "muonL1PrefireStat_tensor"], tensor_axes = muon_prefiring_helper_stat.tensor_axes)
-        results.append(muonL1PrefireStat)
-
-        df = df.Define("muonL1PrefireSyst_tensor", muon_prefiring_helper_syst, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId", "nominal_weight"])
-        muonL1PrefireSyst = df.HistoBoost("muonL1PrefireSyst", nominal_axes, [*nominal_cols, "muonL1PrefireSyst_tensor"], tensor_axes = [common.down_up_axis])
-        results.append(muonL1PrefireSyst)
-    
-        df = df.Define("ecalL1Prefire_tensor", f"wrem::twoPointScaling(nominal_weight/L1PreFiringWeight_ECAL_Nom, L1PreFiringWeight_ECAL_Dn, L1PreFiringWeight_ECAL_Up)")
-        ecalL1Prefire = df.HistoBoost("ecalL1Prefire", nominal_axes, [*nominal_cols, "ecalL1Prefire_tensor"], tensor_axes = [common.down_up_axis])
-        results.append(ecalL1Prefire)
+        df = syst_tools.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, nominal_axes, nominal_cols)
         
         # luminosity, done here as shape variation despite being a flat scaling so to facilitate propagating to fakes afterwards
         df = df.Define("luminosityScaling", f"wrem::constantScaling(nominal_weight, {args.lumiUncertainty})")
@@ -325,7 +301,12 @@ def build_graph(df, dataset):
         if isW or isZ:
 
             df = theory_tools.define_scale_tensor(df)
-            results.append(theory_tools.make_scale_hist(df, [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen"]))
+            df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
+
+            scale_axes = [*nominal_axes, axis_ptVgen, axis_chargeVgen]
+            scale_cols = [*nominal_cols, "ptVgen", "chargeVgen"]
+            syst_tools.add_scale_hist(results, df, scale_axes, scale_cols)
+
             if isW and not args.skipHelicity:
                 helicity_helper = qcdScaleByHelicity_Whelper
                 # TODO: Should have consistent order here with the scetlib correction function
@@ -333,8 +314,7 @@ def build_graph(df, dataset):
                 qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=helicity_helper.tensor_axes)
                 results.append(qcdScaleByHelicityUnc)
 
-            df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
-            results.extend(theory_tools.make_pdf_hists(df, dataset.name, nominal_axes, nominal_cols, args.pdfs))
+            syst_tools.add_pdf_hists(results, df, dataset.name, nominal_axes, nominal_cols, args.pdfs)
 
             df = syst_tools.define_mass_weights(df, isW)
             if isW:

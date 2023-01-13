@@ -4,7 +4,7 @@ parser,initargs = common.common_parser()
 
 import narf
 import wremnants
-from wremnants import theory_tools,syst_tools,theory_corrections, muon_validation, muon_calibration
+from wremnants import theory_tools,syst_tools,theory_corrections, muon_validation, muon_calibration, muon_selections
 import hist
 import lz4.frame
 import logging
@@ -133,7 +133,12 @@ def build_graph(df, dataset):
         calibration_helper = jpsi_crctn_data_helper if dataset.is_data else jpsi_crctn_MC_helper
     else:
         calibration_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
-    df = wremnants.define_corrected_muons(df, calibration_helper, args.muonCorr, dataset, args.trackerMuons)
+    df = muon_calibration.define_corrected_muons(df, calibration_helper, args.muonCorr, dataset, args.trackerMuons, True)
+
+    df = muon_selections.select_veto_muons(df, True)
+    df = muon_selections.select_good_muons(df, True, args.trackerMuons)
+
+    df = muon_calibration.define_trigger_muons(df, calibration_helper, args.muonCorr)
 
     df = df.Filter("Sum(trigMuons) == 1 && Sum(nonTrigMuons) == 1")
     df = df.Filter("NonTrigMuon_pt > 26.")
@@ -175,9 +180,7 @@ def build_graph(df, dataset):
         nHitsSA = common.muonEfficiency_standaloneNumberOfValidHits
         df = df.Filter(f"Muon_standaloneNumberOfValidHits[trigMuons][0] >= {nHitsSA} && Muon_standaloneNumberOfValidHits[nonTrigMuons][0] >= {nHitsSA}")
     
-    df = df.Define("vetoElectrons", "Electron_pt > 10 && Electron_cutBased > 0 && abs(Electron_eta) < 2.4 && abs(Electron_dxy) < 0.05 && abs(Electron_dz)< 0.2")
-
-    df = df.Filter("Sum(vetoElectrons) == 0")
+    df = muon_selections.veto_electrons(df)
 
     if dataset.group in ["Top", "Diboson"]:
         df = df.Define("goodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_pt,TrigObj_l1pt,TrigObj_l2pt,TrigObj_filterBits)")
