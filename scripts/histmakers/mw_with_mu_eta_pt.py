@@ -137,7 +137,7 @@ def build_graph(df, dataset):
     apply_theory_corr = args.theory_corr and dataset.name in corr_helpers
 
     calibration_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
-    df = muon_calibration.define_corrected_muons(df, calibration_helper, args.muonCorr, dataset)
+    df = muon_calibration.define_corrected_muons_wmass(df, calibration_helper, args.muonCorr, dataset)
                     
     # n.b. charge = -99 is a placeholder for invalid track refit/corrections (mostly just from tracks below
     # the pt threshold of 8 GeV in the nano production)
@@ -325,7 +325,7 @@ def build_graph(df, dataset):
         if isW or isZ:
 
             df = theory_tools.define_scale_tensor(df)
-            results.append(theory_tools.make_scale_hist(df, [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen"]))
+            syst_tools.add_scale_hist(results, df, [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen"], "nominal")
             if isW and not args.skipHelicity:
                 helicity_helper = qcdScaleByHelicity_Whelper
                 # TODO: Should have consistent order here with the scetlib correction function
@@ -334,7 +334,7 @@ def build_graph(df, dataset):
                 results.append(qcdScaleByHelicityUnc)
 
             df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
-            results.extend(theory_tools.make_pdf_hists(df, dataset.name, nominal_axes, nominal_cols, args.pdfs))
+            syst_tools.add_pdf_hists(results, df, dataset.name, nominal_axes, nominal_cols, args.pdfs, "nominal")
 
             df = syst_tools.define_mass_weights(df, isW)
             if isW:
