@@ -82,7 +82,7 @@ def define_jpsi_crctd_muons_pt_unc(df, helper):
     )
     return df
 
-def define_corrected_muons(df, helper, corr_type, dataset, trackerMuons, is_w_like=False):
+def define_corrected_muons(df, helper, corr_type, dataset):
     if not (dataset.is_data or dataset.name in common.vprocs):
         corr_type = "none" 
 
@@ -110,9 +110,10 @@ def define_corrected_muons(df, helper, corr_type, dataset, trackerMuons, is_w_li
         df = df.Define("Muon_correctedEta", "ROOT::VecOps::RVec<float> res(Muon_correctedMom4Charge.size()); std::transform(Muon_correctedMom4Charge.begin(), Muon_correctedMom4Charge.end(), res.begin(), [](const auto &x) { return x.first.Eta(); } ); return res;")
         df = df.Define("Muon_correctedPhi", "ROOT::VecOps::RVec<float> res(Muon_correctedMom4Charge.size()); std::transform(Muon_correctedMom4Charge.begin(), Muon_correctedMom4Charge.end(), res.begin(), [](const auto &x) { return x.first.Phi(); } ); return res;")
         df = df.Define("Muon_correctedCharge", "ROOT::VecOps::RVec<int> res(Muon_correctedMom4Charge.size()); std::transform(Muon_correctedMom4Charge.begin(), Muon_correctedMom4Charge.end(), res.begin(), [](const auto &x) { return x.second; }); return res;")
-    elif corr_type != "mass_fit":
+    elif corr_type == "mass_fit":
+        raise ValueError(f"mass_fit not defined for W analysis")
+    else:
         raise ValueError(f"Invalid correction type choice {corr_type}")
-
     return df
 
 def define_trigger_muons(df, helper, corr_type):

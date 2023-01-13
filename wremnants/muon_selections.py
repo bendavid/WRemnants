@@ -12,11 +12,11 @@ def select_veto_muons(df, is_w_like):
 
     return df
 
-def select_good_muons(df, is_w_like, trackerMuons):
+def select_good_muons(df, is_w_like, use_trackerMuons):
 
     nMuons = 2 if is_w_like else 1
 
-    if trackerMuons:
+    if use_trackerMuons:
         if dataset.group in ["Top", "Diboson"]:
             df = df.Define("Muon_category", "Muon_isTracker && Muon_highPurity")
         else:
