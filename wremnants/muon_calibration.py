@@ -82,7 +82,7 @@ def define_jpsi_crctd_muons_pt_unc(df, helper):
     )
     return df
 
-def define_corrected_muons(df, helper, corr_type, dataset, trackerMuons):
+def define_corrected_muons(df, helper, corr_type, dataset, trackerMuons, is_w_like=False):
     if not (dataset.is_data or dataset.name in common.vprocs):
         corr_type = "none" 
 
@@ -112,23 +112,10 @@ def define_corrected_muons(df, helper, corr_type, dataset, trackerMuons):
         df = df.Define("Muon_correctedCharge", "ROOT::VecOps::RVec<int> res(Muon_correctedMom4Charge.size()); std::transform(Muon_correctedMom4Charge.begin(), Muon_correctedMom4Charge.end(), res.begin(), [](const auto &x) { return x.second; }); return res;")
     elif corr_type != "mass_fit":
         raise ValueError(f"Invalid correction type choice {corr_type}")
-    
-    # n.b. charge = -99 is a placeholder for invalid track refit/corrections (mostly just from tracks below
-    # the pt threshold of 8 GeV in the nano production)
-    df = df.Define("vetoMuonsPre", "Muon_looseId && abs(Muon_dxybs) < 0.05 && Muon_correctedCharge != -99")
-    df = df.Define("vetoMuons", "vetoMuonsPre && Muon_correctedPt > 10. && abs(Muon_correctedEta) < 2.4")
 
-    if trackerMuons:
-        if dataset.group in ["Top", "Diboson"]:
-            df = df.Define("Muon_category", "Muon_isTracker && Muon_highPurity")
-        else:
-            df = df.Define("Muon_category", "Muon_isTracker && Muon_innerTrackOriginalAlgo != 13 && Muon_innerTrackOriginalAlgo != 14 && Muon_highPurity")
-    else:
-        df = df.Define("Muon_category", "Muon_isGlobal")
+    return df
 
-    df = df.Filter("Sum(vetoMuons) == 2")
-    df = df.Define("goodMuons", "vetoMuons && Muon_mediumId && Muon_category && Muon_pfRelIso04_all < 0.15")
-    df = df.Filter("Sum(goodMuons) == 2")
+def define_trigger_muons(df, helper, corr_type):
 
     # mu- for even event numbers, mu+ for odd event numbers
     df = df.Define("TrigMuon_charge", "event % 2 == 0 ? -1 : 1")
@@ -140,16 +127,7 @@ def define_corrected_muons(df, helper, corr_type, dataset, trackerMuons):
     if corr_type == "mass_fit":
         df = muon_validation.define_cvh_muons_kinematics(df)
         df = define_jpsi_crctd_muons_pt(df, helper)
-
-    if corr_type != "mass_fit":
-        df = df.Define("TrigMuon_pt", "Muon_correctedPt[trigMuons][0]")
-        df = df.Define("TrigMuon_eta", "Muon_correctedEta[trigMuons][0]")
-        df = df.Define("TrigMuon_phi", "Muon_correctedPhi[trigMuons][0]")
-
-        df = df.Define("NonTrigMuon_pt", "Muon_correctedPt[nonTrigMuons][0]")
-        df = df.Define("NonTrigMuon_eta", "Muon_correctedEta[nonTrigMuons][0]")
-        df = df.Define("NonTrigMuon_phi", "Muon_correctedPhi[nonTrigMuons][0]")
-    else:
+    
         df = df.Alias("TrigMuon_pt", "TrigMuon_cvh_pt")
         df = df.Alias("TrigMuon_eta", "TrigMuon_cvh_eta")
         df = df.Alias("TrigMuon_phi", "TrigMuon_cvh_phi")
@@ -157,6 +135,14 @@ def define_corrected_muons(df, helper, corr_type, dataset, trackerMuons):
         df = df.Alias("NonTrigMuon_pt", "NonTrigMuon_cvh_pt")
         df = df.Alias("NonTrigMuon_eta", "NonTrigMuon_cvh_eta")
         df = df.Alias("NonTrigMuon_phi", "NonTrigMuon_cvh_phi")
+    else:
+        df = df.Define("TrigMuon_pt", "Muon_correctedPt[trigMuons][0]")
+        df = df.Define("TrigMuon_eta", "Muon_correctedEta[trigMuons][0]")
+        df = df.Define("TrigMuon_phi", "Muon_correctedPhi[trigMuons][0]")
+
+        df = df.Define("NonTrigMuon_pt", "Muon_correctedPt[nonTrigMuons][0]")
+        df = df.Define("NonTrigMuon_eta", "Muon_correctedEta[nonTrigMuons][0]")
+        df = df.Define("NonTrigMuon_phi", "Muon_correctedPhi[nonTrigMuons][0]")       
 
     return df
 
