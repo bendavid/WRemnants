@@ -188,9 +188,15 @@ def add_pdf_hists(results, df, dataset, axes, cols, pdfs, base_name="nominal"):
     return df
 
 def add_scale_hist(results, df, axes, cols, base_name="nominal"):
-    name = datagroups2016.histName(base_name, syst=f"qcdScale")
+    name = datagroups2016.histName(base_name, syst="qcdScale")
     scaleHist = df.HistoBoost(name, axes, [*cols, "scaleWeights_tensor_wnom"], tensor_axes=theory_tools.scale_tensor_axes)
     results.append(scaleHist)
+
+def add_qcdScaleByHelicityUnc_hist(results, df, helper, axes, cols, base_name="nominal"):
+    name = datagroups2016.histName(base_name, syst="helicityWeight_tensor")
+    df = df.Define(name, helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
+    qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", axes, [*cols,"helicityWeight_tensor"], tensor_axes=helper.tensor_axes)
+    results.append(qcdScaleByHelicityUnc)
 
 def add_muon_efficiency_unc_hists(results, df, helper_stat, helper_syst, axes, cols, base_name="nominal"):
     for key,helper in helper_stat.items():
@@ -226,7 +232,7 @@ def add_L1Prefire_unc_hists(results, df, helper_stat, helper_syst, axes, cols, b
 
     return df
 
-def add_scalesyst_hist(results, df, netabins, mag, isW, axes, cols, base_name="nominal", nweights = 21):
+def add_muonscale_hist(results, df, netabins, mag, isW, axes, cols, base_name="nominal", nweights = 21):
 
     df = df.Define(f"muonScaleDummy{netabins}Bins", f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(nominal_weight, massWeight_tensor, TrigMuon_eta, {mag}, {str(isW).lower()})")
     name = datagroups2016.histName(base_name, syst=f"muonScaleSyst")
@@ -235,3 +241,4 @@ def add_scalesyst_hist(results, df, netabins, mag, isW, axes, cols, base_name="n
     results.append(dummyMuonScaleSyst)
 
     return df
+
