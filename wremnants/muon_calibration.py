@@ -82,7 +82,41 @@ def define_jpsi_crctd_muons_pt_unc(df, helper):
     )
     return df
 
-def define_corrected_muons(df, helper, corr_type, dataset, trackerMuons):
+def define_corrected_muons_wmass(df, helper, corr_type, dataset):
+    if not (dataset.is_data or dataset.name in common.vprocs):
+        corr_type = "none" 
+
+    if corr_type == "none":
+        df = df.Alias("Muon_correctedPt", "Muon_pt")
+        df = df.Alias("Muon_correctedEta", "Muon_eta")
+        df = df.Alias("Muon_correctedPhi", "Muon_phi")
+        df = df.Alias("Muon_correctedCharge", "Muon_charge")
+    elif corr_type == "trackfit_only" or corr_type == "mass_fit":
+        df = df.Define("Muon_correctedPt", "Muon_cvhPt")
+        df = df.Define("Muon_correctedEta", "Muon_cvhEta")
+        df = df.Define("Muon_correctedPhi", "Muon_cvhPhi")
+        df = df.Define("Muon_correctedCharge", "Muon_cvhCharge")
+    elif corr_type == "lbl":
+        corr_branch = "cvh" if dataset.is_data else "cvhideal"
+
+        # split the nested vectors
+        df = df.Define("Muon_cvhmergedGlobalIdxs", "wrem::splitNestedRVec(Muon_cvhmergedGlobalIdxs_Vals, Muon_cvhmergedGlobalIdxs_Counts)")
+        df = df.Define(f"Muon_{corr_branch}JacRef", f"wrem::splitNestedRVec(Muon_{corr_branch}JacRef_Vals, Muon_{corr_branch}JacRef_Counts)")
+
+        df = df.Define("Muon_correctedMom4Charge", helper, [f"Muon_{corr_branch}Pt", f"Muon_{corr_branch}Eta", f"Muon_{corr_branch}Phi", f"Muon_{corr_branch}Charge", "Muon_cvhmergedGlobalIdxs", f"Muon_{corr_branch}JacRef"])
+
+        # split into individual vectors
+        df = df.Define("Muon_correctedPt", "ROOT::VecOps::RVec<float> res(Muon_correctedMom4Charge.size()); std::transform(Muon_correctedMom4Charge.begin(), Muon_correctedMom4Charge.end(), res.begin(), [](const auto &x) { return x.first.Pt(); } ); return res;")
+        df = df.Define("Muon_correctedEta", "ROOT::VecOps::RVec<float> res(Muon_correctedMom4Charge.size()); std::transform(Muon_correctedMom4Charge.begin(), Muon_correctedMom4Charge.end(), res.begin(), [](const auto &x) { return x.first.Eta(); } ); return res;")
+        df = df.Define("Muon_correctedPhi", "ROOT::VecOps::RVec<float> res(Muon_correctedMom4Charge.size()); std::transform(Muon_correctedMom4Charge.begin(), Muon_correctedMom4Charge.end(), res.begin(), [](const auto &x) { return x.first.Phi(); } ); return res;")
+        df = df.Define("Muon_correctedCharge", "ROOT::VecOps::RVec<int> res(Muon_correctedMom4Charge.size()); std::transform(Muon_correctedMom4Charge.begin(), Muon_correctedMom4Charge.end(), res.begin(), [](const auto &x) { return x.second; }); return res;")
+    elif corr_type == "mass_fit":
+        raise ValueError(f"mass_fit not defined for W analysis")
+    else:
+        raise ValueError(f"Invalid correction type choice {corr_type}")
+    return df
+
+def define_corrected_muons_wlike(df, helper, corr_type, dataset, trackerMuons):
     if not (dataset.is_data or dataset.name in common.vprocs):
         corr_type = "none" 
 
