@@ -215,3 +215,12 @@ def add_L1Prefire_unc_hists(results, df, helper_stat, helper_syst, axes, cols, b
 
     return df
 
+def add_scalesyst_hist(results, df, netabins, mag, isW, axes, cols, base_name="nominal", nweights = 21):
+
+    df = df.Define(f"muonScaleDummy{netabins}Bins", f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(nominal_weight, massWeight_tensor, TrigMuon_eta, {mag}, {str(isW).lower()})")
+    name = datagroups2016.histName(base_name, syst=f"muonScaleSyst")
+    scale_etabins_axis = hist.axis.Regular(netabins, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
+    dummyMuonScaleSyst = df.HistoBoost(name, axes, [*cols, f"muonScaleDummy{netabins}Bins"], tensor_axes=[common.down_up_axis, scale_etabins_axis])
+    results.append(dummyMuonScaleSyst)
+
+    return df

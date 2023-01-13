@@ -308,7 +308,7 @@ def build_graph(df, dataset):
         dilepton_cols = dilepton_cols[:-2]
     dilepton_cols.append("TrigMuon_charge")
     dilepton_axes.append(axis_charge)
-    
+
     dilepton = df_dilepton.HistoBoost("dilepton", dilepton_axes, [*dilepton_cols, "nominal_weight"])
     results.append(dilepton)
     
@@ -363,8 +363,8 @@ def build_graph(df, dataset):
                     with_uncertainties=True)
                 )
 
-            scale_axes = unc_axes if args.uncertainty_hist == "dilepton" else [*unc_axes, axis_ptVgen, axis_chargeVgen]
-            scale_cols = unc_cols if args.uncertainty_hist == "dilepton" else [*unc_cols, "ptVgen", "chargeVgen"]
+            scale_axes = [*unc_axes, axis_ptVgen, axis_chargeVgen]
+            scale_cols = [*unc_cols, "ptVgen", "chargeVgen"]
             syst_tools.add_scale_hist(results, unc_df, scale_axes, scale_cols, args.uncertainty_hist)
             syst_tools.add_pdf_hists(results, unc_df, dataset.name, unc_axes, unc_cols, args.pdfs, args.uncertainty_hist)
 
@@ -381,16 +381,9 @@ def build_graph(df, dataset):
 
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:
-                # TODO: Move to syst_tools
-                netabins = args.muonCorrEtaBins
-                nweights = 21
-                mag = args.muonCorrMag
-                df = df.Define(f"muonScaleDummy{netabins}Bins", f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(nominal_weight, massWeight_tensor, TrigMuon_eta, {mag}, {str(isW).lower()})")
-                scale_etabins_axis = hist.axis.Regular(netabins, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
-                dummyMuonScaleSyst = df.HistoBoost("muonScaleSyst", nominal_axes, [*nominal_cols, f"muonScaleDummy{netabins}Bins"],
-                    tensor_axes=[common.down_up_axis, scale_etabins_axis])
 
-                results.append(dummyMuonScaleSyst)
+                syst_tools.add_scalesyst_hist(results, unc_df, args.muonCorrEtaBins, args.muonCorrMag, isW, unc_axes, unc_cols, args.uncertainty_hist)
+
 
             df = df.Define("Muon_cvhMomCov", "wrem::splitNestedRVec(Muon_cvhMomCov_Vals, Muon_cvhMomCov_Counts)")
 
