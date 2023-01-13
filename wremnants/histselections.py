@@ -3,7 +3,7 @@ import hist
 import numpy as np
 
 hist_map = {
-    "eta_pt" : "nominal",
+    "eta_pt_unrolled" : "nominal",
     "eta" : "nominal",
     "pt" : "nominal",
     "mll" : "dilepton",
