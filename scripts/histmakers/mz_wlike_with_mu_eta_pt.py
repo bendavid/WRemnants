@@ -319,12 +319,12 @@ def build_graph(df, dataset):
             syst_tools.add_pdf_hists(results, unc_df, dataset.name, unc_axes, unc_cols, args.pdfs, args.uncertainty_hist)
 
             if isZ:
-                syst_tools.add_massweights_hist(results, unc_df, qcdScaleByHelicity_helper, scale_axes, scale_cols, args.uncertainty_hist)
+                syst_tools.add_massweights_hist(results, unc_df, scale_axes, scale_cols, args.uncertainty_hist)
                 # there is no W backgrounds for the Wlike, make QCD scale histograms only for Z
                 # should probably remove the charge here, because the Z only has a single charge and the pt distribution does not depend on which charged lepton is selected
                 if not args.skipHelicity:
                     # TODO: Should have consistent order here with the scetlib correction function
-                    syst_tools.add_qcdScaleByHelicityUnc_hist(results, unc_df, unc_axes, unc_cols, args.uncertainty_hist)
+                    syst_tools.add_qcdScaleByHelicityUnc_hist(results, unc_df, qcdScaleByHelicity_helper, scale_axes, scale_cols, args.uncertainty_hist)
 
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:
