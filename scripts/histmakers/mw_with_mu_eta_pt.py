@@ -118,8 +118,11 @@ if not args.no_recoil:
     recoilHelper = recoil_tools.Recoil("highPU", flavor="mu", met=args.met)
 
 def build_graph(df, dataset):
-    print("build graph", dataset.name)
+    logging.info(f"build graph for dataset: {dataset.name}")
     results = []
+    isW = dataset.name in common.wprocs
+    isZ = dataset.name in common.zprocs
+    isTop = dataset.group == "Top"
 
     if dataset.is_data:
         df = df.DefinePerSample("weight", "1.0")
@@ -131,9 +134,6 @@ def build_graph(df, dataset):
     df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
     #df = df.Filter("event % 2 == 1") # test with odd/even events
 
-    isW = dataset.name in common.wprocs
-    isZ = dataset.name in common.zprocs
-    isTop = dataset.group == "Top"
     apply_theory_corr = args.theory_corr and dataset.name in corr_helpers
 
     calibration_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
@@ -144,25 +144,17 @@ def build_graph(df, dataset):
 
     # the corrected RECO muon kinematics, which is intended to be used as the nominal
     df = muon_calibration.define_corrected_reco_muon_kinematics(df)
-    #standalone quantities, currently only in data and W/Z samples
-    if dataset.group in ["Top", "Diboson"]:
-        df = df.Alias("goodMuons_SApt0",  "goodMuons_pt0")
-        df = df.Alias("goodMuons_SAeta0", "goodMuons_eta0")
-        df = df.Alias("goodMuons_SAphi0", "goodMuons_phi0")
-    elif args.trackerMuons:
-        # try to use standalone variables when possible
-        df = df.Define("goodMuons_SApt0",  "goodMuons_isStandalone ? Muon_standalonePt[goodMuons][0] : goodMuons_pt0")
-        df = df.Define("goodMuons_SAeta0", "goodMuons_isStandalone ? Muon_standaloneEta[goodMuons][0] : goodMuons_eta0")
-        df = df.Define("goodMuons_SAphi0", "goodMuons_isStandalone ? Muon_standalonePhi[goodMuons][0] : goodMuons_phi0")
-    else:
-        df = df.Define("goodMuons_SApt0",  "Muon_standalonePt[goodMuons][0]")
-        df = df.Define("goodMuons_SAeta0", "Muon_standaloneEta[goodMuons][0]")
-        df = df.Define("goodMuons_SAphi0", "Muon_standalonePhi[goodMuons][0]")
-    
-    df = df.Define("goodMuons_abseta0", "abs(goodMuons_eta0)")
-    df = df.Filter("goodMuons_SApt0 > 15.0 && wrem::deltaR2(goodMuons_SAeta0, goodMuons_SAphi0, goodMuons_eta0, goodMuons_phi0) < 0.09")
 
-    df = df.Define("goodMuons_isStandalone", "Muon_isStandalone[goodMuons][0]")
+    df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "goodMuons")
+ 
+    df = muon_selections.veto_electrons(df)
+    df = muon_selections.apply_met_filters(df)
+    df = muon_selections.select_trigger_muon(df, dataset, "goodMuons_eta0", "goodMuons_phi0")
+
+    # gen match to bare muons to select only prompt muons from top processes
+    if isTop:
+        df = df.Define("postFSRmuons", "GenPart_status == 1 && (GenPart_statusFlags & 1) && abs(GenPart_pdgId) == 13")
+        df = df.Filter("wrem::hasMatchDR2(goodMuons_eta0,goodMuons_phi0,GenPart_eta[postFSRmuons],GenPart_phi[postFSRmuons],0.09)")
 
     if isW or isZ:
         df = muon_calibration.define_cvh_reco_muon_kinematics(df)
@@ -174,51 +166,36 @@ def build_graph(df, dataset):
 
         if args.validationHists:
             for reco_type in ['crctd', 'cvh', 'uncrct', 'gen_smeared']:
-                df = wremnants.define_reco_over_gen_cols(df, reco_type)
+                df = muon_calibration.define_reco_over_gen_cols(df, reco_type)
 
-    # the next cut is mainly needed for consistency with the reco efficiency measurement for the case with global muons
-    # note, when SA does not exist this cut is still fine because of how we define these variables
-    df = df.Filter("goodMuons_SApt0 > 15.0 && wrem::deltaR2(goodMuons_SAeta0, goodMuons_SAphi0, goodMuons_eta0, goodMuons_phi0) < 0.09")
-    if common.muonEfficiency_standaloneNumberOfValidHits > 0 and not args.trackerMuons and not dataset.group in ["Top", "Diboson"]:
-        df = df.Filter(f"Muon_standaloneNumberOfValidHits[goodMuons][0] >= {common.muonEfficiency_standaloneNumberOfValidHits}")
-        
     df = df.Define("goodMuons_pfRelIso04_all0", "Muon_pfRelIso04_all[goodMuons][0]")
-
-    df = muon_selections.veto_electrons(df)
 
     df = df.Define("goodCleanJets", "Jet_jetId >= 6 && (Jet_pt > 50 || Jet_puId >= 4) && Jet_pt > 30 && abs(Jet_eta) < 2.4 && wrem::cleanJetsFromLeptons(Jet_eta,Jet_phi,Muon_correctedEta[vetoMuons],Muon_correctedPhi[vetoMuons],Electron_eta[vetoElectrons],Electron_phi[vetoElectrons])")
     df = df.Define("goodCleanJetsPt45", "goodCleanJets && Jet_pt > 45")
     df = df.Define("passIso", "goodMuons_pfRelIso04_all0 < 0.15")
 
-    if dataset.group in ["Top", "Diboson"]:
-        df = df.Define("goodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_pt,TrigObj_l1pt,TrigObj_l2pt,TrigObj_filterBits)")
-    else:
-        df = df.Define("goodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_filterBits)")
-    df = df.Filter("wrem::hasTriggerMatch(goodMuons_eta0,goodMuons_phi0,TrigObj_eta[goodTrigObjs],TrigObj_phi[goodTrigObjs])")
-    df = df.Filter("Flag_globalSuperTightHalo2016Filter && Flag_EcalDeadCellTriggerPrimitiveFilter && Flag_goodVertices && Flag_HBHENoiseIsoFilter && Flag_HBHENoiseFilter && Flag_BadPFMuonFilter")
-    
-    # gen match to bare muons to select only prompt muons from top processes
-    if isTop:
-        df = df.Define("postFSRmuons", "GenPart_status == 1 && (GenPart_statusFlags & 1) && abs(GenPart_pdgId) == 13")
-        df = df.Filter("wrem::hasMatchDR2(goodMuons_eta0,goodMuons_phi0,GenPart_eta[postFSRmuons],GenPart_phi[postFSRmuons],0.09)")
-
-    nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
-
-    if dataset.is_data:
-        
-        df = df.Define("nominal_weight", "1.0")
-
-        if not args.no_recoil:
+    if not args.no_recoil:
+        if dataset.is_data:
             df = recoilHelper.setup_MET(df, results, dataset, "goodMuons_pt0", "goodMuons_phi0", "Muon_pt[goodMuons][0]")
             df = df.Alias("MET_corr_rec_pt", "MET_corr_xy_pt")
             df = df.Alias("MET_corr_rec_phi", "MET_corr_xy_phi")
         else:
-            df = df.Alias("MET_corr_rec_pt", "MET_pt")
-            df = df.Alias("MET_corr_rec_phi", "MET_phi")
+            df = recoilHelper.setup_MET(df, results, dataset, "goodMuons_pt0", "goodMuons_phi0", "Muon_pt[goodMuons][0]")
+            df = recoilHelper.setup_recoil_gen(df, results, dataset, ["WplusmunuPostVFP", "WminusmunuPostVFP"])
+            df = recoilHelper.apply_recoil_W(df, results, dataset, ["WplusmunuPostVFP", "WminusmunuPostVFP"]) # produces corrected MET as MET_corr_rec_pt/phi
+    else:
+        df = df.Alias("MET_corr_rec_pt", "MET_pt")
+        df = df.Alias("MET_corr_rec_phi", "MET_phi")
 
-        df = df.Define("transverseMass", "wrem::mt_2(goodMuons_pt0, goodMuons_phi0, MET_corr_rec_pt, MET_corr_rec_phi)")
-        df = df.Define("passMT", "transverseMass >= 40.0")
-        df = df.Filter("passMT || Sum(goodCleanJets)>=1")
+    df = df.Define("transverseMass", "wrem::mt_2(goodMuons_pt0, goodMuons_phi0, MET_corr_rec_pt, MET_corr_rec_phi)")
+    df = df.Define("passMT", "transverseMass >= 40.0")
+    df = df.Filter("passMT || Sum(goodCleanJets)>=1")
+
+
+    nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
+
+    if dataset.is_data:
+        df = df.Define("nominal_weight", "1.0")
 
         nominal = df.HistoBoost("nominal", nominal_axes, nominal_cols)
         results.append(nominal)
@@ -240,18 +217,6 @@ def build_graph(df, dataset):
         
         df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
         
-        if not args.no_recoil:
-            df = recoilHelper.setup_MET(df, results, dataset, "goodMuons_pt0", "goodMuons_phi0", "Muon_pt[goodMuons][0]")
-            df = recoilHelper.setup_recoil_gen(df, results, dataset, ["WplusmunuPostVFP", "WminusmunuPostVFP"])
-            df = recoilHelper.apply_recoil_W(df, results, dataset, ["WplusmunuPostVFP", "WminusmunuPostVFP"]) # produces corrected MET as MET_corr_rec_pt/phi
-        else:
-            df = df.Alias("MET_corr_rec_pt", "MET_pt")
-            df = df.Alias("MET_corr_rec_phi", "MET_phi")
-            
-        df = df.Define("transverseMass", "wrem::mt_2(goodMuons_pt0, goodMuons_phi0, MET_corr_rec_pt, MET_corr_rec_phi)")
-        df = df.Define("passMT", "transverseMass >= 40.0")
-        df = df.Filter("passMT || Sum(goodCleanJets)>=1")
-  
         results.append(df.HistoBoost("nominal_weight", [hist.axis.Regular(200, -4, 4)], ["nominal_weight"]))
 
         nominal = df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "nominal_weight"])

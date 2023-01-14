@@ -106,12 +106,13 @@ logging.info(f"SF file: {args.sfFile}")
 pileup_helper = wremnants.make_pileup_helper(era = era)
 
 if args.muonCorr == "mass_fit":
-    jpsi_crctn_MC_helper = wremnants.make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/calibrationJMC_aftersm.root")
-    jpsi_crctn_unc_MC_helper = wremnants.make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/calibrationJMC_aftersm.root")
-    jpsi_crctn_data_helper = wremnants.make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/calibrationJDATA_aftersm.root")
-    jpsi_crctn_unc_data_helper = wremnants.make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/calibrationJDATA_aftersm.root")
-
-mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
+    mc_calibration_helper = wremnants.make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/calibrationJMC_aftersm.root")
+    data_calibration_helper = wremnants.make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/calibrationJDATA_aftersm.root")
+    # currently not used
+    # jpsi_crctn_unc_MC_helper = wremnants.make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/calibrationJMC_aftersm.root")
+    # jpsi_crctn_unc_data_helper = wremnants.make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/calibrationJDATA_aftersm.root")
+else:
+    mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
 
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_corr)
 
@@ -120,8 +121,6 @@ if not args.no_recoil:
     from wremnants import recoil_tools
     recoilHelper = recoil_tools.Recoil("highPU", flavor="mumu", met=args.met)
 
-
-#def add_plots_with_systematics
 
 def build_graph(df, dataset):
     logging.info(f"build graph for dataset: {dataset.name}")
@@ -138,10 +137,7 @@ def build_graph(df, dataset):
 
     df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
 
-    if args.muonCorr == "mass_fit":
-        calibration_helper = jpsi_crctn_data_helper if dataset.is_data else jpsi_crctn_MC_helper
-    else:
-        calibration_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
+    calibration_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
     df = muon_calibration.define_corrected_muons(df, calibration_helper, args.muonCorr, dataset)
 
     df = muon_selections.select_veto_muons(df, True)
@@ -150,57 +146,17 @@ def build_graph(df, dataset):
     df = muon_calibration.define_trigger_muons(df, calibration_helper, args.muonCorr)
 
     df = df.Filter("Sum(trigMuons) == 1 && Sum(nonTrigMuons) == 1")
-    df = df.Filter("NonTrigMuon_pt > 26.")
+    df = df.Filter("nonTrigMuons_pt0 > 26.")
 
-    df = df.Define("TrigMuon_isStandalone", "Muon_isStandalone[trigMuons][0]")
-    df = df.Define("NonTrigMuon_isStandalone", "Muon_isStandalone[nonTrigMuons][0]")
-    # central NanoAOD for backgrounds do not have standalone variables, therefore cannot use cut on them when running backgrounds (for now we neglect this bias)
-    # when using tracker muons the presence of standalone muons is not guaranteed, so again cannot use or cut on those (also in data or Z, regardless whether branches exist)
-    # it was verified that tracking scale factors can still be used as a function of inner track coordinates, despite having been measured versus standalone ones
-    # (this is true also in the case of global muons, no significant difference is observed applying tracking SF using inner or outer tracks)
-    if dataset.group in ["Top", "Diboson"]:
-        df = df.Alias("TrigMuon_SApt",  "TrigMuon_pt")
-        df = df.Alias("TrigMuon_SAeta", "TrigMuon_eta")
-        df = df.Alias("TrigMuon_SAphi", "TrigMuon_phi")
-        df = df.Alias("NonTrigMuon_SApt",  "NonTrigMuon_pt")
-        df = df.Alias("NonTrigMuon_SAeta", "NonTrigMuon_eta")
-        df = df.Alias("NonTrigMuon_SAphi", "NonTrigMuon_phi")
-    elif args.trackerMuons:
-        # try to use standalone variables when possible
-        df = df.Define("TrigMuon_SApt",  "TrigMuon_isStandalone ? Muon_standalonePt[trigMuons][0] : TrigMuon_pt")
-        df = df.Define("TrigMuon_SAeta", "TrigMuon_isStandalone ? Muon_standaloneEta[trigMuons][0] : TrigMuon_eta")
-        df = df.Define("TrigMuon_SAphi", "TrigMuon_isStandalone ? Muon_standalonePhi[trigMuons][0] : TrigMuon_phi")
-        df = df.Define("NonTrigMuon_SApt",  "NonTrigMuon_isStandalone ? Muon_standalonePt[nonTrigMuons][0] : NonTrigMuon_pt")
-        df = df.Define("NonTrigMuon_SAeta", "NonTrigMuon_isStandalone ? Muon_standaloneEta[nonTrigMuons][0] : NonTrigMuon_eta")
-        df = df.Define("NonTrigMuon_SAphi", "NonTrigMuon_isStandalone ? Muon_standalonePhi[nonTrigMuons][0] : NonTrigMuon_phi")
-    else:
-        df = df.Define("TrigMuon_SApt",  "Muon_standalonePt[trigMuons][0]")
-        df = df.Define("TrigMuon_SAeta", "Muon_standaloneEta[trigMuons][0]")
-        df = df.Define("TrigMuon_SAphi", "Muon_standalonePhi[trigMuons][0]")
-        df = df.Define("NonTrigMuon_SApt",  "Muon_standalonePt[nonTrigMuons][0]")
-        df = df.Define("NonTrigMuon_SAeta", "Muon_standaloneEta[nonTrigMuons][0]")
-        df = df.Define("NonTrigMuon_SAphi", "Muon_standalonePhi[nonTrigMuons][0]")
+    df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "trigMuons")
+    df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "nonTrigMuons")
 
-    # these next cuts are mainly needed for consistency with the reco efficiency measurement for the case with global muons
-    # note, when SA does not exist this cut is still fine because of how we define these variables
-    df = df.Filter("TrigMuon_SApt > 15.0 && wrem::deltaR2(TrigMuon_SAeta, TrigMuon_SAphi, TrigMuon_eta, TrigMuon_phi) < 0.09")
-    df = df.Filter("NonTrigMuon_SApt > 15.0 && wrem::deltaR2(NonTrigMuon_SAeta, NonTrigMuon_SAphi, NonTrigMuon_eta, NonTrigMuon_phi) < 0.09")
-    if common.muonEfficiency_standaloneNumberOfValidHits > 0 and not args.trackerMuons and not dataset.group in ["Top", "Diboson"]:
-        nHitsSA = common.muonEfficiency_standaloneNumberOfValidHits
-        df = df.Filter(f"Muon_standaloneNumberOfValidHits[trigMuons][0] >= {nHitsSA} && Muon_standaloneNumberOfValidHits[nonTrigMuons][0] >= {nHitsSA}")
-    
     df = muon_selections.veto_electrons(df)
+    df = muon_selections.apply_met_filters(df)
+    df = muon_selections.select_trigger_muon(df, dataset, "trigMuons_eta0", "trigMuons_phi0")
 
-    if dataset.group in ["Top", "Diboson"]:
-        df = df.Define("goodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_pt,TrigObj_l1pt,TrigObj_l2pt,TrigObj_filterBits)")
-    else:
-        df = df.Define("goodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_filterBits)")
-    df = df.Filter("wrem::hasTriggerMatch(TrigMuon_eta,TrigMuon_phi,TrigObj_eta[goodTrigObjs],TrigObj_phi[goodTrigObjs])")
-    df = df.Filter("Flag_globalSuperTightHalo2016Filter && Flag_EcalDeadCellTriggerPrimitiveFilter && Flag_goodVertices && Flag_HBHENoiseIsoFilter && Flag_HBHENoiseFilter && Flag_BadPFMuonFilter")
-
-
-    df = df.Define("TrigMuon_mom4", "ROOT::Math::PtEtaPhiMVector(TrigMuon_pt, TrigMuon_eta, TrigMuon_phi, wrem::muon_mass)")
-    df = df.Define("NonTrigMuon_mom4", "ROOT::Math::PtEtaPhiMVector(NonTrigMuon_pt, NonTrigMuon_eta, NonTrigMuon_phi, wrem::muon_mass)")
+    df = df.Define("TrigMuon_mom4", "ROOT::Math::PtEtaPhiMVector(trigMuons_pt0, trigMuons_eta0, trigMuons_phi0, wrem::muon_mass)")
+    df = df.Define("NonTrigMuon_mom4", "ROOT::Math::PtEtaPhiMVector(nonTrigMuons_pt0, nonTrigMuons_eta0, nonTrigMuons_phi0, wrem::muon_mass)")
     df = df.Define("Z_mom4", "ROOT::Math::PxPyPzEVector(TrigMuon_mom4)+ROOT::Math::PxPyPzEVector(NonTrigMuon_mom4)")
     df = df.Define("ptZ", "Z_mom4.pt()")
     df = df.Define("massZ", "Z_mom4.mass()")
@@ -224,15 +180,15 @@ def build_graph(df, dataset):
     #    if (dataset.is_data and args.dataCrctn == 'jpsi_crctd') or ((isZ or isW) and args.MCCrctn == 'jpsi_crctd'):
     #        wremnants.define_jpsi_crctd_z_mass(df)
     #        wremnants.define_jpsi_crctd_unc_z_mass(df)
-    df = df.Define("csSineCosThetaPhiZ", "TrigMuon_charge == -1 ? wrem::csSineCosThetaPhi(TrigMuon_mom4, NonTrigMuon_mom4) : wrem::csSineCosThetaPhi(NonTrigMuon_mom4, TrigMuon_mom4)")
+    df = df.Define("csSineCosThetaPhiZ", "trigMuons_charge0 == -1 ? wrem::csSineCosThetaPhi(TrigMuon_mom4, NonTrigMuon_mom4) : wrem::csSineCosThetaPhi(NonTrigMuon_mom4, TrigMuon_mom4)")
 
     df = df.Define("cosThetaStarZ", "csSineCosThetaPhiZ.costheta")
     df = df.Define("phiStarZ", "std::atan2(csSineCosThetaPhiZ.sinphi, csSineCosThetaPhiZ.cosphi)")
 
     if not dataset.is_data:
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
-        df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["TrigMuon_pt", "TrigMuon_eta", "TrigMuon_SApt", "TrigMuon_SAeta", "TrigMuon_charge",
-                                                                                      "NonTrigMuon_pt", "NonTrigMuon_eta", "NonTrigMuon_SApt", "NonTrigMuon_SAeta", "NonTrigMuon_charge"])
+        df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["trigMuons_pt0", "trigMuons_eta0", "trigMuons_SApt0", "trigMuons_SAeta0", "trigMuons_charge0",
+                                                                                      "nonTrigMuons_pt0", "nonTrigMuons_eta0", "nonTrigMuons_SApt0", "nonTrigMuons_SAeta0", "nonTrigMuons_charge0"])
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId"])
 
         weight_expr = "weight*weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom"
@@ -253,7 +209,7 @@ def build_graph(df, dataset):
     df = df.Filter("massZ >= 60. && massZ < 120.")
 
     df_dilepton = df
-    df_dilepton = df_dilepton.Filter("TrigMuon_pt > 26.")
+    df_dilepton = df_dilepton.Filter("trigMuons_pt0 > 26.")
 
     dilepton_axes = [axis_mll, axis_yll, axis_ptll, axis_costhetastarll, axis_phistarll]
     #if (dataset.is_data and args.dataCrctn):
@@ -270,7 +226,7 @@ def build_graph(df, dataset):
     if not args.csvars_hist:
         dilepton_axes = dilepton_axes[:-2]
         dilepton_cols = dilepton_cols[:-2]
-    dilepton_cols.append("TrigMuon_charge")
+    dilepton_cols.append("trigMuons_charge0")
     dilepton_axes.append(axis_charge)
     dilepton = df_dilepton.HistoBoost("dilepton", dilepton_axes, [*dilepton_cols, "nominal_weight"])
     results.append(dilepton)
@@ -288,16 +244,16 @@ def build_graph(df, dataset):
 
     #TODO improve this to include muon mass?
     met_vars = ("MET_pt", "MET_phi")
-    df = df.Define("transverseMass_uncorr", f"wrem::mt_wlike_nano(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, {', '.join(met_vars)})")
+    df = df.Define("transverseMass_uncorr", f"wrem::mt_wlike_nano(trigMuons_pt0, trigMuons_phi0, nonTrigMuons_pt0, nonTrigMuons_phi0, {', '.join(met_vars)})")
     results.append(df.HistoBoost("transverseMass_uncorr", [axis_mt], ["transverseMass_uncorr", "nominal_weight"]))
-    met_vars = (x.replace("xy", "rec") for x in met_vars)
-
-    df = df.Define("transverseMass", f"wrem::mt_wlike_nano(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, {', '.join(met_vars)})")
+    
+    met_vars = ("MET_corr_rec_pt", "MET_corr_rec_phi")
+    df = df.Define("transverseMass", f"wrem::mt_wlike_nano(trigMuons_pt0, trigMuons_phi0, nonTrigMuons_pt0, nonTrigMuons_phi0, {', '.join(met_vars)})")
     results.append(df.HistoBoost("transverseMass", [axis_mt], ["transverseMass", "nominal_weight"]))
     
     df = df.Filter("transverseMass >= 45.") # 40 for Wmass, thus be 45 here (roughly half the boson mass)
     
-    nominal_cols = ["TrigMuon_eta", "TrigMuon_pt", "TrigMuon_charge"]
+    nominal_cols = ["trigMuons_eta0", "trigMuons_pt0", "trigMuons_charge0"]
 
     nominal = df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "nominal_weight"])
     results.append(nominal)
