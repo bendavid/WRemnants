@@ -51,14 +51,14 @@ def define_jpsi_crctd_muons_pt(df, helper):
         [
             "TrigMuon_cvh_eta",
             "TrigMuon_cvh_pt",
-            "TrigMuon_charge"
+            "trigMuons_charge0"
         ]
     )
     df = df.Define("NonTrigMuon_jpsi_crctd_pt", helper,
         [
             "NonTrigMuon_cvh_eta",
             "NonTrigMuon_cvh_pt",
-            "NonTrigMuon_charge"
+            "nonTrigMuons_charge0"
         ]
     )
     return df
@@ -68,7 +68,7 @@ def define_jpsi_crctd_muons_pt_unc(df, helper):
         [
             "TrigMuon_cvh_eta",
             "TrigMuon_cvh_pt",
-            "TrigMuon_charge",
+            "trigMuons_charge0",
             "TrigMuon_jpsi_crctd_pt"
         ]
     )
@@ -76,7 +76,7 @@ def define_jpsi_crctd_muons_pt_unc(df, helper):
         [
             "NonTrigMuon_cvh_eta",
             "NonTrigMuon_cvh_pt",
-            "NonTrigMuon_charge",
+            "nonTrigMuons_charge0",
             "NonTrigMuon_jpsi_crctd_pt"
         ]
     )
@@ -119,31 +119,31 @@ def define_corrected_muons(df, helper, corr_type, dataset):
 def define_trigger_muons(df, helper, corr_type):
 
     # mu- for even event numbers, mu+ for odd event numbers
-    df = df.Define("TrigMuon_charge", "event % 2 == 0 ? -1 : 1")
-    df = df.Define("NonTrigMuon_charge", "-TrigMuon_charge")
+    df = df.Define("trigMuons_charge0", "event % 2 == 0 ? -1 : 1")
+    df = df.Define("nonTrigMuons_charge0", "-trigMuons_charge0")
 
-    df = df.Define("trigMuons", "goodMuons && Muon_correctedCharge == TrigMuon_charge")
-    df = df.Define("nonTrigMuons", "goodMuons && Muon_correctedCharge == NonTrigMuon_charge")
+    df = df.Define("trigMuons", "goodMuons && Muon_correctedCharge == trigMuons_charge0")
+    df = df.Define("nonTrigMuons", "goodMuons && Muon_correctedCharge == nonTrigMuons_charge0")
 
     if corr_type == "mass_fit":
         df = muon_validation.define_cvh_muons_kinematics(df)
         df = define_jpsi_crctd_muons_pt(df, helper)
     
-        df = df.Alias("TrigMuon_pt", "TrigMuon_cvh_pt")
-        df = df.Alias("TrigMuon_eta", "TrigMuon_cvh_eta")
-        df = df.Alias("TrigMuon_phi", "TrigMuon_cvh_phi")
+        df = df.Alias("trigMuons_pt0", "TrigMuon_cvh_pt")
+        df = df.Alias("trigMuons_eta0", "TrigMuon_cvh_eta")
+        df = df.Alias("trigMuons_phi0", "TrigMuon_cvh_phi")
 
-        df = df.Alias("NonTrigMuon_pt", "NonTrigMuon_cvh_pt")
-        df = df.Alias("NonTrigMuon_eta", "NonTrigMuon_cvh_eta")
-        df = df.Alias("NonTrigMuon_phi", "NonTrigMuon_cvh_phi")
+        df = df.Alias("nonTrigMuons_pt0", "NonTrigMuon_cvh_pt")
+        df = df.Alias("nonTrigMuons_eta0", "NonTrigMuon_cvh_eta")
+        df = df.Alias("nonTrigMuons_phi0", "NonTrigMuon_cvh_phi")
     else:
-        df = df.Define("TrigMuon_pt", "Muon_correctedPt[trigMuons][0]")
-        df = df.Define("TrigMuon_eta", "Muon_correctedEta[trigMuons][0]")
-        df = df.Define("TrigMuon_phi", "Muon_correctedPhi[trigMuons][0]")
+        df = df.Define("trigMuons_pt0", "Muon_correctedPt[trigMuons][0]")
+        df = df.Define("trigMuons_eta0", "Muon_correctedEta[trigMuons][0]")
+        df = df.Define("trigMuons_phi0", "Muon_correctedPhi[trigMuons][0]")
 
-        df = df.Define("NonTrigMuon_pt", "Muon_correctedPt[nonTrigMuons][0]")
-        df = df.Define("NonTrigMuon_eta", "Muon_correctedEta[nonTrigMuons][0]")
-        df = df.Define("NonTrigMuon_phi", "Muon_correctedPhi[nonTrigMuons][0]")       
+        df = df.Define("nonTrigMuons_pt0", "Muon_correctedPt[nonTrigMuons][0]")
+        df = df.Define("nonTrigMuons_eta0", "Muon_correctedEta[nonTrigMuons][0]")
+        df = df.Define("nonTrigMuons_phi0", "Muon_correctedPhi[nonTrigMuons][0]")       
 
     return df
 
