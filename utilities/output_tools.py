@@ -84,6 +84,9 @@ def write_analysis_output(results, outfile, args):
         outfile = outfile.replace(".pkl.lz4", f"_{'_'.join(to_append)}.pkl.lz4")
 
     if args.outfolder:
+        if not os.path.exists(args.outfolder):
+            logging.info(f"Creating output folder {args.outfolder}")
+            os.makedirs(args.outfolder)
         outfile = os.path.join(args.outfolder, outfile)
 
     time0 = time.time()
@@ -91,3 +94,4 @@ def write_analysis_output(results, outfile, args):
     with lz4.frame.open(outfile, "wb") as f:
         pickle.dump(results, f, protocol = pickle.HIGHEST_PROTOCOL)
     print("Output", time.time()-time0)
+    print(f"Output saved in {outfile}")
