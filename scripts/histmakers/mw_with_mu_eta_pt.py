@@ -83,7 +83,9 @@ axis_recoil_magn = hist.axis.Regular(300, 0, 300, name = "recoil_magn", underflo
 
 # axes for study of fakes
 axis_mt_fakes = hist.axis.Regular(60, 0., 120., name = "mt", underflow=False, overflow=True)
-axis_njet_fakes = hist.axis.Regular(2, -0.5, 1.5, name = "Numbr of jets", underflow=False, overflow=False) # only need case with 0 jets or > 0
+axis_hasjet_fakes = hist.axis.Boolean(name = "hasJets") # only need case with 0 jets or > 0 for now
+mTStudyForFakes_axes = [axis_eta, axis_pt, axis_charge, axis_mt_fakes, axis_passIso, axis_hasjet_fakes]
+
 
 if args.binnedScaleFactors:
     logging.info("Using binned scale factors and uncertainties")
@@ -230,16 +232,25 @@ def build_graph(df, dataset):
             df = df.Alias("MET_corr_rec_pt", "MET_pt")
             df = df.Alias("MET_corr_rec_phi", "MET_phi")
 
+            axis_mt_fakes, axis_hasjet_fakes
+
         df = df.Define("transverseMass", "wrem::mt_2(goodMuons_pt0, goodMuons_phi0, MET_corr_rec_pt, MET_corr_rec_phi)")
+        df = df.Define("hasCleanJet", "Sum(goodCleanJets) >= 1")
+        
+        mTStudyForFakes = df.HistoBoost("mTStudyForFakes", mTStudyForFakes_axes, ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "transverseMass", "passIso", "hasCleanJet", "nominal_weight"])
+        results.append(mTStudyForFakes)
+
         df = df.Define("passMT", "transverseMass >= 40.0")
-        df = df.Filter("passMT || Sum(goodCleanJets)>=1")
+        df = df.Filter("passMT || hasCleanJet")
 
         nominal = df.HistoBoost("nominal", nominal_axes, nominal_cols)
         results.append(nominal)
 
-        dQCDbkGVar = df.Filter("passMT || Sum(goodCleanJetsPt45)>=1")
-        qcdJetPt45 = dQCDbkGVar.HistoBoost("qcdJetPt45", nominal_axes, nominal_cols)
-        results.append(qcdJetPt45)
+        if not args.onlyMainHistograms:
+            dQCDbkGVar = df.Filter("passMT || Sum(goodCleanJetsPt45)>=1")
+            qcdJetPt45 = dQCDbkGVar.HistoBoost("qcdJetPt45", nominal_axes, nominal_cols)
+            results.append(qcdJetPt45)
+        
     else:
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
         df = df.Define("weight_vtx", vertex_helper, ["GenVtx_z", "Pileup_nTrueInt"])
@@ -263,8 +274,13 @@ def build_graph(df, dataset):
             df = df.Alias("MET_corr_rec_phi", "MET_phi")
             
         df = df.Define("transverseMass", "wrem::mt_2(goodMuons_pt0, goodMuons_phi0, MET_corr_rec_pt, MET_corr_rec_phi)")
+        df = df.Define("hasCleanJet", "Sum(goodCleanJets) >= 1")
+        
+        mTStudyForFakes = df.HistoBoost("mTStudyForFakes", mTStudyForFakes_axes, ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "transverseMass", "passIso", "hasCleanJet", "nominal_weight"])
+        results.append(mTStudyForFakes)
+
         df = df.Define("passMT", "transverseMass >= 40.0")
-        df = df.Filter("passMT || Sum(goodCleanJets)>=1")
+        df = df.Filter("passMT || hasCleanJet")
   
         results.append(df.HistoBoost("nominal_weight", [hist.axis.Regular(200, -4, 4)], ["nominal_weight"]))
 
