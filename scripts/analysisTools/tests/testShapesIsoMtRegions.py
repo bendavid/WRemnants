@@ -20,8 +20,6 @@ import argparse
 import os
 import shutil
 import logging
-#import pathlib
-import hist
 import re
 
 ## safe batch mode
@@ -44,7 +42,7 @@ sys.path.append(os.getcwd())
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("rootfile", type=str, nargs=1, help="Input file with TH2 histograms")
+    parser.add_argument("inputfile", type=str, nargs=1, help="Input file with histograms (pkl.lz4 file)")
     parser.add_argument("outdir",   type=str, nargs=1, help="Output folder")
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4], help="Set verbosity level with logging, the larger the more verbose");
     parser.add_argument("-n", "--baseName", type=str, help="Histogram name in the file (e.g., 'nominal')", default="nominal")
@@ -67,7 +65,7 @@ if __name__ == "__main__":
     #     logger.debug("TEST LOGGER DEBUG")
     #     quit()
 
-    fname = args.rootfile[0]
+    fname = args.inputfile[0]
     outdir = args.outdir[0]
     createPlotDirAndCopyPhp(outdir)
         
@@ -99,7 +97,7 @@ if __name__ == "__main__":
             selectOp = sel.histWmass_passMT_passIso
             # customized for fakes later on
             
-        groups = datagroups2016(fname, wlike=False)
+        groups = datagroups2016(fname)
         datasets = groups.getNames()
         if args.processes is not None and len(args.processes):
             datasets = list(filter(lambda x: x in args.processes, datasets))
@@ -111,7 +109,7 @@ if __name__ == "__main__":
         groups.setSelectOp(selectOp)
         if passIso and passMT and "Fake" in datasets:
             groups.setSelectOp(sel.fakeHistABCD, processes=["Fake"])
-        groups.loadHistsForDatagroups(args.baseName, syst="", procsToRead=datasets)
+        groups.loadHistsForDatagroups(nominalName, syst="", procsToRead=datasets)
 
         histInfo = groups.getDatagroups()
         #print(histInfo)
