@@ -22,7 +22,7 @@ logger = common.child_logger(__name__)
 
 def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None,
     grid_on_main_plot = False, grid_on_ratio_plot = False, plot_title = None, title_padding = 0,
-    x_ticks_ndp = None, bin_density = 300, cms_label = None, logy=False, logx=False
+    x_ticks_ndp = None, bin_density = 300, cms_label = None, logy=False, logx=False,
 ):
     if not xlim:
         xlim = [href.axes[0].edges[0], href.axes[0].edges[-1]]
@@ -63,13 +63,8 @@ def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None,
     return fig,ax1,ax2
 
 def addLegend(ax, ncols=2, extra_text=None, text_size=20):
-    has_extra_text = extra_text is not None
     handles, labels = ax.get_legend_handles_labels()
     
-    if has_extra_text:
-        #handles.append(patches.Patch(color='none', label=extra_text))
-        ax.plot([], [], ' ', ' ')
-
     shape = np.divide(*ax.get_figure().get_size_inches())
     #TODO: The goal is to leave the data in order, but it should be less hacky
     handles[:] = reversed(handles)
@@ -79,7 +74,19 @@ def addLegend(ax, ncols=2, extra_text=None, text_size=20):
         labels.insert(math.floor(len(labels)/2), ' ')
     #handles= reversed(handles)
     #labels= reversed(labels)
-    ax.legend(handles=handles, labels=labels, prop={'size' : text_size*(0.7 if shape == 1 else 1.3)}, ncol=ncols, loc='upper right')
+    text_size = text_size*(0.7 if shape == 1 else 1.3)
+    leg = ax.legend(handles=handles, labels=labels, prop={'size' : text_size}, ncol=ncols, loc='upper right')
+
+    if extra_text:
+        p = leg.get_frame()
+        bounds = leg.get_bbox_to_anchor().bounds
+        # these are matplotlib.patch.Patch properties
+        props = dict(boxstyle='square', facecolor='white', alpha=0.5)
+
+        # TODO: Figure out how to make this dynamic wrt the legend
+        ax.text(0.8, 0.7, extra_text, transform=ax.transAxes, fontsize=text_size,
+                verticalalignment='top', bbox=props)
+
 
 def makeStackPlotWithRatio(
     histInfo, stackedProcs, histName="nominal", unstacked=None, 
@@ -87,12 +94,13 @@ def makeStackPlotWithRatio(
     binwnorm=None, select={},  action = (lambda x: x), extra_text=None, grid = False, 
     plot_title = None, title_padding = 0, yscale=None,
     fill_between=False, ratio_to_data=False, baseline=True, legtex_size=20, cms_decor="Preliminary", lumi=16.8,
-    no_fill=False, bin_density=300,
+    no_fill=False, bin_density=300, 
 ):
     stack = [action(histInfo[k][histName])[select] for k in stackedProcs if histInfo[k][histName]]
     colors = [histInfo[k]["color"] for k in stackedProcs if histInfo[k][histName]]
     labels = [histInfo[k]["label"] for k in stackedProcs if histInfo[k][histName]]
-    fig, ax1, ax2 = figureWithRatio(stack[0], xlabel, ylabel, ylim, rlabel, rrange, xlim=xlim, grid_on_ratio_plot = grid, plot_title = plot_title, title_padding = title_padding, bin_density = bin_density)
+    fig, ax1, ax2 = figureWithRatio(stack[0], xlabel, ylabel, ylim, rlabel, rrange, xlim=xlim, 
+        grid_on_ratio_plot = grid, plot_title = plot_title, title_padding = title_padding, bin_density = bin_density)
 
     hep.histplot(
         stack,
@@ -180,7 +188,7 @@ def makeStackPlotWithRatio(
 def makePlotWithRatioToRef(
     hists, labels, colors, xlabel="", ylabel="Events/bin", rlabel="x/nominal",
     rrange=[0.9, 1.1], ylim=None, xlim=None, nlegcols=2, binwnorm=None, alpha=1.,
-    baseline=True, data=False, autorrange=None, grid = False,
+    baseline=True, data=False, autorrange=None, grid = False, extra_text=None,
     yerr=False, legtext_size=20, plot_title=None, x_ticks_ndp = None, bin_density = 300, yscale=None,
     logy=False, logx=False, fill_between=False, title_padding = 0, cms_label = None
 ):
@@ -195,7 +203,6 @@ def makePlotWithRatioToRef(
     )
     
     count = len(hists)-data
-    print("Count is", count)
     hep.histplot(
         hists[:count],
         histtype="step",
@@ -252,7 +259,7 @@ def makePlotWithRatioToRef(
             alpha=alpha,
         )
 
-    addLegend(ax1, nlegcols, legtext_size)
+    addLegend(ax1, nlegcols, extra_text=extra_text, text_size=legtext_size)
     
     # This seems like a bug, but it's needed
     if not xlim:

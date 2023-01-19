@@ -164,8 +164,8 @@ def rebinHist(h, axis_name, edges):
                             f"Edges of histogram are {ax.edges}, requested rebinning to {edges}")
         
     # If you rebin to a subset of initial range, keep the overflow and underflow
-    overflow = ax.traits.overflow or edges[-1] < ax.edges[-1] 
-    underflow = ax.traits.underflow or edges[0] > ax.edges[0]
+    overflow = ax.traits.overflow or (edges[-1] < ax.edges[-1] and not np.isclose(edges[-1], ax.edges[-1]))
+    underflow = ax.traits.underflow or (edges[0] > ax.edges[0] and not np.isclose(edges[0], ax.edges[0]))
     flow = overflow or underflow
     new_ax = hist.axis.Variable(edges, name=ax.name, overflow=overflow, underflow=underflow)
     axes = list(h.axes)
@@ -179,19 +179,24 @@ def rebinHist(h, axis_name, edges):
     offset = 0.5*np.min(ax.edges[1:]-ax.edges[:-1])
 
     edges_eval = edges+offset
+    # TODO: Is this correct?
     # Last bin should be inside the boundary
-    edges_eval[-1] -= 2*offset
-    if overflow or not np.isclose(edges[-1], ax.edges[-1]):
-        edges_eval = np.append(edges_eval, ax.edges[-1]+offset)
+    #edges_eval[-1] -= 2*offset
+
+    # TODO: Understand if this is really all correct...
+    if overflow:
+        edges_eval = np.append(edges_eval, max(edges[-1], ax.edges[-1])+offset)
 
     edge_idx = ax.index(edges_eval)
 
-    if underflow:
-        edge_idx += 1
-        edge_idx = np.insert(edge_idx, 0, 0)
-
-    if len(np.unique(edge_idx)) != len(edge_idx):
+    if len(np.unique(edge_idx[:-1-overflow])) != len(edge_idx[:-1-overflow]):
         raise ValueError("Did not find a unique binning. Probably this is a numeric issue with bin boundaries")
+
+    if underflow:
+        edge_idx = np.insert(edge_idx, 0, 0)
+        # Only if the original axis had an underflow should you offset
+        if ax.traits.underflow:
+            edge_idx += 1
 
     hnew.values(flow=flow)[...] = np.add.reduceat(h.values(flow=flow), edge_idx, 
             axis=ax_idx).take(indices=range(new_ax.size+underflow+overflow), axis=ax_idx)

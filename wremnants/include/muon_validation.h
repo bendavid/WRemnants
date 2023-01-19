@@ -54,7 +54,7 @@ public:
     }
     
     // for central value of pt
-    double operator() (float cvh_eta, float cvh_pt, int charge) {
+    float operator() (float cvh_eta, float cvh_pt, int charge) {
         const auto &params = get_tensor(cvh_eta);
         const double A = params(0, 0);
         const double e = params(1, 0);
