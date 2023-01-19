@@ -62,7 +62,7 @@ def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None,
     if plot_title: ax1.set_title(plot_title, pad = title_padding)
     return fig,ax1,ax2
 
-def addLegend(ax, ncols=2, extra_text=None, text_size=20):
+def addLegend(ax, ncols=2, extra_text=None, extra_text_loc=(0.8, 0.7), text_size=20):
     handles, labels = ax.get_legend_handles_labels()
     
     shape = np.divide(*ax.get_figure().get_size_inches())
@@ -84,14 +84,13 @@ def addLegend(ax, ncols=2, extra_text=None, text_size=20):
         props = dict(boxstyle='square', facecolor='white', alpha=0.5)
 
         # TODO: Figure out how to make this dynamic wrt the legend
-        ax.text(0.8, 0.7, extra_text, transform=ax.transAxes, fontsize=text_size,
+        ax.text(*extra_text_loc, extra_text, transform=ax.transAxes, fontsize=text_size,
                 verticalalignment='top', bbox=props)
-
 
 def makeStackPlotWithRatio(
     histInfo, stackedProcs, histName="nominal", unstacked=None, 
     xlabel="", ylabel="Events/bin", rlabel = "Data/Pred.", rrange=[0.9, 1.1], ylim=None, xlim=None, nlegcols=2,
-    binwnorm=None, select={},  action = (lambda x: x), extra_text=None, grid = False, 
+    binwnorm=None, select={},  action = (lambda x: x), extra_text=None, extra_text_loc=(0.8, 0.7), grid = False, 
     plot_title = None, title_padding = 0, yscale=None,
     fill_between=False, ratio_to_data=False, baseline=True, legtex_size=20, cms_decor="Preliminary", lumi=16.8,
     no_fill=False, bin_density=300, 
@@ -175,7 +174,7 @@ def makeStackPlotWithRatio(
                         np.append(unstack_down.values(), unstack_up.values()[-1]),
                     step='post', color=histInfo[up]["color"], alpha=0.5)
 
-    addLegend(ax1, nlegcols, extra_text)
+    addLegend(ax1, nlegcols, extra_text=extra_text, extra_text_loc=extra_text_loc, text_size=legtext_size)
     fix_axes(ax1, ax2, yscale=yscale)
 
     if cms_decor:
@@ -188,7 +187,7 @@ def makeStackPlotWithRatio(
 def makePlotWithRatioToRef(
     hists, labels, colors, xlabel="", ylabel="Events/bin", rlabel="x/nominal",
     rrange=[0.9, 1.1], ylim=None, xlim=None, nlegcols=2, binwnorm=None, alpha=1.,
-    baseline=True, data=False, autorrange=None, grid = False, extra_text=None,
+    baseline=True, data=False, autorrange=None, grid = False, extra_text=None, extra_text_loc=(0.8, 0.7),
     yerr=False, legtext_size=20, plot_title=None, x_ticks_ndp = None, bin_density = 300, yscale=None,
     logy=False, logx=False, fill_between=False, title_padding = 0, cms_label = None
 ):
@@ -259,7 +258,7 @@ def makePlotWithRatioToRef(
             alpha=alpha,
         )
 
-    addLegend(ax1, nlegcols, extra_text=extra_text, text_size=legtext_size)
+    addLegend(ax1, nlegcols, extra_text=extra_text, extra_text_loc=extra_text_loc, text_size=legtext_size)
     
     # This seems like a bug, but it's needed
     if not xlim:
