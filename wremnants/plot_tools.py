@@ -92,7 +92,7 @@ def makeStackPlotWithRatio(
     xlabel="", ylabel="Events/bin", rlabel = "Data/Pred.", rrange=[0.9, 1.1], ylim=None, xlim=None, nlegcols=2,
     binwnorm=None, select={},  action = (lambda x: x), extra_text=None, extra_text_loc=(0.8, 0.7), grid = False, 
     plot_title = None, title_padding = 0, yscale=None,
-    fill_between=False, ratio_to_data=False, baseline=True, legtex_size=20, cms_decor="Preliminary", lumi=16.8,
+    fill_between=False, ratio_to_data=False, baseline=True, legtext_size=20, cms_decor="Preliminary", lumi=16.8,
     no_fill=False, bin_density=300, 
 ):
     stack = [action(histInfo[k][histName])[select] for k in stackedProcs if histInfo[k][histName]]
@@ -179,7 +179,7 @@ def makeStackPlotWithRatio(
 
     if cms_decor:
         scale = max(1, np.divide(*ax1.get_figure().get_size_inches())*0.3)
-        hep.cms.label(ax=ax1, lumi=float(f"{lumi:.3g}"), fontsize=legtex_size*scale, 
+        hep.cms.label(ax=ax1, lumi=float(f"{lumi:.3g}"), fontsize=legtext_size*scale, 
             label=cms_decor, data="Data" in histInfo)
 
     return fig
