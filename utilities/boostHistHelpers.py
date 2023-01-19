@@ -179,17 +179,9 @@ def rebinHist(h, axis_name, edges):
     offset = 0.5*np.min(ax.edges[1:]-ax.edges[:-1])
 
     edges_eval = edges+offset
-    # TODO: Is this correct?
-    # Last bin should be inside the boundary
-    #edges_eval[-1] -= 2*offset
-
-    # TODO: Understand if this is really all correct...
-    if overflow:
-        edges_eval = np.append(edges_eval, max(edges[-1], ax.edges[-1])+offset)
-
     edge_idx = ax.index(edges_eval)
 
-    if len(np.unique(edge_idx[:-1-overflow])) != len(edge_idx[:-1-overflow]):
+    if len(np.unique(edge_idx)) != len(edge_idx):
         raise ValueError("Did not find a unique binning. Probably this is a numeric issue with bin boundaries")
 
     if underflow:
