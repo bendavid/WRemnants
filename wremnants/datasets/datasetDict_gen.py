@@ -1,6 +1,4 @@
-xsec_ZmmPostVFP = 2001.9
-xsec_WpmunuPostVFP = 11765.9
-xsec_WmmunuPostVFP = 8703.87
+from wremnants.datasets.datasetDict_v9 import xsec_ZmmPostVFP,xsec_WpmunuPostVFP,xsec_WmmunuPostVFP
 
 genDataDict = {
     'ZmumuMiNLO' : { 
@@ -15,32 +13,32 @@ genDataDict = {
     },
     'ZToMuMu_horace-lo-photos' : { 
                    'filepaths' :
-                    ["{BASE_PATH}/ZToMuMu_TuneCP5_13TeV-horace-born-fsr-photoslow-isr-pythia/job*.root"],
+                    ["{BASE_PATH}/ZToMuMu_TuneCP5_13TeV-horace-born-fsr-photos_nopair-isr-pythia/job*.root"],
                    'xsec' : xsec_ZmmPostVFP,
     },
     'ZToMuMu_horace-nlo' : { 
                    'filepaths' :
-                    ["{BASE_PATH}/ZToMuMu_TuneCP5_13TeV-horace-exp-fsr-off-isr-off/job*.root"],
+                    ["{BASE_PATH}/ZToMuMu_TuneCP5_13TeV-horace-exp-new-fsr-off-isr-off/job*.root"],
                    'xsec' : xsec_ZmmPostVFP,
     },
     'WplusToMuNu_horace-lo-photos' : { 
                    'filepaths' :
-                    ["{BASE_PATH}/WplusToMuNu_TuneCP5_13TeV-horace-born-fsr-photoslow_otheroff-isr-pythia/job*.root"],
+                    ["{BASE_PATH}/WplusToMuNu_TuneCP5_13TeV-horace-born-fsr-photos_nopair-isr-pythia/job*.root"],
                    'xsec' : xsec_WpmunuPostVFP,
     },
     'WplusToMuNu_horace-nlo' : { 
                    'filepaths' :
-                    ["{BASE_PATH}/WplusToMuNu_TuneCP5_13TeV-horace-exp-fsr-off-isr-off/job*.root"],
+                    ["{BASE_PATH}/WplusToMuNu_TuneCP5_13TeV-horace-exp-new-fsr-off-isr-off/job*.root"],
                    'xsec' : xsec_WpmunuPostVFP,
     },
     'WminusToMuNu_horace-lo-photos' : { 
                    'filepaths' :
-                    ["{BASE_PATH}/WminusToMuNu_TuneCP5_13TeV-horace-born-fsr-photoslow_otheroff-isr-pythia/job*.root"],
+                    ["{BASE_PATH}/WminusToMuNu_TuneCP5_13TeV-horace-born-fsr-photos_nopair-isr-pythia/job*.root"],
                    'xsec' : xsec_WmmunuPostVFP,
     },
     'WminusToMuNu_horace-nlo' : { 
                    'filepaths' :
-                    ["{BASE_PATH}/WminusToMuNu_TuneCP5_13TeV-horace-exp-fsr-off-isr-off/job*.root"],
+                    ["{BASE_PATH}/WminusToMuNu_TuneCP5_13TeV-horace-exp-new-fsr-off-isr-off/job*.root"],
                    'xsec' : xsec_WmmunuPostVFP,
     },
 }
