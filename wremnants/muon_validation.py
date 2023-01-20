@@ -80,26 +80,26 @@ def define_cvh_muon_kinematics(df):
     return df
 
 def define_cvh_muons_kinematics(df):
-    df = df.Define("TrigMuon_cvh_pt", "Muon_cvhPt[trigMuons][0]")
-    df = df.Define("TrigMuon_cvh_eta", "Muon_cvhEta[trigMuons][0]")
-    df = df.Define("TrigMuon_cvh_phi", "Muon_cvhPhi[trigMuons][0]")
-    df = df.Define("NonTrigMuon_cvh_pt", "Muon_cvhPt[nonTrigMuons][0]")
-    df = df.Define("NonTrigMuon_cvh_eta", "Muon_cvhEta[nonTrigMuons][0]")
-    df = df.Define("NonTrigMuon_cvh_phi", "Muon_cvhPhi[nonTrigMuons][0]")
+    df = df.Define("TrigMuon_cvh_pt", "Muon_correctedPt[trigMuons][0]")
+    df = df.Define("TrigMuon_cvh_eta", "Muon_correctedEta[trigMuons][0]")
+    df = df.Define("TrigMuon_cvh_phi", "Muon_correctedPhi[trigMuons][0]")
+    df = df.Define("NonTrigMuon_cvh_pt", "Muon_correctedPt[nonTrigMuons][0]")
+    df = df.Define("NonTrigMuon_cvh_eta", "Muon_correctedEta[nonTrigMuons][0]")
+    df = df.Define("NonTrigMuon_cvh_phi", "Muon_correctedPhi[nonTrigMuons][0]")
     return df
 
 def define_jpsi_crctd_muons_pt(df, helper):
     df = df.Define("TrigMuon_jpsi_crctd_pt", helper,
         [
-            "TrigMuon_cvh_eta",
-            "TrigMuon_cvh_pt",
+            "TrigMuon_eta",
+            "TrigMuon_preCorr_pt",
             "TrigMuon_charge"
         ]
     )
     df = df.Define("NonTrigMuon_jpsi_crctd_pt", helper,
         [
-            "NonTrigMuon_cvh_eta",
-            "NonTrigMuon_cvh_pt",
+            "NonTrigMuon_eta",
+            "NonTrigMuon_preCorr_pt",
             "NonTrigMuon_charge"
         ]
     )
