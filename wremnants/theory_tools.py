@@ -339,8 +339,8 @@ def pdfAsymmetricShifts(hdiff, axis_name):
         return hh.sqrtHist(hnew)
 
     # The error sets are ordered up,down,up,down...
-    upshift = shiftHist(hdiff.values(flow=True)[...,1::2], hdiff.variances(flow=True)[...,1::2], hdiff, axis_name)
-    downshift = shiftHist(hdiff.values(flow=True)[...,2::2], hdiff.variances(flow=True)[...,2::2], hdiff, axis_name)
+    upshift = shiftHist(hdiff.values()[...,1::2], hdiff.variances()[...,1::2], hdiff, axis_name)
+    downshift = shiftHist(hdiff.values()[...,2::2], hdiff.variances()[...,2::2], hdiff, axis_name)
     return upshift, downshift
 
 def hessianPdfUnc(h, axis_name="tensor_axis_0", uncType="symHessian", scale=1.):
