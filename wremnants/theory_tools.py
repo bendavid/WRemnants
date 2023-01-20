@@ -132,34 +132,12 @@ def define_scale_tensor(df, clipWeight=10.0):
 
     return df
 
-def make_scale_hist(df, axes, cols, hname=""):
-    scaleHist = df.HistoBoost("qcdScale" if hname=="" else f"{hname}_qcdScale", axes, [*cols, "scaleWeights_tensor_wnom"], tensor_axes=scale_tensor_axes)
-    return scaleHist
-
 def pdf_info_map(dataset, pdfset):
     infoMap = pdfMap if dataset not in extended_pdf_datasets else pdfMapExtended
 
     if (pdfset != "nnpdf31" and dataset in only_central_pdf_datasets) or pdfset not in infoMap:
         raise ValueError(f"Skipping PDF {pdfset} for dataset {dataset}")
     return infoMap[pdfset]
-
-def make_pdf_hists(df, dataset, axes, cols, pdfs, hname=""):
-    res = []
-    for pdf in pdfs:
-        try:
-            pdfInfo = pdf_info_map(dataset, pdf)
-        except ValueError as e:
-            logging.info(e)
-            continue
-
-        pdfName = pdfInfo["name"]
-        tensorName = f"{pdfName}Weights_tensor"
-        tensorASName = f"{pdfName}ASWeights_tensor"
-        pdfHist = df.HistoBoost(pdfName if hname=="" else f"{hname}_{pdfName}", axes, [*cols, tensorName])
-
-        alphaSHist = df.HistoBoost(f"alphaS002{pdfName}" if hname=="" else f"{hname}_alphaS002{pdfName}", axes, [*cols, tensorASName])
-        res.extend([pdfHist, alphaSHist])
-    return res
 
 def define_pdf_columns(df, dataset, pdfs, noAltUnc):
     for i, pdf in enumerate(pdfs):
@@ -239,19 +217,17 @@ def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_cen
     for i, generator in enumerate(generators):
         if generator not in helpers:
             continue
-        helper = helpers[generator]
+        
         if i == 0 and modify_central_weight:
             nominal_uncorr = df.HistoBoost(f"{name}_uncorr", axes, [*cols, "nominal_weight_uncorr"])
             res.append(nominal_uncorr)
             res.append(df.HistoBoost("weight_uncorr", [hist.axis.Regular(100, -2, 2)], ["nominal_weight_uncorr"]))
 
-        hist_name = f"{generator}Corr"
-        if name != "nominal":
-            hist_name = f"{name}_{hist_name}"
+        hist_name = f"{name}_{generator}Corr"
 
         if with_uncertainties:
             hist_name += "_unc"
-            unc = df.HistoBoost(hist_name, axes, [*cols, f"{generator}Weight_tensor"], tensor_axes=helper.tensor_axes[-1:])
+            unc = df.HistoBoost(hist_name, axes, [*cols, f"{generator}Weight_tensor"], tensor_axes=helpers[generator].tensor_axes[-1:])
             res.append(unc)
         else:
             nominal = df.HistoBoost(hist_name, axes, [*cols, f"{generator}CentralWeight"])
@@ -363,8 +339,8 @@ def pdfAsymmetricShifts(hdiff, axis_name):
         return hh.sqrtHist(hnew)
 
     # The error sets are ordered up,down,up,down...
-    upshift = shiftHist(hdiff.values(flow=True)[...,1::2], hdiff.variances(flow=True)[...,1::2], hdiff, axis_name)
-    downshift = shiftHist(hdiff.values(flow=True)[...,2::2], hdiff.variances(flow=True)[...,2::2], hdiff, axis_name)
+    upshift = shiftHist(hdiff.values()[...,1::2], hdiff.variances()[...,1::2], hdiff, axis_name)
+    downshift = shiftHist(hdiff.values()[...,2::2], hdiff.variances()[...,2::2], hdiff, axis_name)
     return upshift, downshift
 
 def hessianPdfUnc(h, axis_name="tensor_axis_0", uncType="symHessian", scale=1.):
