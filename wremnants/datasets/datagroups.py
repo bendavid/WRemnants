@@ -238,11 +238,11 @@ class datagroups(object):
             self.groups[proc]["selectOp"] = op
 
     @staticmethod
-    def histName(baseName, procName="", syst="", nominalName="nominal"):
+    def histName(baseName, procName="", syst=""):
         # This is kind of hacky to deal with the different naming from combine
-        if baseName != "x" and (syst == "" or syst == nominalName):
+        if baseName != "x" and (syst == ""):
             return baseName
-        if baseName in ["", "x", "nominal"] and syst:
+        if baseName in ["", "x"] and syst:
             return syst
         if syst[:len(baseName)] == baseName:
             return syst

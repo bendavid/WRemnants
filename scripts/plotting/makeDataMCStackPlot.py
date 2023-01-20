@@ -21,7 +21,8 @@ xlabels = {
     "mll" : r"m$_{\ell\ell}$ (GeV)",
     "costhetastarll" : r"$\cos{\phi^{\star}_{\ell\ell}}$",
     "phistarll" : r"$\phi^{\star}_{\ell\ell}$",
-    "recoil_MET_pt" : r"p$_{\mathrm{T}}^{miss}$ (recoil corr.)",
+    "MET_pt" : r"p$_{\mathrm{T}}^{miss}$ (GeV)",
+    "mt" : r"m$_{T}^{\ell\nu}$ (GeV)",
 }
 
 parser = argparse.ArgumentParser()
