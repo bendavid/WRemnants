@@ -130,8 +130,13 @@ class datagroups(object):
     def histNameCombine(self, procName, baseName, syst, channel):
         return datagroups.histNameCombine(procName, baseName, syst, channel)
 
-    def loadHistsForDatagroups(self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="", nominalIfMissing=True,
-                               applySelection=True, forceNonzero=True, pseudodata=False, preOpMap={}, preOpArgs={}, scaleToNewLumi=-1):
+    def loadHistsForDatagroups(
+        self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="",
+        nominalIfMissing=True, applySelection=True, forceNonzero=True, pseudodata=False,
+        preOpMap={}, preOpArgs={}, scaleToNewLumi=-1
+    ):
+        logger.debug(f"the basename and syst is: {baseName}, {syst}")
+        logger.debug(f"The procsToRead and excludedProcs are: {procsToRead}, {excluded_procs}")
         if self.rtfile and self.combine:
             self.setHistsCombine(baseName, syst, channel, procsToRead, excluded_procs, label)
         else:
@@ -233,11 +238,11 @@ class datagroups(object):
             self.groups[proc]["selectOp"] = op
 
     @staticmethod
-    def histName(baseName, procName="", syst="", nominalName="nominal"):
+    def histName(baseName, procName="", syst=""):
         # This is kind of hacky to deal with the different naming from combine
-        if baseName != "x" and (syst == "" or syst == nominalName):
+        if baseName != "x" and (syst == ""):
             return baseName
-        if baseName in ["", "x", "nominal"] and syst:
+        if baseName in ["", "x"] and syst:
             return syst
         if syst[:len(baseName)] == baseName:
             return syst
