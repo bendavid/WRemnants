@@ -408,11 +408,11 @@ def zmumu_perp_RawPFMET():
         fitF, params, cParams = "power", [4.66409e-01, 3.46158e-01, 3.44635e+00], [False, False, False]
         rls.parameterizeGauss(jsIn, jsOut, comp, "p1", fitF, params, outDir_param, binning_qT, procLabel, metLabel, cParams=cParams, fitMin=0, fitMax=100, yMax=50, xMax=100, yTitle = "#sigma_{2} (GeV)")
         
-        fitF, params, cParams = "power", [1, 1, 1], [False, False, False]
-        rls.parameterizeGauss(jsIn, jsOut, comp, "p2", fitF, params, outDir_param, binning_qT, procLabel, metLabel, cParams=cParams, fitMin=0, fitMax=100, yMax=50, xMax=100, yTitle = "#sigma_{3} (GeV)", cutOffMin=6)
+        fitF, params, cParams = "power", [1, 1, 7.5], [False, False, True]
+        rls.parameterizeGauss(jsIn, jsOut, comp, "p2", fitF, params, outDir_param, binning_qT, procLabel, metLabel, cParams=cParams, fitMin=0, fitMax=100, yMax=50, xMax=100, yTitle = "#sigma_{3} (GeV)", cutOffMin=7.5)
         
         fitF, params, cParams = "power", [3.01503e-01, 5.26286e-01, 8.13076e+00], [False, False, False]
-        rls.parameterizeGauss(jsIn, jsOut, comp, "p3", fitF, params, outDir_param, binning_qT, procLabel, metLabel, cParams=cParams, fitMin=0, fitMax=100, yMax=50, xMax=100, yTitle = "#sigma_{4} (GeV)")
+        rls.parameterizeGauss(jsIn, jsOut, comp, "p3", fitF, params, outDir_param, binning_qT, procLabel, metLabel, cParams=cParams, fitMin=0, fitMax=100, yMax=50, xMax=100, yTitle = "#sigma_{4} (GeV)", cutOffMax=13)
         
         
         fitF, params, cParams = "linear", [0, 0], [False, False]
@@ -436,9 +436,49 @@ def zmumu_perp_RawPFMET():
         return
 
 
-
-
+    outDir_param_v0 = "%s/params_v0" % baseDir
     if False:
+        jsOut = {}
+        outDir_param = outDir_param_v0
+        functions.prepareDir(outDir_param, True)
+        jsIn = functions.loadJSON("%s/results.json" % outDir_fits_v0)
+        
+        fitF, params, cParams = "power", [9.90024e-02, 9.34622e-01, 1.26746e+01], [False, False, False]
+        rls.parameterizeGauss(jsIn, jsOut, comp, "p0", fitF, params, outDir_param, binning_qT, procLabel, metLabel, cParams=cParams, fitMin=0, fitMax=100, yMax=50, xMax=100, yTitle = "#sigma_{1} (GeV)")
+
+        fitF, params, cParams = "power", [4.66409e-01, 3.46158e-01, 3.44635e+00], [False, False, False]
+        rls.parameterizeGauss(jsIn, jsOut, comp, "p1", fitF, params, outDir_param, binning_qT, procLabel, metLabel, cParams=cParams, fitMin=0, fitMax=100, yMax=50, xMax=100, yTitle = "#sigma_{2} (GeV)")
+        
+        fitF, params, cParams = "power", [1, 1, 6.5], [False, False, False]
+        rls.parameterizeGauss(jsIn, jsOut, comp, "p2", fitF, params, outDir_param, binning_qT, procLabel, metLabel, cParams=cParams, fitMin=0, fitMax=100, yMax=50, xMax=100, yTitle = "#sigma_{3} (GeV)", cutOffMin=6)
+        
+        fitF, params, cParams = "power", [3.01503e-01, 5.26286e-01, 6.5], [False, False, False]
+        rls.parameterizeGauss(jsIn, jsOut, comp, "p3", fitF, params, outDir_param, binning_qT, procLabel, metLabel, cParams=cParams, fitMin=0, fitMax=100, yMax=50, xMax=100, yTitle = "#sigma_{4} (GeV)")
+        
+        
+        fitF, params, cParams = "linear", [0, 0], [False, False]
+        rls.parameterizeGauss(jsIn, jsOut, comp, "p4", fitF, params, outDir_param, binning_qT, procLabel, metLabel, cParams=cParams, fitMin=0, fitMax=100, yMax=50, xMax=100, yMin=-5, cutOffMax=3, cutOffMin=-3, yTitle = "#mu_{1} (GeV)")
+        
+        fitF, params, cParams = "linear", [0, 0], [False, False]
+        rls.parameterizeGauss(jsIn, jsOut, comp, "p5", fitF, params, outDir_param, binning_qT, procLabel, metLabel, cParams=cParams, fitMin=0, fitMax=100, yMax=50, xMax=100, yMin=-5, cutOffMax=3, cutOffMin=-3, yTitle = "#mu_{2} (GeV)")
+        
+        #fitF, params, cParams = "linear", [0, 0], [False, False]
+        #rls.parameterizeGauss(jsIn, jsOut, comp, "p6", fitF, params, outDir_param, binning_qT, procLabel, metLabel, cParams=cParams, fitMin=0, fitMax=100, yMax=50, xMax=100, yMin=-5, cutOffMax=3, cutOffMin=-3, yTitle = "#mu_{3} (GeV)", doFit=True)
+
+        
+        # add norm parameters
+        rls.addParam(jsOut, "p6", "[0]", [0.2])
+        rls.addParam(jsOut, "p7", "[0]", [0.35])
+        rls.addParam(jsOut, "p8", "[0]", [0.25])
+        
+
+        jsOut['nParams'] = len(jsOut)
+        functions.writeJSON("%s/results.json" % outDir_param_v0, jsOut)
+        return
+
+
+
+    if True:
         outDir_refit = "%s/params_refit" % baseDir
         outDir_refit_fits = "%s/fits_refit" % baseDir
         functions.prepareDir(outDir_refit, False)
@@ -466,11 +506,11 @@ def zmumu_perp_RawPFMET():
         rls.plotParameter("p8", jsIn, outDir_refit, binning_qT, procLabel, metLabel, yMin=0, yMax=1, yTitle = "n_{3} (GeV)")
    
 
-    exportCfg = {}
-    exportCfg["mean"] = ["p4", "p5", "p4", "p5"]
-    exportCfg["sigma"] = ["p0", "p1", "p2", "p3"]
-    exportCfg["norm"] = ["p6", "p7", "p8"]
-    rls.export(exportCfg, "%s/recoil_zmumu_perp.json" % outCfgDir, "%s/results_refit.json" % baseDir)
+    #exportCfg = {}
+    #exportCfg["mean"] = ["p4", "p5", "p4", "p5"]
+    #exportCfg["sigma"] = ["p0", "p1", "p2", "p3"]
+    #exportCfg["norm"] = ["p6", "p7", "p8"]
+    #rls.export(exportCfg, "%s/recoil_zmumu_perp.json" % outCfgDir, "%s/results_refit.json" % baseDir)
    
 
 def zmumu_para_qT_RawPFMET():
@@ -1775,7 +1815,7 @@ def do_singlemuon_para_DeepMETReso():
 def readProc(groups, hName, procs):
 
     label = "%s_%s" % (hName, procs[0]) 
-    groups.setHists(hName, "", label=label, procsToRead=procs, selectSignal=False)
+    groups.setHists(hName, "", label=label, procsToRead=procs)
     bhist = groups.groups[procs[0]][label]
     return bhist 
 
