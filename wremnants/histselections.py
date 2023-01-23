@@ -4,6 +4,7 @@ import numpy as np
 
 hist_map = {
     "eta_pt_unrolled" : "nominal",
+    "eta_pt" : "nominal",
     "eta" : "nominal",
     "pt" : "nominal",
     "mll" : "dilepton",
