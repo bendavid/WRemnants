@@ -81,7 +81,7 @@ def nll_loss(parms, xvals, xwidths, yvals, yvariances, func, norm_axes = None, *
     nllv_safe = tf.where(isnull, tf.zeros_like(nllv), nllv)
     return tf.reduce_sum(nllv_safe)
 
-def fit_hist(hist, func, initial_parmvals, max_iter = 5, edmtol = 1e-5, mode = "chisq", norm_axes = None, xargs=(), bnds=None):
+def fit_hist(hist, func, initial_parmvals, max_iter = 5, edmtol = 1e-5, mode = "chisq", norm_axes = None, xargs=(), bnds=None, sumw2=False):
 
     dtype = tf.float64
 
@@ -138,6 +138,12 @@ def fit_hist(hist, func, initial_parmvals, max_iter = 5, edmtol = 1e-5, mode = "
         converged = edmval < edmtol and np.abs(edmval) >= 0. and eigvals[0] > 0.
         if converged:
             break
+            
+    if sumw2 and mode == "nll":
+        loss_sumw2, grad_sumw2, hess_sumw2 = val_grad_hess(floss, parms, xvals, xwidths, yvariances, yvariances, func, norm_axes, xargs)
+        loss_sumw2, grad_sumw2, hess_sumw2 = loss_sumw2.numpy(), grad_sumw2.numpy(), hess_sumw2.numpy()
+        
+        
 
     status = 1
     covstatus = 1
@@ -149,6 +155,11 @@ def fit_hist(hist, func, initial_parmvals, max_iter = 5, edmtol = 1e-5, mode = "
 
     try:
         cov = covscale*np.linalg.inv(hess)
+        if sumw2 and mode == "nll":
+            #cov_sumw2 = covscale*np.linalg.inv(hess_sumw2)
+            cov_sumw2_inv = hess_sumw2/covscale
+            cov = cov*cov_sumw2_inv*cov
+            
     except np.linalg.LinAlgError:
         cov = np.zeros_like(hess)
         covstatus = 1

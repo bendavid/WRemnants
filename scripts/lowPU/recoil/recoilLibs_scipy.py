@@ -62,7 +62,10 @@ def diagonalize(cov_matrix, parms_nom, sigma=1):
 
 
         parms_dnom_eig = copy.deepcopy(parms_nom_eig)
-        parms_dnom_eig[i] += sigma*math.sqrt(eig)
+        if eig < 0:
+            print("Eigenvalue negative for parIdx=%d, value=%f" % (i, eig))
+        else:
+            parms_dnom_eig[i] += sigma*math.sqrt(eig)
         parms_dnom = np.dot(parms_dnom_eig, eig_vec_inv)
 
         parms_pert.append(parms_dnom)
@@ -1160,10 +1163,10 @@ def doFitMultiGauss_fit(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binni
         yields_err.append(yield_err)
         
         args['qT'] = qT_tf # always propagate qT, in case it is used
-        
+            
         print(" -> Start fitting")
         start = time.time()
-        res = fitter.fit_hist(h, func_model, np.array(func_parms), max_iter = 5, edmtol = 1e-5, mode = "nll", xargs=args) # nll chisq_normalized
+        res = fitter.fit_hist(h, func_model, np.array(func_parms), max_iter = 5, edmtol = 1e-5, mode = "nll", xargs=args, sumw2=True) # nll chisq_normalized
         end = time.time()
             
         parms_vals = res['x']
@@ -2608,7 +2611,7 @@ def combinedFit_scipy(bhist, comp, fitCfg, binning_qT, bkgCfg = {}, recoilLow=-1
                
     print(" -> Start NLL fitting")
     start = time.time()
-    res = fitter.fit_hist(h, func_model, np.array(func_parms), max_iter = 5, edmtol = 1e-5, mode = "nll", xargs=args, bnds=bnds, norm_axes=[1]) # nll chisq_normalized
+    res = fitter.fit_hist(h, func_model, np.array(func_parms), max_iter = 5, edmtol = 1e-5, mode = "nll", xargs=args, bnds=bnds, norm_axes=[1], sumw2=True) # nll chisq_normalized
     end = time.time()
             
     parms_vals = res['x']
@@ -2622,6 +2625,8 @@ def combinedFit_scipy(bhist, comp, fitCfg, binning_qT, bkgCfg = {}, recoilLow=-1
 
     print(" -> Fit ended, time=%.3f s, status=%d, cov_status=%d" % (end-start, fit_status, cov_status))
     print(parms_vals)
+    print("cov")
+    print(cov_matrix)
     
     if chisq_refit:
         print(" -> Start CHISQ fitting")

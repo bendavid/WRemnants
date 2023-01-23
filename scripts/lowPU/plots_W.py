@@ -336,7 +336,6 @@ def parseProc(histCfg, procName, syst="", rebin=1):
     charge = histCfg['charge']
     
     label = "%s_%s" % (hName, procName)
-    print(label)
     groups.setHists(hName, "", label=label, procsToRead=[procName])
     bhist = groups.groups[procName][label]
     
@@ -344,22 +343,16 @@ def parseProc(histCfg, procName, syst="", rebin=1):
     if charge == "combined": bhist = bhist[{"charge" : s[::hist.sum]}]
     elif charge == "plus": bhist = bhist[{"charge" : bhist.axes["charge"].index(+1)}]
     elif charge == "minus": bhist = bhist[{"charge" : bhist.axes["charge"].index(-1)}]
-    #bhist = bhist[{"eta" : s[::hist.sum]}]
-    
-    print(bhist)
-    #sys.exit()
-    
-    #bhist = bhist[{"passIso" : True}]
-    #bhist = bhist[{"passMT" : True}]
-    #print(bhist)
     
     rhist = narf.hist_to_root(bhist)
     rhist = functions.Rebin(rhist, rebin)
     rhist.SetName(label)
     rhist = doOverlow(rhist)
     
-    if procName == "SingleMuon" or procName == "SingleElectron": pass
+    if procName == "Data": pass
     else: rhist.Scale(MC_SF)
+    
+    if procName == "Fake": rhist.Scale(1.2)
     
     #rhist.Scale(1, "width")
 
@@ -586,6 +579,7 @@ def parseHists(histCfg, leg, rebin=1, projectionx=[], noData=False):
     # do systematics
     for i,proc in enumerate(procs):
         
+        continue
         hNom = parseProc(histCfg, proc, rebin=rebin)
         hPert = doRecoilStatSyst(histCfg, proc, hNom, h_err, rebin)
         
@@ -796,9 +790,7 @@ def parseHists(histCfg, leg, rebin=1, projectionx=[], noData=False):
                         h_bkg_err.SetBinError(k, math.sqrt(sigma*sigma + h_bkg_err.GetBinError(k)*h_bkg_err.GetBinError(k)))
                     '''
      
-    for j in range(0, h_err.GetNbinsX()+1):
-        print(h_err.GetBinCenter(j), h_err.GetBinError(j), h_bkg.GetBinError(j))
-    #sys.exit()     
+
     # ratios (bands)
     h_bkg_ratio = h_bkg.Clone("h_bkg_ratio") # nominal point, need to remove stat. error
     h_err_ratio = h_err.Clone("syst_ratio")
@@ -931,7 +923,7 @@ if __name__ == "__main__":
     print("Start")
     flavor = "mu"
     met = "RawPFMET" # DeepMETReso RawPFMET
-    charge = "combined" # combined plus minus
+    charge = "plus" # combined plus minus
     lowPU = False
 
 
@@ -959,7 +951,7 @@ if __name__ == "__main__":
     else:
     
         MC_SF = 1.0
-        if flavor == "mu": MC_SF = 1.026
+        #if flavor == "mu": MC_SF = 1.026
         #MC_SF = 1.0
         
         label = "W^{#%s}, %s" % ("pm" if charge == "combined" else charge, met)
