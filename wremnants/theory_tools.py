@@ -197,6 +197,7 @@ def define_weights_and_corrs(df, weight_expr, dataset_name, helpers, args):
             weight_expr = f"{weight_expr}*MEParamWeightAltSet3[0]"
 
     df = define_prefsr_vars(df)
+    df = define_ew_vars(df)
 
     if args.theory_corr and dataset_name in helpers:
         helper = helpers[dataset_name]
@@ -226,6 +227,9 @@ def define_theory_corr(df, weight_expr, helpers, generators, modify_central_weig
 
         if "Helicity" in generator:
             df = df.Define(f"{generator}Weight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "nominal_weight_uncorr"])
+        elif 'ew' in generator:
+            df = df.Define("ewDummy", "0.")
+            df = df.Define(f"{generator}Weight_tensor", helper, ["ewMll", "ewLogDeltaM", "ewDummy", "chargeVgen", "nominal_weight_uncorr"])
         else:
             df = df.Define(f"{generator}Weight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "nominal_weight_uncorr"])
 

@@ -96,7 +96,6 @@ def build_graph(df, dataset):
         results.append(df.HistoBoost("nominal_genlep", lep_axes, [*lep_cols, "nominal_weight"]))
 
     if args.ewHists and (isW or isZ):
-        df = theory_tools.define_ew_vars(df)
         if isZ:
             massBins = theory_tools.make_ew_binning(mass = 91.1535, width = 2.4932, initialStep=0.010)
         else:
