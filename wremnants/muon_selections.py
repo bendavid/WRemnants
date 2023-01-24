@@ -5,9 +5,7 @@ def apply_met_filters(df):
 
     return df
 
-def select_veto_muons(df, is_w_like):
-
-    nMuons = 2 if is_w_like else 1
+def select_veto_muons(df, nMuons=1):
 
     # n.b. charge = -99 is a placeholder for invalid track refit/corrections (mostly just from tracks below
     # the pt threshold of 8 GeV in the nano production)
@@ -18,9 +16,7 @@ def select_veto_muons(df, is_w_like):
 
     return df
 
-def select_good_muons(df, is_w_like, use_trackerMuons):
-
-    nMuons = 2 if is_w_like else 1
+def select_good_muons(df, nMuons=1, use_trackerMuons=False, use_isolation=False):
 
     if use_trackerMuons:
         if dataset.group in ["Top", "Diboson"]:
@@ -31,7 +27,7 @@ def select_good_muons(df, is_w_like, use_trackerMuons):
         df = df.Define("Muon_category", "Muon_isGlobal")
 
     goodMuonsSelection = "vetoMuons && Muon_mediumId && Muon_category"
-    if is_w_like:
+    if use_isolation:
         # for w like we directly require isolated muons, for w we need non-isolated for qcd estimation
         goodMuonsSelection += " && Muon_pfRelIso04_all < 0.15"
 
@@ -56,7 +52,7 @@ def veto_electrons(df):
     
     return df
 
-def select_standalone_muons(df, dataset, use_trackerMuons, muons="goodMuons", idx=0):
+def select_standalone_muons(df, dataset, use_trackerMuons=False, muons="goodMuons", idx=0):
 
     from utilities.common import muonEfficiency_standaloneNumberOfValidHits as nHitsSA
 
@@ -75,7 +71,7 @@ def select_standalone_muons(df, dataset, use_trackerMuons, muons="goodMuons", id
         df = df.Define(f"{muons}_SAeta{idx}", f"Muon_standaloneEta[{muons}][{idx}]")
         df = df.Define(f"{muons}_SAphi{idx}", f"Muon_standalonePhi[{muons}][{idx}]")
     
-    df = df.Filter(f"{muons}_SApt{idx} > 15.0 && wrem::deltaR2({muons}_SAeta{idx}, {muons}_SAphi{idx}, {muons}_pt{idx}, {muons}_phi{idx}) < 0.09")
+    df = df.Filter(f"{muons}_SApt{idx} > 15.0 && wrem::deltaR2({muons}_SAeta{idx}, {muons}_SAphi{idx}, {muons}_eta{idx}, {muons}_phi{idx}) < 0.09")
 
     # the next cut is mainly needed for consistency with the reco efficiency measurement for the case with global muons
     # note, when SA does not exist this cut is still fine because of how we define these variables
