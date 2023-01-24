@@ -30,6 +30,22 @@ def make_muon_calibration_helpers(mc_filename=data_dir+"/calibration/correctionR
 
     return mc_helper, data_helper, uncertainty_helper
 
+def make_muon_bias_helpers(filename=data_dir+"/calibration/correctionResults_v718_idealgeom_gensim.root"):
+    # this helper adds a correction for the bias from nonclosure to the muon pT
+
+    helper = ROOT.wrem.BiasCorrector(filename)
+
+    uncertainty_hist = get_dummy_uncertainties()
+    uncertainty_hist_cpp = narf.hist_to_pyroot_boost(uncertainty_hist, tensor_rank = 2)
+    # min gen pt = 9 GeV to avoid threshold effects
+    # max weight = 10 to protect against outliers
+    uncertainty_helper = ROOT.wrem.calibration_uncertainty_helper[type(uncertainty_hist_cpp)](ROOT.std.move(uncertainty_hist_cpp), 9., 10.)
+
+    down_up_axis = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "downUpVar")
+    uncertainty_helper.tensor_axes = (uncertainty_hist.axes["calvar"], down_up_axis)
+
+    return helper, uncertainty_helper
+
 def get_dummy_uncertainties():
     axis_eta = hist.axis.Regular(48, -2.4, 2.4, name = "eta")
     axis_calvar = hist.axis.Integer(0, 1, underflow=False, overflow=False, name = "calvar")
