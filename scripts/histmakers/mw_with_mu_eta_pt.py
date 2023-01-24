@@ -43,8 +43,13 @@ datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt 
 era = args.era
 
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
-#qcdScaleByHelicity_Zhelper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = True)
-qcdScaleByHelicity_Whelper = wremnants.makeQCDScaleByHelicityHelper()
+
+qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper()
+axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
+axis_ptVgen = hist.axis.Variable(
+    common.ptV_10quantiles_binning, 
+    name = "ptVgen", underflow=False
+)
 
 # custom template binning
 template_neta = int(args.eta[0])
@@ -68,12 +73,6 @@ axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, nam
 axis_passIso = hist.axis.Boolean(name = "passIso")
 axis_passMT = hist.axis.Boolean(name = "passMT")
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
-
-axis_chargeVgen = qcdScaleByHelicity_Whelper.hist.axes["chargeVgen"]
-axis_ptVgen = hist.axis.Variable(
-    common.ptV_10quantiles_binning, 
-    name = "ptVgen", underflow=False,
-)
 
 # axes for recoil/MET
 axis_mt = hist.axis.Variable([0] + list(range(40, 110, 1)) + [110, 112, 114, 116, 118, 120, 125, 130, 140, 160, 180, 200], name = "mt",underflow=False, overflow=True)
@@ -233,7 +232,8 @@ def build_graph(df, dataset):
             )
         if smearing_weights and (isW or isZ): 
             nominal_cols_cvh, nominal_cols_uncrct, nominal_cols_gen, nominal_cols_gen_smeared = muon_calibration.make_alt_reco_and_gen_hists(df, results, nominal_axes)
-            if args.validationHists: wremnants.make_reco_over_gen_hists(df, results)
+            if args.validationHists: 
+                wremnants.make_reco_over_gen_hists(df, results)
 
         
     results.append(df.HistoBoost("MET_pt", [axis_MET_pt, axis_charge, axis_passMT, axis_passIso], ["MET_corr_rec_pt", "goodMuons_charge0", "passMT", "passIso", "nominal_weight"]))
@@ -249,18 +249,7 @@ def build_graph(df, dataset):
         qcdJetPt45 = dQCDbkGVar.HistoBoost("qcdJetPt45", nominal_axes, [*nominal_cols, "nominal_weight"])
         results.append(qcdJetPt45)
 
-        for key,helper in muon_efficiency_helper_stat.items():
-            if "iso" in key:
-                df = df.Define(f"effStatTnP_{key}_tensor", helper, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0", "passIso", "nominal_weight"])
-            else:
-                df = df.Define(f"effStatTnP_{key}_tensor", helper, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0", "nominal_weight"])
-            effStatTnP = df.HistoBoost(f"effStatTnP_{key}", nominal_axes, [*nominal_cols, f"effStatTnP_{key}_tensor"], tensor_axes = helper.tensor_axes)
-            results.append(effStatTnP)
-        
-        df = df.Define("effSystTnP_weight", muon_efficiency_helper_syst, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso", "nominal_weight"])
-        effSystTnP = df.HistoBoost("effSystTnP", nominal_axes, [*nominal_cols, "effSystTnP_weight"], tensor_axes = muon_efficiency_helper_syst.tensor_axes)
-        results.append(effSystTnP)
-
+        df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, nominal_axes, nominal_cols)
         df = syst_tools.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, nominal_axes, nominal_cols)
         
         # luminosity, done here as shape variation despite being a flat scaling so to facilitate propagating to fakes afterwards
@@ -281,18 +270,15 @@ def build_graph(df, dataset):
             syst_tools.add_scale_hist(results, df, scale_axes, scale_cols)
 
             if isW and not args.skipHelicity:
-                helicity_helper = qcdScaleByHelicity_Whelper
-                # TODO: Should have consistent order here with the scetlib correction function
-                df = df.Define("helicityWeight_tensor", helicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
-                qcdScaleByHelicityUnc = df.HistoBoost("qcdScaleByHelicity", [*nominal_axes, axis_ptVgen, axis_chargeVgen], [*nominal_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=helicity_helper.tensor_axes)
-                results.append(qcdScaleByHelicityUnc)
+                # TODO: Should have consistent order here with the scetlib correction function                    
+                syst_tools.add_qcdScaleByHelicityUnc_hist(results, df, qcdScaleByHelicity_helper, scale_axes, scale_cols)
 
             syst_tools.add_pdf_hists(results, df, dataset.name, nominal_axes, nominal_cols, args.pdfs)
 
             df = syst_tools.define_mass_weights(df, isW)
             if isW:
-                massWeight = df.HistoBoost("massWeight", nominal_axes, [*nominal_cols, "massWeight_tensor_wnom"])
-                results.append(massWeight)
+                syst_tools.add_massweights_hist(results, df, nominal_axes, nominal_cols)
+
 
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:
