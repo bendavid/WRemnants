@@ -228,7 +228,7 @@ def define_theory_corr(df, weight_expr, helpers, generators, modify_central_weig
         if "Helicity" in generator:
             df = df.Define(f"{generator}Weight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "nominal_weight_uncorr"])
         elif 'ew' in generator:
-            df = df.Define("ewDummy", "0.")
+            df = df.DefinePerSample("ewDummy", "0.")
             df = df.Define(f"{generator}Weight_tensor", helper, ["ewMll", "ewLogDeltaM", "ewDummy", "chargeVgen", "nominal_weight_uncorr"])
         else:
             df = df.Define(f"{generator}Weight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "nominal_weight_uncorr"])

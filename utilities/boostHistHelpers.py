@@ -343,7 +343,7 @@ def combineUpDownVarHists(down_hist, up_hist):
         hnew.view(flow=True)[...] = np.stack((down_hist.view(flow=True), up_hist.view(flow=True)), axis = -1)
         return hnew
 
-def smoothenTowardsOne(h):
+def smoothTowardsOne(h):
     vals = h.values(flow=True)
     vars = h.variances(flow=True)
     relErr = np.minimum(1., relVariance(vals, vars, fillOnes=True))
