@@ -33,7 +33,7 @@ for proc in procs:
     hnum = hh.normalize(res[f'{proc}_{args.num}']['output']['nominal_ew'])
     hden = hh.normalize(res[f'{proc}_{args.den}']['output']['nominal_ew'])
     hratio = hh.divideHists(hnum, hden)
-    hratio = hh.smoothenTowardsOne(hratio)
+    hratio = hh.smoothTowardsOne(hratio)
 
     # Add dummy axis
     axis_dummy = hist.axis.Regular(1, -10., 10., underflow=False, overflow=False, name = "dummy")
