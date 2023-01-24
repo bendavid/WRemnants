@@ -46,42 +46,6 @@ def get_dummy_uncertainties():
 
     return h
 
-def define_jpsi_crctd_muons_pt(df, helper):
-    df = df.Define("trigMuons_jpsi_crctd_pt", helper,
-        [
-            "trigMuons_cvh_eta",
-            "trigMuons_cvh_pt",
-            "trigMuons_charge0"
-        ]
-    )
-    df = df.Define("nonTrigMuons_jpsi_crctd_pt", helper,
-        [
-            "nonTrigMuons_cvh_eta",
-            "nonTrigMuons_cvh_pt",
-            "nonTrigMuons_charge0"
-        ]
-    )
-    return df
-
-def define_jpsi_crctd_muons_pt_unc(df, helper):
-    df = df.Define("trigMuons_jpsi_crctd_pt_unc", helper,
-        [
-            "trigMuons_cvh_eta",
-            "trigMuons_cvh_pt",
-            "trigMuons_charge0",
-            "trigMuons_jpsi_crctd_pt"
-        ]
-    )
-    df = df.Define("nonTrigMuons_jpsi_crctd_pt_unc", helper,
-        [
-            "nonTrigMuons_cvh_eta",
-            "nonTrigMuons_cvh_pt",
-            "nonTrigMuons_charge0",
-            "nonTrigMuons_jpsi_crctd_pt"
-        ]
-    )
-    return df
-
 def define_corrected_muons(df, helper, corr_type, dataset):
     if not (dataset.is_data or dataset.name in common.vprocs):
         corr_type = "none" 
@@ -98,7 +62,7 @@ def define_corrected_muons(df, helper, corr_type, dataset):
         df = df.Define("Muon_cvhmergedGlobalIdxs", "wrem::splitNestedRVec(Muon_cvhmergedGlobalIdxs_Vals, Muon_cvhmergedGlobalIdxs_Counts)")
         df = df.Define(f"Muon_{corr_branch}JacRef", f"wrem::splitNestedRVec(Muon_{corr_branch}JacRef_Vals, Muon_{corr_branch}JacRef_Counts)")
 
-        df = df.Define("Muon_correctedMom4Charge", cvh_helper, [f"Muon_{corr_branch}Pt", f"Muon_{corr_branch}Eta", f"Muon_{corr_branch}Phi", f"Muon_{corr_branch}Charge", "Muon_cvhmergedGlobalIdxs", f"Muon_{corr_branch}JacRef"])
+        df = df.Define("Muon_correctedMom4Charge", helper, [f"Muon_{corr_branch}Pt", f"Muon_{corr_branch}Eta", f"Muon_{corr_branch}Phi", f"Muon_{corr_branch}Charge", "Muon_cvhmergedGlobalIdxs", f"Muon_{corr_branch}JacRef"])
 
         # split into individual vectors
         df = df.Define("Muon_correctedPt", "ROOT::VecOps::RVec<float> res(Muon_correctedMom4Charge.size()); std::transform(Muon_correctedMom4Charge.begin(), Muon_correctedMom4Charge.end(), res.begin(), [](const auto &x) { return x.first.Pt(); } ); return res;")
