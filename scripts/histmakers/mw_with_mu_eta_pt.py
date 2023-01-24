@@ -142,8 +142,8 @@ def build_graph(df, dataset):
     calibration_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
     df = muon_calibration.define_corrected_muons(df, calibration_helper, args.muonCorr, dataset)
 
-    df = muon_selections.select_veto_muons(df, False)
-    df = muon_selections.select_good_muons(df, False, args.trackerMuons)
+    df = muon_selections.select_veto_muons(df, nMuons=1)
+    df = muon_selections.select_good_muons(df, nMuons=1, use_trackerMuons=args.trackerMuons, use_isolation=False)
 
     # the corrected RECO muon kinematics, which is intended to be used as the nominal
     df = muon_calibration.define_corrected_reco_muon_kinematics(df)
