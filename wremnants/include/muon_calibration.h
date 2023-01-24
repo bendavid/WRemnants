@@ -411,4 +411,41 @@ private:
         }
         return Take(covmat, idxRange);
     }
+  
+template <typename T>
+class BiasCorrectionsHelper {
+
+public:
+
+    using hist_t = T;
+    using tensor_t = typename T::storage_type::value_type::tensor_t;
+    static constexpr auto sizes = narf::tensor_traits<tensor_t>::sizes;
+    static constexpr auto nUnc = sizes[sizes.size() - 1]; // 1 for cnetral value
+    using out_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<nUnc, 2>>;
+
+    BiasCorrectionsHelper(T&& corrections) :
+        correctionHist_(std::make_shared<const T>(std::move(corrections))) {}
+
+    // helper for bin lookup which implements the compile-time loop over axes
+    template<typename... Xs, std::size_t... Idxs>
+    const tensor_t &get_tensor_impl(std::index_sequence<Idxs...>, const Xs&... xs) {
+        return correctionHist_->at(correctionHist_->template axis<Idxs>().index(xs)...).data();
+    }
+
+    // variadic templated bin lookup
+    template<typename... Xs>
+    const tensor_t &get_tensor(const Xs&... xs) {
+        return get_tensor_impl(std::index_sequence_for<Xs...>{}, xs...);
+    }
+    
+    // for central value of pt
+    float operator() (float eta, float pt, int charge) {
+        const double bias = get_tensor(eta, pt);
+        return (1.0 + bias) * pt;
+    }
+
+private:
+    std::shared_ptr<const T> correctionHist_;
+};
+
 }
