@@ -69,13 +69,17 @@ def define_corrected_muons(df, helper, corr_type, dataset):
         df = df.Define("Muon_correctedEta", "ROOT::VecOps::RVec<float> res(Muon_correctedMom4Charge.size()); std::transform(Muon_correctedMom4Charge.begin(), Muon_correctedMom4Charge.end(), res.begin(), [](const auto &x) { return x.first.Eta(); } ); return res;")
         df = df.Define("Muon_correctedPhi", "ROOT::VecOps::RVec<float> res(Muon_correctedMom4Charge.size()); std::transform(Muon_correctedMom4Charge.begin(), Muon_correctedMom4Charge.end(), res.begin(), [](const auto &x) { return x.first.Phi(); } ); return res;")
         df = df.Define("Muon_correctedCharge", "ROOT::VecOps::RVec<int> res(Muon_correctedMom4Charge.size()); std::transform(Muon_correctedMom4Charge.begin(), Muon_correctedMom4Charge.end(), res.begin(), [](const auto &x) { return x.second; }); return res;")
-    else:
+    elif "trackfit_only" in corr_type:
+        # TODO: Is this a reasonable configuration?
         fit = "cvhideal" if corr_type == "trackfit_only_mctruth" and not dataset.is_data else "cvh"
+        print("Trackfit", fit)
         df = df.Define("Muon_correctedPt", f"Muon_{fit}Pt")
         df = df.Define("Muon_correctedEta", f"Muon_{fit}Eta")
         df = df.Define("Muon_correctedPhi", f"Muon_{fit}Phi")
         df = df.Define("Muon_correctedCharge", f"Muon_{fit}Charge")
-
+    else:
+        raise ValueError(f"Invalid correction type choice {corr_type}")
+        
     return df
 
 def define_trigger_muons(df, helper, corr_type):

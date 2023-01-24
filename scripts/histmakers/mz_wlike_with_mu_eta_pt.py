@@ -247,7 +247,7 @@ def build_graph(df, dataset):
             unc_cols = dilepton_cols
             unc_axes = dilepton_axes
 
-        unc_df = syst_tools.add_muon_efficiency_unc_hists(results, unc_df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, unc_axes, unc_cols, args.uncertainty_hist)
+        unc_df = syst_tools.add_muon_efficiency_unc_hists(results, unc_df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, unc_axes, unc_cols, args.uncertainty_hist, is_w_like=True)
         unc_df = syst_tools.add_L1Prefire_unc_hists(results, unc_df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, unc_axes, unc_cols, args.uncertainty_hist)
 
         # n.b. this is the W analysis so mass weights shouldn't be propagated
