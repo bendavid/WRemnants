@@ -187,13 +187,13 @@ def add_pdf_hists(results, df, dataset, axes, cols, pdfs, base_name="nominal"):
         results.extend([pdfHist, alphaSHist])
     return df
 
-def add_scale_hist(results, df, axes, cols, base_name="nominal"):
+def add_qcdScale_hist(results, df, axes, cols, base_name="nominal"):
     name = datagroups2016.histName(base_name, syst="qcdScale")
     scaleHist = df.HistoBoost(name, axes, [*cols, "scaleWeights_tensor_wnom"], tensor_axes=theory_tools.scale_tensor_axes)
     results.append(scaleHist)
 
 def add_qcdScaleByHelicityUnc_hist(results, df, helper, axes, cols, base_name="nominal"):
-    name = datagroups2016.histName(base_name, syst="helicityWeight_tensor")
+    name = datagroups2016.histName(base_name, syst="qcdScaleByHelicity")
     df = df.Define("helicityWeight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
     qcdScaleByHelicityUnc = df.HistoBoost(name, axes, [*cols,"helicityWeight_tensor"], tensor_axes=helper.tensor_axes)
     results.append(qcdScaleByHelicityUnc)
@@ -242,13 +242,28 @@ def add_L1Prefire_unc_hists(results, df, helper_stat, helper_syst, axes, cols, b
 
     return df
 
-def add_muonscale_hist(results, df, netabins, mag, isW, axes, cols, base_name="nominal", nweights = 21):
+def add_muonscale_hist(results, df, netabins, mag, isW, axes, cols, base_name="nominal", nweights = 21, muon_eta="goodMuons_eta0"):
 
-    df = df.Define(f"muonScaleDummy{netabins}Bins", f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(nominal_weight, massWeight_tensor, trigMuons_eta0, {mag}, {str(isW).lower()})")
-    name = datagroups2016.histName(base_name, syst=f"muonScaleSyst")
+    df = df.Define(f"muonScaleDummy{netabins}Bins{muon_eta}", f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(nominal_weight, massWeight_tensor, {muon_eta}, {mag}, {str(isW).lower()})")
+
     scale_etabins_axis = hist.axis.Regular(netabins, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
-    dummyMuonScaleSyst = df.HistoBoost(name, axes, [*cols, f"muonScaleDummy{netabins}Bins"], tensor_axes=[common.down_up_axis, scale_etabins_axis])
+    name = datagroups2016.histName(base_name, syst=f"muonScaleSyst")
+
+    dummyMuonScaleSyst = df.HistoBoost(name, axes, [*cols, f"muonScaleDummy{netabins}Bins{muon_eta}"], tensor_axes=[common.down_up_axis, scale_etabins_axis])
     results.append(dummyMuonScaleSyst)
 
     return df
+
+
+def add_muonscale_smeared_hist(results, df, netabins, mag, isW, axes, cols, base_name="nominal", nweights = 21, muon_eta="goodMuons_eta0"):
+    # add_muonscale_hist has to be called first such that "muonScaleDummy{netabins}Bins{muon_eta}" is defined
+
+    scale_etabins_axis = hist.axis.Regular(netabins, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
+    name = datagroups2016.histName(base_name, syst=f"muonScaleSyst_gen_smear")
+
+    dummyMuonScaleSyst_gen_smear = df.HistoBoost(name, axes, [*cols, f"muonScaleDummy{netabins}Bins{muon_eta}"], tensor_axes=[common.down_up_axis, scale_etabins_axis])
+    results.append(dummyMuonScaleSyst_gen_smear)
+
+    return df
+
 

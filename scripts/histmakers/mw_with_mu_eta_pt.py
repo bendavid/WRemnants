@@ -205,7 +205,7 @@ def build_graph(df, dataset):
         results.append(nominal)
 
         dQCDbkGVar = df.Filter("passMT || Sum(goodCleanJetsPt45)>=1")
-        qcdJetPt45 = dQCDbkGVar.HistoBoost("qcdJetPt45", nominal_axes, nominal_cols)
+        qcdJetPt45 = dQCDbkGVar.HistoBoost("nominal_qcdJetPt45", nominal_axes, nominal_cols)
         results.append(qcdJetPt45)
     else:
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
@@ -246,7 +246,7 @@ def build_graph(df, dataset):
     if not dataset.is_data and not args.onlyMainHistograms:
         
         dQCDbkGVar = df.Filter("passMT || Sum(goodCleanJetsPt45)>=1")
-        qcdJetPt45 = dQCDbkGVar.HistoBoost("qcdJetPt45", nominal_axes, [*nominal_cols, "nominal_weight"])
+        qcdJetPt45 = dQCDbkGVar.HistoBoost("nominal_qcdJetPt45", nominal_axes, [*nominal_cols, "nominal_weight"])
         results.append(qcdJetPt45)
 
         df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, nominal_axes, nominal_cols)
@@ -254,7 +254,7 @@ def build_graph(df, dataset):
         
         # luminosity, done here as shape variation despite being a flat scaling so to facilitate propagating to fakes afterwards
         df = df.Define("luminosityScaling", f"wrem::constantScaling(nominal_weight, {args.lumiUncertainty})")
-        luminosity = df.HistoBoost("luminosity", nominal_axes, [*nominal_cols, "luminosityScaling"], tensor_axes = [common.down_up_axis])
+        luminosity = df.HistoBoost("nominal_luminosity", nominal_axes, [*nominal_cols, "luminosityScaling"], tensor_axes = [common.down_up_axis])
         results.append(luminosity)
                 
         # n.b. this is the W analysis so mass weights shouldn't be propagated
@@ -267,7 +267,7 @@ def build_graph(df, dataset):
 
             scale_axes = [*nominal_axes, axis_ptVgen, axis_chargeVgen]
             scale_cols = [*nominal_cols, "ptVgen", "chargeVgen"]
-            syst_tools.add_scale_hist(results, df, scale_axes, scale_cols)
+            syst_tools.add_qcdScale_hist(results, df, scale_axes, scale_cols)
 
             if isW and not args.skipHelicity:
                 # TODO: Should have consistent order here with the scetlib correction function                    
@@ -282,28 +282,16 @@ def build_graph(df, dataset):
 
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:
+                syst_tools.add_muonscale_hist(results, df, args.muonCorrEtaBins, args.muonCorrMag, isW, nominal_axes, nominal_cols)
+
+                if smearing_weights:
+                    syst_tools.add_muonscale_smeared_hist(results, df, args.muonCorrEtaBins, args.muonCorrMag, isW, nominal_axes, nominal_cols_gen_smeared)
+
                 # TODO: Move to syst_tools
                 netabins = args.muonCorrEtaBins
                 nweights = 21
                 mag = args.muonCorrMag
-                df = df.Define(f"muonScaleDummy{netabins}Bins", f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(nominal_weight, massWeight_tensor, goodMuons_eta0, {mag}, {str(isW).lower()})")
-                scale_etabins_axis = hist.axis.Regular(netabins, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
-                if smearing_weights:
-                    dummyMuonScaleSyst_gen_smear = df.HistoBoost(
-                        "muonScaleSyst_gen_smear",
-                        nominal_axes,
-                        [*nominal_cols_gen_smeared, f"muonScaleDummy{netabins}Bins"],
-                        tensor_axes=[common.down_up_axis, scale_etabins_axis]
-                    )
-                dummyMuonScaleSyst = df.HistoBoost(
-                    "muonScaleSyst",
-                    nominal_axes,
-                    [*nominal_cols, f"muonScaleDummy{netabins}Bins"],
-                    tensor_axes=[common.down_up_axis, scale_etabins_axis]
-                )
-                if smearing_weights:
-                    results.append(dummyMuonScaleSyst_gen_smear)
-                results.append(dummyMuonScaleSyst)
+
                 df = df.Define("unity", "1.0")
                 df = df.Define(
                     f"muonScaleDummy{netabins}Bins_PerSe",
@@ -314,12 +302,12 @@ def build_graph(df, dataset):
 
                 axis_mass_weight = hist.axis.Regular(1000, 0.9, 1.1, underflow=True, overflow=True, name = "axis_mass_weight")
                 dummyMuonScaleSystPerSeDown = df.HistoBoost(
-                    "muonScaleSystPerSeDown",
+                    "nominal_muonScaleSystPerSeDown",
                     [axis_mass_weight],
                     ["massweights_down"]
                 )
                 dummyMuonScaleSystPerSeUp = df.HistoBoost(
-                    "muonScaleSystPerSeUp",
+                    "nominal_muonScaleSystPerSeUp",
                     [axis_mass_weight],
                     ["massweights_up"]
                 )
@@ -342,7 +330,10 @@ def build_graph(df, dataset):
                         "nominal_weight"
                         ]
                     )
-                    dummyMuonScaleSyst_responseWeights = df.HistoBoost("muonScaleSyst_responseWeights_gensmear", nominal_axes, [*nominal_cols_gen_smeared, "muonScaleSyst_responseWeights_tensor_gensmear"], tensor_axes = calibration_uncertainty_helper.tensor_axes)
+                    dummyMuonScaleSyst_responseWeights = df.HistoBoost(
+                        "nominal_muonScaleSyst_responseWeights_gensmear", 
+                        nominal_axes, [*nominal_cols_gen_smeared, "muonScaleSyst_responseWeights_tensor_gensmear"], 
+                        tensor_axes = calibration_uncertainty_helper.tensor_axes)
                     results.append(dummyMuonScaleSyst_responseWeights)
             if args.validationHists and smearing_weights:
                 df = wremnants.define_cols_for_smearing_weights(df, calibration_uncertainty_helper)
@@ -356,32 +347,32 @@ def build_graph(df, dataset):
                 df = df.Define("goodMuons_pt0_gen_smeared_scaleUp_tenthmil", "goodMuons_pt0_gen_smeared_a_la_qop * 1.0001")
                 df = df.Define("goodMuons_pt0_gen_smeared_scaleDn_tenthmil", "goodMuons_pt0_gen_smeared_a_la_qop / 1.0001")
                 muonScaleVariationUpMil = df.HistoBoost(
-                    "muonScaleVariationUpMil", 
+                    "nominal_muonScaleVariationUpMil", 
                     nominal_axes,
                     [nominal_cols_gen_smeared[0], "goodMuons_pt0_gen_smeared_scaleUp_mil", *nominal_cols_gen_smeared[2:], "nominal_weight"]
                 )
                 muonScaleVariationDnMil = df.HistoBoost(
-                    "muonScaleVariationDnMil", 
+                    "nominal_muonScaleVariationDnMil", 
                     nominal_axes,
                     [nominal_cols_gen_smeared[0], "goodMuons_pt0_gen_smeared_scaleDn_mil", *nominal_cols_gen_smeared[2:], "nominal_weight"]
                 )
                 muonScaleVariationUpTenthmil = df.HistoBoost(
-                    "muonScaleVariationUpTenthmil", 
+                    "nominal_muonScaleVariationUpTenthmil", 
                     nominal_axes,
                     [nominal_cols[0], "goodMuons_pt0_scaleUp_tenthmil", *nominal_cols[2:], "nominal_weight"]
                 )
                 muonScaleVariationDnTenthmil = df.HistoBoost(
-                    "muonScaleVariationDnTenthmil", 
+                    "nominal_muonScaleVariationDnTenthmil", 
                     nominal_axes,
                     [nominal_cols[0], "goodMuons_pt0_scaleDn_tenthmil", *nominal_cols[2:], "nominal_weight"]
                 )
                 muonScaleVariationUpTenthmil_gen_smear = df.HistoBoost(
-                    "muonScaleVariationUpTenthmil_gen_smear", 
+                    "nominal_muonScaleVariationUpTenthmil_gen_smear", 
                     nominal_axes,
                     [nominal_cols_gen_smeared[0], "goodMuons_pt0_gen_smeared_scaleUp_tenthmil", *nominal_cols_gen_smeared[2:], "nominal_weight"]
                 )
                 muonScaleVariationDnTenthmil_gen_smear = df.HistoBoost(
-                    "muonScaleVariationDnTenthmil_gen_smear", 
+                    "nominal_muonScaleVariationDnTenthmil_gen_smear", 
                     nominal_axes,
                     [nominal_cols_gen_smeared[0], "goodMuons_pt0_gen_smeared_scaleDn_tenthmil", *nominal_cols_gen_smeared[2:], "nominal_weight"]
                 )
