@@ -58,7 +58,6 @@ def define_corrected_muons_wmass(df, helper, corr_type, dataset):
     elif "trackfit_only" in corr_type:
         # TODO: Is this a reasonable configuration?
         fit = "cvhideal" if corr_type == "trackfit_only_mctruth" and not dataset.is_data else "cvh"
-        print("Trackfit", fit)
         df = df.Define("Muon_correctedPt", f"Muon_{fit}Pt")
         df = df.Define("Muon_correctedEta", f"Muon_{fit}Eta")
         df = df.Define("Muon_correctedPhi", f"Muon_{fit}Phi")

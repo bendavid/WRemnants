@@ -235,3 +235,60 @@ def add_scalesyst_hist(results, df, netabins, mag, isW, axes, cols, base_name="n
     results.append(dummyMuonScaleSyst)
 
     return df
+
+def scetlib_scale_vars():
+	return ["resumFOScaleUp", "resumFOScaleDown",
+        "resumLambdaUp", "resumLambdaDown",
+        "resumTransitionUp", "resumTransitionDown",
+        "resumScaleUp", "resumScaleDown"]
+
+#TODO: Having these hardcoded kind of defeats the purpose
+def scetlib_np_vars():
+	return ['gamma_cuspUp',
+		'gamma_cuspDown',
+		'gamma_mu_qUp',
+		'gamma_mu_qDown',
+		'gamma_nuUp',
+		'gamma_nuDown',
+		'h_qqVDown',
+		'h_qqVUp',
+		'sUp',
+		'sDown',
+		'b_qqVUp',
+		'b_qqVDown',
+		'b_qqbarVUp',
+		'b_qqbarVDown',
+		'b_qqSUp',
+		'b_qqSDown',
+		'b_qqDSUp',
+		'b_qqDSDown',
+		'b_qgUp',
+		'b_qgDown',
+		'kappaFODown',
+		'kappaFOUp',
+		'lambdaDown',
+		'lambdaUp'
+	]
+
+def scetlib_scale_unc_hist(h, obs, syst_ax="vars"):
+    hnew = hist.Hist(*h.axes[:-1], hist.axis.StrCategory(["central"]+scetlib_scale_vars(),
+    					name=syst_ax), storage=h._storage_type())
+    
+    hnew[...,"central"] = h[...,"central"].view(flow=True)
+    hnew[...,"resumFOScaleUp"] = h[...,"kappaFO2."].view(flow=True)
+    hnew[...,"resumFOScaleDown"] = h[...,"kappaFO0.5"].view(flow=True)
+    hnew[...,"resumLambdaUp"] = h[...,"lambda0.8"].view(flow=True)
+    hnew[...,"resumLambdaDown"] = h[...,"lambda1.5"].view(flow=True)
+    
+    transition_names = [x for x in h.axes[syst_ax] if "transition" in x]    
+    hnew[...,"resumTransitionUp"] = hh.syst_min_or_max_env_hist(h, obs, syst_ax, 
+                                    h.axes[syst_ax].index(transition_names), do_min=False).view(flow=True)
+    hnew[...,"resumTransitionDown"] = hh.syst_min_or_max_env_hist(h, obs, syst_ax, 
+                                    h.axes[syst_ax].index(transition_names), do_min=True).view(flow=True)
+    
+    resum_names = [x for x in h.axes[syst_ax] if not any(i in x for i in ["lambda", "kappa", "transition"])]
+    hnew[...,"resumScaleUp"] = hh.syst_min_or_max_env_hist(h, obs, syst_ax, 
+                                    h.axes[syst_ax].index(resum_names), do_min=False).view(flow=True)
+    hnew[...,"resumScaleDown"] = hh.syst_min_or_max_env_hist(h, obs, syst_ax, 
+                                    h.axes[syst_ax].index(resum_names), do_min=True).view(flow=True)
+    return hnew

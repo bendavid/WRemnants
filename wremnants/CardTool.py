@@ -10,6 +10,7 @@ import collections.abc
 import os
 import itertools
 import re
+import hist
 
 logger = common.child_logger(__name__)
 
@@ -50,7 +51,8 @@ class CardTool(object):
         self.project = None
         self.keepOtherChargeSyst = True
         self.chargeIdDict = {"minus" : {"val" : -1, "id" : "q0", "badId" : None},
-                             "plus"  : {"val" : 1., "id" : "q1", "badId" : None}
+                             "plus"  : {"val" : 1., "id" : "q1", "badId" : None},
+                             "combined" : {"val" : "combined", "id" : "none", "badId" : None}, 
                              }
 
     def skipHistograms(self):
@@ -325,7 +327,8 @@ class CardTool(object):
         #if self.check_variations:
         var_names = set([name.replace("Up", "").replace("Down", "") for name in var_map.keys() if name])
         if len(var_names) != len(var_map.keys())/2:
-            raise ValueError(f"Invalid syst names for process {proc}! Expected an up/down variation for each syst. Found {var_map.keys()}")
+            raise ValueError(f"Invalid syst names for process {proc}! Expected an up/down variation for each syst. "
+                f"Found systs {var_names} and outNames {var_map.keys()}")
         for name in var_names:
             up = var_map[name+"Up"]
             down = var_map[name+"Down"]
@@ -524,7 +527,7 @@ class CardTool(object):
         for charge in self.channels:
             if not self.keepOtherChargeSyst and self.chargeIdDict[charge]["badId"] in name: continue
             q = self.chargeIdDict[charge]["val"]
-            hout = narf.hist_to_root(h[{"charge" : h.axes["charge"].index(q)}])
+            hout = narf.hist_to_root(h[{"charge" : h.axes["charge"].index(q) if q != "combined" else hist.sum}])
             hout.SetName(name+f"_{charge}")
             hout.Write()
 
