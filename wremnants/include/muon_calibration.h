@@ -413,39 +413,52 @@ private:
     }
   
 template <typename T>
-class BiasCorrectionsHelper {
+class BiasCorrectionHelper {
 
 public:
-
-    using hist_t = T;
-    using tensor_t = typename T::storage_type::value_type::tensor_t;
-    static constexpr auto sizes = narf::tensor_traits<tensor_t>::sizes;
-    static constexpr auto nUnc = sizes[sizes.size() - 1]; // 1 for cnetral value
-    using out_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<nUnc, 2>>;
-
-    BiasCorrectionsHelper(T&& corrections) :
+    BiasCorrectionHelper(T&& corrections) :
         correctionHist_(std::make_shared<const T>(std::move(corrections))) {}
-
+    
     // helper for bin lookup which implements the compile-time loop over axes
     template<typename... Xs, std::size_t... Idxs>
-    const tensor_t &get_tensor_impl(std::index_sequence<Idxs...>, const Xs&... xs) {
-        return correctionHist_->at(correctionHist_->template axis<Idxs>().index(xs)...).data();
+    const double &get_value_impl(std::index_sequence<Idxs...>, const Xs&... xs) {
+      return correctionHist_->at(correctionHist_->template axis<Idxs>().index(xs)...);
     }
 
     // variadic templated bin lookup
     template<typename... Xs>
-    const tensor_t &get_tensor(const Xs&... xs) {
-        return get_tensor_impl(std::index_sequence_for<Xs...>{}, xs...);
+    const double &get_value(const Xs&... xs) {
+        return get_value_impl(std::index_sequence_for<Xs...>{}, xs...);
     }
-    
+
     // for central value of pt
     float operator() (float eta, float pt, int charge) {
-        const double bias = get_tensor(eta, pt);
+        const double bias = get_value(eta, pt);
         return (1.0 + bias) * pt;
     }
 
 private:
     std::shared_ptr<const T> correctionHist_;
+};
+
+template <typename T>
+class BiasCorrectionsHelper : public BiasCorrectionHelper<T> {
+
+using base_t = BiasCorrectionHelper<T>;
+
+public:
+    //inherit constructor
+    using base_t::base_t;
+
+    RVec<float> operator() (const RVec<float> etas, const RVec<float>& pts, RVec<int> charges) {
+        RVec<float> biased_pt(pts.size(), 0.);
+        assert(etas.size() == pts.size() && etas.size() == charges.size());
+        for (size_t i = 0; i < pts.size(); i++) {
+            biased_pt[i] = BiasCorrectionHelper<T>::operator()(etas[i], pts[i], charges[i]);
+        }
+
+        return biased_pt;
+    }
 };
 
 }

@@ -33,23 +33,11 @@ def make_muon_calibration_helpers(mc_filename=data_dir+"/calibration/correctionR
 
 def make_muon_bias_helpers(filename=data_dir+"/closure/closureZ.root", histname="closure"):
     # this helper adds a correction for the bias from nonclosure to the muon pT
-
-    h2d = uproot.open(f"{filename}:{histname}")
-    h2d_boost = h2d.to_boost()
-
-    h2d_cpp = narf.hist_to_pyroot_boost(h2d_boost, tensor_rank = 1)
-    helper = ROOT.wrem.BiasCorrectionsHelper[type(h2d_cpp).__cpp_name__](
-        ROOT.std.move(h2d_cpp)
-    )
-
-    # uncertainty_hist = get_dummy_uncertainties()
-    # uncertainty_hist_cpp = narf.hist_to_pyroot_boost(uncertainty_hist, tensor_rank = 2)
-    # # min gen pt = 9 GeV to avoid threshold effects
-    # # max weight = 10 to protect against outliers
-    # uncertainty_helper = ROOT.wrem.calibration_uncertainty_helper[type(uncertainty_hist_cpp)](ROOT.std.move(uncertainty_hist_cpp), 9., 10.)
-
-    # down_up_axis = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "downUpVar")
-    # uncertainty_helper.tensor_axes = (uncertainty_hist.axes["calvar"], down_up_axis)
+    h2d = uproot.open("wremnants/data/closure/closureZ.root:closure").to_hist()
+    # Drop the uncertainty because the Weight storage type doesn't play nice with ROOT
+    h2d_nounc = hist.Hist(*h2d.axes, data=h2d.values(flow=True))
+    h2d_cpp = narf.hist_to_pyroot_boost(h2d_nounc, tensor_rank=0)
+    helper = ROOT.wrem.BiasCorrectionsHelper[type(h2d_cpp).__cpp_name__](ROOT.std.move(h2d_cpp))
 
     return helper
 
@@ -106,12 +94,12 @@ def define_corrected_muons_wmass(df, helper, corr_type, dataset):
         raise ValueError(f"Invalid correction type choice {corr_type}")
     return df
 
-def define_corrected_muons_wlike(df, cvh_helper, jpsi_helper, corr_type, dataset, trackerMuons):
+def define_corrected_muons_wlike(df, cvh_helper, jpsi_helper, corr_type, dataset, trackerMuons, bias=False):
     if not (dataset.is_data or dataset.name in common.vprocs):
         corr_type = "none" 
 
     if corr_type == "none":
-        df = df.Alias("Muon_correctedPt", "Muon_pt")
+        df = df.Alias("Muon_correctedPt", "Muon_bias_pt")
         df = df.Alias("Muon_correctedEta", "Muon_eta")
         df = df.Alias("Muon_correctedPhi", "Muon_phi")
         df = df.Alias("Muon_correctedCharge", "Muon_charge")
@@ -131,10 +119,10 @@ def define_corrected_muons_wlike(df, cvh_helper, jpsi_helper, corr_type, dataset
         df = df.Define("Muon_correctedCharge", "ROOT::VecOps::RVec<int> res(Muon_correctedMom4Charge.size()); std::transform(Muon_correctedMom4Charge.begin(), Muon_correctedMom4Charge.end(), res.begin(), [](const auto &x) { return x.second; }); return res;")
     else:
         fit = "cvhideal" if corr_type == "trackfit_only_mctruth" and not dataset.is_data else "cvh"
-        df = df.Define("Muon_correctedPt", f"Muon_{fit}Pt")
-        df = df.Define("Muon_correctedEta", f"Muon_{fit}Eta")
-        df = df.Define("Muon_correctedPhi", f"Muon_{fit}Phi")
-        df = df.Define("Muon_correctedCharge", f"Muon_{fit}Charge")
+        df = df.Alias("Muon_correctedPt", f"Muon_{fit}Pt")
+        df = df.Alias("Muon_correctedEta", f"Muon_{fit}Eta")
+        df = df.Alias("Muon_correctedPhi", f"Muon_{fit}Phi")
+        df = df.Alias("Muon_correctedCharge", f"Muon_{fit}Charge")
     
     # n.b. charge = -99 is a placeholder for invalid track refit/corrections (mostly just from tracks below
     # the pt threshold of 8 GeV in the nano production)

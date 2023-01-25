@@ -119,7 +119,7 @@ if mass_fit:
 
 mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
 
-bias_helpter = muon_calibration.make_muon_bias_helpers()
+bias_helper = muon_calibration.make_muon_bias_helpers()
 
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_corr)
 
@@ -151,6 +151,7 @@ def build_graph(df, dataset):
         cvh_helper = mc_calibration_helper
         jpsi_helper = jpsi_crctn_MC_helper if mass_fit else None
 
+    df = muon_calibration.define_bias_muons(df, bias_helper, "Muon")
     df = wremnants.define_corrected_muons_wlike(df, cvh_helper, jpsi_helper, args.muonCorr, dataset, args.trackerMuons)
 
     df = df.Filter("Sum(trigMuons) == 1 && Sum(nonTrigMuons) == 1")
@@ -235,9 +236,6 @@ def build_graph(df, dataset):
 
     if isW or isZ:
         df = syst_tools.define_mass_weights(df, isW)
-
-    df = muon_calibration.define_bias_muons(df, bias_helpter, "TrigMuon")
-    df = muon_calibration.define_bias_muons(df, bias_helpter, "NonTrigMuon")
 
     # Move the mass cut to apply to the dilepton plot
     df = df.Filter("massZ >= 60. && massZ < 120.")
