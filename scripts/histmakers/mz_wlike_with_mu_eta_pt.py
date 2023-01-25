@@ -119,6 +119,8 @@ if mass_fit:
 
 mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
 
+bias_helpter = muon_calibration.make_muon_bias_helpers()
+
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_corr)
 
 # recoil initialization
@@ -202,7 +204,6 @@ def build_graph(df, dataset):
     df = df.Filter("wrem::hasTriggerMatch(TrigMuon_eta,TrigMuon_phi,TrigObj_eta[goodTrigObjs],TrigObj_phi[goodTrigObjs])")
     df = df.Filter("Flag_globalSuperTightHalo2016Filter && Flag_EcalDeadCellTriggerPrimitiveFilter && Flag_goodVertices && Flag_HBHENoiseIsoFilter && Flag_HBHENoiseFilter && Flag_BadPFMuonFilter")
 
-
     df = df.Define("TrigMuon_mom4", "ROOT::Math::PtEtaPhiMVector(TrigMuon_pt, TrigMuon_eta, TrigMuon_phi, wrem::muon_mass)")
     df = df.Define("NonTrigMuon_mom4", "ROOT::Math::PtEtaPhiMVector(NonTrigMuon_pt, NonTrigMuon_eta, NonTrigMuon_phi, wrem::muon_mass)")
     df = df.Define("Z_mom4", "ROOT::Math::PxPyPzEVector(TrigMuon_mom4)+ROOT::Math::PxPyPzEVector(NonTrigMuon_mom4)")
@@ -234,6 +235,9 @@ def build_graph(df, dataset):
 
     if isW or isZ:
         df = syst_tools.define_mass_weights(df, isW)
+
+    df = muon_calibration.define_bias_muons(df, bias_helpter, "TrigMuon")
+    df = muon_calibration.define_bias_muons(df, bias_helpter, "NonTrigMuon")
 
     # Move the mass cut to apply to the dilepton plot
     df = df.Filter("massZ >= 60. && massZ < 120.")

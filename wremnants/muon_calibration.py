@@ -6,6 +6,7 @@ from utilities import rdf_tools
 from utilities import common
 from utilities import boostHistHelpers as hh
 from . import muon_validation
+import uproot
 
 ROOT.gInterpreter.Declare('#include "muon_calibration.h"')
 ROOT.gInterpreter.Declare('#include "lowpu_utils.h"')
@@ -30,21 +31,27 @@ def make_muon_calibration_helpers(mc_filename=data_dir+"/calibration/correctionR
 
     return mc_helper, data_helper, uncertainty_helper
 
-def make_muon_bias_helpers(filename=data_dir+"/closure/closureZ.root"):
+def make_muon_bias_helpers(filename=data_dir+"/closure/closureZ.root", histname="closure"):
     # this helper adds a correction for the bias from nonclosure to the muon pT
 
-    helper = ROOT.wrem.BiasCorrector(filename)
+    h2d = uproot.open(f"{filename}:{histname}")
+    h2d_boost = h2d.to_boost()
 
-    uncertainty_hist = get_dummy_uncertainties()
-    uncertainty_hist_cpp = narf.hist_to_pyroot_boost(uncertainty_hist, tensor_rank = 2)
-    # min gen pt = 9 GeV to avoid threshold effects
-    # max weight = 10 to protect against outliers
-    uncertainty_helper = ROOT.wrem.calibration_uncertainty_helper[type(uncertainty_hist_cpp)](ROOT.std.move(uncertainty_hist_cpp), 9., 10.)
+    h2d_cpp = narf.hist_to_pyroot_boost(h2d_boost, tensor_rank = 1)
+    helper = ROOT.wrem.BiasCorrectionsHelper[type(h2d_cpp).__cpp_name__](
+        ROOT.std.move(h2d_cpp)
+    )
 
-    down_up_axis = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "downUpVar")
-    uncertainty_helper.tensor_axes = (uncertainty_hist.axes["calvar"], down_up_axis)
+    # uncertainty_hist = get_dummy_uncertainties()
+    # uncertainty_hist_cpp = narf.hist_to_pyroot_boost(uncertainty_hist, tensor_rank = 2)
+    # # min gen pt = 9 GeV to avoid threshold effects
+    # # max weight = 10 to protect against outliers
+    # uncertainty_helper = ROOT.wrem.calibration_uncertainty_helper[type(uncertainty_hist_cpp)](ROOT.std.move(uncertainty_hist_cpp), 9., 10.)
 
-    return helper, uncertainty_helper
+    # down_up_axis = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "downUpVar")
+    # uncertainty_helper.tensor_axes = (uncertainty_hist.axes["calvar"], down_up_axis)
+
+    return helper
 
 def get_dummy_uncertainties():
     axis_eta = hist.axis.Regular(48, -2.4, 2.4, name = "eta")
@@ -190,6 +197,13 @@ def get_good_gen_muons_idx_in_GenPart(df, reco_subset = "goodMuons"):
     df = df.Define("goodGenMuons_idx","goodMuons_idx[goodMuonsByGenTruth]")
     df = df.Filter("goodGenMuons_idx.size() > 0")
     return df
+
+
+def define_bias_muons(df, helper, muon):
+    df = df.Define(f"{muon}_bias_pt", helper, [f"{muon}_eta", f"{muon}_pt", f"{muon}_charge"])
+
+    return df
+
 
 def define_good_gen_muon_kinematics(df, kinematic_vars = ["pt", "eta", "phi", "charge"]):
     for var in kinematic_vars:
