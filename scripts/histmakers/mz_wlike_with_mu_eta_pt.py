@@ -266,11 +266,11 @@ def build_graph(df, dataset):
 
             scale_axes = [*unc_axes, axis_ptVgen, axis_chargeVgen]
             scale_cols = [*unc_cols, "ptVgen", "chargeVgen"]
-            syst_tools.add_scale_hist(results, unc_df, scale_axes, scale_cols, args.uncertainty_hist)
+            syst_tools.add_qcdScale_hist(results, unc_df, scale_axes, scale_cols, args.uncertainty_hist)
             syst_tools.add_pdf_hists(results, unc_df, dataset.name, unc_axes, unc_cols, args.pdfs, args.uncertainty_hist)
 
             if isZ:
-                syst_tools.add_massweights_hist(results, unc_df, scale_axes, scale_cols, args.uncertainty_hist)
+                syst_tools.add_massweights_hist(results, unc_df, unc_axes, unc_cols, args.uncertainty_hist)
                 # there is no W backgrounds for the Wlike, make QCD scale histograms only for Z
                 # should probably remove the charge here, because the Z only has a single charge and the pt distribution does not depend on which charged lepton is selected
                 if not args.skipHelicity:
@@ -279,8 +279,9 @@ def build_graph(df, dataset):
 
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:
-                syst_tools.add_muonscale_hist(results, unc_df, args.muonCorrEtaBins, args.muonCorrMag, isW, unc_axes, unc_cols, args.uncertainty_hist)
-
+                syst_tools.add_muonscale_hist(
+                    results, unc_df, args.muonCorrEtaBins, args.muonCorrMag, isW, unc_axes, unc_cols, args.uncertainty_hist,
+                    muon_eta="trigMuons_eta0")
 
         df = unc_df
 
