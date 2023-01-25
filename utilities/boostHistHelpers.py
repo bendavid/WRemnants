@@ -297,7 +297,7 @@ def syst_min_or_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=[], do_min=Tr
     if syst_ax in proj_ax:
         proj_ax.pop(proj_ax.index(syst_ax))
         
-    hvar = projectNoFlow(h, proj_ax+[syst_ax], exclude=no_flow)
+    hvar = projectNoFlow(h, (*proj_ax, syst_ax), exclude=no_flow)
 
     proj_ax_idxs = [h.axes.name.index(ax) for ax in proj_ax]
     view = np.take(hvar.view(flow=True), indices, axis=-1)

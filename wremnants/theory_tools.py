@@ -338,16 +338,17 @@ def pdfAsymmetricShifts(hdiff, axis_name):
         hnew[...] = ss
         return hh.sqrtHist(hnew)
 
+    # FIXME: This doesn't quite work, really you should check this in an observable of interest
     # The error sets are ordered up,down,up,down...
     upshift = shiftHist(hdiff.values()[...,1::2], hdiff.variances()[...,1::2], hdiff, axis_name)
     downshift = shiftHist(hdiff.values()[...,2::2], hdiff.variances()[...,2::2], hdiff, axis_name)
-    return upshift, downshift
+    return upshift, downshift 
 
 def hessianPdfUnc(h, axis_name="tensor_axis_0", uncType="symHessian", scale=1.):
     symmetric = uncType == "symHessian"
     diff = hh.addHists(h, -1*h[{axis_name : 0}])*scale
     shiftFunc = pdfSymmetricShifts if symmetric else pdfAsymmetricShifts
     rssUp, rssDown = shiftFunc(diff, axis_name)
-    hUp = hh.addHists(h[{axis_name : 0}], rssUp)
+    hUp = hh.addHists(h[{axis_name : 0}], 1*rssUp)
     hDown = hh.addHists(h[{axis_name : 0}], -1*rssDown)
     return hUp, hDown

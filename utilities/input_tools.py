@@ -48,38 +48,48 @@ def read_scetlib_hist(path, nonsing="auto", flip_y_sign=False, charge=None):
     else:
         ValueError("File {path} is not a recognized file format")
 
-    var_axis = hist.axis.Integer(f["bins"][0][0], f["bins"][0][-1], name="vars", flow=False)
-    # Won't actually have overflow/underflow, but set to match MiNNLO
-    mass_underflow = f["bins"][1][0] > 0.
-    mass_overflow = f["bins"][1][-1] < 13000.
-    mass_axis = hist.axis.Variable(f["bins"][1], name="mass", overflow=mass_overflow, underflow=mass_underflow)
-    y_axis = hist.axis.Variable(f["bins"][2], name="y")
-    
-    # Use 0.1 here rather than 0, because the nonsingular behaves much better with a "cut" at > 0.1
-    pt_underflow = f["bins"][3][0] > 0.1
-    pt_axis = hist.axis.Variable(f["bins"][3], name="pt", underflow=pt_underflow)
-
-    h = f["hist"]
-    storage = hist.storage.Double()
-    axes = [mass_axis,y_axis,pt_axis,var_axis]
-    varax_idx = -1 
-    vals = np.moveaxis(h, 0, varax_idx)
-
-    if "hist_err" in f:
-        err = f["hist_err"]
-        storage = hist.storage.Weight()
-        vals = np.stack((vals, np.moveaxis(err, 0, varax_idx)), axis=-1)
-
     if charge is not None:
         charge_args = (2, -2., 2.) if charge != 0 else (1, 0, 1) 
         charge_axis = hist.axis.Regular(*charge_args, flow=False, name = "charge")
-        axes.insert(-1, charge_axis)
     
-    scetlibh = hist.Hist(*axes, storage=storage)
-    if charge is None:
-        scetlibh[...] = vals
+    if type(f["hist"]) == hist.Hist:
+        if charge is None:
+            scetlibh = f["hist"]
+        else:
+            axes = f["hist"].axes
+            scetlibh = hist.Hist(*axes[:-1], charge_axis, axes[-1], storage=f["hist"]._storage_type())
+            scetlibh[...,charge_axis.index(charge),:] = f["hist"].view(flow=True)
     else:
-        scetlibh[...,charge_axis.index(charge),:] = vals
+        var_axis = hist.axis.Integer(f["bins"][0][0], f["bins"][0][-1], name="vars", flow=False)
+        # Won't actually have overflow/underflow, but set to match MiNNLO
+        mass_underflow = f["bins"][1][0] > 0.
+        mass_overflow = f["bins"][1][-1] < 13000.
+        mass_axis = hist.axis.Variable(f["bins"][1], name="Q", overflow=mass_overflow, underflow=mass_underflow)
+        y_axis = hist.axis.Variable(f["bins"][2], name="Y")
+        
+        # Use 0.1 here rather than 0, because the nonsingular behaves much better with a "cut" at > 0.1
+        pt_underflow = f["bins"][3][0] > 0.1
+        pt_axis = hist.axis.Variable(f["bins"][3], name="qT", underflow=pt_underflow)
+
+        h = f["hist"]
+        storage = hist.storage.Double()
+        axes = [mass_axis,y_axis,pt_axis,var_axis]
+        if charge is not None:
+            axes.insert(-1, charge_axis)
+
+        varax_idx = -1 
+        vals = np.moveaxis(h, 0, varax_idx)
+
+        if "hist_err" in f:
+            err = f["hist_err"]
+            storage = hist.storage.Weight()
+            vals = np.stack((vals, np.moveaxis(err, 0, varax_idx)), axis=-1)
+
+        scetlibh = hist.Hist(*axes, storage=storage)
+        if charge is None:
+            scetlibh[...] = vals
+        else:
+            scetlibh[...,charge_axis.index(charge),:] = vals
 
     if nonsing and nonsing != "skip":
         if nonsing == "auto":
@@ -92,7 +102,7 @@ def read_scetlib_hist(path, nonsing="auto", flip_y_sign=False, charge=None):
     if flip_y_sign:
         mid = y_axis.index(0)
         s = hist.tag.Slicer()
-        scetlibh[{"y" : s[mid:]}] = scetlibh[{"y" : s[mid:]}].view()*-1
+        scetlibh[{"Y" : s[mid:]}] = scetlibh[{"Y" : s[mid:]}].view()*-1
 
     return scetlibh 
 

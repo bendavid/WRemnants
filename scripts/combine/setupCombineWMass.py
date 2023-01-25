@@ -29,12 +29,18 @@ def make_parser(parser=None):
     parser.add_argument("--noHist", action='store_true', help="Skip the making of 2D histograms (root file is left untouched if existing)")
     parser.add_argument("--effStatLumiScale", type=float, default=None, help="Rescale equivalent luminosity for efficiency stat uncertainty by this value (e.g. 10 means ten times more data from tag and probe)")
     parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers and nuisances)")
+    parser.add_argument("--xlim", type=float, nargs=2, default=None, help="Restrict x axis to this range")
     return parser
 
 def main(args):
     logger = common.setup_base_logger('setupCombineWMass', args.debug)
 
     datagroups = datagroups2016(args.inputFile)
+    if args.xlim:
+        if args.fitvar == "eta_pt":
+            raise ValueError("Restricting the x axis not supported for 2D hist")
+        s = hist.tag.Slicer()
+        datagroups.setGlobalAction(lambda h: h[{args.fitvar : s[complex(0, args.xlim[0]):complex(0, args.xlim[1])]}])
     wlike = datagroups.wlike
 
     tag = "WMass" if not wlike else "ZMassWLike"
@@ -50,6 +56,8 @@ def main(args):
     cardTool = CardTool.CardTool(f"{outfolder}/{name}_{{chan}}.txt")
     cardTool.setNominalTemplate(f"{templateDir}/main.txt")
     cardTool.setNominalName(sel.hist_map[args.fitvar])
+    if args.combineChannels:
+        cardTool.setChannels(["combined"])
     if args.fitvar not in ["eta_pt", "ptll_mll"]:
         cardTool.setProjectionAxes([args.fitvar])
     if args.noHist:
