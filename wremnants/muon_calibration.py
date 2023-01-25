@@ -30,7 +30,7 @@ def make_muon_calibration_helpers(mc_filename=data_dir+"/calibration/correctionR
 
     return mc_helper, data_helper, uncertainty_helper
 
-def make_muon_bias_helpers(filename=data_dir+"/calibration/correctionResults_v718_idealgeom_gensim.root"):
+def make_muon_bias_helpers(filename=data_dir+"/closure/closureZ.root"):
     # this helper adds a correction for the bias from nonclosure to the muon pT
 
     helper = ROOT.wrem.BiasCorrector(filename)
