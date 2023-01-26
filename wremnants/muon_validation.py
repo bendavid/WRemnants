@@ -8,6 +8,12 @@ from utilities import common
 
 ROOT.gInterpreter.Declare('#include "muon_validation.h"')
 
+def make_jpsi_crctn_helpers(filepath_data, filepath_mc):
+    return (
+        make_jpsi_crctn_helper(filepath_data), make_jpsi_crctn_helper(filepath_mc)
+        #make_jpsi_crctn_unc_helper(filepath_data), make_jpsi_crctn_unc_helper(filepath_mc)
+    )
+
 def make_jpsi_crctn_helper(filepath):
     f = uproot.open(filepath)
 
@@ -45,7 +51,7 @@ def make_jpsi_crctn_unc_helper(filepath, n_scale_params = 3, n_tot_params = 6, n
         lb, ub = i * n_scale_params, (i + 1) * n_scale_params
         hist_scale_params_unc.view()[i,...] = var_mat[lb:ub][:]
     hist_scale_params_unc_cpp = narf.hist_to_pyroot_boost(hist_scale_params_unc, tensor_rank = 2)
-    jpsi_crctn_unc_helper = ROOT.wrem.JpsiCorrectionsHelper[type(hist_scale_params_unc_cpp).__cpp_name__](
+    jpsi_crctn_unc_helper = ROOT.wrem.JpsiCorrectionsUncHelper[type(hist_scale_params_unc_cpp).__cpp_name__](
         ROOT.std.move(hist_scale_params_unc_cpp)
     )
     jpsi_crctn_unc_helper.tensor_axes = (hist_scale_params_unc.axes['unc'], common.down_up_axis)

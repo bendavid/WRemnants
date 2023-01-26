@@ -5,7 +5,7 @@ parser,initargs = common.common_parser()
 
 import narf
 import wremnants
-from wremnants import theory_tools,syst_tools,theory_corrections, muon_calibration
+from wremnants import theory_tools,syst_tools,theory_corrections, muon_calibration, muon_validation
 import hist
 import lz4.frame
 import logging
@@ -19,19 +19,14 @@ data_dir = f"{pathlib.Path(__file__).parent}/../../wremnants/data/"
 logging.basicConfig(level=logging.INFO)
 
 parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
-parser.add_argument("--muonCorr", type=str, default="lbl", choices=["lbl", "none", "trackfit_only"], help="Type of correction to apply to the muons")
+parser.add_argument("--muonCorr", type=str, default="lbl", 
+    choices=["lbl", "jpsi_massfit", "none", "trackfit_only"], 
+    help="Type of correction to apply to the muons"
+)
 parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency")
 parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
 parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
 parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for luminosity in excess to 1 (e.g. 1.012 means 1.2\%)", default=1.012)
-parser.add_argument(
-    "--dataCrctn", type = str, choices = [None, 'cvh', 'jpsi_crctd'],
-    default=None, help = "alternative correction to be applied to data"
-)
-parser.add_argument(
-    "--MCCrctn", type = str, choices = [None, 'cvh', 'cvhbs', 'truth', 'jpsi_crctd'], 
-    default = None, help = "alternative correction to be applied to MC"
-)
 parser.add_argument("--jpsiCrctnDataInput", type = str, default = None, help = "path to the root file for jpsi corrections on the data")
 parser.add_argument("--jpsiCrctnMCInput", type = str, default = None, help = "path to the root file for jpsi corrections on the MC")
 args = parser.parse_args()
@@ -101,14 +96,12 @@ logging.info(f"SF file: {args.sfFile}")
 pileup_helper = wremnants.make_pileup_helper(era = era)
 vertex_helper = wremnants.make_vertex_helper(era = era)
 
-mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
-
-if args.dataCrctn == 'jpsi_crctd':
-    jpsi_crctn_data_helper = muon_validation.make_jpsi_crctn_helper(args.jpsiCrctnDataInput)
-    jpsi_crctn_unc_data_helper = muon_validation.make_jpsi_crctn_unc_helper(args.jpsiCrctnDataInput)
-if args.MCCrctn == 'jpsi_crctd':
-    jpsi_crctn_MC_helper = muon_validation.make_jpsi_crctn_helper(args.jpsiCrctnMCInput)
-    jpsi_crctn_unc_MC_helper = muon_validation.make_jpsi_crctn_unc_helper(args.jpsiCrctnMCInput)
+if args.muonCorr == 'jpsi_massfit':
+    data_calibration_helper, mc_calibration_helper = muon_validation.make_jpsi_crctn_helpers(
+        args.jpsiCrctnDataInput, args.jpsiCrctnMCInput
+    )
+else:
+    mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
 
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_corr)
 
