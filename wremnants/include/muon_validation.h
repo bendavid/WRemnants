@@ -34,7 +34,7 @@ public:
     static constexpr auto nUnc = sizes[sizes.size() - 1]; // 1 for central value
     using out_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<nUnc, 2>>;
 
-    JpsiCorrectionsHelper(T&& corrections) :
+    JpsiCorrectionsHelperSingle(T&& corrections) :
         correctionHist_(std::make_shared<const T>(std::move(corrections))) {}
 
     // helper for bin lookup which implements the compile-time loop over axes
@@ -69,18 +69,19 @@ private:
 };
 
 // jpsi corrections central value for multiple muons
-class JpsiCorrectionsHelper : public JpsiCorrectionsHelperSingle<> {
+template <typename T>
+class JpsiCorrectionsHelper : public JpsiCorrectionsHelperSingle<T> {
 
 public:
-    JpsiCorrectionsHelper(T&& corrections) : JpsiCorrectionsHelperSingle(corrections) {}
+    JpsiCorrectionsHelper(T&& corrections) : JpsiCorrectionsHelperSingle<T>(corrections) {}
 
     Vec_d operator() (const Vec_f &cvhEtas, const Vec_f &cvhPts, const Vec_i &charges) {
         Vec_d res;
         res.reserve(cvhEtas.size());
         for (unsigned int i = 0; i < cvhEtas.size(); ++i) {
             res.emplace_back(
-                JpsiCorrectionsHelperSingle::operator()(cvhEtas[i], cvhPts[i], charges[i])
-            )
+                JpsiCorrectionsHelperSingle<T>::operator()(cvhEtas[i], cvhPts[i], charges[i])
+            );
         }
     }
 };

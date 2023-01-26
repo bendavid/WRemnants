@@ -295,13 +295,13 @@ def build_graph(df, dataset):
     dilepton_axes = [axis_mll, axis_yll, axis_ptll, axis_costhetastarll, axis_phistarll]
     if (dataset.is_data and args.dataCrctn):
         dilepton_cols = [f"massZ_{args.dataCrctn}", "yZ", "ptZ", "cosThetaStarZ", "phiStarZ"]
-        #if args.dataCrctn == 'jpsi_crctd':
-            #dilepton_unc_cols = [
-            #    f"massZ_{args.dataCrctn}", "yZ", "ptZ", "cosThetaStarZ", "phiStarZ", "massZ_jpsi_crctd_unc"]
+        if args.dataCrctn == 'jpsi_crctd':
+            dilepton_unc_cols = [
+                f"massZ_{args.dataCrctn}", "yZ", "ptZ", "cosThetaStarZ", "phiStarZ", "massZ_jpsi_crctd_unc"]
     elif ((isZ or isW) and args.MCCrctn):
         dilepton_cols = [f"massZ_{args.MCCrctn}", "yZ", "ptZ", "cosThetaStarZ", "phiStarZ"]
-        #if args.MCCrctn == 'jpsi_crctd':
-            #dilepton_unc_cols = [f"massZ_jpsi_crctd_unc"]
+        if args.MCCrctn == 'jpsi_crctd':
+            dilepton_unc_cols = [f"massZ_jpsi_crctd_unc"]
     else:
         dilepton_cols = ["massZ", "yZ", "ptZ", "cosThetaStarZ", "phiStarZ"]
     if not args.csvars_hist:

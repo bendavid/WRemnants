@@ -109,10 +109,13 @@ def define_corrected_muons(df, helper, corr_type, dataset):
         df = df.Define("Muon_correctedEta", "ROOT::VecOps::RVec<float> res(Muon_correctedMom4Charge.size()); std::transform(Muon_correctedMom4Charge.begin(), Muon_correctedMom4Charge.end(), res.begin(), [](const auto &x) { return x.first.Eta(); } ); return res;")
         df = df.Define("Muon_correctedPhi", "ROOT::VecOps::RVec<float> res(Muon_correctedMom4Charge.size()); std::transform(Muon_correctedMom4Charge.begin(), Muon_correctedMom4Charge.end(), res.begin(), [](const auto &x) { return x.first.Phi(); } ); return res;")
         df = df.Define("Muon_correctedCharge", "ROOT::VecOps::RVec<int> res(Muon_correctedMom4Charge.size()); std::transform(Muon_correctedMom4Charge.begin(), Muon_correctedMom4Charge.end(), res.begin(), [](const auto &x) { return x.second; }); return res;")
+    elif corr_type == 'jpsi_massfit':
+        df = df.Define("Muon_correctedPt", helper, ["Muon_cvhEta", "Muon_cvhPt", "Muon_cvhCharge"])
+        df = df.Define("Muon_correctedEta", "Muon_cvhEta")
+        df = df.Define("Muon_correctedPhi", "Muon_cvhPhi")
+        df = df.Define("Muon_correctedCharge", "Muon_cvhCharge")
     else:
         raise ValueError(f"Invalid correction type choice {corr_type}")
-    return df
-
     return df
 
 def get_good_gen_muons_idx_in_GenPart(df, reco_subset = "goodMuons"):
