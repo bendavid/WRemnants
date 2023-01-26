@@ -69,7 +69,7 @@ public:
         return (1.0 / k_crctd);
     }
 
-    private:
+private:
     std::shared_ptr<const T> correctionHist_;
 };
 
