@@ -151,7 +151,7 @@ def build_graph(df, dataset):
  
     df = muon_selections.veto_electrons(df)
     df = muon_selections.apply_met_filters(df)
-    df = muon_selections.select_trigger_muon(df, dataset, "goodMuons_eta0", "goodMuons_phi0")
+    df = muon_selections.select_triggermatched_muon(df, dataset, "goodMuons_eta0", "goodMuons_phi0")
 
     # gen match to bare muons to select only prompt muons from top processes
     if isTop:
