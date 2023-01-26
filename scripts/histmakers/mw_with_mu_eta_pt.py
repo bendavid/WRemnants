@@ -109,14 +109,6 @@ if not args.no_recoil:
 # FIXME: Currently breaks the taus
 smearing_weights = False
 
-# TODO: Reduce duplication in mw and mz producers
-mass_fit = "massfit" in args.muonCorr
-if mass_fit:
-    mc_corrfile = "calibrationJMC_smeared_v718_nominalLBL.root" if "lbl" in args.muonCorr else "calibrationJMC_smeared_v718_nominal.root"
-    data_corrfile = "calibrationJDATA_smeared_v718_LBL.root" if "lbl" in args.muonCorr else "calibrationJDATA_smeared_v718.root"
-    jpsi_crctn_MC_helper = muon_validation.make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}")
-    jpsi_crctn_data_helper = muon_validation.make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}")
-
 def build_graph(df, dataset):
     logging.info(f"build graph for dataset: {dataset.name}")
     results = []
