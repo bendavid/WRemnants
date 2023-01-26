@@ -352,3 +352,15 @@ def smoothTowardsOne(h):
     hnew.values(flow=True)[...]    = newvals
     hnew.variances(flow=True)[...] = vars
     return hnew
+
+def set_flow(h, val="nearest"):
+    raise NotImplementedError("This function doesn't actually work :(")
+    for i, ax in enumerate(h.axes):
+        if ax.traits.underflow:
+            nearest_vals = np.take(h.values(flow=True), 1, i) 
+            # FIXME Take+assign doesn't work :(
+            np.take(h.values(flow=True), 0, i)[...] = nearest_vals if val == "nearest" else np.full_like(nearest_vals, val)
+        if ax.traits.overflow:
+            nearest_vals = np.take(h.values(flow=True), -2, i) 
+            np.take(h.values(flow=True), -1, i)[...] = nearest_vals if val == "nearest" else np.full_like(nearest_vals, val)
+    return h

@@ -5,7 +5,11 @@ parser,initargs = common.common_parser()
 
 import narf
 import wremnants
+<<<<<<< HEAD
 from wremnants import theory_tools,syst_tools,theory_corrections, muon_calibration, muon_selections
+=======
+from wremnants import theory_tools,syst_tools,theory_corrections, muon_calibration, muon_validation
+>>>>>>> 772606996db0ac8e33c3572fe90c2732fdedbf9d
 import hist
 import lz4.frame
 import logging
@@ -19,21 +23,13 @@ data_dir = f"{pathlib.Path(__file__).parent}/../../wremnants/data/"
 logging.basicConfig(level=logging.INFO)
 
 parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
-parser.add_argument("--muonCorr", type=str, default="lbl", choices=["lbl", "none", "trackfit_only"], help="Type of correction to apply to the muons")
+parser.add_argument("--muonCorr", type=str, default="massfit", choices=["lbl", "trackfit_only_mctruth", "none", "massfit", "massfit_lbl", "trackfit_only"], 
+    help="Type of correction to apply to the muons")
 parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency")
 parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
 parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
 parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for luminosity in excess to 1 (e.g. 1.012 means 1.2\%)", default=1.012)
-parser.add_argument(
-    "--dataCrctn", type = str, choices = [None, 'cvh', 'jpsi_crctd'],
-    default=None, help = "alternative correction to be applied to data"
-)
-parser.add_argument(
-    "--MCCrctn", type = str, choices = [None, 'cvh', 'cvhbs', 'truth', 'jpsi_crctd'], 
-    default = None, help = "alternative correction to be applied to MC"
-)
-parser.add_argument("--jpsiCrctnDataInput", type = str, default = None, help = "path to the root file for jpsi corrections on the data")
-parser.add_argument("--jpsiCrctnMCInput", type = str, default = None, help = "path to the root file for jpsi corrections on the MC")
+parser.add_argument("--bias-calibration", action='store_true', help="Adjust central value by calibration bias hist")
 args = parser.parse_args()
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
@@ -102,14 +98,9 @@ vertex_helper = wremnants.make_vertex_helper(era = era)
 
 mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
 
-if args.dataCrctn == 'jpsi_crctd':
-    jpsi_crctn_data_helper = muon_validation.make_jpsi_crctn_helper(args.jpsiCrctnDataInput)
-    jpsi_crctn_unc_data_helper = muon_validation.make_jpsi_crctn_unc_helper(args.jpsiCrctnDataInput)
-if args.MCCrctn == 'jpsi_crctd':
-    jpsi_crctn_MC_helper = muon_validation.make_jpsi_crctn_helper(args.jpsiCrctnMCInput)
-    jpsi_crctn_unc_MC_helper = muon_validation.make_jpsi_crctn_unc_helper(args.jpsiCrctnMCInput)
-
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_corr)
+
+bias_helper = muon_calibration.make_muon_bias_helpers(lbl="lbl" in args.muonCorr) if args.bias_calibration else None
 
 # recoil initialization
 if not args.no_recoil:
@@ -118,6 +109,14 @@ if not args.no_recoil:
 
 # FIXME: Currently breaks the taus
 smearing_weights = False
+
+# TODO: Reduce duplication in mw and mz producers
+mass_fit = "massfit" in args.muonCorr
+if mass_fit:
+    mc_corrfile = "calibrationJMC_smeared_v718_nominalLBL.root" if "lbl" in args.muonCorr else "calibrationJMC_smeared_v718_nominal.root"
+    data_corrfile = "calibrationJDATA_smeared_v718_LBL.root" if "lbl" in args.muonCorr else "calibrationJDATA_smeared_v718.root"
+    jpsi_crctn_MC_helper = muon_validation.make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}")
+    jpsi_crctn_data_helper = muon_validation.make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}")
 
 def build_graph(df, dataset):
     logging.info(f"build graph for dataset: {dataset.name}")
@@ -138,8 +137,14 @@ def build_graph(df, dataset):
 
     apply_theory_corr = args.theory_corr and dataset.name in corr_helpers
 
-    calibration_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
-    df = muon_calibration.define_corrected_muons(df, calibration_helper, args.muonCorr, dataset)
+    if dataset.is_data:
+        cvh_helper = data_calibration_helper
+        jpsi_helper = jpsi_crctn_data_helper if mass_fit else None
+    else:
+        cvh_helper = mc_calibration_helper
+        jpsi_helper = jpsi_crctn_MC_helper if mass_fit else None
+
+    df = muon_calibration.define_corrected_muons(df, cvh_helper, jpsi_helper, args.muonCorr, dataset, bias_helper)
 
     df = muon_selections.select_veto_muons(df, nMuons=1)
     df = muon_selections.select_good_muons(df, nMuons=1, use_trackerMuons=args.trackerMuons, use_isolation=False)

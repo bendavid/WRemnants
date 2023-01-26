@@ -31,11 +31,17 @@ def make_muon_calibration_helpers(mc_filename=data_dir+"/calibration/correctionR
 
     return mc_helper, data_helper, uncertainty_helper
 
-def make_muon_bias_helpers(filename=data_dir+"/closure/closureZ.root", histname="closure"):
+def make_muon_bias_helpers(lbl=False):
     # this helper adds a correction for the bias from nonclosure to the muon pT
-    h2d = uproot.open(f"{filename}:{histname}").to_hist()
+    h2d = uproot.open(f"wremnants/data/closure/closureZ{'_LBL' if lbl else ''}.root:closure").to_hist()
     # Drop the uncertainty because the Weight storage type doesn't play nice with ROOT
     h2d_nounc = hist.Hist(*h2d.axes, data=h2d.values(flow=True))
+    # Set overflow to closest values
+    h2d_nounc[hist.underflow,:][...] = h2d_nounc[0,:].view(flow=True)
+    h2d_nounc[:,hist.underflow][...] = h2d_nounc[:,0].view(flow=True)
+    h2d_nounc[hist.overflow,:][...] = h2d_nounc[-1,:].view(flow=True)
+    h2d_nounc[:,hist.overflow][...] = h2d_nounc[:,-1].view(flow=True)
+
     h2d_cpp = narf.hist_to_pyroot_boost(h2d_nounc, tensor_rank=0)
     helper = ROOT.wrem.BiasCorrectionsHelper[type(h2d_cpp).__cpp_name__](ROOT.std.move(h2d_cpp))
 
@@ -79,7 +85,7 @@ def define_jpsicorr_muons(df, helper, muon):
     )
     return df
 
-def define_corrected_muons(df, cvh_helper, jpsi_helper, corr_type, dataset, trackerMuons, bias_helper=None):
+def define_corrected_muons(df, cvh_helper, jpsi_helper, corr_type, dataset, bias_helper=None):
     if not (dataset.is_data or dataset.name in common.vprocs):
         corr_type = "none" 
 
@@ -98,7 +104,7 @@ def define_corrected_muons(df, cvh_helper, jpsi_helper, corr_type, dataset, trac
         muon_pt = "Muon_jpsiCorrected"
 
     if bias_helper and not dataset.is_data:
-        df = muon_calibration.define_biased_muons(df, bias_helper, muon)
+        df = define_biased_muons(df, bias_helper, muon)
         muon_pt = "_".join([muon, "bias"]) 
 
     for var in ["pt", "eta", "phi", "charge"]:
