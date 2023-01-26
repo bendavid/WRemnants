@@ -5,11 +5,7 @@ parser,initargs = common.common_parser()
 
 import narf
 import wremnants
-<<<<<<< HEAD
-from wremnants import theory_tools,syst_tools,theory_corrections, muon_calibration, muon_selections
-=======
-from wremnants import theory_tools,syst_tools,theory_corrections, muon_calibration, muon_validation
->>>>>>> 772606996db0ac8e33c3572fe90c2732fdedbf9d
+from wremnants import theory_tools,syst_tools,theory_corrections, muon_calibration, muon_selections, muon_validation
 import hist
 import lz4.frame
 import logging
@@ -37,15 +33,6 @@ datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt 
     nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path)
     
 era = args.era
-
-muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
-
-qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper()
-axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
-axis_ptVgen = hist.axis.Variable(
-    common.ptV_10quantiles_binning, 
-    name = "ptVgen", underflow=False
-)
 
 # custom template binning
 template_neta = int(args.eta[0])
@@ -80,6 +67,16 @@ axis_recoil_magn = hist.axis.Regular(300, 0, 300, name = "recoil_magn", underflo
 axis_mt_fakes = hist.axis.Regular(60, 0., 120., name = "mt", underflow=False, overflow=True)
 axis_njet_fakes = hist.axis.Regular(2, -0.5, 1.5, name = "Numbr of jets", underflow=False, overflow=False) # only need case with 0 jets or > 0
 
+# define helpers
+muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
+
+qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper()
+axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
+axis_ptVgen = hist.axis.Variable(
+    common.ptV_10quantiles_binning, 
+    name = "ptVgen", underflow=False
+)
+
 if args.binnedScaleFactors:
     logging.info("Using binned scale factors and uncertainties")
     # add usePseudoSmoothing=True for tests with Asimov
@@ -96,6 +93,8 @@ logging.info(f"SF file: {args.sfFile}")
 pileup_helper = wremnants.make_pileup_helper(era = era)
 vertex_helper = wremnants.make_vertex_helper(era = era)
 
+mc_jpsi_crctn_helper, data_jpsi_crctn_helper = muon_validation.make_jpsi_crctn_helpers(args.muonCorr)
+
 mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
 
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_corr)
@@ -109,14 +108,6 @@ if not args.no_recoil:
 
 # FIXME: Currently breaks the taus
 smearing_weights = False
-
-# TODO: Reduce duplication in mw and mz producers
-mass_fit = "massfit" in args.muonCorr
-if mass_fit:
-    mc_corrfile = "calibrationJMC_smeared_v718_nominalLBL.root" if "lbl" in args.muonCorr else "calibrationJMC_smeared_v718_nominal.root"
-    data_corrfile = "calibrationJDATA_smeared_v718_LBL.root" if "lbl" in args.muonCorr else "calibrationJDATA_smeared_v718.root"
-    jpsi_crctn_MC_helper = muon_validation.make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}")
-    jpsi_crctn_data_helper = muon_validation.make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}")
 
 def build_graph(df, dataset):
     logging.info(f"build graph for dataset: {dataset.name}")
@@ -137,12 +128,8 @@ def build_graph(df, dataset):
 
     apply_theory_corr = args.theory_corr and dataset.name in corr_helpers
 
-    if dataset.is_data:
-        cvh_helper = data_calibration_helper
-        jpsi_helper = jpsi_crctn_data_helper if mass_fit else None
-    else:
-        cvh_helper = mc_calibration_helper
-        jpsi_helper = jpsi_crctn_MC_helper if mass_fit else None
+    cvh_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
+    jpsi_helper = data_jpsi_crctn_helper if dataset.is_data else mc_jpsi_crctn_helper
 
     df = muon_calibration.define_corrected_muons(df, cvh_helper, jpsi_helper, args.muonCorr, dataset, bias_helper)
 
