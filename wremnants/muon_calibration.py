@@ -31,9 +31,9 @@ def make_muon_calibration_helpers(mc_filename=data_dir+"/calibration/correctionR
 
     return mc_helper, data_helper, uncertainty_helper
 
-def make_muon_bias_helpers(filename=data_dir+"/closure/closureZ.root", histname="closure"):
+def make_muon_bias_helpers(lbl=False):
     # this helper adds a correction for the bias from nonclosure to the muon pT
-    h2d = uproot.open("wremnants/data/closure/closureZ.root:closure").to_hist()
+    h2d = uproot.open(f"wremnants/data/closure/closureZ{'_LBL' if lbl else ''}.root:closure").to_hist()
     # Drop the uncertainty because the Weight storage type doesn't play nice with ROOT
     h2d_nounc = hist.Hist(*h2d.axes, data=h2d.values(flow=True))
     # Set overflow to closest values
