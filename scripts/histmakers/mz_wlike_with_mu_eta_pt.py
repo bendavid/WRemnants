@@ -120,7 +120,8 @@ if mass_fit:
 
 mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
 
-bias_helper = muon_calibration.make_muon_bias_helpers() if args.bias_calibration else None
+closurefile = "closureZ_LBL.root" if args.muonCorr=="massfit_lbl" else "closureZ.root"
+bias_helper = muon_calibration.make_muon_bias_helpers(filename=f"{common.data_dir}/closure/{closurefile}") if args.bias_calibration else None
 
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_corr)
 
@@ -145,6 +146,9 @@ def build_graph(df, dataset):
 
     df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
 
+    df = muon_selections.veto_electrons(df)
+    df = muon_selections.apply_met_filters(df)
+
     if dataset.is_data:
         cvh_helper = data_calibration_helper
         jpsi_helper = jpsi_crctn_data_helper if mass_fit else None
@@ -157,18 +161,11 @@ def build_graph(df, dataset):
     df = muon_selections.select_veto_muons(df, nMuons=2)
     df = muon_selections.select_good_muons(df, nMuons=2, use_trackerMuons=args.trackerMuons, use_isolation=True)
 
-    # FIXME: Move to muon_selections
-    df = muon_calibration.define_trigger_muons(df)
-
-
-    df = df.Filter("Sum(trigMuons) == 1 && Sum(nonTrigMuons) == 1")
-    df = df.Filter("nonTrigMuons_pt0 > 26.") # since this is our "neutrino", should there also be an upper cut (and eta cuts)?
+    df = muon_selections.define_trigger_muons(df)
 
     df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "trigMuons")
     df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "nonTrigMuons")
 
-    df = muon_selections.veto_electrons(df)
-    df = muon_selections.apply_met_filters(df)
     df = muon_selections.select_triggermatched_muon(df, dataset, "trigMuons_eta0", "trigMuons_phi0")
 
     df = df.Define("TrigMuon_mom4", "ROOT::Math::PtEtaPhiMVector(trigMuons_pt0, trigMuons_eta0, trigMuons_phi0, wrem::muon_mass)")

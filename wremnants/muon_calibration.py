@@ -33,7 +33,7 @@ def make_muon_calibration_helpers(mc_filename=data_dir+"/calibration/correctionR
 
 def make_muon_bias_helpers(filename=data_dir+"/closure/closureZ.root", histname="closure"):
     # this helper adds a correction for the bias from nonclosure to the muon pT
-    h2d = uproot.open("wremnants/data/closure/closureZ.root:closure").to_hist()
+    h2d = uproot.open(f"{filename}:{histname}").to_hist()
     # Drop the uncertainty because the Weight storage type doesn't play nice with ROOT
     h2d_nounc = hist.Hist(*h2d.axes, data=h2d.values(flow=True))
     h2d_cpp = narf.hist_to_pyroot_boost(h2d_nounc, tensor_rank=0)
@@ -104,26 +104,6 @@ def define_corrected_muons(df, cvh_helper, jpsi_helper, corr_type, dataset, trac
     for var in ["pt", "eta", "phi", "charge"]:
         mu_name = muon_pt if var == "pt" else muon
         df = df.Alias(muon_var_name("Muon_corrected", var), muon_var_name(mu_name, var))
-
-    return df
-    
-
-def define_trigger_muons(df):
-
-    # mu- for even event numbers, mu+ for odd event numbers
-    df = df.Define("trigMuons_charge0", "event % 2 == 0 ? -1 : 1")
-    df = df.Define("nonTrigMuons_charge0", "-trigMuons_charge0")
-
-    df = df.Define("trigMuons", "goodMuons && Muon_correctedCharge == trigMuons_charge0")
-    df = df.Define("nonTrigMuons", "goodMuons && Muon_correctedCharge == nonTrigMuons_charge0")
-
-    df = df.Define("trigMuons_pt0", "Muon_correctedPt[trigMuons][0]")
-    df = df.Define("trigMuons_eta0", "Muon_correctedEta[trigMuons][0]")
-    df = df.Define("trigMuons_phi0", "Muon_correctedPhi[trigMuons][0]")
-
-    df = df.Define("nonTrigMuons_pt0", "Muon_correctedPt[nonTrigMuons][0]")
-    df = df.Define("nonTrigMuons_eta0", "Muon_correctedEta[nonTrigMuons][0]")
-    df = df.Define("nonTrigMuons_phi0", "Muon_correctedPhi[nonTrigMuons][0]")
 
     return df
 
@@ -203,11 +183,11 @@ def define_gen_smeared_muon_kinematics(df):
     df = df.Define("goodMuons_charge0_gen_smeared", "goodMuons_charge0_gen")
     return df
 
-def define_corrected_reco_muon_kinematics(df, kinematic_vars = ["pt", "eta", "phi", "charge"]):
+def define_corrected_reco_muon_kinematics(df, muons="goodMuons", kinematic_vars = ["pt", "eta", "phi", "charge"], index=0):
     for var in kinematic_vars:
         df = df.Define(
-            f"goodMuons_{var.lower()}0",
-            f"Muon_corrected{var.capitalize()}[goodMuons][0]"
+            f"{muons}_{var.lower()}{index}",
+            f"Muon_corrected{var.capitalize()}[{muons}][{index}]"
         )
     return df
 

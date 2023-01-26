@@ -1,4 +1,5 @@
 
+from wremnants import muon_calibration
 
 def apply_met_filters(df):
     df = df.Filter("Flag_globalSuperTightHalo2016Filter && Flag_EcalDeadCellTriggerPrimitiveFilter && Flag_goodVertices && Flag_HBHENoiseIsoFilter && Flag_HBHENoiseFilter && Flag_BadPFMuonFilter")
@@ -36,7 +37,24 @@ def select_good_muons(df, nMuons=1, use_trackerMuons=False, use_isolation=False)
 
     return df
 
-def select_trigger_muon(df, dataset, muon_eta, muon_phi):
+def define_trigger_muons(df):
+
+    # mu- for even event numbers, mu+ for odd event numbers
+    df = df.Define("trigMuons_charge0", "event % 2 == 0 ? -1 : 1")
+    df = df.Define("nonTrigMuons_charge0", "-trigMuons_charge0")
+
+    df = df.Define("trigMuons", "goodMuons && Muon_correctedCharge == trigMuons_charge0")
+    df = df.Define("nonTrigMuons", "goodMuons && Muon_correctedCharge == nonTrigMuons_charge0")
+
+    df = muon_calibration.define_corrected_reco_muon_kinematics(df, "trigMuons", ["pt", "eta", "phi"])
+    df = muon_calibration.define_corrected_reco_muon_kinematics(df, "nonTrigMuons", ["pt", "eta", "phi"])
+
+    df = df.Filter("Sum(trigMuons) == 1 && Sum(nonTrigMuons) == 1")
+    df = df.Filter("nonTrigMuons_pt0 > 26.") # this is our "neutrino", should there also be an upper cut to be consistent with the efficiencies?
+
+    return df
+
+def select_triggermatched_muon(df, dataset, muon_eta, muon_phi):
     if dataset.group in ["Top", "Diboson"]:
         df = df.Define("goodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_pt,TrigObj_l1pt,TrigObj_l2pt,TrigObj_filterBits)")
     else:
