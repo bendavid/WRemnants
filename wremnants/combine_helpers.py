@@ -32,8 +32,6 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, pdf, name_ap
     sum_axes = ["ptVgen", "chargeVgen",]
     if use_hel_hist or helicity:
         sum_axes.append("helicity")
-    if card_tool.histName == "reco_mll":
-        sum_axes.append("reco_gen")
 
     # NOTE: The map needs to be keyed on the base procs not the group names, which is
     # admittedly a bit nasty

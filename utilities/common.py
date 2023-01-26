@@ -8,8 +8,8 @@ import os
 wremnants_dir = f"{pathlib.Path(__file__).parent}/../wremnants"
 data_dir = f"{wremnants_dir}/data/"
 
-wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP"]
-zprocs = ["ZmumuPostVFP", "ZtautauPostVFP", "ZmumuMiNLO", "ZmumuNNLOPS"]
+wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP", 'WplusToMuNu_horace-lo-photos', 'WplusToMuNu_horace-nlo', 'WminusToMuNu_horace-lo-photos', 'WminusToMuNu_horace-nlo']
+zprocs = ["ZmumuPostVFP", "ZtautauPostVFP", "ZmumuMiNLO", "ZmumuNNLOPS", 'ZToMuMu_horace-lo-photos', 'ZToMuMu_horace-nlo']
 vprocs = wprocs+zprocs
 
 wprocs_lowpu = ["WminusJetsToMuNu", "WminusJetsToENu", "WminusJetsToTauNu", "WplusJetsToMuNu", "WplusJetsToENu", "WplusJetsToTauNu"]
@@ -81,6 +81,7 @@ def common_parser():
     parser.add_argument("--v8", action='store_true', help="Use NanoAODv8. Default is v9")
     parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
     parser.add_argument("--theory_corr", nargs="*", choices=["scetlib", "scetlibNP", "scetlibMSHT20", "scetlibHelicity", "dyturbo", "dyturbo1D", "dyturboYOnly", "matrix_radish"], 
+    parser.add_argument("--theory_corr", nargs="*", choices=["scetlib", "scetlibNP", "scetlibMSHT20", "scetlibHelicity", "dyturbo", "dyturbo1D", "dyturboYOnly", "matrix_radish", "horacenloew"], 
         help="Apply corrections from indicated generator. First will be nominal correction.", default=[])
     parser.add_argument("--theory_corr_alt_only", action='store_true', help="Save hist for correction hists but don't modify central weight")
     parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")

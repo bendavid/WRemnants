@@ -59,9 +59,12 @@ def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False):
                 data=np.stack((val, var), axis=-1))
     return newh
 
-def relVariance(hvals, hvars, cutoff=1e-3):
+def relVariance(hvals, hvars, cutoff=1e-3, fillOnes=False):
     nonzero = np.abs(hvals) > cutoff
-    out = np.copy(hvars)
+    if fillOnes:
+        out = np.ones(hvars.shape)
+    else:
+        out = np.copy(hvars)
     np.divide(hvars, hvals*hvals, out=out, where=nonzero),
     return out
 
@@ -141,6 +144,18 @@ def scaleByLumi(h, scale, createNew=False):
         h.variances(flow=True)[...] *= scale
         return h
     
+def normalize(h, scale=1e6, createNew=True):
+    scale = scale/h.sum().value
+    if createNew:
+        hnew = hist.Hist(*h.axes, storage=hist.storage.Weight())
+        hnew.values(flow=True)[...]    = scale * h.values(flow=True)
+        hnew.variances(flow=True)[...] = scale * h.variances(flow=True)
+        return hnew
+    else:
+        h.values(flow=True)[...]    *= scale
+        h.variances(flow=True)[...] *= scale
+        return h
+
 def makeAbsHist(h, axis_name):
     ax = h.axes[axis_name]
     if 0 not in ax.edges:
@@ -327,3 +342,25 @@ def combineUpDownVarHists(down_hist, up_hist):
         hnew = hist.Hist(*up_hist.axes, common.down_up_axis, storage=up_hist._storage_type())
         hnew.view(flow=True)[...] = np.stack((down_hist.view(flow=True), up_hist.view(flow=True)), axis = -1)
         return hnew
+
+def smoothTowardsOne(h):
+    vals = h.values(flow=True)
+    vars = h.variances(flow=True)
+    relErr = np.minimum(1., relVariance(vals, vars, fillOnes=True))
+    newvals = (1.-relErr) * vals + relErr
+    hnew = hist.Hist(*h.axes, storage=hist.storage.Weight())
+    hnew.values(flow=True)[...]    = newvals
+    hnew.variances(flow=True)[...] = vars
+    return hnew
+
+def set_flow(h, val="nearest"):
+    raise NotImplementedError("This function doesn't actually work :(")
+    for i, ax in enumerate(h.axes):
+        if ax.traits.underflow:
+            nearest_vals = np.take(h.values(flow=True), 1, i) 
+            # FIXME Take+assign doesn't work :(
+            np.take(h.values(flow=True), 0, i)[...] = nearest_vals if val == "nearest" else np.full_like(nearest_vals, val)
+        if ax.traits.overflow:
+            nearest_vals = np.take(h.values(flow=True), -2, i) 
+            np.take(h.values(flow=True), -1, i)[...] = nearest_vals if val == "nearest" else np.full_like(nearest_vals, val)
+    return h

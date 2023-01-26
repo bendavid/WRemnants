@@ -753,6 +753,29 @@ def dy_para_qT(xvals, p, *args):
     pdf = n1*gauss1 + n2*gauss2 + n3*gauss3 + n4*gauss4
     return pdf
 
+def dy_para_qT_DeepMETReso(xvals, p, *args):
+
+    mean1 = p[4]
+    mean2 = p[5]
+    mean3 = p[6]
+    mean4 = p[7]
+    
+    gauss1 = func_gauss(xvals[0], mean1, p[0])
+    gauss2 = func_gauss(xvals[0], mean2, p[1])
+    gauss3 = func_gauss(xvals[0], mean3, p[2])
+    gauss4 = func_gauss(xvals[0], mean4, p[3])
+
+    n1 = tf.constant(0.4, dtype=tf.float64)
+    n2 = tf.constant(0.25, dtype=tf.float64)
+    n3 = tf.constant(0.30, dtype=tf.float64)
+    n4 = tf.constant(1.0, dtype=tf.float64) - n1 - n2 - n3
+
+    pdf = n1*gauss1 + n2*gauss2 + n3*gauss3 + n4*gauss4
+    return pdf
+
+ 
+
+
 def dy_para_qT_cond(xvals, p, *args):
 
     sigma1 = power(xvals[0], p[0], p[1], p[2])
@@ -800,11 +823,16 @@ def dy_perp(xvals, p, *args):
     gauss2 = func_gauss(xvals[0], p[5], p[1])
     gauss3 = func_gauss(xvals[0], p[4], p[2])
     gauss4 = func_gauss(xvals[0], p[5], p[3])
-
-    n1 = tf.constant(0.1, dtype=tf.float64)
-    n2 = tf.constant(0.2, dtype=tf.float64)
+    
+    n1 = tf.constant(0.2, dtype=tf.float64)
+    n2 = tf.constant(0.35, dtype=tf.float64)
     n3 = tf.constant(0.25, dtype=tf.float64)
     n4 = tf.constant(1.0, dtype=tf.float64) - n1 - n2 - n3
+
+    #n1 = tf.constant(0.1, dtype=tf.float64)
+    #n2 = tf.constant(0.2, dtype=tf.float64)
+    #n3 = tf.constant(0.25, dtype=tf.float64)
+    #n4 = tf.constant(1.0, dtype=tf.float64) - n1 - n2 - n3
 
     pdf = n1*gauss1 + n2*gauss2 + n3*gauss3 + n4*gauss4
     return pdf
@@ -819,8 +847,8 @@ def dy_perp_DeepMETReso(xvals, p, *args):
 
 
     n1 = tf.constant(0.40, dtype=tf.float64)
-    n2 = tf.constant(0.24, dtype=tf.float64)
-    n3 = tf.constant(0.32, dtype=tf.float64)
+    n2 = tf.constant(0.25, dtype=tf.float64)
+    n3 = tf.constant(0.30, dtype=tf.float64)
     n4 = tf.constant(1.0, dtype=tf.float64) - n1 - n2 - n3
 
     pdf = n1*gauss1 + n2*gauss2 + n3*gauss3 + n4*gauss4
