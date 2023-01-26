@@ -56,7 +56,7 @@ public:
     }
     
     // for central value of pt
-    float operator() (float cvh_eta, float cvh_pt, int charge) {
+    float operator() (float cvh_pt, float cvh_eta, int charge) {
         const auto &params = get_tensor(cvh_eta);
         const double A = params(0, 0);
         const double e = params(1, 0);
@@ -82,11 +82,11 @@ public:
     //inherit constructor
     using base_t::base_t;
 
-    RVec<float> operator() (const RVec<float> etas, const RVec<float>& pts, RVec<int> charges) {
+    RVec<float> operator() (const RVec<float>& pts, const RVec<float> etas, RVec<int> charges) {
         RVec<float> corrected_pt(pts.size(), 0.);
         assert(etas.size() == pts.size() && etas.size() == charges.size());
         for (size_t i = 0; i < pts.size(); i++) {
-            corrected_pt[i] = JpsiCorrectionsHelper<T>::operator()(etas[i], pts[i], charges[i]);
+            corrected_pt[i] = JpsiCorrectionsHelper<T>::operator()(pts[i], etas[i], charges[i]);
         }
 
         return corrected_pt;
