@@ -8,6 +8,22 @@ from utilities import common
 
 ROOT.gInterpreter.Declare('#include "muon_validation.h"')
 
+def make_jpsi_crctn_helpers(muonCorr):
+    if "massfit" not in muonCorr:
+        return None, None
+
+    mc_corrfile = "calibrationJMC_smeared_v718_nominalLBL.root" if "lbl" in muonCorr else "calibrationJMC_smeared_v718_nominal.root"
+    data_corrfile = "calibrationJDATA_smeared_v718_LBL.root" if "lbl" in muonCorr else "calibrationJDATA_smeared_v718.root"
+
+    mc_helper = make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}")
+    data_helper = make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}")
+
+    # FIXME fix uncertainty helpers
+    #mc_unc_helper = wremnants.make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/calibrationJMC_smeared_v718_nominal.root")
+    #data_unc_helper = wremnants.make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/calibrationJDATA_smeared_v718.root")
+
+    return mc_helper, data_helper
+
 def make_jpsi_crctn_helper(filepath):
     f = uproot.open(filepath)
 

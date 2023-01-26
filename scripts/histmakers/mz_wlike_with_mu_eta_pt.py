@@ -39,15 +39,6 @@ datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt 
 
 era = args.era
 
-muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
-
-qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = True)
-axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
-axis_ptVgen = hist.axis.Variable(
-    common.ptV_10quantiles_binning, 
-    name = "ptVgen", underflow=False
-)
-
 # custom template binning
 template_neta = int(args.eta[0])
 template_mineta = args.eta[1]
@@ -90,6 +81,16 @@ if "ptll" in args.dileptonIntegrateAxes:
 axis_costhetastarll = hist.axis.Regular(20, -1., 1., name = "costhetastarll")
 axis_phistarll = hist.axis.Regular(20, -math.pi, math.pi, circular = True, name = "phistarll")
 
+# define helpers
+muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
+
+qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = True)
+axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
+axis_ptVgen = hist.axis.Variable(
+    common.ptV_10quantiles_binning, 
+    name = "ptVgen", underflow=False
+)
+
 # extra axes which can be used to label tensor_axes
 if args.binnedScaleFactors:
     logging.info("Using binned scale factors and uncertainties")
@@ -108,15 +109,7 @@ logging.info(f"SF file: {args.sfFile}")
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
 
-mass_fit = "massfit" in args.muonCorr
-if mass_fit:
-    mc_corrfile = "calibrationJMC_smeared_v718_nominalLBL.root" if "lbl" in args.muonCorr else "calibrationJMC_smeared_v718_nominal.root"
-    data_corrfile = "calibrationJDATA_smeared_v718_LBL.root" if "lbl" in args.muonCorr else "calibrationJDATA_smeared_v718.root"
-    jpsi_crctn_MC_helper = muon_validation.make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}")
-    jpsi_crctn_data_helper = muon_validation.make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}")
-    # FIXME fix uncertainty helpers
-    #jpsi_crctn_unc_MC_helper = wremnants.make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/calibrationJMC_smeared_v718_nominal.root")
-    #jpsi_crctn_unc_data_helper = wremnants.make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/calibrationJDATA_smeared_v718.root")
+mc_jpsi_crctn_helper, data_jpsi_crctn_helper = muon_validation.make_jpsi_crctn_helpers(args.muonCorr)
 
 mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
 
@@ -148,12 +141,8 @@ def build_graph(df, dataset):
     df = muon_selections.veto_electrons(df)
     df = muon_selections.apply_met_filters(df)
 
-    if dataset.is_data:
-        cvh_helper = data_calibration_helper
-        jpsi_helper = jpsi_crctn_data_helper if mass_fit else None
-    else:
-        cvh_helper = mc_calibration_helper
-        jpsi_helper = jpsi_crctn_MC_helper if mass_fit else None
+    cvh_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
+    jpsi_helper = data_jpsi_crctn_helper if dataset.is_data else mc_jpsi_crctn_helper
 
     df = muon_calibration.define_corrected_muons(df, cvh_helper, jpsi_helper, args.muonCorr, dataset, bias_helper)
 
