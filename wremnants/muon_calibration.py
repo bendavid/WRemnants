@@ -83,7 +83,7 @@ def define_corrected_muons(df, cvh_helper, jpsi_helper, corr_type, dataset, trac
     if not (dataset.is_data or dataset.name in common.vprocs):
         corr_type = "none" 
 
-    muon = "Muon_"
+    muon = "Muon"
     if "lbl" in corr_type:
         df = define_lblcorr_muons(df, cvh_helper, dataset)
         muon = "Muon_lbl"
@@ -98,7 +98,7 @@ def define_corrected_muons(df, cvh_helper, jpsi_helper, corr_type, dataset, trac
         muon_pt = "Muon_jpsiCorrected"
 
     if bias_helper and not dataset.is_data:
-        df = muon_calibration.define_bias_muons(df, bias_helper, muon)
+        df = muon_calibration.define_biased_muons(df, bias_helper, muon)
         muon_pt = "_".join([muon, "bias"]) 
 
     for var in ["pt", "eta", "phi", "charge"]:
@@ -162,9 +162,9 @@ def get_good_gen_muons_idx_in_GenPart(df, reco_subset = "goodMuons"):
     return df
 
 def muon_var_name(mu_type, var):
-        return mu_type+(var if mu_type == "Muon" else var.capitalize())
+        return mu_type+(f"_{var}" if mu_type == "Muon" else var.capitalize())
 
-def define_bias_muons(df, helper, muon):
+def define_biased_muons(df, helper, muon):
     mu_name = f"{muon}_bias"
     df = df.Define(muon_var_name(mu_name, "pt"), helper, 
             [muon_var_name(muon, var) for var in ["pt", "eta", "charge"]]
