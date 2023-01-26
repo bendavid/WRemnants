@@ -24,7 +24,7 @@ def make_jpsi_crctn_helper(filepath):
         hist_comb.view()[...,0] = np.stack([x.values() for x in [A, e, M]], axis = -1)
 
     hist_comb_cpp = narf.hist_to_pyroot_boost(hist_comb, tensor_rank = 2)
-    jpsi_crctn_helper = ROOT.wrem.JpsiCorrectionsHelper[type(hist_comb_cpp).__cpp_name__](
+    jpsi_crctn_helper = ROOT.wrem.JpsiCorrectionsRVecHelper[type(hist_comb_cpp).__cpp_name__](
         ROOT.std.move(hist_comb_cpp)
     )
     return jpsi_crctn_helper
@@ -86,23 +86,6 @@ def define_cvh_muons_kinematics(df):
     df = df.Define("NonTrigMuon_cvh_pt", "Muon_correctedPt[nonTrigMuons][0]")
     df = df.Define("NonTrigMuon_cvh_eta", "Muon_correctedEta[nonTrigMuons][0]")
     df = df.Define("NonTrigMuon_cvh_phi", "Muon_correctedPhi[nonTrigMuons][0]")
-    return df
-
-def define_jpsi_crctd_muons_pt(df, helper):
-    df = df.Define("TrigMuon_jpsi_crctd_pt", helper,
-        [
-            "TrigMuon_eta",
-            "TrigMuon_preCorr_pt",
-            "TrigMuon_charge"
-        ]
-    )
-    df = df.Define("NonTrigMuon_jpsi_crctd_pt", helper,
-        [
-            "NonTrigMuon_eta",
-            "NonTrigMuon_preCorr_pt",
-            "NonTrigMuon_charge"
-        ]
-    )
     return df
 
 def define_jpsi_crctd_muons_pt_unc(df, helper):
