@@ -421,18 +421,18 @@ public:
     
     // helper for bin lookup which implements the compile-time loop over axes
     template<typename... Xs, std::size_t... Idxs>
-    const double &get_value_impl(std::index_sequence<Idxs...>, const Xs&... xs) {
+    const float get_value_impl(std::index_sequence<Idxs...>, const Xs&... xs) {
       return correctionHist_->at(correctionHist_->template axis<Idxs>().index(xs)...);
     }
 
     // variadic templated bin lookup
     template<typename... Xs>
-    const double &get_value(const Xs&... xs) {
+    const float get_value(const Xs&... xs) {
         return get_value_impl(std::index_sequence_for<Xs...>{}, xs...);
     }
 
     // for central value of pt
-    float operator() (float eta, float pt, int charge) {
+    float operator() (float pt, float eta, int charge) {
         const double bias = get_value(eta, pt);
         return (1.0 + bias) * pt;
     }
