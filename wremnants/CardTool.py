@@ -37,6 +37,7 @@ class CardTool(object):
         self.dataName = "Data"
         self.nominalName = "nominal"
         self.datagroups = None
+        self.pseudodata_datagroups = None
         self.unconstrainedProcesses = None
         self.noStatUncProcesses = []
         self.buildHistNameFunc = None
@@ -116,8 +117,7 @@ class CardTool(object):
         return self.fakeName
 
     def setPseudodata(self, pseudodata):
-        # TODO: Remove dependence on "nominal"
-        self.pseudoData = pseudodata.replace("nominal", self.nominalName)
+        self.pseudoData = pseudodata
 
     # Needs to be increased from default for long proc names
     def setSpacing(self, spacing):
@@ -130,6 +130,12 @@ class CardTool(object):
         self.datagroups = datagroups 
         if self.nominalName:
             self.datagroups.setNominalName(self.nominalName)
+        
+    def setPseudodataDatagroups(self, datagroups):
+        self.pseudodata_datagroups = datagroups 
+        if self.nominalName:
+            print(datagroups)
+            self.pseudodata_datagroups.setNominalName(self.nominalName)
         
     def setChannels(self, channels):
         self.channels = channels
@@ -363,10 +369,12 @@ class CardTool(object):
                 self.writeHist(var, self.variationName(proc, name), setZeroStatUnc=setZeroStatUnc)
 
     def addPseudodata(self, processes):
-        self.datagroups.loadHistsForDatagroups(
+        datagroups = self.datagroups if not self.pseudodata_datagroups else self.pseudodata_datagroups
+        datagroups.loadHistsForDatagroups(
             baseName=self.pseudoData, syst="", label=self.pseudoData,
             procsToRead=processes, scaleToNewLumi=self.lumiScale)
-        hists = [self.procDict[proc][self.pseudoData] for proc in processes]
+        procDict = datagroups.getDatagroups()
+        hists = [procDict[proc][self.pseudoData] for proc in processes]
         hdata = hh.sumHists(hists)
         # Kind of hacky, but in case the alt hist has uncertainties
         for systAxName in ["systIdx", "tensor_axis_0", "vars"]:

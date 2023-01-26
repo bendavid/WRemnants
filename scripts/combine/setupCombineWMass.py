@@ -19,6 +19,7 @@ def make_parser(parser=None):
     parser.add_argument("-v", "--fitvar", help="Variable to fit", default="eta_pt", choices=sel.hist_map.keys())
     parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow). Equivalent to --excludeNuisances '.*effSystTnP|.*effStatTnP' ")
     parser.add_argument("-p", "--pseudoData", type=str, help="Hist to use as pseudodata")
+    parser.add_argument("--pseudodata-file", type=str, help="Input file for pseudodata (if it should be read from a different file", default=None)
     parser.add_argument("-x",  "--excludeNuisances", type=str, default="", help="Regular expression to exclude some systematics from the datacard")
     parser.add_argument("-k",  "--keepNuisances", type=str, default="", help="Regular expression to keep some systematics, overriding --excludeNuisances. Can be used to keep only some systs while excluding all the others with '.*'")
     parser.add_argument("--skipOtherChargeSyst", dest="skipOtherChargeSyst" , action="store_true",   help="Skip saving histograms and writing nuisance in datacard for systs defined for a given charge but applied on the channel with the other charge")
@@ -73,6 +74,9 @@ def main(args):
         cardTool.setSkipOtherChargeSyst()
     if args.pseudoData:
         cardTool.setPseudodata(args.pseudoData)
+        if args.pseudodata_file:
+            cardTool.setPseudodataDatagroups(datagroups2016(args.pseudodata_file))
+
     if args.lumiScale:
         cardTool.setLumiScale(args.lumiScale)
         
