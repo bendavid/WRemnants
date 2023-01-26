@@ -3,6 +3,8 @@
 
 namespace wrem {
 
+using ROOT::VecOps::RVec;
+
     double calculateTheta(float eta) {
         return 2.*std::atan(std::exp(-double(eta)));
     }
@@ -66,104 +68,29 @@ public:
         double k_crctd = (magnetic + material) * k + alignment;
         return (1.0 / k_crctd);
     }
-    /*
-    // for uncertainties on pt
-    out_tensor_t operator() (
-        float cvh_eta, float cvh_pt, int charge, float jpsi_crctd_pt
-    ) {
-        const auto &params = get_tensor(cvh_eta);
-        double k = 1.0 / cvh_pt;
-        out_tensor_t res;
-        for (int i = 0; i < nUnc; i++) {
-            const double A_unc = params(0, i);
-            const double e_unc = params(1, i);
-            const double M_unc = params(2, i);
-            double k_crctd = 1.0 / jpsi_crctd_pt;
-            double k_unc = (A_unc - e_unc * k) * k + charge * M_unc;
-            double k_crctd_up = k_crctd + k_unc, k_crctd_down = k_crctd - k_unc;
-            res(i, 0) = cvh_pt - (1.0 / k_crctd_down);
-            res(i, 1) = (1.0 / k_crctd_up) - cvh_pt;
-        }
-        return res;
-    }
 
-    // for smearing weights derived from qop
-    out_tensor_t operator() (
-        double genQop, double genPhi, int genCharge, double genEta, double genPt, //for GEN params
-        double qop, double phi, int cvhCharge,
-        float cvhEta, float cvhPt, float jpsiCrctdPt, // for RECO params
-        const RVec<float> &cov, // for sigma on the Gaussian
-        out_tensor_t &deltaPts, // for the variations
-        bool abQop = false, bool fullParam = false
-    ) {
-        const double cvhLam = calculateLam(cvhEta);
-        const double cvhQopAbPt = calculateQop(cvhPt, cvhEta, cvhCharge);
-        const Eigen::Vector3d parms(
-            (abQop? qop : cvhQopAbPt),
-            (fullParam? cvhLam : 0),
-            (fullParam? phi : 0)
-        );
-    
-        const double genLam = calculateLam(genEta);
-        const double genQopAbPt = calculateQop(genPt, genEta, genCharge);
-        const Eigen::Vector3d genparms(
-            (abQop? genQop : genQopAbPt),
-            (fullParam? genLam : 0),
-            (fullParam? genPhi : 0)
-        );
-    
-        const Eigen::Vector3d deltaparms = parms - genparms;
-    
-        const Eigen::Map<const Eigen::Matrix<float, 3, 3, Eigen::RowMajor>> covMap(cov.data(), 3, 3);
-    
-        Eigen::Matrix<double, 3, 3> covd = covMap.cast<double>();
-    
-        if (fullParam) {
-            // fill in lower triangular part of the matrix, which is stored as zeros to save space
-            covd.triangularView<Eigen::Lower>() = covd.triangularView<Eigen::Upper>().transpose();
-        } else {
-            covd.row(0) << covd(0,0), 0, 0;
-            covd.row(1) << 0, 1, 0;
-            covd.row(2) << 0, 0, 1;
-        }
-    
-        const Eigen::Matrix<double, 3, 3> covinv = covd.inverse();
-        const double covdet = covd.determinant();
-    
-        const double lnp = -0.5*deltaparms.transpose()*covinv*deltaparms;
-    
-        // no need to initialize since all elements are explicit filled
-        out_tensor_t res;
-    
-        for (std::ptrdiff_t ivar = 0; ivar < nUnc; ++ivar) {
-
-            double deltaQopDown = calculteDeltaQop(cvhPt, deltaPts(ivar, 0), cvhEta, cvhCharge);
-            double deltaQopUp = calculteDeltaQop(cvhPt, deltaPts(ivar, 1), cvhEta, cvhCharge);
-    
-            for (std::ptrdiff_t idownup = 0; idownup < 2; ++idownup) {
-                Eigen::Vector3d parmvar = Eigen::Vector3d::Zero();   
-                const double dir = idownup == 0 ? -1. : 1.;
-                parmvar[0] =  idownup == 0 ? deltaQopDown : deltaQopUp;
-                const Eigen::Vector3d deltaparmsalt = deltaparms + dir*parmvar;
-                const Eigen::Matrix<double, 3, 3> covdalt = covd; //+ dir*covvar;
-    
-                const Eigen::Matrix<double, 3, 3> covinvalt = covdalt.inverse();
-                const double covdetalt = covdalt.determinant();
-    
-                const double lnpalt = -0.5*deltaparmsalt.transpose()*covinvalt*deltaparmsalt;
-    
-                const double weight = std::sqrt(covdet/covdetalt)*std::exp(lnpalt - lnp);
-    
-            // protect against outliers
-            // if (weight > 0.9998 && weight < 1.0002) {cout << "smearing weight is " << weight << "covd is " << covd << std::endl;}
-                res(ivar, idownup) = weight;
-            }
-        }
-        return res;
-    }
-    */
-private:
+    private:
     std::shared_ptr<const T> correctionHist_;
+};
+
+template <typename T>
+class JpsiCorrectionsRVecHelper : public JpsiCorrectionsHelper<T> {
+
+using base_t = JpsiCorrectionsHelper<T>;
+
+public:
+    //inherit constructor
+    using base_t::base_t;
+
+    RVec<float> operator() (const RVec<float> etas, const RVec<float>& pts, RVec<int> charges) {
+        RVec<float> corrected_pt(pts.size(), 0.);
+        assert(etas.size() == pts.size() && etas.size() == charges.size());
+        for (size_t i = 0; i < pts.size(); i++) {
+            corrected_pt[i] = JpsiCorrectionsHelper<T>::operator()(etas[i], pts[i], charges[i]);
+        }
+
+        return corrected_pt;
+    }
 };
 
 }

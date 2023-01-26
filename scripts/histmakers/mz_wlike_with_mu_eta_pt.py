@@ -13,7 +13,7 @@ import time
 import pdb
 
 parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
-parser.add_argument("--muonCorr", type=str, default="trackfit_only", choices=["lbl", "trackfit_only_mctruth", "none", "massfit", "massfit_lbl", "trackfit_only"], 
+parser.add_argument("--muonCorr", type=str, default="massfit", choices=["lbl", "trackfit_only_mctruth", "none", "massfit", "massfit_lbl", "trackfit_only"], 
     help="Type of correction to apply to the muons")
 parser.add_argument("--muScaleMag", type=float, default=1e-4, help="Magnitude of dummy muon scale uncertainty")
 parser.add_argument("--muScaleBins", type=int, default=1, help="Number of bins for muon scale uncertainty")
@@ -22,6 +22,7 @@ parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of et
 parser.add_argument("--csvars_hist", action='store_true', help="Add CS variables to dilepton hist")
 parser.add_argument("--uncertainty-hist", type=str, choices=["dilepton", "nominal"], default="nominal", help="Histogram to store uncertainties for")
 parser.add_argument("--finePtBinning", action='store_true', help="Use fine binning for ptll")
+parser.add_argument("--bias-calibration", action='store_true', help="Adjust central value by calibration bias hist")
 parser.add_argument("--dileptonIntegrateAxes", type=str, nargs="*", choices=["ptll", "mll", "yll",], 
     default=[], help="Collapse axes in dilepton hist (to avoid overly bloated output)")
 args = parser.parse_args()
@@ -119,6 +120,8 @@ if mass_fit:
 
 mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
 
+bias_helper = muon_calibration.make_muon_bias_helpers() if args.bias_calibration else None
+
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_corr)
 
 # recoil initialization
@@ -149,12 +152,14 @@ def build_graph(df, dataset):
         cvh_helper = mc_calibration_helper
         jpsi_helper = jpsi_crctn_MC_helper if mass_fit else None
 
-    df = muon_calibration.define_corrected_muons(df, cvh_helper, args.muonCorr, dataset)
+    df = muon_calibration.define_corrected_muons(df, cvh_helper, jpsi_helper, args.muonCorr, dataset, bias_helper)
 
     df = muon_selections.select_veto_muons(df, nMuons=2)
     df = muon_selections.select_good_muons(df, nMuons=2, use_trackerMuons=args.trackerMuons, use_isolation=True)
 
-    df = muon_calibration.define_trigger_muons(df, jpsi_helper, args.muonCorr)
+    # FIXME: Move to muon_selections
+    df = muon_calibration.define_trigger_muons(df)
+
 
     df = df.Filter("Sum(trigMuons) == 1 && Sum(nonTrigMuons) == 1")
     df = df.Filter("nonTrigMuons_pt0 > 26.") # since this is our "neutrino", should there also be an upper cut (and eta cuts)?
@@ -164,7 +169,7 @@ def build_graph(df, dataset):
 
     df = muon_selections.veto_electrons(df)
     df = muon_selections.apply_met_filters(df)
-    df = muon_selections.select_trigger_muon(df, dataset, "trigMuons_eta0", "trigMuons_phi0")
+    df = muon_selections.select_triggermatched_muon(df, dataset, "trigMuons_eta0", "trigMuons_phi0")
 
     df = df.Define("TrigMuon_mom4", "ROOT::Math::PtEtaPhiMVector(trigMuons_pt0, trigMuons_eta0, trigMuons_phi0, wrem::muon_mass)")
     df = df.Define("NonTrigMuon_mom4", "ROOT::Math::PtEtaPhiMVector(nonTrigMuons_pt0, nonTrigMuons_eta0, nonTrigMuons_phi0, wrem::muon_mass)")
