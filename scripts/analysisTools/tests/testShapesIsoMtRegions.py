@@ -1,3 +1,6 @@
+## example
+# python tests/testShapesIsoMtRegions.py path/to/pickle/file.pkl.lz4 /path/to/plot/folder/testShapesIsoMtRegions/ [-c minus] [--isoMtRegion 2]
+
 from wremnants.datasets.datagroups import datagroups2016
 from wremnants import histselections as sel
 #from wremnants import plot_tools,theory_tools,syst_tools
@@ -137,16 +140,16 @@ if __name__ == "__main__":
                 hist2D[charge][f"{d}_{charge}"] = h
                 print()
 
-        outdir_isoMtID = f"{outdir}/isoMtID_{isoMtID}/"
-        createPlotDirAndCopyPhp(outdir_isoMtID)
-                
-        for c in charges:
-            hdata2D = hist2D[c][f"Data_{c}"]        
-            hmc2D = [hist2D[c][key] for key in hist2D[c].keys() if key.split("_")[0] != "Data"]
-            outdir_dataMC = f"{outdir_isoMtID}dataMC_{c}/"
-            createPlotDirAndCopyPhp(outdir_dataMC)
-            plotPrefitHistograms(hist2D[c][f"Data_{c}"], hmc2D, outdir_dataMC, xAxisName=xAxisName, yAxisName=yAxisName,
-                                 chargeLabel=c, canvas=canvas, canvasWide=cwide, canvas1D=canvas1D)
+        if "Data" in datasets:
+            outdir_isoMtID = f"{outdir}/isoMtID_{isoMtID}/"
+            createPlotDirAndCopyPhp(outdir_isoMtID)
+            for c in charges:
+                hdata2D = hist2D[c][f"Data_{c}"]        
+                hmc2D = [hist2D[c][key] for key in hist2D[c].keys() if key.split("_")[0] != "Data"]
+                outdir_dataMC = f"{outdir_isoMtID}dataMC_{c}/"
+                createPlotDirAndCopyPhp(outdir_dataMC)
+                plotPrefitHistograms(hist2D[c][f"Data_{c}"], hmc2D, outdir_dataMC, xAxisName=xAxisName, yAxisName=yAxisName,
+                                     chargeLabel=c, canvas=canvas, canvasWide=cwide, canvas1D=canvas1D)
                 
     # processes = ["WplusmunuPostVFP"]
     # hnomi = {}

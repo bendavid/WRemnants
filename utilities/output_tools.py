@@ -64,10 +64,10 @@ def write_analysis_output(results, outfile, args):
     to_append = []
     if args.theory_corr and not args.theory_corr_alt_only:
         to_append.append(args.theory_corr[0]+"Corr")
-    if args.postfix:
-        to_append.append(args.postfix)
     if hasattr(args, "uncertainty_hist") and args.uncertainty_hist != "nominal":
         to_append.append(args.uncertainty_hist)
+    if args.postfix:
+        to_append.append(args.postfix)
     if args.maxFiles > 0:
         to_append.append(f"maxFiles{args.maxFiles}")
 
