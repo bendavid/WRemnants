@@ -82,14 +82,10 @@ axis_ptVgen = hist.axis.Variable(
 if args.binnedScaleFactors:
     logging.info("Using binned scale factors and uncertainties")
     # add usePseudoSmoothing=True for tests with Asimov
-    muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_binned(filename = args.sfFile,
-                                                                                                                                     era = era,
-                                                                                                                                     max_pt = axis_pt.edges[-1], usePseudoSmoothing=True) 
+    muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_binned(filename = args.sfFile, era = era, max_pt = axis_pt.edges[-1], usePseudoSmoothing=True) 
 else:
     logging.info("Using smoothed scale factors and uncertainties")
-    muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile,
-                                                                                                                                     era = era, max_pt =
-                                                                                                                                     axis_pt.edges[-1])
+    muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile, era = era, max_pt = axis_pt.edges[-1])
 logging.info(f"SF file: {args.sfFile}")
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
@@ -145,7 +141,7 @@ def build_graph(df, dataset):
  
     df = muon_selections.veto_electrons(df)
     df = muon_selections.apply_met_filters(df)
-    df = muon_selections.select_triggermatched_muon(df, dataset, "goodMuons_eta0", "goodMuons_phi0")
+    df = muon_selections.apply_triggermatching_muon(df, dataset, "goodMuons_eta0", "goodMuons_phi0")
 
     # gen match to bare muons to select only prompt muons from top processes
     if isTop:
@@ -169,9 +165,26 @@ def build_graph(df, dataset):
     df = df.Define("goodMuons_pfRelIso04_all0", "Muon_pfRelIso04_all[goodMuons][0]")
 
     df = df.Define("goodCleanJets", "Jet_jetId >= 6 && (Jet_pt > 50 || Jet_puId >= 4) && Jet_pt > 30 && abs(Jet_eta) < 2.4 && wrem::cleanJetsFromLeptons(Jet_eta,Jet_phi,Muon_correctedEta[vetoMuons],Muon_correctedPhi[vetoMuons],Electron_eta[vetoElectrons],Electron_phi[vetoElectrons])")
-    df = df.Define("goodCleanJetsPt45", "goodCleanJets && Jet_pt > 45")
     df = df.Define("passIso", "goodMuons_pfRelIso04_all0 < 0.15")
 
+    ########################################################################
+    # define event weights here since they are needed below for some helpers
+    if dataset.is_data:
+        df = df.Define("nominal_weight", "1.0")            
+    else:
+        df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
+        df = df.Define("weight_vtx", vertex_helper, ["GenVtx_z", "Pileup_nTrueInt"])
+        df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId"])
+
+        weight_expr = "weight*weight_pu*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom"
+        if not args.noScaleFactors:
+            df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso"])
+            weight_expr += "*weight_fullMuonSF_withTrackingReco"
+        if args.vertex_weight:
+            weight_expr += "*weight_vtx"
+        df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
+    ########################################################################
+    
     if not args.no_recoil:
         if dataset.is_data:
             df = recoilHelper.setup_MET(df, results, dataset, "goodMuons_pt0", "goodMuons_phi0", "Muon_pt[goodMuons][0]")
@@ -194,50 +207,25 @@ def build_graph(df, dataset):
     df = df.Define("passMT", "transverseMass >= 40.0")
     df = df.Filter("passMT || hasCleanJet")
 
+    ##
+    ##     FIXME
+    ##
+    ## are these supposed to stay before or after the Filter("passMT || hasCleanJet") ???
+    ## the only difference is that when it is afterwards the low mT region will have the >= 1 het requirement
+    ## so the inclusive distributions without the mT cut will not be really consistent
+    results.append(df.HistoBoost("MET_pt", [axis_MET_pt, axis_charge, axis_passMT, axis_passIso], ["MET_corr_rec_pt", "goodMuons_charge0", "passMT", "passIso", "nominal_weight"]))
+    results.append(df.HistoBoost("transverseMass", [axis_mt, axis_charge, axis_passMT, axis_passIso], ["transverseMass", "goodMuons_charge0", "passMT", "passIso", "nominal_weight"]))   
 
     nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
 
     if dataset.is_data:
-        df = df.Define("nominal_weight", "1.0")
         nominal = df.HistoBoost("nominal", nominal_axes, nominal_cols)
         results.append(nominal)
 
         if not args.onlyMainHistograms:
-            dQCDbkGVar = df.Filter("passMT || Sum(goodCleanJetsPt45)>=1")
-            qcdJetPt45 = dQCDbkGVar.HistoBoost("qcdJetPt45", nominal_axes, nominal_cols)
-            results.append(qcdJetPt45)
-        
-    else:
-        df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
-        df = df.Define("weight_vtx", vertex_helper, ["GenVtx_z", "Pileup_nTrueInt"])
-        df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId"])
-
-        weight_expr = "weight*weight_pu*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom"
-        if not args.noScaleFactors:
-            df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso"])
-            weight_expr += "*weight_fullMuonSF_withTrackingReco"
-        if args.vertex_weight:
-            weight_expr += "*weight_vtx"
-        
-        df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
-        
-        if not args.no_recoil:
-            df = recoilHelper.setup_MET(df, results, dataset, "goodMuons_pt0", "goodMuons_phi0", "Muon_pt[goodMuons][0]")
-            df = recoilHelper.setup_recoil_gen(df, results, dataset, ["WplusmunuPostVFP", "WminusmunuPostVFP"])
-            df = recoilHelper.apply_recoil_W(df, results, dataset, ["WplusmunuPostVFP", "WminusmunuPostVFP"]) # produces corrected MET as MET_corr_rec_pt/phi
-        else:
-            df = df.Alias("MET_corr_rec_pt", "MET_pt")
-            df = df.Alias("MET_corr_rec_phi", "MET_phi")
+            syst_tools.add_QCDbkg_jetPt45_hist(results, df, nominal_axes, nominal_cols)
             
-        df = df.Define("transverseMass", "wrem::mt_2(goodMuons_pt0, goodMuons_phi0, MET_corr_rec_pt, MET_corr_rec_phi)")
-        df = df.Define("hasCleanJet", "Sum(goodCleanJets) >= 1")
-        
-        mTStudyForFakes = df.HistoBoost("mTStudyForFakes", mTStudyForFakes_axes, ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "transverseMass", "passIso", "hasCleanJet", "nominal_weight"])
-        results.append(mTStudyForFakes)
-
-        df = df.Define("passMT", "transverseMass >= 40.0")
-        df = df.Filter("passMT || hasCleanJet")
-  
+    else:  
         results.append(df.HistoBoost("nominal_weight", [hist.axis.Regular(200, -4, 4)], ["nominal_weight"]))
 
         nominal = df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "nominal_weight"])
@@ -252,9 +240,6 @@ def build_graph(df, dataset):
             if args.validationHists: 
                 wremnants.make_reco_over_gen_hists(df, results)
 
-        
-    results.append(df.HistoBoost("MET_pt", [axis_MET_pt, axis_charge, axis_passMT, axis_passIso], ["MET_corr_rec_pt", "goodMuons_charge0", "passMT", "passIso", "nominal_weight"]))
-    results.append(df.HistoBoost("transverseMass", [axis_mt, axis_charge, axis_passMT, axis_passIso], ["transverseMass", "goodMuons_charge0", "passMT", "passIso", "nominal_weight"]))   
     if isW or isZ:
         results.extend(theory_tools.make_theory_corr_hists(df, "transverseMass", [axis_mt, axis_charge, axis_passMT, axis_passIso], ["transverseMass", "goodMuons_charge0", "passMT", "passIso"],
             corr_helpers[dataset.name], args.theory_corr, modify_central_weight=False)
@@ -262,9 +247,7 @@ def build_graph(df, dataset):
 
     if not dataset.is_data and not args.onlyMainHistograms:
         
-        dQCDbkGVar = df.Filter("passMT || Sum(goodCleanJetsPt45)>=1")
-        qcdJetPt45 = dQCDbkGVar.HistoBoost("nominal_qcdJetPt45", nominal_axes, [*nominal_cols, "nominal_weight"])
-        results.append(qcdJetPt45)
+        syst_tools.add_QCDbkg_jetPt45_hist(results, df, nominal_axes, nominal_cols)
 
         df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, nominal_axes, nominal_cols)
         df = syst_tools.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, nominal_axes, nominal_cols)
