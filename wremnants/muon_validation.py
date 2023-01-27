@@ -8,6 +8,22 @@ from utilities import common
 
 ROOT.gInterpreter.Declare('#include "muon_validation.h"')
 
+def make_jpsi_crctn_helpers(muonCorr):
+    if "massfit" not in muonCorr:
+        return None, None
+
+    mc_corrfile = "calibrationJMC_smeared_v718_nominalLBL.root" if "lbl" in muonCorr else "calibrationJMC_smeared_v718_nominal.root"
+    data_corrfile = "calibrationJDATA_smeared_v718_LBL.root" if "lbl" in muonCorr else "calibrationJDATA_smeared_v718.root"
+
+    mc_helper = make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}")
+    data_helper = make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}")
+
+    # FIXME fix uncertainty helpers
+    #mc_unc_helper = wremnants.make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/calibrationJMC_smeared_v718_nominal.root")
+    #data_unc_helper = wremnants.make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/calibrationJDATA_smeared_v718.root")
+
+    return mc_helper, data_helper
+
 def make_jpsi_crctn_helper(filepath):
     f = uproot.open(filepath)
 
@@ -24,7 +40,7 @@ def make_jpsi_crctn_helper(filepath):
         hist_comb.view()[...,0] = np.stack([x.values() for x in [A, e, M]], axis = -1)
 
     hist_comb_cpp = narf.hist_to_pyroot_boost(hist_comb, tensor_rank = 2)
-    jpsi_crctn_helper = ROOT.wrem.JpsiCorrectionsHelper[type(hist_comb_cpp).__cpp_name__](
+    jpsi_crctn_helper = ROOT.wrem.JpsiCorrectionsRVecHelper[type(hist_comb_cpp).__cpp_name__](
         ROOT.std.move(hist_comb_cpp)
     )
     return jpsi_crctn_helper
@@ -74,83 +90,66 @@ def get_jpsi_scale_param_cov_mat(cov, n_scale_params = 3, n_tot_params = 6, n_et
 # "muon" is for mw; "muons" is for wlike, for which we select one of the trig/nonTrig muons
 
 def define_cvh_muon_kinematics(df):
-    df = df.Define("goodMuon_cvh_pt", "Muon_cvhPt[gooodMuons][0]")
-    df = df.Define("goodMuon_cvh_eta", "Muon_cvhEta[goodMuons][0]")
-    df = df.Define("goodMuon_cvh_phi", "Muon_cvhPhi[goodMuons][0]")
+    df = df.Define("goodMuons_cvh_pt0", "Muon_cvhPt[gooodMuons][0]")
+    df = df.Define("goodMuons_cvh_eta0", "Muon_cvhEta[goodMuons][0]")
+    df = df.Define("goodMuons_cvh_phi0", "Muon_cvhPhi[goodMuons][0]")
     return df
 
 def define_cvh_muons_kinematics(df):
-    df = df.Define("TrigMuon_cvh_pt", "Muon_correctedPt[trigMuons][0]")
-    df = df.Define("TrigMuon_cvh_eta", "Muon_correctedEta[trigMuons][0]")
-    df = df.Define("TrigMuon_cvh_phi", "Muon_correctedPhi[trigMuons][0]")
-    df = df.Define("NonTrigMuon_cvh_pt", "Muon_correctedPt[nonTrigMuons][0]")
-    df = df.Define("NonTrigMuon_cvh_eta", "Muon_correctedEta[nonTrigMuons][0]")
-    df = df.Define("NonTrigMuon_cvh_phi", "Muon_correctedPhi[nonTrigMuons][0]")
-    return df
-
-def define_jpsi_crctd_muons_pt(df, helper):
-    df = df.Define("TrigMuon_jpsi_crctd_pt", helper,
-        [
-            "TrigMuon_eta",
-            "TrigMuon_preCorr_pt",
-            "TrigMuon_charge"
-        ]
-    )
-    df = df.Define("NonTrigMuon_jpsi_crctd_pt", helper,
-        [
-            "NonTrigMuon_eta",
-            "NonTrigMuon_preCorr_pt",
-            "NonTrigMuon_charge"
-        ]
-    )
+    df = df.Define("trigMuons_cvh_pt0", "Muon_correctedPt[trigMuons][0]")
+    df = df.Define("trigMuons_cvh_eta0", "Muon_correctedEta[trigMuons][0]")
+    df = df.Define("trigMuons_cvh_phi0", "Muon_correctedPhi[trigMuons][0]")
+    df = df.Define("nonTrigMuons_cvh_pt0", "Muon_correctedPt[nonTrigMuons][0]")
+    df = df.Define("nonTrigMuons_cvh_eta0", "Muon_correctedEta[nonTrigMuons][0]")
+    df = df.Define("nonTrigMuons_cvh_phi0", "Muon_correctedPhi[nonTrigMuons][0]")
     return df
 
 def define_jpsi_crctd_muons_pt_unc(df, helper):
-    df = df.Define("TrigMuon_jpsi_crctd_pt_unc", helper,
+    df = df.Define("trigMuons_jpsi_crctd_pt_unc", helper,
         [
-            "TrigMuon_cvh_eta",
-            "TrigMuon_cvh_pt",
-            "TrigMuon_charge",
-            "TrigMuon_jpsi_crctd_pt"
+            "trigMuons_cvh_eta",
+            "trigMuons_cvh_pt",
+            "trigMuons_charge",
+            "trigMuons_jpsi_crctd_pt"
         ]
     )
-    df = df.Define("NonTrigMuon_jpsi_crctd_pt_unc", helper,
+    df = df.Define("nonTrigMuons_jpsi_crctd_pt_unc", helper,
         [
-            "NonTrigMuon_cvh_eta",
-            "NonTrigMuon_cvh_pt",
-            "NonTrigMuon_charge",
-            "NonTrigMuon_jpsi_crctd_pt"
+            "nonTrigMuons_cvh_eta",
+            "nonTrigMuons_cvh_pt",
+            "nonTrigMuons_charge",
+            "nonTrigMuons_jpsi_crctd_pt"
         ]
     )
     return df
 
 def define_jpsi_crctd_z_mass(df):
-    df = df.Define("TrigMuon_jpsi_crctd_mom4",
+    df = df.Define("trigMuons_jpsi_crctd_mom4",
         (
             "ROOT::Math::PtEtaPhiMVector("
-            "TrigMuon_jpsi_crctd_pt, TrigMuon_cvh_eta, TrigMuon_cvh_phi, wrem::muon_mass)"
+            "trigMuons_jpsi_crctd_pt, trigMuons_cvh_eta, trigMuons_cvh_phi, wrem::muon_mass)"
         )
     )
-    df = df.Define("NonTrigMuon_jpsi_crctd_mom4",
+    df = df.Define("nonTrigMuons_jpsi_crctd_mom4",
         (
             "ROOT::Math::PtEtaPhiMVector("
-            "NonTrigMuon_jpsi_crctd_pt, NonTrigMuon_cvh_eta, NonTrigMuon_cvh_phi, wrem::muon_mass)"
+            "nonTrigMuons_jpsi_crctd_pt, nonTrigMuons_cvh_eta, nonTrigMuons_cvh_phi, wrem::muon_mass)"
         )
     )
-    df = df.Define("Z_jpsi_crctd_mom4", "ROOT::Math::PxPyPzEVector(TrigMuon_jpsi_crctd_mom4)+ROOT::Math::PxPyPzEVector(NonTrigMuon_jpsi_crctd_mom4)")
+    df = df.Define("Z_jpsi_crctd_mom4", "ROOT::Math::PxPyPzEVector(trigMuons_jpsi_crctd_mom4)+ROOT::Math::PxPyPzEVector(nonTrigMuons_jpsi_crctd_mom4)")
     df = df.Define("massZ_jpsi_crctd", "Z_jpsi_crctd_mom4.mass()")
     return df
 
 def define_jpsi_crctd_unc_z_mass(df):
-    df = df.Define("TrigMuon_jpsi_crctd_mom4_unc",
+    df = df.Define("trigMuons_jpsi_crctd_mom4_unc",
         (
-            "ROOT::VecOps::RVec<double> res(TrigMuon_jpsi_crctd_pt_unc.size());"
-            "for (int i = 0; i < TrigMuon_jpsi_crctd_pt_unc.size(); i++) {"
+            "ROOT::VecOps::RVec<double> res(trigMuons_jpsi_crctd_pt_unc.size());"
+            "for (int i = 0; i < trigMuons_jpsi_crctd_pt_unc.size(); i++) {"
             "    res[i] = ("
             "       ROOT::Math::PtEtaPhiMVector("
-            "           TrigMuon_jpsi_crctd_pt_unc[i],"
-            "           TrigMuon_cvh_eta,"
-            "           TrigMuon_cvh_phi,"
+            "           trigMuons_jpsi_crctd_pt_unc[i],"
+            "           trigMuons_cvh_eta,"
+            "           trigMuons_cvh_phi,"
             "           wrem::muon_mass"
             "       )"
             "    );"
@@ -158,15 +157,15 @@ def define_jpsi_crctd_unc_z_mass(df):
             "return res;"
         )
     )
-    df = df.Define("NonTrigMuon_jpsi_crctd_mom4_unc",
+    df = df.Define("nonTrigMuons_jpsi_crctd_mom4_unc",
         (
-            "ROOT::VecOps::RVec<double> res(NonTrigMuon_jpsi_crctd_pt_unc.size());"
-            "for (int i = 0; i < NonTrigMuon_jpsi_crctd_pt_unc.size(); i++) {"
+            "ROOT::VecOps::RVec<double> res(nonTrigMuons_jpsi_crctd_pt_unc.size());"
+            "for (int i = 0; i < nonTrigMuons_jpsi_crctd_pt_unc.size(); i++) {"
             "    res[i] = ("
             "        ROOT::Math::PtEtaPhiMVector("
-            "            NonTrigMuon_jpsi_crctd_pt_unc[i],"
-            "            NonTrigMuon_cvh_eta," 
-            "            NonTrigMuon_cvh_phi,"
+            "            nonTrigMuons_jpsi_crctd_pt_unc[i],"
+            "            nonTrigMuons_cvh_eta," 
+            "            nonTrigMuons_cvh_phi,"
             "            wrem::muon_mass"
             "        )"
             "    );"
@@ -176,11 +175,11 @@ def define_jpsi_crctd_unc_z_mass(df):
     )
     df = df.Define("Z_jpsi_crctd_mom4_unc", 
         (
-            "ROOT::VecOps::RVec<double> res(TrigMuon_jpsi_crctd_mom4_unc.size());"
-            "for (int i = 0; i < TrigMuon_jpsi_crctd_mom4_unc.size(); i++) {"
+            "ROOT::VecOps::RVec<double> res(trigMuons_jpsi_crctd_mom4_unc.size());"
+            "for (int i = 0; i < trigMuons_jpsi_crctd_mom4_unc.size(); i++) {"
             "    res[i] = ("
-            "        ROOT::Math::PxPyPzEVector(TrigMuon_jpsi_crctd_mom4_unc[i]) +"
-            "        ROOT::Math::PxPyPzEVector(NonTrigMuon_jpsi_crctd_mom4_unc[i])"
+            "        ROOT::Math::PxPyPzEVector(trigMuons_jpsi_crctd_mom4_unc[i]) +"
+            "        ROOT::Math::PxPyPzEVector(nonTrigMuons_jpsi_crctd_mom4_unc[i])"
             "    )"
             "}"
             "return res"

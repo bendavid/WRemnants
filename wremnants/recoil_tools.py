@@ -33,7 +33,7 @@ class Recoil:
             self.highPU = True
             setattr(ROOT.wrem, "recoil_correction_qTmax", 500)
             setattr(ROOT.wrem, "recoil_verbose", False)
-            self.recoil_qTbins = list(drange(0, 500, 0.5)) + [500]
+            self.recoil_qTbins = list(drange(0, 500, 1)) + [500]
             
             self.met_xycorr_setup(f"wremnants/data/recoil/highPU/{self.flavor}_{self.met}/met_xy_correction.json") # MET XY correction
             if self.flavor == "mumu":
@@ -56,7 +56,8 @@ class Recoil:
             self.highPU = False
             setattr(ROOT.wrem, "recoil_correction_qTmax", 200)
             setattr(ROOT.wrem, "recoil_verbose", False)
-            self.recoil_qTbins = list(drange(0, 300, 0.5))
+            #self.recoil_qTbins = list(drange(0, 300, 0.5))
+            self.recoil_qTbins = list(drange(0, 300, 1)) + [300]
             
             self.met_xycorr_setup(f"wremnants/data/recoil/lowPU/{self.flavor}_{self.met}/met_xy_correction.json") # MET XY correction
             if self.flavor == "mumu": # todo ee

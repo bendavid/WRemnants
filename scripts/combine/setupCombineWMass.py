@@ -19,6 +19,7 @@ def make_parser(parser=None):
     parser.add_argument("-v", "--fitvar", help="Variable to fit", default="eta_pt", choices=sel.hist_map.keys())
     parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow). Equivalent to --excludeNuisances '.*effSystTnP|.*effStatTnP' ")
     parser.add_argument("-p", "--pseudoData", type=str, help="Hist to use as pseudodata")
+    parser.add_argument("--pseudodata-file", type=str, help="Input file for pseudodata (if it should be read from a different file", default=None)
     parser.add_argument("-x",  "--excludeNuisances", type=str, default="", help="Regular expression to exclude some systematics from the datacard")
     parser.add_argument("-k",  "--keepNuisances", type=str, default="", help="Regular expression to keep some systematics, overriding --excludeNuisances. Can be used to keep only some systs while excluding all the others with '.*'")
     parser.add_argument("--skipOtherChargeSyst", dest="skipOtherChargeSyst" , action="store_true",   help="Skip saving histograms and writing nuisance in datacard for systs defined for a given charge but applied on the channel with the other charge")
@@ -29,12 +30,18 @@ def make_parser(parser=None):
     parser.add_argument("--noHist", action='store_true', help="Skip the making of 2D histograms (root file is left untouched if existing)")
     parser.add_argument("--effStatLumiScale", type=float, default=None, help="Rescale equivalent luminosity for efficiency stat uncertainty by this value (e.g. 10 means ten times more data from tag and probe)")
     parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers and nuisances)")
+    parser.add_argument("--xlim", type=float, nargs=2, default=None, help="Restrict x axis to this range")
     return parser
 
 def main(args):
     logger = common.setup_base_logger('setupCombineWMass', args.debug)
 
     datagroups = datagroups2016(args.inputFile)
+    if args.xlim:
+        if args.fitvar == "eta_pt":
+            raise ValueError("Restricting the x axis not supported for 2D hist")
+        s = hist.tag.Slicer()
+        datagroups.setGlobalAction(lambda h: h[{args.fitvar : s[complex(0, args.xlim[0]):complex(0, args.xlim[1])]}])
     wlike = datagroups.wlike
 
     tag = "WMass" if not wlike else "ZMassWLike"
@@ -50,6 +57,8 @@ def main(args):
     cardTool = CardTool.CardTool(f"{outfolder}/{name}_{{chan}}.txt")
     cardTool.setNominalTemplate(f"{templateDir}/main.txt")
     cardTool.setNominalName(sel.hist_map[args.fitvar])
+    if args.combineChannels:
+        cardTool.setChannels(["combined"])
     if args.fitvar not in ["eta_pt", "ptll_mll"]:
         cardTool.setProjectionAxes([args.fitvar])
     if args.noHist:
@@ -65,6 +74,9 @@ def main(args):
         cardTool.setSkipOtherChargeSyst()
     if args.pseudoData:
         cardTool.setPseudodata(args.pseudoData)
+        if args.pseudodata_file:
+            cardTool.setPseudodataDatagroups(datagroups2016(args.pseudodata_file))
+
     if args.lumiScale:
         cardTool.setLumiScale(args.lumiScale)
         

@@ -62,8 +62,6 @@ def write_analysis_output(results, outfile, args):
     results.update({"meta_info" : metaInfoDict()})
 
     to_append = []
-    if not args.no_recoil and hasattr(args, "met"):
-        to_append.append(args.met)
     if args.theory_corr and not args.theory_corr_alt_only:
         to_append.append(args.theory_corr[0]+"Corr")
     if hasattr(args, "uncertainty_hist") and args.uncertainty_hist != "nominal":
@@ -83,9 +81,8 @@ def write_analysis_output(results, outfile, args):
         outfile = os.path.join(args.outfolder, outfile)
 
     time0 = time.time()
-    output = os.path.join(args.outfolder, outfile)
     print(f"writing output file {output} ...")
     with lz4.frame.open(output, "wb") as f:
         pickle.dump(results, f, protocol = pickle.HIGHEST_PROTOCOL)
-    print("Output", time.time()-time0)
+    print("Writing output:", time.time()-time0)
     print(f"Output saved in {outfile}")

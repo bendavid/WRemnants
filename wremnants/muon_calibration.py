@@ -6,6 +6,7 @@ from utilities import rdf_tools
 from utilities import common
 from utilities import boostHistHelpers as hh
 from . import muon_validation
+import uproot
 
 ROOT.gInterpreter.Declare('#include "muon_calibration.h"')
 ROOT.gInterpreter.Declare('#include "lowpu_utils.h"')
@@ -30,6 +31,22 @@ def make_muon_calibration_helpers(mc_filename=data_dir+"/calibration/correctionR
 
     return mc_helper, data_helper, uncertainty_helper
 
+def make_muon_bias_helpers(lbl=False):
+    # this helper adds a correction for the bias from nonclosure to the muon pT
+    h2d = uproot.open(f"wremnants/data/closure/closureZ{'_LBL' if lbl else ''}.root:closure").to_hist()
+    # Drop the uncertainty because the Weight storage type doesn't play nice with ROOT
+    h2d_nounc = hist.Hist(*h2d.axes, data=h2d.values(flow=True))
+    # Set overflow to closest values
+    h2d_nounc[hist.underflow,:][...] = h2d_nounc[0,:].view(flow=True)
+    h2d_nounc[:,hist.underflow][...] = h2d_nounc[:,0].view(flow=True)
+    h2d_nounc[hist.overflow,:][...] = h2d_nounc[-1,:].view(flow=True)
+    h2d_nounc[:,hist.overflow][...] = h2d_nounc[:,-1].view(flow=True)
+
+    h2d_cpp = narf.hist_to_pyroot_boost(h2d_nounc, tensor_rank=0)
+    helper = ROOT.wrem.BiasCorrectionsHelper[type(h2d_cpp).__cpp_name__](ROOT.std.move(h2d_cpp))
+
+    return helper
+
 def get_dummy_uncertainties():
     axis_eta = hist.axis.Regular(48, -2.4, 2.4, name = "eta")
     axis_calvar = hist.axis.Integer(0, 1, underflow=False, overflow=False, name = "calvar")
@@ -46,113 +63,53 @@ def get_dummy_uncertainties():
 
     return h
 
-def define_corrected_muons_wmass(df, helper, corr_type, dataset):
-    if not (dataset.is_data or dataset.name in common.vprocs):
-        corr_type = "none" 
+def define_lblcorr_muons(df, cvh_helper, dataset):
+    corr_branch = "cvh" if dataset.is_data else "cvhideal"
 
-    if corr_type == "none":
-        df = df.Alias("Muon_correctedPt", "Muon_pt")
-        df = df.Alias("Muon_correctedEta", "Muon_eta")
-        df = df.Alias("Muon_correctedPhi", "Muon_phi")
-        df = df.Alias("Muon_correctedCharge", "Muon_charge")
-    elif "trackfit_only" in corr_type:
-        # TODO: Is this a reasonable configuration?
-        fit = "cvhideal" if corr_type == "trackfit_only_mctruth" and not dataset.is_data else "cvh"
-        print("Trackfit", fit)
-        df = df.Define("Muon_correctedPt", f"Muon_{fit}Pt")
-        df = df.Define("Muon_correctedEta", f"Muon_{fit}Eta")
-        df = df.Define("Muon_correctedPhi", f"Muon_{fit}Phi")
-        df = df.Define("Muon_correctedCharge", f"Muon_{fit}Charge")
-    elif corr_type == "lbl":
-        corr_branch = "cvh" if dataset.is_data else "cvhideal"
+    # split the nested vectors
+    df = df.Define("Muon_cvhmergedGlobalIdxs", "wrem::splitNestedRVec(Muon_cvhmergedGlobalIdxs_Vals, Muon_cvhmergedGlobalIdxs_Counts)")
+    df = df.Define(f"Muon_{corr_branch}JacRef", f"wrem::splitNestedRVec(Muon_{corr_branch}JacRef_Vals, Muon_{corr_branch}JacRef_Counts)")
 
-        # split the nested vectors
-        df = df.Define("Muon_cvhmergedGlobalIdxs", "wrem::splitNestedRVec(Muon_cvhmergedGlobalIdxs_Vals, Muon_cvhmergedGlobalIdxs_Counts)")
-        df = df.Define(f"Muon_{corr_branch}JacRef", f"wrem::splitNestedRVec(Muon_{corr_branch}JacRef_Vals, Muon_{corr_branch}JacRef_Counts)")
+    df = df.Define("Muon_lblMom4Charge", cvh_helper, [f"Muon_{corr_branch}Pt", f"Muon_{corr_branch}Eta", f"Muon_{corr_branch}Phi", f"Muon_{corr_branch}Charge", "Muon_cvhmergedGlobalIdxs", f"Muon_{corr_branch}JacRef"])
 
-        df = df.Define("Muon_correctedMom4Charge", helper, [f"Muon_{corr_branch}Pt", f"Muon_{corr_branch}Eta", f"Muon_{corr_branch}Phi", f"Muon_{corr_branch}Charge", "Muon_cvhmergedGlobalIdxs", f"Muon_{corr_branch}JacRef"])
-
-        # split into individual vectors
-        df = df.Define("Muon_correctedPt", "ROOT::VecOps::RVec<float> res(Muon_correctedMom4Charge.size()); std::transform(Muon_correctedMom4Charge.begin(), Muon_correctedMom4Charge.end(), res.begin(), [](const auto &x) { return x.first.Pt(); } ); return res;")
-        df = df.Define("Muon_correctedEta", "ROOT::VecOps::RVec<float> res(Muon_correctedMom4Charge.size()); std::transform(Muon_correctedMom4Charge.begin(), Muon_correctedMom4Charge.end(), res.begin(), [](const auto &x) { return x.first.Eta(); } ); return res;")
-        df = df.Define("Muon_correctedPhi", "ROOT::VecOps::RVec<float> res(Muon_correctedMom4Charge.size()); std::transform(Muon_correctedMom4Charge.begin(), Muon_correctedMom4Charge.end(), res.begin(), [](const auto &x) { return x.first.Phi(); } ); return res;")
-        df = df.Define("Muon_correctedCharge", "ROOT::VecOps::RVec<int> res(Muon_correctedMom4Charge.size()); std::transform(Muon_correctedMom4Charge.begin(), Muon_correctedMom4Charge.end(), res.begin(), [](const auto &x) { return x.second; }); return res;")
-    elif "massfit" in corr_type:
-        raise ValueError(f"mass_fit not defined for W analysis")
-    else:
-        raise ValueError(f"Invalid correction type choice {corr_type}")
+    # split into individual vectors
+    df = df.Define("Muon_lblPt", "ROOT::VecOps::RVec<float> res(Muon_lblMom4Charge.size()); std::transform(Muon_lblMom4Charge.begin(), Muon_lblMom4Charge.end(), res.begin(), [](const auto &x) { return x.first.Pt(); } ); return res;")
+    df = df.Define("Muon_lblEta", "ROOT::VecOps::RVec<float> res(Muon_lblMom4Charge.size()); std::transform(Muon_lblMom4Charge.begin(), Muon_lblMom4Charge.end(), res.begin(), [](const auto &x) { return x.first.Eta(); } ); return res;")
+    df = df.Define("Muon_lblPhi", "ROOT::VecOps::RVec<float> res(Muon_lblMom4Charge.size()); std::transform(Muon_lblMom4Charge.begin(), Muon_lblMom4Charge.end(), res.begin(), [](const auto &x) { return x.first.Phi(); } ); return res;")
+    df = df.Define("Muon_lblCharge", "ROOT::VecOps::RVec<int> res(Muon_lblMom4Charge.size()); std::transform(Muon_lblMom4Charge.begin(), Muon_lblMom4Charge.end(), res.begin(), [](const auto &x) { return x.second; }); return res;")
     return df
 
-def define_corrected_muons_wlike(df, cvh_helper, jpsi_helper, corr_type, dataset, trackerMuons):
+def define_jpsicorr_muons(df, helper, muon):
+    df = df.Define("Muon_jpsiCorrectedPt", helper, 
+            [muon_var_name(muon, var) for var in ["pt", "eta", "charge"]]
+    )
+    return df
+
+def define_corrected_muons(df, cvh_helper, jpsi_helper, corr_type, dataset, bias_helper=None):
     if not (dataset.is_data or dataset.name in common.vprocs):
         corr_type = "none" 
 
-    if corr_type == "none":
-        df = df.Alias("Muon_correctedPt", "Muon_pt")
-        df = df.Alias("Muon_correctedEta", "Muon_eta")
-        df = df.Alias("Muon_correctedPhi", "Muon_phi")
-        df = df.Alias("Muon_correctedCharge", "Muon_charge")
-    elif "lbl" in corr_type:
-        corr_branch = "cvh" if dataset.is_data else "cvhideal"
-
-        # split the nested vectors
-        df = df.Define("Muon_cvhmergedGlobalIdxs", "wrem::splitNestedRVec(Muon_cvhmergedGlobalIdxs_Vals, Muon_cvhmergedGlobalIdxs_Counts)")
-        df = df.Define(f"Muon_{corr_branch}JacRef", f"wrem::splitNestedRVec(Muon_{corr_branch}JacRef_Vals, Muon_{corr_branch}JacRef_Counts)")
-
-        df = df.Define("Muon_correctedMom4Charge", cvh_helper, [f"Muon_{corr_branch}Pt", f"Muon_{corr_branch}Eta", f"Muon_{corr_branch}Phi", f"Muon_{corr_branch}Charge", "Muon_cvhmergedGlobalIdxs", f"Muon_{corr_branch}JacRef"])
-
-        # split into individual vectors
-        df = df.Define("Muon_correctedPt", "ROOT::VecOps::RVec<float> res(Muon_correctedMom4Charge.size()); std::transform(Muon_correctedMom4Charge.begin(), Muon_correctedMom4Charge.end(), res.begin(), [](const auto &x) { return x.first.Pt(); } ); return res;")
-        df = df.Define("Muon_correctedEta", "ROOT::VecOps::RVec<float> res(Muon_correctedMom4Charge.size()); std::transform(Muon_correctedMom4Charge.begin(), Muon_correctedMom4Charge.end(), res.begin(), [](const auto &x) { return x.first.Eta(); } ); return res;")
-        df = df.Define("Muon_correctedPhi", "ROOT::VecOps::RVec<float> res(Muon_correctedMom4Charge.size()); std::transform(Muon_correctedMom4Charge.begin(), Muon_correctedMom4Charge.end(), res.begin(), [](const auto &x) { return x.first.Phi(); } ); return res;")
-        df = df.Define("Muon_correctedCharge", "ROOT::VecOps::RVec<int> res(Muon_correctedMom4Charge.size()); std::transform(Muon_correctedMom4Charge.begin(), Muon_correctedMom4Charge.end(), res.begin(), [](const auto &x) { return x.second; }); return res;")
-    else:
+    muon = "Muon"
+    if "lbl" in corr_type:
+        df = define_lblcorr_muons(df, cvh_helper, dataset)
+        muon = "Muon_lbl"
+    elif corr_type != "none":
         fit = "cvhideal" if corr_type == "trackfit_only_mctruth" and not dataset.is_data else "cvh"
-        df = df.Define("Muon_correctedPt", f"Muon_{fit}Pt")
-        df = df.Define("Muon_correctedEta", f"Muon_{fit}Eta")
-        df = df.Define("Muon_correctedPhi", f"Muon_{fit}Phi")
-        df = df.Define("Muon_correctedCharge", f"Muon_{fit}Charge")
-    
-    # n.b. charge = -99 is a placeholder for invalid track refit/corrections (mostly just from tracks below
-    # the pt threshold of 8 GeV in the nano production)
-    df = df.Define("vetoMuonsPre", "Muon_looseId && abs(Muon_dxybs) < 0.05 && Muon_correctedCharge != -99")
-    df = df.Define("vetoMuons", "vetoMuonsPre && Muon_correctedPt > 10. && abs(Muon_correctedEta) < 2.4")
+        muon = f"Muon_{fit}"
 
-    if trackerMuons:
-        if dataset.group in ["Top", "Diboson"]:
-            df = df.Define("Muon_category", "Muon_isTracker && Muon_highPurity")
-        else:
-            df = df.Define("Muon_category", "Muon_isTracker && Muon_innerTrackOriginalAlgo != 13 && Muon_innerTrackOriginalAlgo != 14 && Muon_highPurity")
-    else:
-        df = df.Define("Muon_category", "Muon_isGlobal")
+    muon_pt = muon
 
-    df = df.Filter("Sum(vetoMuons) == 2")
-    df = df.Define("goodMuons", "vetoMuons && Muon_mediumId && Muon_category && Muon_pfRelIso04_all < 0.15")
-    df = df.Filter("Sum(goodMuons) == 2")
+    if "massfit" in corr_type:
+        df = define_jpsicorr_muons(df, jpsi_helper, muon)
+        muon_pt = "Muon_jpsiCorrected"
 
-    # mu- for even event numbers, mu+ for odd event numbers
-    df = df.Define("TrigMuon_charge", "event % 2 == 0 ? -1 : 1")
-    df = df.Define("NonTrigMuon_charge", "-TrigMuon_charge")
+    if bias_helper and not dataset.is_data:
+        df = define_biased_muons(df, bias_helper, muon)
+        muon_pt = "_".join([muon, "bias"]) 
 
-    df = df.Define("trigMuons", "goodMuons && Muon_correctedCharge == TrigMuon_charge")
-    df = df.Define("nonTrigMuons", "goodMuons && Muon_correctedCharge == NonTrigMuon_charge")
-
-    df = df.Define("TrigMuon_preCorr_pt", "Muon_correctedPt[trigMuons][0]")
-    df = df.Define("TrigMuon_eta", "Muon_correctedEta[trigMuons][0]")
-    df = df.Define("TrigMuon_phi", "Muon_correctedPhi[trigMuons][0]")
-
-    df = df.Define("NonTrigMuon_preCorr_pt", "Muon_correctedPt[nonTrigMuons][0]")
-    df = df.Define("NonTrigMuon_eta", "Muon_correctedEta[nonTrigMuons][0]")
-    df = df.Define("NonTrigMuon_phi", "Muon_correctedPhi[nonTrigMuons][0]")
-
-    # For corr_type == "massfit_lbl" use the truth-assisted lbl for MC
-    if corr_type == "massfit":
-        df = muon_validation.define_jpsi_crctd_muons_pt(df, jpsi_helper)
-        df = df.Alias("TrigMuon_pt", "TrigMuon_jpsi_crctd_pt")
-        df = df.Alias("NonTrigMuon_pt", "NonTrigMuon_jpsi_crctd_pt")
-    else:
-        df = df.Alias("TrigMuon_pt", "TrigMuon_preCorr_pt")
-        df = df.Alias("NonTrigMuon_pt", "NonTrigMuon_preCorr_pt")
+    for var in ["pt", "eta", "phi", "charge"]:
+        mu_name = muon_pt if var == "pt" else muon
+        df = df.Alias(muon_var_name("Muon_corrected", var), muon_var_name(mu_name, var))
 
     return df
 
@@ -174,6 +131,18 @@ def get_good_gen_muons_idx_in_GenPart(df, reco_subset = "goodMuons"):
     df = df.Define("goodGenMuons_idx","goodMuons_idx[goodMuonsByGenTruth]")
     df = df.Filter("goodGenMuons_idx.size() > 0")
     return df
+
+def muon_var_name(mu_type, var):
+        return mu_type+(f"_{var}" if mu_type == "Muon" else var.capitalize())
+
+def define_biased_muons(df, helper, muon):
+    mu_name = f"{muon}_bias"
+    df = df.Define(muon_var_name(mu_name, "pt"), helper, 
+            [muon_var_name(muon, var) for var in ["pt", "eta", "charge"]]
+    )
+
+    return df
+
 
 def define_good_gen_muon_kinematics(df, kinematic_vars = ["pt", "eta", "phi", "charge"]):
     for var in kinematic_vars:
@@ -220,11 +189,11 @@ def define_gen_smeared_muon_kinematics(df):
     df = df.Define("goodMuons_charge0_gen_smeared", "goodMuons_charge0_gen")
     return df
 
-def define_corrected_reco_muon_kinematics(df, kinematic_vars = ["pt", "eta", "phi", "charge"]):
+def define_corrected_reco_muon_kinematics(df, muons="goodMuons", kinematic_vars = ["pt", "eta", "phi", "charge"], index=0):
     for var in kinematic_vars:
         df = df.Define(
-            f"goodMuons_{var.lower()}0",
-            f"Muon_corrected{var.capitalize()}[goodMuons][0]"
+            f"{muons}_{var.lower()}{index}",
+            f"Muon_corrected{var.capitalize()}[{muons}][{index}]"
         )
     return df
 

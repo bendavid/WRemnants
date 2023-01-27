@@ -13,19 +13,20 @@ scriptdir = f"{pathlib.Path(__file__).parent}"
 def make_parser(parser=None):
     if not parser:
         parser = common.common_parser_combine()
-    parser.add_argument("--flavor", type=str, help="Flavor (ee or mumu)", default=None, required=True)
+    parser.add_argument("--flavor", choices=["ee", "mumu"], help="Flavor (ee or mumu)", default="mumu", required=True)
     parser.add_argument("--fitType", choices=["differential", "wmass", "wlike", "inclusive"], default="differential", 
             help="Fit type, defines POI and fit observable (recoil or mT)")
     parser.add_argument("--xsec", dest="xsec", action='store_true', 
             help="Write card for masked xsec normalization")
     parser.add_argument("--met", type=str, help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")
-    parser.add_argument("--lumiScale", dest="lumiScale", help="Luminosity scale", type=float, default=1.0)
+    #parser.add_argument("--lumiScale", dest="lumiScale", help="Luminosity scale", type=float, default=1.0)
     return parser
 
 def main(args):
-    outfolder = "/".join([args.baseDir, args.outfolder])
+    outfolder = f"CombineStudies/"
     if not os.path.isdir(outfolder):
-        os.mkdir(outfolder)
+        os.makedirs(outfolder)
+
 
     if not args.inputFile: args.inputFile = "lowPU_%s_%s_%s.pkl.lz4" % (args.flavor, args.met, args.pdf)
 
@@ -43,14 +44,14 @@ def main(args):
         for i in range(len(common.axis_recoil_gen_ptZ)): # add gen bin processes to the dict
             proc_name = "Zmumu_genBin%d" % (i+1)
             proc_genbin = dict(proc_base)
-            proc_genbin['signalOp'] = lambda x, i=i: x[{"recoil_gen" : i}]
+            proc_genbin['selectOp'] = lambda x, i=i: x[{"recoil_gen" : i}]
             datagroups.groups[proc_name] = proc_genbin
             if args.fitType == "differential": unconstrainedProcs.append(proc_name)
     elif args.fitType == "wmass": 
         proc_name = "Zmumu" if args.flavor == "mumu" else "Zee"
         constrainedProcs.append(proc_name)
         for proc in datagroups.groups.keys():
-            datagroups.groups[proc]['signalOp'] = \
+            datagroups.groups[proc]['selectOp'] = \
             lambda x: x[{ax : s[::hist.sum] for ax in ["recoil_gen", "mll",] if ax in x.axes.name}]
     elif args.fitType == "wlike":
         histName = "mT_corr_rec"
@@ -76,7 +77,7 @@ def main(args):
     cardTool.setOutfile(os.path.abspath(f"{outfolder}/lowPU_Z{args.flavor}_{args.met}_{args.fitType}{suffix}.root"))
     cardTool.setDatagroups(datagroups)
     cardTool.setHistName(histName) 
-    cardTool.setNominalName(histName) 
+    cardTool.setNominalName(histName)
     cardTool.setChannels([f"{args.flavor}{suffix}"])
     cardTool.setDataName(dataProc)
     cardTool.setProcsNoStatUnc(procs=[])
