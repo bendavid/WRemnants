@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # run all pieces (and merge)
-# python w_mass_13TeV/smoothLeptonScaleFactors.py /path/to/tnp/efficiencies_ERA/mu_STEP_CHARGE/allEfficiencies_2D.root /path/to/tnp/smoothLeptonScaleFactors/ --run-all [--do-merge] [--do-steps isonotrig iso triggerplus triggerminus idip idipplus idipminus tracking trackingplus trackingminus reco recoplus recominus]
+# python w_mass_13TeV/smoothLeptonScaleFactors.py /path/to/tnp/efficiencies_ERA/mu_STEP_CHARGE/allEfficiencies_2D.root /path/to/tnp/smoothLeptonScaleFactors/ --run-all [--do-merge] [--do-steps isonotrig iso isoplus isominus triggerplus triggerminus idip idipplus idipminus tracking trackingplus trackingminus reco recoplus recominus]
 
 #
 # TIPS:
@@ -427,18 +427,21 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
     npar = fitFunction[defaultFunc]["func"].GetNpar()
     
     hband = ROOT.TH1D("hband", "", int(math.ceil((maxFitRange-minFitRange))/widthPtSmooth), minFitRange, maxFitRange)
+    if hband.GetNbinsX() != hist_nomiAndAlt_etapt.GetNbinsY():
+        print("ERROR: hband and hist_nomiAndAlt_etapt have a different number of pt bins ({hband.GetNbinsX()} and {hist_nomiAndAlt_etapt.GetNbinsY()}), please check!")
+        quit()
     hband.SetStats(0)
     hband.SetFillColor(ROOT.kGray)
     #hband.SetLineColor(fitFunction[defaultFunc]["func"].GetLineColor())
     #hband.SetFillStyle(3001)
     for ib in range(1, hband.GetNbinsX()+1):
         pt = hband.GetBinCenter(ib)
-        val = fitFunction[defaultFunc]["func"].Eval(pt)
+        val = max(0.001, fitFunction[defaultFunc]["func"].Eval(pt))
         # protect against efficiency becoming larger than 1.0
         # usually it happens because of the pol3 extrapolation for very high pt, which is not used for the analysis
-        # for MC set to slightly less than 1.0 to avoid issues with antiiso when doing 1-eff and then data/MC ratio
+        # for MC set to slightly less than 1.0 to avoid issues with antiiso when doing 1-eff and then data/MC ratio (do the same for data just in case)
         if val >= 1.0 and not doingSF:
-            val = 0.9995 if mc == "MC" else 1.0 
+            val = 0.9995
         hband.SetBinContent(ib, val)
         hist_nomiAndAlt_etapt.SetBinContent(key+1, ib, 1, val) # assuming the pt binning is the same, which it should, although the code should be made more robust
 
@@ -452,7 +455,7 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
         altParameters[ivar]      = fitres_TF[defaultFunc]["x"] + shift
         altParameters[ivar+npar] = fitres_TF[defaultFunc]["x"] - shift
 
-        tf1_func_alt = ROOT.TF1()
+    tf1_func_alt = ROOT.TF1()
     tf1_func_alt.SetName("tf1_func_alt")
     fitFunction[defaultFunc]["func"].Copy(tf1_func_alt)
     tf1_func_alt.SetLineWidth(2)
@@ -463,14 +466,18 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
         for ivar in range(npar):
             # set parameters for a given hessian
             tf1_func_alt.SetParameters(altParameters[ivar]) # this is for Up variations, Down ones could not be the mirror image
-            funcVal = tf1_func_alt.Eval(pt)
+            funcVal = max(0.001, tf1_func_alt.Eval(pt))
+            if funcVal >= 1.0 and not doingSF:
+                funcVal = 0.9995
             diff = funcVal - hband.GetBinContent(ib)
             err += diff * diff
             # now fill TH3, also with down variations
             hist_nomiAndAlt_etapt.SetBinContent(key+1, ib, 2+ivar, funcVal)
             # repeat for Down variations
             tf1_func_alt.SetParameters(altParameters[ivar+npar])
-            funcVal = tf1_func_alt.Eval(pt)
+            funcVal = max(0.001, tf1_func_alt.Eval(pt))
+            if funcVal >= 1.0 and not doingSF:
+                funcVal = 0.9995
             hist_nomiAndAlt_etapt.SetBinContent(key+1, ib, 2+ivar+npar, funcVal)
         err = math.sqrt(err)
         hband.SetBinError(ib, err)
@@ -478,7 +485,10 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
         if histAlt:
             for f in fitFunction.keys():
                 if "_alt_tf" in f:
-                    hist_nomiAndAlt_etapt.SetBinContent(key+1, ib, lastSystBin, fitFunction[f]["func"].Eval(pt))
+                    funcVal = max(0.001, fitFunction[f]["func"].Eval(pt))
+                    if funcVal >= 1.0 and not doingSF:
+                        funcVal = 0.9995
+                    hist_nomiAndAlt_etapt.SetBinContent(key+1, ib, lastSystBin, funcVal)
         
     hband.Draw("E4SAME")
     # redraw to have them on top
