@@ -333,8 +333,15 @@ class datagroups2016(datagroups):
         return "_".join([baseName,syst])
     
     def readHist(self, baseName, proc, syst, scaleOp=None, forceNonzero=True, scaleToNewLumi=-1):
+        print("PROC.NAME")
+        print(proc.name)
+        print("BASENAME")
+        print(baseName)
+        print("SYST")
+        print(syst)
         output = self.results[proc.name]["output"]
         histname = self.histName(baseName, proc.name, syst)
+        print(histname)
         if histname not in output:
             raise ValueError(f"Histogram {histname} not found for process {proc.name}")
         h = output[histname]
