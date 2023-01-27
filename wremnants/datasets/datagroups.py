@@ -37,6 +37,11 @@ class datagroups(object):
             self.lumi = 1
             
         self.nominalName = "nominal"
+        self.globalAction = None
+
+    # To be used for applying a selection, rebinning, etc.
+    def setGlobalAction(self, action):
+        self.globalAction = action
 
     def setNominalName(self, name):
         self.nominalName = name
@@ -85,8 +90,14 @@ class datagroups(object):
                     logger.debug(f"Applying preOp to {member.name} after loading")
                     h = preOpMap[member.name](h, **preOpArgs)
 
+                if self.globalAction:
+                    h = self.globalAction(h)
 
                 group[label] = h if not group[label] else hh.addHists(h, group[label])
+
+            # Can use to apply common rebinning or selection on top of the usual one
+            if "rebinOp" in group and group["rebinOp"]:
+                group[label] = group["rebinOp"](group[label])
 
             if not applySelection and "selectOp" in group and group["selectOp"]:
                 logger.warning(f"Selection requested for process {procName} but applySelection=False, thus it will be ignored")
@@ -122,6 +133,10 @@ class datagroups(object):
                     narf_hist = narf.root_to_hist(rthist, axis_names=axisNames)
                 else:
                     narf_hist = hh.addHists(narf_hist, narf.root_to_hist(rthist, axis_names=axisNames))
+
+            if self.globalAction:
+                narf_hist = self.globalAction(narf_hist)
+
             group[label] = narf_hist
 
     def histName(self, baseName, procName="", syst=""):
