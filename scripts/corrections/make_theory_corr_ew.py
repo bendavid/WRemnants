@@ -20,7 +20,7 @@ args = parser.parse_args()
 logging.basicConfig(level=logging.INFO)
 
 procs = ['ZToMuMu', 'WplusToMuNu', 'WminusToMuNu']
-charge_dict = {'ZToMuMu': 0, 'WplusToMuNu': +1, 'WminusToMuNu': -1}
+charge_dict = {'ZToMuMu': 0, 'WplusToMuNu': 1, 'WminusToMuNu': 0}
 
 # file created with `python WRemnants/scripts/histmakers/w_z_gen_dists.py --skipAngularCoeffs --filter horace --ewHists`
 with lz4.frame.open(args.input) as f:
@@ -34,6 +34,9 @@ for proc in procs:
     hden = hh.normalize(res[f'{proc}_{args.den}']['output']['nominal_ew'])
     hratio = hh.divideHists(hnum, hden)
     hratio = hh.smoothTowardsOne(hratio)
+    scale = np.sum(hden.values()) / np.sum(hden.values()*hratio.values())
+    hratio.values(flow=True)[...]    *= scale
+    hratio.variances(flow=True)[...] *= scale
 
     # Add dummy axis
     axis_dummy = hist.axis.Regular(1, -10., 10., underflow=False, overflow=False, name = "dummy")
@@ -54,7 +57,7 @@ for proc in procs:
     corrh[proc] = hist.Hist(*hratio.axes, hist.axis.Regular(3, 0, 3, name="systIdx"), storage=hist.storage.Double())
     # Variations: 0=original MiNNLO, 1=Horace NLO, 2=mirrored
     horig = hist.Hist(*hratio.axes, storage=hist.storage.Double())
-    horig.values()[...] = np.ones(hratio.shape)
+    horig.values()[...,charge_dict[proc]] = np.ones(hdummy.shape)
     mirror = hh.mirrorHist(horig, hratio, cutoff=1e-5)
     corrh[proc].values()[...,0] = horig.values()
     corrh[proc].values()[...,1] = hratio.values()
@@ -69,10 +72,11 @@ with lz4.frame.open(f"{args.outpath}/{outname}CorrZ.pkl.lz4", "wb") as f:
             "meta_data" : output_tools.metaInfoDict(),
         }, f, protocol = pickle.HIGHEST_PROTOCOL)
 
+corrh['W'] = corrh['WplusToMuNu']+corrh['WminusToMuNu']
 with lz4.frame.open(f"{args.outpath}/{outname}CorrW.pkl.lz4", "wb") as f:
     pickle.dump({
             'W' : {
-                f"{outname}_minnlo_ratio" : corrh['WplusToMuNu']+corrh['WminusToMuNu'],
+                f"{outname}_minnlo_ratio" : corrh['W'],
             },
             "meta_data" : output_tools.metaInfoDict(),
         }, f, protocol = pickle.HIGHEST_PROTOCOL)
