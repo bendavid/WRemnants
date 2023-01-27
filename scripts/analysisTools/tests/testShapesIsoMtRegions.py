@@ -56,7 +56,7 @@ if __name__ == "__main__":
     parser.add_argument("--isoMtRegion", type=int, nargs='+', default=[0,1,2,3], choices=[0,1,2,3], help="Integer index for iso-Mt regions to plot (conversion is index = passIso * 1 + passMT * 2 as in common.getIsoMtRegionFromID)");
     args = parser.parse_args()
 
-    logger = common.setup_test_logger("testShapesIsoMtRegions", args.verbose)
+    logger = common.setup_color_logger(os.path.basename(__file__), args.verbose)
     # if 0:
     #     logger.critical("TEST LOGGER CRITICAL")
     #     logger.error("TEST LOGGER ERROR")
