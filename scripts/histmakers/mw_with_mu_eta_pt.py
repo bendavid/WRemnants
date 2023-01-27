@@ -61,12 +61,6 @@ axis_passIso = hist.axis.Boolean(name = "passIso")
 axis_passMT = hist.axis.Boolean(name = "passMT")
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
 
-# axes for recoil/MET
-axis_mt = hist.axis.Variable([0] + list(range(40, 110, 1)) + [110, 112, 114, 116, 118, 120, 125, 130, 140, 160, 180, 200], name = "mt",underflow=False, overflow=True)
-axis_MET_pt = hist.axis.Regular(300, 0, 300, name = "MET_pt", underflow=False)
-axis_recoil_magn = hist.axis.Regular(300, 0, 300, name = "recoil_magn", underflow=False)
-
-
 # axes for study of fakes
 axis_mt_fakes = hist.axis.Regular(60, 0., 120., name = "mt", underflow=False, overflow=True)
 axis_hasjet_fakes = hist.axis.Boolean(name = "hasJets") # only need case with 0 jets or > 0 for now
@@ -211,15 +205,6 @@ def build_graph(df, dataset):
     df = df.Define("passMT", "transverseMass >= 40.0")
     df = df.Filter("passMT || hasCleanJet")
 
-    ##
-    ##     FIXME
-    ##
-    ## are these supposed to stay before or after the Filter("passMT || hasCleanJet") ???
-    ## the only difference is that when it is afterwards the low mT region will have the >= 1 het requirement
-    ## so the inclusive distributions without the mT cut will not be really consistent
-    results.append(df.HistoBoost("MET_pt", [axis_MET_pt, axis_charge, axis_passMT, axis_passIso], ["MET_corr_rec_pt", "goodMuons_charge0", "passMT", "passIso", "nominal_weight"]))
-    results.append(df.HistoBoost("transverseMass", [axis_mt, axis_charge, axis_passMT, axis_passIso], ["transverseMass", "goodMuons_charge0", "passMT", "passIso", "nominal_weight"]))   
-
     nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
 
     if dataset.is_data:
@@ -243,11 +228,6 @@ def build_graph(df, dataset):
             nominal_cols_cvh, nominal_cols_uncrct, nominal_cols_gen, nominal_cols_gen_smeared = muon_calibration.make_alt_reco_and_gen_hists(df, results, nominal_axes)
             if args.validationHists: 
                 wremnants.make_reco_over_gen_hists(df, results)
-
-    if isW or isZ:
-        results.extend(theory_tools.make_theory_corr_hists(df, "transverseMass", [axis_mt, axis_charge, axis_passMT, axis_passIso], ["transverseMass", "goodMuons_charge0", "passMT", "passIso"],
-            corr_helpers[dataset.name], args.theory_corr, modify_central_weight=False)
-        )
 
     if not dataset.is_data and not args.onlyMainHistograms:
         
