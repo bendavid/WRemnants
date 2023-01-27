@@ -4,6 +4,8 @@
 
 namespace wrem {
 
+using ROOT::VecOps::RVec;
+
     double calculateTheta(float eta) {
         return 2.*std::atan(std::exp(-double(eta)));
     }
@@ -25,7 +27,7 @@ namespace wrem {
 
 // jpsi correction central value for one muon
 template <typename T>
-class JpsiCorrectionsHelperSingle {
+class JpsiCorrectionsHelper {
 
 public:
     using hist_t = T;
@@ -34,7 +36,7 @@ public:
     static constexpr auto nUnc = sizes[sizes.size() - 1]; // 1 for central value
     using out_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<nUnc, 2>>;
 
-    JpsiCorrectionsHelperSingle(T&& corrections) :
+    JpsiCorrectionsHelper(T&& corrections) :
         correctionHist_(std::make_shared<const T>(std::move(corrections))) {}
 
     // helper for bin lookup which implements the compile-time loop over axes
@@ -50,7 +52,7 @@ public:
     }
     
     // for central value of pt
-    double operator() (float cvhEta, float cvhPt, int charge) {
+    float operator() (float cvhPt, float cvhEta, int charge) {
         const auto &params = get_tensor(cvhEta);
         const double A = params(0, 0);
         const double e = params(1, 0);
@@ -67,25 +69,6 @@ private:
     std::shared_ptr<const T> correctionHist_;
 
 };
-
-// jpsi corrections central value for multiple muons
-template <typename T>
-class JpsiCorrectionsHelper : public JpsiCorrectionsHelperSingle<T> {
-
-public:
-    JpsiCorrectionsHelper(T&& corrections) : JpsiCorrectionsHelperSingle<T>(corrections) {}
-
-    Vec_d operator() (const Vec_f &cvhEtas, const Vec_f &cvhPts, const Vec_i &charges) {
-        Vec_d res;
-        res.reserve(cvhEtas.size());
-        for (unsigned int i = 0; i < cvhEtas.size(); ++i) {
-            res.emplace_back(
-                JpsiCorrectionsHelperSingle<T>::operator()(cvhEtas[i], cvhPts[i], charges[i])
-            );
-        }
-    }
-};
-
 
 template <typename T>
 class JpsiCorrectionsUncHelper {
@@ -112,21 +95,20 @@ public:
         return get_tensor_impl(std::index_sequence_for<Xs...>{}, xs...);
     }
 
-private:
     // for smearing weights derived from propagating uncs on A, e, M to uncs on qop
-    out_tensor_t smwearing_weight() (
+    out_tensor_t operator() (
         double genQop, double genPhi, int genCharge, double genEta, double genPt,
         double recoQop, double recoPhi, int recoCharge, float recoEta, float recoPt,
         const RVec<float> &cov, // for sigma on the Gaussian
-        bool abQop = false, bool fullParam = false
+        double nominal_weight, bool abQop = true, bool fullParam = false
     ) {
-        const Eigen::Vector3d parms(
+        Eigen::Vector3d parms(
             (abQop? recoQop : calculateQop(recoPt, recoEta, recoCharge)),
             (fullParam? calculateLam(recoEta) : 0),
             (fullParam? recoPhi: 0)
         ); // (qop, lam, phi)
 
-        const Eigen::Vector3d genparms(
+        Eigen::Vector3d genparms(
             (abQop? genQop : calculateQop(genPt, genEta, genCharge)),
             (fullParam? calculateLam(genEta) : 0),
             (fullParam? genPhi: 0)
@@ -162,9 +144,9 @@ private:
             const double eUnc = params(1, ivar);
             const double MUnc = params(2, ivar);
             double recoK = 1.0 /recoPt;
-            double recoKUnc = (AUnc - eUnc * recoK) * recoK + charge * MUnc;
+            double recoKUnc = (AUnc - eUnc * recoK) * recoK + recoCharge * MUnc;
             Eigen::Vector3d parmvar = Eigen::Vector3d::Zero();   
-            parmvar[0] = charge * std::sin(calculateTheta(cvhEta)) * recoKUnc;
+            parmvar[0] = recoCharge * std::sin(calculateTheta(recoEta)) * recoKUnc;
 
             for (std::ptrdiff_t idownup = 0; idownup < 2; ++idownup) {
                 const double dir = idownup == 0 ? -1. : 1.;
@@ -180,14 +162,36 @@ private:
     
             // protect against outliers
             // if (weight > 0.9998 && weight < 1.0002) {cout << "smearing weight is " << weight << "covd is " << covd << std::endl;}
-                res(ivar, idownup) = weight;
+                res(ivar, idownup) = nominal_weight * weight;
             }
         }
         return res;
     }
 
-    std::shared_ptr<const T> correctionUncHist_;
+private:
+    std::shared_ptr<const T> correctionHist_;
 
+};
+
+// jpsi corrections central value for multiple muons
+template <typename T>
+class JpsiCorrectionsRVecHelper : public JpsiCorrectionsHelper<T> {
+
+using base_t = JpsiCorrectionsHelper<T>;
+
+public:
+    //inherit constructor
+    using base_t::base_t;
+
+    RVec<float> operator() (const RVec<float>& pts, const RVec<float> etas, RVec<int> charges) {
+        RVec<float> corrected_pt(pts.size(), 0.);
+        assert(etas.size() == pts.size() && etas.size() == charges.size());
+        for (size_t i = 0; i < pts.size(); i++) {
+            corrected_pt[i] = JpsiCorrectionsHelper<T>::operator()(pts[i], etas[i], charges[i]);
+        }
+
+        return corrected_pt;
+    }
 };
 
 }
