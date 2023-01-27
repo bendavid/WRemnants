@@ -47,6 +47,22 @@ def make_muon_bias_helpers(lbl=False):
 
     return helper
 
+def make_muon_smearing_helpers(lbl=False):
+    # this helper smears muon pT to match the resolution in data
+    h2d = uproot.open(f"wremnants/data/smearing/XXX{'_LBL' if lbl else ''}.root:XXX").to_hist()
+    # Drop the uncertainty because the Weight storage type doesn't play nice with ROOT
+    h2d_nounc = hist.Hist(*h2d.axes, data=h2d.values(flow=True))
+    # Set overflow to closest values
+    h2d_nounc[hist.underflow,:][...] = h2d_nounc[0,:].view(flow=True)
+    h2d_nounc[:,hist.underflow][...] = h2d_nounc[:,0].view(flow=True)
+    h2d_nounc[hist.overflow,:][...] = h2d_nounc[-1,:].view(flow=True)
+    h2d_nounc[:,hist.overflow][...] = h2d_nounc[:,-1].view(flow=True)
+
+    h2d_cpp = narf.hist_to_pyroot_boost(h2d_nounc, tensor_rank=0)
+    helper = ROOT.wrem.SmearingHelper[type(h2d_cpp).__cpp_name__](ROOT.std.move(h2d_cpp))
+
+    return helper
+
 def get_dummy_uncertainties():
     axis_eta = hist.axis.Regular(48, -2.4, 2.4, name = "eta")
     axis_calvar = hist.axis.Integer(0, 1, underflow=False, overflow=False, name = "calvar")
@@ -79,13 +95,8 @@ def define_lblcorr_muons(df, cvh_helper, dataset):
     df = df.Define("Muon_lblCharge", "ROOT::VecOps::RVec<int> res(Muon_lblMom4Charge.size()); std::transform(Muon_lblMom4Charge.begin(), Muon_lblMom4Charge.end(), res.begin(), [](const auto &x) { return x.second; }); return res;")
     return df
 
-def define_jpsicorr_muons(df, helper, muon):
-    df = df.Define("Muon_jpsiCorrectedPt", helper, 
-            [muon_var_name(muon, var) for var in ["pt", "eta", "charge"]]
-    )
-    return df
 
-def define_corrected_muons(df, cvh_helper, jpsi_helper, corr_type, dataset, bias_helper=None):
+def define_corrected_muons(df, cvh_helper, jpsi_helper, corr_type, dataset, bias_helper=None, smearing_helper=None):
     if not (dataset.is_data or dataset.name in common.vprocs):
         corr_type = "none" 
 
@@ -100,12 +111,16 @@ def define_corrected_muons(df, cvh_helper, jpsi_helper, corr_type, dataset, bias
     muon_pt = muon
 
     if "massfit" in corr_type:
-        df = define_jpsicorr_muons(df, jpsi_helper, muon)
+        df = df.Define("Muon_jpsiCorrectedPt", jpsi_helper, [muon_var_name(muon, var) for var in ["pt", "eta", "charge"]])
         muon_pt = "Muon_jpsiCorrected"
 
+    if smearing_helper and not dataset.is_data:
+        df = df.Define("Muon_smearedPt", smearing_helper, [muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta"), muon_var_name(muon, "charge")])
+        muon_pt = "Muon_smeared"
+
     if bias_helper and not dataset.is_data:
-        df = define_biased_muons(df, bias_helper, muon)
-        muon_pt = "_".join([muon, "bias"]) 
+        df = df.Define("Muon_biasedPt", bias_helper, [muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta"), muon_var_name(muon, "charge")])
+        muon_pt = "Muon_biased"
 
     for var in ["pt", "eta", "phi", "charge"]:
         mu_name = muon_pt if var == "pt" else muon
@@ -134,15 +149,6 @@ def get_good_gen_muons_idx_in_GenPart(df, reco_subset = "goodMuons"):
 
 def muon_var_name(mu_type, var):
         return mu_type+(f"_{var}" if mu_type == "Muon" else var.capitalize())
-
-def define_biased_muons(df, helper, muon):
-    mu_name = f"{muon}_bias"
-    df = df.Define(muon_var_name(mu_name, "pt"), helper, 
-            [muon_var_name(muon, var) for var in ["pt", "eta", "charge"]]
-    )
-
-    return df
-
 
 def define_good_gen_muon_kinematics(df, kinematic_vars = ["pt", "eta", "phi", "charge"]):
     for var in kinematic_vars:

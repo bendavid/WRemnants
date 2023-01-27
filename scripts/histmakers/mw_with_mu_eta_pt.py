@@ -26,6 +26,7 @@ parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude 
 parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
 parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for luminosity in excess to 1 (e.g. 1.012 means 1.2\%)", default=1.012)
 parser.add_argument("--bias-calibration", action='store_true', help="Adjust central value by calibration bias hist")
+parser.add_argument("--smearing", action='store_true', help="Smear pT such that resolution matches data")
 args = parser.parse_args()
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
@@ -267,10 +268,9 @@ def build_graph(df, dataset):
 
             syst_tools.add_pdf_hists(results, df, dataset.name, nominal_axes, nominal_cols, args.pdfs)
 
-            df = syst_tools.define_mass_weights(df, isW)
+            df = syst_tools.define_mass_weights(df)
             if isW:
                 syst_tools.add_massweights_hist(results, df, nominal_axes, nominal_cols)
-
 
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:
