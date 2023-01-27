@@ -112,19 +112,18 @@ def build_graph(df, dataset):
 
     results.append(nominal_gen)
 
-    if 'horace' in dataset.name:
-        return results, weightsum
+    if not 'horace' in dataset.name:
 
-    if "LHEScaleWeight" in df.GetColumnNames():
-        df = theory_tools.define_scale_tensor(df)
-        syst_tools.add_qcdScale_hist(results, df, nominal_axes, nominal_cols, "nominal_gen")
-        df = df.Define("helicity_moments_scale_tensor", "wrem::makeHelicityMomentScaleTensor(csSineCosThetaPhi, scaleWeights_tensor, nominal_weight)")
-        helicity_moments_scale = df.HistoBoost("helicity_moments_scale", nominal_axes, [*nominal_cols, "helicity_moments_scale_tensor"], tensor_axes = [wremnants.axis_helicity, *wremnants.scale_tensor_axes])
-        results.append(helicity_moments_scale)
+        if "LHEScaleWeight" in df.GetColumnNames():
+            df = theory_tools.define_scale_tensor(df)
+            syst_tools.add_qcdScale_hist(results, df, nominal_axes, nominal_cols, "nominal_gen")
+            df = df.Define("helicity_moments_scale_tensor", "wrem::makeHelicityMomentScaleTensor(csSineCosThetaPhi, scaleWeights_tensor, nominal_weight)")
+            helicity_moments_scale = df.HistoBoost("helicity_moments_scale", nominal_axes, [*nominal_cols, "helicity_moments_scale_tensor"], tensor_axes = [wremnants.axis_helicity, *wremnants.scale_tensor_axes])
+            results.append(helicity_moments_scale)
 
-    if "LHEPdfWeight" in df.GetColumnNames():
-        df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
-        syst_tools.add_pdf_hists(results, df, dataset.name, nominal_axes, nominal_cols, args.pdfs, "nominal_gen")
+        if "LHEPdfWeight" in df.GetColumnNames():
+            df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
+            syst_tools.add_pdf_hists(results, df, dataset.name, nominal_axes, nominal_cols, args.pdfs, "nominal_gen")
 
     if args.theory_corr and dataset.name in corr_helpers:
         results.extend(theory_tools.make_theory_corr_hists(df, "nominal_gen", nominal_axes, nominal_cols,
