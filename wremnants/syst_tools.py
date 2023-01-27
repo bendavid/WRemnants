@@ -153,7 +153,7 @@ def uncertainty_hist_from_envelope(h, proj_ax, entries):
     hnew[...,1] = hup.view(flow=True)
     return hnew
 
-def define_mass_weights(df, isW):
+def define_mass_weights(df, isW=False):
     # nweights = 21 if isW else 23
     # from -100 to 100 MeV with 10 MeV increment
     nweights = 21

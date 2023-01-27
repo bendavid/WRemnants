@@ -450,11 +450,60 @@ public:
     //inherit constructor
     using base_t::base_t;
 
-    RVec<float> operator() (const RVec<float> etas, const RVec<float>& pts, RVec<int> charges) {
+    RVec<float> operator() (const RVec<float>& pts, const RVec<float>& etas, RVec<int>& charges) {
         RVec<float> biased_pt(pts.size(), 0.);
         assert(etas.size() == pts.size() && etas.size() == charges.size());
         for (size_t i = 0; i < pts.size(); i++) {
-            biased_pt[i] = BiasCorrectionHelper<T>::operator()(etas[i], pts[i], charges[i]);
+            biased_pt[i] = BiasCorrectionHelper<T>::operator()(pts[i], etas[i], charges[i]);
+        }
+
+        return biased_pt;
+    }
+};
+
+template <typename T>
+class SmearingHelperBase {
+
+public:
+    SmearingHelperBase(T&& corrections) :
+        correctionHist_(std::make_shared<const T>(std::move(corrections))) {}
+    
+    // helper for bin lookup which implements the compile-time loop over axes
+    template<typename... Xs, std::size_t... Idxs>
+    const float get_value_impl(std::index_sequence<Idxs...>, const Xs&... xs) {
+      return correctionHist_->at(correctionHist_->template axis<Idxs>().index(xs)...);
+    }
+
+    // variadic templated bin lookup
+    template<typename... Xs>
+    const float get_value(const Xs&... xs) {
+        return get_value_impl(std::index_sequence_for<Xs...>{}, xs...);
+    }
+
+    // for central value of pt
+    float operator() (float pt, float eta, int charge) {
+        const double bias = get_value(eta, pt);
+        return (1.0 + bias) * pt;
+    }
+
+private:
+    std::shared_ptr<const T> correctionHist_;
+};
+
+template <typename T>
+class SmearingHelper : public SmearingHelperBase<T> {
+
+using base_t = SmearingHelperBase<T>;
+
+public:
+    //inherit constructor
+    using base_t::base_t;
+
+    RVec<float> operator() (const RVec<float>& pts, const RVec<float>& etas, RVec<int>& charges) {
+        RVec<float> biased_pt(pts.size(), 0.);
+        assert(etas.size() == pts.size() && etas.size() == charges.size());
+        for (size_t i = 0; i < pts.size(); i++) {
+            biased_pt[i] = SmearingHelperBase<T>::operator()(pts[i], etas[i], charges[i]);
         }
 
         return biased_pt;
