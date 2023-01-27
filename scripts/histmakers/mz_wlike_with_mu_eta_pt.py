@@ -11,6 +11,7 @@ import logging
 import math
 import time
 import pdb
+import os
 
 parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
 parser.add_argument("--muonCorr", type=str, default="massfit", choices=["lbl", "trackfit_only_mctruth", "none", "massfit", "massfit_lbl", "trackfit_only"], 
@@ -25,14 +26,22 @@ parser.add_argument("--finePtBinning", action='store_true', help="Use fine binni
 parser.add_argument("--bias-calibration", action='store_true', help="Adjust central value by calibration bias hist")
 parser.add_argument("--dileptonIntegrateAxes", type=str, nargs="*", choices=["ptll", "mll", "yll",], 
     default=[], help="Collapse axes in dilepton hist (to avoid overly bloated output)")
-args = parser.parse_args()
-
-logging.basicConfig(level=logging.INFO)
 
 f = next((x for x in parser._actions if x.dest == "pt"), None)
 if f:
-    f.default = [34,26.,60.]
+    newPtDefault = [34,26.,60.]
+    logging.warning("")
+    logging.warning(f" >>> Modifying default of {f.dest} from {f.default} to {newPtDefault}")
+    logging.warning("")
+    f.default = newPtDefault
+    
+args = parser.parse_args()
 
+if args.setCustomLogger:
+    logger = common.setup_test_logger(os.path.basename(__file__), args.verbose)
+else:
+    logger = common.setup_base_logger(os.path.basename(__file__), args.debug)
+    
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
     nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path)
@@ -43,11 +52,11 @@ era = args.era
 template_neta = int(args.eta[0])
 template_mineta = args.eta[1]
 template_maxeta = args.eta[2]
-logging.info(f"Eta binning: {template_neta} bins from {template_mineta} to {template_maxeta}")
+logger.info(f"Eta binning: {template_neta} bins from {template_mineta} to {template_maxeta}")
 template_npt = int(args.pt[0])
 template_minpt = args.pt[1]
 template_maxpt = args.pt[2]
-logging.info(f"Pt binning: {template_npt} bins from {template_minpt} to {template_maxpt}")
+logger.info(f"Pt binning: {template_npt} bins from {template_minpt} to {template_maxpt}")
 
 # standard regular axes
 axis_eta = hist.axis.Regular(template_neta, template_mineta, template_maxeta, name = "eta")
@@ -93,19 +102,19 @@ axis_ptVgen = hist.axis.Variable(
 
 # extra axes which can be used to label tensor_axes
 if args.binnedScaleFactors:
-    logging.info("Using binned scale factors and uncertainties")
+    logger.info("Using binned scale factors and uncertainties")
     # add usePseudoSmoothing=True for tests with Asimov
     muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_binned(filename = args.sfFile,
                                                                                                                                      era = era,
                                                                                                                                      max_pt = axis_pt.edges[-1],
                                                                                                                                      is_w_like = True) 
 else:
-    logging.info("Using smoothed scale factors and uncertainties")
+    logger.info("Using smoothed scale factors and uncertainties")
     muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile,
                                                                                                                                      era = era,
                                                                                                                                      max_pt = axis_pt.edges[-1],
                                                                                                                                      is_w_like = True)
-logging.info(f"SF file: {args.sfFile}")
+logger.info(f"SF file: {args.sfFile}")
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
 
@@ -124,7 +133,7 @@ if not args.no_recoil:
 
 
 def build_graph(df, dataset):
-    logging.info(f"build graph for dataset: {dataset.name}")
+    logger.info(f"build graph for dataset: {dataset.name}")
     results = []
     isW = dataset.name in common.wprocs
     isZ = dataset.name in common.zprocs
@@ -211,8 +220,14 @@ def build_graph(df, dataset):
         df = recoilHelper.apply_recoil_Z(df, results, dataset, ["ZmumuPostVFP"])  # produces corrected MET as MET_corr_rec_pt/phi
         #if isZ: df = recoilHelper.recoil_Z_unc_lowPU(df, results, "", "", axis_mt, axis_mll)
 
-        df = df.Define("transverseMass_uncorr", f"wrem::mt_wlike_nano(trigMuons_pt0, trigMuons_phi0, nonTrigMuons_pt0, nonTrigMuons_phi0, MET_corr_xy_pt, MET_corr_xy_phi)")
-        results.append(df.HistoBoost("transverseMass_uncorr", [axis_mt], ["transverseMass_uncorr", "nominal_weight"]))
+        ########
+        ## FIXME
+        ########
+        ## Why does it use MET_corr_xy_* when no recoil calibration is used?
+        ## I am putting it below for now, and use MET_* as variables
+        #
+        #df = df.Define("transverseMass_uncorr", f"wrem::mt_wlike_nano(trigMuons_pt0, trigMuons_phi0, nonTrigMuons_pt0, nonTrigMuons_phi0, MET_corr_xy_pt, MET_corr_xy_phi)")
+        #results.append(df.HistoBoost("transverseMass_uncorr", [axis_mt], ["transverseMass_uncorr", "nominal_weight"]))
     else:
         df = df.Alias("MET_corr_rec_pt", "MET_pt")
         df = df.Alias("MET_corr_rec_phi", "MET_phi")
@@ -220,13 +235,15 @@ def build_graph(df, dataset):
     #TODO improve this to include muon mass?
     ###########
     # utility plots of transverse mass, with or without recoil corrections
+    # they will be the same plot in case no correction is run, so it is slightly redundant,
+    # but it might be ok so one can check the plots are really the same also in that case
     ###########
     met_vars = ("MET_pt", "MET_phi")
-    df = df.Define("transverseMass_uncorr", f"wrem::mt_wlike_nano(trigMuon_pt0, trigMuon_phi0, nonTrigMuon_pt0, nonTrigMuon_phi0, {', '.join(met_vars)})")
+    df = df.Define("transverseMass_uncorr", f"wrem::mt_wlike_nano(trigMuons_pt0, trigMuons_phi0, nonTrigMuons_pt0, nonTrigMuons_phi0, {', '.join(met_vars)})")
     results.append(df.HistoBoost("transverseMass_uncorr", [axis_mt], ["transverseMass_uncorr", "nominal_weight"]))
     ###########
     met_vars = ("MET_corr_rec_pt", "MET_corr_rec_phi")
-    df = df.Define("transverseMass", f"wrem::mt_wlike_nano(trigMuon_pt0, trigMuon_phi0, nonTrigMuon_pt0, nonTrigMuon_phi0, {', '.join(met_vars)})")
+    df = df.Define("transverseMass", f"wrem::mt_wlike_nano(trigMuons_pt0, trigMuons_phi0, nonTrigMuons_pt0, nonTrigMuons_phi0, {', '.join(met_vars)})")
     results.append(df.HistoBoost("transverseMass", [axis_mt], ["transverseMass", "nominal_weight"]))
     ###########
     
