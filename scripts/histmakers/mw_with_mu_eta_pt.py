@@ -13,10 +13,9 @@ import math
 import time
 from utilities import boostHistHelpers as hh
 import pathlib
+import os
 
 data_dir = f"{pathlib.Path(__file__).parent}/../../wremnants/data/"
-
-logging.basicConfig(level=logging.INFO)
 
 parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
 parser.add_argument("--muonCorr", type=str, default="massfit", choices=["lbl", "trackfit_only_mctruth", "none", "massfit", "massfit_lbl", "trackfit_only"], 
@@ -27,6 +26,11 @@ parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of et
 parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for luminosity in excess to 1 (e.g. 1.012 means 1.2\%)", default=1.012)
 parser.add_argument("--bias-calibration", action='store_true', help="Adjust central value by calibration bias hist")
 args = parser.parse_args()
+
+if args.setCustomLogger:
+    logger = common.setup_test_logger(os.path.basename(__file__), args.verbose)
+else:
+    logger = common.setup_base_logger(os.path.basename(__file__), args.debug)
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
@@ -80,13 +84,13 @@ axis_ptVgen = hist.axis.Variable(
 )
 
 if args.binnedScaleFactors:
-    logging.info("Using binned scale factors and uncertainties")
+    logger.info("Using binned scale factors and uncertainties")
     # add usePseudoSmoothing=True for tests with Asimov
     muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_binned(filename = args.sfFile, era = era, max_pt = axis_pt.edges[-1], usePseudoSmoothing=True) 
 else:
-    logging.info("Using smoothed scale factors and uncertainties")
+    logger.info("Using smoothed scale factors and uncertainties")
     muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile, era = era, max_pt = axis_pt.edges[-1])
-logging.info(f"SF file: {args.sfFile}")
+logger.info(f"SF file: {args.sfFile}")
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
 vertex_helper = wremnants.make_vertex_helper(era = era)
@@ -108,7 +112,7 @@ if not args.no_recoil:
 smearing_weights = False
 
 def build_graph(df, dataset):
-    logging.info(f"build graph for dataset: {dataset.name}")
+    logger.info(f"build graph for dataset: {dataset.name}")
     results = []
     isW = dataset.name in common.wprocs
     isZ = dataset.name in common.zprocs
