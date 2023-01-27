@@ -15,7 +15,7 @@ import pickle
 import narf
 import numpy as np
 
-from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_Z
+from wremnants.datasets.datagroupsLowPU import datagroupsLowPU
 from wremnants.datasets.datagroups import datagroups2016
 
 def readProc(datagroups, hName, procName):
@@ -168,16 +168,8 @@ def METxyCorrection(direction = "x", corrType="uncorr", polyOrderData=-1, polyOr
     functions.prepareDir(outDir_, False)
 
     
-    #procs = ["DYmumu"] + bkgs
-    
-    #b_data = readProc(datagroups, "MET%s_%s_npv" % (direction, corrType), "SingleMuon" if "mu" in flavor else "SingleElectron")
-    b_data = readProc(datagroups, "MET%s_%s_npv" % (direction, corrType), data)
-    b_mc = None
-    for proc in procs:
-    
-        b = readProc(datagroups, "MET%s_%s_npv" % (direction, corrType), proc)
-        if b_mc == None: b_mc = b
-        else: b_mc += b
+    b_data = functions.readBoostHistProc(datagroups, "MET%s_%s_npv" % (direction, corrType), [data])
+    b_mc = functions.readBoostHistProc(datagroups, "MET%s_%s_npv" % (direction, corrType), procs)
 
     h_data = narf.hist_to_root(b_data)
     h_mc = narf.hist_to_root(b_mc)
@@ -303,18 +295,20 @@ if __name__ == "__main__":
 
     met = "RawPFMET" # PFMET, RawPFMET DeepMETReso
     flavor = "mu" # mu, e, mumu, ee
+    pdf = "nnpdf31"
     lowPU = False
 
     # DATA For electron channels!
     
     ####################################################################
     if lowPU:
-        npv_max, npv_fit_max = 10, 10
-        datagroups = datagroupsLowPU_Z("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
-        bkgs = ["DYmumu", "DYee", "DYtautau", "TTTo2L2Nu", "TTToSemiLeptonic", "ZZ", "WZTo3LNu", "WWTo2L2Nu", "WplusJetsToMuNu", "WminusJetsToMuNu", "WplusJetsToENu", "WminusJetsToENu", "WplusJetsToTauNu", "WminusJetsToTauNu"]
+        npv_max, npv_fit_min, npv_fit_max = 10, 0, 10
+        datagroups = datagroupsLowPU("lowPU_%s_%s_%s.pkl.lz4" % (flavor, met, pdf), flavor=flavor)
+        procs = ['EWK', 'Top', 'Zmumu'] 
+        data = "SingleMuon" if flavor == "mumu" else "SingleElectron"
 
         outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/METxy_correction/METxy_%s_%s/" % (flavor, met)
-        fOut = "wremnants/data/lowPU/MET_xy_corr_coeff_%s_%s.json" % (flavor, met)
+        fOut = "wremnants/data/recoil/lowPU/%s_%s/met_xy_correction.json" % (flavor, met)
         functions.prepareDir(outDir, True)
         
         dictout = {}
@@ -329,39 +323,42 @@ if __name__ == "__main__":
         os.system("cp %s %s" % (fOut, outDir)) # make copy to web dir
 
         
-        METxyCorrection(direction="x", corrType="corr_xy", polyOrderData=1, polyOrderMC=1)
-        METxyCorrection(direction="y", corrType="corr_xy", polyOrderData=1, polyOrderMC=1)
+        METxyCorrection(direction="x", corrType="corr_xy", polyOrderData=1, polyOrderMC=1, procs=procs, data=data)
+        METxyCorrection(direction="y", corrType="corr_xy", polyOrderData=1, polyOrderMC=1, procs=procs, data=data)
     
     else:
-        npv_max, npv_fit_min, npv_fit_max = 60, 0, 50
+        npv_max, npv_fit_min, npv_fit_max = 60, 5, 55
         
 
         if flavor == "mumu":
-            datagroups = datagroups2016("mz_wlike_with_mu_eta_pt_%s.pkl.lz4" % met, wlike=True)
+            datagroups = datagroups2016("mz_wlike_with_mu_eta_pt_%s_%s.pkl.lz4" % (met, pdf), wlike=True)
             procs = ["Zmumu", "Ztautau", "Other"]
             data = "Data"
         else:
-            datagroups = datagroups2016("mw_with_mu_eta_pt_%s.pkl.lz4" % met, wlike=False)
+            datagroups = datagroups2016("mw_with_mu_eta_pt_%s_%s.pkl.lz4" % (met, pdf), wlike=False)
             procs = ["Zmumu", "Ztautau", "Wtau", "Wmunu", "Top", "Diboson"]
             data = "Data"
             
+            for g in datagroups.groups:
+                datagroups.groups[g]['selectOp'] = None
+            
+
         outDir = "/eos/user/j/jaeyserm/www/wmass/highPU/METxy_correction/METxy_%s_%s/" % (flavor, met)
-        fOut = "wremnants/data/MET_xy_corr_coeff_%s_%s.json" % (flavor, met)
+        fOut = "wremnants/data/recoil/highPU/%s_%s/met_xy_correction.json" % (flavor, met)
         functions.prepareDir(outDir, True)
         
         dictout = {}
         dictX = METxyCorrection(direction="x", corrType="corr_lep", polyOrderData=3, polyOrderMC=3, procs=procs, data=data, yMin=-10, yMax=6)
-        dictY = METxyCorrection(direction="y", corrType="corr_lep", polyOrderData=6, polyOrderMC=4, procs=procs, data=data)
+        dictY = METxyCorrection(direction="y", corrType="corr_lep", polyOrderData=3, polyOrderMC=3, procs=procs, data=data)
     
     
         dictout['x'] = dictX
         dictout['y'] = dictY
         jsOut = json.dumps(dictout, indent = 4)
         with open(fOut, "w") as outfile: outfile.write(jsOut)
-        os.system("cp %s %s" % (fOut, outDir)) # make copy to web dir
-
         
-        METxyCorrection(direction="x", corrType="corr_xy", polyOrderData=2, polyOrderMC=2, procs=procs, data=data, yMin=-10, yMax=6)
+ 
+        METxyCorrection(direction="x", corrType="corr_xy", polyOrderData=3, polyOrderMC=3, procs=procs, data=data, yMin=-10, yMax=6)
         METxyCorrection(direction="y", corrType="corr_xy", polyOrderData=3, polyOrderMC=3, procs=procs, data=data)
-        
+        print(fOut)
         

@@ -8,8 +8,8 @@ import os
 wremnants_dir = f"{pathlib.Path(__file__).parent}/../wremnants"
 data_dir = f"{wremnants_dir}/data/"
 
-wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP"]
-zprocs = ["ZmumuPostVFP", "ZtautauPostVFP", "ZmumuMiNLO", "ZmumuNNLOPS"]
+wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP", 'WplusToMuNu_horace-lo-photos', 'WplusToMuNu_horace-nlo', 'WminusToMuNu_horace-lo-photos', 'WminusToMuNu_horace-nlo']
+zprocs = ["ZmumuPostVFP", "ZtautauPostVFP", "ZmumuMiNLO", "ZmumuNNLOPS", 'ZToMuMu_horace-lo-photos', 'ZToMuMu_horace-nlo']
 vprocs = wprocs+zprocs
 
 wprocs_lowpu = ["WminusJetsToMuNu", "WminusJetsToENu", "WminusJetsToTauNu", "WplusJetsToMuNu", "WplusJetsToENu", "WplusJetsToTauNu"]
@@ -80,7 +80,7 @@ def common_parser():
     parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=[])
     parser.add_argument("--v8", action='store_true', help="Use NanoAODv8. Default is v9")
     parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
-    parser.add_argument("--theory_corr", nargs="*", choices=["scetlib", "scetlibVars", "scetlibMSHT20", "scetlibHelicity", "dyturbo", "dyturbo1D", "dyturboYOnly", "matrix_radish"], 
+    parser.add_argument("--theory_corr", nargs="*", choices=["scetlib", "scetlibNP", "scetlibMSHT20", "scetlibHelicity", "dyturbo", "dyturbo1D", "dyturboYOnly", "matrix_radish", "horacenloew"], 
         help="Apply corrections from indicated generator. First will be nominal correction.", default=[])
     parser.add_argument("--theory_corr_alt_only", action='store_true', help="Save hist for correction hists but don't modify central weight")
     parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")
@@ -90,11 +90,14 @@ def common_parser():
     parser.add_argument("--highptscales", action='store_true', help="Apply highptscales option in MiNNLO for better description of data at high pT")
     parser.add_argument("--data-path", type=str, default=None, help="Access samples from eos")
     parser.add_argument("--no-vertex_weight", dest="vertex_weight", action='store_false', help="Do not apply reweighting of vertex z distribution in MC to match data")
+    parser.add_argument("--validationHists", action='store_true', help="make histograms used only for validations")
     parser.add_argument("--trackerMuons", action='store_true', help="Use tracker muons instead of global muons (need appropriate scale factors too)")
     parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers)")
     parser.add_argument("--onlyMainHistograms", action='store_true', help="Only produce some histograms, skipping (most) systematics to run faster when those are not needed")
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
                         help="Set verbosity level with logging, the larger the more verbose (currently for setup_test_logger)");
+    parser.add_argument("--met", type=str, choices=["DeepMETReso", "RawPFMET"], help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")                    
+    parser.add_argument("-o", "--outfolder", type=str, default="", help="Output folder")
     
     commonargs,_ = parser.parse_known_args()
 
@@ -114,18 +117,12 @@ def common_parser_combine():
     from wremnants import theory_tools
     parser = argparse.ArgumentParser()
     parser.add_argument("--wlike", action='store_true', help="Run W-like analysis of mZ")
-    initargs,_ = parser.parse_known_args()
-    
-    tag = "WMass" if not initargs.wlike else "ZMassWLike"
-    baseDirDefault = os.environ["COMBINE_STUDIES"] + f"/{tag}/"
-    
-    parser.add_argument("-d", "--baseDir", type=str, default=baseDirDefault, help="base output folder")
-    parser.add_argument("-o", "--outfolder", type=str, default="", help="Main output folder inside baseDir, with the root file storing all histograms and datacards for single charge")
+    parser.add_argument("-o", "--outfolder", type=str, default=".", help="Output folder with the root file storing all histograms and datacards for single charge (subfolder WMass or ZMassWLike is created automatically inside)")
     parser.add_argument("-i", "--inputFile", type=str)
     parser.add_argument("--qcdScale", choices=["byHelicityPt", "byHelicityPtCharge", "byHelicityCharge", "byPtCharge", "byPt", "byCharge", "integrated",], default="byHelicityPtCharge", 
             help="Decorrelation for QCDscale")
     parser.add_argument("--rebinPtV", type=float, nargs='*', help="Rebin axis with gen boson pt by this value (default does nothing)")
-    parser.add_argument("--scetlibUnc", action='store_true', help="Include SCETlib uncertainties")
+    parser.add_argument("--scetlibUnc", default=None, type=str, choices=["scale", "np"], help="Include SCETlib uncertainties")
     parser.add_argument("--pdf", type=str, default="nnpdf31", choices=theory_tools.pdfMapExtended.keys(), help="PDF to use")
     parser.add_argument("-b", "--fitObs", type=str, default="nominal", help="Observable to fit") # TODO: what does it do?
     parser.add_argument("--qcdProcessName", dest="qcdProcessName" , type=str, default="Fake",   help="Name for QCD process")
@@ -134,6 +131,7 @@ def common_parser_combine():
     parser.add_argument("--noQCDscaleFakes", dest="noQCDscaleFakes" , action="store_true",   help="Do not apply QCd scale uncertainties on fakes, mainly for debugging")
     parser.add_argument("--doStatOnly", action="store_true", default=False, help="Set up fit to get stat-only uncertainty (currently combinetf with -S 0 doesn't work)")
     parser.add_argument("--debug", action='store_true', help="Print debug output")
+    parser.add_argument("--combineChannels", action='store_true', help="Only use one channel")
     parser.add_argument("--lumiScale", type=float, default=None, help="Rescale equivalent luminosity by this value (e.g. 10 means ten times more data and MC)")
     return parser
 
@@ -185,3 +183,49 @@ def setup_base_logger(name, debug):
     
 def child_logger(name):
     return logging.getLogger("wremnants").getChild(name.split(".")[-1])
+
+'''
+INPUT -------------------------------------------------------------------------
+|* (str) string: the string to be converted to list
+|
+ROUTINE -----------------------------------------------------------------------
+|* converts a string to a string element in a list
+|  - if not comma-separated, then the whole string becomes one single element
+OUTPUT ------------------------------------------------------------------------
+|* (float) string: the list-lized string
++------------------------------------------------------------------------------
+'''
+def string_to_list(string):
+	if type(string) == str:
+		string = string.split(",") # items have to be comma-separated 
+		return string
+	elif type(string) == list:
+		return string
+	else:
+		raise TypeError(
+            "string_to_list(): cannot convert an input that is"
+            "neither a single string nor a list of strings to a list"
+        )
+
+'''
+INPUT -------------------------------------------------------------------------
+|* list(str): a list of strings
+|
+ROUTINE -----------------------------------------------------------------------
+|* convert the list of string to a single string by join()
+|
+OUTPUT ------------------------------------------------------------------------
+|* (str): the resulted string
++------------------------------------------------------------------------------
+'''
+def list_to_string(list_str):
+	if type(list_str) == str:
+		return list_str
+	elif type(list_str) == list:
+		string = ""
+		return string.join(list_str)
+	else:
+		raise TypeError(
+            "list_to_string(): cannot convert an input that is"
+            " neither a single string or a list of strings"
+        )

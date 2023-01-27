@@ -10,6 +10,7 @@ import collections.abc
 import os
 import itertools
 import re
+import hist
 
 logger = common.child_logger(__name__)
 
@@ -36,6 +37,7 @@ class CardTool(object):
         self.dataName = "Data"
         self.nominalName = "nominal"
         self.datagroups = None
+        self.pseudodata_datagroups = None
         self.unconstrainedProcesses = None
         self.noStatUncProcesses = []
         self.buildHistNameFunc = None
@@ -47,9 +49,11 @@ class CardTool(object):
         self.keepSyst = None # to override previous one with exceptions for special cases
         #self.loadArgs = {"operation" : "self.loadProcesses (reading hists from file)"}
         self.lumiScale = 1.
+        self.project = None
         self.keepOtherChargeSyst = True
         self.chargeIdDict = {"minus" : {"val" : -1, "id" : "q0", "badId" : None},
-                             "plus"  : {"val" : 1., "id" : "q1", "badId" : None}
+                             "plus"  : {"val" : 1., "id" : "q1", "badId" : None},
+                             "combined" : {"val" : "combined", "id" : "none", "badId" : None}, 
                              }
 
     def skipHistograms(self):
@@ -61,6 +65,9 @@ class CardTool(object):
         self.keepOtherChargeSyst = False
         self.chargeIdDict["plus"]["badId"] = "q0"
         self.chargeIdDict["minus"]["badId"] = "q1"
+
+    def setProjectionAxes(self, project):
+        self.project = project
 
     def setProcsNoStatUnc(self, procs, resetList=True):
         if self.skipHist:
@@ -110,7 +117,7 @@ class CardTool(object):
         return self.fakeName
 
     def setPseudodata(self, pseudodata):
-        self.pseudoData = pseudodata.replace("nominal", self.nominalName)
+        self.pseudoData = pseudodata
 
     # Needs to be increased from default for long proc names
     def setSpacing(self, spacing):
@@ -121,6 +128,14 @@ class CardTool(object):
 
     def setDatagroups(self, datagroups):
         self.datagroups = datagroups 
+        if self.nominalName:
+            self.datagroups.setNominalName(self.nominalName)
+        
+    def setPseudodataDatagroups(self, datagroups):
+        self.pseudodata_datagroups = datagroups 
+        if self.nominalName:
+            print(datagroups)
+            self.pseudodata_datagroups.setNominalName(self.nominalName)
         
     def setChannels(self, channels):
         self.channels = channels
@@ -143,7 +158,8 @@ class CardTool(object):
 
     def setNominalName(self, histName):
         self.nominalName = histName
-        self.datagroups.setNominalName(histName)
+        if self.datagroups:
+            self.datagroups.setNominalName(histName)
 
     def isData(self, procName):
         return any([x.is_data for x in self.datagroups.groups[procName]["members"]])
@@ -317,11 +333,16 @@ class CardTool(object):
         #if self.check_variations:
         var_names = set([name.replace("Up", "").replace("Down", "") for name in var_map.keys() if name])
         if len(var_names) != len(var_map.keys())/2:
-            raise ValueError(f"Invalid syst names for process {proc}! Expected an up/down variation for each syst. Found {var_map.keys()}")
+            raise ValueError(f"Invalid syst names for process {proc}! Expected an up/down variation for each syst. "
+                f"Found systs {var_names} and outNames {var_map.keys()}")
         for name in var_names:
             up = var_map[name+"Up"]
             down = var_map[name+"Down"]
-            up_relsign = np.sign(up.values()-hnom.values())
+            try:
+                up_relsign = np.sign(up.values()-hnom.values())
+            except ValueError as e:
+                logger.error(f"Incompatible shapes between up and down for syst {name}")
+                raise e
             down_relsign = np.sign(down.values()-hnom.values())
             vars_sameside = (up_relsign != 0) & (up_relsign == down_relsign)
             perc_sameside = np.count_nonzero(vars_sameside)/hnom.size 
@@ -337,7 +358,7 @@ class CardTool(object):
         logger.info(f"Writing systematic {syst} for process {proc}")
         var_map = self.systHists(h, syst) 
         # TODO: Make this optional
-        if syst != "nominal":
+        if syst != self.nominalName:
             self.checkSysts(self.procDict[proc][self.nominalName], var_map, proc)
         setZeroStatUnc = False
         if proc in self.noStatUncProcesses:
@@ -348,13 +369,15 @@ class CardTool(object):
                 self.writeHist(var, self.variationName(proc, name), setZeroStatUnc=setZeroStatUnc)
 
     def addPseudodata(self, processes):
-        self.datagroups.loadHistsForDatagroups(
+        datagroups = self.datagroups if not self.pseudodata_datagroups else self.pseudodata_datagroups
+        datagroups.loadHistsForDatagroups(
             baseName=self.pseudoData, syst="", label=self.pseudoData,
             procsToRead=processes, scaleToNewLumi=self.lumiScale)
-        hists = [self.procDict[proc][self.pseudoData] for proc in processes]
+        procDict = datagroups.getDatagroups()
+        hists = [procDict[proc][self.pseudoData] for proc in processes]
         hdata = hh.sumHists(hists)
         # Kind of hacky, but in case the alt hist has uncertainties
-        for systAxName in ["systIdx", "tensor_axis_0"]:
+        for systAxName in ["systIdx", "tensor_axis_0", "vars"]:
             if systAxName in [ax.name for ax in hdata.axes]:
                 hdata = hdata[{systAxName : 0 }] 
         self.writeHist(hdata, self.pseudoData+"_sum")
@@ -379,7 +402,8 @@ class CardTool(object):
 
     def writeOutput(self):
         self.datagroups.loadHistsForDatagroups(
-            baseName=self.histName, syst=self.nominalName, label=self.nominalName, scaleToNewLumi=self.lumiScale)
+            baseName=self.nominalName, syst=self.nominalName, label=self.nominalName, 
+            scaleToNewLumi=self.lumiScale)
         self.procDict = self.datagroups.getDatagroups()
         self.writeForProcesses(self.nominalName, processes=self.procDict.keys(), label=self.nominalName)
         self.loadNominalCard()
@@ -392,9 +416,10 @@ class CardTool(object):
             systMap=self.systematics[syst]
             systName = syst if not systMap["name"] else systMap["name"]
             processes=systMap["processes"]
-            self.datagroups.loadHistsForDatagroups(self.histName, systName, label="syst",
-                                                   procsToRead=processes, forceNonzero=systName != "qcdScaleByHelicity",
-                                                   preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"], scaleToNewLumi=self.lumiScale)
+            self.datagroups.loadHistsForDatagroups(self.nominalName, systName, label="syst",
+                procsToRead=processes, forceNonzero=systName != "qcdScaleByHelicity",
+                preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"], 
+                scaleToNewLumi=self.lumiScale)
             self.writeForProcesses(syst, label="syst", processes=processes)    
         output_tools.writeMetaInfoToRootFile(self.outfile, exclude_diff='notebooks')
         if self.skipHist:
@@ -510,7 +535,7 @@ class CardTool(object):
         for charge in self.channels:
             if not self.keepOtherChargeSyst and self.chargeIdDict[charge]["badId"] in name: continue
             q = self.chargeIdDict[charge]["val"]
-            hout = narf.hist_to_root(h[{"charge" : h.axes["charge"].index(q)}])
+            hout = narf.hist_to_root(h[{"charge" : h.axes["charge"].index(q) if q != "combined" else hist.sum}])
             hout.SetName(name+f"_{charge}")
             hout.Write()
 
@@ -522,6 +547,12 @@ class CardTool(object):
     def writeHist(self, h, name, setZeroStatUnc=False):
         if self.skipHist:
             return
+
+        if self.project:
+            axes = self.project[:]
+            if "charge" in h.axes.name:
+                axes.append("charge")
+            h = h.project(*axes)
 
         if not self.nominalDim:
             self.nominalDim = h.ndim

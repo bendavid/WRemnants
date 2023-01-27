@@ -25,15 +25,15 @@ def makeFilelist(paths, maxFiles=-1, format_args={}):
         filelist.extend(glob.glob(path) if path[:4] != "/eos" else buildXrdFileList(path, "eoscms.cern.ch"))
     return filelist if maxFiles < 0 else filelist[:maxFiles]
 
-def getDatasets(maxFiles=-1, filt=None, mode=None, base_path=None, nanoVersion="v9", prod_tag="TrackFitV709_NanoProdv2"):
+def getDatasets(maxFiles=-1, filt=None, mode=None, base_path=None, nanoVersion="v9", prod_tag="TrackFitV718_NanoProdv1"):
     if not base_path:
         hostname = socket.gethostname()
         if hostname == "lxplus8s10.cern.ch":
             base_path = "/scratch/shared/NanoAOD"
         elif "mit.edu" in hostname:
-            base_path = "/data/submit/cms/store/wmass/NanoAOD"
+            base_path = "/scratch/submit/cms/wmass/NanoAOD"
         elif hostname == "cmsanalysis.pi.infn.it":
-            base_path = "/scratchnvme/wmass/NANOV9/newNTuples"
+            base_path = "/scratchnvme/wmass/NANOV9/newNTuples" #temporary
 
     logger.info(f"Loading samples from {base_path}.")
 
