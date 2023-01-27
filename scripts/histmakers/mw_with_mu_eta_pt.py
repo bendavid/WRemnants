@@ -27,10 +27,10 @@ parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for lumin
 parser.add_argument("--bias-calibration", action='store_true', help="Adjust central value by calibration bias hist")
 args = parser.parse_args()
 
-if args.setCustomLogger:
-    logger = common.setup_test_logger(os.path.basename(__file__), args.verbose)
-else:
+if args.noColorLogger:
     logger = common.setup_base_logger(os.path.basename(__file__), args.debug)
+else:
+    logger = common.setup_color_logger(os.path.basename(__file__), args.verbose)
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
