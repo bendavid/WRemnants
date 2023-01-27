@@ -6,8 +6,8 @@
 #include <eigen3/unsupported/Eigen/CXX11/Tensor>
 #include "defines.h"
 #include "ROOT/RVec.hxx"
-#include "TLorentzVector.h"
-#include "TVector3.h"
+#include <Math/Vector4D.h>
+#include "TVector2.h"
 
 using namespace ROOT;
 
@@ -146,11 +146,11 @@ RVec<int> postFSRLeptonsIdx(RVec<bool> postFSRleptons) {
 }
 
 float zqtproj0(const float &goodMuons_pt0, const float &goodMuons_eta0, const float &goodMuons_phi0, RVec<float> &GenPart_pt, RVec<float> &GenPart_eta, RVec<float> &GenPart_phi, RVec<int> &postFSRnusIdx) {
-  TLorentzVector muon, neutrino;
-  muon.SetPtEtaPhiM(goodMuons_pt0, goodMuons_eta0, goodMuons_phi0, muon_mass);
-  neutrino.SetPtEtaPhiM(GenPart_pt[postFSRnusIdx[0]], GenPart_eta[postFSRnusIdx[0]], GenPart_phi[postFSRnusIdx[0]], 0.);
-  TVector3 Muon(muon.X(), muon.Y(), 0.), Neutrino(neutrino.X(), neutrino.Y(), 0.);
-  return Muon.Dot((Muon+Neutrino))/sqrt(Muon.Dot(Muon));
+  ROOT::Math::PtEtaPhiMVector muon, neutrino;
+  muon.SetPt(goodMuons_pt0); muon.SetEta(goodMuons_eta0); muon.SetPhi(goodMuons_phi0); muon.SetM(muon_mass);
+  neutrino.SetPt(GenPart_pt[postFSRnusIdx[0]]); neutrino.SetEta(GenPart_eta[postFSRnusIdx[0]]); neutrino.SetPhi(GenPart_phi[postFSRnusIdx[0]]); neutrino.SetM(0.);
+  TVector2 Muon(muon.X(), muon.Y()), Neutrino(neutrino.X(), neutrino.Y());
+  return (Muon*((Muon+Neutrino)))/sqrt(Muon*Muon);
 }
 
     
