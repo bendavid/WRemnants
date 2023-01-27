@@ -219,15 +219,6 @@ def build_graph(df, dataset):
         df = recoilHelper.auxHists(df, results)
         df = recoilHelper.apply_recoil_Z(df, results, dataset, ["ZmumuPostVFP"])  # produces corrected MET as MET_corr_rec_pt/phi
         #if isZ: df = recoilHelper.recoil_Z_unc_lowPU(df, results, "", "", axis_mt, axis_mll)
-
-        ########
-        ## FIXME
-        ########
-        ## Why does it use MET_corr_xy_* when no recoil calibration is used?
-        ## I am putting it below for now, and use MET_* as variables
-        #
-        #df = df.Define("transverseMass_uncorr", f"wrem::mt_wlike_nano(trigMuons_pt0, trigMuons_phi0, nonTrigMuons_pt0, nonTrigMuons_phi0, MET_corr_xy_pt, MET_corr_xy_phi)")
-        #results.append(df.HistoBoost("transverseMass_uncorr", [axis_mt], ["transverseMass_uncorr", "nominal_weight"]))
     else:
         df = df.Alias("MET_corr_rec_pt", "MET_pt")
         df = df.Alias("MET_corr_rec_phi", "MET_phi")
@@ -235,8 +226,6 @@ def build_graph(df, dataset):
     #TODO improve this to include muon mass?
     ###########
     # utility plots of transverse mass, with or without recoil corrections
-    # they will be the same plot in case no correction is run, so it is slightly redundant,
-    # but it might be ok so one can check the plots are really the same also in that case
     ###########
     met_vars = ("MET_pt", "MET_phi")
     df = df.Define("transverseMass_uncorr", f"wrem::mt_wlike_nano(trigMuons_pt0, trigMuons_phi0, nonTrigMuons_pt0, nonTrigMuons_phi0, {', '.join(met_vars)})")
