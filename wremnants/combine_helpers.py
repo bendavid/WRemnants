@@ -3,7 +3,7 @@ from wremnants import syst_tools
 import numpy as np
 import logging
 
-def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, pdf, name_append="", scetlib=False, use_hel_hist=False, rebin_pt=None):
+def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, pdf, name_append="", scetlib=None, use_hel_hist=False, rebin_pt=None):
     helicity = "Helicity" in scale_type
     pt_binned = "Pt" in scale_type
 
@@ -32,8 +32,6 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, pdf, name_ap
     sum_axes = ["ptVgen", "chargeVgen",]
     if use_hel_hist or helicity:
         sum_axes.append("helicity")
-    if card_tool.histName == "reco_mll":
-        sum_axes.append("reco_gen")
 
     # NOTE: The map needs to be keyed on the base procs not the group names, which is
     # admittedly a bit nasty
@@ -81,42 +79,22 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, pdf, name_ap
         elif helicity:
             skip_entries.append((*[-1]*(nsyst_dims-2), -1.j, -1, -1))
         
+        obs = ("eta", "pt") if card_tool.nominalName == "nominal" else card_tool.project
         # TODO: Implement pT splitting for SCETlib
-        nscetlib_vars=45
-        common_args = dict(name=f"scetlib{pdf if pdf != 'nnpdf31' else ''}Corr_unc",
+        card_tool.addSystematic(name=f"scetlib{'NP' if scetlib == 'np' else ''}Corr_unc",
             processes=samples,
             group=group_name,
             systAxes=["vars"],
             passToFakes=to_fakes,
-        )
-        card_tool.addSystematic(**common_args,
-            outNames=["", "resumFOScaleUp", "resumFOScaleDown"]+[""]*(nscetlib_vars-3),
-            rename="scetlibCorr_resumFO", 
-        )
-        card_tool.addSystematic(**common_args,
-            outNames=[""]*3+["resumLambdaDown", "resumLambdaUp"]+[""]*(nscetlib_vars-5),
-            rename="scetlibCorr_resumLambda", 
-        )
-
-        common_args["systAxes"] = ["downUpVar"]
-        common_args["labelsByAxis"] = ["downUpVar"]
-        axes = ["recoil_reco"] if card_tool.histName == "reco_mll" else ["pt", "eta"] 
-        card_tool.addSystematic(**common_args,
-            # TODO: Should support other variables in the fit
-            actionMap={s : lambda h: syst_tools.uncertainty_hist_from_envelope(h, axes, range(5, 9)) for s in expanded_samples},
-            baseName="resumTransition", 
-            rename="scetlibCorr_resumTrans", 
-        )
-        card_tool.addSystematic(**common_args,
-            # TODO: Should support other variables in the fit
-            actionMap={s : lambda h: syst_tools.uncertainty_hist_from_envelope(h, axes, range(9, 45)) for s in expanded_samples},
-            baseName="resumScale", 
-            rename="scetlibCorr_resumScale", 
+            # TODO: Should probably handle the nominal pt/eta case more gracefully
+            actionMap={s : lambda h: syst_tools.scetlib_scale_unc_hist(h, obs=obs) for s in expanded_samples} if scetlib == "scale" else None,
+            outNames=[""]+(syst_tools.scetlib_scale_vars() if scetlib == "scale" else syst_tools.scetlib_np_vars()),
+            rename=f"QCDscale_scetlib{'NP' if scetlib == 'np' else 'Scale'}", 
         )
 
     if helicity:
         # Drop the uncertainty of A5,A6,A7
-        skip_entries.extend([(*[-1]*(nsyst_dims-3), complex(i), -1, -1) for i in (5,6,7)])
+        skip_entries.extend([(*[-1]*(nsyst_dims-3), complex(0, i), -1, -1) for i in (5,6,7)])
 
     # Skip MiNNLO unc. 
     if scetlib and not (pt_binned or helicity):
