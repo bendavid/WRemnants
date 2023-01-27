@@ -85,7 +85,6 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
     # print(f"Saved file {outpkl}")
     
     sf_syst_pyroot = narf.hist_to_pyroot_boost(sf_syst)
-    #quit()
     
     # nomi and syst are stored in the same histogram, just use different helpers to override the () operator for now, until RDF is improved
     helper = ROOT.wrem.muon_efficiency_smooth_helper[str(is_w_like).lower(), type(sf_syst_pyroot)]( ROOT.std.move(sf_syst_pyroot) )
@@ -196,7 +195,6 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
         axis_ptEigen_eff_tensor = hist.axis.Integer(0, effStat_manager[effStatKey]["nPtEigenBins"], underflow = False, overflow =False, name = "nPtEigenBins")    
         helper_stat.tensor_axes = [axis_eta_eff_tensor, axis_ptEigen_eff_tensor, axis_charge, axis_down_up]
         effStat_manager[effStatKey]["helper"] = helper_stat
-
 
     fin.Close()
     ####

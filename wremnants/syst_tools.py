@@ -2,6 +2,7 @@ import hist
 import numpy as np
 from utilities import boostHistHelpers as hh, common
 from wremnants import theory_tools
+from wremnants.datasets.datagroups import datagroups2016
 import collections.abc
 import logging
 
@@ -108,9 +109,7 @@ def scale_helicity_hist_to_variations(scale_hist, sum_axes=[], rebinPtV=None):
         else:
             scale_hist = scale_hist[{"ptVgen" : s[::hist.rebin(rebinPtV)]}]
             nom_scale_hist = nom_scale_hist[{"ptVgen" : s[::hist.rebin(rebinPtV)]}]
-    elif not hasPtAxis:
-        raise ValueError("In scale_helicity_hist_to_variations: axis 'ptVgen' not found in histogram.")
-            
+
     for axis in sum_axes:
         if axis in axisNames:
             scale_hist = scale_hist[{axis : s[::hist.sum]}]
@@ -133,8 +132,18 @@ def scale_helicity_hist_to_variations(scale_hist, sum_axes=[], rebinPtV=None):
     scale_variation_hist = hist.Hist(*scale_hist.axes, storage = scale_hist._storage_type(), 
                                      name = out_name, data = systhist)
 
-    return scale_variation_hist
+    return scale_variation_hist 
 
+def make_scale_hist(df, axes, cols, hname=""):
+    scaleHist = df.HistoBoost("qcdScale" if hname=="" else f"{hname}_qcdScale", axes, [*cols, "scaleWeights_tensor_wnom"], tensor_axes=scale_tensor_axes)
+    return scaleHist
+
+    systhist = scale_hist.view(flow=True) - nom_scale_hist.view(flow=True) + expandnom
+
+    scale_variation_hist = hist.Hist(*scale_hist.axes, storage = scale_hist._storage_type(), 
+                                     name = out_name, data = systhist)
+
+    return scale_variation_hist
 
 def uncertainty_hist_from_envelope(h, proj_ax, entries):
     hdown = hh.syst_min_or_max_env_hist(h, proj_ax, "vars", entries, no_flow=["ptVgen"], do_min=True)
@@ -144,15 +153,173 @@ def uncertainty_hist_from_envelope(h, proj_ax, entries):
     hnew[...,1] = hup.view(flow=True)
     return hnew
 
-def define_mass_weights(df, isW, nominal_axes=None, nominal_cols=None):
+def define_mass_weights(df, isW):
     # nweights = 21 if isW else 23
     # from -100 to 100 MeV with 10 MeV increment
     nweights = 21
     df = df.Define("massWeight_tensor", f"wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight)")
+    df = df.Define("massWeight_tensor_wnom", "auto res = massWeight_tensor; res = nominal_weight*res; return res;")
 
-    hist = None
-    if nominal_axes and nominal_cols:
-        df = df.Define("massWeight_tensor_wnom", "auto res = massWeight_tensor; res = nominal_weight*res; return res;")
-        hist = df.HistoBoost("massWeight", nominal_axes, [*nominal_cols, "massWeight_tensor_wnom"])
+    return df
 
-    return df, hist
+def add_massweights_hist(results, df, axes, cols, base_name="nominal"):
+    name = datagroups2016.histName(base_name, syst="massWeight")
+    massWeight = df.HistoBoost(name, axes, [*cols, "massWeight_tensor_wnom"])
+    results.append(massWeight)
+
+def add_pdf_hists(results, df, dataset, axes, cols, pdfs, base_name="nominal"):
+    for pdf in pdfs:
+        try:
+            pdfInfo = theory_tools.pdf_info_map(dataset, pdf)
+        except ValueError as e:
+            logging.info(e)
+            continue
+
+        pdfName = pdfInfo["name"]
+        tensorName = f"{pdfName}Weights_tensor"
+        tensorASName = f"{pdfName}ASWeights_tensor"
+
+        name = datagroups2016.histName(base_name, syst=pdfName)
+        pdfHist = df.HistoBoost(name, axes, [*cols, tensorName])
+
+        name = datagroups2016.histName(base_name, syst=f"alphaS002{pdfName}")
+        alphaSHist = df.HistoBoost(name, axes, [*cols, tensorASName])
+        results.extend([pdfHist, alphaSHist])
+    return df
+
+def add_qcdScale_hist(results, df, axes, cols, base_name="nominal"):
+    name = datagroups2016.histName(base_name, syst="qcdScale")
+    scaleHist = df.HistoBoost(name, axes, [*cols, "scaleWeights_tensor_wnom"], tensor_axes=theory_tools.scale_tensor_axes)
+    results.append(scaleHist)
+
+def add_qcdScaleByHelicityUnc_hist(results, df, helper, axes, cols, base_name="nominal"):
+    name = datagroups2016.histName(base_name, syst="qcdScaleByHelicity")
+    df = df.Define("helicityWeight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
+    qcdScaleByHelicityUnc = df.HistoBoost(name, axes, [*cols,"helicityWeight_tensor"], tensor_axes=helper.tensor_axes)
+    results.append(qcdScaleByHelicityUnc)
+
+def add_muon_efficiency_unc_hists(results, df, helper_stat, helper_syst, axes, cols, base_name="nominal", is_w_like=False):
+
+    if is_w_like:
+        muon_columns_stat = ["trigMuons_pt0", "trigMuons_eta0", "trigMuons_charge0", "nonTrigMuons_pt0", "nonTrigMuons_eta0", "nonTrigMuons_charge0"]
+        muon_columns_syst = ["trigMuons_pt0", "trigMuons_eta0", "trigMuons_SApt0", "trigMuons_SAeta0", "trigMuons_charge0",
+            "nonTrigMuons_pt0", "nonTrigMuons_eta0", "nonTrigMuons_SApt0", "nonTrigMuons_SAeta0", "nonTrigMuons_charge0"]
+    else:
+        muon_columns_stat = ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0"]
+        muon_columns_syst = ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso"]
+
+    for key,helper in helper_stat.items():
+        if "iso" in key and not is_w_like:
+            df = df.Define(f"effStatTnP_{key}_tensor", helper, [*muon_columns_stat, "passIso", "nominal_weight"])        
+        else:
+            df = df.Define(f"effStatTnP_{key}_tensor", helper, [*muon_columns_stat, "nominal_weight"])
+        name = datagroups2016.histName(base_name, syst=f"effStatTnP_{key}")
+        effStatTnP = df.HistoBoost(name, axes, [*cols, f"effStatTnP_{key}_tensor"], tensor_axes = helper.tensor_axes)
+        results.append(effStatTnP)
+    
+    df = df.Define("effSystTnP_weight", helper_syst, [*muon_columns_syst, "nominal_weight"])
+    name = datagroups2016.histName(base_name, syst=f"effSystTnP")
+    effSystTnP = df.HistoBoost(name, axes, [*cols, "effSystTnP_weight"], tensor_axes = helper_syst.tensor_axes)
+    results.append(effSystTnP)
+
+    return df
+
+def add_L1Prefire_unc_hists(results, df, helper_stat, helper_syst, axes, cols, base_name="nominal"):
+    df = df.Define("muonL1PrefireStat_tensor", helper_stat, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId", "nominal_weight"])
+    name = datagroups2016.histName(base_name, syst=f"muonL1PrefireStat")
+    muonL1PrefireStat = df.HistoBoost(name, axes, [*cols, "muonL1PrefireStat_tensor"], tensor_axes = helper_stat.tensor_axes)
+    results.append(muonL1PrefireStat)
+
+    df = df.Define("muonL1PrefireSyst_tensor", helper_syst, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId", "nominal_weight"])
+    name = datagroups2016.histName(base_name, syst=f"muonL1PrefireSyst")
+    muonL1PrefireSyst = df.HistoBoost(name, axes, [*cols, "muonL1PrefireSyst_tensor"], tensor_axes = [common.down_up_axis])
+    results.append(muonL1PrefireSyst)
+
+    df = df.Define("ecalL1Prefire_tensor", f"wrem::twoPointScaling(nominal_weight/L1PreFiringWeight_ECAL_Nom, L1PreFiringWeight_ECAL_Dn, L1PreFiringWeight_ECAL_Up)")
+    name = datagroups2016.histName(base_name, syst=f"ecalL1Prefire")
+    ecalL1Prefire = df.HistoBoost(name, axes, [*cols, "ecalL1Prefire_tensor"], tensor_axes = [common.down_up_axis])
+    results.append(ecalL1Prefire)
+
+    return df
+
+def add_muonscale_hist(results, df, netabins, mag, isW, axes, cols, base_name="nominal", nweights = 21, muon_eta="goodMuons_eta0"):
+
+    df = df.Define(f"muonScaleDummy{netabins}Bins{muon_eta}", f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(nominal_weight, massWeight_tensor, {muon_eta}, {mag}, {str(isW).lower()})")
+
+    scale_etabins_axis = hist.axis.Regular(netabins, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
+    name = datagroups2016.histName(base_name, syst=f"muonScaleSyst")
+
+    dummyMuonScaleSyst = df.HistoBoost(name, axes, [*cols, f"muonScaleDummy{netabins}Bins{muon_eta}"], tensor_axes=[common.down_up_axis, scale_etabins_axis])
+    results.append(dummyMuonScaleSyst)
+
+    return df
+
+
+def add_muonscale_smeared_hist(results, df, netabins, mag, isW, axes, cols, base_name="nominal", nweights = 21, muon_eta="goodMuons_eta0"):
+    # add_muonscale_hist has to be called first such that "muonScaleDummy{netabins}Bins{muon_eta}" is defined
+
+    scale_etabins_axis = hist.axis.Regular(netabins, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
+    name = datagroups2016.histName(base_name, syst=f"muonScaleSyst_gen_smear")
+
+    dummyMuonScaleSyst_gen_smear = df.HistoBoost(name, axes, [*cols, f"muonScaleDummy{netabins}Bins{muon_eta}"], tensor_axes=[common.down_up_axis, scale_etabins_axis])
+    results.append(dummyMuonScaleSyst_gen_smear)
+
+    return df
+
+
+def scetlib_scale_vars():
+	return ["resumFOScaleUp", "resumFOScaleDown",
+        "resumLambdaUp", "resumLambdaDown",
+        "resumTransitionUp", "resumTransitionDown",
+        "resumScaleUp", "resumScaleDown"]
+
+#TODO: Having these hardcoded kind of defeats the purpose
+def scetlib_np_vars():
+	return ['gamma_cuspUp',
+		'gamma_cuspDown',
+		'gamma_mu_qUp',
+		'gamma_mu_qDown',
+		'gamma_nuUp',
+		'gamma_nuDown',
+		'h_qqVDown',
+		'h_qqVUp',
+		'sUp',
+		'sDown',
+		'b_qqVUp',
+		'b_qqVDown',
+		'b_qqbarVUp',
+		'b_qqbarVDown',
+		'b_qqSUp',
+		'b_qqSDown',
+		'b_qqDSUp',
+		'b_qqDSDown',
+		'b_qgUp',
+		'b_qgDown',
+		'kappaFODown',
+		'kappaFOUp',
+		'lambdaDown',
+		'lambdaUp'
+	]
+
+def scetlib_scale_unc_hist(h, obs, syst_ax="vars"):
+    hnew = hist.Hist(*h.axes[:-1], hist.axis.StrCategory(["central"]+scetlib_scale_vars(),
+    					name=syst_ax), storage=h._storage_type())
+    
+    hnew[...,"central"] = h[...,"central"].view(flow=True)
+    hnew[...,"resumFOScaleUp"] = h[...,"kappaFO2."].view(flow=True)
+    hnew[...,"resumFOScaleDown"] = h[...,"kappaFO0.5"].view(flow=True)
+    hnew[...,"resumLambdaUp"] = h[...,"lambda0.8"].view(flow=True)
+    hnew[...,"resumLambdaDown"] = h[...,"lambda1.5"].view(flow=True)
+    
+    transition_names = [x for x in h.axes[syst_ax] if "transition" in x]    
+    hnew[...,"resumTransitionUp"] = hh.syst_min_or_max_env_hist(h, obs, syst_ax, 
+                                    h.axes[syst_ax].index(transition_names), do_min=False).view(flow=True)
+    hnew[...,"resumTransitionDown"] = hh.syst_min_or_max_env_hist(h, obs, syst_ax, 
+                                    h.axes[syst_ax].index(transition_names), do_min=True).view(flow=True)
+    
+    resum_names = [x for x in h.axes[syst_ax] if not any(i in x for i in ["lambda", "kappa", "transition"])]
+    hnew[...,"resumScaleUp"] = hh.syst_min_or_max_env_hist(h, obs, syst_ax, 
+                                    h.axes[syst_ax].index(resum_names), do_min=False).view(flow=True)
+    hnew[...,"resumScaleDown"] = hh.syst_min_or_max_env_hist(h, obs, syst_ax, 
+                                    h.axes[syst_ax].index(resum_names), do_min=True).view(flow=True)
+    return hnew

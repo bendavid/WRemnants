@@ -37,6 +37,11 @@ class datagroups(object):
             self.lumi = 1
             
         self.nominalName = "nominal"
+        self.globalAction = None
+
+    # To be used for applying a selection, rebinning, etc.
+    def setGlobalAction(self, action):
+        self.globalAction = action
 
     def setNominalName(self, name):
         self.nominalName = name
@@ -85,8 +90,14 @@ class datagroups(object):
                     logger.debug(f"Applying preOp to {member.name} after loading")
                     h = preOpMap[member.name](h, **preOpArgs)
 
+                if self.globalAction:
+                    h = self.globalAction(h)
 
                 group[label] = h if not group[label] else hh.addHists(h, group[label])
+
+            # Can use to apply common rebinning or selection on top of the usual one
+            if "rebinOp" in group and group["rebinOp"]:
+                group[label] = group["rebinOp"](group[label])
 
             if not applySelection and "selectOp" in group and group["selectOp"]:
                 logger.warning(f"Selection requested for process {procName} but applySelection=False, thus it will be ignored")
@@ -122,20 +133,25 @@ class datagroups(object):
                     narf_hist = narf.root_to_hist(rthist, axis_names=axisNames)
                 else:
                     narf_hist = hh.addHists(narf_hist, narf.root_to_hist(rthist, axis_names=axisNames))
+
+            if self.globalAction:
+                narf_hist = self.globalAction(narf_hist)
+
             group[label] = narf_hist
 
-    def histNameCombine(self, procName, baseName, syst, channel):
-        name = f"{baseName}_{procName}"
-        if syst != "nominal":
-            name += "_"+syst
-        if channel:
-            name += "_"+channel
-        if re.search("^pdf.*_sum", procName): # for pseudodata from alternative pdfset
-            return("_".join([procName, channel])) 
-        return name
+    def histName(self, baseName, procName="", syst=""):
+        return datagroups.histName(baseName, procName, syst, nominalName=self.nominalName)
 
-    def loadHistsForDatagroups(self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="", nominalIfMissing=True,
-                               applySelection=True, forceNonzero=True, pseudodata=False, preOpMap={}, preOpArgs={}, scaleToNewLumi=-1):
+    def histNameCombine(self, procName, baseName, syst, channel):
+        return datagroups.histNameCombine(procName, baseName, syst, channel)
+
+    def loadHistsForDatagroups(
+        self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="",
+        nominalIfMissing=True, applySelection=True, forceNonzero=True, pseudodata=False,
+        preOpMap={}, preOpArgs={}, scaleToNewLumi=-1
+    ):
+        logger.debug(f"the basename and syst is: {baseName}, {syst}")
+        logger.debug(f"The procsToRead and excludedProcs are: {procsToRead}, {excluded_procs}")
         if self.rtfile and self.combine:
             self.setHistsCombine(baseName, syst, channel, procsToRead, excluded_procs, label)
         else:
@@ -235,13 +251,36 @@ class datagroups(object):
             if proc not in self.groups.keys():
                 raise ValueError(f"In setSelectOp(): process {proc} not found")
             self.groups[proc]["selectOp"] = op
-        
+
+    @staticmethod
+    def histName(baseName, procName="", syst=""):
+        # This is kind of hacky to deal with the different naming from combine
+        if baseName != "x" and (syst == ""):
+            return baseName
+        if baseName in ["", "x"] and syst:
+            return syst
+        if syst[:len(baseName)] == baseName:
+            return syst
+        return "_".join([baseName,syst])
+    
+    @staticmethod
+    def histNameCombine(procName, baseName, syst, channel):
+        name = f"{baseName}_{procName}"
+        if syst != "nominal":
+            name += "_"+syst
+        if channel:
+            name += "_"+channel
+        if re.search("^pdf.*_sum", procName): # for pseudodata from alternative pdfset
+            return("_".join([procName, channel])) 
+        return name
+
 class datagroups2016(datagroups):
-    def __init__(self, infile, combine=False, wlike=False, pseudodata_pdfset = None,
+    def __init__(self, infile, combine=False, pseudodata_pdfset = None,
     ):
         self.datasets = {x.name : x for x in datasets2016.getDatasets()}
         super().__init__(infile, combine)
-        if wlike:
+        self.wlike = "wlike" in self.results["meta_info"]["command"]
+        if self.wlike:
             sigOp = None
             fakeOp = None
         else:
@@ -274,25 +313,24 @@ class datagroups2016(datagroups):
                 label = f"pdf{pseudodata_pdfset.upper()}",
                 color = "dimgray"
             )
-        if not wlike:
+        if not self.wlike:
             self.groups.update({
-                "Fake" : dict(
-                    members = list(self.datasets.values()),
-                    scale = lambda x: 1. if x.is_data else -1,
-                    label = "Nonprompt",
-                    color = "grey",
-                    selectOp = fakeOp,
-                ),
-                "Wtau" : dict(
-                    members = [self.datasets["WminustaunuPostVFP"], self.datasets["WplustaunuPostVFP"]],
-                    label = r"W$^{\pm}\to\tau\nu$",
-                    color = "orange",
-                    selectOp = sigOp,
-                ),
                 "Wmunu" : dict(
                     members = [self.datasets["WminusmunuPostVFP"], self.datasets["WplusmunuPostVFP"]],
                     label = r"W$^{\pm}\to\mu\nu$",
                     color = "darkred",
+                    selectOp = sigOp,
+                ),
+                }
+            )
+            # Reorder
+            for k in ["Zmumu", "Ztautau"]:
+                self.groups[k] = self.groups.pop(k)
+            self.groups.update({
+                "Wtau" : dict(
+                    members = [self.datasets["WminustaunuPostVFP"], self.datasets["WplustaunuPostVFP"]],
+                    label = r"W$^{\pm}\to\tau\nu$",
+                    color = "orange",
                     selectOp = sigOp,
                 ),
                 "Top" : dict(
@@ -307,6 +345,13 @@ class datagroups2016(datagroups):
                     color = "pink",
                     selectOp = sigOp,
                 ), 
+                "Fake" : dict(
+                    members = list(self.datasets.values()),
+                    scale = lambda x: 1. if x.is_data else -1,
+                    label = "Nonprompt",
+                    color = "grey",
+                    selectOp = fakeOp,
+                ),
             })
         else:
             self.groups["Other"] = dict(
@@ -322,16 +367,6 @@ class datagroups2016(datagroups):
                 columns=["Process", "Yield", "Uncertainty"])
         return df
 
-    def histName(self, baseName, procName, syst):
-        # This is kind of hacky to deal with the different naming from combine
-        if baseName != "x" and (syst == "" or syst == self.nominalName):
-            return baseName
-        if baseName in ["", "x", "nominal"] and syst:
-            return syst
-        if syst[:len(baseName)] == baseName:
-            return syst
-        return "_".join([baseName,syst])
-    
     def readHist(self, baseName, proc, syst, scaleOp=None, forceNonzero=True, scaleToNewLumi=-1):
         print("PROC.NAME")
         print(proc.name)
