@@ -1,7 +1,6 @@
 import numpy as np
 import lz4.frame
 import pickle
-import logging
 from wremnants import plot_tools, theory_corrections, theory_tools
 from utilities import boostHistHelpers as hh
 from utilities import common, input_tools, output_tools
@@ -18,20 +17,22 @@ parser.add_argument("--outpath", type=str, default=f"{common.data_dir}/TheoryCor
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
 parser.add_argument("--proc", type=str, required=True, choices=["z", "w", ], help="Process")
 parser.add_argument("--axes", nargs="*", type=str, default=None, help="Use only specified axes in hist")
+parser.add_argument("--debug", action='store_true', help="Print debug output")
 
 args = parser.parse_args()
 
-logging.basicConfig(level=logging.INFO)
+logger = common.setup_base_logger("make_theory_corr", args.debug)
 
 def read_corr(procName, generator, corr_file):
     charge = 0 if procName[0] == "Z" else (1 if "Wplus" in procName else -1)
     if generator == "scetlib":
         nons = "auto"
+        #if True and not os.path.isfile(corr_file.replace(".", "_nons.")):
         if not os.path.isfile(corr_file.replace(".", "_nons.")):
             nons = ""
-            logging.warning("No nonsingular file found for SCETlib. Will skip it. This is an approximation!")
+            logger.warning("No nonsingular file found for SCETlib. Will skip it. This is an approximation!")
         numh = input_tools.read_scetlib_hist(corr_file, charge=charge, nonsing=nons)
-        numh = hh.makeAbsHist(numh, "y")
+        numh = hh.makeAbsHist(numh, "Y")
     else:
         if args.generator == "matrix_radish":
             h = input_tools.read_matrixRadish_hist(corr_file, "ptVgen")
@@ -83,7 +84,7 @@ if "y" in minnloh.axes.name:
 # Get more stats in the correction
 add_taus = True 
 if add_taus:
-    logging.info("Combining muon and tau decay samples for increased stats")
+    logger.info("Combining muon and tau decay samples for increased stats")
     from wremnants.datasets.datasetDict_v9 import Z_TAU_TO_LEP_RATIO,BR_TAUToMU
     taus = ["WplustaunuPostVFP", "WminustaunuPostVFP"] if args.proc == "w" else ["ZtautauPostVFP"]
     taush = input_tools.read_all_and_scale(args.minnlo_file, taus, ["nominal_gen"])[0]
@@ -111,8 +112,8 @@ with lz4.frame.open(outfile, "wb") as f:
             "meta_data" : output_tools.metaInfoDict(),
         }, f, protocol = pickle.HIGHEST_PROTOCOL)
 
-logging.info("Correction binning is")
+logger.info("Correction binning is")
 for ax in corrh.axes:
-    logging.info(f"Axis {ax.name}: {ax.edges}")
-logging.info(f"Average correction is {corrh.sum()/np.ones_like(corrh).sum()}")
-logging.info(f"Wrote file {outfile}")
+    logger.info(f"Axis {ax.name}: {ax.edges}")
+logger.info(f"Average correction is {corrh.sum()/np.ones_like(corrh).sum()}")
+logger.info(f"Wrote file {outfile}")

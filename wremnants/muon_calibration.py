@@ -112,40 +112,6 @@ def define_corrected_muons(df, cvh_helper, jpsi_helper, corr_type, dataset, bias
         df = df.Alias(muon_var_name("Muon_corrected", var), muon_var_name(mu_name, var))
 
     return df
-    
-def define_trigger_muons_wlike(df, dataset, trackerMuons):
-    # n.b. charge = -99 is a placeholder for invalid track refit/corrections (mostly just from tracks below
-    # the pt threshold of 8 GeV in the nano production)
-    df = df.Define("vetoMuonsPre", "Muon_looseId && abs(Muon_dxybs) < 0.05 && Muon_correctedCharge != -99")
-    df = df.Define("vetoMuons", "vetoMuonsPre && Muon_correctedPt > 10. && abs(Muon_correctedEta) < 2.4")
-
-    if trackerMuons:
-        if dataset.group in ["Top", "Diboson"]:
-            df = df.Define("Muon_category", "Muon_isTracker && Muon_highPurity")
-        else:
-            df = df.Define("Muon_category", "Muon_isTracker && Muon_innerTrackOriginalAlgo != 13 && Muon_innerTrackOriginalAlgo != 14 && Muon_highPurity")
-    else:
-        df = df.Define("Muon_category", "Muon_isGlobal")
-
-    df = df.Filter("Sum(vetoMuons) == 2")
-    df = df.Define("goodMuons", "vetoMuons && Muon_mediumId && Muon_category && Muon_pfRelIso04_all < 0.15")
-    df = df.Filter("Sum(goodMuons) == 2")
-
-    # mu- for even event numbers, mu+ for odd event numbers
-    df = df.Define("TrigMuon_charge", "event % 2 == 0 ? -1 : 1")
-    df = df.Define("NonTrigMuon_charge", "-TrigMuon_charge")
-
-    df = df.Define("trigMuons", "goodMuons && Muon_correctedCharge == TrigMuon_charge")
-    df = df.Define("nonTrigMuons", "goodMuons && Muon_correctedCharge == NonTrigMuon_charge")
-
-    df = df.Define("TrigMuon_pt", "Muon_correctedPt[trigMuons][0]")
-    df = df.Define("TrigMuon_eta", "Muon_correctedEta[trigMuons][0]")
-    df = df.Define("TrigMuon_phi", "Muon_correctedPhi[trigMuons][0]")
-
-    df = df.Define("NonTrigMuon_pt", "Muon_correctedPt[nonTrigMuons][0]")
-    df = df.Define("NonTrigMuon_eta", "Muon_correctedEta[nonTrigMuons][0]")
-    df = df.Define("NonTrigMuon_phi", "Muon_correctedPhi[nonTrigMuons][0]")
-    return df
 
 def get_good_gen_muons_idx_in_GenPart(df, reco_subset = "goodMuons"):
     df = df.Define("goodMuons_idx", f"Muon_genPartIdx[{reco_subset}]")
@@ -223,11 +189,11 @@ def define_gen_smeared_muon_kinematics(df):
     df = df.Define("goodMuons_charge0_gen_smeared", "goodMuons_charge0_gen")
     return df
 
-def define_corrected_reco_muon_kinematics(df, kinematic_vars = ["pt", "eta", "phi", "charge"]):
+def define_corrected_reco_muon_kinematics(df, muons="goodMuons", kinematic_vars = ["pt", "eta", "phi", "charge"], index=0):
     for var in kinematic_vars:
         df = df.Define(
-            f"goodMuons_{var.lower()}0",
-            f"Muon_corrected{var.capitalize()}[goodMuons][0]"
+            f"{muons}_{var.lower()}{index}",
+            f"Muon_corrected{var.capitalize()}[{muons}][{index}]"
         )
     return df
 
