@@ -24,13 +24,14 @@ parser.add_argument("--uncertainty-axes", type=str, nargs="*", default=["mll",],
 parser.add_argument("--finePtBinning", action='store_true', help="Use fine binning for ptll")
 parser.add_argument("--bias-calibration", action='store_true', help="Adjust central value by calibration bias hist")
 parser.add_argument("--smearing", action='store_true', help="Smear pT such that resolution matches data")
-args = parser.parse_args()
-
-logging.basicConfig(level=logging.INFO)
 
 f = next((x for x in parser._actions if x.dest == "pt"), None)
 if f:
     f.default = [34,26.,60.]
+
+args = parser.parse_args()
+
+logging.basicConfig(level=logging.INFO)
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
@@ -96,11 +97,11 @@ pileup_helper = wremnants.make_pileup_helper(era = era)
 
 mc_jpsi_crctn_helper, data_jpsi_crctn_helper = muon_validation.make_jpsi_crctn_helpers(args.muonCorr)
 
-mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = wremnants.make_muon_calibration_helpers()
+mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = muon_calibration.make_muon_calibration_helpers()
 
-bias_helper = muon_calibration.make_muon_bias_helpers(lbl="lbl" in args.muonCorr) if args.bias_calibration else None
+smearing_helper = muon_calibration.make_muon_smearing_helpers() if args.smearing else None
 
-smearing_helper = muon_calibration.make_muon_smearing_helpers(lbl="lbl" in args.muonCorr) if args.smearing else None
+bias_helper = muon_calibration.make_muon_bias_helpers(args.muonCorr, args.smearing) if args.bias_calibration else None
 
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_corr)
 
@@ -131,7 +132,7 @@ def build_graph(df, dataset):
     cvh_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
     jpsi_helper = data_jpsi_crctn_helper if dataset.is_data else mc_jpsi_crctn_helper
 
-    df = muon_calibration.define_corrected_muons(df, cvh_helper, jpsi_helper, args.muonCorr, dataset, bias_helper, smearing_helper)
+    df = muon_calibration.define_corrected_muons(df, cvh_helper, jpsi_helper, args.muonCorr, dataset, smearing_helper, bias_helper)
 
     df = muon_selections.select_veto_muons(df, nMuons=2)
     df = muon_selections.select_good_muons(df, nMuons=2, use_trackerMuons=args.trackerMuons, use_isolation=True)
@@ -156,17 +157,16 @@ def build_graph(df, dataset):
     df = df.Define("yll", "ll_mom4.Rapidity()")
     df = df.Define("absYll", "std::fabs(yll)")
     df = df.Define("csSineCosThetaPhill", "trigMuons_charge0 == -1 ? wrem::csSineCosThetaPhi(TrigMuon_mom4, NonTrigMuon_mom4) : wrem::csSineCosThetaPhi(NonTrigMuon_mom4, TrigMuon_mom4)")
+    
     # "renaming" to write out corresponding axis
-    df = df.Define("charge", "trigMuons_charge0")
-
-    df = df.Define("etaPlus", "nonTrigMuons_eta0")
-    df = df.Define("etaMinus", "trigMuons_eta0")
-    df = df.Define("ptPlus", "nonTrigMuons_pt0")
-    df = df.Define("ptMinus", "trigMuons_pt0")
+    df = df.Alias("charge", "trigMuons_charge0")
+    df = df.Alias("etaPlus", "nonTrigMuons_eta0") # FIXME
+    df = df.Alias("etaMinus", "trigMuons_eta0") # FIXME
+    df = df.Alias("ptPlus", "nonTrigMuons_pt0") # FIXME
+    df = df.Alias("ptMinus", "trigMuons_pt0") # FIXME
 
     df = df.Define("cosThetaStarll", "csSineCosThetaPhill.costheta")
     df = df.Define("phiStarll", "std::atan2(csSineCosThetaPhill.sinphi, csSineCosThetaPhill.cosphi)")
-
 
     if not dataset.is_data:
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
