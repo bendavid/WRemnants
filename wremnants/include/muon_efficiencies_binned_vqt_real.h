@@ -92,14 +92,16 @@ namespace wrem_vqt_real {
               }
             }
             int chargeidx=(1+charge)/2;
-            int bin=iso3d->FindBin(vqt,eta,pt), binlow=iso3d->FindBin(iso3d->GetXaxis()->GetBinCenter(1),eta,pt), binup=iso3d->FindBin(iso3d->GetXaxis()->GetBinCenter(iso3d->GetXaxis()->GetNbins()),eta,pt);
+            double binlowcenter=iso3d->GetXaxis()->GetBinCenter(1), binupcenter=iso3d->GetXaxis()->GetBinCenter(iso3d->GetXaxis()->GetNbins());
+            int bin=iso3d->FindFixBin(vqt,eta,pt), binlow=iso3d->FindFixBin(binlowcenter,eta,pt), binup=iso3d->FindFixBin(binupcenter,eta,pt);
             if ((vqt>=iso3d->GetXaxis()->GetBinLowEdge(1))&&(vqt<=iso3d->GetXaxis()->GetBinUpEdge(iso3d->GetXaxis()->GetNbins()))) sf *= iso3d->GetBinContent(bin);
             else {
               if (vqt<iso3d->GetXaxis()->GetBinLowEdge(1)) sf *= iso3d->GetBinContent(binlow);
               else sf *= iso3d->GetBinContent(binup);
             }
             if (includeTrigger_) {
-              int bincharge=trig3d[chargeidx]->FindBin(vqt,eta,pt), binlowcharge=trig3d[chargeidx]->FindBin(trig3d[chargeidx]->GetXaxis()->GetBinCenter(1),eta,pt), binupcharge=trig3d[chargeidx]->FindBin(trig3d[chargeidx]->GetXaxis()->GetBinCenter(trig3d[chargeidx]->GetXaxis()->GetNbins()),eta,pt);
+              double binlowchargecenter=trig3d[chargeidx]->GetXaxis()->GetBinCenter(1), binupchargecenter=trig3d[chargeidx]->GetXaxis()->GetBinCenter(trig3d[chargeidx]->GetXaxis()->GetNbins());
+              int bincharge=trig3d[chargeidx]->FindFixBin(vqt,eta,pt), binlowcharge=trig3d[chargeidx]->FindFixBin(binlowchargecenter,eta,pt), binupcharge=trig3d[chargeidx]->FindFixBin(binupchargecenter,eta,pt);
               if ((vqt>=trig3d[chargeidx]->GetXaxis()->GetBinLowEdge(1))&&(vqt<=trig3d[chargeidx]->GetXaxis()->GetBinUpEdge(trig3d[chargeidx]->GetXaxis()->GetNbins()))) sf *= trig3d[chargeidx]->GetBinContent(bincharge);
               else {
                 if (vqt<trig3d[chargeidx]->GetXaxis()->GetBinLowEdge(1)) sf *= trig3d[chargeidx]->GetBinContent(binlowcharge);
