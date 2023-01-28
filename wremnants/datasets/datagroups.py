@@ -279,7 +279,7 @@ class datagroups2016(datagroups):
     ):
         self.datasets = {x.name : x for x in datasets2016.getDatasets()}
         super().__init__(infile, combine)
-        self.wlike = "wlike" in self.results["meta_info"]["command"]
+        self.wlike = "wlike" in self.results["meta_info"]["command"] or "dilepton" in self.results["meta_info"]["command"]
         if self.wlike:
             sigOp = None
             fakeOp = None

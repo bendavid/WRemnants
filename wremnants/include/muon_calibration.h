@@ -432,7 +432,7 @@ public:
     }
 
     // for central value of pt
-    float operator() (float pt, float eta, int charge) {
+    float operator() (float pt, float eta) {
         const double bias = get_value(eta, pt);
         return (1.0 + bias) * pt;
     }
@@ -450,11 +450,11 @@ public:
     //inherit constructor
     using base_t::base_t;
 
-    RVec<float> operator() (const RVec<float>& pts, const RVec<float>& etas, RVec<int>& charges) {
+    RVec<float> operator() (const RVec<float>& pts, const RVec<float>& etas) {
         RVec<float> biased_pt(pts.size(), 0.);
-        assert(etas.size() == pts.size() && etas.size() == charges.size());
+        assert(etas.size() == pts.size());
         for (size_t i = 0; i < pts.size(); i++) {
-            biased_pt[i] = BiasCorrectionHelper<T>::operator()(pts[i], etas[i], charges[i]);
+            biased_pt[i] = BiasCorrectionHelper<T>::operator()(pts[i], etas[i]);
         }
 
         return biased_pt;
@@ -466,12 +466,15 @@ class SmearingHelperBase {
 
 public:
     SmearingHelperBase(T&& corrections) :
-        correctionHist_(std::make_shared<const T>(std::move(corrections))) {}
+        smearingHist_(std::make_shared<const T>(std::move(corrections))) {
+            myRndGen = new TRandom3();
+            myRndGen->SetSeed(1); // not 0 because seed 0 has a special meaning
+        }
     
     // helper for bin lookup which implements the compile-time loop over axes
     template<typename... Xs, std::size_t... Idxs>
     const float get_value_impl(std::index_sequence<Idxs...>, const Xs&... xs) {
-      return correctionHist_->at(correctionHist_->template axis<Idxs>().index(xs)...);
+      return smearingHist_->at(smearingHist_->template axis<Idxs>().index(xs)...);
     }
 
     // variadic templated bin lookup
@@ -481,13 +484,18 @@ public:
     }
 
     // for central value of pt
-    float operator() (float pt, float eta, int charge) {
-        const double bias = get_value(eta, pt);
-        return (1.0 + bias) * pt;
+    float operator() (float pt, float eta) {
+        const double sigma = get_value(eta, pt); //this is sigma_p/p
+
+        if(sigma>0.)
+            return 1. / (1./pt + myRndGen->Gaus(0., sigma/pt));
+        else 
+            return pt;
     }
 
 private:
-    std::shared_ptr<const T> correctionHist_;
+    std::shared_ptr<const T> smearingHist_;
+    TRandom3 *myRndGen; 
 };
 
 template <typename T>
@@ -499,11 +507,11 @@ public:
     //inherit constructor
     using base_t::base_t;
 
-    RVec<float> operator() (const RVec<float>& pts, const RVec<float>& etas, RVec<int>& charges) {
+    RVec<float> operator() (const RVec<float>& pts, const RVec<float>& etas) {
         RVec<float> biased_pt(pts.size(), 0.);
-        assert(etas.size() == pts.size() && etas.size() == charges.size());
+        assert(etas.size() == pts.size());
         for (size_t i = 0; i < pts.size(); i++) {
-            biased_pt[i] = SmearingHelperBase<T>::operator()(pts[i], etas[i], charges[i]);
+            biased_pt[i] = SmearingHelperBase<T>::operator()(pts[i], etas[i]);
         }
 
         return biased_pt;

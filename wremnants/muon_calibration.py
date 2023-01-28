@@ -31,9 +31,19 @@ def make_muon_calibration_helpers(mc_filename=data_dir+"/calibration/correctionR
 
     return mc_helper, data_helper, uncertainty_helper
 
-def make_muon_bias_helpers(lbl=False):
+def make_muon_bias_helpers(corr_type, smearing=True):
     # this helper adds a correction for the bias from nonclosure to the muon pT
-    h2d = uproot.open(f"wremnants/data/closure/closureZ{'_LBL' if lbl else ''}.root:closure").to_hist()
+    if (smearing and corr_type !="massfit") or corr_type not in ["massfit", "massfit_lbl"]:
+        print("The bias correction is not available for this configuration, procees without bias correction helper!")
+        return None
+    elif smearing:
+        filename = "closureZ_smeared"
+    elif corr_type == "massfit":
+        filename = "closureZ"
+    elif corr_type == "massfit_lbl":
+        filename = "closureZ_LBL"
+
+    h2d = uproot.open(f"wremnants/data/closure/{filename}.root:closure").to_hist()
     # Drop the uncertainty because the Weight storage type doesn't play nice with ROOT
     h2d_nounc = hist.Hist(*h2d.axes, data=h2d.values(flow=True))
     # Set overflow to closest values
@@ -47,9 +57,9 @@ def make_muon_bias_helpers(lbl=False):
 
     return helper
 
-def make_muon_smearing_helpers(lbl=False):
+def make_muon_smearing_helpers():
     # this helper smears muon pT to match the resolution in data
-    h2d = uproot.open(f"wremnants/data/smearing/XXX{'_LBL' if lbl else ''}.root:XXX").to_hist()
+    h2d = uproot.open(f"wremnants/data/calibration/smearing.root:smearing").to_hist()
     # Drop the uncertainty because the Weight storage type doesn't play nice with ROOT
     h2d_nounc = hist.Hist(*h2d.axes, data=h2d.values(flow=True))
     # Set overflow to closest values
@@ -96,7 +106,7 @@ def define_lblcorr_muons(df, cvh_helper, dataset):
     return df
 
 
-def define_corrected_muons(df, cvh_helper, jpsi_helper, corr_type, dataset, bias_helper=None, smearing_helper=None):
+def define_corrected_muons(df, cvh_helper, jpsi_helper, corr_type, dataset, smearing_helper=None, bias_helper=None):
     if not (dataset.is_data or dataset.name in common.vprocs):
         corr_type = "none" 
 
@@ -115,11 +125,11 @@ def define_corrected_muons(df, cvh_helper, jpsi_helper, corr_type, dataset, bias
         muon_pt = "Muon_jpsiCorrected"
 
     if smearing_helper and not dataset.is_data:
-        df = df.Define("Muon_smearedPt", smearing_helper, [muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta"), muon_var_name(muon, "charge")])
+        df = df.Define("Muon_smearedPt", smearing_helper, [muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta")])
         muon_pt = "Muon_smeared"
 
     if bias_helper and not dataset.is_data:
-        df = df.Define("Muon_biasedPt", bias_helper, [muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta"), muon_var_name(muon, "charge")])
+        df = df.Define("Muon_biasedPt", bias_helper, [muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta")])
         muon_pt = "Muon_biased"
 
     for var in ["pt", "eta", "phi", "charge"]:
