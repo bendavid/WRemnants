@@ -27,7 +27,7 @@ parser.add_argument("--smearing", action='store_true', help="Smear pT such that 
 
 f = next((x for x in parser._actions if x.dest == "pt"), None)
 if f:
-    f.default = [34,26.,60.]
+    f.default = [44,26.,70.]
 
 args = parser.parse_args()
 
@@ -139,31 +139,24 @@ def build_graph(df, dataset):
 
     df = muon_selections.define_trigger_muons(df)
 
+    df = muon_selections.select_z_candidate(df, args.pt[1], args.pt[2])
+
     df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "trigMuons")
     df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "nonTrigMuons")
 
-    df = muon_selections.select_triggermatched_muon(df, dataset, "trigMuons_eta0", "trigMuons_phi0")
-
-    df = df.Filter("trigMuons_pt0 > 26.") # should there also be an upper cut?
-
-    df = df.Define("TrigMuon_mom4", "ROOT::Math::PtEtaPhiMVector(trigMuons_pt0, trigMuons_eta0, trigMuons_phi0, wrem::muon_mass)")
-    df = df.Define("NonTrigMuon_mom4", "ROOT::Math::PtEtaPhiMVector(nonTrigMuons_pt0, nonTrigMuons_eta0, nonTrigMuons_phi0, wrem::muon_mass)")
-    df = df.Define("ll_mom4", "ROOT::Math::PxPyPzEVector(TrigMuon_mom4)+ROOT::Math::PxPyPzEVector(NonTrigMuon_mom4)")
-    df = df.Define("mll", "ll_mom4.mass()")
-
-    df = df.Filter("mll >= 60. && mll < 120.")
+    df = muon_selections.apply_triggermatching_muon(df, dataset, "trigMuons_eta0", "trigMuons_phi0")
 
     df = df.Define("ptll", "ll_mom4.pt()")
     df = df.Define("yll", "ll_mom4.Rapidity()")
     df = df.Define("absYll", "std::fabs(yll)")
-    df = df.Define("csSineCosThetaPhill", "trigMuons_charge0 == -1 ? wrem::csSineCosThetaPhi(TrigMuon_mom4, NonTrigMuon_mom4) : wrem::csSineCosThetaPhi(NonTrigMuon_mom4, TrigMuon_mom4)")
+    df = df.Define("csSineCosThetaPhill", "trigMuons_charge0 == -1 ? wrem::csSineCosThetaPhi(trigMuons_mom4, nonTrigMuons_mom4) : wrem::csSineCosThetaPhi(nonTrigMuons_mom4, trigMuons_mom4)")
     
     # "renaming" to write out corresponding axis
     df = df.Alias("charge", "trigMuons_charge0")
-    df = df.Alias("etaPlus", "nonTrigMuons_eta0") # FIXME
-    df = df.Alias("etaMinus", "trigMuons_eta0") # FIXME
-    df = df.Alias("ptPlus", "nonTrigMuons_pt0") # FIXME
-    df = df.Alias("ptMinus", "trigMuons_pt0") # FIXME
+    df = df.Define("etaPlus", "trigMuons_charge0 == -1 ? nonTrigMuons_eta0 : trigMuons_eta0") 
+    df = df.Define("etaMinus", "trigMuons_charge0 == 1 ? nonTrigMuons_eta0 : trigMuons_eta0") 
+    df = df.Define("ptPlus", "trigMuons_charge0 == -1 ? nonTrigMuons_pt0 : trigMuons_pt0") 
+    df = df.Define("ptMinus", "trigMuons_charge0 == 1 ? nonTrigMuons_pt0 : trigMuons_pt0") 
 
     df = df.Define("cosThetaStarll", "csSineCosThetaPhill.costheta")
     df = df.Define("phiStarll", "std::atan2(csSineCosThetaPhill.sinphi, csSineCosThetaPhill.cosphi)")
