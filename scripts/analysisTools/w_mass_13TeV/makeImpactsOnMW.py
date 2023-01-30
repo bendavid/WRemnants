@@ -266,7 +266,7 @@ if __name__ == "__main__":
     hval.Draw("AXIS X+ SAME")
         
     postfix = args.postfix
-    if not postfix.startswith("_"):
+    if len(postfix) and  not postfix.startswith("_"):
         postfix = "_" + postfix
     smallBoson = "z" if args.isWlike else "w"
     for ext in ["pdf", "png"]:
