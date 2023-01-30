@@ -413,10 +413,10 @@ private:
     }
   
 template <typename T>
-class BiasCorrectionHelper {
+class CorrectionHelperBase {
 
 public:
-    BiasCorrectionHelper(T&& corrections) :
+    CorrectionHelperBase(T&& corrections) :
         correctionHist_(std::make_shared<const T>(std::move(corrections))) {}
     
     // helper for bin lookup which implements the compile-time loop over axes
@@ -431,61 +431,54 @@ public:
         return get_value_impl(std::index_sequence_for<Xs...>{}, xs...);
     }
 
-    // for central value of pt
-    float operator() (float pt, float eta) {
-        const double bias = get_value(eta, pt);
-        return (1.0 + bias) * pt;
+    // for central value of correction
+    virtual float get_correction(float pt, float eta) {return 0;};
+
+    RVec<float> operator() (const RVec<float>& pts, const RVec<float>& etas) {
+        RVec<float> corrected_pt(pts.size(), 0.);
+        assert(etas.size() == pts.size());
+        for (size_t i = 0; i < pts.size(); i++) {
+            corrected_pt[i] = get_correction(pts[i], etas[i]);
+        }
+        return corrected_pt;
     }
 
 private:
     std::shared_ptr<const T> correctionHist_;
 };
 
-template <typename T>
-class BiasCorrectionsHelper : public BiasCorrectionHelper<T> {
 
-using base_t = BiasCorrectionHelper<T>;
+template <typename T>
+class BiasCalibrationHelper : public CorrectionHelperBase<T> {
+
+using base_t = CorrectionHelperBase<T>;
 
 public:
     //inherit constructor
     using base_t::base_t;
 
-    RVec<float> operator() (const RVec<float>& pts, const RVec<float>& etas) {
-        RVec<float> biased_pt(pts.size(), 0.);
-        assert(etas.size() == pts.size());
-        for (size_t i = 0; i < pts.size(); i++) {
-            biased_pt[i] = BiasCorrectionHelper<T>::operator()(pts[i], etas[i]);
-        }
-
-        return biased_pt;
+    float get_correction(float pt, float eta) override {
+        const double bias = base_t::get_value(eta, pt);
+        return (1.0 + bias) * pt;
     }
+
 };
 
+
 template <typename T>
-class SmearingHelperBase {
+class SmearingHelper : public CorrectionHelperBase<T> {
+
+using base_t = CorrectionHelperBase<T>;
 
 public:
-    SmearingHelperBase(T&& corrections) :
-        smearingHist_(std::make_shared<const T>(std::move(corrections))) {
-            myRndGen = new TRandom3();
-            myRndGen->SetSeed(1); // not 0 because seed 0 has a special meaning
-        }
-    
-    // helper for bin lookup which implements the compile-time loop over axes
-    template<typename... Xs, std::size_t... Idxs>
-    const float get_value_impl(std::index_sequence<Idxs...>, const Xs&... xs) {
-      return smearingHist_->at(smearingHist_->template axis<Idxs>().index(xs)...);
+    //override constructor
+    SmearingHelper(T&& corrections) : base_t(std::forward<T>(corrections)) {
+        myRndGen = new TRandom3();
+        myRndGen->SetSeed(1); // not 0 because seed 0 has a special meaning
     }
 
-    // variadic templated bin lookup
-    template<typename... Xs>
-    const float get_value(const Xs&... xs) {
-        return get_value_impl(std::index_sequence_for<Xs...>{}, xs...);
-    }
-
-    // for central value of pt
-    float operator() (float pt, float eta) {
-        const double sigma = get_value(eta, pt); //this is sigma_p/p
+    float get_correction(float pt, float eta) override {
+        const double sigma = base_t::get_value(eta, pt); //this is sigma_p/p
 
         if(sigma>0.)
             return 1. / (1./pt + myRndGen->Gaus(0., sigma/pt));
@@ -494,28 +487,7 @@ public:
     }
 
 private:
-    std::shared_ptr<const T> smearingHist_;
     TRandom3 *myRndGen; 
-};
-
-template <typename T>
-class SmearingHelper : public SmearingHelperBase<T> {
-
-using base_t = SmearingHelperBase<T>;
-
-public:
-    //inherit constructor
-    using base_t::base_t;
-
-    RVec<float> operator() (const RVec<float>& pts, const RVec<float>& etas) {
-        RVec<float> biased_pt(pts.size(), 0.);
-        assert(etas.size() == pts.size());
-        for (size_t i = 0; i < pts.size(); i++) {
-            biased_pt[i] = SmearingHelperBase<T>::operator()(pts[i], etas[i]);
-        }
-
-        return biased_pt;
-    }
 };
 
 }
