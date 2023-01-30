@@ -69,7 +69,8 @@ def make_muon_smearing_helpers():
     h2d_nounc[:,hist.overflow][...] = h2d_nounc[:,-1].view(flow=True)
 
     h2d_cpp = narf.hist_to_pyroot_boost(h2d_nounc, tensor_rank=0)
-    helper = ROOT.wrem.SmearingHelper[type(h2d_cpp).__cpp_name__](ROOT.std.move(h2d_cpp))
+    # FIXME not sure if ROOT.GetThreadPoolSize() always give number of threads, probably maximum number, maybe there is a better way
+    helper = ROOT.wrem.SmearingHelper[type(h2d_cpp).__cpp_name__](ROOT.std.move(h2d_cpp), ROOT.GetThreadPoolSize())
 
     return helper
 
@@ -125,7 +126,7 @@ def define_corrected_muons(df, cvh_helper, jpsi_helper, corr_type, dataset, smea
         muon_pt = "Muon_jpsiCorrected"
 
     if smearing_helper and not dataset.is_data:
-        df = df.Define("Muon_smearedPt", smearing_helper, [muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta")])
+        df = df.Define("Muon_smearedPt", smearing_helper, ["rdfslot_", muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta")])
         muon_pt = "Muon_smeared"
 
     if bias_helper and not dataset.is_data:
