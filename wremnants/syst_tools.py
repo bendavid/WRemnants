@@ -198,11 +198,12 @@ def add_qcdScaleByHelicityUnc_hist(results, df, helper, axes, cols, base_name="n
     qcdScaleByHelicityUnc = df.HistoBoost(name, axes, [*cols,"helicityWeight_tensor"], tensor_axes=helper.tensor_axes)
     results.append(qcdScaleByHelicityUnc)
 
-def add_QCDbkg_jetPt45_hist(results, df, nominal_axes, nominal_cols):
+def add_QCDbkg_jetPt45_hist(results, df, nominal_axes, nominal_cols, base_name="nominal"):
     # branching the rdataframe to add special filter, no need to return dQCDbkGVar
+    name = datagroups2016.histName(base_name, syst="qcdJetPt45")
     dQCDbkGVar = df.Define("goodCleanJetsPt45", "goodCleanJets && Jet_pt > 45")
     dQCDbkGVar = dQCDbkGVar.Filter("passMT || Sum(goodCleanJetsPt45)>=1")
-    qcdJetPt45 = dQCDbkGVar.HistoBoost("qcdJetPt45", nominal_axes, nominal_cols)
+    qcdJetPt45 = dQCDbkGVar.HistoBoost(name, nominal_axes, nominal_cols)
     results.append(qcdJetPt45)
                                         
 def add_muon_efficiency_unc_hists(results, df, helper_stat, helper_syst, axes, cols, base_name="nominal", is_w_like=False):
