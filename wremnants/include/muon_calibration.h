@@ -431,18 +431,6 @@ public:
         return get_value_impl(std::index_sequence_for<Xs...>{}, xs...);
     }
 
-    // for central value of correction
-    virtual float get_correction(float pt, float eta) {return 0;};
-
-    RVec<float> operator() (const RVec<float>& pts, const RVec<float>& etas) {
-        RVec<float> corrected_pt(pts.size(), 0.);
-        assert(etas.size() == pts.size());
-        for (size_t i = 0; i < pts.size(); i++) {
-            corrected_pt[i] = get_correction(pts[i], etas[i]);
-        }
-        return corrected_pt;
-    }
-
 private:
     std::shared_ptr<const T> correctionHist_;
 };
@@ -457,9 +445,18 @@ public:
     //inherit constructor
     using base_t::base_t;
 
-    float get_correction(float pt, float eta) override {
+    float get_correction(float pt, float eta) {
         const double bias = base_t::get_value(eta, pt);
         return (1.0 + bias) * pt;
+    }
+
+    RVec<float> operator() (const RVec<float>& pts, const RVec<float>& etas) {
+        RVec<float> corrected_pt(pts.size(), 0.);
+        assert(etas.size() == pts.size());
+        for (size_t i = 0; i < pts.size(); i++) {
+            corrected_pt[i] = get_correction(pts[i], etas[i]);
+        }
+        return corrected_pt;
     }
 
 };
@@ -472,22 +469,37 @@ using base_t = CorrectionHelperBase<T>;
 
 public:
     //override constructor
-    SmearingHelper(T&& corrections) : base_t(std::forward<T>(corrections)) {
-        myRndGen = new TRandom3();
-        myRndGen->SetSeed(1); // not 0 because seed 0 has a special meaning
+    SmearingHelper(T&& corrections, unsigned int nSlots) : 
+        base_t(std::forward<T>(corrections)),
+        myRndGens(nSlots)
+    {
+        int seed = 1; // not 0 because seed 0 has a special meaning
+        for (auto &&gen : myRndGens)
+        {
+            gen.SetSeed(seed++);
+        }
     }
 
-    float get_correction(float pt, float eta) override {
+    float get_correction(unsigned int slot, float pt, float eta) {
         const double sigma = base_t::get_value(eta, pt); //this is sigma_p/p
 
         if(sigma>0.)
-            return 1. / (1./pt + myRndGen->Gaus(0., sigma/pt));
+            return 1. / (1./pt + myRndGens[slot]->Gaus(0., sigma/pt));
         else 
             return pt;
     }
 
+    RVec<float> operator() (unsigned int slot, const RVec<float>& pts, const RVec<float>& etas) {
+        RVec<float> corrected_pt(pts.size(), 0.);
+        assert(etas.size() == pts.size());
+        for (size_t i = 0; i < pts.size(); i++) {
+            corrected_pt[i] = get_correction(slot, pts[i], etas[i]);
+        }
+        return corrected_pt;
+    }
+
 private:
-    TRandom3 *myRndGen; 
+    std::vector<TRandom3> myRndGens; 
 };
 
 }
