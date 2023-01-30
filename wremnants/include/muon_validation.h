@@ -100,8 +100,10 @@ public:
         double genQop, double genPhi, int genCharge, double genEta, double genPt,
         double recoQop, double recoPhi, int recoCharge, float recoEta, float recoPt,
         const RVec<float> &cov, // for sigma on the Gaussian
-        double nominal_weight, bool abQop = true, bool fullParam = false
+        double nominal_weight//, bool abQop = true, bool fullParam = false
     ) {
+        bool abQop = true;
+        bool fullParam = false;
         Eigen::Vector3d parms(
             (abQop? recoQop : calculateQop(recoPt, recoEta, recoCharge)),
             (fullParam? calculateLam(recoEta) : 0),
