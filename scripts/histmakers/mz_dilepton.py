@@ -10,7 +10,7 @@ import lz4.frame
 import logging
 import math
 import time
-import pdb
+import os
 
 parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
 parser.add_argument("--muonCorr", type=str, default="massfit", choices=["lbl", "trackfit_only_mctruth", "none", "massfit", "massfit_lbl", "trackfit_only"], 
@@ -27,11 +27,18 @@ parser.add_argument("--smearing", action='store_true', help="Smear pT such that 
 
 f = next((x for x in parser._actions if x.dest == "pt"), None)
 if f:
-    f.default = [44,26.,70.]
+    newPtDefault = [44,26.,70.]
+    logging.warning("")
+    logging.warning(f" >>> Modifying default of {f.dest} from {f.default} to {newPtDefault}")
+    logging.warning("")
+    f.default = newPtDefault
 
 args = parser.parse_args()
 
-logging.basicConfig(level=logging.INFO)
+if args.noColorLogger:
+    logger = common.setup_base_logger(os.path.basename(__file__), args.debug)
+else:
+    logger = common.setup_color_logger(os.path.basename(__file__), args.verbose)
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
@@ -56,7 +63,7 @@ axes = {
 
 for a in args.uncertainty_axes:
     if a not in axes.keys():
-        logging.error(f" {a} is not a known axes! Supported axes choices are {list(axes.keys())}")
+        logger.error(f" {a} is not a known axes! Supported axes choices are {list(axes.keys())}")
 
 nominal_cols = args.uncertainty_axes
 
@@ -79,19 +86,19 @@ axis_ptVgen = hist.axis.Variable(
 
 # extra axes which can be used to label tensor_axes
 if args.binnedScaleFactors:
-    logging.info("Using binned scale factors and uncertainties")
+    logger.info("Using binned scale factors and uncertainties")
     # add usePseudoSmoothing=True for tests with Asimov
     muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_binned(filename = args.sfFile,
                                                                                                                                      era = era,
                                                                                                                                      max_pt = args.pt[2],
                                                                                                                                      is_w_like = True) 
 else:
-    logging.info("Using smoothed scale factors and uncertainties")
+    logger.info("Using smoothed scale factors and uncertainties")
     muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile,
                                                                                                                                      era = era,
                                                                                                                                      max_pt = args.pt[2],
                                                                                                                                      is_w_like = True)
-logging.info(f"SF file: {args.sfFile}")
+logger.info(f"SF file: {args.sfFile}")
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
 
@@ -112,7 +119,7 @@ if not args.no_recoil:
 
 
 def build_graph(df, dataset):
-    logging.info(f"build graph for dataset: {dataset.name}")
+    logger.info(f"build graph for dataset: {dataset.name}")
     results = []
     isW = dataset.name in common.wprocs
     isZ = dataset.name in common.zprocs
