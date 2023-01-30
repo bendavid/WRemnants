@@ -100,15 +100,21 @@ def make_muon_efficiency_helpers_binned_vqt_real(filename = data_dir + "/testMuo
     sf_tracking_pyroot = narf.hist_to_pyroot_boost(effSyst_manager["sf_tracking"]["boostHist"])
     sf_other_pyroot = narf.hist_to_pyroot_boost(effSyst_manager["sf_other"]["boostHist"])
 
+    filenames = ROOT.std.vector('string')() #order is isolation, triggerminus, triggerplus
+    histonames = ROOT.std.vector('string')()
     isolation3dfilename = f"{data_dir}/testMuonSF/isolation3DSFZQT.root"
     isolation3dhistoname = "SF3D_nominal_isolation"
-    ROOT.initializeIsolation3DHistograms(isolation3dfilename,isolation3dhistoname)
+    filenames.push_back(isolation3dfilename)
+    histonames.push_back(isolation3dhistoname)
     if includeTrigger:
-        triggerplus3dfilename = f"{data_dir}/testMuonSF/triggerplus3DSFZQT.root"
-        triggerplus3dhistoname = "SF3D_nominal_trigger_plus"
         triggerminus3dfilename = f"{data_dir}/testMuonSF/triggerminus3DSFZQT.root"
         triggerminus3dhistoname = "SF3D_nominal_trigger_minus"
-        ROOT.initializeTrigger3DHistograms(triggerplus3dfilename,triggerplus3dhistoname,triggerminus3dfilename,triggerminus3dhistoname)
+        triggerplus3dfilename = f"{data_dir}/testMuonSF/triggerplus3DSFZQT.root"
+        triggerplus3dhistoname = "SF3D_nominal_trigger_plus"
+        filenames.push_back(triggerminus3dfilename)
+        histonames.push_back(triggerminus3dhistoname)
+        filenames.push_back(triggerplus3dfilename)
+        histonames.push_back(triggerplus3dhistoname)
     
     helper = ROOT.wrem_vqt_real.muon_efficiency_binned_helper[str(is_w_like).lower(),
                                                               type(sf_other_pyroot),
@@ -117,6 +123,8 @@ def make_muon_efficiency_helpers_binned_vqt_real(filename = data_dir + "/testMuo
                                                                   ROOT.std.move(sf_other_pyroot),
                                                                   ROOT.std.move(sf_tracking_pyroot),
                                                                   ROOT.std.move(sf_reco_pyroot),
+                                                                  filenames,
+                                                                  histonames,
                                                                   includeTrigger
                                                               )
     helper2 = ROOT.wrem.muon_efficiency_binned_helper[str(is_w_like).lower(),
