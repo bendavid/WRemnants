@@ -55,7 +55,10 @@ def make_jpsi_crctn_unc_helper(filepath, n_scale_params = 3, n_tot_params = 6, n
     var_mat = np.sqrt(w) * v
     axis_eta = hist.axis.Regular(n_eta_bins, 0, 1, name = 'eta')
     axis_scale_params = hist.axis.Regular(n_scale_params, 0, 1, name = 'scale_params')
-    axis_scale_params_unc = hist.axis.Regular(n_eta_bins * n_scale_params, 0, 1, name = 'unc')
+    axis_scale_params_unc = hist.axis.Regular(
+        n_eta_bins * n_scale_params, 0, 1,
+        underflow = False, overflow = False,  name = 'unc'
+    )
     hist_scale_params_unc = hist.Hist(axis_eta, axis_scale_params, axis_scale_params_unc)
     for i in range(n_eta_bins):
         lb, ub = i * n_scale_params, (i + 1) * n_scale_params

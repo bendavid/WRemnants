@@ -235,7 +235,7 @@ def muon_scale_variation_from_manual_shift(
 ):
     for proc in procs:
         proc_hists = resultdict[proc]['output']
-        manual_shift_hists = [proc_hists['muonScaleVariationDnTenthmil'], proc_hists['muonScaleVariationUpTenthmil']]
+        manual_shift_hists = [proc_hists['nominal_muonScaleVariationDnTenthmil'], proc_hists['nominal_muonScaleVariationUpTenthmil']]
         proc_hists['muonScaleSyst_manualShift'] = hh.combineUpDownVarHists(*manual_shift_hists)
 
 def make_alt_reco_and_gen_hists(df, results, nominal_axes):
