@@ -53,7 +53,7 @@ def make_muon_bias_helpers(corr_type, smearing=True):
     h2d_nounc[:,hist.overflow][...] = h2d_nounc[:,-1].view(flow=True)
 
     h2d_cpp = narf.hist_to_pyroot_boost(h2d_nounc, tensor_rank=0)
-    helper = ROOT.wrem.BiasCorrectionsHelper[type(h2d_cpp).__cpp_name__](ROOT.std.move(h2d_cpp))
+    helper = ROOT.wrem.BiasCalibrationHelper[type(h2d_cpp).__cpp_name__](ROOT.std.move(h2d_cpp))
 
     return helper
 
