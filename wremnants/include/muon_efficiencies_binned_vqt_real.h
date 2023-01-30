@@ -8,36 +8,29 @@
 #include <array>
 #include <string>
 
-TH3D* iso3d;
-std::vector<TH3D*> trig3d;
-
-void initializeIsolation3DHistograms(const std::string& _filename="allEfficiencies_2D.root", const std::string& _histoname="SF3D_nominal_isolation") {
-  TFile* file=new TFile(_filename.c_str());
-  iso3d=(TH3D*)file->Get(_histoname.c_str())->Clone();
-  iso3d->SetName("iso3d");
-}
-
-void initializeTrigger3DHistograms(const std::string& _filenameplus="allEfficiencies_2D.root", const std::string& _histonameplus="SF3D_nominal_isolation", const std::string& _filenameminus="allEfficiencies_2D.root", const std::string& _histonameminus="SF3D_nominal_isolation") {
-  TFile* file2=new TFile(_filenameminus.c_str());
-  TH3D *minus=(TH3D*)file2->Get(_histonameminus.c_str())->Clone();
-  minus->SetName("triggerminus3d");
-  trig3d.push_back(minus);
-  TFile* file3=new TFile(_filenameplus.c_str());
-  TH3D *plus=(TH3D*)file3->Get(_histonameplus.c_str())->Clone();
-  plus->SetName("triggerplus3d");
-  trig3d.push_back(plus);
-}
-
 namespace wrem_vqt_real {
 
     template<typename HIST_IDIPTRIGISO, typename HIST_TRACKING, typename HIST_RECO>
     class muon_efficiency_binned_helper_base {
     public:
 
-        muon_efficiency_binned_helper_base(HIST_IDIPTRIGISO &&sf_idip_trig_iso, HIST_TRACKING &&sf_tracking, HIST_RECO &&sf_reco, bool includeTrigger) :
+        muon_efficiency_binned_helper_base(HIST_IDIPTRIGISO &&sf_idip_trig_iso, HIST_TRACKING &&sf_tracking, HIST_RECO &&sf_reco, std::vector<std::string> filenames, std::vector<std::string> histonames, bool includeTrigger) :
             sf_idip_trig_iso_(std::make_shared<const HIST_IDIPTRIGISO>(std::move(sf_idip_trig_iso))),
             sf_tracking_(std::make_shared<const HIST_TRACKING>(std::move(sf_tracking))),
-            sf_reco_(std::make_shared<const HIST_RECO>(std::move(sf_reco))) {includeTrigger_=includeTrigger;}
+            sf_reco_(std::make_shared<const HIST_RECO>(std::move(sf_reco))) {
+              includeTrigger_=includeTrigger;
+              TFile *fileiso=new TFile(filenames[0].c_str());
+              iso3d_=(TH3D*)fileiso->Get(histonames[0].c_str())->Clone();
+              iso3d_->SetName("iso3d");
+              if (includeTrigger_) {
+                TFile* filetriggerminus=new TFile(filenames[1].c_str());
+                trig3dminus_=(TH3D*)filetriggerminus->Get(histonames[1].c_str())->Clone();
+                trig3dminus_->SetName("triggerminus3d");
+                TFile* filetriggerplus=new TFile(filenames[2].c_str());
+                trig3dplus_=(TH3D*)filetriggerplus->Get(histonames[2].c_str())->Clone();
+                trig3dplus_->SetName("triggerplus3d");
+              }
+            }
 
         std::array<double,5> scale_factor_array(int pt_idx, int pt_idx_reco, int sapt_idx,
                                                 int eta_idx, int saeta_idx,
@@ -91,21 +84,21 @@ namespace wrem_vqt_real {
                   sf *= allSF[i];
               }
             }
-            int chargeidx=(1+charge)/2;
-            double binlowcenter=iso3d->GetXaxis()->GetBinCenter(1), binupcenter=iso3d->GetXaxis()->GetBinCenter(iso3d->GetXaxis()->GetNbins());
-            int bin=iso3d->FindFixBin(vqt,eta,pt), binlow=iso3d->FindFixBin(binlowcenter,eta,pt), binup=iso3d->FindFixBin(binupcenter,eta,pt);
-            if ((vqt>=iso3d->GetXaxis()->GetBinLowEdge(1))&&(vqt<=iso3d->GetXaxis()->GetBinUpEdge(iso3d->GetXaxis()->GetNbins()))) sf *= iso3d->GetBinContent(bin);
+            double binlowcenter=iso3d_->GetXaxis()->GetBinCenter(1), binupcenter=iso3d_->GetXaxis()->GetBinCenter(iso3d_->GetXaxis()->GetNbins());
+            int bin=iso3d_->FindFixBin(vqt,eta,pt), binlow=iso3d_->FindFixBin(binlowcenter,eta,pt), binup=iso3d_->FindFixBin(binupcenter,eta,pt);
+            if ((vqt>=iso3d_->GetXaxis()->GetBinLowEdge(1))&&(vqt<=iso3d_->GetXaxis()->GetBinUpEdge(iso3d_->GetXaxis()->GetNbins()))) sf *= iso3d_->GetBinContent(bin);
             else {
-              if (vqt<iso3d->GetXaxis()->GetBinLowEdge(1)) sf *= iso3d->GetBinContent(binlow);
-              else sf *= iso3d->GetBinContent(binup);
+              if (vqt<iso3d_->GetXaxis()->GetBinLowEdge(1)) sf *= iso3d_->GetBinContent(binlow);
+              else sf *= iso3d_->GetBinContent(binup);
             }
             if (includeTrigger_) {
-              double binlowchargecenter=trig3d[chargeidx]->GetXaxis()->GetBinCenter(1), binupchargecenter=trig3d[chargeidx]->GetXaxis()->GetBinCenter(trig3d[chargeidx]->GetXaxis()->GetNbins());
-              int bincharge=trig3d[chargeidx]->FindFixBin(vqt,eta,pt), binlowcharge=trig3d[chargeidx]->FindFixBin(binlowchargecenter,eta,pt), binupcharge=trig3d[chargeidx]->FindFixBin(binupchargecenter,eta,pt);
-              if ((vqt>=trig3d[chargeidx]->GetXaxis()->GetBinLowEdge(1))&&(vqt<=trig3d[chargeidx]->GetXaxis()->GetBinUpEdge(trig3d[chargeidx]->GetXaxis()->GetNbins()))) sf *= trig3d[chargeidx]->GetBinContent(bincharge);
+              TH3D* chargehisto = charge > 0 ? trig3dplus_ : trig3dminus_;
+              double binlowchargecenter=chargehisto->GetXaxis()->GetBinCenter(1), binupchargecenter=chargehisto->GetXaxis()->GetBinCenter(chargehisto->GetXaxis()->GetNbins());
+              int bincharge=chargehisto->FindFixBin(vqt,eta,pt), binlowcharge=chargehisto->FindFixBin(binlowchargecenter,eta,pt), binupcharge=chargehisto->FindFixBin(binupchargecenter,eta,pt);
+              if ((vqt>=chargehisto->GetXaxis()->GetBinLowEdge(1))&&(vqt<=chargehisto->GetXaxis()->GetBinUpEdge(chargehisto->GetXaxis()->GetNbins()))) sf *= chargehisto->GetBinContent(bincharge);
               else {
-                if (vqt<trig3d[chargeidx]->GetXaxis()->GetBinLowEdge(1)) sf *= trig3d[chargeidx]->GetBinContent(binlowcharge);
-                else sf *= trig3d[chargeidx]->GetBinContent(binupcharge);
+                if (vqt<chargehisto->GetXaxis()->GetBinLowEdge(1)) sf *= chargehisto->GetBinContent(binlowcharge);
+                else sf *= chargehisto->GetBinContent(binupcharge);
               }
             }
             //std::cout << "Scale factor product " << sf << std::endl;
@@ -163,6 +156,9 @@ namespace wrem_vqt_real {
         int idx_nom_ = sf_idip_trig_iso_->template axis<4>().index(0);
         int idx_alt_ = sf_idip_trig_iso_->template axis<4>().index(1);
 
+        TH3D* iso3d_;
+        TH3D* trig3dplus_;
+        TH3D* trig3dminus_;
         bool includeTrigger_;
     };
 
