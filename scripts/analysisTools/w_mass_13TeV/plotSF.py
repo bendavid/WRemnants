@@ -5,7 +5,7 @@
 # actually, we verified that the correlation is preserved also for the SF, since isoSF and antiisoSF are found to be generally anticorrelated by more than 95% (even 99% for |eta| < 2.0) for pt < 60 GeV
 # no need to do the same also for iso with no trigger, because this splitting is relevant when there are fakes, and for the 2 lepton phase space that background is negligible
 
-# python w-mass-13TeV/plotSF.py file.root output/folder/ -e 'GtoH' -n 'trigger,idip,iso,antiiso,isonotrig,antiisonotrig' [--make-prod] [--skip-eff]
+# python w_mass_13TeV/plotSF.py file.root output/folder/ -e 'GtoH' -n 'trigger,idip,iso,antiiso,isonotrig,antiisonotrig' -wpc reco tracking idip trigger [--make-prod] [--skip-eff]
 
 import re
 import os, os.path
@@ -38,7 +38,7 @@ if __name__ == "__main__":
     parser.add_argument("outdir",   type=str, nargs=1, help="Output folder (subfolder 'allSF/' created automatically inside)")
     parser.add_argument("-e", "--era",    type=str, default="BtoF,GtoH,B,C,D,E,F,G,H", help="Comma separated list of eras for SF in histogram name; default: %(default)s")
     parser.add_argument("-n", "--sfnames", type=str, default="trigger,idip,iso,antiiso,isonotrig,antiisonotrig,tracking,reco", help="Comma separated list of SF names inside root file, which will be plotted; default: %(default)s")
-    parser.add_argument('-wpc','--workinPointsByCharge', default=["trigger"], nargs='*', type=str, choices=list(workingPoints_),
+    parser.add_argument('-wpc','--workinPointsByCharge', default=["trigger",",idip","tracking","reco"], nargs='*', type=str, choices=list(workingPoints_),
                         help='Working points made by charge')
     parser.add_argument("--sf-version", dest="sfversions", type=str, default="nominal,dataAltSig", help="SF versions to plot and to use for the products, usually one would use just nominal and dataAltSig to define the systematic variation; default: %(default)s")
     parser.add_argument("--eff-version", dest="effversions", type=str, default="nominal,altSig", help="Efficiency versions to plot (nominal actually has no keyword); default: %(default)s")
@@ -264,13 +264,13 @@ if __name__ == "__main__":
                                 nContours=args.nContours, palette=args.palette, invertePalette=args.invertePalette)
             # abs. uncertainty (only on nominal, it should be the same for all histograms, hoping the SF and efficiencies were sane in this configuration)
             if "nominal" in n:
-                drawCorrelationPlot(histsSF[era][n], "muon #eta", "muon p_{T} (GeV)", f"Abs. uncertainty on SF::0,0.015",
+                drawCorrelationPlot(histsSF[era][n], "muon #eta", "muon p_{T} (GeV)", f"Abs. uncertainty on SF",
                                     f"absUnc_muonSF_{n}", plotLabel="ForceTitle", outdir=outdir+"absoluteStatUncertainty/",
                                     smoothPlot=False, drawProfileX=False, scaleToUnitArea=False,
                                     draw_both0_noLog1_onlyLog2=1, passCanvas=canvas, plotError=True,
                                     nContours=args.nContours, palette=args.palette, invertePalette=args.invertePalette)
                 ## rel. uncertainty
-                drawCorrelationPlot(histsSF[era][n], "muon #eta", "muon p_{T} (GeV)", f"Rel. uncertainty on SF::0,0.015",
+                drawCorrelationPlot(histsSF[era][n], "muon #eta", "muon p_{T} (GeV)", f"Rel. uncertainty on SF",
                                     f"relUnc_muonSF_{n}", plotLabel="ForceTitle", outdir=outdir+"relativeStatUncertainty/",
                                     smoothPlot=False, drawProfileX=False, scaleToUnitArea=False,
                                     draw_both0_noLog1_onlyLog2=1, passCanvas=canvas, plotRelativeError=True,
