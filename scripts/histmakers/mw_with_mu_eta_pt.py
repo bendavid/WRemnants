@@ -118,8 +118,8 @@ if mass_fit:
     data_corrfile = "calibrationJDATA_smeared_v718_LBL.root" if "lbl" in args.muonCorr else "calibrationJDATA_smeared_v718.root"
     jpsi_crctn_MC_helper = muon_validation.make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}")
     jpsi_crctn_data_helper = muon_validation.make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}")
-    jpsi_crctn_MC_unc_helper = muon_validation.make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}", n_eta_bins = 16)
-    jpsi_crctn_data_unc_helper = muon_validation.make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}", n_eta_bins = 16)
+    jpsi_crctn_MC_unc_helper = muon_validation.make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}", n_tot_params = 3, n_eta_bins = 32)
+    jpsi_crctn_data_unc_helper = muon_validation.make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}", n_tot_params =3, n_eta_bins = 32)
 
 def build_graph(df, dataset):
     logging.info(f"build graph for dataset: {dataset.name}")
@@ -319,6 +319,8 @@ def build_graph(df, dataset):
                 results.append(dummyMuonScaleSystPerSeDown)
                 results.append(dummyMuonScaleSystPerSeUp)
                 if smearing_weights:
+                    df = df.DefinePerSample("bool_true", "true")
+                    df = df.DefinePerSample("bool_false", "false")
                     if args.muonCorr == "massfit":
                         jpsi_unc_helper = jpsi_crctn_data_unc_helper if dataset.is_data else jpsi_crctn_MC_unc_helper
                         df = df.Define("muonScaleSyst_responseWeights_tensor_gensmear", jpsi_unc_helper,
@@ -335,6 +337,8 @@ def build_graph(df, dataset):
                             "goodMuons_pt0_gen_smeared",
                             "covMat_goodGenMuons0",
                             "nominal_weight",
+                            "bool_true",
+                            "bool_false"
                             ]
                         )
                         dummyMuonScaleSyst_responseWeights = df.HistoBoost(
