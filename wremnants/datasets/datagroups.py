@@ -18,7 +18,7 @@ class datagroups(object):
     def __init__(self, infile, combine=False):
         self.combine = combine
         self.lumi = 1.
-        if ".root" not in infile[-5:]:
+        if not infile.endswith(".root"):
             with lz4.frame.open(infile) as f:
                 self.results = pickle.load(f)
             self.rtfile = None
@@ -275,12 +275,12 @@ class datagroups(object):
         return name
 
 class datagroups2016(datagroups):
-    def __init__(self, infile, combine=False, pseudodata_pdfset = None,
+    def __init__(self, infile, combine=False, pseudodata_pdfset = None, applySelection=True
     ):
         self.datasets = {x.name : x for x in datasets2016.getDatasets()}
         super().__init__(infile, combine)
         self.wlike = "wlike" in self.results["meta_info"]["command"]
-        if self.wlike:
+        if self.wlike or not applySelection:
             sigOp = None
             fakeOp = None
         else:
