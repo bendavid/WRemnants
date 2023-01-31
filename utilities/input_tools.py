@@ -7,19 +7,23 @@ import numpy as np
 import logging
 import os
 
-def read_and_scale(fname, proc, histname, lumi=False):
+def read_and_scale(fname, proc, histname, calculate_lumi=False, scale=1):
     with lz4.frame.open(fname) as f:
         out = pickle.load(f)
         
-    return load_and_scale(out, proc, histname, lumi)
+    return load_and_scale(out, proc, histname, calculate_lumi, scale)
 
 def load_and_scale(res_dict, proc, histname, calculate_lumi=False, scale=1.):
     h = res_dict[proc]["output"][histname]
-    scale = res_dict[proc]["dataset"]["xsec"]/res_dict[proc]["weight_sum"]*scale
-    if calculate_lumi:
-        data_keys = [p for p in res_dict.keys() if "dataset" in res_dict[p] and res_dict[p]["dataset"]["is_data"]]
-        lumi = sum([res_dict[p]["lumi"] for p in data_keys])*1000
-        scale *= lumi
+    if not res_dict[proc]["dataset"]["is_data"]:
+        scale = res_dict[proc]["dataset"]["xsec"]/res_dict[proc]["weight_sum"]*scale
+        if calculate_lumi:
+            data_keys = [p for p in res_dict.keys() if "dataset" in res_dict[p] and res_dict[p]["dataset"]["is_data"]]
+            lumi = sum([res_dict[p]["lumi"] for p in data_keys])*1000
+            if not lumi:
+                logging.warning("Did not find a data hist! Skipping calculate_lumi option")
+                lumi = 1
+            scale *= lumi
     return h*scale
 
 def read_all_and_scale(fname, procs, histnames, lumi=False):
@@ -109,8 +113,8 @@ def expand_dyturbo_filenames(path, basename, varname, pieces=["n3ll_born", "n2ll
     return [os.path.join(path, "_".join(filter(None, [basename, piece, varname, append]))+".txt") for piece in pieces]
 
 def dyturbo_varnames():
-	return ["mur{0}_muf{1}_mures{2}".format(i,j,k).replace("0", "H") for i in range(3) for j in range(3) for k in range(3) 
-		if abs(i-j) < 2 and abs(i-k) < 2 and abs(j-k) < 2 and not (i == 1 and j == 1 and k == 1)]
+    return ["mur{0}_muf{1}_mures{2}".format(i,j,k).replace("0", "H") for i in range(3) for j in range(3) for k in range(3) 
+        if abs(i-j) < 2 and abs(i-k) < 2 and abs(j-k) < 2 and not (i == 1 and j == 1 and k == 1)]
 
 def read_dyturbo_variations(path, basename, varnames, axes, pieces=["n3ll_born", "n2ll_ct", "n2lo_vj"], append=None):
     central_files = expand_dyturbo_filenames(path, basename, "", pieces, append)
