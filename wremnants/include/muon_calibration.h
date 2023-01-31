@@ -416,9 +416,30 @@ template <typename T>
 class CorrectionHelperBase {
 
 public:
-    CorrectionHelperBase(T&& corrections) :
-        correctionHist_(std::make_shared<const T>(std::move(corrections))) {}
-    
+    CorrectionHelperBase(unsigned int nSlots, T&& corrections) :
+        myRndGens(nSlots),
+        correctionHist_(std::make_shared<const T>(std::move(corrections)))
+        {
+            init_random_generators();
+        }
+
+
+    CorrectionHelperBase(unsigned int nSlots, T&& corrections, T&& uncertainties) : 
+        myRndGens(nSlots),
+        correctionHist_(std::make_shared<const T>(std::move(corrections))),
+        uncertaintyHist_(std::make_shared<const T>(std::move(uncertainties))
+        ){
+            init_random_generators();
+        }
+
+    void init_random_generators(){
+        int seed = 1; // not 0 because seed 0 has a special meaning
+        for (auto &&gen : myRndGens)
+        {
+            gen.SetSeed(seed++);
+        }
+    }
+
     // helper for bin lookup which implements the compile-time loop over axes
     template<typename... Xs, std::size_t... Idxs>
     const float get_value_impl(std::index_sequence<Idxs...>, const Xs&... xs) {
@@ -431,8 +452,40 @@ public:
         return get_value_impl(std::index_sequence_for<Xs...>{}, xs...);
     }
 
+    // helper for bin lookup which implements the compile-time loop over axes
+    template<typename... Xs, std::size_t... Idxs>
+    const float get_error_impl(std::index_sequence<Idxs...>, const Xs&... xs) {
+      return uncertaintyHist_->at(uncertaintyHist_->template axis<Idxs>().index(xs)...);
+    }
+
+    // variadic templated bin lookup
+    template<typename... Xs>
+    const float get_error(const Xs&... xs) {
+        return get_error_impl(std::index_sequence_for<Xs...>{}, xs...);
+    }
+
+    virtual float get_correction(unsigned int slot, float pt, float eta) {return 0;}
+
+    float get_random(unsigned int slot, float mean, float std){
+        return myRndGens[slot].Gaus(mean, std);
+    }
+
+
+    RVec<float> operator() (unsigned int slot, const RVec<float>& pts, const RVec<float>& etas) {
+        RVec<float> corrected_pt(pts.size(), 0.);
+        assert(etas.size() == pts.size());
+        for (size_t i = 0; i < pts.size(); i++) {
+            corrected_pt[i] = get_correction(slot, pts[i], etas[i]);
+        }
+        return corrected_pt;
+    }
+
+
 private:
+    std::vector<TRandom3> myRndGens; 
+
     std::shared_ptr<const T> correctionHist_;
+    std::shared_ptr<const T> uncertaintyHist_;
 };
 
 
@@ -445,20 +498,15 @@ public:
     //inherit constructor
     using base_t::base_t;
 
-    float get_correction(float pt, float eta) {
+    float get_correction(unsigned int slot, float pt, float eta) override {
         const double bias = base_t::get_value(eta, pt);
-        return (1.0 + bias) * pt;
-    }
+        const double error = base_t::get_error(eta, pt);
 
-    RVec<float> operator() (const RVec<float>& pts, const RVec<float>& etas) {
-        RVec<float> corrected_pt(pts.size(), 0.);
-        assert(etas.size() == pts.size());
-        for (size_t i = 0; i < pts.size(); i++) {
-            corrected_pt[i] = get_correction(pts[i], etas[i]);
-        }
-        return corrected_pt;
+        if(error>0.)
+            return pt*(1.0 + base_t::get_random(slot, bias, error));
+        else 
+            return pt*(1.0+bias);
     }
-
 };
 
 
@@ -468,38 +516,17 @@ class SmearingHelper : public CorrectionHelperBase<T> {
 using base_t = CorrectionHelperBase<T>;
 
 public:
-    //override constructor
-    SmearingHelper(T&& corrections, unsigned int nSlots) : 
-        base_t(std::forward<T>(corrections)),
-        myRndGens(nSlots)
-    {
-        int seed = 1; // not 0 because seed 0 has a special meaning
-        for (auto &&gen : myRndGens)
-        {
-            gen.SetSeed(seed++);
-        }
-    }
+    //inherit constructor
+    using base_t::base_t;
 
-    float get_correction(unsigned int slot, float pt, float eta) {
+    float get_correction(unsigned int slot, float pt, float eta) override {
         const double sigma = base_t::get_value(eta, pt); //this is sigma_p/p
 
         if(sigma>0.)
-            return 1. / (1./pt + myRndGens[slot]->Gaus(0., sigma/pt));
+            return 1. / (1./pt + base_t::get_random(slot, 0., sigma/pt));
         else 
             return pt;
     }
-
-    RVec<float> operator() (unsigned int slot, const RVec<float>& pts, const RVec<float>& etas) {
-        RVec<float> corrected_pt(pts.size(), 0.);
-        assert(etas.size() == pts.size());
-        for (size_t i = 0; i < pts.size(); i++) {
-            corrected_pt[i] = get_correction(slot, pts[i], etas[i]);
-        }
-        return corrected_pt;
-    }
-
-private:
-    std::vector<TRandom3> myRndGens; 
 };
 
 }
