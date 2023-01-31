@@ -63,7 +63,7 @@ axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
 reco_mll_axes = [common.axis_recoil_reco_ptZ, axis_mll]
 gen_reco_mll_axes = [common.axis_recoil_gen_ptZ, common.axis_recoil_reco_ptZ, axis_mll]
 axis_mt = hist.axis.Regular(200, 0., 200., name = "mt", underflow=False)
-
+axis_count = hist.axis.Regular(1, 0., 1., name = "count", underflow=False, overflow=False)
 # extra axes which can be used to label tensor_axes
 
 
@@ -84,6 +84,8 @@ def build_graph(df, dataset):
     else: df = df.Define("weight", "std::copysign(1.0, genWeight)")
 
     weightsum = df.SumAndCount("weight")
+    df = df.Define("count", "0.5")
+    results.append(df.HistoBoost("count", [axis_count], ["count", "weight"]))
     
     if flavor == "mumu":
     
@@ -238,7 +240,7 @@ def build_graph(df, dataset):
     
     # Recoil calibrations
     df = recoilHelper.setup_MET(df, results, dataset, "Lep_pt", "Lep_phi", "Lep_pt_uncorr")
-    df = recoilHelper.setup_recoil_Z(df, results, dataset)
+    df = recoilHelper.setup_recoil_Z(df, results, dataset, common.zprocs_recoil)
     #df = recoilHelper.setup_gen(df, results, dataset, common.zprocs_recoil)
     df = recoilHelper.auxHists(df, results)
     
@@ -272,7 +274,11 @@ def build_graph(df, dataset):
     results.append(df.HistoBoost("mT_corr_lep", [axis_mt], ["mT_corr_lep", "nominal_weight"]))
     results.append(df.HistoBoost("mT_corr_xy", [axis_mt], ["mT_corr_xy", "nominal_weight"]))
     results.append(df.HistoBoost("mT_corr_rec", [axis_mt], ["mT_corr_rec", "nominal_weight"]))
+    results.append(df.HistoBoost("mT_corr_xy_qTrw", [axis_mt], ["mT_corr_xy", "nominal_weight_qTrw"]))
+    results.append(df.HistoBoost("mT_corr_rec_qTrw", [axis_mt], ["mT_corr_rec", "nominal_weight_qTrw"]))
     
+    results.append(df.HistoBoost("lep_pT", [axis_pt], ["TrigMuon_pt", "nominal_weight"]))
+    results.append(df.HistoBoost("lep_pT_qTrw", [axis_pt], ["TrigMuon_pt", "nominal_weight_qTrw"]))
     
     gen_reco_mll_cols = ["ptVgen", "recoil_corr_rec_magn", "massZ"]
     if dataset.name in common.zprocs_lowpu:
