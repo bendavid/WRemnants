@@ -45,15 +45,24 @@ def make_muon_bias_helpers(corr_type, smearing=True):
 
     h2d = uproot.open(f"wremnants/data/closure/{filename}.root:closure").to_hist()
     # Drop the uncertainty because the Weight storage type doesn't play nice with ROOT
+
     h2d_nounc = hist.Hist(*h2d.axes, data=h2d.values(flow=True))
+    h2d_std = hist.Hist(*h2d.axes, data=h2d.variances(flow=True)**0.5)
     # Set overflow to closest values
     h2d_nounc[hist.underflow,:][...] = h2d_nounc[0,:].view(flow=True)
     h2d_nounc[:,hist.underflow][...] = h2d_nounc[:,0].view(flow=True)
     h2d_nounc[hist.overflow,:][...] = h2d_nounc[-1,:].view(flow=True)
     h2d_nounc[:,hist.overflow][...] = h2d_nounc[:,-1].view(flow=True)
 
+    h2d_std[hist.underflow,:][...] = h2d_std[0,:].view(flow=True)
+    h2d_std[:,hist.underflow][...] = h2d_std[:,0].view(flow=True)
+    h2d_std[hist.overflow,:][...] = h2d_std[-1,:].view(flow=True)
+    h2d_std[:,hist.overflow][...] = h2d_std[:,-1].view(flow=True)
+
     h2d_cpp = narf.hist_to_pyroot_boost(h2d_nounc, tensor_rank=0)
-    helper = ROOT.wrem.BiasCalibrationHelper[type(h2d_cpp).__cpp_name__](ROOT.std.move(h2d_cpp))
+    h2d_std_cpp = narf.hist_to_pyroot_boost(h2d_std, tensor_rank=0)
+
+    helper = ROOT.wrem.BiasCalibrationHelper[type(h2d_cpp).__cpp_name__](ROOT.GetThreadPoolSize(), ROOT.std.move(h2d_cpp), ROOT.std.move(h2d_std_cpp))
 
     return helper
 
@@ -70,7 +79,7 @@ def make_muon_smearing_helpers():
 
     h2d_cpp = narf.hist_to_pyroot_boost(h2d_nounc, tensor_rank=0)
     # FIXME not sure if ROOT.GetThreadPoolSize() always give number of threads, probably maximum number, maybe there is a better way
-    helper = ROOT.wrem.SmearingHelper[type(h2d_cpp).__cpp_name__](ROOT.std.move(h2d_cpp), ROOT.GetThreadPoolSize())
+    helper = ROOT.wrem.SmearingHelper[type(h2d_cpp).__cpp_name__](ROOT.GetThreadPoolSize(), ROOT.std.move(h2d_cpp))
 
     return helper
 
@@ -130,7 +139,7 @@ def define_corrected_muons(df, cvh_helper, jpsi_helper, corr_type, dataset, smea
         muon_pt = "Muon_smeared"
 
     if bias_helper and not dataset.is_data:
-        df = df.Define("Muon_biasedPt", bias_helper, [muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta")])
+        df = df.Define("Muon_biasedPt", bias_helper, ["rdfslot_", muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta")])
         muon_pt = "Muon_biased"
 
     for var in ["pt", "eta", "phi", "charge"]:
