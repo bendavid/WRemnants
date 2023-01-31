@@ -273,7 +273,8 @@ def addUnc(hTarget, hNom, hUp, hDw=None):
 
     for k in range(1, hTarget.GetNbinsX()+1):
 
-        if hDw != None: sigma = 0.5*abs(abs(hUp.GetBinContent(k)-hNom.GetBinContent(k)) + abs(hDw.GetBinContent(k)-hNom.GetBinContent(k)))
+        #if hDw != None: sigma = 0.5*abs(abs(hUp.GetBinContent(k)-hNom.GetBinContent(k)) + abs(hDw.GetBinContent(k)-hNom.GetBinContent(k)))
+        if hDw != None: sigma = 0.5*abs(hUp.GetBinContent(k)-hDw.GetBinContent(k))
         else: sigma = abs(hUp.GetBinContent(k)-hNom.GetBinContent(k))
         hTarget.SetBinError(k, math.sqrt(sigma*sigma + hTarget.GetBinError(k)*hTarget.GetBinError(k)))
                             
@@ -350,15 +351,16 @@ def parseProc(histCfg, procName, syst="", rebin=1):
 
 def doRecoilStatSyst(histCfg, procName, hNom, h_syst, rebin):
     
-    #return
+    
     axis = histCfg['axis']
     hName = histCfg['name']
     
-    hists = ["recoil_corr_rec_para_qT", "recoil_corr_rec_para", "recoil_corr_rec_perp", "MET_corr_rec_pt", "mT_corr_rec", "recoil_corr_rec_magn", "recoil_corr_rec_para_qT_qTrw", "recoil_corr_rec_para_qTrw", "recoil_corr_rec_perp_qTrw", "MET_corr_rec_pt_qTrw", "recoil_corr_rec_magn_qTrw"]
+    hists = ["recoil_corr_rec_para_qT", "recoil_corr_rec_para", "recoil_corr_rec_perp", "MET_corr_rec_pt", "mT_corr_rec", "recoil_corr_rec_magn", "recoil_corr_rec_para_qT_qTrw", "recoil_corr_rec_para_qTrw", "recoil_corr_rec_perp_qTrw", "MET_corr_rec_pt_qTrw", "recoil_corr_rec_magn_qTrw", "mT_corr_rec_qTrw"]
     if not hName in hists: return
     if procName != "Zmumu": return
 
-    tags = ["target_para", "target_perp"] # , "source_para", "source_perp", "target_para_bkg", "target_perp_bkg"
+    tags = ["target_para", "target_perp", "source_para", "source_perp"] # , "source_para", "source_perp", "target_para_bkg", "target_perp_bkg"
+    tags = ["target_para"]
     groups.setHists(hName, "", label=hName, procsToRead=[procName])
     bhist_nom = groups.groups[procName][hName]
     rhist_nom = narf.hist_to_root(bhist_nom)
@@ -372,15 +374,27 @@ def doRecoilStatSyst(histCfg, procName, hNom, h_syst, rebin):
         else: bhist_pert *= MC_SF
             
         rhist_pert = narf.hist_to_root(bhist_pert)
+        
+        for i in range(1, int(rhist_pert.GetNbinsY()/2)+1):
+            hUp = rhist_pert.ProjectionX("upvar%d" % i, 2*i-1, 2*i-1)
+            hDw = rhist_pert.ProjectionX("dwvar%d" % i, 2*i, 2*i)
+            hUp = functions.Rebin(hUp, rebin)
+            hDw = functions.Rebin(hDw, rebin)
+            hUp = doOverlow(hUp)
+            hDw = doOverlow(hDw)
+            #for k in range(0, hNom.GetNbinsX()): print(tag, i, hNom.GetBinCenter(k), hNom.GetBinContent(k), hUp.GetBinContent(k), hNom.GetBinContent(k)/hUp.GetBinContent(k) if hUp.GetBinContent(k) > 0 else 1)
+            addUnc(h_syst, hNom, hUp, hDw)
+            if i == 1: continue
+        '''
         for i in range(1, rhist_pert.GetNbinsY()+1):
+            print(i)
             hUp = rhist_pert.ProjectionX("upvar%d" % i, i, i)
             hUp = functions.Rebin(hUp, rebin)
             hUp = doOverlow(hUp)
             #for k in range(0, hNom.GetNbinsX()): print(tag, i, hNom.GetBinCenter(k), hNom.GetBinContent(k), hUp.GetBinContent(k), hNom.GetBinContent(k)/hUp.GetBinContent(k) if hUp.GetBinContent(k) > 0 else 1)
             addUnc(h_syst, hNom, hUp)
+        '''
 
-
-  
                          
 def parseHists(histCfg, leg, rebin=1, projectionx=[], noData=False):
 
@@ -961,7 +975,7 @@ if __name__ == "__main__":
     MC_SF = 1.0
     if flavor == "mumu": MC_SF = 1.0165 # 1.026
 
-    outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/Z%s_%s/plots_1/" % (flavor, met)
+    outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/Z%s_%s/plots/" % (flavor, met)
     functions.prepareDir(outDir, remove=True)
     
     print("Open")
@@ -1034,7 +1048,8 @@ if __name__ == "__main__":
  
     
     singlePlot({"name": "recoil_corr_xy_para", "axis": "recoil_para" }, "recoil_corr_xy_para", -200, 100, 1e-1, 1e6, "U_{#parallel} (GeV)", "Events", rebin=5)
-    singlePlot({"name": "recoil_corr_rec_para", "axis": "recoil_para" }, "recoil_corr_rec_para", -200, 100, 1e-1, 1e6, "U_{#parallel} (GeV)", "Events", rebin=5, yRatio=1.15)
+    singlePlot({"name": "recoil_corr_rec_para", "axis": "recoil_para" }, "recoil_corr_rec_para", -200, 100, 1e-1, 1e6, "U_{#parallel} (GeV) (recoil corrected)", "Events", rebin=5, yRatio=1.15)
+    singlePlot({"name": "recoil_corr_rec_para_qTrw", "axis": "recoil_para_qTrw" }, "recoil_corr_rec_para_qTrw", -200, 100, 1e-1, 1e6, "U_{#parallel} (GeV) (recoil corrected, q_{T} rw)", "Events", rebin=5, yRatio=1.15)
     
     #bins_recoil_para_perp_abs = list(range(0, 10, 1)) + list(range(10, 30, 2)) + [30, 34, 38, 42, 46, 50, 60, 70, 80, 100, 10000]
     #singlePlot({"name": "recoil_corr_rec_para_qT_abs", "axis": "recoil_para_qT" }, "recoil_corr_rec_para_qT_abs", 0, 100, 1e-1, 1e6, "U_{#parallel} + q_{T} (GeV) (recoil corrected)", "Events", rebin=bins_recoil_para_perp_abs)
@@ -1071,7 +1086,7 @@ if __name__ == "__main__":
     singlePlot({"name": "mT_corr_lep", "axis": "mt" }, "mT_corr_lep", 0, 200, 1e-1, 1e6, "m_{T} (GeV) (lepton corrected)", "Events", rebin=mT_bins)
     singlePlot({"name": "mT_corr_xy", "axis": "mt" }, "mT_corr_xy", 0, 200, 1e-1, 1e6, "m_{T} (GeV) (XY corrected)", "Events", rebin=mT_bins)
     singlePlot({"name": "mT_corr_rec", "axis": "mt" }, "mT_corr_rec", 0, 200, 1e-1, 1e6, "m_{T} (GeV)  (recoil corrected)", "Events", rebin=mT_bins, yRatio=1.15)
-        
+    singlePlot({"name": "mT_corr_rec_qTrw", "axis": "mt" }, "mT_corr_rec_qTrw", 0, 200, 1e-1, 1e6, "m_{T} (GeV)  (recoil corrected, q_{T} rw)", "Events", rebin=mT_bins, yRatio=1.15)    
     
     
     

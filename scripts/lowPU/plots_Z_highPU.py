@@ -845,7 +845,7 @@ if __name__ == "__main__":
     outDir = "/eos/user/j/jaeyserm/www/wmass/highPU/Z%s_%s/plots/" % (flavor, met)
     functions.prepareDir(outDir, remove=False)
       
-    groups = datagroups2016("mz_wlike_with_mu_eta_pt_%s_%s.pkl.lz4" % (met, pdf), wlike=True)
+    groups = datagroups2016("mz_wlike_with_mu_eta_pt_%s_%s.pkl.lz4" % (met, pdf))
     groups.groups.update({
         "TTbar" : dict(
                 members = [groups.datasets[x] for x in ["TTLeptonicPostVFP", "TTSemileptonicPostVFP", "SingleTschanLepDecaysPostVFP", "SingleTtWAntitopPostVFP", "SingleTtchanAntitopPostVFP", "SingleTtchanTopPostVFP"]],
@@ -950,6 +950,7 @@ if __name__ == "__main__":
     mT_bins = [0, 10, 15, 20, 25, 30, 35,] + list(range(40, 100, 2)) + [100, 102, 104, 106, 108, 110, 115, 120, 125, 130, 140, 160, 200]
     singlePlot({"name": "transverseMass_uncorr", "axis": "mt" }, "mT_uncorr", 0, 200, 1e0, 1e8, "m_{T} (GeV) (uncorrected)", "Events", rebin=mT_bins, yRatio=1.15)
     singlePlot({"name": "transverseMass", "axis": "mt" }, "mT_corr_rec", 0, 200, 1e0, 1e8, "m_{T} (GeV) (recoil corrected)", "Events", rebin=mT_bins, yRatio=1.15)
+    singlePlot({"name": "transverseMass_qTrw", "axis": "mt" }, "mT_corr_rec_qTrw", 0, 200, 1e-1, 1e6, "m_{T} (GeV)  (recoil corrected, q_{T} rw)", "Events", rebin=mT_bins, yRatio=1.15)    
     
     quit()
     
