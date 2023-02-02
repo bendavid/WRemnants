@@ -845,7 +845,7 @@ if __name__ == "__main__":
     outDir = "/eos/user/j/jaeyserm/www/wmass/highPU/Z%s_%s/plots/" % (flavor, met)
     functions.prepareDir(outDir, remove=False)
       
-    groups = datagroups2016("mz_wlike_with_mu_eta_pt_%s_%s.pkl.lz4" % (met, pdf))
+    groups = datagroups2016("mz_wlike_with_mu_eta_pt_%s.pkl.lz4" % (met))
     groups.groups.update({
         "TTbar" : dict(
                 members = [groups.datasets[x] for x in ["TTLeptonicPostVFP", "TTSemileptonicPostVFP", "SingleTschanLepDecaysPostVFP", "SingleTtWAntitopPostVFP", "SingleTtchanAntitopPostVFP", "SingleTtchanTopPostVFP"]],
@@ -928,8 +928,8 @@ if __name__ == "__main__":
     
         
     recoil_qTbins = list(range(0, 50, 1)) + list(range(50, 70, 2)) + list(range(70, 100, 5)) + list(range(100, 150, 10)) + [150, 200, 300]
-    singlePlot({"name": "qT", "axis": "qT" }, "qT", 0, 300, 1, 1e8, "q_{T} (GeV)", "Events", rebin=recoil_qTbins)
-    singlePlot({"name": "qT_qTrw", "axis": "qT" }, "qT_qTrw", 0, 300, 1, 1e8, "q_{T} (GeV), rw", "Events", rebin=recoil_qTbins)
+    singlePlot({"name": "qT", "axis": "qT" }, "qT", 0, 100, 1, 1e8, "q_{T} (GeV)", "Events", rebin=recoil_qTbins, yRatio=1.15)
+    singlePlot({"name": "qT_qTrw", "axis": "qT" }, "qT_qTrw", 0, 100, 1, 1e8, "q_{T} (GeV), rw", "Events", rebin=recoil_qTbins, yRatio=1.15)
  
     singlePlot({"name": "METx_uncorr", "axis": "MET_xy" }, "METx_uncorr", -100, 100, 1e1, 1e8, "MET x (uncorrected)", "Events", rebin=1)
     singlePlot({"name": "METy_uncorr", "axis": "MET_xy" }, "METy_uncorr", -100, 100, 1e1, 1e8, "MET y (uncorrected)", "Events", rebin=1)

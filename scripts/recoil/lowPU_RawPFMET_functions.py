@@ -274,41 +274,27 @@ def dy_perp_cond(xvals, p, *args):
  
 def data_para_qT(xvals, p, *args):
 
-    pdf_ttbar = ttbar_para_cond_qT([args[0]['qT'], xvals[0]], args[0]['parms_ttbar'])
-    pdf_ewk = ewk_para_qT_cond([args[0]['qT'], xvals[0]], args[0]['parms_ewk'])
-    pdf_zz = zz_para_qT_cond([args[0]['qT'], xvals[0]], args[0]['parms_zz'])
-    
-    pp = tf.constant([2.37500e+01, 1.41561e-01, 4.30537e-01, -1.62911e-02, 4.85259e-04, -6.32757e-06, 9.75226e-01], dtype=tf.float64)
-    mean = pw_poly4_power(args[0]['qT'], pp[0], pp[1], pp[2], pp[3], pp[4], pp[5], pp[6])
-    mean1 = mean + p[3]
-    mean2 = mean + p[4]
-    mean3 = mean + p[5]
-    
-    
-    
-    gauss1 = func_gauss(xvals[0], mean1, p[0])
-    gauss2 = func_gauss(xvals[0], mean2, p[1])
-    gauss3 = func_gauss(xvals[0], mean3, p[2])
-    #gauss4 = func_gauss(xvals[0], tf.constant(0, dtype=tf.float64), p[3])
+    gauss1 = bf.func_gauss(xvals[0], p[3], p[0])
+    gauss2 = bf.func_gauss(xvals[0], p[4], p[1])
+    gauss3 = bf.func_gauss(xvals[0], p[4], p[2])
 
-    n1 = tf.constant(0.1, dtype=tf.float64) # 0.1
-    n2 = tf.constant(0.2, dtype=tf.float64) # 0.2
+    n1 = tf.constant(0.2, dtype=tf.float64)
+    n2 = tf.constant(0.12, dtype=tf.float64)
     n3 = tf.constant(1.0, dtype=tf.float64) - n1 - n2
-    #n3 = tf.constant(0.25, dtype=tf.float64) # 0.25
-    #n4 = tf.constant(1, dtype=tf.float64) - n1 - n2 - n3
-    pdf_sig = n1*gauss1 + n2*gauss2 + n3*gauss3# + n4*gauss4
+   
+    pdf_sig = n1*gauss1 + n2*gauss2 + n3*gauss3
     
-    #k1 = args[0]['frac_ttbar']
-    #k2 = args[0]['frac_ewk']
+    pdf_ttbar = ttbar_para_qT_cond([args[0]['qT'], xvals[0]], args[0]['parms_ttbar'])
+    pdf_ewk = ewk_para_qT_cond([args[0]['qT'], xvals[0]], args[0]['parms_ewk'])
+    
     qTbin = tf.cast(tf.math.multiply(args[0]['qT'], tf.constant(2, dtype=tf.float64)), dtype=tf.int64)
     k1 = tf.gather(args[0]['fracs_ttbar'], qTbin)
     k2 = tf.gather(args[0]['fracs_ewk'], qTbin)
-    k3 = tf.gather(args[0]['fracs_zz'], qTbin)
-    k4 = tf.constant(1.0, dtype=tf.float64) - k1 - k2 - k3
-    pdf = k1*pdf_ttbar + k2*pdf_ewk + k3*pdf_zz + k4*pdf_sig #
+    k3 = tf.constant(1.0, dtype=tf.float64) - k1 - k2
+    pdf = k1*pdf_ttbar + k2*pdf_ewk + k3*pdf_sig
     return pdf
-    
-def data_para_qT_cond(xvals, p, *args):
+ 
+def data_para_qT_cond_mctemplates(xvals, p, *args):
 
     pdf_ttbar = ttbar_para_qT_cond(xvals, args[0]['parms_ttbar'])
     pdf_ewk = ewk_para_qT_cond(xvals, args[0]['parms_ewk'])
@@ -351,22 +337,51 @@ def data_para_qT_cond(xvals, p, *args):
     pdf = k1*pdf_ttbar + k2*pdf_ewk + k3*pdf_sig
     return pdf
     
+ 
+def data_para_qT_cond(xvals, p, *args):
+ 
+    sigma1 = bf.power(xvals[0], p[0], p[1], p[2])
+    sigma2 = bf.power(xvals[0], p[3], p[4], p[5])
+    sigma3 = bf.power(xvals[0], p[6], p[7], p[8])
+    
+    mean1 = bf.power(xvals[0], p[9], p[10], p[11])
+    mean2 = bf.power(xvals[0], p[12], p[13], p[14])
+    
+    gauss1 = bf.func_gauss(xvals[1], mean1, sigma1)
+    gauss2 = bf.func_gauss(xvals[1], mean2, sigma2)
+    gauss3 = bf.func_gauss(xvals[1], mean2, sigma3)
+
+    n1 = p[15]
+    n2 = p[16]
+    n3 = tf.constant(1.0, dtype=tf.float64) - n1 - n2
+   
+    pdf_sig = n1*gauss1 + n2*gauss2 + n3*gauss3
+    
+    pdf_ttbar = ttbar_para_qT_cond(xvals, args[0]['parms_ttbar'])
+    pdf_ewk = ewk_para_qT_cond(xvals, args[0]['parms_ewk'])
+    
+    qTbin = tf.cast(tf.math.multiply(xvals[0], tf.constant(2, dtype=tf.float64)), dtype=tf.int64)
+    k1 = tf.gather(args[0]['fracs_ttbar'], qTbin)
+    k2 = tf.gather(args[0]['fracs_ewk'], qTbin)
+    k3 = tf.constant(1.0, dtype=tf.float64) - k1 - k2
+    pdf = k1*pdf_ttbar + k2*pdf_ewk + k3*pdf_sig
+    return pdf
     
     
-def data_perp_highpu(xvals, p, *args):
-
-    gauss1 = func_gauss(xvals[0], p[4], p[0])
-    gauss2 = func_gauss(xvals[0], p[5], p[1])
-    gauss3 = func_gauss(xvals[0], p[4], p[2])
-    gauss4 = func_gauss(xvals[0], p[5], p[3])
-
-    n1 = tf.constant(0.005, dtype=tf.float64)
-    n2 = tf.constant(0.2, dtype=tf.float64)
-    n3 = tf.constant(0.25, dtype=tf.float64)
-    n4 = tf.constant(1.0, dtype=tf.float64) - n1 - n2 - n3
-
-    pdf_sig = n1*gauss1 + n2*gauss2 + n3*gauss3 + n4*gauss4
     
+def data_perp(xvals, p, *args):
+   
+    gauss1 = bf.func_gauss(xvals[0], p[3], p[0])
+    gauss2 = bf.func_gauss(xvals[0], p[3], p[1])
+    gauss3 = bf.func_gauss(xvals[0], p[3], p[2])
+    
+    n1 = tf.constant(0.1, dtype=tf.float64)
+    n2 = tf.constant(0.4, dtype=tf.float64)
+    n3 = tf.constant(1.0, dtype=tf.float64) - n1 - n2
+
+    pdf_sig = n1*gauss1 + n2*gauss2 + n3*gauss3
+    
+
     pdf_ttbar = ttbar_perp_cond([args[0]['qT'], xvals[0]], args[0]['parms_ttbar'])
     pdf_ewk = ewk_perp_cond([args[0]['qT'], xvals[0]], args[0]['parms_ewk'])
 
@@ -375,9 +390,44 @@ def data_perp_highpu(xvals, p, *args):
     k2 = tf.gather(args[0]['fracs_ewk'], qTbin)
     k3 = tf.constant(1.0, dtype=tf.float64) - k1 - k2
     pdf = k1*pdf_ttbar + k2*pdf_ewk + k3*pdf_sig
+    
     return pdf
-        
+   
+    
 def data_perp_cond(xvals, p, *args):
+
+    pdf_ttbar = ttbar_perp_cond(xvals, args[0]['parms_ttbar'])
+    pdf_ewk = ewk_perp_cond(xvals, args[0]['parms_ewk'])
+
+    sigma1 = bf.power(xvals[0], p[0], p[1], p[2])
+    sigma2 = bf.power(xvals[0], p[3], p[4], 4.124451797563)
+    sigma3 = bf.power(xvals[0], p[5], p[6], p[7])
+ 
+    mean = bf.linear(xvals[0], p[8], p[9])
+
+    
+    gauss1 = bf.func_gauss(xvals[1], mean, sigma1)
+    gauss2 = bf.func_gauss(xvals[1], mean, sigma2)
+    gauss3 = bf.func_gauss(xvals[1], mean, sigma3)
+
+
+    n1 = p[10]
+    n2 = p[11]
+    n3 = tf.constant(1.0, dtype=tf.float64) - n1 - n2
+   
+    pdf_sig = n1*gauss1 + n2*gauss2 + n3*gauss3
+    
+
+    qTbin = tf.cast(tf.math.multiply(xvals[0], tf.constant(2, dtype=tf.float64)), dtype=tf.int64)
+    k1 = tf.gather(args[0]['fracs_ttbar'], qTbin)
+    k2 = tf.gather(args[0]['fracs_ewk'], qTbin)
+    k3 = tf.constant(1.0, dtype=tf.float64) - k1 - k2 
+    pdf = k1*pdf_ttbar + k2*pdf_ewk + k3*pdf_sig
+    return pdf
+    
+
+    
+def data_perp_cond_mctemplate(xvals, p, *args):
 
     pdf_ttbar = ttbar_perp_cond(xvals, args[0]['parms_ttbar'])
     pdf_ewk = ewk_perp_cond(xvals, args[0]['parms_ewk'])

@@ -253,7 +253,7 @@ def build_graph(df, dataset):
     
     if not args.no_recoil:
         df = recoilHelper.setup_MET(df, results, dataset, "Muon_pt[goodMuons]", "Muon_phi[goodMuons]", "Muon_pt[goodMuons]")
-        df = recoilHelper.setup_recoil_Z(df, results, dataset)
+        df = recoilHelper.setup_recoil_Z(df, results, dataset, ["ZmumuPostVFP"])
         df = recoilHelper.auxHists(df, results)
         df = recoilHelper.apply_recoil_Z(df, results, dataset, ["ZmumuPostVFP"])  # produces corrected MET as MET_corr_rec_pt/phi
         #if isZ: df = recoilHelper.recoil_Z_unc_lowPU(df, results, "", "", axis_mt, axis_mll)
