@@ -136,6 +136,18 @@ def common_parser_combine():
     parser.add_argument("--lumiScale", type=float, default=None, help="Rescale equivalent luminosity by this value (e.g. 10 means ten times more data and MC)")
     return parser
 
+def set_parser_default(parser, argument, newDefault):
+    # change the default argument of the parser, must be called before parse_arguments
+    f = next((x for x in parser._actions if x.dest ==argument), None)
+    if f:
+        logging.warning("")
+        logging.warning(f" >>> Modifying default of {f.dest} from {f.default} to {newDefault}")
+        logging.warning("")
+        f.default = newDefault
+    else:
+        logging.warning(f" >>> Parser argument {argument} not found!")
+    return parser
+
 class CustomFormatter(logging.Formatter):
     """Logging Formatter to add colors and count warning / errors"""
 
