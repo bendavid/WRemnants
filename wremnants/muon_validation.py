@@ -13,20 +13,22 @@ def make_jpsi_crctn_helpers(muonCorr):
         return None, None
 
     corr_type_data = muonCorr.replace("Data","").split("_")
-    corr_type_mc = muonCorr.replace("MC","").split("_")    
+    corr_type_mc = muonCorr.replace("idealMC","").split("_")    
 
-    if "lbl" in corr_type_mc:
-        mc_corrfile = "calibrationJMC_smeared_v718_nominalLBL.root"
-    elif "massfit" in corr_type_mc:
-        mc_corrfile = "calibrationJMC_smeared_v718_nominal.root"
+    if "massfit" in corr_type_mc:
+        if "lbl" in corr_type_mc:
+            mc_corrfile = "calibrationJMC_smeared_v718_nominalLBL.root"
+        else:
+            mc_corrfile = "calibrationJMC_smeared_v718_nominal.root"
     else:
         mc_corrfile = None
 
-    if "lbl" in corr_type_data:
-        data_corrfile = "calibrationJDATA_smeared_v718_LBL.root"
-    elif "massfit" in corr_type_data:
-        data_corrfile = "calibrationJDATA_ideal.root"
-        # old calibration: calibrationJDATA_smeared_v718.root"
+    if "massfit" in corr_type_data:
+        if "lbl" in corr_type_data:
+            data_corrfile = "calibrationJDATA_smeared_v718_LBL.root"
+        else:
+            data_corrfile = "calibrationJDATA_ideal.root"
+            # old calibration: calibrationJDATA_smeared_v718.root"
     else:
         data_corrfile = None
 
