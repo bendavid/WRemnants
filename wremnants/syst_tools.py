@@ -51,7 +51,7 @@ def syst_transform_map(base_hist, hist_name):
         return h if not ("vars" in h.axes.name and h.axes["vars"].size > i) else h[{"vars" : i}]
 
     def projAx(hname):
-        return [hname] if hname != "unrolled" else ["pt", "eta"]
+        return hname.split("-")
 
     transforms.update({
         "resumFOScaleUp" : {

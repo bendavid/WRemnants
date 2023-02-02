@@ -25,13 +25,8 @@ parser.add_argument("--finePtBinning", action='store_true', help="Use fine binni
 parser.add_argument("--bias-calibration", action='store_true', help="Adjust central value by calibration bias hist")
 parser.add_argument("--smearing", action='store_true', help="Smear pT such that resolution matches data")
 
-f = next((x for x in parser._actions if x.dest == "pt"), None)
-if f:
-    newPtDefault = [44,26.,70.]
-    logging.warning("")
-    logging.warning(f" >>> Modifying default of {f.dest} from {f.default} to {newPtDefault}")
-    logging.warning("")
-    f.default = newPtDefault
+parser = common.set_parser_default(parser, "pt", [44,26.,70.])
+parser = common.set_parser_default(parser, "eta", [6,-2.4,2.4])
 
 args = parser.parse_args()
 
