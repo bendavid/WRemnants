@@ -100,8 +100,8 @@ def common_parser():
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
                         help="Set verbosity level with logging, the larger the more verbose (currently only for setup_test_logger enabled with --set-custom-logger)");
     parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
-    parser.add_argument("--muonCorr", type=str, default="massfit", 
-        choices=["none", "trackfit_only", "trackfit_only_mctruth", "lbl", "massfit", "massfit_lbl", "massfitData_lblMC"], 
+    parser.add_argument("--muonCorr", type=str, default="massfitData_lblidealMC", 
+        choices=["none", "trackfit_only", "trackfit_only_mctruth", "lbl", "massfit", "massfit_lbl", "massfitData_lblidealMC"], 
         help="Type of correction to apply to the muons")
     parser.add_argument("--muScaleMag", type=float, default=1e-4, help="Magnitude of dummy muon scale uncertainty")
     parser.add_argument("--muScaleBins", type=int, default=1, help="Number of bins for muon scale uncertainty")

@@ -120,7 +120,7 @@ def define_corrected_muons(df, cvh_helper, jpsi_helper, corr_type, dataset, smea
     if not (dataset.is_data or dataset.name in common.vprocs):
         corr_type = "none" 
 
-    corr_type = corr_type.replace("Data","") if dataset.is_data else corr_type.replace("MC","")        
+    corr_type = corr_type.replace("Data","") if dataset.is_data else corr_type.replace("idealMC","")        
 
     muon = "Muon"
     if "lbl" in corr_type.split("_"):
