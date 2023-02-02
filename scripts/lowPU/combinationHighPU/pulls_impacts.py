@@ -294,8 +294,8 @@ if __name__ == '__main__':
     fIn = f"ZMassWLike/{baseName}_output.root"
     
     
-    #baseName = "lowPU_highPU"
-    #fIn = f"CombineStudies/lowPU_wmass//{baseName}_output.root"
+    baseName = "lowPU_highPU"
+    fIn = f"CombineStudies/lowPU_wmass//{baseName}_output.root"
     
     
     baseDir = "/eos/user/j/jaeyserm/www/wmass/combine/lowPU_highPU/"
