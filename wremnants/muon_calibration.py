@@ -120,15 +120,14 @@ def define_corrected_muons(df, cvh_helper, jpsi_helper, corr_type, dataset, smea
     if not (dataset.is_data or dataset.name in common.vprocs):
         corr_type = "none" 
 
-    corr_type = corr_type.replace("Data","") if dataset.is_data else corr_type.replace("idealMC","")        
+    corr_type = corr_type.replace("massfitData","massfit") if dataset.is_data else corr_type.replace("mctruth","lbl")        
 
     muon = "Muon"
     if "lbl" in corr_type.split("_"):
         df = define_lblcorr_muons(df, cvh_helper, dataset)
         muon = "Muon_lbl"
     elif corr_type != "none":
-        fit = "cvhideal" if corr_type == "trackfit_only_mctruth" and not dataset.is_data else "cvh"
-        muon = f"Muon_{fit}"
+        muon = "Muon_cvh"
 
     muon_pt = muon
 
