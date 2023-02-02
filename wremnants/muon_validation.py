@@ -12,12 +12,26 @@ def make_jpsi_crctn_helpers(muonCorr):
     if "massfit" not in muonCorr:
         return None, None
 
-    mc_corrfile = "calibrationJMC_smeared_v718_nominalLBL.root" if "lbl" in muonCorr else "calibrationJMC_smeared_v718_nominal.root"
-    # data_corrfile = "calibrationJDATA_smeared_v718_LBL.root" if "lbl" in muonCorr else "calibrationJDATA_smeared_v718.root"
-    data_corrfile = "calibrationJDATA_smeared_v718_LBL.root" if "lbl" in muonCorr else "calibrationJDATA_ideal.root"
+    corr_type_data = muonCorr.replace("Data","").split("_")
+    corr_type_mc = muonCorr.replace("MC","").split("_")    
 
-    mc_helper = make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}")
-    data_helper = make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}")
+    if "lbl" in corr_type_mc:
+        mc_corrfile = "calibrationJMC_smeared_v718_nominalLBL.root"
+    elif "massfit" in corr_type_mc:
+        mc_corrfile = "calibrationJMC_smeared_v718_nominal.root"
+    else:
+        mc_corrfile = None
+
+    if "lbl" in corr_type_data:
+        data_corrfile = "calibrationJDATA_smeared_v718_LBL.root"
+    elif "massfit" in corr_type_data:
+        data_corrfile = "calibrationJDATA_ideal.root"
+        # old calibration: calibrationJDATA_smeared_v718.root"
+    else:
+        data_corrfile = None
+
+    mc_helper = make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}") if mc_corrfile else None
+    data_helper = make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}") if data_corrfile else None
 
     # FIXME fix uncertainty helpers
     #mc_unc_helper = wremnants.make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/calibrationJMC_smeared_v718_nominal.root")
