@@ -16,6 +16,9 @@ from .datasets import datasetsLowPU
 from .muon_prefiring import make_muon_prefiring_helpers
 from .muon_efficiencies_smooth import make_muon_efficiency_helpers_smooth
 from .muon_efficiencies_binned import make_muon_efficiency_helpers_binned
+from .muon_efficiencies_binned_vqt import make_muon_efficiency_helpers_binned_vqt
+from .muon_efficiencies_binned_vqt_integrated import make_muon_efficiency_helpers_binned_vqt_integrated
+from .muon_efficiencies_binned_vqt_real import make_muon_efficiency_helpers_binned_vqt_real
 from .qcdScaleByHelicity_helper import makeQCDScaleByHelicityHelper
 from .pileup import make_pileup_helper
 from .vertex import make_vertex_helper
