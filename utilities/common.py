@@ -98,7 +98,7 @@ def common_parser():
     parser.add_argument("-o", "--outfolder", type=str, default="", help="Output folder")
     parser.add_argument("--no-color-logger", dest="noColorLogger", action="store_true", default=False, help="Do not use logging with colors")
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
-                        help="Set verbosity level with logging, the larger the more verbose (currently only for setup_test_logger enabled with --set-custom-logger)");
+                        help="Set verbosity level with logging, the larger the more verbose (currently only for setup_test_logger enabled with --set-custom-logger)")
     parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
     parser.add_argument("--muonCorr", type=str, default="massfitData_lblidealMC", 
         choices=["none", "trackfit_only", "trackfit_only_mctruth", "lbl", "massfit", "massfit_lbl", "massfitData_mctruth"], 
