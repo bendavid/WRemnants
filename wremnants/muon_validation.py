@@ -12,8 +12,8 @@ def make_jpsi_crctn_helpers(muonCorr):
     if "massfit" not in muonCorr:
         return None, None
 
-    corr_type_data = muonCorr.replace("Data","").split("_")
-    corr_type_mc = muonCorr.replace("idealMC","").split("_")    
+    corr_type_data = muonCorr.replace("massfitData","massfit").split("_")
+    corr_type_mc = muonCorr.replace("mctruth","lbl").split("_")    
 
     if "massfit" in corr_type_mc:
         if "lbl" in corr_type_mc:
