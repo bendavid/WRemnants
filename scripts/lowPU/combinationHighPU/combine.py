@@ -65,16 +65,16 @@ if __name__ == "__main__":
     card_plus = "ZMassWLike/ZMassWLike_plus.txt"
     
     c = Combine(card_plus, outDir)
-    #c.run_fit()
+    c.run_fit()
     
     card_minus = "ZMassWLike/ZMassWLike_minus.txt"
     c = Combine(card_minus, outDir)
-    #c.run_fit()
+    c.run_fit()
     
     card_z = "ZMassWLike/ZMassWLike.txt"
     combineCards(card_plus, card_minus, card_z)
     c = Combine(card_z, outDir)
-    #c.run_fit()
+    c.run_fit()
     
     card_lowPU_wmass = "CombineStudies/lowPU_wmass/lowPU_Zmumu_RawPFMET_wmass.txt"
     card_combined = "CombineStudies/lowPU_wmass/lowPU_highPU.txt"
