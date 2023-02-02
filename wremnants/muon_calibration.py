@@ -120,8 +120,10 @@ def define_corrected_muons(df, cvh_helper, jpsi_helper, corr_type, dataset, smea
     if not (dataset.is_data or dataset.name in common.vprocs):
         corr_type = "none" 
 
+    corr_type = corr_type.replace("Data","") if dataset.is_data else corr_type.replace("MC","")        
+
     muon = "Muon"
-    if "lbl" in corr_type:
+    if "lbl" in corr_type.split("_"):
         df = define_lblcorr_muons(df, cvh_helper, dataset)
         muon = "Muon_lbl"
     elif corr_type != "none":
@@ -130,7 +132,7 @@ def define_corrected_muons(df, cvh_helper, jpsi_helper, corr_type, dataset, smea
 
     muon_pt = muon
 
-    if "massfit" in corr_type:
+    if "massfit" in corr_type.split("_"):
         df = df.Define("Muon_jpsiCorrectedPt", jpsi_helper, [muon_var_name(muon, var) for var in ["pt", "eta", "charge"]])
         muon_pt = "Muon_jpsiCorrected"
 
