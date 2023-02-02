@@ -23,13 +23,7 @@ parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of et
 parser.add_argument("--bias-calibration", action='store_true', help="Adjust central value by calibration bias hist")
 parser.add_argument("--smearing", action='store_true', help="Smear pT such that resolution matches data")
 
-f = next((x for x in parser._actions if x.dest == "pt"), None)
-if f:
-    newPtDefault = [34,26.,60.]
-    logging.warning("")
-    logging.warning(f" >>> Modifying default of {f.dest} from {f.default} to {newPtDefault}")
-    logging.warning("")
-    f.default = newPtDefault
+parser = common.set_parser_default(parser, "pt", [34,26.,60.])
     
 args = parser.parse_args()
 
