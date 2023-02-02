@@ -359,8 +359,8 @@ def doRecoilStatSyst(histCfg, procName, hNom, h_syst, rebin):
     if not hName in hists: return
     if procName != "Zmumu": return
 
-    tags = ["target_para", "target_perp", "source_para", "source_perp"] # , "source_para", "source_perp", "target_para_bkg", "target_perp_bkg"
-    tags = ["target_para"]
+    tags = ["target_para", "target_perp", "source_para", "source_perp", "target_para_bkg", "target_perp_bkg"] # , "source_para", "source_perp", "target_para_bkg", "target_perp_bkg"
+    #tags = ["target_para_bkg", "target_perp_bkg"]
     groups.setHists(hName, "", label=hName, procsToRead=[procName])
     bhist_nom = groups.groups[procName][hName]
     rhist_nom = narf.hist_to_root(bhist_nom)
@@ -384,7 +384,7 @@ def doRecoilStatSyst(histCfg, procName, hNom, h_syst, rebin):
             hDw = doOverlow(hDw)
             #for k in range(0, hNom.GetNbinsX()): print(tag, i, hNom.GetBinCenter(k), hNom.GetBinContent(k), hUp.GetBinContent(k), hNom.GetBinContent(k)/hUp.GetBinContent(k) if hUp.GetBinContent(k) > 0 else 1)
             addUnc(h_syst, hNom, hUp, hDw)
-            if i == 1: continue
+            #if i == 1: continue
         '''
         for i in range(1, rhist_pert.GetNbinsY()+1):
             print(i)
@@ -979,7 +979,7 @@ if __name__ == "__main__":
     functions.prepareDir(outDir, remove=True)
     
     print("Open")
-    groups = datagroupsLowPU("lowPU_%s_%s_nnpdf31.pkl.lz4" % (flavor, met), flavor=flavor)
+    groups = datagroupsLowPU("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
     
     if flavor == "mumu":
         procs, data = ['EWK', 'Top', 'Zmumu'], 'SingleMuon'
@@ -991,7 +991,7 @@ if __name__ == "__main__":
     print("Plotting")    
     
     
-    #singlePlot({"name": "massZ", "axis": "mll" }, "massZ", 60, 120, 1e0, 1e6, "m(l, l) (GeV)", "Events")
+    singlePlot({"name": "mZ", "axis": "mll" }, "mZ", 60, 120, 1e0, 1e7, "m(l, l) (GeV)", "Events", yRatio=1.15)
     
     #singlePlot({"name": "counts", "axis": "MET_xy" }, "counts", 0, 5, 0, 150, "MET y", "Events", rebin=1, logY=False)
     #singlePlot({"name": "counts_weighted", "axis": "MET_xy" }, "counts_weighted", 0, 5, 0, 150, "MET y", "Events", rebin=1, logY=False)
@@ -1091,6 +1091,7 @@ if __name__ == "__main__":
     
     
     recoil_qTbins = list(range(0, 50, 1)) + list(range(50, 70, 2)) + list(range(70, 100, 5)) + list(range(100, 150, 10)) + [150, 200, 300]
+    recoil_qTbins = list(range(0, 30, 1)) + list(range(30, 50, 2)) + list(range(50, 70, 5)) + list(range(70, 120, 10)) + [120, 150, 300]
     singlePlot({"name": "qT", "axis": "qT" }, "qT", 0, 100, 0.1, 1e6, "q_{T} (GeV)", "Events", rebin=recoil_qTbins, yRatio=1.15)
     singlePlot({"name": "qT_qTrw", "axis": "qT" }, "qT_qTrw", 0, 100, 0.1, 1e6, "q_{T} rw (GeV)", "Events", rebin=recoil_qTbins, yRatio=1.15)
  

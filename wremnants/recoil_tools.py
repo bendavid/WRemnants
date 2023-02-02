@@ -72,22 +72,23 @@ class Recoil:
                 self.addParametric("target_perp", f"wremnants/data/recoil/lowPU/{flavor_}_{self.met}/recoil_data_perp.json")
                 self.addParametric("source_perp", f"wremnants/data/recoil/lowPU/{flavor_}_{self.met}/recoil_zmumu_perp.json", doUnc=True)
                 setattr(ROOT.wrem, "applyRecoilCorrection", True)
+                
+                # syst variations should contain target/source and para/perp, Needed for weights
+                self.addParametricUnc("target_para_bkg", f"wremnants/data/recoil/lowPU/{flavor_}_{self.met}/recoil_data_para_ttbarUp.json")
+                self.addParametricUnc("target_para_bkg", f"wremnants/data/recoil/lowPU/{flavor_}_{self.met}/recoil_data_para_ttbarDown.json")
+                self.addParametricUnc("target_para_bkg", f"wremnants/data/recoil/lowPU/{flavor_}_{self.met}/recoil_data_para_ewkUp.json")
+                self.addParametricUnc("target_para_bkg", f"wremnants/data/recoil/lowPU/{flavor_}_{self.met}/recoil_data_para_ewkDown.json")
+                self.addParametricUnc("target_perp_bkg", f"wremnants/data/recoil/lowPU/{flavor_}_{self.met}/recoil_data_perp_ttbarUp.json")
+                self.addParametricUnc("target_perp_bkg", f"wremnants/data/recoil/lowPU/{flavor_}_{self.met}/recoil_data_perp_ttbarDown.json")
+                self.addParametricUnc("target_perp_bkg", f"wremnants/data/recoil/lowPU/{flavor_}_{self.met}/recoil_data_perp_ewkUp.json")
+                self.addParametricUnc("target_perp_bkg", f"wremnants/data/recoil/lowPU/{flavor_}_{self.met}/recoil_data_perp_ewkDown.json")
+                
             else:
                 logger.warning(f"Recoil corrections for {self.met} not available, use default XY-corrected MET")
                 setattr(ROOT.wrem, "applyRecoilCorrection", False)
                 
-            # syst variations should contain target/source and para/perp, Needed for weights
-            #self.addParametricUnc("target_perp_bkg", "wremnants/data/lowPU/recoil/singlemuon_perp_TTbar_results_refit.json")
-            #self.addParametricUnc("target_perp_bkg", "wremnants/data/lowPU/recoil/singlemuon_perp_EWK_results_refit.json")
-            #self.addParametricUnc("target_perp_bkg", "wremnants/data/lowPU/recoil/singlemuon_perp_ZZ_results_refit.json")
-            #self.addParametricUnc("target_para_bkg", "wremnants/data/lowPU/recoil/singlemuon_para_TTbar_results_refit.json")
-            #self.addParametricUnc("target_para_bkg", "wremnants/data/lowPU/recoil/singlemuon_para_EWK_results_refit.json")
-            #self.addParametricUnc("target_para_bkg", "wremnants/data/lowPU/recoil/singlemuon_para_ZZ_results_refit.json")
-          
-            #self.addBinned("target_para", "/eos/user/j/jaeyserm/www/wmass/lowPU/recoilCorrection/recoil_mumu_RawPFMET/singlemuon_para/fits_v0/results.json")
-            #self.addBinned("source_para", "/eos/user/j/jaeyserm/www/wmass/lowPU/recoilCorrection/recoil_mumu_RawPFMET/dymumu_para/fits_v0/results.json")
-            #self.addBinned("target_perp", "/eos/user/j/jaeyserm/www/wmass/lowPU/recoilCorrection/recoil_mumu_RawPFMET/singlemuon_perp/fits_v1/results.json")
-            #self.addBinned("source_perp", "/eos/user/j/jaeyserm/www/wmass/lowPU/recoilCorrection/recoil_mumu_RawPFMET/dymumu_perp/fits_v0/results.json")
+            
+
             
 
             
@@ -227,7 +228,7 @@ class Recoil:
 
     def addParametricUnc(self, tag, fIn):
     
-        logger.info(f"Add recoil parametric set for {tag}")
+        logger.info(f"Add recoil parametric uncertainty set for {tag}")
         with open(fIn) as f: jsIn = json.load(f)
         nGauss = jsIn['nGauss']
         recoil_param_nGauss = getattr(ROOT.wrem, "recoil_param_nGauss")
