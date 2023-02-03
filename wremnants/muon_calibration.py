@@ -257,7 +257,7 @@ def transport_smearing_weights_to_reco(
                 *[hh.multiplyHists(nominal_reco, x) for x in bin_ratio_dn_up]
             )
             msv_sw_reco.view(flow = True)[..., i_unc, :] = sw_dn_up_reco.view(flow = True)
-        resultdict[proc]['output']['muonScaleSyst_responseWeights'] = msv_sw_reco
+        resultdict[proc]['output']['nominal_muonScaleSyst_responseWeights'] = msv_sw_reco
 
 def muon_scale_variation_from_manual_shift(
     resultdict, procs = ['WplusmunuPostVFP', 'WminusmunuPostVFP', 'ZmumuPostVFP'],

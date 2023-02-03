@@ -97,7 +97,7 @@ public:
 
     // for smearing weights derived from propagating uncs on A, e, M to uncs on qop
     out_tensor_t operator() (
-        double genQop, float genPhi, int genCharge, float genEta, float genPt,
+        double genQop, float genPhi, float genEta,
         double recoQop, float recoPhi, int recoCharge, float recoEta, float recoPt,
         const RVec<float> &cov, // for sigma on the Gaussian
         double nominal_weight, bool abQop = true, bool fullParam = false
@@ -109,7 +109,7 @@ public:
         ); // (qop, lam, phi)
 
         Eigen::Vector3d genparms(
-            (abQop? genQop : calculateQop(genPt, genEta, genCharge)),
+            genQop,
             (fullParam? calculateLam(genEta) : 0),
             (fullParam? genPhi: 0)
         );

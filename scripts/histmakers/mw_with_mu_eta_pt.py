@@ -369,9 +369,7 @@ def build_graph(df, dataset):
                             [
                             "goodMuons_qop0_gen",
                             "goodMuons_phi0_gen",
-                            "goodMuons_charge0_gen",
                             "goodMuons_eta0_gen",
-                            "goodMuons_pt0_gen",
                             "goodMuons_qop0_gen_smeared",
                             "goodMuons_phi0_gen_smeared",
                             "goodMuons_charge0_gen_smeared",
