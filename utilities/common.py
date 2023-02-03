@@ -94,10 +94,11 @@ def common_parser():
     parser.add_argument("--trackerMuons", action='store_true', help="Use tracker muons instead of global muons (need appropriate scale factors too)")
     parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers)")
     parser.add_argument("--onlyMainHistograms", action='store_true', help="Only produce some histograms, skipping (most) systematics to run faster when those are not needed")
-    parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
-                        help="Set verbosity level with logging, the larger the more verbose (currently for setup_test_logger)");
     parser.add_argument("--met", type=str, choices=["DeepMETReso", "RawPFMET"], help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")                    
     parser.add_argument("-o", "--outfolder", type=str, default="", help="Output folder")
+    parser.add_argument("--no-color-logger", dest="noColorLogger", action="store_true", default=False, help="Do not use logging with colors")
+    parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
+                        help="Set verbosity level with logging, the larger the more verbose (currently only for setup_test_logger enabled with --set-custom-logger)");
     
     commonargs,_ = parser.parse_known_args()
 
@@ -145,7 +146,7 @@ class CustomFormatter(logging.Formatter):
     bold_red = "\x1b[31;1m"
     reset = "\x1b[0m"
     #format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
-    myformat = "%(levelname)s:%(name)s: %(message)s"
+    myformat = "%(levelname)s:%(filename)s: %(message)s"
 
     FORMATS = {
         logging.DEBUG: green + myformat + reset,
@@ -165,7 +166,7 @@ logging_verboseLevel = [logging.CRITICAL, logging.ERROR, logging.WARNING, loggin
 def setLoggingLevel(log, verbosity):
     log.setLevel(logging_verboseLevel[max(0, min(4, verbosity))])
 
-def setup_test_logger(name, verbosity):
+def setup_color_logger(name, verbosity):
     base_logger = logging.getLogger("wremnants")
     # set console handler
     ch = logging.StreamHandler()
@@ -182,7 +183,7 @@ def setup_base_logger(name, debug):
     return base_logger.getChild(name)
     
 def child_logger(name):
-    return logging.getLogger("wremnants").getChild(name.split(".")[-1])
+    return logging.getLogger("wremnants").getChild(name)
 
 '''
 INPUT -------------------------------------------------------------------------

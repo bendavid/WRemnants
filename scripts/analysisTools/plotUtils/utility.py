@@ -5,6 +5,8 @@ import numpy as np
 import logging
 logging.basicConfig(level=logging.INFO)
 
+from functools import partial
+
 from array import array
 import shutil
 #sys.path.append(os.getcwd() + "/plotUtils/")
@@ -13,6 +15,25 @@ from scripts.analysisTools.plotUtils.CMS_lumi import *
 #ROOT.gInterpreter.ProcessLine(".O3")
 
 _canvas_pull = ROOT.TCanvas("_canvas_pull","",800,800)
+
+#########################################################################
+colors_plots_ = {"Wmunu"      : ROOT.kRed+2,
+                 "Zmumu"      : ROOT.kAzure+2,
+                 "Wtau"       : ROOT.kCyan+1,
+                 "Ztautau"    : ROOT.kSpring+9,
+                 "Top"        : ROOT.kGreen+2,
+                 "Diboson"    : ROOT.kViolet,
+                 "Fake"       : ROOT.kGray,
+                 "Other"      : ROOT.kGray}
+
+legEntries_plots_ = {"Wmunu"      : "W#rightarrow#mu#nu",
+                     "Zmumu"      : "Z#rightarrow#mu#mu",
+                     "Wtau"       : "W#rightarrow#tau#nu",
+                     "Ztautau"    : "Z#rightarrow#tau#tau",
+                     "Top"        : "t quark",
+                     "Diboson"    : "Diboson",
+                     "Fake"       : "Multijet",
+                     "Other"      : "Other"}   
 
 #########################################################################
 
@@ -1103,6 +1124,21 @@ def drawSingleTH1(h1,
 
 ################################################################
 
+def pol1_root_(xvals, parms, xLowVal = 0.0, xFitRange = 1.0):
+    xscaled = (xvals[0] - xLowVal) / xFitRange
+    return parms[0] + parms[1]*xscaled
+
+def pol2_root_(xvals, parms, xLowVal = 0.0, xFitRange = 1.0):
+    xscaled = (xvals[0] - xLowVal) / xFitRange
+    return parms[0] + parms[1]*xscaled + parms[2]*xscaled**2
+    
+def polN_root_(xvals, parms, xLowVal = 0.0, xFitRange = 1.0, degree=3):
+    xscaled = (xvals[0] - xLowVal) / xFitRange
+    ret = parms[0]
+    for d in range(1, degree):
+        ret += parms[d]*xscaled**d
+    return ret
+    
 def drawSingleTH1withFit(h1,
                          labelXtmp="xaxis", labelYtmp="yaxis",
                          canvasName="default", outdir="./",
@@ -1121,7 +1157,8 @@ def drawSingleTH1withFit(h1,
                          moreText="",
                          moreTextLatex="",
                          fitRange="0,40", # xmin and xmax
-                         fitOptions="WLMFS+"
+                         fitOptions="WLMFS+",
+                         evalAt=None
 ):
 
     # moreText is used to pass some text to write somewhere (TPaveText is used)
@@ -1178,8 +1215,6 @@ def drawSingleTH1withFit(h1,
     h1.SetMarkerStyle(20)
     h1.SetMarkerSize(0)
 
-    #ymax = max(ymax, max(h1.GetBinContent(i)+h1.GetBinError(i) for i in range(1,h1.GetNbinsX()+1)))
-    # if min and max were not set, set them based on histogram content
     if ymin == ymax == 0.0:
         ymin,ymax = getMinMaxHisto(h1,excludeEmpty=True,sumError=True)            
         ymin *= 0.9
@@ -1211,10 +1246,12 @@ def drawSingleTH1withFit(h1,
     #h1.Draw("HIST same")
 
     xMinFit, xMaxFit = map(float, fitRange.split(','))
-    fpol1 = ROOT.TF1("fpol1","pol1", h1.GetXaxis().GetBinLowEdge(1), 30, "")
+    pol1_scaled = partial(pol1_root_, xLowVal=xMinFit, xFitRange=xMaxFit)
+    fpol1 = ROOT.TF1("fpol1",pol1_scaled, h1.GetXaxis().GetBinLowEdge(1), 30, 2)
     fpol1.SetParLimits(1, -50.0, 0.0)
-    f1 = ROOT.TF1("f1","pol2", h1.GetXaxis().GetBinLowEdge(1), xMaxFit, "")
-    f1.SetParLimits(2, -1.0, 0.0)
+    pol2_scaled = partial(pol2_root_, xLowVal=xMinFit, xFitRange=xMaxFit)
+    f1 = ROOT.TF1("f1",pol2_scaled, h1.GetXaxis().GetBinLowEdge(1), xMaxFit, 3)
+    f1.SetParLimits(2, -10.0, 0.0)
     realFitOptions = fitOptions
     if "B" not in fitOptions:
         realFitOptions = "B" + fitOptions
@@ -1228,7 +1265,7 @@ def drawSingleTH1withFit(h1,
     fpol1.SetLineColor(ROOT.kGreen+2)
     fpol1.Draw("L SAME")
     postfitpars = [f1.GetParameter(0), f1.GetParameter(1), f1.GetParameter(2)]
-    f2 = ROOT.TF1("f2","pol2", xMaxFit, h1.GetXaxis().GetBinLowEdge(1+h1.GetNbinsX()), "")
+    f2 = ROOT.TF1("f2",pol2_scaled, xMaxFit, h1.GetXaxis().GetBinLowEdge(1+h1.GetNbinsX()), 3)
     f2.SetParameter(0, postfitpars[0])
     f2.SetParameter(1, postfitpars[1])
     f2.SetParameter(2, postfitpars[2])
@@ -1236,7 +1273,7 @@ def drawSingleTH1withFit(h1,
     f2.SetLineWidth(3)
     f2.SetLineStyle(9)
     f2.Draw("L SAME")
-    f2pol1 = ROOT.TF1("f2pol1","pol1", 30, h1.GetXaxis().GetBinLowEdge(1+h1.GetNbinsX()), "")
+    f2pol1 = ROOT.TF1("f2pol1",pol1_scaled, 30, h1.GetXaxis().GetBinLowEdge(1+h1.GetNbinsX()), 2)
     f2pol1.SetParameter(0, fpol1.GetParameter(0))
     f2pol1.SetParameter(1, fpol1.GetParameter(1))
     f2pol1.SetLineColor(ROOT.kRed+2)
@@ -1388,7 +1425,10 @@ def drawSingleTH1withFit(h1,
         canvas.SaveAs(outdir + canvasName + "_logY.pdf")
         canvas.SetLogy(0)
 
-    return f1,fpol1
+    if evalAt:
+        return f1.Eval(evalAt), fpol1.Eval(evalAt)
+    else:
+        return f1, fpol1
         
 ################################################################
 

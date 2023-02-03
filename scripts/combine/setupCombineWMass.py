@@ -24,9 +24,7 @@ def make_parser(parser=None):
     parser.add_argument("-k",  "--keepNuisances", type=str, default="", help="Regular expression to keep some systematics, overriding --excludeNuisances. Can be used to keep only some systs while excluding all the others with '.*'")
     parser.add_argument("--skipOtherChargeSyst", dest="skipOtherChargeSyst" , action="store_true",   help="Skip saving histograms and writing nuisance in datacard for systs defined for a given charge but applied on the channel with the other charge")
     parser.add_argument("--scaleMuonCorr", type=float, default=1.0, help="Scale up/down dummy muon scale uncertainty by this factor")
-    parser.add_argument("--correlateEffStatIsoByCharge", action='store_true', help="Correlate isolation efficiency uncertanties between the two charges (by default they are decorrelated)")
     parser.add_argument("--muonScaleVariation", choices=["smearing_weights", "massweights", "manual_pt_shift"], default="massweights", help="the method with whicht the distributions for the muon scale variations is derived")
-    parser.add_argument("--decorrelateEffStatIsoByCharge", dest="decorrelateEffStatIsoByCharge", action='store_true', help="Don't correlate isolation efficiency uncertanties between the two charges (by default they are correlated). Obsolete option, one should rather use charge dependent efficiencies directly when they exist")
     parser.add_argument("--noHist", action='store_true', help="Skip the making of 2D histograms (root file is left untouched if existing)")
     parser.add_argument("--effStatLumiScale", type=float, default=None, help="Rescale equivalent luminosity for efficiency stat uncertainty by this value (e.g. 10 means ten times more data from tag and probe)")
     parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers and nuisances)")
@@ -42,9 +40,21 @@ def main(args):
             raise ValueError("Restricting the x axis not supported for 2D hist")
         s = hist.tag.Slicer()
         datagroups.setGlobalAction(lambda h: h[{args.fitvar : s[complex(0, args.xlim[0]):complex(0, args.xlim[1])]}])
+
+    dilepton = datagroups.dilepton
     wlike = datagroups.wlike
 
-    tag = "WMass" if not wlike else "ZMassWLike"
+    if wlike:
+        name = "ZMassWLike"
+    elif dilepton:
+        name = "ZMassDilepton"
+    else:
+        name = "WMass"
+
+    tag = name
+    if args.doStatOnly:
+        tag += "_statOnly"
+
     outfolder = f"{args.outfolder}/{tag}/"
     if not os.path.isdir(outfolder):
         os.makedirs(outfolder)
@@ -53,7 +63,6 @@ def main(args):
         raise ValueError("Option --noHist would override --noStatUncFakes. Please select only one of them")
 
     templateDir = f"{scriptdir}/Templates/WMass"
-    name = "WMass" if not wlike else "ZMassWLike"
     cardTool = CardTool.CardTool(f"{outfolder}/{name}_{{chan}}.txt")
     cardTool.setNominalTemplate(f"{templateDir}/main.txt")
     cardTool.setNominalName(sel.hist_map[args.fitvar])
@@ -80,13 +89,13 @@ def main(args):
     if args.lumiScale:
         cardTool.setLumiScale(args.lumiScale)
         
-    passSystToFakes = not (wlike or args.skipSignalSystOnFakes)
+    passSystToFakes = not (dilepton or args.skipSignalSystOnFakes)
         
     single_v_samples = cardTool.filteredProcesses(lambda x: x[0] in ["W", "Z"])
-    single_v_nonsig_samples = cardTool.filteredProcesses(lambda x: x[0] == ("W" if wlike else "Z"))
+    single_v_nonsig_samples = cardTool.filteredProcesses(lambda x: x[0] == ("W" if dilepton else "Z"))
     single_vmu_samples = list(filter(lambda x: "mu" in x, single_v_samples))
-    signal_samples = list(filter(lambda x: x[0] == ("Z" if wlike else "W"), single_vmu_samples))
-    signal_samples_inctau = list(filter(lambda x: x[0] == ("Z" if wlike else "W"), single_v_samples))
+    signal_samples = list(filter(lambda x: x[0] == ("Z" if dilepton else "W"), single_vmu_samples))
+    signal_samples_inctau = list(filter(lambda x: x[0] == ("Z" if dilepton else "W"), single_v_samples))
 
     logger.info(f"All MC processes {cardTool.allMCProcesses()}")
     logger.info(f"Single V samples: {single_v_samples}")
@@ -99,7 +108,7 @@ def main(args):
     # keep mass weights here as first systematic, in case one wants to run stat-uncertainty only with --doStatOnly
     cardTool.addSystematic("massWeight", 
         processes=signal_samples_inctau,
-        outNames=theory_tools.massWeightNames(["massShift100MeV"], wlike=wlike),
+        outNames=theory_tools.massWeightNames(["massShift100MeV"], wlike=dilepton),
         group="massShift",
         groupFilter=lambda x: x == "massShift100MeV",
         mirror=False,
@@ -111,12 +120,12 @@ def main(args):
 
     if args.doStatOnly:
         # print a card with only mass weights and a dummy syst
-        cardTool.addLnNSystematic("dummy", processes=["Other"] if wlike else ["Top", "Diboson"], size=1.001, group="dummy")
+        cardTool.addLnNSystematic("dummy", processes=["Other"] if dilepton else ["Top", "Diboson"], size=1.001, group="dummy")
         cardTool.writeOutput()
         logger.info("Using option --doStatOnly: the card was created with only mass weights and a dummy LnN syst on all processes")
         quit()
         
-    if wlike:
+    if dilepton:
         # TOCHECK: no fakes here, most likely
         cardTool.addLnNSystematic("luminosity", processes=cardTool.allMCProcesses(), size=1.012, group="luminosity")
     else:
@@ -211,10 +220,10 @@ def main(args):
                 splitGroup=splitGroupDict
             )
 
-    to_fakes = not (wlike or args.noQCDscaleFakes)
+    to_fakes = not (dilepton or args.noQCDscaleFakes)
     combine_helpers.add_scale_uncertainty(cardTool, args.qcdScale, signal_samples_inctau, to_fakes, pdf=args.pdf, scetlib=args.scetlibUnc)
     # for Z background in W mass case (W background for Wlike is essentially 0, useless to apply QCD scales there)
-    if not wlike:
+    if not dilepton:
         combine_helpers.add_scale_uncertainty(cardTool, "integrated", single_v_nonsig_samples, False, pdf=args.pdf, name_append="Z", scetlib=args.scetlibUnc)
 
     msv_config_dict = {
@@ -269,7 +278,7 @@ def main(args):
         labelsByAxis=["downUpVar"],
         passToFakes=passSystToFakes,
     )
-    if not wlike:
+    if not dilepton:
         cardTool.addLnNSystematic("CMS_Fakes", processes=[args.qcdProcessName], size=1.05, group="MultijetBkg")
         cardTool.addLnNSystematic("CMS_Top", processes=["Top"], size=1.06)
         cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16)
