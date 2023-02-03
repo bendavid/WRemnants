@@ -214,21 +214,21 @@ def define_uncrct_reco_muon_kinematics(df, kinematic_vars = ["pt", "eta", "phi",
     return df
 
 def transport_smearing_weights_to_reco(
-    resultdict, procs = ['WplusmunuPostVFP', 'WminusmunuPostVFP', 'ZmumuPostVFP'],
-    proj_axes = ['eta', 'pt', 'charge', 'passIso', 'passMT']
+    resultdict,
+    procs = ['WplusmunuPostVFP', 'WminusmunuPostVFP', 'ZmumuPostVFP'],
 ):
     for proc in procs:
-        proc_hists = resultdict[proc]['output']
-        nominal_gen_smear = (
-            proc_hists['nominal_gen_smeared'].project(*proj_axes))
-        msv_sw_gen_smear = [
-            (proc_hists['muonScaleSyst_responseWeights_gensmear'][...,0,0].project(*proj_axes)),
-            (proc_hists['muonScaleSyst_responseWeights_gensmear'][...,0,1].project(*proj_axes))
-        ]
-        sw_per_bin_gen_smear = [hh.divideHists(x, nominal_gen_smear) for x in msv_sw_gen_smear]
-        nominal_reco = proc_hists['nominal'].project(*proj_axes)
-        msv_sw_reco = [hh.multiplyHists(nominal_reco, x) for x in sw_per_bin_gen_smear]
-        proc_hists['muonScaleSyst_responseWeights'] = hh.combineUpDownVarHists(*msv_sw_reco)
+        nominal_gen_smear = resultdict[proc]['output']['nominal_gen_smeared']
+        nominal_reco = resultdict[proc]['output']['nominal']
+        msv_sw_gen_smear = resultdict[proc]['output']['muonScaleSyst_responseWeights_gensmear']
+        msv_sw_reco = hist.Hist(*msv_sw_gen_smear.axes, storage = ms_sw_gen_smear._storage_type())
+
+        for i_unc in range(msv_sw_gen_smear.axes['unc'].size):
+            sw_dn_up_gen_smear = [msv_sw_gen_smear[..., i_unc, 0], msv_sw_gen_smear[..., i_unc, 1]]
+            bin_ratio_dn_up = [hh.divideHists(x, nominal_gen_smear) for x in sw_dn_up_gen_smear]
+            sw_dn_up_reco = [hh.multiplyHists(nominal_reco, x) for x in bin_ratio_dn_up]
+            msv_sw_reco.view(flow = True)[..., i_unc, :] = sw_dn_up_reco.view(flow = True)
+        resultdict[proc]['output']['muonScaleSyst_responseWeights'] = msv_sw_reco
 
 def muon_scale_variation_from_manual_shift(
     resultdict, procs = ['WplusmunuPostVFP', 'WminusmunuPostVFP', 'ZmumuPostVFP'],

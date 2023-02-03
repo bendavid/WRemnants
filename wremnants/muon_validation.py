@@ -50,10 +50,9 @@ def make_jpsi_crctn_unc_helper(filepath, n_scale_params = 3, n_tot_params = 6, n
     cov = f['covariance_matrix'].to_hist()
     cov_scale_params = get_jpsi_scale_param_cov_mat(cov, n_scale_params, n_tot_params, n_eta_bins)
 
-    #
     w,v = np.linalg.eigh(cov_scale_params)    
     var_mat = np.sqrt(w) * v
-    axis_eta = hist.axis.Regular(n_eta_bins, 0, 1, name = 'eta')
+    axis_eta = hist.axis.Regular(n_eta_bins, -2.4, 2.4, name = 'eta')
     axis_scale_params = hist.axis.Regular(n_scale_params, 0, 1, name = 'scale_params')
     axis_scale_params_unc = hist.axis.Regular(
         n_eta_bins * n_scale_params, 0, 1,
