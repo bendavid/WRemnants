@@ -25,7 +25,7 @@ def select_good_muons(df, nMuons=1, use_trackerMuons=False, use_isolation=False)
         else:
             df = df.Define("Muon_category", "Muon_isTracker && Muon_innerTrackOriginalAlgo != 13 && Muon_innerTrackOriginalAlgo != 14 && Muon_highPurity")
     else:
-        df = df.Define("Muon_category", "Muon_isGlobal")
+        df = df.Define("Muon_category", "Muon_isGlobal && Muon_highPurity")
 
     goodMuonsSelection = "vetoMuons && Muon_mediumId && Muon_category"
     if use_isolation:
@@ -49,12 +49,24 @@ def define_trigger_muons(df):
     df = muon_calibration.define_corrected_reco_muon_kinematics(df, "trigMuons", ["pt", "eta", "phi"])
     df = muon_calibration.define_corrected_reco_muon_kinematics(df, "nonTrigMuons", ["pt", "eta", "phi"])
 
+    return df
+
+def select_z_candidate(df, ptLow, ptHigh):
+
     df = df.Filter("Sum(trigMuons) == 1 && Sum(nonTrigMuons) == 1")
-    df = df.Filter("nonTrigMuons_pt0 > 26.") # this is our "neutrino", should there also be an upper cut to be consistent with the efficiencies?
+    df = df.Filter(f"trigMuons_pt0 > {ptLow} && trigMuons_pt0 < {ptHigh}")
+    df = df.Filter(f"nonTrigMuons_pt0 > {ptLow} && nonTrigMuons_pt0 < {ptHigh}")
+
+    df = df.Define("trigMuons_mom4", "ROOT::Math::PtEtaPhiMVector(trigMuons_pt0, trigMuons_eta0, trigMuons_phi0, wrem::muon_mass)")
+    df = df.Define("nonTrigMuons_mom4", "ROOT::Math::PtEtaPhiMVector(nonTrigMuons_pt0, nonTrigMuons_eta0, nonTrigMuons_phi0, wrem::muon_mass)")
+    df = df.Define("ll_mom4", "ROOT::Math::PxPyPzEVector(trigMuons_mom4)+ROOT::Math::PxPyPzEVector(nonTrigMuons_mom4)")
+    df = df.Define("mll", "ll_mom4.mass()")
+
+    df = df.Filter("mll >= 60. && mll < 120.")
 
     return df
 
-def select_triggermatched_muon(df, dataset, muon_eta, muon_phi):
+def apply_triggermatching_muon(df, dataset, muon_eta, muon_phi):
     if dataset.group in ["Top", "Diboson"]:
         df = df.Define("goodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_pt,TrigObj_l1pt,TrigObj_l2pt,TrigObj_filterBits)")
     else:
@@ -89,10 +101,9 @@ def select_standalone_muons(df, dataset, use_trackerMuons=False, muons="goodMuon
         df = df.Define(f"{muons}_SAeta{idx}", f"Muon_standaloneEta[{muons}][{idx}]")
         df = df.Define(f"{muons}_SAphi{idx}", f"Muon_standalonePhi[{muons}][{idx}]")
     
-    df = df.Filter(f"{muons}_SApt{idx} > 15.0 && wrem::deltaR2({muons}_SAeta{idx}, {muons}_SAphi{idx}, {muons}_eta{idx}, {muons}_phi{idx}) < 0.09")
-
-    # the next cut is mainly needed for consistency with the reco efficiency measurement for the case with global muons
+    # the next cuts are mainly needed for consistency with the reco efficiency measurement for the case with global muons
     # note, when SA does not exist this cut is still fine because of how we define these variables
+    df = df.Filter(f"{muons}_SApt{idx} > 15.0 && wrem::deltaR2({muons}_SAeta{idx}, {muons}_SAphi{idx}, {muons}_eta{idx}, {muons}_phi{idx}) < 0.09")
     if nHitsSA > 0 and not use_trackerMuons and not dataset.group in ["Top", "Diboson"]:
         df = df.Filter(f"Muon_standaloneNumberOfValidHits[{muons}][{idx}] >= {nHitsSA}")
 

@@ -11,6 +11,7 @@ import re
 import pandas as pd
 import math
 from utilities import common
+import os
 
 logger = common.child_logger(__name__)
 
@@ -18,13 +19,17 @@ class datagroups(object):
     def __init__(self, infile, combine=False):
         self.combine = combine
         self.lumi = 1.
-        if ".root" not in infile[-5:]:
+        if not infile.endswith(".root"):
             with lz4.frame.open(infile) as f:
                 self.results = pickle.load(f)
             self.rtfile = None
         else:
             self.rtfile = ROOT.TFile.Open(infile)
             self.results = None
+
+        if self.results:
+            self.dilepton = os.path.basename(self.results["meta_info"]["command"]).split()[0].startswith("mz")
+            self.wlike = os.path.basename(self.results["meta_info"]["command"]).split()[0].startswith("mz_wlike")
 
         self.lumi = None
         if self.datasets and self.results:
@@ -275,12 +280,11 @@ class datagroups(object):
         return name
 
 class datagroups2016(datagroups):
-    def __init__(self, infile, combine=False, pseudodata_pdfset = None,
+    def __init__(self, infile, combine=False, pseudodata_pdfset = None, applySelection=True
     ):
         self.datasets = {x.name : x for x in datasets2016.getDatasets()}
         super().__init__(infile, combine)
-        self.wlike = "wlike" in self.results["meta_info"]["command"]
-        if self.wlike:
+        if self.dilepton or not applySelection:
             sigOp = None
             fakeOp = None
         else:
@@ -313,7 +317,7 @@ class datagroups2016(datagroups):
                 label = f"pdf{pseudodata_pdfset.upper()}",
                 color = "dimgray"
             )
-        if not self.wlike:
+        if not self.dilepton:
             self.groups.update({
                 "Wmunu" : dict(
                     members = [self.datasets["WminusmunuPostVFP"], self.datasets["WplusmunuPostVFP"]],
@@ -368,8 +372,15 @@ class datagroups2016(datagroups):
         return df
 
     def readHist(self, baseName, proc, syst, scaleOp=None, forceNonzero=True, scaleToNewLumi=-1):
+        logger.debug("PROC.NAME")
+        logger.debug(proc.name)
+        logger.debug("BASENAME")
+        logger.debug(baseName)
+        logger.debug("SYST")
+        logger.debug(syst)
         output = self.results[proc.name]["output"]
         histname = self.histName(baseName, proc.name, syst)
+        logger.debug(histname)
         if histname not in output:
             raise ValueError(f"Histogram {histname} not found for process {proc.name}")
         h = output[histname]

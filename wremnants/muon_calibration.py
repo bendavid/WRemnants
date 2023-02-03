@@ -7,6 +7,7 @@ from utilities import common
 from utilities import boostHistHelpers as hh
 from . import muon_validation
 import uproot
+import numpy as np
 
 ROOT.gInterpreter.Declare('#include "muon_calibration.h"')
 ROOT.gInterpreter.Declare('#include "lowpu_utils.h"')
@@ -31,9 +32,44 @@ def make_muon_calibration_helpers(mc_filename=data_dir+"/calibration/correctionR
 
     return mc_helper, data_helper, uncertainty_helper
 
-def make_muon_bias_helpers(lbl=False):
+def make_muon_bias_helpers(corr_type, smearing=True):
     # this helper adds a correction for the bias from nonclosure to the muon pT
-    h2d = uproot.open(f"wremnants/data/closure/closureZ{'_LBL' if lbl else ''}.root:closure").to_hist()
+    if (smearing and corr_type !="massfit") or corr_type not in ["massfit", "massfit_lbl"]:
+        print("The bias correction is not available for this configuration, procees without bias correction helper!")
+        return None
+    elif smearing:
+        filename = "closureZ_smeared"
+    elif corr_type == "massfit":
+        filename = "closureZ"
+    elif corr_type == "massfit_lbl":
+        filename = "closureZ_LBL"
+
+    h2d = uproot.open(f"wremnants/data/closure/{filename}.root:closure").to_hist()
+    # Drop the uncertainty because the Weight storage type doesn't play nice with ROOT
+
+    h2d_nounc = hist.Hist(*h2d.axes, data=h2d.values(flow=True))
+    h2d_std = hist.Hist(*h2d.axes, data=h2d.variances(flow=True)**0.5)
+    # Set overflow to closest values
+    h2d_nounc[hist.underflow,:][...] = h2d_nounc[0,:].view(flow=True)
+    h2d_nounc[:,hist.underflow][...] = h2d_nounc[:,0].view(flow=True)
+    h2d_nounc[hist.overflow,:][...] = h2d_nounc[-1,:].view(flow=True)
+    h2d_nounc[:,hist.overflow][...] = h2d_nounc[:,-1].view(flow=True)
+
+    h2d_std[hist.underflow,:][...] = h2d_std[0,:].view(flow=True)
+    h2d_std[:,hist.underflow][...] = h2d_std[:,0].view(flow=True)
+    h2d_std[hist.overflow,:][...] = h2d_std[-1,:].view(flow=True)
+    h2d_std[:,hist.overflow][...] = h2d_std[:,-1].view(flow=True)
+
+    h2d_cpp = narf.hist_to_pyroot_boost(h2d_nounc, tensor_rank=0)
+    h2d_std_cpp = narf.hist_to_pyroot_boost(h2d_std, tensor_rank=0)
+
+    helper = ROOT.wrem.BiasCalibrationHelper[type(h2d_cpp).__cpp_name__](ROOT.GetThreadPoolSize(), ROOT.std.move(h2d_cpp), ROOT.std.move(h2d_std_cpp))
+
+    return helper
+
+def make_muon_smearing_helpers():
+    # this helper smears muon pT to match the resolution in data
+    h2d = uproot.open(f"wremnants/data/calibration/smearing.root:smearing").to_hist()
     # Drop the uncertainty because the Weight storage type doesn't play nice with ROOT
     h2d_nounc = hist.Hist(*h2d.axes, data=h2d.values(flow=True))
     # Set overflow to closest values
@@ -43,7 +79,8 @@ def make_muon_bias_helpers(lbl=False):
     h2d_nounc[:,hist.overflow][...] = h2d_nounc[:,-1].view(flow=True)
 
     h2d_cpp = narf.hist_to_pyroot_boost(h2d_nounc, tensor_rank=0)
-    helper = ROOT.wrem.BiasCorrectionsHelper[type(h2d_cpp).__cpp_name__](ROOT.std.move(h2d_cpp))
+    # FIXME not sure if ROOT.GetThreadPoolSize() always give number of threads, probably maximum number, maybe there is a better way
+    helper = ROOT.wrem.SmearingHelper[type(h2d_cpp).__cpp_name__](ROOT.GetThreadPoolSize(), ROOT.std.move(h2d_cpp))
 
     return helper
 
@@ -79,13 +116,8 @@ def define_lblcorr_muons(df, cvh_helper, dataset):
     df = df.Define("Muon_lblCharge", "ROOT::VecOps::RVec<int> res(Muon_lblMom4Charge.size()); std::transform(Muon_lblMom4Charge.begin(), Muon_lblMom4Charge.end(), res.begin(), [](const auto &x) { return x.second; }); return res;")
     return df
 
-def define_jpsicorr_muons(df, helper, muon):
-    df = df.Define("Muon_jpsiCorrectedPt", helper, 
-            [muon_var_name(muon, var) for var in ["pt", "eta", "charge"]]
-    )
-    return df
 
-def define_corrected_muons(df, cvh_helper, jpsi_helper, corr_type, dataset, bias_helper=None):
+def define_corrected_muons(df, cvh_helper, jpsi_helper, corr_type, dataset, smearing_helper=None, bias_helper=None):
     if not (dataset.is_data or dataset.name in common.vprocs):
         corr_type = "none" 
 
@@ -100,12 +132,16 @@ def define_corrected_muons(df, cvh_helper, jpsi_helper, corr_type, dataset, bias
     muon_pt = muon
 
     if "massfit" in corr_type:
-        df = define_jpsicorr_muons(df, jpsi_helper, muon)
+        df = df.Define("Muon_jpsiCorrectedPt", jpsi_helper, [muon_var_name(muon, var) for var in ["pt", "eta", "charge"]])
         muon_pt = "Muon_jpsiCorrected"
 
+    if smearing_helper and not dataset.is_data:
+        df = df.Define("Muon_smearedPt", smearing_helper, ["rdfslot_", muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta")])
+        muon_pt = "Muon_smeared"
+
     if bias_helper and not dataset.is_data:
-        df = define_biased_muons(df, bias_helper, muon)
-        muon_pt = "_".join([muon, "bias"]) 
+        df = df.Define("Muon_biasedPt", bias_helper, ["rdfslot_", muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta")])
+        muon_pt = "Muon_biased"
 
     for var in ["pt", "eta", "phi", "charge"]:
         mu_name = muon_pt if var == "pt" else muon
@@ -134,15 +170,6 @@ def get_good_gen_muons_idx_in_GenPart(df, reco_subset = "goodMuons"):
 
 def muon_var_name(mu_type, var):
         return mu_type+(f"_{var}" if mu_type == "Muon" else var.capitalize())
-
-def define_biased_muons(df, helper, muon):
-    mu_name = f"{muon}_bias"
-    df = df.Define(muon_var_name(mu_name, "pt"), helper, 
-            [muon_var_name(muon, var) for var in ["pt", "eta", "charge"]]
-    )
-
-    return df
-
 
 def define_good_gen_muon_kinematics(df, kinematic_vars = ["pt", "eta", "phi", "charge"]):
     for var in kinematic_vars:
@@ -221,12 +248,14 @@ def transport_smearing_weights_to_reco(
         nominal_gen_smear = resultdict[proc]['output']['nominal_gen_smeared']
         nominal_reco = resultdict[proc]['output']['nominal']
         msv_sw_gen_smear = resultdict[proc]['output']['muonScaleSyst_responseWeights_gensmear']
-        msv_sw_reco = hist.Hist(*msv_sw_gen_smear.axes, storage = ms_sw_gen_smear._storage_type())
+        msv_sw_reco = hist.Hist(*msv_sw_gen_smear.axes, storage = msv_sw_gen_smear._storage_type())
 
         for i_unc in range(msv_sw_gen_smear.axes['unc'].size):
             sw_dn_up_gen_smear = [msv_sw_gen_smear[..., i_unc, 0], msv_sw_gen_smear[..., i_unc, 1]]
             bin_ratio_dn_up = [hh.divideHists(x, nominal_gen_smear) for x in sw_dn_up_gen_smear]
-            sw_dn_up_reco = [hh.multiplyHists(nominal_reco, x) for x in bin_ratio_dn_up]
+            sw_dn_up_reco = hh.combineUpDownVarHists(
+                *[hh.multiplyHists(nominal_reco, x) for x in bin_ratio_dn_up]
+            )
             msv_sw_reco.view(flow = True)[..., i_unc, :] = sw_dn_up_reco.view(flow = True)
         resultdict[proc]['output']['muonScaleSyst_responseWeights'] = msv_sw_reco
 

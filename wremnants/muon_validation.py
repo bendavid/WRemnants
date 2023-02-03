@@ -13,7 +13,8 @@ def make_jpsi_crctn_helpers(muonCorr):
         return None, None
 
     mc_corrfile = "calibrationJMC_smeared_v718_nominalLBL.root" if "lbl" in muonCorr else "calibrationJMC_smeared_v718_nominal.root"
-    data_corrfile = "calibrationJDATA_smeared_v718_LBL.root" if "lbl" in muonCorr else "calibrationJDATA_smeared_v718.root"
+    # data_corrfile = "calibrationJDATA_smeared_v718_LBL.root" if "lbl" in muonCorr else "calibrationJDATA_smeared_v718.root"
+    data_corrfile = "calibrationJDATA_smeared_v718_LBL.root" if "lbl" in muonCorr else "calibrationJDATA_ideal.root"
 
     mc_helper = make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}")
     data_helper = make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}")
@@ -45,7 +46,7 @@ def make_jpsi_crctn_helper(filepath):
     )
     return jpsi_crctn_helper
 
-def make_jpsi_crctn_unc_helper(filepath, n_scale_params = 3, n_tot_params = 6, n_eta_bins = 48):
+def make_jpsi_crctn_unc_helper(filepath, n_scale_params = 3, n_tot_params = 4, n_eta_bins = 24):
     f = uproot.open(filepath)
     cov = f['covariance_matrix'].to_hist()
     cov_scale_params = get_jpsi_scale_param_cov_mat(cov, n_scale_params, n_tot_params, n_eta_bins)
@@ -71,7 +72,7 @@ def make_jpsi_crctn_unc_helper(filepath, n_scale_params = 3, n_tot_params = 6, n
 
 # returns the cov mat of only scale parameters in eta bins, in the form of a 2D numpy array
 # there are 3 scale params (A, e, M) + 3 resolution params for each eta bin in the jpsi calib file
-def get_jpsi_scale_param_cov_mat(cov, n_scale_params = 3, n_tot_params = 6, n_eta_bins = 48):
+def get_jpsi_scale_param_cov_mat(cov, n_scale_params = 3, n_tot_params = 4, n_eta_bins = 24):
     cov_dim = len(cov.axes[0].edges) - 1
     if cov_dim != n_tot_params * n_eta_bins:
         raise ValueError(
