@@ -74,7 +74,7 @@ def common_parser():
     import wremnants
     from wremnants import theory_tools
 
-    parser.add_argument("--pdfs", type=str, nargs="*", default=["nnpdf31"], choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for")
+    parser.add_argument("--pdfs", type=str, nargs="*", default=["msht20"], choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for")
     parser.add_argument("--altPdfOnlyCentral", action='store_true', help="Only store central value for alternate PDF sets")
     parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
     parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=[])
@@ -98,8 +98,18 @@ def common_parser():
     parser.add_argument("-o", "--outfolder", type=str, default="", help="Output folder")
     parser.add_argument("--no-color-logger", dest="noColorLogger", action="store_true", default=False, help="Do not use logging with colors")
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
-                        help="Set verbosity level with logging, the larger the more verbose (currently only for setup_test_logger enabled with --set-custom-logger)");
-    
+                        help="Set verbosity level with logging, the larger the more verbose (currently only for setup_test_logger enabled with --set-custom-logger)")
+    parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
+    parser.add_argument("--muonCorr", type=str, default="massfitData_lblidealMC", 
+        choices=["none", "trackfit_only", "trackfit_only_mctruth", "lbl", "massfit", "massfit_lbl", "massfitData_mctruth"], 
+        help="Type of correction to apply to the muons")
+    parser.add_argument("--muScaleMag", type=float, default=1e-4, help="Magnitude of dummy muon scale uncertainty")
+    parser.add_argument("--muScaleBins", type=int, default=1, help="Number of bins for muon scale uncertainty")
+    parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
+    parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
+    parser.add_argument("--bias-calibration", action='store_true', help="Adjust central value by calibration bias hist")
+    parser.add_argument("--smearing", action='store_true', help="Smear pT such that resolution matches data") #TODO change to --no-smearing once smearing is final
+
     commonargs,_ = parser.parse_known_args()
 
     if commonargs.trackerMuons:
