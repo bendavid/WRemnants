@@ -11,6 +11,7 @@ import re
 import pandas as pd
 import math
 from utilities import common
+import os
 
 logger = common.child_logger(__name__)
 
@@ -25,6 +26,10 @@ class datagroups(object):
         else:
             self.rtfile = ROOT.TFile.Open(infile)
             self.results = None
+
+        if self.results:
+            self.dilepton = os.path.basename(self.results["meta_info"]["command"]).split()[0].startswith("mz")
+            self.wlike = os.path.basename(self.results["meta_info"]["command"]).split()[0].startswith("mz_wlike")
 
         self.lumi = None
         if self.datasets and self.results:
@@ -279,8 +284,7 @@ class datagroups2016(datagroups):
     ):
         self.datasets = {x.name : x for x in datasets2016.getDatasets()}
         super().__init__(infile, combine)
-        self.wlike = "wlike" in self.results["meta_info"]["command"]
-        if self.wlike or not applySelection:
+        if self.dilepton or not applySelection:
             sigOp = None
             fakeOp = None
         else:
@@ -313,7 +317,7 @@ class datagroups2016(datagroups):
                 label = f"pdf{pseudodata_pdfset.upper()}",
                 color = "dimgray"
             )
-        if not self.wlike:
+        if not self.dilepton:
             self.groups.update({
                 "Wmunu" : dict(
                     members = [self.datasets["WminusmunuPostVFP"], self.datasets["WplusmunuPostVFP"]],
