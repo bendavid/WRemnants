@@ -28,8 +28,8 @@ class datagroups(object):
             self.results = None
 
         if self.results:
-            self.wmass = os.path.basename(self.results["meta_info"]["command"]).split()[0].startswith("mw")
-            self.wlike = os.path.basename(self.results["meta_info"]["command"]).split()[0].startswith("mz_wlike")
+            self.wmass = os.path.basename(self.results["meta_info"]["command"].split()[0]).startswith("mw")
+            self.wlike = os.path.basename(self.results["meta_info"]["command"].split()[0]).startswith("mz_wlike")
 
         self.lumi = None
         if self.datasets and self.results:
@@ -351,12 +351,19 @@ class datagroups2016(datagroups):
                     selectOp = sigOp,
                 ), 
                 "Fake" : dict(
-                    members = list(self.datasets.values()),
+                    members = list(filter(lambda y: y.group != "QCD", self.datasets.values())),
                     scale = lambda x: 1. if x.is_data else -1,
                     label = "Nonprompt",
                     color = "grey",
                     selectOp = fakeOp,
                 ),
+                "QCD" : dict(
+                    members = list(filter(lambda y: y.group == "QCD", self.datasets.values())),
+                    label = "QCD MC",
+                    color = "grey",
+                    selectOp = sigOp,
+                ), 
+           
             })
         else:
             self.groups["Other"] = dict(

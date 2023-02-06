@@ -16,7 +16,7 @@ import pathlib
 import os
 
 data_dir = f"{pathlib.Path(__file__).parent}/../../wremnants/data/"
-
+parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency (legacy option for tests)")
 parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for luminosity in excess to 1 (e.g. 1.012 means 1.2\%)", default=1.012)
 parser.add_argument("--vqtTest", action="store_true", help="Test of isolation SFs dependence on V q_T projection (at the moment just for the W)")
 sfFileVqtTest = f"{data_dir}/testMuonSF/fits_2.root"
@@ -55,13 +55,10 @@ print(f"Pt binning: {template_npt} bins from {template_minpt} to {template_maxpt
 axis_eta = hist.axis.Regular(template_neta, template_mineta, template_maxeta, name = "eta")
 axis_pt = hist.axis.Regular(template_npt, template_minpt, template_maxpt, name = "pt")
 
-# categorical axes in python bindings always have an overflow bin, so use a regular
-# axis for the charge
-axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "charge")
+axis_charge = common.axis_charge
+axis_passIso = common.axis_passIso
+axis_passMT = common.axis_passMT
 
-# TODO: get from common
-axis_passIso = hist.axis.Boolean(name = "passIso")
-axis_passMT = hist.axis.Boolean(name = "passMT")
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
 
 # axes for study of fakes
@@ -69,8 +66,6 @@ axis_mt_fakes = hist.axis.Regular(120, 0., 120., name = "mt", underflow=False, o
 axis_iso_fakes = hist.axis.Regular(60, 0., 0.6, name = "PFrelIso04", underflow=False, overflow=True)
 axis_hasjet_fakes = hist.axis.Boolean(name = "hasJets") # only need case with 0 jets or > 0 for now
 mTStudyForFakes_axes = [axis_eta, axis_pt, axis_charge, axis_mt_fakes, axis_passIso, axis_hasjet_fakes]
-
-
 
 # define helpers
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
@@ -238,9 +233,12 @@ def build_graph(df, dataset):
 
     df = df.Define("transverseMass", "wrem::mt_2(goodMuons_pt0, goodMuons_phi0, MET_corr_rec_pt, MET_corr_rec_phi)")
     df = df.Define("hasCleanJet", "Sum(goodCleanJets) >= 1")
-        
+
     mTStudyForFakes = df.HistoBoost("mTStudyForFakes", mTStudyForFakes_axes, ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "transverseMass", "passIso", "hasCleanJet", "nominal_weight"])
     results.append(mTStudyForFakes)
+    # perhaps I could merge this histogram with the previous one, it would become a pretty big histogram though
+    mtIsoJetCharge = df.HistoBoost("mtIsoJetCharge", [axis_mt_fakes, axis_iso_fakes, axis_hasjet_fakes, axis_charge], ["transverseMass", "goodMuons_pfRelIso04_all0", "hasCleanJet", "goodMuons_charge0", "nominal_weight"])
+    results.append(mtIsoJetCharge)
 
     df = df.Define("passMT", "transverseMass >= 40.0")
     df = df.Filter("passMT || hasCleanJet")
