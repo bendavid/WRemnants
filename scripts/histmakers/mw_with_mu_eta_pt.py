@@ -377,7 +377,6 @@ def build_graph(df, dataset):
                             "goodMuons_pt0_gen_smeared",
                             "covMat_goodGenMuons0",
                             "nominal_weight",
-                            "bool_true",
                             "bool_false"
                             ]
                         )
