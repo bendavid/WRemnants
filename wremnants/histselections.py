@@ -6,9 +6,9 @@ hist_map = {
     "eta_pt" : "nominal",
     "eta" : "nominal",
     "pt" : "nominal",
-    "mll" : "dilepton",
-    "ptll" : "dilepton",
-    "ptll_mll" : "dilepton",
+    "mll" : "nominal",
+    "ptll" : "nominal",
+    "ptll_mll" : "nominal",
 }
 
 def fakeHistABCD(h):
