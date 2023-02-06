@@ -557,7 +557,7 @@ if __name__ == "__main__":
     zAxisName = args.zAxisName
 
     groups = datagroups2016(args.inputfile[0], applySelection=False)
-    datasets = groups.getNames()
+    datasets = list([x in groups.getNames() if x != "QCD"]) # exclude QCD MC if present
     datasetsNoFakes = [x for x in datasets if x != "Fake"]
     logger.info(f"Will plot datasets {datasets}")
     inputHistName = "mTStudyForFakes"
