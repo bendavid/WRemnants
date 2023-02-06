@@ -404,12 +404,12 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
         status = fitres_TF[fr]["status"]
         covstatus = fitres_TF[fr]["covstatus"]
         if status:
-            print(f">>>>> Function {fr} had status {status}")
+            print(f"-----> Function {fr} had status {status}")
             if key not in badFitsID.keys():
                 badFitsID[key] = {}
             badFitsID[key][fr] = status
         if covstatus:
-            print(f">>>>> Function {fr} had covstatus {covstatus}")
+            print(f"-----> Function {fr} had covstatus {covstatus}")
             if key not in badCovMatrixID.keys():
                 badCovMatrixID[key] = {}
             badCovMatrixID[key][fr] = covstatus
