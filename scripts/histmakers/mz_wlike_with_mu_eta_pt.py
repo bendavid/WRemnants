@@ -13,16 +13,6 @@ import time
 import pdb
 import os
 
-parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
-parser.add_argument("--muonCorr", type=str, default="massfit", choices=["lbl", "trackfit_only_mctruth", "none", "massfit", "massfit_lbl", "trackfit_only"], 
-    help="Type of correction to apply to the muons")
-parser.add_argument("--muScaleMag", type=float, default=1e-4, help="Magnitude of dummy muon scale uncertainty")
-parser.add_argument("--muScaleBins", type=int, default=1, help="Number of bins for muon scale uncertainty")
-parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
-parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
-parser.add_argument("--bias-calibration", action='store_true', help="Adjust central value by calibration bias hist")
-parser.add_argument("--smearing", action='store_true', help="Smear pT such that resolution matches data")
-
 f = next((x for x in parser._actions if x.dest == "pt"), None)
 if f:
     newPtDefault = [34,26.,60.]
