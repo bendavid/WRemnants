@@ -37,7 +37,7 @@ def select_good_muons(df, nMuons=1, use_trackerMuons=False, use_isolation=False)
 
     return df
 
-def define_trigger_muons(df, ptLow, ptHigh):
+def define_trigger_muons(df):
 
     # mu- for even event numbers, mu+ for odd event numbers
     df = df.Define("trigMuons_charge0", "event % 2 == 0 ? -1 : 1")
@@ -49,9 +49,20 @@ def define_trigger_muons(df, ptLow, ptHigh):
     df = muon_calibration.define_corrected_reco_muon_kinematics(df, "trigMuons", ["pt", "eta", "phi"])
     df = muon_calibration.define_corrected_reco_muon_kinematics(df, "nonTrigMuons", ["pt", "eta", "phi"])
 
+    return df
+
+def select_z_candidate(df, ptLow, ptHigh):
+
     df = df.Filter("Sum(trigMuons) == 1 && Sum(nonTrigMuons) == 1")
-    # pt cut only on the "neutrino", for the triggering muon the pt range is implicit through the template range
+    df = df.Filter(f"trigMuons_pt0 > {ptLow} && trigMuons_pt0 < {ptHigh}")
     df = df.Filter(f"nonTrigMuons_pt0 > {ptLow} && nonTrigMuons_pt0 < {ptHigh}")
+
+    df = df.Define("trigMuons_mom4", "ROOT::Math::PtEtaPhiMVector(trigMuons_pt0, trigMuons_eta0, trigMuons_phi0, wrem::muon_mass)")
+    df = df.Define("nonTrigMuons_mom4", "ROOT::Math::PtEtaPhiMVector(nonTrigMuons_pt0, nonTrigMuons_eta0, nonTrigMuons_phi0, wrem::muon_mass)")
+    df = df.Define("ll_mom4", "ROOT::Math::PxPyPzEVector(trigMuons_mom4)+ROOT::Math::PxPyPzEVector(nonTrigMuons_mom4)")
+    df = df.Define("mll", "ll_mom4.mass()")
+
+    df = df.Filter("mll >= 60. && mll < 120.")
 
     return df
 

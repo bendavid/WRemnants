@@ -5,6 +5,11 @@
 #include <eigen3/Eigen/Dense>
 #include <eigen3/unsupported/Eigen/CXX11/Tensor>
 #include "defines.h"
+#include "ROOT/RVec.hxx"
+#include <Math/Vector4D.h>
+#include "TVector2.h"
+
+using namespace ROOT;
 
 namespace wrem {
 
@@ -130,6 +135,22 @@ bool hasMatchDR2(const float& eta, const float& phi, const Vec_f& vec_eta, const
   }
   return false;
 
+}
+
+RVec<int> postFSRLeptonsIdx(RVec<bool> postFSRleptons) {
+  RVec<int> v;
+  for (unsigned int i=0; i<postFSRleptons.size(); i++) {
+    if (postFSRleptons[i]) v.push_back(i);
+  }
+  return v;
+}
+
+float zqtproj0(const float &goodMuons_pt0, const float &goodMuons_eta0, const float &goodMuons_phi0, RVec<float> &GenPart_pt, RVec<float> &GenPart_eta, RVec<float> &GenPart_phi, RVec<int> &postFSRnusIdx) {
+  ROOT::Math::PtEtaPhiMVector muon, neutrino;
+  muon.SetPt(goodMuons_pt0); muon.SetEta(goodMuons_eta0); muon.SetPhi(goodMuons_phi0); muon.SetM(muon_mass);
+  neutrino.SetPt(GenPart_pt[postFSRnusIdx[0]]); neutrino.SetEta(GenPart_eta[postFSRnusIdx[0]]); neutrino.SetPhi(GenPart_phi[postFSRnusIdx[0]]); neutrino.SetM(0.);
+  TVector2 Muon(muon.X(), muon.Y()), Neutrino(neutrino.X(), neutrino.Y());
+  return (Muon*((Muon+Neutrino)))/sqrt(Muon*Muon);
 }
 
     

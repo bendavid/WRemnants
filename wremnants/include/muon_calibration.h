@@ -413,12 +413,33 @@ private:
     }
   
 template <typename T>
-class BiasCorrectionHelper {
+class CorrectionHelperBase {
 
 public:
-    BiasCorrectionHelper(T&& corrections) :
-        correctionHist_(std::make_shared<const T>(std::move(corrections))) {}
-    
+    CorrectionHelperBase(unsigned int nSlots, T&& corrections) :
+        myRndGens(nSlots),
+        correctionHist_(std::make_shared<const T>(std::move(corrections)))
+        {
+            init_random_generators();
+        }
+
+
+    CorrectionHelperBase(unsigned int nSlots, T&& corrections, T&& uncertainties) : 
+        myRndGens(nSlots),
+        correctionHist_(std::make_shared<const T>(std::move(corrections))),
+        uncertaintyHist_(std::make_shared<const T>(std::move(uncertainties))
+        ){
+            init_random_generators();
+        }
+
+    void init_random_generators(){
+        int seed = 1; // not 0 because seed 0 has a special meaning
+        for (auto &&gen : myRndGens)
+        {
+            gen.SetSeed(seed++);
+        }
+    }
+
     // helper for bin lookup which implements the compile-time loop over axes
     template<typename... Xs, std::size_t... Idxs>
     const float get_value_impl(std::index_sequence<Idxs...>, const Xs&... xs) {
@@ -431,33 +452,80 @@ public:
         return get_value_impl(std::index_sequence_for<Xs...>{}, xs...);
     }
 
-    // for central value of pt
-    float operator() (float pt, float eta, int charge) {
-        const double bias = get_value(eta, pt);
-        return (1.0 + bias) * pt;
+    // helper for bin lookup which implements the compile-time loop over axes
+    template<typename... Xs, std::size_t... Idxs>
+    const float get_error_impl(std::index_sequence<Idxs...>, const Xs&... xs) {
+      return uncertaintyHist_->at(uncertaintyHist_->template axis<Idxs>().index(xs)...);
     }
 
+    // variadic templated bin lookup
+    template<typename... Xs>
+    const float get_error(const Xs&... xs) {
+        return get_error_impl(std::index_sequence_for<Xs...>{}, xs...);
+    }
+
+    virtual float get_correction(unsigned int slot, float pt, float eta) {return 0;}
+
+    float get_random(unsigned int slot, float mean, float std){
+        return myRndGens[slot].Gaus(mean, std);
+    }
+
+
+    RVec<float> operator() (unsigned int slot, const RVec<float>& pts, const RVec<float>& etas) {
+        RVec<float> corrected_pt(pts.size(), 0.);
+        assert(etas.size() == pts.size());
+        for (size_t i = 0; i < pts.size(); i++) {
+            corrected_pt[i] = get_correction(slot, pts[i], etas[i]);
+        }
+        return corrected_pt;
+    }
+
+
 private:
+    std::vector<TRandom3> myRndGens; 
+
     std::shared_ptr<const T> correctionHist_;
+    std::shared_ptr<const T> uncertaintyHist_;
 };
 
-template <typename T>
-class BiasCorrectionsHelper : public BiasCorrectionHelper<T> {
 
-using base_t = BiasCorrectionHelper<T>;
+template <typename T>
+class BiasCalibrationHelper : public CorrectionHelperBase<T> {
+
+using base_t = CorrectionHelperBase<T>;
 
 public:
     //inherit constructor
     using base_t::base_t;
 
-    RVec<float> operator() (const RVec<float> etas, const RVec<float>& pts, RVec<int> charges) {
-        RVec<float> biased_pt(pts.size(), 0.);
-        assert(etas.size() == pts.size() && etas.size() == charges.size());
-        for (size_t i = 0; i < pts.size(); i++) {
-            biased_pt[i] = BiasCorrectionHelper<T>::operator()(etas[i], pts[i], charges[i]);
-        }
+    float get_correction(unsigned int slot, float pt, float eta) override {
+        const double bias = base_t::get_value(eta, pt);
+        const double error = base_t::get_error(eta, pt);
 
-        return biased_pt;
+        if(error>0.)
+            return pt*(1.0 + base_t::get_random(slot, bias, error));
+        else 
+            return pt*(1.0+bias);
+    }
+};
+
+
+template <typename T>
+class SmearingHelper : public CorrectionHelperBase<T> {
+
+using base_t = CorrectionHelperBase<T>;
+
+public:
+    //inherit constructor
+    using base_t::base_t;
+
+    float get_correction(unsigned int slot, float pt, float eta) override {
+        const double sigma = base_t::get_value(eta, pt); //this is sigma_p/p
+
+        if(sigma>0.)
+            return 1. / (1./pt + base_t::get_random(slot, 0., sigma/pt));
+        else 
+            return pt;
     }
 };
 
