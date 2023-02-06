@@ -51,7 +51,8 @@ from scripts.analysisTools.tests.testPlots1D import plotDistribution1D
 
 def plotProjection1D(rootHists, datasets, outfolder_dataMC, canvas1Dshapes=None, chargeBin=1,
                      projectAxisToKeep=0, isoAxisRange=[1,1], jetAxisRange=[1,2],
-                     xAxisName="variable", plotName="variable_failIso_jetInclusive", mTaboveThis=None):
+                     xAxisName="variable", plotName="variable_failIso_jetInclusive", mTaboveThis=None,
+                     rebinVariable=None):
 
     firstBinMt = 1
     lastBinMt = rootHists["Data"].GetAxis(3).GetNbins()
@@ -68,6 +69,8 @@ def plotProjection1D(rootHists, datasets, outfolder_dataMC, canvas1Dshapes=None,
         if d == "Data":
             hdata = rootHists[d].Projection(projectAxisToKeep, "EO")
             hdata.SetName(f"{plotName}_{d}")
+            if rebinVariable:
+                hdata.Rebin(rebinVariable)
         else:
             hmc[d] = rootHists[d].Projection(projectAxisToKeep, "EO")
             hmc[d].SetName(f"{plotName}_{d}")
@@ -76,6 +79,8 @@ def plotProjection1D(rootHists, datasets, outfolder_dataMC, canvas1Dshapes=None,
             hmc[d].SetLineColor(ROOT.kBlack)
             hmc[d].SetMarkerSize(0)
             hmc[d].SetMarkerStyle(0)
+            if rebinVariable:
+                hmc[d].Rebin(rebinVariable)
 
     plotDistribution1D(hdata, hmc, datasets,
                        outfolder_dataMC, canvas1Dshapes=canvas1Dshapes,
@@ -610,22 +615,25 @@ if __name__ == "__main__":
         # plot mT, eta, pt in some regions iso-nJet regions, for checks
         # don't plot fakes here
         for xbin in axisVar.keys():
+            rebinVariable = None
+            #if xbin == 3:
+            #    rebinVariable=2 # mT has 1 GeV original binning, but for plot 2 GeV might be better
             plotProjection1D(rootHists, datasetsNoFakes, outfolder_dataMC, canvas1Dshapes=canvas1Dshapes, chargeBin=chargeBin,
                              projectAxisToKeep=xbin, xAxisName=axisVar[xbin][1], plotName=f"{axisVar[xbin][0]}_passIso_1orMoreJet",
-                             isoAxisRange=[2,2], jetAxisRange=[2,2])
+                             isoAxisRange=[2,2], jetAxisRange=[2,2], rebinVariable=rebinVariable)
             plotProjection1D(rootHists, datasetsNoFakes, outfolder_dataMC, canvas1Dshapes=canvas1Dshapes, chargeBin=chargeBin,
                              projectAxisToKeep=xbin, xAxisName=axisVar[xbin][1], plotName=f"{axisVar[xbin][0]}_passIso_jetInclusive",
-                             isoAxisRange=[2,2], jetAxisRange=[1,2])
+                             isoAxisRange=[2,2], jetAxisRange=[1,2], rebinVariable=rebinVariable)
             plotProjection1D(rootHists, datasetsNoFakes, outfolder_dataMC, canvas1Dshapes=canvas1Dshapes, chargeBin=chargeBin,
                              projectAxisToKeep=xbin, xAxisName=axisVar[xbin][1], plotName=f"{axisVar[xbin][0]}_failIso_1orMoreJet",
-                             isoAxisRange=[1,1], jetAxisRange=[2,2])
+                             isoAxisRange=[1,1], jetAxisRange=[2,2], rebinVariable=rebinVariable)
             plotProjection1D(rootHists, datasetsNoFakes, outfolder_dataMC, canvas1Dshapes=canvas1Dshapes, chargeBin=chargeBin,
                              projectAxisToKeep=xbin, xAxisName=axisVar[xbin][1], plotName=f"{axisVar[xbin][0]}_failIso_jetInclusive",
-                             isoAxisRange=[1,1], jetAxisRange=[1,2])
+                             isoAxisRange=[1,1], jetAxisRange=[1,2], rebinVariable=rebinVariable)
             # signal region adding mT cut too
             plotProjection1D(rootHists, datasetsNoFakes, outfolder_dataMC, canvas1Dshapes=canvas1Dshapes, chargeBin=chargeBin,
                              projectAxisToKeep=xbin, xAxisName=axisVar[xbin][1], plotName=f"{axisVar[xbin][0]}_passIso_jetInclusive_passMt",
-                             isoAxisRange=[2,2], jetAxisRange=[1,2], mTaboveThis=40)
+                             isoAxisRange=[2,2], jetAxisRange=[1,2], mTaboveThis=40, rebinVariable=rebinVariable)
             
         ###################################
         ###################################
@@ -659,9 +667,9 @@ if __name__ == "__main__":
         histoPassMtFailIso.SetName("fakes_passMt_failIso_jetInclusive")
         histoPassMtFailIso.SetTitle("fakes_passMt_failIso_jetInclusive")
                 
-        histoPassIso.Rebin3D(args.rebinEta, args.rebinPt)
-        histoFailIso.Rebin3D(args.rebinEta, args.rebinPt)
-        histoPassMtFailIso.Rebin3D(args.rebinEta, args.rebinPt)
+        histoPassIso.Rebin3D(args.rebinEta, args.rebinPt, 1)
+        histoFailIso.Rebin3D(args.rebinEta, args.rebinPt, 1)
+        histoPassMtFailIso.Rebin3D(args.rebinEta, args.rebinPt, 1)
 
         cropNegativeContent(histoPassIso)
         cropNegativeContent(histoFailIso)
