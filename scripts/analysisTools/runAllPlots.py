@@ -19,10 +19,10 @@ onlyData = 0 # or set fits = ["Data"]
 fits = ["Asimov", "Data"]
 
 # select what to plot
-skipHistograms = 1 # prefit histograms, can't be made also before running the fit
+skipHistograms = 0 # prefit histograms, can't be made also before running the fit
 skipImpacts = 1
 skipNuisances = 1
-skipSystRatios = 0
+skipSystRatios = 1
 skipPostfitHistograms = 1 # prefit and postfit histograms, from fitresults.root
 
 # SPECIFIC PATH CUSTOMIZED BY EACH USER (PATH INSIDE $COMBINE_STUDIES)

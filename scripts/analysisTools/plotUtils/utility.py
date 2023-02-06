@@ -494,6 +494,27 @@ def multiplyByHistoWithLessPtBins(h, hless, neglectUncSecond=False):
             h.SetBinContent(ix, iy, hContent * hlessContent)
             h.SetBinError(  ix, iy, unc)
 
+def scaleTH2byOtherTH2(h, hother, scaleUncertainty=True, zeroOutOfAcceptance=False):
+    # multiply 2D histograms when one has less bins
+    # it is used to apply a correction stored in a TH2
+    # one can decide not to scale also the uncertainty (scaleUncertainty=False)
+    for ix in range(1, 1 + h.GetNbinsX()):
+        xbin = hother.GetXaxis().FindFixBin(h.GetXaxis().GetBinCenter(ix))
+        if not zeroOutOfAcceptance:
+            xbin = max(1, min(xbin, hother.GetNbinsX()))
+        for iy in range(1, 1 + h.GetNbinsY()):
+            ybin = hother.GetYaxis().FindFixBin(h.GetYaxis().GetBinCenter(iy))
+            if not zeroOutOfAcceptance:
+                ybin = max(1, min(ybin, hother.GetNbinsY()))
+            hContent = h.GetBinContent(ix, iy)
+            hotherContent = hother.GetBinContent(xbin, ybin)
+            hUnc = h.GetBinError(ix, iy)
+            #print(f"ix-iy-corr = {xbin} - {ybin} - {hotherContent}")
+            h.SetBinContent(ix, iy, hContent * hotherContent)
+            if scaleUncertainty:
+                h.SetBinError(  ix, iy, hUnc * hotherContent)
+
+            
 def getTH2morePtBins(h2, newname, nPt):
     xedges = [round(h2.GetXaxis().GetBinLowEdge(i), 2) for i in range(1, 2 + h2.GetNbinsX())]
     xarr = array('d', xedges)
@@ -1131,14 +1152,18 @@ def pol1_root_(xvals, parms, xLowVal = 0.0, xFitRange = 1.0):
 def pol2_root_(xvals, parms, xLowVal = 0.0, xFitRange = 1.0):
     xscaled = (xvals[0] - xLowVal) / xFitRange
     return parms[0] + parms[1]*xscaled + parms[2]*xscaled**2
-    
+
+def pol3_root_(xvals, parms, xLowVal = 0.0, xFitRange = 1.0):
+    xscaled = (xvals[0] - xLowVal) / xFitRange
+    return parms[0] + parms[1]*xscaled + parms[2]*xscaled**2 + parms[3]*xscaled**3
+
 def polN_root_(xvals, parms, xLowVal = 0.0, xFitRange = 1.0, degree=3):
     xscaled = (xvals[0] - xLowVal) / xFitRange
     ret = parms[0]
     for d in range(1, degree):
         ret += parms[d]*xscaled**d
     return ret
-    
+
 def drawSingleTH1withFit(h1,
                          labelXtmp="xaxis", labelYtmp="yaxis",
                          canvasName="default", outdir="./",
@@ -1252,6 +1277,7 @@ def drawSingleTH1withFit(h1,
     pol2_scaled = partial(pol2_root_, xLowVal=xMinFit, xFitRange=xMaxFit)
     f1 = ROOT.TF1("f1",pol2_scaled, h1.GetXaxis().GetBinLowEdge(1), xMaxFit, 3)
     f1.SetParLimits(2, -10.0, 0.0)
+    ## TODO: set coefficient of x^1 as 0 to have the maximum at 0?
     realFitOptions = fitOptions
     if "B" not in fitOptions:
         realFitOptions = "B" + fitOptions
