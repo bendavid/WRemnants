@@ -13,7 +13,8 @@ def make_jpsi_crctn_helpers(muonCorr):
         return None, None
 
     mc_corrfile = "calibrationJMC_smeared_v718_nominalLBL.root" if "lbl" in muonCorr else "calibrationJMC_smeared_v718_nominal.root"
-    data_corrfile = "calibrationJDATA_smeared_v718_LBL.root" if "lbl" in muonCorr else "calibrationJDATA_smeared_v718.root"
+    # data_corrfile = "calibrationJDATA_smeared_v718_LBL.root" if "lbl" in muonCorr else "calibrationJDATA_smeared_v718.root"
+    data_corrfile = "calibrationJDATA_smeared_v718_LBL.root" if "lbl" in muonCorr else "calibrationJDATA_ideal.root"
 
     mc_helper = make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}")
     data_helper = make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}")
