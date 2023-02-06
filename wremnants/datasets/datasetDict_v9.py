@@ -104,5 +104,11 @@ dataDictV9 = {
                          ["{BASE_PATH}/BKGV9/ZZTo2L2Nu_TuneCP5_13TeV_powheg_pythia8/*.root"],
                          'xsec' : 0.564,
                          'group' : "Diboson",
-    }
+    },
+    # 'QCDmuEnrichPt15PostVFP' : { 
+    #                             'filepaths' : 
+    #                             ["{BASE_PATH}/BKGV9/QCD_Pt-20_MuEnrichedPt15_TuneCP5_13TeV-pythia8/*.root"],
+    #                             'xsec' : 83.52,  ## xsec = 208800 pb, filter efficiency = 0.0004 (with 50% uncertainty)
+    #                             'group' : "QCD",
+    # }
 }
