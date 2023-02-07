@@ -314,7 +314,7 @@ class CardTool(object):
         variations = [hvar[{ax : binnum for ax,binnum in zip(axNames, entry)}] for entry in entries]
         if len(variations) != len(systInfo["outNames"]):
             logger.warning(f"The number of variations doesn't match the number of names for "
-                f"syst {syst}. Found {len(syst_info['outNames'])} names and {len(variations)} variations.")
+                f"syst {syst}. Found {len(systInfo['outNames'])} names and {len(variations)} variations.")
 
         return {name : var for name,var in zip(systInfo["outNames"], variations) if name}
 
