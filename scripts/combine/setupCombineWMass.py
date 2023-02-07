@@ -229,8 +229,8 @@ def main(args):
     msv_config_dict = {
         "smearing_weights":{
             "hist_name": "muonScaleSyst_responseWeights",
-            "syst_axes": ["downUpVar"],
-            "syst_axes_labels": ["downUpVar"]
+            "syst_axes": ["unc", "downUpVar"],
+            "syst_axes_labels": ["unc", "downUpVar"]
         },
         "massweights":{
             "hist_name": "muonScaleSyst",
