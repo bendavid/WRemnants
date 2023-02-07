@@ -14,7 +14,7 @@ ROOT.gStyle.SetOptTitle(0)
 import utils
 import plotter
 import recoilLibs_scipy as rls
-from wremnants.datasets.datagroupsLowPU import datagroupsLowPU
+from wremnants.datasets.datagroups import datagroups2016
 
 import lz4.frame
 import narf
@@ -339,7 +339,7 @@ def ttbar_para_qT():
         return
         
 
-    if False:
+    if True:
         outDir_refit = "%s/params_refit" % baseDir
         outDir_refit_fits = "%s/fits_refit" % baseDir
         utils.mkdir(outDir_refit, False)
@@ -373,7 +373,7 @@ def zmumu_perp():
     procLabel = "DY #rightarrow #mu^{+}#mu^{#minus}"
     metLabel = "%s, U_{#perp}" % (met)
     utils.mkdir(baseDir, False)
-    recoilMin, recoilMax = -100, 100
+    recoilMin, recoilMax = -150, 150
     doExport = False
     
     bhist = readProc(groups, "recoil_corr_xy_perp_qTbinned", procs)
@@ -390,11 +390,11 @@ def zmumu_perp():
 
     fitCfg = {} 
     fitCfg['func_name'] = "dy_perp"
-    fitCfg['func_parms_vals'] = [15, 5, 8, 10, 0, 0]
-    fitCfg['func_parms_cfg'] = [0, 0, 0, 0, 0, 0] # 0=float, 1=propagate, 2=TF1
+    fitCfg['func_parms_vals'] = [25, 5, 8, 10, 0, 0]
+    fitCfg['func_parms_cfg'] = [0, 0, 0, 0, 0, 0]  # 0=float, 1=propagate, 2=TF1
     outDir_fits_v0 = "%s/fits_v0" % baseDir
     if False:
-        rls.doFitMultiGauss_fit(bhist, comp, fitCfg, procLabel, metLabel, outDir_fits_v0, binning_qT, yMin=1e-3, yMax=1e6, recoilLow=recoilMin, recoilHigh=recoilMax)
+        rls.doFitMultiGauss_fit(bhist, comp, fitCfg, procLabel, metLabel, outDir_fits_v0, binning_qT, yMin=1e-2, yMax=1e8, recoilLow=recoilMin, recoilHigh=recoilMax)
         return
         
         
@@ -405,27 +405,28 @@ def zmumu_perp():
         utils.mkdir(outDir_param, True)
         jsIn = utils.loadJSON("%s/results.json" % outDir_fits_v0)
         
-        fitF, params, cParams = "power", [9.90024e-02, 9.34622e-01, 1.26746e+01], [False, False, False]
-        rls.parameterizeGauss(jsIn, jsOut, comp, "p0", fitF, params, outDir_param, binning_qT, procLabel, metLabel, cParams=cParams, fitMin=0, fitMax=100, yMax=50, xMax=100, yTitle = "#sigma_{1} (GeV)")
+        fitF, params, cParams = "power", [1, 1, 1], [False, False, False]
+        rls.parameterizeGauss(jsIn, jsOut, comp, "p0", fitF, params, outDir_param, binning_qT, procLabel, metLabel, cParams=cParams, fitMin=0, fitMax=150, yMax=50, xMax=150, yTitle = "#sigma_{1} (GeV)", fitOpts="NS W")
 
-        fitF, params, cParams = "power", [4.66409e-01, 3.46158e-01, 3.44635e+00], [False, False, False]
-        rls.parameterizeGauss(jsIn, jsOut, comp, "p1", fitF, params, outDir_param, binning_qT, procLabel, metLabel, cParams=cParams, fitMin=0, fitMax=100, yMax=50, xMax=100, yTitle = "#sigma_{2} (GeV)")
+        fitF, params, cParams = "power", [0.5, 1, 11], [False, False, True]
+        rls.parameterizeGauss(jsIn, jsOut, comp, "p1", fitF, params, outDir_param, binning_qT, procLabel, metLabel, cParams=cParams, fitMin=0, fitMax=150, yMax=50, xMax=150, yTitle = "#sigma_{2} (GeV)", fitOpts="NS W")
         
-        fitF, params, cParams = "power", [1, 1, 6], [False, False, False]
-        rls.parameterizeGauss(jsIn, jsOut, comp, "p2", fitF, params, outDir_param, binning_qT, procLabel, metLabel, cParams=cParams, fitMin=0, fitMax=100, yMax=50, xMax=100, yTitle = "#sigma_{3} (GeV)", fitOpts="NS W") # , cutOffMin=7.5
+        fitF, params, cParams = "power", [1, 1, 1], [False, False, False]
+        rls.parameterizeGauss(jsIn, jsOut, comp, "p2", fitF, params, outDir_param, binning_qT, procLabel, metLabel, cParams=cParams, fitMin=0, fitMax=150, yMax=50, xMax=150, yTitle = "#sigma_{3} (GeV)", fitOpts="NS W")
         
-        fitF, params, cParams = "power", [3.01503e-01, 5.26286e-01, 8.13076e+00], [False, False, False]
-        rls.parameterizeGauss(jsIn, jsOut, comp, "p3", fitF, params, outDir_param, binning_qT, procLabel, metLabel, cParams=cParams, fitMin=0, fitMax=100, yMax=50, xMax=100, yTitle = "#sigma_{4} (GeV)") # , cutOffMax=13
+        fitF, params, cParams = "power", [1, 1, 1], [False, False, False]
+        rls.parameterizeGauss(jsIn, jsOut, comp, "p3", fitF, params, outDir_param, binning_qT, procLabel, metLabel, cParams=cParams, fitMin=0, fitMax=150, yMax=50, xMax=150, yTitle = "#sigma_{4} (GeV)", fitOpts="NS W")
         
-        
-        fitF, params, cParams = "linear", [0, 0], [False, False]
-        rls.parameterizeGauss(jsIn, jsOut, comp, "p4", fitF, params, outDir_param, binning_qT, procLabel, metLabel, cParams=cParams, fitMin=0, fitMax=100, yMax=50, xMax=100, yMin=-5, cutOffMax=3, cutOffMin=-3, yTitle = "#mu_{1} (GeV)")
         
         fitF, params, cParams = "linear", [0, 0], [False, False]
-        rls.parameterizeGauss(jsIn, jsOut, comp, "p5", fitF, params, outDir_param, binning_qT, procLabel, metLabel, cParams=cParams, fitMin=0, fitMax=100, yMax=50, xMax=100, yMin=-5, cutOffMax=3, cutOffMin=-3, yTitle = "#mu_{2} (GeV)")
+        rls.parameterizeGauss(jsIn, jsOut, comp, "p4", fitF, params, outDir_param, binning_qT, procLabel, metLabel, cParams=cParams, fitMin=0, fitMax=150, yMax=50, xMax=150, yMin=-50, yTitle = "#mu_{1} (GeV)")
+        
+        fitF, params, cParams = "linear", [0, 0], [False, False]
+        rls.parameterizeGauss(jsIn, jsOut, comp, "p5", fitF, params, outDir_param, binning_qT, procLabel, metLabel, cParams=cParams, fitMin=0, fitMax=150, yMax=50, xMax=150, yMin=-50, yTitle = "#mu_{2} (GeV)")
+
          
         # add norm parameters
-        rls.addParam(jsOut, "p6", "[0]", [0.1])
+        rls.addParam(jsOut, "p6", "[0]", [0.005])
         rls.addParam(jsOut, "p7", "[0]", [0.20])
         rls.addParam(jsOut, "p8", "[0]", [0.25])
 
@@ -434,7 +435,7 @@ def zmumu_perp():
         return
 
 
-    if False:
+    if True:
         outDir_refit = "%s/params_refit" % baseDir
         outDir_refit_fits = "%s/fits_refit" % baseDir
         utils.mkdir(outDir_refit, False)
@@ -442,19 +443,15 @@ def zmumu_perp():
     
         jsIn = utils.loadJSON("%s/results.json" % outDir_param_v0)
         fitCfg = jsIn
-        jsIn['p4']['p0'] = 0
-        jsIn['p4']['p1'] = 0
-        jsIn['p5']['p0'] = 0
-        jsIn['p5']['p1'] = 0
         fitCfg['func_name'] = "dy_perp_cond"
         jsOut = rls.combinedFit_scipy(bhist, comp, fitCfg, binning_qT, chisq_refit=False, outDir=baseDir, recoilLow=recoilMin, recoilHigh=recoilMax)
         utils.writeJSON("%s/results_refit.json" % baseDir, jsOut)
       
         
         jsIn = utils.loadJSON("%s/results_refit.json" % baseDir)
-        rls.doFitMultiGauss_plot(bhist, comp, jsIn, procLabel, metLabel, outDir_refit_fits, binning_qT, yMin=1e-3, yMax=1e6, recoilLow=recoilMin, recoilHigh=recoilMax)
+        rls.doFitMultiGauss_plot(bhist, comp, jsIn, procLabel, metLabel, outDir_refit_fits, binning_qT, yMin=1e-2, yMax=1e8, recoilLow=recoilMin, recoilHigh=recoilMax)
         
-        rls.plotParameter("p0", jsIn, outDir_refit, binning_qT, procLabel, metLabel, yMin=0, yMax=50, yTitle = "#sigma_{1} (GeV)")
+        rls.plotParameter("p0", jsIn, outDir_refit, binning_qT, procLabel, metLabel, yMin=0, yMax=100, yTitle = "#sigma_{1} (GeV)")
         rls.plotParameter("p1", jsIn, outDir_refit, binning_qT, procLabel, metLabel, yMin=0, yMax=50, yTitle = "#sigma_{2} (GeV)")
         rls.plotParameter("p2", jsIn, outDir_refit, binning_qT, procLabel, metLabel, yMin=0, yMax=50, yTitle = "#sigma_{3} (GeV)")
         rls.plotParameter("p3", jsIn, outDir_refit, binning_qT, procLabel, metLabel, yMin=0, yMax=50, yTitle = "#sigma_{4} (GeV)")
@@ -471,18 +468,15 @@ def zmumu_perp():
         exportCfg["sigma"] = ["p0", "p1", "p2", "p3"]
         exportCfg["norm"] = ["p6", "p7", "p8"]
         rls.export(exportCfg, "%s/recoil_zmumu_perp.json" % outCfgDir, "%s/results_refit.json" % baseDir)
-        
+         
+    
     if False:
-    
-        rls.compareChi2("%s/results.json" % outDir_fits_v0, "%s/fits_refit/results.json" % baseDir, "%s/chi2_comparison" % baseDir, procLabel, metLabel)
-    
-    if True:
     
         bhist = readProc(groups, "recoil_corr_xy_perp_qTbinned_qTrw", procs)
         outDir_refit_fits = "%s/apply_fit" % baseDir
         utils.mkdir(outDir_refit_fits, False)
         jsIn = utils.loadJSON("%s/results_refit.json" % baseDir)
-        rls.doFitMultiGauss_plot(bhist, comp, jsIn, procLabel, metLabel, outDir_refit_fits, binning_qT, yMin=1e-3, yMax=1e6, recoilLow=recoilMin, recoilHigh=recoilMax)
+        rls.doFitMultiGauss_plot(bhist, comp, jsIn, procLabel, metLabel, outDir_refit_fits, binning_qT, yMin=1e-2, yMax=1e8, recoilLow=recoilMin, recoilHigh=recoilMax)
 
 
 def zmumu_para_qT():
@@ -495,7 +489,7 @@ def zmumu_para_qT():
     metLabel = "%s, U_{#parallel}" % (met)
     utils.mkdir(baseDir, False)
     procNames = groups.getProcNames(to_expand=procs)
-    doExport = False
+    doExport = True
     
     bhist = readProc(groups, "recoil_corr_xy_para_qT_qTbinned", procs)
     recoilMin, recoilMax = -100, 100
@@ -516,7 +510,7 @@ def zmumu_para_qT():
     fitCfg['func_parms_cfg'] = [0, 0, 0, 0, 1, 1, 1] # 0=float, 1=propagate, 2=TF1
     
     outDir_fits_v0 = "%s/fits_v0" % baseDir
-    if True:
+    if False:
         rls.doFitMultiGauss_fit(bhist, comp, fitCfg, procLabel, metLabel, outDir_fits_v0, binning_qT, yMin=1e-3, yMax=1e6, recoilLow=recoilMin, recoilHigh=recoilMax)
         return
         
@@ -600,19 +594,14 @@ def zmumu_para_qT():
         rls.plotParameter("p7", jsIn, outDir_refit, binning_qT, procLabel, metLabel, yMin=0, yMax=1, yTitle = "n_{3} (GeV)")
         rls.plotParameter("p8", jsIn, outDir_refit, binning_qT, procLabel, metLabel, yMin=0, yMax=1, yTitle = "n_{3} (GeV)")
    
-        if doExport:
-            exportCfg = {}
-            exportCfg["mean"] = ["p4", "p5", "p6", "p6"]
-            exportCfg["sigma"] = ["p0", "p1", "p2", "p3"]
-            exportCfg["norm"] = ["p7", "p8", "p9"]
-            rls.export(exportCfg, "%s/recoil_zmumu_para.json" % outCfgDir, "%s/results_refit.json" % baseDir) # , "%s/parametric_mean.json" % baseDir
-       
-    if False:
-    
-        rls.compareChi2("%s/results.json" % outDir_fits_v0, "%s/fits_refit/results.json" % baseDir, "%s/chi2_comparison" % baseDir, procLabel, metLabel)
-    
+    if doExport:
+        exportCfg = {}
+        exportCfg["mean"] = ["p4", "p5", "p6", "p6"]
+        exportCfg["sigma"] = ["p0", "p1", "p2", "p3"]
+        exportCfg["norm"] = ["p7", "p8", "p9"]
+        rls.export(exportCfg, "%s/recoil_zmumu_para.json" % outCfgDir, "%s/results_refit.json" % baseDir) # , "%s/parametric_mean.json" % baseDir
    
-    if True:
+    if False:
     
         bhist = readProc(groups, "recoil_corr_xy_para_qT_qTbinned_qTrw", procs)
         outDir_refit_fits = "%s/apply_fit" % baseDir
@@ -984,23 +973,37 @@ def readProc(groups, hName, procs):
     
 if __name__ == "__main__":
 
-    met = "RawPFMET" # DeepMETReso RawPFMET
-    flavor = "mumu" # mu, e, mumu, ee
+    met = "RawPFMET"
+    flavor = "mumu"
 
-    groups = datagroupsLowPU("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
+    
+    groups = datagroups2016("mz_wlike_with_mu_eta_pt_%s.pkl.lz4" % met)
+    groups.groups.update({
+        "TTbar" : dict(
+                members = [groups.datasets[x] for x in ["TTLeptonicPostVFP", "TTSemileptonicPostVFP", "SingleTschanLepDecaysPostVFP", "SingleTtWAntitopPostVFP", "SingleTtchanAntitopPostVFP", "SingleTtchanTopPostVFP"]],
+                label = r"Z$\to\tau\tau$",
+                color = "darkblue",
+        ),
+        "EWK" : dict(
+                members = [groups.datasets[x] for x in ["WplusmunuPostVFP", "WminusmunuPostVFP", "WplustaunuPostVFP", "WminustaunuPostVFP", "ZtautauPostVFP", "ZZ2l2nuPostVFP", "WZPostVFP", "WWPostVFP"]],
+                label = r"Z$\to\tau\tau$",
+                color = "darkblue",
+        )
+    })
 
-    outCfgDir = f"wremnants/data/recoil/lowPU/{flavor}_{met}/"
-    outDir = "/eos/user/j/jaeyserm/www/recoil/lowPU/%s_%s/" % (flavor, met)
+    outCfgDir = f"wremnants/data/recoil/highPU/{flavor}_{met}/"
+    outDir = "/eos/user/j/jaeyserm/www/recoil/highPU/%s_%s/" % (flavor, met)
     utils.mkdir(outDir, False)
     
     binning_qT = list(utils.drange(0, 100, 0.5)) + [100]
+    binning_qT = list(utils.drange(0, 150, 1)) + [150]
 
-    import lowPU_RawPFMET_functions as rf
+    import highPU_RawPFMET_functions as rf
     rls.setFunctionLibs(rf)
 
 
-    zmumu_para_qT()
-    #zmumu_perp()
+    #zmumu_para_qT()
+    zmumu_perp()
         
     #ttbar_para_qT()
     #ttbar_perp()

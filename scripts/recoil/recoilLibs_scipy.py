@@ -164,6 +164,9 @@ def doFitMultiGauss_plot(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binn
             args_nobkg_['fracs_%s'%bkg] = tf.constant([0.0]*len(binning_qT), dtype=tf.float64)
         args = (args_)
         args_nobkg = (args_nobkg_)
+        
+    outDict = {}
+    outDict['func_name'] = func_name
                
     g_chi2 = ROOT.TGraphErrors()
     hist_root_tot = None
@@ -359,19 +362,25 @@ def doFitMultiGauss_plot(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binn
         canvas.Update()
         canvas.Draw()
         canvas.SaveAs("%s/%03d_recoil.png" % (outDir_, iBin))
-        #canvas.SaveAs("%s/%03d_recoil.pdf" % (outDir_, iBin))
+        canvas.SaveAs("%s/%03d_recoil.pdf" % (outDir_, iBin))
         dummyB.Delete()
         dummyT.Delete()
         padT.Delete()
         padB.Delete()
         g_chi2.SetPoint(iBin-1, qT, chi2)
         
+        outDict[iBin] = {}
+        outDict[iBin]['yield'] = yield_
+        outDict[iBin]['yield_err'] = yield_err
+        outDict[iBin]['chi2'] = chi2
+        
         if doUnc:
             del hist_root_tot_unc_ratio_
             del hist_root_tot_unc_
         
     plotChi2(g_chi2, "%s/chi2" % outDir_, procLabel, metLabel, xMin=min(binning_qT), xMax=max(binning_qT))
-    
+    outDict['qTbins'] = binning_qT
+    with open("%s/results.json" % outDir_, "w") as outfile: json.dump(outDict, outfile, indent=4)
 
     # uncertainties
     if doUnc:
@@ -799,7 +808,7 @@ def doFitMultiGauss_fit(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binni
         canvas.Update()
         canvas.Draw()
         canvas.SaveAs("%s/%03d_recoil.png" % (outDir_, iBin))
-        #canvas.SaveAs("%s/%03d_recoil.pdf" % (outDir_, iBin))
+        canvas.SaveAs("%s/%03d_recoil.pdf" % (outDir_, iBin))
         dummyB.Delete()
         dummyT.Delete()
         padT.Delete()
@@ -1190,7 +1199,7 @@ def doFitMultiGauss_scipy(fInName, proc, comp, fitCfg, label, outDir_, recoil_qT
         canvas.Update()
         canvas.Draw()
         canvas.SaveAs("%s/%03d_recoil.png" % (outDir_, qTbin))
-        #canvas.SaveAs("%s/%03d_recoil.pdf" % (outDir_, qTbin))
+        canvas.SaveAs("%s/%03d_recoil.pdf" % (outDir_, qTbin))
         dummyB.Delete()
         dummyT.Delete()
         padT.Delete()
@@ -2053,21 +2062,120 @@ def parameterizeGauss(jsIn, jsOut, comp, param, fitFuncName, iParams, outDir, bi
  
 
 
+def compareChi2(f1, f2, fOut, procLabel, metLabel, xMin=0, xMax=100, yMin=0, yMax=3):
+
+    js1 = utils.loadJSON(f1)
+    js2 = utils.loadJSON(f2)
+    
+    g1_chi2 = ROOT.TGraphErrors()
+    g2_chi2 = ROOT.TGraphErrors()
+
+    for i in range(1, len(js1['qTbins'])):
+        
+        qT = 0.5*(js1['qTbins'][i]+js1['qTbins'][i-1])
+        g1_chi2.SetPoint(i-1, qT, js1[str(i)]['chi2'])
+        g2_chi2.SetPoint(i-1, qT, js2[str(i)]['chi2'])
+
+    cfg_chi2 = {
+
+        'logy'              : False,
+        'logx'              : False,
+        
+        'xmin'              : xMin,
+        'xmax'              : xMax,
+        'ymin'              : yMin,
+        'ymax'              : yMax,
+            
+        'xtitle'            : "q_{T} (GeV)",
+        'ytitle'            : "#chi^{2}/ndof",
+            
+        'topRight'          : __topRight__, 
+        'topLeft'           : "#bf{CMS} #scale[0.7]{#it{Preliminary}}",
+
+    } 
+    
+    leg = ROOT.TLegend(.50, 0.80, .95, .9)
+    leg.SetBorderSize(0)
+    leg.SetFillStyle(0)
+    leg.SetTextSize(0.040)
+    
+    g1_chi2.SetLineColor(ROOT.kRed)
+    g1_chi2.SetMarkerStyle(8)
+    g1_chi2.SetMarkerSize(0.8)
+    g1_chi2.SetMarkerColor(ROOT.kRed)
+    
+    g2_chi2.SetLineColor(ROOT.kBlue)
+    g2_chi2.SetMarkerStyle(8)
+    g2_chi2.SetMarkerSize(0.8)
+    g2_chi2.SetMarkerColor(ROOT.kBlue)
+    
+    leg.AddEntry(g1_chi2, "Initial fit", "LP")
+    leg.AddEntry(g2_chi2, "Combined refit", "LP")
+    
+    plotter.cfg = cfg_chi2
+    canvas = plotter.canvas()
+    canvas.SetGrid()
+    canvas.SetTickx()
+    canvas.SetTicky()
+    dummy = plotter.dummy()
+    canvas.cd()
+    dummy.Draw("HIST")
+    g1_chi2.Draw("SAME LP")
+    g2_chi2.Draw("SAME LP")
+    plotter.aux()
+    
+    latex = ROOT.TLatex()
+    latex.SetNDC()
+    latex.SetTextSize(0.035)
+    latex.SetTextColor(1)
+    latex.SetTextFont(42)
+    latex.DrawLatex(0.20, 0.88, procLabel)
+    latex.DrawLatex(0.20, 0.84, metLabel)
+    leg.Draw("SAME")
+    
+    canvas.Modify()
+    canvas.Update()
+    canvas.Draw()
+    canvas.SaveAs("%s.png" % fOut)
+    canvas.SaveAs("%s.pdf" % fOut)
+    canvas.Delete()
 
 
 
 
 def plotCovarianceMatrix(cov, outDir):
 
-    import matplotlib.pyplot as plt
-
-    s = len(cov)    
-    fig, ax1 = plt.subplots(figsize=(s, s))
-    pos = ax1.imshow(cov, cmap='Blues', interpolation='nearest')
-    fig.colorbar(pos, ax=ax1)
     
-    plt.savefig("%s/cov_matrix.png" % outDir)
-    plt.savefig("%s/cov_matrix.pdf" % outDir)
+    s = len(cov)   
+    h_cov = ROOT.TH2D("h_cov", "", s, 0, s-1, s, 0, s-1)
+    for i in range(s):
+        for j in range(s):
+            h_cov.SetBinContent(i+1, s-j, cov[i][j])
+            
+    c = ROOT.TCanvas("c", "c", 1000, 1000)
+    c.SetTopMargin(0.05)
+    c.SetRightMargin(0.18)
+    c.SetLeftMargin(0.1)
+    c.SetBottomMargin(0.07)
+    c.SetTicks()
+    
+    for i in range(s): 
+        h_cov.GetXaxis().SetBinLabel(i+1, str(i))
+        h_cov.GetYaxis().SetBinLabel(i+1, str(i))
+        
+    ROOT.gStyle.SetPaintTextFormat("4.3f")
+    h_cov.SetMarkerSize(0.7)
+    h_cov.GetXaxis().SetLabelSize(1.2*h_cov.GetXaxis().GetLabelSize())
+    h_cov.GetYaxis().SetLabelSize(1.2*h_cov.GetYaxis().GetLabelSize())
+
+    h_cov.Draw("COLZ TEXT") # TEXTE
+    c.RedrawAxis()
+    c.Modify()
+    c.Update()
+    c.SaveAs("%s/cov_matrix.png" % outDir)
+    c.SaveAs("%s/cov_matrix.pdf" % outDir)
+
+
 
 
 
@@ -2079,12 +2187,38 @@ def plotCovarianceMatrix(cov, outDir):
         return correlation
 
     corr = correlation_from_covariance(cov)
-    fig, ax1 = plt.subplots(figsize=(s, s))
-    pos = ax1.imshow(corr, cmap='Blues', interpolation='nearest', vmin=-1, vmax=1)
-    fig.colorbar(pos, ax=ax1)
+
+    h_corr = ROOT.TH2D("h_corr", "", s, 0, s-1, s, 0, s-1)
+    for i in range(s):
+        for j in range(s):
+            h_corr.SetBinContent(i+1, s-j, corr[i][j])
+            
+            
+    c = ROOT.TCanvas("c", "c", 1000, 1000)
+    c.SetTopMargin(0.05)
+    c.SetRightMargin(0.18)
+    c.SetLeftMargin(0.1)
+    c.SetBottomMargin(0.07)
+    c.SetTicks()
     
-    plt.savefig("%s/corr_matrix.png" % outDir)
-    plt.savefig("%s/corr_matrix.pdf" % outDir)
+    for i in range(s): 
+        h_corr.GetXaxis().SetBinLabel(i+1, str(i))
+        h_corr.GetYaxis().SetBinLabel(i+1, str(i))
+        
+    ROOT.gStyle.SetPaintTextFormat("4.3f")
+    h_corr.SetMarkerSize(0.7)
+    h_corr.GetXaxis().SetLabelSize(1.2*h_corr.GetXaxis().GetLabelSize())
+    h_corr.GetYaxis().SetLabelSize(1.2*h_corr.GetYaxis().GetLabelSize())
+    h_corr.GetZaxis().SetRangeUser(-1, 1)
+
+    h_corr.Draw("COLZ TEXT") # TEXTE
+    c.RedrawAxis()
+    c.Modify()
+    c.Update()
+    c.SaveAs("%s/corr_matrix.png" % outDir)
+    c.SaveAs("%s/corr_matrix.pdf" % outDir)
+
+
 
 
 def combinedFit_scipy(bhist, comp, fitCfg, binning_qT, bkgCfg = {}, recoilLow=-100, recoilHigh=100, chisq_refit=False, rebin=1, outDir=""):
