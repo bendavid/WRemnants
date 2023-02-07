@@ -388,7 +388,7 @@ class Recoil:
         return df
     
    
-    def setup_recoil_Z(self, df, results, dataset, datasets_to_apply):
+    def setup_recoil_Z(self, df, results, dataset, datasets_to_apply=[]):
         '''
         Setup the uncorrected recoil components
         '''
@@ -470,6 +470,11 @@ class Recoil:
         results.append(df.HistoBoost("recoil_corr_xy_para_qTbinned", [self.axis_qTbinned, self.axis_recoil_para_fine], ["qT", "recoil_corr_xy_para", "nominal_weight"]))
         results.append(df.HistoBoost("recoil_corr_xy_para_qT_qTbinned", [self.axis_qTbinned, self.axis_recoil_para_qT_fine], ["qT", "recoil_corr_xy_para_qT", "nominal_weight"]))
         results.append(df.HistoBoost("recoil_corr_xy_perp_qTbinned", [self.axis_qTbinned, self.axis_recoil_perp_fine], ["qT", "recoil_corr_xy_perp", "nominal_weight"]))
+        
+        results.append(df.HistoBoost("recoil_corr_xy_magn_qTbinned_qTrw", [self.axis_qTbinned, self.axis_recoil_magn_fine], ["qT", "recoil_corr_xy_magn", "nominal_weight_qTrw"]))
+        results.append(df.HistoBoost("recoil_corr_xy_para_qTbinned_qTrw", [self.axis_qTbinned, self.axis_recoil_para_fine], ["qT", "recoil_corr_xy_para", "nominal_weight_qTrw"]))
+        results.append(df.HistoBoost("recoil_corr_xy_para_qT_qTbinned_qTrw", [self.axis_qTbinned, self.axis_recoil_para_qT_fine], ["qT", "recoil_corr_xy_para_qT", "nominal_weight_qTrw"]))
+        results.append(df.HistoBoost("recoil_corr_xy_perp_qTbinned_qTrw", [self.axis_qTbinned, self.axis_recoil_perp_fine], ["qT", "recoil_corr_xy_perp", "nominal_weight_qTrw"]))
         
             
         results.append(df.HistoBoost("qT", [self.axis_qT], ["qT", "nominal_weight"]))
