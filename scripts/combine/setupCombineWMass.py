@@ -19,6 +19,7 @@ def make_parser(parser=None):
     parser.add_argument("--fitvar", help="Variable to fit", default="eta_pt", choices=sel.hist_map.keys())
     parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow). Equivalent to --excludeNuisances '.*effSystTnP|.*effStatTnP' ")
     parser.add_argument("-p", "--pseudoData", type=str, help="Hist to use as pseudodata")
+    parser.add_argument("--pseudoDataIdx", type=int, default=0, help="Variation index to use as pseudodata")
     parser.add_argument("--pseudodata-file", type=str, help="Input file for pseudodata (if it should be read from a different file", default=None)
     parser.add_argument("-x",  "--excludeNuisances", type=str, default="", help="Regular expression to exclude some systematics from the datacard")
     parser.add_argument("-k",  "--keepNuisances", type=str, default="", help="Regular expression to keep some systematics, overriding --excludeNuisances. Can be used to keep only some systs while excluding all the others with '.*'")
@@ -82,7 +83,7 @@ def main(args):
     if args.skipOtherChargeSyst:
         cardTool.setSkipOtherChargeSyst()
     if args.pseudoData:
-        cardTool.setPseudodata(args.pseudoData)
+        cardTool.setPseudodata(args.pseudoData, args.pseudoDataIdx)
         if args.pseudodata_file:
             cardTool.setPseudodataDatagroups(datagroups2016(args.pseudodata_file))
 
