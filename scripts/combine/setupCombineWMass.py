@@ -16,7 +16,7 @@ scriptdir = f"{pathlib.Path(__file__).parent}"
 def make_parser(parser=None):
     if not parser:
         parser = common.common_parser_combine()
-    parser.add_argument("-v", "--fitvar", help="Variable to fit", default="eta_pt", choices=sel.hist_map.keys())
+    parser.add_argument("-v", "--fitvar", help="Variable to fit", default="pt-eta")
     parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow). Equivalent to --excludeNuisances '.*effSystTnP|.*effStatTnP' ")
     parser.add_argument("-p", "--pseudoData", type=str, help="Hist to use as pseudodata")
     parser.add_argument("--pseudodata-file", type=str, help="Input file for pseudodata (if it should be read from a different file", default=None)
@@ -36,7 +36,7 @@ def main(args):
 
     datagroups = datagroups2016(args.inputFile)
     if args.xlim:
-        if args.fitvar == "eta_pt":
+        if len(args.fitvar.split("-")) > 1:
             raise ValueError("Restricting the x axis not supported for 2D hist")
         s = hist.tag.Slicer()
         datagroups.setGlobalAction(lambda h: h[{args.fitvar : s[complex(0, args.xlim[0]):complex(0, args.xlim[1])]}])
@@ -51,7 +51,7 @@ def main(args):
     else:
         name = "ZMassDilepton"
 
-    tag = name
+    tag = name+"_"+args.fitvar.replace("-","_")
     if args.doStatOnly:
         tag += "_statOnly"
 
@@ -65,11 +65,9 @@ def main(args):
     templateDir = f"{scriptdir}/Templates/WMass"
     cardTool = CardTool.CardTool(f"{outfolder}/{name}_{{chan}}.txt")
     cardTool.setNominalTemplate(f"{templateDir}/main.txt")
-    cardTool.setNominalName(sel.hist_map[args.fitvar])
     if args.combineChannels:
         cardTool.setChannels(["combined"])
-    if args.fitvar not in ["eta_pt", "ptll_mll"]:
-        cardTool.setProjectionAxes([args.fitvar])
+    cardTool.setProjectionAxes(args.fitvar.split("-"))
     if args.noHist:
         cardTool.skipHistograms()
     cardTool.setOutfile(os.path.abspath(f"{outfolder}/{name}CombineInput.root"))
