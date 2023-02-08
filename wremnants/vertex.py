@@ -4,7 +4,6 @@ import hist
 import narf
 import numpy as np
 import boost_histogram as bh
-import logging
 
 ROOT.gInterpreter.Declare('#include "vertex.h"')
 

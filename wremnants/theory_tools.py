@@ -4,9 +4,9 @@ import numpy as np
 import copy
 from utilities import boostHistHelpers as hh,common
 from wremnants import theory_corrections
-import logging
 from scipy import ndimage
 
+logging = common.child_logger(__name__)
 ROOT.gInterpreter.Declare('#include "theoryTools.h"')
 
 # integer axis for -1 through 7
