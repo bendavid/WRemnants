@@ -7,8 +7,9 @@ import lz4.frame
 from .correctionsTensor_helper import makeCorrectionsTensor
 from .theory_tools import scale_tensor_axes
 from utilities import common
-import logging
 import numpy as np
+
+logging = common.child_logger(__name__)
 
 # TODO make this configurable to work in the Z case as well
 # harmonize treatment of charge and mass axes between W and Z?
