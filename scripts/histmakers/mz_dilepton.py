@@ -1,6 +1,6 @@
 from utilities import boostHistHelpers as hh,common,output_tools
 
-parser,initargs = common.common_parser()
+parser,initargs = common.common_parser(True)
 
 import narf
 import wremnants

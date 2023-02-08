@@ -1,7 +1,7 @@
 import argparse
 from utilities import output_tools, common, rdf_tools
 
-parser,initargs = common.common_parser()
+parser,initargs = common.common_parser(True)
 
 import narf
 import wremnants
