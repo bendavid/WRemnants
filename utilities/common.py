@@ -56,7 +56,7 @@ def getIsoMtRegionFromID(regionID):
     return {"passIso" : regionID & 1,
             "passMT"  : regionID & 2}
 
-def common_parser():
+def common_parser(for_reco_highPU=False):
     parser = argparse.ArgumentParser()
     parser.add_argument("-j", "--nThreads", type=int, help="number of threads")
     parser.add_argument("--debug", action='store_true', help="Debug output")
@@ -100,15 +100,17 @@ def common_parser():
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
                         help="Set verbosity level with logging, the larger the more verbose (currently only for setup_test_logger enabled with --set-custom-logger)")
     parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
-    parser.add_argument("--muonCorr", type=str, default="massfitData_lblidealMC", 
-        choices=["none", "trackfit_only", "trackfit_only_mctruth", "lbl", "massfit", "massfit_lbl", "massfitData_mctruth"], 
-        help="Type of correction to apply to the muons")
-    parser.add_argument("--muScaleMag", type=float, default=1e-4, help="Magnitude of dummy muon scale uncertainty")
-    parser.add_argument("--muScaleBins", type=int, default=1, help="Number of bins for muon scale uncertainty")
-    parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
-    parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
-    parser.add_argument("--bias-calibration", action='store_true', help="Adjust central value by calibration bias hist")
-    parser.add_argument("--smearing", action='store_true', help="Smear pT such that resolution matches data") #TODO change to --no-smearing once smearing is final
+    if for_reco_highPU:
+        # additional arguments specific for histmaker of reconstructed objects at high pileup (mw, mz_wlike, and mz_dilepton)
+        parser.add_argument("--muonCorr", type=str, default="massfitData_lblidealMC", 
+            choices=["none", "trackfit_only", "trackfit_only_mctruth", "lbl", "massfit", "massfit_lbl", "massfitData_mctruth"], 
+            help="Type of correction to apply to the muons")
+        parser.add_argument("--muScaleMag", type=float, default=1e-4, help="Magnitude of dummy muon scale uncertainty")
+        parser.add_argument("--muScaleBins", type=int, default=1, help="Number of bins for muon scale uncertainty")
+        parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
+        parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
+        parser.add_argument("--bias-calibration", action='store_true', help="Adjust central value by calibration bias hist")
+        parser.add_argument("--smearing", action='store_true', help="Smear pT such that resolution matches data") #TODO change to --no-smearing once smearing is final
 
     commonargs,_ = parser.parse_known_args()
 
