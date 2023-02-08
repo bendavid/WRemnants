@@ -40,13 +40,16 @@ ROOT.gInterpreter.Declare('#include "lowpu_recoil.h"')
 axis_eta = hist.axis.Regular(48, -2.4, 2.4, name = "eta")
 axis_pt = hist.axis.Regular(29, 26., 55., name = "pt")
 axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "charge")
-axis_mll = hist.axis.Regular(60, 60., 120., underflow=False, overflow=False, name = "mll")
+#axis_mll = hist.axis.Regular(60, 60., 120., underflow=False, overflow=False, name = "mll")
 axis_yll = hist.axis.Regular(50, -2.5, 2.5, name = "yll")
 axis_ptll = hist.axis.Regular(300, 0, 300,  name = "ptll")
 
 axis_ptl = hist.axis.Regular(100, 0., 200., name = "ptl")
 axis_etal = hist.axis.Regular(50, -2.5, 2.5, name = "etal")
 
+
+bins_mll = [60, 65, 70, 72, 74, 76, 78] + list(range(80, 100, 1)) + [100, 102, 104, 106, 108, 110, 115, 120]
+axis_mll = hist.axis.Variable(bins_mll, name = "mll") 
 
 axis_lin = hist.axis.Regular(5, 0, 5, name = "lin")
 
@@ -63,7 +66,8 @@ axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
 reco_mll_axes = [common.axis_recoil_reco_ptZ, axis_mll]
 gen_reco_mll_axes = [common.axis_recoil_gen_ptZ, common.axis_recoil_reco_ptZ, axis_mll]
 axis_mt = hist.axis.Regular(200, 0., 200., name = "mt", underflow=False)
-
+axis_xnorm = hist.axis.Regular(1, 0., 1., name = "count", underflow=False, overflow=False)
+axis_xnorm1 = hist.axis.Regular(1, 0., 1., name = "count1", underflow=False, overflow=False)
 # extra axes which can be used to label tensor_axes
 
 
@@ -82,9 +86,34 @@ def build_graph(df, dataset):
 
     if dataset.is_data: df = df.DefinePerSample("weight", "1.0")
     else: df = df.Define("weight", "std::copysign(1.0, genWeight)")
-
+  
     weightsum = df.SumAndCount("weight")
     
+    # normalization xsecs (propagate pdfs/qcdscales)
+    if dataset.name in common.zprocs_lowpu:
+   
+        #axes_xnorm = [common.axis_recoil_gen_ptZ, axis_xnorm]
+        #cols_xnorm = ["ptVgen", "xnorm"] # this order does not work? Segfault when writing to pkl file
+        
+        axes_xnorm = [axis_xnorm, common.axis_recoil_gen_ptZ]
+        cols_xnorm = ["xnorm", "ptVgen"]
+        
+        df_xnorm = df
+        weight_expr = "weight"
+        df_xnorm = theory_tools.define_weights_and_corrs(df_xnorm, weight_expr, dataset.name, corr_helpers, args)
+        df_xnorm = df_xnorm.Define("xnorm", "0.5")
+        results.append(df_xnorm.HistoBoost("xnorm", axes_xnorm, [*cols_xnorm, "nominal_weight"]))
+
+        df_xnorm = theory_tools.define_pdf_columns(df_xnorm, dataset.name, args.pdfs, args.altPdfOnlyCentral)
+        df_xnorm = theory_tools.define_scale_tensor(df_xnorm)        
+        syst_tools.add_pdf_hists(results, df_xnorm, dataset.name, axes_xnorm, cols_xnorm, args.pdfs, "xnorm")
+        syst_tools.add_scale_hist(results, df_xnorm, [*axes_xnorm, axis_ptVgen, axis_chargeVgen], [*cols_xnorm, "ptVgen", "chargeVgen"], "xnorm")
+        df_xnorm = df_xnorm.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
+        qcdScaleByHelicityUnc = df_xnorm.HistoBoost("xnorm_qcdScaleByHelicity", [*axes_xnorm, axis_ptVgen, axis_chargeVgen], [*cols_xnorm, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
+        results.append(qcdScaleByHelicityUnc)
+     
+        
+  
     if flavor == "mumu":
     
         if not dataset.is_data: 
@@ -238,7 +267,7 @@ def build_graph(df, dataset):
     
     # Recoil calibrations
     df = recoilHelper.setup_MET(df, results, dataset, "Lep_pt", "Lep_phi", "Lep_pt_uncorr")
-    df = recoilHelper.setup_recoil_Z(df, results, dataset)
+    df = recoilHelper.setup_recoil_Z(df, results, dataset, common.zprocs_recoil)
     #df = recoilHelper.setup_gen(df, results, dataset, common.zprocs_recoil)
     df = recoilHelper.auxHists(df, results)
     
@@ -272,22 +301,33 @@ def build_graph(df, dataset):
     results.append(df.HistoBoost("mT_corr_lep", [axis_mt], ["mT_corr_lep", "nominal_weight"]))
     results.append(df.HistoBoost("mT_corr_xy", [axis_mt], ["mT_corr_xy", "nominal_weight"]))
     results.append(df.HistoBoost("mT_corr_rec", [axis_mt], ["mT_corr_rec", "nominal_weight"]))
+    results.append(df.HistoBoost("mT_corr_xy_qTrw", [axis_mt], ["mT_corr_xy", "nominal_weight_qTrw"]))
+    results.append(df.HistoBoost("mT_corr_rec_qTrw", [axis_mt], ["mT_corr_rec", "nominal_weight_qTrw"]))
     
+    results.append(df.HistoBoost("lep_pT", [axis_pt], ["TrigMuon_pt", "nominal_weight"]))
+    results.append(df.HistoBoost("lep_pT_qTrw", [axis_pt], ["TrigMuon_pt", "nominal_weight_qTrw"]))
     
     gen_reco_mll_cols = ["ptVgen", "recoil_corr_rec_magn", "massZ"]
+    
+
+    
     if dataset.name in common.zprocs_lowpu:
     
         # pdfs
         df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
         if sigProc:
-            results.extend(theory_tools.make_pdf_hists(df, dataset.name, gen_reco_mll_axes, gen_reco_mll_cols, args.pdfs, "reco_mll"))
+            #results.extend(theory_tools.make_pdf_hists(df, dataset.name, gen_reco_mll_axes, gen_reco_mll_cols, args.pdfs, "reco_mll"))
+            syst_tools.add_pdf_hists(results, df, dataset.name, gen_reco_mll_axes, gen_reco_mll_cols, args.pdfs, "reco_mll")
         else:
-            results.extend(theory_tools.make_pdf_hists(df, dataset.name, reco_mll_axes, reco_mll_cols, args.pdfs, "reco_mll"))
-        results.extend(theory_tools.make_pdf_hists(df, dataset.name, [axis_mt], ["mT_corr_rec"], args.pdfs, hname="mt"))
+            #results.extend(theory_tools.make_pdf_hists(df, dataset.name, reco_mll_axes, reco_mll_cols, args.pdfs, "reco_mll"))
+            syst_tools.add_pdf_hists(results, df, dataset.name, reco_mll_axes, reco_mll_cols, args.pdfs, "reco_mll")
+        #results.extend(theory_tools.make_pdf_hists(df, dataset.name, [axis_mt], ["mT_corr_rec"], args.pdfs, hname="mt"))
+        syst_tools.add_pdf_hists(results, df, dataset.name, [axis_mt], ["mT_corr_rec"], args.pdfs, "mt")
 
         # QCD scale
         df = theory_tools.define_scale_tensor(df)
-        results.append(theory_tools.make_scale_hist(df, [*gen_reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mll_cols, "ptVgen", "chargeVgen"]))
+        #results.append(theory_tools.make_scale_hist(df, [*gen_reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mll_cols, "ptVgen", "chargeVgen"]))
+        syst_tools.add_scale_hist(results, df, [*gen_reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mll_cols, "ptVgen", "chargeVgen"], "reco_mll")
         df = df.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
         qcdScaleByHelicityUnc = df.HistoBoost("reco_mll_qcdScaleByHelicity", [*gen_reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mll_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
         results.append(qcdScaleByHelicityUnc)

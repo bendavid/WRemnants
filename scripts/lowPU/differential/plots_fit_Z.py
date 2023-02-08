@@ -14,6 +14,7 @@ import narf
 import hist
 from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_Z
 
+sys.path.insert(0, "scripts/lowPU/")
 import plotter
 import functions
 
@@ -27,6 +28,7 @@ def parseHist(fIn, hName, bins):
     h = ROOT.TH1D(hName, "", len(bins)-1, array.array('d', bins))
     
     hIn = fIn.Get(hName)
+    print(hName)
     for iReco in range(0, len(bins)-1):
     
         
@@ -59,8 +61,8 @@ def parseHist1D(fIn, hName, bins):
     
 def doRecoilPlot(flavor="mumu", fitcfg="mumu", fitmode="prefit", ratio=1.06):
 
-    fIn = ROOT.TFile("/home/j/jaeyserm/combine/CMSSW_10_6_20/src/LowPU/LowPU_Z%s_differential_combineOutput.root" % fitcfg)
-    outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/Combine/Z/fit_%s" % fitcfg
+    fIn = ROOT.TFile(f"CombineStudies/lowPU_differential/lowPU_Z{fitcfg}_RawPFMET_differential_tot_output.root")
+    outDir = "/eos/user/j/jaeyserm/www/wmass/combine/lowPU_differential/"
     functions.prepareDir(outDir, remove=False)
     
     resTree = fIn.Get("fitresults")
@@ -85,8 +87,8 @@ def doRecoilPlot(flavor="mumu", fitcfg="mumu", fitmode="prefit", ratio=1.06):
     sigUncs = [0.041657, 0.052776, 0.039676, 0.050306, 0.052252, 0.065191]
     
     # extract the uncertainties
-    name = "nuisance_group_impact_pmaskedexp"
-    #name = "nuisance_group_impact_pmaskedexpnorm"
+    #name = "nuisance_group_impact_pmaskedexp"
+    name = "nuisance_group_impact_pmaskedexpnorm"
     #name = "nuisance_group_impact_mu"
         
     impact_hist = fIn.Get(name)
@@ -128,7 +130,7 @@ def doRecoilPlot(flavor="mumu", fitcfg="mumu", fitmode="prefit", ratio=1.06):
     st.SetName("stack")
     
     # backgrounds
-    h_top = parseHist(fIn, "expproc_TTbar_%s;1" % fitmode, bins_recoil_reco)
+    h_top = parseHist(fIn, "expproc_Top_%s;1" % fitmode, bins_recoil_reco)
     h_top.SetFillColor(ROOT.TColor.GetColor(222, 90, 106))
     h_top.SetLineColor(ROOT.kBlack)
     h_top.SetLineWidth(1)
@@ -165,7 +167,7 @@ def doRecoilPlot(flavor="mumu", fitcfg="mumu", fitmode="prefit", ratio=1.06):
     h_tot_err = None
     for iGenBin in range(1, len(lowPUcfg.bins_recoil_gen)):
 
-        h_err = parseHist(fIn, "expproc_DY_genBin%d_%s;1" % (iGenBin, fitmode), bins_recoil_reco)
+        h_err = parseHist(fIn, "expproc_Zmumu_genBin%d_%s;1" % (iGenBin, fitmode), bins_recoil_reco)
         
         # append the signal strength uncertainties
         if fitmode == "postfit":
@@ -177,7 +179,7 @@ def doRecoilPlot(flavor="mumu", fitcfg="mumu", fitmode="prefit", ratio=1.06):
                 err_new = math.sqrt(err**2 + err_sig**2)
                 h_err.SetBinError(iBin, err_new)
                 #if iGenBin != 2: h_err.SetBinError(iBin, 0)
-                print(iBin, nom, err, err_sig, err_new)
+                #print(iBin, nom, err, err_sig, err_new)
 
         if h_tot_err == None: h_tot_err = h_err
         else: h_tot_err.Add(h_err)
@@ -226,23 +228,34 @@ def doRecoilPlot(flavor="mumu", fitcfg="mumu", fitmode="prefit", ratio=1.06):
     
     # gen signals
     sigColors = [ROOT.kOrange, ROOT.kOrange+1, ROOT.kOrange+2, ROOT.kOrange+4, ROOT.kOrange-1, ROOT.kOrange+5]
+    h_gen_sig_tot = None
+    gen_yields = []
     for iGenBin in range(1, len(lowPUcfg.bins_recoil_gen)):
 
-        h_gen_sig = parseHist(fIn, "expproc_DY_genBin%d_%s;1" % (iGenBin, fitmode), bins_recoil_reco)
+        h_gen_sig = parseHist(fIn, "expproc_Zmumu_genBin%d_%s;1" % (iGenBin, fitmode), bins_recoil_reco)
         h_gen_sig.SetFillColor(sigColors[iGenBin-1])
         h_gen_sig.SetLineColor(ROOT.kBlack)
         h_gen_sig.SetLineWidth(1)
         h_gen_sig.SetLineStyle(1)
-        print("iGenBin", iGenBin, "%d" % h_gen_sig.Integral())
+        #print("iGenBin", iGenBin, "%d" % h_gen_sig.Integral())
         h_gen_sig.Scale(1, "width")
         
+        gen_yields.append(h_gen_sig.Integral())
         
+        if h_gen_sig_tot == None: h_gen_sig_tot = h_gen_sig.Clone("h_gen_sig_tot")
+        else: h_gen_sig_tot.Add(h_gen_sig)
 
         
         leg.AddEntry(h_gen_sig, "%s, p_{T}^{Z, gen} #in [%d, %d] GeV" % (signalLabel, lowPUcfg.bins_recoil_gen[iGenBin-1], lowPUcfg.bins_recoil_gen[iGenBin]), "F")
         st.Add(h_gen_sig)
-          
-          
+     
+    # gen yields
+    for iGen, yGen in enumerate(gen_yields): 
+        print(iGen, yGen)
+     
+    # reco yields
+    for iReco in range(1, h_gen_sig_tot.GetNbinsX()+1): 
+        print(iReco, h_gen_sig_tot.GetBinContent(iReco))
 
 
     cfg = {
@@ -728,18 +741,19 @@ def plotImpactsVsPt(flavor="mumu", fitcfg="mumu", impact_type = "mu"):
  
 if __name__ == "__main__":
     
-    mZbins = 60 # make auto
+    mZbins = 34 # make auto
     
     bins_recoil_reco = lowPUcfg.bins_recoil_reco
     bins_recoil_reco[-1] = 150
     
+    print(bins_recoil_reco)
     
     #doTransverseMassPlot()
     
     doRecoilPlot(flavor="mumu", fitcfg="mumu", fitmode="prefit", ratio=1.06)
     #doRecoilPlot(flavor="ee", fitcfg="ee", fitmode="prefit", ratio=1.03)
     
-    #doRecoilPlot(flavor="mumu", fitcfg="mumu", fitmode="postfit", ratio=1.11)
+    doRecoilPlot(flavor="mumu", fitcfg="mumu", fitmode="postfit", ratio=1.11)
     #doRecoilPlot(flavor="ee", fitcfg="ee", fitmode="postfit", ratio=1.11)
     
     
