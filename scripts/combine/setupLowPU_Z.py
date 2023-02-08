@@ -13,7 +13,7 @@ scriptdir = f"{pathlib.Path(__file__).parent}"
 def make_parser(parser=None):
     if not parser:
         parser = common.common_parser_combine()
-    parser.add_argument("--flavor", choices=["ee", "mumu"], help="Flavor (ee or mumu)", default="mumu", required=True)
+    parser.add_argument("--flavor", choices=["ee", "mumu"], help="Flavor (ee or mumu)", default="mumu")
     parser.add_argument("--fitType", choices=["differential", "wmass", "wlike", "inclusive"], default="differential", 
             help="Fit type, defines POI and fit observable (recoil or mT)")
     parser.add_argument("--xsec", dest="xsec", action='store_true', 
@@ -21,14 +21,19 @@ def make_parser(parser=None):
     parser.add_argument("--met", type=str, help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")
     #parser.add_argument("--lumiScale", dest="lumiScale", help="Luminosity scale", type=float, default=1.0)
     return parser
+    
+def recoilSystNames(baseName, entries):
+    systNames = []
+    systNames.extend(["{baseName}_{i}{shift}".format(baseName=baseName, i=int(j/2), shift="Down" if j%2 else "Up") for j in range(entries)])
+    return systNames
 
 def main(args):
-    outfolder = f"CombineStudies/"
+    outfolder = f"CombineStudies/lowPU_{args.fitType}"
     if not os.path.isdir(outfolder):
         os.makedirs(outfolder)
 
 
-    if not args.inputFile: args.inputFile = "lowPU_%s_%s_%s.pkl.lz4" % (args.flavor, args.met, args.pdf)
+    if not args.inputFile: args.inputFile = "lowPU_%s_%s.pkl.lz4" % (args.flavor, args.met)
 
     datagroups = datagroupsLowPU(args.inputFile, flavor=args.flavor)
     unconstrainedProcs = [] # POI processes
@@ -58,11 +63,21 @@ def main(args):
         constrainedProcs.append("Zmumu" if args.flavor == "mumu" else "Zee") # need sum over gen bins
     elif args.fitType == "inclusive":
         unconstrainedProcs.append("Zmumu" if args.flavor == "mumu" else "Zee") # need sum over gen bins
+ 
     
     suffix = ""
+    if args.doStatOnly:
+        suffix = "_stat"
     if args.xsec:
-        suffix = "_xsec"
+        suffix += "_xsec"
         bkgProcs = [] # for xsec norm card, remove all bkg procs but keep the data
+        histName = "xnorm"
+        
+        # fake data, as sum of all  Zmumu procs over recoil_gen
+        proc_base = dict(datagroups.groups["Zmumu" if args.flavor == "mumu" else "Zee"])
+        proc_base['selectOp'] = lambda x, i=i: x[{"recoil_gen" : s[::hist.sum]}]
+        datagroups.groups["fake_data"] = proc_genbin
+        dataProc = "fake_data"
     
     # hack: remove non-used procs/groups, as there can be more procs/groups defined than defined above
     # need to remove as cardTool takes all procs in the datagroups
@@ -145,15 +160,18 @@ def main(args):
             labelsByAxis = ["downUpVar"],
         )
         
+
         recoil_vars = ["target_para", "target_perp"] #, "source_para", "source_perp", "target_para_bkg", "target_perp_bkg"]
         recoil_grps = ["recoil_stat", "recoil_stat"] #, "recoil_stat", "recoil_stat", "recoil_syst", "recoil_syst"]
+        recoil_nVars = [34, 24]
         for i, tag in enumerate(recoil_vars):
             cardTool.addSystematic("recoilSyst_%s" % tag,
                 processes=Zmumu_procs,
-                mirror = True,
+                mirror = False,
                 group = recoil_grps[i],
                 systAxes = ["tensor_axis_0"],
                 labelsByAxis = ["recoil_%s_{i}" % tag],
+                outNames = recoilSystNames("recoil_"+tag, recoil_nVars[i])
                 #action=scale_recoil_hist_to_variations,
                 #scale = 1./math.sqrt(args.lumiScale) if not "bkg" in tag else 1.0,
             )

@@ -253,7 +253,7 @@ private:
     const double lam = M_PI_2 - theta;
     const double p = double(pt)/std::sin(theta);
     const double Qop = double(charge)/p;
-    const Eigen::Vector3d parms(
+    Eigen::Vector3d parms(
       (abQop? qop : Qop),
       (fullParam? lam : 0),
       (fullParam? phi : 0)
@@ -263,7 +263,7 @@ private:
     const double genlam = M_PI_2 - gentheta;
     const double genp = double(genPt)/std::sin(gentheta);
     const double genqop = double(genCharge)/genp;
-    const Eigen::Vector3d genparms(
+    Eigen::Vector3d genparms(
       (abQop? genQop : genqop),
       (fullParam? genlam : 0),
       (fullParam? genPhi : 0)
