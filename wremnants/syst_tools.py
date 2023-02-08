@@ -4,9 +4,8 @@ from utilities import boostHistHelpers as hh, common
 from wremnants import theory_tools
 from wremnants.datasets.datagroups import datagroups2016
 import collections.abc
-import logging
 
-logger = common.child_logger(__name__)
+logging = common.child_logger(__name__)
 
 def syst_transform_map(base_hist, hist_name):
     pdfInfo = theory_tools.pdfMapExtended 

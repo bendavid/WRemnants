@@ -62,8 +62,6 @@ def common_parser():
     parser.add_argument("--debug", action='store_true', help="Debug output")
     initargs,_ = parser.parse_known_args()
 
-    logging.basicConfig(level=logging.INFO if not initargs.debug else logging.DEBUG)
-
     import ROOT
     ROOT.gInterpreter.ProcessLine(".O3")
     if not initargs.nThreads:
@@ -102,6 +100,11 @@ def common_parser():
     
     commonargs,_ = parser.parse_known_args()
 
+    if commonargs.noColorLogger:
+        logger = setup_base_logger(os.path.basename(__file__), commonargs.debug)
+    else:
+        logger = setup_color_logger(os.path.basename(__file__), commonargs.verbose)
+
     if commonargs.trackerMuons:
         #sfFile = "scaleFactorProduct_12Oct2022_TrackerMuons_vertexWeight_OSchargeExceptTracking.root"
         sfFile = "scaleFactorProduct_16Oct2022_TrackerMuonsHighPurity_vertexWeight_OSchargeExceptTracking.root"
@@ -138,14 +141,13 @@ def common_parser_combine():
 
 def set_parser_default(parser, argument, newDefault):
     # change the default argument of the parser, must be called before parse_arguments
+    logger = child_logger(__name__)
     f = next((x for x in parser._actions if x.dest ==argument), None)
     if f:
-        logging.warning("")
-        logging.warning(f" >>> Modifying default of {f.dest} from {f.default} to {newDefault}")
-        logging.warning("")
+        logger.info(f" Modifying default of {f.dest} from {f.default} to {newDefault}")
         f.default = newDefault
     else:
-        logging.warning(f" >>> Parser argument {argument} not found!")
+        logger.warning(f" Parser argument {argument} not found!")
     return parser
 
 class CustomFormatter(logging.Formatter):

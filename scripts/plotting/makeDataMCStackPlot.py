@@ -22,6 +22,8 @@ xlabels = {
     "phistarll" : r"$\phi^{\star}_{\ell\ell}$",
     "MET_pt" : r"p$_{\mathrm{T}}^{miss}$ (GeV)",
     "mt" : r"m$_{T}^{\ell\nu}$ (GeV)",
+    "etaSum":r"$\eta^{\ell(+)} + \eta^{\ell(-)}$",
+    "etaDiff":r"$\eta^{\ell(+)} - \eta^{\ell(-)}$",
     # add 2d unrolled plots 
     "pt-eta" : r"(p$_{T}^{\ell}$, $\eta^{\ell}$) bin",
     "ptll-yll":r"p$_{\mathrm{T}}^{\ell\ell}$, y$^{\ell\ell}$ bin",
@@ -30,8 +32,10 @@ xlabels = {
     "mll-etaPlus":r"m$_{\ell\ell}$, $\eta^{\ell(+)}$ bin",
     "mll-etaMinus":r"m$_{\ell\ell}$, $\eta^{\ell(-)}$ bin",
     "etaPlus-etaMinus":r"$\eta^{\ell(+)}$, $\eta^{\ell(-)}$ bin",
+    "etaSum-etaDiff":r"$\eta^{\ell(+)} + \eta^{\ell(-)}$, $\eta^{\ell(+)} - \eta^{\ell(-)}$ bin",
     # add 3d unrolled plots 
     "mll-etaPlus-etaMinus":r"m$_{\ell\ell}$, $\eta^{\ell(+)}$, $\eta^{\ell(-)}$ bin",
+    "mll-etaSum-etaDiff":r"m$_{\ell\ell}$, $\eta^{\ell(+)} + \eta^{\ell(-)}$, $\eta^{\ell(+)} - \eta^{\ell(-)}$ bin",
 }
 
 parser = argparse.ArgumentParser()
