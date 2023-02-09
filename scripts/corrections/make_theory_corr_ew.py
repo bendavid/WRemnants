@@ -58,9 +58,10 @@ for proc in procs:
     # Variations: 0=original MiNNLO, 1=Horace NLO, 2=mirrored
     hones = hist.Hist(*hratio.axes, storage=hist.storage.Double())
     hones.values(flow=True)[...,charge_dict[proc]] = np.ones(hdummy.values(flow=True).shape)
-    hmirror = hh.mirrorHist(hones, hratio, cutoff=1e-5)
+    hmirror = hist.Hist(*hratio.axes, storage=hist.storage.Double())
+    hmirror.values(flow=True)[...] = 2*hratio.values(flow=True) - hones.values(flow=True)
     mirrorscale = np.sum(hden.values(flow=True)) / np.sum(hden.values(flow=True)*hmirror.values(flow=True)[...,0,charge_dict[proc]])
-    # print(f'mirrorscale = {mirrorscale}')
+    # print(f'{proc} mirrorscale = {mirrorscale}')
     hmirror.values(flow=True)[...]    *= mirrorscale
     hmirror.variances(flow=True)[...] *= mirrorscale
     corrh[proc].values(flow=True)[...,0] = hones.values(flow=True)
