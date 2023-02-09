@@ -128,7 +128,9 @@ def common_parser_combine():
     parser.add_argument("--skipSignalSystOnFakes", dest="skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
     parser.add_argument("--noQCDscaleFakes", dest="noQCDscaleFakes" , action="store_true",   help="Do not apply QCd scale uncertainties on fakes, mainly for debugging")
     parser.add_argument("--doStatOnly", action="store_true", default=False, help="Set up fit to get stat-only uncertainty (currently combinetf with -S 0 doesn't work)")
-    parser.add_argument("--debug", action='store_true', help="Print debug output")
+    parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
+                        help="Set verbosity level with logging, the larger the more verbose");
+    parser.add_argument("--no-color-logger", action="store_true", default=False, help="Do not use logging with colors")
     parser.add_argument("--combineChannels", action='store_true', help="Only use one channel")
     parser.add_argument("--lumiScale", type=float, default=None, help="Rescale equivalent luminosity by this value (e.g. 10 means ten times more data and MC)")
     return parser
