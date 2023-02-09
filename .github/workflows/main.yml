@@ -24,6 +24,9 @@ jobs:
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v3
+        with:
+          submodules: 'true'
+          token: ${{ secrets.PAT_TOKEN }}
 
       - name: wmass analysis
         run: singularity run /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/bendavid/cmswmassdocker/wmassdevrolling\:latest scripts/ci/wmass_test.sh
