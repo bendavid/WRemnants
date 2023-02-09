@@ -59,10 +59,10 @@ def getIsoMtRegionFromID(regionID):
 def common_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("-j", "--nThreads", type=int, help="number of threads")
-    parser.add_argument("--debug", action='store_true', help="Debug output")
+    parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
+                        help="Set verbosity level with logging, the larger the more verbose");
+    parser.add_argument("--no-color-logger", action="store_true", default=False, help="Do not use logging with colors")
     initargs,_ = parser.parse_known_args()
-
-    logging.basicConfig(level=logging.INFO if not initargs.debug else logging.DEBUG)
 
     import ROOT
     ROOT.gInterpreter.ProcessLine(".O3")
@@ -96,9 +96,6 @@ def common_parser():
     parser.add_argument("--onlyMainHistograms", action='store_true', help="Only produce some histograms, skipping (most) systematics to run faster when those are not needed")
     parser.add_argument("--met", type=str, choices=["DeepMETReso", "RawPFMET"], help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")                    
     parser.add_argument("-o", "--outfolder", type=str, default="", help="Output folder")
-    parser.add_argument("--no-color-logger", dest="noColorLogger", action="store_true", default=False, help="Do not use logging with colors")
-    parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
-                        help="Set verbosity level with logging, the larger the more verbose (currently only for setup_test_logger enabled with --set-custom-logger)");
     
     commonargs,_ = parser.parse_known_args()
 
@@ -166,6 +163,10 @@ logging_verboseLevel = [logging.CRITICAL, logging.ERROR, logging.WARNING, loggin
 def setLoggingLevel(log, verbosity):
     log.setLevel(logging_verboseLevel[max(0, min(4, verbosity))])
 
+def setup_logger(basefile, verbosity, no_colors):
+    setup_func = setup_base_logger if no_colors else setup_color_logger
+    return setup_func(os.path.basename(basefile), verbosity)
+
 def setup_color_logger(name, verbosity):
     base_logger = logging.getLogger("wremnants")
     # set console handler
@@ -176,10 +177,10 @@ def setup_color_logger(name, verbosity):
     base_logger.propagate = False # to avoid propagating back to root logger, which would print messages twice
     return base_logger.getChild(name)
     
-def setup_base_logger(name, debug):
+def setup_base_logger(name, verbosity):
     logging.basicConfig(format='%(levelname)s: %(message)s')
     base_logger = logging.getLogger("wremnants")
-    base_logger.setLevel(logging.DEBUG if debug else logging.INFO)
+    setLoggingLevel(base_logger, verbosity)
     return base_logger.getChild(name)
     
 def child_logger(name):

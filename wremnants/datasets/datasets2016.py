@@ -53,9 +53,15 @@ def getDatasets(maxFiles=-1, filt=None, mode=None, base_path=None, nanoVersion="
         if sample in genDataDict:
             base_path = base_path.replace("NanoAOD", "NanoGen")
 
+        paths = makeFilelist(info["filepaths"], maxFiles, format_args=dict(BASE_PATH=base_path, NANO_PROD_TAG=prod_tag))
+
+        if not paths:
+            logger.warning(f"Failed to find any files for dataset {sample}. Looking at {info['filepaths']}. Skipping!")
+            continue
+
         narf_info = dict(
             name=sample,
-            filepaths=makeFilelist(info["filepaths"], maxFiles, format_args=dict(BASE_PATH=base_path, NANO_PROD_TAG=prod_tag)),
+            filepaths=paths,
         )
 
         if "data" in sample[:4]:

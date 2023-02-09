@@ -11,13 +11,15 @@ import math
 
 parser.add_argument("--skipAngularCoeffs", action='store_true', help="Skip the conversion of helicity moments to angular coeff fractions")
 parser.add_argument("--singleLeptonHists", action='store_true', help="Also store single lepton kinematics")
-parser.add_argument("--ewHists", action='store_true', help="Also store histograms for EW reweighting. Use with --filter horace")
+parser.add_argument("--skip-ew-hists", action='store_true', help="Also store histograms for EW reweighting. Use with --filter horace")
 
 f = next((x for x in parser._actions if x.dest == "filterProcs"), None)
 if f:
     f.default = common.vprocs
 
 args = parser.parse_args()
+
+logger = common.setup_logger(__file__, args.verbose, args.no_color_logger)
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
@@ -95,7 +97,7 @@ def build_graph(df, dataset):
             df = df.Define('etaPrefsrLep', 'genl.eta()')
         results.append(df.HistoBoost("nominal_genlep", lep_axes, [*lep_cols, "nominal_weight"]))
 
-    if args.ewHists and (isW or isZ):
+    if not args.skip_ew_hists and (isW or isZ):
         if isZ:
             massBins = theory_tools.make_ew_binning(mass = 91.1535, width = 2.4932, initialStep=0.010)
         else:
@@ -115,7 +117,7 @@ def build_graph(df, dataset):
 
     if "LHEScaleWeight" in df.GetColumnNames():
         df = theory_tools.define_scale_tensor(df)
-        syst_tools.add_scale_hist(results, df, nominal_axes, nominal_cols, "nominal_gen")
+        syst_tools.add_qcdScale_hist(results, df, nominal_axes, nominal_cols, "nominal_gen")
         df = df.Define("helicity_moments_scale_tensor", "wrem::makeHelicityMomentScaleTensor(csSineCosThetaPhi, scaleWeights_tensor, nominal_weight)")
         helicity_moments_scale = df.HistoBoost("helicity_moments_scale", nominal_axes, [*nominal_cols, "helicity_moments_scale_tensor"], tensor_axes = [wremnants.axis_helicity, *wremnants.scale_tensor_axes])
         results.append(helicity_moments_scale)
@@ -151,6 +153,9 @@ w_moments = None
 if not args.skipAngularCoeffs:
     for dataset in datasets:
         name = dataset.name
+        if "helicity_moments_scale" not in resultdict[name]:
+            logger.warning(f"Failed to find helicity_moments_scale hist for proc {name}. Skipping!")
+            continue
         moments = resultdict[name]["output"]["helicity_moments_scale"]
         if name in common.zprocs:
             if z_moments is None:
