@@ -38,7 +38,8 @@ sys.path.append(os.getcwd())
 from scripts.analysisTools.tests.cropNegativeTemplateBins import cropNegativeContent
 
 def plotDistribution1D(hdata, hmc, datasets, outfolder_dataMC, canvas1Dshapes=None,
-                       xAxisName="variable", plotName="variable_failIso_jetInclusive"):
+                       xAxisName="variable", plotName="variable_failIso_jetInclusive",
+                       draw_both0_noLog1_onlyLog2=1, ratioPadYaxisTitle="Data/pred::0.9,1.1"):
     
     createPlotDirAndCopyPhp(outfolder_dataMC)
     if not canvas1Dshapes:
@@ -69,9 +70,9 @@ def plotDistribution1D(hdata, hmc, datasets, outfolder_dataMC, canvas1Dshapes=No
         legend.AddEntry(hmc[i], legEntries_plots_[i], "LF")
 
     drawTH1dataMCstack(hdata, stack_1D, xAxisName, "Events", plotName,
-                       outfolder_dataMC, legend, ratioPadYaxisNameTmp="Data/pred::0.9,1.1", passCanvas=canvas1Dshapes,
-                       lumi="16.8", drawLumiLatex=True, xcmsText=0.3, noLegendRatio=True
-    )
+                       outfolder_dataMC, legend, ratioPadYaxisNameTmp=ratioPadYaxisTitle, passCanvas=canvas1Dshapes,
+                       lumi="16.8", drawLumiLatex=True, xcmsText=0.3, noLegendRatio=True,
+                       draw_both0_noLog1_onlyLog2=draw_both0_noLog1_onlyLog2)
 
 
 if __name__ == "__main__":

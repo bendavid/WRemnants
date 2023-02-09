@@ -20,7 +20,7 @@ def select_veto_muons(df, nMuons=1):
 def select_good_muons(df, nMuons=1, use_trackerMuons=False, use_isolation=False):
 
     if use_trackerMuons:
-        if dataset.group in ["Top", "Diboson"]:
+        if dataset.group in ["Top", "Diboson", "QCD"]:
             df = df.Define("Muon_category", "Muon_isTracker && Muon_highPurity")
         else:
             df = df.Define("Muon_category", "Muon_isTracker && Muon_innerTrackOriginalAlgo != 13 && Muon_innerTrackOriginalAlgo != 14 && Muon_highPurity")
@@ -67,7 +67,7 @@ def select_z_candidate(df, ptLow, ptHigh):
     return df
 
 def apply_triggermatching_muon(df, dataset, muon_eta, muon_phi):
-    if dataset.group in ["Top", "Diboson"]:
+    if dataset.group in ["Top", "Diboson", "QCD"]:
         df = df.Define("goodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_pt,TrigObj_l1pt,TrigObj_l2pt,TrigObj_filterBits)")
     else:
         df = df.Define("goodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_filterBits)")
@@ -87,7 +87,7 @@ def select_standalone_muons(df, dataset, use_trackerMuons=False, muons="goodMuon
     from utilities.common import muonEfficiency_standaloneNumberOfValidHits as nHitsSA
 
     #standalone quantities, currently only in data and W/Z samples
-    if dataset.group in ["Top", "Diboson"]:
+    if dataset.group in ["Top", "Diboson", "QCD"]:
         df = df.Alias(f"{muons}_SApt{idx}",  f"{muons}_pt{idx}")
         df = df.Alias(f"{muons}_SAeta{idx}", f"{muons}_eta{idx}")
         df = df.Alias(f"{muons}_SAphi{idx}", f"{muons}_phi{idx}")
@@ -104,7 +104,7 @@ def select_standalone_muons(df, dataset, use_trackerMuons=False, muons="goodMuon
     # the next cuts are mainly needed for consistency with the reco efficiency measurement for the case with global muons
     # note, when SA does not exist this cut is still fine because of how we define these variables
     df = df.Filter(f"{muons}_SApt{idx} > 15.0 && wrem::deltaR2({muons}_SAeta{idx}, {muons}_SAphi{idx}, {muons}_eta{idx}, {muons}_phi{idx}) < 0.09")
-    if nHitsSA > 0 and not use_trackerMuons and not dataset.group in ["Top", "Diboson"]:
+    if nHitsSA > 0 and not use_trackerMuons and not dataset.group in ["Top", "Diboson", "QCD"]:
         df = df.Filter(f"Muon_standaloneNumberOfValidHits[{muons}][{idx}] >= {nHitsSA}")
 
     return df
