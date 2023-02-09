@@ -19,6 +19,7 @@ import os
 data_dir = f"{pathlib.Path(__file__).parent}/../../wremnants/data/"
 
 parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for luminosity in excess to 1 (e.g. 1.012 means 1.2\%)", default=1.012)
+parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency")
 parser.add_argument("--vqtTest", action="store_true", help="Test of isolation SFs dependence on V q_T projection (at the moment just for the W)")
 sfFileVqtTest = f"{data_dir}/testMuonSF/fits_2.root"
 parser.add_argument("--sfFileVqtTest", type=str, help="File with muon scale factors as a function of V q_T projection", default=sfFileVqtTest)
@@ -127,7 +128,7 @@ if not args.no_recoil:
     recoilHelper = recoil_tools.Recoil("highPU", flavor="mu", met=args.met)
 
 # FIXME: Currently breaks the taus
-smearing_weights = True
+smearing_weights = False
 
 # TODO: Reduce duplication in mw and mz producers
 mass_fit = "massfit" in args.muonCorr
