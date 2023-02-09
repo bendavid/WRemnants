@@ -32,7 +32,7 @@ def make_parser(parser=None):
     return parser
 
 def main(args):
-    logger = common.setup_base_logger('setupCombineWMass', args.debug)
+    logger = common.setup_logger(__file__, args.verbose, args.no_color_logger)
 
     datagroups = datagroups2016(args.inputFile)
     if args.xlim:
