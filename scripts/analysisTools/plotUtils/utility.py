@@ -24,6 +24,7 @@ colors_plots_ = {"Wmunu"      : ROOT.kRed+2,
                  "Top"        : ROOT.kGreen+2,
                  "Diboson"    : ROOT.kViolet,
                  "Fake"       : ROOT.kGray,
+                 "QCD"        : ROOT.kGray,
                  "Other"      : ROOT.kGray}
 
 legEntries_plots_ = {"Wmunu"      : "W#rightarrow#mu#nu",
@@ -32,7 +33,8 @@ legEntries_plots_ = {"Wmunu"      : "W#rightarrow#mu#nu",
                      "Ztautau"    : "Z#rightarrow#tau#tau",
                      "Top"        : "t quark",
                      "Diboson"    : "Diboson",
-                     "Fake"       : "Multijet",
+                     "Fake"       : "Nonprompt", # or "Multijet"
+                     "QCD"        : "QCD MC",
                      "Other"      : "Other"}   
 
 #########################################################################
@@ -630,7 +632,13 @@ def drawTH1(htmp,
     if (setYAxisRangeFromUser): h.GetYaxis().SetRangeUser(ymin,ymax)
     # force drawing stat box
     h.SetStats(1 if drawStatBox else 0)
-    h.Draw("HIST")
+    if "TH1" in h.ClassName():
+        h.Draw("HIST")
+    else:
+        h.SetLineColor(ROOT.kBlack)
+        h.SetMarkerStyle(20)
+        h.SetMarkerColor(ROOT.kBlack)
+        h.Draw("HE")
     if len(fitString):
         fitFunc,fitOpt,drawOpt,fitMin,fitMax = fitString.split(";")
         print(f"Fitting with {fitFunc}")
@@ -837,13 +845,19 @@ def drawCorrelationPlot(h2D_tmp,
     # canvas.Modified()
     # canvas.Update()
 
-    leg = ROOT.TLegend(0.39,0.75,0.89,0.95)
-    leg.SetFillStyle(0)
-    leg.SetFillColor(0)
+    leg = ROOT.TLegend(0.25,0.83,0.75,0.93)
     leg.SetBorderSize(0)
     leg.SetTextFont(62)
-    if plotLabel not in ["", "ForceTitle"]: leg.AddEntry(0,plotLabel,"")
-    if drawProfileX: leg.AddEntry(0,"Correlation = %.2f" % h2DPlot.GetCorrelationFactor(),"")
+    nLegEntries = 0
+    if plotLabel not in ["", "ForceTitle"]:
+        leg.AddEntry(0,plotLabel,"")
+        nLegEntries += 1
+    if drawProfileX:
+        leg.AddEntry(h2DProfile, "Correlation = %.2f" % h2DPlot.GetCorrelationFactor(),"")
+        nLegEntries += 1
+    if nLegEntries == 0:
+        leg.SetFillStyle(0)
+        leg.SetFillColor(0)
     leg.Draw("same")
 
     if (draw_both0_noLog1_onlyLog2 == 0 or draw_both0_noLog1_onlyLog2 == 1):
@@ -1160,7 +1174,7 @@ def pol3_root_(xvals, parms, xLowVal = 0.0, xFitRange = 1.0):
 def polN_root_(xvals, parms, xLowVal = 0.0, xFitRange = 1.0, degree=3):
     xscaled = (xvals[0] - xLowVal) / xFitRange
     ret = parms[0]
-    for d in range(1, degree):
+    for d in range(1, 1+degree):
         ret += parms[d]*xscaled**d
     return ret
 
@@ -2524,10 +2538,10 @@ def drawTH1dataMCstack(h1, thestack,
         canvas.SaveAs(outdir + canvasName + ".pdf")
 
     if draw_both0_noLog1_onlyLog2 != 1:        
-        if yAxisName == "a.u.": 
-            h1.GetYaxis().SetRangeUser(max(0.0001,h1.GetMinimum()*0.8),h1.GetMaximum()*100)
+        if labelY == "a.u.": 
+            h1.GetYaxis().SetRangeUser(max(0.0001,h1.GetMinimum()*0.8),h1.GetBinContent(h1.GetMaximumBin())*100)
         else:
-            h1.GetYaxis().SetRangeUser(max(0.001,h1.GetMinimum()*0.8),h1.GetMaximum()*100)
+            h1.GetYaxis().SetRangeUser(max(0.1,h1.GetMinimum()*0.8),h1.GetBinContent(h1.GetMaximumBin())*1000)
             canvas.SetLogy()
             canvas.SaveAs(outdir + canvasName + "_logY.png")
             canvas.SaveAs(outdir + canvasName + "_logY.pdf")
@@ -3674,7 +3688,9 @@ def drawGraphCMS(grList,
                  passCanvas=None,
                  graphDrawStyle="p",
                  legEntryStyle="LF",
-                 useOriginalGraphStyle=False # if True use style from original graph
+                 useOriginalGraphStyle=False, # if True use style from original graph
+                 skipLumi=False,
+                 solidLegend=False
              ):
     adjustSettings_CMS_lumi()
     xAxisName = ""
@@ -3706,9 +3722,12 @@ def drawGraphCMS(grList,
     legcoords = [float(x) for x in (legendCoords.split(";")[0]).split(',')]
     lx1,ly1,lx2,ly2 = legcoords[0],legcoords[1],legcoords[2],legcoords[3]
     leg = ROOT.TLegend(lx1,ly1,lx2,ly2)
-    leg.SetFillColor(0)
-    leg.SetFillStyle(0)
-    leg.SetBorderSize(0)
+    if solidLegend:
+        leg.SetFillColor(ROOT.kWhite)
+    else:
+        leg.SetFillColor(0)
+        leg.SetFillStyle(0)
+        leg.SetBorderSize(0)
     leg.SetNColumns(nColumnsLeg)
 
     for ig in range(0,nGraphs):
@@ -3729,7 +3748,6 @@ def drawGraphCMS(grList,
             grList[ig].Draw(graphDrawStyle+" same")
         leg.AddEntry(grList[ig],leg_roc[ig],legEntryStyle)        
 
-    leg.Draw("same")
     canvas.RedrawAxis("sameaxis")
 
     grList[0].GetXaxis().SetTitleSize(0.05)
@@ -3745,19 +3763,22 @@ def drawGraphCMS(grList,
         grList[0].GetYaxis().SetRangeUser(ymin,ymax)
 
     setTDRStyle() # check if it doesn't screw things up
-    if lumi != None: 
-        CMS_lumi(canvas,lumi,True,False)
-    else:   
-        CMS_lumi(canvas,"",True,False)
-
+    if not skipLumi: 
+        if lumi != None: 
+            CMS_lumi(canvas,lumi,True,False)
+        else:   
+            CMS_lumi(canvas,"",True,False)
+        
     etabin = ROOT.TLatex()
     etabin.SetNDC() # not sure it is needed
     etabin.SetTextSize(0.05)
     etabin.SetTextFont(42)
     etabin.SetTextColor(ROOT.kBlack)
-    etabin.DrawLatex(0.15,0.15,etabinText)
+    if etabinText:
+        etabin.DrawLatex(0.15,0.15,etabinText)
 
     canvas.RedrawAxis("sameaxis")
+    leg.Draw("same")
 
     for ext in [".png",".pdf"]:
         canvas.SaveAs(outputDIR+canvasName+ext)
