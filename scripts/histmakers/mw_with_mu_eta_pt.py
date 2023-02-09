@@ -364,7 +364,7 @@ def build_graph(df, dataset):
                     df = df.DefinePerSample("bool_true", "true")
                     df = df.DefinePerSample("bool_false", "false")
                     if args.muonCorr == "massfit":
-                        jpsi_unc_helper = jpsi_crctn_data_unc_helper if dataset.is_data else jpsi_crctn_MC_unc_helper
+                        jpsi_unc_helper = jpsi_crctn_data_unc_helper
                         df = df.Define("muonScaleSyst_responseWeights_tensor_gensmear", jpsi_unc_helper,
                             [
                             "goodMuons_qop0_gen",
