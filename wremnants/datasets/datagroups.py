@@ -373,15 +373,9 @@ class datagroups2016(datagroups):
         return df
 
     def readHist(self, baseName, proc, syst, scaleOp=None, forceNonzero=True, scaleToNewLumi=-1):
-        logger.debug("PROC.NAME")
-        logger.debug(proc.name)
-        logger.debug("BASENAME")
-        logger.debug(baseName)
-        logger.debug("SYST")
-        logger.debug(syst)
         output = self.results[proc.name]["output"]
         histname = self.histName(baseName, proc.name, syst)
-        logger.debug(histname)
+        logger.debug(f"Reading hist {histname} for proc {proc.name} and syst {syst}")
         if histname not in output:
             raise ValueError(f"Histogram {histname} not found for process {proc.name}")
         h = output[histname]

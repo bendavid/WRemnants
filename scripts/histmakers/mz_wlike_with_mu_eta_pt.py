@@ -17,6 +17,7 @@ import os
 parser = common.set_parser_default(parser, "pt", [34, 26, 60])
 
 args = parser.parse_args()
+logger = common.setup_logger(__file__, args.verbose, args.color_logger)
     
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 

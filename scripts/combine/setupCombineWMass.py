@@ -16,7 +16,8 @@ scriptdir = f"{pathlib.Path(__file__).parent}"
 def make_parser(parser=None):
     if not parser:
         parser = common.common_parser_combine()
-    parser.add_argument("-v", "--fitvar", help="Variable to fit", default="pt-eta")
+    parser.add_argument("--fitvar", help="Variable to fit", default="pt-eta")
+    parser.add_argument("--fitvar", help="Variable to fit", default="eta_pt", choices=sel.hist_map.keys())
     parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow). Equivalent to --excludeNuisances '.*effSystTnP|.*effStatTnP' ")
     parser.add_argument("-p", "--pseudoData", type=str, help="Hist to use as pseudodata")
     parser.add_argument("--pseudodata-file", type=str, help="Input file for pseudodata (if it should be read from a different file", default=None)
@@ -32,7 +33,7 @@ def make_parser(parser=None):
     return parser
 
 def main(args):
-    logger = common.setup_base_logger('setupCombineWMass', args.debug)
+    logger = common.setup_logger(__file__, args.verbose, args.color_logger)
 
     datagroups = datagroups2016(args.inputFile)
     if args.xlim:
@@ -295,7 +296,7 @@ def main(args):
         cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
 
     cardTool.writeOutput()
-    logging.info(f"Output stored in {outfolder}")
+    logger.info(f"Output stored in {outfolder}")
     
 if __name__ == "__main__":
     parser = make_parser()
