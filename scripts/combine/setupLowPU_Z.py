@@ -28,6 +28,8 @@ def recoilSystNames(baseName, entries):
     return systNames
 
 def main(args):
+    logger = common.setup_logger(__file__, args.verbose, args.color_logger)
+
     outfolder = f"CombineStudies/lowPU_{args.fitType}"
     if not os.path.isdir(outfolder):
         os.makedirs(outfolder)

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from wremnants import CardTool,theory_tools
+from utilities import common
 from wremnants.datasets.datagroupsLowPU import datagroupsLowPU
 from wremnants import histselections as sel
 import argparse
@@ -14,6 +15,8 @@ parser.add_argument("-i", "--inputFile", type=str, required=True)
 parser.add_argument("--noScaleHelicitySplit", dest="qcdByHelicity", action='store_false', 
         help="Don't split QCD scale into helicity coefficients")
 args = parser.parse_args()
+
+logger = common.setup_logger(__file__, 2, False)
 
 if not os.path.isdir(args.outfolder):
     os.mkdir(args.outfolder)
