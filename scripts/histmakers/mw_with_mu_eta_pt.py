@@ -40,10 +40,7 @@ sfFileVqtTest = args.sfFileVqtTest
 if args.vqtTestIntegrated:
     sfFileVqtTest = f"{data_dir}/testMuonSF/IsolationEfficienciesCoarseBinning.root"
 
-if args.noColorLogger:
-    logger = common.setup_base_logger(os.path.basename(__file__), args.debug)
-else:
-    logger = common.setup_color_logger(os.path.basename(__file__), args.verbose)
+logger = common.setup_logger(__file__, args.verbose, args.color_logger)
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
