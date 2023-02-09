@@ -47,8 +47,7 @@ from scripts.analysisTools.tests.testPlots1D import plotDistribution1D
 
 # will use as input the histogram mTStudyForFakes with eta-pt-charge-mt-passIso-hasJet, where mt is the full distribution
 
-# function to plot 1D data/MC distributions for the iso/nJet bins we have in ths study
-
+# function to plot 1D data/MC distributions for the iso/nJet bins we have in this study
 def plotProjection1D(rootHists, datasets, outfolder_dataMC, canvas1Dshapes=None, chargeBin=1,
                      projectAxisToKeep=0, isoAxisRange=[1,1], jetAxisRange=[1,2],
                      xAxisName="variable", plotName="variable_failIso_jetInclusive", mTaboveThis=None,
@@ -102,11 +101,12 @@ def plotProjection1Dfrom3D(rootHists, datasets, outfolder_dataMC, canvas1Dshapes
             if correctionFakes and d == "Fake":
                 # correct 2D before going to 1D
                 hmc2D = rootHists[d].Project3D(f"yxe")
+                cropNegativeContent(hmc2D)
                 hmc2D.SetName(f"{plotName}_{d}_2Dtmp")                                                 
                 print()
                 print(f"PlotName: {plotName}")
                 print(f"Fakes norm before corr: {hmc2D.Integral()}")
-                scaleTH2byOtherTH2(hmc2D, correctionFakes, scaleUncertainty=True, zeroOutOfAcceptance=True)
+                scaleTH2byOtherTH2(hmc2D, correctionFakes, scaleUncertainty=True, zeroOutOfAcceptance=False)
                 print(f"Fakes norm after corr : {hmc2D.Integral()}")
                 print()
                 if axisProj == "x":
@@ -119,7 +119,7 @@ def plotProjection1Dfrom3D(rootHists, datasets, outfolder_dataMC, canvas1Dshapes
             else:
                 hmc[d] = rootHists[d].Project3D(f"{axisProj}eo")
                 hmc[d].SetName(f"{plotName}_{d}")
-            cropNegativeContent(hmc[d]) # should I crop the 2D before projecting?
+            #cropNegativeContent(hmc[d]) # should I crop the 2D before projecting?
             hmc[d].SetFillColor(colors_plots_[d])
             hmc[d].SetLineColor(ROOT.kBlack)
             hmc[d].SetMarkerSize(0)
@@ -148,7 +148,9 @@ def drawAndFitFRF(h1, labelXtmp="xaxis", labelYtmp="yaxis",
                   fitRange="0,40", # xmin and xmax
                   fitOptions="MSQ+",
                   evalAt=None,
-                  mTshape=None
+                  mTshape=None,
+                  fitPolDegree=3,
+                  useBinnedCorr=False
 ):
 
     # moreTextLatex is used to write text with TLatex, and the syntax is textToWrite::x1,y1,ypass,textsize
@@ -202,8 +204,9 @@ def drawAndFitFRF(h1, labelXtmp="xaxis", labelYtmp="yaxis",
 
     if ymin == ymax == 0.0:
         ymin,ymax = getMinMaxHisto(h1,excludeEmpty=True,sumError=True)            
-        ymin *= 0.9
-        ymax *= (1.1 if leftMargin > 0.1 else 2.0)
+        diff = ymax - ymin
+        ymin -= diff * 0.25
+        ymax += diff * 0.3
         if ymin < 0: ymin = 0
 
     if lowerPanelHeight:
@@ -257,10 +260,10 @@ def drawAndFitFRF(h1, labelXtmp="xaxis", labelYtmp="yaxis",
 
     # FIT WITH TENSORFLOW
     global polN_scaled_global
-    fitModel = "pol3" # just for legend, set here to make sure it is changed consistently with line below
-    params = np.array([1.0, 0.0, 0.0, 0.0])
+    fitModel = f"pol{fitPolDegree}" # just for legend, set here to make sure it is changed consistently with line below
+    params = np.array([1.0] + [0.0 for i in range(fitPolDegree)])
     if polN_scaled_global == None: 
-        polN_scaled_global = partial(pol3_root_, xLowVal=xMinFit, xFitRange=xMaxFit-xMinFit)
+        polN_scaled_global = partial(polN_root_, xLowVal=xMinFit, xFitRange=xMaxFit-xMinFit, degree=fitPolDegree)
 
     fitres_tf1 = narf.fit_hist(boost_hist, polN_scaled_global, params)
     f1 = ROOT.TF1("f1",polN_scaled_global, xMinFit, xMaxFit, len(params))
@@ -284,11 +287,9 @@ def drawAndFitFRF(h1, labelXtmp="xaxis", labelYtmp="yaxis",
     #f1.SetLineStyle(9) # ROOT.kDashed == thin dashes, almost dotted
     f1.SetLineColor(ROOT.kBlue+1)
     # draw extrapolation
-    postfitpars = [f1.GetParameter(0), f1.GetParameter(1), f1.GetParameter(2)]
     f2 = ROOT.TF1("f2",polN_scaled_global, xMaxFit, h1.GetXaxis().GetBinLowEdge(1+h1.GetNbinsX()), len(params))
-    f2.SetParameter(0, postfitpars[0])
-    f2.SetParameter(1, postfitpars[1])
-    f2.SetParameter(2, postfitpars[2])
+    for i in range(1+fitPolDegree):
+        f2.SetParameter(i, f1.GetParameter(i))
     f2.SetLineColor(ROOT.kRed+2)
     f2.SetLineWidth(3)
     f2.SetLineStyle(9)
@@ -478,8 +479,6 @@ def drawAndFitFRF(h1, labelXtmp="xaxis", labelYtmp="yaxis",
     # when deriving the average mT at which to evaluate the FRF, use the average of the FRF over the mT distribution
     # essentially integral of FRF(mT)*G(mT)*dmT, where G is the normalized shape of the mT distribution 
 
-    useBinFRF = False # integrate using original histogram rather than the smooth PDF
-
     averageFRF = 0.0
     if mTshape:
         ## get integral in restricted range to normalize the mT PDF
@@ -491,7 +490,7 @@ def drawAndFitFRF(h1, labelXtmp="xaxis", labelYtmp="yaxis",
             # but if positive it should be set to 0 to avoid issues when the fitted parabola increases versus mT 
             # perhaps the parabola should be forced to have negative concavity
             #valFRF = 0.0 if mTbinVal > xvalMax else funcFullRange.Eval(mTbinVal)
-            valFRF = h1.GetBinContent(max(1, min(h1.GetXaxis().FindFixBin(mTbinVal), h1.GetNbinsX()))) if useBinFRF else funcFullRange.Eval(mTbinVal) 
+            valFRF = h1.GetBinContent(max(1, min(h1.GetXaxis().FindFixBin(mTbinVal), h1.GetNbinsX()))) if useBinnedCorr else funcFullRange.Eval(mTbinVal) 
             averageFRF += max(0.0, valFRF) * mTshape.GetBinContent(ib)
         averageFRF /= integralMt
         
@@ -513,7 +512,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("inputfile", type=str, nargs=1)
     parser.add_argument("outputfolder",   type=str, nargs=1)
-    #parser.add_argument("--hname", default="mt_pt_eta", help="Root of histogram name inside root file")
     parser.add_argument("-x", "--x-axis-name", dest="xAxisName", default="Muon #eta", help="x axis name")
     parser.add_argument("-y", "--y-axis-name", dest="yAxisName", default="Muon p_{T} (GeV)", help="y axis name")
     parser.add_argument("-z", "--z-axis-name", dest="zAxisName", default="m_{T} (GeV)", help="z axis name")
@@ -521,14 +519,18 @@ if __name__ == "__main__":
     parser.add_argument("--mt-bin-edges", dest="mtEdges", default="0,10,20,30,40,50,60", type=str, help="Comma-separated list of bin edges for mT")
     parser.add_argument("--mt-nominal-range", dest="mtNominalRange", default="0,40", type=str, help="Comma-separated list of 2 bin edges for mT, representing the nominal range, used to derive the correction using also option --mt-value-correction")
     parser.add_argument("--mt-fit-range", dest="mtFitRange", default="0,50", type=str, help="Comma-separated list of 2 bin edges for mT, representing the fit range, might be the same as --mt-nominal-range but not necessarily")
-    #parser.add_argument("--mt-value-correction", dest="mtValueCorrection", default=-1, type=float, help="Value at high mT where to evaluate correction with respect to nominal range passed with --mt-nominal-range (if negative the mean from the histogram in each eta-pt bin is used)")
+    parser.add_argument(     '--fit-pol-degree'  , dest='fitPolDegree',      default=3, type=int, help='Degree for polynomial used in the fits')
+    parser.add_argument("--integral-mt-method", dest="integralMtMethod", default="sideband", choices=["sideband", "fullRange"], type=str, help="How to integrate mT distribution to derive the FRF correction (default is 'sideband', orthogonal to the nominal fake region, 'fullRange' uses the full range)")
+    parser.add_argument(     '--use-binned-correction', dest='useBinnedCorrection', action='store_true',   help='Use binned FRF to derive the correction (mainly for tests)')
+    parser.add_argument(     '--jet-cut', dest='jetCut', action='store_true',   help='Use jet cut to derive the FRF (sample will be more QCD enriched but might boas the FRF)')
     parser.add_argument(     "--rebin-x", dest="rebinEta", default=1, type=int, help="To rebin x axis (eta)")
     parser.add_argument(     "--rebin-y", dest="rebinPt", default=1, type=int, help="To rebin y axis (pt)")
     parser.add_argument(     '--nContours', dest='nContours',    default=51, type=int, help='Number of contours in palette. Default is 51 (let it be odd, so the central strip is white if not using --abs-value and the range is symmetric)')
     parser.add_argument(     '--palette'  , dest='palette',      default=55, type=int, help='Set palette: default is a built-in one, 55 is kRainbow')
-    parser.add_argument(     '--invertPalette', dest='invertePalette' , default=False , action='store_true',   help='Inverte color ordering in palette')
-    parser.add_argument(     '--absolute-eta', dest='doAbsEta' , default=False , action='store_true',   help='Do study using histograms folded into absolute value of pseudorapidity')
-    #parser.add_argument("--test-file", dest="testFile", type=str, default=None, help="Optional file to test the correction: it has the prefit shapes in the signal region, as obtained from w_mass_13TeV/plotPrefitTemplatesWRemnants.py")
+    parser.add_argument(     '--invertPalette', dest='invertePalette' , action='store_true',   help='Inverte color ordering in palette')
+    parser.add_argument(     '--absolute-eta', dest='doAbsEta' , action='store_true',   help='Do study using histograms folded into absolute value of pseudorapidity')
+    parser.add_argument(     '--skip-plot-2D', dest='skipPlot2D' , action='store_true',   help='skip some 2D plots with FRF vs eta-Mt, pt-mT, and so on')
+    parser.add_argument("--postfix", default="", type=str, help="Postfix for folder name")
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4], help="Set verbosity level with logging, the larger the more verbose");
     args = parser.parse_args()
     
@@ -547,6 +549,20 @@ if __name__ == "__main__":
     else:
         charges = [args.charge]
 
+    subFolder = f"/{args.integralMtMethod}Integral_fit{args.mtFitRange.replace(',','to')}_pol{args.fitPolDegree}"
+    if args.rebinEta > 1:
+        subFolder += f"_rebinEta{args.rebinEta}"
+    if args.rebinPt > 1:
+        subFolder += f"_rebinPt{args.rebinPt}"
+    if args.jetCut:
+        subFolder += "_1orMoreJetFRF"
+    else:
+        subFolder += "_jetInclusiveFRF"
+    if args.postfix:
+        subFolder += f"_{args.postfix}"
+    subFolder += "/"
+    mainOutputFolder = args.outputfolder[0] + subFolder
+        
     hFakerateFactorCorrection = {x: None for x in charges}
     hFRF_proj = {x: None for x in charges}
 
@@ -557,8 +573,10 @@ if __name__ == "__main__":
     zAxisName = args.zAxisName
 
     groups = datagroups2016(args.inputfile[0], applySelection=False)
-    datasets = list([x in groups.getNames() if x != "QCD"]) # exclude QCD MC if present
-    datasetsNoFakes = [x for x in datasets if x != "Fake"]
+    datasets = groups.getNames()
+    datasetsNoQCD = list(filter(lambda x: x != "QCD", datasets)) # exclude QCD MC if present
+    datasetsNoFakes = list(filter(lambda x: x != "Fake", datasets)) 
+    datasetsNoQCDFakes = list(filter(lambda x: x not in ["QCD", "Fake"], datasets))
     logger.info(f"Will plot datasets {datasets}")
     inputHistName = "mTStudyForFakes"
     groups.setNominalName(inputHistName)
@@ -583,10 +601,10 @@ if __name__ == "__main__":
     groups.setNominalName(inputHistName)
     groups.setSelectOp(sel.histWmass_passMT_passIso)
     groups.setSelectOp(sel.fakeHistABCD, processes=["Fake"])
-    groups.loadHistsForDatagroups(inputHistName, syst="", procsToRead=datasets)
+    groups.loadHistsForDatagroups(inputHistName, syst="", procsToRead=datasetsNoQCD)
     histInfo_nominal = groups.getDatagroups()
-    rootHists_nominal = {d: None for d in datasets}
-    for d in datasets:
+    rootHists_nominal = {d: None for d in datasetsNoQCD}
+    for d in rootHists_nominal.keys():
         hnarf = histInfo_nominal[d][inputHistName]
         rootHists_nominal[d] = narf.hist_to_root(hnarf) # this is a TH3D with eta-pt-charge
     #######
@@ -603,10 +621,10 @@ if __name__ == "__main__":
                
     for charge in charges:
 
-        outfolder = f"{args.outputfolder[0]}/{charge}/"
+        outfolder = f"{mainOutputFolder}/{charge}/"
         createPlotDirAndCopyPhp(outfolder)
 
-        outfolder_dataMC = f"{args.outputfolder[0]}/{charge}/shapesDataMC/"
+        outfolder_dataMC = f"{outfolder}/shapesDataMC/"
         createPlotDirAndCopyPhp(outfolder_dataMC)
 
         # bin number from root histogram
@@ -615,7 +633,7 @@ if __name__ == "__main__":
         # plot mT, eta, pt in some regions iso-nJet regions, for checks
         # don't plot fakes here
         for xbin in axisVar.keys():
-            rebinVariable = None
+            rebinVariable = 2 if xbin == 3 else None 
             #if xbin == 3:
             #    rebinVariable=2 # mT has 1 GeV original binning, but for plot 2 GeV might be better
             plotProjection1D(rootHists, datasetsNoFakes, outfolder_dataMC, canvas1Dshapes=canvas1Dshapes, chargeBin=chargeBin,
@@ -640,23 +658,28 @@ if __name__ == "__main__":
         ###   Now the actual study on fakes
         ###################################
         ###################################
+
+        # select events with at least one jet (or jet inclusive depending on what you need to do)
+        # jetInclusive: GetAxis(5).SetRange(1, 2)
+        # 1orMoreJet:   GetAxis(5).SetRange(2, 2)
         
         # set charge from charge axis
         histo_fakes.GetAxis(2).SetRange(chargeBin, chargeBin)
         histo_fakes.GetAxis(4).SetRange(2, 2) # passIso, equivalent to lowIso
-        histo_fakes.GetAxis(5).SetRange(2, 2) # >= 1 jets
+        histo_fakes.GetAxis(5).SetRange(2 if args.jetCut else 1, 2)
         # now get a TH3
         histoPassIso = histo_fakes.Projection(0, 1, 3, "E")
         histoPassIso.SetName("fakes_passIso")
         histoPassIso.SetTitle("fakes_passIso")
         histo_fakes.GetAxis(2).SetRange(chargeBin, chargeBin)
         histo_fakes.GetAxis(4).SetRange(1, 1) # FailIso
-        histo_fakes.GetAxis(5).SetRange(1, 2) # jet inclusive
+        histo_fakes.GetAxis(5).SetRange(2 if args.jetCut else 1, 2)
         histoFailIso = histo_fakes.Projection(0, 1, 3, "E")
         histoFailIso.SetName("fakes_failIso")
         histoFailIso.SetTitle("fakes_failIso")
 
         # to get the mean only in the desired mt range, get projection using only mt bins in the high mt region
+        # this is always done in the jet inclusive case
         mtThreshold = float(args.mtNominalRange.split(",")[-1])
         histo_fakes.GetAxis(2).SetRange(chargeBin, chargeBin)
         histo_fakes.GetAxis(3).SetRange(histo_fakes.GetAxis(3).FindFixBin(mtThreshold+0.001),
@@ -666,7 +689,9 @@ if __name__ == "__main__":
         histoPassMtFailIso = histo_fakes.Projection(0, 1, 3, "E")
         histoPassMtFailIso.SetName("fakes_passMt_failIso_jetInclusive")
         histoPassMtFailIso.SetTitle("fakes_passMt_failIso_jetInclusive")
-                
+
+        # don't rebin mT here (default is 1 GeV),
+        # otherwise the new binning might no longer be consistent with the one passed to --mt-bin-edges
         histoPassIso.Rebin3D(args.rebinEta, args.rebinPt, 1)
         histoFailIso.Rebin3D(args.rebinEta, args.rebinPt, 1)
         histoPassMtFailIso.Rebin3D(args.rebinEta, args.rebinPt, 1)
@@ -685,37 +710,38 @@ if __name__ == "__main__":
             binEnd = histoPassIso.GetZaxis().FindFixBin(highEdge+0.001) - 1 # bin up edges belong to "next" bin
             h2PassIso = getTH2fromTH3(histoPassIso, f"pt_eta_mt{lowEdge}to{highEdge}_passIso", binStart, binEnd)
             h2FailIso = getTH2fromTH3(histoFailIso, f"pt_eta_mt{lowEdge}to{highEdge}_failIso", binStart, binEnd)
-            cropNegativeContent(h2PassIso)
-            cropNegativeContent(h2FailIso)
 
             h2PassIso.SetTitle("Low Iso: m_{T} #in [%d, %d]" % (lowEdge, highEdge))
-            drawCorrelationPlot(h2PassIso,
-                                xAxisName,
-                                yAxisName,
-                                "Events (data - MC)",
-                                h2PassIso.GetName(), plotLabel="ForceTitle", outdir=outfolder,
-                                draw_both0_noLog1_onlyLog2=1, nContours=args.nContours, palette=args.palette,
-                                invertePalette=args.invertePalette, passCanvas=canvas, skipLumi=True)
+            if not args.skipPlot2D:
+                drawCorrelationPlot(h2PassIso,
+                                    xAxisName,
+                                    yAxisName,
+                                    "Events (data - MC)",
+                                    h2PassIso.GetName(), plotLabel="ForceTitle", outdir=outfolder,
+                                    draw_both0_noLog1_onlyLog2=1, nContours=args.nContours, palette=args.palette,
+                                    invertePalette=args.invertePalette, passCanvas=canvas, skipLumi=True)
 
             h2FailIso.SetTitle("High Iso: m_{T} #in [%d, %d]" % (lowEdge, highEdge))
-            drawCorrelationPlot(h2FailIso,
-                                xAxisName,
-                                yAxisName,
-                                "Events (data - MC)",
-                                h2FailIso.GetName(), plotLabel="ForceTitle", outdir=outfolder,
-                                draw_both0_noLog1_onlyLog2=1, nContours=args.nContours, palette=args.palette,
-                                invertePalette=args.invertePalette, passCanvas=canvas, skipLumi=True)
-
+            if not args.skipPlot2D:
+                drawCorrelationPlot(h2FailIso,
+                                    xAxisName,
+                                    yAxisName,
+                                    "Events (data - MC)",
+                                    h2FailIso.GetName(), plotLabel="ForceTitle", outdir=outfolder,
+                                    draw_both0_noLog1_onlyLog2=1, nContours=args.nContours, palette=args.palette,
+                                    invertePalette=args.invertePalette, passCanvas=canvas, skipLumi=True)
+                
             ratio.append(h2PassIso.Clone(f"fakerateFactor_mt{lowEdge}to{highEdge}"))
             ratio[imt].SetTitle("m_{T} #in [%d, %d]" % (lowEdge, highEdge))
             ratio[imt].Divide(h2FailIso)
-            drawCorrelationPlot(ratio[imt],
-                                xAxisName,
-                                yAxisName,
-                                "fakerate factor: N(iso) / N(not-iso)::0,3",
-                                ratio[imt].GetName(), plotLabel="ForceTitle", outdir=outfolder,
-                                draw_both0_noLog1_onlyLog2=1, nContours=args.nContours, palette=args.palette,
-                                invertePalette=args.invertePalette, passCanvas=canvas, skipLumi=True)
+            if not args.skipPlot2D:
+                drawCorrelationPlot(ratio[imt],
+                                    xAxisName,
+                                    yAxisName,
+                                    "fakerate factor: N(iso) / N(not-iso)::0,3",
+                                    ratio[imt].GetName(), plotLabel="ForceTitle", outdir=outfolder,
+                                    draw_both0_noLog1_onlyLog2=1, nContours=args.nContours, palette=args.palette,
+                                    invertePalette=args.invertePalette, passCanvas=canvas, skipLumi=True)
 
 
         if args.mtNominalRange:
@@ -730,6 +756,7 @@ if __name__ == "__main__":
             nominalFakerateFactor.SetTitle("m_{T} #in [%d, %d]" % (lowEdge, highEdge))        
             nominalFakerateFactor.Divide(h2FailIso)
 
+        # rounding with python is sometimes tricky, add an epsilon to get the desired number
         etaLow = round(0.01 + h2PassIso.GetXaxis().GetBinLowEdge(1), 1)
         etaHigh = round(0.01 + h2PassIso.GetXaxis().GetBinLowEdge(1+h2PassIso.GetNbinsX()), 1)
         ptLow = round(0.01 + h2PassIso.GetYaxis().GetBinLowEdge(1), 1)
@@ -783,33 +810,33 @@ if __name__ == "__main__":
                 textLatex = "%.1f < %s < %.1f;p_{T} #in [%d, %d] GeV::0.2,0.3,0.1,0.045" % (etaBinLow, etaLabel, etaBinHigh, ptBinLow, ptBinHigh)
                 if nMtBins > 2:
                     ## get high mt value to evaluate the correction, can use the mean of the mt distribution for each etapt bin 
-                    projMt = histoPassMtFailIso.ProjectionZ(f"projZ_{histoPassMtFailIso.GetName()}", ieta, ieta, ipt, ipt, "e")
-                    ## or maybe in the full range to get the actual average
-                    #projMt = histoFailIso.ProjectionZ(f"projZ_{histoPassMtFailIso.GetName()}", ieta, ieta, ipt, ipt, "e")
+                    if args.integralMtMethod == "sideband":
+                        projMt = histoPassMtFailIso.ProjectionZ(f"projZ_{histoPassMtFailIso.GetName()}", ieta, ieta, ipt, ipt, "eo")
+                    elif args.integralMtMethod == "fullRange":
+                        ## or maybe in the full range to get the actual average
+                        projMt = histoFailIso.ProjectionZ(f"projZ_{histoFailIso.GetName()}", ieta, ieta, ipt, ipt, "eo")
                     cropNegativeContent(projMt)
-                    meanMtInThisEtaPtBin = projMt.GetMean()
-                    #print()
-                    #print(f"ieta,ipt = {ieta},{ipt}     mean mt = {round(meanMtInThisEtaPtBin,1)}")
-                    #print()
-                    #if args.mtValueCorrection > 0:
-                    #    meanMtInThisEtaPtBin = args.mtValueCorrection
-                        
-                    valHighMt, valHighMtAtMean = drawAndFitFRF(hFRfactorVsMt, zAxisName, "Fakerate factor: N(iso) / N(not-iso)",
-                                                               hFRfactorVsMt.GetName(),
-                                                               outfolder1D, lowerPanelHeight=0.0, passCanvas=canvas1D, moreTextLatex=textLatex,
-                                                               legendCoords="0.64,0.96,0.69,0.93", fitRange=args.mtFitRange, fitOptions="MSQ+",
-                                                               evalAt=meanMtInThisEtaPtBin, mTshape=projMt)
-                    print(f"{valHighMt}, {valHighMtAtMean}")
-                    if valHighMt < 0:
+                    meanMtInThisEtaPtBin = projMt.GetMean()                        
+                    valFRFhighMt, valFRFhighMtAtMean = drawAndFitFRF(hFRfactorVsMt, zAxisName, "Fakerate factor: N(iso) / N(not-iso)",
+                                                                     hFRfactorVsMt.GetName(),
+                                                                     outfolder1D, lowerPanelHeight=0.0, passCanvas=canvas1D,
+                                                                     moreTextLatex=textLatex,
+                                                                     legendCoords="0.64,0.96,0.69,0.93", fitRange=args.mtFitRange,
+                                                                     fitOptions="MSQ+",
+                                                                     evalAt=meanMtInThisEtaPtBin, mTshape=projMt,
+                                                                     fitPolDegree=args.fitPolDegree,
+                                                                     useBinnedCorr=args.useBinnedCorrection)
+                    print(f"{valFRFhighMt}, {valFRFhighMtAtMean}")
+                    if valFRFhighMt < 0:
                         printLine(marker=" ")
                         printLine()
-                        print(f"Warning: ieta = {ieta},   ipt = {ipt},   FRF = {valHighMt}")
-                        #print(f"Warning: ieta = {ieta},   ipt = {ipt},   FRF(mt={meanMtInThisEtaPtBin}) = {valHighMt}")
-                        print("Setting FRF to 0.05!")
+                        logger.warning(f"Warning: ieta = {ieta},   ipt = {ipt},   FRF = {valFRFhighMt}")
+                        #print(f"Warning: ieta = {ieta},   ipt = {ipt},   FRF(mt={meanMtInThisEtaPtBin}) = {valFRFhighMt}")
+                        logger.warning("Setting FRF to 0.01!")
                         printLine()
                         printLine(marker=" ")
-                        valHighMt = 0.05
-                    hFakerateFactorCorrection[charge].SetBinContent(ieta, ipt, valHighMt / nominalFakerateFactor.GetBinContent(ieta, ipt))
+                        valFRFhighMt = 0.01
+                    hFakerateFactorCorrection[charge].SetBinContent(ieta, ipt, valFRFhighMt / nominalFakerateFactor.GetBinContent(ieta, ipt))
                 elif nMtBins == 2:
                     hTmp[1].Divide(hTmp[0])
                     hFakerateFactorCorrection[charge].SetBinContent(ieta, ipt, hTmp[1].GetBinContent(1))
@@ -818,54 +845,58 @@ if __name__ == "__main__":
                                   outfolder1D, lowerPanelHeight=0.0, passCanvas=canvas1D, moreTextLatex=textLatex,
                                   legendCoords="0.64,0.96,0.77,0.93")
 
-            drawCorrelationPlot(fakerateFactor_vs_etaMt,
-                                xAxisName,
-                                zAxisName,
-                                "fakerate factor: N(iso) / N(not-iso)",
-                                fakerateFactor_vs_etaMt.GetName(), plotLabel="ForceTitle", outdir=outfolder,
-                                draw_both0_noLog1_onlyLog2=1, nContours=args.nContours, palette=args.palette,
-                                invertePalette=args.invertePalette, passCanvas=canvas, skipLumi=True)
+            if not args.skipPlot2D:
+                drawCorrelationPlot(fakerateFactor_vs_etaMt,
+                                    xAxisName,
+                                    zAxisName,
+                                    "fakerate factor: N(iso) / N(not-iso)",
+                                    fakerateFactor_vs_etaMt.GetName(), plotLabel="ForceTitle", outdir=outfolder,
+                                    draw_both0_noLog1_onlyLog2=1, nContours=args.nContours, palette=args.palette,
+                                    invertePalette=args.invertePalette, passCanvas=canvas, skipLumi=True)
 
-            # drawCorrelationPlot(fakerateFactor_vs_etaMt,
-            #                     yAxisName,
-            #                     zAxisName,
-            #                     "abs. uncertainty on fakerate factor",
-            #                     fakerateFactor_vs_etaMt.GetName()+"_absUnc", plotLabel="ForceTitle", outdir=outfolder,
-            #                     draw_both0_noLog1_onlyLog2=1, nContours=args.nContours, palette=args.palette,
-            #                     invertePalette=args.invertePalette, passCanvas=canvas, skipLumi=True, plotError=True)
-
-            # drawCorrelationPlot(fakerateFactor_vs_etaMt,
-            #                     yAxisName,
-            #                     zAxisName,
-            #                     "rel. uncertainty on fakerate factor",
-            #                     "relUnc_"+fakerateFactor_vs_etaMt.GetName(), plotLabel="ForceTitle", outdir=outfolder,
-            #                     draw_both0_noLog1_onlyLog2=1, nContours=args.nContours, palette=args.palette,
-            #                     invertePalette=args.invertePalette, passCanvas=canvas, skipLumi=True, plotRelativeError=True)
-
-
+        if args.integralMtMethod == "sideband":
+            if args.jetCut:
+                corrRange = "0,1.0"
+            else:
+                corrRange = "0.2,1.2"
+        else:
+            minCorr = hFakerateFactorCorrection[charge].GetBinContent(hFakerateFactorCorrection[charge].GetMinimumBin())
+            maxCorr = hFakerateFactorCorrection[charge].GetBinContent(hFakerateFactorCorrection[charge].GetMaximumBin())
+            diff = max(abs(maxCorr-1.0), abs(minCorr-1.0))
+            corrRange = f"{1.0-diff},{1.0+diff}"
         drawCorrelationPlot(hFakerateFactorCorrection[charge],
                             xAxisName,
                             yAxisName,
-                            "QCD template correction::0,1.0",
+                            f"QCD template correction::{corrRange}",
                             hFakerateFactorCorrection[charge].GetName(), plotLabel="ForceTitle", outdir=outfolder,
                             draw_both0_noLog1_onlyLog2=1, nContours=args.nContours, palette=args.palette,
                             invertePalette=args.invertePalette, passCanvas=canvas, skipLumi=True)
+        # also plot average vs pt and eta
+        # currently doesn't plot as I expect
+        # hFRF_profileX = hFakerateFactorCorrection[charge].ProfileX(hFakerateFactorCorrection[charge].GetName()+"_profileX",
+        #                                                            1, hFakerateFactorCorrection[charge].GetNbinsY())
+        # hFRF_profileY = hFakerateFactorCorrection[charge].ProfileY(hFakerateFactorCorrection[charge].GetName()+"_profileY",
+        #                                                            1, hFakerateFactorCorrection[charge].GetNbinsX())
+        # drawTH1(hFRF_profileX, xAxisName, f"QCD template correction", hFRF_profileX.GetName(), outfolder, drawStatBox=False,
+        #         plotTitleLatex=f"Charge {charge}")
+        # drawTH1(hFRF_profileY, yAxisName, f"QCD template correction", hFRF_profileY.GetName(), outfolder, drawStatBox=False,
+        #         plotTitleLatex=f"Charge {charge}")
         if hFakerateFactorCorrection[charge].GetNbinsX() > 1 and hFakerateFactorCorrection[charge].GetNbinsY() > 1:
             drawCorrelationPlot(hFakerateFactorCorrection[charge],
                                 xAxisName,
                                 yAxisName,
-                                "QCD template correction::0,1.0",
+                                f"QCD template correction::{corrRange}",
                                 f"{hFakerateFactorCorrection[charge].GetName()}_smooth", plotLabel="ForceTitle", outdir=outfolder, smoothPlot=True,
                                 draw_both0_noLog1_onlyLog2=1, nContours=args.nContours, palette=args.palette,
                                 invertePalette=args.invertePalette, passCanvas=canvas, skipLumi=True)
         else:
             if hFakerateFactorCorrection[charge].GetNbinsY() == 1:
-                hFRF_proj[charge] = hFakerateFactorCorrection[charge].ProjectionX(hFakerateFactorCorrection[charge].GetName()+"_projX",1, 1, "e")
+                hFRF_proj[charge] = hFakerateFactorCorrection[charge].ProjectionX(hFakerateFactorCorrection[charge].GetName()+"_projX", 1, 1, "e")
                 axisName1D = xAxisName
             else:
-                hFRF_proj[charge] = hFakerateFactorCorrection[charge].ProjectionY(hFakerateFactorCorrection[charge].GetName()+"_projY",1, 1, "e")
+                hFRF_proj[charge] = hFakerateFactorCorrection[charge].ProjectionY(hFakerateFactorCorrection[charge].GetName()+"_projY", 1, 1, "e")
                 axisName1D = yAxisName
-            drawTH1(hFRF_proj[charge], axisName1D, "QCD template correction::0,1", hFRF_proj[charge].GetName(), outfolder, drawStatBox=False,
+            drawTH1(hFRF_proj[charge], axisName1D, f"QCD template correction::{corrRange}", hFRF_proj[charge].GetName(), outfolder, drawStatBox=False,
                     plotTitleLatex=f"Charge {charge}")
 
         # plot 1D eta and pt in the signal region with the correction on the fakes, all from the nominal histogram
@@ -873,15 +904,15 @@ if __name__ == "__main__":
             # only eta and pt, a bit hardcoded ...
             if xbin > 1:
                 continue
-            plotProjection1Dfrom3D(rootHists_nominal, datasetsNoFakes, outfolder_dataMC, canvas1Dshapes=canvas1Dshapes, chargeBin=chargeBin,
+            plotProjection1Dfrom3D(rootHists_nominal, datasetsNoQCDFakes, outfolder_dataMC, canvas1Dshapes=canvas1Dshapes, chargeBin=chargeBin,
                                    projectAxisToKeep=xbin, xAxisName=axisVar[xbin][1],
                                    plotName=f"{axisVar[xbin][0]}_passIso_jetInclusive_passMt_noFakes",
                                    correctionFakes=None)
-            plotProjection1Dfrom3D(rootHists_nominal, datasets, outfolder_dataMC, canvas1Dshapes=canvas1Dshapes, chargeBin=chargeBin,
+            plotProjection1Dfrom3D(rootHists_nominal, datasetsNoQCD, outfolder_dataMC, canvas1Dshapes=canvas1Dshapes, chargeBin=chargeBin,
                                    projectAxisToKeep=xbin, xAxisName=axisVar[xbin][1],
                                    plotName=f"{axisVar[xbin][0]}_passIso_jetInclusive_passMt_FakesNoCorr",
                                    correctionFakes=None)
-            plotProjection1Dfrom3D(rootHists_nominal, datasets, outfolder_dataMC, canvas1Dshapes=canvas1Dshapes, chargeBin=chargeBin,
+            plotProjection1Dfrom3D(rootHists_nominal, datasetsNoQCD, outfolder_dataMC, canvas1Dshapes=canvas1Dshapes, chargeBin=chargeBin,
                                    projectAxisToKeep=xbin, xAxisName=axisVar[xbin][1],
                                    plotName=f"{axisVar[xbin][0]}_passIso_jetInclusive_passMt_correctFakes",
                                    correctionFakes=hFakerateFactorCorrection[charge])
@@ -908,81 +939,9 @@ if __name__ == "__main__":
             print(f"{key}  {badCovMatrixID[key]}")
         print("-"*30)
         
-        ## TODO: this might no longer work, to be checked
-        # if args.testFile:
-
-        #     outfolderCheck = outfolder + "checkCorrection_signalRegion/"
-        #     createPlotDirAndCopyPhp(outfolderCheck)
-
-        #     fshape = safeOpenFile(args.testFile)
-        #     hdata = safeGetObject(fshape, "data2D")
-        #     hmc   = safeGetObject(fshape, "sigAndBkgNoFakes2D")
-        #     hqcd  = safeGetObject(fshape, "data_fakes")
-        #     fshape.Close()
-
-        #     # apply correction to qcd
-        #     for ix in range(1, 1+hqcd.GetNbinsX()):
-        #         for iy in range(1, 1+hqcd.GetNbinsY()):
-        #             xCen = hqcd.GetXaxis().GetBinCenter(ix)
-        #             yCen = hqcd.GetYaxis().GetBinCenter(iy)
-        #             xBinCorr = max(1, min(hFakerateFactorCorrection[charge].GetNbinsX(), hFakerateFactorCorrection[charge].GetXaxis().FindFixBin(xCen)))
-        #             yBinCorr = max(1, min(hFakerateFactorCorrection[charge].GetNbinsY(), hFakerateFactorCorrection[charge].GetYaxis().FindFixBin(yCen)))
-        #             corr = hFakerateFactorCorrection[charge].GetBinContent(xBinCorr, yBinCorr)
-        #             hqcd.SetBinContent(ix, iy, hqcd.GetBinContent(ix, iy) * corr)
-        #             hqcd.SetBinError(ix, iy, hqcd.GetBinError(ix, iy) * corr)
-
-        #     hqcd.SetMarkerSize(0)
-        #     hmc.SetMarkerSize(0)
-        #     hdata_eta = hdata.ProjectionX("data_eta", 0, -1, "e")
-        #     hmc_eta   = hmc.ProjectionX("mc_eta", 0, -1, "e")
-        #     hqcd_eta   = hqcd.ProjectionX("qcd_eta", 0, -1, "e")
-        #     hdata_pt  = hdata.ProjectionY("data_pt", 0, -1, "e")
-        #     hmc_pt    = hmc.ProjectionY("mc_pt", 0, -1, "e")
-        #     hqcd_pt    = hqcd.ProjectionY("qcd_pt", 0, -1, "e")
-
-        #     stack_eta = ROOT.THStack("stack_eta", "signal and backgrounds")
-        #     hmc_eta.SetFillColor(ROOT.kRed+2)
-        #     hmc_eta.SetLineColor(ROOT.kBlack)
-        #     hmc_eta.SetMarkerSize(0)
-        #     stack_eta.Add(hmc_eta)
-        #     hqcd_eta.SetFillColor(ROOT.kGray)
-        #     hqcd_eta.SetLineColor(ROOT.kBlack)
-        #     hqcd_eta.SetMarkerSize(0)
-        #     stack_eta.Add(hqcd_eta)
-
-        #     stack_pt = ROOT.THStack("stack_pt", "signal and backgrounds")
-        #     hmc_pt.SetFillColor(ROOT.kRed+2)
-        #     hmc_pt.SetLineColor(ROOT.kBlack)
-        #     hmc_pt.SetMarkerSize(0)
-        #     stack_pt.Add(hmc_pt)
-        #     hqcd_pt.SetFillColor(ROOT.kGray)
-        #     hqcd_pt.SetLineColor(ROOT.kBlack)
-        #     hqcd_pt.SetMarkerSize(0)
-        #     stack_pt.Add(hqcd_pt)
-
-        #     legend = ROOT.TLegend(0.2,0.72,0.95,0.92)
-        #     legend.SetFillColor(0)
-        #     legend.SetFillStyle(0)
-        #     legend.SetBorderSize(0)
-        #     legend.SetNColumns(2)
-        #     legend.AddEntry(hdata_eta, "Data", "EP")
-        #     legend.AddEntry(hmc_eta, "MC prompt", "F")
-        #     legend.AddEntry(hqcd_eta, "QCD multijet", "F")
-
-        #     canvas1Dproj = ROOT.TCanvas("canvas1Dproj", "", 800, 900)
-
-        #     drawTH1dataMCstack(hdata_eta, stack_eta, xAxisName, "Events", "muon_eta_withCorr",
-        #                        outfolderCheck, legend, ratioPadYaxisNameTmp="Data/MC::0.92,1.08", passCanvas=canvas1Dproj,
-        #                        drawLumiLatex=True, xcmsText=0.3, noLegendRatio=True
-        #     )
-        #     drawTH1dataMCstack(hdata_pt, stack_pt, yAxisName, "Events", "muon_pt_withCorr",
-        #                        outfolderCheck, legend, ratioPadYaxisNameTmp="Data/MC::0.92,1.08", passCanvas=canvas1Dproj,
-        #                        drawLumiLatex=True, xcmsText=0.3, noLegendRatio=True
-        #     )
-
 
     if len(charges) == 2:
-        outFile = args.outputfolder[0] + "/fakerateFactorMtBasedCorrection_vsEtaPt.root"
+        outFile = mainOutputFolder + "/fakerateFactorMtBasedCorrection_vsEtaPt.root"
         fout = safeOpenFile(outFile, mode="RECREATE")
         for charge in charges:
             hFakerateFactorCorrection[charge].Write()
