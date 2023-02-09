@@ -34,14 +34,14 @@ for proc in procs:
     hden = hh.normalize(res[f'{proc}_{args.den}']['output']['nominal_ew'])
     hratio = hh.divideHists(hnum, hden)
     hratio = hh.smoothTowardsOne(hratio)
-    scale = np.sum(hden.values()) / np.sum(hden.values()*hratio.values())
+    scale = np.sum(hden.values(flow=True)) / np.sum(hden.values(flow=True)*hratio.values(flow=True))
     hratio.values(flow=True)[...]    *= scale
     hratio.variances(flow=True)[...] *= scale
 
     # Add dummy axis
     axis_dummy = hist.axis.Regular(1, -10., 10., underflow=False, overflow=False, name = "dummy")
     hdummy = hist.Hist(*hratio.axes, axis_dummy, storage=hist.storage.Double())
-    hdummy.values()[...,0] = hratio.values()
+    hdummy.values(flow=True)[...,0] = hratio.values(flow=True)
     hratio = hdummy
 
     # Add charge axis
@@ -50,18 +50,22 @@ for proc in procs:
     elif proc[0] == 'Z':
         axis_charge = hist.axis.Regular(1, -1., 1., underflow=False, overflow=False, name = "charge")
     hcharge = hist.Hist(*hratio.axes, axis_charge, storage=hist.storage.Double())
-    hcharge.values()[...,charge_dict[proc]] = hratio.values()
+    hcharge.values(flow=True)[...,charge_dict[proc]] = hratio.values(flow=True)
     hratio = hcharge
 
     # Add syst axis
-    corrh[proc] = hist.Hist(*hratio.axes, hist.axis.Regular(3, 0, 3, name="systIdx"), storage=hist.storage.Double())
+    corrh[proc] = hist.Hist(*hratio.axes, hist.axis.Regular(3, 0, 3, underflow=False, overflow=False, name="systIdx"), storage=hist.storage.Double())
     # Variations: 0=original MiNNLO, 1=Horace NLO, 2=mirrored
-    horig = hist.Hist(*hratio.axes, storage=hist.storage.Double())
-    horig.values()[...,charge_dict[proc]] = np.ones(hdummy.shape)
-    mirror = hh.mirrorHist(horig, hratio, cutoff=1e-5)
-    corrh[proc].values()[...,0] = horig.values()
-    corrh[proc].values()[...,1] = hratio.values()
-    corrh[proc].values()[...,2] = mirror.values()
+    hones = hist.Hist(*hratio.axes, storage=hist.storage.Double())
+    hones.values(flow=True)[...,charge_dict[proc]] = np.ones(hdummy.values(flow=True).shape)
+    hmirror = hh.mirrorHist(hones, hratio, cutoff=1e-5)
+    mirrorscale = np.sum(hden.values(flow=True)) / np.sum(hden.values(flow=True)*hmirror.values(flow=True)[...,0,charge_dict[proc]])
+    # print(f'mirrorscale = {mirrorscale}')
+    hmirror.values(flow=True)[...]    *= mirrorscale
+    hmirror.variances(flow=True)[...] *= mirrorscale
+    corrh[proc].values(flow=True)[...,0] = hones.values(flow=True)
+    corrh[proc].values(flow=True)[...,1] = hratio.values(flow=True)
+    corrh[proc].values(flow=True)[...,2] = hmirror.values(flow=True)
 
 outname = args.num.replace('-', '') + 'ew'
 with lz4.frame.open(f"{args.outpath}/{outname}CorrZ.pkl.lz4", "wb") as f:
@@ -81,4 +85,4 @@ with lz4.frame.open(f"{args.outpath}/{outname}CorrW.pkl.lz4", "wb") as f:
             "meta_data" : output_tools.metaInfoDict(),
         }, f, protocol = pickle.HIGHEST_PROTOCOL)
 
-print(corrh['ZToMuMu'])
+#print(corrh['ZToMuMu'])
