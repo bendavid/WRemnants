@@ -61,7 +61,8 @@ def common_parser():
     parser.add_argument("-j", "--nThreads", type=int, help="number of threads")
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
                         help="Set verbosity level with logging, the larger the more verbose");
-    parser.add_argument("--no-color-logger", action="store_true", default=False, help="Do not use logging with colors")
+    parser.add_argument("--no-color-logger", action="store_false", dest="color_logger", default=False, 
+                        help="Do not use logging with colors")
     initargs,_ = parser.parse_known_args()
 
     import ROOT
@@ -130,7 +131,8 @@ def common_parser_combine():
     parser.add_argument("--doStatOnly", action="store_true", default=False, help="Set up fit to get stat-only uncertainty (currently combinetf with -S 0 doesn't work)")
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
                         help="Set verbosity level with logging, the larger the more verbose");
-    parser.add_argument("--no-color-logger", action="store_true", default=False, help="Do not use logging with colors")
+    parser.add_argument("--no-color-logger", action="store_false", dest="color_logger", default=False, 
+                        help="Do not use logging with colors")
     parser.add_argument("--combineChannels", action='store_true', help="Only use one channel")
     parser.add_argument("--lumiScale", type=float, default=None, help="Rescale equivalent luminosity by this value (e.g. 10 means ten times more data and MC)")
     return parser
@@ -165,8 +167,8 @@ logging_verboseLevel = [logging.CRITICAL, logging.ERROR, logging.WARNING, loggin
 def setLoggingLevel(log, verbosity):
     log.setLevel(logging_verboseLevel[max(0, min(4, verbosity))])
 
-def setup_logger(basefile, verbosity, no_colors):
-    setup_func = setup_base_logger if no_colors else setup_color_logger
+def setup_logger(basefile, verbosity, colors):
+    setup_func = setup_color_logger if colors else setup_base_logger
     return setup_func(os.path.basename(basefile), verbosity)
 
 def setup_color_logger(name, verbosity):
