@@ -16,7 +16,7 @@ on:
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   # This workflow contains a single job called "wmass"
-  wmass:
+  w-analysis:
     # The type of runner that the job will run on
     runs-on: [self-hosted, linux, x64]
 
@@ -28,4 +28,69 @@ jobs:
           submodules: 'true'
 
       - name: wmass analysis
-        run: SINGULARITY_BIND="/scratch,/eos,/cvmfs" singularity run /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/bendavid/cmswmassdocker/wmassdevrolling\:latest scripts/ci/wmass_test.sh
+        run: SINGULARITY_BIND="/scratch,/eos,/cvmfs" singularity run /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/bendavid/cmswmassdocker/wmassdevrolling\:latest scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_with_mu_eta_pt.py -j 8 --maxFiles 2 --verbose 4
+
+      - name: lowpu w analysis
+        run: SINGULARITY_BIND="/scratch,/eos,/cvmfs" singularity run /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/bendavid/cmswmassdocker/wmassdevrolling\:latest scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_lowPU.py -j 8 --maxFiles 2 --verbose 4
+
+      - name: wmass combine
+        run: SINGULARITY_BIND="/scratch,/eos,/cvmfs" singularity run /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/bendavid/cmswmassdocker/wmassdevrolling\:latest scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i mw_with_mu_eta_pt_maxFiles2.pkl.lz4 --verbose 4
+
+        #TODO: test low pu combine and combined fit
+          #- name: lowpu w combine
+          #  run: SINGULARITY_BIND="/scratch,/eos,/cvmfs" singularity run /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/bendavid/cmswmassdocker/wmassdevrolling\:latest scripts/ci/setup_and_run_python.sh scripts/histmakers/setupLowPileupCombine.py -i lowPU_mu_maxFiles2.pkl.lz4 --verbose 4
+
+  wlike:
+    # The type of runner that the job will run on
+    runs-on: [self-hosted, linux, x64]
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v3
+        with:
+          submodules: 'true'
+
+      - name: wlike analysis
+        run: SINGULARITY_BIND="/scratch,/eos,/cvmfs" singularity run /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/bendavid/cmswmassdocker/wmassdevrolling\:latest scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_wlike_with_mu_eta_pt.py -j 8 --maxFiles 2 --verbose 4
+
+      - name: wlike combine
+        run: SINGULARITY_BIND="/scratch,/eos,/cvmfs" singularity run /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/bendavid/cmswmassdocker/wmassdevrolling\:latest scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i mz_wlike_with_mu_eta_pt_maxFiles2.pkl.lz4 --verbose 4
+
+      - name: lowpu z analysis
+        run: SINGULARITY_BIND="/scratch,/eos,/cvmfs" singularity run /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/bendavid/cmswmassdocker/wmassdevrolling\:latest scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_lowPU.py -j 8 --maxFiles 2 --verbose 4
+
+      - name: lowpu z combine
+        run: SINGULARITY_BIND="/scratch,/eos,/cvmfs" singularity run /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/bendavid/cmswmassdocker/wmassdevrolling\:latest scripts/ci/setup_and_run_python.sh scripts/combine/setupLowPU_Z.py -i lowPU_mumu_maxFiles2.pkl.lz4 --verbose 4
+
+  dilepton:
+    # The type of runner that the job will run on
+    runs-on: [self-hosted, linux, x64]
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v3
+        with:
+          submodules: 'true'
+
+      - name: dilepton analysis
+        run: SINGULARITY_BIND="/scratch,/eos,/cvmfs" singularity run /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/bendavid/cmswmassdocker/wmassdevrolling\:latest scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_dilepton.py -j 8 --maxFiles 2 --verbose 4
+
+      - name: dilepton combine mll fit
+        run: SINGULARITY_BIND="/scratch,/eos,/cvmfs" singularity run /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/bendavid/cmswmassdocker/wmassdevrolling\:latest scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i mz_dilepton_maxFiles2.pkl.lz4 --fitvar mll 
+
+  gen:
+    # The type of runner that the job will run on
+    runs-on: [self-hosted, linux, x64]
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v3
+        with:
+          submodules: 'true'
+
+      - name: gen analysis
+        run: SINGULARITY_BIND="/scratch,/eos,/cvmfs" singularity run /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/bendavid/cmswmassdocker/wmassdevrolling\:latest scripts/ci/setup_and_run_python.sh scripts/histmakers/w_z_gen_dists.py -j 8 --maxFiles 10 --verbose 4
+

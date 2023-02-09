@@ -107,7 +107,7 @@ def build_graph(df, dataset):
         df_xnorm = theory_tools.define_pdf_columns(df_xnorm, dataset.name, args.pdfs, args.altPdfOnlyCentral)
         df_xnorm = theory_tools.define_scale_tensor(df_xnorm)        
         syst_tools.add_pdf_hists(results, df_xnorm, dataset.name, axes_xnorm, cols_xnorm, args.pdfs, "xnorm")
-        syst_tools.add_scale_hist(results, df_xnorm, [*axes_xnorm, axis_ptVgen, axis_chargeVgen], [*cols_xnorm, "ptVgen", "chargeVgen"], "xnorm")
+        syst_tools.add_qcdScale_hist(results, df_xnorm, [*axes_xnorm, axis_ptVgen, axis_chargeVgen], [*cols_xnorm, "ptVgen", "chargeVgen"], "xnorm")
         df_xnorm = df_xnorm.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
         qcdScaleByHelicityUnc = df_xnorm.HistoBoost("xnorm_qcdScaleByHelicity", [*axes_xnorm, axis_ptVgen, axis_chargeVgen], [*cols_xnorm, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
         results.append(qcdScaleByHelicityUnc)
@@ -327,7 +327,7 @@ def build_graph(df, dataset):
         # QCD scale
         df = theory_tools.define_scale_tensor(df)
         #results.append(theory_tools.make_scale_hist(df, [*gen_reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mll_cols, "ptVgen", "chargeVgen"]))
-        syst_tools.add_scale_hist(results, df, [*gen_reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mll_cols, "ptVgen", "chargeVgen"], "reco_mll")
+        syst_tools.add_qcdScale_hist(results, df, [*gen_reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mll_cols, "ptVgen", "chargeVgen"], "reco_mll")
         df = df.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
         qcdScaleByHelicityUnc = df.HistoBoost("reco_mll_qcdScaleByHelicity", [*gen_reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mll_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
         results.append(qcdScaleByHelicityUnc)
