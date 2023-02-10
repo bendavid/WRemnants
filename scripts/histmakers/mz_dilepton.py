@@ -1,7 +1,6 @@
 from utilities import boostHistHelpers as hh, common, output_tools
 
 parser,initargs = common.common_parser(True)
-logger = common.child_logger(__name__)
 
 import narf
 import wremnants
@@ -20,8 +19,6 @@ parser = common.set_parser_default(parser, "pt", [44,26.,70.])
 parser = common.set_parser_default(parser, "eta", [6,-2.4,2.4])
 
 args = parser.parse_args()
-
-
 logger = common.setup_logger(__file__, args.verbose, args.color_logger)
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
@@ -96,12 +93,6 @@ smearing_helper = muon_calibration.make_muon_smearing_helpers() if args.smearing
 bias_helper = muon_calibration.make_muon_bias_helpers(args.muonCorr, args.smearing) if args.bias_calibration else None
 
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_corr)
-
-# recoil initialization
-if not args.no_recoil:
-    from wremnants import recoil_tools
-    recoilHelper = recoil_tools.Recoil("highPU", flavor="mumu", met=args.met)
-
 
 def build_graph(df, dataset):
     logger.info(f"build graph for dataset: {dataset.name}")

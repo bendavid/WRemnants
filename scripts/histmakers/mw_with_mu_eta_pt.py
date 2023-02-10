@@ -2,7 +2,6 @@ import argparse
 from utilities import output_tools, common, rdf_tools
 
 parser,initargs = common.common_parser(True)
-logger = common.child_logger(__name__)
 
 import narf
 import wremnants

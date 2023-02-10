@@ -112,8 +112,6 @@ def common_parser(for_reco_highPU=False):
 
     commonargs,_ = parser.parse_known_args()
 
-    logger = setup_logger(os.path.basename(__file__), commonargs.verbose, commoargs.color_logger)
-
     if commonargs.trackerMuons:
         #sfFile = "scaleFactorProduct_12Oct2022_TrackerMuons_vertexWeight_OSchargeExceptTracking.root"
         sfFile = "scaleFactorProduct_16Oct2022_TrackerMuonsHighPurity_vertexWeight_OSchargeExceptTracking.root"

@@ -1,7 +1,6 @@
 from utilities import boostHistHelpers as hh,common,output_tools
 
 parser,initargs = common.common_parser(True)
-logger = common.child_logger(__name__)
 
 import narf
 import wremnants
