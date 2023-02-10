@@ -125,7 +125,7 @@ def define_corrected_muons(df, cvh_helper, jpsi_helper, corr_type, dataset, smea
     corr_type = corr_type.replace("massfitData","massfit") if dataset.is_data else corr_type.replace("mctruth","lbl")        
 
     muon = "Muon"
-    if "lbl" in corr_type.split("_"):
+    if "lbl" in corr_type:
         df = define_lblcorr_muons(df, cvh_helper, dataset)
         muon = "Muon_lbl"
     elif corr_type != "none":
