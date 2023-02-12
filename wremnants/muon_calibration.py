@@ -85,6 +85,11 @@ def make_muon_smearing_helpers():
 
     return helper
 
+def make_muon_calibration_helper_single(filename=data_dir+"/calibration/correctionResults_v718_idealgeom_gensim.root"):
+
+    helper = ROOT.wrem.CVHCorrectorSingle[""](filename)
+    return helper
+
 def get_dummy_uncertainties():
     axis_eta = hist.axis.Regular(48, -2.4, 2.4, name = "eta")
     axis_calvar = hist.axis.Integer(0, 1, underflow=False, overflow=False, name = "calvar")
@@ -379,3 +384,53 @@ def make_hists_for_smearing_weights(df, nominal_axes, nominal_cols, results):
     smearing_weights_up = df.HistoBoost("smearing_weights_up", [*nominal_axes, axis_smearing_weight], [*nominal_cols, "smearing_weights_up"])
     results.append(smearing_weights_down)
     results.append(smearing_weights_up)
+
+def define_jpsi_corrections(df, helper):
+    df = df.DefinePerSample("Muplus_charge", "1")
+    df = df.DefinePerSample("Muminus_charge", "-1")
+
+    df = df.Define("globalidxvint", "ROOT::VecOps::RVec<int>(globalidxv)")
+
+    df = df.Define("Mupluscor_Mom4Charge", helper, ["Muplus_pt", "Muplus_eta", "Muplus_phi", "Muplus_charge", "globalidxvint", "Muplus_jacRef"])
+    df = df.Define("Mupluscor_mom4", "Mupluscor_Mom4Charge.first")
+    df = df.Define("Mupluscor_pt", "Mupluscor_Mom4Charge.first.Pt()")
+    df = df.Define("Mupluscor_eta", "Mupluscor_Mom4Charge.first.Eta()")
+    df = df.Define("Mupluscor_phi", "Mupluscor_Mom4Charge.first.Phi()")
+
+    df = df.Define("Muminuscor_Mom4Charge", helper, ["Muminus_pt", "Muminus_eta", "Muminus_phi", "Muminus_charge", "globalidxvint", "Muminus_jacRef"])
+    df = df.Define("Muminuscor_mom4", "Muminuscor_Mom4Charge.first")
+    df = df.Define("Muminuscor_pt", "Muminuscor_Mom4Charge.first.Pt()")
+    df = df.Define("Muminuscor_eta", "Muminuscor_Mom4Charge.first.Eta()")
+    df = df.Define("Muminuscor_phi", "Muminuscor_Mom4Charge.first.Phi()")
+
+    df = df.Define("Jpsicor_mom4", "ROOT::Math::PxPyPzEVector(Mupluscor_Mom4Charge.first) + ROOT::Math::PxPyPzEVector(Muminuscor_Mom4Charge.first)")
+
+    df = df.Define("Jpsicor_pt", "Jpsicor_mom4.Pt()")
+    df = df.Define("Jpsicor_eta", "Jpsicor_mom4.Eta()")
+    df = df.Define("Jpsicor_phi", "Jpsicor_mom4.Phi()")
+    df = df.Define("Jpsicor_mass", "Jpsicor_mom4.M()")
+
+    return df
+
+def define_jpsi_corrections_passthrough(df):
+    df = df.DefinePerSample("Muplus_charge", "1")
+    df = df.DefinePerSample("Muminus_charge", "-1")
+
+    df = df.Alias("Mupluscor_pt", "Muplus_pt")
+    df = df.Alias("Mupluscor_eta", "Muplus_eta")
+    df = df.Alias("Mupluscor_phi", "Muplus_phi")
+
+    df = df.Alias("Muminuscor_pt", "Muminus_pt")
+    df = df.Alias("Muminuscor_eta", "Muminus_eta")
+    df = df.Alias("Muminuscor_phi", "Muminus_phi")
+
+    df = df.Alias("Jpsicor_pt", "Jpsi_pt")
+    df = df.Alias("Jpsicor_eta", "Jpsi_eta")
+    df = df.Alias("Jpsicor_phi", "Jpsi_phi")
+    df = df.Alias("Jpsicor_mass", "Jpsi_mass")
+
+    df = df.Define("Mupluscor_mom4", "ROOT::Math::PtEtaPhiMVector(Mupluscor_pt, Mupluscor_eta, Mupluscor_phi, wrem::muon_mass)")
+    df = df.Define("Muminuscor_mom4", "ROOT::Math::PtEtaPhiMVector(Muminuscor_pt, Muminuscor_eta, Muminuscor_phi, wrem::muon_mass)")
+    df = df.Define("Jpsicor_mom4", "ROOT::Math::PtEtaPhiMVector(Jpsicor_pt, Jpsicor_eta, Jpsicor_phi, Jpsicor_mass)")
+
+    return df

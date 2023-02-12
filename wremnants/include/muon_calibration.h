@@ -37,7 +37,7 @@ template <std::ptrdiff_t NJac = 3, std::ptrdiff_t NReplicas = 0>
 class CVHCorrectorSingle {
 public:
 
-  using V = ROOT::Math::PtEtaPhiM4D<double>;
+  using V = ROOT::Math::PtEtaPhiMVector;
 
   CVHCorrectorSingle(const std::string &filename) {
     TFile *fcor = TFile::Open(filename.c_str());
