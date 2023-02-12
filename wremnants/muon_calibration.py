@@ -385,7 +385,7 @@ def make_hists_for_smearing_weights(df, nominal_axes, nominal_cols, results):
     results.append(smearing_weights_down)
     results.append(smearing_weights_up)
 
-def define_jpsi_corrections(df, helper):
+def define_lbl_corrections_jpsi_calibration_ntuples(df, helper):
     df = df.DefinePerSample("Muplus_charge", "1")
     df = df.DefinePerSample("Muminus_charge", "-1")
 
@@ -412,7 +412,7 @@ def define_jpsi_corrections(df, helper):
 
     return df
 
-def define_jpsi_corrections_passthrough(df):
+def define_passthrough_corrections_jpsi_calibration_ntuples(df):
     df = df.DefinePerSample("Muplus_charge", "1")
     df = df.DefinePerSample("Muminus_charge", "-1")
 
