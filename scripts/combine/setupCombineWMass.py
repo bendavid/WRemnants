@@ -19,7 +19,9 @@ def make_parser(parser=None):
     parser.add_argument("--fitvar", help="Variable to fit", default="pt-eta")
     parser.add_argument("--fitvar", help="Variable to fit", default="eta_pt", choices=sel.hist_map.keys())
     parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow). Equivalent to --excludeNuisances '.*effSystTnP|.*effStatTnP' ")
+    parser.add_argument("--ewUnc", action='store_true', help="Include EW uncertainty")
     parser.add_argument("-p", "--pseudoData", type=str, help="Hist to use as pseudodata")
+    parser.add_argument("--pseudoDataIdx", type=int, default=0, help="Variation index to use as pseudodata")
     parser.add_argument("--pseudodata-file", type=str, help="Input file for pseudodata (if it should be read from a different file", default=None)
     parser.add_argument("-x",  "--excludeNuisances", type=str, default="", help="Regular expression to exclude some systematics from the datacard")
     parser.add_argument("-k",  "--keepNuisances", type=str, default="", help="Regular expression to keep some systematics, overriding --excludeNuisances. Can be used to keep only some systs while excluding all the others with '.*'")
@@ -81,7 +83,7 @@ def main(args):
     if args.skipOtherChargeSyst:
         cardTool.setSkipOtherChargeSyst()
     if args.pseudoData:
-        cardTool.setPseudodata(args.pseudoData)
+        cardTool.setPseudodata(args.pseudoData, args.pseudoDataIdx)
         if args.pseudodata_file:
             cardTool.setPseudodataDatagroups(datagroups2016(args.pseudodata_file))
 
@@ -168,6 +170,17 @@ def main(args):
         scale=0.75, # TODO: this depends on the set, should be provided in theory_tools.py
         passToFakes=passSystToFakes,
     )
+
+    if args.ewUnc:
+        cardTool.addSystematic(f"horacenloewCorr_unc", 
+            processes=single_v_samples,
+            mirror=True,
+            group="theory_ew",
+            systAxes=["systIdx"],
+            labelsByAxis=["horacenloewCorr_unc"],
+            skipEntries=[(0, -1), (2, -1)],
+            passToFakes=passSystToFakes,
+        )
 
     if not args.noEfficiencyUnc:
         chargeDependentSteps = common.muonEfficiency_chargeDependentSteps
