@@ -75,7 +75,7 @@ def common_parser(for_reco_highPU=False):
     import wremnants
     from wremnants import theory_tools
 
-    parser.add_argument("--pdfs", type=str, nargs="*", default=["nnpdf31"], choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for")
+    parser.add_argument("--pdfs", type=str, nargs="*", default=["msht20"], choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for")
     parser.add_argument("--altPdfOnlyCentral", action='store_true', help="Only store central value for alternate PDF sets")
     parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
     parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=[])
@@ -134,7 +134,7 @@ def common_parser_combine():
             help="Decorrelation for QCDscale")
     parser.add_argument("--rebinPtV", type=float, nargs='*', help="Rebin axis with gen boson pt by this value (default does nothing)")
     parser.add_argument("--scetlibUnc", default=None, type=str, choices=["scale", "np"], help="Include SCETlib uncertainties")
-    parser.add_argument("--pdf", type=str, default="nnpdf31", choices=theory_tools.pdfMapExtended.keys(), help="PDF to use")
+    parser.add_argument("--pdf", type=str, default="msht20", choices=theory_tools.pdfMapExtended.keys(), help="PDF to use")
     parser.add_argument("-b", "--fitObs", type=str, default="nominal", help="Observable to fit") # TODO: what does it do?
     parser.add_argument("--qcdProcessName", dest="qcdProcessName" , type=str, default="Fake",   help="Name for QCD process")
     parser.add_argument("--noStatUncFakes", dest="noStatUncFakes" , action="store_true",   help="Set bin error for QCD background templates to 0, to check MC stat uncertainties for signal only")
