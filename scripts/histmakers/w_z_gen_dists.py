@@ -13,7 +13,7 @@ parser.add_argument("--skipAngularCoeffs", action='store_true', help="Skip the c
 parser.add_argument("--singleLeptonHists", action='store_true', help="Also store single lepton kinematics")
 parser.add_argument("--skip-ew-hists", action='store_true', help="Also store histograms for EW reweighting. Use with --filter horace")
 
-parser = common.set_parser_default(parser, "filterProcs", None)
+parser = common.set_parser_default(parser, "filterProcs", common.vprocs)
 
 args = parser.parse_args()
 
