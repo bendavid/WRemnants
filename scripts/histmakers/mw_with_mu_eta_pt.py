@@ -61,6 +61,7 @@ nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
 
 # axes for study of fakes
 axis_mt_fakes = hist.axis.Regular(120, 0., 120., name = "mt", underflow=False, overflow=True)
+axis_dxybs_fakes = hist.axis.Regular(100, 0., 0.5, name = "Dxybs", underflow=False, overflow=True)
 axis_iso_fakes = hist.axis.Regular(60, 0., 0.6, name = "PFrelIso04", underflow=False, overflow=True)
 axis_hasjet_fakes = hist.axis.Boolean(name = "hasJets") # only need case with 0 jets or > 0 for now
 mTStudyForFakes_axes = [axis_eta, axis_pt, axis_charge, axis_mt_fakes, axis_passIso, axis_hasjet_fakes]
@@ -242,6 +243,11 @@ def build_graph(df, dataset):
     df = df.Define("transverseMass", "wrem::mt_2(goodMuons_pt0, goodMuons_phi0, MET_corr_rec_pt, MET_corr_rec_phi)")
     df = df.Define("hasCleanJet", "Sum(goodCleanJets) >= 1")
 
+    df = df.Define("goodMuons_absdxybs0", "abs(Muon_dxybs[goodMuons][0])")
+    mtIsoDxybsCharge = df.HistoBoost("mtIsoDxybsCharge", [axis_mt_fakes, axis_iso_fakes, axis_dxybs_fakes, axis_charge], ["transverseMass", "goodMuons_pfRelIso04_all0", "goodMuons_absdxybs0", "goodMuons_charge0", "nominal_weight"])
+    results.append(mtIsoDxybsCharge)
+    df = df.Filter("goodMuons_absdxybs0 < 0.05")
+    
     mTStudyForFakes = df.HistoBoost("mTStudyForFakes", mTStudyForFakes_axes, ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "transverseMass", "passIso", "hasCleanJet", "nominal_weight"])
     results.append(mTStudyForFakes)
     # perhaps I could merge this histogram with the previous one, it would become a pretty big histogram though
@@ -249,7 +255,7 @@ def build_graph(df, dataset):
     results.append(mtIsoJetCharge)
 
     df = df.Define("passMT", "transverseMass >= 40.0")
-    df = df.Filter("passMT || hasCleanJet")
+    #df = df.Filter("passMT || hasCleanJet") ## TEST no jet cut at low mT
 
     nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
 
