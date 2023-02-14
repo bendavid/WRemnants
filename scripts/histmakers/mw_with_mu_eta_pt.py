@@ -63,7 +63,6 @@ nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
 
 # axes for study of fakes
 axis_mt_fakes = hist.axis.Regular(120, 0., 120., name = "mt", underflow=False, overflow=True)
-axis_dxybs_fakes = hist.axis.Regular(100, 0., 0.5, name = "Dxybs", underflow=False, overflow=True)
 axis_iso_fakes = hist.axis.Regular(60, 0., 0.6, name = "PFrelIso04", underflow=False, overflow=True)
 axis_hasjet_fakes = hist.axis.Boolean(name = "hasJets") # only need case with 0 jets or > 0 for now
 mTStudyForFakes_axes = [axis_eta, axis_pt, axis_charge, axis_mt_fakes, axis_passIso, axis_hasjet_fakes]
@@ -188,7 +187,8 @@ def build_graph(df, dataset):
 
     df = df.Define("goodMuons_pfRelIso04_all0", "Muon_pfRelIso04_all[goodMuons][0]")
 
-    df = df.Define("goodCleanJets", "Jet_jetId >= 6 && (Jet_pt > 50 || Jet_puId >= 4) && Jet_pt > 30 && abs(Jet_eta) < 2.4 && wrem::cleanJetsFromLeptons(Jet_eta,Jet_phi,Muon_correctedEta[vetoMuons],Muon_correctedPhi[vetoMuons],Electron_eta[vetoElectrons],Electron_phi[vetoElectrons])")
+    # Jet collection actually has a pt threshold of 15 GeV in MiniAOD 
+    df = df.Define("goodCleanJetsNoPt", "Jet_jetId >= 6 && (Jet_pt > 50 || Jet_puId >= 4) && abs(Jet_eta) < 2.4 && wrem::cleanJetsFromLeptons(Jet_eta,Jet_phi,Muon_correctedEta[vetoMuons],Muon_correctedPhi[vetoMuons],Electron_eta[vetoElectrons],Electron_phi[vetoElectrons])")
     df = df.Define("passIso", "goodMuons_pfRelIso04_all0 < 0.15")
 
     ########################################################################
@@ -233,21 +233,16 @@ def build_graph(df, dataset):
         df = df.Alias("MET_corr_rec_phi", "MET_phi")
 
     df = df.Define("transverseMass", "wrem::mt_2(goodMuons_pt0, goodMuons_phi0, MET_corr_rec_pt, MET_corr_rec_phi)")
-    df = df.Define("hasCleanJet", "Sum(goodCleanJets) >= 1")
+    df = df.Define("hasCleanJet", "Sum(goodCleanJetsNoPt && Jet_pt > 30) >= 1")
 
-    df = df.Define("goodMuons_absdxybs0", "abs(Muon_dxybs[goodMuons][0])")
-    mtIsoDxybsCharge = df.HistoBoost("mtIsoDxybsCharge", [axis_mt_fakes, axis_iso_fakes, axis_dxybs_fakes, axis_charge], ["transverseMass", "goodMuons_pfRelIso04_all0", "goodMuons_absdxybs0", "goodMuons_charge0", "nominal_weight"])
-    results.append(mtIsoDxybsCharge)
-    df = df.Filter("goodMuons_absdxybs0 < 0.05")
-    
+    # couple of histograms specific for tests with fakes
     mTStudyForFakes = df.HistoBoost("mTStudyForFakes", mTStudyForFakes_axes, ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "transverseMass", "passIso", "hasCleanJet", "nominal_weight"])
     results.append(mTStudyForFakes)
-    # perhaps I could merge this histogram with the previous one, it would become a pretty big histogram though
     mtIsoJetCharge = df.HistoBoost("mtIsoJetCharge", [axis_mt_fakes, axis_iso_fakes, axis_hasjet_fakes, axis_charge], ["transverseMass", "goodMuons_pfRelIso04_all0", "hasCleanJet", "goodMuons_charge0", "nominal_weight"])
     results.append(mtIsoJetCharge)
 
     df = df.Define("passMT", "transverseMass >= 40.0")
-    #df = df.Filter("passMT || hasCleanJet") ## TEST no jet cut at low mT
+    # no longer cut on jet at low mT, it biases the fakes estimate
 
     nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
 
@@ -256,8 +251,8 @@ def build_graph(df, dataset):
         results.append(nominal)
 
         if not args.onlyMainHistograms:
-            syst_tools.add_QCDbkg_jetPt45_hist(results, df, nominal_axes, nominal_cols)       
-            
+            syst_tools.add_QCDbkg_jetPt_hist(results, df, nominal_axes, nominal_cols, jet_pt=30)
+
     else:  
         results.append(df.HistoBoost("nominal_weight", [hist.axis.Regular(200, -4, 4)], ["nominal_weight"]))
 
@@ -275,7 +270,7 @@ def build_graph(df, dataset):
 
     if not dataset.is_data and not args.onlyMainHistograms:
         
-        syst_tools.add_QCDbkg_jetPt45_hist(results, df, nominal_axes, nominal_cols)
+        syst_tools.add_QCDbkg_jetPt_hist(results, df, nominal_axes, nominal_cols, jet_pt=30)
 
         df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, nominal_axes, nominal_cols)
         df = syst_tools.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, nominal_axes, nominal_cols)

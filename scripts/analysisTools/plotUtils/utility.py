@@ -496,22 +496,23 @@ def multiplyByHistoWithLessPtBins(h, hless, neglectUncSecond=False):
             h.SetBinContent(ix, iy, hContent * hlessContent)
             h.SetBinError(  ix, iy, unc)
 
-def scaleTH2byOtherTH2(h, hother, scaleUncertainty=True, zeroOutOfAcceptance=False):
+def scaleTH2byOtherTH2(h, hother, scaleUncertainty=True):
     # multiply 2D histograms when one has less bins
     # it is used to apply a correction stored in a TH2
     # one can decide not to scale also the uncertainty (scaleUncertainty=False)
+    maxXbinOther = hother.GetNbinsX()
+    maxYbinOther = hother.GetNbinsY()
     for ix in range(1, 1 + h.GetNbinsX()):
         xbin = hother.GetXaxis().FindFixBin(h.GetXaxis().GetBinCenter(ix))
-        if not zeroOutOfAcceptance:
-            xbin = max(1, min(xbin, hother.GetNbinsX()))
+        xbin = sorted((1, xbin, maxXbinOther))[1] # creative way to clamp, faster than max(1, min(val, maxVal)) syntax
         for iy in range(1, 1 + h.GetNbinsY()):
             ybin = hother.GetYaxis().FindFixBin(h.GetYaxis().GetBinCenter(iy))
-            if not zeroOutOfAcceptance:
-                ybin = max(1, min(ybin, hother.GetNbinsY()))
+            ybin = sorted((1, ybin, maxYbinOther))[1]
             hContent = h.GetBinContent(ix, iy)
-            hotherContent = hother.GetBinContent(xbin, ybin)
             hUnc = h.GetBinError(ix, iy)
-            #print(f"ix-iy-corr = {xbin} - {ybin} - {hotherContent}")
+            hotherContent = hother.GetBinContent(xbin, ybin)
+            #hotherContent = 2.0 ## for debug
+            #print(f"ix-iy-xbin-ybin-corr = {ix} - {iy} - {xbin} - {ybin} - {hotherContent}")
             h.SetBinContent(ix, iy, hContent * hotherContent)
             if scaleUncertainty:
                 h.SetBinError(  ix, iy, hUnc * hotherContent)
@@ -594,7 +595,8 @@ def drawTH1(htmp,
             skipTdrStyle=False,
             drawStatBox=True,
             fitString="", # can be "gaus;LEMSQ+;;-5;5"
-            plotTitleLatex=""
+            plotTitleLatex="",
+            setLogY=False
 ):
 
 
@@ -680,8 +682,12 @@ def drawTH1(htmp,
         for itx,tx in enumerate(realtext.split(";")):
             lat.DrawLatex(x1,y1-itx*ypass,tx)
 
+    if setLogY:
+        canvas.SetLogy()
     for ext in ["png","pdf"]:
         canvas.SaveAs(f"{outdir}{canvasName}.{ext}")
+    if setLogY:
+        canvas.SetLogy(0)
 
 
 
