@@ -54,7 +54,7 @@ def plotProjection1D(rootHists, datasets, outfolder_dataMC, canvas1Dshapes=None,
                      rebinVariable=None):
 
     firstBinMt = 1
-    lastBinMt = rootHists["Data"].GetAxis(3).GetNbins()
+    lastBinMt = 1 + rootHists["Data"].GetAxis(3).GetNbins()
     if mTaboveThis:
         firstBinMt = rootHists["Data"].GetAxis(3).FindFixBin(mTaboveThis+0.001)
 
@@ -98,21 +98,22 @@ def plotProjection1Dfrom3D(rootHists, datasets, outfolder_dataMC, canvas1Dshapes
             hdata = rootHists[d].Project3D(f"{axisProj}eo")
             hdata.SetName(f"{plotName}_{d}")
         else:
-            if correctionFakes and d == "Fake":
+            if correctionFakes != None and d == "Fake":
                 # correct 2D before going to 1D
+                print(f"nX,nY bins = {rootHists[d].GetNbinsX()}, {rootHists[d].GetNbinsY()}")
                 hmc2D = rootHists[d].Project3D(f"yxe")
                 cropNegativeContent(hmc2D)
                 hmc2D.SetName(f"{plotName}_{d}_2Dtmp")                                                 
                 print()
                 print(f"PlotName: {plotName}")
                 print(f"Fakes norm before corr: {hmc2D.Integral()}")
-                scaleTH2byOtherTH2(hmc2D, correctionFakes, scaleUncertainty=True, zeroOutOfAcceptance=False)
+                scaleTH2byOtherTH2(hmc2D, correctionFakes, scaleUncertainty=True)
                 print(f"Fakes norm after corr : {hmc2D.Integral()}")
                 print()
                 if axisProj == "x":
-                    hmc[d] = hmc2D.ProjectionX(f"{plotName}_{d}", 1, hmc2D.GetNbinsX(), "eo")
+                    hmc[d] = hmc2D.ProjectionX(f"{plotName}_{d}", 1, hmc2D.GetNbinsY(), "eo")
                 elif axisProj == "y":
-                    hmc[d] = hmc2D.ProjectionY(f"{plotName}_{d}", 1, hmc2D.GetNbinsY(), "eo")
+                    hmc[d] = hmc2D.ProjectionY(f"{plotName}_{d}", 1, hmc2D.GetNbinsX(), "eo")
                 else:
                     print("Error in plotProjection1Dfrom3D: 'z' axis not permitted for TH2. Abort")
                     quit()
@@ -248,15 +249,6 @@ def drawAndFitFRF(h1, labelXtmp="xaxis", labelYtmp="yaxis",
         h1fitRange.SetBinContent(ib, h1.GetBinContent(binOriginalHisto))
         h1fitRange.SetBinError(ib, h1.GetBinError(binOriginalHisto))
     boost_hist = narf.root_to_hist(h1fitRange)
-
-    # OLD ROOT BASED FIT
-    #f1 = ROOT.TF1("f1",polN_scaled_global, xMinFit, xMaxFit, 3)
-    ## TODO: set coefficient of x^1 as 0 to have the maximum at 0?
-    #f1.SetParLimits(2, -10.0, 0.0)
-    #realFitOptions = fitOptions
-    #if "B" not in fitOptions:
-    #    realFitOptions = "B" + fitOptions
-    #fitres = h1.Fit("f1", realFitOptions, "", xMinFit, xMaxFit)
 
     # FIT WITH TENSORFLOW
     global polN_scaled_global
@@ -406,8 +398,6 @@ def drawAndFitFRF(h1, labelXtmp="xaxis", labelYtmp="yaxis",
 
         frame.Reset("ICES")
         if setRatioYAxisRangeFromUser: frame.GetYaxis().SetRangeUser(yminRatio,ymaxRatio)
-        #else:                          
-        #frame.GetYaxis().SetRangeUser(0.5,1.5)
         frame.GetYaxis().SetNdivisions(5)
         frame.GetYaxis().SetTitle(yRatioAxisName)
         frame.GetYaxis().SetTitleOffset(yAxisTitleOffset)
@@ -480,24 +470,29 @@ def drawAndFitFRF(h1, labelXtmp="xaxis", labelYtmp="yaxis",
     # essentially integral of FRF(mT)*G(mT)*dmT, where G is the normalized shape of the mT distribution 
 
     averageFRF = 0.0
+    averageFRFcap = 0.0
     if mTshape:
         ## get integral in restricted range to normalize the mT PDF
         #mTshape.GetXaxis().SetRange(1, mTshape.GetXaxis().FindFixBin(xvalMax-0.001))
-        integralMt = mTshape.Integral()
+        integralMtNorm = 1./mTshape.Integral()
         for ib in range(1, 1+mTshape.GetNbinsX()):
             mTbinVal = mTshape.GetBinCenter(ib)
-            # evaluate FRF as 0 when mT is too large, the function would be negative most likely,
-            # but if positive it should be set to 0 to avoid issues when the fitted parabola increases versus mT 
-            # perhaps the parabola should be forced to have negative concavity
-            #valFRF = 0.0 if mTbinVal > xvalMax else funcFullRange.Eval(mTbinVal)
-            valFRF = h1.GetBinContent(max(1, min(h1.GetXaxis().FindFixBin(mTbinVal), h1.GetNbinsX()))) if useBinnedCorr else funcFullRange.Eval(mTbinVal) 
-            averageFRF += max(0.0, valFRF) * mTshape.GetBinContent(ib)
-        averageFRF /= integralMt
+            mTbinValCap = min(mTbinVal, h1.GetXaxis().GetBinUpEdge(h1.GetNbinsX())) # assume constant after histogram range
+            valFRF = h1.GetBinContent(max(1, min(h1.GetXaxis().FindFixBin(mTbinVal), h1.GetNbinsX()))) if useBinnedCorr else funcFullRange.Eval(mTbinVal)
+            valFRFcap = h1.GetBinContent(max(1, min(h1.GetXaxis().FindFixBin(mTbinValCap), h1.GetNbinsX()))) if useBinnedCorr else funcFullRange.Eval(mTbinValCap)
+            mTshapeBinContent = mTshape.GetBinContent(ib)
+            addVal = max(0.0, valFRF) * mTshapeBinContent
+            addValCap =  max(0.0, valFRFcap) * mTshapeBinContent
+            averageFRF += addVal
+            averageFRFcap += addValCap
+            #print(f"{ib}: mT = {mTbinVal}, FRF={valFRF}, PDF(mT) = {mTshapeBinContent*integralMtNorm}, addVal = {addVal*integralMtNorm}")
+        averageFRF *= integralMtNorm
+        averageFRFcap *= integralMtNorm
         
     if evalAt:
-        return averageFRF, funcFullRange.Eval(evalAt)
+        return averageFRF, averageFRFcap, funcFullRange.Eval(evalAt)
     else:
-        return averageFRF, 0.0
+        return averageFRF, averageFRFcap, 0.0
         
 ################################################################
 
@@ -522,7 +517,7 @@ if __name__ == "__main__":
     parser.add_argument(     '--fit-pol-degree'  , dest='fitPolDegree',      default=3, type=int, help='Degree for polynomial used in the fits')
     parser.add_argument("--integral-mt-method", dest="integralMtMethod", default="sideband", choices=["sideband", "fullRange"], type=str, help="How to integrate mT distribution to derive the FRF correction (default is 'sideband', orthogonal to the nominal fake region, 'fullRange' uses the full range)")
     parser.add_argument(     '--use-binned-correction', dest='useBinnedCorrection', action='store_true',   help='Use binned FRF to derive the correction (mainly for tests)')
-    parser.add_argument(     '--jet-cut', dest='jetCut', action='store_true',   help='Use jet cut to derive the FRF (sample will be more QCD enriched but might boas the FRF)')
+    parser.add_argument(     '--jet-cut', dest='jetCut', action='store_true',   help='Use jet cut to derive the FRF (sample will be more QCD enriched but might bias the FRF)')
     parser.add_argument(     "--rebin-x", dest="rebinEta", default=1, type=int, help="To rebin x axis (eta)")
     parser.add_argument(     "--rebin-y", dest="rebinPt", default=1, type=int, help="To rebin y axis (pt)")
     parser.add_argument(     '--nContours', dest='nContours',    default=51, type=int, help='Number of contours in palette. Default is 51 (let it be odd, so the central strip is white if not using --abs-value and the range is symmetric)')
@@ -690,15 +685,91 @@ if __name__ == "__main__":
         histoPassMtFailIso.SetName("fakes_passMt_failIso_jetInclusive")
         histoPassMtFailIso.SetTitle("fakes_passMt_failIso_jetInclusive")
 
+        cropNegativeContent(histoPassIso)
+        cropNegativeContent(histoFailIso)
+        cropNegativeContent(histoPassMtFailIso)
+        
+        # compute FRF vs eta-pt and original binning to reproduce the nominal histograms and make plots
+        # but don't use the jet cut here, to see how it gets without it
+        # also integrate mt < mtThreshold
+        histo_fakes.GetAxis(2).SetRange(chargeBin, chargeBin)
+        histo_fakes.GetAxis(3).SetRange(1, histo_fakes.GetAxis(3).FindFixBin(mtThreshold-0.001))
+        histo_fakes.GetAxis(4).SetRange(2, 2) # passIso, equivalent to lowIso
+        histo_fakes.GetAxis(5).SetRange(1, 2) # always integrate jet here
+        # now get a TH2 for passIso
+        histoPassIsoLowMt_jetInclusive_vsEtaPt = histo_fakes.Projection(1, 0, "E")
+        histoPassIsoLowMt_jetInclusive_vsEtaPt.SetName("fakes_passIsoLowMt_jetInclusive_vsEtaPt")
+        histoPassIsoLowMt_jetInclusive_vsEtaPt.SetTitle("fakes_passIsoLowMt_jetInclusive_vsEtaPt")
+        cropNegativeContent(histoPassIsoLowMt_jetInclusive_vsEtaPt)
+        # now get a TH2 for failIso
+        histo_fakes.GetAxis(4).SetRange(1, 1) # failIso, equivalent to highIso
+        histoFailIsoLowMt_jetInclusive_vsEtaPt = histo_fakes.Projection(1, 0, "E")
+        histoFailIsoLowMt_jetInclusive_vsEtaPt.SetName("fakes_failIsoLowMt_jetInclusive_vsEtaPt")
+        histoFailIsoLowMt_jetInclusive_vsEtaPt.SetTitle("fakes_failIsoLowMt_jetInclusive_vsEtaPt")
+        cropNegativeContent(histoFailIsoLowMt_jetInclusive_vsEtaPt)
+        # get FRF vs etapt for jetInclusive events
+        FRF_jetInclusive_vsEtaPt = copy.deepcopy(histoPassIsoLowMt_jetInclusive_vsEtaPt.Clone(f"FRF_jetInclusive_vsEtaPt_{charge}"))
+        FRF_jetInclusive_vsEtaPt.SetTitle(f"jet inclusive, mT < {mtThreshold} GeV")
+        FRF_jetInclusive_vsEtaPt.Divide(histoFailIsoLowMt_jetInclusive_vsEtaPt)
+        # now get the data-driven QCD prediction vs eta-pt, start by cloning histoPassMtFailIso integrating mT        
+        #dataDrivenQCDtemplate_jetInclusive = getTH2fromTH3(histoPassMtFailIso, "dataDrivenQCDtemplate_jetInclusive", 1, histoPassMtFailIso.GetNbinsZ())
+        #dataDrivenQCDtemplate_jetInclusive.Multiply(FRF_jetInclusive_vsEtaPt)
+
+        ## now redo the same for the >=1 jet region
+        ## could be done from previous TH3 histograms integrating in mT, but they don't always have the same jet cut 
+        histo_fakes.GetAxis(4).SetRange(2, 2) # passIso, equivalent to lowIso
+        histo_fakes.GetAxis(5).SetRange(2, 2) # always integrate jet here
+        # now get a TH2 for passIso
+        histoPassIsoLowMt_1orMoreJet_vsEtaPt = histo_fakes.Projection(1, 0, "E")
+        histoPassIsoLowMt_1orMoreJet_vsEtaPt.SetName("fakes_passIsoLowMt_1orMoreJet_vsEtaPt")
+        histoPassIsoLowMt_1orMoreJet_vsEtaPt.SetTitle("fakes_passIsoLowMt_1orMoreJet_vsEtaPt")
+        cropNegativeContent(histoPassIsoLowMt_1orMoreJet_vsEtaPt)
+        # now get a TH2 for failIso
+        histo_fakes.GetAxis(4).SetRange(1, 1) # failIso, equivalent to highIso
+        histoFailIsoLowMt_1orMoreJet_vsEtaPt = histo_fakes.Projection(1, 0, "E")
+        histoFailIsoLowMt_1orMoreJet_vsEtaPt.SetName("fakes_failIsoLowMt_1orMoreJet_vsEtaPt")
+        histoFailIsoLowMt_1orMoreJet_vsEtaPt.SetTitle("fakes_failIsoLowMt_1orMoreJet_vsEtaPt")
+        cropNegativeContent(histoFailIsoLowMt_1orMoreJet_vsEtaPt)
+        # get FRF vs etapt for 1orMoreJet events
+        FRF_1orMoreJet_vsEtaPt = copy.deepcopy(histoPassIsoLowMt_1orMoreJet_vsEtaPt.Clone(f"FRF_1orMoreJet_vsEtaPt_{charge}"))
+        FRF_1orMoreJet_vsEtaPt.SetTitle(f">= 1 jet, mT < {mtThreshold} GeV")
+        FRF_1orMoreJet_vsEtaPt.Divide(histoFailIsoLowMt_1orMoreJet_vsEtaPt)
+        # now get the data-driven QCD prediction vs eta-pt, start by cloning histoPassMtFailIso integrating mT        
+        #dataDrivenQCDtemplate_1orMoreJet = getTH2fromTH3(histoPassMtFailIso, "dataDrivenQCDtemplate_1orMoreJet", 1, histoPassMtFailIso.GetNbinsZ())
+        #dataDrivenQCDtemplate_1orMoreJet.Multiply(FRF_1orMoreJet_vsEtaPt)
+
+        # make some plots
+        drawCorrelationPlot(FRF_jetInclusive_vsEtaPt,
+                            xAxisName,
+                            yAxisName,
+                            "Fakerate factor",
+                            FRF_jetInclusive_vsEtaPt.GetName(), plotLabel="ForceTitle", outdir=outfolder,
+                            draw_both0_noLog1_onlyLog2=1, nContours=args.nContours, palette=args.palette,
+                            invertePalette=args.invertePalette, passCanvas=canvas, skipLumi=True)
+        drawCorrelationPlot(FRF_1orMoreJet_vsEtaPt,
+                            xAxisName,
+                            yAxisName,
+                            "Fakerate factor",
+                            FRF_1orMoreJet_vsEtaPt.GetName(), plotLabel="ForceTitle", outdir=outfolder,
+                            draw_both0_noLog1_onlyLog2=1, nContours=args.nContours, palette=args.palette,
+                            invertePalette=args.invertePalette, passCanvas=canvas, skipLumi=True)
+        # and also the ratio between jet inclusive and >=1 jet
+        FRF_ratioJet_vsEtaPt = copy.deepcopy(FRF_jetInclusive_vsEtaPt.Clone(f"FRF_ratioJet_vsEtaPt_{charge}"))
+        FRF_ratioJet_vsEtaPt.SetTitle(f"jetInclusive/1orMoreJet, mT < {mtThreshold} GeV")
+        FRF_ratioJet_vsEtaPt.Divide(FRF_1orMoreJet_vsEtaPt)
+        drawCorrelationPlot(FRF_ratioJet_vsEtaPt,
+                            xAxisName,
+                            yAxisName,
+                            "Ratio of fakerate factors::0.8,1.6",
+                            FRF_ratioJet_vsEtaPt.GetName(), plotLabel="ForceTitle", outdir=outfolder,
+                            draw_both0_noLog1_onlyLog2=1, nContours=args.nContours, palette=args.palette,
+                            invertePalette=args.invertePalette, passCanvas=canvas, skipLumi=True)
+        
         # don't rebin mT here (default is 1 GeV),
         # otherwise the new binning might no longer be consistent with the one passed to --mt-bin-edges
         histoPassIso.Rebin3D(args.rebinEta, args.rebinPt, 1)
         histoFailIso.Rebin3D(args.rebinEta, args.rebinPt, 1)
         histoPassMtFailIso.Rebin3D(args.rebinEta, args.rebinPt, 1)
-
-        cropNegativeContent(histoPassIso)
-        cropNegativeContent(histoFailIso)
-        cropNegativeContent(histoPassMtFailIso)
 
         mtEdges = [round(int(x),1) for x in args.mtEdges.split(',')] 
         nMtBins = len(mtEdges) -1
@@ -767,7 +838,6 @@ if __name__ == "__main__":
                                                       h2PassIso.GetNbinsY(), round(ptLow,1), round(ptHigh,1))
         
         # now preparing a summary for each pt bin
-        ptCentralBin = h2PassIso.GetYaxis().FindFixBin(39.5)
         for ipt in range(1, 1+h2PassIso.GetNbinsY()):
             ptBinLow = int(h2PassIso.GetYaxis().GetBinLowEdge(ipt))
             ptBinHigh = int(h2PassIso.GetYaxis().GetBinLowEdge(ipt+1))
@@ -814,19 +884,20 @@ if __name__ == "__main__":
                         projMt = histoPassMtFailIso.ProjectionZ(f"projZ_{histoPassMtFailIso.GetName()}", ieta, ieta, ipt, ipt, "eo")
                     elif args.integralMtMethod == "fullRange":
                         ## or maybe in the full range to get the actual average
+                        histoFailIso.GetZaxis().SetRange(1, histoFailIso.GetNbinsZ())
                         projMt = histoFailIso.ProjectionZ(f"projZ_{histoFailIso.GetName()}", ieta, ieta, ipt, ipt, "eo")
                     cropNegativeContent(projMt)
                     meanMtInThisEtaPtBin = projMt.GetMean()                        
-                    valFRFhighMt, valFRFhighMtAtMean = drawAndFitFRF(hFRfactorVsMt, zAxisName, "Fakerate factor: N(iso) / N(not-iso)",
-                                                                     hFRfactorVsMt.GetName(),
-                                                                     outfolder1D, lowerPanelHeight=0.0, passCanvas=canvas1D,
-                                                                     moreTextLatex=textLatex,
-                                                                     legendCoords="0.64,0.96,0.69,0.93", fitRange=args.mtFitRange,
-                                                                     fitOptions="MSQ+",
-                                                                     evalAt=meanMtInThisEtaPtBin, mTshape=projMt,
-                                                                     fitPolDegree=args.fitPolDegree,
-                                                                     useBinnedCorr=args.useBinnedCorrection)
-                    print(f"{valFRFhighMt}, {valFRFhighMtAtMean}")
+                    valFRFhighMt, valFRFhighMtCap, valFRFhighMtAtMean = drawAndFitFRF(hFRfactorVsMt, zAxisName, "Fakerate factor: N(iso) / N(not-iso)",
+                                                                                      hFRfactorVsMt.GetName(),
+                                                                                      outfolder1D, lowerPanelHeight=0.0, passCanvas=canvas1D,
+                                                                                      moreTextLatex=textLatex,
+                                                                                      legendCoords="0.64,0.96,0.69,0.93", fitRange=args.mtFitRange,
+                                                                                      fitOptions="MSQ+",
+                                                                                      evalAt=meanMtInThisEtaPtBin, mTshape=projMt,
+                                                                                      fitPolDegree=args.fitPolDegree,
+                                                                                      useBinnedCorr=args.useBinnedCorrection)
+                    print(f"{valFRFhighMt}, {valFRFhighMtCap}, {valFRFhighMtAtMean}")
                     if valFRFhighMt < 0:
                         printLine(marker=" ")
                         printLine()
@@ -864,6 +935,7 @@ if __name__ == "__main__":
             maxCorr = hFakerateFactorCorrection[charge].GetBinContent(hFakerateFactorCorrection[charge].GetMaximumBin())
             diff = max(abs(maxCorr-1.0), abs(minCorr-1.0))
             corrRange = f"{1.0-diff},{1.0+diff}"
+            corrRange = "0.5,1.5"
         drawCorrelationPlot(hFakerateFactorCorrection[charge],
                             xAxisName,
                             yAxisName,
@@ -881,15 +953,7 @@ if __name__ == "__main__":
         #         plotTitleLatex=f"Charge {charge}")
         # drawTH1(hFRF_profileY, yAxisName, f"QCD template correction", hFRF_profileY.GetName(), outfolder, drawStatBox=False,
         #         plotTitleLatex=f"Charge {charge}")
-        if hFakerateFactorCorrection[charge].GetNbinsX() > 1 and hFakerateFactorCorrection[charge].GetNbinsY() > 1:
-            drawCorrelationPlot(hFakerateFactorCorrection[charge],
-                                xAxisName,
-                                yAxisName,
-                                f"QCD template correction::{corrRange}",
-                                f"{hFakerateFactorCorrection[charge].GetName()}_smooth", plotLabel="ForceTitle", outdir=outfolder, smoothPlot=True,
-                                draw_both0_noLog1_onlyLog2=1, nContours=args.nContours, palette=args.palette,
-                                invertePalette=args.invertePalette, passCanvas=canvas, skipLumi=True)
-        else:
+        if hFakerateFactorCorrection[charge].GetNbinsX() == 1 or hFakerateFactorCorrection[charge].GetNbinsY() == 1:
             if hFakerateFactorCorrection[charge].GetNbinsY() == 1:
                 hFRF_proj[charge] = hFakerateFactorCorrection[charge].ProjectionX(hFakerateFactorCorrection[charge].GetName()+"_projX", 1, 1, "e")
                 axisName1D = xAxisName
