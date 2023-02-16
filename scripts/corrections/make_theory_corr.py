@@ -58,7 +58,6 @@ def read_corr(procName, generator, corr_file):
             axnames = args.axes
             if not axnames:
                 axnames = ("y", "pt") if "2d" in corr_file else ("pt")
-            print(charge)
             h = input_tools.read_dyturbo_hist(corr_file.split(":"), axes=axnames, charge=charge)
             if "y" in h.axes.name:
                 h = hh.makeAbsHist(h, "y")
@@ -82,7 +81,6 @@ elif args.proc == "w":
     filesByProc = { "WplusmunuPostVFP" : wpfiles,
         "WminusmunuPostVFP" : wmfiles}
 
-print(filesByProc)
 minnloh = input_tools.read_all_and_scale(args.minnlo_file, list(filesByProc.keys()), ["nominal_gen"])[0]
 
 if "y" in minnloh.axes.name:
@@ -101,7 +99,6 @@ if add_taus:
     minnloh = 0.5*(minnloh + taush/(Z_TAU_TO_LEP_RATIO if args.proc == "z" else BR_TAUToMU))
 
 numh = hh.sumHists([read_corr(procName, args.generator, corr_file) for procName, corr_file in filesByProc.items()])
-print(numh.sum())
 
 if numh.ndim-1 < minnloh.ndim:
     ax_map = {
@@ -123,11 +120,7 @@ if numh.ndim-1 < minnloh.ndim:
                 underflow=minnlo_ax.traits.underflow, overflow=minnlo_ax.traits.overflow, name=ax))
     # NOTE: This leaves out the underflow, but there can't be any underflow anyway
     numh = hist.Hist(*axes, storage=numh._storage_type(), data=np.reshape(numh.view(), [ax.size for ax in axes]))
-print(numh.sum())
-print(minnloh.sum())
 
-print(numh)
-print(minnloh)
 
 corrh_unc  = theory_corrections.make_corr_from_ratio(minnloh, numh)
 corrh = hist.Hist(*corrh_unc.axes, name=corrh_unc.name, storage=hist.storage.Double(), data=corrh_unc.values(flow=True))
