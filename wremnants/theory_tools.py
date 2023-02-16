@@ -4,9 +4,9 @@ import numpy as np
 import copy
 from utilities import boostHistHelpers as hh,common
 from wremnants import theory_corrections
-import logging
 from scipy import ndimage
 
+logging = common.child_logger(__name__)
 ROOT.gInterpreter.Declare('#include "theoryTools.h"')
 
 # integer axis for -1 through 7
@@ -109,7 +109,7 @@ only_central_pdf_datasets = [
     "Zmumu_bugfix_slc7",
 ]
 
-extended_pdf_datasets = common.vprocs
+extended_pdf_datasets = common.vprocs+common.vprocs_lowpu
 
 def define_prefsr_vars(df):
     df = df.Define("prefsrLeps", "wrem::prefsrLeptons(GenPart_status, GenPart_statusFlags, GenPart_pdgId, GenPart_genPartIdxMother)")
