@@ -57,7 +57,7 @@ variation.add_argument("--fill_between", action='store_true', help="Fill between
 
 args = parser.parse_args()
 
-logger = common.setup_base_logger("makeDataMCStackPlot", args.debug)
+logger = common.setup_logger("makeDataMCStackPlot", 4 if args.debug else 3, True)
 
 def padArray(ref, matchLength):
     return ref+ref[-1:]*(len(matchLength)-len(ref))
