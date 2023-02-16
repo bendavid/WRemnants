@@ -109,7 +109,7 @@ only_central_pdf_datasets = [
     "Zmumu_bugfix_slc7",
 ]
 
-extended_pdf_datasets = common.vprocs
+extended_pdf_datasets = common.vprocs+common.vprocs_lowpu
 
 def define_prefsr_vars(df):
     df = df.Define("prefsrLeps", "wrem::prefsrLeptons(GenPart_status, GenPart_statusFlags, GenPart_pdgId, GenPart_genPartIdxMother)")
