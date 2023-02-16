@@ -22,6 +22,7 @@ def valsAndVariances(h1, h2, allowBroadcast=True, transpose=True):
         outshape = h1.view(flow=flow).shape if len(h1.shape) > len(h2.shape) else h2.view(flow=flow).shape
         # The transpose is because numpy works right to left in broadcasting, and we've put the
         # syst axis on the right
+        print(h1.shape, h2.shape)
         try:
             res = [np.broadcast_to(x.T if transpose else x, outshape[::-1] if transpose else outshape) for x in \
                     [h1.values(flow=flow), h2.values(flow=flow), h1.variances(flow=flow), h2.variances(flow=flow)]]
@@ -65,7 +66,7 @@ def relVariance(hvals, hvars, cutoff=1e-3, fillOnes=False):
         out = np.ones(hvars.shape)
     else:
         out = np.copy(hvars)
-    np.divide(hvars, hvals*hvals, out=out, where=nonzero),
+    np.divide(hvars, hvals*hvals, out=out, where=nonzero)
     return out
 
 def relVariances(h1vals, h2vals, h1vars, h2vars):
@@ -158,9 +159,13 @@ def normalize(h, scale=1e6, createNew=True):
 
 def makeAbsHist(h, axis_name):
     ax = h.axes[axis_name]
+    axidx = list(h.axes).index(ax)
+    if ax.size == 1 and -ax.edges[0] == ax.edges[-1]:
+        abs_ax = hist.axis.Regular(1, 0, ax.edges[-1], underflow=False, name=f"abs{axis_name}")
+        return hist.Hist(*h.axes[:axidx], abs_ax, *h.axes[axidx+1:], storage=h._storage_type(), data=h.view())
+
     if 0 not in ax.edges:
         raise ValueError("Can't mirror around 0 if it isn't a bin boundary")
-    axidx = list(h.axes).index(ax)
     abs_ax = hist.axis.Variable(ax.edges[ax.index(0.):], underflow=False, name=f"abs{axis_name}")
     hnew = hist.Hist(*h.axes[:axidx], abs_ax, *h.axes[axidx+1:], storage=h._storage_type())
     
@@ -187,31 +192,23 @@ def rebinHist(h, axis_name, edges):
     axes[ax_idx] = new_ax
     
     hnew = hist.Hist(*axes, name=h.name, storage=h._storage_type())
-    # Take is used because reduceat sums i:len(array) for the last entry, in the case
-    # where the final bin isn't the same between the initial and rebinned histogram, you
-    # want to drop this value. Add tolerance of 1/2 min bin width to avoid numeric issues
 
     offset = 0.5*np.min(ax.edges[1:]-ax.edges[:-1])
-
     edges_eval = edges+offset
     edge_idx = ax.index(edges_eval)
-
-    if len(np.unique(edge_idx)) != len(edge_idx):
-        raise ValueError("Did not find a unique binning. Probably this is a numeric issue with bin boundaries")
+    # Avoid going outside the range, reduceat will add the last index anyway
+    if edge_idx[-1] == ax.size+ax.traits.overflow:
+        edge_idx = edge_idx[:-1]
 
     if underflow:
-        edge_idx = np.insert(edge_idx, 0, 0)
         # Only if the original axis had an underflow should you offset
         if ax.traits.underflow:
             edge_idx += 1
+        edge_idx = np.insert(edge_idx, 0, 0)
 
-    # Avoid out of range error if there is no overflow
-    # TODO: Understand if this is fully correct
-    if edge_idx[-1] >= ax.size+ax.traits.overflow+ax.traits.underflow:
-        edge_idx[-1] = ax.index(edges_eval[-1]-2*offset)
-        if edge_idx[-1] == edge_idx[-2]:
-            edge_idx = edge_idx[:-1]
-
+    # Take is used because reduceat sums i:len(array) for the last entry, in the case
+    # where the final bin isn't the same between the initial and rebinned histogram, you
+    # want to drop this value. Add tolerance of 1/2 min bin width to avoid numeric issues
     hnew.values(flow=flow)[...] = np.add.reduceat(h.values(flow=flow), edge_idx, 
             axis=ax_idx).take(indices=range(new_ax.size+underflow+overflow), axis=ax_idx)
     if hnew._storage_type() == hist.storage.Weight():
@@ -238,9 +235,10 @@ def mergeAxes(ax1, ax2):
         raise ValueError("Didn't find any common edges in two axes, can't merge")
 
     merge_idx = list(ax2.edges).index(ax1_edges[-1])+1
-    if merge_idx < 1 or merge_idx > ax2.size:
-        raise ValueError("Can't merge axes unless there is a common point of intersection!"
-            f"The edges were {ax1.edges}, and {ax2.edges}")
+    if merge_idx < 1 or merge_idx > ax2.size+1:
+        raise ValueError("Can't merge axes unless there is a common point of intersection! "
+            f"Merge index was {merge_idx} "
+            f"The edges were {ax1.edges} (size={ax1.size}), and {ax2.edges} (size={ax2.size})")
 
     new_edges = np.concatenate((ax1_edges, ax2.edges[merge_idx:]))
     return hist.axis.Variable(new_edges, name=ax1.name)
@@ -265,6 +263,7 @@ def findCommonBinning(hists, axis_idx):
 def rebinHistsToCommon(hists, axis_idx, keep_full_range=False):
     orig_axes = [h.axes[axis_idx] for h in hists]
     new_edges = findCommonBinning(hists, axis_idx)
+    print(new_edges)
     rebinned_hists = [rebinHist(h, ax.name, new_edges) for h,ax in zip(hists, orig_axes)]
 
     # TODO: This assumes that the range extension only happens in one direction,

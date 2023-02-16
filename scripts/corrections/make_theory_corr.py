@@ -4,6 +4,7 @@ import pickle
 from wremnants import plot_tools, theory_corrections, theory_tools
 from utilities import boostHistHelpers as hh
 from utilities import common, input_tools, output_tools
+import pathlib
 import hist
 import argparse
 import os
@@ -11,29 +12,45 @@ import os
 parser = argparse.ArgumentParser()
 parser.add_argument("-m", "--minnlo_file", type=str, default="w_z_gen_dists.pkl.lz4", help="MiNNLO gen file, denominator in ratio") 
 parser.add_argument("-c", "--corr_files", type=str, nargs='+', required=True, help="Reference files for the corrections (both W+ and W- for the W)") 
-parser.add_argument("-g", "--generator", type=str, choices=["dyturbo", "scetlib", "matrix_radish"], 
+parser.add_argument("-g", "--generator", type=str, choices=["dyturbo", "scetlib", "scetlib_dyturbo", "matrix_radish"], 
     required=True, help="Generator used to produce correction hist")
 parser.add_argument("--outpath", type=str, default=f"{common.data_dir}/TheoryCorrections", help="Output path")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
 parser.add_argument("--proc", type=str, required=True, choices=["z", "w", ], help="Process")
 parser.add_argument("--axes", nargs="*", type=str, default=None, help="Use only specified axes in hist")
 parser.add_argument("--debug", action='store_true', help="Print debug output")
+parser.add_argument("--no-color-logger", action="store_false", dest="color_logger", default=False, 
+                    help="Do not use logging with colors")
 
 args = parser.parse_args()
 
-logger = common.setup_base_logger("make_theory_corr", args.debug)
+logger = common.setup_logger("make_theory_corr", 4 if args.debug else 3, args.color_logger)
 
 def read_corr(procName, generator, corr_file):
-    print(procName, generator)
     charge = 0 if procName[0] == "Z" else (1 if "Wplus" in procName else -1)
-    if generator == "scetlib":
-        nons = "auto"
-        #if True and not os.path.isfile(corr_file.replace(".", "_nons.")):
-        if not os.path.isfile(corr_file.replace(".", "_nons.")):
-            nons = ""
-            logger.warning("No nonsingular file found for SCETlib. Will skip it. This is an approximation!")
-        numh = input_tools.read_scetlib_hist(corr_file, charge=charge, nonsing=nons)
-        numh = hh.makeAbsHist(numh, "Y")
+    if "scetlib" in generator:
+        if "dyturbo" in generator == "scetlib_dyturbo":
+            scetlib_files = [x for x in corr_files if pathlib.Path(x).suffix == ".pkl"]
+            if len(scetlib_files) != 2:
+                raise ValueError(f"scetlib_dyturbo correction requires two SCETlib files (resummed and FO nonsingular). Found {len(scetlib_files)}")
+            nlo_nons_idx = 0 if "nlo" in scetlib_files[0] else 1
+            resumf = scetlib_files[~nlo_nons_idx]
+            nlo_nonsf = scetlib_files[nlo_nons_idx]
+
+            dyturbo_files = [x for x in corr_files if pathlib.Path(x).suffix == ".txt"]
+            if len(dyturbo_files) != 1:
+                raise ValueError("scetlib_dyturbo correction requires one DYTurbo file (fixed order contribution)")
+
+            numh = input_tools.read_matched_scetlib_dyturbo_hist(resumf, nlo_nonsf, dyturbo_files[0], args.axes, charge=charge)
+        else:
+            nons = "auto"
+            if not os.path.isfile(corr_file.replace(".", "_nons.")):
+                nons = ""
+                logger.warning("No nonsingular file found for SCETlib. Will skip it.")
+            numh = input_tools.read_scetlib_hist(corr_file, charge=charge, nonsing=nons)
+        if "Y" in numh.axes.name:
+            numh = hh.makeAbsHist(numh, "Y")
+        return numh 
     else:
         if args.generator == "matrix_radish":
             h = input_tools.read_matrixRadish_hist(corr_file, "ptVgen")
@@ -46,18 +63,6 @@ def read_corr(procName, generator, corr_file):
             if "y" in h.axes.name:
                 h = hh.makeAbsHist(h, "y")
 
-        # TODO: Should be a little careful because this won't include overflow, as long as the
-        # axis range is large enough, it shouldn't matter much
-        axes = []
-        for ax in minnloh.axes.name:
-            axname = ax.replace("Vgen", "")
-            if axname in h.axes.name:
-                axes.append(h.axes[axname])
-            else:
-                minnlo_ax = minnloh.axes[ax]
-                axes.append(hist.axis.Regular(1, minnlo_ax.edges[0], minnlo_ax.edges[-1], 
-                    underflow=minnlo_ax.traits.underflow, overflow=minnlo_ax.traits.overflow, name=ax))
-
         vars_ax = h.axes["vars"] if "vars" in h.axes.name else hist.axis.Integer(0, 1, flow=False, name="vars") 
         axes.append(vars_ax)
 
@@ -68,15 +73,14 @@ def read_corr(procName, generator, corr_file):
     return numh
 
 if args.proc == "z":
-    if len(args.corr_files) != 1:
-        raise ValueError("Only one file expected for Z")
-    filesByProc = { "ZmumuPostVFP" : args.corr_files[0] }
+    filesByProc = { "ZmumuPostVFP" : args.corr_files }
 elif args.proc == "w":
-    if len(args.corr_files) != 2:
-        raise ValueError("Requires two files for W (W+ and W-)")
-    plus_idx = 0 if "Wp" in args.corr_files[0] else 1
-    filesByProc = { "WplusmunuPostVFP" : args.corr_files[plus_idx],
-        "WminusmunuPostVFP" : args.corr_files[0 if plus_idx else 1]}
+    wpfiles = filter(lambda x: "wp" in x.lower(), args.corr_files)
+    wmfiles = filter(lambda x: "wm" in x.lower(), args.corr_files)
+    if len(wpfiles) != len(wmfiles):
+        raise ValueError(f"Expected equal number of files for W+ and W-, found {len(wpfiles)} (Wp) and {len(wmfiles)} (Wm)")
+    filesByProc = { "WplusmunuPostVFP" : wpfiles,
+        "WminusmunuPostVFP" : wmfiles}
 
 print(filesByProc)
 minnloh = input_tools.read_all_and_scale(args.minnlo_file, list(filesByProc.keys()), ["nominal_gen"])[0]
@@ -97,6 +101,30 @@ if add_taus:
     minnloh = 0.5*(minnloh + taush/(Z_TAU_TO_LEP_RATIO if args.proc == "z" else BR_TAUToMU))
 
 numh = hh.sumHists([read_corr(procName, args.generator, corr_file) for procName, corr_file in filesByProc.items()])
+print(numh.sum())
+
+if numh.ndim-1 < minnloh.ndim:
+    ax_map = {
+        "ptVgen" : "qT",
+        "absYVgen" : "absY",
+        "massVgen" : "Q",
+        "chargeVgen" : "charge",
+    }
+    axes = []
+    for ax in minnloh.axes.name:
+        axname = ax_map[ax]
+        if axname in numh.axes.name:
+            axes.append(numh.axes[axname])
+        else:
+            minnlo_ax = minnloh.axes[ax]
+            # TODO: Should be a little careful because this won't include overflow, as long as the
+            # axis range is large enough, it shouldn't matter much
+            axes.append(hist.axis.Regular(1, minnlo_ax.edges[0], minnlo_ax.edges[-1], 
+                underflow=minnlo_ax.traits.underflow, overflow=minnlo_ax.traits.overflow, name=ax))
+    # NOTE: This leaves out the underflow, but there can't be any underflow anyway
+    numh = hist.Hist(*axes, storage=numh._storage_type(), data=np.reshape(numh.view(), [ax.size for ax in axes]))
+print(numh.sum())
+print(minnloh.sum())
 
 print(numh)
 print(minnloh)
