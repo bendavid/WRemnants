@@ -77,7 +77,7 @@ cardTool.setLumiScale(args.lumiScale)
 
 
 
-pdfName = theory_tools.pdfMap["nnpdf31"]["name"]
+pdfName = theory_tools.pdfMapExtended["msht20"]["name"]
 cardTool.addSystematic(pdfName, 
     processes=unconstrainedProcs,
     mirror=True,
