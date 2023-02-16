@@ -125,7 +125,7 @@ def main(args):
         print("Using option --doStatOnly: the card was created with only mass weights and a dummy LnN syst on all processes")
         quit()
 
-    pdfName = theory_tools.pdfMap["nnpdf31"]["name"]
+    pdfName = theory_tools.pdfMap["msht20"]["name"]
     pdfAction = {x : lambda h: h[{"recoil_gen" : s[::hist.sum]}] for x in Zmumu_procs if "gen" not in x},
     cardTool.addSystematic(pdfName, 
         processes=Zmumu_procs,
