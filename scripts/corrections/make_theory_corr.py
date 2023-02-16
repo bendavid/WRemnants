@@ -26,8 +26,9 @@ args = parser.parse_args()
 
 logger = common.setup_logger("make_theory_corr", 4 if args.debug else 3, args.color_logger)
 
-def read_corr(procName, generator, corr_file):
+def read_corr(procName, generator, corr_files):
     charge = 0 if procName[0] == "Z" else (1 if "Wplus" in procName else -1)
+    corr_file = corr_files[0]
     if "scetlib" in generator:
         if "dyturbo" in generator == "scetlib_dyturbo":
             scetlib_files = [x for x in corr_files if pathlib.Path(x).suffix == ".pkl"]
@@ -57,18 +58,16 @@ def read_corr(procName, generator, corr_file):
         else:
             axnames = args.axes
             if not axnames:
-                axnames = ("y", "pt") if "2d" in corr_file else ("pt")
-            h = input_tools.read_dyturbo_hist(corr_file.split(":"), axes=axnames, charge=charge)
-            if "y" in h.axes.name:
-                h = hh.makeAbsHist(h, "y")
+                axnames = ("Y", "qT") if "2d" in corr_file else ("qT")
+            h = input_tools.read_dyturbo_hist(corr_files, axes=axnames, charge=charge)
+            if "Y" in h.axes.name:
+                h = hh.makeAbsHist(h, "Y")
 
-        vars_ax = h.axes["vars"] if "vars" in h.axes.name else hist.axis.Integer(0, 1, flow=False, name="vars") 
-        axes.append(vars_ax)
-
-        h5D = hist.Hist(*axes)
+        vars_ax = h.axes["vars"] if "vars" in h.axes.name else hist.axis.StrCategory(["central"], name="vars") 
+        hnD = hist.Hist(*h.axes, vars_ax)
         # Leave off the overflow, we won't use it anyway
-        h5D[...] = np.reshape(h.values(), h5D.shape)
-        numh = h5D
+        hnD[...] = np.reshape(h.values(), hnD.shape)
+        numh = hnD
     return numh
 
 if args.proc == "z":
@@ -108,7 +107,9 @@ if numh.ndim-1 < minnloh.ndim:
         "chargeVgen" : "charge",
     }
     axes = []
-    for ax in minnloh.axes.name:
+    # NOTE: This leaves out the flow, but there shouldn't be any for the theory pred anyway
+    data = numh.view()
+    for i, ax in enumerate(minnloh.axes.name):
         axname = ax_map[ax]
         if axname in numh.axes.name:
             axes.append(numh.axes[axname])
@@ -117,9 +118,12 @@ if numh.ndim-1 < minnloh.ndim:
             # TODO: Should be a little careful because this won't include overflow, as long as the
             # axis range is large enough, it shouldn't matter much
             axes.append(hist.axis.Regular(1, minnlo_ax.edges[0], minnlo_ax.edges[-1], 
-                underflow=minnlo_ax.traits.underflow, overflow=minnlo_ax.traits.overflow, name=ax))
-    # NOTE: This leaves out the underflow, but there can't be any underflow anyway
-    numh = hist.Hist(*axes, storage=numh._storage_type(), data=np.reshape(numh.view(), [ax.size for ax in axes]))
+                flow=True, name=ax))
+            data = np.expand_dims(data, i)
+    if numh.axes.name[-1] == "vars":
+        axes.append(numh.axes["vars"])
+
+    numh = hist.Hist(*axes, storage=numh._storage_type(), data=data)
 
 
 corrh_unc  = theory_corrections.make_corr_from_ratio(minnloh, numh)

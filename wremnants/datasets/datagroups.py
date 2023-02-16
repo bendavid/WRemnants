@@ -28,8 +28,8 @@ class datagroups(object):
             self.results = None
 
         if self.results:
-            self.dilepton = os.path.basename(self.results["meta_info"]["command"]).split()[0].startswith("mz")
-            self.wlike = os.path.basename(self.results["meta_info"]["command"]).split()[0].startswith("mz_wlike")
+            self.dilepton = os.path.basename(self.results["meta_info"]["command"].split()[0]).startswith("mz")
+            self.wlike = os.path.basename(self.results["meta_info"]["command"].split()[0]).startswith("mz_wlike")
 
         self.lumi = None
         if self.datasets and self.results:

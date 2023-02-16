@@ -44,6 +44,7 @@ parser.add_argument("--debug", action='store_true', help="Print debug output")
 parser.add_argument("--procFilters", type=str, nargs="*", help="Filter to plot (default no filter, only specify if you want a subset")
 parser.add_argument("--no_data", action='store_true', help="Don't plot data")
 parser.add_argument("--no_fill", action='store_true', help="Don't fill stack")
+parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend text")
 
 subparsers = parser.add_subparsers()
 variation = subparsers.add_parser("variation", help="Arguments for adding variation hists")
@@ -162,7 +163,8 @@ for h in args.hists:
             fill_between=args.fill_between if hasattr(args, "fill_between") else None, action=action, unstacked=unstack, 
             xlabel=xlabels[h], ylabel="Events/bin", rrange=args.rrange, binwnorm=1.0, lumi=groups.lumi,
             ratio_to_data=args.ratio_to_data, rlabel="Pred./Data" if args.ratio_to_data else "Data/Pred.",
-            xlim=args.xlim, no_fill=args.no_fill, cms_decor="Preliminary" if not args.no_data else "Simulation Preliminary") 
+            xlim=args.xlim, no_fill=args.no_fill, cms_decor="Preliminary" if not args.no_data else "Simulation Preliminary",
+            legtext_size=20*args.scaleleg)
     outfile = f"{h}_{args.baseName}_{args.channel}"+ (f"_{args.name_append}" if args.name_append else "")
     plot_tools.save_pdf_and_png(outdir, outfile)
     stack_yields = groups.make_yields_df(args.baseName, prednames, action)
