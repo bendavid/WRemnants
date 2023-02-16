@@ -22,7 +22,6 @@ def valsAndVariances(h1, h2, allowBroadcast=True, transpose=True):
         outshape = h1.view(flow=flow).shape if len(h1.shape) > len(h2.shape) else h2.view(flow=flow).shape
         # The transpose is because numpy works right to left in broadcasting, and we've put the
         # syst axis on the right
-        print(h1.shape, h2.shape)
         try:
             res = [np.broadcast_to(x.T if transpose else x, outshape[::-1] if transpose else outshape) for x in \
                     [h1.values(flow=flow), h2.values(flow=flow), h1.variances(flow=flow), h2.variances(flow=flow)]]
@@ -193,6 +192,7 @@ def rebinHist(h, axis_name, edges):
     
     hnew = hist.Hist(*axes, name=h.name, storage=h._storage_type())
 
+    # Offset from bin edge to avoid numeric issues
     offset = 0.5*np.min(ax.edges[1:]-ax.edges[:-1])
     edges_eval = edges+offset
     edge_idx = ax.index(edges_eval)
@@ -263,7 +263,6 @@ def findCommonBinning(hists, axis_idx):
 def rebinHistsToCommon(hists, axis_idx, keep_full_range=False):
     orig_axes = [h.axes[axis_idx] for h in hists]
     new_edges = findCommonBinning(hists, axis_idx)
-    print(new_edges)
     rebinned_hists = [rebinHist(h, ax.name, new_edges) for h,ax in zip(hists, orig_axes)]
 
     # TODO: This assumes that the range extension only happens in one direction,

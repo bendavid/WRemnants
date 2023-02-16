@@ -224,7 +224,6 @@ def readImpacts(rtfile, group, sort=True, add_total=True, stat=0.0):
 def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo, axes=None, charge=None, fix_nons_bin0=True):
     hsing = read_scetlib_hist(scetlib_resum, charge=charge)
     hfo_sing = read_scetlib_hist(scetlib_fo_sing, charge=charge)
-    #print(hfo_sing)
     if axes:
         newaxes = [*axes, "vars"]
         if charge:
