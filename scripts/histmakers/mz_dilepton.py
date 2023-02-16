@@ -20,7 +20,7 @@ parser.add_argument("--muScaleBins", type=int, default=1, help="Number of bins f
 parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
 parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
 parser.add_argument("--csvars_hist", action='store_true', help="Add CS variables to dilepton hist")
-parser.add_argument("--uncertainty-axes", type=str, nargs="*", default=["mll",], help="")
+parser.add_argument("--axes", type=str, nargs="*", default=["mll", "ptll"], help="")
 parser.add_argument("--finePtBinning", action='store_true', help="Use fine binning for ptll")
 parser.add_argument("--bias-calibration", action='store_true', help="Adjust central value by calibration bias hist")
 parser.add_argument("--smearing", action='store_true', help="Smear pT such that resolution matches data")
@@ -58,11 +58,11 @@ axes = {
     "charge": hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "charge") # categorical axes in python bindings always have an overflow bin, so use a regular
 }
 
-for a in args.uncertainty_axes:
+for a in args.axes:
     if a not in axes.keys():
         logger.error(f" {a} is not a known axes! Supported axes choices are {list(axes.keys())}")
 
-nominal_cols = args.uncertainty_axes
+nominal_cols = args.axes
 
 if args.csvars_hist:
     nominal_cols += ["cosThetaStarll", "phiStarll"]

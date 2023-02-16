@@ -111,7 +111,6 @@ def read_dyturbo_hist(filenames, path="", axes=("y", "pt"), charge=None):
     if charge is not None:
         charge_args = (2, -2., 2.) if charge != 0 else (1, 0, 1) 
         charge_axis = hist.axis.Regular(*charge_args, flow=False, name = "charge")
-        print(charge, charge_axis.index(charge))
         hnew = hist.Hist(*h.axes, charge_axis, storage=h._storage_type())
         hnew[...,charge_axis.index(charge)] = h.view(flow=True)
         return hnew
@@ -179,8 +178,7 @@ def read_dyturbo_file(filename, axnames=("Y", "qT"), charge=None):
         # Normally last line is the total cross section, also possible it isn't, so check the bin ranges
         offset = offset and data[-1,2*i] == data[0,2*i] and data[-1,2*i+1] == data[-2,2*i+1]
         bins = sorted(list(set(data[:len(data)-offset,2*i:2*i+2].flatten())))
-        #axes.append(hist.axis.Variable(bins, name=name, underflow=not (bins[0] == 0 and "pt" in name)))
-        axes.append(hist.axis.Variable(bins, name=name, flow=False))
+        axes.append(hist.axis.Variable(bins, name=name, underflow=not (bins[0] == 0 and "qT" in name)))
 
     h = hist.Hist(*axes, storage=hist.storage.Weight())
     h[...] = np.reshape(data[:len(data)-offset,len(axes)*2:], (*h.axes.size, 2))
@@ -231,8 +229,9 @@ def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo
         hfo_sing = hfo_sing.project(*newaxes)
         hsing = hsing.project(*newaxes)
     hfo = read_dyturbo_hist([dyturbo_fo], axes=axes if axes else sing.axes.name[:-1], charge=charge)
-    if "Y" in set(hfo.axes.name).intersection(set(hfo_sing.axes.name)).intersection(set(hsing.axes.name)):
-        hfo, hfo_sing, hsing = hh.rebinHistsToCommon([hfo, hfo_sing, hsing], "Y")
+    for ax in ["Y", "Q"]:
+        if ax in set(hfo.axes.name).intersection(set(hfo_sing.axes.name)).intersection(set(hsing.axes.name)):
+            hfo, hfo_sing, hsing = hh.rebinHistsToCommon([hfo, hfo_sing, hsing], ax)
     hnonsing = hh.addHists(-1*hfo_sing, hfo)
     if fix_nons_bin0:
         hnonsing[...,0,:] = np.zeros((*hnonsing[{"qT" : 0}].shape, 2))
