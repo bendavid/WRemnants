@@ -189,8 +189,8 @@ def add_qcdScaleByHelicityUnc_hist(results, df, helper, axes, cols, base_name="n
 def add_QCDbkg_jetPt_hist(results, df, nominal_axes, nominal_cols, base_name="nominal", jet_pt=30):
     # branching the rdataframe to add special filter, no need to return dQCDbkGVar
     name = datagroups2016.histName(base_name, syst=f"qcdJetPt{str(jet_pt)}")
-    dQCDbkGVar = df.Define("goodCleanJetsPt", f"goodCleanJetsNoPt && Jet_pt > {jet_pt}")
-    dQCDbkGVar = dQCDbkGVar.Filter("passMT || Sum(goodCleanJetsPt)>=1")
+    dQCDbkGVar = df.Define(f"goodCleanJetsPt{jet_pt}", f"goodCleanJetsNoPt && Jet_pt > {jet_pt}")
+    dQCDbkGVar = dQCDbkGVar.Filter(f"passMT || Sum(goodCleanJetsPt{jet_pt})>=1")
     qcdJetPt = dQCDbkGVar.HistoBoost(name, nominal_axes, nominal_cols)
     results.append(qcdJetPt)
                                         
