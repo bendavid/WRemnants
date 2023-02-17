@@ -1,7 +1,7 @@
 import argparse
 from utilities import output_tools, common, rdf_tools
 
-parser,initargs = common.common_parser()
+parser,initargs = common.common_parser(True)
 
 import narf
 import wremnants
@@ -18,6 +18,7 @@ import os
 data_dir = f"{pathlib.Path(__file__).parent}/../../wremnants/data/"
 parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency (legacy option for tests)")
 parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for luminosity in excess to 1 (e.g. 1.012 means 1.2\%)", default=1.012)
+parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency")
 parser.add_argument("--vqtTest", action="store_true", help="Test of isolation SFs dependence on V q_T projection (at the moment just for the W)")
 sfFileVqtTest = f"{data_dir}/testMuonSF/fits_2.root"
 parser.add_argument("--sfFileVqtTest", type=str, help="File with muon scale factors as a function of V q_T projection", default=sfFileVqtTest)
@@ -30,10 +31,7 @@ sfFileVqtTest = args.sfFileVqtTest
 if args.vqtTestIntegrated:
     sfFileVqtTest = f"{data_dir}/testMuonSF/IsolationEfficienciesCoarseBinning.root"
 
-if args.noColorLogger:
-    logger = common.setup_base_logger(os.path.basename(__file__), args.debug)
-else:
-    logger = common.setup_color_logger(os.path.basename(__file__), args.verbose)
+logger = common.setup_logger(__file__, args.verbose, args.color_logger)
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
@@ -129,6 +127,16 @@ if not args.no_recoil:
 
 # FIXME: Currently breaks the taus
 smearing_weights = False
+
+# TODO: Reduce duplication in mw and mz producers
+mass_fit = "massfit" in args.muonCorr
+if mass_fit:
+    mc_corrfile = "calibrationJMC_smeared_v718_nominalLBL.root" if "lbl" in args.muonCorr else "calibrationJMC_smeared_v718_nominal.root"
+    data_corrfile = "calibrationJDATA_smeared_v718_LBL.root" if "lbl" in args.muonCorr else "calibrationJDATA_smeared_v718.root"
+    jpsi_crctn_MC_helper = muon_validation.make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}")
+    jpsi_crctn_data_helper = muon_validation.make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}")
+    jpsi_crctn_MC_unc_helper = muon_validation.make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}")
+    jpsi_crctn_data_unc_helper = muon_validation.make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}")
 
 def build_graph(df, dataset):
     logger.info(f"build graph for dataset: {dataset.name}")
@@ -310,10 +318,10 @@ def build_graph(df, dataset):
 
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:
-                syst_tools.add_muonscale_hist(results, df, args.muonCorrEtaBins, args.muonCorrMag, isW, nominal_axes, nominal_cols)
+                df = syst_tools.add_muonscale_hist(results, df, args.muonCorrEtaBins, args.muonCorrMag, isW, nominal_axes, nominal_cols)
 
                 if smearing_weights:
-                    syst_tools.add_muonscale_smeared_hist(results, df, args.muonCorrEtaBins, args.muonCorrMag, isW, nominal_axes, nominal_cols_gen_smeared)
+                    df = syst_tools.add_muonscale_smeared_hist(results, df, args.muonCorrEtaBins, args.muonCorrMag, isW, nominal_axes, nominal_cols_gen_smeared)
 
                 # TODO: Move to syst_tools
                 netabins = args.muonCorrEtaBins
@@ -342,27 +350,50 @@ def build_graph(df, dataset):
                 results.append(dummyMuonScaleSystPerSeDown)
                 results.append(dummyMuonScaleSystPerSeUp)
                 if smearing_weights:
-                    df = df.Define("muonScaleSyst_responseWeights_tensor_gensmear", calibration_uncertainty_helper,
-                        [
-                        "goodMuons_qop0_gen_smeared",
-                        "goodMuons_pt0_gen_smeared_a_la_qop",
-                        "goodMuons_eta0_gen_smeared",
-                        "goodMuons_phi0_gen_smeared",
-                        "goodMuons_charge0_gen_smeared",
-                        "covMat_goodGenMuons0",
-                        "goodMuons_qop0_gen",
-                        "goodMuons_pt0_gen",
-                        "goodMuons_eta0_gen",
-                        "goodMuons_phi0_gen",
-                        "goodMuons_charge0_gen",
-                        "nominal_weight"
-                        ]
-                    )
-                    dummyMuonScaleSyst_responseWeights = df.HistoBoost(
-                        "nominal_muonScaleSyst_responseWeights_gensmear", 
-                        nominal_axes, [*nominal_cols_gen_smeared, "muonScaleSyst_responseWeights_tensor_gensmear"], 
-                        tensor_axes = calibration_uncertainty_helper.tensor_axes)
-                    results.append(dummyMuonScaleSyst_responseWeights)
+                    df = df.DefinePerSample("bool_true", "true")
+                    df = df.DefinePerSample("bool_false", "false")
+                    if args.muonCorr == "massfit":
+                        jpsi_unc_helper = jpsi_crctn_data_unc_helper if dataset.is_data else jpsi_crctn_MC_unc_helper
+                        df = df.Define("muonScaleSyst_responseWeights_tensor_gensmear", jpsi_unc_helper,
+                            [
+                            "goodMuons_qop0_gen",
+                            "goodMuons_phi0_gen",
+                            "goodMuons_eta0_gen",
+                            "goodMuons_qop0_gen_smeared",
+                            "goodMuons_phi0_gen_smeared",
+                            "goodMuons_charge0_gen_smeared",
+                            "goodMuons_eta0_gen_smeared",
+                            "goodMuons_pt0_gen_smeared",
+                            "covMat_goodGenMuons0",
+                            "nominal_weight",
+                            "bool_false"
+                            ]
+                        )
+                        dummyMuonScaleSyst_responseWeights = df.HistoBoost(
+                            "muonScaleSyst_responseWeights_gensmear", nominal_axes,
+                            [*nominal_cols_gen_smeared, "muonScaleSyst_responseWeights_tensor_gensmear"],
+                            tensor_axes = jpsi_unc_helper.tensor_axes
+                        )
+                        results.append(dummyMuonScaleSyst_responseWeights)
+                    else:
+                        df = df.Define("muonScaleSyst_responseWeights_tensor_gensmear", calibration_uncertainty_helper,
+                            [
+                            "goodMuons_qop0_gen_smeared",
+                            "goodMuons_pt0_gen_smeared_a_la_qop",
+                            "goodMuons_eta0_gen_smeared",
+                            "goodMuons_phi0_gen_smeared",
+                            "goodMuons_charge0_gen_smeared",
+                            "covMat_goodGenMuons0",
+                            "goodMuons_qop0_gen",
+                            "goodMuons_pt0_gen",
+                            "goodMuons_eta0_gen",
+                            "goodMuons_phi0_gen",
+                            "goodMuons_charge0_gen",
+                            "nominal_weight"
+                            ]
+                        )
+                        dummyMuonScaleSyst_responseWeights = df.HistoBoost("muonScaleSyst_responseWeights_gensmear", nominal_axes, [*nominal_cols_gen_smeared, "muonScaleSyst_responseWeights_tensor_gensmear"], tensor_axes = calibration_uncertainty_helper.tensor_axes)
+                        results.append(dummyMuonScaleSyst_responseWeights)
             if args.validationHists and smearing_weights:
                 df = wremnants.define_cols_for_smearing_weights(df, calibration_uncertainty_helper)
                 wremnants.make_hists_for_smearing_weights(df, nominal_axes, nominal_cols, results)

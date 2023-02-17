@@ -1,6 +1,6 @@
 from utilities import boostHistHelpers as hh,common,output_tools
 
-parser,initargs = common.common_parser()
+parser,initargs = common.common_parser(True)
 
 import narf
 import wremnants
@@ -13,20 +13,10 @@ import time
 import pdb
 import os
 
-f = next((x for x in parser._actions if x.dest == "pt"), None)
-if f:
-    newPtDefault = [34,26.,60.]
-    logging.warning("")
-    logging.warning(f" >>> Modifying default of {f.dest} from {f.default} to {newPtDefault}")
-    logging.warning("")
-    f.default = newPtDefault
-    
-args = parser.parse_args()
+parser = common.set_parser_default(parser, "pt", [34, 26, 60])
 
-if args.noColorLogger:
-    logger = common.setup_base_logger(os.path.basename(__file__), args.debug)
-else:
-    logger = common.setup_color_logger(os.path.basename(__file__), args.verbose)
+args = parser.parse_args()
+logger = common.setup_logger(__file__, args.verbose, args.color_logger)
     
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
@@ -156,8 +146,7 @@ def build_graph(df, dataset):
 
     if not args.no_recoil:
         df = recoilHelper.setup_MET(df, results, dataset, "Muon_pt[goodMuons]", "Muon_phi[goodMuons]", "Muon_pt[goodMuons]")
-        df = recoilHelper.setup_recoil_Z(df, results, dataset)
-        df = recoilHelper.auxHists(df, results)
+        df = recoilHelper.setup_recoil_Z(df, results, dataset, ["ZmumuPostVFP"])
         df = recoilHelper.apply_recoil_Z(df, results, dataset, ["ZmumuPostVFP"])  # produces corrected MET as MET_corr_rec_pt/phi
         #if isZ: df = recoilHelper.recoil_Z_unc_lowPU(df, results, "", "", axis_mt, axis_mll)
     else:

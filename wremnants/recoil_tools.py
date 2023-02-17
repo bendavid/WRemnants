@@ -57,7 +57,7 @@ class Recoil:
             setattr(ROOT.wrem, "recoil_correction_qTmax", 200)
             setattr(ROOT.wrem, "recoil_verbose", False)
             #self.recoil_qTbins = list(drange(0, 300, 0.5))
-            self.recoil_qTbins = list(drange(0, 300, 1)) + [300]
+            self.recoil_qTbins = list(drange(0, 100, 0.5)) + [100]
             
             self.met_xycorr_setup(f"wremnants/data/recoil/lowPU/{self.flavor}_{self.met}/met_xy_correction.json") # MET XY correction
             if self.flavor == "mumu": # todo ee
@@ -68,26 +68,27 @@ class Recoil:
                 logger.info(f"Apply recoil corrections for {self.met}")
                 flavor_ = "mumu" # both mu and mumu
                 self.addParametric("target_para", f"wremnants/data/recoil/lowPU/{flavor_}_{self.met}/recoil_data_para.json")
-                self.addParametric("source_para", f"wremnants/data/recoil/lowPU/{flavor_}_{self.met}/recoil_zmumu_para.json", doUnc=False)
+                self.addParametric("source_para", f"wremnants/data/recoil/lowPU/{flavor_}_{self.met}/recoil_zmumu_para.json", doUnc=True)
                 self.addParametric("target_perp", f"wremnants/data/recoil/lowPU/{flavor_}_{self.met}/recoil_data_perp.json")
-                self.addParametric("source_perp", f"wremnants/data/recoil/lowPU/{flavor_}_{self.met}/recoil_zmumu_perp.json", doUnc=False)
+                self.addParametric("source_perp", f"wremnants/data/recoil/lowPU/{flavor_}_{self.met}/recoil_zmumu_perp.json", doUnc=True)
                 setattr(ROOT.wrem, "applyRecoilCorrection", True)
+                
+                # syst variations should contain target/source and para/perp, Needed for weights
+                self.addParametricUnc("target_para_bkg", f"wremnants/data/recoil/lowPU/{flavor_}_{self.met}/recoil_data_para_ttbarUp.json")
+                self.addParametricUnc("target_para_bkg", f"wremnants/data/recoil/lowPU/{flavor_}_{self.met}/recoil_data_para_ttbarDown.json")
+                self.addParametricUnc("target_para_bkg", f"wremnants/data/recoil/lowPU/{flavor_}_{self.met}/recoil_data_para_ewkUp.json")
+                self.addParametricUnc("target_para_bkg", f"wremnants/data/recoil/lowPU/{flavor_}_{self.met}/recoil_data_para_ewkDown.json")
+                self.addParametricUnc("target_perp_bkg", f"wremnants/data/recoil/lowPU/{flavor_}_{self.met}/recoil_data_perp_ttbarUp.json")
+                self.addParametricUnc("target_perp_bkg", f"wremnants/data/recoil/lowPU/{flavor_}_{self.met}/recoil_data_perp_ttbarDown.json")
+                self.addParametricUnc("target_perp_bkg", f"wremnants/data/recoil/lowPU/{flavor_}_{self.met}/recoil_data_perp_ewkUp.json")
+                self.addParametricUnc("target_perp_bkg", f"wremnants/data/recoil/lowPU/{flavor_}_{self.met}/recoil_data_perp_ewkDown.json")
+                
             else:
                 logger.warning(f"Recoil corrections for {self.met} not available, use default XY-corrected MET")
                 setattr(ROOT.wrem, "applyRecoilCorrection", False)
                 
-            # syst variations should contain target/source and para/perp, Needed for weights
-            #self.addParametricUnc("target_perp_bkg", "wremnants/data/lowPU/recoil/singlemuon_perp_TTbar_results_refit.json")
-            #self.addParametricUnc("target_perp_bkg", "wremnants/data/lowPU/recoil/singlemuon_perp_EWK_results_refit.json")
-            #self.addParametricUnc("target_perp_bkg", "wremnants/data/lowPU/recoil/singlemuon_perp_ZZ_results_refit.json")
-            #self.addParametricUnc("target_para_bkg", "wremnants/data/lowPU/recoil/singlemuon_para_TTbar_results_refit.json")
-            #self.addParametricUnc("target_para_bkg", "wremnants/data/lowPU/recoil/singlemuon_para_EWK_results_refit.json")
-            #self.addParametricUnc("target_para_bkg", "wremnants/data/lowPU/recoil/singlemuon_para_ZZ_results_refit.json")
-          
-            #self.addBinned("target_para", "/eos/user/j/jaeyserm/www/wmass/lowPU/recoilCorrection/recoil_mumu_RawPFMET/singlemuon_para/fits_v0/results.json")
-            #self.addBinned("source_para", "/eos/user/j/jaeyserm/www/wmass/lowPU/recoilCorrection/recoil_mumu_RawPFMET/dymumu_para/fits_v0/results.json")
-            #self.addBinned("target_perp", "/eos/user/j/jaeyserm/www/wmass/lowPU/recoilCorrection/recoil_mumu_RawPFMET/singlemuon_perp/fits_v1/results.json")
-            #self.addBinned("source_perp", "/eos/user/j/jaeyserm/www/wmass/lowPU/recoilCorrection/recoil_mumu_RawPFMET/dymumu_perp/fits_v0/results.json")
+            
+
             
 
             
@@ -166,56 +167,68 @@ class Recoil:
         nGauss = jsIn['nGauss']
         recoil_param_nGauss = getattr(ROOT.wrem, "recoil_param_nGauss")
         recoil_param_funcs = getattr(ROOT.wrem, "recoil_param_funcs")
+        recoil_param_funcs_ = getattr(ROOT.wrem, "recoil_param_funcs_")
         recoil_param_nGauss.insert((tag, nGauss))
         
         for iGauss in range(1, nGauss+1):
             
             label = "mean%d" % iGauss
-            func = ROOT.TF1("%s_%s" % (tag, label), jsIn[label]['func'], 0, 300)
-            for iParam in range(0, jsIn[label]['nParams']): func.SetParameter(iParam, jsIn[label]['p%d' % iParam])
-            recoil_param_funcs.insert((func.GetName(), func))
+            pars = [jsIn[label]['p%d' % iParam] for iParam in range(0, jsIn[label]['nParams'])]
+            funcName = "%s_%s" % (tag, label)
+            funcExpr = jsIn[label]['func']
+            ROOT.wrem.insertFunction(funcName, funcExpr, pars)
+            
             
             label = "sigma%d" % iGauss
-            func = ROOT.TF1("%s_%s" % (tag, label), jsIn[label]['func'], 0, 300)
-            for iParam in range(0, jsIn[label]['nParams']): func.SetParameter(iParam, jsIn[label]['p%d' % iParam])
-            recoil_param_funcs.insert((func.GetName(), func))
+            pars = [jsIn[label]['p%d' % iParam] for iParam in range(0, jsIn[label]['nParams'])]
+            funcName = "%s_%s" % (tag, label)
+            funcExpr = jsIn[label]['func']
+            ROOT.wrem.insertFunction(funcName, funcExpr, pars)
             
             if iGauss == nGauss: continue
             label = "norm%d" % iGauss
-            func = ROOT.TF1("%s_%s" % (tag, label), jsIn[label]['func'], 0, 300)
-            for iParam in range(0, jsIn[label]['nParams']): func.SetParameter(iParam, jsIn[label]['p%d' % iParam])
-            recoil_param_funcs.insert((func.GetName(), func))
+            pars = [jsIn[label]['p%d' % iParam] for iParam in range(0, jsIn[label]['nParams'])]
+            funcName = "%s_%s" % (tag, label)
+            funcExpr = jsIn[label]['func']
+            ROOT.wrem.insertFunction(funcName, funcExpr, pars)
             
         
         # do statistical variations
         if not doUnc: return
         nStatVars = jsIn['nStatVars']
         recoil_param_nStat = getattr(ROOT.wrem, "recoil_param_nStat")
-        recoil_param_nStat.insert((tag, nStatVars))
+        recoil_param_nStat.insert((tag, nStatVars*2))
+        iiStat = 0
+        test = {}
         for nStat in range(0, nStatVars):
-            statLabel = "stat%d_p" % nStat
-            systLabel = "syst%d" % nStat
-            for iGauss in range(1, nGauss+1):
-                
-                label = "mean%d" % iGauss
-                func = ROOT.TF1("%s_%s_%s" % (tag, label, systLabel), jsIn[label]['func'], 0, 300)
-                for iParam in range(0, jsIn[label]['nParams']): func.SetParameter(iParam, jsIn[statLabel][label]['p%d' % iParam])
-                recoil_param_funcs.insert((func.GetName(), func))
-                
-                label = "sigma%d" % iGauss
-                func = ROOT.TF1("%s_%s_%s" % (tag, label, systLabel), jsIn[label]['func'], 0, 300)
-                for iParam in range(0, jsIn[label]['nParams']): func.SetParameter(iParam, jsIn[statLabel][label]['p%d' % iParam])
-                recoil_param_funcs.insert((func.GetName(), func))
-                
-                if iGauss == nGauss: continue
-                label = "norm%d" % iGauss
-                func = ROOT.TF1("%s_%s_%s" % (tag, label, systLabel), jsIn[label]['func'], 0, 300)
-                for iParam in range(0, jsIn[label]['nParams']): func.SetParameter(iParam, jsIn[statLabel][label]['p%d' % iParam])
-                recoil_param_funcs.insert((func.GetName(), func))        
+            for statVar in ["p", "m"]:
+                systLabel = "syst%d" % iiStat
+                statLabel = "stat%d_%s" % (nStat, statVar)
+                for iGauss in range(1, nGauss+1):
+                    
+                    label = "mean%d" % iGauss
+                    pars = [jsIn[statLabel][label]['p%d' % iParam] for iParam in range(0, jsIn[label]['nParams'])]
+                    funcName = "%s_%s_%s" % (tag, label, systLabel)
+                    funcExpr = jsIn[label]['func']
+                    ROOT.wrem.insertFunction(funcName, funcExpr, pars)
+
+                    label = "sigma%d" % iGauss
+                    pars = [jsIn[statLabel][label]['p%d' % iParam] for iParam in range(0, jsIn[label]['nParams'])]
+                    funcName = "%s_%s_%s" % (tag, label, systLabel)
+                    funcExpr = jsIn[label]['func']
+                    ROOT.wrem.insertFunction(funcName, funcExpr, pars)
+
+                    if iGauss == nGauss: continue
+                    label = "norm%d" % iGauss
+                    pars = [jsIn[statLabel][label]['p%d' % iParam] for iParam in range(0, jsIn[label]['nParams'])]
+                    funcName = "%s_%s_%s" % (tag, label, systLabel)
+                    funcExpr = jsIn[label]['func']
+                    ROOT.wrem.insertFunction(funcName, funcExpr, pars)
+                iiStat += 1
 
     def addParametricUnc(self, tag, fIn):
     
-        logger.info(f"Add recoil parametric set for {tag}")
+        logger.info(f"Add recoil parametric uncertainty set for {tag}")
         with open(fIn) as f: jsIn = json.load(f)
         nGauss = jsIn['nGauss']
         recoil_param_nGauss = getattr(ROOT.wrem, "recoil_param_nGauss")
@@ -233,20 +246,23 @@ class Recoil:
         for iGauss in range(1, nGauss+1):
             
             label = "mean%d" % iGauss
-            func = ROOT.TF1("%s_%s_%s" % (tag, label, systLabel), jsIn[label]['func'], 0, 300)
-            for iParam in range(0, jsIn[label]['nParams']): func.SetParameter(iParam, jsIn[label]['p%d' % iParam])
-            recoil_param_funcs.insert((func.GetName(), func))
+            pars = [jsIn[label]['p%d' % iParam] for iParam in range(0, jsIn[label]['nParams'])]
+            funcName = "%s_%s_%s" % (tag, label, systLabel)
+            funcExpr = jsIn[label]['func']
+            ROOT.wrem.insertFunction(funcName, funcExpr, pars)
             
             label = "sigma%d" % iGauss
-            func = ROOT.TF1("%s_%s_%s" % (tag, label, systLabel), jsIn[label]['func'], 0, 300)
-            for iParam in range(0, jsIn[label]['nParams']): func.SetParameter(iParam, jsIn[label]['p%d' % iParam])
-            recoil_param_funcs.insert((func.GetName(), func))
+            pars = [jsIn[label]['p%d' % iParam] for iParam in range(0, jsIn[label]['nParams'])]
+            funcName = "%s_%s_%s" % (tag, label, systLabel)
+            funcExpr = jsIn[label]['func']
+            ROOT.wrem.insertFunction(funcName, funcExpr, pars)
             
             if iGauss == nGauss: continue
             label = "norm%d" % iGauss
-            func = ROOT.TF1("%s_%s_%s" % (tag, label, systLabel), jsIn[label]['func'], 0, 300)
-            for iParam in range(0, jsIn[label]['nParams']): func.SetParameter(iParam, jsIn[label]['p%d' % iParam])
-            recoil_param_funcs.insert((func.GetName(), func))
+            pars = [jsIn[label]['p%d' % iParam] for iParam in range(0, jsIn[label]['nParams'])]
+            funcName = "%s_%s_%s" % (tag, label, systLabel)
+            funcExpr = jsIn[label]['func']
+            ROOT.wrem.insertFunction(funcName, funcExpr, pars)
             
         
         
@@ -372,7 +388,7 @@ class Recoil:
         return df
     
    
-    def setup_recoil_Z(self, df, results, dataset):
+    def setup_recoil_Z(self, df, results, dataset, datasets_to_apply=[]):
         '''
         Setup the uncorrected recoil components
         '''
@@ -383,6 +399,12 @@ class Recoil:
         df = df.Define("Z_mom2", "Lep1_mom2 + Lep2_mom2")
         df = df.Define("qT", "Z_mom2.R()")
         df = df.Define("qTbin", "wrem::getqTbin(qT)")
+        
+        if dataset.name in datasets_to_apply:
+            df = df.Define("qTweight_", "wrem::qTweight(qT)")
+            df = df.Define("nominal_weight_qTrw", "nominal_weight*qTweight_")
+        else:
+            df = df.Alias("nominal_weight_qTrw", "nominal_weight")
         
         # uncorrected recoil
         df = df.Define("recoil_uncorr", "wrem::recoilComponents(MET_uncorr_pt, MET_uncorr_phi, qT, Z_mom2.Phi())")
@@ -426,6 +448,12 @@ class Recoil:
         results.append(df.HistoBoost("recoil_corr_xy_perp", [self.axis_recoil_perp], ["recoil_corr_xy_perp", "nominal_weight"]))
         results.append(df.HistoBoost("recoil_corr_xy_para_qT_perp", [self.axis_recoil_para_qT], ["recoil_corr_xy_para_qT_perp", "nominal_weight"]))
         
+        results.append(df.HistoBoost("recoil_corr_xy_magn_qTrw", [self.axis_recoil_magn], ["recoil_corr_xy_magn", "nominal_weight_qTrw"]))
+        results.append(df.HistoBoost("recoil_corr_xy_para_qTrw", [self.axis_recoil_para], ["recoil_corr_xy_para", "nominal_weight_qTrw"]))
+        results.append(df.HistoBoost("recoil_corr_xy_para_qT_qTrw", [self.axis_recoil_para_qT], ["recoil_corr_xy_para_qT", "nominal_weight_qTrw"]))
+        results.append(df.HistoBoost("recoil_corr_xy_perp_qTrw", [self.axis_recoil_perp], ["recoil_corr_xy_perp", "nominal_weight_qTrw"]))
+        results.append(df.HistoBoost("MET_corr_xy_pt_qTrw", [self.axis_MET_pt], ["MET_corr_xy_pt", "nominal_weight_qTrw"]))
+        
 
         # for the correction, binned in qT
         results.append(df.HistoBoost("recoil_uncorr_magn_qTbinned", [self.axis_qTbinned, self.axis_recoil_magn_fine], ["qT", "recoil_uncorr_magn", "nominal_weight"]))
@@ -442,11 +470,15 @@ class Recoil:
         results.append(df.HistoBoost("recoil_corr_xy_para_qTbinned", [self.axis_qTbinned, self.axis_recoil_para_fine], ["qT", "recoil_corr_xy_para", "nominal_weight"]))
         results.append(df.HistoBoost("recoil_corr_xy_para_qT_qTbinned", [self.axis_qTbinned, self.axis_recoil_para_qT_fine], ["qT", "recoil_corr_xy_para_qT", "nominal_weight"]))
         results.append(df.HistoBoost("recoil_corr_xy_perp_qTbinned", [self.axis_qTbinned, self.axis_recoil_perp_fine], ["qT", "recoil_corr_xy_perp", "nominal_weight"]))
+        
+        results.append(df.HistoBoost("recoil_corr_xy_magn_qTbinned_qTrw", [self.axis_qTbinned, self.axis_recoil_magn_fine], ["qT", "recoil_corr_xy_magn", "nominal_weight_qTrw"]))
+        results.append(df.HistoBoost("recoil_corr_xy_para_qTbinned_qTrw", [self.axis_qTbinned, self.axis_recoil_para_fine], ["qT", "recoil_corr_xy_para", "nominal_weight_qTrw"]))
+        results.append(df.HistoBoost("recoil_corr_xy_para_qT_qTbinned_qTrw", [self.axis_qTbinned, self.axis_recoil_para_qT_fine], ["qT", "recoil_corr_xy_para_qT", "nominal_weight_qTrw"]))
+        results.append(df.HistoBoost("recoil_corr_xy_perp_qTbinned_qTrw", [self.axis_qTbinned, self.axis_recoil_perp_fine], ["qT", "recoil_corr_xy_perp", "nominal_weight_qTrw"]))
+        
             
         results.append(df.HistoBoost("qT", [self.axis_qT], ["qT", "nominal_weight"]))
-        
-        results.append(df.HistoBoost("recoil_corr_xy_para_qTbinned_new", [self.axis_qTbinned, self.axis_recoil_para_perp], ["qT", "recoil_corr_xy_para", "nominal_weight"]))
-        results.append(df.HistoBoost("recoil_corr_xy_perp_qTbinned_new", [self.axis_qTbinned, self.axis_recoil_para_perp], ["qT", "recoil_corr_xy_perp", "nominal_weight"]))
+
         
         return df
 
@@ -526,8 +558,8 @@ class Recoil:
             df = df.Define("MET_corr_rec_pt", "MET_corr_rec[0]")
             df = df.Define("MET_corr_rec_phi", "MET_corr_rec[1]")
             
-            df = df.Define("qTweight_", "wrem::qTweight(qT)")
-            df = df.Define("nominal_weight_qTrw", "nominal_weight*qTweight_")
+            #df = df.Define("qTweight_", "wrem::qTweight(qT)")
+            #df = df.Define("nominal_weight_qTrw", "nominal_weight*qTweight_")
             
         else:
             df = df.Alias("recoil_corr_rec_magn", "recoil_corr_xy_magn")
@@ -537,7 +569,7 @@ class Recoil:
             df = df.Alias("MET_corr_rec_pt", "MET_corr_xy_pt")
             df = df.Alias("MET_corr_rec_phi", "MET_corr_xy_phi")
             df = df.Alias("recoil_corr_rec_para_qT_perp", "recoil_corr_xy_para_qT_perp")
-            df = df.Alias("nominal_weight_qTrw", "nominal_weight")
+            #df = df.Alias("nominal_weight_qTrw", "nominal_weight")
         
         #df = df.Filter("recoil_corr_rec_para_qT < 40 && recoil_corr_rec_para_qT > -40")
         #df = df.Filter("recoil_corr_rec_perp < 40 && recoil_corr_rec_perp > -40")
@@ -771,11 +803,14 @@ class Recoil:
                 # qT reweighted uncertainties
                 recoilTensorWeights_qTrw = f"recoilTensorWeights_qTrw_{tag}"
                 df = df.Define(recoilTensorWeights_qTrw, "Eigen::TensorFixedSize<double, Eigen::Sizes<%d>> res; auto w = nominal_weight_qTrw*%s; std::copy(std::begin(w), std::end(w), res.data()); return res;" % (nVars, recoilWeights))
-                results.append(df.HistoBoost(f"recoil_corr_rec_magn_qTrw_recoilSyst_{tag}", [self.axis_recoil_magn], ["recoil_corr_rec_magn", recoilTensorWeights_qTrw]))
-                results.append(df.HistoBoost(f"recoil_corr_rec_para_qTrw_recoilSyst_{tag}", [self.axis_recoil_para], ["recoil_corr_rec_para", recoilTensorWeights_qTrw]))
-                results.append(df.HistoBoost(f"recoil_corr_rec_para_qT_qTrw_recoilSyst_{tag}", [self.axis_recoil_para_qT], ["recoil_corr_rec_para_qT", recoilTensorWeights_qTrw]))
-                results.append(df.HistoBoost(f"recoil_corr_rec_perp_qTrw_recoilSyst_{tag}", [self.axis_recoil_perp], ["recoil_corr_rec_perp", recoilTensorWeights_qTrw]))
-                results.append(df.HistoBoost(f"MET_corr_rec_pt_qTrw_recoilSyst_{tag}", [self.axis_MET_pt], ["MET_corr_rec_pt", recoilTensorWeights_qTrw]))
+                for hName, col, ax in zip(hNames, cols, axes):
+                    results.append(df.HistoBoost(f"{hName}_qTrw_recoilSyst_{tag}", ax if isinstance(col, list) else [ax], (col if isinstance(col, list) else [col]) + [recoilTensorWeights_qTrw]))
+                
+                #results.append(df.HistoBoost(f"recoil_corr_rec_magn_qTrw_recoilSyst_{tag}", [self.axis_recoil_magn], ["recoil_corr_rec_magn", recoilTensorWeights_qTrw]))
+                #results.append(df.HistoBoost(f"recoil_corr_rec_para_qTrw_recoilSyst_{tag}", [self.axis_recoil_para], ["recoil_corr_rec_para", recoilTensorWeights_qTrw]))
+                #results.append(df.HistoBoost(f"recoil_corr_rec_para_qT_qTrw_recoilSyst_{tag}", [self.axis_recoil_para_qT], ["recoil_corr_rec_para_qT", recoilTensorWeights_qTrw]))
+                #results.append(df.HistoBoost(f"recoil_corr_rec_perp_qTrw_recoilSyst_{tag}", [self.axis_recoil_perp], ["recoil_corr_rec_perp", recoilTensorWeights_qTrw]))
+                #results.append(df.HistoBoost(f"MET_corr_rec_pt_qTrw_recoilSyst_{tag}", [self.axis_MET_pt], ["MET_corr_rec_pt", recoilTensorWeights_qTrw]))
                
         elif self.parametric and not smearWeights:
         

@@ -21,6 +21,8 @@ def getDatasets(maxFiles=-1, filt=None, flavor="",base_path=None):
             base_path = "/scratch/shared/lowPU/"
         elif "mit.edu" in hostname:
             base_path = "/data/submit/cms/store/wmass/lowPU/"
+        elif "cmswmass2.cern.ch" in hostname:
+            base_path = "/data/shared/lowPU/"
 
     logger.info(f"Loading samples from {base_path}.")
 

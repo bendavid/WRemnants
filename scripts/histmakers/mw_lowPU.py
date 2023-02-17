@@ -3,7 +3,7 @@ from utilities import output_tools
 from utilities import common as common
 
 parser,initargs = common.common_parser()
-parser.add_argument("--flavor", type=str, choices=["e", "mu"], help="Flavor (ee or mumu)", default="mumu")
+parser.add_argument("--flavor", type=str, choices=["e", "mu"], help="Flavor (ee or mumu)", default="mu")
 args = parser.parse_args()
 
 
@@ -25,7 +25,10 @@ corr_helpers = theory_corrections.load_corr_helpers(common.wprocs_lowpu, args.th
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
 datasets = wremnants.datasetsLowPU.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, flavor=flavor)
-for d in datasets: logging.info(f"Dataset {d.name}")
+
+logger = common.setup_logger(__file__, args.verbose, args.color_logger)
+
+for d in datasets: logger.info(f"Dataset {d.name}")
 
 # load lowPU specific libs
 #ROOT.gInterpreter.AddIncludePath(f"{pathlib.Path(__file__).parent}/include/")
