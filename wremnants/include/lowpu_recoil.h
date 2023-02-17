@@ -27,8 +27,9 @@ std::map<std::string, TH1D*> recoil_hists_param;
 // recoil parametric maps
 std::map<std::string, int> recoil_param_nGauss;
 
-
-std::map<std::string, TF1*> recoil_param_funcs;
+std::vector<TF1*> recoil_param_funcs_;
+std::map<std::string, TF1> recoil_param_funcs__;
+std::unordered_map<std::string, TF1*> recoil_param_funcs;
 std::map<std::string, int> recoil_param_nStat;
 
 std::map<std::string, int> recoil_binned_nGauss;
@@ -54,55 +55,18 @@ std::vector<float> qTrw_weights;
 bool applyMETxyCorrection = false;
 std::vector<float> met_xy_corr_x_data_nom, met_xy_corr_y_data_nom, met_xy_corr_x_mc_nom, met_xy_corr_y_mc_nom;
 
+void insertFunction(char* name, char* expr, std::vector<float> pars) {
+    
+    auto func = new TF1(name, expr, 0, 300);
+    for(int j=0; j<pars.size(); j++) {
+        func->SetParameter(j, pars.at(j));
+    }
+    recoil_param_funcs.insert({name, func});
+}
 
 void recoil_init(char* name) {
     
-        
-    
-    TH3D *h3;
-    TH1D *h1;
-    
-    
-    TFile *recoil_fits_Z = new TFile(name, "READ");
-    
-    /*
-    for(TKey *key: ROOT::RangeStaticCast<TKey*>(*recoil_fits_Z->GetListOfKeys())) {
-        
-        auto *h = recoil_fits_Z->Get(key->GetName());
-        if(strncmp(key->GetClassName(), "TH3D", 4) == 0) {
-            cout << "Load recoil histo " << key->GetName() << endl;
-            h3 = (TH3D*)(recoil_fits_Z->Get(key->GetName()));
-            recoil_hists.insert({key->GetName(), h3});
-        }
-    }
-    
-    */
 
- 
-    h3 = (TH3D*)recoil_fits_Z->Get("mc_para");
-    recoil_hists.insert({h3->GetName(), h3});
-    
-    h3 = (TH3D*)recoil_fits_Z->Get("mc_perp");
-    recoil_hists.insert({h3->GetName(), h3});
-    
-    h3 = (TH3D*)recoil_fits_Z->Get("data_para");
-    recoil_hists.insert({h3->GetName(), h3});
-    
-    h3 = (TH3D*)recoil_fits_Z->Get("data_perp");
-    recoil_hists.insert({h3->GetName(), h3});
-/*
-    h1 = (TH1D*)recoil_fits_Z_param->Get("para_mc");
-    recoil_hists_param.insert({h1->GetName(), h1});
-    
-    h1 = (TH1D*)recoil_fits_Z_param->Get("perp_mc");
-    recoil_hists_param.insert({h1->GetName(), h1});
-    
-    h1 = (TH1D*)recoil_fits_Z_param->Get("para_data");
-    recoil_hists_param.insert({h1->GetName(), h1});
-    
-    h1 = (TH1D*)recoil_fits_Z_param->Get("perp_data");
-    recoil_hists_param.insert({h1->GetName(), h1});
-*/
 }
 
 
@@ -777,6 +741,7 @@ GaussianSum constructParametricGauss(string tag, double qT, int syst=-1) {
                 if(norm < 0) norm = 0;
             }
             mean = recoil_param_funcs[tag + "_mean" + to_string(i) + systLabel]->Eval(qT);
+            //if(tag == "target_para" or tag == "source_para") mean -= qT;
             sigma = recoil_param_funcs[tag + "_sigma" + to_string(i) + systLabel]->Eval(qT);
             gauss.addTerm(mean, sigma, norm);
             //cout << " " << tag << " qT=" << qT << "  iGauss=" << i << " norm=" << norm << " mean=" << mean << " sigma=" << sigma << endl;
@@ -850,8 +815,8 @@ Vec_f recoilCorrectionParametric(double para, double perp, double qT, string sys
     else dy_para = constructParametricGauss("source_para", qT);
     if(systIdx != -1 and systTag == "source_perp") dy_perp = constructParametricGauss("source_perp", qT, systIdx);
     else dy_perp = constructParametricGauss("source_perp", qT);
-
-    double pVal_para_dy = dy_para.evalCDF(para + qT); // pdfs are parameterized on para + qT - qTcorrMean, i.e. to have mean=0
+ 
+    double pVal_para_dy = dy_para.evalCDF(para + qT); //  // pdfs are parameterized on para + qT - qTcorrMean, i.e. to have mean=0
     double pVal_perp_dy = dy_perp.evalCDF(perp);
     
     

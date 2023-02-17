@@ -4,9 +4,8 @@ from utilities import boostHistHelpers as hh, common
 from wremnants import theory_tools
 from wremnants.datasets.datagroups import datagroups2016
 import collections.abc
-import logging
 
-logger = common.child_logger(__name__)
+logging = common.child_logger(__name__)
 
 def syst_transform_map(base_hist, hist_name):
     pdfInfo = theory_tools.pdfMapExtended 
@@ -51,7 +50,7 @@ def syst_transform_map(base_hist, hist_name):
         return h if not ("vars" in h.axes.name and h.axes["vars"].size > i) else h[{"vars" : i}]
 
     def projAx(hname):
-        return [hname] if hname != "unrolled" else ["pt", "eta"]
+        return hname.split("-")
 
     transforms.update({
         "resumFOScaleUp" : {
@@ -133,17 +132,6 @@ def scale_helicity_hist_to_variations(scale_hist, sum_axes=[], rebinPtV=None):
                                      name = out_name, data = systhist)
 
     return scale_variation_hist 
-
-def make_scale_hist(df, axes, cols, hname=""):
-    scaleHist = df.HistoBoost("qcdScale" if hname=="" else f"{hname}_qcdScale", axes, [*cols, "scaleWeights_tensor_wnom"], tensor_axes=scale_tensor_axes)
-    return scaleHist
-
-    systhist = scale_hist.view(flow=True) - nom_scale_hist.view(flow=True) + expandnom
-
-    scale_variation_hist = hist.Hist(*scale_hist.axes, storage = scale_hist._storage_type(), 
-                                     name = out_name, data = systhist)
-
-    return scale_variation_hist
 
 def uncertainty_hist_from_envelope(h, proj_ax, entries):
     hdown = hh.syst_min_or_max_env_hist(h, proj_ax, "vars", entries, no_flow=["ptVgen"], do_min=True)

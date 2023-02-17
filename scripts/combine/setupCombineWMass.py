@@ -16,9 +16,11 @@ scriptdir = f"{pathlib.Path(__file__).parent}"
 def make_parser(parser=None):
     if not parser:
         parser = common.common_parser_combine()
-    parser.add_argument("-v", "--fitvar", help="Variable to fit", default="eta_pt", choices=sel.hist_map.keys())
+    parser.add_argument("--fitvar", help="Variable to fit", default="pt-eta")
     parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow). Equivalent to --excludeNuisances '.*effSystTnP|.*effStatTnP' ")
+    parser.add_argument("--ewUnc", action='store_true', help="Include EW uncertainty")
     parser.add_argument("-p", "--pseudoData", type=str, help="Hist to use as pseudodata")
+    parser.add_argument("--pseudoDataIdx", type=int, default=0, help="Variation index to use as pseudodata")
     parser.add_argument("--pseudodata-file", type=str, help="Input file for pseudodata (if it should be read from a different file", default=None)
     parser.add_argument("-x",  "--excludeNuisances", type=str, default="", help="Regular expression to exclude some systematics from the datacard")
     parser.add_argument("-k",  "--keepNuisances", type=str, default="", help="Regular expression to keep some systematics, overriding --excludeNuisances. Can be used to keep only some systs while excluding all the others with '.*'")
@@ -32,11 +34,11 @@ def make_parser(parser=None):
     return parser
 
 def main(args):
-    logger = common.setup_base_logger('setupCombineWMass', args.debug)
+    logger = common.setup_logger(__file__, args.verbose, args.color_logger)
 
     datagroups = datagroups2016(args.inputFile)
     if args.xlim:
-        if args.fitvar == "eta_pt":
+        if len(args.fitvar.split("-")) > 1:
             raise ValueError("Restricting the x axis not supported for 2D hist")
         s = hist.tag.Slicer()
         datagroups.setGlobalAction(lambda h: h[{args.fitvar : s[complex(0, args.xlim[0]):complex(0, args.xlim[1])]}])
@@ -51,7 +53,7 @@ def main(args):
     else:
         name = "ZMassDilepton"
 
-    tag = name
+    tag = name+"_"+args.fitvar.replace("-","_")
     if args.doStatOnly:
         tag += "_statOnly"
 
@@ -65,11 +67,9 @@ def main(args):
     templateDir = f"{scriptdir}/Templates/WMass"
     cardTool = CardTool.CardTool(f"{outfolder}/{name}_{{chan}}.txt")
     cardTool.setNominalTemplate(f"{templateDir}/main.txt")
-    cardTool.setNominalName(sel.hist_map[args.fitvar])
     if args.combineChannels:
         cardTool.setChannels(["combined"])
-    if args.fitvar not in ["eta_pt", "ptll_mll"]:
-        cardTool.setProjectionAxes([args.fitvar])
+    cardTool.setProjectionAxes(args.fitvar.split("-"))
     if args.noHist:
         cardTool.skipHistograms()
     cardTool.setOutfile(os.path.abspath(f"{outfolder}/{name}CombineInput.root"))
@@ -82,7 +82,7 @@ def main(args):
     if args.skipOtherChargeSyst:
         cardTool.setSkipOtherChargeSyst()
     if args.pseudoData:
-        cardTool.setPseudodata(args.pseudoData)
+        cardTool.setPseudodata(args.pseudoData, args.pseudoDataIdx)
         if args.pseudodata_file:
             cardTool.setPseudodataDatagroups(datagroups2016(args.pseudodata_file))
 
@@ -170,6 +170,17 @@ def main(args):
         passToFakes=passSystToFakes,
     )
 
+    if args.ewUnc:
+        cardTool.addSystematic(f"horacenloewCorr_unc", 
+            processes=single_v_samples,
+            mirror=True,
+            group="theory_ew",
+            systAxes=["systIdx"],
+            labelsByAxis=["horacenloewCorr_unc"],
+            skipEntries=[(0, -1), (2, -1)],
+            passToFakes=passSystToFakes,
+        )
+
     if not args.noEfficiencyUnc:
         chargeDependentSteps = common.muonEfficiency_chargeDependentSteps
         effTypesNoIso = ["reco", "tracking", "idip", "trigger"]
@@ -230,8 +241,8 @@ def main(args):
     msv_config_dict = {
         "smearing_weights":{
             "hist_name": "muonScaleSyst_responseWeights",
-            "syst_axes": ["downUpVar"],
-            "syst_axes_labels": ["downUpVar"]
+            "syst_axes": ["unc", "downUpVar"],
+            "syst_axes_labels": ["unc", "downUpVar"]
         },
         "massweights":{
             "hist_name": "muonScaleSyst",
@@ -297,7 +308,7 @@ def main(args):
         cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
 
     cardTool.writeOutput()
-    logging.info(f"Output stored in {outfolder}")
+    logger.info(f"Output stored in {outfolder}")
     
 if __name__ == "__main__":
     parser = make_parser()

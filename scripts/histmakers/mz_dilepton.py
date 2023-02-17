@@ -1,13 +1,12 @@
-from utilities import boostHistHelpers as hh,common,output_tools
+from utilities import boostHistHelpers as hh, common, output_tools
 
-parser,initargs = common.common_parser()
+parser,initargs = common.common_parser(True)
 
 import narf
 import wremnants
 from wremnants import theory_tools,syst_tools,theory_corrections, muon_validation, muon_calibration, muon_selections
 import hist
 import lz4.frame
-import logging
 import math
 import time
 import os
@@ -16,27 +15,17 @@ parser.add_argument("--csvars_hist", action='store_true', help="Add CS variables
 parser.add_argument("--uncertainty-axes", type=str, nargs="*", default=["mll",], help="")
 parser.add_argument("--finePtBinning", action='store_true', help="Use fine binning for ptll")
 
-f = next((x for x in parser._actions if x.dest == "pt"), None)
-if f:
-    newPtDefault = [44,26.,70.]
-    logging.warning("")
-    logging.warning(f" >>> Modifying default of {f.dest} from {f.default} to {newPtDefault}")
-    logging.warning("")
-    f.default = newPtDefault
+parser = common.set_parser_default(parser, "pt", [44,26.,70.])
+parser = common.set_parser_default(parser, "eta", [6,-2.4,2.4])
 
 args = parser.parse_args()
-
-if args.noColorLogger:
-    logger = common.setup_base_logger(os.path.basename(__file__), args.debug)
-else:
-    logger = common.setup_color_logger(os.path.basename(__file__), args.verbose)
+logger = common.setup_logger(__file__, args.verbose, args.color_logger)
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
     nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path)
 
 era = args.era
-
 
 # available axes for dilepton validation plots
 axes = {
@@ -45,6 +34,8 @@ axes = {
     "ptll": hist.axis.Variable(common.ptV_binning if not args.finePtBinning else range(60), name = "ptll"),
     "etaPlus": hist.axis.Regular(int(args.eta[0]), args.eta[1], args.eta[2], name = "etaPlus"),
     "etaMinus": hist.axis.Regular(int(args.eta[0]), args.eta[1], args.eta[2], name = "etaMinus"),
+    "etaSum": hist.axis.Regular(12, -4.8, 4.8, name = "etaSum"),
+    "etaDiff": hist.axis.Variable([-4.8, -1.0, -0.6, -0.2, 0.2, 0.6, 1.0, 4.8], name = "etaDiff"),
     "ptPlus": hist.axis.Regular(int(args.pt[0]), args.pt[1], args.pt[2], name = "ptPlus"),
     "ptMinus": hist.axis.Regular(int(args.pt[0]), args.pt[1], args.pt[2], name = "ptMinus"),
     "cosThetaStarll": hist.axis.Regular(20, -1., 1., name = "cosThetaStarll"),
@@ -103,12 +94,6 @@ bias_helper = muon_calibration.make_muon_bias_helpers(args.muonCorr, args.smeari
 
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_corr)
 
-# recoil initialization
-if not args.no_recoil:
-    from wremnants import recoil_tools
-    recoilHelper = recoil_tools.Recoil("highPU", flavor="mumu", met=args.met)
-
-
 def build_graph(df, dataset):
     logger.info(f"build graph for dataset: {dataset.name}")
     results = []
@@ -155,6 +140,9 @@ def build_graph(df, dataset):
     df = df.Define("etaMinus", "trigMuons_charge0 == 1 ? nonTrigMuons_eta0 : trigMuons_eta0") 
     df = df.Define("ptPlus", "trigMuons_charge0 == -1 ? nonTrigMuons_pt0 : trigMuons_pt0") 
     df = df.Define("ptMinus", "trigMuons_charge0 == 1 ? nonTrigMuons_pt0 : trigMuons_pt0") 
+
+    df = df.Define("etaSum", "nonTrigMuons_eta0 + trigMuons_eta0") 
+    df = df.Define("etaDiff", "nonTrigMuons_eta0 - trigMuons_eta0") 
 
     df = df.Define("cosThetaStarll", "csSineCosThetaPhill.costheta")
     df = df.Define("phiStarll", "std::atan2(csSineCosThetaPhill.sinphi, csSineCosThetaPhill.cosphi)")

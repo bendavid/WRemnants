@@ -25,7 +25,8 @@ def makeFilelist(paths, maxFiles=-1, format_args={}):
         filelist.extend(glob.glob(path) if path[:4] != "/eos" else buildXrdFileList(path, "eoscms.cern.ch"))
     return filelist if maxFiles < 0 else filelist[:maxFiles]
 
-def getDatasets(maxFiles=-1, filt=None, mode=None, base_path=None, nanoVersion="v9", prod_tag="TrackFitV718_NanoProdv1"):
+def getDatasets(maxFiles=-1, filt=None, mode=None, base_path=None, nanoVersion="v9", 
+        data_tag="TrackFitV718_NanoProdv1", mc_tag="TrackFitV718_NanoProdv1"):
     if not base_path:
         hostname = socket.gethostname()
         if hostname == "lxplus8s10.cern.ch":
@@ -53,12 +54,21 @@ def getDatasets(maxFiles=-1, filt=None, mode=None, base_path=None, nanoVersion="
         if sample in genDataDict:
             base_path = base_path.replace("NanoAOD", "NanoGen")
 
+        is_data = "data" in sample[:4]
+
+        prod_tag = data_tag if is_data else mc_tag 
+        paths = makeFilelist(info["filepaths"], maxFiles, format_args=dict(BASE_PATH=base_path, NANO_PROD_TAG=prod_tag))
+
+        if not paths:
+            logger.warning(f"Failed to find any files for dataset {sample}. Looking at {info['filepaths']}. Skipping!")
+            continue
+
         narf_info = dict(
             name=sample,
-            filepaths=makeFilelist(info["filepaths"], maxFiles, format_args=dict(BASE_PATH=base_path, NANO_PROD_TAG=prod_tag)),
+            filepaths=paths,
         )
 
-        if "data" in sample[:4]:
+        if is_data:
             if mode == "gen":
                 continue
             narf_info.update(dict(

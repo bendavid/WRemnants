@@ -7,6 +7,8 @@ from utilities import common
 from utilities import boostHistHelpers as hh
 from . import muon_validation
 import uproot
+import numpy as np
+import warnings
 
 ROOT.gInterpreter.Declare('#include "muon_calibration.h"')
 ROOT.gInterpreter.Declare('#include "lowpu_utils.h"')
@@ -83,6 +85,11 @@ def make_muon_smearing_helpers():
 
     return helper
 
+def make_muon_calibration_helper_single(filename=data_dir+"/calibration/correctionResults_v718_idealgeom_gensim.root"):
+
+    helper = ROOT.wrem.CVHCorrectorSingle[""](filename)
+    return helper
+
 def get_dummy_uncertainties():
     axis_eta = hist.axis.Regular(48, -2.4, 2.4, name = "eta")
     axis_calvar = hist.axis.Integer(0, 1, underflow=False, overflow=False, name = "calvar")
@@ -123,7 +130,7 @@ def define_corrected_muons(df, cvh_helper, jpsi_helper, corr_type, dataset, smea
     corr_type = corr_type.replace("massfitData","massfit") if dataset.is_data else corr_type.replace("mctruth","lbl")        
 
     muon = "Muon"
-    if "lbl" in corr_type.split("_"):
+    if "lbl" in corr_type:
         df = define_lblcorr_muons(df, cvh_helper, dataset)
         muon = "Muon_lbl"
     elif corr_type != "none":
@@ -241,28 +248,44 @@ def define_uncrct_reco_muon_kinematics(df, kinematic_vars = ["pt", "eta", "phi",
     return df
 
 def transport_smearing_weights_to_reco(
-    resultdict, procs = ['WplusmunuPostVFP', 'WminusmunuPostVFP', 'ZmumuPostVFP'],
-    proj_axes = ['eta', 'pt', 'charge', 'passIso', 'passMT']
+    resultdict,
+    procs = ['WplusmunuPostVFP', 'WminusmunuPostVFP', 'ZmumuPostVFP'],
 ):
     for proc in procs:
-        proc_hists = resultdict[proc]['output']
-        nominal_gen_smear = (
-            proc_hists['nominal_gen_smeared'].project(*proj_axes))
-        msv_sw_gen_smear = [
-            (proc_hists['muonScaleSyst_responseWeights_gensmear'][...,0,0].project(*proj_axes)),
-            (proc_hists['muonScaleSyst_responseWeights_gensmear'][...,0,1].project(*proj_axes))
-        ]
-        sw_per_bin_gen_smear = [hh.divideHists(x, nominal_gen_smear) for x in msv_sw_gen_smear]
-        nominal_reco = proc_hists['nominal'].project(*proj_axes)
-        msv_sw_reco = [hh.multiplyHists(nominal_reco, x) for x in sw_per_bin_gen_smear]
-        proc_hists['muonScaleSyst_responseWeights'] = hh.combineUpDownVarHists(*msv_sw_reco)
+        proc_hist = resultdict[proc]['output']
+        nominal_reco = proc_hist['nominal']
+
+        if 'nominal_gen_smeared' in proc_hist.keys():
+            nominal_gen_smear = proc_hist['nominal_gen_smeared']
+        else:
+            warning.warn(f"Histogram 'nominal_gen_smeared' not found in {proc}")
+            warning.warn("smearing weights not transported to RECO kinematics")
+            return
+
+        if 'muonScaleSyst_responseWeights_gensmear' in proc_hist.keys():
+            msv_sw_gen_smear = proc_hist['muonScaleSyst_responseWeights_gensmear']
+        else:
+            warning.warn(f"Histogram 'muonScaleSyst_responseWeights_gensmear' not found in {proc}")
+            warning.warn("smearing weights not transported to RECO kinematics")
+            return
+
+        msv_sw_reco = hist.Hist(*msv_sw_gen_smear.axes, storage = msv_sw_gen_smear._storage_type())
+
+        for i_unc in range(msv_sw_gen_smear.axes['unc'].size):
+            sw_dn_up_gen_smear = [msv_sw_gen_smear[..., i_unc, 0], msv_sw_gen_smear[..., i_unc, 1]]
+            bin_ratio_dn_up = [hh.divideHists(x, nominal_gen_smear) for x in sw_dn_up_gen_smear]
+            sw_dn_up_reco = hh.combineUpDownVarHists(
+                *[hh.multiplyHists(nominal_reco, x) for x in bin_ratio_dn_up]
+            )
+            msv_sw_reco.view(flow = True)[..., i_unc, :] = sw_dn_up_reco.view(flow = True)
+        resultdict[proc]['output']['nominal_muonScaleSyst_responseWeights'] = msv_sw_reco
 
 def muon_scale_variation_from_manual_shift(
     resultdict, procs = ['WplusmunuPostVFP', 'WminusmunuPostVFP', 'ZmumuPostVFP'],
 ):
     for proc in procs:
         proc_hists = resultdict[proc]['output']
-        manual_shift_hists = [proc_hists['muonScaleVariationDnTenthmil'], proc_hists['muonScaleVariationUpTenthmil']]
+        manual_shift_hists = [proc_hists['nominal_muonScaleVariationDnTenthmil'], proc_hists['nominal_muonScaleVariationUpTenthmil']]
         proc_hists['muonScaleSyst_manualShift'] = hh.combineUpDownVarHists(*manual_shift_hists)
 
 def make_alt_reco_and_gen_hists(df, results, nominal_axes):
@@ -362,3 +385,53 @@ def make_hists_for_smearing_weights(df, nominal_axes, nominal_cols, results):
     smearing_weights_up = df.HistoBoost("smearing_weights_up", [*nominal_axes, axis_smearing_weight], [*nominal_cols, "smearing_weights_up"])
     results.append(smearing_weights_down)
     results.append(smearing_weights_up)
+
+def define_lbl_corrections_jpsi_calibration_ntuples(df, helper):
+    df = df.DefinePerSample("Muplus_charge", "1")
+    df = df.DefinePerSample("Muminus_charge", "-1")
+
+    df = df.Define("globalidxvint", "ROOT::VecOps::RVec<int>(globalidxv)")
+
+    df = df.Define("Mupluscor_Mom4Charge", helper, ["Muplus_pt", "Muplus_eta", "Muplus_phi", "Muplus_charge", "globalidxvint", "Muplus_jacRef"])
+    df = df.Define("Mupluscor_mom4", "Mupluscor_Mom4Charge.first")
+    df = df.Define("Mupluscor_pt", "Mupluscor_Mom4Charge.first.Pt()")
+    df = df.Define("Mupluscor_eta", "Mupluscor_Mom4Charge.first.Eta()")
+    df = df.Define("Mupluscor_phi", "Mupluscor_Mom4Charge.first.Phi()")
+
+    df = df.Define("Muminuscor_Mom4Charge", helper, ["Muminus_pt", "Muminus_eta", "Muminus_phi", "Muminus_charge", "globalidxvint", "Muminus_jacRef"])
+    df = df.Define("Muminuscor_mom4", "Muminuscor_Mom4Charge.first")
+    df = df.Define("Muminuscor_pt", "Muminuscor_Mom4Charge.first.Pt()")
+    df = df.Define("Muminuscor_eta", "Muminuscor_Mom4Charge.first.Eta()")
+    df = df.Define("Muminuscor_phi", "Muminuscor_Mom4Charge.first.Phi()")
+
+    df = df.Define("Jpsicor_mom4", "ROOT::Math::PxPyPzEVector(Mupluscor_Mom4Charge.first) + ROOT::Math::PxPyPzEVector(Muminuscor_Mom4Charge.first)")
+
+    df = df.Define("Jpsicor_pt", "Jpsicor_mom4.Pt()")
+    df = df.Define("Jpsicor_eta", "Jpsicor_mom4.Eta()")
+    df = df.Define("Jpsicor_phi", "Jpsicor_mom4.Phi()")
+    df = df.Define("Jpsicor_mass", "Jpsicor_mom4.M()")
+
+    return df
+
+def define_passthrough_corrections_jpsi_calibration_ntuples(df):
+    df = df.DefinePerSample("Muplus_charge", "1")
+    df = df.DefinePerSample("Muminus_charge", "-1")
+
+    df = df.Alias("Mupluscor_pt", "Muplus_pt")
+    df = df.Alias("Mupluscor_eta", "Muplus_eta")
+    df = df.Alias("Mupluscor_phi", "Muplus_phi")
+
+    df = df.Alias("Muminuscor_pt", "Muminus_pt")
+    df = df.Alias("Muminuscor_eta", "Muminus_eta")
+    df = df.Alias("Muminuscor_phi", "Muminus_phi")
+
+    df = df.Alias("Jpsicor_pt", "Jpsi_pt")
+    df = df.Alias("Jpsicor_eta", "Jpsi_eta")
+    df = df.Alias("Jpsicor_phi", "Jpsi_phi")
+    df = df.Alias("Jpsicor_mass", "Jpsi_mass")
+
+    df = df.Define("Mupluscor_mom4", "ROOT::Math::PtEtaPhiMVector(Mupluscor_pt, Mupluscor_eta, Mupluscor_phi, wrem::muon_mass)")
+    df = df.Define("Muminuscor_mom4", "ROOT::Math::PtEtaPhiMVector(Muminuscor_pt, Muminuscor_eta, Muminuscor_phi, wrem::muon_mass)")
+    df = df.Define("Jpsicor_mom4", "ROOT::Math::PtEtaPhiMVector(Jpsicor_pt, Jpsicor_eta, Jpsicor_phi, Jpsicor_mass)")
+
+    return df
