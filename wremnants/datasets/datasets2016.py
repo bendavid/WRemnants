@@ -26,7 +26,7 @@ def makeFilelist(paths, maxFiles=-1, format_args={}):
     return filelist if maxFiles < 0 else filelist[:maxFiles]
 
 def getDatasets(maxFiles=-1, filt=None, mode=None, base_path=None, nanoVersion="v9", 
-        data_tag="TrackFitV722_NanoProdv1", mc_tag="TrackFitV718_NanoProdv1"):
+        data_tag="TrackFitV722_NanoProdv2", mc_tag="TrackFitV718_NanoProdv1"):
     if not base_path:
         hostname = socket.gethostname()
         if hostname == "lxplus8s10.cern.ch":
