@@ -1514,8 +1514,8 @@ def drawNTH1(hists=[],
              setRatioRangeFromHisto=False, # currently only for 2 histograms in hists
              setOnlyLineRatio=False,
              lineWidth=2,
-             ytextOffsetFromTop=0.15,
-             useMultiHistRatioOption=False): # in % of maxy-miny of the top panel
+             ytextOffsetFromTop=0.15,  # in % of maxy-miny of the top panel
+             useMultiHistRatioOption=False):
 
     # moreText is used to pass some text to write somewhere (TPaveText is used)
     # e.g.  "stuff::x1,y1,x2,y2"  where xi and yi are the coordinates for the text
