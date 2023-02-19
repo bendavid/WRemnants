@@ -153,7 +153,10 @@ def drawAndFitFRF(h1,
                   fitRange="0,40", # xmin and xmax
                   mTshape=None,
                   fitPolDegree=3,
-                  useBinnedCorr=False
+                  useBinnedCorr=False,
+                  # following two are test histograms which make sense for pol1 fits
+                  histoChi2diffTest=None,
+                  histoPullsPol1Slope=None
 ):
 
     # moreTextLatex is used to write text with TLatex, and the syntax is textToWrite::x1,y1,ypass,textsize
@@ -196,7 +199,7 @@ def drawAndFitFRF(h1,
         ymin,ymax = getMinMaxHisto(h1,excludeEmpty=True,sumError=True)            
         diff = ymax - ymin
         ymin -= diff * 0.25
-        ymax += diff * 0.3
+        ymax += diff * 0.45
         if ymin < 0: ymin = 0
 
     h1.GetXaxis().SetTitle(xAxisName)
@@ -239,8 +242,9 @@ def drawAndFitFRF(h1,
     global polN_scaled_global
     fitModel = f"pol{fitPolDegree}" # just for legend, set here to make sure it is changed consistently with line below
     params = np.array([1.0] + [0.0 for i in range(fitPolDegree)])
-    if polN_scaled_global == None: 
+    if polN_scaled_global == None:
         polN_scaled_global = partial(polN_root_, xLowVal=xMinFit, xFitRange=xMaxFit-xMinFit, degree=fitPolDegree)
+    global pol0_scaled_global
 
     fitres_tf1 = narf.fit_hist(boost_hist, polN_scaled_global, params)
     f1 = ROOT.TF1("f1",polN_scaled_global, xMinFit, xMaxFit, len(params))
@@ -259,6 +263,31 @@ def drawAndFitFRF(h1,
         else:
             badCovMatrixID[covstatus] += 1                                       
 
+    # get chi 2:
+    chi2 = fitres_tf1["loss_val"]
+    ndof = int(len(fitBinEdges)-1 - f1.GetNpar())
+    chi2prob = ROOT.TMath.Prob(chi2, ndof)
+    chi2text = f"#chi^{{2}} = {round(chi2,1)} / {ndof}"
+    if chi2prob < 0.05:
+        perc_chi2prob = 100.0 * chi2prob
+        sign = "="
+        if perc_chi2prob < 0.1:
+            perc_chi2prob = 0.1
+            sign = "<"
+        chi2text += " (prob {} {}%)".format(sign, round(perc_chi2prob,1))
+        
+    if fitPolDegree == 1:
+        params0 = np.array([1.0])
+        if pol0_scaled_global == None:
+            pol0_scaled_global = partial(polN_root_, xLowVal=xMinFit, xFitRange=xMaxFit-xMinFit, degree=0)
+        fitres_tf1_pol0 = narf.fit_hist(boost_hist, pol0_scaled_global, params0)
+        fpol0 = ROOT.TF1("fpol0",pol0_scaled_global, xMinFit, xMaxFit, len(params0))
+        chi2pol0 = fitres_tf1_pol0["loss_val"]
+        chi2diffTest = ROOT.TMath.Prob(chi2pol0 - chi2, 1)
+        if histoChi2diffTest:
+            histoChi2diffTest.Fill(chi2diffTest)
+        if histoPullsPol1Slope:
+            histoPullsPol1Slope.Fill(fitres_tf1["x"][1]/np.sqrt(fitres_tf1["cov"][1][1]))
     f1.SetParameters( np.array( fitres_tf1["x"], dtype=np.dtype('d') ) )
     f1.SetLineWidth(3)
     #f1.SetLineStyle(9) # ROOT.kDashed == thin dashes, almost dotted
@@ -363,7 +392,8 @@ def drawAndFitFRF(h1,
         lat.SetTextSize(textsize)
         for itx,tx in enumerate(realtext.split(";")):
             lat.DrawLatex(x1,y1-itx*ypass,tx)
-
+        lat.DrawLatex(x1,y1-(itx+1)*ypass, chi2text)
+            
     setTDRStyle()
     if leftMargin > 0.1:
         if lumi != None: CMS_lumi(canvas,lumi,True,False)
@@ -434,6 +464,7 @@ def drawAndFitFRF(h1,
 
 # need to define functions as global below to avoid them being deleted out of fitTurnOnTF
 polN_scaled_global = None
+pol0_scaled_global = None # only needed with straight line fit, to perform check fitting with horizontal line
 badFitsID = {}
 badCovMatrixID = {}
 
@@ -502,6 +533,8 @@ if __name__ == "__main__":
     hFRFcorrUnc = {x: None for x in charges}
     hFRFcorrTestCap = {x: None for x in charges}
     hFRF_proj = {x: None for x in charges}
+    histoChi2diffTest = {x: None for x in charges}
+    histoPullsPol1Slope = {x: None for x in charges}
 
     etaLabel = "#eta" if not args.doAbsEta else "|#eta|"
     
@@ -797,6 +830,9 @@ if __name__ == "__main__":
                                      h2PassIso.GetNbinsX(), round(etaLow,1), round(etaHigh,1),
                                      nPtBins, round(ptLow,1), rangeMaxPt)
         hFRFcorrTestCap[charge] = copy.deepcopy(hFRFcorr[charge].Clone(f"fakerateFactorCorrTestCap_{charge}"))
+        if args.fitPolDegree == 1:
+            histoChi2diffTest[charge] = ROOT.TH1D(f"histoChi2diffTest_{charge}", "Probability(#chi^{2}_{0} - #chi^{2}_{1})", 10, 0, 1)
+            histoPullsPol1Slope[charge] = ROOT.TH1D(f"histoPullsPol1Slope_{charge}", "Pulls for slope parameter in pol1 fits", 20, -5, 5)
         
         # now preparing a summary for each pt bin
         for ipt in range(1, 1+nPtBins):
@@ -838,7 +874,8 @@ if __name__ == "__main__":
                         hTmp[imt-1].SetBinContent(1, max(0.0, binContent))
                         hTmp[imt-1].SetBinError(  1, binError)
 
-                textLatex = "%.1f < %s < %.1f;p_{T} #in [%d, %d] GeV::0.2,0.3,0.1,0.045" % (etaBinLow, etaLabel, etaBinHigh, ptBinLow, ptBinHigh)
+                textLatex = "%.1f < %s < %.1f;%d < p_{T} < %d GeV::0.2,0.88,0.08,0.045" % (etaBinLow, etaLabel, etaBinHigh,
+                                                                                           ptBinLow, ptBinHigh)
                 if nMtBins > 2:
                     ## get high mt value to evaluate the correction, can use the mean of the mt distribution for each etapt bin 
                     if args.integralMtMethod == "sideband":
@@ -855,7 +892,9 @@ if __name__ == "__main__":
                                                               legendCoords="0.64,0.96,0.69,0.93", fitRange=args.mtFitRange,
                                                               mTshape=projMt,
                                                               fitPolDegree=args.fitPolDegree,
-                                                              useBinnedCorr=args.useBinnedCorrection)
+                                                              useBinnedCorr=args.useBinnedCorrection,
+                                                              histoChi2diffTest=histoChi2diffTest[charge],
+                                                              histoPullsPol1Slope=histoPullsPol1Slope[charge])
                     #print(f"{valFRF}, {valFRFCap}")
                     if valFRF < 0:
                         printLine(marker=" ")
@@ -918,6 +957,16 @@ if __name__ == "__main__":
                             hFRFcorr[charge].GetName(), plotLabel="ForceTitle", outdir=outfolder,
                             draw_both0_noLog1_onlyLog2=1, nContours=args.nContours, palette=args.palette,
                             invertePalette=args.invertePalette, passCanvas=canvas, skipLumi=True)
+        if args.fitPolDegree:
+            drawTH1(histoChi2diffTest[charge],
+                    "#chi^{2} difference probability (pol0 versus pol1)", "Events",
+                    histoChi2diffTest[charge].GetName(), outfolder, passCanvas=canvas1D,
+                    statBoxSpec=210, skipTdrStyle=True)
+            drawTH1(histoPullsPol1Slope[charge],
+                    "Pulls", "Events",
+                    histoPullsPol1Slope[charge].GetName(), outfolder, passCanvas=canvas1D,
+                    statBoxSpec=210, fitString="gaus;LEMSQ+;;-5;5", skipTdrStyle=True)
+                    
         if hFRFcorrUnc[charge] is not None:
             # do some unrolling and plot FRF correction with uncertainty bands
             nomi_unrolled = unroll2Dto1D(hFRFcorr[charge], newname=f"unrolled_{hFRFcorr[charge].GetName()}", cropNegativeBins=False)
@@ -925,14 +974,14 @@ if __name__ == "__main__":
             legEntries = ["nomi"]
             colorVec = [ROOT.kRed+2, ROOT.kRed+1,
                         ROOT.kAzure+2, ROOT.kAzure+1,
-                        ROOT.kGreen+2, ROOT.kGreen+1,
-                        ROOT.kOrange+2, ROOT.kOrange+1] # colors only passed for variations
+                        ROOT.kOrange+2, ROOT.kOrange+1,
+                        ROOT.kGreen+2, ROOT.kGreen+1] # colors only passed for variations
             if hFRFcorrTestCap[charge]:
                 hList.append( unroll2Dto1D(hFRFcorrTestCap[charge],
                                            newname=f"unrolled_{hFRFcorrTestCap[charge].GetName()}",
                                            cropNegativeBins=False) )
                 legEntries.append( "syst(cap FRF)" )
-                colorVec = [ROOT.kViolet] + colorVec
+                colorVec = [ROOT.kGreen+3] + colorVec
             ptBinRanges = []
             for ipt in range(hFRFcorr[charge].GetNbinsY()):
                 ptBinRanges.append("[{ptmin},{ptmax}] GeV".format(ptmin=int(hFRFcorr[charge].GetYaxis().GetBinLowEdge(ipt+1)),
@@ -951,7 +1000,7 @@ if __name__ == "__main__":
                      legendCoords="0.06,0.99,0.91,0.99;6", lowerPanelHeight=0.5, skipLumi=True, passCanvas=canvas_unroll,
                      drawVertLines="{a},{b}".format(a=hFRFcorr[charge].GetNbinsY(),b=hFRFcorr[charge].GetNbinsX()),
                      textForLines=ptBinRanges, transparentLegend=False,
-                     onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True, setOnlyLineRatio=True, lineWidth=2,
+                     onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True, setOnlyLineRatio=True, lineWidth=1,
                      colorVec=colorVec)
             
         if hFRFcorrTestCap[charge] is not None:

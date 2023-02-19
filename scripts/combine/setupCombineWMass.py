@@ -97,7 +97,9 @@ def main(args):
     signal_samples = list(filter(lambda x: x[0] == ("W" if wmass else "Z"), single_vmu_samples))
     signal_samples_inctau = list(filter(lambda x: x[0] == ("W" if wmass else "Z"), single_v_samples))
 
-    logger.info(f"All MC processes {cardTool.allMCProcesses()}")
+    allMCprocesses_noQCDMC = [x for x in cardTool.allMCProcesses() if x != "QCD"]
+    
+    logger.info(f"All MC processes {allMCprocesses_noQCDMC}")
     logger.info(f"Single V samples: {single_v_samples}")
     logger.info(f"Single V no signal samples: {single_v_nonsig_samples}")
     logger.info(f"Signal samples: {signal_samples}")
@@ -127,7 +129,7 @@ def main(args):
         
     if wmass:
         cardTool.addSystematic("luminosity",
-                            processes=cardTool.allMCProcesses(),
+                            processes=allMCprocesses_noQCDMC,
                             outNames=["lumiDown", "lumiUp"],
                             group="luminosity",
                             systAxes=["downUpVar"],
@@ -135,7 +137,7 @@ def main(args):
                             passToFakes=passSystToFakes)
     else:
         # TOCHECK: no fakes here, most likely
-        cardTool.addLnNSystematic("luminosity", processes=cardTool.allMCProcesses(), size=1.012, group="luminosity")
+        cardTool.addLnNSystematic("luminosity", processes=allMCprocesses_noQCDMC, size=1.012, group="luminosity")
 
     if pdfInfo["combine"] == "symHessian":
         cardTool.addSystematic(pdfName, 
@@ -225,7 +227,7 @@ def main(args):
                 systAxes=axes,
                 labelsByAxis=axlabels,
                 baseName=name+"_",
-                processes=cardTool.allMCProcesses(),
+                processes=allMCprocesses_noQCDMC,
                 passToFakes=passSystToFakes,
                 systNameReplace=nameReplace,
                 scale=scale,
@@ -267,7 +269,7 @@ def main(args):
         scale = args.scaleMuonCorr
     )
     cardTool.addSystematic("muonL1PrefireSyst", 
-        processes=cardTool.allMCProcesses(),
+        processes=allMCprocesses_noQCDMC,
         group="muonPrefire",
         baseName="CMS_prefire_syst_m",
         systAxes=["downUpVar"],
@@ -275,7 +277,7 @@ def main(args):
         passToFakes=passSystToFakes,
     )
     cardTool.addSystematic("muonL1PrefireStat", 
-        processes=cardTool.allMCProcesses(),
+        processes=allMCprocesses_noQCDMC,
         group="muonPrefire",
         baseName="CMS_prefire_stat_m_",
         systAxes=["downUpVar", "etaPhiRegion"],
@@ -283,7 +285,7 @@ def main(args):
         passToFakes=passSystToFakes,
     )
     cardTool.addSystematic("ecalL1Prefire", 
-        processes=cardTool.allMCProcesses(),
+        processes=allMCprocesses_noQCDMC,
         group="ecalPrefire",
         baseName="CMS_prefire_ecal",
         systAxes=["downUpVar"],
@@ -295,15 +297,17 @@ def main(args):
         cardTool.addLnNSystematic("CMS_Top", processes=["Top"], size=1.06)
         cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16)
 
-        # FIXME: it doesn't really make sense to mirror this one since the systematic goes only in one direction
-        cardTool.addSystematic(f"qcdJetPt45", 
-                               processes=["Fake"],
-                               mirror=True,
-                               group="MultijetBkg",
-                               systAxes=[],
-                               outNames=["qcdJetPt45Down", "qcdJetPt45Up"],
-                               passToFakes=passSystToFakes,
-        )
+        ## FIXME 1: with the jet cut removed this syst is probably no longer needed, but one could still consider
+        ## it to cover for how much the fake estimate changes when modifying the composition of the QCD region
+        ## FIXME 2: it doesn't really make sense to mirror this one since the systematic goes only in one direction        
+        # cardTool.addSystematic(f"qcdJetPt30", 
+        #                        processes=["Fake"],
+        #                        mirror=True,
+        #                        group="MultijetBkg",
+        #                        systAxes=[],
+        #                        outNames=["qcdJetPt30Down", "qcdJetPt30Up"],
+        #                        passToFakes=passSystToFakes,
+        # )
     else:
         cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
 

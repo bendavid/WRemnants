@@ -594,6 +594,7 @@ def drawTH1(htmp,
             moreTextLatex="",
             skipTdrStyle=False,
             drawStatBox=True,
+            statBoxSpec=None, # to specify what to print (None uses a default which depends on having or not fitString
             fitString="", # can be "gaus;LEMSQ+;;-5;5"
             plotTitleLatex="",
             setLogY=False
@@ -658,9 +659,9 @@ def drawTH1(htmp,
     if drawStatBox:
         if len(fitString):
             ROOT.gStyle.SetOptFit(111)
-            ROOT.gStyle.SetOptStat(110010)
+            ROOT.gStyle.SetOptStat(statBoxSpec if statBoxSpec else 110010)
         else:
-            ROOT.gStyle.SetOptStat(111110)
+            ROOT.gStyle.SetOptStat(statBoxSpec if statBoxSpec else 111110)
 
     if len(plotTitleLatex):
         lat = ROOT.TLatex()
