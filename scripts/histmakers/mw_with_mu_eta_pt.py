@@ -450,4 +450,4 @@ if smearing_weights:
     wremnants.transport_smearing_weights_to_reco(resultdict)
     wremnants.muon_scale_variation_from_manual_shift(resultdict)
 
-output_tools.write_analysis_output(resultdict, "mw_with_mu_eta_pt.pkl.lz4", args)
+output_tools.write_analysis_output(resultdict, "mw_with_mu_eta_pt.hdf5", args)

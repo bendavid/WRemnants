@@ -140,7 +140,7 @@ def build_graph(df, dataset):
 
 resultdict = narf.build_and_run(datasets, build_graph)
 
-output_tools.write_analysis_output(resultdict, "w_z_gen_dists.pkl.lz4", args)
+output_tools.write_analysis_output(resultdict, "w_z_gen_dists.hdf5", args)
 
 print("computing angular coefficients")
 
@@ -183,4 +183,4 @@ if z_moments and w_moments:
             "W" : wremnants.moments_to_angular_coeffs(w_moments) if w_moments else None,
     }
 
-    output_tools.write_analysis_output(coeffs, "w_z_coeffs.pkl.lz4", args)
+    output_tools.write_analysis_output(coeffs, "w_z_coeffs.hdf5", args)
