@@ -28,7 +28,7 @@ class datagroups(object):
             self.results = None
 
         if self.results:
-            self.dilepton = os.path.basename(self.results["meta_info"]["command"].split()[0]).startswith("mz")
+            self.wmass = os.path.basename(self.results["meta_info"]["command"].split()[0]).startswith("mw")
             self.wlike = os.path.basename(self.results["meta_info"]["command"].split()[0]).startswith("mz_wlike")
 
         self.lumi = None
