@@ -305,7 +305,7 @@ class datagroupsLowPU(datagroups):
         #print(baseName, proc.name, histname, syst)
         if histname not in output:
             raise ValueError(f"Histogram {histname} not found for process {proc.name}")
-        h = output[histname]
+        h = output[histname].get()
         #print(h)
         if forceNonzero:
             h = hh.clipNegativeVals(h)
