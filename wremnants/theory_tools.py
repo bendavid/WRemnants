@@ -4,9 +4,9 @@ import numpy as np
 import copy
 from utilities import boostHistHelpers as hh,common
 from wremnants import theory_corrections
-import logging
 from scipy import ndimage
 
+logging = common.child_logger(__name__)
 ROOT.gInterpreter.Declare('#include "theoryTools.h"')
 
 # integer axis for -1 through 7
@@ -109,7 +109,7 @@ only_central_pdf_datasets = [
     "Zmumu_bugfix_slc7",
 ]
 
-extended_pdf_datasets = common.vprocs
+extended_pdf_datasets = common.vprocs+common.vprocs_lowpu
 
 def define_prefsr_vars(df):
     df = df.Define("prefsrLeps", "wrem::prefsrLeptons(GenPart_status, GenPart_statusFlags, GenPart_pdgId, GenPart_genPartIdxMother)")
@@ -228,8 +228,8 @@ def define_theory_corr(df, weight_expr, helpers, generators, modify_central_weig
         if "Helicity" in generator:
             df = df.Define(f"{generator}Weight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "nominal_weight_uncorr"])
         elif 'ew' in generator:
-            df = df.DefinePerSample("ewDummy", "0.")
-            df = df.Define(f"{generator}Weight_tensor", helper, ["ewMll", "ewLogDeltaM", "ewDummy", "chargeVgen", "nominal_weight_uncorr"])
+            df = df.DefinePerSample(f"{generator}Dummy", "0.")
+            df = df.Define(f"{generator}Weight_tensor", helper, ["ewMll", "ewLogDeltaM", f"{generator}Dummy", "chargeVgen", "nominal_weight_uncorr" if i == 0 else "nominal_weight"]) # multiplying with nominal QCD weight
         else:
             df = df.Define(f"{generator}Weight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "nominal_weight_uncorr"])
 

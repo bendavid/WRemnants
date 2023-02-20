@@ -4,7 +4,9 @@ import hist
 import narf
 import numpy as np
 import boost_histogram as bh
-import logging
+from utilities import common
+
+logging = common.child_logger(__name__)
 
 ROOT.gInterpreter.Declare('#include "pileup.h"')
 
