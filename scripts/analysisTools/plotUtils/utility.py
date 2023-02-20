@@ -12,8 +12,6 @@ import shutil
 #sys.path.append(os.getcwd() + "/plotUtils/")
 from scripts.analysisTools.plotUtils.CMS_lumi import *
 
-#ROOT.gInterpreter.ProcessLine(".O3")
-
 _canvas_pull = ROOT.TCanvas("_canvas_pull","",800,800)
 
 #########################################################################

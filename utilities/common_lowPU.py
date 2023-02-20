@@ -35,7 +35,6 @@ def common_parser():
     logging.basicConfig(level=logging.INFO if not initargs.debug else logging.DEBUG)
 
     import ROOT
-    ROOT.gInterpreter.ProcessLine(".O3")
     if not initargs.nThreads:
         ROOT.ROOT.EnableImplicitMT()
     elif initargs.nThreads != 1:
