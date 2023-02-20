@@ -56,7 +56,7 @@ def getIsoMtRegionFromID(regionID):
     return {"passIso" : regionID & 1,
             "passMT"  : regionID & 2}
 
-def common_parser():
+def common_parser(for_reco_highPU=False):
     parser = argparse.ArgumentParser()
     parser.add_argument("-j", "--nThreads", type=int, help="number of threads")
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
@@ -100,7 +100,19 @@ def common_parser():
     parser.add_argument("--onlyMainHistograms", action='store_true', help="Only produce some histograms, skipping (most) systematics to run faster when those are not needed")
     parser.add_argument("--met", type=str, choices=["DeepMETReso", "RawPFMET"], help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")                    
     parser.add_argument("-o", "--outfolder", type=str, default="", help="Output folder")
-    
+    parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
+    if for_reco_highPU:
+        # additional arguments specific for histmaker of reconstructed objects at high pileup (mw, mz_wlike, and mz_dilepton)
+        parser.add_argument("--muonCorr", type=str, default="massfitData_lblidealMC", 
+            choices=["none", "trackfit_only", "trackfit_only_mctruth", "lbl", "massfit", "massfit_lbl", "massfitData_mctruth"], 
+            help="Type of correction to apply to the muons")
+        parser.add_argument("--muScaleMag", type=float, default=1e-4, help="Magnitude of dummy muon scale uncertainty")
+        parser.add_argument("--muScaleBins", type=int, default=1, help="Number of bins for muon scale uncertainty")
+        parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
+        parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
+        parser.add_argument("--bias-calibration", action='store_true', help="Adjust central value by calibration bias hist")
+        parser.add_argument("--smearing", action='store_true', help="Smear pT such that resolution matches data") #TODO change to --no-smearing once smearing is final
+
     commonargs,_ = parser.parse_known_args()
 
     if commonargs.trackerMuons:
@@ -125,7 +137,7 @@ def common_parser_combine():
             help="Decorrelation for QCDscale")
     parser.add_argument("--rebinPtV", type=float, nargs='*', help="Rebin axis with gen boson pt by this value (default does nothing)")
     parser.add_argument("--scetlibUnc", default=None, type=str, choices=["scale", "np"], help="Include SCETlib uncertainties")
-    parser.add_argument("--pdf", type=str, default="nnpdf31", choices=theory_tools.pdfMapExtended.keys(), help="PDF to use")
+    parser.add_argument("--pdf", type=str, default="msht20", choices=theory_tools.pdfMapExtended.keys(), help="PDF to use")
     parser.add_argument("-b", "--fitObs", type=str, default="nominal", help="Observable to fit") # TODO: what does it do?
     parser.add_argument("--qcdProcessName", dest="qcdProcessName" , type=str, default="Fake",   help="Name for QCD process")
     parser.add_argument("--noStatUncFakes", dest="noStatUncFakes" , action="store_true",   help="Set bin error for QCD background templates to 0, to check MC stat uncertainties for signal only")
@@ -138,6 +150,17 @@ def common_parser_combine():
                         help="Do not use logging with colors")
     parser.add_argument("--combineChannels", action='store_true', help="Only use one channel")
     parser.add_argument("--lumiScale", type=float, default=None, help="Rescale equivalent luminosity by this value (e.g. 10 means ten times more data and MC)")
+    return parser
+
+def set_parser_default(parser, argument, newDefault):
+    # change the default argument of the parser, must be called before parse_arguments
+    logger = child_logger(__name__)
+    f = next((x for x in parser._actions if x.dest ==argument), None)
+    if f:
+        logger.info(f" Modifying default of {f.dest} from {f.default} to {newDefault}")
+        f.default = newDefault
+    else:
+        logger.warning(f" Parser argument {argument} not found!")
     return parser
 
 class CustomFormatter(logging.Formatter):

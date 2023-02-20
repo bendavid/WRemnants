@@ -44,6 +44,7 @@ class CardTool(object):
         self.histName = "x"
         self.nominalDim = None
         self.pseudoData = None
+        self.pseudoDataIdx = None
         self.excludeSyst = None
         self.writeByCharge = True
         self.keepSyst = None # to override previous one with exceptions for special cases
@@ -116,8 +117,9 @@ class CardTool(object):
     def getFakeName(self):
         return self.fakeName
 
-    def setPseudodata(self, pseudodata):
+    def setPseudodata(self, pseudodata, idx = 0):
         self.pseudoData = pseudodata
+        self.pseudoDataIdx = idx
 
     # Needs to be increased from default for long proc names
     def setSpacing(self, spacing):
@@ -379,7 +381,7 @@ class CardTool(object):
         # Kind of hacky, but in case the alt hist has uncertainties
         for systAxName in ["systIdx", "tensor_axis_0", "vars"]:
             if systAxName in [ax.name for ax in hdata.axes]:
-                hdata = hdata[{systAxName : 0 }] 
+                hdata = hdata[{systAxName : self.pseudoDataIdx }] 
         self.writeHist(hdata, self.pseudoData+"_sum")
 
     def writeForProcesses(self, syst, processes, label):

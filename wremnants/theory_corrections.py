@@ -9,8 +9,8 @@ import pickle
 from .correctionsTensor_helper import makeCorrectionsTensor
 from utilities import boostHistHelpers as hh, common
 from wremnants import theory_tools
-import logging
 
+logging = common.child_logger(__name__)
 
 def load_corr_helpers(procs, generators):
     corr_helpers = {}

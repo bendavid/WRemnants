@@ -284,12 +284,13 @@ class datagroups2016(datagroups):
     ):
         self.datasets = {x.name : x for x in datasets2016.getDatasets()}
         super().__init__(infile, combine)
-        if self.dilepton or not applySelection:
-            sigOp = None
-            fakeOp = None
-        else:
+        if self.wmass and applySelection:
             sigOp = sel.signalHistWmass
             fakeOp = sel.fakeHistABCD
+        else:
+            sigOp = None
+            fakeOp = None
+
         ###
         self.hists = {} # container storing temporary histograms
         self.groups =  {
@@ -317,7 +318,7 @@ class datagroups2016(datagroups):
                 label = f"pdf{pseudodata_pdfset.upper()}",
                 color = "dimgray"
             )
-        if not self.dilepton:
+        if self.wmass:
             self.groups.update({
                 "Wmunu" : dict(
                     members = [self.datasets["WminusmunuPostVFP"], self.datasets["WplusmunuPostVFP"]],
