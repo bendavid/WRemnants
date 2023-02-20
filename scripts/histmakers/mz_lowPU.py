@@ -415,5 +415,5 @@ def build_graph(df, dataset):
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)
-fname = "lowPU_%s.pkl.lz4" % flavor
+fname = "lowPU_%s.hdf5" % flavor
 output_tools.write_analysis_output(resultdict, fname, args)
