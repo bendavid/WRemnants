@@ -402,7 +402,7 @@ class CardTool(object):
         else:
             self.outfile = outfile
 
-    def writeOutput(self):
+    def writeOutput(self, args):
         self.datagroups.loadHistsForDatagroups(
             baseName=self.nominalName, syst=self.nominalName, label=self.nominalName, 
             scaleToNewLumi=self.lumiScale)
@@ -423,7 +423,7 @@ class CardTool(object):
                 preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"], 
                 scaleToNewLumi=self.lumiScale)
             self.writeForProcesses(syst, label="syst", processes=processes)    
-        output_tools.writeMetaInfoToRootFile(self.outfile, exclude_diff='notebooks')
+        output_tools.writeMetaInfoToRootFile(self.outfile, exclude_diff='notebooks', args=args)
         if self.skipHist:
             logger.info("Histograms will not be written because 'skipHist' flag is set to True")
         self.writeCard()
