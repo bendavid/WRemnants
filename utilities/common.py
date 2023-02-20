@@ -66,7 +66,6 @@ def common_parser(for_reco_highPU=False):
     initargs,_ = parser.parse_known_args()
 
     import ROOT
-    ROOT.gInterpreter.ProcessLine(".O3")
     if not initargs.nThreads:
         ROOT.ROOT.EnableImplicitMT()
     elif initargs.nThreads != 1:
