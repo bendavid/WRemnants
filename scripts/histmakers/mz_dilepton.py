@@ -205,4 +205,4 @@ def build_graph(df, dataset):
 
 resultdict = narf.build_and_run(datasets, build_graph)
 
-output_tools.write_analysis_output(resultdict, "mz_dilepton.pkl.lz4", args)
+output_tools.write_analysis_output(resultdict, "mz_dilepton.hdf5", args)
