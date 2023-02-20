@@ -2,6 +2,8 @@ from utilities import boostHistHelpers as hh
 from wremnants import histselections as sel
 from wremnants.datasets import datasets2016
 import logging
+import lz4.frame
+import pickle
 import hdf5plugin
 import h5py
 import narf
@@ -21,12 +23,17 @@ class datagroups(object):
         self.lumi = 1.
         self.h5file = None
         self.rtfile = None
-        if not infile.endswith(".root"):
+        if infile.endswith(".pkl.lz4"):
+            with lz4.frame.open(infile) as f:
+                self.results = pickle.load(f)
+        elif infile.endswith(".hdf5"):
             self.h5file = h5py.File(infile, "r")
             self.results = narf.ioutils.pickle_load_h5py(self.h5file["results"])
-        else:
+        elif infile.endswith(".root"):
             self.rtfile = ROOT.TFile.Open(infile)
             self.results = None
+        else:
+            raise ValueError("Unsupported file type")
 
         if self.results:
             self.wmass = os.path.basename(self.results["meta_info"]["command"].split()[0]).startswith("mw")
@@ -385,7 +392,9 @@ class datagroups2016(datagroups):
         logger.debug(f"Reading hist {histname} for proc {proc.name} and syst {syst}")
         if histname not in output:
             raise ValueError(f"Histogram {histname} not found for process {proc.name}")
-        h = output[histname].get()
+        h = output[histname]
+        if isinstance(h, narf.ioutils.H5PickleProxy):
+            h = h.get()
         if forceNonzero:
             h = hh.clipNegativeVals(h)
         if scaleToNewLumi > 0:
