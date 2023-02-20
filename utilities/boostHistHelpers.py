@@ -306,13 +306,20 @@ def syst_min_or_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=[], do_min=Tr
     if syst_ax not in h.axes.name:
         logging.warning(f"Did not find syst axis {syst_ax} in histogram. Returning nominal!")
         return h
-    if max(indices) > h.axes[syst_ax].size:
-        logging.warning(f"Range of indices exceeds length of syst axis '{syst_ax}.' Returning nominal!")
-        return h
 
     systax_idx = h.axes.name.index(syst_ax)
     if systax_idx != h.ndim-1:
         raise ValueError("Required to have the syst axis at index -1")
+
+    if type(indices[0]) == str:
+        if all(x.isdigit() for x in indices):
+            indices == [int(x) for x in indices]
+        else:
+            indices = h.axes[syst_ax].index(indices)
+
+    if max(indices) > h.axes[syst_ax].size:
+        logging.warning(f"Range of indices exceeds length of syst axis '{syst_ax}.' Returning nominal!")
+        return h
 
     if syst_ax in proj_ax:
         proj_ax.pop(proj_ax.index(syst_ax))
