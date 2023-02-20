@@ -3,8 +3,7 @@ import setupCombineWMass,setupLowPU_Z
 parser = setupCombineWMass.make_parser()
 parser = setupLowPU_Z.make_parser(parser)
 parser.add_argument("--inputFileLowPU", type=str, default="", help="Input file for low pu step")
-f = next((x for x in parser._actions if x.dest == "baseDir"), None)
-if f: f.default = "combineResults/WMassLowPUComb"
+parser = common.set_parser_default(parser, "baseDir", "combineResults/WMassLowPUComb")
 
 args = parser.parse_args()
 
