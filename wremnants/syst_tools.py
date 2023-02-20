@@ -62,10 +62,24 @@ def syst_transform_map(base_hist, hist_name):
             "action" : lambda h: scetlibIdx(h, 3)},
         "resumLambdaUp" : {
             "action" : lambda h: scetlibIdx(h, 4)},
-        "resumTransitionMax" : {
-            "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", range(5,9), no_flow=["ptVgen"], do_min=False)},
-        "resumTransitionMin" : {
-            "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", range(5,9), no_flow=["ptVgen"], do_min=True)},
+        "resumTransitionUp" : {
+            "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", 
+                ["transition_points0.2_0.65_1.1", "transition_points0.4_0.55_0.7", 
+                "transition_points0.2_0.45_0.7", "transition_points0.4_0.75_1.1", ],
+                 no_flow=["ptVgen"], do_min=False)},
+        "resumTransitionDown" : {
+            "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", 
+                ["transition_points0.2_0.65_1.1", "transition_points0.4_0.55_0.7", 
+                "transition_points0.2_0.45_0.7", "transition_points0.4_0.75_1.1", ],
+                 no_flow=["ptVgen"], do_min=True)},
+       "resumNPUp" : {
+            "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", 
+                ['c_nu-0.15-omega_nu0.43', 'c_nu0.05', 'c_nu0.5-omega_nu0.15', 'c_nu-0.5-omega_nu0.37'],
+                 no_flow=["ptVgen"], do_min=False)},
+        "resumNPDown" : {
+            "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", 
+                ['c_nu-0.15-omega_nu0.43', 'c_nu0.05', 'c_nu0.5-omega_nu0.15', 'c_nu-0.5-omega_nu0.37'],
+                 no_flow=["ptVgen"], do_min=True)},
         "resumScaleMax" : {
             "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", range(9,44), no_flow=["ptVgen"], do_min=False)},
         "resumScaleMin" : {
@@ -74,9 +88,6 @@ def syst_transform_map(base_hist, hist_name):
     for k,v in transforms.items():
         if any([x in k for x in ["QCDscale", "resum", "pdf"]]):
             v["procs"] = common.vprocs 
-            if any([x in k for x in ["QCDscale", "resum", ]]):
-                unc = "qcdScale" if "QCDscale" in k else "scetlibCorr_unc"
-                v["hist"] = unc if base_hist == "nominal" else f"{base_hist}_{unc}"
 
     return transforms
 

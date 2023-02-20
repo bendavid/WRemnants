@@ -46,13 +46,14 @@ parser.add_argument("--no_data", action='store_true', help="Don't plot data")
 parser.add_argument("--no_fill", action='store_true', help="Don't fill stack")
 parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend text")
 
-subparsers = parser.add_subparsers()
+subparsers = parser.add_subparsers(dest="variation")
 variation = subparsers.add_parser("variation", help="Arguments for adding variation hists")
 variation.add_argument("--varName", type=str, nargs='+', required=True, help="Name of variation hist")
 variation.add_argument("--varLabel", type=str, nargs='+', required=True, help="Label(s) of variation hist for plotting")
 variation.add_argument("--selectAxis", type=str, nargs='+', help="If you need to select a variation axis")
-variation.add_argument("--selectEntries", type=int, nargs='+', help="entries to read from the selected axis")
+variation.add_argument("--selectEntries", type=str, nargs='+', help="entries to read from the selected axis")
 variation.add_argument("--colors", type=str, nargs='+', help="Variation colors")
+variation.add_argument("--double-colors", action='store_true', help="Auto generate colors in pairs (useful for systematics)")
 variation.add_argument("--transform", action='store_true', help="Apply variation-specific transformation")
 variation.add_argument("--fill_between", action='store_true', help="Fill between uncertainty hists in ratio")
 
@@ -69,8 +70,9 @@ if addVariation and (args.selectAxis or args.selectEntries):
     if not (args.selectAxis and args.selectEntries):
         raise ValueError("Must --selectAxis and --selectEntires together")
     if len(args.varLabel) != 1 and len(args.varLabel) != len(args.selectEntries):
-        raise ValueError("Must specify the same number of args for --selectEntires, and --varLabel")
-    if len(args.varName) == 1 and len(args.selectEntries):
+        raise ValueError("Must specify the same number of args for --selectEntires, and --varLabel"
+                         f" found selectEntries={len(args.selectEntries)} and varLabel={len(args.varLabel)}")
+    if len(args.varName) < len(args.selectEntries):
         args.varName = padArray(args.varName, args.selectEntries)
     axes = padArray(args.selectAxis, args.varLabel)
     entries = padArray(args.selectEntries, args.varLabel)
@@ -102,39 +104,41 @@ if addVariation:
     logger.info(f"Adding variation {args.varName}")
     varLabels = padArray(args.varLabel, args.varName)
     # If none matplotlib will pick a random color
-    colors = args.colors if args.colors else [cm.get_cmap("tab10")(i) for i in range(len(args.varName))]
-    for i, (label,name,color) in enumerate(zip(varLabels, args.varName, colors)):
-        do_transform = args.transform and name in transforms
-        name_toload = name if not do_transform else transforms[name]["hist"]
+    ncols = len(args.varName) if not args.double_colors else int(len(args.varName)/2)
+    colors = args.colors if args.colors else [cm.get_cmap("tab10" if ncols < 10 else "tab20")(int(i/2) if args.double_colors else i) for i in range(len(args.varName))]
+    for i, (label,name,color,entry) in enumerate(zip(varLabels,args.varName,colors,entries)):
+        do_transform = args.transform and entry in transforms
         name = name if name != "" else nominalName
         load_op = {}
         action=None
 
+        if entry.isdigit():
+            entry = int(entry)
+
         if args.selectAxis or do_transform:
             transform_procs = groups.getProcNames(exclude_group=exclude)
-            if args.selectAxis:
-                ax = axes[i]
-                entry = entries[i]
-                action = lambda x: x[{ax : entry}] if ax in x.axes.name else x
-                varname = name+str(entry)
+            if do_transform:
+                action = transforms[entry]["action"]
+                if "procs" in transforms[entry]:
+                    transform_procs = transforms[entry]["procs"]
             else:
-                action = transforms[name]["action"]
-                varname = name
-                if "procs" in transforms[name]:
-                    transform_procs = transforms[name]["procs"]
+                ax = axes[i]
+                action = lambda x: x[{ax : entry}] if ax in x.axes.name else x
+            varname = name+str(entry)
             load_op = {p : action for p in transform_procs}
         else:
-            varname = name_toload
+            varname = name
 
-        if (args.transform and name not in transforms):
-            logger.warning(f"No known transformation for variation {name}. No transform applied!")
+        if (args.transform and entry not in transforms):
+            logger.warning(f"No known transformation for variation {entry}. No transform applied!")
 
-        reload = name_toload != args.baseName
+        reload = name != args.baseName
         # The action map will only work if reloading, otherwise need to apply some transform
         # to the already loaded hist
         if load_op and reload:
             action = None
-        groups.addSummedProc(nominalName, relabel=args.baseName, name=name_toload, label=label, exclude=exclude,
+        logger.warning(f"Action is {action}, load op {load_op}")
+        groups.addSummedProc(nominalName, relabel=args.baseName, name=name, label=label, exclude=exclude,
             color=color, reload=reload, rename=varname, procsToRead=datasets,
             preOpMap=load_op, action=action)
 
@@ -171,4 +175,6 @@ for h in args.hists:
     unstacked_yields = groups.make_yields_df(args.baseName, unstack, action)
     plot_tools.write_index_and_log(outdir, outfile, 
         yield_tables={"Stacked processes" : stack_yields, "Unstacked processes" : unstacked_yields},
-        analysis_meta_info={"AnalysisOutput" : groups.getMetaInfo()})
+        analysis_meta_info={"AnalysisOutput" : groups.getMetaInfo()},
+        args=args,
+    )

@@ -16,7 +16,7 @@ ROOT.gInterpreter.Declare('#include "lowpu_utils.h"')
 data_dir = f"{pathlib.Path(__file__).parent}/data/"
 
 def make_muon_calibration_helpers(mc_filename=data_dir+"/calibration/correctionResults_v718_idealgeom_gensim.root", 
-        data_filename=data_dir+"/calibration/calibrationJDATA_smeared_rewtgr_3dmap_LBL.root", 
+        data_filename=data_dir+"/calibration/correctionResults_v721_recjpsidata.root", 
         era = None):
 
     mc_helper = ROOT.wrem.CVHCorrector(mc_filename)
