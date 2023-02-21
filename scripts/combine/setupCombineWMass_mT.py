@@ -119,7 +119,7 @@ if args.statOnly:
     )
     
     
-    cardTool.writeOutput()
+    cardTool.writeOutput(args=args)
     print("Using option --doStatOnly: the card was created with only mass weights and a dummy LnN syst on all processes")
     quit()
 
@@ -426,4 +426,4 @@ cardTool.addSystematic("massWeight",
 ###cardTool.addLnNSystematic("CMS_lumi_lowPU", processes=cardTool.allMCProcesses(), size=1.02, group="CMS_lumi_lowPU")
 
 
-cardTool.writeOutput()
+cardTool.writeOutput(args=args)

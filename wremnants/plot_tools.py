@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib import ticker
 from matplotlib import patches
 from matplotlib.ticker import StrMethodFormatter # for setting number of decimal places on tick labels
-from utilities import boostHistHelpers as hh,common
+from utilities import boostHistHelpers as hh,common,output_tools
 from wremnants import histselections as sel
 import math
 import numpy as np
@@ -312,14 +312,14 @@ def save_pdf_and_png(outdir, basename):
     logger.info(f"Wrote file(s) {fname}(.png)")
 
 def write_index_and_log(outpath, logname, indexname="index.php", template_dir=f"{pathlib.Path(__file__).parent}/Templates", 
-        yield_tables=None, analysis_meta_info=None):
+        yield_tables=None, analysis_meta_info=None, args={}):
     shutil.copyfile(f"{template_dir}/{indexname}", f"{outpath}/{indexname}")
     logdir = outpath
 
     with open(f"{logdir}/{logname}.log", "w") as logf:
         meta_info = '-'*80 + '\n' + \
-            'Script called at %s\n' % datetime.datetime.now() + \
-            'The command was: %s\n' % ' '.join(sys.argv) + \
+            f'Script called at {datetime.datetime.now()}' + \
+            f'The command was: {output_tools.script_command_to_str(sys.argv, args)}\n' + \
             '-'*80 + '\n'
         logf.write(meta_info)
 

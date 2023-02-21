@@ -36,8 +36,8 @@ class datagroups(object):
             raise ValueError("Unsupported file type")
 
         if self.results:
-            self.wmass = os.path.basename(self.results["meta_info"]["command"]).split()[0].startswith("mw")
-            self.wlike = os.path.basename(self.results["meta_info"]["command"]).split()[0].startswith("mz_wlike")
+            self.wmass = os.path.basename(self.results["meta_info"]["command"].split()[0]).startswith("mw")
+            self.wlike = os.path.basename(self.results["meta_info"]["command"].split()[0]).startswith("mz_wlike")
 
         self.lumi = None
         if self.datasets and self.results:

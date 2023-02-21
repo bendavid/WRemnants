@@ -121,7 +121,7 @@ def main(args):
 
     if args.doStatOnly:
         cardTool.addLnNSystematic("dummy", processes=cardTool.allMCProcesses(), size=1.001, group="dummy")
-        cardTool.writeOutput()
+        cardTool.writeOutput(args=args)
         print("Using option --doStatOnly: the card was created with only mass weights and a dummy LnN syst on all processes")
         quit()
 
@@ -200,7 +200,7 @@ def main(args):
 
 
 
-    cardTool.writeOutput()
+    cardTool.writeOutput(args=args)
 
 if __name__ == "__main__":
     parser = make_parser()
