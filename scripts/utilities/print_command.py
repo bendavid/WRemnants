@@ -3,6 +3,7 @@ import pickle
 import argparse
 import os
 import pathlib
+from wremnants.datasets.datagroups import datagroups2016
 
 parser = argparse.ArgumentParser()
 parser.add_argument("infile", type=str, help=".pkl.lz4 from with meta_info")
@@ -24,19 +25,9 @@ def print_command_from_dict(res):
     meta_data = res["meta_data"] if "meta_data" in res else res["meta_info"]
     print(meta_data["command"])
 
-if ".root" in exts:
+
+datagroups = datagroups2016(args.infile)
+if datagroups.rtfile:
     print_command_from_root(args.infile)
-elif ".pkl" in exts:
-    if "lz4" in exts[-1]:
-        open_func = lz4.frame.open
-        open_args = []
-    else:
-        open_func = open
-        open_args ["rb"]
-
-    with open_func(args.infile, *open_args) as f:
-        res = pickle.load(f)
-
-    print_command_from_dict(res)
 else:
-    raise ValueError("Unrecognized file type! Expected pkl or root file")
+    print_command_from_dict(datagroups.results)

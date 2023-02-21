@@ -63,8 +63,8 @@ pdfMap = {
 pdfMapExtended = copy.deepcopy(pdfMap)
 pdfMapExtended["ct18"]["branch"] = "LHEPdfWeightAltSet11"
 pdfMapExtended["ct18"]["alphas"] = ["LHEPdfWeightAltSet11[59]", "LHEPdfWeightAltSet11[62]"]
-pdfMapExtended["mmht"]["branch"] = "LHEPdfWeightAltSet13"
-pdfMapExtended["mmht"]["alphas"] = ["LHEPdfWeightAltSet14[1]", "LHEPdfWeightAltSet14[2]"]
+pdfMapExtended["mmht"]["branch"] = "LHEPdfWeightAltSet12"
+pdfMapExtended["mmht"]["alphas"] = ["LHEPdfWeightAltSet13[1]", "LHEPdfWeightAltSet13[2]"]
 pdfMapExtended.update({
     "nnpdf40" : {
         "name" : "pdfNNPDF40",
@@ -84,16 +84,17 @@ pdfMapExtended.update({
     },
     "msht20" : {
         "name" : "pdfMSHT20",
-        "branch" : "LHEPdfWeightAltSet12",
-        "combine" : "symHessian",
-        "entries" : 51,
-        "alphas" : ["LHEPdfWeight[51]", "LHEPdfWeightAltSet12[52]"],
+        "branch" : "LHEPdfWeightAltSet11",
+        "combine" : "asymHessian",
+        "entries" : 65,
+        "alphas" : ["LHEPdfWeightAltSet11[66]", "LHEPdfWeightAltSet12[69]"],
+        # 65-71 - are LHAPDF ID 27500 = 27506, 27501 is 0.0116 and 27504 is 0.0120
         "alphasRange" : "002", # TODO: IS that true?
     },
     "atlasWZj20" : {
         "name" : "pdfATLASWZJ20",
         "branch" : "LHEPdfWeightAltSet19",
-        "combine" : "symHessian",
+        "combine" : "asymHessian",
         "entries" : 33,
         "alphas" : ["LHEPdfWeight[41]", "LHEPdfWeight[42]"],
         "alphasRange" : "002", # TODO: IS that true?

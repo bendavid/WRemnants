@@ -21,8 +21,8 @@ def syst_transform_map(base_hist, hist_name):
         return unc if base_hist == "nominal" else f"{base_hist}_{unc}"
 
     transforms = {}
-    transforms.update({pdf+"Up" : {"hist" : uncHist(pdf), "action" : lambda h,p=pdf: pdfUnc(h, p)[0]} for pdf in pdfNames})
-    transforms.update({pdf+"Down" : {"hist" : uncHist(pdf), "action" : lambda h,p=pdf: pdfUnc(h, p)[1]} for pdf in pdfNames})
+    transforms.update({pdf+"Up" : {"action" : lambda h,p=pdf: pdfUnc(h, p)[0]} for pdf in pdfNames})
+    transforms.update({pdf+"Down" : {"action" : lambda h,p=pdf: pdfUnc(h, p)[1]} for pdf in pdfNames})
     transforms.update({
         "massShift100MeVDown" : {"hist" : "massWeight", "action" : lambda h: h[{"tensor_axis_0" : 0}]},
         "massShift100MeVUp" : {"hist" : "massWeight", "action" : lambda h: h[{"tensor_axis_0" : 20}]},
@@ -272,41 +272,6 @@ def add_muonscale_smeared_hist(results, df, netabins, mag, isW, axes, cols, base
     results.append(dummyMuonScaleSyst_gen_smear)
 
     return df
-
-
-def scetlib_scale_vars():
-	return ["resumFOScaleUp", "resumFOScaleDown",
-        "resumLambdaUp", "resumLambdaDown",
-        "resumTransitionUp", "resumTransitionDown",
-        "resumScaleUp", "resumScaleDown"]
-
-#TODO: Having these hardcoded kind of defeats the purpose
-def scetlib_np_vars():
-	return ['gamma_cuspUp',
-		'gamma_cuspDown',
-		'gamma_mu_qUp',
-		'gamma_mu_qDown',
-		'gamma_nuUp',
-		'gamma_nuDown',
-		'h_qqVDown',
-		'h_qqVUp',
-		'sUp',
-		'sDown',
-		'b_qqVUp',
-		'b_qqVDown',
-		'b_qqbarVUp',
-		'b_qqbarVDown',
-		'b_qqSUp',
-		'b_qqSDown',
-		'b_qqDSUp',
-		'b_qqDSDown',
-		'b_qgUp',
-		'b_qgDown',
-		'kappaFODown',
-		'kappaFOUp',
-		'lambdaDown',
-		'lambdaUp'
-	]
 
 def scetlib_scale_unc_hist(h, obs, syst_ax="vars"):
     hnew = hist.Hist(*h.axes[:-1], hist.axis.StrCategory(["central"]+scetlib_scale_vars(),
