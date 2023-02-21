@@ -36,8 +36,8 @@ class datagroups(object):
             raise ValueError("Unsupported file type")
 
         if self.results:
-            self.wmass = os.path.basename(self.results["meta_info"]["command"].split()[0]).startswith("mw")
-            self.wlike = os.path.basename(self.results["meta_info"]["command"].split()[0]).startswith("mz_wlike")
+            self.wmass = os.path.basename(self.getMetaInfo()["command"].split()[0]).startswith("mw")
+            self.wlike = os.path.basename(self.getMetaInfo()["command"].split()[0]).startswith("mz_wlike")
 
         self.lumi = None
         if self.datasets and self.results:
@@ -71,7 +71,10 @@ class datagroups(object):
         return self.lumi*1000*proc.xsec/self.results[proc.name]["weight_sum"]
 
     def getMetaInfo(self):
-        return self.results["meta_info"]
+        if self.rtfile:
+            return self.rtfile["meta_info"]
+        else:
+            return self.results["meta_info"] if "meta_info" in self.results else self.results["meta_data"]
 
     # for reading pickle files
     # as a reminder, the ND hists with tensor axes in the pickle files are organized as

@@ -79,11 +79,12 @@ def padArray(ref, matchLength):
 
 addVariation = hasattr(args, "varName") and args.varName is not None
 
+entries = []
 if addVariation and (args.selectAxis or args.selectEntries):
     if not (args.selectAxis and args.selectEntries):
-        raise ValueError("Must --selectAxis and --selectEntires together")
+        raise ValueError("Must --selectAxis and --selectEntries together")
     if len(args.varLabel) != 1 and len(args.varLabel) != len(args.selectEntries):
-        raise ValueError("Must specify the same number of args for --selectEntires, and --varLabel"
+        raise ValueError("Must specify the same number of args for --selectEntries, and --varLabel"
                          f" found selectEntries={len(args.selectEntries)} and varLabel={len(args.varLabel)}")
     if len(args.varName) < len(args.selectEntries):
         args.varName = padArray(args.varName, args.selectEntries)
@@ -119,13 +120,14 @@ if addVariation:
     # If none matplotlib will pick a random color
     ncols = len(args.varName) if not args.double_colors else int(len(args.varName)/2)
     colors = args.colors if args.colors else [cm.get_cmap("tab10" if ncols < 10 else "tab20")(int(i/2) if args.double_colors else i) for i in range(len(args.varName))]
-    for i, (label,name,color,entry) in enumerate(zip(varLabels,args.varName,colors,entries)):
+    for i, (label,name,color) in enumerate(zip(varLabels,args.varName,colors)):
+        entry = entries[i] if entries else None
         do_transform = args.transform and entry in transforms
         name = name if name != "" else nominalName
         load_op = {}
         action=None
 
-        if entry.isdigit():
+        if entry and entry.isdigit():
             entry = int(entry)
 
         if args.selectAxis or do_transform:
@@ -134,10 +136,11 @@ if addVariation:
                 action = transforms[entry]["action"]
                 if "procs" in transforms[entry]:
                     transform_procs = transforms[entry]["procs"]
+                varname = entry
             else:
                 ax = axes[i]
                 action = lambda x: x[{ax : entry}] if ax in x.axes.name else x
-            varname = name+str(entry)
+                varname = name+str(entry)
             load_op = {p : action for p in transform_procs}
         else:
             varname = name

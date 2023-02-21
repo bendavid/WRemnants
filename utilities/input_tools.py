@@ -6,15 +6,26 @@ from utilities import boostHistHelpers as hh
 import numpy as np
 import logging
 import os
+import hdf5plugin
+import h5py
+import narf
+
+def read_and_scale_pkllz4(fname, proc, histname, calculate_lumi=False, scale=1):
+    with lz4.frame.open(fname) as f:
+        results = pickle.load(f)
+        
+    return load_and_scale(results, proc, histname, calculate_lumi, scale)
 
 def read_and_scale(fname, proc, histname, calculate_lumi=False, scale=1):
-    with lz4.frame.open(fname) as f:
-        out = pickle.load(f)
+    h5file = h5py.File(fname, "r")
+    results = narf.ioutils.pickle_load_h5py(h5file["results"])
         
-    return load_and_scale(out, proc, histname, calculate_lumi, scale)
+    return load_and_scale(results, proc, histname, calculate_lumi, scale)
 
 def load_and_scale(res_dict, proc, histname, calculate_lumi=False, scale=1.):
     h = res_dict[proc]["output"][histname]
+    if isinstance(h, narf.ioutils.H5PickleProxy):
+        h = h.get()
     if not res_dict[proc]["dataset"]["is_data"]:
         scale = res_dict[proc]["dataset"]["xsec"]/res_dict[proc]["weight_sum"]*scale
         if calculate_lumi:
@@ -27,14 +38,14 @@ def load_and_scale(res_dict, proc, histname, calculate_lumi=False, scale=1.):
     return h*scale
 
 def read_all_and_scale(fname, procs, histnames, lumi=False):
-    with lz4.frame.open(fname) as f:
-        out = pickle.load(f)
+    h5file = h5py.File(fname, "r")
+    results = narf.ioutils.pickle_load_h5py(h5file["results"])
 
     hists = []
     for histname in histnames:
-        h = load_and_scale(out, procs[0], histname, lumi)
+        h = load_and_scale(results, procs[0], histname, lumi)
         for proc in procs[1:]:
-            h += load_and_scale(out, proc, histname, lumi)
+            h += load_and_scale(results, proc, histname, lumi)
         hists.append(h)
 
     return hists
