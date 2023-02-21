@@ -29,7 +29,7 @@ axis_massWgen = hist.axis.Variable([5., 13000.], name="massVgen", underflow=True
 axis_massZgen = hist.axis.Regular(10, 60., 120., name="massVgen")
 
 axis_absYVgen = hist.axis.Variable(
-    [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4, 5], 
+    [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4, 4.25, 4.5, 4.75, 5, 10], 
     name = "absYVgen", underflow=False
 )
 
@@ -77,13 +77,13 @@ def build_graph(df, dataset):
     df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
 
     if isZ:
-        nominal_axes = [axis_massZgen, axis_ygen, axis_ptVgen, axis_chargeZgen]
+        nominal_axes = [axis_massZgen, axis_absYVgen, axis_ptVgen, axis_chargeZgen]
         lep_axes = [axis_l_eta_gen, axis_l_pt_gen, axis_chargeZgen]
     else:
-        nominal_axes = [axis_massWgen, axis_ygen, axis_ptVgen, axis_chargeWgen]
+        nominal_axes = [axis_massWgen, axis_absYVgen, axis_ptVgen, axis_chargeWgen]
         lep_axes = [axis_l_eta_gen, axis_l_pt_gen, axis_chargeWgen]
 
-    nominal_cols = ["massVgen", "yVgen", "ptVgen", "chargeVgen"]
+    nominal_cols = ["massVgen", "absYVgen", "ptVgen", "chargeVgen"]
     lep_cols = ["etaPrefsrLep", "ptPrefsrLep", "chargeVgen"]
 
     if args.singleLeptonHists and isW or isZ:
@@ -150,7 +150,7 @@ w_moments = None
 if not args.skipAngularCoeffs:
     for dataset in datasets:
         name = dataset.name
-        if "helicity_moments_scale" not in resultdict[name]:
+        if "helicity_moments_scale" not in resultdict[name]["output"]:
             logger.warning(f"Failed to find helicity_moments_scale hist for proc {name}. Skipping!")
             continue
         moments = resultdict[name]["output"]["helicity_moments_scale"]

@@ -251,4 +251,4 @@ cardTool.addLnNSystematic("CMS_DY", processes=["DY"], size=1.03, group="CMS_DY")
 cardTool.addLnNSystematic("CMS_lumi_lowPU", processes=cardTool.allMCProcesses(), size=1.02, group="CMS_lumi_lowPU")
 
 
-cardTool.writeOutput(statOnly=args.statOnly)
+cardTool.writeOutput(args=args)

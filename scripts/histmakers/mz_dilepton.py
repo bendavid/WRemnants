@@ -12,7 +12,7 @@ import time
 import os
 
 parser.add_argument("--csvars_hist", action='store_true', help="Add CS variables to dilepton hist")
-parser.add_argument("--uncertainty-axes", type=str, nargs="*", default=["mll",], help="")
+parser.add_argument("--axes", type=str, nargs="*", default=["mll", "ptll"], help="")
 parser.add_argument("--finePtBinning", action='store_true', help="Use fine binning for ptll")
 
 parser = common.set_parser_default(parser, "pt", [44,26.,70.])
@@ -43,11 +43,11 @@ axes = {
     "charge": hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "charge") # categorical axes in python bindings always have an overflow bin, so use a regular
 }
 
-for a in args.uncertainty_axes:
+for a in args.axes:
     if a not in axes.keys():
         logger.error(f" {a} is not a known axes! Supported axes choices are {list(axes.keys())}")
 
-nominal_cols = args.uncertainty_axes
+nominal_cols = args.axes
 
 if args.csvars_hist:
     nominal_cols += ["cosThetaStarll", "phiStarll"]
