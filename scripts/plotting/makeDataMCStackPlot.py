@@ -150,7 +150,6 @@ if addVariation:
         # to the already loaded hist
         if load_op and reload:
             action = None
-        logger.warning(f"Action is {action}, load op {load_op}")
         groups.addSummedProc(nominalName, relabel=args.baseName, name=name, label=label, exclude=exclude,
             color=color, reload=reload, rename=varname, procsToRead=datasets,
             preOpMap=load_op, action=action)
