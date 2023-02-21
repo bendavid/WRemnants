@@ -200,7 +200,7 @@ def main(args):
 
 
 
-    cardTool.writeOutput()
+    cardTool.writeOutput(args=args)
 
 if __name__ == "__main__":
     parser = make_parser()
