@@ -4,8 +4,9 @@ import sys
 import subprocess
 import datetime
 import time
-import pickle
-import lz4.frame
+import hdf5plugin
+import h5py
+import narf
 import logging
 from utilities import common
 
@@ -72,7 +73,7 @@ def write_analysis_output(results, outfile, args):
         to_append.append(f"maxFiles{args.maxFiles}")
 
     if to_append:
-        outfile = outfile.replace(".pkl.lz4", f"_{'_'.join(to_append)}.pkl.lz4")
+        outfile = outfile.replace(".hdf5", f"_{'_'.join(to_append)}.hdf5")
 
     if args.outfolder:
         if not os.path.exists(args.outfolder):
@@ -81,7 +82,7 @@ def write_analysis_output(results, outfile, args):
         outfile = os.path.join(args.outfolder, outfile)
 
     time0 = time.time()
-    with lz4.frame.open(outfile, "wb") as f:
-        pickle.dump(results, f, protocol = pickle.HIGHEST_PROTOCOL)
+    with h5py.File(outfile, 'w') as f:
+        narf.ioutils.pickle_dump_h5py("results", results, f)
     print("Writing output:", time.time()-time0)
     print(f"Output saved in {outfile}")
