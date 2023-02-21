@@ -4,6 +4,8 @@ from wremnants.datasets import datasets2016
 import logging
 import lz4.frame
 import pickle
+import hdf5plugin
+import h5py
 import narf
 #import uproot
 import ROOT
@@ -19,13 +21,19 @@ class datagroups(object):
     def __init__(self, infile, combine=False):
         self.combine = combine
         self.lumi = 1.
-        if not infile.endswith(".root"):
+        self.h5file = None
+        self.rtfile = None
+        if infile.endswith(".pkl.lz4"):
             with lz4.frame.open(infile) as f:
                 self.results = pickle.load(f)
-            self.rtfile = None
-        else:
+        elif infile.endswith(".hdf5"):
+            self.h5file = h5py.File(infile, "r")
+            self.results = narf.ioutils.pickle_load_h5py(self.h5file["results"])
+        elif infile.endswith(".root"):
             self.rtfile = ROOT.TFile.Open(infile)
             self.results = None
+        else:
+            raise ValueError("Unsupported file type")
 
         if self.results:
             self.wmass = os.path.basename(self.results["meta_info"]["command"]).split()[0].startswith("mw")
@@ -43,6 +51,12 @@ class datagroups(object):
             
         self.nominalName = "nominal"
         self.globalAction = None
+
+    def __del__(self):
+        if self.h5file:
+            self.h5file.close()
+        if self.rtfile:
+            self.rtfile.Close()
 
     # To be used for applying a selection, rebinning, etc.
     def setGlobalAction(self, action):
@@ -379,6 +393,8 @@ class datagroups2016(datagroups):
         if histname not in output:
             raise ValueError(f"Histogram {histname} not found for process {proc.name}")
         h = output[histname]
+        if isinstance(h, narf.ioutils.H5PickleProxy):
+            h = h.get()
         if forceNonzero:
             h = hh.clipNegativeVals(h)
         if scaleToNewLumi > 0:
