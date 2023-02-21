@@ -65,6 +65,6 @@ cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16)
 # This needs to be handled by shifting the norm before subtracting from the fakes
 # cardTool.addSystematic("lumi", outNames=["", "lumiDown", "lumiUp"], group="luminosity")
 # TODO: Allow to be appended to previous group
-cardTool.writeOutput()
+cardTool.writeOutput(args=args)
 
 

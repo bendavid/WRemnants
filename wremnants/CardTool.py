@@ -402,7 +402,7 @@ class CardTool(object):
         else:
             self.outfile = outfile
 
-    def writeOutput(self, args):
+    def writeOutput(self, args=None):
         self.datagroups.loadHistsForDatagroups(
             baseName=self.nominalName, syst=self.nominalName, label=self.nominalName, 
             scaleToNewLumi=self.lumiScale)
