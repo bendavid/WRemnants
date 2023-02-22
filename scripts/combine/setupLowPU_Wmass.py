@@ -97,9 +97,6 @@ cardTool.addSystematic(f"alphaS002{pdfName}",
     scale=0.75,
 )
 
-
-
-
 scaleSystAxes = ["chargeVgen", "muRfact", "muFfact"]  ##  "ptVgen", "chargeVgen", "helicityWeight_tensor" ## charge = 0?
 scaleLabelsByAxis = ["q", "muR", "muF"]
 scaleGroupName = "QCDscale"
@@ -133,7 +130,6 @@ cardTool.addSystematic("qcdScaleByHelicity",
         ("muR0muF1", "muRDown"), ("muR1muF0", "muFDown"), ("muR1muF2", "muFUp")],
     baseName="QCDscale_",
     )
-
 
 
 def scale_recoil_hist_to_variations(scale_hist):
