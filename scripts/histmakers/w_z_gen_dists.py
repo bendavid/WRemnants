@@ -109,9 +109,7 @@ def build_graph(df, dataset):
     nominal_gen = df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols, "nominal_weight"])
 
     results.append(nominal_gen)
-
     if not 'horace' in dataset.name:
-
         if "LHEScaleWeight" in df.GetColumnNames():
             df = theory_tools.define_scale_tensor(df)
             syst_tools.add_qcdScale_hist(results, df, nominal_axes, nominal_cols, "nominal_gen")
@@ -150,37 +148,37 @@ w_moments = None
 if not args.skipAngularCoeffs:
     for dataset in datasets:
         name = dataset.name
-        if "helicity_moments_scale" not in resultdict[name]:
+        if "helicity_moments_scale" not in resultdict[name]['output']:
             logger.warning(f"Failed to find helicity_moments_scale hist for proc {name}. Skipping!")
             continue
         moments = resultdict[name]["output"]["helicity_moments_scale"]
         if name in common.zprocs:
             if z_moments is None:
-                z_moments = moments
+                z_moments = hh.makeAbsHist(moments.get(), "y")
             else:
-                z_moments += moments
+                new_moments = hh.makeAbsHist(moments.get(), "y")
+                z_moments = hh.addHists(z_moments, new_moments)
         elif name in common.wprocs:
             if w_moments is None:
-                w_moments = moments
+                w_moments = hh.makeAbsHist(moments.get(), "y")
             else:
-                w_moments += moments
-
-if z_moments and w_moments:
+                new_moments = hh.makeAbsHist(moments.get(), "y")
+                w_moments = hh.addHists(w_moments, new_moments)
+    yax_name = "absy"
+    coeffs={}
     # REMINDER: common.ptV_binning is not the one using 10% quantiles, and the quantiles are not a subset of this binning, but apparently it doesn't matter
-    yax_name = axis_absYVgen.name
-    if "y" in z_moments.axes.name and "y" in w_moments.axes.name:
-        z_moments = hh.makeAbsHist(z_moments, "y")
-        w_moments = hh.makeAbsHist(w_moments, "y")
-        yax_name = "absy"
-
-    z_moments = hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning)
-    z_moments = hh.rebinHist(z_moments, axis_massZgen.name, axis_massZgen.edges[::2])
-    z_moments = hh.rebinHist(z_moments, yax_name, axis_absYVgen.edges[:-1])
-    w_moments = hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning)
-    w_moments = hh.rebinHist(w_moments, yax_name, axis_absYVgen.edges[:-1])
-
-    coeffs = {"Z" : wremnants.moments_to_angular_coeffs(z_moments) if z_moments else None,
-            "W" : wremnants.moments_to_angular_coeffs(w_moments) if w_moments else None,
-    }
-
-    output_tools.write_analysis_output(coeffs, "w_z_coeffs.hdf5", args)
+    if z_moments:
+        print('Writing angular coeffs Z')
+        #yax_name = axis_absYVgen.name
+        z_moments = hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning)
+        z_moments = hh.rebinHist(z_moments, axis_massZgen.name, axis_massZgen.edges[::2])
+        z_moments = hh.rebinHist(z_moments, yax_name, axis_absYVgen.edges[:-1])
+        coeffs["Z"] = wremnants.moments_to_angular_coeffs(z_moments)
+    if w_moments:
+        print('Writing angular coeffs W')
+        w_moments = hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning)
+        w_moments = hh.rebinHist(w_moments, yax_name, axis_absYVgen.edges[:-1])
+        coeffs["W"] = wremnants.moments_to_angular_coeffs(w_moments)
+    print(coeffs)
+    if coeffs:
+        output_tools.write_analysis_output(coeffs, "w_z_coeffs.hdf5", args)
