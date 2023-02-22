@@ -22,8 +22,11 @@ args = parser.parse_args()
 logger = common.setup_logger(__file__, args.verbose, args.color_logger)
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
-datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
-    nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path)
+excludeGroup = lambda x,excl=args.excludeProcGroups: all([f not in x.group for f in excl if x.group is not None])
+datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
+                                              filt=filt if args.filterProcs else None,
+                                              excludeGroup=excludeGroup if args.excludeProcGroups else None,
+                                              nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path)
 
 era = args.era
 

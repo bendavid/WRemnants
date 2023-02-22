@@ -25,7 +25,7 @@ def makeFilelist(paths, maxFiles=-1, format_args={}):
         filelist.extend(glob.glob(path) if path[:4] != "/eos" else buildXrdFileList(path, "eoscms.cern.ch"))
     return filelist if maxFiles < 0 else filelist[:maxFiles]
 
-def getDatasets(maxFiles=-1, filt=None, mode=None, base_path=None, nanoVersion="v9", 
+def getDatasets(maxFiles=-1, filt=None, excludeGroup=None, mode=None, base_path=None, nanoVersion="v9", 
         data_tag="TrackFitV718_NanoProdv1", mc_tag="TrackFitV718_NanoProdv1"):
     if not base_path:
         hostname = socket.gethostname()
@@ -86,7 +86,9 @@ def getDatasets(maxFiles=-1, filt=None, mode=None, base_path=None, nanoVersion="
 
     if filt:
         narf_datasets = list(filter(filt, narf_datasets))
-
+    if excludeGroup:
+        narf_datasets = list(filter(excludeGroup, narf_datasets))
+        
     for sample in narf_datasets:
         if not sample.filepaths:
             logger.warning(f"Failed to find any files for sample {sample.name}!")
