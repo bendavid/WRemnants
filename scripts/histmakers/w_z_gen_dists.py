@@ -164,10 +164,12 @@ if not args.skipAngularCoeffs:
             else:
                 new_moments = hh.makeAbsHist(moments.get(), "y")
                 w_moments = hh.addHists(w_moments, new_moments)
-    yax_name = "absy"
+
     coeffs={}
     # REMINDER: common.ptV_binning is not the one using 10% quantiles, and the quantiles are not a subset of this binning, but apparently it doesn't matter
     if z_moments:
+        if "y" in z_moments.axes.name:
+            yax_name = "absy"
         print('Writing angular coeffs Z')
         #yax_name = axis_absYVgen.name
         z_moments = hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning)
@@ -175,10 +177,11 @@ if not args.skipAngularCoeffs:
         z_moments = hh.rebinHist(z_moments, yax_name, axis_absYVgen.edges[:-1])
         coeffs["Z"] = wremnants.moments_to_angular_coeffs(z_moments)
     if w_moments:
+        if "y" in w_moments.axes.name:
+            yax_name = "absy"
         print('Writing angular coeffs W')
         w_moments = hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning)
         w_moments = hh.rebinHist(w_moments, yax_name, axis_absYVgen.edges[:-1])
         coeffs["W"] = wremnants.moments_to_angular_coeffs(w_moments)
-    print(coeffs)
     if coeffs:
         output_tools.write_analysis_output(coeffs, "w_z_coeffs.hdf5", args)
