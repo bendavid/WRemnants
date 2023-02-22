@@ -24,7 +24,11 @@ met = args.met # mumu, ee
 corr_helpers = theory_corrections.load_corr_helpers(common.wprocs_lowpu, args.theory_corr)
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
-datasets = wremnants.datasetsLowPU.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, flavor=flavor)
+excludeGroup = lambda x,excl=args.excludeProcGroups: all([f not in x.group for f in excl if x.group is not None])
+datasets = wremnants.datasetsLowPU.getDatasets(maxFiles=args.maxFiles,
+                                               filt=filt if args.filterProcs else None,
+                                               excludeGroup=excludeGroup if args.excludeProcGroups else None,
+                                               flavor=flavor)
 
 logger = common.setup_logger(__file__, args.verbose, args.color_logger)
 
