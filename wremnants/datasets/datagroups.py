@@ -367,7 +367,7 @@ class datagroups2016(datagroups):
             })
         else:
             self.groups["Other"] = dict(
-                members = [x for x in self.datasets.values() if not x.is_data and x.name not in ["ZmumuPostVFP", "ZtautauPostVFP"]],
+                members = [x for x in self.datasets.values() if not x.is_data and x.name not in ["ZmumuPostVFP", "ZtautauPostVFP"] and x.group != "QCD"],
                 label = "Other",
                 color = "grey",
             )
