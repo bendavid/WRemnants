@@ -148,7 +148,7 @@ def main(args):
         scale=0.75,
     )
 
-    combine_helpers.add_pdf_uncertainty(cardTool, single_v_samples, passSystToFakes)
+    combine_helpers.add_pdf_uncertainty(cardTool, constrainedProcs+unconstrainedProcs, passSystToFakes)
     combine_helpers.add_scale_uncertainty(cardTool, args.qcdScale, constrainedProcs+unconstrainedProcs, 
         to_fakes=False, pdf=args.pdf, use_hel_hist=True, scetlib=args.scetlibUnc)
     

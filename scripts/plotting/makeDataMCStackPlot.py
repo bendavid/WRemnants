@@ -171,6 +171,8 @@ logger.info(f"Stacked processes are {prednames}")
 select = {} if args.channel == "all" else {"charge" : -1.j if args.channel == "minus" else 1.j}
 
 def collapseSyst(h):
+    if type(h.axes[-1]) == hist.axis.StrCategory:
+        return h[...,0]
     for ax in ["systIdx", "tensor_axis_0", "vars"]:
         if ax in h.axes.name:
             return h[{ax : 0}].copy()

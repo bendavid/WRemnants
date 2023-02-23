@@ -314,10 +314,10 @@ class CardTool(object):
                         for rep in systInfo["systNameReplace"]:
                             name = name.replace(*rep)
                     # Obviously there is a nicer way to do this...
-                    if "up" in name.lower():
-                        name = name.replace("Up", "").replace("up", "")+"Up"
-                    elif "down" in name.lower():
-                        name = name.replace("Down", "").replace("down", "")+"Down"
+                    if "Up" in name:
+                        name = name.replace("Up", "")+"Up"
+                    elif "Down" in name:
+                        name = name.replace("Down", "")+"Down"
                     systInfo["outNames"].append(name)
             if not len(systInfo["outNames"]):
                 raise RuntimeError(f"Did not find any valid variations for syst {syst}")
