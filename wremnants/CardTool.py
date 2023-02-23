@@ -248,7 +248,7 @@ class CardTool(object):
             skip = False
             for e,match in zip(entry, skipEntry): 
                 # Can use -1 to exclude all values of an axis
-                if match == -1 or re.match(str(match), str(e)):
+                if match == -1 or match == e or re.match(str(match), str(e)):
                     return True
         return False
 
