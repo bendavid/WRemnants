@@ -1512,6 +1512,7 @@ def drawNTH1(hists=[],
              markerStyleFirstHistogram=20,
              useLineFirstHistogram=False,
              fillStyleSecondHistogram=3004,
+             fillColorSecondHistogram=None,
              colorVec=None,
              setRatioRangeFromHisto=False, # currently only for 2 histograms in hists
              setOnlyLineRatio=False,
@@ -1604,7 +1605,10 @@ def drawNTH1(hists=[],
         if not onlyLineColor:
             h.SetFillColor(colors[ic])
             if ic==0: 
-                h.SetFillStyle(fillStyleSecondHistogram)   
+                h.SetFillStyle(fillStyleSecondHistogram)
+                if fillColorSecondHistogram:
+                    h.SetLineWidth(lineWidth)
+                    h.SetFillColor(fillColorSecondHistogram)
             if ic==1: 
                 h.SetFillColor(0) 
                 h.SetLineWidth(lineWidth) 
@@ -1649,8 +1653,11 @@ def drawNTH1(hists=[],
     h1.GetYaxis().SetTickSize(0.01)
     if setXAxisRangeFromUser: h1.GetXaxis().SetRangeUser(xmin,xmax)
     h1.Draw("HE" if useLineFirstHistogram else "PE")
-    for h in hnums:
-        h.Draw("HE SAME" if drawErrorAll else "HIST SAME")
+    for ih,h in enumerate(hnums):
+        if ih == 0 and fillColorSecondHistogram != None:
+            h.Draw("E2 SAME" if drawErrorAll else "HIST SAME")
+        else:
+            h.Draw("HE SAME" if drawErrorAll else "HIST SAME")
     h1.Draw("HE SAME" if useLineFirstHistogram else "PE SAME")
 
     nColumnsLeg = 1
