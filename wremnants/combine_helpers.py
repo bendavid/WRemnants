@@ -167,7 +167,7 @@ def args_from_metadata(meta_data, arg, default):
         last_idx = len(sys_args)
     return sys_args[idx+1:last_idx]
 
-def add_pdf_uncertainty(card_tool, samples, to_fakes):
+def add_pdf_uncertainty(card_tool, samples, to_fakes, action=None):
     pdf = args_from_metadata(card_tool.datagroups.getMetaInfo(), "pdfs", "msht20")[0]
     logger.info(f"Using PDF {pdf}")
     pdfInfo = theory_tools.pdf_info_map("ZmumuPostVFP", pdf)
@@ -183,6 +183,7 @@ def add_pdf_uncertainty(card_tool, samples, to_fakes):
             # -1 means all possible values of the mirror axis
             skipEntries=[("^pdf0[a-z]*", -1)],
             passToFakes=to_fakes,
+            actionMap=action,
         )
     else:
         card_tool.addSystematic(pdfName, 
@@ -193,6 +194,7 @@ def add_pdf_uncertainty(card_tool, samples, to_fakes):
             skipEntries=[("^pdf0[a-z]*",)],
             passToFakes=to_fakes,
             scale=pdfInfo["scale"] if "scale" in pdfInfo else 1,
+            actionMap=action,
         )
 
     asRange = pdfInfo['alphasRange']
