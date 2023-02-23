@@ -95,7 +95,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
             group="scetlibTNP",
             systAxes=["vars"],
             passToFakes=to_fakes,
-            systNameReplace=[("central", ""), ("+1", "Up"), ("-1", "Down"), ("-0.5", "Down"), ("+0.5", "Up")],
+            systNameReplace=[("central", ""), ("+1", "Up"), ("-1", "Down"), ("-0.5", "Down"), ("+0.5", "Up"), ("up", "Up"), ("down", "Down")],
             skipEntries=[('^kappaFO.*',), ('^recoil_scheme.*',), ('^c_nu.*',), ('Omega\d.\d*',), ("^transition_points.*",)],
             rename=f"scetlibTNP", 
         )
