@@ -1489,6 +1489,7 @@ def drawNTH1(hists=[],
              draw_both0_noLog1_onlyLog2=1,
              leftMargin=0.15,
              rightMargin=0.04,
+             bottomMargin=0.15,
              labelRatioTmp="Rel.Unc.::0.5,1.5",
              drawStatBox=False,
              legendCoords="0.15,0.35,0.8,0.9",  # x1,x2,y1,y2
@@ -1569,7 +1570,7 @@ def drawNTH1(hists=[],
         pad2.SetGridy(1)
         pad2.SetFillStyle(0)
     else:
-        canvas.SetBottomMargin(0.15)
+        canvas.SetBottomMargin(bottomMargin)
 
     h1 = hists[0]
     hnums = [hists[i] for i in range(1,len(hists))]
