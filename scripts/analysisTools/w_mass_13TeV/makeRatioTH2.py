@@ -295,22 +295,34 @@ if __name__ == "__main__":
         ratio_unrolled = unroll2Dto1D(hratio, newname=f"unrolled_{hratio.GetName()}", cropNegativeBins=False)
         unitLine = copy.deepcopy(ratio_unrolled.Clone("tmp_horizontalLineAt1"))
         unitLine.Reset("ICESM")
+        ratioUnc = copy.deepcopy(ratio_unrolled.Clone("tmp_ratioUnc"))
+        ratioUnc.Reset("ICESM")
         for ib in range(2+unitLine.GetNbinsX()):
             unitLine.SetBinContent(ib, 1.0)
             unitLine.SetBinError(ib, 0.0)
+            # for plotting purpose put the uncertainty of the unrolled on the unit line, and reset it for the unrolled
+            ratioUnc.SetBinContent(ib, 1.0)
+            ratioUnc.SetBinError(ib, ratio_unrolled.GetBinError(ib))
+            ratio_unrolled.SetBinError(ib, 0.0)
         yBinRanges = []
-        for iybin in range(hratio.GetNbinsY()):
-            yBinRanges.append("") # keep dummy otherwise there's too much text most of the time
+        if hratio.GetNbinsY() > 15:
+            for iybin in range(hratio.GetNbinsY()):
+                yBinRanges.append("") # keep dummy otherwise there's too much text most of the time
+        else:
+            for iybin in range(hratio.GetNbinsY()):
+                yBinRanges.append("#splitline{{y in}}{{[{ptmin},{ptmax}]}}".format(ptmin=int(hratio.GetYaxis().GetBinLowEdge(iybin+1)),
+                                                                                   ptmax=int(hratio.GetYaxis().GetBinLowEdge(iybin+2))))
         zAxisTitle_unroll = zAxisTitle if "::" not in zAxisTitle else str(zAxisTitle.split("::")[0])
-        drawNTH1([ratio_unrolled, unitLine], [f"Ratio {args.histTitle}", "Unity"],
-                 f"Unrolled bin: '{xAxisTitle}' vs '{yAxisTitle}'", zAxisTitle_unroll,
+        drawNTH1([ratio_unrolled, ratioUnc, unitLine], [f"Ratio {args.histTitle}", "Ratio uncertainty", "Unity"],
+                 f"Unrolled bin: '{yAxisTitle}' vs '{xAxisTitle}'", zAxisTitle_unroll,
                  ratio_unrolled.GetName(), outname,
                  leftMargin=0.06, rightMargin=0.01,
-                 legendCoords="0.06,0.99,0.91,0.99;2", lowerPanelHeight=0.0, skipLumi=True, passCanvas=canvas_unroll,
+                 legendCoords="0.06,0.99,0.91,0.99;3", lowerPanelHeight=0.0, skipLumi=True, passCanvas=canvas_unroll,
                  drawVertLines="{a},{b}".format(a=hratio.GetNbinsY(),b=hratio.GetNbinsX()),
                  textForLines=yBinRanges, transparentLegend=False,
-                 onlyLineColor=True, useLineFirstHistogram=True, lineWidth=1,
-                 colorVec=[ROOT.kRed])
+                 onlyLineColor=False, useLineFirstHistogram=True, drawErrorAll=True, lineWidth=1,
+                 fillStyleSecondHistogram=1001, fillColorSecondHistogram=ROOT.kGray,
+                 colorVec=[ROOT.kBlack, ROOT.kRed])
 
     
     # making distribution of pulls
