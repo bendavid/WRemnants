@@ -13,7 +13,7 @@ lumicsv_mu = f"{pathlib.Path(__file__).parent.parent}/data/lowPU/bylsoutput_HLT_
 lumicsv_el = f"{pathlib.Path(__file__).parent.parent}/data/lowPU/bylsoutput_HLT_HIEle20_Full.csv"
 
 # https://twiki.cern.ch/twiki/bin/viewauth/CMS/StandardModelCrossSectionsat13TeV
-def getDatasets(maxFiles=-1, filt=None, flavor="",base_path=None):
+def getDatasets(maxFiles=-1, filt=None, excludeGroup=None, flavor="",base_path=None):
 
     if not base_path:
         hostname = socket.gethostname()
@@ -153,6 +153,8 @@ def getDatasets(maxFiles=-1, filt=None, flavor="",base_path=None):
         
     if filt:
         allProcs = list(filter(filt, allProcs))
+    if excludeGroup:
+        allProcs = list(filter(excludeGroup, allProcs))
 
     for sample in allProcs:
         if not sample.filepaths:
