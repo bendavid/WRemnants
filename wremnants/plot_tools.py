@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib import ticker
 from matplotlib import patches
 from matplotlib.ticker import StrMethodFormatter # for setting number of decimal places on tick labels
-from utilities import boostHistHelpers as hh,common
+from utilities import boostHistHelpers as hh,common,output_tools
 from wremnants import histselections as sel
 import math
 import numpy as np
@@ -92,7 +92,7 @@ def makeStackPlotWithRatio(
     xlabel="", ylabel="Events/bin", rlabel = "Data/Pred.", rrange=[0.9, 1.1], ylim=None, xlim=None, nlegcols=2,
     binwnorm=None, select={},  action = (lambda x: x), extra_text=None, extra_text_loc=(0.8, 0.7), grid = False, 
     plot_title = None, title_padding = 0, yscale=None,
-    fill_between=False, ratio_to_data=False, baseline=True, legtext_size=20, cms_decor="Preliminary", lumi=16.8,
+    fill_between=False, skip_fill=0, ratio_to_data=False, baseline=True, legtext_size=20, cms_decor="Preliminary", lumi=16.8,
     no_fill=False, bin_density=300, 
 ):
     stack = [action(histInfo[k][histName])[select] for k in stackedProcs if histInfo[k][histName]]
@@ -166,7 +166,10 @@ def makeStackPlotWithRatio(
 
         if fill_between:
             fill_procs = [x for x in unstacked if x != "Data"]
-            for up,down in zip(fill_procs[::2], fill_procs[1::2]):
+            if not skip_fill:
+                skip_fill = len(fill_procs) % 2
+            logger.debug(f"Skip filling first {skip_fill}")
+            for up,down in zip(fill_procs[skip_fill::2], fill_procs[skip_fill+1::2]):
                 unstack_up = hh.divideHists(action(histInfo[up][histName][select]), ratio_ref, 1e-6)
                 unstack_down = hh.divideHists(action(histInfo[down][histName][select]), ratio_ref, 1e-6)
                 ax2.fill_between(unstack_up.axes[0].edges, 
@@ -312,14 +315,14 @@ def save_pdf_and_png(outdir, basename):
     logger.info(f"Wrote file(s) {fname}(.png)")
 
 def write_index_and_log(outpath, logname, indexname="index.php", template_dir=f"{pathlib.Path(__file__).parent}/Templates", 
-        yield_tables=None, analysis_meta_info=None):
+        yield_tables=None, analysis_meta_info=None, args={}):
     shutil.copyfile(f"{template_dir}/{indexname}", f"{outpath}/{indexname}")
     logdir = outpath
 
     with open(f"{logdir}/{logname}.log", "w") as logf:
         meta_info = '-'*80 + '\n' + \
-            'Script called at %s\n' % datetime.datetime.now() + \
-            'The command was: %s\n' % ' '.join(sys.argv) + \
+            f'Script called at {datetime.datetime.now()}' + \
+            f'The command was: {output_tools.script_command_to_str(sys.argv, args)}\n' + \
             '-'*80 + '\n'
         logf.write(meta_info)
 

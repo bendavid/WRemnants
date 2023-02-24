@@ -17,6 +17,9 @@ zprocs_lowpu = ["Zmumu", "Zee", "Ztautau"]
 zprocs_recoil = ["Zmumu", "Zee"]
 vprocs_lowpu = wprocs_lowpu+zprocs_lowpu
 
+zprocs_all = zprocs_lowpu+zprocs
+wprocs_all = wprocs_lowpu+wprocs
+
 # unfolding axes for low pu
 axis_recoil_reco_ptZ = hist.axis.Variable([0, 5, 10, 15, 20, 30, 40, 50, 60, 75, 90, 150], name = "recoil_reco", underflow=False, overflow=True)
 axis_recoil_gen_ptZ = hist.axis.Variable([0.0, 10.0, 20.0, 40.0, 60.0, 90.0, 150], name = "recoil_gen", underflow=False, overflow=True)
@@ -80,7 +83,10 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=[])
     parser.add_argument("--v8", action='store_true', help="Use NanoAODv8. Default is v9")
     parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
-    parser.add_argument("--theory_corr", nargs="*", choices=["scetlib", "scetlibNP", "scetlibMSHT20", "scetlibHelicity", "dyturbo", "dyturbo1D", "dyturboYOnly", "matrix_radish", "horacenloew"], 
+    parser.add_argument("--theory_corr", nargs="*", 
+        choices=["scetlib", "scetlibNP", "scetlibN4LL", "scetlibMSHT20an3lo", "scetlibHelicity", 
+                 "scetlib_dyturbo", "scetlib_dyturboN4LL", "scetlib_dyturboN3LLp_an3lo", "scetlib_dyturboMSHT20an3lo",
+                 "dyturboN3LLp", "dyturbo", "dyturboYOnly", "matrix_radish", "horacenloew"], 
         help="Apply corrections from indicated generator. First will be nominal correction.", default=[])
     parser.add_argument("--theory_corr_alt_only", action='store_true', help="Save hist for correction hists but don't modify central weight")
     parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")
@@ -133,7 +139,6 @@ def common_parser_combine():
             help="Decorrelation for QCDscale")
     parser.add_argument("--rebinPtV", type=float, nargs='*', help="Rebin axis with gen boson pt by this value (default does nothing)")
     parser.add_argument("--scetlibUnc", default=None, type=str, choices=["scale", "np"], help="Include SCETlib uncertainties")
-    parser.add_argument("--pdf", type=str, default="msht20", choices=theory_tools.pdfMapExtended.keys(), help="PDF to use")
     parser.add_argument("-b", "--fitObs", type=str, default="nominal", help="Observable to fit") # TODO: what does it do?
     parser.add_argument("--qcdProcessName", dest="qcdProcessName" , type=str, default="Fake",   help="Name for QCD process")
     parser.add_argument("--noStatUncFakes", dest="noStatUncFakes" , action="store_true",   help="Set bin error for QCD background templates to 0, to check MC stat uncertainties for signal only")
