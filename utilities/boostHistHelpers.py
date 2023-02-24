@@ -302,6 +302,14 @@ def projectNoFlow(h, proj_ax, exclude=[]):
     hnoflow = h[{ax : s[0:hist.overflow:hist.sum] for ax in h.axes.name if ax not in exclude+list(proj_ax)}]
     return hnoflow.project(*proj_ax) 
 
+def syst_min_and_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=[]):
+    hup = syst_min_or_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=no_flow, do_min=False)
+    hdown = syst_min_or_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=no_flow, do_min=True)
+    hnew = hist.Hist(*hup.axes, common.down_up_axis, storage=hup._storage_type())
+    hnew[...,0] = hdown.view(flow=True)
+    hnew[...,1] = hup.view(flow=True)
+    return hnew
+
 def syst_min_or_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=[], do_min=True):
     if syst_ax not in h.axes.name:
         logging.warning(f"Did not find syst axis {syst_ax} in histogram. Returning nominal!")

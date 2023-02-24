@@ -40,7 +40,7 @@ xlabels = {
 
 parser = argparse.ArgumentParser()
 parser.add_argument("infile", help="Output file of the analysis stage, containing ND boost histogrdams")
-parser.add_argument("--ratio_to_data", action='store_true', help="Use data as denominator in ratio")
+parser.add_argument("--ratio-to-data", action='store_true', help="Use data as denominator in ratio")
 parser.add_argument("-n", "--baseName", type=str, help="Histogram name in the file (e.g., 'nominal')", default="nominal")
 parser.add_argument("--nominalRef", type=str, help="Specify the nominal his if baseName is a variation hist (for plotting alt hists)")
 parser.add_argument("--hists", type=str, nargs='+', required=True, choices=xlabels.keys(), help="List of histograms to plot")
@@ -68,7 +68,8 @@ variation.add_argument("--selectEntries", type=str, nargs='+', help="entries to 
 variation.add_argument("--colors", type=str, nargs='+', help="Variation colors")
 variation.add_argument("--double-colors", action='store_true', help="Auto generate colors in pairs (useful for systematics)")
 variation.add_argument("--transform", action='store_true', help="Apply variation-specific transformation")
-variation.add_argument("--fill_between", action='store_true', help="Fill between uncertainty hists in ratio")
+variation.add_argument("--fill-between", action='store_true', help="Fill between uncertainty hists in ratio")
+variation.add_argument("--skip-fill-between", type=int, default=0, help="Don't fill between the first N hists (only relevant if --fill-between = True)")
 
 args = parser.parse_args()
 
@@ -79,11 +80,12 @@ def padArray(ref, matchLength):
 
 addVariation = hasattr(args, "varName") and args.varName is not None
 
+entries = []
 if addVariation and (args.selectAxis or args.selectEntries):
     if not (args.selectAxis and args.selectEntries):
-        raise ValueError("Must --selectAxis and --selectEntires together")
+        raise ValueError("Must --selectAxis and --selectEntries together")
     if len(args.varLabel) != 1 and len(args.varLabel) != len(args.selectEntries):
-        raise ValueError("Must specify the same number of args for --selectEntires, and --varLabel"
+        raise ValueError("Must specify the same number of args for --selectEntries, and --varLabel"
                          f" found selectEntries={len(args.selectEntries)} and varLabel={len(args.varLabel)}")
     if len(args.varName) < len(args.selectEntries):
         args.varName = padArray(args.varName, args.selectEntries)
@@ -119,13 +121,14 @@ if addVariation:
     # If none matplotlib will pick a random color
     ncols = len(args.varName) if not args.double_colors else int(len(args.varName)/2)
     colors = args.colors if args.colors else [cm.get_cmap("tab10" if ncols < 10 else "tab20")(int(i/2) if args.double_colors else i) for i in range(len(args.varName))]
-    for i, (label,name,color,entry) in enumerate(zip(varLabels,args.varName,colors,entries)):
+    for i, (label,name,color) in enumerate(zip(varLabels,args.varName,colors)):
+        entry = entries[i] if entries else None
         do_transform = args.transform and entry in transforms
         name = name if name != "" else nominalName
         load_op = {}
         action=None
 
-        if entry.isdigit():
+        if entry and entry.isdigit():
             entry = int(entry)
 
         if args.selectAxis or do_transform:
@@ -134,10 +137,11 @@ if addVariation:
                 action = transforms[entry]["action"]
                 if "procs" in transforms[entry]:
                     transform_procs = transforms[entry]["procs"]
+                varname = entry
             else:
                 ax = axes[i]
                 action = lambda x: x[{ax : entry}] if ax in x.axes.name else x
-            varname = name+str(entry)
+                varname = name+str(entry)
             load_op = {p : action for p in transform_procs}
         else:
             varname = name
@@ -167,6 +171,8 @@ logger.info(f"Stacked processes are {prednames}")
 select = {} if args.channel == "all" else {"charge" : -1.j if args.channel == "minus" else 1.j}
 
 def collapseSyst(h):
+    if type(h.axes[-1]) == hist.axis.StrCategory:
+        return h[...,0]
     for ax in ["systIdx", "tensor_axis_0", "vars"]:
         if ax in h.axes.name:
             return h[{ax : 0}].copy()
@@ -179,7 +185,9 @@ for h in args.hists:
     else:
         action = lambda x: hh.projectNoFlow(collapseSyst(x[select]), h, overflow_ax)
     fig = plot_tools.makeStackPlotWithRatio(histInfo, prednames, histName=args.baseName, ylim=args.ylim, yscale=args.yscale,
-            fill_between=args.fill_between if hasattr(args, "fill_between") else None, action=action, unstacked=unstack, 
+            fill_between=args.fill_between if hasattr(args, "fill_between") else None, 
+            skip_fill=args.skip_fill_between if hasattr(args, "skip_fill_between") else 0,
+            action=action, unstacked=unstack, 
             xlabel=xlabels[h], ylabel="Events/bin", rrange=args.rrange, binwnorm=1.0, lumi=groups.lumi,
             ratio_to_data=args.ratio_to_data, rlabel="Pred./Data" if args.ratio_to_data else "Data/Pred.",
             xlim=args.xlim, no_fill=args.no_fill, cms_decor="Preliminary" if not args.no_data else "Simulation Preliminary",

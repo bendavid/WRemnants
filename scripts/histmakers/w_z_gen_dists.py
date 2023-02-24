@@ -153,7 +153,7 @@ if not args.skipAngularCoeffs:
         if "helicity_moments_scale" not in resultdict[name]["output"]:
             logger.warning(f"Failed to find helicity_moments_scale hist for proc {name}. Skipping!")
             continue
-        moments = resultdict[name]["output"]["helicity_moments_scale"]
+        moments = resultdict[name]["output"]["helicity_moments_scale"].get()
         if name in common.zprocs:
             if z_moments is None:
                 z_moments = moments

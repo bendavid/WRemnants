@@ -31,7 +31,7 @@ era = args.era
 axes = {
     "mll": hist.axis.Regular(60, 60., 120., name = "mll"),
     "yll": hist.axis.Regular(25, -2.5, 2.5, name = "yll"),
-    "ptll": hist.axis.Variable(common.ptV_binning if not args.finePtBinning else range(60), name = "ptll"),
+    "ptll": hist.axis.Variable(common.ptV_binning if not args.finePtBinning else range(60), name = "ptll", underflow=False),
     "etaPlus": hist.axis.Regular(int(args.eta[0]), args.eta[1], args.eta[2], name = "etaPlus"),
     "etaMinus": hist.axis.Regular(int(args.eta[0]), args.eta[1], args.eta[2], name = "etaMinus"),
     "etaSum": hist.axis.Regular(12, -4.8, 4.8, name = "etaSum"),
@@ -185,9 +185,9 @@ def build_graph(df, dataset):
             syst_tools.add_pdf_hists(results, df, dataset.name, nominal_axes, nominal_cols, args.pdfs)
 
 
-            df = syst_tools.define_mass_weights(df)
+            df = syst_tools.define_mass_weights(df, dataset.name)
             if isZ:
-                syst_tools.add_massweights_hist(results, df, nominal_axes, nominal_cols)
+                syst_tools.add_massweights_hist(results, df, nominal_axes, nominal_cols, proc=dataset.name)
                 # there is no W backgrounds for the Wlike, make QCD scale histograms only for Z
                 # should probably remove the charge here, because the Z only has a single charge and the pt distribution does not depend on which charged lepton is selected
                 if not args.skipHelicity:
