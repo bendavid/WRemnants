@@ -125,31 +125,10 @@ def main(args):
         print("Using option --doStatOnly: the card was created with only mass weights and a dummy LnN syst on all processes")
         quit()
 
-    pdfName = theory_tools.pdfMapExtended["msht20"]["name"]
     pdfAction = {x : lambda h: h[{"recoil_gen" : s[::hist.sum]}] for x in Zmumu_procs if "gen" not in x},
-    cardTool.addSystematic(pdfName, 
-        processes=Zmumu_procs,
-        mirror=True,
-        group=pdfName,
-        actionMap=pdfAction,
-        systAxes=["tensor_axis_0"],
-        labelsByAxis=[pdfName.replace("pdf", "pdf{i}")],
-        # Needs to be a tuple, since for multiple axis it would be (ax1, ax2, ax3)...
-        # -1 means all possible values of the mirror axis
-        skipEntries=[(0, -1)],
-    )
-    cardTool.addSystematic(f"alphaS002{pdfName}", 
-        processes=Zmumu_procs,
-        mirror=False,
-        actionMap=pdfAction,
-        group=pdfName,
-        systAxes=["tensor_axis_0"],
-        outNames=[pdfName+"AlphaSUp", pdfName+"AlphaSDown"],
-        scale=0.75,
-    )
-
+    combine_helpers.add_pdf_uncertainty(cardTool, constrainedProcs+unconstrainedProcs, False, action=pdfAction)
     combine_helpers.add_scale_uncertainty(cardTool, args.qcdScale, constrainedProcs+unconstrainedProcs, 
-        to_fakes=False, pdf=args.pdf, use_hel_hist=True, scetlib=args.scetlibUnc)
+        to_fakes=False, use_hel_hist=True, scetlib=args.scetlibUnc)
     
     if not args.xsec:
 

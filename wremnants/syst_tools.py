@@ -15,14 +15,14 @@ def syst_transform_map(base_hist, hist_name):
         key =  list(pdfInfo.keys())[list(pdfNames).index(pdfName)]
         unc = pdfInfo[key]["combine"]
         scale = pdfInfo[key]["scale"] if "scale" in pdfInfo[key] else 1.
-        return theory_tools.hessianPdfUnc(h, "tensor_axis_0", unc, scale)
+        return theory_tools.hessianPdfUnc(h, uncType=unc, scale=scale)
 
     def uncHist(unc):
         return unc if base_hist == "nominal" else f"{base_hist}_{unc}"
 
     transforms = {}
-    transforms.update({pdf+"Up" : {"hist" : uncHist(pdf), "action" : lambda h,p=pdf: pdfUnc(h, p)[0]} for pdf in pdfNames})
-    transforms.update({pdf+"Down" : {"hist" : uncHist(pdf), "action" : lambda h,p=pdf: pdfUnc(h, p)[1]} for pdf in pdfNames})
+    transforms.update({pdf+"Up" : {"action" : lambda h,p=pdf: pdfUnc(h, p)[0]} for pdf in pdfNames})
+    transforms.update({pdf+"Down" : {"action" : lambda h,p=pdf: pdfUnc(h, p)[1]} for pdf in pdfNames})
     transforms.update({
         "massShift100MeVDown" : {"hist" : "massWeight", "action" : lambda h: h[{"tensor_axis_0" : 0}]},
         "massShift100MeVUp" : {"hist" : "massWeight", "action" : lambda h: h[{"tensor_axis_0" : 20}]},
@@ -152,19 +152,30 @@ def uncertainty_hist_from_envelope(h, proj_ax, entries):
     hnew[...,1] = hup.view(flow=True)
     return hnew
 
-def define_mass_weights(df, isW=False):
-    # nweights = 21 if isW else 23
+def define_mass_weights(df, proc):
+    nweights = 23 if proc in common.zprocs_all else 21
     # from -100 to 100 MeV with 10 MeV increment
-    nweights = 21
     df = df.Define("massWeight_tensor", f"wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight)")
     df = df.Define("massWeight_tensor_wnom", "auto res = massWeight_tensor; res = nominal_weight*res; return res;")
 
     return df
 
-def add_massweights_hist(results, df, axes, cols, base_name="nominal"):
+def add_massweights_hist(results, df, axes, cols, base_name="nominal", proc=""):
     name = datagroups2016.histName(base_name, syst="massWeight")
-    massWeight = df.HistoBoost(name, axes, [*cols, "massWeight_tensor_wnom"])
+    massWeight = df.HistoBoost(name, axes, [*cols, "massWeight_tensor_wnom"], 
+                    tensor_axes=[hist.axis.StrCategory(massWeightNames(proc=proc), name="massShift")])
     results.append(massWeight)
+
+def massWeightNames(matches=None, proc=""):
+    central=10
+    nweights=21
+    names = [f"massShift{int(abs(central-i)*10)}MeV{'' if i == central else ('Down' if i < central else 'Up')}" for i in range(nweights)]
+    if proc and proc in common.zprocs_all:
+        # This is the PDG uncertainty (turned off for now since it doesn't seem to have been read into the nano)
+        names.extend(["massShift2p1MeVDown", "massShift2p1MeVUp"])
+
+    # If name is "" it won't be stored
+    return [x if not matches or any(y in x for y in matches) else "" for x in names]
 
 def add_pdf_hists(results, df, dataset, axes, cols, pdfs, base_name="nominal"):
     for pdf in pdfs:
@@ -179,10 +190,18 @@ def add_pdf_hists(results, df, dataset, axes, cols, pdfs, base_name="nominal"):
         tensorASName = f"{pdfName}ASWeights_tensor"
 
         name = datagroups2016.histName(base_name, syst=pdfName)
-        pdfHist = df.HistoBoost(name, axes, [*cols, tensorName])
+        names = [f"pdf{pdfName}{i}" for i in range(pdfInfo["entries"])] if pdfInfo["combine"] == "symHessian" else \
+                theory_tools.pdfNamesAsymHessian(pdfInfo["entries"], pdfName)
+        pdf_ax = hist.axis.StrCategory(names, name="pdfVar")
+        pdfHist = df.HistoBoost(name, axes, [*cols, tensorName], tensor_axes=[pdf_ax])
 
-        name = datagroups2016.histName(base_name, syst=f"alphaS002{pdfName}")
-        alphaSHist = df.HistoBoost(name, axes, [*cols, tensorASName])
+        if pdfInfo["alphasRange"] == "001":
+            name = datagroups2016.histName(base_name, syst=f"{pdfName}alphaS001")
+            as_ax = hist.axis.StrCategory(["as0117", "as0119"], name="alphasVar")
+        else:
+            name = datagroups2016.histName(base_name, syst=f"{pdfName}alphaS002")
+            as_ax = hist.axis.StrCategory(["as0116", "as0120"], name="alphasVar")
+        alphaSHist = df.HistoBoost(name, axes, [*cols, tensorASName], tensor_axes=[as_ax])
         results.extend([pdfHist, alphaSHist])
     return df
 
@@ -249,7 +268,8 @@ def add_L1Prefire_unc_hists(results, df, helper_stat, helper_syst, axes, cols, b
 
     return df
 
-def add_muonscale_hist(results, df, netabins, mag, isW, axes, cols, base_name="nominal", nweights = 21, muon_eta="goodMuons_eta0"):
+def add_muonscale_hist(results, df, netabins, mag, isW, axes, cols, base_name="nominal", muon_eta="goodMuons_eta0"):
+    nweights = 21 if isW else 23
 
     df = df.Define(f"muonScaleDummy{netabins}Bins{muon_eta}", f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(nominal_weight, massWeight_tensor, {muon_eta}, {mag}, {str(isW).lower()})")
 
@@ -262,8 +282,9 @@ def add_muonscale_hist(results, df, netabins, mag, isW, axes, cols, base_name="n
     return df
 
 
-def add_muonscale_smeared_hist(results, df, netabins, mag, isW, axes, cols, base_name="nominal", nweights = 21, muon_eta="goodMuons_eta0"):
+def add_muonscale_smeared_hist(results, df, netabins, mag, isW, axes, cols, base_name="nominal", muon_eta="goodMuons_eta0"):
     # add_muonscale_hist has to be called first such that "muonScaleDummy{netabins}Bins{muon_eta}" is defined
+    nweights = 21 if isW else 23
 
     scale_etabins_axis = hist.axis.Regular(netabins, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
     name = datagroups2016.histName(base_name, syst=f"muonScaleSyst_gen_smear")
@@ -272,41 +293,6 @@ def add_muonscale_smeared_hist(results, df, netabins, mag, isW, axes, cols, base
     results.append(dummyMuonScaleSyst_gen_smear)
 
     return df
-
-
-def scetlib_scale_vars():
-	return ["resumFOScaleUp", "resumFOScaleDown",
-        "resumLambdaUp", "resumLambdaDown",
-        "resumTransitionUp", "resumTransitionDown",
-        "resumScaleUp", "resumScaleDown"]
-
-#TODO: Having these hardcoded kind of defeats the purpose
-def scetlib_np_vars():
-	return ['gamma_cuspUp',
-		'gamma_cuspDown',
-		'gamma_mu_qUp',
-		'gamma_mu_qDown',
-		'gamma_nuUp',
-		'gamma_nuDown',
-		'h_qqVDown',
-		'h_qqVUp',
-		'sUp',
-		'sDown',
-		'b_qqVUp',
-		'b_qqVDown',
-		'b_qqbarVUp',
-		'b_qqbarVDown',
-		'b_qqSUp',
-		'b_qqSDown',
-		'b_qqDSUp',
-		'b_qqDSDown',
-		'b_qgUp',
-		'b_qgDown',
-		'kappaFODown',
-		'kappaFOUp',
-		'lambdaDown',
-		'lambdaUp'
-	]
 
 def scetlib_scale_unc_hist(h, obs, syst_ax="vars"):
     hnew = hist.Hist(*h.axes[:-1], hist.axis.StrCategory(["central"]+scetlib_scale_vars(),
