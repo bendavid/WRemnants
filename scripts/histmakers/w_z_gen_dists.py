@@ -12,6 +12,7 @@ import math
 parser.add_argument("--skipAngularCoeffs", action='store_true', help="Skip the conversion of helicity moments to angular coeff fractions")
 parser.add_argument("--singleLeptonHists", action='store_true', help="Also store single lepton kinematics")
 parser.add_argument("--skip-ew-hists", action='store_true', help="Also store histograms for EW reweighting. Use with --filter horace")
+parser.add_argument("--absY", action='store_true', help="use absolute |Y|")
 
 parser = common.set_parser_default(parser, "filterProcs", common.vprocs)
 
@@ -154,34 +155,36 @@ if not args.skipAngularCoeffs:
         moments = resultdict[name]["output"]["helicity_moments_scale"]
         if name in common.zprocs:
             if z_moments is None:
-                z_moments = hh.makeAbsHist(moments.get(), "y")
+                z_moments = moments.get()
             else:
-                new_moments = hh.makeAbsHist(moments.get(), "y")
+                new_moments = moments.get()
                 z_moments = hh.addHists(z_moments, new_moments)
         elif name in common.wprocs:
             if w_moments is None:
-                w_moments = hh.makeAbsHist(moments.get(), "y")
+                w_moments = moments.get()
             else:
-                new_moments = hh.makeAbsHist(moments.get(), "y")
+                new_moments = moments.get()
                 w_moments = hh.addHists(w_moments, new_moments)
 
     coeffs={}
     # REMINDER: common.ptV_binning is not the one using 10% quantiles, and the quantiles are not a subset of this binning, but apparently it doesn't matter
     if z_moments:
-        if "y" in z_moments.axes.name:
+        if args.absY:
+            z_moments = hh.makeAbsHist(z_moments, "y")
             yax_name = "absy"
-        print('Writing angular coeffs Z')
-        #yax_name = axis_absYVgen.name
+            z_moments = hh.rebinHist(z_moments, yax_name, axis_absYVgen.edges[:-1])
         z_moments = hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning)
         z_moments = hh.rebinHist(z_moments, axis_massZgen.name, axis_massZgen.edges[::2])
-        z_moments = hh.rebinHist(z_moments, yax_name, axis_absYVgen.edges[:-1])
+        print('Writing angular coeffs Z')
         coeffs["Z"] = wremnants.moments_to_angular_coeffs(z_moments)
     if w_moments:
-        if "y" in w_moments.axes.name:
+        if args.absY:
+            w_moments = hh.makeAbsHist(w_moments, "y")
             yax_name = "absy"
+            w_moments = hh.rebinHist(w_moments, yax_name, axis_absYVgen.edges[:-1])
         print('Writing angular coeffs W')
         w_moments = hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning)
-        w_moments = hh.rebinHist(w_moments, yax_name, axis_absYVgen.edges[:-1])
         coeffs["W"] = wremnants.moments_to_angular_coeffs(w_moments)
     if coeffs:
-        output_tools.write_analysis_output(coeffs, "w_z_coeffs.hdf5", args)
+        outfname = "w_z_coeffs_absY.hdf5" if args.absY else "w_z_coeffs.hdf5"
+        output_tools.write_analysis_output(coeffs, outfname, args)
