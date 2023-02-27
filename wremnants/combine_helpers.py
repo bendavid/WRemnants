@@ -3,7 +3,13 @@ from wremnants import syst_tools
 import numpy as np
 import logging
 
+logger = common.child_logger(__name__)
+
 def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, pdf, name_append="", scetlib=None, use_hel_hist=False, rebin_pt=None):
+    if not len(samples):
+        logger.warning(f"Skipping QCD scale syst '{scale_type}', no process to apply it to")
+        return 0
+        
     helicity = "Helicity" in scale_type
     pt_binned = "Pt" in scale_type
 
@@ -35,7 +41,9 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, pdf, name_ap
 
     # NOTE: The map needs to be keyed on the base procs not the group names, which is
     # admittedly a bit nasty
-    expanded_samples = card_tool.datagroups.getProcNames(samples)
+    expanded_samples = card_tool.datagroups.getProcNames(samples, afterFilter=True)
+    logger.debug(f"using {scale_hist} histogram for QCD scale systematics")
+    logger.debug(f"expanded_samples: {expanded_samples}")
     action_map = {proc : syst_tools.scale_helicity_hist_to_variations for proc in expanded_samples}
         
     # Determine if it should be summed over based on scale_type passed in. If not,
@@ -98,7 +106,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, pdf, name_ap
 
     # Skip MiNNLO unc. 
     if scetlib and not (pt_binned or helicity):
-        logging.warning("Without pT or helicity splitting, only the SCETlib uncertainty will be applied!")
+        logger.warning("Without pT or helicity splitting, only the SCETlib uncertainty will be applied!")
     else:
         card_tool.addSystematic(scale_hist,
             actionMap=action_map,

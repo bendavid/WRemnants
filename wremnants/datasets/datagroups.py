@@ -37,7 +37,8 @@ class datagroups(object):
             if self.data:
                 self.lumi = sum([self.results[x.name]["lumi"] for x in self.data if x.name in self.results])
         self.groups = {}
-
+        self.groupNamesPostFilter = [] # keep track of group names after any filter defined by the user
+        
         if not self.lumi:
             self.lumi = 1
             
@@ -65,11 +66,15 @@ class datagroups(object):
     ## procName are grouped into datagroups
     ## baseName takes values such as "nominal"
     def setHists(self, baseName, syst, procsToRead=None, label=None, nominalIfMissing=True, 
-                 applySelection=True, forceNonzero=True, preOpMap=None, preOpArgs=None, scaleToNewLumi=-1):
+                 applySelection=True, forceNonzero=True, preOpMap=None, preOpArgs=None, scaleToNewLumi=-1, excludeProcs=None):
         if not label:
             label = syst if syst else baseName
+        logger.debug(f"In setHists(): procsToRead = {procsToRead}")
         if not procsToRead:
-            procsToRead = self.groups.keys()
+            if excludeProcs:
+                procsToRead = list(filter(lambda x: x not in excludeProcs, self.groups.keys()))
+            else:
+                procsToRead = list(self.groups.keys())
 
         foundExact = False
         for procName in procsToRead:
@@ -122,7 +127,10 @@ class datagroups(object):
         if not label:
             label = syst
         if not procsToRead:
-            procsToRead = list(filter(lambda x: x not in excluded_procs, self.groups.keys()))
+            if excludeProcs:
+                procsToRead = list(filter(lambda x: x not in excludeProcs, self.groups.keys()))
+            else:
+                procsToRead = list(self.groups.keys())
 
         for procName in procsToRead:
             group = self.groups[procName]
@@ -155,32 +163,52 @@ class datagroups(object):
         nominalIfMissing=True, applySelection=True, forceNonzero=True, pseudodata=False,
         preOpMap={}, preOpArgs={}, scaleToNewLumi=-1
     ):
+        logger.debug("Calling loadHistsForDatagroups()")
         logger.debug(f"the basename and syst is: {baseName}, {syst}")
         logger.debug(f"The procsToRead and excludedProcs are: {procsToRead}, {excluded_procs}")
         if self.rtfile and self.combine:
             self.setHistsCombine(baseName, syst, channel, procsToRead, excluded_procs, label)
         else:
-            self.setHists(baseName, syst, procsToRead, label, nominalIfMissing, applySelection, forceNonzero, preOpMap, preOpArgs, scaleToNewLumi=scaleToNewLumi)
+            self.setHists(baseName, syst, procsToRead, label, nominalIfMissing, applySelection,
+                          forceNonzero, preOpMap, preOpArgs,
+                          scaleToNewLumi=scaleToNewLumi, excludeProcs=excluded_procs)
 
-    def getDatagroups(self, excluded_procs=[]):
+    def getDatagroups(self, excluded_procs=[], afterFilter=False):
+        # usually excluded_procs is not needed if afterFilter=True, unless one has to filter further
         if type(excluded_procs) == str:
             excluded_procs = list(excluded_procs)
-        return dict(filter(lambda x: x[0] not in excluded_procs, self.groups.items()))
+        filtDef = lambda x: x[0] not in excluded_procs
+        if afterFilter:
+            filtDef = lambda x: x[0] in self.groupNamesPostFilter
+            if len(excluded_procs):
+                filtDef = lambda x: x[0] in self.groupNamesPostFilter and x[0] not in excluded_procs
+        return dict(filter(filtDef, self.groups.items()))
 
-    def getNames(self, matches=[], exclude=False):
+    # INFO: this method returns the list from the full set of defined groups, unless one filters further.
+    # Instead, argument 'afterFilter' is used to return the names after the filter passed to the constructor
+    def getNames(self, matches=[], exclude=False, afterFilter=False):
+        listOfNames = list(x for x in self.groupNamesPostFilter) if afterFilter else list(x for x in self.groups.keys())
         if not matches:
-            return list(x for x in self.groups.keys())
+            return listOfNames
         else:
-            if not exclude:
-                return list(filter(lambda x: any([re.match(expr, x) for expr in matches]), self.groups.keys()))
+            # matches uses regular expressions with search (and can be inverted when exclude is true),
+            # thus a string will match if the process name contains that string anywhere inside it
+            ##########
+            # FIXME ? : allow for usage of simple 'string in name' syntax, with no regular expressions? Or exact names?
+            #           Note that datasets2016.getDatasets currently accepts only exact names, so one should stay consistent
+            ##########
+            if exclude:
+                return list(filter(lambda x: all([re.search(expr, x) is None for expr in matches]), listOfNames))
             else:
-                return list(filter(lambda x: x not in matches, self.groups.keys()))
-
-    def getProcNames(self, to_expand=[], exclude_group=[]):
+                return list(filter(lambda x: any([re.search(expr, x) for expr in matches]), listOfNames))
+              
+    def getProcNames(self, to_expand=[], exclude_group=[], afterFilter=False):
         procs = []
         if not to_expand:
-            to_expand = self.groups.keys()
+            to_expand = self.groupNamesPostFilter if afterFilter else self.groups.keys()
         for group_name in to_expand:
+            if afterFilter and group_name not in self.groupNamesPostFilter:
+                continue
             if group_name not in exclude_group:
                 for member in self.groups[group_name]["members"]:
                     procs.append(member.name)
@@ -280,9 +308,12 @@ class datagroups(object):
         return name
 
 class datagroups2016(datagroups):
-    def __init__(self, infile, combine=False, pseudodata_pdfset = None, applySelection=True
+    def __init__(self, infile, combine=False, pseudodata_pdfset = None, applySelection=True,
+                 excludeProcGroup=None, filterProcGroup=None
     ):
-        self.datasets = {x.name : x for x in datasets2016.getDatasets()}
+        self.datasets = {x.name : x for x in datasets2016.getDatasets(filt=filterProcGroup, excludeGroup=excludeProcGroup)}
+        self.datasetsKeys = self.datasets.keys()
+        logger.debug(f"Getting these datasets: {self.datasetsKeys}")
         super().__init__(infile, combine)
         if self.wmass and applySelection:
             sigOp = sel.signalHistWmass
@@ -295,19 +326,19 @@ class datagroups2016(datagroups):
         self.hists = {} # container storing temporary histograms
         self.groups =  {
             "Data" : dict(
-                members = [self.datasets["dataPostVFP"]],
+                members = self.getSafeListFromDataset(["dataPostVFP"]),
                 color = "black",
                 label = "Data",
                 selectOp = sigOp,
             ),
             "Zmumu" : dict(
-                members = [self.datasets["ZmumuPostVFP"]],
+                members = self.getSafeListFromDataset(["ZmumuPostVFP"]),
                 label = r"Z$\to\mu\mu$",
                 color = "lightblue",
                 selectOp = sigOp,
             ),   
             "Ztautau" : dict(
-                members = [self.datasets["ZtautauPostVFP"]],
+                members = self.getSafeListFromDataset(["ZtautauPostVFP"]),
                 label = r"Z$\to\tau\tau$",
                 color = "darkblue",
                 selectOp = sigOp,
@@ -321,7 +352,7 @@ class datagroups2016(datagroups):
         if self.wmass:
             self.groups.update({
                 "Wmunu" : dict(
-                    members = [self.datasets["WminusmunuPostVFP"], self.datasets["WplusmunuPostVFP"]],
+                    members = self.getSafeListFromDataset(["WminusmunuPostVFP", "WplusmunuPostVFP"]),
                     label = r"W$^{\pm}\to\mu\nu$",
                     color = "darkred",
                     selectOp = sigOp,
@@ -332,8 +363,8 @@ class datagroups2016(datagroups):
             for k in ["Zmumu", "Ztautau"]:
                 self.groups[k] = self.groups.pop(k)
             self.groups.update({
-                "Wtau" : dict(
-                    members = [self.datasets["WminustaunuPostVFP"], self.datasets["WplustaunuPostVFP"]],
+                "Wtaunu" : dict(
+                    members = self.getSafeListFromDataset(["WminustaunuPostVFP", "WplustaunuPostVFP"]),
                     label = r"W$^{\pm}\to\tau\nu$",
                     color = "orange",
                     selectOp = sigOp,
@@ -371,7 +402,20 @@ class datagroups2016(datagroups):
                 label = "Other",
                 color = "grey",
             )
+            
+        # keep track of groups which have at least one process member after the filters
+        # check also that the key is not in excludeProcGroup (e.g. Fake must be excluded here,
+        # since it is created after filtering the input datasetDict)
+        self.groupNamesPostFilter = list(x for x in self.groups.keys() if len(self.groups[x]["members"]) and x not in excludeProcGroup)
+        logger.debug(f"Filtered groups: {self.groupNamesPostFilter}")
 
+    def getSafeListFromDataset(self, procs):
+        # return list of valid samples which belongs to the dataset or where not excluded elsewhere
+        if isinstance(procs, str):
+            return [self.datasets[procs]] if procs in self.datasetsKeys else []
+        else:
+            return list(self.datasets[x] for x in procs if x in self.datasetsKeys)
+        
     def make_yields_df(self, histName, procs, action):
         def sum_and_unc(h):
             return (h.sum().value, math.sqrt(h.sum().variance))

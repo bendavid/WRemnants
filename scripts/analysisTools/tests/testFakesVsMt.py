@@ -543,7 +543,7 @@ if __name__ == "__main__":
     zAxisName = args.zAxisName
 
     groups = datagroups2016(args.inputfile[0], applySelection=False)
-    datasets = groups.getNames()
+    datasets = groups.getNames() # this has all the original defined groups
     datasetsNoQCD = list(filter(lambda x: x != "QCD", datasets)) # exclude QCD MC if present
     datasetsNoFakes = list(filter(lambda x: x != "Fake", datasets)) 
     datasetsNoQCDFakes = list(filter(lambda x: x not in ["QCD", "Fake"], datasets))
@@ -551,7 +551,7 @@ if __name__ == "__main__":
     inputHistName = "mTStudyForFakes"
     groups.setNominalName(inputHistName)
     groups.loadHistsForDatagroups(inputHistName, syst="", procsToRead=datasets, applySelection=False)
-    histInfo = groups.getDatagroups()
+    histInfo = groups.getDatagroups() # keys are same as returned by groups.getNames() 
     rootHists = {d: None for d in datasets}
     for d in datasets:
         #print(d)
