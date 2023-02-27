@@ -31,8 +31,6 @@ from scripts.analysisTools.tests.cropNegativeTemplateBins import cropNegativeCon
 
 logging.basicConfig(level=logging.INFO)
 
-ROOT.gInterpreter.ProcessLine(".O3")
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("rootfile", type=str, nargs=1, help="Input file with histograms")

@@ -314,9 +314,9 @@ def build_graph(df, dataset):
 
             syst_tools.add_pdf_hists(results, df, dataset.name, nominal_axes, nominal_cols, args.pdfs)
 
-            df = syst_tools.define_mass_weights(df)
+            df = syst_tools.define_mass_weights(df, dataset.name)
             if isW:
-                syst_tools.add_massweights_hist(results, df, nominal_axes, nominal_cols)
+                syst_tools.add_massweights_hist(results, df, nominal_axes, nominal_cols, proc=dataset.name)
 
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:
@@ -327,7 +327,7 @@ def build_graph(df, dataset):
 
                 # TODO: Move to syst_tools
                 netabins = args.muonCorrEtaBins
-                nweights = 21
+                nweights = 23 if isZ else 21
                 mag = args.muonCorrMag
 
                 df = df.Define("unity", "1.0")
@@ -453,4 +453,4 @@ if smearing_weights:
     wremnants.transport_smearing_weights_to_reco(resultdict)
     wremnants.muon_scale_variation_from_manual_shift(resultdict)
 
-output_tools.write_analysis_output(resultdict, "mw_with_mu_eta_pt.pkl.lz4", args)
+output_tools.write_analysis_output(resultdict, "mw_with_mu_eta_pt.hdf5", args)

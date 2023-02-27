@@ -137,7 +137,6 @@ class CardTool(object):
     def setPseudodataDatagroups(self, datagroups):
         self.pseudodata_datagroups = datagroups 
         if self.nominalName:
-            print(datagroups)
             self.pseudodata_datagroups.setNominalName(self.nominalName)
         
     def setChannels(self, channels):
@@ -245,7 +244,12 @@ class CardTool(object):
     def setMirrorForSyst(self, syst, mirror=True):
         self.systematics[syst]["mirror"] = mirror
 
-    def systLabelForAxis(self, axLabel, entry):
+    def systLabelForAxis(self, axLabel, entry, axis):
+        if type(axis) == hist.axis.StrCategory:
+            if entry in axis:
+                return entry
+            else:
+                raise ValueError(f"Did not find label {entry} in categorical axis {axis}")
         if axLabel == "mirror":
             return 'Down' if entry else 'Up' # first entry is the original, call it Up since it is usually defined by an actual scaling up of something (e.g. efficiencies)
         if axLabel == "downUpVar":
@@ -256,9 +260,11 @@ class CardTool(object):
 
     def excludeSystEntry(self, entry, skipEntries):
         for skipEntry in skipEntries:
-            # Can use -1 to exclude all values of an axis
-            if all(y == -1 or x == y for x,y in zip(entry, skipEntry)):
-                return True
+            skip = False
+            for e,match in zip(entry, skipEntry): 
+                # Can use -1 to exclude all values of an axis
+                if match == -1 or match == e or re.match(str(match), str(e)):
+                    return True
         return False
 
     def expandSkipEntries(self, h, syst, skipEntries):
@@ -302,11 +308,14 @@ class CardTool(object):
         if hvar.axes[-1].name == "mirror":
             axNames.append("mirror")
             axLabels.append("mirror")
+        axes = [hvar.axes[ax] for ax in axNames]
 
         if not all([name in hvar.axes.name for name in axNames]):
             raise ValueError(f"Failed to find axis names {str(axNames)} in hist for syst {syst}. " \
                 f"Axes in hist are {str(hvar.axes.name)}")
-        entries = list(itertools.product(*[range(hvar.axes[ax].size) for ax in axNames]))
+
+        # Converting to a list becasue otherwise if you print it for debugging you loose it
+        entries = list(itertools.product(*[[x for x in ax] if type(ax) == hist.axis.StrCategory else range(ax.size) for ax in axes]))
         
         if len(systInfo["outNames"]) == 0:
             for entry in entries:
@@ -315,7 +324,7 @@ class CardTool(object):
                     systInfo["outNames"].append("")
                 else:
                     name = systInfo["baseName"]
-                    name += "".join([self.systLabelForAxis(al, entry[i]) for i,al in enumerate(axLabels)])
+                    name += "".join([self.systLabelForAxis(al, entry[i], ax) for i,(al,ax) in enumerate(zip(axLabels,axes))])
                     if "systNameReplace" in systInfo and systInfo["systNameReplace"]:
                         for rep in systInfo["systNameReplace"]:
                             name = name.replace(*rep)
@@ -326,7 +335,7 @@ class CardTool(object):
                         name = name.replace("Down", "")+"Down"
                     systInfo["outNames"].append(name)
             if not len(systInfo["outNames"]):
-                raise RuntimeError(f"All entries for syst {syst} were skipped!")
+                raise RuntimeError(f"Did not find any valid variations for syst {syst}")
 
         variations = [hvar[{ax : binnum for ax,binnum in zip(axNames, entry)}] for entry in entries]
         if len(variations) != len(systInfo["outNames"]):
@@ -419,7 +428,7 @@ class CardTool(object):
         else:
             self.outfile = outfile
 
-    def writeOutput(self):
+    def writeOutput(self, args=None):
         self.datagroups.loadHistsForDatagroups(
             baseName=self.nominalName, syst=self.nominalName,
             procsToRead=self.procDict.keys(), excluded_procs=self.excludeProcGroups,
@@ -444,7 +453,7 @@ class CardTool(object):
                 preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"],
                 scaleToNewLumi=self.lumiScale)
             self.writeForProcesses(syst, label="syst", processes=processes)    
-        output_tools.writeMetaInfoToRootFile(self.outfile, exclude_diff='notebooks')
+        output_tools.writeMetaInfoToRootFile(self.outfile, exclude_diff='notebooks', args=args)
         if self.skipHist:
             logger.info("Histograms will not be written because 'skipHist' flag is set to True")
         self.writeCard()

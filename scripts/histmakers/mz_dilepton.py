@@ -12,7 +12,7 @@ import time
 import os
 
 parser.add_argument("--csvars_hist", action='store_true', help="Add CS variables to dilepton hist")
-parser.add_argument("--uncertainty-axes", type=str, nargs="*", default=["mll",], help="")
+parser.add_argument("--axes", type=str, nargs="*", default=["mll", "ptll"], help="")
 parser.add_argument("--finePtBinning", action='store_true', help="Use fine binning for ptll")
 
 parser = common.set_parser_default(parser, "pt", [44,26.,70.])
@@ -34,7 +34,7 @@ era = args.era
 axes = {
     "mll": hist.axis.Regular(60, 60., 120., name = "mll"),
     "yll": hist.axis.Regular(25, -2.5, 2.5, name = "yll"),
-    "ptll": hist.axis.Variable(common.ptV_binning if not args.finePtBinning else range(60), name = "ptll"),
+    "ptll": hist.axis.Variable(common.ptV_binning if not args.finePtBinning else range(60), name = "ptll", underflow=False),
     "etaPlus": hist.axis.Regular(int(args.eta[0]), args.eta[1], args.eta[2], name = "etaPlus"),
     "etaMinus": hist.axis.Regular(int(args.eta[0]), args.eta[1], args.eta[2], name = "etaMinus"),
     "etaSum": hist.axis.Regular(12, -4.8, 4.8, name = "etaSum"),
@@ -46,11 +46,11 @@ axes = {
     "charge": hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "charge") # categorical axes in python bindings always have an overflow bin, so use a regular
 }
 
-for a in args.uncertainty_axes:
+for a in args.axes:
     if a not in axes.keys():
         logger.error(f" {a} is not a known axes! Supported axes choices are {list(axes.keys())}")
 
-nominal_cols = args.uncertainty_axes
+nominal_cols = args.axes
 
 if args.csvars_hist:
     nominal_cols += ["cosThetaStarll", "phiStarll"]
@@ -188,9 +188,9 @@ def build_graph(df, dataset):
             syst_tools.add_pdf_hists(results, df, dataset.name, nominal_axes, nominal_cols, args.pdfs)
 
 
-            df = syst_tools.define_mass_weights(df)
+            df = syst_tools.define_mass_weights(df, dataset.name)
             if isZ:
-                syst_tools.add_massweights_hist(results, df, nominal_axes, nominal_cols)
+                syst_tools.add_massweights_hist(results, df, nominal_axes, nominal_cols, proc=dataset.name)
                 # there is no W backgrounds for the Wlike, make QCD scale histograms only for Z
                 # should probably remove the charge here, because the Z only has a single charge and the pt distribution does not depend on which charged lepton is selected
                 if not args.skipHelicity:
@@ -208,4 +208,4 @@ def build_graph(df, dataset):
 
 resultdict = narf.build_and_run(datasets, build_graph)
 
-output_tools.write_analysis_output(resultdict, "mz_dilepton.pkl.lz4", args)
+output_tools.write_analysis_output(resultdict, "mz_dilepton.hdf5", args)

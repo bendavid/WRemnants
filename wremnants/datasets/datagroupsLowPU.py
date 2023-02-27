@@ -306,6 +306,8 @@ class datagroupsLowPU(datagroups):
         if histname not in output:
             raise ValueError(f"Histogram {histname} not found for process {proc.name}")
         h = output[histname]
+        if isinstance(h, narf.ioutils.H5PickleProxy):
+            h = h.get()
         #print(h)
         if forceNonzero:
             h = hh.clipNegativeVals(h)
@@ -789,6 +791,8 @@ class datagroupsLowPU_W(datagroups):
         if histname not in output:
             raise ValueError(f"Histogram {histname} not found for process {proc.name}")
         h = output[histname]
+        if isinstance(h, narf.ioutils.H5PickleProxy):
+            h = h.get()
         #print(h)
         if forceNonzero:
             h = hh.clipNegativeVals(h)

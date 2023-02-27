@@ -27,7 +27,7 @@ def makeFilelist(paths, maxFiles=-1, format_args={}):
 
 ## TODO: use consistent names for filt and excludeGroup, filt was implemented before, should call it filterGroup
 def getDatasets(maxFiles=-1, filt=None, excludeGroup=None, mode=None, base_path=None, nanoVersion="v9", 
-        data_tag="TrackFitV718_NanoProdv1", mc_tag="TrackFitV718_NanoProdv1"):
+        data_tag="TrackFitV722_NanoProdv2", mc_tag="TrackFitV718_NanoProdv1"):
     if not base_path:
         hostname = socket.gethostname()
         if hostname == "lxplus8s10.cern.ch":
