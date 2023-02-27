@@ -1,4 +1,6 @@
 import ROOT
+ROOT.ROOT.EnableThreadSafety()
+import narf
 import pathlib
 
 ROOT.gInterpreter.AddIncludePath(f"{pathlib.Path(__file__).parent}/include/")

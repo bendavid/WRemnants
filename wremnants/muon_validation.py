@@ -25,10 +25,9 @@ def make_jpsi_crctn_helpers(muonCorr):
 
     if "massfit" in corr_type_data:
         if "lbl" in corr_type_data:
-            data_corrfile = "calibrationJDATA_smeared_v718_LBL.root"
+            data_corrfile = "calibrationJDATA_smeared_rewtgr_3dmap_LBL.root"
         else:
             data_corrfile = "calibrationJDATA_ideal.root"
-            # old calibration: calibrationJDATA_smeared_v718.root"
     else:
         data_corrfile = None
 

@@ -130,26 +130,23 @@ def main(args):
     logger.info(f"Single V no signal samples: {single_v_nonsig_samples}")
     logger.info(f"Signal samples: {signal_samples}")
 
-    pdfInfo = theory_tools.pdf_info_map("ZmumuPostVFP", args.pdf)
-    pdfName = pdfInfo["name"]
-
     # keep mass weights here as first systematic, in case one wants to run stat-uncertainty only with --doStatOnly
     cardTool.addSystematic("massWeight", 
         processes=signal_samples_inctau,
-        outNames=theory_tools.massWeightNames(["massShift100MeV"], wlike=not wmass),
         group="massShift",
         groupFilter=lambda x: x == "massShift100MeV",
+        skipEntries=[(f"^massShift{i}MeV.*",) for i in range(0, 100, 10)]+[("^massShift2p4MeV.8",)],
         mirror=False,
         #TODO: Name this
         noConstraint=True,
-        systAxes=["tensor_axis_0"],
+        systAxes=["massShift"],
         passToFakes=passSystToFakes,
     )
 
     if args.doStatOnly:
         # print a card with only mass weights and a dummy syst
         cardTool.addLnNSystematic("dummy", processes=["Top", "Diboson"] if wmass else ["Other"], size=1.001, group="dummy")
-        cardTool.writeOutput()
+        cardTool.writeOutput(args=args)
         logger.info("Using option --doStatOnly: the card was created with only mass weights and a dummy LnN syst on all processes")
         quit()
         
@@ -164,39 +161,6 @@ def main(args):
     else:
         # TOCHECK: no fakes here, most likely
         cardTool.addLnNSystematic("luminosity", processes=allMCprocesses_noQCDMC, size=1.012, group="luminosity")
-
-    if pdfInfo["combine"] == "symHessian":
-        cardTool.addSystematic(pdfName, 
-            processes=single_v_samples,
-            mirror=True,
-            group=pdfName,
-            systAxes=["tensor_axis_0"],
-            labelsByAxis=[pdfName.replace("pdf", "pdf{i}")],
-            # Needs to be a tuple, since for multiple axis it would be (ax1, ax2, ax3)...
-            # -1 means all possible values of the mirror axis
-            skipEntries=[(0, -1)],
-            passToFakes=passSystToFakes,
-        )
-    else:
-        cardTool.addSystematic(pdfName, 
-            processes=single_v_samples,
-            mirror=False,
-            group=pdfName,
-            systAxes=["tensor_axis_0"],
-            outNames=theory_tools.pdfNamesAsymHessian(pdfInfo["entries"]),
-            passToFakes=passSystToFakes,
-            scale=pdfInfo["scale"] if "scale" in pdfInfo else 1,
-        )
-
-    cardTool.addSystematic(f"alphaS002{pdfName}", 
-        processes=single_v_samples,
-        mirror=False,
-        group=pdfName,
-        systAxes=["tensor_axis_0"],
-        outNames=[pdfName+"AlphaSUp", pdfName+"AlphaSDown"],
-        scale=0.75, # TODO: this depends on the set, should be provided in theory_tools.py
-        passToFakes=passSystToFakes,
-    )
 
     if args.ewUnc:
         cardTool.addSystematic(f"horacenloewCorr_unc", 
@@ -261,10 +225,11 @@ def main(args):
             )
 
     to_fakes = wmass and not args.noQCDscaleFakes
-    combine_helpers.add_scale_uncertainty(cardTool, args.qcdScale, signal_samples_inctau, to_fakes, pdf=args.pdf, scetlib=args.scetlibUnc)
+    combine_helpers.add_pdf_uncertainty(cardTool, single_v_samples, passSystToFakes)
+    combine_helpers.add_scale_uncertainty(cardTool, args.qcdScale, signal_samples_inctau, to_fakes, scetlib=args.scetlibUnc)
     # for Z background in W mass case (W background for Wlike is essentially 0, useless to apply QCD scales there)
     if wmass:
-        combine_helpers.add_scale_uncertainty(cardTool, "integrated", single_v_nonsig_samples, False, pdf=args.pdf, name_append="Z", scetlib=args.scetlibUnc)
+        combine_helpers.add_scale_uncertainty(cardTool, "integrated", single_v_nonsig_samples, False, name_append="Z", scetlib=args.scetlibUnc)
 
     msv_config_dict = {
         "smearing_weights":{
@@ -338,7 +303,7 @@ def main(args):
     else:
         cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
 
-    cardTool.writeOutput()
+    cardTool.writeOutput(args=args)
     logger.info(f"Output stored in {outfolder}")
     
 if __name__ == "__main__":

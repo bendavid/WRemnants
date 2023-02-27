@@ -30,9 +30,6 @@ sys.path.append(os.getcwd())
 
 logging.basicConfig(level=logging.INFO)
 
-ROOT.gInterpreter.ProcessLine(".O3")
-
-
 def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
                          lumi="", ptRangeProjection=(0,-1), chargeLabel="",
                          canvas=None, canvasWide=None, canvas1D=None,

@@ -195,9 +195,9 @@ def build_graph(df, dataset):
             syst_tools.add_qcdScale_hist(results, df, scale_axes, scale_cols)
             syst_tools.add_pdf_hists(results, df, dataset.name, nominal_axes, nominal_cols, args.pdfs)
 
-            df = syst_tools.define_mass_weights(df)
+            df = syst_tools.define_mass_weights(df, dataset.name)
             if isZ:
-                syst_tools.add_massweights_hist(results, df, nominal_axes, nominal_cols)
+                syst_tools.add_massweights_hist(results, df, nominal_axes, nominal_cols, proc=dataset.name)
                 # there is no W backgrounds for the Wlike, make QCD scale histograms only for Z
                 # should probably remove the charge here, because the Z only has a single charge and the pt distribution does not depend on which charged lepton is selected
                 if not args.skipHelicity:
@@ -214,4 +214,4 @@ def build_graph(df, dataset):
 
 resultdict = narf.build_and_run(datasets, build_graph)
 
-output_tools.write_analysis_output(resultdict, "mz_wlike_with_mu_eta_pt.pkl.lz4", args)
+output_tools.write_analysis_output(resultdict, "mz_wlike_with_mu_eta_pt.hdf5", args)
