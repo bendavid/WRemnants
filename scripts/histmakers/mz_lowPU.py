@@ -23,10 +23,10 @@ met = args.met # mumu, ee
 sigProc = "Zmumu" if flavor == "mumu" else "Zee"
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
-excludeGroup = lambda x,excl=args.excludeProcGroups: all([f not in x.group for f in excl if x.group is not None])
+excludeGroup = args.excludeProcGroups if args.excludeProcGroups else None
 datasets = wremnants.datasetsLowPU.getDatasets(maxFiles=args.maxFiles,
                                                filt=filt if args.filterProcs else None,
-                                               excludeGroup=excludeGroup if args.excludeProcGroups else None,
+                                               excludeGroup=excludeGroup,
                                                flavor=flavor)
 for d in datasets: logging.info(f"Dataset {d.name}")
 

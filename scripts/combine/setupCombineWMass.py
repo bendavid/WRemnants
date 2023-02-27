@@ -34,9 +34,24 @@ def make_parser(parser=None):
     return parser
 
 def main(args):
+
     logger = common.setup_logger(__file__, args.verbose, args.color_logger)
 
-    datagroups = datagroups2016(args.inputFile)
+    # NOTE: args.filterProcGroups and args.excludeProcGroups should in principle not be used together
+    #       (because filtering is equivalent to exclude something), however the exclusion is also meant to skip
+    #       processes which are defined in the original process dictionary but are not supposed to be (always) run on
+    logger.debug(f"Filtering these groups of processes: {args.filterProcGroups}")
+    logger.debug(f"Excluding these groups of processes: {args.excludeProcGroups}")
+    filterGroup = args.filterProcGroups if args.filterProcGroups else None
+    excludeGroup = None
+    if args.excludeProcGroups:
+        ## can pass a filter that datagroups2016 can digest, but better to pass list of names
+        # excludeGroup = lambda x,excl=args.excludeProcGroups: all([f not in x.group for f in excl if x.group is not None])
+        ## alternatively can just pass the array with names
+        excludeGroup = args.excludeProcGroups
+
+    datagroups = datagroups2016(args.inputFile, excludeProcGroup=excludeGroup, filterProcGroup=filterGroup)
+
     if args.xlim:
         if len(args.fitvar.split("-")) > 1:
             raise ValueError("Restricting the x axis not supported for 2D hist")
@@ -65,7 +80,16 @@ def main(args):
         raise ValueError("Option --noHist would override --noStatUncFakes. Please select only one of them")
 
     templateDir = f"{scriptdir}/Templates/WMass"
+    # Start to create the CardTool object, customizing everything
     cardTool = CardTool.CardTool(f"{outfolder}/{name}_{{chan}}.txt")
+    cardTool.setProcesses(datagroups.getNames(afterFilter=True)) # use process after filters applied to the datagroups
+    # FIXME ?:
+    # setting excluded processes for internal consistency, but in principle it should not be needed
+    # it will be used to call datagroups.loadHistsForDatagroups with the proper exclude argument, even if the
+    # list of processes to read (set with CardTool.setProcesses) should be totally sufficient in that case
+    cardTool.setExcludedProcs(excludeGroup)
+    #
+    logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
     cardTool.setNominalTemplate(f"{templateDir}/main.txt")
     if args.combineChannels:
         cardTool.setChannels(["combined"])
@@ -88,8 +112,10 @@ def main(args):
 
     if args.lumiScale:
         cardTool.setLumiScale(args.lumiScale)
+
+    print(f"cardTool.allMCProcesses(): {cardTool.allMCProcesses()}")
         
-    passSystToFakes = wmass and not args.skipSignalSystOnFakes
+    passSystToFakes = wmass and not args.skipSignalSystOnFakes and args.qcdProcessName not in excludeGroup
 
     single_v_samples = cardTool.filteredProcesses(lambda x: x[0] in ["W", "Z"])
     single_v_nonsig_samples = cardTool.filteredProcesses(lambda x: x[0] == ("Z" if wmass else "W"))
@@ -294,6 +320,7 @@ def main(args):
     )
     if wmass:
         cardTool.addLnNSystematic("CMS_Fakes", processes=[args.qcdProcessName], size=1.05, group="MultijetBkg")
+        # FIXME: propagate these systs to fakes too? Not a big impact for sure, but for consistency
         cardTool.addLnNSystematic("CMS_Top", processes=["Top"], size=1.06)
         cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16)
 

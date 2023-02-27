@@ -24,7 +24,7 @@ class CardTool(object):
         self.cardName = cardName
         self.systematics = {}
         self.lnNSystematics = {}
-        self.procDict = OrderedDict()
+        self.procDict = {}
         self.predictedProcs = []
         self.fakeEstimate = None
         self.addMirrorForSyst = {}
@@ -46,6 +46,7 @@ class CardTool(object):
         self.pseudoData = None
         self.pseudoDataIdx = None
         self.excludeSyst = None
+        self.excludeProcGroups = None # exclude processes, by group name
         self.writeByCharge = True
         self.keepSyst = None # to override previous one with exceptions for special cases
         #self.loadArgs = {"operation" : "self.loadProcesses (reading hists from file)"}
@@ -152,7 +153,7 @@ class CardTool(object):
 
     def predictedProcesses(self):
         if self.predictedProcs:
-            return self.predictedProces
+            return self.predictedProcs
         return list(filter(lambda x: x != self.dataName, self.procDict.keys()))
 
     def setHistName(self, histName):
@@ -163,6 +164,8 @@ class CardTool(object):
         if self.datagroups:
             self.datagroups.setNominalName(histName)
 
+    # FIXME ? : this will return True for Fake since it has Data in the list of members.
+    #           Is it intended? I guess isData is also meant to indentify "data-driven" then
     def isData(self, procName):
         return any([x.is_data for x in self.datagroups.groups[procName]["members"]])
 
@@ -173,10 +176,22 @@ class CardTool(object):
         self.fakeEstimate = estimate
 
     def setProcesses(self, processes):
-        self.procDict = OrderedDict([ (proc, {}) for proc in processes])
+        self.procDict = {proc: {} for proc in processes}
 
+    def getProcesses(self):
+        return list(self.procDict.keys())
+
+    def setExcludedProcs(self, proc_list):
+        if isinstance(proc_list, list):
+            self.excludeProcGroups = [x for x in proc_list]
+        elif isinstance(proc_list, str):
+            self.excludeProcGroups = [proc_list]
+        elif proc_list is not None:
+            logger.error(f"In CardTool.setExcludedProcs(): invalid argument with type {type(proc_list)}")
+            quit()
+            
     def filteredProcesses(self, filterExpr):
-        return list(filter(filterExpr, self.datagroups.processes()))
+        return list(filter(filterExpr, self.procDict.keys()))
 
     def allMCProcesses(self):
         return self.filteredProcesses(lambda x: self.isMC(x))
@@ -195,12 +210,12 @@ class CardTool(object):
     # by pt or helicity
     def addSystematic(self, name, systAxes, outNames=None, skipEntries=None, labelsByAxis=None, 
                         baseName="", mirror=False, scale=1, processes=None, group=None, noConstraint=False,
-                        action=None, actionArgs={}, actionMap={}, systNameReplace=[], groupFilter=None, passToFakes=False, 
+                        action=None, actionArgs={}, actionMap={}, systNameReplace=[], groupFilter=None, passToFakes=False,
                         rename=None, splitGroup={}):
 
         # Need to make an explicit copy of the array before appending
         procs_to_add = [x for x in (self.allMCProcesses() if not processes else processes)]
-        if passToFakes and self.getFakeName() not in procs_to_add:
+        if passToFakes and self.getFakeName() not in procs_to_add and self.getFakeName() not in self.excludeProcGroups:
             procs_to_add.append(self.getFakeName())
 
         if action and actionMap:
@@ -374,8 +389,10 @@ class CardTool(object):
         datagroups = self.datagroups if not self.pseudodata_datagroups else self.pseudodata_datagroups
         datagroups.loadHistsForDatagroups(
             baseName=self.pseudoData, syst="", label=self.pseudoData,
-            procsToRead=processes, scaleToNewLumi=self.lumiScale)
-        procDict = datagroups.getDatagroups()
+            procsToRead=processes, excluded_procs=self.excludeProcGroups,
+            scaleToNewLumi=self.lumiScale)
+        # FIXME: not sure if afterFilter is desired here, but it probably should
+        procDict = datagroups.getDatagroups(afterFilter=True)
         hists = [procDict[proc][self.pseudoData] for proc in processes]
         hdata = hh.sumHists(hists)
         # Kind of hacky, but in case the alt hist has uncertainties
@@ -404,9 +421,11 @@ class CardTool(object):
 
     def writeOutput(self):
         self.datagroups.loadHistsForDatagroups(
-            baseName=self.nominalName, syst=self.nominalName, label=self.nominalName, 
+            baseName=self.nominalName, syst=self.nominalName,
+            procsToRead=self.procDict.keys(), excluded_procs=self.excludeProcGroups,
+            label=self.nominalName, 
             scaleToNewLumi=self.lumiScale)
-        self.procDict = self.datagroups.getDatagroups()
+        self.procDict = self.datagroups.getDatagroups(afterFilter=True)
         self.writeForProcesses(self.nominalName, processes=self.procDict.keys(), label=self.nominalName)
         self.loadNominalCard()
         if self.pseudoData:
@@ -418,9 +437,11 @@ class CardTool(object):
             systMap=self.systematics[syst]
             systName = syst if not systMap["name"] else systMap["name"]
             processes=systMap["processes"]
-            self.datagroups.loadHistsForDatagroups(self.nominalName, systName, label="syst",
-                procsToRead=processes, forceNonzero=systName != "qcdScaleByHelicity",
-                preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"], 
+            self.datagroups.loadHistsForDatagroups(
+                self.nominalName, systName, label="syst",
+                procsToRead=processes, excluded_procs=self.excludeProcGroups,
+                forceNonzero=systName != "qcdScaleByHelicity",
+                preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"],
                 scaleToNewLumi=self.lumiScale)
             self.writeForProcesses(syst, label="syst", processes=processes)    
         output_tools.writeMetaInfoToRootFile(self.outfile, exclude_diff='notebooks')
@@ -446,7 +467,11 @@ class CardTool(object):
 
     def writeLnNSystematics(self):
         nondata = self.predictedProcesses()
+        # exit this function when a syst is applied to no process (can happen when some are excluded)
         for name,info in self.lnNSystematics.items():
+            if all(x not in info["processes"] for x in nondata):
+                logger.warning(f"Skipping syst {name}, procs to apply it to would be {info['processes']}, and predicted processes are {nondata}")
+                return 0
             include = [(str(info["size"]) if x in info["processes"] else "-").ljust(self.spacing) for x in nondata]
             group = info["group"]
             groupFilter = info["groupFilter"]
@@ -466,6 +491,10 @@ class CardTool(object):
         nondata = self.predictedProcesses()
         names = [x[:-2] if "Up" in x[-2:] else (x[:-4] if "Down" in x[-4:] else x) 
                     for x in filter(lambda x: x != "", systInfo["outNames"])]
+        # exit this function when a syst is applied to no process (can happen when some are excluded)
+        if all(x not in procs for x in nondata):
+            return 0
+        
         if type(scale) != dict:
             include = [(str(scale) if x in procs else "-").ljust(self.spacing) for x in nondata]
 

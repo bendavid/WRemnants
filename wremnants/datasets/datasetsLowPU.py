@@ -154,7 +154,12 @@ def getDatasets(maxFiles=-1, filt=None, excludeGroup=None, flavor="",base_path=N
     if filt:
         allProcs = list(filter(filt, allProcs))
     if excludeGroup:
-        allProcs = list(filter(excludeGroup, allProcs))
+        if isinstance(excludeGroup, list):
+            # FIXME: here there are no groups defined, so this might never filter anything out
+            # might implement with names instead of groups, but would not be consistent with high PU
+            allProcs = list(filter(lambda x: x.group not in excludeGroup if x.group is not None else 1, allProcs))
+        else:
+            allProcs = list(filter(excludeGroup, allProcs))
 
     for sample in allProcs:
         if not sample.filepaths:
