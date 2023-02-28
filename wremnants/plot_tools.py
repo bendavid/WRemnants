@@ -89,6 +89,7 @@ def addLegend(ax, ncols=2, extra_text=None, extra_text_loc=(0.8, 0.7), text_size
 
 def makeStackPlotWithRatio(
     histInfo, stackedProcs, histName="nominal", unstacked=None, 
+    fitresult=None, prefit=False,
     xlabel="", ylabel="Events/bin", rlabel = "Data/Pred.", rrange=[0.9, 1.1], ylim=None, xlim=None, nlegcols=2,
     binwnorm=None, select={},  action = (lambda x: x), extra_text=None, extra_text_loc=(0.8, 0.7), grid = False, 
     plot_title = None, title_padding = 0, yscale=None,
@@ -101,6 +102,35 @@ def makeStackPlotWithRatio(
     fig, ax1, ax2 = figureWithRatio(stack[0], xlabel, ylabel, ylim, rlabel, rrange, xlim=xlim, 
         grid_on_ratio_plot = grid, plot_title = plot_title, title_padding = title_padding, bin_density = bin_density)
 
+    if fitresult:
+        import uproot
+        combine_result = uproot.open(fitresult)
+
+        fittype = "prefit" if prefit else "postfit"
+
+        # set histograms to prefit/postfit values
+        for s, p in zip(stack, stackedProcs):
+            s.values()[...] = combine_result[f"expproc_{p}_{fittype}"].to_hist().values()
+
+        # for postfit uncertaity bands
+        axis = stack[0].axes[0].edges
+
+        # need to divide by bin width
+        binwidth = axis[1:]-axis[:-1]
+        nom = combine_result[f"expfull_{fittype}"].to_hist().values() / binwidth
+        std = np.sqrt(combine_result[f"expfull_{fittype}"].to_hist().variances()) / binwidth
+
+        hatchstyle = '///'
+        ax1.fill_between(axis, 
+                np.append(nom+std, (nom+std)[-1]), 
+                np.append(nom-std, (nom-std)[-1]),
+            step='post',facecolor="none", zorder=2, hatch=hatchstyle, edgecolor="k", linewidth=0.0, label="Uncertainty")
+
+        ax2.fill_between(axis, 
+                np.append((nom+std)/nom, ((nom+std)/nom)[-1]), 
+                np.append((nom-std)/nom, ((nom-std)/nom)[-1]),
+            step='post',facecolor="none", zorder=2, hatch=hatchstyle, edgecolor="k", linewidth=0.0)
+
     hep.histplot(
         stack,
         histtype="fill" if not no_fill else "step",
@@ -109,6 +139,7 @@ def makeStackPlotWithRatio(
         stack=True,
         ax=ax1,
         binwnorm=binwnorm,
+        zorder=1,
     )
     
     data_hist = None
@@ -120,7 +151,8 @@ def makeStackPlotWithRatio(
             color=histInfo[stackedProcs[-1]]["color"],
             label=histInfo[stackedProcs[-1]]["label"],
             yerr=False,
-            ax=ax2
+            ax=ax2,
+            zorder=3,
         )
 
     if unstacked:
