@@ -58,6 +58,9 @@ parser.add_argument("--procFilters", type=str, nargs="*", help="Filter to plot (
 parser.add_argument("--no_data", action='store_true', help="Don't plot data")
 parser.add_argument("--no_fill", action='store_true', help="Don't fill stack")
 parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend text")
+parser.add_argument("--fitresult", type=str, help="Specify a fitresult root file to draw the postfit distributions with uncertainty bands")
+parser.add_argument("--prefit", action='store_true', help="Use the prefit uncertainty from the fitresult root file, instead of the postfit. (--fitresult has to be given)")
+
 
 subparsers = parser.add_subparsers(dest="variation")
 variation = subparsers.add_parser("variation", help="Arguments for adding variation hists")
@@ -161,6 +164,7 @@ if addVariation:
         exclude.append(varname)
         unstack.append(varname)
 
+
 groups.sortByYields(args.baseName, nominalName=nominalName)
 histInfo = groups.getDatagroups()
 
@@ -188,11 +192,16 @@ for h in args.hists:
             fill_between=args.fill_between if hasattr(args, "fill_between") else None, 
             skip_fill=args.skip_fill_between if hasattr(args, "skip_fill_between") else 0,
             action=action, unstacked=unstack, 
+            fitresult=args.fitresult, prefit=args.prefit,
             xlabel=xlabels[h], ylabel="Events/bin", rrange=args.rrange, binwnorm=1.0, lumi=groups.lumi,
             ratio_to_data=args.ratio_to_data, rlabel="Pred./Data" if args.ratio_to_data else "Data/Pred.",
             xlim=args.xlim, no_fill=args.no_fill, cms_decor="Preliminary" if not args.no_data else "Simulation Preliminary",
             legtext_size=20*args.scaleleg)
-    outfile = f"{h.replace('-','_')}_{args.baseName}_{args.channel}"+ (f"_{args.name_append}" if args.name_append else "")
+
+    fitresultstring=""
+    if args.fitresult:
+        fitresultstring = "_prefit" if args.prefit else "_postfit"
+    outfile = f"{h.replace('-','_')}_{args.baseName}_{args.channel}"+ fitresultstring + (f"_{args.name_append}" if args.name_append else "")
     plot_tools.save_pdf_and_png(outdir, outfile)
     stack_yields = groups.make_yields_df(args.baseName, prednames, action)
     unstacked_yields = groups.make_yields_df(args.baseName, unstack, action)
