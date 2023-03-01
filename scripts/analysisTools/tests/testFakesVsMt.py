@@ -547,7 +547,7 @@ if __name__ == "__main__":
     datasetsNoQCD = list(filter(lambda x: x != "QCD", datasets)) # exclude QCD MC if present
     datasetsNoFakes = list(filter(lambda x: x != "Fake", datasets)) 
     datasetsNoQCDFakes = list(filter(lambda x: x not in ["QCD", "Fake"], datasets))
-    logger.info(f"Will plot datasets {datasets}")
+    logger.info(f"All original datasets available {datasets}")
     inputHistName = "mTStudyForFakes"
     groups.setNominalName(inputHistName)
     groups.loadHistsForDatagroups(inputHistName, syst="", procsToRead=datasets, applySelection=False)

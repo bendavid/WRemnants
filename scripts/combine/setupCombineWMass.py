@@ -292,14 +292,30 @@ def main(args):
         ## FIXME 1: with the jet cut removed this syst is probably no longer needed, but one could still consider
         ## it to cover for how much the fake estimate changes when modifying the composition of the QCD region
         ## FIXME 2: it doesn't really make sense to mirror this one since the systematic goes only in one direction        
-        # cardTool.addSystematic(f"qcdJetPt30", 
-        #                        processes=["Fake"],
-        #                        mirror=True,
-        #                        group="MultijetBkg",
-        #                        systAxes=[],
-        #                        outNames=["qcdJetPt30Down", "qcdJetPt30Up"],
-        #                        passToFakes=passSystToFakes,
-        # )
+        cardTool.addSystematic(f"qcdJetPt30", 
+                               processes=["Fake"],
+                               mirror=True,
+                               group="MultijetBkg",
+                               systAxes=[],
+                               outNames=["qcdJetPt30Down", "qcdJetPt30Up"],
+                               passToFakes=passSystToFakes,
+        )
+        # define from existing histograms by means of some manipulation
+        cardTool.addDecorrCustomSyst(f"testFakeSyst",
+                                     actOn="nominal",
+                                     processes=["Fake"],
+                                     mirror=True,
+                                     group="MultijetBkg",
+                                     # bin: bin edges to split the variable
+                                     # mag: variation in %, if single value it means a constant scaling, else if two values
+                                     # the variation changes linearly in the other variable range from low to high
+                                     decorrAction={"eta" : {"bin": [round(-2.4 + 0.1*i) for i in range(49)],
+                                                            "mag": [2.0, 25.0],
+                                                            }
+                                                   }
+                                     # the syst name will be f"{name}_eta_{binEta}
+        )
+
     else:
         cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
 

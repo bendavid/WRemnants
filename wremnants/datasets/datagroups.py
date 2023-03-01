@@ -452,7 +452,7 @@ class datagroups2016(datagroups):
         if forceNonzero:
             h = hh.clipNegativeVals(h)
         if scaleToNewLumi > 0:
-            h = hh.scaleByLumi(h, scaleToNewLumi)
+            h = hh.scaleByLumi(h, scaleToNewLumi, createNew=True)
         scale = self.processScaleFactor(proc)
         if scaleOp:
             scale = scale*scaleOp(proc)
