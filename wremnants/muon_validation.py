@@ -8,26 +8,21 @@ from utilities import common
 
 ROOT.gInterpreter.Declare('#include "muon_validation.h"')
 
-def make_jpsi_crctn_helpers(muonCorr):
-    if "massfit" not in muonCorr:
-        return None, None
+logging = common.child_logger(__name__)
 
-    corr_type_data = muonCorr.replace("massfitData","massfit").split("_")
-    corr_type_mc = muonCorr.replace("mctruth","lbl").split("_")    
+def make_jpsi_crctn_helpers(args):
 
-    if "massfit" in corr_type_mc:
-        if "lbl" in corr_type_mc:
-            mc_corrfile = "calibrationJMC_smeared_v718_nominalLBL.root"
-        else:
-            mc_corrfile = "calibrationJMC_smeared_v718_nominal.root"
+    if args.muonCorrMC == "idealMC_massfit":
+        mc_corrfile = "calibrationJMC_smeared_v718_nominal.root"
+    elif args.muonCorrMC == "idealMC_lbltruth_massfit":
+        mc_corrfile = "calibrationJMC_smeared_v718_nominalLBL.root"
     else:
         mc_corrfile = None
 
-    if "massfit" in corr_type_data:
-        if "lbl" in corr_type_data:
-            data_corrfile = "calibrationJDATA_smeared_rewtgr_3dmap_LBL.root"
-        else:
-            data_corrfile = "calibrationJDATA_ideal.root"
+    if args.muonCorrData == "massfit":
+        data_corrfile = "calibrationJDATA_ideal.root"
+    elif args.muonCorrData == "lbl_massfit":
+        data_corrfile = "calibrationJDATA_smeared_rewtgr_3dmap_LBL.root"            
     else:
         data_corrfile = None
 
