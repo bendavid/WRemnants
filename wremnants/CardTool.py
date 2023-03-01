@@ -27,7 +27,6 @@ class CardTool(object):
         self.procDict = {}
         self.predictedProcs = []
         self.fakeEstimate = None
-        self.addMirrorForSyst = {}
         self.channels = ["plus", "minus"]
         self.cardContent = {}
         self.cardGroups = {}
@@ -195,11 +194,6 @@ class CardTool(object):
     def allMCProcesses(self):
         return self.filteredProcesses(lambda x: self.isMC(x))
 
-    # FIXME: used nowhere?
-    def mirrorNames(self, baseName, size, offset=0):
-        names = [""]*offset + [f"{baseName.format(i=i%size)}{'Up' if i % 2 else 'Down'}" for i in range(size*2)]
-        return names
-
     def addLnNSystematic(self, name, size, processes, group=None, groupFilter=None):
         if not self.isExcludedNuisance(name):
             self.lnNSystematics.update({name : {"size" : size, "processes" : processes, "group" : group, "groupFilter" : groupFilter}})
@@ -208,9 +202,9 @@ class CardTool(object):
     # to apply a separate action per process. this is needed for example for the scale uncertainty split
     # by pt or helicity
     def addSystematic(self, name, systAxes, outNames=None, skipEntries=None, labelsByAxis=None, 
-                        baseName="", mirror=False, scale=1, processes=None, group=None, noConstraint=False,
-                        action=None, actionArgs={}, actionMap={}, systNameReplace=[], groupFilter=None, passToFakes=False,
-                        rename=None, splitGroup={}):
+                      baseName="", mirror=False, scale=1, processes=None, group=None, noConstraint=False,
+                      action=None, actionArgs={}, actionMap={}, systNameReplace=[], groupFilter=None, passToFakes=False,
+                      rename=None, splitGroup={}):
 
         # Need to make an explicit copy of the array before appending
         procs_to_add = [x for x in (self.allMCProcesses() if not processes else processes)]
@@ -221,26 +215,43 @@ class CardTool(object):
             raise ValueError("Only one of action and actionMap args are allowed")
 
         self.systematics.update({
-            name if not rename else rename : { "outNames" : [] if not outNames else outNames,
-                     "baseName" : baseName,
-                     "processes" : procs_to_add,
-                     "systAxes" : systAxes,
-                     "labelsByAxis" : systAxes if not labelsByAxis else labelsByAxis,
-                     "group" : group,
-                     "groupFilter" : groupFilter,
-                     "splitGroup" : splitGroup if len(splitGroup) else {group : ".*"}, # dummy dictionary if splitGroup=None, to allow for uniform treatment
-                     "scale" : scale,
-                     "mirror" : mirror,
-                     "action" : action,
-                     "actionMap" : actionMap,
-                     "actionArgs" : actionArgs,
-                     "systNameReplace" : systNameReplace,
-                     "noConstraint" : noConstraint,
-                     "skipEntries" : [] if not skipEntries else skipEntries,
-                     "name" : name,
+            name if not rename else rename : {
+                "outNames" : [] if not outNames else outNames,
+                "baseName" : baseName,
+                "processes" : procs_to_add,
+                "systAxes" : systAxes,
+                "labelsByAxis" : systAxes if not labelsByAxis else labelsByAxis,
+                "group" : group,
+                "groupFilter" : groupFilter,
+                "splitGroup" : splitGroup if len(splitGroup) else {group : ".*"}, # dummy dictionary if splitGroup=None, to allow for uniform treatment
+                "scale" : scale,
+                "mirror" : mirror,
+                "action" : action,
+                "actionMap" : actionMap,
+                "actionArgs" : actionArgs,
+                "systNameReplace" : systNameReplace,
+                "noConstraint" : noConstraint,
+                "skipEntries" : [] if not skipEntries else skipEntries,
+                "name" : name,
             }
         })
 
+    def addDecorrCustomSyst(self, name, histToActOn,
+                            mirror=False, processes=None, group=None, decorrAction={}
+                            ):
+        # Need to make an explicit copy of the array before appending
+        procs_to_add = [x for x in (self.allMCProcesses() if not processes else processes)]
+
+        self.decorrCustomSyst.update({
+            name : {
+                "histToActOn": histToActOn, 
+                "processes" : procs_to_add,
+                "group" : group,
+                "mirror" : mirror,
+                "decorrAction" : decorrAction,
+            }
+        })
+        
     def setMirrorForSyst(self, syst, mirror=True):
         self.systematics[syst]["mirror"] = mirror
 
@@ -350,11 +361,6 @@ class CardTool(object):
         else:
             return f"{self.histName}_{proc}_{name}"
 
-    # This logic used to be more complicated, leaving the function here for now even
-    # though it's trivial
-    def addMirror(self, h, proc, syst):
-        return syst != self.nominalName and self.systematics[syst]["mirror"]
-
     def checkSysts(self, hnom, var_map, proc, thresh=0.25):
         #if self.check_variations:
         var_names = set([name.replace("Up", "").replace("Down", "") for name in var_map.keys() if name])
@@ -376,7 +382,7 @@ class CardTool(object):
                 logger.warning(f"{perc_sameside:.0%} bins are one sided for syst {name} and process {proc}!")
 
     def writeForProcess(self, h, proc, syst):
-        if self.addMirror(h, proc, syst):
+        if syst != self.nominalName and self.systematics[syst]["mirror"]:
             hnom = self.procDict[proc][self.nominalName]
             h = hh.extendHistByMirror(h, hnom)
         # Otherwise this is a processes not affected by the variation, don't write it out,
@@ -443,16 +449,101 @@ class CardTool(object):
         self.writeLnNSystematics()
         for syst in self.systematics.keys():
             if self.isExcludedNuisance(syst): continue
-            systMap=self.systematics[syst]
+            systMap = self.systematics[syst]
             systName = syst if not systMap["name"] else systMap["name"]
-            processes=systMap["processes"]
+            processes = systMap["processes"]
             self.datagroups.loadHistsForDatagroups(
                 self.nominalName, systName, label="syst",
                 procsToRead=processes, excluded_procs=self.excludeProcGroups,
                 forceNonzero=systName != "qcdScaleByHelicity",
                 preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"],
                 scaleToNewLumi=self.lumiScale)
-            self.writeForProcesses(syst, label="syst", processes=processes)    
+            self.writeForProcesses(syst, label="syst", processes=processes)
+        #########
+        ### WIP #
+        for dcsyst in self.decorrCustomSyst.keys(): 
+            if self.isExcludedNuisance(dcsyst): continue
+            systMap = self.decorrCustomSyst[syst]
+            inputHistName = systMap["histToActOn"]
+            processes=systMap["processes"]
+            #self.writeForProcesses(dcsyst, label="syst", processes=processes)
+            ####
+            for p in processes:
+                for chan in self.channels:
+                    #hout = narf.hist_to_root(h[{"charge" : h.axes["charge"].index(q) if q != "combined" else hist.sum}])                    
+                    rootHist = self.outfile.Get(f"{inputHistName}_{chan}") # I think I can't read this, maybe work with Narf?
+
+        logger.info(f"Writing systematic {syst} for process {proc}")
+        var_map = self.systHists(h, syst) 
+        # TODO: Make this optional
+        if syst != self.nominalName:
+            self.checkSysts(self.procDict[proc][self.nominalName], var_map, proc)
+        setZeroStatUnc = False
+        if proc in self.noStatUncProcesses:
+            logger.info(f"Zeroing statistical uncertainty for process {proc}")
+            setZeroStatUnc = True
+        for name, var in var_map.items():
+            if name != "":
+                self.writeHist(var, self.variationName(proc, name), setZeroStatUnc=setZeroStatUnc)
+
+            
+            #######
+    def fillCardWithSyst(self, syst):
+        systInfo = self.systematics[syst]
+        scale = systInfo["scale"]
+        procs = systInfo["processes"]
+        group = systInfo["group"]
+        groupFilter = systInfo["groupFilter"]
+        label = "group" if not systInfo["noConstraint"] else "noiGroup"
+        nondata = self.predictedProcesses()
+        names = [x[:-2] if "Up" in x[-2:] else (x[:-4] if "Down" in x[-4:] else x) 
+                    for x in filter(lambda x: x != "", systInfo["outNames"])]
+        # exit this function when a syst is applied to no process (can happen when some are excluded)
+        if all(x not in procs for x in nondata):
+            return 0
+        
+        if type(scale) != dict:
+            include = [(str(scale) if x in procs else "-").ljust(self.spacing) for x in nondata]
+
+        splitGroupDict = systInfo["splitGroup"]
+        shape = "shape" if not systInfo["noConstraint"] else "shapeNoConstraint"
+
+        # Deduplicate while keeping order
+        systNames = list(dict.fromkeys(names))
+        systnamesPruned = [s for s in systNames if not self.isExcludedNuisance(s)]
+        systNames = systnamesPruned[:]
+        for systname in systNames:
+            if type(scale) == dict:
+                for reg in scale.keys():
+                    if re.match(reg, systname):
+                        thiscale = str(scale[reg])
+                        include = [(thiscale if x in procs else "-").ljust(self.spacing) for x in nondata]
+                        break # exit this inner loop when match is found, to save time
+            shape = "shape" if not systInfo["noConstraint"] else "shapeNoConstraint"
+            for chan in self.channels:
+                # do not write systs which should only apply to other charge, to simplify card
+                if self.keepOtherChargeSyst or self.chargeIdDict[chan]["badId"] not in systname:
+                    self.cardContent[chan] += f"{systname.ljust(self.spacing)} {shape.ljust(self.spacing)}{''.join(include)}\n"
+        # unlike for LnN systs, here it is simpler to act on the list of these systs to form groups, rather than doing it syst by syst 
+        if group:
+            for chan in self.channels:
+                if self.keepOtherChargeSyst:
+                    systNamesForGroupPruned = systNames[:]
+                else:
+                    systNamesForGroupPruned = [s for s in systNames if self.chargeIdDict[chan]["badId"] not in s]
+                systNamesForGroup = list(systNamesForGroupPruned if not groupFilter else filter(groupFilter, systNamesForGroupPruned))
+                if len(systNamesForGroup):
+                    for subgroup in splitGroupDict.keys():
+                        matchre = re.compile(splitGroupDict[subgroup])
+                        systNamesForSubgroup = list(filter(lambda x: matchre.match(x),systNamesForGroup))
+                        if len(systNamesForSubgroup):
+                            members = " ".join(systNamesForSubgroup)
+                            self.addSystToGroup(subgroup, chan, members, groupLabel=label)
+
+######
+#### END OF WIP
+###########
+            
         output_tools.writeMetaInfoToRootFile(self.outfile, exclude_diff='notebooks', args=args)
         if self.skipHist:
             logger.info("Histograms will not be written because 'skipHist' flag is set to True")
@@ -587,7 +678,7 @@ class CardTool(object):
     def writeHist(self, h, name, setZeroStatUnc=False):
         if self.skipHist:
             return
-
+        
         if self.project:
             axes = self.project[:]
             if "charge" in h.axes.name:
