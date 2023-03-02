@@ -8,6 +8,9 @@ import pickle
 import narf
 import ROOT
 import hist
+from utilities import common
+
+logger = common.child_logger(__name__)
 
 class datagroupsLowPU(datagroups):
     isW = False
@@ -256,7 +259,8 @@ class datagroupsLowPU(datagroups):
 
         # this class doesn't implement exclusion of groups yet, and maybe it is not needed.
         # If if it is ever added, next line needs to be modified accordingly
-        self.groupNamesPostFilter = list(x for x in self.groups.keys() if len(self.groups[x]["members"])) # and x not in excludeProcGroup)
+        self.updateGroupNamesPostFilter(excludeGroup=[])
+        #self.groupNamesPostFilter = list(x for x in self.groups.keys() if len(self.groups[x]["members"])) # and x not in excludeProcGroup)
         logger.debug(f"Filtered groups: {self.groupNamesPostFilter}")
             
     def signalHistSel(self, h, charge=None):

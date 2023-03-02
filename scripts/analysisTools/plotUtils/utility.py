@@ -17,7 +17,8 @@ _canvas_pull = ROOT.TCanvas("_canvas_pull","",800,800)
 #########################################################################
 colors_plots_ = {"Wmunu"      : ROOT.kRed+2,
                  "Zmumu"      : ROOT.kAzure+2,
-                 "Wtau"       : ROOT.kCyan+1,
+                 "Wtau"       : ROOT.kCyan+1, #backward compatibility
+                 "Wtaunu"     : ROOT.kCyan+1,
                  "Ztautau"    : ROOT.kSpring+9,
                  "Top"        : ROOT.kGreen+2,
                  "Diboson"    : ROOT.kViolet,
@@ -27,7 +28,8 @@ colors_plots_ = {"Wmunu"      : ROOT.kRed+2,
 
 legEntries_plots_ = {"Wmunu"      : "W#rightarrow#mu#nu",
                      "Zmumu"      : "Z#rightarrow#mu#mu",
-                     "Wtau"       : "W#rightarrow#tau#nu",
+                     "Wtau"       : "W#rightarrow#tau#nu", #backward compatibility
+                     "Wtaunu"     : "W#rightarrow#tau#nu",
                      "Ztautau"    : "Z#rightarrow#tau#tau",
                      "Top"        : "t quark",
                      "Diboson"    : "Diboson",
@@ -1176,7 +1178,7 @@ def pol3_root_(xvals, parms, xLowVal = 0.0, xFitRange = 1.0):
     xscaled = (xvals[0] - xLowVal) / xFitRange
     return parms[0] + parms[1]*xscaled + parms[2]*xscaled**2 + parms[3]*xscaled**3
 
-def polN_root_(xvals, parms, xLowVal = 0.0, xFitRange = 1.0, degree=3):
+def polN_root_(xvals, parms, xLowVal = 0.0, xFitRange = 1.0, degree = 3):
     xscaled = (xvals[0] - xLowVal) / xFitRange
     ret = parms[0]
     for d in range(1, 1+degree):
