@@ -31,6 +31,9 @@ def make_jpsi_crctn_helpers(args, make_uncertainty_helper=False):
 
     # FIXME fix uncertainty helpers
     if make_uncertainty_helper:
+        # FIXME new files don't work for data in uncertainty maker
+        data_corrfile = "calibrationJDATA_smeared_v718_LBL.root" if "lbl" in args.muonCorrData else "calibrationJDATA_smeared_v718.root"
+
         mc_unc_helper = make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}") if mc_corrfile else None
         data_unc_helper = make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}") if data_corrfile else None
 
