@@ -5,8 +5,10 @@ import socket
 import logging
 import glob
 from wremnants.datasets import datasets2016
+from utilities import common
 
-logger = logging.getLogger("wremnants").getChild(__name__.split(".")[-1])
+#logger = logging.getLogger("wremnants").getChild(__name__.split(".")[-1])
+logger = common.child_logger(__name__)
 
 lumijson = f"{pathlib.Path(__file__).parent.parent}/data/lowPU/Cert_306896-307082_13TeV_PromptReco_Collisions17_JSON_LowPU_lowPU_suppressedHighPULS.txt"
 lumicsv_mu = f"{pathlib.Path(__file__).parent.parent}/data/lowPU/bylsoutput_HLT_HIMu17_Full.csv"
