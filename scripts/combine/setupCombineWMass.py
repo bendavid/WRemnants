@@ -83,12 +83,12 @@ def main(args):
     # Start to create the CardTool object, customizing everything
     cardTool = CardTool.CardTool(f"{outfolder}/{name}_{{chan}}.txt")
     cardTool.setProcesses(datagroups.getNames(afterFilter=True)) # use process after filters applied to the datagroups
-    # FIXME ?:
     # setting excluded processes for internal consistency, but in principle it should not be needed
     # it will be used to call datagroups.loadHistsForDatagroups with the proper exclude argument, even if the
     # list of processes to read (set with CardTool.setProcesses) should be totally sufficient in that case
     cardTool.setExcludedProcs(excludeGroup)
-    #
+    ###
+    cardTool.setDatagroups(datagroups)
     logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
     cardTool.setNominalTemplate(f"{templateDir}/main.txt")
     if args.combineChannels:
@@ -97,7 +97,6 @@ def main(args):
     if args.noHist:
         cardTool.skipHistograms()
     cardTool.setOutfile(os.path.abspath(f"{outfolder}/{name}CombineInput.root"))
-    cardTool.setDatagroups(datagroups)
     cardTool.setFakeName(args.qcdProcessName)
     cardTool.setSpacing(52)
     if args.noStatUncFakes:

@@ -128,10 +128,14 @@ class CardTool(object):
     def setDataName(self, name):
         self.dataName = name
 
-    def setDatagroups(self, datagroups):
+    def setDatagroups(self, datagroups, resetGroups=False):
         self.datagroups = datagroups 
         if self.nominalName:
             self.datagroups.setNominalName(self.nominalName)
+        # if processes are not set yet, do it now to skip one step
+        # FIXME: should it allow one to reset the procDict by passing a flag, e.g. in case one loads a new datagroups?
+        if resetGroups or not self.procDict:
+            self.setProcesses(self.datagroups.getNames(afterFilter=True))
         
     def setPseudodataDatagroups(self, datagroups):
         self.pseudodata_datagroups = datagroups 
