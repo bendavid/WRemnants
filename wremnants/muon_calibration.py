@@ -73,19 +73,23 @@ def make_muon_bias_helpers(args):
         # identify bias correction file name
         if args.smearing and args.muonCorrMC == "trackfit_only_idealMC":
             filename = "closureZ_smeared_v721"
+            offset = -1
         elif args.smearing and args.muonCorrMC == "idealMC_lbltruth":
             filename = "closureZ_smeared_LBL_v721"
+            offset = -1
         elif not args.smearing and args.muonCorrMC == "idealMC_massfit":
             filename = "closureZ_v718"
+            offset = 0
         elif not args.smearing and args.muonCorrMC == "idealMC_lbltruth_massfit":
             filename = "closureZ_LBL_v718"
+            offset = 0
         else:
             raise NotImplementedError(f"Did not find any closure file for muon momentum scale correction {args.muonCorrMC}"+str(" smeared!" if args.smearing else "!"))
 
         h2d = uproot.open(f"{data_dir}/closure/{filename}.root:closure").to_hist()
         # Drop the uncertainty because the Weight storage type doesn't play nice with ROOT
 
-        h2d_nounc = hist.Hist(*h2d.axes, data=h2d.values(flow=True))
+        h2d_nounc = hist.Hist(*h2d.axes, data=h2d.values(flow=True)+offset)
         h2d_std = hist.Hist(*h2d.axes, data=h2d.variances(flow=True)**0.5)
         # Set overflow to closest values
         h2d_nounc[hist.underflow,:][...] = h2d_nounc[0,:].view(flow=True)
@@ -109,7 +113,7 @@ def make_muon_bias_helpers(args):
 
 def make_muon_smearing_helpers():
     # this helper smears muon pT to match the resolution in data
-    h2d = uproot.open(f"wremnants/data/calibration/smearing.root:smearing").to_hist()
+    h2d = uproot.open(f"{data_dir}/calibration/smearing.root:smearing").to_hist()
     # Drop the uncertainty because the Weight storage type doesn't play nice with ROOT
     h2d_nounc = hist.Hist(*h2d.axes, data=h2d.values(flow=True))
     # Set overflow to closest values
@@ -194,7 +198,7 @@ def define_corrected_muons(df, cvh_helper, jpsi_helper, args, dataset, smearing_
     # Bias corrections from nonclosure
     if not dataset.is_data and bias_helper:
         if args.bias_calibration == "parameterized":
-            df = df.Define("Muon_biasedPt", bias_helper, [muon_var_name(muon, var) for var in ["pt", "eta", "charge"]])
+            df = df.Define("Muon_biasedPt", bias_helper, [muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta"), muon_var_name(muon, "charge")])
         else:
             df = df.Define("Muon_biasedPt", bias_helper, ["rdfslot_", muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta")])
 
