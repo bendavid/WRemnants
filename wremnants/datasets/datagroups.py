@@ -426,6 +426,7 @@ class datagroups2016(datagroups):
         self.groupNamesPostFilter = list(x for x in self.groups.keys() if len(self.groups[x]["members"]) and x not in excludeProcGroup)
         logger.debug(f"Filtered groups: {self.groupNamesPostFilter}")
 
+    # TODO: move to base class
     def getSafeListFromDataset(self, procs):
         # return list of valid samples which belongs to the dataset or where not excluded elsewhere
         if isinstance(procs, str):

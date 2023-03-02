@@ -88,10 +88,12 @@ def main(args):
         if not group in constrainedProcs+unconstrainedProcs+bkgProcs+[dataProc]: toDel.append(group)
     for group in toDel: del datagroups.groups[group]    
 
+    logger.debug(f"Going to use these groups: {datagroups.getNames(afterFilter=True)}")
     templateDir = f"{scriptdir}/Templates/LowPileupW"
     cardTool = CardTool.CardTool(f"{outfolder}/lowPU_Z{args.flavor}_{args.met}_{args.fitType}{suffix}.txt")
     cardTool.setNominalTemplate(f"{templateDir}/main.txt")
     cardTool.setOutfile(os.path.abspath(f"{outfolder}/lowPU_Z{args.flavor}_{args.met}_{args.fitType}{suffix}.root"))
+    cardTool.setProcesses(datagroups.getNames(afterFilter=True)) # use process after filters applied to the datagroups
     cardTool.setDatagroups(datagroups)
     cardTool.setHistName(histName) 
     cardTool.setNominalName(histName)
@@ -106,6 +108,8 @@ def main(args):
     Zmumu_procs = cardTool.filteredProcesses(lambda x: "Zmumu" in x)
     Zmumu_procsIncTau = Zmumu_procs + ["Ztautau"]
 
+    logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
+    
     if args.fitType == "wlike" or args.fitType == "wmass":
 
         cardTool.addSystematic("massWeight", 
