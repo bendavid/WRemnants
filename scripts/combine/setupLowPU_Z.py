@@ -52,7 +52,7 @@ def main(args):
             proc_name = "Zmumu_genBin%d" % (i+1)
             proc_genbin = dict(proc_base)
             proc_genbin['selectOp'] = lambda x, i=i: x[{"recoil_gen" : i}]
-            datagroups.groups[proc_name] = proc_genbin
+            datagroups.addGroups({proc_name: proc_genbin})
             if args.fitType == "differential": unconstrainedProcs.append(proc_name)
     elif args.fitType == "wmass": 
         proc_name = "Zmumu" if args.flavor == "mumu" else "Zee"
@@ -78,17 +78,18 @@ def main(args):
         # fake data, as sum of all  Zmumu procs over recoil_gen
         proc_base = dict(datagroups.groups["Zmumu" if args.flavor == "mumu" else "Zee"])
         proc_base['selectOp'] = lambda x, i=i: x[{"recoil_gen" : s[::hist.sum]}]
-        datagroups.groups["fake_data"] = proc_genbin
         dataProc = "fake_data"
+        datagroups.addGroups({dataProc: proc_genbin})
     
     # hack: remove non-used procs/groups, as there can be more procs/groups defined than defined above
     # need to remove as cardTool takes all procs in the datagroups
     toDel = []
     for group in datagroups.groups: 
         if not group in constrainedProcs+unconstrainedProcs+bkgProcs+[dataProc]: toDel.append(group)
-    for group in toDel: del datagroups.groups[group]    
+    datagroups.deleteGroup(toDel)    
 
     logger.debug(f"Going to use these groups: {datagroups.getNames(afterFilter=True)}")
+    logger.debug(f"Datagroup keys: {datagroups.groups.keys()}")
     templateDir = f"{scriptdir}/Templates/LowPileupW"
     cardTool = CardTool.CardTool(f"{outfolder}/lowPU_Z{args.flavor}_{args.met}_{args.fitType}{suffix}.txt")
     cardTool.setNominalTemplate(f"{templateDir}/main.txt")

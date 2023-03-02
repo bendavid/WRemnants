@@ -77,6 +77,10 @@ class datagroups(object):
         else:
             return self.results["meta_info"] if "meta_info" in self.results else self.results["meta_data"]
 
+    def updateGroupNamesPostFilter(self, excludeGroup=[]):
+        self.groupNamesPostFilter = list(x for x in self.groups.keys() if len(self.groups[x]["members"]) and x not in excludeGroup)
+        logger.debug(f"Updating group names, new list is {self.groupNamesPostFilter}")
+        
     # for reading pickle files
     # as a reminder, the ND hists with tensor axes in the pickle files are organized as
     # pickle[procName]["output"][baseName] where
@@ -190,6 +194,23 @@ class datagroups(object):
                           forceNonzero, preOpMap, preOpArgs,
                           scaleToNewLumi=scaleToNewLumi, excludeProcs=excluded_procs)
 
+    def addGroups(self, dictToAdd, canReplaceKey=False):
+        # dictToAdd is of the form {key: dict}, where dict is another dictionary with the group's specimen
+        for k in dictToAdd.keys():
+            if canReplaceKey or k not in self.groups.keys():
+                if k in self.groups.keys():
+                    logger.warning(f"Replacing {k} in groups")
+                self.groups[k] = dictToAdd[k]
+                if k not in self.groupNamesPostFilter:
+                    self.groupNamesPostFilter.append(k)
+            
+    def deleteGroup(self, procs):
+        for p in procs:
+            if p in self.groups.keys():
+                del self.groups[p]
+            if p in self.groupNamesPostFilter:
+                self.groupNamesPostFilter.remove(p)
+            
     def getDatagroups(self, excluded_procs=[], afterFilter=False):
         # usually excluded_procs is not needed if afterFilter=True, unless one has to filter further
         if type(excluded_procs) == str:
@@ -380,7 +401,7 @@ class datagroups2016(datagroups):
             for k in ["Zmumu", "Ztautau"]:
                 self.groups[k] = self.groups.pop(k)
             self.groups.update({
-                "Wtaunu" : dict(
+                "Wtau" : dict(
                     members = self.getSafeListFromDataset(["WminustaunuPostVFP", "WplustaunuPostVFP"]),
                     label = r"W$^{\pm}\to\tau\nu$",
                     color = "orange",
@@ -423,7 +444,11 @@ class datagroups2016(datagroups):
         # keep track of groups which have at least one process member after the filters
         # check also that the key is not in excludeProcGroup (e.g. Fake must be excluded here,
         # since it is created after filtering the input datasetDict)
-        self.groupNamesPostFilter = list(x for x in self.groups.keys() if len(self.groups[x]["members"]) and x not in excludeProcGroup)
+        if excludeProcGroup is None:
+            excludeProcGroup = []
+
+        self.updateGroupNamesPostFilter(excludeGroup=excludeProcGroup)
+        #self.groupNamesPostFilter = list(x for x in self.groups.keys() if len(self.groups[x]["members"]) and x not in excludeProcGroup)
         logger.debug(f"Filtered groups: {self.groupNamesPostFilter}")
 
     # TODO: move to base class

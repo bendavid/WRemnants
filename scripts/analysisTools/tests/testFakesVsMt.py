@@ -244,7 +244,6 @@ def drawAndFitFRF(h1,
     params = np.array([1.0] + [0.0 for i in range(fitPolDegree)])
     if polN_scaled_global == None:
         polN_scaled_global = partial(polN_root_, xLowVal=xMinFit, xFitRange=xMaxFit-xMinFit, degree=fitPolDegree)
-    global pol0_scaled_global
 
     fitres_tf1 = narf.fit_hist(boost_hist, polN_scaled_global, params)
     f1 = ROOT.TF1("f1",polN_scaled_global, xMinFit, xMaxFit, len(params))
@@ -276,6 +275,7 @@ def drawAndFitFRF(h1,
             sign = "<"
         chi2text += " (prob {} {}%)".format(sign, round(perc_chi2prob,1))
         
+    global pol0_scaled_global
     if fitPolDegree == 1:
         params0 = np.array([1.0])
         if pol0_scaled_global == None:
