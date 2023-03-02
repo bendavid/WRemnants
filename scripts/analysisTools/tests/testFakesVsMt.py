@@ -1055,6 +1055,9 @@ if __name__ == "__main__":
         hFRFcorr[charge].Write()
         if hFRF_proj[charge]:
             hFRF_proj[charge].Write()
+        if hFRFcorrUnc[charge]:
+            for k in hFRFcorrUnc[charge]:
+                hFRFcorrUnc[charge][k].Write()
         print()
         print(f"Saving FRF correction vs eta-pt in file\n{outFile}\nfor charge {charge}")
         print()
@@ -1078,7 +1081,11 @@ if __name__ == "__main__":
         fout = safeOpenFile(outFile, mode="RECREATE")
         for charge in charges:
             hFRFcorr[charge].Write()
-            hFRF_proj[charge].Write()
+            if hFRF_proj[charge]:
+                hFRF_proj[charge].Write()
+            if hFRFcorrUnc[charge]:
+                for k in hFRFcorrUnc[charge]:
+                    hFRFcorrUnc[charge][k].Write()
         print()
         print(f"Saving FRF correction vs eta-pt in file {outFile}")
         print()
