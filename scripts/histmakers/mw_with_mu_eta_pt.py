@@ -24,6 +24,7 @@ sfFileVqtTest = f"{data_dir}/testMuonSF/fits_2.root"
 parser.add_argument("--sfFileVqtTest", type=str, help="File with muon scale factors as a function of V q_T projection", default=sfFileVqtTest)
 parser.add_argument("--vqtTestIntegrated", action="store_true", help="Test of isolation SFs dependence on V q_T projection, integrated (would be the same as default SF, but pt-eta binning is different)")
 parser.add_argument("--vqtTestReal", action="store_true", help="Test of isolation SFs dependence on V q_T projection, using 3D SFs directly (instead of the Vqt fits)")
+parser.add_argument("--vqtTestStep", default=2, type=int , help="Test of isolation SFs dependence on V q_T projection. Including trigger")
 args = parser.parse_args()
 sfFileVqtTest = args.sfFileVqtTest
 
@@ -85,11 +86,10 @@ if args.binnedScaleFactors:
 
     if args.vqtTest:
         if args.vqtTestReal:
-            includeTrigger = True
             muon_efficiency_helper_vqt, dummy_helper1, dummy_helper2 = wremnants.make_muon_efficiency_helpers_binned_vqt_real(filename = args.sfFile,
                                                                                                                               era = era,
                                                                                                                               max_pt = axis_pt.edges[-1],
-                                                                                                                              includeTrigger = includeTrigger)
+                                                                                                                              step = args.vqtTestStep)
         else:
             if not args.vqtTestIntegrated:
                 muon_efficiency_helper_vqt, dummy_helper1, dummy_helper2 = wremnants.make_muon_efficiency_helpers_binned_vqt(filename = args.sfFile, filenamevqt = sfFileVqtTest,
