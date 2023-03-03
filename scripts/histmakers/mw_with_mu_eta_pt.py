@@ -33,10 +33,10 @@ if args.vqtTestIntegrated:
 
 logger = common.setup_logger(__file__, args.verbose, args.color_logger)
 
-filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
-datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
+datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, 
+    filt=common.get_process_filter(args.filterProcs, args.invert_filter), 
     nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path)
-    
+
 era = args.era
 
 # custom template binning
