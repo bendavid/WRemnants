@@ -155,71 +155,143 @@ def define_corrected_muons(df, cvh_helper, jpsi_helper, corr_type, dataset, smea
 
     return df
 
-def get_good_gen_muons_idx_in_GenPart(df, reco_subset = "goodMuons"):
-    df = df.Define("goodMuons_idx", f"Muon_genPartIdx[{reco_subset}]")
-    df = df.Define("goodMuonsByGenTruth",
+def getColName_genFiltered_recoMuonSel(reco_sel = "goodMuons", require_prompt = True):
+    genMatch_condition = "Prompt" if require_prompt else "FSonly"
+    return f"{reco_sel}_genTruth_{genMatch_condition}"
+
+def define_genFiltered_recoMuonSel(df, reco_sel = "goodMuons", require_prompt = True):
+    col_name = getColName_genFiltered_recoMuonSel(reco_sel, require_prompt)
+    require_prompt = "true" if require_prompt else "false"
+    df = df.Define(
+        col_name,
         (
-        "ROOT::VecOps::RVec<bool> res(goodMuons_idx.size());"
-        "for (int i = 0; i < goodMuons_idx.size(); i++) {"
-        "    res[i] = ("
-        "        (GenPart_statusFlags[goodMuons_idx[i]] & 0x01) &&"
-        "        (abs(GenPart_pdgId[goodMuons_idx[i]]) == 13) &&"
-        "        (GenPart_status[goodMuons_idx[i]] == 1)"
-        "    );"
-        "}"
-        "return res;"
+            f"wrem::filterRecoMuonsByGenTruth("
+            f"   {reco_sel},"
+            "    Muon_genPartIdx," 
+            "    GenPart_pdgId,"
+            "    GenPart_statusFlags,"
+            "    GenPart_status,"
+            f"   {require_prompt})"
         )
     )
-    df = df.Define("goodGenMuons_idx","goodMuons_idx[goodMuonsByGenTruth]")
-    df = df.Filter("goodGenMuons_idx.size() > 0")
     return df
 
 def muon_var_name(mu_type, var):
         return mu_type+(f"_{var}" if mu_type == "Muon" else var.capitalize())
 
-def define_good_gen_muon_kinematics(df, kinematic_vars = ["pt", "eta", "phi", "charge"]):
-    for var in kinematic_vars:
-        if var == "charge": var = "pdgId"
-        col_name = f"goodMuons_{var.lower()}0_gen"
-        selection = f"ROOT::VecOps::Take(GenPart_{var}, goodGenMuons_idx)[0]"
-        df = df.Define(col_name, selection)
-        if var == "pdgId":
-            df = df.Define("goodMuons_charge0_gen", "goodMuons_pdgid0_gen > 0 ? -1 : 1")
-    return df
-
-def calculate_good_gen_muon_kinematics(df):
-    df = df.Define("goodMuons_theta0_gen",
-        "2. * std::atan(std::exp(-double(goodMuons_eta0_gen)))")
-    df = df.Define("goodMuons_p0_gen", "double(goodMuons_pt0_gen) / std::sin(goodMuons_theta0_gen)")
-    df = df.Define("goodMuons_qop0_gen", "double(goodMuons_charge0_gen) / goodMuons_p0_gen")
-    return df
-
-def define_gen_smeared_muon_kinematics(df):
-    df = df.Define("covMat_goodGenMuons0",
-        ("wrem::getCovMatForGoodMuons0("
-        "    Muon_cvhMomCov_Vals, Muon_cvhMomCov_Counts," 
-        "    goodMuons, goodMuonsByGenTruth"
-        ")")
-    )
-    df = df.Define("goodMuons_pt0_gen_smeared", 
+def define_matched_gen_muons_covMat(df, reco_sel = "goodMuons"):
+    df = df.Define(
+        f"{reco_sel}_covMat",
         (
-        "wrem::smearGenPt(covMat_goodGenMuons0, goodMuons_charge0_gen, "
-        "goodMuons_pt0_gen, goodMuons_theta0_gen)"
+            "wrem::getCovMatForSelectedRecoMuons<float>("
+            f"    Muon_cvhMomCov_Vals, Muon_cvhMomCov_Counts, {reco_sel}"
+            ");"
         )
     )
-    df = df.Define("goodMuons_qop0_gen_smeared", 
-        "wrem::smearGenQop(covMat_goodGenMuons0, goodMuons_qop0_gen)"
+    print(df.GetColumnType(f"{reco_sel}_covMat"))
+    return df
+
+def redefine_matched_gen_muons_covMat(df, reco_sel = "goodMuons"):
+    df = df.Redefine(
+        f"{reco_sel}_covMat",
+        (
+            "wrem::getCovMatForSelectedRecoMuons<float>("
+            f"    Muon_cvhMomCov_Vals, Muon_cvhMomCov_Counts, {reco_sel}"
+            ");"
+        )
     )
-    df = df.Define("goodMuons_pt0_gen_smeared_a_la_qop", 
-        "goodMuons_charge0_gen * std::sin(goodMuons_theta0_gen) / goodMuons_qop0_gen_smeared"
+    return df
+
+def filter_by_covMat(df, reco_sel = "goodMuons"):
+    df = df.Redefine(
+        f"{reco_sel}",
+        (
+            f"ROOT::VecOps::RVec<bool> res({reco_sel}.size());"
+            "for(int i = 0; i < res.size(); i++) {"
+            f"    res[i] = {reco_sel}[i] && *({reco_sel}_covMat[i])[0] > 0;"
+            "}"
+            "return res;"
+        )
     )
-    df = df.Define("goodMuons_qop0_gen_smeared_a_la_pt", 
-        "goodMuons_charge0_gen * std::sin(goodMuons_theta0_gen) / goodMuons_pt0_gen_smeared"
+    return df
+
+# this returns the kinematic variables of a collection of GEN muons matching a subset of RECO muons
+def define_matched_gen_muons_kinematics(
+    df,
+    reco_sel = "goodMuons",
+    kinematic_vars = ["pt", "eta", "phi", "charge"]
+):
+    for var in kinematic_vars:
+        if var == "charge": var = "pdgId"
+        df = df.Define(
+            f"{reco_sel}_gen{var.capitalize()}",
+            f"ROOT::VecOps::Take(GenPart_{var}, Muon_genPartIdx[{reco_sel}]);"
+        )
+        if var == "pdgId":
+            df = df.Define(
+                f"{reco_sel}_genCharge",
+                (f"ROOT::VecOps::RVec<int> res({reco_sel}_gen{var.capitalize()}.size());"
+                 "for (int i = 0; i < res.size(); i++) {"
+                 f"    res[i] = ({reco_sel}_gen{var.capitalize()}[i] > 0 ? -1 : 1);"
+                 "}"
+                 "return res;"
+                )
+            )
+    return df
+
+def calculate_matched_gen_muon_kinematics(df, reco_sel = "goodMuons"):
+    df = df.Define(
+        f"{reco_sel}_genTheta",
+        (f"ROOT::VecOps::RVec<double> res({reco_sel}_genEta.size());"
+         "for (int i = 0; i < res.size(); i++) {"
+         f"    res[i] = wrem::calculateTheta({reco_sel}_genEta[i]);"
+         "}"
+         "return res;"
+        )
     )
-    df = df.Filter("covMat_goodGenMuons0[0] > 0 && covMat_goodGenMuons0[0] < 1")
-    df = df.Define("goodMuons_eta0_gen_smeared", "goodMuons_eta0_gen")
-    df = df.Define("goodMuons_phi0_gen_smeared", "goodMuons_phi0_gen")
-    df = df.Define("goodMuons_charge0_gen_smeared", "goodMuons_charge0_gen")
+    df = df.Define(
+        f"{reco_sel}_genP",
+        (f"ROOT::VecOps::RVec<double> res({reco_sel}_genPt.size());"
+         "for (int i = 0; i < res.size(); i++) {"
+         f"    res[i] = {reco_sel}_genPt[i] / std::sin({reco_sel}_genTheta[i]);"
+         "}"
+         "return res;"
+        )
+    )
+    df = df.Define(
+        f"{reco_sel}_genQop",
+        (f"ROOT::VecOps::RVec<double> res({reco_sel}_genCharge.size());"
+         "for (int i = 0; i < res.size(); i++) {"
+         f"    res[i] = {reco_sel}_genCharge[i] / {reco_sel}_genP[i];"
+         "}"
+         "return res;"
+        )
+    )
+    return df
+
+def define_matched_genSmeared_muon_kinematics(df, reco_sel = "goodMuons"):
+    df = df.Define(f"{reco_sel}_genSmearedQop", 
+        (f"ROOT::VecOps::RVec<double> res({reco_sel}_genQop.size());"
+         "for (int i = 0; i < res.size(); i++) {"
+         "    res[i] = wrem::smearGenQop("
+         f"        {reco_sel}_covMat[i],"
+         f"        {reco_sel}_genQop[i]"
+         "    );"
+         "}"
+         "return res;"
+        )
+    )
+    df = df.Define(f"{reco_sel}_genSmearedPt", 
+        (f"ROOT::VecOps::RVec<double> res({reco_sel}_genPt.size());"
+         "for (int i = 0; i < res.size(); i++) {"
+         f"    res[i] = {reco_sel}_genCharge[i] * std::sin({reco_sel}_genTheta[i]) / {reco_sel}_genSmearedQop[i];"
+         "}"
+         "return res;"
+        )
+    )
+    df = df.Define(f"{reco_sel}_genSmearedEta", f"{reco_sel}_genEta")
+    df = df.Define(f"{reco_sel}_genSmearedPhi", f"{reco_sel}_genPhi")
+    df = df.Define(f"{reco_sel}_genSmearedCharge", f"{reco_sel}_genCharge")
     return df
 
 def define_corrected_reco_muon_kinematics(df, muons="goodMuons", kinematic_vars = ["pt", "eta", "phi", "charge"], index=0):
@@ -288,33 +360,21 @@ def muon_scale_variation_from_manual_shift(
         proc_hists['muonScaleSyst_manualShift'] = hh.combineUpDownVarHists(*manual_shift_hists)
 
 def make_alt_reco_and_gen_hists(df, results, nominal_axes):
-    nominal_cols_cvh = [
-        "goodMuons_eta0_cvh", "goodMuons_pt0_cvh", "goodMuons_charge0_cvh",
-        "passIso", "passMT"
-    ]
-    nominal_cols_uncrct = [
-        "goodMuons_eta0_uncrct", "goodMuons_pt0_uncrct", "goodMuons_charge0_uncrct", 
-        "passIso", "passMT"
-    ]
     nominal_cols_gen = [
         "goodMuons_eta0_gen", "goodMuons_pt0_gen", "goodMuons_charge0_gen", 
         "passIso", "passMT"
     ]
     nominal_cols_gen_smeared = [
-        "goodMuons_eta0_gen_smeared", "goodMuons_pt0_gen_smeared_a_la_qop", "goodMuons_charge0_gen_smeared",
+        "goodMuons_eta0_gen_smeared", "goodMuons_pt0_gen_smeared", "goodMuons_charge0_gen_smeared",
         "passIso", "passMT"
     ]
 
-    nominal_cvh =       df.HistoBoost("nominal_cvh", nominal_axes, [*nominal_cols_cvh, "nominal_weight"])
-    nominal_uncrct =      df.HistoBoost("nominal_uncrct", nominal_axes, [*nominal_cols_uncrct, "nominal_weight"])
     nominal_gen =         df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols_gen, "nominal_weight"])
     nominal_gen_smeared = df.HistoBoost("nominal_gen_smeared", nominal_axes, [*nominal_cols_gen_smeared, "nominal_weight"])
 
-    results.append(nominal_cvh)
-    results.append(nominal_uncrct)
     results.append(nominal_gen)
     results.append(nominal_gen_smeared)
-    return [nominal_cols_cvh, nominal_cols_uncrct, nominal_cols_gen, nominal_cols_gen_smeared]
+    return [nominal_cols_gen, nominal_cols_gen_smeared]
 
 ####################
 ## FOR VALIDATION ##
