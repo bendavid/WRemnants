@@ -46,7 +46,7 @@ def make_jpsi_crctn_helper(filepath):
     )
     return jpsi_crctn_helper
 
-def make_jpsi_crctn_unc_helper(filepath, n_scale_params = 3, n_tot_params = 4, n_eta_bins = 24):
+def make_jpsi_crctn_unc_helper(filepath, n_scale_params = 3, n_tot_params = 4, n_eta_bins = 48):
     f = uproot.open(filepath)
     cov = f['covariance_matrix'].to_hist()
     cov_scale_params = get_jpsi_scale_param_cov_mat(cov, n_scale_params, n_tot_params, n_eta_bins)

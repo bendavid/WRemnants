@@ -96,11 +96,41 @@ public:
     }
 
     // for smearing weights derived from propagating uncs on A, e, M to uncs on qop
+
     out_tensor_t operator() (
-        double genQop, float genPhi, float genEta,
-        double recoQop, float recoPhi, int recoCharge, float recoEta, float recoPt,
-        const RVec<float> &cov, // for sigma on the Gaussian
-        double nominal_weight, bool fullParam = false
+        const RVec<double> &genQops, 
+        const RVec<float> &genPhis,
+        const RVec<float> &genEtas,
+        const RVec<double> &recoQops,
+        const RVec<float> &recoPhis,
+        const RVec<float> &recoEtas,
+        const RVec<int> &recoCharges,
+        const RVec<double> &recoPts,
+        const RVec<RVec<float>> &covs, // for sigma on the Gaussian
+        double nominal_weight = 1.0,
+        bool fullParam = false
+    ) {
+        out_tensor_t res;
+        res.setConstant(nominal_weight);
+
+        const std::size_t nmuons = recoPts.size();
+
+        for (std::size_t i = 0; i < nmuons; ++i) {
+            res *= smearingWeight_oneMuon(
+                genQops[i], genPhis[i], genEtas[i],
+                recoQops[i], recoPhis[i], recoEtas[i], recoCharges[i], recoPts[i],
+                covs[i], fullParam
+            );
+        }
+
+        return res;
+    }
+
+private:
+    out_tensor_t smearingWeight_oneMuon(
+        double genQop,  float genPhi,  float genEta,
+        double recoQop, float recoPhi, float recoEta, int recoCharge, float recoPt,  
+        const RVec<float> &cov, bool fullParam = false
     ) {
         Eigen::Vector3d parms(
             recoQop,
@@ -160,15 +190,15 @@ public:
     
                 const double weight = std::sqrt(covdet/covdetalt)*std::exp(lnpalt - lnp);
     
-            // protect against outliers
-            // if (weight > 0.9998 && weight < 1.0002) {cout << "smearing weight is " << weight << "covd is " << covd << std::endl;}
-                res(ivar, idownup) = nominal_weight * weight;
+                //if (std::isnan(weight)) {
+                //    cout << genQop << " " << recoQop << " " << genEta << " " << recoEta << " " << genPhi << " " << recoPhi << " " << recoPt << " " << recoCharge << " " << covd(0,0) << " " << std::endl;
+                //}
+                res(ivar, idownup) = (std::isnan(weight) ? 1.0 : weight);
             }
         }
         return res;
     }
 
-private:
     std::shared_ptr<const T> correctionHist_;
 
 };
