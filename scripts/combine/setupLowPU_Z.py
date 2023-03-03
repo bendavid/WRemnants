@@ -52,7 +52,7 @@ def main(args):
             proc_name = "Zmumu_genBin%d" % (i+1)
             proc_genbin = dict(proc_base)
             proc_genbin['selectOp'] = lambda x, i=i: x[{"recoil_gen" : i}]
-            datagroups.addGroups({proc_name: proc_genbin})
+            datagroups.addGroup(proc_name, proc_genbin)
             if args.fitType == "differential": unconstrainedProcs.append(proc_name)
     elif args.fitType == "wmass": 
         proc_name = "Zmumu" if args.flavor == "mumu" else "Zee"
@@ -79,7 +79,7 @@ def main(args):
         proc_base = dict(datagroups.groups["Zmumu" if args.flavor == "mumu" else "Zee"])
         proc_base['selectOp'] = lambda x, i=i: x[{"recoil_gen" : s[::hist.sum]}]
         dataProc = "fake_data"
-        datagroups.addGroups({dataProc: proc_genbin})
+        datagroups.addGroups(dataProc, proc_genbin)
     
     # hack: remove non-used procs/groups, as there can be more procs/groups defined than defined above
     # need to remove as cardTool takes all procs in the datagroups
@@ -88,13 +88,13 @@ def main(args):
         if not group in constrainedProcs+unconstrainedProcs+bkgProcs+[dataProc]: toDel.append(group)
     datagroups.deleteGroup(toDel)    
 
-    logger.debug(f"Going to use these groups: {datagroups.getNames(afterFilter=True)}")
+    logger.debug(f"Going to use these groups: {datagroups.getNames()}")
     logger.debug(f"Datagroup keys: {datagroups.groups.keys()}")
     templateDir = f"{scriptdir}/Templates/LowPileupW"
     cardTool = CardTool.CardTool(f"{outfolder}/lowPU_Z{args.flavor}_{args.met}_{args.fitType}{suffix}.txt")
     cardTool.setNominalTemplate(f"{templateDir}/main.txt")
     cardTool.setOutfile(os.path.abspath(f"{outfolder}/lowPU_Z{args.flavor}_{args.met}_{args.fitType}{suffix}.root"))
-    cardTool.setProcesses(datagroups.getNames(afterFilter=True)) # use process after filters applied to the datagroups
+    cardTool.setProcesses(datagroups.getNames())
     cardTool.setDatagroups(datagroups)
     cardTool.setHistName(histName) 
     cardTool.setNominalName(histName)

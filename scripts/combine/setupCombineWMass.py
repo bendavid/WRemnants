@@ -83,7 +83,7 @@ def main(args):
     templateDir = f"{scriptdir}/Templates/WMass"
     # Start to create the CardTool object, customizing everything
     cardTool = CardTool.CardTool(f"{outfolder}/{name}_{{chan}}.txt")
-    cardTool.setProcesses(datagroups.getNames(afterFilter=True)) # use process after filters applied to the datagroups
+    cardTool.setProcesses(datagroups.getNames())
     # setting excluded processes for internal consistency, but in principle it should not be needed
     # it will be used to call datagroups.loadHistsForDatagroups with the proper exclude argument, even if the
     # list of processes to read (set with CardTool.setProcesses) should be totally sufficient in that case
