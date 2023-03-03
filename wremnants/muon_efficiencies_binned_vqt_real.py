@@ -17,7 +17,7 @@ data_dir = f"{pathlib.Path(__file__).parent}/data/"
 
 def make_muon_efficiency_helpers_binned_vqt_real(filename = data_dir + "/testMuonSF/allSmooth_GtoH.root",
                                                  era = None, is_w_like = False, max_pt = np.inf,
-                                                 usePseudoSmoothing=False, step = 2):
+                                                 usePseudoSmoothing=False, error=False, step = 2):
 
     # usePseudoSmoothing will use smoothed nominal histograms with the same pt binning as the original ones.
     # (should do the same for the systematic but the smoothed histogram with original binning is not available at the moment)
@@ -124,6 +124,7 @@ def make_muon_efficiency_helpers_binned_vqt_real(filename = data_dir + "/testMuo
                                                                   ROOT.std.move(sf_reco_pyroot),
                                                                   filenames,
                                                                   histonames,
+                                                                  error,
                                                                   step
                                                               )
     helper2 = ROOT.wrem.muon_efficiency_binned_helper[str(is_w_like).lower(),
