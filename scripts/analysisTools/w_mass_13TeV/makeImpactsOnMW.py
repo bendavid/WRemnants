@@ -60,10 +60,17 @@ def readNuisances(args, infile=None):
         print("ERROR: Cannot find the impact TH2 named ",th2name," in the input file. Maybe you didn't run --doImpacts?\nSkipping.")
         sys.exit()
 
+    if args.excludeNuisgroups:
+        matchExclude = re.compile(args.excludeNuisgroups)
+    else:
+        matchExclude = re.compile(".*")
+        
     print("Histograms loaded successfully ...")
     nuisGroup_nameVal = {}
     for iy in range(1,impMat.GetNbinsY()+1):
         label = impMat.GetYaxis().GetBinLabel(iy)
+        if matchExclude.match(label):
+            continue
         if nuis[0] != "ALL":
             if label in nuis:
                 nuisGroup_nameVal[label] = impMat.GetBinContent(1,iy)
@@ -80,6 +87,7 @@ if __name__ == "__main__":
     parser.add_argument("rootfile", type=str, nargs=1)
     parser.add_argument('-o','--outdir',     dest='outdir',     default='',   type=str, help='output directory to save the matrix')    
     parser.add_argument(     '--nuisgroups', dest='nuisgroups', default='ALL',   type=str, help='nuis groups for which you want to show the impacts (can pass comma-separated list to make all of them one after the other). Use full name, no regular expressions. By default, all are made')
+    parser.add_argument('-x', '--excludeNuisgroups', dest='excludeNuisgroups', default=None,   type=str, help='Regular expression for nuisances to be excluded')
     parser.add_argument(     '--set-stat'  , dest='setStat',    default=-1.0, type=float, help='If positive, use this value for stat (this is before scaling to MeV) until combinetf is fixed')
     parser.add_argument(     '--postfix',     dest='postfix',     default='',   type=str, help='postfix for the output name')
     parser.add_argument(     '--canvasSize', dest='canvasSize', default='800,1200', type=str, help='Pass canvas dimensions as "width,height" ')

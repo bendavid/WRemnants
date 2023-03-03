@@ -17,20 +17,24 @@ _canvas_pull = ROOT.TCanvas("_canvas_pull","",800,800)
 #########################################################################
 colors_plots_ = {"Wmunu"      : ROOT.kRed+2,
                  "Zmumu"      : ROOT.kAzure+2,
-                 "Wtau"       : ROOT.kCyan+1,
+                 "Wtau"       : ROOT.kCyan+1, #backward compatibility
+                 "Wtaunu"     : ROOT.kCyan+1,
                  "Ztautau"    : ROOT.kSpring+9,
                  "Top"        : ROOT.kGreen+2,
                  "Diboson"    : ROOT.kViolet,
                  "Fake"       : ROOT.kGray,
+                 "QCD"        : ROOT.kGray,
                  "Other"      : ROOT.kGray}
 
 legEntries_plots_ = {"Wmunu"      : "W#rightarrow#mu#nu",
                      "Zmumu"      : "Z#rightarrow#mu#mu",
-                     "Wtau"       : "W#rightarrow#tau#nu",
+                     "Wtau"       : "W#rightarrow#tau#nu", #backward compatibility
+                     "Wtaunu"     : "W#rightarrow#tau#nu",
                      "Ztautau"    : "Z#rightarrow#tau#tau",
                      "Top"        : "t quark",
                      "Diboson"    : "Diboson",
-                     "Fake"       : "Multijet",
+                     "Fake"       : "Nonprompt", # or "Multijet"
+                     "QCD"        : "QCD MC",
                      "Other"      : "Other"}   
 
 #########################################################################
@@ -492,6 +496,28 @@ def multiplyByHistoWithLessPtBins(h, hless, neglectUncSecond=False):
             h.SetBinContent(ix, iy, hContent * hlessContent)
             h.SetBinError(  ix, iy, unc)
 
+def scaleTH2byOtherTH2(h, hother, scaleUncertainty=True):
+    # multiply 2D histograms when one has less bins
+    # it is used to apply a correction stored in a TH2
+    # one can decide not to scale also the uncertainty (scaleUncertainty=False)
+    maxXbinOther = hother.GetNbinsX()
+    maxYbinOther = hother.GetNbinsY()
+    for ix in range(1, 1 + h.GetNbinsX()):
+        xbin = hother.GetXaxis().FindFixBin(h.GetXaxis().GetBinCenter(ix))
+        xbin = sorted((1, xbin, maxXbinOther))[1] # creative way to clamp, faster than max(1, min(val, maxVal)) syntax
+        for iy in range(1, 1 + h.GetNbinsY()):
+            ybin = hother.GetYaxis().FindFixBin(h.GetYaxis().GetBinCenter(iy))
+            ybin = sorted((1, ybin, maxYbinOther))[1]
+            hContent = h.GetBinContent(ix, iy)
+            hUnc = h.GetBinError(ix, iy)
+            hotherContent = hother.GetBinContent(xbin, ybin)
+            #hotherContent = 2.0 ## for debug
+            #print(f"ix-iy-xbin-ybin-corr = {ix} - {iy} - {xbin} - {ybin} - {hotherContent}")
+            h.SetBinContent(ix, iy, hContent * hotherContent)
+            if scaleUncertainty:
+                h.SetBinError(  ix, iy, hUnc * hotherContent)
+
+            
 def getTH2morePtBins(h2, newname, nPt):
     xedges = [round(h2.GetXaxis().GetBinLowEdge(i), 2) for i in range(1, 2 + h2.GetNbinsX())]
     xarr = array('d', xedges)
@@ -568,8 +594,10 @@ def drawTH1(htmp,
             moreTextLatex="",
             skipTdrStyle=False,
             drawStatBox=True,
+            statBoxSpec=None, # to specify what to print (None uses a default which depends on having or not fitString
             fitString="", # can be "gaus;LEMSQ+;;-5;5"
-            plotTitleLatex=""
+            plotTitleLatex="",
+            setLogY=False
 ):
 
 
@@ -607,7 +635,13 @@ def drawTH1(htmp,
     if (setYAxisRangeFromUser): h.GetYaxis().SetRangeUser(ymin,ymax)
     # force drawing stat box
     h.SetStats(1 if drawStatBox else 0)
-    h.Draw("HIST")
+    if "TH1" in h.ClassName():
+        h.Draw("HIST")
+    else:
+        h.SetLineColor(ROOT.kBlack)
+        h.SetMarkerStyle(20)
+        h.SetMarkerColor(ROOT.kBlack)
+        h.Draw("HE")
     if len(fitString):
         fitFunc,fitOpt,drawOpt,fitMin,fitMax = fitString.split(";")
         print(f"Fitting with {fitFunc}")
@@ -625,9 +659,9 @@ def drawTH1(htmp,
     if drawStatBox:
         if len(fitString):
             ROOT.gStyle.SetOptFit(111)
-            ROOT.gStyle.SetOptStat(110010)
+            ROOT.gStyle.SetOptStat(statBoxSpec if statBoxSpec else 110010)
         else:
-            ROOT.gStyle.SetOptStat(111110)
+            ROOT.gStyle.SetOptStat(statBoxSpec if statBoxSpec else 111110)
 
     if len(plotTitleLatex):
         lat = ROOT.TLatex()
@@ -649,8 +683,12 @@ def drawTH1(htmp,
         for itx,tx in enumerate(realtext.split(";")):
             lat.DrawLatex(x1,y1-itx*ypass,tx)
 
+    if setLogY:
+        canvas.SetLogy()
     for ext in ["png","pdf"]:
         canvas.SaveAs(f"{outdir}{canvasName}.{ext}")
+    if setLogY:
+        canvas.SetLogy(0)
 
 
 
@@ -814,13 +852,19 @@ def drawCorrelationPlot(h2D_tmp,
     # canvas.Modified()
     # canvas.Update()
 
-    leg = ROOT.TLegend(0.39,0.75,0.89,0.95)
-    leg.SetFillStyle(0)
-    leg.SetFillColor(0)
+    leg = ROOT.TLegend(0.25,0.83,0.75,0.93)
     leg.SetBorderSize(0)
     leg.SetTextFont(62)
-    if plotLabel not in ["", "ForceTitle"]: leg.AddEntry(0,plotLabel,"")
-    if drawProfileX: leg.AddEntry(0,"Correlation = %.2f" % h2DPlot.GetCorrelationFactor(),"")
+    nLegEntries = 0
+    if plotLabel not in ["", "ForceTitle"]:
+        leg.AddEntry(0,plotLabel,"")
+        nLegEntries += 1
+    if drawProfileX:
+        leg.AddEntry(h2DProfile, "Correlation = %.2f" % h2DPlot.GetCorrelationFactor(),"")
+        nLegEntries += 1
+    if nLegEntries == 0:
+        leg.SetFillStyle(0)
+        leg.SetFillColor(0)
     leg.Draw("same")
 
     if (draw_both0_noLog1_onlyLog2 == 0 or draw_both0_noLog1_onlyLog2 == 1):
@@ -1129,14 +1173,18 @@ def pol1_root_(xvals, parms, xLowVal = 0.0, xFitRange = 1.0):
 def pol2_root_(xvals, parms, xLowVal = 0.0, xFitRange = 1.0):
     xscaled = (xvals[0] - xLowVal) / xFitRange
     return parms[0] + parms[1]*xscaled + parms[2]*xscaled**2
-    
-def polN_root_(xvals, parms, xLowVal = 0.0, xFitRange = 1.0, degree=3):
+
+def pol3_root_(xvals, parms, xLowVal = 0.0, xFitRange = 1.0):
+    xscaled = (xvals[0] - xLowVal) / xFitRange
+    return parms[0] + parms[1]*xscaled + parms[2]*xscaled**2 + parms[3]*xscaled**3
+
+def polN_root_(xvals, parms, xLowVal = 0.0, xFitRange = 1.0, degree = 3):
     xscaled = (xvals[0] - xLowVal) / xFitRange
     ret = parms[0]
-    for d in range(1, degree):
+    for d in range(1, 1+degree):
         ret += parms[d]*xscaled**d
     return ret
-    
+
 def drawSingleTH1withFit(h1,
                          labelXtmp="xaxis", labelYtmp="yaxis",
                          canvasName="default", outdir="./",
@@ -1250,6 +1298,7 @@ def drawSingleTH1withFit(h1,
     pol2_scaled = partial(pol2_root_, xLowVal=xMinFit, xFitRange=xMaxFit)
     f1 = ROOT.TF1("f1",pol2_scaled, h1.GetXaxis().GetBinLowEdge(1), xMaxFit, 3)
     f1.SetParLimits(2, -10.0, 0.0)
+    ## TODO: set coefficient of x^1 as 0 to have the maximum at 0?
     realFitOptions = fitOptions
     if "B" not in fitOptions:
         realFitOptions = "B" + fitOptions
@@ -1440,6 +1489,7 @@ def drawNTH1(hists=[],
              draw_both0_noLog1_onlyLog2=1,
              leftMargin=0.15,
              rightMargin=0.04,
+             bottomMargin=0.15,
              labelRatioTmp="Rel.Unc.::0.5,1.5",
              drawStatBox=False,
              legendCoords="0.15,0.35,0.8,0.9",  # x1,x2,y1,y2
@@ -1462,12 +1512,13 @@ def drawNTH1(hists=[],
              markerStyleFirstHistogram=20,
              useLineFirstHistogram=False,
              fillStyleSecondHistogram=3004,
+             fillColorSecondHistogram=None,
              colorVec=None,
              setRatioRangeFromHisto=False, # currently only for 2 histograms in hists
              setOnlyLineRatio=False,
              lineWidth=2,
-             ytextOffsetFromTop=0.15,
-             useMultiHistRatioOption=False): # in % of maxy-miny of the top panel
+             ytextOffsetFromTop=0.15,  # in % of maxy-miny of the top panel
+             useMultiHistRatioOption=False):
 
     # moreText is used to pass some text to write somewhere (TPaveText is used)
     # e.g.  "stuff::x1,y1,x2,y2"  where xi and yi are the coordinates for the text
@@ -1520,7 +1571,7 @@ def drawNTH1(hists=[],
         pad2.SetGridy(1)
         pad2.SetFillStyle(0)
     else:
-        canvas.SetBottomMargin(0.15)
+        canvas.SetBottomMargin(bottomMargin)
 
     h1 = hists[0]
     hnums = [hists[i] for i in range(1,len(hists))]
@@ -1554,7 +1605,10 @@ def drawNTH1(hists=[],
         if not onlyLineColor:
             h.SetFillColor(colors[ic])
             if ic==0: 
-                h.SetFillStyle(fillStyleSecondHistogram)   
+                h.SetFillStyle(fillStyleSecondHistogram)
+                if fillColorSecondHistogram:
+                    h.SetLineWidth(lineWidth)
+                    h.SetFillColor(fillColorSecondHistogram)
             if ic==1: 
                 h.SetFillColor(0) 
                 h.SetLineWidth(lineWidth) 
@@ -1599,8 +1653,11 @@ def drawNTH1(hists=[],
     h1.GetYaxis().SetTickSize(0.01)
     if setXAxisRangeFromUser: h1.GetXaxis().SetRangeUser(xmin,xmax)
     h1.Draw("HE" if useLineFirstHistogram else "PE")
-    for h in hnums:
-        h.Draw("HE SAME" if drawErrorAll else "HIST SAME")
+    for ih,h in enumerate(hnums):
+        if ih == 0 and fillColorSecondHistogram != None:
+            h.Draw("E2 SAME" if drawErrorAll else "HIST SAME")
+        else:
+            h.Draw("HE SAME" if drawErrorAll else "HIST SAME")
     h1.Draw("HE SAME" if useLineFirstHistogram else "PE SAME")
 
     nColumnsLeg = 1
@@ -2496,10 +2553,10 @@ def drawTH1dataMCstack(h1, thestack,
         canvas.SaveAs(outdir + canvasName + ".pdf")
 
     if draw_both0_noLog1_onlyLog2 != 1:        
-        if yAxisName == "a.u.": 
-            h1.GetYaxis().SetRangeUser(max(0.0001,h1.GetMinimum()*0.8),h1.GetMaximum()*100)
+        if labelY == "a.u.": 
+            h1.GetYaxis().SetRangeUser(max(0.0001,h1.GetMinimum()*0.8),h1.GetBinContent(h1.GetMaximumBin())*100)
         else:
-            h1.GetYaxis().SetRangeUser(max(0.001,h1.GetMinimum()*0.8),h1.GetMaximum()*100)
+            h1.GetYaxis().SetRangeUser(max(0.1,h1.GetMinimum()*0.8),h1.GetBinContent(h1.GetMaximumBin())*1000)
             canvas.SetLogy()
             canvas.SaveAs(outdir + canvasName + "_logY.png")
             canvas.SaveAs(outdir + canvasName + "_logY.pdf")
@@ -3646,7 +3703,9 @@ def drawGraphCMS(grList,
                  passCanvas=None,
                  graphDrawStyle="p",
                  legEntryStyle="LF",
-                 useOriginalGraphStyle=False # if True use style from original graph
+                 useOriginalGraphStyle=False, # if True use style from original graph
+                 skipLumi=False,
+                 solidLegend=False
              ):
     adjustSettings_CMS_lumi()
     xAxisName = ""
@@ -3678,9 +3737,12 @@ def drawGraphCMS(grList,
     legcoords = [float(x) for x in (legendCoords.split(";")[0]).split(',')]
     lx1,ly1,lx2,ly2 = legcoords[0],legcoords[1],legcoords[2],legcoords[3]
     leg = ROOT.TLegend(lx1,ly1,lx2,ly2)
-    leg.SetFillColor(0)
-    leg.SetFillStyle(0)
-    leg.SetBorderSize(0)
+    if solidLegend:
+        leg.SetFillColor(ROOT.kWhite)
+    else:
+        leg.SetFillColor(0)
+        leg.SetFillStyle(0)
+        leg.SetBorderSize(0)
     leg.SetNColumns(nColumnsLeg)
 
     for ig in range(0,nGraphs):
@@ -3701,7 +3763,6 @@ def drawGraphCMS(grList,
             grList[ig].Draw(graphDrawStyle+" same")
         leg.AddEntry(grList[ig],leg_roc[ig],legEntryStyle)        
 
-    leg.Draw("same")
     canvas.RedrawAxis("sameaxis")
 
     grList[0].GetXaxis().SetTitleSize(0.05)
@@ -3717,19 +3778,22 @@ def drawGraphCMS(grList,
         grList[0].GetYaxis().SetRangeUser(ymin,ymax)
 
     setTDRStyle() # check if it doesn't screw things up
-    if lumi != None: 
-        CMS_lumi(canvas,lumi,True,False)
-    else:   
-        CMS_lumi(canvas,"",True,False)
-
+    if not skipLumi: 
+        if lumi != None: 
+            CMS_lumi(canvas,lumi,True,False)
+        else:   
+            CMS_lumi(canvas,"",True,False)
+        
     etabin = ROOT.TLatex()
     etabin.SetNDC() # not sure it is needed
     etabin.SetTextSize(0.05)
     etabin.SetTextFont(42)
     etabin.SetTextColor(ROOT.kBlack)
-    etabin.DrawLatex(0.15,0.15,etabinText)
+    if etabinText:
+        etabin.DrawLatex(0.15,0.15,etabinText)
 
     canvas.RedrawAxis("sameaxis")
+    leg.Draw("same")
 
     for ext in [".png",".pdf"]:
         canvas.SaveAs(outputDIR+canvasName+ext)
