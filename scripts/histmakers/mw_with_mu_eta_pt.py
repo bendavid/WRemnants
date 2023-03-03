@@ -23,9 +23,10 @@ sfFileVqtTest = f"{data_dir}/testMuonSF/fits_2.root"
 parser.add_argument("--sfFileVqtTest", type=str, help="File with muon scale factors as a function of V q_T projection", default=sfFileVqtTest)
 parser.add_argument("--vqtTestIntegrated", action="store_true", help="Test of isolation SFs dependence on V q_T projection, integrated (would be the same as default SF, but pt-eta binning is different)")
 parser.add_argument("--vqtTestReal", action="store_true", help="Test of isolation SFs dependence on V q_T projection, using 3D SFs directly (instead of the Vqt fits)")
-parser.add_argument("--vqtTestStep", default=2, type=int , help="Test of isolation SFs dependence on V q_T projection. Including trigger")
-parser.add_argument("--vqtTestError", action="store_true", help="Test of isolation SFs dependence on V q_T projection. Including trigger")
-parser.add_argument("--vqt3dsmoothing", action="store_true", help="Test of isolation SFs dependence on V q_T projection. Including trigger")
+parser.add_argument("--vqtTestStep", default=2, type=int , help="Test of isolation SFs dependence on V q_T projection. Index to determine up to which step the selection is applied (for 3d smoothing). Values are 0,1,2")
+parser.add_argument("--vqtTestCorrectionStep", default=2, type=int , help="Test of isolation SFs dependence on V q_T projection. Index to determine up to which step the 3D SFs are applied. Values are 0,1,2")
+parser.add_argument("--vqtTestError", action="store_true", help="Fill histograms with 3D SFs errors as a function of ut (for 3D smoothing)")
+parser.add_argument("--vqt3dsmoothing", action="store_true", help="3D Smoothing")
 args = parser.parse_args()
 sfFileVqtTest = args.sfFileVqtTest
 
@@ -103,7 +104,7 @@ if args.binnedScaleFactors:
                                                                                                                               era = era,
                                                                                                                               max_pt = axis_pt.edges[-1],
                                                                                                                               error = error,
-                                                                                                                              step = args.vqtTestStep)
+                                                                                                                              step = args.vqtTestCorrectionStep)
         else:
             if not args.vqtTestIntegrated:
                 muon_efficiency_helper_vqt, dummy_helper1, dummy_helper2 = wremnants.make_muon_efficiency_helpers_binned_vqt(filename = args.sfFile, filenamevqt = sfFileVqtTest,
