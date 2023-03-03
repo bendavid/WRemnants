@@ -24,6 +24,8 @@ sfFileVqtTest = f"{data_dir}/testMuonSF/fits_2.root"
 parser.add_argument("--sfFileVqtTest", type=str, help="File with muon scale factors as a function of V q_T projection", default=sfFileVqtTest)
 parser.add_argument("--vqtTestIntegrated", action="store_true", help="Test of isolation SFs dependence on V q_T projection, integrated (would be the same as default SF, but pt-eta binning is different)")
 parser.add_argument("--vqtTestReal", action="store_true", help="Test of isolation SFs dependence on V q_T projection, using 3D SFs directly (instead of the Vqt fits)")
+parser.add_argument("--vqtTestStep", default=2, type=int , help="Test of isolation SFs dependence on V q_T projection. Including trigger")
+parser.add_argument("--vqtTestError", action="store_true", help="Test of isolation SFs dependence on V q_T projection. Including trigger")
 args = parser.parse_args()
 sfFileVqtTest = args.sfFileVqtTest
 
@@ -50,7 +52,8 @@ print(f"Pt binning: {template_npt} bins from {template_minpt} to {template_maxpt
 
 # standard regular axes
 axis_eta = hist.axis.Regular(template_neta, template_mineta, template_maxeta, name = "eta")
-axis_pt = hist.axis.Regular(template_npt, template_minpt, template_maxpt, name = "pt")
+axis_pt_list = [24., 26., 28., 30., 32., 34., 36., 38., 40., 42., 44., 47., 50., 55., 60., 65.]
+axis_pt = hist.axis.Variable(axis_pt_list, name = "pt")
 
 # categorical axes in python bindings always have an overflow bin, so use a regular
 # axis for the charge
@@ -59,7 +62,11 @@ axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, nam
 # TODO: get from common
 axis_passIso = hist.axis.Boolean(name = "passIso")
 axis_passMT = hist.axis.Boolean(name = "passMT")
-nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
+nominal_axes1 = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
+axis_vqt_list = [-3000000000,-30,-15,-10,-5,0,5,10,15,30,3000000000] #has to match the ut binning in the 3D SFs
+#axis_vqt_list = [-3000000000,-15,-5,0,5,15,3000000000]
+axis_vqt = hist.axis.Variable(axis_vqt_list, name = "ut")
+nominal_axes2 = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT, axis_vqt]
 
 # axes for study of fakes
 axis_mt_fakes = hist.axis.Regular(60, 0., 120., name = "mt", underflow=False, overflow=True)
@@ -85,11 +92,16 @@ if args.binnedScaleFactors:
 
     if args.vqtTest:
         if args.vqtTestReal:
-            includeTrigger = True
-            muon_efficiency_helper_vqt, dummy_helper1, dummy_helper2 = wremnants.make_muon_efficiency_helpers_binned_vqt_real(filename = args.sfFile,
-                                                                                                                              era = era,
-                                                                                                                              max_pt = axis_pt.edges[-1],
-                                                                                                                              includeTrigger = includeTrigger)
+            if not args.vqtTestError:
+                muon_efficiency_helper_vqt, dummy_helper1, dummy_helper2 = wremnants.make_muon_efficiency_helpers_binned_vqt_real(filename = args.sfFile,
+                                                                                                                                  era = era,
+                                                                                                                                  max_pt = axis_pt.edges[-1],
+                                                                                                                                  step = args.vqtTestStep)
+            else:
+                muon_efficiency_helper_vqt, dummy_helper1, dummy_helper2 = wremnants.make_muon_efficiency_helpers_binned_vqt_real_error(filename = args.sfFile,
+                                                                                                                                        era = era,
+                                                                                                                                        max_pt = axis_pt.edges[-1],
+                                                                                                                                        step = args.vqtTestStep)
         else:
             if not args.vqtTestIntegrated:
                 muon_efficiency_helper_vqt, dummy_helper1, dummy_helper2 = wremnants.make_muon_efficiency_helpers_binned_vqt(filename = args.sfFile, filenamevqt = sfFileVqtTest,
@@ -100,7 +112,7 @@ if args.binnedScaleFactors:
                 muon_efficiency_helper_vqt, muon_efficiency_helper_vqt_syst, dummy_helper2 = wremnants.make_muon_efficiency_helpers_binned_vqt_integrated(filename = args.sfFile, filenamevqt = sfFileVqtTest,
                                                                                                                                                           era = era,
                                                                                                                                                           max_pt = axis_pt.edges[-1],
-                                                                                                                                                          includeTrigger = includeTrigger) 
+                                                                                                                                                          includeTrigger = includeTrigger)
 else:
     logger.info("Using smoothed scale factors and uncertainties")
     muon_efficiency_helperw, muon_efficiency_helper_systw, muon_efficiency_helper_statw = wremnants.make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSmooth_GtoH3D.root", era = era, max_pt = axis_pt.edges[-1])
@@ -147,6 +159,11 @@ def build_graph(df, dataset):
     isZ = dataset.name in common.zprocs
     isTop = dataset.group == "Top"
 
+    if (args.vqtTestError and isW):
+        nominal_axes = nominal_axes2
+    else:
+        nominal_axes = nominal_axes1
+
     if dataset.name in ["WplusmunuPostVFP", "WminusmunuPostVFP"] :
         muon_efficiency_helper = muon_efficiency_helperw
         muon_efficiency_helper_syst = muon_efficiency_helper_systw
@@ -163,7 +180,7 @@ def build_graph(df, dataset):
 
     weightsum = df.SumAndCount("weight")
 
-    df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
+    #df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24") #for IDIP we don't want trigger requirement
     #df = df.Filter("event % 2 == 1") # test with odd/even events
 
     apply_theory_corr = args.theory_corr and dataset.name in corr_helpers
@@ -183,7 +200,7 @@ def build_graph(df, dataset):
  
     df = muon_selections.veto_electrons(df)
     df = muon_selections.apply_met_filters(df)
-    df = muon_selections.apply_triggermatching_muon(df, dataset, "goodMuons_eta0", "goodMuons_phi0")
+    #df = muon_selections.apply_triggermatching_muon(df, dataset, "goodMuons_eta0", "goodMuons_phi0") #for IDIP we don't want trigger requirement
 
     # gen match to bare muons to select only prompt muons from top processes
     if isTop:
@@ -257,7 +274,7 @@ def build_graph(df, dataset):
     results.append(mTStudyForFakes)
 
     df = df.Define("passMT", "transverseMass >= 40.0")
-    df = df.Filter("passMT || hasCleanJet")
+    df = df.Filter("passMT && passIso") #to simplify, don't allow pass on jet, but we want event to pass ISO cut
 
     nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
 

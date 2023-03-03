@@ -130,6 +130,17 @@ def main(args):
                             systAxes=["downUpVar"],
                             labelsByAxis=["downUpVar"],
                             passToFakes=passSystToFakes)
+
+        cardTool.addSystematic("sf2d", 
+            processes=signal_samples,
+            outNames=["sf2dDown", "sf2dUp"],
+            group="SF3Dvs2D",
+            mirror=True,
+            #TODO: Name this
+            noConstraint=False,
+            systAxes=[],
+            passToFakes=True,
+        )
     else:
         # TOCHECK: no fakes here, most likely
         cardTool.addLnNSystematic("luminosity", processes=cardTool.allMCProcesses(), size=1.012, group="luminosity")

@@ -1,5 +1,5 @@
-#ifndef WREMNANTS_MUON_EFFICIENCIES_BINNED_VQT_REAL_H
-#define WREMNANTS_MUON_EFFICIENCIES_BINNED_VQT_REAL_H
+#ifndef WREMNANTS_MUON_EFFICIENCIES_BINNED_VQT_REAL_ERROR_H
+#define WREMNANTS_MUON_EFFICIENCIES_BINNED_VQT_REAL_ERROR_H
 
 #include <boost/histogram/axis.hpp>
 #include "TFile.h"
@@ -8,7 +8,7 @@
 #include <array>
 #include <string>
 
-namespace wrem_vqt_real {
+namespace wrem_vqt_real_error {
 
     template<typename HIST_IDIPTRIGISO, typename HIST_TRACKING, typename HIST_RECO>
     class muon_efficiency_binned_helper_base {
@@ -28,6 +28,30 @@ namespace wrem_vqt_real {
               TFile* filetriggerplus=new TFile(filenames[2].c_str());
               trig3dplus_=(TH3D*)filetriggerplus->Get(histonames[2].c_str())->Clone();
               trig3dplus_->SetName("triggerplus3d");
+              std::cout<<"ISOLATION\n";
+              for (unsigned int i=0; i!=10; i++) {
+                for (unsigned int j=0; j!=48; j++) {
+                  for (unsigned int h=0; h!=15; h++) {
+                    std::cout<<"ut: "<<iso3d_->GetXaxis()->GetBinCenter(i+1)<<" eta: "<<iso3d_->GetYaxis()->GetBinCenter(j+1)<<" pt: "<<iso3d_->GetZaxis()->GetBinCenter(h+1)<<" "<<iso3d_->GetBinError(i+1,j+1,h+1)<<"\n";
+                  }
+                }
+              }
+              std::cout<<"TRIGGER PLUS\n";
+              for (unsigned int i=0; i!=10; i++) {
+                for (unsigned int j=0; j!=48; j++) {
+                  for (unsigned int h=0; h!=15; h++) {
+                    std::cout<<"ut: "<<trig3dplus_->GetXaxis()->GetBinCenter(i+1)<<" eta: "<<trig3dplus_->GetYaxis()->GetBinCenter(j+1)<<" pt: "<<trig3dplus_->GetZaxis()->GetBinCenter(h+1)<<" "<<trig3dplus_->GetBinError(i+1,j+1,h+1)<<"\n";
+                  }
+                }
+              }
+              std::cout<<"TRIGGER MINUS\n";
+              for (unsigned int i=0; i!=10; i++) {
+                for (unsigned int j=0; j!=48; j++) {
+                  for (unsigned int h=0; h!=15; h++) {
+                    std::cout<<"ut: "<<trig3dminus_->GetXaxis()->GetBinCenter(i+1)<<" eta: "<<trig3dminus_->GetYaxis()->GetBinCenter(j+1)<<" pt: "<<trig3dminus_->GetZaxis()->GetBinCenter(h+1)<<" "<<trig3dminus_->GetBinError(i+1,j+1,h+1)<<"\n";
+                  }
+                }
+              }
             }
 
         std::array<double,5> scale_factor_array(int pt_idx, int pt_idx_reco, int sapt_idx,
@@ -70,13 +94,23 @@ namespace wrem_vqt_real {
 
             std::array<double,5> allSF = scale_factor_array(pt_idx, pt_idx_reco, sapt_idx, eta_idx, saeta_idx, charge_idx, pass_iso, with_trigger, idx_nom_alt);
             double sf = 1.0;
-            if (step_>=0) {
+            //if (step_==0) {
               for(int i = 0; i < (allSF.size()-2); i++) {
                   // std::cout << "Scale factor i = " << i << " --> " << allSF[i] << std::endl;
                   sf *= allSF[i];
               }
+            //}
+            if (step_==1) {
+              TH3D* chargehisto = charge > 0 ? trig3dplus_ : trig3dminus_;
+              double binlowchargecenter=chargehisto->GetXaxis()->GetBinCenter(1), binupchargecenter=chargehisto->GetXaxis()->GetBinCenter(chargehisto->GetXaxis()->GetNbins());
+              int bincharge=chargehisto->FindFixBin(vqt,eta,pt), binlowcharge=chargehisto->FindFixBin(binlowchargecenter,eta,pt), binupcharge=chargehisto->FindFixBin(binupchargecenter,eta,pt);
+              if ((vqt>=chargehisto->GetXaxis()->GetBinLowEdge(1))&&(vqt<=chargehisto->GetXaxis()->GetBinUpEdge(chargehisto->GetXaxis()->GetNbins()))) sf *= chargehisto->GetBinError(bincharge);
+              else {
+                if (vqt<chargehisto->GetXaxis()->GetBinLowEdge(1)) sf *= chargehisto->GetBinError(binlowcharge);
+                else sf *= chargehisto->GetBinError(binupcharge);
+              }
             }
-            if (step_>=1) {
+            if (step_==2) {
               TH3D* chargehisto = charge > 0 ? trig3dplus_ : trig3dminus_;
               double binlowchargecenter=chargehisto->GetXaxis()->GetBinCenter(1), binupchargecenter=chargehisto->GetXaxis()->GetBinCenter(chargehisto->GetXaxis()->GetNbins());
               int bincharge=chargehisto->FindFixBin(vqt,eta,pt), binlowcharge=chargehisto->FindFixBin(binlowchargecenter,eta,pt), binupcharge=chargehisto->FindFixBin(binupchargecenter,eta,pt);
@@ -85,14 +119,12 @@ namespace wrem_vqt_real {
                 if (vqt<chargehisto->GetXaxis()->GetBinLowEdge(1)) sf *= chargehisto->GetBinContent(binlowcharge);
                 else sf *= chargehisto->GetBinContent(binupcharge);
               }
-            }
-            if (step_>=2) {
               double binlowcenter=iso3d_->GetXaxis()->GetBinCenter(1), binupcenter=iso3d_->GetXaxis()->GetBinCenter(iso3d_->GetXaxis()->GetNbins());
               int bin=iso3d_->FindFixBin(vqt,eta,pt), binlow=iso3d_->FindFixBin(binlowcenter,eta,pt), binup=iso3d_->FindFixBin(binupcenter,eta,pt);
-              if ((vqt>=iso3d_->GetXaxis()->GetBinLowEdge(1))&&(vqt<=iso3d_->GetXaxis()->GetBinUpEdge(iso3d_->GetXaxis()->GetNbins()))) sf *= iso3d_->GetBinContent(bin);
+              if ((vqt>=iso3d_->GetXaxis()->GetBinLowEdge(1))&&(vqt<=iso3d_->GetXaxis()->GetBinUpEdge(iso3d_->GetXaxis()->GetNbins()))) sf *= iso3d_->GetBinError(bin);
               else {
-                if (vqt<iso3d_->GetXaxis()->GetBinLowEdge(1)) sf *= iso3d_->GetBinContent(binlow);
-                else sf *= iso3d_->GetBinContent(binup);
+                if (vqt<iso3d_->GetXaxis()->GetBinLowEdge(1)) sf *= iso3d_->GetBinError(binlow);
+                else sf *= iso3d_->GetBinError(binup);
               }
             }
             //std::cout << "Scale factor product " << sf << std::endl;
