@@ -29,7 +29,7 @@ templateDir = f"{scriptdir}/Templates/LowPileupW"
 cardTool = CardTool.CardTool(f"{args.outfolder}/LowPileupW_{{chan}}.txt")
 cardTool.setNominalTemplate(f"{templateDir}/main.txt")
 cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/LowPileupWCombineInput.root"))
-cardTool.setProcesses(datagroups.getNames(afterFilter=True)) # use process after filters applied to the datagroups
+cardTool.setProcesses(datagroups.getNames())
 cardTool.setDatagroups(datagroups)
 cardTool.setHistName("mt_reco_pf")
 cardTool.setUnconstrainedProcs([cardTool.getFakeName(), "Wmunu"])

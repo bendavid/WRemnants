@@ -194,15 +194,13 @@ class datagroups(object):
                           forceNonzero, preOpMap, preOpArgs,
                           scaleToNewLumi=scaleToNewLumi, excludeProcs=excluded_procs)
 
-    def addGroups(self, dictToAdd, canReplaceKey=False):
-        # dictToAdd is of the form {key: dict}, where dict is another dictionary with the group's specimen
-        for k in dictToAdd.keys():
-            if canReplaceKey or k not in self.groups.keys():
-                if k in self.groups.keys():
-                    logger.warning(f"Replacing {k} in groups")
-                self.groups[k] = dictToAdd[k]
-                if k not in self.groupNamesPostFilter:
-                    self.groupNamesPostFilter.append(k)
+    def addGroup(self, keyname, dictToAdd, canReplaceKey=False):
+        if canReplaceKey or keyname not in self.groups.keys():
+            if keyname in self.groups.keys():
+                logger.warning(f"Replacing {keyname} in groups")
+            self.groups[keyname] = dictToAdd
+            if keyname not in self.groupNamesPostFilter:
+                self.groupNamesPostFilter.append(keyname)
             
     def deleteGroup(self, procs):
         for p in procs:
@@ -211,7 +209,7 @@ class datagroups(object):
             if p in self.groupNamesPostFilter:
                 self.groupNamesPostFilter.remove(p)
             
-    def getDatagroups(self, excluded_procs=[], afterFilter=False):
+    def getDatagroups(self, excluded_procs=[], afterFilter=True):
         # usually excluded_procs is not needed if afterFilter=True, unless one has to filter further
         if type(excluded_procs) == str:
             excluded_procs = list(excluded_procs)
@@ -224,7 +222,7 @@ class datagroups(object):
 
     # INFO: this method returns the list from the full set of defined groups, unless one filters further.
     # Instead, argument 'afterFilter' is used to return the names after the filter passed to the constructor
-    def getNames(self, matches=[], exclude=False, afterFilter=False):
+    def getNames(self, matches=[], exclude=False, afterFilter=True):
         listOfNames = list(x for x in self.groupNamesPostFilter) if afterFilter else list(x for x in self.groups.keys())
         if not matches:
             return listOfNames
@@ -240,7 +238,7 @@ class datagroups(object):
             else:
                 return list(filter(lambda x: any([re.search(expr, x) for expr in matches]), listOfNames))
               
-    def getProcNames(self, to_expand=[], exclude_group=[], afterFilter=False):
+    def getProcNames(self, to_expand=[], exclude_group=[], afterFilter=True):
         procs = []
         if not to_expand:
             to_expand = self.groupNamesPostFilter if afterFilter else self.groups.keys()
