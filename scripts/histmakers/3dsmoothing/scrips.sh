@@ -4,7 +4,7 @@
 
 NAME="redo"
 
-python WRemnants/scripts/histmakers/mw_with_mu_eta_pt.py --theory_corr scetlib --muonCorr none --no_recoil -p idip${NAME} --binnedScaleFactors --vqtTest --vqtTestReal --vqt3dsmoothing --vqtTestStep 0
+python WRemnants/scripts/histmakers/mw_with_mu_eta_pt.py --theory_corr scetlib --muonCorr none --no_recoil -p idip${NAME} --binnedScaleFactors --vqtTest --vqtTestReal --vqt3dsmoothing --vqtTestStep 0 --vqtTestCorrectionStep 0
 python WRemnants/scripts/histmakers/mw_with_mu_eta_pt.py --theory_corr scetlib --muonCorr none --no_recoil -p triggerMC${NAME} --binnedScaleFactors --vqtTest --vqtTestReal --vqt3dsmoothing --vqtTestStep 1 --vqtTestCorrectionStep 0
 python WRemnants/scripts/histmakers/mw_with_mu_eta_pt.py --theory_corr scetlib --muonCorr none --no_recoil -p trigger${NAME} --binnedScaleFactors --vqtTest --vqtTestReal --vqt3dsmoothing --vqtTestStep 1 --vqtTestCorrectionStep 1
 python WRemnants/scripts/histmakers/mw_with_mu_eta_pt.py --theory_corr scetlib --muonCorr none --no_recoil -p trigger${NAME}error --binnedScaleFactors --vqtTest --vqtTestReal --vqt3dsmoothing --vqtTestStep 1 --vqtTestCorrectionStep 1 --vqtTestError
