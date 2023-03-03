@@ -22,8 +22,9 @@ flavor = args.flavor # mumu, ee
 met = args.met # mumu, ee
 sigProc = "Zmumu" if flavor == "mumu" else "Zee"
 
-filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
-datasets = wremnants.datasetsLowPU.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, flavor=flavor)
+datasets = wremnants.datasetsLowPU.getDatasets(maxFiles=args.maxFiles, 
+    filt=common.get_process_filter(args.filterProcs, args.invert_filter), 
+    flavor=flavor)
 for d in datasets: logging.info(f"Dataset {d.name}")
 
 
