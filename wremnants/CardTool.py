@@ -166,10 +166,13 @@ class CardTool(object):
         if self.datagroups:
             self.datagroups.setNominalName(histName)
 
-    # FIXME ? : this will return True for Fake since it has Data in the list of members.
-    #           Is it intended? I guess isData is also meant to indentify "data-driven" then
-    def isData(self, procName):
-        return any([x.is_data for x in self.datagroups.groups[procName]["members"]])
+    # by default this returns True also for Fake since it has Data in the list of members
+    # then self.isMC negates this one and thus will only include pure MC processes
+    def isData(self, procName, onlyData=False):
+        if onlyData:
+            return all([x.is_data for x in self.datagroups.groups[procName]["members"]])
+        else:
+            return any([x.is_data for x in self.datagroups.groups[procName]["members"]])
 
     def isMC(self, procName):
         return not self.isData(procName)

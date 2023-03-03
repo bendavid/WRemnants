@@ -20,7 +20,6 @@ logger = common.child_logger(__name__)
 class datagroups(object):
     def __init__(self, infile, combine=False):
         self.combine = combine
-        self.lumi = 1.
         self.h5file = None
         self.rtfile = None
         if infile.endswith(".pkl.lz4"):
@@ -40,6 +39,7 @@ class datagroups(object):
             self.wlike = os.path.basename(self.getMetaInfo()["command"].split()[0]).startswith("mz_wlike")
 
         self.lumi = None
+        # FIXME: self.datasets is currently a data member of the inherited class, we should define it here as well
         if self.datasets and self.results:
             self.data = [x for x in self.datasets.values() if x.is_data]
             if self.data:
@@ -350,8 +350,7 @@ class datagroups2016(datagroups):
                  excludeProcGroup=None, filterProcGroup=None
     ):
         self.datasets = {x.name : x for x in datasets2016.getDatasets(filt=filterProcGroup, excludeGroup=excludeProcGroup)}
-        self.datasetsKeys = self.datasets.keys()
-        logger.debug(f"Getting these datasets: {self.datasetsKeys}")
+        logger.debug(f"Getting these datasets: {self.datasets.keys()}")
         super().__init__(infile, combine)
         if self.wmass and applySelection:
             sigOp = sel.signalHistWmass
@@ -401,7 +400,7 @@ class datagroups2016(datagroups):
             for k in ["Zmumu", "Ztautau"]:
                 self.groups[k] = self.groups.pop(k)
             self.groups.update({
-                "Wtau" : dict(
+                "Wtaunu" : dict(
                     members = self.getSafeListFromDataset(["WminustaunuPostVFP", "WplustaunuPostVFP"]),
                     label = r"W$^{\pm}\to\tau\nu$",
                     color = "orange",
@@ -455,9 +454,9 @@ class datagroups2016(datagroups):
     def getSafeListFromDataset(self, procs):
         # return list of valid samples which belongs to the dataset or where not excluded elsewhere
         if isinstance(procs, str):
-            return [self.datasets[procs]] if procs in self.datasetsKeys else []
+            return [self.datasets[procs]] if procs in self.datasets.keys() else []
         else:
-            return list(self.datasets[x] for x in procs if x in self.datasetsKeys)
+            return list(self.datasets[x] for x in procs if x in self.datasets.keys())
         
     def make_yields_df(self, histName, procs, action):
         def sum_and_unc(h):
