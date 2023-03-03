@@ -10,15 +10,17 @@ import ROOT
 
 name = "rnd"
 
+directory = "directory_name"
+
 histlist = []
 
-histlist.append(f"mw_with_mu_eta_pt_scetlibCorr_idip{name}.hdf5")
-histlist.append(f"mw_with_mu_eta_pt_scetlibCorr_triggerMC{name}.hdf5")
-histlist.append(f"mw_with_mu_eta_pt_scetlibCorr_trigger{name}.hdf5")
-histlist.append(f"mw_with_mu_eta_pt_scetlibCorr_trigger{name}error.hdf5")
-histlist.append(f"mw_with_mu_eta_pt_scetlibCorr_isoMC{name}.hdf5")
-histlist.append(f"mw_with_mu_eta_pt_scetlibCorr_iso{name}.hdf5")
-histlist.append(f"mw_with_mu_eta_pt_scetlibCorr_iso{name}error.hdf5")
+histlist.append(f"{directory_name}/mw_with_mu_eta_pt_scetlibCorr_idip{name}.hdf5")
+histlist.append(f"{directory_name}/mw_with_mu_eta_pt_scetlibCorr_triggerMC{name}.hdf5")
+histlist.append(f"{directory_name}/mw_with_mu_eta_pt_scetlibCorr_trigger{name}.hdf5")
+histlist.append(f"{directory_name}/mw_with_mu_eta_pt_scetlibCorr_trigger{name}error.hdf5")
+histlist.append(f"{directory_name}/mw_with_mu_eta_pt_scetlibCorr_isoMC{name}.hdf5")
+histlist.append(f"{directory_name}/mw_with_mu_eta_pt_scetlibCorr_iso{name}.hdf5")
+histlist.append(f"{directory_name}/mw_with_mu_eta_pt_scetlibCorr_iso{name}error.hdf5")
 
 namelist = []
 namelist.append("IDIP")
@@ -30,23 +32,23 @@ namelist.append("Iso")
 namelist.append("IsoError")
 
 histos = []
-
+    
 for idx,filename in enumerate(histlist) :
     h5file = h5py.File(filename, "r")
-    results = narf.ioutils.pickle_load_h5py(h5file["results"]))
+    results = narf.ioutils.pickle_load_h5py(h5file["results"])
     plus = results["WplusmunuPostVFP"]["output"]
     minus = results["WminusmunuPostVFP"]["output"]
-    plus = plus["nominal"]
-    minus = minus["nominal"]
+    plus = plus["nominal"].get()
+    minus = minus["nominal"].get()
     if "error" in filename:
         plus = plus[:,:,1:2,:,:,:]
         plus = plus[:,:,sum,sum,sum,:]
-        minus = minus[:,:,1:2,:,:,:]
+        minus = minus[:,:,0:1,:,:,:]
         minus = minus[:,:,sum,sum,sum,:]
     else :
         plus = plus[:,:,1:2,:,:]
         plus = plus[:,:,sum,sum,sum]
-        minus = minus[:,:,1:2,:,:]
+        minus = minus[:,:,0:1,:,:]
         minus = minus[:,:,sum,sum,sum]
     plus=narf.hist_to_root(plus)
     plus.SetName(f"{namelist[idx]}Plus")
@@ -55,7 +57,7 @@ for idx,filename in enumerate(histlist) :
     histos.append(plus)
     histos.append(minus)
 
-output_file = ROOT.TFile("makeefficiencies{name}.root","RECREATE")
+output_file = ROOT.TFile(f"makeefficiencies{name}.root","RECREATE")
 output_file.cd()
 
 for histo in histos:
