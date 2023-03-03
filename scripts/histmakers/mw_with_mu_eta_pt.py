@@ -275,7 +275,7 @@ def build_graph(df, dataset):
     df = df.Define("passMT", "transverseMass >= 40.0")
 
     if args.vqt3dsmoothing:
-        if not (args.vqtTestStep == 2):
+        if (args.vqtTestStep == 2):
             df = df.Filter("passMT && passIso")
         else :
             df = df.Filter("passMT")
