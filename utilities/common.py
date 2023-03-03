@@ -82,7 +82,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--altPdfOnlyCentral", action='store_true', help="Only store central value for alternate PDF sets")
     parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
     parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=[])
-    parser.add_argument("--exclude_proc_groups", dest="excludeProcGroups", type=str, nargs="*", help="Don't run over processes belonging to these groups (only accepts exact group name)", default=["QCD"])
+    parser.add_argument("--exclude-proc-groups", dest="excludeProcGroups", type=str, nargs="*", help="Don't run over processes belonging to these groups (only accepts exact group name)", default=["QCD"])
     parser.add_argument("--v8", action='store_true', help="Use NanoAODv8. Default is v9")
     parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
     parser.add_argument("--theory_corr", nargs="*", 
@@ -153,7 +153,7 @@ def common_parser_combine():
                         help="Do not use logging with colors")
     parser.add_argument("--combineChannels", action='store_true', help="Only use one channel")
     parser.add_argument("--lumiScale", type=float, default=None, help="Rescale equivalent luminosity by this value (e.g. 10 means ten times more data and MC)")
-    parser.add_argument("--exclude_proc_groups", dest="excludeProcGroups", type=str, nargs="*", help="Don't run over processes belonging to these groups (only accepts exact group names)", default=["QCD"])
+    parser.add_argument("--exclude-proc-groups", dest="excludeProcGroups", type=str, nargs="*", help="Don't run over processes belonging to these groups (only accepts exact group names)", default=["QCD"])
     parser.add_argument("--filter_proc_groups", dest="filterProcGroups", type=str, nargs="*", help="Only run over processes belonging to these groups", default=[])
     return parser
 
