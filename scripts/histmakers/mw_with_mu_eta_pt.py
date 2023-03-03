@@ -66,6 +66,9 @@ axis_mt_fakes = hist.axis.Regular(120, 0., 120., name = "mt", underflow=False, o
 axis_iso_fakes = hist.axis.Regular(60, 0., 0.6, name = "PFrelIso04", underflow=False, overflow=True)
 axis_hasjet_fakes = hist.axis.Boolean(name = "hasJets") # only need case with 0 jets or > 0 for now
 mTStudyForFakes_axes = [axis_eta, axis_pt, axis_charge, axis_mt_fakes, axis_passIso, axis_hasjet_fakes]
+
+axis_met = hist.axis.Regular(200, 0., 200., name = "met", underflow=False, overflow=True)
+
 # define helpers
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 
@@ -249,10 +252,15 @@ def build_graph(df, dataset):
     results.append(mTStudyForFakes)
     mtIsoJetCharge = df.HistoBoost("mtIsoJetCharge", [axis_mt_fakes, axis_iso_fakes, axis_hasjet_fakes, axis_charge], ["transverseMass", "goodMuons_pfRelIso04_all0", "hasCleanJet", "goodMuons_charge0", "nominal_weight"])
     results.append(mtIsoJetCharge)
-
+    
     df = df.Define("passMT", "transverseMass >= 40.0")
     # no longer cut on jet at low mT, it biases the fakes estimate
 
+    # utility plot, mt and met together in 2D, to plot them later
+    mtAndMET = df.HistoBoost("mtAndMET", [axis_mt_fakes, axis_met, axis_charge, axis_passIso, axis_passMT], ["transverseMass", "MET_corr_rec_pt", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"])
+    results.append(mtAndMET)
+    ##
+    
     nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
 
     if dataset.is_data:
