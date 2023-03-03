@@ -22,8 +22,11 @@ args = parser.parse_args()
 logger = common.setup_logger(__file__, args.verbose, args.color_logger)
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
-datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
-    nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path)
+excludeGroup = args.excludeProcGroups if args.excludeProcGroups else None
+datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
+                                              filt=filt if args.filterProcs else None,
+                                              excludeGroup=excludeGroup,
+                                              nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path)
 
 era = args.era
 
@@ -84,13 +87,13 @@ logger.info(f"SF file: {args.sfFile}")
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
 
-mc_jpsi_crctn_helper, data_jpsi_crctn_helper = muon_validation.make_jpsi_crctn_helpers(args.muonCorr)
+mc_jpsi_crctn_helper, data_jpsi_crctn_helper = muon_validation.make_jpsi_crctn_helpers(args)
 
-mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = muon_calibration.make_muon_calibration_helpers()
+mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = muon_calibration.make_muon_calibration_helpers(args)
 
 smearing_helper = muon_calibration.make_muon_smearing_helpers() if args.smearing else None
 
-bias_helper = muon_calibration.make_muon_bias_helpers(args.muonCorr, args.smearing) if args.bias_calibration else None
+bias_helper = muon_calibration.make_muon_bias_helpers(args) 
 
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_corr)
 
@@ -115,7 +118,7 @@ def build_graph(df, dataset):
     cvh_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
     jpsi_helper = data_jpsi_crctn_helper if dataset.is_data else mc_jpsi_crctn_helper
 
-    df = muon_calibration.define_corrected_muons(df, cvh_helper, jpsi_helper, args.muonCorr, dataset, smearing_helper, bias_helper)
+    df = muon_calibration.define_corrected_muons(df, cvh_helper, jpsi_helper, args, dataset, smearing_helper, bias_helper)
 
     df = muon_selections.select_veto_muons(df, nMuons=2)
     df = muon_selections.select_good_muons(df, nMuons=2, use_trackerMuons=args.trackerMuons, use_isolation=True)

@@ -266,7 +266,7 @@ if __name__ == "__main__":
 
     ptBinRanges = []
     for i in range(nominals[p].GetNbinsY()):
-        ptBinRanges.append("") # keep dummy otherwise there's too many text here
+        ptBinRanges.append("") # keep dummy otherwise there's too much text here
     systPostfix = f"_{args.charge}"
     if args.systPostfix:
         systPostfix += f"_{args.systPostfix}"
