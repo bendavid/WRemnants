@@ -24,7 +24,6 @@ sfFileVqtTest = f"{data_dir}/testMuonSF/fits_2.root"
 parser.add_argument("--sfFileVqtTest", type=str, help="File with muon scale factors as a function of V q_T projection", default=sfFileVqtTest)
 parser.add_argument("--vqtTestIntegrated", action="store_true", help="Test of isolation SFs dependence on V q_T projection, integrated (would be the same as default SF, but pt-eta binning is different)")
 parser.add_argument("--vqtTestReal", action="store_true", help="Test of isolation SFs dependence on V q_T projection, using 3D SFs directly (instead of the Vqt fits)")
-parser.add_argument("--vqtTestIncludeTrigger", action="store_true", help="Test of isolation SFs dependence on V q_T projection. Including trigger")
 args = parser.parse_args()
 sfFileVqtTest = args.sfFileVqtTest
 
@@ -81,13 +80,12 @@ axis_ptVgen = hist.axis.Variable(
 if args.binnedScaleFactors:
     logger.info("Using binned scale factors and uncertainties")
     # add usePseudoSmoothing=True for tests with Asimov
-    muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_binned(filename = args.sfFile, era = era, max_pt = axis_pt.edges[-1], usePseudoSmoothing=True) 
+    muon_efficiency_helperw, muon_efficiency_helper_systw, muon_efficiency_helper_statw = wremnants.make_muon_efficiency_helpers_binned(filename = data_dir + "/testMuonSF/allSmooth_GtoH3D.root", era = era, max_pt = axis_pt.edges[-1], usePseudoSmoothing=True) 
+    muon_efficiency_helper2d, muon_efficiency_helper_syst2d, muon_efficiency_helper_stat2d = wremnants.make_muon_efficiency_helpers_binned(filename = data_dir + "/testMuonSF/allSmooth_GtoH.root", era = era, max_pt = axis_pt.edges[-1], usePseudoSmoothing=True) 
 
     if args.vqtTest:
         if args.vqtTestReal:
-            includeTrigger = False
-            if args.vqtTestIncludeTrigger:
-                includeTrigger = True
+            includeTrigger = True
             muon_efficiency_helper_vqt, dummy_helper1, dummy_helper2 = wremnants.make_muon_efficiency_helpers_binned_vqt_real(filename = args.sfFile,
                                                                                                                               era = era,
                                                                                                                               max_pt = axis_pt.edges[-1],
@@ -98,17 +96,18 @@ if args.binnedScaleFactors:
                                                                                                                              era = era,
                                                                                                                              max_pt = axis_pt.edges[-1]) 
             else:
-                includeTrigger = False
-                if args.vqtTestIncludeTrigger:
-                    includeTrigger = True
+                includeTrigger = True
                 muon_efficiency_helper_vqt, muon_efficiency_helper_vqt_syst, dummy_helper2 = wremnants.make_muon_efficiency_helpers_binned_vqt_integrated(filename = args.sfFile, filenamevqt = sfFileVqtTest,
                                                                                                                                                           era = era,
                                                                                                                                                           max_pt = axis_pt.edges[-1],
                                                                                                                                                           includeTrigger = includeTrigger) 
 else:
     logger.info("Using smoothed scale factors and uncertainties")
-    muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile, era = era, max_pt = axis_pt.edges[-1])
-logger.info(f"SF file: {args.sfFile}")
+    muon_efficiency_helperw, muon_efficiency_helper_systw, muon_efficiency_helper_statw = wremnants.make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSmooth_GtoH3D.root", era = era, max_pt = axis_pt.edges[-1])
+    muon_efficiency_helper2d, muon_efficiency_helper_syst2d, muon_efficiency_helper_stat2d = wremnants.make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSmooth_GtoH.root", era = era, max_pt = axis_pt.edges[-1])
+#logger.info(f"SF file: {args.sfFile}")
+logger.info(f"SF file: {data_dir}/testMuonSF/allSmooth_GtoH3D.root for W")
+logger.info(f"SF file: {data_dir}/testMuonSF/allSmooth_GtoH.root for everything else")
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
 vertex_helper = wremnants.make_vertex_helper(era = era)
@@ -147,6 +146,15 @@ def build_graph(df, dataset):
     isW = dataset.name in common.wprocs
     isZ = dataset.name in common.zprocs
     isTop = dataset.group == "Top"
+
+    if dataset.name in ["WplusmunuPostVFP", "WminusmunuPostVFP"] :
+        muon_efficiency_helper = muon_efficiency_helperw
+        muon_efficiency_helper_syst = muon_efficiency_helper_systw
+        muon_efficiency_helper_stat = muon_efficiency_helper_statw
+    else :
+        muon_efficiency_helper = muon_efficiency_helper2d
+        muon_efficiency_helper_syst = muon_efficiency_helper_syst2d
+        muon_efficiency_helper_stat = muon_efficiency_helper_stat2d
 
     if dataset.is_data:
         df = df.DefinePerSample("weight", "1.0")
@@ -442,6 +450,12 @@ def build_graph(df, dataset):
                 results.append(muonScaleVariationDnTenthmil_gen_smear)
 
             df = df.Define("Muon_cvhMomCov", "wrem::splitNestedRVec(Muon_cvhMomCov_Vals, Muon_cvhMomCov_Counts)")
+
+            if dataset.name in ["WplusmunuPostVFP", "WminusmunuPostVFP"]:
+                df = df.Define("weight2dsfup", muon_efficiency_helper2d, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso"])
+                df = df.Define("nominal_weight_2dsf", "nominal_weight/weight_fullMuonSF_withTrackingReco*weight2dsfup") #be EXTREMELY CAREFUL about the histogram files (this assumes that you have another file with the old trigger and histo SFs which also contains the same SFs for all the other steps as the central one)
+                sf2dup = df.HistoBoost("nominal_sf2d", nominal_axes, [*nominal_cols, "nominal_weight_2dsf"])
+                results.append(sf2dup)
 
     return results, weightsum
 

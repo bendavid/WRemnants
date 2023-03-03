@@ -17,7 +17,7 @@ data_dir = f"{pathlib.Path(__file__).parent}/data/"
 
 def make_muon_efficiency_helpers_binned_vqt_real(filename = data_dir + "/testMuonSF/allSmooth_GtoH.root",
                                                  era = None, is_w_like = False, max_pt = np.inf,
-                                                 usePseudoSmoothing=False, includeTrigger = False):
+                                                 usePseudoSmoothing=False, step = 2):
 
     # usePseudoSmoothing will use smoothed nominal histograms with the same pt binning as the original ones.
     # (should do the same for the systematic but the smoothed histogram with original binning is not available at the moment)
@@ -102,19 +102,18 @@ def make_muon_efficiency_helpers_binned_vqt_real(filename = data_dir + "/testMuo
 
     filenames = ROOT.std.vector('string')() #order is isolation, triggerminus, triggerplus
     histonames = ROOT.std.vector('string')()
-    isolation3dfilename = f"{data_dir}/testMuonSF/isolation3DSFZQT.root"
+    isolation3dfilename = f"{data_dir}/testMuonSF/isolation3DSFUT.root"
     isolation3dhistoname = "SF3D_nominal_isolation"
     filenames.push_back(isolation3dfilename)
     histonames.push_back(isolation3dhistoname)
-    if includeTrigger:
-        triggerminus3dfilename = f"{data_dir}/testMuonSF/triggerminus3DSFZQT.root"
-        triggerminus3dhistoname = "SF3D_nominal_trigger_minus"
-        triggerplus3dfilename = f"{data_dir}/testMuonSF/triggerplus3DSFZQT.root"
-        triggerplus3dhistoname = "SF3D_nominal_trigger_plus"
-        filenames.push_back(triggerminus3dfilename)
-        histonames.push_back(triggerminus3dhistoname)
-        filenames.push_back(triggerplus3dfilename)
-        histonames.push_back(triggerplus3dhistoname)
+    triggerminus3dfilename = f"{data_dir}/testMuonSF/triggerminus3DSFUT.root"
+    triggerminus3dhistoname = "SF3D_nominal_trigger_minus"
+    triggerplus3dfilename = f"{data_dir}/testMuonSF/triggerplus3DSFUT.root"
+    triggerplus3dhistoname = "SF3D_nominal_trigger_plus"
+    filenames.push_back(triggerminus3dfilename)
+    histonames.push_back(triggerminus3dhistoname)
+    filenames.push_back(triggerplus3dfilename)
+    histonames.push_back(triggerplus3dhistoname)
     
     helper = ROOT.wrem_vqt_real.muon_efficiency_binned_helper[str(is_w_like).lower(),
                                                               type(sf_other_pyroot),
@@ -125,7 +124,7 @@ def make_muon_efficiency_helpers_binned_vqt_real(filename = data_dir + "/testMuo
                                                                   ROOT.std.move(sf_reco_pyroot),
                                                                   filenames,
                                                                   histonames,
-                                                                  includeTrigger
+                                                                  step
                                                               )
     helper2 = ROOT.wrem.muon_efficiency_binned_helper[str(is_w_like).lower(),
                                                       type(sf_other_pyroot),
