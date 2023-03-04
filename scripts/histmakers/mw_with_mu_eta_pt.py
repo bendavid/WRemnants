@@ -16,9 +16,8 @@ import pathlib
 import os
 
 data_dir = f"{pathlib.Path(__file__).parent}/../../wremnants/data/"
-
+parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency (legacy option for tests)")
 parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for luminosity in excess to 1 (e.g. 1.012 means 1.2\%)", default=1.012)
-parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency")
 parser.add_argument("--vqtTest", action="store_true", help="Test of isolation SFs dependence on V q_T projection (at the moment just for the W)")
 sfFileVqtTest = f"{data_dir}/testMuonSF/fits_2.root"
 parser.add_argument("--sfFileVqtTest", type=str, help="File with muon scale factors as a function of V q_T projection", default=sfFileVqtTest)
@@ -33,9 +32,12 @@ if args.vqtTestIntegrated:
 
 logger = common.setup_logger(__file__, args.verbose, args.color_logger)
 
-filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
-datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
-    nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path)
+filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
+excludeGroup = args.excludeProcGroups if args.excludeProcGroups else None
+datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
+                                              filt=filt if args.filterProcs else None,
+                                              excludeGroup=excludeGroup, 
+                                              nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path)
     
 era = args.era
 
@@ -53,20 +55,19 @@ print(f"Pt binning: {template_npt} bins from {template_minpt} to {template_maxpt
 axis_eta = hist.axis.Regular(template_neta, template_mineta, template_maxeta, name = "eta")
 axis_pt = hist.axis.Regular(template_npt, template_minpt, template_maxpt, name = "pt")
 
-# categorical axes in python bindings always have an overflow bin, so use a regular
-# axis for the charge
-axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "charge")
+axis_charge = common.axis_charge
+axis_passIso = common.axis_passIso
+axis_passMT = common.axis_passMT
 
-# TODO: get from common
-axis_passIso = hist.axis.Boolean(name = "passIso")
-axis_passMT = hist.axis.Boolean(name = "passMT")
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
 
 # axes for study of fakes
-axis_mt_fakes = hist.axis.Regular(60, 0., 120., name = "mt", underflow=False, overflow=True)
+axis_mt_fakes = hist.axis.Regular(120, 0., 120., name = "mt", underflow=False, overflow=True)
+axis_iso_fakes = hist.axis.Regular(60, 0., 0.6, name = "PFrelIso04", underflow=False, overflow=True)
 axis_hasjet_fakes = hist.axis.Boolean(name = "hasJets") # only need case with 0 jets or > 0 for now
 mTStudyForFakes_axes = [axis_eta, axis_pt, axis_charge, axis_mt_fakes, axis_passIso, axis_hasjet_fakes]
 
+axis_met = hist.axis.Regular(200, 0., 200., name = "met", underflow=False, overflow=True)
 
 # define helpers
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
@@ -113,13 +114,13 @@ logger.info(f"SF file: {args.sfFile}")
 pileup_helper = wremnants.make_pileup_helper(era = era)
 vertex_helper = wremnants.make_vertex_helper(era = era)
 
-mc_jpsi_crctn_helper, data_jpsi_crctn_helper = muon_validation.make_jpsi_crctn_helpers(args.muonCorr)
+mc_jpsi_crctn_helper, data_jpsi_crctn_helper, jpsi_crctn_MC_unc_helper, jpsi_crctn_data_unc_helper = muon_validation.make_jpsi_crctn_helpers(args, make_uncertainty_helper=True)
 
-mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = muon_calibration.make_muon_calibration_helpers()
+mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = muon_calibration.make_muon_calibration_helpers(args)
 
 smearing_helper = muon_calibration.make_muon_smearing_helpers() if args.smearing else None
 
-bias_helper = muon_calibration.make_muon_bias_helpers(args.muonCorr, args.smearing) if args.bias_calibration else None
+bias_helper = muon_calibration.make_muon_bias_helpers(args) if args.bias_calibration else None
 
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_corr)
 
@@ -130,16 +131,6 @@ if not args.no_recoil:
 
 # FIXME: Currently breaks the taus
 smearing_weights = False
-
-# TODO: Reduce duplication in mw and mz producers
-mass_fit = "massfit" in args.muonCorr
-if mass_fit:
-    mc_corrfile = "calibrationJMC_smeared_v718_nominalLBL.root" if "lbl" in args.muonCorr else "calibrationJMC_smeared_v718_nominal.root"
-    data_corrfile = "calibrationJDATA_smeared_v718_LBL.root" if "lbl" in args.muonCorr else "calibrationJDATA_smeared_v718.root"
-    jpsi_crctn_MC_helper = muon_validation.make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}")
-    jpsi_crctn_data_helper = muon_validation.make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}")
-    jpsi_crctn_MC_unc_helper = muon_validation.make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}")
-    jpsi_crctn_data_unc_helper = muon_validation.make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}")
 
 def build_graph(df, dataset):
     logger.info(f"build graph for dataset: {dataset.name}")
@@ -163,7 +154,7 @@ def build_graph(df, dataset):
     cvh_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
     jpsi_helper = data_jpsi_crctn_helper if dataset.is_data else mc_jpsi_crctn_helper
 
-    df = muon_calibration.define_corrected_muons(df, cvh_helper, jpsi_helper, args.muonCorr, dataset, smearing_helper, bias_helper)
+    df = muon_calibration.define_corrected_muons(df, cvh_helper, jpsi_helper, args, dataset, smearing_helper, bias_helper)
 
     df = muon_selections.select_veto_muons(df, nMuons=1)
     df = muon_selections.select_good_muons(df, nMuons=1, use_trackerMuons=args.trackerMuons, use_isolation=False)
@@ -198,7 +189,8 @@ def build_graph(df, dataset):
 
     df = df.Define("goodMuons_pfRelIso04_all0", "Muon_pfRelIso04_all[goodMuons][0]")
 
-    df = df.Define("goodCleanJets", "Jet_jetId >= 6 && (Jet_pt > 50 || Jet_puId >= 4) && Jet_pt > 30 && abs(Jet_eta) < 2.4 && wrem::cleanJetsFromLeptons(Jet_eta,Jet_phi,Muon_correctedEta[vetoMuons],Muon_correctedPhi[vetoMuons],Electron_eta[vetoElectrons],Electron_phi[vetoElectrons])")
+    # Jet collection actually has a pt threshold of 15 GeV in MiniAOD 
+    df = df.Define("goodCleanJetsNoPt", "Jet_jetId >= 6 && (Jet_pt > 50 || Jet_puId >= 4) && abs(Jet_eta) < 2.4 && wrem::cleanJetsFromLeptons(Jet_eta,Jet_phi,Muon_correctedEta[vetoMuons],Muon_correctedPhi[vetoMuons],Electron_eta[vetoElectrons],Electron_phi[vetoElectrons])")
     df = df.Define("passIso", "goodMuons_pfRelIso04_all0 < 0.15")
 
     ########################################################################
@@ -243,14 +235,22 @@ def build_graph(df, dataset):
         df = df.Alias("MET_corr_rec_phi", "MET_phi")
 
     df = df.Define("transverseMass", "wrem::mt_2(goodMuons_pt0, goodMuons_phi0, MET_corr_rec_pt, MET_corr_rec_phi)")
-    df = df.Define("hasCleanJet", "Sum(goodCleanJets) >= 1")
-        
+    df = df.Define("hasCleanJet", "Sum(goodCleanJetsNoPt && Jet_pt > 30) >= 1")
+
+    # couple of histograms specific for tests with fakes
     mTStudyForFakes = df.HistoBoost("mTStudyForFakes", mTStudyForFakes_axes, ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "transverseMass", "passIso", "hasCleanJet", "nominal_weight"])
     results.append(mTStudyForFakes)
-
+    mtIsoJetCharge = df.HistoBoost("mtIsoJetCharge", [axis_mt_fakes, axis_iso_fakes, axis_hasjet_fakes, axis_charge], ["transverseMass", "goodMuons_pfRelIso04_all0", "hasCleanJet", "goodMuons_charge0", "nominal_weight"])
+    results.append(mtIsoJetCharge)
+    
     df = df.Define("passMT", "transverseMass >= 40.0")
-    df = df.Filter("passMT || hasCleanJet")
+    # no longer cut on jet at low mT, it biases the fakes estimate
 
+    # utility plot, mt and met together in 2D, to plot them later
+    mtAndMET = df.HistoBoost("mtAndMET", [axis_mt_fakes, axis_met, axis_charge, axis_passIso, axis_passMT], ["transverseMass", "MET_corr_rec_pt", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"])
+    results.append(mtAndMET)
+    ##
+    
     nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
 
     if dataset.is_data:
@@ -258,8 +258,8 @@ def build_graph(df, dataset):
         results.append(nominal)
 
         if not args.onlyMainHistograms:
-            syst_tools.add_QCDbkg_jetPt45_hist(results, df, nominal_axes, nominal_cols)       
-            
+            syst_tools.add_QCDbkg_jetPt_hist(results, df, nominal_axes, nominal_cols, jet_pt=30)
+
     else:  
         results.append(df.HistoBoost("nominal_weight", [hist.axis.Regular(200, -4, 4)], ["nominal_weight"]))
 
@@ -277,7 +277,7 @@ def build_graph(df, dataset):
 
     if not dataset.is_data and not args.onlyMainHistograms:
         
-        syst_tools.add_QCDbkg_jetPt45_hist(results, df, nominal_axes, nominal_cols)
+        syst_tools.add_QCDbkg_jetPt_hist(results, df, nominal_axes, nominal_cols, jet_pt=30)
 
         df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, nominal_axes, nominal_cols)
         df = syst_tools.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, nominal_axes, nominal_cols)
