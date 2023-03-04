@@ -239,7 +239,7 @@ def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo
             newaxes.insert(-1, "charge")
         hfo_sing = hfo_sing.project(*newaxes)
         hsing = hsing.project(*newaxes)
-    hfo = read_dyturbo_hist([dyturbo_fo], axes=axes if axes else sing.axes.name[:-1], charge=charge)
+    hfo = read_dyturbo_hist([dyturbo_fo], axes=axes if axes else hsing.axes.name[:-1], charge=charge)
     for ax in ["Y", "Q"]:
         if ax in set(hfo.axes.name).intersection(set(hfo_sing.axes.name)).intersection(set(hsing.axes.name)):
             hfo, hfo_sing, hsing = hh.rebinHistsToCommon([hfo, hfo_sing, hsing], ax)
