@@ -38,24 +38,24 @@ for idx,filename in enumerate(histlist) :
     plus = results["WplusmunuPostVFP"]["output"]
     minus = results["WminusmunuPostVFP"]["output"]
     for i in range(0,len(listoflists[idx])):
-        plus = plus[listoflists[idx][i]].get()
-        minus = minus[listoflists[idx][i]].get()
+        Plus = plus[listoflists[idx][i]].get()
+        Minus = minus[listoflists[idx][i]].get()
         if "Error" in namelist[counter]:
-            plus = plus[:,:,1:2,:,:,:]
-            plus = plus[:,:,sum,sum,sum,:]
-            minus = minus[:,:,0:1,:,:,:]
-            minus = minus[:,:,sum,sum,sum,:]
+            Plus = Plus[:,:,1:2,:,:,:]
+            Plus = Plus[:,:,sum,sum,sum,:]
+            Minus = Minus[:,:,0:1,:,:,:]
+            Minus = Minus[:,:,sum,sum,sum,:]
         else :
-            plus = plus[:,:,1:2,:,:]
-            plus = plus[:,:,sum,sum,sum]
-            minus = minus[:,:,0:1,:,:]
-            minus = minus[:,:,sum,sum,sum]
-        plus=narf.hist_to_root(plus)
-        plus.SetName(f"{namelist[counter]}Plus")
-        minus=narf.hist_to_root(minus)
-        minus.SetName(f"{namelist[counter]}Minus")
-        histos.append(plus)
-        histos.append(minus)
+            Plus = Plus[:,:,1:2,:,:]
+            Plus = Plus[:,:,sum,sum,sum]
+            Minus = Minus[:,:,0:1,:,:]
+            Minus = Minus[:,:,sum,sum,sum]
+        Plus=narf.hist_to_root(Plus)
+        Plus.SetName(f"{namelist[counter]}Plus")
+        Minus=narf.hist_to_root(Minus)
+        Minus.SetName(f"{namelist[counter]}Minus")
+        histos.append(Plus)
+        histos.append(Minus)
         counter = counter + 1
 
 output_file = ROOT.TFile(f"makeefficiencies{name}.root","RECREATE")
