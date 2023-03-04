@@ -25,7 +25,6 @@ parser.add_argument("--vqtTestIntegrated", action="store_true", help="Test of is
 parser.add_argument("--vqtTestReal", action="store_true", help="Test of isolation SFs dependence on V q_T projection, using 3D SFs directly (instead of the Vqt fits)")
 parser.add_argument("--vqtTestStep", default=2, type=int , help="Test of isolation SFs dependence on V q_T projection. Index to determine up to which step the selection is applied (for 3d smoothing). Values are 0,1,2")
 parser.add_argument("--vqtTestCorrectionStep", default=2, type=int , help="Test of isolation SFs dependence on V q_T projection. Index to determine up to which step the 3D SFs are applied. Values are 0,1,2")
-parser.add_argument("--vqtTestError", action="store_true", help="Fill histograms with 3D SFs errors as a function of ut (for 3D smoothing)")
 parser.add_argument("--vqt3dsmoothing", action="store_true", help="3D Smoothing")
 args = parser.parse_args()
 sfFileVqtTest = args.sfFileVqtTest
@@ -66,7 +65,7 @@ axis_charge = common.axis_charge
 axis_passIso = common.axis_passIso
 axis_passMT = common.axis_passMT
 
-nominal_axes1 = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
+nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
 axis_vqt_list = [-3000000000,-30,-15,-10,-5,0,5,10,15,30,3000000000] #has to match the ut binning in the 3D SFs
 axis_vqt = hist.axis.Variable(axis_vqt_list, name = "ut")
 nominal_axes2 = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT, axis_vqt]
@@ -97,14 +96,22 @@ if args.binnedScaleFactors:
 
     if args.vqtTest:
         if args.vqtTestReal:
-            error = False
-            if (args.vqtTestError and args.vqt3dsmoothing):
-                error = True
             muon_efficiency_helper_vqt, dummy_helper1, dummy_helper2 = wremnants.make_muon_efficiency_helpers_binned_vqt_real(filename = args.sfFile,
                                                                                                                               era = era,
                                                                                                                               max_pt = axis_pt.edges[-1],
-                                                                                                                              error = error,
+                                                                                                                              error = False,
                                                                                                                               step = args.vqtTestCorrectionStep)
+            if args.vqt3dsmoothing:
+                muon_efficiency_helper_vqt2, dummy_helper1, dummy_helper2 = wremnants.make_muon_efficiency_helpers_binned_vqt_real(filename = args.sfFile,
+                                                                                                                                   era = era,
+                                                                                                                                   max_pt = axis_pt.edges[-1],
+                                                                                                                                   error = False,
+                                                                                                                                   step = 0)
+                muon_efficiency_helper_vqt3, dummy_helper1, dummy_helper2 = wremnants.make_muon_efficiency_helpers_binned_vqt_real(filename = args.sfFile,
+                                                                                                                                   era = era,
+                                                                                                                                   max_pt = axis_pt.edges[-1],
+                                                                                                                                   error = True,
+                                                                                                                                   step = args.vqtTestCorrectionStep)
         else:
             if not args.vqtTestIntegrated:
                 muon_efficiency_helper_vqt, dummy_helper1, dummy_helper2 = wremnants.make_muon_efficiency_helpers_binned_vqt(filename = args.sfFile, filenamevqt = sfFileVqtTest,
@@ -151,11 +158,6 @@ def build_graph(df, dataset):
     isW = dataset.name in common.wprocs
     isZ = dataset.name in common.zprocs
     isTop = dataset.group == "Top"
-
-    if (args.vqtTestError and args.vqt3dsmoothing and isW):
-        nominal_axes = nominal_axes2
-    else:
-        nominal_axes = nominal_axes1
 
     if dataset.name in ["WplusmunuPostVFP", "WminusmunuPostVFP"] :
         muon_efficiency_helper = muon_efficiency_helperw
@@ -244,6 +246,9 @@ def build_graph(df, dataset):
                     df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper_vqt, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso"])
                 else:
                     df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper_vqt, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso", "goodMuons_zqtproj0"])
+                    if args.vqt3dsmoothing:
+                        df = df.Define("weight_fullMuonSF_withTrackingRecoMC", muon_efficiency_helper_vqt2, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso", "goodMuons_zqtproj0"])
+                        df = df.Define("weight_fullMuonSF_withTrackingRecoErr", muon_efficiency_helper_vqt3, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso", "goodMuons_zqtproj0"])
             weight_expr += "*weight_fullMuonSF_withTrackingReco"
         if args.vertex_weight:
             weight_expr += "*weight_vtx"
@@ -286,8 +291,6 @@ def build_graph(df, dataset):
     ##
     
     nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
-    if (args.vqt3dsmoothing and args.vqtTestError and isW):
-        nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT", "goodMuons_zqtproj0"]
 
     if dataset.is_data:
         nominal = df.HistoBoost("nominal", nominal_axes, nominal_cols)
@@ -484,7 +487,15 @@ def build_graph(df, dataset):
                 df = df.Define("nominal_weight_2dsf", "nominal_weight/weight_fullMuonSF_withTrackingReco*weight2dsfup") #be EXTREMELY CAREFUL about the histogram files (this assumes that you have another file with the old trigger and histo SFs which also contains the same SFs for all the other steps as the central one)
                 sf2dup = df.HistoBoost("nominal_sf2d", nominal_axes, [*nominal_cols, "nominal_weight_2dsf"])
                 results.append(sf2dup)
-
+                if args.vqt3dsmoothing:
+                    df = df.Define("nominal_weight_MC", "nominal_weight/weight_fullMuonSF_withTrackingReco*weight_fullMuonSF_withTrackingRecoMC")
+                    df = df.Define("nominal_weight_Err", "nominal_weight/weight_fullMuonSF_withTrackingReco*weight_fullMuonSF_withTrackingRecoErr")
+                    smoothMC = df.HistoBoost("nominal_smoothMC", nominal_axes, [*nominal_cols, "nominal_weight_MC"])
+                    results.append(smoothMC)
+                    new_nom_cols = [*nominal_cols, "goodMuons_zqtproj0"]
+                    smoothErr = df.HistoBoost("nominal_smoothErr", nominal_axes2, [*new_nom_cols, "nominal_weight_Err"])
+                    results.append(smoothErr)
+                
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)
