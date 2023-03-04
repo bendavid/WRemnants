@@ -178,29 +178,19 @@ def add_pdf_uncertainty(card_tool, samples, to_fakes, action=None):
     pdfInfo = theory_tools.pdf_info_map("ZmumuPostVFP", pdf)
     pdfName = pdfInfo["name"]
 
-    if pdfInfo["combine"] == "symHessian":
-        card_tool.addSystematic(pdfName, 
-            processes=samples,
-            mirror=True,
-            group=pdfName,
-            systAxes=["pdfVar"],
-            # Needs to be a tuple, since for multiple axis it would be (ax1, ax2, ax3)...
-            # -1 means all possible values of the mirror axis
-            skipEntries=[("^pdf0[a-z]*", -1)],
-            passToFakes=to_fakes,
-            actionMap=action,
-        )
-    else:
-        card_tool.addSystematic(pdfName, 
-            processes=samples,
-            mirror=False,
-            group=pdfName,
-            systAxes=["pdfVar"],
-            skipEntries=[("^pdf0[a-z]*",)],
-            passToFakes=to_fakes,
-            scale=pdfInfo["scale"] if "scale" in pdfInfo else 1,
-            actionMap=action,
-        )
+    symHessian = pdfInfo["combine"] == "symHessian"
+    card_tool.addSystematic(pdfName, 
+        processes=samples,
+        mirror=True if symHessian else False,
+        group=pdfName,
+        systAxes=["pdfVar"],
+        # Needs to be a tuple, since for multiple axis it would be (ax1, ax2, ax3)...
+        # -1 means all possible values of the mirror axis
+        skipEntries=[("^pdf0[a-z]*", -1) if symHessian else ("^pdf0[a-z]*",)],
+        passToFakes=to_fakes,
+        actionMap=action,
+        scale=pdfInfo["scale"] if "scale" in pdfInfo else 1,
+    )
 
     asRange = pdfInfo['alphasRange']
     card_tool.addSystematic(f"{pdfName}alphaS{asRange}", 

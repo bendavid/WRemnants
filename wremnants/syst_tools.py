@@ -190,8 +190,7 @@ def add_pdf_hists(results, df, dataset, axes, cols, pdfs, base_name="nominal"):
         tensorASName = f"{pdfName}ASWeights_tensor"
 
         name = datagroups2016.histName(base_name, syst=pdfName)
-        names = [f"pdf{pdfName}{i}" for i in range(pdfInfo["entries"])] if pdfInfo["combine"] == "symHessian" else \
-                theory_tools.pdfNamesAsymHessian(pdfInfo["entries"], pdfName)
+        names = getattr(theory_tools, "pdfNames{'Sym' if pdfInfo['combine'] == 'symHessian' else 'Asym'}Hessian")(pdfInfo["entries"], pdfName)
         pdf_ax = hist.axis.StrCategory(names, name="pdfVar")
         pdfHist = df.HistoBoost(name, axes, [*cols, tensorName], tensor_axes=[pdf_ax])
 
