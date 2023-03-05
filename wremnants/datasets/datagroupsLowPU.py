@@ -1,4 +1,4 @@
-from utilities import boostHistHelpers as hh
+from utilities import boostHistHelpers as hh, logging
 from wremnants import histselections as sel
 from wremnants.datasets import datasetsLowPU
 from wremnants.datasets.datagroups import datagroups
@@ -9,10 +9,12 @@ import narf
 import ROOT
 import hist
 
+logger = logging.child_logger(__name__)
+
 class datagroupsLowPU(datagroups):
     isW = False
-    def __init__(self, infile, combine=False, flavor=""):
-        self.datasets = {x.name : x for x in datasetsLowPU.getDatasets(flavor=flavor)}
+    def __init__(self, infile, combine=False, flavor="", excludeProcGroup=None, filterProcGroup=None):
+        self.datasets = {x.name : x for x in datasetsLowPU.getDatasets(flavor=flavor, filt=filterProcGroup, excludeGroup=excludeProcGroup)}
         super().__init__(infile, combine)
         #self.lumi = 0.199269742
         self.hists = {} # container storing temporary histograms
@@ -253,6 +255,12 @@ class datagroupsLowPU(datagroups):
                     selectOp = self.signalHistSel,
                 ),
             )
+
+        # this class doesn't implement exclusion of groups yet, and maybe it is not needed.
+        # If if it is ever added, next line needs to be modified accordingly
+        self.updateGroupNamesPostFilter(excludeGroup=[])
+        #self.groupNamesPostFilter = list(x for x in self.groups.keys() if len(self.groups[x]["members"])) # and x not in excludeProcGroup)
+        logger.debug(f"Filtered groups: {self.groupNamesPostFilter}")
             
     def signalHistSel(self, h, charge=None):
         s = hist.tag.Slicer()

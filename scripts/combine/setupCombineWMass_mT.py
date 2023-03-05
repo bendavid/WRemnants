@@ -9,6 +9,7 @@ import hist
 import numpy as np
 import scripts.lowPU.config as lowPUcfg
 import math
+from utilities import common
 
 scriptdir = f"{pathlib.Path(__file__).parent}"
 
@@ -33,6 +34,7 @@ parser.add_argument("--skipSignalSystOnFakes", dest="skipSignalSystOnFakes" , ac
 
 
 args = parser.parse_args()
+logger = common.setup_logger(__file__, args.verbose, args.color_logger)
 
 if not os.path.isdir(args.outfolder):
     os.mkdir(args.outfolder)
@@ -86,7 +88,7 @@ QCDscale = "integral"
 toDel = []
 for group in datagroups.groups: 
     if not group in constrainedProcs+unconstrainedProcs+bkgDataProcs: toDel.append(group)
-for group in toDel: del datagroups.groups[group]    
+datagroups.deleteGroup(toDel)    
 
 templateDir = f"{scriptdir}/Templates/LowPileupW"
 cardTool = CardTool.CardTool(f"{args.outfolder}/{args.PUMode}_{args.flavor}_{{chan}}_{met}_lumi{lumisuffix}{suffix}.txt")

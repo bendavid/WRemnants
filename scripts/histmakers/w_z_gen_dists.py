@@ -1,4 +1,4 @@
-from utilities import boostHistHelpers as hh, common, output_tools
+from utilities import boostHistHelpers as hh, common, output_tools, logging
 
 parser,initargs = common.common_parser()
 
@@ -17,11 +17,14 @@ parser = common.set_parser_default(parser, "filterProcs", common.vprocs)
 
 args = parser.parse_args()
 
-logger = common.setup_logger(__file__, args.verbose, args.color_logger)
+logger = logging.setup_logger(__file__, args.verbose, args.color_logger)
 
-datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, 
-    filt=common.get_process_filter(args.filterProcs, args.invert_filter), 
-    nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path, mode='gen')
+filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
+excludeGroup = args.excludeProcGroups if args.excludeProcGroups else None
+datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
+                                              filt=filt if args.filterProcs else None,
+                                              excludeGroup=excludeGroup,
+                                              nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path, mode='gen')
 
 axis_massWgen = hist.axis.Variable([5., 13000.], name="massVgen", underflow=True, overflow=False)
 

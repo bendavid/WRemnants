@@ -5,15 +5,16 @@ import socket
 import logging
 import glob
 from wremnants.datasets import datasets2016
+from utilities import logging
 
-logger = logging.getLogger("wremnants").getChild(__name__.split(".")[-1])
+logger = logging.child_logger(__name__)
 
 lumijson = f"{pathlib.Path(__file__).parent.parent}/data/lowPU/Cert_306896-307082_13TeV_PromptReco_Collisions17_JSON_LowPU_lowPU_suppressedHighPULS.txt"
 lumicsv_mu = f"{pathlib.Path(__file__).parent.parent}/data/lowPU/bylsoutput_HLT_HIMu17_Full.csv"
 lumicsv_el = f"{pathlib.Path(__file__).parent.parent}/data/lowPU/bylsoutput_HLT_HIEle20_Full.csv"
 
 # https://twiki.cern.ch/twiki/bin/viewauth/CMS/StandardModelCrossSectionsat13TeV
-def getDatasets(maxFiles=-1, filt=None, flavor="",base_path=None):
+def getDatasets(maxFiles=-1, filt=None, excludeGroup=None, flavor="",base_path=None):
 
     if not base_path:
         hostname = socket.gethostname()
@@ -153,6 +154,13 @@ def getDatasets(maxFiles=-1, filt=None, flavor="",base_path=None):
         
     if filt:
         allProcs = list(filter(filt, allProcs))
+    if excludeGroup:
+        if isinstance(excludeGroup, list):
+            # FIXME: here there are no groups defined, so this might never filter anything out
+            # might implement with names instead of groups, but would not be consistent with high PU
+            allProcs = list(filter(lambda x: x.group not in excludeGroup if x.group is not None else 1, allProcs))
+        else:
+            allProcs = list(filter(excludeGroup, allProcs))
 
     for sample in allProcs:
         if not sample.filepaths:

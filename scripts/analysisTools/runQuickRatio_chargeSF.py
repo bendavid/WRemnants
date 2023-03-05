@@ -45,14 +45,14 @@ if len(scriptDir):
 
 for wp in workingPoints:
     for era in eras:
-        outdir = f"{mainPath}/compareEffAndSFbyCharge/{era}/{wp}/{subFolder}/"
+        outdir = f"{mainPath}/compareEffAndSFbyCharge/{era}/{wp}/{subFolder}_TRASHTEST/"
         file1  = f"{inputhPath}/efficiencies_{era}/mu_{wp}_{elements[0]}/allEfficiencies_2D.root"
         file2  = f"{inputhPath}/efficiencies_{era}/mu_{wp}_{elements[1]}/allEfficiencies_2D.root"
         
         for n in hToPlot:
             h1 = f"{n}_{era}"
             
-            basecmd = f"python {scriptDir}w_mass_13TeV/makeRatioTH2.py {file1} {n} {file2} {n} -o {outdir} {xyRange} -p -n ratio_{tag}_{n}_{era} -x 'Muon #eta' -y 'Muon p_{{T}} (GeV)' -z '{era} {n} ratio::0.99,1.01' --skip1DPlot -t '{ratioTitle}' --palette -1 "
+            basecmd = f"python {scriptDir}w_mass_13TeV/makeRatioTH2.py {file1} {n} {file2} {n} -o {outdir} {xyRange} -p -n ratio_{tag}_{n}_{era} -x 'Muon #eta' -y 'Muon p_{{T}} (GeV)' -z '{era} {n} ratio::0.99,1.01' --skip1DPlot -t '{ratioTitle}' --palette -1 --unroll"
             print()
             print(basecmd)
             
