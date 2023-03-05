@@ -22,12 +22,12 @@ flavor = args.flavor # mumu, ee
 met = args.met # mumu, ee
 sigProc = "Zmumu" if flavor == "mumu" else "Zee"
 
-filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
-excludeGroup = args.excludeProcGroups if args.excludeProcGroups else None
 datasets = wremnants.datasetsLowPU.getDatasets(maxFiles=args.maxFiles,
-                                               filt=filt if args.filterProcs else None,
-                                               excludeGroup=excludeGroup,
-                                               flavor=flavor)
+                                              filt=args.filterProcs,
+                                              excl=args.excludeProcs, 
+                                              flavor=flavor)
+
+
 for d in datasets: logging.info(f"Dataset {d.name}")
 
 
