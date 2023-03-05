@@ -1,7 +1,6 @@
 from utilities import boostHistHelpers as hh, common, logging
 from wremnants import syst_tools,theory_tools
 import numpy as np
-import 
 import re
 
 logger = logging.child_logger(__name__)

@@ -1,7 +1,7 @@
 import os
-from utilities import common
+from utilities import logging
 
-logger = common.setup_logger(__file__, 3, True)
+logger = logging.setup_logger(__file__, 3, True)
 
 # Perform bias tests on different momentum scale and resolution corrections and closure files. 
 #   Use one setting + uncertainties as nominal and fit the other setting as pseudodata.
@@ -11,14 +11,14 @@ logger = common.setup_logger(__file__, 3, True)
 
 histmaker = "mw_with_mu_eta_pt"
 
-histDir = "/scratch/dwalter/results_histmaker/230303_biastests_momentumScale/"
-combineDir = "/scratch/dwalter/CombineStudies/230303_biastests_momentumScale/"
+histDir = "/scratch/dwalter/results_histmaker/230305_biastests_momentumScale/"
+combineDir = "/scratch/dwalter/CombineStudies/230305_biastests_momentumScale/"
 
 nTreads = 128
 
 # common options (apart from --theory_corr)
 theory_corr = "scetlib"
-options = "--no-recoil"
+options = "--no_recoil"
 
 if not os.path.isdir(histDir):
     os.mkdir(histDir)
@@ -27,22 +27,19 @@ if not os.path.isdir(combineDir):
     os.mkdir(combineDir)
 
 def EXE(command):
-    logging.info(command) 
+    logger.info(command) 
     os.system(command)  # for testing comment out this line
 
 def make_appendix(name):
         
-    name = "{options} {name}"
+    name = f"{options} {name}"
     parts = []
-    for p in [p.replace("-"," ") for p in name.split("--")] :
+    for p in [p.replace("-"," ").replace("_"," ") for p in name.split("--")] :
         ps = p.split(" ")
         ps = "".join([ps[0],]+[p.capitalize() for p in ps[1:]])
         parts.append(ps)
 
-    if theory_corr != "":
-        theory_append = theory_corr+"Corr_"
-
-    return theory_append + "_".join(parts)
+    return "_".join(parts)
 
 
 for nominal, pseudodata in (
@@ -51,34 +48,42 @@ for nominal, pseudodata in (
     ("", "--smearing"),
     ):
     if nominal == pseudodata:
-        logging.warning("Now at nominal and pseudodata are the same, this would be just an asimov fit! continue with next setup")
+        logger.warning("Now at nominal and pseudodata are the same, this would be just an asimov fit! continue with next setup")
         continue
 
-    logging.info("Now at {nominal} vs {pseudodata}")
+    logger.info(f"Now at {nominal} vs {pseudodata}")
+
+    if theory_corr != "":
+        theory_append = "_"+theory_corr+"Corr"
+    else:
+        theory_append = "_"
+
 
     append_nominal = make_appendix(nominal)
     append_pseudodata = make_appendix(pseudodata)
 
-    file_nominal = f"{histDir}/{histmaker}{append_nominal}.hdf5"
-    file_pseudodata = f"{histDir}/{histmaker}{append_pseudodata}.hdf5"
+    file_nominal = f"{histDir}/{histmaker}{theory_append}{append_nominal}.hdf5"
+    file_pseudodata = f"{histDir}/{histmaker}{theory_append}{append_pseudodata}.hdf5"
+
+    logger.info(f"Looking for {file_nominal}")
 
     if not os.path.isfile(file_nominal):
         # run histmaker for nominal
         EXE(f"python3 scripts/histmakers/{histmaker}.py -j {nTreads} -o {histDir} --theory_corr {theory_corr} {options} -p {append_nominal}")
     else:
-        logging.info(f"Found file for nominal {nominal}")
+        logger.info(f"Found file for nominal {nominal}")
 
     if not os.path.isfile(file_pseudodata):
         # run histmaker for pseudodata
         EXE(f"python3 scripts/histmakers/{histmaker}.py -j {nTreads} -o {histDir} --theory_corr {theory_corr} {options} -p {append_pseudodata}")
     else:
-        logging.info(f"Found file for pseudodata {pseudodata}")
+        logger.info(f"Found file for pseudodata {pseudodata}")
 
     # make combine input
     dir_combine = f"{combineDir}/{append_nominal}_vs_{append_pseudodata}"
 
     if os.path.isdir(dir_combine):
-        logging.warning("The combine file for {dir_combine} already exists, continue with the next one!")
+        logger.warning(f"The combine file for {dir_combine} already exists, continue with the next one!")
         continue
 
     EXE(f"python3 scripts/combine/setupCombineWMass.py -o {dir_combine} -i {file_nominal} --pseudodata-file {file_pseudodata} --pseudoData nominal")

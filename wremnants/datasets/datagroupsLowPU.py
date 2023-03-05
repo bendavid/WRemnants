@@ -14,7 +14,7 @@ logger = logging.child_logger(__name__)
 class datagroupsLowPU(datagroups):
     isW = False
     def __init__(self, infile, combine=False, flavor="", excludeProcGroup=None, filterProcGroup=None):
-        self.datasets = {x.name : x for x in datasetsLowPU.getDatasets(flavor=flavor, filt=filterProcGroup, excludeGroup=excludeProcGroup)}
+        self.datasets = {x.name : x for x in datasetsLowPU.getDatasets(flavor=flavor, filt=filterProcGroup, excl=excludeProcGroup)}
         super().__init__(infile, combine)
         #self.lumi = 0.199269742
         self.hists = {} # container storing temporary histograms

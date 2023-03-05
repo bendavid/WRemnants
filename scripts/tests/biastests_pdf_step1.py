@@ -12,13 +12,12 @@ pdfsets = ["nnpdf31", "nnpdf40", "msht20", "pdf4lhc21", "ct18"]
 
 histmaker = "mw_with_mu_eta_pt"
 
-histDir = "/scratch/dwalter/results_histmaker/230302_studies_pdfs/"
-combineDir = "/scratch/dwalter/CombineStudies/230302_studies_pdfs/"
+histDir = "/scratch/dwalter/results_histmaker/230305_studies_pdfs/"
+combineDir = "/scratch/dwalter/CombineStudies/230305_studies_pdfs/"
 
 nTreads = 128
 
 options = [
-    "--exclude-proc-groups 'data'", # skip data
     "--theory_corr scetlib",
     "--no_recoil"
 ]
@@ -60,7 +59,7 @@ for nominal in pdfsets:
         # make combine input
         for freeze_string, freeze, in (
             ("reducedUncertainties", "-x '.*' -k 'pdf*|alphaS*|mass*'"),  # freeze all nuisances except pdf and alphaS
-            ("fullUncertainties", "")
+            # ("fullUncertainties", "")
         ):     
             dir_combine = f"{combineDir}/{freeze_string}_{nominal}_vs_{pseudodata}"
 
@@ -70,5 +69,4 @@ for nominal in pdfsets:
 
             EXE(f"python3 scripts/combine/setupCombineWMass.py -o {dir_combine} -i {file_nominal} --pseudodata-file {file_pseudodata} --pseudoData nominal {freeze}")
         
-        exit()
 
