@@ -38,6 +38,8 @@ axis_absYVgen = hist.axis.Variable(
 )
 
 axis_ygen = hist.axis.Regular(200, -5., 5., name="y")
+axis_rapidity = axis_absYVgen if args.absY else axis_ygen
+col_rapidity =  "absYVgen" if args.absY else "yVgen"
 
 axis_ptVgen = hist.axis.Variable(
     list(range(0,151))+[160., 190.0, 220.0, 250.0, 300.0, 400.0, 500.0, 800.0, 1500.0], 
@@ -81,13 +83,13 @@ def build_graph(df, dataset):
     df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
 
     if isZ:
-        nominal_axes = [axis_massZgen, axis_absYVgen, axis_ptVgen, axis_chargeZgen]
+        nominal_axes = [axis_massZgen, axis_rapidity, axis_ptVgen, axis_chargeZgen]
         lep_axes = [axis_l_eta_gen, axis_l_pt_gen, axis_chargeZgen]
     else:
-        nominal_axes = [axis_massWgen, axis_absYVgen, axis_ptVgen, axis_chargeWgen]
+        nominal_axes = [axis_massWgen, axis_rapidity, axis_ptVgen, axis_chargeWgen]
         lep_axes = [axis_l_eta_gen, axis_l_pt_gen, axis_chargeWgen]
 
-    nominal_cols = ["massVgen", "absYVgen", "ptVgen", "chargeVgen"]
+    nominal_cols = ["massVgen", col_rapidity, "ptVgen", "chargeVgen"]
     lep_cols = ["etaPrefsrLep", "ptPrefsrLep", "chargeVgen"]
 
     if args.singleLeptonHists and isW or isZ:
@@ -141,11 +143,9 @@ def build_graph(df, dataset):
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)
-
 output_tools.write_analysis_output(resultdict, "w_z_gen_dists.hdf5", args)
 
 print("computing angular coefficients")
-
 z_moments = None
 w_moments = None
 
@@ -158,33 +158,25 @@ if not args.skipAngularCoeffs:
         moments = resultdict[name]["output"]["helicity_moments_scale"].get()
         if name in common.zprocs:
             if z_moments is None:
-                z_moments = moments.get()
+                z_moments = moments
             else:
-                new_moments = moments.get()
+                new_moments = moments
                 z_moments = hh.addHists(z_moments, new_moments)
         elif name in common.wprocs:
             if w_moments is None:
-                w_moments = moments.get()
+                w_moments = moments
             else:
-                new_moments = moments.get()
+                new_moments = moments
                 w_moments = hh.addHists(w_moments, new_moments)
 
     coeffs={}
     # REMINDER: common.ptV_binning is not the one using 10% quantiles, and the quantiles are not a subset of this binning, but apparently it doesn't matter
     if z_moments:
-        if args.absY:
-            z_moments = hh.makeAbsHist(z_moments, "y")
-            yax_name = "absy"
-            z_moments = hh.rebinHist(z_moments, yax_name, axis_absYVgen.edges[:-1])
         z_moments = hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning)
         z_moments = hh.rebinHist(z_moments, axis_massZgen.name, axis_massZgen.edges[::2])
         print('Writing angular coeffs Z')
         coeffs["Z"] = wremnants.moments_to_angular_coeffs(z_moments)
     if w_moments:
-        if args.absY:
-            w_moments = hh.makeAbsHist(w_moments, "y")
-            yax_name = "absy"
-            w_moments = hh.rebinHist(w_moments, yax_name, axis_absYVgen.edges[:-1])
         print('Writing angular coeffs W')
         w_moments = hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning)
         coeffs["W"] = wremnants.moments_to_angular_coeffs(w_moments)
