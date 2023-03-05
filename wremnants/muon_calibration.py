@@ -3,14 +3,14 @@ import pathlib
 import hist
 import narf
 from utilities import rdf_tools
-from utilities import common
+from utilities import common, logging
 from utilities import boostHistHelpers as hh
 from . import muon_validation
 import uproot
 import numpy as np
 import warnings
 
-logging = common.child_logger(__name__)
+logger = logging.child_logger(__name__)
 
 ROOT.gInterpreter.Declare('#include "muon_calibration.h"')
 ROOT.gInterpreter.Declare('#include "lowpu_utils.h"')

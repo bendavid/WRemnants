@@ -17,6 +17,7 @@ zprocs_lowpu = ["Zmumu", "Zee", "Ztautau"]
 zprocs_recoil = ["Zmumu", "Zee"]
 vprocs_lowpu = wprocs_lowpu+zprocs_lowpu
 
+background_MCprocs = ["Top", "Diboson", "QCD"]
 zprocs_all = zprocs_lowpu+zprocs
 wprocs_all = wprocs_lowpu+wprocs
 
@@ -64,7 +65,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("-j", "--nThreads", type=int, help="number of threads")
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
                         help="Set verbosity level with logging, the larger the more verbose");
-    parser.add_argument("--no-color-logger", action="store_false", dest="color_logger", default=False, 
+    parser.add_argument("--no-color-logger", action="store_false", dest="color_logger", 
                         help="Do not use logging with colors")
     initargs,_ = parser.parse_known_args()
 
@@ -81,7 +82,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--altPdfOnlyCentral", action='store_true', help="Only store central value for alternate PDF sets")
     parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
     parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=[])
-    parser.add_argument("--invert-filter", action='store_true', help="Invert the filter to veto the processes specified in --filterProcs")
+    parser.add_argument("--excludeProcs", type=str, nargs="*", help="Exclude processes matched by (subset) of name", default=[])
     parser.add_argument("--v8", action='store_true', help="Use NanoAODv8. Default is v9")
     parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
     parser.add_argument("--theory_corr", nargs="*", 
@@ -151,10 +152,12 @@ def common_parser_combine():
     parser.add_argument("--doStatOnly", action="store_true", default=False, help="Set up fit to get stat-only uncertainty (currently combinetf with -S 0 doesn't work)")
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
                         help="Set verbosity level with logging, the larger the more verbose");
-    parser.add_argument("--no-color-logger", action="store_false", dest="color_logger", default=False, 
+    parser.add_argument("--no-color-logger", action="store_false", dest="color_logger", 
                         help="Do not use logging with colors")
     parser.add_argument("--combineChannels", action='store_true', help="Only use one channel")
     parser.add_argument("--lumiScale", type=float, default=None, help="Rescale equivalent luminosity by this value (e.g. 10 means ten times more data and MC)")
+    parser.add_argument("--exclude-proc-groups", dest="excludeProcGroups", type=str, nargs="*", help="Don't run over processes belonging to these groups (only accepts exact group names)", default=["QCD"])
+    parser.add_argument("--filter_proc_groups", dest="filterProcGroups", type=str, nargs="*", help="Only run over processes belonging to these groups", default=[])
     return parser
 
 def set_parser_default(parser, argument, newDefault):
@@ -167,17 +170,6 @@ def set_parser_default(parser, argument, newDefault):
     else:
         logger.warning(f" Parser argument {argument} not found!")
     return parser
-
-def get_process_filter(filter_keys, invert=False):
-    if filter_keys is None:
-        return None
-
-    if invert:
-        filt = lambda x, filts=filter_keys: not any([f in x.name for f in filts]) 
-    else:
-        filt = lambda x, filts=filter_keys: any([f in x.name for f in filts]) 
-
-    return filt
 
 '''
 INPUT -------------------------------------------------------------------------

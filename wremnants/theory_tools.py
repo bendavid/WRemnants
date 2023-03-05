@@ -2,11 +2,11 @@ import ROOT
 import hist
 import numpy as np
 import copy
-from utilities import boostHistHelpers as hh,common
+from utilities import boostHistHelpers as hh,common,logging
 from wremnants import theory_corrections
 from scipy import ndimage
 
-logger = common.child_logger(__name__)
+logger = logging.child_logger(__name__)
 ROOT.gInterpreter.Declare('#include "theoryTools.h"')
 
 # integer axis for -1 through 7

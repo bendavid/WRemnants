@@ -18,7 +18,7 @@ combineDir = "/scratch/dwalter/CombineStudies/230302_studies_pdfs/"
 nTreads = 128
 
 options = [
-    "--filterProcs 'data'", "--invert-filter", # skip data
+    "--exclude-proc-groups 'data'", # skip data
     "--theory_corr scetlib",
     "--no_recoil"
 ]
