@@ -3,7 +3,7 @@ import lz4.frame
 import pickle
 from wremnants import plot_tools, theory_corrections, theory_tools
 from utilities import boostHistHelpers as hh
-from utilities import common, input_tools, output_tools
+from utilities import common, input_tools, output_tools, logging
 import hist
 import argparse
 
@@ -20,7 +20,7 @@ parser.add_argument("--proc", type=str, required=True, choices=["z", "w", ], hel
 
 args = parser.parse_args()
 
-logger = common.setup_base_logger("makeDataMCStackPlot", args.debug)
+logger = logging.setup_base_logger("makeDataMCStackPlot", args.debug)
 
 def read_corr(procName, generator, corr, isA4=False):
     charge = 0 if procName[0] == "Z" else (1 if "Wplus" in procName else -1)

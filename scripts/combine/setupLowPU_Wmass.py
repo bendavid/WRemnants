@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from wremnants import CardTool,theory_tools,syst_tools
 from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_W
-from utilities import common, logging
+from utilities import logging
 from wremnants import histselections as sel
 import argparse
 import os
