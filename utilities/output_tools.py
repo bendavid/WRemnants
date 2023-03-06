@@ -94,5 +94,5 @@ def write_analysis_output(results, outfile, args):
     time0 = time.time()
     with h5py.File(outfile, 'w') as f:
         narf.ioutils.pickle_dump_h5py("results", results, f)
-    logger.info("Writing output:", time.time()-time0)
+    logger.info(f"Writing output: {time.time()-time0}")
     logger.info(f"Output saved in {outfile}")
