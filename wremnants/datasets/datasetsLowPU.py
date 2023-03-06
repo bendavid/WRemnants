@@ -2,7 +2,6 @@ import narf
 import os
 import pathlib
 import socket
-import logging
 import glob
 from wremnants.datasets.dataset_tools import filterProcs, excludeProcs, makeFilelist
 from utilities import logging
