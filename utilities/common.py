@@ -3,7 +3,7 @@ import pathlib
 import argparse
 import numpy as np
 import os
-import logging
+from utilities import logging
 
 wremnants_dir = f"{pathlib.Path(__file__).parent}/../wremnants"
 data_dir = f"{wremnants_dir}/data/"
