@@ -2,7 +2,6 @@ from utilities import boostHistHelpers as hh, logging
 from wremnants import histselections as sel
 from wremnants.datasets import datasetsLowPU
 from wremnants.datasets.datagroups import datagroups
-import logging
 import lz4.frame
 import pickle
 import narf
