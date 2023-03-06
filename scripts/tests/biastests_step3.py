@@ -18,6 +18,7 @@ logger = logging.setup_logger(__file__, 3, True)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-i","--input", type=str, help="json file with paths to fit results")
+parser.add_argument("-m","--mode", type=str, default="tot", help="Uncertainty to consider", choices=["pdf","scale"])
 args = parser.parse_args()
 
 outDir = "/".join(args.input.split("/")[:-1])
@@ -45,7 +46,7 @@ def readImpacts(rtfile, group, sort=True, add_total=True, stat=0.0):
 
     return impacts,labels
 
-def read_result(rootfile):
+def read_result(rootfile, nominal):
     logger.info(f"read {rootfile}")
     with uproot.open(rootfile) as rtfile:
 
@@ -53,17 +54,19 @@ def read_result(rootfile):
 
         pull_mass = rtfile["fitresults"]["massShift100MeV"].array()[0]
 
-        uncertainty_pdf = impacts_group[f"pdf{nominal.upper()}"]
-        uncertainty_total = impacts_group["Total"]
+        if args.mode == "scale":
+            uncertainty = impacts_group["Total"]
+        elif args.mode == "pdf":
+            uncertainty = impacts_group[f"pdf{nominal.upper()}"]
+        
 
-        return pull_mass, uncertainty_pdf, uncertainty_total
+        return pull_mass, uncertainty
 
 nominals = []
 pseudos = []
 channels = []
 masses = []
-uncertainties_pdf = []
-uncertainties_tot = []
+uncertainties = []
 
 for nominal, r_n in results.items():
 
@@ -71,29 +74,35 @@ for nominal, r_n in results.items():
 
         for channel, filename in r_np.items():
 
-            m, updf, ut = read_result(filename)
+            m, u = read_result(filename, nominal)
 
-            nominals.append(nominal.upper())
-            pseudos.append(pseudodata.upper())
+            if args.mode == "pdf":
+                nominals.append(nominal.upper())
+                pseudos.append(pseudodata.upper())
+            else:
+                nominals.append(nominal)
+                pseudos.append(pseudodata)
             channels.append(channel)
             masses.append(m)
-            uncertainties_pdf.append(updf)
-            uncertainties_tot.append(ut)
+            uncertainties.append(u)
 
-data = pd.DataFrame({"nominal":nominals, "pseudo":pseudos, "channel":channels, "mass":masses, "unc_pdf": uncertainties_pdf, "unc_tot":uncertainties_tot})
+data = pd.DataFrame({"nominal":nominals, "pseudo":pseudos, "channel":channels, "mass":masses, "unc": uncertainties})
 
 for channel, df in data.groupby("channel"):
 
     df.sort_values(by=["nominal","pseudo"])
 
     pseudo = list(sorted(set(df["pseudo"].values)))
+    nominal = list(sorted(set(df["nominal"].values)))
+
+    pseudo = list(filter(lambda x: x in pseudo, nominal)) + list(filter(lambda x: x not in nominal, pseudo))
 
     outfile=f"{outDir}/result_table_{channel}.txt"
     logger.info(f"write {outfile}")
     with open(outfile, "w") as outfile:
 
         outfile.write(r"\begin{table}" +"\n")
-        outfile.write(r"\topcaption{\label{table:pullsPDFUnc}"+"\n")
+        outfile.write(r"\topcaption{\label{table:pullsPDFUnc_"+channel+"}"+"\n")
         outfile.write(r"""  Pulls table for fitting $(p_T^{\ell},\eta^{\ell})$ in the """+channel+r""" channel with only pdf and bin-by-bin statistical uncertainties. 
   Entries read (pull on the $m_W$ central value) $\pm$ (pdf uncertainty on $m_W$).}"""+"\n")
         outfile.write(r"\centering"+"\n")
@@ -109,8 +118,8 @@ for channel, df in data.groupby("channel"):
 
         for nominal, df_n in df.groupby("nominal"):
             entries = []
-            for p in pseudo:
-                m, u = df_n.loc[df_n["pseudo"] == p][["mass","unc_pdf"]].values[0]
+            for p in pseudo:                 
+                m, u = df_n.loc[df_n["pseudo"] == p][["mass", f"unc" ]].values[0]
                 m = round(100*m,1)
                 u = round(100*u,1)
                 colorstring = "\cellcolor{red!25}" if abs(m) > u else ""    # highlight background color of cell if uncertainty does not cover mass shift
