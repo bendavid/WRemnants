@@ -2,6 +2,8 @@ import os
 import glob
 import pdb
 import json
+import argparse
+
 os.sys.path.append(os.path.expandvars('/home/d/dwalter/WRemnants/'))
 
 from utilities import logging
@@ -16,7 +18,7 @@ parser.add_argument("-i","--input", type=str, help="input path to combine subfol
 args = parser.parse_args()
 
 histmaker = "mw_with_mu_eta_pt"
-fittype = "WMass_pt_eta"   
+fittype = "WMass_eta_pt"   
 
 combineDir = args.input
 
@@ -35,10 +37,13 @@ def get_card(name):
     else:
         return card[0]
 
+results = {}
+for subdir in glob.glob(f"{combineDir}/*_vs_*/{fittype}"):
 
-for subdir in glob.glob(f"{combineDir}/*_vs_*/{fittype}/"):
 
-    nominal, pseudodata = subdir.split("/")[-2].split("_vs_")
+    splits = subdir.split("/")[-2].split("_vs_")
+    pseudodata = splits[1]
+    nominal = splits[0]
     nominal = nominal.split("_")[-1]
 
     if nominal == pseudodata:

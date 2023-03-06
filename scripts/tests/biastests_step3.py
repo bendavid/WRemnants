@@ -86,7 +86,7 @@ for channel, df in data.groupby("channel"):
 
     df.sort_values(by=["nominal","pseudo"])
 
-    pseudo = list(set(df["pseudo"].values))
+    pseudo = list(sorted(set(df["pseudo"].values)))
 
     outfile=f"{outDir}/result_table_{channel}.txt"
     logger.info(f"write {outfile}")
