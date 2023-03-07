@@ -24,10 +24,9 @@ class CardTool(object):
         self.cardName = cardName
         self.systematics = {}
         self.lnNSystematics = {}
-        self.procDict = OrderedDict()
+        self.procDict = {}
         self.predictedProcs = []
         self.fakeEstimate = None
-        self.addMirrorForSyst = {}
         self.channels = ["plus", "minus"]
         self.cardContent = {}
         self.cardGroups = {}
@@ -44,7 +43,9 @@ class CardTool(object):
         self.histName = "x"
         self.nominalDim = None
         self.pseudoData = None
+        self.pseudoDataIdx = None
         self.excludeSyst = None
+        self.excludeProcGroups = None # exclude processes, by group name
         self.writeByCharge = True
         self.keepSyst = None # to override previous one with exceptions for special cases
         #self.loadArgs = {"operation" : "self.loadProcesses (reading hists from file)"}
@@ -116,8 +117,9 @@ class CardTool(object):
     def getFakeName(self):
         return self.fakeName
 
-    def setPseudodata(self, pseudodata):
+    def setPseudodata(self, pseudodata, idx = 0):
         self.pseudoData = pseudodata
+        self.pseudoDataIdx = idx
 
     # Needs to be increased from default for long proc names
     def setSpacing(self, spacing):
@@ -126,15 +128,18 @@ class CardTool(object):
     def setDataName(self, name):
         self.dataName = name
 
-    def setDatagroups(self, datagroups):
+    def setDatagroups(self, datagroups, resetGroups=False):
         self.datagroups = datagroups 
         if self.nominalName:
             self.datagroups.setNominalName(self.nominalName)
+        # if processes are not set yet, do it now to skip one step
+        # FIXME: should it allow one to reset the procDict by passing a flag, e.g. in case one loads a new datagroups?
+        if resetGroups or not self.procDict:
+            self.setProcesses(self.datagroups.getNames(afterFilter=True))
         
     def setPseudodataDatagroups(self, datagroups):
         self.pseudodata_datagroups = datagroups 
         if self.nominalName:
-            print(datagroups)
             self.pseudodata_datagroups.setNominalName(self.nominalName)
         
     def setChannels(self, channels):
@@ -150,7 +155,7 @@ class CardTool(object):
 
     def predictedProcesses(self):
         if self.predictedProcs:
-            return self.predictedProces
+            return self.predictedProcs
         return list(filter(lambda x: x != self.dataName, self.procDict.keys()))
 
     def setHistName(self, histName):
@@ -161,8 +166,13 @@ class CardTool(object):
         if self.datagroups:
             self.datagroups.setNominalName(histName)
 
-    def isData(self, procName):
-        return any([x.is_data for x in self.datagroups.groups[procName]["members"]])
+    # by default this returns True also for Fake since it has Data in the list of members
+    # then self.isMC negates this one and thus will only include pure MC processes
+    def isData(self, procName, onlyData=False):
+        if onlyData:
+            return all([x.is_data for x in self.datagroups.groups[procName]["members"]])
+        else:
+            return any([x.is_data for x in self.datagroups.groups[procName]["members"]])
 
     def isMC(self, procName):
         return not self.isData(procName)
@@ -171,18 +181,25 @@ class CardTool(object):
         self.fakeEstimate = estimate
 
     def setProcesses(self, processes):
-        self.procDict = OrderedDict([ (proc, {}) for proc in processes])
+        self.procDict = {proc: {} for proc in processes}
 
+    def getProcesses(self):
+        return list(self.procDict.keys())
+
+    def setExcludedProcs(self, proc_list):
+        if isinstance(proc_list, list):
+            self.excludeProcGroups = [x for x in proc_list]
+        elif isinstance(proc_list, str):
+            self.excludeProcGroups = [proc_list]
+        elif proc_list is not None:
+            logger.error(f"In CardTool.setExcludedProcs(): invalid argument with type {type(proc_list)}")
+            quit()
+            
     def filteredProcesses(self, filterExpr):
-        return list(filter(filterExpr, self.datagroups.processes()))
+        return list(filter(filterExpr, self.procDict.keys()))
 
     def allMCProcesses(self):
         return self.filteredProcesses(lambda x: self.isMC(x))
-
-    # FIXME: used nowhere?
-    def mirrorNames(self, baseName, size, offset=0):
-        names = [""]*offset + [f"{baseName.format(i=i%size)}{'Up' if i % 2 else 'Down'}" for i in range(size*2)]
-        return names
 
     def addLnNSystematic(self, name, size, processes, group=None, groupFilter=None):
         if not self.isExcludedNuisance(name):
@@ -192,43 +209,49 @@ class CardTool(object):
     # to apply a separate action per process. this is needed for example for the scale uncertainty split
     # by pt or helicity
     def addSystematic(self, name, systAxes, outNames=None, skipEntries=None, labelsByAxis=None, 
-                        baseName="", mirror=False, scale=1, processes=None, group=None, noConstraint=False,
-                        action=None, actionArgs={}, actionMap={}, systNameReplace=[], groupFilter=None, passToFakes=False, 
-                        rename=None, splitGroup={}):
+                      baseName="", mirror=False, scale=1, processes=None, group=None, noConstraint=False,
+                      action=None, actionArgs={}, actionMap={}, systNameReplace=[], groupFilter=None, passToFakes=False,
+                      rename=None, splitGroup={}):
 
         # Need to make an explicit copy of the array before appending
         procs_to_add = [x for x in (self.allMCProcesses() if not processes else processes)]
-        if passToFakes and self.getFakeName() not in procs_to_add:
+        if passToFakes and self.getFakeName() not in procs_to_add and self.getFakeName() not in self.excludeProcGroups:
             procs_to_add.append(self.getFakeName())
 
         if action and actionMap:
             raise ValueError("Only one of action and actionMap args are allowed")
 
         self.systematics.update({
-            name if not rename else rename : { "outNames" : [] if not outNames else outNames,
-                     "baseName" : baseName,
-                     "processes" : procs_to_add,
-                     "systAxes" : systAxes,
-                     "labelsByAxis" : systAxes if not labelsByAxis else labelsByAxis,
-                     "group" : group,
-                     "groupFilter" : groupFilter,
-                     "splitGroup" : splitGroup if len(splitGroup) else {group : ".*"}, # dummy dictionary if splitGroup=None, to allow for uniform treatment
-                     "scale" : scale,
-                     "mirror" : mirror,
-                     "action" : action,
-                     "actionMap" : actionMap,
-                     "actionArgs" : actionArgs,
-                     "systNameReplace" : systNameReplace,
-                     "noConstraint" : noConstraint,
-                     "skipEntries" : [] if not skipEntries else skipEntries,
-                     "name" : name,
+            name if not rename else rename : {
+                "outNames" : [] if not outNames else outNames,
+                "baseName" : baseName,
+                "processes" : procs_to_add,
+                "systAxes" : systAxes,
+                "labelsByAxis" : systAxes if not labelsByAxis else labelsByAxis,
+                "group" : group,
+                "groupFilter" : groupFilter,
+                "splitGroup" : splitGroup if len(splitGroup) else {group : ".*"}, # dummy dictionary if splitGroup=None, to allow for uniform treatment
+                "scale" : scale,
+                "mirror" : mirror,
+                "action" : action,
+                "actionMap" : actionMap,
+                "actionArgs" : actionArgs,
+                "systNameReplace" : systNameReplace,
+                "noConstraint" : noConstraint,
+                "skipEntries" : [] if not skipEntries else skipEntries,
+                "name" : name,
             }
         })
-
+        
     def setMirrorForSyst(self, syst, mirror=True):
         self.systematics[syst]["mirror"] = mirror
 
-    def systLabelForAxis(self, axLabel, entry):
+    def systLabelForAxis(self, axLabel, entry, axis):
+        if type(axis) == hist.axis.StrCategory:
+            if entry in axis:
+                return entry
+            else:
+                raise ValueError(f"Did not find label {entry} in categorical axis {axis}")
         if axLabel == "mirror":
             return 'Down' if entry else 'Up' # first entry is the original, call it Up since it is usually defined by an actual scaling up of something (e.g. efficiencies)
         if axLabel == "downUpVar":
@@ -239,9 +262,11 @@ class CardTool(object):
 
     def excludeSystEntry(self, entry, skipEntries):
         for skipEntry in skipEntries:
-            # Can use -1 to exclude all values of an axis
-            if all(y == -1 or x == y for x,y in zip(entry, skipEntry)):
-                return True
+            skip = False
+            for e,match in zip(entry, skipEntry): 
+                # Can use -1 to exclude all values of an axis
+                if match == -1 or match == e or re.match(str(match), str(e)):
+                    return True
         return False
 
     def expandSkipEntries(self, h, syst, skipEntries):
@@ -285,11 +310,14 @@ class CardTool(object):
         if hvar.axes[-1].name == "mirror":
             axNames.append("mirror")
             axLabels.append("mirror")
+        axes = [hvar.axes[ax] for ax in axNames]
 
         if not all([name in hvar.axes.name for name in axNames]):
             raise ValueError(f"Failed to find axis names {str(axNames)} in hist for syst {syst}. " \
                 f"Axes in hist are {str(hvar.axes.name)}")
-        entries = list(itertools.product(*[range(hvar.axes[ax].size) for ax in axNames]))
+
+        # Converting to a list becasue otherwise if you print it for debugging you loose it
+        entries = list(itertools.product(*[[x for x in ax] if type(ax) == hist.axis.StrCategory else range(ax.size) for ax in axes]))
         
         if len(systInfo["outNames"]) == 0:
             for entry in entries:
@@ -298,7 +326,7 @@ class CardTool(object):
                     systInfo["outNames"].append("")
                 else:
                     name = systInfo["baseName"]
-                    name += "".join([self.systLabelForAxis(al, entry[i]) for i,al in enumerate(axLabels)])
+                    name += "".join([self.systLabelForAxis(al, entry[i], ax) for i,(al,ax) in enumerate(zip(axLabels,axes))])
                     if "systNameReplace" in systInfo and systInfo["systNameReplace"]:
                         for rep in systInfo["systNameReplace"]:
                             name = name.replace(*rep)
@@ -309,7 +337,7 @@ class CardTool(object):
                         name = name.replace("Down", "")+"Down"
                     systInfo["outNames"].append(name)
             if not len(systInfo["outNames"]):
-                raise RuntimeError(f"All entries for syst {syst} were skipped!")
+                raise RuntimeError(f"Did not find any valid variations for syst {syst}")
 
         variations = [hvar[{ax : binnum for ax,binnum in zip(axNames, entry)}] for entry in entries]
         if len(variations) != len(systInfo["outNames"]):
@@ -323,11 +351,6 @@ class CardTool(object):
             return f"{self.histName}_{proc}"
         else:
             return f"{self.histName}_{proc}_{name}"
-
-    # This logic used to be more complicated, leaving the function here for now even
-    # though it's trivial
-    def addMirror(self, h, proc, syst):
-        return syst != self.nominalName and self.systematics[syst]["mirror"]
 
     def checkSysts(self, hnom, var_map, proc, thresh=0.25):
         #if self.check_variations:
@@ -350,7 +373,7 @@ class CardTool(object):
                 logger.warning(f"{perc_sameside:.0%} bins are one sided for syst {name} and process {proc}!")
 
     def writeForProcess(self, h, proc, syst):
-        if self.addMirror(h, proc, syst):
+        if syst != self.nominalName and self.systematics[syst]["mirror"]:
             hnom = self.procDict[proc][self.nominalName]
             h = hh.extendHistByMirror(h, hnom)
         # Otherwise this is a processes not affected by the variation, don't write it out,
@@ -372,14 +395,16 @@ class CardTool(object):
         datagroups = self.datagroups if not self.pseudodata_datagroups else self.pseudodata_datagroups
         datagroups.loadHistsForDatagroups(
             baseName=self.pseudoData, syst="", label=self.pseudoData,
-            procsToRead=processes, scaleToNewLumi=self.lumiScale)
-        procDict = datagroups.getDatagroups()
+            procsToRead=processes, excluded_procs=self.excludeProcGroups,
+            scaleToNewLumi=self.lumiScale)
+        # FIXME: not sure if afterFilter is desired here, but it probably should
+        procDict = datagroups.getDatagroups(afterFilter=True)
         hists = [procDict[proc][self.pseudoData] for proc in processes]
         hdata = hh.sumHists(hists)
         # Kind of hacky, but in case the alt hist has uncertainties
         for systAxName in ["systIdx", "tensor_axis_0", "vars"]:
             if systAxName in [ax.name for ax in hdata.axes]:
-                hdata = hdata[{systAxName : 0 }] 
+                hdata = hdata[{systAxName : self.pseudoDataIdx }] 
         self.writeHist(hdata, self.pseudoData+"_sum")
 
     def writeForProcesses(self, syst, processes, label):
@@ -400,11 +425,13 @@ class CardTool(object):
         else:
             self.outfile = outfile
 
-    def writeOutput(self):
+    def writeOutput(self, args=None):
         self.datagroups.loadHistsForDatagroups(
-            baseName=self.nominalName, syst=self.nominalName, label=self.nominalName, 
+            baseName=self.nominalName, syst=self.nominalName,
+            procsToRead=self.procDict.keys(), excluded_procs=self.excludeProcGroups,
+            label=self.nominalName, 
             scaleToNewLumi=self.lumiScale)
-        self.procDict = self.datagroups.getDatagroups()
+        self.procDict = self.datagroups.getDatagroups(afterFilter=True)
         self.writeForProcesses(self.nominalName, processes=self.procDict.keys(), label=self.nominalName)
         self.loadNominalCard()
         if self.pseudoData:
@@ -413,15 +440,18 @@ class CardTool(object):
         self.writeLnNSystematics()
         for syst in self.systematics.keys():
             if self.isExcludedNuisance(syst): continue
-            systMap=self.systematics[syst]
+            systMap = self.systematics[syst]
             systName = syst if not systMap["name"] else systMap["name"]
-            processes=systMap["processes"]
-            self.datagroups.loadHistsForDatagroups(self.nominalName, systName, label="syst",
-                procsToRead=processes, forceNonzero=systName != "qcdScaleByHelicity",
-                preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"], 
+            processes = systMap["processes"]
+            self.datagroups.loadHistsForDatagroups(
+                self.nominalName, systName, label="syst",
+                procsToRead=processes, excluded_procs=self.excludeProcGroups,
+                forceNonzero=systName != "qcdScaleByHelicity",
+                preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"],
                 scaleToNewLumi=self.lumiScale)
-            self.writeForProcesses(syst, label="syst", processes=processes)    
-        output_tools.writeMetaInfoToRootFile(self.outfile, exclude_diff='notebooks')
+            self.writeForProcesses(syst, label="syst", processes=processes)
+            
+        output_tools.writeMetaInfoToRootFile(self.outfile, exclude_diff='notebooks', args=args)
         if self.skipHist:
             logger.info("Histograms will not be written because 'skipHist' flag is set to True")
         self.writeCard()
@@ -444,7 +474,11 @@ class CardTool(object):
 
     def writeLnNSystematics(self):
         nondata = self.predictedProcesses()
+        # exit this function when a syst is applied to no process (can happen when some are excluded)
         for name,info in self.lnNSystematics.items():
+            if all(x not in info["processes"] for x in nondata):
+                logger.warning(f"Skipping syst {name}, procs to apply it to would be {info['processes']}, and predicted processes are {nondata}")
+                return 0
             include = [(str(info["size"]) if x in info["processes"] else "-").ljust(self.spacing) for x in nondata]
             group = info["group"]
             groupFilter = info["groupFilter"]
@@ -464,6 +498,10 @@ class CardTool(object):
         nondata = self.predictedProcesses()
         names = [x[:-2] if "Up" in x[-2:] else (x[:-4] if "Down" in x[-4:] else x) 
                     for x in filter(lambda x: x != "", systInfo["outNames"])]
+        # exit this function when a syst is applied to no process (can happen when some are excluded)
+        if all(x not in procs for x in nondata):
+            return 0
+        
         if type(scale) != dict:
             include = [(str(scale) if x in procs else "-").ljust(self.spacing) for x in nondata]
 
@@ -547,7 +585,7 @@ class CardTool(object):
     def writeHist(self, h, name, setZeroStatUnc=False):
         if self.skipHist:
             return
-
+        
         if self.project:
             axes = self.project[:]
             if "charge" in h.axes.name:

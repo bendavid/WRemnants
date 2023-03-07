@@ -78,6 +78,7 @@ if __name__ == "__main__":
     parser.add_argument('-a', '--make-asymmetry', dest="makeAsymmetry", action="store_true", help="Make ratio of difference over the sum. For this to make sense, the binning of the two inputs must be consistent")
     parser.add_argument('-p', '--make-pulls', dest="makePulls", action="store_true", help="Make pulls of input histograms, i.e. (h1-h2)/error, where error is taken as the quadrature sum of the errors of the input")
     parser.add_argument(       '--pull-error-ScaleFactor', dest='pullErrorScaleFactor', default='1.', type=float, help='Inflate the error by this factor when making the pulls (because it is assumed the inputs are uncorrelated, so the error might need a correction)')
+    parser.add_argument('-u', '--unroll', action="store_true",  help="Make plot of unrilled 1D histogram from the 2D ratio")
     parser.add_argument(      '--roll1Dto2D', action="store_true",  help="Input histograms are 1D distributions to be unrolled into 2D. Need binning from option --binning-file-to-roll")
     parser.add_argument(      '--binning-file-to-roll', dest="binFileToRoll", default="", help="File with binning to roll 1D into 2D (the reco binning is used)")
     parser.add_argument(      '--drawOption',  default='colz0', type=str, help='Draw option for TH2')
@@ -269,7 +270,8 @@ if __name__ == "__main__":
             args.ratioRange = (hratio.GetBinContent(hratio.GetMinimumBin()), hratio.GetBinContent(hratio.GetMaximumBin()))
         zAxisTitle = zAxisTitle + "::" + str(args.ratioRange[0]) + "," + str(args.ratioRange[1])
     drawCorrelationPlot(hratio,xAxisTitle,yAxisTitle,zAxisTitle,
-                        args.outhistname,"ForceTitle",outname,0,0,False,False,False,1,palette=args.palette,passCanvas=canvas2D,drawOption=args.drawOption)
+                        args.outhistname,"ForceTitle",outname,0,0,False,False,False,1,
+                        palette=args.palette,passCanvas=canvas2D,drawOption=args.drawOption)
     
     canvas = ROOT.TCanvas("canvas","",800,700)
     if not args.skip1DPlot:
@@ -281,6 +283,48 @@ if __name__ == "__main__":
                 passCanvas=canvas
         )
 
+    # unroll 2D ratio into a 1D
+    if args.unroll:
+        canvas_unroll = ROOT.TCanvas("canvas_unroll","",3000,800)
+        bottomMargin = 0.12
+        canvas_unroll.SetTickx(1)
+        canvas_unroll.SetTicky(1)
+        canvas_unroll.cd()
+        canvas_unroll.SetBottomMargin(bottomMargin)                                            
+        
+        ratio_unrolled = unroll2Dto1D(hratio, newname=f"unrolled_{hratio.GetName()}", cropNegativeBins=False)
+        unitLine = copy.deepcopy(ratio_unrolled.Clone("tmp_horizontalLineAt1"))
+        unitLine.Reset("ICESM")
+        ratioUnc = copy.deepcopy(ratio_unrolled.Clone("tmp_ratioUnc"))
+        ratioUnc.Reset("ICESM")
+        for ib in range(2+unitLine.GetNbinsX()):
+            unitLine.SetBinContent(ib, 1.0)
+            unitLine.SetBinError(ib, 0.0)
+            # for plotting purpose put the uncertainty of the unrolled on the unit line, and reset it for the unrolled
+            ratioUnc.SetBinContent(ib, 1.0)
+            ratioUnc.SetBinError(ib, ratio_unrolled.GetBinError(ib))
+            ratio_unrolled.SetBinError(ib, 0.0)
+        yBinRanges = []
+        if hratio.GetNbinsY() > 15:
+            for iybin in range(hratio.GetNbinsY()):
+                yBinRanges.append("") # keep dummy otherwise there's too much text most of the time
+        else:
+            for iybin in range(hratio.GetNbinsY()):
+                yBinRanges.append("#splitline{{y in}}{{[{ptmin},{ptmax}]}}".format(ptmin=int(hratio.GetYaxis().GetBinLowEdge(iybin+1)),
+                                                                                   ptmax=int(hratio.GetYaxis().GetBinLowEdge(iybin+2))))
+        zAxisTitle_unroll = zAxisTitle if "::" not in zAxisTitle else str(zAxisTitle.split("::")[0])
+        drawNTH1([ratio_unrolled, ratioUnc, unitLine], [f"Ratio {args.histTitle}", "Ratio uncertainty", "Unity"],
+                 f"Unrolled bin: '{yAxisTitle}' vs '{xAxisTitle}'", zAxisTitle_unroll,
+                 ratio_unrolled.GetName(), outname,
+                 leftMargin=0.06, rightMargin=0.01,
+                 legendCoords="0.06,0.99,0.91,0.99;3", lowerPanelHeight=0.0, skipLumi=True, passCanvas=canvas_unroll,
+                 drawVertLines="{a},{b}".format(a=hratio.GetNbinsY(),b=hratio.GetNbinsX()),
+                 textForLines=yBinRanges, transparentLegend=False,
+                 onlyLineColor=False, useLineFirstHistogram=True, drawErrorAll=True, lineWidth=1,
+                 fillStyleSecondHistogram=1001, fillColorSecondHistogram=ROOT.kGray,
+                 colorVec=[ROOT.kBlack, ROOT.kRed])
+
+    
     # making distribution of pulls
     if args.makePulls:
         hpull = ROOT.TH1D("pulls","Distribution of pulls",100,-5,5)

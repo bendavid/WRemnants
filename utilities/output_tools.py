@@ -4,9 +4,12 @@ import sys
 import subprocess
 import datetime
 import time
-import pickle
-import lz4.frame
+import hdf5plugin
+import h5py
+import narf
 import logging
+import numpy as np
+import re
 from utilities import common
 
 def readTemplate(templateFile, templateDict, filt=None):
@@ -23,8 +26,15 @@ def fillTemplatedFile(templateFile, outFile, templateDict, append=False):
     with open(outFile, "w" if not append else "a") as outFile:
         outFile.write(result)
 
-def metaInfoDict(exclude_diff='notebooks'):
-    meta_data = {"time" : str(datetime.datetime.now()), "command" : ' '.join(sys.argv)}
+def script_command_to_str(argv, parser_args):
+    call_args = np.array(argv[1:], dtype=object)
+    match_expr = "|".join(["^--[a-z].*|^-[a-z].*"]+([] if not parser_args else [f"^-*{x}" for x in vars(parser_args).keys()]))
+    flags = np.vectorize(lambda x: bool(re.match(match_expr, x)))(call_args)
+    call_args[~flags] = np.vectorize(lambda x: f"'{x}'")(call_args[~flags])
+    return " ".join([argv[0], *call_args])
+
+def metaInfoDict(exclude_diff='notebooks', args=None):
+    meta_data = {"time" : str(datetime.datetime.now()), "command" : script_command_to_str(sys.argv, args)}
     if subprocess.call(["git", "branch"], stderr=subprocess.STDOUT, stdout=open(os.devnull, 'w')) != 0:
         meta_data["git_info"] = {"hash" : "Not a git repository!",
                 "diff" : "Not a git repository"}
@@ -47,9 +57,9 @@ def analysis_debug_output(results):
             logging.debug("-"*30)
     logging.debug("")
 
-def writeMetaInfoToRootFile(rtfile, exclude_diff='notebooks'):
+def writeMetaInfoToRootFile(rtfile, exclude_diff='notebooks', args=None):
     import ROOT
-    meta_dict = metaInfoDict(exclude_diff)
+    meta_dict = metaInfoDict(exclude_diff, args=args)
     d = rtfile.mkdir("meta_info")
     d.cd()
     
@@ -59,7 +69,7 @@ def writeMetaInfoToRootFile(rtfile, exclude_diff='notebooks'):
 
 def write_analysis_output(results, outfile, args):
     analysis_debug_output(results)
-    results.update({"meta_info" : metaInfoDict()})
+    results.update({"meta_info" : metaInfoDict(args=args)})
 
     to_append = []
     if args.theory_corr and not args.theory_corr_alt_only:
@@ -72,7 +82,7 @@ def write_analysis_output(results, outfile, args):
         to_append.append(f"maxFiles{args.maxFiles}")
 
     if to_append:
-        outfile = outfile.replace(".pkl.lz4", f"_{'_'.join(to_append)}.pkl.lz4")
+        outfile = outfile.replace(".hdf5", f"_{'_'.join(to_append)}.hdf5")
 
     if args.outfolder:
         if not os.path.exists(args.outfolder):
@@ -81,7 +91,7 @@ def write_analysis_output(results, outfile, args):
         outfile = os.path.join(args.outfolder, outfile)
 
     time0 = time.time()
-    with lz4.frame.open(outfile, "wb") as f:
-        pickle.dump(results, f, protocol = pickle.HIGHEST_PROTOCOL)
+    with h5py.File(outfile, 'w') as f:
+        narf.ioutils.pickle_dump_h5py("results", results, f)
     print("Writing output:", time.time()-time0)
     print(f"Output saved in {outfile}")
