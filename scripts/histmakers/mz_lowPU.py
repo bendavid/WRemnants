@@ -19,8 +19,7 @@ corr_helpers = theory_corrections.load_corr_helpers(common.zprocs_lowpu, args.th
 
 ###################################
 flavor = args.flavor # mumu, ee
-met = args.met # mumu, ee
-sigProc = "Zmumu" if flavor == "mumu" else "Zee"
+sigProcs = ["Zmumu"] if flavor == "mumu" else ["Zee"]
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
 datasets = wremnants.datasetsLowPU.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, flavor=flavor)
@@ -67,15 +66,12 @@ reco_mll_axes = [common.axis_recoil_reco_ptZ, axis_mll]
 gen_reco_mll_axes = [common.axis_recoil_gen_ptZ, common.axis_recoil_reco_ptZ, axis_mll]
 axis_mt = hist.axis.Regular(200, 0., 200., name = "mt", underflow=False)
 axis_xnorm = hist.axis.Regular(1, 0., 1., name = "count", underflow=False, overflow=False)
-axis_xnorm1 = hist.axis.Regular(1, 0., 1., name = "count1", underflow=False, overflow=False)
-# extra axes which can be used to label tensor_axes
 
 
-axis_qT = hist.axis.Regular(600, 0, 300, name = "qT")
 
 # recoil initialization
 from wremnants import recoil_tools
-recoilHelper = recoil_tools.Recoil("lowPU", flavor, met)
+recoilHelper = recoil_tools.Recoil("lowPU", args, flavor)
 
 
 
@@ -90,7 +86,7 @@ def build_graph(df, dataset):
     weightsum = df.SumAndCount("weight")
     
     # normalization xsecs (propagate pdfs/qcdscales)
-    if dataset.name in common.zprocs_lowpu:
+    if dataset.name in sigProcs:
    
         #axes_xnorm = [common.axis_recoil_gen_ptZ, axis_xnorm]
         #cols_xnorm = ["ptVgen", "xnorm"] # this order does not work? Segfault when writing to pkl file
@@ -107,10 +103,8 @@ def build_graph(df, dataset):
         df_xnorm = theory_tools.define_pdf_columns(df_xnorm, dataset.name, args.pdfs, args.altPdfOnlyCentral)
         df_xnorm = theory_tools.define_scale_tensor(df_xnorm)        
         syst_tools.add_pdf_hists(results, df_xnorm, dataset.name, axes_xnorm, cols_xnorm, args.pdfs, "xnorm")
-        syst_tools.add_scale_hist(results, df_xnorm, [*axes_xnorm, axis_ptVgen, axis_chargeVgen], [*cols_xnorm, "ptVgen", "chargeVgen"], "xnorm")
-        df_xnorm = df_xnorm.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
-        qcdScaleByHelicityUnc = df_xnorm.HistoBoost("xnorm_qcdScaleByHelicity", [*axes_xnorm, axis_ptVgen, axis_chargeVgen], [*cols_xnorm, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
-        results.append(qcdScaleByHelicityUnc)
+        syst_tools.add_qcdScale_hist(results, df_xnorm, [*axes_xnorm, axis_ptVgen, axis_chargeVgen], [*cols_xnorm, "ptVgen", "chargeVgen"], "xnorm")
+        syst_tools.add_qcdScaleByHelicityUnc_hist(results, df_xnorm, qcdScaleByHelicity_helper, [*axes_xnorm, axis_ptVgen, axis_chargeVgen], [*cols_xnorm, "ptVgen", "chargeVgen"], base_name="xnorm_qcdScaleByHelicity")
      
         
   
@@ -265,13 +259,8 @@ def build_graph(df, dataset):
     df = df.Define("noTrigMatch", "Sum(trigMatch)")
     results.append(df.HistoBoost("noTrigMatch", [axis_lin], ["noTrigMatch", "nominal_weight"]))
     
-    # Recoil calibrations
-    df = recoilHelper.setup_MET(df, results, dataset, "Lep_pt", "Lep_phi", "Lep_pt_uncorr")
-    df = recoilHelper.setup_recoil_Z(df, results, dataset, common.zprocs_recoil)
-    #df = recoilHelper.setup_gen(df, results, dataset, common.zprocs_recoil)
-    df = recoilHelper.auxHists(df, results)
     
-    df = recoilHelper.apply_recoil_Z(df, results, dataset, common.zprocs_recoil) # produces corrected MET as MET_corr_rec_pt/phi
+    
 
     
     # W-like
@@ -286,53 +275,40 @@ def build_graph(df, dataset):
     df = df.Define("NonTrigMuon_pt", "Lep_pt[nonTrigMuons][0]")
     df = df.Define("NonTrigMuon_eta", "Lep_eta[nonTrigMuons][0]")
     df = df.Define("NonTrigMuon_phi", "Lep_phi[nonTrigMuons][0]")
-    df = df.Define("mT_uncorr", "wrem::mt_wlike_nano(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, MET_uncorr_pt, MET_uncorr_phi)")
-    df = df.Define("mT_corr_lep", "wrem::mt_wlike_nano(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, MET_corr_lep_pt, MET_corr_lep_phi)")
-    df = df.Define("mT_corr_xy", "wrem::mt_wlike_nano(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, MET_corr_xy_pt, MET_corr_xy_phi)")
-    df = df.Define("mT_corr_rec", "wrem::mt_wlike_nano(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, MET_corr_rec_pt, MET_corr_rec_phi)")
 
+    lep_cols = ["Lep_pt", "Lep_phi", "Lep_pt_uncorr"]
+    trg_cols = ["TrigMuon_pt", "TrigMuon_phi", "NonTrigMuon_pt", "NonTrigMuon_phi"]
+    df = recoilHelper.recoil_Z(df, results, dataset, common.zprocs_recoil_lowpu, lep_cols, trg_cols) # produces corrected MET as MET_corr_rec_pt/phi
 
     
     results.append(df.HistoBoost("mZ", [axis_mll], ["massZ", "nominal_weight"]))
     results.append(df.HistoBoost("yZ", [axis_yll], ["yZ", "nominal_weight"]))
     results.append(df.HistoBoost("ptZ", [axis_ptll], ["ptZ", "nominal_weight"]))
     
-    results.append(df.HistoBoost("mT_uncorr", [axis_mt], ["mT_uncorr", "nominal_weight"]))
-    results.append(df.HistoBoost("mT_corr_lep", [axis_mt], ["mT_corr_lep", "nominal_weight"]))
-    results.append(df.HistoBoost("mT_corr_xy", [axis_mt], ["mT_corr_xy", "nominal_weight"]))
-    results.append(df.HistoBoost("mT_corr_rec", [axis_mt], ["mT_corr_rec", "nominal_weight"]))
-    results.append(df.HistoBoost("mT_corr_xy_qTrw", [axis_mt], ["mT_corr_xy", "nominal_weight_qTrw"]))
-    results.append(df.HistoBoost("mT_corr_rec_qTrw", [axis_mt], ["mT_corr_rec", "nominal_weight_qTrw"]))
-    
     results.append(df.HistoBoost("lep_pT", [axis_pt], ["TrigMuon_pt", "nominal_weight"]))
     results.append(df.HistoBoost("lep_pT_qTrw", [axis_pt], ["TrigMuon_pt", "nominal_weight_qTrw"]))
     
     gen_reco_mll_cols = ["ptVgen", "recoil_corr_rec_magn", "massZ"]
-    
+    reco_mll_cols = ["recoil_corr_rec_magn", "massZ"]
 
     
     if dataset.name in common.zprocs_lowpu:
     
         # pdfs
         df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
-        if sigProc:
-            #results.extend(theory_tools.make_pdf_hists(df, dataset.name, gen_reco_mll_axes, gen_reco_mll_cols, args.pdfs, "reco_mll"))
+        if dataset.name in sigProcs:
             syst_tools.add_pdf_hists(results, df, dataset.name, gen_reco_mll_axes, gen_reco_mll_cols, args.pdfs, "reco_mll")
         else:
-            #results.extend(theory_tools.make_pdf_hists(df, dataset.name, reco_mll_axes, reco_mll_cols, args.pdfs, "reco_mll"))
             syst_tools.add_pdf_hists(results, df, dataset.name, reco_mll_axes, reco_mll_cols, args.pdfs, "reco_mll")
-        #results.extend(theory_tools.make_pdf_hists(df, dataset.name, [axis_mt], ["mT_corr_rec"], args.pdfs, hname="mt"))
         syst_tools.add_pdf_hists(results, df, dataset.name, [axis_mt], ["mT_corr_rec"], args.pdfs, "mt")
 
         # QCD scale
         df = theory_tools.define_scale_tensor(df)
-        #results.append(theory_tools.make_scale_hist(df, [*gen_reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mll_cols, "ptVgen", "chargeVgen"]))
-        syst_tools.add_scale_hist(results, df, [*gen_reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mll_cols, "ptVgen", "chargeVgen"], "reco_mll")
-        df = df.Define("helicityWeight_tensor", qcdScaleByHelicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
-        qcdScaleByHelicityUnc = df.HistoBoost("reco_mll_qcdScaleByHelicity", [*gen_reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mll_cols, "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
-        results.append(qcdScaleByHelicityUnc)
-        qcdScaleByHelicityUnc = df.HistoBoost("mt_qcdScaleByHelicity", [axis_mt, axis_ptVgen, axis_chargeVgen], ["mT_corr_rec", "ptVgen", "chargeVgen", "helicityWeight_tensor"], tensor_axes=qcdScaleByHelicity_helper.tensor_axes)
-        results.append(qcdScaleByHelicityUnc)
+        syst_tools.add_qcdScale_hist(results, df, [*gen_reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mll_cols, "ptVgen", "chargeVgen"], "reco_mll") 
+        syst_tools.add_qcdScaleByHelicityUnc_hist(results, df, qcdScaleByHelicity_helper, [*gen_reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mll_cols, "ptVgen", "chargeVgen"], base_name="reco_mll_qcdScaleByHelicity")
+        syst_tools.add_qcdScaleByHelicityUnc_hist(results, df, qcdScaleByHelicity_helper, [axis_mt, axis_ptVgen, axis_chargeVgen], ["mT_corr_rec", "ptVgen", "chargeVgen"], base_name="mt_qcdScaleByHelicity")
+        
+        
     
     # TODO: Should this also be added for the mT hist?
 
@@ -343,13 +319,11 @@ def build_graph(df, dataset):
             helpers=corr_helpers[dataset.name], generators=args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
         )
 
-    if dataset.name == sigProc:
+    if dataset.name in sigProcs:
     
         results.append(df.HistoBoost("reco_mll", gen_reco_mll_axes, [*gen_reco_mll_cols, "nominal_weight"]))
 
-        # recoil
-        if dataset.name in common.zprocs_recoil:
-            df = recoilHelper.recoil_Z_unc_lowPU(df, results, hNames=["mT_corr_rec", "reco_mll"], cols=["mT_corr_rec", gen_reco_mll_cols], axes=[axis_mt, gen_reco_mll_axes])
+        df = recoilHelper.recoil_Z_unc(df, results, dataset, common.zprocs_recoil_lowpu, hNames=["reco_mll"], cols=[gen_reco_mll_cols], axes=[gen_reco_mll_axes])
 
         # lepton efficiencies
         if dataset.name == "Zmumu":
@@ -373,22 +347,14 @@ def build_graph(df, dataset):
 
         
         # mass weights (Breit-Wigner and nominal)
-        nweights = 21
-        results.append(df.HistoBoost("mll", [axis_mll], ["massZ", "nominal_weight"]))
-        if not "MiNNLObug" in dataset.name: # test of BW massweights
-            df = df.Define("massWeight_tensor", f"auto res = wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight); res = nominal_weight*res; return res;")   
-            
-            results.append(df.HistoBoost("mll_massWeight", [axis_mll], ["massZ", "massWeight_tensor"]))
-            results.append(df.HistoBoost("reco_mll_massWeight", gen_reco_mll_axes, [*gen_reco_mll_cols, "massWeight_tensor"]))
-            results.append(df.HistoBoost("mT_corr_rec_massWeight", [axis_mt], ["mT_corr_rec", "massWeight_tensor"]))
-            
-        df = df.Define("MEParamWeight_BW", "wrem::breitWignerWeights(massVgen, 0)")
-        df = df.Define("massWeight_tensor_BW", f"auto res = wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight_BW); res = nominal_weight*res; return res;")
-        results.append(df.HistoBoost("mll_massWeight_BW", [axis_mll], ["massZ", "massWeight_tensor_BW"]))
+        df = syst_tools.define_mass_weights(df)
+        syst_tools.add_massweights_hist(results, df, [axis_mll], ["massZ"], base_name="mll_massWeight")
+        syst_tools.add_massweights_hist(results, df, gen_reco_mll_axes, [*gen_reco_mll_cols], base_name="reco_mll_massWeight")
+        syst_tools.add_massweights_hist(results, df, [axis_mt], ["mT_corr_rec"], base_name="mT_corr_rec_massWeight")
 
         
     else:
-        reco_mll_cols = ["recoil_corr_rec_magn", "massZ"]
+        
         
         results.append(df.HistoBoost("reco_mll", reco_mll_axes, [*reco_mll_cols, "nominal_weight"]))
         if dataset.is_data: return results, weightsum
