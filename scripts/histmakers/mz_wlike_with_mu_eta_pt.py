@@ -1,6 +1,6 @@
 from utilities import boostHistHelpers as hh,common,output_tools
 
-parser,initargs = common.common_parser()
+parser,initargs = common.common_parser(True)
 
 import narf
 import wremnants
@@ -13,34 +13,17 @@ import time
 import pdb
 import os
 
-parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
-parser.add_argument("--muonCorr", type=str, default="massfit", choices=["lbl", "trackfit_only_mctruth", "none", "massfit", "massfit_lbl", "trackfit_only"], 
-    help="Type of correction to apply to the muons")
-parser.add_argument("--muScaleMag", type=float, default=1e-4, help="Magnitude of dummy muon scale uncertainty")
-parser.add_argument("--muScaleBins", type=int, default=1, help="Number of bins for muon scale uncertainty")
-parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
-parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
-parser.add_argument("--bias-calibration", action='store_true', help="Adjust central value by calibration bias hist")
-parser.add_argument("--smearing", action='store_true', help="Smear pT such that resolution matches data")
+parser = common.set_parser_default(parser, "pt", [34, 26, 60])
 
-f = next((x for x in parser._actions if x.dest == "pt"), None)
-if f:
-    newPtDefault = [34,26.,60.]
-    logging.warning("")
-    logging.warning(f" >>> Modifying default of {f.dest} from {f.default} to {newPtDefault}")
-    logging.warning("")
-    f.default = newPtDefault
-    
 args = parser.parse_args()
-
-if args.noColorLogger:
-    logger = common.setup_base_logger(os.path.basename(__file__), args.debug)
-else:
-    logger = common.setup_color_logger(os.path.basename(__file__), args.verbose)
+logger = common.setup_logger(__file__, args.verbose, args.color_logger)
     
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
-datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, 
-    nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path)
+excludeGroup = args.excludeProcGroups if args.excludeProcGroups else None
+datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
+                                              filt=filt if args.filterProcs else None,
+                                              excludeGroup=excludeGroup,
+                                              nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path)
 
 era = args.era
 
@@ -96,13 +79,13 @@ logger.info(f"SF file: {args.sfFile}")
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
 
-mc_jpsi_crctn_helper, data_jpsi_crctn_helper = muon_validation.make_jpsi_crctn_helpers(args.muonCorr)
+mc_jpsi_crctn_helper, data_jpsi_crctn_helper = muon_validation.make_jpsi_crctn_helpers(args)
 
-mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = muon_calibration.make_muon_calibration_helpers()
+mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = muon_calibration.make_muon_calibration_helpers(args)
 
 smearing_helper = muon_calibration.make_muon_smearing_helpers() if args.smearing else None
 
-bias_helper = muon_calibration.make_muon_bias_helpers(args.muonCorr, args.smearing) if args.bias_calibration else None
+bias_helper = muon_calibration.make_muon_bias_helpers(args) if args.bias_calibration else None
 
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_corr)
 
@@ -133,7 +116,7 @@ def build_graph(df, dataset):
     cvh_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
     jpsi_helper = data_jpsi_crctn_helper if dataset.is_data else mc_jpsi_crctn_helper
 
-    df = muon_calibration.define_corrected_muons(df, cvh_helper, jpsi_helper, args.muonCorr, dataset, smearing_helper, bias_helper)
+    df = muon_calibration.define_corrected_muons(df, cvh_helper, jpsi_helper, args, dataset, smearing_helper, bias_helper)
 
     df = muon_selections.select_veto_muons(df, nMuons=2)
     df = muon_selections.select_good_muons(df, nMuons=2, use_trackerMuons=args.trackerMuons, use_isolation=True)
@@ -213,9 +196,9 @@ def build_graph(df, dataset):
             syst_tools.add_qcdScale_hist(results, df, scale_axes, scale_cols)
             syst_tools.add_pdf_hists(results, df, dataset.name, nominal_axes, nominal_cols, args.pdfs)
 
-            df = syst_tools.define_mass_weights(df)
+            df = syst_tools.define_mass_weights(df, dataset.name)
             if isZ:
-                syst_tools.add_massweights_hist(results, df, nominal_axes, nominal_cols)
+                syst_tools.add_massweights_hist(results, df, nominal_axes, nominal_cols, proc=dataset.name)
                 # there is no W backgrounds for the Wlike, make QCD scale histograms only for Z
                 # should probably remove the charge here, because the Z only has a single charge and the pt distribution does not depend on which charged lepton is selected
                 if not args.skipHelicity:
@@ -232,4 +215,4 @@ def build_graph(df, dataset):
 
 resultdict = narf.build_and_run(datasets, build_graph)
 
-output_tools.write_analysis_output(resultdict, "mz_wlike_with_mu_eta_pt.pkl.lz4", args)
+output_tools.write_analysis_output(resultdict, "mz_wlike_with_mu_eta_pt.hdf5", args)

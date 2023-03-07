@@ -22,7 +22,11 @@ flavor = args.flavor # mumu, ee
 sigProcs = ["Zmumu"] if flavor == "mumu" else ["Zee"]
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
-datasets = wremnants.datasetsLowPU.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, flavor=flavor)
+excludeGroup = args.excludeProcGroups if args.excludeProcGroups else None
+datasets = wremnants.datasetsLowPU.getDatasets(maxFiles=args.maxFiles,
+                                               filt=filt if args.filterProcs else None,
+                                               excludeGroup=excludeGroup,
+                                               flavor=flavor)
 for d in datasets: logging.info(f"Dataset {d.name}")
 
 
@@ -307,8 +311,6 @@ def build_graph(df, dataset):
         syst_tools.add_qcdScale_hist(results, df, [*gen_reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mll_cols, "ptVgen", "chargeVgen"], "reco_mll") 
         syst_tools.add_qcdScaleByHelicityUnc_hist(results, df, qcdScaleByHelicity_helper, [*gen_reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mll_cols, "ptVgen", "chargeVgen"], base_name="reco_mll_qcdScaleByHelicity")
         syst_tools.add_qcdScaleByHelicityUnc_hist(results, df, qcdScaleByHelicity_helper, [axis_mt, axis_ptVgen, axis_chargeVgen], ["mT_corr_rec", "ptVgen", "chargeVgen"], base_name="mt_qcdScaleByHelicity")
-        
-        
     
     # TODO: Should this also be added for the mT hist?
 
@@ -381,5 +383,5 @@ def build_graph(df, dataset):
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)
-fname = "lowPU_%s.pkl.lz4" % flavor
+fname = "lowPU_%s.hdf5" % flavor
 output_tools.write_analysis_output(resultdict, fname, args)

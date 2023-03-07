@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from wremnants import CardTool,theory_tools
+from utilities import common
 from wremnants.datasets.datagroupsLowPU import datagroupsLowPU
 from wremnants import histselections as sel
 import argparse
@@ -15,6 +16,8 @@ parser.add_argument("--noScaleHelicitySplit", dest="qcdByHelicity", action='stor
         help="Don't split QCD scale into helicity coefficients")
 args = parser.parse_args()
 
+logger = common.setup_logger(__file__, 2, False)
+
 if not os.path.isdir(args.outfolder):
     os.mkdir(args.outfolder)
 
@@ -26,9 +29,12 @@ templateDir = f"{scriptdir}/Templates/LowPileupW"
 cardTool = CardTool.CardTool(f"{args.outfolder}/LowPileupW_{{chan}}.txt")
 cardTool.setNominalTemplate(f"{templateDir}/main.txt")
 cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/LowPileupWCombineInput.root"))
+cardTool.setProcesses(datagroups.getNames())
 cardTool.setDatagroups(datagroups)
 cardTool.setHistName("mt_reco_pf")
 cardTool.setUnconstrainedProcs([cardTool.getFakeName(), "Wmunu"])
+
+logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
 
 cardTool.addSystematic("PDF", 
     processes=cardTool.filteredProcesses(lambda x: x[0] == "W" or x == "Fake"),
@@ -62,6 +68,6 @@ cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16)
 # This needs to be handled by shifting the norm before subtracting from the fakes
 # cardTool.addSystematic("lumi", outNames=["", "lumiDown", "lumiUp"], group="luminosity")
 # TODO: Allow to be appended to previous group
-cardTool.writeOutput()
+cardTool.writeOutput(args=args)
 
 

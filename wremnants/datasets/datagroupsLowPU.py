@@ -8,11 +8,14 @@ import pickle
 import narf
 import ROOT
 import hist
+from utilities import common
+
+logger = common.child_logger(__name__)
 
 class datagroupsLowPU(datagroups):
     isW = False
-    def __init__(self, infile, combine=False, flavor=""):
-        self.datasets = {x.name : x for x in datasetsLowPU.getDatasets(flavor=flavor)}
+    def __init__(self, infile, combine=False, flavor="", excludeProcGroup=None, filterProcGroup=None):
+        self.datasets = {x.name : x for x in datasetsLowPU.getDatasets(flavor=flavor, filt=filterProcGroup, excludeGroup=excludeProcGroup)}
         super().__init__(infile, combine)
         #self.lumi = 0.199269742
         self.hists = {} # container storing temporary histograms
@@ -253,6 +256,12 @@ class datagroupsLowPU(datagroups):
                     selectOp = self.signalHistSel,
                 ),
             )
+
+        # this class doesn't implement exclusion of groups yet, and maybe it is not needed.
+        # If if it is ever added, next line needs to be modified accordingly
+        self.updateGroupNamesPostFilter(excludeGroup=[])
+        #self.groupNamesPostFilter = list(x for x in self.groups.keys() if len(self.groups[x]["members"])) # and x not in excludeProcGroup)
+        logger.debug(f"Filtered groups: {self.groupNamesPostFilter}")
             
     def signalHistSel(self, h, charge=None):
         s = hist.tag.Slicer()
@@ -312,6 +321,8 @@ class datagroupsLowPU(datagroups):
         if histname not in output:
             raise ValueError(f"Histogram {histname} not found for process {proc.name}")
         h = output[histname]
+        if isinstance(h, narf.ioutils.H5PickleProxy):
+            h = h.get()
         #print(h)
         if forceNonzero:
             h = hh.clipNegativeVals(h)
@@ -795,6 +806,8 @@ class datagroupsLowPU_W(datagroups):
         if histname not in output:
             raise ValueError(f"Histogram {histname} not found for process {proc.name}")
         h = output[histname]
+        if isinstance(h, narf.ioutils.H5PickleProxy):
+            h = h.get()
         #print(h)
         if forceNonzero:
             h = hh.clipNegativeVals(h)
