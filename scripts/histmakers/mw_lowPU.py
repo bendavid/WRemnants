@@ -264,9 +264,9 @@ def build_graph(df, dataset):
         '''
         
         # mass weights (Breit-Wigner and nominal)
-        df = syst_tools.define_mass_weights(df)
-        syst_tools.add_massweights_hist(results, df, gen_reco_mT_axes, [*gen_reco_mT_cols], base_name="reco_mT_massWeight")
-        syst_tools.add_massweights_hist(results, df, [axis_mT], ["mT"], base_name="mT_massWeight")
+        df = syst_tools.define_mass_weights(df, dataset.name)
+        syst_tools.add_massweights_hist(results, df, gen_reco_mT_axes, [*gen_reco_mT_cols], base_name="reco_mT_massWeight", proc=dataset.name)
+        syst_tools.add_massweights_hist(results, df, [axis_mT], ["mT"], base_name="mT_massWeight", proc=dataset.name)
 
 
         # Muon momentum scale

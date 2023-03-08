@@ -349,10 +349,10 @@ def build_graph(df, dataset):
 
         
         # mass weights (Breit-Wigner and nominal)
-        df = syst_tools.define_mass_weights(df)
-        syst_tools.add_massweights_hist(results, df, [axis_mll], ["massZ"], base_name="mll_massWeight")
-        syst_tools.add_massweights_hist(results, df, gen_reco_mll_axes, [*gen_reco_mll_cols], base_name="reco_mll_massWeight")
-        syst_tools.add_massweights_hist(results, df, [axis_mt], ["mT_corr_rec"], base_name="mT_corr_rec_massWeight")
+        df = syst_tools.define_mass_weights(df, dataset.name)
+        syst_tools.add_massweights_hist(results, df, [axis_mll], ["massZ"], base_name="mll_massWeight", proc=dataset.name)
+        syst_tools.add_massweights_hist(results, df, gen_reco_mll_axes, [*gen_reco_mll_cols], base_name="reco_mll_massWeight", proc=dataset.name)
+        syst_tools.add_massweights_hist(results, df, [axis_mt], ["mT_corr_rec"], base_name="mT_corr_rec_massWeight", proc=dataset.name)
 
         
     else:
