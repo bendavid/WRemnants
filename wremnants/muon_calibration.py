@@ -10,14 +10,20 @@ import uproot
 import numpy as np
 import warnings
 
+logging = common.child_logger(__name__)
+
 ROOT.gInterpreter.Declare('#include "muon_calibration.h"')
 ROOT.gInterpreter.Declare('#include "lowpu_utils.h"')
 
 data_dir = f"{pathlib.Path(__file__).parent}/data/"
 
-def make_muon_calibration_helpers(mc_filename=data_dir+"/calibration/correctionResults_v718_idealgeom_gensim.root", 
-        data_filename=data_dir+"/calibration/correctionResults_v718_recjpsidata.root", 
+def make_muon_calibration_helpers(args,
+        mc_filename=data_dir+"/calibration/correctionResults_v718_idealgeom_gensim.root", 
+        data_filename=data_dir+"/calibration/correctionResults_v721_recjpsidata.root", 
         era = None):
+
+    if args.muonCorrMC in ["trackfit_only", "lbl", "lbl_massfit"]:
+        raise NotImplementedError(f"Muon calibrations for non-ideal geometry are currently not available! (needed for --muonCorrMC {args.muonCorrMC})")
 
     mc_helper = ROOT.wrem.CVHCorrector(mc_filename)
     data_helper = ROOT.wrem.CVHCorrector(data_filename)
@@ -33,44 +39,81 @@ def make_muon_calibration_helpers(mc_filename=data_dir+"/calibration/correctionR
 
     return mc_helper, data_helper, uncertainty_helper
 
-def make_muon_bias_helpers(corr_type, smearing=True):
-    # this helper adds a correction for the bias from nonclosure to the muon pT
-    if (smearing and corr_type !="massfit") or corr_type not in ["massfit", "massfit_lbl"]:
-        print("The bias correction is not available for this configuration, procees without bias correction helper!")
+def make_muon_bias_helpers(args):
+    # apply a bias to MC to correct for the nonclosure with data in the muon momentum scale calibration
+    if args.bias_calibration is None: 
         return None
-    elif smearing:
-        filename = "closureZ_smeared"
-    elif corr_type == "massfit":
-        filename = "closureZ"
-    elif corr_type == "massfit_lbl":
-        filename = "closureZ_LBL"
 
-    h2d = uproot.open(f"wremnants/data/closure/{filename}.root:closure").to_hist()
-    # Drop the uncertainty because the Weight storage type doesn't play nice with ROOT
+    if args.bias_calibration == "parameterized":
+        if args.muonCorrMC == "idealMC_lbltruth":
+            filename = "calibrationAlignmentZ_LBLcorr_afterJ_v721"
+        else:
+            raise NotImplementedError(f"Did not find any parameterized closure file for --muonCorrMC {args.muonCorrMC}!")
 
-    h2d_nounc = hist.Hist(*h2d.axes, data=h2d.values(flow=True))
-    h2d_std = hist.Hist(*h2d.axes, data=h2d.variances(flow=True)**0.5)
-    # Set overflow to closest values
-    h2d_nounc[hist.underflow,:][...] = h2d_nounc[0,:].view(flow=True)
-    h2d_nounc[:,hist.underflow][...] = h2d_nounc[:,0].view(flow=True)
-    h2d_nounc[hist.overflow,:][...] = h2d_nounc[-1,:].view(flow=True)
-    h2d_nounc[:,hist.overflow][...] = h2d_nounc[:,-1].view(flow=True)
+        f = uproot.open(f"{data_dir}/closure/{filename}.root")
 
-    h2d_std[hist.underflow,:][...] = h2d_std[0,:].view(flow=True)
-    h2d_std[:,hist.underflow][...] = h2d_std[:,0].view(flow=True)
-    h2d_std[hist.overflow,:][...] = h2d_std[-1,:].view(flow=True)
-    h2d_std[:,hist.overflow][...] = h2d_std[:,-1].view(flow=True)
+        A, M = [x.to_hist() for x in [f['AZ'], f['MZ']]]
 
-    h2d_cpp = narf.hist_to_pyroot_boost(h2d_nounc, tensor_rank=0)
-    h2d_std_cpp = narf.hist_to_pyroot_boost(h2d_std, tensor_rank=0)
+        # The bias correction follows the same parameterization as the J/Psi correction, but with e=0
+        # We use the J/Psi correction helper and set e=0
+        if (A.axes != M.axes):
+            raise RuntimeError("A, M histograms have different axes!")
+        else:
+            axis_param = hist.axis.Regular(3, 0, 3, underflow = False, overflow = False, name = 'param')
+            axis_cenval = hist.axis.Regular(1, 0, 1, name = 'cenval')
+            hist_comb = hist.Hist(*A.axes, axis_param, axis_cenval, storage = hist.storage.Double())
+            hist_comb.view()[...,0] = np.stack([x.values() for x in [A, A*0, M]], axis = -1)
 
-    helper = ROOT.wrem.BiasCalibrationHelper[type(h2d_cpp).__cpp_name__](ROOT.GetThreadPoolSize(), ROOT.std.move(h2d_cpp), ROOT.std.move(h2d_std_cpp))
+        hist_comb_cpp = narf.hist_to_pyroot_boost(hist_comb, tensor_rank = 2)
+        helper = ROOT.wrem.JpsiCorrectionsRVecHelper[type(hist_comb_cpp).__cpp_name__](
+            ROOT.std.move(hist_comb_cpp)
+        )
+
+    elif args.bias_calibration == "binned":
+        # identify bias correction file name
+        if args.smearing and args.muonCorrMC == "trackfit_only_idealMC":
+            filename = "closureZ_smeared_v721"
+            offset = -1
+        elif args.smearing and args.muonCorrMC == "idealMC_lbltruth":
+            filename = "closureZ_smeared_LBL_v721"
+            offset = -1
+        elif not args.smearing and args.muonCorrMC == "idealMC_massfit":
+            filename = "closureZ_v718"
+            offset = 0
+        elif not args.smearing and args.muonCorrMC == "idealMC_lbltruth_massfit":
+            filename = "closureZ_LBL_v718"
+            offset = 0
+        else:
+            raise NotImplementedError(f"Did not find any closure file for muon momentum scale correction {args.muonCorrMC}"+str(" smeared!" if args.smearing else "!"))
+
+        h2d = uproot.open(f"{data_dir}/closure/{filename}.root:closure").to_hist()
+        # Drop the uncertainty because the Weight storage type doesn't play nice with ROOT
+
+        h2d_nounc = hist.Hist(*h2d.axes, data=h2d.values(flow=True)+offset)
+        h2d_std = hist.Hist(*h2d.axes, data=h2d.variances(flow=True)**0.5)
+        # Set overflow to closest values
+        h2d_nounc[hist.underflow,:][...] = h2d_nounc[0,:].view(flow=True)
+        h2d_nounc[:,hist.underflow][...] = h2d_nounc[:,0].view(flow=True)
+        h2d_nounc[hist.overflow,:][...] = h2d_nounc[-1,:].view(flow=True)
+        h2d_nounc[:,hist.overflow][...] = h2d_nounc[:,-1].view(flow=True)
+
+        h2d_std[hist.underflow,:][...] = h2d_std[0,:].view(flow=True)
+        h2d_std[:,hist.underflow][...] = h2d_std[:,0].view(flow=True)
+        h2d_std[hist.overflow,:][...] = h2d_std[-1,:].view(flow=True)
+        h2d_std[:,hist.overflow][...] = h2d_std[:,-1].view(flow=True)
+
+        h2d_cpp = narf.hist_to_pyroot_boost(h2d_nounc, tensor_rank=0)
+        h2d_std_cpp = narf.hist_to_pyroot_boost(h2d_std, tensor_rank=0)
+
+        helper = ROOT.wrem.BiasCalibrationHelper[type(h2d_cpp).__cpp_name__](ROOT.GetThreadPoolSize(), ROOT.std.move(h2d_cpp), ROOT.std.move(h2d_std_cpp))
+    else:
+        raise NotImplementedError(f"Correction for --bias-calibration {args.bias_calibration} not available")
 
     return helper
 
 def make_muon_smearing_helpers():
     # this helper smears muon pT to match the resolution in data
-    h2d = uproot.open(f"wremnants/data/calibration/smearing.root:smearing").to_hist()
+    h2d = uproot.open(f"{data_dir}/calibration/smearing.root:smearing").to_hist()
     # Drop the uncertainty because the Weight storage type doesn't play nice with ROOT
     h2d_nounc = hist.Hist(*h2d.axes, data=h2d.values(flow=True))
     # Set overflow to closest values
@@ -106,8 +149,7 @@ def get_dummy_uncertainties():
 
     return h
 
-def define_lblcorr_muons(df, cvh_helper, dataset):
-    corr_branch = "cvh" if dataset.is_data else "cvhideal"
+def define_lblcorr_muons(df, cvh_helper, corr_branch="cvh"):
 
     # split the nested vectors
     df = df.Define("Muon_cvhmergedGlobalIdxs", "wrem::splitNestedRVec(Muon_cvhmergedGlobalIdxs_Vals, Muon_cvhmergedGlobalIdxs_Counts)")
@@ -123,30 +165,43 @@ def define_lblcorr_muons(df, cvh_helper, dataset):
     return df
 
 
-def define_corrected_muons(df, cvh_helper, jpsi_helper, corr_type, dataset, smearing_helper=None, bias_helper=None):
+def define_corrected_muons(df, cvh_helper, jpsi_helper, args, dataset, smearing_helper=None, bias_helper=None):
     if not (dataset.is_data or dataset.name in common.vprocs):
         corr_type = "none" 
+    else:
+        corr_type = args.muonCorrData if dataset.is_data else args.muonCorrMC
 
-    muon = "Muon"
+    # use continuous variable helix fits (cvh) with ideal or non ideal geometry 
+    corr_branch = "cvhideal" if "idealMC" in corr_type else "cvh"
+
+    # layer-by-layer corrections (lbl)
     if "lbl" in corr_type:
-        df = define_lblcorr_muons(df, cvh_helper, dataset)
+        df = define_lblcorr_muons(df, cvh_helper, corr_branch)
         muon = "Muon_lbl"
     elif corr_type != "none":
-        fit = "cvhideal" if corr_type == "trackfit_only_mctruth" and not dataset.is_data else "cvh"
-        muon = f"Muon_{fit}"
+        muon = f"Muon_{corr_branch}"
+    else:
+        muon = "Muon"
 
-    muon_pt = muon
-
+    # calibrations from J/Psi massfits
     if "massfit" in corr_type:
         df = df.Define("Muon_jpsiCorrectedPt", jpsi_helper, [muon_var_name(muon, var) for var in ["pt", "eta", "charge"]])
         muon_pt = "Muon_jpsiCorrected"
+    else:
+        muon_pt = muon
 
-    if smearing_helper and not dataset.is_data:
+    # Muon momentum scale resolution
+    if not dataset.is_data and smearing_helper:
         df = df.Define("Muon_smearedPt", smearing_helper, ["rdfslot_", muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta")])
         muon_pt = "Muon_smeared"
 
-    if bias_helper and not dataset.is_data:
-        df = df.Define("Muon_biasedPt", bias_helper, ["rdfslot_", muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta")])
+    # Bias corrections from nonclosure
+    if not dataset.is_data and bias_helper:
+        if args.bias_calibration == "parameterized":
+            df = df.Define("Muon_biasedPt", bias_helper, [muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta"), muon_var_name(muon, "charge")])
+        else:
+            df = df.Define("Muon_biasedPt", bias_helper, ["rdfslot_", muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta")])
+
         muon_pt = "Muon_biased"
 
     for var in ["pt", "eta", "phi", "charge"]:

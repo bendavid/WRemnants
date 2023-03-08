@@ -1,12 +1,9 @@
-export PYTHONPATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd ):$PYTHONPATH"
-export PYTHONPATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/narf:$PYTHONPATH"
+export WREM_BASE=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 
-export WREM_BASE=""
-if [[ "$PWD" == *"/WRemnants"* ]]; then
-    WREM_BASE="$PWD"
-else
-    WREM_BASE="${PWD}/WRemnants"
-fi
+source ${WREM_BASE}/narf/setup.sh
+
+export PYTHONPATH="${WREM_BASE}:$PYTHONPATH"
+
 echo "Created environment variable WREM_BASE=${WREM_BASE}"
 
 # utility variables pointing to specific folders in the filesystem

@@ -29,9 +29,12 @@ templateDir = f"{scriptdir}/Templates/LowPileupW"
 cardTool = CardTool.CardTool(f"{args.outfolder}/LowPileupW_{{chan}}.txt")
 cardTool.setNominalTemplate(f"{templateDir}/main.txt")
 cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/LowPileupWCombineInput.root"))
+cardTool.setProcesses(datagroups.getNames())
 cardTool.setDatagroups(datagroups)
 cardTool.setHistName("mt_reco_pf")
 cardTool.setUnconstrainedProcs([cardTool.getFakeName(), "Wmunu"])
+
+logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
 
 cardTool.addSystematic("PDF", 
     processes=cardTool.filteredProcesses(lambda x: x[0] == "W" or x == "Fake"),
@@ -65,6 +68,6 @@ cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16)
 # This needs to be handled by shifting the norm before subtracting from the fakes
 # cardTool.addSystematic("lumi", outNames=["", "lumiDown", "lumiUp"], group="luminosity")
 # TODO: Allow to be appended to previous group
-cardTool.writeOutput()
+cardTool.writeOutput(args=args)
 
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from wremnants import CardTool,theory_tools,syst_tools
 from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_W
+from utilities import common
 from wremnants import histselections as sel
 import argparse
 import os
@@ -27,6 +28,8 @@ parser.add_argument("--lumiScale", dest="lumiScale", help="Luminosity scale", ty
 parser.add_argument("--met", type=str, help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")
 args = parser.parse_args()
 
+logger = common.setup_logger(__file__, args.verbose, args.color_logger)
+
 if not os.path.isdir(args.outfolder):
     os.mkdir(args.outfolder)
 
@@ -35,7 +38,6 @@ lumisuffix = str(args.lumiScale).replace(".", "p")
 suffix = "_statOnly" if args.statOnly else ""
 
 if args.inputFile == "": args.inputFile = "lowPU_%s_%s.pkl.lz4" % (args.flavor, met)
-
 
 datagroups = datagroupsLowPU_W(args.inputFile, flavor=args.flavor)
 
@@ -59,12 +61,13 @@ QCDscale = "integral"
 toDel = []
 for group in datagroups.groups: 
     if not group in constrainedProcs+unconstrainedProcs+bkgDataProcs: toDel.append(group)
-for group in toDel: del datagroups.groups[group]    
+datagroups.deleteGroup(toDel)    
 
 templateDir = f"{scriptdir}/Templates/LowPileupW"
 cardTool = CardTool.CardTool(f"{args.outfolder}/LowPU_Wmass_{args.flavor}_{{chan}}_{met}_lumi{lumisuffix}{suffix}.txt")
 cardTool.setNominalTemplate(f"{templateDir}/main.txt")
 cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/LowPU_Wmass_{args.flavor}_{met}_lumi{lumisuffix}{suffix}.root"))
+cardTool.setProcesses(datagroups.getNames())
 cardTool.setDatagroups(datagroups)
 cardTool.setHistName(histName) 
 ##cardTool.setChannels([f"{args.flavor}"])
@@ -75,9 +78,9 @@ cardTool.setSpacing(36)
 cardTool.setLumiScale(args.lumiScale)
 ####cardTool.setUnconstrainedProcs(unconstrainedProcs)
 
+logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
 
-
-pdfName = theory_tools.pdfMap["nnpdf31"]["name"]
+pdfName = theory_tools.pdfMapExtended["msht20"]["name"]
 cardTool.addSystematic(pdfName, 
     processes=unconstrainedProcs,
     mirror=True,
@@ -96,9 +99,6 @@ cardTool.addSystematic(f"alphaS002{pdfName}",
     outNames=[pdfName+"AlphaSUp", pdfName+"AlphaSDown"],
     scale=0.75,
 )
-
-
-
 
 scaleSystAxes = ["chargeVgen", "muRfact", "muFfact"]  ##  "ptVgen", "chargeVgen", "helicityWeight_tensor" ## charge = 0?
 scaleLabelsByAxis = ["q", "muR", "muF"]
@@ -133,7 +133,6 @@ cardTool.addSystematic("qcdScaleByHelicity",
         ("muR0muF1", "muRDown"), ("muR1muF0", "muFDown"), ("muR1muF2", "muFUp")],
     baseName="QCDscale_",
     )
-
 
 
 def scale_recoil_hist_to_variations(scale_hist):
@@ -251,4 +250,4 @@ cardTool.addLnNSystematic("CMS_DY", processes=["DY"], size=1.03, group="CMS_DY")
 cardTool.addLnNSystematic("CMS_lumi_lowPU", processes=cardTool.allMCProcesses(), size=1.02, group="CMS_lumi_lowPU")
 
 
-cardTool.writeOutput(statOnly=args.statOnly)
+cardTool.writeOutput(args=args)

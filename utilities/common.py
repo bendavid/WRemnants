@@ -17,6 +17,10 @@ zprocs_lowpu = ["Zmumu", "Zee", "Ztautau"]
 zprocs_recoil = ["Zmumu", "Zee"]
 vprocs_lowpu = wprocs_lowpu+zprocs_lowpu
 
+background_MCprocs = ["Top", "Diboson", "QCD"]
+zprocs_all = zprocs_lowpu+zprocs
+wprocs_all = wprocs_lowpu+wprocs
+
 # unfolding axes for low pu
 axis_recoil_reco_ptZ = hist.axis.Variable([0, 5, 10, 15, 20, 30, 40, 50, 60, 75, 90, 150], name = "recoil_reco", underflow=False, overflow=True)
 axis_recoil_gen_ptZ = hist.axis.Variable([0.0, 10.0, 20.0, 40.0, 60.0, 90.0, 150], name = "recoil_gen", underflow=False, overflow=True)
@@ -56,17 +60,16 @@ def getIsoMtRegionFromID(regionID):
     return {"passIso" : regionID & 1,
             "passMT"  : regionID & 2}
 
-def common_parser():
+def common_parser(for_reco_highPU=False):
     parser = argparse.ArgumentParser()
     parser.add_argument("-j", "--nThreads", type=int, help="number of threads")
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
                         help="Set verbosity level with logging, the larger the more verbose");
-    parser.add_argument("--no-color-logger", action="store_false", dest="color_logger", default=False, 
+    parser.add_argument("--no-color-logger", action="store_false", dest="color_logger", 
                         help="Do not use logging with colors")
     initargs,_ = parser.parse_known_args()
 
     import ROOT
-    ROOT.gInterpreter.ProcessLine(".O3")
     if not initargs.nThreads:
         ROOT.ROOT.EnableImplicitMT()
     elif initargs.nThreads != 1:
@@ -75,13 +78,17 @@ def common_parser():
     import wremnants
     from wremnants import theory_tools
 
-    parser.add_argument("--pdfs", type=str, nargs="*", default=["nnpdf31"], choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for")
+    parser.add_argument("--pdfs", type=str, nargs="*", default=["msht20"], choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for")
     parser.add_argument("--altPdfOnlyCentral", action='store_true', help="Only store central value for alternate PDF sets")
     parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
     parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=[])
+    parser.add_argument("--exclude-proc-groups", dest="excludeProcGroups", type=str, nargs="*", help="Don't run over processes belonging to these groups (only accepts exact group name)", default=["QCD"])
     parser.add_argument("--v8", action='store_true', help="Use NanoAODv8. Default is v9")
     parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
-    parser.add_argument("--theory_corr", nargs="*", choices=["scetlib", "scetlibNP", "scetlibMSHT20", "scetlibHelicity", "dyturbo", "dyturbo1D", "dyturboYOnly", "matrix_radish", "horacenloew"], 
+    parser.add_argument("--theory_corr", nargs="*", 
+        choices=["scetlib", "scetlibNP", "scetlibN4LL", "scetlibMSHT20an3lo", "scetlibHelicity", 
+                 "scetlib_dyturbo", "scetlib_dyturboN4LL", "scetlib_dyturboN3LLp_an3lo", "scetlib_dyturboMSHT20an3lo",
+                 "dyturboN3LLp", "dyturbo", "dyturboYOnly", "matrix_radish", "horacenloew"], 
         help="Apply corrections from indicated generator. First will be nominal correction.", default=[])
     parser.add_argument("--theory_corr_alt_only", action='store_true', help="Save hist for correction hists but don't modify central weight")
     parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")
@@ -97,7 +104,22 @@ def common_parser():
     parser.add_argument("--onlyMainHistograms", action='store_true', help="Only produce some histograms, skipping (most) systematics to run faster when those are not needed")
     parser.add_argument("--met", type=str, choices=["DeepMETReso", "RawPFMET"], help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")                    
     parser.add_argument("-o", "--outfolder", type=str, default="", help="Output folder")
-    
+    parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
+    if for_reco_highPU:
+        # additional arguments specific for histmaker of reconstructed objects at high pileup (mw, mz_wlike, and mz_dilepton)
+        parser.add_argument("--muonCorrMC", type=str, default="idealMC_lbltruth", 
+            choices=["none", "trackfit_only", "trackfit_only_idealMC", "lbl", "idealMC_lbltruth", "idealMC_massfit", "idealMC_lbltruth_massfit"], 
+            help="Type of correction to apply to the muons in simulation")
+        parser.add_argument("--muonCorrData", type=str, default="lbl_massfit", 
+            choices=["none", "trackfit_only", "lbl", "massfit", "lbl_massfit"], 
+            help="Type of correction to apply to the muons in data")
+        parser.add_argument("--muScaleMag", type=float, default=1e-4, help="Magnitude of dummy muon scale uncertainty")
+        parser.add_argument("--muScaleBins", type=int, default=1, help="Number of bins for muon scale uncertainty")
+        parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
+        parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
+        parser.add_argument("--bias-calibration", type=str, default=None, choices=["binned","parameterized"], help="Adjust central value by calibration bias hist for simulation")
+        parser.add_argument("--smearing", action='store_true', help="Smear pT such that resolution matches data") #TODO change to --no-smearing once smearing is final
+
     commonargs,_ = parser.parse_known_args()
 
     if commonargs.trackerMuons:
@@ -122,7 +144,6 @@ def common_parser_combine():
             help="Decorrelation for QCDscale")
     parser.add_argument("--rebinPtV", type=float, nargs='*', help="Rebin axis with gen boson pt by this value (default does nothing)")
     parser.add_argument("--scetlibUnc", default=None, type=str, choices=["scale", "np"], help="Include SCETlib uncertainties")
-    parser.add_argument("--pdf", type=str, default="nnpdf31", choices=theory_tools.pdfMapExtended.keys(), help="PDF to use")
     parser.add_argument("-b", "--fitObs", type=str, default="nominal", help="Observable to fit") # TODO: what does it do?
     parser.add_argument("--qcdProcessName", dest="qcdProcessName" , type=str, default="Fake",   help="Name for QCD process")
     parser.add_argument("--noStatUncFakes", dest="noStatUncFakes" , action="store_true",   help="Set bin error for QCD background templates to 0, to check MC stat uncertainties for signal only")
@@ -131,10 +152,23 @@ def common_parser_combine():
     parser.add_argument("--doStatOnly", action="store_true", default=False, help="Set up fit to get stat-only uncertainty (currently combinetf with -S 0 doesn't work)")
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
                         help="Set verbosity level with logging, the larger the more verbose");
-    parser.add_argument("--no-color-logger", action="store_false", dest="color_logger", default=False, 
+    parser.add_argument("--no-color-logger", action="store_false", dest="color_logger", 
                         help="Do not use logging with colors")
     parser.add_argument("--combineChannels", action='store_true', help="Only use one channel")
     parser.add_argument("--lumiScale", type=float, default=None, help="Rescale equivalent luminosity by this value (e.g. 10 means ten times more data and MC)")
+    parser.add_argument("--exclude-proc-groups", dest="excludeProcGroups", type=str, nargs="*", help="Don't run over processes belonging to these groups (only accepts exact group names)", default=["QCD"])
+    parser.add_argument("--filter_proc_groups", dest="filterProcGroups", type=str, nargs="*", help="Only run over processes belonging to these groups", default=[])
+    return parser
+
+def set_parser_default(parser, argument, newDefault):
+    # change the default argument of the parser, must be called before parse_arguments
+    logger = child_logger(__name__)
+    f = next((x for x in parser._actions if x.dest ==argument), None)
+    if f:
+        logger.info(f" Modifying default of {f.dest} from {f.default} to {newDefault}")
+        f.default = newDefault
+    else:
+        logger.warning(f" Parser argument {argument} not found!")
     return parser
 
 class CustomFormatter(logging.Formatter):

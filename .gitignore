@@ -155,6 +155,5 @@ cython_debug/
 #.idea/
 
 # WRemnants/analysis specific
-*.pkl.lz4
 *.pdf
 *.png

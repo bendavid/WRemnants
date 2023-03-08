@@ -52,7 +52,7 @@ def main(args):
             proc_name = "Zmumu_genBin%d" % (i+1)
             proc_genbin = dict(proc_base)
             proc_genbin['selectOp'] = lambda x, i=i: x[{"recoil_gen" : i}]
-            datagroups.groups[proc_name] = proc_genbin
+            datagroups.addGroup(proc_name, proc_genbin)
             if args.fitType == "differential": unconstrainedProcs.append(proc_name)
     elif args.fitType == "wmass": 
         proc_name = "Zmumu" if args.flavor == "mumu" else "Zee"
@@ -78,20 +78,23 @@ def main(args):
         # fake data, as sum of all  Zmumu procs over recoil_gen
         proc_base = dict(datagroups.groups["Zmumu" if args.flavor == "mumu" else "Zee"])
         proc_base['selectOp'] = lambda x, i=i: x[{"recoil_gen" : s[::hist.sum]}]
-        datagroups.groups["fake_data"] = proc_genbin
         dataProc = "fake_data"
+        datagroups.addGroups(dataProc, proc_genbin)
     
     # hack: remove non-used procs/groups, as there can be more procs/groups defined than defined above
     # need to remove as cardTool takes all procs in the datagroups
     toDel = []
     for group in datagroups.groups: 
         if not group in constrainedProcs+unconstrainedProcs+bkgProcs+[dataProc]: toDel.append(group)
-    for group in toDel: del datagroups.groups[group]    
+    datagroups.deleteGroup(toDel)    
 
+    logger.debug(f"Going to use these groups: {datagroups.getNames()}")
+    logger.debug(f"Datagroup keys: {datagroups.groups.keys()}")
     templateDir = f"{scriptdir}/Templates/LowPileupW"
     cardTool = CardTool.CardTool(f"{outfolder}/lowPU_Z{args.flavor}_{args.met}_{args.fitType}{suffix}.txt")
     cardTool.setNominalTemplate(f"{templateDir}/main.txt")
     cardTool.setOutfile(os.path.abspath(f"{outfolder}/lowPU_Z{args.flavor}_{args.met}_{args.fitType}{suffix}.root"))
+    cardTool.setProcesses(datagroups.getNames())
     cardTool.setDatagroups(datagroups)
     cardTool.setHistName(histName) 
     cardTool.setNominalName(histName)
@@ -106,6 +109,8 @@ def main(args):
     Zmumu_procs = cardTool.filteredProcesses(lambda x: "Zmumu" in x)
     Zmumu_procsIncTau = Zmumu_procs + ["Ztautau"]
 
+    logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
+    
     if args.fitType == "wlike" or args.fitType == "wmass":
 
         cardTool.addSystematic("massWeight", 
@@ -121,35 +126,14 @@ def main(args):
 
     if args.doStatOnly:
         cardTool.addLnNSystematic("dummy", processes=cardTool.allMCProcesses(), size=1.001, group="dummy")
-        cardTool.writeOutput()
+        cardTool.writeOutput(args=args)
         print("Using option --doStatOnly: the card was created with only mass weights and a dummy LnN syst on all processes")
         quit()
 
-    pdfName = theory_tools.pdfMap["nnpdf31"]["name"]
     pdfAction = {x : lambda h: h[{"recoil_gen" : s[::hist.sum]}] for x in Zmumu_procs if "gen" not in x},
-    cardTool.addSystematic(pdfName, 
-        processes=Zmumu_procs,
-        mirror=True,
-        group=pdfName,
-        actionMap=pdfAction,
-        systAxes=["tensor_axis_0"],
-        labelsByAxis=[pdfName.replace("pdf", "pdf{i}")],
-        # Needs to be a tuple, since for multiple axis it would be (ax1, ax2, ax3)...
-        # -1 means all possible values of the mirror axis
-        skipEntries=[(0, -1)],
-    )
-    cardTool.addSystematic(f"alphaS002{pdfName}", 
-        processes=Zmumu_procs,
-        mirror=False,
-        actionMap=pdfAction,
-        group=pdfName,
-        systAxes=["tensor_axis_0"],
-        outNames=[pdfName+"AlphaSUp", pdfName+"AlphaSDown"],
-        scale=0.75,
-    )
-
+    combine_helpers.add_pdf_uncertainty(cardTool, constrainedProcs+unconstrainedProcs, False, action=pdfAction)
     combine_helpers.add_scale_uncertainty(cardTool, args.qcdScale, constrainedProcs+unconstrainedProcs, 
-        to_fakes=False, pdf=args.pdf, use_hel_hist=True, scetlib=args.scetlibUnc)
+        to_fakes=False, use_hel_hist=True, scetlib=args.scetlibUnc)
     
     if not args.xsec:
 
@@ -200,7 +184,7 @@ def main(args):
 
 
 
-    cardTool.writeOutput()
+    cardTool.writeOutput(args=args)
 
 if __name__ == "__main__":
     parser = make_parser()
