@@ -8,22 +8,38 @@ from utilities import common
 
 ROOT.gInterpreter.Declare('#include "muon_validation.h"')
 
-def make_jpsi_crctn_helpers(muonCorr):
-    if "massfit" not in muonCorr:
-        return None, None
+logging = common.child_logger(__name__)
 
-    mc_corrfile = "calibrationJMC_smeared_v718_nominalLBL.root" if "lbl" in muonCorr else "calibrationJMC_smeared_v718_nominal.root"
-    # data_corrfile = "calibrationJDATA_smeared_v718_LBL.root" if "lbl" in muonCorr else "calibrationJDATA_smeared_v718.root"
-    data_corrfile = "calibrationJDATA_smeared_v718_LBL.root" if "lbl" in muonCorr else "calibrationJDATA_ideal.root"
+def make_jpsi_crctn_helpers(args, make_uncertainty_helper=False):
 
-    mc_helper = make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}")
-    data_helper = make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}")
+    if args.muonCorrMC == "idealMC_massfit":
+        mc_corrfile = "calibrationJMC_smeared_v718_nominal.root"
+    elif args.muonCorrMC == "idealMC_lbltruth_massfit":
+        mc_corrfile = "calibrationJMC_smeared_v718_nominalLBL.root"
+    else:
+        mc_corrfile = None
+
+    if args.muonCorrData == "massfit":
+        data_corrfile = "calibrationJDATA_ideal.root"
+    elif args.muonCorrData == "lbl_massfit":
+        data_corrfile = "calibrationJDATA_smeared_rewtgr_3dmap_LBL.root"            
+    else:
+        data_corrfile = None
+
+    mc_helper = make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}") if mc_corrfile else None
+    data_helper = make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}") if data_corrfile else None
 
     # FIXME fix uncertainty helpers
-    #mc_unc_helper = wremnants.make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/calibrationJMC_smeared_v718_nominal.root")
-    #data_unc_helper = wremnants.make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/calibrationJDATA_smeared_v718.root")
+    if make_uncertainty_helper:
+        # FIXME new files don't work for data in uncertainty maker
+        data_corrfile = "calibrationJDATA_smeared_v718_LBL.root" if "lbl" in args.muonCorrData else "calibrationJDATA_smeared_v718.root"
 
-    return mc_helper, data_helper
+        mc_unc_helper = make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}") if mc_corrfile else None
+        data_unc_helper = make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}") if data_corrfile else None
+
+        return mc_helper, data_helper, mc_unc_helper, data_unc_helper
+    else:
+        return mc_helper, data_helper
 
 def make_jpsi_crctn_helper(filepath):
     f = uproot.open(filepath)

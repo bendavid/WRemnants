@@ -24,7 +24,11 @@ met = args.met # mumu, ee
 corr_helpers = theory_corrections.load_corr_helpers(common.wprocs_lowpu, args.theory_corr)
 
 filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
-datasets = wremnants.datasetsLowPU.getDatasets(maxFiles=args.maxFiles, filt=filt if args.filterProcs else None, flavor=flavor)
+excludeGroup = args.excludeProcGroups if args.excludeProcGroups else None
+datasets = wremnants.datasetsLowPU.getDatasets(maxFiles=args.maxFiles,
+                                               filt=filt if args.filterProcs else None,
+                                               excludeGroup=excludeGroup,
+                                               flavor=flavor)
 
 logger = common.setup_logger(__file__, args.verbose, args.color_logger)
 
@@ -502,5 +506,5 @@ def build_graph_cutFlow(df, dataset):
 
 
 resultdict = narf.build_and_run(datasets, build_graph)
-fname = "lowPU_%s.pkl.lz4" % flavor
+fname = "lowPU_%s.hdf5" % flavor
 output_tools.write_analysis_output(resultdict, fname, args)

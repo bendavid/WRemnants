@@ -16,7 +16,7 @@ scriptdir = f"{pathlib.Path(__file__).parent}"
 def make_parser(parser=None):
     if not parser:
         parser = common.common_parser_combine()
-    parser.add_argument("--fitvar", help="Variable to fit", default="eta_pt", choices=sel.hist_map.keys())
+    parser.add_argument("--fitvar", help="Variable to fit", default="eta-pt")
     parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow). Equivalent to --excludeNuisances '.*effSystTnP|.*effStatTnP' ")
     parser.add_argument("--ewUnc", action='store_true', help="Include EW uncertainty")
     parser.add_argument("-p", "--pseudoData", type=str, help="Hist to use as pseudodata")
@@ -24,36 +24,54 @@ def make_parser(parser=None):
     parser.add_argument("--pseudodata-file", type=str, help="Input file for pseudodata (if it should be read from a different file", default=None)
     parser.add_argument("-x",  "--excludeNuisances", type=str, default="", help="Regular expression to exclude some systematics from the datacard")
     parser.add_argument("-k",  "--keepNuisances", type=str, default="", help="Regular expression to keep some systematics, overriding --excludeNuisances. Can be used to keep only some systs while excluding all the others with '.*'")
-    parser.add_argument("--skipOtherChargeSyst", dest="skipOtherChargeSyst" , action="store_true",   help="Skip saving histograms and writing nuisance in datacard for systs defined for a given charge but applied on the channel with the other charge")
+    #parser.add_argument("--skipOtherChargeSyst", dest="skipOtherChargeSyst" , action="store_true",   help="Skip saving histograms and writing nuisance in datacard for systs defined for a given charge but applied on the channel with the other charge")
+    parser.add_argument("--keepOtherChargeSyst", dest="skipOtherChargeSyst" , action="store_false",   help="Keep histograms and nuisance in datacard for systs defined for a given charge but applied on the channel with the other charge")
     parser.add_argument("--scaleMuonCorr", type=float, default=1.0, help="Scale up/down dummy muon scale uncertainty by this factor")
     parser.add_argument("--muonScaleVariation", choices=["smearing_weights", "massweights", "manual_pt_shift"], default="massweights", help="the method with whicht the distributions for the muon scale variations is derived")
     parser.add_argument("--noHist", action='store_true', help="Skip the making of 2D histograms (root file is left untouched if existing)")
     parser.add_argument("--effStatLumiScale", type=float, default=None, help="Rescale equivalent luminosity for efficiency stat uncertainty by this value (e.g. 10 means ten times more data from tag and probe)")
     parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers and nuisances)")
     parser.add_argument("--xlim", type=float, nargs=2, default=None, help="Restrict x axis to this range")
+    parser.add_argument("--constrain-mass", action='store_true', help="Constrain mass parameter in the fit (e.g. for ptll fit)")
+
     return parser
 
 def main(args):
+
     logger = common.setup_logger(__file__, args.verbose, args.color_logger)
 
-    datagroups = datagroups2016(args.inputFile)
+    # NOTE: args.filterProcGroups and args.excludeProcGroups should in principle not be used together
+    #       (because filtering is equivalent to exclude something), however the exclusion is also meant to skip
+    #       processes which are defined in the original process dictionary but are not supposed to be (always) run on
+    logger.debug(f"Filtering these groups of processes: {args.filterProcGroups}")
+    logger.debug(f"Excluding these groups of processes: {args.excludeProcGroups}")
+    filterGroup = args.filterProcGroups if args.filterProcGroups else None
+    excludeGroup = None
+    if args.excludeProcGroups:
+        ## can pass a filter that datagroups2016 can digest, but better to pass list of names
+        # excludeGroup = lambda x,excl=args.excludeProcGroups: all([f not in x.group for f in excl if x.group is not None])
+        ## alternatively can just pass the array with names
+        excludeGroup = args.excludeProcGroups
+
+    datagroups = datagroups2016(args.inputFile, excludeProcGroup=excludeGroup, filterProcGroup=filterGroup)
+
     if args.xlim:
-        if args.fitvar == "eta_pt":
+        if len(args.fitvar.split("-")) > 1:
             raise ValueError("Restricting the x axis not supported for 2D hist")
         s = hist.tag.Slicer()
         datagroups.setGlobalAction(lambda h: h[{args.fitvar : s[complex(0, args.xlim[0]):complex(0, args.xlim[1])]}])
 
-    dilepton = datagroups.dilepton
+    wmass = datagroups.wmass
     wlike = datagroups.wlike
 
-    if wlike:
-        name = "ZMassWLike"
-    elif dilepton:
-        name = "ZMassDilepton"
-    else:
+    if wmass:
         name = "WMass"
+    elif wlike:
+        name = "ZMassWLike"
+    else:
+        name = "ZMassDilepton"
 
-    tag = name
+    tag = name+"_"+args.fitvar.replace("-","_")
     if args.doStatOnly:
         tag += "_statOnly"
 
@@ -65,17 +83,23 @@ def main(args):
         raise ValueError("Option --noHist would override --noStatUncFakes. Please select only one of them")
 
     templateDir = f"{scriptdir}/Templates/WMass"
+    # Start to create the CardTool object, customizing everything
     cardTool = CardTool.CardTool(f"{outfolder}/{name}_{{chan}}.txt")
+    cardTool.setProcesses(datagroups.getNames())
+    # setting excluded processes for internal consistency, but in principle it should not be needed
+    # it will be used to call datagroups.loadHistsForDatagroups with the proper exclude argument, even if the
+    # list of processes to read (set with CardTool.setProcesses) should be totally sufficient in that case
+    cardTool.setExcludedProcs(excludeGroup)
+    ###
+    cardTool.setDatagroups(datagroups)
+    logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
     cardTool.setNominalTemplate(f"{templateDir}/main.txt")
-    cardTool.setNominalName(sel.hist_map[args.fitvar])
     if args.combineChannels:
         cardTool.setChannels(["combined"])
-    if args.fitvar not in ["eta_pt", "ptll_mll"]:
-        cardTool.setProjectionAxes([args.fitvar])
+    cardTool.setProjectionAxes(args.fitvar.split("-"))
     if args.noHist:
         cardTool.skipHistograms()
     cardTool.setOutfile(os.path.abspath(f"{outfolder}/{name}CombineInput.root"))
-    cardTool.setDatagroups(datagroups)
     cardTool.setFakeName(args.qcdProcessName)
     cardTool.setSpacing(52)
     if args.noStatUncFakes:
@@ -90,86 +114,68 @@ def main(args):
 
     if args.lumiScale:
         cardTool.setLumiScale(args.lumiScale)
-        
-    passSystToFakes = not (dilepton or args.skipSignalSystOnFakes)
-        
-    single_v_samples = cardTool.filteredProcesses(lambda x: x[0] in ["W", "Z"])
-    single_v_nonsig_samples = cardTool.filteredProcesses(lambda x: x[0] == ("W" if dilepton else "Z"))
-    single_vmu_samples = list(filter(lambda x: "mu" in x, single_v_samples))
-    signal_samples = list(filter(lambda x: x[0] == ("Z" if dilepton else "W"), single_vmu_samples))
-    signal_samples_inctau = list(filter(lambda x: x[0] == ("Z" if dilepton else "W"), single_v_samples))
 
-    logger.info(f"All MC processes {cardTool.allMCProcesses()}")
+    print(f"cardTool.allMCProcesses(): {cardTool.allMCProcesses()}")
+        
+    passSystToFakes = wmass and not args.skipSignalSystOnFakes and args.qcdProcessName not in excludeGroup
+
+    single_v_samples = cardTool.filteredProcesses(lambda x: x[0] in ["W", "Z"])
+    single_v_nonsig_samples = cardTool.filteredProcesses(lambda x: x[0] == ("Z" if wmass else "W"))
+    single_vmu_samples = list(filter(lambda x: "mu" in x, single_v_samples))
+    signal_samples = list(filter(lambda x: x[0] == ("W" if wmass else "Z"), single_vmu_samples))
+    signal_samples_inctau = list(filter(lambda x: x[0] == ("W" if wmass else "Z"), single_v_samples))
+
+    allMCprocesses_noQCDMC = [x for x in cardTool.allMCProcesses() if x != "QCD"]
+    
+    logger.info(f"All MC processes {allMCprocesses_noQCDMC}")
     logger.info(f"Single V samples: {single_v_samples}")
     logger.info(f"Single V no signal samples: {single_v_nonsig_samples}")
     logger.info(f"Signal samples: {signal_samples}")
 
-    pdfInfo = theory_tools.pdf_info_map("ZmumuPostVFP", args.pdf)
-    pdfName = pdfInfo["name"]
-
-    # keep mass weights here as first systematic, in case one wants to run stat-uncertainty only with --doStatOnly
-    cardTool.addSystematic("massWeight", 
-        processes=signal_samples_inctau,
-        outNames=theory_tools.massWeightNames(["massShift100MeV"], wlike=dilepton),
-        group="massShift",
-        groupFilter=lambda x: x == "massShift100MeV",
-        mirror=False,
-        #TODO: Name this
-        noConstraint=True,
-        systAxes=["tensor_axis_0"],
-        passToFakes=passSystToFakes,
-    )
+    if not args.constrain_mass:
+        # keep mass weights here as first systematic, in case one wants to run stat-uncertainty only with --doStatOnly
+        cardTool.addSystematic("massWeight", 
+            processes=signal_samples_inctau,
+            group="massShift",
+            groupFilter=lambda x: x == "massShift100MeV",
+            skipEntries=[(f"^massShift{i}MeV.*",) for i in range(0, 100, 10)]+[("^massShift2p1MeV.*",)],
+            mirror=False,
+            #TODO: Name this
+            noConstraint=True,
+            systAxes=["massShift"],
+            passToFakes=passSystToFakes,
+        )
 
     if args.doStatOnly:
         # print a card with only mass weights and a dummy syst
-        cardTool.addLnNSystematic("dummy", processes=["Other"] if dilepton else ["Top", "Diboson"], size=1.001, group="dummy")
-        cardTool.writeOutput()
+        cardTool.addLnNSystematic("dummy", processes=["Top", "Diboson"] if wmass else ["Other"], size=1.001, group="dummy")
+        cardTool.writeOutput(args=args)
         logger.info("Using option --doStatOnly: the card was created with only mass weights and a dummy LnN syst on all processes")
         quit()
         
-    if dilepton:
-        # TOCHECK: no fakes here, most likely
-        cardTool.addLnNSystematic("luminosity", processes=cardTool.allMCProcesses(), size=1.012, group="luminosity")
-    else:
+    if args.constrain_mass:
+        # add an uncertainty on the mass, e.g. for ptll fits
+        cardTool.addSystematic("massWeight", 
+            processes=signal_samples_inctau,
+            group="massShift",
+            groupFilter=lambda x: x == "massShift2p1MeV",
+            skipEntries=[(f"^massShift{i}MeV.*",) for i in range(0, 110, 10)],
+            mirror=False,
+            systAxes=["massShift"],
+            passToFakes=passSystToFakes,
+        )
+
+    if wmass:
         cardTool.addSystematic("luminosity",
-                            processes=cardTool.allMCProcesses(),
+                            processes=allMCprocesses_noQCDMC,
                             outNames=["lumiDown", "lumiUp"],
                             group="luminosity",
                             systAxes=["downUpVar"],
                             labelsByAxis=["downUpVar"],
                             passToFakes=passSystToFakes)
-    if pdfInfo["combine"] == "symHessian":
-        cardTool.addSystematic(pdfName, 
-            processes=single_v_samples,
-            mirror=True,
-            group=pdfName,
-            systAxes=["tensor_axis_0"],
-            labelsByAxis=[pdfName.replace("pdf", "pdf{i}")],
-            # Needs to be a tuple, since for multiple axis it would be (ax1, ax2, ax3)...
-            # -1 means all possible values of the mirror axis
-            skipEntries=[(0, -1)],
-            passToFakes=passSystToFakes,
-        )
     else:
-        cardTool.addSystematic(pdfName, 
-            processes=single_v_samples,
-            mirror=False,
-            group=pdfName,
-            systAxes=["tensor_axis_0"],
-            outNames=theory_tools.pdfNamesAsymHessian(pdfInfo["entries"]),
-            passToFakes=passSystToFakes,
-            scale=pdfInfo["scale"] if "scale" in pdfInfo else 1,
-        )
-
-    cardTool.addSystematic(f"alphaS002{pdfName}", 
-        processes=single_v_samples,
-        mirror=False,
-        group=pdfName,
-        systAxes=["tensor_axis_0"],
-        outNames=[pdfName+"AlphaSUp", pdfName+"AlphaSDown"],
-        scale=0.75, # TODO: this depends on the set, should be provided in theory_tools.py
-        passToFakes=passSystToFakes,
-    )
+        # TOCHECK: no fakes here, most likely
+        cardTool.addLnNSystematic("luminosity", processes=allMCprocesses_noQCDMC, size=1.012, group="luminosity")
 
     if args.ewUnc:
         cardTool.addSystematic(f"horacenloewCorr_unc", 
@@ -226,18 +232,19 @@ def main(args):
                 systAxes=axes,
                 labelsByAxis=axlabels,
                 baseName=name+"_",
-                processes=cardTool.allMCProcesses(),
+                processes=allMCprocesses_noQCDMC,
                 passToFakes=passSystToFakes,
                 systNameReplace=nameReplace,
                 scale=scale,
                 splitGroup=splitGroupDict
             )
 
-    to_fakes = not (dilepton or args.noQCDscaleFakes)
-    combine_helpers.add_scale_uncertainty(cardTool, args.qcdScale, signal_samples_inctau, to_fakes, pdf=args.pdf, scetlib=args.scetlibUnc)
+    to_fakes = wmass and not args.noQCDscaleFakes
+    combine_helpers.add_pdf_uncertainty(cardTool, single_v_samples, passSystToFakes)
+    combine_helpers.add_scale_uncertainty(cardTool, args.qcdScale, signal_samples_inctau, to_fakes, scetlib=args.scetlibUnc)
     # for Z background in W mass case (W background for Wlike is essentially 0, useless to apply QCD scales there)
-    if not dilepton:
-        combine_helpers.add_scale_uncertainty(cardTool, "integrated", single_v_nonsig_samples, False, pdf=args.pdf, name_append="Z", scetlib=args.scetlibUnc)
+    if wmass:
+        combine_helpers.add_scale_uncertainty(cardTool, "integrated", single_v_nonsig_samples, False, name_append="Z", scetlib=args.scetlibUnc)
 
     msv_config_dict = {
         "smearing_weights":{
@@ -268,7 +275,7 @@ def main(args):
         scale = args.scaleMuonCorr
     )
     cardTool.addSystematic("muonL1PrefireSyst", 
-        processes=cardTool.allMCProcesses(),
+        processes=allMCprocesses_noQCDMC,
         group="muonPrefire",
         baseName="CMS_prefire_syst_m",
         systAxes=["downUpVar"],
@@ -276,7 +283,7 @@ def main(args):
         passToFakes=passSystToFakes,
     )
     cardTool.addSystematic("muonL1PrefireStat", 
-        processes=cardTool.allMCProcesses(),
+        processes=allMCprocesses_noQCDMC,
         group="muonPrefire",
         baseName="CMS_prefire_stat_m_",
         systAxes=["downUpVar", "etaPhiRegion"],
@@ -284,31 +291,34 @@ def main(args):
         passToFakes=passSystToFakes,
     )
     cardTool.addSystematic("ecalL1Prefire", 
-        processes=cardTool.allMCProcesses(),
+        processes=allMCprocesses_noQCDMC,
         group="ecalPrefire",
         baseName="CMS_prefire_ecal",
         systAxes=["downUpVar"],
         labelsByAxis=["downUpVar"],
         passToFakes=passSystToFakes,
     )
-    if not dilepton:
+    if wmass:
         cardTool.addLnNSystematic("CMS_Fakes", processes=[args.qcdProcessName], size=1.05, group="MultijetBkg")
         cardTool.addLnNSystematic("CMS_Top", processes=["Top"], size=1.06)
         cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16)
 
-        # FIXME: it doesn't really make sense to mirror this one since the systematic goes only in one direction
-        cardTool.addSystematic(f"qcdJetPt45", 
+        ## FIXME 1: with the jet cut removed this syst is probably no longer needed, but one could still consider
+        ## it to cover for how much the fake estimate changes when modifying the composition of the QCD region
+        ## FIXME 2: it doesn't really make sense to mirror this one since the systematic goes only in one direction
+        cardTool.addSystematic(f"qcdJetPt30", 
                                processes=["Fake"],
                                mirror=True,
                                group="MultijetBkg",
                                systAxes=[],
-                               outNames=["qcdJetPt45Down", "qcdJetPt45Up"],
+                               outNames=["qcdJetPt30Down", "qcdJetPt30Up"],
                                passToFakes=passSystToFakes,
         )
+
     else:
         cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
 
-    cardTool.writeOutput()
+    cardTool.writeOutput(args=args)
     logger.info(f"Output stored in {outfolder}")
     
 if __name__ == "__main__":

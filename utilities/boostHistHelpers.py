@@ -65,7 +65,7 @@ def relVariance(hvals, hvars, cutoff=1e-3, fillOnes=False):
         out = np.ones(hvars.shape)
     else:
         out = np.copy(hvars)
-    np.divide(hvars, hvals*hvals, out=out, where=nonzero),
+    np.divide(hvars, hvals*hvals, out=out, where=nonzero)
     return out
 
 def relVariances(h1vals, h2vals, h1vars, h2vars):
@@ -158,9 +158,13 @@ def normalize(h, scale=1e6, createNew=True):
 
 def makeAbsHist(h, axis_name):
     ax = h.axes[axis_name]
+    axidx = list(h.axes).index(ax)
+    if ax.size == 1 and -ax.edges[0] == ax.edges[-1]:
+        abs_ax = hist.axis.Regular(1, 0, ax.edges[-1], underflow=False, name=f"abs{axis_name}")
+        return hist.Hist(*h.axes[:axidx], abs_ax, *h.axes[axidx+1:], storage=h._storage_type(), data=h.view())
+
     if 0 not in ax.edges:
         raise ValueError("Can't mirror around 0 if it isn't a bin boundary")
-    axidx = list(h.axes).index(ax)
     abs_ax = hist.axis.Variable(ax.edges[ax.index(0.):], underflow=False, name=f"abs{axis_name}")
     hnew = hist.Hist(*h.axes[:axidx], abs_ax, *h.axes[axidx+1:], storage=h._storage_type())
     
@@ -187,24 +191,24 @@ def rebinHist(h, axis_name, edges):
     axes[ax_idx] = new_ax
     
     hnew = hist.Hist(*axes, name=h.name, storage=h._storage_type())
-    # Take is used because reduceat sums i:len(array) for the last entry, in the case
-    # where the final bin isn't the same between the initial and rebinned histogram, you
-    # want to drop this value. Add tolerance of 1/2 min bin width to avoid numeric issues
 
+    # Offset from bin edge to avoid numeric issues
     offset = 0.5*np.min(ax.edges[1:]-ax.edges[:-1])
-
     edges_eval = edges+offset
     edge_idx = ax.index(edges_eval)
-
-    if len(np.unique(edge_idx)) != len(edge_idx):
-        raise ValueError("Did not find a unique binning. Probably this is a numeric issue with bin boundaries")
+    # Avoid going outside the range, reduceat will add the last index anyway
+    if edge_idx[-1] == ax.size+ax.traits.overflow:
+        edge_idx = edge_idx[:-1]
 
     if underflow:
-        edge_idx = np.insert(edge_idx, 0, 0)
         # Only if the original axis had an underflow should you offset
         if ax.traits.underflow:
             edge_idx += 1
+        edge_idx = np.insert(edge_idx, 0, 0)
 
+    # Take is used because reduceat sums i:len(array) for the last entry, in the case
+    # where the final bin isn't the same between the initial and rebinned histogram, you
+    # want to drop this value. Add tolerance of 1/2 min bin width to avoid numeric issues
     hnew.values(flow=flow)[...] = np.add.reduceat(h.values(flow=flow), edge_idx, 
             axis=ax_idx).take(indices=range(new_ax.size+underflow+overflow), axis=ax_idx)
     if hnew._storage_type() == hist.storage.Weight():
@@ -231,9 +235,10 @@ def mergeAxes(ax1, ax2):
         raise ValueError("Didn't find any common edges in two axes, can't merge")
 
     merge_idx = list(ax2.edges).index(ax1_edges[-1])+1
-    if merge_idx < 1 or merge_idx > ax2.size:
-        raise ValueError("Can't merge axes unless there is a common point of intersection!"
-            f"The edges were {ax1.edges}, and {ax2.edges}")
+    if merge_idx < 1 or merge_idx > ax2.size+1:
+        raise ValueError("Can't merge axes unless there is a common point of intersection! "
+            f"Merge index was {merge_idx} "
+            f"The edges were {ax1.edges} (size={ax1.size}), and {ax2.edges} (size={ax2.size})")
 
     new_edges = np.concatenate((ax1_edges, ax2.edges[merge_idx:]))
     return hist.axis.Variable(new_edges, name=ax1.name)
@@ -297,17 +302,32 @@ def projectNoFlow(h, proj_ax, exclude=[]):
     hnoflow = h[{ax : s[0:hist.overflow:hist.sum] for ax in h.axes.name if ax not in exclude+list(proj_ax)}]
     return hnoflow.project(*proj_ax) 
 
+def syst_min_and_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=[]):
+    hup = syst_min_or_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=no_flow, do_min=False)
+    hdown = syst_min_or_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=no_flow, do_min=True)
+    hnew = hist.Hist(*hup.axes, common.down_up_axis, storage=hup._storage_type())
+    hnew[...,0] = hdown.view(flow=True)
+    hnew[...,1] = hup.view(flow=True)
+    return hnew
+
 def syst_min_or_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=[], do_min=True):
     if syst_ax not in h.axes.name:
         logging.warning(f"Did not find syst axis {syst_ax} in histogram. Returning nominal!")
-        return h
-    if max(indices) > h.axes[syst_ax].size:
-        logging.warning(f"Range of indices exceeds length of syst axis '{syst_ax}.' Returning nominal!")
         return h
 
     systax_idx = h.axes.name.index(syst_ax)
     if systax_idx != h.ndim-1:
         raise ValueError("Required to have the syst axis at index -1")
+
+    if type(indices[0]) == str:
+        if all(x.isdigit() for x in indices):
+            indices == [int(x) for x in indices]
+        else:
+            indices = h.axes[syst_ax].index(indices)
+
+    if max(indices) > h.axes[syst_ax].size:
+        logging.warning(f"Range of indices exceeds length of syst axis '{syst_ax}.' Returning nominal!")
+        return h
 
     if syst_ax in proj_ax:
         proj_ax.pop(proj_ax.index(syst_ax))
