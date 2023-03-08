@@ -31,7 +31,7 @@ class Recoil:
         self.args = args
         self.smearWeights = True
         self.storeHists = args.recoil_hists
-        setattr(ROOT.wrem, "recoil_verbose", args.recoil_verbose)
+        setattr(ROOT.wrem, "recoil_verbose", True if args.verbose > 3 else False)
 
         if type_ == "highPU":
             self.highPU = True
