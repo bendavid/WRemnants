@@ -16,6 +16,13 @@ def read_and_scale_pkllz4(fname, proc, histname, calculate_lumi=False, scale=1):
         
     return load_and_scale(results, proc, histname, calculate_lumi, scale)
 
+def read_hist_names(fname, proc):
+    h5file = h5py.File(fname, "r")
+    results = narf.ioutils.pickle_load_h5py(h5file["results"])
+    if proc not in results:
+        raise ValueError(f"Invalid process {proc}! No output found in file {fname}")
+    return results[proc]["output"].keys()
+
 def read_and_scale(fname, proc, histname, calculate_lumi=False, scale=1):
     h5file = h5py.File(fname, "r")
     results = narf.ioutils.pickle_load_h5py(h5file["results"])
@@ -231,7 +238,11 @@ def readImpacts(rtfile, group, sort=True, add_total=True, stat=0.0):
     return impacts,labels
 
 def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo, axes=None, charge=None, fix_nons_bin0=True):
+    print("Resum", scetlib_resum)
+    print("FO sing", scetlib_fo_sing)
+    print("FO full", dyturbo_fo)
     hsing = read_scetlib_hist(scetlib_resum, charge=charge)
+    print(hsing.axes.name)
     hfo_sing = read_scetlib_hist(scetlib_fo_sing, charge=charge)
     if axes:
         newaxes = [*axes, "vars"]
@@ -240,10 +251,19 @@ def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo
         hfo_sing = hfo_sing.project(*newaxes)
         hsing = hsing.project(*newaxes)
     hfo = read_dyturbo_hist([dyturbo_fo], axes=axes if axes else hsing.axes.name[:-1], charge=charge)
+    print(hfo.axes.name)
+    print(hsing.axes.name)
     for ax in ["Y", "Q"]:
         if ax in set(hfo.axes.name).intersection(set(hfo_sing.axes.name)).intersection(set(hsing.axes.name)):
             hfo, hfo_sing, hsing = hh.rebinHistsToCommon([hfo, hfo_sing, hsing], ax)
     hnonsing = hh.addHists(-1*hfo_sing, hfo)
+    print(hnonsing.shape)
     if fix_nons_bin0:
-        hnonsing[...,0,:] = np.zeros((*hnonsing[{"qT" : 0}].shape, 2))
+        # The 2 is for the WeightedSum
+        res = np.zeros((*hnonsing[{"qT" : 0}].shape, 2))
+        print(res.shape)
+        if charge:
+            hnonsing[...,0,:,:] = res
+        else:
+            hnonsing[...,0,:] = res
     return hh.addHists(hsing, hnonsing[{"vars" : "central"}])
