@@ -1,5 +1,4 @@
 import ROOT
-ROOT.ROOT.EnableThreadSafety()
 import narf
 import pathlib
 
