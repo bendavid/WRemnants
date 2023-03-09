@@ -34,6 +34,8 @@ def make_parser(parser=None):
     parser.add_argument("--effStatLumiScale", type=float, default=None, help="Rescale equivalent luminosity for efficiency stat uncertainty by this value (e.g. 10 means ten times more data from tag and probe)")
     parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers and nuisances)")
     parser.add_argument("--xlim", type=float, nargs=2, default=None, help="Restrict x axis to this range")
+    parser.add_argument("--constrain-mass", action='store_true', help="Constrain mass parameter in the fit (e.g. for ptll fit)")
+
     return parser
 
 def main(args):
@@ -132,17 +134,18 @@ def main(args):
     logger.info(f"Single V no signal samples: {single_v_nonsig_samples}")
     logger.info(f"Signal samples: {signal_samples}")
 
-    # keep mass weights here as first systematic, in case one wants to run stat-uncertainty only with --doStatOnly
-    cardTool.addSystematic("massWeight", 
-        processes=signal_samples_inctau,
-        group="massShift",
-        groupFilter=lambda x: x == "massShift100MeV",
-        skipEntries=[(f"^massShift{i}MeV.*",) for i in range(0, 100, 10)]+[("^massShift2p4MeV.8",)],
-        mirror=False,
-        #TODO: Name this
-        noConstraint=True,
-        systAxes=["massShift"],
-        passToFakes=False, # probably better never to apply the mass syst to fakes
+    if not args.constrain_mass:
+        # keep mass weights here as first systematic, in case one wants to run stat-uncertainty only with --doStatOnly
+        cardTool.addSystematic("massWeight", 
+                               processes=signal_samples_inctau,
+                               group="massShift",
+                               groupFilter=lambda x: x == "massShift100MeV",
+                               skipEntries=[(f"^massShift{i}MeV.*",) for i in range(0, 100, 10)]+[("^massShift2p1MeV.*",)],
+                               mirror=False,
+                               #TODO: Name this
+                               noConstraint=True,
+                               systAxes=["massShift"],
+                               passToFakes=False, # probably better never to apply the mass syst to fakes
     )
 
     if args.doStatOnly:
@@ -151,7 +154,19 @@ def main(args):
         cardTool.writeOutput(args=args)
         logger.info("Using option --doStatOnly: the card was created with only mass weights and a dummy LnN syst on all processes")
         quit()
-        
+
+    if args.constrain_mass:
+        # add an uncertainty on the mass, e.g. for ptll fits
+        cardTool.addSystematic("massWeight", 
+            processes=signal_samples_inctau,
+            group="massShift",
+            groupFilter=lambda x: x == "massShift2p1MeV",
+            skipEntries=[(f"^massShift{i}MeV.*",) for i in range(0, 110, 10)],
+            mirror=False,
+            systAxes=["massShift"],
+            passToFakes=passSystToFakes,
+        )
+
     if wmass:
         cardTool.addSystematic("luminosity",
                                processes=["Fake"], #allMCprocesses_noQCDMC,
