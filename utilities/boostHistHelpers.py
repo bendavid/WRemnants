@@ -5,6 +5,9 @@ from functools import reduce
 import logging
 import collections
 from . import common
+from scripts.analysisTools.plotUtils.utility import safeOpenFile, safeGetObject
+import narf
+import ROOT
 
 def valsAndVariances(h1, h2, allowBroadcast=True, transpose=True):
     if not allowBroadcast and len(h1.axes) != len(h2.axes):
@@ -384,3 +387,36 @@ def set_flow(h, val="nearest"):
             nearest_vals = np.take(h.values(flow=True), -2, i) 
             np.take(h.values(flow=True), -1, i)[...] = nearest_vals if val == "nearest" else np.full_like(nearest_vals, val)
     return h
+
+def applyCorrection(h, scale=1.0, offsetCorr=0.0, corrFile=None, corrHist=None, createNew=False):
+    # originally intended to apply a correction differential in eta-pt
+    # corrHist is a TH3 with eta-pt-charge
+    # scale is just to apply an additional constant scaling (or only that if ever needed) before the correction from corrHist
+    # offsetCorr is for utility, to add to the correction from the file, e.g. if the histogram is a scaling of x (e.g. 5%) one has to multiply the input histogram h by 1+x, so offset should be 1
+    boost_corr = None
+    if corrFile and corrHist:
+        ## TDirectory.TContext() should restore the ROOT current directory to whatever it was before a new ROOT file was opened
+        ## but it doesn't work at the moment, apparently the class miss the __enter__ member and the usage with "with" fails
+        #with ROOT.TDirectory.TContext():
+        f = safeOpenFile(corrFile, mode="READ")
+        corr = safeGetObject(f, corrHist, detach=True)
+        if offsetCorr:
+            offsetHist = corr.Clone("offsetHist")
+            ROOT.wrem.initializeRootHistogram(offsetHist, offsetCorr)
+            corr.Add(offsetHist)
+        f.Close()
+        boost_corr = narf.root_to_hist(corr)
+    # note: in fact multiplyHists already creates a new histogram
+    if createNew:
+        hnew = hist.Hist(*h.axes, storage=hist.storage.Weight())
+        hnew.values(flow=True)[...]    = scale * h.values(flow=True)
+        hnew.variances(flow=True)[...] = scale * scale * h.variances(flow=True)
+        if boost_corr:
+            hnew = multiplyHists(hnew, boost_corr)
+        return hnew
+    else:
+        h.values(flow=True)[...]    *= scale
+        h.variances(flow=True)[...] *= (scale * scale)
+        if boost_corr:
+            h = multiplyHists(h, boost_corr)
+        return h

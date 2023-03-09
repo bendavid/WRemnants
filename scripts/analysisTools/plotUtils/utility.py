@@ -496,6 +496,7 @@ def multiplyByHistoWithLessPtBins(h, hless, neglectUncSecond=False):
             h.SetBinContent(ix, iy, hContent * hlessContent)
             h.SetBinError(  ix, iy, unc)
 
+# TODO: make this C++ function in wremnants/include/histHelpers.h
 def scaleTH2byOtherTH2(h, hother, scaleUncertainty=True):
     # multiply 2D histograms when one has less bins
     # it is used to apply a correction stored in a TH2

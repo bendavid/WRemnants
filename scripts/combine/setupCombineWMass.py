@@ -3,6 +3,7 @@ from wremnants import CardTool,theory_tools,syst_tools,combine_helpers
 from wremnants import histselections as sel
 from wremnants.datasets.datagroups import datagroups2016
 from utilities import common
+from utilities import boostHistHelpers as hh
 import argparse
 import os
 import pathlib
@@ -12,6 +13,7 @@ import copy
 import math
 
 scriptdir = f"{pathlib.Path(__file__).parent}"
+data_dir = f"{pathlib.Path(__file__).parent}/../../wremnants/data/"
 
 def make_parser(parser=None):
     if not parser:
@@ -140,7 +142,7 @@ def main(args):
         #TODO: Name this
         noConstraint=True,
         systAxes=["massShift"],
-        passToFakes=passSystToFakes,
+        passToFakes=False, # probably better never to apply the mass syst to fakes
     )
 
     if args.doStatOnly:
@@ -152,12 +154,12 @@ def main(args):
         
     if wmass:
         cardTool.addSystematic("luminosity",
-                            processes=allMCprocesses_noQCDMC,
-                            outNames=["lumiDown", "lumiUp"],
-                            group="luminosity",
-                            systAxes=["downUpVar"],
-                            labelsByAxis=["downUpVar"],
-                            passToFakes=passSystToFakes)
+                               processes=["Fake"], #allMCprocesses_noQCDMC,
+                               outNames=["lumiDown", "lumiUp"],
+                               group="luminosity",
+                               systAxes=["downUpVar"],
+                               labelsByAxis=["downUpVar"],
+                               passToFakes=passSystToFakes)
     else:
         # TOCHECK: no fakes here, most likely
         cardTool.addLnNSystematic("luminosity", processes=allMCprocesses_noQCDMC, size=1.012, group="luminosity")
@@ -284,20 +286,39 @@ def main(args):
         passToFakes=passSystToFakes,
     )
     if wmass:
-        cardTool.addLnNSystematic("CMS_Fakes", processes=[args.qcdProcessName], size=1.05, group="MultijetBkg")
+        #cardTool.addLnNSystematic("CMS_Fakes", processes=[args.qcdProcessName], size=1.05, group="MultijetBkg")
         cardTool.addLnNSystematic("CMS_Top", processes=["Top"], size=1.06)
         cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16)
 
         ## FIXME 1: with the jet cut removed this syst is probably no longer needed, but one could still consider
         ## it to cover for how much the fake estimate changes when modifying the composition of the QCD region
         ## FIXME 2: it doesn't really make sense to mirror this one since the systematic goes only in one direction
-        cardTool.addSystematic(f"qcdJetPt30", 
+        # cardTool.addSystematic(f"qcdJetPt30", 
+        #                        processes=["Fake"],
+        #                        mirror=True,
+        #                        group="MultijetBkg",
+        #                        systAxes=[],
+        #                        outNames=["qcdJetPt30Down", "qcdJetPt30Up"],
+        #                        passToFakes=passSystToFakes,
+        # )
+        # TODO: experimental, will include the mt correction
+        cardTool.addSystematic(f"nominal", # this is the histogram to read
+                               systAxes=[],
                                processes=["Fake"],
                                mirror=True,
                                group="MultijetBkg",
-                               systAxes=[],
-                               outNames=["qcdJetPt30Down", "qcdJetPt30Up"],
+                               outNames=["mtCorrFakesDown", "mtCorrFakesUp"],
+                               decorrelateByCharge=True,
                                passToFakes=passSystToFakes,
+                               rename="mtCorrFakes", # this is the name used to identify the syst in the list of systs
+                               action=hh.applyCorrection,
+                               doActionBeforeMirror=True,
+                               actionArgs={"scale": 1.0,
+                                           "corrFile" : f"{data_dir}/fakesWmass/fakerateFactorMtBasedCorrection_vsEtaPt.root",
+                                           "corrHist": "etaPtCharge_mtCorrection",
+                                           "offsetCorr": 1.0,
+                                           "createNew": True}
+                               # add action to multiply by correction
         )
 
     else:

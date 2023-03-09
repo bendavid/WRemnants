@@ -43,24 +43,10 @@ def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
     if not canvas1D: canvas1D = ROOT.TCanvas("canvas1D", "", 800, 900)
 
     if not colors:
-        colors = {"Wmunu"      : ROOT.kRed+2,
-                  "Zmumu"      : ROOT.kAzure+2,
-                  "Wtau"       : ROOT.kCyan+1,
-                  "Ztautau"    : ROOT.kSpring+9,
-                  "Top"        : ROOT.kGreen+2,
-                  "Diboson"    : ROOT.kViolet,
-                  "Fake"       : ROOT.kGray,
-                  "Other"      : ROOT.kGray}
+        colors = colors_plots_
 
     if not legEntries:
-        legEntries = {"Wmunu"      : "W#rightarrow#mu#nu",
-                      "Zmumu"      : "Z#rightarrow#mu#mu",
-                      "Wtau"       : "W#rightarrow#tau#nu",
-                      "Ztautau"    : "Z#rightarrow#tau#tau",
-                      "Top"        : "t quark",
-                      "Diboson"    : "Diboson",
-                      "Fake"       : "Multijet",
-                      "Other"      : "Other"}
+        legEntries = legEntries_plots_
 
     createPlotDirAndCopyPhp(outdir_dataMC)
 
@@ -221,24 +207,8 @@ if __name__ == "__main__":
     xAxisName = "Muon #eta"
     yAxisName = "Muon p_{T} (GeV)"
 
-    colors = {"Wmunu"      : ROOT.kRed+2,
-              "Zmumu"      : ROOT.kAzure+2,
-              "Wtau"       : ROOT.kCyan+1,
-              "Ztautau"    : ROOT.kSpring+9,
-              "Top"        : ROOT.kGreen+2,
-              "Diboson"    : ROOT.kViolet,
-              "Fake"       : ROOT.kGray,
-              "Other"      : ROOT.kGray}
-
-    legEntries = {"Wmunu"      : "W#rightarrow#mu#nu",
-                  "Zmumu"      : "Z#rightarrow#mu#mu",
-                  "Wtau"       : "W#rightarrow#tau#nu",
-                  "Ztautau"    : "Z#rightarrow#tau#tau",
-                  "Top"        : "t quark",
-                  "Diboson"    : "Diboson",
-                  "Fake"       : "Multijet",
-                  "Other"      : "Other"}
-
+    colors = colors_plots_
+    legEntries = legEntries_plots_
     for charge in charges:
     
         # read histograms
