@@ -354,7 +354,7 @@ def pdfNamesAsymHessian(entries, pdfset=""):
     return pdfNames
 
 def pdfNamesSymHessian(entries, pdfset=""):
-    return [f"pdf{i}{pdfName.replace('pdf', '')}" for i in range(entries)]
+    return [f"pdf{i}{pdfset.replace('pdf', '')}" for i in range(entries)]
 
 def pdfSymmetricShifts(hdiff, axis_name):
     sq = hh.multiplyHists(hdiff, hdiff)

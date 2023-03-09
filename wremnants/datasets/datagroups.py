@@ -68,8 +68,8 @@ class datagroups(object):
             return 1
         return self.lumi*1000*proc.xsec/self.results[proc.name]["weight_sum"]
 
-    def getMetaData(self):
-        if results:
+    def getMetaInfo(self):
+        if self.results:
             return self.results["meta_info"] if "meta_info" in self.results else self.results["meta_data"]
         raise NotImplementedError("Currently can't access meta data as dict for ROOT file")
 
