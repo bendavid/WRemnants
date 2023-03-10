@@ -1319,7 +1319,12 @@ if __name__ == "__main__":
                         "SF ratio: smooth eff or ratio directly::0.999,1.001",
                         "ratioSF_smoothNumDen_smoothRatio","ForceTitle",outname,palette=args.palette,passCanvas=canvas)
 
-
+    # same as ratioSF_smoothNumDen_smoothRatio but with fine pt binning
+    ratioSF_smoothEffiOverSmoothDirectly = copy.deepcopy(hdataSmoothCheck.Clone("ratioSF_smoothEffiOverSmoothDirectly"))
+    ratioSF_smoothEffiOverSmoothDirectly.SetTitle("SF ratio: smooth eff or ratio directly")
+    ratioSF_smoothEffiOverSmoothDirectly.Divide(hmcSmoothCheck)
+    ratioSF_smoothEffiOverSmoothDirectly.Divide(hsfSmoothCheck)
+    
     c = ROOT.TCanvas("c","",700,700)
     c.SetTickx(1)
     c.SetTicky(1)
@@ -1449,6 +1454,7 @@ if __name__ == "__main__":
         hdataSmoothCheck_origBinPt.Write("effData_smoothWithOriginalPtBins" + hist_postfix)
         hmcSmoothCheck_origBinPt.Write("effMC_smoothWithOriginalPtBins" + hist_postfix)
         scaleFactor.Write("SF_fromSmoothEfficiencyRatio" + hist_postfix)
+        ratioSF_smoothEffiOverSmoothDirectly.Write(ratioSF_smoothEffiOverSmoothDirectly.GetName() + hist_postfix)
     hist_effData_nomiAndAlt_etapt.Write("effData_nomiAndAlt" + hist_postfix)
     hist_effMC_nomiAndAlt_etapt.Write("effMC_nomiAndAlt" + hist_postfix)
     hist_SF_nomiAndAlt_etapt.Write("SF_nomiAndAlt" + hist_postfix)
