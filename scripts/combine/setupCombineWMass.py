@@ -169,7 +169,7 @@ def main(args):
 
     if wmass:
         cardTool.addSystematic("luminosity",
-                               processes=["Fake"], #allMCprocesses_noQCDMC,
+                               processes=allMCprocesses_noQCDMC,
                                outNames=["lumiDown", "lumiUp"],
                                group="luminosity",
                                systAxes=["downUpVar"],
