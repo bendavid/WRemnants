@@ -221,12 +221,27 @@ def define_genFiltered_recoMuonSel(df, reco_sel = "goodMuons", require_prompt = 
         col_name,
         (
             f"wrem::filterRecoMuonsByGenTruth("
-            f"   {reco_sel},"
-            "    Muon_genPartIdx," 
-            "    GenPart_pdgId,"
-            "    GenPart_statusFlags,"
-            "    GenPart_status,"
-            f"   {require_prompt})"
+            f"    {reco_sel},"
+             "    Muon_genPartIdx," 
+             "    GenPart_pdgId,"
+             "    GenPart_statusFlags,"
+             "    GenPart_status,"
+            f"    {require_prompt}"
+             ")"
+        )
+    )
+    return df
+
+def define_covMatFiltered_recoMuonSel(df, reco_sel = "goodMuons"):
+    df = df.Redefine(
+        f"{reco_sel}",
+        (
+            f"wrem::filterRecoMuonsByCovMat("
+            f"    {reco_sel},"
+             "    Muon_cvhMomCov_Vals,"
+             "    Muon_cvhMomCov_Counts"
+             ")"
+
         )
     )
     return df
@@ -243,7 +258,6 @@ def define_matched_gen_muons_covMat(df, reco_sel = "goodMuons"):
             ");"
         )
     )
-    print(df.GetColumnType(f"{reco_sel}_covMat"))
     return df
 
 def redefine_matched_gen_muons_covMat(df, reco_sel = "goodMuons"):
@@ -253,19 +267,6 @@ def redefine_matched_gen_muons_covMat(df, reco_sel = "goodMuons"):
             "wrem::getCovMatForSelectedRecoMuons<float>("
             f"    Muon_cvhMomCov_Vals, Muon_cvhMomCov_Counts, {reco_sel}"
             ");"
-        )
-    )
-    return df
-
-def filter_by_covMat(df, reco_sel = "goodMuons"):
-    df = df.Redefine(
-        f"{reco_sel}",
-        (
-            f"ROOT::VecOps::RVec<bool> res({reco_sel}.size());"
-            "for(int i = 0; i < res.size(); i++) {"
-            f"    res[i] = {reco_sel}[i] && *({reco_sel}_covMat[i])[0] > 0;"
-            "}"
-            "return res;"
         )
     )
     return df
@@ -379,17 +380,17 @@ def transport_smearing_weights_to_reco(
 ):
     for proc in procs:
         proc_hist = resultdict[proc]['output']
-        nominal_reco = proc_hist['nominal']
+        nominal_reco = proc_hist['nominal'].get()
 
         if 'nominal_gen_smeared' in proc_hist.keys():
-            nominal_gen_smear = proc_hist['nominal_gen_smeared']
+            nominal_gen_smear = proc_hist['nominal_gen_smeared'].get()
         else:
             warning.warn(f"Histogram 'nominal_gen_smeared' not found in {proc}")
             warning.warn("smearing weights not transported to RECO kinematics")
             return
 
         if 'muonScaleSyst_responseWeights_gensmear' in proc_hist.keys():
-            msv_sw_gen_smear = proc_hist['muonScaleSyst_responseWeights_gensmear']
+            msv_sw_gen_smear = proc_hist['muonScaleSyst_responseWeights_gensmear'].get()
         else:
             warning.warn(f"Histogram 'muonScaleSyst_responseWeights_gensmear' not found in {proc}")
             warning.warn("smearing weights not transported to RECO kinematics")
@@ -404,23 +405,25 @@ def transport_smearing_weights_to_reco(
                 *[hh.multiplyHists(nominal_reco, x) for x in bin_ratio_dn_up]
             )
             msv_sw_reco.view(flow = True)[..., i_unc, :] = sw_dn_up_reco.view(flow = True)
-        resultdict[proc]['output']['nominal_muonScaleSyst_responseWeights'] = msv_sw_reco
+        resultdict[proc]['output']['nominal_muonScaleSyst_responseWeights'] = (
+            narf.ioutils.H5PickleProxy(msv_sw_reco)
+        )
 
 def muon_scale_variation_from_manual_shift(
     resultdict, procs = ['WplusmunuPostVFP', 'WminusmunuPostVFP', 'ZmumuPostVFP'],
 ):
     for proc in procs:
         proc_hists = resultdict[proc]['output']
-        manual_shift_hists = [proc_hists['nominal_muonScaleVariationDnTenthmil'], proc_hists['nominal_muonScaleVariationUpTenthmil']]
+        manual_shift_hists = [proc_hists['nominal_muonScaleVariationDnTenthmil'].get(), proc_hists['nominal_muonScaleVariationUpTenthmil'].get()]
         proc_hists['muonScaleSyst_manualShift'] = hh.combineUpDownVarHists(*manual_shift_hists)
 
-def make_alt_reco_and_gen_hists(df, results, nominal_axes):
+def make_alt_reco_and_gen_hists(df, results, nominal_axes, matched_reco_sel = "goodMuons"):
     nominal_cols_gen = [
-        "goodMuons_eta0_gen", "goodMuons_pt0_gen", "goodMuons_charge0_gen", 
+        f"{matched_reco_sel}_eta0_gen", f"{matched_reco_sel}_pt0_gen", f"{matched_reco_sel}_charge0_gen", 
         "passIso", "passMT"
     ]
     nominal_cols_gen_smeared = [
-        "goodMuons_eta0_gen_smeared", "goodMuons_pt0_gen_smeared", "goodMuons_charge0_gen_smeared",
+        f"{matched_reco_sel}_eta0_gen_smeared", f"{matched_reco_sel}_pt0_gen_smeared", f"{matched_reco_sel}_charge0_gen_smeared",
         "passIso", "passMT"
     ]
 
