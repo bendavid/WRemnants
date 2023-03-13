@@ -370,8 +370,7 @@ private:
     
     double smearGenQop(RVec<float> cov, double qop) {
         double sigma2_qop = cov[0];
-        double smearedQop = gRandom -> Gaus(qop, sqrt(sigma2_qop));
-        return (cov[0] > 0 ? smearedQop: qop);
+        return gRandom -> Gaus(qop, sqrt(sigma2_qop));
     }
 
     int getGoodGenMuons0IdxInReco(RVec<bool> goodMuons, RVec<bool> goodMuonsByGenTruth) {
@@ -412,13 +411,31 @@ private:
             );
         }
         return res;
-}
+    }
+
+    RVec<bool> filterRecoMuonsByCovMat(
+        RVec<bool> muonSelection,
+        RVec<float> covMat,
+        RVec<int> covMatCounts
+    ) {
+        ROOT::VecOps::RVec<bool> res(muonSelection.size());
+        int covMat_start_idx = 0;
+        for (int i = 0; i < muonSelection.size(); i++) {
+            res[i] = (
+                muonSelection[i] &&
+                //covMatCounts[i] &&
+                covMat[covMat_start_idx] > 0
+            );
+            covMat_start_idx += covMatCounts[i];
+        }
+        return res;
+    }
+
     template<typename T> RVec<RVec<T>> getCovMatForSelectedRecoMuons(
         RVec<float> covmat,
         RVec<int> covmat_counts,
         RVec<bool> selection,
-        int nMuons = -1, // limit the number of muons to be N; -1 to take all selected muons
-        int nParamInCovMat = 3
+        int nMuons = -1 // limit the number of muons to be N; -1 to take all selected muons
     ) {
         if (covmat_counts.size() != selection.size()) {
             cout << "WARNING: selection should be done on all RECO muons" << std::endl;
@@ -431,7 +448,7 @@ private:
         int covmat_start_idx = 0;
         for (int i = 0; i < covmat_counts.size(); i++) {
             if (selection[i]) {
-                ROOT::VecOps::RVec<int> idxRange(nParamInCovMat * nParamInCovMat);
+                ROOT::VecOps::RVec<int> idxRange(covmat_counts[i]);
                 for (int i = 0; i < idxRange.size(); i++) {
                     idxRange[i] = i + covmat_start_idx;
                 }

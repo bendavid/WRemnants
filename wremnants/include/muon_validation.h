@@ -193,7 +193,7 @@ private:
                 //if (std::isnan(weight)) {
                 //    cout << genQop << " " << recoQop << " " << genEta << " " << recoEta << " " << genPhi << " " << recoPhi << " " << recoPt << " " << recoCharge << " " << covd(0,0) << " " << std::endl;
                 //}
-                res(ivar, idownup) = (std::isnan(weight) ? 1.0 : weight);
+                res(ivar, idownup) = weight;
             }
         }
         return res;

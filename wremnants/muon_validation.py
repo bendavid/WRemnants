@@ -29,13 +29,9 @@ def make_jpsi_crctn_helpers(args, make_uncertainty_helper=False):
     mc_helper = make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}") if mc_corrfile else None
     data_helper = make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}") if data_corrfile else None
 
-    # FIXME fix uncertainty helpers
     if make_uncertainty_helper:
-        # FIXME new files don't work for data in uncertainty maker
-        data_corrfile = "calibrationJDATA_smeared_v718_LBL.root" if "lbl" in args.muonCorrData else "calibrationJDATA_smeared_v718.root"
-
         mc_unc_helper = make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}") if mc_corrfile else None
-        data_unc_helper = make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}") if data_corrfile else None
+        data_unc_helper = make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}", n_eta_bins = 48) if data_corrfile else None
 
         return mc_helper, data_helper, mc_unc_helper, data_unc_helper
     else:
@@ -62,7 +58,7 @@ def make_jpsi_crctn_helper(filepath):
     )
     return jpsi_crctn_helper
 
-def make_jpsi_crctn_unc_helper(filepath, n_scale_params = 3, n_tot_params = 4, n_eta_bins = 48):
+def make_jpsi_crctn_unc_helper(filepath, n_scale_params = 3, n_tot_params = 4, n_eta_bins = 24):
     f = uproot.open(filepath)
     cov = f['covariance_matrix'].to_hist()
     cov_scale_params = get_jpsi_scale_param_cov_mat(cov, n_scale_params, n_tot_params, n_eta_bins)
