@@ -56,7 +56,7 @@ class CardTool(object):
         self.keepOtherChargeSyst = True
         self.chargeIdDict = {"minus" : {"val" : -1, "id" : "q0", "badId" : None},
                              "plus"  : {"val" : 1., "id" : "q1", "badId" : None},
-                             "combined" : {"val" : "combined", "id" : "none", "badId" : None}, 
+                             "inclusive" : {"val" : "sum", "id" : "none", "badId" : "NOBADID"}, # for this channel there is no bad id, currently using random string to make sure it doesn't match
                              }
 
     def skipHistograms(self):
@@ -217,20 +217,30 @@ class CardTool(object):
     # by pt or helicity
     # action takes place after mirroring
     # use doActionBeforeMirror to do something before it instead (so the mirroring will act on the modified histogram)
+    # decorrelateByBin is to customize eta-pt decorrelation: pass dictionary with {axisName: [bin edges]}
     def addSystematic(self, name, systAxes, outNames=None, skipEntries=None, labelsByAxis=None, 
                       baseName="", mirror=False, scale=1, processes=None, group=None, noConstraint=False,
                       action=None, doActionBeforeMirror=False, actionArgs={}, actionMap={},
                       systNameReplace=[], groupFilter=None, passToFakes=False,
-                      rename=None, splitGroup={}, decorrelateByCharge=False):
+                      rename=None, splitGroup={}, decorrelateByCharge=False, decorrelateByBin={}):
 
         # Need to make an explicit copy of the array before appending
-        procs_to_add = [x for x in (self.allMCProcesses() if not processes else processes)]
+        procs_to_add = [x for x in (self.allMCProcesses() if processes is None else processes)]
         if passToFakes and self.getFakeName() not in procs_to_add and self.getFakeName() not in self.excludeProcGroups:
             procs_to_add.append(self.getFakeName())
 
         if action and actionMap:
             raise ValueError("Only one of action and actionMap args are allowed")
 
+        # protection when the input list is empty because of filters but the systematic is built reading the nominal
+        # since the nominal reads all filtered processes regardless whether a systematic is passed to them or not
+        # this can happen when creating new systs by scaling of the nominal histogram
+        if not len(procs_to_add):
+            return 0
+
+        if name == self.nominalName:
+            logger.debug("Defining syst {rename} from nominal histogram")
+            
         self.systematics.update({
             name if not rename else rename : {
                 "outNames" : [] if not outNames else outNames,
@@ -252,6 +262,7 @@ class CardTool(object):
                 "skipEntries" : [] if not skipEntries else skipEntries,
                 "name" : name,
                 "decorrCharge" : decorrelateByCharge,
+                "decorrByBin": decorrelateByBin
             }
         })
         
@@ -387,6 +398,7 @@ class CardTool(object):
 
     def writeForProcess(self, h, proc, syst):
         decorrelateByCharge = False
+        decorrelateByBin = {}
         if syst != self.nominalName:
             systInfo = self.systematics[syst]
             if systInfo["doActionBeforeMirror"] and systInfo["action"]:
@@ -397,6 +409,8 @@ class CardTool(object):
                 h = hh.extendHistByMirror(h, hnom)
             if systInfo["decorrCharge"]:
                 decorrelateByCharge = True
+            if systInfo["decorrByBin"]:
+                decorrelateByBin = systInfo["decorrByBin"]
         # Otherwise this is a processes not affected by the variation, don't write it out,
         # it's only needed for the fake subtraction
         logger.info(f"Writing systematic {syst} for process {proc}")
@@ -410,7 +424,8 @@ class CardTool(object):
             setZeroStatUnc = True
         for name, var in var_map.items():
             if name != "":
-                self.writeHist(var, self.variationName(proc, name), setZeroStatUnc=setZeroStatUnc, decorrCharge=decorrelateByCharge)
+                self.writeHist(var, self.variationName(proc, name), setZeroStatUnc=setZeroStatUnc,
+                               decorrCharge=decorrelateByCharge, decorrByBin=decorrelateByBin)
 
     def addPseudodata(self, processes):
         datagroups = self.datagroups if not self.pseudodata_datagroups else self.pseudodata_datagroups
@@ -418,8 +433,8 @@ class CardTool(object):
             baseName=self.pseudoData, syst="", label=self.pseudoData,
             procsToRead=processes, excluded_procs=self.excludeProcGroups,
             scaleToNewLumi=self.lumiScale)
-        # FIXME: not sure if afterFilter is desired here, but it probably should
-        procDict = datagroups.getDatagroups(afterFilter=True)
+        procDict = datagroups.getDatagroups()
+        logger.warning(f"Making pseudodata summing these proceses: {processes}")
         hists = [procDict[proc][self.pseudoData] for proc in processes]
         hdata = hh.sumHists(hists)
         # Kind of hacky, but in case the alt hist has uncertainties
@@ -454,11 +469,11 @@ class CardTool(object):
             procsToRead=self.procDict.keys(), excluded_procs=self.excludeProcGroups,
             label=self.nominalName, 
             scaleToNewLumi=self.lumiScale)
-        self.procDict = self.datagroups.getDatagroups(afterFilter=True)
+        self.procDict = self.datagroups.getDatagroups()
         self.writeForProcesses(self.nominalName, processes=self.procDict.keys(), label=self.nominalName)
         self.loadNominalCard()
         if self.pseudoData:
-            self.addPseudodata(self.predictedProcesses())
+            self.addPseudodata([x for x in self.procDict.keys() if x != "Data"])
 
         self.writeLnNSystematics()
         for syst in self.systematics.keys():
@@ -601,15 +616,15 @@ class CardTool(object):
             
     def writeHistByCharge(self, h, name, decorrCharge=False):
         for charge in self.channels:
+            newname = name
             if decorrCharge:
-                upDown = "Up" if name.endswith("Up") else "Down" 
+                # name should always have Up/Down here, since this acts on syst histograms, but let's allow for all cases
+                upDown = "Up" if name.endswith("Up") else "Down" if name.endswith("Down") else ""
                 newname = name.rstrip(upDown)
                 newname = f"{newname}_{self.chargeIdDict[charge]['id']}{upDown}"
-            else:
-                newname = name
             if not self.keepOtherChargeSyst and self.chargeIdDict[charge]["badId"] in newname: continue
             q = self.chargeIdDict[charge]["val"]
-            hout = narf.hist_to_root(h[{"charge" : h.axes["charge"].index(q) if q != "combined" else hist.sum}])
+            hout = narf.hist_to_root(h[{"charge" : h.axes["charge"].index(q) if q != "sum" else hist.sum}])
             hout.SetName(newname+f"_{charge}")
             hout.Write()
 
@@ -618,7 +633,7 @@ class CardTool(object):
         hout.SetName(f"{name}_{self.channels[0]}")
         hout.Write()
     
-    def writeHist(self, h, name, setZeroStatUnc=False, decorrCharge=False):
+    def writeHist(self, h, name, setZeroStatUnc=False, decorrCharge=False, decorrByBin={}):
         if self.skipHist:
             return
         
@@ -640,7 +655,24 @@ class CardTool(object):
             hist_no_error = h.copy()
             hist_no_error.variances(flow=True)[...] = 0.
             h = hist_no_error
-        if self.writeByCharge:
-            self.writeHistByCharge(h, name, decorrCharge=decorrCharge)
+
+        hists = {}
+        if decorrByBin:
+            s = hist.tag.Slicer()
+            # TODO: if passing two axes this has to make all combinations, currently it assumes only one axis
+            for ax in decorrByBin.keys():
+                for ibin in range(len(decorrByBin[ax]) -1):
+                    upDown = "Up" if name.endswith("Up") else "Down" if name.endswith("Down") else ""
+                    newname = name.rstrip(upDown)
+                    newname = f"{newname}_{ax}{ibin}_{upDown}"
+                    # TODO: this takes a slice, but I actually want to use nominal everywhere except in this particular bin
+                    # should I do alt-nomi and then sum this back?
+                    hists[newname] = narf.hist_to_root(h[{ax : s[complex(0, decorrByBin[ax][ibin]):complex(0, decorrByBin[ax][ibin+1])]}])
         else:
-            self.writeHistWithCharges(h, name)
+            hists[name] = h    
+                
+        for hname,hist in hists.items():
+            if self.writeByCharge:
+                self.writeHistByCharge(hist, hname, decorrCharge=decorrCharge)
+            else:
+                self.writeHistWithCharges(hist, hname)

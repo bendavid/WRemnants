@@ -45,18 +45,19 @@ def main(args):
     # NOTE: args.filterProcGroups and args.excludeProcGroups should in principle not be used together
     #       (because filtering is equivalent to exclude something), however the exclusion is also meant to skip
     #       processes which are defined in the original process dictionary but are not supposed to be (always) run on
+    if args.addQCDMC or "QCD" in args.filterProcGroups:
+        logger.warning("Adding QCD MC to list of processes for the fit setup")
+    else:
+        if "QCD" not in args.excludeProcGroups:
+            logger.warning("Automatic removal of QCD MC from list of processes. Use --filter-proc-groups 'QCD' or --add-qcd-mc to keep it")
+            args.excludeProcGroups.append("QCD")
+    filterGroup = args.filterProcGroups if args.filterProcGroups else None
+    excludeGroup = args.excludeProcGroups if args.excludeProcGroups else None
     logger.debug(f"Filtering these groups of processes: {args.filterProcGroups}")
     logger.debug(f"Excluding these groups of processes: {args.excludeProcGroups}")
-    filterGroup = args.filterProcGroups if args.filterProcGroups else None
-    excludeGroup = None
-    if args.excludeProcGroups:
-        ## can pass a filter that datagroups2016 can digest, but better to pass list of names
-        # excludeGroup = lambda x,excl=args.excludeProcGroups: all([f not in x.group for f in excl if x.group is not None])
-        ## alternatively can just pass the array with names
-        excludeGroup = args.excludeProcGroups
-
+    
     datagroups = datagroups2016(args.inputFile, excludeProcGroup=excludeGroup, filterProcGroup=filterGroup)
-
+    
     if args.xlim:
         if len(args.fitvar.split("-")) > 1:
             raise ValueError("Restricting the x axis not supported for 2D hist")
@@ -96,8 +97,8 @@ def main(args):
     cardTool.setDatagroups(datagroups)
     logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
     cardTool.setNominalTemplate(f"{templateDir}/main.txt")
-    if args.combineChannels:
-        cardTool.setChannels(["combined"])
+    if args.sumChannels:
+        cardTool.setChannels(["inclusive"])
     cardTool.setProjectionAxes(args.fitvar.split("-"))
     if args.noHist:
         cardTool.skipHistograms()
@@ -112,7 +113,9 @@ def main(args):
     if args.pseudoData:
         cardTool.setPseudodata(args.pseudoData, args.pseudoDataIdx)
         if args.pseudodata_file:
-            cardTool.setPseudodataDatagroups(datagroups2016(args.pseudodata_file))
+            cardTool.setPseudodataDatagroups(datagroups2016(args.pseudodata_file,
+                                                            excludeProcGroup=excludeGroup,
+                                                            filterProcGroup=filterGroup))
 
     if args.lumiScale:
         cardTool.setLumiScale(args.lumiScale)
@@ -316,23 +319,23 @@ def main(args):
         #                        outNames=["qcdJetPt30Down", "qcdJetPt30Up"],
         #                        passToFakes=passSystToFakes,
         # )
-        # TODO: experimental, will include the mt correction
-        cardTool.addSystematic(f"nominal", # this is the histogram to read
-                               systAxes=[],
-                               processes=["Fake"],
-                               mirror=True,
-                               group="MultijetBkg",
-                               outNames=["mtCorrFakesDown", "mtCorrFakesUp"],
-                               decorrelateByCharge=True,
-                               passToFakes=passSystToFakes,
-                               rename="mtCorrFakes", # this is the name used to identify the syst in the list of systs
-                               action=hh.applyCorrection,
-                               doActionBeforeMirror=True,
-                               actionArgs={"scale": 1.0,
-                                           "corrFile" : f"{data_dir}/fakesWmass/fakerateFactorMtBasedCorrection_vsEtaPt.root",
-                                           "corrHist": "etaPtCharge_mtCorrection",
-                                           "offsetCorr": 1.0,
-                                           "createNew": True}
+        #
+        if "Fake" not in excludeGroup:
+            cardTool.addSystematic(f"nominal", # this is the histogram to read
+                                   systAxes=[],
+                                   processes=["Fake"],
+                                   mirror=True,
+                                   group="MultijetBkg",
+                                   outNames=["mtCorrFakesDown", "mtCorrFakesUp"],
+                                   decorrelateByCharge=True,
+                                   rename="mtCorrFakes", # this is the name used to identify the syst in the list of systs
+                                   action=hh.applyCorrection,
+                                   doActionBeforeMirror=True,
+                                   actionArgs={"scale": 1.0,
+                                               "corrFile" : f"{data_dir}/fakesWmass/fakerateFactorMtBasedCorrection_vsEtaPt.root",
+                                               "corrHist": "etaPtCharge_mtCorrection",
+                                               "offsetCorr": 1.0,
+                                               "createNew": True}
                                # add action to multiply by correction
         )
 
