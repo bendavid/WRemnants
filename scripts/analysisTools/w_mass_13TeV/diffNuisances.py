@@ -395,7 +395,8 @@ if __name__ == "__main__":
         line.DrawLine(0., ycen, nbins, ycen)
         line.DrawLine(0., ymax, nbins, ymax)
         line.DrawLine(0., ymin, nbins, ymin)
-        line.SetLineStyle(2); line.SetLineColor(ROOT.kRed)
+        line.SetLineStyle(2);
+        line.SetLineColor(ROOT.kRed)
         line.DrawLine(0., yhalfu, nbins, yhalfu)
         line.DrawLine(0., yhalfd, nbins, yhalfd)
         line.SetLineStyle(3)
