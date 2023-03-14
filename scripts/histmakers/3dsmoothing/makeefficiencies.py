@@ -8,24 +8,26 @@ import ROOT
 
 #FIRST STEP IN EFFICIENCY CREATION
 
-name = "rnf"
+name = "redo"
 
 histlist = []
 
-directory = "directory_name"
+directory = "/gpfs/ddn/cms/user/bruschin"
 
 histlist.append(f"{directory}/mw_with_mu_eta_pt_scetlibCorr_idip{name}.hdf5")
 histlist.append(f"{directory}/mw_with_mu_eta_pt_scetlibCorr_trigger{name}.hdf5")
 histlist.append(f"{directory}/mw_with_mu_eta_pt_scetlibCorr_iso{name}.hdf5")
 
-listoflists = [["nominal"],["nominal_smoothMC","nominal","nominal_smoothErr"],["nominal_smoothMC","nominal","nominal_smoothErr"]] 
+listoflists = [["nominal"],["nominal_smoothMC","nominal_smoothMC","nominal","nominal_smoothErr"],["nominal_smoothMC","nominal_smoothMC","nominal","nominal_smoothErr"]] 
 
 namelist = []
 namelist.append("IDIP")
-namelist.append("TriggerMC")
+namelist.append("TriggerMCPass")
+namelist.append("TriggerMCFail")
 namelist.append("Trigger")
 namelist.append("TriggerError")
-namelist.append("IsoMC")
+namelist.append("IsoMCPass")
+namelist.append("IsoMCFail")
 namelist.append("Iso")
 namelist.append("IsoError")
 
@@ -41,15 +43,43 @@ for idx,filename in enumerate(histlist) :
         Plus = plus[listoflists[idx][i]].get()
         Minus = minus[listoflists[idx][i]].get()
         if "Error" in namelist[counter]:
+            if "Iso" in namelist[counter]:
+                Plus = Plus[:,:,1:2,1:2,:,:,1:2]
+                Plus = Plus[:,:,sum,sum,sum,:,sum]
+                Minus = Minus[:,:,0:1,1:2,:,:,1:2]
+                Minus = Minus[:,:,sum,sum,sum,:,sum]
+            else :
+                Plus = Plus[:,:,1:2,:,:,:,1:2]
+                Plus = Plus[:,:,sum,sum,sum,:,sum]
+                Minus = Minus[:,:,0:1,:,:,:,1:2]
+                Minus = Minus[:,:,sum,sum,sum,:,sum]
+        elif "Trigger" in namelist[counter]:
+            if "Fail" in namelist[counter]:
+                Plus = Plus[:,:,1:2,:,:,0:1]
+                Plus = Plus[:,:,sum,sum,sum,sum]
+                Minus = Minus[:,:,0:1,:,:,0:1]
+                Minus = Minus[:,:,sum,sum,sum,sum]
+            else :
+                Plus = Plus[:,:,1:2,:,:,1:2]
+                Plus = Plus[:,:,sum,sum,sum,sum]
+                Minus = Minus[:,:,0:1,:,:,1:2]
+                Minus = Minus[:,:,sum,sum,sum,sum]
+        elif "Iso" in namelist[counter]:
+            if "Fail" in namelist[counter]:
+                Plus = Plus[:,:,1:2,0:1,:,1:2]
+                Plus = Plus[:,:,sum,sum,sum,sum]
+                Minus = Minus[:,:,0:1,0:1,:,1:2]
+                Minus = Minus[:,:,sum,sum,sum,sum]
+            else:
+                Plus = Plus[:,:,1:2,1:2,:,1:2]
+                Plus = Plus[:,:,sum,sum,sum,sum]
+                Minus = Minus[:,:,0:1,1:2,:,1:2]
+                Minus = Minus[:,:,sum,sum,sum,sum]
+        else:
             Plus = Plus[:,:,1:2,:,:,:]
-            Plus = Plus[:,:,sum,sum,sum,:]
+            Plus = Plus[:,:,sum,sum,sum,sum]
             Minus = Minus[:,:,0:1,:,:,:]
-            Minus = Minus[:,:,sum,sum,sum,:]
-        else :
-            Plus = Plus[:,:,1:2,:,:]
-            Plus = Plus[:,:,sum,sum,sum]
-            Minus = Minus[:,:,0:1,:,:]
-            Minus = Minus[:,:,sum,sum,sum]
+            Minus = Minus[:,:,sum,sum,sum,sum]
         Plus=narf.hist_to_root(Plus)
         Plus.SetName(f"{namelist[counter]}Plus")
         Minus=narf.hist_to_root(Minus)

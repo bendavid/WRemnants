@@ -1,9 +1,9 @@
 //THIS SCRIPTS IS USED TO MERGE SCALE FACTORS FROM DIFFERENT FILES. THIS IS BECAUSE I PERFORMED THE SMOOTHING ONLY FOR TRIGGER AND ISO, THE REST IS EXACTLY THE SAME. THIS ALSO IMPLEMENTS THE CORRECTION TO ALTERNATE FITS (WHICH MOSTLY DON'T CONVERGE AS A FUNCTION OF UT, BUT THE NOMINAL ONES DO, SO WHAT IS DONE IS RESCALE THE ALT FIT EFFICIENCY TO THE 3D SMOOTH ONE, AS THE REASON BEHIND THE UNCERTAINTY BAR SHOULD BE THE SAME
 
 void makenew2dsf() {
-	TFile *file=new TFile("/gpfs/ddn/cms/user/bruschin/newtest3/WRemnants/wremnants/data/testMuonSF/allSmooth_GtoH.root");
-	TFile *file2=new TFile("/gpfs/ddn/cms/user/bruschin/Wsmooth/smoothLeptonScaleFactors2/GtoH/allSmooth_GtoH2.root");
-	TFile *file3=new TFile("/gpfs/ddn/cms/user/bruschin/newtest3/WRemnants/wremnants/data/testMuonSF/allSmooth_GtoH3D.root","RECREATE");
+	TFile *file=new TFile("/gpfs/ddn/cms/user/bruschin/WRemnants/wremnants/data/testMuonSF/allSmooth_GtoH.root");
+	TFile *file2=new TFile("/gpfs/ddn/cms/user/bruschin/smoothLeptonScaleFactorsredo/GtoH/allSmooth_GtoH2.root");
+	TFile *file3=new TFile("/gpfs/ddn/cms/user/bruschin/WRemnants/wremnants/data/testMuonSF/allSmooth_GtoH3DREDO.root","RECREATE");
 	file3->cd();
 	TH2D *Histo1, *Histo2;
 	for (auto&& keyAsObj : *(file->GetListOfKeys())){

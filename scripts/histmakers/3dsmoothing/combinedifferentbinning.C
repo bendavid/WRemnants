@@ -2,8 +2,8 @@
 
 void combinedifferentbinning() {
 	TFile *file=new TFile("/gpfs/ddn/cms/user/bruschin/Wsmooth/smoothLeptonScaleFactorsNoScetlib/GtoH/allSmooth_GtoH.root");
-	TFile *file2=new TFile("/gpfs/ddn/cms/user/bruschin/Wsmooth/smoothLeptonScaleFactors20bins/GtoH/allSmooth_GtoH.root");
-	TFile *file3=new TFile("/gpfs/ddn/cms/user/bruschin/Wsmooth/smoothLeptonScaleFactors20bins/GtoH/allSmooth_GtoH2.root","RECREATE");
+	TFile *file2=new TFile("/gpfs/ddn/cms/user/bruschin/smoothLeptonScaleFactorsredo/GtoH/allSmooth_GtoH.root");
+	TFile *file3=new TFile("/gpfs/ddn/cms/user/bruschin/smoothLeptonScaleFactorsredo/GtoH/allSmooth_GtoH2.root","RECREATE");
 	file3->cd();
 	for (auto&& keyAsObj : *(file->GetListOfKeys())){
 		auto key = (TKey*) keyAsObj;
