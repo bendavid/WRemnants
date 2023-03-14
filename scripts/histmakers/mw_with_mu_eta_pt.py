@@ -64,11 +64,13 @@ else :
 axis_charge = common.axis_charge
 axis_passIso = common.axis_passIso
 axis_passMT = common.axis_passMT
+axis_passTrigger = hist.axis.Boolean(name = "passTrigger")
 
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
 axis_vqt_list = [-3000000000,-30,-15,-10,-5,0,5,10,15,30,3000000000] #has to match the ut binning in the 3D SFs
 axis_vqt = hist.axis.Variable(axis_vqt_list, name = "ut")
-nominal_axes2 = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT, axis_vqt]
+nominal_axes2 = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT, axis_vqt, axis_passTrigger]
+nominal_axes3 = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT, axis_passTrigger]
 
 # axes for study of fakes
 axis_mt_fakes = hist.axis.Regular(120, 0., 120., name = "mt", underflow=False, overflow=True)
@@ -175,7 +177,7 @@ def build_graph(df, dataset):
 
     weightsum = df.SumAndCount("weight")
 
-    if not (args.vqt3dsmoothing and (args.vqtTestStep == 0)) :
+    if not (args.vqt3dsmoothing and (args.vqtTestStep < 2)) :
         df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
     #df = df.Filter("event % 2 == 1") # test with odd/even events
 
@@ -196,8 +198,15 @@ def build_graph(df, dataset):
  
     df = muon_selections.veto_electrons(df)
     df = muon_selections.apply_met_filters(df)
-    if not (args.vqt3dsmoothing and (args.vqtTestStep == 0)) :
+    if not (args.vqt3dsmoothing and (args.vqtTestStep < 2)) :
         df = muon_selections.apply_triggermatching_muon(df, dataset, "goodMuons_eta0", "goodMuons_phi0")
+
+    if (args.vqt3dsmoothing) :
+        if dataset.group in ["Top", "Diboson"]:
+            df = df.Define("GoodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_pt,TrigObj_l1pt,TrigObj_l2pt,TrigObj_filterBits)")
+        else:
+            df = df.Define("GoodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_filterBits)")
+        df = df.Define("passTrigger","wrem::hasTriggerMatch(goodMuons_eta0,goodMuons_phi0,TrigObj_eta[GoodTrigObjs],TrigObj_phi[GoodTrigObjs])")
 
     # gen match to bare muons to select only prompt muons from top processes
     if isTop:
@@ -280,10 +289,7 @@ def build_graph(df, dataset):
     df = df.Define("passMT", "transverseMass >= 40.0")
 
     if args.vqt3dsmoothing:
-        if (args.vqtTestStep == 2):
-            df = df.Filter("passMT && passIso")
-        else :
-            df = df.Filter("passMT")
+        df = df.Filter("passMT")
 
     # utility plot, mt and met together in 2D, to plot them later
     mtAndMET = df.HistoBoost("mtAndMET", [axis_mt_fakes, axis_met, axis_charge, axis_passIso, axis_passMT], ["transverseMass", "MET_corr_rec_pt", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"])
@@ -302,7 +308,10 @@ def build_graph(df, dataset):
     else:  
         results.append(df.HistoBoost("nominal_weight", [hist.axis.Regular(200, -4, 4)], ["nominal_weight"]))
 
-        nominal = df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "nominal_weight"])
+        if not args.vqt3dsmoothing:
+            nominal = df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "nominal_weight"])
+        else:
+            nominal = df.HistoBoost("nominal", nominal_axes3, [*nominal_cols, "passTrigger", "nominal_weight"])
         results.append(nominal)
 
         if apply_theory_corr:
@@ -490,9 +499,10 @@ def build_graph(df, dataset):
                 if args.vqt3dsmoothing:
                     df = df.Define("nominal_weight_MC", "nominal_weight/weight_fullMuonSF_withTrackingReco*weight_fullMuonSF_withTrackingRecoMC")
                     df = df.Define("nominal_weight_Err", "nominal_weight/weight_fullMuonSF_withTrackingReco*weight_fullMuonSF_withTrackingRecoErr")
-                    smoothMC = df.HistoBoost("nominal_smoothMC", nominal_axes, [*nominal_cols, "nominal_weight_MC"])
+                    new_nom_cols_MC = [*nominal_cols, "passTrigger"]
+                    smoothMC = df.HistoBoost("nominal_smoothMC", nominal_axes3, [*new_nom_cols_MC, "nominal_weight_MC"])
                     results.append(smoothMC)
-                    new_nom_cols = [*nominal_cols, "goodMuons_zqtproj0"]
+                    new_nom_cols = [*nominal_cols, "goodMuons_zqtproj0", "passTrigger"]
                     smoothErr = df.HistoBoost("nominal_smoothErr", nominal_axes2, [*new_nom_cols, "nominal_weight_Err"])
                     results.append(smoothErr)
                 

@@ -3,11 +3,12 @@
 //FINAL CREATION OF HISTOGRAMS, USED TO PRODUCE FILES IN THE SAME FORMAT AS THE egm TOOL OUTPUT, TO BE PASSED TO THE SMOOTHER. YOU NEED TO CHANGE THE HISTNAMES (e.g. if you want trigger you need triggerPlus, triggerMCPlus...), AND THE 
 
 void makesf() {
-	TFile *file=new TFile("efficiencieswremnants{***}.root");
-	TH2D* isoplus=(TH2D*)file->Get("STEPPlus");
-	TH2D* isoMCplus=(TH2D*)file->Get("STEPMCPlus");
-	TH2D* isominus=(TH2D*)file->Get("STEPMinus");
-	TH2D* isoMCminus=(TH2D*)file->Get("STEPMCMinus");
+	TFile *file=new TFile("efficiencieswremnants1bin.root");
+	TH2D* isoplus=(TH2D*)file->Get("triggerPlus");
+	TH2D* isoMCplus=(TH2D*)file->Get("triggerMCPlus");
+	TH2D* isominus=(TH2D*)file->Get("triggerMinus");
+	TH2D* isoMCminus=(TH2D*)file->Get("triggerMCMinus");
+	//double etabinning[49], ptbinning[PTSIZE+1] = {24.,26.,28.,30.,32.,34.,36.,38.,40.,42.,44.,47.,50.,55.,60.,65.};
 	double etabinning[49], ptbinning[PTSIZE+1] = {24.,26.,28.,30.,32.,34.,36.,38.,40.,42.,44.,47.,50.,55.};
 	for (unsigned int i=0; i!=49; i++) {
 		etabinning[i] = -2.4 + i*0.1;
@@ -19,16 +20,16 @@ void makesf() {
 	TH2D* mc=new TH2D("EffMC2D","EffMC2D",48,etabinning,PTSIZE,ptbinning);
 	for (unsigned int i=0; i!=48; i++) {
 		for (unsigned int j=0; j!=PTSIZE; j++) {
-			data->SetBinContent(i+1,j+1,isoCHARGE->GetBinContent(i+1,j+1)); data->SetBinError(i+1,j+1,isoCHARGE->GetBinError(i+1,j+1));
-			data2->SetBinContent(i+1,j+1,isoCHARGE->GetBinContent(i+1,j+1)); data2->SetBinError(i+1,j+1,isoCHARGE->GetBinError(i+1,j+1));
-			mc->SetBinContent(i+1,j+1,isoMCCHARGE->GetBinContent(i+1,j+1)); mc->SetBinError(i+1,j+1,isoMCCHARGE->GetBinError(i+1,j+1));
-			sf->SetBinContent(i+1,j+1,isoCHARGE->GetBinContent(i+1,j+1)/isoMCCHARGE->GetBinContent(i+1,j+1));
-			sf2->SetBinContent(i+1,j+1,isoCHARGE->GetBinContent(i+1,j+1)/isoMCCHARGE->GetBinContent(i+1,j+1));
-			sf->SetBinError(i+1,j+1,isoCHARGE->GetBinError(i+1,j+1)/isoMCCHARGE->GetBinContent(i+1,j+1));
-			sf2->SetBinError(i+1,j+1,isoCHARGE->GetBinError(i+1,j+1)/isoMCCHARGE->GetBinContent(i+1,j+1));
+			data->SetBinContent(i+1,j+1,isominus->GetBinContent(i+1,j+1)); data->SetBinError(i+1,j+1,isominus->GetBinError(i+1,j+1));
+			data2->SetBinContent(i+1,j+1,isominus->GetBinContent(i+1,j+1)); data2->SetBinError(i+1,j+1,isominus->GetBinError(i+1,j+1));
+			mc->SetBinContent(i+1,j+1,isoMCminus->GetBinContent(i+1,j+1)); mc->SetBinError(i+1,j+1,isoMCminus->GetBinError(i+1,j+1));
+			sf->SetBinContent(i+1,j+1,isominus->GetBinContent(i+1,j+1)/isoMCminus->GetBinContent(i+1,j+1));
+			sf2->SetBinContent(i+1,j+1,isominus->GetBinContent(i+1,j+1)/isoMCminus->GetBinContent(i+1,j+1));
+			sf->SetBinError(i+1,j+1,isominus->GetBinError(i+1,j+1)/isoMCminus->GetBinContent(i+1,j+1));
+			sf2->SetBinError(i+1,j+1,isominus->GetBinError(i+1,j+1)/isoMCminus->GetBinContent(i+1,j+1));
 		}
 	}
-	TFile *output=new TFile("{***}/mu_STEP_CHARGE/allEfficiencies_2D.root","RECREATE");
+	TFile *output=new TFile("1binredo/mu_trigger_minus/allEfficiencies_2D.root","RECREATE");
 	output->cd();
 	sf->Write();
 	sf2->Write();
