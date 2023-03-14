@@ -4,11 +4,11 @@ import narf
 import numpy as np
 import uproot
 from functools import reduce
-from utilities import common
+from utilities import common, logging
 
 ROOT.gInterpreter.Declare('#include "muon_validation.h"')
 
-logging = common.child_logger(__name__)
+logger = logging.child_logger(__name__)
 
 def make_jpsi_crctn_helpers(args, make_uncertainty_helper=False):
 
