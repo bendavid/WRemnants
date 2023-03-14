@@ -3,14 +3,14 @@ import pathlib
 import hist
 import narf
 from utilities import rdf_tools
-from utilities import common
+from utilities import common, logging
 from utilities import boostHistHelpers as hh
 from . import muon_validation
 import uproot
 import numpy as np
 import warnings
 
-logging = common.child_logger(__name__)
+logger = logging.child_logger(__name__)
 
 ROOT.gInterpreter.Declare('#include "muon_calibration.h"')
 ROOT.gInterpreter.Declare('#include "lowpu_utils.h"')
@@ -62,7 +62,7 @@ def make_muon_bias_helpers(args):
             axis_param = hist.axis.Regular(3, 0, 3, underflow = False, overflow = False, name = 'param')
             axis_cenval = hist.axis.Regular(1, 0, 1, name = 'cenval')
             hist_comb = hist.Hist(*A.axes, axis_param, axis_cenval, storage = hist.storage.Double())
-            hist_comb.view()[...,0] = np.stack([x.values() for x in [A, A*0, M]], axis = -1)
+            hist_comb.view()[...,0] = np.stack([x.values() for x in [A, A*0, M/45.]], axis = -1)
 
         hist_comb_cpp = narf.hist_to_pyroot_boost(hist_comb, tensor_rank = 2)
         helper = ROOT.wrem.JpsiCorrectionsRVecHelper[type(hist_comb_cpp).__cpp_name__](

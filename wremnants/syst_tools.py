@@ -1,11 +1,11 @@
 import hist
 import numpy as np
-from utilities import boostHistHelpers as hh, common
+from utilities import boostHistHelpers as hh, common, logging
 from wremnants import theory_tools
 from wremnants.datasets.datagroups import datagroups2016
 import collections.abc
 
-logging = common.child_logger(__name__)
+logger = logging.child_logger(__name__)
 
 def syst_transform_map(base_hist, hist_name):
     pdfInfo = theory_tools.pdfMapExtended 
@@ -182,7 +182,7 @@ def add_pdf_hists(results, df, dataset, axes, cols, pdfs, base_name="nominal"):
         try:
             pdfInfo = theory_tools.pdf_info_map(dataset, pdf)
         except ValueError as e:
-            logging.info(e)
+            logger.info(e)
             continue
 
         pdfName = pdfInfo["name"]
