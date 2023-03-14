@@ -124,7 +124,7 @@ corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_c
 # recoil initialization
 if not args.no_recoil:
     from wremnants import recoil_tools
-    recoilHelper = recoil_tools.Recoil("highPU", flavor="mu", met=args.met)
+    recoilHelper = recoil_tools.Recoil("highPU", args, flavor="mu")
 
 # FIXME: Currently breaks the taus
 smearing_weights = False
@@ -219,14 +219,9 @@ def build_graph(df, dataset):
     ########################################################################
     
     if not args.no_recoil:
-        if dataset.is_data:
-            df = recoilHelper.setup_MET(df, results, dataset, "goodMuons_pt0", "goodMuons_phi0", "Muon_pt[goodMuons][0]")
-            df = df.Alias("MET_corr_rec_pt", "MET_corr_xy_pt")
-            df = df.Alias("MET_corr_rec_phi", "MET_corr_xy_phi")
-        else:
-            df = recoilHelper.setup_MET(df, results, dataset, "goodMuons_pt0", "goodMuons_phi0", "Muon_pt[goodMuons][0]")
-            df = recoilHelper.setup_recoil_gen(df, results, dataset, ["WplusmunuPostVFP", "WminusmunuPostVFP"])
-            df = recoilHelper.apply_recoil_W(df, results, dataset, ["WplusmunuPostVFP", "WminusmunuPostVFP"]) # produces corrected MET as MET_corr_rec_pt/phi
+        lep_cols = ["goodMuons_pt0", "goodMuons_phi0", "goodMuons_charge0", "Muon_pt[goodMuons][0]"]
+        df = recoilHelper.recoil_W(df, results, dataset, common.vprocs, lep_cols) # produces corrected MET as MET_corr_rec_pt/phi  vprocs_lowpu wprocs_recoil_lowpu
+        df = recoilHelper.recoil_W_unc(df, results, dataset, common.vprocs)
     else:
         df = df.Alias("MET_corr_rec_pt", "MET_pt")
         df = df.Alias("MET_corr_rec_phi", "MET_phi")

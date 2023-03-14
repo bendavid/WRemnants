@@ -40,7 +40,7 @@ def prepareDir(outDir, remove=True):
 
     if os.path.exists(outDir) and os.path.isdir(outDir) and remove: shutil.rmtree(outDir)
     os.system("mkdir -p %s" % outDir)
-    os.system("cp /eos/user/j/jaeyserm/www/wmass/index.php %s" % outDir)
+    #os.system("cp /eos/user/j/jaeyserm/www/wmass/index.php %s" % outDir)
 
     
 def doOverlow(h):

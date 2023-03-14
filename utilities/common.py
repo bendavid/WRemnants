@@ -11,11 +11,17 @@ data_dir = f"{wremnants_dir}/data/"
 wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP", 'WplusToMuNu_horace-lo-photos', 'WplusToMuNu_horace-nlo', 'WminusToMuNu_horace-lo-photos', 'WminusToMuNu_horace-nlo']
 zprocs = ["ZmumuPostVFP", "ZtautauPostVFP", "ZmumuMiNLO", "ZmumuNNLOPS", 'ZToMuMu_horace-lo-photos', 'ZToMuMu_horace-nlo']
 vprocs = wprocs+zprocs
+zprocs_recoil = ["ZmumuPostVFP"]
+wprocs_recoil = ["WplusmunuPostVFP", "WminusmunuPostVFP"]
 
 wprocs_lowpu = ["WminusJetsToMuNu", "WminusJetsToENu", "WminusJetsToTauNu", "WplusJetsToMuNu", "WplusJetsToENu", "WplusJetsToTauNu"]
 zprocs_lowpu = ["Zmumu", "Zee", "Ztautau"]
-zprocs_recoil = ["Zmumu", "Zee"]
 vprocs_lowpu = wprocs_lowpu+zprocs_lowpu
+zprocs_recoil_lowpu = ["Zmumu", "Zee"]
+wprocs_recoil_lowpu = ["WminusJetsToMuNu", "WminusJetsToENu", "WplusJetsToMuNu", "WplusJetsToENu"]
+
+
+
 
 background_MCprocs = ["Top", "Diboson", "QCD"]
 zprocs_all = zprocs_lowpu+zprocs
@@ -24,6 +30,8 @@ wprocs_all = wprocs_lowpu+wprocs
 # unfolding axes for low pu
 axis_recoil_reco_ptZ = hist.axis.Variable([0, 5, 10, 15, 20, 30, 40, 50, 60, 75, 90, 150], name = "recoil_reco", underflow=False, overflow=True)
 axis_recoil_gen_ptZ = hist.axis.Variable([0.0, 10.0, 20.0, 40.0, 60.0, 90.0, 150], name = "recoil_gen", underflow=False, overflow=True)
+axis_recoil_reco_ptW = hist.axis.Variable([0, 5, 10, 15, 20, 30, 40, 50, 60, 75, 90, 150], name = "recoil_reco", underflow=False, overflow=True)
+axis_recoil_gen_ptW = hist.axis.Variable([0.0, 10.0, 20.0, 40.0, 60.0, 90.0, 150], name = "recoil_gen", underflow=False, overflow=True)
 
 # standard regular axes
 axis_eta = hist.axis.Regular(48, -2.4, 2.4, name = "eta")
@@ -94,7 +102,8 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")
     parser.add_argument("--eta", nargs=3, type=float, help="Eta binning as 'nbins min max' (only uniform for now)", default=[48,-2.4,2.4])
     parser.add_argument("--pt", nargs=3, type=float, help="Pt binning as 'nbins,min,max' (only uniform for now)", default=[29,26.,55.])
-    parser.add_argument("--no_recoil", action='store_true', help="Don't apply recoild correction")
+    parser.add_argument("--no-recoil", action='store_true', help="Don't apply recoild correction")
+    parser.add_argument("--recoil-hists", action='store_true', help="Save all recoil related histograms for calibration and validation")
     parser.add_argument("--highptscales", action='store_true', help="Apply highptscales option in MiNNLO for better description of data at high pT")
     parser.add_argument("--data-path", type=str, default=None, help="Access samples from eos")
     parser.add_argument("--no-vertex_weight", dest="vertex_weight", action='store_false', help="Do not apply reweighting of vertex z distribution in MC to match data")
