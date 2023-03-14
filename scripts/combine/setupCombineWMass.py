@@ -2,11 +2,10 @@
 from wremnants import CardTool,theory_tools,syst_tools,combine_helpers
 from wremnants import histselections as sel
 from wremnants.datasets.datagroups import datagroups2016
-from utilities import common
+from utilities import common, logging
 import argparse
 import os
 import pathlib
-import logging
 import hist
 import copy
 import math
@@ -38,7 +37,7 @@ def make_parser(parser=None):
 
 def main(args):
 
-    logger = common.setup_logger(__file__, args.verbose, args.color_logger)
+    logger = logging.setup_logger(__file__, args.verbose, args.color_logger)
 
     # NOTE: args.filterProcGroups and args.excludeProcGroups should in principle not be used together
     #       (because filtering is equivalent to exclude something), however the exclusion is also meant to skip

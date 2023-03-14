@@ -1,4 +1,4 @@
-from utilities import boostHistHelpers as hh, common, output_tools
+from utilities import boostHistHelpers as hh, common, output_tools, logging
 
 parser,initargs = common.common_parser(True)
 
@@ -11,6 +11,7 @@ import math
 import time
 import os
 
+
 parser.add_argument("--csvars_hist", action='store_true', help="Add CS variables to dilepton hist")
 parser.add_argument("--axes", type=str, nargs="*", default=["mll", "ptll"], help="")
 parser.add_argument("--finePtBinning", action='store_true', help="Use fine binning for ptll")
@@ -19,13 +20,11 @@ parser = common.set_parser_default(parser, "pt", [44,26.,70.])
 parser = common.set_parser_default(parser, "eta", [6,-2.4,2.4])
 
 args = parser.parse_args()
-logger = common.setup_logger(__file__, args.verbose, args.color_logger)
+logger = logging.setup_logger(__file__, args.verbose, args.color_logger)
 
-filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
-excludeGroup = args.excludeProcGroups if args.excludeProcGroups else None
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
-                                              filt=filt if args.filterProcs else None,
-                                              excludeGroup=excludeGroup,
+                                              filt=args.filterProcs,
+                                              excl=args.excludeProcs, 
                                               nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path)
 
 era = args.era

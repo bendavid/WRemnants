@@ -1,21 +1,19 @@
-from utilities import boostHistHelpers as hh
+from utilities import boostHistHelpers as hh, logging
 from wremnants import histselections as sel
 from wremnants.datasets import datasetsLowPU
 from wremnants.datasets.datagroups import datagroups
-import logging
 import lz4.frame
 import pickle
 import narf
 import ROOT
 import hist
-from utilities import common
 
-logger = common.child_logger(__name__)
+logger = logging.child_logger(__name__)
 
 class datagroupsLowPU(datagroups):
     isW = False
     def __init__(self, infile, combine=False, flavor="", excludeProcGroup=None, filterProcGroup=None):
-        self.datasets = {x.name : x for x in datasetsLowPU.getDatasets(flavor=flavor, filt=filterProcGroup, excludeGroup=excludeProcGroup)}
+        self.datasets = {x.name : x for x in datasetsLowPU.getDatasets(flavor=flavor, filt=filterProcGroup, excl=excludeProcGroup)}
         super().__init__(infile, combine)
         #self.lumi = 0.199269742
         self.hists = {} # container storing temporary histograms
@@ -231,7 +229,7 @@ class datagroupsLowPU(datagroups):
                     members = [self.datasets[x] for x in ["singlemuon", "WplusJetsToENu", "WminusJetsToENu", "WZTo3LNu", "WWTo2L2Nu", "ZZ", "WplusJetsToTauNu", "WminusJetsToTauNu", "WplusJetsToMuNu", "WminusJetsToMuNu", "Ztautau", "Zee", "Zmumu", "TTTo2L2Nu", "TTToSemiLeptonic"]],
                     label = "Nonprompt",
                     scale = lambda x: 1. if x.is_data else -1,
-                    color="#A9A9A9", #ROOT.TColor.GetColor(222, 90, 106),  --> sel
+                    color="#A9A9A9",
                     selectOp = self.fakeHistABCD,
                 ),
             )        
@@ -265,18 +263,24 @@ class datagroupsLowPU(datagroups):
             
     def signalHistSel(self, h, charge=None):
         s = hist.tag.Slicer()
+        axes = [ax.name for ax in h.axes]
         if self.isW:
             sel = {"passIso" : True, "passMT": True}
             if charge in [-1, 1]:
                 sel.update({"charge" : -1j if charge < 0 else 1j})
+            for key in sel.copy().keys():
+                if not key in axes:
+                    del sel[key]
             return h[sel]
         else: return h
                 
        
     def fakeHistABCD(self, h):
-        s = hist.tag.Slicer()
-        sf = h[{"passIso" : True, "passMT" : False}].sum().value / h[{"passIso" : False, "passMT" : False}].sum().value
-        return h[{"passIso" : False, "passMT" : True}]*sf
+        axes = [ax.name for ax in h.axes]
+        if "mt" in axes:
+            s = hist.tag.Slicer()
+            sf = h[{"passIso" : True, "passMT" : False}].sum().value / h[{"passIso" : False, "passMT" : False}].sum().value
+            return h[{"passIso" : False, "passMT" : True}]*sf
         
         ret = hh.multiplyHists(
             hh.divideHists(h[{"passIso" : True, "passMT" : False}], 

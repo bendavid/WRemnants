@@ -21,6 +21,7 @@ import pickle
 import tensorflow as tf
 
 import fitter
+#import narf.fitutils as fitter
 import hist
 import boost_histogram as bh
 import baseFunctions as rfb
@@ -87,9 +88,118 @@ def diagonalize(cov_matrix, parms_nom, sigma=1):
 
     return parms_pert
     
+def doubleRatio(r1, r2, comp, procLabel, metLabel, outDir, recoilLow, recoilHigh):
+ 
+    f1 = ROOT.TFile(r1)
+    h1 = f1.Get("ratio")
+    
+    f2 = ROOT.TFile(r2)
+    h2 = f2.Get("ratio")
+    
+    h1.Divide(h2)
+ 
+ 
+    cfgPlot = {
 
+        'logy'              : False,
+        'logx'              : False,
+    
+        'xmin'              : recoilLow,
+        'xmax'              : recoilHigh,
+        'ymin'              : 0.95,
+        'ymax'              : 1.05,
+        
+        'xtitle'            : "Recoil U_{#perp}   (GeV)" if comp == "perp" else "Recoil U_{#parallel} (GeV)",
+        'ytitle'            : "Ratio / Ratio-(q_{T} reweighted)" ,
+        
+        'topRight'          : __topRight__, 
+        'topLeft'           : "#bf{CMS} #scale[0.7]{#it{Preliminary}}",
+        
+    }
 
-def doFitMultiGauss_plot(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binning_qT, rebin=1, yMin=1e-6, yMax=1e4, bkgCfg={}, yRatio = 1.15, recoilLow=-100, recoilHigh=100, plotSignal=False):
+    plotter.cfg = cfgPlot
+    canvas = plotter.canvas()
+    dummy = plotter.dummy()
+        
+    canvas.cd()
+    canvas.SetGrid()
+    canvas.SetTickx()
+    canvas.SetTicky()
+    dummy.Draw("HIST")
+
+    h1.SetMarkerStyle(8)
+    h1.SetMarkerSize(0.7)
+    h1.SetMarkerColor(ROOT.kBlack)
+    h1.SetLineColor(ROOT.kBlack)
+    h1.SetLineWidth(1)
+    
+    h1.Draw("SAME")
+   
+
+    latex = ROOT.TLatex()
+    latex.SetNDC()
+    latex.SetTextSize(0.040)
+    latex.SetTextColor(1)
+    latex.SetTextFont(42)
+    latex.DrawLatex(0.20, 0.85, procLabel)
+    latex.DrawLatex(0.20, 0.80, metLabel)
+
+    canvas.RedrawAxis()
+    canvas.RedrawAxis("G")
+    plotter.aux()
+    canvas.cd()
+    
+    canvas.Draw()
+    canvas.SaveAs("%s/pdf_double_ratio_qtRw.png" % outDir)
+    canvas.SaveAs("%s/pdf_double_ratio_qtRw.pdf" % outDir)
+
+def validatePDF(fitCfg, nStat, exportCfg, qT):
+
+    # check if norms > 0, and sigmas > 0
+    
+    # check if norms > 0 and  < 1
+    for nPar in exportCfg['norm']:
+        f = ROOT.TF1("tmp", fitCfg[nPar]['func'],0, 500)
+        
+        nStatName = "stat%d_p" % nStat
+        for iPar in range(fitCfg[nPar]['nParams']):
+            f.SetParameter(iPar, fitCfg[nStatName][nPar]["p%d"%iPar])
+        n = f.Eval(qT)
+        if n < 0 or n > 1:
+            print(f"ERROR: NORM NOT IN RANGE qT={qT}, nStat={nStat}, nPar={nPar}, val={n}")
+            return False
+            
+        nStatName = "stat%d_m" % nStat
+        for iPar in range(fitCfg[nPar]['nParams']):
+            f.SetParameter(iPar, fitCfg[nStatName][nPar]["p%d"%iPar])
+        n = f.Eval(qT)
+        if n < 0 or n > 1:
+            print(f"ERROR: NORM NOT IN RANGE qT={qT}, nStat={nStat}, nPar={nPar}, val={n}")
+            return False
+
+    # check if sigmas > 0
+    for nPar in exportCfg['sigma']:
+        f = ROOT.TF1("tmp", fitCfg[nPar]['func'],0, 500)
+        
+        nStatName = "stat%d_p" % nStat
+        for iPar in range(fitCfg[nPar]['nParams']):
+            f.SetParameter(iPar, fitCfg[nStatName][nPar]["p%d"%iPar])
+        n = f.Eval(qT)
+        if n < 0:
+            print(f"ERROR: SIGMA NEGATIVE qT={qT}, nStat={nStat}, nPar={nPar}, val={n}")
+            return False
+            
+        nStatName = "stat%d_m" % nStat
+        for iPar in range(fitCfg[nPar]['nParams']):
+            f.SetParameter(iPar, fitCfg[nStatName][nPar]["p%d"%iPar])
+        n = f.Eval(qT)
+        if n < 0:
+            print(f"ERROR: SIGMA NEGATIVE qT={qT}, nStat={nStat}, nPar={nPar}, val={n}")
+            return False          
+            
+    return True
+   
+def plotSystUncertainty(fitCfg, fitCfgUp, fitCfgDown, outName, label, yieldsIn, exportCfg, comp, procLabel, metLabel, outDir_, binning_qT, bkgCfg={}, yMin=1e-6, yMax=1e4, yRatio = 1.15, recoilLow=-100, recoilHigh=100):
     
     average_eval_PDF = False
  
@@ -109,7 +219,411 @@ def doFitMultiGauss_plot(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binn
         'topRight'          : __topRight__, 
         'topLeft'           : "#bf{CMS} #scale[0.7]{#it{Preliminary}}",
         
-        'ratiofraction'     : 0.25,
+        'ratiofraction'     : 0.3,
+        'ytitleR'           : "Ratio",
+        'yminR'             : (1-(yRatio-1)),
+        'ymaxR'             : yRatio,
+    }
+    
+        
+    qTlow, qThigh = min(binning_qT), max(binning_qT)    
+    nStatVars = fitCfg['nStatVars']
+    bins_recoil = range(recoilLow, recoilHigh, 1)
+    centers_qT = [(binning_qT[i]+binning_qT[i-1])*0.5 for i in range(1, len(binning_qT))]
+    centers_recoil = [(bins_recoil[i]+bins_recoil[i-1])*0.5 for i in range(1, len(bins_recoil))]
+    centers_recoil_tf = tf.constant(centers_recoil, dtype=tf.float64)
+    bins_recoil_tf = tf.constant(bins_recoil, dtype=tf.float64)
+    
+    
+    func_name = fitCfg['func_name']
+    func_parms = []
+    for k in range(0, fitCfg['nParams']):
+        for l in range(0, fitCfg["p%d"%k]['nParams']):
+            func_parms.append(fitCfg["p%d"%k]["p%d"%l])
+    func_model = getattr(rf, func_name)
+    
+    
+    func_parms_p = []
+    for k in range(0, fitCfgUp['nParams']):
+        for l in range(0, fitCfgUp["p%d"%k]['nParams']):
+            func_parms_p.append(fitCfgUp["p%d"%k]["p%d"%l])
+            
+    func_parms_m = []
+    for k in range(0, fitCfgDown['nParams']):
+        for l in range(0, fitCfgDown["p%d"%k]['nParams']):
+            func_parms_m.append(fitCfgDown["p%d"%k]["p%d"%l])
+    
+    # backgrounds
+    args_nobkg = ()
+    if len(bkgCfg) > 0:
+        args_nobkg_ = {}
+        for i,bkg in enumerate(bkgCfg["procs"]):
+            parms_cond = [] # construct array of conditional pdf parameters
+            for k in range(0, bkgCfg['parms'][i]['nParams']):
+                for l in range(0, bkgCfg['parms'][i]["p%d"%k]['nParams']):
+                    parms_cond.append(tf.constant(bkgCfg['parms'][i]["p%d"%k]["p%d"%l], dtype=tf.float64))
+            args_nobkg_['parms_%s'%bkg] = parms_cond
+            yield_fracs = [] # construct array of yield fractions
+            for iBin in range(1, len(binning_qT)):
+                yield_fracs.append(bkgCfg['norms'][i]*bkgCfg['yields'][i]["%d"%iBin]["yield"]/bkgCfg['data_yields']["%d"%iBin]['yield'])
+            args_nobkg_['fracs_%s'%bkg] = tf.constant([0.0]*len(binning_qT), dtype=tf.float64)
+        args_nobkg = (args_nobkg_)
+
+    pdf_tot = [0]*len(centers_recoil)
+    pdf_up = [0]*len(centers_recoil)
+    pdf_dw = [0]*len(centers_recoil)
+    
+
+    pdf_fracs = []
+    for iBin in range(1, len(binning_qT)):
+
+        qT = 0.5*(binning_qT[iBin-1] + binning_qT[iBin])
+        qT_tf = tf.constant(qT, dtype=tf.float64)
+        qTlow, qThigh = binning_qT[iBin-1], binning_qT[iBin]
+        yield_ = yieldsIn[str(iBin)]['yield']
+        print("############# Recoil bin %d [%.2f, %.2f]" % (iBin, qTlow, qThigh))
+
+
+        if average_eval_PDF:
+            pdf_values_bins = func_model([qT_tf, bins_recoil_tf], func_parms, args_nobkg).numpy()
+            pdf_values = [0.5*(pdf_values_bins[i-1]+pdf_values_bins[i]) for i in range(1, len(pdf_values_bins))]
+        else:
+            pdf_values = func_model([qT_tf, centers_recoil_tf], func_parms, args_nobkg).numpy()
+        pdf_frac_range = sum(pdf_values)
+        pdf_fracs.append(pdf_frac_range)
+
+        for i in range(0, len(centers_recoil)): 
+            pdf_tot[i] += pdf_values[i]*yield_/pdf_fracs[iBin-1]
+
+        # up
+        if average_eval_PDF:
+            pdf_values_bins = func_model([qT_tf, bins_recoil_tf], func_parms_p, args_nobkg).numpy()
+            pdf_values = [0.5*(pdf_values_bins[i-1]+pdf_values_bins[i]) for i in range(1, len(pdf_values_bins))]
+        else:
+            pdf_values = func_model([qT_tf, centers_recoil_tf], func_parms_p, args_nobkg).numpy()
+
+        for i in range(0, len(centers_recoil)): 
+            pdf_up[i] += pdf_values[i]*yield_/pdf_fracs[iBin-1]
+        
+
+        # dw
+        if average_eval_PDF:
+            pdf_values_bins = func_model([qT_tf, bins_recoil_tf], func_parms_m, args_nobkg).numpy()
+            pdf_values = [0.5*(pdf_values_bins[i-1]+pdf_values_bins[i]) for i in range(1, len(pdf_values_bins))]
+        else:
+            pdf_values = func_model([qT_tf, centers_recoil_tf], func_parms_m, args_nobkg).numpy()
+
+        for i in range(0, len(centers_recoil)): 
+            pdf_dw[i] += pdf_values[i]*yield_/pdf_fracs[iBin-1]
+ 
+ 
+ 
+    g_pdf = ROOT.TGraphErrors()
+    g_pdf.SetName("g_pdf")
+    for i in range(0, len(centers_recoil)): 
+        g_pdf.SetPoint(i, centers_recoil[i], pdf_tot[i])
+    g_pdf.SetLineColor(ROOT.kRed)
+    g_pdf.SetLineWidth(3)
+    
+
+
+    
+    g_up = ROOT.TGraphErrors()
+    g_up.SetName("g_up")
+    for i in range(0, len(centers_recoil)): 
+        g_up.SetPoint(i, centers_recoil[i], pdf_up[i]/pdf_tot[i])
+    g_up.SetLineColor(ROOT.kBlue)
+    g_up.SetLineWidth(2)
+    
+    g_dw = ROOT.TGraphErrors()
+    g_dw.SetName("g_dw")
+    for i in range(0, len(centers_recoil)): 
+        g_dw.SetPoint(i, centers_recoil[i], pdf_dw[i]/pdf_tot[i])
+    g_dw.SetLineColor(ROOT.kRed)
+    g_dw.SetLineWidth(2)
+    
+    # global plot
+    plotter.cfg = cfgPlot
+    canvas, padT, padB = plotter.canvasRatio()
+    dummyT, dummyB, dummyL = plotter.dummyRatio(line=1)
+            
+    canvas.cd()
+    padT.Draw()
+    padT.cd()
+    padT.SetGrid()
+    padT.SetTickx()
+    padT.SetTicky()
+    dummyT.Draw("HIST")
+
+    g_pdf.Draw("L SAME")
+
+    latex = ROOT.TLatex()
+    latex.SetNDC()
+    latex.SetTextSize(0.040)
+    latex.SetTextColor(1)
+    latex.SetTextFont(42)
+    latex.DrawLatex(0.20, 0.85, procLabel)
+    latex.DrawLatex(0.20, 0.80, metLabel)
+    latex.DrawLatex(0.20, 0.75, label)
+
+    padT.RedrawAxis()
+    padT.RedrawAxis("G")
+    plotter.auxRatio()
+    canvas.cd()
+    padB.Draw()
+    padB.cd()
+    padB.SetGrid()
+    padB.SetTickx()
+    padB.SetTicky()
+    dummyB.Draw("HIST")
+    dummyL.SetLineColor(ROOT.kBlack)
+    dummyL.Draw("SAME")
+    g_up.Draw("L SAME")
+    g_dw.Draw("L SAME")
+    padB.RedrawAxis()
+    padB.RedrawAxis("G")
+    canvas.Modify()
+    canvas.Update()
+    canvas.Draw()
+    canvas.SaveAs("%s/%s.png" % (outDir_, outName))
+    canvas.SaveAs("%s/%s.pdf" % (outDir_, outName))
+    dummyB.Delete()
+    dummyT.Delete()
+    padT.Delete()
+    padB.Delete()
+    
+
+
+def plotStatUncertainties(fitCfg, yieldsIn, exportCfg, comp, procLabel, metLabel, outDir_, binning_qT, bkgCfg={}, yMin=1e-6, yMax=1e4, yRatio = 1.15, recoilLow=-100, recoilHigh=100):
+    
+    average_eval_PDF = False
+ 
+    cfgPlot = {
+
+        'logy'              : True,
+        'logx'              : False,
+    
+        'xmin'              : recoilLow,
+        'xmax'              : recoilHigh,
+        'ymin'              : yMin,
+        'ymax'              : yMax,
+        
+        'xtitle'            : "Recoil U_{#perp}   (GeV)" if comp == "perp" else "Recoil U_{#parallel} (GeV)",
+        'ytitle'            : "Events" ,
+        
+        'topRight'          : __topRight__, 
+        'topLeft'           : "#bf{CMS} #scale[0.7]{#it{Preliminary}}",
+        
+        'ratiofraction'     : 0.3,
+        'ytitleR'           : "Ratio",
+        'yminR'             : (1-(yRatio-1)),
+        'ymaxR'             : yRatio,
+    }
+    
+        
+    qTlow, qThigh = min(binning_qT), max(binning_qT)    
+    nStatVars = fitCfg['nStatVars']
+    bins_recoil = range(recoilLow, recoilHigh, 1)
+    centers_qT = [(binning_qT[i]+binning_qT[i-1])*0.5 for i in range(1, len(binning_qT))]
+    centers_recoil = [(bins_recoil[i]+bins_recoil[i-1])*0.5 for i in range(1, len(bins_recoil))]
+    centers_recoil_tf = tf.constant(centers_recoil, dtype=tf.float64)
+    bins_recoil_tf = tf.constant(bins_recoil, dtype=tf.float64)
+    
+    
+    func_name = fitCfg['func_name']
+    func_parms = []
+    for k in range(0, fitCfg['nParams']):
+        for l in range(0, fitCfg["p%d"%k]['nParams']):
+            func_parms.append(fitCfg["p%d"%k]["p%d"%l])
+    func_model = getattr(rf, func_name)
+    
+    # backgrounds
+    args_nobkg = ()
+    if len(bkgCfg) > 0:
+        args_nobkg_ = {}
+        for i,bkg in enumerate(bkgCfg["procs"]):
+            parms_cond = [] # construct array of conditional pdf parameters
+            for k in range(0, bkgCfg['parms'][i]['nParams']):
+                for l in range(0, bkgCfg['parms'][i]["p%d"%k]['nParams']):
+                    parms_cond.append(tf.constant(bkgCfg['parms'][i]["p%d"%k]["p%d"%l], dtype=tf.float64))
+            args_nobkg_['parms_%s'%bkg] = parms_cond
+            yield_fracs = [] # construct array of yield fractions
+            for iBin in range(1, len(binning_qT)):
+                yield_fracs.append(bkgCfg['norms'][i]*bkgCfg['yields'][i]["%d"%iBin]["yield"]/bkgCfg['data_yields']["%d"%iBin]['yield'])
+            args_nobkg_['fracs_%s'%bkg] = tf.constant([0.0]*len(binning_qT), dtype=tf.float64)
+        args_nobkg = (args_nobkg_, 1)
+
+    pdf_tot = [0]*len(centers_recoil)
+    pdfs_up = [[0]*len(centers_recoil) for i in range(0, nStatVars)]
+    pdfs_dw = [[0]*len(centers_recoil) for i in range(0, nStatVars)]
+    
+
+    pdf_fracs = []
+    for iBin in range(1, len(binning_qT)):
+
+        qT = 0.5*(binning_qT[iBin-1] + binning_qT[iBin])
+        qT_tf = tf.constant(qT, dtype=tf.float64)
+        qTlow, qThigh = binning_qT[iBin-1], binning_qT[iBin]
+        yield_ = yieldsIn[str(iBin)]['yield']
+        print("############# Recoil bin %d [%.2f, %.2f]" % (iBin, qTlow, qThigh))
+
+
+        if average_eval_PDF:
+            pdf_values_bins = func_model([qT_tf, bins_recoil_tf], func_parms, *args_nobkg).numpy()
+            pdf_values = [0.5*(pdf_values_bins[i-1]+pdf_values_bins[i]) for i in range(1, len(pdf_values_bins))]
+        else:
+            pdf_values = func_model([qT_tf, centers_recoil_tf], func_parms, *args_nobkg).numpy()
+        pdf_frac_range = sum(pdf_values)
+        pdf_fracs.append(pdf_frac_range)
+
+        for i in range(0, len(centers_recoil)): 
+            pdf_tot[i] += pdf_values[i]*yield_/pdf_fracs[iBin-1] # iBin starts from 1
+
+        for nStat in range(0, nStatVars):
+                
+            #valid = validatePDF(fitCfg, nStat, exportCfg, qT)
+            #if not valid:
+            #    continue
+                
+            ### PLUS VARIATION
+            nStatName = "stat%d_p" % nStat
+            func_parms_p = []
+            for k in range(0, fitCfg['nParams']):
+                for l in range(0, fitCfg["p%d"%k]['nParams']):
+                    val = fitCfg[nStatName]["p%d"%k]["p%d"%l]
+                    #if k == 0: val = fitCfg["p%d"%k]["p%d"%l]
+                    func_parms_p.append(val)
+                       
+            if average_eval_PDF:
+                pdf_values_var_bins = func_model([qT_tf, bins_recoil_tf], func_parms_p, *args_nobkg).numpy()
+                pdf_values_var = [0.5*(pdf_values_var_bins[i-1]+pdf_values_var_bins[i]) for i in range(1, len(pdf_values_var_bins))]
+            else:
+                pdf_values_var = func_model([qT_tf, centers_recoil_tf], func_parms_p, *args_nobkg).numpy()
+
+            for i in range(0, len(centers_recoil)): 
+                pdfs_up[nStat][i] += pdf_values_var[i]*yield_/pdf_fracs[iBin-1]
+                         
+                
+            ### MINUS VARIATION
+            nStatName = "stat%d_m" % nStat
+            func_parms_m = []
+            for k in range(0, fitCfg['nParams']):
+                for l in range(0, fitCfg["p%d"%k]['nParams']):
+                    val = fitCfg[nStatName]["p%d"%k]["p%d"%l]
+                    #if k == 0: val = fitCfg["p%d"%k]["p%d"%l]
+                    func_parms_m.append(val)
+                    #func_parms_m.append(fitCfg[nStatName]["p%d"%k]["p%d"%l])
+                 
+            if average_eval_PDF:
+                pdf_values_var_bins = func_model([qT_tf, bins_recoil_tf], func_parms_m, *args_nobkg).numpy()
+                pdf_values_var = [0.5*(pdf_values_var_bins[i-1]+pdf_values_var_bins[i]) for i in range(1, len(pdf_values_var_bins))]
+            else:
+                pdf_values_var = func_model([qT_tf, centers_recoil_tf], func_parms_m, *args_nobkg).numpy()
+
+            for i in range(0, len(centers_recoil)): 
+                pdfs_dw[nStat][i] += pdf_values_var[i]*yield_/pdf_fracs[iBin-1]
+
+
+ 
+    g_pdf = ROOT.TGraphErrors()
+    g_pdf.SetName("g_pdf")
+    for i in range(0, len(centers_recoil)): 
+        g_pdf.SetPoint(i, centers_recoil[i], pdf_tot[i])
+    g_pdf.SetLineColor(ROOT.kRed)
+    g_pdf.SetLineWidth(3)
+    
+
+    for nStat in range(0, nStatVars):
+    
+        g_up = ROOT.TGraphErrors()
+        g_up.SetName("g_up")
+        for i in range(0, len(centers_recoil)): 
+            g_up.SetPoint(i, centers_recoil[i], pdfs_up[nStat][i]/pdf_tot[i])
+        g_up.SetLineColor(ROOT.kBlue)
+        g_up.SetLineWidth(2)
+    
+        g_dw = ROOT.TGraphErrors()
+        g_dw.SetName("g_dw")
+        for i in range(0, len(centers_recoil)): 
+            g_dw.SetPoint(i, centers_recoil[i], pdfs_dw[nStat][i]/pdf_tot[i])
+        g_dw.SetLineColor(ROOT.kRed)
+        g_dw.SetLineWidth(2)
+    
+        # global plot
+        plotter.cfg = cfgPlot
+        canvas, padT, padB = plotter.canvasRatio()
+        dummyT, dummyB, dummyL = plotter.dummyRatio(line=1)
+            
+        canvas.cd()
+        padT.Draw()
+        padT.cd()
+        padT.SetGrid()
+        padT.SetTickx()
+        padT.SetTicky()
+        dummyT.Draw("HIST")
+
+        g_pdf.Draw("L SAME")
+
+        latex = ROOT.TLatex()
+        latex.SetNDC()
+        latex.SetTextSize(0.040)
+        latex.SetTextColor(1)
+        latex.SetTextFont(42)
+        latex.DrawLatex(0.20, 0.85, procLabel)
+        latex.DrawLatex(0.20, 0.80, metLabel)
+        latex.DrawLatex(0.20, 0.75, f"Stat. uncertainty {nStat}")
+
+        padT.RedrawAxis()
+        padT.RedrawAxis("G")
+        plotter.auxRatio()
+        canvas.cd()
+        padB.Draw()
+        padB.cd()
+        padB.SetGrid()
+        padB.SetTickx()
+        padB.SetTicky()
+        dummyB.Draw("HIST")
+        dummyL.SetLineColor(ROOT.kBlack)
+        dummyL.Draw("SAME")
+        g_up.Draw("L SAME")
+        g_dw.Draw("L SAME")
+        padB.RedrawAxis()
+        padB.RedrawAxis("G")
+        canvas.Modify()
+        canvas.Update()
+        canvas.Draw()
+        canvas.SaveAs("%s/stat_%i.png" % (outDir_, nStat))
+        canvas.SaveAs("%s/stat_%i.pdf" % (outDir_, nStat))
+        dummyB.Delete()
+        dummyT.Delete()
+        padT.Delete()
+        padB.Delete()
+        
+
+ 
+
+
+def doFitMultiGauss_plot(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binning_qT, rebin=1, yMin=1e-6, yMax=1e4, bkgCfg={}, yRatio = 1.15, recoilLow=-100, recoilHigh=100, plotSignal=False, statUnc=True):
+    
+    average_eval_PDF = False
+ 
+    cfgPlot = {
+
+        'logy'              : True,
+        'logx'              : False,
+    
+        'xmin'              : recoilLow,
+        'xmax'              : recoilHigh,
+        'ymin'              : yMin,
+        'ymax'              : yMax,
+        
+        'xtitle'            : "Recoil U_{#perp}   (GeV)" if comp == "perp" else "Recoil U_{#parallel} (GeV)",
+        'ytitle'            : "Events" ,
+        
+        'topRight'          : __topRight__, 
+        'topLeft'           : "#bf{CMS} #scale[0.7]{#it{Preliminary}}",
+        
+        'ratiofraction'     : 0.3,
         'ytitleR'           : "Ratio",
         'yminR'             : (1-(yRatio-1)),
         'ymaxR'             : yRatio,
@@ -127,7 +641,7 @@ def doFitMultiGauss_plot(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binn
     bhist =  bhist[{"qTbinned": s[complex(0,qTlow):complex(0,qThigh)], axis_name: s[complex(0,recoilLow):complex(0,recoilHigh)]}]
     bhist = bhist[{axis_name: s[::bh.rebin(rebin)]}] # induces overflows?
     
-    doUnc = 'nStatVars' in fitCfg
+    doUnc = 'nStatVars' in fitCfg and statUnc
     bins_qT = bhist.axes[0].edges
     bins_recoil = bhist.axes[1].edges
     centers_qT = bhist.axes[0].centers
@@ -162,8 +676,8 @@ def doFitMultiGauss_plot(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binn
                 yield_fracs.append(bkgCfg['norms'][i]*bkgCfg['yields'][i]["%d"%iBin]["yield"]/bkgCfg['data_yields']["%d"%iBin]['yield'])
             args_['fracs_%s'%bkg] = tf.constant(yield_fracs, dtype=tf.float64)
             args_nobkg_['fracs_%s'%bkg] = tf.constant([0.0]*len(binning_qT), dtype=tf.float64)
-        args = (args_)
-        args_nobkg = (args_nobkg_)
+        args = (args_, 1)
+        args_nobkg = (args_nobkg_, 1)
         
     outDict = {}
     outDict['func_name'] = func_name
@@ -187,10 +701,10 @@ def doFitMultiGauss_plot(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binn
         yields_err.append(yield_err)
 
         if average_eval_PDF:
-            pdf_values_bins = func_model([qT_tf, bins_recoil_tf], func_parms, args).numpy()
+            pdf_values_bins = func_model([qT_tf, bins_recoil_tf], func_parms, *args).numpy()
             pdf_values = [0.5*(pdf_values_bins[i-1]+pdf_values_bins[i]) for i in range(1, len(pdf_values_bins))]
         else:
-            pdf_values = func_model([qT_tf, centers_recoil_tf], func_parms, args).numpy()
+            pdf_values = func_model([qT_tf, centers_recoil_tf], func_parms, *args).numpy()
         pdf_frac_range = sum(pdf_values)
         pdf_fracs.append(pdf_frac_range)
         
@@ -230,10 +744,10 @@ def doFitMultiGauss_plot(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binn
                         func_parms_p.append(fitCfg[nStatName]["p%d"%k]["p%d"%l])
                        
                 if average_eval_PDF:
-                    pdf_values_var_bins = func_model([qT_tf, bins_recoil_tf], func_parms_p, args).numpy()
+                    pdf_values_var_bins = func_model([qT_tf, bins_recoil_tf], func_parms_p, *args).numpy()
                     pdf_values_var = [0.5*(pdf_values_var_bins[i-1]+pdf_values_var_bins[i]) for i in range(1, len(pdf_values_var_bins))]
                 else:
-                    pdf_values_var = func_model([qT_tf, centers_recoil_tf], func_parms_p, args).numpy()
+                    pdf_values_var = func_model([qT_tf, centers_recoil_tf], func_parms_p, *args).numpy()
 
                 for i in range(0, len(centers_recoil)): 
                     pdf_tot_var_up[i] += pdf_values_var[i]*yields[iBin-1]/pdf_fracs[iBin-1] # iBin starts from 1
@@ -248,10 +762,10 @@ def doFitMultiGauss_plot(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binn
                         func_parms_m.append(fitCfg[nStatName]["p%d"%k]["p%d"%l])
                  
                 if average_eval_PDF:
-                    pdf_values_var_bins = func_model([qT_tf, bins_recoil_tf], func_parms_m, args).numpy()
+                    pdf_values_var_bins = func_model([qT_tf, bins_recoil_tf], func_parms_m, *args).numpy()
                     pdf_values_var = [0.5*(pdf_values_var_bins[i-1]+pdf_values_var_bins[i]) for i in range(1, len(pdf_values_var_bins))]
                 else:
-                    pdf_values_var = func_model([qT_tf, centers_recoil_tf], func_parms_m, args).numpy()
+                    pdf_values_var = func_model([qT_tf, centers_recoil_tf], func_parms_m, *args).numpy()
 
                 for i in range(0, len(centers_recoil)): 
                     pdf_tot_var_dw[i] += pdf_values_var[i]*yields[iBin-1]/pdf_fracs[iBin-1] # iBin starts from 1     
@@ -260,8 +774,8 @@ def doFitMultiGauss_plot(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binn
                 for i in range(1, hist_root_tot_unc_ratio_.GetNbinsX()+1):
                     pdf_tot_eval = pdf_values[i-1]*yield_/pdf_frac_range
                     if pdf_tot_eval > 0:
-                        err_up = pdf_tot_var_up[i-1] - pdf_tot_eval
-                        err_dw = pdf_tot_eval - pdf_tot_var_dw[i-1]
+                        err_up = abs(pdf_tot_var_up[i-1] - pdf_tot_eval)
+                        err_dw = abs(pdf_tot_eval - pdf_tot_var_dw[i-1])
                         err = abs(0.5*(err_up+err_dw))
                     else:
                         err = 0
@@ -279,10 +793,10 @@ def doFitMultiGauss_plot(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binn
 
         if plotSignal:
             if average_eval_PDF:
-                pdf_values_bins = func_model([qT_tf, bins_recoil_tf], func_parms, args_nobkg).numpy()
+                pdf_values_bins = func_model([qT_tf, bins_recoil_tf], func_parms, *args_nobkg).numpy()
                 sig_pdf_values = [0.5*(pdf_values_bins[i-1]+pdf_values_bins[i]) for i in range(1, len(pdf_values_bins))]
             else:
-                sig_pdf_values = func_model([qT_tf, centers_recoil_tf], func_parms, args_nobkg).numpy()
+                sig_pdf_values = func_model([qT_tf, centers_recoil_tf], func_parms, *args_nobkg).numpy()
             sig_pdf_frac_range = sum(sig_pdf_values)
            
         plotter.cfg = cfgPlot
@@ -425,10 +939,10 @@ def doFitMultiGauss_plot(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binn
                 qT_tf = tf.constant(qT, dtype=tf.float64)
                 
                 if average_eval_PDF:
-                    pdf_values_var_bins = func_model([qT_tf, bins_recoil_tf], func_parms_p, args).numpy()
+                    pdf_values_var_bins = func_model([qT_tf, bins_recoil_tf], func_parms_p, *args).numpy()
                     pdf_values_var = [0.5*(pdf_values_var_bins[i-1]+pdf_values_var_bins[i]) for i in range(1, len(pdf_values_var_bins))]
                 else:
-                    pdf_values_var = func_model([qT_tf, centers_recoil_tf], func_parms_p, args).numpy()
+                    pdf_values_var = func_model([qT_tf, centers_recoil_tf], func_parms_p, *args).numpy()
 
                 for i in range(0, len(centers_recoil)): 
                     pdf_tot_var_up[i] += pdf_values_var[i]*yields[iBin-1]/pdf_fracs[iBin-1] # iBin starts from 1
@@ -448,10 +962,10 @@ def doFitMultiGauss_plot(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binn
                 qT_tf = tf.constant(qT, dtype=tf.float64)
                 
                 if average_eval_PDF:
-                    pdf_values_var_bins = func_model([qT_tf, bins_recoil_tf], func_parms_m, args).numpy()
+                    pdf_values_var_bins = func_model([qT_tf, bins_recoil_tf], func_parms_m, *args).numpy()
                     pdf_values_var = [0.5*(pdf_values_var_bins[i-1]+pdf_values_var_bins[i]) for i in range(1, len(pdf_values_var_bins))]
                 else:
-                    pdf_values_var = func_model([qT_tf, centers_recoil_tf], func_parms_m, args).numpy()
+                    pdf_values_var = func_model([qT_tf, centers_recoil_tf], func_parms_m, *args).numpy()
 
                 for i in range(0, len(centers_recoil)): 
                     pdf_tot_var_dw[i] += pdf_values_var[i]*yields[iBin-1]/pdf_fracs[iBin-1] # iBin starts from 1     
@@ -472,8 +986,8 @@ def doFitMultiGauss_plot(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binn
             for i in range(1, hist_root_tot_unc_ratio.GetNbinsX()+1):
                 pdf_tot_eval = pdf_tot[i-1]
                 if pdf_tot_eval > 0:
-                    err_up = pdf_tot_var_up[i-1] - pdf_tot_eval
-                    err_dw = pdf_tot_eval - pdf_tot_var_dw[i-1]
+                    err_up = abs(pdf_tot_var_up[i-1] - pdf_tot_eval)
+                    err_dw = abs(pdf_tot_eval - pdf_tot_var_dw[i-1])
                     err = abs(0.5*(err_up+err_dw))
                 else:
                     err = 0
@@ -494,10 +1008,13 @@ def doFitMultiGauss_plot(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binn
             #print(i,hist_root_tot_unc_ratio.GetBinCenter(i), centers_recoil[i-1], pdf_tot[i-1], pdf_tot_var[i-1], err, pdf_tot[i-1]/pdf_tot_var[i-1])
        
         for i in range(0, len(centers_recoil)): 
-            eyl[i] = eyl[i]**0.5
-            eyh[i] = eyh[i]**0.5
+            eyl[i] = eyl[i]**0.5 / pdf_tot[i]
+            eyh[i] = eyh[i]**0.5 / pdf_tot[i]
+            
+            print(i, eyl[i], eyh[i], hist_root_tot_unc_ratio.GetBinError(i+1))
+            
         hist_root_tot_unc_ratio_asym = ROOT.TGraphAsymmErrors(len(centers_recoil), vx, vy, exl, exh, eyl, eyh);
-        hist_root_tot_unc_ratio_asym = hist_root_tot.Clone("hist_root_tot_unc_ratio")
+        #hist_root_tot_unc_ratio_asym = hist_root_tot.Clone("hist_root_tot_unc_ratio")
         hist_root_tot_unc_ratio_asym.SetFillColor(18)
         hist_root_tot_unc_ratio_asym.SetMarkerSize(0)
         hist_root_tot_unc_ratio_asym.SetLineWidth(0)
@@ -524,6 +1041,8 @@ def doFitMultiGauss_plot(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binn
     
 
     g_pdf = ROOT.TGraphErrors()
+    g_pdf.SetName("g_pdf")
+    g_sig_pdf.SetName("g_sig_pdf")
     g_sig_pdf = ROOT.TGraphErrors()
     for i in range(0, len(centers_recoil)): 
         g_pdf.SetPoint(i, centers_recoil[i], pdf_tot[i])
@@ -568,8 +1087,9 @@ def doFitMultiGauss_plot(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binn
     padB.SetTickx()
     padB.SetTicky()
     dummyB.Draw("HIST")
-    if doUnc: hist_root_tot_unc_ratio.Draw("E4 SAME")
-    #hist_root_tot_unc_ratio_asym.Draw("E4 SAME")
+    if doUnc: 
+        hist_root_tot_unc_ratio.Draw("E4 SAME")
+        #hist_root_tot_unc_ratio_asym.Draw("E4 SAME") # draws the opposite region?!
     dummyL.Draw("SAME")
     histRatio.Draw("SAME E0")
     padB.RedrawAxis()
@@ -584,20 +1104,23 @@ def doFitMultiGauss_plot(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binn
     padT.Delete()
     padB.Delete()
     
-    #fOut = ROOT.TFile("%s/global.png" % outDir_)
-    #fOut.Close()
+    fOut = ROOT.TFile("%s/global.root" % outDir_, "RECREATE")
+    histRatio.Write()
+    hist_root_tot.Write()
+    g_pdf.Write()
+    fOut.Close()
 
  
 def makeFunction(funcJs, i):
 
     cfg = funcJs["p%d"%i]
-    func = ROOT.TF1(cfg['funcName'], getattr(rf, cfg['funcName']+"_")(), 0, 500)
+    func = ROOT.TF1("func%d"%i, cfg['func'], 0, 500)
     for j in range(0, cfg['nParams']):
         func.SetParameter(j, cfg["p%d"%j])
     return func
     
  
-def doFitMultiGauss_fit(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binning_qT, yMin=1e-6, yMax=1e4, bkgCfg={}, funcJs=None, yRatio = 1.15, recoilLow=-100, recoilHigh=100, rebin=1):
+def doFitMultiGauss_fit(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binning_qT, yMin=1e-6, yMax=1e4, bkgCfg={}, funcJs=None, yRatio = 1.15, recoilLow=-100, recoilHigh=100, rebin=1, sumw2=True):
     
     average_eval_PDF = False
  
@@ -617,7 +1140,7 @@ def doFitMultiGauss_fit(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binni
         'topRight'          : __topRight__, 
         'topLeft'           : "#bf{CMS} #scale[0.7]{#it{Preliminary}}",
         
-        'ratiofraction'     : 0.25,
+        'ratiofraction'     : 0.3,
         'ytitleR'           : "Ratio",
         'yminR'             : (1-(yRatio-1)),
         'ymaxR'             : yRatio,
@@ -676,7 +1199,7 @@ def doFitMultiGauss_fit(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binni
                 yield_fracs.append(bkgCfg['norms'][i]*bkgCfg['yields'][i]["%d"%iBin]["yield"]/bkgCfg['data_yields']["%d"%iBin]['yield'])
             args_['fracs_%s'%bkg] = tf.constant(yield_fracs, dtype=tf.float64)
                 
-    args = (args_)
+    args = (args_, 1)
 
     g_chi2 = ROOT.TGraphErrors()
     hist_root_tot = None
@@ -701,11 +1224,16 @@ def doFitMultiGauss_fit(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binni
         yields.append(yield_)
         yields_err.append(yield_err)
         
-        args['qT'] = qT_tf # always propagate qT, in case it is used
+        if not sumw2:
+           h.variances = h.values
+
+        
+        args_['qT'] = qT_tf # always propagate qT, in case it is used
+        args = (args_, 1)
             
         print(" -> Start fitting")
         start = time.time()
-        res = fitter.fit_hist(h, func_model, np.array(func_parms), max_iter = 5, edmtol = 1e-5, mode = "nll", xargs=args, sumw2=True) # nll chisq_normalized
+        res = fitter.fit_hist(h, func_model, np.array(func_parms), max_iter = 5, edmtol = 1e-5, mode = "nll", args=args) # nll chisq_normalized
         end = time.time()
             
         parms_vals = res['x']
@@ -721,10 +1249,10 @@ def doFitMultiGauss_fit(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binni
         
 
         if average_eval_PDF:
-            pdf_values_bins = func_model([qT_tf], parms_vals, args).numpy()
+            pdf_values_bins = func_model([qT_tf], parms_vals, *args).numpy()
             pdf_values = [0.5*(pdf_values_bins[i-1]+pdf_values_bins[i]) for i in range(1, len(pdf_values_bins))]      
         else:
-            pdf_values = func_model([centers_recoil_tf], parms_vals, args).numpy()
+            pdf_values = func_model([centers_recoil_tf], parms_vals, *args).numpy()
             
         pdf_frac_range = sum(pdf_values)
 
@@ -788,6 +1316,9 @@ def doFitMultiGauss_fit(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binni
         outDict[iBin] = {}
         outDict[iBin]['yield'] = yield_
         outDict[iBin]['yield_err'] = yield_err
+        outDict[iBin]['fit_status'] = fit_status
+        outDict[iBin]['cov_status'] = cov_status
+        
 
         for i in range(0, len(func_parms)):
             val, err = parms_vals[i], math.sqrt(cov_matrix[i][i]) if cov_status == 0 and cov_matrix[i][i] >= 0 else -2
@@ -980,7 +1511,7 @@ def doFitMultiGauss_scipy(fInName, proc, comp, fitCfg, label, outDir_, recoil_qT
         'topRight'          : __topRight__, 
         'topLeft'           : "#bf{CMS} #scale[0.7]{#it{Preliminary}}",
         
-        'ratiofraction'     : 0.25,
+        'ratiofraction'     : 0.3,
         'ytitleR'           : "Ratio" if ratio else "Pull",
         'yminR'             : (1-(yRatio-1)) if ratio else -2.5,
         'ymaxR'             : yRatio if ratio else 2.5,
@@ -1507,7 +2038,7 @@ def doGlobalPlot(fInName, proc, comp, jsIn, binning_qT, outDir_, label, funcJs=N
         'topRight'          : __topRight__,
         'topLeft'           : "#bf{CMS} #scale[0.7]{#it{Preliminary}}",
         
-        'ratiofraction'     : 0.25,
+        'ratiofraction'     : 0.3,
         'ytitleR'           : "Ratio" if ratio else "Pull",
         'yminR'             : (1-(yRatio-1)) if ratio else -2.5,
         'ymaxR'             : yRatio if ratio else 2.5,
@@ -1820,7 +2351,7 @@ def plotParameter(param, jsIn, outDir, binning_qT, procLabel, metLabel, yMin=0, 
         'topRight'          : __topRight__, 
         'topLeft'           : "#bf{CMS} #scale[0.7]{#it{Preliminary}}",
             
-        'ratiofraction'     : 0.25,
+        'ratiofraction'     : 0.3,
         'ytitleR'           : "Ratio",
         'yminR'             : (1-(yRatio-1)),
         'ymaxR'             : yRatio,
@@ -1906,6 +2437,11 @@ def parameterizeGauss(jsIn, jsOut, comp, param, fitFuncName, iParams, outDir, bi
         y_err = jsIn[str(qTbin)][param + "_err"]
         if y_err < 0: y_err = 0
         
+        fit_status = jsIn[str(qTbin)]['fit_status']
+        cov_status = jsIn[str(qTbin)]['cov_status']
+        if fit_status != 0: continue
+        if cov_status != 0: continue
+        
         #if x < fitMin or x > fitMax: continue
         if y < cutOffMin: continue
         if y > cutOffMax: continue
@@ -1913,7 +2449,7 @@ def parameterizeGauss(jsIn, jsOut, comp, param, fitFuncName, iParams, outDir, bi
         g.SetPoint(iPoint, x, y)   
         g.SetPointError(iPoint, x_err, y_err)
         iPoint += 1
-
+    chisq = 0.0
     if doFit and fit:
         result = g.Fit(fit.GetName(), fitOpts, "", fitMin, fitMax) 
         chisq = fit.GetChisquare()/fit.GetNDF()
@@ -1981,7 +2517,7 @@ def parameterizeGauss(jsIn, jsOut, comp, param, fitFuncName, iParams, outDir, bi
         'topRight'          : __topRight__, 
         'topLeft'           : "#bf{CMS} #scale[0.7]{#it{Preliminary}}",
             
-        'ratiofraction'     : 0.25,
+        'ratiofraction'     : 0.3,
         'ytitleR'           : "Ratio",
         'yminR'             : (1-(yRatio-1)),
         'ymaxR'             : yRatio,
@@ -2036,7 +2572,8 @@ def parameterizeGauss(jsIn, jsOut, comp, param, fitFuncName, iParams, outDir, bi
         uncBand_ratio.SetFillColor(18)
         uncBand_ratio.Draw("3SAME")
     dummyL.Draw("SAME")
-    g_ratio.Draw("PE0 SAME")
+    if doFit and fit:
+        g_ratio.Draw("PE0 SAME")
     
     padB.RedrawAxis()
     padB.RedrawAxis("G")
@@ -2160,8 +2697,8 @@ def plotCovarianceMatrix(cov, outDir):
     c.SetTicks()
     
     for i in range(s): 
-        h_cov.GetXaxis().SetBinLabel(i+1, str(i))
-        h_cov.GetYaxis().SetBinLabel(i+1, str(i))
+        h_cov.GetXaxis().SetBinLabel(i+1, str(i+1))
+        h_cov.GetYaxis().SetBinLabel(i+1, str(s-i))
         
     ROOT.gStyle.SetPaintTextFormat("4.3f")
     h_cov.SetMarkerSize(0.7)
@@ -2202,8 +2739,8 @@ def plotCovarianceMatrix(cov, outDir):
     c.SetTicks()
     
     for i in range(s): 
-        h_corr.GetXaxis().SetBinLabel(i+1, str(i))
-        h_corr.GetYaxis().SetBinLabel(i+1, str(i))
+        h_corr.GetXaxis().SetBinLabel(i+1, str(i+1))
+        h_corr.GetYaxis().SetBinLabel(i+1, str(s-i))
         
     ROOT.gStyle.SetPaintTextFormat("4.3f")
     h_corr.SetMarkerSize(0.7)
@@ -2221,7 +2758,7 @@ def plotCovarianceMatrix(cov, outDir):
 
 
 
-def combinedFit_scipy(bhist, comp, fitCfg, binning_qT, bkgCfg = {}, recoilLow=-100, recoilHigh=100, chisq_refit=False, rebin=1, outDir=""):
+def combinedFit_scipy(bhist, comp, fitCfg, binning_qT, bkgCfg = {}, recoilLow=-100, recoilHigh=100, rebin=1, outDir="/tmp/", sumw2=True):
     
     # TODO: implement rebinning of binning_qT
     # TODO: what if fit failed, not invertible...
@@ -2239,6 +2776,9 @@ def combinedFit_scipy(bhist, comp, fitCfg, binning_qT, bkgCfg = {}, recoilLow=-1
     h =  bhist[{"qTbinned": s[complex(0,qTlow):complex(0,qThigh)], axis_name: s[complex(0,recoilLow):complex(0,recoilHigh)]}]  #"recoil_perp": s[complex(0,recoilLow):complex(0,recoilHigh)
     h =  bhist[{"qTbinned": s[complex(0,qTlow):complex(0,qThigh)]}]
     h = h[{axis_name: s[::bh.rebin(rebin)]}]
+    
+    if not sumw2:
+           h.variances = h.values
 
     bins_qT = h.axes[0].edges
     bins_recoil = h.axes[1].edges
@@ -2252,6 +2792,7 @@ def combinedFit_scipy(bhist, comp, fitCfg, binning_qT, bkgCfg = {}, recoilLow=-1
     bnds = []
     for k in range(0, fitCfg['nParams']):
         for l in range(0, fitCfg["p%d"%k]['nParams']):
+            #if fitCfg["p%d"%k]["p%d_isCte"%l]: continue
             func_parms.append(fitCfg["p%d"%k]["p%d"%l])
             bnds.append(fitCfg["p%d"%k]["p%d_bnds"%l] if "p%d_bnds"%l in fitCfg["p%d"%k] else (None, None))
             print("  -> p%d, p%d: %.5f (%s)" % (k, l, fitCfg["p%d"%k]["p%d"%l], (fitCfg["p%d"%k]["p%d_bnds"%l] if "p%d_bnds"%l in fitCfg["p%d"%k] else (None, None),)))
@@ -2268,12 +2809,13 @@ def combinedFit_scipy(bhist, comp, fitCfg, binning_qT, bkgCfg = {}, recoilLow=-1
             for k in range(0, bkgCfg['parms'][i]['nParams']):
                 for l in range(0, bkgCfg['parms'][i]["p%d"%k]['nParams']):
                     parms_cond.append(tf.constant(bkgCfg['parms'][i]["p%d"%k]["p%d"%l], dtype=tf.float64))
-            args_['parms_%s'%bkg] = parms_cond
+            args_["parms_%s"%bkg] = parms_cond
             yield_fracs = [] # construct array of yield fractions
             for iBin in range(1, len(binning_qT)):
                 yield_fracs.append(bkgCfg['norms'][i]*bkgCfg['yields'][i]["%d"%iBin]["yield"]/bkgCfg['data_yields']["%d"%iBin]['yield'])
             args_['fracs_%s'%bkg] = tf.constant(yield_fracs, dtype=tf.float64)
-        args = (args_)
+        args = (args_, 1) # the 1 seems necessary for the val_grad_hess, which seems to slice only the dict keys and not the values
+   
 
     outDict = {}
     outDict['nParams'] = fitCfg['nParams']
@@ -2282,7 +2824,7 @@ def combinedFit_scipy(bhist, comp, fitCfg, binning_qT, bkgCfg = {}, recoilLow=-1
                
     print(" -> Start NLL fitting")
     start = time.time()
-    res = fitter.fit_hist(h, func_model, np.array(func_parms), max_iter = 5, edmtol = 1e-5, mode = "nll", xargs=args, bnds=bnds, norm_axes=[1], sumw2=False) # nll chisq_normalized
+    res = fitter.fit_hist(h, func_model, np.array(func_parms), max_iter = 5, edmtol = 1e-5, mode = "nll", args=args, norm_axes=[1])
     end = time.time()
             
     parms_vals = res['x']
@@ -2299,20 +2841,6 @@ def combinedFit_scipy(bhist, comp, fitCfg, binning_qT, bkgCfg = {}, recoilLow=-1
     print("cov")
     print(cov_matrix)
     
-    if chisq_refit:
-        print(" -> Start CHISQ fitting")
-        start = time.time()
-        res = fitter.fit_hist(h, func_model, np.array(parms_vals), max_iter = 5, edmtol = 1e-5, mode = "chisq_normalized", xargs=args) # nll chisq_normalized
-        end = time.time()
-                
-        parms_vals = res['x']
-        fit_status = res['status']
-        cov_status = res['covstatus']
-        hess_eigvals = res['hess_eigvals']
-        cov_matrix = res['cov']
-            
-        print(" -> Fit ended, time=%.3f s, status=%d, cov_status=%d" % (end-start, fit_status, cov_status))
-        print(parms_vals)
     
     # save output parms to dict
     iiter = 0
@@ -2412,7 +2940,7 @@ def parameterizeMean(bhist, comp, outDir, fitCfg, binning_qT, procLabel, metLabe
            
 
 
-    result = g.Fit(fit.GetName(), "NSE", "", xMin, xMax) 
+    result = g.Fit(fit.GetName(), "NS ", "", xMin, xMax) 
     chisq = fit.GetChisquare()/fit.GetNDF()
     fit.SetLineColor(ROOT.kRed)
     #fit.GetXaxis().SetRangeUser(0, 200)
@@ -2474,7 +3002,7 @@ def parameterizeMean(bhist, comp, outDir, fitCfg, binning_qT, procLabel, metLabe
         'topRight'          : __topRight__, 
         'topLeft'           : "#bf{CMS} #scale[0.7]{#it{Preliminary}}",
             
-        'ratiofraction'     : 0.25,
+        'ratiofraction'     : 0.3,
         'ytitleR'           : "Ratio",
         'yminR'             : (1-(yRatio-1)),
         'ymaxR'             : yRatio,
@@ -2553,7 +3081,15 @@ def parameterizeMean(bhist, comp, outDir, fitCfg, binning_qT, procLabel, metLabe
      
     with open("%s/parametric_mean.json" % outDir, "w") as outfile: json.dump(outDict, outfile, indent=4)
     with open("%s/yields.json" % outDir, "w") as outfile: json.dump(yieldsDict, outfile, indent=4)
-    
+ 
+
+def printVars(fitCfg):
+
+    for k in range(0, fitCfg['nParams']):
+        print("p%d"%k)
+        for l in range(0, fitCfg["p%d"%k]['nParams']):
+            print("p%d %.4e"%(l, fitCfg["p%d"%k]["p%d"%l]))
+
 
 def export(exportCfg, fOut, jsInF, jsInF_mean=None):
 
@@ -2566,7 +3102,7 @@ def export(exportCfg, fOut, jsInF, jsInF_mean=None):
     for i in range(0, nGauss):
     
         # mean
-        if isinstance(exportCfg['mean'][i], str): cfg = jsIn[exportCfg['mean'][i]]
+        if isinstance(exportCfg['mean'][i], str): cfg = copy.deepcopy(jsIn[exportCfg['mean'][i]])
         else:
             cfg = {}
             cfg['func'] = "[0]"
@@ -2589,7 +3125,7 @@ def export(exportCfg, fOut, jsInF, jsInF_mean=None):
         cfgOut['mean%d'%(i+1)] = cfg
         
         # sigma
-        if isinstance(exportCfg['sigma'][i], str): cfg = jsIn[exportCfg['sigma'][i]]
+        if isinstance(exportCfg['sigma'][i], str): cfg = cfg = copy.deepcopy(jsIn[exportCfg['sigma'][i]])
         else:
             cfg = {}
             cfg['func'] = "[0]"
@@ -2601,7 +3137,7 @@ def export(exportCfg, fOut, jsInF, jsInF_mean=None):
         
         # norm
         if i == nGauss-1: continue
-        if isinstance(exportCfg['norm'][i], str): cfg = jsIn[exportCfg['norm'][i]]
+        if isinstance(exportCfg['norm'][i], str): cfg = cfg = copy.deepcopy(jsIn[exportCfg['norm'][i]])
         else:
             cfg = {}
             cfg['func'] = "[0]"
@@ -2622,26 +3158,22 @@ def export(exportCfg, fOut, jsInF, jsInF_mean=None):
                 cfgOut[statLabel] = {}
                 for i in range(0, nGauss):
                     # mean
-                    if isinstance(exportCfg['mean'][i], str): cfg = jsIn[statLabel][exportCfg['mean'][i]]
+                    if isinstance(exportCfg['mean'][i], str): cfg = cfg = copy.deepcopy(jsIn[statLabel][exportCfg['mean'][i]])
                     else:
                         cfg = {}
                         cfg['p0'] = exportCfg['mean'][i]
                     if jsInF_mean != None: # add parameterized mean to mean
                         func_mean = jsIn_mean['func']
                         func_nParams = jsIn_mean['nParams']
-                        p_base = cfg['nParams']
+                        p_base = jsIn[exportCfg['mean'][i]]['nParams'] #  cfg['nParams']
                         for iPar in reversed(range(0, func_nParams)):
                             p = p_base + iPar
                             func_mean = func_mean.replace("[%d]"%iPar, "[%d]"%p) # shift the parameters
                             cfg['p%d'%p] = jsIn_mean['p%d'%iPar]
-                            cfg['p%d_err'%p] = jsIn_mean['p%d_err'%iPar]
-                            cfg['p%d_isCte'%p] = jsIn_mean['p%d_isCte'%iPar]
-                            cfg['nParams'] += 1
-                        cfg['func'] = "(%s) + (%s)" % (cfg['func'], func_mean)
                     cfgOut[statLabel]['mean%d'%(i+1)] = cfg
                     
                     # sigma
-                    if isinstance(exportCfg['sigma'][i], str): cfg = jsIn[statLabel][exportCfg['sigma'][i]]
+                    if isinstance(exportCfg['sigma'][i], str): cfg = cfg = copy.deepcopy(jsIn[statLabel][exportCfg['sigma'][i]])
                     else:
                         cfg = {}
                         cfg['p0'] = exportCfg['sigma'][i]
@@ -2650,7 +3182,7 @@ def export(exportCfg, fOut, jsInF, jsInF_mean=None):
                     
                     # norm
                     if i == nGauss-1: continue
-                    if isinstance(exportCfg['norm'][i], str): cfg = jsIn[statLabel][exportCfg['norm'][i]]
+                    if isinstance(exportCfg['norm'][i], str): cfg = cfg = copy.deepcopy(jsIn[statLabel][exportCfg['norm'][i]])
                     else:
                         cfg = {}
                         cfg['p0'] = exportCfg['norm'][i]

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from wremnants import CardTool,theory_tools,syst_tools
 from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_W
-from utilities import common
+from utilities import logging
 from wremnants import histselections as sel
 import argparse
 import os
@@ -28,7 +28,7 @@ parser.add_argument("--lumiScale", dest="lumiScale", help="Luminosity scale", ty
 parser.add_argument("--met", type=str, help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")
 args = parser.parse_args()
 
-logger = common.setup_logger(__file__, args.verbose, args.color_logger)
+logger = logging.setup_logger(__file__, args.verbose, args.color_logger)
 
 if not os.path.isdir(args.outfolder):
     os.mkdir(args.outfolder)
