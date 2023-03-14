@@ -229,7 +229,7 @@ class datagroupsLowPU(datagroups):
                     members = [self.datasets[x] for x in ["singlemuon", "WplusJetsToENu", "WminusJetsToENu", "WZTo3LNu", "WWTo2L2Nu", "ZZ", "WplusJetsToTauNu", "WminusJetsToTauNu", "WplusJetsToMuNu", "WminusJetsToMuNu", "Ztautau", "Zee", "Zmumu", "TTTo2L2Nu", "TTToSemiLeptonic"]],
                     label = "Nonprompt",
                     scale = lambda x: 1. if x.is_data else -1,
-                    color="#A9A9A9", #ROOT.TColor.GetColor(222, 90, 106),  --> sel
+                    color="#A9A9A9",
                     selectOp = self.fakeHistABCD,
                 ),
             )        
@@ -263,18 +263,24 @@ class datagroupsLowPU(datagroups):
             
     def signalHistSel(self, h, charge=None):
         s = hist.tag.Slicer()
+        axes = [ax.name for ax in h.axes]
         if self.isW:
             sel = {"passIso" : True, "passMT": True}
             if charge in [-1, 1]:
                 sel.update({"charge" : -1j if charge < 0 else 1j})
+            for key in sel.copy().keys():
+                if not key in axes:
+                    del sel[key]
             return h[sel]
         else: return h
                 
        
     def fakeHistABCD(self, h):
-        s = hist.tag.Slicer()
-        sf = h[{"passIso" : True, "passMT" : False}].sum().value / h[{"passIso" : False, "passMT" : False}].sum().value
-        return h[{"passIso" : False, "passMT" : True}]*sf
+        axes = [ax.name for ax in h.axes]
+        if "mt" in axes:
+            s = hist.tag.Slicer()
+            sf = h[{"passIso" : True, "passMT" : False}].sum().value / h[{"passIso" : False, "passMT" : False}].sum().value
+            return h[{"passIso" : False, "passMT" : True}]*sf
         
         ret = hh.multiplyHists(
             hh.divideHists(h[{"passIso" : True, "passMT" : False}], 

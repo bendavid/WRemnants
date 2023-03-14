@@ -22,6 +22,8 @@ def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, na
         hostname = socket.gethostname()
         if hostname == "lxplus8s10.cern.ch":
             base_path = "/scratch/shared/NanoAOD"
+        if hostname == "cmswmass2.cern.ch":
+            base_path = "/data/shared/NanoAOD"
         elif "mit.edu" in hostname:
             base_path = "/scratch/submit/cms/wmass/NanoAOD"
         elif hostname == "cmsanalysis.pi.infn.it":
