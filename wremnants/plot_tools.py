@@ -4,13 +4,12 @@ import matplotlib.pyplot as plt
 from matplotlib import ticker
 from matplotlib import patches
 from matplotlib.ticker import StrMethodFormatter # for setting number of decimal places on tick labels
-from utilities import boostHistHelpers as hh,common,output_tools
+from utilities import boostHistHelpers as hh,common,output_tools,logging
 from wremnants import histselections as sel
 import math
 import numpy as np
 import re
 import os
-import logging
 import shutil
 import sys
 import datetime
@@ -18,7 +17,7 @@ import json
 
 hep.style.use(hep.style.ROOT)
 
-logger = common.child_logger(__name__)
+logger = logging.child_logger(__name__)
 
 def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None,
     grid_on_main_plot = False, grid_on_ratio_plot = False, plot_title = None, title_padding = 0,

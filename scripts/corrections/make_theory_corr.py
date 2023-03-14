@@ -3,7 +3,7 @@ import lz4.frame
 import pickle
 from wremnants import plot_tools, theory_corrections, theory_tools
 from utilities import boostHistHelpers as hh
-from utilities import common, input_tools, output_tools
+from utilities import common, input_tools, output_tools, logging
 import pathlib
 import hist
 import argparse
@@ -24,7 +24,7 @@ parser.add_argument("--no-color-logger", action="store_false", dest="color_logge
 
 args = parser.parse_args()
 
-logger = common.setup_logger("make_theory_corr", 4 if args.debug else 3, args.color_logger)
+logger = logging.setup_logger("make_theory_corr", 4 if args.debug else 3, args.color_logger)
 
 def read_corr(procName, generator, corr_files):
     charge = 0 if procName[0] == "Z" else (1 if "Wplus" in procName else -1)

@@ -1,5 +1,5 @@
 import argparse
-from utilities import output_tools, common, rdf_tools
+from utilities import output_tools, common, rdf_tools, logging
 
 parser,initargs = common.common_parser(True)
 
@@ -8,7 +8,6 @@ import wremnants
 from wremnants import theory_tools,syst_tools,theory_corrections, muon_calibration, muon_selections, muon_validation
 import hist
 import lz4.frame
-import logging
 import math
 import time
 from utilities import boostHistHelpers as hh
@@ -19,26 +18,24 @@ data_dir = f"{pathlib.Path(__file__).parent}/../../wremnants/data/"
 parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency (legacy option for tests)")
 parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for luminosity in excess to 1 (e.g. 1.012 means 1.2\%)", default=1.012)
 parser.add_argument("--vqtTest", action="store_true", help="Test of isolation SFs dependence on V q_T projection (at the moment just for the W)")
-sfFileVqtTest = f"{data_dir}/testMuonSF/fits_2.root"
-parser.add_argument("--sfFileVqtTest", type=str, help="File with muon scale factors as a function of V q_T projection", default=sfFileVqtTest)
+parser.add_argument("--sfFileVqtTest", type=str, help="File with muon scale factors as a function of V q_T projection", default=f"{data_dir}/testMuonSF/fits_2.root")
 parser.add_argument("--vqtTestIntegrated", action="store_true", help="Test of isolation SFs dependence on V q_T projection, integrated (would be the same as default SF, but pt-eta binning is different)")
 parser.add_argument("--vqtTestReal", action="store_true", help="Test of isolation SFs dependence on V q_T projection, using 3D SFs directly (instead of the Vqt fits)")
 parser.add_argument("--vqtTestIncludeTrigger", action="store_true", help="Test of isolation SFs dependence on V q_T projection. Including trigger")
 args = parser.parse_args()
-sfFileVqtTest = args.sfFileVqtTest
 
 if args.vqtTestIntegrated:
     sfFileVqtTest = f"{data_dir}/testMuonSF/IsolationEfficienciesCoarseBinning.root"
+else:
+    sfFileVqtTest = args.sfFileVqtTest
 
-logger = common.setup_logger(__file__, args.verbose, args.color_logger)
+logger = logging.setup_logger(__file__, args.verbose, args.color_logger)
 
-filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
-excludeGroup = args.excludeProcGroups if args.excludeProcGroups else None
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
-                                              filt=filt if args.filterProcs else None,
-                                              excludeGroup=excludeGroup, 
+                                              filt=args.filterProcs,
+                                              excl=args.excludeProcs, 
                                               nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path)
-    
+
 era = args.era
 
 # custom template binning

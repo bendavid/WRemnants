@@ -1,6 +1,6 @@
 import argparse
 from utilities import output_tools
-from utilities import common as common
+from utilities import common, logging
 
 parser,initargs = common.common_parser()
 parser.add_argument("--flavor", type=str, choices=["e", "mu"], help="Flavor (ee or mumu)", default="mu")
@@ -10,7 +10,6 @@ args = parser.parse_args()
 import narf
 import wremnants
 from wremnants import theory_tools,syst_tools,theory_corrections
-import logging
 import math
 import hist
 import ROOT
@@ -23,14 +22,12 @@ met = args.met # mumu, ee
 
 corr_helpers = theory_corrections.load_corr_helpers(common.wprocs_lowpu, args.theory_corr)
 
-filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts]) 
-excludeGroup = args.excludeProcGroups if args.excludeProcGroups else None
 datasets = wremnants.datasetsLowPU.getDatasets(maxFiles=args.maxFiles,
-                                               filt=filt if args.filterProcs else None,
-                                               excludeGroup=excludeGroup,
-                                               flavor=flavor)
+                                              filt=args.filterProcs,
+                                              excl=args.excludeProcs, 
+                                              flavor=flavor)
 
-logger = common.setup_logger(__file__, args.verbose, args.color_logger)
+logger = logging.setup_logger(__file__, args.verbose, args.color_logger)
 
 for d in datasets: logger.info(f"Dataset {d.name}")
 

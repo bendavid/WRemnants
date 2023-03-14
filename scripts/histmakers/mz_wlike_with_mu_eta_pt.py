@@ -1,4 +1,4 @@
-from utilities import boostHistHelpers as hh,common,output_tools
+from utilities import boostHistHelpers as hh, common, output_tools, logging
 
 parser,initargs = common.common_parser(True)
 
@@ -7,7 +7,6 @@ import wremnants
 from wremnants import theory_tools,syst_tools,theory_corrections, muon_validation, muon_calibration, muon_selections
 import hist
 import lz4.frame
-import logging
 import math
 import time
 import pdb
@@ -16,13 +15,11 @@ import os
 parser = common.set_parser_default(parser, "pt", [34, 26, 60])
 
 args = parser.parse_args()
-logger = common.setup_logger(__file__, args.verbose, args.color_logger)
+logger = logging.setup_logger(__file__, args.verbose, args.color_logger)
     
-filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
-excludeGroup = args.excludeProcGroups if args.excludeProcGroups else None
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
-                                              filt=filt if args.filterProcs else None,
-                                              excludeGroup=excludeGroup,
+                                              filt=args.filterProcs,
+                                              excl=args.excludeProcs, 
                                               nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path)
 
 era = args.era

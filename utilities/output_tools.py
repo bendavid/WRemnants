@@ -7,10 +7,11 @@ import time
 import hdf5plugin
 import h5py
 import narf
-import logging
 import numpy as np
 import re
-from utilities import common
+from utilities import logging
+
+logger = logging.child_logger(__name__)
 
 def readTemplate(templateFile, templateDict, filt=None):
     if not os.path.isfile(templateFile):
@@ -48,14 +49,14 @@ def metaInfoDict(exclude_diff='notebooks', args=None):
     return meta_data
 
 def analysis_debug_output(results):
-    logging.debug("")
-    logging.debug("Unweighted events (before cut)")
-    logging.debug("-"*30)
+    logger.debug("")
+    logger.debug("Unweighted events (before cut)")
+    logger.debug("-"*30)
     for key,val in results.items():
         if "event_count" in val:
-            logging.debug(f"Dataset {key.ljust(30)}:  {val['event_count']}")
-            logging.debug("-"*30)
-    logging.debug("")
+            logger.debug(f"Dataset {key.ljust(30)}:  {val['event_count']}")
+            logger.debug("-"*30)
+    logger.debug("")
 
 def writeMetaInfoToRootFile(rtfile, exclude_diff='notebooks', args=None):
     import ROOT
@@ -86,12 +87,12 @@ def write_analysis_output(results, outfile, args):
 
     if args.outfolder:
         if not os.path.exists(args.outfolder):
-            logging.info(f"Creating output folder {args.outfolder}")
+            logger.info(f"Creating output folder {args.outfolder}")
             os.makedirs(args.outfolder)
         outfile = os.path.join(args.outfolder, outfile)
 
     time0 = time.time()
     with h5py.File(outfile, 'w') as f:
         narf.ioutils.pickle_dump_h5py("results", results, f)
-    print("Writing output:", time.time()-time0)
-    print(f"Output saved in {outfile}")
+    logger.info(f"Writing output: {time.time()-time0}")
+    logger.info(f"Output saved in {outfile}")

@@ -1,9 +1,9 @@
 import hist
 import pathlib
 import argparse
-import logging
 import numpy as np
 import os
+from utilities import logging
 
 wremnants_dir = f"{pathlib.Path(__file__).parent}/../wremnants"
 data_dir = f"{wremnants_dir}/data/"
@@ -81,8 +81,8 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--pdfs", type=str, nargs="*", default=["msht20"], choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for")
     parser.add_argument("--altPdfOnlyCentral", action='store_true', help="Only store central value for alternate PDF sets")
     parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
-    parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by (subset) of name", default=[])
-    parser.add_argument("--exclude-proc-groups", dest="excludeProcGroups", type=str, nargs="*", help="Don't run over processes belonging to these groups (only accepts exact group name)", default=["QCD"])
+    parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by group name or (subset) of name", default=[])
+    parser.add_argument("--excludeProcs", type=str, nargs="*", help="Exclude processes matched by group name or (subset) of name", default=["QCD",])
     parser.add_argument("--v8", action='store_true', help="Use NanoAODv8. Default is v9")
     parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
     parser.add_argument("--theory_corr", nargs="*", 
@@ -162,7 +162,7 @@ def common_parser_combine():
 
 def set_parser_default(parser, argument, newDefault):
     # change the default argument of the parser, must be called before parse_arguments
-    logger = child_logger(__name__)
+    logger = logging.child_logger(__name__)
     f = next((x for x in parser._actions if x.dest ==argument), None)
     if f:
         logger.info(f" Modifying default of {f.dest} from {f.default} to {newDefault}")
@@ -170,59 +170,6 @@ def set_parser_default(parser, argument, newDefault):
     else:
         logger.warning(f" Parser argument {argument} not found!")
     return parser
-
-class CustomFormatter(logging.Formatter):
-    """Logging Formatter to add colors and count warning / errors"""
-
-    green = "\x1b[1;32m"
-    grey = "\x1b[38;21m"
-    yellow = "\x1b[33;21m"
-    red = "\x1b[31;21m"
-    bold_red = "\x1b[31;1m"
-    reset = "\x1b[0m"
-    #format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
-    myformat = "%(levelname)s:%(filename)s: %(message)s"
-
-    FORMATS = {
-        logging.DEBUG: green + myformat + reset,
-        logging.INFO: grey + myformat + reset,
-        logging.WARNING: yellow + myformat + reset,
-        logging.ERROR: red + myformat + reset,
-        logging.CRITICAL: bold_red + myformat + reset
-    }
-
-    def format(self, record):
-        log_fmt = self.FORMATS.get(record.levelno)
-        formatter = logging.Formatter(log_fmt)
-        return formatter.format(record)
-
-logging_verboseLevel = [logging.CRITICAL, logging.ERROR, logging.WARNING, logging.INFO, logging.DEBUG]
-
-def setLoggingLevel(log, verbosity):
-    log.setLevel(logging_verboseLevel[max(0, min(4, verbosity))])
-
-def setup_logger(basefile, verbosity, colors):
-    setup_func = setup_color_logger if colors else setup_base_logger
-    return setup_func(os.path.basename(basefile), verbosity)
-
-def setup_color_logger(name, verbosity):
-    base_logger = logging.getLogger("wremnants")
-    # set console handler
-    ch = logging.StreamHandler()
-    ch.setFormatter(CustomFormatter())
-    base_logger.addHandler(ch)
-    setLoggingLevel(base_logger, verbosity)
-    base_logger.propagate = False # to avoid propagating back to root logger, which would print messages twice
-    return base_logger.getChild(name)
-    
-def setup_base_logger(name, verbosity):
-    logging.basicConfig(format='%(levelname)s: %(message)s')
-    base_logger = logging.getLogger("wremnants")
-    setLoggingLevel(base_logger, verbosity)
-    return base_logger.getChild(name)
-    
-def child_logger(name):
-    return logging.getLogger("wremnants").getChild(name)
 
 '''
 INPUT -------------------------------------------------------------------------
