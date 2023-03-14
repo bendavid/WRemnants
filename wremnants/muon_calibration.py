@@ -39,6 +39,33 @@ def make_muon_calibration_helpers(args,
 
     return mc_helper, data_helper, uncertainty_helper
 
+def make_jpsi_crctn_helpers(args, make_uncertainty_helper=False):
+
+    if args.muonCorrMC == "idealMC_massfit":
+        mc_corrfile = "calibrationJMC_smeared_v718_nominal.root"
+    elif args.muonCorrMC == "idealMC_lbltruth_massfit":
+        mc_corrfile = "calibrationJMC_smeared_v718_nominalLBL.root"
+    else:
+        mc_corrfile = None
+
+    if args.muonCorrData == "massfit":
+        data_corrfile = "calibrationJDATA_ideal.root"
+    elif args.muonCorrData == "lbl_massfit":
+        data_corrfile = "calibrationJDATA_rewtgr_3dmap_LBL.root"            
+    else:
+        data_corrfile = None
+
+    mc_helper = make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}") if mc_corrfile else None
+    data_helper = make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}") if data_corrfile else None
+
+    if make_uncertainty_helper:
+        mc_unc_helper = make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}", n_eta_bins = 24) if mc_corrfile else None
+        data_unc_helper = make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}", scale = 3.0) if data_corrfile else None
+
+        return mc_helper, data_helper, mc_unc_helper, data_unc_helper
+    else:
+        return mc_helper, data_helper
+
 def make_muon_bias_helpers(args):
     # apply a bias to MC to correct for the nonclosure with data in the muon momentum scale calibration
     if args.bias_calibration is None: 
@@ -148,6 +175,71 @@ def get_dummy_uncertainties():
     h.values(flow=True)[-1, ...] = h.values(flow=True)[-2, ...]
 
     return h
+
+def make_jpsi_crctn_helper(filepath):
+    f = uproot.open(filepath)
+
+    # TODO: convert variable axis to regular if the bin width is uniform
+    A, e, M = [x.to_hist() for x in [f['A'], f['e'], f['M']]]
+
+    # TODO: make this into a function in utilities/boostHistHelpers
+    if (A.axes != e.axes) or (e.axes != M.axes):
+        raise RuntimeError("A, e, M histograms have different axes!")
+    else:
+        axis_param = hist.axis.Regular(3, 0, 3, underflow = False, overflow = False, name = 'param')
+        axis_cenval = hist.axis.Regular(1, 0, 1, name = 'cenval')
+        hist_comb = hist.Hist(*A.axes, axis_param, axis_cenval, storage = hist.storage.Double())
+        hist_comb.view()[...,0] = np.stack([x.values() for x in [A, e, M]], axis = -1)
+
+    hist_comb_cpp = narf.hist_to_pyroot_boost(hist_comb, tensor_rank = 2)
+    jpsi_crctn_helper = ROOT.wrem.JpsiCorrectionsRVecHelper[type(hist_comb_cpp).__cpp_name__](
+        ROOT.std.move(hist_comb_cpp)
+    )
+    return jpsi_crctn_helper
+
+def make_jpsi_crctn_unc_helper(filepath, n_scale_params = 3, n_tot_params = 4, n_eta_bins = 48, scale = 1.0):
+    f = uproot.open(filepath)
+    cov = f['covariance_matrix'].to_hist()
+    cov_scale_params = get_jpsi_scale_param_cov_mat(cov, n_scale_params, n_tot_params, n_eta_bins, scale)
+
+    w,v = np.linalg.eigh(cov_scale_params)    
+    var_mat = np.sqrt(w) * v
+    axis_eta = hist.axis.Regular(n_eta_bins, -2.4, 2.4, name = 'eta')
+    axis_scale_params = hist.axis.Regular(n_scale_params, 0, 1, name = 'scale_params')
+    axis_scale_params_unc = hist.axis.Regular(
+        n_eta_bins * n_scale_params, 0, 1,
+        underflow = False, overflow = False,  name = 'unc'
+    )
+    hist_scale_params_unc = hist.Hist(axis_eta, axis_scale_params, axis_scale_params_unc)
+    for i in range(n_eta_bins):
+        lb, ub = i * n_scale_params, (i + 1) * n_scale_params
+        hist_scale_params_unc.view()[i,...] = var_mat[lb:ub][:]
+    hist_scale_params_unc_cpp = narf.hist_to_pyroot_boost(hist_scale_params_unc, tensor_rank = 2)
+    jpsi_crctn_unc_helper = ROOT.wrem.JpsiCorrectionsUncHelper[type(hist_scale_params_unc_cpp).__cpp_name__](
+        ROOT.std.move(hist_scale_params_unc_cpp)
+    )
+    jpsi_crctn_unc_helper.tensor_axes = (hist_scale_params_unc.axes['unc'], common.down_up_axis)
+    return jpsi_crctn_unc_helper
+
+# returns the cov mat of only scale parameters in eta bins, in the form of a 2D numpy array
+# there are 3 scale params (A, e, M) + 3 resolution params for each eta bin in the jpsi calib file
+def get_jpsi_scale_param_cov_mat(cov, n_scale_params = 3, n_tot_params = 4, n_eta_bins = 24, scale = 1.0):
+    cov_dim = len(cov.axes[0].edges) - 1
+    if cov_dim != n_tot_params * n_eta_bins:
+        raise ValueError(
+            f"dimension of the covariance matrix {cov_dim} doesn't match the input number of "
+            f"total parameters {n_tot_params} times the number of eta bins {n_eta_bins}"
+        )
+    idx_first_param = np.arange(0, cov_dim, n_tot_params)
+    idx_scale_params = np.sort(reduce(
+        np.append, [(idx_first_param + i) for i in range(n_scale_params)]
+    ))
+    cov_scale_params = np.empty([n_scale_params * n_eta_bins, n_scale_params * n_eta_bins])
+    for irow_scale_params, irow_all_params in enumerate(idx_scale_params):
+        cov_scale_params[irow_scale_params, :] = scale * np.take(
+            cov.values()[irow_all_params], idx_scale_params
+        )
+    return cov_scale_params
 
 def define_lblcorr_muons(df, cvh_helper, corr_branch="cvh"):
 
