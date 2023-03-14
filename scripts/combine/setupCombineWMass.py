@@ -3,6 +3,7 @@ from wremnants import CardTool,theory_tools,syst_tools,combine_helpers
 from wremnants import histselections as sel
 from wremnants.datasets.datagroups import datagroups2016
 from utilities import common
+from utilities import boostHistHelpers as hh
 import argparse
 import os
 import pathlib
@@ -12,6 +13,7 @@ import copy
 import math
 
 scriptdir = f"{pathlib.Path(__file__).parent}"
+data_dir = f"{pathlib.Path(__file__).parent}/../../wremnants/data/"
 
 def make_parser(parser=None):
     if not parser:
@@ -43,18 +45,19 @@ def main(args):
     # NOTE: args.filterProcGroups and args.excludeProcGroups should in principle not be used together
     #       (because filtering is equivalent to exclude something), however the exclusion is also meant to skip
     #       processes which are defined in the original process dictionary but are not supposed to be (always) run on
+    if args.addQCDMC or "QCD" in args.filterProcGroups:
+        logger.warning("Adding QCD MC to list of processes for the fit setup")
+    else:
+        if "QCD" not in args.excludeProcGroups:
+            logger.warning("Automatic removal of QCD MC from list of processes. Use --filter-proc-groups 'QCD' or --add-qcd-mc to keep it")
+            args.excludeProcGroups.append("QCD")
+    filterGroup = args.filterProcGroups if args.filterProcGroups else None
+    excludeGroup = args.excludeProcGroups if args.excludeProcGroups else None
     logger.debug(f"Filtering these groups of processes: {args.filterProcGroups}")
     logger.debug(f"Excluding these groups of processes: {args.excludeProcGroups}")
-    filterGroup = args.filterProcGroups if args.filterProcGroups else None
-    excludeGroup = None
-    if args.excludeProcGroups:
-        ## can pass a filter that datagroups2016 can digest, but better to pass list of names
-        # excludeGroup = lambda x,excl=args.excludeProcGroups: all([f not in x.group for f in excl if x.group is not None])
-        ## alternatively can just pass the array with names
-        excludeGroup = args.excludeProcGroups
-
+    
     datagroups = datagroups2016(args.inputFile, excludeProcGroup=excludeGroup, filterProcGroup=filterGroup)
-
+    
     if args.xlim:
         if len(args.fitvar.split("-")) > 1:
             raise ValueError("Restricting the x axis not supported for 2D hist")
@@ -94,8 +97,8 @@ def main(args):
     cardTool.setDatagroups(datagroups)
     logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
     cardTool.setNominalTemplate(f"{templateDir}/main.txt")
-    if args.combineChannels:
-        cardTool.setChannels(["combined"])
+    if args.sumChannels:
+        cardTool.setChannels(["inclusive"])
     cardTool.setProjectionAxes(args.fitvar.split("-"))
     if args.noHist:
         cardTool.skipHistograms()
@@ -110,7 +113,9 @@ def main(args):
     if args.pseudoData:
         cardTool.setPseudodata(args.pseudoData, args.pseudoDataIdx)
         if args.pseudodata_file:
-            cardTool.setPseudodataDatagroups(datagroups2016(args.pseudodata_file))
+            cardTool.setPseudodataDatagroups(datagroups2016(args.pseudodata_file,
+                                                            excludeProcGroup=excludeGroup,
+                                                            filterProcGroup=filterGroup))
 
     if args.lumiScale:
         cardTool.setLumiScale(args.lumiScale)
@@ -135,16 +140,16 @@ def main(args):
     if not args.constrain_mass:
         # keep mass weights here as first systematic, in case one wants to run stat-uncertainty only with --doStatOnly
         cardTool.addSystematic("massWeight", 
-            processes=signal_samples_inctau,
-            group="massShift",
-            groupFilter=lambda x: x == "massShift100MeV",
-            skipEntries=[(f"^massShift{i}MeV.*",) for i in range(0, 100, 10)]+[("^massShift2p1MeV.*",)],
-            mirror=False,
-            #TODO: Name this
-            noConstraint=True,
-            systAxes=["massShift"],
-            passToFakes=passSystToFakes,
-        )
+                               processes=signal_samples_inctau,
+                               group="massShift",
+                               groupFilter=lambda x: x == "massShift100MeV",
+                               skipEntries=[(f"^massShift{i}MeV.*",) for i in range(0, 100, 10)]+[("^massShift2p1MeV.*",)],
+                               mirror=False,
+                               #TODO: Name this
+                               noConstraint=True,
+                               systAxes=["massShift"],
+                               passToFakes=False, # probably better never to apply the mass syst to fakes
+    )
 
     if args.doStatOnly:
         # print a card with only mass weights and a dummy syst
@@ -152,7 +157,7 @@ def main(args):
         cardTool.writeOutput(args=args)
         logger.info("Using option --doStatOnly: the card was created with only mass weights and a dummy LnN syst on all processes")
         quit()
-        
+
     if args.constrain_mass:
         # add an uncertainty on the mass, e.g. for ptll fits
         cardTool.addSystematic("massWeight", 
@@ -167,12 +172,12 @@ def main(args):
 
     if wmass:
         cardTool.addSystematic("luminosity",
-                            processes=allMCprocesses_noQCDMC,
-                            outNames=["lumiDown", "lumiUp"],
-                            group="luminosity",
-                            systAxes=["downUpVar"],
-                            labelsByAxis=["downUpVar"],
-                            passToFakes=passSystToFakes)
+                               processes=allMCprocesses_noQCDMC,
+                               outNames=["lumiDown", "lumiUp"],
+                               group="luminosity",
+                               systAxes=["downUpVar"],
+                               labelsByAxis=["downUpVar"],
+                               passToFakes=passSystToFakes)
 
         cardTool.addSystematic("sf2d", 
             processes=signal_samples,
@@ -184,6 +189,7 @@ def main(args):
             systAxes=[],
             passToFakes=True,
         )
+
     else:
         # TOCHECK: no fakes here, most likely
         cardTool.addLnNSystematic("luminosity", processes=allMCprocesses_noQCDMC, size=1.012, group="luminosity")
@@ -310,20 +316,39 @@ def main(args):
         passToFakes=passSystToFakes,
     )
     if wmass:
-        cardTool.addLnNSystematic("CMS_Fakes", processes=[args.qcdProcessName], size=1.05, group="MultijetBkg")
+        #cardTool.addLnNSystematic("CMS_Fakes", processes=[args.qcdProcessName], size=1.05, group="MultijetBkg")
         cardTool.addLnNSystematic("CMS_Top", processes=["Top"], size=1.06)
         cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16)
 
         ## FIXME 1: with the jet cut removed this syst is probably no longer needed, but one could still consider
         ## it to cover for how much the fake estimate changes when modifying the composition of the QCD region
         ## FIXME 2: it doesn't really make sense to mirror this one since the systematic goes only in one direction
-        cardTool.addSystematic(f"qcdJetPt30", 
-                               processes=["Fake"],
-                               mirror=True,
-                               group="MultijetBkg",
-                               systAxes=[],
-                               outNames=["qcdJetPt30Down", "qcdJetPt30Up"],
-                               passToFakes=passSystToFakes,
+        # cardTool.addSystematic(f"qcdJetPt30", 
+        #                        processes=["Fake"],
+        #                        mirror=True,
+        #                        group="MultijetBkg",
+        #                        systAxes=[],
+        #                        outNames=["qcdJetPt30Down", "qcdJetPt30Up"],
+        #                        passToFakes=passSystToFakes,
+        # )
+        #
+        if "Fake" not in excludeGroup:
+            cardTool.addSystematic(f"nominal", # this is the histogram to read
+                                   systAxes=[],
+                                   processes=["Fake"],
+                                   mirror=True,
+                                   group="MultijetBkg",
+                                   outNames=["mtCorrFakesDown", "mtCorrFakesUp"],
+                                   decorrelateByCharge=True,
+                                   rename="mtCorrFakes", # this is the name used to identify the syst in the list of systs
+                                   action=hh.applyCorrection,
+                                   doActionBeforeMirror=True,
+                                   actionArgs={"scale": 1.0,
+                                               "corrFile" : f"{data_dir}/fakesWmass/fakerateFactorMtBasedCorrection_vsEtaPt.root",
+                                               "corrHist": "etaPtCharge_mtCorrection",
+                                               "offsetCorr": 1.0,
+                                               "createNew": True}
+                               # add action to multiply by correction
         )
 
     else:
