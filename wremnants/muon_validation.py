@@ -22,7 +22,7 @@ def make_jpsi_crctn_helpers(args, make_uncertainty_helper=False):
     if args.muonCorrData == "massfit":
         data_corrfile = "calibrationJDATA_ideal.root"
     elif args.muonCorrData == "lbl_massfit":
-        data_corrfile = "calibrationJDATA_smeared_rewtgr_3dmap_LBL.root"            
+        data_corrfile = "calibrationJDATA_rewtgr_3dmap_LBL.root"            
     else:
         data_corrfile = None
 
@@ -30,8 +30,8 @@ def make_jpsi_crctn_helpers(args, make_uncertainty_helper=False):
     data_helper = make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}") if data_corrfile else None
 
     if make_uncertainty_helper:
-        mc_unc_helper = make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}") if mc_corrfile else None
-        data_unc_helper = make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}", n_eta_bins = 48) if data_corrfile else None
+        mc_unc_helper = make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}", n_eta_bins = 24) if mc_corrfile else None
+        data_unc_helper = make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}", scale = 3.0) if data_corrfile else None
 
         return mc_helper, data_helper, mc_unc_helper, data_unc_helper
     else:
@@ -58,10 +58,10 @@ def make_jpsi_crctn_helper(filepath):
     )
     return jpsi_crctn_helper
 
-def make_jpsi_crctn_unc_helper(filepath, n_scale_params = 3, n_tot_params = 4, n_eta_bins = 24):
+def make_jpsi_crctn_unc_helper(filepath, n_scale_params = 3, n_tot_params = 4, n_eta_bins = 48, scale = 1.0):
     f = uproot.open(filepath)
     cov = f['covariance_matrix'].to_hist()
-    cov_scale_params = get_jpsi_scale_param_cov_mat(cov, n_scale_params, n_tot_params, n_eta_bins)
+    cov_scale_params = get_jpsi_scale_param_cov_mat(cov, n_scale_params, n_tot_params, n_eta_bins, scale)
 
     w,v = np.linalg.eigh(cov_scale_params)    
     var_mat = np.sqrt(w) * v
@@ -84,7 +84,7 @@ def make_jpsi_crctn_unc_helper(filepath, n_scale_params = 3, n_tot_params = 4, n
 
 # returns the cov mat of only scale parameters in eta bins, in the form of a 2D numpy array
 # there are 3 scale params (A, e, M) + 3 resolution params for each eta bin in the jpsi calib file
-def get_jpsi_scale_param_cov_mat(cov, n_scale_params = 3, n_tot_params = 4, n_eta_bins = 24):
+def get_jpsi_scale_param_cov_mat(cov, n_scale_params = 3, n_tot_params = 4, n_eta_bins = 24, scale = 1.0):
     cov_dim = len(cov.axes[0].edges) - 1
     if cov_dim != n_tot_params * n_eta_bins:
         raise ValueError(
@@ -97,7 +97,7 @@ def get_jpsi_scale_param_cov_mat(cov, n_scale_params = 3, n_tot_params = 4, n_et
     ))
     cov_scale_params = np.empty([n_scale_params * n_eta_bins, n_scale_params * n_eta_bins])
     for irow_scale_params, irow_all_params in enumerate(idx_scale_params):
-        cov_scale_params[irow_scale_params, :] = np.take(
+        cov_scale_params[irow_scale_params, :] = scale * np.take(
             cov.values()[irow_all_params], idx_scale_params
         )
     return cov_scale_params
