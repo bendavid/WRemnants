@@ -56,6 +56,7 @@ badCovMatrixID_sf = {}
 pol2_tf_scaled = None
 pol3_tf_scaled = None
 pol4_tf_scaled = None
+polN_tf_scaled = None
 #############################################
 # some functions for tensorflow
 
@@ -158,7 +159,9 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
                 etabins = [],
                 widthPtSmooth=0.2,
                 hist_nomiAndAlt_etapt=None,
-                histAlt = None
+                histAlt = None,
+                efficiencyFitPolDegree=4,
+                doSpline=False
 ):
 
     doingSF = True if mc == "SF" else False
@@ -349,24 +352,24 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
         tf1_erf.SetLineWidth(2)
         tf1_erf.SetLineStyle(ROOT.kDashed)
         tf1_erf.SetLineColor(ROOT.kBlue)
-
-        global pol4_tf_scaled
-        if pol4_tf_scaled == None:
-            pol4_tf_scaled = partial(pol4_root, xLowVal=minFitRange, xFitRange=xFitRange)        
-        params = np.array([1.0, 0.0, 0.0, 0.0, 0.0])
-        res_tf1_pol4 = narf.fit_hist(boost_hist, pol4_tf_scaled, params)
-        tf1_pol4 = ROOT.TF1("tf1_pol4", pol4_tf_scaled, minFitRange, maxFitRange, len(params))
-        tf1_pol4.SetParameters( np.array( res_tf1_pol4["x"], dtype=np.dtype('d') ) )
-        tf1_pol4.SetLineWidth(3)
-        tf1_pol4.SetLineColor(ROOT.kRed+2)
+        
+        global polN_tf_scaled
+        if polN_tf_scaled == None:
+            polN_tf_scaled = partial(polN_root_, xLowVal=minFitRange, xFitRange=xFitRange, degree=efficiencyFitPolDegree)
+        params = np.array([1.0] + [0.0 for i in range(efficiencyFitPolDegree)])
+        res_tf1_polN = narf.fit_hist(boost_hist, polN_tf_scaled, params)
+        tf1_polN = ROOT.TF1(f"tf1_pol{efficiencyFitPolDegree}", polN_tf_scaled, minFitRange, maxFitRange, len(params))
+        tf1_polN.SetParameters( np.array( res_tf1_polN["x"], dtype=np.dtype('d') ) )
+        tf1_polN.SetLineWidth(3)
+        tf1_polN.SetLineColor(ROOT.kRed+2)
         #
         fitres_TF = {"erf" : res_tf1_erf,
-                     "pol4_tf" : res_tf1_pol4,
+                     "polN_tf" : res_tf1_polN,
         }
         fitFunction = {
-            "pol4_tf" : {
-                "func" : tf1_pol4,
-                "leg"  : "Pol4",
+            "polN_tf" : {
+                "func" : tf1_polN,
+                "leg"  : f"Pol{efficiencyFitPolDegree}",
                 "hist": hist,
 
             },
@@ -377,16 +380,16 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
                 
             },
         }
-        defaultFunc = "pol4_tf"
+        defaultFunc = "polN_tf"
         if histAlt:
-            params = np.array([1.0, 0.0, 0.0, 0.0, 0.0])
-            res_tf1_pol4_alt = narf.fit_hist(boost_hist_alt, pol4_tf_scaled, params)
-            tf1_pol4_alt = ROOT.TF1("tf1_pol4_alt", pol4_tf_scaled, minFitRange, maxFitRange, len(params))
-            tf1_pol4_alt.SetParameters( np.array( res_tf1_pol4_alt["x"], dtype=np.dtype('d') ) )
-            tf1_pol4_alt.SetLineWidth(2)
-            tf1_pol4_alt.SetLineColor(ROOT.kAzure+2)
-            fitres_TF["pol4_alt_tf"] = res_tf1_pol4_alt
-            fitFunction["pol4_alt_tf"] = {"func" : tf1_pol4_alt,
+            params = np.array([1.0] + [0.0 for i in range(efficiencyFitPolDegree)])
+            res_tf1_polN_alt = narf.fit_hist(boost_hist_alt, polN_tf_scaled, params)
+            tf1_polN_alt = ROOT.TF1("tf1_polN_alt", polN_tf_scaled, minFitRange, maxFitRange, len(params))
+            tf1_polN_alt.SetParameters( np.array( res_tf1_polN_alt["x"], dtype=np.dtype('d') ) )
+            tf1_polN_alt.SetLineWidth(2)
+            tf1_polN_alt.SetLineColor(ROOT.kAzure+2)
+            fitres_TF["polN_alt_tf"] = res_tf1_polN_alt
+            fitFunction["polN_alt_tf"] = {"func" : tf1_polN_alt,
                                           "leg" : "dataAltSig",
                                           "hist": histAlt,
             }
@@ -665,7 +668,6 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
             canvas.SaveAs("{out}sf_pt_{ch}_eta{b}{charge}.{ext}".format(out=outdir,ch=channel,b=key,charge=tmpch,ext=ext))            
         else:
             canvas.SaveAs("{out}eff{mc}_pt_{ch}_eta{b}{charge}.{ext}".format(out=outdir,mc=mc,ch=channel,b=key,charge=tmpch,ext=ext))                            
-    
     return fitFunction[defaultFunc]["func"]
 
 ############################################################################
@@ -844,6 +846,8 @@ def runFiles(args):
         cmd += " --input-hist-names  EffData2D,EffMC2D,SF2D_nominal --input-hist-names-alt EffDataAltSig2D,SF2D_dataAltSig"
         if step not in ["iso", "isonotrig"]:
             cmd += " --skip-eff"
+        else:
+            cmd += f" --fit-pol-degree-efficiency {args.fitPolDegreeEfficiency}"
         print()
         safeSystem(cmd, args.dryRun)
         print()
@@ -866,6 +870,7 @@ if __name__ == "__main__":
     parser.add_argument(    '--input-hist-names', dest='inputHistNames', default='EffData2D,EffMC2D,SF2D_nominal', type=str, help='Pass comma separated list of 3  names, for eff(data),eff(MC),SF, to be used instead of the default names')
     parser.add_argument(    '--input-hist-names-alt', dest='inputHistNamesAlt', default='EffDataAltSig2D,SF2D_dataAltSig', type=str, help='Pass comma separated list of 2  names for alternate variations, for eff(data),SF, to be used instead of the default names')
     parser.add_argument(     '--palette'  , dest='palette',      default=87, type=int, help='Set palette: default is a built-in one, 55 is kRainbow')
+    parser.add_argument(     '--fit-pol-degree-efficiency'  , dest='fitPolDegreeEfficiency', default=4, type=int, help='Degree for polynomial used in the fits to efficiencies')
     parser.add_argument(     '--skip-eff', dest='skipEff', action="store_true", default=False, help='Skip efficiencies and do only SF (to save time and if one only wants to smooth SF directly)')
     # utility option to print commands to do all files
     parser.add_argument('-d',  '--dryRun', action='store_true', help='Do not execute commands, just print them')
@@ -873,6 +878,7 @@ if __name__ == "__main__":
     parser.add_argument(     '--do-steps', dest='doSteps', nargs='+', default=["isonotrig", "iso", "triggerplus", "triggerminus", "idip", "tracking", "reco"], choices=list(minmaxSF.keys()), help='Working points to smooth when running --run-all or --do-merge')
     # option to merge files once they exist
     parser.add_argument(     '--do-merge', dest='doMerge', action="store_true", default=False, help='Merge efficiency files if they all exist')
+    parser.add_argument(     '--spline', dest='doSpline', action="store_true", help='Interpolate with spline (mainly for tests, no uncertainties)')
     
     args = parser.parse_args()
 
@@ -945,7 +951,7 @@ if __name__ == "__main__":
     hist_chosenFunc = ROOT.TH1D("chosenFitFunc", "Best fit function for each #eta bin for data or MC", 3, 0, 3)
     hist_chosenFunc.GetXaxis().SetBinLabel(1, "erf")
     hist_chosenFunc.GetXaxis().SetBinLabel(2, "tf1_pol3")
-    hist_chosenFunc.GetXaxis().SetBinLabel(3, "pol4_tf")
+    hist_chosenFunc.GetXaxis().SetBinLabel(3, f"pol{args.fitPolDegreeEfficiency}_tf")
     # 
     hist_chosenFunc_SF = ROOT.TH1D("chosenFitFunc_SF", "Best fit function for each #eta bin for SF", 3, 0, 3)
     hist_chosenFunc_SF.GetXaxis().SetBinLabel(1, "tf1_cheb3")
@@ -994,10 +1000,15 @@ if __name__ == "__main__":
                          len(etabins)-1, array('d',etabins),
                          len(ptbins)-1, array('d',ptbins)
                          )
+    pullSFfromSmoothEffi =  ROOT.TH2D("scaleFactorPullFromSmoothEffi","Original/smooth scale factor pull (SF from smooth effi)",
+                                      len(etabins)-1, array('d',etabins),
+                                      len(ptbins)-1, array('d',ptbins)
+    )
 
     copyHisto(pullData, hdata)
     copyHisto(pullMC, hmc)
     copyHisto(pullSF, hsf)
+    copyHisto(pullSFfromSmoothEffi, hsf)
     errData = copy.deepcopy(hdata.Clone("errData"))
     errMC   = copy.deepcopy(hmc.Clone("errMC"))
     errSF   = copy.deepcopy(hsf.Clone("errSF"))
@@ -1031,7 +1042,7 @@ if __name__ == "__main__":
     ## prepare histograms with nominal eta-pt efficiency or scale factor, and other variations on the Z axis
     ## will save both up and down variations for effStat and (currently) only 1 syst, so have 1+2*nPar+1 bins
     ## assume we have 48 eta bins to use constructor of TH3
-    nBinsEff = 12 # fits with pol4 (5 parameters), then nominal in first bin and syst in last
+    nBinsEff = 2 + 2 * (1 + args.fitPolDegreeEfficiency) # fits with pol4 (5 parameters), then nominal in first bin and syst in last
     hist_effData_nomiAndAlt_etapt = ROOT.TH3D("hist_effData_nomiAndAlt_etapt",
                                               "Smooth nominal and alternate data efficiency",
                                               48,-2.40,2.40,
@@ -1042,6 +1053,7 @@ if __name__ == "__main__":
                                               48,-2.40,2.40,
                                               nFinePtBins, minPtHisto, maxPtHisto,
                                               nBinsEff,0.5,0.5+nBinsEff)
+    # TODO: avoid magic numbers, use option as for efficiencies
     nBinsSF = 8 if args.step == "tracking" else 10 # fits are done with pol2 for tracking (3 parameters) and pol3 otherwise (4 parameters), then this is 1 + 2 * nBinsSF + 1
     hist_SF_nomiAndAlt_etapt = ROOT.TH3D("hist_SF_nomiAndAlt_etapt",
                                          "Smooth nominal and alternate scale factor",
@@ -1074,7 +1086,9 @@ if __name__ == "__main__":
                                       charge=args.charge,
                                       etabins=etabins,
                                       widthPtSmooth=args.widthPt,
-                                      hist_nomiAndAlt_etapt=hist_effMC_nomiAndAlt_etapt
+                                      hist_nomiAndAlt_etapt=hist_effMC_nomiAndAlt_etapt,
+                                      efficiencyFitPolDegree=args.fitPolDegreeEfficiency
+
             )
             for ipt in range(1, hmcSmoothCheck_origBinPt.GetNbinsY()+1):
                 ptval = hmcSmoothCheck_origBinPt.GetYaxis().GetBinCenter(ipt)
@@ -1099,7 +1113,9 @@ if __name__ == "__main__":
                                       etabins=etabins,
                                       widthPtSmooth=args.widthPt,
                                       hist_nomiAndAlt_etapt=hist_effData_nomiAndAlt_etapt,
-                                      histAlt=hdataptAlt[key]
+                                      histAlt=hdataptAlt[key],
+                                      efficiencyFitPolDegree=args.fitPolDegreeEfficiency
+
             )
             for ipt in range(1,hdataSmoothCheck_origBinPt.GetNbinsY()+1):
                 ptval = hdataSmoothCheck_origBinPt.GetYaxis().GetBinCenter(ipt)
@@ -1250,11 +1266,11 @@ if __name__ == "__main__":
     ######################
     # finally SF(smooth)/SF(original)
     ######################
-    drawCorrelationPlot(ratioData,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),"Data efficiency ratio (original/smooth)::0.98,1.02",
+    drawCorrelationPlot(ratioData,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),"Data efficiency ratio (original/smooth)::0.99,1.01",
                         "dataEfficiencyRatio","ForceTitle",outname,palette=args.palette,passCanvas=canvas)
-    drawCorrelationPlot(ratioMC,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),"MC efficiency ratio (original/smooth)::0.98,1.02",
+    drawCorrelationPlot(ratioMC,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),"MC efficiency ratio (original/smooth)::0.99,1.01",
                         "mcEfficiencyRatio","ForceTitle",outname,palette=args.palette,passCanvas=canvas)
-    drawCorrelationPlot(ratioSF,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),"scale factor ratio (original/smooth)::0.98,1.02",
+    drawCorrelationPlot(ratioSF,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),"scale factor ratio (original/smooth)::0.99,1.01",
                         "scaleFactorRatio","ForceTitle",outname,palette=args.palette,passCanvas=canvas)
 
     pullData.Add(hdataSmoothCheck_origBinPt, -1.0)
@@ -1267,8 +1283,29 @@ if __name__ == "__main__":
                         "dataEfficiencyPull","ForceTitle",outname,nContours=10,palette=args.palette,passCanvas=canvas)
     drawCorrelationPlot(pullMC,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),"MC eff. pull (original-smooth)/err::-5.0,5.0",
                         "mcEfficiencyPull","ForceTitle",outname,nContours=10,palette=args.palette,passCanvas=canvas)
-    drawCorrelationPlot(pullSF,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),"scale factor pull (original-smooth)/err::-5.0,5.0",
+    drawCorrelationPlot(pullSF,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),"scale factor pull (original-smoothDirectly)/err::-5.0,5.0",
                         "scaleFactorPull","ForceTitle",outname,nContours=10,palette=args.palette,passCanvas=canvas)
+    if not args.skipEff:
+        # add also ratio of ratioData and ratioMC, because in each there might be trend and we want to see if in the double ratio they would cancel
+        doubleRatioDataMC = copy.deepcopy(ratioData.Clone("doubleRatioDataMC"))
+        doubleRatioDataMC.SetTitle("(smooth/binned)_{data} / (smooth/binned)_{MC}")
+        doubleRatioDataMC.Divide(ratioMC)
+        drawCorrelationPlot(doubleRatioDataMC,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),
+                            "Double ratio",
+                            "doubleRatio_smoothOverBinnedEffi_DataAndMC","ForceTitle",
+                            outname,palette=args.palette,passCanvas=canvas)
+        # additional pulls
+        pullSFfromSmoothEffi.Add(scaleFactor_origBinPt, -1.0)
+        pullSFfromSmoothEffi.Divide(errSF)
+        drawCorrelationPlot(pullSFfromSmoothEffi,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),"scale factor pull (original-smoothFromEffi)/err::-5.0,5.0",
+                        "scaleFactorPull_SFfromSmoothEffi","ForceTitle",outname,nContours=10,palette=args.palette,passCanvas=canvas)
+
+        SFpullRatio = copy.deepcopy(pullSFfromSmoothEffi.Clone("scaleFactorPullRatio_SFfromSmoothEffiOverDirectSmoothing"))
+        SFpullRatio.Divide(pullSF)
+        SFpullRatio.SetTitle("")
+        drawCorrelationPlot(SFpullRatio, "{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),
+                            "SF pull ratio: smoothFromEffi / directSmoothing",
+                            SFpullRatio.GetName(), "ForceTitle",outname,nContours=10,palette=args.palette,passCanvas=canvas)
     # ######################
     # # See the difference between smoothing Data and MC efficiency and taking the ratio or smoothing directly the efficiency ratio
     # ######################    
@@ -1280,10 +1317,20 @@ if __name__ == "__main__":
     copyHisto(ratioSF_smoothNumDen_smoothRatio,scaleFactor_origBinPt)
     ratioSF_smoothNumDen_smoothRatio.Divide(hsfSmoothCheck_origBinPt)
     drawCorrelationPlot(ratioSF_smoothNumDen_smoothRatio,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),
-                        "SF ratio: smooth eff or ratio directly::0.98,1.02",
+                        "SF ratio: smooth eff or ratio directly::0.999,1.001",
                         "ratioSF_smoothNumDen_smoothRatio","ForceTitle",outname,palette=args.palette,passCanvas=canvas)
 
-
+    # same as ratioSF_smoothNumDen_smoothRatio but with fine pt binning
+    if not args.skipEff:
+        ratioSF_smoothEffiOverSmoothDirectly = copy.deepcopy(hdataSmoothCheck.Clone("ratioSF_smoothEffiOverSmoothDirectly"))
+        ratioSF_smoothEffiOverSmoothDirectly.SetTitle("SF ratio: smooth eff or ratio directly")
+        ratioSF_smoothEffiOverSmoothDirectly.Divide(hmcSmoothCheck)
+        ratioSF_smoothEffiOverSmoothDirectly.Divide(hsfSmoothCheck)
+        drawCorrelationPlot(ratioSF_smoothEffiOverSmoothDirectly,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),
+                            "SF ratio: smooth eff or ratio directly::0.999,1.001",
+                            "ratioSF_smoothEffiOverSmoothDirectly","ForceTitle",outname,palette=args.palette,passCanvas=canvas)
+        
+        
     c = ROOT.TCanvas("c","",700,700)
     c.SetTickx(1)
     c.SetTicky(1)
@@ -1318,23 +1365,26 @@ if __name__ == "__main__":
         # broadcast nominal data efficiency from TH2 into TH3
         ROOT.wrem.broadCastTH2intoTH3(hist_SF_nomiAndAlt_onlyMCVar_etapt, hdataSmoothCheck)
         hist_SF_nomiAndAlt_onlyMCVar_etapt.Divide(hist_effMC_nomiAndAlt_etapt)
-        # also make SF histogram with data and MC variations stacked together, plus syst only for data as in other cases
-        nBinsEff_iso = 2 * (nBinsEff -2) + 2 # subtract nominal and syst, then double to include both data and MC, then include back nominal and variations
-        hist_SF_nomiAndAlt_dataMCVar_etapt = ROOT.TH3D("SF_nomiAndAlt_dataMCVar" + hist_postfix,
-                                                       "Smooth nominal and alternate SF (data and MC eff variations)",
-                                                       48,-2.40,2.40,
-                                                       nFinePtBins, minPtHisto, maxPtHisto,
-                                                       nBinsEff_iso,0.5,0.5+nBinsEff_iso)
-        # fill hist_SF_nomiAndAlt_dataMCVar_etapt with hist_SF_nomiAndAlt_onlyDataVar_etapt excluding last bin of the latter which has the systematic (to be added at the end)
-        ROOT.wrem.fillTH3fromTH3(hist_SF_nomiAndAlt_dataMCVar_etapt, hist_SF_nomiAndAlt_onlyDataVar_etapt,
-                                 1, 1, hist_SF_nomiAndAlt_onlyDataVar_etapt.GetNbinsZ()-1)
-        # fill hist_SF_nomiAndAlt_dataMCVar_etapt with hist_SF_nomiAndAlt_onlyMCVar_etapt excluding first (nominal) and last bin of the latter (need none of them)
-        ROOT.wrem.fillTH3fromTH3(hist_SF_nomiAndAlt_dataMCVar_etapt, hist_SF_nomiAndAlt_onlyMCVar_etapt,
-                                 1+hist_SF_nomiAndAlt_onlyDataVar_etapt.GetNbinsZ(), 2, hist_SF_nomiAndAlt_onlyMCVar_etapt.GetNbinsZ()-1)
-        # finally add the data syst in last bin
-        ROOT.wrem.fillTH3fromTH3(hist_SF_nomiAndAlt_dataMCVar_etapt, hist_SF_nomiAndAlt_onlyDataVar_etapt,
-                                 hist_SF_nomiAndAlt_dataMCVar_etapt.GetNbinsZ(), hist_SF_nomiAndAlt_onlyDataVar_etapt.GetNbinsZ(), hist_SF_nomiAndAlt_onlyDataVar_etapt.GetNbinsZ())
-        #
+        ##
+        ## Keep the following commented part, but not used for now, no need to stack data and MC variations together in same TH3
+        ##
+        ## also make SF histogram with data and MC variations stacked together, plus syst only for data as in other cases
+        ##nBinsEff_iso = 2 * (nBinsEff -2) + 2 # subtract nominal and syst, then double to include both data and MC, then include back nominal and variations
+        # hist_SF_nomiAndAlt_dataMCVar_etapt = ROOT.TH3D("SF_nomiAndAlt_dataMCVar" + hist_postfix,
+        #                                                "Smooth nominal and alternate SF (data and MC eff variations)",
+        #                                                48,-2.40,2.40,
+        #                                                nFinePtBins, minPtHisto, maxPtHisto,
+        #                                                nBinsEff_iso,0.5,0.5+nBinsEff_iso)
+        # # fill hist_SF_nomiAndAlt_dataMCVar_etapt with hist_SF_nomiAndAlt_onlyDataVar_etapt excluding last bin of the latter which has the systematic (to be added at the end)
+        # ROOT.wrem.fillTH3fromTH3(hist_SF_nomiAndAlt_dataMCVar_etapt, hist_SF_nomiAndAlt_onlyDataVar_etapt,
+        #                          1, 1, hist_SF_nomiAndAlt_onlyDataVar_etapt.GetNbinsZ()-1)
+        # # fill hist_SF_nomiAndAlt_dataMCVar_etapt with hist_SF_nomiAndAlt_onlyMCVar_etapt excluding first (nominal) and last bin of the latter (need none of them)
+        # ROOT.wrem.fillTH3fromTH3(hist_SF_nomiAndAlt_dataMCVar_etapt, hist_SF_nomiAndAlt_onlyMCVar_etapt,
+        #                          1+hist_SF_nomiAndAlt_onlyDataVar_etapt.GetNbinsZ(), 2, hist_SF_nomiAndAlt_onlyMCVar_etapt.GetNbinsZ()-1)
+        # # finally add the data syst in last bin
+        # ROOT.wrem.fillTH3fromTH3(hist_SF_nomiAndAlt_dataMCVar_etapt, hist_SF_nomiAndAlt_onlyDataVar_etapt,
+        #                          hist_SF_nomiAndAlt_dataMCVar_etapt.GetNbinsZ(), hist_SF_nomiAndAlt_onlyDataVar_etapt.GetNbinsZ(), hist_SF_nomiAndAlt_onlyDataVar_etapt.GetNbinsZ())
+        # #
         #
         # now antiisolation
         #
@@ -1364,19 +1414,19 @@ if __name__ == "__main__":
         hanti_SF_nomiAndAlt_onlyMCVar_etapt.SetTitle("Smooth nominal and alternate SF (only MC eff variations)")
         ROOT.wrem.broadCastTH2intoTH3(hanti_SF_nomiAndAlt_onlyMCVar_etapt, ROOT.wrem.projectTH2FromTH3(hanti_effData, "hanti_effData_nomi_2D", 1))
         hanti_SF_nomiAndAlt_onlyMCVar_etapt.Divide(hanti_effMC)
-        # now pack again data and MC variations as done for isolation
-        hanti_SF_nomiAndAlt_dataMCVar_etapt = copy.deepcopy(hist_SF_nomiAndAlt_dataMCVar_etapt.Clone("SF_nomiAndAlt_dataMCVar" + hist_postfix_anti))
-        hanti_SF_nomiAndAlt_dataMCVar_etapt.Reset("ICESM")
-        hanti_SF_nomiAndAlt_dataMCVar_etapt.SetTitle("Smooth nominal and alternate SF (data and MC eff variations)")
-        # fill hanti_SF_nomiAndAlt_dataMCVar_etapt with hanti_SF_nomiAndAlt_onlyDataVar_etapt excluding last bin of the latter which has the systematic (to be added at the end)
-        ROOT.wrem.fillTH3fromTH3(hanti_SF_nomiAndAlt_dataMCVar_etapt, hanti_SF_nomiAndAlt_onlyDataVar_etapt,
-                                 1, 1, hanti_SF_nomiAndAlt_onlyDataVar_etapt.GetNbinsZ()-1)
-        # fill hanti_SF_nomiAndAlt_dataMCVar_etapt with hanti_SF_nomiAndAlt_onlyMCVar_etapt excluding first (nominal) and last bin of the latter (need none of them)
-        ROOT.wrem.fillTH3fromTH3(hanti_SF_nomiAndAlt_dataMCVar_etapt, hanti_SF_nomiAndAlt_onlyMCVar_etapt,
-                                 1+hanti_SF_nomiAndAlt_onlyDataVar_etapt.GetNbinsZ(), 2, hanti_SF_nomiAndAlt_onlyDataVar_etapt.GetNbinsZ()-1)
-        # finally add the data syst in last bin
-        ROOT.wrem.fillTH3fromTH3(hanti_SF_nomiAndAlt_dataMCVar_etapt, hanti_SF_nomiAndAlt_onlyDataVar_etapt,
-                                 hanti_SF_nomiAndAlt_dataMCVar_etapt.GetNbinsZ(), hanti_SF_nomiAndAlt_onlyDataVar_etapt.GetNbinsZ(), hanti_SF_nomiAndAlt_onlyDataVar_etapt.GetNbinsZ())
+        # # now pack again data and MC variations as done for isolation
+        # hanti_SF_nomiAndAlt_dataMCVar_etapt = copy.deepcopy(hist_SF_nomiAndAlt_dataMCVar_etapt.Clone("SF_nomiAndAlt_dataMCVar" + hist_postfix_anti))
+        # hanti_SF_nomiAndAlt_dataMCVar_etapt.Reset("ICESM")
+        # hanti_SF_nomiAndAlt_dataMCVar_etapt.SetTitle("Smooth nominal and alternate SF (data and MC eff variations)")
+        # # fill hanti_SF_nomiAndAlt_dataMCVar_etapt with hanti_SF_nomiAndAlt_onlyDataVar_etapt excluding last bin of the latter which has the systematic (to be added at the end)
+        # ROOT.wrem.fillTH3fromTH3(hanti_SF_nomiAndAlt_dataMCVar_etapt, hanti_SF_nomiAndAlt_onlyDataVar_etapt,
+        #                          1, 1, hanti_SF_nomiAndAlt_onlyDataVar_etapt.GetNbinsZ()-1)
+        # # fill hanti_SF_nomiAndAlt_dataMCVar_etapt with hanti_SF_nomiAndAlt_onlyMCVar_etapt excluding first (nominal) and last bin of the latter (need none of them)
+        # ROOT.wrem.fillTH3fromTH3(hanti_SF_nomiAndAlt_dataMCVar_etapt, hanti_SF_nomiAndAlt_onlyMCVar_etapt,
+        #                          1+hanti_SF_nomiAndAlt_onlyDataVar_etapt.GetNbinsZ(), 2, hanti_SF_nomiAndAlt_onlyDataVar_etapt.GetNbinsZ()-1)
+        # # finally add the data syst in last bin
+        # ROOT.wrem.fillTH3fromTH3(hanti_SF_nomiAndAlt_dataMCVar_etapt, hanti_SF_nomiAndAlt_onlyDataVar_etapt,
+        #                          hanti_SF_nomiAndAlt_dataMCVar_etapt.GetNbinsZ(), hanti_SF_nomiAndAlt_onlyDataVar_etapt.GetNbinsZ(), hanti_SF_nomiAndAlt_onlyDataVar_etapt.GetNbinsZ())
         # for completeness make also original antiiso efficiencies and scale factors
         hanti_effData_original = copy.deepcopy(hdata.Clone("effData_original" + hist_postfix_anti))
         ROOT.wrem.initializeRootHistogram(hanti_effData_original, 1.0)
@@ -1413,18 +1463,20 @@ if __name__ == "__main__":
         hdataSmoothCheck_origBinPt.Write("effData_smoothWithOriginalPtBins" + hist_postfix)
         hmcSmoothCheck_origBinPt.Write("effMC_smoothWithOriginalPtBins" + hist_postfix)
         scaleFactor.Write("SF_fromSmoothEfficiencyRatio" + hist_postfix)
+        #ratioSF_smoothNumDen_smoothRatio.Write(ratioSF_smoothNumDen_smoothRatio.GetName() + hist_postfix)
+        ratioSF_smoothEffiOverSmoothDirectly.Write(ratioSF_smoothEffiOverSmoothDirectly.GetName() + hist_postfix)
     hist_effData_nomiAndAlt_etapt.Write("effData_nomiAndAlt" + hist_postfix)
     hist_effMC_nomiAndAlt_etapt.Write("effMC_nomiAndAlt" + hist_postfix)
     hist_SF_nomiAndAlt_etapt.Write("SF_nomiAndAlt" + hist_postfix)
     if hasSpecialHistForIsolation:
         hist_SF_nomiAndAlt_onlyDataVar_etapt.Write()
         hist_SF_nomiAndAlt_onlyMCVar_etapt.Write()
-        hist_SF_nomiAndAlt_dataMCVar_etapt.Write()
+        #hist_SF_nomiAndAlt_dataMCVar_etapt.Write()
         hanti_effData.Write()
         hanti_effMC.Write()
         hanti_SF_nomiAndAlt_onlyDataVar_etapt.Write()
         hanti_SF_nomiAndAlt_onlyMCVar_etapt.Write()
-        hanti_SF_nomiAndAlt_dataMCVar_etapt.Write()
+        #hanti_SF_nomiAndAlt_dataMCVar_etapt.Write()
         hanti_hdataSmoothCheck_origBinPt.Write()
         hanti_hmcSmoothCheck_origBinPt.Write()
         hanti_hsfSmoothCheck_origBinPt.Write() # equivalent of scaleFactor histogram from ratio of smooth efficiencies (smoothing SF directly for antiiso doesn't make sense)
@@ -1458,3 +1510,4 @@ if __name__ == "__main__":
             outf.write(f"SF  {key}  {badCovMatrixID_sf[key]}\n")
         outf.seek(0)
         print(outf.read())
+        
