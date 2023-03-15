@@ -40,6 +40,7 @@ class datagroups(object):
 
         self.lumi = None
         # FIXME: self.datasets is currently a data member of the inherited class, we should define it here as well
+        # FIXME: if data is excluded the normalization will be lost
         if self.datasets and self.results:
             self.data = [x for x in self.datasets.values() if x.is_data]
             if self.data:

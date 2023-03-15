@@ -76,6 +76,7 @@ def getDatasets(maxFiles=-1, filt=None, excludeGroup=None, mode=None, base_path=
                 is_data=True,
                 lumi_csv=lumicsv,
                 lumi_json=lumijson,
+                group=info["group"] if "group" in info else None,
             ))
         else:
             narf_info.update(dict(
