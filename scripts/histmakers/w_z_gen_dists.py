@@ -79,6 +79,7 @@ def build_graph(df, dataset):
         weight_expr = f"{weight_expr}*LHEScaleWeightAltSet1[4]"
 
     df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
+    df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
 
     if isZ:
         nominal_axes = [axis_massZgen, axis_rapidity, axis_ptVgen, axis_chargeZgen]
@@ -122,7 +123,6 @@ def build_graph(df, dataset):
             results.append(helicity_moments_scale)
 
         if "LHEPdfWeight" in df.GetColumnNames():
-            df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
             syst_tools.add_pdf_hists(results, df, dataset.name, nominal_axes, nominal_cols, args.pdfs, "nominal_gen")
 
     if args.theory_corr and dataset.name in corr_helpers:
