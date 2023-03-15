@@ -17,17 +17,17 @@ def read_and_scale_pkllz4(fname, proc, histname, calculate_lumi=False, scale=1):
     return load_and_scale(results, proc, histname, calculate_lumi, scale)
 
 def read_hist_names(fname, proc):
-    h5file = h5py.File(fname, "r")
-    results = narf.ioutils.pickle_load_h5py(h5file["results"])
-    if proc not in results:
-        raise ValueError(f"Invalid process {proc}! No output found in file {fname}")
-    return results[proc]["output"].keys()
+    with h5py.File(fname, "r") as h5file:
+        results = narf.ioutils.pickle_load_h5py(h5file["results"])
+        if proc not in results:
+            raise ValueError(f"Invalid process {proc}! No output found in file {fname}")
+        return results[proc]["output"].keys()
 
 def read_and_scale(fname, proc, histname, calculate_lumi=False, scale=1):
-    h5file = h5py.File(fname, "r")
-    results = narf.ioutils.pickle_load_h5py(h5file["results"])
-        
-    return load_and_scale(results, proc, histname, calculate_lumi, scale)
+    with h5py.File(fname, "r") as h5file:
+        results = narf.ioutils.pickle_load_h5py(h5file["results"])
+            
+        return load_and_scale(results, proc, histname, calculate_lumi, scale)
 
 def load_and_scale(res_dict, proc, histname, calculate_lumi=False, scale=1.):
     h = res_dict[proc]["output"][histname]

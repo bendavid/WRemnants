@@ -122,7 +122,7 @@ only_central_pdf_datasets = [
     "Zmumu_bugfix_slc7",
 ]
 
-extended_pdf_datasets = common.vprocs+common.vprocs_lowpu
+extended_pdf_datasets = [x for x in common.vprocs+common.vprocs_lowpu if not any(y in x for y in ["NNLOPS", "MiNLO"])]
 
 def define_prefsr_vars(df):
     df = df.Define("prefsrLeps", "wrem::prefsrLeptons(GenPart_status, GenPart_statusFlags, GenPart_pdgId, GenPart_genPartIdxMother)")
@@ -179,10 +179,8 @@ def define_pdf_columns(df, dataset_name, pdfs, noAltUnc):
     if dataset_name not in common.vprocs_all or \
             "horace" in dataset_name or \
             "LHEPdfWeight" not in df.GetColumnNames():
-        if "LHEPdfWeight" not in df.GetColumnNames():
-            logger.warning("Did not find PDF weights for sample {dataset_name}! Skipping")
+        logger.warning(f"Did not find PDF weights for sample {dataset_name}! Using nominal PDF in sample")
         df = df.DefinePerSample("nominal_pdf_cen", "1.0")
-        df = df.Redefine("nominal_weight", "nominal_weight*nominal_pdf_cen")
         return df
 
     for i, pdf in enumerate(pdfs):
@@ -190,6 +188,9 @@ def define_pdf_columns(df, dataset_name, pdfs, noAltUnc):
             pdfInfo = pdf_info_map(dataset_name, pdf)
         except ValueError as e:
             logger.info(e)
+            if i == 0:
+                logger.warning(f"Did not find PDF {pdf} for sample {dataset_name}! Using nominal PDF in sample")
+                df = df.DefinePerSample("nominal_pdf_cen", "1.0")
             return df
 
         pdfName = pdfInfo["name"]
@@ -200,12 +201,10 @@ def define_pdf_columns(df, dataset_name, pdfs, noAltUnc):
         start = 0 if "first_entry" not in pdfInfo else pdfInfo["first_entry"]
 
         if i == 0:
-            print("Define", tensorName)
             df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, {entries}>({pdfBranch}, {start}), 10.); res = nominal_weight*res; return res;")
             df = df.Define("nominal_pdf_cen", f"{tensorName}(0)")
             df = df.Redefine("nominal_weight", "nominal_weight*nominal_pdf_cen")
         else:
-            print("Now Define", tensorName)
             df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, {entries}>({pdfBranch}, {start}), 10.); res = nominal_weight/nominal_pdf_cen*res; return res;")
 
         df = df.Define(tensorASName, "Eigen::TensorFixedSize<double, Eigen::Sizes<2>> res; "
