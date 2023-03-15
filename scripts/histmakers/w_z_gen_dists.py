@@ -25,10 +25,11 @@ datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
                                               excl=args.excludeProcs, 
                                               nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path, mode='gen')
 
+logger.debug(f"Will process samples {[d.name for d in datasets]}")
+
 axis_massWgen = hist.axis.Variable([5., 13000.], name="massVgen", underflow=True, overflow=False)
 
-#axis_massZgen = hist.axis.Regular(12, 60., 120., name="massVgen")
-axis_massZgen = hist.axis.Regular(10, 60., 120., name="massVgen")
+axis_massZgen = hist.axis.Regular(12, 60., 120., name="massVgen")
 
 axis_absYVgen = hist.axis.Variable(
     [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4, 4.25, 4.5, 4.75, 5, 10], 
@@ -179,20 +180,3 @@ if not args.skipAngularCoeffs:
     if coeffs:
         outfname = "w_z_coeffs_absY.hdf5" if args.absY else "w_z_coeffs.hdf5"
         output_tools.write_analysis_output(coeffs, outfname, args)
-    yax_name = axis_ygen.name
-    if "y" in z_moments.axes.name and "y" in w_moments.axes.name:
-        z_moments = hh.makeAbsHist(z_moments, "y")
-        w_moments = hh.makeAbsHist(w_moments, "y")
-        yax_name = "absy"
-
-    z_moments = hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning)
-    z_moments = hh.rebinHist(z_moments, axis_massZgen.name, axis_massZgen.edges[::2])
-    z_moments = hh.rebinHist(z_moments, yax_name, axis_absYVgen.edges[:-1])
-    w_moments = hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning)
-    w_moments = hh.rebinHist(w_moments, yax_name, axis_absYVgen.edges[:-1])
-
-    coeffs = {"Z" : wremnants.moments_to_angular_coeffs(z_moments) if z_moments else None,
-            "W" : wremnants.moments_to_angular_coeffs(w_moments) if w_moments else None,
-    }
-
-    output_tools.write_analysis_output(coeffs, "w_z_coeffs.hdf5", args)
