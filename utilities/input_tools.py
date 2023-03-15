@@ -8,7 +8,7 @@ import logging
 import os
 import hdf5plugin
 import h5py
-import narf
+from narf import ioutils
 
 def read_and_scale_pkllz4(fname, proc, histname, calculate_lumi=False, scale=1):
     with lz4.frame.open(fname) as f:
@@ -18,20 +18,20 @@ def read_and_scale_pkllz4(fname, proc, histname, calculate_lumi=False, scale=1):
 
 def read_hist_names(fname, proc):
     with h5py.File(fname, "r") as h5file:
-        results = narf.ioutils.pickle_load_h5py(h5file["results"])
+        results = ioutils.pickle_load_h5py(h5file["results"])
         if proc not in results:
             raise ValueError(f"Invalid process {proc}! No output found in file {fname}")
         return results[proc]["output"].keys()
 
 def read_and_scale(fname, proc, histname, calculate_lumi=False, scale=1):
     with h5py.File(fname, "r") as h5file:
-        results = narf.ioutils.pickle_load_h5py(h5file["results"])
+        results = ioutils.pickle_load_h5py(h5file["results"])
             
         return load_and_scale(results, proc, histname, calculate_lumi, scale)
 
 def load_and_scale(res_dict, proc, histname, calculate_lumi=False, scale=1.):
     h = res_dict[proc]["output"][histname]
-    if isinstance(h, narf.ioutils.H5PickleProxy):
+    if isinstance(h, ioutils.H5PickleProxy):
         h = h.get()
     if not res_dict[proc]["dataset"]["is_data"]:
         scale = res_dict[proc]["dataset"]["xsec"]/res_dict[proc]["weight_sum"]*scale
@@ -46,7 +46,7 @@ def load_and_scale(res_dict, proc, histname, calculate_lumi=False, scale=1.):
 
 def read_all_and_scale(fname, procs, histnames, lumi=False):
     h5file = h5py.File(fname, "r")
-    results = narf.ioutils.pickle_load_h5py(h5file["results"])
+    results = ioutils.pickle_load_h5py(h5file["results"])
 
     hists = []
     for histname in histnames:
