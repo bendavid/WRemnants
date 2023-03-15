@@ -49,6 +49,11 @@ class datagroups(object):
         self.groupNamesPostFilter = [] # keep track of group names after any filter defined by the user
         
         if not self.lumi:
+            logger.warning("")
+            logger.warning("*"*30)
+            logger.warning("No data sample selected: setting integrated luminosity to 1/fb")
+            logger.warning("*"*30)
+            logger.warning("")
             self.lumi = 1
             
         self.nominalName = "nominal"
