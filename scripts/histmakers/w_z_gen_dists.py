@@ -169,20 +169,16 @@ if not args.skipAngularCoeffs:
 
     coeffs={}
     # REMINDER: common.ptV_binning is not the one using 10% quantiles, and the quantiles are not a subset of this binning, but apparently it doesn't matter
-<<<<<<< HEAD
     if z_moments:
         z_moments = hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning)
         z_moments = hh.rebinHist(z_moments, axis_massZgen.name, axis_massZgen.edges[::2])
-        print('Writing angular coeffs Z')
         coeffs["Z"] = wremnants.moments_to_angular_coeffs(z_moments)
     if w_moments:
-        print('Writing angular coeffs W')
         w_moments = hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning)
         coeffs["W"] = wremnants.moments_to_angular_coeffs(w_moments)
     if coeffs:
         outfname = "w_z_coeffs_absY.hdf5" if args.absY else "w_z_coeffs.hdf5"
         output_tools.write_analysis_output(coeffs, outfname, args)
-=======
     yax_name = axis_ygen.name
     if "y" in z_moments.axes.name and "y" in w_moments.axes.name:
         z_moments = hh.makeAbsHist(z_moments, "y")
@@ -200,4 +196,3 @@ if not args.skipAngularCoeffs:
     }
 
     output_tools.write_analysis_output(coeffs, "w_z_coeffs.hdf5", args)
->>>>>>> fbb6d50 (Some formatting improvements for PDFs)
