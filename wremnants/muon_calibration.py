@@ -9,6 +9,8 @@ from . import muon_validation
 import uproot
 import numpy as np
 import warnings
+from functools import reduce
+
 
 logger = logging.child_logger(__name__)
 
