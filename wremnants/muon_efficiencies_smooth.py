@@ -143,7 +143,7 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
                 # print(f"stat: {effStatKey}|{eff_type} -> {hist_name}")
                 # print(ROOT.AddressOf(hist_root))
                 if hist_root is None:
-                    print(f"Error: {hist_name} onot found in file {filename}")
+                    print(f"Error: {hist_name} not found in file {filename}")
                     quit()
 
                 if down_nom_up_effStat_axis is None:
