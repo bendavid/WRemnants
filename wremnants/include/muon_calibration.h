@@ -183,7 +183,6 @@ public:
   }
 };
 
-
 class CVHCorrector : public CVHCorrectorSingle<> {
 public:
 
