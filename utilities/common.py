@@ -26,6 +26,7 @@ wprocs_recoil_lowpu = ["WminusJetsToMuNu", "WminusJetsToENu", "WplusJetsToMuNu",
 background_MCprocs = ["Top", "Diboson", "QCD"]
 zprocs_all = zprocs_lowpu+zprocs
 wprocs_all = wprocs_lowpu+wprocs
+vprocs_all = vprocs_lowpu+vprocs
 
 # unfolding axes for low pu
 axis_recoil_reco_ptZ = hist.axis.Variable([0, 5, 10, 15, 20, 30, 40, 50, 60, 75, 90, 150], name = "recoil_reco", underflow=False, overflow=True)

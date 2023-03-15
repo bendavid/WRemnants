@@ -215,6 +215,8 @@ def build_graph(df, dataset):
             weight_expr += "*weight_fullMuonSF_withTrackingReco"
         if args.vertex_weight:
             weight_expr += "*weight_vtx"
+        
+        df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
         df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
     ########################################################################
     
@@ -291,7 +293,6 @@ def build_graph(df, dataset):
         if isW or isZ:
 
             df = theory_tools.define_scale_tensor(df)
-            df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
 
             scale_axes = [*nominal_axes, axis_ptVgen, axis_chargeVgen]
             scale_cols = [*nominal_cols, "ptVgen", "chargeVgen"]
