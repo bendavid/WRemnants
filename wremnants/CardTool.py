@@ -376,25 +376,43 @@ class CardTool(object):
         else:
             return f"{self.histName}_{proc}_{name}"
 
-    def checkSysts(self, hnom, var_map, proc, thresh=0.25):
+    def getBoostHistByCharge(self, h, q):
+        return h[{"charge" : h.axes["charge"].index(q) if q != "sum" else hist.sum}]
+        
+    def checkSysts(self, hnom3D, var_map, proc, thresh=0.25):
         #if self.check_variations:
         var_names = set([name.replace("Up", "").replace("Down", "") for name in var_map.keys() if name])
         if len(var_names) != len(var_map.keys())/2:
             raise ValueError(f"Invalid syst names for process {proc}! Expected an up/down variation for each syst. "
                 f"Found systs {var_names} and outNames {var_map.keys()}")
         for name in var_names:
-            up = var_map[name+"Up"]
-            down = var_map[name+"Down"]
-            try:
-                up_relsign = np.sign(up.values()-hnom.values())
-            except ValueError as e:
-                logger.error(f"Incompatible shapes between up and down for syst {name}")
-                raise e
-            down_relsign = np.sign(down.values()-hnom.values())
-            vars_sameside = (up_relsign != 0) & (up_relsign == down_relsign)
-            perc_sameside = np.count_nonzero(vars_sameside)/hnom.size 
-            if perc_sameside > thresh:
-                logger.warning(f"{perc_sameside:.0%} bins are one sided for syst {name} and process {proc}!")
+            for chan in self.channels:
+                if not self.keepOtherChargeSyst and self.chargeIdDict[chan]["badId"] in name:
+                    continue
+                q = self.chargeIdDict[chan]["val"]
+                hnom = self.getBoostHistByCharge(hnom3D, q)
+                up = self.getBoostHistByCharge(var_map[name+"Up"], q)
+                down = self.getBoostHistByCharge(var_map[name+"Down"], q)
+                nCellsWithoutOverflows = 1
+                for axisLength in hnom.shape:
+                    nCellsWithoutOverflows *= axisLength
+                try:
+                    up_relsign = np.sign(up.values()-hnom.values())
+                except ValueError as e:
+                    logger.error(f"Incompatible shapes between up and down for syst {name}")
+                    raise e
+                down_relsign = np.sign(down.values()-hnom.values())
+                vars_sameside = (up_relsign != 0) & (up_relsign == down_relsign)
+                perc_sameside = np.count_nonzero(vars_sameside)/nCellsWithoutOverflows 
+                if perc_sameside > thresh:
+                    logger.warning(f"Charge {chan.ljust(5)}: {perc_sameside:.0%} bins are one sided for syst {name} and process {proc}!")
+                # check variations are not same as nominal
+                # it evaluates absolute(a - b) <= (atol + rtol * absolute(b))
+                up_nBinsSystSameAsNomi = np.count_nonzero(np.isclose(up.values(), hnom.values(), rtol=1e-07, atol=1e-08))/nCellsWithoutOverflows
+                down_nBinsSystSameAsNomi = np.count_nonzero(np.isclose(down.values(), hnom.values(), rtol=1e-06, atol=1e-08))/nCellsWithoutOverflows
+                if up_nBinsSystSameAsNomi > 0.99 or down_nBinsSystSameAsNomi > 0.99:
+                    logger.warning(f"Charge {chan.ljust(5)}: syst {name} has Up/Down variation with {up_nBinsSystSameAsNomi:.0%}/{down_nBinsSystSameAsNomi:.0%} of bins equal to nominal")
+                    
 
     def writeForProcess(self, h, proc, syst):
         decorrelateByCharge = False
