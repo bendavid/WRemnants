@@ -43,6 +43,9 @@ def read_corr(procName, generator, corr_files):
                 raise ValueError("scetlib_dyturbo correction requires one DYTurbo file (fixed order contribution)")
 
             numh = input_tools.read_matched_scetlib_dyturbo_hist(resumf, nlo_nonsf, dyturbo_files[0], args.axes, charge=charge)
+            print(numh.sum())
+            print(resumf)
+            print("DYTURBO", dyturbo_files)
         else:
             nons = "auto"
             if not os.path.isfile(corr_file.replace(".", "_nons.")):

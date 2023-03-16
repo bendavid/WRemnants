@@ -11,11 +11,11 @@ def syst_transform_map(base_hist, hist_name):
     pdfInfo = theory_tools.pdfMapExtended 
     pdfNames = [pdfInfo[k]["name"] for k in pdfInfo.keys()]
 
-    def pdfUnc(h, pdfName):
+    def pdfUnc(h, pdfName, axis_name="pdfVar"):
         key =  list(pdfInfo.keys())[list(pdfNames).index(pdfName)]
         unc = pdfInfo[key]["combine"]
         scale = pdfInfo[key]["scale"] if "scale" in pdfInfo[key] else 1.
-        return theory_tools.hessianPdfUnc(h, uncType=unc, scale=scale)
+        return theory_tools.hessianPdfUnc(h, uncType=unc, scale=scale, axis_name=axis_name)
 
     def uncHist(unc):
         return unc if base_hist == "nominal" else f"{base_hist}_{unc}"
@@ -23,6 +23,8 @@ def syst_transform_map(base_hist, hist_name):
     transforms = {}
     transforms.update({pdf+"Up" : {"action" : lambda h,p=pdf: pdfUnc(h, p)[0]} for pdf in pdfNames})
     transforms.update({pdf+"Down" : {"action" : lambda h,p=pdf: pdfUnc(h, p)[1]} for pdf in pdfNames})
+    transforms["scetlib_dyturboMSHT20Up"] = {"action" : lambda h: pdfUnc(h, "pdfMSHT20", "vars")[0], "procs" : ["ZmumuPostVFP"]}
+    transforms["scetlib_dyturboMSHT20Down"] = {"action" : lambda h: pdfUnc(h, "pdfMSHT20", "vars")[1], "procs" : ["ZmumuPostVFP"]}
     transforms.update({
         "massShift100MeVDown" : {"hist" : "massWeight", "action" : lambda h: h[{"tensor_axis_0" : 0}]},
         "massShift100MeVUp" : {"hist" : "massWeight", "action" : lambda h: h[{"tensor_axis_0" : 20}]},
