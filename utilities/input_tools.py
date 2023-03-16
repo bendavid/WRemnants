@@ -119,11 +119,9 @@ def read_dyturbo_pdf_hist(base_name, pdf_members, axes, charge=None):
     
     for i in range(pdf_members):
         h = read_dyturbo_hist([base_name.format(i=i)], axes=axes, charge=charge)
-        print("HERE WE ARE!", h.shape)
         if not pdf_hist:
             pdf_hist = hist.Hist(*h.axes, pdf_ax, storage=h._storage_type())
         pdf_hist[...,i] = h.view(flow=True)
-    print("PDF", pdf_hist.shape)
         
     return pdf_hist
 
@@ -265,18 +263,15 @@ def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo
         pdf_members = hsing.axes["vars"].size
         hfo = read_dyturbo_pdf_hist(dyturbo_fo, pdf_members=pdf_members, axes=axes if axes else hsing.axes.name[:-1], charge=charge)
     else:
-        print("Actually here!")
         hfo = read_dyturbo_hist([dyturbo_fo], axes=axes if axes else hsing.axes.name[:-1], charge=charge)
     for ax in ["Y", "Q"]:
         if ax in set(hfo.axes.name).intersection(set(hfo_sing.axes.name)).intersection(set(hsing.axes.name)):
             hfo, hfo_sing, hsing = hh.rebinHistsToCommon([hfo, hfo_sing, hsing], ax)
-    print("Shapes are")
-    print("hfo", hfo.shape, "hfo_sing", hfo_sing.shape, "hsing", hsing.shape)
     hnonsing = hh.addHists(-1*hfo_sing, hfo)
     if fix_nons_bin0:
         # The 2 is for the WeightedSum
         res = np.zeros((*hnonsing[{"qT" : 0}].shape, 2))
-        if charge:
+        if "charge" in hnonsing.axes.name:
             hnonsing[...,0,:,:] = res
         else:
             hnonsing[...,0,:] = res

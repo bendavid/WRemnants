@@ -7,7 +7,7 @@ from matplotlib import cm
 import argparse
 import os
 import shutil
-import logging
+from wremnants import logging
 import pathlib
 import hist
 import re
@@ -76,7 +76,7 @@ variation.add_argument("--skip-fill-between", type=int, default=0, help="Don't f
 
 args = parser.parse_args()
 
-logger = common.setup_logger("makeDataMCStackPlot", 4 if args.debug else 3, True)
+logger = logging.setup_logger("makeDataMCStackPlot", 4 if args.debug else 3, True)
 
 def padArray(ref, matchLength):
     return ref+ref[-1:]*(len(matchLength)-len(ref))
@@ -157,6 +157,7 @@ if addVariation:
         # to the already loaded hist
         if load_op and reload:
             action = None
+        print("Adding name", varname)
         groups.addSummedProc(nominalName, relabel=args.baseName, name=name, label=label, exclude=exclude,
             color=color, reload=reload, rename=varname, procsToRead=datasets,
             preOpMap=load_op, action=action)

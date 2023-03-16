@@ -256,7 +256,7 @@ def define_theory_corr(df, weight_expr, helpers, generators, modify_central_weig
         df = df.Define(f"{generator}CentralWeight", f"{generator}Weight_tensor(0)")
 
         if i == 0 and modify_central_weight:
-            df = df.Alias("nominal_weight", f"{generator}CentralWeight")
+            df = df.Define("nominal_weight", f"{generator}CentralWeight")
 
     return df
 
@@ -403,6 +403,7 @@ def pdfAsymmetricShifts(hdiff, axis_name):
     return upshift, downshift 
 
 def hessianPdfUnc(h, axis_name="pdfVar", uncType="symHessian", scale=1.):
+    print(h.axes.name)
     underflow = h.axes[axis_name].traits.underflow
     symmetric = uncType == "symHessian"
     diff = hh.addHists(h, -1*h[{axis_name : 0}])*scale

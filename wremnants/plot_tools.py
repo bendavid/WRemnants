@@ -171,6 +171,7 @@ def makeStackPlotWithRatio(
 
         for proc in unstacked:
             logger.debug(f"Plotting proc {proc}")
+            print("Proc", proc)
             unstack = action(histInfo[proc][histName][select])
             hep.histplot(
                 unstack,
