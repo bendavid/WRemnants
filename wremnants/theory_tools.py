@@ -202,8 +202,8 @@ def define_pdf_columns(df, dataset_name, pdfs, noAltUnc):
 
         if i == 0:
             df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, {entries}>({pdfBranch}, {start}), 10.); res = nominal_weight*res; return res;")
-            df = df.Define("nominal_pdf_cen", f"{tensorName}(0)")
-            df = df.Redefine("nominal_weight", "nominal_weight*nominal_pdf_cen")
+            df = df.Define("nominal_pdf_cen", f"{tensorName}(0)/nominal_weight")
+            df = df.Redefine("nominal_weight", f"{tensorName}(0)")
         else:
             df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, {entries}>({pdfBranch}, {start}), 10.); res = nominal_weight/nominal_pdf_cen*res; return res;")
 
