@@ -32,7 +32,7 @@ def make_parser(parser=None):
     parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers and nuisances)")
     parser.add_argument("--xlim", type=float, nargs=2, default=None, help="Restrict x axis to this range")
     parser.add_argument("--constrain-mass", action='store_true', help="Constrain mass parameter in the fit (e.g. for ptll fit)")
-
+    parser.add_argument("-a", "--append", type=str, help="Append to output folder name")
     return parser
 
 def main(args):
@@ -73,6 +73,8 @@ def main(args):
     tag = name+"_"+args.fitvar.replace("-","_")
     if args.doStatOnly:
         tag += "_statOnly"
+    if args.append:
+        tag = f"{tag}_{args.append}"
 
     outfolder = f"{args.outfolder}/{tag}/"
     if not os.path.isdir(outfolder):
@@ -114,7 +116,7 @@ def main(args):
     if args.lumiScale:
         cardTool.setLumiScale(args.lumiScale)
 
-    print(f"cardTool.allMCProcesses(): {cardTool.allMCProcesses()}")
+    logger.info(f"cardTool.allMCProcesses(): {cardTool.allMCProcesses()}")
         
     passSystToFakes = wmass and not args.skipSignalSystOnFakes and args.qcdProcessName not in excludeGroup
 

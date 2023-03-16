@@ -190,9 +190,11 @@ def add_pdf_hists(results, df, dataset, axes, cols, pdfs, base_name="nominal"):
         tensorASName = f"{pdfName}ASWeights_tensor"
 
         name = datagroups2016.histName(base_name, syst=pdfName)
-        names = [f"pdf{pdfName}{i}" for i in range(pdfInfo["entries"])] if pdfInfo["combine"] == "symHessian" else \
-                theory_tools.pdfNamesAsymHessian(pdfInfo["entries"], pdfName)
+        names = getattr(theory_tools, f"pdfNames{'Sym' if pdfInfo['combine'] == 'symHessian' else 'Asym'}Hessian")(pdfInfo["entries"], pdfName)
         pdf_ax = hist.axis.StrCategory(names, name="pdfVar")
+        if tensorName not in df.GetColumnNames():
+            logger.warning(f"PDF {pdf} was not found for sample {dataset}. Skipping uncertainty hist!")
+            continue
         pdfHist = df.HistoBoost(name, axes, [*cols, tensorName], tensor_axes=[pdf_ax])
 
         if pdfInfo["alphasRange"] == "001":
@@ -296,7 +298,7 @@ def add_muonscale_smeared_hist(results, df, netabins, mag, isW, axes, cols, base
 
 def scetlib_scale_unc_hist(h, obs, syst_ax="vars"):
     hnew = hist.Hist(*h.axes[:-1], hist.axis.StrCategory(["central"]+scetlib_scale_vars(),
-    					name=syst_ax), storage=h._storage_type())
+                        name=syst_ax), storage=h._storage_type())
     
     hnew[...,"central"] = h[...,"central"].view(flow=True)
     hnew[...,"resumFOScaleUp"] = h[...,"kappaFO2."].view(flow=True)

@@ -25,10 +25,11 @@ datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
                                               excl=args.excludeProcs, 
                                               nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path, mode='gen')
 
+logger.debug(f"Will process samples {[d.name for d in datasets]}")
+
 axis_massWgen = hist.axis.Variable([5., 13000.], name="massVgen", underflow=True, overflow=False)
 
-#axis_massZgen = hist.axis.Regular(12, 60., 120., name="massVgen")
-axis_massZgen = hist.axis.Regular(10, 60., 120., name="massVgen")
+axis_massZgen = hist.axis.Regular(12, 60., 120., name="massVgen")
 
 axis_absYVgen = hist.axis.Variable(
     [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4, 4.25, 4.5, 4.75, 5, 10], 
@@ -79,6 +80,7 @@ def build_graph(df, dataset):
         weight_expr = f"{weight_expr}*LHEScaleWeightAltSet1[4]"
 
     df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
+    df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
 
     if isZ:
         nominal_axes = [axis_massZgen, axis_rapidity, axis_ptVgen, axis_chargeZgen]
@@ -122,7 +124,6 @@ def build_graph(df, dataset):
             results.append(helicity_moments_scale)
 
         if "LHEPdfWeight" in df.GetColumnNames():
-            df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
             syst_tools.add_pdf_hists(results, df, dataset.name, nominal_axes, nominal_cols, args.pdfs, "nominal_gen")
 
     if args.theory_corr and dataset.name in corr_helpers:
@@ -172,10 +173,8 @@ if not args.skipAngularCoeffs:
     if z_moments:
         z_moments = hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning)
         z_moments = hh.rebinHist(z_moments, axis_massZgen.name, axis_massZgen.edges[::2])
-        print('Writing angular coeffs Z')
         coeffs["Z"] = wremnants.moments_to_angular_coeffs(z_moments)
     if w_moments:
-        print('Writing angular coeffs W')
         w_moments = hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning)
         coeffs["W"] = wremnants.moments_to_angular_coeffs(w_moments)
     if coeffs:
