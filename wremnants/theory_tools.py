@@ -122,7 +122,7 @@ only_central_pdf_datasets = [
     "Zmumu_bugfix_slc7",
 ]
 
-extended_pdf_datasets = common.vprocs+common.vprocs_lowpu
+extended_pdf_datasets = [x for x in common.vprocs+common.vprocs_lowpu if not any(y in x for y in ["NNLOPS", "MiNLO"])]
 
 def define_prefsr_vars(df):
     df = df.Define("prefsrLeps", "wrem::prefsrLeptons(GenPart_status, GenPart_statusFlags, GenPart_pdgId, GenPart_genPartIdxMother)")
@@ -175,12 +175,22 @@ def pdf_info_map(dataset, pdfset):
         raise ValueError(f"Skipping PDF {pdfset} for dataset {dataset}")
     return infoMap[pdfset]
 
-def define_pdf_columns(df, dataset, pdfs, noAltUnc):
+def define_pdf_columns(df, dataset_name, pdfs, noAltUnc):
+    if dataset_name not in common.vprocs_all or \
+            "horace" in dataset_name or \
+            "LHEPdfWeight" not in df.GetColumnNames():
+        logger.warning(f"Did not find PDF weights for sample {dataset_name}! Using nominal PDF in sample")
+        df = df.DefinePerSample("nominal_pdf_cen", "1.0")
+        return df
+
     for i, pdf in enumerate(pdfs):
         try:
-            pdfInfo = pdf_info_map(dataset, pdf)
+            pdfInfo = pdf_info_map(dataset_name, pdf)
         except ValueError as e:
             logger.info(e)
+            if i == 0:
+                logger.warning(f"Did not find PDF {pdf} for sample {dataset_name}! Using nominal PDF in sample")
+                df = df.DefinePerSample("nominal_pdf_cen", "1.0")
             return df
 
         pdfName = pdfInfo["name"]
@@ -190,25 +200,23 @@ def define_pdf_columns(df, dataset, pdfs, noAltUnc):
         entries = 1 if i != 0 and noAltUnc else pdfInfo["entries"]
         start = 0 if "first_entry" not in pdfInfo else pdfInfo["first_entry"]
 
-        df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, {entries}>({pdfBranch}, {start}), 10.); res = nominal_weight/nominal_pdf_cen*res; return res;")
+        if i == 0:
+            df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, {entries}>({pdfBranch}, {start}), 10.); res = nominal_weight*res; return res;")
+            df = df.Define("nominal_pdf_cen", f"{tensorName}(0)/nominal_weight")
+            df = df.Redefine("nominal_weight", f"{tensorName}(0)")
+        else:
+            df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, {entries}>({pdfBranch}, {start}), 10.); res = nominal_weight/nominal_pdf_cen*res; return res;")
 
         df = df.Define(tensorASName, "Eigen::TensorFixedSize<double, Eigen::Sizes<2>> res; "
-                f"res(0) = nominal_weight*nominal_pdf_cen*{pdfInfo['alphas'][0]}; "
-                f"res(1) = nominal_weight*nominal_pdf_cen*{pdfInfo['alphas'][1]}; "
+                f"res(0) = nominal_weight/nominal_pdf_cen*{pdfInfo['alphas'][0]}; "
+                f"res(1) = nominal_weight/nominal_pdf_cen*{pdfInfo['alphas'][1]}; "
                 "return wrem::clip_tensor(res, 10.)")
     return df
 
 def define_weights_and_corrs(df, weight_expr, dataset_name, helpers, args):
     #TODO: organize this better
-    if "LHEPdfWeight" not in df.GetColumnNames():
-        df = df.DefinePerSample("nominal_pdf_cen", "1.0")
-    elif "horace" in dataset_name:
-        df = df.DefinePerSample("nominal_pdf_cen", "1.0")
-    elif dataset_name in common.vprocs+common.vprocs_lowpu:
-        df = df.Define("nominal_pdf_cen", pdf_central_weight(dataset_name, args.pdfs[0]))
-        weight_expr = f"{weight_expr}*nominal_pdf_cen"
-        if args.highptscales:
-            weight_expr = f"{weight_expr}*MEParamWeightAltSet3[0]"
+    if args.highptscales:
+        weight_expr = f"{weight_expr}*MEParamWeightAltSet3[0]"
 
     df = define_prefsr_vars(df)
     df = define_ew_vars(df)
@@ -220,11 +228,6 @@ def define_weights_and_corrs(df, weight_expr, dataset_name, helpers, args):
     else:
         df = df.Define("nominal_weight", weight_expr)
     return df 
-
-def pdf_central_weight(dataset, pdfset):
-    pdfInfo = pdf_info_map(dataset, pdfset)
-    pdfBranch = pdfInfo["branch"]
-    return f"{pdfBranch}[0]"
 
 def define_theory_corr(df, weight_expr, helpers, generators, modify_central_weight):
     for i, generator in enumerate(generators):
@@ -352,6 +355,9 @@ def pdfNamesAsymHessian(entries, pdfset=""):
     pdfNames = ["pdf0"+pdfset.replace("pdf", "")] 
     pdfNames.extend([f"pdf{int(j/2)}{pdfset.replace('pdf', '')}{'Up' if j % 2 else 'Down'}" for j in range(entries-1)])
     return pdfNames
+
+def pdfNamesSymHessian(entries, pdfset=""):
+    return [f"pdf{i}{pdfset.replace('pdf', '')}" for i in range(entries)]
 
 def pdfSymmetricShifts(hdiff, axis_name):
     sq = hh.multiplyHists(hdiff, hdiff)
