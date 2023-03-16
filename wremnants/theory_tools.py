@@ -200,17 +200,22 @@ def define_pdf_columns(df, dataset_name, pdfs, noAltUnc):
         entries = 1 if i != 0 and noAltUnc else pdfInfo["entries"]
         start = 0 if "first_entry" not in pdfInfo else pdfInfo["first_entry"]
 
+        df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, {entries}>({pdfBranch}, {start}), 10.); res = nominal_weight*res; return res;")
+
         if i == 0:
-            df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, {entries}>({pdfBranch}, {start}), 10.); res = nominal_weight*res; return res;")
-            df = df.Define("nominal_pdf_cen", f"{tensorName}(0)/nominal_weight")
-            df = df.Redefine("nominal_weight", f"{tensorName}(0)")
-        else:
-            df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, {entries}>({pdfBranch}, {start}), 10.); res = nominal_weight/nominal_pdf_cen*res; return res;")
+            tensorNameNominal = tensorName
+
+        if pdfName == "pdfMSHT20":
+            df = pdfBugfixMSHT20(df, tensorName)
 
         df = df.Define(tensorASName, "Eigen::TensorFixedSize<double, Eigen::Sizes<2>> res; "
-                f"res(0) = nominal_weight/nominal_pdf_cen*{pdfInfo['alphas'][0]}; "
-                f"res(1) = nominal_weight/nominal_pdf_cen*{pdfInfo['alphas'][1]}; "
+                f"res(0) = nominal_weight*{pdfInfo['alphas'][0]}; "
+                f"res(1) = nominal_weight*{pdfInfo['alphas'][1]}; "
                 "return wrem::clip_tensor(res, 10.)")
+
+    # now set the nominal pdf
+    df = df.Redefine("nominal_weight", f"{tensorNameNominal}(0)")
+
     return df
 
 def define_weights_and_corrs(df, weight_expr, dataset_name, helpers, args):
@@ -410,3 +415,13 @@ def hessianPdfUnc(h, axis_name="pdfVar", uncType="symHessian", scale=1.):
     hUp = hh.addHists(h[{axis_name : 0}], 1*rssUp)
     hDown = hh.addHists(h[{axis_name : 0}], -1*rssDown)
     return hUp, hDown
+
+def pdfBugfixMSHT20(df , tensorPDFName):
+    # There is a known bug in MSHT20 where member 15 and 16 are identical
+    #   to fix this, one has to be mirrored:
+    #   pdf(16) = pdf(0) - (pdf(16) - pdf(0))
+    return df.Redefine(tensorPDFName, 
+        f"auto res = {tensorPDFName};"
+        f"res(16) = {tensorPDFName}(0) - ({tensorPDFName}(16) - {tensorPDFName}(0));"
+        "return res")
+        
