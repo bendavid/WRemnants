@@ -100,7 +100,7 @@ def read_scetlib_hist(path, nonsing="none", flip_y_sign=False, charge=None):
         nonsingh = read_scetlib_hist(nonsing, nonsing="none", flip_y_sign=flip_y_sign, charge=charge)
         # The overflow in the categorical axis breaks the broadcast
         if "vars" in nonsingh.axes.name and nonsingh.axes["vars"].size == 1:
-            nonsingh = nonsingh[{"vars" : "central"}]
+            nonsingh = nonsingh[{"vars" : 0}]
         scetlibh = hh.addHists(scetlibh, nonsingh)
         logging.warning("Adding NLO nonsingular contribution!")
     elif nonsing != "none":
@@ -112,6 +112,20 @@ def read_scetlib_hist(path, nonsing="none", flip_y_sign=False, charge=None):
         scetlibh[{"Y" : s[mid:]}] = scetlibh[{"Y" : s[mid:]}].view()*-1
 
     return scetlibh 
+
+def read_dyturbo_pdf_hist(base_name, pdf_members, axes, charge=None):
+    pdf_ax = hist.axis.StrCategory([f"pdf{i}" for i in range(pdf_members)], name="vars")
+    pdf_hist = None
+    
+    for i in range(pdf_members):
+        h = read_dyturbo_hist([base_name.format(i=i)], axes=axes, charge=charge)
+        print("HERE WE ARE!", h.shape)
+        if not pdf_hist:
+            pdf_hist = hist.Hist(*h.axes, pdf_ax, storage=h._storage_type())
+        pdf_hist[...,i] = h.view(flow=True)
+    print("PDF", pdf_hist.shape)
+        
+    return pdf_hist
 
 def read_dyturbo_hist(filenames, path="", axes=("y", "pt"), charge=None):
     isfile = list(filter(lambda x: os.path.isfile(x), 
@@ -238,32 +252,32 @@ def readImpacts(rtfile, group, sort=True, add_total=True, stat=0.0):
     return impacts,labels
 
 def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo, axes=None, charge=None, fix_nons_bin0=True):
-    print("Resum", scetlib_resum)
-    print("FO sing", scetlib_fo_sing)
-    print("FO full", dyturbo_fo)
     hsing = read_scetlib_hist(scetlib_resum, charge=charge)
-    print(hsing.axes.name)
     hfo_sing = read_scetlib_hist(scetlib_fo_sing, charge=charge)
     if axes:
         newaxes = [*axes, "vars"]
-        if charge:
+        if charge is not None:
             newaxes.insert(-1, "charge")
         hfo_sing = hfo_sing.project(*newaxes)
         hsing = hsing.project(*newaxes)
-    hfo = read_dyturbo_hist([dyturbo_fo], axes=axes if axes else hsing.axes.name[:-1], charge=charge)
-    print(hfo.axes.name)
-    print(hsing.axes.name)
+    if all("pdf" in x for x in hsing.axes["vars"]):
+        logging.info("Reading PDF variations for DYTurbo")
+        pdf_members = hsing.axes["vars"].size
+        hfo = read_dyturbo_pdf_hist(dyturbo_fo, pdf_members=pdf_members, axes=axes if axes else hsing.axes.name[:-1], charge=charge)
+    else:
+        print("Actually here!")
+        hfo = read_dyturbo_hist([dyturbo_fo], axes=axes if axes else hsing.axes.name[:-1], charge=charge)
     for ax in ["Y", "Q"]:
         if ax in set(hfo.axes.name).intersection(set(hfo_sing.axes.name)).intersection(set(hsing.axes.name)):
             hfo, hfo_sing, hsing = hh.rebinHistsToCommon([hfo, hfo_sing, hsing], ax)
+    print("Shapes are")
+    print("hfo", hfo.shape, "hfo_sing", hfo_sing.shape, "hsing", hsing.shape)
     hnonsing = hh.addHists(-1*hfo_sing, hfo)
-    print(hnonsing.shape)
     if fix_nons_bin0:
         # The 2 is for the WeightedSum
         res = np.zeros((*hnonsing[{"qT" : 0}].shape, 2))
-        print(res.shape)
         if charge:
             hnonsing[...,0,:,:] = res
         else:
             hnonsing[...,0,:] = res
-    return hh.addHists(hsing, hnonsing[{"vars" : "central"}])
+    return hh.addHists(hsing, hnonsing[{"vars" : 0}])
