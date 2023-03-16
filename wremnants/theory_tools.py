@@ -180,7 +180,6 @@ def define_pdf_columns(df, dataset_name, pdfs, noAltUnc):
             "horace" in dataset_name or \
             "LHEPdfWeight" not in df.GetColumnNames():
         logger.warning(f"Did not find PDF weights for sample {dataset_name}! Using nominal PDF in sample")
-        df = df.DefinePerSample("nominal_pdf_cen", "1.0")
         return df
 
     for i, pdf in enumerate(pdfs):
@@ -190,7 +189,6 @@ def define_pdf_columns(df, dataset_name, pdfs, noAltUnc):
             logger.info(e)
             if i == 0:
                 logger.warning(f"Did not find PDF {pdf} for sample {dataset_name}! Using nominal PDF in sample")
-                df = df.DefinePerSample("nominal_pdf_cen", "1.0")
             return df
 
         pdfName = pdfInfo["name"]

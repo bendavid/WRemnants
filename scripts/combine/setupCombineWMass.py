@@ -242,10 +242,10 @@ def main(args):
 
     to_fakes = wmass and not args.noQCDscaleFakes
     combine_helpers.add_pdf_uncertainty(cardTool, single_v_samples, passSystToFakes)
-    combine_helpers.add_scale_uncertainty(cardTool, args.qcdScale, signal_samples_inctau, to_fakes, scetlib=args.scetlibUnc)
+    combine_helpers.add_scale_uncertainty(cardTool, args.minnlo_scale_unc, signal_samples_inctau, to_fakes, resum=args.resum_unc)
     # for Z background in W mass case (W background for Wlike is essentially 0, useless to apply QCD scales there)
     if wmass:
-        combine_helpers.add_scale_uncertainty(cardTool, "integrated", single_v_nonsig_samples, False, name_append="Z", scetlib=args.scetlibUnc)
+        combine_helpers.add_scale_uncertainty(cardTool, "integrated", single_v_nonsig_samples, False, name_append="Z", resum=args.resum_unc)
 
     msv_config_dict = {
         "smearing_weights":{

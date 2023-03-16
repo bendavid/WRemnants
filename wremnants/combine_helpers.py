@@ -159,6 +159,13 @@ def args_from_metadata(meta_data, arg, default):
     command = meta_data["command"]
     sys_args = np.array([x.strip("'") for x in command.split()])
     matching = (sys_args == f"--{arg}") | (sys_args == f"-{arg}")
+
+    if not np.count_nonzero(matching):
+        # try to catch abbreviations
+        matching = [(f"--{arg}").startswith(sys_arg) for sys_arg in sys_args]
+        if sum(matching)>1:
+            logger.warning(f"Found {sum(matching)} matches when trying to catch abbreviations for {arg}!")
+
     if not np.count_nonzero(matching):
         logger.warning(f"Did not find argument {arg}. Assuming the default value {default}")
         return [default]
