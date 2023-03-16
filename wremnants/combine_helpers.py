@@ -5,7 +5,7 @@ import re
 
 logger = logging.child_logger(__name__)
 
-def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append="", scetlib=None, use_hel_hist=False, rebin_pt=None):
+def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append="", resum=None, use_hel_hist=False, rebin_pt=None):
     if not len(samples):
         logger.warning(f"Skipping QCD scale syst '{scale_type}', no process to apply it to")
         return
@@ -132,7 +132,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
         skip_entries.extend([(*[-1]*(nsyst_dims-3), complex(0, i), -1, -1) for i in (5,6,7)])
 
     # Skip MiNNLO unc. 
-    if scetlib and not (pt_binned or helicity):
+    if resum and not (pt_binned or helicity):
         logger.warning("Without pT or helicity splitting, only the SCETlib uncertainty will be applied!")
     else:
         card_tool.addSystematic(scale_hist,
@@ -159,6 +159,13 @@ def args_from_metadata(meta_data, arg, default):
     command = meta_data["command"]
     sys_args = np.array([x.strip("'") for x in command.split()])
     matching = (sys_args == f"--{arg}") | (sys_args == f"-{arg}")
+
+    if not np.count_nonzero(matching):
+        # try to catch abbreviations
+        matching = [(f"--{arg}").startswith(sys_arg) for sys_arg in sys_args]
+        if sum(matching)>1:
+            logger.warning(f"Found {sum(matching)} matches when trying to catch abbreviations for {arg}!")
+
     if not np.count_nonzero(matching):
         logger.warning(f"Did not find argument {arg}. Assuming the default value {default}")
         return [default]
