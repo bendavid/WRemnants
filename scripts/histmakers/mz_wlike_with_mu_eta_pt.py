@@ -76,7 +76,7 @@ logger.info(f"SF file: {args.sfFile}")
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
 
-mc_jpsi_crctn_helper, data_jpsi_crctn_helper = muon_validation.make_jpsi_crctn_helpers(args)
+mc_jpsi_crctn_helper, data_jpsi_crctn_helper = muon_calibration.make_jpsi_crctn_helpers(args)
 
 mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = muon_calibration.make_muon_calibration_helpers(args)
 

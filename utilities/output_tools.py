@@ -30,7 +30,10 @@ def fillTemplatedFile(templateFile, outFile, templateDict, append=False):
 def script_command_to_str(argv, parser_args):
     call_args = np.array(argv[1:], dtype=object)
     match_expr = "|".join(["^--[a-z].*|^-[a-z].*"]+([] if not parser_args else [f"^-*{x}" for x in vars(parser_args).keys()]))
-    flags = np.vectorize(lambda x: bool(re.match(match_expr, x)))(call_args)
+    flags = (
+        np.vectorize(lambda x: bool(re.match(match_expr, x)))(call_args)
+        if len(call_args) > 0 else np.array([True])
+    )
     if np.count_nonzero(~flags):
         call_args[~flags] = np.vectorize(lambda x: f"'{x}'")(call_args[~flags])
     return " ".join([argv[0], *call_args])
