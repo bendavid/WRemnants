@@ -259,13 +259,17 @@ class CardTool(object):
             return axLabel.format(i=entry)
         return axLabel+str(entry)
 
-    def excludeSystEntry(self, entry, skipEntries):
-        for skipEntry in skipEntries:
-            skip = False
-            for e,match in zip(entry, skipEntry): 
-                # Can use -1 to exclude all values of an axis
-                if match == -1 or match == e or re.match(str(match), str(e)):
-                    return True
+    # TODO: Really would be better to use the axis names, not just indices
+    def excludeSystEntry(self, entry, entries_to_skip):
+        # Check if the entry in the hist matches one of the entries in entries_to_skip, across all axes
+        # Can use -1 to exclude all values of an axis
+        def match_entry(curr_entry, to_skip): 
+            return to_skip == -1 or curr_entry == to_skip or re.match(str(to_skip), str(curr_entry))
+
+        for skipEntry in entries_to_skip:
+            if all(match_entry(e,m) for e,m in zip(entry, skipEntry)):
+                return True
+        # If no matches were found for any of the entries_to_skip possibilities
         return False
 
     def expandSkipEntries(self, h, syst, skipEntries):
