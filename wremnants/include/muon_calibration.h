@@ -437,7 +437,7 @@ private:
         int nMuons = -1 // limit the number of muons to be N; -1 to take all selected muons
     ) {
         if (covmat_counts.size() != selection.size()) {
-            cout << "WARNING: selection should be done on all RECO muons" << std::endl;
+            throw std::invalid_argument("selection masks should match the size of all RECO muons");
         }
         
         using ROOT::VecOps::RVec;
@@ -529,9 +529,9 @@ public:
     // for central value of pt
     float operator() (float cvhPt, float cvhEta, int charge) {
         const auto &params = get_tensor(cvhEta);
-        const double A = params(0, 0);
-        const double e = params(1, 0);
-        const double M = params(2, 0);
+        const double A = params(0);
+        const double e = params(1);
+        const double M = params(2);
         double k = 1.0 / cvhPt;
         double magnetic = 1.0 + A;
         double material = -1.0 * e * k;
@@ -675,7 +675,6 @@ private:
     }
 
     std::shared_ptr<const T> correctionHist_;
-
 };
 
 // jpsi corrections central value for multiple muons
