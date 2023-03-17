@@ -5,7 +5,6 @@ import narf
 from utilities import rdf_tools
 from utilities import common, logging
 from utilities import boostHistHelpers as hh
-from . import muon_validation
 import uproot
 import numpy as np
 import warnings
@@ -474,8 +473,8 @@ def transport_smearing_weights_to_reco(
         if 'muonScaleSyst_responseWeights_gensmear' in proc_hist.keys():
             msv_sw_gen_smear = proc_hist['muonScaleSyst_responseWeights_gensmear'].get()
         else:
-            warning.warn(f"Histogram 'muonScaleSyst_responseWeights_gensmear' not found in {proc}")
-            warning.warn("smearing weights not transported to RECO kinematics")
+            warnings.warn(f"Histogram 'muonScaleSyst_responseWeights_gensmear' not found in {proc}")
+            warnings.warn("smearing weights not transported to RECO kinematics")
             return
 
         msv_sw_reco = hist.Hist(*msv_sw_gen_smear.axes, storage = msv_sw_gen_smear._storage_type())
