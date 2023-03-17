@@ -169,6 +169,7 @@ def makeStackPlotWithRatio(
                 linewidth=2,
             )
 
+        print("Valid names are", histInfo.keys())
         for proc in unstacked:
             logger.debug(f"Plotting proc {proc}")
             print("Proc", proc)

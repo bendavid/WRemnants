@@ -381,7 +381,7 @@ def pdfAsymmetricShifts(hdiff, axis_name):
     ax = hdiff.axes[axis_name] 
     underflow = hdiff.axes[axis_name].traits.underflow
     overflow = hdiff.axes[axis_name].traits.overflow
-    if type(ax) == hist.axis.StrCategory:
+    if type(ax) == hist.axis.StrCategory and all(["Up" in x or "Down" in x for x in ax][1:]):
         # Remove the overflow from the categorical axis
         end = int((ax.size-1)/2)
         upvals = hdiff[{axis_name : [x for x in ax if "Up" in x]}].values(flow=True)[...,:end]
@@ -403,7 +403,6 @@ def pdfAsymmetricShifts(hdiff, axis_name):
     return upshift, downshift 
 
 def hessianPdfUnc(h, axis_name="pdfVar", uncType="symHessian", scale=1.):
-    print(h.axes.name)
     underflow = h.axes[axis_name].traits.underflow
     symmetric = uncType == "symHessian"
     diff = hh.addHists(h, -1*h[{axis_name : 0}])*scale

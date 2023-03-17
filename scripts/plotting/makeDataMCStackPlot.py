@@ -116,7 +116,7 @@ unstack = exclude[:]
 # TODO: In should select the correct hist for the transform, not just the first
 transforms = syst_tools.syst_transform_map(nominalName, args.hists[0])
 
-histInfo = groups.getDatagroups()
+histInfo = groups.getDatagroups(afterFilter=False)
 
 if addVariation:
     logger.info(f"Adding variation {args.varName}")
@@ -161,6 +161,7 @@ if addVariation:
         groups.addSummedProc(nominalName, relabel=args.baseName, name=name, label=label, exclude=exclude,
             color=color, reload=reload, rename=varname, procsToRead=datasets,
             preOpMap=load_op, action=action)
+        print("Groups", groups.groups.keys())
 
         exclude.append(varname)
         unstack.append(varname)
@@ -182,6 +183,8 @@ def collapseSyst(h):
         if ax in h.axes.name:
             return h[{ax : 0}].copy()
     return h
+
+print("Now keys are", histInfo.keys())
 
 overflow_ax = ["ptll", "chargeVgen", "massVgen", "ptVgen"]
 for h in args.hists:

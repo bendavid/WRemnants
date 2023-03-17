@@ -2,13 +2,14 @@ import lz4.frame
 import pickle
 import numpy
 import hist
-from utilities import boostHistHelpers as hh
+from utilities import boostHistHelpers as hh,logging
 import numpy as np
-import logging
 import os
 import hdf5plugin
 import h5py
 from narf import ioutils
+
+logger = logging.child_logger(__name__)
 
 def read_and_scale_pkllz4(fname, proc, histname, calculate_lumi=False, scale=1):
     with lz4.frame.open(fname) as f:
@@ -39,7 +40,7 @@ def load_and_scale(res_dict, proc, histname, calculate_lumi=False, scale=1.):
             data_keys = [p for p in res_dict.keys() if "dataset" in res_dict[p] and res_dict[p]["dataset"]["is_data"]]
             lumi = sum([res_dict[p]["lumi"] for p in data_keys])*1000
             if not lumi:
-                logging.warning("Did not find a data hist! Skipping calculate_lumi option")
+                logger.warning("Did not find a data hist! Skipping calculate_lumi option")
                 lumi = 1
             scale *= lumi
     return h*scale
@@ -102,9 +103,9 @@ def read_scetlib_hist(path, nonsing="none", flip_y_sign=False, charge=None):
         if "vars" in nonsingh.axes.name and nonsingh.axes["vars"].size == 1:
             nonsingh = nonsingh[{"vars" : 0}]
         scetlibh = hh.addHists(scetlibh, nonsingh)
-        logging.warning("Adding NLO nonsingular contribution!")
+        logger.warning("Adding NLO nonsingular contribution!")
     elif nonsing != "none":
-        logging.warning("Will not include nonsingular contribution!")
+        logger.warning("Will not include nonsingular contribution!")
     
     if flip_y_sign:
         mid = y_axis.index(0)
@@ -259,7 +260,7 @@ def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo
         hfo_sing = hfo_sing.project(*newaxes)
         hsing = hsing.project(*newaxes)
     if all("pdf" in x for x in hsing.axes["vars"]):
-        logging.info("Reading PDF variations for DYTurbo")
+        logger.info("Reading PDF variations for DYTurbo")
         pdf_members = hsing.axes["vars"].size
         hfo = read_dyturbo_pdf_hist(dyturbo_fo, pdf_members=pdf_members, axes=axes if axes else hsing.axes.name[:-1], charge=charge)
     else:
@@ -275,4 +276,7 @@ def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo
             hnonsing[...,0,:,:] = res
         else:
             hnonsing[...,0,:] = res
-    return hh.addHists(hsing, hnonsing[{"vars" : 0}])
+    if hnonsing.axes["vars"].size != hsing.axes["vars"].size:
+        logger.warning("Did not find variation for nonsingular! Assuming nominal for all variations!")
+        hnonsing = hnonsing[{"vars" : 0}]
+    return hh.addHists(hsing, hnonsing)
