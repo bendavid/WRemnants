@@ -189,11 +189,10 @@ def make_jpsi_crctn_helper(filepath):
         raise RuntimeError("A, e, M histograms have different axes!")
     else:
         axis_param = hist.axis.Regular(3, 0, 3, underflow = False, overflow = False, name = 'param')
-        axis_cenval = hist.axis.Regular(1, 0, 1, name = 'cenval')
-        hist_comb = hist.Hist(*A.axes, axis_param, axis_cenval, storage = hist.storage.Double())
-        hist_comb.view()[...,0] = np.stack([x.values() for x in [A, e, M]], axis = -1)
+        hist_comb = hist.Hist(*A.axes, axis_param, storage = hist.storage.Double())
+        hist_comb.view()[...] = np.stack([x.values() for x in [A, e, M]], axis = -1)
 
-    hist_comb_cpp = narf.hist_to_pyroot_boost(hist_comb, tensor_rank = 2)
+    hist_comb_cpp = narf.hist_to_pyroot_boost(hist_comb, tensor_rank = 1)
     jpsi_crctn_helper = ROOT.wrem.JpsiCorrectionsRVecHelper[type(hist_comb_cpp).__cpp_name__](
         ROOT.std.move(hist_comb_cpp)
     )
@@ -345,17 +344,6 @@ def muon_var_name(mu_type, var):
 
 def define_matched_gen_muons_covMat(df, reco_sel = "goodMuons"):
     df = df.Define(
-        f"{reco_sel}_covMat",
-        (
-            "wrem::getCovMatForSelectedRecoMuons<float>("
-            f"    Muon_cvhMomCov_Vals, Muon_cvhMomCov_Counts, {reco_sel}"
-            ");"
-        )
-    )
-    return df
-
-def redefine_matched_gen_muons_covMat(df, reco_sel = "goodMuons"):
-    df = df.Redefine(
         f"{reco_sel}_covMat",
         (
             "wrem::getCovMatForSelectedRecoMuons<float>("

@@ -459,7 +459,7 @@ def build_graph(df, dataset):
 
 resultdict = narf.build_and_run(datasets, build_graph)
 if args.smearingWeights:
-    wremnants.transport_smearing_weights_to_reco(resultdict)
-    wremnants.muon_scale_variation_from_manual_shift(resultdict)
+    muon_calibration.transport_smearing_weights_to_reco(resultdict)
+    muon_calibration.muon_scale_variation_from_manual_shift(resultdict)
 
 output_tools.write_analysis_output(resultdict, "mw_with_mu_eta_pt.hdf5", args)
