@@ -221,7 +221,8 @@ class datagroups(object):
             filtDef = lambda x: x[0] in self.groupNamesPostFilter
             if len(excluded_procs):
                 filtDef = lambda x: x[0] in self.groupNamesPostFilter and x[0] not in excluded_procs
-        return dict(filter(filtDef, self.groups.items()))
+        #return dict(filter(filtDef, self.groups.items()))
+        return self.groups
 
     # INFO: this method returns the list from the full set of defined groups, unless one filters further.
     # Instead, argument 'afterFilter' is used to return the names after the filter passed to the constructor
