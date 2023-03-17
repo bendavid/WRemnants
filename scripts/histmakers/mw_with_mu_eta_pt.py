@@ -22,6 +22,7 @@ parser.add_argument("--sfFileVqtTest", type=str, help="File with muon scale fact
 parser.add_argument("--vqtTestIntegrated", action="store_true", help="Test of isolation SFs dependence on V q_T projection, integrated (would be the same as default SF, but pt-eta binning is different)")
 parser.add_argument("--vqtTestReal", action="store_true", help="Test of isolation SFs dependence on V q_T projection, using 3D SFs directly (instead of the Vqt fits)")
 parser.add_argument("--vqtTestIncludeTrigger", action="store_true", help="Test of isolation SFs dependence on V q_T projection. Including trigger")
+parser.add_argument("--validateByMassWeights", action="store_true", help="validate the muon scale variation from jpsi massfit stats. unc. by massweights")
 args = parser.parse_args()
 
 if args.vqtTestIntegrated:
@@ -364,8 +365,24 @@ def build_graph(df, dataset):
                     df = df.DefinePerSample("bool_true", "true")
                     df = df.DefinePerSample("bool_false", "false")
                     if args.muonCorrData == "massfit" or "massfit_lbl":
-                        jpsi_unc_helper = jpsi_crctn_data_unc_helper
-                        df = df.Define("muonScaleSyst_responseWeights_tensor_gensmear", jpsi_unc_helper,
+                        if args.validateByMassWeights:
+                            jpsi_unc_helper = muon_validation.make_jpsi_crctn_unc_helper_massweights(
+                                "wremnants/data/calibration/calibrationJDATA_rewtgr_3dmap_LBL.root",
+                                nweights
+                            )
+                            df = df.Define("muonScaleSyst_responseWeights_tensor_gensmear", jpsi_unc_helper,
+                            [
+                            f"{reco_sel_GF}_eta0_gen_smeared",
+                            f"{reco_sel_GF}_charge0_gen_smeared",
+                            f"{reco_sel_GF}_pt0_gen_smeared",
+                            "massWeight_tensor",
+                            "nominal_weight",
+                            f"bool_{str(isW).lower()}"
+                            ]
+                            )
+                        else:
+                            jpsi_unc_helper = jpsi_crctn_data_unc_helper
+                            df = df.Define("muonScaleSyst_responseWeights_tensor_gensmear", jpsi_unc_helper,
                             [
                             f"{reco_sel_GF}_genQop",
                             f"{reco_sel_GF}_genPhi",
@@ -379,7 +396,7 @@ def build_graph(df, dataset):
                             "nominal_weight",
                             "bool_false"
                             ]
-                        )
+                            )
                         dummyMuonScaleSyst_responseWeights = df.HistoBoost(
                             "muonScaleSyst_responseWeights_gensmear", nominal_axes,
                             [*nominal_cols_gen_smeared, "muonScaleSyst_responseWeights_tensor_gensmear"],
