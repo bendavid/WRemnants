@@ -151,7 +151,7 @@ def common_parser_combine():
     parser.add_argument("--wlike", action='store_true', help="Run W-like analysis of mZ")
     parser.add_argument("-o", "--outfolder", type=str, default=".", help="Output folder with the root file storing all histograms and datacards for single charge (subfolder WMass or ZMassWLike is created automatically inside)")
     parser.add_argument("-i", "--inputFile", type=str)
-    parser.add_argument("--minnlo-scale-unc", choices=["byHelicityPt", "byHelicityPtCharge", "byHelicityCharge", "byPtCharge", "byPt", "byCharge", "integrated",], default="byHelicityPtCharge", 
+    parser.add_argument("--minnlo-scale-unc", choices=["byHelicityPt", "byHelicityPtCharge", "byHelicityCharge", "byPtCharge", "byPt", "byCharge", "integrated",], default="byPtCharge", 
             help="Decorrelation for QCDscale")
     parser.add_argument("--rebinPtV", type=float, nargs='*', help="Rebin axis with gen boson pt by this value (default does nothing)")
     parser.add_argument("--resum-unc", default=None, type=str, choices=["scale", "np"], help="Include SCETlib uncertainties")
