@@ -26,6 +26,7 @@ wprocs_recoil_lowpu = ["WminusJetsToMuNu", "WminusJetsToENu", "WplusJetsToMuNu",
 background_MCprocs = ["Top", "Diboson", "QCD"]
 zprocs_all = zprocs_lowpu+zprocs
 wprocs_all = wprocs_lowpu+wprocs
+vprocs_all = vprocs_lowpu+vprocs
 
 # unfolding axes for low pu
 axis_recoil_reco_ptZ = hist.axis.Variable([0, 5, 10, 15, 20, 30, 40, 50, 60, 75, 90, 150], name = "recoil_reco", underflow=False, overflow=True)
@@ -72,7 +73,7 @@ def common_parser(for_reco_highPU=False):
     parser = argparse.ArgumentParser()
     parser.add_argument("-j", "--nThreads", type=int, help="number of threads")
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
-                        help="Set verbosity level with logging, the larger the more verbose");
+                        help="Set verbosity level with logging, the larger the more verbose")
     parser.add_argument("--no-color-logger", action="store_false", dest="color_logger", 
                         help="Do not use logging with colors")
     initargs,_ = parser.parse_known_args()
@@ -96,7 +97,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
     parser.add_argument("--theory_corr", nargs="*", 
         choices=["scetlib", "scetlibNP", "scetlibN4LL", "scetlibMSHT20an3lo", "scetlibHelicity", 
-                 "scetlib_dyturbo", "scetlib_dyturboN4LL", "scetlib_dyturboN3LLp_an3lo", "scetlib_dyturboMSHT20an3lo",
+                 "scetlib_dyturbo", "scetlib_dyturboN4LL", "scetlib_dyturboN3LLp_an3lo", "scetlib_dyturboMSHT20an3lo", "scetlib_dyturboMSHT20Unc",
                  "dyturboN3LLp", "dyturbo", "dyturboYOnly", "matrix_radish", "horacenloew"], 
         help="Apply corrections from indicated generator. First will be nominal correction.", default=[])
     parser.add_argument("--theory_corr_alt_only", action='store_true', help="Save hist for correction hists but don't modify central weight")
@@ -151,25 +152,24 @@ def common_parser_combine():
     parser.add_argument("--wlike", action='store_true', help="Run W-like analysis of mZ")
     parser.add_argument("-o", "--outfolder", type=str, default=".", help="Output folder with the root file storing all histograms and datacards for single charge (subfolder WMass or ZMassWLike is created automatically inside)")
     parser.add_argument("-i", "--inputFile", type=str)
-    parser.add_argument("--qcdScale", choices=["byHelicityPt", "byHelicityPtCharge", "byHelicityCharge", "byPtCharge", "byPt", "byCharge", "integrated",], default="byHelicityPtCharge", 
+    parser.add_argument("--minnlo-scale-unc", choices=["byHelicityPt", "byHelicityPtCharge", "byHelicityCharge", "byPtCharge", "byPt", "byCharge", "integrated",], default="byPtCharge", 
             help="Decorrelation for QCDscale")
     parser.add_argument("--rebinPtV", type=float, nargs='*', help="Rebin axis with gen boson pt by this value (default does nothing)")
-    parser.add_argument("--scetlibUnc", default=None, type=str, choices=["scale", "np"], help="Include SCETlib uncertainties")
-    parser.add_argument("-b", "--fitObs", type=str, default="nominal", help="Observable to fit") # TODO: what does it do?
-    parser.add_argument("--qcdProcessName", dest="qcdProcessName" , type=str, default="Fake",   help="Name for QCD process")
-    parser.add_argument("--noStatUncFakes", dest="noStatUncFakes" , action="store_true",   help="Set bin error for QCD background templates to 0, to check MC stat uncertainties for signal only")
-    parser.add_argument("--skipSignalSystOnFakes", dest="skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
-    parser.add_argument("--noQCDscaleFakes", dest="noQCDscaleFakes" , action="store_true",   help="Do not apply QCd scale uncertainties on fakes, mainly for debugging")
+    parser.add_argument("--resum-unc", default=None, type=str, choices=["scale", "np"], help="Include SCETlib uncertainties")
+    parser.add_argument("--qcdProcessName" , type=str, default="Fake",   help="Name for QCD process")
+    parser.add_argument("--noStatUncFakes" , action="store_true",   help="Set bin error for QCD background templates to 0, to check MC stat uncertainties for signal only")
+    parser.add_argument("--skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
+    parser.add_argument("--noQCDscaleFakes", action="store_true",   help="Do not apply QCd scale uncertainties on fakes, mainly for debugging")
     parser.add_argument("--doStatOnly", action="store_true", default=False, help="Set up fit to get stat-only uncertainty (currently combinetf with -S 0 doesn't work)")
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
-                        help="Set verbosity level with logging, the larger the more verbose");
+                        help="Set verbosity level with logging, the larger the more verbose")
     parser.add_argument("--no-color-logger", action="store_false", dest="color_logger", 
                         help="Do not use logging with colors")
     parser.add_argument("--sum-channels", dest="sumChannels", action='store_true', help="Only use one channel summing the charges")
     parser.add_argument("--lumiScale", type=float, default=None, help="Rescale equivalent luminosity by this value (e.g. 10 means ten times more data and MC)")
     parser.add_argument("--add-qcd-mc", dest="addQCDMC", action="store_true", help="Include QCD MC when making datacards (otherwise by default it will always be excluded)")
-    parser.add_argument("--exclude-proc-groups", dest="excludeProcGroups", type=str, nargs="*", help="Don't run over processes belonging to these groups (only accepts exact group names)", default=[])
-    parser.add_argument("--filter-proc-groups", dest="filterProcGroups", type=str, nargs="*", help="Only run over processes belonging to these groups", default=[])
+    parser.add_argument("--excludeProcGroups", type=str, nargs="*", help="Don't run over processes belonging to these groups (only accepts exact group names)", default=["QCD"])
+    parser.add_argument("--filterProcGroups", type=str, nargs="*", help="Only run over processes belonging to these groups", default=[])
     return parser
 
 def set_parser_default(parser, argument, newDefault):

@@ -32,9 +32,8 @@ class datagroups(object):
         else:
             raise ValueError("Unsupported file type")
 
-        if self.results:
-            self.wmass = os.path.basename(self.getMetaInfo()["command"].split()[0]).startswith("mw")
-            self.wlike = os.path.basename(self.getMetaInfo()["command"].split()[0]).startswith("mz_wlike")
+        self.wmass = os.path.basename(self.getScriptCommand().split()[0]).startswith("mw")
+        self.wlike = os.path.basename(self.getScriptCommand().split()[0]).startswith("mz_wlike")
 
         self.lumi = None
         # FIXME: self.datasets is currently a data member of the inherited class, we should define it here as well
@@ -76,10 +75,16 @@ class datagroups(object):
         return self.lumi*1000*proc.xsec/self.results[proc.name]["weight_sum"]
 
     def getMetaInfo(self):
-        if self.rtfile:
-            return self.rtfile["meta_info"]
-        else:
+        if self.results:
             return self.results["meta_info"] if "meta_info" in self.results else self.results["meta_data"]
+        raise NotImplementedError("Currently can't access meta data as dict for ROOT file")
+
+    def getScriptCommand(self):
+        if self.rtfile:
+            return self.rtfile.Get("meta_info/command").GetTitle()
+        else:
+            meta_info = self.results["meta_info"] if "meta_info" in self.results else self.results["meta_data"]
+            return meta_info["command"]
 
     def updateGroupNamesPostFilter(self, excludeGroup=[]):
         self.groupNamesPostFilter = list(x for x in self.groups.keys() if len(self.groups[x]["members"]) and x not in excludeGroup)
@@ -222,7 +227,9 @@ class datagroups(object):
             filtDef = lambda x: x[0] in self.groupNamesPostFilter
             if len(excluded_procs):
                 filtDef = lambda x: x[0] in self.groupNamesPostFilter and x[0] not in excluded_procs
+        # FIXME: This breaks the plotting
         return dict(filter(filtDef, self.groups.items()))
+        #return self.groups
 
     # INFO: this method returns the list from the full set of defined groups, unless one filters further.
     # Instead, argument 'afterFilter' is used to return the names after the filter passed to the constructor
