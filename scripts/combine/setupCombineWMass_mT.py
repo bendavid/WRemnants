@@ -9,7 +9,7 @@ import hist
 import numpy as np
 import scripts.lowPU.config as lowPUcfg
 import math
-from utilities import common
+from utilities import common, logging
 
 scriptdir = f"{pathlib.Path(__file__).parent}"
 
@@ -34,7 +34,7 @@ parser.add_argument("--skipSignalSystOnFakes", dest="skipSignalSystOnFakes" , ac
 
 
 args = parser.parse_args()
-logger = common.setup_logger(__file__, args.verbose, args.color_logger)
+logger = logging.setup_logger(__file__, args.verbose, args.color_logger)
 
 if not os.path.isdir(args.outfolder):
     os.mkdir(args.outfolder)

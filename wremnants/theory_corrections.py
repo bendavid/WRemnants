@@ -7,10 +7,10 @@ import numpy as np
 import lz4.frame
 import pickle
 from .correctionsTensor_helper import makeCorrectionsTensor
-from utilities import boostHistHelpers as hh, common
+from utilities import boostHistHelpers as hh, common, logging
 from wremnants import theory_tools
 
-logging = common.child_logger(__name__)
+logger = logging.child_logger(__name__)
 
 def load_corr_helpers(procs, generators):
     corr_helpers = {}
@@ -19,7 +19,7 @@ def load_corr_helpers(procs, generators):
         for generator in generators:
             fname = f"{common.data_dir}/TheoryCorrections/{generator}Corr{proc[0]}.pkl.lz4"
             if not os.path.isfile(fname):
-                logging.warning(f"Did not find correction file for process {proc}, generator {generator}. No correction will be applied for this process!")
+                logger.warning(f"Did not find correction file for process {proc}, generator {generator}. No correction will be applied for this process!")
                 continue
             helper_func = make_corr_helper if "Helicity" not in generator else make_corr_by_helicity_helper
             # Hack for now
@@ -88,7 +88,7 @@ def load_corr_helpers(procs, generators):
         for generator in generators:
             fname = f"{common.data_dir}/TheoryCorrections/{generator}Corr{proc[0]}.pkl.lz4"
             if not os.path.isfile(fname):
-                logging.warning(f"Did not find correction file for process {proc}, generator {generator}. No correction will be applied for this process!")
+                logger.warning(f"Did not find correction file for process {proc}, generator {generator}. No correction will be applied for this process!")
                 continue
             corr_hist_name = get_corr_name(generator)
             helper_func = make_corr_helper if "Helicity" not in generator else make_corr_by_helicity_helper
@@ -106,7 +106,7 @@ def rebin_corr_hists(hists, ndim=-1, use_predefined_bins=False):
             hists = [hh.rebinHist(h, "pt" if "pt" in h.axes.name else "ptVgen", common.ptV_binning[:-2]) for h in hists]
             hists = [hh.rebinHist(h, "absy" if "absy" in h.axes.name else "absYVgen", common.absYV_binning[:-1]) for h in hists]
         except ValueError as e:
-            logging.warning("Can't rebin axes to predefined binning")
+            logger.warning("Can't rebin axes to predefined binning")
     for i in range(ndims):
         # This is a workaround for now for the fact that MiNNLO has mass binning up to
         # Inf whereas SCETlib has 13 TeV

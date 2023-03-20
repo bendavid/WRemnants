@@ -295,7 +295,6 @@ if __name__ == "__main__":
 
     met = "RawPFMET" # PFMET, RawPFMET DeepMETReso
     flavor = "mu" # mu, e, mumu, ee
-    pdf = "nnpdf31"
     lowPU = False
 
     # DATA For electron channels!
@@ -303,9 +302,9 @@ if __name__ == "__main__":
     ####################################################################
     if lowPU:
         npv_max, npv_fit_min, npv_fit_max = 10, 0, 10
-        datagroups = datagroupsLowPU("lowPU_%s_%s_%s.pkl.lz4" % (flavor, met, pdf), flavor=flavor)
+        datagroups = datagroupsLowPU("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
         procs = ['EWK', 'Top', 'Zmumu'] 
-        data = "SingleMuon" if flavor == "mumu" else "SingleElectron"
+        data = "SingleMuon" if "mu" in flavor else "SingleElectron"
 
         outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/METxy_correction/METxy_%s_%s/" % (flavor, met)
         fOut = "wremnants/data/recoil/lowPU/%s_%s/met_xy_correction.json" % (flavor, met)
@@ -331,11 +330,17 @@ if __name__ == "__main__":
         
 
         if flavor == "mumu":
-            datagroups = datagroups2016("mz_wlike_with_mu_eta_pt_%s_%s.pkl.lz4" % (met, pdf), wlike=True)
+            npv_max, npv_fit_min, npv_fit_max = 60, 5, 55
+            polyOrderDataX, polyOrderMCX = 3, 3
+            polyOrderDataY, polyOrderMCY = 3, 3
+            datagroups = datagroups2016("mz_wlike_with_mu_eta_pt_%s.pkl.lz4" % (met))
             procs = ["Zmumu", "Ztautau", "Other"]
             data = "Data"
         else:
-            datagroups = datagroups2016("mw_with_mu_eta_pt_%s_%s.pkl.lz4" % (met, pdf), wlike=False)
+            npv_max, npv_fit_min, npv_fit_max = 60, 0, 55
+            polyOrderDataX, polyOrderMCX = 3, 3
+            polyOrderDataY, polyOrderMCY = 6, 3
+            datagroups = datagroups2016("mw_with_mu_eta_pt_%s.pkl.lz4" % (met))
             procs = ["Zmumu", "Ztautau", "Wtau", "Wmunu", "Top", "Diboson"]
             data = "Data"
             
@@ -348,8 +353,8 @@ if __name__ == "__main__":
         functions.prepareDir(outDir, True)
         
         dictout = {}
-        dictX = METxyCorrection(direction="x", corrType="corr_lep", polyOrderData=3, polyOrderMC=3, procs=procs, data=data, yMin=-10, yMax=6)
-        dictY = METxyCorrection(direction="y", corrType="corr_lep", polyOrderData=3, polyOrderMC=3, procs=procs, data=data)
+        dictX = METxyCorrection(direction="x", corrType="corr_lep", polyOrderData=polyOrderDataX, polyOrderMC=polyOrderMCX, procs=procs, data=data, yMin=-10, yMax=6)
+        dictY = METxyCorrection(direction="y", corrType="corr_lep", polyOrderData=polyOrderDataY, polyOrderMC=polyOrderMCY, procs=procs, data=data)
     
     
         dictout['x'] = dictX
@@ -358,7 +363,7 @@ if __name__ == "__main__":
         with open(fOut, "w") as outfile: outfile.write(jsOut)
         
  
-        METxyCorrection(direction="x", corrType="corr_xy", polyOrderData=3, polyOrderMC=3, procs=procs, data=data, yMin=-10, yMax=6)
-        METxyCorrection(direction="y", corrType="corr_xy", polyOrderData=3, polyOrderMC=3, procs=procs, data=data)
+        METxyCorrection(direction="x", corrType="corr_xy", polyOrderData=polyOrderDataX, polyOrderMC=polyOrderMCX, procs=procs, data=data, yMin=-10, yMax=6)
+        METxyCorrection(direction="y", corrType="corr_xy", polyOrderData=polyOrderDataY, polyOrderMC=polyOrderMCY, procs=procs, data=data)
         print(fOut)
         

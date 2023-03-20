@@ -1,4 +1,4 @@
-from utilities import boostHistHelpers as hh,common,output_tools
+from utilities import boostHistHelpers as hh, common, output_tools, logging
 
 parser,initargs = common.common_parser(True)
 
@@ -7,7 +7,6 @@ import wremnants
 from wremnants import theory_tools,syst_tools,theory_corrections, muon_validation, muon_calibration, muon_selections
 import hist
 import lz4.frame
-import logging
 import math
 import time
 import pdb
@@ -16,13 +15,11 @@ import os
 parser = common.set_parser_default(parser, "pt", [34, 26, 60])
 
 args = parser.parse_args()
-logger = common.setup_logger(__file__, args.verbose, args.color_logger)
+logger = logging.setup_logger(__file__, args.verbose, args.color_logger)
     
-filt = lambda x,filts=args.filterProcs: any([f in x.name for f in filts])
-excludeGroup = args.excludeProcGroups if args.excludeProcGroups else None
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
-                                              filt=filt if args.filterProcs else None,
-                                              excludeGroup=excludeGroup,
+                                              filt=args.filterProcs,
+                                              excl=args.excludeProcs, 
                                               nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path)
 
 era = args.era
@@ -79,7 +76,7 @@ logger.info(f"SF file: {args.sfFile}")
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
 
-mc_jpsi_crctn_helper, data_jpsi_crctn_helper = muon_validation.make_jpsi_crctn_helpers(args)
+mc_jpsi_crctn_helper, data_jpsi_crctn_helper = muon_calibration.make_jpsi_crctn_helpers(args)
 
 mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = muon_calibration.make_muon_calibration_helpers(args)
 
@@ -92,7 +89,7 @@ corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_c
 # recoil initialization
 if not args.no_recoil:
     from wremnants import recoil_tools
-    recoilHelper = recoil_tools.Recoil("highPU", flavor="mumu", met=args.met)
+    recoilHelper = recoil_tools.Recoil("highPU", args, flavor="mumu")
 
 
 def build_graph(df, dataset):
@@ -148,10 +145,11 @@ def build_graph(df, dataset):
     results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"]))
 
     if not args.no_recoil:
-        df = recoilHelper.setup_MET(df, results, dataset, "Muon_pt[goodMuons]", "Muon_phi[goodMuons]", "Muon_pt[goodMuons]")
-        df = recoilHelper.setup_recoil_Z(df, results, dataset, ["ZmumuPostVFP"])
-        df = recoilHelper.apply_recoil_Z(df, results, dataset, ["ZmumuPostVFP"])  # produces corrected MET as MET_corr_rec_pt/phi
-        #if isZ: df = recoilHelper.recoil_Z_unc_lowPU(df, results, "", "", axis_mt, axis_mll)
+        df = df.Define("yZ", "ll_mom4.Rapidity()")
+        lep_cols = ["Muon_pt[goodMuons]", "Muon_phi[goodMuons]", "Muon_pt[goodMuons]"]
+        trg_cols = ["trigMuons_pt0", "trigMuons_phi0", "nonTrigMuons_pt0", "nonTrigMuons_phi0"]
+        df = recoilHelper.recoil_Z(df, results, dataset, common.zprocs_recoil, lep_cols, trg_cols) # produces corrected MET as MET_corr_rec_pt/phi
+        df = recoilHelper.recoil_Z_unc(df, results, dataset, common.zprocs_recoil)
     else:
         df = df.Alias("MET_corr_rec_pt", "MET_pt")
         df = df.Alias("MET_corr_rec_phi", "MET_phi")
