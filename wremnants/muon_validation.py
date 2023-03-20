@@ -32,7 +32,7 @@ def make_jpsi_crctn_unc_helper_massweights(
         lb, ub = i * n_scale_params, (i + 1) * n_scale_params
         hist_scale_params_unc.view()[i,...] = var_mat[lb:ub][:]
     hist_scale_params_unc_cpp = narf.hist_to_pyroot_boost(hist_scale_params_unc, tensor_rank = 2)
-    jpsi_crctn_unc_helper = ROOT.wrem.JpsiCorrectionsUncHelper_massWeights[type(hist_scale_params_unc_cpp).__cpp_name__, n_massweights, 1](
+    jpsi_crctn_unc_helper = ROOT.wrem.JpsiCorrectionsUncHelper_massWeights[type(hist_scale_params_unc_cpp).__cpp_name__, n_massweights](
         ROOT.std.move(hist_scale_params_unc_cpp)
     )
     jpsi_crctn_unc_helper.tensor_axes = (hist_scale_params_unc.axes['unc'], common.down_up_axis)
