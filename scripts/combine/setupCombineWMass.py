@@ -73,6 +73,8 @@ def main(args):
     tag = name+"_"+args.fitvar.replace("-","_")
     if args.doStatOnly:
         tag += "_statOnly"
+    if args.customTag:
+        tag += f"_{args.customTag}"
 
     outfolder = f"{args.outfolder}/{tag}/"
     if not os.path.isdir(outfolder):
