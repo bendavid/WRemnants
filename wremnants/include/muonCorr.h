@@ -4,19 +4,19 @@
 
 #include <eigen3/Eigen/Dense>
 #include <eigen3/unsupported/Eigen/CXX11/Tensor>
-#include <math.h>
 
 namespace wrem {
 
 double scaleWeight(double weight, double scale) {
-    //return std::exp(scale*std::log(std::abs(weight)))*std::copysign(1., weight);
-    return pow(weight, scale) * std::copysign(1., weight);
-
+    return std::exp(scale*std::log(std::abs(weight)))*std::copysign(1., weight);
 }
 
 template <size_t ETABINS, size_t T>
 Eigen::TensorFixedSize<double, Eigen::Sizes<2, ETABINS>> dummyScaleFromMassWeights(double nominal_weight,
     Eigen::TensorFixedSize<double, Eigen::Sizes<T>>& weights, double eta, double scale, bool isW=true) {
+    if (scale < 0)
+        throw std::out_of_range("Scale should always be positive!");
+
     const double refMass = isW ? 80351.81229 : 91153.50974;
     const size_t centralIdx = 10;
     const double scaleMeV = refMass*scale;

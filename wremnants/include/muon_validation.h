@@ -3,6 +3,7 @@
 #include <defines.h>
 #include "muonCorr.h"
 #include <typeinfo>
+#include <cmath>
 
 namespace wrem {
 
@@ -54,7 +55,7 @@ public:
             double recoKUnc = (AUnc - eUnc * recoK) * recoK + recoCharge * MUnc;
             double scale = recoKUnc / recoK;
             auto scaleShiftWeights = scaleShiftWeightsFromMassWeights<N_MASSWEIGHTS>(
-                nominal_weight, weights, -1.0 * scale, isW
+                nominal_weight, weights, abs(scale), isW
             );
             res(ivar, 0) = scaleShiftWeights(0);
             res(ivar, 1) = scaleShiftWeights(1);
