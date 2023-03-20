@@ -2,10 +2,11 @@
 #include <stdlib.h>
 #include <defines.h>
 #include "muonCorr.h"
+#include <typeinfo>
 
 namespace wrem {
 
-template <typename T, size_t N_MASSWEIGHTS, size_t N_ETABINS>
+template <typename T, size_t N_MASSWEIGHTS>
 class JpsiCorrectionsUncHelper_massWeights {
 
 public:
@@ -41,7 +42,8 @@ public:
         bool isW = true
     ) {
         out_tensor_t res;
-        res.setConstant(nominal_weight);
+        res.setConstant(1.0);
+        //Eigen::TensorFixedSize<double, Eigen::Sizes<3, nUnc>> &params = get_tensor(recoEta); 
         const auto &params = get_tensor(recoEta);
 
         for (std::ptrdiff_t ivar = 0; ivar < nUnc; ++ivar) {
@@ -51,11 +53,11 @@ public:
             double recoK = 1.0 /recoPt;
             double recoKUnc = (AUnc - eUnc * recoK) * recoK + recoCharge * MUnc;
             double scale = recoKUnc / recoK;
-            weights = dummyScaleFromMassWeights<N_ETABINS, N_MASSWEIGHTS>(
-                nominal_weight, weights, recoEta, scale, isW
+            auto scaleShiftWeights = scaleShiftWeightsFromMassWeights<N_MASSWEIGHTS>(
+                nominal_weight, weights, -1.0 * scale, isW
             );
-            res(ivar, 0) = weights(0, 0);
-            res(ivar, 1) = weights(1, 0);
+            res(ivar, 0) = scaleShiftWeights(0);
+            res(ivar, 1) = scaleShiftWeights(1);
         }
         return res;
     }

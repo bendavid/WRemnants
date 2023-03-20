@@ -4,11 +4,14 @@
 
 #include <eigen3/Eigen/Dense>
 #include <eigen3/unsupported/Eigen/CXX11/Tensor>
+#include <math.h>
 
 namespace wrem {
 
 double scaleWeight(double weight, double scale) {
-    return std::exp(scale*std::log(std::abs(weight)))*std::copysign(1., weight);
+    //return std::exp(scale*std::log(std::abs(weight)))*std::copysign(1., weight);
+    return pow(weight, scale) * std::copysign(1., weight);
+
 }
 
 template <size_t ETABINS, size_t T>
@@ -27,13 +30,26 @@ Eigen::TensorFixedSize<double, Eigen::Sizes<2, ETABINS>> dummyScaleFromMassWeigh
 
     const double etaStep = 2*2.4/ETABINS;
     size_t ieta = (std::clamp(eta, -2.4, 2.4)+2.4)/etaStep;
-    
     // Down weight, then up weight
     outWeights(0, ieta) = scaleWeight(weights[centralIdx-step10MeV], scaleFac)*nominal_weight;
     outWeights(1, ieta) = scaleWeight(weights[centralIdx+step10MeV], scaleFac)*nominal_weight;
     return outWeights;
 }
 
+template <size_t N_MASSWEIGHTS>
+Eigen::TensorFixedSize<double, Eigen::Sizes<2>> scaleShiftWeightsFromMassWeights(
+    double nominal_weight,
+    Eigen::TensorFixedSize<double, Eigen::Sizes<N_MASSWEIGHTS>>& weights,
+    double scale,
+    bool isW=true
+) {
+    Eigen::TensorFixedSize<double, Eigen::Sizes<2>> res;
+    // Down weight, then up weight
+    res(0) = dummyScaleFromMassWeights<1, N_MASSWEIGHTS>(nominal_weight, weights, 0, scale, isW)(0, 0);
+    res(1) = dummyScaleFromMassWeights<1, N_MASSWEIGHTS>(nominal_weight, weights, 0, scale, isW)(1, 0);
+    return res;
 }
+
+};
 
 #endif
