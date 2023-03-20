@@ -33,7 +33,8 @@ logging.basicConfig(level=logging.INFO)
 def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
                          lumi="", ptRangeProjection=(0,-1), chargeLabel="",
                          canvas=None, canvasWide=None, canvas1D=None,
-                         colors=None, legEntries=None, isPseudoData=False):
+                         colors=None, legEntries=None, isPseudoData=False,
+                         ratioRange=(0.92,1.08)):
 
     #TODO: make colors and legEntries a single dictionary
 
@@ -82,6 +83,8 @@ def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
         lowPtbin = 1
         highPtbin = hdata2D.GetNbinsY()
 
+    ratioRangeStr = f"::{args.ratioRange[0]},{args.ratioRange[1]}"
+        
     hdata_eta = hdata2D.ProjectionX("data_eta",lowPtbin,highPtbin,"e")
     hdata_pt  = hdata2D.ProjectionY("data_pt",1,hdata2D.GetNbinsX(),"e")
 
@@ -129,12 +132,12 @@ def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
     ratio2D.Write()
 
     drawTH1dataMCstack(hdata_eta, stack_eta, "Muon #eta", "Events", "muon_eta" + ptRange,
-                       outdir_dataMC, legend, ratioPadYaxisNameTmp=f"{dataTitle}/pred::0.92,1.08",
+                       outdir_dataMC, legend, ratioPadYaxisNameTmp=f"{dataTitle}/pred{ratioRangeStr}",
                        passCanvas=canvas1D, lumi=lumi,
                        drawLumiLatex=True, xcmsText=0.3, noLegendRatio=True
     )
     drawTH1dataMCstack(hdata_pt, stack_pt, "Muon p_{T} (GeV)", "Events", "muon_pt",
-                       outdir_dataMC, legend, ratioPadYaxisNameTmp=f"{dataTitle}/pred::0.92,1.08",
+                       outdir_dataMC, legend, ratioPadYaxisNameTmp=f"{dataTitle}/pred{ratioRangeStr}",
                        passCanvas=canvas1D, lumi=lumi,
                        drawLumiLatex=True, xcmsText=0.3, noLegendRatio=True
     )
@@ -175,7 +178,7 @@ def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
         ptBinRanges.append("#splitline{{[{ptmin},{ptmax}]}}{{GeV}}".format(ptmin=int(recoBins.ptBins[ipt]), ptmax=int(recoBins.ptBins[ipt+1])))
 
     drawTH1dataMCstack(hdata_unrolled, stack_unrolled, XlabelUnroll, YlabelUnroll, cnameUnroll,
-                       outdir_dataMC, leg_unrolled, ratioPadYaxisNameTmp=f"{dataTitle}/pred::0.92,1.08",
+                       outdir_dataMC, leg_unrolled, ratioPadYaxisNameTmp=f"{dataTitle}/pred{ratioRangeStr}",
                        passCanvas=canvasWide,
                        wideCanvas=True, leftMargin=0.05,rightMargin=0.02,lumi=lumi, 
                        drawVertLines="{a},{b}".format(a=recoBins.Npt,b=recoBins.Neta),
@@ -196,6 +199,8 @@ if __name__ == "__main__":
 
     parser.add_argument("--pp", "--predicted-processes", dest="predictedProcesses", type=str, nargs="*", help="Use these names for predicted processes to make plots", default=defaultProcs)
     parser.add_argument("--xpp", "--exclude-predicted-processes", dest="excludePredictedProcesses", type=str, nargs="*", help="Use these names to exclude predicted processes to make plots", default=[])
+    parser.add_argument('-c','--charges', dest='charges', choices=['plus', 'minus', 'both'], default='both', type=str, help='Charges to process')
+    parser.add_argument("--rr", "--ratio-range", dest="ratioRange", default=(0.92,1.08), type=float, nargs=2, help="Range for ratio plot")
     args = parser.parse_args()
            
     fname = args.rootfile[0]
@@ -212,7 +217,7 @@ if __name__ == "__main__":
     processes = [x for x in args.predictedProcesses if x not in args.excludePredictedProcesses]
     if not args.pseudodata:
         processes = ["Data"] + processes
-    charges = ["plus", "minus"]
+    charges = ["plus", "minus"] if args.charges == "both" else [args.charges]
 
     xAxisName = "Muon #eta"
     yAxisName = "Muon p_{T} (GeV)"
@@ -239,5 +244,6 @@ if __name__ == "__main__":
         plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName=xAxisName, yAxisName=yAxisName,
                              lumi=args.lumi, ptRangeProjection=args.ptRangeProjection, chargeLabel=charge,
                              canvas=canvas, canvasWide=cwide, canvas1D=canvas1D,
-                             colors=colors, legEntries=legEntries, isPseudoData=True if args.pseudodata else False)
+                             colors=colors, legEntries=legEntries, isPseudoData=True if args.pseudodata else False,
+                             ratioRange=args.ratioRange)
 
