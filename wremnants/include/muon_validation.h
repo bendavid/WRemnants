@@ -55,7 +55,7 @@ public:
             double recoKUnc = (AUnc - eUnc * recoK) * recoK + recoCharge * MUnc;
             double scale = recoKUnc / recoK;
             auto scaleShiftWeights = scaleShiftWeightsFromMassWeights<N_MASSWEIGHTS>(
-                nominal_weight, weights, abs(scale), isW
+                nominal_weight, weights, scale, isW
             );
             res(ivar, 0) = scaleShiftWeights(0);
             res(ivar, 1) = scaleShiftWeights(1);

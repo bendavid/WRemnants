@@ -8,19 +8,17 @@
 namespace wrem {
 
 double scaleWeight(double weight, double scale) {
-    return std::exp(scale*std::log(std::abs(weight)))*std::copysign(1., weight);
+    return std::exp(scale*std::log(std::abs(weight))) * std::copysign(1., weight);
 }
 
 template <size_t ETABINS, size_t T>
 Eigen::TensorFixedSize<double, Eigen::Sizes<2, ETABINS>> dummyScaleFromMassWeights(double nominal_weight,
     Eigen::TensorFixedSize<double, Eigen::Sizes<T>>& weights, double eta, double scale, bool isW=true) {
-    if (scale < 0)
-        throw std::out_of_range("Scale should always be positive!");
 
     const double refMass = isW ? 80351.81229 : 91153.50974;
     const size_t centralIdx = 10;
     const double scaleMeV = refMass*scale;
-    const int step10MeV = std::floor(scaleMeV/10.)+1;
+    const int step10MeV = std::floor(std::abs(scaleMeV)/10.)+1;
     if (centralIdx-step10MeV < 0)
         throw std::out_of_range("Maximum allowed range for momentum scale uncertainty is 100 MeV!");
     const double scaleFac = scaleMeV/(10.*step10MeV);
