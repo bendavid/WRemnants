@@ -246,11 +246,17 @@ def mergeAxes(ax1, ax2):
     new_edges = np.concatenate((ax1_edges, ax2.edges[merge_idx:]))
     return hist.axis.Variable(new_edges, name=ax1.name)
 
+def findAxes(hists, axis_idx):
+    if type(axis_idx) in [list, tuple]:
+        return [h.axes[[ax for ax in axis_idx if ax in h.axes.name][0]] for h in hists]
+    else:
+        return [h.axes[axis_idx] for h in hists]
+
 def findCommonBinning(hists, axis_idx):
     if len(hists) < 2:
         raise ValueError("Can only find common binning between > 1 hists")
 
-    orig_axes = [h.axes[axis_idx] for h in hists]
+    orig_axes = findAxes(hists, axis_idx)
     # Set intersection with tolerance for floats
     common_edges = np.array(orig_axes[0].edges)
     for ax in orig_axes[1:]:
@@ -264,7 +270,7 @@ def findCommonBinning(hists, axis_idx):
     return edges
 
 def rebinHistsToCommon(hists, axis_idx, keep_full_range=False):
-    orig_axes = [h.axes[axis_idx] for h in hists]
+    orig_axes = findAxes(hists, axis_idx)
     new_edges = findCommonBinning(hists, axis_idx)
     rebinned_hists = [rebinHist(h, ax.name, new_edges) for h,ax in zip(hists, orig_axes)]
 

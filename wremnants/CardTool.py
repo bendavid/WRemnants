@@ -282,13 +282,17 @@ class CardTool(object):
             return axLabel.format(i=entry)
         return axLabel+str(entry)
 
-    def excludeSystEntry(self, entry, skipEntries):
-        for skipEntry in skipEntries:
-            skip = False
-            for e,match in zip(entry, skipEntry): 
-                # Can use -1 to exclude all values of an axis
-                if match == -1 or match == e or re.match(str(match), str(e)):
-                    return True
+    # TODO: Really would be better to use the axis names, not just indices
+    def excludeSystEntry(self, entry, entries_to_skip):
+        # Check if the entry in the hist matches one of the entries in entries_to_skip, across all axes
+        # Can use -1 to exclude all values of an axis
+        def match_entry(curr_entry, to_skip): 
+            return to_skip == -1 or curr_entry == to_skip or re.match(str(to_skip), str(curr_entry))
+
+        for skipEntry in entries_to_skip:
+            if all(match_entry(e,m) for e,m in zip(entry, skipEntry)):
+                return True
+        # If no matches were found for any of the entries_to_skip possibilities
         return False
 
     def expandSkipEntries(self, h, syst, skipEntries):
@@ -542,7 +546,7 @@ class CardTool(object):
                     newname = f"{name}_{self.chargeIdDict[chan]['id']}"
                 else:
                     newname = name
-                if self.keepOtherChargeSyst or self.chargeIdDict[chan]["badId"] not in name:
+                if self.keepOtherChargeSyst or self.chargeIdDict[chan]["badId"] is None or self.chargeIdDict[chan]["badId"] not in name:
                     self.cardContent[chan] += f'{name.ljust(self.spacing)} lnN{" "*(self.systTypeSpacing-2)} {"".join(include)}\n'
                     if group and not self.isExcludedNuisance(name) and len(list(filter(groupFilter, [name]))):
                         self.addSystToGroup(group, chan, name)
@@ -584,7 +588,7 @@ class CardTool(object):
             shape = "shape" if not systInfo["noConstraint"] else "shapeNoConstraint"
             for chan in self.channels:
                 # do not write systs which should only apply to other charge, to simplify card
-                if self.keepOtherChargeSyst or self.chargeIdDict[chan]["badId"] not in systname:
+                if self.keepOtherChargeSyst or self.chargeIdDict[chan]["badId"] is None or self.chargeIdDict[chan]["badId"] not in systname:
                     self.cardContent[chan] += f"{systname.ljust(self.spacing)} {shape.ljust(self.systTypeSpacing)} {''.join(include)}\n"
         # unlike for LnN systs, here it is simpler to act on the list of these systs to form groups, rather than doing it syst by syst 
         if group:
@@ -592,7 +596,7 @@ class CardTool(object):
                 if self.keepOtherChargeSyst:
                     systNamesForGroupPruned = systNames[:]
                 else:
-                    systNamesForGroupPruned = [s for s in systNames if self.chargeIdDict[chan]["badId"] not in s]
+                    systNamesForGroupPruned = [s for s in systNames if self.chargeIdDict[chan]["badId"] is None or self.chargeIdDict[chan]["badId"] not in s]
                 systNamesForGroup = list(systNamesForGroupPruned if not groupFilter else filter(groupFilter, systNamesForGroupPruned))
                 if len(systNamesForGroup):
                     for subgroup in splitGroupDict.keys():
@@ -639,7 +643,8 @@ class CardTool(object):
                 upDown = "Up" if name.endswith("Up") else "Down" if name.endswith("Down") else ""
                 newname = name.rstrip(upDown)
                 newname = f"{newname}_{self.chargeIdDict[charge]['id']}{upDown}"
-            if not self.keepOtherChargeSyst and self.chargeIdDict[charge]["badId"] in newname: continue
+            if not self.keepOtherChargeSyst and self.chargeIdDict[charge]["badId"] and self.chargeIdDict[charge]["badId"] in newname:
+                continue
             q = self.chargeIdDict[charge]["val"]
             hout = narf.hist_to_root(h[{"charge" : h.axes["charge"].index(q) if q != "sum" else hist.sum}])
             hout.SetName(newname+f"_{charge}")

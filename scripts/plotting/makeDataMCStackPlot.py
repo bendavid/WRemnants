@@ -7,7 +7,7 @@ from matplotlib import cm
 import argparse
 import os
 import shutil
-import logging
+from wremnants import logging
 import pathlib
 import hist
 import re
@@ -76,7 +76,7 @@ variation.add_argument("--skip-fill-between", type=int, default=0, help="Don't f
 
 args = parser.parse_args()
 
-logger = common.setup_logger("makeDataMCStackPlot", 4 if args.debug else 3, True)
+logger = logging.setup_logger("makeDataMCStackPlot", 4 if args.debug else 3, True)
 
 def padArray(ref, matchLength):
     return ref+ref[-1:]*(len(matchLength)-len(ref))
@@ -116,7 +116,7 @@ unstack = exclude[:]
 # TODO: In should select the correct hist for the transform, not just the first
 transforms = syst_tools.syst_transform_map(nominalName, args.hists[0])
 
-histInfo = groups.getDatagroups()
+histInfo = groups.getDatagroups(afterFilter=False)
 
 if addVariation:
     logger.info(f"Adding variation {args.varName}")
@@ -157,9 +157,11 @@ if addVariation:
         # to the already loaded hist
         if load_op and reload:
             action = None
+        print("Adding name", varname)
         groups.addSummedProc(nominalName, relabel=args.baseName, name=name, label=label, exclude=exclude,
             color=color, reload=reload, rename=varname, procsToRead=datasets,
             preOpMap=load_op, action=action)
+        print("Groups", groups.groups.keys())
 
         exclude.append(varname)
         unstack.append(varname)
@@ -181,6 +183,8 @@ def collapseSyst(h):
         if ax in h.axes.name:
             return h[{ax : 0}].copy()
     return h
+
+print("Now keys are", histInfo.keys())
 
 overflow_ax = ["ptll", "chargeVgen", "massVgen", "ptVgen"]
 for h in args.hists:
