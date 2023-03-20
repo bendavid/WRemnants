@@ -132,8 +132,8 @@ def main(args):
 
     pdfAction = {x : lambda h: h[{"recoil_gen" : s[::hist.sum]}] for x in Zmumu_procs if "gen" not in x},
     combine_helpers.add_pdf_uncertainty(cardTool, constrainedProcs+unconstrainedProcs, False, action=pdfAction)
-    combine_helpers.add_scale_uncertainty(cardTool, args.qcdScale, constrainedProcs+unconstrainedProcs, 
-        to_fakes=False, use_hel_hist=True, scetlib=args.scetlibUnc)
+    combine_helpers.add_scale_uncertainty(cardTool, args.minnlo_scale_unc, constrainedProcs+unconstrainedProcs, 
+        to_fakes=False, use_hel_hist=True, resum=args.resum_unc)
     
     if not args.xsec:
 
