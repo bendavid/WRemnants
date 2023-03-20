@@ -49,9 +49,9 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
         for eff_type in allEff_types:
             # for iso can use histogram for efficiency variation only in data (the only one we have for now)
             if directIsoSFsmoothing:
-                nameTag = "nomiAndAlt_onlyDataVar" if any(x in eff_type for x in ["iso", "antiiso"]) else "nomiAndAlt"
-            else:
                 nameTag =  "nomiAndAlt"
+            else:
+                nameTag = "nomiAndAlt_onlyDataVar" if any(x in eff_type for x in ["iso", "antiiso"]) else "nomiAndAlt"
             chargeTag = charge_tag if eff_type in chargeDependentSteps else "both"
             hist_name = f"SF_{nameTag}_{eratag}_{eff_type}_{chargeTag}"
             hist_root = fin.Get(hist_name)
