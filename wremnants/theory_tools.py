@@ -356,11 +356,11 @@ def pdfNames(cardTool, pdf, skipFirst=True):
 
 def pdfNamesAsymHessian(entries, pdfset=""):
     pdfNames = ["pdf0"+pdfset.replace("pdf", "")] 
-    pdfNames.extend([f"pdf{int(j/2)}{pdfset.replace('pdf', '')}{'Up' if j % 2 else 'Down'}" for j in range(entries-1)])
+    pdfNames.extend([f"pdf{int((j+2)/2)}{pdfset.replace('pdf', '')}{'Up' if j % 2 else 'Down'}" for j in range(entries-1)])
     return pdfNames
 
 def pdfNamesSymHessian(entries, pdfset=""):
-    return [f"pdf{i}{pdfset.replace('pdf', '')}" for i in range(entries)]
+    return [f"pdf{i+1}{pdfset.replace('pdf', '')}" for i in range(entries)]
 
 def pdfSymmetricShifts(hdiff, axis_name):
     sq = hh.multiplyHists(hdiff, hdiff)
@@ -417,9 +417,9 @@ def hessianPdfUnc(h, axis_name="pdfVar", uncType="symHessian", scale=1.):
 def pdfBugfixMSHT20(df , tensorPDFName):
     # There is a known bug in MSHT20 where member 15 and 16 are identical
     #   to fix this, one has to be mirrored:
-    #   pdf(16) = pdf(0) - (pdf(16) - pdf(0))
+    #   pdf(15) = pdf(0) - (pdf(15) - pdf(0))
     return df.Redefine(tensorPDFName, 
         f"auto res = {tensorPDFName};"
-        f"res(16) = {tensorPDFName}(0) - ({tensorPDFName}(16) - {tensorPDFName}(0));"
+        f"res(15) = {tensorPDFName}(0) - ({tensorPDFName}(15) - {tensorPDFName}(0));"
         "return res")
         
