@@ -1,7 +1,6 @@
 from collections import OrderedDict
-from utilities import output_tools,boostHistHelpers as hh,common
+from utilities import boostHistHelpers as hh, common, output_tools, logging
 import narf
-import logging
 import ROOT
 import uproot
 import time
@@ -12,7 +11,7 @@ import itertools
 import re
 import hist
 
-logger = common.child_logger(__name__)
+logger = logging.child_logger(__name__)
 
 def notImplemented(operation="Unknown"):
     raise NotImplementedError(f"Required operation '{operation}' is not implemented!")

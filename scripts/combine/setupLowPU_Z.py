@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from wremnants import CardTool,theory_tools,syst_tools,combine_helpers
 from wremnants.datasets.datagroupsLowPU import datagroupsLowPU
-from utilities import common
+from utilities import common, logging
 import argparse
 import os
 import pathlib
@@ -28,7 +28,7 @@ def recoilSystNames(baseName, entries):
     return systNames
 
 def main(args):
-    logger = common.setup_logger(__file__, args.verbose, args.color_logger)
+    logger = logging.setup_logger(__file__, args.verbose, args.color_logger)
 
     outfolder = f"CombineStudies/lowPU_{args.fitType}"
     if not os.path.isdir(outfolder):

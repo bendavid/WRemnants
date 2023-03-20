@@ -1,10 +1,9 @@
-from utilities import common,boostHistHelpers as hh,common
+from utilities import boostHistHelpers as hh, common, logging
 from wremnants import syst_tools,theory_tools
 import numpy as np
-import logging
 import re
 
-logger = common.child_logger(__name__)
+logger = logging.child_logger(__name__)
 
 def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append="", scetlib=None, use_hel_hist=False, rebin_pt=None):
     if not len(samples):

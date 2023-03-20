@@ -6,10 +6,10 @@ import pickle
 import lz4.frame
 from .correctionsTensor_helper import makeCorrectionsTensor
 from .theory_tools import scale_tensor_axes
-from utilities import common
+from utilities import common, logging
 import numpy as np
 
-logging = common.child_logger(__name__)
+logger = logging.child_logger(__name__)
 
 # TODO make this configurable to work in the Z case as well
 # harmonize treatment of charge and mass axes between W and Z?
@@ -28,7 +28,7 @@ def makeQCDScaleByHelicityHelper(is_w_like = False, filename=None):
 
     corrh = out["Z"] if is_w_like else out["W"]
     if np.count_nonzero(corrh[{"helicity" : -1.j}] == 0):
-        logging.warning("Zeros in sigma UL for the angular coefficients will give undefined behaviour!")
+        logger.warning("Zeros in sigma UL for the angular coefficients will give undefined behaviour!")
 
     # histogram has to be without errors to load the tensor directly
     corrh_noerrs = hist.Hist(*corrh.axes, storage=hist.storage.Double())

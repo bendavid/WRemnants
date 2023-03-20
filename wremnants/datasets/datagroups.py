@@ -1,7 +1,6 @@
-from utilities import boostHistHelpers as hh
+from utilities import boostHistHelpers as hh,common,logging
 from wremnants import histselections as sel
 from wremnants.datasets import datasets2016
-import logging
 import lz4.frame
 import pickle
 import hdf5plugin
@@ -12,10 +11,9 @@ import ROOT
 import re
 import pandas as pd
 import math
-from utilities import common
 import os
 
-logger = common.child_logger(__name__)
+logger = logging.child_logger(__name__)
 
 class datagroups(object):
     def __init__(self, infile, combine=False):
@@ -353,7 +351,7 @@ class datagroups2016(datagroups):
     def __init__(self, infile, combine=False, pseudodata_pdfset = None, applySelection=True,
                  excludeProcGroup=None, filterProcGroup=None
     ):
-        self.datasets = {x.name : x for x in datasets2016.getDatasets(filt=filterProcGroup, excludeGroup=excludeProcGroup)}
+        self.datasets = {x.name : x for x in datasets2016.getDatasets(filt=filterProcGroup, excl=excludeProcGroup)}
         logger.debug(f"Getting these datasets: {self.datasets.keys()}")
         super().__init__(infile, combine)
         if self.wmass and applySelection:
