@@ -26,13 +26,14 @@ def make_parser(parser=None):
     parser.add_argument("--pseudodata-file", type=str, help="Input file for pseudodata (if it should be read from a different file", default=None)
     parser.add_argument("-x",  "--excludeNuisances", type=str, default="", help="Regular expression to exclude some systematics from the datacard")
     parser.add_argument("-k",  "--keepNuisances", type=str, default="", help="Regular expression to keep some systematics, overriding --excludeNuisances. Can be used to keep only some systs while excluding all the others with '.*'")
-    #parser.add_argument("--skipOtherChargeSyst", dest="skipOtherChargeSyst" , action="store_true",   help="Skip saving histograms and writing nuisance in datacard for systs defined for a given charge but applied on the channel with the other charge")
-    parser.add_argument("--keepOtherChargeSyst", dest="skipOtherChargeSyst" , action="store_false",   help="Keep histograms and nuisance in datacard for systs defined for a given charge but applied on the channel with the other charge")
+    parser.add_argument("--skipOtherChargeSyst", dest="skipOtherChargeSyst" , action="store_true",   help="Skip saving histograms and writing nuisance in datacard for systs defined for a given charge but applied on the channel with the other charge")
+    #parser.add_argument("--keepOtherChargeSyst", dest="skipOtherChargeSyst" , action="store_false",   help="Keep histograms and nuisance in datacard for systs defined for a given charge but applied on the channel with the other charge")
     parser.add_argument("--scaleMuonCorr", type=float, default=1.0, help="Scale up/down dummy muon scale uncertainty by this factor")
-    parser.add_argument("--muonScaleVariation", choices=["smearing_weights", "massweights", "manual_pt_shift"], default="massweights", help="the method with whicht the distributions for the muon scale variations is derived")
+    parser.add_argument("--muonScaleVariation", choices=["smearing_weights", "massweights", "manual_pt_shift"], default="massweights", help="the method with which the distributions for the muon scale variations is derived")
     parser.add_argument("--noHist", action='store_true', help="Skip the making of 2D histograms (root file is left untouched if existing)")
     parser.add_argument("--effStatLumiScale", type=float, default=None, help="Rescale equivalent luminosity for efficiency stat uncertainty by this value (e.g. 10 means ten times more data from tag and probe)")
     parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers and nuisances)")
+    parser.add_argument("--directIsoSFsmoothing", action='store_true', help="If isolation SF were smoothed directly instead of being derived from smooth efficiencies")
     parser.add_argument("--xlim", type=float, nargs=2, default=None, help="Restrict x axis to this range")
     parser.add_argument("--constrain-mass", action='store_true', help="Constrain mass parameter in the fit (e.g. for ptll fit)")
 
@@ -197,7 +198,7 @@ def main(args):
         chargeDependentSteps = common.muonEfficiency_chargeDependentSteps
         effTypesNoIso = ["reco", "tracking", "idip", "trigger"]
         effStatTypes = [x for x in effTypesNoIso]
-        if args.binnedScaleFactors:
+        if args.binnedScaleFactors or args.directIsoSFsmoothing:
             effStatTypes.extend(["iso"])
         else:
             effStatTypes.extend(["iso_effData", "iso_effMC"])
@@ -244,7 +245,7 @@ def main(args):
                 splitGroup=splitGroupDict
             )
 
-    to_fakes = wmass and not args.noQCDscaleFakes
+    to_fakes = passSystToFakes and not args.noQCDscaleFakes
     combine_helpers.add_pdf_uncertainty(cardTool, single_v_samples, passSystToFakes)
     combine_helpers.add_scale_uncertainty(cardTool, args.qcdScale, signal_samples_inctau, to_fakes, scetlib=args.scetlibUnc)
     # for Z background in W mass case (W background for Wlike is essentially 0, useless to apply QCD scales there)

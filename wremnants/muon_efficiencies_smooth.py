@@ -15,7 +15,8 @@ ROOT.gInterpreter.Declare('#include "muon_efficiencies_smooth.h"')
 data_dir = f"{pathlib.Path(__file__).parent}/data/"
 
 def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSmooth_GtoH.root",
-                                        era = None, is_w_like = False, max_pt = np.inf):
+                                        era = None, is_w_like = False, max_pt = np.inf,
+                                        directIsoSFsmoothing=False):
 
     eradict = { "2016PreVFP" : "BtoF",
                 "2016PostVFP" : "GtoH" }
@@ -47,13 +48,16 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
     for charge, charge_tag in charges.items():
         for eff_type in allEff_types:
             # for iso can use histogram for efficiency variation only in data (the only one we have for now)
-            nameTag = "nomiAndAlt_onlyDataVar" if any(x in eff_type for x in ["iso", "antiiso"]) else "nomiAndAlt"
+            if directIsoSFsmoothing:
+                nameTag = "nomiAndAlt_onlyDataVar" if any(x in eff_type for x in ["iso", "antiiso"]) else "nomiAndAlt"
+            else:
+                nameTag =  "nomiAndAlt"
             chargeTag = charge_tag if eff_type in chargeDependentSteps else "both"
             hist_name = f"SF_{nameTag}_{eratag}_{eff_type}_{chargeTag}"
             hist_root = fin.Get(hist_name)
             #print(ROOT.AddressOf(hist_root))
             if hist_root is None:
-                print(f"Error: {hist_name} onot found in file {filename}")
+                print(f"Error: {hist_name} not found in file {filename}")
                 quit()
             #print(f"syst: {eff_type} -> {hist_name}")
 
@@ -117,16 +121,22 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
                                    "axisLabels" : ["trigger"],
                                    "boostHist" : None,
                                    "helper" : None},
-                       "sf_iso_effData": {"nPtEigenBins" : 0,
-                                          "axisLabels" : ["iso", "isonotrig", "antiiso", "antiisonotrig"],
-                                          "boostHist" : None,
-                                          "helper" : None},
-                       "sf_iso_effMC": {"nPtEigenBins" : 0,
-                                        "axisLabels" : ["iso", "isonotrig", "antiiso", "antiisonotrig"],
-                                        "boostHist" : None,
-                                        "helper" : None},
-    }
-
+                       }
+    if directIsoSFsmoothing:
+        effStat_manager["sf_iso"] = {"nPtEigenBins" : 0,
+                                     "axisLabels" : ["iso", "isonotrig", "antiiso", "antiisonotrig"],
+                                     "boostHist" : None,
+                                     "helper" : None}
+    else:
+        effStat_manager["sf_iso_effData"] =  {"nPtEigenBins" : 0,
+                                              "axisLabels" : ["iso", "isonotrig", "antiiso", "antiisonotrig"],
+                                              "boostHist" : None,
+                                              "helper" : None}
+        effStat_manager["sf_iso_effMC"] = {"nPtEigenBins" : 0,
+                                           "axisLabels" : ["iso", "isonotrig", "antiiso", "antiisonotrig"],
+                                           "boostHist" : None,
+                                           "helper" : None}
+        
     for effStatKey in effStat_manager.keys():
         down_nom_up_effStat_axis = None
         axis_eff_type = None
