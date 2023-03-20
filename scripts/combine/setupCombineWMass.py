@@ -32,7 +32,7 @@ def make_parser(parser=None):
     parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers and nuisances)")
     parser.add_argument("--xlim", type=float, nargs=2, default=None, help="Restrict x axis to this range")
     parser.add_argument("--constrain-mass", action='store_true', help="Constrain mass parameter in the fit (e.g. for ptll fit)")
-
+    parser.add_argument("-a", "--append", type=str, help="Append to output folder name")
     return parser
 
 def main(args):
@@ -73,6 +73,8 @@ def main(args):
     tag = name+"_"+args.fitvar.replace("-","_")
     if args.doStatOnly:
         tag += "_statOnly"
+    if args.append:
+        tag = f"{tag}_{args.append}"
 
     outfolder = f"{args.outfolder}/{tag}/"
     if not os.path.isdir(outfolder):
@@ -114,7 +116,7 @@ def main(args):
     if args.lumiScale:
         cardTool.setLumiScale(args.lumiScale)
 
-    print(f"cardTool.allMCProcesses(): {cardTool.allMCProcesses()}")
+    logger.info(f"cardTool.allMCProcesses(): {cardTool.allMCProcesses()}")
         
     passSystToFakes = wmass and not args.skipSignalSystOnFakes and args.qcdProcessName not in excludeGroup
 
@@ -240,10 +242,10 @@ def main(args):
 
     to_fakes = wmass and not args.noQCDscaleFakes
     combine_helpers.add_pdf_uncertainty(cardTool, single_v_samples, passSystToFakes)
-    combine_helpers.add_scale_uncertainty(cardTool, args.qcdScale, signal_samples_inctau, to_fakes, scetlib=args.scetlibUnc)
+    combine_helpers.add_scale_uncertainty(cardTool, args.minnlo_scale_unc, signal_samples_inctau, to_fakes, resum=args.resum_unc)
     # for Z background in W mass case (W background for Wlike is essentially 0, useless to apply QCD scales there)
     if wmass:
-        combine_helpers.add_scale_uncertainty(cardTool, "integrated", single_v_nonsig_samples, False, name_append="Z", scetlib=args.scetlibUnc)
+        combine_helpers.add_scale_uncertainty(cardTool, "integrated", single_v_nonsig_samples, False, name_append="Z", resum=args.resum_unc)
 
     msv_config_dict = {
         "smearing_weights":{
