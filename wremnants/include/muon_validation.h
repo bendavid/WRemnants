@@ -42,6 +42,7 @@ public:
         double nominal_weight = 1.0,
         bool isW = true
     ) {
+        double scaleCut = 0.001;
         out_tensor_t res;
         res.setConstant(1.0);
         //Eigen::TensorFixedSize<double, Eigen::Sizes<3, nUnc>> &params = get_tensor(recoEta); 
@@ -53,7 +54,10 @@ public:
             const double MUnc = params(2, ivar);
             double recoK = 1.0 /recoPt;
             double recoKUnc = (AUnc - eUnc * recoK) * recoK + recoCharge * MUnc;
-            double scale = recoKUnc / recoK;
+            double scale = (
+                abs(recoKUnc / recoK) > scaleCut ? 
+                (std::copysign(1., recoKUnc / recoK) * scaleCut) : (recoKUnc / recoK)
+            );
             auto scaleShiftWeights = scaleShiftWeightsFromMassWeights<N_MASSWEIGHTS>(
                 nominal_weight, weights, scale, isW
             );

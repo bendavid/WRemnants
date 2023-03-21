@@ -8,6 +8,7 @@
 namespace wrem {
 
 double scaleWeight(double weight, double scale) {
+    weight = weight == 0. ? 1. : weight;
     return std::exp(scale*std::log(std::abs(weight))) * std::copysign(1., weight);
 }
 
@@ -19,8 +20,9 @@ Eigen::TensorFixedSize<double, Eigen::Sizes<2, ETABINS>> dummyScaleFromMassWeigh
     const size_t centralIdx = 10;
     const double scaleMeV = refMass*scale;
     const int step10MeV = std::floor(std::abs(scaleMeV)/10.)+1;
-    if (centralIdx-step10MeV < 0)
+    if (centralIdx-step10MeV < 0) {
         throw std::out_of_range("Maximum allowed range for momentum scale uncertainty is 100 MeV!");
+    }
     const double scaleFac = scaleMeV/(10.*step10MeV);
 
     Eigen::TensorFixedSize<double, Eigen::Sizes<2, ETABINS>> outWeights;
@@ -28,6 +30,7 @@ Eigen::TensorFixedSize<double, Eigen::Sizes<2, ETABINS>> dummyScaleFromMassWeigh
 
     const double etaStep = 2*2.4/ETABINS;
     size_t ieta = (std::clamp(eta, -2.4, 2.4)+2.4)/etaStep;
+
     // Down weight, then up weight
     outWeights(0, ieta) = scaleWeight(weights[centralIdx-step10MeV], scaleFac)*nominal_weight;
     outWeights(1, ieta) = scaleWeight(weights[centralIdx+step10MeV], scaleFac)*nominal_weight;
