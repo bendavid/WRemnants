@@ -37,7 +37,11 @@ def script_command_to_str(argv, parser_args):
     return " ".join([argv[0], *call_args])
 
 def metaInfoDict(exclude_diff='notebooks', args=None):
-    meta_data = {"time" : str(datetime.datetime.now()), "command" : script_command_to_str(sys.argv, args)}
+    meta_data = {
+        "time" : str(datetime.datetime.now()), 
+        "command" : script_command_to_str(sys.argv, args),
+        "args": {a: getattr(args,a) for a in vars(args)}
+    }
     if subprocess.call(["git", "branch"], stderr=subprocess.STDOUT, stdout=open(os.devnull, 'w')) != 0:
         meta_data["git_info"] = {"hash" : "Not a git repository!",
                 "diff" : "Not a git repository"}
