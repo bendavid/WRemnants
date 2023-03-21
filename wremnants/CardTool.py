@@ -55,7 +55,7 @@ class CardTool(object):
         self.keepOtherChargeSyst = True
         self.chargeIdDict = {"minus" : {"val" : -1, "id" : "q0", "badId" : None},
                              "plus"  : {"val" : 1., "id" : "q1", "badId" : None},
-                             "inclusive" : {"val" : "sum", "id" : "none", "badId" : "NOBADID"}, # for this channel there is no bad id, currently using random string to make sure it doesn't match
+                             "inclusive" : {"val" : "sum", "id" : "none", "badId" : None}, # for this channel there is no bad id, currently using random string to make sure it doesn't match
                              }
 
     def skipHistograms(self):
@@ -390,7 +390,7 @@ class CardTool(object):
                 f"Found systs {var_names} and outNames {var_map.keys()}")
         for name in var_names:
             for chan in self.channels:
-                if not self.keepOtherChargeSyst and self.chargeIdDict[chan]["badId"] in name:
+                if not self.keepOtherChargeSyst and self.chargeIdDict[chan]["badId"]  is not None and self.chargeIdDict[chan]["badId"] in name:
                     continue
                 q = self.chargeIdDict[chan]["val"]
                 hnom = self.getBoostHistByCharge(hnom3D, q)
