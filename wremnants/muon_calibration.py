@@ -45,15 +45,17 @@ def make_jpsi_crctn_helpers(args, make_uncertainty_helper=False):
 
     if args.muonCorrMC == "idealMC_massfit":
         mc_corrfile = "calibrationJMC_smeared_v718_nominal.root"
+        logger.warning("You apply J/Psi massfit corrections on MC, this is currenlty not recommended!")
     elif args.muonCorrMC == "idealMC_lbltruth_massfit":
         mc_corrfile = "calibrationJMC_smeared_v718_nominalLBL.root"
+        logger.warning("You apply J/Psi massfit corrections on MC, this is currenlty not recommended!")
     else:
         mc_corrfile = None
 
     if args.muonCorrData == "massfit":
         data_corrfile = "calibrationJDATA_ideal.root"
     elif args.muonCorrData == "lbl_massfit":
-        data_corrfile = "calibrationJDATA_rewtgr_3dmap_LBL.root"            
+        data_corrfile = "calibrationJDATA_rewtgr_3dmap_LBL_v721.root" 
     else:
         data_corrfile = None
 
@@ -73,15 +75,22 @@ def make_muon_bias_helpers(args):
     if args.biasCalibration is None: 
         return None
 
-    if args.biasCalibration == "parameterized":
+    if args.biasCalibration in ["parameterized", "A", "M"]:
         if args.muonCorrMC == "idealMC_lbltruth":
-            filename = "calibrationAlignmentZ_LBLcorr_afterJ_v721"
+            filename = "calibrationAlignmentZ_after_LBL_v721"
         else:
             raise NotImplementedError(f"Did not find any parameterized closure file for --muonCorrMC {args.muonCorrMC}!")
 
         f = uproot.open(f"{data_dir}/closure/{filename}.root")
 
         A, M = [x.to_hist() for x in [f['AZ'], f['MZ']]]
+
+        factor_A = 1
+        factor_M = 1
+        if args.bias_calibration == "A":
+            factor_M = 0
+        elif args.bias_calibration == "M":
+            factor_A = 0
 
         # The bias correction follows the same parameterization as the J/Psi correction, but with e=0
         # We use the J/Psi correction helper and set e=0
@@ -91,7 +100,7 @@ def make_muon_bias_helpers(args):
             axis_param = hist.axis.Regular(3, 0, 3, underflow = False, overflow = False, name = 'param')
             axis_cenval = hist.axis.Regular(1, 0, 1, name = 'cenval')
             hist_comb = hist.Hist(*A.axes, axis_param, axis_cenval, storage = hist.storage.Double())
-            hist_comb.view()[...,0] = np.stack([x.values() for x in [A, A*0, M/45.]], axis = -1)
+            hist_comb.view()[...,0] = np.stack([x.values() for x in [A*factor_A, A*0, M/45.*factor_M]], axis = -1)
 
         hist_comb_cpp = narf.hist_to_pyroot_boost(hist_comb, tensor_rank = 2)
         helper = ROOT.wrem.JpsiCorrectionsRVecHelper[type(hist_comb_cpp).__cpp_name__](
@@ -103,15 +112,18 @@ def make_muon_bias_helpers(args):
         if args.smearing and args.muonCorrMC == "trackfit_only_idealMC":
             filename = "closureZ_smeared_v721"
             offset = -1
+            logger.warning("You are using an outdated closure file!")
         elif args.smearing and args.muonCorrMC == "idealMC_lbltruth":
-            filename = "closureZ_smeared_LBL_v721"
+            filename = "closureZ_LBL_smeared_v721"
             offset = -1
         elif not args.smearing and args.muonCorrMC == "idealMC_massfit":
             filename = "closureZ_v718"
             offset = 0
+            logger.warning("You are using an outdated closure file!")
         elif not args.smearing and args.muonCorrMC == "idealMC_lbltruth_massfit":
             filename = "closureZ_LBL_v718"
             offset = 0
+            logger.warning("You are using an outdated closure file!")
         else:
             raise NotImplementedError(f"Did not find any closure file for muon momentum scale correction {args.muonCorrMC}"+str(" smeared!" if args.smearing else "!"))
 
@@ -140,20 +152,21 @@ def make_muon_bias_helpers(args):
 
     return helper
 
-def make_muon_smearing_helpers():
+def make_muon_smearing_helpers(muonCorrMC="idealMC_lbltruth"):
     # this helper smears muon pT to match the resolution in data
-    h2d = uproot.open(f"{data_dir}/calibration/smearing.root:smearing").to_hist()
-    # Drop the uncertainty because the Weight storage type doesn't play nice with ROOT
-    h2d_nounc = hist.Hist(*h2d.axes, data=h2d.values(flow=True))
-    # Set overflow to closest values
-    h2d_nounc[hist.underflow,:][...] = h2d_nounc[0,:].view(flow=True)
-    h2d_nounc[:,hist.underflow][...] = h2d_nounc[:,0].view(flow=True)
-    h2d_nounc[hist.overflow,:][...] = h2d_nounc[-1,:].view(flow=True)
-    h2d_nounc[:,hist.overflow][...] = h2d_nounc[:,-1].view(flow=True)
 
-    h2d_cpp = narf.hist_to_pyroot_boost(h2d_nounc, tensor_rank=0)
-    # FIXME not sure if ROOT.GetThreadPoolSize() always give number of threads, probably maximum number, maybe there is a better way
-    helper = ROOT.wrem.SmearingHelper[type(h2d_cpp).__cpp_name__](ROOT.GetThreadPoolSize(), ROOT.std.move(h2d_cpp))
+    if muonCorrMC == "idealMC_lbltruth":
+        filename = "smearing_LBL"
+    elif muonCorrMC == "idealMC_massfit":
+        filename = "smearing"
+        logger.warning("You are using an outdated smearing file!")
+    else:
+        raise NotImplementedError(f"Did not find any smearing file for muon momentum scale correction {args.muonCorrMC}!")
+
+    rfile = ROOT.TFile(f"{data_dir}/calibration/{filename}.root","READ")
+    r2d = rfile.Get("smearing")
+
+    helper = ROOT.wrem.SmearingHelper(ROOT.GetThreadPoolSize(), ROOT.std.move(r2d))
 
     return helper
 
@@ -290,10 +303,13 @@ def define_corrected_muons(df, cvh_helper, jpsi_helper, args, dataset, smearing_
 
     # Bias corrections from nonclosure
     if not dataset.is_data and bias_helper:
-        if args.biasCalibration == "parameterized":
+        if args.biasCalibration in ["parameterized", "A", "M"]:
             df = df.Define("Muon_biasedPt", bias_helper, [muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta"), muon_var_name(muon, "charge")])
         else:
-            df = df.Define("Muon_biasedPt", bias_helper, ["rdfslot_", muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta")])
+            df = df.Define("Muon_biasedPtData", bias_helper, ["rdfslot_", muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta")])
+
+        # bias derived from data -> invert to apply on MC
+        df = df.Define("Muon_biasedPt", "{0}/Muon_biasedPtData * {0}".format(muon_var_name(muon_pt, "pt")))
 
         muon_pt = "Muon_biased"
 
