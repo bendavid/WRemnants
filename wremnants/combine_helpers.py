@@ -90,10 +90,14 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
         obs = ("eta", "pt") if not card_tool.project else card_tool.project
         # TODO: Implement pT splitting for SCETlib
         # TODO: The hist used needs to be configurable
+        
+        theory_unc = args_from_metadata(card_tool, "theory_corr", ["scetlib_dyturboCorr",])
+        if not theory_unc:
+            logger.error("Can not add resummation uncertainties. No theory correction was applied!")
+        theory_unc = theory_unc[0]+"_unc"
 
-        theory_unc = args_from_metadata(card_tool.datagroups.getMetaInfo(), "theory_corr", "scetlib_dyturboCorr")+"_unc"
-        if "--theory_corr_alt_only" in card_tool.datagroups.getMetaInfo()["command"]:
-            logger.warning("The theory correction was only applied as an alternate hist. Using its syst isn't well defined!")
+        if args_from_metadata(card_tool, "theory_corr_alt_only", False):
+            logger.error("The theory correction was only applied as an alternate hist. Using its syst isn't well defined!")
 
         card_tool.addSystematic(name=f"scetlib_dyturboN4LLCorr_unc",
             processes=samples,
@@ -152,8 +156,12 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
         )
 
 # TODO: It's a bit dangerous to not double check what the default really is
-def args_from_metadata(meta_data, arg, default):
-    if "command" not in meta_data.keys():
+def args_from_metadata(card_tool, arg, default):
+    meta_data = card_tool.datagroups.getMetaInfo()
+    if "args" in meta_data.keys():
+        return meta_data.get(arg, default)
+    # FIXME the following is the old approach and only here for backward compatibility, could be removed at some point
+    elif "command" not in meta_data.keys():
         raise ValueError(f"Failed to find command in meta_data (meta_data keys are {meta_data.keys()}")
 
     command = meta_data["command"]
@@ -168,7 +176,7 @@ def args_from_metadata(meta_data, arg, default):
 
     if not np.count_nonzero(matching):
         logger.warning(f"Did not find argument {arg}. Assuming the default value {default}")
-        return [default]
+        return default
 
     idx = np.argmax(matching)
     isflag = np.vectorize(lambda x: bool(re.match("^-+[a-z]", x)))(sys_args)
@@ -180,7 +188,7 @@ def args_from_metadata(meta_data, arg, default):
     return sys_args[idx+1:last_idx]
 
 def add_pdf_uncertainty(card_tool, samples, to_fakes, action=None):
-    pdf = args_from_metadata(card_tool.datagroups.getMetaInfo(), "pdfs", "msht20")[0]
+    pdf = args_from_metadata(card_tool, "pdfs", ["msht20",])[0]
     logger.info(f"Using PDF {pdf}")
     pdfInfo = theory_tools.pdf_info_map("ZmumuPostVFP", pdf)
     pdfName = pdfInfo["name"]
