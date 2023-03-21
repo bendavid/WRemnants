@@ -451,7 +451,11 @@ class CardTool(object):
                 procsToRead=processes, excluded_procs=self.excludeProcGroups,
                 forceNonzero=systName != "qcdScaleByHelicity",
                 preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"],
-                scaleToNewLumi=self.lumiScale)
+                # Needed to avoid always reading the variation for the fakes, even for procs not specified
+                forceToNominal=[x for x in self.datagroups.getProcNames() if x not in 
+                    self.datagroups.getProcNames([p for p in processes if p != "Fake"])],
+                scaleToNewLumi=self.lumiScale,
+            )
             self.writeForProcesses(syst, label="syst", processes=processes)
             
         output_tools.writeMetaInfoToRootFile(self.outfile, exclude_diff='notebooks', args=args)
@@ -481,7 +485,7 @@ class CardTool(object):
         for name,info in self.lnNSystematics.items():
             if all(x not in info["processes"] for x in nondata):
                 logger.warning(f"Skipping syst {name}, procs to apply it to would be {info['processes']}, and predicted processes are {nondata}")
-                return 0
+                return
             include = [(str(info["size"]) if x in info["processes"] else "-").ljust(self.spacing) for x in nondata]
             group = info["group"]
             groupFilter = info["groupFilter"]

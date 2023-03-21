@@ -90,10 +90,12 @@ class datagroups(object):
     ## procName are grouped into datagroups
     ## baseName takes values such as "nominal"
     def setHists(self, baseName, syst, procsToRead=None, label=None, nominalIfMissing=True, 
-                 applySelection=True, forceNonzero=True, preOpMap=None, preOpArgs=None, scaleToNewLumi=-1, excludeProcs=None):
+                 applySelection=True, forceNonzero=True, preOpMap=None, preOpArgs=None, scaleToNewLumi=-1, 
+                 excludeProcs=None, forceToNominal=[]):
         if not label:
             label = syst if syst else baseName
         logger.debug(f"In setHists(): procsToRead = {procsToRead}")
+
         if not procsToRead:
             if excludeProcs:
                 procsToRead = list(filter(lambda x: x not in excludeProcs, self.groups.keys()))
@@ -103,14 +105,19 @@ class datagroups(object):
         foundExact = False
         for procName in procsToRead:
             logger.debug(f"Reading group {procName}")
-            group = self.groups[procName]
+            group = self.groups[procName] if procName in self.groups else {}
             group[label] = None
 
             for member in group["members"]:
                 logger.debug(f"Looking at group member {member.name}")
                 scale = group["scale"] if "scale" in group else None
+                read_syst = syst
+                if member.name in forceToNominal:
+                    read_syst = ""
+                    logger.debug(f"Forcing group member {member.name} to read the nominal hist for syst {syst}")
+
                 try:
-                    h = self.readHist(baseName, member, syst, scaleOp=scale, forceNonzero=forceNonzero, scaleToNewLumi=scaleToNewLumi)
+                    h = self.readHist(baseName, member, read_syst, scaleOp=scale, forceNonzero=forceNonzero, scaleToNewLumi=scaleToNewLumi)
                     foundExact = True
                 except ValueError as e:
                     if nominalIfMissing:
@@ -119,6 +126,7 @@ class datagroups(object):
                     else:
                         logger.warning(str(e))
                         continue
+                logger.debug(f"Hist axes are {h.axes.name}")
 
                 if preOpMap and member.name in preOpMap:
                     logger.debug(f"Applying preOp to {member.name} after loading")
@@ -157,7 +165,7 @@ class datagroups(object):
                 procsToRead = list(self.groups.keys())
 
         for procName in procsToRead:
-            group = self.groups[procName]
+            group = self.groups[procName] if procName in self.groups else {}
             group[label] = None
             if type(channel) == str: channel = channel.split(",")
             narf_hist = None
@@ -185,7 +193,7 @@ class datagroups(object):
     def loadHistsForDatagroups(
         self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="",
         nominalIfMissing=True, applySelection=True, forceNonzero=True, pseudodata=False,
-        preOpMap={}, preOpArgs={}, scaleToNewLumi=-1
+        preOpMap={}, preOpArgs={}, scaleToNewLumi=-1, forceToNominal=[]
     ):
         logger.debug("Calling loadHistsForDatagroups()")
         logger.debug(f"the basename and syst is: {baseName}, {syst}")
@@ -195,7 +203,8 @@ class datagroups(object):
         else:
             self.setHists(baseName, syst, procsToRead, label, nominalIfMissing, applySelection,
                           forceNonzero, preOpMap, preOpArgs,
-                          scaleToNewLumi=scaleToNewLumi, excludeProcs=excluded_procs)
+                          scaleToNewLumi=scaleToNewLumi, 
+                          excludeProcs=excluded_procs, forceToNominal=forceToNominal)
 
     def addGroup(self, keyname, dictToAdd, canReplaceKey=False):
         if canReplaceKey or keyname not in self.groups.keys():
@@ -221,9 +230,7 @@ class datagroups(object):
             filtDef = lambda x: x[0] in self.groupNamesPostFilter
             if len(excluded_procs):
                 filtDef = lambda x: x[0] in self.groupNamesPostFilter and x[0] not in excluded_procs
-        # FIXME: This breaks the plotting
         return dict(filter(filtDef, self.groups.items()))
-        #return self.groups
 
     # INFO: this method returns the list from the full set of defined groups, unless one filters further.
     # Instead, argument 'afterFilter' is used to return the names after the filter passed to the constructor
