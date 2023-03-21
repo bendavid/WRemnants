@@ -128,7 +128,7 @@ def common_parser(for_reco_highPU=False):
         parser.add_argument("--muScaleBins", type=int, default=1, help="Number of bins for muon scale uncertainty")
         parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
         parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
-        parser.add_argument("--bias-calibration", type=str, default=None, choices=["binned","parameterized"], help="Adjust central value by calibration bias hist for simulation")
+        parser.add_argument("--bias-calibration", type=str, default=None, choices=["binned","parameterized", "A", "M"], help="Adjust central value by calibration bias hist for simulation")
         parser.add_argument("--smearing", action='store_true', help="Smear pT such that resolution matches data") #TODO change to --no-smearing once smearing is final
 
     commonargs,_ = parser.parse_known_args()
