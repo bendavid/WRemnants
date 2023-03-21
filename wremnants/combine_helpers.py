@@ -91,8 +91,8 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
         # TODO: Implement pT splitting for SCETlib
         # TODO: The hist used needs to be configurable
 
-        theory_unc = args_from_metadata(card_tool.datagroups.getMetaInfo(), "theory_corr", "scetlib_dyturboCorr")+"_unc"
-        if "--theory_corr_alt_only" in card_tool.datagroups.getMetaInfo()["command"]:
+        theory_unc = args_from_metadata(card_tool.datagroups.getMetaInfo(), "theoryCorr", "scetlib_dyturboCorr")+"_unc"
+        if "--theoryCorrAltOnly" in card_tool.datagroups.getMetaInfo()["command"]:
             logger.warning("The theory correction was only applied as an alternate hist. Using its syst isn't well defined!")
 
         card_tool.addSystematic(name=f"scetlib_dyturboN4LLCorr_unc",

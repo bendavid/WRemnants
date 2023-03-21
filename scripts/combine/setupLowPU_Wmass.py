@@ -28,7 +28,7 @@ parser.add_argument("--lumiScale", dest="lumiScale", help="Luminosity scale", ty
 parser.add_argument("--met", type=str, help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")
 args = parser.parse_args()
 
-logger = logging.setup_logger(__file__, args.verbose, args.color_logger)
+logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
 if not os.path.isdir(args.outfolder):
     os.mkdir(args.outfolder)

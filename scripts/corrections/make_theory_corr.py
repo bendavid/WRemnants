@@ -19,12 +19,11 @@ parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file n
 parser.add_argument("--proc", type=str, required=True, choices=["z", "w", ], help="Process")
 parser.add_argument("--axes", nargs="*", type=str, default=None, help="Use only specified axes in hist")
 parser.add_argument("--debug", action='store_true', help="Print debug output")
-parser.add_argument("--no-color-logger", action="store_false", dest="color_logger", default=False, 
-                    help="Do not use logging with colors")
+parser.add_argument("--noColorLogger", action="store_true", default=False, help="Do not use logging with colors")
 
 args = parser.parse_args()
 
-logger = logging.setup_logger("make_theory_corr", 4 if args.debug else 3, args.color_logger)
+logger = logging.setup_logger("make_theory_corr", 4 if args.debug else 3, args.noColorLogger)
 
 def read_corr(procName, generator, corr_files):
     charge = 0 if procName[0] == "Z" else (1 if "Wplus" in procName else -1)

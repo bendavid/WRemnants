@@ -20,14 +20,14 @@ import scripts.lowPU.config as lowPUcfg
 flavor = args.flavor # mu, e
 sigProcs = ["WminusJetsToMuNu", "WplusJetsToMuNu"] if flavor == "mu" else ["WminusJetsToENu", "WplusJetsToENu"]
 
-corr_helpers = theory_corrections.load_corr_helpers(common.wprocs_lowpu, args.theory_corr)
+corr_helpers = theory_corrections.load_corr_helpers(common.wprocs_lowpu, args.theoryCorr)
 
 datasets = wremnants.datasetsLowPU.getDatasets(maxFiles=args.maxFiles,
                                               filt=args.filterProcs,
                                               excl=args.excludeProcs, 
                                               flavor=flavor)
 
-logger = logging.setup_logger(__file__, args.verbose, args.color_logger)
+logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
 for d in datasets: logger.info(f"Dataset {d.name}")
 
