@@ -70,10 +70,10 @@ def make_jpsi_crctn_helpers(args, make_uncertainty_helper=False):
 
 def make_muon_bias_helpers(args):
     # apply a bias to MC to correct for the nonclosure with data in the muon momentum scale calibration
-    if args.bias_calibration is None: 
+    if args.biasCalibration is None: 
         return None
 
-    if args.bias_calibration == "parameterized":
+    if args.biasCalibration == "parameterized":
         if args.muonCorrMC == "idealMC_lbltruth":
             filename = "calibrationAlignmentZ_LBLcorr_afterJ_v721"
         else:
@@ -98,7 +98,7 @@ def make_muon_bias_helpers(args):
             ROOT.std.move(hist_comb_cpp)
         )
 
-    elif args.bias_calibration == "binned":
+    elif args.biasCalibration == "binned":
         # identify bias correction file name
         if args.smearing and args.muonCorrMC == "trackfit_only_idealMC":
             filename = "closureZ_smeared_v721"
@@ -136,7 +136,7 @@ def make_muon_bias_helpers(args):
 
         helper = ROOT.wrem.BiasCalibrationHelper[type(h2d_cpp).__cpp_name__](ROOT.GetThreadPoolSize(), ROOT.std.move(h2d_cpp), ROOT.std.move(h2d_std_cpp))
     else:
-        raise NotImplementedError(f"Correction for --bias-calibration {args.bias_calibration} not available")
+        raise NotImplementedError(f"Correction for --bias-calibration {args.biasCalibration} not available")
 
     return helper
 
@@ -290,7 +290,7 @@ def define_corrected_muons(df, cvh_helper, jpsi_helper, args, dataset, smearing_
 
     # Bias corrections from nonclosure
     if not dataset.is_data and bias_helper:
-        if args.bias_calibration == "parameterized":
+        if args.biasCalibration == "parameterized":
             df = df.Define("Muon_biasedPt", bias_helper, [muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta"), muon_var_name(muon, "charge")])
         else:
             df = df.Define("Muon_biasedPt", bias_helper, ["rdfslot_", muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta")])

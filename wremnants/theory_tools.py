@@ -224,10 +224,10 @@ def define_weights_and_corrs(df, weight_expr, dataset_name, helpers, args):
     df = define_prefsr_vars(df)
     df = define_ew_vars(df)
 
-    if args.theory_corr and dataset_name in helpers:
+    if args.theoryCorr and dataset_name in helpers:
         helper = helpers[dataset_name]
-        df = define_theory_corr(df, weight_expr, helper, generators=args.theory_corr, 
-                modify_central_weight=not args.theory_corr_alt_only)
+        df = define_theory_corr(df, weight_expr, helper, generators=args.theoryCorr, 
+                modify_central_weight=not args.theoryCorrAltOnly)
     else:
         df = df.Define("nominal_weight", weight_expr)
     return df 
