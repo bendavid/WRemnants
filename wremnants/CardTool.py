@@ -390,12 +390,17 @@ class CardTool(object):
                 f"Found systs {var_names} and outNames {var_map.keys()}")
         for name in var_names:
             for chan in self.channels:
-                if not self.keepOtherChargeSyst and self.chargeIdDict[chan]["badId"]  is not None and self.chargeIdDict[chan]["badId"] in name:
+                if not self.keepOtherChargeSyst and self.chargeIdDict[chan]["badId"] is not None and self.chargeIdDict[chan]["badId"] in name:
                     continue
-                q = self.chargeIdDict[chan]["val"]
-                hnom = self.getBoostHistByCharge(hnom3D, q)
-                up = self.getBoostHistByCharge(var_map[name+"Up"], q)
-                down = self.getBoostHistByCharge(var_map[name+"Down"], q)
+                if chan in ["plus", "minus"]:
+                    q = self.chargeIdDict[chan]["val"]
+                    hnom = self.getBoostHistByCharge(hnom3D, q)
+                    up = self.getBoostHistByCharge(var_map[name+"Up"], q)
+                    down = self.getBoostHistByCharge(var_map[name+"Down"], q)
+                else:
+                    hnom = hnom3D
+                    up = var_map[name+"Up"]
+                    down = var_map[name+"Down"]
                 nCellsWithoutOverflows = 1
                 for axisLength in hnom.shape:
                     nCellsWithoutOverflows *= axisLength
@@ -414,7 +419,7 @@ class CardTool(object):
                 up_nBinsSystSameAsNomi = np.count_nonzero(np.isclose(up.values(), hnom.values(), rtol=1e-07, atol=1e-08))/nCellsWithoutOverflows
                 down_nBinsSystSameAsNomi = np.count_nonzero(np.isclose(down.values(), hnom.values(), rtol=1e-06, atol=1e-08))/nCellsWithoutOverflows
                 if up_nBinsSystSameAsNomi > 0.99 or down_nBinsSystSameAsNomi > 0.99:
-                    logger.warning(f"Charge {chan.ljust(5)}: syst {name} has Up/Down variation with {up_nBinsSystSameAsNomi:.0%}/{down_nBinsSystSameAsNomi:.0%} of bins equal to nominal")
+                    logger.warning(f"Channel {chan.ljust(5)}: syst {name} has Up/Down variation with {up_nBinsSystSameAsNomi:.0%}/{down_nBinsSystSameAsNomi:.0%} of bins equal to nominal")
                     
 
     def writeForProcess(self, h, proc, syst):
