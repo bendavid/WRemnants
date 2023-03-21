@@ -150,7 +150,7 @@ def main(args):
                                #TODO: Name this
                                noConstraint=True,
                                systAxes=["massShift"],
-                               passToFakes=False, # probably better never to apply the mass syst to fakes
+                               passToFakes=passSystToFakes,
     )
 
     if args.doStatOnly:
