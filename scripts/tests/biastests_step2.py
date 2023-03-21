@@ -17,7 +17,6 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-i","--input", type=str, help="input path to combine subfolders")
 args = parser.parse_args()
 
-histmaker = "mw_with_mu_eta_pt"
 fittype = "WMass_eta_pt"   
 
 combineDir = args.input
@@ -39,7 +38,6 @@ def get_card(name):
 
 results = {}
 for subdir in glob.glob(f"{combineDir}/*_vs_*/{fittype}"):
-
 
     splits = subdir.split("/")[-2].split("_vs_")
     pseudodata = splits[1]
@@ -101,7 +99,7 @@ for subdir in glob.glob(f"{combineDir}/*_vs_*/{fittype}"):
 
             if not os.path.isfile(fitresult_asimov):
                 # run combine fit to asimov data
-                EXE(f"combinetf.py -t -1 {input_hdf5} --doImpacts --binByBinStat -o {fitresult_asimov}")
+                EXE(f"combinetf.py -t -1 {input_hdf5} --saveHists --computeHistErrors --doImpacts --binByBinStat -o {fitresult_asimov}")
             else:
                 logger.info("Existing fitresult file found")
 
