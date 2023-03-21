@@ -100,6 +100,7 @@ def read_scetlib_hist(path, nonsing="none", flip_y_sign=False, charge=None):
             nonsing = path.replace(*((".", "_nons.") if "sing" not in path else ("sing", "nons")))
         nonsingh = read_scetlib_hist(nonsing, nonsing="none", flip_y_sign=flip_y_sign, charge=charge)
         # The overflow in the categorical axis breaks the broadcast
+        # FIXME: Only set central for variations that aren't present
         if "vars" in nonsingh.axes.name and nonsingh.axes["vars"].size == 1:
             nonsingh = nonsingh[{"vars" : 0}]
         scetlibh = hh.addHists(scetlibh, nonsingh)
@@ -268,6 +269,9 @@ def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo
     for ax in ["Y", "Q"]:
         if ax in set(hfo.axes.name).intersection(set(hfo_sing.axes.name)).intersection(set(hsing.axes.name)):
             hfo, hfo_sing, hsing = hh.rebinHistsToCommon([hfo, hfo_sing, hsing], ax)
+    if hfo.axes["vars"].size != hfo_sing.axes["vars"].size:
+        if hfo.axes["vars"].size == 1:
+            hfo = hfo[{"vars" : 0}]
     hnonsing = hh.addHists(-1*hfo_sing, hfo)
     if fix_nons_bin0:
         # The 2 is for the WeightedSum
@@ -276,7 +280,11 @@ def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo
             hnonsing[...,0,:,:] = res
         else:
             hnonsing[...,0,:] = res
+    # TODO: Validate
     if hnonsing.axes["vars"].size != hsing.axes["vars"].size:
-        logger.warning("Did not find variation for nonsingular! Assuming nominal for all variations!")
-        hnonsing = hnonsing[{"vars" : 0}]
+        htmp_nonsing = hsing.copy()
+        for var in htmp_nonsing.axes["vars"]:
+            logger.warning(f"Did not find variation {var} for nonsingular! Assuming nominal")
+            htmp_nonsing = hnonsing[{"vars" : var if var in hnonsing.axes["vars"] else 0}]
+        hnonsing = htmp_nonsing
     return hh.addHists(hsing, hnonsing)

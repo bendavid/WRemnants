@@ -95,7 +95,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
         if "--theoryCorrAltOnly" in card_tool.datagroups.getMetaInfo()["command"]:
             logger.warning("The theory correction was only applied as an alternate hist. Using its syst isn't well defined!")
 
-        card_tool.addSystematic(name=f"scetlib_dyturboN4LLCorr_unc",
+        card_tool.addSystematic(name=theory_unc,
             processes=samples,
             group="resumTNP",
             systAxes=["vars"],
@@ -104,7 +104,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
             skipEntries=[('^kappaFO.*',), ('^recoil_scheme.*',), ('^c_nu.*',), ('Omega\d.\d*',), ("^transition_points.*",)],
             rename=f"resumTNP", 
         )
-        card_tool.addSystematic(name=f"scetlib_dyturboN4LLCorr_unc",
+        card_tool.addSystematic(name=theory_unc,
             processes=samples,
             group="resumNonpert",
             systAxes=["downUpVar"],
@@ -115,7 +115,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
             outNames=["scetlibNonpertUp", "scetlibNonpertDown"],
             rename=f"scetlibNonpert", 
         )
-        card_tool.addSystematic(name=f"scetlib_dyturboN4LLCorr_unc",
+        card_tool.addSystematic(name=theory_unc,
             processes=samples,
             group="resumTransition",
             systAxes=["downUpVar"],
