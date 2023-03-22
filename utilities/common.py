@@ -115,6 +115,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--met", type=str, choices=["DeepMETReso", "RawPFMET"], help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")                    
     parser.add_argument("-o", "--outfolder", type=str, default="", help="Output folder")
     parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
+    parser.add_argument("--customTag", type=str, default=None, help="custom tags in the outout file name")
     if for_reco_highPU:
         # additional arguments specific for histmaker of reconstructed objects at high pileup (mw, mz_wlike, and mz_dilepton)
         parser.add_argument("--muonCorrMC", type=str, default="idealMC_lbltruth", 
