@@ -153,7 +153,8 @@ if __name__ == "__main__":
     process_features = {'Wmunu'       : {"color" : ROOT.kRed+2,    "title" : "W#rightarrow#mu#nu"},
                         'Top'         : {"color" : ROOT.kGreen+2,  "title" : "top"},
                         'Diboson'     : {"color" : ROOT.kViolet+2, "title" : "dibosons"},
-                        'Wtau'        : {"color" : ROOT.kSpring+9, "title" : "W#rightarrow#tau#nu"},
+                        #'Wtau'        : {"color" : ROOT.kSpring+9, "title" : "W#rightarrow#tau#nu"},
+                        'Wtaunu'        : {"color" : ROOT.kSpring+9, "title" : "W#rightarrow#tau#nu"},
                         'Zmumu'       : {"color" : ROOT.kAzure+2,  "title" : "Z#rightarrow#mu#mu"},
                         'Ztautau'     : {"color" : ROOT.kCyan,     "title" : "Z#rightarrow#tau#tau"},
                         'Fake'        : {"color" : ROOT.kGray,     "title" : "QCD multijet"}
@@ -162,7 +163,8 @@ if __name__ == "__main__":
         process_features = {'Wmunu'       : {"color" : ROOT.kRed+2,    "title" : "W#rightarrow#mu#nu"},
                             'Top'         : {"color" : ROOT.kGreen+2,  "title" : "top"},
                             'Diboson'     : {"color" : ROOT.kViolet+2, "title" : "dibosons"},
-                            'Wtau'        : {"color" : ROOT.kSpring+9, "title" : "W#rightarrow#tau#nu"},
+                            #'Wtau'        : {"color" : ROOT.kSpring+9, "title" : "W#rightarrow#tau#nu"},
+                            'Wtaunu'        : {"color" : ROOT.kSpring+9, "title" : "W#rightarrow#tau#nu"},
                             'Zmumu'       : {"color" : ROOT.kAzure+2,  "title" : "Z#rightarrow#mu#mu"},
                             'Ztautau'     : {"color" : ROOT.kCyan,     "title" : "Z#rightarrow#tau#tau"},
                             'Other'       : {"color" : ROOT.kMagenta,  "title" : "Other"}
@@ -374,7 +376,7 @@ if __name__ == "__main__":
             htot_unrolled.Sumw2()
             htot_unrolled.SetDirectory(0)
             stack_unrolled = ROOT.THStack(f"stack_unrolled_{prepost}_{charge}", "")
-            leg_unrolled = prepareLegend(0.15, 0.72, 0.85, 0.90, textSize=0.045, nColumns=5)
+            leg_unrolled = prepareLegend(0.1, 0.81, 0.9, 0.90, textSize=0.045, nColumns=8)
             listOfProj = []
             for key in sortedKeys:
                 histo = all_procs[key]
@@ -389,7 +391,7 @@ if __name__ == "__main__":
                 htot_unrolled.Add(proc_unrolled)
                 listOfProj.append([proc_unrolled, procsAndTitles[keycolor]])
                 
-            leg_unrolled.AddEntry(hdata_unrolled, 'Data', 'PE')
+            leg_unrolled.AddEntry(hdata_unrolled, args.dataTitle, 'PE')
             for pair in reversed(listOfProj):
                 leg_unrolled.AddEntry(pair[0], pair[1], 'F')
 
@@ -405,7 +407,8 @@ if __name__ == "__main__":
                                leg_unrolled, ratioYlabel, 1, passCanvas=cwide, hErrStack=h1_expfull_unrolled, lumi=args.lumi,
                                wideCanvas=True, leftMargin=0.05,rightMargin=0.02, 
                                drawVertLines="{a},{b}".format(a=recoBins.Npt,b=recoBins.Neta),
-                               textForLines=ptBinRanges, etaptbinning=binning, textSize=0.04, textAngle=0)
+                               textForLines=ptBinRanges, etaptbinning=binning,
+                               textSize=0.04, textAngle=0, textYheightOffset=0.65)
                 
     outfile.Close()
 
