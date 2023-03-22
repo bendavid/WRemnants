@@ -1,11 +1,9 @@
 import lz4.frame
 import pickle
-import numpy
 import hist
 from utilities import boostHistHelpers as hh,logging
 import numpy as np
 import os
-import hdf5plugin
 import h5py
 from narf import ioutils
 

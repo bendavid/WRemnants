@@ -105,7 +105,7 @@ if args.binnedScaleFactors:
                                                                                                                                                           includeTrigger = includeTrigger) 
 else:
     logger.info("Using smoothed scale factors and uncertainties")
-    muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile, era = era, max_pt = axis_pt.edges[-1])
+    muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile, era = era, max_pt = axis_pt.edges[-1], directIsoSFsmoothing=args.directIsoSFsmoothing)
 logger.info(f"SF file: {args.sfFile}")
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
