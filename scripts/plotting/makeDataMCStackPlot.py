@@ -168,7 +168,7 @@ if addVariation:
 
 
 groups.sortByYields(args.baseName, nominalName=nominalName)
-histInfo = groups.getDatagroups()
+histInfo = groups.getDatagroups(afterFilter=False)
 
 logger.info(f"Unstacked processes are {exclude}")
 prednames = list(reversed(groups.getNames([d for d in datasets if d not in exclude], exclude=False)))

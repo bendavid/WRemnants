@@ -33,7 +33,6 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
     name_replace = [("muR2muF2", "muRmuFUp"), ("muR0muF0", "muRmuFDown"), ("muR2muF1", "muRUp"), 
                         ("muR0muF1", "muRDown"), ("muR1muF0", "muFDown"), ("muR1muF2", "muFUp"),
     ]
-    scaleActionArgs = {}
     action_map = {}
     sum_axes = ["ptVgen", "chargeVgen",]
     if use_hel_hist or helicity:
@@ -99,7 +98,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
         if args_from_metadata(card_tool, "theory_corr_alt_only", False):
             logger.error("The theory correction was only applied as an alternate hist. Using its syst isn't well defined!")
 
-        card_tool.addSystematic(name=f"scetlib_dyturboN4LLCorr_unc",
+        card_tool.addSystematic(name=theory_unc,
             processes=samples,
             group="resumTNP",
             systAxes=["vars"],
@@ -108,7 +107,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
             skipEntries=[('^kappaFO.*',), ('^recoil_scheme.*',), ('^c_nu.*',), ('Omega\d.\d*',), ("^transition_points.*",)],
             rename=f"resumTNP", 
         )
-        card_tool.addSystematic(name=f"scetlib_dyturboN4LLCorr_unc",
+        card_tool.addSystematic(name=theory_unc,
             processes=samples,
             group="resumNonpert",
             systAxes=["downUpVar"],
@@ -119,7 +118,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
             outNames=["scetlibNonpertUp", "scetlibNonpertDown"],
             rename=f"scetlibNonpert", 
         )
-        card_tool.addSystematic(name=f"scetlib_dyturboN4LLCorr_unc",
+        card_tool.addSystematic(name=theory_unc,
             processes=samples,
             group="resumTransition",
             systAxes=["downUpVar"],
