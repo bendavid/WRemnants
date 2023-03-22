@@ -81,7 +81,7 @@ for i, dt, l, p in zip(range(len(data)), data, testlabels, pvalues):
 norm = (rangex[1]-rangex[0])/nBins*len(toys)
 
 x = np.linspace(*rangex, 100)
-ax.plot(x, chi2.pdf(x, args.nDoF)*norm, 'k-', lw=1, label='chi2 pdf')
+# ax.plot(x, chi2.pdf(x, args.nDoF)*norm, 'k-', lw=1, label='chi2 pdf')
 
 ax.set_ylabel("Number of toys", fontsize=textsize)
 
