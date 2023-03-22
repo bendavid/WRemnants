@@ -235,7 +235,7 @@ class CardTool(object):
         # since the nominal reads all filtered processes regardless whether a systematic is passed to them or not
         # this can happen when creating new systs by scaling of the nominal histogram
         if not len(procs_to_add):
-            return 0
+            return
 
         if name == self.nominalName:
             logger.debug("Defining syst {rename} from nominal histogram")
@@ -401,9 +401,7 @@ class CardTool(object):
                     hnom = hnom3D
                     up = var_map[name+"Up"]
                     down = var_map[name+"Down"]
-                nCellsWithoutOverflows = 1
-                for axisLength in hnom.shape:
-                    nCellsWithoutOverflows *= axisLength
+                nCellsWithoutOverflows = np.product(nom.shape)
                 try:
                     up_relsign = np.sign(up.values()-hnom.values())
                 except ValueError as e:

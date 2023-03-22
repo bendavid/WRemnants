@@ -331,7 +331,7 @@ def main(args):
                                    outNames=["mtCorrFakesDown", "mtCorrFakesUp"],
                                    decorrelateByCharge=True,
                                    rename="mtCorrFakes", # this is the name used to identify the syst in the list of systs
-                                   action=hh.applyCorrection,
+                                   action=sel.applyCorrection,
                                    doActionBeforeMirror=True,
                                    actionArgs={"scale": 1.0,
                                                "corrFile" : f"{data_dir}/fakesWmass/fakerateFactorMtBasedCorrection_vsEtaPt.root",
