@@ -37,6 +37,7 @@ class datagroups(object):
 
         self.lumi = None
         # FIXME: self.datasets is currently a data member of the inherited class, we should define it here as well
+        # FIXME: if data is excluded the normalization will be lost
         if self.datasets and self.results:
             self.data = [x for x in self.datasets.values() if x.is_data]
             if self.data:
@@ -45,6 +46,11 @@ class datagroups(object):
         self.groupNamesPostFilter = [] # keep track of group names after any filter defined by the user
         
         if not self.lumi:
+            logger.warning("")
+            logger.warning("*"*30)
+            logger.warning("No data sample selected: setting integrated luminosity to 1/fb")
+            logger.warning("*"*30)
+            logger.warning("")
             self.lumi = 1
             
         self.nominalName = "nominal"

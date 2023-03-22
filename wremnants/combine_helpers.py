@@ -33,7 +33,6 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
     name_replace = [("muR2muF2", "muRmuFUp"), ("muR0muF0", "muRmuFDown"), ("muR2muF1", "muRUp"), 
                         ("muR0muF1", "muRDown"), ("muR1muF0", "muFDown"), ("muR1muF2", "muFUp"),
     ]
-    scaleActionArgs = {}
     action_map = {}
     sum_axes = ["ptVgen", "chargeVgen",]
     if use_hel_hist or helicity:
