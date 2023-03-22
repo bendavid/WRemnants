@@ -1,6 +1,7 @@
 from utilities import boostHistHelpers as hh
 import hist
 import numpy as np
+from scripts.analysisTools.plotUtils.utility import safeOpenFile, safeGetObject
 
 hist_map = {
     "eta_pt" : "nominal",
