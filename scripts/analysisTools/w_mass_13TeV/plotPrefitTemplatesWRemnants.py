@@ -33,7 +33,8 @@ logging.basicConfig(level=logging.INFO)
 def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
                          lumi="", ptRangeProjection=(0,-1), chargeLabel="",
                          canvas=None, canvasWide=None, canvas1D=None,
-                         colors=None, legEntries=None):
+                         colors=None, legEntries=None, isPseudoData=False,
+                         ratioRange=(0.92,1.08)):
 
     #TODO: make colors and legEntries a single dictionary
 
@@ -43,24 +44,10 @@ def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
     if not canvas1D: canvas1D = ROOT.TCanvas("canvas1D", "", 800, 900)
 
     if not colors:
-        colors = {"Wmunu"      : ROOT.kRed+2,
-                  "Zmumu"      : ROOT.kAzure+2,
-                  "Wtau"       : ROOT.kCyan+1,
-                  "Ztautau"    : ROOT.kSpring+9,
-                  "Top"        : ROOT.kGreen+2,
-                  "Diboson"    : ROOT.kViolet,
-                  "Fake"       : ROOT.kGray,
-                  "Other"      : ROOT.kGray}
+        colors = colors_plots_
 
     if not legEntries:
-        legEntries = {"Wmunu"      : "W#rightarrow#mu#nu",
-                      "Zmumu"      : "Z#rightarrow#mu#mu",
-                      "Wtau"       : "W#rightarrow#tau#nu",
-                      "Ztautau"    : "Z#rightarrow#tau#tau",
-                      "Top"        : "t quark",
-                      "Diboson"    : "Diboson",
-                      "Fake"       : "Multijet",
-                      "Other"      : "Other"}
+        legEntries = legEntries_plots_
 
     createPlotDirAndCopyPhp(outdir_dataMC)
 
@@ -93,11 +80,13 @@ def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
         ptRange = "_%gTo%g" % (hdata2D.GetYaxis().GetBinLowEdge(lowPtbin), hdata2D.GetYaxis().GetBinLowEdge(1+highPtbin))
         ptRange = ptRange.replace(".","p")
     else:
-        lowPtbin = 0
-        highPtbin = -1
+        lowPtbin = 1
+        highPtbin = hdata2D.GetNbinsY()
 
+    ratioRangeStr = f"::{args.ratioRange[0]},{args.ratioRange[1]}"
+        
     hdata_eta = hdata2D.ProjectionX("data_eta",lowPtbin,highPtbin,"e")
-    hdata_pt  = hdata2D.ProjectionY("data_pt",0,-1,"e")
+    hdata_pt  = hdata2D.ProjectionY("data_pt",1,hdata2D.GetNbinsX(),"e")
 
     legend = ROOT.TLegend(0.2,0.72,0.95,0.92)
     legend.SetFillColor(0)
@@ -112,8 +101,9 @@ def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
     hdata_pt.Write()
     hdata_unrolled.Write()
 
-    legend.AddEntry(hdata2D, "Data", "EP")
-    leg_unrolled.AddEntry(hdata_unrolled, "Data", "EP")
+    dataTitle = "Pseudodata" if isPseudoData else "Data"
+    legend.AddEntry(hdata2D, dataTitle, "EP")
+    leg_unrolled.AddEntry(hdata_unrolled, dataTitle, "EP")
     hmc_unrolled = []
     for h in hmc2D:
         h.SetTitle("")
@@ -142,30 +132,31 @@ def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
     ratio2D.Write()
 
     drawTH1dataMCstack(hdata_eta, stack_eta, "Muon #eta", "Events", "muon_eta" + ptRange,
-                       outdir_dataMC, legend, ratioPadYaxisNameTmp="Data/pred::0.92,1.08", passCanvas=canvas1D, lumi=lumi,
+                       outdir_dataMC, legend, ratioPadYaxisNameTmp=f"{dataTitle}/pred{ratioRangeStr}",
+                       passCanvas=canvas1D, lumi=lumi,
                        drawLumiLatex=True, xcmsText=0.3, noLegendRatio=True
     )
     drawTH1dataMCstack(hdata_pt, stack_pt, "Muon p_{T} (GeV)", "Events", "muon_pt",
-                       outdir_dataMC, legend, ratioPadYaxisNameTmp="Data/pred::0.92,1.08", passCanvas=canvas1D, lumi=lumi,
+                       outdir_dataMC, legend, ratioPadYaxisNameTmp=f"{dataTitle}/pred{ratioRangeStr}",
+                       passCanvas=canvas1D, lumi=lumi,
                        drawLumiLatex=True, xcmsText=0.3, noLegendRatio=True
     )
 
 
     ratio2D.SetTitle("data / (signal + background)")
-    drawCorrelationPlot(ratio2D, xAxisName, yAxisName, "Data/pred",
+    drawCorrelationPlot(ratio2D, xAxisName, yAxisName, f"{dataTitle}/pred",
                         f"muon_eta_pt_dataMCratio", plotLabel="ForceTitle", outdir=outdir_dataMC,
                         palette=57, passCanvas=canvas, drawOption="COLZ0", skipLumi=True)
-    drawCorrelationPlot(ratio2D, xAxisName, yAxisName, "Data/pred. statistical uncertainty",
+    drawCorrelationPlot(ratio2D, xAxisName, yAxisName, f"{dataTitle}/pred. statistical uncertainty",
                         f"muon_eta_pt_dataMCratio_absUncertainty", plotLabel="ForceTitle", outdir=outdir_dataMC,
                         palette=57, passCanvas=canvas, drawOption="COLZ0", skipLumi=True, plotError=True)
 
 
     allHists = hmc2D + [hdata2D]
+    hdata2D.SetTitle(f"{dataTitle} {chargeLabel}")
+    for h in hmc2D:
+        h.SetTitle(legEntries[h.GetName().split("_")[-2]] + " " + chargeLabel)
     for h in allHists:
-        if "Data" not in h.GetName():
-            h.SetTitle(legEntries[h.GetName().split("_")[-2]] + " " + chargeLabel)
-        else:
-            h.SetTitle(f"Data {chargeLabel}")
         drawCorrelationPlot(h, xAxisName, yAxisName, "Events",
                             f"muon_eta_pt_{h.GetName()}", plotLabel="ForceTitle", outdir=outdir_dataMC,
                             palette=57, passCanvas=canvas, drawOption="COLZ0", skipLumi=True)
@@ -186,7 +177,8 @@ def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
         #ptBinRanges.append("p_{{T}} #in [{ptmin:3g}, {ptmax:.3g}]".format(ptmin=recoBins.ptBins[ipt], ptmax=recoBins.ptBins[ipt+1]))
         ptBinRanges.append("#splitline{{[{ptmin},{ptmax}]}}{{GeV}}".format(ptmin=int(recoBins.ptBins[ipt]), ptmax=int(recoBins.ptBins[ipt+1])))
 
-    drawTH1dataMCstack(hdata_unrolled, stack_unrolled, XlabelUnroll, YlabelUnroll, cnameUnroll, outdir_dataMC, leg_unrolled, ratioPadYaxisNameTmp="Data/pred::0.92,1.08",
+    drawTH1dataMCstack(hdata_unrolled, stack_unrolled, XlabelUnroll, YlabelUnroll, cnameUnroll,
+                       outdir_dataMC, leg_unrolled, ratioPadYaxisNameTmp=f"{dataTitle}/pred{ratioRangeStr}",
                        passCanvas=canvasWide,
                        wideCanvas=True, leftMargin=0.05,rightMargin=0.02,lumi=lumi, 
                        drawVertLines="{a},{b}".format(a=recoBins.Npt,b=recoBins.Neta),
@@ -200,6 +192,15 @@ if __name__ == "__main__":
     parser.add_argument("-l", "--lumi",     type=str, default=None, help="Luminosity to print on canvas, by default it is not printed")
     parser.add_argument("--pt-range-projection", dest="ptRangeProjection", default=(0,-1), type=float, nargs=2, help="Pt range to select bins to use for 1D projection (for upper range remember that upper bin edge belongs to next bin in ROOT)")
     parser.add_argument("--wlike", dest="isWlike", action="store_true", help="Flag for W-like analysis")
+    parser.add_argument("--pd", "--pseudodata", dest="pseudodata", type=str, default=None, help="Name for pseudodata histogram, to be used instead of x_Data (with no charge postfix, it is added in this script)")
+    
+    commonargs,_ = parser.parse_known_args()
+    defaultProcs = ["Zmumu", "Ztautau", "Other"] if commonargs.isWlike else ["Wmunu", "Wtaunu", "Zmumu", "Ztautau", "Fake", "Top", "Diboson"]
+
+    parser.add_argument("--pp", "--predicted-processes", dest="predictedProcesses", type=str, nargs="*", help="Use these names for predicted processes to make plots", default=defaultProcs)
+    parser.add_argument("--xpp", "--exclude-predicted-processes", dest="excludePredictedProcesses", type=str, nargs="*", help="Use these names to exclude predicted processes to make plots", default=[])
+    parser.add_argument('-c','--charges', dest='charges', choices=['plus', 'minus', 'both'], default='both', type=str, help='Charges to process')
+    parser.add_argument("--rr", "--ratio-range", dest="ratioRange", default=(0.92,1.08), type=float, nargs=2, help="Range for ratio plot")
     args = parser.parse_args()
            
     fname = args.rootfile[0]
@@ -213,32 +214,16 @@ if __name__ == "__main__":
     adjustSettings_CMS_lumi()    
     canvas1D = ROOT.TCanvas("canvas1D", "", 800, 900)
 
-    processes = ["Data", "Wmunu", "Wtau", "Zmumu", "Ztautau", "Fake", "Top", "Diboson"]
-    if args.isWlike:
-        processes = ["Data", "Zmumu", "Ztautau", "Other"]
-    charges = ["plus", "minus"]
+    processes = [x for x in args.predictedProcesses if x not in args.excludePredictedProcesses]
+    if not args.pseudodata:
+        processes = ["Data"] + processes
+    charges = ["plus", "minus"] if args.charges == "both" else [args.charges]
 
     xAxisName = "Muon #eta"
     yAxisName = "Muon p_{T} (GeV)"
 
-    colors = {"Wmunu"      : ROOT.kRed+2,
-              "Zmumu"      : ROOT.kAzure+2,
-              "Wtau"       : ROOT.kCyan+1,
-              "Ztautau"    : ROOT.kSpring+9,
-              "Top"        : ROOT.kGreen+2,
-              "Diboson"    : ROOT.kViolet,
-              "Fake"       : ROOT.kGray,
-              "Other"      : ROOT.kGray}
-
-    legEntries = {"Wmunu"      : "W#rightarrow#mu#nu",
-                  "Zmumu"      : "Z#rightarrow#mu#mu",
-                  "Wtau"       : "W#rightarrow#tau#nu",
-                  "Ztautau"    : "Z#rightarrow#tau#tau",
-                  "Top"        : "t quark",
-                  "Diboson"    : "Diboson",
-                  "Fake"       : "Multijet",
-                  "Other"      : "Other"}
-
+    colors = colors_plots_
+    legEntries = legEntries_plots_
     for charge in charges:
     
         # read histograms
@@ -246,6 +231,8 @@ if __name__ == "__main__":
         infile = safeOpenFile(fname)
         for proc in processes:
             nomihists[proc] = safeGetObject(infile, f"x_{proc}_{charge}", detach=True)
+        if args.pseudodata:
+            nomihists["Data"] = safeGetObject(infile, f"{args.pseudodata}_{charge}", detach=True)
         infile.Close()
 
         hdata2D = nomihists["Data"]
@@ -257,5 +244,6 @@ if __name__ == "__main__":
         plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName=xAxisName, yAxisName=yAxisName,
                              lumi=args.lumi, ptRangeProjection=args.ptRangeProjection, chargeLabel=charge,
                              canvas=canvas, canvasWide=cwide, canvas1D=canvas1D,
-                             colors=colors, legEntries=legEntries)
+                             colors=colors, legEntries=legEntries, isPseudoData=True if args.pseudodata else False,
+                             ratioRange=args.ratioRange)
 
