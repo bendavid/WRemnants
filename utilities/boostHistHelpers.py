@@ -5,7 +5,6 @@ from functools import reduce
 import logging
 import collections
 from . import common
-from scripts.analysisTools.plotUtils.utility import safeOpenFile, safeGetObject
 import narf
 import ROOT
 
