@@ -82,6 +82,7 @@ if __name__ == "__main__":
     parser.add_argument(      '--roll1Dto2D', action="store_true",  help="Input histograms are 1D distributions to be unrolled into 2D. Need binning from option --binning-file-to-roll")
     parser.add_argument(      '--binning-file-to-roll', dest="binFileToRoll", default="", help="File with binning to roll 1D into 2D (the reco binning is used)")
     parser.add_argument(      '--drawOption',  default='colz0', type=str, help='Draw option for TH2')
+    parser.add_argument(      '--set-ratio-unc', dest="setRatioUnc", default="num", choices=["num", "den", "both"], help="Set how to compute uncertainty for the ratio (num or den simply use the one of those component, neglecting the other, both propagates both) ")
     args = parser.parse_args()
     
     f1 = args.file1[0]
@@ -190,8 +191,8 @@ if __name__ == "__main__":
     yMax = args.yRange[1]
 
     hratio = hinput1.Clone(args.outhistname)
-    hratio.SetTitle(args.histTitle)
-
+    hratio.SetTitle(args.histTitle)                
+                
     hsum = None
     if args.makeAsymmetry:
         hsum = hinput1.Clone("diff")
@@ -216,6 +217,11 @@ if __name__ == "__main__":
             if yMin < yMax:
                 if yval < yMin or yval > yMax: continue
             denval = 0
+            if args.setRatioUnc == "den":
+                hratio.SetBinError(ix, iy, hinput2.GetBinError(hist2xbin, hist2ybin))
+            elif args.setRatioUnc == "both":
+                print("Error: '--set-ratio-unc' both not implemented yet. Abort")
+                quit()
             if args.makeAsymmetry:
                 denval = hsum.GetBinContent(hist2xbin, hist2ybin)
             else:
@@ -235,13 +241,18 @@ if __name__ == "__main__":
                 ratio = numval / denval
                 hratioDistr.Fill(ratio)
                 hratio.SetBinContent(ix,iy,ratio)
+                if args.divideRelativeError or args.divideError:
+                    hratio.SetBinError(ix,iy, 0.0)
+                else:
+                    hratio.SetBinError(ix,iy, hratio.GetBinError(ix,iy)/denval)
                 if ratio < float(minx) or ratio > float(maxx): nout += 1
                 #profX.Fill()
             else: 
                 print("Warning: found division by 0 in one bin: setting ratio to " + str(args.valBadRatio))
                 hratio.SetBinContent(ix,iy,args.valBadRatio)
+                hratio.SetBinError(ix,iy, 0.0)
 
-    print("nout = " + str(nout))
+    print("nout = " + str(nout) + f" outside [{minx}, {maxx}]")
 
     if args.xAxisTitle: hratio.GetXaxis().SetTitle(args.xAxisTitle)    
     if args.yAxisTitle: hratio.GetYaxis().SetTitle(args.yAxisTitle)    
@@ -313,7 +324,8 @@ if __name__ == "__main__":
                 yBinRanges.append("#splitline{{y in}}{{[{ptmin},{ptmax}]}}".format(ptmin=int(hratio.GetYaxis().GetBinLowEdge(iybin+1)),
                                                                                    ptmax=int(hratio.GetYaxis().GetBinLowEdge(iybin+2))))
         zAxisTitle_unroll = zAxisTitle if "::" not in zAxisTitle else str(zAxisTitle.split("::")[0])
-        drawNTH1([ratio_unrolled, ratioUnc, unitLine], [f"Ratio {args.histTitle}", "Ratio uncertainty", "Unity"],
+        whatUncertainty = "numerator" if args.setRatioUnc == "num" else "denominator" if args.setRatioUnc == "den" else "total"
+        drawNTH1([ratio_unrolled, ratioUnc, unitLine], [f"Ratio {args.histTitle}", f"Uncertainty ({whatUncertainty})", "Unity"],
                  f"Unrolled bin: '{yAxisTitle}' vs '{xAxisTitle}'", zAxisTitle_unroll,
                  ratio_unrolled.GetName(), outname,
                  leftMargin=0.06, rightMargin=0.01,
