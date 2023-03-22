@@ -42,7 +42,7 @@ sys.path.append(os.getcwd())
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("inputfile", type=str, nargs=1, help="Input file with histograms (pkl.lz4 file)")
+    parser.add_argument("inputfile", type=str, nargs=1, help="Input file with histograms (pkl.lz4 or hdf5 file)")
     parser.add_argument("outdir",   type=str, nargs=1, help="Output folder")
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4], help="Set verbosity level with logging, the larger the more verbose");
     parser.add_argument("-n", "--baseName", type=str, help="Histogram name in the file (e.g., 'nominal')", default="nominal")
@@ -143,7 +143,7 @@ if __name__ == "__main__":
             createPlotDirAndCopyPhp(outdir_isoMtID)
             for c in charges:
                 hdata2D = hist2D[c][f"Data_{c}"]        
-                hmc2D = [hist2D[c][key] for key in hist2D[c].keys() if key.split("_")[0] != "Data"]
+                hmc2D = [hist2D[c][key] for key in hist2D[c].keys() if key.split("_")[0] not in ["Data", "QCD"]]
                 outdir_dataMC = f"{outdir_isoMtID}dataMC_{c}/"
                 createPlotDirAndCopyPhp(outdir_dataMC)
                 plotPrefitHistograms(hist2D[c][f"Data_{c}"], hmc2D, outdir_dataMC, xAxisName=xAxisName, yAxisName=yAxisName,

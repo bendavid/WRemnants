@@ -332,7 +332,9 @@ namespace wrem {
 
                     const double sf_stat = cell_stat.value();
                     const double sf_stat_variation = sf_stat / sf_nomi;
-                    
+                    // if (charge < 0 and fabs(sf_stat_variation-1.0) < 1e-7 and pt < 55.0) {
+                    //     std::cout << "sf_nomi,sf_stat_variation,eta,pt,ptEigen,upDown = " << sf_nomi << "," << sf_stat_variation << "," << pt << "," << eta << "," << tensor_eigen_idx << "," << downup_idx << std::endl;
+                    // }
                     res(tensor_eta_idx, tensor_eigen_idx-1, charge_idx, downup_idx) *= sf_stat_variation;
 
                 }
