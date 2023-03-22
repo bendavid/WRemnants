@@ -32,6 +32,7 @@ def make_parser(parser=None):
     parser.add_argument("--xlim", type=float, nargs=2, default=None, help="Restrict x axis to this range")
     parser.add_argument("--constrainMass", action='store_true', help="Constrain mass parameter in the fit (e.g. for ptll fit)")
     parser.add_argument("-a", "--append", type=str, help="Append to output folder name")
+    parser.add_argument("--unfold", action='store_true', help="Prepare datacard for unfolding")
     return parser
 
 def main(args):
@@ -68,6 +69,26 @@ def main(args):
         name = "ZMassWLike"
     else:
         name = "ZMassDilepton"
+
+    if args.unfold:
+        if not args.constrainMass:
+            logger.warning("Unfolding is specified but the mass is treated free floating, to constrain the mass add '--constrainMass'")
+
+        base_proc = "Wmunu"  if wmass else "Zmumu" 
+        unconstrainedProcs = []
+
+        # get gen bin edges from nominal histogram
+        if fitvar == "pt":
+            genVar = "ptGen"
+
+        gen_bin_edges = datagroups.results[datagroups.groups[base_proc]["members"][0].name]["output"]["gen"].get().axes[genVar].edges
+
+        for i in range(1, len(gen_bin_edges)): # add gen bin processes to the dict
+            proc_name = f"{base_proc}_genBin{i}"
+            proc_genbin = dict(datagroups.groups[base_proc])
+            proc_genbin['selectOp'] = lambda x, i=i: x[{genVar : i}]
+            datagroups.addGroup(proc_name, proc_genbin)
+            unconstrainedProcs.append(proc_name)
 
     tag = name+"_"+args.fitvar.replace("-","_")
     if args.doStatOnly:
@@ -114,6 +135,8 @@ def main(args):
 
     if args.lumiScale:
         cardTool.setLumiScale(args.lumiScale)
+
+    cardTool.setUnconstrainedProcs(unconstrainedProcs)
 
     logger.info(f"cardTool.allMCProcesses(): {cardTool.allMCProcesses()}")
         

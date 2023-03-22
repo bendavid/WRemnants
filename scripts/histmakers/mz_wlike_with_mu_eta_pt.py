@@ -44,6 +44,12 @@ axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, nam
 
 nominal_axes = [axis_eta, axis_pt, axis_charge]
 
+# gen axes for differential measurement
+axis_ptGen = hist.axis.Regular(template_npt, template_minpt, template_maxpt, name = "ptGen")
+axis_etaGen = hist.axis.Regular(template_neta, template_mineta, template_maxeta, name = "etaGen")
+unfolding_axes = [axis_ptGen, axis_etaGen]
+unfolding_cols = ["ptGen", "etaGen"]
+
 # axes for mT measurement
 axis_mt = hist.axis.Regular(200, 0., 200., name = "mt",underflow=False, overflow=True)
 axis_eta_mT = hist.axis.Variable([-2.4, 2.4], name = "eta")
@@ -97,6 +103,7 @@ def build_graph(df, dataset):
     results = []
     isW = dataset.name in common.wprocs
     isZ = dataset.name in common.zprocs
+    unfold = args.unfolding and dataset.name == "ZmumuPostVFP"
 
     if dataset.is_data:
         df = df.DefinePerSample("weight", "1.0")
@@ -104,6 +111,35 @@ def build_graph(df, dataset):
         df = df.Define("weight", "std::copysign(1.0, genWeight)")
 
     weightsum = df.SumAndCount("weight")
+
+    if not dataset.is_data:
+        #define theory corrections and weights here - also needed for gen level when unfolding
+        df = theory_tools.define_weights_and_corrs(df, "weight", dataset.name, corr_helpers, args)
+        df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
+        if isW or isZ:
+            df = theory_tools.define_scale_tensor(df)
+    else:
+        df = df.DefinePerSample("nominal_weight", "1.0")
+
+    if unfold:
+        # selecting trigger muon on gen level
+        df = df.Define("ptGen", "event % 2 == 0 ? genl.pt() : genlanti.pt()")   
+        df = df.Define("etaGen", "event % 2 == 0 ? genl.eta() : genlanti.eta()")
+
+        # add histograms before any selection
+        df_gen = df
+        gen = df_gen.HistoBoost("gen", unfolding_axes, [*unfolding_cols, "nominal_weight"])
+        results.append(gen)
+
+        scale_axes = [*unfolding_axes, axis_ptVgen, axis_chargeVgen]
+        scale_cols = [*unfolding_cols, "ptVgen", "chargeVgen"]
+
+        syst_tools.add_pdf_hists(results, df_gen, dataset.name, unfolding_axes, unfolding_cols, args.pdfs, base_name="gen")
+
+        syst_tools.add_qcdScale_hist(results, df_gen, scale_axes, scale_cols, base_name="gen")
+        if not args.skipHelicity:
+            # TODO: Should have consistent order here with the scetlib correction function
+            syst_tools.add_qcdScaleByHelicityUnc_hist(results, df_gen, qcdScaleByHelicity_helper, scale_axes, scale_cols, base_name="gen")
 
     df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
 
@@ -133,14 +169,7 @@ def build_graph(df, dataset):
                                                                                       "nonTrigMuons_pt0", "nonTrigMuons_eta0", "nonTrigMuons_SApt0", "nonTrigMuons_SAeta0", "nonTrigMuons_charge0"])
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId"])
 
-        weight_expr = "weight*weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom"
-
-        df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
-        df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
-        if isW or isZ:
-            df = theory_tools.define_scale_tensor(df)
-    else:
-        df = df.DefinePerSample("nominal_weight", "1.0")
+        df = df.Redefine("nominal_weight", f"nominal_weight*weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom")
 
     results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"]))
 
@@ -171,31 +200,38 @@ def build_graph(df, dataset):
     
     nominal_cols = ["trigMuons_eta0", "trigMuons_pt0", "trigMuons_charge0"]
 
-    nominal = df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "nominal_weight"])
+    if unfold:
+        axes_nominal = [*nominal_axes, *unfolding_axes] 
+        cols_nominal = [*nominal_cols, *unfolding_cols]
+    else:
+        axes_nominal = nominal_axes
+        cols_nominal = nominal_cols
+
+    nominal = df.HistoBoost("nominal", axes_nominal, [*cols_nominal, "nominal_weight"])
     results.append(nominal)
 
     if not dataset.is_data and not args.onlyMainHistograms:
 
-        df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, nominal_axes, nominal_cols, is_w_like=True)
-        df = syst_tools.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, nominal_axes, nominal_cols)
+        df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, axes_nominal, cols_nominal, is_w_like=True)
+        df = syst_tools.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, axes_nominal, cols_nominal)
 
         # n.b. this is the W analysis so mass weights shouldn't be propagated
         # on the Z samples (but can still use it for dummy muon scale)
         if isW or isZ:
 
             if args.theoryCorr and dataset.name in corr_helpers:
-                results.extend(theory_tools.make_theory_corr_hists(df, "nominal", nominal_axes, nominal_cols, 
+                results.extend(theory_tools.make_theory_corr_hists(df, "nominal", axes_nominal, cols_nominal, 
                     corr_helpers[dataset.name], args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly)
                 )
 
-            scale_axes = [*nominal_axes, axis_ptVgen, axis_chargeVgen]
-            scale_cols = [*nominal_cols, "ptVgen", "chargeVgen"]
+            scale_axes = [*axes_nominal, axis_ptVgen, axis_chargeVgen]
+            scale_cols = [*cols_nominal, "ptVgen", "chargeVgen"]
             syst_tools.add_qcdScale_hist(results, df, scale_axes, scale_cols)
-            syst_tools.add_pdf_hists(results, df, dataset.name, nominal_axes, nominal_cols, args.pdfs)
+            syst_tools.add_pdf_hists(results, df, dataset.name, axes_nominal, cols_nominal, args.pdfs)
 
             df = syst_tools.define_mass_weights(df, dataset.name)
             if isZ:
-                syst_tools.add_massweights_hist(results, df, nominal_axes, nominal_cols, proc=dataset.name)
+                syst_tools.add_massweights_hist(results, df, axes_nominal, cols_nominal, proc=dataset.name)
                 # there is no W backgrounds for the Wlike, make QCD scale histograms only for Z
                 # should probably remove the charge here, because the Z only has a single charge and the pt distribution does not depend on which charged lepton is selected
                 if not args.skipHelicity:
@@ -205,7 +241,7 @@ def build_graph(df, dataset):
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:
                 syst_tools.add_muonscale_hist(
-                    results, df, args.muonCorrEtaBins, args.muonCorrMag, isW, nominal_axes, nominal_cols,
+                    results, df, args.muonCorrEtaBins, args.muonCorrMag, isW, axes_nominal, cols_nominal,
                     muon_eta="trigMuons_eta0")
 
     return results, weightsum
