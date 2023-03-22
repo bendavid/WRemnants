@@ -401,7 +401,7 @@ class CardTool(object):
                     hnom = hnom3D
                     up = var_map[name+"Up"]
                     down = var_map[name+"Down"]
-                nCellsWithoutOverflows = np.product(nom.shape)
+                nCellsWithoutOverflows = np.product(hnom.shape)
                 try:
                     up_relsign = np.sign(up.values()-hnom.values())
                 except ValueError as e:
