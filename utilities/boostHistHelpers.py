@@ -5,6 +5,8 @@ from functools import reduce
 import logging
 import collections
 from . import common
+import narf
+import ROOT
 
 def valsAndVariances(h1, h2, allowBroadcast=True, transpose=True):
     if not allowBroadcast and len(h1.axes) != len(h2.axes):

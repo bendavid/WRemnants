@@ -34,7 +34,7 @@ from copy import *
 
 from scripts.analysisTools.plotUtils.utility import *
 
-sys.path.append(os.getcwd())
+#sys.path.append(os.getcwd())
 from scripts.analysisTools.tests.cropNegativeTemplateBins import cropNegativeContent
 from scripts.analysisTools.tests.testPlots1D import plotDistribution1D
 
@@ -427,7 +427,8 @@ def drawAndFitFRF(h1,
     averageFRF = 0.0
     averageFRFcap = 0.0
     averageFRFunc = {i : {"Up" : 0.0, "Down" : 0.0} for i in range(npar)}
-        
+    averageFRFunc["quadsum"] = {"Up" : 0.0, "Down" : 0.0}
+
     if mTshape:
         ## get integral in restricted range to normalize the mT PDF
         #mTshape.GetXaxis().SetRange(1, mTshape.GetXaxis().FindFixBin(xvalMax-0.001))
@@ -457,6 +458,17 @@ def drawAndFitFRF(h1,
         for ivar in range(npar):
             averageFRFunc[ivar]["Up"] *= integralMtNorm
             averageFRFunc[ivar]["Down"] *= integralMtNorm
+
+    # also get total uncertainty summing in quadrature
+    for updown in ["Up", "Down"]:
+        averageFRFunc["quadsum"][updown] = 0.0
+        for ivar in range(npar):
+            averageFRFunc["quadsum"][updown] += pow(averageFRFunc[ivar][updown] - averageFRF, 2)
+        averageFRFunc["quadsum"][updown] = np.sqrt(averageFRFunc["quadsum"][updown])
+        if updown == "Up":
+            averageFRFunc["quadsum"][updown] = averageFRF + averageFRFunc["quadsum"][updown]
+        else:
+            averageFRFunc["quadsum"][updown] = averageFRF - averageFRFunc["quadsum"][updown]
         
     return averageFRF, averageFRFcap, averageFRFunc
 
@@ -579,6 +591,12 @@ if __name__ == "__main__":
         hnarf = histInfo_nominal[d][inputHistName]
         rootHists_nominal[d] = narf.hist_to_root(hnarf) # this is a TH3D with eta-pt-charge
     #######
+
+    # get a copy of the eta-pt-charge histogram to use as template with same binning as the analysis histograms
+    # it will be filled with the correction uncertainty to be used as a systematic
+    etaPtChargeTemplate = copy.deepcopy(rootHists_nominal[d].Clone("etaPtCharge_mtCorrection"))
+    etaPtChargeTemplate.SetTitle("FRF correction uncertainty (quadrature sum, Up)")
+    etaPtChargeTemplate.Reset("ICESM")
     
     adjustSettings_CMS_lumi()    
     canvas = ROOT.TCanvas("canvas","",800,800)
@@ -917,10 +935,9 @@ if __name__ == "__main__":
                             hFRFcorrUnc[charge][f"{key}_Up"].Reset("ICESM")
                             hFRFcorrUnc[charge][f"{key}_Down"] = copy.deepcopy(hFRFcorr[charge].Clone(f"hFRFcorrUnc_{key}Down_{charge}"))
                             hFRFcorrUnc[charge][f"{key}_Down"].Reset("ICESM")
-                    else:
-                        for key in uncFRF.keys():
-                            hFRFcorrUnc[charge][f"{key}_Up"].SetBinContent(ieta, ipt, uncFRF[key]["Up"] * inverseNomiFRF )
-                            hFRFcorrUnc[charge][f"{key}_Down"].SetBinContent(ieta, ipt, uncFRF[key]["Down"] * inverseNomiFRF)
+                    for key in uncFRF.keys():
+                        hFRFcorrUnc[charge][f"{key}_Up"].SetBinContent(ieta, ipt, uncFRF[key]["Up"] * inverseNomiFRF )
+                        hFRFcorrUnc[charge][f"{key}_Down"].SetBinContent(ieta, ipt, uncFRF[key]["Down"] * inverseNomiFRF)
                 elif nMtBins == 2:
                     hTmp[1].Divide(hTmp[0])
                     hFRFcorr[charge].SetBinContent(ieta, ipt, hTmp[1].GetBinContent(1))
@@ -988,6 +1005,8 @@ if __name__ == "__main__":
                                                                   ptmax=int(hFRFcorr[charge].GetYaxis().GetBinLowEdge(ipt+2))))
                                         
             for ivar in uncFRF.keys():
+                if ivar == "quadsum":
+                    continue
                 hList.append( unroll2Dto1D(hFRFcorrUnc[charge][f"{ivar}_Up"],
                                            newname=f"unrolled_{hFRFcorrUnc[charge][f'{ivar}_Up'].GetName()}",
                                            cropNegativeBins=False) )
@@ -1058,6 +1077,25 @@ if __name__ == "__main__":
         if hFRFcorrUnc[charge]:
             for k in hFRFcorrUnc[charge]:
                 hFRFcorrUnc[charge][k].Write()
+            # fill the template
+            # first create the TH2 layer with more bins
+            etaPtTemplate = ROOT.wrem.projectTH2FromTH3(etaPtChargeTemplate, f"FRF_corrUnc_quadSum_{charge}", 1, 2)
+            etaPtTemplate.SetTitle("")
+            ROOT.wrem.initializeRootHistogram(etaPtTemplate, 1.0)
+            # hFRFcorrUnc contains corr+unc, have to get unc only
+            hFRFcorrUnc_tmp = copy.deepcopy(hFRFcorrUnc[charge]["quadsum_Up"].Clone(f"hFRFcorrUnc_tmp_{charge}"))
+            hFRFcorrUnc_tmp.Add(hFRFcorr[charge], -1.0)
+            scaleTH2byOtherTH2(etaPtTemplate, hFRFcorrUnc_tmp, scaleUncertainty=False)
+            drawCorrelationPlot(etaPtTemplate,
+                                xAxisName,
+                                yAxisName,
+                                f"FRF correction uncertainty (quadrature sum)",
+                                etaPtTemplate.GetName(), plotLabel="ForceTitle", outdir=outfolder,
+                                draw_both0_noLog1_onlyLog2=1, nContours=args.nContours, palette=args.palette,
+                                invertePalette=args.invertePalette, passCanvas=canvas, skipLumi=True)
+            ROOT.wrem.broadCastTH2intoTH3(etaPtChargeTemplate, etaPtTemplate, chargeBin, chargeBin, True)
+            etaPtChargeTemplate.Write()
+            
         print()
         print(f"Saving FRF correction vs eta-pt in file\n{outFile}\nfor charge {charge}")
         print()
@@ -1086,6 +1124,8 @@ if __name__ == "__main__":
             if hFRFcorrUnc[charge]:
                 for k in hFRFcorrUnc[charge]:
                     hFRFcorrUnc[charge][k].Write()
+        etaPtChargeTemplate.Write()
+
         print()
         print(f"Saving FRF correction vs eta-pt in file {outFile}")
         print()
