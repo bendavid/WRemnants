@@ -13,6 +13,7 @@ import pandas as pd
 import math
 import os
 import itertools
+import functools
 
 logger = logging.child_logger(__name__)
 
@@ -345,11 +346,11 @@ class datagroups(object):
                 raise ValueError(f"In setSelectOp(): process {proc} not found")
             self.groups[proc]["selectOp"] = op
 
-    def defineSignalBinsUnfolding(self, fitvar, base_process, add_overflow=False):
+    def defineSignalBinsUnfolding(self, fitvar, base_process):
         # get gen bin names corresponding to fitvars
         genvar_dict = {
             "pt": "ptGen",
-            "eta": "etaGen",
+            "eta": "etaGen"
         }
 
         fitvars = fitvar.split("-")
@@ -362,14 +363,12 @@ class datagroups(object):
             genvars.append(genvar)
             gen_bin_edges = self.results[self.groups[base_process]["members"][0].name]["output"]["gen"].get().axes[genvar].edges
 
-            if add_overflow:
-                # to add separate overflow/underflow bins
-                gen_bins.append([hist.underflow, *[i for i in range(len(gen_bin_edges)-1)], hist.overflow]) 
-            else:
-                gen_bins.append(range(len(gen_bin_edges)-1))
+            # # to add out of acceptance constributions for separate overflow/underflow bins
+            # gen_bins.append([hist.underflow, *[i for i in range(len(gen_bin_edges)-1)], hist.overflow]) 
+
+            gen_bins.append(range(len(gen_bin_edges)-1))
 
         for indices in itertools.product(*gen_bins):
-            
             proc_genbin = dict(self.groups[base_process])
             proc_genbin['selectOp'] = lambda x, indices=indices, genvars=genvars: x[{var : i for var, i in zip(genvars, indices)}]
 
@@ -381,9 +380,18 @@ class datagroups(object):
                     proc_name += f"_{var}O"
                 else:
                     proc_name += f"_{var}{idx}"
-
-            self.addGroup(proc_name, proc_genbin)
+            
             self.unconstrainedProcesses.append(proc_name)
+            self.addGroup(proc_name, proc_genbin)
+            
+        # add one inclusive out of acceptance contribution and treat as background
+        proc_genbin = dict(self.groups[base_process])
+
+        conditions = [{var : hist.overflow} for var in genvars] + [{var : hist.underflow} for var in genvars]
+        combined_condition = functools.reduce(lambda a, b: a | b, conditions)
+        proc_genbin['selectOp'] = lambda x: x[combined_condition]
+
+        self.addGroup(base_process, proc_genbin)
 
         # Remove inclusive signal
         self.deleteGroup(base_process)
@@ -413,7 +421,7 @@ class datagroups(object):
 
 class datagroups2016(datagroups):
     def __init__(self, infile, combine=False, pseudodata_pdfset = None, applySelection=True,
-                 excludeProcGroup=None, filterProcGroup=None
+                 excludeProcGroup=None, filterProcGroup=None, splitWByCharge=False
     ):
         self.datasets = {x.name : x for x in datasets2016.getDatasets(filt=filterProcGroup, excl=excludeProcGroup)}
         logger.debug(f"Getting these datasets: {self.datasets.keys()}")
@@ -453,15 +461,35 @@ class datagroups2016(datagroups):
                 color = "dimgray"
             )
         if self.wmass:
-            self.groups.update({
-                "Wmunu" : dict(
-                    members = self.getSafeListFromDataset(["WminusmunuPostVFP", "WplusmunuPostVFP"]),
-                    label = r"W$^{\pm}\to\mu\nu$",
-                    color = "darkred",
-                    selectOp = sigOp,
-                ),
-                }
-            )
+            if splitWByCharge:
+                self.groups.update({
+                    "WmunuPlus" : dict(
+                        members = self.getSafeListFromDataset(["WplusmunuPostVFP"]),
+                        label = r"W$^{-}\to\mu\nu$",
+                        color = "darkred",
+                        selectOp = sigOp,
+                    ),
+                    }
+                )
+                self.groups.update({
+                    "WmunuMinus" : dict(
+                        members = self.getSafeListFromDataset(["WminusmunuPostVFP"]),
+                        label = r"W$^{-}\to\mu\nu$",
+                        color = "darkred",
+                        selectOp = sigOp,
+                    ),
+                    }
+                )
+            else:
+                self.groups.update({
+                    "Wmunu" : dict(
+                        members = self.getSafeListFromDataset(["WminusmunuPostVFP", "WplusmunuPostVFP"]),
+                        label = r"W$^{\pm}\to\mu\nu$",
+                        color = "darkred",
+                        selectOp = sigOp,
+                    ),
+                    }
+                )
             # Reorder
             for k in ["Zmumu", "Ztautau"]:
                 self.groups[k] = self.groups.pop(k)

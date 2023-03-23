@@ -26,7 +26,7 @@ def valsAndVariances(h1, h2, allowBroadcast=True, transpose=True):
             res = [np.broadcast_to(x.T if transpose else x, outshape[::-1] if transpose else outshape) for x in \
                     [h1.values(flow=flow), h2.values(flow=flow), h1.variances(flow=flow), h2.variances(flow=flow)]]
         except ValueError as e:
-            logging.error(f"Failed to broadcast hists! h1.axes.name {h1.axes.name}, h2.axes.name {h2.axes.name}")
+            logger.error(f"Failed to broadcast hists! h1.axes.name {h1.axes.name}, h2.axes.name {h2.axes.name}")
             raise e
         return [x.T for x in res] if transpose else res
 
@@ -260,7 +260,7 @@ def findCommonBinning(hists, axis_idx):
         common_edges = common_edges[np.isclose(np.array(ax.edges)[:,np.newaxis], common_edges).any(0)]
 
     edges = np.sort(common_edges)
-    logging.debug(f"Common edges are {common_edges}")
+    logger.debug(f"Common edges are {common_edges}")
 
     if len(edges) < 2:
         raise ValueError(f"Found < 2 common edges, cannot rebin. Axes were {orig_axes}")
@@ -318,7 +318,7 @@ def syst_min_and_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=[]):
 
 def syst_min_or_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=[], do_min=True):
     if syst_ax not in h.axes.name:
-        logging.warning(f"Did not find syst axis {syst_ax} in histogram. Returning nominal!")
+        logger.warning(f"Did not find syst axis {syst_ax} in histogram. Returning nominal!")
         return h
 
     systax_idx = h.axes.name.index(syst_ax)
@@ -332,7 +332,7 @@ def syst_min_or_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=[], do_min=Tr
             indices = h.axes[syst_ax].index(indices)
 
     if max(indices) > h.axes[syst_ax].size:
-        logging.warning(f"Range of indices exceeds length of syst axis '{syst_ax}.' Returning nominal!")
+        logger.warning(f"Range of indices exceeds length of syst axis '{syst_ax}.' Returning nominal!")
         return h
 
     if syst_ax in proj_ax:

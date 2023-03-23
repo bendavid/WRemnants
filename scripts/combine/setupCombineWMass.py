@@ -51,14 +51,14 @@ def main(args):
         logger.warning("Adding QCD MC to list of processes for the fit setup")
     else:
         if "QCD" not in args.excludeProcGroups:
-            logger.warning("Automatic removal of QCD MC from list of processes. Use --filter-proc-groups 'QCD' or --add-qcd-mc to keep it")
+            logger.warning("Automatic removal of QCD MC from list of processes. Use --filterProcGroups 'QCD' or --addQCDMC to keep it")
             args.excludeProcGroups.append("QCD")
     filterGroup = args.filterProcGroups if args.filterProcGroups else None
     excludeGroup = args.excludeProcGroups if args.excludeProcGroups else None
     logger.debug(f"Filtering these groups of processes: {args.filterProcGroups}")
     logger.debug(f"Excluding these groups of processes: {args.excludeProcGroups}")
     
-    datagroups = datagroups2016(args.inputFile, excludeProcGroup=excludeGroup, filterProcGroup=filterGroup)
+    datagroups = datagroups2016(args.inputFile, excludeProcGroup=excludeGroup, filterProcGroup=filterGroup, splitWByCharge=args.unfold)
     
     if args.xlim:
         if len(args.fitvar.split("-")) > 1:
@@ -86,26 +86,69 @@ def main(args):
     if not os.path.isdir(outfolder):
         os.makedirs(outfolder)
 
+    templateDir = f"{scriptdir}/Templates/WMass"
+
     if args.unfold:
         if not args.constrainMass:
             logger.warning("Unfolding is specified but the mass is treated free floating, to constrain the mass add '--constrainMass'")
 
-        base_proc = "Wmunu"  if wmass else "Zmumu" 
+        base_procs = ["WmunuPlus", "WmunuMinus"] if wmass else ["Zmumu"]
 
-        datagroups.defineSignalBinsUnfolding(args.fitvar, base_proc)
+        
+        for base_proc in base_procs:
+            datagroups.defineSignalBinsUnfolding(args.fitvar, base_proc)
+
+        # # for the xsec calculation
+        # suffix += "_xsec"
+        # bkgProcs = [] # for xsec norm card, remove all bkg procs but keep the data
+        # histName = "xnorm"
+        
+        # # fake data, as sum of all  Zmumu procs over recoil_gen
+        # proc_base = dict(datagroups.groups[base_proc])
+        # proc_base['selectOp'] = lambda x, i=i: x[{"recoil_gen" : hist.tag.Slicer()[::hist.sum]}]
+        # dataProc = "fake_data"
+        # datagroups.addGroups(dataProc, proc_genbin)
+
+        # datagroups_gen = datagroups2016(args.inputFile, excludeProcGroup=excludeGroup, filterProcGroup=filterGroup)
+        # datagroups_gen.setNominalName("gen")
+        # # datagroups_gen.defineSignalBinsUnfolding(args.fitvar, base_proc)
+
+        # # hack: remove non-used procs/groups, as there can be more procs/groups defined than defined above
+        # # need to remove as cardTool takes all procs in the datagroups
+        # toDel=[]
+        # for group in datagroups.groups: 
+        #     if base_proc not in group:
+        #         toDel.append(group)
+        # datagroups_gen.deleteGroup(toDel)    
+
+        # # write a seperate card with the gen information for xsec calculation
+        # cardGen = CardTool.CardTool(f"{outfolder}/{name}_gen_{{chan}}.txt")
+        # cardGen.setDatagroups(datagroups_gen)
+        # # cardGen.setProcesses(datagroups_gen.unconstrainedProcesses) # only save signals
+        # cardGen.setNominalName("gen")
+
+        # cardGen.setNominalTemplate(f"{templateDir}/main.txt")
+        # # cardGen.setProjectionAxes(["etaGen","ptGen"])
+
+        # cardGen.setOutfile(os.path.abspath(f"{outfolder}/{name}CombineInput_gen.root"))
+        # cardGen.setSpacing(52)
+
+        # combine_helpers.add_pdf_uncertainty(cardGen, datagroups.unconstrainedProcesses, False)
+        # combine_helpers.add_scale_uncertainty(cardGen, args.minnloScaleUnc, datagroups.unconstrainedProcesses, False, resum=args.resumUnc)
+        # # for Z background in W mass case (W background for Wlike is essentially 0, useless to apply QCD scales there)
+        # if wmass:
+        #     combine_helpers.add_scale_uncertainty(cardGen, "integrated", datagroups.unconstrainedProcesses, False, name_append="Z", resum=args.resumUnc)
+
+        # cardGen.writeOutput(args=args)
+
 
     if args.noHist and args.noStatUncFakes:
         raise ValueError("Option --noHist would override --noStatUncFakes. Please select only one of them")
 
-    templateDir = f"{scriptdir}/Templates/WMass"
+
     # Start to create the CardTool object, customizing everything
     cardTool = CardTool.CardTool(f"{outfolder}/{name}_{{chan}}.txt")
-    cardTool.setProcesses(datagroups.getNames())
-    # setting excluded processes for internal consistency, but in principle it should not be needed
-    # it will be used to call datagroups.loadHistsForDatagroups with the proper exclude argument, even if the
-    # list of processes to read (set with CardTool.setProcesses) should be totally sufficient in that case
     cardTool.setExcludedProcs(excludeGroup)
-    ###
     cardTool.setDatagroups(datagroups)
     logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
     cardTool.setNominalTemplate(f"{templateDir}/main.txt")
@@ -161,7 +204,7 @@ def main(args):
                                systAxes=["massShift"],
                                passToFakes=passSystToFakes,
     )
-
+    
     if args.doStatOnly:
         # print a card with only mass weights and a dummy syst
         cardTool.addLnNSystematic("dummy", processes=["Top", "Diboson"] if wmass else ["Other"], size=1.001, group="dummy")

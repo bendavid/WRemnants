@@ -164,7 +164,7 @@ def build_graph(df, dataset):
 
         # add histograms before any selection
         df_gen = df
-        gen = df_gen.HistoBoost("gen", unfolding_axes, [*unfolding_cols, "nominal_weight"])
+        gen = df_gen.HistoBoost("gen", [*unfolding_axes, axis_charge], [*unfolding_cols, "chargeVgen", "nominal_weight"])
         results.append(gen)
 
         scale_axes = [*unfolding_axes, axis_ptVgen, axis_chargeVgen]
