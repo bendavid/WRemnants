@@ -31,8 +31,8 @@ class CardTool(object):
         self.cardGroups = {}
         self.nominalTemplate = ""
         self.spacing = 28
-        self.systTypeSpacing = 12
-        self.procColumnsSpacing = 12
+        self.systTypeSpacing = 16
+        self.procColumnsSpacing = 16
         self.fakeName = "Fake" # but better to set it explicitly
         self.dataName = "Data"
         self.nominalName = "nominal"
