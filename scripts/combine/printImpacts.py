@@ -28,6 +28,5 @@ def printImpacts(args,rtfile,POI='Wmass'):
 if __name__ == '__main__':
     args = parseArgs()
     rtfile = uproot.open(args.inputFile)
-    POInames = input_tools.getPOInames(rtfile)
-    for poi in ['Wmass',*POInames]:
+    for poi in input_tools.getPOInames(rtfile):
         printImpacts(args,rtfile,poi)

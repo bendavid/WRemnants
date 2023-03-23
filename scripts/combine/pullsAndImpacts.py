@@ -239,6 +239,5 @@ def producePlots(rtfile,args, POI='Wmass'):
 if __name__ == '__main__':
     args = parseArgs()
     rtfile = uproot.open(args.inputFile)
-    POInames = ['Wmass',*input_tools.getPOInames(rtfile)]
-    for POI in POInames:
+    for POI in input_tools.getPOInames(rtfile):
         producePlots(rtfile,args,POI)
