@@ -348,7 +348,7 @@ class datagroups(object):
     def defineSignalBinsUnfolding(self, fitvar, base_process, add_overflow=False, inclusive=False):
 
         if inclusive:
-            self.unconstrainedProcesses.append(proc_name)
+            self.unconstrainedProcesses.append(base_process)
             return
             
         # get gen bin names corresponding to fitvars
