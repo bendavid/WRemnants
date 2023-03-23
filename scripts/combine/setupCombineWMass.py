@@ -10,7 +10,8 @@ import pathlib
 import hist
 import copy
 import math
-import itertools
+
+import pdb
 
 scriptdir = f"{pathlib.Path(__file__).parent}"
 data_dir = f"{pathlib.Path(__file__).parent}/../../wremnants/data/"
@@ -85,42 +86,13 @@ def main(args):
     if not os.path.isdir(outfolder):
         os.makedirs(outfolder)
 
-    unconstrainedProcs = []
-
     if args.unfold:
         if not args.constrainMass:
             logger.warning("Unfolding is specified but the mass is treated free floating, to constrain the mass add '--constrainMass'")
 
         base_proc = "Wmunu"  if wmass else "Zmumu" 
 
-        # get gen bin names corresponding to fitvars
-        genVar_dict = {
-            "pt": "ptGen",
-            "eta": "etaGen",
-        }
-
-        gen_bins = []
-        fitvars = args.fitvar.split("-")
-        genvars = [genVar_dict[f] for f in fitvars]
-        for fitvar in fitvars:
-            genVar = genVar_dict[fitvar]
-            gen_bin_edges = datagroups.results[datagroups.groups[base_proc]["members"][0].name]["output"]["gen"].get().axes[genVar].edges
-            gen_bins.append(range(len(gen_bin_edges)-1))
-
-        for indices in itertools.product(*gen_bins):
-            
-            proc_genbin = dict(datagroups.groups[base_proc])
-            proc_genbin['selectOp'] = lambda x, indices=indices, genvars=genvars: x[{var : i for var, i in zip(genvars, indices)}]
-
-            proc_name = base_proc
-            for idx, var in zip(indices, fitvars):
-                proc_name += f"_{var}{idx}"
-
-            datagroups.addGroup(proc_name, proc_genbin)
-            unconstrainedProcs.append(proc_name)
-
-        # Remove inclusive signal
-        datagroups.deleteGroup(base_proc)
+        datagroups.defineSignalBinsUnfolding(args.fitvar, base_proc)
 
     if args.noHist and args.noStatUncFakes:
         raise ValueError("Option --noHist would override --noStatUncFakes. Please select only one of them")
@@ -158,10 +130,6 @@ def main(args):
                                                 filterProcGroup=filterGroup))
     if args.lumiScale:
         cardTool.setLumiScale(args.lumiScale)
-
-    if unconstrainedProcs:
-        cardTool.setUnconstrainedProcs(unconstrainedProcs)
-
 
     logger.info(f"cardTool.allMCProcesses(): {cardTool.allMCProcesses()}")
         
@@ -289,7 +257,7 @@ def main(args):
 
     to_fakes = passSystToFakes and not args.noQCDscaleFakes
     combine_helpers.add_pdf_uncertainty(cardTool, single_v_samples, passSystToFakes)
-    combine_helpers.add_scale_uncertainty(cardTool, args.minnlo_scale_unc, signal_samples_inctau, to_fakes, resum=args.resumUnc)
+    combine_helpers.add_scale_uncertainty(cardTool, args.minnloScaleUnc, signal_samples_inctau, to_fakes, resum=args.resumUnc)
     # for Z background in W mass case (W background for Wlike is essentially 0, useless to apply QCD scales there)
     if wmass:
         combine_helpers.add_scale_uncertainty(cardTool, "integrated", single_v_nonsig_samples, False, name_append="Z", resum=args.resumUnc)
