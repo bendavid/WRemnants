@@ -46,10 +46,11 @@ ROOT.gInterpreter.Declare('#include "lowpu_recoil.h"')
 
 
 # standard regular axes
-axis_eta = hist.axis.Regular(50, -2.5, 2.5, name = "eta")
-axis_pt = hist.axis.Regular(100, 0., 200., name = "pt")
+axis_eta = hist.axis.Regular(24, -2.4, 2.4, name = "eta", underflow=False, overflow=False)
+axis_pt = hist.axis.Regular(75, 25., 100., name = "pt", underflow=False)
+axis_phi = hist.axis.Regular(50, -4, 4, name = "phi")
 axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "charge")
-axis_iso = hist.axis.Regular(100, 0, 5, underflow=False, overflow=True, name = "iso")
+axis_iso = hist.axis.Regular(50, 0, 1, underflow=False, overflow=True, name = "iso")
 
 axis_passMT = hist.axis.Boolean(name = "passMT")
 axis_passIso = hist.axis.Boolean(name = "passIso")
@@ -65,6 +66,7 @@ axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
 
 # axes for final cards/fitting
 axis_mT = hist.axis.Variable([0] + list(range(40, 110, 1)) + [110, 112, 114, 116, 118, 120, 125, 130, 140, 160, 180, 200], name = "mt",underflow=False, overflow=True)
+axis_mT = hist.axis.Regular(100, 0, 200, name = "mt", underflow=False)
 reco_mT_axes = [common.axis_recoil_reco_ptW, axis_mT, axis_charge, axis_passMT, axis_passIso]
 gen_reco_mT_axes = [common.axis_recoil_gen_ptW, common.axis_recoil_reco_ptW, axis_mT, axis_charge, axis_passMT, axis_passIso]
 
@@ -161,7 +163,7 @@ def build_graph(df, dataset):
         df = df.Define("goodLeptons", "vetoElectrons && Electron_pt_corr > 25 && Electron_cutBased >= 3 && !(abs(Electron_eta) > 1.4442 && abs(Electron_eta) < 1.566)")
         df = df.Define("goodLeptonsPlus", "goodLeptons && Electron_charge > 0")
         df = df.Define("goodLeptonsMinus", "goodLeptons && Electron_charge < 0")
-        df = df.Filter("Sum(goodLeptons) == 2")
+        df = df.Filter("Sum(goodLeptons) == 1")
         
         df = df.Filter("(Electron_charge[goodLeptons][0] + Electron_charge[goodLeptons][1]) == 0")
         df = df.Define("goodTrigObjs", "wrem::goodElectronTriggerCandidateLowPU(TrigObj_id, TrigObj_pt, TrigObj_l1pt, TrigObj_l2pt, TrigObj_filterBits)")
@@ -198,9 +200,7 @@ def build_graph(df, dataset):
         df = df.DefinePerSample("nominal_weight", "1.0")
 
     
-    results.append(df.HistoBoost("lep_pt", [axis_pt], ["Lep_pt", "nominal_weight"]))
-    results.append(df.HistoBoost("lep_eta", [axis_eta], ["Lep_eta", "nominal_weight"]))
-    results.append(df.HistoBoost("lep_iso", [axis_iso], ["Lep_iso", "nominal_weight"]))
+   
     
     df = df.Define("noTrigMatch", "Sum(trigMatch)")
     results.append(df.HistoBoost("noTrigMatch", [axis_lin], ["noTrigMatch", "nominal_weight"]))
@@ -212,12 +212,22 @@ def build_graph(df, dataset):
     df = recoilHelper.recoil_W_unc(df, results, dataset, common.vprocs_lowpu)
     df = df.Alias("mT", "mT_corr_rec")
     df = df.Define("passMT", "mT > 40")
+    
+    results.append(df.HistoBoost("lep_pt", [axis_pt, axis_charge, axis_passMT, axis_passIso], ["Lep_pt", "Lep_charge", "passMT", "passIso", "nominal_weight"]))
+    results.append(df.HistoBoost("lep_eta", [axis_eta, axis_charge, axis_passMT, axis_passIso], ["Lep_eta", "Lep_charge", "passMT", "passIso", "nominal_weight"]))
+    results.append(df.HistoBoost("lep_phi", [axis_phi, axis_charge, axis_passMT, axis_passIso], ["Lep_phi", "Lep_charge", "passMT", "passIso", "nominal_weight"]))
+    results.append(df.HistoBoost("lep_pt", [axis_pt, axis_charge, axis_passMT, axis_passIso], ["Lep_pt", "Lep_charge", "passMT", "passIso", "nominal_weight"]))
+    results.append(df.HistoBoost("lep_iso", [axis_iso], ["Lep_iso", "nominal_weight"]))
    
+    results.append(df.HistoBoost("qcd_space", [axis_pt, axis_eta, axis_iso, axis_charge, axis_mT], ["Lep_pt", "Lep_eta", "Lep_iso", "Lep_charge", "mT_corr_rec", "nominal_weight"]))
 
     if dataset.is_data: return results, weightsum
     
     gen_reco_mT_cols = ["ptVgen", "recoil_corr_rec_magn", "mT_corr_rec", "Lep_charge", "passMT", "passIso"]
     reco_mT_cols = ["recoil_corr_rec_magn", "mT_corr_rec", "Lep_charge", "passMT", "passIso"]
+    
+    
+    
     
     if dataset.name in common.zprocs_lowpu:
     
