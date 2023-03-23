@@ -27,11 +27,11 @@ class CustomFormatter(logging.Formatter):
 
 logging_verboseLevel = [logging.CRITICAL, logging.ERROR, logging.WARNING, logging.INFO, logging.DEBUG]
 
-def setLoggingLevel(log, verbosity):
+def set_logging_level(log, verbosity):
     log.setLevel(logging_verboseLevel[max(0, min(4, verbosity))])
 
-def setup_logger(basefile, verbosity, colors):
-    setup_func = setup_color_logger if colors else setup_base_logger
+def setup_logger(basefile, verbosity, no_colors=False):
+    setup_func = setup_base_logger if no_colors else setup_color_logger
     return setup_func(os.path.basename(basefile), verbosity)
 
 def setup_color_logger(name, verbosity):
@@ -40,14 +40,14 @@ def setup_color_logger(name, verbosity):
     ch = logging.StreamHandler()
     ch.setFormatter(CustomFormatter())
     base_logger.addHandler(ch)
-    setLoggingLevel(base_logger, verbosity)
+    set_logging_level(base_logger, verbosity)
     base_logger.propagate = False # to avoid propagating back to root logger, which would print messages twice
     return base_logger.getChild(name)
     
 def setup_base_logger(name, verbosity):
     logging.basicConfig(format='%(levelname)s: %(message)s')
     base_logger = logging.getLogger("wremnants")
-    setLoggingLevel(base_logger, verbosity)
+    set_logging_level(base_logger, verbosity)
     return base_logger.getChild(name)
     
 def child_logger(name):

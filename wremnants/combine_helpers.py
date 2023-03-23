@@ -33,7 +33,6 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
     name_replace = [("muR2muF2", "muRmuFUp"), ("muR0muF0", "muRmuFDown"), ("muR2muF1", "muRUp"), 
                         ("muR0muF1", "muRDown"), ("muR1muF0", "muFDown"), ("muR1muF2", "muFUp"),
     ]
-    scaleActionArgs = {}
     action_map = {}
     sum_axes = ["ptVgen", "chargeVgen",]
     if use_hel_hist or helicity:
@@ -90,10 +89,14 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
         obs = ("eta", "pt") if not card_tool.project else card_tool.project
         # TODO: Implement pT splitting for SCETlib
         # TODO: The hist used needs to be configurable
+        
+        theory_unc = args_from_metadata(card_tool, "theory_corr")
+        if not theory_unc:
+            logger.error("Can not add resummation uncertainties. No theory correction was applied!")
+        theory_unc = theory_unc[0]+"_unc"
 
-        theory_unc = args_from_metadata(card_tool.datagroups.getMetaInfo(), "theory_corr", "scetlib_dyturboCorr")+"_unc"
-        if "--theory_corr_alt_only" in card_tool.datagroups.getMetaInfo()["command"]:
-            logger.warning("The theory correction was only applied as an alternate hist. Using its syst isn't well defined!")
+        if args_from_metadata(card_tool, "theoryCorrAltOnly"):
+            logger.error("The theory correction was only applied as an alternate hist. Using its syst isn't well defined!")
 
         card_tool.addSystematic(name=theory_unc,
             processes=samples,
@@ -151,36 +154,16 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
             rename=group_name, # Needed to allow it to be called multiple times
         )
 
-# TODO: It's a bit dangerous to not double check what the default really is
-def args_from_metadata(meta_data, arg, default):
-    if "command" not in meta_data.keys():
-        raise ValueError(f"Failed to find command in meta_data (meta_data keys are {meta_data.keys()}")
+def args_from_metadata(card_tool, arg):
+    meta_data = card_tool.datagroups.getMetaInfo()
+    if "args" not in meta_data.keys() or arg not in meta_data["args"].keys():
+        raise IOError(f"The argument {arg} was not found in the metadata, maybe you run on an obsolete file.")
 
-    command = meta_data["command"]
-    sys_args = np.array([x.strip("'") for x in command.split()])
-    matching = (sys_args == f"--{arg}") | (sys_args == f"-{arg}")
+    return meta_data["args"][arg]
 
-    if not np.count_nonzero(matching):
-        # try to catch abbreviations
-        matching = [(f"--{arg}").startswith(sys_arg) for sys_arg in sys_args]
-        if sum(matching)>1:
-            logger.warning(f"Found {sum(matching)} matches when trying to catch abbreviations for {arg}!")
-
-    if not np.count_nonzero(matching):
-        logger.warning(f"Did not find argument {arg}. Assuming the default value {default}")
-        return [default]
-
-    idx = np.argmax(matching)
-    isflag = np.vectorize(lambda x: bool(re.match("^-+[a-z]", x)))(sys_args)
-    isflag[:idx+1] = False
-    # Select args until the next flag (this will break if you have a positional arg afterwards...)
-    last_idx = np.argmax(isflag)
-    if not last_idx:
-        last_idx = len(sys_args)
-    return sys_args[idx+1:last_idx]
 
 def add_pdf_uncertainty(card_tool, samples, to_fakes, action=None):
-    pdf = args_from_metadata(card_tool.datagroups.getMetaInfo(), "pdfs", "msht20")[0]
+    pdf = args_from_metadata(card_tool, "pdfs")[0]
     logger.info(f"Using PDF {pdf}")
     pdfInfo = theory_tools.pdf_info_map("ZmumuPostVFP", pdf)
     pdfName = pdfInfo["name"]

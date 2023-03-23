@@ -15,7 +15,7 @@ import hist
 import ROOT
 import scripts.lowPU.config as lowPUcfg
 
-corr_helpers = theory_corrections.load_corr_helpers(common.zprocs_lowpu, args.theory_corr)
+corr_helpers = theory_corrections.load_corr_helpers(common.zprocs_lowpu, args.theoryCorr)
 
 ###################################
 flavor = args.flavor # mumu, ee
@@ -313,11 +313,11 @@ def build_graph(df, dataset):
     
     # TODO: Should this also be added for the mT hist?
 
-    apply_theory_corr = args.theory_corr and dataset.name in corr_helpers
+    apply_theory_corr = args.theoryCorr and dataset.name in corr_helpers
     print("Apply corr for proc", dataset.name, apply_theory_corr)
     if apply_theory_corr:
         results.extend(theory_tools.make_theory_corr_hists(df, "reco_mll", axes=gen_reco_mll_axes, cols=gen_reco_mll_cols, 
-            helpers=corr_helpers[dataset.name], generators=args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
+            helpers=corr_helpers[dataset.name], generators=args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly)
         )
 
     if dataset.name in sigProcs:

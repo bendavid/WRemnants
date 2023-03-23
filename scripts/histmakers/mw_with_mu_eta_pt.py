@@ -29,12 +29,12 @@ if args.vqtTestIntegrated:
 else:
     sfFileVqtTest = args.sfFileVqtTest
 
-logger = logging.setup_logger(__file__, args.verbose, args.color_logger)
+logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
                                               filt=args.filterProcs,
                                               excl=args.excludeProcs, 
-                                              nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path)
+                                              nanoVersion="v8" if args.v8 else "v9", base_path=args.dataPath)
 
 era = args.era
 
@@ -105,7 +105,7 @@ if args.binnedScaleFactors:
                                                                                                                                                           includeTrigger = includeTrigger) 
 else:
     logger.info("Using smoothed scale factors and uncertainties")
-    muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile, era = era, max_pt = axis_pt.edges[-1])
+    muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile, era = era, max_pt = axis_pt.edges[-1], directIsoSFsmoothing=args.directIsoSFsmoothing)
 logger.info(f"SF file: {args.sfFile}")
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
@@ -117,12 +117,12 @@ mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper =
 
 smearing_helper = muon_calibration.make_muon_smearing_helpers() if args.smearing else None
 
-bias_helper = muon_calibration.make_muon_bias_helpers(args) if args.bias_calibration else None
+bias_helper = muon_calibration.make_muon_bias_helpers(args) if args.biasCalibration else None
 
-corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_corr)
+corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theoryCorr)
 
 # recoil initialization
-if not args.no_recoil:
+if not args.noRecoil:
     from wremnants import recoil_tools
     recoilHelper = recoil_tools.Recoil("highPU", args, flavor="mu")
 
@@ -144,7 +144,7 @@ def build_graph(df, dataset):
     df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
     #df = df.Filter("event % 2 == 1") # test with odd/even events
 
-    apply_theory_corr = args.theory_corr and dataset.name in corr_helpers
+    apply_theory_corr = args.theoryCorr and dataset.name in corr_helpers
 
     cvh_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
     jpsi_helper = data_jpsi_crctn_helper if dataset.is_data else mc_jpsi_crctn_helper
@@ -233,14 +233,14 @@ def build_graph(df, dataset):
                 else:
                     df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper_vqt, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso", "goodMuons_zqtproj0"])
             weight_expr += "*weight_fullMuonSF_withTrackingReco"
-        if args.vertex_weight:
+        if not args.noVertexWeight:
             weight_expr += "*weight_vtx"
         
         df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
         df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
     ########################################################################
     
-    if not args.no_recoil:
+    if not args.noRecoil:
         lep_cols = ["goodMuons_pt0", "goodMuons_phi0", "goodMuons_charge0", "Muon_pt[goodMuons][0]"]
         df = recoilHelper.recoil_W(df, results, dataset, common.vprocs, lep_cols) # produces corrected MET as MET_corr_rec_pt/phi  vprocs_lowpu wprocs_recoil_lowpu
         df = recoilHelper.recoil_W_unc(df, results, dataset, common.vprocs)
@@ -282,7 +282,7 @@ def build_graph(df, dataset):
 
         if apply_theory_corr:
             results.extend(theory_tools.make_theory_corr_hists(df, "nominal", nominal_axes, nominal_cols, 
-                corr_helpers[dataset.name], args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
+                corr_helpers[dataset.name], args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly)
             )
         if args.smearingWeights and (isW or isZ): 
             nominal_cols_gen, nominal_cols_gen_smeared = muon_calibration.make_alt_reco_and_gen_hists(df, results, nominal_axes, reco_sel_GF)
