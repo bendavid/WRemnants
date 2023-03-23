@@ -11,19 +11,19 @@ import math
 
 parser.add_argument("--skipAngularCoeffs", action='store_true', help="Skip the conversion of helicity moments to angular coeff fractions")
 parser.add_argument("--singleLeptonHists", action='store_true', help="Also store single lepton kinematics")
-parser.add_argument("--skip-ew-hists", action='store_true', help="Also store histograms for EW reweighting. Use with --filter horace")
+parser.add_argument("--skipEWHists", action='store_true', help="Also store histograms for EW reweighting. Use with --filter horace")
 parser.add_argument("--absY", action='store_true', help="use absolute |Y|")
 
 parser = common.set_parser_default(parser, "filterProcs", common.vprocs)
 
 args = parser.parse_args()
 
-logger = logging.setup_logger(__file__, args.verbose, args.color_logger)
+logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
                                               filt=args.filterProcs,
                                               excl=args.excludeProcs, 
-                                              nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path, mode='gen')
+                                              nanoVersion="v8" if args.v8 else "v9", base_path=args.dataPath, mode='gen')
 
 logger.debug(f"Will process samples {[d.name for d in datasets]}")
 
@@ -58,7 +58,7 @@ axis_chargeZgen = hist.axis.Integer(
 axis_l_eta_gen = hist.axis.Regular(48, -2.4, 2.4, name = "eta")
 axis_l_pt_gen = hist.axis.Regular(29, 26., 55., name = "pt")
 
-corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_corr)
+corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theoryCorr)
 
 def build_graph(df, dataset):
     print("build graph")
@@ -103,7 +103,7 @@ def build_graph(df, dataset):
             df = df.Define('etaPrefsrLep', 'genl.eta()')
         results.append(df.HistoBoost("nominal_genlep", lep_axes, [*lep_cols, "nominal_weight"]))
 
-    if not args.skip_ew_hists and (isW or isZ):
+    if not args.skipEWHists and (isW or isZ):
         if isZ:
             massBins = theory_tools.make_ew_binning(mass = 91.1535, width = 2.4932, initialStep=0.010)
         else:
@@ -128,13 +128,13 @@ def build_graph(df, dataset):
         if "LHEPdfWeight" in df.GetColumnNames():
             syst_tools.add_pdf_hists(results, df, dataset.name, nominal_axes, nominal_cols, args.pdfs, "nominal_gen")
 
-    if args.theory_corr and dataset.name in corr_helpers:
+    if args.theoryCorr and dataset.name in corr_helpers:
         results.extend(theory_tools.make_theory_corr_hists(df, "nominal_gen", nominal_axes, nominal_cols,
-            corr_helpers[dataset.name], args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
+            corr_helpers[dataset.name], args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly)
         )
         if args.singleLeptonHists:
             results.extend(theory_tools.make_theory_corr_hists(df, "nominal_genlep", lep_axes, lep_cols, 
-                corr_helpers[dataset.name], args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
+                corr_helpers[dataset.name], args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly)
             )
 
     if "MEParamWeight" in df.GetColumnNames():

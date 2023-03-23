@@ -12,7 +12,7 @@ import time
 import os
 
 
-parser.add_argument("--csvars_hist", action='store_true', help="Add CS variables to dilepton hist")
+parser.add_argument("--csVarsHist", action='store_true', help="Add CS variables to dilepton hist")
 parser.add_argument("--axes", type=str, nargs="*", default=["mll", "ptll"], help="")
 parser.add_argument("--finePtBinning", action='store_true', help="Use fine binning for ptll")
 
@@ -20,12 +20,12 @@ parser = common.set_parser_default(parser, "pt", [44,26.,70.])
 parser = common.set_parser_default(parser, "eta", [6,-2.4,2.4])
 
 args = parser.parse_args()
-logger = logging.setup_logger(__file__, args.verbose, args.color_logger)
+logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
                                               filt=args.filterProcs,
                                               excl=args.excludeProcs, 
-                                              nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path)
+                                              nanoVersion="v8" if args.v8 else "v9", base_path=args.dataPath)
 
 era = args.era
 
@@ -52,7 +52,7 @@ for a in args.axes:
 
 nominal_cols = args.axes
 
-if args.csvars_hist:
+if args.csVarsHist:
     nominal_cols += ["cosThetaStarll", "phiStarll"]
 
 nominal_cols.append("charge")
@@ -95,7 +95,7 @@ smearing_helper = muon_calibration.make_muon_smearing_helpers() if args.smearing
 
 bias_helper = muon_calibration.make_muon_bias_helpers(args) 
 
-corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_corr)
+corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theoryCorr)
 
 def build_graph(df, dataset):
     logger.info(f"build graph for dataset: {dataset.name}")
@@ -178,9 +178,9 @@ def build_graph(df, dataset):
         # on the Z samples (but can still use it for dummy muon scale)
         if isW or isZ:
 
-            if args.theory_corr and dataset.name in corr_helpers:
+            if args.theoryCorr and dataset.name in corr_helpers:
                 results.extend(theory_tools.make_theory_corr_hists(df, "nominal", nominal_axes, nominal_cols, 
-                    corr_helpers[dataset.name], args.theory_corr, modify_central_weight=not args.theory_corr_alt_only))
+                    corr_helpers[dataset.name], args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly))
 
             scale_axes = [*nominal_axes, axis_ptVgen, axis_chargeVgen]
             scale_cols = [*nominal_cols, "ptVgen", "chargeVgen"]

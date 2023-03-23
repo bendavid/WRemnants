@@ -1,12 +1,10 @@
 import hist
-import boost_histogram as bh
 import numpy as np
 from functools import reduce
-import logging
 import collections
-from . import common
-import narf
-import ROOT
+from utilities import common, logging
+
+logger = logging.child_logger(__name__)
 
 def valsAndVariances(h1, h2, allowBroadcast=True, transpose=True):
     if not allowBroadcast and len(h1.axes) != len(h2.axes):
