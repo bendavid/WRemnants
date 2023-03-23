@@ -145,7 +145,7 @@ with lz4.frame.open(outfile, "wb") as f:
                 f"{args.generator}_hist" : numh,
                 "minnlo_ref_hist" : minnloh,
             },
-            "meta_data" : output_tools.metaInfoDict(),
+            "meta_data" : output_tools.metaInfoDict(args=args),
         }, f, protocol = pickle.HIGHEST_PROTOCOL)
 
 logger.info("Correction binning is")
