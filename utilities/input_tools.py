@@ -229,12 +229,35 @@ def add_charge_axis(h, charge):
         hnew[...,charge_axis.index(charge)] = h.view(flow=True)
     return hnew
 
-def readImpacts(rtfile, group, sort=True, add_total=True, stat=0.0):
-    histname = "nuisance_group_impact_nois" if group else "nuisance_impact_nois"
+def getPOInames(rtfile):
+    try:
+        impacts = rtfile['nuisance_impact_mu'].to_hist()
+        names = [impacts.axes[0].value(i) for i in range(impacts.axes[0].size)]
+    except:
+        logger.warning("Did not find any POI (free-floating processes)")
+        names = []
+    try:
+        impacts = rtfile['nuisance_impact_nois'].to_hist()
+        names.append('Wmass')
+    except:
+        logger.warning("W mass not a free parameter")
+    if len(names)==0:
+        raise ValueError('No free parameters found (neither signal strenght(s), nor W mass)')
+    return names
+    
+def readImpacts(rtfile, group, sort=True, add_total=True, stat=0.0, POI='Wmass'):
+    if POI=='Wmass':
+        histname = "nuisance_group_impact_nois" if group else "nuisance_impact_nois"
+    elif POI in getPOInames(rtfile):
+        histname = "nuisance_group_impact_mu" if group else "nuisance_impact_mu"
+    else:
+        raise ValueError(f"Invalid POI: {POI}")
+        
     impacts = rtfile[histname].to_hist()
     labels = np.array([impacts.axes[1].value(i) for i in range(impacts.axes[1].size)])
-    total = rtfile["fitresults"][impacts.axes[0].value(0)+"_err"].array()[0]
-    impacts = impacts.values()[0,:]
+    iPOI = 0 if POI=='Wmass' else getPOInames(rtfile).index(POI)
+    total = rtfile["fitresults"][impacts.axes[0].value(iPOI)+"_err"].array()[0]
+    impacts = impacts.values()[iPOI,:]
     if sort:
         order = np.argsort(impacts)
         impacts = impacts[order]

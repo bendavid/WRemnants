@@ -38,6 +38,8 @@ def make_parser(parser=None):
     parser.add_argument("--constrainMass", action='store_true', help="Constrain mass parameter in the fit (e.g. for ptll fit)")
     parser.add_argument("-a", "--append", type=str, help="Append to output folder name")
     parser.add_argument("--unfold", action='store_true', help="Prepare datacard for unfolding")
+    parser.add_argument("--fitXsec", action='store_true', help="Fit signal inclusive cross section")
+    
     return parser
 
 def main(args):
@@ -88,13 +90,16 @@ def main(args):
 
     templateDir = f"{scriptdir}/Templates/WMass"
 
-    if args.unfold:
+    if args.unfold and args.fitXsec:
+        raise ValueError("Options --unfolding and --fitXsec are incompatible. Please choose one or the other")
+    elif args.fitXsec:
+        self.unconstrainedProcesses.append("WmunuP" if wmass else "Zmumu")
+    elif args.unfold:
         if not args.constrainMass:
             logger.warning("Unfolding is specified but the mass is treated free floating, to constrain the mass add '--constrainMass'")
 
         base_procs = ["WmunuPlus", "WmunuMinus"] if wmass else ["Zmumu"]
 
-        
         for base_proc in base_procs:
             datagroups.defineSignalBinsUnfolding(args.fitvar, base_proc)
 

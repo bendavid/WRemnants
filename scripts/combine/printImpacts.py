@@ -12,13 +12,21 @@ def parseArgs():
         help="fitresults output ROOT file from combinetf")
     return parser.parse_args()
 
-args = parseArgs()
-rtfile = uproot.open(args.inputFile)
-impacts,labels = input_tools.readImpacts(rtfile, not args.ungroup, sort=args.sort)
-if args.nuisance:
-    if args.nuisance not in labels:
-        raise ValueError(f"Invalid nuisance {args.nuisance}. Options are {labels}")
-    print(f"Impact of nuisance {args.nuisance} is {impacts[labels.index(args.nuisance)]} MeV")
-else:
-    print("Impact of all systematics (in MeV)")
-    print("\n".join([f"   {k}: {round(v*100, 2)}" for k,v in zip(labels, impacts)]))
+
+def printImpacts(args,rtfile,POI='Wmass'):
+    impacts,labels = input_tools.readImpacts(rtfile, not args.ungroup, sort=args.sort, POI=POI)
+    unit = 'MeV' if POI=='Wmass' else 'n.u. %'
+    if args.nuisance:
+        if args.nuisance not in labels:
+            raise ValueError(f"Invalid nuisance {args.nuisance}. Options are {labels}")
+        print(f"Impact of nuisance {args.nuisance} is {impacts[list(labels).index(args.nuisance)]*100} {unit}")
+    else:
+        print(f"Impact of all systematics (in {unit})")
+        print("\n".join([f"   {k}: {round(v*100, 2)}" for k,v in zip(labels, impacts)]))
+
+
+if __name__ == '__main__':
+    args = parseArgs()
+    rtfile = uproot.open(args.inputFile)
+    for poi in input_tools.getPOInames(rtfile):
+        printImpacts(args,rtfile,poi)
