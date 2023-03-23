@@ -14,7 +14,7 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 
-def plotImpacts(df, title, pulls=False, pullrange=[-5,5]):
+def plotImpacts(df, title, pulls=False, pullrange=[-5,5], POI='Wmass'):
     
     fig = make_subplots(rows=1,cols=2 if pulls else 1,
             horizontal_spacing=0.1, shared_yaxes=True)
@@ -65,19 +65,19 @@ def plotImpacts(df, title, pulls=False, pullrange=[-5,5]):
         plot_bgcolor='rgba(0,0,0,0)',
         xaxis_title="Impact on mass (MeV)",
         title={
-            'text': title,
+            'text': POI,
             'y':.999 if ndisplay > 100 else 0.98,
             'x': 0.5,
             'xanchor': 'center',
             'yanchor': 'top'},
         margin=dict(l=20,r=20,t=50,b=20),
         #xaxis=dict(range=[-25, 25],
-        xaxis=dict(range=[-20, 20],
+        xaxis=dict(range=[-20, 20] if POI=='Wmass' else [-3,3],
                 showgrid=True, gridwidth=2,gridcolor='LightPink',
                 zeroline=True, zerolinewidth=4, zerolinecolor='Gray',
                 tickmode='linear',
                 tick0=0.,
-                dtick=5
+                dtick=5 if POI=='Wmass' else 1
             ),
         yaxis=dict(range=[-1, ndisplay]),
         showlegend=False,
@@ -98,15 +98,15 @@ def plotImpacts(df, title, pulls=False, pullrange=[-5,5]):
         )
     return fig
 
-def readFitInfoFromFile(filename, group=False, sort=None, ascending=True, stat=0.0):
-    rf = uproot.open(filename)
-    name = "nuisance_group_impact_nois" if group else "nuisance_impact_nois"
+def readFitInfoFromFile(rf,filename, group=False, sort=None, ascending=True, stat=0.0, POI='Wmass'):
+    # rf = uproot.open(filename)
+    # name = "nuisance_group_impact_nois" if group else "nuisance_impact_nois"
     
     treename = "fitresults"
     tree = rf[treename]
     # TODO: Make add_total configurable
     add_total = group
-    impacts,labels = input_tools.readImpacts(rf, group, sort=sort, add_total=add_total, stat=stat)
+    impacts,labels = input_tools.readImpacts(rf, group, sort=sort, add_total=add_total, stat=stat, POI=POI)
     # TODO: Make configurable
     if True:
         impacts = impacts*100
@@ -180,11 +180,12 @@ def draw_figure(maxShow, sortBy, sortDescending, filterLabels, groups):
 dataframe = pd.DataFrame()
 groupsdataframe = pd.DataFrame()
 
-if __name__ == '__main__':
-    args = parseArgs()
-    groupsdataframe = readFitInfoFromFile(args.inputFile, True, sort=args.sort, ascending=args.ascending, stat=args.stat/100.)
+        
+def producePlots(rtfile,args, POI='Wmass'):
+
+    groupsdataframe = readFitInfoFromFile(rtfile,args.inputFile, True, sort=args.sort, ascending=args.ascending, stat=args.stat/100., POI=POI)
     if not (args.group and args.mode == 'output'):
-        dataframe = readFitInfoFromFile(args.inputFile, False, sort=args.sort, ascending=args.ascending, stat=args.stat/100.)
+        dataframe = readFitInfoFromFile(rtfile,args.inputFile, False, sort=args.sort, ascending=args.ascending, stat=args.stat/100., POI=POI)
     if args.mode == "interactive":
         app.layout = html.Div([
                 dcc.Input(
@@ -226,10 +227,18 @@ if __name__ == '__main__':
         app.run_server(debug=True, port=3389, host=args.interface)
     elif args.mode == 'output':
         df = dataframe if not args.group else groupsdataframe
-        fig = plotImpacts(df, title=args.title, pulls=not args.noPulls and not args.group, pullrange=[-5,5])
+        fig = plotImpacts(df, title=args.title, pulls=not args.noPulls and not args.group, pullrange=[-5,5], POI=POI)
         if ".html" in args.outputFile[-5:]:
-            fig.write_html(args.outputFile)
+            fig.write_html(args.outputFile.replace('.html',f'_{POI}.html'))
         else:
-            fig.write_image(args.outputFile)
+            fig.write_image(args.outputFile.replace('.html',f'_{POI}.html'))
     else:
         raise ValueError("Must select mode 'interactive' or 'output'")
+
+
+if __name__ == '__main__':
+    args = parseArgs()
+    rtfile = uproot.open(args.inputFile)
+    POInames = ['Wmass',*input_tools.getPOInames(rtfile)]
+    for POI in POInames:
+        producePlots(rtfile,args,POI)
