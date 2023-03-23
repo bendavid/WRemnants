@@ -345,7 +345,12 @@ class datagroups(object):
                 raise ValueError(f"In setSelectOp(): process {proc} not found")
             self.groups[proc]["selectOp"] = op
 
-    def defineSignalBinsUnfolding(self, fitvar, base_process, add_overflow=False):
+    def defineSignalBinsUnfolding(self, fitvar, base_process, add_overflow=False, inclusive=False):
+
+        if inclusive:
+            self.unconstrainedProcesses.append(proc_name)
+            return
+            
         # get gen bin names corresponding to fitvars
         genvar_dict = {
             "pt": "ptGen",

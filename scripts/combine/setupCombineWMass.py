@@ -38,6 +38,8 @@ def make_parser(parser=None):
     parser.add_argument("--constrainMass", action='store_true', help="Constrain mass parameter in the fit (e.g. for ptll fit)")
     parser.add_argument("-a", "--append", type=str, help="Append to output folder name")
     parser.add_argument("--unfold", action='store_true', help="Prepare datacard for unfolding")
+    parser.add_argument("--fitXsec", action='store_true', help="Fit signal inclusive cross section")
+    
     return parser
 
 def main(args):
@@ -86,13 +88,15 @@ def main(args):
     if not os.path.isdir(outfolder):
         os.makedirs(outfolder)
 
-    if args.unfold:
-        if not args.constrainMass:
-            logger.warning("Unfolding is specified but the mass is treated free floating, to constrain the mass add '--constrainMass'")
+    if args.unfold or args.fitXsec:
+        if args.unfold and args.fitXsec:
+            raise ValueError("Options --unfolding and --fitXsec are incompatible. Please choose one or the other")
+        if args.unfold and not args.constrainMass:
+            raise ValueError("Unfolding is specified but the mass is treated free floating, to constrain the mass add '--constrainMass'")
 
         base_proc = "Wmunu"  if wmass else "Zmumu" 
+        datagroups.defineSignalBinsUnfolding(args.fitvar, base_proc, inclusive=args.fitXsec)
 
-        datagroups.defineSignalBinsUnfolding(args.fitvar, base_proc)
 
     if args.noHist and args.noStatUncFakes:
         raise ValueError("Option --noHist would override --noStatUncFakes. Please select only one of them")
