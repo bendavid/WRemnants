@@ -2,6 +2,8 @@ import ROOT
 import narf
 import pathlib
 
+ROOT.gROOT.SetBatch(True)
+
 ROOT.gInterpreter.AddIncludePath(f"{pathlib.Path(__file__).parent}/include/")
 
 ROOT.gInterpreter.Declare('#include "muonCorr.h"')
