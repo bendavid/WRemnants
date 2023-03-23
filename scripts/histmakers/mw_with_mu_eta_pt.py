@@ -159,8 +159,8 @@ def build_graph(df, dataset):
 
     if unfold:
         # selecting the charged lepton at gen level
-        df = df.Define("ptGen", "abs(genlPdgId == 13) ? genl.pt() : genlanti.pt()")   
-        df = df.Define("etaGen", "abs(genlPdgId == 13) ? genl.eta() : genlanti.eta()")
+        df = df.Define("ptGen", "abs(genlPdgId) == 13 ? genl.pt() : genlanti.pt()")   
+        df = df.Define("etaGen", "abs(genlPdgId) == 13 ? genl.eta() : genlanti.eta()")
 
         # add histograms before any selection
         df_gen = df

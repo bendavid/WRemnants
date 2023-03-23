@@ -130,7 +130,8 @@ class CardTool(object):
         self.dataName = name
 
     def setDatagroups(self, datagroups, resetGroups=False):
-        self.datagroups = datagroups 
+        self.datagroups = datagroups
+        self.unconstrainedProcesses = datagroups.unconstrainedProcesses
         if self.nominalName:
             self.datagroups.setNominalName(self.nominalName)
         # if processes are not set yet, do it now to skip one step
