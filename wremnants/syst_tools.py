@@ -1,21 +1,21 @@
 import hist
 import numpy as np
-from utilities import boostHistHelpers as hh, common
+from utilities import boostHistHelpers as hh, common, logging
 from wremnants import theory_tools
 from wremnants.datasets.datagroups import datagroups2016
 import collections.abc
 
-logging = common.child_logger(__name__)
+logger = logging.child_logger(__name__)
 
 def syst_transform_map(base_hist, hist_name):
     pdfInfo = theory_tools.pdfMapExtended 
     pdfNames = [pdfInfo[k]["name"] for k in pdfInfo.keys()]
 
-    def pdfUnc(h, pdfName):
+    def pdfUnc(h, pdfName, axis_name="pdfVar"):
         key =  list(pdfInfo.keys())[list(pdfNames).index(pdfName)]
         unc = pdfInfo[key]["combine"]
         scale = pdfInfo[key]["scale"] if "scale" in pdfInfo[key] else 1.
-        return theory_tools.hessianPdfUnc(h, uncType=unc, scale=scale)
+        return theory_tools.hessianPdfUnc(h, uncType=unc, scale=scale, axis_name=axis_name)
 
     def uncHist(unc):
         return unc if base_hist == "nominal" else f"{base_hist}_{unc}"
@@ -23,6 +23,8 @@ def syst_transform_map(base_hist, hist_name):
     transforms = {}
     transforms.update({pdf+"Up" : {"action" : lambda h,p=pdf: pdfUnc(h, p)[0]} for pdf in pdfNames})
     transforms.update({pdf+"Down" : {"action" : lambda h,p=pdf: pdfUnc(h, p)[1]} for pdf in pdfNames})
+    transforms["scetlib_dyturboMSHT20Up"] = {"action" : lambda h: pdfUnc(h, "pdfMSHT20", "vars")[0], "procs" : ["ZmumuPostVFP"]}
+    transforms["scetlib_dyturboMSHT20Down"] = {"action" : lambda h: pdfUnc(h, "pdfMSHT20", "vars")[1], "procs" : ["ZmumuPostVFP"]}
     transforms.update({
         "massShift100MeVDown" : {"hist" : "massWeight", "action" : lambda h: h[{"tensor_axis_0" : 0}]},
         "massShift100MeVUp" : {"hist" : "massWeight", "action" : lambda h: h[{"tensor_axis_0" : 20}]},
@@ -182,7 +184,7 @@ def add_pdf_hists(results, df, dataset, axes, cols, pdfs, base_name="nominal"):
         try:
             pdfInfo = theory_tools.pdf_info_map(dataset, pdf)
         except ValueError as e:
-            logging.info(e)
+            logger.info(e)
             continue
 
         pdfName = pdfInfo["name"]
@@ -190,9 +192,11 @@ def add_pdf_hists(results, df, dataset, axes, cols, pdfs, base_name="nominal"):
         tensorASName = f"{pdfName}ASWeights_tensor"
 
         name = datagroups2016.histName(base_name, syst=pdfName)
-        names = [f"pdf{pdfName}{i}" for i in range(pdfInfo["entries"])] if pdfInfo["combine"] == "symHessian" else \
-                theory_tools.pdfNamesAsymHessian(pdfInfo["entries"], pdfName)
+        names = getattr(theory_tools, f"pdfNames{'Sym' if pdfInfo['combine'] == 'symHessian' else 'Asym'}Hessian")(pdfInfo["entries"], pdfName)
         pdf_ax = hist.axis.StrCategory(names, name="pdfVar")
+        if tensorName not in df.GetColumnNames():
+            logger.warning(f"PDF {pdf} was not found for sample {dataset}. Skipping uncertainty hist!")
+            continue
         pdfHist = df.HistoBoost(name, axes, [*cols, tensorName], tensor_axes=[pdf_ax])
 
         if pdfInfo["alphasRange"] == "001":
@@ -296,7 +300,7 @@ def add_muonscale_smeared_hist(results, df, netabins, mag, isW, axes, cols, base
 
 def scetlib_scale_unc_hist(h, obs, syst_ax="vars"):
     hnew = hist.Hist(*h.axes[:-1], hist.axis.StrCategory(["central"]+scetlib_scale_vars(),
-    					name=syst_ax), storage=h._storage_type())
+                        name=syst_ax), storage=h._storage_type())
     
     hnew[...,"central"] = h[...,"central"].view(flow=True)
     hnew[...,"resumFOScaleUp"] = h[...,"kappaFO2."].view(flow=True)

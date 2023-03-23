@@ -1,7 +1,6 @@
-from utilities import boostHistHelpers as hh
+from utilities import boostHistHelpers as hh,common,logging
 from wremnants import histselections as sel
 from wremnants.datasets import datasets2016
-import logging
 import lz4.frame
 import pickle
 import hdf5plugin
@@ -12,10 +11,9 @@ import ROOT
 import re
 import pandas as pd
 import math
-from utilities import common
 import os
 
-logger = common.child_logger(__name__)
+logger = logging.child_logger(__name__)
 
 class datagroups(object):
     def __init__(self, infile, combine=False):
@@ -34,12 +32,12 @@ class datagroups(object):
         else:
             raise ValueError("Unsupported file type")
 
-        if self.results:
-            self.wmass = os.path.basename(self.getMetaInfo()["command"].split()[0]).startswith("mw")
-            self.wlike = os.path.basename(self.getMetaInfo()["command"].split()[0]).startswith("mz_wlike")
+        self.wmass = os.path.basename(self.getScriptCommand().split()[0]).startswith("mw")
+        self.wlike = os.path.basename(self.getScriptCommand().split()[0]).startswith("mz_wlike")
 
         self.lumi = None
         # FIXME: self.datasets is currently a data member of the inherited class, we should define it here as well
+        # FIXME: if data is excluded the normalization will be lost
         if self.datasets and self.results:
             self.data = [x for x in self.datasets.values() if x.is_data]
             if self.data:
@@ -48,6 +46,11 @@ class datagroups(object):
         self.groupNamesPostFilter = [] # keep track of group names after any filter defined by the user
         
         if not self.lumi:
+            logger.warning("")
+            logger.warning("*"*30)
+            logger.warning("No data sample selected: setting integrated luminosity to 1/fb")
+            logger.warning("*"*30)
+            logger.warning("")
             self.lumi = 1
             
         self.nominalName = "nominal"
@@ -72,10 +75,16 @@ class datagroups(object):
         return self.lumi*1000*proc.xsec/self.results[proc.name]["weight_sum"]
 
     def getMetaInfo(self):
-        if self.rtfile:
-            return self.rtfile["meta_info"]
-        else:
+        if self.results:
             return self.results["meta_info"] if "meta_info" in self.results else self.results["meta_data"]
+        raise NotImplementedError("Currently can't access meta data as dict for ROOT file")
+
+    def getScriptCommand(self):
+        if self.rtfile:
+            return self.rtfile.Get("meta_info/command").GetTitle()
+        else:
+            meta_info = self.results["meta_info"] if "meta_info" in self.results else self.results["meta_data"]
+            return meta_info["command"]
 
     def updateGroupNamesPostFilter(self, excludeGroup=[]):
         self.groupNamesPostFilter = list(x for x in self.groups.keys() if len(self.groups[x]["members"]) and x not in excludeGroup)
@@ -87,10 +96,12 @@ class datagroups(object):
     ## procName are grouped into datagroups
     ## baseName takes values such as "nominal"
     def setHists(self, baseName, syst, procsToRead=None, label=None, nominalIfMissing=True, 
-                 applySelection=True, forceNonzero=True, preOpMap=None, preOpArgs=None, scaleToNewLumi=-1, excludeProcs=None):
+                 applySelection=True, forceNonzero=True, preOpMap=None, preOpArgs=None, scaleToNewLumi=-1, 
+                 excludeProcs=None, forceToNominal=[]):
         if not label:
             label = syst if syst else baseName
         logger.debug(f"In setHists(): procsToRead = {procsToRead}")
+
         if not procsToRead:
             if excludeProcs:
                 procsToRead = list(filter(lambda x: x not in excludeProcs, self.groups.keys()))
@@ -100,14 +111,19 @@ class datagroups(object):
         foundExact = False
         for procName in procsToRead:
             logger.debug(f"Reading group {procName}")
-            group = self.groups[procName]
+            group = self.groups[procName] if procName in self.groups else {}
             group[label] = None
 
             for member in group["members"]:
                 logger.debug(f"Looking at group member {member.name}")
                 scale = group["scale"] if "scale" in group else None
+                read_syst = syst
+                if member.name in forceToNominal:
+                    read_syst = ""
+                    logger.debug(f"Forcing group member {member.name} to read the nominal hist for syst {syst}")
+
                 try:
-                    h = self.readHist(baseName, member, syst, scaleOp=scale, forceNonzero=forceNonzero, scaleToNewLumi=scaleToNewLumi)
+                    h = self.readHist(baseName, member, read_syst, scaleOp=scale, forceNonzero=forceNonzero, scaleToNewLumi=scaleToNewLumi)
                     foundExact = True
                 except ValueError as e:
                     if nominalIfMissing:
@@ -116,6 +132,7 @@ class datagroups(object):
                     else:
                         logger.warning(str(e))
                         continue
+                logger.debug(f"Hist axes are {h.axes.name}")
 
                 if preOpMap and member.name in preOpMap:
                     logger.debug(f"Applying preOp to {member.name} after loading")
@@ -154,7 +171,7 @@ class datagroups(object):
                 procsToRead = list(self.groups.keys())
 
         for procName in procsToRead:
-            group = self.groups[procName]
+            group = self.groups[procName] if procName in self.groups else {}
             group[label] = None
             if type(channel) == str: channel = channel.split(",")
             narf_hist = None
@@ -182,7 +199,7 @@ class datagroups(object):
     def loadHistsForDatagroups(
         self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="",
         nominalIfMissing=True, applySelection=True, forceNonzero=True, pseudodata=False,
-        preOpMap={}, preOpArgs={}, scaleToNewLumi=-1
+        preOpMap={}, preOpArgs={}, scaleToNewLumi=-1, forceToNominal=[]
     ):
         logger.debug("Calling loadHistsForDatagroups()")
         logger.debug(f"the basename and syst is: {baseName}, {syst}")
@@ -192,7 +209,8 @@ class datagroups(object):
         else:
             self.setHists(baseName, syst, procsToRead, label, nominalIfMissing, applySelection,
                           forceNonzero, preOpMap, preOpArgs,
-                          scaleToNewLumi=scaleToNewLumi, excludeProcs=excluded_procs)
+                          scaleToNewLumi=scaleToNewLumi, 
+                          excludeProcs=excluded_procs, forceToNominal=forceToNominal)
 
     def addGroup(self, keyname, dictToAdd, canReplaceKey=False):
         if canReplaceKey or keyname not in self.groups.keys():
@@ -347,7 +365,7 @@ class datagroups2016(datagroups):
     def __init__(self, infile, combine=False, pseudodata_pdfset = None, applySelection=True,
                  excludeProcGroup=None, filterProcGroup=None
     ):
-        self.datasets = {x.name : x for x in datasets2016.getDatasets(filt=filterProcGroup, excludeGroup=excludeProcGroup)}
+        self.datasets = {x.name : x for x in datasets2016.getDatasets(filt=filterProcGroup, excl=excludeProcGroup)}
         logger.debug(f"Getting these datasets: {self.datasets.keys()}")
         super().__init__(infile, combine)
         if self.wmass and applySelection:

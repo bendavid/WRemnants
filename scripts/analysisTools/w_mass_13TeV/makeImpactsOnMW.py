@@ -62,14 +62,12 @@ def readNuisances(args, infile=None):
 
     if args.excludeNuisgroups:
         matchExclude = re.compile(args.excludeNuisgroups)
-    else:
-        matchExclude = re.compile(".*")
         
     print("Histograms loaded successfully ...")
     nuisGroup_nameVal = {}
     for iy in range(1,impMat.GetNbinsY()+1):
         label = impMat.GetYaxis().GetBinLabel(iy)
-        if matchExclude.match(label):
+        if args.excludeNuisgroups and matchExclude.match(label):
             continue
         if nuis[0] != "ALL":
             if label in nuis:

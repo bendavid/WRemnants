@@ -3,7 +3,7 @@ import lz4.frame
 import pickle
 from wremnants import plot_tools, theory_corrections, theory_tools
 from utilities import boostHistHelpers as hh
-from utilities import common, input_tools, output_tools
+from utilities import common, input_tools, output_tools, logging
 import pathlib
 import hist
 import argparse
@@ -19,12 +19,11 @@ parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file n
 parser.add_argument("--proc", type=str, required=True, choices=["z", "w", ], help="Process")
 parser.add_argument("--axes", nargs="*", type=str, default=None, help="Use only specified axes in hist")
 parser.add_argument("--debug", action='store_true', help="Print debug output")
-parser.add_argument("--no-color-logger", action="store_false", dest="color_logger", default=False, 
-                    help="Do not use logging with colors")
+parser.add_argument("--noColorLogger", action="store_true", default=False, help="Do not use logging with colors")
 
 args = parser.parse_args()
 
-logger = common.setup_logger("make_theory_corr", 4 if args.debug else 3, args.color_logger)
+logger = logging.setup_logger("make_theory_corr", 4 if args.debug else 3, args.noColorLogger)
 
 def read_corr(procName, generator, corr_files):
     charge = 0 if procName[0] == "Z" else (1 if "Wplus" in procName else -1)
@@ -43,6 +42,9 @@ def read_corr(procName, generator, corr_files):
                 raise ValueError("scetlib_dyturbo correction requires one DYTurbo file (fixed order contribution)")
 
             numh = input_tools.read_matched_scetlib_dyturbo_hist(resumf, nlo_nonsf, dyturbo_files[0], args.axes, charge=charge)
+            print(numh.sum())
+            print(resumf)
+            print("DYTURBO", dyturbo_files)
         else:
             nons = "auto"
             if not os.path.isfile(corr_file.replace(".", "_nons.")):
@@ -73,8 +75,10 @@ def read_corr(procName, generator, corr_files):
 if args.proc == "z":
     filesByProc = { "ZmumuPostVFP" : args.corr_files }
 elif args.proc == "w":
-    wpfiles = filter(lambda x: "wp" in x.lower(), args.corr_files)
-    wmfiles = filter(lambda x: "wm" in x.lower(), args.corr_files)
+    wpfiles = list(filter(lambda x: "wp" in x.lower(), args.corr_files))
+    wmfiles = list(filter(lambda x: "wm" in x.lower(), args.corr_files))
+    print("Wm", wmfiles)
+    print("Wp", wpfiles)
     if len(wpfiles) != len(wmfiles):
         raise ValueError(f"Expected equal number of files for W+ and W-, found {len(wpfiles)} (Wp) and {len(wmfiles)} (Wm)")
     filesByProc = { "WplusmunuPostVFP" : wpfiles,
@@ -103,6 +107,7 @@ if numh.ndim-1 < minnloh.ndim:
     ax_map = {
         "ptVgen" : "qT",
         "absYVgen" : "absY",
+        "absy" : "absY",
         "massVgen" : "Q",
         "chargeVgen" : "charge",
     }

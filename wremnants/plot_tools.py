@@ -4,13 +4,12 @@ import matplotlib.pyplot as plt
 from matplotlib import ticker
 from matplotlib import patches
 from matplotlib.ticker import StrMethodFormatter # for setting number of decimal places on tick labels
-from utilities import boostHistHelpers as hh,common,output_tools
+from utilities import boostHistHelpers as hh,common,output_tools,logging
 from wremnants import histselections as sel
 import math
 import numpy as np
 import re
 import os
-import logging
 import shutil
 import sys
 import datetime
@@ -18,7 +17,7 @@ import json
 
 hep.style.use(hep.style.ROOT)
 
-logger = common.child_logger(__name__)
+logger = logging.child_logger(__name__)
 
 def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None,
     grid_on_main_plot = False, grid_on_ratio_plot = False, plot_title = None, title_padding = 0,
@@ -170,8 +169,10 @@ def makeStackPlotWithRatio(
                 linewidth=2,
             )
 
+        print("Valid names are", histInfo.keys())
         for proc in unstacked:
             logger.debug(f"Plotting proc {proc}")
+            print("Proc", proc)
             unstack = action(histInfo[proc][histName][select])
             hep.histplot(
                 unstack,
@@ -220,7 +221,8 @@ def makeStackPlotWithRatio(
     return fig
 
 def makePlotWithRatioToRef(
-    hists, labels, colors, xlabel="", ylabel="Events/bin", rlabel="x/nominal",
+    hists, labels, colors, linestyles=[],
+    xlabel="", ylabel="Events/bin", rlabel="x/nominal",
     rrange=[0.9, 1.1], ylim=None, xlim=None, nlegcols=2, binwnorm=None, alpha=1.,
     baseline=True, data=False, autorrange=None, grid = False, extra_text=None, extra_text_loc=(0.8, 0.7),
     yerr=False, legtext_size=20, plot_title=None, x_ticks_ndp = None, bin_density = 300, yscale=None,
@@ -235,6 +237,8 @@ def makePlotWithRatioToRef(
         grid_on_ratio_plot = grid, plot_title = plot_title, title_padding=title_padding,
         bin_density = bin_density, cms_label = cms_label, logy=logy, logx=logx
     )
+
+    linestyles = linestyles+['solid']*(len(hists)-len(linestyles))
     
     count = len(hists)-data
     hep.histplot(
@@ -242,6 +246,7 @@ def makePlotWithRatioToRef(
         histtype="step",
         color=colors[:count],
         label=labels[:count],
+        linestyle=linestyles,
         stack=False,
         ax=ax1,
         yerr=yerr,
@@ -265,6 +270,7 @@ def makePlotWithRatioToRef(
             ratio_hists[(not baseline):count],
             histtype="step",
             color=colors[(not baseline):count],
+            linestyle=linestyles,
             yerr=False,
             stack=False,
             ax=ax2,
