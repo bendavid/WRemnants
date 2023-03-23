@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from wremnants import CardTool,theory_tools,syst_tools,combine_helpers
 from wremnants.datasets.datagroupsLowPU import datagroupsLowPU
-from utilities import common
+from utilities import common, logging
 import argparse
 import os
 import pathlib
@@ -28,7 +28,7 @@ def recoilSystNames(baseName, entries):
     return systNames
 
 def main(args):
-    logger = common.setup_logger(__file__, args.verbose, args.color_logger)
+    logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
     outfolder = f"CombineStudies/lowPU_{args.fitType}"
     if not os.path.isdir(outfolder):
@@ -132,8 +132,8 @@ def main(args):
 
     pdfAction = {x : lambda h: h[{"recoil_gen" : s[::hist.sum]}] for x in Zmumu_procs if "gen" not in x},
     combine_helpers.add_pdf_uncertainty(cardTool, constrainedProcs+unconstrainedProcs, False, action=pdfAction)
-    combine_helpers.add_scale_uncertainty(cardTool, args.qcdScale, constrainedProcs+unconstrainedProcs, 
-        to_fakes=False, use_hel_hist=True, scetlib=args.scetlibUnc)
+    combine_helpers.add_scale_uncertainty(cardTool, args.minnlo_scale_unc, constrainedProcs+unconstrainedProcs, 
+        to_fakes=False, use_hel_hist=True, resum=args.resumUnc)
     
     if not args.xsec:
 
