@@ -6,12 +6,13 @@ import pickle
 import hdf5plugin
 import h5py
 import narf
-#import uproot
+import hist
 import ROOT
 import re
 import pandas as pd
 import math
 import os
+import itertools
 
 logger = logging.child_logger(__name__)
 
@@ -44,7 +45,9 @@ class datagroups(object):
                 self.lumi = sum([self.results[x.name]["lumi"] for x in self.data if x.name in self.results])
         self.groups = {}
         self.groupNamesPostFilter = [] # keep track of group names after any filter defined by the user
-        
+
+        self.unconstrainedProcesses = [] # processes that are treated as free floating (usually signals)
+
         if not self.lumi:
             logger.warning("")
             logger.warning("*"*30)
@@ -341,6 +344,50 @@ class datagroups(object):
             if proc not in self.groups.keys():
                 raise ValueError(f"In setSelectOp(): process {proc} not found")
             self.groups[proc]["selectOp"] = op
+
+    def defineSignalBinsUnfolding(self, fitvar, base_process, add_overflow=False):
+        # get gen bin names corresponding to fitvars
+        genvar_dict = {
+            "pt": "ptGen",
+            "eta": "etaGen",
+        }
+
+        fitvars = fitvar.split("-")
+        genvars = []
+        gen_bins = []
+        for fitvar in fitvars:
+            if fitvar not in genvar_dict.keys():
+                raise RuntimeError(f"No corresponding gen level definition for {fitvar} found!")
+            genvar = genvar_dict[fitvar]
+            genvars.append(genvar)
+            gen_bin_edges = self.results[self.groups[base_process]["members"][0].name]["output"]["gen"].get().axes[genvar].edges
+
+            if add_overflow:
+                # to add separate overflow/underflow bins
+                gen_bins.append([hist.underflow, *[i for i in range(len(gen_bin_edges)-1)], hist.overflow]) 
+            else:
+                gen_bins.append(range(len(gen_bin_edges)-1))
+
+        for indices in itertools.product(*gen_bins):
+            
+            proc_genbin = dict(self.groups[base_process])
+            proc_genbin['selectOp'] = lambda x, indices=indices, genvars=genvars: x[{var : i for var, i in zip(genvars, indices)}]
+
+            proc_name = base_process
+            for idx, var in zip(indices, fitvars):
+                if idx == hist.underflow:
+                    proc_name += f"_{var}U"
+                elif idx == hist.overflow:
+                    proc_name += f"_{var}O"
+                else:
+                    proc_name += f"_{var}{idx}"
+
+            self.addGroup(proc_name, proc_genbin)
+            self.unconstrainedProcesses.append(proc_name)
+
+        # Remove inclusive signal
+        self.deleteGroup(base_process)
+
 
     @staticmethod
     def histName(baseName, procName="", syst=""):
