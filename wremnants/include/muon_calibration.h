@@ -794,24 +794,79 @@ public:
     }
 };
 
-
-template <typename T>
-class SmearingHelper : public CorrectionHelperBase<T> {
-
-using base_t = CorrectionHelperBase<T>;
+class SmearingHelper{
 
 public:
-    //inherit constructor
-    using base_t::base_t;
+    SmearingHelper(unsigned int nSlots, TH2D&& smearings) :
+        myRndGens(nSlots),
+        hsmear(std::make_shared<const TH2D>(std::move(smearings)))
+        {
+            init_random_generators();
+        }
 
-    float get_correction(unsigned int slot, float pt, float eta) override {
-        const double sigma = base_t::get_value(eta, pt); //this is sigma_p/p
+    void init_random_generators(){
+        int seed = 1; // not 0 because seed 0 has a special meaning
+        for (auto &&gen : myRndGens)
+        {
+            gen.SetSeed(seed++);
+        }
+    }
+
+    float get_random(unsigned int slot, float mean, float std){
+        return myRndGens[slot].Gaus(mean, std);
+    }
+
+
+    RVec<float> operator() (unsigned int slot, const RVec<float>& pts, const RVec<float>& etas) {
+        RVec<float> corrected_pt(pts.size(), 0.);
+        assert(etas.size() == pts.size());
+        for (size_t i = 0; i < pts.size(); i++) {
+            corrected_pt[i] = get_correction(slot, pts[i], etas[i]);
+        }
+        return corrected_pt;
+    }
+
+
+    float get_correction(unsigned int slot, float pt, float eta) {
+
+        const double xlow = hsmear->GetXaxis()->GetBinLowEdge(1);
+        const double ylow = hsmear->GetYaxis()->GetBinLowEdge(1);
+
+        const double xhigh = hsmear->GetXaxis()->GetBinUpEdge(hsmear->GetNbinsX());
+        const double yhigh = hsmear->GetYaxis()->GetBinUpEdge(hsmear->GetNbinsY());
+
+        double pt_cap = pt;
+        double eta_cap = eta;
+
+        // If eta is outside the range, set the interpolated value to the interpolated value of the closest x bin edge
+        if (eta <= xlow){
+          eta_cap = xlow + 0.00001;
+        } 
+        else if (eta >= xhigh)
+        {
+          eta_cap = xhigh - 0.00001;
+        }
+
+        // If pt is outside the range, set the interpolated value to the interpolated value of the closest y bin edge
+        if (pt <= ylow){
+          pt_cap = ylow + 0.00001;
+        }
+        else if (pt >= yhigh)
+        {
+          pt_cap = yhigh - 0.00001;
+        }
+
+        const double sigma = hsmear->Interpolate(eta_cap, pt_cap); // this is sigma_p/p
 
         if(sigma>0.)
-            return 1. / (1./pt + base_t::get_random(slot, 0., sigma/pt));
+            return 1. / (1./pt + get_random(slot, 0., sigma/pt));
         else 
             return pt;
     }
+
+private:
+    std::vector<TRandom3> myRndGens; 
+    std::shared_ptr<const TH2D> hsmear;
 };
 
 }
