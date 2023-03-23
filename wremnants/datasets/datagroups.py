@@ -221,6 +221,9 @@ class datagroups(object):
                 self.groupNamesPostFilter.append(keyname)
             
     def deleteGroup(self, procs):
+        if isinstance(procs, str):
+            procs = [procs,]
+
         for p in procs:
             if p in self.groups.keys():
                 del self.groups[p]

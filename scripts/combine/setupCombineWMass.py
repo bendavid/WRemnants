@@ -10,6 +10,7 @@ import pathlib
 import hist
 import copy
 import math
+import itertools
 
 scriptdir = f"{pathlib.Path(__file__).parent}"
 data_dir = f"{pathlib.Path(__file__).parent}/../../wremnants/data/"
@@ -74,26 +75,6 @@ def main(args):
     else:
         name = "ZMassDilepton"
 
-    if args.unfold:
-        if not args.constrainMass:
-            logger.warning("Unfolding is specified but the mass is treated free floating, to constrain the mass add '--constrainMass'")
-
-        base_proc = "Wmunu"  if wmass else "Zmumu" 
-        unconstrainedProcs = []
-
-        # get gen bin edges from nominal histogram
-        if fitvar == "pt":
-            genVar = "ptGen"
-
-        gen_bin_edges = datagroups.results[datagroups.groups[base_proc]["members"][0].name]["output"]["gen"].get().axes[genVar].edges
-
-        for i in range(1, len(gen_bin_edges)): # add gen bin processes to the dict
-            proc_name = f"{base_proc}_genBin{i}"
-            proc_genbin = dict(datagroups.groups[base_proc])
-            proc_genbin['selectOp'] = lambda x, i=i: x[{genVar : i}]
-            datagroups.addGroup(proc_name, proc_genbin)
-            unconstrainedProcs.append(proc_name)
-
     tag = name+"_"+args.fitvar.replace("-","_")
     if args.doStatOnly:
         tag += "_statOnly"
@@ -103,6 +84,43 @@ def main(args):
     outfolder = f"{args.outfolder}/{tag}/"
     if not os.path.isdir(outfolder):
         os.makedirs(outfolder)
+
+    unconstrainedProcs = []
+
+    if args.unfold:
+        if not args.constrainMass:
+            logger.warning("Unfolding is specified but the mass is treated free floating, to constrain the mass add '--constrainMass'")
+
+        base_proc = "Wmunu"  if wmass else "Zmumu" 
+
+        # get gen bin names corresponding to fitvars
+        genVar_dict = {
+            "pt": "ptGen",
+            "eta": "etaGen",
+        }
+
+        gen_bins = []
+        fitvars = args.fitvar.split("-")
+        genvars = [genVar_dict[f] for f in fitvars]
+        for fitvar in fitvars:
+            genVar = genVar_dict[fitvar]
+            gen_bin_edges = datagroups.results[datagroups.groups[base_proc]["members"][0].name]["output"]["gen"].get().axes[genVar].edges
+            gen_bins.append(range(len(gen_bin_edges)-1))
+
+        for indices in itertools.product(*gen_bins):
+            
+            proc_genbin = dict(datagroups.groups[base_proc])
+            proc_genbin['selectOp'] = lambda x, indices=indices, genvars=genvars: x[{var : i for var, i in zip(genvars, indices)}]
+
+            proc_name = base_proc
+            for idx, var in zip(indices, fitvars):
+                proc_name += f"_{var}{idx}"
+
+            datagroups.addGroup(proc_name, proc_genbin)
+            unconstrainedProcs.append(proc_name)
+
+        # Remove inclusive signal
+        datagroups.deleteGroup(base_proc)
 
     if args.noHist and args.noStatUncFakes:
         raise ValueError("Option --noHist would override --noStatUncFakes. Please select only one of them")
@@ -138,11 +156,12 @@ def main(args):
             cardTool.setPseudodataDatagroups(datagroups2016(args.pseudoDataFile,
                                                 excludeProcGroup=excludeGroup,
                                                 filterProcGroup=filterGroup))
-
     if args.lumiScale:
         cardTool.setLumiScale(args.lumiScale)
 
-    cardTool.setUnconstrainedProcs(unconstrainedProcs)
+    if unconstrainedProcs:
+        cardTool.setUnconstrainedProcs(unconstrainedProcs)
+
 
     logger.info(f"cardTool.allMCProcesses(): {cardTool.allMCProcesses()}")
         
