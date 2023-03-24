@@ -9,14 +9,14 @@ from wremnants.datasets.datasetDict_v9 import dataDictV9
 from wremnants.datasets.datasetDict_v8 import dataDictV8
 from wremnants.datasets.datasetDict_gen import genDataDict
 
-from wremnants.datasets.dataset_tools import filterProcs, excludeProcs, makeFilelist
+from wremnants.datasets.dataset_tools import makeFilelist
 
 logger = logging.child_logger(__name__)
 
 lumicsv = f"{pathlib.Path(__file__).parent.parent}/data/bylsoutput.csv"
 lumijson = f"{pathlib.Path(__file__).parent.parent}/data/Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.txt"
 
-def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, nanoVersion="v9", 
+def getDatasets(maxFiles=-1, mode=None, base_path=None, nanoVersion="v9", 
         data_tag="TrackFitV722_NanoProdv2", mc_tag="TrackFitV718_NanoProdv1"):
     if not base_path:
         hostname = socket.gethostname()
@@ -68,18 +68,13 @@ def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, na
                 is_data=True,
                 lumi_csv=lumicsv,
                 lumi_json=lumijson,
-                group=info["group"] if "group" in info else None,
             ))
         else:
             narf_info.update(dict(
                 xsec=info["xsec"],
-                group=info["group"] if "group" in info else None,
                 )
             )
         narf_datasets.append(narf.Dataset(**narf_info))
-
-    narf_datasets = filterProcs(filt, narf_datasets)
-    narf_datasets = excludeProcs(excl, narf_datasets)
     
     for sample in narf_datasets:
         if not sample.filepaths:

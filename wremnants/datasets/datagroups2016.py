@@ -6,14 +6,15 @@ import narf
 import pandas as pd
 import math
 
+import pdb
 
 logger = logging.child_logger(__name__)
 
 class Datagroups2016(Datagroups):
     def __init__(self, infile, combine=False, pseudodata_pdfset = None, applySelection=True,
-                 excludeProcGroup=None, filterProcGroup=None
+                 excludeGroups=None, filterGroups=None
     ):
-        super().__init__(infile, combine, datasets2016.getDatasets(filt=filterProcGroup, excl=excludeProcGroup))
+        super().__init__(infile, combine, datasets2016.getDatasets())
 
         if self.wmass and applySelection:
             sigOp = sel.signalHistWmass
@@ -68,49 +69,48 @@ class Datagroups2016(Datagroups):
                     selectOp = sigOp,
                 ),
                 "Top" : dict(
-                    members = list(filter(lambda y: y.group == "Top", self.datasets.values())),
+                    members = self.getSafeListFromDataset(["TTLeptonicPostVFP", "TTSemileptonicPostVFP", 
+                        "SingleTschanLepDecaysPostVFP", "SingleTtWAntitopPostVFP", "SingleTtchanAntitopPostVFP", "SingleTtchanTopPostVFP"
+                        ]),
                     label = "Top",
                     color = "green",
                     selectOp = sigOp,
                 ), 
                 "Diboson" : dict(
-                    members = list(filter(lambda y: y.group == "Diboson", self.datasets.values())),
+                    members = self.getSafeListFromDataset(["WWPostVFP", "WZPostVFP", "ZZ2l2nuPostVFP"]),
                     label = "Diboson",
                     color = "pink",
                     selectOp = sigOp,
                 ), 
-                "Fake" : dict(
-                    members = list(filter(lambda y: y.group != "QCD", self.datasets.values())),
-                    scale = lambda x: 1. if x.is_data else -1,
-                    label = "Nonprompt",
-                    color = "grey",
-                    selectOp = fakeOp,
-                ),
                 "QCD" : dict(
-                    members = list(filter(lambda y: y.group == "QCD", self.datasets.values())),
+                    members = self.getSafeListFromDataset(["QCDmuEnrichPt15PostVFP"]),
                     label = "QCD MC",
                     color = "grey",
                     selectOp = sigOp,
                 ), 
-           
             })
         else:
             self.groups["Other"] = dict(
-                members = [x for x in self.datasets.values() if not x.is_data and x.name not in ["ZmumuPostVFP", "ZtautauPostVFP"] and x.group != "QCD"],
+                members = [x for x in self.datasets.values() if not x.is_data and x.name not in ["ZmumuPostVFP", "ZtautauPostVFP"] and x.name != "QCD"],
                 label = "Other",
                 color = "grey",
             )
-            
-        # keep track of groups which have at least one process member after the filters
-        # check also that the key is not in excludeProcGroup (e.g. Fake must be excluded here,
-        # since it is created after filtering the input datasetDict)
-        # if excludeProcGroup is None:
-        #     excludeProcGroup = []
-
-        # self.updateGroupNamesPostFilter(excludeGroup=excludeProcGroup)
-        # #self.groupNamesPostFilter = list(x for x in self.groups.keys() if len(self.groups[x]["members"]) and x not in excludeProcGroup)
-        # logger.debug(f"Filtered groups: {self.groupNamesPostFilter}")
         
+        self.filterGroups(filterGroups)
+        self.excludeGroups(excludeGroups)
+
+        if self.wmass:
+            # add all processes to the fake contributions
+            self.groups["Fake"] = dict(
+                members = [member for sublist in [self.groups[x]["members"] for x in self.groups if x != "QCD"] for member in sublist],
+                scale = lambda x: 1. if x.is_data else -1,
+                label = "Nonprompt",
+                color = "grey",
+                selectOp = fakeOp,
+            )
+
+        pdb.set_trace()
+
     def make_yields_df(self, histName, procs, action):
         def sum_and_unc(h):
             return (h.sum().value, math.sqrt(h.sum().variance))

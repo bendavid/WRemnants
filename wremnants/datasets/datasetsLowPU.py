@@ -3,7 +3,7 @@ import os
 import pathlib
 import socket
 import glob
-from wremnants.datasets.dataset_tools import filterProcs, excludeProcs, makeFilelist
+from wremnants.datasets.dataset_tools import makeFilelist
 from utilities import logging
 
 logger = logging.child_logger(__name__)
@@ -13,7 +13,7 @@ lumicsv_mu = f"{pathlib.Path(__file__).parent.parent}/data/lowPU/bylsoutput_HLT_
 lumicsv_el = f"{pathlib.Path(__file__).parent.parent}/data/lowPU/bylsoutput_HLT_HIEle20_Full.csv"
 
 # https://twiki.cern.ch/twiki/bin/viewauth/CMS/StandardModelCrossSectionsat13TeV
-def getDatasets(maxFiles=-1, filt=None, excl=None, flavor="",base_path=None):
+def getDatasets(maxFiles=-1, flavor="",base_path=None):
 
     if not base_path:
         hostname = socket.gethostname()
@@ -150,9 +150,6 @@ def getDatasets(maxFiles=-1, filt=None, excl=None, flavor="",base_path=None):
                 lumi_csv = lumicsv_el
             ),
         )
-        
-    allProcs = filterProcs(filt, allProcs)
-    allProcs = excludeProcs(excl, allProcs)
 
     for sample in allProcs:
         if not sample.filepaths:

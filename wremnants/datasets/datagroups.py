@@ -31,7 +31,7 @@ class Datagroups(object):
 
         self.lumi = 1
 
-        if self.datasets:
+        if datasets:
             self.datasets = {x.name : x for x in datasets}
             logger.debug(f"Getting these datasets: {self.datasets.keys()}")
 
@@ -39,8 +39,6 @@ class Datagroups(object):
                 self.data = [x for x in self.datasets.values() if x.is_data]
                 if self.data:
                     self.lumi = sum([self.results[x.name]["lumi"] for x in self.data if x.name in self.results])
-
-        # self.groupNamesPostFilter = [] # keep track of group names after any filter defined by the user
 
         self.groups = {}
         self.nominalName = "nominal"
@@ -51,6 +49,82 @@ class Datagroups(object):
             self.h5file.close()
         if self.rtfile:
             self.rtfile.Close()
+
+    def addGroup(self, group_name, dictToAdd, canReplaceKey=False):
+        if canReplaceKey or group_name not in self.groups.keys():
+            if group_name in self.groups.keys():
+                logger.warning(f"Replacing {group_name} in groups")
+            self.groups[group_name] = dictToAdd
+
+    def addGroupMember(self, group_name, member_name):
+        # adds a process to the existing members of a given group
+        if group_name not in self.groups:
+            logger.warning(f"The group {group_name} is not defined in the datagroups object! Do nothing here.")
+            return
+
+        if self.datasets and member_name not in [d.name for d in self.datasets]:
+            logger.warning(f"The member {member_name} can not be found in the current dataset, still add it to the list of members of the group and trust you.")
+
+        self.groups[group_name]["members"] = [*self.groups[group_name]["members"], member_name]
+
+    def deleteGroupMember(self, group_name, member_name):
+        # deletes a process from the list of members of a given group
+        if group_name not in self.groups:
+            logger.warning(f"The group {group_name} is not defined in the datagroups object! Do nothing here.")
+            return
+
+        if member_name not in self.groups[group_name]["members"]:
+            logger.warning(f"The member {member_name} can not be found in the group {group_name}! Do nothing here.")
+            return
+
+        self.groups[group_name]["members"] = [m for m in self.groups[group_name]["members"] if m != member_name]
+
+    def selectGroups(self, selections):
+        new_groupnames = []
+        for selection in selections:
+            new_groupnames += list(filter(lambda x, s=selection: x == s, self.groups.keys()))
+
+        # remove duplicates selected by multiple filters
+        return list(set(new_groupnames))
+
+    def filterGroups(self, filters):
+        if filters:
+            if isinstance(filters, str):
+                filters = [filters]
+
+            if isinstance(filters, list):
+                new_groupnames = self.selectGroups(filters)
+            else:
+                new_groupnames = list(filter(filters, self.groups.keys()))
+
+            diff = list(set(new_groupnames) - set(self.groups.keys()))
+            if diff:
+                logger.debug(f"Filtered out following groups: {diff}")
+
+            self.groups = {key: self.groups[key] for key in new_groupnames}
+
+        if len(self.groups) == 0:
+            logger.warning("Filtered groups but didn't find any match. Continue without any group.")
+
+    def excludeGroups(self, excludes):
+        if excludes:
+            if isinstance(excludes, str):
+                excludes = [excludes]
+
+            if isinstance(excludes, list):
+                # remove selected datasets
+                new_groupnames = list(filter(lambda x: x not in self.selectGroups(excludes), self.groups))
+            else:
+                new_groupnames = list(filter(excludes, self.groups.keys()))
+
+            diff = list(set(new_groupnames) - set(self.groups.keys()))
+            if diff:
+                logger.debug(f"Filtered out following groups: {diff}")
+
+            self.groups = {key: self.groups[key] for key in new_groupnames}
+        
+        if len(self.groups) == 0:
+            logger.warning("Excluded all groups. Continue without any group.")
 
     def getSafeListFromDataset(self, procs):
         # return list of valid samples which belongs to the dataset or where not excluded elsewhere
@@ -82,10 +156,6 @@ class Datagroups(object):
         else:
             meta_info = self.results["meta_info"] if "meta_info" in self.results else self.results["meta_data"]
             return meta_info["command"]
-
-    # def updateGroupNamesPostFilter(self, excludeGroup=[]):
-    #     self.groupNamesPostFilter = list(x for x in self.groups.keys() if len(self.groups[x]["members"]) and x not in excludeGroup)
-    #     logger.debug(f"Updating group names, new list is {self.groupNamesPostFilter}")
         
     # for reading pickle files
     # as a reminder, the ND hists with tensor axes in the pickle files are organized as
@@ -145,8 +215,8 @@ class Datagroups(object):
             raise ValueError(f"Did not find systematic {syst} for any processes!")
 
     #TODO: Better organize to avoid duplicated code
-    def setHistsCombine(self, baseName, syst, channel, procsToRead=None, excluded_procs=[], label=None):
-        if type(excluded_procs) == str: excluded_procs = excluded_procs.split(",")
+    def setHistsCombine(self, baseName, syst, channel, procsToRead=None, excludeProcs=[], label=None):
+        if type(excludeProcs) == str: excludeProcs = excludeProcs.split(",")
         #TODO Set axis names properly
         if baseName == "x":
             axisNames=["eta", "pt"]
@@ -200,38 +270,8 @@ class Datagroups(object):
                           forceNonzero, preOpMap, preOpArgs,
                           scaleToNewLumi=scaleToNewLumi, excludeProcs=excluded_procs)
 
-    def addGroup(self, keyname, dictToAdd, canReplaceKey=False):
-        if canReplaceKey or keyname not in self.groups.keys():
-            if keyname in self.groups.keys():
-                logger.warning(f"Replacing {keyname} in groups")
-            self.groups[keyname] = dictToAdd
-            # if keyname not in self.groupNamesPostFilter:
-            #     self.groupNamesPostFilter.append(keyname)
-            
-    def deleteGroup(self, procs):
-        for p in procs:
-            if p in self.groups.keys():
-                del self.groups[p]
-            # if p in self.groupNamesPostFilter:
-            #     self.groupNamesPostFilter.remove(p)
-            
-    def getDatagroups(self, excluded_procs=[], afterFilter=True):
-        # # usually excluded_procs is not needed if afterFilter=True, unless one has to filter further
-        # if type(excluded_procs) == str:
-        #     excluded_procs = list(excluded_procs)
-        # filtDef = lambda x: x[0] not in excluded_procs
-        # if afterFilter:
-        #     filtDef = lambda x: x[0] in self.groupNamesPostFilter
-        #     if len(excluded_procs):
-        #         filtDef = lambda x: x[0] in self.groupNamesPostFilter and x[0] not in excluded_procs
-        # FIXME: This breaks the plotting
-        # return dict(filter(filtDef, self.groups.items()))
-        return self.groups
-
-    # INFO: this method returns the list from the full set of defined groups, unless one filters further.
-    # Instead, argument 'afterFilter' is used to return the names after the filter passed to the constructor
-    def getNames(self, matches=[], exclude=False, afterFilter=True):
-        # listOfNames = list(x for x in self.groupNamesPostFilter) if afterFilter else list(x for x in self.groups.keys())
+    def getNames(self, matches=[], exclude=False):
+        # This method returns the names from the defined groups, unless one selects further.
         listOfNames = list(x for x in self.groups.keys())
         if not matches:
             return listOfNames
@@ -247,14 +287,11 @@ class Datagroups(object):
             else:
                 return list(filter(lambda x: any([re.search(expr, x) for expr in matches]), listOfNames))
               
-    def getProcNames(self, to_expand=[], exclude_group=[], afterFilter=True):
+    def getProcNames(self, to_expand=[], exclude_group=[]):
         procs = []
         if not to_expand:
-            # to_expand = self.groupNamesPostFilter if afterFilter else self.groups.keys()
             to_expand = self.groups.keys()
         for group_name in to_expand:
-            # if afterFilter and group_name not in self.groupNamesPostFilter:
-            #     continue
             if group_name not in exclude_group:
                 for member in self.groups[group_name]["members"]:
                     procs.append(member.name)
@@ -279,9 +316,6 @@ class Datagroups(object):
 
     def resultsDict(self):
         return self.results
-
-    def processes(self):
-        return self.groups.keys()
 
     def addSummedProc(self, refname, name, label, color="red", exclude=["Data"], relabel=None, 
             procsToRead=None, reload=False, rename=None, action=None, preOpMap={}, preOpArgs={}):
@@ -318,14 +352,12 @@ class Datagroups(object):
         )
         self.groups[name][refname] = action(self.groups[refproc][refname])
 
-    def setSelectOp(self, op, processes=None, exclude=False): 
+    def setSelectOp(self, op, processes=None): 
         if processes == None:
-            procs = self.getDatagroups()
+            procs = self.groups
         else:
-            if exclude:
-                procs = self.getDatagroups(excluded_procs=processes)
-            else:
-                procs = [processes] if isinstance(processes, str) else [p for p in processes]
+            procs = [processes] if isinstance(processes, str) else processes
+
         for proc in procs:
             if proc not in self.groups.keys():
                 raise ValueError(f"In setSelectOp(): process {proc} not found")
