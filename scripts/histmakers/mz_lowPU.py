@@ -15,7 +15,7 @@ import hist
 import ROOT
 import scripts.lowPU.config as lowPUcfg
 
-corr_helpers = theory_corrections.load_corr_helpers(common.zprocs_lowpu, args.theory_corr)
+corr_helpers = theory_corrections.load_corr_helpers(common.zprocs_lowpu, args.theoryCorr)
 
 ###################################
 flavor = args.flavor # mumu, ee
@@ -101,10 +101,10 @@ def build_graph(df, dataset):
         df_xnorm = df
         weight_expr = "weight"
         df_xnorm = theory_tools.define_weights_and_corrs(df_xnorm, weight_expr, dataset.name, corr_helpers, args)
+        df_xnorm = theory_tools.define_pdf_columns(df_xnorm, dataset.name, args.pdfs, args.altPdfOnlyCentral)
         df_xnorm = df_xnorm.Define("xnorm", "0.5")
         results.append(df_xnorm.HistoBoost("xnorm", axes_xnorm, [*cols_xnorm, "nominal_weight"]))
 
-        df_xnorm = theory_tools.define_pdf_columns(df_xnorm, dataset.name, args.pdfs, args.altPdfOnlyCentral)
         df_xnorm = theory_tools.define_scale_tensor(df_xnorm)        
         syst_tools.add_pdf_hists(results, df_xnorm, dataset.name, axes_xnorm, cols_xnorm, args.pdfs, "xnorm")
         syst_tools.add_qcdScale_hist(results, df_xnorm, [*axes_xnorm, axis_ptVgen, axis_chargeVgen], [*cols_xnorm, "ptVgen", "chargeVgen"], "xnorm")
@@ -226,6 +226,7 @@ def build_graph(df, dataset):
     if not dataset.is_data:
         weight_expr = "weight*SFMC"
         df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
+        df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")
 
@@ -298,8 +299,6 @@ def build_graph(df, dataset):
     
     if dataset.name in common.zprocs_lowpu:
     
-        # pdfs
-        df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
         if dataset.name in sigProcs:
             syst_tools.add_pdf_hists(results, df, dataset.name, gen_reco_mll_axes, gen_reco_mll_cols, args.pdfs, "reco_mll")
         else:
@@ -314,11 +313,11 @@ def build_graph(df, dataset):
     
     # TODO: Should this also be added for the mT hist?
 
-    apply_theory_corr = args.theory_corr and dataset.name in corr_helpers
+    apply_theory_corr = args.theoryCorr and dataset.name in corr_helpers
     print("Apply corr for proc", dataset.name, apply_theory_corr)
     if apply_theory_corr:
         results.extend(theory_tools.make_theory_corr_hists(df, "reco_mll", axes=gen_reco_mll_axes, cols=gen_reco_mll_cols, 
-            helpers=corr_helpers[dataset.name], generators=args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
+            helpers=corr_helpers[dataset.name], generators=args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly)
         )
 
     if dataset.name in sigProcs:

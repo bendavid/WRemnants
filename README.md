@@ -20,7 +20,15 @@ Get updates from the central repository (and main branch)
 git pull --recurse-submodules upstream main
 git push origin main
 ```
-    
+
+### Contribute to the code
+
+**Guidelines**
+ * Use camel case practice for command line arguments and avoid the "dest" keyword.
+ * Use snake case practice for function names.
+ * Class names should start with capital letters.
+ * When making a new PR, it should target only one subject at a time. This makes it more easy to validate and the integration faster. PR on top of other PR are ok when it is noted in the description, e.g. this PR is on top of PR XYZ.
+
 ### Run the code
 Source the setup script.
 It will create some environment variables to ease access to some folders:

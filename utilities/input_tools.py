@@ -1,14 +1,13 @@
 import lz4.frame
 import pickle
-import numpy
 import hist
-from utilities import boostHistHelpers as hh
+from utilities import boostHistHelpers as hh,logging
 import numpy as np
-import logging
 import os
-import hdf5plugin
 import h5py
-import narf
+from narf import ioutils
+
+logger = logging.child_logger(__name__)
 
 def read_and_scale_pkllz4(fname, proc, histname, calculate_lumi=False, scale=1):
     with lz4.frame.open(fname) as f:
@@ -16,15 +15,22 @@ def read_and_scale_pkllz4(fname, proc, histname, calculate_lumi=False, scale=1):
         
     return load_and_scale(results, proc, histname, calculate_lumi, scale)
 
+def read_hist_names(fname, proc):
+    with h5py.File(fname, "r") as h5file:
+        results = ioutils.pickle_load_h5py(h5file["results"])
+        if proc not in results:
+            raise ValueError(f"Invalid process {proc}! No output found in file {fname}")
+        return results[proc]["output"].keys()
+
 def read_and_scale(fname, proc, histname, calculate_lumi=False, scale=1):
-    h5file = h5py.File(fname, "r")
-    results = narf.ioutils.pickle_load_h5py(h5file["results"])
-        
-    return load_and_scale(results, proc, histname, calculate_lumi, scale)
+    with h5py.File(fname, "r") as h5file:
+        results = ioutils.pickle_load_h5py(h5file["results"])
+            
+        return load_and_scale(results, proc, histname, calculate_lumi, scale)
 
 def load_and_scale(res_dict, proc, histname, calculate_lumi=False, scale=1.):
     h = res_dict[proc]["output"][histname]
-    if isinstance(h, narf.ioutils.H5PickleProxy):
+    if isinstance(h, ioutils.H5PickleProxy):
         h = h.get()
     if not res_dict[proc]["dataset"]["is_data"]:
         scale = res_dict[proc]["dataset"]["xsec"]/res_dict[proc]["weight_sum"]*scale
@@ -32,14 +38,14 @@ def load_and_scale(res_dict, proc, histname, calculate_lumi=False, scale=1.):
             data_keys = [p for p in res_dict.keys() if "dataset" in res_dict[p] and res_dict[p]["dataset"]["is_data"]]
             lumi = sum([res_dict[p]["lumi"] for p in data_keys])*1000
             if not lumi:
-                logging.warning("Did not find a data hist! Skipping calculate_lumi option")
+                logger.warning("Did not find a data hist! Skipping calculate_lumi option")
                 lumi = 1
             scale *= lumi
     return h*scale
 
 def read_all_and_scale(fname, procs, histnames, lumi=False):
     h5file = h5py.File(fname, "r")
-    results = narf.ioutils.pickle_load_h5py(h5file["results"])
+    results = ioutils.pickle_load_h5py(h5file["results"])
 
     hists = []
     for histname in histnames:
@@ -92,12 +98,13 @@ def read_scetlib_hist(path, nonsing="none", flip_y_sign=False, charge=None):
             nonsing = path.replace(*((".", "_nons.") if "sing" not in path else ("sing", "nons")))
         nonsingh = read_scetlib_hist(nonsing, nonsing="none", flip_y_sign=flip_y_sign, charge=charge)
         # The overflow in the categorical axis breaks the broadcast
+        # FIXME: Only set central for variations that aren't present
         if "vars" in nonsingh.axes.name and nonsingh.axes["vars"].size == 1:
-            nonsingh = nonsingh[{"vars" : "central"}]
+            nonsingh = nonsingh[{"vars" : 0}]
         scetlibh = hh.addHists(scetlibh, nonsingh)
-        logging.warning("Adding NLO nonsingular contribution!")
+        logger.warning("Adding NLO nonsingular contribution!")
     elif nonsing != "none":
-        logging.warning("Will not include nonsingular contribution!")
+        logger.warning("Will not include nonsingular contribution!")
     
     if flip_y_sign:
         mid = y_axis.index(0)
@@ -105,6 +112,18 @@ def read_scetlib_hist(path, nonsing="none", flip_y_sign=False, charge=None):
         scetlibh[{"Y" : s[mid:]}] = scetlibh[{"Y" : s[mid:]}].view()*-1
 
     return scetlibh 
+
+def read_dyturbo_pdf_hist(base_name, pdf_members, axes, charge=None):
+    pdf_ax = hist.axis.StrCategory([f"pdf{i}" for i in range(pdf_members)], name="vars")
+    pdf_hist = None
+    
+    for i in range(pdf_members):
+        h = read_dyturbo_hist([base_name.format(i=i)], axes=axes, charge=charge)
+        if not pdf_hist:
+            pdf_hist = hist.Hist(*h.axes, pdf_ax, storage=h._storage_type())
+        pdf_hist[...,i] = h.view(flow=True)
+        
+    return pdf_hist
 
 def read_dyturbo_hist(filenames, path="", axes=("y", "pt"), charge=None):
     isfile = list(filter(lambda x: os.path.isfile(x), 
@@ -235,15 +254,35 @@ def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo
     hfo_sing = read_scetlib_hist(scetlib_fo_sing, charge=charge)
     if axes:
         newaxes = [*axes, "vars"]
-        if charge:
+        if charge is not None:
             newaxes.insert(-1, "charge")
         hfo_sing = hfo_sing.project(*newaxes)
         hsing = hsing.project(*newaxes)
-    hfo = read_dyturbo_hist([dyturbo_fo], axes=axes if axes else sing.axes.name[:-1], charge=charge)
+    if all("pdf" in x for x in hsing.axes["vars"]):
+        logger.info("Reading PDF variations for DYTurbo")
+        pdf_members = hsing.axes["vars"].size
+        hfo = read_dyturbo_pdf_hist(dyturbo_fo, pdf_members=pdf_members, axes=axes if axes else hsing.axes.name[:-1], charge=charge)
+    else:
+        hfo = read_dyturbo_hist([dyturbo_fo], axes=axes if axes else hsing.axes.name[:-1], charge=charge)
     for ax in ["Y", "Q"]:
         if ax in set(hfo.axes.name).intersection(set(hfo_sing.axes.name)).intersection(set(hsing.axes.name)):
             hfo, hfo_sing, hsing = hh.rebinHistsToCommon([hfo, hfo_sing, hsing], ax)
+    if hfo.axes["vars"].size != hfo_sing.axes["vars"].size:
+        if hfo.axes["vars"].size == 1:
+            hfo = hfo[{"vars" : 0}]
     hnonsing = hh.addHists(-1*hfo_sing, hfo)
     if fix_nons_bin0:
-        hnonsing[...,0,:] = np.zeros((*hnonsing[{"qT" : 0}].shape, 2))
-    return hh.addHists(hsing, hnonsing[{"vars" : "central"}])
+        # The 2 is for the WeightedSum
+        res = np.zeros((*hnonsing[{"qT" : 0}].shape, 2))
+        if "charge" in hnonsing.axes.name:
+            hnonsing[...,0,:,:] = res
+        else:
+            hnonsing[...,0,:] = res
+    # TODO: Validate
+    if hnonsing.axes["vars"].size != hsing.axes["vars"].size:
+        htmp_nonsing = hsing.copy()
+        for var in htmp_nonsing.axes["vars"]:
+            logger.warning(f"Did not find variation {var} for nonsingular! Assuming nominal")
+            htmp_nonsing = hnonsing[{"vars" : var if var in hnonsing.axes["vars"] else 0}]
+        hnonsing = htmp_nonsing
+    return hh.addHists(hsing, hnonsing)
