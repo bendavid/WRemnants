@@ -16,7 +16,7 @@ import narf
 import numpy as np
 
 from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_Z
-from wremnants.datasets.datagroups import datagroups2016
+from wremnants.datasets.datagroups2016 import Datagroups2016
 
 
 
@@ -242,7 +242,7 @@ if __name__ == "__main__":
         
     else:
 
-        datagroups = datagroups2016("mz_wlike_with_mu_eta_pt_%s.pkl.lz4" % met, wlike=True)
+        datagroups = Datagroups2016("mz_wlike_with_mu_eta_pt_%s.pkl.lz4" % met, wlike=True)
         lumiLabel = "16.8 fb^{#minus1} (13 TeV)"
 
         procs = ["Zmumu", "Ztautau", "Other"]

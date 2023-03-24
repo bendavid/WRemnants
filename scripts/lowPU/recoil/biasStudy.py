@@ -18,7 +18,7 @@ import narf
 import numpy as np
 
 from wremnants.datasets.datagroupsLowPU import datagroupsLowPU
-from wremnants.datasets.datagroups import datagroups2016
+from wremnants.datasets.datagroups2016 import Datagroups2016
 
 def doPlot(tag, xMin=-100, xMax=100, yMin=1, yMax=-1, label="", xLabel="", yRatio = 1.3, rebin=1, logPos=[.20, 0.65, .5, .88]):
 
@@ -125,7 +125,7 @@ if __name__ == "__main__":
     functions.prepareDir(outDir, False)
 
     #groups = datagroupsLowPU("lowPU_%s_%s_nnpdf31.pkl.lz4" % (flavor, met), flavor=flavor)
-    groups = datagroups2016("mz_wlike_with_mu_eta_pt_%s_nnpdf31.pkl.lz4" % (met))
+    groups = Datagroups2016("mz_wlike_with_mu_eta_pt_%s_nnpdf31.pkl.lz4" % (met))
     
     recoil_qTbins = list(range(0, 30, 1)) + list(range(30, 50, 2)) + list(range(50, 70, 5)) + list(range(70, 120, 10)) + [120, 150, 300]
     

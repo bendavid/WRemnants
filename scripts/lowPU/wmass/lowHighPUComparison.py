@@ -18,7 +18,7 @@ import hist
 import numpy as np
 
 from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_Z
-from wremnants.datasets.datagroups import datagroups2016
+from wremnants.datasets.datagroups2016 import Datagroups2016
 
 
 def doOverlow(h):
@@ -66,7 +66,7 @@ def mTcomparison():
     outDir = "/eos/user/j/jaeyserm/www/wmass/lowHighPU/comparison/"
     histCfg = {"name": "mT_corr_rec", "axis": "mt"}
    
-    groups = datagroups2016("mw_with_%s_eta_pt_%s.pkl.lz4" % (flavor, "RawPFMET"))
+    groups = Datagroups2016("mw_with_%s_eta_pt_%s.pkl.lz4" % (flavor, "RawPFMET"))
     bhist_highPU_RawPFMET = parseProc(groups, histCfg, "Wmunu")
     bhist_highPU_RawPFMET = slice_(bhist_highPU_RawPFMET, "eta_mT")
     hist_highPU_RawPFMET = narf.hist_to_root(bhist_highPU_RawPFMET)
@@ -74,7 +74,7 @@ def mTcomparison():
     hist_highPU_RawPFMET.SetLineWidth(2)
     hist_highPU_RawPFMET.Scale(1./hist_highPU_RawPFMET.Integral())
     
-    groups = datagroups2016("mw_with_%s_eta_pt_%s.pkl.lz4" % (flavor, "DeepMETReso"))
+    groups = Datagroups2016("mw_with_%s_eta_pt_%s.pkl.lz4" % (flavor, "DeepMETReso"))
     bhist_highPU_DeepMETReso = parseProc(groups, histCfg, "Wmunu")
     bhist_highPU_DeepMETReso = slice_(bhist_highPU_DeepMETReso, "eta_mT")
     hist_highPU_DeepMETReso = narf.hist_to_root(bhist_highPU_DeepMETReso)

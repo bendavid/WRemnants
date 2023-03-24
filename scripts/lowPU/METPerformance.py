@@ -16,7 +16,7 @@ import narf
 import hist
 
 from wremnants.datasets.datagroupsLowPU import datagroupsLowPU
-from wremnants.datasets.datagroups import datagroups2016
+from wremnants.datasets.datagroups2016 import Datagroups2016
 
 
 def doOverlow(h):
@@ -752,8 +752,8 @@ def plotHighLowPU():
     
     # highPU
     nvtx_highPU = list(range(5, 40))
-    groups_highPU_pfmet = datagroups2016("mz_wlike_with_mu_eta_pt_RawPFMET.pkl.lz4")
-    groups_highPU_deepmet = datagroups2016("mz_wlike_with_mu_eta_pt_DeepMETReso.pkl.lz4")
+    groups_highPU_pfmet = Datagroups2016("mz_wlike_with_mu_eta_pt_RawPFMET.pkl.lz4")
+    groups_highPU_deepmet = Datagroups2016("mz_wlike_with_mu_eta_pt_DeepMETReso.pkl.lz4")
     
     if True:
     

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from wremnants.datasets.datagroups import datagroups2016
+from wremnants.datasets.datagroups2016 import Datagroups2016
 from wremnants import histselections as sel
 #from wremnants import plot_tools,theory_tools,syst_tools
 from utilities import boostHistHelpers as hh,common
@@ -99,7 +99,7 @@ if __name__ == "__main__":
     adjustSettings_CMS_lumi()
     canvas1D = ROOT.TCanvas("canvas1D", "", 800, 900)
 
-    groups = datagroups2016(fname)
+    groups = Datagroups2016(fname)
     datasets = groups.getNames()
     if args.processes is not None and len(args.processes):
         datasets = list(filter(lambda x: x in args.processes, datasets))

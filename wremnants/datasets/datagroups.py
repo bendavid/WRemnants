@@ -270,10 +270,10 @@ class Datagroups(object):
             group[label] = narf_hist
 
     def histName(self, baseName, procName="", syst=""):
-        return datagroups.histName(baseName, procName, syst, nominalName=self.nominalName)
+        return Datagroups.histName(baseName, procName, syst, nominalName=self.nominalName)
 
     def histNameCombine(self, procName, baseName, syst, channel):
-        return datagroups.histNameCombine(procName, baseName, syst, channel)
+        return Datagroups.histNameCombine(procName, baseName, syst, channel)
 
     def loadHistsForDatagroups(
         self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="",
