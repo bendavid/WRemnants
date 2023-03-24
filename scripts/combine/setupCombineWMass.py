@@ -93,7 +93,7 @@ def main(args):
     if args.unfold and args.fitXsec:
         raise ValueError("Options --unfolding and --fitXsec are incompatible. Please choose one or the other")
     elif args.fitXsec:
-        self.unconstrainedProcesses.append("WmunuP" if wmass else "Zmumu")
+        datagroups.unconstrainedProcesses.append("Wmunu" if wmass else "Zmumu")
     elif args.unfold:
         if not args.constrainMass:
             logger.warning("Unfolding is specified but the mass is treated free floating, to constrain the mass add '--constrainMass'")
@@ -103,53 +103,8 @@ def main(args):
         for base_proc in base_procs:
             datagroups.defineSignalBinsUnfolding(args.fitvar, base_proc)
 
-        # # for the xsec calculation
-        # suffix += "_xsec"
-        # bkgProcs = [] # for xsec norm card, remove all bkg procs but keep the data
-        # histName = "xnorm"
-        
-        # # fake data, as sum of all  Zmumu procs over recoil_gen
-        # proc_base = dict(datagroups.groups[base_proc])
-        # proc_base['selectOp'] = lambda x, i=i: x[{"recoil_gen" : hist.tag.Slicer()[::hist.sum]}]
-        # dataProc = "fake_data"
-        # datagroups.addGroups(dataProc, proc_genbin)
-
-        # datagroups_gen = datagroups2016(args.inputFile, excludeProcGroup=excludeGroup, filterProcGroup=filterGroup)
-        # datagroups_gen.setNominalName("gen")
-        # # datagroups_gen.defineSignalBinsUnfolding(args.fitvar, base_proc)
-
-        # # hack: remove non-used procs/groups, as there can be more procs/groups defined than defined above
-        # # need to remove as cardTool takes all procs in the datagroups
-        # toDel=[]
-        # for group in datagroups.groups: 
-        #     if base_proc not in group:
-        #         toDel.append(group)
-        # datagroups_gen.deleteGroup(toDel)    
-
-        # # write a seperate card with the gen information for xsec calculation
-        # cardGen = CardTool.CardTool(f"{outfolder}/{name}_gen_{{chan}}.txt")
-        # cardGen.setDatagroups(datagroups_gen)
-        # # cardGen.setProcesses(datagroups_gen.unconstrainedProcesses) # only save signals
-        # cardGen.setNominalName("gen")
-
-        # cardGen.setNominalTemplate(f"{templateDir}/main.txt")
-        # # cardGen.setProjectionAxes(["etaGen","ptGen"])
-
-        # cardGen.setOutfile(os.path.abspath(f"{outfolder}/{name}CombineInput_gen.root"))
-        # cardGen.setSpacing(52)
-
-        # combine_helpers.add_pdf_uncertainty(cardGen, datagroups.unconstrainedProcesses, False)
-        # combine_helpers.add_scale_uncertainty(cardGen, args.minnloScaleUnc, datagroups.unconstrainedProcesses, False, resum=args.resumUnc)
-        # # for Z background in W mass case (W background for Wlike is essentially 0, useless to apply QCD scales there)
-        # if wmass:
-        #     combine_helpers.add_scale_uncertainty(cardGen, "integrated", datagroups.unconstrainedProcesses, False, name_append="Z", resum=args.resumUnc)
-
-        # cardGen.writeOutput(args=args)
-
-
     if args.noHist and args.noStatUncFakes:
         raise ValueError("Option --noHist would override --noStatUncFakes. Please select only one of them")
-
 
     # Start to create the CardTool object, customizing everything
     cardTool = CardTool.CardTool(f"{outfolder}/{name}_{{chan}}.txt")
