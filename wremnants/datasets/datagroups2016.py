@@ -6,8 +6,6 @@ import narf
 import pandas as pd
 import math
 
-import pdb
-
 logger = logging.child_logger(__name__)
 
 class Datagroups2016(Datagroups):
@@ -128,8 +126,6 @@ class Datagroups2016(Datagroups):
                 color = "grey",
                 selectOp = fakeOp,
             )
-
-        pdb.set_trace()
 
     def make_yields_df(self, histName, procs, action):
         def sum_and_unc(h):
