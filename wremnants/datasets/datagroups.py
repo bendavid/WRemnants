@@ -408,7 +408,11 @@ class Datagroups(object):
 
         for indices in itertools.product(*gen_bins):
             proc_genbin = dict(self.groups[base_process])
-            proc_genbin['selectOp'] = lambda x, indices=indices, genvars=genvars: x[{var : i for var, i in zip(genvars, indices)}]
+            if proc_genbin['selectOp'] is None:
+                proc_genbin['selectOp'] = lambda x, indices=indices, genvars=genvars: x[{var : i for var, i in zip(genvars, indices)}]            
+            else:
+                # in case there is already a selection operation, e.g. for W, this one needs to be wrapped around the first
+                proc_genbin['selectOp'] = lambda x, indices=indices, genvars=genvars, f0=proc_genbin['selectOp']: f0(x)[{var : i for var, i in zip(genvars, indices)}]
 
             proc_name = base_process
             for idx, var in zip(indices, fitvars):
@@ -422,6 +426,13 @@ class Datagroups(object):
             self.unconstrainedProcesses.append(proc_name)
             self.addGroup(proc_name, proc_genbin)
             
+            if self.wmass:
+                # Add fake distribution of gen level bin
+                fake_genbin = dict(self.groups["Fake"])
+                fake_genbin['selectOp'] = lambda x, indices=indices, genvars=genvars, f0=fake_genbin['selectOp']: f0(x)[{var : i for var, i in zip(genvars, indices)}]
+                proc_name += "_Fake"
+                self.addGroup(proc_name, fake_genbin)
+
             # self.addGroupMember("Fake", proc_name)
 
         # add one inclusive out of acceptance contribution and treat as background
@@ -429,14 +440,14 @@ class Datagroups(object):
 
         conditions = [{var : hist.overflow} for var in genvars] + [{var : hist.underflow} for var in genvars]
         combined_condition = functools.reduce(lambda a, b: a | b, conditions)
-        proc_genbin['selectOp'] = lambda x: x[combined_condition]
+        proc_genbin['selectOp'] = lambda x, f0=proc_genbin['selectOp']: f0(x)[combined_condition]
 
         self.addGroup(base_process, proc_genbin)
 
         # Remove inclusive signal
+        for member in self.groups[base_process]["members"]:
+            self.deleteGroupMember("Fake", member)
         self.deleteGroup(base_process)
-        self.deleteGroupMember("Fake", base_process)
-
 
     @staticmethod
     def histName(baseName, procName="", syst=""):
