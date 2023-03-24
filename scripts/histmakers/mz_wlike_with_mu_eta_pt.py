@@ -15,12 +15,12 @@ import os
 parser = common.set_parser_default(parser, "pt", [34, 26, 60])
 
 args = parser.parse_args()
-logger = logging.setup_logger(__file__, args.verbose, args.color_logger)
+logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
     
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
                                               filt=args.filterProcs,
                                               excl=args.excludeProcs, 
-                                              nanoVersion="v8" if args.v8 else "v9", base_path=args.data_path)
+                                              nanoVersion="v8" if args.v8 else "v9", base_path=args.dataPath)
 
 era = args.era
 
@@ -71,7 +71,7 @@ else:
     muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile,
                                                                                                                                      era = era,
                                                                                                                                      max_pt = axis_pt.edges[-1],
-                                                                                                                                     is_w_like = True)
+                                                                                                                                     is_w_like = True, directIsoSFsmoothing=args.directIsoSFsmoothing)
 logger.info(f"SF file: {args.sfFile}")
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
@@ -82,12 +82,12 @@ mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper =
 
 smearing_helper = muon_calibration.make_muon_smearing_helpers() if args.smearing else None
 
-bias_helper = muon_calibration.make_muon_bias_helpers(args) if args.bias_calibration else None
+bias_helper = muon_calibration.make_muon_bias_helpers(args) if args.biasCalibration else None
 
-corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theory_corr)
+corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theoryCorr)
 
 # recoil initialization
-if not args.no_recoil:
+if not args.noRecoil:
     from wremnants import recoil_tools
     recoilHelper = recoil_tools.Recoil("highPU", args, flavor="mumu")
 
@@ -136,15 +136,15 @@ def build_graph(df, dataset):
         weight_expr = "weight*weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom"
 
         df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
+        df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
         if isW or isZ:
-            df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
             df = theory_tools.define_scale_tensor(df)
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")
 
     results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"]))
 
-    if not args.no_recoil:
+    if not args.noRecoil:
         df = df.Define("yZ", "ll_mom4.Rapidity()")
         lep_cols = ["Muon_pt[goodMuons]", "Muon_phi[goodMuons]", "Muon_pt[goodMuons]"]
         trg_cols = ["trigMuons_pt0", "trigMuons_phi0", "nonTrigMuons_pt0", "nonTrigMuons_phi0"]
@@ -183,9 +183,9 @@ def build_graph(df, dataset):
         # on the Z samples (but can still use it for dummy muon scale)
         if isW or isZ:
 
-            if args.theory_corr and dataset.name in corr_helpers:
+            if args.theoryCorr and dataset.name in corr_helpers:
                 results.extend(theory_tools.make_theory_corr_hists(df, "nominal", nominal_axes, nominal_cols, 
-                    corr_helpers[dataset.name], args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
+                    corr_helpers[dataset.name], args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly)
                 )
 
             scale_axes = [*nominal_axes, axis_ptVgen, axis_chargeVgen]

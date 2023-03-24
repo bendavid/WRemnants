@@ -20,14 +20,14 @@ import scripts.lowPU.config as lowPUcfg
 flavor = args.flavor # mu, e
 sigProcs = ["WminusJetsToMuNu", "WplusJetsToMuNu"] if flavor == "mu" else ["WminusJetsToENu", "WplusJetsToENu"]
 
-corr_helpers = theory_corrections.load_corr_helpers(common.wprocs_lowpu, args.theory_corr)
+corr_helpers = theory_corrections.load_corr_helpers(common.wprocs_lowpu, args.theoryCorr)
 
 datasets = wremnants.datasetsLowPU.getDatasets(maxFiles=args.maxFiles,
                                               filt=args.filterProcs,
                                               excl=args.excludeProcs, 
                                               flavor=flavor)
 
-logger = logging.setup_logger(__file__, args.verbose, args.color_logger)
+logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
 for d in datasets: logger.info(f"Dataset {d.name}")
 
@@ -191,6 +191,7 @@ def build_graph(df, dataset):
     if not dataset.is_data: 
         weight_expr = "weight*SFMC"
         df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
+        df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")
 
@@ -219,7 +220,6 @@ def build_graph(df, dataset):
     if dataset.name in common.zprocs_lowpu:
     
         # pdfs
-        df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
         if dataset.name in sigProcs:
             syst_tools.add_pdf_hists(results, df, dataset.name, gen_reco_mT_axes, gen_reco_mT_cols, args.pdfs, "reco_mT")
         else:

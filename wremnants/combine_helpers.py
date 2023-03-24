@@ -5,10 +5,10 @@ import re
 
 logger = logging.child_logger(__name__)
 
-def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append="", scetlib=None, use_hel_hist=False, rebin_pt=None):
+def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append="", resum=None, use_hel_hist=False, rebin_pt=None):
     if not len(samples):
         logger.warning(f"Skipping QCD scale syst '{scale_type}', no process to apply it to")
-        return 0
+        return
         
     helicity = "Helicity" in scale_type
     pt_binned = "Pt" in scale_type
@@ -33,7 +33,6 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
     name_replace = [("muR2muF2", "muRmuFUp"), ("muR0muF0", "muRmuFDown"), ("muR2muF1", "muRUp"), 
                         ("muR0muF1", "muRDown"), ("muR1muF0", "muFDown"), ("muR1muF2", "muFUp"),
     ]
-    scaleActionArgs = {}
     action_map = {}
     sum_axes = ["ptVgen", "chargeVgen",]
     if use_hel_hist or helicity:
@@ -69,7 +68,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
     nsyst_dims = len(syst_axes)
     skip_entries = [(*[-1]*(nsyst_dims-2),*x) for x in skip_entries]
 
-    if scetlib:
+    if resum:
         group_name += "Resum"
         # At least I hope this is the binning... Ideally would get it from the hist, but it's not trivial here
         other_dims = []
@@ -90,23 +89,27 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
         obs = ("eta", "pt") if not card_tool.project else card_tool.project
         # TODO: Implement pT splitting for SCETlib
         # TODO: The hist used needs to be configurable
+        
+        theory_unc = args_from_metadata(card_tool, "theory_corr")
+        if not theory_unc:
+            logger.error("Can not add resummation uncertainties. No theory correction was applied!")
+        theory_unc = theory_unc[0]+"_unc"
 
-        theory_hist = args_from_metadata(card_tool.datagroups.getMetaInfo(), "theory_corr", "scetlib_dyturboCorr_unc")
-        if "--theory_corr_alt_only" in card_tool.datagroups.getMetaInfo()["command"]:
-            logger.warning("The theory correction was only applied as an alternate hist. Using its syst isn't well defined!")
+        if args_from_metadata(card_tool, "theoryCorrAltOnly"):
+            logger.error("The theory correction was only applied as an alternate hist. Using its syst isn't well defined!")
 
-        card_tool.addSystematic(name=f"scetlib_dyturboN4LLCorr_unc",
+        card_tool.addSystematic(name=theory_unc,
             processes=samples,
-            group="scetlibTNP",
+            group="resumTNP",
             systAxes=["vars"],
             passToFakes=to_fakes,
             systNameReplace=[("central", ""), ("+1", "Up"), ("-1", "Down"), ("-0.5", "Down"), ("+0.5", "Up"), ("up", "Up"), ("down", "Down")],
             skipEntries=[('^kappaFO.*',), ('^recoil_scheme.*',), ('^c_nu.*',), ('Omega\d.\d*',), ("^transition_points.*",)],
-            rename=f"scetlibTNP", 
+            rename=f"resumTNP", 
         )
-        card_tool.addSystematic(name=f"scetlib_dyturboN4LLCorr_unc",
+        card_tool.addSystematic(name=theory_unc,
             processes=samples,
-            group="scetlibNonpert",
+            group="resumNonpert",
             systAxes=["downUpVar"],
             passToFakes=to_fakes,
             actionMap={s : lambda h: hh.syst_min_and_max_env_hist(h, obs, "vars", 
@@ -115,7 +118,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
             outNames=["scetlibNonpertUp", "scetlibNonpertDown"],
             rename=f"scetlibNonpert", 
         )
-        card_tool.addSystematic(name=f"scetlib_dyturboN4LLCorr_unc",
+        card_tool.addSystematic(name=theory_unc,
             processes=samples,
             group="resumTransition",
             systAxes=["downUpVar"],
@@ -132,7 +135,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
         skip_entries.extend([(*[-1]*(nsyst_dims-3), complex(0, i), -1, -1) for i in (5,6,7)])
 
     # Skip MiNNLO unc. 
-    if scetlib and not (pt_binned or helicity):
+    if resum and not (pt_binned or helicity):
         logger.warning("Without pT or helicity splitting, only the SCETlib uncertainty will be applied!")
     else:
         card_tool.addSystematic(scale_hist,
@@ -151,56 +154,33 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
             rename=group_name, # Needed to allow it to be called multiple times
         )
 
-# TODO: It's a bit dangerous to not double check what the default really is
-def args_from_metadata(meta_data, arg, default):
-    if "command" not in meta_data.keys():
-        raise ValueError(f"Failed to find command in meta_data (meta_data keys are {meta_data.keys()}")
+def args_from_metadata(card_tool, arg):
+    meta_data = card_tool.datagroups.getMetaInfo()
+    if "args" not in meta_data.keys() or arg not in meta_data["args"].keys():
+        raise IOError(f"The argument {arg} was not found in the metadata, maybe you run on an obsolete file.")
 
-    command = meta_data["command"]
-    sys_args = np.array([x.strip("'") for x in command.split()])
-    matching = (sys_args == f"--{arg}") | (sys_args == f"-{arg}")
-    if not np.count_nonzero(matching):
-        logger.warning(f"Did not find argument {arg}. Assuming the default value {default}")
-        return [default]
+    return meta_data["args"][arg]
 
-    idx = np.argmax(matching)
-    isflag = np.vectorize(lambda x: bool(re.match("^-+[a-z]", x)))(sys_args)
-    isflag[:idx+1] = False
-    # Select args until the next flag (this will break if you have a positional arg afterwards...)
-    last_idx = np.argmax(isflag)
-    if not last_idx:
-        last_idx = len(sys_args)
-    return sys_args[idx+1:last_idx]
 
 def add_pdf_uncertainty(card_tool, samples, to_fakes, action=None):
-    pdf = args_from_metadata(card_tool.datagroups.getMetaInfo(), "pdfs", "msht20")[0]
+    pdf = args_from_metadata(card_tool, "pdfs")[0]
     logger.info(f"Using PDF {pdf}")
     pdfInfo = theory_tools.pdf_info_map("ZmumuPostVFP", pdf)
     pdfName = pdfInfo["name"]
 
-    if pdfInfo["combine"] == "symHessian":
-        card_tool.addSystematic(pdfName, 
-            processes=samples,
-            mirror=True,
-            group=pdfName,
-            systAxes=["pdfVar"],
-            # Needs to be a tuple, since for multiple axis it would be (ax1, ax2, ax3)...
-            # -1 means all possible values of the mirror axis
-            skipEntries=[("^pdf0[a-z]*", -1)],
-            passToFakes=to_fakes,
-            actionMap=action,
-        )
-    else:
-        card_tool.addSystematic(pdfName, 
-            processes=samples,
-            mirror=False,
-            group=pdfName,
-            systAxes=["pdfVar"],
-            skipEntries=[("^pdf0[a-z]*",)],
-            passToFakes=to_fakes,
-            scale=pdfInfo["scale"] if "scale" in pdfInfo else 1,
-            actionMap=action,
-        )
+    symHessian = pdfInfo["combine"] == "symHessian"
+    card_tool.addSystematic(pdfName, 
+        processes=samples,
+        mirror=True if symHessian else False,
+        group=pdfName,
+        systAxes=["pdfVar"],
+        # Needs to be a tuple, since for multiple axis it would be (ax1, ax2, ax3)...
+        # -1 means all possible values of the mirror axis
+        skipEntries=[("^pdf0[a-z]*", -1) if symHessian else ("^pdf0[a-z]*",)],
+        passToFakes=to_fakes,
+        actionMap=action,
+        scale=pdfInfo["scale"] if "scale" in pdfInfo else 1,
+    )
 
     asRange = pdfInfo['alphasRange']
     card_tool.addSystematic(f"{pdfName}alphaS{asRange}", 
@@ -208,7 +188,7 @@ def add_pdf_uncertainty(card_tool, samples, to_fakes, action=None):
         mirror=False,
         group=pdfName,
         systAxes=["alphasVar"],
-        systNameReplace=[("0116", "Down"), ("0120", "Up")] if asRange == "002" else [("0117", "Down"), ("0119", "Up")],
+        systNameReplace=[("as", "pdfAlphaS")]+[("0116", "Down"), ("0120", "Up")] if asRange == "002" else [("0117", "Down"), ("0119", "Up")],
         scale=0.75, # TODO: this depends on the set, should be provided in theory_tools.py
         passToFakes=to_fakes,
     )

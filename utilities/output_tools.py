@@ -29,17 +29,19 @@ def fillTemplatedFile(templateFile, outFile, templateDict, append=False):
 
 def script_command_to_str(argv, parser_args):
     call_args = np.array(argv[1:], dtype=object)
-    match_expr = "|".join(["^--[a-z].*|^-[a-z].*"]+([] if not parser_args else [f"^-*{x}" for x in vars(parser_args).keys()]))
-    flags = (
-        np.vectorize(lambda x: bool(re.match(match_expr, x)))(call_args)
-        if len(call_args) > 0 else np.array([True])
-    )
-    if np.count_nonzero(~flags):
-        call_args[~flags] = np.vectorize(lambda x: f"'{x}'")(call_args[~flags])
+    match_expr = "|".join(["^-+([a-z]+[1-9]*-*)+"]+([] if not parser_args else [f"^-*{x.replace('_', '.')}" for x in vars(parser_args).keys()]))
+    if call_args.size != 0:
+        flags = np.vectorize(lambda x: bool(re.match(match_expr, x)))(call_args)
+        if np.count_nonzero(~flags):
+            call_args[~flags] = np.vectorize(lambda x: f"'{x}'")(call_args[~flags])
     return " ".join([argv[0], *call_args])
 
 def metaInfoDict(exclude_diff='notebooks', args=None):
-    meta_data = {"time" : str(datetime.datetime.now()), "command" : script_command_to_str(sys.argv, args)}
+    meta_data = {
+        "time" : str(datetime.datetime.now()), 
+        "command" : script_command_to_str(sys.argv, args),
+        "args": {a: getattr(args,a) for a in vars(args)}
+    }
     if subprocess.call(["git", "branch"], stderr=subprocess.STDOUT, stdout=open(os.devnull, 'w')) != 0:
         meta_data["git_info"] = {"hash" : "Not a git repository!",
                 "diff" : "Not a git repository"}
@@ -77,8 +79,8 @@ def write_analysis_output(results, outfile, args):
     results.update({"meta_info" : metaInfoDict(args=args)})
 
     to_append = []
-    if args.theory_corr and not args.theory_corr_alt_only:
-        to_append.append(args.theory_corr[0]+"Corr")
+    if args.theoryCorr and not args.theoryCorrAltOnly:
+        to_append.append(args.theoryCorr[0]+"Corr")
     if hasattr(args, "uncertainty_hist") and args.uncertainty_hist != "nominal":
         to_append.append(args.uncertainty_hist)
     if args.postfix:
