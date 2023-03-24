@@ -16,7 +16,6 @@ import narf
 import numpy as np
 
 from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_Z
-from wremnants.datasets.datagroups import datagroups2016
 
 def doPlot(tag, h_target, h_uncorr, h_corr, xMin=-100, xMax=100, label="", xLabel=""):
     

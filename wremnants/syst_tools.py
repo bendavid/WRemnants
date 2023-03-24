@@ -278,7 +278,7 @@ def add_muonscale_hist(results, df, netabins, mag, isW, axes, cols, base_name="n
     df = df.Define(f"muonScaleDummy{netabins}Bins{muon_eta}", f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(nominal_weight, massWeight_tensor, {muon_eta}, {mag}, {str(isW).lower()})")
 
     scale_etabins_axis = hist.axis.Regular(netabins, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
-    name = datagroups2016.histName(base_name, syst=f"muonScaleSyst")
+    name = Datagroups.histName(base_name, syst=f"muonScaleSyst")
 
     dummyMuonScaleSyst = df.HistoBoost(name, axes, [*cols, f"muonScaleDummy{netabins}Bins{muon_eta}"], tensor_axes=[common.down_up_axis, scale_etabins_axis])
     results.append(dummyMuonScaleSyst)
@@ -291,7 +291,7 @@ def add_muonscale_smeared_hist(results, df, netabins, mag, isW, axes, cols, base
     nweights = 21 if isW else 23
 
     scale_etabins_axis = hist.axis.Regular(netabins, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
-    name = datagroups2016.histName(base_name, syst=f"muonScaleSyst_gen_smear")
+    name = Datagroups.histName(base_name, syst=f"muonScaleSyst_gen_smear")
 
     dummyMuonScaleSyst_gen_smear = df.HistoBoost(name, axes, [*cols, f"muonScaleDummy{netabins}Bins{muon_eta}"], tensor_axes=[common.down_up_axis, scale_etabins_axis])
     results.append(dummyMuonScaleSyst_gen_smear)

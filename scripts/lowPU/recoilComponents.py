@@ -12,7 +12,6 @@ import plotter
 
 
 from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_Z
-from wremnants.datasets.datagroups import datagroups2016
 
 import lz4.frame
 import pickle

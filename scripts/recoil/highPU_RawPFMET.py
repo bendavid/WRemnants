@@ -14,7 +14,7 @@ ROOT.gStyle.SetOptTitle(0)
 import utils
 import plotter
 import recoilLibs_scipy as rls
-from wremnants.datasets.datagroups import datagroups2016
+from wremnants.datasets.datagroups2016 import Datagroups2016
 
 import lz4.frame
 import narf
@@ -1423,7 +1423,7 @@ if __name__ == "__main__":
     met = "RawPFMET"
     flavor = "mumu"
     
-    groups = datagroups2016("mz_wlike_with_mu_eta_pt_%s.pkl.lz4" % met)
+    groups = Datagroups2016("mz_wlike_with_mu_eta_pt_%s.pkl.lz4" % met)
     groups.groups.update({
         "TTbar" : dict(
                 members = [groups.datasets[x] for x in ["TTLeptonicPostVFP", "TTSemileptonicPostVFP", "SingleTschanLepDecaysPostVFP", "SingleTtWAntitopPostVFP", "SingleTtchanAntitopPostVFP", "SingleTtchanTopPostVFP"]],

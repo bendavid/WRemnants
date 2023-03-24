@@ -126,7 +126,7 @@ def main(args):
     if args.pseudoData:
         cardTool.setPseudodata(args.pseudoData, args.pseudoDataIdx)
         if args.pseudoDataFile:
-            cardTool.setPseudodataDatagroups(datagroups2016(args.pseudoDataFile,
+            cardTool.setPseudodataDatagroups(Datagroups2016(args.pseudoDataFile,
                                                 excludeProcGroup=excludeGroup,
                                                 filterProcGroup=filterGroup))
     if args.lumiScale:

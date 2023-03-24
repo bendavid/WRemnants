@@ -16,7 +16,7 @@ import narf
 import numpy as np
 
 from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_Z
-from wremnants.datasets.datagroups import datagroups2016
+from wremnants.datasets.datagroups2016 import Datagroups2016
 
 
 w = ROOT.RooWorkspace("w", "")
@@ -3754,7 +3754,7 @@ if __name__ == "__main__":
         #groups_ee = datagroupsLowPU_Z("mz_lowPU_ee.pkl.lz4")
         bkg_procs = ['EWK', 'TTbar']
     else:
-        groups_mumu = datagroups2016("mz_wlike_with_mu_eta_pt.pkl.lz4", wlike=True)
+        groups_mumu = Datagroups2016("mz_wlike_with_mu_eta_pt.pkl.lz4", wlike=True)
         bkg_procs = ['Other']
     '''
     label = "DY #rightarrow #mu^{+}#mu^{#minus} #plus e^{+}e^{#minus}"
