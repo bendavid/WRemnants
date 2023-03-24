@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 from wremnants import CardTool,theory_tools,syst_tools,combine_helpers
 from wremnants import histselections as sel
-from wremnants.datasets.datagroups import datagroups2016
-from utilities import boostHistHelpers as hh
+from wremnants.datasets.datagroups2016 import Datagroups2016
 from utilities import common, logging
 import argparse
 import os
@@ -60,7 +59,7 @@ def main(args):
     logger.debug(f"Filtering these groups of processes: {args.filterProcGroups}")
     logger.debug(f"Excluding these groups of processes: {args.excludeProcGroups}")
     
-    datagroups = datagroups2016(args.inputFile, excludeProcGroup=excludeGroup, filterProcGroup=filterGroup, splitWByCharge=args.unfold)
+    datagroups = Datagroups2016(args.inputFile, excludeProcGroup=excludeGroup, filterProcGroup=filterGroup, splitWByCharge=args.unfold)
     
     if args.xlim:
         if len(args.fitvar.split("-")) > 1:
