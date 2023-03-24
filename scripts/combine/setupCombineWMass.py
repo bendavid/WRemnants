@@ -59,7 +59,7 @@ def main(args):
     logger.debug(f"Filtering these groups of processes: {args.filterProcGroups}")
     logger.debug(f"Excluding these groups of processes: {args.excludeProcGroups}")
     
-    datagroups = Datagroups2016(args.inputFile, excludeProcGroup=excludeGroup, filterProcGroup=filterGroup, splitWByCharge=args.unfold)
+    datagroups = Datagroups2016(args.inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, splitWByCharge=args.unfold)
     
     if args.xlim:
         if len(args.fitvar.split("-")) > 1:
@@ -107,7 +107,6 @@ def main(args):
 
     # Start to create the CardTool object, customizing everything
     cardTool = CardTool.CardTool(f"{outfolder}/{name}_{{chan}}.txt")
-    cardTool.setExcludedProcs(excludeGroup)
     cardTool.setDatagroups(datagroups)
     logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
     cardTool.setNominalTemplate(f"{templateDir}/main.txt")

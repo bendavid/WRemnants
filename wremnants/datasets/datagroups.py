@@ -8,6 +8,7 @@ import re
 import os
 import itertools
 import functools
+import hist
 
 logger = logging.child_logger(__name__)
 
@@ -45,6 +46,7 @@ class Datagroups(object):
         self.groups = {}
         self.nominalName = "nominal"
         self.globalAction = None
+        self.unconstrainedProcesses = []
 
     def __del__(self):
         if self.h5file:
@@ -58,13 +60,21 @@ class Datagroups(object):
                 logger.warning(f"Replacing {group_name} in groups")
             self.groups[group_name] = dictToAdd
 
+    def deleteGroup(self, procs):
+        if isinstance(procs, str):
+            procs = [procs,]
+
+        for p in procs:
+            if p in self.groups.keys():
+                del self.groups[p]
+
     def addGroupMember(self, group_name, member_name):
         # adds a process to the existing members of a given group
         if group_name not in self.groups:
             logger.warning(f"The group {group_name} is not defined in the datagroups object! Do nothing here.")
             return
 
-        if self.datasets and member_name not in [d.name for d in self.datasets]:
+        if self.datasets and member_name not in [d for d in self.datasets]:
             logger.warning(f"The member {member_name} can not be found in the current dataset, still add it to the list of members of the group and trust you.")
 
         self.groups[group_name]["members"] = [*self.groups[group_name]["members"], member_name]
@@ -412,6 +422,8 @@ class Datagroups(object):
             self.unconstrainedProcesses.append(proc_name)
             self.addGroup(proc_name, proc_genbin)
             
+            # self.addGroupMember("Fake", proc_name)
+
         # add one inclusive out of acceptance contribution and treat as background
         proc_genbin = dict(self.groups[base_process])
 
@@ -423,6 +435,7 @@ class Datagroups(object):
 
         # Remove inclusive signal
         self.deleteGroup(base_process)
+        self.deleteGroupMember("Fake", base_process)
 
 
     @staticmethod
