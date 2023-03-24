@@ -369,34 +369,34 @@ def build_graph(df, dataset):
                             jpsi_unc_helper = muon_validation.make_jpsi_crctn_unc_helper_massweights(
                                 "wremnants/data/calibration/calibrationJDATA_rewtgr_3dmap_LBL.root",
                                 nweights,
-                                scale = 3.0
+                                scale = 3.04
                             )
                             df = df.Define("muonScaleSyst_responseWeights_tensor_gensmear", jpsi_unc_helper,
-                            [
-                            f"{reco_sel_GF}_eta0_gen_smeared",
-                            f"{reco_sel_GF}_charge0_gen_smeared",
-                            f"{reco_sel_GF}_pt0_gen_smeared",
-                            "massWeight_tensor",
-                            "nominal_weight",
-                            f"bool_{str(isW).lower()}"
-                            ]
+                                [
+                                    f"{reco_sel_GF}_eta0_gen_smeared",
+                                    f"{reco_sel_GF}_charge0_gen_smeared",
+                                    f"{reco_sel_GF}_pt0_gen_smeared",
+                                    "massWeight_tensor",
+                                    "nominal_weight",
+                                    f"bool_{str(isW).lower()}"
+                                ]
                             )
                         else:
                             jpsi_unc_helper = jpsi_crctn_data_unc_helper
                             df = df.Define("muonScaleSyst_responseWeights_tensor_gensmear", jpsi_unc_helper,
-                            [
-                            f"{reco_sel_GF}_genQop",
-                            f"{reco_sel_GF}_genPhi",
-                            f"{reco_sel_GF}_genEta",
-                            f"{reco_sel_GF}_genSmearedQop",
-                            f"{reco_sel_GF}_genSmearedPhi",
-                            f"{reco_sel_GF}_genSmearedEta",
-                            f"{reco_sel_GF}_genSmearedCharge",
-                            f"{reco_sel_GF}_genSmearedPt",
-                            f"{reco_sel_GF}_covMat",
-                            "nominal_weight",
-                            "bool_false"
-                            ]
+                                [
+                                    f"{reco_sel_GF}_genQop",
+                                    f"{reco_sel_GF}_genPhi",
+                                    f"{reco_sel_GF}_genEta",
+                                    f"{reco_sel_GF}_genSmearedQop",
+                                    f"{reco_sel_GF}_genSmearedPhi",
+                                    f"{reco_sel_GF}_genSmearedEta",
+                                    f"{reco_sel_GF}_genSmearedCharge",
+                                    f"{reco_sel_GF}_genSmearedPt",
+                                    f"{reco_sel_GF}_covMat",
+                                    "nominal_weight",
+                                    "bool_false"
+                                ]
                             )
                         dummyMuonScaleSyst_responseWeights = df.HistoBoost(
                             "muonScaleSyst_responseWeights_gensmear", nominal_axes,
