@@ -134,7 +134,7 @@ class CardTool(object):
         # if processes are not set yet, do it now to skip one step
         # FIXME: should it allow one to reset the procDict by passing a flag, e.g. in case one loads a new datagroups?
         if resetGroups or not self.procDict:
-            self.setProcesses(self.datagroups.getNames(afterFilter=True))
+            self.setProcesses(self.datagroups.getNames())
         
     def setPseudodataDatagroups(self, datagroups):
         self.pseudodata_datagroups = datagroups 
@@ -400,8 +400,8 @@ class CardTool(object):
             baseName=self.pseudoData, syst="", label=self.pseudoData,
             procsToRead=processes, excluded_procs=self.excludeProcGroups,
             scaleToNewLumi=self.lumiScale)
-        # FIXME: not sure if afterFilter is desired here, but it probably should
-        procDict = datagroups.getDatagroups(afterFilter=True)
+
+        procDict = datagroups.groups
         hists = [procDict[proc][self.pseudoData] for proc in processes]
         hdata = hh.sumHists(hists)
         # Kind of hacky, but in case the alt hist has uncertainties
@@ -434,7 +434,7 @@ class CardTool(object):
             procsToRead=self.procDict.keys(), excluded_procs=self.excludeProcGroups,
             label=self.nominalName, 
             scaleToNewLumi=self.lumiScale)
-        self.procDict = self.datagroups.getDatagroups(afterFilter=True)
+        self.procDict = self.datagroups.groups
         self.writeForProcesses(self.nominalName, processes=self.procDict.keys(), label=self.nominalName)
         self.loadNominalCard()
         if self.pseudoData:

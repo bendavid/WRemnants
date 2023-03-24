@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from wremnants import CardTool,theory_tools,syst_tools,combine_helpers
 from wremnants import histselections as sel
-from wremnants.datasets.datagroups import datagroups2016
+from wremnants.datasets.datagroups2016 import Datagroups2016
 from utilities import common, logging
 import argparse
 import os
@@ -47,12 +47,12 @@ def main(args):
     filterGroup = args.filterProcGroups if args.filterProcGroups else None
     excludeGroup = None
     if args.excludeProcGroups:
-        ## can pass a filter that datagroups2016 can digest, but better to pass list of names
+        ## can pass a filter that Datagroups2016 can digest, but better to pass list of names
         # excludeGroup = lambda x,excl=args.excludeProcGroups: all([f not in x.group for f in excl if x.group is not None])
         ## alternatively can just pass the array with names
         excludeGroup = args.excludeProcGroups
 
-    datagroups = datagroups2016(args.inputFile, excludeProcGroup=excludeGroup, filterProcGroup=filterGroup)
+    datagroups = Datagroups2016(args.inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup)
 
     if args.xlim:
         if len(args.fitvar.split("-")) > 1:
