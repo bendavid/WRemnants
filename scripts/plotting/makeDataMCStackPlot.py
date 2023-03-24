@@ -1,4 +1,4 @@
-from wremnants.datasets.datagroups import datagroups2016
+from wremnants.datasets.datagroups2016 import Datagroups2016
 from wremnants import histselections as sel
 from wremnants import plot_tools,theory_tools,syst_tools
 from utilities import boostHistHelpers as hh,common
@@ -97,7 +97,7 @@ if addVariation and (args.selectAxis or args.selectEntries):
 
 outdir = plot_tools.make_plot_dir(args.outpath, args.outfolder)
 
-groups = datagroups2016(args.infile)
+groups = Datagroups2016(args.infile, excludeGroups="QCD")
 datasets = groups.getNames(args.procFilters, exclude=False)
 logger.info(f"Will plot datasets {datasets}")
 
@@ -115,8 +115,6 @@ unstack = exclude[:]
 
 # TODO: In should select the correct hist for the transform, not just the first
 transforms = syst_tools.syst_transform_map(nominalName, args.hists[0])
-
-histInfo = groups.getDatagroups(afterFilter=False)
 
 if addVariation:
     logger.info(f"Adding variation {args.varName}")
@@ -168,7 +166,7 @@ if addVariation:
 
 
 groups.sortByYields(args.baseName, nominalName=nominalName)
-histInfo = groups.getDatagroups(afterFilter=False)
+histInfo = groups.groups
 
 logger.info(f"Unstacked processes are {exclude}")
 prednames = list(reversed(groups.getNames([d for d in datasets if d not in exclude], exclude=False)))

@@ -1,7 +1,7 @@
 from utilities import boostHistHelpers as hh, logging
 from wremnants import histselections as sel
 from wremnants.datasets import datasetsLowPU
-from wremnants.datasets.datagroups import datagroups
+from wremnants.datasets.datagroups import Datagroups
 import lz4.frame
 import pickle
 import narf
@@ -10,7 +10,7 @@ import hist
 
 logger = logging.child_logger(__name__)
 
-class datagroupsLowPU(datagroups):
+class DatagroupsLowPU(Datagroups):
     isW = False
     def __init__(self, infile, combine=False, flavor="", excludeProcGroup=None, filterProcGroup=None):
         self.datasets = {x.name : x for x in datasetsLowPU.getDatasets(flavor=flavor, filt=filterProcGroup, excl=excludeProcGroup)}
