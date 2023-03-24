@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <defines.h>
 #include "muonCorr.h"
-#include <typeinfo>
 #include <cmath>
 
 namespace wrem {

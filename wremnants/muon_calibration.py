@@ -63,7 +63,7 @@ def make_jpsi_crctn_helpers(args, make_uncertainty_helper=False):
 
     if make_uncertainty_helper:
         mc_unc_helper = make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}", n_eta_bins = 24) if mc_corrfile else None
-        data_unc_helper = make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}", scale = 3.0) if data_corrfile else None
+        data_unc_helper = make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}", scale = 3.04) if data_corrfile else None
 
         return mc_helper, data_helper, mc_unc_helper, data_unc_helper
     else:

@@ -30,7 +30,6 @@ Eigen::TensorFixedSize<double, Eigen::Sizes<2, ETABINS>> dummyScaleFromMassWeigh
 
     const double etaStep = 2*2.4/ETABINS;
     size_t ieta = (std::clamp(eta, -2.4, 2.4)+2.4)/etaStep;
-
     // Down weight, then up weight
     outWeights(0, ieta) = scaleWeight(weights[centralIdx-step10MeV], scaleFac)*nominal_weight;
     outWeights(1, ieta) = scaleWeight(weights[centralIdx+step10MeV], scaleFac)*nominal_weight;
