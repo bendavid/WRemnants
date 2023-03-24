@@ -34,7 +34,6 @@ def make_parser(parser=None):
     parser.add_argument("--directIsoSFsmoothing", action='store_true', help="If isolation SF were smoothed directly instead of being derived from smooth efficiencies")
     parser.add_argument("--xlim", type=float, nargs=2, default=None, help="Restrict x axis to this range")
     parser.add_argument("--constrainMass", action='store_true', help="Constrain mass parameter in the fit (e.g. for ptll fit)")
-    parser.add_argument("-a", "--append", type=str, help="Append to output folder name")
     return parser
 
 def main(args):
@@ -78,8 +77,6 @@ def main(args):
         tag += "_statOnly"
     if args.customTag:
         tag += f"_{args.customTag}"
-    if args.append:
-        tag = f"{tag}_{args.append}"
 
     outfolder = f"{args.outfolder}/{tag}/"
     if not os.path.isdir(outfolder):
