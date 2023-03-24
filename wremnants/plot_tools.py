@@ -339,10 +339,14 @@ def make_plot_dir(outpath, outfolder):
 
     return full_outpath
 
-def save_pdf_and_png(outdir, basename):
+def save_pdf_and_png(outdir, basename, fig=None):
     fname = f"{outdir}/{basename}.pdf"
-    plt.savefig(fname, bbox_inches='tight')
-    plt.savefig(fname.replace(".pdf", ".png"), bbox_inches='tight')
+    if fig:
+        fig.savefig(fname, bbox_inches='tight')
+        fig.savefig(fname.replace(".pdf", ".png"), bbox_inches='tight')
+    else:
+        plt.savefig(fname, bbox_inches='tight')
+        plt.savefig(fname.replace(".pdf", ".png"), bbox_inches='tight')
     logger.info(f"Wrote file(s) {fname}(.png)")
 
 def write_index_and_log(outpath, logname, indexname="index.php", template_dir=f"{pathlib.Path(__file__).parent}/Templates", 
