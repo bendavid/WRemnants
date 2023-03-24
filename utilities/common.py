@@ -115,7 +115,9 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--met", type=str, choices=["DeepMETReso", "RawPFMET"], help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")                    
     parser.add_argument("-o", "--outfolder", type=str, default="", help="Output folder")
     parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
-    parser.add_argument("--customTag", type=str, default=None, help="custom tags in the outout file name")
+    parser.add_argument("--customTag",
+        type = str, default = None, help = "custom tags in the outout file name"
+    )
     if for_reco_highPU:
         # additional arguments specific for histmaker of reconstructed objects at high pileup (mw, mz_wlike, and mz_dilepton)
         parser.add_argument("--muonCorrMC", type=str, default="idealMC_lbltruth", 
@@ -130,6 +132,10 @@ def common_parser(for_reco_highPU=False):
         parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
         parser.add_argument("--bias-calibration", type=str, default=None, choices=["binned","parameterized"], help="Adjust central value by calibration bias hist for simulation")
         parser.add_argument("--smearing", action='store_true', help="Smear pT such that resolution matches data") #TODO change to --no-smearing once smearing is final
+        parser.add_argument("--validateByMassWeights", 
+            action = "store_true",
+            help = "validate the muon momentum scale shift weights by massweights"
+        )
 
     commonargs,_ = parser.parse_known_args()
 
@@ -161,7 +167,9 @@ def common_parser_combine():
     parser.add_argument("--skipSignalSystOnFakes", dest="skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
     parser.add_argument("--noQCDscaleFakes", dest="noQCDscaleFakes" , action="store_true",   help="Do not apply QCd scale uncertainties on fakes, mainly for debugging")
     parser.add_argument("--doStatOnly", action="store_true", default=False, help="Set up fit to get stat-only uncertainty (currently combinetf with -S 0 doesn't work)")
-    parser.add_argument("--customTag", type=str, default=None, help="custom tag for combine subfolder name")
+    parser.add_argument("--customTag",
+        type = str, default = None, help = "custom tags in combine output subfolder name"
+    )
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
                         help="Set verbosity level with logging, the larger the more verbose");
     parser.add_argument("--no-color-logger", action="store_false", dest="color_logger", 

@@ -22,7 +22,6 @@ parser.add_argument("--sfFileVqtTest", type=str, help="File with muon scale fact
 parser.add_argument("--vqtTestIntegrated", action="store_true", help="Test of isolation SFs dependence on V q_T projection, integrated (would be the same as default SF, but pt-eta binning is different)")
 parser.add_argument("--vqtTestReal", action="store_true", help="Test of isolation SFs dependence on V q_T projection, using 3D SFs directly (instead of the Vqt fits)")
 parser.add_argument("--vqtTestIncludeTrigger", action="store_true", help="Test of isolation SFs dependence on V q_T projection. Including trigger")
-parser.add_argument("--validateByMassWeights", action="store_true", help="validate the muon scale variation from jpsi massfit stats. unc. by massweights")
 args = parser.parse_args()
 
 if args.vqtTestIntegrated:
@@ -365,11 +364,11 @@ def build_graph(df, dataset):
                     df = df.DefinePerSample("bool_true", "true")
                     df = df.DefinePerSample("bool_false", "false")
                     if args.muonCorrData == "massfit" or "massfit_lbl":
-
                         if args.validateByMassWeights:
                             jpsi_unc_helper = muon_validation.make_jpsi_crctn_unc_helper_massweights(
                                 "wremnants/data/calibration/calibrationJDATA_rewtgr_3dmap_LBL.root",
-                                nweights
+                                nweights,
+                                scale = 3.0
                             )
                             df = df.Define("muonScaleSyst_responseWeights_tensor_gensmear", jpsi_unc_helper,
                             [
