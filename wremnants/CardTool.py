@@ -395,7 +395,7 @@ class CardTool(object):
         # so there is some customization based on what one expects to silent some noisy warnings
         for name in sorted(var_names):
             for chan in self.channels:
-                if self.chargeIdDict[chan]["badId"] is not None and self.chargeIdDict[chan]["badId"] in name:
+                if chan in self.chargeIdDict .keys() and self.chargeIdDict[chan]["badId"] is not None and self.chargeIdDict[chan]["badId"] in name:
                     if silentCheckOtherCharge:
                         continue
                 if chan in ["plus", "minus"]:
