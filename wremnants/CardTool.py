@@ -398,7 +398,6 @@ class CardTool(object):
                 if self.chargeIdDict[chan]["badId"] is not None and self.chargeIdDict[chan]["badId"] in name:
                     if self.datagroups.wmass or silentCheckOtherCharge:
                         continue
-                    logger.error(self.datagroups.wmass)
                 if chan in ["plus", "minus"]:
                     q = self.chargeIdDict[chan]["val"]
                     hnom = self.getBoostHistByCharge(hnom3D, q)
