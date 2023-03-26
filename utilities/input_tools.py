@@ -280,3 +280,35 @@ def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo
         logger.warning("Did not find variation for nonsingular! Assuming nominal for all variations!")
         hnonsing = hnonsing[{"vars" : 0}]
     return hh.addHists(hsing, hnonsing)
+
+def safeGetRootObject(fileObject, objectName, quitOnFail=True, silent=False, detach=True):
+    obj = fileObject.Get(objectName)
+    if obj == None:
+        if not silent:
+            print(f"Error getting {objectName} from file {fileObject.GetName()}")
+        if quitOnFail:
+            quit()
+        return None
+    else:
+        if detach:
+            obj.SetDirectory(0)
+        return obj
+        
+def safeOpenRootFile(fileName, quitOnFail=True, silent=False, mode="READ"):
+    fileObject = ROOT.TFile.Open(fileName, mode)
+    if not fileObject or fileObject.IsZombie():
+        if not silent:
+            print(f"Error when opening file {fileName}")
+        if quitOnFail:
+            quit()
+        else:
+            return None
+    elif not fileObject.IsOpen():
+        if not silent:
+            print(f"File {fileName} was not opened")
+        if quitOnFail:
+            quit()
+        else:
+            return None
+    else:
+        return fileObject

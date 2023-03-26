@@ -396,7 +396,7 @@ class CardTool(object):
         for name in sorted(var_names):
             for chan in self.channels:
                 if self.chargeIdDict[chan]["badId"] is not None and self.chargeIdDict[chan]["badId"] in name:
-                    if self.datagroups.wmass or silentCheckOtherCharge:
+                    if silentCheckOtherCharge:
                         continue
                 if chan in ["plus", "minus"]:
                     q = self.chargeIdDict[chan]["val"]
