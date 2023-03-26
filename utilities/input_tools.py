@@ -8,6 +8,7 @@ import os
 import hdf5plugin
 import h5py
 from narf import ioutils
+import ROOT
 
 logger = logging.child_logger(__name__)
 
