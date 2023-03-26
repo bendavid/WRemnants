@@ -12,8 +12,6 @@ from scripts.analysisTools.plotUtils.CMS_lumi import *
 
 logger = logging.child_logger(__name__)
 
-_canvas_pull = ROOT.TCanvas("_canvas_pull","",800,800)
-
 #########################################################################
 colors_plots_ = {"Wmunu"      : ROOT.kRed+2,
                  "Zmumu"      : ROOT.kAzure+2,
@@ -2570,6 +2568,7 @@ def drawTH1dataMCstack(h1, thestack,
   
     if "unrolled" in canvasName:
 
+        _canvas_pull = ROOT.TCanvas("_canvas_pull","",800,800)
         _canvas_pull.SetTickx(1)
         _canvas_pull.SetTicky(1)
         _canvas_pull.SetGridx(1)

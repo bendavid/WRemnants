@@ -232,8 +232,17 @@ def main(args):
                 splitGroupDict[groupName] = ".*effStat.*" # add also the group with everything
             if args.effStatLumiScale and "Syst" not in name:
                 scale /= math.sqrt(args.effStatLumiScale)
-
-            cardTool.addSystematic(name, 
+            silentCheckOtherCharge = False
+            if wmass or (wlike and "trigger" in name):
+                # For wmass the histograms associated to the wrong reco charge are present but equal to nominal one.
+                # To avoid annoying warnings of this expected behaviour we silent the related check in cardtool.
+                # This also has to happen for effStat trigger in the wlike case
+                # Note: should be the case also for trigger effSyst, but since it is packed with the other steps we can't
+                # silent it only for that from here (in any case we can live with a single unnecessary warning)
+                silentCheckOtherCharge = True
+                
+            cardTool.addSystematic(
+                name, 
                 mirror=mirror,
                 group=groupName,
                 systAxes=axes,
@@ -243,7 +252,8 @@ def main(args):
                 passToFakes=passSystToFakes,
                 systNameReplace=nameReplace,
                 scale=scale,
-                splitGroup=splitGroupDict
+                splitGroup=splitGroupDict,
+                silentCheckOtherCharge=silentCheckOtherCharge
             )
 
     to_fakes = passSystToFakes and not args.noQCDscaleFakes
