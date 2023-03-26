@@ -215,7 +215,7 @@ def main(args):
                 splitGroupDict = {f"{groupName}_{x}" : f".*effSyst.*{x}" for x in list(effTypesNoIso + ["iso"])}
                 splitGroupDict[groupName] = ".*effSyst.*" # add also the group with everything
             else:
-                nameReplace = [] if any(x in name for x in chargeDependentSteps) else [("q0", ""), ("q1", "")]  # this part correlates nuisances between charges
+                nameReplace = []# if any(x in name for x in chargeDependentSteps) else [("q0", ""), ("q1", "")]  # this part correlates nuisances between charges
                 if args.binnedScaleFactors:
                     axes = ["SF eta", "nPtBins", "SF charge"]
                     axlabels = ["eta", "pt", "q"]

@@ -9,7 +9,6 @@
 
 import re
 import os, os.path
-import logging
 import argparse
 import shutil
 
@@ -28,13 +27,11 @@ from scripts.analysisTools.plotUtils.utility import *
 
 sys.path.append(os.getcwd())
 
-logging.basicConfig(level=logging.INFO)
-
 def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
                          lumi="", ptRangeProjection=(0,-1), chargeLabel="",
                          canvas=None, canvasWide=None, canvas1D=None,
                          colors=None, legEntries=None, isPseudoData=False,
-                         ratioRange=(0.92,1.08)):
+                         ratioRange=None):
 
     #TODO: make colors and legEntries a single dictionary
 
@@ -83,7 +80,10 @@ def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
         lowPtbin = 1
         highPtbin = hdata2D.GetNbinsY()
 
-    ratioRangeStr = f"::{args.ratioRange[0]},{args.ratioRange[1]}"
+    ratioRangeStr = ""
+    if ratioRange:
+        ratioRangeStr = f"::{ratioRange[0]},{ratioRange[1]}"
+    
         
     hdata_eta = hdata2D.ProjectionX("data_eta",lowPtbin,highPtbin,"e")
     hdata_pt  = hdata2D.ProjectionY("data_pt",1,hdata2D.GetNbinsX(),"e")
