@@ -40,7 +40,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
 
     # NOTE: The map needs to be keyed on the base procs not the group names, which is
     # admittedly a bit nasty
-    expanded_samples = card_tool.datagroups.getProcNames(samples, afterFilter=True)
+    expanded_samples = card_tool.datagroups.getProcNames(samples)
     logger.debug(f"using {scale_hist} histogram for QCD scale systematics")
     logger.debug(f"expanded_samples: {expanded_samples}")
     action_map = {proc : syst_tools.scale_helicity_hist_to_variations for proc in expanded_samples}

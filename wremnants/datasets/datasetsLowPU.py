@@ -150,7 +150,7 @@ def getDatasets(maxFiles=-1, filt=None, excl=None, flavor="",base_path=None):
                 lumi_csv = lumicsv_el
             ),
         )
-        
+
     allProcs = filterProcs(filt, allProcs)
     allProcs = excludeProcs(excl, allProcs)
 

@@ -128,7 +128,9 @@ def build_graph(df, dataset):
 
         # add histograms before any selection
         df_gen = df
-        gen = df_gen.HistoBoost("gen", unfolding_axes, [*unfolding_cols, "nominal_weight"])
+        df_gen = df.Define("charge", "event % 2 == 0 ? -1 : 1")
+
+        gen = df_gen.HistoBoost("gen", [*unfolding_axes, axis_charge], [*unfolding_cols, "charge", "nominal_weight"])
         results.append(gen)
 
         scale_axes = [*unfolding_axes, axis_ptVgen, axis_chargeVgen]

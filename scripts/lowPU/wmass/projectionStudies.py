@@ -17,7 +17,7 @@ import narf
 import hist
 import numpy as np
 
-from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_Z
+from wremnants.datasets.datagroupsLowPU import DatagroupsLowPU_Z
 
 
 
@@ -75,13 +75,13 @@ def mTcomparison():
     histCfg = {"name": "mT_uncorr", "axis": "mt", "charge": charge }
     
     met = "DeepMETReso"
-    groups = datagroupsLowPU_Z("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
+    groups = DatagroupsLowPU_Z("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
     hist_DeepMETReso = parseProc(groups, histCfg, "WJetsToMuNu", rebin=mT_bins)
     hist_DeepMETReso.SetLineColor(ROOT.kRed)
     hist_DeepMETReso.SetLineWidth(2)
     
     met = "RawPFMET"
-    groups = datagroupsLowPU_Z("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
+    groups = DatagroupsLowPU_Z("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
     hist_RawPFMET = parseProc(groups, histCfg, "WJetsToMuNu", rebin=mT_bins)
     hist_RawPFMET.SetLineColor(ROOT.kBlue)
     hist_RawPFMET.SetLineWidth(2)
@@ -145,13 +145,13 @@ def eventYields():
     for proc in procs:
     
         met = "DeepMETReso"
-        groups = datagroupsLowPU_Z("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
+        groups = DatagroupsLowPU_Z("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
         hist_DeepMETReso = parseProc(groups, histCfg, proc)
         hist_DeepMETReso.SetLineColor(ROOT.kRed)
         hist_DeepMETReso.SetLineWidth(2)
         
         met = "RawPFMET"
-        groups = datagroupsLowPU_Z("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
+        groups = DatagroupsLowPU_Z("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
         hist_RawPFMET = parseProc(groups, histCfg, proc)
         hist_RawPFMET.SetLineColor(ROOT.kBlue)
         hist_RawPFMET.SetLineWidth(2)

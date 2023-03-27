@@ -14,7 +14,7 @@ dataDictV9 = {
                                      "{BASE_PATH}/SingleMuon/NanoV9Run2016HDataPostVFP_{NANO_PROD_TAG}/*/*/*.root",
                                      ],
                       'group': "Data",
-        
+
     },
     'ZmumuPostVFP' : { 
                    'filepaths' :
@@ -74,7 +74,7 @@ dataDictV9 = {
                                           'filepaths' : 
                                           ["{BASE_PATH}/BKGV9/ST_s-channel_4f_leptonDecays_TuneCP5_13TeV-amcatnlo-pythia8/*.root"],
                                           'xsec' : 3.74,
-                                          'group' : "Top",
+                                         'group' : "Top",
     },
     'SingleTtWAntitopPostVFP' : { 
                                      'filepaths' : 

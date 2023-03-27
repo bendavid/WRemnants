@@ -16,7 +16,7 @@ import narf
 import wremnants
 import hist
 import lz4.frame, pickle
-from wremnants.datasets.datagroups import datagroups2016
+from wremnants.datasets.datagroups2016 import Datagroups2016
 from wremnants import histselections as sel
 
 from utilities import boostHistHelpers as hh,common
@@ -554,7 +554,7 @@ if __name__ == "__main__":
     yAxisName = args.yAxisName
     zAxisName = args.zAxisName
 
-    groups = datagroups2016(args.inputfile[0], applySelection=False)
+    groups = Datagroups2016(args.inputfile[0], applySelection=False)
     datasets = groups.getNames() # this has all the original defined groups
     datasetsNoQCD = list(filter(lambda x: x != "QCD", datasets)) # exclude QCD MC if present
     datasetsNoFakes = list(filter(lambda x: x != "Fake", datasets)) 

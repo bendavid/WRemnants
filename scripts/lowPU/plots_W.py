@@ -19,7 +19,7 @@ import hist
 import numpy as np
 
 from wremnants.datasets.datagroupsLowPU import datagroupsLowPU
-from wremnants.datasets.datagroups import datagroups2016
+from wremnants.datasets.datagroups2016 import Datagroups2016
 
 
 def doOverlow(h):
@@ -960,7 +960,7 @@ if __name__ == "__main__":
     
         from wremnants import histselections as sel
         
-        groups = datagroups2016("mw_with_mu_eta_pt_%s_nnpdf31.pkl.lz4" % met)
+        groups = Datagroups2016("mw_with_mu_eta_pt_%s_nnpdf31.pkl.lz4" % met)
         groups.groups.update({
             "EWK" : dict(
                     members = [groups.datasets[x] for x in ["WplustaunuPostVFP", "WminustaunuPostVFP", "ZmumuPostVFP", "ZtautauPostVFP", "ZZ2l2nuPostVFP", "WZPostVFP", "WWPostVFP"]],
