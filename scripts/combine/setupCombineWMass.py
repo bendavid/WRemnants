@@ -27,7 +27,6 @@ def make_parser(parser=None):
     parser.add_argument("-k",  "--keepNuisances", type=str, default="", help="Regular expression to keep some systematics, overriding --excludeNuisances. Can be used to keep only some systs while excluding all the others with '.*'")
     parser.add_argument("--skipOtherChargeSyst", action="store_true", help="Skip saving histograms and writing nuisance in datacard for systs defined for a given charge but applied on the channel with the other charge")
     parser.add_argument("--scaleMuonCorr", type=float, default=1.0, help="Scale up/down dummy muon scale uncertainty by this factor")
-    parser.add_argument("--muonScaleVariation", choices=["smearing_weights", "massweights", "manual_pt_shift"], default="massweights", help="the method with which the distributions for the muon scale variations is derived")
     parser.add_argument("--noHist", action='store_true', help="Skip the making of 2D histograms (root file is left untouched if existing)")
     parser.add_argument("--effStatLumiScale", type=float, default=None, help="Rescale equivalent luminosity for efficiency stat uncertainty by this value (e.g. 10 means ten times more data from tag and probe)")
     parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers and nuisances)")
@@ -252,17 +251,17 @@ def main(args):
         combine_helpers.add_scale_uncertainty(cardTool, "integrated", single_v_nonsig_samples, False, name_append="Z", resum=args.resumUnc)
 
     msv_config_dict = {
-        "smearing_weights":{
+        "smearingWeights":{
             "hist_name": "muonScaleSyst_responseWeights",
             "syst_axes": ["unc", "downUpVar"],
             "syst_axes_labels": ["unc", "downUpVar"]
         },
-        "massweights":{
+        "massWeights":{
             "hist_name": "muonScaleSyst",
             "syst_axes": ["downUpVar", "scaleEtaSlice"],
             "syst_axes_labels": ["downUpVar", "ieta"]
         },
-        "manual_pt_shift":{
+        "manualShift":{
             "hist_name": "muonScaleSyst_manualShift",
             "syst_axes": ["downUpVar"],
             "syst_axes_labels": ["downUpVar"]
