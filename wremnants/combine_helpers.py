@@ -1,4 +1,4 @@
-from utilities import boostHistHelpers as hh, common, logging
+from utilities import boostHistHelpers as hh, common, logging,input_tools
 from wremnants import syst_tools,theory_tools
 import numpy as np
 import re
@@ -27,7 +27,8 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
     group_name = f"QCDscale{name_append}"
     # Exclude all combinations where muR = muF = 1 (nominal) or where
     # they are extreme values (ratio = 4 or 1/4)
-    skip_entries = [(1.j, 1.j), (0.5j, 2.j), (2.j, 0.5j)]
+    skip_entries = [{"muRfact" : 1.j, "muFfact" :  1.j}, {"muRfact" : 0.5j, "muFfact" : 2.j}, 
+                    {"muRfact" : 2.j, "muFfact" : 0.5j}]
     # In order to make prettier names than the automated ones.
     # No harm in leaving extra replaces that won't be triggered
     name_replace = [("muR2muF2", "muRmuFUp"), ("muR0muF0", "muRmuFDown"), ("muR2muF1", "muRUp"), 
@@ -66,55 +67,80 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
 
     # Skip extreme muR/muF values for all bin combos (-1 = any)
     nsyst_dims = len(syst_axes)
-    skip_entries = [(*[-1]*(nsyst_dims-2),*x) for x in skip_entries]
+    #skip_entries = [(*[-1]*(nsyst_dims-2),*x) for x in skip_entries]
 
     if resum:
-        group_name += "Resum"
-        # At least I hope this is the binning... Ideally would get it from the hist, but it's not trivial here
-        other_dims = []
-
+        group_name += f"Resum{resum.capitalize()}"
         if pt_binned:
             binning = np.array(common.ptV_10quantiles_binning)
             pt30_idx = np.argmax(binning > 30)
             # Drop the uncertainties for < 30
-            other_dims = [[-1]*(nsyst_dims-1)]
-            if helicity:
-                # Skip only the 1+cos^2 term
-                other_dims = [(*[-1]*(nsyst_dims-4), -1.j, -1, -1)]
-
-            skip_entries.extend([(complex(0, x), *other) for other in other_dims for x in binning[:pt30_idx-1]])
-        elif helicity:
-            skip_entries.append((*[-1]*(nsyst_dims-2), -1.j, -1, -1))
+            skip_entries.extend([{"ptVgen" : complex(0, x)} for x in binning[:pt30_idx-1]])
+        if helicity:
+            skip_entries.append({"helicity" : -1.j})
         
-        obs = ("eta", "pt") if not card_tool.project else card_tool.project
+        obs = card_tool.project
+        if not obs:
+            raise ValueError("Failed to find the observable names for the resummation uncertainties")
         # TODO: Implement pT splitting for SCETlib
-        # TODO: The hist used needs to be configurable
         
-        theory_unc = args_from_metadata(card_tool, "theory_corr")
+        theory_unc = input_tools.args_from_metadata(card_tool, "theoryCorr")
         if not theory_unc:
             logger.error("Can not add resummation uncertainties. No theory correction was applied!")
-        theory_unc = theory_unc[0]
+        theory_unc = theory_unc[0]+"Corr"
+        if theory_unc != "scetlib_dyturboCorr":
+            raise ValueError(f"The theory uncertainty hist {theory_unc} doesn't have the resummation {resum} uncertainty implemented")
 
-        if args_from_metadata(card_tool, "theoryCorrAltOnly"):
+        if input_tools.args_from_metadata(card_tool, "theoryCorrAltOnly"):
             logger.error("The theory correction was only applied as an alternate hist. Using its syst isn't well defined!")
 
-        card_tool.addSystematic(name=theory_unc,
-            processes=samples,
-            group="resumTNP",
-            systAxes=["vars"],
-            passToFakes=to_fakes,
-            systNameReplace=[("central", ""), ("+1", "Up"), ("-1", "Down"), ("-0.5", "Down"), ("+0.5", "Up"), ("up", "Up"), ("down", "Down")],
-            skipEntries=[('^kappaFO.*',), ('^recoil_scheme.*',), ('^c_nu.*',), ('Omega\d.\d*',), ("^transition_points.*",)],
-            rename=f"resumTNP", 
-        )
+        syst_ax = "vars"
+        both_exclude = ['^kappaFO.*','^recoil_scheme.*','^c_nu.*','Omega\d.\d*',"^transition_points.*",]
+        tnp_nuisances = ["^gamma_.*", "b_.*", "s+*", "s-*",]
+        resumscale_nuisances = ["^nuB.*", "nuS.*", "^muB.*", "^muS.*",]
+        scale_nuisances = ["^mu.*", "^mu.*", "^nu",]
+        if resum == "tnp":
+            # Exclude the scale uncertainty nuisances
+            card_tool.addSystematic(name=theory_unc,
+                processes=samples,
+                group="resumTNP",
+                systAxes=["vars"],
+                passToFakes=to_fakes,
+                systNameReplace=[("central", ""), ("pdf0", ""), ("+1", "Up"), ("-1", "Down"), ("-0.5", "Down"), ("+0.5", "Up"), ("up", "Up"), ("down", "Down")],
+                skipEntries=[{syst_ax : x} for x in both_exclude+scale_nuisances],
+                rename=f"resumTNP", 
+            )
+        else:
+            # Exclude the tnp uncertainty nuisances
+            card_tool.addSystematic(name=theory_unc,
+                processes=samples,
+                group="resumTNP",
+                passToFakes=to_fakes,
+                skipEntries=[{syst_ax : x} for x in both_exclude+tnp_nuisances],
+                systAxes=["downUpVar"], # Is added by the actionMap
+                actionMap={s : lambda h: hh.syst_min_and_max_env_hist(h, obs, "vars", 
+                    [x for x in h.axes["vars"] if any(re.match(y, x) for y in resumscale_nuisances)]) for s in expanded_samples},
+                outNames=["scetlibResumScaleUp", "scetlibResumScaleDown"],
+                rename=f"resumScale", 
+            )
+            card_tool.addSystematic(name=theory_unc,
+                processes=samples,
+                group="resumScale",
+                passToFakes=to_fakes,
+                systAxes=["vars"],
+                actionMap={s : lambda h: h[{"vars" : ["kappaFO0.5-kappaf2.", "kappaFO2.-kappaf0.5", "mufdown", "mufup",]}] for s in expanded_samples},
+                outNames=["scetlib_kappaUp", "scetlib_kappaDown", "scetlib_muFUp", "scetlib_muFDown"],
+                rename=f"resumFOScale", 
+            )
+
         card_tool.addSystematic(name=theory_unc,
             processes=samples,
             group="resumNonpert",
             systAxes=["downUpVar"],
             passToFakes=to_fakes,
             actionMap={s : lambda h: hh.syst_min_and_max_env_hist(h, obs, "vars", 
-                ['c_nu-0.15-omega_nu0.43', 'c_nu0.05', 'c_nu0.5-omega_nu0.15', 'c_nu-0.5-omega_nu0.37', 'Omega0.', 'Omega0.71',],
-            no_flow=["ptVgen"]) for s in expanded_samples},
+                [x for x in h.axes["vars"] if any(re.match(y, x) for y in ["^c_nu", "^omega_nu", "^Omega"])]) \
+                    for s in expanded_samples},
             outNames=["scetlibNonpertUp", "scetlibNonpertDown"],
             rename=f"scetlibNonpert", 
         )
@@ -123,16 +149,16 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
             group="resumTransition",
             systAxes=["downUpVar"],
             passToFakes=to_fakes,
+            # NOTE: I don't actually remember why this used no_flow=ptVgen previously, I don't think there's any harm in not using it...
             actionMap={s : lambda h: hh.syst_min_and_max_env_hist(h, obs, "vars", 
-                ['transition_points0.4_0.75_1.1', 'transition_points0.2_0.45_0.7', 'transition_points0.4_0.55_0.7', 'transition_points0.2_0.65_1.1'],
-            no_flow=["ptVgen"]) for s in expanded_samples},
+                [x for x in h.axes["vars"] if "transition_point" in x]) for s in expanded_samples},
             outNames=["resumTransitionUp", "resumTransitionDown"],
             rename=f"scetlibResumTransition", 
         )
 
     if helicity:
         # Drop the uncertainty of A5,A6,A7
-        skip_entries.extend([(*[-1]*(nsyst_dims-3), complex(0, i), -1, -1) for i in (5,6,7)])
+        skip_entries.extend([{"helicity" : complex(0, i)} for i in (5,6,7)])
 
     # Skip MiNNLO unc. 
     if resum and not (pt_binned or helicity):
@@ -154,29 +180,22 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
             rename=group_name, # Needed to allow it to be called multiple times
         )
 
-def args_from_metadata(card_tool, arg):
-    meta_data = card_tool.datagroups.getMetaInfo()
-    if "args" not in meta_data.keys() or arg not in meta_data["args"].keys():
-        raise IOError(f"The argument {arg} was not found in the metadata, maybe you run on an obsolete file.")
-
-    return meta_data["args"][arg]
-
-
 def add_pdf_uncertainty(card_tool, samples, to_fakes, action=None):
-    pdf = args_from_metadata(card_tool, "pdfs")[0]
+    pdf = input_tools.args_from_metadata(card_tool, "pdfs")[0]
     logger.info(f"Using PDF {pdf}")
     pdfInfo = theory_tools.pdf_info_map("ZmumuPostVFP", pdf)
     pdfName = pdfInfo["name"]
 
+    pdf_ax = "pdfVar"
     symHessian = pdfInfo["combine"] == "symHessian"
     card_tool.addSystematic(pdfName, 
         processes=samples,
         mirror=True if symHessian else False,
         group=pdfName,
-        systAxes=["pdfVar"],
+        systAxes=[pdf_ax],
         # Needs to be a tuple, since for multiple axis it would be (ax1, ax2, ax3)...
         # -1 means all possible values of the mirror axis
-        skipEntries=[("^pdf0[a-z]*", -1) if symHessian else ("^pdf0[a-z]*",)],
+        skipEntries=[{pdf_ax : "^pdf0[a-z]*"}],
         passToFakes=to_fakes,
         actionMap=action,
         scale=pdfInfo["scale"] if "scale" in pdfInfo else 1,
