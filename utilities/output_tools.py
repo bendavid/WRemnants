@@ -87,8 +87,8 @@ def write_analysis_output(results, outfile, args):
         to_append.append(args.postfix)
     if args.maxFiles > 0:
         to_append.append(f"maxFiles{args.maxFiles}")
-    if args.customTag:
-        to_append.append(args.customTag)
+    if args.postfix:
+        to_append.append(args.postfix)
 
     if to_append:
         outfile = outfile.replace(".hdf5", f"_{'_'.join(to_append)}.hdf5")
