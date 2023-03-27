@@ -32,7 +32,7 @@ class CardTool(object):
         self.nominalTemplate = ""
         self.spacing = 28
         self.systTypeSpacing = 16
-        self.procColumnsSpacing = 16
+        self.procColumnsSpacing = 24
         self.fakeName = "Fake" # but better to set it explicitly
         self.dataName = "Data"
         self.nominalName = "nominal"
@@ -328,11 +328,12 @@ class CardTool(object):
         if hvar.axes[-1].name == "mirror":
             axNames.append("mirror")
             axLabels.append("mirror")
-        axes = [hvar.axes[ax] for ax in axNames]
 
         if not all([name in hvar.axes.name for name in axNames]):
             raise ValueError(f"Failed to find axis names {str(axNames)} in hist for syst {syst}. " \
                 f"Axes in hist are {str(hvar.axes.name)}")
+
+        axes = [hvar.axes[ax] for ax in axNames]
 
         # Converting to a list becasue otherwise if you print it for debugging you loose it
         entries = list(itertools.product(*[[x for x in ax] if type(ax) == hist.axis.StrCategory else range(ax.size) for ax in axes]))

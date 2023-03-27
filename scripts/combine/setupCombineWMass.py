@@ -97,7 +97,7 @@ def main(args):
         if not args.constrainMass:
             logger.warning("Unfolding is specified but the mass is treated free floating, to constrain the mass add '--constrainMass'")
 
-        base_procs = ["WmunuPlus", "WmunuMinus"] if wmass else ["Zmumu"]
+        base_procs = ["Wmunu_q0", "Wmunu_q1"] if wmass else ["Zmumu"]
 
         for base_proc in base_procs:
             datagroups.defineSignalBinsUnfolding(args.fitvar, base_proc)
@@ -169,7 +169,7 @@ def main(args):
         cardTool.writeOutput(args=args)
         logger.info("Using option --doStatOnly: the card was created with only mass weights and a dummy LnN syst on all processes")
         quit()
-        
+    
     if args.constrainMass:
         # add an uncertainty on the mass, e.g. for ptll fits
         cardTool.addSystematic("massWeight", 
