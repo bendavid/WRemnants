@@ -15,7 +15,7 @@ import pickle
 import narf
 import hist
 
-from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_Z
+from wremnants.datasets.datagroupsLowPU import DatagroupsLowPU_Z
 from wremnants.datasets.datagroups2016 import Datagroups2016
 
 
@@ -730,8 +730,8 @@ def plotHighLowPU():
     # lowPU
     nvtx_lowPU = list(range(1, 7))
     flavor = "mumu"
-    groups_lowPU_pfmet = datagroupsLowPU_Z("mz_lowPU_%s_pfmet.pkl.lz4" % flavor, flavor=flavor)
-    groups_lowPU_deepmet = datagroupsLowPU_Z("mz_lowPU_%s_deepmet.pkl.lz4" % flavor, flavor=flavor)
+    groups_lowPU_pfmet = DatagroupsLowPU_Z("mz_lowPU_%s_pfmet.pkl.lz4" % flavor, flavor=flavor)
+    groups_lowPU_deepmet = DatagroupsLowPU_Z("mz_lowPU_%s_deepmet.pkl.lz4" % flavor, flavor=flavor)
     
     # highPU
     nvtx_highPU = list(range(5, 40))

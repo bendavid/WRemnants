@@ -17,7 +17,7 @@ import narf
 import hist
 import numpy as np
 
-from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_Z
+from wremnants.datasets.datagroupsLowPU import DatagroupsLowPU_Z
 from wremnants.datasets.datagroups2016 import Datagroups2016
 
 
@@ -84,7 +84,7 @@ def mTcomparison():
     
     '''
    
-    groups = datagroupsLowPU_Z("lowPU_%s_%s.pkl.lz4" % (flavor, "RawPFMET"), flavor=flavor)
+    groups = DatagroupsLowPU_Z("lowPU_%s_%s.pkl.lz4" % (flavor, "RawPFMET"), flavor=flavor)
     bhist_lowPU_RawPFMET = parseProc(groups, histCfg, "WJetsToMuNu")
     bhist_lowPU_RawPFMET = slice_(bhist_lowPU_RawPFMET, "eta")
     hist_lowPU_RawPFMET = narf.hist_to_root(bhist_lowPU_RawPFMET)
@@ -92,7 +92,7 @@ def mTcomparison():
     hist_lowPU_RawPFMET.SetLineWidth(2)
     hist_lowPU_RawPFMET.Scale(1./hist_lowPU_RawPFMET.Integral())
 
-    groups = datagroupsLowPU_Z("lowPU_%s_%s.pkl.lz4" % (flavor, "DeepMETReso"), flavor=flavor)
+    groups = DatagroupsLowPU_Z("lowPU_%s_%s.pkl.lz4" % (flavor, "DeepMETReso"), flavor=flavor)
     bhist_lowPU_DeepMETReso = parseProc(groups, histCfg, "WJetsToMuNu")
     bhist_lowPU_DeepMETReso = slice_(bhist_lowPU_DeepMETReso, "eta")
     hist_lowPU_DeepMETReso = narf.hist_to_root(bhist_lowPU_DeepMETReso)
@@ -184,7 +184,7 @@ def mTcomparison_fromCards():
     
     '''
    
-    groups = datagroupsLowPU_Z("lowPU_%s_%s.pkl.lz4" % (flavor, "RawPFMET"), flavor=flavor)
+    groups = DatagroupsLowPU_Z("lowPU_%s_%s.pkl.lz4" % (flavor, "RawPFMET"), flavor=flavor)
     bhist_lowPU_RawPFMET = parseProc(groups, histCfg, "WJetsToMuNu")
     bhist_lowPU_RawPFMET = slice_(bhist_lowPU_RawPFMET, "eta")
     hist_lowPU_RawPFMET = narf.hist_to_root(bhist_lowPU_RawPFMET)
@@ -192,7 +192,7 @@ def mTcomparison_fromCards():
     hist_lowPU_RawPFMET.SetLineWidth(2)
     hist_lowPU_RawPFMET.Scale(1./hist_lowPU_RawPFMET.Integral())
 
-    groups = datagroupsLowPU_Z("lowPU_%s_%s.pkl.lz4" % (flavor, "DeepMETReso"), flavor=flavor)
+    groups = DatagroupsLowPU_Z("lowPU_%s_%s.pkl.lz4" % (flavor, "DeepMETReso"), flavor=flavor)
     bhist_lowPU_DeepMETReso = parseProc(groups, histCfg, "WJetsToMuNu")
     bhist_lowPU_DeepMETReso = slice_(bhist_lowPU_DeepMETReso, "eta")
     hist_lowPU_DeepMETReso = narf.hist_to_root(bhist_lowPU_DeepMETReso)
@@ -264,13 +264,13 @@ def eventYields():
     for proc in procs:
     
         met = "DeepMETReso"
-        groups = datagroupsLowPU_Z("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
+        groups = DatagroupsLowPU_Z("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
         hist_DeepMETReso = parseProc(groups, histCfg, proc)
         hist_DeepMETReso.SetLineColor(ROOT.kRed)
         hist_DeepMETReso.SetLineWidth(2)
         
         met = "RawPFMET"
-        groups = datagroupsLowPU_Z("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
+        groups = DatagroupsLowPU_Z("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
         hist_RawPFMET = parseProc(groups, histCfg, proc)
         hist_RawPFMET.SetLineColor(ROOT.kBlue)
         hist_RawPFMET.SetLineWidth(2)

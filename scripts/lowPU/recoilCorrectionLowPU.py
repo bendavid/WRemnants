@@ -13,7 +13,7 @@ import functions
 import plotter
 import recoilLibs
 
-from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_Z
+from wremnants.datasets.datagroupsLowPU import DatagroupsLowPU_Z
 
 import lz4.frame
 import narf
@@ -3388,7 +3388,7 @@ def prepareFile(fInName, fOutName):
         return bhist 
 
 
-    datagroups = datagroupsLowPU_Z(fInName, flavor=flavor)
+    datagroups = DatagroupsLowPU_Z(fInName, flavor=flavor)
     procs = ["ZZ", "EWK_noZZ", "TTbar"]
     if flavor == "mumu": procs += ["SingleMuon", "DYmumu"]
     if flavor == "ee": procs += ["SingleElectron", "DYee"]

@@ -15,7 +15,7 @@ import pickle
 import narf
 import numpy as np
 
-from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_Z
+from wremnants.datasets.datagroupsLowPU import DatagroupsLowPU_Z
 from wremnants.datasets.datagroups2016 import Datagroups2016
 
 
@@ -194,7 +194,7 @@ if __name__ == "__main__":
     
     if lowPU:
 
-        datagroups = datagroupsLowPU_Z("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
+        datagroups = DatagroupsLowPU_Z("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
         lumiLabel = "199 pb^{#minus1} (13 TeV)"
 
         ##procs = ["Zmumu", "Ztautau", "Other"]
