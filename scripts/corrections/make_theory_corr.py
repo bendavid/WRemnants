@@ -29,19 +29,21 @@ def read_corr(procName, generator, corr_files):
     charge = 0 if procName[0] == "Z" else (1 if "Wplus" in procName else -1)
     corr_file = corr_files[0]
     if "scetlib" in generator:
-        if "dyturbo" in generator == "scetlib_dyturbo":
+        if "dyturbo" in generator:
             scetlib_files = [x for x in corr_files if pathlib.Path(x).suffix == ".pkl"]
             if len(scetlib_files) != 2:
-                raise ValueError(f"scetlib_dyturbo correction requires two SCETlib files (resummed and FO nonsingular). Found {len(scetlib_files)}")
-            nlo_nons_idx = 0 if "nlo" in scetlib_files[0] else 1
-            resumf = scetlib_files[~nlo_nons_idx]
-            nlo_nonsf = scetlib_files[nlo_nons_idx]
+                raise ValueError(f"scetlib_dyturbo correction requires two SCETlib files (resummed and FO singular). Found {len(scetlib_files)}")
+            if not any("nnlo_sing" not in x for x in scetlib_files):
+                raise ValueError("Must pass in a fixed order singular file")
+            nnlo_sing_idx = 0 if "nnlo_sing" in scetlib_files[0] else 1
+            resumf = scetlib_files[~nnlo_sing_idx]
+            nnlo_singf = scetlib_files[nnlo_sing_idx]
 
             dyturbo_files = [x for x in corr_files if pathlib.Path(x).suffix == ".txt"]
             if len(dyturbo_files) != 1:
                 raise ValueError("scetlib_dyturbo correction requires one DYTurbo file (fixed order contribution)")
 
-            numh = input_tools.read_matched_scetlib_dyturbo_hist(resumf, nlo_nonsf, dyturbo_files[0], args.axes, charge=charge)
+            numh = input_tools.read_matched_scetlib_dyturbo_hist(resumf, nnlo_singf, dyturbo_files[0], args.axes, charge=charge)
             print(numh.sum())
             print(resumf)
             print("DYTURBO", dyturbo_files)

@@ -40,7 +40,7 @@ xlabels = {
 
 parser = argparse.ArgumentParser()
 parser.add_argument("infile", help="Output file of the analysis stage, containing ND boost histogrdams")
-parser.add_argument("--ratio-to-data", action='store_true', help="Use data as denominator in ratio")
+parser.add_argument("--ratioToData", action='store_true', help="Use data as denominator in ratio")
 parser.add_argument("-n", "--baseName", type=str, help="Histogram name in the file (e.g., 'nominal')", default="nominal")
 parser.add_argument("--nominalRef", type=str, help="Specify the nominal his if baseName is a variation hist (for plotting alt hists)")
 parser.add_argument("--hists", type=str, nargs='+', required=True, choices=xlabels.keys(), help="List of histograms to plot")
@@ -157,11 +157,9 @@ if addVariation:
         # to the already loaded hist
         if load_op and reload:
             action = None
-        print("Adding name", varname)
         groups.addSummedProc(nominalName, relabel=args.baseName, name=name, label=label, exclude=exclude,
             color=color, reload=reload, rename=varname, procsToRead=datasets,
             preOpMap=load_op, action=action)
-        print("Groups", groups.groups.keys())
 
         exclude.append(varname)
         unstack.append(varname)
@@ -184,8 +182,6 @@ def collapseSyst(h):
             return h[{ax : 0}].copy()
     return h
 
-print("Now keys are", histInfo.keys())
-
 overflow_ax = ["ptll", "chargeVgen", "massVgen", "ptVgen"]
 for h in args.hists:
     if len(h.split("-")) > 1:
@@ -193,12 +189,12 @@ for h in args.hists:
     else:
         action = lambda x: hh.projectNoFlow(collapseSyst(x[select]), h, overflow_ax)
     fig = plot_tools.makeStackPlotWithRatio(histInfo, prednames, histName=args.baseName, ylim=args.ylim, yscale=args.yscale,
-            fill_between=args.fillBetween if hasattr(args, "fill_between") else None, 
-            skip_fill=args.skipFillBetween if hasattr(args, "skip_fill_between") else 0,
+            fill_between=args.fillBetween if hasattr(args, "variation") else None, 
+            skip_fill=args.skipFillBetween if hasattr(args, "variation") else 0,
             action=action, unstacked=unstack, 
             fitresult=args.fitresult, prefit=args.prefit,
             xlabel=xlabels[h], ylabel="Events/bin", rrange=args.rrange, binwnorm=1.0, lumi=groups.lumi,
-            ratio_to_data=args.ratio_to_data, rlabel="Pred./Data" if args.ratio_to_data else "Data/Pred.",
+            ratio_to_data=args.ratioToData, rlabel="Pred./Data" if args.ratioToData else "Data/Pred.",
             xlim=args.xlim, no_fill=args.noFill, cms_decor="Preliminary" if not args.noData else "Simulation Preliminary",
             legtext_size=20*args.scaleleg)
 
