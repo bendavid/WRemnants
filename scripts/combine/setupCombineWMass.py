@@ -20,7 +20,7 @@ def make_parser(parser=None):
     parser.add_argument("--fitvar", help="Variable to fit", default="eta-pt")
     parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow). Equivalent to --excludeNuisances '.*effSystTnP|.*effStatTnP' ")
     parser.add_argument("--ewUnc", action='store_true', help="Include EW uncertainty")
-    parser.add_argument("-p", "--pseudoData", type=str, help="Hist to use as pseudodata")
+    parser.add_argument("--pseudoData", type=str, help="Hist to use as pseudodata")
     parser.add_argument("--pseudoDataIdx", type=int, default=0, help="Variation index to use as pseudodata")
     parser.add_argument("--pseudoDataFile", type=str, help="Input file for pseudodata (if it should be read from a different file", default=None)
     parser.add_argument("-x",  "--excludeNuisances", type=str, default="", help="Regular expression to exclude some systematics from the datacard")
@@ -75,8 +75,8 @@ def main(args):
     tag = name+"_"+args.fitvar.replace("-","_")
     if args.doStatOnly:
         tag += "_statOnly"
-    if args.customTag:
-        tag += f"_{args.customTag}"
+    if args.postfix:
+        tag += f"_{args.postfix}"
 
     outfolder = f"{args.outfolder}/{tag}/"
     if not os.path.isdir(outfolder):

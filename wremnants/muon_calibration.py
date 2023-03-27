@@ -482,15 +482,15 @@ def transport_smearing_weights_to_reco(
         if 'nominal_gen_smeared' in proc_hist.keys():
             nominal_gen_smear = proc_hist['nominal_gen_smeared'].get()
         else:
-            warning.warn(f"Histogram 'nominal_gen_smeared' not found in {proc}")
-            warning.warn("smearing weights not transported to RECO kinematics")
+            logger.warn(f"Histogram 'nominal_gen_smeared' not found in {proc}")
+            logger.warn("smearing weights not transported to RECO kinematics")
             return
 
         if 'muonScaleSyst_responseWeights_gensmear' in proc_hist.keys():
             msv_sw_gen_smear = proc_hist['muonScaleSyst_responseWeights_gensmear'].get()
         else:
-            warnings.warn(f"Histogram 'muonScaleSyst_responseWeights_gensmear' not found in {proc}")
-            warnings.warn("smearing weights not transported to RECO kinematics")
+            logger.warn(f"Histogram 'muonScaleSyst_responseWeights_gensmear' not found in {proc}")
+            logger.warn("smearing weights not transported to RECO kinematics")
             return
 
         msv_sw_reco = hist.Hist(*msv_sw_gen_smear.axes, storage = msv_sw_gen_smear._storage_type())
