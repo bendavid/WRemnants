@@ -14,7 +14,7 @@ import lz4.frame
 import pickle
 import narf
 
-from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_Z
+from wremnants.datasets.datagroupsLowPU import DatagroupsLowPU_Z
 
 
 def parseProc(histCfg, procName, syst="", rebin=1):
@@ -60,7 +60,7 @@ if __name__ == "__main__":
       
       
     sys.exit()  
-    groups = datagroupsLowPU_Z("mz_lowPU_%s.pkl.lz4" % flavor)
+    groups = DatagroupsLowPU_Z("mz_lowPU_%s.pkl.lz4" % flavor)
 
     if flavor == "mumu":
     

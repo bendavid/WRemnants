@@ -269,12 +269,6 @@ class Datagroups(object):
 
             group[label] = narf_hist
 
-    def histName(self, baseName, procName="", syst=""):
-        return Datagroups.histName(baseName, procName, syst, nominalName=self.nominalName)
-
-    def histNameCombine(self, procName, baseName, syst, channel):
-        return Datagroups.histNameCombine(procName, baseName, syst, channel)
-
     def loadHistsForDatagroups(
         self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="",
         nominalIfMissing=True, applySelection=True, forceNonzero=True, pseudodata=False,
@@ -431,6 +425,7 @@ class Datagroups(object):
                 fake_genbin = dict(self.groups["Fake"])
                 fake_genbin['selectOp'] = lambda x, indices=indices, genvars=genvars, f0=fake_genbin['selectOp']: f0(x)[{var : i for var, i in zip(genvars, indices)}]
                 proc_name += "_Fake"
+                fake_genbin['members'] = self.groups[base_process]['members']
                 self.addGroup(proc_name, fake_genbin)
 
             # self.addGroupMember("Fake", proc_name)
@@ -448,6 +443,37 @@ class Datagroups(object):
         for member in self.groups[base_process]["members"]:
             self.deleteGroupMember("Fake", member)
         self.deleteGroup(base_process)
+
+    def make_yields_df(self, histName, procs, action):
+        def sum_and_unc(h):
+            return (h.sum().value, math.sqrt(h.sum().variance))
+        df = pd.DataFrame([(k, *sum_and_unc(action(v[histName]))) for k,v in self.groups.items() if k in procs], 
+                columns=["Process", "Yield", "Uncertainty"])
+        return df
+
+    def readHist(self, baseName, proc, syst, scaleOp=None, forceNonzero=True, scaleToNewLumi=-1):
+        output = self.results[proc.name]["output"]
+        histname = self.histName(baseName, proc.name, syst)
+        logger.debug(f"Reading hist {histname} for proc {proc.name} and syst {syst}")
+        if histname not in output:
+            raise ValueError(f"Histogram {histname} not found for process {proc.name}")
+        h = output[histname]
+        if isinstance(h, narf.ioutils.H5PickleProxy):
+            h = h.get()
+        if forceNonzero:
+            h = hh.clipNegativeVals(h)
+        if scaleToNewLumi > 0:
+            h = hh.scaleByLumi(h, scaleToNewLumi, createNew=True)
+        scale = self.processScaleFactor(proc)
+        if scaleOp:
+            scale = scale*scaleOp(proc)
+        return h*scale
+
+    def histName(self, baseName, procName="", syst=""):
+        return Datagroups.histName(baseName, procName, syst, nominalName=self.nominalName)
+
+    def histNameCombine(self, procName, baseName, syst, channel):
+        return Datagroups.histNameCombine(procName, baseName, syst, channel)
 
     @staticmethod
     def histName(baseName, procName="", syst=""):

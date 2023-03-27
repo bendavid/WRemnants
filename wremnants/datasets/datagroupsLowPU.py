@@ -290,14 +290,7 @@ class DatagroupsLowPU(Datagroups):
                     #where=h[{"passIso" : False, "passMT" : True}].values(flow=True)>1),
             h[{"passIso" : False, "passMT" : True}], 
         )
-        return ret
-
-
-    def processScaleFactor(self, proc):
-        if proc.is_data:
-            return 1
-        return self.lumi*1000*proc.xsec/self.results[proc.name]["weight_sum"]
-        
+        return ret       
         
     def histName(self, baseName, procName, syst):
         
@@ -311,28 +304,8 @@ class DatagroupsLowPU(Datagroups):
             return syst
         return "_".join([baseName,syst])
     
-    # read single histogram (name, proc and syst)
-    def readHist(self, baseName, proc, syst = "", scaleOp=None, forceNonzero=True, scaleToNewLumi=-1): 
-        output = self.results[proc.name]["output"]
-        histname = self.histName(baseName, proc.name, syst)
-        #print(baseName, proc.name, histname, syst)
-        if histname not in output:
-            raise ValueError(f"Histogram {histname} not found for process {proc.name}")
-        h = output[histname]
-        if isinstance(h, narf.ioutils.H5PickleProxy):
-            h = h.get()
-        #print(h)
-        if forceNonzero:
-            h = hh.clipNegativeVals(h)
-        scale = self.processScaleFactor(proc)
-        if scaleOp:
-            scale = scale*scaleOp(proc)
-        return h*scale
-        
 
-
-
-class datagroupsLowPU_Z(datagroups):
+class DatagroupsLowPU_Z(Datagroups):
     def __init__(self, infile, combine=False, flavor=""):
         self.datasets = {x.name : x for x in datasetsLowPU.getDatasets()}
         super().__init__(infile, combine)
@@ -535,12 +508,6 @@ class datagroupsLowPU_Z(datagroups):
                 selectOp = None,
                 ),
             )        
-
-    def processScaleFactor(self, proc):
-        if proc.is_data:
-            return 1
-        return self.lumi*1000*proc.xsec/self.results[proc.name]["weight_sum"]
-        
         
     def histName(self, baseName, procName, syst):
         
@@ -552,29 +519,9 @@ class datagroupsLowPU_Z(datagroups):
             return baseName
         if (baseName == "" or baseName == "x") and syst:
             return syst
-        return "_".join([baseName,syst])
-    
-    # read single histogram (name, proc and syst)
-    def readHist(self, baseName, proc, syst = "", scaleOp=None, forceNonzero=True):
-        output = self.results[proc.name]["output"]
-        histname = self.histName(baseName, proc.name, syst)
-        print(baseName, proc.name, histname, syst)
-        if histname not in output:
-            raise ValueError(f"Histogram {histname} not found for process {proc.name}")
-        h = output[histname]
-        #print(h)
-        if forceNonzero:
-            h = hh.clipNegativeVals(h)
-        scale = self.processScaleFactor(proc)
-        if scaleOp:
-            scale = scale*scaleOp(proc)
-        return h*scale
+        return "_".join([baseName,syst])  
         
-        
-        
-        
-        
-class datagroupsLowPU_W(datagroups):
+class DatagroupsLowPU_W(Datagroups):
     def __init__(self, infile, combine=False, flavor=""):
         self.datasets = {x.name : x for x in datasetsLowPU.getDatasets()}
         super().__init__(infile, combine)
@@ -776,13 +723,6 @@ class datagroupsLowPU_W(datagroups):
         return h[{"passIso" : False, "mt":s[40j:10000j], "eta" : s[::hist.sum]}]*sf
         #hh.multiplyHists(hh.divideHists(h[{"passIso" : True, "mt":s[0j:40j]}], h[{"passIso" : False, "mt":s[0j:40j]}], cutoff=1), h[{"passIso" : False, "mt":s[40j:10000j]}])
         #return hh.multiplyHists(hh.divideHists(h[{"passIso" : True, "mt":s[0j:40j]}], h[{"passIso" : False, "mt":s[0j:40j]}], cutoff=1), h[{"passIso" : False, "mt":s[40j:10000j]}])
-
-
-    def processScaleFactor(self, proc):
-        if proc.is_data:
-            return 1
-        return self.lumi*1000*proc.xsec/self.results[proc.name]["weight_sum"]
-        
         
     def histName(self, baseName, procName, syst):
         
@@ -796,21 +736,4 @@ class datagroupsLowPU_W(datagroups):
             return syst
         return "_".join([baseName,syst])
     
-    # read single histogram (name, proc and syst)
-    def readHist(self, baseName, proc, syst = "", scaleOp=None, forceNonzero=True):
-        output = self.results[proc.name]["output"]
-        histname = self.histName(baseName, proc.name, syst)
-        #print(baseName, proc.name, histname, syst)
-        if histname not in output:
-            raise ValueError(f"Histogram {histname} not found for process {proc.name}")
-        h = output[histname]
-        if isinstance(h, narf.ioutils.H5PickleProxy):
-            h = h.get()
-        #print(h)
-        if forceNonzero:
-            h = hh.clipNegativeVals(h)
-        scale = self.processScaleFactor(proc)
-        if scaleOp:
-            scale = scale*scaleOp(proc)
-        return h*scale
         

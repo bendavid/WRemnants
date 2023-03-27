@@ -49,7 +49,7 @@ class Datagroups2016(Datagroups):
         if self.wmass:
             if splitWByCharge:
                 self.groups.update({
-                    "WmunuPlus" : dict(
+                    "Wmunu_q1" : dict(
                         members = self.getSafeListFromDataset(["WplusmunuPostVFP"]),
                         label = r"W$^{-}\to\mu\nu$",
                         color = "darkred",
@@ -58,7 +58,7 @@ class Datagroups2016(Datagroups):
                     }
                 )
                 self.groups.update({
-                    "WmunuMinus" : dict(
+                    "Wmunu_q0" : dict(
                         members = self.getSafeListFromDataset(["WminusmunuPostVFP"]),
                         label = r"W$^{-}\to\mu\nu$",
                         color = "darkred",
@@ -126,28 +126,3 @@ class Datagroups2016(Datagroups):
                 color = "grey",
                 selectOp = fakeOp,
             )
-
-    def make_yields_df(self, histName, procs, action):
-        def sum_and_unc(h):
-            return (h.sum().value, math.sqrt(h.sum().variance))
-        df = pd.DataFrame([(k, *sum_and_unc(action(v[histName]))) for k,v in self.groups.items() if k in procs], 
-                columns=["Process", "Yield", "Uncertainty"])
-        return df
-
-    def readHist(self, baseName, proc, syst, scaleOp=None, forceNonzero=True, scaleToNewLumi=-1):
-        output = self.results[proc.name]["output"]
-        histname = self.histName(baseName, proc.name, syst)
-        logger.debug(f"Reading hist {histname} for proc {proc.name} and syst {syst}")
-        if histname not in output:
-            raise ValueError(f"Histogram {histname} not found for process {proc.name}")
-        h = output[histname]
-        if isinstance(h, narf.ioutils.H5PickleProxy):
-            h = h.get()
-        if forceNonzero:
-            h = hh.clipNegativeVals(h)
-        if scaleToNewLumi > 0:
-            h = hh.scaleByLumi(h, scaleToNewLumi, createNew=True)
-        scale = self.processScaleFactor(proc)
-        if scaleOp:
-            scale = scale*scaleOp(proc)
-        return h*scale
