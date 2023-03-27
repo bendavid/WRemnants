@@ -93,7 +93,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
         theory_unc = args_from_metadata(card_tool, "theory_corr")
         if not theory_unc:
             logger.error("Can not add resummation uncertainties. No theory correction was applied!")
-        theory_unc = theory_unc[0]+"_unc"
+        theory_unc = theory_unc[0]
 
         if args_from_metadata(card_tool, "theoryCorrAltOnly"):
             logger.error("The theory correction was only applied as an alternate hist. Using its syst isn't well defined!")
