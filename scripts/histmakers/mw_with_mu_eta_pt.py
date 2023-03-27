@@ -236,7 +236,7 @@ def build_graph(df, dataset):
         if not args.noVertexWeight:
             weight_expr += "*weight_vtx"
         
-        df = df.define("exp_weight", weight_expr)
+        df = df.Define("exp_weight", weight_expr)
         df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
     ########################################################################
     
