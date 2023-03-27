@@ -189,8 +189,8 @@ for h in args.hists:
     else:
         action = lambda x: hh.projectNoFlow(collapseSyst(x[select]), h, overflow_ax)
     fig = plot_tools.makeStackPlotWithRatio(histInfo, prednames, histName=args.baseName, ylim=args.ylim, yscale=args.yscale,
-            fill_between=args.fillBetween if hasattr(args, "variation") else None, 
-            skip_fill=args.skipFillBetween if hasattr(args, "variation") else 0,
+            fill_between=args.fillBetween if hasattr(args, "fillBetween") else None, 
+            skip_fill=args.skipFillBetween if hasattr(args, "skipFillBetween") else 0,
             action=action, unstacked=unstack, 
             fitresult=args.fitresult, prefit=args.prefit,
             xlabel=xlabels[h], ylabel="Events/bin", rrange=args.rrange, binwnorm=1.0, lumi=groups.lumi,

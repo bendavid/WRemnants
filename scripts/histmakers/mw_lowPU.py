@@ -189,7 +189,7 @@ def build_graph(df, dataset):
 
 
     if not dataset.is_data: 
-        df = df.define("exp_weight", "weight*SFMC")
+        df = df.Define("exp_weight", "weight*SFMC")
         df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")
