@@ -47,57 +47,48 @@ dataDictV8 = {
                           'filepaths' : 
                           ["/scratch/shared/originalNANO/TTbar_2l2nu_postVFP/*.root"],
                           'xsec' : 88.29,
-                          'group' : "Top",
     },
     "ttbarlqPostVFP" : { 'name' :"TTSemileptonicPostVFP",
                          'filepaths' : 
                          ["/scratch/shared/originalNANO/TTbar_SemiLeptonic_postVFP/*.root"],
                          'xsec' : 365.64,
-                         'group' : "Top",
     },
     # TODO: these samples and cross sections are preliminary
     "singleTop_schanLepDecaysPostVFP" : { 'name' :"SingleTschanLepDecaysPostVFP",
                                           'filepaths' : 
                                           ["/scratch/shared/originalNANO/SingleTop_schan_lepDecays_postVFP/*.root"],
                                           'xsec' : 3.74,
-                                          'group' : "Top",
     },
     
     "singleTop_tWAntitopPostVFP" : { 'name' :"SingleTtWAntitopPostVFP",
                                      'filepaths' : 
                                      ["/scratch/shared/originalNANO/SingleTop_tW_antitop_noFullyHadronic_postVFP/*.root"],
                                      'xsec' : 19.55,
-                                     'group' : "Top",
     },
     "singleTop_tchanAntitopPostVFP" : { 'name' :"SingleTtchanAntitopPostVFP",
                                         'filepaths' : 
                                         ["/scratch/shared/originalNANO/SingleTop_tchan_antitop_inclusive_postVFP/*.root"],
                                         'xsec' : 70.79,
-                                        'group' : "Top",
     },
     "singleTop_tchanTopPostVFP" : { 'name' :"SingleTtchanTopPostVFP",
                                     'filepaths' : 
                                     ["/scratch/shared/originalNANO/SingleTop_tchan_top_inclusive_postVFP/*.root"],
                                     'xsec' : 119.71,
-                                    'group' : "Top",
     },    
     # TODO: should really use the specific decay channels
     "wwPostVFP" : { 'name' :"WWPostVFP",
                     'filepaths' : 
                     ["/scratch/shared/originalNANO/WW_inclusive_postVFP/*.root"],
                     'xsec' : 75.8,
-                    'group' : "Diboson",
     },
     "wzPostVFP" : { 'name' :"WZPostVFP",
                     'filepaths' : 
                     ["/scratch/shared/originalNANO/WZ_inclusive_postVFP/*.root"],
                     'xsec' : 27.6,
-                    'group' : "Diboson",
     },
     "zz2l2nuPostVFP" : { 'name' :"ZZ2l2nuPostVFP",
                          'filepaths' : 
                          ["/scratch/shared/originalNANO/ZZ_2l2nu_postVFP/*.root"],
                          'xsec' : 0.564,
-                         'group' : "Diboson",
     }
 }

@@ -59,8 +59,8 @@ axis_passMT = common.axis_passMT
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
 
 # gen axes for differential measurement
-axis_ptGen = hist.axis.Regular(template_npt, template_minpt, template_maxpt, name = "ptGen")
-axis_etaGen = hist.axis.Regular(template_neta, template_mineta, template_maxeta, name = "etaGen")
+axis_ptGen = hist.axis.Regular(2, template_minpt, template_maxpt, name = "ptGen")
+axis_etaGen = hist.axis.Regular(3, -2.4, 2.4, name = "etaGen")
 unfolding_axes = [axis_ptGen, axis_etaGen]
 unfolding_cols = ["ptGen", "etaGen"]
 
@@ -164,7 +164,7 @@ def build_graph(df, dataset):
 
         # add histograms before any selection
         df_gen = df
-        gen = df_gen.HistoBoost("gen", unfolding_axes, [*unfolding_cols, "nominal_weight"])
+        gen = df_gen.HistoBoost("gen", [*unfolding_axes, axis_charge], [*unfolding_cols, "chargeVgen", "nominal_weight"])
         results.append(gen)
 
         scale_axes = [*unfolding_axes, axis_ptVgen, axis_chargeVgen]

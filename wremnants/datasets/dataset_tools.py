@@ -25,7 +25,6 @@ def makeFilelist(paths, maxFiles=-1, format_args={}):
         filelist.extend(glob.glob(path) if path[:4] != "/eos" else buildXrdFileList(path, "eoscms.cern.ch"))
     return filelist if maxFiles < 0 else filelist[:maxFiles]
 
-
 def selectProc(selection, datasets):
     if any(selection == x.group for x in datasets):
         # if the selection matches any of the group names in the given dataset, the selection is applied to groups
@@ -72,4 +71,3 @@ def excludeProcs(excludes, datasets):
             return list(filter(excludes, datasets))
     else:
         return datasets
-

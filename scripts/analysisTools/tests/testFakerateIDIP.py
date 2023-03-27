@@ -8,7 +8,7 @@ import narf
 import wremnants
 import hist
 import lz4.frame, pickle
-from wremnants.datasets.datagroups import datagroups2016
+from wremnants.datasets.datagroups2016 import Datagroups2016
 from wremnants import histselections as sel
 
 from utilities import boostHistHelpers as hh,common
@@ -59,7 +59,7 @@ if __name__ == "__main__":
     xAxisName = args.xAxisName
     yAxisName = args.yAxisName
 
-    groups = datagroups2016(args.inputfile[0], applySelection=False)
+    groups = Datagroups2016(args.inputfile[0], applySelection=False)
     datasetsAll = groups.getNames()
     datasetsAllNoFake = list(filter(lambda x: x != "Fake", datasetsAll))
     datasets = ["Wmunu", "QCD", "Top", "Fake"]

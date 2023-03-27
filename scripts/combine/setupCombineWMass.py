@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 from wremnants import CardTool,theory_tools,syst_tools,combine_helpers
 from wremnants import histselections as sel
-from wremnants.datasets.datagroups import datagroups2016
-from utilities import boostHistHelpers as hh
+from wremnants.datasets.datagroups2016 import Datagroups2016
 from utilities import common, logging
 import argparse
 import os
@@ -53,14 +52,14 @@ def main(args):
         logger.warning("Adding QCD MC to list of processes for the fit setup")
     else:
         if "QCD" not in args.excludeProcGroups:
-            logger.warning("Automatic removal of QCD MC from list of processes. Use --filter-proc-groups 'QCD' or --add-qcd-mc to keep it")
+            logger.warning("Automatic removal of QCD MC from list of processes. Use --filterProcGroups 'QCD' or --addQCDMC to keep it")
             args.excludeProcGroups.append("QCD")
     filterGroup = args.filterProcGroups if args.filterProcGroups else None
     excludeGroup = args.excludeProcGroups if args.excludeProcGroups else None
     logger.debug(f"Filtering these groups of processes: {args.filterProcGroups}")
     logger.debug(f"Excluding these groups of processes: {args.excludeProcGroups}")
     
-    datagroups = datagroups2016(args.inputFile, excludeProcGroup=excludeGroup, filterProcGroup=filterGroup)
+    datagroups = Datagroups2016(args.inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, splitWByCharge=args.unfold)
     
     if args.xlim:
         if len(args.fitvar.split("-")) > 1:
@@ -88,28 +87,26 @@ def main(args):
     if not os.path.isdir(outfolder):
         os.makedirs(outfolder)
 
-    if args.unfold or args.fitXsec:
-        if args.unfold and args.fitXsec:
-            raise ValueError("Options --unfolding and --fitXsec are incompatible. Please choose one or the other")
-        if args.unfold and not args.constrainMass:
-            raise ValueError("Unfolding is specified but the mass is treated free floating, to constrain the mass add '--constrainMass'")
+    templateDir = f"{scriptdir}/Templates/WMass"
 
-        base_proc = "Wmunu"  if wmass else "Zmumu" 
-        datagroups.defineSignalBinsUnfolding(args.fitvar, base_proc, inclusive=args.fitXsec)
+    if args.unfold and args.fitXsec:
+        raise ValueError("Options --unfolding and --fitXsec are incompatible. Please choose one or the other")
+    elif args.fitXsec:
+        datagroups.unconstrainedProcesses.append("Wmunu" if wmass else "Zmumu")
+    elif args.unfold:
+        if not args.constrainMass:
+            logger.warning("Unfolding is specified but the mass is treated free floating, to constrain the mass add '--constrainMass'")
 
+        base_procs = ["Wmunu_q0", "Wmunu_q1"] if wmass else ["Zmumu"]
+
+        for base_proc in base_procs:
+            datagroups.defineSignalBinsUnfolding(args.fitvar, base_proc)
 
     if args.noHist and args.noStatUncFakes:
         raise ValueError("Option --noHist would override --noStatUncFakes. Please select only one of them")
 
-    templateDir = f"{scriptdir}/Templates/WMass"
     # Start to create the CardTool object, customizing everything
     cardTool = CardTool.CardTool(f"{outfolder}/{name}_{{chan}}.txt")
-    cardTool.setProcesses(datagroups.getNames())
-    # setting excluded processes for internal consistency, but in principle it should not be needed
-    # it will be used to call datagroups.loadHistsForDatagroups with the proper exclude argument, even if the
-    # list of processes to read (set with CardTool.setProcesses) should be totally sufficient in that case
-    cardTool.setExcludedProcs(excludeGroup)
-    ###
     cardTool.setDatagroups(datagroups)
     logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
     cardTool.setNominalTemplate(f"{templateDir}/main.txt")
@@ -129,7 +126,7 @@ def main(args):
     if args.pseudoData:
         cardTool.setPseudodata(args.pseudoData, args.pseudoDataIdx)
         if args.pseudoDataFile:
-            cardTool.setPseudodataDatagroups(datagroups2016(args.pseudoDataFile,
+            cardTool.setPseudodataDatagroups(Datagroups2016(args.pseudoDataFile,
                                                 excludeProcGroup=excludeGroup,
                                                 filterProcGroup=filterGroup))
     if args.lumiScale:
@@ -165,14 +162,14 @@ def main(args):
                                systAxes=["massShift"],
                                passToFakes=passSystToFakes,
     )
-
+    
     if args.doStatOnly:
         # print a card with only mass weights and a dummy syst
         cardTool.addLnNSystematic("dummy", processes=["Top", "Diboson"] if wmass else ["Other"], size=1.001, group="dummy")
         cardTool.writeOutput(args=args)
         logger.info("Using option --doStatOnly: the card was created with only mass weights and a dummy LnN syst on all processes")
         quit()
-        
+    
     if args.constrainMass:
         # add an uncertainty on the mass, e.g. for ptll fits
         cardTool.addSystematic("massWeight", 

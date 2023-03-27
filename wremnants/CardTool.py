@@ -32,7 +32,7 @@ class CardTool(object):
         self.nominalTemplate = ""
         self.spacing = 28
         self.systTypeSpacing = 16
-        self.procColumnsSpacing = 16
+        self.procColumnsSpacing = 24
         self.fakeName = "Fake" # but better to set it explicitly
         self.dataName = "Data"
         self.nominalName = "nominal"
@@ -46,7 +46,6 @@ class CardTool(object):
         self.pseudoData = None
         self.pseudoDataIdx = None
         self.excludeSyst = None
-        self.excludeProcGroups = None # exclude processes, by group name
         self.writeByCharge = True
         self.keepSyst = None # to override previous one with exceptions for special cases
         #self.loadArgs = {"operation" : "self.loadProcesses (reading hists from file)"}
@@ -137,7 +136,7 @@ class CardTool(object):
         # if processes are not set yet, do it now to skip one step
         # FIXME: should it allow one to reset the procDict by passing a flag, e.g. in case one loads a new datagroups?
         if resetGroups or not self.procDict:
-            self.setProcesses(self.datagroups.getNames(afterFilter=True))
+            self.setProcesses(self.datagroups.getNames())
         
     def setPseudodataDatagroups(self, datagroups):
         self.pseudodata_datagroups = datagroups 
@@ -187,15 +186,6 @@ class CardTool(object):
 
     def getProcesses(self):
         return list(self.procDict.keys())
-
-    def setExcludedProcs(self, proc_list):
-        if isinstance(proc_list, list):
-            self.excludeProcGroups = [x for x in proc_list]
-        elif isinstance(proc_list, str):
-            self.excludeProcGroups = [proc_list]
-        elif proc_list is not None:
-            logger.error(f"In CardTool.setExcludedProcs(): invalid argument with type {type(proc_list)}")
-            quit()
             
     def filteredProcesses(self, filterExpr):
         return list(filter(filterExpr, self.procDict.keys()))
@@ -226,7 +216,7 @@ class CardTool(object):
 
         # Need to make an explicit copy of the array before appending
         procs_to_add = [x for x in (self.allMCProcesses() if processes is None else processes)]
-        if passToFakes and self.getFakeName() not in procs_to_add and self.getFakeName() not in self.excludeProcGroups:
+        if passToFakes and self.getFakeName() not in procs_to_add:
             procs_to_add.append(self.getFakeName())
 
         if action and actionMap:
@@ -338,11 +328,12 @@ class CardTool(object):
         if hvar.axes[-1].name == "mirror":
             axNames.append("mirror")
             axLabels.append("mirror")
-        axes = [hvar.axes[ax] for ax in axNames]
 
         if not all([name in hvar.axes.name for name in axNames]):
             raise ValueError(f"Failed to find axis names {str(axNames)} in hist for syst {syst}. " \
                 f"Axes in hist are {str(hvar.axes.name)}")
+
+        axes = [hvar.axes[ax] for ax in axNames]
 
         # Converting to a list becasue otherwise if you print it for debugging you loose it
         entries = list(itertools.product(*[[x for x in ax] if type(ax) == hist.axis.StrCategory else range(ax.size) for ax in axes]))
@@ -456,10 +447,10 @@ class CardTool(object):
         datagroups = self.datagroups if not self.pseudodata_datagroups else self.pseudodata_datagroups
         datagroups.loadHistsForDatagroups(
             baseName=self.pseudoData, syst="", label=self.pseudoData,
-            procsToRead=processes, excluded_procs=self.excludeProcGroups,
+            procsToRead=processes,
             scaleToNewLumi=self.lumiScale)
-        procDict = datagroups.getDatagroups()
-        logger.warning(f"Making pseudodata summing these proceses: {processes}")
+
+        procDict = datagroups.groups
         hists = [procDict[proc][self.pseudoData] for proc in processes]
         hdata = hh.sumHists(hists)
         # Kind of hacky, but in case the alt hist has uncertainties
@@ -491,10 +482,10 @@ class CardTool(object):
     def writeOutput(self, args=None):
         self.datagroups.loadHistsForDatagroups(
             baseName=self.nominalName, syst=self.nominalName,
-            procsToRead=self.procDict.keys(), excluded_procs=self.excludeProcGroups,
+            procsToRead=self.procDict.keys(),
             label=self.nominalName, 
             scaleToNewLumi=self.lumiScale)
-        self.procDict = self.datagroups.getDatagroups()
+        self.procDict = self.datagroups.groups
         self.writeForProcesses(self.nominalName, processes=self.procDict.keys(), label=self.nominalName)
         self.loadNominalCard()
         if self.pseudoData:
@@ -508,7 +499,7 @@ class CardTool(object):
             processes = systMap["processes"]
             self.datagroups.loadHistsForDatagroups(
                 self.nominalName, systName, label="syst",
-                procsToRead=processes, excluded_procs=self.excludeProcGroups,
+                procsToRead=processes, 
                 forceNonzero=systName != "qcdScaleByHelicity",
                 preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"],
                 # Needed to avoid always reading the variation for the fakes, even for procs not specified
