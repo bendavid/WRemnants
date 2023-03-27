@@ -236,8 +236,8 @@ def build_graph(df, dataset):
         if not args.noVertexWeight:
             weight_expr += "*weight_vtx"
         
-        df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
-        df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
+        df = df.define("exp_weight", weight_expr)
+        df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
     ########################################################################
     
     if not args.noRecoil:

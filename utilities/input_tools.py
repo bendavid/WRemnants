@@ -4,6 +4,7 @@ import hist
 from utilities import boostHistHelpers as hh,logging
 import numpy as np
 import os
+import hdf5plugin
 import h5py
 from narf import ioutils
 
@@ -258,7 +259,7 @@ def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo
             newaxes.insert(-1, "charge")
         hfo_sing = hfo_sing.project(*newaxes)
         hsing = hsing.project(*newaxes)
-    if all("pdf" in x for x in hsing.axes["vars"]):
+    if all("pdf" in x for x in hsing.axes["vars"]) and hsing.axes["vars"].size > 1:
         logger.info("Reading PDF variations for DYTurbo")
         pdf_members = hsing.axes["vars"].size
         hfo = read_dyturbo_pdf_hist(dyturbo_fo, pdf_members=pdf_members, axes=axes if axes else hsing.axes.name[:-1], charge=charge)

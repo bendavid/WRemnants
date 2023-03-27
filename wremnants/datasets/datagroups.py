@@ -386,7 +386,7 @@ class datagroups2016(datagroups):
             ),
             "Zmumu" : dict(
                 members = self.getSafeListFromDataset(["ZmumuPostVFP"]),
-                label = r"Z$\to\mu\mu$",
+                label = r"Z$\to\mu\mu$ (N$^{3}LL+NNLO)$",
                 color = "lightblue",
                 selectOp = sigOp,
             ),   
