@@ -47,7 +47,7 @@ class Datagroups(object):
         self.groups = {}
         self.nominalName = "nominal"
         self.globalAction = None
-        self.gen_axes = None
+        self.gen_axes = ["etaGen", "ptGen"]
         self.unconstrainedProcesses = []
 
     def __del__(self):
@@ -420,17 +420,7 @@ class Datagroups(object):
                 raise ValueError(f"In setSelectOp(): process {proc} not found")
             self.groups[proc]["selectOp"] = op
 
-    def setGenAxes(self, fit_axes):
-        gen_axes_dict = {
-            "pt": "ptGen",
-            "eta": "etaGen"
-        }
-        gen_axes = []
-        for fit_axis in fit_axes.split("-"):
-            if fit_axis not in gen_axes_dict.keys():
-                raise RuntimeError(f"No corresponding gen level definition for {fit_axis} found!")
-            gen_axes.append(gen_axes_dict[fit_axis])
-        
+    def setGenAxes(self, gen_axes):        
         self.gen_axes = gen_axes
 
     def defineSignalBinsUnfolding(self, group_name):

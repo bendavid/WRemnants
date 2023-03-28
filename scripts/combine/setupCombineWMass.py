@@ -89,8 +89,6 @@ def main(args):
 
     templateDir = f"{scriptdir}/Templates/WMass"
 
-    datagroups.setGenAxes(args.fitvar)
-
     if args.unfold and args.fitXsec:
         raise ValueError("Options --unfolding and --fitXsec are incompatible. Please choose one or the other")
     elif args.fitXsec:
