@@ -1,8 +1,9 @@
 import ROOT
 import pathlib
 import hist
+import narf.clingutils
 
-ROOT.gInterpreter.Declare('#include "muon_prefiring.h"')
+narf.clingutils.Declare('#include "muon_prefiring.h"')
 
 data_dir = f"{pathlib.Path(__file__).parent}/data/"
 

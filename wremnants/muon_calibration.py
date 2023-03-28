@@ -5,7 +5,6 @@ import narf
 from utilities import rdf_tools
 from utilities import common, logging
 from utilities import boostHistHelpers as hh
-from . import muon_validation
 import uproot
 import numpy as np
 import warnings
@@ -14,8 +13,8 @@ from functools import reduce
 
 logger = logging.child_logger(__name__)
 
-ROOT.gInterpreter.Declare('#include "muon_calibration.h"')
-ROOT.gInterpreter.Declare('#include "lowpu_utils.h"')
+narf.clingutils.Declare('#include "muon_calibration.h"')
+narf.clingutils.Declare('#include "lowpu_utils.h"')
 
 data_dir = f"{pathlib.Path(__file__).parent}/data/"
 
@@ -64,7 +63,7 @@ def make_jpsi_crctn_helpers(args, make_uncertainty_helper=False):
 
     if make_uncertainty_helper:
         mc_unc_helper = make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}", n_eta_bins = 24) if mc_corrfile else None
-        data_unc_helper = make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}", scale = 3.0) if data_corrfile else None
+        data_unc_helper = make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}", scale = 3.04) if data_corrfile else None
 
         return mc_helper, data_helper, mc_unc_helper, data_unc_helper
     else:
@@ -483,15 +482,15 @@ def transport_smearing_weights_to_reco(
         if 'nominal_gen_smeared' in proc_hist.keys():
             nominal_gen_smear = proc_hist['nominal_gen_smeared'].get()
         else:
-            warning.warn(f"Histogram 'nominal_gen_smeared' not found in {proc}")
-            warning.warn("smearing weights not transported to RECO kinematics")
+            logger.warning(f"Histogram 'nominal_gen_smeared' not found in {proc}")
+            logger.warning("smearing weights not transported to RECO kinematics")
             return
 
         if 'muonScaleSyst_responseWeights_gensmear' in proc_hist.keys():
             msv_sw_gen_smear = proc_hist['muonScaleSyst_responseWeights_gensmear'].get()
         else:
-            warning.warn(f"Histogram 'muonScaleSyst_responseWeights_gensmear' not found in {proc}")
-            warning.warn("smearing weights not transported to RECO kinematics")
+            logger.warning(f"Histogram 'muonScaleSyst_responseWeights_gensmear' not found in {proc}")
+            logger.warning("smearing weights not transported to RECO kinematics")
             return
 
         msv_sw_reco = hist.Hist(*msv_sw_gen_smear.axes, storage = msv_sw_gen_smear._storage_type())
