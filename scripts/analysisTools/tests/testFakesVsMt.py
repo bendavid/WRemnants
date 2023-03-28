@@ -19,7 +19,7 @@ import lz4.frame, pickle
 from wremnants.datasets.datagroups2016 import Datagroups2016
 from wremnants import histselections as sel
 
-from utilities import boostHistHelpers as hh,common
+from utilities import boostHistHelpers as hh, common, logging
 
 ## safe batch mode                                 
 import sys
@@ -510,7 +510,7 @@ if __name__ == "__main__":
     parser.add_argument(     '--use-qcd-mc', dest='useQCDMC' , action='store_true',   help='Make study using QCD MC instead of data-driven fakes, as a cross check')
     args = parser.parse_args()
     
-    logger = common.setup_color_logger(os.path.basename(__file__), args.verbose)
+    logger = logging.setup_logger(os.path.basename(__file__), args.verbose)
     if args.doAbsEta:
         logger.error("Option --absolute-eta not implemented correctly yet. Abort")
         quit()
