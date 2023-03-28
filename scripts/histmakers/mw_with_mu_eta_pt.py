@@ -155,6 +155,8 @@ def build_graph(df, dataset):
         df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
         if isW or isZ:
             df = theory_tools.define_scale_tensor(df)
+            df = syst_tools.define_mass_weights(df, dataset.name)
+
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")
 
@@ -179,6 +181,8 @@ def build_graph(df, dataset):
             # TODO: Should have consistent order here with the scetlib correction function
             syst_tools.add_qcdScaleByHelicityUnc_hist(results, df_gen, qcdScaleByHelicity_helper, scale_axes, scale_cols, base_name="xnorm")
 
+        if isW:
+            syst_tools.add_massweights_hist(results, df_gen, axes_nominal, cols_nominal, proc=dataset.name, base_name="xnorm")
 
     df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
     #df = df.Filter("event % 2 == 1") # test with odd/even events
@@ -368,7 +372,6 @@ def build_graph(df, dataset):
 
             syst_tools.add_pdf_hists(results, df, dataset.name, axes_nominal, cols_nominal, args.pdfs)
 
-            df = syst_tools.define_mass_weights(df, dataset.name)
             if isW:
                 syst_tools.add_massweights_hist(results, df, axes_nominal, cols_nominal, proc=dataset.name)
 
