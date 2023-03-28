@@ -22,6 +22,9 @@ datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
                                               excl=args.excludeProcs, 
                                               nanoVersion="v8" if args.v8 else "v9", base_path=args.dataPath)
 
+if args.validateByMassWeights:
+    raise NotImplementedError("Validation of muon scale hists. by massWeights are not implemented!")
+
 era = args.era
 
 # custom template binning
@@ -171,7 +174,12 @@ def build_graph(df, dataset):
                                                                                       "nonTrigMuons_pt0", "nonTrigMuons_eta0", "nonTrigMuons_SApt0", "nonTrigMuons_SAeta0", "nonTrigMuons_charge0"])
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId"])
 
-        df = df.Redefine("nominal_weight", f"nominal_weight*weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom")
+        df = df.Define("exp_weight", "weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom")
+        df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
+        if isW or isZ:
+            df = theory_tools.define_scale_tensor(df)
+    else:
+        df = df.DefinePerSample("nominal_weight", "1.0")
 
     results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"]))
 

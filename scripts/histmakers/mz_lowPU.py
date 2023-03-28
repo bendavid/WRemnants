@@ -32,11 +32,11 @@ for d in datasets: logging.info(f"Dataset {d.name}")
 
 # load lowPU specific libs
 #ROOT.gInterpreter.AddIncludePath(f"{pathlib.Path(__file__).parent}/include/")
-ROOT.gInterpreter.Declare('#include "lowpu_utils.h"')
-ROOT.gInterpreter.Declare('#include "lowpu_efficiencies.h"')
-ROOT.gInterpreter.Declare('#include "lowpu_prefire.h"')
-ROOT.gInterpreter.Declare('#include "lowpu_rochester.h"')
-ROOT.gInterpreter.Declare('#include "lowpu_recoil.h"')
+narf.clingutils.Declare('#include "lowpu_utils.h"')
+narf.clingutils.Declare('#include "lowpu_efficiencies.h"')
+narf.clingutils.Declare('#include "lowpu_prefire.h"')
+narf.clingutils.Declare('#include "lowpu_rochester.h"')
+narf.clingutils.Declare('#include "lowpu_recoil.h"')
 
 
 # standard regular axes
@@ -99,9 +99,8 @@ def build_graph(df, dataset):
         cols_xnorm = ["xnorm", "ptVgen"]
         
         df_xnorm = df
-        weight_expr = "weight"
-        df_xnorm = theory_tools.define_weights_and_corrs(df_xnorm, weight_expr, dataset.name, corr_helpers, args)
-        df_xnorm = theory_tools.define_pdf_columns(df_xnorm, dataset.name, args.pdfs, args.altPdfOnlyCentral)
+        df_xnorm = df_xnorm.DefinePerSample("exp_weight", "1.0")
+        df_xnorm = theory_tools.define_theory_weights_and_corrs(df_xnorm, dataset.name, corr_helpers, args)
         df_xnorm = df_xnorm.Define("xnorm", "0.5")
         results.append(df_xnorm.HistoBoost("xnorm", axes_xnorm, [*cols_xnorm, "nominal_weight"]))
 
@@ -224,9 +223,8 @@ def build_graph(df, dataset):
     df = df.Filter("massZ > 60 && massZ < 120")
 
     if not dataset.is_data:
-        weight_expr = "weight*SFMC"
-        df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
-        df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
+        df = df.Define("exp_weight", "SFMC")
+        df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")
 

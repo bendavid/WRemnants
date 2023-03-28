@@ -21,7 +21,7 @@ from wremnants.datasets.datagroups2016 import Datagroups2016
 
 w = ROOT.RooWorkspace("w", "")
 
-ROOT.gInterpreter.Declare("""
+narf.clingutils.Declare("""
 
 void GaussianKernel(TH1D h, TH1D &h_sm, TH1D &h_pull, double sigma) {
 
