@@ -9,8 +9,9 @@ import json
 import os
 import array
 from utilities import common as common
+import narf.clingutils
 
-ROOT.gInterpreter.Declare('#include "lowpu_recoil.h"')
+narf.clingutils.Declare('#include "lowpu_recoil.h"')
 logger = logging.getLogger("wremnants").getChild(__name__.split(".")[-1])
 
 

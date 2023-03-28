@@ -68,7 +68,7 @@ namespace wrem_vqt {
                 if ((pt>=Ptbins[i])&&(pt<Ptbins[i+1])) {
                     for (unsigned int j=0; j!=ETASIZE; j++) {
                         if ((eta>=Etabins[j])&&(eta<Etabins[j+1])) {
-                            sf *= vector_[i*ETASIZE+j]->Eval(vqt);
+                            sf *= vector_[i*ETASIZE+j].Eval(vqt);
                         }
                     }
                 }

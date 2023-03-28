@@ -8,7 +8,7 @@ from utilities import common, logging
 
 logger = logging.child_logger(__name__)
 
-ROOT.gInterpreter.Declare('#include "pileup.h"')
+narf.clingutils.Declare('#include "pileup.h"')
 
 data_dir = f"{pathlib.Path(__file__).parent}/data/"
 
