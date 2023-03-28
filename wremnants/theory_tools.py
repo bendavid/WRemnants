@@ -5,9 +5,10 @@ import copy
 from utilities import boostHistHelpers as hh,common,logging
 from wremnants import theory_corrections
 from scipy import ndimage
+import narf.clingutils
 
 logger = logging.child_logger(__name__)
-ROOT.gInterpreter.Declare('#include "theoryTools.h"')
+narf.clingutils.Declare('#include "theoryTools.h"')
 
 # integer axis for -1 through 7
 axis_helicity = hist.axis.Integer(
