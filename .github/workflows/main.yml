@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
 
 env:
-  CONTAINER_COMMAND: SINGULARITY_BIND="/scratch,/eos,/cvmfs" singularity run /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/bendavid/cmswmassdocker/wmassdevrolling\:latest
+  CONTAINER_COMMAND: SINGULARITY_BIND="/scratch,/eos,/cvmfs" singularity run /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/bendavid/cmswmassdocker/wmassdevrolling\:v5
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
