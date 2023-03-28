@@ -33,7 +33,7 @@ def read_corr(procName, generator, corr_files):
             scetlib_files = [x for x in corr_files if pathlib.Path(x).suffix == ".pkl"]
             if len(scetlib_files) != 2:
                 raise ValueError(f"scetlib_dyturbo correction requires two SCETlib files (resummed and FO singular). Found {len(scetlib_files)}")
-            if not any("nnlo_sing" not in x for x in scetlib_files):
+            if not any("nnlo_sing" in x for x in scetlib_files):
                 raise ValueError("Must pass in a fixed order singular file")
             nnlo_sing_idx = 0 if "nnlo_sing" in scetlib_files[0] else 1
             resumf = scetlib_files[~nnlo_sing_idx]
@@ -44,9 +44,6 @@ def read_corr(procName, generator, corr_files):
                 raise ValueError("scetlib_dyturbo correction requires one DYTurbo file (fixed order contribution)")
 
             numh = input_tools.read_matched_scetlib_dyturbo_hist(resumf, nnlo_singf, dyturbo_files[0], args.axes, charge=charge)
-            print(numh.sum())
-            print(resumf)
-            print("DYTURBO", dyturbo_files)
         else:
             nons = "auto"
             if not os.path.isfile(corr_file.replace(".", "_nons.")):
@@ -79,8 +76,6 @@ if args.proc == "z":
 elif args.proc == "w":
     wpfiles = list(filter(lambda x: "wp" in x.lower(), args.corr_files))
     wmfiles = list(filter(lambda x: "wm" in x.lower(), args.corr_files))
-    print("Wm", wmfiles)
-    print("Wp", wpfiles)
     if len(wpfiles) != len(wmfiles):
         raise ValueError(f"Expected equal number of files for W+ and W-, found {len(wpfiles)} (Wp) and {len(wmfiles)} (Wm)")
     filesByProc = { "WplusmunuPostVFP" : wpfiles,

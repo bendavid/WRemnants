@@ -219,13 +219,9 @@ def define_central_pdf_weight(df, dataset_name, pdf):
 
     pdfName = pdfInfo["name"]
     pdfBranch = pdfInfo["branch"]
-    #return df.Define("central_pdf_weight", f"std::clamp({pdfBranch}[0], -1*theory_weight_truncate, theory_weight_truncate)")
-    return df.Define("central_pdf_weight", f"std::clamp<float>({pdfBranch}[0], -10., 10.)")
+    return df.Define("central_pdf_weight", f"std::clamp<float>({pdfBranch}[0], -theory_weight_truncate, theory_weight_truncate)")
 
 def define_theory_weights_and_corrs(df, dataset_name, helpers, args):
-    #TODO: Reimplement this
-    #if args.highptscales:
-    #    weight_expr = f"{weight_expr}*MEParamWeightAltSet3[0]"
     df = define_prefsr_vars(df)
     df = define_ew_vars(df)
 
@@ -233,32 +229,63 @@ def define_theory_weights_and_corrs(df, dataset_name, helpers, args):
     df = define_central_pdf_weight(df, dataset_name, args.pdfs[0])
     df = define_theory_corr(df, dataset_name, helpers, generators=args.theoryCorr, 
             modify_central_weight=not args.theoryCorrAltOnly)
-    df = df.Define("nominal_weight", "exp_weight*central_pdf_weight*theory_corr_weight")
+
+    if args.highptscales:
+        df = df.Define("extra_weight", f"{weight_expr}*MEParamWeightAltSet3[0]")
+    df = define_nominal_weight(df)
     df = define_pdf_columns(df, dataset_name, args.pdfs, args.altPdfOnlyCentral)
         
     return df 
 
+def build_weight_expr(df, exclude_weights=[]):
+    nominal_weight = "weight"
+    valid_cols = df.GetColumnNames()
+    if nominal_weight not in valid_cols:
+        raise ValueError(f"The weight '{nominal_weight}' must be defined in the histmaker!")
+    weights = ["central_pdf_weight", "theory_corr_weight", "exp_weight"]
+    found_weights = []
+
+    for weight in filter(lambda x: x not in exclude_weights, weights):
+        if weight not in valid_cols:
+            logger.warning(f"Did not find weight '{weight}'! Assuming 1.0")
+        else:
+            found_weights.append(weight)
+
+    if "extra_weight" in valid_cols:
+        logger.info("Adding additional weight '{extra_weight}'")
+        found_weights.append(extra_weight)
+
+    return "*".join(found_weights)
+
+def define_nominal_weight(df):
+    return df.Define(f"nominal_weight", build_weight_expr(df))
+
 def define_theory_corr(df, dataset_name, helpers, generators, modify_central_weight):
-    df = df.Define(f"nominal_weight_uncorr", "exp_weight*central_pdf_weight")
+    df = df.Define(f"nominal_weight_uncorr", build_weight_expr(df, exclude_weights=["theory_corr_weight"]))
 
-    sample_helpers = helpers[dataset_name] if dataset_name in helpers else None
+    dataset_helpers = helpers.get(dataset_name, [])
 
-    if not modify_central_weight or not sample_helpers or generators[0] not in sample_helpers:
+    if not modify_central_weight or not generators or generators[0] not in dataset_helpers:
         df = df.DefinePerSample("theory_corr_weight", "1.0")
         return df
 
     for i, generator in enumerate(generators):
-        if generator not in sample_helpers:
+        if generator not in dataset_helpers:
             continue
 
-        helper = sample_helpers[generator]
+        helper = dataset_helpers[generator]
 
         if "Helicity" in generator:
             df = df.Define(f"{generator}Weight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "nominal_weight_uncorr"])
         elif 'ew' in generator:
+            # Used as a placeholder to match the helper dimensionality 
             df = df.DefinePerSample(f"{generator}Dummy", "0.")
             multiplicative_weight = i != 0 and modify_central_weight
-            df = df.Define(f"{generator}Weight_tensor", helper, ["ewMll", "ewLogDeltaM", f"{generator}Dummy", "chargeVgen", "nominal_weight_uncorr" if not multiplicative_weight else "nominal_weight"]) # multiplying with nominal QCD weight
+            if i != 0 and modify_central_weight:
+                df = df.Define(f"ew_corr_weight", build_weight_expr(df))
+            else:
+                df = df.Alias("ew_corr_weight", "nominal_weight_uncorr")
+            df = df.Define(f"{generator}Weight_tensor", helper, ["ewMll", "ewLogDeltaM", f"{generator}Dummy", "chargeVgen", "ew_corr_weight"]) # multiplying with nominal QCD weight
         else:
             df = df.Define(f"{generator}Weight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "nominal_weight_uncorr"])
 

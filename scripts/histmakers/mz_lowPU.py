@@ -99,7 +99,7 @@ def build_graph(df, dataset):
         cols_xnorm = ["xnorm", "ptVgen"]
         
         df_xnorm = df
-        df_xnorm = df_xnorm.Define("exp_weight", "weight")
+        df_xnorm = df_xnorm.DefinePerSample("exp_weight", "1.0")
         df_xnorm = theory_tools.define_theory_weights_and_corrs(df_xnorm, dataset.name, corr_helpers, args)
         df_xnorm = df_xnorm.Define("xnorm", "0.5")
         results.append(df_xnorm.HistoBoost("xnorm", axes_xnorm, [*cols_xnorm, "nominal_weight"]))
@@ -223,7 +223,7 @@ def build_graph(df, dataset):
     df = df.Filter("massZ > 60 && massZ < 120")
 
     if not dataset.is_data:
-        df = df.Define("exp_weight", "weight*SFMC")
+        df = df.Define("exp_weight", "SFMC")
         df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")
