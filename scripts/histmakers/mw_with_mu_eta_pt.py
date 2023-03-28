@@ -167,14 +167,16 @@ def build_graph(df, dataset):
         df = df.DefinePerSample("count", "0.5")
 
         # add histograms before any selection
+        xnorm_axes = [*unfolding_axes, axis_xnorm, axis_charge]
+        xnorm_cols = [*unfolding_cols, "count", "chargeVgen"]
         df_gen = df
-        gen = df_gen.HistoBoost("xnorm", [*unfolding_axes, axis_xnorm, axis_charge], [*unfolding_cols, "count", "chargeVgen", "nominal_weight"])
+        gen = df_gen.HistoBoost("xnorm", xnorm_axes, [*xnorm_cols, "nominal_weight"])
         results.append(gen)
 
         scale_axes = [*unfolding_axes, axis_xnorm, axis_ptVgen, axis_chargeVgen]
         scale_cols = [*unfolding_cols, "count", "ptVgen", "chargeVgen"]
 
-        syst_tools.add_pdf_hists(results, df_gen, dataset.name, [*unfolding_axes, axis_xnorm], [*unfolding_cols, "count"], args.pdfs, base_name="xnorm")
+        syst_tools.add_pdf_hists(results, df_gen, dataset.name, xnorm_axes, xnorm_cols, args.pdfs, base_name="xnorm")
 
         syst_tools.add_qcdScale_hist(results, df_gen, scale_axes, scale_cols, base_name="xnorm")
         if not args.skipHelicity:
@@ -182,7 +184,7 @@ def build_graph(df, dataset):
             syst_tools.add_qcdScaleByHelicityUnc_hist(results, df_gen, qcdScaleByHelicity_helper, scale_axes, scale_cols, base_name="xnorm")
 
         if isW:
-            syst_tools.add_massweights_hist(results, df_gen, axes_nominal, cols_nominal, proc=dataset.name, base_name="xnorm")
+            syst_tools.add_massweights_hist(results, df_gen, xnorm_axes, xnorm_cols, proc=dataset.name, base_name="xnorm")
 
     df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
     #df = df.Filter("event % 2 == 1") # test with odd/even events
