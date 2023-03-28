@@ -476,7 +476,7 @@ def build_graph(df, dataset):
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)
-if args.muonScaleVariation == 'smeraingWeights':
+if args.muonScaleVariation == 'smearingWeights':
     muon_calibration.transport_smearing_weights_to_reco(resultdict)
     muon_calibration.muon_scale_variation_from_manual_shift(resultdict)
 

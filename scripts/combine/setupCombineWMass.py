@@ -277,7 +277,9 @@ def main(args):
             "syst_axes_labels": ["downUpVar"]
         }
     }
-    msv_config = msv_config_dict[args.muonScaleVariation]
+
+    # FIXME: remove this once msv from smearing weights is implemented for the Z
+    msv_config = msv_config_dict[args.muonScaleVariation] if wmass else msv_config_dict["massWeights"]
 
     cardTool.addSystematic(msv_config['hist_name'], 
         processes=single_vmu_samples,
