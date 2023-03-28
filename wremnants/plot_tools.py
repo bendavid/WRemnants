@@ -169,10 +169,8 @@ def makeStackPlotWithRatio(
                 linewidth=2,
             )
 
-        print("Valid names are", histInfo.keys())
         for proc in unstacked:
             logger.debug(f"Plotting proc {proc}")
-            print("Proc", proc)
             unstack = action(histInfo[proc][histName][select])
             hep.histplot(
                 unstack,
@@ -363,7 +361,7 @@ def write_index_and_log(outpath, logname, indexname="index.php", template_dir=f"
 
     with open(f"{logdir}/{logname}.log", "w") as logf:
         meta_info = '-'*80 + '\n' + \
-            f'Script called at {datetime.datetime.now()}' + \
+            f'Script called at {datetime.datetime.now()}\n' + \
             f'The command was: {output_tools.script_command_to_str(sys.argv, args)}\n' + \
             '-'*80 + '\n'
         logf.write(meta_info)

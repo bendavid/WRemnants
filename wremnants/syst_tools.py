@@ -25,6 +25,8 @@ def syst_transform_map(base_hist, hist_name):
     transforms.update({pdf+"Down" : {"action" : lambda h,p=pdf: pdfUnc(h, p)[1]} for pdf in pdfNames})
     transforms["scetlib_dyturboMSHT20Up"] = {"action" : lambda h: pdfUnc(h, "pdfMSHT20", "vars")[0], "procs" : ["ZmumuPostVFP"]}
     transforms["scetlib_dyturboMSHT20Down"] = {"action" : lambda h: pdfUnc(h, "pdfMSHT20", "vars")[1], "procs" : ["ZmumuPostVFP"]}
+    transforms["scetlib_dyturboMSHT20an3loUp"] = {"action" : lambda h: pdfUnc(h, "pdfMSHT20", "vars")[0], "procs" : ["ZmumuPostVFP"]}
+    transforms["scetlib_dyturboMSHT20an3loDown"] = {"action" : lambda h: pdfUnc(h, "pdfMSHT20", "vars")[1], "procs" : ["ZmumuPostVFP"]}
     transforms.update({
         "massShift100MeVDown" : {"hist" : "massWeight", "action" : lambda h: h[{"tensor_axis_0" : 0}]},
         "massShift100MeVUp" : {"hist" : "massWeight", "action" : lambda h: h[{"tensor_axis_0" : 20}]},
@@ -75,12 +77,12 @@ def syst_transform_map(base_hist, hist_name):
                  no_flow=["ptVgen"], do_min=True)},
        "resumNPUp" : {
             "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", 
-                ['c_nu-0.15-omega_nu0.43', 'c_nu0.05', 'c_nu0.5-omega_nu0.15', 'c_nu-0.5-omega_nu0.37'],
-                 no_flow=["ptVgen"], do_min=False)},
+                 [x for x in h.axes["vars"] if "Omega" in x or "cnu" in x or "omega" in x],
+                 no_flow=["ptVgen"], do_min=False) if "vars" in h.axes.name else h},
         "resumNPDown" : {
             "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", 
-                ['c_nu-0.15-omega_nu0.43', 'c_nu0.05', 'c_nu0.5-omega_nu0.15', 'c_nu-0.5-omega_nu0.37'],
-                 no_flow=["ptVgen"], do_min=True)},
+                 [x for x in h.axes["vars"] if "omega" in x or "cnu" in x or "omega" in x],
+                 no_flow=["ptVgen"], do_min=True) if "vars" in h.axes.name else h},
         "resumScaleMax" : {
             "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", range(9,44), no_flow=["ptVgen"], do_min=False)},
         "resumScaleMin" : {

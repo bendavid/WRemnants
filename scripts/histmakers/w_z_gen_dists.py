@@ -81,8 +81,7 @@ def build_graph(df, dataset):
     elif "NNLOPS" in dataset.name:
         weight_expr = f"{weight_expr}*LHEScaleWeightAltSet1[4]"
 
-    df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
-    df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
+    df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
 
     if isZ:
         nominal_axes = [axis_massZgen, axis_rapidity, axis_ptVgen, axis_chargeZgen]
