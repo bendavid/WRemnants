@@ -68,28 +68,38 @@ class Datagroups(object):
             if p in self.groups.keys():
                 del self.groups[p]
 
-    def addGroupMember(self, group_name, member_name):
+    def addGroupMember(self, group_name, member):
         # adds a process to the existing members of a given group
-        if group_name not in self.groups:
+        if group_name not in self.groups.keys():
             logger.warning(f"The group {group_name} is not defined in the datagroups object! Do nothing here.")
             return
 
-        if self.datasets and member_name not in [d for d in self.datasets]:
-            logger.warning(f"The member {member_name} can not be found in the current dataset, still add it to the list of members of the group and trust you.")
+        if isinstance(member, list):
+            for m in member:
+                self.addGroupMember(group_name, m)
+            return
 
-        self.groups[group_name]["members"] = [*self.groups[group_name]["members"], member_name]
+        if self.datasets and member.name not in [d for d in self.datasets]:
+            logger.warning(f"The member {member.name} can not be found in the current dataset, still add it to the list of members of the group and trust you.")
 
-    def deleteGroupMember(self, group_name, member_name):
+        self.groups[group_name]["members"] = [*self.groups[group_name]["members"], member]
+
+    def deleteGroupMember(self, group_name, member):
         # deletes a process from the list of members of a given group
-        if group_name not in self.groups:
+        if group_name not in self.groups.keys():
             logger.warning(f"The group {group_name} is not defined in the datagroups object! Do nothing here.")
             return
 
-        if member_name not in self.groups[group_name]["members"]:
-            logger.warning(f"The member {member_name} can not be found in the group {group_name}! Do nothing here.")
+        if isinstance(member, list):
+            for m in member:
+                self.deleteGroupMember(group_name, m)
             return
 
-        self.groups[group_name]["members"] = [m for m in self.groups[group_name]["members"] if m != member_name]
+        if member not in self.groups[group_name]["members"]:
+            logger.warning(f"The member {member.name} can not be found in the group {group_name}! Do nothing here.")
+            return
+
+        self.groups[group_name]["members"] = [m for m in self.groups[group_name]["members"] if m != member]
 
     def selectGroups(self, selections):
         new_groupnames = []
@@ -393,7 +403,7 @@ class Datagroups(object):
                 raise RuntimeError(f"No corresponding gen level definition for {fitvar} found!")
             genvar = genvar_dict[fitvar]
             genvars.append(genvar)
-            gen_bin_edges = self.results[self.groups[base_process]["members"][0].name]["output"]["gen"].get().axes[genvar].edges
+            gen_bin_edges = self.results[self.groups[base_process]["members"][0].name]["output"]["xnorm"].get().axes[genvar].edges
 
             # # to add out of acceptance constributions for separate overflow/underflow bins
             # gen_bins.append([hist.underflow, *[i for i in range(len(gen_bin_edges)-1)], hist.overflow]) 
@@ -424,20 +434,32 @@ class Datagroups(object):
                 # Add fake distribution of gen level bin
                 fake_genbin = dict(self.groups["Fake"])
                 fake_genbin['selectOp'] = lambda x, indices=indices, genvars=genvars, f0=fake_genbin['selectOp']: f0(x)[{var : i for var, i in zip(genvars, indices)}]
-                proc_name += "_Fake"
                 fake_genbin['members'] = self.groups[base_process]['members']
+                proc_name += "_Fake"
                 self.addGroup(proc_name, fake_genbin)
 
             # self.addGroupMember("Fake", proc_name)
 
         # add one inclusive out of acceptance contribution and treat as background
-        proc_genbin = dict(self.groups[base_process])
+        if "acceptance_bkg" in self.groups:
+            self.addGroupMember("acceptance_bkg", self.groups[base_process]["members"])
+        else:
+            proc_genbin = dict(self.groups[base_process])
+            conditions = [{var : hist.overflow} for var in genvars] + [{var : hist.underflow} for var in genvars]
+            combined_condition = functools.reduce(lambda a, b: a | b, conditions)
+            proc_genbin['selectOp'] = lambda x, f0=proc_genbin['selectOp']: f0(x)[combined_condition]
+            self.addGroup("acceptance_bkg", proc_genbin)
 
-        conditions = [{var : hist.overflow} for var in genvars] + [{var : hist.underflow} for var in genvars]
-        combined_condition = functools.reduce(lambda a, b: a | b, conditions)
-        proc_genbin['selectOp'] = lambda x, f0=proc_genbin['selectOp']: f0(x)[combined_condition]
+        if self.wmass:
 
-        self.addGroup(base_process, proc_genbin)
+            if "acceptance_bkg_Fake" in self.groups:
+                self.addGroupMember("acceptance_bkg_Fake", self.groups[base_process]["members"])
+            else:
+                fake_genbin = dict(self.groups["Fake"])
+                fake_genbin['selectOp'] = lambda x, indices=indices, genvars=genvars, f0=fake_genbin['selectOp']: f0(x)[{var : i for var, i in zip(genvars, indices)}]
+                fake_genbin['members'] = self.groups[base_process]['members']
+
+                self.addGroup("acceptance_bkg_Fake", fake_genbin)
 
         # Remove inclusive signal
         for member in self.groups[base_process]["members"]:
