@@ -52,8 +52,8 @@ class CardTool(object):
         self.lumiScale = 1.
         self.project = None
         self.keepOtherChargeSyst = True
-        self.chargeIdDict = {"minus" : {"val" : -1, "id" : "q0", "badId" : None},
-                             "plus"  : {"val" : 1., "id" : "q1", "badId" : None},
+        self.chargeIdDict = {"minus" : {"val" : -1, "id" : "q0", "badId" : "q1"},
+                             "plus"  : {"val" : 1., "id" : "q1", "badId" : "q0"},
                              "inclusive" : {"val" : "sum", "id" : "none", "badId" : None}, # for this channel there is no bad id, currently using random string to make sure it doesn't match
                              }
 
@@ -212,7 +212,8 @@ class CardTool(object):
                       baseName="", mirror=False, scale=1, processes=None, group=None, noConstraint=False,
                       action=None, doActionBeforeMirror=False, actionArgs={}, actionMap={},
                       systNameReplace=[], groupFilter=None, passToFakes=False,
-                      rename=None, splitGroup={}, decorrelateByCharge=False, decorrelateByBin={}):
+                      rename=None, splitGroup={}, decorrelateByCharge=False, decorrelateByBin={},
+                      silentCheckOtherCharge=False):
 
         # Need to make an explicit copy of the array before appending
         procs_to_add = [x for x in (self.allMCProcesses() if processes is None else processes)]
@@ -252,7 +253,8 @@ class CardTool(object):
                 "skipEntries" : [] if not skipEntries else skipEntries,
                 "name" : name,
                 "decorrCharge" : decorrelateByCharge,
-                "decorrByBin": decorrelateByBin
+                "decorrByBin": decorrelateByBin,
+                "silentCheckOtherCharge" : silentCheckOtherCharge
             }
         })
         
@@ -374,16 +376,20 @@ class CardTool(object):
     def getBoostHistByCharge(self, h, q):
         return h[{"charge" : h.axes["charge"].index(q) if q != "sum" else hist.sum}]
         
-    def checkSysts(self, hnom3D, var_map, proc, thresh=0.25):
+    def checkSysts(self, hnom3D, var_map, proc, thresh=0.25, silentCheckOtherCharge=False):
         #if self.check_variations:
         var_names = set([name.replace("Up", "").replace("Down", "") for name in var_map.keys() if name])
         if len(var_names) != len(var_map.keys())/2:
             raise ValueError(f"Invalid syst names for process {proc}! Expected an up/down variation for each syst. "
                 f"Found systs {var_names} and outNames {var_map.keys()}")
-        for name in var_names:
+        # for wmass some systs are only expected to affect a reco charge, but the syst for other charge might still exist and be used
+        # although one expects it to be same as nominal. The following check would trigger on this case with spurious warnings
+        # so there is some customization based on what one expects to silent some noisy warnings
+        for name in sorted(var_names):
             for chan in self.channels:
-                if not self.keepOtherChargeSyst and self.chargeIdDict[chan]["badId"] is not None and self.chargeIdDict[chan]["badId"] in name:
-                    continue
+                if chan in self.chargeIdDict .keys() and self.chargeIdDict[chan]["badId"] is not None and self.chargeIdDict[chan]["badId"] in name:
+                    if silentCheckOtherCharge:
+                        continue
                 if chan in ["plus", "minus"]:
                     q = self.chargeIdDict[chan]["val"]
                     hnom = self.getBoostHistByCharge(hnom3D, q)
@@ -433,7 +439,7 @@ class CardTool(object):
         var_map = self.systHists(h, syst) 
         # TODO: Make this optional
         if syst != self.nominalName:
-            self.checkSysts(self.procDict[proc][self.nominalName], var_map, proc)
+            self.checkSysts(self.procDict[proc][self.nominalName], var_map, proc, silentCheckOtherCharge=systInfo["silentCheckOtherCharge"])
         setZeroStatUnc = False
         if proc in self.noStatUncProcesses:
             logger.info(f"Zeroing statistical uncertainty for process {proc}")
