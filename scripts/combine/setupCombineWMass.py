@@ -89,6 +89,8 @@ def main(args):
 
     templateDir = f"{scriptdir}/Templates/WMass"
 
+    datagroups.setGenAxes(args.fitvar)
+
     if args.unfold and args.fitXsec:
         raise ValueError("Options --unfolding and --fitXsec are incompatible. Please choose one or the other")
     elif args.fitXsec:
@@ -100,7 +102,7 @@ def main(args):
         base_procs = ["Wmunu_q0", "Wmunu_q1"] if wmass else ["Zmumu"]
 
         for base_proc in base_procs:
-            datagroups.defineSignalBinsUnfolding(args.fitvar, base_proc)
+            datagroups.defineSignalBinsUnfolding(base_proc)
 
     if args.noHist and args.noStatUncFakes:
         raise ValueError("Option --noHist would override --noStatUncFakes. Please select only one of them")
