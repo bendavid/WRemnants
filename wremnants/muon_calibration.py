@@ -13,8 +13,8 @@ from functools import reduce
 
 logger = logging.child_logger(__name__)
 
-ROOT.gInterpreter.Declare('#include "muon_calibration.h"')
-ROOT.gInterpreter.Declare('#include "lowpu_utils.h"')
+narf.clingutils.Declare('#include "muon_calibration.h"')
+narf.clingutils.Declare('#include "lowpu_utils.h"')
 
 data_dir = f"{pathlib.Path(__file__).parent}/data/"
 

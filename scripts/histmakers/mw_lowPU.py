@@ -33,11 +33,11 @@ for d in datasets: logger.info(f"Dataset {d.name}")
 
 # load lowPU specific libs
 #ROOT.gInterpreter.AddIncludePath(f"{pathlib.Path(__file__).parent}/include/")
-ROOT.gInterpreter.Declare('#include "lowpu_utils.h"')
-ROOT.gInterpreter.Declare('#include "lowpu_efficiencies.h"')
-ROOT.gInterpreter.Declare('#include "lowpu_prefire.h"')
-ROOT.gInterpreter.Declare('#include "lowpu_rochester.h"')
-ROOT.gInterpreter.Declare('#include "lowpu_recoil.h"')
+narf.clingutils.Declare('#include "lowpu_utils.h"')
+narf.clingutils.Declare('#include "lowpu_efficiencies.h"')
+narf.clingutils.Declare('#include "lowpu_prefire.h"')
+narf.clingutils.Declare('#include "lowpu_rochester.h"')
+narf.clingutils.Declare('#include "lowpu_recoil.h"')
 
 
 

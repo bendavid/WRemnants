@@ -7,7 +7,7 @@ from functools import reduce
 from utilities import common, logging
 from wremnants.muon_calibration import get_jpsi_scale_param_cov_mat
 
-ROOT.gInterpreter.Declare('#include "muon_validation.h"')
+narf.clingutils.Declare('#include "muon_validation.h"')
 
 logger = logging.child_logger(__name__)
 

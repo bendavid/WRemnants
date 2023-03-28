@@ -5,7 +5,7 @@ import narf
 import numpy as np
 import boost_histogram as bh
 
-ROOT.gInterpreter.Declare('#include "vertex.h"')
+narf.clingutils.Declare('#include "vertex.h"')
 
 data_dir = f"{pathlib.Path(__file__).parent}/data/"
 
