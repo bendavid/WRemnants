@@ -61,6 +61,7 @@ nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
 # gen axes for differential measurement
 axis_ptGen = hist.axis.Regular(2, template_minpt, template_maxpt, name = "ptGen")
 axis_etaGen = hist.axis.Regular(3, -2.4, 2.4, name = "etaGen")
+axis_xnorm = hist.axis.Regular(1, 0., 1., name = "count", underflow=False, overflow=False)
 unfolding_axes = [axis_ptGen, axis_etaGen]
 unfolding_cols = ["ptGen", "etaGen"]
 
@@ -154,6 +155,8 @@ def build_graph(df, dataset):
         df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
         if isW or isZ:
             df = theory_tools.define_scale_tensor(df)
+            df = syst_tools.define_mass_weights(df, dataset.name)
+
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")
 
@@ -161,22 +164,25 @@ def build_graph(df, dataset):
         # selecting the charged lepton at gen level
         df = df.Define("ptGen", "abs(genlPdgId) == 13 ? genl.pt() : genlanti.pt()")   
         df = df.Define("etaGen", "abs(genlPdgId) == 13 ? genl.eta() : genlanti.eta()")
+        df = df.DefinePerSample("count", "0.5")
 
         # add histograms before any selection
         df_gen = df
-        gen = df_gen.HistoBoost("gen", [*unfolding_axes, axis_charge], [*unfolding_cols, "chargeVgen", "nominal_weight"])
+        gen = df_gen.HistoBoost("xnorm", [*unfolding_axes, axis_xnorm, axis_charge], [*unfolding_cols, "count", "chargeVgen", "nominal_weight"])
         results.append(gen)
 
-        scale_axes = [*unfolding_axes, axis_ptVgen, axis_chargeVgen]
-        scale_cols = [*unfolding_cols, "ptVgen", "chargeVgen"]
+        scale_axes = [*unfolding_axes, axis_xnorm, axis_ptVgen, axis_chargeVgen]
+        scale_cols = [*unfolding_cols, "count", "ptVgen", "chargeVgen"]
 
-        syst_tools.add_pdf_hists(results, df_gen, dataset.name, unfolding_axes, unfolding_cols, args.pdfs, base_name="gen")
+        syst_tools.add_pdf_hists(results, df_gen, dataset.name, [*unfolding_axes, axis_xnorm], [*unfolding_cols, "count"], args.pdfs, base_name="xnorm")
 
-        syst_tools.add_qcdScale_hist(results, df_gen, scale_axes, scale_cols, base_name="gen")
+        syst_tools.add_qcdScale_hist(results, df_gen, scale_axes, scale_cols, base_name="xnorm")
         if not args.skipHelicity:
             # TODO: Should have consistent order here with the scetlib correction function
-            syst_tools.add_qcdScaleByHelicityUnc_hist(results, df_gen, qcdScaleByHelicity_helper, scale_axes, scale_cols, base_name="gen")
+            syst_tools.add_qcdScaleByHelicityUnc_hist(results, df_gen, qcdScaleByHelicity_helper, scale_axes, scale_cols, base_name="xnorm")
 
+        if isW:
+            syst_tools.add_massweights_hist(results, df_gen, axes_nominal, cols_nominal, proc=dataset.name, base_name="xnorm")
 
     df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
     #df = df.Filter("event % 2 == 1") # test with odd/even events
@@ -366,7 +372,6 @@ def build_graph(df, dataset):
 
             syst_tools.add_pdf_hists(results, df, dataset.name, axes_nominal, cols_nominal, args.pdfs)
 
-            df = syst_tools.define_mass_weights(df, dataset.name)
             if isW:
                 syst_tools.add_massweights_hist(results, df, axes_nominal, cols_nominal, proc=dataset.name)
 
