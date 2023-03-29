@@ -325,6 +325,10 @@ def syst_min_or_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=[], do_min=Tr
     if systax_idx != h.ndim-1:
         raise ValueError("Required to have the syst axis at index -1")
 
+    if len(indices) < 2:
+        logger.warning(f"Requires at least two histograms for envelope. Returning nominal!")
+        return h
+
     if type(indices[0]) == str:
         if all(x.isdigit() for x in indices):
             indices == [int(x) for x in indices]
