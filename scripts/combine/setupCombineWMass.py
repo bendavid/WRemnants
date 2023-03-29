@@ -41,7 +41,7 @@ def make_parser(parser=None):
     
     return parser
 
-def main(args):
+def main(args,xnorm=False):
 
     logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
@@ -59,7 +59,7 @@ def main(args):
     logger.debug(f"Filtering these groups of processes: {args.filterProcGroups}")
     logger.debug(f"Excluding these groups of processes: {args.excludeProcGroups}")
     
-    datagroups = Datagroups2016(args.inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, splitWByCharge=args.unfold)
+    datagroups = Datagroups2016(args.inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, splitWByCharge=args.unfold, applySelection= not xnorm)
     
     if args.xlim:
         if len(args.fitvar.split("-")) > 1:
@@ -104,20 +104,34 @@ def main(args):
         for base_proc in base_procs:
             datagroups.defineSignalBinsUnfolding(base_proc)
 
+        if xnorm:
+            toDel = [group for group in datagroups.groups if not group in datagroups.unconstrainedProcesses]
+            datagroups.deleteGroup(toDel)
+            histName = "xnorm"
+
     if args.noHist and args.noStatUncFakes:
         raise ValueError("Option --noHist would override --noStatUncFakes. Please select only one of them")
 
+    suffix = '' if not xnorm else '_xsec'
+
     # Start to create the CardTool object, customizing everything
-    cardTool = CardTool.CardTool(f"{outfolder}/{name}_{{chan}}.txt")
+    cardTool = CardTool.CardTool(f"{outfolder}/{name}_{{chan}}{suffix}.txt")
     cardTool.setDatagroups(datagroups)
     logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
     cardTool.setNominalTemplate(f"{templateDir}/main.txt")
-    if args.sumChannels:
+    if args.sumChannels or xnorm:
         cardTool.setChannels(["inclusive"])
-    cardTool.setProjectionAxes(args.fitvar.split("-"))
+    if xnorm:
+        cardTool.setProjectionAxes(None)
+        cardTool.setWriteByCharge(False)
+        cardTool.setHistName(histName)
+        cardTool.setNominalName(histName)
+        cardTool.setProjectionAxes(["count"])
+    else:
+        cardTool.setProjectionAxes(args.fitvar.split("-"))
     if args.noHist:
         cardTool.skipHistograms()
-    cardTool.setOutfile(os.path.abspath(f"{outfolder}/{name}CombineInput.root"))
+    cardTool.setOutfile(os.path.abspath(f"{outfolder}/{name}CombineInput{suffix}.root"))
     cardTool.setFakeName(args.qcdProcessName)
     cardTool.setSpacing(52)
     if args.noStatUncFakes:
@@ -136,7 +150,7 @@ def main(args):
 
     logger.info(f"cardTool.allMCProcesses(): {cardTool.allMCProcesses()}")
         
-    passSystToFakes = wmass and not args.skipSignalSystOnFakes and args.qcdProcessName not in excludeGroup
+    passSystToFakes = wmass and not args.skipSignalSystOnFakes and args.qcdProcessName not in excludeGroup and not xnorm
 
     single_v_samples = cardTool.filteredProcesses(lambda x: x[0] in ["W", "Z"])
     single_v_nonsig_samples = cardTool.filteredProcesses(lambda x: x[0] == ("Z" if wmass else "W"))
@@ -184,17 +198,20 @@ def main(args):
             passToFakes=passSystToFakes,
         )
 
-    if wmass:
-        cardTool.addSystematic("luminosity",
-                               processes=allMCprocesses_noQCDMC,
-                               outNames=["lumiDown", "lumiUp"],
-                               group="luminosity",
-                               systAxes=["downUpVar"],
-                               labelsByAxis=["downUpVar"],
-                               passToFakes=passSystToFakes)
+    if not xnorm:
+        if wmass:
+            cardTool.addSystematic("luminosity",
+                                   processes=allMCprocesses_noQCDMC,
+                                   outNames=["lumiDown", "lumiUp"],
+                                   group="luminosity",
+                                   systAxes=["downUpVar"],
+                                   labelsByAxis=["downUpVar"],
+                                   passToFakes=passSystToFakes)
+        else:
+            # TOCHECK: no fakes here, most likely
+            cardTool.addLnNSystematic("luminosity", processes=allMCprocesses_noQCDMC, size=1.012, group="luminosity")
     else:
-        # TOCHECK: no fakes here, most likely
-        cardTool.addLnNSystematic("luminosity", processes=allMCprocesses_noQCDMC, size=1.012, group="luminosity")
+        pass
 
     if args.ewUnc:
         cardTool.addSystematic(f"horacenloewCorr_unc", 
@@ -207,7 +224,7 @@ def main(args):
             passToFakes=passSystToFakes,
         )
 
-    if not args.noEfficiencyUnc:
+    if not args.noEfficiencyUnc and not xnorm:
         chargeDependentSteps = common.muonEfficiency_chargeDependentSteps
         effTypesNoIso = ["reco", "tracking", "idip", "trigger"]
         effStatTypes = [x for x in effTypesNoIso]
@@ -268,104 +285,106 @@ def main(args):
                 silentCheckOtherCharge=silentCheckOtherCharge
             )
 
-    to_fakes = passSystToFakes and not args.noQCDscaleFakes
+    to_fakes = passSystToFakes and not args.noQCDscaleFakes and not xnorm
     combine_helpers.add_pdf_uncertainty(cardTool, single_v_samples, passSystToFakes)
     combine_helpers.add_scale_uncertainty(cardTool, args.minnloScaleUnc, signal_samples_inctau, to_fakes, resum=args.resumUnc)
     # for Z background in W mass case (W background for Wlike is essentially 0, useless to apply QCD scales there)
-    if wmass:
+    if wmass and not xnorm:
         combine_helpers.add_scale_uncertainty(cardTool, "integrated", single_v_nonsig_samples, False, name_append="Z", resum=args.resumUnc)
 
-    msv_config_dict = {
-        "smearing_weights":{
-            "hist_name": "muonScaleSyst_responseWeights",
-            "syst_axes": ["unc", "downUpVar"],
-            "syst_axes_labels": ["unc", "downUpVar"]
-        },
-        "massweights":{
-            "hist_name": "muonScaleSyst",
-            "syst_axes": ["downUpVar", "scaleEtaSlice"],
-            "syst_axes_labels": ["downUpVar", "ieta"]
-        },
-        "manual_pt_shift":{
-            "hist_name": "muonScaleSyst_manualShift",
-            "syst_axes": ["downUpVar"],
-            "syst_axes_labels": ["downUpVar"]
+    if not xnorm:
+        msv_config_dict = {
+            "smearing_weights":{
+                "hist_name": "muonScaleSyst_responseWeights",
+                "syst_axes": ["unc", "downUpVar"],
+                "syst_axes_labels": ["unc", "downUpVar"]
+            },
+            "massweights":{
+                "hist_name": "muonScaleSyst",
+                "syst_axes": ["downUpVar", "scaleEtaSlice"],
+                "syst_axes_labels": ["downUpVar", "ieta"]
+            },
+            "manual_pt_shift":{
+                "hist_name": "muonScaleSyst_manualShift",
+                "syst_axes": ["downUpVar"],
+                "syst_axes_labels": ["downUpVar"]
+            }
         }
-    }
-    msv_config = msv_config_dict[args.muonScaleVariation]
+        msv_config = msv_config_dict[args.muonScaleVariation]
 
-    cardTool.addSystematic(msv_config['hist_name'], 
-        processes=single_vmu_samples,
-        group="muonScale",
-        baseName="CMS_scale_m_",
-        systAxes=msv_config['syst_axes'],
-        labelsByAxis=msv_config['syst_axes_labels'],
-        passToFakes=passSystToFakes,
-        scale = args.scaleMuonCorr
-    )
-    cardTool.addSystematic("muonL1PrefireSyst", 
-        processes=allMCprocesses_noQCDMC,
-        group="muonPrefire",
-        baseName="CMS_prefire_syst_m",
-        systAxes=["downUpVar"],
-        labelsByAxis=["downUpVar"],
-        passToFakes=passSystToFakes,
-    )
-    cardTool.addSystematic("muonL1PrefireStat", 
-        processes=allMCprocesses_noQCDMC,
-        group="muonPrefire",
-        baseName="CMS_prefire_stat_m_",
-        systAxes=["downUpVar", "etaPhiRegion"],
-        labelsByAxis=["downUpVar", "etaPhiReg"],
-        passToFakes=passSystToFakes,
-    )
-    cardTool.addSystematic("ecalL1Prefire", 
-        processes=allMCprocesses_noQCDMC,
-        group="ecalPrefire",
-        baseName="CMS_prefire_ecal",
-        systAxes=["downUpVar"],
-        labelsByAxis=["downUpVar"],
-        passToFakes=passSystToFakes,
-    )
-    if wmass:
-        #cardTool.addLnNSystematic("CMS_Fakes", processes=[args.qcdProcessName], size=1.05, group="MultijetBkg")
-        cardTool.addLnNSystematic("CMS_Top", processes=["Top"], size=1.06)
-        cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16)
-
-        ## FIXME 1: with the jet cut removed this syst is probably no longer needed, but one could still consider
-        ## it to cover for how much the fake estimate changes when modifying the composition of the QCD region
-        ## FIXME 2: it doesn't really make sense to mirror this one since the systematic goes only in one direction
-        # cardTool.addSystematic(f"qcdJetPt30", 
-        #                        processes=["Fake"],
-        #                        mirror=True,
-        #                        group="MultijetBkg",
-        #                        systAxes=[],
-        #                        outNames=["qcdJetPt30Down", "qcdJetPt30Up"],
-        #                        passToFakes=passSystToFakes,
-        # )
-        #
-        if "Fake" not in excludeGroup:
-            cardTool.addSystematic(f"nominal", # this is the histogram to read
-                                   systAxes=[],
-                                   processes=["Fake"],
-                                   mirror=True,
-                                   group="MultijetBkg",
-                                   outNames=["mtCorrFakesDown", "mtCorrFakesUp"],
-                                   decorrelateByCharge=True,
-                                   rename="mtCorrFakes", # this is the name used to identify the syst in the list of systs
-                                   action=sel.applyCorrection,
-                                   doActionBeforeMirror=True,
-                                   actionArgs={"scale": 1.0,
-                                               "corrFile" : f"{data_dir}/fakesWmass/fakerateFactorMtBasedCorrection_vsEtaPt.root",
-                                               "corrHist": "etaPtCharge_mtCorrection",
-                                               "offsetCorr": 1.0,
-                                               "createNew": True}
-                               # add action to multiply by correction
+        cardTool.addSystematic(msv_config['hist_name'], 
+            processes=single_vmu_samples,
+            group="muonScale",
+            baseName="CMS_scale_m_",
+            systAxes=msv_config['syst_axes'],
+            labelsByAxis=msv_config['syst_axes_labels'],
+            passToFakes=passSystToFakes,
+            scale = args.scaleMuonCorr
         )
+        cardTool.addSystematic("muonL1PrefireSyst", 
+            processes=allMCprocesses_noQCDMC,
+            group="muonPrefire",
+            baseName="CMS_prefire_syst_m",
+            systAxes=["downUpVar"],
+            labelsByAxis=["downUpVar"],
+            passToFakes=passSystToFakes,
+        )
+        cardTool.addSystematic("muonL1PrefireStat", 
+            processes=allMCprocesses_noQCDMC,
+            group="muonPrefire",
+            baseName="CMS_prefire_stat_m_",
+            systAxes=["downUpVar", "etaPhiRegion"],
+            labelsByAxis=["downUpVar", "etaPhiReg"],
+            passToFakes=passSystToFakes,
+        )
+        cardTool.addSystematic("ecalL1Prefire", 
+            processes=allMCprocesses_noQCDMC,
+            group="ecalPrefire",
+            baseName="CMS_prefire_ecal",
+            systAxes=["downUpVar"],
+            labelsByAxis=["downUpVar"],
+            passToFakes=passSystToFakes,
+        )
+        if wmass:
+            #cardTool.addLnNSystematic("CMS_Fakes", processes=[args.qcdProcessName], size=1.05, group="MultijetBkg")
+            cardTool.addLnNSystematic("CMS_Top", processes=["Top"], size=1.06)
+            cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16)
 
-    else:
-        cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
+            ## FIXME 1: with the jet cut removed this syst is probably no longer needed, but one could still consider
+            ## it to cover for how much the fake estimate changes when modifying the composition of the QCD region
+            ## FIXME 2: it doesn't really make sense to mirror this one since the systematic goes only in one direction
+            # cardTool.addSystematic(f"qcdJetPt30", 
+            #                        processes=["Fake"],
+            #                        mirror=True,
+            #                        group="MultijetBkg",
+            #                        systAxes=[],
+            #                        outNames=["qcdJetPt30Down", "qcdJetPt30Up"],
+            #                        passToFakes=passSystToFakes,
+            # )
+            #
+            if "Fake" not in excludeGroup:
+                cardTool.addSystematic(f"nominal", # this is the histogram to read
+                                       systAxes=[],
+                                       processes=["Fake"],
+                                       mirror=True,
+                                       group="MultijetBkg",
+                                       outNames=["mtCorrFakesDown", "mtCorrFakesUp"],
+                                       decorrelateByCharge=True,
+                                       rename="mtCorrFakes", # this is the name used to identify the syst in the list of systs
+                                       action=sel.applyCorrection,
+                                       doActionBeforeMirror=True,
+                                       actionArgs={"scale": 1.0,
+                                                   "corrFile" : f"{data_dir}/fakesWmass/fakerateFactorMtBasedCorrection_vsEtaPt.root",
+                                                   "corrHist": "etaPtCharge_mtCorrection",
+                                                   "offsetCorr": 1.0,
+                                                   "createNew": True}
+                                   # add action to multiply by correction
+            )
 
+        else:
+            cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
+
+    cardTool.setCrossSectionOutput(xnorm)
     cardTool.writeOutput(args=args)
     logger.info(f"Output stored in {outfolder}")
     
@@ -373,4 +392,5 @@ if __name__ == "__main__":
     parser = make_parser()
     args = parser.parse_args()
     main(args)
-    
+    if args.unfold:
+        main(args,xnorm=True)
