@@ -150,7 +150,9 @@ def build_graph(df, dataset):
     df = df.Define("cosThetaStarll", "csSineCosThetaPhill.costheta")
     df = df.Define("phiStarll", "std::atan2(csSineCosThetaPhill.sinphi, csSineCosThetaPhill.cosphi)")
 
-    if not dataset.is_data:
+    if dataset.is_data:
+        df = df.DefinePerSample("nominal_weight", "1.0")
+    else:
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
         df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["trigMuons_pt0", "trigMuons_eta0", "trigMuons_SApt0", "trigMuons_SAeta0", "trigMuons_charge0",
                                                                                       "nonTrigMuons_pt0", "nonTrigMuons_eta0", "nonTrigMuons_SApt0", "nonTrigMuons_SAeta0", "nonTrigMuons_charge0"])
@@ -160,8 +162,6 @@ def build_graph(df, dataset):
         df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
         if isW or isZ:
             df = theory_tools.define_scale_tensor(df)
-    else:
-        df = df.DefinePerSample("nominal_weight", "1.0")
 
     results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"]))
     results.append(df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "nominal_weight"]))

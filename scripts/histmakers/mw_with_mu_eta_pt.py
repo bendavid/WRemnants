@@ -60,7 +60,7 @@ nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
 
 # gen axes for differential measurement
 axis_ptGen = hist.axis.Regular(2, template_minpt, template_maxpt, name = "ptGen")
-axis_etaGen = hist.axis.Regular(3, -2.4, 2.4, name = "etaGen")
+axis_etaGen = hist.axis.Regular(3, template_mineta, template_maxeta, name = "etaGen")
 axis_xnorm = hist.axis.Regular(1, 0., 1., name = "count", underflow=False, overflow=False)
 unfolding_axes = [axis_ptGen, axis_etaGen]
 unfolding_cols = ["ptGen", "etaGen"]
@@ -140,7 +140,14 @@ def build_graph(df, dataset):
     isZ = dataset.name in common.zprocs
     isTop = dataset.group == "Top"
     require_prompt = "tau" not in dataset.name # for muon GEN-matching
+
     unfold = args.unfolding and dataset.name in ["WplusmunuPostVFP", "WminusmunuPostVFP"]
+
+    apply_theory_corr = args.theoryCorr and dataset.name in corr_helpers
+
+    cvh_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
+    jpsi_helper = data_jpsi_crctn_helper if dataset.is_data else mc_jpsi_crctn_helper
+
 
     if dataset.is_data:
         df = df.DefinePerSample("weight", "1.0")
@@ -149,50 +156,47 @@ def build_graph(df, dataset):
 
     weightsum = df.SumAndCount("weight")
 
-    if dataset.is_data:
-        df = df.DefinePerSample("weight", "1.0")
-    else:
-        df = df.Define("weight", "std::copysign(1.0, genWeight)")
-
-
     if unfold:
-        # selecting the charged lepton at gen level
-        df = df.Define("ptGen", "abs(genlPdgId) == 13 ? genl.pt() : genlanti.pt()")   
-        df = df.Define("etaGen", "abs(genlPdgId) == 13 ? genl.eta() : genlanti.eta()")
-        df = df.DefinePerSample("count", "0.5")
-
         # add histograms before any selection
+
+        df_xnorm = df
+        df_xnorm = df_xnorm.DefinePerSample("exp_weight", "1.0")
+
+        df_xnorm = theory_tools.define_theory_weights_and_corrs(df_xnorm, dataset.name, corr_helpers, args)
+
+        # selecting the charged lepton at gen level
+        df_xnorm = df_xnorm.Define("ptGen", "chargeVgen < 0 ? genl.pt() : genlanti.pt()")   
+        df_xnorm = df_xnorm.Define("etaGen", "chargeVgen < 0 ? genl.eta() : genlanti.eta()")
+
+        df_xnorm = df_xnorm.DefinePerSample("count", "0.5")
+
         xnorm_axes = [*unfolding_axes, axis_xnorm, axis_charge]
         xnorm_cols = [*unfolding_cols, "count", "chargeVgen"]
         
-        df_gen = df
-        df_gen = theory_tools.define_theory_weights_and_corrs(df_gen, dataset.name, corr_helpers, args)
-        df_gen = theory_tools.define_scale_tensor(df_gen)
-        df_gen = syst_tools.define_mass_weights(df_gen, dataset.name)
-
-        gen = df_gen.HistoBoost("xnorm", xnorm_axes, [*xnorm_cols, "nominal_weight"])
-        results.append(gen)
+        results.append(df_xnorm.HistoBoost("xnorm", xnorm_axes, [*xnorm_cols, "nominal_weight"]))
 
         scale_axes = [*unfolding_axes, axis_xnorm, axis_ptVgen, axis_chargeVgen]
         scale_cols = [*unfolding_cols, "count", "ptVgen", "chargeVgen"]
 
-        syst_tools.add_pdf_hists(results, df_gen, dataset.name, xnorm_axes, xnorm_cols, args.pdfs, base_name="xnorm")
+        syst_tools.add_pdf_hists(results, df_xnorm, dataset.name, xnorm_axes, xnorm_cols, args.pdfs, base_name="xnorm")
 
-        syst_tools.add_qcdScale_hist(results, df_gen, scale_axes, scale_cols, base_name="xnorm")
+        df_xnorm = theory_tools.define_scale_tensor(df_xnorm)
+
+        syst_tools.add_qcdScale_hist(results, df_xnorm, scale_axes, scale_cols, base_name="xnorm")
         if not args.skipHelicity:
-            # TODO: Should have consistent order here with the scetlib correction function
-            syst_tools.add_qcdScaleByHelicityUnc_hist(results, df_gen, qcdScaleByHelicity_helper, scale_axes, scale_cols, base_name="xnorm")
+            syst_tools.add_qcdScaleByHelicityUnc_hist(results, df_xnorm, qcdScaleByHelicity_helper, scale_axes, scale_cols, base_name="xnorm")
 
-        if isW:
-            syst_tools.add_massweights_hist(results, df_gen, xnorm_axes, xnorm_cols, proc=dataset.name, base_name="xnorm")
+        df_xnorm = syst_tools.define_mass_weights(df_xnorm, dataset.name)
+
+        syst_tools.add_massweights_hist(results, df_xnorm, xnorm_axes, xnorm_cols, proc=dataset.name, base_name="xnorm")
+
+        if apply_theory_corr:
+            results.extend(theory_tools.make_theory_corr_hists(df_xnorm, "nominal", xnorm_axes, xnorm_cols, 
+                corr_helpers[dataset.name], args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly)
+            )
 
     df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
     #df = df.Filter("event % 2 == 1") # test with odd/even events
-
-    apply_theory_corr = args.theoryCorr and dataset.name in corr_helpers
-
-    cvh_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
-    jpsi_helper = data_jpsi_crctn_helper if dataset.is_data else mc_jpsi_crctn_helper
 
     df = muon_calibration.define_corrected_muons(df, cvh_helper, jpsi_helper, args, dataset, smearing_helper, bias_helper)
 
@@ -257,7 +261,9 @@ def build_graph(df, dataset):
 
     ########################################################################
     # define event weights here since they are needed below for some helpers
-    if not dataset.is_data:
+    if dataset.is_data:
+        df = df.DefinePerSample("nominal_weight", "1.0")            
+    else:
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
         df = df.Define("weight_vtx", vertex_helper, ["GenVtx_z", "Pileup_nTrueInt"])
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId"])
@@ -311,6 +317,9 @@ def build_graph(df, dataset):
     nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
 
     if unfold:
+        df = df.Define("ptGen", "chargeVgen < 0 ? genl.pt() : genlanti.pt()")   
+        df = df.Define("etaGen", "chargeVgen < 0 ? genl.eta() : genlanti.eta()")
+
         axes_nominal = [*nominal_axes, *unfolding_axes] 
         cols_nominal = [*nominal_cols, *unfolding_cols]
     else:
@@ -377,6 +386,7 @@ def build_graph(df, dataset):
 
             syst_tools.add_pdf_hists(results, df, dataset.name, axes_nominal, cols_nominal, args.pdfs)
 
+            df = syst_tools.define_mass_weights(df, dataset.name)
             if isW:
                 syst_tools.add_massweights_hist(results, df, axes_nominal, cols_nominal, proc=dataset.name)
 
@@ -384,8 +394,6 @@ def build_graph(df, dataset):
             if not "tau" in dataset.name:
                 df = syst_tools.add_muonscale_hist(results, df, args.muonCorrEtaBins, args.muonCorrMag, isW, axes_nominal, cols_nominal)
 
-                if args.smearingWeights:
-                    df = syst_tools.add_muonscale_smeared_hist(results, df, args.muonCorrEtaBins, args.muonCorrMag, isW, axes_nominal, nominal_cols_gen_smeared)
                 if args.muonScaleVariation == 'smearingWeights':
                     df = syst_tools.add_muonscale_smeared_hist(results, df, args.muonCorrEtaBins, args.muonCorrMag, isW, axes_nominal, nominal_cols_gen_smeared)
 
