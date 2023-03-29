@@ -95,7 +95,8 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
             logger.error("The theory correction was only applied as an alternate hist. Using its syst isn't well defined!")
 
         syst_ax = "vars"
-        both_exclude = ['^kappaFO.*','^recoil_scheme.*','^c_nu.*','Omega\d.\d*',"^transition_points.*",]
+        np_nuisances = ["^c_nu-*\d+", "^omega_nu-*\d+", "^Omega-*\d+"]
+        both_exclude = ['^kappaFO.*','^recoil_scheme.*',"^transition_points.*",]+np_nuisances
         tnp_nuisances = ["^gamma_.*", "b_.*", "s+*", "s-*",]
         resumscale_nuisances = ["^nuB.*", "nuS.*", "^muB.*", "^muS.*",]
         scale_nuisances = ["^mu.*", "^mu.*", "^nu",]
@@ -133,17 +134,18 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
                 rename=f"resumFOScale", 
             )
 
-        card_tool.addSystematic(name=theory_unc,
-            processes=samples,
-            group="resumNonpert",
-            systAxes=["downUpVar"],
-            passToFakes=to_fakes,
-            actionMap={s : lambda h: hh.syst_min_and_max_env_hist(h, obs, "vars", 
-                [x for x in h.axes["vars"] if any(re.match(y, x) for y in ["^c_nu", "^omega_nu", "^Omega"])]) \
-                    for s in expanded_samples},
-            outNames=["scetlibNonpertUp", "scetlibNonpertDown"],
-            rename=f"scetlibNonpert", 
-        )
+        for np_nuisance in ["c_nu", "omega_nu", "Omega"]:
+            nuisance_name = f"scetlibNP{np_nuisance}"
+            card_tool.addSystematic(name=theory_unc,
+                processes=samples,
+                group="resumNonpert",
+                systAxes=["downUpVar"],
+                passToFakes=to_fakes,
+                actionMap={s : lambda h: hh.syst_min_and_max_env_hist(h, obs, "vars", 
+                    [x for x in h.axes["vars"] if re.match(f"^{np_nuisance}-*\d+", x)]) for s in expanded_samples},
+                outNames=[f"{nuisance_name}Up", f"{nuisance_name}Down"],
+                rename=nuisance_name, 
+            )
         card_tool.addSystematic(name=theory_unc,
             processes=samples,
             group="resumTransition",
