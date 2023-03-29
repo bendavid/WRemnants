@@ -3,7 +3,7 @@ from wremnants import histselections as sel
 from wremnants import plot_tools,theory_tools,syst_tools
 from utilities import boostHistHelpers as hh,common
 import matplotlib.pyplot as plt
-from matplotlib import cm
+from matplotlib import colormaps
 import argparse
 import os
 import shutil
@@ -124,7 +124,7 @@ if addVariation:
     varLabels = padArray(args.varLabel, args.varName)
     # If none matplotlib will pick a random color
     ncols = len(args.varName) if not args.doubleColors else int(len(args.varName)/2)
-    colors = args.colors if args.colors else [cm.get_cmap("tab10" if ncols < 10 else "tab20")(int(i/2) if args.doubleColors else i) for i in range(len(args.varName))]
+    colors = args.colors if args.colors else [colormaps["tab10" if ncols < 10 else "tab20"](int(i/2) if args.doubleColors else i) for i in range(len(args.varName))]
     for i, (label,name,color) in enumerate(zip(varLabels,args.varName,colors)):
         entry = entries[i] if entries else None
         do_transform = args.transform and entry in transforms
