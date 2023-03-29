@@ -31,7 +31,7 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_with_mu_eta_pt.py -j 8 --maxFiles 10 --verbose 4
 
       - name: wmass plotting
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --hists pt eta -p ~/www/WMassAnalysis/PRValidation -f $(date +%Y_%m_%d)/$(git rev-parse --short HEAD) -a W mw_with_mu_eta_pt_maxFiles10.hdf5
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --hists pt eta -p ~/www/WMassAnalysis/PRValidation -f $(date +%Y_%m_%d)/PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') -a W mw_with_mu_eta_pt_maxFiles10.hdf5
 
       - name: lowpu w analysis
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_lowPU.py -j 8 --maxFiles 2 --verbose 4
@@ -58,7 +58,7 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_wlike_with_mu_eta_pt.py -j 8 --maxFiles 10 --verbose 4 --theoryCorr scetlib_dyturbo
 
       - name: wlike plotting
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal_uncorr --nominalRef nominal --hists pt eta -p ~/www/WMassAnalysis/PRValidation -f $(date +%Y_%m_%d)/$(git rev-parse --short HEAD) -a wlike mz_wlike_with_mu_eta_pt_scetlib_dyturboCorr_maxFiles10.hdf5 variation --varName nominal --varLabel 'SCETlib+DYTurbo' --colors purple
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal_uncorr --nominalRef nominal --hists pt eta -p ~/www/WMassAnalysis/PRValidation -f $(date +%Y_%m_%d)/PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') -a wlike mz_wlike_with_mu_eta_pt_scetlib_dyturboCorr_maxFiles10.hdf5 variation --varName nominal --varLabel 'SCETlib+DYTurbo' --colors purple
 
       - name: wlike combine
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i mz_wlike_with_mu_eta_pt_scetlib_dyturboCorr_maxFiles10.hdf5 --verbose 4
@@ -84,7 +84,7 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_dilepton.py -j 8 --maxFiles 10 --verbose 4  --theoryCorr scetlib_dyturbo --axes ptll yll mll
 
       - name: dilepton plotting
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal_uncorr --nominalRef nominal --hists ptll yll mll -p ~/www/WMassAnalysis/PRValidation -f $(date +%Y_%m_%d)/$(git rev-parse --short HEAD) -a z mz_dilepton_scetlib_dyturboCorr_maxFiles10.hdf5 variation --varName nominal --varLabel 'SCETlib+DYTurbo' --colors purple
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal_uncorr --nominalRef nominal --hists ptll yll mll -p ~/www/WMassAnalysis/PRValidation -f $(date +%Y_%m_%d)/PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') -a z mz_dilepton_scetlib_dyturboCorr_maxFiles10.hdf5 variation --varName nominal --varLabel 'SCETlib+DYTurbo' --colors purple
 
       - name: dilepton combine mll fit
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i mz_dilepton_scetlib_dyturboCorr_maxFiles10.hdf5 --fitvar mll
