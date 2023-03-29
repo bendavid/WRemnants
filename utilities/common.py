@@ -85,6 +85,7 @@ def common_parser(for_reco_highPU=False):
     import narf
     import wremnants
     from wremnants import theory_tools
+    from wremnants import theory_corrections
 
     parser.add_argument("--pdfs", type=str, nargs="*", default=["msht20"], choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for")
     parser.add_argument("--altPdfOnlyCentral", action='store_true', help="Only store central value for alternate PDF sets")
@@ -94,11 +95,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--v8", action='store_true', help="Use NanoAODv8. Default is v9")
     parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
     parser.add_argument("--forceDefaultName", help="Don't modify the name", action='store_true')
-    parser.add_argument("--theoryCorr", nargs="*", 
-        choices=["scetlib", "scetlibNP", "scetlibN4LL", "scetlibMSHT20an3lo", "scetlibHelicity", 
-                 "scetlib_dyturbo", "scetlib_dyturboN4LL", "scetlib_dyturboN3LLp_an3lo", "scetlib_dyturboMSHT20an3lo", "scetlib_dyturboMSHT20Unc",
-                 "scetlib_dyturboMSHT20Vars", "scetlib_dyturboMSHT20an3loVars", "scetlib_dyturboN3LLpMSHT20an3lo", "scetlib_dyturboN4LLMSHT20an3lo",
-                 "dyturboN3LLp", "dyturbo", "dyturboYOnly", "matrix_radish", "horacenloew"], 
+    parser.add_argument("--theoryCorr", nargs="*", choices=theory_corrections.valid_theory_corrections(),
         help="Apply corrections from indicated generator. First will be nominal correction.", default=[])
     parser.add_argument("--theoryCorrAltOnly", action='store_true', help="Save hist for correction hists but don't modify central weight")
     parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")

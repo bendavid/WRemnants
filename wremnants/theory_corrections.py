@@ -6,11 +6,18 @@ import narf
 import numpy as np
 import lz4.frame
 import pickle
+import re
+import glob
 from .correctionsTensor_helper import makeCorrectionsTensor
 from utilities import boostHistHelpers as hh, common, logging
 from wremnants import theory_tools
 
 logger = logging.child_logger(__name__)
+
+def valid_theory_corrections():
+    corr_files = glob.glob(common.data_dir+"TheoryCorrections/*Corr*.pkl.lz4")
+    matches = [re.match("(^.*)Corr[W|Z]\.pkl\.lz4", os.path.basename(c)) for c in corr_files]
+    return [m[1] for m in matches if m]
 
 def load_corr_helpers(procs, generators):
     corr_helpers = {}
