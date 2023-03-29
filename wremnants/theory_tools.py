@@ -231,7 +231,7 @@ def define_theory_weights_and_corrs(df, dataset_name, helpers, args):
             modify_central_weight=not args.theoryCorrAltOnly)
 
     if args.highptscales:
-        df = df.Define("extra_weight", f"{weight_expr}*MEParamWeightAltSet3[0]")
+        df = df.Define("extra_weight", "MEParamWeightAltSet3[0]")
     df = define_nominal_weight(df)
     df = define_pdf_columns(df, dataset_name, args.pdfs, args.altPdfOnlyCentral)
         
