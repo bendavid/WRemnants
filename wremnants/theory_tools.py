@@ -242,7 +242,7 @@ def build_weight_expr(df, exclude_weights=[]):
     valid_cols = df.GetColumnNames()
     if nominal_weight not in valid_cols:
         raise ValueError(f"The weight '{nominal_weight}' must be defined in the histmaker!")
-    weights = ["central_pdf_weight", "theory_corr_weight", "exp_weight"]
+    weights = [nominal_weight, "central_pdf_weight", "theory_corr_weight", "exp_weight"]
     found_weights = []
 
     for weight in filter(lambda x: x not in exclude_weights, weights):
@@ -255,7 +255,10 @@ def build_weight_expr(df, exclude_weights=[]):
         logger.info("Adding additional weight '{extra_weight}'")
         found_weights.append(extra_weight)
 
-    return "*".join(found_weights)
+    weight_expr = "*".join(found_weights)
+    logger.debug(f"Weight is {weight_expr}")
+
+    return weight_expr
 
 def define_nominal_weight(df):
     return df.Define(f"nominal_weight", build_weight_expr(df))
