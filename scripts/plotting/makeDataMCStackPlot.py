@@ -98,7 +98,8 @@ if addVariation and (args.selectAxis or args.selectEntries):
 outdir = plot_tools.make_plot_dir(args.outpath, args.outfolder)
 
 groups = datagroups2016(args.infile)
-datasets = groups.getNames(args.procFilters, exclude=False)
+# There is probably a better way to do this but I don't want to deal with it
+datasets = groups.getNames(args.procFilters if args.procFilters else ['QCD'], exclude=not args.procFilters)
 logger.info(f"Will plot datasets {datasets}")
 
 if not args.nominalRef:
@@ -116,7 +117,7 @@ unstack = exclude[:]
 # TODO: In should select the correct hist for the transform, not just the first
 transforms = syst_tools.syst_transform_map(nominalName, args.hists[0])
 
-histInfo = groups.getDatagroups(afterFilter=False)
+histInfo = groups.getDatagroups()
 
 if addVariation:
     logger.info(f"Adding variation {args.varName}")
@@ -166,7 +167,7 @@ if addVariation:
 
 
 groups.sortByYields(args.baseName, nominalName=nominalName)
-histInfo = groups.getDatagroups(afterFilter=False)
+histInfo = groups.getDatagroups()
 
 logger.info(f"Unstacked processes are {exclude}")
 prednames = list(reversed(groups.getNames([d for d in datasets if d not in exclude], exclude=False)))
