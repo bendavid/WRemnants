@@ -54,7 +54,7 @@ def make_jpsi_crctn_helpers(args, make_uncertainty_helper=False):
     if args.muonCorrData == "massfit":
         data_corrfile = "calibrationJDATA_ideal.root"
     elif args.muonCorrData == "lbl_massfit":
-        data_corrfile = "calibrationJDATA_rewtgr_3dmap_LBL_v721.root" 
+        data_corrfile = "calibrationJDATA_rewtgr_3dmap_LBL_v721_cropped_eta.root" 
     else:
         data_corrfile = None
 
@@ -253,6 +253,15 @@ def get_jpsi_scale_param_cov_mat(cov, n_scale_params = 3, n_tot_params = 4, n_et
             cov.values()[irow_all_params], idx_scale_params
         )
     return cov_scale_params
+
+def crop_cov_mat(filepath, n_tot_params = 4, n_cropped_eta_bins = 2):
+    f = uproot.open(filepath)
+    filename = filepath.split("/")[-1]
+    cov_mat = np.array(f['covariance_matrix'].to_hist().values())
+    start_idx = n_tot_params * n_cropped_eta_bins
+    cov_mat_cropped = cov_mat[start_idx:-start_idx, start_idx:-start_idx]
+    fout = uproot.recreate(filename.split(".")[0] + "_cropped_eta" + ".root")
+    fout['covariance_matrix'] = cov_mat_cropped 
 
 def define_lblcorr_muons(df, cvh_helper, corr_branch="cvh"):
 
