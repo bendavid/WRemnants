@@ -234,18 +234,17 @@ def define_theory_weights_and_corrs(df, dataset_name, helpers, args):
             modify_central_weight=not args.theoryCorrAltOnly)
 
     if args.highptscales:
-        df = df.Define("extra_weight", f"{weight_expr}*MEParamWeightAltSet3[0]")
+        df = df.Define("extra_weight", "MEParamWeightAltSet3[0]")
     df = define_nominal_weight(df)
     df = define_pdf_columns(df, dataset_name, args.pdfs, args.altPdfOnlyCentral)
         
     return df 
 
 def build_weight_expr(df, exclude_weights=[]):
-    nominal_weight = "weight"
     valid_cols = df.GetColumnNames()
-    if nominal_weight not in valid_cols:
-        raise ValueError(f"The weight '{nominal_weight}' must be defined in the histmaker!")
-    weights = ["central_pdf_weight", "theory_corr_weight", "exp_weight"]
+    weights = ["weight", "central_pdf_weight", "theory_corr_weight", "exp_weight"]
+    if weights[0] not in valid_cols:
+        raise ValueError(f"The weight '{weights[0]}' must be defined in the histmaker!")
     found_weights = []
 
     for weight in filter(lambda x: x not in exclude_weights, weights):
@@ -258,7 +257,10 @@ def build_weight_expr(df, exclude_weights=[]):
         logger.info("Adding additional weight '{extra_weight}'")
         found_weights.append(extra_weight)
 
-    return "*".join(found_weights)
+    weight_expr = "*".join(found_weights)
+    logger.debug(f"Weight is {weight_expr}")
+
+    return weight_expr
 
 def define_nominal_weight(df):
     return df.Define(f"nominal_weight", build_weight_expr(df))
