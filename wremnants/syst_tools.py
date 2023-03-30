@@ -22,8 +22,8 @@ def syst_transform_map(base_hist, hist_name):
         return unc if base_hist == "nominal" else f"{base_hist}_{unc}"
 
     transforms = {}
-    transforms.update({pdf+"Up" : {"action" : lambda h,p=pdf: pdfUnc(h, p)[0]} for pdf in pdfNames})
-    transforms.update({pdf+"Down" : {"action" : lambda h,p=pdf: pdfUnc(h, p)[1]} for pdf in pdfNames})
+    transforms.update({pdf+"Up" : {"action" : lambda h,p=pdf: pdfUnc(h, p)[0] if "pdfVar" in h.axes.name else h} for pdf in pdfNames})
+    transforms.update({pdf+"Down" : {"action" : lambda h,p=pdf: pdfUnc(h, p)[1] if "pdfVar" in h.axes.name else h} for pdf in pdfNames})
     transforms["scetlib_dyturboMSHT20Up"] = {"action" : lambda h: pdfUnc(h, "pdfMSHT20", "vars")[0], "procs" : ["ZmumuPostVFP"]}
     transforms["scetlib_dyturboMSHT20Down"] = {"action" : lambda h: pdfUnc(h, "pdfMSHT20", "vars")[1], "procs" : ["ZmumuPostVFP"]}
     transforms["scetlib_dyturboMSHT20an3loUp"] = {"action" : lambda h: pdfUnc(h, "pdfMSHT20", "vars")[0], "procs" : ["ZmumuPostVFP"]}

@@ -143,7 +143,7 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_wlike_with_mu_eta_pt.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4 --theoryCorr scetlib_dyturbo --forceDefaultName
 
       - name: wlike plotting
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal --nominalRef nominal --hists pt eta -p ~/www/WMassAnalysis/PRValidation -f $PLOT_DIR -a wlike $OUTFILE variation --varName nominal_uncorr --varLabel MiNNLO --colors red
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal --nominalRef nominal --hists pt eta -p ~/www/WMassAnalysis/PRValidation -f $(date +%Y_%m_%d)/PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') -a wlike mz_wlike_with_mu_eta_pt_scetlib_dyturboCorr_maxFiles10.hdf5 variation --varName nominal_uncorr --varLabel MiNNLO --colors red
 
       - name: wlike combine setup
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $OUTFILE --verbose 4 --lumiScale $LUMI_SCALE
@@ -196,7 +196,11 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_dilepton.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4  --theoryCorr scetlib_dyturbo --axes ptll --forceDefaultName
 
       - name: dilepton plotting ptll
+<<<<<<< HEAD
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal --nominalRef nominal --hists ptll -p ~/www/WMassAnalysis/PRValidation -f $PLOT_DIR -a z $OUTFILE variation --varName nominal_uncorr --varLabel MiNNLO --colors red
+=======
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal --nominalRef nominal --hists ptll -p ~/www/WMassAnalysis/PRValidation -f $(date +%Y_%m_%d)/PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') -a z mz_dilepton_scetlib_dyturboCorr_maxFiles10.hdf5 variation --varName nominal_uncorr --varLabel MiNNLO --colors red
+>>>>>>> f7fadb2 (CI improvements)
 
       - name: dilepton plotting mll
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal_mll --hists mll -p ~/www/WMassAnalysis/PRValidation -f $PLOT_DIR -a z $OUTFILE
@@ -207,8 +211,16 @@ jobs:
       - name: dilepton combine ptll setup
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $OUTFILE --fitvar ptll --constrainMass --lumiScale $LUMI_SCALE
 
+<<<<<<< HEAD
       - name: dilepton combine ptll fit
         run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ ZMassDilepton_ptll/ZMassDilepton_plus.txt ZMassDilepton_minus.txt 
+=======
+      - name: dilepton combine ptll setup
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i mz_dilepton_scetlib_dyturboCorr_maxFiles10.hdf5 --fitvar ptll --resumUnc tnp
+>>>>>>> f7fadb2 (CI improvements)
+
+      - name: dilepton combine ptll fit
+        run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ ZMassDilepton_ptll/ZMassDilepton_plus.txt ZMassDilepton_minus.txt
 
   gen:
     # The type of runner that the job will run on

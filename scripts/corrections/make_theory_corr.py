@@ -148,5 +148,6 @@ with lz4.frame.open(outfile, "wb") as f:
 logger.info("Correction binning is")
 for ax in corrh.axes:
     logger.info(f"Axis {ax.name}: {ax.edges}")
-logger.info(f"Average correction is {corrh.sum()/np.ones_like(corrh).sum()}")
+logger.info(f"Average correction is {np.average(corrh.values())}")
+logger.info(f"Normalization change (corr/minnlo) is {numh[{'vars' : 0 }].sum().value/minnloh.sum().value}")
 logger.info(f"Wrote file {outfile}")
