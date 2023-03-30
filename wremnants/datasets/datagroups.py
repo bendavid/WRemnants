@@ -76,25 +76,19 @@ class Datagroups(object):
             logger.warning(f"The group {group_name} is not defined in the datagroups object! Do nothing here.")
             return
 
-        if isinstance(member, list):
-            if isinstance(member_operation, list):
-                for m, o in zip(member, member_operation):
-                    self.addGroupMember(group_name, m, o)
-            else:
-                for m in member:
-                    self.addGroupMember(group_name, m)
+        if isinstance(member, list) or isinstance(member_operation, list):
+            logger.warning(f"Only scalar types can be given! Do nothing here.")
             return
 
         if self.datasets and member.name not in [d for d in self.datasets]:
             logger.warning(f"The member {member.name} can not be found in the current dataset!")
         
         # add member operation
-        if "memberOp" in self.groups[group_name]:
-            self.groups[group_name]["memberOp"] = [*self.groups[group_name]["memberOp"], member_operation]
-        else:
-            self.groups[group_name]["memberOp"] = [None]*len(self.groups[group_name]["members"]) + [member_operation]
-
-        self.groups[group_name]["members"] = [*self.groups[group_name]["members"], member]
+        if "memberOp" not in self.groups[group_name]:
+            self.groups[group_name]["memberOp"] = [None]*len(self.groups[group_name]["members"])
+        
+        self.groups[group_name]["memberOp"].append(copy.deepcopy(member_operation))
+        self.groups[group_name]["members"].append(member)
         
 
     def deleteGroupMember(self, group_name, member):
@@ -456,17 +450,25 @@ class Datagroups(object):
             self.unconstrainedProcesses.append(proc_name)
             self.addGroup(proc_name, proc_genbin)
 
-        # add one inclusive out of acceptance contribution and treat as background
-        conditions = [{var : hist.overflow} for var in self.gen_axes] + [{var : hist.underflow} for var in self.gen_axes]
-        combined_condition = functools.reduce(lambda a, b: a | b, conditions)
-        memberOp = lambda x: x[combined_condition] 
-
-        if "acceptance_bkg" in self.groups.keys():
-            self.addGroupMember("acceptance_bkg", base_members, memberOp)
-        else:
+        # add one out of acceptance group and treat as background
+        ooa_name = group_name.split("_")[0]+"_bkg"
+        if ooa_name not in self.groups.keys():
             proc_genbin = base_group
-            proc_genbin['memberOp'] = [memberOp for m in base_members]
-            self.addGroup("acceptance_bkg", proc_genbin)
+            proc_genbin['memberOp'] = []
+            proc_genbin['members'] = []
+            self.addGroup(ooa_name, proc_genbin)
+        
+        # list of possible slices for each axis
+        slices = [({var : hist.underflow}, {var : hist.overflow}, {var : hist.tag.Slicer()[0:hist.overflow:hist.sum] }) for var in self.gen_axes]
+        # pick one slice for each axis from the list of possible slices
+        for condition in [functools.reduce(lambda x, y: {**x, **y}, tup) for tup in itertools.product(*slices)]:
+            # make sure that at least one axis takes the underflow/overflow, otherwise it would not be out of acceptance
+            if not any([c in [hist.underflow, hist.overflow] for c in condition.values()]):
+                continue
+            logger.debug(f"Add members with condition {condition}")
+            for member in base_members:
+                self.addGroupMember(ooa_name, member, lambda x, c=condition: x[c])
+
 
     def make_yields_df(self, histName, procs, action):
         def sum_and_unc(h):
