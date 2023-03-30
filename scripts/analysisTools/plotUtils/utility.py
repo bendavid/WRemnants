@@ -1488,6 +1488,7 @@ def drawNTH1(hists=[],
              outdir="./",
              rebinFactorX=0,
              draw_both0_noLog1_onlyLog2=1,
+             topMargin=0.1,
              leftMargin=0.15,
              rightMargin=0.04,
              bottomMargin=0.15,
@@ -1557,6 +1558,7 @@ def drawNTH1(hists=[],
     canvas.SetTickx(1)
     canvas.SetTicky(1)
     canvas.cd()
+    canvas.SetTopMargin(topMargin)
     canvas.SetLeftMargin(leftMargin)
     canvas.SetRightMargin(rightMargin)
     canvas.cd()

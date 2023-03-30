@@ -55,7 +55,7 @@ class CardTool(object):
         self.keepOtherChargeSyst = True
         self.chargeIdDict = {"minus" : {"val" : -1, "id" : "q0", "badId" : "q1"},
                              "plus"  : {"val" : 1., "id" : "q1", "badId" : "q0"},
-                             "inclusive" : {"val" : "sum", "id" : "none", "badId" : None}, # for this channel there is no bad id, currently using random string to make sure it doesn't match
+                             "inclusive" : {"val" : "sum", "id" : "none", "badId" : None},
                              }
 
     def skipHistograms(self):
@@ -65,8 +65,6 @@ class CardTool(object):
         
     def setSkipOtherChargeSyst(self):
         self.keepOtherChargeSyst = False
-        self.chargeIdDict["plus"]["badId"] = "q0"
-        self.chargeIdDict["minus"]["badId"] = "q1"
 
     def setProjectionAxes(self, project):
         self.project = project
@@ -395,7 +393,7 @@ class CardTool(object):
         # so there is some customization based on what one expects to silent some noisy warnings
         for name in sorted(var_names):
             for chan in self.channels:
-                if chan in self.chargeIdDict .keys() and self.chargeIdDict[chan]["badId"] is not None and self.chargeIdDict[chan]["badId"] in name:
+                if chan in self.chargeIdDict.keys() and self.chargeIdDict[chan]["badId"] is not None and self.chargeIdDict[chan]["badId"] in name:
                     if silentCheckOtherCharge:
                         continue
                 if chan in ["plus", "minus"]:
@@ -424,7 +422,6 @@ class CardTool(object):
                 down_nBinsSystSameAsNomi = np.count_nonzero(np.isclose(down.values(), hnom.values(), rtol=1e-06, atol=1e-08))/nCellsWithoutOverflows
                 if up_nBinsSystSameAsNomi > 0.99 or down_nBinsSystSameAsNomi > 0.99:
                     logger.warning(f"Channel {chan.ljust(5)}: syst {name} has Up/Down variation with {up_nBinsSystSameAsNomi:.0%}/{down_nBinsSystSameAsNomi:.0%} of bins equal to nominal")
-                    
 
     def writeForProcess(self, h, proc, syst):
         decorrelateByCharge = False
