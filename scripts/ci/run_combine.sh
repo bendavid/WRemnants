@@ -29,4 +29,4 @@ if [[ $# -gt 2 ]]; then
 fi
 
 text2hdf5.py --X-allow-no-signal $card_name
-combinetf.py --binByBinStat ${card_name/txt/hdf5}
+combinetf.py --binByBinStat -t -1 ${card_name/txt/hdf5}
