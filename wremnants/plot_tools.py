@@ -339,8 +339,12 @@ def make_plot_dir(outpath, outfolder):
         raise IOError(f"The path {outpath} doesn't not exist. You should create it (and possibly link it to your web area)")
         
     if not os.path.isdir(full_outpath):
-        logger.info(f"Creating folder {full_outpath}")
-        os.makedirs(full_outpath)
+        try:
+            os.makedirs(full_outpath)
+            logger.info(f"Creating folder {full_outpath}")
+        except FileExistsError as e:
+            logger.warning(e)
+            pass
 
     return full_outpath
 
