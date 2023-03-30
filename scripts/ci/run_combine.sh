@@ -31,5 +31,3 @@ fi
 outfile=${card_name/txt/hdf5}
 text2hdf5.py --X-allow-no-signal $card_name
 combinetf.py --doImpacts --binByBinStat -t -1 $outfile
-popd
-python3 scripts/combine/printImpacts.py -f $working_dir/$outfile
