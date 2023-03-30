@@ -51,6 +51,7 @@ class CardTool(object):
         #self.loadArgs = {"operation" : "self.loadProcesses (reading hists from file)"}
         self.lumiScale = 1.
         self.project = None
+        self.xnorm = False
         self.keepOtherChargeSyst = True
         self.chargeIdDict = {"minus" : {"val" : -1, "id" : "q0", "badId" : "q1"},
                              "plus"  : {"val" : 1., "id" : "q1", "badId" : "q0"},
@@ -84,6 +85,9 @@ class CardTool(object):
     
     def setLumiScale(self, lumiScale):
         self.lumiScale = lumiScale
+
+    def setCrossSectionOutput(self, xnorm):
+        self.xnorm = xnorm
         
     def getProcsNoStatUnc(self):
         return self.noStatUncProcesses
@@ -375,7 +379,7 @@ class CardTool(object):
 
     def getBoostHistByCharge(self, h, q):
         return h[{"charge" : h.axes["charge"].index(q) if q != "sum" else hist.sum}]
-        
+
     def checkSysts(self, hnom3D, var_map, proc, thresh=0.25, silentCheckOtherCharge=False):
         #if self.check_variations:
         var_names = set([name.replace("Up", "").replace("Down", "") for name in var_map.keys() if name])
@@ -385,6 +389,7 @@ class CardTool(object):
         # for wmass some systs are only expected to affect a reco charge, but the syst for other charge might still exist and be used
         # although one expects it to be same as nominal. The following check would trigger on this case with spurious warnings
         # so there is some customization based on what one expects to silent some noisy warnings
+
         for name in sorted(var_names):
             for chan in self.channels:
                 if chan in self.chargeIdDict .keys() and self.chargeIdDict[chan]["badId"] is not None and self.chargeIdDict[chan]["badId"] in name:
@@ -494,7 +499,7 @@ class CardTool(object):
         self.procDict = self.datagroups.groups
         self.writeForProcesses(self.nominalName, processes=self.procDict.keys(), label=self.nominalName)
         self.loadNominalCard()
-        if self.pseudoData:
+        if self.pseudoData and not self.xnorm:
             self.addPseudodata([x for x in self.procDict.keys() if x != "Data"])
 
         self.writeLnNSystematics()
@@ -651,7 +656,7 @@ class CardTool(object):
             if not self.keepOtherChargeSyst and self.chargeIdDict[charge]["badId"] and self.chargeIdDict[charge]["badId"] in newname:
                 continue
             q = self.chargeIdDict[charge]["val"]
-            hout = narf.hist_to_root(h[{"charge" : h.axes["charge"].index(q) if q != "sum" else hist.sum}])
+            hout = narf.hist_to_root(self.getBoostHistByCharge(h,q))
             hout.SetName(newname+f"_{charge}")
             hout.Write()
 
@@ -663,10 +668,9 @@ class CardTool(object):
     def writeHist(self, h, name, setZeroStatUnc=False, decorrCharge=False, decorrByBin={}):
         if self.skipHist:
             return
-        
         if self.project:
             axes = self.project[:]
-            if "charge" in h.axes.name:
+            if "charge" in h.axes.name and not self.xnorm:
                 axes.append("charge")
             h = h.project(*axes)
 
@@ -674,7 +678,7 @@ class CardTool(object):
             self.nominalDim = h.ndim
             if self.nominalDim-self.writeByCharge > 3:
                 raise ValueError("Cannot write hists with > 3 dimensions as combinetf does not accept THn")
-        
+
         if h.ndim != self.nominalDim:
             raise ValueError(f"Histogram {name} does not have the correct dimensions. Found {h.ndim}, expected {self.nominalDim}")
 
@@ -697,7 +701,7 @@ class CardTool(object):
                     hists[newname] = narf.hist_to_root(h[{ax : s[complex(0, decorrByBin[ax][ibin]):complex(0, decorrByBin[ax][ibin+1])]}])
         else:
             hists[name] = h    
-                
+
         for hname,hist in hists.items():
             if self.writeByCharge:
                 self.writeHistByCharge(hist, hname, decorrCharge=decorrCharge)
