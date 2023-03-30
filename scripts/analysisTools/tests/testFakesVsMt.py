@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 ## example
-# python tests/testFakesVsMt.py /path/to/file.pkl.lz4  outputFolder/ --palette 87 --rebin-x 4 --rebin-y 2 --mt-bin-edges "0,5,10,15,20,25,30,35,40,45,50,55,60" --mt-nominal-range "0,40" --mt-fit-range "0,60" -c plus -z "RawPFMET m_{T} (GeV)" --fit-pol-degree 1 --integral-mt-method sideband [--skip-plot-2D] [--jet-cut]
+# python tests/testFakesVsMt.py /scratch/mciprian/CombineStudies/TRASHTEST/testMyPRafterMerge/mw_with_mu_eta_pt_scetlibCorr_23mar_isoEffiSmoothingPol4.hdf5 plots/fromMyWremnants/fitResults/TRASHTEST/testMyPRafterMerges/23mar2023/full_isoEffiSmoothingPol4/testFakesVsMt/ --palette 87 --rebin-x 4 --rebin-y 2 --mt-bin-edges "0,5,10,15,20,25,30,35,40,45,50,55,60" --mt-nominal-range "0,40" --mt-fit-range "0,40" -c plus -z "RawPFMET m_{T} (GeV)" --fit-pol-degree 1 --integral-mt-method sideband -v 4 --skip-plot-2D --max-pt 50 [--jet-cut]
 #
 # Note: --jet-cut is used to enforce the jet requirement to derive the FRF,
 #       however the validation is made using the nominal histogram, which may or may not have had that cut included
@@ -13,6 +13,7 @@ import time
 import argparse
 
 import narf
+import narf.fitutils
 import wremnants
 import hist
 import lz4.frame, pickle
@@ -245,7 +246,7 @@ def drawAndFitFRF(h1,
     if polN_scaled_global == None:
         polN_scaled_global = partial(polN_root_, xLowVal=xMinFit, xFitRange=xMaxFit-xMinFit, degree=fitPolDegree)
 
-    fitres_tf1 = narf.fit_hist(boost_hist, polN_scaled_global, params)
+    fitres_tf1 = narf.fitutils.fit_hist(boost_hist, polN_scaled_global, params)
     f1 = ROOT.TF1("f1",polN_scaled_global, xMinFit, xMaxFit, len(params))
     status = fitres_tf1["status"]
     covstatus = fitres_tf1["covstatus"]
@@ -280,7 +281,7 @@ def drawAndFitFRF(h1,
         params0 = np.array([1.0])
         if pol0_scaled_global == None:
             pol0_scaled_global = partial(polN_root_, xLowVal=xMinFit, xFitRange=xMaxFit-xMinFit, degree=0)
-        fitres_tf1_pol0 = narf.fit_hist(boost_hist, pol0_scaled_global, params0)
+        fitres_tf1_pol0 = narf.fitutils.fit_hist(boost_hist, pol0_scaled_global, params0)
         fpol0 = ROOT.TF1("fpol0",pol0_scaled_global, xMinFit, xMaxFit, len(params0))
         chi2pol0 = fitres_tf1_pol0["loss_val"]
         chi2diffTest = ROOT.TMath.Prob(chi2pol0 - chi2, 1)
@@ -534,6 +535,8 @@ if __name__ == "__main__":
         subFolder += "_1orMoreJetFRF"
     else:
         subFolder += "_jetInclusiveFRF"
+    if args.maxPt > 0:
+        subFolder += f"_maxPt{int(args.maxPt)}"
     if args.useQCDMC:
         subFolder += "_QCDMCtruth"
     if args.postfix:
@@ -789,6 +792,7 @@ if __name__ == "__main__":
             h2FailIso = getTH2fromTH3(histoFailIso, f"pt_eta_mt{lowEdge}to{highEdge}_failIso", binStart, binEnd)
 
             h2PassIso.SetTitle("Low Iso: m_{T} #in [%d, %d]" % (lowEdge, highEdge))
+            h2FailIso.SetTitle("High Iso: m_{T} #in [%d, %d]" % (lowEdge, highEdge))
             if not args.skipPlot2D:
                 drawCorrelationPlot(h2PassIso,
                                     xAxisName,
@@ -797,9 +801,6 @@ if __name__ == "__main__":
                                     h2PassIso.GetName(), plotLabel="ForceTitle", outdir=outfolder,
                                     draw_both0_noLog1_onlyLog2=1, nContours=args.nContours, palette=args.palette,
                                     invertePalette=args.invertePalette, passCanvas=canvas, skipLumi=True)
-
-            h2FailIso.SetTitle("High Iso: m_{T} #in [%d, %d]" % (lowEdge, highEdge))
-            if not args.skipPlot2D:
                 drawCorrelationPlot(h2FailIso,
                                     xAxisName,
                                     yAxisName,
