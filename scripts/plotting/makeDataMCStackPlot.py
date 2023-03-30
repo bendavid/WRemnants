@@ -117,8 +117,6 @@ unstack = exclude[:]
 # TODO: In should select the correct hist for the transform, not just the first
 transforms = syst_tools.syst_transform_map(nominalName, args.hists[0])
 
-histInfo = groups.getDatagroups()
-
 if addVariation:
     logger.info(f"Adding variation {args.varName}")
     varLabels = padArray(args.varLabel, args.varName)
