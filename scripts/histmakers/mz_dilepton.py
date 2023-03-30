@@ -166,6 +166,9 @@ def build_graph(df, dataset):
     results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"]))
     results.append(df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "nominal_weight"]))
 
+    for obs in ["ptll", "mll", "yll"]:
+        results.append(df.HistoBoost(f"nominal_{obs}", [axes[obs]], [obs, "nominal_weight"]))
+
     if not dataset.is_data and not args.onlyMainHistograms:
 
 
