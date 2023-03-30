@@ -28,5 +28,7 @@ if [[ $# -gt 2 ]]; then
 	combineCards.py $cards > $card_name
 fi
 
+outfile=${card_name/txt/hdf5}
 text2hdf5.py --X-allow-no-signal $card_name
-combinetf.py --binByBinStat -t -1 ${card_name/txt/hdf5}
+combinetf.py --doImpacts --binByBinStat -t -1 $outfile
+python3 scripts/combine/printImpacts -f $outfile
