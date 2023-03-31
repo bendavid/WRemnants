@@ -185,14 +185,14 @@ def main(args,xnorm=False):
         cardTool.writeOutput(args=args)
         logger.info("Using option --doStatOnly: the card was created with only mass weights and a dummy LnN syst on all processes")
         quit()
-    
+
     if args.constrainMass:
         # add an uncertainty on the mass, e.g. for ptll fits
         cardTool.addSystematic("massWeight", 
             processes=signal_samples_inctau,
             group="massShift",
-            groupFilter=lambda x: x == "massShift2p1MeV",
-            skipEntries=[(f"^massShift{i}MeV.*",) for i in range(0, 110, 10)],
+            groupFilter=lambda x: x == "massShift20MeV" if wmass else lambda x: x == "massShift2p1MeV",
+            skipEntries=[(f"^massShift{i}MeV.*",) for i in range(30, 110, 10)]+[("^massShift2p1MeV.*",)]+[(f"^massShift{i}MeV.*",) for i in range(0, 20, 10)] if wmass else [(f"^massShift{i}MeV.*",) for i in range(0, 110, 10)],
             mirror=False,
             systAxes=["massShift"],
             passToFakes=passSystToFakes,
