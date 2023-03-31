@@ -27,6 +27,9 @@ if args.validateByMassWeights:
 
 era = args.era
 
+print("file is", f"{__file__}.hdf5")
+exit(0)
+
 # custom template binning
 template_neta = int(args.eta[0])
 template_mineta = args.eta[1]
@@ -213,4 +216,4 @@ def build_graph(df, dataset):
 
 resultdict = narf.build_and_run(datasets, build_graph)
 
-output_tools.write_analysis_output(resultdict, "mz_wlike_with_mu_eta_pt.hdf5", args)
+output_tools.write_analysis_output(resultdict, f"{__file__}.replace('py', 'hdf5')", args, update_name=not args.forceDefaultName)
