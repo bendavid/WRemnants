@@ -303,17 +303,17 @@ def main(args,xnorm=False):
 
     if not xnorm:
         msv_config_dict = {
-            "smearing_weights":{
+            "smearingWeights":{
                 "hist_name": "muonScaleSyst_responseWeights",
                 "syst_axes": ["unc", "downUpVar"],
                 "syst_axes_labels": ["unc", "downUpVar"]
             },
-            "massweights":{
+            "massWeights":{
                 "hist_name": "muonScaleSyst",
                 "syst_axes": ["downUpVar", "scaleEtaSlice"],
                 "syst_axes_labels": ["downUpVar", "ieta"]
             },
-            "manual_pt_shift":{
+            "manualShift":{
                 "hist_name": "muonScaleSyst_manualShift",
                 "syst_axes": ["downUpVar"],
                 "syst_axes_labels": ["downUpVar"]
