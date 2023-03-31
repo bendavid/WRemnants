@@ -86,9 +86,9 @@ def make_muon_bias_helpers(args):
 
         factor_A = 1
         factor_M = 1
-        if args.bias_calibration == "A":
+        if args.biasCalibration == "A":
             factor_M = 0
-        elif args.bias_calibration == "M":
+        elif args.biasCalibration == "M":
             factor_A = 0
 
         # The bias correction follows the same parameterization as the J/Psi correction, but with e=0
@@ -303,7 +303,7 @@ def define_corrected_muons(df, cvh_helper, jpsi_helper, args, dataset, smearing_
     # Bias corrections from nonclosure
     if not dataset.is_data and bias_helper:
         if args.biasCalibration in ["parameterized", "A", "M"]:
-            df = df.Define("Muon_biasedPt", bias_helper, [muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta"), muon_var_name(muon, "charge")])
+            df = df.Define("Muon_biasedPtData", bias_helper, [muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta"), muon_var_name(muon, "charge")])
         else:
             df = df.Define("Muon_biasedPtData", bias_helper, ["rdfslot_", muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta")])
 
