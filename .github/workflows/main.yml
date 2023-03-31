@@ -5,21 +5,25 @@ name: CI
 # Controls when the workflow will run
 on:
   # Triggers the workflow on push or pull request events but only for the master branch
-  push:
-    branches: [ main ]
   pull_request:
     branches: [ main ]
-
+  schedule:
+    - cron: '0 3 * * 3,6' # Run on Wednesday and Saturday morning at 3h00 UTC
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
+env: 
+  MAX_FILES: 10
+  LUMI_SCALE: 100
+  NTHREADS: 16
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "wmass"
   w-analysis:
     # The type of runner that the job will run on
     runs-on: [self-hosted, linux, x64]
 
+    env:
+      OUTFILE: "mw_with_mu_eta_pt.hdf5"
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -27,17 +31,50 @@ jobs:
         with:
           submodules: 'true'
 
+      - name: wmass setup folder
+        run: echo PLOT_DIR=$(date +%Y_%m_%d)/PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') >> $GITHUB_ENV
+
+      - name: wmass setup folder nightly
+        if: github.event.schedule == '0 3 * * 3,6'
+        run: echo PLOT_DIR=$(date +%Y_%m_%d)/ScheduledBuild_$(git rev-parse --short "$GITHUB_SHA") >> $GITHUB_ENV
+
+      - name: wmass setup events
+        if: github.event.schedule == '0 3 * * 3,6'
+        run: echo "NTHREADS=64" >> $GITHUB_ENV
+
+      - name: wmass setup events
+        if: github.event.schedule == '0 3 * * 3,6'
+        run: echo "MAX_FILES=-1" >> $GITHUB_ENV
+
+      - name: wmass setup lumi scale
+        if: github.event.schedule == '0 3 * * 3,6'
+        run: echo "LUMI_SCALE=1" >> $GITHUB_ENV
+
+      - name: wmass setup lumi scale
+        if: github.event.schedule != '0 3 * * 3,6'
+        run: echo "LUMI_SCALE=125" >> $GITHUB_ENV
+
+      - name: wmass setup lumi scale
+        if: github.event.schedule != '0 3 * * 3,6'
+        run: echo "MAX_FILES=100" >> $GITHUB_ENV
+
       - name: wmass analysis
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_with_mu_eta_pt.py -j 8 --maxFiles 10 --verbose 4
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_with_mu_eta_pt.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4 --forceDefaultName
 
       - name: wmass plotting
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --hists pt eta -p ~/www/WMassAnalysis/PRValidation -f $(date +%Y_%m_%d)/PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') -a W mw_with_mu_eta_pt_maxFiles10.hdf5
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --hists pt eta -p ~/www/WMassAnalysis/PRValidation -f $PLOT_DIR -a W $OUTFILE
 
       - name: lowpu w analysis
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_lowPU.py -j 8 --maxFiles 2 --verbose 4
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_lowPU.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4
 
-      - name: wmass combine
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i mw_with_mu_eta_pt_maxFiles10.hdf5 --verbose 4
+      - name: wmass combine setup
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $OUTFILE --verbose 4 --lumiScale $LUMI_SCALE
+
+      - name: wmass combine fit 
+        run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ WMass_eta_pt/WMass_plus.txt WMass_eta_pt/WMass_minus.txt 
+
+      - name: wmass combine impacts
+        run: scripts/ci/run_with_singularity.sh scripts/ci/show_impacts.sh WMass_eta_pt/fitresults_123456789.root ~/www/WMassAnalysis/PRValidation/$PLOT_DIR/impactsW.html
 
         #TODO: test low pu combine and combined fit
           #- name: lowpu w combine
@@ -47,6 +84,8 @@ jobs:
     # The type of runner that the job will run on
     runs-on: [self-hosted, linux, x64]
 
+    env:
+      OUTFILE: "mz_wlike_with_mu_eta_pt.hdf5"
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -54,25 +93,56 @@ jobs:
         with:
           submodules: 'true'
 
+      - name: wlike setup folder
+        run: echo PLOT_DIR=$(date +%Y_%m_%d)/PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') >> $GITHUB_ENV
+
+      - name: wlike setup folder nightly
+        if: github.event.schedule == '0 3 * * 3,6'
+        run: echo PLOT_DIR=$(date +%Y_%m_%d)/ScheduledBuild_$(git rev-parse --short "$GITHUB_SHA") >> $GITHUB_ENV
+
+      - name: wlike setup events
+        if: github.event.schedule == '0 3 * * 3,6'
+        run: echo "MAX_FILES=-1" >> $GITHUB_ENV
+
+      - name: wlike setup lumi scale
+        if: github.event.schedule == '0 3 * * 3,6'
+        run: echo "LUMI_SCALE=1" >> $GITHUB_ENV
+
+      - name: wlike setup threads
+        if: github.event.schedule == '0 3 * * 3,6'
+        run: echo "NTHREADS=64" >> $GITHUB_ENV
+
       - name: wlike analysis
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_wlike_with_mu_eta_pt.py -j 8 --maxFiles 10 --verbose 4 --theoryCorr scetlib_dyturbo
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_wlike_with_mu_eta_pt.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4 --theoryCorr scetlib_dyturbo --forceDefaultName
 
       - name: wlike plotting
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal --nominalRef nominal --hists pt eta -p ~/www/WMassAnalysis/PRValidation -f $(date +%Y_%m_%d)/PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') -a wlike mz_wlike_with_mu_eta_pt_scetlib_dyturboCorr_maxFiles10.hdf5 variation --varName nominal_uncorr --varLabel $(echo "MiNNLO uncorr.") --colors red
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal --nominalRef nominal --hists pt eta -p ~/www/WMassAnalysis/PRValidation -f $PLOT_DIR -a wlike $OUTFILE variation --varName nominal_uncorr --varLabel MiNNLO --colors red
 
-      - name: wlike combine
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i mz_wlike_with_mu_eta_pt_scetlib_dyturboCorr_maxFiles10.hdf5 --verbose 4
+      - name: wlike combine setup
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $OUTFILE --verbose 4 --lumiScale $LUMI_SCALE
+
+      - name: wlike combine fit 
+        run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ ZMassWLike_eta_pt/ZMassWLike_plus.txt ZMassWLike_eta_pt/ZMassWLike_minus.txt 
+
+      - name: wlike combine impacts
+        run: scripts/ci/run_with_singularity.sh scripts/ci/show_impacts.sh ZMassWLike_eta_pt/fitresults_123456789.root ~/www/WMassAnalysis/PRValidation/$PLOT_DIR/impactsWlike.html
 
       - name: lowpu z analysis
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_lowPU.py -j 8 --maxFiles 10 --verbose 4
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_lowPU.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4 --forceDefaultName
 
-      - name: lowpu z combine
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupLowPU_Z.py -i lowPU_mumu_maxFiles10.hdf5 --verbose 4
+      - name: lowpu z combine setup
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupLowPU_Z.py -i lowPU_mumu.hdf5 --verbose 4 
+
+          # FIXME: Remove from CI for now, to be added back in Jan's next PR
+          #- name: lowpu z combine fit
+          #  run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ CombineStudies/lowPU_differential/lowPU_Zmumu_RawPFMET_differential.txt
 
   dilepton:
     # The type of runner that the job will run on
     runs-on: [self-hosted, linux, x64]
 
+    env:
+      OUTFILE: "mz_dilepton.hdf5"
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -80,20 +150,34 @@ jobs:
         with:
           submodules: 'true'
 
+      - name: dilepton setup
+        run: echo PLOT_DIR=$(date +%Y_%m_%d)/PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') >> $GITHUB_ENV
+
+      - name: dilepton setup folder nightly
+        if: github.event.schedule == '0 3 * * 3,6'
+        run: echo PLOT_DIR=$(date +%Y_%m_%d)/ScheduledBuild_$(git rev-parse --short "$GITHUB_SHA") >> $GITHUB_ENV
+
+      - name: dilepton setup threads
+        if: github.event.schedule == '0 3 * * 3,6'
+        run: echo "NTHREADS=64" >> $GITHUB_ENV
+
       - name: dilepton analysis
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_dilepton.py -j 8 --maxFiles 10 --verbose 4  --theoryCorr scetlib_dyturbo --axes ptll
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_dilepton.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4  --theoryCorr scetlib_dyturbo --axes ptll --forceDefaultName
 
       - name: dilepton plotting ptll
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal --nominalRef nominal --hists ptll -p ~/www/WMassAnalysis/PRValidation -f $(date +%Y_%m_%d)/PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') -a z mz_dilepton_scetlib_dyturboCorr_maxFiles10.hdf5 variation --varName nominal_uncorr --varLabel $(echo "MiNNLO uncorr.") --colors red
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal --nominalRef nominal --hists ptll -p ~/www/WMassAnalysis/PRValidation -f $PLOT_DIR -a z $OUTFILE variation --varName nominal_uncorr --varLabel MiNNLO --colors red
 
       - name: dilepton plotting mll
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal_mll --hists mll -p ~/www/WMassAnalysis/PRValidation -f $(date +%Y_%m_%d)/PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') -a z mz_dilepton_scetlib_dyturboCorr_maxFiles10.hdf5 
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal_mll --hists mll -p ~/www/WMassAnalysis/PRValidation -f $PLOT_DIR -a z $OUTFILE
 
       - name: dilepton plotting yll
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal_yll --nominalRef nominal_yll --hists yll -p ~/www/WMassAnalysis/PRValidation -f $(date +%Y_%m_%d)/PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') -a z mz_dilepton_scetlib_dyturboCorr_maxFiles10.hdf5 
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal_yll --nominalRef nominal_yll --hists yll -p ~/www/WMassAnalysis/PRValidation -f $PLOT_DIR -a z $OUTFILE
+
+      - name: dilepton combine ptll setup
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $OUTFILE --fitvar ptll --constrainMass --lumiScale $LUMI_SCALE
 
       - name: dilepton combine ptll fit
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i mz_dilepton_scetlib_dyturboCorr_maxFiles10.hdf5 --fitvar ptll 
+        run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ ZMassDilepton_ptll/ZMassDilepton_plus.txt ZMassDilepton_minus.txt 
 
   gen:
     # The type of runner that the job will run on
@@ -107,5 +191,5 @@ jobs:
           submodules: 'true'
 
       - name: gen analysis
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/w_z_gen_dists.py -j 8 --maxFiles 10 --verbose 4
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/w_z_gen_dists.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4
 
