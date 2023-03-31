@@ -47,35 +47,15 @@ class Datagroups2016(Datagroups):
                 color = "dimgray"
             )
         if self.wmass:
-            if splitWByCharge:
-                self.groups.update({
-                    "Wmunu_q1" : dict(
-                        members = self.getSafeListFromDataset(["WplusmunuPostVFP"]),
-                        label = r"W$^{-}\to\mu\nu$",
-                        color = "darkred",
-                        selectOp = sigOp,
-                    ),
-                    }
-                )
-                self.groups.update({
-                    "Wmunu_q0" : dict(
-                        members = self.getSafeListFromDataset(["WminusmunuPostVFP"]),
-                        label = r"W$^{-}\to\mu\nu$",
-                        color = "darkred",
-                        selectOp = sigOp,
-                    ),
-                    }
-                )
-            else:
-                self.groups.update({
-                    "Wmunu" : dict(
-                        members = self.getSafeListFromDataset(["WminusmunuPostVFP", "WplusmunuPostVFP"]),
-                        label = r"W$^{\pm}\to\mu\nu$",
-                        color = "darkred",
-                        selectOp = sigOp,
-                    ),
-                    }
-                )
+            self.groups.update({
+                "Wmunu" : dict(
+                    members = self.getSafeListFromDataset(["WminusmunuPostVFP", "WplusmunuPostVFP"]),
+                    label = r"W$^{\pm}\to\mu\nu$",
+                    color = "darkred",
+                    selectOp = sigOp,
+                ),
+                }
+            )
             # Reorder
             for k in ["Zmumu", "Ztautau"]:
                 self.groups[k] = self.groups.pop(k)

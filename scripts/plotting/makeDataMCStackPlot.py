@@ -97,7 +97,7 @@ if addVariation and (args.selectAxis or args.selectEntries):
 
 outdir = plot_tools.make_plot_dir(args.outpath, args.outfolder)
 
-groups = datagroups2016(args.infile)
+groups = Datagroups2016(args.infile)
 # There is probably a better way to do this but I don't want to deal with it
 datasets = groups.getNames(args.procFilters if args.procFilters else ['QCD'], exclude=not args.procFilters)
 logger.info(f"Will plot datasets {datasets}")
