@@ -86,9 +86,9 @@ def make_muon_bias_helpers(args):
 
         factor_A = 1
         factor_M = 1
-        if args.bias_calibration == "A":
+        if args.biasCalibration == "A":
             factor_M = 0
-        elif args.bias_calibration == "M":
+        elif args.biasCalibration == "M":
             factor_A = 0
 
         # The bias correction follows the same parameterization as the J/Psi correction, but with e=0
@@ -303,7 +303,7 @@ def define_corrected_muons(df, cvh_helper, jpsi_helper, args, dataset, smearing_
     # Bias corrections from nonclosure
     if not dataset.is_data and bias_helper:
         if args.biasCalibration in ["parameterized", "A", "M"]:
-            df = df.Define("Muon_biasedPt", bias_helper, [muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta"), muon_var_name(muon, "charge")])
+            df = df.Define("Muon_biasedPtData", bias_helper, [muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta"), muon_var_name(muon, "charge")])
         else:
             df = df.Define("Muon_biasedPtData", bias_helper, ["rdfslot_", muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta")])
 
@@ -514,23 +514,25 @@ def muon_scale_variation_from_manual_shift(
         manual_shift_hists = [proc_hists['nominal_muonScaleVariationDnTenthmil'].get(), proc_hists['nominal_muonScaleVariationUpTenthmil'].get()]
         proc_hists['muonScaleSyst_manualShift'] = hh.combineUpDownVarHists(*manual_shift_hists)
 
-def make_alt_reco_and_gen_hists(df, results, nominal_axes, matched_reco_sel = "goodMuons"):
-    nominal_cols_gen = [
-        f"{matched_reco_sel}_eta0_gen", f"{matched_reco_sel}_pt0_gen", f"{matched_reco_sel}_charge0_gen", 
-        "passIso", "passMT"
-    ]
-    nominal_cols_gen_smeared = [
-        f"{matched_reco_sel}_eta0_gen_smeared", f"{matched_reco_sel}_pt0_gen_smeared", f"{matched_reco_sel}_charge0_gen_smeared",
-        "passIso", "passMT"
-    ]
+def make_alt_reco_and_gen_hists(df, results, nominal_axes, nominal_columns, matched_reco_sel = "goodMuons"):
 
-    nominal_gen =         df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols_gen, "nominal_weight"])
-    nominal_gen_smeared = df.HistoBoost("nominal_gen_smeared", nominal_axes, [*nominal_cols_gen_smeared, "nominal_weight"])
+    nominal_cols_gen = nominal_columns
+    nominal_cols_gen_smeared = nominal_columns
 
-    results.append(nominal_gen)
-    results.append(nominal_gen_smeared)
+    for col in ("pt", "eta", "charge"):
+        idx = [i for i, x in enumerate(nominal_columns) if f"_{col}0" in x]
+        if len(idx) != 1:
+            logger.warning(f"None or more than one columns to match '_{col}0'! Do nothing here!")
+            continue
+        else:
+            nominal_cols_gen[idx[0]] = f"{matched_reco_sel}_{col}0_gen"
+            nominal_cols_gen_smeared[idx[0]] = f"{matched_reco_sel}_{col}0_gen_smeared"  
+
+    results.append(df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols_gen, "nominal_weight"]))
+    results.append(df.HistoBoost("nominal_gen_smeared", nominal_axes, [*nominal_cols_gen_smeared, "nominal_weight"]))
+
     return [nominal_cols_gen, nominal_cols_gen_smeared]
-
+    
 ####################
 ## FOR VALIDATION ##
 ####################
