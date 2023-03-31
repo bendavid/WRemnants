@@ -129,8 +129,6 @@ def define_prefsr_vars(df):
     df = df.Define("prefsrLeps", "wrem::prefsrLeptons(GenPart_status, GenPart_statusFlags, GenPart_pdgId, GenPart_genPartIdxMother)")
     df = df.Define("genl", "ROOT::Math::PtEtaPhiMVector(GenPart_pt[prefsrLeps[0]], GenPart_eta[prefsrLeps[0]], GenPart_phi[prefsrLeps[0]], GenPart_mass[prefsrLeps[0]])")
     df = df.Define("genlanti", "ROOT::Math::PtEtaPhiMVector(GenPart_pt[prefsrLeps[1]], GenPart_eta[prefsrLeps[1]], GenPart_phi[prefsrLeps[1]], GenPart_mass[prefsrLeps[1]])")
-    df = df.Define("genlPdgId", "GenPart_pdgId[prefsrLeps[0]]")
-    df = df.Define("genlantiPdgId", "GenPart_pdgId[prefsrLeps[1]]")
     df = df.Define("genV", "ROOT::Math::PxPyPzEVector(genl)+ROOT::Math::PxPyPzEVector(genlanti)")
     df = df.Define("ptVgen", "genV.pt()")
     df = df.Define("massVgen", "genV.mass()")

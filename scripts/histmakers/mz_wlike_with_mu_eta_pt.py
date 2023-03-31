@@ -9,7 +9,6 @@ import hist
 import lz4.frame
 import math
 import time
-import pdb
 import os
 
 parser = common.set_parser_default(parser, "pt", [34, 26, 60])

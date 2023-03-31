@@ -10,8 +10,6 @@ import hist
 import copy
 import math
 
-import pdb
-
 scriptdir = f"{pathlib.Path(__file__).parent}"
 data_dir = f"{pathlib.Path(__file__).parent}/../../wremnants/data/"
 
@@ -95,10 +93,22 @@ def main(args,xnorm=False):
         if not args.constrainMass:
             logger.warning("Unfolding is specified but the mass is treated free floating, to constrain the mass add '--constrainMass'")
 
-        base_procs = ["Wmunu_q0", "Wmunu_q1"] if wmass else ["Zmumu"]
+        if wmass:
+            # split group into two
+            gMinus = datagroups.groups["Wmunu"] 
+            gMinus["members"] = [m for m in gMinus["members"] if "Wminusmunu" in m.name]
+            datagroups.addGroup("Wmunu_qGen0", gMinus)
 
-        for base_proc in base_procs:
-            datagroups.defineSignalBinsUnfolding(base_proc)
+            gPlus = datagroups.groups["Wmunu"] 
+            gPlus["members"] = [m for m in gPlus["members"] if "Wplusmunu" in m.name]
+            datagroups.addGroup("Wmunu_qGen1", gPlus)
+
+            datagroups.deleteGroup("Wmunu")
+
+            datagroups.defineSignalBinsUnfolding("Wmunu_qGen0")
+            datagroups.defineSignalBinsUnfolding("Wmunu_qGen1")
+        else:
+            datagroups.defineSignalBinsUnfolding("Zmumu")
 
         if xnorm:
             toDel = [group for group in datagroups.groups if not group in datagroups.unconstrainedProcesses]
