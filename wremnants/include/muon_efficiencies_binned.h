@@ -331,11 +331,11 @@ namespace wrem {
     // base template for one lepton case
     template<bool do_other, int NEtaBins, int NPtBins, int NCharges, typename HIST_SF>
     class muon_efficiency_binned_helper_stat :
-        public muon_efficiency_binned_helper_stat_base<NEtaBins, NPtBins, nCharges, HIST_SF> {
+        public muon_efficiency_binned_helper_stat_base<NEtaBins, NPtBins, NCharges, HIST_SF> {
         
     public:
         
-        using stat_base_t = muon_efficiency_binned_helper_stat_base<NEtaBins, NPtBins, nCharges, HIST_SF>;
+        using stat_base_t = muon_efficiency_binned_helper_stat_base<NEtaBins, NPtBins, NCharges, HIST_SF>;
         using tensor_t = typename stat_base_t::stat_tensor_t;
   
         using stat_base_t::stat_base_t;
@@ -348,12 +348,12 @@ namespace wrem {
 
     // specialization for two-lepton case
     template<int NEtaBins, int NPtBins, int NCharges, typename HIST_SF>
-    class muon_efficiency_binned_helper_stat<true, NEtaBins, NPtBins, nCharges, HIST_SF> :
-        public muon_efficiency_binned_helper_stat_base<NEtaBins, NPtBins, nCharges, HIST_SF> {
+    class muon_efficiency_binned_helper_stat<true, NEtaBins, NPtBins, NCharges, HIST_SF> :
+        public muon_efficiency_binned_helper_stat_base<NEtaBins, NPtBins, NCharges, HIST_SF> {
 
     public:
 
-        using stat_base_t = muon_efficiency_binned_helper_stat_base<NEtaBins, NPtBins, nCharges, HIST_SF>;
+        using stat_base_t = muon_efficiency_binned_helper_stat_base<NEtaBins, NPtBins, NCharges, HIST_SF>;
         using tensor_t = typename stat_base_t::stat_tensor_t;
 
         using stat_base_t::stat_base_t;
@@ -379,11 +379,11 @@ namespace wrem {
     // base template for one lepton case
     template<bool do_other, int NEtaBins, int NPtBins, int NCharges, typename HIST_SF>
     class muon_efficiency_binned_helper_stat_iso :
-        public muon_efficiency_binned_helper_stat_base<NEtaBins, NPtBins, nCharges, HIST_SF> {
+        public muon_efficiency_binned_helper_stat_base<NEtaBins, NPtBins, NCharges, HIST_SF> {
         
     public:
         
-        using stat_base_t = muon_efficiency_binned_helper_stat_base<NEtaBins, NPtBins, nCharges, HIST_SF>;
+        using stat_base_t = muon_efficiency_binned_helper_stat_base<NEtaBins, NPtBins, NCharges, HIST_SF>;
         using tensor_t = typename stat_base_t::stat_tensor_t;
   
         using stat_base_t::stat_base_t;
@@ -397,12 +397,12 @@ namespace wrem {
 
     // specialization for two-lepton case
     template<int NEtaBins, int NPtBins, int NCharges, typename HIST_SF>
-    class muon_efficiency_binned_helper_stat_iso<true, NEtaBins, NPtBins, nCharges, HIST_SF> :
-        public muon_efficiency_binned_helper_stat_base<NEtaBins, NPtBins, nCharges, HIST_SF> {
+    class muon_efficiency_binned_helper_stat_iso<true, NEtaBins, NPtBins, NCharges, HIST_SF> :
+        public muon_efficiency_binned_helper_stat_base<NEtaBins, NPtBins, NCharges, HIST_SF> {
 
     public:
 
-        using stat_base_t = muon_efficiency_binned_helper_stat_base<NEtaBins, NPtBins, nCharges, HIST_SF>;
+        using stat_base_t = muon_efficiency_binned_helper_stat_base<NEtaBins, NPtBins, NCharges, HIST_SF>;
         using tensor_t = typename stat_base_t::stat_tensor_t;
 
         using stat_base_t::stat_base_t;
