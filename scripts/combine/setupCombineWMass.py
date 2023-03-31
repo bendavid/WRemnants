@@ -147,9 +147,6 @@ def main(args,xnorm=False):
                                                 filterProcGroup=filterGroup))
     if args.lumiScale:
         cardTool.setLumiScale(args.lumiScale)
-    if xnorm:
-        lumiScale = 1. if not args.lumiScale else args.lumiScale
-        cardTool.setLumiScale(lumiScale/datagroups.lumi)
 
     logger.info(f"cardTool.allMCProcesses(): {cardTool.allMCProcesses()}")
         
