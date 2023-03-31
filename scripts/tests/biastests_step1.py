@@ -15,6 +15,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-m","--mode", type=str, help="what kind of biastests", choices=["pdf","scale"])
 parser.add_argument("--histmaker", type=str, help="histmaker to perform bias tests with", 
     default="mw_with_mu_eta_pt", choices=["mw_with_mu_eta_pt","mz_wlike_with_mu_eta_pt", "mz_dilepton"])
+parser.add_argument("-o", "--outfolder", type=str, default="", help="Output folder")
 
 args = parser.parse_args()
 
@@ -25,31 +26,28 @@ if args.mode == "pdf":
 
     datasets = itertools.product(pdfsets, pdfsets)
 
-    # freeze_uncertainties = ("reducedUncertainties", "-x '.*' -k 'pdf*|AlphaS*|mass*'") # freeze all nuisances except pdf and alphaS
-    freeze_uncertainties = ("fullUncertainties", "")
-
-    histDir = "/scratch/dwalter/results_histmaker/230318_studies_pdfs/"
-    combineDir = f"/scratch/dwalter/CombineStudies/230318_studies_pdfs_{freeze_uncertainties[0]}/"
+    freeze_uncertainties = (
+        ("reducedUncertainties", "-x '.*' -k 'pdf*|AlphaS*|mass*'"), # freeze all nuisances except pdf and alphaS
+        ("fullUncertainties", ""))
 
 elif args.mode == "scale":
     argument = ""
 
     datasets = [
-        ("default", "--smearing"),
+        # ("default", "--smearing"),
         # ("default", "--smearing --bias-calibration parameterized"),
         # ("default", "--smearing --bias-calibration A"),
         # ("default", "--smearing --bias-calibration M"),
-        ("--smearing", "--smearing --bias-calibration parameterized"),
-        ("--smearing", "--smearing --bias-calibration binned"),
-        ("--smearing", "--smearing --bias-calibration A"),
-        ("--smearing", "--smearing --bias-calibration M"),
+        ("--smearing", "--smearing --biasCalibration parameterized"),
+        ("--smearing", "--smearing --biasCalibration binned"),
+        ("--smearing", "--smearing --biasCalibration A"),
+        ("--smearing", "--smearing --biasCalibration M"),
     ]
 
-    freeze_uncertainties = ("fullUncertainties", "")
-
-    histDir = "/scratch/dwalter/results_histmaker/230313_newCalibrations"
-    combineDir = f"/scratch/dwalter/CombineStudies/230313_newCalibrations_{freeze_uncertainties[0]}/"
-
+    freeze_uncertainties = (
+        ("reducedUncertainties", "-x '.*' -k 'muonScaleSyst*|CMS_scale_m_*|mass*'"), # freeze all nuisances except momentum scale
+        # ("fullUncertainties", ""),
+        )
 
 hists_to_plot = {
     "mw_with_mu_eta_pt": "pt eta pt-eta",
@@ -71,16 +69,13 @@ channels_to_plot = channels_to_plot[histmaker]
 nTreads = 192
 
 options = [
-    "--theory_corr scetlib",
-    "--no-recoil"
+    # "--theory_corr scetlib",
+    # "--no-recoil"
 ]
 options = " ".join(options)
 
-if not os.path.isdir(histDir):
-    os.mkdir(histDir)
-
-if not os.path.isdir(combineDir):
-    os.mkdir(combineDir)
+if not os.path.isdir(args.outfolder):
+    os.mkdir(args.outfolder)
 
 def EXE(command):
     logger.info(command) 
@@ -110,32 +105,33 @@ for nominal, pseudodata in datasets:
 
     arg_pseudodata = pseudodata if pseudodata != "default" else ""
     str_pseudodata = make_appendix(pseudodata)
+
     # we never use biased datasets as nominal, thus we can skip expensive uncertainty calculation
     if "bias" in arg_pseudodata:
         arg_pseudodata += " --onlyMainHistograms"
 
-    file_nominal = f"{histDir}/{histmaker}_scetlibCorr_noRecoil_{str_nominal}.hdf5"
-    file_pseudodata = f"{histDir}/{histmaker}_scetlibCorr_noRecoil_{str_pseudodata}.hdf5"
+    file_nominal = f"{args.outfolder}/{histmaker}_{str_nominal}.hdf5"
+    file_pseudodata = f"{args.outfolder}/{histmaker}_{str_pseudodata}.hdf5"
 
     if not os.path.isfile(file_nominal):
         # run histmaker for nominal
-        EXE(f"python3 scripts/histmakers/{histmaker}.py -j {nTreads} -o {histDir} {options} {argument} {arg_nominal} -p noRecoil_{str_nominal}")
+        EXE(f"python3 scripts/histmakers/{histmaker}.py -j {nTreads} -o {args.outfolder} {options} {argument} {arg_nominal} -p {str_nominal}")
     else:
         logger.info(f"Found file for nominal {nominal}")
 
     if not os.path.isfile(file_pseudodata):
         # run histmaker for pseudodata
-        EXE(f"python3 scripts/histmakers/{histmaker}.py -j {nTreads} -o {histDir} {options} {argument} {arg_pseudodata} -p noRecoil_{str_pseudodata}")
+        EXE(f"python3 scripts/histmakers/{histmaker}.py -j {nTreads} -o {args.outfolder} {options} {argument} {arg_pseudodata} -p {str_pseudodata}")
     else:
         logger.info(f"Found file for pseudodata {pseudodata}")
         
     # make control plots
-    webDir = histDir.split("/")[-1] +f"/{str_nominal}_vs_{str_pseudodata}"
+    # webDir = args.outfolder.split("/")[-1] +f"/{str_nominal}_vs_{str_pseudodata}"
     
-    if args.mode=="pdf":
-        variation = f"variation --varName pdf{str_nominal.upper()}Up pdf{str_nominal.upper()}Down pdf{str_pseudodata.upper()} --transform --varLabel {str_nominal.upper()} $\pm 1 \sigma$  {str_pseudodata.upper()} --color grey grey --fill-between"
-    else:
-        variation = ""
+    # if args.mode=="pdf":
+    #     variation = f"variation --varName pdf{str_nominal.upper()}Up pdf{str_nominal.upper()}Down pdf{str_pseudodata.upper()} --transform --varLabel {str_nominal.upper()} $\pm 1 \sigma$  {str_pseudodata.upper()} --color grey grey --fill-between"
+    # else:
+    #     variation = ""
     
     # for channel in channels_to_plot:
     #     if len(glob.glob(f"/home/d/dwalter/www/WMassAnalysis/{webDir}/*_{channel}_*.pdf")) == 0:
@@ -143,12 +139,12 @@ for nominal, pseudodata in datasets:
     #         EXE(f"python3 scripts/plotting/makeDataMCStackPlot.py --hists {hists_to_plot} --yscale 1.6 -r 0.95 1.05 --channel {channel} -f {webDir} -a {str_pseudodata} {file_pseudodata} {variation}")
 
     # make combine input        
-    dir_combine = f"{combineDir}/{str_nominal}_vs_{str_pseudodata}"
+    for freeze_name, freeze_command in freeze_uncertainties:
 
-    if os.path.isdir(dir_combine):
-        logger.warning(f"The combine file for {dir_combine} already exists, continue with the next one!")
-        continue
+        dir_combine = f"{args.outfolder}/{str_nominal}_vs_{str_pseudodata}_{freeze_name}"
+        
+        if os.path.isdir(dir_combine):
+            logger.warning(f"The combine file for {dir_combine} already exists, continue with the next one!")
+            continue
 
-    EXE(f"python3 scripts/combine/setupCombineWMass.py -o {dir_combine} -i {file_nominal} --pseudodata-file {file_pseudodata} --pseudoData nominal {freeze_uncertainties[1]}")
-
-
+        EXE(f"python3 scripts/combine/setupCombineWMass.py -o {dir_combine} -i {file_nominal} --skipOtherChargeSyst --pseudoDataFile {file_pseudodata} --pseudoData nominal {freeze_command}")
