@@ -338,10 +338,10 @@ def main(args):
                                    mirror=True,
                                    group="MultijetBkg",
                                    outNames=["mtCorrFakesDown", "mtCorrFakesUp"],
-                                   decorrelateByCharge=True,
+                                   decorrelateByCharge=True, # will modify names above to include channel name
                                    rename="mtCorrFakes", # this is the name used to identify the syst in the list of systs
                                    action=sel.applyCorrection,
-                                   doActionBeforeMirror=True,
+                                   doActionBeforeMirror=True, # to mirror after the histogram has been created
                                    actionArgs={"scale": 1.0,
                                                "corrFile" : f"{data_dir}/fakesWmass/fakerateFactorMtBasedCorrection_vsEtaPt.root",
                                                "corrHist": "etaPtCharge_mtCorrection",

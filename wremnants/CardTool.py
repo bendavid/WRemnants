@@ -565,6 +565,8 @@ class CardTool(object):
                         self.addSystToGroup(group, chan, name)
 
     def fillCardWithSyst(self, syst):
+        # note: this function doesn't act on all systematics all at once
+        # but rather it deals with all those coming from each call to CardTool.addSystematics
         systInfo = self.systematics[syst]
         scale = systInfo["scale"]
         procs = systInfo["processes"]
@@ -586,30 +588,36 @@ class CardTool(object):
 
         # Deduplicate while keeping order
         systNames = list(dict.fromkeys(names))
-        if systInfo["decorrCharge"]:
-            systNames = list([f"{x}_q{i}" for x in systNames for i in range(2)])
 
         systnamesPruned = [s for s in systNames if not self.isExcludedNuisance(s)]
         systNames = systnamesPruned[:]
-        for systname in systNames:
-            if type(scale) == dict:
-                for reg in scale.keys():
-                    if re.match(reg, systname):
-                        thiscale = str(scale[reg])
-                        include = [(thiscale if x in procs else "-").ljust(self.procColumnsSpacing) for x in nondata]
-                        break # exit this inner loop when match is found, to save time
-            shape = "shape" if not systInfo["noConstraint"] else "shapeNoConstraint"
-            for chan in self.channels:
+        systNamesChan = []
+        for chan in self.channels:
+            if systInfo["decorrCharge"]:
+                for x in systNames:
+                    if self.chargeIdDict[chan]['id'] in x or (self.chargeIdDict[chan]['badId'] is not None and self.chargeIdDict[chan]["badId"] in x):
+                        logger.warning(f"decorrCharge action requested for syst {x} whose name already contains channel keywords. Please check")
+                    systNamesChan.append(f"{x}_{self.chargeIdDict[chan]['id']}")
+                    
+            else:
+                systNamesChan = systNames[:]
+            for systname in systNamesChan:
+                if type(scale) == dict:
+                    for reg in scale.keys():
+                        if re.match(reg, systname):
+                            thiscale = str(scale[reg])
+                            include = [(thiscale if x in procs else "-").ljust(self.procColumnsSpacing) for x in nondata]
+                            break # exit this inner loop when match is found, to save time
+                shape = "shape" if not systInfo["noConstraint"] else "shapeNoConstraint"
                 # do not write systs which should only apply to other charge, to simplify card
                 if self.keepOtherChargeSyst or self.chargeIdDict[chan]["badId"] is None or self.chargeIdDict[chan]["badId"] not in systname:
                     self.cardContent[chan] += f"{systname.ljust(self.spacing)} {shape.ljust(self.systTypeSpacing)} {''.join(include)}\n"
-        # unlike for LnN systs, here it is simpler to act on the list of these systs to form groups, rather than doing it syst by syst 
-        if group:
-            for chan in self.channels:
+            # unlike for LnN systs, here it is simpler to act on the list of these systs to form groups, rather than doing it syst by syst 
+            if group:
                 if self.keepOtherChargeSyst:
-                    systNamesForGroupPruned = systNames[:]
+                    systNamesForGroupPruned = systNamesChan[:]
                 else:
-                    systNamesForGroupPruned = [s for s in systNames if self.chargeIdDict[chan]["badId"] is None or self.chargeIdDict[chan]["badId"] not in s]
+                    systNamesForGroupPruned = [s for s in systNamesChan if self.chargeIdDict[chan]["badId"] is None or self.chargeIdDict[chan]["badId"] not in s]
                 systNamesForGroup = list(systNamesForGroupPruned if not groupFilter else filter(groupFilter, systNamesForGroupPruned))
                 if len(systNamesForGroup):
                     for subgroup in splitGroupDict.keys():
