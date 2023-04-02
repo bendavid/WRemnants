@@ -8,5 +8,5 @@ fi
 . ./setup.sh
 python3 scripts/combine/printImpacts.py -f $1 
 # TODO: Add option to do this in the same call to the function
-python3 scripts/combine/pullsAndImpacts.py -g -f $1 output -o ${2/.html/_grouped.html}
-python3 scripts/combine/pullsAndImpacts.py -f $1 output -o $2
+python3 scripts/combine/pullsAndImpacts.py -g -f $1 output -o ${2/.html/_grouped.html} --otherExtensions pdf png html -n 50
+python3 scripts/combine/pullsAndImpacts.py -f $1 output -o $2 --otherExtensions pdf png html -n 50
