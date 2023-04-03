@@ -10,6 +10,7 @@ import itertools
 import functools
 import hist
 import copy
+import pandas as pd
 
 logger = logging.child_logger(__name__)
 
