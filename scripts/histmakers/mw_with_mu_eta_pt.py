@@ -163,9 +163,11 @@ def build_graph(df, dataset):
             df = df.Define("ptGen", "chargeVgen < 0 ? genl.pt() : genlanti.pt()")   
             df = df.Define("etaGen", "chargeVgen < 0 ? genl.eta() : genlanti.eta()")
         elif args.genLevel == "postFSR":
-            df = df.Define("postFSRmuons", "GenPart_status == 1 && (GenPart_statusFlags & 1) && abs(GenPart_pdgId) == 13")
-            df = df.Define("ptGen", "GenPart_pt[postFSRmuons][0]")
-            df = df.Define("etaGen", "GenPart_eta[postFSRmuons][0]")
+            pdgId = -13 if "Wplusmunu" in dataset.name else 13
+            df = df.Define("postFSRmuons", f"GenPart_status == 1 && (GenPart_statusFlags & 1) && GenPart_pdgId == {pdgId}")
+            df = df.Define("postFSRmuonIdx", "ROOT::VecOps::ArgMax(GenPart_pt[postFSRmuons])")
+            df = df.Define("ptGen", "GenPart_pt[postFSRmuons][postFSRmuonIdx]")
+            df = df.Define("etaGen", "GenPart_eta[postFSRmuons][postFSRmuonIdx]")
 
         # add histograms before any selection
         df_xnorm = df
