@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from wremnants import CardTool,theory_tools,syst_tools,combine_helpers
-from wremnants.datasets.datagroupsLowPU import datagroupsLowPU
+from wremnants.datasets.datagroupsLowPU import DatagroupsLowPU
 from utilities import common, logging
 import argparse
 import os
@@ -37,7 +37,7 @@ def main(args):
 
     if not args.inputFile: args.inputFile = "lowPU_%s_%s.pkl.lz4" % (args.flavor, args.met)
 
-    datagroups = datagroupsLowPU(args.inputFile, flavor=args.flavor)
+    datagroups = DatagroupsLowPU(args.inputFile, flavor=args.flavor)
     unconstrainedProcs = [] # POI processes
     constrainedProcs = []   # constrained signal procs
     bkgProcs = ["Other", "Ztautau"] if args.fitType == "wmass" else ["Top", "EWK"] # background procs
