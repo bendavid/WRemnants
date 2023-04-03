@@ -328,7 +328,6 @@ def build_graph(df, dataset):
 
     nominal = df.HistoBoost("nominal", axes_nominal, [*cols_nominal, "nominal_weight"])
 
-
     if dataset.is_data:
         nominal = df.HistoBoost("nominal", axes_nominal, cols_nominal)
         results.append(nominal)

@@ -54,6 +54,13 @@ lumi=16.8
 
 binwnorm = 1.0
 
+def getProcessPtEtaCharge(name):
+    charge, eta, pt = name.split("_")[1:]
+    charge = int(charge.replace("qGen",""))
+    eta = int(eta.replace("etaGen",""))
+    pt = int(pt.replace("ptGen",""))
+    return pt, eta, charge
+
 # labels
 labelmap = {
     "Zmumu" : r"Z$\to\mu\mu$",
@@ -72,10 +79,7 @@ def get_label(name):
     if name in labelmap.keys():
         return labelmap[name]
     elif name.startswith("Wmunu"):
-        charge, eta, pt = name.split("_")[1:]
-        charge = int(charge.replace("q",""))
-        eta = int(eta.replace("etaGen",""))
-        pt = int(pt.replace("ptGen",""))
+        pt, eta, charge = getProcessPtEtaCharge(name)
 
         label = r"W$^{+}\to\mu\nu$" if charge else r"W$^{-}\to\mu\nu$"
         label += f"({eta};{pt})"
@@ -105,10 +109,7 @@ def get_color(name):
     if name in colormap.keys():
         return colormap[name]
     elif name.startswith("Wmunu"):
-        charge, eta, pt = name.split("_")[1:]
-        charge = int(charge.replace("q",""))
-        eta = int(eta.replace("etaGen",""))
-        pt = int(pt.replace("ptGen",""))
+        pt, eta, charge = getProcessPtEtaCharge(name)
 
         icol = (eta + nbins_eta*pt + nbins_eta*nbins_pt*charge) / (nbins_eta*nbins_pt*nbins_charge-1)
 
@@ -151,8 +152,8 @@ def plot(fittype, bins=(None, None), channel=None):
 
     procs = [p for p in filter(lambda x: x.startswith("expproc_") and x.endswith(f"_{fittype};1"), combine_result.keys())]
 
-    proc_sig = filter(lambda x: "_Wmunu_q" in x, procs)
-    proc_bkg = filter(lambda x: "_Wmunu_q" not in x, procs)
+    proc_sig = filter(lambda x: "_Wmunu_qGen" in x, procs)
+    proc_bkg = filter(lambda x: "_Wmunu_qGen" not in x, procs)
 
     proc_bkg = [s for s in sorted(proc_bkg, key=lambda x: sum(combine_result[x].to_hist().values()))]
     proc_sig = [s for s in sorted(proc_sig, reverse=True)]

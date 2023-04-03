@@ -62,22 +62,36 @@ class Datagroups(object):
                 logger.warning(f"Replacing {group_name} in groups")
             self.groups[group_name] = copy.deepcopy(dictToAdd)
 
-    def deleteGroup(self, procs):
-        if isinstance(procs, str):
-            procs = [procs,]
+    def deleteGroups(self, names):
+        for n in names:
+            self.deleteGroup(n)
 
-        for p in procs:
-            if p in self.groups.keys():
-                del self.groups[p]
+    def deleteGroup(self, name):
+        if name in self.groups.keys():
+            del self.groups[n]
+        else:
+            logger.warning("Try to delete group '{n}' but did not find this group.")
+
+    def copyGroup(self, group_name, new_name, member_filter=None):
+        self.groups[new_name] = copy.deepcopy(self.groups[group_name])
+        if member_filter:
+            # Invert the member filter and exclude those members
+            self.deleteGroupMembers(new_name, [m for m in filter(lambda x,f=member_filter: not f(x), self.groups[new_name]["members"])])
+
+    def addGroupMembers(self, group_name, members, member_operations=None):
+        if callable(member_operations) or member_operations is None:
+            for m in members:
+                self.addGroupMember(group_name, m, member_operations)
+        elif len(member_operations) == len(members):
+            for m, o in zip(members, member_operations):
+                self.addGroupMember(group_name, m, o)
+        else:
+            raise RuntimeError("'member_operations' has to be a string or a list with the same length as 'members'!")            
 
     def addGroupMember(self, group_name, member, member_operation=None):
         # adds a process to the existing members of a given group
         if group_name not in self.groups.keys():
             logger.warning(f"The group {group_name} is not defined in the datagroups object! Do nothing here.")
-            return
-
-        if isinstance(member, list) or isinstance(member_operation, list):
-            logger.warning(f"Only scalar types can be given! Do nothing here.")
             return
 
         if self.datasets and member.name not in [d for d in self.datasets]:
@@ -89,17 +103,16 @@ class Datagroups(object):
         
         self.groups[group_name]["memberOp"].append(copy.deepcopy(member_operation))
         self.groups[group_name]["members"].append(member)
-        
+
+    def deleteGroupMembers(self, group_name, members):
+        for m in members:
+            self.deleteGroupMember(group_name, m)
+        return
 
     def deleteGroupMember(self, group_name, member):
         # deletes a process from the list of members of a given group
         if group_name not in self.groups.keys():
             logger.warning(f"The group {group_name} is not defined in the datagroups object! Do nothing here.")
-            return
-
-        if isinstance(member, list):
-            for m in member:
-                self.deleteGroupMember(group_name, m)
             return
 
         if member not in self.groups[group_name]["members"]:
@@ -321,6 +334,9 @@ class Datagroups(object):
                           scaleToNewLumi=scaleToNewLumi, 
                           excludeProcs=excluded_procs, forceToNominal=forceToNominal)
 
+    def getDatagroups(self):
+        return self.groups
+
     def getNames(self, matches=[], exclude=False):
         # This method returns the names from the defined groups, unless one selects further.
         listOfNames = list(x for x in self.groups.keys())
@@ -420,7 +436,7 @@ class Datagroups(object):
     def defineSignalBinsUnfolding(self, group_name):
         if group_name not in self.groups.keys():
             raise RuntimeError(f"Base group {group_name} not found in groups {self.groups.keys()}!")
-
+        
         nominal_hist = self.results[self.groups[group_name]["members"][0].name]["output"]["xnorm"].get()
 
         gen_bins = []
@@ -466,8 +482,7 @@ class Datagroups(object):
             if not any([c in [hist.underflow, hist.overflow] for c in condition.values()]):
                 continue
             logger.debug(f"Add members with condition {condition}")
-            for member in base_members:
-                self.addGroupMember(ooa_name, member, lambda x, c=condition: x[c])
+            self.addGroupMembers(ooa_name, base_members, lambda x, c=condition: x[c])
 
 
     def make_yields_df(self, histName, procs, action):
