@@ -100,7 +100,7 @@ def build_graph(df, dataset):
         
         df_xnorm = df
         weight_expr = "weight"
-        df_xnorm = theory_tools.define_theory_weights_and_corrs(df_xnorm, weight_expr, dataset.name, corr_helpers, args)
+        df_xnorm = theory_tools.define_weights_and_corrs(df_xnorm, weight_expr, dataset.name, corr_helpers, args)
         df_xnorm = theory_tools.define_pdf_columns(df_xnorm, dataset.name, args.pdfs, args.altPdfOnlyCentral)
         df_xnorm = df_xnorm.Define("xnorm", "0.5")
         results.append(df_xnorm.HistoBoost("xnorm", axes_xnorm, [*cols_xnorm, "nominal_weight"]))
@@ -216,7 +216,7 @@ def build_graph(df, dataset):
 
     if not dataset.is_data: 
         weight_expr = "weight*SFMC"
-        df = theory_tools.define_theory_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
+        df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
         df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")

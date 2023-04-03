@@ -2,9 +2,7 @@
 
 import re, sys, os, os.path, subprocess, json, ROOT, copy, math
 import numpy as np
-import logging
-logging.basicConfig(level=logging.INFO)
-
+from utilities import common, logging
 from functools import partial
 
 from array import array
@@ -12,7 +10,7 @@ import shutil
 #sys.path.append(os.getcwd() + "/plotUtils/")
 from scripts.analysisTools.plotUtils.CMS_lumi import *
 
-_canvas_pull = ROOT.TCanvas("_canvas_pull","",800,800)
+logger = logging.child_logger(__name__)
 
 #########################################################################
 colors_plots_ = {"Wmunu"      : ROOT.kRed+2,
@@ -168,7 +166,7 @@ def getMinMaxHisto(h, excludeEmpty=True, sumError=True,
     elif dim == 2: nbins = (h.GetNbinsX() + 2) * (h.GetNbinsY() + 2)
     elif dim == 3: nbins = (h.GetNbinsX() + 2) * (h.GetNbinsY() + 2) * (h.GetNbinsZ() + 2)
     else:
-        logging.error("In getMaxHisto(): dim = %d is not supported. Exit" % dim)
+        logger.error("In getMaxHisto(): dim = %d is not supported. Exit" % dim)
         quit()
 
     nBinMin = 0
@@ -192,7 +190,7 @@ def getMinMaxHisto(h, excludeEmpty=True, sumError=True,
         if excludeMin != None and tmpmin <= excludeMin: continue
         if excludeMax != None and tmpmax >= excludeMax: continue
         if firstValidBin < 0: 
-            logging.debug("ibin %d:   tmpmin,tmpmax = %.2f, %.2f" % (ibin,tmpmin,tmpmax))
+            logger.debug("ibin %d:   tmpmin,tmpmax = %.2f, %.2f" % (ibin,tmpmin,tmpmax))
             firstValidBin = ibin
         if sumError:
             tmpmin -= h.GetBinError(ibin)
@@ -201,11 +199,11 @@ def getMinMaxHisto(h, excludeEmpty=True, sumError=True,
             #the first time we pick a non empty bin, we set min and max to the histogram content in that bin
             minval = tmpmin
             maxval = tmpmax
-            logging.debug("#### ibin %d:   min,max = %.2f, %.2f" % (ibin,minval,maxval))
+            logger.debug("#### ibin %d:   min,max = %.2f, %.2f" % (ibin,minval,maxval))
         else:
             minval = min(minval,tmpmin)
             maxval = max(maxval,tmpmax)
-        logging.debug("ibin %d:   min,max = %.2f, %.2f" % (ibin,minval,maxval))
+        logger.debug("ibin %d:   min,max = %.2f, %.2f" % (ibin,minval,maxval))
     
     return minval,maxval
 
@@ -1533,7 +1531,7 @@ def drawNTH1(hists=[],
     # where x1 and y1 are the coordinates the first line, and ypass is how much below y1 the second line is (and so on for following lines)
 
     if len(hists) != len(legEntries):
-        logging.warning("In drawNTH1: #(hists) != #(legEntries). Abort")
+        logger.warning("In drawNTH1: #(hists) != #(legEntries). Abort")
         quit()
 
     if (rebinFactorX): 
@@ -2392,9 +2390,9 @@ def drawTH1dataMCstack(h1, thestack,
     if hErrStack != None:
         stackErr = copy.deepcopy(hErrStack.Clone("stackErr"))
 
-    # logging.info("drawTH1dataMCstack():  integral(data):  " + str(h1.Integral()))
-    # logging.info("drawTH1dataMCstack():  integral(stack): " + str(stackCopy.Integral()))
-    # logging.info("drawTH1dataMCstack():  integral(herr):  " + str(stackErr.Integral()))
+    # logger.info("drawTH1dataMCstack():  integral(data):  " + str(h1.Integral()))
+    # logger.info("drawTH1dataMCstack():  integral(stack): " + str(stackCopy.Integral()))
+    # logger.info("drawTH1dataMCstack():  integral(herr):  " + str(stackErr.Integral()))
 
     h1.SetStats(0)
     titleBackup = h1.GetTitle()
@@ -2570,6 +2568,7 @@ def drawTH1dataMCstack(h1, thestack,
   
     if "unrolled" in canvasName:
 
+        _canvas_pull = ROOT.TCanvas("_canvas_pull","",800,800)
         _canvas_pull.SetTickx(1)
         _canvas_pull.SetTicky(1)
         _canvas_pull.SetGridx(1)
@@ -3537,8 +3536,8 @@ def getArrayParsingString(inputString, verbose=False, makeFloat=False):
     tmp = inputString.replace('[','').replace(']','')
     tmp = tmp.split(',')
     if verbose:
-        logging.info("Input: %s" % inputString)
-        logging.info("Output: %s" % tmp)
+        logger.info("Input: %s" % inputString)
+        logger.info("Output: %s" % tmp)
     if makeFloat:
         ret = [float(x) for x in tmp]
     else:
@@ -3612,7 +3611,7 @@ def getEtaPtBinning(inputBins, whichBins="reco"):
     # whichBins can be reco or gen
     # actually, gen was needed only for 2D xsec, might not be used anymore
     if whichBins not in ["reco", "gen"]:
-        logging.error("In function getEtaPtBinning(): whichBins must be 'reco' or 'gen'. Exit")
+        logger.error("In function getEtaPtBinning(): whichBins must be 'reco' or 'gen'. Exit")
         exit()
 
     # case in which we are passing a file containing the binning and not directly the binning itself

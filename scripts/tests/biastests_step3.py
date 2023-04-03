@@ -18,18 +18,17 @@ logger = logging.setup_logger(__file__, 3, True)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-i","--input", type=str, help="json file with paths to fit results")
-parser.add_argument("-m","--mode", type=str, default="tot", help="Uncertainty to consider", choices=["pdf","scale"])
+parser.add_argument("-m","--mode", type=str, default="pdf", help="Uncertainty to consider", choices=["pdf","scale"])
 parser.add_argument("-f","--folder", type=str, default="Impacts", help="output folder for impact plots")
+parser.add_argument("-u","--update", action="store_true", help="Override existing json file")
+parser.add_argument("--doImpacts", action="store_true", help="Produce impact plots")
+parser.add_argument("--impactTypes", default=["group"], nargs="+", choices=["group","ungroup"], help="Group or ungroup nuisances in impact plot, or both")
 args = parser.parse_args()
 
 outDir = "/".join(args.input.split("/")[:-1])
 
-do_impacts = False
-group = True
-group_str = "-g" if group else ""
-
 output_dir_impacts = f"/eos/home-d/dwalter/www/WMassAnalysis/{args.folder}"
-if do_impacts and not os.path.isdir(output_dir_impacts):
+if args.doImpacts and not os.path.isdir(output_dir_impacts):
     os.mkdir(output_dir_impacts)
 
 def EXE(command):
@@ -44,15 +43,16 @@ def read_result(rootfile, nominal):
 
         pull_mass = rtfile["fitresults"]["massShift100MeV"].array()[0]
 
+        uncertainty_total = impacts_group["Total"]
+
         if args.mode == "scale":
-            uncertainty = impacts_group["Total"]
+            uncertainty = impacts_group["muonScale"]
         elif args.mode == "pdf":
             uncertainty = impacts_group[f"pdf{nominal.upper()}"]
-        
 
-        return pull_mass, uncertainty
+        return pull_mass, uncertainty, uncertainty_total
 
-
+### Collecting fit results
 with open(args.input,"r") as rfile:
     results = json.load(rfile)
 
@@ -61,35 +61,45 @@ pseudos = []
 channels = []
 masses = []
 uncertainties = []
+totals = []
 
-update_result = False
 for nominal, r_n in results.items():
 
     for pseudodata, r_np in r_n.items():
 
         for channel, r_c in r_np.items():
 
-            if isinstance(r_c, dict) and "mass" in r_c.keys() and "unc" in r_c.keys():
-                m = results[nominal][pseudodata][channel]["mass"]
-                u = results[nominal][pseudodata][channel]["unc"]
-                filename = results[nominal][pseudodata][channel]["filename"]
-            elif isinstance(r_c, str):
+            if isinstance(r_c, dict) :
+                filename = r_c["filename"]
+            else:
                 filename = r_c
-                m, u = read_result(filename, nominal)
+            
+            if not args.update and isinstance(r_c, dict) and "mass" in r_c.keys() and "unc" in r_c.keys() and "tot" in r_c.keys():
+                m = r_c["mass"]
+                u = r_c["unc"]
+                t = r_c["tot"]
+            else:
+                m, u, t = read_result(filename, nominal)
 
                 results[nominal][pseudodata][channel] = {
                     "filename" : filename,
                     "mass": m,
-                    "unc":u
-                }
-                update_result = True
+                    "unc":u,
+                    "tot":t
+                }   
+                # save result.json so that next time the information does not have to be read again
+                with open(args.input,"w") as rfile:
+                    json.dump(results, rfile, indent=4)
             
-            
-            output_impacts = f"{output_dir_impacts}/{channel}_{nominal}_vs_{pseudodata}.html"
+            for group in args.impactTypes:
 
-            if do_impacts and not os.path.isfile(output_impacts):
+                output_impacts = f"{output_dir_impacts}/{channel}_{group}_{nominal}_vs_{pseudodata}.html"
+
+                if args.doImpacts and not os.path.isfile(output_impacts):
                 
-                EXE(f"python3 scripts/combine/pullsAndImpacts.py -f {filename} {group_str} -s impact output -o {output_impacts}")
+                    group_str = "-g" if group=="group" else ""
+
+                    EXE(f"python3 scripts/combine/pullsAndImpacts.py -f {filename} {group_str} -s impact output -o {output_impacts}")
 
             if args.mode == "pdf":
                 nominals.append(nominal.upper())
@@ -101,13 +111,9 @@ for nominal, r_n in results.items():
             channels.append(channel)
             masses.append(m)
             uncertainties.append(u)
+            totals.append(t)
 
 
-
-if update_result:
-    # save result.json so that next time the information does not have to be read again
-    with open(args.input,"w") as rfile:
-        json.dump(results, rfile, indent=4)
 
 
 ### Make latex table
@@ -116,20 +122,15 @@ if update_result:
 boson_str = "W"
 fit_str = "\P"+boson_str+" $(\pt^{\ell},\eta^{\ell})$"
 
-if args.mode == "scale":
-    mode_str = "muon momentum scale and resoltion"
-    uncertainty_str1 = "with the full uncertainty model."
-    uncertainty_str2 = " uncertainty on $m_\P"+boson_str+"$"
 
-elif args.mode == "pdf":
+data = pd.DataFrame({"nominal":nominals, "pseudo":pseudos, "channel":channels, "mass":masses, "unc": uncertainties, "tot": totals})
+
+def plot_table_pdf(data, uncertainty="unc"):
+
     mode_str = "pdf sets"
     uncertainty_str1 = "only pdf and bin-by-bin statistical uncertainties."
     uncertainty_str2 = "pdf uncertainty on $m_\P"+boson_str+"$"
 
-
-data = pd.DataFrame({"nominal":nominals, "pseudo":pseudos, "channel":channels, "mass":masses, "unc": uncertainties})
-
-if args.mode == "pdf":
     for channel, df in data.groupby("channel"):
 
         df.sort_values(by=["nominal","pseudo"])
@@ -139,12 +140,12 @@ if args.mode == "pdf":
 
         pseudo = list(filter(lambda x: x in pseudo, nominal)) + list(filter(lambda x: x not in nominal, pseudo))
 
-        outfile=f"{outDir}/result_table_{channel}.txt"
+        outfile=f"{outDir}/result_table_{channel}_{uncertainty}.txt"
         logger.info(f"write {outfile}")
         with open(outfile, "w") as outfile:
 
             outfile.write(r"\begin{table}" +"\n")
-            outfile.write(r"\topcaption{\label{table:pulls_pdf_"+channel+"}"+"\n")
+            outfile.write(r"\topcaption{\label{table:pulls_pdf_"+nominal+"_"+uncertainty+"}"+"\n")
             outfile.write(r""" Pulls table for different pdf sets. The fit is performed on """+fit_str+""" in the """+channel+r""" channel with """+uncertainty_str1+r""" 
     Entries read (pull on the $m_\P"""+boson_str+"""$ central value) $\pm$ (""" +uncertainty_str2+ r""").}"""+"\n")
             outfile.write(r"\centering"+"\n")
@@ -161,11 +162,11 @@ if args.mode == "pdf":
             for nominal, df_n in df.groupby("nominal"):
                 entries = []
                 for p in pseudo:         
-                    df_p = df_n.loc[df_n["pseudo"] == p][["mass", f"unc" ]]        
+                    df_p = df_n.loc[df_n["pseudo"] == p][["mass", uncertainty ]]        
                     if len(df_p) == 1:
                         m, u = df_p.values[0]
-                        m = round(100*m,1)
-                        u = round(100*u,1)
+                        m = round(100*m,2)
+                        u = round(100*u,2)
                         colorstring = "\cellcolor{red!25}" if abs(m) > u else ""    # highlight background color of cell if uncertainty does not cover mass shift
                         entries.append(f"{colorstring} ${m} \pm {u}$")
                     else:
@@ -177,8 +178,7 @@ if args.mode == "pdf":
             outfile.write(r"  \end{tabular}"+"\n")
             outfile.write(r"\end{table} "+"\n")
 
-if args.mode == "scale":
-
+def plot_table_scale(data, uncertainty="unc"):
     translate = {
         "smearing": "smeared",
         "biasCalibrationA": "bias A",
@@ -188,52 +188,74 @@ if args.mode == "scale":
         "smearing_biasCalibrationA": "+ bias A",
         "smearing_biasCalibrationM": "+ bias M",
         "smearing_biasCalibrationParameterized": "+ bias A,M",
-        "smearing_biasCalibrationBinned": "+ bias $\pt,\eta$"
+        "smearing_biasCalibrationBinned": "+ bias $\pt,\eta$",
+        # fit types
+        "reducedUncertainties" : "only scale and bin-by-bin MC statistical uncertainties.",
+        "fullUncertainties" : "the full uncertainty model.",
     }
 
-    for nominal, df in data.groupby("nominal"):
+    mode_str = "muon momentum scale and resoltion"
+    uncertainty_str2 = "full" if uncertainty=="tot" else "momentum scale"
+    uncertainty_str2 += " uncertainty on $m_\P"+boson_str+"$"
 
-        closure_str = "different muon momentum scale closures" if nominal=="smearing" else "muon momentum scale resolution"
+    for fittype, df_fittype in data.groupby("fittype"):
 
-        df.sort_values(by=["pseudo"])
+        uncertainty_str1 = translate[fittype]
 
-        pseudo = list(sorted(set(df["pseudo"].values)))
-        pseudo = list(filter(lambda x: x in pseudo, nominal)) + list(filter(lambda x: x not in nominal, pseudo))
+        for nominal, df in df_fittype.groupby("nominal"):
 
-        outfile=f"{outDir}/result_table_{nominal}.txt"
-        logger.info(f"write {outfile}")
-        with open(outfile, "w") as outfile:
+            closure_str = "different muon momentum scale closures" if nominal=="smearing" else "muon momentum scale resolution"
 
-            outfile.write(r"\begin{table}" +"\n")
-            outfile.write(r"\topcaption{\label{table:pulls_scale_"+nominal+"}"+"\n")
-            outfile.write(r""" Pulls table for """+closure_str+""". The fit is performed on """+fit_str+""" in different channels with """+uncertainty_str1+r""" 
-    Entries read (pull on the $m_\P"""+boson_str+"""$ central value) $\pm$ (""" +uncertainty_str2+ r""").}"""+"\n")
-            outfile.write(r"\centering"+"\n")
+            df.sort_values(by=["pseudo"])
 
-            columns = "l|"
-            columns += "".join(["c" for c in range(len(pseudo))])
-            outfile.write(r"\begin{tabular}{"+columns+"}"+"\n")
-            
-            outfile.write("  Model + & \multicolumn{"+str(len(pseudo))+"}{c}{Pseudodata} " + r" \\"+"\n")
-            outfile.write("  Uncertainty & " + " & ".join([translate.get(p,p) for p in pseudo]) + r" \\"+"\n")
+            pseudo = list(sorted(set(df["pseudo"].values)))
+            pseudo = list(filter(lambda x: x in pseudo, nominal)) + list(filter(lambda x: x not in nominal, pseudo))
 
-            outfile.write(r"  \hline "+"\n")
+            outfile=f"{outDir}/result_table_{nominal}_{fittype}_{uncertainty}.txt"
+            logger.info(f"write {outfile}")
+            with open(outfile, "w") as outfile:
 
-            for channel, df_n in df.groupby("channel"):
-                entries = []
-                for p in pseudo:         
-                    df_p = df_n.loc[df_n["pseudo"] == p][["mass", f"unc" ]]        
-                    if len(df_p) == 1:
-                        m, u = df_p.values[0]
-                        m = round(100*m,1)
-                        u = round(100*u,1)
-                        colorstring = "\cellcolor{red!25}" if abs(m) > u else ""    # highlight background color of cell if uncertainty does not cover mass shift
-                        entries.append(f"{colorstring} ${m} \pm {u}$")
-                    else:
-                        entries.append(r" \NA ")
+                outfile.write(r"\begin{table}" +"\n")
+                outfile.write(r"\topcaption{\label{table:pulls_scale_"+nominal+"_"+uncertainty+"}"+"\n")
+                outfile.write(r""" Pulls table for """+closure_str+""". The fit is performed on """+fit_str+""" in different channels with """+uncertainty_str1+r""" 
+        Entries read (pull on the $m_\P"""+boson_str+"""$ central value) $\pm$ (""" +uncertainty_str2+ r""").}"""+"\n")
+                outfile.write(r"\centering"+"\n")
 
-                outfile.write(f"  {translate.get(nominal,nominal)} ({channel}) & " + " & ".join(entries) + r" \\"+"\n")
+                columns = "l|"
+                columns += "".join(["c" for c in range(len(pseudo))])
+                outfile.write(r"\begin{tabular}{"+columns+"}"+"\n")
+                
+                outfile.write("  Model + & \multicolumn{"+str(len(pseudo))+"}{c}{Pseudodata} " + r" \\"+"\n")
+                outfile.write("  Uncertainty & " + " & ".join([translate.get(p, p) for p in pseudo]) + r" \\"+"\n")
+
+                outfile.write(r"  \hline "+"\n")
+
+                for channel, df_n in df.groupby("channel"):
+                    entries = []
+                    for p in pseudo:         
+                        df_p = df_n.loc[df_n["pseudo"] == p][["mass", uncertainty ]]        
+                        if len(df_p) == 1:
+                            m, u = df_p.values[0]
+                            m = round(100*m,2)
+                            u = round(100*u,2)
+                            colorstring = "\cellcolor{red!25}" if abs(m) > u else ""    # highlight background color of cell if uncertainty does not cover mass shift
+                            entries.append(f"{colorstring} ${m} \pm {u}$")
+                        else:
+                            entries.append(r" \NA ")
+
+                    outfile.write(f"  {translate.get(nominal,nominal)} ({channel}) & " + " & ".join(entries) + r" \\"+"\n")
 
 
-            outfile.write(r"  \end{tabular}"+"\n")
-            outfile.write(r"\end{table} "+"\n")
+                outfile.write(r"  \end{tabular}"+"\n")
+                outfile.write(r"\end{table} "+"\n")
+
+
+data["fittype"] = data["pseudo"].apply(lambda x: x.split("_")[-1])
+data["pseudo"] = data["pseudo"].apply(lambda x: "_".join(x.split("_")[:-1]))
+
+if args.mode == "scale":
+    plot_table_scale(data)
+    plot_table_scale(data, "tot")
+
+if args.mode == "pdf":
+    plot_table_pdf(data)
