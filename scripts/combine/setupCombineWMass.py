@@ -305,7 +305,8 @@ def main(args):
         passToFakes=passSystToFakes,
     )
 
-    combine_helpers.add_recoil_uncertainty(cardTool, signal_samples, flavor="mu")
+    if wmass or wlike:
+        combine_helpers.add_recoil_uncertainty(cardTool, signal_samples, flavor="mu")
 
     if wmass:
         #cardTool.addLnNSystematic("CMS_Fakes", processes=[args.qcdProcessName], size=1.05, group="MultijetBkg")
