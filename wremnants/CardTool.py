@@ -591,8 +591,8 @@ class CardTool(object):
 
         systnamesPruned = [s for s in systNames if not self.isExcludedNuisance(s)]
         systNames = systnamesPruned[:]
-        systNamesChan = []
         for chan in self.channels:
+            systNamesChan = []
             if systInfo["decorrCharge"]:
                 for x in systNames:
                     if self.chargeIdDict[chan]['id'] in x or (self.chargeIdDict[chan]['badId'] is not None and self.chargeIdDict[chan]["badId"] in x):
