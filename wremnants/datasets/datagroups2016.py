@@ -30,6 +30,7 @@ class Datagroups2016(Datagroups):
             ),
             "Zmumu" : dict(
                 members = self.getSafeListFromDataset(["ZmumuPostVFP"]),
+                #label = r"Z$\to\mu\mu$ (N$^{3}LL+NNLO)$",
                 label = r"Z$\to\mu\mu$",
                 color = "lightblue",
                 selectOp = sigOp,
@@ -67,29 +68,35 @@ class Datagroups2016(Datagroups):
                     selectOp = sigOp,
                 ),
                 "Top" : dict(
-                    members = self.getSafeListFromDataset(["TTLeptonicPostVFP", "TTSemileptonicPostVFP", 
-                        "SingleTschanLepDecaysPostVFP", "SingleTtWAntitopPostVFP", "SingleTtchanAntitopPostVFP", "SingleTtchanTopPostVFP"
-                        ]),
+                    members = list(filter(lambda y: y.group == "Top", self.datasets.values())),
                     label = "Top",
                     color = "green",
                     selectOp = sigOp,
                 ), 
                 "Diboson" : dict(
-                    members = self.getSafeListFromDataset(["WWPostVFP", "WZPostVFP", "ZZ2l2nuPostVFP"]),
+                    members = list(filter(lambda y: y.group == "Diboson", self.datasets.values())),
                     label = "Diboson",
                     color = "pink",
                     selectOp = sigOp,
                 ), 
+                "Fake" : dict(
+                    members = list(filter(lambda y: y.group != "QCD", self.datasets.values())),
+                    scale = lambda x: 1. if x.is_data else -1,
+                    label = "Nonprompt",
+                    color = "grey",
+                    selectOp = fakeOp,
+                ),
                 "QCD" : dict(
-                    members = self.getSafeListFromDataset(["QCDmuEnrichPt15PostVFP"]),
+                    members = list(filter(lambda y: y.group == "QCD", self.datasets.values())),
                     label = "QCD MC",
                     color = "grey",
                     selectOp = sigOp,
                 ), 
+           
             })
         else:
             self.groups["Other"] = dict(
-                members = [x for x in self.datasets.values() if not x.is_data and x.name not in ["ZmumuPostVFP", "ZtautauPostVFP"] and x.name != "QCD"],
+                members = [x for x in self.datasets.values() if not x.is_data and x.name not in ["ZmumuPostVFP", "ZtautauPostVFP"] and x.group != "QCD"],
                 label = "Other",
                 color = "grey",
             )
