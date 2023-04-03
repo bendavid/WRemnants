@@ -213,6 +213,12 @@ class datagroupsLowPU(datagroups):
                 color="#64C0E8",
                 selectOp = self.signalHistSel,
                 ),
+                WJetsToMuNu=dict(
+                members = [self.datasets[x] for x in ["WplusJetsToMuNu", "WminusJetsToMuNu"]],
+                label="W^{#pm} #rightarrow #mu^{#pm}#nu",
+                color="#F8CE68",
+                selectOp = self.signalHistSel,
+                ),
                 DY=dict(
                 members = [self.datasets[x] for x in ["Ztautau", "Zee", "Zmumu"]],
                 label="DY",
@@ -261,24 +267,26 @@ class datagroupsLowPU(datagroups):
         #self.groupNamesPostFilter = list(x for x in self.groups.keys() if len(self.groups[x]["members"])) # and x not in excludeProcGroup)
         logger.debug(f"Filtered groups: {self.groupNamesPostFilter}")
             
-    def signalHistSel(self, h, charge=None):
+    def signalHistSel(self, h, charge=None, genBin=None):
         s = hist.tag.Slicer()
         axes = [ax.name for ax in h.axes]
+        if genBin != None:
+            h = h[{"recoil_gen" : genBin}]
         if self.isW:
             sel = {"passIso" : True, "passMT": True}
             if charge in [-1, 1]:
                 sel.update({"charge" : -1j if charge < 0 else 1j})
             for key in sel.copy().keys():
-                if not key in axes:
+                if not key in axes: # remove ax slice if the ax does not exist
                     del sel[key]
             return h[sel]
         else: return h
                 
        
     def fakeHistABCD(self, h):
+        s = hist.tag.Slicer()
         axes = [ax.name for ax in h.axes]
         if "mt" in axes:
-            s = hist.tag.Slicer()
             sf = h[{"passIso" : True, "passMT" : False}].sum().value / h[{"passIso" : False, "passMT" : False}].sum().value
             return h[{"passIso" : False, "passMT" : True}]*sf
         
@@ -291,7 +299,6 @@ class datagroupsLowPU(datagroups):
             h[{"passIso" : False, "passMT" : True}], 
         )
         return ret
-
 
     def processScaleFactor(self, proc):
         if proc.is_data:
@@ -312,7 +319,7 @@ class datagroupsLowPU(datagroups):
         return "_".join([baseName,syst])
     
     # read single histogram (name, proc and syst)
-    def readHist(self, baseName, proc, syst = "", scaleOp=None, forceNonzero=True, scaleToNewLumi=-1): 
+    def readHist(self, baseName, proc, group, syst = "", scaleOp=None, forceNonzero=True, scaleToNewLumi=-1):
         output = self.results[proc.name]["output"]
         histname = self.histName(baseName, proc.name, syst)
         #print(baseName, proc.name, histname, syst)
@@ -321,7 +328,10 @@ class datagroupsLowPU(datagroups):
         h = output[histname]
         if isinstance(h, narf.ioutils.H5PickleProxy):
             h = h.get()
-        #print(h)
+        axes = [ax.name for ax in h.axes]
+        if group == "Fake" and "recoil_gen" in axes:
+            s = hist.tag.Slicer()
+            h = h[{"recoil_gen" : s[0:hist.overflow:hist.sum]}]
         if forceNonzero:
             h = hh.clipNegativeVals(h)
         scale = self.processScaleFactor(proc)
