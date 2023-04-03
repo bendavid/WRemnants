@@ -119,16 +119,22 @@ def build_graph(df, dataset):
 
     if unfold:
         # add histograms before any selection
+        if args.genLevel == "preFSR":
+            df = theory_tools.define_prefsr_vars(df)
+            df = df.Define("ptGen", "event % 2 == 0 ? genl.pt() : genlanti.pt()")
+            df = df.Define("etaGen", "event % 2 == 0 ? genl.eta() : genlanti.eta()")
+        elif args.genLevel == "postFSR":
+            df = df.Define("postFSRmuons", "GenPart_status == 1 && (GenPart_statusFlags & 1) && GenPart_pdgId == 13")
+            df = df.Define("postFSRantimuons", "GenPart_status == 1 && (GenPart_statusFlags & 1) && GenPart_pdgId == -13")
+            df = df.Define("ptGen", "event % 2 == 0 ? GenPart_pt[postFSRmuons[0]] : GenPart_pt[postFSRantimuons[0]]")
+            df = df.Define("etaGen", "event % 2 == 0 ? GenPart_eta[postFSRmuons[0]] : GenPart_eta[postFSRantimuons[0]]")
+
+        df = df.Define("qGen", "event % 2 == 0 ? -1 : 1")
 
         df_xnorm = df
         df_xnorm = df_xnorm.DefinePerSample("exp_weight", "1.0")
 
         df_xnorm = theory_tools.define_theory_weights_and_corrs(df_xnorm, dataset.name, corr_helpers, args)
-
-        # selecting the charged lepton at gen level
-        df_xnorm = df_xnorm.Define("ptGen", "event % 2 == 0 ? genl.pt() : genlanti.pt()")
-        df_xnorm = df_xnorm.Define("etaGen", "event % 2 == 0 ? genl.eta() : genlanti.eta()")
-        df_xnorm = df_xnorm.Define("qGen", "event % 2 == 0 ? -1 : 1")
 
         df_xnorm = df_xnorm.DefinePerSample("count", "0.5")
 
@@ -222,10 +228,6 @@ def build_graph(df, dataset):
     nominal_cols = ["trigMuons_eta0", "trigMuons_pt0", "trigMuons_charge0"]
 
     if unfold:
-        df = df.Define("ptGen", "event % 2 == 0 ? genl.pt() : genlanti.pt()")
-        df = df.Define("etaGen", "event % 2 == 0 ? genl.eta() : genlanti.eta()")
-        df = df.Define("qGen", "event % 2 == 0 ? -1 : 1")
-
         axes_nominal = [*nominal_axes, *unfolding_axes] 
         cols_nominal = [*nominal_cols, *unfolding_cols]
     else:
