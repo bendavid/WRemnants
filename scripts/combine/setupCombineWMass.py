@@ -56,7 +56,7 @@ def main(args,xnorm=False):
     logger.debug(f"Filtering these groups of processes: {args.filterProcGroups}")
     logger.debug(f"Excluding these groups of processes: {args.excludeProcGroups}")
     
-    datagroups = Datagroups2016(args.inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, splitWByCharge=args.unfold, applySelection= not xnorm)
+    datagroups = Datagroups2016(args.inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm)
     
     if args.xlim:
         if len(args.fitvar.split("-")) > 1:
@@ -96,13 +96,8 @@ def main(args,xnorm=False):
 
         if wmass:
             # split group into two
-            gMinus = datagroups.groups["Wmunu"] 
-            gMinus["members"] = [m for m in gMinus["members"] if "Wminusmunu" in m.name]
-            datagroups.addGroup("Wmunu_qGen0", gMinus)
-
-            gPlus = datagroups.groups["Wmunu"] 
-            gPlus["members"] = [m for m in gPlus["members"] if "Wplusmunu" in m.name]
-            datagroups.addGroup("Wmunu_qGen1", gPlus)
+            gMinus = datagroups.copyGroup("Wmunu", "Wmunu_qGen0", member_filter=lambda x: "Wminusmunu" in x.name)
+            gPlus = datagroups.copyGroup("Wmunu", "Wmunu_qGen1", member_filter=lambda x: "Wplusmunu" in x.name)
 
             datagroups.deleteGroup("Wmunu")
 
@@ -113,7 +108,7 @@ def main(args,xnorm=False):
 
         if xnorm:
             toDel = [group for group in datagroups.groups if not group in datagroups.unconstrainedProcesses]
-            datagroups.deleteGroup(toDel)
+            datagroups.deleteGroups(toDel)
             histName = "xnorm"
 
     if args.noHist and args.noStatUncFakes:
