@@ -544,4 +544,4 @@ if not args.onlyMainHistograms and args.muonScaleVariation == 'smearingWeights':
     muon_calibration.transport_smearing_weights_to_reco(resultdict)
     muon_calibration.muon_scale_variation_from_manual_shift(resultdict)
 
-output_tools.write_analysis_output(resultdict, "mw_with_mu_eta_pt.hdf5", args)
+output_tools.write_analysis_output(resultdict, f"{os.path.basename(__file__).replace('py', 'hdf5')}", args, update_name=not args.forceDefaultName)

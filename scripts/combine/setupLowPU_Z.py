@@ -102,6 +102,7 @@ def main(args):
     cardTool.setDataName(dataProc)
     cardTool.setProcsNoStatUnc(procs=[])
     cardTool.setSpacing(36)
+    cardTool.setProcColumnsSpacing(20)
     cardTool.setWriteByCharge(False)
     cardTool.setUnconstrainedProcs(unconstrainedProcs)
     cardTool.setLumiScale(args.lumiScale)
