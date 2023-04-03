@@ -62,27 +62,27 @@ jobs:
         run: echo PLOT_DIR=$(date +%Y_%m_%d)/PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') >> $GITHUB_ENV
 
       - name: wmass setup folder nightly
-        if: github.event.schedule == '0 3 * * 3,6'
+        if: github.event.schedule == '0 3 * * 2,4,6'
         run: echo PLOT_DIR=$(date +%Y_%m_%d)/ScheduledBuild_$(git rev-parse --short "$GITHUB_SHA") >> $GITHUB_ENV
 
       - name: wmass setup events
-        if: github.event.schedule == '0 3 * * 3,6'
+        if: github.event.schedule == '0 3 * * 2,4,6'
         run: echo "NTHREADS=64" >> $GITHUB_ENV
 
       - name: wmass setup events
-        if: github.event.schedule == '0 3 * * 3,6'
+        if: github.event.schedule == '0 3 * * 2,4,6'
         run: echo "MAX_FILES=-1" >> $GITHUB_ENV
 
       - name: wmass setup lumi scale
-        if: github.event.schedule == '0 3 * * 3,6'
+        if: github.event.schedule == '0 3 * * 2,4,6'
         run: echo "LUMI_SCALE=1" >> $GITHUB_ENV
 
       - name: wmass setup lumi scale
-        if: github.event.schedule != '0 3 * * 3,6'
+        if: github.event.schedule != '0 3 * * 2,4,6'
         run: echo "LUMI_SCALE=125" >> $GITHUB_ENV
 
       - name: wmass setup lumi scale
-        if: github.event.schedule != '0 3 * * 3,6'
+        if: github.event.schedule != '0 3 * * 2,4,6'
         run: echo "MAX_FILES=100" >> $GITHUB_ENV
 
       - name: wmass analysis
@@ -124,19 +124,19 @@ jobs:
         run: echo PLOT_DIR=$(date +%Y_%m_%d)/PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') >> $GITHUB_ENV
 
       - name: wlike setup folder nightly
-        if: github.event.schedule == '0 3 * * 3,6'
+        if: github.event.schedule == '0 3 * * 2,4,6'
         run: echo PLOT_DIR=$(date +%Y_%m_%d)/ScheduledBuild_$(git rev-parse --short "$GITHUB_SHA") >> $GITHUB_ENV
 
       - name: wlike setup events
-        if: github.event.schedule == '0 3 * * 3,6'
+        if: github.event.schedule == '0 3 * * 2,4,6'
         run: echo "MAX_FILES=-1" >> $GITHUB_ENV
 
       - name: wlike setup lumi scale
-        if: github.event.schedule == '0 3 * * 3,6'
+        if: github.event.schedule == '0 3 * * 2,4,6'
         run: echo "LUMI_SCALE=1" >> $GITHUB_ENV
 
       - name: wlike setup threads
-        if: github.event.schedule == '0 3 * * 3,6'
+        if: github.event.schedule == '0 3 * * 2,4,6'
         run: echo "NTHREADS=64" >> $GITHUB_ENV
 
       - name: wlike analysis
@@ -181,12 +181,16 @@ jobs:
         run: echo PLOT_DIR=$(date +%Y_%m_%d)/PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') >> $GITHUB_ENV
 
       - name: dilepton setup folder nightly
-        if: github.event.schedule == '0 3 * * 3,6'
+        if: github.event.schedule == '0 3 * * 2,4,6'
         run: echo PLOT_DIR=$(date +%Y_%m_%d)/ScheduledBuild_$(git rev-parse --short "$GITHUB_SHA") >> $GITHUB_ENV
 
       - name: dilepton setup threads
-        if: github.event.schedule == '0 3 * * 3,6'
+        if: github.event.schedule == '0 3 * * 2,4,6'
         run: echo "NTHREADS=64" >> $GITHUB_ENV
+
+      - name: dilepton setup events
+        if: github.event.schedule == '0 3 * * 2,4,6'
+        run: echo "MAX_FILES=-1" >> $GITHUB_ENV
 
       - name: dilepton analysis
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_dilepton.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4  --theoryCorr scetlib_dyturbo --axes ptll --forceDefaultName
