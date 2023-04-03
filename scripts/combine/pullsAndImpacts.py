@@ -11,8 +11,20 @@ from dash import html
 from dash.dependencies import Input, Output
 from utilities import input_tools
 import logging
+import os
 
 logging.basicConfig(level=logging.INFO)
+
+def writeOutput(fig, outfile, extensions=[]):
+    name, ext = os.path.splitext(outfile)
+    if ext not in extensions:
+        extensions.append(ext)
+
+    for ext in extensions:
+        if ext[0] != ".":
+            ext = "."+ext
+        func = "write_html" if ext == ".html" else "write_image"
+        getattr(fig, func)(name+ext)
 
 def plotImpacts(df, title, pulls=False, pullrange=[-5,5], POI='Wmass'):
     
@@ -22,9 +34,9 @@ def plotImpacts(df, title, pulls=False, pullrange=[-5,5], POI='Wmass'):
     max_pull = np.max(df["pull"])
     default_pr = pullrange == [-5, 5]
     if max_pull == 0 and default_pr:
-        pullrange = [-1.1, 1.1]
+        pullrange = [-1.5, 1.5]
     elif default_pr:
-        r = np.max([1.1, max_pull])
+        r = np.max([1.5, max_pull])
         pullrange = [-1*r, r]
     
     ndisplay = len(df)
@@ -57,10 +69,12 @@ def plotImpacts(df, title, pulls=False, pullrange=[-5,5], POI='Wmass'):
                     thickness=1.5,
                     width=5,
                 ),
-                name="impacts",
+                name="pulls",
             ),
             row=1,col=2,
     )
+    impact_range = np.ceil(df['impact'].max()*1.2)
+    impact_spacing = 5
     fig.update_layout(paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
         xaxis_title="Impact on mass (MeV)",
@@ -71,13 +85,12 @@ def plotImpacts(df, title, pulls=False, pullrange=[-5,5], POI='Wmass'):
             'xanchor': 'center',
             'yanchor': 'top'},
         margin=dict(l=20,r=20,t=50,b=20),
-        #xaxis=dict(range=[-25, 25],
-        xaxis=dict(range=[-20, 20] if POI=='Wmass' else [-3,3],
+        xaxis=dict(range=[-impact_range, impact_range],
                 showgrid=True, gridwidth=2,gridcolor='LightPink',
                 zeroline=True, zerolinewidth=4, zerolinecolor='Gray',
                 tickmode='linear',
                 tick0=0.,
-                dtick=5 if POI=='Wmass' else 1
+                dtick=impact_range/impact_spacing
             ),
         yaxis=dict(range=[-1, ndisplay]),
         showlegend=False,
@@ -90,7 +103,7 @@ def plotImpacts(df, title, pulls=False, pullrange=[-5,5], POI='Wmass'):
                     zeroline=True, zerolinewidth=4, zerolinecolor='Gray',
                     tickmode='linear',
                     tick0=0.,
-                    dtick=1 if pullrange[1]-pullrange[0] > 2.5 else 0.5,
+                    dtick=1 if pullrange[1]-pullrange[0] > 2.5 else 0.25,
                 ),
             xaxis2_title="pull+constraint",
             yaxis2=dict(range=[-1, ndisplay]),
@@ -134,6 +147,8 @@ def readFitInfoFromFile(rf,filename, group=False, sort=None, ascending=True, sta
     df.insert(0, "modlabel", modlabel)
     if sort:
         df = df.sort_values(by=sort, ascending=ascending)
+    if not group:
+        df.drop(df.loc[df['modlabel']=='massShift100MeV'].index, inplace=True)
     return df
 
 def parseArgs():
@@ -150,7 +165,8 @@ def parseArgs():
     interactive.add_argument("-i", "--interface", default="localhost", help="The network interface to bind to.")
     output = parsers.add_parser("output", help="Produce plots as output (not interactive)")
     output.add_argument("-o", "--outputFile", default="test.html", type=str, help="Output file (extension specifies if html or pdf/png)")
-    output.add_argument("-n", "--num", default=20, type=str, help="Number of nuisances to plot")
+    output.add_argument("--otherExtensions", default=[], type=str, nargs="*", help="Additional output file types to write")
+    output.add_argument("-n", "--num", type=int, help="Number of nuisances to plot")
     output.add_argument("--noPulls", action='store_true', help="Don't show pulls (not defined for groups)")
     output.add_argument("-t", "--title", type=str, default="Mass impact", help="Title of output plot")
     
@@ -227,11 +243,10 @@ def producePlots(rtfile,args, POI='Wmass'):
         app.run_server(debug=True, port=3389, host=args.interface)
     elif args.mode == 'output':
         df = dataframe if not args.group else groupsdataframe
+        if args.num and args.num < df.size:
+            df = df[-args.num:].sort_values(by=args.sort, ascending=args.ascending)
         fig = plotImpacts(df, title=args.title, pulls=not args.noPulls and not args.group, pullrange=[-5,5], POI=POI)
-        if ".html" in args.outputFile[-5:]:
-            fig.write_html(args.outputFile.replace('.html',f'_{POI}.html'))
-        else:
-            fig.write_image(args.outputFile.replace('.html',f'_{POI}.html'))
+        writeOutput(fig, args.outputFile, args.otherExtensions)
     else:
         raise ValueError("Must select mode 'interactive' or 'output'")
 
