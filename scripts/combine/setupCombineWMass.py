@@ -96,8 +96,8 @@ def main(args,xnorm=False):
 
         if wmass:
             # split group into two
-            gMinus = datagroups.copyGroup("Wmunu", "Wmunu_qGen0", member_filter=lambda x: "Wminusmunu" in x.name)
-            gPlus = datagroups.copyGroup("Wmunu", "Wmunu_qGen1", member_filter=lambda x: "Wplusmunu" in x.name)
+            datagroups.copyGroup("Wmunu", "Wmunu_qGen0", member_filter=lambda x: "Wminusmunu" in x.name)
+            datagroups.copyGroup("Wmunu", "Wmunu_qGen1", member_filter=lambda x: "Wplusmunu" in x.name)
 
             datagroups.deleteGroup("Wmunu")
 
