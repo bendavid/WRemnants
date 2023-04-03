@@ -20,9 +20,6 @@ vprocs_lowpu = wprocs_lowpu+zprocs_lowpu
 zprocs_recoil_lowpu = ["Zmumu", "Zee"]
 wprocs_recoil_lowpu = ["WminusJetsToMuNu", "WminusJetsToENu", "WplusJetsToMuNu", "WplusJetsToENu"]
 
-
-
-
 background_MCprocs = ["Top", "Diboson", "QCD"]
 zprocs_all = zprocs_lowpu+zprocs
 wprocs_all = wprocs_lowpu+wprocs
@@ -132,6 +129,7 @@ def common_parser(for_reco_highPU=False):
         parser.add_argument("--biasCalibration", type=str, default=None, choices=["binned","parameterized", "A", "M"], help="Adjust central value by calibration bias hist for simulation")
         parser.add_argument("--smearing", action='store_true', help="Smear pT such that resolution matches data") #TODO change to --no-smearing once smearing is final
         parser.add_argument("--unfolding", action='store_true', help="Add information needed for unfolding")
+        parser.add_argument("--genLevel", type=str, default='postFSR', choices=["preFSR", "postFSR"], help="Generator level definition for unfolding")
         parser.add_argument("--validateByMassWeights", 
             action = "store_true",
             help = "validate the muon momentum scale shift weights by massweights"
