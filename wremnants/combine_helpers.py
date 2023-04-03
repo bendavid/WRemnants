@@ -79,10 +79,13 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
         if helicity:
             skip_entries.append({"helicity" : -1.j})
         
-        obs = card_tool.project
+        obs = card_tool.project[:]
         if not obs:
             raise ValueError("Failed to find the observable names for the resummation uncertainties")
-        # TODO: Implement pT splitting for SCETlib
+        #if card_tool.datagroups.wmass:
+        #    obs.extend(["charge", "passIso", "passMT"])
+        #else:
+        #    obs.append("charge")
         
         theory_unc = input_tools.args_from_metadata(card_tool, "theoryCorr")
         if not theory_unc:

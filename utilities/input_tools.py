@@ -323,7 +323,6 @@ def safeOpenRootFile(fileName, quitOnFail=True, silent=False, mode="READ"):
 
 def args_from_metadata(card_tool, arg):
     meta_data = card_tool.datagroups.getMetaInfo()
-    print(meta_data.keys())
     if "args" not in meta_data.keys():
         raise IOError(f"The argument {arg} was not found in the metadata, maybe you run on an obsolete file.")
     elif arg not in meta_data["args"].keys():
