@@ -16,6 +16,7 @@ env:
   MAX_FILES: 10
   LUMI_SCALE: 100
   NTHREADS: 16
+  WEB_DIR: ~/www/WMassAnalysis/PRValidation
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
@@ -89,7 +90,10 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_with_mu_eta_pt.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4 --forceDefaultName
 
       - name: wmass plotting
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --hists pt eta -p ~/www/WMassAnalysis/PRValidation -f $PLOT_DIR -a W $OUTFILE
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --hists pt eta unrolled -p $WEB_DIR -f $PLOT_DIR -a W $OUTFILE variation --varName nominal_uncorr --varLabel MiNNLO --colors red
+
+      - name: wmass plot other
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py scripts/plotting/makeDataMCStackPlot.py --rebin 2 --yscale 1.5 --baseName mtAndMET --hists mt met -f $PLOT_DIR -a W $OUTFILE 
 
       - name: lowpu w analysis
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_lowPU.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4
@@ -101,7 +105,7 @@ jobs:
         run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ WMass_eta_pt/WMass_plus.txt WMass_eta_pt/WMass_minus.txt 
 
       - name: wmass combine impacts
-        run: scripts/ci/run_with_singularity.sh scripts/ci/show_impacts.sh WMass_eta_pt/fitresults_123456789.root ~/www/WMassAnalysis/PRValidation/$PLOT_DIR/impactsW.html
+        run: scripts/ci/run_with_singularity.sh scripts/ci/show_impacts.sh WMass_eta_pt/fitresults_123456789.root $WEB_DIR/$PLOT_DIR/impactsW.html
 
         #TODO: test low pu combine and combined fit
           #- name: lowpu w combine
@@ -143,7 +147,7 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_wlike_with_mu_eta_pt.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4 --theoryCorr scetlib_dyturbo --forceDefaultName
 
       - name: wlike plotting
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal --nominalRef nominal --hists pt eta -p ~/www/WMassAnalysis/PRValidation -f $(date +%Y_%m_%d)/PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') -a wlike mz_wlike_with_mu_eta_pt_scetlib_dyturboCorr_maxFiles10.hdf5 variation --varName nominal_uncorr --varLabel MiNNLO --colors red
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal --nominalRef nominal --hists pt eta -p $WEB_DIR -f $(date +%Y_%m_%d)/PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') -a wlike $OUTFILE variation --varName nominal_uncorr --varLabel MiNNLO --colors red
 
       - name: wlike combine setup
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $OUTFILE --verbose 4 --lumiScale $LUMI_SCALE
@@ -152,7 +156,7 @@ jobs:
         run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ ZMassWLike_eta_pt/ZMassWLike_plus.txt ZMassWLike_eta_pt/ZMassWLike_minus.txt 
 
       - name: wlike combine impacts
-        run: scripts/ci/run_with_singularity.sh scripts/ci/show_impacts.sh ZMassWLike_eta_pt/fitresults_123456789.root ~/www/WMassAnalysis/PRValidation/$PLOT_DIR/impactsWlike.html
+        run: scripts/ci/run_with_singularity.sh scripts/ci/show_impacts.sh ZMassWLike_eta_pt/fitresults_123456789.root $WEB_DIR/$PLOT_DIR/impactsWlike.html
 
       - name: lowpu z analysis
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_lowPU.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4 --forceDefaultName
@@ -196,13 +200,13 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_dilepton.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4  --theoryCorr scetlib_dyturbo --axes ptll --forceDefaultName
 
       - name: dilepton plotting ptll
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal --nominalRef nominal --hists ptll -p ~/www/WMassAnalysis/PRValidation -f $PLOT_DIR -a z $OUTFILE variation --varName nominal_uncorr --varLabel MiNNLO --colors red
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal --nominalRef nominal --hists ptll -p $WEB_DIR -f $PLOT_DIR -a z $OUTFILE variation --varName nominal_uncorr --varLabel MiNNLO --colors red
 
       - name: dilepton plotting mll
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal_mll --hists mll -p ~/www/WMassAnalysis/PRValidation -f $PLOT_DIR -a z $OUTFILE
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal_mll --hists mll -p $WEB_DIR -f $PLOT_DIR -a z $OUTFILE
 
       - name: dilepton plotting yll
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal_yll --nominalRef nominal_yll --hists yll -p ~/www/WMassAnalysis/PRValidation -f $PLOT_DIR -a z $OUTFILE
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal_yll --nominalRef nominal_yll --hists yll -p $WEB_DIR -f $PLOT_DIR -a z $OUTFILE
 
       - name: dilepton combine ptll setup
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $OUTFILE --fitvar ptll --constrainMass --lumiScale $LUMI_SCALE
