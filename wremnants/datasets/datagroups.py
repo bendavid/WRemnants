@@ -68,9 +68,9 @@ class Datagroups(object):
 
     def deleteGroup(self, name):
         if name in self.groups.keys():
-            del self.groups[n]
+            del self.groups[name]
         else:
-            logger.warning("Try to delete group '{n}' but did not find this group.")
+            logger.warning(f"Try to delete group '{name}' but did not find this group.")
 
     def copyGroup(self, group_name, new_name, member_filter=None):
         self.groups[new_name] = copy.deepcopy(self.groups[group_name])
@@ -436,7 +436,7 @@ class Datagroups(object):
     def defineSignalBinsUnfolding(self, group_name):
         if group_name not in self.groups.keys():
             raise RuntimeError(f"Base group {group_name} not found in groups {self.groups.keys()}!")
-        
+
         nominal_hist = self.results[self.groups[group_name]["members"][0].name]["output"]["xnorm"].get()
 
         gen_bins = []
