@@ -33,11 +33,11 @@ for d in datasets: logger.info(f"Dataset {d.name}")
 
 # load lowPU specific libs
 #ROOT.gInterpreter.AddIncludePath(f"{pathlib.Path(__file__).parent}/include/")
-ROOT.gInterpreter.Declare('#include "lowpu_utils.h"')
-ROOT.gInterpreter.Declare('#include "lowpu_efficiencies.h"')
-ROOT.gInterpreter.Declare('#include "lowpu_prefire.h"')
-ROOT.gInterpreter.Declare('#include "lowpu_rochester.h"')
-ROOT.gInterpreter.Declare('#include "lowpu_recoil.h"')
+narf.clingutils.Declare('#include "lowpu_utils.h"')
+narf.clingutils.Declare('#include "lowpu_efficiencies.h"')
+narf.clingutils.Declare('#include "lowpu_prefire.h"')
+narf.clingutils.Declare('#include "lowpu_rochester.h"')
+narf.clingutils.Declare('#include "lowpu_recoil.h"')
 
 
 
@@ -215,9 +215,8 @@ def build_graph(df, dataset):
 
 
     if not dataset.is_data: 
-        weight_expr = "weight*SFMC"
-        df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
-        df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
+        df = df.Define("exp_weight", "SFMC")
+        df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")
 
@@ -446,4 +445,4 @@ def build_graph_cutFlow(df, dataset):
 
 resultdict = narf.build_and_run(datasets, build_graph)
 fname = "lowPU_%s.hdf5" % flavor
-output_tools.write_analysis_output(resultdict, fname, args)
+output_tools.write_analysis_output(resultdict, fname, args, update_name=not args.forceDefaultName)
