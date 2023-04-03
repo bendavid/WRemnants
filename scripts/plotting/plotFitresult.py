@@ -26,7 +26,7 @@ parser.add_argument("--debug", action='store_true', help="Print debug output")
 parser.add_argument("--noData", action='store_true', help="Don't plot data")
 # parser.add_argument("--noFill", action='store_true', help="Don't fill stack")
 parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend text")
-parser.add_argument("--fittypes", default=["prefit", "postfit"], help="Make prefit or postfit plots, or both")
+parser.add_argument("--fittypes", type=str, nargs="+", default=["prefit", "postfit"], help="Make prefit or postfit plots, or both")
 
 args = parser.parse_args()
 
