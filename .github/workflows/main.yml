@@ -19,23 +19,24 @@ env:
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   comment_on_pr:
-    runs-on: ubuntu-latest
-    name: Comment PR
+    runs-on: [self-hosted, linux, x64]
     steps:
       - name: Checkout
         uses: actions/checkout@v3
 
-	  - name: setup plot dir
+      - name: setup plot dir
         run: echo PLOT_DIR=$(date +%Y_%m_%d)/PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') >> $GITHUB_ENV
-
-	  - name: setup plot dir
-        run: echo "MESSAGE=\"Validation plots can be found at https://cmsmwbot.web.cern.ch/WMassAnalysis/PRValidation/$PLOT_DIR\"" >> $GITHUB_ENV
-
+      
+      - name: form message
+        run: echo "MESSAGE=\"Validation plots from the CI can be found [here](https://cmsmwbot.web.cern.ch/WMassAnalysis/PRValidation/${{env.PLOT_DIR}})\"" >> $GITHUB_ENV
+      
       - name: Comment PR
         uses: thollander/actions-comment-pull-request@v2
+        #if: github.event.issue.pull_request
         with:
           message: |
             ${{env.MESSAGE}}
+          comment_tag: execution
 
   w-analysis:
     # The type of runner that the job will run on
