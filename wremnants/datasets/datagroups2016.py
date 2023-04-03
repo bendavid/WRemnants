@@ -2,8 +2,6 @@ from utilities import boostHistHelpers as hh, logging
 from wremnants import histselections as sel
 from wremnants.datasets.datagroups import Datagroups
 from wremnants.datasets import datasets2016
-import narf
-import math
 
 logger = logging.child_logger(__name__)
 
