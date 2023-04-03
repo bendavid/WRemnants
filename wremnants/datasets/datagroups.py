@@ -421,7 +421,7 @@ class Datagroups(object):
         if group_name not in self.groups.keys():
             raise RuntimeError(f"Base group {group_name} not found in groups {self.groups.keys()}!")
 
-        nominal_hist = self.results[self.groups[group_name]["members"][0].name]["output"]["nominal"].get()
+        nominal_hist = self.results[self.groups[group_name]["members"][0].name]["output"]["xnorm"].get()
 
         gen_bins = []
         for gen_axis in self.gen_axes:

@@ -198,7 +198,7 @@ def main(args,xnorm=False):
             processes=signal_samples_inctau,
             group="massShift",
             groupFilter=lambda x: x == "massShift20MeV" if wmass else lambda x: x == "massShift2p1MeV",
-            skipEntries=[(f"^massShift{i}MeV.*",) for i in range(30, 110, 10)]+[("^massShift2p1MeV.*",)]+[(f"^massShift{i}MeV.*",) for i in range(0, 20, 10)] if wmass else [(f"^massShift{i}MeV.*",) for i in range(0, 110, 10)],
+            skipEntries=[(f"^massShift{i}MeV.*",) for i in range(0, 110, 10) if i != 20 or not wmass],
             mirror=False,
             systAxes=["massShift"],
             passToFakes=passSystToFakes,
