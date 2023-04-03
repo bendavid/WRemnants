@@ -96,11 +96,11 @@ def build_graph(df, dataset):
 
     if args.singleLeptonHists and isW or isZ:
         if isW:
-            df = df.Define('ptPrefsrLep', 'genlanti.pt()')
-            df = df.Define('etaPrefsrLep', 'genlanti.eta()')
-        else:
             df = df.Define('ptPrefsrLep', 'genl.pt()')
             df = df.Define('etaPrefsrLep', 'genl.eta()')
+        else:
+            df = df.Define('ptPrefsrLep', 'genlanti.pt()')
+            df = df.Define('etaPrefsrLep', 'genlanti.eta()')
         results.append(df.HistoBoost("nominal_genlep", lep_axes, [*lep_cols, "nominal_weight"]))
 
     if not args.skipEWHists and (isW or isZ):
