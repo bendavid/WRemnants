@@ -5,8 +5,10 @@ from utilities import boostHistHelpers as hh,logging
 import numpy as np
 import os
 import json
+import hdf5plugin
 import h5py
 from narf import ioutils
+import ROOT
 
 logger = logging.child_logger(__name__)
 
@@ -259,7 +261,7 @@ def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo
             newaxes.insert(-1, "charge")
         hfo_sing = hfo_sing.project(*newaxes)
         hsing = hsing.project(*newaxes)
-    if all("pdf" in x for x in hsing.axes["vars"]):
+    if all("pdf" in x for x in hsing.axes["vars"]) and hsing.axes["vars"].size > 1:
         logger.info("Reading PDF variations for DYTurbo")
         pdf_members = hsing.axes["vars"].size
         hfo = read_dyturbo_pdf_hist(dyturbo_fo, pdf_members=pdf_members, axes=axes if axes else hsing.axes.name[:-1], charge=charge)
@@ -268,7 +270,7 @@ def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo
     for ax in ["Y", "Q"]:
         if ax in set(hfo.axes.name).intersection(set(hfo_sing.axes.name)).intersection(set(hsing.axes.name)):
             hfo, hfo_sing, hsing = hh.rebinHistsToCommon([hfo, hfo_sing, hsing], ax)
-    if hfo.axes["vars"].size != hfo_sing.axes["vars"].size:
+    if "vars" in hfo.axes.name and hfo.axes["vars"].size != hfo_sing.axes["vars"].size:
         if hfo.axes["vars"].size == 1:
             hfo = hfo[{"vars" : 0}]
     hnonsing = hh.addHists(-1*hfo_sing, hfo)
@@ -288,7 +290,6 @@ def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo
         hnonsing = htmp_nonsing
     return hh.addHists(hsing, hnonsing)
 
-
 def read_json(fIn):
 
     if not os.path.exists(fIn):
@@ -297,3 +298,36 @@ def read_json(fIn):
     else:
         with open(fIn) as f: jsDict = json.load(f)
         return jsDict
+
+def safeGetRootObject(fileObject, objectName, quitOnFail=True, silent=False, detach=True):
+    obj = fileObject.Get(objectName)
+    if obj == None:
+        if not silent:
+            print(f"Error getting {objectName} from file {fileObject.GetName()}")
+        if quitOnFail:
+            quit()
+        return None
+    else:
+        if detach:
+            obj.SetDirectory(0)
+        return obj
+        
+def safeOpenRootFile(fileName, quitOnFail=True, silent=False, mode="READ"):
+    fileObject = ROOT.TFile.Open(fileName, mode)
+    if not fileObject or fileObject.IsZombie():
+        if not silent:
+            print(f"Error when opening file {fileName}")
+        if quitOnFail:
+            quit()
+        else:
+            return None
+    elif not fileObject.IsOpen():
+        if not silent:
+            print(f"File {fileName} was not opened")
+        if quitOnFail:
+            quit()
+        else:
+            return None
+    else:
+        return fileObject
+

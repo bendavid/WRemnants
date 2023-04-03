@@ -22,6 +22,9 @@ datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
                                               excl=args.excludeProcs, 
                                               nanoVersion="v8" if args.v8 else "v9", base_path=args.dataPath)
 
+if args.validateByMassWeights:
+    raise NotImplementedError("Validation of muon scale hists. by massWeights are not implemented!")
+
 era = args.era
 
 # custom template binning
@@ -133,10 +136,8 @@ def build_graph(df, dataset):
                                                                                       "nonTrigMuons_pt0", "nonTrigMuons_eta0", "nonTrigMuons_SApt0", "nonTrigMuons_SAeta0", "nonTrigMuons_charge0"])
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId"])
 
-        weight_expr = "weight*weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom"
-
-        df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
-        df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
+        df = df.Define("exp_weight", "weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom")
+        df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
         if isW or isZ:
             df = theory_tools.define_scale_tensor(df)
     else:
@@ -214,4 +215,4 @@ def build_graph(df, dataset):
 
 resultdict = narf.build_and_run(datasets, build_graph)
 
-output_tools.write_analysis_output(resultdict, "mz_wlike_with_mu_eta_pt.hdf5", args)
+output_tools.write_analysis_output(resultdict, f"{os.path.basename(__file__).replace('py', 'hdf5')}", args, update_name=not args.forceDefaultName)
