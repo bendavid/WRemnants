@@ -7,6 +7,7 @@ import wremnants
 from wremnants import theory_tools,syst_tools,theory_corrections
 import hist
 import math
+import os
 
 
 parser.add_argument("--skipAngularCoeffs", action='store_true', help="Skip the conversion of helicity moments to angular coeff fractions")
@@ -81,8 +82,7 @@ def build_graph(df, dataset):
     elif "NNLOPS" in dataset.name:
         weight_expr = f"{weight_expr}*LHEScaleWeightAltSet1[4]"
 
-    df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
-    df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
+    df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
 
     if isZ:
         nominal_axes = [axis_massZgen, axis_rapidity, axis_ptVgen, axis_chargeZgen]
@@ -144,7 +144,7 @@ def build_graph(df, dataset):
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)
-output_tools.write_analysis_output(resultdict, "w_z_gen_dists.hdf5", args)
+output_tools.write_analysis_output(resultdict, f"{os.path.basename(__file__).replace('py', 'hdf5')}", args, update_name=not args.forceDefaultName)
 
 print("computing angular coefficients")
 z_moments = None
@@ -181,4 +181,4 @@ if not args.skipAngularCoeffs:
         coeffs["W"] = wremnants.moments_to_angular_coeffs(w_moments)
     if coeffs:
         outfname = "w_z_coeffs_absY.hdf5" if args.absY else "w_z_coeffs.hdf5"
-        output_tools.write_analysis_output(coeffs, outfname, args)
+        output_tools.write_analysis_output(coeffs, outfname, args, update_name=not args.forceDefaultName)

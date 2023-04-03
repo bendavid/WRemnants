@@ -3,7 +3,7 @@ from wremnants import histselections as sel
 from wremnants import plot_tools,theory_tools,syst_tools
 from utilities import boostHistHelpers as hh,common
 import matplotlib.pyplot as plt
-from matplotlib import cm
+from matplotlib import colormaps
 import argparse
 import os
 import shutil
@@ -40,7 +40,7 @@ xlabels = {
 
 parser = argparse.ArgumentParser()
 parser.add_argument("infile", help="Output file of the analysis stage, containing ND boost histogrdams")
-parser.add_argument("--ratio-to-data", action='store_true', help="Use data as denominator in ratio")
+parser.add_argument("--ratioToData", action='store_true', help="Use data as denominator in ratio")
 parser.add_argument("-n", "--baseName", type=str, help="Histogram name in the file (e.g., 'nominal')", default="nominal")
 parser.add_argument("--nominalRef", type=str, help="Specify the nominal his if baseName is a variation hist (for plotting alt hists)")
 parser.add_argument("--hists", type=str, nargs='+', required=True, choices=xlabels.keys(), help="List of histograms to plot")
@@ -98,7 +98,8 @@ if addVariation and (args.selectAxis or args.selectEntries):
 outdir = plot_tools.make_plot_dir(args.outpath, args.outfolder)
 
 groups = datagroups2016(args.infile)
-datasets = groups.getNames(args.procFilters, exclude=False)
+# There is probably a better way to do this but I don't want to deal with it
+datasets = groups.getNames(args.procFilters if args.procFilters else ['QCD'], exclude=not args.procFilters)
 logger.info(f"Will plot datasets {datasets}")
 
 if not args.nominalRef:
@@ -116,14 +117,12 @@ unstack = exclude[:]
 # TODO: In should select the correct hist for the transform, not just the first
 transforms = syst_tools.syst_transform_map(nominalName, args.hists[0])
 
-histInfo = groups.getDatagroups(afterFilter=False)
-
 if addVariation:
     logger.info(f"Adding variation {args.varName}")
     varLabels = padArray(args.varLabel, args.varName)
     # If none matplotlib will pick a random color
     ncols = len(args.varName) if not args.doubleColors else int(len(args.varName)/2)
-    colors = args.colors if args.colors else [cm.get_cmap("tab10" if ncols < 10 else "tab20")(int(i/2) if args.doubleColors else i) for i in range(len(args.varName))]
+    colors = args.colors if args.colors else [colormaps["tab10" if ncols < 10 else "tab20"](int(i/2) if args.doubleColors else i) for i in range(len(args.varName))]
     for i, (label,name,color) in enumerate(zip(varLabels,args.varName,colors)):
         entry = entries[i] if entries else None
         do_transform = args.transform and entry in transforms
@@ -157,18 +156,16 @@ if addVariation:
         # to the already loaded hist
         if load_op and reload:
             action = None
-        print("Adding name", varname)
         groups.addSummedProc(nominalName, relabel=args.baseName, name=name, label=label, exclude=exclude,
             color=color, reload=reload, rename=varname, procsToRead=datasets,
             preOpMap=load_op, action=action)
-        print("Groups", groups.groups.keys())
 
         exclude.append(varname)
         unstack.append(varname)
 
 
 groups.sortByYields(args.baseName, nominalName=nominalName)
-histInfo = groups.getDatagroups(afterFilter=False)
+histInfo = groups.getDatagroups()
 
 logger.info(f"Unstacked processes are {exclude}")
 prednames = list(reversed(groups.getNames([d for d in datasets if d not in exclude], exclude=False)))
@@ -184,8 +181,6 @@ def collapseSyst(h):
             return h[{ax : 0}].copy()
     return h
 
-print("Now keys are", histInfo.keys())
-
 overflow_ax = ["ptll", "chargeVgen", "massVgen", "ptVgen"]
 for h in args.hists:
     if len(h.split("-")) > 1:
@@ -193,12 +188,12 @@ for h in args.hists:
     else:
         action = lambda x: hh.projectNoFlow(collapseSyst(x[select]), h, overflow_ax)
     fig = plot_tools.makeStackPlotWithRatio(histInfo, prednames, histName=args.baseName, ylim=args.ylim, yscale=args.yscale,
-            fill_between=args.fillBetween if hasattr(args, "fill_between") else None, 
-            skip_fill=args.skipFillBetween if hasattr(args, "skip_fill_between") else 0,
+            fill_between=args.fillBetween if hasattr(args, "fillBetween") else None, 
+            skip_fill=args.skipFillBetween if hasattr(args, "skipFillBetween") else 0,
             action=action, unstacked=unstack, 
             fitresult=args.fitresult, prefit=args.prefit,
             xlabel=xlabels[h], ylabel="Events/bin", rrange=args.rrange, binwnorm=1.0, lumi=groups.lumi,
-            ratio_to_data=args.ratio_to_data, rlabel="Pred./Data" if args.ratio_to_data else "Data/Pred.",
+            ratio_to_data=args.ratioToData, rlabel="Pred./Data" if args.ratioToData else "Data/Pred.",
             xlim=args.xlim, no_fill=args.noFill, cms_decor="Preliminary" if not args.noData else "Simulation Preliminary",
             legtext_size=20*args.scaleleg)
 

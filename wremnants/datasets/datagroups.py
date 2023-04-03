@@ -300,11 +300,11 @@ class datagroups(object):
 
         if not rename:
             rename = name
-        self.groups[rename] = dict(
+        self.addGroup(rename, dict(
             label=label,
             color=color,
             members=[],
-        )
+        ))
         tosum = []
         procs = procsToRead if procsToRead else self.groups.keys()
         for proc in filter(lambda x: x not in exclude+[rename], procs):
@@ -387,6 +387,7 @@ class datagroups2016(datagroups):
             ),
             "Zmumu" : dict(
                 members = self.getSafeListFromDataset(["ZmumuPostVFP"]),
+                #label = r"Z$\to\mu\mu$ (N$^{3}LL+NNLO)$",
                 label = r"Z$\to\mu\mu$",
                 color = "lightblue",
                 selectOp = sigOp,

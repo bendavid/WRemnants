@@ -1,7 +1,7 @@
 from utilities import boostHistHelpers as hh
 import hist
 import numpy as np
-from scripts.analysisTools.plotUtils.utility import safeOpenFile, safeGetObject
+from utilities.input_tools import safeOpenRootFile, safeGetRootObject
 import narf
 import ROOT
 
@@ -82,8 +82,8 @@ def applyCorrection(h, scale=1.0, offsetCorr=0.0, corrFile=None, corrHist=None, 
         ## TDirectory.TContext() should restore the ROOT current directory to whatever it was before a new ROOT file was opened
         ## but it doesn't work at the moment, apparently the class miss the __enter__ member and the usage with "with" fails
         #with ROOT.TDirectory.TContext():
-        f = safeOpenFile(corrFile, mode="READ")
-        corr = safeGetObject(f, corrHist, detach=True)
+        f = safeOpenRootFile(corrFile, mode="READ")
+        corr = safeGetRootObject(f, corrHist, detach=True)
         if offsetCorr:
             offsetHist = corr.Clone("offsetHist")
             ROOT.wrem.initializeRootHistogram(offsetHist, offsetCorr)
