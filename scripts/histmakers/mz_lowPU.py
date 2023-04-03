@@ -91,22 +91,13 @@ def build_graph(df, dataset):
     
     # normalization xsecs (propagate pdfs/qcdscales)
     if dataset.name in sigProcs:
-   
-        #axes_xnorm = [common.axis_recoil_gen_ptZ_lowpu, axis_xnorm]
-        #cols_xnorm = ["ptVgen", "xnorm"] # this order does not work? Segfault when writing to pkl file
-        
+
         axes_xnorm = [axis_xnorm, common.axis_recoil_gen_ptZ_lowpu, axis_charge]
         cols_xnorm = ["xnorm", "ptVgen", "TrigMuon_charge"]
         
         df_xnorm = df
-<<<<<<< HEAD
-        weight_expr = "weight"
-        df_xnorm = theory_tools.define_theory_weights_and_corrs(df_xnorm, weight_expr, dataset.name, corr_helpers, args)
-        df_xnorm = theory_tools.define_pdf_columns(df_xnorm, dataset.name, args.pdfs, args.altPdfOnlyCentral)
-=======
         df_xnorm = df_xnorm.DefinePerSample("exp_weight", "1.0")
         df_xnorm = theory_tools.define_theory_weights_and_corrs(df_xnorm, dataset.name, corr_helpers, args)
->>>>>>> f5384b778bec23c2624566abacad79c17def0297
         df_xnorm = df_xnorm.Define("xnorm", "0.5")
         results.append(df_xnorm.HistoBoost("xnorm", axes_xnorm, [*cols_xnorm, "nominal_weight"]))
 
@@ -229,14 +220,8 @@ def build_graph(df, dataset):
     df = df.Filter("massZ > 60 && massZ < 120")
 
     if not dataset.is_data:
-<<<<<<< HEAD
-        weight_expr = "weight*SFMC"
-        df = theory_tools.define_theory_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
-        df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
-=======
         df = df.Define("exp_weight", "SFMC")
         df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
->>>>>>> f5384b778bec23c2624566abacad79c17def0297
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")
 

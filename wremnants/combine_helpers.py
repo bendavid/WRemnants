@@ -194,7 +194,7 @@ def add_pdf_uncertainty(card_tool, samples, to_fakes, action=None):
     )
 
 
-def add_recoil_uncertainty(card_tool, samples, pu_type="highPU", flavor="", group_compact=True):
+def add_recoil_uncertainty(card_tool, samples, passSystToFakes=False, pu_type="highPU", flavor="", group_compact=True):
     met = args_from_metadata(card_tool, "met")
     if flavor == "":
         flavor = args_from_metadata(card_tool, "flavor")
@@ -213,4 +213,5 @@ def add_recoil_uncertainty(card_tool, samples, pu_type="highPU", flavor="", grou
             mirror = False,
             group = recoil_grps[i],
             systAxes = ["recoilVar"],
+            passToFakes=passSystToFakes,
         )

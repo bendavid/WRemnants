@@ -91,17 +91,13 @@ def build_graph(df, dataset):
     
     # normalization xsecs (propagate pdfs/qcdscales)
     if dataset.name in sigProcs:
-   
-        #axes_xnorm = [common.axis_recoil_gen_ptZ_lowpu, axis_xnorm]
-        #cols_xnorm = ["ptVgen", "xnorm"] # this order does not work? Segfault when writing to pkl file
-        
+
         axes_xnorm = [axis_xnorm, common.axis_recoil_gen_ptZ_lowpu, axis_charge]
         cols_xnorm = ["xnorm", "ptVgen", "chargeVgen"]
         
         df_xnorm = df
-        weight_expr = "weight"
-        df_xnorm = theory_tools.define_weights_and_corrs(df_xnorm, weight_expr, dataset.name, corr_helpers, args)
-        df_xnorm = theory_tools.define_pdf_columns(df_xnorm, dataset.name, args.pdfs, args.altPdfOnlyCentral)
+        df_xnorm = df_xnorm.DefinePerSample("exp_weight", "1.0")
+        df_xnorm = theory_tools.define_theory_weights_and_corrs(df_xnorm, dataset.name, corr_helpers, args)
         df_xnorm = df_xnorm.Define("xnorm", "0.5")
         results.append(df_xnorm.HistoBoost("xnorm", axes_xnorm, [*cols_xnorm, "nominal_weight"]))
 
@@ -215,15 +211,11 @@ def build_graph(df, dataset):
 
 
     if not dataset.is_data: 
-        weight_expr = "weight*SFMC"
-        df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
-        df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
+        df = df.Define("exp_weight", "SFMC")
+        df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")
 
-    
-   
-    
     df = df.Define("noTrigMatch", "Sum(trigMatch)")
     results.append(df.HistoBoost("noTrigMatch", [axis_lin], ["noTrigMatch", "nominal_weight"]))
 
