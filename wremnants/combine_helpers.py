@@ -69,8 +69,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
     nsyst_dims = len(syst_axes)
     #skip_entries = [(*[-1]*(nsyst_dims-2),*x) for x in skip_entries]
 
-    if resum:
-        group_name += f"Resum{resum.capitalize()}"
+    if resum != "none":
         if pt_binned:
             binning = np.array(common.ptV_10quantiles_binning)
             pt30_idx = np.argmax(binning > 30)
@@ -100,7 +99,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
         syst_ax = "vars"
         np_nuisances = ["^c_nu-*\d+", "^omega_nu-*\d+", "^Omega-*\d+"]
         both_exclude = ['^kappaFO.*','^recoil_scheme.*',"^transition_points.*",]+np_nuisances
-        tnp_nuisances = ["^gamma_.*", "b_.*", "s+*", "s-*",]
+        tnp_nuisances = ["^gamma_.*", "^b_.*", "^s+*", "^s-*",]
         resumscale_nuisances = ["^nuB.*", "nuS.*", "^muB.*", "^muS.*",]
         scale_nuisances = ["^mu.*", "^mu.*", "^nu",]
         if resum == "tnp":
@@ -169,6 +168,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
     if resum and not (pt_binned or helicity):
         logger.warning("Without pT or helicity splitting, only the SCETlib uncertainty will be applied!")
     else:
+        group_name += f"MiNNLO"
         card_tool.addSystematic(scale_hist,
             actionMap=action_map,
             actionArgs=action_args,
