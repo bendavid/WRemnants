@@ -151,14 +151,14 @@ dataDictV9 = {
     },
     'ZZTo2Q2LPostVFP' : { 
         'filepaths' : 
-        ["{BASE_PATH}/BKGV9/ZZTo2Q2L_mllmin4p0_TuneCP5_13TeV-amcatnloFXFX-pythia8/*.root"],
+        ["{BASE_PATH}/BKGV9/ZZTo2Q2L_mllmin4p0_TuneCP5_13TeV-amcatnloFXFX-pythia8/*/*.root"],
         'xsec' : 5.1,
         'group' : "Diboson",
     },
     'QCDmuEnrichPt15PostVFP' : { 
-                                'filepaths' : 
-                                ["{BASE_PATH}/BKGV9/QCD_Pt-20_MuEnrichedPt15_TuneCP5_13TeV-pythia8/*/*.root"],
-                                'xsec' : 238800,
-                                'group' : "QCD",
+        'filepaths' : 
+        ["{BASE_PATH}/BKGV9/QCD_Pt-20_MuEnrichedPt15_TuneCP5_13TeV-pythia8/*/*.root"],
+        'xsec' : 238800,
+        'group' : "QCD",
     }
 }
