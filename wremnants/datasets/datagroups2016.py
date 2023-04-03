@@ -3,7 +3,6 @@ from wremnants import histselections as sel
 from wremnants.datasets.datagroups import Datagroups
 from wremnants.datasets import datasets2016
 import narf
-import pandas as pd
 import math
 
 logger = logging.child_logger(__name__)

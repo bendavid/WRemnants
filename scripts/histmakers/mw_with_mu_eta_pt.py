@@ -164,8 +164,8 @@ def build_graph(df, dataset):
             df = df.Define("etaGen", "chargeVgen < 0 ? genl.eta() : genlanti.eta()")
         elif args.genLevel == "postFSR":
             df = df.Define("postFSRmuons", "GenPart_status == 1 && (GenPart_statusFlags & 1) && abs(GenPart_pdgId) == 13")
-            df = df.Define("ptGen", "GenPart_pt[postFSRmuons[0]]")
-            df = df.Define("etaGen", "GenPart_eta[postFSRmuons[0]]")
+            df = df.Define("ptGen", "GenPart_pt[postFSRmuons][0]")
+            df = df.Define("etaGen", "GenPart_eta[postFSRmuons][0]")
 
         # add histograms before any selection
         df_xnorm = df

@@ -126,8 +126,8 @@ def build_graph(df, dataset):
         elif args.genLevel == "postFSR":
             df = df.Define("postFSRmuons", "GenPart_status == 1 && (GenPart_statusFlags & 1) && GenPart_pdgId == 13")
             df = df.Define("postFSRantimuons", "GenPart_status == 1 && (GenPart_statusFlags & 1) && GenPart_pdgId == -13")
-            df = df.Define("ptGen", "event % 2 == 0 ? GenPart_pt[postFSRmuons[0]] : GenPart_pt[postFSRantimuons[0]]")
-            df = df.Define("etaGen", "event % 2 == 0 ? GenPart_eta[postFSRmuons[0]] : GenPart_eta[postFSRantimuons[0]]")
+            df = df.Define("ptGen", "event % 2 == 0 ? GenPart_pt[postFSRmuons][0] : GenPart_pt[postFSRantimuons][0]")
+            df = df.Define("etaGen", "event % 2 == 0 ? GenPart_eta[postFSRmuons][0] : GenPart_eta[postFSRantimuons][0]")
 
         df = df.Define("qGen", "event % 2 == 0 ? -1 : 1")
 
