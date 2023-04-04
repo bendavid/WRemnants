@@ -2,18 +2,14 @@ from utilities import boostHistHelpers as hh, logging
 from wremnants import histselections as sel
 from wremnants.datasets import datasetsLowPU
 from wremnants.datasets.datagroups import Datagroups
-import ROOT
 import hist
 
 logger = logging.child_logger(__name__)
 
 class DatagroupsLowPU(Datagroups):
-    isW = False
-    def __init__(self, infile, combine=False, flavor="", excludeProcGroup=None, filterProcGroup=None):
-        self.datasets = {x.name : x for x in datasetsLowPU.getDatasets(flavor=flavor, filt=filterProcGroup, excl=excludeProcGroup)}
-        super().__init__(infile, combine)
-        #self.lumi = 0.199269742
-        self.hists = {} # container storing temporary histograms
+    def __init__(self, infile, combine=False, flavor="", filterGroups=None, excludeGroups=None):
+        super().__init__(infile, combine, datasetsLowPU.getDatasets(flavor=flavor))
+
         self.isW = True if flavor in ["mu", "e"] else False
         self.groups = dict(
         
@@ -228,15 +224,19 @@ class DatagroupsLowPU(Datagroups):
                 color="#64C0E8",
                 selectOp = self.signalHistSel,
                 ),
-                Fake=dict(
-                    members = [self.datasets[x] for x in ["singlemuon", "WplusJetsToENu", "WminusJetsToENu", "WZTo3LNu", "WWTo2L2Nu", "ZZ", "WplusJetsToTauNu", "WminusJetsToTauNu", "WplusJetsToMuNu", "WminusJetsToMuNu", "Ztautau", "Zee", "Zmumu", "TTTo2L2Nu", "TTToSemiLeptonic"]],
-                    label = "Nonprompt",
-                    scale = lambda x: 1. if x.is_data else -1,
-                    color="#A9A9A9",
-                    selectOp = self.fakeHistABCD,
-                ),
             )        
 
+        self.filterGroups(filterGroups)
+        self.excludeGroups(excludeGroups)
+
+        if self.wmass:
+            self.groups["Fake"] = dict(
+                members = [self.datasets[x] for x in ["singlemuon", "WplusJetsToENu", "WminusJetsToENu", "WZTo3LNu", "WWTo2L2Nu", "ZZ", "WplusJetsToTauNu", "WminusJetsToTauNu", "WplusJetsToMuNu", "WminusJetsToMuNu", "Ztautau", "Zee", "Zmumu", "TTTo2L2Nu", "TTToSemiLeptonic"]],
+                label = "Nonprompt",
+                scale = lambda x: 1. if x.is_data else -1,
+                color="#A9A9A9",
+                selectOp = self.fakeHistABCD,
+            )
 
         # data
         if flavor == "mu" or flavor == "mumu":  
@@ -257,7 +257,8 @@ class DatagroupsLowPU(Datagroups):
                     selectOp = self.signalHistSel,
                 ),
             )
-            
+        
+        
     def signalHistSel(self, h, charge=None, genBin=None):
         s = hist.tag.Slicer()
         axes = [ax.name for ax in h.axes]
@@ -289,38 +290,6 @@ class DatagroupsLowPU(Datagroups):
                     #where=h[{"passIso" : False, "passMT" : True}].values(flow=True)>1),
             h[{"passIso" : False, "passMT" : True}], 
         )
-        return ret       
-        
-    def histName(self, baseName, procName, syst):
-        
-        if baseName == "reco_mll" and (procName == "DYmumu" or procName == "DYee"): 
-            baseName = "gen_reco_mll"
-
-        # This is kind of hacky to deal with the different naming from combine
-        if baseName != "x" and (syst == "" or syst == self.nominalName):
-            return baseName
-        if (baseName == "" or baseName == "x") and syst:
-            return syst
-        return "_".join([baseName,syst])
+        return ret 
     
-    # read single histogram (name, proc and syst)
-    def readHist(self, baseName, proc, group, syst = "", scaleOp=None, forceNonzero=True, scaleToNewLumi=-1):
-        output = self.results[proc.name]["output"]
-        histname = self.histName(baseName, proc.name, syst)
-        #print(baseName, proc.name, histname, syst)
-        if histname not in output:
-            raise ValueError(f"Histogram {histname} not found for process {proc.name}")
-        h = output[histname]
-        if isinstance(h, narf.ioutils.H5PickleProxy):
-            h = h.get()
-        axes = [ax.name for ax in h.axes]
-        if group == "Fake" and "recoil_gen" in axes:
-            s = hist.tag.Slicer()
-            h = h[{"recoil_gen" : s[0:hist.overflow:hist.sum]}]
-        if forceNonzero:
-            h = hh.clipNegativeVals(h)
-        scale = self.processScaleFactor(proc)
-        if scaleOp:
-            scale = scale*scaleOp(proc)
-        return h*scale
         

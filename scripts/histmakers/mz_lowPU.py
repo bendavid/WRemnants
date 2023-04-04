@@ -1,19 +1,19 @@
 import argparse
 from utilities import output_tools
-from utilities import common as common
+from utilities import common, logging
 
 parser,initargs = common.common_parser()
 parser.add_argument("--flavor", type=str, choices=["ee", "mumu"], help="Flavor (ee or mumu)", default="mumu")
 args = parser.parse_args()
 
+logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
+
 import narf
 import wremnants
 from wremnants import theory_tools,syst_tools,theory_corrections
-import logging
-import math
 import hist
-import ROOT
 import scripts.lowPU.config as lowPUcfg
+
 
 corr_helpers = theory_corrections.load_corr_helpers(common.zprocs_lowpu, args.theoryCorr)
 
@@ -27,7 +27,7 @@ datasets = wremnants.datasetsLowPU.getDatasets(maxFiles=args.maxFiles,
                                               flavor=flavor)
 
 
-for d in datasets: logging.info(f"Dataset {d.name}")
+for d in datasets: logger.info(f"Dataset {d.name}")
 
 
 # load lowPU specific libs

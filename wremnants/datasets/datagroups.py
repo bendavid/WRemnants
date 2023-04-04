@@ -62,7 +62,7 @@ class Datagroups(object):
         if canReplaceKey or group_name not in self.groups.keys():
             if group_name in self.groups.keys():
                 logger.warning(f"Replacing {group_name} in groups")
-            self.groups[group_name] = copy.deepcopy(dictToAdd)
+            self.groups[group_name] = dictToAdd #copy.deepcopy(dictToAdd)
 
     def deleteGroups(self, names):
         for n in names:
@@ -433,8 +433,11 @@ class Datagroups(object):
                 raise ValueError(f"In setSelectOp(): process {proc} not found")
             self.groups[proc]["selectOp"] = op
 
-    def setGenAxes(self, gen_axes):        
-        self.gen_axes = gen_axes
+    def setGenAxes(self, gen_axes):
+        if isinstance(gen_axes, str):
+            self.gen_axes = [gen_axes,]
+        else:
+            self.gen_axes = gen_axes
 
     def defineSignalBinsUnfolding(self, group_name):
         if group_name not in self.groups.keys():
@@ -445,7 +448,7 @@ class Datagroups(object):
         gen_bins = []
         for gen_axis in self.gen_axes:
             if gen_axis not in nominal_hist.axes.name:
-                raise RuntimeError(f"Gen axis {gen_axis} not found in histogram!")
+                raise RuntimeError(f"Gen axis '{gen_axis}' not found in histogram axes '{nominal_hist.axes.name}'!")
 
             gen_bin_edges = nominal_hist.axes[gen_axis].edges
             gen_bins.append(range(len(gen_bin_edges)-1))
@@ -465,9 +468,10 @@ class Datagroups(object):
             proc_name = group_name
             for idx, var in zip(indices, self.gen_axes):
                 proc_name += f"_{var}{idx}"
-            
+
             self.unconstrainedProcesses.append(proc_name)
             self.addGroup(proc_name, proc_genbin)
+
 
         # add one out of acceptance group and treat as background
         ooa_name = group_name.split("_")[0]+"_bkg"

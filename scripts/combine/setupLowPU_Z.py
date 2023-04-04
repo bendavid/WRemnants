@@ -33,11 +33,9 @@ def main(args, xsec=False):
     if not os.path.isdir(outfolder):
         os.makedirs(outfolder)
 
-
     if not args.inputFile: args.inputFile = "lowPU_%s_%s.hdf5" % (args.flavor, args.met)
 
     datagroups = DatagroupsLowPU(args.inputFile, flavor=args.flavor)
-    unconstrainedProcs = [] # POI processes
     constrainedProcs = []   # constrained signal procs
     bkgProcs = ["Other", "Ztautau"] if args.fitType == "wmass" else ["Top", "EWK"] # background procs
     dataProc = "SingleMuon" if args.flavor == "mumu" else "SingleElectron"
@@ -46,14 +44,12 @@ def main(args, xsec=False):
     histName = "reco_mT"
     s = hist.tag.Slicer()
     if args.fitType == "differential":
-        proc_base = dict(datagroups.groups[sigProc]) # signal process (Zmumu or Zee)
-        for i in range(len(common.axis_recoil_gen_ptZ_lowpu)): # add gen bin processes to the dict
-            proc_name = "Zmumu_genBin%d" % (i+1)
-            proc_genbin = dict(proc_base)
-            #proc_genbin['selectOp'] = lambda x, i=i: x[{"recoil_gen" : i}]
-            proc_genbin['selectOpArgs'] = {"genBin": i}
-            datagroups.addGroup(proc_name, proc_genbin)
-            unconstrainedProcs.append(proc_name)
+
+        datagroups.setGenAxes("recoil_gen")
+        datagroups.defineSignalBinsUnfolding(sigProc)
+
+        quit()
+
     elif args.fitType == "wmass": 
         constrainedProcs.append(sigProc)
         for proc in datagroups.groups.keys():
@@ -63,7 +59,8 @@ def main(args, xsec=False):
         histName = "mT_corr_rec"
         constrainedProcs.append(sigProc) # need sum over gen bins
     elif args.fitType == "inclusive":
-        unconstrainedProcs.append(sigProc)
+        datagroups.unconstrainedProcesses.append(sigProc)
+
         for proc in datagroups.groups.keys():
             datagroups.groups[proc]['selectOp'] = \
             lambda x, f=datagroups.groups[proc]['selectOp'] : f(x)[{ax : s[::hist.sum] for ax in ["recoil_gen", "recoil_reco",] if ax in x.axes.name}]
@@ -88,7 +85,7 @@ def main(args, xsec=False):
     # need to remove as cardTool takes all procs in the datagroups
     toDel = []
     for group in datagroups.groups: 
-        if not group in constrainedProcs+unconstrainedProcs+bkgProcs+[dataProc]: toDel.append(group)
+        if not group in constrainedProcs+datagroups.unconstrainedProcesses+bkgProcs+[dataProc]: toDel.append(group)
     datagroups.deleteGroups(toDel)    
 
     logger.debug(f"Going to use these groups: {datagroups.getNames()}")
@@ -107,7 +104,6 @@ def main(args, xsec=False):
     cardTool.setSpacing(40)
     cardTool.setProcColumnsSpacing(20)
     cardTool.setWriteByCharge(True)
-    cardTool.setUnconstrainedProcs(unconstrainedProcs)
     cardTool.setLumiScale(args.lumiScale)
 
     Zmumu_procs = cardTool.filteredProcesses(lambda x: "Zmumu" in x)
@@ -135,8 +131,8 @@ def main(args, xsec=False):
         return
 
     pdfAction = {x : lambda h: h[{"recoil_gen" : s[::hist.sum]}] for x in Zmumu_procs if "gen" not in x},
-    combine_helpers.add_pdf_uncertainty(cardTool, constrainedProcs+unconstrainedProcs, False, action=pdfAction)
-    combine_helpers.add_scale_uncertainty(cardTool, args.minnloScaleUnc, constrainedProcs+unconstrainedProcs, 
+    combine_helpers.add_pdf_uncertainty(cardTool, constrainedProcs+datagroups.unconstrainedProcesses, False, action=pdfAction)
+    combine_helpers.add_scale_uncertainty(cardTool, args.minnloScaleUnc, constrainedProcs+datagroups.unconstrainedProcesses, 
         to_fakes=False, use_hel_hist=True, resum=args.resumUnc)
     
     if not xsec:
@@ -169,8 +165,6 @@ def main(args, xsec=False):
             cardTool.addLnNSystematic("CMS_VV", processes=["EWK"], size=1.16, group="CMS_background")
 
         cardTool.addLnNSystematic("CMS_lumi_lowPU", processes=cardTool.allMCProcesses(), size=1.02, group="CMS_lumi_lowPU")
-
-
 
     cardTool.writeOutput(args=args)
 

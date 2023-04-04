@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from wremnants import CardTool,theory_tools,syst_tools
-from wremnants.datasets.datagroupsLowPU import DatagroupsLowPU_W
+from wremnants.datasets.datagroupsLowPU import DatagroupsLowPU
 from utilities import logging
 from wremnants import histselections as sel
 import argparse
@@ -39,7 +39,7 @@ suffix = "_statOnly" if args.statOnly else ""
 
 if args.inputFile == "": args.inputFile = "lowPU_%s_%s.pkl.lz4" % (args.flavor, met)
 
-datagroups = DatagroupsLowPU_W(args.inputFile, flavor=args.flavor)
+datagroups = DatagroupsLowPU(args.inputFile, flavor=args.flavor)
 
 unconstrainedProcs = ["WplusJetsToMuNu", "WminusJetsToMuNu"] # POIs
 constrainedProcs = []   # constrained signal procs
