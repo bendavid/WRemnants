@@ -187,7 +187,6 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
 
 def add_pdf_uncertainty(card_tool, samples, to_fakes, action=None, from_corr=False):
     pdf = input_tools.args_from_metadata(card_tool, "pdfs")[0]
-    logger.info(f"Using PDF {pdf}")
     pdfInfo = theory_tools.pdf_info_map("ZmumuPostVFP", pdf)
     pdfName = pdfInfo["name"]
     pdf_hist = pdfName
@@ -201,6 +200,8 @@ def add_pdf_uncertainty(card_tool, samples, to_fakes, action=None, from_corr=Fal
             logger.error(f"Did not find {pdf_hist} correction in file! Cannot use SCETlib+DYTurbo PDF uncertainties")
         pdf_hist += "Corr"
 
+    logger.info(f"Using PDF hist {pdf_hist}")
+
     pdf_ax = "vars" if from_corr else "pdfVar"
     symHessian = pdfInfo["combine"] == "symHessian"
     pdf_args = dict(
@@ -213,9 +214,8 @@ def add_pdf_uncertainty(card_tool, samples, to_fakes, action=None, from_corr=Fal
         systAxes=[pdf_ax],
     )
     if from_corr:
-        # TODO: Something is strange about the PDF axis, not working right now, to follow up
         card_tool.addSystematic(pdf_hist, 
-            systNameReplace=[("pdf0", "")]+[(f"pdf{i}", f"pdf{int((i-1)/2)}{'Up' if i%2 else 'Down'}") for i in range(pdfInfo["entries"])],
+            outNames=[""]+theory_tools.pdfNamesAsymHessian(pdfInfo['entries'], pdfset=pdf.upper())[1:],
             **pdf_args
         )
     else:
