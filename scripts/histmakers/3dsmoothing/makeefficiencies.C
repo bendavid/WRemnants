@@ -1,11 +1,11 @@
-#define PTSIZE 15
+#define PTSIZE 7
 
 //SECOND STEP IN EFFICIENCY CALCULATION
 
-#define UTBINS 10 //CHANGE IF NEEDED
+#define UTBINS 17 //CHANGE IF NEEDED
 
 void makeefficiencies() {
-	TFile *file=new TFile("makeefficienciesredo.root");
+	TFile *file=new TFile("makeefficiencieshighpt10bins.root");
 	TH3D *errortriggerplus=(TH3D*)file->Get("TriggerErrorPlus");
 	TH3D *errortriggerminus=(TH3D*)file->Get("TriggerErrorMinus");
 	TH3D *errorisoplus=(TH3D*)file->Get("IsoErrorPlus");
@@ -24,7 +24,9 @@ void makeefficiencies() {
 	TH2D *IsoMCFailMinus=(TH2D*)file->Get("IsoMCFailMinus");
 	TH2D *IsoPlus=(TH2D*)file->Get("IsoPlus");
 	TH2D *IsoMinus=(TH2D*)file->Get("IsoMinus");
-	double etabinning[49], ptbinning[PTSIZE+1] = {24.,26.,28.,30.,32.,34.,36.,38.,40.,42.,44.,47.,50.,55.,60.,65.};
+    TH2D *IsoptPlus=(TH2D*)file->Get("IsoptPlus");
+	TH2D *IsoptMinus=(TH2D*)file->Get("IsoptMinus");
+	double etabinning[49], ptbinning[PTSIZE+1] = {40.,42.,44.,47.,50.,55.,60.,65.};
 	for (unsigned int i=0; i!=49; i++) {
 		etabinning[i] = -2.4 + i*0.1;
 	}
@@ -38,8 +40,19 @@ void makeefficiencies() {
 	TH2D *isoMCMinus = new TH2D("isoMCMinus","",48,etabinning,PTSIZE,ptbinning);
 	TH2D *triggerPlus = new TH2D("triggerPlus","",48,etabinning,PTSIZE,ptbinning);
 	TH2D *triggerMinus = new TH2D("triggerMinus","",48,etabinning,PTSIZE,ptbinning);
+	TH2D *isoptPlus = new TH2D("isoptPlus","",48,etabinning,PTSIZE,ptbinning);
+	TH2D *isoptMinus = new TH2D("isoptMinus","",48,etabinning,PTSIZE,ptbinning);
 	TH2D *isoPlus = new TH2D("isoPlus","",48,etabinning,PTSIZE,ptbinning);
 	TH2D *isoMinus = new TH2D("isoMinus","",48,etabinning,PTSIZE,ptbinning);
+	double ptbinning2[PTSIZE+1],meanvalues[PTSIZE];
+	for (unsigned int i=0; i!=PTSIZE; i++) {
+		double denominator=0;
+		for (unsigned int j=0; j!=48; j++) {
+			denominator+=TriggerMCPassPlus->GetBinContent(j+1,i+1);
+		}
+		meanvalues[i]=isoptPlus->GetBinContent(1,i+1)/denominator;
+	}
+	
 	for (unsigned int i=0; i!=48; i++) {
 		for (unsigned int j=0; j!=PTSIZE; j++) {
 			double Errortriggerplus=0, Errortriggerminus=0, Errorisoplus=0, Errorisominus=0;
@@ -91,7 +104,7 @@ void makeefficiencies() {
 			isoMinus->SetBinError(i+1,j+1,ErrorIsoMinus->GetBinContent(i+1,j+1)/TriggerMinus->GetBinContent(i+1,j+1));
 		}
 	}
-	TFile *output = new TFile("efficiencieswremnantsredo.root","RECREATE");
+	TFile *output = new TFile("efficiencieswremnantshighpt10bins.root","RECREATE");
 	output->cd();
 	triggerMCPlus->Write();
 	triggerMCMinus->Write();

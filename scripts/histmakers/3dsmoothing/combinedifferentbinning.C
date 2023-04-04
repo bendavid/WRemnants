@@ -1,14 +1,15 @@
 //TO BE USED IN CASE WE NEED TO COMBINE EFFICIENCIES SMOOTHED IN DIFFERENT PT RANGES (AT THE MOMENT THE SMOOTHER DOESN'T DO IT, SO A WORKAROUND IS TO CHANGE THE PT RANGE IN THE HISTOGRAMS AND THEN ADD THE REMAINING BINS FROM ANOTHER FILE).
 
 void combinedifferentbinning() {
-	TFile *file=new TFile("/gpfs/ddn/cms/user/bruschin/Wsmooth/smoothLeptonScaleFactorsNoScetlib/GtoH/allSmooth_GtoH.root");
-	TFile *file2=new TFile("/gpfs/ddn/cms/user/bruschin/smoothLeptonScaleFactorsredo/GtoH/allSmooth_GtoH.root");
-	TFile *file3=new TFile("/gpfs/ddn/cms/user/bruschin/smoothLeptonScaleFactorsredo/GtoH/allSmooth_GtoH2.root","RECREATE");
+	TFile *file=new TFile("/gpfs/ddn/cms/user/bruschin/Newtest/smoothLeptonScaleFactorsredofullpol4/GtoH/allSmooth_GtoH.root");
+	TFile *file2=new TFile("/gpfs/ddn/cms/user/bruschin/Newtest/smoothLeptonScaleFactorsredopol4/GtoH/allSmooth_GtoH.root");
+	TFile *file3=new TFile("/gpfs/ddn/cms/user/bruschin/Newtest/smoothLeptonScaleFactorsredopol4/GtoH/allSmooth_GtoH2.root","RECREATE");
 	file3->cd();
-	for (auto&& keyAsObj : *(file->GetListOfKeys())){
+	for (auto&& keyAsObj : *(file2->GetListOfKeys())){
 		auto key = (TKey*) keyAsObj;
 		TH2D *_2dhisto1, *_2dhisto2, *_2dhisto3;
 		TH3D *_3dhisto1, *_3dhisto2, *_3dhisto3;
+		std::cout<<key->GetName()<<"\n";
 		if (std::string(key->GetClassName())==std::string("TH2D")) {
 			std::string name(key->GetName());
 			_2dhisto1=(TH2D*)file->Get(name.c_str());

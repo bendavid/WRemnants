@@ -178,17 +178,19 @@ def main(args):
                                systAxes=["downUpVar"],
                                labelsByAxis=["downUpVar"],
                                passToFakes=passSystToFakes)
-
+        
+        
         cardTool.addSystematic("sf2d", 
-            processes=signal_samples,
+            processes=allMCprocesses_noQCDMC,
             outNames=["sf2dDown", "sf2dUp"],
             group="SF3Dvs2D",
             mirror=True,
             #TODO: Name this
             noConstraint=False,
             systAxes=[],
-            passToFakes=True,
+            passToFakes=passSystToFakes,
         )
+        
 
     else:
         # TOCHECK: no fakes here, most likely
