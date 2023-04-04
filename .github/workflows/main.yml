@@ -16,7 +16,7 @@ env:
   MAX_FILES: 10
   LUMI_SCALE: 100
   NTHREADS: 16
-  WEB_DIR: ~/www/WMassAnalysis/PRValidation
+  WEB_DIR: /home/c/cmsmwbot/www/WMassAnalysis/PRValidation
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:

@@ -213,8 +213,9 @@ def add_pdf_uncertainty(card_tool, samples, to_fakes, action=None, from_corr=Fal
         systAxes=[pdf_ax],
     )
     if from_corr:
+        # TODO: Something is strange about the PDF axis, not working right now, to follow up
         card_tool.addSystematic(pdf_hist, 
-            outNames=theory_tools.pdfNamesAsymHessian(pdfInfo["entries"], pdfName),
+            systNameReplace=[("pdf0", "")]+[(f"pdf{i}", f"pdf{int((i-1)/2)}{'Up' if i%2 else 'Down'}") for i in range(pdfInfo["entries"])],
             **pdf_args
         )
     else:
