@@ -90,10 +90,13 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_with_mu_eta_pt.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4 --forceDefaultName
 
       - name: wmass plotting
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --hists pt eta unrolled -p $WEB_DIR -f $PLOT_DIR -a W $OUTFILE variation --varName nominal_uncorr --varLabel MiNNLO --colors red
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --hists pt eta pt-eta -p $WEB_DIR -f $PLOT_DIR -a W $OUTFILE variation --varName nominal_uncorr --varLabel MiNNLO --colors red
 
-      - name: wmass plot other
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py scripts/plotting/makeDataMCStackPlot.py --rebin 2 --yscale 1.5 --baseName mtAndMET --hists mt met -f $PLOT_DIR -a W $OUTFILE 
+      - name: wmass plot mtAndMet
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py scripts/plotting/makeDataMCStackPlot.py --rebin 2 --yscale 1.5 --baseName mtAndMET --hists mt met -p $WEB_DIR -f $PLOT_DIR 
+
+      - name: wmass plot massShift
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py  python3 scripts/plotting/makeDataMCStackPlot.py -a 'massVariation' --yscale '1.2' --hist 'pt' --baseName 'nominal' -r '0.95' '1.05' -p $WEB_DIR -f $PLOT_DIR $OUTFILE variation --varName 'massWeight' --selectEntries massShift100MeVUp massShift100MeVDown --varLabel '$m_{W}\pm100\,MeV$' "" --selectAxis massShift --color grey grey
 
       - name: lowpu w analysis
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_lowPU.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4
@@ -147,7 +150,7 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_wlike_with_mu_eta_pt.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4 --theoryCorr scetlib_dyturbo --forceDefaultName
 
       - name: wlike plotting
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal --nominalRef nominal --hists pt eta -p $WEB_DIR -f $(date +%Y_%m_%d)/PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') -a wlike $OUTFILE variation --varName nominal_uncorr --varLabel MiNNLO --colors red
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal --nominalRef nominal --hists pt eta pt-eta -p $WEB_DIR -f $(date +%Y_%m_%d)/PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') -a wlike $OUTFILE variation --varName nominal_uncorr --varLabel MiNNLO --colors red
 
       - name: wlike combine setup
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $OUTFILE --verbose 4 --lumiScale $LUMI_SCALE

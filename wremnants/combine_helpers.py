@@ -185,27 +185,45 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
             rename=group_name, # Needed to allow it to be called multiple times
         )
 
-def add_pdf_uncertainty(card_tool, samples, to_fakes, action=None):
+def add_pdf_uncertainty(card_tool, samples, to_fakes, action=None, from_corr=False):
     pdf = input_tools.args_from_metadata(card_tool, "pdfs")[0]
     logger.info(f"Using PDF {pdf}")
     pdfInfo = theory_tools.pdf_info_map("ZmumuPostVFP", pdf)
     pdfName = pdfInfo["name"]
+    pdf_hist = pdfName
 
-    pdf_ax = "pdfVar"
+    if from_corr:
+        theory_unc = input_tools.args_from_metadata(card_tool, "theoryCorr")
+        if not theory_unc:
+            logger.error("Can not add resummation uncertainties. No theory correction was applied!")
+        pdf_hist = f"scetlib_dyturbo{pdf.upper()}Vars" 
+        if pdf_hist not in theory_unc:
+            logger.error(f"Did not find {pdf_hist} correction in file! Cannot use SCETlib+DYTurbo PDF uncertainties")
+        pdf_hist += "Corr"
+
+    pdf_ax = "vars" if from_corr else "pdfVar"
     symHessian = pdfInfo["combine"] == "symHessian"
-    card_tool.addSystematic(pdfName, 
+    pdf_args = dict(
         processes=samples,
         mirror=True if symHessian else False,
         group=pdfName,
-        systAxes=[pdf_ax],
-        # Needs to be a tuple, since for multiple axis it would be (ax1, ax2, ax3)...
-        # -1 means all possible values of the mirror axis
-        skipEntries=[{pdf_ax : "^pdf0[a-z]*"}],
         passToFakes=to_fakes,
         actionMap=action,
-        scale=pdfInfo["scale"] if "scale" in pdfInfo else 1,
+        scale=pdfInfo.get("scale", 1),
+        systAxes=[pdf_ax],
     )
+    if from_corr:
+        card_tool.addSystematic(pdf_hist, 
+            outNames=theory_tools.pdfNamesAsymHessian(pdfInfo["entries"], pdfName),
+            **pdf_args
+        )
+    else:
+        card_tool.addSystematic(pdf_hist, 
+            skipEntries=[{pdf_ax : "^pdf0[a-z]*"}],
+            **pdf_args
+        )
 
+    # TODO: For now only MiNNLO alpha_s is supported
     asRange = pdfInfo['alphasRange']
     card_tool.addSystematic(f"{pdfName}alphaS{asRange}", 
         processes=samples,
