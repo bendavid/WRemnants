@@ -61,7 +61,7 @@ QCDscale = "integral"
 toDel = []
 for group in datagroups.groups: 
     if not group in constrainedProcs+unconstrainedProcs+bkgDataProcs: toDel.append(group)
-datagroups.deleteGroup(toDel)    
+datagroups.deleteGroups(toDel)    
 
 templateDir = f"{scriptdir}/Templates/LowPileupW"
 cardTool = CardTool.CardTool(f"{args.outfolder}/LowPU_Wmass_{args.flavor}_{{chan}}_{met}_lumi{lumisuffix}{suffix}.txt")
