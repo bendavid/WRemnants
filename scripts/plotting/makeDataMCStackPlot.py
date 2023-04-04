@@ -94,8 +94,8 @@ if addVariation and (args.selectAxis or args.selectEntries):
                          f" found selectEntries={len(args.selectEntries)} and varLabel={len(args.varLabel)}")
     if len(args.varName) < len(args.selectEntries):
         args.varName = padArray(args.varName, args.selectEntries)
-    axes = padArray(args.selectAxis, args.varLabel)
-    entries = padArray(args.selectEntries, args.varLabel)
+    axes = padArray(args.selectAxis, args.varName)
+    entries = padArray(args.selectEntries, args.varName)
 
 outdir = plot_tools.make_plot_dir(args.outpath, args.outfolder)
 
