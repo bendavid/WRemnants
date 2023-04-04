@@ -390,21 +390,24 @@ class CardTool(object):
             down = var_map[name+"Down"]
             nCellsWithoutOverflows = np.product(hnom.shape)
             try:
-                up_relsign = np.sign(up.values()-hnom.values())
+                up_relsign = np.sign(up.values(flow=False)-hnom.values(flow=False))
             except ValueError as e:
                 logger.error(f"Incompatible shapes between up and down for syst {name}")
                 raise e
-            down_relsign = np.sign(down.values()-hnom.values())
+            down_relsign = np.sign(down.values(flow=False)-hnom.values(flow=False))
             vars_sameside = (up_relsign != 0) & (up_relsign == down_relsign)
             perc_sameside = np.count_nonzero(vars_sameside)/nCellsWithoutOverflows 
             if perc_sameside > thresh:
-                logger.warning(f"{perc_sameside:.0%} bins are one sided for syst {name} and process {proc}!")
+                logger.warning(f"{perc_sameside:.1%} bins are one sided for syst {name} and process {proc}!")
             # check variations are not same as nominal
             # it evaluates absolute(a - b) <= (atol + rtol * absolute(b))
-            up_nBinsSystSameAsNomi = np.count_nonzero(np.isclose(up.values(), hnom.values(), rtol=1e-07, atol=1e-08))/nCellsWithoutOverflows
-            down_nBinsSystSameAsNomi = np.count_nonzero(np.isclose(down.values(), hnom.values(), rtol=1e-06, atol=1e-08))/nCellsWithoutOverflows
-            if up_nBinsSystSameAsNomi > 0.99 or down_nBinsSystSameAsNomi > 0.99:
-                logger.warning(f"syst {name} has Up/Down variation with {up_nBinsSystSameAsNomi:.0%}/{down_nBinsSystSameAsNomi:.0%} of bins equal to nominal")
+            up_nBinsSystSameAsNomi = np.count_nonzero(np.isclose(up.values(flow=False), hnom.values(flow=False), rtol=1e-07, atol=1e-08))/nCellsWithoutOverflows
+            down_nBinsSystSameAsNomi = np.count_nonzero(np.isclose(down.values(flow=False), hnom.values(flow=False), rtol=1e-06, atol=1e-08))/nCellsWithoutOverflows
+            # varEqNomiThreshold = 1.0 - 5./CellsWithoutOverflows # at least 5 bins different, but sensible choice depends on how many cells we have,
+            # perhaps just better to check against 100%, the tolerances in np.isclose should already catch bad cases with 1.0 != 1.0 because of numerical imprecisions
+            varEqNomiThreshold = 1.0
+            if up_nBinsSystSameAsNomi >= varEqNomiThreshold or down_nBinsSystSameAsNomi >= varEqNomiThreshold:
+                logger.warning(f"syst {name} has Up/Down variation with {up_nBinsSystSameAsNomi:.1%}/{down_nBinsSystSameAsNomi:.1%} of bins equal to nominal")
                     
 
     def writeForProcess(self, h, proc, syst):
