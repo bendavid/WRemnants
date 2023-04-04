@@ -2343,7 +2343,8 @@ def drawTH1dataMCstack(h1, thestack,
                        noLegendRatio=False,
                        textSize=0.035,
                        textAngle=0.10,
-                       textYheightOffset=0.55 # text printed at y = maxY of cancas times this constant
+                       textYheightOffset=0.55, # text printed at y = maxY of cancas times this constant
+                       noRatioPanel=False
 ):
 
     # if normalizing stack to same area as data, we need to modify the stack
@@ -2366,7 +2367,7 @@ def drawTH1dataMCstack(h1, thestack,
     canvas.SetTicky(1)
     canvas.SetLeftMargin(leftMargin)
     canvas.SetRightMargin(rightMargin)
-    canvas.SetBottomMargin(0.3)
+    canvas.SetBottomMargin(0.12 if noRatioPanel else 0.3)
     canvas.cd()
 
     addStringToEnd(outdir,"/",notAddIfEndswithMatch=True)
@@ -2417,8 +2418,13 @@ def drawTH1dataMCstack(h1, thestack,
     h1.SetMarkerStyle(20)
     h1.SetMarkerSize(1)
 
-    h1.GetXaxis().SetLabelSize(0)
-    h1.GetXaxis().SetTitle("")
+    if not noRatioPanel:
+        h1.GetXaxis().SetLabelSize(0)
+        h1.GetXaxis().SetTitle("")
+    else:
+        h1.GetXaxis().SetTitle(labelX)
+        h1.GetXaxis().SetTitleOffset(1.1)
+        h1.GetXaxis().SetTitleSize(0.05)
     h1.GetYaxis().SetTitle(labelY)
     h1.GetYaxis().SetTitleOffset(0.5 if wideCanvas else 1.5)
     h1.GetYaxis().SetTitleSize(0.05)
@@ -2493,62 +2499,63 @@ def drawTH1dataMCstack(h1, thestack,
 
     setTDRStyle()
 
-    pad2.Draw();
-    pad2.cd();
+    if not noRatioPanel:
+        pad2.Draw();
+        pad2.cd();
 
-    frame.Reset("ICES")
-    if setRatioYAxisRangeFromUser: frame.GetYaxis().SetRangeUser(yminRatio,ymaxRatio)
-    #else:                          
-    #frame.GetYaxis().SetRangeUser(0.5,1.5)
-    frame.GetYaxis().SetNdivisions(5)
-    frame.GetYaxis().SetTitle(labelRatioY)
-    frame.GetYaxis().SetTitleOffset(0.5 if wideCanvas else 1.5)
-    frame.GetYaxis().SetTitleSize(0.05)
-    frame.GetYaxis().SetLabelSize(0.04)
-    frame.GetYaxis().CenterTitle()
-    frame.GetXaxis().SetTitle(labelX)
-    if setXAxisRangeFromUser: frame.GetXaxis().SetRangeUser(xmin,xmax)
-    frame.GetXaxis().SetTitleOffset(1.2)
-    frame.GetXaxis().SetTitleSize(0.05)
+        frame.Reset("ICES")
+        if setRatioYAxisRangeFromUser: frame.GetYaxis().SetRangeUser(yminRatio,ymaxRatio)
+        #else:                          
+        #frame.GetYaxis().SetRangeUser(0.5,1.5)
+        frame.GetYaxis().SetNdivisions(5)
+        frame.GetYaxis().SetTitle(labelRatioY)
+        frame.GetYaxis().SetTitleOffset(0.5 if wideCanvas else 1.5)
+        frame.GetYaxis().SetTitleSize(0.05)
+        frame.GetYaxis().SetLabelSize(0.04)
+        frame.GetYaxis().CenterTitle()
+        frame.GetXaxis().SetTitle(labelX)
+        if setXAxisRangeFromUser: frame.GetXaxis().SetRangeUser(xmin,xmax)
+        frame.GetXaxis().SetTitleOffset(1.2)
+        frame.GetXaxis().SetTitleSize(0.05)
 
-    #ratio = copy.deepcopy(h1.Clone("ratio"))
-    #den_noerr = copy.deepcopy(stackErr.Clone("den_noerr"))
-    ratio = h1.Clone("ratio")
-    den_noerr = stackErr.Clone("den_noerr")
-    den = stackErr.Clone("den")
-    for iBin in range (1,den_noerr.GetNbinsX()+1):
-        den_noerr.SetBinError(iBin,0.)
+        #ratio = copy.deepcopy(h1.Clone("ratio"))
+        #den_noerr = copy.deepcopy(stackErr.Clone("den_noerr"))
+        ratio = h1.Clone("ratio")
+        den_noerr = stackErr.Clone("den_noerr")
+        den = stackErr.Clone("den")
+        for iBin in range (1,den_noerr.GetNbinsX()+1):
+            den_noerr.SetBinError(iBin,0.)
 
-    ratio.Divide(den_noerr)
-    den.Divide(den_noerr)
-    den.SetFillColor(ROOT.kCyan)
-    den.SetFillStyle(1001)  # make it solid again
-    den.SetMarkerSize(0)
-    #den.SetLineColor(ROOT.kRed)
-    frame.Draw()        
-    ratio.SetMarkerSize(0.85)
-    ratio.SetMarkerStyle(20) 
-    den.Draw("E2same")
-    ratio.Draw("EPsame")
+        ratio.Divide(den_noerr)
+        den.Divide(den_noerr)
+        den.SetFillColor(ROOT.kCyan)
+        den.SetFillStyle(1001)  # make it solid again
+        den.SetMarkerSize(0)
+        #den.SetLineColor(ROOT.kRed)
+        frame.Draw()        
+        ratio.SetMarkerSize(0.85)
+        ratio.SetMarkerStyle(20) 
+        den.Draw("E2same")
+        ratio.Draw("EPsame")
 
-    # if not "unrolled_" in canvasName:
-    #     for i in range(1,1+ratio.GetNbinsX()):
-    #         print "Error data bin {bin}: {val}".format(bin=i,val=ratio.GetBinError(i))
+        # if not "unrolled_" in canvasName:
+        #     for i in range(1,1+ratio.GetNbinsX()):
+        #         print "Error data bin {bin}: {val}".format(bin=i,val=ratio.GetBinError(i))
 
-    line = ROOT.TF1("horiz_line","1",ratio.GetXaxis().GetBinLowEdge(1),ratio.GetXaxis().GetBinLowEdge(ratio.GetNbinsX()+1))
-    line.SetLineColor(ROOT.kRed)
-    line.SetLineWidth(1)  # 1, not 2, which is too wide for canvas with large width
-    line.Draw("Lsame")
+        line = ROOT.TF1("horiz_line","1",ratio.GetXaxis().GetBinLowEdge(1),ratio.GetXaxis().GetBinLowEdge(ratio.GetNbinsX()+1))
+        line.SetLineColor(ROOT.kRed)
+        line.SetLineWidth(1)  # 1, not 2, which is too wide for canvas with large width
+        line.Draw("Lsame")
 
-    leg2 = ROOT.TLegend(0.2,0.25,0.4,0.30)
-    leg2.SetFillColor(0)
-    leg2.SetFillStyle(0)
-    leg2.SetBorderSize(0)
-    leg2.AddEntry(den,"tot. unc. exp.","LF")
-    if not noLegendRatio:
-        leg2.Draw("same")
+        leg2 = ROOT.TLegend(0.2,0.25,0.4,0.30)
+        leg2.SetFillColor(0)
+        leg2.SetFillStyle(0)
+        leg2.SetBorderSize(0)
+        leg2.AddEntry(den,"tot. unc. exp.","LF")
+        if not noLegendRatio:
+            leg2.Draw("same")
 
-    pad2.RedrawAxis("sameaxis")
+        pad2.RedrawAxis("sameaxis")
 
 
     if draw_both0_noLog1_onlyLog2 != 2:
