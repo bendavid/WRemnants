@@ -86,7 +86,7 @@ def main(args):
     toDel = []
     for group in datagroups.groups: 
         if not group in constrainedProcs+unconstrainedProcs+bkgProcs+[dataProc]: toDel.append(group)
-    datagroups.deleteGroup(toDel)    
+    datagroups.deleteGroups(toDel)    
 
     logger.debug(f"Going to use these groups: {datagroups.getNames()}")
     logger.debug(f"Datagroup keys: {datagroups.groups.keys()}")
