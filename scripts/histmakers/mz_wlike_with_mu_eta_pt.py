@@ -207,7 +207,6 @@ def build_graph(df, dataset):
         lep_cols = ["Muon_pt[goodMuons]", "Muon_phi[goodMuons]", "Muon_pt[goodMuons]"]
         trg_cols = ["trigMuons_pt0", "trigMuons_phi0", "nonTrigMuons_pt0", "nonTrigMuons_phi0"]
         df = recoilHelper.recoil_Z(df, results, dataset, common.zprocs_recoil, lep_cols, trg_cols) # produces corrected MET as MET_corr_rec_pt/phi
-        df = recoilHelper.recoil_Z_unc(df, results, dataset, common.zprocs_recoil)
     else:
         df = df.Alias("MET_corr_rec_pt", "MET_pt")
         df = df.Alias("MET_corr_rec_phi", "MET_phi")
@@ -238,6 +237,9 @@ def build_graph(df, dataset):
 
     nominal = df.HistoBoost("nominal", axes_nominal, [*cols_nominal, "nominal_weight"])
     results.append(nominal)
+
+    if not args.noRecoil:
+        df = recoilHelper.add_recoil_unc_Z(df, results, dataset, nominal_cols, nominal_axes, "nominal")
 
     if not dataset.is_data and not args.onlyMainHistograms:
 
