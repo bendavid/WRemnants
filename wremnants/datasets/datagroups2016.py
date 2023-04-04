@@ -76,13 +76,6 @@ class Datagroups2016(Datagroups):
                     color = "pink",
                     selectOp = sigOp,
                 ), 
-                "Fake" : dict(
-                    members = list(filter(lambda y: y.group != "QCD", self.datasets.values())),
-                    scale = lambda x: 1. if x.is_data else -1,
-                    label = "Nonprompt",
-                    color = "grey",
-                    selectOp = fakeOp,
-                ),
                 "QCD" : dict(
                     members = list(filter(lambda y: y.group == "QCD", self.datasets.values())),
                     label = "QCD MC",
@@ -102,7 +95,7 @@ class Datagroups2016(Datagroups):
         self.excludeGroups(excludeGroups)
 
         if self.wmass:
-            # add all processes to the fake contributions
+            # add all processes to the fake contributions after filtered and excluded groups
             self.groups["Fake"] = dict(
                 members = [member for sublist in [self.groups[x]["members"] for x in self.groups if x != "QCD"] for member in sublist],
                 scale = lambda x: 1. if x.is_data else -1,
