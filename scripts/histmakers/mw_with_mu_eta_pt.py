@@ -58,7 +58,7 @@ axis_eta = hist.axis.Regular(template_neta, template_mineta, template_maxeta, na
 if not args.vqt3dsmoothing:
     axis_pt = hist.axis.Regular(template_npt, template_minpt, template_maxpt, name = "pt")
 else :
-    axis_pt_list = [24., 26., 28., 30., 32., 34., 36., 38., 40., 42., 44., 47., 50., 55., 60., 65.]
+    axis_pt_list = [40., 42., 44., 47., 50., 55., 60., 65.]
     axis_pt = hist.axis.Variable(axis_pt_list, name = "pt")
 
 axis_charge = common.axis_charge
@@ -67,7 +67,11 @@ axis_passMT = common.axis_passMT
 axis_passTrigger = hist.axis.Boolean(name = "passTrigger")
 
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
-axis_vqt_list = [-3000000000,-30,-15,-10,-5,0,5,10,15,30,3000000000] #has to match the ut binning in the 3D SFs
+#axis_vqt_list = [-3000000000,-30,-15,-10,-5,0,5,10,15,30,3000000000] #has to match the ut binning in the 3D SFs
+#axis_vqt_list = [-3000000000,-300,-30,-22.5,-15,-12.5,-10,-7.5,-5,-2.5,0,2.5,5,7.5,10,12.5,15,22.5,30,300,3000000000] #has to match the ut binning in the 3D SFs
+#axis_vqt_list = [-3000000000,3000000000]
+#axis_vqt_list = [-3000000000,*[-100 + i*2 for i in range(101)],3000000000]
+axis_vqt_list = [-3000000000,-30,-15,-10,-5,0,5,10,20,30,40,50,60,70,80,90,100,3000000000]
 axis_vqt = hist.axis.Variable(axis_vqt_list, name = "ut")
 nominal_axes2 = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT, axis_vqt, axis_passTrigger]
 nominal_axes3 = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT, axis_passTrigger]
@@ -93,8 +97,7 @@ axis_ptVgen = hist.axis.Variable(
 if args.binnedScaleFactors:
     logger.info("Using binned scale factors and uncertainties")
     # add usePseudoSmoothing=True for tests with Asimov
-    muon_efficiency_helperw, muon_efficiency_helper_systw, muon_efficiency_helper_statw = wremnants.make_muon_efficiency_helpers_binned(filename = data_dir + "/testMuonSF/allSmooth_GtoH3D.root", era = era, max_pt = axis_pt.edges[-1], usePseudoSmoothing=True) 
-    muon_efficiency_helper2d, muon_efficiency_helper_syst2d, muon_efficiency_helper_stat2d = wremnants.make_muon_efficiency_helpers_binned(filename = data_dir + "/testMuonSF/allSmooth_GtoH.root", era = era, max_pt = axis_pt.edges[-1], usePseudoSmoothing=True) 
+    muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_binned(filename = data_dir + "/testMuonSF/allSmooth_GtoH3D.root", era = era, max_pt = axis_pt.edges[-1], usePseudoSmoothing=True) 
 
     if args.vqtTest:
         if args.vqtTestReal:
@@ -127,11 +130,11 @@ if args.binnedScaleFactors:
                                                                                                                                                           includeTrigger = includeTrigger) 
 else:
     logger.info("Using smoothed scale factors and uncertainties")
-    muon_efficiency_helperw, muon_efficiency_helper_systw, muon_efficiency_helper_statw = wremnants.make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSmooth_GtoH3D.root", era = era, max_pt = axis_pt.edges[-1])
-    muon_efficiency_helper2d, muon_efficiency_helper_syst2d, muon_efficiency_helper_stat2d = wremnants.make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSmooth_GtoH.root", era = era, max_pt = axis_pt.edges[-1])
-#logger.info(f"SF file: {args.sfFile}")
-logger.info(f"SF file: {data_dir}/testMuonSF/allSmooth_GtoH3D.root for W")
-logger.info(f"SF file: {data_dir}/testMuonSF/allSmooth_GtoH.root for everything else")
+    muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile, era = era, max_pt = axis_pt.edges[-1])
+    muon_efficiency_helper2d, muon_efficiency_helper_syst2d, muon_efficiency_helper_stat2d = wremnants.make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSmooth_GtoHisosf.root", era = era, max_pt = axis_pt.edges[-1])
+logger.info(f"SF file: {args.sfFile}")
+#logger.info(f"SF file: {data_dir}/testMuonSF/allSmooth_GtoH3D.root for W")
+#logger.info(f"SF file: {data_dir}/testMuonSF/allSmooth_GtoH.root for everything else")
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
 vertex_helper = wremnants.make_vertex_helper(era = era)
@@ -160,15 +163,6 @@ def build_graph(df, dataset):
     isW = dataset.name in common.wprocs
     isZ = dataset.name in common.zprocs
     isTop = dataset.group == "Top"
-
-    if dataset.name in ["WplusmunuPostVFP", "WminusmunuPostVFP"] :
-        muon_efficiency_helper = muon_efficiency_helperw
-        muon_efficiency_helper_syst = muon_efficiency_helper_systw
-        muon_efficiency_helper_stat = muon_efficiency_helper_statw
-    else :
-        muon_efficiency_helper = muon_efficiency_helper2d
-        muon_efficiency_helper_syst = muon_efficiency_helper_syst2d
-        muon_efficiency_helper_stat = muon_efficiency_helper_stat2d
 
     if dataset.is_data:
         df = df.DefinePerSample("weight", "1.0")
@@ -243,6 +237,8 @@ def build_graph(df, dataset):
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId"])
 
         weight_expr = "weight*weight_pu*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom"
+        weight_expr2 = ''.join(weight_expr) 
+        weight_expr3 = ''.join(weight_expr) 
         if not args.noScaleFactors:
             if not (args.vqtTest and isW):
                 df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso"])
@@ -259,9 +255,16 @@ def build_graph(df, dataset):
                         df = df.Define("weight_fullMuonSF_withTrackingRecoMC", muon_efficiency_helper_vqt2, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso", "goodMuons_zqtproj0"])
                         df = df.Define("weight_fullMuonSF_withTrackingRecoErr", muon_efficiency_helper_vqt3, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso", "goodMuons_zqtproj0"])
             weight_expr += "*weight_fullMuonSF_withTrackingReco"
+            weight_expr2 += "*weight_fullMuonSF_withTrackingRecoMC"
+            weight_expr3 += "*weight_fullMuonSF_withTrackingRecoErr"
         if args.vertex_weight:
             weight_expr += "*weight_vtx"
+            weight_expr2 += "*weight_vtx"
+            weight_expr3 += "*weight_vtx"
         df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
+        if args.vqt3dsmoothing and isW:
+            df = theory_tools.define_weights_and_corrs_ut(df, weight_expr2, dataset.name, corr_helpers, args, "MC")
+            df = theory_tools.define_weights_and_corrs_ut(df, weight_expr3, dataset.name, corr_helpers, args, "Err")
     ########################################################################
     
     if not args.no_recoil:
@@ -491,20 +494,26 @@ def build_graph(df, dataset):
 
             df = df.Define("Muon_cvhMomCov", "wrem::splitNestedRVec(Muon_cvhMomCov_Vals, Muon_cvhMomCov_Counts)")
 
-            if dataset.name in ["WplusmunuPostVFP", "WminusmunuPostVFP"]:
-                df = df.Define("weight2dsfup", muon_efficiency_helper2d, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso"])
-                df = df.Define("nominal_weight_2dsf", "nominal_weight/weight_fullMuonSF_withTrackingReco*weight2dsfup") #be EXTREMELY CAREFUL about the histogram files (this assumes that you have another file with the old trigger and histo SFs which also contains the same SFs for all the other steps as the central one)
-                sf2dup = df.HistoBoost("nominal_sf2d", nominal_axes, [*nominal_cols, "nominal_weight_2dsf"])
-                results.append(sf2dup)
-                if args.vqt3dsmoothing:
-                    df = df.Define("nominal_weight_MC", "nominal_weight/weight_fullMuonSF_withTrackingReco*weight_fullMuonSF_withTrackingRecoMC")
-                    df = df.Define("nominal_weight_Err", "nominal_weight/weight_fullMuonSF_withTrackingReco*weight_fullMuonSF_withTrackingRecoErr")
-                    new_nom_cols_MC = [*nominal_cols, "passTrigger"]
-                    smoothMC = df.HistoBoost("nominal_smoothMC", nominal_axes3, [*new_nom_cols_MC, "nominal_weight_MC"])
-                    results.append(smoothMC)
-                    new_nom_cols = [*nominal_cols, "goodMuons_zqtproj0", "passTrigger"]
-                    smoothErr = df.HistoBoost("nominal_smoothErr", nominal_axes2, [*new_nom_cols, "nominal_weight_Err"])
-                    results.append(smoothErr)
+            if args.vqt3dsmoothing and isW:
+                df = df.Define("nominal_weight_pt", "nominal_weight*goodMuons_pt0")
+                new_nom_cols_MC = [*nominal_cols, "passTrigger"]
+                smoothMC = df.HistoBoost("nominal_smoothMC", nominal_axes3, [*new_nom_cols_MC, "nominal_weight_MC"])
+                results.append(smoothMC)
+                new_nom_cols = [*nominal_cols, "goodMuons_zqtproj0", "passTrigger"]
+                smoothErr = df.HistoBoost("nominal_smoothErr", nominal_axes2, [*new_nom_cols, "nominal_weight_Err"])
+                results.append(smoothErr)
+                new_nom_cols_noeta = ["goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT", "passTrigger"]
+                nominal_axes4 = [axis_pt, axis_charge, axis_passIso, axis_passMT, axis_passTrigger]
+                smoothpt = df.HistoBoost("nominal_smoothpt", nominal_axes4, [*new_nom_cols_noeta, "nominal_weight_pt"])
+                results.append(smoothpt)
+                utdistro = df.HistoBoost("nominal_utdistro", nominal_axes2, [*new_nom_cols, "nominal_weight_MC"])
+                results.append(utdistro)
+
+        if not args.binnedScaleFactors:
+            df = df.Define("weight2dsfup", muon_efficiency_helper2d, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso"])
+            df = df.Define("nominal_weight_2dsf", "nominal_weight/weight_fullMuonSF_withTrackingReco*weight2dsfup") #be EXTREMELY CAREFUL about the histogram files (this assumes that you have another file with the old trigger and histo SFs which also contains the same SFs for all the other steps as the central one)
+            sf2dup = df.HistoBoost("nominal_sf2d", nominal_axes, [*nominal_cols, "nominal_weight_2dsf"])
+            results.append(sf2dup)
                 
     return results, weightsum
 
