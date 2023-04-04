@@ -251,12 +251,6 @@ class DatagroupsLowPU(Datagroups):
                     selectOp = self.signalHistSel,
                 ),
             )
-
-        # this class doesn't implement exclusion of groups yet, and maybe it is not needed.
-        # If if it is ever added, next line needs to be modified accordingly
-        self.updateGroupNamesPostFilter(excludeGroup=[])
-        #self.groupNamesPostFilter = list(x for x in self.groups.keys() if len(self.groups[x]["members"])) # and x not in excludeProcGroup)
-        logger.debug(f"Filtered groups: {self.groupNamesPostFilter}")
             
     def signalHistSel(self, h, charge=None):
         s = hist.tag.Slicer()
