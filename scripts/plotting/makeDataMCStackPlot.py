@@ -21,6 +21,7 @@ xlabels = {
     "costhetastarll" : r"$\cos{\phi^{\star}_{\ell\ell}}$",
     "phistarll" : r"$\phi^{\star}_{\ell\ell}$",
     "MET_pt" : r"p$_{\mathrm{T}}^{miss}$ (GeV)",
+    "met" : r"p$_{\mathrm{T}}^{miss}$ (GeV)",
     "mt" : r"m$_{T}^{\ell\nu}$ (GeV)",
     "etaSum":r"$\eta^{\ell(+)} + \eta^{\ell(-)}$",
     "etaDiff":r"$\eta^{\ell(+)} - \eta^{\ell(-)}$",
@@ -69,6 +70,7 @@ variation.add_argument("--varLabel", type=str, nargs='+', required=True, help="L
 variation.add_argument("--selectAxis", type=str, nargs='+', help="If you need to select a variation axis")
 variation.add_argument("--selectEntries", type=str, nargs='+', help="entries to read from the selected axis")
 variation.add_argument("--colors", type=str, nargs='+', help="Variation colors")
+variation.add_argument("--linestyle", type=str, default=[], nargs='+', help="Linestyle for variations")
 variation.add_argument("--doubleColors", action='store_true', help="Auto generate colors in pairs (useful for systematics)")
 variation.add_argument("--transform", action='store_true', help="Apply variation-specific transformation")
 variation.add_argument("--fillBetween", action='store_true', help="Fill between uncertainty hists in ratio")
@@ -195,7 +197,7 @@ for h in args.hists:
             xlabel=xlabels[h], ylabel="Events/bin", rrange=args.rrange, binwnorm=1.0, lumi=groups.lumi,
             ratio_to_data=args.ratioToData, rlabel="Pred./Data" if args.ratioToData else "Data/Pred.",
             xlim=args.xlim, no_fill=args.noFill, cms_decor="Preliminary" if not args.noData else "Simulation Preliminary",
-            legtext_size=20*args.scaleleg)
+            legtext_size=20*args.scaleleg, unstacked_linestyles=args.linestyle if hasattr(args, "linestyle") else [])
 
     fitresultstring=""
     if args.fitresult:
