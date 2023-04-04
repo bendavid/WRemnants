@@ -25,7 +25,6 @@ def make_parser(parser=None):
     parser.add_argument("--pseudoDataFile", type=str, help="Input file for pseudodata (if it should be read from a different file", default=None)
     parser.add_argument("-x",  "--excludeNuisances", type=str, default="", help="Regular expression to exclude some systematics from the datacard")
     parser.add_argument("-k",  "--keepNuisances", type=str, default="", help="Regular expression to keep some systematics, overriding --excludeNuisances. Can be used to keep only some systs while excluding all the others with '.*'")
-    parser.add_argument("--skipOtherChargeSyst", action="store_true", help="Skip saving histograms and writing nuisance in datacard for systs defined for a given charge but applied on the channel with the other charge")
     parser.add_argument("--scaleMuonCorr", type=float, default=1.0, help="Scale up/down dummy muon scale uncertainty by this factor")
     parser.add_argument("--noHist", action='store_true', help="Skip the making of 2D histograms (root file is left untouched if existing)")
     parser.add_argument("--effStatLumiScale", type=float, default=None, help="Rescale equivalent luminosity for efficiency stat uncertainty by this value (e.g. 10 means ten times more data from tag and probe)")
@@ -107,8 +106,6 @@ def main(args):
     if args.noStatUncFakes:
         cardTool.setProcsNoStatUnc(procs=args.qcdProcessName, resetList=False)
     cardTool.setCustomSystForCard(args.excludeNuisances, args.keepNuisances)
-    if args.skipOtherChargeSyst:
-        cardTool.setSkipOtherChargeSyst()
     if args.pseudoData:
         cardTool.setPseudodata(args.pseudoData, args.pseudoDataIdx)
         if args.pseudoDataFile:
@@ -331,24 +328,28 @@ def main(args):
         #                        passToFakes=passSystToFakes,
         # )
         #
-        if "Fake" not in excludeGroup:
-            cardTool.addSystematic(f"nominal", # this is the histogram to read
-                                   systAxes=[],
-                                   processes=["Fake"],
-                                   mirror=True,
-                                   group="MultijetBkg",
-                                   outNames=["mtCorrFakesDown", "mtCorrFakesUp"],
-                                   decorrelateByCharge=True, # will modify names above to include channel name
-                                   rename="mtCorrFakes", # this is the name used to identify the syst in the list of systs
-                                   action=sel.applyCorrection,
-                                   doActionBeforeMirror=True, # to mirror after the histogram has been created
-                                   actionArgs={"scale": 1.0,
-                                               "corrFile" : f"{data_dir}/fakesWmass/fakerateFactorMtBasedCorrection_vsEtaPt.root",
-                                               "corrHist": "etaPtCharge_mtCorrection",
-                                               "offsetCorr": 1.0,
-                                               "createNew": True}
-                               # add action to multiply by correction
-        )
+
+        ## currently can't work with the changes made in CardTool.py,
+        ## the histograms to be loaded for the corrections must be remade according to the new logic
+        
+        # if "Fake" not in excludeGroup:
+        #     cardTool.addSystematic(f"nominal", # this is the histogram to read
+        #                            systAxes=[],
+        #                            processes=["Fake"],
+        #                            mirror=True,
+        #                            group="MultijetBkg",
+        #                            outNames=["mtCorrFakesDown", "mtCorrFakesUp"],
+        #                            decorrelateByCharge=True, # will modify names above to include channel name
+        #                            rename="mtCorrFakes", # this is the name used to identify the syst in the list of systs
+        #                            action=sel.applyCorrection,
+        #                            doActionBeforeMirror=True, # to mirror after the histogram has been created
+        #                            actionArgs={"scale": 1.0,
+        #                                        "corrFile" : f"{data_dir}/fakesWmass/fakerateFactorMtBasedCorrection_vsEtaPt.root",
+        #                                        "corrHist": "etaPtCharge_mtCorrection",
+        #                                        "offsetCorr": 1.0,
+        #                                        "createNew": True}
+        #                        # add action to multiply by correction
+        # )
 
     else:
         cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
