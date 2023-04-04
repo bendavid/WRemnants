@@ -62,7 +62,10 @@ class Datagroups(object):
         if canReplaceKey or group_name not in self.groups.keys():
             if group_name in self.groups.keys():
                 logger.warning(f"Replacing {group_name} in groups")
-            self.groups[group_name] = dictToAdd #copy.deepcopy(dictToAdd)
+            self.groups[group_name] = dictToAdd
+            # deepcopy member operation
+            if "memberOp" in dictToAdd.keys():
+                self.groups[group_name]["memberOp"] = copy.deepcopy(dictToAdd["memberOp"])
 
     def deleteGroups(self, names):
         for n in names:
@@ -75,7 +78,10 @@ class Datagroups(object):
             logger.warning(f"Try to delete group '{name}' but did not find this group.")
 
     def copyGroup(self, group_name, new_name, member_filter=None):
-        self.groups[new_name] = copy.deepcopy(self.groups[group_name])
+        self.groups[new_name] = self.groups[group_name]
+        # deepcopy member operation
+        if "memberOp" in self.groups[group_name].keys():
+            self.groups[new_name]["memberOp"] = copy.deepcopy(self.groups[group_name]["memberOp"])
         if member_filter:
             # Invert the member filter and exclude those members
             self.deleteGroupMembers(new_name, [m for m in filter(lambda x,f=member_filter: not f(x), self.groups[new_name]["members"])])
