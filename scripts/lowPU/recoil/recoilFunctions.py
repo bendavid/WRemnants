@@ -101,7 +101,16 @@ def pol6(qT, p0, p1, p2, p3, p4, p5, p6):
 def heaviside(var, qT):
      
     return (tf.math.maximum(tf.constant(1.0, dtype=tf.float64), tf.math.sign(-(qT-var))))
-    
+ 
+
+def pw_poly4_poly1(qT, p0, p1, p2, p3, p4, p5):
+    x = p0
+    fLeft = p1 + p2*qT + p3*tf.math.pow(qT, 2) + p4*tf.math.pow(qT, 3) + p5*tf.math.pow(qT, 4)
+    fLeftEval = p1 + p2*x + p3*tf.math.pow(x, 2) + p4*tf.math.pow(x, 3) + p5*tf.math.pow(x, 4)
+    dfLeftEval = p2 + 2.0*p3*tf.math.pow(x, 1) + 3.0*p4*tf.math.pow(x, 2) + 4.0*p5*tf.math.pow(x, 3)
+    fRight = dfLeftEval*qT + (fLeftEval-dfLeftEval)*p0
+    h = tf.experimental.numpy.heaviside(qT-x, 0)
+    return ((1.0-h)*fLeft + h*fRight) 
     
 def pw_poly4_power(qT, p0, p1, p2, p3, p4, p5, p6):
     x = p0

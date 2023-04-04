@@ -357,6 +357,9 @@ def main(args,xnorm=False):
             labelsByAxis=["downUpVar"],
             passToFakes=passSystToFakes,
         )
+        if wmass or wlike:
+            combine_helpers.add_recoil_uncertainty(cardTool, signal_samples, passSystToFakes=passSystToFakes, flavor="mu")
+
         if wmass:
             #cardTool.addLnNSystematic("CMS_Fakes", processes=[args.qcdProcessName], size=1.05, group="MultijetBkg")
             cardTool.addLnNSystematic("CMS_Top", processes=["Top"], size=1.06)

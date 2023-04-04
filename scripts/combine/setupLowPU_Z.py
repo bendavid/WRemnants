@@ -26,59 +26,63 @@ def recoilSystNames(baseName, entries):
     systNames.extend(["{baseName}_{i}{shift}".format(baseName=baseName, i=int(j/2), shift="Down" if j%2 else "Up") for j in range(entries)])
     return systNames
 
-def main(args):
+def main(args, xsec=False):
     logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
-    outfolder = f"CombineStudies/lowPU_{args.fitType}"
+    outfolder = f"CombineStudies/lowPU_{args.fitType}_{args.flavor}"
     if not os.path.isdir(outfolder):
         os.makedirs(outfolder)
 
 
-    if not args.inputFile: args.inputFile = "lowPU_%s_%s.pkl.lz4" % (args.flavor, args.met)
+    if not args.inputFile: args.inputFile = "lowPU_%s_%s.hdf5" % (args.flavor, args.met)
 
     datagroups = DatagroupsLowPU(args.inputFile, flavor=args.flavor)
     unconstrainedProcs = [] # POI processes
     constrainedProcs = []   # constrained signal procs
     bkgProcs = ["Other", "Ztautau"] if args.fitType == "wmass" else ["Top", "EWK"] # background procs
     dataProc = "SingleMuon" if args.flavor == "mumu" else "SingleElectron"
+    sigProc ="Zmumu" if args.flavor == "mumu" else "Zee"
 
-
-    histName = "reco_mll"
+    histName = "reco_mT"
     s = hist.tag.Slicer()
     if args.fitType == "differential":
-        proc_base = dict(datagroups.groups["Zmumu" if args.flavor == "mumu" else "Zee"]) # signal process (Zmumu or Zee)
-        for i in range(len(common.axis_recoil_gen_ptZ)): # add gen bin processes to the dict
+        proc_base = dict(datagroups.groups[sigProc]) # signal process (Zmumu or Zee)
+        for i in range(len(common.axis_recoil_gen_ptZ_lowpu)): # add gen bin processes to the dict
             proc_name = "Zmumu_genBin%d" % (i+1)
             proc_genbin = dict(proc_base)
-            proc_genbin['selectOp'] = lambda x, i=i: x[{"recoil_gen" : i}]
+            #proc_genbin['selectOp'] = lambda x, i=i: x[{"recoil_gen" : i}]
+            proc_genbin['selectOpArgs'] = {"genBin": i}
             datagroups.addGroup(proc_name, proc_genbin)
-            if args.fitType == "differential": unconstrainedProcs.append(proc_name)
+            unconstrainedProcs.append(proc_name)
     elif args.fitType == "wmass": 
-        proc_name = "Zmumu" if args.flavor == "mumu" else "Zee"
-        constrainedProcs.append(proc_name)
+        constrainedProcs.append(sigProc)
         for proc in datagroups.groups.keys():
             datagroups.groups[proc]['selectOp'] = \
             lambda x: x[{ax : s[::hist.sum] for ax in ["recoil_gen", "mll",] if ax in x.axes.name}]
     elif args.fitType == "wlike":
         histName = "mT_corr_rec"
-        constrainedProcs.append("Zmumu" if args.flavor == "mumu" else "Zee") # need sum over gen bins
+        constrainedProcs.append(sigProc) # need sum over gen bins
     elif args.fitType == "inclusive":
-        unconstrainedProcs.append("Zmumu" if args.flavor == "mumu" else "Zee") # need sum over gen bins
- 
+        unconstrainedProcs.append(sigProc)
+        for proc in datagroups.groups.keys():
+            datagroups.groups[proc]['selectOp'] = \
+            lambda x, f=datagroups.groups[proc]['selectOp'] : f(x)[{ax : s[::hist.sum] for ax in ["recoil_gen", "recoil_reco",] if ax in x.axes.name}]
+
     
     suffix = ""
     if args.doStatOnly:
         suffix = "_stat"
-    if args.xsec:
+    if xsec:
         suffix += "_xsec"
         bkgProcs = [] # for xsec norm card, remove all bkg procs but keep the data
         histName = "xnorm"
         
         # fake data, as sum of all  Zmumu procs over recoil_gen
         proc_base = dict(datagroups.groups["Zmumu" if args.flavor == "mumu" else "Zee"])
-        proc_base['selectOp'] = lambda x, i=i: x[{"recoil_gen" : s[::hist.sum]}]
+        if args.fitType == "differential":
+            proc_base['selectOp'] = lambda x, i=i: x[{"recoil_gen" : s[::hist.sum]}]
         dataProc = "fake_data"
-        datagroups.addGroups(dataProc, proc_genbin)
+        datagroups.addGroup(dataProc, proc_base)
     
     # hack: remove non-used procs/groups, as there can be more procs/groups defined than defined above
     # need to remove as cardTool takes all procs in the datagroups
@@ -90,19 +94,19 @@ def main(args):
     logger.debug(f"Going to use these groups: {datagroups.getNames()}")
     logger.debug(f"Datagroup keys: {datagroups.groups.keys()}")
     templateDir = f"{scriptdir}/Templates/LowPileupW"
-    cardTool = CardTool.CardTool(f"{outfolder}/lowPU_Z{args.flavor}_{args.met}_{args.fitType}{suffix}.txt")
+    cardTool = CardTool.CardTool(f"{outfolder}/lowPU_{args.flavor}_{{chan}}_{args.met}_{args.fitType}{suffix}.txt")
     cardTool.setNominalTemplate(f"{templateDir}/main.txt")
-    cardTool.setOutfile(os.path.abspath(f"{outfolder}/lowPU_Z{args.flavor}_{args.met}_{args.fitType}{suffix}.root"))
+    cardTool.setOutfile(os.path.abspath(f"{outfolder}/lowPU_{args.flavor}_{args.met}_{args.fitType}{suffix}.root"))
     cardTool.setProcesses(datagroups.getNames())
     cardTool.setDatagroups(datagroups)
     cardTool.setHistName(histName) 
     cardTool.setNominalName(histName)
-    cardTool.setChannels([f"{args.flavor}{suffix}"])
+    #cardTool.setChannels([args.flavor])
     cardTool.setDataName(dataProc)
     cardTool.setProcsNoStatUnc(procs=[])
-    cardTool.setSpacing(36)
+    cardTool.setSpacing(40)
     cardTool.setProcColumnsSpacing(20)
-    cardTool.setWriteByCharge(False)
+    cardTool.setWriteByCharge(True)
     cardTool.setUnconstrainedProcs(unconstrainedProcs)
     cardTool.setLumiScale(args.lumiScale)
 
@@ -128,14 +132,14 @@ def main(args):
         cardTool.addLnNSystematic("dummy", processes=cardTool.allMCProcesses(), size=1.001, group="dummy")
         cardTool.writeOutput(args=args)
         print("Using option --doStatOnly: the card was created with only mass weights and a dummy LnN syst on all processes")
-        quit()
+        return
 
     pdfAction = {x : lambda h: h[{"recoil_gen" : s[::hist.sum]}] for x in Zmumu_procs if "gen" not in x},
     combine_helpers.add_pdf_uncertainty(cardTool, constrainedProcs+unconstrainedProcs, False, action=pdfAction)
     combine_helpers.add_scale_uncertainty(cardTool, args.minnloScaleUnc, constrainedProcs+unconstrainedProcs, 
         to_fakes=False, use_hel_hist=True, resum=args.resumUnc)
     
-    if not args.xsec:
+    if not xsec:
 
         cardTool.addSystematic("prefireCorr",
             processes=cardTool.allMCProcesses(),
@@ -146,22 +150,7 @@ def main(args):
             labelsByAxis = ["downUpVar"],
         )
         
-
-        recoil_vars = ["target_para", "target_perp"] #, "source_para", "source_perp", "target_para_bkg", "target_perp_bkg"]
-        recoil_grps = ["recoil_stat", "recoil_stat"] #, "recoil_stat", "recoil_stat", "recoil_syst", "recoil_syst"]
-        recoil_nVars = [34, 24]
-        for i, tag in enumerate(recoil_vars):
-            cardTool.addSystematic("recoilSyst_%s" % tag,
-                processes=Zmumu_procs,
-                mirror = False,
-                group = recoil_grps[i],
-                systAxes = ["tensor_axis_0"],
-                labelsByAxis = ["recoil_%s_{i}" % tag],
-                outNames = recoilSystNames("recoil_"+tag, recoil_nVars[i])
-                #action=scale_recoil_hist_to_variations,
-                #scale = 1./math.sqrt(args.lumiScale) if not "bkg" in tag else 1.0,
-            )
-
+        combine_helpers.add_recoil_uncertainty(cardTool, Zmumu_procs, pu_type="lowPU")
 
         for lepEff in ["lepSF_HLT_DATA_stat", "lepSF_HLT_DATA_syst", "lepSF_HLT_MC_stat", "lepSF_HLT_MC_syst", "lepSF_ISO_stat", "lepSF_ISO_DATA_syst", "lepSF_ISO_MC_syst", "lepSF_IDIP_stat", "lepSF_IDIP_DATA_syst", "lepSF_IDIP_MC_syst"]:
             
@@ -173,7 +162,6 @@ def main(args):
                 systAxes = ["tensor_axis_0"],
                 labelsByAxis = [""],
             )
-
         if args.fitType == "wmass":
             cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15, group="CMS_background")
         else:
@@ -191,3 +179,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     main(args)
+    if args.fitType == "differential":
+        main(args, xsec=True)
+        
+    if args.fitType == "inclusive":
+        main(args, xsec=True)    
+        
+        
