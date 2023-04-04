@@ -198,7 +198,7 @@ def build_graph(df, dataset):
         syst_tools.add_massweights_hist(results, df_xnorm, xnorm_axes, xnorm_cols, proc=dataset.name, base_name="xnorm")
 
         if apply_theory_corr:
-            results.extend(theory_tools.make_theory_corr_hists(df_xnorm, "nominal", xnorm_axes, xnorm_cols, 
+            results.extend(theory_tools.make_theory_corr_hists(df_xnorm, "xnorm", xnorm_axes, xnorm_cols, 
                 corr_helpers[dataset.name], args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly)
             )
 
