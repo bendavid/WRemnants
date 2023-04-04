@@ -23,8 +23,8 @@ parser.add_argument("--qcdScale", choices=["byHelicityPt", "byPt", "integrated",
 parser.add_argument("--flavor", type=str, help="Flavor (e or mu)", default=None, required=True)
 parser.add_argument("--fittype", choices=["differential", "wmass", "wlike", "inclusive"], default="differential", 
         help="Fit type, defines POI and fit observable (recoil or mT)")
-parser.add_argument("--statOnly", dest="statOnly", action='store_true', help="Stat-only cards")
-parser.add_argument("--lumiScale", dest="lumiScale", help="Luminosity scale", type=float, default=1.0)
+parser.add_argument("--statOnly", action='store_true', help="Stat-only cards")
+parser.add_argument("--lumiScale", help="Luminosity scale", type=float, default=1.0)
 parser.add_argument("--met", type=str, help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")
 args = parser.parse_args()
 

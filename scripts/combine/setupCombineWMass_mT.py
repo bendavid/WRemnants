@@ -22,15 +22,15 @@ parser.add_argument("--noScaleHelicitySplit", dest="qcdByHelicity", action='stor
 parser.add_argument("--flavor", type=str, help="Flavor (e or mu)", default="mu")
 parser.add_argument("--fittype", choices=["differential", "wmass", "wlike", "inclusive"], default="differential", 
         help="Fit type, defines POI and fit observable (recoil or mT)")
-parser.add_argument("--statOnly", dest="statOnly", action='store_true', help="Stat-only cards")
-parser.add_argument("--lumiScale", dest="lumiScale", help="Luminosity scale", type=float, default=1.0)
+parser.add_argument("--statOnly", action='store_true', help="Stat-only cards")
+parser.add_argument("--lumiScale", help="Luminosity scale", type=float, default=1.0)
 parser.add_argument("--met", type=str, help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")
 parser.add_argument("--PUMode", type=str, help="PU mode (lowPU or highPU)", default="lowPU")
 
 parser.add_argument("--qcdScale", choices=["byHelicityPtAndByPt", "byHelicityPt", "byHelicityCharge", "byPt", "byCharge", "integrated",], default="integrated", 
         help="Decorrelation for QCDscale (additionally always by charge). With 'byHelicityPtAndByPt' two independent histograms are stored, split and not split by helicities (for tests)")
-parser.add_argument("--noQCDscaleFakes", dest="noQCDscaleFakes" , action="store_true",   help="Do not apply QCd scale uncertainties on fakes, mainly for debugging")
-parser.add_argument("--skipSignalSystOnFakes", dest="skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
+parser.add_argument("--noQCDscaleFakes", action="store_true",   help="Do not apply QCd scale uncertainties on fakes, mainly for debugging")
+parser.add_argument("--skipSignalSystOnFakes", action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
 
 
 args = parser.parse_args()

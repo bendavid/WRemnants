@@ -127,9 +127,9 @@ def build_graph(df, dataset):
             df = df.Define("postFSRmuons", "GenPart_status == 1 && (GenPart_statusFlags & 1) && GenPart_pdgId == 13")
             df = df.Define("postFSRantimuons", "GenPart_status == 1 && (GenPart_statusFlags & 1) && GenPart_pdgId == -13")
             df = df.Define("postFSRmuonIdx", "ROOT::VecOps::ArgMax(GenPart_pt[postFSRmuons])")
-            df = df.Define("postFSRantimuonsIdx", "ROOT::VecOps::ArgMax(GenPart_pt[postFSRantimuons])")
-            df = df.Define("ptGen", "event % 2 == 0 ? GenPart_pt[postFSRmuons][postFSRmuonIdx] : GenPart_pt[postFSRantimuons][postFSRantimuonsIdx]")
-            df = df.Define("etaGen", "event % 2 == 0 ? GenPart_eta[postFSRmuons][postFSRmuonIdx] : GenPart_eta[postFSRantimuons][postFSRantimuonsIdx]")
+            df = df.Define("postFSRantimuonIdx", "ROOT::VecOps::ArgMax(GenPart_pt[postFSRantimuons])")
+            df = df.Define("ptGen", "event % 2 == 0 ? GenPart_pt[postFSRmuons][postFSRmuonIdx] : GenPart_pt[postFSRantimuons][postFSRantimuonIdx]")
+            df = df.Define("etaGen", "event % 2 == 0 ? GenPart_eta[postFSRmuons][postFSRmuonIdx] : GenPart_eta[postFSRantimuons][postFSRantimuonIdx]")
 
         df = df.Define("qGen", "event % 2 == 0 ? -1 : 1")
 

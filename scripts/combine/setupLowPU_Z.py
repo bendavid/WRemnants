@@ -19,7 +19,6 @@ def make_parser(parser=None):
     parser.add_argument("--xsec", dest="xsec", action='store_true', 
             help="Write card for masked xsec normalization")
     parser.add_argument("--met", type=str, help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")
-    #parser.add_argument("--lumiScale", dest="lumiScale", help="Luminosity scale", type=float, default=1.0)
     return parser
     
 def recoilSystNames(baseName, entries):
