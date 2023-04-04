@@ -147,8 +147,7 @@ def main(args,xnorm=False):
             cardTool.setPseudodataDatagroups(Datagroups2016(args.pseudoDataFile,
                                                 excludeProcGroup=excludeGroup,
                                                 filterProcGroup=filterGroup))
-    if args.lumiScale:
-        cardTool.setLumiScale(args.lumiScale)
+    cardTool.setLumiScale(args.lumiScale)
 
     logger.info(f"cardTool.allMCProcesses(): {cardTool.allMCProcesses()}")
         
