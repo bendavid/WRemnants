@@ -45,6 +45,7 @@ def main(args):
 
 
     histName = "reco_mll"
+    project = ["recoil_reco"]
     s = hist.tag.Slicer()
     if args.fitType == "differential":
         proc_base = dict(datagroups.groups["Zmumu" if args.flavor == "mumu" else "Zee"]) # signal process (Zmumu or Zee)
@@ -62,6 +63,7 @@ def main(args):
             lambda x: x[{ax : s[::hist.sum] for ax in ["recoil_gen", "mll",] if ax in x.axes.name}]
     elif args.fitType == "wlike":
         histName = "mT_corr_rec"
+        project = ["mt"]
         constrainedProcs.append("Zmumu" if args.flavor == "mumu" else "Zee") # need sum over gen bins
     elif args.fitType == "inclusive":
         unconstrainedProcs.append("Zmumu" if args.flavor == "mumu" else "Zee") # need sum over gen bins
@@ -74,6 +76,7 @@ def main(args):
         suffix += "_xsec"
         bkgProcs = [] # for xsec norm card, remove all bkg procs but keep the data
         histName = "xnorm"
+        project = ["count"]
         
         # fake data, as sum of all  Zmumu procs over recoil_gen
         proc_base = dict(datagroups.groups["Zmumu" if args.flavor == "mumu" else "Zee"])
@@ -97,6 +100,7 @@ def main(args):
     cardTool.setProcesses(datagroups.getNames())
     cardTool.setDatagroups(datagroups)
     cardTool.setHistName(histName) 
+    cardTool.setProjectionAxes(project) 
     cardTool.setNominalName(histName)
     cardTool.setChannels([f"{args.flavor}{suffix}"])
     cardTool.setDataName(dataProc)
