@@ -153,8 +153,7 @@ def readFitInfoFromFile(rf,filename, group=False, sort=None, ascending=True, sta
 
 def parseArgs():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-f", "--inputFile", 
-        default="/Users/kenneth/cernbox/CombineStudies/WGen/etal_ptl_smear_unrolled_scetlib/fitresults_123456789.root", 
+    parser.add_argument("-f", "--inputFile", type=str, required=True,
         help="fitresults output ROOT file from combinetf")
     parser.add_argument("-s", "--sort", default="impact", type=str, choices=["label", "pull", "constraint", "impact"], help="Sort mode for nuisances")
     parser.add_argument("--stat", default=0.0, type=float, help="Overwrite stat. uncertainty with this value")

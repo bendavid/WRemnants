@@ -62,7 +62,6 @@ colors = [[cmap(i)]*3 for i in range(len(args.pdfs))]
 outdir = plot_tools.make_plot_dir(args.outpath, args.outfolder)
 
 for obs in args.obs:
-    print("Obs is", obs)
     for name,color,labels,hists in zip(args.pdfs,colors, names, uncHists):
         # This is the reference
         action = sel.unrolledHist if obs == "unrolled" else lambda x: x.project(obs) 
