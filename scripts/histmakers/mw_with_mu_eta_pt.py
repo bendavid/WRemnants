@@ -177,8 +177,8 @@ def build_graph(df, dataset):
 
         df_xnorm = df_xnorm.DefinePerSample("count", "0.5")
 
-        xnorm_axes = [*unfolding_axes, axis_xnorm, axis_charge]
-        xnorm_cols = [*unfolding_cols, "count", "chargeVgen"]
+        xnorm_axes = [*unfolding_axes, axis_xnorm]
+        xnorm_cols = [*unfolding_cols, "count"]
         
         results.append(df_xnorm.HistoBoost("xnorm", xnorm_axes, [*xnorm_cols, "nominal_weight"]))
 
