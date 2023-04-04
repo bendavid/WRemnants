@@ -7,7 +7,7 @@ logger = logging.child_logger(__name__)
 
 class Datagroups2016(Datagroups):
     def __init__(self, infile, combine=False, pseudodata_pdfset = None, applySelection=True,
-                 excludeGroups=None, filterGroups=None, splitWByCharge=False
+                 excludeGroups=None, filterGroups=None
     ):
         super().__init__(infile, combine, datasets2016.getDatasets())
 
