@@ -619,7 +619,7 @@ class CardTool(object):
     def writeHistByCharge(self, h, name, decorrCharge=False):
         for charge in self.channels:
             q = self.chargeIdDict[charge]["val"]
-            hout = narf.hist_to_root(getBoostHistByCharge(h, q))
+            hout = narf.hist_to_root(self.getBoostHistByCharge(h, q))
             hout.SetName(name+f"_{charge}")
             hout.Write()
 
