@@ -74,8 +74,8 @@ Eigen::TensorFixedSize<int, Eigen::Sizes<2>> prefsrLeptons(const ROOT::VecOps::R
   std::array<int, 2> selected_pdgids = { pdgId[selected_idxs[0]], pdgId[selected_idxs[1]] };
   const bool partIdx = selected_pdgids[0] > 0;
   Eigen::TensorFixedSize<int, Eigen::Sizes<2>> out;
-  out(0) = selected_idxs[partIdx];
-  out(1) = selected_idxs[!partIdx];
+  out(0) = selected_idxs[!partIdx];
+  out(1) = selected_idxs[partIdx];
   return out;
 
 }
