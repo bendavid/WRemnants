@@ -36,10 +36,14 @@ outdir = plot_tools.make_plot_dir(args.outpath, args.outfolder)
 
 combine_result = uproot.open(args.infile)
 
-# settings
+# reco bin settings
 nbins_reco_charge = 2
-nbins_reco_pt = 34 #29
 nbins_reco_eta = 48
+
+if any([x.startswith("WMass") for x in args.infile.split("/")]):
+    nbins_reco_pt = 29
+else:
+    nbins_reco_pt = 34
 
 nbins_reco = nbins_reco_charge * nbins_reco_pt * nbins_reco_eta
 

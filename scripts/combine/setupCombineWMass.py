@@ -69,8 +69,10 @@ def main(args,xnorm=False):
 
     if wmass:
         name = "WMass"
+        datagroups.setGenAxes(["etaGen","ptGen"])
     elif wlike:
         name = "ZMassWLike"
+        datagroups.setGenAxes(["qGen","etaGen","ptGen"])
     else:
         name = "ZMassDilepton"
 
@@ -103,8 +105,8 @@ def main(args,xnorm=False):
 
             datagroups.defineSignalBinsUnfolding("Wmunu_qGen0")
             datagroups.defineSignalBinsUnfolding("Wmunu_qGen1")
+
         else:
-            datagroups.setGenAxes(["qGen","etaGen","ptGen"])
             datagroups.defineSignalBinsUnfolding("Zmumu")
 
         if xnorm:
