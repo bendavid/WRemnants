@@ -151,7 +151,7 @@ dataDictV9 = {
     },
     'ZZTo2Q2LPostVFP' : { 
         'filepaths' : 
-        ["{BASE_PATH}/BKGV9/ZZTo2Q2L_mllmin4p0_TuneCP5_13TeV-amcatnloFXFX-pythia8/*.root"],
+        ["{BASE_PATH}/BKGV9/ZZTo2Q2L_mllmin4p0_TuneCP5_13TeV-amcatnloFXFX-pythia8/*/*.root"],
         'xsec' : 5.1,
         'group' : "Diboson",
     },
