@@ -344,7 +344,7 @@ def build_graph(df, dataset):
         results.append(nominal)
 
         if not args.noRecoil:
-            df = recoilHelper.add_recoil_unc_W(df, results, dataset, nominal_cols, nominal_axes, "nominal")
+            df = recoilHelper.add_recoil_unc_W(df, results, dataset, cols_nominal, axes_nominal, "nominal")
 
         if apply_theory_corr:
             results.extend(theory_tools.make_theory_corr_hists(df, "nominal", axes_nominal, cols_nominal, 
