@@ -1124,7 +1124,6 @@ if __name__ == "__main__":
         
     if len(charges) == 2:
         outFile = mainOutputFolder + fname
-        filesToMerge = []
         mergeCmd = f"hadd -f {outFile} {" ".join(filesToMerge)}"
         safeSystem(mergeCmd)
         print()
