@@ -1118,13 +1118,13 @@ if __name__ == "__main__":
     filesToMerge = []
     for charge in charges:
         outputFolder = f"{mainOutputFolder}/{charge}/"
-        fnameCharge = fname.replace(".root", f"_{charge.root}")
+        fnameCharge = fname.replace(".root", f"_{charge}.root")
         runStudy(charge, outputFolder, fnameCharge, args)
         filesToMerge.append(outputFolder+fnameCharge)
         
     if len(charges) == 2:
         outFile = mainOutputFolder + fname
-        mergeCmd = f"hadd -f {outFile} {" ".join(filesToMerge)}"
+        mergeCmd = f"hadd -f {outFile} {' '.join(filesToMerge)}"
         safeSystem(mergeCmd)
         print()
         print(f"Saving all FRF corrections vs eta-pt in file {outFile}")
