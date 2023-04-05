@@ -67,7 +67,6 @@ templateDir = f"{scriptdir}/Templates/LowPileupW"
 cardTool = CardTool.CardTool(f"{args.outfolder}/LowPU_Wmass_{args.flavor}_{{chan}}_{met}_lumi{lumisuffix}{suffix}.txt")
 cardTool.setNominalTemplate(f"{templateDir}/main.txt")
 cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/LowPU_Wmass_{args.flavor}_{met}_lumi{lumisuffix}{suffix}.root"))
-cardTool.setProcesses(datagroups.getNames())
 cardTool.setDatagroups(datagroups)
 cardTool.setHistName(histName) 
 ##cardTool.setChannels([f"{args.flavor}"])
