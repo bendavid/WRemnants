@@ -13,6 +13,8 @@ from copy import deepcopy
 import pandas as pd
 import math
 
+from wremnants.datasets.datagroup import Datagroup
+
 logger = logging.child_logger(__name__)
 
 class Datagroups(object):
@@ -49,7 +51,7 @@ class Datagroups(object):
         self.groups = {}
         self.nominalName = "nominal"
         self.globalAction = None
-        self.gen_axes = ["etaGen", "ptGen"]
+        self.gen_axes = None
         self.unconstrainedProcesses = []
 
     def __del__(self):
@@ -58,12 +60,10 @@ class Datagroups(object):
         if self.rtfile:
             self.rtfile.Close()
 
-    def addGroup(self, group_name, dictToAdd, canReplaceKey=False):
-        if canReplaceKey or group_name not in self.groups.keys():
-            if group_name in self.groups.keys():
-                logger.warning(f"Replacing {group_name} in groups")
-            self.groups[group_name] = deepcopy(dictToAdd)
-
+    def addGroup(self, name, **kwargs):
+        group = Datagroup(name, **kwargs)
+        self.groups[name] = group
+        
     def deleteGroups(self, names):
         for n in names:
             self.deleteGroup(n)
@@ -75,58 +75,7 @@ class Datagroups(object):
             logger.warning(f"Try to delete group '{name}' but did not find this group.")
 
     def copyGroup(self, group_name, new_name, member_filter=None):
-        self.groups[new_name] = deepcopy(self.groups[group_name])
-        if member_filter:
-            # Invert the member filter and exclude those members
-            self.deleteGroupMembers(new_name, [m for m in filter(lambda x,f=member_filter: not f(x), self.groups[new_name]["members"])])
-
-    def addGroupMembers(self, group_name, members, member_operations=None):
-        if callable(member_operations) or member_operations is None:
-            for m in members:
-                self.addGroupMember(group_name, m, member_operations)
-        elif len(member_operations) == len(members):
-            for m, o in zip(members, member_operations):
-                self.addGroupMember(group_name, m, o)
-        else:
-            raise RuntimeError("'member_operations' has to be a string or a list with the same length as 'members'!")            
-
-    def addGroupMember(self, group_name, member, member_operation=None):
-        # adds a process to the existing members of a given group
-        if group_name not in self.groups.keys():
-            logger.warning(f"The group {group_name} is not defined in the datagroups object! Do nothing here.")
-            return
-
-        if self.datasets and member.name not in [d for d in self.datasets]:
-            logger.warning(f"The member {member.name} can not be found in the current dataset!")
-        
-        # add member operation
-        if "memberOp" not in self.groups[group_name]:
-            self.groups[group_name]["memberOp"] = [None]*len(self.groups[group_name]["members"])
-        
-        self.groups[group_name]["memberOp"].append(deepcopy(member_operation))
-        self.groups[group_name]["members"].append(member)
-
-    def deleteGroupMembers(self, group_name, members):
-        for m in members:
-            self.deleteGroupMember(group_name, m)
-        return
-
-    def deleteGroupMember(self, group_name, member):
-        # deletes a process from the list of members of a given group
-        if group_name not in self.groups.keys():
-            logger.warning(f"The group {group_name} is not defined in the datagroups object! Do nothing here.")
-            return
-
-        if member not in self.groups[group_name]["members"]:
-            logger.warning(f"The member {member.name} can not be found in the group {group_name}! Do nothing here.")
-            return
-
-        # sort out members and corresponding member operations
-        mask = [m != member for m in self.groups[group_name]["members"]]
-        if "memberOp" in self.groups[group_name]:
-            self.groups[group_name]["memberOp"] = [v for (v, i) in zip(self.groups[group_name]["memberOp"], mask) if i]
-
-        self.groups[group_name]["members"] = [m for m in self.groups[group_name]["members"] if m != member]
+        self.groups[new_name] = self.groups[group_name].copy(new_name, member_filter)
 
     def selectGroups(self, selections):
         new_groupnames = []
@@ -137,43 +86,47 @@ class Datagroups(object):
         return list(set(new_groupnames))
 
     def filterGroups(self, filters):
-        if filters:
-            if isinstance(filters, str):
-                filters = [filters]
+        if filters is None:
+            return
 
-            if isinstance(filters, list):
-                new_groupnames = self.selectGroups(filters)
-            else:
-                new_groupnames = list(filter(filters, self.groups.keys()))
+        if isinstance(filters, str):
+            filters = [filters]
 
-            diff = list(set(new_groupnames) - set(self.groups.keys()))
-            if diff:
-                logger.debug(f"Filtered out following groups: {diff}")
+        if isinstance(filters, list):
+            new_groupnames = self.selectGroups(filters)
+        else:
+            new_groupnames = list(filter(filters, self.groups.keys()))
 
-            self.groups = {key: self.groups[key] for key in new_groupnames}
+        diff = list(set(new_groupnames) - set(self.groups.keys()))
+        if diff:
+            logger.debug(f"Filtered out following groups: {diff}")
+
+        self.groups = {key: self.groups[key] for key in new_groupnames}
 
         if len(self.groups) == 0:
-            logger.warning("Filtered groups but didn't find any match. Continue without any group.")
+            logger.warning(f"Filtered groups using '{filters}' but didn't find any match. Continue without any group.")
 
     def excludeGroups(self, excludes):
-        if excludes:
-            if isinstance(excludes, str):
-                excludes = [excludes]
+        if excludes is None:
+            return
 
-            if isinstance(excludes, list):
-                # remove selected datasets
-                new_groupnames = list(filter(lambda x: x not in self.selectGroups(excludes), self.groups))
-            else:
-                new_groupnames = list(filter(excludes, self.groups.keys()))
+        if isinstance(excludes, str):
+            excludes = [excludes]
 
-            diff = list(set(new_groupnames) - set(self.groups.keys()))
-            if diff:
-                logger.debug(f"Filtered out following groups: {diff}")
+        if isinstance(excludes, list):
+            # remove selected datasets
+            new_groupnames = list(filter(lambda x: x not in self.selectGroups(excludes), self.groups))
+        else:
+            new_groupnames = list(filter(excludes, self.groups.keys()))
 
-            self.groups = {key: self.groups[key] for key in new_groupnames}
+        diff = list(set(new_groupnames) - set(self.groups.keys()))
+        if diff:
+            logger.debug(f"Filtered out following groups: {diff}")
+
+        self.groups = {key: self.groups[key] for key in new_groupnames}
         
         if len(self.groups) == 0:
-            logger.warning("Excluded all groups. Continue without any group.")
+            logger.warning(f"Excluded all groups using '{excludes}'. Continue without any group.")
 
     def getSafeListFromDataset(self, procs):
         # return list of valid samples which belongs to the dataset or where not excluded elsewhere
@@ -227,12 +180,14 @@ class Datagroups(object):
         foundExact = False
         for procName in procsToRead:
             logger.debug(f"Reading group {procName}")
-            group = self.groups[procName] if procName in self.groups else {}
-            group[label] = None
+            if procName not in self.groups.keys():
+                raise RuntimeError(f"Group {procName} not known. Defined groups are {list(self.groups.keys())}.")
+            group = self.groups[procName]
+            group.hists[label] = None
 
-            for i, member in enumerate(group["members"]):
+            for i, member in enumerate(group.members):
                 logger.debug(f"Looking at group member {member.name}")
-                scale = group["scale"] if "scale" in group else None
+                scale = group.scale
                 read_syst = syst
                 if member.name in forceToNominal:
                     read_syst = ""
@@ -257,10 +212,10 @@ class Datagroups(object):
                 if self.globalAction:
                     h = self.globalAction(h)
                 
-                if "memberOp" in group.keys():
-                    if group["memberOp"][i] is not None:
+                if group.memberOp:
+                    if group.memberOp[i] is not None:
                         logger.debug(f"Apply operation to member {i}: {member.name}")
-                        h = group["memberOp"][i](h)
+                        h = group.memberOp[i](h)
                     else:
                         logger.debug(f"No operation for member {i}: {member.name}")
 
@@ -271,17 +226,17 @@ class Datagroups(object):
                     if projections != h.axes.name:
                         h = h.project(*projections)
 
-                group[label] = h if not group[label] else hh.addHists(h, group[label])
+                group.hists[label] = hh.addHists(h, group.hists[label]) if group.hists[label] else h
 
             # Can use to apply common rebinning or selection on top of the usual one
-            if "rebinOp" in group and group["rebinOp"]:
-                group[label] = group["rebinOp"](group[label])
+            if group.rebinOp:
+                group.hists[label] = group.rebinOp(group.hists[label])
 
-            if not applySelection and "selectOp" in group and group["selectOp"]:
-                logger.warning(f"Selection requested for process {procName} but applySelection=False, thus it will be ignored")
-            if applySelection and group[label] and "selectOp" in group and group["selectOp"]:
-                selectOpArgs = group["selectOpArgs"] if "selectOpArgs" in group else {}
-                group[label] = group["selectOp"](group[label], **selectOpArgs)
+            if group.selectOp:
+                if not applySelection:
+                    logger.warning(f"Selection requested for process {procName} but applySelection=False, thus it will be ignored")
+                elif label in group.hists.keys():
+                    group.hists[label] = group.selectOp(group.hists[label], **group.selectOpArgs)
         # Avoid situation where the nominal is read for all processes for this syst
         if not foundExact:
             raise ValueError(f"Did not find systematic {syst} for any processes!")
@@ -303,7 +258,7 @@ class Datagroups(object):
 
         for procName in procsToRead:
             group = self.groups[procName] if procName in self.groups else {}
-            group[label] = None
+            group.hists[label] = None
             if type(channel) == str: channel = channel.split(",")
             narf_hist = None
             for chn in channel:
@@ -319,7 +274,7 @@ class Datagroups(object):
             if self.globalAction:
                 narf_hist = self.globalAction(narf_hist)
 
-            group[label] = narf_hist
+            group.hists[label] = narf_hist
 
     def loadHistsForDatagroups(
         self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="",
@@ -327,7 +282,7 @@ class Datagroups(object):
         preOpMap={}, preOpArgs={}, scaleToNewLumi=-1, forceToNominal=[]
     ):
         logger.debug("Calling loadHistsForDatagroups()")
-        logger.debug(f"the basename and syst is: {baseName}, {syst}")
+        logger.debug(f"The basename and syst is: {baseName}, {syst}")
         logger.debug(f"The procsToRead and excludedProcs are: {procsToRead}, {excluded_procs}")
         if self.rtfile and self.combine:
             self.setHistsCombine(baseName, syst, channel, procsToRead, excluded_procs, label)
@@ -363,7 +318,7 @@ class Datagroups(object):
             to_expand = self.groups.keys()
         for group_name in to_expand:
             if group_name not in exclude_group:
-                for member in self.groups[group_name]["members"]:
+                for member in self.groups[group_name].members:
                     procs.append(member.name)
         return procs
 
@@ -414,14 +369,6 @@ class Datagroups(object):
         histname = refname if not relabel else relabel
         self.groups[rename][histname] = hh.sumHists(tosum)
 
-    def copyWithAction(self, action, name, refproc, refname, label, color):
-        self.groups[name] = dict(
-            label=label,
-            color=color,
-            members=[],
-        )
-        self.groups[name][refname] = action(self.groups[refproc][refname])
-
     def setSelectOp(self, op, processes=None): 
         if processes == None:
             procs = self.groups
@@ -431,7 +378,7 @@ class Datagroups(object):
         for proc in procs:
             if proc not in self.groups.keys():
                 raise ValueError(f"In setSelectOp(): process {proc} not found")
-            self.groups[proc]["selectOp"] = op
+            self.groups[proc].selectOp = op
 
     def setGenAxes(self, gen_axes):
         if isinstance(gen_axes, str):
@@ -443,7 +390,7 @@ class Datagroups(object):
         if group_name not in self.groups.keys():
             raise RuntimeError(f"Base group {group_name} not found in groups {self.groups.keys()}!")
 
-        nominal_hist = self.results[self.groups[group_name]["members"][0].name]["output"]["xnorm"].get()
+        nominal_hist = self.results[self.groups[group_name].members[0].name]["output"]["xnorm"].get()
 
         gen_bins = []
         for gen_axis in self.gen_axes:
@@ -453,28 +400,27 @@ class Datagroups(object):
             gen_bin_edges = nominal_hist.axes[gen_axis].edges
             gen_bins.append(range(len(gen_bin_edges)-1))
 
-        base_group = self.groups[group_name]
-        base_members = base_group["members"][:]
+        base_members = self.groups[group_name].members[:]
 
         for indices in itertools.product(*gen_bins):
-            proc_genbin = deepcopy(base_group)
-            memberOp = lambda x, indices=indices, genvars=self.gen_axes: x[{var : i for var, i in zip(self.gen_axes, indices)}]
-            proc_genbin["memberOp"] = [memberOp for m in base_members]
 
             proc_name = group_name
             for idx, var in zip(indices, self.gen_axes):
                 proc_name += f"_{var}{idx}"
 
+            self.copyGroup(group_name, proc_name)
+
+            memberOp = lambda x, indices=indices, genvars=self.gen_axes: x[{var : i for var, i in zip(self.gen_axes, indices)}]
+            self.groups[proc_name].memberOp = [memberOp for m in base_members]
+
             self.unconstrainedProcesses.append(proc_name)
-            self.addGroup(proc_name, proc_genbin)
 
         # add one out of acceptance group and treat as background
         ooa_name = group_name.split("_")[0]+"_bkg"
         if ooa_name not in self.groups.keys():
-            proc_genbin = deepcopy(base_group)
-            proc_genbin['memberOp'] = []
-            proc_genbin['members'] = []
-            self.addGroup(ooa_name, proc_genbin)
+            self.copyGroup(group_name, ooa_name)
+            self.groups[ooa_name].memberOp = []
+            self.groups[ooa_name].members = []
         
         # list of possible slices for each axis
         slices = []
@@ -492,7 +438,7 @@ class Datagroups(object):
             if not any([c in [hist.underflow, hist.overflow] for c in condition.values()]):
                 continue
             logger.debug(f"Add members with condition {condition}")
-            self.addGroupMembers(ooa_name, base_members, lambda x, c=condition: x[c])
+            self.groups[ooa_name].addMembers(base_members, lambda x, c=condition: x[c])
 
         # Remove inclusive signal
         self.deleteGroup(group_name)

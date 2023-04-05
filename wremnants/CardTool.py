@@ -23,7 +23,6 @@ class CardTool(object):
         self.cardName = cardName
         self.systematics = {}
         self.lnNSystematics = {}
-        self.procDict = {}
         self.predictedProcs = []
         self.fakeEstimate = None
         self.channels = ["plus", "minus"]
@@ -140,10 +139,6 @@ class CardTool(object):
         self.unconstrainedProcesses = datagroups.unconstrainedProcesses
         if self.nominalName:
             self.datagroups.setNominalName(self.nominalName)
-        # if processes are not set yet, do it now to skip one step
-        # FIXME: should it allow one to reset the procDict by passing a flag, e.g. in case one loads a new datagroups?
-        if resetGroups or not self.procDict:
-            self.setProcesses(self.datagroups.getNames())
         
     def setPseudodataDatagroups(self, datagroups):
         self.pseudodata_datagroups = datagroups 
@@ -164,7 +159,7 @@ class CardTool(object):
     def predictedProcesses(self):
         if self.predictedProcs:
             return self.predictedProcs
-        return list(filter(lambda x: x != self.dataName, self.procDict.keys()))
+        return list(filter(lambda x: x != self.dataName, self.datagroups.groups.keys()))
 
     def setHistName(self, histName):
         self.histName = histName
@@ -178,9 +173,9 @@ class CardTool(object):
     # then self.isMC negates this one and thus will only include pure MC processes
     def isData(self, procName, onlyData=False):
         if onlyData:
-            return all([x.is_data for x in self.datagroups.groups[procName]["members"]])
+            return all([x.is_data for x in self.datagroups.groups[procName].members])
         else:
-            return any([x.is_data for x in self.datagroups.groups[procName]["members"]])
+            return any([x.is_data for x in self.datagroups.groups[procName].members])
 
     def isMC(self, procName):
         return not self.isData(procName)
@@ -188,14 +183,11 @@ class CardTool(object):
     def addFakeEstimate(self, estimate):
         self.fakeEstimate = estimate
 
-    def setProcesses(self, processes):
-        self.procDict = {proc: {} for proc in processes}
-
     def getProcesses(self):
-        return list(self.procDict.keys())
+        return list(self.datagroups.groups.keys())
             
     def filteredProcesses(self, filterExpr):
-        return list(filter(filterExpr, self.procDict.keys()))
+        return list(filter(filterExpr, self.datagroups.groups.keys()))
 
     def allMCProcesses(self):
         return self.filteredProcesses(lambda x: self.isMC(x))
@@ -435,7 +427,7 @@ class CardTool(object):
                 h =systInfo["action"](h, **systInfo["actionArgs"])
                 self.outfile.cd() # needed to restore the current directory in case the action opens a new root file
             if systInfo["mirror"]:
-                hnom = self.procDict[proc][self.nominalName]
+                hnom = self.datagroups.groups[proc].hists[self.nominalName]
                 h = hh.extendHistByMirror(h, hnom)
             if systInfo["decorrCharge"]:
                 decorrelateByCharge = True
@@ -447,7 +439,7 @@ class CardTool(object):
         var_map = self.systHists(h, syst) 
         # TODO: Make this optional
         if syst != self.nominalName:
-            self.checkSysts(self.procDict[proc][self.nominalName], var_map, proc, silentCheckOtherCharge=systInfo["silentCheckOtherCharge"])
+            self.checkSysts(self.datagroups.groups[proc].hists[self.nominalName], var_map, proc, silentCheckOtherCharge=systInfo["silentCheckOtherCharge"])
         setZeroStatUnc = False
         if proc in self.noStatUncProcesses:
             logger.info(f"Zeroing statistical uncertainty for process {proc}")
@@ -464,8 +456,7 @@ class CardTool(object):
             procsToRead=processes,
             scaleToNewLumi=self.lumiScale)
 
-        procDict = datagroups.groups
-        hists = [procDict[proc][self.pseudoData] for proc in processes]
+        hists = [self.datagroups.groups[proc].hists[self.pseudoData] for proc in processes]
         hdata = hh.sumHists(hists)
         # Kind of hacky, but in case the alt hist has uncertainties
         for systAxName in ["systIdx", "tensor_axis_0", "vars"]:
@@ -475,7 +466,7 @@ class CardTool(object):
 
     def writeForProcesses(self, syst, processes, label):
         for process in processes:
-            hvar = self.procDict[process][label]
+            hvar = self.datagroups.groups[process].hists[label]
             if not hvar:
                 raise RuntimeError(f"Failed to load hist for process {process}, systematic {syst}")
             self.writeForProcess(hvar, process, syst)
@@ -496,14 +487,13 @@ class CardTool(object):
     def writeOutput(self, args=None):
         self.datagroups.loadHistsForDatagroups(
             baseName=self.nominalName, syst=self.nominalName,
-            procsToRead=self.procDict.keys(),
+            procsToRead=self.datagroups.groups.keys(),
             label=self.nominalName, 
             scaleToNewLumi=self.lumiScale)
-        self.procDict = self.datagroups.groups
-        self.writeForProcesses(self.nominalName, processes=self.procDict.keys(), label=self.nominalName)
+        self.writeForProcesses(self.nominalName, processes=self.datagroups.groups.keys(), label=self.nominalName)
         self.loadNominalCard()
         if self.pseudoData and not self.xnorm:
-            self.addPseudodata([x for x in self.procDict.keys() if x != "Data"])
+            self.addPseudodata([x for x in self.datagroups.groups.keys() if x != "Data"])
 
         self.writeLnNSystematics()
         for syst in self.systematics.keys():
