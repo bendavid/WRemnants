@@ -205,13 +205,6 @@ class Datagroups(object):
                         continue
                 logger.debug(f"Hist axes are {h.axes.name}")
 
-                if preOpMap and member.name in preOpMap:
-                    logger.debug(f"Applying preOp to {member.name} after loading")
-                    h = preOpMap[member.name](h, **preOpArgs)
-
-                if self.globalAction:
-                    h = self.globalAction(h)
-                
                 if group.memberOp:
                     if group.memberOp[i] is not None:
                         logger.debug(f"Apply operation to member {i}: {member.name}")
@@ -219,12 +212,18 @@ class Datagroups(object):
                     else:
                         logger.debug(f"No operation for member {i}: {member.name}")
 
-
                 if self.gen_axes:
                     # integrate over remaining gen axes 
                     projections = (a for a in h.axes.name if a not in self.gen_axes)
                     if projections != h.axes.name:
                         h = h.project(*projections)
+
+                if preOpMap and member.name in preOpMap:
+                    logger.debug(f"Applying preOp to {member.name} after loading")
+                    h = preOpMap[member.name](h, **preOpArgs)
+
+                if self.globalAction:
+                    h = self.globalAction(h)
 
                 group.hists[label] = hh.addHists(h, group.hists[label]) if group.hists[label] else h
 
@@ -350,15 +349,15 @@ class Datagroups(object):
 
         if not rename:
             rename = name
-        self.addGroup(rename, dict(
+        self.addGroup(rename,
             label=label,
             color=color,
             members=[],
-        ))
+        )
         tosum = []
         procs = procsToRead if procsToRead else self.groups.keys()
         for proc in filter(lambda x: x not in exclude+[rename], procs):
-            h = self.groups[proc][name]
+            h = self.groups[proc].hists[name]
             if not h:
                 raise ValueError(f"Failed to find hist for proc {proc}, histname {name}")
             if action:
@@ -367,7 +366,7 @@ class Datagroups(object):
                 logger.debug(f"After action sum {h.sum()}")
             tosum.append(h)
         histname = refname if not relabel else relabel
-        self.groups[rename][histname] = hh.sumHists(tosum)
+        self.groups[rename].hists[histname] = hh.sumHists(tosum)
 
     def setSelectOp(self, op, processes=None): 
         if processes == None:
