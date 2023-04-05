@@ -27,7 +27,6 @@ def recoilSystNames(baseName, entries):
     return systNames
 
 def main(args, xsec=False):
-    logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
     outfolder = f"CombineStudies/lowPU_{args.fitType}_{args.flavor}"
     if not os.path.isdir(outfolder):
@@ -41,29 +40,6 @@ def main(args, xsec=False):
     dataProc = "SingleMuon" if args.flavor == "mumu" else "SingleElectron"
     sigProc ="Zmumu" if args.flavor == "mumu" else "Zee"
 
-    histName = "reco_mT"
-    s = hist.tag.Slicer()
-    if args.fitType == "differential":
-
-        datagroups.setGenAxes("recoil_gen")
-        datagroups.defineSignalBinsUnfolding(sigProc)
-
-    elif args.fitType == "wmass": 
-        constrainedProcs.append(sigProc)
-        for proc in datagroups.groups.keys():
-            datagroups.groups[proc]['selectOp'] = \
-            lambda x: x[{ax : s[::hist.sum] for ax in ["recoil_gen", "mll",] if ax in x.axes.name}]
-    elif args.fitType == "wlike":
-        histName = "mT_corr_rec"
-        constrainedProcs.append(sigProc) # need sum over gen bins
-    elif args.fitType == "inclusive":
-        datagroups.unconstrainedProcesses.append(sigProc)
-
-        for proc in datagroups.groups.keys():
-            datagroups.groups[proc]['selectOp'] = \
-            lambda x, f=datagroups.groups[proc]['selectOp'] : f(x)[{ax : s[::hist.sum] for ax in ["recoil_gen", "recoil_reco",] if ax in x.axes.name}]
-
-    
     suffix = ""
     if args.doStatOnly:
         suffix = "_stat"
@@ -73,11 +49,30 @@ def main(args, xsec=False):
         histName = "xnorm"
         
         # fake data, as sum of all  Zmumu procs over recoil_gen
-        proc_base = dict(datagroups.groups["Zmumu" if args.flavor == "mumu" else "Zee"])
+        datagroups.copyGroup("Zmumu" if args.flavor == "mumu" else "Zee", "fake_data")
         if args.fitType == "differential":
-            proc_base['selectOp'] = lambda x, i=i: x[{"recoil_gen" : s[::hist.sum]}]
-        dataProc = "fake_data"
-        datagroups.addGroup(dataProc, proc_base)
+            datagroups.groups["fake_data"].selectOp = lambda x: x[{"recoil_gen" : hist.tag.Slicer()[::hist.sum]}]
+
+    histName = "reco_mT"
+    if args.fitType == "differential":
+
+        datagroups.setGenAxes("recoil_gen")
+        datagroups.defineSignalBinsUnfolding(sigProc)
+
+    elif args.fitType == "wmass": 
+        constrainedProcs.append(sigProc)
+        for proc in datagroups.groups.keys():
+            datagroups.groups[proc].selectOp = \
+            lambda x: x[{ax : hist.tag.Slicer()[::hist.sum] for ax in ["recoil_gen", "mll",] if ax in x.axes.name}]
+    elif args.fitType == "wlike":
+        histName = "mT_corr_rec"
+        constrainedProcs.append(sigProc) # need sum over gen bins
+    elif args.fitType == "inclusive":
+        datagroups.unconstrainedProcesses.append(sigProc)
+
+        for proc in datagroups.groups.keys():
+            datagroups.groups[proc].selectOp = \
+            lambda x, f=datagroups.groups[proc].selectOp : f(x)[{ax : hist.tag.Slicer()[::hist.sum] for ax in ["recoil_gen", "recoil_reco",] if ax in x.axes.name}]
     
     # hack: remove non-used procs/groups, as there can be more procs/groups defined than defined above
     # need to remove as cardTool takes all procs in the datagroups
@@ -92,7 +87,6 @@ def main(args, xsec=False):
     cardTool = CardTool.CardTool(f"{outfolder}/lowPU_{args.flavor}_{{chan}}_{args.met}_{args.fitType}{suffix}.txt")
     cardTool.setNominalTemplate(f"{templateDir}/main.txt")
     cardTool.setOutfile(os.path.abspath(f"{outfolder}/lowPU_{args.flavor}_{args.met}_{args.fitType}{suffix}.root"))
-    cardTool.setProcesses(datagroups.getNames())
     cardTool.setDatagroups(datagroups)
     cardTool.setHistName(histName) 
     cardTool.setNominalName(histName)
@@ -169,6 +163,8 @@ def main(args, xsec=False):
 if __name__ == "__main__":
     parser = make_parser()
     args = parser.parse_args()
+
+    logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
     main(args)
     if args.fitType == "differential":

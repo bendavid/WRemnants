@@ -36,9 +36,7 @@ def make_parser(parser=None):
     
     return parser
 
-def main(args,xnorm=False):
-
-    logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
+def main(args,xnorm=False):   
 
     # NOTE: args.filterProcGroups and args.excludeProcGroups should in principle not be used together
     #       (because filtering is equivalent to exclude something), however the exclusion is also meant to skip
@@ -385,6 +383,9 @@ def main(args,xnorm=False):
 if __name__ == "__main__":
     parser = make_parser()
     args = parser.parse_args()
+
+    logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
+
     main(args)
     if args.unfold:
         main(args,xnorm=True)
