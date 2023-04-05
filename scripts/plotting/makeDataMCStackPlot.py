@@ -53,7 +53,7 @@ parser.add_argument("--rebin", type=int, default=1, help="Rebin (for now must be
 parser.add_argument("--ylim", type=float, nargs=2, help="Min and max values for y axis (if not specified, range set automatically)")
 parser.add_argument("--yscale", type=float, help="Scale the upper y axis by this factor (useful when auto scaling cuts off legend)")
 parser.add_argument("--xlim", type=float, nargs=2, help="min and max for x axis")
-parser.add_argument("-a", "--name_append", type=str, help="Name to append to file name")
+parser.add_argument("-a", "--name_append", default="", type=str, help="Name to append to file name")
 parser.add_argument("--debug", action='store_true', help="Print debug output")
 parser.add_argument("--procFilters", type=str, nargs="*", help="Filter to plot (default no filter, only specify if you want a subset")
 parser.add_argument("--noData", action='store_true', help="Don't plot data")
@@ -202,7 +202,11 @@ for h in args.hists:
     fitresultstring=""
     if args.fitresult:
         fitresultstring = "_prefit" if args.prefit else "_postfit"
-    outfile = f"{h.replace('-','_')}_{args.baseName}_{args.channel}"+ fitresultstring + (f"_{args.name_append}" if args.name_append else "")
+    outnames = [f"{h.replace('-','_')}", args.baseName, args.channel]
+    for n in filter(lambda x: x, ([args.varName[0], args.selectEntries[0]] if "varName" in args else [])+[fitresultstring, args.name_append]):
+        outnames.append(n)
+    print(outnames)
+    outfile = "_".join(outnames)
     plot_tools.save_pdf_and_png(outdir, outfile)
     stack_yields = groups.make_yields_df(args.baseName, prednames, action)
     unstacked_yields = groups.make_yields_df(args.baseName, unstack, action)

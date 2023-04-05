@@ -76,6 +76,22 @@ def syst_transform_map(base_hist, hist_name):
                 ["transition_points0.2_0.65_1.1", "transition_points0.4_0.55_0.7", 
                 "transition_points0.2_0.45_0.7", "transition_points0.4_0.75_1.1", ],
                  no_flow=["ptVgen"], do_min=True)},
+       "resumTNPAllUp" : {
+           "action" : lambda h: h if "vars" not in h.axes.name else theory_tools.hessianPdfUnc(h[{"vars" :
+                 [x for x in h.axes["vars"] if any(re.match(y, x) for y in ["pdf0", "^gamma_", "^q_", "b_", "^s+", "^s-", "^h_"])]}], 
+                "vars", uncType="asymHessian")[0]},
+       "resumTNPAllDown" : {
+           "action" : lambda h: h if "vars" not in h.axes.name else theory_tools.hessianPdfUnc(h[{"vars" :
+                 [x for x in h.axes["vars"] if any(re.match(y, x) for y in ["pdf0", "^gamma_", "^q_", "b_", "^s+", "^s-", "^h_"])]}], 
+                "vars", uncType="asymHessian")[1]},
+       "resumScaleAllUp" : {
+           "action" : lambda h: h if "vars" not in h.axes.name else hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars",
+                 [x for x in h.axes["vars"] if any(re.match(y, x) for y in ["pdf0", "^nuB.*", "nuS.*", "^muB.*", "^muS.*",])],
+                    do_min=False)},
+       "resumScaleAllDown" : {
+           "action" : lambda h: h if "vars" not in h.axes.name else hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars",
+                 [x for x in h.axes["vars"] if any(re.match(y, x) for y in ["pdf0", "^nuB.*", "nuS.*", "^muB.*", "^muS.*",])],
+                    do_min=True)},
        "resumNPUp" : {
             "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", 
                  [x for x in h.axes["vars"] if "Omega" in x or "cnu" in x or "omega" in x],

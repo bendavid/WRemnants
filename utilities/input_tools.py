@@ -128,11 +128,11 @@ def read_dyturbo_pdf_hist(base_name, pdf_members, axes, charge=None):
     return pdf_hist
 
 def read_dyturbo_hist(filenames, path="", axes=("y", "pt"), charge=None):
-    isfile = list(filter(lambda x: os.path.isfile(x), 
-        [os.path.expanduser(os.path.join(path, f)) for f in filenames]))
+    filenames = [os.path.expanduser(os.path.join(path, f)) for f in filenames]
+    isfile = list(filter(lambda x: os.path.isfile(x), filenames))
 
     if not isfile:
-        raise ValueError("Must pass in a valid file")
+        raise ValueError(f"Did not find any valid files in {filenames}")
 
     hists = [read_dyturbo_file(f, axes, charge) for f in isfile]
     if len(hists) > 1:
