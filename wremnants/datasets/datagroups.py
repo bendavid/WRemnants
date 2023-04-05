@@ -477,7 +477,15 @@ class Datagroups(object):
             self.addGroup(ooa_name, proc_genbin)
         
         # list of possible slices for each axis
-        slices = [({var : hist.underflow}, {var : hist.overflow}, {var : hist.tag.Slicer()[0:hist.overflow:hist.sum] }) for var in self.gen_axes]
+        slices = []
+        for var in self.gen_axes:
+            subslice = [{var : hist.tag.Slicer()[0:hist.overflow:hist.sum]}] 
+            if nominal_hist.axes[var].traits.__dict__["underflow"]:
+                subslice.append({var : hist.underflow})
+            if nominal_hist.axes[var].traits.__dict__["overflow"]:
+                subslice.append({var : hist.overflow})
+            slices.append(subslice)
+
         # pick one slice for each axis from the list of possible slices
         for condition in [functools.reduce(lambda x, y: {**x, **y}, tup) for tup in itertools.product(*slices)]:
             # make sure that at least one axis takes the underflow/overflow, otherwise it would not be out of acceptance
