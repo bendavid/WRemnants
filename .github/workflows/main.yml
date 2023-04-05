@@ -5,21 +5,53 @@ name: CI
 # Controls when the workflow will run
 on:
   # Triggers the workflow on push or pull request events but only for the master branch
-  push:
-    branches: [ main ]
   pull_request:
     branches: [ main ]
-
+  schedule:
+    - cron: '0 3 * * 2,4,6' # Run on Wednesday and Saturday morning at 3h00 UTC
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
+env: 
+  MAX_FILES: 10
+  LUMI_SCALE: 100
+  NTHREADS: 16
+  WEB_DIR: /home/c/cmsmwbot/www/WMassAnalysis/PRValidation
+
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "wmass"
+  # Can't get these permissions to work for now
+  #  comment_on_pr:
+  #    runs-on: [self-hosted, linux, x64]
+  #    permissions: write-all
+  #    steps:
+  #      - name: Checkout
+  #        uses: actions/checkout@v3
+  #
+  #      - name: setup plot dir
+  #        run: echo PLOT_DIR=$(date +%Y_%m_%d)/PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') >> $GITHUB_ENV
+  #      
+  #      - name: form message
+  #        run: echo "MESSAGE=\"Validation plots from the CI can be found [here](https://cmsmwbot.web.cern.ch/WMassAnalysis/PRValidation/${{env.PLOT_DIR}})\"" >> $GITHUB_ENV
+  #      
+  #      - name: Comment PR
+  #        uses: actions/github-script@v5
+  #        with:
+  #          github-token: ${{secrets.GITHUB_TOKEN}}
+  #          script: |
+  #            github.rest.issues.createComment({
+  #              issue_number: context.issue.number,
+  #              owner: context.repo.owner,
+  #              repo: context.repo.repo,
+  #              body: ${{env.MESSAGE}}
+  #            })
+
   w-analysis:
     # The type of runner that the job will run on
     runs-on: [self-hosted, linux, x64]
 
+    env:
+      OUTFILE: "mw_with_mu_eta_pt.hdf5"
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -27,23 +59,67 @@ jobs:
         with:
           submodules: 'true'
 
+      - name: wmass setup folder
+        run: echo PLOT_DIR=$(date +%Y_%m_%d)/PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') >> $GITHUB_ENV
+
+      - name: wmass setup folder nightly
+        if: github.event.schedule == '0 3 * * 2,4,6'
+        run: echo PLOT_DIR=$(date +%Y_%m_%d)/ScheduledBuild_$(git rev-parse --short "$GITHUB_SHA") >> $GITHUB_ENV
+
+      - name: wmass setup events
+        if: github.event.schedule == '0 3 * * 2,4,6'
+        run: echo "NTHREADS=64" >> $GITHUB_ENV
+
+      - name: wmass setup events
+        if: github.event.schedule == '0 3 * * 2,4,6'
+        run: echo "MAX_FILES=-1" >> $GITHUB_ENV
+
+      - name: wmass setup lumi scale
+        if: github.event.schedule == '0 3 * * 2,4,6'
+        run: echo "LUMI_SCALE=1" >> $GITHUB_ENV
+
+      - name: wmass setup lumi scale
+        if: github.event.schedule != '0 3 * * 2,4,6'
+        run: echo "LUMI_SCALE=125" >> $GITHUB_ENV
+
+      - name: wmass setup lumi scale
+        if: github.event.schedule != '0 3 * * 2,4,6'
+        run: echo "MAX_FILES=100" >> $GITHUB_ENV
+
       - name: wmass analysis
-        run: SINGULARITY_BIND="/scratch,/eos,/cvmfs" singularity run /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/bendavid/cmswmassdocker/wmassdevrolling\:latest scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_with_mu_eta_pt.py -j 8 --maxFiles 2 --verbose 4
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_with_mu_eta_pt.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4 --forceDefaultName
+
+      - name: wmass plotting
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --hists pt eta pt-eta -p $WEB_DIR -f $PLOT_DIR -a W $OUTFILE
+
+      - name: wmass plot mtAndMet
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --rebin 2 --yscale 1.5 --baseName mtAndMET --hists mt met -p $WEB_DIR -f $PLOT_DIR $OUTFILE
+
+      - name: wmass plot massShift
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py -a massVariation --yscale 1.2 --hist pt --baseName nominal -r 0.98 1.02 -p $WEB_DIR -f $PLOT_DIR $OUTFILE variation --varName massWeight --selectEntries massShift100MeVUp massShift100MeVDown --varLabel '$m_{W}\pm100\,MeV$' ' ' --selectAxis massShift --color grey grey
 
       - name: lowpu w analysis
-        run: SINGULARITY_BIND="/scratch,/eos,/cvmfs" singularity run /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/bendavid/cmswmassdocker/wmassdevrolling\:latest scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_lowPU.py -j 8 --maxFiles 2 --verbose 4
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_lowPU.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4
 
-      - name: wmass combine
-        run: SINGULARITY_BIND="/scratch,/eos,/cvmfs" singularity run /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/bendavid/cmswmassdocker/wmassdevrolling\:latest scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i mw_with_mu_eta_pt_maxFiles2.hdf5 --verbose 4
+      - name: wmass combine setup
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $OUTFILE --verbose 4 --lumiScale $LUMI_SCALE
+
+      - name: wmass combine fit 
+        run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ WMass_eta_pt/WMass_plus.txt WMass_eta_pt/WMass_minus.txt 
+
+      - name: wmass combine impacts
+        run: scripts/ci/run_with_singularity.sh scripts/ci/show_impacts.sh WMass_eta_pt/fitresults_123456789.root $WEB_DIR/$PLOT_DIR/impactsW.html
 
         #TODO: test low pu combine and combined fit
           #- name: lowpu w combine
-          #  run: SINGULARITY_BIND="/scratch,/eos,/cvmfs" singularity run /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/bendavid/cmswmassdocker/wmassdevrolling\:latest scripts/ci/setup_and_run_python.sh scripts/histmakers/setupLowPileupCombine.py -i lowPU_mu_maxFiles2.hdf5 --verbose 4
+          #  run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/setupLowPileupCombine.py -i lowPU_mu_maxFiles2.hdf5 --verbose 4
 
   wlike:
     # The type of runner that the job will run on
     runs-on: [self-hosted, linux, x64]
 
+    env:
+      OUTFILE: "mz_wlike_with_mu_eta_pt.hdf5"
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -51,22 +127,56 @@ jobs:
         with:
           submodules: 'true'
 
-      - name: wlike analysis
-        run: SINGULARITY_BIND="/scratch,/eos,/cvmfs" singularity run /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/bendavid/cmswmassdocker/wmassdevrolling\:latest scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_wlike_with_mu_eta_pt.py -j 8 --maxFiles 2 --verbose 4
+      - name: wlike setup folder
+        run: echo PLOT_DIR=$(date +%Y_%m_%d)/PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') >> $GITHUB_ENV
 
-      - name: wlike combine
-        run: SINGULARITY_BIND="/scratch,/eos,/cvmfs" singularity run /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/bendavid/cmswmassdocker/wmassdevrolling\:latest scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i mz_wlike_with_mu_eta_pt_maxFiles2.hdf5 --verbose 4
+      - name: wlike setup folder nightly
+        if: github.event.schedule == '0 3 * * 2,4,6'
+        run: echo PLOT_DIR=$(date +%Y_%m_%d)/ScheduledBuild_$(git rev-parse --short "$GITHUB_SHA") >> $GITHUB_ENV
+
+      - name: wlike setup events
+        if: github.event.schedule == '0 3 * * 2,4,6'
+        run: echo "MAX_FILES=-1" >> $GITHUB_ENV
+
+      - name: wlike setup lumi scale
+        if: github.event.schedule == '0 3 * * 2,4,6'
+        run: echo "LUMI_SCALE=1" >> $GITHUB_ENV
+
+      - name: wlike setup threads
+        if: github.event.schedule == '0 3 * * 2,4,6'
+        run: echo "NTHREADS=64" >> $GITHUB_ENV
+
+      - name: wlike analysis
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_wlike_with_mu_eta_pt.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4 --theoryCorr scetlib_dyturbo --forceDefaultName
+
+      - name: wlike plotting
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal --nominalRef nominal --hists pt eta pt-eta -p $WEB_DIR -f $PLOT_DIR -a wlike $OUTFILE variation --varName nominal_uncorr --varLabel MiNNLO --colors red
+
+      - name: wlike combine setup
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $OUTFILE --verbose 4 --lumiScale $LUMI_SCALE
+
+      - name: wlike combine fit 
+        run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ ZMassWLike_eta_pt/ZMassWLike_plus.txt ZMassWLike_eta_pt/ZMassWLike_minus.txt 
+
+      - name: wlike combine impacts
+        run: scripts/ci/run_with_singularity.sh scripts/ci/show_impacts.sh ZMassWLike_eta_pt/fitresults_123456789.root $WEB_DIR/$PLOT_DIR/impactsWlike.html
 
       - name: lowpu z analysis
-        run: SINGULARITY_BIND="/scratch,/eos,/cvmfs" singularity run /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/bendavid/cmswmassdocker/wmassdevrolling\:latest scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_lowPU.py -j 8 --maxFiles 2 --verbose 4
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_lowPU.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4 --forceDefaultName
 
-      - name: lowpu z combine
-        run: SINGULARITY_BIND="/scratch,/eos,/cvmfs" singularity run /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/bendavid/cmswmassdocker/wmassdevrolling\:latest scripts/ci/setup_and_run_python.sh scripts/combine/setupLowPU_Z.py -i lowPU_mumu_maxFiles2.hdf5 --verbose 4
+      - name: lowpu z combine setup
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupLowPU_Z.py -i lowPU_mumu.hdf5 --verbose 4 
+
+          # FIXME: Remove from CI for now, to be added back in Jan's next PR
+          #- name: lowpu z combine fit
+          #  run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ CombineStudies/lowPU_differential/lowPU_Zmumu_RawPFMET_differential.txt
 
   dilepton:
     # The type of runner that the job will run on
     runs-on: [self-hosted, linux, x64]
 
+    env:
+      OUTFILE: "mz_dilepton.hdf5"
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -74,11 +184,38 @@ jobs:
         with:
           submodules: 'true'
 
-      - name: dilepton analysis
-        run: SINGULARITY_BIND="/scratch,/eos,/cvmfs" singularity run /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/bendavid/cmswmassdocker/wmassdevrolling\:latest scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_dilepton.py -j 8 --maxFiles 2 --verbose 4
+      - name: dilepton setup
+        run: echo PLOT_DIR=$(date +%Y_%m_%d)/PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') >> $GITHUB_ENV
 
-      - name: dilepton combine mll fit
-        run: SINGULARITY_BIND="/scratch,/eos,/cvmfs" singularity run /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/bendavid/cmswmassdocker/wmassdevrolling\:latest scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i mz_dilepton_maxFiles2.hdf5 --fitvar mll
+      - name: dilepton setup folder nightly
+        if: github.event.schedule == '0 3 * * 2,4,6'
+        run: echo PLOT_DIR=$(date +%Y_%m_%d)/ScheduledBuild_$(git rev-parse --short "$GITHUB_SHA") >> $GITHUB_ENV
+
+      - name: dilepton setup threads
+        if: github.event.schedule == '0 3 * * 2,4,6'
+        run: echo "NTHREADS=64" >> $GITHUB_ENV
+
+      - name: dilepton setup events
+        if: github.event.schedule == '0 3 * * 2,4,6'
+        run: echo "MAX_FILES=-1" >> $GITHUB_ENV
+
+      - name: dilepton analysis
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_dilepton.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4  --theoryCorr scetlib_dyturbo --axes ptll --forceDefaultName
+
+      - name: dilepton plotting ptll
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal --nominalRef nominal --hists ptll -p $WEB_DIR -f $PLOT_DIR -a z $OUTFILE variation --varName nominal_uncorr --varLabel MiNNLO --colors red
+
+      - name: dilepton plotting mll
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal_mll --hists mll -p $WEB_DIR -f $PLOT_DIR -a z $OUTFILE
+
+      - name: dilepton plotting yll
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal_yll --nominalRef nominal_yll --hists yll -p $WEB_DIR -f $PLOT_DIR -a z $OUTFILE
+
+      - name: dilepton combine ptll setup
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $OUTFILE --fitvar ptll --constrainMass --lumiScale $LUMI_SCALE
+
+      - name: dilepton combine ptll fit
+        run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ ZMassDilepton_ptll/ZMassDilepton_plus.txt ZMassDilepton_minus.txt 
 
   gen:
     # The type of runner that the job will run on
@@ -92,5 +229,5 @@ jobs:
           submodules: 'true'
 
       - name: gen analysis
-        run: SINGULARITY_BIND="/scratch,/eos,/cvmfs" singularity run /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/bendavid/cmswmassdocker/wmassdevrolling\:latest scripts/ci/setup_and_run_python.sh scripts/histmakers/w_z_gen_dists.py -j 8 --maxFiles 10 --verbose 4
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/w_z_gen_dists.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4
 

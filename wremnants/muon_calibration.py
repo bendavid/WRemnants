@@ -5,7 +5,6 @@ import narf
 from utilities import rdf_tools
 from utilities import common, logging
 from utilities import boostHistHelpers as hh
-from . import muon_validation
 import uproot
 import numpy as np
 import warnings
@@ -14,8 +13,8 @@ from functools import reduce
 
 logger = logging.child_logger(__name__)
 
-ROOT.gInterpreter.Declare('#include "muon_calibration.h"')
-ROOT.gInterpreter.Declare('#include "lowpu_utils.h"')
+narf.clingutils.Declare('#include "muon_calibration.h"')
+narf.clingutils.Declare('#include "lowpu_utils.h"')
 
 data_dir = f"{pathlib.Path(__file__).parent}/data/"
 
@@ -64,7 +63,7 @@ def make_jpsi_crctn_helpers(args, make_uncertainty_helper=False):
 
     if make_uncertainty_helper:
         mc_unc_helper = make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}", n_eta_bins = 24) if mc_corrfile else None
-        data_unc_helper = make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}", scale = 3.0) if data_corrfile else None
+        data_unc_helper = make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}", scale = 3.04) if data_corrfile else None
 
         return mc_helper, data_helper, mc_unc_helper, data_unc_helper
     else:
@@ -72,10 +71,10 @@ def make_jpsi_crctn_helpers(args, make_uncertainty_helper=False):
 
 def make_muon_bias_helpers(args):
     # apply a bias to MC to correct for the nonclosure with data in the muon momentum scale calibration
-    if args.bias_calibration is None: 
+    if args.biasCalibration is None: 
         return None
 
-    if args.bias_calibration in ["parameterized", "A", "M"]:
+    if args.biasCalibration in ["parameterized", "A", "M"]:
         if args.muonCorrMC == "idealMC_lbltruth":
             filename = "calibrationAlignmentZ_after_LBL_v721"
         else:
@@ -87,9 +86,9 @@ def make_muon_bias_helpers(args):
 
         factor_A = 1
         factor_M = 1
-        if args.bias_calibration == "A":
+        if args.biasCalibration == "A":
             factor_M = 0
-        elif args.bias_calibration == "M":
+        elif args.biasCalibration == "M":
             factor_A = 0
 
         # The bias correction follows the same parameterization as the J/Psi correction, but with e=0
@@ -107,7 +106,7 @@ def make_muon_bias_helpers(args):
             ROOT.std.move(hist_comb_cpp)
         )
 
-    elif args.bias_calibration == "binned":
+    elif args.biasCalibration == "binned":
         # identify bias correction file name
         if args.smearing and args.muonCorrMC == "trackfit_only_idealMC":
             filename = "closureZ_smeared_v721"
@@ -148,7 +147,7 @@ def make_muon_bias_helpers(args):
 
         helper = ROOT.wrem.BiasCalibrationHelper[type(h2d_cpp).__cpp_name__](ROOT.GetThreadPoolSize(), ROOT.std.move(h2d_cpp), ROOT.std.move(h2d_std_cpp))
     else:
-        raise NotImplementedError(f"Correction for --bias-calibration {args.bias_calibration} not available")
+        raise NotImplementedError(f"Correction for --bias-calibration {args.biasCalibration} not available")
 
     return helper
 
@@ -303,7 +302,7 @@ def define_corrected_muons(df, cvh_helper, jpsi_helper, args, dataset, smearing_
 
     # Bias corrections from nonclosure
     if not dataset.is_data and bias_helper:
-        if args.bias_calibration in ["parameterized", "A", "M"]:
+        if args.biasCalibration in ["parameterized", "A", "M"]:
             df = df.Define("Muon_biasedPtData", bias_helper, [muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta"), muon_var_name(muon, "charge")])
         else:
             df = df.Define("Muon_biasedPtData", bias_helper, ["rdfslot_", muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta")])
@@ -477,21 +476,24 @@ def transport_smearing_weights_to_reco(
     procs = ['WplusmunuPostVFP', 'WminusmunuPostVFP', 'ZmumuPostVFP'],
 ):
     for proc in procs:
+        if proc not in resultdict:
+            logger.warning(f"Proc {proc} not found in output. Skipping smearing weights")
+            continue
         proc_hist = resultdict[proc]['output']
         nominal_reco = proc_hist['nominal'].get()
 
         if 'nominal_gen_smeared' in proc_hist.keys():
             nominal_gen_smear = proc_hist['nominal_gen_smeared'].get()
         else:
-            warning.warn(f"Histogram 'nominal_gen_smeared' not found in {proc}")
-            warning.warn("smearing weights not transported to RECO kinematics")
+            logger.warning(f"Histogram 'nominal_gen_smeared' not found in {proc}")
+            logger.warning("smearing weights not transported to RECO kinematics")
             return
 
         if 'muonScaleSyst_responseWeights_gensmear' in proc_hist.keys():
             msv_sw_gen_smear = proc_hist['muonScaleSyst_responseWeights_gensmear'].get()
         else:
-            warning.warn(f"Histogram 'muonScaleSyst_responseWeights_gensmear' not found in {proc}")
-            warning.warn("smearing weights not transported to RECO kinematics")
+            logger.warning(f"Histogram 'muonScaleSyst_responseWeights_gensmear' not found in {proc}")
+            logger.warning("smearing weights not transported to RECO kinematics")
             return
 
         msv_sw_reco = hist.Hist(*msv_sw_gen_smear.axes, storage = msv_sw_gen_smear._storage_type())
@@ -515,23 +517,25 @@ def muon_scale_variation_from_manual_shift(
         manual_shift_hists = [proc_hists['nominal_muonScaleVariationDnTenthmil'].get(), proc_hists['nominal_muonScaleVariationUpTenthmil'].get()]
         proc_hists['muonScaleSyst_manualShift'] = hh.combineUpDownVarHists(*manual_shift_hists)
 
-def make_alt_reco_and_gen_hists(df, results, nominal_axes, matched_reco_sel = "goodMuons"):
-    nominal_cols_gen = [
-        f"{matched_reco_sel}_eta0_gen", f"{matched_reco_sel}_pt0_gen", f"{matched_reco_sel}_charge0_gen", 
-        "passIso", "passMT"
-    ]
-    nominal_cols_gen_smeared = [
-        f"{matched_reco_sel}_eta0_gen_smeared", f"{matched_reco_sel}_pt0_gen_smeared", f"{matched_reco_sel}_charge0_gen_smeared",
-        "passIso", "passMT"
-    ]
+def make_alt_reco_and_gen_hists(df, results, nominal_axes, nominal_columns, matched_reco_sel = "goodMuons"):
 
-    nominal_gen =         df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols_gen, "nominal_weight"])
-    nominal_gen_smeared = df.HistoBoost("nominal_gen_smeared", nominal_axes, [*nominal_cols_gen_smeared, "nominal_weight"])
+    nominal_cols_gen = nominal_columns[:]
+    nominal_cols_gen_smeared = nominal_columns[:]
 
-    results.append(nominal_gen)
-    results.append(nominal_gen_smeared)
+    for col in ("pt", "eta", "charge"):
+        idx = [i for i, x in enumerate(nominal_columns) if f"_{col}0" in x]
+        if len(idx) != 1:
+            logger.warning(f"None or more than one columns to match '_{col}0'! Do nothing here!")
+            continue
+        else:
+            nominal_cols_gen[idx[0]] = f"{matched_reco_sel}_{col}0_gen"
+            nominal_cols_gen_smeared[idx[0]] = f"{matched_reco_sel}_{col}0_gen_smeared"  
+
+    results.append(df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols_gen, "nominal_weight"]))
+    results.append(df.HistoBoost("nominal_gen_smeared", nominal_axes, [*nominal_cols_gen_smeared, "nominal_weight"]))
+
     return [nominal_cols_gen, nominal_cols_gen_smeared]
-
+    
 ####################
 ## FOR VALIDATION ##
 ####################

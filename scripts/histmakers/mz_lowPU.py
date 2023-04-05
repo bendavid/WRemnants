@@ -15,7 +15,7 @@ import hist
 import ROOT
 import scripts.lowPU.config as lowPUcfg
 
-corr_helpers = theory_corrections.load_corr_helpers(common.zprocs_lowpu, args.theory_corr)
+corr_helpers = theory_corrections.load_corr_helpers(common.zprocs_lowpu, args.theoryCorr)
 
 ###################################
 flavor = args.flavor # mumu, ee
@@ -32,11 +32,11 @@ for d in datasets: logging.info(f"Dataset {d.name}")
 
 # load lowPU specific libs
 #ROOT.gInterpreter.AddIncludePath(f"{pathlib.Path(__file__).parent}/include/")
-ROOT.gInterpreter.Declare('#include "lowpu_utils.h"')
-ROOT.gInterpreter.Declare('#include "lowpu_efficiencies.h"')
-ROOT.gInterpreter.Declare('#include "lowpu_prefire.h"')
-ROOT.gInterpreter.Declare('#include "lowpu_rochester.h"')
-ROOT.gInterpreter.Declare('#include "lowpu_recoil.h"')
+narf.clingutils.Declare('#include "lowpu_utils.h"')
+narf.clingutils.Declare('#include "lowpu_efficiencies.h"')
+narf.clingutils.Declare('#include "lowpu_prefire.h"')
+narf.clingutils.Declare('#include "lowpu_rochester.h"')
+narf.clingutils.Declare('#include "lowpu_recoil.h"')
 
 
 # standard regular axes
@@ -99,9 +99,8 @@ def build_graph(df, dataset):
         cols_xnorm = ["xnorm", "ptVgen"]
         
         df_xnorm = df
-        weight_expr = "weight"
-        df_xnorm = theory_tools.define_weights_and_corrs(df_xnorm, weight_expr, dataset.name, corr_helpers, args)
-        df_xnorm = theory_tools.define_pdf_columns(df_xnorm, dataset.name, args.pdfs, args.altPdfOnlyCentral)
+        df_xnorm = df_xnorm.DefinePerSample("exp_weight", "1.0")
+        df_xnorm = theory_tools.define_theory_weights_and_corrs(df_xnorm, dataset.name, corr_helpers, args)
         df_xnorm = df_xnorm.Define("xnorm", "0.5")
         results.append(df_xnorm.HistoBoost("xnorm", axes_xnorm, [*cols_xnorm, "nominal_weight"]))
 
@@ -224,9 +223,8 @@ def build_graph(df, dataset):
     df = df.Filter("massZ > 60 && massZ < 120")
 
     if not dataset.is_data:
-        weight_expr = "weight*SFMC"
-        df = theory_tools.define_weights_and_corrs(df, weight_expr, dataset.name, corr_helpers, args)
-        df = theory_tools.define_pdf_columns(df, dataset.name, args.pdfs, args.altPdfOnlyCentral)
+        df = df.Define("exp_weight", "SFMC")
+        df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")
 
@@ -313,11 +311,11 @@ def build_graph(df, dataset):
     
     # TODO: Should this also be added for the mT hist?
 
-    apply_theory_corr = args.theory_corr and dataset.name in corr_helpers
+    apply_theory_corr = args.theoryCorr and dataset.name in corr_helpers
     print("Apply corr for proc", dataset.name, apply_theory_corr)
     if apply_theory_corr:
         results.extend(theory_tools.make_theory_corr_hists(df, "reco_mll", axes=gen_reco_mll_axes, cols=gen_reco_mll_cols, 
-            helpers=corr_helpers[dataset.name], generators=args.theory_corr, modify_central_weight=not args.theory_corr_alt_only)
+            helpers=corr_helpers[dataset.name], generators=args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly)
         )
 
     if dataset.name in sigProcs:
@@ -383,4 +381,4 @@ def build_graph(df, dataset):
 
 resultdict = narf.build_and_run(datasets, build_graph)
 fname = "lowPU_%s.hdf5" % flavor
-output_tools.write_analysis_output(resultdict, fname, args)
+output_tools.write_analysis_output(resultdict, fname, args, update_name=not args.forceDefaultName)

@@ -10,7 +10,7 @@ import lz4.frame
 
 from utilities import common
 
-ROOT.gInterpreter.Declare('#include "muon_efficiencies_smooth.h"')
+narf.clingutils.Declare('#include "muon_efficiencies_smooth.h"')
 
 data_dir = f"{pathlib.Path(__file__).parent}/data/"
 

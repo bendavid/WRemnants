@@ -9,8 +9,9 @@ import json
 import os
 import array
 from utilities import common as common
+import narf.clingutils
 
-ROOT.gInterpreter.Declare('#include "lowpu_recoil.h"')
+narf.clingutils.Declare('#include "lowpu_recoil.h"')
 logger = logging.getLogger("wremnants").getChild(__name__.split(".")[-1])
 
 
@@ -30,7 +31,7 @@ class Recoil:
         self.highPU = False
         self.args = args
         self.smearWeights = True
-        self.storeHists = args.recoil_hists
+        self.storeHists = args.recoilHists
         setattr(ROOT.wrem, "recoil_verbose", True if args.verbose > 3 else False)
 
         if type_ == "highPU":
@@ -443,7 +444,7 @@ class Recoil:
               
         if self.dataset.name in self.datasets_to_apply:
             self.df = self.df.Define("qTweight_", "wrem::qTweight(qT)")
-            if not self.args.theory_corr_alt_only and self.args.theory_corr:
+            if not self.args.theoryCorrAltOnly and self.args.theoryCorr:
                 self.df = self.df.Define("nominal_weight_qTrw", "nominal_weight_uncorr*qTweight_")
             else:
                 self.df = self.df.Define("nominal_weight_qTrw", "nominal_weight*qTweight_")
@@ -674,7 +675,7 @@ class Recoil:
         if self.dataset.name in self.datasets_to_apply:
         
             self.df = self.df.Define("qTweight_", "wrem::qTweight(qT_gen)")
-            if not self.args.theory_corr_alt_only and self.args.theory_corr:
+            if not self.args.theoryCorrAltOnly and self.args.theoryCorr:
                 self.df = self.df.Define("nominal_weight_qTrw", "nominal_weight_uncorr*qTweight_")
             else:
                 self.df = self.df.Define("nominal_weight_qTrw", "nominal_weight*qTweight_")
