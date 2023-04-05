@@ -326,8 +326,8 @@ class Datagroups(object):
             return h.sum() if not hasattr(h.sum(), "value") else h.sum().value
         self.groups = dict(
             sorted(self.groups.items(), key=lambda x: get_sum(
-                x[1][histName if histName in x[1] else nominalName])
-                    if nominalName in x[1] or histName in x[1] else 0,
+                x[1].hists[histName if histName in x[1].hists else nominalName])
+                    if nominalName in x[1].hists or histName in x[1].hists else 0,
                 reverse=True)
         )
 
@@ -445,7 +445,7 @@ class Datagroups(object):
     def make_yields_df(self, histName, procs, action):
         def sum_and_unc(h):
             return (h.sum().value, math.sqrt(h.sum().variance))
-        df = pd.DataFrame([(k, *sum_and_unc(action(v[histName]))) for k,v in self.groups.items() if k in procs], 
+        df = pd.DataFrame([(k, *sum_and_unc(action(v.hists[histName]))) for k,v in self.groups.items() if k in procs], 
                 columns=["Process", "Yield", "Uncertainty"])
         return df
 
