@@ -381,4 +381,4 @@ def build_graph(df, dataset):
 
 resultdict = narf.build_and_run(datasets, build_graph)
 fname = "lowPU_%s.hdf5" % flavor
-output_tools.write_analysis_output(resultdict, fname, args)
+output_tools.write_analysis_output(resultdict, fname, args, update_name=not args.forceDefaultName)

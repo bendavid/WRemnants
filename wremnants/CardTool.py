@@ -120,6 +120,12 @@ class CardTool(object):
     def setSpacing(self, spacing):
         self.spacing = spacing
 
+    def setProcColumnsSpacing(self, spacing):
+        self.procColumnsSpacing = spacing
+
+    def setSystTypeSpacing(self, spacing):
+        self.systTypeSpacing = spacing
+
     def setDataName(self, name):
         self.dataName = name
 
