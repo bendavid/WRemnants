@@ -104,6 +104,7 @@ def main(args,xnorm=False):
             datagroups.defineSignalBinsUnfolding("Wmunu_qGen0")
             datagroups.defineSignalBinsUnfolding("Wmunu_qGen1")
         else:
+            # datagroups.setGenAxes(["qGen","ptGen","etaGen"])
             datagroups.defineSignalBinsUnfolding("Zmumu")
 
         if xnorm:
@@ -201,17 +202,6 @@ def main(args,xnorm=False):
 
     if not xnorm:
         if wmass:
-            # Uncertainty on Z mass
-            cardTool.addSystematic("massWeightZ", 
-                processes=signal_samples_inctau,
-                group="massShift",
-                groupFilter=lambda x: x == "massShift2p1MeV",
-                skipEntries=[(f"^massShift{i}MeV.*",) for i in range(0, 110, 10)],
-                mirror=False,
-                systAxes=["massShift"],
-                passToFakes=passSystToFakes,
-            )
-
             cardTool.addSystematic("luminosity",
                                    processes=allMCprocesses_noQCDMC,
                                    outNames=["lumiDown", "lumiUp"],
