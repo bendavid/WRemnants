@@ -4,6 +4,7 @@ import hist
 from utilities import boostHistHelpers as hh,logging
 import numpy as np
 import os
+import json
 import hdf5plugin
 import h5py
 from narf import ioutils
@@ -288,6 +289,15 @@ def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo
             htmp_nonsing = hnonsing[{"vars" : var if var in hnonsing.axes["vars"] else 0}]
         hnonsing = htmp_nonsing
     return hh.addHists(hsing, hnonsing)
+
+def read_json(fIn):
+
+    if not os.path.exists(fIn):
+        logger.warning(f"File {fIn} not found")
+        return False
+    else:
+        with open(fIn) as f: jsDict = json.load(f)
+        return jsDict
 
 def safeGetRootObject(fileObject, objectName, quitOnFail=True, silent=False, detach=True):
     obj = fileObject.Get(objectName)

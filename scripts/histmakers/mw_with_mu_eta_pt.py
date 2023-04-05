@@ -243,7 +243,6 @@ def build_graph(df, dataset):
     if not args.noRecoil:
         lep_cols = ["goodMuons_pt0", "goodMuons_phi0", "goodMuons_charge0", "Muon_pt[goodMuons][0]"]
         df = recoilHelper.recoil_W(df, results, dataset, common.vprocs, lep_cols) # produces corrected MET as MET_corr_rec_pt/phi  vprocs_lowpu wprocs_recoil_lowpu
-        df = recoilHelper.recoil_W_unc(df, results, dataset, common.vprocs)
     else:
         df = df.Alias("MET_corr_rec_pt", "MET_pt")
         df = df.Alias("MET_corr_rec_phi", "MET_phi")
@@ -279,6 +278,9 @@ def build_graph(df, dataset):
 
         nominal = df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "nominal_weight"])
         results.append(nominal)
+
+        if not args.noRecoil:
+            df = recoilHelper.add_recoil_unc_W(df, results, dataset, nominal_cols, nominal_axes, "nominal")
 
         if apply_theory_corr:
             results.extend(theory_tools.make_theory_corr_hists(df, "nominal", nominal_axes, nominal_cols, 

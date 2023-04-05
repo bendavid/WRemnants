@@ -123,12 +123,12 @@ class datagroups(object):
                     logger.debug(f"Forcing group member {member.name} to read the nominal hist for syst {syst}")
 
                 try:
-                    h = self.readHist(baseName, member, read_syst, scaleOp=scale, forceNonzero=forceNonzero, scaleToNewLumi=scaleToNewLumi)
+                    h = self.readHist(baseName, member, procName, read_syst, scaleOp=scale, forceNonzero=forceNonzero, scaleToNewLumi=scaleToNewLumi)
                     foundExact = True
                 except ValueError as e:
                     if nominalIfMissing:
                         logger.info(f"{str(e)}. Using nominal hist {self.nominalName} instead")
-                        h = self.readHist(self.nominalName, member, "", scaleOp=scale, forceNonzero=forceNonzero, scaleToNewLumi=scaleToNewLumi)
+                        h = self.readHist(self.nominalName, member, procName, "", scaleOp=scale, forceNonzero=forceNonzero, scaleToNewLumi=scaleToNewLumi)
                     else:
                         logger.warning(str(e))
                         continue
@@ -150,7 +150,8 @@ class datagroups(object):
             if not applySelection and "selectOp" in group and group["selectOp"]:
                 logger.warning(f"Selection requested for process {procName} but applySelection=False, thus it will be ignored")
             if applySelection and group[label] and "selectOp" in group and group["selectOp"]:
-                group[label] = group["selectOp"](group[label])
+                selectOpArgs = group["selectOpArgs"] if "selectOpArgs" in group else {}
+                group[label] = group["selectOp"](group[label], **selectOpArgs)
         # Avoid situation where the nominal is read for all processes for this syst
         if not foundExact:
             raise ValueError(f"Did not find systematic {syst} for any processes!")
@@ -482,7 +483,7 @@ class datagroups2016(datagroups):
                 columns=["Process", "Yield", "Uncertainty"])
         return df
 
-    def readHist(self, baseName, proc, syst, scaleOp=None, forceNonzero=True, scaleToNewLumi=-1):
+    def readHist(self, baseName, proc, group, syst, scaleOp=None, forceNonzero=True, scaleToNewLumi=-1):
         output = self.results[proc.name]["output"]
         histname = self.histName(baseName, proc.name, syst)
         logger.debug(f"Reading hist {histname} for proc {proc.name} and syst {syst}")

@@ -554,8 +554,6 @@ def zmumu_perp():
         yieldsIn = utils.loadJSON("%s/yields.json" % baseDir)
         rls.plotStatUncertainties(fitCfg, yieldsIn, exportCfg, comp, procLabel, metLabel, outDir_unc, binning_qT, recoilLow=recoilMin, recoilHigh=recoilMax, yMin=1e-2, yMax=1e8)
 
-  
-
 def zmumu_para():
 
     procs = ["Zmumu"]
@@ -664,7 +662,7 @@ def zmumu_para():
  
 
     # do a refit absorbing correlations
-    if False:
+    if True:
 
         outDir_refit = "%s/params_refit_v1" % baseDir
         outDir_refit_fits = "%s/fits_refit_v1" % baseDir
@@ -856,7 +854,7 @@ def singlemuon_perp():
         rls.plotParameter("p8", jsIn, outDir_refit, binning_qT, procLabel, metLabel, yMin=0, yMax=1, yTitle = "n_{3} (GeV)")
    
     # do a refit absorbing correlations
-    if False:
+    if True:
 
         outDir_refit = "%s/params_refit_v1" % baseDir
         outDir_refit_fits = "%s/fits_refit_v1" % baseDir
@@ -937,7 +935,7 @@ def singlemuon_perp():
     exportCfg["sigma"] = ["p0", "p1", "p2", "p3"]
     exportCfg["norm"] = ["p6", "p7", "p8"]
  
-    if True: # bkg syst variations
+    if False: # bkg syst variations
         
         fitCfg = utils.loadJSON("%s/results_refit_v1.json" % baseDir)
         fitCfg['func_name'] = "data_perp_cond_v1"
@@ -1190,7 +1188,7 @@ def singlemuon_para():
 
 
     # do a refit absorbing correlations
-    if False:
+    if True:
 
         outDir_refit = "%s/params_refit_v1" % baseDir
         outDir_refit_fits = "%s/fits_refit_v1" % baseDir
@@ -1273,7 +1271,7 @@ def singlemuon_para():
     exportCfg["sigma"] = ["p0", "p1", "p2", "p3"]
     exportCfg["norm"] = ["p8", "p9", "p10"]
  
-    if True: # bkg syst variations
+    if False: # bkg syst variations
         
         fitCfg = utils.loadJSON("%s/results_refit_v1.json" % baseDir)
         fitCfg['func_name'] = "data_para_cond_v1"
@@ -1422,6 +1420,7 @@ if __name__ == "__main__":
 
     met = "RawPFMET"
     flavor = "mumu"
+    rls.__topRight__ = "16.8 fb^{#minus1} (13 TeV)"
     
     groups = datagroups2016("mz_wlike_with_mu_eta_pt_%s.pkl.lz4" % met)
     groups.groups.update({
@@ -1447,8 +1446,8 @@ if __name__ == "__main__":
     rls.setFunctionLibs(rf)
 
 
-    zmumu_para()
-    #zmumu_perp()
+    #zmumu_para()
+    zmumu_perp()
         
     #ttbar_para()
     #ttbar_perp()
