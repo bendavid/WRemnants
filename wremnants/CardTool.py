@@ -556,8 +556,7 @@ class CardTool(object):
         if all(x not in procs for x in nondata):
             return 0
         
-        if type(scale) != dict:
-            include = [(str(scale) if x in procs else "-").ljust(self.procColumnsSpacing) for x in nondata]
+        include = [(str(scale) if x in procs else "-").ljust(self.procColumnsSpacing) for x in nondata]
 
         splitGroupDict = systInfo["splitGroup"]
         shape = "shape" if not systInfo["noConstraint"] else "shapeNoConstraint"
@@ -569,12 +568,6 @@ class CardTool(object):
         systNames = systnamesPruned[:]
         for chan in self.channels:
             for systname in systNames:
-                if type(scale) == dict:
-                    for reg in scale.keys():
-                        if re.match(reg, systname):
-                            thiscale = str(scale[reg])
-                            include = [(thiscale if x in procs else "-").ljust(self.procColumnsSpacing) for x in nondata]
-                            break # exit this inner loop when match is found, to save time
                 shape = "shape" if not systInfo["noConstraint"] else "shapeNoConstraint"
                 # do not write systs which should only apply to other charge, to simplify card
                 self.cardContent[chan] += f"{systname.ljust(self.spacing)} {shape.ljust(self.systTypeSpacing)} {''.join(include)}\n"
