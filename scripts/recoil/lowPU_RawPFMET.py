@@ -172,17 +172,17 @@ def ewk_para():
         utils.mkdir(outDir_refit, False)
         utils.mkdir(outDir_refit_fits, False)
     
-        with open("%s/results.json" % outDir_param_v0) as f: jsIn = json.load(f)
-        with open("%s/results_refit.json" % baseDir.replace("para", "para_qT")) as f: jsIn = json.load(f)
-        fitCfg = jsIn
-        fitCfg['func_name'] = "ewk_para_cond"
-        jsOut = rls.combinedFit_scipy(bhist, comp, fitCfg, binning_qT, outDir=baseDir, chisq_refit=False, rebin=rebin, recoilLow=recoilMin, recoilHigh=recoilMax)
-        with open("%s/results_refit.json" % baseDir, "w") as outfile: json.dump(jsOut, outfile, indent=4)
+        #with open("%s/results.json" % outDir_param_v0) as f: jsIn = json.load(f)
+        #with open("%s/results_refit.json" % baseDir.replace("para", "para_qT")) as f: jsIn = json.load(f)
+        #fitCfg = jsIn
+        #fitCfg['func_name'] = "ewk_para_cond"
+        #jsOut = rls.combinedFit_scipy(bhist, comp, fitCfg, binning_qT, outDir=baseDir, chisq_refit=False, rebin=rebin, recoilLow=recoilMin, recoilHigh=recoilMax)
+        #with open("%s/results_refit.json" % baseDir, "w") as outfile: json.dump(jsOut, outfile, indent=4)
         
       
         
         with open("%s/results_refit.json" % baseDir) as f: jsIn = json.load(f)
-        rls.doFitMultiGauss_plot(bhist, comp, jsIn, procLabel, metLabel, outDir_refit_fits, binning_qT, yMin=1e-5, yMax=1e3, recoilLow=recoilMin, recoilHigh=recoilMax, rebin=rebin)
+        rls.doFitMultiGauss_plot(bhist, comp, jsIn, procLabel, metLabel, outDir_refit_fits, binning_qT, yMin=1e-5, yMax=1e3, recoilLow=recoilMin, recoilHigh=recoilMax, rebin=rebin, statUnc=False, yRatio=1.25)
         
         rls.plotParameter("p0", jsIn, outDir_refit, binning_qT, procLabel, metLabel, yMin=0, yMax=50, yTitle = "#sigma_{1} (GeV)")
         rls.plotParameter("p1", jsIn, outDir_refit, binning_qT, procLabel, metLabel, yMin=0, yMax=50, yTitle = "#sigma_{2} (GeV)")
@@ -286,7 +286,7 @@ def ttbar_para():
     bhist = readProc(groups, "recoil_corr_xy_para_qTbinned", procs)
     procNames = groups.getProcNames(to_expand=procs)
 
-    if True:
+    if False:
         fitCfg = {}
         fitCfg['func_name'] = "pol6"
         fitCfg['parms_init'] = [2.99723e+00, -1.47337e-01, 1.61576e-02, -1.42718e-04, -9.91942e-07, 1.47306e-08, -3.50397e-11]
@@ -346,14 +346,14 @@ def ttbar_para():
         utils.mkdir(outDir_refit, False)
         utils.mkdir(outDir_refit_fits, False)
     
-        jsIn = utils.loadJSON("%s/results.json" % outDir_param_v0)
-        fitCfg = jsIn
-        fitCfg['func_name'] = "ttbar_para_cond"
-        jsOut = rls.combinedFit_scipy(bhist, comp, fitCfg, binning_qT, outDir=baseDir, chisq_refit=False, recoilLow=recoilMin, recoilHigh=recoilMax, rebin=rebin)
-        utils.writeJSON("%s/results_refit.json" % baseDir, jsOut)
+        #jsIn = utils.loadJSON("%s/results.json" % outDir_param_v0)
+        #fitCfg = jsIn
+        #fitCfg['func_name'] = "ttbar_para_cond"
+        #jsOut = rls.combinedFit_scipy(bhist, comp, fitCfg, binning_qT, outDir=baseDir, chisq_refit=False, recoilLow=recoilMin, recoilHigh=recoilMax, rebin=rebin)
+        #utils.writeJSON("%s/results_refit.json" % baseDir, jsOut)
       
         jsIn = utils.loadJSON("%s/results_refit.json" % baseDir)
-        rls.doFitMultiGauss_plot(bhist, comp, jsIn, procLabel, metLabel, outDir_refit_fits, binning_qT, yMin=1e-5, yMax=1e3, recoilLow=recoilMin, recoilHigh=recoilMax, rebin=rebin)
+        rls.doFitMultiGauss_plot(bhist, comp, jsIn, procLabel, metLabel, outDir_refit_fits, binning_qT, yMin=1e-5, yMax=1e3, recoilLow=recoilMin, recoilHigh=recoilMax, rebin=rebin, statUnc=False, yRatio=1.25)
         
         rls.plotParameter("p0", jsIn, outDir_refit, binning_qT, procLabel, metLabel, yMin=0, yMax=50, yTitle = "#sigma_{1} (GeV)")
         rls.plotParameter("p1", jsIn, outDir_refit, binning_qT, procLabel, metLabel, yMin=0, yMax=50, yTitle = "#sigma_{2} (GeV)")
@@ -2030,9 +2030,9 @@ if __name__ == "__main__":
     #zmumu_para()
     #zmumu_perp()
     #zmumu_gen_perp()
-    wmu_gen_perp()
+    #wmu_gen_perp()
         
-    #ttbar_para()
+    ttbar_para()
     #ttbar_perp()
     
     #ewk_para()

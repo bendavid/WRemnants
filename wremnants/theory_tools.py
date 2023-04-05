@@ -220,6 +220,9 @@ def define_central_pdf_weight(df, dataset_name, pdf):
 
     pdfName = pdfInfo["name"]
     pdfBranch = pdfInfo["branch"]
+    if not pdfBranch in df.GetColumnNames():
+        logger.warning(f"Did not find PDF branch {pdfBranch} for sample {dataset_name}! Set PDF weights to 1")
+        return df.DefinePerSample("central_pdf_weight", "1.0")
     return df.Define("central_pdf_weight", f"std::clamp<float>({pdfBranch}[0], -theory_weight_truncate, theory_weight_truncate)")
 
 def define_theory_weights_and_corrs(df, dataset_name, helpers, args):
