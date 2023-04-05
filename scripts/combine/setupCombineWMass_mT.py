@@ -34,7 +34,7 @@ parser.add_argument("--skipSignalSystOnFakes", dest="skipSignalSystOnFakes" , ac
 
 
 args = parser.parse_args()
-logger = logging.setup_logger(__file__, args.verbose, args.color_logger)
+logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
 if not os.path.isdir(args.outfolder):
     os.mkdir(args.outfolder)

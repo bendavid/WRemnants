@@ -1,6 +1,8 @@
 import os
 from utilities import logging
 import argparse 
+import itertools
+import glob
 
 logger = logging.setup_logger(__file__, 3, True)
 
@@ -11,48 +13,69 @@ logger = logging.setup_logger(__file__, 3, True)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-m","--mode", type=str, help="what kind of biastests", choices=["pdf","scale"])
-args = parser.parse_args()
+parser.add_argument("--histmaker", type=str, help="histmaker to perform bias tests with", 
+    default="mw_with_mu_eta_pt", choices=["mw_with_mu_eta_pt","mz_wlike_with_mu_eta_pt", "mz_dilepton"])
+parser.add_argument("-o", "--outfolder", type=str, default="", help="Output folder")
 
+args = parser.parse_args()
 
 if args.mode == "pdf":
     argument = "--pdfs"
 
-    nominals = ["nnpdf31", "nnpdf40", "msht20", "pdf4lhc21", "ct18"]
-    pseudos = ["nnpdf31", "nnpdf40", "msht20", "pdf4lhc21", "ct18"]
+    pdfsets = ["nnpdf31", "nnpdf40", "msht20", "pdf4lhc21", "ct18"]
 
-    # freeze_uncertainties = ("reducedUncertainties", "-x '.*' -k 'pdf*|alphaS*|mass*'") # freeze all nuisances except pdf and alphaS
-    freeze_uncertainties = ("fullUncertainties", "")
+    datasets = itertools.product(pdfsets, pdfsets)
 
-    histDir = "/scratch/dwalter/results_histmaker/230305_studies_pdfs/"
-    combineDir = f"/scratch/dwalter/CombineStudies/230305_studies_pdfs_{freeze_uncertainties[0]}/"
+    freeze_uncertainties = (
+        ("reducedUncertainties", "-x '.*' -k 'pdf*|AlphaS*|mass*'"), # freeze all nuisances except pdf and alphaS
+        ("fullUncertainties", ""))
 
 elif args.mode == "scale":
     argument = ""
 
-    nominals = ["default",]
-    pseudos = ["--bias-calibration binned", "--bias-calibration parameterized", "--smearing"]
+    datasets = [
+        # ("default", "--smearing"),
+        # ("default", "--smearing --bias-calibration parameterized"),
+        # ("default", "--smearing --bias-calibration A"),
+        # ("default", "--smearing --bias-calibration M"),
+        ("--smearing", "--smearing --biasCalibration parameterized"),
+        ("--smearing", "--smearing --biasCalibration binned"),
+        ("--smearing", "--smearing --biasCalibration A"),
+        ("--smearing", "--smearing --biasCalibration M"),
+    ]
 
-    freeze_uncertainties = ("fullUncertainties", "")
+    freeze_uncertainties = (
+        ("reducedUncertainties", "-x '.*' -k 'muonScaleSyst*|CMS_scale_m_*|mass*'"), # freeze all nuisances except momentum scale
+        # ("fullUncertainties", ""),
+        )
 
-    histDir = "/scratch/dwalter/results_histmaker/230305_biastests_momentumScale/"
-    combineDir = f"/scratch/dwalter/CombineStudies/230305_biastests_momentumScale_{freeze_uncertainties[0]}/"
+hists_to_plot = {
+    "mw_with_mu_eta_pt": "pt eta pt-eta",
+    "mz_wlike_with_mu_eta_pt": "pt eta pt-eta",
+    "mz_dilepton": "mll",
+}
+channels_to_plot = {
+    "mw_with_mu_eta_pt": ["plus","minus","all"],
+    "mz_wlike_with_mu_eta_pt": ["plus","minus","all"],
+    "mz_dilepton": ["all",],
+}
+
+histmaker = args.histmaker
+
+hists_to_plot = hists_to_plot[histmaker]
+channels_to_plot = channels_to_plot[histmaker]
 
 
-histmaker = "mw_with_mu_eta_pt"
-
-nTreads = 128
+nTreads = 192
 
 options = [
-    "--theory_corr scetlib",
-    "--no_recoil"
+    # "--theory_corr scetlib",
+    # "--no-recoil"
 ]
 options = " ".join(options)
 
-if not os.path.isdir(histDir):
-    os.mkdir(histDir)
-
-if not os.path.isdir(combineDir):
-    os.mkdir(combineDir)
+if not os.path.isdir(args.outfolder):
+    os.mkdir(args.outfolder)
 
 def EXE(command):
     logger.info(command) 
@@ -70,42 +93,58 @@ def make_appendix(name):
     
     return "_".join(parts)
 
-for nominal in nominals:
+for nominal, pseudodata in datasets:
     
-    for pseudodata in pseudos:
-        if nominal == pseudodata:
-            continue
+    if nominal == pseudodata:
+        continue
 
-        logger.info(f"Now at {nominal} vs {pseudodata}")
+    logger.info(f"Now at {nominal} vs {pseudodata}")
+    
+    arg_nominal = nominal if nominal != "default" else ""
+    str_nominal = make_appendix(nominal)
+
+    arg_pseudodata = pseudodata if pseudodata != "default" else ""
+    str_pseudodata = make_appendix(pseudodata)
+
+    # we never use biased datasets as nominal, thus we can skip expensive uncertainty calculation
+    if "bias" in arg_pseudodata:
+        arg_pseudodata += " --onlyMainHistograms"
+
+    file_nominal = f"{args.outfolder}/{histmaker}_{str_nominal}.hdf5"
+    file_pseudodata = f"{args.outfolder}/{histmaker}_{str_pseudodata}.hdf5"
+
+    if not os.path.isfile(file_nominal):
+        # run histmaker for nominal
+        EXE(f"python3 scripts/histmakers/{histmaker}.py -j {nTreads} -o {args.outfolder} {options} {argument} {arg_nominal} -p {str_nominal}")
+    else:
+        logger.info(f"Found file for nominal {nominal}")
+
+    if not os.path.isfile(file_pseudodata):
+        # run histmaker for pseudodata
+        EXE(f"python3 scripts/histmakers/{histmaker}.py -j {nTreads} -o {args.outfolder} {options} {argument} {arg_pseudodata} -p {str_pseudodata}")
+    else:
+        logger.info(f"Found file for pseudodata {pseudodata}")
         
-        arg_nominal = nominal if nominal != "default" else ""
-        str_nominal = make_appendix(nominal)
+    # make control plots
+    # webDir = args.outfolder.split("/")[-1] +f"/{str_nominal}_vs_{str_pseudodata}"
+    
+    # if args.mode=="pdf":
+    #     variation = f"variation --varName pdf{str_nominal.upper()}Up pdf{str_nominal.upper()}Down pdf{str_pseudodata.upper()} --transform --varLabel {str_nominal.upper()} $\pm 1 \sigma$  {str_pseudodata.upper()} --color grey grey --fill-between"
+    # else:
+    #     variation = ""
+    
+    # for channel in channels_to_plot:
+    #     if len(glob.glob(f"/home/d/dwalter/www/WMassAnalysis/{webDir}/*_{channel}_*.pdf")) == 0:
+    #         EXE(f"python3 scripts/plotting/makeDataMCStackPlot.py --hists {hists_to_plot} --yscale 1.6 -r 0.95 1.05 --channel {channel} -f {webDir} -a {str_nominal} {file_nominal} {variation}")
+    #         EXE(f"python3 scripts/plotting/makeDataMCStackPlot.py --hists {hists_to_plot} --yscale 1.6 -r 0.95 1.05 --channel {channel} -f {webDir} -a {str_pseudodata} {file_pseudodata} {variation}")
 
-        arg_pseudodata = pseudodata if pseudodata != "default" else ""
-        str_pseudodata = make_appendix(pseudodata)
+    # make combine input        
+    for freeze_name, freeze_command in freeze_uncertainties:
 
-        file_nominal = f"{histDir}/{histmaker}_scetlibCorr_noRecoil_{str_nominal}.hdf5"
-        file_pseudodata = f"{histDir}/{histmaker}_scetlibCorr_noRecoil_{str_pseudodata}.hdf5"
-
-        if not os.path.isfile(file_nominal):
-            # run histmaker for nominal
-            EXE(f"python3 scripts/histmakers/{histmaker}.py -j {nTreads} -o {histDir} {options} {argument} {arg_nominal} -p noRecoil_{str_nominal}")
-        else:
-            logger.info(f"Found file for nominal {nominal}")
-
-        if not os.path.isfile(file_pseudodata):
-            # run histmaker for pseudodata
-            EXE(f"python3 scripts/histmakers/{histmaker}.py -j {nTreads} -o {histDir} {options} {argument} {arg_pseudodata} -p noRecoil_{str_pseudodata}")
-        else:
-            logger.info(f"Found file for pseudodata {pseudodata}")
-
-        # make combine input        
-        dir_combine = f"{combineDir}/{str_nominal}_vs_{str_pseudodata}"
-
+        dir_combine = f"{args.outfolder}/{str_nominal}_vs_{str_pseudodata}_{freeze_name}"
+        
         if os.path.isdir(dir_combine):
             logger.warning(f"The combine file for {dir_combine} already exists, continue with the next one!")
             continue
 
-        EXE(f"python3 scripts/combine/setupCombineWMass.py -o {dir_combine} -i {file_nominal} --pseudodata-file {file_pseudodata} --pseudoData nominal {freeze_uncertainties[1]}")
-    
-
+        EXE(f"python3 scripts/combine/setupCombineWMass.py -o {dir_combine} -i {file_nominal} --skipOtherChargeSyst --pseudoDataFile {file_pseudodata} --pseudoData nominal {freeze_command}")

@@ -93,7 +93,7 @@ def makeStackPlotWithRatio(
     binwnorm=None, select={},  action = (lambda x: x), extra_text=None, extra_text_loc=(0.8, 0.7), grid = False, 
     plot_title = None, title_padding = 0, yscale=None,
     fill_between=False, skip_fill=0, ratio_to_data=False, baseline=True, legtext_size=20, cms_decor="Preliminary", lumi=16.8,
-    no_fill=False, bin_density=300, 
+    no_fill=False, bin_density=300, unstacked_linestyles=[],
 ):
     stack = [action(histInfo[k][histName])[select] for k in stackedProcs if histInfo[k][histName]]
     colors = [histInfo[k]["color"] for k in stackedProcs if histInfo[k][histName]]
@@ -155,6 +155,7 @@ def makeStackPlotWithRatio(
         )
 
     if unstacked:
+        linestyles = unstacked_linestyles+['solid']*(len(unstacked)-len(unstacked_linestyles))
         if type(unstacked) == str: 
             unstacked = unstacked.split(",")
         ratio_ref = data_hist if data_hist else sum(stack) 
@@ -169,11 +170,11 @@ def makeStackPlotWithRatio(
                 linewidth=2,
             )
 
-        print("Valid names are", histInfo.keys())
-        for proc in unstacked:
+        for proc,style in zip(unstacked, linestyles):
             logger.debug(f"Plotting proc {proc}")
-            print("Proc", proc)
             unstack = action(histInfo[proc][histName][select])
+            if proc == "Data":
+                style = "None"
             hep.histplot(
                 unstack,
                 yerr=True if proc == "Data" else False,
@@ -181,7 +182,8 @@ def makeStackPlotWithRatio(
                 color=histInfo[proc]["color"],
                 label=histInfo[proc]["label"],
                 ax=ax1,
-                alpha=0.7 if not proc == "Data" else 1.,
+                alpha=0.7 if proc != "Data" else 1.,
+                linestyle=style,
                 binwnorm=binwnorm,
             )
             # TODO: Add option to leave data off ratio, I guess
@@ -194,6 +196,7 @@ def makeStackPlotWithRatio(
                 label=histInfo[proc]["label"],
                 yerr=True if (proc == "Data" and not data_hist) else False,
                 linewidth=2,
+                linestyle=style,
                 ax=ax2
             )
 
@@ -341,15 +344,23 @@ def make_plot_dir(outpath, outfolder):
         raise IOError(f"The path {outpath} doesn't not exist. You should create it (and possibly link it to your web area)")
         
     if not os.path.isdir(full_outpath):
-        logger.info(f"Creating folder {full_outpath}")
-        os.makedirs(full_outpath)
+        try:
+            os.makedirs(full_outpath)
+            logger.info(f"Creating folder {full_outpath}")
+        except FileExistsError as e:
+            logger.warning(e)
+            pass
 
     return full_outpath
 
-def save_pdf_and_png(outdir, basename):
+def save_pdf_and_png(outdir, basename, fig=None):
     fname = f"{outdir}/{basename}.pdf"
-    plt.savefig(fname, bbox_inches='tight')
-    plt.savefig(fname.replace(".pdf", ".png"), bbox_inches='tight')
+    if fig:
+        fig.savefig(fname, bbox_inches='tight')
+        fig.savefig(fname.replace(".pdf", ".png"), bbox_inches='tight')
+    else:
+        plt.savefig(fname, bbox_inches='tight')
+        plt.savefig(fname.replace(".pdf", ".png"), bbox_inches='tight')
     logger.info(f"Wrote file(s) {fname}(.png)")
 
 def write_index_and_log(outpath, logname, indexname="index.php", template_dir=f"{pathlib.Path(__file__).parent}/Templates", 
@@ -359,7 +370,7 @@ def write_index_and_log(outpath, logname, indexname="index.php", template_dir=f"
 
     with open(f"{logdir}/{logname}.log", "w") as logf:
         meta_info = '-'*80 + '\n' + \
-            f'Script called at {datetime.datetime.now()}' + \
+            f'Script called at {datetime.datetime.now()}\n' + \
             f'The command was: {output_tools.script_command_to_str(sys.argv, args)}\n' + \
             '-'*80 + '\n'
         logf.write(meta_info)

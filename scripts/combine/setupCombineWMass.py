@@ -20,27 +20,25 @@ def make_parser(parser=None):
     parser.add_argument("--fitvar", help="Variable to fit", default="eta-pt")
     parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow). Equivalent to --excludeNuisances '.*effSystTnP|.*effStatTnP' ")
     parser.add_argument("--ewUnc", action='store_true', help="Include EW uncertainty")
-    parser.add_argument("-p", "--pseudoData", type=str, help="Hist to use as pseudodata")
+    parser.add_argument("--pseudoData", type=str, help="Hist to use as pseudodata")
     parser.add_argument("--pseudoDataIdx", type=int, default=0, help="Variation index to use as pseudodata")
-    parser.add_argument("--pseudodata-file", type=str, help="Input file for pseudodata (if it should be read from a different file", default=None)
+    parser.add_argument("--pseudoDataFile", type=str, help="Input file for pseudodata (if it should be read from a different file", default=None)
     parser.add_argument("-x",  "--excludeNuisances", type=str, default="", help="Regular expression to exclude some systematics from the datacard")
     parser.add_argument("-k",  "--keepNuisances", type=str, default="", help="Regular expression to keep some systematics, overriding --excludeNuisances. Can be used to keep only some systs while excluding all the others with '.*'")
-    parser.add_argument("--skipOtherChargeSyst", dest="skipOtherChargeSyst" , action="store_true",   help="Skip saving histograms and writing nuisance in datacard for systs defined for a given charge but applied on the channel with the other charge")
-    #parser.add_argument("--keepOtherChargeSyst", dest="skipOtherChargeSyst" , action="store_false",   help="Keep histograms and nuisance in datacard for systs defined for a given charge but applied on the channel with the other charge")
+    parser.add_argument("--skipOtherChargeSyst", action="store_true", default=True, 
+        help="Skip saving histograms and writing nuisance in datacard for systs defined for a given charge but applied on the channel with the other charge")
     parser.add_argument("--scaleMuonCorr", type=float, default=1.0, help="Scale up/down dummy muon scale uncertainty by this factor")
-    parser.add_argument("--muonScaleVariation", choices=["smearing_weights", "massweights", "manual_pt_shift"], default="massweights", help="the method with which the distributions for the muon scale variations is derived")
     parser.add_argument("--noHist", action='store_true', help="Skip the making of 2D histograms (root file is left untouched if existing)")
     parser.add_argument("--effStatLumiScale", type=float, default=None, help="Rescale equivalent luminosity for efficiency stat uncertainty by this value (e.g. 10 means ten times more data from tag and probe)")
     parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers and nuisances)")
     parser.add_argument("--directIsoSFsmoothing", action='store_true', help="If isolation SF were smoothed directly instead of being derived from smooth efficiencies")
     parser.add_argument("--xlim", type=float, nargs=2, default=None, help="Restrict x axis to this range")
-    parser.add_argument("--constrain-mass", action='store_true', help="Constrain mass parameter in the fit (e.g. for ptll fit)")
-    parser.add_argument("-a", "--append", type=str, help="Append to output folder name")
+    parser.add_argument("--constrainMass", action='store_true', help="Constrain mass parameter in the fit (e.g. for ptll fit)")
     return parser
 
 def main(args):
 
-    logger = logging.setup_logger(__file__, args.verbose, args.color_logger)
+    logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
     # NOTE: args.filterProcGroups and args.excludeProcGroups should in principle not be used together
     #       (because filtering is equivalent to exclude something), however the exclusion is also meant to skip
@@ -77,8 +75,8 @@ def main(args):
     tag = name+"_"+args.fitvar.replace("-","_")
     if args.doStatOnly:
         tag += "_statOnly"
-    if args.append:
-        tag = f"{tag}_{args.append}"
+    if args.postfix:
+        tag += f"_{args.postfix}"
 
     outfolder = f"{args.outfolder}/{tag}/"
     if not os.path.isdir(outfolder):
@@ -114,10 +112,10 @@ def main(args):
         cardTool.setSkipOtherChargeSyst()
     if args.pseudoData:
         cardTool.setPseudodata(args.pseudoData, args.pseudoDataIdx)
-        if args.pseudodata_file:
-            cardTool.setPseudodataDatagroups(datagroups2016(args.pseudodata_file,
-                                                            excludeProcGroup=excludeGroup,
-                                                            filterProcGroup=filterGroup))
+        if args.pseudoDataFile:
+            cardTool.setPseudodataDatagroups(datagroups2016(args.pseudoDataFile,
+                                                excludeProcGroup=excludeGroup,
+                                                filterProcGroup=filterGroup))
 
     if args.lumiScale:
         cardTool.setLumiScale(args.lumiScale)
@@ -139,7 +137,7 @@ def main(args):
     logger.info(f"Single V no signal samples: {single_v_nonsig_samples}")
     logger.info(f"Signal samples: {signal_samples}")
 
-    if not args.constrain_mass:
+    if not args.constrainMass:
         # keep mass weights here as first systematic, in case one wants to run stat-uncertainty only with --doStatOnly
         cardTool.addSystematic("massWeight", 
                                processes=signal_samples_inctau,
@@ -159,8 +157,8 @@ def main(args):
         cardTool.writeOutput(args=args)
         logger.info("Using option --doStatOnly: the card was created with only mass weights and a dummy LnN syst on all processes")
         quit()
-
-    if args.constrain_mass:
+        
+    if args.constrainMass:
         # add an uncertainty on the mass, e.g. for ptll fits
         cardTool.addSystematic("massWeight", 
             processes=signal_samples_inctau,
@@ -258,29 +256,31 @@ def main(args):
 
     to_fakes = passSystToFakes and not args.noQCDscaleFakes
     combine_helpers.add_pdf_uncertainty(cardTool, single_v_samples, passSystToFakes)
-    combine_helpers.add_scale_uncertainty(cardTool, args.minnlo_scale_unc, signal_samples_inctau, to_fakes, resum=args.resum_unc)
+    combine_helpers.add_scale_uncertainty(cardTool, args.minnlo_scale_unc, signal_samples_inctau, to_fakes, resum=args.resumUnc)
     # for Z background in W mass case (W background for Wlike is essentially 0, useless to apply QCD scales there)
     if wmass:
-        combine_helpers.add_scale_uncertainty(cardTool, "integrated", single_v_nonsig_samples, False, name_append="Z", resum=args.resum_unc)
+        combine_helpers.add_scale_uncertainty(cardTool, "integrated", single_v_nonsig_samples, False, name_append="Z", resum=args.resumUnc)
 
     msv_config_dict = {
-        "smearing_weights":{
+        "smearingWeights":{
             "hist_name": "muonScaleSyst_responseWeights",
             "syst_axes": ["unc", "downUpVar"],
             "syst_axes_labels": ["unc", "downUpVar"]
         },
-        "massweights":{
+        "massWeights":{
             "hist_name": "muonScaleSyst",
             "syst_axes": ["downUpVar", "scaleEtaSlice"],
             "syst_axes_labels": ["downUpVar", "ieta"]
         },
-        "manual_pt_shift":{
+        "manualShift":{
             "hist_name": "muonScaleSyst_manualShift",
             "syst_axes": ["downUpVar"],
             "syst_axes_labels": ["downUpVar"]
         }
     }
-    msv_config = msv_config_dict[args.muonScaleVariation]
+
+    # FIXME: remove this once msv from smearing weights is implemented for the Z
+    msv_config = msv_config_dict[args.muonScaleVariation] if wmass else msv_config_dict["massWeights"]
 
     cardTool.addSystematic(msv_config['hist_name'], 
         processes=single_vmu_samples,

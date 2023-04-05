@@ -43,14 +43,14 @@ def printLine(marker='-', repeat=30):
 #########################################################################
 
 def safeSystem(cmd, dryRun=False, quitOnFail=True):
-    print(cmd)
+    logger.info(cmd)
     if not dryRun:
         res = os.system(cmd)
         if res:
-            print('-'*30)
-            print("safeSystem(): error occurred when executing the following command. Aborting")
-            print(cmd)
-            print('-'*30)
+            logger.error('-'*30)
+            logger.error("safeSystem(): error occurred when executing the following command. Aborting")
+            logger.error(cmd)
+            logger.error('-'*30)
             if quitOnFail:
                 quit()
         return res
@@ -59,14 +59,14 @@ def safeSystem(cmd, dryRun=False, quitOnFail=True):
 
 def checkHistInFile(h, hname, fname, message=""):
     if not h:
-        print("Error {msg}: I couldn't find histogram {h} in file {f}".format(msg=message,h=hname,f=fname))
+        logger.error("Error {msg}: I couldn't find histogram {h} in file {f}".format(msg=message,h=hname,f=fname))
         quit()
 
 def safeGetObject(fileObject, objectName, quitOnFail=True, silent=False, detach=True):
     obj = fileObject.Get(objectName)
     if obj == None:
         if not silent:
-            print(f"Error getting {objectName} from file {fileObject.GetName()}")
+            logger.error(f"Could not get {objectName} from file {fileObject.GetName()}")
         if quitOnFail:
             quit()
         return None
@@ -79,14 +79,14 @@ def safeOpenFile(fileName, quitOnFail=True, silent=False, mode="READ"):
     fileObject = ROOT.TFile.Open(fileName, mode)
     if not fileObject or fileObject.IsZombie():
         if not silent:
-            print(f"Error when opening file {fileName}")
+            logger.error(f"Could not open file {fileName}")
         if quitOnFail:
             quit()
         else:
             return None
     elif not fileObject.IsOpen():
         if not silent:
-            print(f"File {fileName} was not opened")
+            logger.error(f"File {fileName} was not opened")
         if quitOnFail:
             quit()
         else:
@@ -97,7 +97,7 @@ def safeOpenFile(fileName, quitOnFail=True, silent=False, mode="READ"):
 def checkNullObj(obj, objName="object", quitOnFail=True):
 
     if obj == None:
-        print(f"Error with {objName}: it was None.")
+        logger.error(f"{objName} was None.")
         if quitOnFail:
             quit()
         else:
@@ -645,7 +645,7 @@ def drawTH1(htmp,
         h.Draw("HE")
     if len(fitString):
         fitFunc,fitOpt,drawOpt,fitMin,fitMax = fitString.split(";")
-        print(f"Fitting with {fitFunc}")
+        logger.info(f"Fitting with {fitFunc}")
         h.Fit(fitFunc,fitOpt,drawOpt,float(fitMin),float(fitMax))
         f1 = h.GetFunction(fitFunc)
         f1.SetLineWidth(2)
@@ -1869,7 +1869,7 @@ def drawNTH1(hists=[],
             newymax = newymax + 0.1 * newdiff
             #print(newymin, newymax)
             if not setRatioYAxisRangeFromUser:
-                print(f"drawNTH1(): setting y axis in ratio panel to this range: {newymin}, {newymax}")
+                logger.debug(f"drawNTH1(): setting y axis in ratio panel to this range: {newymin}, {newymax}")
                 frame.GetYaxis().SetRangeUser(newymin, newymax)
             pad2.RedrawAxis("sameaxis")
 
@@ -3679,7 +3679,7 @@ def unroll2Dto1D(h, newname='', cropNegativeBins=True, silent=False):
         for ibin in range(1, nbins+1):
             if newh.GetBinContent(ibin)<0:
                 if not silent:
-                    print('Warning: cropping to zero bin %d in %s (was %f)'%(ibin, newh.GetName(), newh.GetBinContent(ibin)))
+                    logger.warning('cropping to zero bin %d in %s (was %f)'%(ibin, newh.GetName(), newh.GetBinContent(ibin)))
                 newh.SetBinContent(ibin, 0)
     return newh
 
