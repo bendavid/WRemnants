@@ -358,7 +358,7 @@ def parseProc(histCfg, procName, syst="", rebin=1):
     
     label = "%s_%s" % (hName, procName)
     bhist = functions.readBoostHistProc(groups, hName, [procName])
-    if axis: bhist = bhist.project(axis)
+    #if axis: bhist = bhist.project(axis)
     rhist = narf.hist_to_root(bhist)
     rhist = functions.Rebin(rhist, rebin)
     rhist.SetName(label)
@@ -458,7 +458,7 @@ def doRecoilStatSyst(histCfg, procName, hNom, h_syst, rebin):
                 addUnc(h_syst, hNom, hUp)
   
                         
-def parseHists(histCfg, leg, rebin=1, projectionx=[], noData=False):
+def parseHists(histCfg, leg, rebin=1, projectionx=[], noData=False, statOnly=True):
 
     h_data = parseProc(histCfg, data, rebin=rebin)
     leg.AddEntry(h_data, groups.groups[data]['label'], "PE")
@@ -495,7 +495,7 @@ def parseHists(histCfg, leg, rebin=1, projectionx=[], noData=False):
     h_err.SetMarkerSize(0)
     h_err.SetLineWidth(0)
     h_err.SetFillStyle(3004)    
-    leg.AddEntry(h_err, "Stat. + Syst. Unc.", "F")
+    leg.AddEntry(h_err, "Stat. Unc." if statOnly else "Stat. + Syst. Unc.", "F")
     
     
     # do systematics
@@ -725,7 +725,7 @@ def parseHists(histCfg, leg, rebin=1, projectionx=[], noData=False):
 
 
 
-def singlePlot(histCfg, fOut, xMin, xMax, yMin, yMax, xLabel, yLabel, logY=True, rebin=1, legPos=[], projectionx=[], yRatio = 1.3):
+def singlePlot(histCfg, fOut, xMin, xMax, yMin, yMax, xLabel, yLabel, logY=True, rebin=1, legPos=[], projectionx=[], yRatio = 1.3, statOnly=True):
     
     # default cfg
     cfg = {
@@ -757,7 +757,7 @@ def singlePlot(histCfg, fOut, xMin, xMax, yMin, yMax, xLabel, yLabel, logY=True,
     leg.SetFillStyle(0)
     leg.SetTextSize(0.040)
     
-    h_data, st, h_bkg, h_ratio, h_err, h_err_ratio = parseHists(histCfg, leg, rebin, projectionx=projectionx)
+    h_data, st, h_bkg, h_ratio, h_err, h_err_ratio = parseHists(histCfg, leg, rebin, projectionx=projectionx, statOnly=statOnly)
 
     cfg['logy'] = logY
     cfg['xmin'] = xMin
@@ -838,14 +838,17 @@ if __name__ == "__main__":
     flavor = "mumu" #mumu, ee
     pdf = "nnpdf31"
     
+    suffix = ""
+    suffix = "_scetlibCorr"
+    
     #MC_SF = 0.984213668
     MC_SF = 1.0
     #if flavor == "mumu": MC_SF = 1.026
 
-    outDir = "/eos/user/j/jaeyserm/www/wmass/highPU/Z%s_%s/plots/" % (flavor, met)
-    functions.prepareDir(outDir, remove=False)
+    outDir = "/eos/user/j/jaeyserm/www/wmass/highPU/Z%s_%s/plots%s/" % (flavor, met, suffix)
+    functions.prepareDir(outDir, remove=True)
       
-    groups = datagroups2016("mz_wlike_with_mu_eta_pt_%s.pkl.lz4" % (met))
+    groups = datagroups2016("mz_wlike_with_mu_eta_pt_%s%s.pkl.lz4" % (met, suffix))
     groups.groups.update({
         "TTbar" : dict(
                 members = [groups.datasets[x] for x in ["TTLeptonicPostVFP", "TTSemileptonicPostVFP", "SingleTschanLepDecaysPostVFP", "SingleTtWAntitopPostVFP", "SingleTtchanAntitopPostVFP", "SingleTtchanTopPostVFP"]],
@@ -870,46 +873,43 @@ if __name__ == "__main__":
     procs = ['EWK', 'TTbar', 'Zmumu']
     data = 'Data'
 
-    doYields()
+    #doYields()
 
 
     bins_recoil_para_perp = [-10000, -150, -120, -110, -100, -90, -80, -70, -60, -50, -46, -42, -38, -34] + list(range(-30, 30, 2)) + [30, 34, 38, 42, 46, 50, 60, 70, 80, 90, 100, 110, 120, 150, 10000]
     bins_recoil_magn = list(range(0, 100, 4)) + [100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200]
-    singlePlot({"name": "recoil_uncorr_para_qT", "axis": "recoil_para_qT" }, "recoil_uncorr_para_qT", -150, 150, 1e0, 1e8, "U_{#parallel} + q_{T} (GeV) (uncorrected)", "Events", rebin=bins_recoil_para_perp)
+    singlePlot({"name": "recoil_uncorr_para", "axis": "recoil_para" }, "recoil_uncorr_para", -150, 150, 1e0, 1e8, "U_{#parallel} (GeV) (uncorrected)", "Events", rebin=bins_recoil_para_perp)
     singlePlot({"name": "recoil_uncorr_perp", "axis": "recoil_perp" }, "recoil_uncorr_perp", -150, 150, 1e0, 1e8, "U_{#perp}  (GeV) (uncorrected)", "Events", rebin=bins_recoil_para_perp)
-    singlePlot({"name": "recoil_uncorr_para_qT_perp", "axis": "recoil_para_qT" }, "recoil_uncorr_para_qT_perp", -150, 150, 1e0, 1e8, "U_{#parallel} + U_{#perp}  (GeV) (uncorrected)", "Events", rebin=bins_recoil_para_perp)
     singlePlot({"name": "recoil_uncorr_magn", "axis": "recoil_magn" }, "recoil_uncorr_magn", 0, 200, 1e0, 1e8, "|U| (GeV) (uncorrected)", "Events", rebin=bins_recoil_magn)
     
-    singlePlot({"name": "recoil_corr_lep_para_qT", "axis": "recoil_para_qT" }, "recoil_corr_lep_para_qT", -150, 150, 1e0, 1e8, "U_{#parallel} + q_{T} (GeV) (lepton corrected)", "Events", rebin=bins_recoil_para_perp)
+    singlePlot({"name": "recoil_corr_lep_para", "axis": "recoil_para" }, "recoil_corr_lep_para", -150, 150, 1e0, 1e8, "U_{#parallel} (GeV) (lepton corrected)", "Events", rebin=bins_recoil_para_perp)
     singlePlot({"name": "recoil_corr_lep_perp", "axis": "recoil_perp" }, "recoil_corr_lep_perp", -150, 150, 1e0, 1e8, "U_{#perp}  (GeV) (lepton corrected)", "Events", rebin=bins_recoil_para_perp)
-    singlePlot({"name": "recoil_corr_lep_para_qT_perp", "axis": "recoil_para_qT" }, "recoil_corr_lep_para_qT_perp", -150, 150, 1e0, 1e8, "U_{#parallel} + U_{#perp}  (GeV) (lepton corrected)", "Events", rebin=bins_recoil_para_perp)
     singlePlot({"name": "recoil_corr_lep_magn", "axis": "recoil_magn" }, "recoil_corr_lep_magn", 0, 200, 1e0, 1e8, "|U| (GeV) (lepton corrected)", "Events", rebin=bins_recoil_magn)
     
     
-    singlePlot({"name": "recoil_corr_xy_para_qT", "axis": "recoil_para_qT" }, "recoil_corr_xy_para_qT", -150, 150, 1e0, 1e8, "U_{#parallel} + q_{T} (GeV) (XY corrected)", "Events", rebin=bins_recoil_para_perp)
+    singlePlot({"name": "recoil_corr_xy_para", "axis": "recoil_para" }, "recoil_corr_xy_para_qT", -150, 150, 1e0, 1e8, "U_{#parallel} (GeV) (XY corrected)", "Events", rebin=bins_recoil_para_perp)
     singlePlot({"name": "recoil_corr_xy_perp", "axis": "recoil_perp" }, "recoil_corr_xy_perp", -150, 150, 1e0, 1e8, "U_{#perp}  (GeV) (XY corrected)", "Events", rebin=bins_recoil_para_perp)
-    singlePlot({"name": "recoil_corr_xy_para_qT_perp", "axis": "recoil_para_qT" }, "recoil_corr_xy_para_qT_perp", -150, 150, 1e0, 1e8, "U_{#parallel} + U_{#perp}  (GeV) (XY corrected)", "Events", rebin=bins_recoil_para_perp)
     singlePlot({"name": "recoil_corr_xy_magn", "axis": "recoil_magn" }, "recoil_corr_xy_magn", 0, 200, 1e0, 1e8, "|U| (GeV) (XY corrected)", "Events", rebin=bins_recoil_magn)
     
     
  
-    singlePlot({"name": "recoil_corr_rec_para_qT", "axis": "recoil_para_qT" }, "recoil_corr_rec_para_qT", -150, 150, 1e0, 1e8, "U_{#parallel} + q_{T} (GeV) (recoil corrected)", "Events", rebin=bins_recoil_para_perp, yRatio=1.15)
-    singlePlot({"name": "recoil_corr_rec_para_qT_qTrw", "axis": "recoil_para_qT" }, "recoil_corr_rec_para_qT_qTrw", -150, 150, 1e0, 1e8, "U_{#parallel} + q_{T} (GeV) (recoil corrected, q_{T} rw)", "Events", rebin=bins_recoil_para_perp, yRatio=1.15)
+    singlePlot({"name": "recoil_corr_rec_para", "axis": "recoil_para" }, "recoil_corr_rec_para", -150, 150, 1e0, 1e8, "U_{#parallel} (GeV) (recoil corrected)", "Events", rebin=bins_recoil_para_perp, yRatio=1.15)
+    singlePlot({"name": "recoil_corr_rec_para_qTrw", "axis": "recoil_para_qT" }, "recoil_corr_rec_para_qTrw", -150, 150, 1e0, 1e8, "U_{#parallel} (GeV) (recoil corrected, q_{T} rw)", "Events", rebin=bins_recoil_para_perp, yRatio=1.15)
     
     singlePlot({"name": "recoil_corr_rec_perp", "axis": "recoil_perp" }, "recoil_corr_rec_perp", -150, 150, 1e0, 1e8, "U_{#perp}  (GeV) (recoil corrected)", "Events", rebin=bins_recoil_para_perp, yRatio=1.15)
     singlePlot({"name": "recoil_corr_rec_perp_qTrw", "axis": "recoil_perp" }, "recoil_corr_rec_perp_qTrw", -150, 150, 1e0, 1e8, "U_{#perp}  (GeV) (recoil corrected, q_{T} rw)", "Events", rebin=bins_recoil_para_perp, yRatio=1.15)
     
-    singlePlot({"name": "recoil_corr_rec_para_qT_perp", "axis": "recoil_para_qT" }, "recoil_corr_rec_para_qT_perp", -150, 150, 1e0, 1e8, "U_{#parallel} + U_{#perp}  (GeV) (recoil corrected)", "Events", rebin=bins_recoil_para_perp, yRatio=1.15)
     
     singlePlot({"name": "recoil_corr_rec_magn", "axis": "recoil_magn" }, "recoil_corr_rec_magn", 0, 200, 1e0, 1e8, "|U| (GeV) (recoil corrected)", "Events", rebin=bins_recoil_magn, yRatio=1.15)
     singlePlot({"name": "recoil_corr_rec_magn_qTrw", "axis": "recoil_magn" }, "recoil_corr_rec_magn_qTrw", 0, 200, 1e0, 1e8, "|U| (GeV) (recoil corrected, q_{T} rw)", "Events", rebin=bins_recoil_magn, yRatio=1.15)
  
-
+    singlePlot({"name": "recoil_corr_xy_para_qT", "axis": "recoil_para" }, "recoil_corr_xy_para_qT", -200, 100, 1e0, 1e8, "U_{#parallel} #minus q_{T} (GeV)", "Events", rebin=5)
+    singlePlot({"name": "recoil_corr_rec_para_qT", "axis": "recoil_para" }, "recoil_corr_rec_para_qT", -200, 100, 1e0, 1e8, "U_{#parallel} #minus q_{T} (GeV) (recoil corrected)", "Events", rebin=5, yRatio=1.15)
+    singlePlot({"name": "recoil_corr_rec_para_qT_qTrw", "axis": "recoil_para_qTrw" }, "recoil_corr_rec_para_qT_qTrw", -200, 100, 1e0, 1e8, "U_{#parallel} #minus q_{T} (GeV) (recoil corrected, q_{T} rw)", "Events", rebin=5, yRatio=1.15)
    
 
     
     ##### MET PLOTS
-    bins_MET = list(range(0, 50, 2)) + list(range(50, 70, 4)) + [70, 80, 90, 100] # was 2 before
     bins_MET = list(range(0, 20, 1)) + list(range(20, 50, 2)) + list(range(50, 70, 4)) + [70, 80, 90, 110, 130, 150] # was 2 before
     singlePlot({"name": "MET_uncorr_pt", "axis": "recoil_MET_pt" }, "MET_uncorr_pt", 0, 150, 10, 1e8, "MET p_{T} (uncorrected)", "Events", rebin=bins_MET, yRatio=1.15)
     singlePlot({"name": "MET_corr_lep_pt", "axis": "recoil_MET_pt" }, "MET_corr_lep_pt", 0, 150, 10, 1e8, "MET p_{T} (lepton corrected)", "Events", rebin=bins_MET, yRatio=1.15)
@@ -927,9 +927,9 @@ if __name__ == "__main__":
     
     
         
-    recoil_qTbins = list(range(0, 50, 1)) + list(range(50, 70, 2)) + list(range(70, 100, 5)) + list(range(100, 150, 10)) + [150, 200, 300]
-    singlePlot({"name": "qT", "axis": "qT" }, "qT", 0, 100, 1, 1e8, "q_{T} (GeV)", "Events", rebin=recoil_qTbins, yRatio=1.15)
-    singlePlot({"name": "qT_qTrw", "axis": "qT" }, "qT_qTrw", 0, 100, 1, 1e8, "q_{T} (GeV), rw", "Events", rebin=recoil_qTbins, yRatio=1.15)
+    recoil_qTbins = list(range(0, 50, 1)) + list(range(50, 80, 2)) + list(range(80, 100, 5)) + [100]
+    singlePlot({"name": "qT", "axis": "qT" }, "qT", 0, 100, 10, 1e9, "q_{T} (GeV)", "Events", rebin=recoil_qTbins, yRatio=1.15)
+    singlePlot({"name": "qT_qTrw", "axis": "qT" }, "qT_qTrw", 0, 100, 10, 1e9, "q_{T} (GeV), rw", "Events", rebin=recoil_qTbins, yRatio=1.15)
  
     singlePlot({"name": "METx_uncorr", "axis": "MET_xy" }, "METx_uncorr", -100, 100, 1e1, 1e8, "MET x (uncorrected)", "Events", rebin=1)
     singlePlot({"name": "METy_uncorr", "axis": "MET_xy" }, "METy_uncorr", -100, 100, 1e1, 1e8, "MET y (uncorrected)", "Events", rebin=1)
@@ -940,19 +940,22 @@ if __name__ == "__main__":
     singlePlot({"name": "METx_corr_xy", "axis": "MET_xy" }, "METx_corr_xy", -100, 100, 1e1, 1e8, "MET x (XY corrected)", "Events", rebin=1)
     singlePlot({"name": "METy_corr_xy", "axis": "MET_xy" }, "METy_corr_xy", -100, 100, 1e1, 1e8, "MET y (XY corrected)", "Events", rebin=1)
     
-    #singlePlot({"name": "METx_corr_rec", "axis": "MET_xy" }, "METx_corr_rec", -100, 100, 1e1, 1e8, "MET x (recoil corrected)", "Events", rebin=1)
-    #singlePlot({"name": "METy_corr_rec", "axis": "MET_xy" }, "METy_corr_rec", -100, 100, 1e1, 1e8, "MET y (recoil corrected)", "Events", rebin=1)
+    singlePlot({"name": "METx_corr_rec", "axis": "MET_xy" }, "METx_corr_rec", -100, 100, 1e1, 1e8, "MET x (recoil corrected)", "Events", rebin=1)
+    singlePlot({"name": "METy_corr_rec", "axis": "MET_xy" }, "METy_corr_rec", -100, 100, 1e1, 1e8, "MET y (recoil corrected)", "Events", rebin=1)
     
     singlePlot({"name": "npv", "axis": "recoil_npv" }, "npv", 0, 50, 1e2, 1e8, "Number of primary vertices", "Events", rebin=1)
     singlePlot({"name": "njets", "axis": "recoil_njets" }, "njets", 0, 20, 1e3, 1e8, "Number of jets", "Events", rebin=1)
     singlePlot({"name": "RawMET_sumEt", "axis": "recoil_sumEt" }, "RawMET_sumEt", 0, 3000, 10, 1e6, "RawMET sumEt", "Events", rebin=2)
         
     mT_bins = [0, 10, 15, 20, 25, 30, 35,] + list(range(40, 100, 2)) + [100, 102, 104, 106, 108, 110, 115, 120, 125, 130, 140, 160, 200]
-    singlePlot({"name": "transverseMass_uncorr", "axis": "mt" }, "mT_uncorr", 0, 200, 1e0, 1e8, "m_{T} (GeV) (uncorrected)", "Events", rebin=mT_bins, yRatio=1.15)
-    singlePlot({"name": "transverseMass", "axis": "mt" }, "mT_corr_rec", 0, 200, 1e0, 1e8, "m_{T} (GeV) (recoil corrected)", "Events", rebin=mT_bins, yRatio=1.15)
-    singlePlot({"name": "transverseMass_qTrw", "axis": "mt" }, "mT_corr_rec_qTrw", 0, 200, 1e-1, 1e6, "m_{T} (GeV)  (recoil corrected, q_{T} rw)", "Events", rebin=mT_bins, yRatio=1.15)    
+    singlePlot({"name": "mT_uncorr", "axis": "mt" }, "mT_uncorr", 0, 200, 1e0, 1e8, "m_{T} (GeV) (uncorrected)", "Events", rebin=mT_bins)
+    singlePlot({"name": "mT_corr_lep", "axis": "mt" }, "mT_corr_lep", 0, 200, 1e0, 1e8, "m_{T} (GeV) (lepton corrected)", "Events", rebin=mT_bins)
+    singlePlot({"name": "mT_corr_xy", "axis": "mt" }, "mT_corr_xy", 0, 200, 1e0, 1e8, "m_{T} (GeV) (XY corrected)", "Events", rebin=mT_bins)
+    singlePlot({"name": "mT_corr_rec", "axis": "mt" }, "mT_corr_rec", 0, 200, 1e0, 1e8, "m_{T} (GeV)  (recoil corrected)", "Events", rebin=mT_bins, yRatio=1.15)
+    singlePlot({"name": "mT_corr_rec_qTrw", "axis": "mt" }, "mT_corr_rec_qTrw", 0, 200, 1e0, 1e8, "m_{T} (GeV)  (recoil corrected, q_{T} rw)", "Events", rebin=mT_bins, yRatio=1.15)
     
     quit()
+    
     
     
     
