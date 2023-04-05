@@ -73,6 +73,9 @@ def relVariances(h1vals, h2vals, h1vars, h2vars):
     rel2 = relVariance(h2vals, h2vars)
     return (rel1, rel2)
 
+# TODO: Implement this rather than relying on pdf unc function
+#def rssHist(h):
+
 def sqrtHist(h):
     rootval = np.sqrt(h.values(flow=True))
     relvar = relVariance(h.values(flow=True), h.variances(flow=True))
