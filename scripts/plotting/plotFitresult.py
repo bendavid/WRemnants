@@ -44,7 +44,7 @@ nbins_reco_eta = 48
 nbins_reco = nbins_reco_charge * nbins_reco_pt * nbins_reco_eta
 
 # gen bins
-nbins_charge = 1#2
+nbins_charge = 2#2
 nbins_pt = 2 #29
 nbins_eta = 3 #48
 
@@ -55,13 +55,8 @@ lumi=16.8
 binwnorm = 1.0
 
 def getProcessPtEtaCharge(name):
-    if name.startswith("Zmumu"):
-        eta, pt = name.split("_")[1:]
-        charge = 0
-    else:  
-        charge, eta, pt = name.split("_")[1:]
-        charge = int(charge.replace("qGen",""))
-
+    charge, eta, pt = name.split("_")[1:]
+    charge = int(charge.replace("qGen",""))
     eta = int(eta.replace("etaGen",""))
     pt = int(pt.replace("ptGen",""))
     return pt, eta, charge
@@ -94,7 +89,7 @@ def get_label(name):
     elif name.startswith("Zmumu"):
         pt, eta, charge = getProcessPtEtaCharge(name)
 
-        label = r"Z$\to\mu\mu$" #if charge else r"W$^{-}\to\mu\nu$"
+        label = r"Z$\to\mu^{+}$" if charge else r"Z$\to\mu^{-}$"
         label += f"({eta};{pt})"
 
         return label
@@ -126,13 +121,13 @@ def get_color(name):
     elif name.startswith("Wmunu"):
         pt, eta, charge = getProcessPtEtaCharge(name)
 
-        icol = (eta + nbins_eta*pt + nbins_eta*nbins_pt*charge) / (nbins_eta*nbins_pt*nbins_charge-1)
+        icol = (1+eta + nbins_eta*pt + nbins_eta*nbins_pt*charge) / (nbins_eta*nbins_pt*nbins_charge)
 
         return cm_w(icol)
     elif name.startswith("Zmumu"):
         pt, eta, charge = getProcessPtEtaCharge(name)
 
-        icol = (eta + nbins_eta*pt + nbins_eta*nbins_pt*charge) / (nbins_eta*nbins_pt*nbins_charge-1)
+        icol = (1+eta + nbins_eta*pt + nbins_eta*nbins_pt*charge) / (nbins_eta*nbins_pt*nbins_charge)
 
         return cm_z(icol)        
 

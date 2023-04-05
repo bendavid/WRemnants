@@ -104,7 +104,7 @@ def main(args,xnorm=False):
             datagroups.defineSignalBinsUnfolding("Wmunu_qGen0")
             datagroups.defineSignalBinsUnfolding("Wmunu_qGen1")
         else:
-            # datagroups.setGenAxes(["qGen","ptGen","etaGen"])
+            datagroups.setGenAxes(["qGen","etaGen","ptGen"])
             datagroups.defineSignalBinsUnfolding("Zmumu")
 
         if xnorm:
