@@ -38,13 +38,13 @@ combine_result = uproot.open(args.infile)
 
 # settings
 nbins_reco_charge = 2
-nbins_reco_pt = 29
+nbins_reco_pt = 34 #29
 nbins_reco_eta = 48
 
 nbins_reco = nbins_reco_charge * nbins_reco_pt * nbins_reco_eta
 
 # gen bins
-nbins_charge = 2
+nbins_charge = 1#2
 nbins_pt = 2 #29
 nbins_eta = 3 #48
 
@@ -55,8 +55,13 @@ lumi=16.8
 binwnorm = 1.0
 
 def getProcessPtEtaCharge(name):
-    charge, eta, pt = name.split("_")[1:]
-    charge = int(charge.replace("qGen",""))
+    if name.startswith("Zmumu"):
+        eta, pt = name.split("_")[1:]
+        charge = 0
+    else:  
+        charge, eta, pt = name.split("_")[1:]
+        charge = int(charge.replace("qGen",""))
+
     eta = int(eta.replace("etaGen",""))
     pt = int(pt.replace("ptGen",""))
     return pt, eta, charge
@@ -64,6 +69,7 @@ def getProcessPtEtaCharge(name):
 # labels
 labelmap = {
     "Zmumu" : r"Z$\to\mu\mu$",
+    "Zmumu_bkg" : r"Z$\to\mu\mu$ (bkg)",
     "Ztautau" : r"Z$\to\tau\tau$",
     "Wmunu_bkg" : r"W$^{\pm}\to\mu\nu$ (bkg)",
     "Wmunu" : r"W$^{\pm}\to\mu\nu$ ",
@@ -85,6 +91,13 @@ def get_label(name):
         label += f"({eta};{pt})"
 
         return label
+    elif name.startswith("Zmumu"):
+        pt, eta, charge = getProcessPtEtaCharge(name)
+
+        label = r"Z$\to\mu\mu$" #if charge else r"W$^{-}\to\mu\nu$"
+        label += f"({eta};{pt})"
+
+        return label
     else:
         logger.warning(f"No label found for {name}")
         return name
@@ -92,6 +105,7 @@ def get_label(name):
 # colors
 colormap= {
     "Zmumu" : "lightblue",
+    "Zmumu_bkg" : "lightblue",
     "Ztautau" : "darkblue",
     "Wmunu_bkg" : "darkred",
     "Wmunu" : "darkred",
@@ -102,7 +116,8 @@ colormap= {
     "Fake" : "grey",
 }
 
-cm = mpl.colormaps["autumn"]
+cm_w = mpl.colormaps["autumn"]
+cm_z = mpl.colormaps["winter"]
 
 def get_color(name):
     logger.debug(f"Get color for {name}")
@@ -113,7 +128,14 @@ def get_color(name):
 
         icol = (eta + nbins_eta*pt + nbins_eta*nbins_pt*charge) / (nbins_eta*nbins_pt*nbins_charge-1)
 
-        return cm(icol)
+        return cm_w(icol)
+    elif name.startswith("Zmumu"):
+        pt, eta, charge = getProcessPtEtaCharge(name)
+
+        icol = (eta + nbins_eta*pt + nbins_eta*nbins_pt*charge) / (nbins_eta*nbins_pt*nbins_charge-1)
+
+        return cm_z(icol)        
+
     else:
         logger.warning(f"No color found for {name}")
         return "white"

@@ -9,7 +9,7 @@ import os
 import itertools
 import functools
 import hist
-import copy
+from copy import deepcopy
 import pandas as pd
 import math
 
@@ -62,10 +62,7 @@ class Datagroups(object):
         if canReplaceKey or group_name not in self.groups.keys():
             if group_name in self.groups.keys():
                 logger.warning(f"Replacing {group_name} in groups")
-            self.groups[group_name] = dictToAdd
-            # deepcopy member operation
-            if "memberOp" in dictToAdd.keys():
-                self.groups[group_name]["memberOp"] = copy.deepcopy(dictToAdd["memberOp"])
+            self.groups[group_name] = deepcopy(dictToAdd)
 
     def deleteGroups(self, names):
         for n in names:
@@ -78,10 +75,7 @@ class Datagroups(object):
             logger.warning(f"Try to delete group '{name}' but did not find this group.")
 
     def copyGroup(self, group_name, new_name, member_filter=None):
-        self.groups[new_name] = self.groups[group_name]
-        # deepcopy member operation
-        if "memberOp" in self.groups[group_name].keys():
-            self.groups[new_name]["memberOp"] = copy.deepcopy(self.groups[group_name]["memberOp"])
+        self.groups[new_name] = deepcopy(self.groups[group_name])
         if member_filter:
             # Invert the member filter and exclude those members
             self.deleteGroupMembers(new_name, [m for m in filter(lambda x,f=member_filter: not f(x), self.groups[new_name]["members"])])
@@ -109,7 +103,7 @@ class Datagroups(object):
         if "memberOp" not in self.groups[group_name]:
             self.groups[group_name]["memberOp"] = [None]*len(self.groups[group_name]["members"])
         
-        self.groups[group_name]["memberOp"].append(copy.deepcopy(member_operation))
+        self.groups[group_name]["memberOp"].append(deepcopy(member_operation))
         self.groups[group_name]["members"].append(member)
 
     def deleteGroupMembers(self, group_name, members):
@@ -459,15 +453,11 @@ class Datagroups(object):
             gen_bin_edges = nominal_hist.axes[gen_axis].edges
             gen_bins.append(range(len(gen_bin_edges)-1))
 
-        # temporarily save base group dictionary
-        base_group = dict(self.groups[group_name])
-        base_members = base_group["members"]
-
-        # Remove inclusive signal
-        self.deleteGroup(group_name)
+        base_group = self.groups[group_name]
+        base_members = base_group["members"][:]
 
         for indices in itertools.product(*gen_bins):
-            proc_genbin = base_group
+            proc_genbin = deepcopy(base_group)
             memberOp = lambda x, indices=indices, genvars=self.gen_axes: x[{var : i for var, i in zip(self.gen_axes, indices)}]
             proc_genbin["memberOp"] = [memberOp for m in base_members]
 
@@ -478,11 +468,10 @@ class Datagroups(object):
             self.unconstrainedProcesses.append(proc_name)
             self.addGroup(proc_name, proc_genbin)
 
-
         # add one out of acceptance group and treat as background
         ooa_name = group_name.split("_")[0]+"_bkg"
         if ooa_name not in self.groups.keys():
-            proc_genbin = base_group
+            proc_genbin = deepcopy(base_group)
             proc_genbin['memberOp'] = []
             proc_genbin['members'] = []
             self.addGroup(ooa_name, proc_genbin)
@@ -497,6 +486,8 @@ class Datagroups(object):
             logger.debug(f"Add members with condition {condition}")
             self.addGroupMembers(ooa_name, base_members, lambda x, c=condition: x[c])
 
+        # Remove inclusive signal
+        self.deleteGroup(group_name)
 
     def make_yields_df(self, histName, procs, action):
         def sum_and_unc(h):

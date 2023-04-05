@@ -48,8 +48,6 @@ def main(args, xsec=False):
         datagroups.setGenAxes("recoil_gen")
         datagroups.defineSignalBinsUnfolding(sigProc)
 
-        quit()
-
     elif args.fitType == "wmass": 
         constrainedProcs.append(sigProc)
         for proc in datagroups.groups.keys():
