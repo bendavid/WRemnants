@@ -136,7 +136,7 @@ def define_prefsr_vars(df):
     df = df.Define("phiVgen", "genV.Phi()")
     df = df.Define("absYVgen", "std::fabs(yVgen)")
     df = df.Define("chargeVgen", "GenPart_pdgId[prefsrLeps[0]] + GenPart_pdgId[prefsrLeps[1]]")
-    df = df.Define("csSineCosThetaPhi", "wrem::csSineCosThetaPhi(genl, genlanti)")
+    df = df.Define("csSineCosThetaPhi", "wrem::csSineCosThetaPhi(genlanti, genl)")
     return df
 
 def define_scale_tensor(df):
@@ -220,6 +220,9 @@ def define_central_pdf_weight(df, dataset_name, pdf):
 
     pdfName = pdfInfo["name"]
     pdfBranch = pdfInfo["branch"]
+    if not pdfBranch in df.GetColumnNames():
+        logger.warning(f"Did not find PDF branch {pdfBranch} for sample {dataset_name}! Set PDF weights to 1")
+        return df.DefinePerSample("central_pdf_weight", "1.0")
     return df.Define("central_pdf_weight", f"std::clamp<float>({pdfBranch}[0], -theory_weight_truncate, theory_weight_truncate)")
 
 def define_theory_weights_and_corrs(df, dataset_name, helpers, args):
