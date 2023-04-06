@@ -1129,4 +1129,3 @@ if __name__ == "__main__":
         print()
         print(f"Saving all FRF corrections vs eta-pt in file {outFile}")
         print()
-        fout.Close()

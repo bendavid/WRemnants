@@ -190,7 +190,7 @@ def getMinMaxHisto(h, excludeEmpty=True, sumError=True,
         if excludeMin != None and tmpmin <= excludeMin: continue
         if excludeMax != None and tmpmax >= excludeMax: continue
         if firstValidBin < 0: 
-            logger.debug("ibin %d:   tmpmin,tmpmax = %.2f, %.2f" % (ibin,tmpmin,tmpmax))
+            #logger.debug("ibin %d:   tmpmin,tmpmax = %.2f, %.2f" % (ibin,tmpmin,tmpmax))
             firstValidBin = ibin
         if sumError:
             tmpmin -= h.GetBinError(ibin)
@@ -199,11 +199,11 @@ def getMinMaxHisto(h, excludeEmpty=True, sumError=True,
             #the first time we pick a non empty bin, we set min and max to the histogram content in that bin
             minval = tmpmin
             maxval = tmpmax
-            logger.debug("#### ibin %d:   min,max = %.2f, %.2f" % (ibin,minval,maxval))
+            #logger.debug("#### ibin %d:   min,max = %.2f, %.2f" % (ibin,minval,maxval))
         else:
             minval = min(minval,tmpmin)
             maxval = max(maxval,tmpmax)
-        logger.debug("ibin %d:   min,max = %.2f, %.2f" % (ibin,minval,maxval))
+        #logger.debug("ibin %d:   min,max = %.2f, %.2f" % (ibin,minval,maxval))
     
     return minval,maxval
 
