@@ -9,25 +9,39 @@ from dash import dcc
 import dash_daq as daq
 from dash import html
 from dash.dependencies import Input, Output
-from utilities import input_tools
-import logging
+from utilities import input_tools, logging
 import os
 
-logging.basicConfig(level=logging.INFO)
-
-def writeOutput(fig, outfile, extensions=[]):
+def writeOutput(fig, outfile, extensions=[], postfix=None):
     name, ext = os.path.splitext(outfile)
     if ext not in extensions:
         extensions.append(ext)
+
+    if postfix:
+        name += f"_{postfix}"
 
     for ext in extensions:
         if ext[0] != ".":
             ext = "."+ext
         func = "write_html" if ext == ".html" else "write_image"
-        getattr(fig, func)(name+ext)
+
+        output = name+ext
+        logger.debug(f"Write output file {output}")
+
+        getattr(fig, func)(output)
 
 def plotImpacts(df, title, pulls=False, pullrange=[-5,5], POI='Wmass'):
-    
+    poi_type = POI.split("_")[-1]
+
+    if poi_type == "WMass":
+        impact_title="Impact on mass (MeV)"
+    elif poi_type == "mu":
+        impact_title="delta mu"
+    elif poi_type == "pmaskedexp":
+        impact_title="delta N"
+    elif poi_type == "pmaskedexpnorm":
+        impact_title="delta sigma / sigma"
+
     fig = make_subplots(rows=1,cols=2 if pulls else 1,
             horizontal_spacing=0.1, shared_yaxes=True)
 
@@ -73,11 +87,11 @@ def plotImpacts(df, title, pulls=False, pullrange=[-5,5], POI='Wmass'):
             ),
             row=1,col=2,
     )
-    impact_range = np.ceil(df['impact'].max()*1.2)
+    impact_range = df['impact'].max()*1.2
     impact_spacing = 5
     fig.update_layout(paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
-        xaxis_title="Impact on mass (MeV)",
+        xaxis_title=impact_title,
         title={
             'text': POI,
             'y':.999 if ndisplay > 100 else 0.98,
@@ -133,7 +147,7 @@ def readFitInfoFromFile(rf,filename, group=False, sort=None, ascending=True, sta
         rtree.GetEntry(0)
         for i, label in enumerate(labels):
             if not hasattr(rtree, label):
-                logging.warning(f"Failed to find syst {label} in tree")
+                logger.warning(f"Failed to find syst {label} in tree")
                 continue
                 
             pulls[i] = getattr(rtree, label)
@@ -159,6 +173,7 @@ def parseArgs():
     parser.add_argument("--stat", default=0.0, type=float, help="Overwrite stat. uncertainty with this value")
     parser.add_argument("-d", "--sortDescending", dest='ascending', action='store_false', help="Sort mode for nuisances")
     parser.add_argument("-g", "--group", action='store_true', help="Show impacts of groups")
+    parser.add_argument("--debug", action='store_true', help="Print debug output")
     parsers = parser.add_subparsers(dest='mode')
     interactive = parsers.add_parser("interactive", help="Launch and interactive dash session")
     interactive.add_argument("-i", "--interface", default="localhost", help="The network interface to bind to.")
@@ -245,13 +260,29 @@ def producePlots(rtfile,args, POI='Wmass'):
         if args.num and args.num < df.size:
             df = df[-args.num:].sort_values(by=args.sort, ascending=args.ascending)
         fig = plotImpacts(df, title=args.title, pulls=not args.noPulls and not args.group, pullrange=[-5,5], POI=POI)
-        writeOutput(fig, args.outputFile, args.otherExtensions)
+
+        outputfilename = args.outputFile
+        outputfilename
+        writeOutput(fig, args.outputFile, args.otherExtensions, postfix=POI)
     else:
         raise ValueError("Must select mode 'interactive' or 'output'")
 
 
 if __name__ == '__main__':
     args = parseArgs()
+
+    logger = logging.setup_logger("pullsAndImpacts", 4 if args.debug else 3, False)
+
     rtfile = uproot.open(args.inputFile)
-    for POI in input_tools.getPOInames(rtfile):
+    POIs = input_tools.getPOInames(rtfile)
+    for POI in POIs:
         producePlots(rtfile,args,POI)
+    
+    if not (POIs[0]=="WMass" and len(POIs) == 1):
+        # masked channel
+        for POI in input_tools.getPOInames(rtfile, poi_type="pmaskedexp"):
+            producePlots(rtfile,args,POI)
+
+        # masked channel normalized
+        for POI in input_tools.getPOInames(rtfile, poi_type="pmaskedexpnorm"):
+            producePlots(rtfile,args,POI)

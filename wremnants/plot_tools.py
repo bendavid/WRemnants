@@ -364,7 +364,7 @@ def save_pdf_and_png(outdir, basename, fig=None):
     logger.info(f"Wrote file(s) {fname}(.png)")
 
 def write_index_and_log(outpath, logname, indexname="index.php", template_dir=f"{pathlib.Path(__file__).parent}/Templates", 
-        yield_tables=None, analysis_meta_info=None, args={}):
+        yield_tables=None, analysis_meta_info=None, args={}, nround=2):
     shutil.copyfile(f"{template_dir}/{indexname}", f"{outpath}/{indexname}")
     logdir = outpath
 
@@ -379,7 +379,7 @@ def write_index_and_log(outpath, logname, indexname="index.php", template_dir=f"
             for k,v in yield_tables.items():
                 logf.write(f"Yield information for {k}\n")
                 logf.write("-"*80+"\n")
-                logf.write(str(v.round(2))+"\n\n")
+                logf.write(str(v.round(nround))+"\n\n")
 
         if analysis_meta_info:
             for k,analysis_info in analysis_meta_info.items():
