@@ -327,24 +327,24 @@ def main(args):
         ## currently can't work with the changes made in CardTool.py,
         ## the histograms to be loaded for the corrections must be remade according to the new logic
         
-        # if "Fake" not in excludeGroup:
-        #     cardTool.addSystematic(f"nominal", # this is the histogram to read
-        #                            systAxes=[],
-        #                            processes=["Fake"],
-        #                            mirror=True,
-        #                            group="MultijetBkg",
-        #                            outNames=["mtCorrFakesDown", "mtCorrFakesUp"],
-        #                            decorrelateByCharge=True, # will modify names above to include channel name
-        #                            rename="mtCorrFakes", # this is the name used to identify the syst in the list of systs
-        #                            action=sel.applyCorrection,
-        #                            doActionBeforeMirror=True, # to mirror after the histogram has been created
-        #                            actionArgs={"scale": 1.0,
-        #                                        "corrFile" : f"{data_dir}/fakesWmass/fakerateFactorMtBasedCorrection_vsEtaPt.root",
-        #                                        "corrHist": "etaPtCharge_mtCorrection",
-        #                                        "offsetCorr": 1.0,
-        #                                        "createNew": True}
-        #                        # add action to multiply by correction
-        # )
+        if "Fake" not in excludeGroup:
+            for charge in ["plus", "minus"]:
+                chargeId = "q1" if charge == "plus" else "q0"
+                cardTool.addSystematic(f"nominal", # this is the histogram to read
+                                       systAxes=[],
+                                       processes=["Fake"],
+                                       mirror=True,
+                                       group="MultijetBkg",
+                                       outNames=[f"mtCorrFakes_{chargeId}{upd}" for upd in ["Up", "Down"]], # actual names for nuisances
+                                       rename=f"mtCorrFakes_{chargeId}", # this name is used only to identify the syst in CardTool's syst list
+                                       action=sel.applyCorrection,
+                                       doActionBeforeMirror=True, # to mirror after the histogram has been created
+                                       actionArgs={"scale": 1.0,
+                                                   "corrFile" : f"{data_dir}/fakesWmass/fakerateFactorMtBasedCorrection_vsEtaPt.root",
+                                                   "corrHist": f"etaPtCharge_mtCorrection_{charge}",
+                                                   "offsetCorr": 1.0,
+                                                   "createNew": True}
+                )
 
     else:
         cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
