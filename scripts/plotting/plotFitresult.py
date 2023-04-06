@@ -1,4 +1,5 @@
 import mplhep as hep
+import matplotlib.pyplot as plt
 import uproot
 import argparse
 import os
@@ -10,6 +11,9 @@ import pdb
 
 from utilities import boostHistHelpers as hh, logging
 from wremnants import plot_tools
+
+hep.style.use(hep.style.ROOT)
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument("infile", help="Output file of the analysis stage, containing ND boost histogrdams")
@@ -30,7 +34,7 @@ parser.add_argument("--fittypes", type=str, nargs="+", default=["prefit", "postf
 
 args = parser.parse_args()
 
-logger = logging.setup_logger("plotFitresult", 4 if args.debug else 3, True)
+logger = logging.setup_logger("plotFitresult", 4 if args.debug else 3, False)
 
 outdir = plot_tools.make_plot_dir(args.outpath, args.outfolder)
 
@@ -41,9 +45,14 @@ nbins_reco_charge = 2
 nbins_reco_eta = 48
 
 if any([x.startswith("WMass") for x in args.infile.split("/")]):
+    base_process = "Wmunu"
     nbins_reco_pt = 29
+    cm = mpl.colormaps["autumn"]
 else:
+    base_process = "Zmumu"
     nbins_reco_pt = 34
+
+    cm = mpl.colormaps["winter"]
 
 nbins_reco = nbins_reco_charge * nbins_reco_pt * nbins_reco_eta
 
@@ -59,7 +68,7 @@ lumi=16.8
 binwnorm = 1.0
 
 def getProcessPtEtaCharge(name):
-    charge, eta, pt = name.split("_")[1:]
+    charge, eta, pt = name.split("_")[1:4]
     charge = int(charge.replace("qGen",""))
     eta = int(eta.replace("etaGen",""))
     pt = int(pt.replace("ptGen",""))
@@ -113,27 +122,20 @@ colormap= {
     "Diboson" : "pink",
     "QCD" : "grey",
     "Fake" : "grey",
+    "Other" : "grey",
 }
 
-cm_w = mpl.colormaps["autumn"]
-cm_z = mpl.colormaps["winter"]
 
 def get_color(name):
     logger.debug(f"Get color for {name}")
     if name in colormap.keys():
         return colormap[name]
-    elif name.startswith("Wmunu"):
+    elif name.startswith(base_process):
         pt, eta, charge = getProcessPtEtaCharge(name)
 
         icol = (1+eta + nbins_eta*pt + nbins_eta*nbins_pt*charge) / (nbins_eta*nbins_pt*nbins_charge)
 
-        return cm_w(icol)
-    elif name.startswith("Zmumu"):
-        pt, eta, charge = getProcessPtEtaCharge(name)
-
-        icol = (1+eta + nbins_eta*pt + nbins_eta*nbins_pt*charge) / (nbins_eta*nbins_pt*nbins_charge)
-
-        return cm_z(icol)        
+        return cm(icol) 
 
     else:
         logger.warning(f"No color found for {name}")
@@ -153,14 +155,25 @@ def make_yields_df(hists, procs, signal=None):
     return pd.DataFrame(entries, columns=["Process", "Yield", "Uncertainty"])
 
 
+
 def plot(fittype, bins=(None, None), channel=None):
     logger.info(f"Make {fittype} plot"+(f" in channel {channel}" if channel else ""))
+
+    procs = [p for p in filter(lambda x: x.startswith("expproc_") and x.endswith(f"_{fittype};1"), combine_result.keys())]
+
+    proc_sig = filter(lambda x: f"_{base_process}_qGen" in x, procs)
+    proc_bkg = filter(lambda x: f"_{base_process}_qGen" not in x, procs)
+
+    proc_bkg = [s for s in sorted(proc_bkg, key=lambda x: sum(combine_result[x].to_hist().values()))]
+    proc_sig = [s for s in sorted(proc_sig, reverse=True)]
 
     bin_lo = bins[0]
     bin_hi = bins[1]
 
-
     # pre computation
+    if "obs" not in [c.replace(";1","") for c in  combine_result.keys()]:
+        logger.error(f"Shapes not found in fitresult file, run combine with --saveHists --computeHistErrors to get shapes.")
+        return
     hist_data = combine_result["obs"].to_hist()[bin_lo:bin_hi]
     hist_pred = combine_result[f"expfull_{fittype}"].to_hist()[bin_lo:bin_hi]
 
@@ -170,16 +183,6 @@ def plot(fittype, bins=(None, None), channel=None):
         ylim = args.ylim
 
     fig, ax1, ax2 = plot_tools.figureWithRatio(hist_data, "Bin number", "Events/bin", ylim, "Data/Pred.", args.rrange)
-
-    procs = [p for p in filter(lambda x: x.startswith("expproc_") and x.endswith(f"_{fittype};1"), combine_result.keys())]
-
-    proc_sig = filter(lambda x: "_Wmunu_qGen" in x, procs)
-    proc_bkg = filter(lambda x: "_Wmunu_qGen" not in x, procs)
-
-    proc_bkg = [s for s in sorted(proc_bkg, key=lambda x: sum(combine_result[x].to_hist().values()))]
-    proc_sig = [s for s in sorted(proc_sig, reverse=True)]
-
-    procs = proc_bkg + proc_sig
 
     stack = [combine_result[p].to_hist()[bin_lo:bin_hi] for p in procs]
     names = [k.replace("expproc_","").replace(f"_{fittype};1","") for k in procs]
@@ -254,7 +257,7 @@ def plot(fittype, bins=(None, None), channel=None):
     outfile = f"{fittype}" + (f"_{args.postfix}" if args.postfix else "") + (f"_{channel}" if channel else "")
     plot_tools.save_pdf_and_png(outdir, outfile)
     stack_yields = make_yields_df(stack, names)
-    signal_yields = make_yields_df(stack, names, signal="Wmunu")
+    signal_yields = make_yields_df(stack, names, signal=base_process)
     unstacked_yields = make_yields_df([hist_data], ["Data"])
     plot_tools.write_index_and_log(outdir, outfile, 
         yield_tables={"Stacked processes" : stack_yields, "Signal process": signal_yields, "Unstacked processes" : unstacked_yields},
@@ -262,8 +265,60 @@ def plot(fittype, bins=(None, None), channel=None):
         args=args,
     )
 
+def plot_matrix_poi(matrix="covariance_matrix_channelmu"):
+
+    if matrix not in [c.replace(";1","") for c in combine_result.keys()]:
+        logger.error(f"Histogram {matrix} was not found in the fit results file!")
+        return
+
+    hist2d = combine_result[matrix].to_hist()
+
+    # select signal parameters
+    key = matrix.split("channel")[-1]
+    xentries = [(i, hist2d.axes[0][i]) for i in range(len(hist2d.axes[0])) if hist2d.axes[0][i].endswith(key)]
+    xentries = sorted(xentries, key=lambda x: x[1], reverse=True)
+
+    # make matrix between POIs only
+    cov_mat = np.zeros((len(xentries), len(xentries)))
+    for i, ia in xentries:
+        for j, ja in xentries:
+            cov_mat[i][j] = hist2d[i,j]
+
+    xlabels = [get_label(x[1]) for x in xentries]
+
+    fig = plt.figure()#figsize=(8*width,8))
+    ax = fig.add_subplot() 
+
+    hep.hist2dplot(cov_mat)#, labels=(xlabels,ylabels))
+    
+
+    ax.set_xticks(np.arange(len(xlabels))+0.5)
+    ax.set_yticks(np.arange(len(xlabels))+0.5)
+    ax.set_xticklabels(xlabels, rotation = 90)
+    ax.set_yticklabels(xlabels)
+
+    outfile = "covariance" if "covariance" in matrix else "correlation"
+
+    outfile += "_" + matrix.split("_")[-1].replace("channel","")
+        
+    plot_tools.save_pdf_and_png(outdir, outfile)
+    plot_tools.write_index_and_log(outdir, outfile, 
+        yield_tables={"Values" : cov_mat}, nround=2 if "correlation" in matrix else 10,
+        analysis_meta_info=None,
+        args=args,
+    )
 
 for fittype in args.fittypes:
-    plot(fittype)
+
+    plot_matrix_poi("correlation_matrix_channelmu")
+    plot_matrix_poi("covariance_matrix_channelmu")
+
+    plot_matrix_poi("correlation_matrix_channelpmaskedexp")
+    plot_matrix_poi("covariance_matrix_channelpmaskedexp")
+    plot_matrix_poi("correlation_matrix_channelpmaskedexpnorm")
+    plot_matrix_poi("covariance_matrix_channelpmaskedexpnorm")
+
+
+    plot(fittype, bins=(None, nbins_reco))
     plot(fittype, bins=(None,int(nbins_reco/2)), channel="minus")
-    plot(fittype, bins=(int(nbins_reco/2),None), channel="plus")
+    plot(fittype, bins=(int(nbins_reco/2), nbins_reco), channel="plus")
