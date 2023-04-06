@@ -202,10 +202,10 @@ for h in args.hists:
     fitresultstring=""
     if args.fitresult:
         fitresultstring = "_prefit" if args.prefit else "_postfit"
-    outnames = [f"{h.replace('-','_')}", args.baseName, args.channel]
-    for n in filter(lambda x: x, ([args.varName[0], args.selectEntries[0]] if "varName" in args else [])+[fitresultstring, args.name_append]):
+    outnames = [f"{h.replace('-','_')}", args.baseName]
+    var_args = [getattr(args, attr) for attr in ["varName", "selectEntries"] if attr in args]
+    for n in filter(lambda x: x, [x[0] for x in var_args if x]+[fitresultstring, args.name_append, args.channel]):
         outnames.append(n)
-    print(outnames)
     outfile = "_".join(outnames)
     plot_tools.save_pdf_and_png(outdir, outfile)
     stack_yields = groups.make_yields_df(args.baseName, prednames, action)

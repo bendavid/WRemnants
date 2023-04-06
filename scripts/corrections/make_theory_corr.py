@@ -128,7 +128,7 @@ if numh.ndim-1 < minnloh.ndim:
     numh = hist.Hist(*axes, storage=numh._storage_type(), data=data)
 
 
-corrh_unc  = theory_corrections.make_corr_from_ratio(minnloh, numh)
+corrh_unc, minnloh, numh  = theory_corrections.make_corr_from_ratio(minnloh, numh)
 corrh = hist.Hist(*corrh_unc.axes, name=corrh_unc.name, storage=hist.storage.Double(), data=corrh_unc.values(flow=True))
 
 if args.postfix:

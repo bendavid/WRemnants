@@ -145,7 +145,7 @@ def make_corr_from_ratio(denom_hist, num_hist, rebin=False):
     denom_hist, num_hist = rebin_corr_hists([denom_hist, num_hist], use_predefined_bins=rebin)
 
     corrh = hh.divideHists(num_hist, denom_hist)
-    return set_corr_ratio_flow(corrh)
+    return set_corr_ratio_flow(corrh), denom_hist, num_hist
 
 def make_corr_by_helicity(ref_helicity_hist, target_sigmaul, target_sigma4, ndim=3):
     ref_helicity_hist, target_sigmaul, target_sigma4 = rebin_corr_hists([ref_helicity_hist, target_sigmaul, target_sigma4], ndim, True)
