@@ -130,23 +130,13 @@ if __name__ == "__main__":
     hratio = 0
 
     # file 1
-    tf = ROOT.TFile.Open(f1)        
-    hist1 =   tf.Get(h1)
-    if (hist1 == 0):
-        print("Error: could not retrieve %s from input file %s. Exit" % (h1,f1))
-        quit()
-    else:
-        hist1.SetDirectory(0)
+    tf = safeOpenFile(f1)
+    hist1 = safeGetObject(tf, h1)
     tf.Close()
 
     # file2
-    tf = ROOT.TFile.Open(f2)        
-    hist2 =   tf.Get(h2)
-    if (hist2 == 0):
-        print("Error: could not retrieve %s from input file %s. Exit" % (h2,f2))
-        quit()
-    else:
-        hist2.SetDirectory(0)
+    tf = safeOpenFile(f2)
+    hist2 = safeGetObject(tf, h2)
     tf.Close()
 
     hinput1 = hist1

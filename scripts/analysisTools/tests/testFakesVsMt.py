@@ -44,14 +44,21 @@ from scripts.analysisTools.tests.testPlots1D import plotDistribution1D
 # function to plot 1D data/MC distributions for the iso/nJet bins we have in this study
 def plotProjection1D(rootHists, datasets, outfolder_dataMC, canvas1Dshapes=None, chargeBin=1,
                      projectAxisToKeep=0, isoAxisRange=[1,1], jetAxisRange=[1,2],
-                     xAxisName="variable", plotName="variable_failIso_jetInclusive", mTaboveThis=None,
+                     xAxisName="variable", plotName="variable_failIso_jetInclusive", mTvalueRange=[],
                      rebinVariable=None):
 
     firstBinMt = 1
     lastBinMt = 1 + rootHists["Data"].GetAxis(3).GetNbins()
-    if mTaboveThis:
-        firstBinMt = rootHists["Data"].GetAxis(3).FindFixBin(mTaboveThis+0.001)
-
+    if len(mTvalueRange):
+        if len(mTvalueRange) != 2:
+            logger.error(f"In plotProjection1D(): mTvalueRange must have two values, it was {mTvalueRange}")
+            quit()
+        # [40, -1] selects from 40 onwards
+        # [40, 100] selects from 40 to 100
+        firstBinMt = rootHists["Data"].GetAxis(3).FindFixBin(mTvalueRange[0]+0.001)
+        if mTvalueRange[1] > mTvalueRange[0]:
+            lastBinMt  = rootHists["Data"].GetAxis(3).FindFixBin(mTvalueRange-0.001)
+            
     hdata = None
     hmc = {}
     for d in datasets:
@@ -88,7 +95,7 @@ def plotProjection1Dfrom3D(rootHists, datasets, outfolder_dataMC, canvas1Dshapes
     axisProj = "x" if projectAxisToKeep == 0 else "y" if projectAxisToKeep == 1 else "z"
     for d in datasets:
         rootHists[d].GetZaxis().SetRange(chargeBin, chargeBin)
-        logger.warning("Setting pt axis to exclude overflows from projections")
+        logger.warning("In plotProjection1Dfrom3D(): setting pt axis to exclude overflows from projections")
         rootHists[d].GetYaxis().SetRange(1, rootHists[d].GetNbinsY())
         if d == "Data":
             hdata = rootHists[d].Project3D(f"{axisProj}eo")
@@ -561,7 +568,8 @@ def runStudy(charge, outfolder, rootfilename, args):
     
     axisVar = {0 : ["muon_eta", "#eta"],
                1 : ["muon_pt",  "p_{T} (GeV)"],
-               3 : ["mT", "m_{T} (GeV)"]
+               3 : ["mT", "m_{T} (GeV)"],
+               6 : ["deltaPhiMuonMET", "#Delta#phi(#mu\,MET) (GeV)"]
     }
                
     createPlotDirAndCopyPhp(outfolder)
@@ -593,7 +601,10 @@ def runStudy(charge, outfolder, rootfilename, args):
         # signal region adding mT cut too
         plotProjection1D(rootHists, datasetsNoFakes, outfolder_dataMC, canvas1Dshapes=canvas1Dshapes, chargeBin=chargeBin,
                          projectAxisToKeep=xbin, xAxisName=axisVar[xbin][1], plotName=f"{axisVar[xbin][0]}_passIso_jetInclusive_passMt",
-                         isoAxisRange=[2,2], jetAxisRange=[1,2], mTaboveThis=40, rebinVariable=rebinVariable)
+                         isoAxisRange=[2,2], jetAxisRange=[1,2], mTvalueRange=[40,-1], rebinVariable=rebinVariable)
+        plotProjection1D(rootHists, datasetsNoFakes, outfolder_dataMC, canvas1Dshapes=canvas1Dshapes, chargeBin=chargeBin,
+                         projectAxisToKeep=xbin, xAxisName=axisVar[xbin][1], plotName=f"{axisVar[xbin][0]}_failIso_jetInclusive",
+                         isoAxisRange=[1,1], jetAxisRange=[1,2], rebinVariable=rebinVariable)
 
     ###################################
     ###################################
