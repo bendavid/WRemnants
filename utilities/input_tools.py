@@ -247,7 +247,7 @@ def getPOInames(rtfile, poi_type="mu"):
 
     return names
     
-def readImpacts(rtfile, group, sort=True, add_total=True, stat=0.0, POI='Wmass'):
+def readImpacts(rtfile, group, sort=True, add_total=True, stat=0.0, POI='Wmass', normalize=True):
     poi_type = POI.split("_")[-1]
     if POI=='Wmass':
         histname = "nuisance_group_impact_nois" if group else "nuisance_impact_nois"
@@ -260,6 +260,7 @@ def readImpacts(rtfile, group, sort=True, add_total=True, stat=0.0, POI='Wmass')
     labels = np.array([impacts.axes[1].value(i) for i in range(impacts.axes[1].size)])
     iPOI = 0 if POI=='Wmass' else getPOInames(rtfile, poi_type).index(POI)
     total = rtfile["fitresults"][impacts.axes[0].value(iPOI)+"_err"].array()[0]
+    norm = rtfile["fitresults"][impacts.axes[0].value(iPOI)].array()[0]
     impacts = impacts.values()[iPOI,:]
     if sort:
         order = np.argsort(impacts)
@@ -268,6 +269,9 @@ def readImpacts(rtfile, group, sort=True, add_total=True, stat=0.0, POI='Wmass')
     if add_total:
         impacts = np.append(impacts, total)
         labels = np.append(labels, "Total")
+
+    if normalize:
+        impacts /= norm
 
     if stat > 0:
         idx = np.argwhere(labels == "stat")

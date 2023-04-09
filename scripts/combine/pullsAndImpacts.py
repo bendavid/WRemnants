@@ -30,17 +30,17 @@ def writeOutput(fig, outfile, extensions=[], postfix=None):
 
         getattr(fig, func)(output)
 
-def plotImpacts(df, title, pulls=False, pullrange=[-5,5], POI='Wmass'):
+def plotImpacts(df, title, pulls=False, pullrange=[-5,5], POI='Wmass', normalize=False):
     poi_type = POI.split("_")[-1]
 
-    if poi_type == "WMass":
+    if poi_type == "Wmass":
         impact_title="Impact on mass (MeV)"
     elif poi_type == "mu":
-        impact_title="delta mu"
+        impact_title=r"$\Delta \mu$"
     elif poi_type == "pmaskedexp":
-        impact_title="delta N"
+        impact_title=r"$\delta N$" if normalize else r"$\Delta N$"
     elif poi_type == "pmaskedexpnorm":
-        impact_title="delta sigma / sigma"
+        impact_title=r"$\delta (\mathrm{d} \sigma / \sigma)$" if normalize else r"$\Delta(\mathrm{d} \sigma / \sigma)$"
 
     fig = make_subplots(rows=1,cols=2 if pulls else 1,
             horizontal_spacing=0.1, shared_yaxes=True)
@@ -87,7 +87,7 @@ def plotImpacts(df, title, pulls=False, pullrange=[-5,5], POI='Wmass'):
             ),
             row=1,col=2,
     )
-    impact_range = df['impact'].max()*1.2
+    impact_range = np.ceil(df['impact'].max()*1.2)
     impact_spacing = 5
     fig.update_layout(paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
@@ -125,7 +125,7 @@ def plotImpacts(df, title, pulls=False, pullrange=[-5,5], POI='Wmass'):
         )
     return fig
 
-def readFitInfoFromFile(rf,filename, group=False, sort=None, ascending=True, stat=0.0, POI='Wmass'):
+def readFitInfoFromFile(rf,filename, group=False, sort=None, ascending=True, stat=0.0, POI='Wmass', normalize=False):
     # rf = uproot.open(filename)
     # name = "nuisance_group_impact_nois" if group else "nuisance_impact_nois"
     
@@ -133,7 +133,7 @@ def readFitInfoFromFile(rf,filename, group=False, sort=None, ascending=True, sta
     tree = rf[treename]
     # TODO: Make add_total configurable
     add_total = group
-    impacts,labels = input_tools.readImpacts(rf, group, sort=sort, add_total=add_total, stat=stat, POI=POI)
+    impacts,labels = input_tools.readImpacts(rf, group, sort=sort, add_total=add_total, stat=stat, POI=POI, normalize=normalize)
     # TODO: Make configurable
     if True:
         impacts = impacts*100
@@ -173,6 +173,7 @@ def parseArgs():
     parser.add_argument("--stat", default=0.0, type=float, help="Overwrite stat. uncertainty with this value")
     parser.add_argument("-d", "--sortDescending", dest='ascending', action='store_false', help="Sort mode for nuisances")
     parser.add_argument("-g", "--group", action='store_true', help="Show impacts of groups")
+    parser.add_argument("--absolute", action='store_true', help="Not normalize impacts on cross sections and event numbers.")
     parser.add_argument("--debug", action='store_true', help="Print debug output")
     parsers = parser.add_subparsers(dest='mode')
     interactive = parsers.add_parser("interactive", help="Launch and interactive dash session")
@@ -211,11 +212,11 @@ dataframe = pd.DataFrame()
 groupsdataframe = pd.DataFrame()
 
         
-def producePlots(rtfile,args, POI='Wmass'):
+def producePlots(rtfile,args, POI='Wmass', normalize=False):
 
-    groupsdataframe = readFitInfoFromFile(rtfile,args.inputFile, True, sort=args.sort, ascending=args.ascending, stat=args.stat/100., POI=POI)
+    groupsdataframe = readFitInfoFromFile(rtfile,args.inputFile, True, sort=args.sort, ascending=args.ascending, stat=args.stat/100., POI=POI, normalize=normalize)
     if not (args.group and args.mode == 'output'):
-        dataframe = readFitInfoFromFile(rtfile,args.inputFile, False, sort=args.sort, ascending=args.ascending, stat=args.stat/100., POI=POI)
+        dataframe = readFitInfoFromFile(rtfile,args.inputFile, False, sort=args.sort, ascending=args.ascending, stat=args.stat/100., POI=POI, normalize=normalize)
     if args.mode == "interactive":
         app.layout = html.Div([
                 dcc.Input(
@@ -259,7 +260,7 @@ def producePlots(rtfile,args, POI='Wmass'):
         df = dataframe if not args.group else groupsdataframe
         if args.num and args.num < df.size:
             df = df[-args.num:].sort_values(by=args.sort, ascending=args.ascending)
-        fig = plotImpacts(df, title=args.title, pulls=not args.noPulls and not args.group, pullrange=[-5,5], POI=POI)
+        fig = plotImpacts(df, title=args.title, pulls=not args.noPulls and not args.group, pullrange=[-5,5], POI=POI, normalize=not args.absoluteError)
 
         outputfilename = args.outputFile
         outputfilename
@@ -271,18 +272,18 @@ def producePlots(rtfile,args, POI='Wmass'):
 if __name__ == '__main__':
     args = parseArgs()
 
-    logger = logging.setup_logger("pullsAndImpacts", 4 if args.debug else 3, False)
+    logger = logging.setup_logger("pullsAndImpacts", 4 if args.debug else 3)
 
     rtfile = uproot.open(args.inputFile)
     POIs = input_tools.getPOInames(rtfile)
     for POI in POIs:
         producePlots(rtfile,args,POI)
     
-    if not (POIs[0]=="WMass" and len(POIs) == 1):
+    if not (POIs[0]=="Wmass" and len(POIs) == 1):
         # masked channel
         for POI in input_tools.getPOInames(rtfile, poi_type="pmaskedexp"):
-            producePlots(rtfile,args,POI)
+            producePlots(rtfile,args,POI, normalize=not args.absolute)
 
         # masked channel normalized
         for POI in input_tools.getPOInames(rtfile, poi_type="pmaskedexpnorm"):
-            producePlots(rtfile,args,POI)
+            producePlots(rtfile,args,POI, normalize=not args.absolute)
