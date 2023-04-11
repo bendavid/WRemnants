@@ -458,11 +458,14 @@ def plot_xsec_unfolded(bins=(None, None), channel=None, poi_type="mu"):
         outfile = "unfolded_xsec" 
 
     outfile += (f"_{args.postfix}" if args.postfix else "")
-    asimov_yields = make_yields_df([ha_xsec], ["Model"], per_bin=True)
-    asimov_yields["Uncertainty"] *= 0 # artificially set uncertainty on model hard coded to 0
+    plot_tools.save_pdf_and_png(outdir, outfile)
+
+    if asimov:
+        asimov_yields = make_yields_df([ha_xsec], ["Model"], per_bin=True)
+        asimov_yields["Uncertainty"] *= 0 # artificially set uncertainty on model hard coded to 0
     data_yields = make_yields_df([hist_xsec], ["Data"], per_bin=True)
     plot_tools.write_index_and_log(outdir, outfile, nround=4 if normalize else 2,
-        yield_tables={"Data" : data_yields, "Model": asimov_yields},
+        yield_tables={"Data" : data_yields, "Model": asimov_yields} if asimov else {"Data" : data_yields},
         analysis_meta_info=None,
         args=args,
     )
