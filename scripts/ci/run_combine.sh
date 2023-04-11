@@ -6,8 +6,8 @@ if [[ $# -lt 4 ]]; then
 fi
 
 combinetf_dir=$1
-
 mode=$2
+working_dir=$3
 
 cards=()
 for card in ${@:4}; do
@@ -20,7 +20,6 @@ pushd $combinetf_dir
 eval `scram runtime -sh`
 popd
 
-working_dir=`dirname $3`
 pushd $working_dir
 
 card_name=${working_dir}.txt
