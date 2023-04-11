@@ -1,14 +1,16 @@
 #!/bin/bash
 
-if [[ $# -lt 2 ]]; then
-	echo "Requires at least two arguments: run_combine.sh <combinetf_dir> <combine_cards>"
+if [[ $# -lt 3 ]]; then
+	echo "Requires at least three arguments: run_combine.sh <combinetf_dir> <mode> <combine_cards>"
 	exit 1
 fi
 
 combinetf_dir=$1
 
+mode=$2
+
 cards=()
-for card in ${@:2}; do
+for card in ${@:3}; do
 	echo $card
 	cards+=( `basename $card` )
 done
@@ -29,5 +31,11 @@ if [[ $# -gt 2 ]]; then
 fi
 
 outfile=${card_name/txt/hdf5}
-text2hdf5.py --X-allow-no-signal $card_name
-combinetf.py --doImpacts --binByBinStat -t -1 $outfile
+
+if [ "$mode" == "mass" ]; then
+	text2hdf5.py --X-allow-no-signal "$card_name"
+	combinetf.py --doImpacts --binByBinStat -t -1 "$outfile"
+elif [ "$mode" == "unfold" ]; then
+	text2hdf5.py --X-allow-no-background --maskedChan=xnorm "$card_name"
+	combinetf.py --doImpacts --binByBinStat -t 1 --saveHists --computeHistErrors --correlateXsecStat "$outfile"
+fi
