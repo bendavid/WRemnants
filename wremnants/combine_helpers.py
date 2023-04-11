@@ -234,7 +234,7 @@ def add_pdf_uncertainty(card_tool, samples, to_fakes, action=None, from_corr=Fal
 
 
 def add_recoil_uncertainty(card_tool, samples, passSystToFakes=False, pu_type="highPU", flavor="", group_compact=True):
-    met = args_from_metadata(card_tool, "met")
+    met = input_tools.args_from_metadata(card_tool, "met")
     if flavor == "":
         flavor = args_from_metadata(card_tool, "flavor")
     rtag = f"{pu_type}_{flavor}_{met}"
