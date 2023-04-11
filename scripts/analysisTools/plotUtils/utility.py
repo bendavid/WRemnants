@@ -43,14 +43,14 @@ def printLine(marker='-', repeat=30):
 #########################################################################
 
 def safeSystem(cmd, dryRun=False, quitOnFail=True):
-    print(cmd)
+    logger.info(cmd)
     if not dryRun:
         res = os.system(cmd)
         if res:
-            print('-'*30)
-            print("safeSystem(): error occurred when executing the following command. Aborting")
-            print(cmd)
-            print('-'*30)
+            logger.error('-'*30)
+            logger.error("safeSystem(): error occurred when executing the following command. Aborting")
+            logger.error(cmd)
+            logger.error('-'*30)
             if quitOnFail:
                 quit()
         return res
@@ -59,14 +59,14 @@ def safeSystem(cmd, dryRun=False, quitOnFail=True):
 
 def checkHistInFile(h, hname, fname, message=""):
     if not h:
-        print("Error {msg}: I couldn't find histogram {h} in file {f}".format(msg=message,h=hname,f=fname))
+        logger.error("Error {msg}: I couldn't find histogram {h} in file {f}".format(msg=message,h=hname,f=fname))
         quit()
 
 def safeGetObject(fileObject, objectName, quitOnFail=True, silent=False, detach=True):
     obj = fileObject.Get(objectName)
     if obj == None:
         if not silent:
-            print(f"Error getting {objectName} from file {fileObject.GetName()}")
+            logger.error(f"Could not get {objectName} from file {fileObject.GetName()}")
         if quitOnFail:
             quit()
         return None
@@ -79,14 +79,14 @@ def safeOpenFile(fileName, quitOnFail=True, silent=False, mode="READ"):
     fileObject = ROOT.TFile.Open(fileName, mode)
     if not fileObject or fileObject.IsZombie():
         if not silent:
-            print(f"Error when opening file {fileName}")
+            logger.error(f"Could not open file {fileName}")
         if quitOnFail:
             quit()
         else:
             return None
     elif not fileObject.IsOpen():
         if not silent:
-            print(f"File {fileName} was not opened")
+            logger.error(f"File {fileName} was not opened")
         if quitOnFail:
             quit()
         else:
@@ -97,7 +97,7 @@ def safeOpenFile(fileName, quitOnFail=True, silent=False, mode="READ"):
 def checkNullObj(obj, objName="object", quitOnFail=True):
 
     if obj == None:
-        print(f"Error with {objName}: it was None.")
+        logger.error(f"{objName} was None.")
         if quitOnFail:
             quit()
         else:
@@ -190,7 +190,7 @@ def getMinMaxHisto(h, excludeEmpty=True, sumError=True,
         if excludeMin != None and tmpmin <= excludeMin: continue
         if excludeMax != None and tmpmax >= excludeMax: continue
         if firstValidBin < 0: 
-            logger.debug("ibin %d:   tmpmin,tmpmax = %.2f, %.2f" % (ibin,tmpmin,tmpmax))
+            #logger.debug("ibin %d:   tmpmin,tmpmax = %.2f, %.2f" % (ibin,tmpmin,tmpmax))
             firstValidBin = ibin
         if sumError:
             tmpmin -= h.GetBinError(ibin)
@@ -199,11 +199,11 @@ def getMinMaxHisto(h, excludeEmpty=True, sumError=True,
             #the first time we pick a non empty bin, we set min and max to the histogram content in that bin
             minval = tmpmin
             maxval = tmpmax
-            logger.debug("#### ibin %d:   min,max = %.2f, %.2f" % (ibin,minval,maxval))
+            #logger.debug("#### ibin %d:   min,max = %.2f, %.2f" % (ibin,minval,maxval))
         else:
             minval = min(minval,tmpmin)
             maxval = max(maxval,tmpmax)
-        logger.debug("ibin %d:   min,max = %.2f, %.2f" % (ibin,minval,maxval))
+        #logger.debug("ibin %d:   min,max = %.2f, %.2f" % (ibin,minval,maxval))
     
     return minval,maxval
 
@@ -645,7 +645,7 @@ def drawTH1(htmp,
         h.Draw("HE")
     if len(fitString):
         fitFunc,fitOpt,drawOpt,fitMin,fitMax = fitString.split(";")
-        print(f"Fitting with {fitFunc}")
+        logger.info(f"Fitting with {fitFunc}")
         h.Fit(fitFunc,fitOpt,drawOpt,float(fitMin),float(fitMax))
         f1 = h.GetFunction(fitFunc)
         f1.SetLineWidth(2)
@@ -1488,6 +1488,7 @@ def drawNTH1(hists=[],
              outdir="./",
              rebinFactorX=0,
              draw_both0_noLog1_onlyLog2=1,
+             topMargin=0.1,
              leftMargin=0.15,
              rightMargin=0.04,
              bottomMargin=0.15,
@@ -1557,6 +1558,7 @@ def drawNTH1(hists=[],
     canvas.SetTickx(1)
     canvas.SetTicky(1)
     canvas.cd()
+    canvas.SetTopMargin(topMargin)
     canvas.SetLeftMargin(leftMargin)
     canvas.SetRightMargin(rightMargin)
     canvas.cd()
@@ -1867,7 +1869,7 @@ def drawNTH1(hists=[],
             newymax = newymax + 0.1 * newdiff
             #print(newymin, newymax)
             if not setRatioYAxisRangeFromUser:
-                print(f"drawNTH1(): setting y axis in ratio panel to this range: {newymin}, {newymax}")
+                logger.debug(f"drawNTH1(): setting y axis in ratio panel to this range: {newymin}, {newymax}")
                 frame.GetYaxis().SetRangeUser(newymin, newymax)
             pad2.RedrawAxis("sameaxis")
 
@@ -2341,7 +2343,8 @@ def drawTH1dataMCstack(h1, thestack,
                        noLegendRatio=False,
                        textSize=0.035,
                        textAngle=0.10,
-                       textYheightOffset=0.55 # text printed at y = maxY of cancas times this constant
+                       textYheightOffset=0.55, # text printed at y = maxY of cancas times this constant
+                       noRatioPanel=False
 ):
 
     # if normalizing stack to same area as data, we need to modify the stack
@@ -2364,7 +2367,7 @@ def drawTH1dataMCstack(h1, thestack,
     canvas.SetTicky(1)
     canvas.SetLeftMargin(leftMargin)
     canvas.SetRightMargin(rightMargin)
-    canvas.SetBottomMargin(0.3)
+    canvas.SetBottomMargin(0.12 if noRatioPanel else 0.3)
     canvas.cd()
 
     addStringToEnd(outdir,"/",notAddIfEndswithMatch=True)
@@ -2415,8 +2418,13 @@ def drawTH1dataMCstack(h1, thestack,
     h1.SetMarkerStyle(20)
     h1.SetMarkerSize(1)
 
-    h1.GetXaxis().SetLabelSize(0)
-    h1.GetXaxis().SetTitle("")
+    if not noRatioPanel:
+        h1.GetXaxis().SetLabelSize(0)
+        h1.GetXaxis().SetTitle("")
+    else:
+        h1.GetXaxis().SetTitle(labelX)
+        h1.GetXaxis().SetTitleOffset(1.1)
+        h1.GetXaxis().SetTitleSize(0.05)
     h1.GetYaxis().SetTitle(labelY)
     h1.GetYaxis().SetTitleOffset(0.5 if wideCanvas else 1.5)
     h1.GetYaxis().SetTitleSize(0.05)
@@ -2491,62 +2499,63 @@ def drawTH1dataMCstack(h1, thestack,
 
     setTDRStyle()
 
-    pad2.Draw();
-    pad2.cd();
+    if not noRatioPanel:
+        pad2.Draw();
+        pad2.cd();
 
-    frame.Reset("ICES")
-    if setRatioYAxisRangeFromUser: frame.GetYaxis().SetRangeUser(yminRatio,ymaxRatio)
-    #else:                          
-    #frame.GetYaxis().SetRangeUser(0.5,1.5)
-    frame.GetYaxis().SetNdivisions(5)
-    frame.GetYaxis().SetTitle(labelRatioY)
-    frame.GetYaxis().SetTitleOffset(0.5 if wideCanvas else 1.5)
-    frame.GetYaxis().SetTitleSize(0.05)
-    frame.GetYaxis().SetLabelSize(0.04)
-    frame.GetYaxis().CenterTitle()
-    frame.GetXaxis().SetTitle(labelX)
-    if setXAxisRangeFromUser: frame.GetXaxis().SetRangeUser(xmin,xmax)
-    frame.GetXaxis().SetTitleOffset(1.2)
-    frame.GetXaxis().SetTitleSize(0.05)
+        frame.Reset("ICES")
+        if setRatioYAxisRangeFromUser: frame.GetYaxis().SetRangeUser(yminRatio,ymaxRatio)
+        #else:                          
+        #frame.GetYaxis().SetRangeUser(0.5,1.5)
+        frame.GetYaxis().SetNdivisions(5)
+        frame.GetYaxis().SetTitle(labelRatioY)
+        frame.GetYaxis().SetTitleOffset(0.5 if wideCanvas else 1.5)
+        frame.GetYaxis().SetTitleSize(0.05)
+        frame.GetYaxis().SetLabelSize(0.04)
+        frame.GetYaxis().CenterTitle()
+        frame.GetXaxis().SetTitle(labelX)
+        if setXAxisRangeFromUser: frame.GetXaxis().SetRangeUser(xmin,xmax)
+        frame.GetXaxis().SetTitleOffset(1.2)
+        frame.GetXaxis().SetTitleSize(0.05)
 
-    #ratio = copy.deepcopy(h1.Clone("ratio"))
-    #den_noerr = copy.deepcopy(stackErr.Clone("den_noerr"))
-    ratio = h1.Clone("ratio")
-    den_noerr = stackErr.Clone("den_noerr")
-    den = stackErr.Clone("den")
-    for iBin in range (1,den_noerr.GetNbinsX()+1):
-        den_noerr.SetBinError(iBin,0.)
+        #ratio = copy.deepcopy(h1.Clone("ratio"))
+        #den_noerr = copy.deepcopy(stackErr.Clone("den_noerr"))
+        ratio = h1.Clone("ratio")
+        den_noerr = stackErr.Clone("den_noerr")
+        den = stackErr.Clone("den")
+        for iBin in range (1,den_noerr.GetNbinsX()+1):
+            den_noerr.SetBinError(iBin,0.)
 
-    ratio.Divide(den_noerr)
-    den.Divide(den_noerr)
-    den.SetFillColor(ROOT.kCyan)
-    den.SetFillStyle(1001)  # make it solid again
-    den.SetMarkerSize(0)
-    #den.SetLineColor(ROOT.kRed)
-    frame.Draw()        
-    ratio.SetMarkerSize(0.85)
-    ratio.SetMarkerStyle(20) 
-    den.Draw("E2same")
-    ratio.Draw("EPsame")
+        ratio.Divide(den_noerr)
+        den.Divide(den_noerr)
+        den.SetFillColor(ROOT.kCyan)
+        den.SetFillStyle(1001)  # make it solid again
+        den.SetMarkerSize(0)
+        #den.SetLineColor(ROOT.kRed)
+        frame.Draw()        
+        ratio.SetMarkerSize(0.85)
+        ratio.SetMarkerStyle(20) 
+        den.Draw("E2same")
+        ratio.Draw("EPsame")
 
-    # if not "unrolled_" in canvasName:
-    #     for i in range(1,1+ratio.GetNbinsX()):
-    #         print "Error data bin {bin}: {val}".format(bin=i,val=ratio.GetBinError(i))
+        # if not "unrolled_" in canvasName:
+        #     for i in range(1,1+ratio.GetNbinsX()):
+        #         print "Error data bin {bin}: {val}".format(bin=i,val=ratio.GetBinError(i))
 
-    line = ROOT.TF1("horiz_line","1",ratio.GetXaxis().GetBinLowEdge(1),ratio.GetXaxis().GetBinLowEdge(ratio.GetNbinsX()+1))
-    line.SetLineColor(ROOT.kRed)
-    line.SetLineWidth(1)  # 1, not 2, which is too wide for canvas with large width
-    line.Draw("Lsame")
+        line = ROOT.TF1("horiz_line","1",ratio.GetXaxis().GetBinLowEdge(1),ratio.GetXaxis().GetBinLowEdge(ratio.GetNbinsX()+1))
+        line.SetLineColor(ROOT.kRed)
+        line.SetLineWidth(1)  # 1, not 2, which is too wide for canvas with large width
+        line.Draw("Lsame")
 
-    leg2 = ROOT.TLegend(0.2,0.25,0.4,0.30)
-    leg2.SetFillColor(0)
-    leg2.SetFillStyle(0)
-    leg2.SetBorderSize(0)
-    leg2.AddEntry(den,"tot. unc. exp.","LF")
-    if not noLegendRatio:
-        leg2.Draw("same")
+        leg2 = ROOT.TLegend(0.2,0.25,0.4,0.30)
+        leg2.SetFillColor(0)
+        leg2.SetFillStyle(0)
+        leg2.SetBorderSize(0)
+        leg2.AddEntry(den,"tot. unc. exp.","LF")
+        if not noLegendRatio:
+            leg2.Draw("same")
 
-    pad2.RedrawAxis("sameaxis")
+        pad2.RedrawAxis("sameaxis")
 
 
     if draw_both0_noLog1_onlyLog2 != 2:
@@ -3670,7 +3679,7 @@ def unroll2Dto1D(h, newname='', cropNegativeBins=True, silent=False):
         for ibin in range(1, nbins+1):
             if newh.GetBinContent(ibin)<0:
                 if not silent:
-                    print('Warning: cropping to zero bin %d in %s (was %f)'%(ibin, newh.GetName(), newh.GetBinContent(ibin)))
+                    logger.warning('cropping to zero bin %d in %s (was %f)'%(ibin, newh.GetName(), newh.GetBinContent(ibin)))
                 newh.SetBinContent(ibin, 0)
     return newh
 

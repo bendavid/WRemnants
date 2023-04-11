@@ -245,6 +245,7 @@ if __name__ == "__main__":
                     hratio.SetBinError(ix,iy, 0.0)
                 else:
                     hratio.SetBinError(ix,iy, hratio.GetBinError(ix,iy)/denval)
+                #print(f"{ix} {iy} {ratio}")
                 if ratio < float(minx) or ratio > float(maxx): nout += 1
                 #profX.Fill()
             else: 
