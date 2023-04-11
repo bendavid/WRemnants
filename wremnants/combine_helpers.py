@@ -65,10 +65,6 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
     if pt_binned:
         action_args["rebinPtV"] = rebin_pt
 
-    # Skip extreme muR/muF values for all bin combos (-1 = any)
-    nsyst_dims = len(syst_axes)
-    #skip_entries = [(*[-1]*(nsyst_dims-2),*x) for x in skip_entries]
-
     if resum != "none":
         if pt_binned:
             binning = np.array(common.ptV_10quantiles_binning)
@@ -236,7 +232,7 @@ def add_pdf_uncertainty(card_tool, samples, to_fakes, action=None, from_corr=Fal
 def add_recoil_uncertainty(card_tool, samples, passSystToFakes=False, pu_type="highPU", flavor="", group_compact=True):
     met = input_tools.args_from_metadata(card_tool, "met")
     if flavor == "":
-        flavor = args_from_metadata(card_tool, "flavor")
+        flavor = input_tools.args_from_metadata(card_tool, "flavor")
     rtag = f"{pu_type}_{flavor}_{met}"
     if not rtag in recoil_tools.recoil_cfg:
         logger.warning(f"Recoil corrections for {pu_type}, {flavor}, {met} not available.")
