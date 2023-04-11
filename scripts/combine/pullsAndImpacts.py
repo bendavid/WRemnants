@@ -260,7 +260,7 @@ def producePlots(rtfile,args, POI='Wmass', normalize=False):
         df = dataframe if not args.group else groupsdataframe
         if args.num and args.num < df.size:
             df = df[-args.num:].sort_values(by=args.sort, ascending=args.ascending)
-        fig = plotImpacts(df, title=args.title, pulls=not args.noPulls and not args.group, pullrange=[-5,5], POI=POI, normalize=not args.absoluteError)
+        fig = plotImpacts(df, title=args.title, pulls=not args.noPulls and not args.group, pullrange=[-5,5], POI=POI, normalize=not args.absolute)
 
         outputfilename = args.outputFile
         outputfilename
