@@ -20,7 +20,7 @@ pushd $combinetf_dir
 eval `scram runtime -sh`
 popd
 
-working_dir=`dirname $2`
+working_dir=`dirname $3`
 card_name=${cards[0]}
 
 pushd $working_dir
