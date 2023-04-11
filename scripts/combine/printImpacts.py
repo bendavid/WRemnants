@@ -14,7 +14,7 @@ def parseArgs():
 
 
 def printImpacts(args,rtfile,POI='Wmass'):
-    impacts,labels = input_tools.readImpacts(rtfile, not args.ungroup, sort=args.sort, POI=POI)
+    impacts,labels,_ = input_tools.readImpacts(rtfile, not args.ungroup, sort=args.sort, POI=POI)
     unit = 'MeV' if POI=='Wmass' else 'n.u. %'
     if args.nuisance:
         if args.nuisance not in labels:

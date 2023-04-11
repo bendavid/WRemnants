@@ -133,7 +133,7 @@ def readFitInfoFromFile(rf,filename, group=False, sort=None, ascending=True, sta
     tree = rf[treename]
     # TODO: Make add_total configurable
     add_total = group
-    impacts,labels = input_tools.readImpacts(rf, group, sort=sort, add_total=add_total, stat=stat, POI=POI, normalize=normalize)
+    impacts, labels, _ = input_tools.readImpacts(rf, group, sort=sort, add_total=add_total, stat=stat, POI=POI, normalize=normalize)
     # TODO: Make configurable
     if True:
         impacts = impacts*100

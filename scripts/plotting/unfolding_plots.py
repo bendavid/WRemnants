@@ -6,21 +6,23 @@ import os
 import numpy as np
 import matplotlib as mpl
 import pandas as pd
-
+import boost_histogram as bh
+import hist
 import pdb
 
-from utilities import boostHistHelpers as hh, logging
+from utilities import boostHistHelpers as hh, logging, input_tools
 from wremnants import plot_tools
 
 hep.style.use(hep.style.ROOT)
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("infile", help="Output file of the analysis stage, containing ND boost histogrdams")
+parser.add_argument("infile", help="Combine fitresult root file")
+parser.add_argument("--asimov",  type=str, default=None, help="Optional combine fitresult root file from an asimov fit for comparison")
 # parser.add_argument("--ratioToData", action='store_true', help="Use data as denominator in ratio")
 parser.add_argument("-o", "--outpath", type=str, default=os.path.expanduser("~/www/WMassAnalysis"), help="Base path for output")
 parser.add_argument("-f", "--outfolder", type=str, default="test", help="Subfolder for output")
-parser.add_argument("-r", "--rrange", type=float, nargs=2, default=[0.9, 1.1], help="y range for ratio plot")
+parser.add_argument("-r", "--rrange", type=float, nargs=2, default=None, help="y range for ratio plot")
 # parser.add_argument("--rebin", type=int, default=1, help="Rebin (for now must be an int)")
 parser.add_argument("--ylim", type=float, nargs=2, help="Min and max values for y axis (if not specified, range set automatically)")
 parser.add_argument("--yscale", type=float, help="Scale the upper y axis by this factor (useful when auto scaling cuts off legend)")
@@ -30,7 +32,8 @@ parser.add_argument("--debug", action='store_true', help="Print debug output")
 parser.add_argument("--noData", action='store_true', help="Don't plot data")
 # parser.add_argument("--noFill", action='store_true', help="Don't fill stack")
 parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend text")
-parser.add_argument("--fittypes", type=str, nargs="+", default=["prefit", "postfit"], help="Make prefit or postfit plots, or both")
+parser.add_argument("--plots", type=str, nargs="+", default="xsec", choices=["xsec", "prefit", "postfit", "correlation", "covariance"], help="Define which plots to make")
+parser.add_argument("--lumi", type=float, default=16.8, help="Luminosity used in the fit, needed to get the absolute cross section")
 
 args = parser.parse_args()
 
@@ -38,7 +41,11 @@ logger = logging.setup_logger("plotFitresult", 4 if args.debug else 3, False)
 
 outdir = plot_tools.make_plot_dir(args.outpath, args.outfolder)
 
-combine_result = uproot.open(args.infile)
+rfile = uproot.open(args.infile)
+if args.asimov:
+    asimov = uproot.open(args.asimov)
+else:
+    asimov=None
 
 # reco bin settings
 nbins_reco_charge = 2
@@ -62,8 +69,6 @@ nbins_pt = 2 #29
 nbins_eta = 3 #48
 
 cms_decor = "Preliminary" if not args.noData else "Simulation Preliminary"
-
-lumi=16.8
 
 binwnorm = 1.0
 
@@ -125,6 +130,8 @@ colormap= {
     "Other" : "grey",
 }
 
+def get_bin_number(pt, eta, charge):
+    return eta + nbins_eta*pt + nbins_eta*nbins_pt*charge
 
 def get_color(name):
     logger.debug(f"Get color for {name}")
@@ -141,16 +148,23 @@ def get_color(name):
         logger.warning(f"No color found for {name}")
         return "white"
 
-def make_yields_df(hists, procs, signal=None):
+def make_yields_df(hists, procs, signal=None, per_bin=False):
     logger.debug(f"Make yield df for {procs}")
 
-    def sum_and_unc(h):
-        return (sum(h.values()), np.sqrt(sum(h.variances())))
-
-    if signal is not None:
-        entries = [(signal, sum([ sum(v.values()) for k,v in zip(procs, hists) if signal in k]), np.sqrt(sum([ sum(v.variances()) for k,v in zip(procs, hists) if signal in k])))]
+    if per_bin:
+        def sum_and_unc(h):
+            return (h.values(), np.sqrt(h.variances()))   
     else:
-        entries = [(k, *sum_and_unc(v)) for k,v in zip(procs, hists)]
+        def sum_and_unc(h):
+            return (sum(h.values()), np.sqrt(sum(h.variances())))
+
+    if per_bin:
+        entries = [(i, v[0], v[1]) for i,v in enumerate(zip(*sum_and_unc(hists[0])))]
+    else:
+        if signal is not None:
+            entries = [(signal, sum([ sum(v.values()) for k,v in zip(procs, hists) if signal in k]), np.sqrt(sum([ sum(v.variances()) for k,v in zip(procs, hists) if signal in k])))]
+        else:
+            entries = [(k, *sum_and_unc(v)) for k,v in zip(procs, hists)]
 
     return pd.DataFrame(entries, columns=["Process", "Yield", "Uncertainty"])
 
@@ -159,32 +173,37 @@ def make_yields_df(hists, procs, signal=None):
 def plot(fittype, bins=(None, None), channel=None):
     logger.info(f"Make {fittype} plot"+(f" in channel {channel}" if channel else ""))
 
-    procs = [p for p in filter(lambda x: x.startswith("expproc_") and x.endswith(f"_{fittype};1"), combine_result.keys())]
+    procs = [p for p in filter(lambda x: x.startswith("expproc_") and x.endswith(f"_{fittype};1"), rfile.keys())]
 
     proc_sig = filter(lambda x: f"_{base_process}_qGen" in x, procs)
     proc_bkg = filter(lambda x: f"_{base_process}_qGen" not in x, procs)
 
-    proc_bkg = [s for s in sorted(proc_bkg, key=lambda x: sum(combine_result[x].to_hist().values()))]
+    proc_bkg = [s for s in sorted(proc_bkg, key=lambda x: sum(rfile[x].to_hist().values()))]
     proc_sig = [s for s in sorted(proc_sig, reverse=True)]
 
     bin_lo = bins[0]
     bin_hi = bins[1]
 
     # pre computation
-    if "obs" not in [c.replace(";1","") for c in  combine_result.keys()]:
+    if "obs" not in [c.replace(";1","") for c in  rfile.keys()]:
         logger.error(f"Shapes not found in fitresult file, run combine with --saveHists --computeHistErrors to get shapes.")
         return
-    hist_data = combine_result["obs"].to_hist()[bin_lo:bin_hi]
-    hist_pred = combine_result[f"expfull_{fittype}"].to_hist()[bin_lo:bin_hi]
+    hist_data = rfile["obs"].to_hist()[bin_lo:bin_hi]
+    hist_pred = rfile[f"expfull_{fittype}"].to_hist()[bin_lo:bin_hi]
 
     if args.ylim is None:
         ylim = (0, 1.1 * max(max(hist_data.values()), max(hist_pred.values())))
     else:
         ylim = args.ylim
 
-    fig, ax1, ax2 = plot_tools.figureWithRatio(hist_data, "Bin number", "Events/bin", ylim, "Data/Pred.", args.rrange)
+    if args.rrange is None:
+        rrange = [0.90,1.1]
+    else:
+        rrange = args.rrange
 
-    stack = [combine_result[p].to_hist()[bin_lo:bin_hi] for p in procs]
+    fig, ax1, ax2 = plot_tools.figureWithRatio(hist_data, "Bin number", "Events/bin", ylim, "Data/Pred.", rrange)
+
+    stack = [rfile[p].to_hist()[bin_lo:bin_hi] for p in procs]
     names = [k.replace("expproc_","").replace(f"_{fittype};1","") for k in procs]
     colors = [get_color(l) for l in names]
     labels = [get_label(l) for l in names]
@@ -226,7 +245,6 @@ def plot(fittype, bins=(None, None), channel=None):
             ax=ax2
         )
 
-
     # uncertainties
     # need to divide by bin width
     axis = hist_pred.axes[0].edges
@@ -246,12 +264,11 @@ def plot(fittype, bins=(None, None), channel=None):
         step='post',facecolor="none", zorder=2, hatch=hatchstyle, edgecolor="k", linewidth=0.0)
 
 
-    extra_text=None, 
     plot_tools.addLegend(ax1, ncols=4, text_size=20*args.scaleleg)
     plot_tools.fix_axes(ax1, ax2, yscale=args.yscale)
 
     scale = max(1, np.divide(*ax1.get_figure().get_size_inches())*0.3)
-    hep.cms.label(ax=ax1, lumi=float(f"{lumi:.3g}"), fontsize=20*args.scaleleg*scale, 
+    hep.cms.label(ax=ax1, lumi=float(f"{args.lumi:.3g}"), fontsize=20*args.scaleleg*scale, 
         label=cms_decor, data=not args.noData)
 
     outfile = f"{fittype}" + (f"_{args.postfix}" if args.postfix else "") + (f"_{channel}" if channel else "")
@@ -267,11 +284,11 @@ def plot(fittype, bins=(None, None), channel=None):
 
 def plot_matrix_poi(matrix="covariance_matrix_channelmu"):
 
-    if matrix not in [c.replace(";1","") for c in combine_result.keys()]:
+    if matrix not in [c.replace(";1","") for c in rfile.keys()]:
         logger.error(f"Histogram {matrix} was not found in the fit results file!")
         return
 
-    hist2d = combine_result[matrix].to_hist()
+    hist2d = rfile[matrix].to_hist()
 
     # select signal parameters
     key = matrix.split("channel")[-1]
@@ -299,7 +316,7 @@ def plot_matrix_poi(matrix="covariance_matrix_channelmu"):
 
     outfile = "covariance" if "covariance" in matrix else "correlation"
 
-    outfile += "_" + matrix.split("_")[-1].replace("channel","")
+    outfile += (f"_{args.postfix}_" if args.postfix else "_") + matrix.split("_")[-1].replace("channel","")
         
     plot_tools.save_pdf_and_png(outdir, outfile)
     plot_tools.write_index_and_log(outdir, outfile, 
@@ -308,17 +325,170 @@ def plot_matrix_poi(matrix="covariance_matrix_channelmu"):
         args=args,
     )
 
-for fittype in args.fittypes:
+def get_results(rootfile, pois, scale=1.0):
+    results = []
+    for poi in pois:
+        impacts, labels, norm = input_tools.readImpacts(rootfile, True, add_total=True, POI=poi, normalize=False)
+        res = {l: i/scale for i,l in zip(impacts, labels) if l in ["Total", "stat"]}
 
+        res["norm"] = norm/scale
+
+        charge, eta, pt = getProcessPtEtaCharge(poi)
+        res.update({"pt":pt, "eta":eta, "charge": charge})
+
+        res["bin"] = get_bin_number(pt, eta, charge)
+
+        results.append(res)
+
+    df = pd.DataFrame(results)
+    df = df.sort_values("bin")
+    return df
+
+def plot_xsec_unfolded(bins=(None, None), channel=None, poi_type="mu"):
+    normalize = poi_type=="pmaskedexpnorm"
+    logger.info(f"Make "+("normalized " if normalize else "")+"unfoled xsec plot"+(f" in channel {channel}" if channel else ""))
+
+    if normalize:
+        yLabel="1/$\sigma$ d$\sigma$"
+        scale = 1
+    else:
+        yLabel="d$\sigma$ [pb]"
+        scale= args.lumi * 1000
+
+    # read nominal values and uncertainties from fit result and fill histograms
+    pois = input_tools.getPOInames(rfile, poi_type=poi_type)
+
+    df = get_results(rfile, pois, scale=scale)
+
+    hist_xsec = hist.Hist(
+        hist.axis.Regular(bins=len(df), start=0, stop=max(df["bin"].values)+1, underflow=False, overflow=False), storage=hist.storage.Weight())
+    hist_xsec_stat = hist.Hist(
+        hist.axis.Regular(bins=len(df), start=0, stop=max(df["bin"].values)+1, underflow=False, overflow=False), storage=hist.storage.Weight())
+
+    hist_xsec.view(flow=False)[...] = np.stack([df["norm"].values, (df["Total"].values)**2], axis=-1)
+    hist_xsec_stat.view(flow=False)[...] = np.stack([df["norm"].values, (df["stat"].values)**2], axis=-1)
+
+    if asimov:
+        df_asimov = get_results(asimov, pois, scale=scale)
+
+        ha_xsec = hist.Hist(
+            hist.axis.Regular(bins=len(df), start=0, stop=max(df["bin"].values)+1, underflow=False, overflow=False))
+
+        ha_xsec.view(flow=False)[...] = df_asimov["norm"].values
+
+    # make plots
+    if args.ylim is None:
+        ylim = (0, 1.1 * max((df["norm"]+df["Total"]).values))
+    else:
+        ylim = args.ylim
+
+    if args.rrange is None:
+        rrange = [0.99,1.01] if normalize else [0.97,1.03]
+    else:
+        rrange = args.rrange
+
+    fig, ax1, ax2 = plot_tools.figureWithRatio(hist_xsec, "Bin number", yLabel, ylim, "Data/Pred.", rrange)
+
+    hep.histplot(
+        hist_xsec,
+        yerr=True,
+        histtype="errorbar",
+        color="black",
+        label="Data",
+        ax=ax1,
+        alpha=1.,
+        binwnorm=binwnorm,
+        zorder=2,
+    )    
+
+    hep.histplot(
+        hh.divideHists(hist_xsec, hist_xsec, cutoff=0.01, rel_unc=True),
+        histtype="errorbar",
+        color="black",
+        label="Data",
+        yerr=True,
+        linewidth=2,
+        ax=ax2
+    )
+
+    hep.histplot(
+        hh.divideHists(hist_xsec_stat, hist_xsec, cutoff=0.01, rel_unc=True),
+        histtype="errorbar",
+        color="black",
+        label="Data",
+        yerr=True,
+        linewidth=2,
+        ax=ax2, capsize=2, elinewidth=0, markersize=0
+    )
+
+    if asimov:
+        hep.histplot(
+            ha_xsec,
+            yerr=False,
+            histtype="step",
+            color="blue",
+            label="Model",
+            ax=ax1,
+            alpha=1.,
+            binwnorm=binwnorm,
+            zorder=2,
+        ) 
+
+        hep.histplot(
+            hh.divideHists(ha_xsec, hist_xsec, cutoff=0.01, rel_unc=True),
+            histtype="step",
+            color="blue",
+            label="Model",
+            yerr=False,
+            ax=ax2
+        )
+
+    plot_tools.addLegend(ax1, ncols=4, text_size=20*args.scaleleg)
+    plot_tools.fix_axes(ax1, ax2, yscale=args.yscale)
+
+    scale = max(1, np.divide(*ax1.get_figure().get_size_inches())*0.3)
+    hep.cms.label(ax=ax1, lumi=float(f"{args.lumi:.3g}"), fontsize=20*args.scaleleg*scale, 
+        label=cms_decor, data=not args.noData)
+
+    if poi_type=="mu":
+        outfile = "mu"
+    elif normalize:
+        outfile = "unfolded_xsec_normalized"
+    else: 
+        outfile = "unfolded_xsec" 
+
+    outfile += (f"_{args.postfix}" if args.postfix else "")
+    asimov_yields = make_yields_df([ha_xsec], ["Model"], per_bin=True)
+    asimov_yields["Uncertainty"] *= 0 # artificially set uncertainty on model hard coded to 0
+    data_yields = make_yields_df([hist_xsec], ["Data"], per_bin=True)
+    plot_tools.write_index_and_log(outdir, outfile, nround=4 if normalize else 2,
+        yield_tables={"Data" : data_yields, "Model": asimov_yields},
+        analysis_meta_info=None,
+        args=args,
+    )
+
+
+
+if "xsec" in args.plots:
+    plot_xsec_unfolded(poi_type="pmaskedexp")
+    plot_xsec_unfolded(poi_type="pmaskedexpnorm")
+
+if "prefit" in args.plots:
+    plot("prefit", bins=(None, nbins_reco))
+    plot("prefit", bins=(None,int(nbins_reco/2)), channel="minus")
+    plot("prefit", bins=(int(nbins_reco/2), nbins_reco), channel="plus")
+
+if "postfit" in args.plots:
+    plot("postfit", bins=(None, nbins_reco))
+    plot("postfit", bins=(None,int(nbins_reco/2)), channel="minus")
+    plot("postfit", bins=(int(nbins_reco/2), nbins_reco), channel="plus")
+
+if "correlation" in args.plots:
     plot_matrix_poi("correlation_matrix_channelmu")
-    plot_matrix_poi("covariance_matrix_channelmu")
-
     plot_matrix_poi("correlation_matrix_channelpmaskedexp")
-    plot_matrix_poi("covariance_matrix_channelpmaskedexp")
     plot_matrix_poi("correlation_matrix_channelpmaskedexpnorm")
+
+if "covariance" in args.plots:
+    plot_matrix_poi("covariance_matrix_channelmu")
+    plot_matrix_poi("covariance_matrix_channelpmaskedexp")
     plot_matrix_poi("covariance_matrix_channelpmaskedexpnorm")
-
-
-    plot(fittype, bins=(None, nbins_reco))
-    plot(fittype, bins=(None,int(nbins_reco/2)), channel="minus")
-    plot(fittype, bins=(int(nbins_reco/2), nbins_reco), channel="plus")
