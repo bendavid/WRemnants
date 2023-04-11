@@ -13,8 +13,8 @@ on:
   workflow_dispatch:
 
 env: 
-  MAX_FILES: 10
-  LUMI_SCALE: 100
+  MAX_FILES: 20
+  LUMI_SCALE: 760
   NTHREADS: 16
   WEB_DIR: /home/c/cmsmwbot/www/WMassAnalysis/PRValidation
 
@@ -80,7 +80,7 @@ jobs:
 
       - name: wmass setup lumi scale
         if: github.event.schedule != '0 3 * * 2,4,6'
-        run: echo "LUMI_SCALE=125" >> $GITHUB_ENV
+        run: echo "LUMI_SCALE=120" >> $GITHUB_ENV
 
       - name: wmass setup lumi scale
         if: github.event.schedule != '0 3 * * 2,4,6'
