@@ -9,7 +9,6 @@ import os
 import itertools
 import functools
 import hist
-from copy import deepcopy
 import pandas as pd
 import math
 

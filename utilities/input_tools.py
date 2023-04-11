@@ -277,7 +277,7 @@ def readImpacts(rtfile, group, sort=True, add_total=True, stat=0.0, POI='Wmass',
         idx = np.argwhere(labels == "stat")
         impacts[idx] = stat
 
-    return impacts,labels
+    return impacts, labels, norm
 
 def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo, axes=None, charge=None, fix_nons_bin0=True):
     hsing = read_scetlib_hist(scetlib_resum, charge=charge)
