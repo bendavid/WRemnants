@@ -16,8 +16,6 @@ def make_parser(parser=None):
     parser.add_argument("--flavor", choices=["ee", "mumu"], help="Flavor (ee or mumu)", default="mumu")
     parser.add_argument("--fitType", choices=["differential", "wmass", "wlike", "inclusive"], default="differential", 
             help="Fit type, defines POI and fit observable (recoil or mT)")
-    parser.add_argument("--xsec", dest="xsec", action='store_true', 
-            help="Write card for masked xsec normalization")
     parser.add_argument("--met", type=str, help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")
     return parser
     
@@ -26,7 +24,7 @@ def recoilSystNames(baseName, entries):
     systNames.extend(["{baseName}_{i}{shift}".format(baseName=baseName, i=int(j/2), shift="Down" if j%2 else "Up") for j in range(entries)])
     return systNames
 
-def main(args, xsec=False):
+def main(args, xnorm=False):
 
     outfolder = f"CombineStudies/lowPU_{args.fitType}_{args.flavor}"
     if not os.path.isdir(outfolder):
@@ -40,22 +38,9 @@ def main(args, xsec=False):
     dataProc = "SingleMuon" if args.flavor == "mumu" else "SingleElectron"
     sigProc ="Zmumu" if args.flavor == "mumu" else "Zee"
 
-    project = ["recoil_reco"]
-    suffix = ""
-    if args.doStatOnly:
-        suffix = "_stat"
-    if xsec:
-        suffix += "_xsec"
-        bkgProcs = [] # for xsec norm card, remove all bkg procs but keep the data
-        histName = "xnorm"
-        project = ["count"]
-        
-        # fake data, as sum of all  Zmumu procs over recoil_gen
-        datagroups.copyGroup("Zmumu" if args.flavor == "mumu" else "Zee", "fake_data")
-        if args.fitType == "differential":
-            datagroups.groups["fake_data"].selectOp = lambda x: x[{"recoil_gen" : hist.tag.Slicer()[::hist.sum]}]
-
     histName = "reco_mT"
+    project = ["recoil_reco"]
+
     if args.fitType == "differential":
 
         datagroups.setGenAxes("recoil_gen")
@@ -76,13 +61,16 @@ def main(args, xsec=False):
         for proc in datagroups.groups.keys():
             datagroups.groups[proc].selectOp = \
             lambda x, f=datagroups.groups[proc].selectOp : f(x)[{ax : hist.tag.Slicer()[::hist.sum] for ax in ["recoil_gen", "recoil_reco",] if ax in x.axes.name}]
-            
-    # hack: remove non-used procs/groups, as there can be more procs/groups defined than defined above
-    # need to remove as cardTool takes all procs in the datagroups
-    toDel = []
-    for group in datagroups.groups: 
-        if not group in constrainedProcs+datagroups.unconstrainedProcesses+bkgProcs+[dataProc]: toDel.append(group)
-    datagroups.deleteGroups(toDel)    
+
+    if xnorm:
+        bkgProcs = [] # for xnorm norm card, remove all bkg procs but keep the data
+        histName = "xnorm"
+        project = ["count"]
+
+        toDel = [group for group in datagroups.groups if not group in datagroups.unconstrainedProcesses]
+        datagroups.deleteGroups(toDel)
+
+    suffix = '_xnorm' if xnorm else ''
 
     logger.debug(f"Going to use these groups: {datagroups.getNames()}")
     logger.debug(f"Datagroup keys: {datagroups.groups.keys()}")
@@ -131,7 +119,7 @@ def main(args, xsec=False):
     combine_helpers.add_scale_uncertainty(cardTool, args.minnloScaleUnc, constrainedProcs+datagroups.unconstrainedProcesses, 
         to_fakes=False, use_hel_hist=True, resum=args.resumUnc)
     
-    if not xsec:
+    if not xnorm:
 
         cardTool.addSystematic("prefireCorr",
             processes=cardTool.allMCProcesses(),
@@ -172,9 +160,9 @@ if __name__ == "__main__":
 
     main(args)
     if args.fitType == "differential":
-        main(args, xsec=True)
+        main(args, xnorm=True)
         
     if args.fitType == "inclusive":
-        main(args, xsec=True)    
+        main(args, xnorm=True)    
         
         

@@ -113,7 +113,7 @@ def main(args,xnorm=False):
     if args.noHist and args.noStatUncFakes:
         raise ValueError("Option --noHist would override --noStatUncFakes. Please select only one of them")
 
-    suffix = '' if not xnorm else '_xsec'
+    suffix = '_xnorm' if xnorm else ''
 
     # Start to create the CardTool object, customizing everything
     cardTool = CardTool.CardTool(f"{outfolder}/{name}_{{chan}}{suffix}.txt")
@@ -123,7 +123,6 @@ def main(args,xnorm=False):
     if args.sumChannels or xnorm:
         cardTool.setChannels(["inclusive"])
     if xnorm:
-        cardTool.setProjectionAxes(None)
         cardTool.setWriteByCharge(False)
         cardTool.setHistName(histName)
         cardTool.setNominalName(histName)
