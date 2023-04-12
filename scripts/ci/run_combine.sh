@@ -24,6 +24,7 @@ pushd $working_dir
 
 card_name=${working_dir}.txt
 combineCards.py $cards > $card_name
+echo "combineCards.py $cards > $card_name"
 
 outfile=${card_name/txt/hdf5}
 
@@ -32,5 +33,5 @@ if [ "$mode" == "mass" ]; then
 	combinetf.py --doImpacts --binByBinStat -t -1 "$outfile"
 elif [ "$mode" == "unfold" ]; then
 	text2hdf5.py --X-allow-no-background --maskedChan=xnorm "$card_name"
-	combinetf.py --doImpacts --binByBinStat -t -1 --saveHists --computeHistErrors --correlateXsecStat "$outfile"
+	combinetf.py --doImpacts --binByBinStat -t -1 --correlateXsecStat "$outfile"
 fi
