@@ -476,11 +476,15 @@ class datagroups2016(datagroups):
         else:
             return list(self.datasets[x] for x in procs if x in self.datasets.keys())
         
-    def make_yields_df(self, histName, procs, action):
+    def make_yields_df(self, histName, procs, action, norm_proc=None):
         def sum_and_unc(h):
             return (h.sum().value, math.sqrt(h.sum().variance))
         df = pd.DataFrame([(k, *sum_and_unc(action(v[histName]))) for k,v in self.groups.items() if k in procs], 
                 columns=["Process", "Yield", "Uncertainty"])
+
+        if norm_proc and norm_proc in self.groups:
+            df[f"Ratio to {norm_proc} (%)"] = df["Yield"]/action(self.groups[norm_proc][histName]).sum().value*100
+
         return df
 
     def readHist(self, baseName, proc, group, syst, scaleOp=None, forceNonzero=True, scaleToNewLumi=-1):
