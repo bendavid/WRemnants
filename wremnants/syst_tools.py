@@ -28,10 +28,6 @@ def syst_transform_map(base_hist, hist_name):
     transforms["scetlib_dyturboMSHT20Down"] = {"action" : lambda h: pdfUnc(h, "pdfMSHT20", "vars")[1], "procs" : ["ZmumuPostVFP"]}
     transforms["scetlib_dyturboMSHT20an3loUp"] = {"action" : lambda h: pdfUnc(h, "pdfMSHT20", "vars")[0], "procs" : ["ZmumuPostVFP"]}
     transforms["scetlib_dyturboMSHT20an3loDown"] = {"action" : lambda h: pdfUnc(h, "pdfMSHT20", "vars")[1], "procs" : ["ZmumuPostVFP"]}
-    transforms.update({
-        "massShift100MeVDown" : {"hist" : "massWeight", "action" : lambda h: h[{"tensor_axis_0" : 0}]},
-        "massShift100MeVUp" : {"hist" : "massWeight", "action" : lambda h: h[{"tensor_axis_0" : 20}]},
-    })
 
     s = hist.tag.Slicer()
     transforms.update({
