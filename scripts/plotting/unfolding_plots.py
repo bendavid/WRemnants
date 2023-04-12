@@ -65,8 +65,8 @@ nbins_reco = nbins_reco_charge * nbins_reco_pt * nbins_reco_eta
 
 # gen bins
 nbins_charge = 2#2
-nbins_pt = 2 #29
-nbins_eta = 3 #48
+nbins_pt = 3 #29
+nbins_eta = 2 #48
 
 cms_decor = "Preliminary" if not args.noData else "Simulation Preliminary"
 
