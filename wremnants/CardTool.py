@@ -385,7 +385,7 @@ class CardTool(object):
     def getBoostHistByCharge(self, h, q):
         return h[{"charge" : h.axes["charge"].index(q) if q != "sum" else hist.sum}]
 
-    def checkSysts(self, hnom3D, var_map, proc, thresh=0.25):
+    def checkSysts(self, var_map, proc, thresh=0.25):
         #if self.check_variations:
         var_names = set([name.replace("Up", "").replace("Down", "") for name in var_map.keys() if name])
         if len(var_names) != len(var_map.keys())/2:
@@ -396,7 +396,7 @@ class CardTool(object):
         # so there is some customization based on what one expects to silent some noisy warnings
 
         for name in sorted(var_names):
-            hnom = hnom3D
+            hnom = self.datagroups.groups[proc].hists[self.nominalName]
             up = var_map[name+"Up"]
             down = var_map[name+"Down"]
             nCellsWithoutOverflows = np.product(hnom.shape)
@@ -438,7 +438,7 @@ class CardTool(object):
         var_map = self.systHists(h, syst) 
         # TODO: Make this optional
         if syst != self.nominalName:
-            self.checkSysts(self.datagroups.groups[proc].hists[self.nominalName], var_map, proc)
+            self.checkSysts(var_map, proc)
         setZeroStatUnc = False
         if proc in self.noStatUncProcesses:
             logger.info(f"Zeroing statistical uncertainty for process {proc}")
