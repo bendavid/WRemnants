@@ -1,5 +1,5 @@
 import argparse
-from utilities import output_tools, common, rdf_tools, logging
+from utilities import output_tools, common, rdf_tools, logging, differential
 
 parser,initargs = common.common_parser(True)
 
@@ -59,17 +59,7 @@ axis_passMT = common.axis_passMT
 
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
 
-# gen axes for differential measurement
-if len(args.genBins) == 2:
-    genBinsPt = args.genBins[0]
-    genBinsEta = args.genBins[1]
-else:
-    raise IOError(f"Specified format '--genBins {args.genBins}' can not be processed! Please specify the number of gen bins for pT and |eta|")
-axis_ptGen = hist.axis.Regular(genBinsPt, template_minpt, template_maxpt, name = "ptGen")
-axis_etaGen = hist.axis.Regular(genBinsEta, 0, template_maxeta, underflow=False, name = "etaGen")
-axis_xnorm = hist.axis.Regular(1, 0., 1., name = "count", underflow=False, overflow=False)
-unfolding_axes = [axis_ptGen, axis_etaGen]
-unfolding_cols = ["ptGen", "etaGen"]
+unfolding_axes, unfolding_cols = differential.get_pt_eta_axes(args.genBins, template_minpt, template_maxpt, template_maxeta)
 
 # axes for study of fakes
 axis_mt_fakes = hist.axis.Regular(120, 0., 120., name = "mt", underflow=False, overflow=True)
@@ -184,12 +174,12 @@ def build_graph(df, dataset):
 
         df_xnorm = df_xnorm.DefinePerSample("count", "0.5")
 
-        xnorm_axes = [*unfolding_axes, axis_xnorm]
+        xnorm_axes = [*unfolding_axes, differential.axis_xnorm]
         xnorm_cols = [*unfolding_cols, "count"]
         
         results.append(df_xnorm.HistoBoost("xnorm", xnorm_axes, [*xnorm_cols, "nominal_weight"]))
 
-        scale_axes = [*unfolding_axes, axis_xnorm, axis_ptVgen, axis_chargeVgen]
+        scale_axes = [*unfolding_axes, differential.axis_xnorm, axis_ptVgen, axis_chargeVgen]
         scale_cols = [*unfolding_cols, "count", "ptVgen", "chargeVgen"]
 
         syst_tools.add_pdf_hists(results, df_xnorm, dataset.name, xnorm_axes, xnorm_cols, args.pdfs, base_name="xnorm")
