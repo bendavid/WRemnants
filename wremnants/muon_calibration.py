@@ -54,7 +54,7 @@ def make_jpsi_crctn_helpers(args, make_uncertainty_helper=False):
     if args.muonCorrData == "massfit":
         data_corrfile = "calibrationJDATA_ideal.root"
     elif args.muonCorrData == "lbl_massfit":
-        data_corrfile = "calibrationJDATA_rewtgr_3dmap_LBL_v721_cropped_eta.root" 
+        data_corrfile = "calibrationJDATA_rewtgr_3dmap_LBL_v721.root" 
     else:
         data_corrfile = None
 

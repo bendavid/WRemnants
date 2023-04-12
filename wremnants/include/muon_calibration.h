@@ -716,7 +716,7 @@ public:
         const RVec<float> &cov, double nominal_weight = 1.0
     ) {
         cout << "++++++++++++++++++++++++" << std::endl;
-        const auto nonClosure = correctionHist_->at(recoEta, recoPt).data();
+        const auto nonClosure = correctionHist_->at(recoEta, recoPt).value;
         const double recoPtUnc = nonClosure - 1;
         const double recoQop = calculateQop(recoPt, recoEta, recoCharge);
         const double recoQopUnc = calculateQopUnc(recoPt, recoEta, recoCharge, recoPtUnc);
