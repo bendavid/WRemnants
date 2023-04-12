@@ -424,6 +424,7 @@ def build_graph(df, dataset):
                                 "hist_Z_non_closure",
                                 nominal_axes,
                                 [*nominal_cols_gen_smeared, "Z_non_closure"],
+                                tensor_axes = [common.down_up_axis]
                             )
                             results.append(hist_Z_non_closure)
                     else:
