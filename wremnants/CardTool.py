@@ -53,7 +53,7 @@ class CardTool(object):
         self.project = None
         self.chargeIdDict = {"minus" : {"val" : -1, "id" : "q0", "badId" : "q1"},
                              "plus"  : {"val" : 1., "id" : "q1", "badId" : "q0"},
-                             "inclusive" : {"val" : "sum", "id" : "none", "badId" : None}, # for this channel there is no bad id, currently using random string to make sure it doesn't match
+                             "inclusive" : {"val" : "sum", "id" : "none", "badId" : None},
                              }
 
     def skipHistograms(self):
@@ -430,7 +430,6 @@ class CardTool(object):
             varEqNomiThreshold = 1.0
             if up_nBinsSystSameAsNomi >= varEqNomiThreshold or down_nBinsSystSameAsNomi >= varEqNomiThreshold:
                 logger.warning(f"syst {name} has Up/Down variation with {up_nBinsSystSameAsNomi:.1%}/{down_nBinsSystSameAsNomi:.1%} of bins equal to nominal")
-                    
 
     def writeForProcess(self, h, proc, syst):
         decorrelateByBin = {}

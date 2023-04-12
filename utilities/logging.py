@@ -30,7 +30,7 @@ logging_verboseLevel = [logging.CRITICAL, logging.ERROR, logging.WARNING, loggin
 def set_logging_level(log, verbosity):
     log.setLevel(logging_verboseLevel[max(0, min(4, verbosity))])
 
-def setup_logger(basefile, verbosity, no_colors=False):
+def setup_logger(basefile, verbosity=3, no_colors=False):
     setup_func = setup_base_logger if no_colors else setup_color_logger
     return setup_func(os.path.basename(basefile), verbosity)
 
