@@ -3,6 +3,7 @@ import numpy as np
 from utilities import boostHistHelpers as hh, common, logging
 from wremnants import theory_tools
 from wremnants.datasets.datagroups import datagroups2016
+import re
 import collections.abc
 
 logger = logging.child_logger(__name__)
@@ -21,8 +22,8 @@ def syst_transform_map(base_hist, hist_name):
         return unc if base_hist == "nominal" else f"{base_hist}_{unc}"
 
     transforms = {}
-    transforms.update({pdf+"Up" : {"action" : lambda h,p=pdf: pdfUnc(h, p)[0]} for pdf in pdfNames})
-    transforms.update({pdf+"Down" : {"action" : lambda h,p=pdf: pdfUnc(h, p)[1]} for pdf in pdfNames})
+    transforms.update({pdf+"Up" : {"action" : lambda h,p=pdf: pdfUnc(h, p)[0] if "pdfVar" in h.axes.name else h} for pdf in pdfNames})
+    transforms.update({pdf+"Down" : {"action" : lambda h,p=pdf: pdfUnc(h, p)[1] if "pdfVar" in h.axes.name else h} for pdf in pdfNames})
     transforms["scetlib_dyturboMSHT20Up"] = {"action" : lambda h: pdfUnc(h, "pdfMSHT20", "vars")[0], "procs" : ["ZmumuPostVFP"]}
     transforms["scetlib_dyturboMSHT20Down"] = {"action" : lambda h: pdfUnc(h, "pdfMSHT20", "vars")[1], "procs" : ["ZmumuPostVFP"]}
     transforms["scetlib_dyturboMSHT20an3loUp"] = {"action" : lambda h: pdfUnc(h, "pdfMSHT20", "vars")[0], "procs" : ["ZmumuPostVFP"]}
@@ -75,6 +76,22 @@ def syst_transform_map(base_hist, hist_name):
                 ["transition_points0.2_0.65_1.1", "transition_points0.4_0.55_0.7", 
                 "transition_points0.2_0.45_0.7", "transition_points0.4_0.75_1.1", ],
                  no_flow=["ptVgen"], do_min=True)},
+       "resumTNPAllUp" : {
+           "action" : lambda h: h if "vars" not in h.axes.name else theory_tools.hessianPdfUnc(h[{"vars" :
+                 [x for x in h.axes["vars"] if any(re.match(y, x) for y in ["pdf0", "^gamma_", "^q_", "b_", "^s+", "^s-", "^h_"])]}], 
+                "vars", uncType="asymHessian")[0]},
+       "resumTNPAllDown" : {
+           "action" : lambda h: h if "vars" not in h.axes.name else theory_tools.hessianPdfUnc(h[{"vars" :
+                 [x for x in h.axes["vars"] if any(re.match(y, x) for y in ["pdf0", "^gamma_", "^q_", "b_", "^s+", "^s-", "^h_"])]}], 
+                "vars", uncType="asymHessian")[1]},
+       "resumScaleAllUp" : {
+           "action" : lambda h: h if "vars" not in h.axes.name else hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars",
+                 [x for x in h.axes["vars"] if any(re.match(y, x) for y in ["pdf0", "^nuB.*", "nuS.*", "^muB.*", "^muS.*",])],
+                    do_min=False)},
+       "resumScaleAllDown" : {
+           "action" : lambda h: h if "vars" not in h.axes.name else hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars",
+                 [x for x in h.axes["vars"] if any(re.match(y, x) for y in ["pdf0", "^nuB.*", "nuS.*", "^muB.*", "^muS.*",])],
+                    do_min=True)},
        "resumNPUp" : {
             "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", 
                  [x for x in h.axes["vars"] if "Omega" in x or "cnu" in x or "omega" in x],
@@ -83,14 +100,38 @@ def syst_transform_map(base_hist, hist_name):
             "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", 
                  [x for x in h.axes["vars"] if "omega" in x or "cnu" in x or "omega" in x],
                  no_flow=["ptVgen"], do_min=True) if "vars" in h.axes.name else h},
+       "resumNPOmegaUp" : {
+            "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", 
+                [x for x in h.axes["vars"] if re.match("^Omega-*\d+", x)],
+                 do_min=False) if "vars" in h.axes.name else h},
+        "resumNPOmegaDown" : {
+            "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", 
+                [x for x in h.axes["vars"] if re.match("^Omega-*\d+", x)],
+                 do_min=True) if "vars" in h.axes.name else h},
+       "resumNPomega_nuUp" : {
+            "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", 
+                [x for x in h.axes["vars"] if re.match("^omega_nu-*\d+", x)],
+                 do_min=False) if "vars" in h.axes.name else h},
+        "resumNPomega_nuDown" : {
+            "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", 
+                [x for x in h.axes["vars"] if re.match("^omega_nu-*\d+", x)],
+                 do_min=True) if "vars" in h.axes.name else h},
+       "resumNPc_nuUp" : {
+            "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", 
+                [x for x in h.axes["vars"] if re.match("^c_nu-*\d+", x)],
+                 do_min=False) if "vars" in h.axes.name else h},
+        "resumNPc_nuDown" : {
+            "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", 
+                [x for x in h.axes["vars"] if re.match("^c_nu-*\d+", x)],
+                 do_min=True) if "vars" in h.axes.name else h},
         "resumScaleMax" : {
             "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", range(9,44), no_flow=["ptVgen"], do_min=False)},
         "resumScaleMin" : {
             "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", range(9,44), no_flow=["ptVgen"], do_min=True)},
     })
-    for k,v in transforms.items():
-        if any([x in k for x in ["QCDscale", "resum", "pdf"]]):
-            v["procs"] = common.vprocs 
+    #for k,v in transforms.items():
+    #    if any([x in k for x in ["QCDscale", "resum", "pdf"]]):
+    #        #v["procs"] = common.vprocs 
 
     return transforms
 

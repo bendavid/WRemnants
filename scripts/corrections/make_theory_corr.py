@@ -8,6 +8,7 @@ import pathlib
 import hist
 import argparse
 import os
+import matplotlib.pyplot as plt
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-m", "--minnlo_file", type=str, default="w_z_gen_dists.pkl.lz4", help="MiNNLO gen file, denominator in ratio") 
@@ -20,6 +21,7 @@ parser.add_argument("--proc", type=str, required=True, choices=["z", "w", ], hel
 parser.add_argument("--axes", nargs="*", type=str, default=None, help="Use only specified axes in hist")
 parser.add_argument("--debug", action='store_true', help="Print debug output")
 parser.add_argument("--noColorLogger", action="store_true", default=False, help="Do not use logging with colors")
+parser.add_argument("-o", "--plotdir", type=str, help="Output directory for plots")
 
 args = parser.parse_args()
 
@@ -128,7 +130,7 @@ if numh.ndim-1 < minnloh.ndim:
     numh = hist.Hist(*axes, storage=numh._storage_type(), data=data)
 
 
-corrh_unc  = theory_corrections.make_corr_from_ratio(minnloh, numh)
+corrh_unc, minnloh, numh  = theory_corrections.make_corr_from_ratio(minnloh, numh)
 corrh = hist.Hist(*corrh_unc.axes, name=corrh_unc.name, storage=hist.storage.Double(), data=corrh_unc.values(flow=True))
 
 if args.postfix:
@@ -148,5 +150,63 @@ with lz4.frame.open(outfile, "wb") as f:
 logger.info("Correction binning is")
 for ax in corrh.axes:
     logger.info(f"Axis {ax.name}: {ax.edges}")
-logger.info(f"Average correction is {corrh.sum()/np.ones_like(corrh).sum()}")
+logger.info(f"Average correction is {np.average(corrh.values())}")
+logger.info(f"Normalization change (corr/minnlo) is {numh[{'vars' : 0 }].sum().value/minnloh.sum().value}")
 logger.info(f"Wrote file {outfile}")
+
+if args.plotdir:
+    colors = {
+        "scetlib_dyturbo" : "mediumpurple",
+        "dyturbo" : "darkblue",
+        "matrix_radish" : "green",
+    }
+
+    xlabel = {
+        "massVgen" : "$m_{{{final_state}}}$ (GeV)",
+        "ptVgen" : "$p_{{T}}^{{{final_state}}}$ (GeV)",
+        "absy" : "$|y^{{{final_state}}}|$",
+    }
+    
+    for charge in minnloh.axes["chargeVgen"].centers:
+        charge = complex(0, charge)
+        proc = 'Z' if args.proc == 'z' else ("Wp" if charge.imag > 0 else "Wm")
+
+        meta_dict = {}
+        for f in [args.minnlo_file]+args.corr_files:
+            try:
+                meta = input_tools.get_metadata(f)
+                meta_dict[f] = meta
+            except ValueError as e:
+                logger.warning(f"No meta data found for file {f}")
+                pass
+
+        fig, ax = plt.subplots(figsize=(6, 6))
+        corrh[{"vars" : 0, "charge" : charge, "massVgen" : 0}].plot(ax=ax)
+        final_state = "\\ell\\ell" if args.proc == 'z' else ("\\ell^{+}\\nu" if charge.imag > 0 else "\\ell^{-}\\nu")
+
+        plot_tools.make_plot_dir(*args.plotdir.rsplit("/", 1))
+        plot_name = f"corr2D_{args.generator}_MiNNLO_{proc}"
+        plot_tools.save_pdf_and_png(args.plotdir, plot_name)
+        plot_tools.write_index_and_log(args.plotdir, plot_name, args=args, analysis_meta_info=meta_dict)
+        
+        for varm,varn in zip(minnloh.axes.name[:-1], numh.axes.name[:-2]):
+            fig = plot_tools.makePlotWithRatioToRef(
+                [minnloh[{"chargeVgen" : charge}].project(varm),
+                    numh[{"vars" : 0, "charge" : charge}].project(varn),
+                ],
+                ["MiNNLO", args.generator, 
+                ],
+                colors=["orange", "mediumpurple"], 
+                linestyles=["solid", "dashed", ],
+                xlabel=xlabel[varm].format(final_state=final_state), 
+                ylabel="Events/bin",
+                rlabel="x/MiNNLO",
+                legtext_size=24,
+                rrange=[0.8, 1.2],
+                yscale=1.1,
+                xlim=None, binwnorm=1.0, baseline=True
+            )
+            plot_name = f"{varm}_{args.generator}_MiNNLO_{proc}"
+            plot_tools.save_pdf_and_png(args.plotdir, plot_name)
+            plot_tools.write_index_and_log(args.plotdir, plot_name, args=args,
+                analysis_meta_info=meta_dict)

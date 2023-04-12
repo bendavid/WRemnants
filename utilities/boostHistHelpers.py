@@ -73,6 +73,9 @@ def relVariances(h1vals, h2vals, h1vars, h2vars):
     rel2 = relVariance(h2vals, h2vars)
     return (rel1, rel2)
 
+# TODO: Implement this rather than relying on pdf unc function
+#def rssHist(h):
+
 def sqrtHist(h):
     rootval = np.sqrt(h.values(flow=True))
     relvar = relVariance(h.values(flow=True), h.variances(flow=True))
@@ -321,9 +324,15 @@ def syst_min_or_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=[], do_min=Tr
         logger.warning(f"Did not find syst axis {syst_ax} in histogram. Returning nominal!")
         return h
 
+    # Keep the order of the hist
+    proj_ax = [ax for ax in h.axes.name if ax in proj_ax]
     systax_idx = h.axes.name.index(syst_ax)
     if systax_idx != h.ndim-1:
         raise ValueError("Required to have the syst axis at index -1")
+
+    if len(indices) < 2:
+        logger.warning(f"Requires at least two histograms for envelope. Returning nominal!")
+        return h
 
     if type(indices[0]) == str:
         if all(x.isdigit() for x in indices):
@@ -340,12 +349,17 @@ def syst_min_or_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=[], do_min=Tr
         
     hvar = projectNoFlow(h, (*proj_ax, syst_ax), exclude=no_flow)
 
-    proj_ax_idxs = [h.axes.name.index(ax) for ax in proj_ax]
     view = np.take(hvar.view(flow=True), indices, axis=-1)
     fullview = np.take(h.view(flow=True), indices, axis=-1)
 
-    # Move project axis to second two last position so the broadcasting works
-    for idx in proj_ax_idxs:
+    # Move project axis to second to last position so the broadcasting works
+    # NOTE: Be careful that you keep track of the actual order, keeping in mind that things are moving
+    names = list(h.axes.name)
+    initial_order = []
+    for ax in proj_ax:
+        idx = names.index(ax)
+        initial_order.append(idx)
+        names.insert(-2, names.pop(idx))
         fullview = np.moveaxis(fullview, idx, -2)
     
     op = np.argmin if do_min else np.argmax
@@ -356,8 +370,11 @@ def syst_min_or_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=[], do_min=Tr
 
     hnew = h[{syst_ax : 0}]
     # Now that the syst ax has been collapsed, project axes will be at last position
-    for idx in reversed(proj_ax_idxs):
+    # Move the axes back to where they belong
+    names = list(h.axes.name)
+    for idx in reversed(initial_order):
         opview = np.moveaxis(opview, -1, idx)
+
     hnew[...] = opview
     return hnew
 
