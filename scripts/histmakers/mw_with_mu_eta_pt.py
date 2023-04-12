@@ -60,8 +60,13 @@ axis_passMT = common.axis_passMT
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
 
 # gen axes for differential measurement
-axis_ptGen = hist.axis.Regular(2, template_minpt, template_maxpt, name = "ptGen")
-axis_etaGen = hist.axis.Regular(3, template_mineta, template_maxeta, name = "etaGen")
+if len(args.genBins) == 2:
+    genBinsPt = args.genBins[0]
+    genBinsEta = args.genBins[1]
+else:
+    raise IOError(f"Specified format '--genBins {args.genBins}' can not be processed! Please specify the number of gen bins for pT and |eta|")
+axis_ptGen = hist.axis.Regular(genBinsPt, template_minpt, template_maxpt, name = "ptGen")
+axis_etaGen = hist.axis.Regular(genBinsEta, 0, template_maxeta, underflow=False, name = "etaGen")
 axis_xnorm = hist.axis.Regular(1, 0., 1., name = "count", underflow=False, overflow=False)
 unfolding_axes = [axis_ptGen, axis_etaGen]
 unfolding_cols = ["ptGen", "etaGen"]
@@ -163,13 +168,13 @@ def build_graph(df, dataset):
         if args.genLevel == "preFSR":
             df = theory_tools.define_prefsr_vars(df)
             df = df.Define("ptGen", "chargeVgen < 0 ? genl.pt() : genlanti.pt()")   
-            df = df.Define("etaGen", "chargeVgen < 0 ? genl.eta() : genlanti.eta()")
+            df = df.Define("etaGen", "chargeVgen < 0 ? abs(genl.eta()) : abs(genlanti.eta())")
         elif args.genLevel == "postFSR":
             pdgId = -13 if "Wplusmunu" in dataset.name else 13
             df = df.Define("postFSRmuons", f"GenPart_status == 1 && (GenPart_statusFlags & 1) && GenPart_pdgId == {pdgId}")
             df = df.Define("postFSRmuonIdx", "ROOT::VecOps::ArgMax(GenPart_pt[postFSRmuons])")
             df = df.Define("ptGen", "GenPart_pt[postFSRmuons][postFSRmuonIdx]")
-            df = df.Define("etaGen", "GenPart_eta[postFSRmuons][postFSRmuonIdx]")
+            df = df.Define("etaGen", "abs(GenPart_eta[postFSRmuons][postFSRmuonIdx])")
 
         # add histograms before any selection
         df_xnorm = df
