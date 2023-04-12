@@ -28,27 +28,23 @@ def syst_transform_map(base_hist, hist_name):
     transforms["scetlib_dyturboMSHT20Down"] = {"action" : lambda h: pdfUnc(h, "pdfMSHT20", "vars")[1], "procs" : ["ZmumuPostVFP"]}
     transforms["scetlib_dyturboMSHT20an3loUp"] = {"action" : lambda h: pdfUnc(h, "pdfMSHT20", "vars")[0], "procs" : ["ZmumuPostVFP"]}
     transforms["scetlib_dyturboMSHT20an3loDown"] = {"action" : lambda h: pdfUnc(h, "pdfMSHT20", "vars")[1], "procs" : ["ZmumuPostVFP"]}
-    transforms.update({
-        "massShift100MeVDown" : {"hist" : "massWeight", "action" : lambda h: h[{"tensor_axis_0" : 0}]},
-        "massShift100MeVUp" : {"hist" : "massWeight", "action" : lambda h: h[{"tensor_axis_0" : 20}]},
-    })
 
     s = hist.tag.Slicer()
     transforms.update({
         "QCDscale_muRmuFUp" : {
-            "action" : lambda h: h[{"muRfact" : 2.j, "muFfact" : 2.j, "ptVgen" : s[::hist.sum]}]},
+            "action" : lambda h: h if "muRfact" not in h.axes.name else h[{"muRfact" : 2.j, "muFfact" : 2.j, "ptVgen" : s[::hist.sum]}]},
         "QCDscale_muRmuFDown" : {
-            "action" : lambda h: h[{"muRfact" : 0.5j, "muFfact" : 0.5j, "ptVgen" : s[::hist.sum]}]},
+            "action" : lambda h: h if "muRfact" not in h.axes.name else h[{"muRfact" : 0.5j, "muFfact" : 0.5j, "ptVgen" : s[::hist.sum]}]},
         "QCDscale_muRUp" : {
-            "action" : lambda h: h[{"muRfact" : 2.j, "muFfact" : 1.j, "ptVgen" : s[::hist.sum]}]},
+            "action" : lambda h: h if "muRfact" not in h.axes.name else h[{"muRfact" : 2.j, "muFfact" : 1.j, "ptVgen" : s[::hist.sum]}]},
         "QCDscale_muRDown" : {
-            "action" : lambda h: h[{"muRfact" : 0.5j, "muFfact" : 1.j, "ptVgen" : s[::hist.sum]}]},
+            "action" : lambda h: h if "muRfact" not in h.axes.name else h[{"muRfact" : 0.5j, "muFfact" : 1.j, "ptVgen" : s[::hist.sum]}]},
         "QCDscale_muFUp" : {
-            "action" : lambda h: h[{"muRfact" : 1.j, "muFfact" : 2.j, "ptVgen" : s[::hist.sum]}]},
+            "action" : lambda h: h if "muRfact" not in h.axes.name else h[{"muRfact" : 1.j, "muFfact" : 2.j, "ptVgen" : s[::hist.sum]}]},
         "QCDscale_muFDown" : {
-            "action" : lambda h: h[{"muRfact" : 1.j, "muFfact" : 0.5j, "ptVgen" : s[::hist.sum]}]},
+            "action" : lambda h: h if "muRfact" not in h.axes.name else h[{"muRfact" : 1.j, "muFfact" : 0.5j, "ptVgen" : s[::hist.sum]}]},
         "QCDscale_cen" : {
-            "action" : lambda h: h[{"muRfact" : 1.j, "muFfact" : 1.j, "ptVgen" : s[::hist.sum]}]},
+            "action" : lambda h: h if "muRfact" not in h.axes.name else h[{"muRfact" : 1.j, "muFfact" : 1.j, "ptVgen" : s[::hist.sum]}]},
     })
 
     def scetlibIdx(h, i):
