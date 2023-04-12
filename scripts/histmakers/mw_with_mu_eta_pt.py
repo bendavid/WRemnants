@@ -121,6 +121,8 @@ bias_helper = muon_calibration.make_muon_bias_helpers(args) if args.biasCalibrat
 
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theoryCorr)
 
+z_non_closure_helper = muon_calibration.make_z_non_closure_helper()
+
 # recoil initialization
 if not args.noRecoil:
     from wremnants import recoil_tools
@@ -193,6 +195,7 @@ def build_graph(df, dataset):
 
                 df = df.Define(f"{reco_sel}_{var.lower()}0_gen_smeared", f"{reco_sel}_genSmeared{var.capitalize()}[0]")
                 df = df.Define(f"{reco_sel_GF}_{var.lower()}0_gen_smeared", f"{reco_sel_GF}_genSmeared{var.capitalize()}[0]")
+            df = df.Define(f"{reco_sel_GF}_covMat0", f"{reco_sel_GF}_covMat[0]")
 
 #            reco_sel = "vetoMuonsPre"
 #            df = muon_calibration.define_matched_gen_muons_kinematics(df, reco_sel)
@@ -285,7 +288,7 @@ def build_graph(df, dataset):
                 corr_helpers[dataset.name], args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly)
             )
         if args.muonScaleVariation == 'smearingWeights' and (isW or isZ): 
-            nominal_cols_gen, nominal_cols_gen_smeared = muon_calibration.make_alt_reco_and_gen_hists(df, results, nominal_axes, reco_sel_GF)
+            nominal_cols_gen, nominal_cols_gen_smeared = muon_calibration.make_alt_reco_and_gen_hists(df, results, nominal_axes, nominal_cols, reco_sel_GF)
             if args.validationHists: 
                 wremnants.make_reco_over_gen_hists(df, results)
 
@@ -398,12 +401,31 @@ def build_graph(df, dataset):
                                     "bool_false"
                                 ]
                             )
-                        dummyMuonScaleSyst_responseWeights = df.HistoBoost(
-                            "muonScaleSyst_responseWeights_gensmear", nominal_axes,
-                            [*nominal_cols_gen_smeared, "muonScaleSyst_responseWeights_tensor_gensmear"],
-                            tensor_axes = jpsi_unc_helper.tensor_axes
-                        )
-                        results.append(dummyMuonScaleSyst_responseWeights)
+                            dummyMuonScaleSyst_responseWeights = df.HistoBoost(
+                                "muonScaleSyst_responseWeights_gensmear", nominal_axes,
+                                [*nominal_cols_gen_smeared, "muonScaleSyst_responseWeights_tensor_gensmear"],
+                                tensor_axes = jpsi_unc_helper.tensor_axes
+                            )
+                            results.append(dummyMuonScaleSyst_responseWeights)
+
+                            df = df.Define("Z_non_closure", z_non_closure_helper,
+                                [
+                                    f"{reco_sel_GF}_pt0_gen",
+                                    f"{reco_sel_GF}_eta0_gen",
+                                    f"{reco_sel_GF}_charge0_gen",
+                                    f"{reco_sel_GF}_pt0_gen_smeared",
+                                    f"{reco_sel_GF}_eta0_gen_smeared",
+                                    f"{reco_sel_GF}_charge0_gen_smeared",
+                                    f"{reco_sel_GF}_covMat0",
+                                    "nominal_weight"
+                                ]
+                            )
+                            hist_Z_non_closure = df.HistoBoost(
+                                "hist_Z_non_closure",
+                                nominal_axes,
+                                [*nominal_cols_gen_smeared, "Z_non_closure"],
+                            )
+                            results.append(hist_Z_non_closure)
                     else:
                         df = df.Define("muonScaleSyst_responseWeights_tensor_gensmear", calibration_uncertainty_helper,
                             [
@@ -422,12 +444,14 @@ def build_graph(df, dataset):
                             ]
                         )
                         dummyMuonScaleSyst_responseWeights = df.HistoBoost("muonScaleSyst_responseWeights_gensmear", nominal_axes, [*nominal_cols_gen_smeared, "muonScaleSyst_responseWeights_tensor_gensmear"], tensor_axes = calibration_uncertainty_helper.tensor_axes)
-                        results.append(dummyMuonScaleSyst_responseWeights)
-            if args.validationHists and args.muonScaleVariation == 'smearingWeights':
-                df = wremnants.define_cols_for_smearing_weights(df, calibration_uncertainty_helper)
-                wremnants.make_hists_for_smearing_weights(df, nominal_axes, nominal_cols, results)
+                        results.append(dummyMuonScaleSyst_responseWeights)                
 
             if args.muonScaleVariation == 'smearingWeights':
+                
+                if args.validationHists:
+                    df = wremnants.define_cols_for_smearing_weights(df, calibration_uncertainty_helper)
+                    wremnants.make_hists_for_smearing_weights(df, nominal_axes, nominal_cols, results)
+
                 df = df.Define("goodMuons_pt0_gen_smeared_scaleUp_mil", "goodMuons_pt0_gen_smeared * 1.001")
                 df = df.Define("goodMuons_pt0_gen_smeared_scaleDn_mil", "goodMuons_pt0_gen_smeared / 1.001")
                 df = df.Define("goodMuons_pt0_scaleUp_tenthmil", "goodMuons_pt0 * 1.0001")
@@ -476,8 +500,8 @@ def build_graph(df, dataset):
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)
-if args.muonScaleVariation == 'smearingWeights':
+if not args.onlyMainHistograms and args.muonScaleVariation == 'smearingWeights':
     muon_calibration.transport_smearing_weights_to_reco(resultdict)
     muon_calibration.muon_scale_variation_from_manual_shift(resultdict)
 
-output_tools.write_analysis_output(resultdict, "mw_with_mu_eta_pt.hdf5", args)
+output_tools.write_analysis_output(resultdict, f"{os.path.basename(__file__).replace('py', 'hdf5')}", args, update_name=not args.forceDefaultName)

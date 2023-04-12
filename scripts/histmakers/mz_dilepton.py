@@ -166,6 +166,9 @@ def build_graph(df, dataset):
     results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"]))
     results.append(df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "nominal_weight"]))
 
+    for obs in ["ptll", "mll", "yll"]:
+        results.append(df.HistoBoost(f"nominal_{obs}", [axes[obs]], [obs, "nominal_weight"]))
+
     if not dataset.is_data and not args.onlyMainHistograms:
 
 
@@ -206,4 +209,4 @@ def build_graph(df, dataset):
 
 resultdict = narf.build_and_run(datasets, build_graph)
 
-output_tools.write_analysis_output(resultdict, "mz_dilepton.hdf5", args)
+output_tools.write_analysis_output(resultdict, f"{os.path.basename(__file__).replace('py', 'hdf5')}", args, update_name=not args.forceDefaultName)
