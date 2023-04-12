@@ -275,7 +275,7 @@ def main(args,xnorm=False):
             )
 
     to_fakes = passSystToFakes and not args.noQCDscaleFakes and not xnorm
-    combine_helpers.add_pdf_uncertainty(cardTool, single_v_samples, passSystToFakes)
+    combine_helpers.add_pdf_uncertainty(cardTool, single_v_samples, passSystToFakes, from_corr=args.pdfUncFromCorr)
     combine_helpers.add_scale_uncertainty(cardTool, args.minnloScaleUnc, signal_samples_inctau, to_fakes, resum=args.resumUnc)
     # for Z background in W mass case (W background for Wlike is essentially 0, useless to apply QCD scales there)
     if wmass and not xnorm:

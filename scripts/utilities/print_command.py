@@ -3,7 +3,7 @@ import pickle
 import argparse
 import os
 import pathlib
-from wremnants.datasets.datagroups2016 import Datagroups2016
+from utilities import input_tools
 
 parser = argparse.ArgumentParser()
 parser.add_argument("infile", type=str, help=".pkl.lz4 from with meta_info")
@@ -21,13 +21,11 @@ def print_command_from_root(rtfile_name):
     command = rtfile.Get("meta_info/command")
     print(command.GetTitle())
 
-def print_command_from_dict(res):
-    meta_data = res["meta_data"] if "meta_data" in res else res["meta_info"]
+def print_command_from_dict(infile):
+    meta_data = input_tools.get_metadata(infile)
     print(meta_data["command"])
 
-
-datagroups = Datagroups2016(args.infile)
-if datagroups.rtfile:
+if args.infile.endswith(".root"):
     print_command_from_root(args.infile)
 else:
-    print_command_from_dict(datagroups.results)
+    print_command_from_dict(args.infile)

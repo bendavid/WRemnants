@@ -90,6 +90,8 @@ def build_graph(df, dataset):
     df = df.Define("TrigMuon_charge", "event % 2 == 0 ? -1 : 1") # wlike charge
     
     # normalization xsecs (propagate pdfs/qcdscales)
+    apply_theory_corr = args.theoryCorr and dataset.name in corr_helpers
+
     if dataset.name in sigProcs:
 
         axes_xnorm = [axis_xnorm, common.axis_recoil_gen_ptZ_lowpu, axis_charge]
@@ -106,7 +108,10 @@ def build_graph(df, dataset):
         syst_tools.add_qcdScale_hist(results, df_xnorm, [*axes_xnorm, axis_ptVgen, axis_chargeVgen], [*cols_xnorm, "ptVgen", "chargeVgen"], "xnorm")
         syst_tools.add_qcdScaleByHelicityUnc_hist(results, df_xnorm, qcdScaleByHelicity_helper, [*axes_xnorm, axis_ptVgen, axis_chargeVgen], [*cols_xnorm, "ptVgen", "chargeVgen"], base_name="xnorm")
      
-        
+        if apply_theory_corr:
+            results.extend(theory_tools.make_theory_corr_hists(df_xnorm, "xnorm", axes=axes_xnorm, cols=cols_xnorm, 
+                helpers=corr_helpers[dataset.name], generators=args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly)
+            )
   
     if flavor == "mumu":
     
@@ -310,8 +315,6 @@ def build_graph(df, dataset):
     
     # TODO: Should this also be added for the mT hist?
 
-    apply_theory_corr = args.theoryCorr and dataset.name in corr_helpers
-    print("Apply corr for proc", dataset.name, apply_theory_corr)
     if apply_theory_corr:
         results.extend(theory_tools.make_theory_corr_hists(df, "reco_mT", axes=gen_reco_mll_axes, cols=gen_reco_mt_cols, 
             helpers=corr_helpers[dataset.name], generators=args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly)
