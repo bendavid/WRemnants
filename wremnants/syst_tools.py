@@ -36,19 +36,19 @@ def syst_transform_map(base_hist, hist_name):
     s = hist.tag.Slicer()
     transforms.update({
         "QCDscale_muRmuFUp" : {
-            "action" : lambda h: h[{"muRfact" : 2.j, "muFfact" : 2.j, "ptVgen" : s[::hist.sum]}]},
+            "action" : lambda h: h if "muRfact" not in h.axes.name else h[{"muRfact" : 2.j, "muFfact" : 2.j, "ptVgen" : s[::hist.sum]}]},
         "QCDscale_muRmuFDown" : {
-            "action" : lambda h: h[{"muRfact" : 0.5j, "muFfact" : 0.5j, "ptVgen" : s[::hist.sum]}]},
+            "action" : lambda h: h if "muRfact" not in h.axes.name else h[{"muRfact" : 0.5j, "muFfact" : 0.5j, "ptVgen" : s[::hist.sum]}]},
         "QCDscale_muRUp" : {
-            "action" : lambda h: h[{"muRfact" : 2.j, "muFfact" : 1.j, "ptVgen" : s[::hist.sum]}]},
+            "action" : lambda h: h if "muRfact" not in h.axes.name else h[{"muRfact" : 2.j, "muFfact" : 1.j, "ptVgen" : s[::hist.sum]}]},
         "QCDscale_muRDown" : {
-            "action" : lambda h: h[{"muRfact" : 0.5j, "muFfact" : 1.j, "ptVgen" : s[::hist.sum]}]},
+            "action" : lambda h: h if "muRfact" not in h.axes.name else h[{"muRfact" : 0.5j, "muFfact" : 1.j, "ptVgen" : s[::hist.sum]}]},
         "QCDscale_muFUp" : {
-            "action" : lambda h: h[{"muRfact" : 1.j, "muFfact" : 2.j, "ptVgen" : s[::hist.sum]}]},
+            "action" : lambda h: h if "muRfact" not in h.axes.name else h[{"muRfact" : 1.j, "muFfact" : 2.j, "ptVgen" : s[::hist.sum]}]},
         "QCDscale_muFDown" : {
-            "action" : lambda h: h[{"muRfact" : 1.j, "muFfact" : 0.5j, "ptVgen" : s[::hist.sum]}]},
+            "action" : lambda h: h if "muRfact" not in h.axes.name else h[{"muRfact" : 1.j, "muFfact" : 0.5j, "ptVgen" : s[::hist.sum]}]},
         "QCDscale_cen" : {
-            "action" : lambda h: h[{"muRfact" : 1.j, "muFfact" : 1.j, "ptVgen" : s[::hist.sum]}]},
+            "action" : lambda h: h if "muRfact" not in h.axes.name else h[{"muRfact" : 1.j, "muFfact" : 1.j, "ptVgen" : s[::hist.sum]}]},
     })
 
     def scetlibIdx(h, i):
