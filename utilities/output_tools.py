@@ -74,7 +74,7 @@ def writeMetaInfoToRootFile(rtfile, exclude_diff='notebooks', args=None):
         out = ROOT.TNamed(str(key), str(value))
         out.Write()
 
-def write_analysis_output(results, outfile, args):
+def write_analysis_output(results, outfile, args, update_name=True):
     analysis_debug_output(results)
     results.update({"meta_info" : metaInfoDict(args=args)})
 
@@ -87,10 +87,8 @@ def write_analysis_output(results, outfile, args):
         to_append.append(args.postfix)
     if args.maxFiles > 0:
         to_append.append(f"maxFiles{args.maxFiles}")
-    if args.postfix:
-        to_append.append(args.postfix)
 
-    if to_append:
+    if to_append and update_name:
         outfile = outfile.replace(".hdf5", f"_{'_'.join(to_append)}.hdf5")
 
     if args.outfolder:

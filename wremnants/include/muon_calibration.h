@@ -500,6 +500,11 @@ private:
         return (charge * std::sin(theta) / qop);
     }
 
+    double calculateQopUnc(float pt, float eta, int charge, double ptUnc) {
+        double theta = calculateTheta(eta);
+        return ((-1. * charge * std::sin(theta)) / pow(pt, 2)) * ptUnc;
+    }
+
 // jpsi correction central value for one muon
 template <typename T>
 class JpsiCorrectionsHelper {
@@ -507,9 +512,6 @@ class JpsiCorrectionsHelper {
 public:
     using hist_t = T;
     using tensor_t = typename T::storage_type::value_type::tensor_t;
-    static constexpr auto sizes = narf::tensor_traits<tensor_t>::sizes;
-    static constexpr auto nUnc = sizes[sizes.size() - 1]; // 1 for central value
-    using out_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<nUnc, 2>>;
 
     JpsiCorrectionsHelper(T&& corrections) :
         correctionHist_(std::make_shared<const T>(std::move(corrections))) {}
@@ -542,9 +544,32 @@ public:
 
 private:
     std::shared_ptr<const T> correctionHist_;
-
 };
 
+// jpsi corrections central value for multiple muons
+template <typename T>
+class JpsiCorrectionsRVecHelper : public JpsiCorrectionsHelper<T> {
+
+using base_t = JpsiCorrectionsHelper<T>;
+
+public:
+    //inherit constructor
+    using base_t::base_t;
+
+    RVec<float> operator() (const RVec<float>& pts, const RVec<float> etas, RVec<int> charges) {
+        RVec<float> corrected_pt(pts.size(), 0.);
+        assert(etas.size() == pts.size() && etas.size() == charges.size());
+        for (size_t i = 0; i < pts.size(); i++) {
+            corrected_pt[i] = JpsiCorrectionsHelper<T>::operator()(pts[i], etas[i], charges[i]);
+        }
+
+        return corrected_pt;
+    }
+};
+
+// unlike the JpsiCorrectionHelper which only deals with one muon,
+// and uses inheritance to work on a vector of muons,
+// this helper is already vectorized
 template <typename T>
 class JpsiCorrectionsUncHelper {
 
@@ -665,9 +690,6 @@ private:
     
                 const double weight = std::sqrt(covdet/covdetalt)*std::exp(lnpalt - lnp);
     
-                //if (std::isnan(weight)) {
-                //    cout << genQop << " " << recoQop << " " << genEta << " " << recoEta << " " << genPhi << " " << recoPhi << " " << recoPt << " " << recoCharge << " " << covd(0,0) << " " << std::endl;
-                //}
                 res(ivar, idownup) = weight;
             }
         }
@@ -677,26 +699,51 @@ private:
     std::shared_ptr<const T> correctionHist_;
 };
 
-// jpsi corrections central value for multiple muons
 template <typename T>
-class JpsiCorrectionsRVecHelper : public JpsiCorrectionsHelper<T> {
-
-using base_t = JpsiCorrectionsHelper<T>;
+class ZNonClosureHelper {
 
 public:
-    //inherit constructor
-    using base_t::base_t;
+    using hist_t = T;
+    using out_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<2>>;
 
-    RVec<float> operator() (const RVec<float>& pts, const RVec<float> etas, RVec<int> charges) {
-        RVec<float> corrected_pt(pts.size(), 0.);
-        assert(etas.size() == pts.size() && etas.size() == charges.size());
-        for (size_t i = 0; i < pts.size(); i++) {
-            corrected_pt[i] = JpsiCorrectionsHelper<T>::operator()(pts[i], etas[i], charges[i]);
+    ZNonClosureHelper(T&& corrections) :
+        correctionHist_(std::make_shared<const T>(std::move(corrections))) {}
+
+    // smaering weights for Z non-closure number on pt 
+    out_tensor_t operator() (
+        float genPt, float genEta, int genCharge,
+        double recoPt, float recoEta, int recoCharge,
+        const RVec<float> &cov, double nominal_weight = 1.0
+    ) {
+        cout << "++++++++++++++++++++++++" << std::endl;
+        const auto nonClosure = correctionHist_->at(recoEta, recoPt).data();
+        const double recoPtUnc = nonClosure - 1;
+        const double recoQop = calculateQop(recoPt, recoEta, recoCharge);
+        const double recoQopUnc = calculateQopUnc(recoPt, recoEta, recoCharge, recoPtUnc);
+        const double genQop = calculateQop(genPt, genEta, genCharge);
+
+        const Eigen::Map<const Eigen::Matrix<float, 3, 3, Eigen::RowMajor>> covMap(cov.data(), 3, 3);
+        Eigen::Matrix<double, 3, 3> covd = covMap.cast<double>();
+        const double sigma2Qop = covd(0,0);
+        const double sigma2QopAlt = sigma2Qop;
+
+        const double lnp = -0.5 * pow((recoQop - genQop), 2) / sigma2Qop;
+
+        out_tensor_t res;
+        res.setConstant(nominal_weight);
+        for (std::ptrdiff_t idownup = 0; idownup < 2; ++idownup) {
+            const double dir = idownup == 0 ? -1. : 1.;
+            const double lnpAlt = -0.5 * pow((recoQop + dir * recoQopUnc - genQop), 2) / sigma2QopAlt;
+            const double weight = std::sqrt(sigma2Qop / sigma2QopAlt) * std::exp(lnpAlt - lnp);
+            res(idownup) *= weight; 
         }
-
-        return corrected_pt;
+        return res;
     }
+
+private:
+    std::shared_ptr<const T> correctionHist_;
 };
+
 template <typename T>
 class CorrectionHelperBase {
 

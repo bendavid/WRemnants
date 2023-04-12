@@ -299,11 +299,11 @@ class datagroups(object):
 
         if not rename:
             rename = name
-        self.groups[rename] = dict(
+        self.addGroup(rename, dict(
             label=label,
             color=color,
             members=[],
-        )
+        ))
         tosum = []
         procs = procsToRead if procsToRead else self.groups.keys()
         for proc in filter(lambda x: x not in exclude+[rename], procs):
