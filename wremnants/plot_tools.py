@@ -336,7 +336,7 @@ def format_axis_num(val):
     if type(val) == int or val.is_integer():
         # This is kinda dumb and I might change it
         return f"{val:.0f}" if val > 5 else f"{val:0.1f}"
-    return f"{x:0.3g}" if val > 10 else f"{val:0.2g}"
+    return f"{val:0.3g}" if val > 10 else f"{val:0.2g}"
 
 def make_plot_dir(outpath, outfolder):
     full_outpath = "/".join([outpath, outfolder])

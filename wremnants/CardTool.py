@@ -5,7 +5,6 @@ import ROOT
 import uproot
 import time
 import numpy as np
-import collections.abc
 import os
 import itertools
 import re
@@ -278,25 +277,45 @@ class CardTool(object):
         # If no matches were found for any of the entries_to_skip possibilities
         return False
 
+    def skipEntryDictToArray(self, h, skipEntry, syst):
+        nsyst = len(self.systematics[syst]["systAxes"])+self.systematics[syst]["mirror"]
+
+        if type(skipEntry) == dict:
+            skipEntryArr = np.full(nsyst, -1, dtype=object)
+            nother_ax = h.ndim-nsyst
+            for k,v in skipEntry.items():
+                idx = h.axes.name.index(k)-nother_ax # Offset by the number of other axes, require that syst axes are the trailing ones
+                skipEntryArr[idx] = v
+            logger.debug(f"Expanded skipEntry for syst {syst} is {skipEntryArr}. Syst axes are {h.axes.name[-nsyst:]}")
+        elif type(skipEntry) not in (np.array, list, tuple):
+            raise ValueError(f"Unexpected format for skipEntry. Must be either dict or sequence. found {type(skipEntry)}")
+        else:
+            skipEntryArr = skipEntry
+
+        if len(skipEntryArr) != nsyst:
+            raise ValueError("skipEntry tuple must have the same dimensions as the number os syst axes. " \
+                f"found {nsyst} systematics and len(skipEntry) = {len(skipEntry)}.") 
+
+        return skipEntryArr
+
     def expandSkipEntries(self, h, syst, skipEntries):
         updated_skip = []
         for skipEntry in skipEntries:
-            nsyst_ax = len(self.systematics[syst]["systAxes"])+self.systematics[syst]["mirror"]
-            if len(skipEntry) != nsyst_ax:
-                raise ValueError(f"Error in syst {syst}. skipEntry must specify a value per axis. "
-                        f"Found {nsyst_ax} axes ({self.systematics[syst]['systAxes']}) but {len(skipEntry)} "
-                        "entries were given")
+            skipEntry = self.skipEntryDictToArray(h, skipEntry, syst)
             # The lookup is handled by passing an imaginary number,
             # so detect these and then call the bin lookup on them
             # np.iscomplex returns false for 0.j, but still want to detect that
             to_lookup = np.array([isinstance(x, complex) for x in skipEntry])
             skip_arr = np.array(skipEntry)
             if to_lookup.any():
+                nsyst = len(self.systematics[syst]["systAxes"])+self.systematics[syst]["mirror"]
                 bin_lookup = np.array([ax.index(x.imag) for x, ax in 
-                    zip(skipEntry, h.axes[-nsyst_ax:]) if isinstance(x, complex)])
-                skip_arr = skip_arr.real
+                    zip(skipEntry, h.axes[-nsyst:]) if isinstance(x, complex)])
+                # Need to loop here rather than using skip_arr.real because the dtype is object to allow strings
+                skip_arr = np.array([a.real for a in skip_arr])
                 skip_arr[to_lookup] += bin_lookup
             updated_skip.append(skip_arr)
+            logger.debug(f"Updated skip entry to {skip_arr}")
 
         return updated_skip
 

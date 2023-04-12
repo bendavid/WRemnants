@@ -6,11 +6,18 @@ import narf
 import numpy as np
 import lz4.frame
 import pickle
+import re
+import glob
 from .correctionsTensor_helper import makeCorrectionsTensor
 from utilities import boostHistHelpers as hh, common, logging
 from wremnants import theory_tools
 
 logger = logging.child_logger(__name__)
+
+def valid_theory_corrections():
+    corr_files = glob.glob(common.data_dir+"TheoryCorrections/*Corr*.pkl.lz4")
+    matches = [re.match("(^.*)Corr[W|Z]\.pkl\.lz4", os.path.basename(c)) for c in corr_files]
+    return [m[1] for m in matches if m]
 
 def load_corr_helpers(procs, generators):
     corr_helpers = {}
@@ -138,7 +145,7 @@ def make_corr_from_ratio(denom_hist, num_hist, rebin=False):
     denom_hist, num_hist = rebin_corr_hists([denom_hist, num_hist], use_predefined_bins=rebin)
 
     corrh = hh.divideHists(num_hist, denom_hist)
-    return set_corr_ratio_flow(corrh)
+    return set_corr_ratio_flow(corrh), denom_hist, num_hist
 
 def make_corr_by_helicity(ref_helicity_hist, target_sigmaul, target_sigma4, ndim=3):
     ref_helicity_hist, target_sigmaul, target_sigma4 = rebin_corr_hists([ref_helicity_hist, target_sigmaul, target_sigma4], ndim, True)

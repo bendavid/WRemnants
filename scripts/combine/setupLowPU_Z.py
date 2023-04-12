@@ -47,6 +47,7 @@ def main(args, xsec=False):
         suffix += "_xsec"
         bkgProcs = [] # for xsec norm card, remove all bkg procs but keep the data
         histName = "xnorm"
+        project = ["count"]
         
         # fake data, as sum of all  Zmumu procs over recoil_gen
         datagroups.copyGroup("Zmumu" if args.flavor == "mumu" else "Zee", "fake_data")
@@ -89,6 +90,7 @@ def main(args, xsec=False):
     cardTool.setOutfile(os.path.abspath(f"{outfolder}/lowPU_{args.flavor}_{args.met}_{args.fitType}{suffix}.root"))
     cardTool.setDatagroups(datagroups)
     cardTool.setHistName(histName) 
+    cardTool.setProjectionAxes(project) 
     cardTool.setNominalName(histName)
     #cardTool.setChannels([args.flavor])
     cardTool.setDataName(dataProc)
