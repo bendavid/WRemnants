@@ -40,6 +40,7 @@ def main(args, xsec=False):
     dataProc = "SingleMuon" if args.flavor == "mumu" else "SingleElectron"
     sigProc ="Zmumu" if args.flavor == "mumu" else "Zee"
 
+    project = ["recoil_reco"]
     suffix = ""
     if args.doStatOnly:
         suffix = "_stat"
@@ -67,6 +68,7 @@ def main(args, xsec=False):
             lambda x: x[{ax : hist.tag.Slicer()[::hist.sum] for ax in ["recoil_gen", "mll",] if ax in x.axes.name}]
     elif args.fitType == "wlike":
         histName = "mT_corr_rec"
+        project = ["mt"]
         constrainedProcs.append(sigProc) # need sum over gen bins
     elif args.fitType == "inclusive":
         datagroups.unconstrainedProcesses.append(sigProc)
@@ -74,7 +76,7 @@ def main(args, xsec=False):
         for proc in datagroups.groups.keys():
             datagroups.groups[proc].selectOp = \
             lambda x, f=datagroups.groups[proc].selectOp : f(x)[{ax : hist.tag.Slicer()[::hist.sum] for ax in ["recoil_gen", "recoil_reco",] if ax in x.axes.name}]
-    
+            
     # hack: remove non-used procs/groups, as there can be more procs/groups defined than defined above
     # need to remove as cardTool takes all procs in the datagroups
     toDel = []
