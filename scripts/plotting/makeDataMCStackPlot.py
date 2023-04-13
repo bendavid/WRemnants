@@ -72,7 +72,6 @@ variation.add_argument("--selectEntries", type=str, nargs='+', help="entries to 
 variation.add_argument("--colors", type=str, nargs='+', help="Variation colors")
 variation.add_argument("--linestyle", type=str, default=[], nargs='+', help="Linestyle for variations")
 variation.add_argument("--doubleColors", action='store_true', help="Auto generate colors in pairs (useful for systematics)")
-variation.add_argument("--transform", action='store_true', help="Apply variation-specific transformation")
 variation.add_argument("--fillBetween", action='store_true', help="Fill between uncertainty hists in ratio")
 variation.add_argument("--skipFillBetween", type=int, default=0, help="Don't fill between the first N hists (only relevant if --fillBetween = True)")
 
@@ -127,7 +126,7 @@ if addVariation:
     colors = args.colors if args.colors else [colormaps["tab10" if ncols < 10 else "tab20"](int(i/2) if args.doubleColors else i) for i in range(len(args.varName))]
     for i, (label,name,color) in enumerate(zip(varLabels,args.varName,colors)):
         entry = entries[i] if entries else None
-        do_transform = args.transform and entry in transforms
+        do_transform = entry in transforms
         name = name if name != "" else nominalName
         load_op = {}
         action=None
@@ -149,9 +148,6 @@ if addVariation:
             load_op = {p : action for p in transform_procs}
         else:
             varname = name
-
-        if (args.transform and entry not in transforms):
-            logger.warning(f"No known transformation for variation {entry}. No transform applied!")
 
         reload = name != args.baseName
         # The action map will only work if reloading, otherwise need to apply some transform
@@ -208,8 +204,8 @@ for h in args.hists:
         outnames.append(n)
     outfile = "_".join(outnames)
     plot_tools.save_pdf_and_png(outdir, outfile)
-    stack_yields = groups.make_yields_df(args.baseName, prednames, action)
-    unstacked_yields = groups.make_yields_df(args.baseName, unstack, action)
+    stack_yields = groups.make_yields_df(args.baseName, prednames, action, norm_proc="Data")
+    unstacked_yields = groups.make_yields_df(args.baseName, unstack, action, norm_proc="Data")
     plot_tools.write_index_and_log(outdir, outfile, 
         yield_tables={"Stacked processes" : stack_yields, "Unstacked processes" : unstacked_yields},
         analysis_meta_info={"AnalysisOutput" : groups.getMetaInfo()},
