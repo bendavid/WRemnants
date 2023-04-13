@@ -381,6 +381,13 @@ def write_index_and_log(outpath, logname, indexname="index.php", template_dir=f"
                 logf.write("-"*80+"\n")
                 logf.write(str(v.round(nround))+"\n\n")
 
+            if "Unstacked processes" in yield_tables and "Stacked processes" in yield_tables:
+                if "Data" in yield_tables["Unstacked processes"]["Process"].values:
+                    unstacked = yield_tables["Unstacked processes"]
+                    data_yield = unstacked[unstacked["Process"] == "Data"]["Yield"]
+                    ratio = float(yield_tables["Stacked processes"]["Yield"].sum()/data_yield)*100
+                    logf.write(f"===> Sum unstacked to data is {ratio:.2f}%")
+
         if analysis_meta_info:
             for k,analysis_info in analysis_meta_info.items():
                 logf.write('\n'+'-'*80+"\n")
