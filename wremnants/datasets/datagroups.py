@@ -448,7 +448,7 @@ class Datagroups(object):
                 columns=["Process", "Yield", "Uncertainty"])
 
         if norm_proc and norm_proc in self.groups:
-            df[f"Ratio to {norm_proc} (%)"] = df["Yield"]/action(self.groups[norm_proc][histName]).sum().value*100
+            df[f"Ratio to {norm_proc} (%)"] = df["Yield"]/action(self.groups[norm_proc].hists[histName]).sum().value*100
             
         return df
 
