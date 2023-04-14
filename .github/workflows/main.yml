@@ -98,21 +98,56 @@ jobs:
       - name: wmass plot massShift
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py -a massVariation --yscale 1.4 --hist pt --baseName nominal -r 0.98 1.02 -p $WEB_DIR -f $PLOT_DIR $OUTFILE variation --varName massWeight --selectEntries massShift100MeVUp massShift100MeVDown --varLabel massShift100MeVUp massShift100MeVDown --selectAxis massShift --color grey grey
 
-      - name: lowpu w analysis
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_lowPU.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4
-
       - name: wmass combine setup
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $OUTFILE --verbose 4 --lumiScale $LUMI_SCALE
 
       - name: wmass combine fit 
-        run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ WMass_eta_pt/WMass_plus.txt WMass_eta_pt/WMass_minus.txt 
+        run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ mass WMass_eta_pt WMass_plus.txt WMass_minus.txt 
 
       - name: wmass combine impacts
         run: scripts/ci/run_with_singularity.sh scripts/ci/show_impacts.sh WMass_eta_pt/fitresults_123456789.root $WEB_DIR/$PLOT_DIR/impactsW.html
 
-        #TODO: test low pu combine and combined fit
+
+  lowpu:
+    # The type of runner that the job will run on
+    runs-on: [self-hosted, linux, x64]
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:    
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v3
+        with:
+          submodules: 'true'
+
+      - name: lowpu setup events
+        if: github.event.schedule == '0 3 * * 2,4,6'
+        run: echo "MAX_FILES=-1" >> $GITHUB_ENV
+
+      - name: lowpu setup lumi scale
+        if: github.event.schedule == '0 3 * * 2,4,6'
+        run: echo "LUMI_SCALE=1" >> $GITHUB_ENV
+
+      - name: lowpu setup threads
+        if: github.event.schedule == '0 3 * * 2,4,6'
+        run: echo "NTHREADS=64" >> $GITHUB_ENV
+
+      - name: lowpu w analysis
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_lowPU.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4
+
+        #TODO: test low pu combine (and combined fit)
           #- name: lowpu w combine
           #  run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/setupLowPileupCombine.py -i lowPU_mu_maxFiles2.hdf5 --verbose 4
+
+      - name: lowpu z analysis
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_lowPU.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4 --forceDefaultName
+
+      - name: lowpu z combine setup
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupLowPU_Z.py -i lowPU_mumu.hdf5 --verbose 4 
+
+          # FIXME: Remove from CI for now, to be added back in Jan's next PR
+          #- name: lowpu z combine fit
+          #  run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ CombineStudies/lowPU_differential/ lowPU_Zmumu_RawPFMET_differential.txt
+
 
   wlike:
     # The type of runner that the job will run on
@@ -156,20 +191,11 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $OUTFILE --verbose 4 --lumiScale $LUMI_SCALE
 
       - name: wlike combine fit 
-        run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ ZMassWLike_eta_pt/ZMassWLike_plus.txt ZMassWLike_eta_pt/ZMassWLike_minus.txt 
+        run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ mass ZMassWLike_eta_pt ZMassWLike_plus.txt ZMassWLike_minus.txt 
 
       - name: wlike combine impacts
         run: scripts/ci/run_with_singularity.sh scripts/ci/show_impacts.sh ZMassWLike_eta_pt/fitresults_123456789.root $WEB_DIR/$PLOT_DIR/impactsWlike.html
 
-      - name: lowpu z analysis
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_lowPU.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4 --forceDefaultName
-
-      - name: lowpu z combine setup
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupLowPU_Z.py -i lowPU_mumu.hdf5 --verbose 4 
-
-          # FIXME: Remove from CI for now, to be added back in Jan's next PR
-          #- name: lowpu z combine fit
-          #  run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ CombineStudies/lowPU_differential/lowPU_Zmumu_RawPFMET_differential.txt
 
   dilepton:
     # The type of runner that the job will run on
@@ -215,7 +241,7 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $OUTFILE --fitvar ptll --constrainMass --lumiScale $LUMI_SCALE
 
       - name: dilepton combine ptll fit
-        run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ ZMassDilepton_ptll/ZMassDilepton_plus.txt ZMassDilepton_minus.txt 
+        run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ mass ZMassDilepton_ptll ZMassDilepton_plus.txt ZMassDilepton_minus.txt 
 
   gen:
     # The type of runner that the job will run on
@@ -230,4 +256,3 @@ jobs:
 
       - name: gen analysis
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/w_z_gen_dists.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4
-
