@@ -272,4 +272,3 @@ jobs:
 
       - name: gen analysis
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/w_z_gen_dists.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4
-
