@@ -152,6 +152,12 @@ jobs:
       - name: wlike plotting
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal --nominalRef nominal --hists pt eta pt-eta -p $WEB_DIR -f $PLOT_DIR -a wlike $OUTFILE variation --varName nominal_uncorr --varLabel MiNNLO --colors red
 
+      - name: wlike plot mt
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --baseName transverseMass --rebin 2 --hists mt -p $WEB_DIR -f $PLOT_DIR -a wlike $OUTFILE 
+
+      - name: wlike plot MET
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --baseName MET --hists MET -p $WEB_DIR -f $PLOT_DIR -a wlike $OUTFILE 
+
       - name: wlike combine setup
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $OUTFILE --verbose 4 --lumiScale $LUMI_SCALE
 
