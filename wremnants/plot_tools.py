@@ -93,7 +93,7 @@ def makeStackPlotWithRatio(
     binwnorm=None, select={},  action = (lambda x: x), extra_text=None, extra_text_loc=(0.8, 0.7), grid = False, 
     plot_title = None, title_padding = 0, yscale=None,
     fill_between=False, skip_fill=0, ratio_to_data=False, baseline=True, legtext_size=20, cms_decor="Preliminary", lumi=16.8,
-    no_fill=False, bin_density=300, 
+    no_fill=False, bin_density=300, unstacked_linestyles=[],
 ):
     stack = [action(histInfo[k][histName])[select] for k in stackedProcs if histInfo[k][histName]]
     colors = [histInfo[k]["color"] for k in stackedProcs if histInfo[k][histName]]
@@ -155,6 +155,7 @@ def makeStackPlotWithRatio(
         )
 
     if unstacked:
+        linestyles = unstacked_linestyles+['solid']*(len(unstacked)-len(unstacked_linestyles))
         if type(unstacked) == str: 
             unstacked = unstacked.split(",")
         ratio_ref = data_hist if data_hist else sum(stack) 
@@ -169,9 +170,11 @@ def makeStackPlotWithRatio(
                 linewidth=2,
             )
 
-        for proc in unstacked:
+        for proc,style in zip(unstacked, linestyles):
             logger.debug(f"Plotting proc {proc}")
             unstack = action(histInfo[proc][histName][select])
+            if proc == "Data":
+                style = "None"
             hep.histplot(
                 unstack,
                 yerr=True if proc == "Data" else False,
@@ -179,7 +182,8 @@ def makeStackPlotWithRatio(
                 color=histInfo[proc]["color"],
                 label=histInfo[proc]["label"],
                 ax=ax1,
-                alpha=0.7 if not proc == "Data" else 1.,
+                alpha=0.7 if proc != "Data" else 1.,
+                linestyle=style,
                 binwnorm=binwnorm,
             )
             # TODO: Add option to leave data off ratio, I guess
@@ -192,6 +196,7 @@ def makeStackPlotWithRatio(
                 label=histInfo[proc]["label"],
                 yerr=True if (proc == "Data" and not data_hist) else False,
                 linewidth=2,
+                linestyle=style,
                 ax=ax2
             )
 
@@ -331,7 +336,7 @@ def format_axis_num(val):
     if type(val) == int or val.is_integer():
         # This is kinda dumb and I might change it
         return f"{val:.0f}" if val > 5 else f"{val:0.1f}"
-    return f"{x:0.3g}" if val > 10 else f"{val:0.2g}"
+    return f"{val:0.3g}" if val > 10 else f"{val:0.2g}"
 
 def make_plot_dir(outpath, outfolder):
     full_outpath = "/".join([outpath, outfolder])
@@ -375,6 +380,13 @@ def write_index_and_log(outpath, logname, indexname="index.php", template_dir=f"
                 logf.write(f"Yield information for {k}\n")
                 logf.write("-"*80+"\n")
                 logf.write(str(v.round(2))+"\n\n")
+
+            if "Unstacked processes" in yield_tables and "Stacked processes" in yield_tables:
+                if "Data" in yield_tables["Unstacked processes"]["Process"].values:
+                    unstacked = yield_tables["Unstacked processes"]
+                    data_yield = unstacked[unstacked["Process"] == "Data"]["Yield"]
+                    ratio = float(yield_tables["Stacked processes"]["Yield"].sum()/data_yield)*100
+                    logf.write(f"===> Sum unstacked to data is {ratio:.2f}%")
 
         if analysis_meta_info:
             for k,analysis_info in analysis_meta_info.items():

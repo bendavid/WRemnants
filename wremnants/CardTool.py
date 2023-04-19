@@ -5,7 +5,6 @@ import ROOT
 import uproot
 import time
 import numpy as np
-import collections.abc
 import os
 import itertools
 import re
@@ -52,21 +51,15 @@ class CardTool(object):
         #self.loadArgs = {"operation" : "self.loadProcesses (reading hists from file)"}
         self.lumiScale = 1.
         self.project = None
-        self.keepOtherChargeSyst = True
         self.chargeIdDict = {"minus" : {"val" : -1, "id" : "q0", "badId" : "q1"},
                              "plus"  : {"val" : 1., "id" : "q1", "badId" : "q0"},
-                             "inclusive" : {"val" : "sum", "id" : "none", "badId" : None}, # for this channel there is no bad id, currently using random string to make sure it doesn't match
+                             "inclusive" : {"val" : "sum", "id" : "none", "badId" : None},
                              }
 
     def skipHistograms(self):
         self.skipHist = True
         if len(self.noStatUncProcesses):
             logger.info("Attention: histograms are not saved according to input options, thus statistical uncertainty won't be zeroed")
-        
-    def setSkipOtherChargeSyst(self):
-        self.keepOtherChargeSyst = False
-        self.chargeIdDict["plus"]["badId"] = "q0"
-        self.chargeIdDict["minus"]["badId"] = "q1"
 
     def setProjectionAxes(self, project):
         self.project = project
@@ -125,12 +118,9 @@ class CardTool(object):
     # Needs to be increased from default for long proc names
     def setSpacing(self, spacing):
         self.spacing = spacing
-
+        
     def setProcColumnsSpacing(self, spacing):
         self.procColumnsSpacing = spacing
-
-    def setSystTypeSpacing(self, spacing):
-        self.systTypeSpacing = spacing
 
     def setDataName(self, name):
         self.dataName = name
@@ -208,13 +198,12 @@ class CardTool(object):
     def allMCProcesses(self):
         return self.filteredProcesses(lambda x: self.isMC(x))
 
-    def addLnNSystematic(self, name, size, processes, group=None, groupFilter=None, decorrCharge=False):
+    def addLnNSystematic(self, name, size, processes, group=None, groupFilter=None):
         if not self.isExcludedNuisance(name):
             self.lnNSystematics.update({name : {"size" : size,
                                                 "processes" : processes,
                                                 "group" : group,
-                                                "groupFilter" : groupFilter,
-                                                "decorrCharge" : decorrCharge}
+                                                "groupFilter" : groupFilter}
             })
 
     # action will be applied to the sum of all the individual samples contributing, actionMap should be used
@@ -227,8 +216,8 @@ class CardTool(object):
                       baseName="", mirror=False, scale=1, processes=None, group=None, noConstraint=False,
                       action=None, doActionBeforeMirror=False, actionArgs={}, actionMap={},
                       systNameReplace=[], groupFilter=None, passToFakes=False,
-                      rename=None, splitGroup={}, decorrelateByCharge=False, decorrelateByBin={},
-                      silentCheckOtherCharge=False):
+                      rename=None, splitGroup={}, decorrelateByBin={},
+                      ):
 
         # Need to make an explicit copy of the array before appending
         procs_to_add = [x for x in (self.allMCProcesses() if processes is None else processes)]
@@ -267,9 +256,7 @@ class CardTool(object):
                 "noConstraint" : noConstraint,
                 "skipEntries" : [] if not skipEntries else skipEntries,
                 "name" : name,
-                "decorrCharge" : decorrelateByCharge,
                 "decorrByBin": decorrelateByBin,
-                "silentCheckOtherCharge" : silentCheckOtherCharge
             }
         })
         
@@ -303,25 +290,45 @@ class CardTool(object):
         # If no matches were found for any of the entries_to_skip possibilities
         return False
 
+    def skipEntryDictToArray(self, h, skipEntry, syst):
+        nsyst = len(self.systematics[syst]["systAxes"])+self.systematics[syst]["mirror"]
+
+        if type(skipEntry) == dict:
+            skipEntryArr = np.full(nsyst, -1, dtype=object)
+            nother_ax = h.ndim-nsyst
+            for k,v in skipEntry.items():
+                idx = h.axes.name.index(k)-nother_ax # Offset by the number of other axes, require that syst axes are the trailing ones
+                skipEntryArr[idx] = v
+            logger.debug(f"Expanded skipEntry for syst {syst} is {skipEntryArr}. Syst axes are {h.axes.name[-nsyst:]}")
+        elif type(skipEntry) not in (np.array, list, tuple):
+            raise ValueError(f"Unexpected format for skipEntry. Must be either dict or sequence. found {type(skipEntry)}")
+        else:
+            skipEntryArr = skipEntry
+
+        if len(skipEntryArr) != nsyst:
+            raise ValueError("skipEntry tuple must have the same dimensions as the number os syst axes. " \
+                f"found {nsyst} systematics and len(skipEntry) = {len(skipEntry)}.") 
+
+        return skipEntryArr
+
     def expandSkipEntries(self, h, syst, skipEntries):
         updated_skip = []
         for skipEntry in skipEntries:
-            nsyst_ax = len(self.systematics[syst]["systAxes"])+self.systematics[syst]["mirror"]
-            if len(skipEntry) != nsyst_ax:
-                raise ValueError(f"Error in syst {syst}. skipEntry must specify a value per axis. "
-                        f"Found {nsyst_ax} axes ({self.systematics[syst]['systAxes']}) but {len(skipEntry)} "
-                        "entries were given")
+            skipEntry = self.skipEntryDictToArray(h, skipEntry, syst)
             # The lookup is handled by passing an imaginary number,
             # so detect these and then call the bin lookup on them
             # np.iscomplex returns false for 0.j, but still want to detect that
             to_lookup = np.array([isinstance(x, complex) for x in skipEntry])
             skip_arr = np.array(skipEntry)
             if to_lookup.any():
+                nsyst = len(self.systematics[syst]["systAxes"])+self.systematics[syst]["mirror"]
                 bin_lookup = np.array([ax.index(x.imag) for x, ax in 
-                    zip(skipEntry, h.axes[-nsyst_ax:]) if isinstance(x, complex)])
-                skip_arr = skip_arr.real
+                    zip(skipEntry, h.axes[-nsyst:]) if isinstance(x, complex)])
+                # Need to loop here rather than using skip_arr.real because the dtype is object to allow strings
+                skip_arr = np.array([a.real for a in skip_arr])
                 skip_arr[to_lookup] += bin_lookup
             updated_skip.append(skip_arr)
+            logger.debug(f"Updated skip entry to {skip_arr}")
 
         return updated_skip
 
@@ -390,7 +397,7 @@ class CardTool(object):
     def getBoostHistByCharge(self, h, q):
         return h[{"charge" : h.axes["charge"].index(q) if q != "sum" else hist.sum}]
         
-    def checkSysts(self, hnom3D, var_map, proc, thresh=0.25, silentCheckOtherCharge=False):
+    def checkSysts(self, hnom3D, var_map, proc, thresh=0.25):
         #if self.check_variations:
         var_names = set([name.replace("Up", "").replace("Down", "") for name in var_map.keys() if name])
         if len(var_names) != len(var_map.keys())/2:
@@ -400,40 +407,31 @@ class CardTool(object):
         # although one expects it to be same as nominal. The following check would trigger on this case with spurious warnings
         # so there is some customization based on what one expects to silent some noisy warnings
         for name in sorted(var_names):
-            for chan in self.channels:
-                if chan in self.chargeIdDict .keys() and self.chargeIdDict[chan]["badId"] is not None and self.chargeIdDict[chan]["badId"] in name:
-                    if silentCheckOtherCharge:
-                        continue
-                if chan in ["plus", "minus"]:
-                    q = self.chargeIdDict[chan]["val"]
-                    hnom = self.getBoostHistByCharge(hnom3D, q)
-                    up = self.getBoostHistByCharge(var_map[name+"Up"], q)
-                    down = self.getBoostHistByCharge(var_map[name+"Down"], q)
-                else:
-                    hnom = hnom3D
-                    up = var_map[name+"Up"]
-                    down = var_map[name+"Down"]
-                nCellsWithoutOverflows = np.product(hnom.shape)
-                try:
-                    up_relsign = np.sign(up.values()-hnom.values())
-                except ValueError as e:
-                    logger.error(f"Incompatible shapes between up and down for syst {name}")
-                    raise e
-                down_relsign = np.sign(down.values()-hnom.values())
-                vars_sameside = (up_relsign != 0) & (up_relsign == down_relsign)
-                perc_sameside = np.count_nonzero(vars_sameside)/nCellsWithoutOverflows 
-                if perc_sameside > thresh:
-                    logger.warning(f"Charge {chan.ljust(5)}: {perc_sameside:.0%} bins are one sided for syst {name} and process {proc}!")
-                # check variations are not same as nominal
-                # it evaluates absolute(a - b) <= (atol + rtol * absolute(b))
-                up_nBinsSystSameAsNomi = np.count_nonzero(np.isclose(up.values(), hnom.values(), rtol=1e-07, atol=1e-08))/nCellsWithoutOverflows
-                down_nBinsSystSameAsNomi = np.count_nonzero(np.isclose(down.values(), hnom.values(), rtol=1e-06, atol=1e-08))/nCellsWithoutOverflows
-                if up_nBinsSystSameAsNomi > 0.99 or down_nBinsSystSameAsNomi > 0.99:
-                    logger.warning(f"Channel {chan.ljust(5)}: syst {name} has Up/Down variation with {up_nBinsSystSameAsNomi:.0%}/{down_nBinsSystSameAsNomi:.0%} of bins equal to nominal")
-                    
+            hnom = hnom3D
+            up = var_map[name+"Up"]
+            down = var_map[name+"Down"]
+            nCellsWithoutOverflows = np.product(hnom.shape)
+            try:
+                up_relsign = np.sign(up.values(flow=False)-hnom.values(flow=False))
+            except ValueError as e:
+                logger.error(f"Incompatible shapes between up and down for syst {name}")
+                raise e
+            down_relsign = np.sign(down.values(flow=False)-hnom.values(flow=False))
+            vars_sameside = (up_relsign != 0) & (up_relsign == down_relsign)
+            perc_sameside = np.count_nonzero(vars_sameside)/nCellsWithoutOverflows 
+            if perc_sameside > thresh:
+                logger.warning(f"{perc_sameside:.1%} bins are one sided for syst {name} and process {proc}!")
+            # check variations are not same as nominal
+            # it evaluates absolute(a - b) <= (atol + rtol * absolute(b))
+            up_nBinsSystSameAsNomi = np.count_nonzero(np.isclose(up.values(flow=False), hnom.values(flow=False), rtol=1e-07, atol=1e-08))/nCellsWithoutOverflows
+            down_nBinsSystSameAsNomi = np.count_nonzero(np.isclose(down.values(flow=False), hnom.values(flow=False), rtol=1e-06, atol=1e-08))/nCellsWithoutOverflows
+            # varEqNomiThreshold = 1.0 - 5./CellsWithoutOverflows # at least 5 bins different, but sensible choice depends on how many cells we have,
+            # perhaps just better to check against 100%, the tolerances in np.isclose should already catch bad cases with 1.0 != 1.0 because of numerical imprecisions
+            varEqNomiThreshold = 1.0
+            if up_nBinsSystSameAsNomi >= varEqNomiThreshold or down_nBinsSystSameAsNomi >= varEqNomiThreshold:
+                logger.warning(f"syst {name} has Up/Down variation with {up_nBinsSystSameAsNomi:.1%}/{down_nBinsSystSameAsNomi:.1%} of bins equal to nominal")
 
     def writeForProcess(self, h, proc, syst):
-        decorrelateByCharge = False
         decorrelateByBin = {}
         if syst != self.nominalName:
             systInfo = self.systematics[syst]
@@ -443,8 +441,6 @@ class CardTool(object):
             if systInfo["mirror"]:
                 hnom = self.procDict[proc][self.nominalName]
                 h = hh.extendHistByMirror(h, hnom)
-            if systInfo["decorrCharge"]:
-                decorrelateByCharge = True
             if systInfo["decorrByBin"]:
                 decorrelateByBin = systInfo["decorrByBin"]
         # Otherwise this is a processes not affected by the variation, don't write it out,
@@ -453,7 +449,7 @@ class CardTool(object):
         var_map = self.systHists(h, syst) 
         # TODO: Make this optional
         if syst != self.nominalName:
-            self.checkSysts(self.procDict[proc][self.nominalName], var_map, proc, silentCheckOtherCharge=systInfo["silentCheckOtherCharge"])
+            self.checkSysts(self.procDict[proc][self.nominalName], var_map, proc)
         setZeroStatUnc = False
         if proc in self.noStatUncProcesses:
             logger.info(f"Zeroing statistical uncertainty for process {proc}")
@@ -461,7 +457,7 @@ class CardTool(object):
         for name, var in var_map.items():
             if name != "":
                 self.writeHist(var, self.variationName(proc, name), setZeroStatUnc=setZeroStatUnc,
-                               decorrCharge=decorrelateByCharge, decorrByBin=decorrelateByBin)
+                               decorrByBin=decorrelateByBin)
 
     def addPseudodata(self, processes):
         datagroups = self.datagroups if not self.pseudodata_datagroups else self.pseudodata_datagroups
@@ -561,16 +557,13 @@ class CardTool(object):
             group = info["group"]
             groupFilter = info["groupFilter"]
             for chan in self.channels:
-                if info["decorrCharge"]:
-                    newname = f"{name}_{self.chargeIdDict[chan]['id']}"
-                else:
-                    newname = name
-                if self.keepOtherChargeSyst or self.chargeIdDict[chan]["badId"] is None or self.chargeIdDict[chan]["badId"] not in name:
-                    self.cardContent[chan] += f'{name.ljust(self.spacing)} lnN{" "*(self.systTypeSpacing-2)} {"".join(include)}\n'
-                    if group and not self.isExcludedNuisance(name) and len(list(filter(groupFilter, [name]))):
-                        self.addSystToGroup(group, chan, name)
+                self.cardContent[chan] += f'{name.ljust(self.spacing)} lnN{" "*(self.systTypeSpacing-2)} {"".join(include)}\n'
+                if group and not self.isExcludedNuisance(name) and len(list(filter(groupFilter, [name]))):
+                    self.addSystToGroup(group, chan, name)
 
     def fillCardWithSyst(self, syst):
+        # note: this function doesn't act on all systematics all at once
+        # but rather it deals with all those coming from each call to CardTool.addSystematics
         systInfo = self.systematics[syst]
         scale = systInfo["scale"]
         procs = systInfo["processes"]
@@ -584,38 +577,24 @@ class CardTool(object):
         if all(x not in procs for x in nondata):
             return 0
         
-        if type(scale) != dict:
-            include = [(str(scale) if x in procs else "-").ljust(self.procColumnsSpacing) for x in nondata]
+        include = [(str(scale) if x in procs else "-").ljust(self.procColumnsSpacing) for x in nondata]
 
         splitGroupDict = systInfo["splitGroup"]
         shape = "shape" if not systInfo["noConstraint"] else "shapeNoConstraint"
 
         # Deduplicate while keeping order
         systNames = list(dict.fromkeys(names))
-        if systInfo["decorrCharge"]:
-            systNames = list([f"{x}_q{i}" for x in systNames for i in range(2)])
 
         systnamesPruned = [s for s in systNames if not self.isExcludedNuisance(s)]
         systNames = systnamesPruned[:]
-        for systname in systNames:
-            if type(scale) == dict:
-                for reg in scale.keys():
-                    if re.match(reg, systname):
-                        thiscale = str(scale[reg])
-                        include = [(thiscale if x in procs else "-").ljust(self.procColumnsSpacing) for x in nondata]
-                        break # exit this inner loop when match is found, to save time
-            shape = "shape" if not systInfo["noConstraint"] else "shapeNoConstraint"
-            for chan in self.channels:
+        for chan in self.channels:
+            for systname in systNames:
+                shape = "shape" if not systInfo["noConstraint"] else "shapeNoConstraint"
                 # do not write systs which should only apply to other charge, to simplify card
-                if self.keepOtherChargeSyst or self.chargeIdDict[chan]["badId"] is None or self.chargeIdDict[chan]["badId"] not in systname:
-                    self.cardContent[chan] += f"{systname.ljust(self.spacing)} {shape.ljust(self.systTypeSpacing)} {''.join(include)}\n"
-        # unlike for LnN systs, here it is simpler to act on the list of these systs to form groups, rather than doing it syst by syst 
-        if group:
-            for chan in self.channels:
-                if self.keepOtherChargeSyst:
-                    systNamesForGroupPruned = systNames[:]
-                else:
-                    systNamesForGroupPruned = [s for s in systNames if self.chargeIdDict[chan]["badId"] is None or self.chargeIdDict[chan]["badId"] not in s]
+                self.cardContent[chan] += f"{systname.ljust(self.spacing)} {shape.ljust(self.systTypeSpacing)} {''.join(include)}\n"
+            # unlike for LnN systs, here it is simpler to act on the list of these systs to form groups, rather than doing it syst by syst 
+            if group:
+                systNamesForGroupPruned = systNames[:]
                 systNamesForGroup = list(systNamesForGroupPruned if not groupFilter else filter(groupFilter, systNamesForGroupPruned))
                 if len(systNamesForGroup):
                     for subgroup in splitGroupDict.keys():
@@ -656,17 +635,9 @@ class CardTool(object):
             
     def writeHistByCharge(self, h, name, decorrCharge=False):
         for charge in self.channels:
-            newname = name
-            if decorrCharge:
-                # name should always have Up/Down here, since this acts on syst histograms, but let's allow for all cases
-                upDown = "Up" if name.endswith("Up") else "Down" if name.endswith("Down") else ""
-                newname = name.rstrip(upDown)
-                newname = f"{newname}_{self.chargeIdDict[charge]['id']}{upDown}"
-            if not self.keepOtherChargeSyst and self.chargeIdDict[charge]["badId"] and self.chargeIdDict[charge]["badId"] in newname:
-                continue
             q = self.chargeIdDict[charge]["val"]
-            hout = narf.hist_to_root(h[{"charge" : h.axes["charge"].index(q) if q != "sum" else hist.sum}])
-            hout.SetName(newname+f"_{charge}")
+            hout = narf.hist_to_root(self.getBoostHistByCharge(h, q))
+            hout.SetName(name+f"_{charge}")
             hout.Write()
 
     def writeHistWithCharges(self, h, name):
@@ -674,7 +645,7 @@ class CardTool(object):
         hout.SetName(f"{name}_{self.channels[0]}")
         hout.Write()
     
-    def writeHist(self, h, name, setZeroStatUnc=False, decorrCharge=False, decorrByBin={}):
+    def writeHist(self, h, name, setZeroStatUnc=False, decorrByBin={}):
         if self.skipHist:
             return
         
@@ -714,6 +685,6 @@ class CardTool(object):
                 
         for hname,hist in hists.items():
             if self.writeByCharge:
-                self.writeHistByCharge(hist, hname, decorrCharge=decorrCharge)
+                self.writeHistByCharge(hist, hname)
             else:
                 self.writeHistWithCharges(hist, hname)

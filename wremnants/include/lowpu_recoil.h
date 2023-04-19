@@ -30,7 +30,7 @@ std::map<std::string, int> recoil_param_nGauss;
 std::vector<TF1*> recoil_param_funcs_;
 std::map<std::string, TF1> recoil_param_funcs__;
 std::unordered_map<std::string, TF1*> recoil_param_funcs;
-std::map<std::string, int> recoil_param_nStat;
+std::map<std::string, int> recoil_unc_no; // number of uncertainties recoil_unc_no
 
 std::map<std::string, int> recoil_binned_nGauss;
 std::map<std::string, std::vector<float>> recoil_binned_qTbins;
@@ -800,7 +800,7 @@ GaussianSum constructParametricGauss(string tag, double qT, int syst=-1) {
 }
 
 
-// recoil correction
+// recoil correction for Z (MC to DATA)
 Vec_f recoilCorrectionParametric(double para, double perp, double qT, string systTag="", int systIdx=-1) {
     
     Vec_f res(3, 0);
@@ -878,7 +878,7 @@ Vec_recoil recoilCorrectionParametricUnc(double para, double perp, double qT, st
     */
     
     
-    int nSysts = recoil_param_nStat[tag];
+    int nSysts = recoil_unc_no[tag];
     Vec_recoil res(nSysts);
     for(int iSyst = 0; iSyst<nSysts; iSyst++) {
         Vec_f ret = recoilCorrectionParametric(para, perp, qT, tag, iSyst);
@@ -896,7 +896,7 @@ Vec_f recoilCorrectionParametricUncWeights(double eval, double qT, string tag_no
     
     if(qT > recoil_correction_qTmax) qT = recoil_correction_qTmax; // protection for high qT
     
-    int nSysts = recoil_param_nStat[tag_pert];
+    int nSysts = recoil_unc_no[tag_pert];
     Vec_f res(nSysts);
     nom = constructParametricGauss(tag_nom, qT);
     double nom_eval = nom.eval(eval);
@@ -905,11 +905,10 @@ Vec_f recoilCorrectionParametricUncWeights(double eval, double qT, string tag_no
 
         pert = constructParametricGauss(tag_pert, qT, iSyst);
         w = pert.eval(eval)/nom_eval;
-        //if(w < 0.2 or w > 1.8) { // protection
-        //if(w < 0.2 or w > 5) { // protection
-        //    if(recoil_verbose) cout << "Weight too large w=" << w << " tag_pert=" << tag_pert << " eval=" << eval <<" qT=" << qT << " res[iSyst]=" << res[iSyst] << " nom_eval=" << nom_eval << " pert_eval" << pert.eval(eval) << endl;
-        //    w = 1;
-        //}
+        if(w < 0.1 or w > 10) { // protection
+            //if(recoil_verbose) cout << "Weight too large w=" << w << " tag_pert=" << tag_pert << " eval=" << eval <<" qT=" << qT << " res[iSyst]=" << res[iSyst] << " nom_eval=" << nom_eval << " pert_eval" << pert.eval(eval) << endl;
+            w = 1;
+        }
         if(nom_eval < 1e-10) res[iSyst] = 1;
         else res[iSyst] = w;
         //cout << tag_pert << " qT=" << qT << " res[iSyst]=" << res[iSyst] << " " << nom_eval << endl;

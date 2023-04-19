@@ -2,6 +2,7 @@ import narf
 from utilities import logging
 import subprocess
 import glob
+import random
 
 logger = logging.child_logger(__name__)
 
@@ -23,7 +24,8 @@ def makeFilelist(paths, maxFiles=-1, format_args={}):
             path = path.format(**format_args)
             logger.debug(f"Reading files from path {path}")
         filelist.extend(glob.glob(path) if path[:4] != "/eos" else buildXrdFileList(path, "eoscms.cern.ch"))
-    return filelist if maxFiles < 0 else filelist[:maxFiles]
+
+    return filelist if maxFiles < 0 or len(filelist) < maxFiles else random.Random(1).sample(filelist, maxFiles)
 
 
 def selectProc(selection, datasets):

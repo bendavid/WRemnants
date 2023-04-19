@@ -22,6 +22,7 @@ import tensorflow as tf
 import hist
 import boost_histogram as bh
 import narf
+import narf.fitutils
 import subprocess
 
 from functools import partial
@@ -286,7 +287,7 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
             if pol2_tf_scaled == None:
                 pol2_tf_scaled = partial(pol2_root, xLowVal=minFitRange, xFitRange=xFitRange)
             params = np.array([1.0, 0.0, 0.0])
-            res_tf1_pol2 = narf.fit_hist(boost_hist, pol2_tf_scaled, params)
+            res_tf1_pol2 = narf.fitutils.fit_hist(boost_hist, pol2_tf_scaled, params)
             tf1_pol2 = ROOT.TF1("tf1_pol2", pol2_tf_scaled, minFitRange, maxFitRange, len(params))
             tf1_pol2.SetParameters( np.array( res_tf1_pol2["x"], dtype=np.dtype('d') ) )
             tf1_pol2.SetLineWidth(3)
@@ -303,7 +304,7 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
             defaultFunc = "pol2_tf"
             if histAlt:
                 params = np.array([1.0, 0.0, 0.0])
-                res_tf1_pol2_alt = narf.fit_hist(boost_hist_alt, pol2_tf_scaled, params)
+                res_tf1_pol2_alt = narf.fitutils.fit_hist(boost_hist_alt, pol2_tf_scaled, params)
                 tf1_pol2_alt = ROOT.TF1("tf1_pol2_alt", pol2_tf_scaled, minFitRange, maxFitRange, len(params))
                 tf1_pol2_alt.SetParameters( np.array( res_tf1_pol2_alt["x"], dtype=np.dtype('d') ) )
                 tf1_pol2_alt.SetLineWidth(2)
@@ -318,7 +319,7 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
             if pol3_tf_scaled == None:
                 pol3_tf_scaled = partial(pol3_root, xLowVal=minFitRange, xFitRange=xFitRange)
             params = np.array([1.0, 0.0, 0.0, 0.0])
-            res_tf1_pol3 = narf.fit_hist(boost_hist, pol3_tf_scaled, params)
+            res_tf1_pol3 = narf.fitutils.fit_hist(boost_hist, pol3_tf_scaled, params)
             tf1_pol3 = ROOT.TF1("tf1_pol3", pol3_tf_scaled, minFitRange, maxFitRange, len(params))
             tf1_pol3.SetParameters( np.array( res_tf1_pol3["x"], dtype=np.dtype('d') ) )
             tf1_pol3.SetLineWidth(3)
@@ -343,7 +344,7 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
             defaultFunc = "pol3_tf"
             if histAlt:
                 params = np.array([1.0, 0.0, 0.0, 0.0])
-                res_tf1_pol3_alt = narf.fit_hist(boost_hist_alt, pol3_tf_scaled, params)
+                res_tf1_pol3_alt = narf.fitutils.fit_hist(boost_hist_alt, pol3_tf_scaled, params)
                 tf1_pol3_alt = ROOT.TF1("tf1_pol3_alt", pol3_tf_scaled, minFitRange, maxFitRange, len(params))
                 tf1_pol3_alt.SetParameters( np.array( res_tf1_pol3_alt["x"], dtype=np.dtype('d') ) )
                 tf1_pol3_alt.SetLineWidth(2)
@@ -361,10 +362,10 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
 
         if step == "antiiso":
             tf1_erf = ROOT.TF1("tf1_erf","1.0 - [0] * (1.0 + TMath::Erf((x-[1])/[2]))", minFitRange, maxFitRange)
-            res_tf1_erf = narf.fit_hist(boost_hist, antiErf_tf, np.array([1.0, 35.0, 3.0]))
+            res_tf1_erf = narf.fitutils.fit_hist(boost_hist, antiErf_tf, np.array([1.0, 35.0, 3.0]))
         else:
             tf1_erf = ROOT.TF1("tf1_erf","[0] * (1.0 + TMath::Erf((x-[1])/[2]))", minFitRange, maxFitRange)
-            res_tf1_erf = narf.fit_hist(boost_hist, erf_tf, np.array([1.0, 35.0, 3.0]))
+            res_tf1_erf = narf.fitutils.fit_hist(boost_hist, erf_tf, np.array([1.0, 35.0, 3.0]))
         tf1_erf.SetParameters( np.array( res_tf1_erf["x"], dtype=np.dtype('d') ) )
         tf1_erf.SetLineWidth(2)
         tf1_erf.SetLineStyle(ROOT.kDashed)
@@ -381,7 +382,7 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
             if polN_tf_scaled == None:
                 polN_tf_scaled = partial(polN_root_, xLowVal=minFitRange, xFitRange=xFitRange, degree=efficiencyFitPolDegree)
             params = np.array([1.0] + [0.0 for i in range(efficiencyFitPolDegree)])
-            res_tf1_polN = narf.fit_hist(boost_hist, polN_tf_scaled, params)
+            res_tf1_polN = narf.fitutils.fit_hist(boost_hist, polN_tf_scaled, params)
             tf1_polN = ROOT.TF1(f"tf1_pol{efficiencyFitPolDegree}", polN_tf_scaled, minFitRange, maxFitRange, len(params))
             tf1_polN.SetParameters( np.array( res_tf1_polN["x"], dtype=np.dtype('d') ) )
             tf1_polN.SetLineWidth(3)
@@ -415,7 +416,7 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
                 res_tf1_polN_alt = None
             else:
                 params = np.array([1.0] + [0.0 for i in range(efficiencyFitPolDegree)])
-                res_tf1_polN_alt = narf.fit_hist(boost_hist_alt, polN_tf_scaled, params)
+                res_tf1_polN_alt = narf.fitutils.fit_hist(boost_hist_alt, polN_tf_scaled, params)
                 tf1_polN_alt = ROOT.TF1("tf1_polN_alt", polN_tf_scaled, minFitRange, maxFitRange, len(params))
                 tf1_polN_alt.SetParameters( np.array( res_tf1_polN_alt["x"], dtype=np.dtype('d') ) )
                 tf1_polN_alt.SetLineWidth(2)

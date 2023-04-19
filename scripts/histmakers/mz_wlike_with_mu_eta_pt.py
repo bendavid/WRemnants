@@ -150,7 +150,6 @@ def build_graph(df, dataset):
         lep_cols = ["Muon_pt[goodMuons]", "Muon_phi[goodMuons]", "Muon_pt[goodMuons]"]
         trg_cols = ["trigMuons_pt0", "trigMuons_phi0", "nonTrigMuons_pt0", "nonTrigMuons_phi0"]
         df = recoilHelper.recoil_Z(df, results, dataset, common.zprocs_recoil, lep_cols, trg_cols) # produces corrected MET as MET_corr_rec_pt/phi
-        df = recoilHelper.recoil_Z_unc(df, results, dataset, common.zprocs_recoil)
     else:
         df = df.Alias("MET_corr_rec_pt", "MET_pt")
         df = df.Alias("MET_corr_rec_phi", "MET_phi")
@@ -166,6 +165,7 @@ def build_graph(df, dataset):
     met_vars = ("MET_corr_rec_pt", "MET_corr_rec_phi")
     df = df.Define("transverseMass", f"wrem::mt_wlike_nano(trigMuons_pt0, trigMuons_phi0, nonTrigMuons_pt0, nonTrigMuons_phi0, {', '.join(met_vars)})")
     results.append(df.HistoBoost("transverseMass", [axis_mt], ["transverseMass", "nominal_weight"]))
+    results.append(df.HistoBoost("MET", [hist.axis.Regular(20, 0, 100, name="MET")], ["MET_corr_rec_pt", "nominal_weight"]))
     ###########
     
     df = df.Filter("transverseMass >= 45.") # 40 for Wmass, thus be 45 here (roughly half the boson mass)
@@ -174,6 +174,9 @@ def build_graph(df, dataset):
 
     nominal = df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "nominal_weight"])
     results.append(nominal)
+
+    if not args.noRecoil:
+        df = recoilHelper.add_recoil_unc_Z(df, results, dataset, nominal_cols, nominal_axes, "nominal")
 
     if not dataset.is_data and not args.onlyMainHistograms:
 
