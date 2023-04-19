@@ -149,6 +149,7 @@ if __name__ == "__main__":
     ratios = {p : [] for p in processes}
 
     canvas = ROOT.TCanvas("canvas","",900,800) 
+    canvas1D = ROOT.TCanvas("canvas","",800,900) 
 
     canvas_unroll = ROOT.TCanvas("canvas_unroll","",3000,800) 
     leftMargin = 0.06
@@ -200,9 +201,13 @@ if __name__ == "__main__":
 
     systList = {p : [] for p in processes}
     systLeg  = {p : [] for p in processes}
+    systList_eta = {p : [] for p in processes}
+    systList_pt  = {p : [] for p in processes}
     for p in processes:
         systList[p].append(unroll2Dto1D(nominals[p], newname=f"unrolled_{nominals[p].GetName()}", cropNegativeBins=False))
         systLeg[p].append(p)
+        systList_eta[p].append(nominals[p].ProjectionX(f"{nominals[p].GetName()}_eta", 1, nominals[p].GetNbinsY(), "e"))
+        systList_pt[p].append( nominals[p].ProjectionY(f"{nominals[p].GetName()}_pt",  1, nominals[p].GetNbinsX(), "e"))
     # now make a full loop for systematics
     for k in f.GetListOfKeys():
         name = k.GetName()
@@ -228,6 +233,8 @@ if __name__ == "__main__":
         alternate = f.Get(name)
         alternate.SetDirectory(0)    
         systList[pname].append(unroll2Dto1D(alternate, newname=f"unrolled_{alternate.GetName()}", cropNegativeBins=False))
+        systList_eta[pname].append(alternate.ProjectionX(f"{alternate.GetName()}_eta", 1, alternate.GetNbinsY(), "e"))
+        systList_pt[pname].append( alternate.ProjectionY(f"{alternate.GetName()}_pt",  1, alternate.GetNbinsX(), "e"))
         ratio = alternate.Clone(f"systRatio_{sname}")
         if args.plotSystOriginal:
             if do2D:
@@ -280,4 +287,16 @@ if __name__ == "__main__":
                      drawVertLines="{a},{b}".format(a=nominals[p].GetNbinsY(),b=nominals[p].GetNbinsX()),
                      textForLines=ptBinRanges, transparentLegend=False,
                      onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True, setOnlyLineRatio=True, lineWidth=1)
+            #
+            drawNTH1(systList_eta[p], systLeg[p], "Muon eta", "Events", f"nominalAndSyst_{p}{systPostfix}_projEta", outdir,
+                     topMargin=0.14, leftMargin=0.16, rightMargin=0.05, labelRatioTmp="syst/nomi",
+                     legendCoords="0.02,0.98,0.91,0.99;3", lowerPanelHeight=0.5, skipLumi=True, passCanvas=canvas1D,
+                     transparentLegend=False,
+                     onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True, setOnlyLineRatio=True, lineWidth=2)
+            #
+            drawNTH1(systList_pt[p], systLeg[p], "Muon p_{T} (GeV)", "Events", f"nominalAndSyst_{p}{systPostfix}_projPt", outdir,
+                     topMargin=0.14, leftMargin=0.16, rightMargin=0.05, labelRatioTmp="syst/nomi",
+                     legendCoords="0.02,0.98,0.91,0.99;3", lowerPanelHeight=0.45, skipLumi=True, passCanvas=canvas1D,
+                     transparentLegend=False,
+                     onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True, setOnlyLineRatio=True, lineWidth=2)
     print()

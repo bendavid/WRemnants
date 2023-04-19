@@ -487,6 +487,9 @@ def transport_smearing_weights_to_reco(
     procs = ['WplusmunuPostVFP', 'WminusmunuPostVFP', 'ZmumuPostVFP'],
 ):
     for proc in procs:
+        if proc not in resultdict:
+            logger.warning(f"Proc {proc} not found in output. Skipping smearing weights")
+            continue
         proc_hist = resultdict[proc]['output']
         nominal_reco = proc_hist['nominal'].get()
 
@@ -527,8 +530,8 @@ def muon_scale_variation_from_manual_shift(
 
 def make_alt_reco_and_gen_hists(df, results, nominal_axes, nominal_columns, matched_reco_sel = "goodMuons"):
 
-    nominal_cols_gen = nominal_columns
-    nominal_cols_gen_smeared = nominal_columns
+    nominal_cols_gen = nominal_columns[:]
+    nominal_cols_gen_smeared = nominal_columns[:]
 
     for col in ("pt", "eta", "charge"):
         idx = [i for i, x in enumerate(nominal_columns) if f"_{col}0" in x]
