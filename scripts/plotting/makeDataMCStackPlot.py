@@ -200,9 +200,9 @@ for h in args.hists:
     if args.fitresult:
         fitresultstring = "_prefit" if args.prefit else "_postfit"
     var_arg = None
-    if "varName" in args:
+    if "varName" in args and args.varName:
         var_arg = args.varName[0]
-        if "selectEntries" in args:
+        if "selectEntries" in args and args.selectEntries:
             var_arg = args.selectEntries[0] if not args.selectEntries[0].isdigit() else (var_arg+args.selectEntries[0])
     to_join = [f"{h.replace('-','_')}"]+[var_arg]+[fitresultstring, args.name_append]+[args.channel if args.channel != "all" else None]
     outfile = "_".join(filter(lambda x: x, to_join))
