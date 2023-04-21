@@ -9,25 +9,39 @@ from dash import dcc
 import dash_daq as daq
 from dash import html
 from dash.dependencies import Input, Output
-from utilities import input_tools
-import logging
+from utilities import input_tools, logging
 import os
 
-logging.basicConfig(level=logging.INFO)
-
-def writeOutput(fig, outfile, extensions=[]):
+def writeOutput(fig, outfile, extensions=[], postfix=None):
     name, ext = os.path.splitext(outfile)
     if ext not in extensions:
         extensions.append(ext)
+
+    if postfix:
+        name += f"_{postfix}"
 
     for ext in extensions:
         if ext[0] != ".":
             ext = "."+ext
         func = "write_html" if ext == ".html" else "write_image"
-        getattr(fig, func)(name+ext)
 
-def plotImpacts(df, title, pulls=False, pullrange=[-5,5], oneSidedImpacts=False):
-    
+        output = name+ext
+        logger.debug(f"Write output file {output}")
+
+        getattr(fig, func)(output)
+
+def plotImpacts(df, title, pulls=False, pullrange=[-5,5], POI='Wmass', normalize=False, oneSidedImpacts=False):
+    poi_type = POI.split("_")[-1]
+
+    if poi_type == "Wmass":
+        impact_title="Impact on mass (MeV)"
+    elif poi_type == "mu":
+        impact_title=r"$\Delta \mu$"
+    elif poi_type == "pmaskedexp":
+        impact_title=r"$\delta N$" if normalize else r"$\Delta N$"
+    elif poi_type == "pmaskedexpnorm":
+        impact_title=r"$\delta (\mathrm{d} \sigma / \sigma)$" if normalize else r"$\Delta(\mathrm{d} \sigma / \sigma)$"
+
     fig = make_subplots(rows=1,cols=2 if pulls else 1,
             horizontal_spacing=0.1, shared_yaxes=True)
 
@@ -92,9 +106,9 @@ def plotImpacts(df, title, pulls=False, pullrange=[-5,5], oneSidedImpacts=False)
     fig.update_layout(barmode='relative')
     fig.update_layout(paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
-        xaxis_title="Impact on mass (MeV)",
+        xaxis_title=impact_title,
         title={
-            'text': title,
+            'text': POI,
             'y': 1.-1/float(ndisplay),
             'x': 0.7,
             'xanchor': 'center',
@@ -129,15 +143,12 @@ def plotImpacts(df, title, pulls=False, pullrange=[-5,5], oneSidedImpacts=False)
         )
     return fig
 
-def readFitInfoFromFile(filename, group=False, sort=None, ascending=True, stat=0.0):
-    rf = uproot.open(filename)
-    name = "nuisance_group_impact_nois" if group else "nuisance_impact_nois"
-    
+def readFitInfoFromFile(rf,filename, group=False, sort=None, ascending=True, stat=0.0, POI='Wmass', normalize=False):    
     treename = "fitresults"
     tree = rf[treename]
     # TODO: Make add_total configurable
     add_total = group
-    impacts,labels = input_tools.readImpacts(rf, group, sort=sort, add_total=add_total, stat=stat)
+    impacts, labels, _ = input_tools.readImpacts(rf, group, sort=sort, add_total=add_total, stat=stat, POI=POI, normalize=normalize)
     # TODO: Make configurable
     if True:
         impacts = impacts*100
@@ -151,7 +162,7 @@ def readFitInfoFromFile(filename, group=False, sort=None, ascending=True, stat=0
         rtree.GetEntry(0)
         for i, label in enumerate(labels):
             if not hasattr(rtree, label):
-                logging.warning(f"Failed to find syst {label} in tree")
+                logger.warning(f"Failed to find syst {label} in tree")
                 continue
                 
             pulls[i] = getattr(rtree, label)
@@ -180,6 +191,8 @@ def parseArgs():
     parser.add_argument("--stat", default=0.0, type=float, help="Overwrite stat. uncertainty with this value")
     parser.add_argument("-d", "--sortDescending", dest='ascending', action='store_false', help="Sort mode for nuisances")
     parser.add_argument("-g", "--group", action='store_true', help="Show impacts of groups")
+    parser.add_argument("--absolute", action='store_true', help="Not normalize impacts on cross sections and event numbers.")
+    parser.add_argument("--debug", action='store_true', help="Print debug output")
     parser.add_argument("--oneSidedImpacts", action='store_true', help="Make impacts one-sided")
     parsers = parser.add_subparsers(dest='mode')
     interactive = parsers.add_parser("interactive", help="Launch and interactive dash session")
@@ -217,11 +230,12 @@ def draw_figure(maxShow, sortBy, sortDescending, filterLabels, groups, oneSidedI
 dataframe = pd.DataFrame()
 groupsdataframe = pd.DataFrame()
 
-if __name__ == '__main__':
-    args = parseArgs()
-    groupsdataframe = readFitInfoFromFile(args.inputFile, True, sort=None, ascending=args.ascending, stat=args.stat/100.)
+        
+def producePlots(rtfile,args, POI='Wmass', normalize=False):
+
+    groupsdataframe = readFitInfoFromFile(rtfile,args.inputFile, True, sort=args.sort, ascending=args.ascending, stat=args.stat/100., POI=POI, normalize=normalize)
     if not (args.group and args.mode == 'output'):
-        dataframe = readFitInfoFromFile(args.inputFile, False, sort=None, ascending=args.ascending, stat=args.stat/100.)
+        dataframe = readFitInfoFromFile(rtfile,args.inputFile, False, sort=args.sort, ascending=args.ascending, stat=args.stat/100., POI=POI, normalize=normalize)
     if args.mode == "interactive":
         app.layout = html.Div([
                 dcc.Input(
@@ -265,8 +279,31 @@ if __name__ == '__main__':
         df = dataframe if not args.group else groupsdataframe
         df = df.sort_values(by=args.sort, ascending=args.ascending)
         if args.num and args.num < df.size:
-            df = df[-args.num:]
-        fig = plotImpacts(df, title=args.title, pulls=not args.noPulls and not args.group, pullrange=[-5,5], oneSidedImpacts=args.oneSidedImpacts)
-        writeOutput(fig, args.outputFile, args.otherExtensions)
+            df = df[-args.num:].sort_values(by=args.sort, ascending=args.ascending)
+        fig = plotImpacts(df, title=args.title, pulls=not args.noPulls and not args.group, pullrange=[-5,5], POI=POI, normalize=not args.absolute, oneSidedImpacts=args.oneSidedImpacts)
+
+        outputfilename = args.outputFile
+        outputfilename
+        writeOutput(fig, args.outputFile, args.otherExtensions, postfix=POI)
     else:
         raise ValueError("Must select mode 'interactive' or 'output'")
+
+
+if __name__ == '__main__':
+    args = parseArgs()
+
+    logger = logging.setup_logger("pullsAndImpacts", 4 if args.debug else 3)
+
+    rtfile = uproot.open(args.inputFile)
+    POIs = input_tools.getPOInames(rtfile)
+    for POI in POIs:
+        producePlots(rtfile,args,POI)
+    
+    if not (POIs[0]=="Wmass" and len(POIs) == 1):
+        # masked channel
+        for POI in input_tools.getPOInames(rtfile, poi_type="pmaskedexp"):
+            producePlots(rtfile,args,POI, normalize=not args.absolute)
+
+        # masked channel normalized
+        for POI in input_tools.getPOInames(rtfile, poi_type="pmaskedexpnorm"):
+            producePlots(rtfile,args,POI, normalize=not args.absolute)

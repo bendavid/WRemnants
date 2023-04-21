@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from wremnants import CardTool,theory_tools
 from utilities import logging
-from wremnants.datasets.datagroupsLowPU import datagroupsLowPU
+from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU
 from wremnants import histselections as sel
 import argparse
 import os
@@ -21,7 +21,7 @@ logger = logging.setup_logger(__file__, 2, False)
 if not os.path.isdir(args.outfolder):
     os.mkdir(args.outfolder)
 
-datagroups = datagroupsLowPU(args.inputFile)
+datagroups = make_datagroups_lowPU(args.inputFile)
 templateDir = "Templates/LowPileupW"
 cardTool = CardTool.CardTool(f"{args.outfolder}/LowPileupW.txt")
 
@@ -29,7 +29,6 @@ templateDir = f"{scriptdir}/Templates/LowPileupW"
 cardTool = CardTool.CardTool(f"{args.outfolder}/LowPileupW_{{chan}}.txt")
 cardTool.setNominalTemplate(f"{templateDir}/main.txt")
 cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/LowPileupWCombineInput.root"))
-cardTool.setProcesses(datagroups.getNames())
 cardTool.setDatagroups(datagroups)
 cardTool.setHistName("mt_reco_pf")
 cardTool.setUnconstrainedProcs([cardTool.getFakeName(), "Wmunu"])

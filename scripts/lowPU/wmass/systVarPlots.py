@@ -12,7 +12,6 @@ import lz4.frame
 import pickle
 import narf
 import hist
-from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_Z
 
 sys.path.insert(0, "scripts/lowPU/")
 import plotter
