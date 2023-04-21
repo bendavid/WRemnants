@@ -1,5 +1,5 @@
 #!/bin/bash
-
+set -x
 if [[ $# -lt 4 ]]; then
 	echo "Requires at least four arguments: run_combine.sh <combinetf_dir> <mode> <working_dir> <combine_cards>"
 	exit 1
