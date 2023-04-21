@@ -249,4 +249,4 @@ def make_datagroups_lowPU(input_file, combine=False, flavor="", excludeGroups=No
             selectOp = sigOp,
         )
 
-        
+    return dg
