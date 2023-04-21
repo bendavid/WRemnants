@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from wremnants import CardTool,theory_tools
 from utilities import logging
-from wremnants.datasets.datagroupsLowPU import DatagroupsLowPU
+from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU
 from wremnants import histselections as sel
 import argparse
 import os
@@ -21,7 +21,7 @@ logger = logging.setup_logger(__file__, 2, False)
 if not os.path.isdir(args.outfolder):
     os.mkdir(args.outfolder)
 
-datagroups = DatagroupsLowPU(args.inputFile)
+datagroups = make_datagroups_lowPU(args.inputFile)
 templateDir = "Templates/LowPileupW"
 cardTool = CardTool.CardTool(f"{args.outfolder}/LowPileupW.txt")
 

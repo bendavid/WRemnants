@@ -45,9 +45,9 @@ suffix = "_statOnly" if args.statOnly else ""
 
 if args.PUMode == "lowPU":
 
-    from wremnants.datasets.datagroupsLowPU import DatagroupsLowPU_W
+    from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU
     inputFile = "lowPU_%s_%s.pkl.lz4" % (args.flavor, met)
-    datagroups = DatagroupsLowPU_W(inputFile, flavor=args.flavor)
+    datagroups = make_datagroups_lowPU(inputFile, flavor=args.flavor)
     
     #unconstrainedProcs = ["WplusJetsToMuNu", "WminusJetsToMuNu"] # POIs
     unconstrainedProcs = ["WJetsToMuNu"] # POIs

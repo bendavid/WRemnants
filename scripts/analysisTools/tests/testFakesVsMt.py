@@ -17,7 +17,7 @@ import narf.fitutils
 import wremnants
 import hist
 import lz4.frame, pickle
-from wremnants.datasets.datagroups2016 import Datagroups2016
+from wremnants.datasets.datagroups2016 import make_datagroups_2016
 from wremnants import histselections as sel
 
 from utilities import boostHistHelpers as hh, common, logging
@@ -496,7 +496,7 @@ def runStudy(charge, outfolder, rootfilename, args):
     yAxisName = args.yAxisName
     zAxisName = args.zAxisName
 
-    groups = Datagroups2016(args.inputfile[0], applySelection=False)
+    groups = make_datagroups_2016(args.inputfile[0], applySelection=False)
     datasets = groups.getNames() # this has all the original defined groups
     datasetsNoQCD = list(filter(lambda x: x != "QCD", datasets)) # exclude QCD MC if present
     datasetsNoFakes = list(filter(lambda x: x != "Fake", datasets)) 

@@ -11,7 +11,7 @@ import functions
 import plotter
 
 
-from wremnants.datasets.datagroupsLowPU import DatagroupsLowPU_Z
+from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU
 
 import lz4.frame
 import pickle
@@ -346,7 +346,7 @@ if __name__ == "__main__":
     recoil_qTbins = list(range(0, 50, 1)) + list(range(50, 70, 2)) + list(range(70, 100, 5)) + list(range(100, 150, 10)) + [150, 200, 300, 10000]
     
     ####################################################################
-    datagroups = DatagroupsLowPU_Z("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
+    datagroups = make_datagroups_lowPU("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
     data, sig, bkgs = "SingleMuon", "DYmumu", ['EWK', 'TTbar'] 
     #bkgs = ["DYee", "DYtautau", "TTTo2L2Nu", "TTToSemiLeptonic", "ZZ", "WZTo3LNu", "WWTo2L2Nu", "WplusJetsToMuNu", "WminusJetsToMuNu", "WplusJetsToENu", "WminusJetsToENu", "WplusJetsToTauNu", "WminusJetsToTauNu"]
     outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/recoilCorrection/RecoilComponents_%s_%s/" % (flavor, met)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from wremnants import CardTool,theory_tools,syst_tools,combine_helpers
-from wremnants.datasets.datagroupsLowPU import DatagroupsLowPU
+from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU
 from utilities import common, logging
 import argparse
 import os
@@ -32,7 +32,7 @@ def main(args, xnorm=False):
 
     if not args.inputFile: args.inputFile = "lowPU_%s_%s.hdf5" % (args.flavor, args.met)
 
-    datagroups = DatagroupsLowPU(args.inputFile, flavor=args.flavor)
+    datagroups = make_datagroups_lowPU(args.inputFile, flavor=args.flavor)
     constrainedProcs = []   # constrained signal procs
     bkgProcs = ["Other", "Ztautau"] if args.fitType == "wmass" else ["Top", "EWK"] # background procs
     dataProc = "SingleMuon" if args.flavor == "mumu" else "SingleElectron"

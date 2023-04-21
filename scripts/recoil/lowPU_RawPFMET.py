@@ -14,7 +14,7 @@ ROOT.gStyle.SetOptTitle(0)
 import utils
 import plotter
 import recoilLibs_scipy as rls
-from wremnants.datasets.datagroupsLowPU import datagroupsLowPU
+from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU
 
 import lz4.frame
 import narf
@@ -2015,7 +2015,7 @@ if __name__ == "__main__":
     met = "RawPFMET" # DeepMETReso RawPFMET
     flavor = "mumu" # mu, e, mumu, ee
 
-    groups = datagroupsLowPU("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
+    groups = make_datagroups_lowPU("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
 
     outCfgDir = f"wremnants/data/recoil/lowPU/{flavor}_{met}/"
     outDir = "/eos/user/j/jaeyserm/www/recoil/lowPU/%s_%s/" % (flavor, met)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from wremnants import CardTool,theory_tools,syst_tools,combine_helpers
 from wremnants import histselections as sel
-from wremnants.datasets.datagroups2016 import Datagroups2016
+from wremnants.datasets.datagroups2016 import make_datagroups_2016
 from utilities import common, logging
 import argparse
 import os
@@ -52,8 +52,8 @@ def main(args,xnorm=False):
     logger.debug(f"Filtering these groups of processes: {args.filterProcGroups}")
     logger.debug(f"Excluding these groups of processes: {args.excludeProcGroups}")
     
-    datagroups = Datagroups2016(args.inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm)
-    
+    datagroups = make_datagroups_2016(args.inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm)
+
     if args.xlim:
         if len(args.fitvar.split("-")) > 1:
             raise ValueError("Restricting the x axis not supported for 2D hist")
@@ -140,7 +140,7 @@ def main(args,xnorm=False):
     if args.pseudoData:
         cardTool.setPseudodata(args.pseudoData, args.pseudoDataIdx)
         if args.pseudoDataFile:
-            cardTool.setPseudodataDatagroups(Datagroups2016(args.pseudoDataFile,
+            cardTool.setPseudodataDatagroups(make_datagroups_2016(args.pseudoDataFile,
                                                 excludeProcGroup=excludeGroup,
                                                 filterProcGroup=filterGroup))
     cardTool.setLumiScale(args.lumiScale)
