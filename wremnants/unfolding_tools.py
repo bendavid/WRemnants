@@ -44,7 +44,7 @@ def define_gen_level(df, gen_level, dataset_name, mode="wmass"):
 
         
 
-def add_xnorm_histograms(df, results, args, dataset_name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols, axis_ptVgen, axis_chargeVgen):
+def add_xnorm_histograms(results, df, args, dataset_name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols):
     # add histograms before any selection
     df_xnorm = df
     df_xnorm = df_xnorm.DefinePerSample("exp_weight", "1.0")
@@ -58,22 +58,4 @@ def add_xnorm_histograms(df, results, args, dataset_name, corr_helpers, qcdScale
     
     results.append(df_xnorm.HistoBoost("xnorm", xnorm_axes, [*xnorm_cols, "nominal_weight"]))
 
-    scale_axes = [*unfolding_axes, differential.axis_xnorm, axis_ptVgen, axis_chargeVgen]
-    scale_cols = [*unfolding_cols, "count", "ptVgen", "chargeVgen"]
-
-    syst_tools.add_pdf_hists(results, df_xnorm, dataset_name, xnorm_axes, xnorm_cols, args.pdfs, base_name="xnorm")
-
-    df_xnorm = theory_tools.define_scale_tensor(df_xnorm)
-
-    syst_tools.add_qcdScale_hist(results, df_xnorm, scale_axes, scale_cols, base_name="xnorm")
-    if not args.skipHelicity:
-        syst_tools.add_qcdScaleByHelicityUnc_hist(results, df_xnorm, qcdScaleByHelicity_helper, scale_axes, scale_cols, base_name="xnorm")
-
-    df_xnorm = syst_tools.define_mass_weights(df_xnorm, dataset_name)
-
-    syst_tools.add_massweights_hist(results, df_xnorm, xnorm_axes, xnorm_cols, proc=dataset_name, base_name="xnorm")
-
-    if args.theoryCorr and dataset_name in corr_helpers:
-        results.extend(theory_tools.make_theory_corr_hists(df_xnorm, "xnorm", xnorm_axes, xnorm_cols, 
-            corr_helpers[dataset_name], args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly)
-        )
+    syst_tools.add_theory_hists(results, df_xnorm, args, dataset_name, corr_helpers, qcdScaleByHelicity_helper, xnorm_axes, xnorm_cols, base_name="xnorm")

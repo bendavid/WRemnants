@@ -30,7 +30,7 @@ datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
 era = args.era
 
 # available axes for dilepton validation plots
-axes = {
+all_axes = {
     "mll": hist.axis.Regular(60, 60., 120., name = "mll"),
     "yll": hist.axis.Regular(25, -2.5, 2.5, name = "yll"),
     "absYll": hist.axis.Regular(25, 0., 2.5, name = "absYll"),
@@ -47,27 +47,22 @@ axes = {
 }
 
 for a in args.axes:
-    if a not in axes.keys():
+    if a not in all_axes.keys():
         logger.error(f" {a} is not a known axes! Supported axes choices are {list(axes.keys())}")
 
-nominal_cols = args.axes
+cols = args.axes
 
 if args.csVarsHist:
-    nominal_cols += ["cosThetaStarll", "phiStarll"]
+    cols += ["cosThetaStarll", "phiStarll"]
 
-nominal_cols.append("charge")
+cols.append("charge")
 
-nominal_axes = [axes[a] for a in nominal_cols] 
+axes = [all_axes[a] for a in cols] 
 
 # define helpers
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 
 qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = True)
-axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
-axis_ptVgen = hist.axis.Variable(
-    common.ptV_10quantiles_binning, 
-    name = "ptVgen", underflow=False
-)
 
 # extra axes which can be used to label tensor_axes
 if args.binnedScaleFactors:
@@ -160,48 +155,28 @@ def build_graph(df, dataset):
 
         df = df.Define("exp_weight", "weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom")
         df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
-        if isW or isZ:
-            df = theory_tools.define_scale_tensor(df)
 
     results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"]))
-    results.append(df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "nominal_weight"]))
+    results.append(df.HistoBoost("nominal", axes, [*cols, "nominal_weight"]))
 
     for obs in ["ptll", "mll", "yll"]:
-        results.append(df.HistoBoost(f"nominal_{obs}", [axes[obs]], [obs, "nominal_weight"]))
+        results.append(df.HistoBoost(f"nominal_{obs}", [all_axes[obs]], [obs, "nominal_weight"]))
 
     if not dataset.is_data and not args.onlyMainHistograms:
 
-
-        df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, nominal_axes, nominal_cols, is_w_like=True)
-        df = syst_tools.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, nominal_axes, nominal_cols)
+        df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, axes, cols, is_w_like=True)
+        df = syst_tools.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, axes, cols)
 
         # n.b. this is the W analysis so mass weights shouldn't be propagated
         # on the Z samples (but can still use it for dummy muon scale)
         if isW or isZ:
 
-            if args.theoryCorr and dataset.name in corr_helpers:
-                results.extend(theory_tools.make_theory_corr_hists(df, "nominal", nominal_axes, nominal_cols, 
-                    corr_helpers[dataset.name], args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly))
-
-            scale_axes = [*nominal_axes, axis_ptVgen, axis_chargeVgen]
-            scale_cols = [*nominal_cols, "ptVgen", "chargeVgen"]
-            syst_tools.add_qcdScale_hist(results, df, scale_axes, scale_cols)
-            syst_tools.add_pdf_hists(results, df, dataset.name, nominal_axes, nominal_cols, args.pdfs)
-
-
-            df = syst_tools.define_mass_weights(df, dataset.name)
-            if isZ:
-                syst_tools.add_massweights_hist(results, df, nominal_axes, nominal_cols, proc=dataset.name)
-                # there is no W backgrounds for the Wlike, make QCD scale histograms only for Z
-                # should probably remove the charge here, because the Z only has a single charge and the pt distribution does not depend on which charged lepton is selected
-                if not args.skipHelicity:
-                    # TODO: Should have consistent order here with the scetlib correction function
-                    syst_tools.add_qcdScaleByHelicityUnc_hist(results, df, qcdScaleByHelicity_helper, scale_axes, scale_cols)
+            df = syst_tools.add_theory_hists(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, axes, cols, for_wmass=False)
 
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:
                 syst_tools.add_muonscale_hist(
-                    results, df, args.muonCorrEtaBins, args.muonCorrMag, isW, nominal_axes, nominal_cols,
+                    results, df, args.muonCorrEtaBins, args.muonCorrMag, isW, axes, cols,
                     muon_eta="trigMuons_eta0")
 
 

@@ -359,3 +359,38 @@ def scetlib_scale_unc_hist(h, obs, syst_ax="vars"):
     hnew[...,"resumScaleDown"] = hh.syst_min_or_max_env_hist(h, obs, syst_ax, 
                                     h.axes[syst_ax].index(resum_names), do_min=True).view(flow=True)
     return hnew
+
+def add_theory_hists(results, df, args, dataset_name, corr_helpers, qcdScaleByHelicity_helper, axes, cols, base_name="nominal", for_wmass=True):
+    axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
+    axis_ptVgen = hist.axis.Variable(
+        common.ptV_10quantiles_binning, 
+        name = "ptVgen", underflow=False
+    )
+
+    scale_axes = [*axes, axis_ptVgen, axis_chargeVgen]
+    scale_cols = [*cols, "ptVgen", "chargeVgen"]
+
+    df = theory_tools.define_scale_tensor(df)
+    df = define_mass_weights(df, dataset_name)
+
+    add_pdf_hists(results, df, dataset_name, axes, cols, args.pdfs, base_name=base_name)
+    add_qcdScale_hist(results, df, scale_axes, scale_cols, base_name=base_name)
+
+    if args.theoryCorr and dataset_name in corr_helpers:
+        results.extend(theory_tools.make_theory_corr_hists(df, base_name, axes, cols, 
+            corr_helpers[dataset_name], args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly)
+        )
+
+    isZ = dataset_name in common.zprocs
+
+    if for_wmass or isZ:
+        # there is no W backgrounds for the Wlike, make QCD scale histograms only for Z
+        # should probably remove the charge here, because the Z only has a single charge and the pt distribution does not depend on which charged lepton is selected
+
+        if not args.skipHelicity:
+            add_qcdScaleByHelicityUnc_hist(results, df, qcdScaleByHelicity_helper, scale_axes, scale_cols, base_name=base_name)
+
+        # TODO: Should have consistent order here with the scetlib correction function
+        add_massweights_hist(results, df, axes, cols, proc=dataset_name, base_name=base_name)
+
+    return df
