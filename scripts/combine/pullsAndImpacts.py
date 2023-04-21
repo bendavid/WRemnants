@@ -125,10 +125,7 @@ def plotImpacts(df, title, pulls=False, pullrange=[-5,5], POI='Wmass', normalize
         )
     return fig
 
-def readFitInfoFromFile(rf,filename, group=False, sort=None, ascending=True, stat=0.0, POI='Wmass', normalize=False):
-    # rf = uproot.open(filename)
-    # name = "nuisance_group_impact_nois" if group else "nuisance_impact_nois"
-    
+def readFitInfoFromFile(rf,filename, group=False, sort=None, ascending=True, stat=0.0, POI='Wmass', normalize=False):    
     treename = "fitresults"
     tree = rf[treename]
     # TODO: Make add_total configurable

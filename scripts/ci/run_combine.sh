@@ -23,19 +23,14 @@ popd
 pushd $working_dir
 
 card_name=${working_dir}.txt
-echo "combineCards.py ${cards[@]} > $card_name"
 combineCards.py ${cards[@]} > $card_name
 
 outfile=${card_name/txt/hdf5}
 
 if [ "$mode" == "mass" ]; then
-	echo text2hdf5.py --X-allow-no-signal "$card_name"
 	text2hdf5.py --X-allow-no-signal "$card_name"
-	echo combinetf.py --doImpacts --binByBinStat -t -1 "$outfile"
 	combinetf.py --doImpacts --binByBinStat -t -1 "$outfile"
 elif [ "$mode" == "unfold" ]; then
-	echo text2hdf5.py --X-allow-no-background --maskedChan=xnorm "$card_name"
 	text2hdf5.py --X-allow-no-background --maskedChan=xnorm "$card_name"
-	echo combinetf.py --doImpacts --binByBinStat -t -1 --correlateXsecStat "$outfile"
 	combinetf.py --doImpacts --binByBinStat -t -1 --correlateXsecStat "$outfile"
 fi

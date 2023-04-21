@@ -5,7 +5,7 @@ parser,initargs = common.common_parser(True)
 
 import narf
 import wremnants
-from wremnants import theory_tools,syst_tools,theory_corrections, muon_calibration, muon_selections, muon_validation
+from wremnants import theory_tools,syst_tools,theory_corrections, muon_calibration, muon_selections, muon_validation, unfolding_tools
 import hist
 import lz4.frame
 import math
@@ -154,50 +154,8 @@ def build_graph(df, dataset):
     weightsum = df.SumAndCount("weight")
 
     if unfold:
-        # gen level definitions
-        if args.genLevel == "preFSR":
-            df = theory_tools.define_prefsr_vars(df)
-            df = df.Define("ptGen", "chargeVgen < 0 ? genl.pt() : genlanti.pt()")   
-            df = df.Define("etaGen", "chargeVgen < 0 ? abs(genl.eta()) : abs(genlanti.eta())")
-        elif args.genLevel == "postFSR":
-            pdgId = -13 if "Wplusmunu" in dataset.name else 13
-            df = df.Define("postFSR_mu", f"GenPart_status == 1 && (GenPart_statusFlags & 1) && GenPart_pdgId == {pdgId}")
-            df = df.Define("postFSR_mu_idx", "ROOT::VecOps::ArgMax(GenPart_pt[postFSR_mu])")
-            df = df.Define("ptGen", "GenPart_pt[postFSR_mu][postFSR_mu_idx]")
-            df = df.Define("etaGen", "abs(GenPart_eta[postFSR_mu][postFSR_mu_idx])")
-
-        # add histograms before any selection
-        df_xnorm = df
-        df_xnorm = df_xnorm.DefinePerSample("exp_weight", "1.0")
-
-        df_xnorm = theory_tools.define_theory_weights_and_corrs(df_xnorm, dataset.name, corr_helpers, args)
-
-        df_xnorm = df_xnorm.DefinePerSample("count", "0.5")
-
-        xnorm_axes = [*unfolding_axes, differential.axis_xnorm]
-        xnorm_cols = [*unfolding_cols, "count"]
-        
-        results.append(df_xnorm.HistoBoost("xnorm", xnorm_axes, [*xnorm_cols, "nominal_weight"]))
-
-        scale_axes = [*unfolding_axes, differential.axis_xnorm, axis_ptVgen, axis_chargeVgen]
-        scale_cols = [*unfolding_cols, "count", "ptVgen", "chargeVgen"]
-
-        syst_tools.add_pdf_hists(results, df_xnorm, dataset.name, xnorm_axes, xnorm_cols, args.pdfs, base_name="xnorm")
-
-        df_xnorm = theory_tools.define_scale_tensor(df_xnorm)
-
-        syst_tools.add_qcdScale_hist(results, df_xnorm, scale_axes, scale_cols, base_name="xnorm")
-        if not args.skipHelicity:
-            syst_tools.add_qcdScaleByHelicityUnc_hist(results, df_xnorm, qcdScaleByHelicity_helper, scale_axes, scale_cols, base_name="xnorm")
-
-        df_xnorm = syst_tools.define_mass_weights(df_xnorm, dataset.name)
-
-        syst_tools.add_massweights_hist(results, df_xnorm, xnorm_axes, xnorm_cols, proc=dataset.name, base_name="xnorm")
-
-        if apply_theory_corr:
-            results.extend(theory_tools.make_theory_corr_hists(df_xnorm, "xnorm", xnorm_axes, xnorm_cols, 
-                corr_helpers[dataset.name], args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly)
-            )
+        df = unfolding_tools.define_gen_level(df, args.genLevel, dataset.name, mode="wmass")
+        unfolding_tools.add_xnorm_histograms(df, results, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols, axis_ptVgen, axis_chargeVgen)
 
     df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
     #df = df.Filter("event % 2 == 1") # test with odd/even events
