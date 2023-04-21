@@ -95,9 +95,9 @@ def makeStackPlotWithRatio(
     fill_between=False, skip_fill=0, ratio_to_data=False, baseline=True, legtext_size=20, cms_decor="Preliminary", lumi=16.8,
     no_fill=False, bin_density=300, unstacked_linestyles=[],
 ):
-    stack = [action(histInfo[k][histName])[select] for k in stackedProcs if histInfo[k][histName]]
-    colors = [histInfo[k]["color"] for k in stackedProcs if histInfo[k][histName]]
-    labels = [histInfo[k]["label"] for k in stackedProcs if histInfo[k][histName]]
+    stack = [action(histInfo[k].hists[histName])[select] for k in stackedProcs if histInfo[k].hists[histName]]
+    colors = [histInfo[k].color for k in stackedProcs if histInfo[k].hists[histName]]
+    labels = [histInfo[k].label for k in stackedProcs if histInfo[k].hists[histName]]
     fig, ax1, ax2 = figureWithRatio(stack[0], xlabel, ylabel, ylim, rlabel, rrange, xlim=xlim, 
         grid_on_ratio_plot = grid, plot_title = plot_title, title_padding = title_padding, bin_density = bin_density)
 
@@ -143,12 +143,12 @@ def makeStackPlotWithRatio(
     
     data_hist = None
     if "Data" in histInfo and ratio_to_data:
-        data_hist = action(histInfo["Data"][histName][select])
+        data_hist = action(histInfo["Data"].hists[histName][select])
         hep.histplot(
             hh.divideHists(sum(stack), data_hist, cutoff=0.01),
             histtype="step",
-            color=histInfo[stackedProcs[-1]]["color"],
-            label=histInfo[stackedProcs[-1]]["label"],
+            color=histInfo[stackedProcs[-1]].color,
+            label=histInfo[stackedProcs[-1]].label,
             yerr=False,
             ax=ax2,
             zorder=3,
@@ -172,15 +172,15 @@ def makeStackPlotWithRatio(
 
         for proc,style in zip(unstacked, linestyles):
             logger.debug(f"Plotting proc {proc}")
-            unstack = action(histInfo[proc][histName][select])
+            unstack = action(histInfo[proc].hists[histName][select])
             if proc == "Data":
                 style = "None"
             hep.histplot(
                 unstack,
                 yerr=True if proc == "Data" else False,
                 histtype="errorbar" if (proc == "Data" or re.search("^pdf.*_sum", proc)) else "step",
-                color=histInfo[proc]["color"],
-                label=histInfo[proc]["label"],
+                color=histInfo[proc].color,
+                label=histInfo[proc].label,
                 ax=ax1,
                 alpha=0.7 if proc != "Data" else 1.,
                 linestyle=style,
@@ -192,8 +192,8 @@ def makeStackPlotWithRatio(
             hep.histplot(
                 hh.divideHists(unstack, ratio_ref, cutoff=0.01, rel_unc=True),
                 histtype="errorbar" if proc == "Data" and not data_hist else "step",
-                color=histInfo[proc]["color"],
-                label=histInfo[proc]["label"],
+                color=histInfo[proc].color,
+                label=histInfo[proc].label,
                 yerr=True if (proc == "Data" and not data_hist) else False,
                 linewidth=2,
                 linestyle=style,
@@ -206,12 +206,12 @@ def makeStackPlotWithRatio(
                 skip_fill = len(fill_procs) % 2
             logger.debug(f"Skip filling first {skip_fill}")
             for up,down in zip(fill_procs[skip_fill::2], fill_procs[skip_fill+1::2]):
-                unstack_up = hh.divideHists(action(histInfo[up][histName][select]), ratio_ref, 1e-6)
-                unstack_down = hh.divideHists(action(histInfo[down][histName][select]), ratio_ref, 1e-6)
+                unstack_up = hh.divideHists(action(histInfo[up].hists[histName][select]), ratio_ref, 1e-6)
+                unstack_down = hh.divideHists(action(histInfo[down].hists[histName][select]), ratio_ref, 1e-6)
                 ax2.fill_between(unstack_up.axes[0].edges, 
                         np.append(unstack_up.values(), unstack_up.values()[-1]), 
                         np.append(unstack_down.values(), unstack_up.values()[-1]),
-                    step='post', color=histInfo[up]["color"], alpha=0.5)
+                    step='post', color=histInfo[up].color, alpha=0.5)
 
     addLegend(ax1, nlegcols, extra_text=extra_text, extra_text_loc=extra_text_loc, text_size=legtext_size)
     fix_axes(ax1, ax2, yscale=yscale)
@@ -364,7 +364,7 @@ def save_pdf_and_png(outdir, basename, fig=None):
     logger.info(f"Wrote file(s) {fname}(.png)")
 
 def write_index_and_log(outpath, logname, indexname="index.php", template_dir=f"{pathlib.Path(__file__).parent}/Templates", 
-        yield_tables=None, analysis_meta_info=None, args={}):
+        yield_tables=None, analysis_meta_info=None, args={}, nround=2):
     shutil.copyfile(f"{template_dir}/{indexname}", f"{outpath}/{indexname}")
     logdir = outpath
 
@@ -379,7 +379,7 @@ def write_index_and_log(outpath, logname, indexname="index.php", template_dir=f"
             for k,v in yield_tables.items():
                 logf.write(f"Yield information for {k}\n")
                 logf.write("-"*80+"\n")
-                logf.write(str(v.round(2))+"\n\n")
+                logf.write(str(v.round(nround))+"\n\n")
 
             if "Unstacked processes" in yield_tables and "Stacked processes" in yield_tables:
                 if "Data" in yield_tables["Unstacked processes"]["Process"].values:

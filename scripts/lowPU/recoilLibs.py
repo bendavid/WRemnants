@@ -3696,7 +3696,7 @@ def prepareFile(datagroups, fOutName, fOut_):
     fOut = ROOT.TFile(fOutName, "RECREATE")
 
     # RECO level qT
-    datagroups = datagroupsLowPU_Z("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
+    datagroups = DatagroupsLowPU_Z("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
     procs = []
     if flavor == "mumu": procs = ["SingleMuon", "DYmumu"] + bkgs
     if flavor == "ee": procs = ["SingleElectron", "DYee"] + bkgs

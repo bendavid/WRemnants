@@ -77,10 +77,10 @@ def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, na
                 )
             )
         narf_datasets.append(narf.Dataset(**narf_info))
-
+    
     narf_datasets = filterProcs(filt, narf_datasets)
     narf_datasets = excludeProcs(excl, narf_datasets)
-    
+
     for sample in narf_datasets:
         if not sample.filepaths:
             logger.warning(f"Failed to find any files for sample {sample.name}!")
