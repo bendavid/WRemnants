@@ -26,7 +26,7 @@ def writeOutput(fig, outfile, extensions=[]):
         func = "write_html" if ext == ".html" else "write_image"
         getattr(fig, func)(name+ext)
 
-def plotImpacts(df, title, pulls=False, pullrange=[-5,5]):
+def plotImpacts(df, title, pulls=False, pullrange=[-5,5], oneSidedImpacts=False):
     
     fig = make_subplots(rows=1,cols=2 if pulls else 1,
             horizontal_spacing=0.1, shared_yaxes=True)
@@ -41,26 +41,35 @@ def plotImpacts(df, title, pulls=False, pullrange=[-5,5]):
     
     ndisplay = len(df)
     fig.add_trace(
-        go.Scatter(
-            x=np.zeros(ndisplay),
-            y=df['modlabel'],
-            mode="markers",
-            marker=dict(color='black', size=8,),
-            error_x=dict(
-                array=df['impact'],
-                color="black",
-                thickness=1.5,
-                width=5,
-            ),
-            name="impacts",
+        go.Bar(
+            x=df['impact' if not oneSidedImpacts else 'absimpact'],
+            y=df['label'],
+            marker_color=df['impact_color'] if oneSidedImpacts else '#377eb8',
+            texttemplate="%{x:0.2f}",
+			textposition="outside",
+            textfont_size=12,
+			textangle=0,
+            orientation='h',
+            name="impacts_down",
         ),
         row=1,col=1,
+    )
+    if not oneSidedImpacts:
+        fig.add_trace(
+            go.Bar(
+                x=-1*df['impact'],
+                y=df['label'],
+                marker_color='#e41a1c',
+                name="impacts_up",
+                orientation='h',
+            ),
+            row=1,col=1,
     )
     if pulls:
         fig.add_trace(
             go.Scatter(
                 x=df['pull'],
-                y=df['modlabel'],
+                y=df['label'],
                 mode="markers",
                 marker=dict(color='black', size=8,),
                 error_x=dict(
@@ -73,24 +82,32 @@ def plotImpacts(df, title, pulls=False, pullrange=[-5,5]):
             ),
             row=1,col=2,
     )
-    impact_range = np.ceil(df['impact'].max()*1.2)
-    impact_spacing = 5
+    impact_range = np.ceil(df['impact'].max())
+    impact_spacing = 2 if pulls else 3
+    if impact_range % impact_spacing:
+        impact_range += impact_spacing - (impact_range % impact_spacing)
+    tick_spacing = impact_range/impact_spacing
+    if pulls and oneSidedImpacts:
+        tick_spacing /= 2.
+    fig.update_layout(barmode='relative')
     fig.update_layout(paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
         xaxis_title="Impact on mass (MeV)",
         title={
             'text': title,
-            'y':.999 if ndisplay > 100 else 0.98,
-            'x': 0.5,
+            'y': 1.-1/float(ndisplay),
+            'x': 0.7,
             'xanchor': 'center',
             'yanchor': 'top'},
         margin=dict(l=20,r=20,t=50,b=20),
-        xaxis=dict(range=[-impact_range, impact_range],
-                showgrid=True, gridwidth=2,gridcolor='LightPink',
-                zeroline=True, zerolinewidth=4, zerolinecolor='Gray',
+        xaxis=dict(range=[-impact_range if not oneSidedImpacts else -impact_range/20, impact_range],
+                showgrid=True, gridwidth=1,gridcolor='Gray', griddash='dash',
+                zeroline=True, zerolinewidth=2, zerolinecolor='Gray',
                 tickmode='linear',
+                tickangle=0,
                 tick0=0.,
-                dtick=impact_range/impact_spacing
+                side='top',
+                dtick=tick_spacing,
             ),
         yaxis=dict(range=[-1, ndisplay]),
         showlegend=False,
@@ -103,7 +120,8 @@ def plotImpacts(df, title, pulls=False, pullrange=[-5,5]):
                     zeroline=True, zerolinewidth=4, zerolinecolor='Gray',
                     tickmode='linear',
                     tick0=0.,
-                    dtick=1 if pullrange[1]-pullrange[0] > 2.5 else 0.25,
+                    dtick=0.5 if pullrange[1]-pullrange[0] > 2.5 else 0.25,
+                    side='top',
                 ),
             xaxis2_title="pull+constraint",
             yaxis2=dict(range=[-1, ndisplay]),
@@ -139,26 +157,30 @@ def readFitInfoFromFile(filename, group=False, sort=None, ascending=True, stat=0
             pulls[i] = getattr(rtree, label)
             constraints[i] = getattr(rtree, label+"_err")
     
-    modlabel = labels
-    neg = ["-"+x for x in modlabel[impacts<0]]
-    modlabel[impacts<0] = neg
-    df = pd.DataFrame(np.array((pulls, np.abs(impacts), constraints), dtype=np.float64).T, columns=["pull", "impact", "constraint"])
-    df.insert(0, "label", labels)
-    df.insert(0, "modlabel", modlabel)
+    df = pd.DataFrame(np.array((pulls, impacts, constraints), dtype=np.float64).T, columns=["pull", "impact", "constraint"])
+    df['label'] = labels
+    df['absimpact'] = np.abs(df['impact'])
+    if not group:
+        df.drop(df.loc[df['label']=='massShift100MeV'].index, inplace=True)
+    colors = np.full(len(df), '#377eb8')
+    if not group:
+        colors[df['impact'] > 0.] = '#e41a1c'
+    df['impact_color'] = colors
+
     if sort:
         df = df.sort_values(by=sort, ascending=ascending)
-    if not group:
-        df.drop(df.loc[df['modlabel']=='massShift100MeV'].index, inplace=True)
+
     return df
 
 def parseArgs():
     parser = argparse.ArgumentParser()
     parser.add_argument("-f", "--inputFile", type=str, required=True,
         help="fitresults output ROOT file from combinetf")
-    parser.add_argument("-s", "--sort", default="impact", type=str, choices=["label", "pull", "constraint", "impact"], help="Sort mode for nuisances")
+    parser.add_argument("-s", "--sort", default="absimpact", type=str, choices=["label", "pull", "constraint", "absimpact"], help="Sort mode for nuisances")
     parser.add_argument("--stat", default=0.0, type=float, help="Overwrite stat. uncertainty with this value")
     parser.add_argument("-d", "--sortDescending", dest='ascending', action='store_false', help="Sort mode for nuisances")
     parser.add_argument("-g", "--group", action='store_true', help="Show impacts of groups")
+    parser.add_argument("--oneSidedImpacts", action='store_true', help="Make impacts one-sided")
     parsers = parser.add_subparsers(dest='mode')
     interactive = parsers.add_parser("interactive", help="Launch and interactive dash session")
     interactive.add_argument("-i", "--interface", default="localhost", help="The network interface to bind to.")
@@ -167,7 +189,7 @@ def parseArgs():
     output.add_argument("--otherExtensions", default=[], type=str, nargs="*", help="Additional output file types to write")
     output.add_argument("-n", "--num", type=int, help="Number of nuisances to plot")
     output.add_argument("--noPulls", action='store_true', help="Don't show pulls (not defined for groups)")
-    output.add_argument("-t", "--title", type=str, default="Mass impact", help="Title of output plot")
+    output.add_argument("-t", "--title", type=str, default="", help="Title of output plot")
     
     return parser.parse_args()
 
@@ -181,7 +203,7 @@ app = dash.Dash(__name__)
     [Input("filterLabels", "value")],
     [Input("groups", "on")],
 )
-def draw_figure(maxShow, sortBy, sortDescending, filterLabels, groups):
+def draw_figure(maxShow, sortBy, sortDescending, filterLabels, groups, oneSidedImpacts=False):
     df = groupsdataframe if groups else dataframe
     df = df[0 if not maxShow else -1*maxShow:].copy()
     df = df.sort_values(by=sortBy, ascending=sortDescending)
@@ -190,16 +212,16 @@ def draw_figure(maxShow, sortBy, sortDescending, filterLabels, groups):
         for label in filterLabels.split(","):
             filt = filt | (df["label"].str.find(label.strip()) >= 0)
         df = df[filt]
-    return plotImpacts(df, title="Contribution to uncertainty in mW", pulls=not groups, pullrange=[-5,5])
+    return plotImpacts(df, title="Contribution to uncertainty in mW", pulls=not groups, pullrange=[-5,5], oneSidedImpacts=oneSidedImpacts)
 
 dataframe = pd.DataFrame()
 groupsdataframe = pd.DataFrame()
 
 if __name__ == '__main__':
     args = parseArgs()
-    groupsdataframe = readFitInfoFromFile(args.inputFile, True, sort=args.sort, ascending=args.ascending, stat=args.stat/100.)
+    groupsdataframe = readFitInfoFromFile(args.inputFile, True, sort=None, ascending=args.ascending, stat=args.stat/100.)
     if not (args.group and args.mode == 'output'):
-        dataframe = readFitInfoFromFile(args.inputFile, False, sort=args.sort, ascending=args.ascending, stat=args.stat/100.)
+        dataframe = readFitInfoFromFile(args.inputFile, False, sort=None, ascending=args.ascending, stat=args.stat/100.)
     if args.mode == "interactive":
         app.layout = html.Div([
                 dcc.Input(
@@ -241,9 +263,10 @@ if __name__ == '__main__':
         app.run_server(debug=True, port=3389, host=args.interface)
     elif args.mode == 'output':
         df = dataframe if not args.group else groupsdataframe
+        df = df.sort_values(by=args.sort, ascending=args.ascending)
         if args.num and args.num < df.size:
-            df = df[-args.num:].sort_values(by=args.sort, ascending=args.ascending)
-        fig = plotImpacts(df, title=args.title, pulls=not args.noPulls and not args.group, pullrange=[-5,5])
+            df = df[-args.num:]
+        fig = plotImpacts(df, title=args.title, pulls=not args.noPulls and not args.group, pullrange=[-5,5], oneSidedImpacts=args.oneSidedImpacts)
         writeOutput(fig, args.outputFile, args.otherExtensions)
     else:
         raise ValueError("Must select mode 'interactive' or 'output'")

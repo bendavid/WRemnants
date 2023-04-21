@@ -453,7 +453,7 @@ def pdfBugfixMSHT20(df , tensorPDFName):
     #   to fix this, one has to be mirrored:
     #   pdf(15) = pdf(0) - (pdf(15) - pdf(0))
     return df.Redefine(tensorPDFName, 
-        f"auto res = {tensorPDFName};"
+        f"auto& res = {tensorPDFName};"
         f"res(15) = {tensorPDFName}(0) - ({tensorPDFName}(15) - {tensorPDFName}(0));"
         "return res")
         
