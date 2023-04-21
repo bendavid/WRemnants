@@ -258,6 +258,8 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $OUTFILE --fitvar ptll --constrainMass --lumiScale $LUMI_SCALE
 
       - name: dilepton combine ptll fit
+        run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ mass ZMassDilepton_ptll ZMassDilepton_plus.txt ZMassDilepton_minus.txt 
+
   gen:
     # The type of runner that the job will run on
     runs-on: [self-hosted, linux, x64]
