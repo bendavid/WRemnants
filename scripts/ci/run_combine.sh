@@ -1,5 +1,4 @@
 #!/bin/bash
-set -x
 if [[ $# -lt 4 ]]; then
 	echo "Requires at least four arguments: run_combine.sh <combinetf_dir> <mode> <working_dir> <combine_cards>"
 	exit 1
@@ -27,6 +26,8 @@ combineCards.py ${cards[@]} > $card_name
 
 outfile=${card_name/txt/hdf5}
 
+set -x
+
 if [ "$mode" == "mass" ]; then
 	text2hdf5.py --X-allow-no-signal "$card_name"
 	combinetf.py --doImpacts --binByBinStat -t -1 "$outfile"
@@ -34,3 +35,5 @@ elif [ "$mode" == "unfold" ]; then
 	text2hdf5.py --X-allow-no-background --maskedChan=xnorm "$card_name"
 	combinetf.py --doImpacts --binByBinStat -t -1 --correlateXsecStat "$outfile"
 fi
+
+set +x

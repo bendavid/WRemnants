@@ -11,7 +11,7 @@ import functions
 import plotter
 
 
-from wremnants.datasets.datagroupsLowPU import DatagroupsLowPU_Z
+from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU
 
 import lz4.frame
 import pickle
@@ -592,7 +592,7 @@ def readProc(groups_mumu, hName, procName):
 
 def prepareFile(fOut_):
     
-    datagroups = DatagroupsLowPU_Z("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
+    datagroups = make_datagroups_lowPU("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
     fOut = ROOT.TFile(fOut_, "RECREATE")
 
     if flavor == "mumu": procs =[ "DYmumu"]

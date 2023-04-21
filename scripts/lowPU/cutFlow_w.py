@@ -16,7 +16,7 @@ import narf
 import hist
 import numpy as np
 
-from wremnants.datasets.datagroupsLowPU import DatagroupsLowPU_Z
+from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU
 
 
 
@@ -77,7 +77,7 @@ if __name__ == "__main__":
     outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/W%s/plots_%s_%s/" % (flavor, charge, met)
 
     procs = ['EWK', 'TTbar', 'WJetsToMuNu'] 
-    groups = DatagroupsLowPU_Z("lowPU_%s_%s_cutFlow.pkl.lz4" % (flavor, met), flavor=flavor)
+    groups = make_datagroups_lowPU("lowPU_%s_%s_cutFlow.pkl.lz4" % (flavor, met), flavor=flavor)
     
     cutFlowHists = {}
     st = ROOT.THStack()
