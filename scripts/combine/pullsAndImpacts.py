@@ -83,7 +83,7 @@ def plotImpacts(df, title, pulls=False, pullrange=[-5,5], oneSidedImpacts=False)
             row=1,col=2,
     )
     impact_range = np.ceil(df['impact'].max())
-    impact_spacing = 2 if pulls else 3
+    impact_spacing = min(impact_range, 2 if pulls else 3)
     if impact_range % impact_spacing:
         impact_range += impact_spacing - (impact_range % impact_spacing)
     tick_spacing = impact_range/impact_spacing
