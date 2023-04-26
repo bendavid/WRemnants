@@ -12,6 +12,7 @@ from dash.dependencies import Input, Output
 from utilities import input_tools
 import logging
 import os
+import re
 
 logging.basicConfig(level=logging.INFO)
 
@@ -26,45 +27,80 @@ def writeOutput(fig, outfile, extensions=[]):
         func = "write_html" if ext == ".html" else "write_image"
         getattr(fig, func)(name+ext)
 
-def plotImpacts(df, title, pulls=False, pullrange=[-5,5], oneSidedImpacts=False):
+def plotImpacts(df, title, pulls=True, oneSidedImpacts=False):
     
-    fig = make_subplots(rows=1,cols=2 if pulls else 1,
-            horizontal_spacing=0.1, shared_yaxes=True)
+    pulls = pulls and bool(df['pull'].sum())
+    impacts = bool(df['impact'].sum())
+    ncols = pulls+impacts
+    fig = make_subplots(rows=1,cols=ncols,
+            horizontal_spacing=0.1, shared_yaxes=ncols > 1)
 
-    max_pull = np.max(df["pull"])
-    default_pr = pullrange == [-5, 5]
-    if max_pull == 0 and default_pr:
-        pullrange = [-1.5, 1.5]
-    elif default_pr:
-        r = np.max([1.5, max_pull])
-        pullrange = [-1*r, r]
+    max_pull = np.max(df["abspull"])
+    # Round up to nearest 0.5
+    pullrange = np.ceil(max_pull+1)
     
     ndisplay = len(df)
-    fig.add_trace(
-        go.Bar(
-            x=df['impact' if not oneSidedImpacts else 'absimpact'],
-            y=df['label'],
-            marker_color=df['impact_color'] if oneSidedImpacts else '#377eb8',
-            texttemplate="%{x:0.2f}",
-			textposition="outside",
-            textfont_size=12,
-			textangle=0,
-            orientation='h',
-            name="impacts_down",
-        ),
-        row=1,col=1,
+    fig.update_layout(paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        xaxis_title="Impact on mass (MeV)" if impacts else "Pull",
+        title={
+            'text': title,
+            'y': 1.-1/float(ndisplay),
+            'x': 0.7,
+            'xanchor': 'center',
+            'yanchor': 'top'},
+        margin=dict(l=20,r=20,t=50,b=20),
+        yaxis=dict(range=[-1, ndisplay]),
+        showlegend=False,
+        height=100*(ndisplay<100)+ndisplay*20.5,width=800,
     )
-    if not oneSidedImpacts:
+
+    if impacts:
         fig.add_trace(
             go.Bar(
-                x=-1*df['impact'],
+                x=df['impact' if not oneSidedImpacts else 'absimpact'],
                 y=df['label'],
-                marker_color='#e41a1c',
-                name="impacts_up",
+                marker_color=df['impact_color'] if oneSidedImpacts else '#377eb8',
+                texttemplate="%{x:0.2f}",
+                textposition="outside",
+                textfont_size=12,
+                textangle=0,
                 orientation='h',
+                name="impacts_down",
             ),
             row=1,col=1,
-    )
+        )
+        if not oneSidedImpacts:
+            fig.add_trace(
+                go.Bar(
+                    x=-1*df['impact'],
+                    y=df['label'],
+                    marker_color='#e41a1c',
+                    name="impacts_up",
+                    orientation='h',
+                ),
+                row=1,col=1,
+        )
+        impact_range = np.ceil(df['impact'].max())
+        impact_spacing = min(impact_range, 2 if pulls else 3)
+        if impact_range % impact_spacing:
+            impact_range += impact_spacing - (impact_range % impact_spacing)
+        tick_spacing = impact_range/impact_spacing
+        if pulls and oneSidedImpacts:
+            tick_spacing /= 2.
+        fig.update_layout(barmode='relative')
+        fig.update_layout(
+            xaxis=dict(range=[-impact_range if not oneSidedImpacts else -impact_range/20, impact_range],
+                    showgrid=True, gridwidth=1,gridcolor='Gray', griddash='dash',
+                    zeroline=True, zerolinewidth=2, zerolinecolor='Gray',
+                    tickmode='linear',
+                    tickangle=0,
+                    tick0=0.,
+                    side='top',
+                    dtick=tick_spacing,
+                ),
+        )
+
     if pulls:
         fig.add_trace(
             go.Scatter(
@@ -80,58 +116,34 @@ def plotImpacts(df, title, pulls=False, pullrange=[-5,5], oneSidedImpacts=False)
                 ),
                 name="pulls",
             ),
-            row=1,col=2,
-    )
-    impact_range = np.ceil(df['impact'].max())
-    impact_spacing = min(impact_range, 2 if pulls else 3)
-    if impact_range % impact_spacing:
-        impact_range += impact_spacing - (impact_range % impact_spacing)
-    tick_spacing = impact_range/impact_spacing
-    if pulls and oneSidedImpacts:
-        tick_spacing /= 2.
-    fig.update_layout(barmode='relative')
-    fig.update_layout(paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        xaxis_title="Impact on mass (MeV)",
-        title={
-            'text': title,
-            'y': 1.-1/float(ndisplay),
-            'x': 0.7,
-            'xanchor': 'center',
-            'yanchor': 'top'},
-        margin=dict(l=20,r=20,t=50,b=20),
-        xaxis=dict(range=[-impact_range if not oneSidedImpacts else -impact_range/20, impact_range],
-                showgrid=True, gridwidth=1,gridcolor='Gray', griddash='dash',
-                zeroline=True, zerolinewidth=2, zerolinecolor='Gray',
-                tickmode='linear',
-                tickangle=0,
-                tick0=0.,
-                side='top',
-                dtick=tick_spacing,
-            ),
-        yaxis=dict(range=[-1, ndisplay]),
-        showlegend=False,
-        height=100*(ndisplay<100)+ndisplay*20.5,width=800,
-    )
-    if pulls:
-        fig.update_layout(
-            xaxis2=dict(range=pullrange,
+            row=1,col=ncols,
+        )
+        # Keep it a factor of 0.25, but no bigger than 1
+        spacing = min(1, np.ceil(pullrange)/4.)
+        info = dict(
+            xaxis=dict(range=[-pullrange, pullrange],
                     showgrid=True, gridwidth=2,gridcolor='LightBlue',
                     zeroline=True, zerolinewidth=4, zerolinecolor='Gray',
                     tickmode='linear',
                     tick0=0.,
-                    dtick=0.5 if pullrange[1]-pullrange[0] > 2.5 else 0.25,
+                    dtick=spacing,
                     side='top',
                 ),
-            xaxis2_title="pull+constraint",
-            yaxis2=dict(range=[-1, ndisplay]),
-            yaxis2_visible=False,
+            xaxis_title="pull+constraint",
+            yaxis=dict(range=[-1, ndisplay]),
+            yaxis_visible=not impacts,
         )
+        if impacts:
+            new_info = {}
+            for k in info.keys():
+                new_info[k.replace("axis", "axis2")] = info[k]
+            info = new_info
+        fig.update_layout(**info)
+
     return fig
 
 def readFitInfoFromFile(filename, group=False, sort=None, ascending=True, stat=0.0):
     rf = uproot.open(filename)
-    name = "nuisance_group_impact_nois" if group else "nuisance_impact_nois"
     
     treename = "fitresults"
     tree = rf[treename]
@@ -142,8 +154,18 @@ def readFitInfoFromFile(filename, group=False, sort=None, ascending=True, stat=0
     if True:
         impacts = impacts*100
     
-    pulls = np.zeros_like(impacts)
-    constraints = np.zeros_like(impacts)
+    if args.filters:
+        filtimpacts = []
+        filtlabels = []
+        for impact,label in zip(impacts,labels):
+            if any(re.match(f, label) for f in args.filters):
+                filtimpacts.append(impact)
+                filtlabels.append(label)
+        impacts = filtimpacts
+        labels = filtlabels
+
+    pulls = np.zeros_like(labels, dtype=float)
+    constraints = np.zeros_like(labels, dtype=float)
     if not group:
         import ROOT
         rtfile = ROOT.TFile.Open(filename)
@@ -160,6 +182,7 @@ def readFitInfoFromFile(filename, group=False, sort=None, ascending=True, stat=0
     df = pd.DataFrame(np.array((pulls, impacts, constraints), dtype=np.float64).T, columns=["pull", "impact", "constraint"])
     df['label'] = labels
     df['absimpact'] = np.abs(df['impact'])
+    df['abspull'] = np.abs(df['pull'])
     if not group:
         df.drop(df.loc[df['label']=='massShift100MeV'].index, inplace=True)
     colors = np.full(len(df), '#377eb8')
@@ -176,11 +199,12 @@ def parseArgs():
     parser = argparse.ArgumentParser()
     parser.add_argument("-f", "--inputFile", type=str, required=True,
         help="fitresults output ROOT file from combinetf")
-    parser.add_argument("-s", "--sort", default="absimpact", type=str, choices=["label", "pull", "constraint", "absimpact"], help="Sort mode for nuisances")
+    parser.add_argument("-s", "--sort", default="absimpact", type=str, choices=["label", "abspull", "constraint", "absimpact"], help="Sort mode for nuisances")
     parser.add_argument("--stat", default=0.0, type=float, help="Overwrite stat. uncertainty with this value")
     parser.add_argument("-d", "--sortDescending", dest='ascending', action='store_false', help="Sort mode for nuisances")
     parser.add_argument("-g", "--group", action='store_true', help="Show impacts of groups")
     parser.add_argument("--oneSidedImpacts", action='store_true', help="Make impacts one-sided")
+    parser.add_argument("--filters", nargs="*", type=str, help="Filter regexes to select nuisances by name")
     parsers = parser.add_subparsers(dest='mode')
     interactive = parsers.add_parser("interactive", help="Launch and interactive dash session")
     interactive.add_argument("-i", "--interface", default="localhost", help="The network interface to bind to.")
@@ -212,16 +236,18 @@ def draw_figure(maxShow, sortBy, sortDescending, filterLabels, groups, oneSidedI
         for label in filterLabels.split(","):
             filt = filt | (df["label"].str.find(label.strip()) >= 0)
         df = df[filt]
-    return plotImpacts(df, title="Contribution to uncertainty in mW", pulls=not groups, pullrange=[-5,5], oneSidedImpacts=oneSidedImpacts)
+    return plotImpacts(df, title="Contribution to uncertainty in mW", pulls=True, oneSidedImpacts=oneSidedImpacts)
 
 dataframe = pd.DataFrame()
 groupsdataframe = pd.DataFrame()
 
 if __name__ == '__main__':
     args = parseArgs()
-    groupsdataframe = readFitInfoFromFile(args.inputFile, True, sort=None, ascending=args.ascending, stat=args.stat/100.)
+    if args.group:
+        groupsdataframe = readFitInfoFromFile(args.inputFile, True, sort=None, ascending=args.ascending, stat=args.stat/100.)
     if not (args.group and args.mode == 'output'):
         dataframe = readFitInfoFromFile(args.inputFile, False, sort=None, ascending=args.ascending, stat=args.stat/100.)
+
     if args.mode == "interactive":
         app.layout = html.Div([
                 dcc.Input(
@@ -266,7 +292,7 @@ if __name__ == '__main__':
         df = df.sort_values(by=args.sort, ascending=args.ascending)
         if args.num and args.num < df.size:
             df = df[-args.num:]
-        fig = plotImpacts(df, title=args.title, pulls=not args.noPulls and not args.group, pullrange=[-5,5], oneSidedImpacts=args.oneSidedImpacts)
+        fig = plotImpacts(df, title=args.title, pulls=not args.noPulls and not args.group, oneSidedImpacts=args.oneSidedImpacts)
         writeOutput(fig, args.outputFile, args.otherExtensions)
     else:
         raise ValueError("Must select mode 'interactive' or 'output'")

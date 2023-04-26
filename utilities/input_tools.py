@@ -232,10 +232,28 @@ def add_charge_axis(h, charge):
         hnew[...,charge_axis.index(charge)] = h.view(flow=True)
     return hnew
 
-def readImpacts(rtfile, group, sort=True, add_total=True, stat=0.0):
-    histname = "nuisance_group_impact_nois" if group else "nuisance_impact_nois"
+def readImpacts(rtfile, group, sort=True, add_total=True, noi=True, stat=0.0):
+    impact_hist = "nuisance_group_impact" if group else "nuisance_impact"
+    if noi:
+        impact_hist += "_nois"
+
+    if group:
+        histname = impact_hist
+    else:
+        histname = "correlation_matrix_channelmu"
+
+    if histname not in rtfile:
+        raise ValueError(f"Did not find hist {histname} in file")
+
+    h = rtfile[histname].to_hist()
+    labels = np.array(list(h.axes["yaxis"]), dtype=object)
+
+    if impact_hist not in rtfile:
+        logger.warning("Did not find impact hist in file. Skipping!")
+        return np.zeros_like(labels), labels
+
     impacts = rtfile[histname].to_hist()
-    labels = np.array([impacts.axes[1].value(i) for i in range(impacts.axes[1].size)])
+
     total = rtfile["fitresults"][impacts.axes[0].value(0)+"_err"].array()[0]
     impacts = impacts.values()[0,:]
     if sort:
