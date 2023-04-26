@@ -108,11 +108,16 @@ def makeStackPlotWithRatio(
         fittype = "prefit" if prefit else "postfit"
 
         # set histograms to prefit/postfit values
-        for s, p in zip(stack, stackedProcs):
-            s.values()[...] = combine_result[f"expproc_{p}_{fittype}"].to_hist().values()
-
+        for i, (s, p) in enumerate(zip(stack, stackedProcs)):
+            vals = combine_result[f"expproc_{p}_{fittype}"].to_hist().values()
+            # This will only work in the case where you place an upper limit when you rebin (e.g., ptll fit)
+            max_bin = len(vals)
+            s.values()[:max_bin] = vals
+            stack[i] = stack[i][:max_bin]
+        
         # for postfit uncertaity bands
         axis = stack[0].axes[0].edges
+        xmax = len(stack[0].values())
 
         # need to divide by bin width
         binwidth = axis[1:]-axis[:-1]
@@ -143,7 +148,7 @@ def makeStackPlotWithRatio(
     
     data_hist = None
     if "Data" in histInfo and ratio_to_data:
-        data_hist = action(histInfo["Data"][histName][select])
+        data_hist = action(histInfo["Data"][histName][select])[:xmax]
         hep.histplot(
             hh.divideHists(sum(stack), data_hist, cutoff=0.01),
             histtype="step",
@@ -172,29 +177,26 @@ def makeStackPlotWithRatio(
 
         for proc,style in zip(unstacked, linestyles):
             logger.debug(f"Plotting proc {proc}")
-            unstack = action(histInfo[proc][histName][select])
+            unstack = action(histInfo[proc][histName][select])[:xmax]
             if proc == "Data":
                 style = "None"
             hep.histplot(
                 unstack,
-                yerr=True if proc == "Data" else False,
-                histtype="errorbar" if (proc == "Data" or re.search("^pdf.*_sum", proc)) else "step",
+                yerr=True if style == "None" else False,
+                histtype="errorbar" if style == "None" else "step",
                 color=histInfo[proc]["color"],
                 label=histInfo[proc]["label"],
                 ax=ax1,
-                alpha=0.7 if proc != "Data" else 1.,
+                alpha=0.7 if style != "None" else 1.,
                 linestyle=style,
                 binwnorm=binwnorm,
             )
-            # TODO: Add option to leave data off ratio, I guess
-            #if proc == "Data":
-            #    continue
             hep.histplot(
                 hh.divideHists(unstack, ratio_ref, cutoff=0.01, rel_unc=True),
-                histtype="errorbar" if proc == "Data" and not data_hist else "step",
+                histtype="errorbar" if style != "None" else "step",
                 color=histInfo[proc]["color"],
                 label=histInfo[proc]["label"],
-                yerr=True if (proc == "Data" and not data_hist) else False,
+                yerr=True if style == "None" else False,
                 linewidth=2,
                 linestyle=style,
                 ax=ax2

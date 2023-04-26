@@ -104,6 +104,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
                 systNameReplace=[("central", ""), ("pdf0", ""), ("+1", "Up"), ("-1", "Down"), ("-0.5", "Down"), ("+0.5", "Up"), ("up", "Up"), ("down", "Down")],
                 skipEntries=[{syst_ax : x} for x in both_exclude+scale_nuisances],
                 rename=f"resumTNP", 
+                systNamePrepend="resumTNP_",
             )
         else:
             # Exclude the tnp uncertainty nuisances
@@ -117,6 +118,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
                     [x for x in h.axes["vars"] if any(re.match(y, x) for y in resumscale_nuisances)]) for s in expanded_samples},
                 outNames=["scetlibResumScaleUp", "scetlibResumScaleDown"],
                 rename=f"resumScale", 
+                systNamePrepend="resumScale_",
             )
             card_tool.addSystematic(name=theory_unc,
                 processes=samples,
@@ -126,6 +128,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
                 actionMap={s : lambda h: h[{"vars" : ["kappaFO0.5-kappaf2.", "kappaFO2.-kappaf0.5", "mufdown", "mufup",]}] for s in expanded_samples},
                 outNames=["scetlib_kappaUp", "scetlib_kappaDown", "scetlib_muFUp", "scetlib_muFDown"],
                 rename=f"resumFOScale", 
+                systNamePrepend="resumScale_",
             )
 
         for np_nuisance in ["c_nu", "omega_nu", "Omega"]:

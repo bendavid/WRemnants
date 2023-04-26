@@ -215,7 +215,7 @@ class CardTool(object):
     def addSystematic(self, name, systAxes, outNames=None, skipEntries=None, labelsByAxis=None, 
                       baseName="", mirror=False, scale=1, processes=None, group=None, noConstraint=False,
                       action=None, doActionBeforeMirror=False, actionArgs={}, actionMap={},
-                      systNameReplace=[], groupFilter=None, passToFakes=False,
+                      systNameReplace=[], systNamePrepend=None, groupFilter=None, passToFakes=False,
                       rename=None, splitGroup={}, decorrelateByBin={},
                       ):
 
@@ -257,6 +257,7 @@ class CardTool(object):
                 "skipEntries" : [] if not skipEntries else skipEntries,
                 "name" : name,
                 "decorrByBin": decorrelateByBin,
+                "systNamePrepend" : systNamePrepend,
             }
         })
         
@@ -372,6 +373,8 @@ class CardTool(object):
                     if "systNameReplace" in systInfo and systInfo["systNameReplace"]:
                         for rep in systInfo["systNameReplace"]:
                             name = name.replace(*rep)
+                    if name and "systNamePrepend" in systInfo and systInfo["systNamePrepend"]:
+                        name = systInfo["systNamePrepend"]+name
                     # Obviously there is a nicer way to do this...
                     if "Up" in name:
                         name = name.replace("Up", "")+"Up"
