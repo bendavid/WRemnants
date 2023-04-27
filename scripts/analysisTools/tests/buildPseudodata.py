@@ -9,7 +9,6 @@ import narf
 import wremnants
 import hist
 import lz4.frame, pickle
-from wremnants.datasets.datagroups import datagroups2016
 from wremnants import histselections as sel
 
 from utilities import boostHistHelpers as hh,common

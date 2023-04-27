@@ -14,7 +14,10 @@ hist_map = {
     "ptll_mll" : "nominal",
 }
 
-def fakeHistABCD(h):
+def fakeHistABCD(h, low_PU=False):
+    if low_PU and "mt" in [ax.name for ax in h.axes]:
+        return h[{"passIso" : False, "passMT" : True}]*h[{"passIso" : True, "passMT" : False}].sum().value / h[{"passIso" : False, "passMT" : False}].sum().value
+
     return hh.multiplyHists(
         hh.divideHists(h[{"passIso" : True, "passMT" : False}], 
             h[{"passIso" : False, "passMT" : False}],
@@ -36,10 +39,19 @@ def fakeHistIsoRegionIntGen(h, scale=1.):
     print("Slicing")
     return h[{"iso" : 0, "qTgen" : s[::hist.sum]}]
 
-def signalHistWmass(h, charge=None, passIso=True, passMT=True):
+def signalHistWmass(h, charge=None, passIso=True, passMT=True, genBin=None):
+    if genBin != None:
+        h = h[{"recoil_gen" : genBin}]
+
     sel = {"passIso" : passIso, "passMT" : passMT}
     if charge in [-1, 1]:
         sel.update({"charge" : -1j if charge < 0 else 1j})
+
+    # remove ax slice if the ax does not exist
+    for key in sel.copy().keys():
+        if not key in [ax.name for ax in h.axes]: 
+            del sel[key]
+
     return h[sel]
 
 # the following are utility wrapper functions for signalHistWmass with proper region selection
