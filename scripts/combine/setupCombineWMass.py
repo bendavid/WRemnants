@@ -182,12 +182,14 @@ def main(args):
         
         cardTool.addSystematic("sf2d", 
             processes=allMCprocesses_noQCDMC,
-            outNames=["sf2dDown", "sf2dUp"],
+            outNames=["sf2dDown","sf2dUp"],
             group="SF3Dvs2D",
             mirror=True,
             #TODO: Name this
             noConstraint=False,
             systAxes=[],
+            #systAxes=["downUpVar"],
+            #labelsByAxis=["downUpVar"],
             passToFakes=passSystToFakes,
         )
         

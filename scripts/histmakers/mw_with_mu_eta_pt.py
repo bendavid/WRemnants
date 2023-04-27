@@ -67,11 +67,11 @@ axis_passMT = common.axis_passMT
 axis_passTrigger = hist.axis.Boolean(name = "passTrigger")
 
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
-#axis_vqt_list = [-3000000000,-30,-15,-10,-5,0,5,10,15,30,3000000000] #has to match the ut binning in the 3D SFs
+axis_vqt_list = [-3000000000,-30,-15,-10,-5,0,5,10,15,30,3000000000] #has to match the ut binning in the 3D SFs
 #axis_vqt_list = [-3000000000,-300,-30,-22.5,-15,-12.5,-10,-7.5,-5,-2.5,0,2.5,5,7.5,10,12.5,15,22.5,30,300,3000000000] #has to match the ut binning in the 3D SFs
 #axis_vqt_list = [-3000000000,3000000000]
 #axis_vqt_list = [-3000000000,*[-100 + i*2 for i in range(101)],3000000000]
-axis_vqt_list = [-3000000000,-30,-15,-10,-5,0,5,10,20,30,40,50,60,70,80,90,100,3000000000]
+#axis_vqt_list = [-3000000000,-30,-15,-10,-5,0,5,10,20,30,40,50,60,70,80,90,100,3000000000]
 axis_vqt = hist.axis.Variable(axis_vqt_list, name = "ut")
 nominal_axes2 = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT, axis_vqt, axis_passTrigger]
 nominal_axes3 = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT, axis_passTrigger]
@@ -131,7 +131,7 @@ if args.binnedScaleFactors:
 else:
     logger.info("Using smoothed scale factors and uncertainties")
     muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile, era = era, max_pt = axis_pt.edges[-1])
-    muon_efficiency_helper2d, muon_efficiency_helper_syst2d, muon_efficiency_helper_stat2d = wremnants.make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSmooth_GtoHisosf.root", era = era, max_pt = axis_pt.edges[-1])
+    muon_efficiency_helper2d, muon_efficiency_helper_syst2d, muon_efficiency_helper_stat2d = wremnants.make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSmooth_GtoHisosf_2.root", era = era, max_pt = axis_pt.edges[-1])
 logger.info(f"SF file: {args.sfFile}")
 #logger.info(f"SF file: {data_dir}/testMuonSF/allSmooth_GtoH3D.root for W")
 #logger.info(f"SF file: {data_dir}/testMuonSF/allSmooth_GtoH.root for everything else")
@@ -512,8 +512,10 @@ def build_graph(df, dataset):
         if not args.binnedScaleFactors:
             df = df.Define("weight2dsfup", muon_efficiency_helper2d, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso"])
             df = df.Define("nominal_weight_2dsf", "nominal_weight/weight_fullMuonSF_withTrackingReco*weight2dsfup") #be EXTREMELY CAREFUL about the histogram files (this assumes that you have another file with the old trigger and histo SFs which also contains the same SFs for all the other steps as the central one)
-            sf2dup = df.HistoBoost("nominal_sf2d", nominal_axes, [*nominal_cols, "nominal_weight_2dsf"])
-            results.append(sf2dup)
+            #df = df.Define("sf3dvs2d","wrem::sf3dvs2d(nominal_weight,nominal_weight_2dsf)")
+            #sf2d = df.HistoBoost("nominal_sf2d", nominal_axes, [*nominal_cols, "sf3dvs2d"], tensor_axes = [common.down_up_axis])
+            sf2d = df.HistoBoost("nominal_sf2d", nominal_axes, [*nominal_cols, "nominal_weight_2dsf"])
+            results.append(sf2d)
                 
     return results, weightsum
 
