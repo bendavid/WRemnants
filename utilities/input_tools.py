@@ -232,43 +232,67 @@ def add_charge_axis(h, charge):
         hnew[...,charge_axis.index(charge)] = h.view(flow=True)
     return hnew
 
-def readImpacts(rtfile, group, sort=True, add_total=True, noi=True, stat=0.0):
-    impact_hist = "nuisance_group_impact" if group else "nuisance_impact"
-    if noi:
-        impact_hist += "_nois"
+def getPOInames(rtfile, poi_type="mu"):
+    names = []
+    if f'nuisance_impact_{poi_type}' in [k.replace(";1","") for k in rtfile.keys()]:
+        impacts = rtfile[f'nuisance_impact_{poi_type}'].to_hist()
+        names = [impacts.axes[0].value(i) for i in range(impacts.axes[0].size)]
+
+    if 'nuisance_impact_nois' in [k.replace(";1","") for k in rtfile.keys()]:
+        impacts = rtfile['nuisance_impact_nois'].to_hist()
+        names.append('Wmass')
+
+    if len(names)==0:
+        logger.warning('No free parameters found (neither signal strenght(s), nor W mass)')
+        return [None]
+
+    return names
+    
+def readImpacts(rtfile, group, sort=True, add_total=True, stat=0.0, POI='Wmass', normalize=True):
+    poi_type = POI.split("_")[-1] if POI else None
+    poi_names = getPOInames(rtfile, poi_type)
+    if POI=='Wmass':
+        impact_hist = "nuisance_group_impact_nois" if group else "nuisance_impact_nois"
+    elif POI in poi_names:
+        impact_hist = f"nuisance_group_impact_{poi_type}" if group else f"nuisance_impact_{poi_type}"
+    else:
+        raise ValueError(f"Invalid POI: {POI}")
 
     if group:
         histname = impact_hist
     else:
         histname = "correlation_matrix_channelmu"
-
-    if histname not in rtfile:
-        raise ValueError(f"Did not find hist {histname} in file")
-
+        
     h = rtfile[histname].to_hist()
     labels = np.array(list(h.axes["yaxis"]), dtype=object)
 
     if impact_hist not in rtfile:
         logger.warning("Did not find impact hist in file. Skipping!")
-        return np.zeros_like(labels), labels
+        return np.zeros_like(labels), labels, 1.
+    else:
+        impacts = rtfile[impact_hist].to_hist()
+        iPOI = 0 if POI=='Wmass' else poi_names.index(POI)
+        total = rtfile["fitresults"][impacts.axes[0].value(iPOI)+"_err"].array()[0]
+        norm = rtfile["fitresults"][impacts.axes[0].value(iPOI)].array()[0]
+        impacts = impacts.values()[iPOI,:]
 
-    impacts = rtfile[histname].to_hist()
-
-    total = rtfile["fitresults"][impacts.axes[0].value(0)+"_err"].array()[0]
-    impacts = impacts.values()[0,:]
     if sort:
         order = np.argsort(impacts)
         impacts = impacts[order]
         labels = labels[order]
+
     if add_total:
         impacts = np.append(impacts, total)
         labels = np.append(labels, "Total")
+
+    if normalize:
+        impacts /= norm
 
     if stat > 0:
         idx = np.argwhere(labels == "stat")
         impacts[idx] = stat
 
-    return impacts,labels
+    return impacts, labels, norm
 
 def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo, axes=None, charge=None, fix_nons_bin0=True):
     hsing = read_scetlib_hist(scetlib_resum, charge=charge)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from wremnants import CardTool,theory_tools,syst_tools
-from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_W
+from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU
 from utilities import logging
 from wremnants import histselections as sel
 import argparse
@@ -23,8 +23,8 @@ parser.add_argument("--qcdScale", choices=["byHelicityPt", "byPt", "integrated",
 parser.add_argument("--flavor", type=str, help="Flavor (e or mu)", default=None, required=True)
 parser.add_argument("--fittype", choices=["differential", "wmass", "wlike", "inclusive"], default="differential", 
         help="Fit type, defines POI and fit observable (recoil or mT)")
-parser.add_argument("--statOnly", dest="statOnly", action='store_true', help="Stat-only cards")
-parser.add_argument("--lumiScale", dest="lumiScale", help="Luminosity scale", type=float, default=1.0)
+parser.add_argument("--statOnly", action='store_true', help="Stat-only cards")
+parser.add_argument("--lumiScale", help="Luminosity scale", type=float, default=1.0)
 parser.add_argument("--met", type=str, help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")
 args = parser.parse_args()
 
@@ -39,7 +39,7 @@ suffix = "_statOnly" if args.statOnly else ""
 
 if args.inputFile == "": args.inputFile = "lowPU_%s_%s.pkl.lz4" % (args.flavor, met)
 
-datagroups = datagroupsLowPU_W(args.inputFile, flavor=args.flavor)
+datagroups = make_datagroups_lowPU(args.inputFile, flavor=args.flavor)
 
 unconstrainedProcs = ["WplusJetsToMuNu", "WminusJetsToMuNu"] # POIs
 constrainedProcs = []   # constrained signal procs
@@ -61,13 +61,12 @@ QCDscale = "integral"
 toDel = []
 for group in datagroups.groups: 
     if not group in constrainedProcs+unconstrainedProcs+bkgDataProcs: toDel.append(group)
-datagroups.deleteGroup(toDel)    
+datagroups.deleteGroups(toDel)    
 
 templateDir = f"{scriptdir}/Templates/LowPileupW"
 cardTool = CardTool.CardTool(f"{args.outfolder}/LowPU_Wmass_{args.flavor}_{{chan}}_{met}_lumi{lumisuffix}{suffix}.txt")
 cardTool.setNominalTemplate(f"{templateDir}/main.txt")
 cardTool.setOutfile(os.path.abspath(f"{args.outfolder}/LowPU_Wmass_{args.flavor}_{met}_lumi{lumisuffix}{suffix}.root"))
-cardTool.setProcesses(datagroups.getNames())
 cardTool.setDatagroups(datagroups)
 cardTool.setHistName(histName) 
 ##cardTool.setChannels([f"{args.flavor}"])

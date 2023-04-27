@@ -12,7 +12,7 @@ import lz4.frame
 import pickle
 import narf
 import hist
-from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_Z
+from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU
 
 sys.path.insert(0, "scripts/lowPU/")
 import plotter
@@ -440,7 +440,7 @@ def doTransverseMassPlot(flavor="mumu", fitcfg="mumu", fitmode="prefit", ratio=1
     ## mass variations
     if True:
     
-        groups = datagroupsLowPU_Z("mz_lowPU_%s.pkl.lz4" % flavor)
+        groups = make_datagroups_lowPU("mz_lowPU_%s.pkl.lz4" % flavor)
         bhist = groups.readProc("mt_massWeight", "DYmumu")
         hist_nom = narf.hist_to_root(bhist[:, 10])
         hist_plus_1 = narf.hist_to_root(bhist[:, 20])

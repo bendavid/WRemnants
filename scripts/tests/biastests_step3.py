@@ -39,7 +39,7 @@ def read_result(rootfile, nominal):
     logger.info(f"read {rootfile}")
     with uproot.open(rootfile) as rtfile:
 
-        impacts_group = {l: i for i, l in zip(*input_tools.readImpacts(rtfile, True))}
+        impacts_group = {l: i for i, l in zip(*input_tools.readImpacts(rtfile, True)[:2])}
 
         pull_mass = rtfile["fitresults"]["massShift100MeV"].array()[0]
 

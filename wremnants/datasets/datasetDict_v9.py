@@ -14,7 +14,7 @@ dataDictV9 = {
                                      "{BASE_PATH}/SingleMuon/NanoV9Run2016HDataPostVFP_{NANO_PROD_TAG}/*/*/*.root",
                                      ],
                       'group': "Data",
-        
+
     },
     'ZmumuPostVFP' : { 
                    'filepaths' :
