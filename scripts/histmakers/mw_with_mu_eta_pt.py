@@ -27,6 +27,8 @@ parser.add_argument("--vqt3dsmoothing", action="store_true", help="3D Smoothing"
 parser.add_argument("--noGenMatchMC", action='store_true', help="Don't use gen match filter for prompt muons with MC samples (note: QCD MC never has it anyway)")
 args = parser.parse_args()
 
+print(args)
+
 if args.vqtTestIntegrated:
     sfFileVqtTest = f"{data_dir}/testMuonSF/IsolationEfficienciesCoarseBinning.root"
 else:
@@ -411,7 +413,7 @@ def build_graph(df, dataset):
                 if args.muonScaleVariation == 'smearingWeights':
                     df = df.DefinePerSample("bool_true", "true")
                     df = df.DefinePerSample("bool_false", "false")
-                    if args.muonCorrData == "massfit" or "massfit_lbl":
+                    if (args.muonCorrData == "massfit") or (args.muonCorrData == "massfit_lbl"):
                         if args.validateByMassWeights:
                             jpsi_unc_helper = muon_validation.make_jpsi_crctn_unc_helper_massweights(
                                 "wremnants/data/calibration/calibrationJDATA_rewtgr_3dmap_LBL.root",
