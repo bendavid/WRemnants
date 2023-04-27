@@ -13,7 +13,7 @@ import functions
 import plotter
 import recoilLibs
 
-from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_Z
+from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU
 
 import lz4.frame
 import narf
@@ -3388,7 +3388,7 @@ def prepareFile(fInName, fOutName):
         return bhist 
 
 
-    datagroups = datagroupsLowPU_Z(fInName, flavor=flavor)
+    datagroups = make_datagroups_lowPU(fInName, flavor=flavor)
     procs = ["ZZ", "EWK_noZZ", "TTbar"]
     if flavor == "mumu": procs += ["SingleMuon", "DYmumu"]
     if flavor == "ee": procs += ["SingleElectron", "DYee"]
@@ -3457,7 +3457,7 @@ if __name__ == "__main__":
     
     
     print("Open")
-    groups = datagroupsLowPU("lowPU_%s_RawPFMET_%s_nnpdf31.pkl.lz4" % (flavor, met), flavor=flavor)
+    groups = make_datagroups_lowPU("lowPU_%s_RawPFMET_%s_nnpdf31.pkl.lz4" % (flavor, met), flavor=flavor)
     
     quit()
     #rFile = "wremnants/data/lowPU/recoil/lowPU_%s_%s.root" % (flavor, met)

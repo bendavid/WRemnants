@@ -15,8 +15,8 @@ import pickle
 import narf
 import numpy as np
 
-from wremnants.datasets.datagroupsLowPU import datagroupsLowPU
-from wremnants.datasets.datagroups import datagroups2016
+from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU
+from wremnants.datasets.datagroups2016 import make_datagroups_2016
 
 def readProc(datagroups, hName, procName):
 
@@ -51,7 +51,7 @@ def makePlot(hist_data, hist_mc, fOut, xLabel, npv, outDir_):
         'xtitle'            : xLabel,
         'ytitle'            : "Events",
             
-        'topRight'          : "199 pb^{#minus1} (13 TeV)", 
+        'topRight'          : lumi_header, 
         'topLeft'           : "#bf{CMS} #scale[0.7]{#it{Preliminary}}",
 
     } 
@@ -113,7 +113,7 @@ def makePlot_fit(hist_data, hist_mc, fOut, xLabel, npv, outDir_):
         'xtitle'            : xLabel,
         'ytitle'            : "Events",
             
-        'topRight'          : "199 pb^{#minus1} (13 TeV)", 
+        'topRight'          : lumi_header, 
         'topLeft'           : "#bf{CMS} #scale[0.7]{#it{Preliminary}}",
 
     } 
@@ -234,10 +234,10 @@ def METxyCorrection(direction = "x", corrType="uncorr", polyOrderData=-1, polyOr
         'ymin'              : yMin,
         'ymax'              : yMax,
             
-        'xtitle'            : "NPV",
+        'xtitle'            : "Number of primary vertices",
         'ytitle'            : "#LT MET_{%s} #GT (Gev)" % direction,
             
-        'topRight'          : "199 pb^{#minus1} (13 TeV)", 
+        'topRight'          : lumi_header, 
         'topLeft'           : "#bf{CMS} #scale[0.7]{#it{Preliminary}}",
 
     } 
@@ -262,8 +262,8 @@ def METxyCorrection(direction = "x", corrType="uncorr", polyOrderData=-1, polyOr
     
     if flavor == "mumu": label = "Z #rightarrow #mu^{#plus}#mu^{#minus}"
     elif flavor == "ee": label = "Z #rightarrow e^{#plus}e^{#minus}"
-    elif flavor == "mu": label = "W #rightarrow #mu"
-    elif flavor == "e": label = "W #rightarrow e"
+    elif flavor == "mu": label = "W^{#pm} #rightarrow #mu^{#pm}#nu"
+    elif flavor == "e": label = "W^{#pm} #rightarrow e^{#pm}#nu"
     else: label = ""
     latex.DrawLatex(0.20, 0.90, label)
     latex.DrawLatex(0.20, 0.85, "#LT MET_{%s} #GT, %s" % (direction, met))
@@ -295,17 +295,18 @@ if __name__ == "__main__":
 
     met = "RawPFMET" # PFMET, RawPFMET DeepMETReso
     flavor = "mu" # mu, e, mumu, ee
-    pdf = "nnpdf31"
-    lowPU = False
+    lowPU = True
 
     # DATA For electron channels!
     
     ####################################################################
     if lowPU:
         npv_max, npv_fit_min, npv_fit_max = 10, 0, 10
-        datagroups = datagroupsLowPU("lowPU_%s_%s_%s.pkl.lz4" % (flavor, met, pdf), flavor=flavor)
+        lumi_header = "199 pb^{#minus1} (13 TeV)"
+        
+        datagroups = make_datagroups_lowPU("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
         procs = ['EWK', 'Top', 'Zmumu'] 
-        data = "SingleMuon" if flavor == "mumu" else "SingleElectron"
+        data = "SingleMuon" if "mu" in flavor else "SingleElectron"
 
         outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/METxy_correction/METxy_%s_%s/" % (flavor, met)
         fOut = "wremnants/data/recoil/lowPU/%s_%s/met_xy_correction.json" % (flavor, met)
@@ -328,15 +329,21 @@ if __name__ == "__main__":
     
     else:
         npv_max, npv_fit_min, npv_fit_max = 60, 5, 55
-        
+        lumi_header = "16.8 fb^{#minus1} (13 TeV)"
 
         if flavor == "mumu":
-            datagroups = datagroups2016("mz_wlike_with_mu_eta_pt_%s_%s.pkl.lz4" % (met, pdf), wlike=True)
+            npv_max, npv_fit_min, npv_fit_max = 60, 5, 55
+            polyOrderDataX, polyOrderMCX = 3, 3
+            polyOrderDataY, polyOrderMCY = 3, 3
+            datagroups = make_datagroups_2016("mz_wlike_with_mu_eta_pt_%s.pkl.lz4" % (met))
             procs = ["Zmumu", "Ztautau", "Other"]
             data = "Data"
         else:
-            datagroups = datagroups2016("mw_with_mu_eta_pt_%s_%s.pkl.lz4" % (met, pdf), wlike=False)
-            procs = ["Zmumu", "Ztautau", "Wtau", "Wmunu", "Top", "Diboson"]
+            npv_max, npv_fit_min, npv_fit_max = 60, 0, 55
+            polyOrderDataX, polyOrderMCX = 3, 3
+            polyOrderDataY, polyOrderMCY = 6, 3
+            datagroups = make_datagroups_2016("mw_with_mu_eta_pt_%s.pkl.lz4" % (met))
+            procs = ["Zmumu", "Ztautau", "Wtaunu", "Wmunu", "Top", "Diboson"]
             data = "Data"
             
             for g in datagroups.groups:
@@ -348,8 +355,8 @@ if __name__ == "__main__":
         functions.prepareDir(outDir, True)
         
         dictout = {}
-        dictX = METxyCorrection(direction="x", corrType="corr_lep", polyOrderData=3, polyOrderMC=3, procs=procs, data=data, yMin=-10, yMax=6)
-        dictY = METxyCorrection(direction="y", corrType="corr_lep", polyOrderData=3, polyOrderMC=3, procs=procs, data=data)
+        dictX = METxyCorrection(direction="x", corrType="corr_lep", polyOrderData=polyOrderDataX, polyOrderMC=polyOrderMCX, procs=procs, data=data, yMin=-10, yMax=6)
+        dictY = METxyCorrection(direction="y", corrType="corr_lep", polyOrderData=polyOrderDataY, polyOrderMC=polyOrderMCY, procs=procs, data=data)
     
     
         dictout['x'] = dictX
@@ -358,7 +365,7 @@ if __name__ == "__main__":
         with open(fOut, "w") as outfile: outfile.write(jsOut)
         
  
-        METxyCorrection(direction="x", corrType="corr_xy", polyOrderData=3, polyOrderMC=3, procs=procs, data=data, yMin=-10, yMax=6)
-        METxyCorrection(direction="y", corrType="corr_xy", polyOrderData=3, polyOrderMC=3, procs=procs, data=data)
+        METxyCorrection(direction="x", corrType="corr_xy", polyOrderData=polyOrderDataX, polyOrderMC=polyOrderMCX, procs=procs, data=data, yMin=-10, yMax=6)
+        METxyCorrection(direction="y", corrType="corr_xy", polyOrderData=polyOrderDataY, polyOrderMC=polyOrderMCY, procs=procs, data=data)
         print(fOut)
         

@@ -217,7 +217,7 @@ namespace wrem {
     // this is now an independent class with respect to the previous one which only deals with nominal and statistical variations
     ////
     //// BASE CLASS FOR HELPER_STAT
-    template<int NEtaBins, int NPtEigenBins, typename HIST_SF>
+    template<int NEtaBins, int NPtEigenBins, int NCharges, typename HIST_SF>
     class muon_efficiency_smooth_helper_stat_base {
     public:
 
@@ -225,7 +225,7 @@ namespace wrem {
             sf_type_(std::make_shared<const HIST_SF>(std::move(sf_type))) {}
 
         // number of eta bins, number of eigen variations for pt axis, then 2 charges and Up/Down shifts
-        using stat_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<NEtaBins, NPtEigenBins, 2, 2>>;
+        using stat_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<NEtaBins, NPtEigenBins, NCharges, 2>>;
         
         //using base_t = muon_efficiency_smooth_helper_stat_base<NEtaBins, NPtEigenBins, HIST_SF>;        
         //muon_efficiency_smooth_helper_stat_base(const base_t &other) : base_t(other) {}
@@ -332,7 +332,9 @@ namespace wrem {
 
                     const double sf_stat = cell_stat.value();
                     const double sf_stat_variation = sf_stat / sf_nomi;
-                    
+                    // if (charge < 0 and fabs(sf_stat_variation-1.0) < 1e-7 and pt < 55.0) {
+                    //     std::cout << "sf_nomi,sf_stat_variation,eta,pt,ptEigen,upDown = " << sf_nomi << "," << sf_stat_variation << "," << pt << "," << eta << "," << tensor_eigen_idx << "," << downup_idx << std::endl;
+                    // }
                     res(tensor_eta_idx, tensor_eigen_idx-1, charge_idx, downup_idx) *= sf_stat_variation;
 
                 }
@@ -362,13 +364,13 @@ namespace wrem {
     ////
 
     // base template for one lepton case
-    template<bool do_other, int NEtaBins, int NPtEigenBins, typename HIST_SF>
+    template<bool do_other, int NEtaBins, int NPtEigenBins, int NCharges, typename HIST_SF>
     class muon_efficiency_smooth_helper_stat :
-        public muon_efficiency_smooth_helper_stat_base<NEtaBins, NPtEigenBins, HIST_SF> {
+        public muon_efficiency_smooth_helper_stat_base<NEtaBins, NPtEigenBins, NCharges, HIST_SF> {
         
     public:
         
-        using stat_base_t = muon_efficiency_smooth_helper_stat_base<NEtaBins, NPtEigenBins, HIST_SF>;
+        using stat_base_t = muon_efficiency_smooth_helper_stat_base<NEtaBins, NPtEigenBins, NCharges, HIST_SF>;
         using tensor_t = typename stat_base_t::stat_tensor_t;
   
         using stat_base_t::stat_base_t;
@@ -380,13 +382,13 @@ namespace wrem {
     };
 
     // specialization for two-lepton case
-    template<int NEtaBins, int NPtEigenBins, typename HIST_SF>
-    class muon_efficiency_smooth_helper_stat<true, NEtaBins, NPtEigenBins, HIST_SF> :
-        public muon_efficiency_smooth_helper_stat_base<NEtaBins, NPtEigenBins, HIST_SF> {
+    template<int NEtaBins, int NPtEigenBins, int NCharges, typename HIST_SF>
+    class muon_efficiency_smooth_helper_stat<true, NEtaBins, NPtEigenBins, NCharges, HIST_SF> :
+        public muon_efficiency_smooth_helper_stat_base<NEtaBins, NPtEigenBins, NCharges, HIST_SF> {
 
     public:
 
-        using stat_base_t = muon_efficiency_smooth_helper_stat_base<NEtaBins, NPtEigenBins, HIST_SF>;
+        using stat_base_t = muon_efficiency_smooth_helper_stat_base<NEtaBins, NPtEigenBins, NCharges, HIST_SF>;
         using tensor_t = typename stat_base_t::stat_tensor_t;
 
         using stat_base_t::stat_base_t;
@@ -410,13 +412,13 @@ namespace wrem {
     ////
 
     // base template for one lepton case
-    template<bool do_other, int NEtaBins, int NPtEigenBins, typename HIST_SF>
+    template<bool do_other, int NEtaBins, int NPtEigenBins, int NCharges, typename HIST_SF>
     class muon_efficiency_smooth_helper_stat_iso :
-        public muon_efficiency_smooth_helper_stat_base<NEtaBins, NPtEigenBins, HIST_SF> {
+        public muon_efficiency_smooth_helper_stat_base<NEtaBins, NPtEigenBins, NCharges, HIST_SF> {
         
     public:
         
-        using stat_base_t = muon_efficiency_smooth_helper_stat_base<NEtaBins, NPtEigenBins, HIST_SF>;
+        using stat_base_t = muon_efficiency_smooth_helper_stat_base<NEtaBins, NPtEigenBins, NCharges, HIST_SF>;
         using tensor_t = typename stat_base_t::stat_tensor_t;
   
         using stat_base_t::stat_base_t;
@@ -429,13 +431,13 @@ namespace wrem {
     };
 
     // specialization for two-lepton case
-    template<int NEtaBins, int NPtEigenBins, typename HIST_SF>
-    class muon_efficiency_smooth_helper_stat_iso<true, NEtaBins, NPtEigenBins, HIST_SF> :
-        public muon_efficiency_smooth_helper_stat_base<NEtaBins, NPtEigenBins, HIST_SF> {
+    template<int NEtaBins, int NPtEigenBins, int NCharges, typename HIST_SF>
+    class muon_efficiency_smooth_helper_stat_iso<true, NEtaBins, NPtEigenBins, NCharges, HIST_SF> :
+        public muon_efficiency_smooth_helper_stat_base<NEtaBins, NPtEigenBins, NCharges, HIST_SF> {
 
     public:
 
-        using stat_base_t = muon_efficiency_smooth_helper_stat_base<NEtaBins, NPtEigenBins, HIST_SF>;
+        using stat_base_t = muon_efficiency_smooth_helper_stat_base<NEtaBins, NPtEigenBins, NCharges, HIST_SF>;
         using tensor_t = typename stat_base_t::stat_tensor_t;
 
         using stat_base_t::stat_base_t;

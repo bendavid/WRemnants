@@ -10,6 +10,7 @@
 #include <fstream>
 #include <typeinfo>
 #include <algorithm>
+#include "defines.h"
 
 namespace wrem {
 
@@ -181,7 +182,6 @@ public:
 
   }
 };
-
 
 class CVHCorrector : public CVHCorrectorSingle<> {
 public:
@@ -392,12 +392,79 @@ private:
         return goodGenMuons0_idx_in_recos;
     }
 
+    RVec<bool> filterRecoMuonsByGenTruth(
+        RVec<bool> muonSelection,
+        RVec<int> Muon_genPartIdx,
+        RVec<int> GenPart_pdgId,
+        RVec<int> GenPart_statusFlags,
+        RVec<int> GenPart_status,
+        bool requirePrompt = true
+    ) {
+        ROOT::VecOps::RVec<bool> res(muonSelection.size());
+        for (int i = 0; i < muonSelection.size(); i++) {
+            res[i] = (
+                muonSelection[i] &&
+                (!(requirePrompt) || GenPart_statusFlags[Muon_genPartIdx[i]] & 0x01) &&
+                (abs(GenPart_pdgId[Muon_genPartIdx[i]]) == MUON_PDGID) &&
+                (GenPart_status[Muon_genPartIdx[i]] == 1)
+            );
+        }
+        return res;
+    }
+
+    RVec<bool> filterRecoMuonsByCovMat(
+        RVec<bool> muonSelection,
+        RVec<float> covMat,
+        RVec<int> covMatCounts
+    ) {
+        ROOT::VecOps::RVec<bool> res(muonSelection.size());
+        int covMat_start_idx = 0;
+        for (int i = 0; i < muonSelection.size(); i++) {
+            res[i] = (
+                muonSelection[i] &&
+                //covMatCounts[i] &&
+                covMat[covMat_start_idx] > 0
+            );
+            covMat_start_idx += covMatCounts[i];
+        }
+        return res;
+    }
+
+    template<typename T> RVec<RVec<T>> getCovMatForSelectedRecoMuons(
+        RVec<float> covmat,
+        RVec<int> covmat_counts,
+        RVec<bool> selection,
+        int nMuons = -1 // limit the number of muons to be N; -1 to take all selected muons
+    ) {
+        if (covmat_counts.size() != selection.size()) {
+            throw std::invalid_argument("selection masks should match the size of all RECO muons");
+        }
+        
+        using ROOT::VecOps::RVec;
+        RVec<RVec<T>> res;
+        res.reserve(nMuons > 0 ? nMuons : 1);
+
+        int covmat_start_idx = 0;
+        for (int i = 0; i < covmat_counts.size(); i++) {
+            if (selection[i]) {
+                ROOT::VecOps::RVec<int> idxRange(covmat_counts[i]);
+                for (int i = 0; i < idxRange.size(); i++) {
+                    idxRange[i] = i + covmat_start_idx;
+                }
+                res.emplace_back(Take(covmat, idxRange));
+            }
+            covmat_start_idx += covmat_counts[i];
+        }
+        return res;
+    }
+        
     RVec<float> getCovMatForGoodMuons0(
         RVec<float> covmat,
         RVec<int> covmat_counts,
         RVec<bool> goodMuons,
         RVec<bool> goodMuonsByGenTruth
     ) {
+        
         int goodGenMuons0_idx_in_recos = wrem::getGoodGenMuons0IdxInReco(
             goodMuons, goodMuonsByGenTruth
         );
@@ -412,6 +479,224 @@ private:
         return Take(covmat, idxRange);
     }
   
+    using ROOT::VecOps::RVec;
+
+    double calculateTheta(float eta) {
+        return 2.*std::atan(std::exp(-double(eta)));
+    }
+
+    double calculateLam(float eta) {
+        double theta = calculateTheta(eta);
+        return M_PI_2 - theta;
+    }
+
+    double calculateQop(float pt, float eta, int charge) {
+        double theta = calculateTheta(eta);
+        return (charge * std::sin(theta) / double(pt));
+    }
+
+    double calculatePt(double qop, float eta, int charge) {
+        double theta = calculateTheta(eta);
+        return (charge * std::sin(theta) / qop);
+    }
+
+// jpsi correction central value for one muon
+template <typename T>
+class JpsiCorrectionsHelper {
+
+public:
+    using hist_t = T;
+    using tensor_t = typename T::storage_type::value_type::tensor_t;
+    static constexpr auto sizes = narf::tensor_traits<tensor_t>::sizes;
+    static constexpr auto nUnc = sizes[sizes.size() - 1]; // 1 for central value
+    using out_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<nUnc, 2>>;
+
+    JpsiCorrectionsHelper(T&& corrections) :
+        correctionHist_(std::make_shared<const T>(std::move(corrections))) {}
+
+    // helper for bin lookup which implements the compile-time loop over axes
+    template<typename... Xs, std::size_t... Idxs>
+    const tensor_t &get_tensor_impl(std::index_sequence<Idxs...>, const Xs&... xs) {
+        return correctionHist_->at(correctionHist_->template axis<Idxs>().index(xs)...).data();
+    }
+
+    // variadic templated bin lookup
+    template<typename... Xs>
+    const tensor_t &get_tensor(const Xs&... xs) {
+        return get_tensor_impl(std::index_sequence_for<Xs...>{}, xs...);
+    }
+    
+    // for central value of pt
+    float operator() (float cvhPt, float cvhEta, int charge) {
+        const auto &params = get_tensor(cvhEta);
+        const double A = params(0);
+        const double e = params(1);
+        const double M = params(2);
+        double k = 1.0 / cvhPt;
+        double magnetic = 1.0 + A;
+        double material = -1.0 * e * k;
+        double alignment = charge * M;
+        double kCrctd = (magnetic + material) * k + alignment;
+        return (1.0 / kCrctd);
+    }
+
+private:
+    std::shared_ptr<const T> correctionHist_;
+
+};
+
+template <typename T>
+class JpsiCorrectionsUncHelper {
+
+public:
+    using hist_t = T;
+    using tensor_t = typename T::storage_type::value_type::tensor_t;
+    static constexpr auto sizes = narf::tensor_traits<tensor_t>::sizes;
+    static constexpr auto nUnc = sizes[sizes.size() - 1]; // 1 for central value
+    using out_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<nUnc, 2>>;
+
+    JpsiCorrectionsUncHelper(T&& corrections) :
+        correctionHist_(std::make_shared<const T>(std::move(corrections))) {}
+
+    // helper for bin lookup which implements the compile-time loop over axes
+    template<typename... Xs, std::size_t... Idxs>
+    const tensor_t &get_tensor_impl(std::index_sequence<Idxs...>, const Xs&... xs) {
+        return correctionHist_->at(correctionHist_->template axis<Idxs>().index(xs)...).data();
+    }
+
+    // variadic templated bin lookup
+    template<typename... Xs>
+    const tensor_t &get_tensor(const Xs&... xs) {
+        return get_tensor_impl(std::index_sequence_for<Xs...>{}, xs...);
+    }
+
+    // for smearing weights derived from propagating uncs on A, e, M to uncs on qop
+
+    out_tensor_t operator() (
+        const RVec<double> &genQops, 
+        const RVec<float> &genPhis,
+        const RVec<float> &genEtas,
+        const RVec<double> &recoQops,
+        const RVec<float> &recoPhis,
+        const RVec<float> &recoEtas,
+        const RVec<int> &recoCharges,
+        const RVec<double> &recoPts,
+        const RVec<RVec<float>> &covs, // for sigma on the Gaussian
+        double nominal_weight = 1.0,
+        bool fullParam = false
+    ) {
+        out_tensor_t res;
+        res.setConstant(nominal_weight);
+
+        const std::size_t nmuons = recoPts.size();
+
+        for (std::size_t i = 0; i < nmuons; ++i) {
+            res *= smearingWeight_oneMuon(
+                genQops[i], genPhis[i], genEtas[i],
+                recoQops[i], recoPhis[i], recoEtas[i], recoCharges[i], recoPts[i],
+                covs[i], fullParam
+            );
+        }
+
+        return res;
+    }
+
+private:
+    out_tensor_t smearingWeight_oneMuon(
+        double genQop,  float genPhi,  float genEta,
+        double recoQop, float recoPhi, float recoEta, int recoCharge, float recoPt,  
+        const RVec<float> &cov, bool fullParam = false
+    ) {
+        Eigen::Vector3d parms(
+            recoQop,
+            (fullParam? calculateLam(recoEta) : 0),
+            (fullParam? recoPhi: 0)
+        ); // (qop, lam, phi)
+
+        Eigen::Vector3d genparms(
+            genQop,
+            (fullParam? calculateLam(genEta) : 0),
+            (fullParam? genPhi: 0)
+        );
+
+        const Eigen::Vector3d deltaparms = parms - genparms;
+
+        const Eigen::Map<const Eigen::Matrix<float, 3, 3, Eigen::RowMajor>> covMap(cov.data(), 3, 3);
+
+        Eigen::Matrix<double, 3, 3> covd = covMap.cast<double>();
+    
+        if (fullParam) {
+            // fill in lower triangular part of the matrix, which is stored as zeros to save space
+            covd.triangularView<Eigen::Lower>() = covd.triangularView<Eigen::Upper>().transpose();
+        } else {
+            covd.row(0) << covd(0,0), 0, 0;
+            covd.row(1) << 0, 1, 0;
+            covd.row(2) << 0, 0, 1;
+        }
+
+        const Eigen::Matrix<double, 3, 3> covinv = covd.inverse();
+        const double covdet = covd.determinant();
+    
+        const double lnp = -0.5*deltaparms.transpose()*covinv*deltaparms;
+
+        const auto &params = get_tensor(recoEta);
+
+        // no need to initialize since all elements will be explicitly filled
+        out_tensor_t res;
+    
+        for (std::ptrdiff_t ivar = 0; ivar < nUnc; ++ivar) {
+            const double AUnc = params(0, ivar);
+            const double eUnc = params(1, ivar);
+            const double MUnc = params(2, ivar);
+            double recoK = 1.0 /recoPt;
+            double recoKUnc = (AUnc - eUnc * recoK) * recoK + recoCharge * MUnc;
+            Eigen::Vector3d parmvar = Eigen::Vector3d::Zero();   
+            parmvar[0] = recoCharge * std::sin(calculateTheta(recoEta)) * recoKUnc;
+
+            for (std::ptrdiff_t idownup = 0; idownup < 2; ++idownup) {
+                const double dir = idownup == 0 ? -1. : 1.;
+                const Eigen::Vector3d deltaparmsalt = deltaparms + dir*parmvar;
+                const Eigen::Matrix<double, 3, 3> covdalt = covd; //+ dir*covvar;
+    
+                const Eigen::Matrix<double, 3, 3> covinvalt = covdalt.inverse();
+                const double covdetalt = covdalt.determinant();
+    
+                const double lnpalt = -0.5*deltaparmsalt.transpose()*covinvalt*deltaparmsalt;
+    
+                const double weight = std::sqrt(covdet/covdetalt)*std::exp(lnpalt - lnp);
+    
+                //if (std::isnan(weight)) {
+                //    cout << genQop << " " << recoQop << " " << genEta << " " << recoEta << " " << genPhi << " " << recoPhi << " " << recoPt << " " << recoCharge << " " << covd(0,0) << " " << std::endl;
+                //}
+                res(ivar, idownup) = weight;
+            }
+        }
+        return res;
+    }
+
+    std::shared_ptr<const T> correctionHist_;
+};
+
+// jpsi corrections central value for multiple muons
+template <typename T>
+class JpsiCorrectionsRVecHelper : public JpsiCorrectionsHelper<T> {
+
+using base_t = JpsiCorrectionsHelper<T>;
+
+public:
+    //inherit constructor
+    using base_t::base_t;
+
+    RVec<float> operator() (const RVec<float>& pts, const RVec<float> etas, RVec<int> charges) {
+        RVec<float> corrected_pt(pts.size(), 0.);
+        assert(etas.size() == pts.size() && etas.size() == charges.size());
+        for (size_t i = 0; i < pts.size(); i++) {
+            corrected_pt[i] = JpsiCorrectionsHelper<T>::operator()(pts[i], etas[i], charges[i]);
+        }
+
+        return corrected_pt;
+    }
+};
 template <typename T>
 class CorrectionHelperBase {
 
@@ -509,24 +794,79 @@ public:
     }
 };
 
-
-template <typename T>
-class SmearingHelper : public CorrectionHelperBase<T> {
-
-using base_t = CorrectionHelperBase<T>;
+class SmearingHelper{
 
 public:
-    //inherit constructor
-    using base_t::base_t;
+    SmearingHelper(unsigned int nSlots, TH2D&& smearings) :
+        myRndGens(nSlots),
+        hsmear(std::make_shared<const TH2D>(std::move(smearings)))
+        {
+            init_random_generators();
+        }
 
-    float get_correction(unsigned int slot, float pt, float eta) override {
-        const double sigma = base_t::get_value(eta, pt); //this is sigma_p/p
+    void init_random_generators(){
+        int seed = 1; // not 0 because seed 0 has a special meaning
+        for (auto &&gen : myRndGens)
+        {
+            gen.SetSeed(seed++);
+        }
+    }
+
+    float get_random(unsigned int slot, float mean, float std){
+        return myRndGens[slot].Gaus(mean, std);
+    }
+
+
+    RVec<float> operator() (unsigned int slot, const RVec<float>& pts, const RVec<float>& etas) {
+        RVec<float> corrected_pt(pts.size(), 0.);
+        assert(etas.size() == pts.size());
+        for (size_t i = 0; i < pts.size(); i++) {
+            corrected_pt[i] = get_correction(slot, pts[i], etas[i]);
+        }
+        return corrected_pt;
+    }
+
+
+    float get_correction(unsigned int slot, float pt, float eta) {
+
+        const double xlow = hsmear->GetXaxis()->GetBinLowEdge(1);
+        const double ylow = hsmear->GetYaxis()->GetBinLowEdge(1);
+
+        const double xhigh = hsmear->GetXaxis()->GetBinUpEdge(hsmear->GetNbinsX());
+        const double yhigh = hsmear->GetYaxis()->GetBinUpEdge(hsmear->GetNbinsY());
+
+        double pt_cap = pt;
+        double eta_cap = eta;
+
+        // If eta is outside the range, set the interpolated value to the interpolated value of the closest x bin edge
+        if (eta <= xlow){
+          eta_cap = xlow + 0.00001;
+        } 
+        else if (eta >= xhigh)
+        {
+          eta_cap = xhigh - 0.00001;
+        }
+
+        // If pt is outside the range, set the interpolated value to the interpolated value of the closest y bin edge
+        if (pt <= ylow){
+          pt_cap = ylow + 0.00001;
+        }
+        else if (pt >= yhigh)
+        {
+          pt_cap = yhigh - 0.00001;
+        }
+
+        const double sigma = hsmear->Interpolate(eta_cap, pt_cap); // this is sigma_p/p
 
         if(sigma>0.)
-            return 1. / (1./pt + base_t::get_random(slot, 0., sigma/pt));
+            return 1. / (1./pt + get_random(slot, 0., sigma/pt));
         else 
             return pt;
     }
+
+private:
+    std::vector<TRandom3> myRndGens; 
+    std::shared_ptr<const TH2D> hsmear;
 };
 
 }

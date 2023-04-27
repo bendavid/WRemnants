@@ -14,7 +14,7 @@ dataDictV9 = {
                                      "{BASE_PATH}/SingleMuon/NanoV9Run2016HDataPostVFP_{NANO_PROD_TAG}/*/*/*.root",
                                      ],
                       'group': "Data",
-        
+
     },
     'ZmumuPostVFP' : { 
                    'filepaths' :
@@ -66,57 +66,99 @@ dataDictV9 = {
     'TTSemileptonicPostVFP' : { 
                          'filepaths' : 
                          ["{BASE_PATH}/BKGV9/TTToSemiLeptonic_TuneCP5_13TeV-powheg-pythia8/*.root"],
-                         'xsec' : 365.34,
+                         'xsec' : 366.34,
                          'group' : "Top",
     },
-    # TODO: these samples and cross sections are preliminary
     'SingleTschanLepDecaysPostVFP' : { 
                                           'filepaths' : 
                                           ["{BASE_PATH}/BKGV9/ST_s-channel_4f_leptonDecays_TuneCP5_13TeV-amcatnlo-pythia8/*.root"],
-                                          'xsec' : 3.74,
+                                          'xsec' : 3.609,
                                           'group' : "Top",
     },
     'SingleTtWAntitopPostVFP' : { 
                                      'filepaths' : 
                                      ["{BASE_PATH}/BKGV9/ST_tW_antitop_5f_NoFullyHadronicDecays_TuneCP5_13TeV-powheg-pythia8/*.root"],
+                                     'xsec' : 19.55, # 35.85 * (1.0-((1-0.1086*3)*(1-0.1086*3))) = 19.5 pb
+                                     'group' : "Top",
+    },
+    'SingleTtWTopPostVFP' : { 
+                                     'filepaths' : 
+                                     ["{BASE_PATH}/BKGV9/ST_tW_top_5f_NoFullyHadronicDecays_TuneCP5_13TeV-powheg-pythia8/*.root"],
                                      'xsec' : 19.55,
                                      'group' : "Top",
     },
     'SingleTtchanAntitopPostVFP' : { 
                                         'filepaths' : 
                                         ["{BASE_PATH}/BKGV9/ST_t-channel_antitop_5f_InclusiveDecays_TuneCP5_13TeV-powheg-pythia8/*.root"],
-                                        'xsec' : 70.79,
+                                        'xsec' : 80.0,
                                         'group' : "Top",
     },
     'SingleTtchanTopPostVFP' : { 
                                     'filepaths' : 
                                     ["{BASE_PATH}/BKGV9/ST_t-channel_top_5f_InclusiveDecays_TuneCP5_13TeV-powheg-pythia8/*.root"],
-                                    'xsec' : 119.71,
+                                    'xsec' : 134.2,
                                     'group' : "Top",
     },   
-    # TODO: should really use the specific decay channels
-    'WWPostVFP' : { 
-                    'filepaths' : 
-                    ["{BASE_PATH}/BKGV9/WW_TuneCP5_13TeV-pythia8/*.root"],
-                    'xsec' : 75.8,
-                    'group' : "Diboson",
+    # inclusive samples, keep for reference
+    # 'WWPostVFP' : { 
+    #                 'filepaths' : 
+    #                 ["{BASE_PATH}/BKGV9/WW_TuneCP5_13TeV-pythia8/*.root"],
+    #                 'xsec' : 118.7,
+    #                 'group' : "Diboson",
+    # },
+    # 'WZPostVFP' : { 
+    #                 'filepaths' : 
+    #                 ["{BASE_PATH}/BKGV9/WZ_TuneCP5_13TeV-pythia8/*.root"],
+    #                 'xsec' : 47.026760,  # to check, taken from WZTo1L1Nu2Q dividing by BR: 10.71/(3*0.1086)/(1-3*0.033658-0.2)
+    #                 'group' : "Diboson",
+    # },
+    ##
+    'WWTo2L2Nu' : { 
+        'filepaths' : 
+        ["{BASE_PATH}/BKGV9/WWTo2L2Nu_TuneCP5_13TeV-powheg-pythia8/*/*.root"],
+        'xsec' : 12.6, # 118.7*0.1086*0.1086*9
+        'group' : "Diboson",
     },
-    'WZPostVFP' : { 
-                    'filepaths' : 
-                    ["{BASE_PATH}/BKGV9/WZ_TuneCP5_13TeV-pythia8/*.root"],
-                    'xsec' : 27.6,
-                    'group' : "Diboson",
+    'WWTo1L1Nu2QPostVFP' : { 
+        'filepaths' : 
+        ["{BASE_PATH}/BKGV9/WWTo1L1Nu2Q_4f_TuneCP5_13TeV-amcatnloFXFX-pythia8/*/*.root"],
+        'xsec' : 52.146, # 118.7*[(3*0.1086)*(1-3*0.1086)]*2 (2 is because one W or the other can go to Q)
+        'group' : "Diboson",
     },
-    'ZZ2l2nuPostVFP' : { 
-                         'filepaths' : 
-                         ["{BASE_PATH}/BKGV9/ZZTo2L2Nu_TuneCP5_13TeV_powheg_pythia8/*.root"],
-                         'xsec' : 0.564,
-                         'group' : "Diboson",
+    'WZTo3LNuPostVFP' : { 
+        'filepaths' : 
+        ["{BASE_PATH}/BKGV9/WZTo3LNu_TuneCP5_13TeV-amcatnloFXFX-pythia8/*/*.root"],
+        'xsec' : 4.91, # 4.42965*1.109, 1.109 is the NLO to NNLO kfactor, for this one would need to make sure about the NLO XS, depends a lot on the dilepton mass cut
+        'group' : "Diboson",
+    },
+    'WZTo2Q2LPostVFP' : { 
+        'filepaths' : 
+        ["{BASE_PATH}/BKGV9/WZTo2Q2L_mllmin4p0_TuneCP5_13TeV-amcatnloFXFX-pythia8/*/*.root"],
+        'xsec' : 5.4341, # 4.9*1.109
+        'group' : "Diboson",
+    },
+    'WZTo1L1Nu2QPostVFP' : { 
+        'filepaths' : 
+        ["{BASE_PATH}/BKGV9/WZTo1L1Nu2Q_4f_TuneCP5_13TeV-amcatnloFXFX-pythia8/*/*.root"],
+        'xsec' : 11.781, # 10.71*1.10
+        'group' : "Diboson",
+    },
+    'ZZTo2L2NuPostVFP' : { 
+        'filepaths' : 
+        ["{BASE_PATH}/BKGV9/ZZTo2L2Nu_TuneCP5_13TeV_powheg_pythia8/*.root"],
+        'xsec' : 0.60,
+        'group' : "Diboson",
+    },
+    'ZZTo2Q2LPostVFP' : { 
+        'filepaths' : 
+        ["{BASE_PATH}/BKGV9/ZZTo2Q2L_mllmin4p0_TuneCP5_13TeV-amcatnloFXFX-pythia8/*/*.root"],
+        'xsec' : 5.1,
+        'group' : "Diboson",
     },
     'QCDmuEnrichPt15PostVFP' : { 
-                                'filepaths' : 
-                                ["{BASE_PATH}/BKGV9/QCD_Pt-20_MuEnrichedPt15_TuneCP5_13TeV-pythia8/*/*.root"],
-                                'xsec' : 238800,
-                                'group' : "QCD",
+        'filepaths' : 
+        ["{BASE_PATH}/BKGV9/QCD_Pt-20_MuEnrichedPt15_TuneCP5_13TeV-pythia8/*/*.root"],
+        'xsec' : 238800,
+        'group' : "QCD",
     }
 }

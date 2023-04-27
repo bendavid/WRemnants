@@ -18,8 +18,8 @@ import hist
 import hist
 import numpy as np
 
-from wremnants.datasets.datagroupsLowPU import datagroupsLowPU
-from wremnants.datasets.datagroups import datagroups2016
+from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU
+from wremnants.datasets.datagroups2016 import make_datagroups_2016
 
 
 def doOverlow(h):
@@ -923,8 +923,8 @@ if __name__ == "__main__":
     print("Start")
     flavor = "mu"
     met = "RawPFMET" # DeepMETReso RawPFMET
-    charge = "plus" # combined plus minus
-    lowPU = False
+    charge = "combined" # combined plus minus
+    lowPU = True
 
 
 
@@ -934,11 +934,11 @@ if __name__ == "__main__":
         if flavor == "mu": MC_SF = 1.026
         MC_SF = 1.0
         
-        label = "W^{#%s}, %s" % (charge, met)
+        label = "W^{#%s}, %s" % (charge if charge != "combined" else "pm", met)
         outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/W%s/plots_%s_%s/" % (flavor, charge, met)
         functions.prepareDir(outDir, remove=True)
         
-        groups = datagroupsLowPU("lowPU_%s_%s_nnpdf31.pkl.lz4" % (flavor, met), flavor=flavor)
+        groups = make_datagroups_lowPU("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
         
 
         if flavor == "mu":
@@ -960,7 +960,7 @@ if __name__ == "__main__":
     
         from wremnants import histselections as sel
         
-        groups = datagroups2016("mw_with_mu_eta_pt_%s_nnpdf31.pkl.lz4" % met)
+        groups = make_datagroups_2016("mw_with_mu_eta_pt_%s_nnpdf31.pkl.lz4" % met)
         groups.groups.update({
             "EWK" : dict(
                     members = [groups.datasets[x] for x in ["WplustaunuPostVFP", "WminustaunuPostVFP", "ZmumuPostVFP", "ZtautauPostVFP", "ZZ2l2nuPostVFP", "WZPostVFP", "WWPostVFP"]],
@@ -982,17 +982,31 @@ if __name__ == "__main__":
         procs, data = ['EWK', 'Top',  'Wmunu', 'Fake'], 'Data'
 
     # mT
-    singlePlot({"name": "mT_corr_rec", "axis": "mt", "charge": charge }, "mT_corr_rec", 40, 200, 1e2, 1e8, "m_{T} (GeV)", "Events", rebin=1, yRatio=1.15)
-    singlePlot({"name": "mT_uncorr", "axis": "mt", "charge": charge }, "mT_corr_xy", 40, 200, 1e2, 1e8, "m_{T} (GeV)", "Events", rebin=1, yRatio=1.15)
+    singlePlot({"name": "mT_corr_rec", "axis": "mt", "charge": charge }, "mT_corr_rec", 40, 200, 1e0, 1e7, "m_{T} (GeV)", "Events", rebin=1, yRatio=1.15)
+    singlePlot({"name": "mT_corr_xy", "axis": "mt", "charge": charge }, "mT_corr_xy", 40, 200, 1e0, 1e7, "m_{T} (GeV)", "Events", rebin=1, yRatio=1.15)
+    
+    singlePlot({"name": "mT_corr_rec_qTrw", "axis": "mt", "charge": charge }, "mT_corr_rec_qTrw", 40, 200, 1e0, 1e7, "m_{T} (GeV)", "Events", rebin=1, yRatio=1.15)
+    singlePlot({"name": "mT_corr_xy_qTrw", "axis": "mt", "charge": charge }, "mT_corr_xy_qTrw", 40, 200, 1e0, 1e7, "m_{T} (GeV)", "Events", rebin=1, yRatio=1.15)
+    #singlePlot({"name": "mT_uncorr", "axis": "mt", "charge": charge }, "mT_corr_xy", 40, 200, 1e2, 1e8, "m_{T} (GeV)", "Events", rebin=1, yRatio=1.15)
     
     # MET
     bins_MET = list(range(0, 10, 2)) + list(range(10, 70, 1)) + list(range(70, 150, 2)) + list(range(150, 200, 5)) + [200]
-    singlePlot({"name": "MET_corr_rec_pt", "axis": "MET_pt", "charge": charge }, "MET_corr_rec_pt", 0, 200, 1e2, 1e8, "MET p_{T}", "Events", rebin=bins_MET, yRatio=1.15)
-    singlePlot({"name": "MET_uncorr_pt", "axis": "MET_pt", "charge": charge }, "MET_corr_xy_pt", 0, 200, 1e2, 1e8, "MET p_{T}", "Events", rebin=bins_MET, yRatio=1.15)
+    singlePlot({"name": "MET_corr_rec_pt", "axis": "MET_pt", "charge": charge }, "MET_corr_rec_pt", 0, 200, 1e0, 1e7, "MET p_{T}", "Events", rebin=bins_MET, yRatio=1.15)
+    singlePlot({"name": "MET_corr_xy_pt", "axis": "MET_pt", "charge": charge }, "MET_corr_xy_pt", 0, 200, 1e0, 1e7, "MET p_{T}", "Events", rebin=bins_MET, yRatio=1.15)
+    
+    singlePlot({"name": "MET_corr_rec_pt_qTrw", "axis": "MET_pt", "charge": charge }, "MET_corr_rec_pt_qTrw", 0, 200, 1e0, 1e7, "MET p_{T}", "Events", rebin=bins_MET, yRatio=1.15)
+    singlePlot({"name": "MET_corr_xy_pt_qTrw", "axis": "MET_pt", "charge": charge }, "MET_corr_xy_pt_qTrw", 0, 200, 1e0, 1e7, "MET p_{T}", "Events", rebin=bins_MET, yRatio=1.15)
+    
+    
+    singlePlot({"name": "MET_corr_xy_phi", "axis": "recoil_MET_phi", "charge": charge }, "MET_corr_xy_phi", -4, 4, 1e3, 1e7, "MET #phi (XY corrected)", "Events", rebin=1)
+    singlePlot({"name": "MET_corr_rec_phi", "axis": "recoil_MET_phi", "charge": charge }, "MET_corr_rec_phi", -4, 4, 1e3, 1e7, "MET #phi (recoil corrected)", "Events", rebin=1, yRatio=1.3)
+    
+    singlePlot({"name": "MET_corr_xy_phi_qTrw", "axis": "recoil_MET_phi", "charge": charge }, "MET_corr_xy_phi_qTrw", -4, 4, 1e3, 1e7, "MET #phi (XY corrected)", "Events", rebin=1)
+    singlePlot({"name": "MET_corr_rec_phi_qTrw", "axis": "recoil_MET_phi", "charge": charge }, "MET_corr_rec_phi_qTrw", -4, 4, 1e3, 1e7, "MET #phi (recoil corrected)", "Events", rebin=1, yRatio=1.3)
     
     # recoil
     bins_recoil_magn = list(range(0, 100, 2)) + list(range(100, 150, 5)) + [150, 160, 170, 180, 190, 200]
-    singlePlot({"name": "recoil_corr_rec_magn", "axis": "recoil_magn", "charge": charge  }, "recoil_corr_rec_magn", 0, 200, 1e2, 1e8, "Recoil (GeV)", "Events", rebin=bins_recoil_magn, dataNorm=True, yRatio=1.15) # blind!
+    singlePlot({"name": "recoil_corr_rec_magn", "axis": "recoil_magn", "charge": charge  }, "recoil_corr_rec_magn", 0, 200, 1e0, 1e7, "Recoil (GeV)", "Events", rebin=bins_recoil_magn, dataNorm=True, yRatio=1.15) # blind!
    
 
   
