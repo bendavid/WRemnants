@@ -15,13 +15,13 @@ import pickle
 import narf
 import numpy as np
 
-from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_Z
-from wremnants.datasets.datagroups import datagroups2016
+from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU
+from wremnants.datasets.datagroups2016 import make_datagroups_2016
 
 
 w = ROOT.RooWorkspace("w", "")
 
-ROOT.gInterpreter.Declare("""
+narf.clingutils.Declare("""
 
 void GaussianKernel(TH1D h, TH1D &h_sm, TH1D &h_pull, double sigma) {
 
@@ -3745,16 +3745,16 @@ if __name__ == "__main__":
     met = "RawPFMET" # RawPFMET DeepMETReso
     flavor = "mumu" # mu, e, mumu, ee
     
-    groups_mumu = datagroupsLowPU_Z("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
+    groups_mumu = make_datagroups_lowPU("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
     bkg_procs = ['EWK', 'TTbar']
     '''
     lowPU = True
     if lowPU:
-        groups_mumu = datagroupsLowPU_Z("mz_lowPU_mumu.pkl.lz4", flavor="mumu")
-        #groups_ee = datagroupsLowPU_Z("mz_lowPU_ee.pkl.lz4")
+        groups_mumu = make_datagroups_lowPU("mz_lowPU_mumu.pkl.lz4", flavor="mumu")
+        #groups_ee = make_datagroups_lowPU("mz_lowPU_ee.pkl.lz4")
         bkg_procs = ['EWK', 'TTbar']
     else:
-        groups_mumu = datagroups2016("mz_wlike_with_mu_eta_pt.pkl.lz4", wlike=True)
+        groups_mumu = make_datagroups_2016("mz_wlike_with_mu_eta_pt.pkl.lz4", wlike=True)
         bkg_procs = ['Other']
     '''
     label = "DY #rightarrow #mu^{+}#mu^{#minus} #plus e^{+}e^{#minus}"

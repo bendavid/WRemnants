@@ -99,7 +99,7 @@ def build_graph(df, dataset):
         df = df.Define("weight_vtx", vertex_helper, ["GenVtx_z", "Pileup_nTrueInt"])
 
         weight_expr = "weight*weight_pu"
-        if args.vertex_weight:
+        if not args.noVertexWeight:
             weight_expr += "*weight_vtx"
             
         nominal = df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "nominal_weight"])

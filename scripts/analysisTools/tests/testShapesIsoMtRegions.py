@@ -1,10 +1,11 @@
 ## example
 # python tests/testShapesIsoMtRegions.py path/to/pickle/file.pkl.lz4 /path/to/plot/folder/testShapesIsoMtRegions/ [-c minus] [--isoMtRegion 2]
 
-from wremnants.datasets.datagroups import datagroups2016
+from wremnants.datasets.datagroups2016 import make_datagroups_2016
 from wremnants import histselections as sel
 #from wremnants import plot_tools,theory_tools,syst_tools
-from utilities import boostHistHelpers as hh,common
+from utilities import boostHistHelpers as hh
+from utilities import common, logging
 
 import narf
 import wremnants
@@ -19,7 +20,6 @@ import lz4.frame
 import argparse
 import os
 import shutil
-import logging
 import re
 
 ## safe batch mode
@@ -56,7 +56,7 @@ if __name__ == "__main__":
     parser.add_argument("--isoMtRegion", type=int, nargs='+', default=[0,1,2,3], choices=[0,1,2,3], help="Integer index for iso-Mt regions to plot (conversion is index = passIso * 1 + passMT * 2 as in common.getIsoMtRegionFromID)");
     args = parser.parse_args()
 
-    logger = common.setup_color_logger(os.path.basename(__file__), args.verbose)
+    logger = logging.setup_logger(os.path.basename(__file__), args.verbose, True)
     # if 0:
     #     logger.critical("TEST LOGGER CRITICAL")
     #     logger.error("TEST LOGGER ERROR")
@@ -97,7 +97,7 @@ if __name__ == "__main__":
             selectOp = sel.histWmass_passMT_passIso
             # customized for fakes later on
             
-        groups = datagroups2016(fname)
+        groups = make_datagroups_2016(fname)
         datasets = groups.getNames()
         if args.processes is not None and len(args.processes):
             datasets = list(filter(lambda x: x in args.processes, datasets))

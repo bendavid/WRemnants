@@ -1,13 +1,10 @@
 import hist
-import boost_histogram as bh
 import numpy as np
 from functools import reduce
-import logging
 import collections
-from . import common
-from scripts.analysisTools.plotUtils.utility import safeOpenFile, safeGetObject
-import narf
-import ROOT
+from utilities import common, logging
+
+logger = logging.child_logger(__name__)
 
 def valsAndVariances(h1, h2, allowBroadcast=True, transpose=True):
     if not allowBroadcast and len(h1.axes) != len(h2.axes):
@@ -29,7 +26,7 @@ def valsAndVariances(h1, h2, allowBroadcast=True, transpose=True):
             res = [np.broadcast_to(x.T if transpose else x, outshape[::-1] if transpose else outshape) for x in \
                     [h1.values(flow=flow), h2.values(flow=flow), h1.variances(flow=flow), h2.variances(flow=flow)]]
         except ValueError as e:
-            logging.error(f"Failed to broadcast hists! h1.axes.name {h1.axes.name}, h2.axes.name {h2.axes.name}")
+            logger.error(f"Failed to broadcast hists! h1.axes.name {h1.axes.name}, h2.axes.name {h2.axes.name}")
             raise e
         return [x.T for x in res] if transpose else res
 
@@ -75,6 +72,9 @@ def relVariances(h1vals, h2vals, h1vars, h2vars):
     rel1 = relVariance(h1vals, h1vars)
     rel2 = relVariance(h2vals, h2vars)
     return (rel1, rel2)
+
+# TODO: Implement this rather than relying on pdf unc function
+#def rssHist(h):
 
 def sqrtHist(h):
     rootval = np.sqrt(h.values(flow=True))
@@ -246,25 +246,31 @@ def mergeAxes(ax1, ax2):
     new_edges = np.concatenate((ax1_edges, ax2.edges[merge_idx:]))
     return hist.axis.Variable(new_edges, name=ax1.name)
 
+def findAxes(hists, axis_idx):
+    if type(axis_idx) in [list, tuple]:
+        return [h.axes[[ax for ax in axis_idx if ax in h.axes.name][0]] for h in hists]
+    else:
+        return [h.axes[axis_idx] for h in hists]
+
 def findCommonBinning(hists, axis_idx):
     if len(hists) < 2:
         raise ValueError("Can only find common binning between > 1 hists")
 
-    orig_axes = [h.axes[axis_idx] for h in hists]
+    orig_axes = findAxes(hists, axis_idx)
     # Set intersection with tolerance for floats
     common_edges = np.array(orig_axes[0].edges)
     for ax in orig_axes[1:]:
         common_edges = common_edges[np.isclose(np.array(ax.edges)[:,np.newaxis], common_edges).any(0)]
 
     edges = np.sort(common_edges)
-    logging.debug(f"Common edges are {common_edges}")
+    logger.debug(f"Common edges are {common_edges}")
 
     if len(edges) < 2:
         raise ValueError(f"Found < 2 common edges, cannot rebin. Axes were {orig_axes}")
     return edges
 
 def rebinHistsToCommon(hists, axis_idx, keep_full_range=False):
-    orig_axes = [h.axes[axis_idx] for h in hists]
+    orig_axes = findAxes(hists, axis_idx)
     new_edges = findCommonBinning(hists, axis_idx)
     rebinned_hists = [rebinHist(h, ax.name, new_edges) for h,ax in zip(hists, orig_axes)]
 
@@ -315,12 +321,18 @@ def syst_min_and_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=[]):
 
 def syst_min_or_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=[], do_min=True):
     if syst_ax not in h.axes.name:
-        logging.warning(f"Did not find syst axis {syst_ax} in histogram. Returning nominal!")
+        logger.warning(f"Did not find syst axis {syst_ax} in histogram. Returning nominal!")
         return h
 
+    # Keep the order of the hist
+    proj_ax = [ax for ax in h.axes.name if ax in proj_ax]
     systax_idx = h.axes.name.index(syst_ax)
     if systax_idx != h.ndim-1:
         raise ValueError("Required to have the syst axis at index -1")
+
+    if len(indices) < 2:
+        logger.warning(f"Requires at least two histograms for envelope. Returning nominal!")
+        return h
 
     if type(indices[0]) == str:
         if all(x.isdigit() for x in indices):
@@ -329,7 +341,7 @@ def syst_min_or_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=[], do_min=Tr
             indices = h.axes[syst_ax].index(indices)
 
     if max(indices) > h.axes[syst_ax].size:
-        logging.warning(f"Range of indices exceeds length of syst axis '{syst_ax}.' Returning nominal!")
+        logger.warning(f"Range of indices exceeds length of syst axis '{syst_ax}.' Returning nominal!")
         return h
 
     if syst_ax in proj_ax:
@@ -337,12 +349,17 @@ def syst_min_or_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=[], do_min=Tr
         
     hvar = projectNoFlow(h, (*proj_ax, syst_ax), exclude=no_flow)
 
-    proj_ax_idxs = [h.axes.name.index(ax) for ax in proj_ax]
     view = np.take(hvar.view(flow=True), indices, axis=-1)
     fullview = np.take(h.view(flow=True), indices, axis=-1)
 
-    # Move project axis to second two last position so the broadcasting works
-    for idx in proj_ax_idxs:
+    # Move project axis to second to last position so the broadcasting works
+    # NOTE: Be careful that you keep track of the actual order, keeping in mind that things are moving
+    names = list(h.axes.name)
+    initial_order = []
+    for ax in proj_ax:
+        idx = names.index(ax)
+        initial_order.append(idx)
+        names.insert(-2, names.pop(idx))
         fullview = np.moveaxis(fullview, idx, -2)
     
     op = np.argmin if do_min else np.argmax
@@ -353,8 +370,11 @@ def syst_min_or_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=[], do_min=Tr
 
     hnew = h[{syst_ax : 0}]
     # Now that the syst ax has been collapsed, project axes will be at last position
-    for idx in reversed(proj_ax_idxs):
+    # Move the axes back to where they belong
+    names = list(h.axes.name)
+    for idx in reversed(initial_order):
         opview = np.moveaxis(opview, -1, idx)
+
     hnew[...] = opview
     return hnew
 
@@ -387,36 +407,3 @@ def set_flow(h, val="nearest"):
             nearest_vals = np.take(h.values(flow=True), -2, i) 
             np.take(h.values(flow=True), -1, i)[...] = nearest_vals if val == "nearest" else np.full_like(nearest_vals, val)
     return h
-
-def applyCorrection(h, scale=1.0, offsetCorr=0.0, corrFile=None, corrHist=None, createNew=False):
-    # originally intended to apply a correction differential in eta-pt
-    # corrHist is a TH3 with eta-pt-charge
-    # scale is just to apply an additional constant scaling (or only that if ever needed) before the correction from corrHist
-    # offsetCorr is for utility, to add to the correction from the file, e.g. if the histogram is a scaling of x (e.g. 5%) one has to multiply the input histogram h by 1+x, so offset should be 1
-    boost_corr = None
-    if corrFile and corrHist:
-        ## TDirectory.TContext() should restore the ROOT current directory to whatever it was before a new ROOT file was opened
-        ## but it doesn't work at the moment, apparently the class miss the __enter__ member and the usage with "with" fails
-        #with ROOT.TDirectory.TContext():
-        f = safeOpenFile(corrFile, mode="READ")
-        corr = safeGetObject(f, corrHist, detach=True)
-        if offsetCorr:
-            offsetHist = corr.Clone("offsetHist")
-            ROOT.wrem.initializeRootHistogram(offsetHist, offsetCorr)
-            corr.Add(offsetHist)
-        f.Close()
-        boost_corr = narf.root_to_hist(corr)
-    # note: in fact multiplyHists already creates a new histogram
-    if createNew:
-        hnew = hist.Hist(*h.axes, storage=hist.storage.Weight())
-        hnew.values(flow=True)[...]    = scale * h.values(flow=True)
-        hnew.variances(flow=True)[...] = scale * scale * h.variances(flow=True)
-        if boost_corr:
-            hnew = multiplyHists(hnew, boost_corr)
-        return hnew
-    else:
-        h.values(flow=True)[...]    *= scale
-        h.variances(flow=True)[...] *= (scale * scale)
-        if boost_corr:
-            h = multiplyHists(h, boost_corr)
-        return h

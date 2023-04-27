@@ -2,12 +2,13 @@ import ROOT
 import hist
 import numpy as np
 import copy
-from utilities import boostHistHelpers as hh,common
+from utilities import boostHistHelpers as hh,common,logging
 from wremnants import theory_corrections
 from scipy import ndimage
+import narf.clingutils
 
-logger = common.child_logger(__name__)
-ROOT.gInterpreter.Declare('#include "theoryTools.h"')
+logger = logging.child_logger(__name__)
+narf.clingutils.Declare('#include "theoryTools.h"')
 
 # integer axis for -1 through 7
 axis_helicity = hist.axis.Integer(
@@ -122,7 +123,7 @@ only_central_pdf_datasets = [
     "Zmumu_bugfix_slc7",
 ]
 
-extended_pdf_datasets = common.vprocs+common.vprocs_lowpu
+extended_pdf_datasets = [x for x in common.vprocs+common.vprocs_lowpu if not any(y in x for y in ["NNLOPS", "MiNLO"])]
 
 def define_prefsr_vars(df):
     df = df.Define("prefsrLeps", "wrem::prefsrLeptons(GenPart_status, GenPart_statusFlags, GenPart_pdgId, GenPart_genPartIdxMother)")
@@ -135,12 +136,12 @@ def define_prefsr_vars(df):
     df = df.Define("phiVgen", "genV.Phi()")
     df = df.Define("absYVgen", "std::fabs(yVgen)")
     df = df.Define("chargeVgen", "GenPart_pdgId[prefsrLeps[0]] + GenPart_pdgId[prefsrLeps[1]]")
-    df = df.Define("csSineCosThetaPhi", "wrem::csSineCosThetaPhi(genl, genlanti)")
+    df = df.Define("csSineCosThetaPhi", "wrem::csSineCosThetaPhi(genlanti, genl)")
     return df
 
-def define_scale_tensor(df, clipWeight=10.0):
+def define_scale_tensor(df):
     # convert vector of scale weights to 3x3 tensor and clip weights to |weight|<10.
-    df = df.Define("scaleWeights_tensor", f"wrem::makeScaleTensor(LHEScaleWeight, {clipWeight});")
+    df = df.Define("scaleWeights_tensor", f"wrem::makeScaleTensor(LHEScaleWeight, theory_weight_truncate);")
     df = df.Define("scaleWeights_tensor_wnom", "auto res = scaleWeights_tensor; res = nominal_weight*res; return res;")
 
     return df
@@ -171,16 +172,21 @@ def make_ew_binning(mass = 91.1535, width = 2.4932, initialStep = 0.1):
 def pdf_info_map(dataset, pdfset):
     infoMap = pdfMap if dataset not in extended_pdf_datasets else pdfMapExtended
 
-    if (pdfset != "nnpdf31" and dataset in only_central_pdf_datasets) or pdfset not in infoMap:
+    if "horace" in dataset or (pdfset != "nnpdf31" and dataset in only_central_pdf_datasets) or pdfset not in infoMap:
         raise ValueError(f"Skipping PDF {pdfset} for dataset {dataset}")
     return infoMap[pdfset]
 
-def define_pdf_columns(df, dataset, pdfs, noAltUnc):
+def define_pdf_columns(df, dataset_name, pdfs, noAltUnc):
+    if dataset_name not in common.vprocs_all or \
+            "horace" in dataset_name or \
+            "LHEPdfWeight" not in df.GetColumnNames():
+        logger.warning(f"Did not find PDF weights for sample {dataset_name}! Using nominal PDF in sample")
+        return df
+
     for i, pdf in enumerate(pdfs):
         try:
-            pdfInfo = pdf_info_map(dataset, pdf)
+            pdfInfo = pdf_info_map(dataset_name, pdf)
         except ValueError as e:
-            logger.info(e)
             return df
 
         pdfName = pdfInfo["name"]
@@ -190,122 +196,114 @@ def define_pdf_columns(df, dataset, pdfs, noAltUnc):
         entries = 1 if i != 0 and noAltUnc else pdfInfo["entries"]
         start = 0 if "first_entry" not in pdfInfo else pdfInfo["first_entry"]
 
-        df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, {entries}>({pdfBranch}, {start}), 10.); res = nominal_weight/nominal_pdf_cen*res; return res;")
+        df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, {entries}>({pdfBranch}, {start}), theory_weight_truncate); res = nominal_weight/central_pdf_weight*res; return res;")
+
+        if i == 0:
+            tensorNameNominal = tensorName
+
+        if pdfName == "pdfMSHT20":
+            df = pdfBugfixMSHT20(df, tensorName)
 
         df = df.Define(tensorASName, "Eigen::TensorFixedSize<double, Eigen::Sizes<2>> res; "
-                f"res(0) = nominal_weight*nominal_pdf_cen*{pdfInfo['alphas'][0]}; "
-                f"res(1) = nominal_weight*nominal_pdf_cen*{pdfInfo['alphas'][1]}; "
-                "return wrem::clip_tensor(res, 10.)")
+                f"res(0) = nominal_weight/central_pdf_weight*{pdfInfo['alphas'][0]}; "
+                f"res(1) = nominal_weight/central_pdf_weight*{pdfInfo['alphas'][1]}; "
+                "return wrem::clip_tensor(res, theory_weight_truncate)")
+
     return df
 
-def define_weights_and_corrs(df, weight_expr, dataset_name, helpers, args):
-    #TODO: organize this better
-    if "LHEPdfWeight" not in df.GetColumnNames():
-        df = df.DefinePerSample("nominal_pdf_cen", "1.0")
-    elif "horace" in dataset_name:
-        df = df.DefinePerSample("nominal_pdf_cen", "1.0")
-    elif dataset_name in common.vprocs+common.vprocs_lowpu:
-        df = df.Define("nominal_pdf_cen", pdf_central_weight(dataset_name, args.pdfs[0]))
-        weight_expr = f"{weight_expr}*nominal_pdf_cen"
-        if args.highptscales:
-            weight_expr = f"{weight_expr}*MEParamWeightAltSet3[0]"
+def define_central_pdf_weight(df, dataset_name, pdf):
+    try:
+        pdfInfo = pdf_info_map(dataset_name, pdf)
+    except ValueError as e:
+        logger.warning(f"Did not find PDF {pdf} for sample {dataset_name}! Using nominal PDF in sample")
+        return df.DefinePerSample("central_pdf_weight", "1.0")
 
-    df = define_prefsr_vars(df)
+    pdfName = pdfInfo["name"]
+    pdfBranch = pdfInfo["branch"]
+    if not pdfBranch in df.GetColumnNames():
+        logger.warning(f"Did not find PDF branch {pdfBranch} for sample {dataset_name}! Set PDF weights to 1")
+        return df.DefinePerSample("central_pdf_weight", "1.0")
+    return df.Define("central_pdf_weight", f"std::clamp<float>({pdfBranch}[0], -theory_weight_truncate, theory_weight_truncate)")
+
+def define_theory_weights_and_corrs(df, dataset_name, helpers, args):
+    if "prefsrLeps" not in df.GetColumnNames():
+        df = define_prefsr_vars(df)
+        
     df = define_ew_vars(df)
 
-    if args.theory_corr and dataset_name in helpers:
-        helper = helpers[dataset_name]
-        df = define_theory_corr(df, weight_expr, helper, generators=args.theory_corr, 
-                modify_central_weight=not args.theory_corr_alt_only)
-    else:
-        df = df.Define("nominal_weight", weight_expr)
+    df = df.DefinePerSample("theory_weight_truncate", "10.")
+    df = define_central_pdf_weight(df, dataset_name, args.pdfs[0])
+    df = define_theory_corr(df, dataset_name, helpers, generators=args.theoryCorr, 
+            modify_central_weight=not args.theoryCorrAltOnly)
+
+    if args.highptscales:
+        df = df.Define("extra_weight", "MEParamWeightAltSet3[0]")
+    df = define_nominal_weight(df)
+    df = define_pdf_columns(df, dataset_name, args.pdfs, args.altPdfOnlyCentral)
+        
     return df 
 
-def define_weights_and_corrs_ut(df, weight_expr, dataset_name, helpers, args, name):
-    #TODO: organize this better
-    if "LHEPdfWeight" not in df.GetColumnNames():
-        df = df.DefinePerSample(f"nominal_pdf_cen_{name}", "1.0")
-    elif "horace" in dataset_name:
-        df = df.DefinePerSample(f"nominal_pdf_cen_{name}", "1.0")
-    elif dataset_name in common.vprocs+common.vprocs_lowpu:
-        df = df.Define(f"nominal_pdf_cen_{name}", pdf_central_weight(dataset_name, args.pdfs[0]))
-        weight_expr = f"{weight_expr}*nominal_pdf_cen_{name}"
-        if args.highptscales:
-            weight_expr = f"{weight_expr}*MEParamWeightAltSet3[0]"
 
-    #df = define_prefsr_vars(df)
-    #df = define_ew_vars(df)
+def build_weight_expr(df, exclude_weights=[]):
+    valid_cols = df.GetColumnNames()
+    weights = ["weight", "central_pdf_weight", "theory_corr_weight", "exp_weight"]
+    if weights[0] not in valid_cols:
+        raise ValueError(f"The weight '{weights[0]}' must be defined in the histmaker!")
+    found_weights = []
 
-    if args.theory_corr and dataset_name in helpers:
-        helper = helpers[dataset_name]
-        df = define_theory_corr_ut(df, weight_expr, helper, generators=args.theory_corr, 
-                modify_central_weight=not args.theory_corr_alt_only, name=name)
-    else:
-        df = df.Define(f"nominal_weight_{name}", weight_expr)
-    return df 
+    for weight in filter(lambda x: x not in exclude_weights, weights):
+        if weight not in valid_cols:
+            logger.warning(f"Did not find weight '{weight}'! Assuming 1.0")
+        else:
+            found_weights.append(weight)
 
-def pdf_central_weight(dataset, pdfset):
-    pdfInfo = pdf_info_map(dataset, pdfset)
-    pdfBranch = pdfInfo["branch"]
-    return f"{pdfBranch}[0]"
+    if "extra_weight" in valid_cols:
+        logger.info("Adding additional weight '{extra_weight}'")
+        found_weights.append(extra_weight)
 
-def define_theory_corr(df, weight_expr, helpers, generators, modify_central_weight):
+    weight_expr = "*".join(found_weights)
+    logger.debug(f"Weight is {weight_expr}")
+
+    return weight_expr
+
+def define_nominal_weight(df):
+    return df.Define(f"nominal_weight", build_weight_expr(df))
+
+def define_theory_corr(df, dataset_name, helpers, generators, modify_central_weight):
+    df = df.Define(f"nominal_weight_uncorr", build_weight_expr(df, exclude_weights=["theory_corr_weight"]))
+
+    dataset_helpers = helpers.get(dataset_name, [])
+
+    if not modify_central_weight or not generators or generators[0] not in dataset_helpers:
+        df = df.DefinePerSample("theory_corr_weight", "1.0")
+        return df
+
     for i, generator in enumerate(generators):
-        if i == 0:
-            if modify_central_weight and generator in helpers:
-                df = df.Define("nominal_weight_uncorr", weight_expr)
-            else:
-                df = df.Define("nominal_weight", weight_expr)
-                df = df.Alias("nominal_weight_uncorr", "nominal_weight")
-        if generator not in helpers:
+        if generator not in dataset_helpers:
             continue
 
-        helper = helpers[generator]
+        helper = dataset_helpers[generator]
 
         if "Helicity" in generator:
             df = df.Define(f"{generator}Weight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "nominal_weight_uncorr"])
         elif 'ew' in generator:
+            # Used as a placeholder to match the helper dimensionality 
             df = df.DefinePerSample(f"{generator}Dummy", "0.")
-            df = df.Define(f"{generator}Weight_tensor", helper, ["ewMll", "ewLogDeltaM", f"{generator}Dummy", "chargeVgen", "nominal_weight_uncorr" if i == 0 else "nominal_weight"]) # multiplying with nominal QCD weight
+            multiplicative_weight = i != 0 and modify_central_weight
+            if i != 0 and modify_central_weight:
+                df = df.Define(f"ew_corr_weight", build_weight_expr(df))
+            else:
+                df = df.Alias("ew_corr_weight", "nominal_weight_uncorr")
+            df = df.Define(f"{generator}Weight_tensor", helper, ["ewMll", "ewLogDeltaM", f"{generator}Dummy", "chargeVgen", "ew_corr_weight"]) # multiplying with nominal QCD weight
         else:
             df = df.Define(f"{generator}Weight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "nominal_weight_uncorr"])
 
-        df = df.Define(f"{generator}CentralWeight", f"{generator}Weight_tensor(0)")
-
         if i == 0 and modify_central_weight:
-            df = df.Alias("nominal_weight", f"{generator}CentralWeight")
+            df = df.Define("theory_corr_weight", f"{generator}Weight_tensor(0)/nominal_weight_uncorr")
 
     return df
 
-def define_theory_corr_ut(df, weight_expr, helpers, generators, modify_central_weight, name):
-    for i, generator in enumerate(generators):
-        if i == 0:
-            if modify_central_weight and generator in helpers:
-                df = df.Define(f"nominal_weight_uncorr_{name}", weight_expr)
-            else:
-                df = df.Define(f"nominal_weight_{name}", weight_expr)
-                df = df.Alias(f"nominal_weight_uncorr_{name}", f"nominal_weight_{name}")
-        if generator not in helpers:
-            continue
-
-        helper = helpers[generator]
-
-        if "Helicity" in generator:
-            df = df.Define(f"{generator}Weight_tensor_{name}", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", f"nominal_weight_uncorr_{name}"])
-        elif 'ew' in generator:
-            df = df.DefinePerSample(f"{generator}Dummy_{name}", "0.")
-            df = df.Define(f"{generator}Weight_tensor_{name}", helper, ["ewMll", "ewLogDeltaM", f"{generator}Dummy", "chargeVgen", f"nominal_weight_uncorr_{name}" if i == 0 else f"nominal_weight_{name}"]) # multiplying with nominal QCD weight
-        else:
-            df = df.Define(f"{generator}Weight_tensor_{name}", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", f"nominal_weight_uncorr_{name}"])
-
-        df = df.Define(f"{generator}CentralWeight_{name}", f"{generator}Weight_tensor_{name}(0)")
-
-        if i == 0 and modify_central_weight:
-            df = df.Alias(f"nominal_weight_{name}", f"{generator}CentralWeight_{name}")
-
-    return df
-
-def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_central_weight, with_uncertainties=True):
+def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_central_weight):
     res = []
     
     for i, generator in enumerate(generators):
@@ -318,14 +316,8 @@ def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_cen
             res.append(df.HistoBoost("weight_uncorr", [hist.axis.Regular(100, -2, 2)], ["nominal_weight_uncorr"]))
 
         hist_name = f"{name}_{generator}Corr"
-
-        if with_uncertainties:
-            hist_name += "_unc"
-            unc = df.HistoBoost(hist_name, axes, [*cols, f"{generator}Weight_tensor"], tensor_axes=helpers[generator].tensor_axes[-1:])
-            res.append(unc)
-        else:
-            nominal = df.HistoBoost(hist_name, axes, [*cols, f"{generator}CentralWeight"])
-            res.append(nominal)
+        unc = df.HistoBoost(hist_name, axes, [*cols, f"{generator}Weight_tensor"], tensor_axes=helpers[generator].tensor_axes[-1:])
+        res.append(unc)
 
     return res
 
@@ -401,8 +393,11 @@ def pdfNames(cardTool, pdf, skipFirst=True):
 
 def pdfNamesAsymHessian(entries, pdfset=""):
     pdfNames = ["pdf0"+pdfset.replace("pdf", "")] 
-    pdfNames.extend([f"pdf{int(j/2)}{pdfset.replace('pdf', '')}{'Up' if j % 2 else 'Down'}" for j in range(entries-1)])
+    pdfNames.extend([f"pdf{int((j+2)/2)}{pdfset.replace('pdf', '')}{'Up' if j % 2 else 'Down'}" for j in range(entries-1)])
     return pdfNames
+
+def pdfNamesSymHessian(entries, pdfset=""):
+    return [f"pdf{i+1}{pdfset.replace('pdf', '')}" for i in range(entries)]
 
 def pdfSymmetricShifts(hdiff, axis_name):
     sq = hh.multiplyHists(hdiff, hdiff)
@@ -423,7 +418,7 @@ def pdfAsymmetricShifts(hdiff, axis_name):
     ax = hdiff.axes[axis_name] 
     underflow = hdiff.axes[axis_name].traits.underflow
     overflow = hdiff.axes[axis_name].traits.overflow
-    if type(ax) == hist.axis.StrCategory:
+    if type(ax) == hist.axis.StrCategory and all(["Up" in x or "Down" in x for x in ax][1:]):
         # Remove the overflow from the categorical axis
         end = int((ax.size-1)/2)
         upvals = hdiff[{axis_name : [x for x in ax if "Up" in x]}].values(flow=True)[...,:end]
@@ -455,3 +450,13 @@ def hessianPdfUnc(h, axis_name="pdfVar", uncType="symHessian", scale=1.):
     hUp = hh.addHists(h[{axis_name : 0}], 1*rssUp)
     hDown = hh.addHists(h[{axis_name : 0}], -1*rssDown)
     return hUp, hDown
+
+def pdfBugfixMSHT20(df , tensorPDFName):
+    # There is a known bug in MSHT20 where member 15 and 16 are identical
+    #   to fix this, one has to be mirrored:
+    #   pdf(15) = pdf(0) - (pdf(15) - pdf(0))
+    return df.Redefine(tensorPDFName, 
+        f"auto& res = {tensorPDFName};"
+        f"res(15) = {tensorPDFName}(0) - ({tensorPDFName}(15) - {tensorPDFName}(0));"
+        "return res")
+        

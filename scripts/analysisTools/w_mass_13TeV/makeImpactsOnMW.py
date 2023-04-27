@@ -37,12 +37,6 @@ def readNuisances(args, infile=None):
 
     print(f"Starting with file {infile} ...")
 
-    nuis = []
-    if args.nuisgroups == "ALL": 
-        nuis = ["ALL"]
-    else:
-        nuis = list(args.nuisgroups.split(','))
-
     massNuisanceName = "massShift{s}MeV".format(s=int(args.prefitUncertainty))
     valuesAndErrors = utilities.getFromHessian(infile,params=[massNuisanceName])
     totalUncertainty = valuesAndErrors[massNuisanceName][1] - valuesAndErrors[massNuisanceName][0]
@@ -60,19 +54,17 @@ def readNuisances(args, infile=None):
         print("ERROR: Cannot find the impact TH2 named ",th2name," in the input file. Maybe you didn't run --doImpacts?\nSkipping.")
         sys.exit()
 
+    matchKeep = re.compile(args.keepNuisgroups)
     if args.excludeNuisgroups:
         matchExclude = re.compile(args.excludeNuisgroups)
-        
+    
     print("Histograms loaded successfully ...")
     nuisGroup_nameVal = {}
     for iy in range(1,impMat.GetNbinsY()+1):
         label = impMat.GetYaxis().GetBinLabel(iy)
         if args.excludeNuisgroups and matchExclude.match(label):
             continue
-        if nuis[0] != "ALL":
-            if label in nuis:
-                nuisGroup_nameVal[label] = impMat.GetBinContent(1,iy)
-        else:
+        if matchKeep.match(label):
             nuisGroup_nameVal[label] = impMat.GetBinContent(1,iy)
     return totalUncertainty,nuisGroup_nameVal
 
@@ -85,7 +77,8 @@ if __name__ == "__main__":
     parser.add_argument("rootfile", type=str, nargs=1)
     parser.add_argument('-o','--outdir',     dest='outdir',     default='',   type=str, help='output directory to save the matrix')    
     parser.add_argument(     '--nuisgroups', dest='nuisgroups', default='ALL',   type=str, help='nuis groups for which you want to show the impacts (can pass comma-separated list to make all of them one after the other). Use full name, no regular expressions. By default, all are made')
-    parser.add_argument('-x', '--excludeNuisgroups', dest='excludeNuisgroups', default=None,   type=str, help='Regular expression for nuisances to be excluded')
+    parser.add_argument(     '--keepNuisgroups', default='.*',   type=str, help='nuis groups for which you want to show the impacts, using regular expressions')
+    parser.add_argument('-x', '--excludeNuisgroups', dest='excludeNuisgroups', default=None,   type=str, help='Regular expression for nuisances to be excluded (note that it wins against --keepNuisgroups since evaluated before it')
     parser.add_argument(     '--set-stat'  , dest='setStat',    default=-1.0, type=float, help='If positive, use this value for stat (this is before scaling to MeV) until combinetf is fixed')
     parser.add_argument(     '--postfix',     dest='postfix',     default='',   type=str, help='postfix for the output name')
     parser.add_argument(     '--canvasSize', dest='canvasSize', default='800,1200', type=str, help='Pass canvas dimensions as "width,height" ')
@@ -99,8 +92,9 @@ if __name__ == "__main__":
     parser.add_argument(     '--prefitUncertainty'  , dest='prefitUncertainty',      default=100.0, type=float, help='prefit uncertainty on mW in MeV')
     parser.add_argument(     '--wlike', dest='isWlike', action="store_true", default=False, help="impacts for W-like analysis (it prints mZ accordingly). Default is Wmass");
     parser.add_argument(     '--compareFile', dest='compareFile', default='', type=str, help='Additional file to compare impacts with (must have the same impact labels)')
-    parser.add_argument(     '--set-stat-alt'  , dest='setStatAlt',    default=-1.0, type=float, help='If positive, use this value for stat of the file passed with compareFile')
+    parser.add_argument(     '--set-stat-alt'  , dest='setStatAlt',    default=-1.0, type=float, help='If positive, use this value for stat of the file passed with compareFile, otherwise use the same as the other file')
     parser.add_argument(     '--legendEntries', nargs=2, type=str, help="Legend entries when comparing files", default=["Nominal", "Alternate"])
+    parser.add_argument(     '--printAltVal', action='store_true', help='When comparing to a second file, also print the values for the alternative')
     args = parser.parse_args()
 
     # palettes:
@@ -153,16 +147,18 @@ if __name__ == "__main__":
     createPlotDirAndCopyPhp(args.outdir)
 
     compare = True if len(args.compareFile) else False
-        
+    if not compare and args.printAltVal:
+        print("Warning: --printAltVal only works with --compareFile. Please try again")
+        quit()
+    
     totalUncertainty_mW, nuisGroup_nameVal = readNuisances(args, args.rootfile[0])
     if args.setStat > 0.0:
         nuisGroup_nameVal["stat"] = args.setStat
 
     if compare:
         totalUncertainty_mW_alt, nuisGroup_nameVal_alt = readNuisances(args, args.compareFile)
-        if args.setStatAlt > 0.0:
-            nuisGroup_nameVal_alt["stat"] = args.setStatAlt
-
+        nuisGroup_nameVal_alt["stat"] = args.setStatAlt if args.setStatAlt > 0.0 else nuisGroup_nameVal["stat"]
+            
     sortedGroups = sorted(nuisGroup_nameVal.keys(), key= lambda x: nuisGroup_nameVal[x])
 
     ROOT.gStyle.SetPaintTextFormat('2.1f' if args.scaleToMeV else '0.3f')
@@ -224,7 +220,7 @@ if __name__ == "__main__":
     #ROOT.gPad.SetFrameFillColor(33)
     
     clm = 0.4
-    crm = 0.12
+    crm = 0.16 if args.printAltVal else 0.12
     cbm = 0.1
     ctm = 0.1
     if args.margin:
@@ -261,14 +257,23 @@ if __name__ == "__main__":
     #lat.SetNDC();
     lat.SetTextFont(42)        
     lat.SetTextSize(0.035)
+    latAlt = ROOT.TLatex()
+    latAlt.SetTextFont(42)        
+    latAlt.SetTextSize(0.025)
+    latAlt.SetTextColor(ROOT.kPink-6)
     c1.Update()
     xtex = 1.05 * (ROOT.gPad.GetUxmax() - ROOT.gPad.GetUxmin())
+    xtexAlt = 1.22 * (ROOT.gPad.GetUxmax() - ROOT.gPad.GetUxmin())
     step = (ROOT.gPad.GetUymax() - ROOT.gPad.GetUymin()) / h1.GetNbinsX()
-    ytex = ROOT.gPad.GetUymin() + step/2
+    ytex = ROOT.gPad.GetUymin() + 0.25 * step
+    ytexAlt = ytex # ROOT.gPad.GetUymin() + 0.07 * step
     for i in range(1, 1 + h1.GetNbinsX()):
         hval.GetXaxis().SetBinLabel(i, str(round(h1.GetBinContent(i), 1 if args.scaleToMeV else 3)))
         hval.SetBinContent(i, 0.0)
         lat.DrawLatex(xtex, ytex + step * (i-1), hval.GetXaxis().GetBinLabel(i))
+        if args.printAltVal:
+            altVal = str(round(h2.GetBinContent(i), 1 if args.scaleToMeV else 3))
+            latAlt.DrawLatex(xtexAlt, ytexAlt + step * (i-1), altVal)
     hval.Draw("AXIS X+ SAME")
         
     postfix = args.postfix

@@ -8,10 +8,10 @@ import narf
 import wremnants
 import hist
 import lz4.frame, pickle
-from wremnants.datasets.datagroups import datagroups2016
+from wremnants.datasets.datagroups2016 import make_datagroups_2016
 from wremnants import histselections as sel
 
-from utilities import boostHistHelpers as hh,common
+from utilities import boostHistHelpers as hh, common, logging
 
 ## safe batch mode                                 
 import sys
@@ -44,7 +44,7 @@ if __name__ == "__main__":
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4], help="Set verbosity level with logging, the larger the more verbose");
     args = parser.parse_args()
     
-    logger = common.setup_color_logger(os.path.basename(__file__), args.verbose)
+    logger = logging.setup_logger(os.path.basename(__file__), args.verbose)
     
     ROOT.TH1.SetDefaultSumw2()
 
@@ -59,7 +59,7 @@ if __name__ == "__main__":
     xAxisName = args.xAxisName
     yAxisName = args.yAxisName
 
-    groups = datagroups2016(args.inputfile[0], applySelection=False)
+    groups = make_datagroups_2016(args.inputfile[0], applySelection=False)
     datasetsAll = groups.getNames()
     datasetsAllNoFake = list(filter(lambda x: x != "Fake", datasetsAll))
     datasets = ["Wmunu", "QCD", "Top", "Fake"]

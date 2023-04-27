@@ -10,7 +10,7 @@ import lz4.frame
 
 from utilities import common
 
-ROOT.gInterpreter.Declare('#include "muon_efficiencies_binned.h"')
+narf.clingutils.Declare('#include "muon_efficiencies_binned.h"')
 
 data_dir = f"{pathlib.Path(__file__).parent}/data/"
 
@@ -34,6 +34,7 @@ def make_muon_efficiency_helpers_binned(filename = data_dir + "/testMuonSF/allSm
     # categorical axes in python bindings always have an overflow bin, so use a regular
     # axis for the charge
     axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "SF charge")
+    axis_charge_inclusive = hist.axis.Regular(1, -2., 2., underflow=False, overflow=False, name = "SF charge") # for isolation and effStat only
     isoEff_types = ["iso", "isonotrig", "antiiso", "antiisonotrig"]
     allEff_types = ["reco", "tracking", "idip", "trigger"] + isoEff_types
     axis_allEff_type = hist.axis.StrCategory(allEff_types, name = "allEff_type")
@@ -120,31 +121,36 @@ def make_muon_efficiency_helpers_binned(filename = data_dir + "/testMuonSF/allSm
 
     ##############
     ## now the EFFSTAT    
-    effStat_manager = {"sf_reco": {"nPtBins" : 0,
+    effStat_manager = {"sf_reco": {"nPtBins" : None,
+                                   "nCharges" : None,
                                    "axisLabels" : ["reco"],
                                    "boostHist" : None,
                                    "helper" : None},
-                       "sf_tracking": {"nPtBins" : 0,
+                       "sf_tracking": {"nPtBins" : None,
+                                       "nCharges" : None,
                                        "axisLabels" : ["tracking"],
                                        "boostHist" : None,
                                        "helper" : None},
-                       "sf_idip": {"nPtBins" : 0,
+                       "sf_idip": {"nPtBins" : None,
+                                   "nCharges" : None,
                                    "axisLabels" : ["idip"],
                                    "boostHist" : None,
                                    "helper" : None},
-                       "sf_trigger": {"nPtBins" : 0,
-                                   "axisLabels" : ["trigger"],
-                                   "boostHist" : None,
-                                   "helper" : None},
-                       "sf_iso": {"nPtBins" : 0,
+                       "sf_trigger": {"nPtBins" : None,
+                                     "nCharges" : None,
+                                      "axisLabels" : ["trigger"],
+                                      "boostHist" : None,
+                                      "helper" : None},
+                       "sf_iso": {"nPtBins" : None,
+                                  "nCharges" : None,
                                   "axisLabels" : ["iso", "isonotrig", "antiiso", "antiisonotrig"],
                                   "boostHist" : None,
                                   "helper" : None},
-                       # "sf_iso_effData": {"nPtBins" : 0,
+                       # "sf_iso_effData": {"nPtBins" : None,
                        #                    "axisLabels" : ["iso", "isonotrig", "antiiso", "antiisonotrig"],
                        #                    "boostHist" : None,
                        #                    "helper" : None},
-                       # "sf_iso_effMC": {"nPtBins" : 0,
+                       # "sf_iso_effMC": {"nPtBins" : None,
                        #                  "axisLabels" : ["iso", "isonotrig", "antiiso", "antiisonotrig"],
                        #                  "boostHist" : None,
                        #                  "helper" : None},
@@ -152,10 +158,17 @@ def make_muon_efficiency_helpers_binned(filename = data_dir + "/testMuonSF/allSm
 
     for effStatKey in effStat_manager.keys():
         axis_eff_type = None
+        axis_charge_def = None
         histPrefix = "effData" if "effData" in effStatKey else "effMC" if "effMC" in effStatKey else "SF"
         for charge, charge_tag in charges.items():
             for eff_type in effStat_manager[effStatKey]["axisLabels"]:
-                chargeTag = charge_tag if eff_type in chargeDependentSteps else "both"
+                if eff_type in chargeDependentSteps:
+                    axis_charge_def = axis_charge
+                    chargeTag = charge_tag
+                else:
+                    axis_charge_def = axis_charge_inclusive
+                    chargeTag = "both"                    
+                    if ic: continue # must continue after having set the charge axis
                 hist_name = f"{histPrefix}_{histNameTag}_{eratag}_{eff_type}_{chargeTag}"
                 hist_root = fin.Get(hist_name)
                 if hist_root is None:
@@ -170,14 +183,15 @@ def make_muon_efficiency_helpers_binned(filename = data_dir + "/testMuonSF/allSm
                     axis_eta_eff = hist_hist.axes[0]
                     axis_pt_eff = hist_hist.axes[1]
                     axis_eff_type = hist.axis.StrCategory(effStat_manager[effStatKey]["axisLabels"], name = f"{effStatKey}_eff_type")
+                    effStat_manager[effStatKey]["nCharges"] = 2 if eff_type in chargeDependentSteps else 1
                     effStat_manager[effStatKey]["boostHist"] = hist.Hist(axis_eta_eff,
                                                                          axis_pt_eff,
-                                                                         axis_charge,
+                                                                         axis_charge_def,
                                                                          axis_eff_type,
                                                                          name = effStatKey,
                                                                          storage = hist.storage.Weight())
                     
-                effStat_manager[effStatKey]["boostHist"].view(flow=True)[:, :, axis_charge.index(charge), axis_eff_type.index(eff_type)] = hist_hist.view(flow=True)[:,:]
+                effStat_manager[effStatKey]["boostHist"].view(flow=True)[:, :, axis_charge_def.index(charge), axis_eff_type.index(eff_type)] = hist_hist.view(flow=True)[:,:]
                 
         # set overflow and underflow equal to adjacent bins
         effStat_manager[effStatKey]["boostHist"].view(flow=True)[0, ...] = effStat_manager[effStatKey]["boostHist"].view(flow=True)[1, ...]
@@ -190,13 +204,13 @@ def make_muon_efficiency_helpers_binned(filename = data_dir + "/testMuonSF/allSm
         # this works because we are using the histogram after smoothing but with the original TnP pt binning 
         nptbins = np.count_nonzero(axis_pt_eff.edges < max_pt) if "tracking" not in effStatKey else axis_pt_eff.size
         logging.info(f"Using {nptbins} pt bins for {effStatKey}")
-
+        ncharges = effStat_manager[effStatKey]["nCharges"]
 
         sf_stat_pyroot = narf.hist_to_pyroot_boost(effStat_manager[effStatKey]["boostHist"])
         if "sf_iso" in effStatKey:
-            helper_stat = ROOT.wrem.muon_efficiency_binned_helper_stat_iso[str(is_w_like).lower(), netabins, nptbins, type(sf_stat_pyroot)]( ROOT.std.move(sf_stat_pyroot) )
+            helper_stat = ROOT.wrem.muon_efficiency_binned_helper_stat_iso[str(is_w_like).lower(), netabins, nptbins, ncharges, type(sf_stat_pyroot)]( ROOT.std.move(sf_stat_pyroot) )
         else:
-            helper_stat = ROOT.wrem.muon_efficiency_binned_helper_stat[str(is_w_like).lower(), netabins, nptbins, type(sf_stat_pyroot)]( ROOT.std.move(sf_stat_pyroot) )
+            helper_stat = ROOT.wrem.muon_efficiency_binned_helper_stat[str(is_w_like).lower(), netabins, nptbins, ncharges, type(sf_stat_pyroot)]( ROOT.std.move(sf_stat_pyroot) )
 
         # make new versions of these axes without overflow/underflow to index the tensor
         if isinstance(axis_eta_eff, bh.axis.Regular):
@@ -210,7 +224,7 @@ def make_muon_efficiency_helpers_binned(filename = data_dir + "/testMuonSF/allSm
             axis_pt_eff_tensor = hist.axis.Variable(axis_pt_eff.edges[:nptbins+1], name = "nPtBins", overflow = False, underflow = False)
 
         #print(f"{effStatKey} nPtBins-tensor = {axis_pt_eff_tensor.size}")
-        helper_stat.tensor_axes = [axis_eta_eff_tensor, axis_pt_eff_tensor, axis_charge]
+        helper_stat.tensor_axes = [axis_eta_eff_tensor, axis_pt_eff_tensor, axis_charge_def]
         effStat_manager[effStatKey]["helper"] = helper_stat
 
     fin.Close()

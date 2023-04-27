@@ -61,7 +61,7 @@ if __name__ == "__main__":
     parser.add_argument("-a", "--all",      dest="show_all_parameters",    default=False,  action="store_true", help="Print all nuisances, even the ones which are unchanged w.r.t. pre-fit values.")
     parser.add_argument("-p", "--pois",      default=None,   type=str,  help="Name of the nuisances to be plotted (comma separated list of regexps)")
     parser.add_argument("-f", "--format", default="html", choices=['text', 'latex', 'html'], type=str,  help="Output format (in addition to pdf,png)")
-    parser.add_argument(     '--suffix', default='', type=str, help='suffix for the correlation matrix')
+    parser.add_argument(     '--postfix', default='', type=str, help='postfix for the correlation matrix')
     parser.add_argument(     '--uniqueString', default=None, required= True, type=str, help='Unique name to identify the output file names, which is nuisances_XXX_SUFF.EXT, with XXX passed by this option')
     parser.add_argument('-t', '--type',  default='hessian', choices=["hessian", "scans", "toys"], type=str, help='run the plot from which postfit? toys/scans/hessian')
     parser.add_argument('--bm', '--bottom-margin' , dest='setBottomMargin'     , default=0.3        , type=float, help='Bottom margin for the canvas')
@@ -218,13 +218,13 @@ if __name__ == "__main__":
     # print the results
     #----------
     if args.rankNuisancesBy:
-        addSuffix = "rankBy{what}".format(what=args.rankNuisancesBy)
-        if args.suffix:
-            args.suffix += "_{add}".format(add=addSuffix)
+        addPostfix = "rankBy{what}".format(what=args.rankNuisancesBy)
+        if args.postfix:
+            args.postfix += "_{add}".format(add=addPostfix)
         else:
-            args.suffix = addSuffix
+            args.postfix = addPostfix
             
-    outnameNoExt = "{od}/nuisances_{ps}_{suff}".format(od=args.outdir, ps=args.uniqueString, suff=args.suffix)
+    outnameNoExt = "{od}/nuisances_{ps}_{suff}".format(od=args.outdir, ps=args.uniqueString, suff=args.postfix)
 
     for ext in args.format.split(','):
         txtfilename = "{noext}.{ext}".format(noext=outnameNoExt, ext=ext)

@@ -30,7 +30,7 @@ std::map<std::string, int> recoil_param_nGauss;
 std::vector<TF1*> recoil_param_funcs_;
 std::map<std::string, TF1> recoil_param_funcs__;
 std::unordered_map<std::string, TF1*> recoil_param_funcs;
-std::map<std::string, int> recoil_param_nStat;
+std::map<std::string, int> recoil_unc_no; // number of uncertainties recoil_unc_no
 
 std::map<std::string, int> recoil_binned_nGauss;
 std::map<std::string, std::vector<float>> recoil_binned_qTbins;
@@ -165,10 +165,7 @@ Vec_f METLeptonCorrection(double MET_pt, double MET_phi, double lep_pt_uncorr, d
 
 Vec_f recoilComponents(double MET_pt, double MET_phi, double lep_pt, double lep_phi) {
     
-    // computes the hadronic recoil, defined as -(MET + V), V being the vector sum of the (di)lepton system in the lab frame
-    
-    
-    
+    // computes the hadronic recoil, defined as -(MET + V), V being the vector sum of the reco (di)lepton system in the lab frame
     double pUx  = MET_pt*cos(MET_phi) + lep_pt*cos(lep_phi); // recoil x in lab frame
 	double pUy  = MET_pt*sin(MET_phi) + lep_pt*sin(lep_phi); // recoil y in lab frame
 	double pU   = std::hypot(pUx, pUy);
@@ -188,7 +185,8 @@ Vec_f recoilComponents(double MET_pt, double MET_phi, double lep_pt, double lep_
 
 Vec_f recoilComponentsGen(double MET_pt, double MET_phi, double lep_pt, double lep_phi, double gen_lep_phi) {
     
-    // computes the hadronic recoil, defined as -(MET + V), V being the vector sum of the (di)lepton system in the lab frame
+    // computes the hadronic recoil, defined as -(MET + V), V being the vector sum of the reco (di)lepton system in the lab frame
+    // compute recoil as projection on the gen boson phi
     double pUx  = MET_pt*cos(MET_phi) + lep_pt*cos(lep_phi); // recoil x in lab frame
 	double pUy  = MET_pt*sin(MET_phi) + lep_pt*sin(lep_phi); // recoil y in lab frame
 	double pU   = std::hypot(pUx, pUy);
@@ -302,9 +300,11 @@ class GaussianSum {
             for(unsigned int i = 0; i < mean.size(); i++) {
                 
                 tmp = (pval-mean.at(i))/sigma.at(i);
-                ret += norm.at(i)*std::erfc(-tmp/TMath::Sqrt2()); // erfc?
+                //ret += norm.at(i)*std::erfc(-tmp/TMath::Sqrt2()); // erfc?
+                ret += norm.at(i)*0.5*(1.0 + std::erf(tmp/TMath::Sqrt2()));
             }
-            return 0.5*ret/totNorm;
+            //return 0.5*ret/totNorm;
+            return ret/totNorm;
         }
         
         double eval(double val) {
@@ -315,6 +315,22 @@ class GaussianSum {
                 ret += norm.at(i)*TMath::Gaus(val, mean.at(i), sigma.at(i), true);
             }
             return ret/totNorm;
+        }
+        
+        void resetMeans() {
+            
+            for(unsigned int i = 0; i < mean.size(); i++) {
+                mean.at(i) = 0;
+            }
+        }
+        
+        double getWeightedMean() {
+            
+            double wmean = 0;
+            for(unsigned int i = 0; i < mean.size(); i++) {
+                wmean += norm.at(i)*mean.at(i);
+            }
+            return wmean;
         }
         
         double findRoot(double value, double xMin, double xMax) {
@@ -729,6 +745,12 @@ GaussianSum constructParametricGauss(string tag, double qT, int syst=-1) {
         //cout << " PARAMETIC " << endl; 
         int nGauss = recoil_param_nGauss[tag];
         for(int i=1; i<=nGauss; i++) {
+            mean = recoil_param_funcs[tag + "_mean" + to_string(i) + systLabel]->Eval(qT);
+           
+            //if(tag == "target_para" or tag == "source_para") mean -= qT;
+            sigma = recoil_param_funcs[tag + "_sigma" + to_string(i) + systLabel]->Eval(qT);
+            if(sigma <= 0) continue;
+            
             if(i == nGauss) norm = 1.-totNorm;
             else {
                 norm = recoil_param_funcs[tag + "_norm" + to_string(i) + systLabel]->Eval(qT);
@@ -740,10 +762,9 @@ GaussianSum constructParametricGauss(string tag, double qT, int syst=-1) {
                 norm = 1. - totNorm;
                 if(norm < 0) norm = 0;
             }
-            mean = recoil_param_funcs[tag + "_mean" + to_string(i) + systLabel]->Eval(qT);
-            //if(tag == "target_para" or tag == "source_para") mean -= qT;
-            sigma = recoil_param_funcs[tag + "_sigma" + to_string(i) + systLabel]->Eval(qT);
+        
             gauss.addTerm(mean, sigma, norm);
+            
             //cout << " " << tag << " qT=" << qT << "  iGauss=" << i << " norm=" << norm << " mean=" << mean << " sigma=" << sigma << endl;
         }
     }
@@ -779,7 +800,7 @@ GaussianSum constructParametricGauss(string tag, double qT, int syst=-1) {
 }
 
 
-// recoil correction
+// recoil correction for Z (MC to DATA)
 Vec_f recoilCorrectionParametric(double para, double perp, double qT, string systTag="", int systIdx=-1) {
     
     Vec_f res(3, 0);
@@ -790,16 +811,9 @@ Vec_f recoilCorrectionParametric(double para, double perp, double qT, string sys
     res[0] = std::hypot(res[1], res[2]);
     
 	if(!applyRecoilCorrection) return res;
-    //if(qT > recoil_correction_qTmax) qT = recoil_correction_qTmax; // protection for high qT
-    //return res;
+    if(qT > recoil_correction_qTmax) return res; // protection for high qT
     
-    int corrIdx = 1;
-    
-    double norm_para_data = 1;
-    double norm_perp_data = 1;
-    double norm_para_mc = 1;
-    double norm_perp_mc = 1;
-    
+
     GaussianSum data_para;
     GaussianSum data_perp;
     GaussianSum dy_para;
@@ -815,28 +829,35 @@ Vec_f recoilCorrectionParametric(double para, double perp, double qT, string sys
     else dy_para = constructParametricGauss("source_para", qT);
     if(systIdx != -1 and systTag == "source_perp") dy_perp = constructParametricGauss("source_perp", qT, systIdx);
     else dy_perp = constructParametricGauss("source_perp", qT);
+    
+    double dy_para_mean = dy_para.getWeightedMean();
+    double data_para_mean = data_para.getWeightedMean();
+    double dmean = data_para_mean - dy_para_mean;
+    
+    //data_para.resetMeans();
+    //dy_para.resetMeans();
  
-    double pVal_para_dy = dy_para.evalCDF(para + qT); //  // pdfs are parameterized on para + qT - qTcorrMean, i.e. to have mean=0
+    double pVal_para_dy = dy_para.evalCDF(para);// dy_para_mean works
     double pVal_perp_dy = dy_perp.evalCDF(perp);
+    
+    double para_orig = dy_para.findRoot(pVal_para_dy, -1000, 1000);
+    double perp_orig = dy_perp.findRoot(pVal_perp_dy, -1000, 1000);
     
     
     double para_corr = data_para.findRoot(pVal_para_dy, -1000, 1000);
-    double perp_corr = data_perp.findRoot(pVal_perp_dy, -500, 500);
+    double perp_corr = data_perp.findRoot(pVal_perp_dy, -1000, 1000);
 
   
     if(para_corr == 999999 and recoil_verbose) cout << "PARA ************* " << qT << endl;
     if(perp_corr == 999999 and recoil_verbose) cout << "PERP ************* " << qT << endl;
     
-    
-  
     if(para_corr == 999999) para_corr = para;
-    else para_corr -= qT;
-    
+    //else para_corr += data_para_mean; // -data_para_mean
     if(perp_corr == 999999) perp_corr = perp;    
         
-    res[1] = para_corr;
-    res[2] = perp_corr;
-    res[0] = std::hypot(res[1], res[2]);
+    res[1] = para_corr + para - para_orig;
+    res[2] = perp_corr + perp - perp_orig;
+    res[0] = std::hypot(res[1]-qT, res[2]);
 
 	return res;    
 }
@@ -845,7 +866,19 @@ Vec_f recoilCorrectionParametric(double para, double perp, double qT, string sys
 // recoil correction
 Vec_recoil recoilCorrectionParametricUnc(double para, double perp, double qT, string tag) {
     
-    int nSysts = recoil_param_nStat[tag];
+    /*
+    if(tag == "target_para_bkg") {
+        
+        Vec_f ret_up = recoilCorrectionParametric(para, perp, qT, "target_para_bkg", 0);
+        Vec_f ret_dw = recoilCorrectionParametric(para, perp, qT, "target_para_bkg", 1);
+        Vec_f ret_nom = recoilCorrectionParametric(para, perp, qT, "target_para");
+        
+        if(ret_nom[1] > 60) cout << "qT=" << qT << " para=" << para << " para_nom=" << ret_nom[1] << " para_up=" << ret_up[1] <<  "para_dw=" << ret_dw[1] << endl;
+    }
+    */
+    
+    
+    int nSysts = recoil_unc_no[tag];
     Vec_recoil res(nSysts);
     for(int iSyst = 0; iSyst<nSysts; iSyst++) {
         Vec_f ret = recoilCorrectionParametric(para, perp, qT, tag, iSyst);
@@ -863,7 +896,7 @@ Vec_f recoilCorrectionParametricUncWeights(double eval, double qT, string tag_no
     
     if(qT > recoil_correction_qTmax) qT = recoil_correction_qTmax; // protection for high qT
     
-    int nSysts = recoil_param_nStat[tag_pert];
+    int nSysts = recoil_unc_no[tag_pert];
     Vec_f res(nSysts);
     nom = constructParametricGauss(tag_nom, qT);
     double nom_eval = nom.eval(eval);
@@ -872,11 +905,12 @@ Vec_f recoilCorrectionParametricUncWeights(double eval, double qT, string tag_no
 
         pert = constructParametricGauss(tag_pert, qT, iSyst);
         w = pert.eval(eval)/nom_eval;
-        if(w < 0.2 or w > 1.8) { // protection
-            if(recoil_verbose) cout << "Weight too large w=" << w << " tag_pert=" << tag_pert << " qT=" << qT << " res[iSyst]=" << res[iSyst] << " nom_eval=" << nom_eval << " pert_eval" << pert.eval(eval) << endl;
+        if(w < 0.1 or w > 10) { // protection
+            //if(recoil_verbose) cout << "Weight too large w=" << w << " tag_pert=" << tag_pert << " eval=" << eval <<" qT=" << qT << " res[iSyst]=" << res[iSyst] << " nom_eval=" << nom_eval << " pert_eval" << pert.eval(eval) << endl;
             w = 1;
         }
-        res[iSyst] = w;        
+        if(nom_eval < 1e-10) res[iSyst] = 1;
+        else res[iSyst] = w;
         //cout << tag_pert << " qT=" << qT << " res[iSyst]=" << res[iSyst] << " " << nom_eval << endl;
     }
     return res;
@@ -972,7 +1006,7 @@ Vec_f recoilCorrectionParametric_para_qT_unc(Vec_recoil recoil, double qT) {
     
     int nBins = recoil.size();
     Vec_f res(nBins, -1e5);
-    for(int iSyst=0; iSyst<nBins; iSyst++) res[iSyst] = recoil[iSyst].para + qT;
+    for(int iSyst=0; iSyst<nBins; iSyst++) res[iSyst] = recoil[iSyst].para - qT;
 	return res;
 }
 
@@ -996,7 +1030,7 @@ Vec_f recoilCorrectionParametric_magn_unc(Vec_recoil recoil, double qT) {
     
     int nBins = recoil.size();
     Vec_f res(nBins, -1e5);
-    for(int iSyst=0; iSyst<nBins; iSyst++) res[iSyst] = sqrt(recoil[iSyst].para*recoil[iSyst].para + recoil[iSyst].perp*recoil[iSyst].perp);
+    for(int iSyst=0; iSyst<nBins; iSyst++) res[iSyst] = sqrt((recoil[iSyst].para-qT)*(recoil[iSyst].para-qT) + recoil[iSyst].perp*recoil[iSyst].perp);
 	return res;
 }
 

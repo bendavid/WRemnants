@@ -1,7 +1,7 @@
 import narf
 import ROOT
 
-ROOT.gInterpreter.Declare('#include "theory_corrections.h"')
+narf.clingutils.Declare('#include "theory_corrections.h"')
 
 def makeCorrectionsTensor(corrh, tensor, tensor_rank):
     corrhConv = narf.hist_to_pyroot_boost(corrh, tensor_rank=tensor_rank)

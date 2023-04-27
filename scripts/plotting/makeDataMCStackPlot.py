@@ -1,13 +1,13 @@
-from wremnants.datasets.datagroups import datagroups2016
+from wremnants.datasets.datagroups2016 import make_datagroups_2016
 from wremnants import histselections as sel
 from wremnants import plot_tools,theory_tools,syst_tools
 from utilities import boostHistHelpers as hh,common
 import matplotlib.pyplot as plt
-from matplotlib import cm
+from matplotlib import colormaps
 import argparse
 import os
 import shutil
-import logging
+from wremnants import logging
 import pathlib
 import hist
 import re
@@ -21,6 +21,8 @@ xlabels = {
     "costhetastarll" : r"$\cos{\phi^{\star}_{\ell\ell}}$",
     "phistarll" : r"$\phi^{\star}_{\ell\ell}$",
     "MET_pt" : r"p$_{\mathrm{T}}^{miss}$ (GeV)",
+    "MET" : r"p$_{\mathrm{T}}^{miss}$ (GeV)",
+    "met" : r"p$_{\mathrm{T}}^{miss}$ (GeV)",
     "mt" : r"m$_{T}^{\ell\nu}$ (GeV)",
     "etaSum":r"$\eta^{\ell(+)} + \eta^{\ell(-)}$",
     "etaDiff":r"$\eta^{\ell(+)} - \eta^{\ell(-)}$",
@@ -40,7 +42,7 @@ xlabels = {
 
 parser = argparse.ArgumentParser()
 parser.add_argument("infile", help="Output file of the analysis stage, containing ND boost histogrdams")
-parser.add_argument("--ratio-to-data", action='store_true', help="Use data as denominator in ratio")
+parser.add_argument("--ratioToData", action='store_true', help="Use data as denominator in ratio")
 parser.add_argument("-n", "--baseName", type=str, help="Histogram name in the file (e.g., 'nominal')", default="nominal")
 parser.add_argument("--nominalRef", type=str, help="Specify the nominal his if baseName is a variation hist (for plotting alt hists)")
 parser.add_argument("--hists", type=str, nargs='+', required=True, choices=xlabels.keys(), help="List of histograms to plot")
@@ -52,11 +54,11 @@ parser.add_argument("--rebin", type=int, default=1, help="Rebin (for now must be
 parser.add_argument("--ylim", type=float, nargs=2, help="Min and max values for y axis (if not specified, range set automatically)")
 parser.add_argument("--yscale", type=float, help="Scale the upper y axis by this factor (useful when auto scaling cuts off legend)")
 parser.add_argument("--xlim", type=float, nargs=2, help="min and max for x axis")
-parser.add_argument("-a", "--name_append", type=str, help="Name to append to file name")
+parser.add_argument("-a", "--name_append", default="", type=str, help="Name to append to file name")
 parser.add_argument("--debug", action='store_true', help="Print debug output")
 parser.add_argument("--procFilters", type=str, nargs="*", help="Filter to plot (default no filter, only specify if you want a subset")
-parser.add_argument("--no_data", action='store_true', help="Don't plot data")
-parser.add_argument("--no_fill", action='store_true', help="Don't fill stack")
+parser.add_argument("--noData", action='store_true', help="Don't plot data")
+parser.add_argument("--noFill", action='store_true', help="Don't fill stack")
 parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend text")
 parser.add_argument("--fitresult", type=str, help="Specify a fitresult root file to draw the postfit distributions with uncertainty bands")
 parser.add_argument("--prefit", action='store_true', help="Use the prefit uncertainty from the fitresult root file, instead of the postfit. (--fitresult has to be given)")
@@ -69,14 +71,14 @@ variation.add_argument("--varLabel", type=str, nargs='+', required=True, help="L
 variation.add_argument("--selectAxis", type=str, nargs='+', help="If you need to select a variation axis")
 variation.add_argument("--selectEntries", type=str, nargs='+', help="entries to read from the selected axis")
 variation.add_argument("--colors", type=str, nargs='+', help="Variation colors")
-variation.add_argument("--double-colors", action='store_true', help="Auto generate colors in pairs (useful for systematics)")
-variation.add_argument("--transform", action='store_true', help="Apply variation-specific transformation")
-variation.add_argument("--fill-between", action='store_true', help="Fill between uncertainty hists in ratio")
-variation.add_argument("--skip-fill-between", type=int, default=0, help="Don't fill between the first N hists (only relevant if --fill-between = True)")
+variation.add_argument("--linestyle", type=str, default=[], nargs='+', help="Linestyle for variations")
+variation.add_argument("--doubleColors", action='store_true', help="Auto generate colors in pairs (useful for systematics)")
+variation.add_argument("--fillBetween", action='store_true', help="Fill between uncertainty hists in ratio")
+variation.add_argument("--skipFillBetween", type=int, default=0, help="Don't fill between the first N hists (only relevant if --fillBetween = True)")
 
 args = parser.parse_args()
 
-logger = common.setup_logger("makeDataMCStackPlot", 4 if args.debug else 3, True)
+logger = logging.setup_logger("makeDataMCStackPlot", 4 if args.debug else 3, True)
 
 def padArray(ref, matchLength):
     return ref+ref[-1:]*(len(matchLength)-len(ref))
@@ -92,17 +94,18 @@ if addVariation and (args.selectAxis or args.selectEntries):
                          f" found selectEntries={len(args.selectEntries)} and varLabel={len(args.varLabel)}")
     if len(args.varName) < len(args.selectEntries):
         args.varName = padArray(args.varName, args.selectEntries)
-    axes = padArray(args.selectAxis, args.varLabel)
-    entries = padArray(args.selectEntries, args.varLabel)
+    axes = padArray(args.selectAxis, args.varName)
+    entries = padArray(args.selectEntries, args.varName)
 
 outdir = plot_tools.make_plot_dir(args.outpath, args.outfolder)
 
-groups = datagroups2016(args.infile)
-datasets = groups.getNames(args.procFilters, exclude=False)
+groups = make_datagroups_2016(args.infile, filterGroups=args.procFilters, excludeGroups=None if args.procFilters else ['QCD'])
+# There is probably a better way to do this but I don't want to deal with it
+datasets = groups.getNames()
 logger.info(f"Will plot datasets {datasets}")
 
 if not args.nominalRef:
-    nominalName = args.baseName.rsplit("-", 1)[0]
+    nominalName = args.baseName.rsplit("_", 1)[0]
     groups.setNominalName(nominalName)
     groups.loadHistsForDatagroups(args.baseName, syst="", procsToRead=datasets)
 else:
@@ -110,23 +113,21 @@ else:
     groups.setNominalName(nominalName)
     groups.loadHistsForDatagroups(nominalName, syst=args.baseName, procsToRead=datasets)
 
-exclude = ["Data"] if not args.no_data else []
+exclude = ["Data"] if not args.noData else []
 unstack = exclude[:]
 
 # TODO: In should select the correct hist for the transform, not just the first
 transforms = syst_tools.syst_transform_map(nominalName, args.hists[0])
 
-histInfo = groups.getDatagroups()
-
 if addVariation:
     logger.info(f"Adding variation {args.varName}")
     varLabels = padArray(args.varLabel, args.varName)
     # If none matplotlib will pick a random color
-    ncols = len(args.varName) if not args.double_colors else int(len(args.varName)/2)
-    colors = args.colors if args.colors else [cm.get_cmap("tab10" if ncols < 10 else "tab20")(int(i/2) if args.double_colors else i) for i in range(len(args.varName))]
+    ncols = len(args.varName) if not args.doubleColors else int(len(args.varName)/2)
+    colors = args.colors if args.colors else [colormaps["tab10" if ncols < 10 else "tab20"](int(i/2) if args.doubleColors else i) for i in range(len(args.varName))]
     for i, (label,name,color) in enumerate(zip(varLabels,args.varName,colors)):
         entry = entries[i] if entries else None
-        do_transform = args.transform and entry in transforms
+        do_transform = entry in transforms
         name = name if name != "" else nominalName
         load_op = {}
         action=None
@@ -148,9 +149,6 @@ if addVariation:
             load_op = {p : action for p in transform_procs}
         else:
             varname = name
-
-        if (args.transform and entry not in transforms):
-            logger.warning(f"No known transformation for variation {entry}. No transform applied!")
 
         reload = name != args.baseName
         # The action map will only work if reloading, otherwise need to apply some transform
@@ -189,22 +187,29 @@ for h in args.hists:
     else:
         action = lambda x: hh.projectNoFlow(collapseSyst(x[select]), h, overflow_ax)
     fig = plot_tools.makeStackPlotWithRatio(histInfo, prednames, histName=args.baseName, ylim=args.ylim, yscale=args.yscale,
-            fill_between=args.fill_between if hasattr(args, "fill_between") else None, 
-            skip_fill=args.skip_fill_between if hasattr(args, "skip_fill_between") else 0,
+            fill_between=args.fillBetween if hasattr(args, "fillBetween") else None, 
+            skip_fill=args.skipFillBetween if hasattr(args, "skipFillBetween") else 0,
             action=action, unstacked=unstack, 
             fitresult=args.fitresult, prefit=args.prefit,
             xlabel=xlabels[h], ylabel="Events/bin", rrange=args.rrange, binwnorm=1.0, lumi=groups.lumi,
-            ratio_to_data=args.ratio_to_data, rlabel="Pred./Data" if args.ratio_to_data else "Data/Pred.",
-            xlim=args.xlim, no_fill=args.no_fill, cms_decor="Preliminary" if not args.no_data else "Simulation Preliminary",
-            legtext_size=20*args.scaleleg)
+            ratio_to_data=args.ratioToData, rlabel="Pred./Data" if args.ratioToData else "Data/Pred.",
+            xlim=args.xlim, no_fill=args.noFill, cms_decor="Preliminary" if not args.noData else "Simulation Preliminary",
+            legtext_size=20*args.scaleleg, unstacked_linestyles=args.linestyle if hasattr(args, "linestyle") else [])
 
     fitresultstring=""
     if args.fitresult:
         fitresultstring = "_prefit" if args.prefit else "_postfit"
-    outfile = f"{h.replace('-','_')}_{args.baseName}_{args.channel}"+ fitresultstring + (f"_{args.name_append}" if args.name_append else "")
+    var_arg = None
+    if "varName" in args and args.varName:
+        var_arg = args.varName[0]
+        if "selectEntries" in args and args.selectEntries:
+            var_arg = args.selectEntries[0] if not args.selectEntries[0].isdigit() else (var_arg+args.selectEntries[0])
+    to_join = [f"{h.replace('-','_')}"]+[var_arg]+[fitresultstring, args.name_append]+[args.channel if args.channel != "all" else None]
+    outfile = "_".join(filter(lambda x: x, to_join))
+
     plot_tools.save_pdf_and_png(outdir, outfile)
-    stack_yields = groups.make_yields_df(args.baseName, prednames, action)
-    unstacked_yields = groups.make_yields_df(args.baseName, unstack, action)
+    stack_yields = groups.make_yields_df(args.baseName, prednames, action, norm_proc="Data")
+    unstacked_yields = groups.make_yields_df(args.baseName, unstack, action, norm_proc="Data")
     plot_tools.write_index_and_log(outdir, outfile, 
         yield_tables={"Stacked processes" : stack_yields, "Unstacked processes" : unstacked_yields},
         analysis_meta_info={"AnalysisOutput" : groups.getMetaInfo()},

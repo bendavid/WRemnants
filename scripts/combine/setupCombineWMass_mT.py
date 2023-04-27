@@ -9,7 +9,7 @@ import hist
 import numpy as np
 import scripts.lowPU.config as lowPUcfg
 import math
-from utilities import common
+from utilities import common, logging
 
 scriptdir = f"{pathlib.Path(__file__).parent}"
 
@@ -22,19 +22,19 @@ parser.add_argument("--noScaleHelicitySplit", dest="qcdByHelicity", action='stor
 parser.add_argument("--flavor", type=str, help="Flavor (e or mu)", default="mu")
 parser.add_argument("--fittype", choices=["differential", "wmass", "wlike", "inclusive"], default="differential", 
         help="Fit type, defines POI and fit observable (recoil or mT)")
-parser.add_argument("--statOnly", dest="statOnly", action='store_true', help="Stat-only cards")
-parser.add_argument("--lumiScale", dest="lumiScale", help="Luminosity scale", type=float, default=1.0)
+parser.add_argument("--statOnly", action='store_true', help="Stat-only cards")
+parser.add_argument("--lumiScale", help="Luminosity scale", type=float, default=1.0)
 parser.add_argument("--met", type=str, help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")
 parser.add_argument("--PUMode", type=str, help="PU mode (lowPU or highPU)", default="lowPU")
 
 parser.add_argument("--qcdScale", choices=["byHelicityPtAndByPt", "byHelicityPt", "byHelicityCharge", "byPt", "byCharge", "integrated",], default="integrated", 
         help="Decorrelation for QCDscale (additionally always by charge). With 'byHelicityPtAndByPt' two independent histograms are stored, split and not split by helicities (for tests)")
-parser.add_argument("--noQCDscaleFakes", dest="noQCDscaleFakes" , action="store_true",   help="Do not apply QCd scale uncertainties on fakes, mainly for debugging")
-parser.add_argument("--skipSignalSystOnFakes", dest="skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
+parser.add_argument("--noQCDscaleFakes", action="store_true",   help="Do not apply QCd scale uncertainties on fakes, mainly for debugging")
+parser.add_argument("--skipSignalSystOnFakes", action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
 
 
 args = parser.parse_args()
-logger = common.setup_logger(__file__, args.verbose, args.color_logger)
+logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
 if not os.path.isdir(args.outfolder):
     os.mkdir(args.outfolder)
@@ -45,9 +45,9 @@ suffix = "_statOnly" if args.statOnly else ""
 
 if args.PUMode == "lowPU":
 
-    from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_W
+    from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU
     inputFile = "lowPU_%s_%s.pkl.lz4" % (args.flavor, met)
-    datagroups = datagroupsLowPU_W(inputFile, flavor=args.flavor)
+    datagroups = make_datagroups_lowPU(inputFile, flavor=args.flavor)
     
     #unconstrainedProcs = ["WplusJetsToMuNu", "WminusJetsToMuNu"] # POIs
     unconstrainedProcs = ["WJetsToMuNu"] # POIs
@@ -88,7 +88,7 @@ QCDscale = "integral"
 toDel = []
 for group in datagroups.groups: 
     if not group in constrainedProcs+unconstrainedProcs+bkgDataProcs: toDel.append(group)
-datagroups.deleteGroup(toDel)    
+datagroups.deleteGroups(toDel)    
 
 templateDir = f"{scriptdir}/Templates/LowPileupW"
 cardTool = CardTool.CardTool(f"{args.outfolder}/{args.PUMode}_{args.flavor}_{{chan}}_{met}_lumi{lumisuffix}{suffix}.txt")
