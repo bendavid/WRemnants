@@ -221,6 +221,29 @@ def define_weights_and_corrs(df, weight_expr, dataset_name, helpers, args):
         df = df.Define("nominal_weight", weight_expr)
     return df 
 
+def define_weights_and_corrs_ut(df, weight_expr, dataset_name, helpers, args, name):
+    #TODO: organize this better
+    if "LHEPdfWeight" not in df.GetColumnNames():
+        df = df.DefinePerSample(f"nominal_pdf_cen_{name}", "1.0")
+    elif "horace" in dataset_name:
+        df = df.DefinePerSample(f"nominal_pdf_cen_{name}", "1.0")
+    elif dataset_name in common.vprocs+common.vprocs_lowpu:
+        df = df.Define(f"nominal_pdf_cen_{name}", pdf_central_weight(dataset_name, args.pdfs[0]))
+        weight_expr = f"{weight_expr}*nominal_pdf_cen_{name}"
+        if args.highptscales:
+            weight_expr = f"{weight_expr}*MEParamWeightAltSet3[0]"
+
+    #df = define_prefsr_vars(df)
+    #df = define_ew_vars(df)
+
+    if args.theory_corr and dataset_name in helpers:
+        helper = helpers[dataset_name]
+        df = define_theory_corr_ut(df, weight_expr, helper, generators=args.theory_corr, 
+                modify_central_weight=not args.theory_corr_alt_only, name=name)
+    else:
+        df = df.Define(f"nominal_weight_{name}", weight_expr)
+    return df 
+
 def pdf_central_weight(dataset, pdfset):
     pdfInfo = pdf_info_map(dataset, pdfset)
     pdfBranch = pdfInfo["branch"]
@@ -251,6 +274,34 @@ def define_theory_corr(df, weight_expr, helpers, generators, modify_central_weig
 
         if i == 0 and modify_central_weight:
             df = df.Alias("nominal_weight", f"{generator}CentralWeight")
+
+    return df
+
+def define_theory_corr_ut(df, weight_expr, helpers, generators, modify_central_weight, name):
+    for i, generator in enumerate(generators):
+        if i == 0:
+            if modify_central_weight and generator in helpers:
+                df = df.Define(f"nominal_weight_uncorr_{name}", weight_expr)
+            else:
+                df = df.Define(f"nominal_weight_{name}", weight_expr)
+                df = df.Alias(f"nominal_weight_uncorr_{name}", f"nominal_weight_{name}")
+        if generator not in helpers:
+            continue
+
+        helper = helpers[generator]
+
+        if "Helicity" in generator:
+            df = df.Define(f"{generator}Weight_tensor_{name}", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", f"nominal_weight_uncorr_{name}"])
+        elif 'ew' in generator:
+            df = df.DefinePerSample(f"{generator}Dummy_{name}", "0.")
+            df = df.Define(f"{generator}Weight_tensor_{name}", helper, ["ewMll", "ewLogDeltaM", f"{generator}Dummy", "chargeVgen", f"nominal_weight_uncorr_{name}" if i == 0 else f"nominal_weight_{name}"]) # multiplying with nominal QCD weight
+        else:
+            df = df.Define(f"{generator}Weight_tensor_{name}", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", f"nominal_weight_uncorr_{name}"])
+
+        df = df.Define(f"{generator}CentralWeight_{name}", f"{generator}Weight_tensor_{name}(0)")
+
+        if i == 0 and modify_central_weight:
+            df = df.Alias(f"nominal_weight_{name}", f"{generator}CentralWeight_{name}")
 
     return df
 

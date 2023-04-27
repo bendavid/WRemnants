@@ -132,6 +132,7 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
         axis_eff_type = None
         for charge, charge_tag in charges.items():
             for eff_type in effStat_manager[effStatKey]["axisLabels"]:
+                print(eff_type)
                 nameTag = "nomiAndAlt"
                 if "effData" in effStatKey:
                     nameTag += "_onlyDataVar"

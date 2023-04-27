@@ -11,6 +11,7 @@ ROOT.gInterpreter.Declare('#include "histHelpers.h"')
 ROOT.gInterpreter.Declare('#include "utils.h"')
 ROOT.gInterpreter.Declare('#include "csVariables.h"')
 ROOT.gInterpreter.Declare('#include "EtaPtCorrelatedEfficiency.h"')
+ROOT.gInterpreter.Declare('#include "sf3dvs2d.h"')
 
 from .datasets import datasets2016
 from .datasets import datasetsLowPU
