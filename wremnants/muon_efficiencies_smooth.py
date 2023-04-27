@@ -151,9 +151,6 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
         axis_charge_def = None
         for ic, (charge, charge_tag) in enumerate(charges.items()):
             for eff_type in effStat_manager[effStatKey]["axisLabels"]:
-<<<<<<< HEAD
-                print(eff_type)
-=======
                 if eff_type in chargeDependentSteps:
                     axis_charge_def = axis_charge
                     chargeTag = charge_tag
@@ -161,7 +158,6 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
                     axis_charge_def = axis_charge_inclusive
                     chargeTag = "both"                    
                     if ic: continue # must continue after having set the charge axis
->>>>>>> 94fa335b697627fdccd62bfbcfebe5cb38c84d2f
                 nameTag = "nomiAndAlt"
                 if "effData" in effStatKey:
                     nameTag += "_onlyDataVar"
