@@ -1,22 +1,23 @@
 from utilities import boostHistHelpers as hh,common,logging
-from wremnants import histselections as sel
-from wremnants.datasets import datasets2016
 import lz4.frame
 import pickle
-import hdf5plugin
 import h5py
 import narf
-#import uproot
 import ROOT
 import re
+import os
+import itertools
+import functools
+import hist
 import pandas as pd
 import math
-import os
+
+from wremnants.datasets.datagroup import Datagroup
 
 logger = logging.child_logger(__name__)
 
-class datagroups(object):
-    def __init__(self, infile, combine=False):
+class Datagroups(object):
+    def __init__(self, infile, combine=False, datasets=None):
         self.combine = combine
         self.h5file = None
         self.rtfile = None
@@ -35,26 +36,22 @@ class datagroups(object):
         self.wmass = os.path.basename(self.getScriptCommand().split()[0]).startswith("mw")
         self.wlike = os.path.basename(self.getScriptCommand().split()[0]).startswith("mz_wlike")
 
-        self.lumi = None
-        # FIXME: self.datasets is currently a data member of the inherited class, we should define it here as well
-        # FIXME: if data is excluded the normalization will be lost
-        if self.datasets and self.results:
-            self.data = [x for x in self.datasets.values() if x.is_data]
-            if self.data:
-                self.lumi = sum([self.results[x.name]["lumi"] for x in self.data if x.name in self.results])
+        self.lumi = 1
+
+        if datasets:
+            self.datasets = {x.name : x for x in datasets}
+            logger.debug(f"Getting these datasets: {self.datasets.keys()}")
+
+            if self.results:
+                self.data = [x for x in self.datasets.values() if x.is_data]
+                if self.data:
+                    self.lumi = sum([self.results[x.name]["lumi"] for x in self.data if x.name in self.results])
+
         self.groups = {}
-        self.groupNamesPostFilter = [] # keep track of group names after any filter defined by the user
-        
-        if not self.lumi:
-            logger.warning("")
-            logger.warning("*"*30)
-            logger.warning("No data sample selected: setting integrated luminosity to 1/fb")
-            logger.warning("*"*30)
-            logger.warning("")
-            self.lumi = 1
-            
         self.nominalName = "nominal"
         self.globalAction = None
+        self.gen_axes = None
+        self.unconstrainedProcesses = []
 
     def __del__(self):
         if self.h5file:
@@ -62,8 +59,83 @@ class datagroups(object):
         if self.rtfile:
             self.rtfile.Close()
 
-    # To be used for applying a selection, rebinning, etc.
+    def addGroup(self, name, **kwargs):
+        group = Datagroup(name, **kwargs)
+        self.groups[name] = group
+        
+    def deleteGroups(self, names):
+        for n in names:
+            self.deleteGroup(n)
+
+    def deleteGroup(self, name):
+        if name in self.groups.keys():
+            del self.groups[name]
+        else:
+            logger.warning(f"Try to delete group '{name}' but did not find this group.")
+
+    def copyGroup(self, group_name, new_name, member_filter=None):
+        self.groups[new_name] = self.groups[group_name].copy(new_name, member_filter)
+
+    def selectGroups(self, selections):
+        new_groupnames = []
+        for selection in selections:
+            new_groupnames += list(filter(lambda x, s=selection: x == s, self.groups.keys()))
+
+        # remove duplicates selected by multiple filters
+        return list(set(new_groupnames))
+
+    def filterGroups(self, filters):
+        if filters is None:
+            return
+
+        if isinstance(filters, str):
+            filters = [filters]
+
+        if isinstance(filters, list):
+            new_groupnames = self.selectGroups(filters)
+        else:
+            new_groupnames = list(filter(filters, self.groups.keys()))
+
+        diff = list(set(new_groupnames) - set(self.groups.keys()))
+        if diff:
+            logger.debug(f"Filtered out following groups: {diff}")
+
+        self.groups = {key: self.groups[key] for key in new_groupnames}
+
+        if len(self.groups) == 0:
+            logger.warning(f"Filtered groups using '{filters}' but didn't find any match. Continue without any group.")
+
+    def excludeGroups(self, excludes):
+        if excludes is None:
+            return
+
+        if isinstance(excludes, str):
+            excludes = [excludes]
+
+        if isinstance(excludes, list):
+            # remove selected datasets
+            new_groupnames = list(filter(lambda x: x not in self.selectGroups(excludes), self.groups))
+        else:
+            new_groupnames = list(filter(excludes, self.groups.keys()))
+
+        diff = list(set(new_groupnames) - set(self.groups.keys()))
+        if diff:
+            logger.debug(f"Filtered out following groups: {diff}")
+
+        self.groups = {key: self.groups[key] for key in new_groupnames}
+        
+        if len(self.groups) == 0:
+            logger.warning(f"Excluded all groups using '{excludes}'. Continue without any group.")
+
+    def getSafeListFromDataset(self, procs):
+        # return list of valid samples which belongs to the dataset or where not excluded elsewhere
+        if isinstance(procs, str):
+            return [self.datasets[procs]] if procs in self.datasets.keys() else []
+        else:
+            return list(self.datasets[x] for x in procs if x in self.datasets.keys())
+    
     def setGlobalAction(self, action):
+        # To be used for applying a selection, rebinning, etc.
         self.globalAction = action
 
     def setNominalName(self, name):
@@ -85,10 +157,6 @@ class datagroups(object):
         else:
             meta_info = self.results["meta_info"] if "meta_info" in self.results else self.results["meta_data"]
             return meta_info["command"]
-
-    def updateGroupNamesPostFilter(self, excludeGroup=[]):
-        self.groupNamesPostFilter = list(x for x in self.groups.keys() if len(self.groups[x]["members"]) and x not in excludeGroup)
-        logger.debug(f"Updating group names, new list is {self.groupNamesPostFilter}")
         
     # for reading pickle files
     # as a reminder, the ND hists with tensor axes in the pickle files are organized as
@@ -111,12 +179,14 @@ class datagroups(object):
         foundExact = False
         for procName in procsToRead:
             logger.debug(f"Reading group {procName}")
-            group = self.groups[procName] if procName in self.groups else {}
-            group[label] = None
+            if procName not in self.groups.keys():
+                raise RuntimeError(f"Group {procName} not known. Defined groups are {list(self.groups.keys())}.")
+            group = self.groups[procName]
+            group.hists[label] = None
 
-            for member in group["members"]:
+            for i, member in enumerate(group.members):
                 logger.debug(f"Looking at group member {member.name}")
-                scale = group["scale"] if "scale" in group else None
+                scale = group.scale
                 read_syst = syst
                 if member.name in forceToNominal:
                     read_syst = ""
@@ -134,6 +204,19 @@ class datagroups(object):
                         continue
                 logger.debug(f"Hist axes are {h.axes.name}")
 
+                if group.memberOp:
+                    if group.memberOp[i] is not None:
+                        logger.debug(f"Apply operation to member {i}: {member.name}")
+                        h = group.memberOp[i](h)
+                    else:
+                        logger.debug(f"No operation for member {i}: {member.name}")
+
+                if self.gen_axes:
+                    # integrate over remaining gen axes 
+                    projections = (a for a in h.axes.name if a not in self.gen_axes)
+                    if projections != h.axes.name:
+                        h = h.project(*projections)
+
                 if preOpMap and member.name in preOpMap:
                     logger.debug(f"Applying preOp to {member.name} after loading")
                     h = preOpMap[member.name](h, **preOpArgs)
@@ -141,24 +224,24 @@ class datagroups(object):
                 if self.globalAction:
                     h = self.globalAction(h)
 
-                group[label] = h if not group[label] else hh.addHists(h, group[label])
+                group.hists[label] = hh.addHists(h, group.hists[label]) if group.hists[label] else h
 
             # Can use to apply common rebinning or selection on top of the usual one
-            if "rebinOp" in group and group["rebinOp"]:
-                group[label] = group["rebinOp"](group[label])
+            if group.rebinOp:
+                group.hists[label] = group.rebinOp(group.hists[label])
 
-            if not applySelection and "selectOp" in group and group["selectOp"]:
-                logger.warning(f"Selection requested for process {procName} but applySelection=False, thus it will be ignored")
-            if applySelection and group[label] and "selectOp" in group and group["selectOp"]:
-                selectOpArgs = group["selectOpArgs"] if "selectOpArgs" in group else {}
-                group[label] = group["selectOp"](group[label], **selectOpArgs)
+            if group.selectOp:
+                if not applySelection:
+                    logger.warning(f"Selection requested for process {procName} but applySelection=False, thus it will be ignored")
+                elif label in group.hists.keys():
+                    group.hists[label] = group.selectOp(group.hists[label], **group.selectOpArgs)
         # Avoid situation where the nominal is read for all processes for this syst
         if not foundExact:
             raise ValueError(f"Did not find systematic {syst} for any processes!")
 
     #TODO: Better organize to avoid duplicated code
-    def setHistsCombine(self, baseName, syst, channel, procsToRead=None, excluded_procs=[], label=None):
-        if type(excluded_procs) == str: excluded_procs = excluded_procs.split(",")
+    def setHistsCombine(self, baseName, syst, channel, procsToRead=None, excludeProcs=[], label=None):
+        if type(excludeProcs) == str: excludeProcs = excludeProcs.split(",")
         #TODO Set axis names properly
         if baseName == "x":
             axisNames=["eta", "pt"]
@@ -173,7 +256,7 @@ class datagroups(object):
 
         for procName in procsToRead:
             group = self.groups[procName] if procName in self.groups else {}
-            group[label] = None
+            group.hists[label] = None
             if type(channel) == str: channel = channel.split(",")
             narf_hist = None
             for chn in channel:
@@ -189,13 +272,7 @@ class datagroups(object):
             if self.globalAction:
                 narf_hist = self.globalAction(narf_hist)
 
-            group[label] = narf_hist
-
-    def histName(self, baseName, procName="", syst=""):
-        return datagroups.histName(baseName, procName, syst, nominalName=self.nominalName)
-
-    def histNameCombine(self, procName, baseName, syst, channel):
-        return datagroups.histNameCombine(procName, baseName, syst, channel)
+            group.hists[label] = narf_hist
 
     def loadHistsForDatagroups(
         self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="",
@@ -203,7 +280,7 @@ class datagroups(object):
         preOpMap={}, preOpArgs={}, scaleToNewLumi=-1, forceToNominal=[]
     ):
         logger.debug("Calling loadHistsForDatagroups()")
-        logger.debug(f"the basename and syst is: {baseName}, {syst}")
+        logger.debug(f"The basename and syst is: {baseName}, {syst}")
         logger.debug(f"The procsToRead and excludedProcs are: {procsToRead}, {excluded_procs}")
         if self.rtfile and self.combine:
             self.setHistsCombine(baseName, syst, channel, procsToRead, excluded_procs, label)
@@ -213,36 +290,12 @@ class datagroups(object):
                           scaleToNewLumi=scaleToNewLumi, 
                           excludeProcs=excluded_procs, forceToNominal=forceToNominal)
 
-    def addGroup(self, keyname, dictToAdd, canReplaceKey=False):
-        if canReplaceKey or keyname not in self.groups.keys():
-            if keyname in self.groups.keys():
-                logger.warning(f"Replacing {keyname} in groups")
-            self.groups[keyname] = dictToAdd
-            if keyname not in self.groupNamesPostFilter:
-                self.groupNamesPostFilter.append(keyname)
-            
-    def deleteGroup(self, procs):
-        for p in procs:
-            if p in self.groups.keys():
-                del self.groups[p]
-            if p in self.groupNamesPostFilter:
-                self.groupNamesPostFilter.remove(p)
-            
-    def getDatagroups(self, excluded_procs=[], afterFilter=True):
-        # usually excluded_procs is not needed if afterFilter=True, unless one has to filter further
-        if type(excluded_procs) == str:
-            excluded_procs = list(excluded_procs)
-        filtDef = lambda x: x[0] not in excluded_procs
-        if afterFilter:
-            filtDef = lambda x: x[0] in self.groupNamesPostFilter
-            if len(excluded_procs):
-                filtDef = lambda x: x[0] in self.groupNamesPostFilter and x[0] not in excluded_procs
-        return dict(filter(filtDef, self.groups.items()))
+    def getDatagroups(self):
+        return self.groups
 
-    # INFO: this method returns the list from the full set of defined groups, unless one filters further.
-    # Instead, argument 'afterFilter' is used to return the names after the filter passed to the constructor
-    def getNames(self, matches=[], exclude=False, afterFilter=True):
-        listOfNames = list(x for x in self.groupNamesPostFilter) if afterFilter else list(x for x in self.groups.keys())
+    def getNames(self, matches=[], exclude=False):
+        # This method returns the names from the defined groups, unless one selects further.
+        listOfNames = list(x for x in self.groups.keys())
         if not matches:
             return listOfNames
         else:
@@ -257,15 +310,13 @@ class datagroups(object):
             else:
                 return list(filter(lambda x: any([re.search(expr, x) for expr in matches]), listOfNames))
               
-    def getProcNames(self, to_expand=[], exclude_group=[], afterFilter=True):
+    def getProcNames(self, to_expand=[], exclude_group=[]):
         procs = []
         if not to_expand:
-            to_expand = self.groupNamesPostFilter if afterFilter else self.groups.keys()
+            to_expand = self.groups.keys()
         for group_name in to_expand:
-            if afterFilter and group_name not in self.groupNamesPostFilter:
-                continue
             if group_name not in exclude_group:
-                for member in self.groups[group_name]["members"]:
+                for member in self.groups[group_name].members:
                     procs.append(member.name)
         return procs
 
@@ -274,8 +325,8 @@ class datagroups(object):
             return h.sum() if not hasattr(h.sum(), "value") else h.sum().value
         self.groups = dict(
             sorted(self.groups.items(), key=lambda x: get_sum(
-                x[1][histName if histName in x[1] else nominalName])
-                    if nominalName in x[1] or histName in x[1] else 0,
+                x[1].hists[histName if histName in x[1].hists else nominalName])
+                    if nominalName in x[1].hists or histName in x[1].hists else 0,
                 reverse=True)
         )
 
@@ -289,9 +340,6 @@ class datagroups(object):
     def resultsDict(self):
         return self.results
 
-    def processes(self):
-        return self.groups.keys()
-
     def addSummedProc(self, refname, name, label, color="red", exclude=["Data"], relabel=None, 
             procsToRead=None, reload=False, rename=None, action=None, preOpMap={}, preOpArgs={}):
         if reload:
@@ -300,15 +348,15 @@ class datagroups(object):
 
         if not rename:
             rename = name
-        self.addGroup(rename, dict(
+        self.addGroup(rename,
             label=label,
             color=color,
             members=[],
-        ))
+        )
         tosum = []
         procs = procsToRead if procsToRead else self.groups.keys()
         for proc in filter(lambda x: x not in exclude+[rename], procs):
-            h = self.groups[proc][name]
+            h = self.groups[proc].hists[name]
             if not h:
                 raise ValueError(f"Failed to find hist for proc {proc}, histname {name}")
             if action:
@@ -317,28 +365,116 @@ class datagroups(object):
                 logger.debug(f"After action sum {h.sum()}")
             tosum.append(h)
         histname = refname if not relabel else relabel
-        self.groups[rename][histname] = hh.sumHists(tosum)
+        self.groups[rename].hists[histname] = hh.sumHists(tosum)
 
-    def copyWithAction(self, action, name, refproc, refname, label, color):
-        self.groups[name] = dict(
-            label=label,
-            color=color,
-            members=[],
-        )
-        self.groups[name][refname] = action(self.groups[refproc][refname])
-
-    def setSelectOp(self, op, processes=None, exclude=False): 
+    def setSelectOp(self, op, processes=None): 
         if processes == None:
-            procs = self.getDatagroups()
+            procs = self.groups
         else:
-            if exclude:
-                procs = self.getDatagroups(excluded_procs=processes)
-            else:
-                procs = [processes] if isinstance(processes, str) else [p for p in processes]
+            procs = [processes] if isinstance(processes, str) else processes
+
         for proc in procs:
             if proc not in self.groups.keys():
                 raise ValueError(f"In setSelectOp(): process {proc} not found")
-            self.groups[proc]["selectOp"] = op
+            self.groups[proc].selectOp = op
+
+    def setGenAxes(self, gen_axes):
+        if isinstance(gen_axes, str):
+            self.gen_axes = [gen_axes,]
+        else:
+            self.gen_axes = gen_axes
+
+    def defineSignalBinsUnfolding(self, group_name):
+        if group_name not in self.groups.keys():
+            raise RuntimeError(f"Base group {group_name} not found in groups {self.groups.keys()}!")
+
+        nominal_hist = self.results[self.groups[group_name].members[0].name]["output"]["xnorm"].get()
+
+        gen_bins = []
+        for gen_axis in self.gen_axes:
+            if gen_axis not in nominal_hist.axes.name:
+                raise RuntimeError(f"Gen axis '{gen_axis}' not found in histogram axes '{nominal_hist.axes.name}'!")
+
+            gen_bin_edges = nominal_hist.axes[gen_axis].edges
+            gen_bins.append(range(len(gen_bin_edges)-1))
+
+        base_members = self.groups[group_name].members[:]
+
+        for indices in itertools.product(*gen_bins):
+
+            proc_name = group_name
+            for idx, var in zip(indices, self.gen_axes):
+                proc_name += f"_{var}{idx}"
+
+            self.copyGroup(group_name, proc_name)
+
+            memberOp = lambda x, indices=indices, genvars=self.gen_axes: x[{var : i for var, i in zip(self.gen_axes, indices)}]
+            self.groups[proc_name].memberOp = [memberOp for m in base_members]
+
+            self.unconstrainedProcesses.append(proc_name)
+
+        # add one out of acceptance group and treat as background
+        ooa_name = group_name.split("_")[0]+"_bkg"
+        if ooa_name not in self.groups.keys():
+            self.copyGroup(group_name, ooa_name)
+            self.groups[ooa_name].memberOp = []
+            self.groups[ooa_name].members = []
+        
+        # list of possible slices for each axis
+        slices = []
+        for var in self.gen_axes:
+            subslice = [{var : hist.tag.Slicer()[0:hist.overflow:hist.sum]}] 
+            if nominal_hist.axes[var].traits.__dict__["underflow"]:
+                subslice.append({var : hist.underflow})
+            if nominal_hist.axes[var].traits.__dict__["overflow"]:
+                subslice.append({var : hist.overflow})
+            slices.append(subslice)
+
+        # pick one slice for each axis from the list of possible slices
+        for condition in [functools.reduce(lambda x, y: {**x, **y}, tup) for tup in itertools.product(*slices)]:
+            # make sure that at least one axis takes the underflow/overflow, otherwise it would not be out of acceptance
+            if not any([c in [hist.underflow, hist.overflow] for c in condition.values()]):
+                continue
+            logger.debug(f"Add members with condition {condition}")
+            self.groups[ooa_name].addMembers(base_members, lambda x, c=condition: x[c])
+
+        # Remove inclusive signal
+        self.deleteGroup(group_name)
+
+    def make_yields_df(self, histName, procs, action, norm_proc=None):
+        def sum_and_unc(h):
+            return (h.sum().value, math.sqrt(h.sum().variance))
+        df = pd.DataFrame([(k, *sum_and_unc(action(v.hists[histName]))) for k,v in self.groups.items() if k in procs], 
+                columns=["Process", "Yield", "Uncertainty"])
+
+        if norm_proc and norm_proc in self.groups:
+            df[f"Ratio to {norm_proc} (%)"] = df["Yield"]/action(self.groups[norm_proc].hists[histName]).sum().value*100
+            
+        return df
+
+    def readHist(self, baseName, proc, group, syst, scaleOp=None, forceNonzero=True, scaleToNewLumi=-1):
+        output = self.results[proc.name]["output"]
+        histname = self.histName(baseName, proc.name, syst)
+        logger.debug(f"Reading hist {histname} for proc {proc.name} and syst {syst}")
+        if histname not in output:
+            raise ValueError(f"Histogram {histname} not found for process {proc.name}")
+        h = output[histname]
+        if isinstance(h, narf.ioutils.H5PickleProxy):
+            h = h.get()
+        if forceNonzero:
+            h = hh.clipNegativeVals(h)
+        if scaleToNewLumi > 0:
+            h = hh.scaleByLumi(h, scaleToNewLumi, createNew=True)
+        scale = self.processScaleFactor(proc)
+        if scaleOp:
+            scale = scale*scaleOp(proc)
+        return h*scale
+
+    def histName(self, baseName, procName="", syst=""):
+        return Datagroups.histName(baseName, procName, syst, nominalName=self.nominalName)
+
+    def histNameCombine(self, procName, baseName, syst, channel):
+        return Datagroups.histNameCombine(procName, baseName, syst, channel)
 
     @staticmethod
     def histName(baseName, procName="", syst=""):
@@ -361,146 +497,3 @@ class datagroups(object):
         if re.search("^pdf.*_sum", procName): # for pseudodata from alternative pdfset
             return("_".join([procName, channel])) 
         return name
-
-class datagroups2016(datagroups):
-    def __init__(self, infile, combine=False, pseudodata_pdfset = None, applySelection=True,
-                 excludeProcGroup=None, filterProcGroup=None
-    ):
-        self.datasets = {x.name : x for x in datasets2016.getDatasets(filt=filterProcGroup, excl=excludeProcGroup)}
-        logger.debug(f"Getting these datasets: {self.datasets.keys()}")
-        super().__init__(infile, combine)
-        if self.wmass and applySelection:
-            sigOp = sel.signalHistWmass
-            fakeOp = sel.fakeHistABCD
-        else:
-            sigOp = None
-            fakeOp = None
-
-        ###
-        self.hists = {} # container storing temporary histograms
-        self.groups =  {
-            "Data" : dict(
-                members = self.getSafeListFromDataset(["dataPostVFP"]),
-                color = "black",
-                label = "Data",
-                selectOp = sigOp,
-            ),
-            "Zmumu" : dict(
-                members = self.getSafeListFromDataset(["ZmumuPostVFP"]),
-                #label = r"Z$\to\mu\mu$ (N$^{3}LL+NNLO)$",
-                label = r"Z$\to\mu\mu$",
-                color = "lightblue",
-                selectOp = sigOp,
-            ),   
-            "Ztautau" : dict(
-                members = self.getSafeListFromDataset(["ZtautauPostVFP"]),
-                label = r"Z$\to\tau\tau$",
-                color = "darkblue",
-                selectOp = sigOp,
-            ),            
-        }
-        if pseudodata_pdfset and combine:
-            self.groups[f"pdf{pseudodata_pdfset.upper()}_sum"] = dict(
-                label = f"pdf{pseudodata_pdfset.upper()}",
-                color = "dimgray"
-            )
-        if self.wmass:
-            self.groups.update({
-                "Wmunu" : dict(
-                    members = self.getSafeListFromDataset(["WminusmunuPostVFP", "WplusmunuPostVFP"]),
-                    label = r"W$^{\pm}\to\mu\nu$",
-                    color = "darkred",
-                    selectOp = sigOp,
-                ),
-                }
-            )
-            # Reorder
-            for k in ["Zmumu", "Ztautau"]:
-                self.groups[k] = self.groups.pop(k)
-            self.groups.update({
-                "Wtaunu" : dict(
-                    members = self.getSafeListFromDataset(["WminustaunuPostVFP", "WplustaunuPostVFP"]),
-                    label = r"W$^{\pm}\to\tau\nu$",
-                    color = "orange",
-                    selectOp = sigOp,
-                ),
-                "Top" : dict(
-                    members = list(filter(lambda y: y.group == "Top", self.datasets.values())),
-                    label = "Top",
-                    color = "green",
-                    selectOp = sigOp,
-                ), 
-                "Diboson" : dict(
-                    members = list(filter(lambda y: y.group == "Diboson", self.datasets.values())),
-                    label = "Diboson",
-                    color = "pink",
-                    selectOp = sigOp,
-                ), 
-                "Fake" : dict(
-                    members = list(filter(lambda y: y.group != "QCD", self.datasets.values())),
-                    scale = lambda x: 1. if x.is_data else -1,
-                    label = "Nonprompt",
-                    color = "grey",
-                    selectOp = fakeOp,
-                ),
-                "QCD" : dict(
-                    members = list(filter(lambda y: y.group == "QCD", self.datasets.values())),
-                    label = "QCD MC",
-                    color = "grey",
-                    selectOp = sigOp,
-                ), 
-           
-            })
-        else:
-            self.groups["Other"] = dict(
-                members = [x for x in self.datasets.values() if not x.is_data and x.name not in ["ZmumuPostVFP", "ZtautauPostVFP"] and x.group != "QCD"],
-                label = "Other",
-                color = "grey",
-            )
-            
-        # keep track of groups which have at least one process member after the filters
-        # check also that the key is not in excludeProcGroup (e.g. Fake must be excluded here,
-        # since it is created after filtering the input datasetDict)
-        if excludeProcGroup is None:
-            excludeProcGroup = []
-
-        self.updateGroupNamesPostFilter(excludeGroup=excludeProcGroup)
-        #self.groupNamesPostFilter = list(x for x in self.groups.keys() if len(self.groups[x]["members"]) and x not in excludeProcGroup)
-        logger.debug(f"Filtered groups: {self.groupNamesPostFilter}")
-
-    # TODO: move to base class
-    def getSafeListFromDataset(self, procs):
-        # return list of valid samples which belongs to the dataset or where not excluded elsewhere
-        if isinstance(procs, str):
-            return [self.datasets[procs]] if procs in self.datasets.keys() else []
-        else:
-            return list(self.datasets[x] for x in procs if x in self.datasets.keys())
-        
-    def make_yields_df(self, histName, procs, action, norm_proc=None):
-        def sum_and_unc(h):
-            return (h.sum().value, math.sqrt(h.sum().variance))
-        df = pd.DataFrame([(k, *sum_and_unc(action(v[histName]))) for k,v in self.groups.items() if k in procs], 
-                columns=["Process", "Yield", "Uncertainty"])
-
-        if norm_proc and norm_proc in self.groups:
-            df[f"Ratio to {norm_proc} (%)"] = df["Yield"]/action(self.groups[norm_proc][histName]).sum().value*100
-
-        return df
-
-    def readHist(self, baseName, proc, group, syst, scaleOp=None, forceNonzero=True, scaleToNewLumi=-1):
-        output = self.results[proc.name]["output"]
-        histname = self.histName(baseName, proc.name, syst)
-        logger.debug(f"Reading hist {histname} for proc {proc.name} and syst {syst}")
-        if histname not in output:
-            raise ValueError(f"Histogram {histname} not found for process {proc.name}")
-        h = output[histname]
-        if isinstance(h, narf.ioutils.H5PickleProxy):
-            h = h.get()
-        if forceNonzero:
-            h = hh.clipNegativeVals(h)
-        if scaleToNewLumi > 0:
-            h = hh.scaleByLumi(h, scaleToNewLumi, createNew=True)
-        scale = self.processScaleFactor(proc)
-        if scaleOp:
-            scale = scale*scaleOp(proc)
-        return h*scale

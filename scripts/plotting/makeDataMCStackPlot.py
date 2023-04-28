@@ -1,4 +1,4 @@
-from wremnants.datasets.datagroups import datagroups2016
+from wremnants.datasets.datagroups2016 import make_datagroups_2016
 from wremnants import histselections as sel
 from wremnants import plot_tools,theory_tools,syst_tools
 from utilities import boostHistHelpers as hh,common
@@ -99,13 +99,13 @@ if addVariation and (args.selectAxis or args.selectEntries):
 
 outdir = plot_tools.make_plot_dir(args.outpath, args.outfolder)
 
-groups = datagroups2016(args.infile)
+groups = make_datagroups_2016(args.infile, filterGroups=args.procFilters, excludeGroups=None if args.procFilters else ['QCD'])
 # There is probably a better way to do this but I don't want to deal with it
-datasets = groups.getNames(args.procFilters if args.procFilters else ['QCD'], exclude=not args.procFilters)
+datasets = groups.getNames()
 logger.info(f"Will plot datasets {datasets}")
 
 if not args.nominalRef:
-    nominalName = args.baseName.rsplit("-", 1)[0]
+    nominalName = args.baseName.rsplit("_", 1)[0]
     groups.setNominalName(nominalName)
     groups.loadHistsForDatagroups(args.baseName, syst="", procsToRead=datasets)
 else:
@@ -199,11 +199,14 @@ for h in args.hists:
     fitresultstring=""
     if args.fitresult:
         fitresultstring = "_prefit" if args.prefit else "_postfit"
-    outnames = [f"{h.replace('-','_')}", args.baseName]
-    var_args = [getattr(args, attr) for attr in ["varName", "selectEntries"] if attr in args]
-    for n in filter(lambda x: x, [x[0] for x in var_args if x]+[fitresultstring, args.name_append, args.channel]):
-        outnames.append(n)
-    outfile = "_".join(outnames)
+    var_arg = None
+    if "varName" in args and args.varName:
+        var_arg = args.varName[0]
+        if "selectEntries" in args and args.selectEntries:
+            var_arg = args.selectEntries[0] if not args.selectEntries[0].isdigit() else (var_arg+args.selectEntries[0])
+    to_join = [f"{h.replace('-','_')}"]+[var_arg]+[fitresultstring, args.name_append]+[args.channel if args.channel != "all" else None]
+    outfile = "_".join(filter(lambda x: x, to_join))
+
     plot_tools.save_pdf_and_png(outdir, outfile)
     stack_yields = groups.make_yields_df(args.baseName, prednames, action, norm_proc="Data")
     unstacked_yields = groups.make_yields_df(args.baseName, unstack, action, norm_proc="Data")

@@ -15,7 +15,7 @@ import pickle
 import narf
 import hist
 
-from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_Z
+from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU
 
 
 def Rebin(h, newbins):
@@ -788,7 +788,7 @@ if __name__ == "__main__":
     outDir = "/eos/user/j/jaeyserm/www/wmass/lowPU/Z%s/plots_mZ_variation/" % flavor
     functions.prepareDir(outDir)
       
-    groups = datagroupsLowPU_Z("mz_lowPU_%s.pkl.lz4" % flavor)
+    groups = make_datagroups_lowPU("mz_lowPU_%s.pkl.lz4" % flavor)
     
    
 
