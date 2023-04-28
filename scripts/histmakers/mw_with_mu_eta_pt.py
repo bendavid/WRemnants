@@ -27,8 +27,6 @@ parser.add_argument("--vqt3dsmoothing", action="store_true", help="3D Smoothing"
 parser.add_argument("--noGenMatchMC", action='store_true', help="Don't use gen match filter for prompt muons with MC samples (note: QCD MC never has it anyway)")
 args = parser.parse_args()
 
-print(args)
-
 if args.vqtTestIntegrated:
     sfFileVqtTest = f"{data_dir}/testMuonSF/IsolationEfficienciesCoarseBinning.root"
 else:
@@ -230,7 +228,7 @@ def build_graph(df, dataset):
             df = muon_calibration.define_matched_gen_muons_covMat(df, reco_sel)
             df = muon_calibration.define_matched_genSmeared_muon_kinematics(df, reco_sel)
 
-            for var in ['Pt', 'Eta', 'Charge']:
+            for var in ['Pt', 'Eta', 'Charge', 'Qop']:
                 df = df.Define(f"{reco_sel}_{var.lower()}0_gen", f"{reco_sel}_gen{var.capitalize()}[0]")
                 df = df.Define(f"{reco_sel_GF}_{var.lower()}0_gen", f"{reco_sel_GF}_gen{var.capitalize()}[0]")
 
@@ -544,9 +542,9 @@ def build_graph(df, dataset):
         if not args.binnedScaleFactors:
             df = df.Define("weight2dsfup", muon_efficiency_helper2d, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso"])
             df = df.Define("nominal_weight_2dsf", "nominal_weight/weight_fullMuonSF_withTrackingReco*weight2dsfup") #be EXTREMELY CAREFUL about the histogram files (this assumes that you have another file with the old trigger and histo SFs which also contains the same SFs for all the other steps as the central one)
-            #df = df.Define("sf3dvs2d","wrem::sf3dvs2d(nominal_weight,nominal_weight_2dsf)")
-            #sf2d = df.HistoBoost("nominal_sf2d", nominal_axes, [*nominal_cols, "sf3dvs2d"], tensor_axes = [common.down_up_axis])
-            sf2d = df.HistoBoost("nominal_sf2d", nominal_axes, [*nominal_cols, "nominal_weight_2dsf"])
+            df = df.Define("sf3dvs2d","wrem::sf3dvs2d(nominal_weight,nominal_weight_2dsf)")
+            sf2d = df.HistoBoost("nominal_sf2d", nominal_axes, [*nominal_cols, "sf3dvs2d"], tensor_axes = [common.down_up_axis])
+            #sf2d = df.HistoBoost("nominal_sf2d", nominal_axes, [*nominal_cols, "nominal_weight_2dsf"])
             results.append(sf2d)
                 
     return results, weightsum

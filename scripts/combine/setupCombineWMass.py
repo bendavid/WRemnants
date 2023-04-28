@@ -210,12 +210,12 @@ def main(args,xnorm=False):
                 processes=allMCprocesses_noQCDMC,
                 outNames=["sf2dDown","sf2dUp"],
                 group="SF3Dvs2D",
-                mirror=True,
+                mirror=False,
                 #TODO: Name this
                 noConstraint=False,
-                systAxes=[],
-                #systAxes=["downUpVar"],
-                #labelsByAxis=["downUpVar"],
+                #systAxes=[],
+                systAxes=["downUpVar"],
+                labelsByAxis=["downUpVar"],
                 passToFakes=passSystToFakes,
             )
 
