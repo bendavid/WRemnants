@@ -5,7 +5,6 @@ import ROOT
 import uproot
 import time
 import numpy as np
-import collections.abc
 import os
 import itertools
 import re
@@ -24,7 +23,6 @@ class CardTool(object):
         self.cardName = cardName
         self.systematics = {}
         self.lnNSystematics = {}
-        self.procDict = {}
         self.predictedProcs = []
         self.fakeEstimate = None
         self.channels = ["plus", "minus"]
@@ -32,8 +30,8 @@ class CardTool(object):
         self.cardGroups = {}
         self.nominalTemplate = ""
         self.spacing = 28
-        self.systTypeSpacing = 12
-        self.procColumnsSpacing = 12
+        self.systTypeSpacing = 16
+        self.procColumnsSpacing = 30
         self.fakeName = "Fake" # but better to set it explicitly
         self.dataName = "Data"
         self.nominalName = "nominal"
@@ -48,12 +46,12 @@ class CardTool(object):
         self.pseudoDataIdx = None
         self.pseudoDataProcsRegexp = None
         self.excludeSyst = None
-        self.excludeProcGroups = None # exclude processes, by group name
         self.writeByCharge = True
         self.keepSyst = None # to override previous one with exceptions for special cases
         #self.loadArgs = {"operation" : "self.loadProcesses (reading hists from file)"}
         self.lumiScale = 1.
         self.project = None
+        self.xnorm = False
         self.chargeIdDict = {"minus" : {"val" : -1, "id" : "q0", "badId" : "q1"},
                              "plus"  : {"val" : 1., "id" : "q1", "badId" : "q0"},
                              "inclusive" : {"val" : "sum", "id" : "none", "badId" : None},
@@ -81,6 +79,9 @@ class CardTool(object):
     
     def setLumiScale(self, lumiScale):
         self.lumiScale = lumiScale
+
+    def setCrossSectionOutput(self, xnorm):
+        self.xnorm = xnorm
         
     def getProcsNoStatUnc(self):
         return self.noStatUncProcesses
@@ -130,13 +131,10 @@ class CardTool(object):
         self.dataName = name
 
     def setDatagroups(self, datagroups, resetGroups=False):
-        self.datagroups = datagroups 
+        self.datagroups = datagroups
+        self.unconstrainedProcesses = datagroups.unconstrainedProcesses
         if self.nominalName:
             self.datagroups.setNominalName(self.nominalName)
-        # if processes are not set yet, do it now to skip one step
-        # FIXME: should it allow one to reset the procDict by passing a flag, e.g. in case one loads a new datagroups?
-        if resetGroups or not self.procDict:
-            self.setProcesses(self.datagroups.getNames(afterFilter=True))
         
     def setPseudodataDatagroups(self, datagroups):
         self.pseudodata_datagroups = datagroups 
@@ -157,7 +155,7 @@ class CardTool(object):
     def predictedProcesses(self):
         if self.predictedProcs:
             return self.predictedProcs
-        return list(filter(lambda x: x != self.dataName, self.procDict.keys()))
+        return list(filter(lambda x: x != self.dataName, self.datagroups.groups.keys()))
 
     def setHistName(self, histName):
         self.histName = histName
@@ -171,9 +169,9 @@ class CardTool(object):
     # then self.isMC negates this one and thus will only include pure MC processes
     def isData(self, procName, onlyData=False):
         if onlyData:
-            return all([x.is_data for x in self.datagroups.groups[procName]["members"]])
+            return all([x.is_data for x in self.datagroups.groups[procName].members])
         else:
-            return any([x.is_data for x in self.datagroups.groups[procName]["members"]])
+            return any([x.is_data for x in self.datagroups.groups[procName].members])
 
     def isMC(self, procName):
         return not self.isData(procName)
@@ -181,23 +179,11 @@ class CardTool(object):
     def addFakeEstimate(self, estimate):
         self.fakeEstimate = estimate
 
-    def setProcesses(self, processes):
-        self.procDict = {proc: {} for proc in processes}
-
     def getProcesses(self):
-        return list(self.procDict.keys())
-
-    def setExcludedProcs(self, proc_list):
-        if isinstance(proc_list, list):
-            self.excludeProcGroups = [x for x in proc_list]
-        elif isinstance(proc_list, str):
-            self.excludeProcGroups = [proc_list]
-        elif proc_list is not None:
-            logger.error(f"In CardTool.setExcludedProcs(): invalid argument with type {type(proc_list)}")
-            quit()
+        return list(self.datagroups.groups.keys())
             
     def filteredProcesses(self, filterExpr):
-        return list(filter(filterExpr, self.procDict.keys()))
+        return list(filter(filterExpr, self.datagroups.groups.keys()))
 
     def allMCProcesses(self):
         return self.filteredProcesses(lambda x: self.isMC(x))
@@ -225,7 +211,7 @@ class CardTool(object):
 
         # Need to make an explicit copy of the array before appending
         procs_to_add = [x for x in (self.allMCProcesses() if processes is None else processes)]
-        if passToFakes and self.getFakeName() not in procs_to_add and self.getFakeName() not in self.excludeProcGroups:
+        if passToFakes and self.getFakeName() not in procs_to_add:
             procs_to_add.append(self.getFakeName())
 
         if action and actionMap:
@@ -294,25 +280,45 @@ class CardTool(object):
         # If no matches were found for any of the entries_to_skip possibilities
         return False
 
+    def skipEntryDictToArray(self, h, skipEntry, syst):
+        nsyst = len(self.systematics[syst]["systAxes"])+self.systematics[syst]["mirror"]
+
+        if type(skipEntry) == dict:
+            skipEntryArr = np.full(nsyst, -1, dtype=object)
+            nother_ax = h.ndim-nsyst
+            for k,v in skipEntry.items():
+                idx = h.axes.name.index(k)-nother_ax # Offset by the number of other axes, require that syst axes are the trailing ones
+                skipEntryArr[idx] = v
+            logger.debug(f"Expanded skipEntry for syst {syst} is {skipEntryArr}. Syst axes are {h.axes.name[-nsyst:]}")
+        elif type(skipEntry) not in (np.array, list, tuple):
+            raise ValueError(f"Unexpected format for skipEntry. Must be either dict or sequence. found {type(skipEntry)}")
+        else:
+            skipEntryArr = skipEntry
+
+        if len(skipEntryArr) != nsyst:
+            raise ValueError("skipEntry tuple must have the same dimensions as the number os syst axes. " \
+                f"found {nsyst} systematics and len(skipEntry) = {len(skipEntry)}.") 
+
+        return skipEntryArr
+
     def expandSkipEntries(self, h, syst, skipEntries):
         updated_skip = []
         for skipEntry in skipEntries:
-            nsyst_ax = len(self.systematics[syst]["systAxes"])+self.systematics[syst]["mirror"]
-            if len(skipEntry) != nsyst_ax:
-                raise ValueError(f"Error in syst {syst}. skipEntry must specify a value per axis. "
-                        f"Found {nsyst_ax} axes ({self.systematics[syst]['systAxes']}) but {len(skipEntry)} "
-                        "entries were given")
+            skipEntry = self.skipEntryDictToArray(h, skipEntry, syst)
             # The lookup is handled by passing an imaginary number,
             # so detect these and then call the bin lookup on them
             # np.iscomplex returns false for 0.j, but still want to detect that
             to_lookup = np.array([isinstance(x, complex) for x in skipEntry])
             skip_arr = np.array(skipEntry)
             if to_lookup.any():
+                nsyst = len(self.systematics[syst]["systAxes"])+self.systematics[syst]["mirror"]
                 bin_lookup = np.array([ax.index(x.imag) for x, ax in 
-                    zip(skipEntry, h.axes[-nsyst_ax:]) if isinstance(x, complex)])
-                skip_arr = skip_arr.real
+                    zip(skipEntry, h.axes[-nsyst:]) if isinstance(x, complex)])
+                # Need to loop here rather than using skip_arr.real because the dtype is object to allow strings
+                skip_arr = np.array([a.real for a in skip_arr])
                 skip_arr[to_lookup] += bin_lookup
             updated_skip.append(skip_arr)
+            logger.debug(f"Updated skip entry to {skip_arr}")
 
         return updated_skip
 
@@ -336,11 +342,12 @@ class CardTool(object):
         if hvar.axes[-1].name == "mirror":
             axNames.append("mirror")
             axLabels.append("mirror")
-        axes = [hvar.axes[ax] for ax in axNames]
 
         if not all([name in hvar.axes.name for name in axNames]):
             raise ValueError(f"Failed to find axis names {str(axNames)} in hist for syst {syst}. " \
                 f"Axes in hist are {str(hvar.axes.name)}")
+
+        axes = [hvar.axes[ax] for ax in axNames]
 
         # Converting to a list becasue otherwise if you print it for debugging you loose it
         entries = list(itertools.product(*[[x for x in ax] if type(ax) == hist.axis.StrCategory else range(ax.size) for ax in axes]))
@@ -380,8 +387,8 @@ class CardTool(object):
 
     def getBoostHistByCharge(self, h, q):
         return h[{"charge" : h.axes["charge"].index(q) if q != "sum" else hist.sum}]
-        
-    def checkSysts(self, hnom3D, var_map, proc, thresh=0.25):
+
+    def checkSysts(self, var_map, proc, thresh=0.25):
         #if self.check_variations:
         var_names = set([name.replace("Up", "").replace("Down", "") for name in var_map.keys() if name])
         if len(var_names) != len(var_map.keys())/2:
@@ -390,8 +397,9 @@ class CardTool(object):
         # for wmass some systs are only expected to affect a reco charge, but the syst for other charge might still exist and be used
         # although one expects it to be same as nominal. The following check would trigger on this case with spurious warnings
         # so there is some customization based on what one expects to silent some noisy warnings
+
         for name in sorted(var_names):
-            hnom = hnom3D
+            hnom = self.datagroups.groups[proc].hists[self.nominalName]
             up = var_map[name+"Up"]
             down = var_map[name+"Down"]
             nCellsWithoutOverflows = np.product(hnom.shape)
@@ -511,7 +519,7 @@ class CardTool(object):
         var_map = self.systHists(h, syst) 
         # TODO: Make this optional
         if syst != self.nominalName:
-            self.checkSysts(hnom, var_map, proc)
+            self.checkSysts(var_map, proc)
         setZeroStatUnc = False
         if proc in self.noStatUncProcesses:
             logger.info(f"Zeroing statistical uncertainty for process {proc}")
@@ -525,7 +533,7 @@ class CardTool(object):
         datagroups = self.datagroups if not self.pseudodata_datagroups else self.pseudodata_datagroups
         datagroups.loadHistsForDatagroups(
             baseName=self.pseudoData, syst="", label=self.pseudoData,
-            procsToRead=processes, excluded_procs=self.excludeProcGroups,
+            procsToRead=processes,
             scaleToNewLumi=self.lumiScale)
         procDict = datagroups.getDatagroups()
         hists = [procDict[proc][self.pseudoData] for proc in processes if proc not in processesFromNomi]
@@ -550,7 +558,7 @@ class CardTool(object):
 
     def writeForProcesses(self, syst, processes, label):
         for process in processes:
-            hvar = self.procDict[process][label]
+            hvar = self.datagroups.groups[process].hists[label]
             if not hvar:
                 raise RuntimeError(f"Failed to load hist for process {process}, systematic {syst}")
             self.writeForProcess(hvar, process, syst)
@@ -571,15 +579,18 @@ class CardTool(object):
     def writeOutput(self, args=None):
         self.datagroups.loadHistsForDatagroups(
             baseName=self.nominalName, syst=self.nominalName,
-            procsToRead=self.procDict.keys(), excluded_procs=self.excludeProcGroups,
+            procsToRead=self.datagroups.groups.keys(),
             label=self.nominalName, 
             scaleToNewLumi=self.lumiScale)
-        self.procDict = self.datagroups.getDatagroups()
-        self.writeForProcesses(self.nominalName, processes=self.procDict.keys(), label=self.nominalName)
+        self.writeForProcesses(self.nominalName, processes=self.datagroups.groups.keys(), label=self.nominalName)
         self.loadNominalCard()
-        if self.pseudoData:
+        if self.pseudoData and not self.xnorm:
             self.addPseudodata([x for x in self.procDict.keys() if x != "Data"],
                                [x for x in self.procDict.keys() if x != "Data" and not self.pseudoDataProcsRegexp.match(x)])
+        ## NOTE: when fixing conflicts I noticed the following had self.datagroups.groups.keys() instead of self.procDict.keys()
+        ##       should be the same but I am not sure if there are unexpected features with one or the other case
+        #if self.pseudoData and not self.xnorm:
+        #    self.addPseudodata([x for x in self.datagroups.groups.keys() if x != "Data"])
 
         self.writeLnNSystematics()
         for syst in self.systematics.keys():
@@ -589,7 +600,7 @@ class CardTool(object):
             processes = systMap["processes"]
             self.datagroups.loadHistsForDatagroups(
                 self.nominalName, systName, label="syst",
-                procsToRead=processes, excluded_procs=self.excludeProcGroups,
+                procsToRead=processes, 
                 forceNonzero=systName != "qcdScaleByHelicity",
                 preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"],
                 # Needed to avoid always reading the variation for the fakes, even for procs not specified
@@ -729,10 +740,9 @@ class CardTool(object):
     def writeHist(self, h, name, setZeroStatUnc=False, decorrByBin={}, hnomi=None):
         if self.skipHist:
             return
-        
         if self.project:
             axes = self.project[:]
-            if "charge" in h.axes.name:
+            if "charge" in h.axes.name and not self.xnorm:
                 axes.append("charge")
             h = h.project(*axes)
 
@@ -740,7 +750,7 @@ class CardTool(object):
             self.nominalDim = h.ndim
             if self.nominalDim-self.writeByCharge > 3:
                 raise ValueError("Cannot write hists with > 3 dimensions as combinetf does not accept THn")
-        
+
         if h.ndim != self.nominalDim:
             raise ValueError(f"Histogram {name} does not have the correct dimensions. Found {h.ndim}, expected {self.nominalDim}")
 

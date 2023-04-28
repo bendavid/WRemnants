@@ -17,8 +17,8 @@ import pickle
 import narf
 import numpy as np
 
-from wremnants.datasets.datagroupsLowPU import datagroupsLowPU
-from wremnants.datasets.datagroups import datagroups2016
+from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU
+from wremnants.datasets.datagroups2016 import make_datagroups_2016
 
 def doPlot(tag, xMin=-100, xMax=100, yMin=1, yMax=-1, label="", xLabel="", yRatio = 1.3, rebin=1, logPos=[.20, 0.65, .5, .82]):
 
@@ -163,7 +163,7 @@ if __name__ == "__main__":
         outDir = "/eos/user/j/jaeyserm/www/recoil/biasStudy/lowPU_zmumu"
         functions.prepareDir(outDir, False)
 
-        groups = datagroupsLowPU("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
+        groups = make_datagroups_2016("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
         
         recoil_qTbins = list(range(0, 30, 1)) + list(range(30, 50, 2)) + list(range(50, 70, 5)) + list(range(70, 120, 10)) + [120, 150, 300]
         
@@ -191,7 +191,7 @@ if __name__ == "__main__":
         outDir = "/eos/user/j/jaeyserm/www/recoil/biasStudy/highPU_zmumu"
         functions.prepareDir(outDir, False)
 
-        groups = datagroups2016("mz_wlike_with_mu_eta_pt_%s.pkl.lz4" % (met))
+        groups = make_datagroups_2016("mz_wlike_with_mu_eta_pt_%s.pkl.lz4" % (met))
         
         recoil_qTbins = list(range(0, 30, 1)) + list(range(30, 50, 2)) + list(range(50, 70, 5)) + list(range(70, 120, 10)) + [120, 150, 300]
         

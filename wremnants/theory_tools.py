@@ -226,7 +226,9 @@ def define_central_pdf_weight(df, dataset_name, pdf):
     return df.Define("central_pdf_weight", f"std::clamp<float>({pdfBranch}[0], -theory_weight_truncate, theory_weight_truncate)")
 
 def define_theory_weights_and_corrs(df, dataset_name, helpers, args):
-    df = define_prefsr_vars(df)
+    if "prefsrLeps" not in df.GetColumnNames():
+        df = define_prefsr_vars(df)
+        
     df = define_ew_vars(df)
 
     df = df.DefinePerSample("theory_weight_truncate", "10.")
@@ -453,7 +455,7 @@ def pdfBugfixMSHT20(df , tensorPDFName):
     #   to fix this, one has to be mirrored:
     #   pdf(15) = pdf(0) - (pdf(15) - pdf(0))
     return df.Redefine(tensorPDFName, 
-        f"auto res = {tensorPDFName};"
+        f"auto& res = {tensorPDFName};"
         f"res(15) = {tensorPDFName}(0) - ({tensorPDFName}(15) - {tensorPDFName}(0));"
         "return res")
         

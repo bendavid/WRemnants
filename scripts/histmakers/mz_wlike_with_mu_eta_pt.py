@@ -1,15 +1,14 @@
-from utilities import boostHistHelpers as hh, common, output_tools, logging
+from utilities import boostHistHelpers as hh, common, output_tools, logging, differential
 
 parser,initargs = common.common_parser(True)
 
 import narf
 import wremnants
-from wremnants import theory_tools,syst_tools,theory_corrections, muon_validation, muon_calibration, muon_selections
+from wremnants import theory_tools,syst_tools,theory_corrections, muon_validation, muon_calibration, muon_selections, unfolding_tools
 import hist
 import lz4.frame
 import math
 import time
-import pdb
 import os
 
 parser = common.set_parser_default(parser, "pt", [34, 26, 60])
@@ -47,6 +46,8 @@ axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, nam
 
 nominal_axes = [axis_eta, axis_pt, axis_charge]
 
+unfolding_axes, unfolding_cols = differential.get_pt_eta_charge_axes(args.genBins, template_minpt, template_maxpt, template_maxeta)
+
 # axes for mT measurement
 axis_mt = hist.axis.Regular(200, 0., 200., name = "mt",underflow=False, overflow=True)
 axis_eta_mT = hist.axis.Variable([-2.4, 2.4], name = "eta")
@@ -55,11 +56,6 @@ axis_eta_mT = hist.axis.Variable([-2.4, 2.4], name = "eta")
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 
 qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = True)
-axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
-axis_ptVgen = hist.axis.Variable(
-    common.ptV_10quantiles_binning, 
-    name = "ptVgen", underflow=False
-)
 
 # extra axes which can be used to label tensor_axes
 if args.binnedScaleFactors:
@@ -100,6 +96,8 @@ def build_graph(df, dataset):
     results = []
     isW = dataset.name in common.wprocs
     isZ = dataset.name in common.zprocs
+    unfold = args.unfolding and dataset.name == "ZmumuPostVFP"
+    apply_theory_corr = args.theoryCorr and dataset.name in corr_helpers
 
     if dataset.is_data:
         df = df.DefinePerSample("weight", "1.0")
@@ -107,6 +105,10 @@ def build_graph(df, dataset):
         df = df.Define("weight", "std::copysign(1.0, genWeight)")
 
     weightsum = df.SumAndCount("weight")
+
+    if unfold:
+        df = unfolding_tools.define_gen_level(df, args.genLevel, dataset.name, mode="wlike")
+        unfolding_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols)
 
     df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
 
@@ -138,8 +140,6 @@ def build_graph(df, dataset):
 
         df = df.Define("exp_weight", "weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom")
         df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
-        if isW or isZ:
-            df = theory_tools.define_scale_tensor(df)
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")
 
@@ -165,50 +165,41 @@ def build_graph(df, dataset):
     met_vars = ("MET_corr_rec_pt", "MET_corr_rec_phi")
     df = df.Define("transverseMass", f"wrem::mt_wlike_nano(trigMuons_pt0, trigMuons_phi0, nonTrigMuons_pt0, nonTrigMuons_phi0, {', '.join(met_vars)})")
     results.append(df.HistoBoost("transverseMass", [axis_mt], ["transverseMass", "nominal_weight"]))
+    results.append(df.HistoBoost("MET", [hist.axis.Regular(20, 0, 100, name="MET")], ["MET_corr_rec_pt", "nominal_weight"]))
     ###########
     
     df = df.Filter("transverseMass >= 45.") # 40 for Wmass, thus be 45 here (roughly half the boson mass)
     
     nominal_cols = ["trigMuons_eta0", "trigMuons_pt0", "trigMuons_charge0"]
 
-    nominal = df.HistoBoost("nominal", nominal_axes, [*nominal_cols, "nominal_weight"])
+    if unfold:
+        axes = [*nominal_axes, *unfolding_axes] 
+        cols = [*nominal_cols, *unfolding_cols]
+    else:
+        axes = nominal_axes
+        cols = nominal_cols
+
+    nominal = df.HistoBoost("nominal", axes, [*cols, "nominal_weight"])
     results.append(nominal)
 
     if not args.noRecoil:
-        df = recoilHelper.add_recoil_unc_Z(df, results, dataset, nominal_cols, nominal_axes, "nominal")
+        df = recoilHelper.add_recoil_unc_Z(df, results, dataset, cols, axes, "nominal")
 
     if not dataset.is_data and not args.onlyMainHistograms:
 
-        df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, nominal_axes, nominal_cols, is_w_like=True)
-        df = syst_tools.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, nominal_axes, nominal_cols)
+        df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, axes, cols, is_w_like=True)
+        df = syst_tools.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, axes, cols)
 
         # n.b. this is the W analysis so mass weights shouldn't be propagated
         # on the Z samples (but can still use it for dummy muon scale)
         if isW or isZ:
 
-            if args.theoryCorr and dataset.name in corr_helpers:
-                results.extend(theory_tools.make_theory_corr_hists(df, "nominal", nominal_axes, nominal_cols, 
-                    corr_helpers[dataset.name], args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly)
-                )
-
-            scale_axes = [*nominal_axes, axis_ptVgen, axis_chargeVgen]
-            scale_cols = [*nominal_cols, "ptVgen", "chargeVgen"]
-            syst_tools.add_qcdScale_hist(results, df, scale_axes, scale_cols)
-            syst_tools.add_pdf_hists(results, df, dataset.name, nominal_axes, nominal_cols, args.pdfs)
-
-            df = syst_tools.define_mass_weights(df, dataset.name)
-            if isZ:
-                syst_tools.add_massweights_hist(results, df, nominal_axes, nominal_cols, proc=dataset.name)
-                # there is no W backgrounds for the Wlike, make QCD scale histograms only for Z
-                # should probably remove the charge here, because the Z only has a single charge and the pt distribution does not depend on which charged lepton is selected
-                if not args.skipHelicity:
-                    # TODO: Should have consistent order here with the scetlib correction function
-                    syst_tools.add_qcdScaleByHelicityUnc_hist(results, df, qcdScaleByHelicity_helper, scale_axes, scale_cols)
+            df = syst_tools.add_theory_hists(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, axes, cols, for_wmass=False)
 
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:
                 syst_tools.add_muonscale_hist(
-                    results, df, args.muonCorrEtaBins, args.muonCorrMag, isW, nominal_axes, nominal_cols,
+                    results, df, args.muonCorrEtaBins, args.muonCorrMag, isW, axes, cols,
                     muon_eta="trigMuons_eta0")
 
     return results, weightsum
