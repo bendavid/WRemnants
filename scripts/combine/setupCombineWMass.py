@@ -22,7 +22,8 @@ def make_parser(parser=None):
     parser.add_argument("--ewUnc", action='store_true', help="Include EW uncertainty")
     parser.add_argument("--pseudoData", type=str, help="Hist to use as pseudodata")
     parser.add_argument("--pseudoDataIdx", type=int, default=0, help="Variation index to use as pseudodata")
-    parser.add_argument("--pseudoDataFile", type=str, help="Input file for pseudodata (if it should be read from a different file", default=None)
+    parser.add_argument("--pseudoDataFile", type=str, help="Input file for pseudodata (if it should be read from a different file)", default=None)
+    parser.add_argument("--pseudoDataProcsRegexp", type=str, default=".*", help="Regular expression for processes taken from pseudodata file (all other processes are automatically got from the nominal file). Data is excluded automatically as usual")
     parser.add_argument("-x",  "--excludeNuisances", type=str, default="", help="Regular expression to exclude some systematics from the datacard")
     parser.add_argument("-k",  "--keepNuisances", type=str, default="", help="Regular expression to keep some systematics, overriding --excludeNuisances. Can be used to keep only some systs while excluding all the others with '.*'")
     parser.add_argument("--scaleMuonCorr", type=float, default=1.0, help="Scale up/down dummy muon scale uncertainty by this factor")
@@ -107,7 +108,7 @@ def main(args):
         cardTool.setProcsNoStatUnc(procs=args.qcdProcessName, resetList=False)
     cardTool.setCustomSystForCard(args.excludeNuisances, args.keepNuisances)
     if args.pseudoData:
-        cardTool.setPseudodata(args.pseudoData, args.pseudoDataIdx)
+        cardTool.setPseudodata(args.pseudoData, args.pseudoDataIdx, args.pseudoDataProcsRegexp)
         if args.pseudoDataFile:
             cardTool.setPseudodataDatagroups(datagroups2016(args.pseudoDataFile,
                                                 excludeProcGroup=excludeGroup,
@@ -330,12 +331,27 @@ def main(args):
         if "Fake" not in excludeGroup:
             for charge in ["plus", "minus"]:
                 chargeId = "q1" if charge == "plus" else "q0"
+                decorrDict = {
+                    #"x" : {
+                    #    "label" : "eta",
+                    #    "edges": [round(-2.4+i*0.4,1) for i in range(13)],
+                    #}
+                    #"y" : {
+                    #    "label" : "pt",
+                    #    "edges": [round(26.0+i*2,1) for i in range(16)],
+                    #}
+                    "xy" : {
+                        "label" : ["eta", "pt"],
+                        "edges": [[round(-2.4+i*0.4,1) for i in range(13)], [round(26.0+i*4,1) for i in range(9)]]
+                    }
+                }
+                outnames = [f"mtCorrFakes_{chargeId}{upd}" for upd in ["Up", "Down"]]
                 cardTool.addSystematic(f"nominal", # this is the histogram to read
                                        systAxes=[],
                                        processes=["Fake"],
                                        mirror=True,
                                        group="MultijetBkg",
-                                       outNames=[f"mtCorrFakes_{chargeId}{upd}" for upd in ["Up", "Down"]], # actual names for nuisances
+                                       outNames=outnames, # actual names for nuisances
                                        rename=f"mtCorrFakes_{chargeId}", # this name is used only to identify the syst in CardTool's syst list
                                        action=sel.applyCorrection,
                                        doActionBeforeMirror=True, # to mirror after the histogram has been created
@@ -343,7 +359,8 @@ def main(args):
                                                    "corrFile" : f"{data_dir}/fakesWmass/fakerateFactorMtBasedCorrection_vsEtaPt.root",
                                                    "corrHist": f"etaPtCharge_mtCorrection_{charge}",
                                                    "offsetCorr": 1.0,
-                                                   "createNew": True}
+                                                   "createNew": True},
+                                       decorrelateByBin=decorrDict
                 )
 
     else:
