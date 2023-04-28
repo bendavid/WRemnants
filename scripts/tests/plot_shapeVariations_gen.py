@@ -32,8 +32,8 @@ logger = logging.setup_logger(__file__, 3, True)
 # Plot the shapes from the histmaker and theoy corrections input file 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--minnlo", required=True, help="Input. Output files from the histmaker in .hdf5 format (E.g. from scripts/histmakers/w_z_gen_dists.py")
-parser.add_argument("--theory", required=True, help="Input from theory corrections in .pkl.lz4 format (E.g. from wremnants/data/TheoryCorrections/)")
+parser.add_argument("--input", required=True, help="Input. Output files from the histmaker in .hdf5 format (E.g. from scripts/histmakers/w_z_gen_dists.py")
+# parser.add_argument("--theory", required=True, help="Input from theory corrections in .pkl.lz4 format (E.g. from wremnants/data/TheoryCorrections/)")
 parser.add_argument("-d", "--datasets", default=["Z",], nargs="+", help="the datasets for which the plot should be made")
 parser.add_argument("-c", "--channels", default=[""], nargs="+", help="the channels to plot")
 parser.add_argument("--axes", default=["absVY", "VPT"], nargs="+", help="project the histogram on one axes")
@@ -53,62 +53,78 @@ translate_process = {
     "W": "WmunuPostVFP"
 }
 
+translate_systematic_theory = {
+    "MSHT20as": "MSHT20as",
+}
+
+translate_systematic_minnlo = {
+    "MSHT20as": "MSHT20alphaS002"
+}
+
 translate_theory = {
     "absVY": "absY",
     "VPT": "qT"
 }
 
 translate_minnlo = {
-    "absVY": "absYVgen",
+    "absVY": "y",
     "VPT": "ptVgen"
 }
 
-if args.theory:
-    fin = pickle.load(lz4.frame.open(args.theory))   
-
 for dataset in args.datasets:
     logger.info(f"Now at {dataset}")
+
     for channel in args.channels:
         logger.info(f"Now at {channel}")
         
         for systematic in args.systematics:
             logger.info(f"Now at {systematic}")
 
-            if args.minnlo:
-                minnlo = input_tools.read_and_scale(args.minnlo, translate_process[dataset], f"nominal_gen_pdf{systematic}", calculate_lumi=False, scale=1)
+            nominal = input_tools.read_and_scale(args.input, translate_process[dataset], 
+                f"nominal_gen_pdfMSHT20", calculate_lumi=False, scale=1)
+            minnlo = input_tools.read_and_scale(args.input, translate_process[dataset], 
+                f"nominal_gen_pdf{translate_systematic_minnlo.get(systematic,systematic)}", calculate_lumi=False, scale=1)
+            theory = input_tools.read_and_scale(args.input, translate_process[dataset], 
+                f"nominal_gen_scetlib_dyturbo{translate_systematic_theory.get(systematic,systematic)}VarsCorr", calculate_lumi=False, scale=1)
 
-            theory = fin[dataset][f"scetlib_dyturbo{systematic}Unc_hist"]
-
-            var_name_minnlo = "pdfVar"
+            var_name_minnlo = "alphasVar" if systematic=="MSHT20as" else "pdfVar" 
             var_name_theory = "vars"
 
-            
             for axis in args.axes:
                                 
                 if axis != None:
                     a_minnlo = translate_minnlo[axis]
-                    a_theory = translate_theory[axis]
+                    # a_theory = translate_theory[axis]
 
-                    x = minnlo[{var_name_minnlo : 0}].project(a_minnlo).axes[0].centers
+                    x = nominal[{"pdfVar" : 0}].project(a_minnlo).axes[0].centers
 
                     var_names = [str(x) for x in range(1, int((len(minnlo.axes[var_name_minnlo])-1)/2) + 1)]
 
                     # minnlo:
-                    nom = minnlo[{var_name_minnlo : 0}].project(a_minnlo).values()
-                    std = minnlo[{var_name_minnlo : 0}].project(a_minnlo).variances()**0.5 / nom
+                    nom = nominal[{"pdfVar" : 0}].project(a_minnlo).values()
+                    std = nominal[{"pdfVar" : 0}].project(a_minnlo).variances()**0.5 / nom
 
-                    var_minnlo = [ 
-                        (minnlo[{var_name_minnlo : 2*i-1}].project(a_minnlo).values()/nom, minnlo[{var_name_minnlo : 2*i}].project(a_minnlo).values()/nom) 
-                        for i in range(1, len(var_names)+1)   ]
+                    if systematic=="MSHT20as":
+
+                        var_names = ["alphaS", ]
+                        var_minnlo = [ 
+                            (minnlo[{var_name_minnlo : "as0116"}].project(a_minnlo).values()/nom, minnlo[{var_name_minnlo : "as0120"}].project(a_minnlo).values()/nom),]                    
+                    else:
+
+                        var_minnlo = [ 
+                            (minnlo[{var_name_minnlo : 2*i-1}].project(a_minnlo).values()/nom, minnlo[{var_name_minnlo : 2*i}].project(a_minnlo).values()/nom) 
+                            for i in range(1, len(var_names)+1)   ]
 
                     # theory:
-                    nom = theory[{var_name_theory : 0}].project(a_theory).values()
-                    # std = theory[{var_name_theory : 0}].project(a_theory).variances()**0.5 / nom
+                    nom = theory[{var_name_theory : 0}].project(a_minnlo).values()
 
-                    x = minnlo[{var_name_minnlo : 0}].project(a_minnlo).axes[0].centers
-                    var_theory = [ 
-                        (theory[{var_name_theory : 2*i-1}].project(a_theory).values()/nom, theory[{var_name_theory : 2*i}].project(a_theory).values()/nom) 
-                        for i in range(1, len(var_names)+1)   ]
+                    if systematic=="MSHT20as":
+                        var_theory = [ 
+                            (theory[{var_name_theory : "pdf2"}].project(a_minnlo).values()/nom, theory[{var_name_theory : "pdf5"}].project(a_minnlo).values()/nom),]
+                    else:
+                        var_theory = [ 
+                            (theory[{var_name_theory : 2*i-1}].project(a_minnlo).values()/nom, theory[{var_name_theory : 2*i}].project(a_minnlo).values()/nom) 
+                            for i in range(1, len(var_names)+1)   ]
 
                 for t, m, n in zip(var_theory, var_minnlo, var_names):
                     # make the plot for each variation
