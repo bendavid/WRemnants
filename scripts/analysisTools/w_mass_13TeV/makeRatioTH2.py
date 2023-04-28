@@ -207,11 +207,6 @@ if __name__ == "__main__":
             if yMin < yMax:
                 if yval < yMin or yval > yMax: continue
             denval = 0
-            if args.setRatioUnc == "den":
-                hratio.SetBinError(ix, iy, hinput2.GetBinError(hist2xbin, hist2ybin))
-            elif args.setRatioUnc == "both":
-                print("Error: '--set-ratio-unc' both not implemented yet. Abort")
-                quit()
             if args.makeAsymmetry:
                 denval = hsum.GetBinContent(hist2xbin, hist2ybin)
             else:
@@ -234,6 +229,13 @@ if __name__ == "__main__":
                 if args.divideRelativeError or args.divideError:
                     hratio.SetBinError(ix,iy, 0.0)
                 else:
+                    if args.setRatioUnc == "den":
+                        hratio.SetBinError(ix, iy, hinput2.GetBinError(hist2xbin, hist2ybin))
+                    elif args.setRatioUnc == "zero":
+                        hratio.SetBinError(ix, iy, 0.0)
+                    elif args.setRatioUnc == "both":
+                        print("Error: '--set-ratio-unc' both not implemented yet. Abort")
+                        quit()
                     hratio.SetBinError(ix,iy, hratio.GetBinError(ix,iy)/denval)
                 #print(f"{ix} {iy} {ratio}")
                 if ratio < float(minx) or ratio > float(maxx): nout += 1
@@ -304,7 +306,7 @@ if __name__ == "__main__":
             unitLine.SetBinError(ib, 0.0)
             # for plotting purpose put the uncertainty of the unrolled on the unit line, and reset it for the unrolled
             ratioUnc.SetBinContent(ib, 1.0)
-            ratioUnc.SetBinError(ib, ratio_unrolled.GetBinError(ib))
+            ratioUnc.SetBinError(ib, 0.0 if (args.divideRelativeError or args.divideError) else ratio_unrolled.GetBinError(ib))
             ratio_unrolled.SetBinError(ib, 0.0)
         yBinRanges = []
         if hratio.GetNbinsY() > 15:
