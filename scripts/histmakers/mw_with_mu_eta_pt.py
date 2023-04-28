@@ -119,7 +119,8 @@ bias_helper = muon_calibration.make_muon_bias_helpers(args) if args.biasCalibrat
 
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theoryCorr)
 
-z_non_closure_helper = muon_calibration.make_z_non_closure_helper()
+z_non_closure_charge_dep_helper = muon_calibration.make_Z_non_closure_charge_dep_helper()
+z_non_closure_charge_ind_helper = muon_calibration.make_Z_non_closure_charge_ind_helper()
 
 # recoil initialization
 if not args.noRecoil:
@@ -196,7 +197,7 @@ def build_graph(df, dataset):
             df = muon_calibration.define_matched_gen_muons_covMat(df, reco_sel)
             df = muon_calibration.define_matched_genSmeared_muon_kinematics(df, reco_sel)
 
-            for var in ['Pt', 'Eta', 'Charge']:
+            for var in ['Pt', 'Eta', 'Charge', 'Qop']:
                 df = df.Define(f"{reco_sel}_{var.lower()}0_gen", f"{reco_sel}_gen{var.capitalize()}[0]")
                 df = df.Define(f"{reco_sel_GF}_{var.lower()}0_gen", f"{reco_sel_GF}_gen{var.capitalize()}[0]")
 
@@ -404,12 +405,98 @@ def build_graph(df, dataset):
                                     "bool_false"
                                 ]
                             )
-                        dummyMuonScaleSyst_responseWeights = df.HistoBoost(
-                            "muonScaleSyst_responseWeights_gensmear", axes,
-                            [*nominal_cols_gen_smeared, "muonScaleSyst_responseWeights_tensor_gensmear"],
-                            tensor_axes = jpsi_unc_helper.tensor_axes
-                        )
-                        results.append(dummyMuonScaleSyst_responseWeights)
+                            dummyMuonScaleSyst_responseWeights = df.HistoBoost(
+                                "muonScaleSyst_responseWeights_gensmear", nominal_axes,
+                                [*nominal_cols_gen_smeared, "muonScaleSyst_responseWeights_tensor_gensmear"],
+                                tensor_axes = jpsi_unc_helper.tensor_axes
+                            )
+                            results.append(dummyMuonScaleSyst_responseWeights)
+
+                            df = df.DefinePerSample("A", 'return std::vector<std::string> {"A"}')
+                            df = df.DefinePerSample("M", 'return std::vector<std::string> {"M"}')
+                            df = df.DefinePerSample("AM", 'return std::vector<std::string> {"A", "M"}')
+                            df = df.Define("Z_non_closure_charge_dep", z_non_closure_charge_dep_helper,
+                                [
+                                    f"{reco_sel_GF}_qop0_gen",
+                                    f"{reco_sel_GF}_eta0_gen",
+                                    f"{reco_sel_GF}_qop0_gen_smeared",
+                                    f"{reco_sel_GF}_eta0_gen_smeared",
+                                    f"{reco_sel_GF}_charge0_gen_smeared",
+                                    f"{reco_sel_GF}_pt0_gen_smeared",
+                                    f"{reco_sel_GF}_covMat0",
+                                    "nominal_weight",
+                                    "AM"
+                                ]
+                            )
+                            hist_Z_non_closure_charge_dep = df.HistoBoost(
+                                "nominal_Z_non_closure_charge_dep",
+                                nominal_axes,
+                                [*nominal_cols_gen_smeared, "Z_non_closure_charge_dep"],
+                                tensor_axes = [common.down_up_axis]
+                            )
+                            results.append(hist_Z_non_closure_charge_dep)
+                            df = df.Define("Z_non_closure_charge_dep_A", z_non_closure_charge_dep_helper,
+                                [
+                                    f"{reco_sel_GF}_qop0_gen",
+                                    f"{reco_sel_GF}_eta0_gen",
+                                    f"{reco_sel_GF}_qop0_gen_smeared",
+                                    f"{reco_sel_GF}_eta0_gen_smeared",
+                                    f"{reco_sel_GF}_charge0_gen_smeared",
+                                    f"{reco_sel_GF}_pt0_gen_smeared",
+                                    f"{reco_sel_GF}_covMat0",
+                                    "nominal_weight",
+                                    "A"
+                                ]
+                            )
+                            hist_Z_non_closure_charge_dep_A = df.HistoBoost(
+                                "nominal_Z_non_closure_charge_dep_A",
+                                nominal_axes,
+                                [*nominal_cols_gen_smeared, "Z_non_closure_charge_dep_A"],
+                                tensor_axes = [common.down_up_axis]
+                            )
+                            results.append(hist_Z_non_closure_charge_dep_A)
+                            df = df.Define("Z_non_closure_charge_dep_M", z_non_closure_charge_dep_helper,
+                                [
+                                    f"{reco_sel_GF}_qop0_gen",
+                                    f"{reco_sel_GF}_eta0_gen",
+                                    f"{reco_sel_GF}_qop0_gen_smeared",
+                                    f"{reco_sel_GF}_eta0_gen_smeared",
+                                    f"{reco_sel_GF}_charge0_gen_smeared",
+                                    f"{reco_sel_GF}_pt0_gen_smeared",
+                                    f"{reco_sel_GF}_covMat0",
+                                    "nominal_weight",
+                                    "M"
+                                ]
+                            )
+                            hist_Z_non_closure_charge_dep_M = df.HistoBoost(
+                                "nominal_Z_non_closure_charge_dep_M",
+                                nominal_axes,
+                                [*nominal_cols_gen_smeared, "Z_non_closure_charge_dep_M"],
+                                tensor_axes = [common.down_up_axis]
+                            )
+                            results.append(hist_Z_non_closure_charge_dep_M)
+
+                            df = df.Define("Z_non_closure_charge_ind", z_non_closure_charge_ind_helper,
+                                [
+                                    f"{reco_sel_GF}_qop0_gen",
+                                    f"{reco_sel_GF}_pt0_gen",
+                                    f"{reco_sel_GF}_eta0_gen",
+                                    f"{reco_sel_GF}_charge0_gen",
+                                    f"{reco_sel_GF}_qop0_gen_smeared",
+                                    f"{reco_sel_GF}_pt0_gen_smeared",
+                                    f"{reco_sel_GF}_eta0_gen_smeared",
+                                    f"{reco_sel_GF}_charge0_gen_smeared",
+                                    f"{reco_sel_GF}_covMat0",
+                                    "nominal_weight"
+                                ]
+                            )
+                            hist_Z_non_closure_charge_ind = df.HistoBoost(
+                                "nominal_Z_non_closure_charge_ind",
+                                nominal_axes,
+                                [*nominal_cols_gen_smeared, "Z_non_closure_charge_ind"],
+                                tensor_axes = [common.down_up_axis]
+                            )
+                            results.append(hist_Z_non_closure_charge_ind)
                     else:
                         df = df.Define("muonScaleSyst_responseWeights_tensor_gensmear", calibration_uncertainty_helper,
                             [
