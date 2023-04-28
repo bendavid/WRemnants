@@ -371,7 +371,7 @@ def build_graph(df, dataset):
                 if args.muonScaleVariation == 'smearingWeights':
                     df = df.DefinePerSample("bool_true", "true")
                     df = df.DefinePerSample("bool_false", "false")
-                    if args.muonCorrData == "massfit" or "massfit_lbl":
+                    if args.muonCorrData in ["massfit", "lbl_massfit"]:
                         if args.validateByMassWeights:
                             jpsi_unc_helper = muon_validation.make_jpsi_crctn_unc_helper_massweights(
                                 "wremnants/data/calibration/calibrationJDATA_rewtgr_3dmap_LBL.root",
