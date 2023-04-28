@@ -298,6 +298,8 @@ def main(args,xnorm=False):
                 "syst_axes_labels": ["downUpVar"]
             }
         }
+
+        # FIXME: remove this once msv from smearing weights is implemented for the Z
         msv_config = msv_config_dict[args.muonScaleVariation] if wmass else msv_config_dict["massWeights"]
 
         cardTool.addSystematic(msv_config['hist_name'], 
@@ -309,6 +311,43 @@ def main(args,xnorm=False):
             passToFakes=passSystToFakes,
             scale = args.scaleMuonCorr
         )
+
+        cardTool.addSystematic("Z_non_closure_charge_dep", 
+            processes=single_vmu_samples,
+            group="muonScale_nonClosure_chargeDep",
+            baseName="CMS_scale_m_non_closure_charge_dep",
+            systAxes=["downUpVar"],
+            labelsByAxis=["downUpVar"],
+            passToFakes=passSystToFakes
+        )
+
+        cardTool.addSystematic("Z_non_closure_charge_dep_A", 
+            processes=single_vmu_samples,
+            group="muonScale_nonClosure_chargeDep_A",
+            baseName="CMS_scale_m_non_closure_charge_dep_A",
+            systAxes=["downUpVar"],
+            labelsByAxis=["downUpVar"],
+            passToFakes=passSystToFakes
+        )
+
+        cardTool.addSystematic("Z_non_closure_charge_dep_M", 
+            processes=single_vmu_samples,
+            group="muonScale_nonClosure_chargeDep_M",
+            baseName="CMS_scale_m_non_closure_charge_dep_M",
+            systAxes=["downUpVar"],
+            labelsByAxis=["downUpVar"],
+            passToFakes=passSystToFakes
+        )
+
+        cardTool.addSystematic("Z_non_closure_charge_ind", 
+            processes=single_vmu_samples,
+            group="muonScale_nonClosure_chargeInd",
+            baseName="CMS_scale_m_non_closure_charge_ind",
+            systAxes=["downUpVar"],
+            labelsByAxis=["downUpVar"],
+            passToFakes=passSystToFakes
+        )
+
         cardTool.addSystematic("muonL1PrefireSyst", 
             processes=allMCprocesses_noQCDMC,
             group="muonPrefire",
@@ -317,6 +356,7 @@ def main(args,xnorm=False):
             labelsByAxis=["downUpVar"],
             passToFakes=passSystToFakes,
         )
+
         cardTool.addSystematic("muonL1PrefireStat", 
             processes=allMCprocesses_noQCDMC,
             group="muonPrefire",
@@ -325,6 +365,7 @@ def main(args,xnorm=False):
             labelsByAxis=["downUpVar", "etaPhiReg"],
             passToFakes=passSystToFakes,
         )
+
         cardTool.addSystematic("ecalL1Prefire", 
             processes=allMCprocesses_noQCDMC,
             group="ecalPrefire",
@@ -333,6 +374,7 @@ def main(args,xnorm=False):
             labelsByAxis=["downUpVar"],
             passToFakes=passSystToFakes,
         )
+
         if wmass or wlike:
             combine_helpers.add_recoil_uncertainty(cardTool, signal_samples, passSystToFakes=passSystToFakes, flavor="mu")
 
