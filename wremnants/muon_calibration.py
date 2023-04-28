@@ -234,6 +234,17 @@ def make_jpsi_crctn_unc_helper(filepath, n_scale_params = 3, n_tot_params = 4, n
     jpsi_crctn_unc_helper.tensor_axes = (hist_scale_params_unc.axes['unc'], common.down_up_axis)
     return jpsi_crctn_unc_helper
 
+def make_z_non_closure_helper(filepath = f"{data_dir}/closure/closureZ_LBL_smeared_v721.root"):
+    f = uproot.open(filepath)
+
+    # TODO: convert variable axis to regular if the bin width is uniform
+    hist_non_closure = f['closure'].to_hist()
+    hist_non_closure_cpp = narf.hist_to_pyroot_boost(hist_non_closure)
+    z_non_closure_helper = ROOT.wrem.ZNonClosureHelper[type(hist_non_closure_cpp).__cpp_name__](
+        ROOT.std.move(hist_non_closure_cpp)
+    )
+    return z_non_closure_helper
+
 # returns the cov mat of only scale parameters in eta bins, in the form of a 2D numpy array
 # there are 3 scale params (A, e, M) + 3 resolution params for each eta bin in the jpsi calib file
 def get_jpsi_scale_param_cov_mat(cov, n_scale_params = 3, n_tot_params = 4, n_eta_bins = 24, scale = 1.0):
@@ -253,6 +264,15 @@ def get_jpsi_scale_param_cov_mat(cov, n_scale_params = 3, n_tot_params = 4, n_et
             cov.values()[irow_all_params], idx_scale_params
         )
     return cov_scale_params
+
+def crop_cov_mat(filepath, n_tot_params = 4, n_cropped_eta_bins = 2):
+    f = uproot.open(filepath)
+    filename = filepath.split("/")[-1]
+    cov_mat = np.array(f['covariance_matrix'].to_hist().values())
+    start_idx = n_tot_params * n_cropped_eta_bins
+    cov_mat_cropped = cov_mat[start_idx:-start_idx, start_idx:-start_idx]
+    fout = uproot.recreate(filename.split(".")[0] + "_cropped_eta" + ".root")
+    fout['covariance_matrix'] = cov_mat_cropped 
 
 def define_lblcorr_muons(df, cvh_helper, corr_branch="cvh"):
 
