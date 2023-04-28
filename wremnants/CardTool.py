@@ -635,6 +635,7 @@ class CardTool(object):
         nondata = self.predictedProcesses()
         # exit this function when a syst is applied to no process (can happen when some are excluded)
         for name,info in self.lnNSystematics.items():
+            if self.isExcludedNuisance(name): continue
             if all(x not in info["processes"] for x in nondata):
                 logger.warning(f"Skipping syst {name}, procs to apply it to would be {info['processes']}, and predicted processes are {nondata}")
                 return
@@ -643,7 +644,7 @@ class CardTool(object):
             groupFilter = info["groupFilter"]
             for chan in self.channels:
                 self.cardContent[chan] += f'{name.ljust(self.spacing)} lnN{" "*(self.systTypeSpacing-2)} {"".join(include)}\n'
-                if group and not self.isExcludedNuisance(name) and len(list(filter(groupFilter, [name]))):
+                if group and len(list(filter(groupFilter, [name]))):
                     self.addSystToGroup(group, chan, name)
 
     def fillCardWithSyst(self, syst):
