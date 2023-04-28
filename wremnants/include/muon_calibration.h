@@ -500,6 +500,11 @@ private:
         return (charge * std::sin(theta) / qop);
     }
 
+    double calculateQopUnc(float eta, int charge, double KUnc) {
+        double theta = calculateTheta(eta);
+        return (charge * std::sin(theta) * KUnc);
+    }
+
     double calculateQopUnc(float pt, float eta, int charge, double ptUnc) {
         double theta = calculateTheta(eta);
         return ((-1. * charge * std::sin(theta)) / pow(pt, 2)) * ptUnc;
@@ -700,27 +705,52 @@ private:
 };
 
 template <typename T>
-class ZNonClosureHelper {
+class ZNonClosureChargeDepHelper {
 
 public:
     using hist_t = T;
+    using tensor_t = typename T::storage_type::value_type::tensor_t;
     using out_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<2>>;
 
-    ZNonClosureHelper(T&& corrections) :
+    ZNonClosureChargeDepHelper(T&& corrections) :
         correctionHist_(std::make_shared<const T>(std::move(corrections))) {}
 
-    // smaering weights for Z non-closure number on pt 
+    // helper for bin lookup which implements the compile-time loop over axes
+    template<typename... Xs, std::size_t... Idxs>
+    const tensor_t &get_tensor_impl(std::index_sequence<Idxs...>, const Xs&... xs) {
+        return correctionHist_->at(correctionHist_->template axis<Idxs>().index(xs)...).data();
+    }
+
+    // variadic templated bin lookup
+    template<typename... Xs>
+    const tensor_t &get_tensor(const Xs&... xs) {
+        return get_tensor_impl(std::index_sequence_for<Xs...>{}, xs...);
+    }
+
     out_tensor_t operator() (
-        float genPt, float genEta, int genCharge,
-        double recoPt, float recoEta, int recoCharge,
-        const RVec<float> &cov, double nominal_weight = 1.0
+        double genQop, float genEta,
+        double recoQop, float recoEta, int recoCharge, double recoPt,  
+        const RVec<float> &cov, double nominal_weight = 1.0,
+        std::vector<std::string> vars =  {"A", "M"}
     ) {
-        cout << "++++++++++++++++++++++++" << std::endl;
-        const auto nonClosure = correctionHist_->at(recoEta, recoPt).value;
-        const double recoPtUnc = nonClosure - 1;
-        const double recoQop = calculateQop(recoPt, recoEta, recoCharge);
-        const double recoQopUnc = calculateQopUnc(recoPt, recoEta, recoCharge, recoPtUnc);
-        const double genQop = calculateQop(genPt, genEta, genCharge);
+        const auto &params = get_tensor(recoEta);
+        double recoK = 1.0 /recoPt;
+        double recoKUnc = 0.0;
+
+        if (std::find(vars.begin(), vars.end(), "A") != vars.end()) {
+            const double AUnc = params(0);
+            recoKUnc += AUnc * recoK;
+        }
+        if (std::find(vars.begin(), vars.end(), "e") != vars.end()) {
+            const double eUnc = params(1);
+            recoKUnc += -1.0 * eUnc * recoK * recoK;
+        }
+        if (std::find(vars.begin(), vars.end(), "M") != vars.end()) {
+            const double MUnc = params(2);
+            recoKUnc += recoCharge * MUnc;
+        }
+
+        double recoQopUnc = recoCharge * std::sin(calculateTheta(recoEta)) * recoKUnc;
 
         const Eigen::Map<const Eigen::Matrix<float, 3, 3, Eigen::RowMajor>> covMap(cov.data(), 3, 3);
         Eigen::Matrix<double, 3, 3> covd = covMap.cast<double>();
@@ -731,6 +761,56 @@ public:
 
         out_tensor_t res;
         res.setConstant(nominal_weight);
+
+        for (std::ptrdiff_t idownup = 0; idownup < 2; ++idownup) {
+            const double dir = idownup == 0 ? -1. : 1.;
+            const double lnpAlt = -0.5 * pow((recoQop + dir * recoQopUnc - genQop), 2) / sigma2QopAlt;
+            const double weight = std::sqrt(sigma2Qop / sigma2QopAlt) * std::exp(lnpAlt - lnp);
+            res(idownup) *= weight; 
+        }
+        return res;
+    }
+
+private:
+    std::shared_ptr<const T> correctionHist_;
+};
+
+template <typename T>
+class ZNonClosureChargeIndHelper {
+
+public:
+    using hist_t = T;
+    using out_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<2>>;
+
+    ZNonClosureChargeIndHelper(T&& corrections) :
+        correctionHist_(std::make_shared<const T>(std::move(corrections))) {}
+
+    // smaering weights for Z non-closure number on pt 
+    out_tensor_t operator() (
+        double genQop, float genPt, float genEta, int genCharge,
+        double recoQop, double recoPt, float recoEta, int recoCharge,
+        const RVec<float> &cov, double nominal_weight = 1.0
+    ) {
+        out_tensor_t res;
+        res.setConstant(nominal_weight);
+        /*
+        if (recoPt <= 25.0 || recoPt >= 100.0 || abs(recoEta) >= 2.4 ) {
+            return res;
+        }
+        */
+        unsigned int iEta = correctionHist_->template axis<0>().index(recoEta);
+        unsigned int iPt = correctionHist_->template axis<1>().index(recoPt);
+        const double nonClosure = correctionHist_->at(iEta, iPt).value();
+        const double recoKUnc = (nonClosure - 1) * (1 / recoPt);
+        const double recoQopUnc = calculateQopUnc(recoEta, recoCharge, recoKUnc);
+
+        const Eigen::Map<const Eigen::Matrix<float, 3, 3, Eigen::RowMajor>> covMap(cov.data(), 3, 3);
+        Eigen::Matrix<double, 3, 3> covd = covMap.cast<double>();
+        const double sigma2Qop = covd(0,0);
+        const double sigma2QopAlt = sigma2Qop;
+
+        const double lnp = -0.5 * pow((recoQop - genQop), 2) / sigma2Qop;
+
         for (std::ptrdiff_t idownup = 0; idownup < 2; ++idownup) {
             const double dir = idownup == 0 ? -1. : 1.;
             const double lnpAlt = -0.5 * pow((recoQop + dir * recoQopUnc - genQop), 2) / sigma2QopAlt;
