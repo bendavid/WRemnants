@@ -234,13 +234,36 @@ def make_jpsi_crctn_unc_helper(filepath, n_scale_params = 3, n_tot_params = 4, n
     jpsi_crctn_unc_helper.tensor_axes = (hist_scale_params_unc.axes['unc'], common.down_up_axis)
     return jpsi_crctn_unc_helper
 
-def make_z_non_closure_helper(filepath = f"{data_dir}/closure/closureZ_LBL_smeared_v721.root"):
+def make_Z_non_closure_charge_dep_helper(
+    filepath = f"{data_dir}/closure/calibrationAlignmentZ_after_LBL_v721.root",
+    n_eta_bins = 24, n_scale_params = 3
+):
+    f = uproot.open(filepath)
+    M = f['MZ'].to_hist()
+    A = f['AZ'].to_hist()
+
+    axis_eta = hist.axis.Regular(n_eta_bins, -2.4, 2.4, name = 'eta')
+    axis_scale_params = hist.axis.Regular(n_scale_params, 0, 1, name = 'scale_params')
+    hist_non_closure = hist.Hist(axis_eta, axis_scale_params)
+    hist_non_closure.view()[...,0] = A.values()
+    hist_non_closure.view()[...,1] = np.zeros(n_eta_bins)
+    hist_non_closure.view()[...,2] = M.values()
+
+    hist_non_closure_cpp = narf.hist_to_pyroot_boost(hist_non_closure, tensor_rank = 1)
+    z_non_closure_helper = ROOT.wrem.ZNonClosureChargeDepHelper[type(hist_non_closure_cpp).__cpp_name__](
+        ROOT.std.move(hist_non_closure_cpp)
+    )
+    return z_non_closure_helper
+
+def make_Z_non_closure_charge_ind_helper(
+    filepath = f"{data_dir}/closure/closureZ_LBL_smeared_v721.root"
+):
     f = uproot.open(filepath)
 
     # TODO: convert variable axis to regular if the bin width is uniform
     hist_non_closure = f['closure'].to_hist()
     hist_non_closure_cpp = narf.hist_to_pyroot_boost(hist_non_closure)
-    z_non_closure_helper = ROOT.wrem.ZNonClosureHelper[type(hist_non_closure_cpp).__cpp_name__](
+    z_non_closure_helper = ROOT.wrem.ZNonClosureChargeIndHelper[type(hist_non_closure_cpp).__cpp_name__](
         ROOT.std.move(hist_non_closure_cpp)
     )
     return z_non_closure_helper
