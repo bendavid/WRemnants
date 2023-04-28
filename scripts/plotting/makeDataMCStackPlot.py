@@ -1,4 +1,4 @@
-from wremnants.datasets.datagroups import datagroups2016
+from wremnants.datasets.datagroups2016 import make_datagroups_2016
 from wremnants import histselections as sel
 from wremnants import plot_tools,theory_tools,syst_tools
 from utilities import boostHistHelpers as hh,common
@@ -21,6 +21,7 @@ xlabels = {
     "costhetastarll" : r"$\cos{\phi^{\star}_{\ell\ell}}$",
     "phistarll" : r"$\phi^{\star}_{\ell\ell}$",
     "MET_pt" : r"p$_{\mathrm{T}}^{miss}$ (GeV)",
+    "MET" : r"p$_{\mathrm{T}}^{miss}$ (GeV)",
     "met" : r"p$_{\mathrm{T}}^{miss}$ (GeV)",
     "mt" : r"m$_{T}^{\ell\nu}$ (GeV)",
     "etaSum":r"$\eta^{\ell(+)} + \eta^{\ell(-)}$",
@@ -53,7 +54,7 @@ parser.add_argument("--rebin", type=int, default=1, help="Rebin (for now must be
 parser.add_argument("--ylim", type=float, nargs=2, help="Min and max values for y axis (if not specified, range set automatically)")
 parser.add_argument("--yscale", type=float, help="Scale the upper y axis by this factor (useful when auto scaling cuts off legend)")
 parser.add_argument("--xlim", type=float, nargs=2, help="min and max for x axis")
-parser.add_argument("-a", "--name_append", type=str, help="Name to append to file name")
+parser.add_argument("-a", "--name_append", default="", type=str, help="Name to append to file name")
 parser.add_argument("--debug", action='store_true', help="Print debug output")
 parser.add_argument("--procFilters", type=str, nargs="*", help="Filter to plot (default no filter, only specify if you want a subset")
 parser.add_argument("--noData", action='store_true', help="Don't plot data")
@@ -72,7 +73,6 @@ variation.add_argument("--selectEntries", type=str, nargs='+', help="entries to 
 variation.add_argument("--colors", type=str, nargs='+', help="Variation colors")
 variation.add_argument("--linestyle", type=str, default=[], nargs='+', help="Linestyle for variations")
 variation.add_argument("--doubleColors", action='store_true', help="Auto generate colors in pairs (useful for systematics)")
-variation.add_argument("--transform", action='store_true', help="Apply variation-specific transformation")
 variation.add_argument("--fillBetween", action='store_true', help="Fill between uncertainty hists in ratio")
 variation.add_argument("--skipFillBetween", type=int, default=0, help="Don't fill between the first N hists (only relevant if --fillBetween = True)")
 
@@ -99,13 +99,13 @@ if addVariation and (args.selectAxis or args.selectEntries):
 
 outdir = plot_tools.make_plot_dir(args.outpath, args.outfolder)
 
-groups = datagroups2016(args.infile)
+groups = make_datagroups_2016(args.infile, filterGroups=args.procFilters, excludeGroups=None if args.procFilters else ['QCD'])
 # There is probably a better way to do this but I don't want to deal with it
-datasets = groups.getNames(args.procFilters if args.procFilters else ['QCD'], exclude=not args.procFilters)
+datasets = groups.getNames()
 logger.info(f"Will plot datasets {datasets}")
 
 if not args.nominalRef:
-    nominalName = args.baseName.rsplit("-", 1)[0]
+    nominalName = args.baseName.rsplit("_", 1)[0]
     groups.setNominalName(nominalName)
     groups.loadHistsForDatagroups(args.baseName, syst="", procsToRead=datasets)
 else:
@@ -127,7 +127,7 @@ if addVariation:
     colors = args.colors if args.colors else [colormaps["tab10" if ncols < 10 else "tab20"](int(i/2) if args.doubleColors else i) for i in range(len(args.varName))]
     for i, (label,name,color) in enumerate(zip(varLabels,args.varName,colors)):
         entry = entries[i] if entries else None
-        do_transform = args.transform and entry in transforms
+        do_transform = entry in transforms
         name = name if name != "" else nominalName
         load_op = {}
         action=None
@@ -149,9 +149,6 @@ if addVariation:
             load_op = {p : action for p in transform_procs}
         else:
             varname = name
-
-        if (args.transform and entry not in transforms):
-            logger.warning(f"No known transformation for variation {entry}. No transform applied!")
 
         reload = name != args.baseName
         # The action map will only work if reloading, otherwise need to apply some transform
@@ -202,10 +199,17 @@ for h in args.hists:
     fitresultstring=""
     if args.fitresult:
         fitresultstring = "_prefit" if args.prefit else "_postfit"
-    outfile = f"{h.replace('-','_')}_{args.baseName}_{args.channel}"+ fitresultstring + (f"_{args.name_append}" if args.name_append else "")
+    var_arg = None
+    if "varName" in args and args.varName:
+        var_arg = args.varName[0]
+        if "selectEntries" in args and args.selectEntries:
+            var_arg = args.selectEntries[0] if not args.selectEntries[0].isdigit() else (var_arg+args.selectEntries[0])
+    to_join = [f"{h.replace('-','_')}"]+[var_arg]+[fitresultstring, args.name_append]+[args.channel if args.channel != "all" else None]
+    outfile = "_".join(filter(lambda x: x, to_join))
+
     plot_tools.save_pdf_and_png(outdir, outfile)
-    stack_yields = groups.make_yields_df(args.baseName, prednames, action)
-    unstacked_yields = groups.make_yields_df(args.baseName, unstack, action)
+    stack_yields = groups.make_yields_df(args.baseName, prednames, action, norm_proc="Data")
+    unstacked_yields = groups.make_yields_df(args.baseName, unstack, action, norm_proc="Data")
     plot_tools.write_index_and_log(outdir, outfile, 
         yield_tables={"Stacked processes" : stack_yields, "Unstacked processes" : unstacked_yields},
         analysis_meta_info={"AnalysisOutput" : groups.getMetaInfo()},

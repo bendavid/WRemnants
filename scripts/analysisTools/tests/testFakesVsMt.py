@@ -17,7 +17,7 @@ import narf.fitutils
 import wremnants
 import hist
 import lz4.frame, pickle
-from wremnants.datasets.datagroups import datagroups2016
+from wremnants.datasets.datagroups2016 import make_datagroups_2016
 from wremnants import histselections as sel
 
 import hist
@@ -508,7 +508,6 @@ def runStudy(charge, outfolder, rootfilename, args):
     zAxisName = args.zAxisName
 
     createPlotDirAndCopyPhp(outfolder)
-
     outfolder_dataMC = f"{outfolder}/shapesDataMC/"
     createPlotDirAndCopyPhp(outfolder_dataMC)
 
