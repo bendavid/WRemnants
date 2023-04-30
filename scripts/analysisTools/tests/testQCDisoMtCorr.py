@@ -91,7 +91,7 @@ if __name__ == "__main__":
         
         for d in datasetsAll:
             logger.info(f"     Process {d}")
-            hnarf = histInfo[d][inputHistName]
+            hnarf = histInfo[d].hists[inputHistName]
             rootHists[d] = narf.hist_to_root(hnarf) # this is a THnD with mt-iso-Njet-charge (Njet is a boolean for 0 or >=1)
 
             # copy such that the original can still be used untouched to plot all processes

@@ -129,12 +129,18 @@ def addSystAxis(h, size=1, offset=0):
     hnew[...] = np.stack((newvals, newvars), axis=-1)
     return hnew
 
-def clipNegativeVals(h, clipValue=0):
-    hnew = hist.Hist(*h.axes, storage=hist.storage.Weight())
-    vals = h.values(flow=True)
-    vals[vals<0] = clipValue
-    hnew[...] = np.stack((vals, h.variances(flow=True)), axis=-1)
-    return hnew
+def clipNegativeVals(h, clipValue=0, createNew=False):
+    if createNew:
+        hnew = hist.Hist(*h.axes, storage=hist.storage.Weight())
+        vals = h.values(flow=True)
+        vals[vals<0] = clipValue
+        hnew[...] = np.stack((vals, h.variances(flow=True)), axis=-1)
+        return hnew
+    else:
+        vals = h.values(flow=True)
+        vals[vals<0] = clipValue
+        h.values(flow=True)[...] = vals
+        return h
 
 def scaleByLumi(h, scale, createNew=False):
     if createNew:

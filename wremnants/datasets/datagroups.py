@@ -46,6 +46,8 @@ class Datagroups(object):
                 self.data = [x for x in self.datasets.values() if x.is_data]
                 if self.data:
                     self.lumi = sum([self.results[x.name]["lumi"] for x in self.data if x.name in self.results])
+                else:
+                    logger.warning("No data process was selected, normalizing MC to to 1/fb")
 
         self.groups = {}
         self.nominalName = "nominal"
@@ -215,6 +217,7 @@ class Datagroups(object):
                     # integrate over remaining gen axes 
                     projections = (a for a in h.axes.name if a not in self.gen_axes)
                     if projections != h.axes.name:
+                        logger.debug(f"Projecting non-gen axes: {projections} from {h.axes.name}")
                         h = h.project(*projections)
 
                 if preOpMap and member.name in preOpMap:
@@ -223,8 +226,11 @@ class Datagroups(object):
 
                 if self.globalAction:
                     h = self.globalAction(h)
+                    logger.debug("Applying global action")
 
+                logger.debug("Summing histogram to group")
                 group.hists[label] = hh.addHists(h, group.hists[label]) if group.hists[label] else h
+                logger.debug("Sum done")
 
             # Can use to apply common rebinning or selection on top of the usual one
             if group.rebinOp:
@@ -455,7 +461,7 @@ class Datagroups(object):
     def readHist(self, baseName, proc, group, syst, scaleOp=None, forceNonzero=True, scaleToNewLumi=-1):
         output = self.results[proc.name]["output"]
         histname = self.histName(baseName, proc.name, syst)
-        logger.debug(f"Reading hist {histname} for proc {proc.name} and syst {syst}")
+        logger.debug(f"Reading hist {histname} for proc {proc.name} and syst '{syst}'")
         if histname not in output:
             raise ValueError(f"Histogram {histname} not found for process {proc.name}")
         h = output[histname]
@@ -463,8 +469,9 @@ class Datagroups(object):
             h = h.get()
         if forceNonzero:
             h = hh.clipNegativeVals(h)
+            logger.debug("Done with clipping negative bin contents")
         if scaleToNewLumi > 0:
-            h = hh.scaleByLumi(h, scaleToNewLumi, createNew=True)
+            h = hh.scaleByLumi(h, scaleToNewLumi) #, createNew=True)
         scale = self.processScaleFactor(proc)
         if scaleOp:
             scale = scale*scaleOp(proc)
