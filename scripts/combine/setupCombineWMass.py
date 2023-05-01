@@ -142,8 +142,9 @@ def main(args,xnorm=False):
         cardTool.setPseudodata(args.pseudoData, args.pseudoDataIdx, args.pseudoDataProcsRegexp)
         if args.pseudoDataFile:
             cardTool.setPseudodataDatagroups(make_datagroups_2016(args.pseudoDataFile,
-                                                excludeProcGroup=excludeGroup,
-                                                filterProcGroup=filterGroup))
+                                                                  excludeGroups=excludeGroup,
+                                                                  filterGroups=filterGroup)
+            )
     cardTool.setLumiScale(args.lumiScale)
 
     logger.info(f"cardTool.allMCProcesses(): {cardTool.allMCProcesses()}")
@@ -359,17 +360,9 @@ def main(args,xnorm=False):
             for charge in ["plus", "minus"]:
                 chargeId = "q1" if charge == "plus" else "q0"
                 decorrDict = {
-                    #"x" : {
-                    #    "label" : "eta",
-                    #    "edges": [round(-2.4+i*0.4,1) for i in range(13)],
-                    #}
-                    #"y" : {
-                    #    "label" : "pt",
-                    #    "edges": [round(26.0+i*2,1) for i in range(16)],
-                    #}
                     "xy" : {
                         "label" : ["eta", "pt"],
-                        "edges": [[round(-2.4+i*0.4,1) for i in range(13)], [round(26.0+i*4,1) for i in range(9)]]
+                        "edges": [[round(-2.4+i*0.4,1) for i in range(13)], [round(26.0+i*2,1) for i in range(16)]]
                     }
                 }
                 outnames = [f"mtCorrFakes_{chargeId}{upd}" for upd in ["Up", "Down"]]
