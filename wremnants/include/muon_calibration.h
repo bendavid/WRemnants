@@ -731,23 +731,28 @@ public:
         double genQop, float genEta,
         double recoQop, float recoEta, int recoCharge, double recoPt,  
         const RVec<float> &cov, double nominal_weight = 1.0,
-        std::vector<std::string> vars = {"A", "M"},
+        int calVarFlags = 7   //A = 1, e = 2, M = 4
     ) {
+        
         const auto &params = get_tensor(recoEta);
         double recoK = 1.0 /recoPt;
         double recoKUnc = 0.0;
-
-        if (std::find(vars.begin(), vars.end(), "A") != vars.end()) {
+        
+        enum calVarFlagsScheme {AFlag = 1, eFlag = 2, MFlag = 4};
+        if (calVarFlags & AFlag) {
             const double AUnc = params(0);
             recoKUnc += AUnc * recoK;
+            cout << "A added" << std::endl;
         }
-        if (std::find(vars.begin(), vars.end(), "e") != vars.end()) {
+        if (calVarFlags & eFlag) {
             const double eUnc = params(1);
             recoKUnc += -1.0 * eUnc * recoK * recoK;
+            cout << "e added" << std::endl;
         }
-        if (std::find(vars.begin(), vars.end(), "M") != vars.end()) {
+        if (calVarFlags & MFlag) {
             const double MUnc = params(2);
             recoKUnc += recoCharge * MUnc;
+            cout << "M added" << std::endl;
         }
 
         double recoQopUnc = recoCharge * std::sin(calculateTheta(recoEta)) * recoKUnc;
