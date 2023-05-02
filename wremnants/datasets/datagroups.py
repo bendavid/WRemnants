@@ -215,9 +215,8 @@ class Datagroups(object):
 
                 if self.gen_axes:
                     # integrate over remaining gen axes 
-                    projections = (a for a in h.axes.name if a not in self.gen_axes)
-                    if projections != h.axes.name:
-                        logger.debug(f"Projecting non-gen axes: {projections} from {h.axes.name}")
+                    projections = [a for a in h.axes.name if a not in self.gen_axes]
+                    if len(projections) < len(h.axes.name):
                         h = h.project(*projections)
 
                 if preOpMap and member.name in preOpMap:
@@ -229,7 +228,7 @@ class Datagroups(object):
                     logger.debug("Applying global action")
 
                 logger.debug("Summing histogram to group")
-                group.hists[label] = hh.addHists(h, group.hists[label]) if group.hists[label] else h
+                group.hists[label] = hh.addHistsNoCopy(h, group.hists[label]) if group.hists[label] else h
                 logger.debug("Sum done")
 
             # Can use to apply common rebinning or selection on top of the usual one
@@ -323,7 +322,9 @@ class Datagroups(object):
         for group_name in to_expand:
             if group_name not in exclude_group:
                 for member in self.groups[group_name].members:
-                    procs.append(member.name)
+                    # protection against duplicates in the output list, they may arise from fakes
+                    if member.name not in procs:
+                        procs.append(member.name)
         return procs
 
     def sortByYields(self, histName, nominalName="nominal"):
@@ -469,7 +470,6 @@ class Datagroups(object):
             h = h.get()
         if forceNonzero:
             h = hh.clipNegativeVals(h)
-            logger.debug("Done with clipping negative bin contents")
         if scaleToNewLumi > 0:
             h = hh.scaleByLumi(h, scaleToNewLumi) #, createNew=True)
         scale = self.processScaleFactor(proc)

@@ -101,13 +101,19 @@ def multiplyHists(h1, h2, allowBroadcast=True, transpose=True):
 def addHists(h1, h2, allowBroadcast=True):
     h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2, allowBroadcast)
     outh = h1 if not allowBroadcast else broadcastOutHist(h1, h2)
-
     newh = hist.Hist(*outh.axes, storage=hist.storage.Weight(),
             data=np.stack((h1vals+h2vals, h1vars+h2vars), axis=-1))
     return newh
 
 def sumHists(hists):
     return reduce(addHists, hists)
+
+def addHistsNoCopy(h1, h2, allowBroadcast=True):
+    h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2, allowBroadcast)
+    outh = h1 if not allowBroadcast else broadcastOutHist(h1, h2)
+    outh.values(flow=True)[...] = h1vals + h2vals
+    outh.variances(flow=True)[...] = h1vars + h2vars
+    return outh
 
 def mirrorHist(hvar, hnom, cutoff=1):
     div = divideHists(hnom, hvar, cutoff)

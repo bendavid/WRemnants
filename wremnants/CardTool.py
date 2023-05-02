@@ -517,7 +517,7 @@ class CardTool(object):
         # Otherwise this is a processes not affected by the variation, don't write it out,
         # it's only needed for the fake subtraction
         logger.info(f"Writing systematic {syst} for process {proc}")
-        var_map = self.systHists(h, syst) 
+        var_map = self.systHists(h, syst)
         # TODO: Make this optional
         if syst != self.nominalName:
             self.checkSysts(var_map, proc)
@@ -525,10 +525,12 @@ class CardTool(object):
         if proc in self.noStatUncProcesses:
             logger.info(f"Zeroing statistical uncertainty for process {proc}")
             setZeroStatUnc = True
+        # this is a big loop a bit slow, but it might be mainly the hist->root conversion and writing into the root file
         for name, var in var_map.items():
             if name != "":
                 self.writeHist(var, self.variationName(proc, name), setZeroStatUnc=setZeroStatUnc,
                                decorrByBin=decorrelateByBin, hnomi=hnom)
+        logger.debug("After self.writeHist(...)")
 
     def addPseudodata(self, processes, processesFromNomi=[]):
         datagroups = self.datagroups if not self.pseudodata_datagroups else self.pseudodata_datagroups
@@ -602,7 +604,7 @@ class CardTool(object):
                 preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"],
                 # Needed to avoid always reading the variation for the fakes, even for procs not specified
                 forceToNominal=[x for x in self.datagroups.getProcNames() if x not in 
-                    self.datagroups.getProcNames([p for p in processes if p != "Fake"])],
+                                self.datagroups.getProcNames([p for p in processes if p != "Fake"])],
                 scaleToNewLumi=self.lumiScale,
             )
             self.writeForProcesses(syst, label="syst", processes=processes)
@@ -740,7 +742,10 @@ class CardTool(object):
             axes = self.project[:]
             if "charge" in h.axes.name and not self.xnorm:
                 axes.append("charge")
-            h = h.project(*axes)
+            # don't project h into itself when axes to project are all axes
+            if len(axes) < len(h.axes.name): 
+                logger.debug(f"Projecting {h.axes.name} into {axes}")
+                h = h.project(*axes)
 
         if not self.nominalDim:
             self.nominalDim = h.ndim
@@ -751,9 +756,7 @@ class CardTool(object):
             raise ValueError(f"Histogram {name} does not have the correct dimensions. Found {h.ndim}, expected {self.nominalDim}")
 
         if setZeroStatUnc:
-            hist_no_error = h.copy()
-            hist_no_error.variances(flow=True)[...] = 0.
-            h = hist_no_error
+            h.variances(flow=True)[...] = 0.
 
         hists = {name: h} # always keep original variation in output file for checks
         if decorrByBin:
