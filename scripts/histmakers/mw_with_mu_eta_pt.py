@@ -408,9 +408,10 @@ def build_graph(df, dataset):
                         )
                         results.append(dummyMuonScaleSyst_responseWeights)
 
-                        df = df.DefinePerSample("A", 'return std::vector<std::string> {"A"}')
-                        df = df.DefinePerSample("M", 'return std::vector<std::string> {"M"}')
-                        df = df.DefinePerSample("AM", 'return std::vector<std::string> {"A", "M"}')
+                        df = df.DefinePerSample("AFlag", "0x01")
+                        df = df.DefinePerSample("MFlag", "0x04")
+                        df = df.DefinePerSample("AMFlag", "0x01 | 0x04")
+
                         df = df.Define("Z_non_closure_charge_dep", z_non_closure_charge_dep_helper,
                             [
                                 f"{reco_sel_GF}_qop0_gen",
@@ -421,16 +422,17 @@ def build_graph(df, dataset):
                                 f"{reco_sel_GF}_pt0_gen_smeared",
                                 f"{reco_sel_GF}_covMat0",
                                 "nominal_weight",
-                                "AM"
+                                "AMFlag"
                             ]
                         )
                         hist_Z_non_closure_charge_dep = df.HistoBoost(
                             "nominal_Z_non_closure_charge_dep",
                             nominal_axes,
                             [*nominal_cols_gen_smeared, "Z_non_closure_charge_dep"],
-                            tensor_axes = [common.down_up_axis]
+                           tensor_axes = [common.down_up_axis]
                         )
                         results.append(hist_Z_non_closure_charge_dep)
+
                         df = df.Define("Z_non_closure_charge_dep_A", z_non_closure_charge_dep_helper,
                             [
                                 f"{reco_sel_GF}_qop0_gen",
@@ -441,7 +443,7 @@ def build_graph(df, dataset):
                                 f"{reco_sel_GF}_pt0_gen_smeared",
                                 f"{reco_sel_GF}_covMat0",
                                 "nominal_weight",
-                                "A"
+                                "AFlag"
                             ]
                         )
                         hist_Z_non_closure_charge_dep_A = df.HistoBoost(
@@ -451,6 +453,7 @@ def build_graph(df, dataset):
                             tensor_axes = [common.down_up_axis]
                         )
                         results.append(hist_Z_non_closure_charge_dep_A)
+
                         df = df.Define("Z_non_closure_charge_dep_M", z_non_closure_charge_dep_helper,
                             [
                                 f"{reco_sel_GF}_qop0_gen",
@@ -461,7 +464,7 @@ def build_graph(df, dataset):
                                 f"{reco_sel_GF}_pt0_gen_smeared",
                                 f"{reco_sel_GF}_covMat0",
                                 "nominal_weight",
-                                "M"
+                                "MFlag"
                             ]
                         )
                         hist_Z_non_closure_charge_dep_M = df.HistoBoost(
