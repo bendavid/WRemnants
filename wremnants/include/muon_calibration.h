@@ -731,7 +731,7 @@ public:
         double genQop, float genEta,
         double recoQop, float recoEta, int recoCharge, double recoPt,  
         const RVec<float> &cov, double nominal_weight = 1.0,
-        std::vector<std::string> vars =  {"A", "M"}
+        std::vector<std::string> vars = {"A", "M"},
     ) {
         const auto &params = get_tensor(recoEta);
         double recoK = 1.0 /recoPt;
