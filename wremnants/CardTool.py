@@ -505,7 +505,8 @@ class CardTool(object):
         hnom = None
         if syst != self.nominalName:
             systInfo = self.systematics[syst]
-            hnom = self.procDict[proc][self.nominalName]
+            procDict = self.datagroups.getDatagroups()
+            hnom = procDict[proc].hists[self.nominalName]
             if systInfo["doActionBeforeMirror"] and systInfo["action"]:
                 h =systInfo["action"](h, **systInfo["actionArgs"])
                 self.outfile.cd() # needed to restore the current directory in case the action opens a new root file
@@ -536,7 +537,7 @@ class CardTool(object):
             procsToRead=processes,
             scaleToNewLumi=self.lumiScale)
         procDict = datagroups.getDatagroups()
-        hists = [procDict[proc][self.pseudoData] for proc in processes if proc not in processesFromNomi]
+        hists = [procDict[proc].hists[self.pseudoData] for proc in processes if proc not in processesFromNomi]
         # now add possible processes from nominal
         logger.warning(f"Making pseudodata summing these processes: {processes}")
         if len(processesFromNomi):
@@ -544,10 +545,10 @@ class CardTool(object):
             datagroupsFromNomi = self.datagroups
             datagroupsFromNomi.loadHistsForDatagroups(
                 baseName=self.pseudoData, syst="", label=self.pseudoData,
-                procsToRead=processesFromNomi, excluded_procs=self.excludeProcGroups,
+                procsToRead=processesFromNomi,
                 scaleToNewLumi=self.lumiScale)
             procDictFromNomi = datagroupsFromNomi.getDatagroups()
-            hists.extend([procDictFromNomi[proc][self.pseudoData] for proc in processesFromNomi])
+            hists.extend([procDictFromNomi[proc].hists[self.pseudoData] for proc in processesFromNomi])
         # done, now sum all histograms
         hdata = hh.sumHists(hists)
         # Kind of hacky, but in case the alt hist has uncertainties
@@ -585,12 +586,8 @@ class CardTool(object):
         self.writeForProcesses(self.nominalName, processes=self.datagroups.groups.keys(), label=self.nominalName)
         self.loadNominalCard()
         if self.pseudoData and not self.xnorm:
-            self.addPseudodata([x for x in self.procDict.keys() if x != "Data"],
-                               [x for x in self.procDict.keys() if x != "Data" and not self.pseudoDataProcsRegexp.match(x)])
-        ## NOTE: when fixing conflicts I noticed the following had self.datagroups.groups.keys() instead of self.procDict.keys()
-        ##       should be the same but I am not sure if there are unexpected features with one or the other case
-        #if self.pseudoData and not self.xnorm:
-        #    self.addPseudodata([x for x in self.datagroups.groups.keys() if x != "Data"])
+            self.addPseudodata([x for x in self.datagroups.groups.keys() if x != "Data"],
+                               [x for x in self.datagroups.groups.keys() if x != "Data" and not self.pseudoDataProcsRegexp.match(x)])
 
         self.writeLnNSystematics()
         for syst in self.systematics.keys():
@@ -671,12 +668,10 @@ class CardTool(object):
         # Deduplicate while keeping order
         systNames = list(dict.fromkeys(names))
 
-        ############################################
         # if decorrelating by bin, define new nuisances
         if systInfo["decorrByBin"]:
             systNamesTmp = self.makeDecorrelatedSystNuisances(systNames, systInfo["decorrByBin"])
             systNames = systNamesTmp[:]
-        ############################################
                 
         systnamesPruned = [s for s in systNames if not self.isExcludedNuisance(s)]
         systNames = systnamesPruned[:]
