@@ -130,23 +130,13 @@ if __name__ == "__main__":
     hratio = 0
 
     # file 1
-    tf = ROOT.TFile.Open(f1)        
-    hist1 =   tf.Get(h1)
-    if (hist1 == 0):
-        print("Error: could not retrieve %s from input file %s. Exit" % (h1,f1))
-        quit()
-    else:
-        hist1.SetDirectory(0)
+    tf = safeOpenFile(f1)
+    hist1 = safeGetObject(tf, h1)
     tf.Close()
 
     # file2
-    tf = ROOT.TFile.Open(f2)        
-    hist2 =   tf.Get(h2)
-    if (hist2 == 0):
-        print("Error: could not retrieve %s from input file %s. Exit" % (h2,f2))
-        quit()
-    else:
-        hist2.SetDirectory(0)
+    tf = safeOpenFile(f2)
+    hist2 = safeGetObject(tf, h2)
     tf.Close()
 
     hinput1 = hist1
@@ -217,11 +207,6 @@ if __name__ == "__main__":
             if yMin < yMax:
                 if yval < yMin or yval > yMax: continue
             denval = 0
-            if args.setRatioUnc == "den":
-                hratio.SetBinError(ix, iy, hinput2.GetBinError(hist2xbin, hist2ybin))
-            elif args.setRatioUnc == "both":
-                print("Error: '--set-ratio-unc' both not implemented yet. Abort")
-                quit()
             if args.makeAsymmetry:
                 denval = hsum.GetBinContent(hist2xbin, hist2ybin)
             else:
@@ -244,6 +229,13 @@ if __name__ == "__main__":
                 if args.divideRelativeError or args.divideError:
                     hratio.SetBinError(ix,iy, 0.0)
                 else:
+                    if args.setRatioUnc == "den":
+                        hratio.SetBinError(ix, iy, hinput2.GetBinError(hist2xbin, hist2ybin))
+                    elif args.setRatioUnc == "zero":
+                        hratio.SetBinError(ix, iy, 0.0)
+                    elif args.setRatioUnc == "both":
+                        print("Error: '--set-ratio-unc' both not implemented yet. Abort")
+                        quit()
                     hratio.SetBinError(ix,iy, hratio.GetBinError(ix,iy)/denval)
                 #print(f"{ix} {iy} {ratio}")
                 if ratio < float(minx) or ratio > float(maxx): nout += 1
@@ -314,7 +306,7 @@ if __name__ == "__main__":
             unitLine.SetBinError(ib, 0.0)
             # for plotting purpose put the uncertainty of the unrolled on the unit line, and reset it for the unrolled
             ratioUnc.SetBinContent(ib, 1.0)
-            ratioUnc.SetBinError(ib, ratio_unrolled.GetBinError(ib))
+            ratioUnc.SetBinError(ib, 0.0 if (args.divideRelativeError or args.divideError) else ratio_unrolled.GetBinError(ib))
             ratio_unrolled.SetBinError(ib, 0.0)
         yBinRanges = []
         if hratio.GetNbinsY() > 15:
