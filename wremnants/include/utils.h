@@ -16,6 +16,17 @@ namespace wrem {
 // pdg value
 constexpr double muon_mass = 0.1056583745;
 
+    template <typename T>
+    ROOT::VecOps::RVec<T> absVal(const ROOT::VecOps::RVec<T> & val) {
+
+        ROOT::VecOps::RVec<T> res(val.size(), 0.0); // initialize to 0
+        for (unsigned int i = 0; i < res.size(); ++i) {
+            res[i] = std::abs(val[i]);
+        }
+        return res;
+
+    }
+        
 float mt_2(float pt1, float phi1, float pt2, float phi2) {
     return std::sqrt(2*pt1*pt2*(1-std::cos(phi1-phi2)));
 }
