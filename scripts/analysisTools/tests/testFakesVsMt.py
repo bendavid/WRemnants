@@ -619,6 +619,7 @@ def runStudy(charge, outfolder, rootfilename, args):
         dphiMuonMetCut = args.dphiMuonMetCut * np.pi
         hnarf = hnarf[{"DphiMuonMet" : s[complex(0, 0.01+dphiMuonMetCut):complex(0, np.pi):hist.sum]}] # test dphi cut
         rootHists[d] = narf.hist_to_root(hnarf) # this is a THnD with eta-pt-charge-mt-passIso-hasJets-DphiMuonMet
+        hnarf_forplots = hnarf_forplots[{"DphiMuonMet" : s[complex(0, 0.01+dphiMuonMetCut):complex(0, np.pi)]}] # cut but do not integrate
         hnarf_forplots = hnarf_forplots[{"mt" : s[::hist.rebin(2)]}]
         rootHists_forplots[d] = narf.hist_to_root(hnarf_forplots) # this is a THnD with eta-pt-charge-mt-passIso-hasJets-DphiMuonMet
     ########
@@ -1029,7 +1030,8 @@ def runStudy(charge, outfolder, rootfilename, args):
                         invertePalette=args.invertePalette, passCanvas=canvas, skipLumi=True)
     if args.fitPolDegree:
         drawTH1(histoChi2diffTest,
-                "#chi^{2} difference probability (pol0 versus pol1)", "Events",
+                "#chi^{2} difference probability (pol0 versus pol1)",
+                f"Events::0,{1.2*histoChi2diffTest.GetBinContent(histoChi2diffTest.GetMaximumBin())}",
                 histoChi2diffTest.GetName(), outfolder, passCanvas=canvas1D,
                 statBoxSpec=210, skipTdrStyle=True)
         drawTH1(histoPullsPol1Slope,
