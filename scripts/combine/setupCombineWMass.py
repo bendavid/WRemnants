@@ -362,12 +362,12 @@ def main(args,xnorm=False):
                     decorrDict = {
                     }
                     # example of usage
-                    # decorrDict = {
-                    #     "xy" : {
-                    #         "label" : ["eta", "pt"],
-                    #         "edges": [[round(-2.4+i*0.4,1) for i in range(13)], [round(26.0+i*2,1) for i in range(16)]]
-                    #     }
-                    # }
+                    decorrDict = {
+                        "xy" : {
+                            "label" : ["eta", "pt"],
+                            "edges": [[round(-2.4+i*0.4,1) for i in range(13)], [round(26.0+i*2,1) for i in range(16)]]
+                        }
+                    }
                     outnames = [f"mtCorrFakes_{chargeId}{upd}" for upd in ["Up", "Down"]]
                     cardTool.addSystematic(f"nominal", # this is the histogram to read
                                            systAxes=[],
