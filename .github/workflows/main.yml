@@ -67,23 +67,23 @@ jobs:
         run: echo PLOT_DIR=$(date +%Y_%m_%d)/ScheduledBuild_$(git rev-parse --short "$GITHUB_SHA") >> $GITHUB_ENV
 
       - name: wmass setup events
-        if: github.event.schedule == '0 3 * * 2,4,6'
+        if: github.event_name != 'pull_request'
         run: echo "NTHREADS=64" >> $GITHUB_ENV
 
       - name: wmass setup events
-        if: github.event.schedule == '0 3 * * 2,4,6'
+        if: github.event_name != 'pull_request'
         run: echo "MAX_FILES=-1" >> $GITHUB_ENV
 
       - name: wmass setup lumi scale
-        if: github.event.schedule == '0 3 * * 2,4,6'
+        if: github.event_name != 'pull_request'
         run: echo "LUMI_SCALE=1" >> $GITHUB_ENV
 
       - name: wmass setup lumi scale
-        if: github.event.schedule != '0 3 * * 2,4,6'
+        if: github.event_name != 'pull_request'
         run: echo "LUMI_SCALE=120" >> $GITHUB_ENV
 
       - name: wmass setup lumi scale
-        if: github.event.schedule != '0 3 * * 2,4,6'
+        if: github.event_name != 'pull_request'
         run: echo "MAX_FILES=100" >> $GITHUB_ENV
 
       - name: wmass analysis
@@ -120,15 +120,15 @@ jobs:
           submodules: 'true'
 
       - name: lowpu setup events
-        if: github.event.schedule == '0 3 * * 2,4,6'
+        if: github.event_name != 'pull_request'
         run: echo "MAX_FILES=-1" >> $GITHUB_ENV
 
       - name: lowpu setup lumi scale
-        if: github.event.schedule == '0 3 * * 2,4,6'
+        if: github.event_name != 'pull_request'
         run: echo "LUMI_SCALE=1" >> $GITHUB_ENV
 
       - name: lowpu setup threads
-        if: github.event.schedule == '0 3 * * 2,4,6'
+        if: github.event_name != 'pull_request'
         run: echo "NTHREADS=64" >> $GITHUB_ENV
 
       - name: lowpu w analysis
@@ -171,15 +171,15 @@ jobs:
         run: echo PLOT_DIR=$(date +%Y_%m_%d)/ScheduledBuild_$(git rev-parse --short "$GITHUB_SHA") >> $GITHUB_ENV
 
       - name: wlike setup events
-        if: github.event.schedule == '0 3 * * 2,4,6'
+        if: github.event_name != 'pull_request'
         run: echo "MAX_FILES=-1" >> $GITHUB_ENV
 
       - name: wlike setup lumi scale
-        if: github.event.schedule == '0 3 * * 2,4,6'
+        if: github.event_name != 'pull_request'
         run: echo "LUMI_SCALE=1" >> $GITHUB_ENV
 
       - name: wlike setup threads
-        if: github.event.schedule == '0 3 * * 2,4,6'
+        if: github.event_name != 'pull_request'
         run: echo "NTHREADS=64" >> $GITHUB_ENV
 
       - name: wlike analysis
@@ -235,11 +235,11 @@ jobs:
         run: echo PLOT_DIR=$(date +%Y_%m_%d)/ScheduledBuild_$(git rev-parse --short "$GITHUB_SHA") >> $GITHUB_ENV
 
       - name: dilepton setup threads
-        if: github.event.schedule == '0 3 * * 2,4,6'
+        if: github.event_name != 'pull_request'
         run: echo "NTHREADS=64" >> $GITHUB_ENV
 
       - name: dilepton setup events
-        if: github.event.schedule == '0 3 * * 2,4,6'
+        if: github.event_name != 'pull_request'
         run: echo "MAX_FILES=-1" >> $GITHUB_ENV
 
       - name: dilepton analysis
