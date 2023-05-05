@@ -743,7 +743,11 @@ class CardTool(object):
             if "charge" in h.axes.name and not self.xnorm:
                 axes.append("charge")
             # don't project h into itself when axes to project are all axes
-            if len(axes) < len(h.axes.name): 
+            if any (ax not in h.axes.name for ax in axes):
+                logger.error("Request to project some axes not present in the histogram")
+                raise ValueError(f"Histogram has {h.axes.name} but requested axes for projection are {axes}")
+
+            if len(axes) < len(h.axes.name):
                 logger.debug(f"Projecting {h.axes.name} into {axes}")
                 h = h.project(*axes)
 
