@@ -11,6 +11,7 @@ import functools
 import hist
 import pandas as pd
 import math
+import copy
 
 from wremnants.datasets.datagroup import Datagroup
 
@@ -229,6 +230,7 @@ class Datagroups(object):
 
                 logger.debug("Summing histogram to group")
                 group.hists[label] = hh.addHistsNoCopy(h, group.hists[label]) if group.hists[label] else h
+                #group.hists[label] = hh.addHists(h, group.hists[label]) if group.hists[label] else h
                 logger.debug("Sum done")
 
             # Can use to apply common rebinning or selection on top of the usual one
@@ -462,16 +464,17 @@ class Datagroups(object):
     def readHist(self, baseName, proc, group, syst, scaleOp=None, forceNonzero=True, scaleToNewLumi=-1):
         output = self.results[proc.name]["output"]
         histname = self.histName(baseName, proc.name, syst)
-        logger.debug(f"Reading hist {histname} for proc {proc.name} and syst '{syst}'")
+        logger.debug(f"Reading hist {histname} for proc/group {proc.name}/{group} and syst '{syst}'")
         if histname not in output:
             raise ValueError(f"Histogram {histname} not found for process {proc.name}")
         h = output[histname]
         if isinstance(h, narf.ioutils.H5PickleProxy):
             h = h.get()
+        h = copy.deepcopy(h)
         if forceNonzero:
             h = hh.clipNegativeVals(h)
         if scaleToNewLumi > 0:
-            h = hh.scaleByLumi(h, scaleToNewLumi, createNew=True)
+            h = hh.scaleByLumi(h, scaleToNewLumi, createNew=False)
         scale = self.processScaleFactor(proc)
         if scaleOp:
             scale = scale*scaleOp(proc)
