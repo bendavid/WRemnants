@@ -74,7 +74,7 @@ jobs:
         if: github.event_name != 'pull_request'
         run: echo "MAX_FILES=-1" >> $GITHUB_ENV
 
-      - name: wmass setup lumi scale
+      - name: wmass setup full lumi 
         if: github.event_name != 'pull_request'
         run: echo "LUMI_SCALE=1" >> $GITHUB_ENV
 
@@ -82,7 +82,7 @@ jobs:
         if: github.event_name == 'pull_request'
         run: echo "LUMI_SCALE=120" >> $GITHUB_ENV
 
-      - name: wmass setup lumi scale
+      - name: wmass setup max files
         if: github.event_name == 'pull_request'
         run: echo "MAX_FILES=100" >> $GITHUB_ENV
 
