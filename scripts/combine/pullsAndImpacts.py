@@ -10,10 +10,11 @@ import dash_daq as daq
 from dash import html
 from dash.dependencies import Input, Output
 from utilities import input_tools, logging
+from wremnants import plot_tools
 import os
 import re
 
-def writeOutput(fig, outfile, extensions=[], postfix=None):
+def writeOutput(fig, outfile, extensions=[], postfix=None, args=None):
     name, ext = os.path.splitext(outfile)
     if ext not in extensions:
         extensions.append(ext)
@@ -29,8 +30,17 @@ def writeOutput(fig, outfile, extensions=[], postfix=None):
         logger.debug(f"Write output file {output}")
 
         getattr(fig, func)(output)
+        
+        output = outfile.rsplit("/", 1)
+        output[1] = os.path.splitext(output[1])[0]
+        if len(output) == 1:
+            output = (None, *output)
+        plot_tools.write_index_and_log(*output, 
+            args=args,
+        )
 
-def plotImpacts(df, title, pulls=False, POI='Wmass', normalize=False, oneSidedImpacts=False):
+
+def plotImpacts(df, pulls=False, POI='Wmass', normalize=False, oneSidedImpacts=False):
     poi_type = POI.split("_")[-1] if POI else None
 
     if poi_type == "Wmass":
@@ -56,12 +66,6 @@ def plotImpacts(df, title, pulls=False, POI='Wmass', normalize=False, oneSidedIm
     fig.update_layout(paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
         xaxis_title=impact_title if impacts else "Pull",
-        title={
-            'text': title,
-            'y': 1.-1/float(ndisplay),
-            'x': 0.7,
-            'xanchor': 'center',
-            'yanchor': 'top'},
         margin=dict(l=20,r=20,t=50,b=20),
         yaxis=dict(range=[-1, ndisplay]),
         showlegend=False,
@@ -226,7 +230,6 @@ def parseArgs():
     output.add_argument("--otherExtensions", default=[], type=str, nargs="*", help="Additional output file types to write")
     output.add_argument("-n", "--num", type=int, help="Number of nuisances to plot")
     output.add_argument("--noPulls", action='store_true', help="Don't show pulls (not defined for groups)")
-    output.add_argument("-t", "--title", type=str, default="", help="Title of output plot")
     
     return parser.parse_args()
 
@@ -249,7 +252,7 @@ def draw_figure(maxShow, sortBy, sortDescending, filterLabels, groups, oneSidedI
         for label in filterLabels.split(","):
             filt = filt | (df["label"].str.find(label.strip()) >= 0)
         df = df[filt]
-    return plotImpacts(df, title="Contribution to uncertainty in mW", pulls=True, oneSidedImpacts=oneSidedImpacts)
+    return plotImpacts(df, pulls=True, oneSidedImpacts=oneSidedImpacts)
 
 dataframe = pd.DataFrame()
 groupsdataframe = pd.DataFrame()
@@ -305,9 +308,10 @@ def producePlots(rtfile, args, POI='Wmass', normalize=False):
         df = df.sort_values(by=args.sort, ascending=args.ascending)
         if args.num and args.num < df.size:
             df = df[-args.num:]
-        fig = plotImpacts(df, title=args.title, pulls=not args.noPulls and not args.group, POI=POI, normalize=not args.absolute, oneSidedImpacts=args.oneSidedImpacts)
+        fig = plotImpacts(df, pulls=not args.noPulls and not args.group, POI=POI, normalize=not args.absolute, oneSidedImpacts=args.oneSidedImpacts)
 
-        writeOutput(fig, args.outputFile, args.otherExtensions, postfix=POI)
+        postfix = POI if POI and "mass" not in POI else None
+        writeOutput(fig, args.outputFile, args.otherExtensions, postfix=postfix, args=args)
     else:
         raise ValueError("Must select mode 'interactive' or 'output'")
 

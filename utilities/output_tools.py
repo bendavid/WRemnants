@@ -32,8 +32,9 @@ def script_command_to_str(argv, parser_args):
     match_expr = "|".join(["^-+([a-z]+[1-9]*-*)+"]+([] if not parser_args else [f"^-*{x.replace('_', '.')}" for x in vars(parser_args).keys()]))
     if call_args.size != 0:
         flags = np.vectorize(lambda x: bool(re.match(match_expr, x)))(call_args)
+        special_chars = np.vectorize(lambda x: not x.isalnum())(call_args)
         if np.count_nonzero(~flags):
-            call_args[~flags] = np.vectorize(lambda x: f"'{x}'")(call_args[~flags])
+            call_args[~flags & special_chars] = np.vectorize(lambda x: f"'{x}'")(call_args[~flags & special_chars])
     return " ".join([argv[0], *call_args])
 
 def metaInfoDict(exclude_diff='notebooks', args=None):
