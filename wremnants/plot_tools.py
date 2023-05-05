@@ -388,9 +388,9 @@ def save_pdf_and_png(outdir, basename, fig=None):
 def write_index_and_log(outpath, logname, indexname="index.php", template_dir=f"{pathlib.Path(__file__).parent}/Templates", 
         yield_tables=None, analysis_meta_info=None, args={}, nround=2):
     shutil.copyfile(f"{template_dir}/{indexname}", f"{outpath}/{indexname}")
-    logdir = outpath
+    logname = f"{outpath}/{logname}.log"
 
-    with open(f"{logdir}/{logname}.log", "w") as logf:
+    with open(logname, "w") as logf:
         meta_info = '-'*80 + '\n' + \
             f'Script called at {datetime.datetime.now()}\n' + \
             f'The command was: {output_tools.script_command_to_str(sys.argv, args)}\n' + \
@@ -415,4 +415,5 @@ def write_index_and_log(outpath, logname, indexname="index.php", template_dir=f"
                 logf.write('\n'+'-'*80+"\n")
                 logf.write(f"Meta info from input file {k}\n")
                 logf.write('\n'+'-'*80+"\n")
-                logf.write(json.dumps(analysis_info, indent=4).replace("\\n", "\n"))
+                logf.write(json.dumps(analysis_info, indent=5).replace("\\n", "\n"))
+        logger.info(f"Writing file {logname}")
