@@ -224,7 +224,7 @@ class CardTool(object):
             return
 
         if name == self.nominalName:
-            logger.debug("Defining syst {rename} from nominal histogram")
+            logger.debug(f"Defining syst {rename} from nominal histogram")
             
         self.systematics.update({
             name if not rename else rename : {
@@ -514,9 +514,7 @@ class CardTool(object):
                 h = hh.extendHistByMirror(h, hnom)
             if systInfo["decorrByBin"]:
                 decorrelateByBin = systInfo["decorrByBin"]
-        # Otherwise this is a processes not affected by the variation, don't write it out,
-        # it's only needed for the fake subtraction
-        logger.info(f"Writing systematic {syst} for process {proc}")
+        logger.info(f"Preparing to write systematic {syst} for process {proc}")
         var_map = self.systHists(h, syst)
         # TODO: Make this optional
         if syst != self.nominalName:
