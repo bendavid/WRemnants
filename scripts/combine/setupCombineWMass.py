@@ -260,7 +260,7 @@ def main(args,xnorm=False):
                 splitGroupDict[groupName] = ".*effStat.*" # add also the group with everything
             if args.effStatLumiScale and "Syst" not in name:
                 scale /= math.sqrt(args.effStatLumiScale)
-                
+
             cardTool.addSystematic(
                 name, 
                 mirror=mirror,
