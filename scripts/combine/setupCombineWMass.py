@@ -355,37 +355,36 @@ def main(args,xnorm=False):
             #                        passToFakes=passSystToFakes,
             # )
             #
-        
-            if "Fake" not in excludeGroup:
-                for charge in ["plus", "minus"]:
-                    chargeId = "q1" if charge == "plus" else "q0"
-                    decorrDict = {
-                    }
-                    decorrDict = {}
-                    # example of usage (for one dimension don't pass an array with 1 element, but a single object)
-                    # decorrDict = {
-                    #     "xy" : {
-                    #         "label" : ["eta", "pt"],
-                    #         "edges": [[round(-2.4+i*0.4,1) for i in range(13)], [round(26.0+i*2,1) for i in range(16)]]
-                    #     }
-                    # }
-                    outnames = [f"mtCorrFakes_{chargeId}{upd}" for upd in ["Up", "Down"]]
-                    cardTool.addSystematic(f"nominal", # this is the histogram to read
-                                           systAxes=[],
-                                           processes=["Fake"],
-                                           mirror=True,
-                                           group="MultijetBkg",
-                                           outNames=outnames, # actual names for nuisances
-                                           rename=f"mtCorrFakes_{chargeId}", # this name is used only to identify the syst in CardTool's syst list
-                                           action=sel.applyCorrection,
-                                           doActionBeforeMirror=True, # to mirror after the histogram has been created
-                                           actionArgs={"scale": 1.0,
-                                                       "corrFile" : f"{data_dir}/fakesWmass/fakerateFactorMtBasedCorrection_vsEtaPt.root",
-                                                       "corrHist": f"etaPtCharge_mtCorrection_{charge}",
-                                                       "offsetCorr": 1.0,
-                                                       "createNew": True},
-                                           decorrelateByBin=decorrDict
-                    )
+
+            ## Remove for now since it seems redundant after adding the dphi cut
+            ## keep in case it is needed again in the near future (we still have to test deepmet)
+            # if "Fake" not in excludeGroup:
+            #     for charge in ["plus", "minus"]:
+            #         chargeId = "q1" if charge == "plus" else "q0"
+            #         decorrDict = {}
+            #         # decorrDict = {                        
+            #         #     "xy" : {
+            #         #         "label" : ["eta", "pt"],
+            #         #         "edges": [[round(-2.4+i*0.4,1) for i in range(13)], [round(26.0+i*2,1) for i in range(16)]]
+            #         #     }
+            #         # }
+            #         outnames = [f"mtCorrFakes_{chargeId}{upd}" for upd in ["Up", "Down"]]
+            #         cardTool.addSystematic(f"nominal", # this is the histogram to read
+            #                                systAxes=[],
+            #                                processes=["Fake"],
+            #                                mirror=True,
+            #                                group="MultijetBkg",
+            #                                outNames=outnames, # actual names for nuisances
+            #                                rename=f"mtCorrFakes_{chargeId}", # this name is used only to identify the syst in CardTool's syst list
+            #                                action=sel.applyCorrection,
+            #                                doActionBeforeMirror=True, # to mirror after the histogram has been created
+            #                                actionArgs={"scale": 1.0,
+            #                                            "corrFile" : f"{data_dir}/fakesWmass/fakerateFactorMtBasedCorrection_vsEtaPt.root",
+            #                                            "corrHist": f"etaPtCharge_mtCorrection_{charge}",
+            #                                            "offsetCorr": 1.0,
+            #                                            "createNew": True},
+            #                                decorrelateByBin=decorrDict
+            #         )
         else:
             cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
 
