@@ -3,6 +3,7 @@ import numpy as np
 from functools import reduce
 import collections
 from utilities import common, logging
+import copy
 
 logger = logging.child_logger(__name__)
 
@@ -108,6 +109,7 @@ def addHists(h1, h2, allowBroadcast=True):
 def sumHists(hists):
     return reduce(addHists, hists)
 
+# TODO: implement this inside addHists with another createNew argument?
 def addHistsNoCopy(h1, h2, allowBroadcast=True):
     h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2, allowBroadcast)
     outh = h1 if not allowBroadcast else broadcastOutHist(h1, h2)
@@ -115,13 +117,23 @@ def addHistsNoCopy(h1, h2, allowBroadcast=True):
     outh.variances(flow=True)[...] = h1vars + h2vars
     return outh
 
+# TODO: avoid doing multiple copies, e.g. inside both divideHists and multiplyHists, for big histograms it is slow
 def mirrorHist(hvar, hnom, cutoff=1):
     div = divideHists(hnom, hvar, cutoff)
     hnew = multiplyHists(div, hnom)
     return hnew
 
-def extendHistByMirror(hvar, hnom):
-    hmirror = mirrorHist(hvar, hnom)
+def extendHistByMirror(hvar, hnom, downAsUp=False, downAsNomi=False):
+    if downAsUp:
+        hmirror = copy.deepcopy(hvar)
+    elif downAsNomi:
+        # temporary solution, can't just copy nominal since I have to broabcast, as done in multiplyHists/divideHists
+        # surely there is a smarter way with numpy
+        hmirror = copy.deepcopy(hvar)
+        div = divideHists(hmirror, hvar) # essentially creates hist with ones, with same shape as hvar 
+        hmirror = multiplyHists(div, hnom)
+    else:
+        hmirror = mirrorHist(hvar, hnom)
     mirrorAx = hist.axis.Integer(0,2, name="mirror", overflow=False, underflow=False)
     hnew = hist.Hist(*hvar.axes, mirrorAx, storage=hvar._storage_type())
     hnew.view(flow=True)[...] = np.stack((hvar.view(flow=True), hmirror.view(flow=True)), axis=-1)
