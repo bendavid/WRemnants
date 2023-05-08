@@ -209,7 +209,11 @@ class CardTool(object):
                       systNameReplace=[], groupFilter=None, passToFakes=False,
                       rename=None, splitGroup={}, decorrelateByBin={},
                       ):
-
+        # note: setting Up=Down seems to be pathological for the moment, it might be due to the interpolation in the fit
+        # for now better not to use the options, although it might be useful to keep it implemented
+        if mirrorDownVarEqualToUp:
+            raise ValueError("mirrorDownVarEqualToUp currently leads to pathological results in the fit, please keep it False")
+        
         # Need to make an explicit copy of the array before appending
         procs_to_add = [x for x in (self.allMCProcesses() if processes is None else processes)]
         if passToFakes and self.getFakeName() not in procs_to_add:
