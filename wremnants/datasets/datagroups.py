@@ -196,7 +196,7 @@ class Datagroups(object):
             fakesMembers = [m.name for m in self.groups[nameFake].members]
             fakesMembersWithSyst = []
         else:
-            procsToReadSort = procsToRead[:]
+            procsToReadSort = [x for x in procsToRead]
         # if hasFake is kept as False, the original behaviour for which Fake reads everything again is restored
             
         for procName in procsToReadSort:
