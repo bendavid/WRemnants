@@ -13,32 +13,47 @@ genDataDict = {
     },
     'ZToMuMu_horace-lo-photos' : { 
                    'filepaths' :
-                    ["{BASE_PATH}/ZToMuMu_TuneCP5_13TeV-horace-born-fsr-photos_nopair-isr-pythia/job*.root"],
+                    ["{BASE_PATH}/Horace_v3/ZToMuMu_TuneCP5_13TeV-horace-born-fsr-photos_nopair-isr-pythia/job*.root"],
+                   'xsec' : xsec_ZmmPostVFP,
+    },
+    'ZToMuMu_horace-qed' : { 
+                   'filepaths' :
+                    ["{BASE_PATH}/Horace_v3/ZToMuMu_TuneCP5_13TeV-horace-exp-old-fsr-off-isr-pythia/job*.root"],
                    'xsec' : xsec_ZmmPostVFP,
     },
     'ZToMuMu_horace-nlo' : { 
                    'filepaths' :
-                    ["{BASE_PATH}/ZToMuMu_TuneCP5_13TeV-horace-exp-new-fsr-off-isr-off/job*.root"],
+                    ["{BASE_PATH}/Horace_v3/ZToMuMu_TuneCP5_13TeV-horace-exp-new-fsr-off-isr-off/job*.root"],
                    'xsec' : xsec_ZmmPostVFP,
     },
     'WplusToMuNu_horace-lo-photos' : { 
                    'filepaths' :
-                    ["{BASE_PATH}/WplusToMuNu_TuneCP5_13TeV-horace-born-fsr-photos_nopair-isr-pythia/job*.root"],
+                    ["{BASE_PATH}/Horace_v3/WplusToMuNu_TuneCP5_13TeV-horace-born-fsr-photos_nopair-isr-pythia/job*.root"],
+                   'xsec' : xsec_WpmunuPostVFP,
+    },
+    'WplusToMuNu_horace-qed' : { 
+                   'filepaths' :
+                    ["{BASE_PATH}/Horace_v3/WplusToMuNu_TuneCP5_13TeV-horace-exp-old-fsr-off-isr-pythia/job*.root"],
                    'xsec' : xsec_WpmunuPostVFP,
     },
     'WplusToMuNu_horace-nlo' : { 
                    'filepaths' :
-                    ["{BASE_PATH}/WplusToMuNu_TuneCP5_13TeV-horace-exp-new-fsr-off-isr-off/job*.root"],
+                    ["{BASE_PATH}/Horace_v3/WplusToMuNu_TuneCP5_13TeV-horace-exp-new-fsr-off-isr-off/job*.root"],
                    'xsec' : xsec_WpmunuPostVFP,
     },
     'WminusToMuNu_horace-lo-photos' : { 
                    'filepaths' :
-                    ["{BASE_PATH}/WminusToMuNu_TuneCP5_13TeV-horace-born-fsr-photos_nopair-isr-pythia/job*.root"],
+                    ["{BASE_PATH}/Horace_v3/WminusToMuNu_TuneCP5_13TeV-horace-born-fsr-photos_nopair-isr-pythia/job*.root"],
+                   'xsec' : xsec_WmmunuPostVFP,
+    },
+    'WminusToMuNu_horace-qed' : { 
+                   'filepaths' :
+                    ["{BASE_PATH}/Horace_v3/WminusToMuNu_TuneCP5_13TeV-horace-exp-old-fsr-off-isr-pythia/job*.root"],
                    'xsec' : xsec_WmmunuPostVFP,
     },
     'WminusToMuNu_horace-nlo' : { 
                    'filepaths' :
-                    ["{BASE_PATH}/WminusToMuNu_TuneCP5_13TeV-horace-exp-new-fsr-off-isr-off/job*.root"],
+                    ["{BASE_PATH}/Horace_v3/WminusToMuNu_TuneCP5_13TeV-horace-exp-new-fsr-off-isr-off/job*.root"],
                    'xsec' : xsec_WmmunuPostVFP,
     },
 }
