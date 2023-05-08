@@ -257,7 +257,6 @@ class Datagroups(object):
 
                 hasPartialSumForFake = False
                 if hasFake and procName != nameFake:
-                    # FIXME: deal with memberOperation, basically scale by -1 for MC and +1 for data
                     if member.name in fakesMembers:
                         if member.name not in fakesMembersWithSyst:
                             fakesMembersWithSyst.append(member.name)
@@ -297,23 +296,8 @@ class Datagroups(object):
             # Then continue with the rest of the code as usual
             if hasFake and procName == nameFake:
                 if histForFake is not None:
-                    group.hists[label] = hh.addHistsNoCopy(histForFake, group.hists[label]) if group.hists[label] else histForFake                   
+                    group.hists[label] = hh.addHistsNoCopy(histForFake, group.hists[label]) if group.hists[label] else histForFake
 
-            #############################################################################
-            ### The following was experimental, to sum preexisting histograms for groups instead of doing it per process
-            ###
-            # # create partial sum for Fakes, when present
-            # # TODO: evaluate if it can go after the following operations, but it must be before the selectOp since
-            # #       fakes use a special one compared to other processes (e.g. all iso-mt regions, not just signal one)
-            # if hasFake and procName != nameFake:
-            #     # FIXME: deal with memberOperation, basically scale by -1 for MC and +1 for data
-            #     if not all(x in fakesMembers for x in group.members):
-            #         missingMembersInFake = [x for x in group.members if x not in fakesMembers]
-            #         logger.warning(f"{nameFake} histogram being created using unexpected members {missingMembersInFake}")
-            #     hPrompt = copy.deepcopy(group.hists[label])
-            #     histPrompSumForFake = hh.addHistsNoCopy(hPrompt, histPrompSumForFake) if histPrompSumForFake else hPrompt
-            #############################################################################
-            
             # Can use to apply common rebinning or selection on top of the usual one
             if group.rebinOp:
                 group.hists[label] = group.rebinOp(group.hists[label])
@@ -551,7 +535,7 @@ class Datagroups(object):
         h = output[histname]
         if isinstance(h, narf.ioutils.H5PickleProxy):
             h = h.get()
-        # Do a copy to detach the modified object from the original one, so it stays unmodified.
+        # Do a copy to detach the modified object from the original one, so the latter stays unmodified.
         # This is extremely important for fakes, since they reuse the other histograms to subtract from data
         # If fakes are not used, or one changes the code to avoid reading everything again for fakes, one could
         # actually modify directly the input histograms here, which might save some time compared to the copy.
