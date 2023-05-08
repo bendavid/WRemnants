@@ -239,21 +239,22 @@ def main(args,xnorm=False):
                 nameReplace = [("WPSYST0", "reco"), ("WPSYST1", "tracking"), ("WPSYST2", "idip"), ("WPSYST3", "trigger"), ("WPSYST4", "iso"), ("effSystTnP", "effSyst")]
                 scale = 1.0
                 mirror = True
+                mirrorDownVarEqualToNomi=True
                 groupName = "muon_eff_syst"
                 splitGroupDict = {f"{groupName}_{x}" : f".*effSyst.*{x}" for x in list(effTypesNoIso + ["iso"])}
                 splitGroupDict[groupName] = ".*effSyst.*" # add also the group with everything
             else:
                 nameReplace = [] if any(x in name for x in chargeDependentSteps) else [("q0", "qall")] # for iso charge the tag id with another sensible label
+                mirror = True
+                mirrorDownVarEqualToNomi=False
                 if args.binnedScaleFactors:
                     axes = ["SF eta", "nPtBins", "SF charge"]
                     axlabels = ["eta", "pt", "q"]
-                    mirror = True
                     nameReplace = nameReplace + [("effStatTnP_sf_", "effStatBinned_")]
                 else:
-                    axes = ["SF eta", "nPtEigenBins", "SF charge", "downUpVar"]
-                    axlabels = ["eta", "pt", "q", "downUpVar"]
-                    mirror = False
-                    nameReplace = nameReplace + [("effStatTnP_sf_", "effStatSmooth_")]
+                    axes = ["SF eta", "nPtEigenBins", "SF charge"]
+                    axlabels = ["eta", "pt", "q"]
+                    nameReplace = nameReplace + [("effStatTnP_sf_", "effStatSmooth_")]                    
                 scale = 1.0
                 groupName = "muon_eff_stat"
                 splitGroupDict = {f"{groupName}_{x}" : f".*effStat.*{x}" for x in effStatTypes}
@@ -264,6 +265,7 @@ def main(args,xnorm=False):
             cardTool.addSystematic(
                 name, 
                 mirror=mirror,
+                mirrorDownVarEqualToNomi=mirrorDownVarEqualToNomi,
                 group=groupName,
                 systAxes=axes,
                 labelsByAxis=axlabels,
