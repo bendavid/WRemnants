@@ -409,7 +409,7 @@ class CardTool(object):
                 logger.error(f"Incompatible shapes between up and down for syst {name}")
                 raise e
             down_relsign = np.sign(down.values(flow=False)-hnom.values(flow=False))
-            vars_sameside = (up_relsign != 0) & (up_relsign == down_relsign)
+            vars_sameside = (up_relsign != 0) & (up_relsign == down_relsign) & np.logical_not(np.isclose(up.values(flow=False), hnom.values(flow=False), rtol=1e-07, atol=1e-08))
             perc_sameside = np.count_nonzero(vars_sameside)/nCellsWithoutOverflows 
             if perc_sameside > thresh:
                 logger.warning(f"{perc_sameside:.1%} bins are one sided for syst {name} and process {proc}!")
