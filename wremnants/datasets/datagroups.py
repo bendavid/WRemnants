@@ -474,7 +474,7 @@ class Datagroups(object):
         if forceNonzero:
             h = hh.clipNegativeVals(h, createNew=False)
         if scaleToNewLumi > 0:
-            h = hh.scaleByLumi(h, scaleToNewLumi, createNew=True)
+            h = hh.scaleByLumi(h, scaleToNewLumi, createNew=False)
         scale = self.processScaleFactor(proc)
         if scaleOp:
             scale = scale*scaleOp(proc)
