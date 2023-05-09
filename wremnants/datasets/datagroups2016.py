@@ -80,9 +80,6 @@ def make_datagroups_2016(input_file, combine=False, pseudodata_pdfset = None, ap
             label = "Other",
             color = "grey",
         )
-
-    dg.filterGroups(filterGroups)
-    dg.excludeGroups(excludeGroups)
     
     if dg.wmass:
         # add all processes to the fake contributions after filtered and excluded groups
@@ -93,6 +90,9 @@ def make_datagroups_2016(input_file, combine=False, pseudodata_pdfset = None, ap
             color = "grey",
             selectOp = fakeOp,
         )
+
+    dg.filterGroups(filterGroups)
+    dg.excludeGroups(excludeGroups)
 
     if dg.wmass:
         dg.gen_axes = ["etaGen", "ptGen"]
