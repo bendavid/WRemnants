@@ -226,7 +226,7 @@ class Datagroups(object):
                 if self.globalAction:
                     h = self.globalAction(h)
 
-                group.hists[label] = hh.addHistsNoCopy(h, group.hists[label]) if group.hists[label] else h
+                group.hists[label] = hh.addHists(h, group.hists[label]) if group.hists[label] else h
 
             # Can use to apply common rebinning or selection on top of the usual one
             if group.rebinOp:
