@@ -11,7 +11,6 @@ import functools
 import hist
 import pandas as pd
 import math
-import copy
 
 from wremnants.datasets.datagroup import Datagroup
 
@@ -470,11 +469,11 @@ class Datagroups(object):
         # This is extremely important for fakes, since they reuse the other histograms to subtract from data
         # If fakes are not used, or one changes the code to avoid reading everything again for fakes, one could
         # actually modify directly the input histograms here, which might save some time compared to the copy.
-        h = copy.deepcopy(h)
+        h = h.copy()
         if forceNonzero:
             h = hh.clipNegativeVals(h, createNew=False)
         if scaleToNewLumi > 0:
-            h = hh.scaleByLumi(h, scaleToNewLumi, createNew=False)
+            h = hh.scaleByLumi(h, scaleToNewLumi, createNew=False)                        
         scale = self.processScaleFactor(proc)
         if scaleOp:
             scale = scale*scaleOp(proc)
