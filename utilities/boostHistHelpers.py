@@ -109,6 +109,13 @@ def addHists(h1, h2, allowBroadcast=True):
 def sumHists(hists):
     return reduce(addHists, hists)
 
+def addHistsNoCopy(h1, h2, allowBroadcast=True):
+    h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2, allowBroadcast)
+    outh = h1 if not allowBroadcast else broadcastOutHist(h1, h2)
+    outh.values(flow=True)[...] = h1vals + h2vals
+    outh.variances(flow=True)[...] = h1vars + h2vars
+    return outh                
+
 def mirrorHist(hvar, hnom, cutoff=1):
     div = divideHists(hnom, hvar, cutoff)
     hnew = multiplyHists(div, hnom)
@@ -129,13 +136,17 @@ def addSystAxis(h, size=1, offset=0):
     hnew[...] = np.stack((newvals, newvars), axis=-1)
     return hnew
 
-def clipNegativeVals(h, clipValue=0):
-    hnew = hist.Hist(*h.axes, storage=hist.storage.Weight())
+def clipNegativeVals(h, clipValue=0, createNew=False):
     vals = h.values(flow=True)
     vals[vals<0] = clipValue
-    hnew[...] = np.stack((vals, h.variances(flow=True)), axis=-1)
-    return hnew
-
+    if createNew:
+        hnew = hist.Hist(*h.axes, storage=hist.storage.Weight())
+        hnew[...] = np.stack((vals, h.variances(flow=True)), axis=-1)
+        return hnew
+    else:
+        h.values(flow=True)[...] = vals
+        return h
+    
 def scaleByLumi(h, scale, createNew=False):
     if createNew:
         hnew = hist.Hist(*h.axes, storage=hist.storage.Weight())

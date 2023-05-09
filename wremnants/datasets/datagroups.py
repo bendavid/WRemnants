@@ -11,6 +11,7 @@ import functools
 import hist
 import pandas as pd
 import math
+import copy
 
 from wremnants.datasets.datagroup import Datagroup
 
@@ -46,7 +47,9 @@ class Datagroups(object):
                 self.data = [x for x in self.datasets.values() if x.is_data]
                 if self.data:
                     self.lumi = sum([self.results[x.name]["lumi"] for x in self.data if x.name in self.results])
-
+                else:
+                    logger.warning("No data process was selected, normalizing MC to to 1/fb")
+                    
         self.groups = {}
         self.nominalName = "nominal"
         self.globalAction = None
@@ -168,8 +171,8 @@ class Datagroups(object):
                  excludeProcs=None, forceToNominal=[]):
         if not label:
             label = syst if syst else baseName
-        logger.debug(f"In setHists(): procsToRead = {procsToRead}")
-
+        logger.info(f"In setHists(): for hist {syst} procsToRead = {procsToRead}")
+        
         if not procsToRead:
             if excludeProcs:
                 procsToRead = list(filter(lambda x: x not in excludeProcs, self.groups.keys()))
@@ -213,8 +216,8 @@ class Datagroups(object):
 
                 if self.gen_axes:
                     # integrate over remaining gen axes 
-                    projections = (a for a in h.axes.name if a not in self.gen_axes)
-                    if projections != h.axes.name:
+                    projections = [a for a in h.axes.name if a not in self.gen_axes]
+                    if len(projections) < len(h.axes.name):
                         h = h.project(*projections)
 
                 if preOpMap and member.name in preOpMap:
@@ -224,7 +227,7 @@ class Datagroups(object):
                 if self.globalAction:
                     h = self.globalAction(h)
 
-                group.hists[label] = hh.addHists(h, group.hists[label]) if group.hists[label] else h
+                group.hists[label] = hh.addHistsNoCopy(h, group.hists[label]) if group.hists[label] else h
 
             # Can use to apply common rebinning or selection on top of the usual one
             if group.rebinOp:
@@ -317,7 +320,9 @@ class Datagroups(object):
         for group_name in to_expand:
             if group_name not in exclude_group:
                 for member in self.groups[group_name].members:
-                    procs.append(member.name)
+                    # protection against duplicates in the output list, they may arise from fakes
+                    if member.name not in procs:
+                        procs.append(member.name)
         return procs
 
     def sortByYields(self, histName, nominalName="nominal"):
@@ -455,14 +460,19 @@ class Datagroups(object):
     def readHist(self, baseName, proc, group, syst, scaleOp=None, forceNonzero=True, scaleToNewLumi=-1):
         output = self.results[proc.name]["output"]
         histname = self.histName(baseName, proc.name, syst)
-        logger.debug(f"Reading hist {histname} for proc {proc.name} and syst {syst}")
+        logger.debug(f"Reading hist {histname} for proc/group {proc.name}/{group} and syst '{syst}'")
         if histname not in output:
             raise ValueError(f"Histogram {histname} not found for process {proc.name}")
         h = output[histname]
         if isinstance(h, narf.ioutils.H5PickleProxy):
             h = h.get()
+        # Do a copy to detach the modified object from the original one, so it stays unmodified.
+        # This is extremely important for fakes, since they reuse the other histograms to subtract from data
+        # If fakes are not used, or one changes the code to avoid reading everything again for fakes, one could
+        # actually modify directly the input histograms here, which might save some time compared to the copy.
+        h = copy.deepcopy(h)
         if forceNonzero:
-            h = hh.clipNegativeVals(h)
+            h = hh.clipNegativeVals(h, createNew=False)
         if scaleToNewLumi > 0:
             h = hh.scaleByLumi(h, scaleToNewLumi, createNew=True)
         scale = self.processScaleFactor(proc)
