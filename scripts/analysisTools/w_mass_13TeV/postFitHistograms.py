@@ -17,6 +17,7 @@ ROOT.PyConfig.IgnoreCommandLineOptions = True
 
 import utilitiesCMG
 utilities = utilitiesCMG.util()
+from utilities import logging
 
 #sys.path.append(os.getcwd() + "/plotUtils/")
 #from utility import *
@@ -101,7 +102,10 @@ if __name__ == "__main__":
     parser.add_argument('-l','--lumi', default=16.8, type=float, help='Integrated luminosity to print in the plot')
     parser.add_argument('--fp','--filter-processes', dest="filterProcesses", default="", type=str, help='If given, regexp to filter some processes')
     parser.add_argument('--dt','--data-title', dest="dataTitle", default="Data", type=str, help='Title for data in legend (usually Data but could be Pseudodata)')
+    parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4], help="Set verbosity level with logging, the larger the more verbose");
     args = parser.parse_args()
+
+    logger = logging.setup_logger(os.path.basename(__file__), args.verbose)
 
     ROOT.gStyle.SetOptStat(0)
     ROOT.TH1.SetDefaultSumw2()
@@ -123,11 +127,11 @@ if __name__ == "__main__":
     etabins = [round(-2.4 + (0.1 * i), 1) for i in range(0,49)]
     ptbins = [round(26.0 + (1.0 * i), 1) for i in range(0,30)]    
     recoBins = templateBinning(etabins, ptbins)
-    print("-"*30)
-    print("USING THIS BINNING: PLEASE CHECK IF IT IS OK")
-    print("-"*30)
+    logger.warning("-"*30)
+    logger.warning("USING THIS BINNING: PLEASE CHECK IF IT IS OK")
+    logger.warning("-"*30)
     recoBins.printBinAll()
-    print("-"*30)
+    logger.warning("-"*30)
     nRecoBins = recoBins.NTotBins
     #following array is used to call function dressed2DfromFit()
     binning = [recoBins.Neta, recoBins.etaBins, recoBins.Npt, recoBins.ptBins]

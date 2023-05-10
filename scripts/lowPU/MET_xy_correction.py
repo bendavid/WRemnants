@@ -368,4 +368,3 @@ if __name__ == "__main__":
         METxyCorrection(direction="x", corrType="corr_xy", polyOrderData=polyOrderDataX, polyOrderMC=polyOrderMCX, procs=procs, data=data, yMin=-10, yMax=6)
         METxyCorrection(direction="y", corrType="corr_xy", polyOrderData=polyOrderDataY, polyOrderMC=polyOrderMCY, procs=procs, data=data)
         print(fOut)
-        

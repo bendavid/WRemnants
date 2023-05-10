@@ -15,8 +15,8 @@ import pickle
 import narf
 import numpy as np
 
-from wremnants.datasets.datagroupsLowPU import datagroupsLowPU
-from wremnants.datasets.datagroups import datagroups2016
+from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU
+from wremnants.datasets.datagroups2016 import make_datagroups_2016
 
 
 
@@ -33,7 +33,7 @@ if __name__ == "__main__":
     if lowPU:
         recoil_qTbins = list(range(0, 30, 1)) + list(range(30, 50, 2)) + list(range(50, 70, 5)) + list(range(70, 120, 10)) + [120, 150, 300]
         
-        datagroups = datagroupsLowPU("lowPU_%s_%s_%s.pkl.lz4" % (flavor, met, pdf), flavor=flavor)
+        datagroups = make_datagroups_lowPU("lowPU_%s_%s_%s.pkl.lz4" % (flavor, met, pdf), flavor=flavor)
         sig = "Zmumu"
         data = "SingleMuon"
         bkgs = ['EWK', 'Top'] 
@@ -65,7 +65,7 @@ if __name__ == "__main__":
     else:
         recoil_qTbins = list(range(0, 50, 1)) + list(range(50, 80, 2)) + list(range(80, 120, 5)) + list(range(120, 160, 10)) + list(range(160, 300, 20)) + [500]
         
-        datagroups = datagroups2016("mz_wlike_with_mu_eta_pt_%s_%s.pkl.lz4" % (met, pdf), wlike=True)
+        datagroups = make_datagroups_2016("mz_wlike_with_mu_eta_pt_%s_%s.pkl.lz4" % (met, pdf), wlike=True)
         sig = "Zmumu"
         data = "Data"
         bkgs = ['Ztautau', 'Other']

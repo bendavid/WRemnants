@@ -8,8 +8,8 @@ from utilities import logging
 wremnants_dir = f"{pathlib.Path(__file__).parent}/../wremnants"
 data_dir = f"{wremnants_dir}/data/"
 
-wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP", 'WplusToMuNu_horace-lo-photos', 'WplusToMuNu_horace-nlo', 'WminusToMuNu_horace-lo-photos', 'WminusToMuNu_horace-nlo']
-zprocs = ["ZmumuPostVFP", "ZtautauPostVFP", "ZmumuMiNLO", "ZmumuNNLOPS", 'ZToMuMu_horace-lo-photos', 'ZToMuMu_horace-nlo']
+wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP", 'WplusToMuNu_horace-lo-photos', 'WplusToMuNu_horace-qed', 'WplusToMuNu_horace-nlo', 'WminusToMuNu_horace-lo-photos', 'WminusToMuNu_horace-qed', 'WminusToMuNu_horace-nlo']
+zprocs = ["ZmumuPostVFP", "ZtautauPostVFP", "ZmumuMiNLO", "ZmumuNNLOPS", 'ZToMuMu_horace-lo-photos', 'ZToMuMu_horace-qed', 'ZToMuMu_horace-nlo']
 vprocs = wprocs+zprocs
 zprocs_recoil = ["ZmumuPostVFP"]
 wprocs_recoil = ["WplusmunuPostVFP", "WminusmunuPostVFP"]
@@ -19,9 +19,6 @@ zprocs_lowpu = ["Zmumu", "Zee", "Ztautau"]
 vprocs_lowpu = wprocs_lowpu+zprocs_lowpu
 zprocs_recoil_lowpu = ["Zmumu", "Zee"]
 wprocs_recoil_lowpu = ["WminusJetsToMuNu", "WminusJetsToENu", "WplusJetsToMuNu", "WplusJetsToENu"]
-
-
-
 
 background_MCprocs = ["Top", "Diboson", "QCD"]
 zprocs_all = zprocs_lowpu+zprocs
@@ -88,6 +85,7 @@ def common_parser(for_reco_highPU=False):
     import narf
     import wremnants
     from wremnants import theory_tools
+    from wremnants import theory_corrections
 
     parser.add_argument("--pdfs", type=str, nargs="*", default=["msht20"], choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for")
     parser.add_argument("--altPdfOnlyCentral", action='store_true', help="Only store central value for alternate PDF sets")
@@ -97,12 +95,8 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--v8", action='store_true', help="Use NanoAODv8. Default is v9")
     parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
     parser.add_argument("--forceDefaultName", help="Don't modify the name", action='store_true')
-    parser.add_argument("--theoryCorr", nargs="*", 
-        choices=["scetlib", "scetlibNP", "scetlibN4LL", "scetlibMSHT20an3lo", "scetlibHelicity", 
-                 "scetlib_dyturbo", "scetlib_dyturboN4LL", "scetlib_dyturboN3LLp_an3lo", "scetlib_dyturboMSHT20an3lo", "scetlib_dyturboMSHT20Unc",
-                 "scetlib_dyturboMSHT20Vars", "scetlib_dyturboMSHT20an3loVars", "scetlib_dyturboN3LLpMSHT20an3lo", "scetlib_dyturboN4LLMSHT20an3lo",
-                 "dyturboN3LLp", "dyturbo", "dyturboYOnly", "matrix_radish", "horacenloew"], 
-        help="Apply corrections from indicated generator. First will be nominal correction.", default=[])
+    parser.add_argument("--theoryCorr", nargs="*", default=["scetlib_dyturbo"], choices=theory_corrections.valid_theory_corrections(),
+        help="Apply corrections from indicated generator. First will be nominal correction.")
     parser.add_argument("--theoryCorrAltOnly", action='store_true', help="Save hist for correction hists but don't modify central weight")
     parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")
     parser.add_argument("--eta", nargs=3, type=float, help="Eta binning as 'nbins min max' (only uniform for now)", default=[48,-2.4,2.4])
@@ -134,6 +128,9 @@ def common_parser(for_reco_highPU=False):
         parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
         parser.add_argument("--biasCalibration", type=str, default=None, choices=["binned","parameterized", "A", "M"], help="Adjust central value by calibration bias hist for simulation")
         parser.add_argument("--smearing", action='store_true', help="Smear pT such that resolution matches data") #TODO change to --no-smearing once smearing is final
+        parser.add_argument("--unfolding", action='store_true', help="Add information needed for unfolding")
+        parser.add_argument("--genLevel", type=str, default='postFSR', choices=["preFSR", "postFSR"], help="Generator level definition for unfolding")
+        parser.add_argument("--genBins", type=int, default=[3, 2], help="Number of generator level bins")
         parser.add_argument("--validateByMassWeights", 
             action = "store_true",
             help = "validate the muon momentum scale shift weights by massweights"
@@ -154,15 +151,15 @@ def common_parser(for_reco_highPU=False):
     return parser,initargs
 
 def common_parser_combine():
-    from wremnants import theory_tools
     parser = argparse.ArgumentParser()
     parser.add_argument("--wlike", action='store_true', help="Run W-like analysis of mZ")
     parser.add_argument("-o", "--outfolder", type=str, default=".", help="Output folder with the root file storing all histograms and datacards for single charge (subfolder WMass or ZMassWLike is created automatically inside)")
     parser.add_argument("-i", "--inputFile", type=str)
-    parser.add_argument("--minnlo-scale-unc", choices=["byHelicityPt", "byHelicityPtCharge", "byHelicityCharge", "byPtCharge", "byPt", "byCharge", "integrated",], default="byPtCharge", 
+    parser.add_argument("--minnloScaleUnc", choices=["byHelicityPt", "byHelicityPtCharge", "byHelicityCharge", "byPtCharge", "byPt", "byCharge", "integrated",], default="byPtCharge", 
             help="Decorrelation for QCDscale")
     parser.add_argument("--rebinPtV", type=float, nargs='*', help="Rebin axis with gen boson pt by this value (default does nothing)")
-    parser.add_argument("--resumUnc", default=None, type=str, choices=["scale", "np"], help="Include SCETlib uncertainties")
+    parser.add_argument("--resumUnc", default="tnp", type=str, choices=["scale", "tnp", "none"], help="Include SCETlib uncertainties")
+    parser.add_argument("--pdfUncFromCorr", action='store_true', help="Take PDF uncertainty from correction hist (Requires having run that correction)")
     parser.add_argument("--qcdProcessName" , type=str, default="Fake",   help="Name for QCD process")
     parser.add_argument("--noStatUncFakes" , action="store_true",   help="Set bin error for QCD background templates to 0, to check MC stat uncertainties for signal only")
     parser.add_argument("--skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
@@ -173,7 +170,7 @@ def common_parser_combine():
                         help="Set verbosity level with logging, the larger the more verbose")
     parser.add_argument("--noColorLogger", action="store_true", help="Do not use logging with colors")
     parser.add_argument("--sumChannels", action='store_true', help="Only use one channel")
-    parser.add_argument("--lumiScale", type=float, default=None, help="Rescale equivalent luminosity by this value (e.g. 10 means ten times more data and MC)")
+    parser.add_argument("--lumiScale", type=float, default=1.0, help="Rescale equivalent luminosity by this value (e.g. 10 means ten times more data and MC)")
     parser.add_argument("--addQCDMC", action="store_true", help="Include QCD MC when making datacards (otherwise by default it will always be excluded)")
     parser.add_argument("--excludeProcGroups", type=str, nargs="*", help="Don't run over processes belonging to these groups (only accepts exact group names)", default=["QCD"])
     parser.add_argument("--filterProcGroups", type=str, nargs="*", help="Only run over processes belonging to these groups", default=[])
