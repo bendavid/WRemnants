@@ -254,7 +254,6 @@ class Datagroups(object):
 
                 hasPartialSumForFake = False
                 if hasFake and procName != nameFake:
-                    # FIXME: deal with memberOperation, basically scale by -1 for MC and +1 for data
                     if member.name in fakesMembers:
                         if member.name not in fakesMembersWithSyst:
                             fakesMembersWithSyst.append(member.name)
@@ -275,7 +274,7 @@ class Datagroups(object):
                         scaleProcForFake = self.groups[nameFake].scale(member)
                         logger.debug(f"Summing hist {read_syst} for {member.name} to {nameFake} with scale = {scaleProcForFake}")
                         hProcForFake = scaleProcForFake * copy.deepcopy(h)
-                        histForFake = hh.addHistsNoCopy(hProcForFake, histForFake) if histForFake else hProcForFake
+                        histForFake = hh.addHists(hProcForFake, histForFake, createNew=False) if histForFake else hProcForFake
 
                 # The following must be done when the group is not Fake, or when the previous part for fakes was not done
                 # For fake this essentially happens when the process doesn't have the syst, so that the nominal is used
@@ -285,8 +284,7 @@ class Datagroups(object):
                         logger.debug(f"Summing nominal hist instead of {syst} to {nameFake} for {member.name}")
                     else:
                         logger.debug(f"Summing {read_syst} to {procName} for {member.name}")
-                    group.hists[label] = hh.addHistsNoCopy(h, group.hists[label]) if group.hists[label] else h
-                    #group.hists[label] = hh.addHists(h, group.hists[label]) if group.hists[label] else h
+                    group.hists[label] = hh.addHists(h, group.hists[label], createNew=False) if group.hists[label] else h
                     logger.debug("Sum done")
                 
             # now sum to fakes the partial sums which where not already done before
@@ -295,7 +293,6 @@ class Datagroups(object):
             if hasFake and procName == nameFake:
                 if histForFake is not None:
                     group.hists[label] = hh.addHistsNoCopy(histForFake, group.hists[label]) if group.hists[label] else histForFake
-            
             # Can use to apply common rebinning or selection on top of the usual one
             if group.rebinOp:
                 group.hists[label] = group.rebinOp(group.hists[label])
@@ -533,7 +530,7 @@ class Datagroups(object):
         h = output[histname]
         if isinstance(h, narf.ioutils.H5PickleProxy):
             h = h.get()
-        # Do a copy to detach the modified object from the original one, so it stays unmodified.
+        # Do a copy to detach the modified object from the original one, so the latter stays unmodified.
         # This is extremely important for fakes, since they reuse the other histograms to subtract from data
         # If fakes are not used, or one changes the code to avoid reading everything again for fakes, one could
         # actually modify directly the input histograms here, which might save some time compared to the copy.
