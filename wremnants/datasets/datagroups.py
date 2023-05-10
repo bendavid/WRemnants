@@ -292,7 +292,7 @@ class Datagroups(object):
             # Then continue with the rest of the code as usual
             if hasFake and procName == nameFake:
                 if histForFake is not None:
-                    group.hists[label] = hh.addHistsNoCopy(histForFake, group.hists[label]) if group.hists[label] else histForFake
+                    group.hists[label] = hh.addHists(histForFake, group.hists[label], createNew=False) if group.hists[label] else histForFake
             # Can use to apply common rebinning or selection on top of the usual one
             if group.rebinOp:
                 group.hists[label] = group.rebinOp(group.hists[label])
