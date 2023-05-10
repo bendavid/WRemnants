@@ -142,24 +142,13 @@ def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
                        drawLumiLatex=True, xcmsText=0.3, noLegendRatio=True
     )
 
-
-    ratio2D.SetTitle("data / (signal + background)")
+    ratio2D.SetTitle(f"{dataTitle} / (signal + background)")
     drawCorrelationPlot(ratio2D, xAxisName, yAxisName, f"{dataTitle}/pred",
                         f"muon_eta_pt_dataMCratio", plotLabel="ForceTitle", outdir=outdir_dataMC,
                         palette=57, passCanvas=canvas, drawOption="COLZ0", skipLumi=True)
     drawCorrelationPlot(ratio2D, xAxisName, yAxisName, f"{dataTitle}/pred. statistical uncertainty",
                         f"muon_eta_pt_dataMCratio_absUncertainty", plotLabel="ForceTitle", outdir=outdir_dataMC,
                         palette=57, passCanvas=canvas, drawOption="COLZ0", skipLumi=True, plotError=True)
-
-
-    allHists = hmc2D + [hdata2D]
-    hdata2D.SetTitle(f"{dataTitle} {chargeLabel}")
-    for h in hmc2D:
-        h.SetTitle(legEntries[h.GetName().split("_")[-2]] + " " + chargeLabel)
-    for h in allHists:
-        drawCorrelationPlot(h, xAxisName, yAxisName, "Events",
-                            f"muon_eta_pt_{h.GetName()}", plotLabel="ForceTitle", outdir=outdir_dataMC,
-                            palette=57, passCanvas=canvas, drawOption="COLZ0", skipLumi=True)
 
     #
     etabins = [round(hdata2D.GetXaxis().GetBinLowEdge(i), 1) for i in range(1, 2 + hdata2D.GetNbinsX())]
@@ -176,6 +165,26 @@ def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
     for ipt in range(0,recoBins.Npt):
         #ptBinRanges.append("p_{{T}} #in [{ptmin:3g}, {ptmax:.3g}]".format(ptmin=recoBins.ptBins[ipt], ptmax=recoBins.ptBins[ipt+1]))
         ptBinRanges.append("#splitline{{[{ptmin},{ptmax}]}}{{GeV}}".format(ptmin=int(recoBins.ptBins[ipt]), ptmax=int(recoBins.ptBins[ipt+1])))
+
+    # plot unrolled ratio to better see how it looks like
+    ratio_unrolled = unroll2Dto1D(ratio2D, newname=f"{ratio2D.GetName()}_unrolled")
+    drawSingleTH1(ratio_unrolled, XlabelUnroll, f"{dataTitle}/pred. ratio", "muon_etaPtUnrolledRatio",
+                  outdir_dataMC, drawLineLowerPanel="", lowerPanelHeight=0.0, labelRatioTmp="", 
+                  passCanvas=canvasWide,
+                  legendCoords="0.15,0.85,0.82,0.9;2",
+                  leftMargin=0.05,rightMargin=0.01,lumi=lumi, 
+                  drawVertLines="{a},{b}".format(a=recoBins.Npt,b=recoBins.Neta),
+                  textForLines=ptBinRanges, ytextOffsetFromTop=0.3, textSize=0.04, textAngle=30, drawLineTopPanel=1.0)
+                       
+
+    allHists = hmc2D + [hdata2D]
+    hdata2D.SetTitle(f"{dataTitle} {chargeLabel}")
+    for h in hmc2D:
+        h.SetTitle(legEntries[h.GetName().split("_")[-2]] + " " + chargeLabel)
+    for h in allHists:
+        drawCorrelationPlot(h, xAxisName, yAxisName, "Events",
+                            f"muon_eta_pt_{h.GetName()}", plotLabel="ForceTitle", outdir=outdir_dataMC,
+                            palette=57, passCanvas=canvas, drawOption="COLZ0", skipLumi=True)
 
     drawTH1dataMCstack(hdata_unrolled, stack_unrolled, XlabelUnroll, YlabelUnroll, cnameUnroll,
                        outdir_dataMC, leg_unrolled, ratioPadYaxisNameTmp=f"{dataTitle}/pred{ratioRangeStr}",

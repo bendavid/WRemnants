@@ -158,7 +158,7 @@ if __name__ == "__main__":
     if compare:
         totalUncertainty_mW_alt, nuisGroup_nameVal_alt = readNuisances(args, args.compareFile)
         nuisGroup_nameVal_alt["stat"] = args.setStatAlt if args.setStatAlt > 0.0 else nuisGroup_nameVal["stat"]
-            
+
     sortedGroups = sorted(nuisGroup_nameVal.keys(), key= lambda x: nuisGroup_nameVal[x])
 
     ROOT.gStyle.SetPaintTextFormat('2.1f' if args.scaleToMeV else '0.3f')
@@ -182,7 +182,12 @@ if __name__ == "__main__":
         bincontent = nuisGroup_nameVal[k] if not args.scaleToMeV else nuisGroup_nameVal[k] * args.prefitUncertainty
         print("%s: %2.1f" % (k,bincontent))
         #print("%s: %2.1f" % (k,bincontent))
-        h1.GetXaxis().SetBinLabel(ik+1,k)
+        label = k
+        if k == "binByBinStat":
+            label = "MCandFakes_stat"
+        elif k == "stat":
+            label = "data_stat"
+        h1.GetXaxis().SetBinLabel(ik+1, label)
         h1.SetBinContent(ik+1,bincontent)
         if compare:
             bincontentAlt = nuisGroup_nameVal_alt[k] if not args.scaleToMeV else nuisGroup_nameVal_alt[k] * args.prefitUncertainty
