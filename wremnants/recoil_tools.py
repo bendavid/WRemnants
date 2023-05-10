@@ -242,20 +242,23 @@ class Recoil:
                     pars = [jsIn[statLabel][label]['p%d' % iParam] for iParam in range(0, jsIn[label]['nParams'])]
                     funcName = "%s_%s_%s" % (tag, label, systLabel)
                     funcExpr = jsIn[label]['func']
-                    ROOT.wrem.insertFunction(funcName, funcExpr, pars)
+                    transform = jsIn[label]['transform'] if 'transform' in jsIn[label] else False
+                    ROOT.wrem.insertFunction(funcName, funcExpr, pars, transform)
 
                     label = "sigma%d" % iGauss
                     pars = [jsIn[statLabel][label]['p%d' % iParam] for iParam in range(0, jsIn[label]['nParams'])]
                     funcName = "%s_%s_%s" % (tag, label, systLabel)
                     funcExpr = jsIn[label]['func']
-                    ROOT.wrem.insertFunction(funcName, funcExpr, pars)
+                    transform = jsIn[label]['transform'] if 'transform' in jsIn[label] else False
+                    ROOT.wrem.insertFunction(funcName, funcExpr, pars, transform)
 
                     if iGauss == nGauss: continue
                     label = "norm%d" % iGauss
                     pars = [jsIn[statLabel][label]['p%d' % iParam] for iParam in range(0, jsIn[label]['nParams'])]
                     funcName = "%s_%s_%s" % (tag, label, systLabel)
                     funcExpr = jsIn[label]['func']
-                    ROOT.wrem.insertFunction(funcName, funcExpr, pars)
+                    transform = jsIn[label]['transform'] if 'transform' in jsIn[label] else False
+                    ROOT.wrem.insertFunction(funcName, funcExpr, pars, transform)
                 iiStat += 1
 
     def addParametricUnc(self, tag, fIn):
@@ -282,20 +285,23 @@ class Recoil:
             pars = [jsIn[label]['p%d' % iParam] for iParam in range(0, jsIn[label]['nParams'])]
             funcName = "%s_%s_%s" % (tag, label, systLabel)
             funcExpr = jsIn[label]['func']
-            ROOT.wrem.insertFunction(funcName, funcExpr, pars)
+            transform = jsIn[label]['transform'] if 'transform' in jsIn[label] else False
+            ROOT.wrem.insertFunction(funcName, funcExpr, pars, transform)
             
             label = "sigma%d" % iGauss
             pars = [jsIn[label]['p%d' % iParam] for iParam in range(0, jsIn[label]['nParams'])]
             funcName = "%s_%s_%s" % (tag, label, systLabel)
             funcExpr = jsIn[label]['func']
-            ROOT.wrem.insertFunction(funcName, funcExpr, pars)
+            transform = jsIn[label]['transform'] if 'transform' in jsIn[label] else False
+            ROOT.wrem.insertFunction(funcName, funcExpr, pars, transform)
             
             if iGauss == nGauss: continue
             label = "norm%d" % iGauss
             pars = [jsIn[label]['p%d' % iParam] for iParam in range(0, jsIn[label]['nParams'])]
             funcName = "%s_%s_%s" % (tag, label, systLabel)
             funcExpr = jsIn[label]['func']
-            ROOT.wrem.insertFunction(funcName, funcExpr, pars)
+            transform = jsIn[label]['transform'] if 'transform' in jsIn[label] else False
+            ROOT.wrem.insertFunction(funcName, funcExpr, pars, transform)
             
         
         
