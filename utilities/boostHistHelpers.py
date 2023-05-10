@@ -144,7 +144,7 @@ def clipNegativeVals(h, clipValue=0, createNew=False):
         h.values(flow=True)[...] = vals
         return h
 
-    def scaleByLumi(h, scale, createNew=False):
+def scaleByLumi(h, scale, createNew=False):
     if createNew:
         hnew = hist.Hist(*h.axes, storage=hist.storage.Weight())
         hnew.values(flow=True)[...]    = scale * h.values(flow=True)

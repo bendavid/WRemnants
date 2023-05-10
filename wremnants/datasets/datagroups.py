@@ -186,18 +186,16 @@ class Datagroups(object):
         # To speed up even more, instead of doing the sum for each single process in a group, we could use the partial sum that
         # is already computed for the groups, assuming that the fakes effectively had all processes in a group as members
         hasFake = False
-        histPrompSumForFake = None
         histForFake = None
         nameFake = "Fake"
+        procsToReadSort = [x for x in procsToRead]
+        # if hasFake = False when fakes are present, the original behaviour for which Fake reads everything again is restored
         if nameFake in procsToRead:
             procsToReadSort = [x for x in procsToRead if x != nameFake] + [nameFake]
             hasFake = True
             fakesMembers = [m.name for m in self.groups[nameFake].members]
             fakesMembersWithSyst = []
-        else:
-            procsToReadSort = [x for x in procsToRead]
-        # if hasFake is kept as False, the original behaviour for which Fake reads everything again is restored
-            
+
         for procName in procsToReadSort:
             logger.debug(f"Reading group {procName}")
             if procName not in self.groups.keys():
@@ -296,22 +294,7 @@ class Datagroups(object):
             # Then continue with the rest of the code as usual
             if hasFake and procName == nameFake:
                 if histForFake is not None:
-                    group.hists[label] = hh.addHistsNoCopy(histForFake, group.hists[label]) if group.hists[label] else histForFake                   
-
-            #############################################################################
-            ### The following was experimental, to sum preexisting histograms for groups instead of doing it per process
-            ###
-            # # create partial sum for Fakes, when present
-            # # TODO: evaluate if it can go after the following operations, but it must be before the selectOp since
-            # #       fakes use a special one compared to other processes (e.g. all iso-mt regions, not just signal one)
-            # if hasFake and procName != nameFake:
-            #     # FIXME: deal with memberOperation, basically scale by -1 for MC and +1 for data
-            #     if not all(x in fakesMembers for x in group.members):
-            #         missingMembersInFake = [x for x in group.members if x not in fakesMembers]
-            #         logger.warning(f"{nameFake} histogram being created using unexpected members {missingMembersInFake}")
-            #     hPrompt = copy.deepcopy(group.hists[label])
-            #     histPrompSumForFake = hh.addHistsNoCopy(hPrompt, histPrompSumForFake) if histPrompSumForFake else hPrompt
-            #############################################################################
+                    group.hists[label] = hh.addHistsNoCopy(histForFake, group.hists[label]) if group.hists[label] else histForFake
             
             # Can use to apply common rebinning or selection on top of the usual one
             if group.rebinOp:
