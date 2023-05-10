@@ -30,6 +30,8 @@ std::map<std::string, int> recoil_param_nGauss;
 std::vector<TF1*> recoil_param_funcs_;
 std::map<std::string, TF1> recoil_param_funcs__;
 std::unordered_map<std::string, TF1*> recoil_param_funcs;
+std::unordered_map<std::string, bool> recoil_param_transform;
+
 std::map<std::string, int> recoil_unc_no; // number of uncertainties recoil_unc_no
 
 std::map<std::string, int> recoil_binned_nGauss;
@@ -55,13 +57,14 @@ std::vector<float> qTrw_weights;
 bool applyMETxyCorrection = false;
 std::vector<float> met_xy_corr_x_data_nom, met_xy_corr_y_data_nom, met_xy_corr_x_mc_nom, met_xy_corr_y_mc_nom;
 
-void insertFunction(char* name, char* expr, std::vector<float> pars) {
+void insertFunction(char* name, char* expr, std::vector<float> pars, bool transform) {
     
-    auto func = new TF1(name, expr, 0, 300);
+    auto func = new TF1(name, expr, -300, 300);
     for(int j=0; j<pars.size(); j++) {
         func->SetParameter(j, pars.at(j));
     }
     recoil_param_funcs.insert({name, func});
+    recoil_param_transform.insert({name, transform});
 }
 
 void recoil_init(char* name) {
@@ -727,7 +730,12 @@ Vec_f recoilCorrectionBinnedWtoZ(int q, double pU1, double pU2, double qTbinIdx,
 }
 
 
-
+double qT_tf(double qT, bool transform) {
+    if(transform) {
+        return ((qT-0)-(recoil_correction_qTmax-qT))/(recoil_correction_qTmax-0); // map to [-1, 1]s
+    }
+    else return qT;
+}
 
 
 
@@ -740,20 +748,19 @@ GaussianSum constructParametricGauss(string tag, double qT, int syst=-1) {
     
     //if(tag == "target_perp" and syst==1) syst = -1;
     if(syst != -1) systLabel = "_syst" + to_string(syst);
-     
     if(recoil_param_nGauss.find(tag) != recoil_param_nGauss.end()) { // parametric
         //cout << " PARAMETIC " << endl; 
         int nGauss = recoil_param_nGauss[tag];
         for(int i=1; i<=nGauss; i++) {
-            mean = recoil_param_funcs[tag + "_mean" + to_string(i) + systLabel]->Eval(qT);
+            mean = recoil_param_funcs[tag + "_mean" + to_string(i) + systLabel]->Eval(qT_tf(qT, recoil_param_transform[tag + "_mean" + to_string(i)]));
            
             //if(tag == "target_para" or tag == "source_para") mean -= qT;
-            sigma = recoil_param_funcs[tag + "_sigma" + to_string(i) + systLabel]->Eval(qT);
+            sigma = recoil_param_funcs[tag + "_sigma" + to_string(i) + systLabel]->Eval(qT_tf(qT, recoil_param_transform[tag + "_sigma" + to_string(i)]));
             if(sigma <= 0) continue;
-            
+
             if(i == nGauss) norm = 1.-totNorm;
             else {
-                norm = recoil_param_funcs[tag + "_norm" + to_string(i) + systLabel]->Eval(qT);
+                norm = recoil_param_funcs[tag + "_norm" + to_string(i) + systLabel]->Eval(qT_tf(qT, recoil_param_transform[tag + "_norm" + to_string(i)]));
                 totNorm += norm;
             }
             if(totNorm > 1) {
@@ -764,7 +771,6 @@ GaussianSum constructParametricGauss(string tag, double qT, int syst=-1) {
             }
         
             gauss.addTerm(mean, sigma, norm);
-            
             //cout << " " << tag << " qT=" << qT << "  iGauss=" << i << " norm=" << norm << " mean=" << mean << " sigma=" << sigma << endl;
         }
     }
@@ -811,8 +817,8 @@ Vec_f recoilCorrectionParametric(double para, double perp, double qT, string sys
     res[0] = std::hypot(res[1], res[2]);
     
 	if(!applyRecoilCorrection) return res;
-    if(qT > recoil_correction_qTmax) return res; // protection for high qT
-    
+    //if(qT > recoil_correction_qTmax) return res; // protection for high qT
+    if(qT > recoil_correction_qTmax) qT = recoil_correction_qTmax; // protection for high qT
 
     GaussianSum data_para;
     GaussianSum data_perp;
