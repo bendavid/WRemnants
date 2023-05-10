@@ -293,9 +293,9 @@ def METxyCorrection(direction = "x", corrType="uncorr", polyOrderData=-1, polyOr
     
 if __name__ == "__main__":
 
-    met = "RawPFMET" # PFMET, RawPFMET DeepMETReso
+    met = "DeepMETReso" # PFMET, RawPFMET DeepMETReso
     flavor = "mu" # mu, e, mumu, ee
-    lowPU = True
+    lowPU = False
 
     # DATA For electron channels!
     
@@ -335,14 +335,14 @@ if __name__ == "__main__":
             npv_max, npv_fit_min, npv_fit_max = 60, 5, 55
             polyOrderDataX, polyOrderMCX = 3, 3
             polyOrderDataY, polyOrderMCY = 3, 3
-            datagroups = datagroups2016("mz_wlike_with_mu_eta_pt_%s.pkl.lz4" % (met))
+            datagroups = datagroups2016(f"mz_wlike_with_mu_eta_pt_{met}.hdf5")
             procs = ["Zmumu", "Ztautau", "Other"]
             data = "Data"
         else:
             npv_max, npv_fit_min, npv_fit_max = 60, 0, 55
             polyOrderDataX, polyOrderMCX = 3, 3
             polyOrderDataY, polyOrderMCY = 6, 3
-            datagroups = datagroups2016("mw_with_mu_eta_pt_%s.pkl.lz4" % (met))
+            datagroups = datagroups2016(f"mw_with_mu_eta_pt_{met}.hdf5")
             procs = ["Zmumu", "Ztautau", "Wtaunu", "Wmunu", "Top", "Diboson"]
             data = "Data"
             

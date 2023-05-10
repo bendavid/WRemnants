@@ -1118,7 +1118,81 @@ def makeFunction(funcJs, i):
     for j in range(0, cfg['nParams']):
         func.SetParameter(j, cfg["p%d"%j])
     return func
-    
+ 
+
+def test(x, max_components):
+
+    import numpy as np
+    from scipy.stats import norm
+
+    def gaussian(x, mu, sigma):
+        """ Computes the value of a Gaussian distribution at x given mean mu and standard deviation sigma """
+        return np.exp(-(x - mu) ** 2 / (2 * sigma ** 2)) / (np.sqrt(2 * np.pi) * sigma)
+
+    def gaussian_mixture(x, weights, means, sigmas):
+        """ Computes the value of a Gaussian mixture model with given weights, means, and standard deviations at x """
+        return np.sum([weights[i] * gaussian(x, means[i], sigmas[i]) for i in range(len(weights))], axis=0)
+
+    def bic(x, log_likelihood, num_params):
+        """ Computes the Bayesian Information Criterion (BIC) for a Gaussian mixture model """
+        n = len(x)
+        return -2 * log_likelihood + num_params * np.log(n)
+
+    def aic(x, log_likelihood, num_params):
+        """ Computes the Akaike Information Criterion (AIC) for a Gaussian mixture model """
+        return -2 * log_likelihood + 2 * num_params
+
+    def fit_gaussian_mixture(x, max_components):
+        """ Fits a Gaussian mixture model with up to max_components components to the data x and selects the optimal number of components using the BIC and AIC """
+        n = len(x)
+
+        best_bic = np.inf
+        best_aic = np.inf
+        best_num_components = None
+        best_weights = None
+        best_means = None
+        best_sigmas = None
+        best_log_likelihood = None
+
+        for num_components in range(2, max_components + 1):
+            print(f"Do {num_components}")
+            # Initialize random means and standard deviations
+            weights = np.ones(num_components) / num_components
+            means = np.random.choice(x, size=num_components)
+            sigmas = np.ones(num_components)
+
+            prev_log_likelihood = None
+            while True:
+                # E-step: compute the responsibilities
+                responsibilities = np.array([weights[i] * gaussian(x, means[i], sigmas[i]) for i in range(num_components)])
+                responsibilities /= np.sum(responsibilities, axis=0)
+
+                # M-step: update the parameters
+                weights = np.mean(responsibilities, axis=1)
+                means = np.sum(responsibilities * x, axis=1) / np.sum(responsibilities, axis=1)
+                sigmas = np.sqrt(np.sum(responsibilities * (x - means[:, np.newaxis]) ** 2, axis=1) / np.sum(responsibilities, axis=1))
+
+                # Compute the log-likelihood and check for convergence
+                log_likelihood = np.sum(np.log(np.sum([weights[i] * gaussian(x, means[i], sigmas[i]) for i in range(num_components)], axis=0)))
+                if prev_log_likelihood is not None and np.abs(log_likelihood - prev_log_likelihood) < 1e-6:
+                    break
+                prev_log_likelihood = log_likelihood
+
+            # Compute the BIC and AIC for the model
+            bic_val = bic(x, log_likelihood, num_components * 3 - 1)
+            aic_val = aic(x, log_likelihood, num_components * 3 - 1)
+
+            # Update the best model if necessary
+            if bic_val < best_bic:
+                best_bic = bic_val
+                best_num_components = num_components
+                best_weights = weights
+                best_means = means
+               
+                
+        print(best_num_components)
+        
+    fit_gaussian_mixture(x, max_components)
  
 def doFitMultiGauss_fit(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binning_qT, yMin=1e-6, yMax=1e4, bkgCfg={}, funcJs=None, yRatio = 1.15, recoilLow=-100, recoilHigh=100, rebin=1, sumw2=True):
     
@@ -1153,6 +1227,8 @@ def doFitMultiGauss_fit(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binni
         axis_name = "recoil_para"
     elif comp == "para_qT":
         axis_name = "recoil_para_qT"
+    elif "sumet" in comp:
+        axis_name = "recoil_sumEt_sqrt"
         
     qTlow, qThigh = min(binning_qT), max(binning_qT)
     bhist =  bhist[{"qTbinned": s[complex(0,qTlow):complex(0,qThigh)], axis_name: s[complex(0,recoilLow):complex(0,recoilHigh)]}]
@@ -1182,7 +1258,6 @@ def doFitMultiGauss_fit(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binni
     
     func_parms = func_parms_vals # initial conditions
     
-
     # backgrounds
     args = ()
     args_ = {}
@@ -1215,7 +1290,10 @@ def doFitMultiGauss_fit(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binni
         # set the parameters
         for i,func in enumerate(func_parms_func):
             if func == None: continue
-            func_parms[i] = func.Eval(qT)
+            min_ = 0
+            max_ = 100
+            qT_ = ((qT-min_)-(max_-qT))/(max_-min_)
+            func_parms[i] = func.Eval(qT_)
             
         h = bhist[{"qTbinned": s[complex(0,qTlow):complex(0,qThigh)]}]
         h = h[{"qTbinned": s[0:hist.overflow:hist.sum]}] # remove the overflow in the sum  
@@ -1223,6 +1301,7 @@ def doFitMultiGauss_fit(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binni
         yield_, yield_err = h.sum().value, math.sqrt(h.sum().variance)
         yields.append(yield_)
         yields_err.append(yield_err)
+       
         
         if not sumw2:
            h.variances = h.values
@@ -1234,6 +1313,30 @@ def doFitMultiGauss_fit(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binni
         print(" -> Start fitting")
         start = time.time()
         res = fitter.fit_hist(h, func_model, np.array(func_parms), max_iter = 5, edmtol = 1e-5, mode = "nll", args=args) # nll chisq_normalized
+        
+        ##################################################
+        '''
+        parms_vals = res['x']
+        func_parms = [parms_vals[i] if func_parms_cfg[i]==1 else func_parms_vals[i] for i in range(0, len(func_parms))]
+        # sort on sigma
+        nSig = fitCfg['func_parms_nparms'][0]
+        refit = False
+        if nSig > 0: 
+            parms_vals_sigma = np.sort(parms_vals[0:nSig])[::-1] # sort high to low
+            if not np.array_equal(parms_vals_sigma, parms_vals[0:nSig]):
+                print("REFIT")
+                print(parms_vals_sigma)
+                print(parms_vals[0:nSig])
+                refit = True
+            for l in range(0, nSig):
+                func_parms[l] = parms_vals_sigma[l]
+                #parms_vals[l] = parms_vals_sigma[l]
+                
+        if refit:
+            res = fitter.fit_hist(h, func_model, np.array(func_parms), max_iter = 5, edmtol = 1e-5, mode = "nll", args=args) # nll chisq_normalized
+        '''
+        ##################################################
+        
         end = time.time()
             
         parms_vals = res['x']
@@ -1246,6 +1349,37 @@ def doFitMultiGauss_fit(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binni
             
         print(" -> Fit ended, time=%.3f s, status=%d, cov_status=%d" % (end-start, fit_status, cov_status))
         print(parms_vals)
+        print("--")
+        np.set_printoptions(formatter={'float': '{: 0.2f}'.format})
+        corr_matrix = correlation_from_covariance(cov_matrix)
+        print(corr_matrix)
+        
+        
+        func_parms_orig = copy.deepcopy(func_parms)
+        # sort on sigma
+        nSig = fitCfg['func_parms_nparms'][0]
+        if nSig > 0: 
+            parms_vals_sigma = np.sort(parms_vals[0:nSig])[::-1] # sort high to low
+            for l in range(0, nSig):
+                func_parms[l] = parms_vals_sigma[l]
+                #parms_vals[l] = parms_vals_sigma[l]
+               
+                
+        '''
+        # sort on mean
+        parms_vals_mean = np.sort(parms_vals[5:9])[::-1]
+        func_parms[5] = parms_vals_mean[0]
+        func_parms[6] = parms_vals_mean[1]
+        func_parms[7] = parms_vals_mean[2]
+        func_parms[8] = parms_vals_mean[3]
+        '''
+        
+        #parms_vals_norm = np.sort(parms_vals[9:11])[::-1]
+        #func_parms[9] = parms_vals_norm[0]
+        #func_parms[10] = parms_vals_norm[1]
+        #print(parms_vals_norm)
+        
+        #quit()
         
 
         if average_eval_PDF:
@@ -1324,6 +1458,23 @@ def doFitMultiGauss_fit(bhist, comp, fitCfg, procLabel, metLabel, outDir_, binni
             val, err = parms_vals[i], math.sqrt(cov_matrix[i][i]) if cov_status == 0 and cov_matrix[i][i] >= 0 else -2
             outDict[iBin]["p%d"%i], outDict[iBin]["p%d_err"%i] = val, err
             latex.DrawLatex(0.6, 0.86-i*0.04, "p_{%d} = %.2e #pm %.2e" % (i, val, err))
+            
+        # sort on sigma
+        '''
+        parms_vals_sigma = np.sort(parms_vals[0:5])[::-1]
+        func_parms[0] = parms_vals_sigma[0]
+        func_parms[1] = parms_vals_sigma[1]
+        func_parms[2] = parms_vals_sigma[2]
+        func_parms[3] = parms_vals_sigma[3]
+        func_parms[4] = parms_vals_sigma[4]
+        
+        # sort on mean
+        parms_vals_mean = np.sort(parms_vals[5:9])[::-1]
+        func_parms[5] = parms_vals_mean[0]
+        func_parms[6] = parms_vals_mean[1]
+        func_parms[7] = parms_vals_mean[2]
+        func_parms[8] = parms_vals_mean[3]
+        '''
         
         plotter.auxRatio()
         canvas.cd()
@@ -2278,17 +2429,21 @@ def plotYields(g_yields, fOut, procLabel, metLabel, xMin=0, xMax=100, yMin=0, yM
 
 
 
-def plotParameter(param, jsIn, outDir, binning_qT, procLabel, metLabel, yMin=0, yMax=30, yTitle="", yRatio=1.15):
+def plotParameter(param, jsIn, outDir, binning_qT, procLabel, metLabel, yMin=0, yMax=30, yTitle="", yRatio=1.15, transform=False):
 
     xMin, xMax = min(binning_qT), max(binning_qT)
 
-    f_base = ROOT.TF1("f_base", jsIn[param]['func'], 0, 500)
+    f_base = ROOT.TF1("f_base", jsIn[param]['func'], -500, 500)
     for i in range(0, jsIn[param]['nParams']): f_base.SetParameter(i, jsIn[param]['p%d' % i])
-    f_unc = ROOT.TF1("f_unc", jsIn[param]['func'], 0, 500)
+    f_unc = ROOT.TF1("f_unc", jsIn[param]['func'], -500, 500)
     for i in range(0, jsIn[param]['nParams']): f_unc.SetParameter(i, jsIn[param]['p%d' % i])
     
     f_base.SetLineColor(ROOT.kRed)
     f_base.SetLineWidth(3)
+    
+    g_base = ROOT.TGraphErrors()
+    g_base.SetLineColor(ROOT.kRed)
+    g_base.SetLineWidth(3)
 
     g = ROOT.TGraphErrors()
     #g.SetLineColor(ROOT.kBlack)
@@ -2302,7 +2457,11 @@ def plotParameter(param, jsIn, outDir, binning_qT, procLabel, metLabel, yMin=0, 
     for qTbin in range(1, len(binning_qT)):
         x = 0.5*(binning_qT[qTbin-1] + binning_qT[qTbin])
         x_err = 0.
-        y = f_base.Eval(x)
+        if transform:
+            x_eval = ((x-xMin)-(xMax-x))/(xMax-xMin)
+        else:
+            x_eval = x
+        y = f_base.Eval(x_eval)
         
         # loop over all stat uncertainties
         y_err = 0
@@ -2312,7 +2471,7 @@ def plotParameter(param, jsIn, outDir, binning_qT, procLabel, metLabel, yMin=0, 
                 for i in range(0, jsIn[param]['nParams']): 
                     if param in jsIn['stat%d_p' % iStat]: f_unc.SetParameter(i, jsIn['stat%d_p' % iStat][param]['p%d' % i])
                     else : f_unc.SetParameter(i, jsIn[param]['p%d' % i])
-                up = f_unc.Eval(x)
+                up = f_unc.Eval(x_eval)
                 s = up - y
                 y_err_up += s**2
                 
@@ -2320,7 +2479,7 @@ def plotParameter(param, jsIn, outDir, binning_qT, procLabel, metLabel, yMin=0, 
                 for i in range(0, jsIn[param]['nParams']): 
                     if param in jsIn['stat%d_m' % iStat]: f_unc.SetParameter(i, jsIn['stat%d_m' % iStat][param]['p%d' % i])
                     else : f_unc.SetParameter(i, jsIn[param]['p%d' % i])
-                up = f_unc.Eval(x)
+                up = f_unc.Eval(x_eval)
                 s = up - y
                 y_err_dw += s**2    
           
@@ -2328,6 +2487,8 @@ def plotParameter(param, jsIn, outDir, binning_qT, procLabel, metLabel, yMin=0, 
         y_err_up =y_err_up**(0.5)  
         y_err = 0.5*(y_err_dw + y_err_up) # y_err**(0.5)    
         #print(x, y, y_err)
+        
+        g_base.SetPoint(iPoint, x, y)   
         
         g.SetPoint(iPoint, x, y)   
         g.SetPointError(iPoint, 0, y_err)
@@ -2372,7 +2533,7 @@ def plotParameter(param, jsIn, outDir, binning_qT, procLabel, metLabel, yMin=0, 
     
     g.SetFillColor(18)
     g.Draw("3SAME")
-    f_base.Draw("L SAME")
+    g_base.Draw("L SAME")
     padT.RedrawAxis()
     padT.RedrawAxis("G")
     plotter.auxRatio()
@@ -2404,7 +2565,7 @@ def plotParameter(param, jsIn, outDir, binning_qT, procLabel, metLabel, yMin=0, 
     
     
     
-def parameterizeGauss(jsIn, jsOut, comp, param, fitFuncName, iParams, outDir, binning_qT, procLabel, metLabel, cParams=[], excludeBins=[], fitMin=0, fitMax=200, xMin=0, xMax=150, yMin=0, yMax=30, yTitle="", bnds=None, doFit=True, cutOffMin=-99999, cutOffMax=99999, yRatio = 1.3, fitOpts="NS"):
+def parameterizeGauss(jsIn, jsOut, comp, param, fitFuncName, iParams, outDir, binning_qT, procLabel, metLabel, cParams=[], excludeBins=[], excludeRegions=[], fitMin=0, fitMax=200, xMin=0, xMax=150, yMin=0, yMax=30, yTitle="", bnds=None, doFit=True, cutOffMin=-99999, cutOffMax=99999, yRatio = 1.3, fitOpts="NS", transform=False):
 
     xMin, xMax = min(binning_qT), max(binning_qT)
 
@@ -2415,6 +2576,12 @@ def parameterizeGauss(jsIn, jsOut, comp, param, fitFuncName, iParams, outDir, bi
         if cParams[i]: fit.FixParameter(i, iPar)
         else: fit.SetParameter(i, iPar)
 
+    if transform:
+        fit_tf = ROOT.TF1("fit_tf", fitF, -1, 1) if fitF != "" else None
+        for i, iPar in enumerate(iParams):
+            if cParams[i]: fit.FixParameter(i, iPar)
+            else: fit.SetParameter(i, iPar)
+        
 
     g = ROOT.TGraphErrors()
     g.SetLineColor(ROOT.kBlack)
@@ -2422,12 +2589,23 @@ def parameterizeGauss(jsIn, jsOut, comp, param, fitFuncName, iParams, outDir, bi
     g.SetMarkerSize(0.55)
     g.SetMarkerColor(ROOT.kBlack)
     g.SetLineColor(ROOT.kBlack)
+    g_fit = ROOT.TGraphErrors()
+    
            
     iPoint = 0
     for qTbin in range(1, len(binning_qT)):
         if not str(qTbin) in jsIn:
             continue
         if qTbin in excludeBins: continue
+        
+        cont = False
+        for exBins in excludeRegions:
+            if qTbin >= exBins[0] and qTbin <= exBins[1]:
+                cont = True
+                break
+        if cont:
+            continue
+        
         x = 0.5*(binning_qT[qTbin-1] + binning_qT[qTbin])
         x_err = 0.5*(binning_qT[qTbin] - binning_qT[qTbin-1])
         if not param in jsIn[str(qTbin)]:
@@ -2439,8 +2617,8 @@ def parameterizeGauss(jsIn, jsOut, comp, param, fitFuncName, iParams, outDir, bi
         
         fit_status = jsIn[str(qTbin)]['fit_status']
         cov_status = jsIn[str(qTbin)]['cov_status']
-        if fit_status != 0: continue
-        if cov_status != 0: continue
+        #if fit_status != 0: continue
+        #if cov_status != 0: continue
         
         #if x < fitMin or x > fitMax: continue
         if y < cutOffMin: continue
@@ -2448,15 +2626,26 @@ def parameterizeGauss(jsIn, jsOut, comp, param, fitFuncName, iParams, outDir, bi
         #if y_err <= 0: continue
         g.SetPoint(iPoint, x, y)   
         g.SetPointError(iPoint, x_err, y_err)
+        
+        x_tf, x_err_tf = ((x-xMin)-(xMax-x))/(xMax-xMin), ((x_err-xMin)-(xMax-x_err))/(xMax-xMin)
+        g_fit.SetPoint(iPoint, x_tf, y) 
+        g_fit.SetPointError(iPoint, x_err_tf, y_err)
+        
         iPoint += 1
+         
     chisq = 0.0
     if doFit and fit:
-        result = g.Fit(fit.GetName(), fitOpts, "", fitMin, fitMax) 
-        chisq = fit.GetChisquare()/fit.GetNDF()
+        if transform:
+            result = g_fit.Fit(fit_tf.GetName(), fitOpts, "", -1, 1) 
+            chisq = fit_tf.GetChisquare()/fit_tf.GetNDF()
+            g.Fit(fit.GetName(), fitOpts, "", fitMin, fitMax) # fit the non-tranformed one (same result for plotting, but different coeff)
+        else:
+            result = g.Fit(fit.GetName(), fitOpts, "", fitMin, fitMax) 
+            chisq = fit.GetChisquare()/fit.GetNDF()
         fit.SetLineColor(ROOT.kRed)
         fit.SetLineWidth(2)
-
-            
+     
+   
         cov = result.GetCorrelationMatrix()       
         values = result.GetConfidenceIntervals(0.68, False)
         uncBand = ROOT.TGraphErrors()
@@ -2479,6 +2668,15 @@ def parameterizeGauss(jsIn, jsOut, comp, param, fitFuncName, iParams, outDir, bi
             if not str(qTbin) in jsIn:
                 continue
             if qTbin in excludeBins: continue
+            cont = False
+            for exBins in excludeRegions:
+                if qTbin >= exBins[0] and qTbin <= exBins[1]:
+                    cont = True
+                    break
+            if cont:
+                continue
+            
+            
             x = 0.5*(binning_qT[qTbin-1] + binning_qT[qTbin])
             x_err = 0.5*(binning_qT[qTbin] - binning_qT[qTbin-1])
             if not param in jsIn[str(qTbin)]: continue
@@ -2553,9 +2751,11 @@ def parameterizeGauss(jsIn, jsOut, comp, param, fitFuncName, iParams, outDir, bi
     latex.DrawLatex(0.2, 0.80, metLabel)
     latex.DrawLatex(0.2, 0.75, "#chi^{2}/ndof = %.2f" % chisq)
     
+    g_git_pars = fit_tf if transform else fit
+    
     latex.SetTextSize(0.035)
     for i in range(0, len(iParams)):
-        latex.DrawLatex(0.6, 0.86-i*0.04, "a_{%d} = %.2e #pm %.2e" % (i, fit.GetParameter(i), fit.GetParError(i)))
+        latex.DrawLatex(0.6, 0.86-i*0.04, "a_{%d} = %.2e #pm %.2e" % (i, g_git_pars.GetParameter(i), g_git_pars.GetParError(i)))
         
        
         
@@ -2589,8 +2789,8 @@ def parameterizeGauss(jsIn, jsOut, comp, param, fitFuncName, iParams, outDir, bi
     jsOut[param]["funcName"] = fitFuncName
     jsOut[param]["nParams"] = len(iParams)
     for i, iPar in enumerate(iParams):
-        jsOut[param]["p%d" % i] = fit.GetParameter(i)
-        jsOut[param]["p%d_err" % i] = fit.GetParError(i)
+        jsOut[param]["p%d" % i] = g_git_pars.GetParameter(i)
+        jsOut[param]["p%d_err" % i] = g_git_pars.GetParError(i)
         jsOut[param]["p%d_isCte" % i] = cParams[i]
         jsOut[param]["p%d_bnds" % i] = (None, None) if bnds==None else bnds[i]
     
@@ -2678,7 +2878,12 @@ def compareChi2(f1, f2, fOut, procLabel, metLabel, xMin=0, xMax=100, yMin=0, yMa
     canvas.Delete()
 
 
-
+def correlation_from_covariance(covariance):
+    v = np.sqrt(np.diag(covariance))
+    outer_v = np.outer(v, v)
+    correlation = covariance / outer_v
+    correlation[covariance == 0] = 0
+    return correlation
 
 def plotCovarianceMatrix(cov, outDir):
 
@@ -2716,12 +2921,7 @@ def plotCovarianceMatrix(cov, outDir):
 
 
 
-    def correlation_from_covariance(covariance):
-        v = np.sqrt(np.diag(covariance))
-        outer_v = np.outer(v, v)
-        correlation = covariance / outer_v
-        correlation[covariance == 0] = 0
-        return correlation
+    
 
     corr = correlation_from_covariance(cov)
 
@@ -3122,6 +3322,7 @@ def export(exportCfg, fOut, jsInF, jsInF_mean=None):
                 cfg['p%d_isCte'%p] = jsIn_mean['p%d_isCte'%iPar]
                 cfg['nParams'] += 1
             cfg['func'] = "(%s) + (%s)" % (cfg['func'], func_mean)
+        cfg['transform'] = True if exportCfg['mean'][i] in exportCfg["transform"] else False
         cfgOut['mean%d'%(i+1)] = cfg
         
         # sigma
@@ -3133,6 +3334,7 @@ def export(exportCfg, fOut, jsInF, jsInF_mean=None):
             cfg['p0'] = exportCfg['sigma'][i]
             cfg['p0_err'] = -1
             cfg['p0_isCte'] = True
+        cfg['transform'] = True if exportCfg['sigma'][i] in exportCfg["transform"] else False
         cfgOut['sigma%d'%(i+1)] = cfg
         
         # norm
@@ -3145,6 +3347,7 @@ def export(exportCfg, fOut, jsInF, jsInF_mean=None):
             cfg['p0'] = exportCfg['norm'][i]
             cfg['p0_err'] = -1
             cfg['p0_isCte'] = True
+        cfg['transform'] = True if exportCfg['norm'][i] in exportCfg["transform"] else False
         cfgOut['norm%d'%(i+1)] = cfg
    
 
