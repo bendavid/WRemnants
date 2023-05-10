@@ -8,19 +8,19 @@ import ROOT
 
 #FIRST STEP IN EFFICIENCY CREATION
 
-name = "highpt10bins"
+name = "newupdates"
 
 histlist = []
 
 directory = "/gpfs/ddn/cms/user/bruschin/Newtest"
 
-histlist.append(f"{directory}/mw_with_mu_eta_pt_scetlibCorr_idip{name}.hdf5")
-histlist.append(f"{directory}/mw_with_mu_eta_pt_scetlibCorr_trigger{name}.hdf5")
-histlist.append(f"{directory}/mw_with_mu_eta_pt_scetlibCorr_iso{name}.hdf5")
+#histlist.append(f"{directory}/mw_with_mu_eta_pt_scetlibCorr_idip{name}.hdf5")
+#histlist.append(f"{directory}/mw_with_mu_eta_pt_scetlibCorr_trigger{name}.hdf5")
+#histlist.append(f"{directory}/mw_with_mu_eta_pt_scetlibCorr_iso{name}.hdf5")
 
-#histlist.append(f"{directory}/mw_with_mu_eta_pt_scetlib_dyturboCorr_idip{name}.hdf5")
-#histlist.append(f"{directory}/mw_with_mu_eta_pt_scetlib_dyturboCorr_trigger{name}.hdf5")
-#histlist.append(f"{directory}/mw_with_mu_eta_pt_scetlib_dyturboCorr_iso{name}.hdf5")
+histlist.append(f"{directory}/mw_with_mu_eta_pt_scetlib_dyturboCorr_idip{name}.hdf5")
+histlist.append(f"{directory}/mw_with_mu_eta_pt_scetlib_dyturboCorr_trigger{name}.hdf5")
+histlist.append(f"{directory}/mw_with_mu_eta_pt_scetlib_dyturboCorr_iso{name}.hdf5")
 
 listoflists = [["nominal"],["nominal_smoothMC","nominal_smoothMC","nominal","nominal_smoothErr"],["nominal_smoothMC","nominal_smoothMC","nominal","nominal_smoothErr"]] 
 

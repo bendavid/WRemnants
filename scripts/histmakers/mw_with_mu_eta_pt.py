@@ -56,7 +56,7 @@ axis_eta = hist.axis.Regular(template_neta, template_mineta, template_maxeta, na
 if not args.vqt3dsmoothing:
     axis_pt = hist.axis.Regular(template_npt, template_minpt, template_maxpt, name = "pt")
 else :
-    axis_pt_list = [40., 42., 44., 47., 50., 55., 60., 65.]
+    axis_pt_list = [24.,26.,28.,30.,32.,34.,36.,38.,40., 42., 44., 47., 50., 55., 60., 65.]
     axis_pt = hist.axis.Variable(axis_pt_list, name = "pt")
 
 axis_charge = common.axis_charge
@@ -415,7 +415,7 @@ def build_graph(df, dataset):
                 if args.muonScaleVariation == 'smearingWeights':
                     df = df.DefinePerSample("bool_true", "true")
                     df = df.DefinePerSample("bool_false", "false")
-                    if (args.muonCorrData == "massfit") or (args.muonCorrData == "massfit_lbl"):
+                    if (args.muonCorrData == "massfit") or (args.muonCorrData == "lbl_massfit"):
                         if args.validateByMassWeights:
                             jpsi_unc_helper = muon_validation.make_jpsi_crctn_unc_helper_massweights(
                                 "wremnants/data/calibration/calibrationJDATA_rewtgr_3dmap_LBL.root",
@@ -634,11 +634,12 @@ def build_graph(df, dataset):
         if not args.binnedScaleFactors:
             df = df.Define("weight2dsfup", muon_efficiency_helper2d, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso"])
             df = df.Define("nominal_weight_2dsf", "nominal_weight/weight_fullMuonSF_withTrackingReco*weight2dsfup") #be EXTREMELY CAREFUL about the histogram files (this assumes that you have another file with the old trigger and histo SFs which also contains the same SFs for all the other steps as the central one)
-            df = df.Define("sf3dvs2d","wrem::sf3dvs2d(nominal_weight,nominal_weight_2dsf)")
+            df = df.Define("sf3dvs2d","wrem::SF3DVS2D(nominal_weight,nominal_weight_2dsf)")
+            #df = df.Define("sf3dvs2d","wrem::SF3DVS2D(nominal_weight_2dsf,nominal_weight_2dsf)")
             sf2d = df.HistoBoost("nominal_sf2d", nominal_axes, [*nominal_cols, "sf3dvs2d"], tensor_axes = [common.down_up_axis])
             #sf2d = df.HistoBoost("nominal_sf2d", nominal_axes, [*nominal_cols, "nominal_weight_2dsf"])
             results.append(sf2d)
-                
+               
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)

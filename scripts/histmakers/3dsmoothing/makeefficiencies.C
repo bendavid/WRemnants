@@ -1,11 +1,11 @@
-#define PTSIZE 7
+#define PTSIZE 15
 
 //SECOND STEP IN EFFICIENCY CALCULATION
 
-#define UTBINS 17 //CHANGE IF NEEDED
+#define UTBINS 10 //CHANGE IF NEEDED
 
 void makeefficiencies() {
-	TFile *file=new TFile("makeefficiencieshighpt10bins.root");
+	TFile *file=new TFile("makeefficienciesnewupdates.root");
 	TH3D *errortriggerplus=(TH3D*)file->Get("TriggerErrorPlus");
 	TH3D *errortriggerminus=(TH3D*)file->Get("TriggerErrorMinus");
 	TH3D *errorisoplus=(TH3D*)file->Get("IsoErrorPlus");
@@ -26,7 +26,7 @@ void makeefficiencies() {
 	TH2D *IsoMinus=(TH2D*)file->Get("IsoMinus");
     TH2D *IsoptPlus=(TH2D*)file->Get("IsoptPlus");
 	TH2D *IsoptMinus=(TH2D*)file->Get("IsoptMinus");
-	double etabinning[49], ptbinning[PTSIZE+1] = {40.,42.,44.,47.,50.,55.,60.,65.};
+	double etabinning[49], ptbinning[PTSIZE+1] = {24.,26.,28.,30.,32.,34.,36.,38.,40.,42.,44.,47.,50.,55.,60.,65.};
 	for (unsigned int i=0; i!=49; i++) {
 		etabinning[i] = -2.4 + i*0.1;
 	}
@@ -104,7 +104,7 @@ void makeefficiencies() {
 			isoMinus->SetBinError(i+1,j+1,ErrorIsoMinus->GetBinContent(i+1,j+1)/TriggerMinus->GetBinContent(i+1,j+1));
 		}
 	}
-	TFile *output = new TFile("efficiencieswremnantshighpt10bins.root","RECREATE");
+	TFile *output = new TFile("efficiencieswremnantsnewupdates.root","RECREATE");
 	output->cd();
 	triggerMCPlus->Write();
 	triggerMCMinus->Write();

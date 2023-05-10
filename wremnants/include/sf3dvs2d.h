@@ -5,7 +5,7 @@
 
 namespace wrem {
 
-    Eigen::TensorFixedSize<double, Eigen::Sizes<2>> sf3dvs2d(double up, double down) {
+    Eigen::TensorFixedSize<double, Eigen::Sizes<2>> SF3DVS2D(double up, double down) {
 
         Eigen::TensorFixedSize<double, Eigen::Sizes<2>> outWeights;
             

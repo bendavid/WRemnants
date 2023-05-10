@@ -1,7 +1,7 @@
 void implementantiisosf() {
-	TFile *filein=new TFile("/gpfs/ddn/cms/user/bruschin/Newtest/WRemnants/wremnants/data/testMuonSF/allSmooth_GtoH3Dsfiso2.root");
-	TFile *filein2=new TFile("/gpfs/ddn/cms/user/bruschin/Newtest/smoothLeptonScaleFactorsredofull/GtoH/allSmooth_GtoH.root");
-	TFile *fileout=new TFile("/gpfs/ddn/cms/user/bruschin/Newtest/WRemnants/wremnants/data/testMuonSF/allSmooth_GtoH3Dsfiso2_.root","RECREATE");
+	TFile *filein=new TFile("/scratchnvme/bruschin/Newtest/WRemnants/wremnants/data/testMuonSF/allSmooth_GtoH3Dsfiso2.root");
+	TFile *filein2=new TFile("/scratchnvme/bruschin/Newtest/smoothLeptonScaleFactorsredofullspline/GtoH/allSmooth_GtoH.root");
+	TFile *fileout=new TFile("/scratchnvme/bruschin/Newtest/WRemnants/wremnants/data/testMuonSF/allSmooth_GtoH3Dsfiso3_.root","RECREATE");
 	fileout->cd();
 	for (auto&& keyAsObj : *(filein->GetListOfKeys())){
 		auto key = (TKey*) keyAsObj;
