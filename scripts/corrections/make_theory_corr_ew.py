@@ -8,9 +8,11 @@ from utilities import common, input_tools, output_tools
 import hist
 import argparse
 import os
+import h5py
+import narf
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-i", "--input", type=str, default="w_z_gen_dists_RawPFMET.pkl.lz4", help="File containing EW hists")
+parser.add_argument("-i", "--input", type=str, default="w_z_gen_dists_scetlib_dyturboCorr_ewinput.hdf5", help="File containing EW hists")
 parser.add_argument("--num", type=str, default="horace-nlo", help="Numerator")
 parser.add_argument("--den", type=str, default="horace-lo-photos", help="Denominator")
 parser.add_argument("--outpath", type=str, default=f"{common.data_dir}/TheoryCorrections", help="Output path")
@@ -22,21 +24,28 @@ logging.basicConfig(level=logging.INFO)
 procs = ['ZToMuMu', 'WplusToMuNu', 'WminusToMuNu']
 charge_dict = {'ZToMuMu': 0, 'WplusToMuNu': 1, 'WminusToMuNu': 0}
 
-# file created with `python WRemnants/scripts/histmakers/w_z_gen_dists.py --skipAngularCoeffs --filter horace --ewHists`
-with lz4.frame.open(args.input) as f:
-    res = pickle.load(f)
+# file created with `python WRemnants/scripts/histmakers/w_z_gen_dists.py --skipAngularCoeffs --filter horace -p ewinput`
+f = h5py.File(args.input, 'r')
+res = narf.ioutils.pickle_load_h5py(f["results"])
 
 corrh = {}
 
 for proc in procs:
     # Make 2D ratio
-    hnum = hh.normalize(res[f'{proc}_{args.num}']['output']['nominal_ew'])
-    hden = hh.normalize(res[f'{proc}_{args.den}']['output']['nominal_ew'])
+    print('------')
+    hnum = res[f'{proc}_{args.num}']['output']['nominal_ew'].get()
+    hden = res[f'{proc}_{args.den}']['output']['nominal_ew'].get()
+    print('Integrals', np.sum(hnum.values(flow=True)), np.sum(hden.values(flow=True)))
+    hnum = hh.normalize(hnum)
+    hden = hh.normalize(hden)
+    print('Integrals after normalizing', np.sum(hnum.values(flow=True)), np.sum(hden.values(flow=True)))
     hratio = hh.divideHists(hnum, hden)
     hratio = hh.smoothTowardsOne(hratio)
     scale = np.sum(hden.values(flow=True)) / np.sum(hden.values(flow=True)*hratio.values(flow=True))
+    print('Adjustment after smoothing', scale)
     hratio.values(flow=True)[...]    *= scale
     hratio.variances(flow=True)[...] *= scale
+    print('Integrals after adjustment', np.sum(hden.values(flow=True)), np.sum(hden.values(flow=True)*hratio.values(flow=True)))
 
     # Add dummy axis
     axis_dummy = hist.axis.Regular(1, -10., 10., underflow=False, overflow=False, name = "dummy")
@@ -74,7 +83,7 @@ with lz4.frame.open(f"{args.outpath}/{outname}CorrZ.pkl.lz4", "wb") as f:
             'Z' : {
                 f"{outname}_minnlo_ratio" : corrh['ZToMuMu'],
             },
-            "meta_data" : output_tools.metaInfoDict(),
+            "meta_data" : output_tools.metaInfoDict(args=args),
         }, f, protocol = pickle.HIGHEST_PROTOCOL)
 
 corrh['W'] = corrh['WplusToMuNu']+corrh['WminusToMuNu']
@@ -83,7 +92,7 @@ with lz4.frame.open(f"{args.outpath}/{outname}CorrW.pkl.lz4", "wb") as f:
             'W' : {
                 f"{outname}_minnlo_ratio" : corrh['W'],
             },
-            "meta_data" : output_tools.metaInfoDict(),
+            "meta_data" : output_tools.metaInfoDict(args=args),
         }, f, protocol = pickle.HIGHEST_PROTOCOL)
 
-#print(corrh['ZToMuMu'])
+# print(corrh['ZToMuMu'])
