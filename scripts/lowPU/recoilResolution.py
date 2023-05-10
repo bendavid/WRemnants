@@ -15,8 +15,8 @@ import pickle
 import narf
 import hist
 
-from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_Z
-from wremnants.datasets.datagroups import datagroups2016
+from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU
+from wremnants.datasets.datagroups2016 import make_datagroups_2016
 
 
 def doOverlow(h):
@@ -730,13 +730,13 @@ def plotHighLowPU():
     # lowPU
     nvtx_lowPU = list(range(1, 7))
     flavor = "mumu"
-    groups_lowPU_pfmet = datagroupsLowPU_Z("mz_lowPU_%s_pfmet.pkl.lz4" % flavor, flavor=flavor)
-    groups_lowPU_deepmet = datagroupsLowPU_Z("mz_lowPU_%s_deepmet.pkl.lz4" % flavor, flavor=flavor)
+    groups_lowPU_pfmet = make_datagroups_lowPU("mz_lowPU_%s_pfmet.pkl.lz4" % flavor, flavor=flavor)
+    groups_lowPU_deepmet = make_datagroups_lowPU("mz_lowPU_%s_deepmet.pkl.lz4" % flavor, flavor=flavor)
     
     # highPU
     nvtx_highPU = list(range(5, 40))
-    groups_highPU_pfmet = datagroups2016("mz_wlike_with_mu_eta_pt_pfmet.pkl.lz4")
-    groups_highPU_deepmet = datagroups2016("mz_wlike_with_mu_eta_pt_deepmet.pkl.lz4")
+    groups_highPU_pfmet = make_datagroups_2016("mz_wlike_with_mu_eta_pt_pfmet.pkl.lz4")
+    groups_highPU_deepmet = make_datagroups_2016("mz_wlike_with_mu_eta_pt_deepmet.pkl.lz4")
     
     if False:
     

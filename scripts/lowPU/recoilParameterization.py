@@ -14,7 +14,7 @@ import lz4.frame
 import pickle
 import narf
 
-from wremnants.datasets.datagroupsLowPU import datagroupsLowPU_Z
+from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU
 def prepareDir(outDir, remove=True):
 
     if os.path.exists(outDir) and os.path.isdir(outDir) and remove: shutil.rmtree(outDir)
@@ -1966,8 +1966,8 @@ if __name__ == "__main__":
     #compare()
     #plotParameterizations()
     #sys.exit()
-    groups_mumu = datagroupsLowPU_Z("mz_lowPU_mumu.pkl.lz4")
-    groups_ee = datagroupsLowPU_Z("mz_lowPU_ee.pkl.lz4")
+    groups_mumu = make_datagroups_lowPU("mz_lowPU_mumu.pkl.lz4")
+    groups_ee = make_datagroups_lowPU("mz_lowPU_ee.pkl.lz4")
     
     import decimal
     def drange(x, y, jump):

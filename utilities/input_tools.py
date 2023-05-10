@@ -129,11 +129,11 @@ def read_dyturbo_pdf_hist(base_name, pdf_members, axes, charge=None):
     return pdf_hist
 
 def read_dyturbo_hist(filenames, path="", axes=("y", "pt"), charge=None):
-    isfile = list(filter(lambda x: os.path.isfile(x), 
-        [os.path.expanduser(os.path.join(path, f)) for f in filenames]))
+    filenames = [os.path.expanduser(os.path.join(path, f)) for f in filenames]
+    isfile = list(filter(lambda x: os.path.isfile(x), filenames))
 
     if not isfile:
-        raise ValueError("Must pass in a valid file")
+        raise ValueError(f"Did not find any valid files in {filenames}")
 
     hists = [read_dyturbo_file(f, axes, charge) for f in isfile]
     if len(hists) > 1:
@@ -232,12 +232,36 @@ def add_charge_axis(h, charge):
         hnew[...,charge_axis.index(charge)] = h.view(flow=True)
     return hnew
 
-def readImpacts(rtfile, group, sort=True, add_total=True, stat=0.0):
-    histname = "nuisance_group_impact_nois" if group else "nuisance_impact_nois"
+def getPOInames(rtfile, poi_type="mu"):
+    names = []
+    if f'nuisance_impact_{poi_type}' in [k.replace(";1","") for k in rtfile.keys()]:
+        impacts = rtfile[f'nuisance_impact_{poi_type}'].to_hist()
+        names = [impacts.axes[0].value(i) for i in range(impacts.axes[0].size)]
+
+    if 'nuisance_impact_nois' in [k.replace(";1","") for k in rtfile.keys()]:
+        impacts = rtfile['nuisance_impact_nois'].to_hist()
+        names.append('Wmass')
+
+    if len(names)==0:
+        raise ValueError('No free parameters found (neither signal strenght(s), nor W mass)')
+
+    return names
+    
+def readImpacts(rtfile, group, sort=True, add_total=True, stat=0.0, POI='Wmass', normalize=True):
+    poi_type = POI.split("_")[-1]
+    if POI=='Wmass':
+        histname = "nuisance_group_impact_nois" if group else "nuisance_impact_nois"
+    elif POI in getPOInames(rtfile, poi_type):
+        histname = f"nuisance_group_impact_{poi_type}" if group else f"nuisance_impact_{poi_type}"
+    else:
+        raise ValueError(f"Invalid POI: {POI}")
+        
     impacts = rtfile[histname].to_hist()
     labels = np.array([impacts.axes[1].value(i) for i in range(impacts.axes[1].size)])
-    total = rtfile["fitresults"][impacts.axes[0].value(0)+"_err"].array()[0]
-    impacts = impacts.values()[0,:]
+    iPOI = 0 if POI=='Wmass' else getPOInames(rtfile, poi_type).index(POI)
+    total = rtfile["fitresults"][impacts.axes[0].value(iPOI)+"_err"].array()[0]
+    norm = rtfile["fitresults"][impacts.axes[0].value(iPOI)].array()[0]
+    impacts = impacts.values()[iPOI,:]
     if sort:
         order = np.argsort(impacts)
         impacts = impacts[order]
@@ -246,11 +270,14 @@ def readImpacts(rtfile, group, sort=True, add_total=True, stat=0.0):
         impacts = np.append(impacts, total)
         labels = np.append(labels, "Total")
 
+    if normalize:
+        impacts /= norm
+
     if stat > 0:
         idx = np.argwhere(labels == "stat")
         impacts[idx] = stat
 
-    return impacts,labels
+    return impacts, labels, norm
 
 def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo, axes=None, charge=None, fix_nons_bin0=True):
     hsing = read_scetlib_hist(scetlib_resum, charge=charge)
@@ -331,3 +358,29 @@ def safeOpenRootFile(fileName, quitOnFail=True, silent=False, mode="READ"):
     else:
         return fileObject
 
+def args_from_metadata(card_tool, arg):
+    meta_data = card_tool.datagroups.getMetaInfo()
+    if "args" not in meta_data.keys():
+        raise IOError(f"The argument {arg} was not found in the metadata, maybe you run on an obsolete file.")
+    elif arg not in meta_data["args"].keys():
+        raise IOError(f"Did not find the argument {arg} in the meta_data dict. Maybe it is an outdated option")
+
+    return meta_data["args"][arg]
+
+def get_metadata(infile):
+    import narf
+    results = None
+    if infile.endswith(".pkl.lz4"):
+        with lz4.frame.open(infile) as f:
+            results = pickle.load(f)
+    elif infile.endswith(".pkl"):
+        with open(infile, "rb") as f:
+            results = pickle.load(f)
+    elif infile.endswith(".hdf5"):
+        h5file = h5py.File(infile, "r")
+        results = narf.ioutils.pickle_load_h5py(h5file["results"])
+
+    if not results:
+        raise ValueError("Failed to find results dict. Note that only pkl, hdf5, and pkl.lz4 file types are supported")
+
+    return results["meta_info"] if "meta_info" in results else results["meta_data"]

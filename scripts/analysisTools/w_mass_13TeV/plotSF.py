@@ -295,6 +295,12 @@ if __name__ == "__main__":
                                         smoothPlot=False, drawProfileX=False, scaleToUnitArea=False,
                                         draw_both0_noLog1_onlyLog2=1, passCanvas=canvas,
                                         nContours=args.nContours, palette=args.palette, invertePalette=args.invertePalette)
+                    hsyst.Divide(hnomi)
+                    drawCorrelationPlot(hsyst, "muon #eta", "muon p_{T} (GeV)", f"{v2} relative syst unc. on SF",
+                                        f"muonSF_{n2}_systRel", plotLabel="ForceTitle", outdir=outdir+"relativeSystUncertainty/",
+                                        smoothPlot=False, drawProfileX=False, scaleToUnitArea=False,
+                                        draw_both0_noLog1_onlyLog2=1, passCanvas=canvas,
+                                        nContours=args.nContours, palette=args.palette, invertePalette=args.invertePalette)
                 ptBinRanges = []
                 for ipt in range(hnomi.GetNbinsY()):
                     ptBinRanges.append("#splitline{{[{ptmin},{ptmax}]}}{{GeV}}".format(ptmin=int(hnomi.GetYaxis().GetBinLowEdge(ipt+1)),
