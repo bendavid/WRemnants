@@ -156,7 +156,7 @@ def scaleByLumi(h, scale, createNew=True):
         return h
     
 def normalize(h, scale=1e6, createNew=True):
-    scale = scale/h.sum().value
+    scale = scale/h.sum(flow=True).value
     if createNew:
         hnew = hist.Hist(*h.axes, storage=hist.storage.Weight())
         hnew.values(flow=True)[...]    = scale * h.values(flow=True)
