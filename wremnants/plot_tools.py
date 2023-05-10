@@ -205,8 +205,10 @@ def makeStackPlotWithRatio(
             )
 
         for proc,style in zip(unstacked, linestyles):
-            logger.debug(f"Plotting proc {proc}")
             unstack = histInfo[proc].hists[histName]
+            if proc not in to_read:
+                unstack = action(unstack)
+
             hep.histplot(
                 unstack,
                 yerr=True if style == "None" else False,
