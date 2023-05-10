@@ -213,12 +213,12 @@ def main(args,xnorm=False):
         pass
 
     if args.ewUnc:
-        cardTool.addSystematic(f"horacenloewCorr_unc", 
+        cardTool.addSystematic(f"horacenloewCorr", 
             processes=single_v_samples,
             mirror=True,
             group="theory_ew",
             systAxes=["systIdx"],
-            labelsByAxis=["horacenloewCorr_unc"],
+            labelsByAxis=["horacenloewCorr"],
             skipEntries=[(0, -1), (2, -1)],
             passToFakes=passSystToFakes,
         )
