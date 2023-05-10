@@ -16,10 +16,10 @@ logger = logging.child_logger(__name__)
 lumicsv = f"{pathlib.Path(__file__).parent.parent}/data/bylsoutput.csv"
 lumijson = f"{pathlib.Path(__file__).parent.parent}/data/Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.txt"
 
-#def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, nanoVersion="v9", 
-#        data_tag="TrackFitV722_NanoProdv2", mc_tag="TrackFitV718_NanoProdv1"):
 def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, nanoVersion="v9", 
-        data_tag="TrackFitV709_NanoProdv2", mc_tag="TrackFitV709_NanoProdv2"):
+        data_tag="TrackFitV722_NanoProdv2", mc_tag="TrackFitV718_NanoProdv1"):
+#def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, nanoVersion="v9", 
+#        data_tag="TrackFitV709_NanoProdv2", mc_tag="TrackFitV709_NanoProdv2"):
 
     if not base_path:
         hostname = socket.gethostname()
@@ -30,7 +30,7 @@ def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, na
         elif "mit.edu" in hostname:
             base_path = "/scratch/submit/cms/wmass/NanoAOD"
         elif hostname == "cmsanalysis.pi.infn.it":
-            base_path = "/scratchnvme/wmass/NANOV9/newNTuples" #temporary
+            base_path = "/scratchnvme/wmass/NANOV9/postVFP"
 
     logger.info(f"Loading samples from {base_path}.")
 
