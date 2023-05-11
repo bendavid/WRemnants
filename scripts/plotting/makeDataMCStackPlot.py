@@ -210,8 +210,8 @@ for h in args.hists:
     outfile = "_".join(filter(lambda x: x, to_join))
 
     plot_tools.save_pdf_and_png(outdir, outfile)
-    stack_yields = groups.make_yields_df(args.baseName, prednames, action, norm_proc="Data")
-    unstacked_yields = groups.make_yields_df(args.baseName, unstack, action, norm_proc="Data")
+    stack_yields = groups.make_yields_df(args.baseName, prednames, norm_proc="Data")
+    unstacked_yields = groups.make_yields_df(args.baseName, unstack, norm_proc="Data")
     plot_tools.write_index_and_log(outdir, outfile, 
         yield_tables={"Stacked processes" : stack_yields, "Unstacked processes" : unstacked_yields},
         analysis_meta_info={"AnalysisOutput" : groups.getMetaInfo()},
