@@ -98,9 +98,9 @@ class Datagroups(object):
         else:
             new_groupnames = list(filter(filters, self.groups.keys()))
 
-        diff = list(set(new_groupnames) - set(self.groups.keys()))
+        diff = list(self.groups.keys() - set(new_groupnames))
         if diff:
-            logger.debug(f"Filtered out following groups: {diff}")
+            logger.info(f"Datagroups.filterGroups : filtered out following groups: {diff}")
 
         self.groups = {key: self.groups[key] for key in new_groupnames}
 
@@ -120,9 +120,9 @@ class Datagroups(object):
         else:
             new_groupnames = list(filter(excludes, self.groups.keys()))
 
-        diff = list(set(new_groupnames) - set(self.groups.keys()))
+        diff = list(self.groups.keys() - set(new_groupnames))
         if diff:
-            logger.debug(f"Filtered out following groups: {diff}")
+            logger.info(f"Datagroups.excludeGroups: filtered out following groups: {diff}")
 
         self.groups = {key: self.groups[key] for key in new_groupnames}
         
