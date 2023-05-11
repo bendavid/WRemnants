@@ -248,7 +248,7 @@ class Datagroups(object):
                 if preOpMap and member.name in preOpMap:
                     logger.debug(f"Applying preOp to {member.name}/{procName} after loading")
                     h = preOpMap[member.name](h, **preOpArgs)
-
+                    
                 if self.globalAction:
                     h = self.globalAction(h)
                     logger.debug("Applying global action")
@@ -259,17 +259,6 @@ class Datagroups(object):
                         if member.name not in fakesMembersWithSyst:
                             fakesMembersWithSyst.append(member.name)
                         hasPartialSumForFake = True
-                        ## some operations might have to be triggered only for group Fake,
-                        ## thus they must be repeated inside here
-                        if group.memberOp:
-                            if group.memberOp[i] is not None:
-                                logger.debug(f"Apply operation to member {i}: {member.name}/{procName}")
-                                h = group.memberOp[i](h)
-                            else:
-                                logger.debug(f"No operation for member {i}: {member.name}/{procName}")
-                        if preOpMap and member.name in preOpMap:
-                            logger.debug(f"Applying preOp to {member.name}/{procName} after loading")
-                            h = preOpMap[member.name](h, **preOpArgs)
                         # apply the correct scale for fakes
                         scaleProcForFake = self.groups[nameFake].scale(member)
                         logger.debug(f"Summing hist {read_syst} for {member.name} to {nameFake} with scale = {scaleProcForFake}")
