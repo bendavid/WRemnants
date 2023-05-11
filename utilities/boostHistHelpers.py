@@ -46,7 +46,7 @@ def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False):
     out[(np.abs(h2vals) < cutoff) & (np.abs(h1vals) < cutoff)] = 1.
     val = np.divide(h1vals, h2vals, out=out, where=np.abs(h2vals)>cutoff)
 
-    if h1._storage_type() != hist.storage.Weight() or h2._storage_type() != hist.storage.Weight():
+    if h1.variances() is None or h2.variances() is None:
         newh = hist.Hist(*outh.axes, data=val)
     else:
         relvars = relVariances(h1vals, h2vals, h1vars, h2vars)
@@ -95,19 +95,19 @@ def multiplyWithVariance(vals1, vals2, vars1, vars2):
     return val, var
 
 def multiplyHists(h1, h2, allowBroadcast=True, transpose=True, createNew=True):
-    h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2, allowBroadcast, transpose)
+    h1vals, h2vals, h1vars, h2vars = valsAndVariances(h1, h2, allowBroadcast, transpose)
     outh = h1 if not allowBroadcast else broadcastOutHist(h1, h2)
 
     if createNew:
         if h1vars is None or h2vars is None: 
-            val = np.multiply(vals1, vals2)
+            val = np.multiply(h1vals, h2vals)
             return hist.Hist(*outh.axes, data=val)
         else:
             val,var = multiplyWithVariance(h1vals, h2vals, h1vars, h2vars)
             return hist.Hist(*outh.axes, storage=hist.storage.Weight(), data=np.stack((val, var), axis=-1))
     else:
         if h1vars is None or h2vars is  None:
-            val = np.multiply(vals1, vals2)
+            val = np.multiply(h1vals, h2vals)
         else:
             val,var = multiplyWithVariance(h1vals, h2vals, h1vars, h2vars)
             outh.variances(flow=True)[...] = var

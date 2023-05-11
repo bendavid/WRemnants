@@ -16,7 +16,8 @@ data_dir = f"{pathlib.Path(__file__).parent}/data/"
 
 def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSmooth_GtoH.root",
                                         era = None, is_w_like = False, max_pt = np.inf,
-                                        directIsoSFsmoothing=False):
+                                        directIsoSFsmoothing=False,
+                                        sumW2=False):
 
     eradict = { "2016PreVFP" : "BtoF",
                 "2016PostVFP" : "GtoH" }
@@ -68,7 +69,7 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
                 axis_eta_eff = hist_hist.axes[0]
                 axis_pt_eff = hist_hist.axes[1]
                 # store all systs (currently only 1) with the nominal, for all efficiency steps
-                sf_syst = hist.Hist(axis_eta_eff, axis_pt_eff, axis_charge, axis_allEff_type, axis_nom_syst, name = "sf_syst", storage = hist.storage.Weight())
+                sf_syst = hist.Hist(axis_eta_eff, axis_pt_eff, axis_charge, axis_allEff_type, axis_nom_syst, name = "sf_syst", storage = hist.storage.Weight() if sumW2 else hist.storage.Double())
             # this axis might change for different histograms, because of a different number of effStat variations
             axis_nomiAlt_eff = hist_hist.axes[2]
             # could use max_pt to remove some of the pt bins for the input histogram
@@ -188,7 +189,7 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
                                                                          axis_eff_type,
                                                                          down_nom_up_effStat_axis,
                                                                          name = effStatKey,
-                                                                         storage = hist.storage.Weight())
+                                                                         storage = hist.storage.Weight() if sumW2 else hist.storage.Double())
                     
                 # extract nominal (first bin that is not underflow)
                 effStat_manager[effStatKey]["boostHist"].view(flow=True)[:, :, axis_charge_def.index(charge), axis_eff_type.index(eff_type), down_nom_up_effStat_axis.index(0)] = hist_hist.view(flow=True)[:,:,1]
