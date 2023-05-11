@@ -114,8 +114,7 @@ def multiplyHists(h1, h2, allowBroadcast=True, transpose=True, createNew=True):
 
         outh.values(flow=True)[...] = val
 
-        return outh                
-
+        return outh
 
 def addHists(h1, h2, allowBroadcast=True, createNew=True):
     h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2, allowBroadcast)
