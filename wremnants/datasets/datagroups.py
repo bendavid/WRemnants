@@ -11,7 +11,6 @@ import functools
 import hist
 import pandas as pd
 import math
-import copy
 
 from wremnants.datasets.datagroup import Datagroup
 
@@ -274,7 +273,7 @@ class Datagroups(object):
                         # apply the correct scale for fakes
                         scaleProcForFake = self.groups[nameFake].scale(member)
                         logger.debug(f"Summing hist {read_syst} for {member.name} to {nameFake} with scale = {scaleProcForFake}")
-                        hProcForFake = scaleProcForFake * copy.deepcopy(h)
+                        hProcForFake = scaleProcForFake * h.copy()
                         histForFake = hh.addHists(hProcForFake, histForFake, createNew=False) if histForFake else hProcForFake
 
                 # The following must be done when the group is not Fake, or when the previous part for fakes was not done
@@ -540,7 +539,7 @@ class Datagroups(object):
             h = hh.clipNegativeVals(h, createNew=False)
         if scaleToNewLumi > 0:
             h = hh.scaleByLumi(h, scaleToNewLumi, createNew=False)                        
-        scale = self.processScaleFactor(proc)
+        scale = self.processScaleFactor(proc)                                                        
         if scaleOp:
             scale = scale*scaleOp(proc)
         return h*scale
