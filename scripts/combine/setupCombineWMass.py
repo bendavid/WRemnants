@@ -149,7 +149,7 @@ def main(args,xnorm=False):
 
     logger.info(f"cardTool.allMCProcesses(): {cardTool.allMCProcesses()}")
         
-    passSystToFakes = wmass and not args.skipSignalSystOnFakes and args.qcdProcessName not in excludeGroup and not xnorm
+    passSystToFakes = wmass and not args.skipSignalSystOnFakes and args.qcdProcessName not in excludeGroup and (filterGroup == None or args.qcdProcessName in filterGroup) and not xnorm
 
     single_v_samples = cardTool.filteredProcesses(lambda x: x[0] in ["W", "Z"])
     single_v_nonsig_samples = cardTool.filteredProcesses(lambda x: x[0] == ("Z" if wmass else "W"))
@@ -213,12 +213,12 @@ def main(args,xnorm=False):
         pass
 
     if args.ewUnc:
-        cardTool.addSystematic(f"horacenloewCorr_unc", 
+        cardTool.addSystematic(f"horacenloewCorr", 
             processes=single_v_samples,
             mirror=True,
             group="theory_ew",
             systAxes=["systIdx"],
-            labelsByAxis=["horacenloewCorr_unc"],
+            labelsByAxis=["horacenloewCorr"],
             skipEntries=[(0, -1), (2, -1)],
             passToFakes=passSystToFakes,
         )
