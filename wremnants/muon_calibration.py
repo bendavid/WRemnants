@@ -496,7 +496,7 @@ def transport_smearing_weights_to_reco(
             logger.warning("smearing weights not transported to RECO kinematics")
             return
 
-        msv_sw_reco = hist.Hist(*msv_sw_gen_smear.axes, storage = msv_sw_gen_smear._storage_type())
+        msv_sw_reco = hist.Hist(*msv_sw_gen_smear.axes, storage=bh.storage.Double())
 
         for i_unc in range(msv_sw_gen_smear.axes['unc'].size):
             sw_dn_up_gen_smear = [msv_sw_gen_smear[..., i_unc, 0], msv_sw_gen_smear[..., i_unc, 1]]
@@ -504,7 +504,8 @@ def transport_smearing_weights_to_reco(
             sw_dn_up_reco = hh.combineUpDownVarHists(
                 *[hh.multiplyHists(nominal_reco, x) for x in bin_ratio_dn_up]
             )
-            msv_sw_reco.view(flow = True)[..., i_unc, :] = sw_dn_up_reco.view(flow = True)
+
+            msv_sw_reco.values(flow = True)[..., i_unc, :] = sw_dn_up_reco.values(flow = True)
         resultdict[proc]['output']['nominal_muonScaleSyst_responseWeights'] = (
             narf.ioutils.H5PickleProxy(msv_sw_reco)
         )
