@@ -17,8 +17,7 @@ data_dir = f"{pathlib.Path(__file__).parent}/data/"
 
 def make_muon_efficiency_helpers_binned_vqt(filename = data_dir + "/testMuonSF/allSmooth_GtoH.root", filenamevqt = data_dir + "/testMuonSF/allSmooth_GtoH.root",
                                             era = None, is_w_like = False, max_pt = np.inf,
-                                            usePseudoSmoothing=False,
-                                            sumW2=False):
+                                            usePseudoSmoothing=False):
 
     # usePseudoSmoothing will use smoothed nominal histograms with the same pt binning as the original ones.
     # (should do the same for the systematic but the smoothed histogram with original binning is not available at the moment)
@@ -92,7 +91,7 @@ def make_muon_efficiency_helpers_binned_vqt(filename = data_dir + "/testMuonSF/a
                         axis_pt_eff = hist_hist.axes[1]
                         # store all systs (currently only 1) with the nominal, for all efficiency steps
                         axis_eff_type = hist.axis.StrCategory(effSyst_manager[effSystKey]["axisLabels"], name = f"{effSystKey}_eff_type")
-                        effSyst_manager[effSystKey]["boostHist"] = hist.Hist(axis_eta_eff, axis_pt_eff, axis_charge, axis_eff_type, axis_nom_syst, name = effSystKey, storage = hist.storage.Weight() if sumW2 else hist.storage.Double())
+                        effSyst_manager[effSystKey]["boostHist"] = hist.Hist(axis_eta_eff, axis_pt_eff, axis_charge, axis_eff_type, axis_nom_syst, name = effSystKey, storage = hist.storage.Weight())
                     # could use max_pt to remove some of the pt bins for the input histogram
                     effSyst_manager[effSystKey]["boostHist"].view(flow=True)[:, :, axis_charge.index(charge), axis_eff_type.index(eff_type), nomiAltId] = hist_hist.view(flow=True)[:,:]
 
@@ -197,7 +196,7 @@ def make_muon_efficiency_helpers_binned_vqt(filename = data_dir + "/testMuonSF/a
                                                                          axis_charge,
                                                                          axis_eff_type,
                                                                          name = effStatKey,
-                                                                         storage = hist.storage.Weight() if sumW2 else hist.storage.Double())
+                                                                         storage = hist.storage.Weight())
                     
                 effStat_manager[effStatKey]["boostHist"].view(flow=True)[:, :, axis_charge.index(charge), axis_eff_type.index(eff_type)] = hist_hist.view(flow=True)[:,:]
                 

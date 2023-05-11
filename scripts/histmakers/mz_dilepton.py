@@ -146,24 +146,36 @@ def build_graph(df, dataset):
     df = df.Define("cosThetaStarll", "csSineCosThetaPhill.costheta")
     df = df.Define("phiStarll", "std::atan2(csSineCosThetaPhill.sinphi, csSineCosThetaPhill.cosphi)")
 
+    logger.debug(f"Define weights and store nominal histograms")
+
     if dataset.is_data:
-        df = df.DefinePerSample("nominal_weight", "1.0")
+        results.append(df.HistoBoost("nominal", axes, [*cols]))
     else:
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
+
+        logger.debug(f"Apply efficiency helper")
+
         df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["trigMuons_pt0", "trigMuons_eta0", "trigMuons_SApt0", "trigMuons_SAeta0", "trigMuons_charge0",
                                                                                       "nonTrigMuons_pt0", "nonTrigMuons_eta0", "nonTrigMuons_SApt0", "nonTrigMuons_SAeta0", "nonTrigMuons_charge0"])
+
+        logger.debug(f"Apply prefiring helper")
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId"])
 
         df = df.Define("exp_weight", "weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom")
         df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
 
-    results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"], storage=bh.storage.Double()))
-    results.append(df.HistoBoost("nominal", axes, [*cols, "nominal_weight"]))
+        results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"], storage=bh.storage.Double()))
+        results.append(df.HistoBoost("nominal", axes, [*cols, "nominal_weight"]))
 
     for obs in ["ptll", "mll", "yll"]:
-        results.append(df.HistoBoost(f"nominal_{obs}", [all_axes[obs]], [obs, "nominal_weight"]))
+        if dataset.is_data:
+            results.append(df.HistoBoost(f"nominal_{obs}", [all_axes[obs]], [obs]))
+        else:
+            results.append(df.HistoBoost(f"nominal_{obs}", [all_axes[obs]], [obs, "nominal_weight"]))
+
 
     if not dataset.is_data and not args.onlyMainHistograms:
+        logger.debug(f"Make histograms with systematic variations")
 
         df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, axes, cols, is_w_like=True)
         df = syst_tools.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, axes, cols)
@@ -179,7 +191,8 @@ def build_graph(df, dataset):
                 syst_tools.add_muonscale_hist(
                     results, df, args.muonCorrEtaBins, args.muonCorrMag, isW, axes, cols,
                     muon_eta="trigMuons_eta0")
-
+    
+    logger.debug(f"Return graph")
 
     return results, weightsum
 
