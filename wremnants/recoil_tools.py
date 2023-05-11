@@ -27,48 +27,72 @@ recoil_cfg['lowPU_mumu_RawPFMET'] = {
     'met_xy'    : f"{common.data_dir}/recoil/lowPU/mumu_RawPFMET/met_xy_correction.json",
     'qt_rw'     : f"{common.data_dir}/recoil/lowPU/mumu_RawPFMET/qT_reweighting.json",
     'qTbins'    : list(np.arange(0, 150, 0.5)) + [150],
-    'qTmax'     : 9e99,
+    'qTmax'     : 100.,
     'corr_z'    : { maps_corr_z[i] : f"{common.data_dir}/recoil/lowPU/mumu_RawPFMET/recoil_{tag}.json" for i,tag in enumerate(tags_corr_z) },
     'unc_z'     : {
         'target_para_bkg'   : [f"{common.data_dir}/recoil/lowPU/mumu_RawPFMET/recoil_data_{tag}.json" for tag in tags_unc_para_bkg_z],
         'target_perp_bkg'   : [f"{common.data_dir}/recoil/lowPU/mumu_RawPFMET/recoil_data_{tag}.json" for tag in tags_unc_perp_bkg_z],
-    }
+    },
+    'statUnc'   : True,
 }
 
 recoil_cfg['lowPU_mu_RawPFMET'] = {
     'met_xy'    : f"{common.data_dir}/recoil/lowPU/mu_RawPFMET/met_xy_correction.json",
     'qt_rw'     : f"{common.data_dir}/recoil/lowPU/mumu_RawPFMET/qT_reweighting.json",
     'qTbins'    : list(np.arange(0, 150, 0.5)) + [150],
-    'qTmax'     : 9e99,
+    'qTmax'     : 100.,
     'corr_z'    : { maps_corr_z[i] : f"{common.data_dir}/recoil/lowPU/mumu_RawPFMET/recoil_{tag}.json" for i,tag in enumerate(tags_corr_z) },
     'unc_z'     : {
         'target_para_bkg'   : [f"{common.data_dir}/recoil/lowPU/mumu_RawPFMET/recoil_data_{tag}.json" for tag in tags_unc_para_bkg_z],
         'target_perp_bkg'   : [f"{common.data_dir}/recoil/lowPU/mumu_RawPFMET/recoil_data_{tag}.json" for tag in tags_unc_perp_bkg_z],
-    }
+    },
+    'statUnc'   : True,
 }
 
 recoil_cfg['highPU_mumu_RawPFMET'] = {
     'met_xy'    : f"{common.data_dir}/recoil/highPU/mumu_RawPFMET/met_xy_correction.json",
     'qt_rw'     : f"{common.data_dir}/recoil/highPU/mumu_RawPFMET/qT_reweighting.json",
     'qTbins'    : list(np.arange(0, 500, 1)) + [500],
-    'qTmax'     : 9e99,
+    'qTmax'     : 200.,
     'corr_z'    : { maps_corr_z[i] : f"{common.data_dir}/recoil/highPU/mumu_RawPFMET/recoil_{tag}.json" for i,tag in enumerate(tags_corr_z) },
     'unc_z'     : {
         'target_para_bkg'   : [f"{common.data_dir}/recoil/highPU/mumu_RawPFMET/recoil_data_{tag}.json" for tag in tags_unc_para_bkg_z],
         'target_perp_bkg'   : [f"{common.data_dir}/recoil/highPU/mumu_RawPFMET/recoil_data_{tag}.json" for tag in tags_unc_perp_bkg_z],
-    }
+    },
+    'statUnc'   : True,
+}
+
+recoil_cfg['highPU_mumu_DeepMETReso'] = {
+    'met_xy'    : f"{common.data_dir}/recoil/highPU/mumu_DeepMETReso/met_xy_correction.json",
+    'qt_rw'     : f"{common.data_dir}/recoil/highPU/mumu_DeepMETReso/qT_reweighting.json",
+    'qTbins'    : list(np.arange(0, 200, 0.5)) + [200],
+    'qTmax'     : 100.,
+    'corr_z'    : { maps_corr_z[i] : f"{common.data_dir}/recoil/highPU/mumu_DeepMETReso/recoil_{tag}.json" for i,tag in enumerate(tags_corr_z) },
+    'unc_z'     : {},
+    'statUnc'   : False,
 }
 
 recoil_cfg['highPU_mu_RawPFMET'] = {
     'met_xy'    : f"{common.data_dir}/recoil/highPU/mu_RawPFMET/met_xy_correction.json",
     'qt_rw'     : f"{common.data_dir}/recoil/highPU/mumu_RawPFMET/qT_reweighting.json",
     'qTbins'    : list(np.arange(0, 500, 1)) + [500],
-    'qTmax'     : 9e99,
+    'qTmax'     : 200.,
     'corr_z'    : { maps_corr_z[i] : f"{common.data_dir}/recoil/highPU/mumu_RawPFMET/recoil_{tag}.json" for i,tag in enumerate(tags_corr_z) },
     'unc_z'     : {
         'target_para_bkg'   : [f"{common.data_dir}/recoil/highPU/mumu_RawPFMET/recoil_data_{tag}.json" for tag in tags_unc_para_bkg_z],
         'target_perp_bkg'   : [f"{common.data_dir}/recoil/highPU/mumu_RawPFMET/recoil_data_{tag}.json" for tag in tags_unc_perp_bkg_z],
-    }
+    },
+    'statUnc'   : True,
+}
+
+recoil_cfg['highPU_mu_DeepMETReso'] = {
+    'met_xy'    : f"{common.data_dir}/recoil/highPU/mu_DeepMETReso/met_xy_correction.json",
+    'qt_rw'     : f"{common.data_dir}/recoil/highPU/mumu_DeepMETReso/qT_reweighting.json",
+    'qTbins'    : list(np.arange(0, 500, 1)) + [500],
+    'qTmax'     : 100.,
+    'corr_z'    : { maps_corr_z[i] : f"{common.data_dir}/recoil/highPU/mumu_DeepMETReso/recoil_{tag}.json" for i,tag in enumerate(tags_corr_z) },
+    'unc_z'     : {},
+    'statUnc'   : False,
 }
 
         
@@ -107,7 +131,7 @@ class Recoil:
 
         # recoil Z calibration
         for tag in recoil_cfg[rtag]['corr_z']:        
-            self.addParametric(tag, recoil_cfg[rtag]['corr_z'][tag])
+            self.addParametric(tag, recoil_cfg[rtag]['corr_z'][tag], doUnc=recoil_cfg[rtag]['statUnc'])
 
         # recoil Z uncertainties
         for tag in recoil_cfg[rtag]['unc_z']:
@@ -126,6 +150,7 @@ class Recoil:
         self.axis_recoil_para_qT = hist.axis.Regular(400, -300, 100, name = "recoil_para_qT")
         self.axis_recoil_para = hist.axis.Variable(list(range(-150, 150, 2)) + [150], name = "recoil_para")
         self.axis_recoil_perp = hist.axis.Variable(list(range(-150, 150, 2)) + [150], name = "recoil_perp")
+        self.axis_run_no = hist.axis.Variable(list(range(277770, 284045, 1)) + [284045], name = "run_no")
         
         self.axis_recoil_magn_fine = hist.axis.Regular(300, 0, 300, name = "recoil_magn", underflow=False)
         self.axis_recoil_para_fine = hist.axis.Regular(1000, -500, 500, name = "recoil_para")
@@ -135,7 +160,8 @@ class Recoil:
         self.axis_mt = hist.axis.Regular(200, 0., 200., name = "mt", underflow=False)
         self.axis_njets = hist.axis.Regular(30, 0.5, 30.5, name = "recoil_njets")
         self.axis_npv = hist.axis.Regular(100, 0.5, 100.5, name = "recoil_npv")
-        self.axis_sumEt = hist.axis.Regular(400, 0, 4000, name = "recoil_sumEt")
+        self.axis_sumEt = hist.axis.Regular(500, 0, 5000, name = "recoil_sumEt")
+        self.axis_sumEt_sqrt = hist.axis.Regular(100, 0, 100, name = "recoil_sumEt_sqrt")
         self.axis_rapidity = hist.axis.Regular(24, -2.4, 2.4, name = "recoil_rapidity")
 
         self.axis_qT = hist.axis.Variable(self.recoil_qTbins, name = "qTbinned", underflow=False)
@@ -180,24 +206,28 @@ class Recoil:
             pars = [jsIn[label]['p%d' % iParam] for iParam in range(0, jsIn[label]['nParams'])]
             funcName = "%s_%s" % (tag, label)
             funcExpr = jsIn[label]['func']
-            ROOT.wrem.insertFunction(funcName, funcExpr, pars)            
+            transform = jsIn[label]['transform'] if 'transform' in jsIn[label] else False
+            ROOT.wrem.insertFunction(funcName, funcExpr, pars, transform) 
             
             label = "sigma%d" % iGauss
             pars = [jsIn[label]['p%d' % iParam] for iParam in range(0, jsIn[label]['nParams'])]
             funcName = "%s_%s" % (tag, label)
             funcExpr = jsIn[label]['func']
-            ROOT.wrem.insertFunction(funcName, funcExpr, pars)
+            transform = jsIn[label]['transform'] if 'transform' in jsIn[label] else False
+            ROOT.wrem.insertFunction(funcName, funcExpr, pars, transform)
             
             if iGauss == nGauss: continue
             label = "norm%d" % iGauss
             pars = [jsIn[label]['p%d' % iParam] for iParam in range(0, jsIn[label]['nParams'])]
             funcName = "%s_%s" % (tag, label)
             funcExpr = jsIn[label]['func']
-            ROOT.wrem.insertFunction(funcName, funcExpr, pars)
+            transform = jsIn[label]['transform'] if 'transform' in jsIn[label] else False
+            ROOT.wrem.insertFunction(funcName, funcExpr, pars, transform)
             
         
         # do statistical variations
         if not doUnc: return
+        if not 'nStatVars' in jsIn: return
         nStatVars = jsIn['nStatVars']
         recoil_unc_no = getattr(ROOT.wrem, "recoil_unc_no")
         recoil_unc_no.insert((tag, nStatVars*2))
@@ -213,20 +243,23 @@ class Recoil:
                     pars = [jsIn[statLabel][label]['p%d' % iParam] for iParam in range(0, jsIn[label]['nParams'])]
                     funcName = "%s_%s_%s" % (tag, label, systLabel)
                     funcExpr = jsIn[label]['func']
-                    ROOT.wrem.insertFunction(funcName, funcExpr, pars)
+                    transform = jsIn[label]['transform'] if 'transform' in jsIn[label] else False
+                    ROOT.wrem.insertFunction(funcName, funcExpr, pars, transform)
 
                     label = "sigma%d" % iGauss
                     pars = [jsIn[statLabel][label]['p%d' % iParam] for iParam in range(0, jsIn[label]['nParams'])]
                     funcName = "%s_%s_%s" % (tag, label, systLabel)
                     funcExpr = jsIn[label]['func']
-                    ROOT.wrem.insertFunction(funcName, funcExpr, pars)
+                    transform = jsIn[label]['transform'] if 'transform' in jsIn[label] else False
+                    ROOT.wrem.insertFunction(funcName, funcExpr, pars, transform)
 
                     if iGauss == nGauss: continue
                     label = "norm%d" % iGauss
                     pars = [jsIn[statLabel][label]['p%d' % iParam] for iParam in range(0, jsIn[label]['nParams'])]
                     funcName = "%s_%s_%s" % (tag, label, systLabel)
                     funcExpr = jsIn[label]['func']
-                    ROOT.wrem.insertFunction(funcName, funcExpr, pars)
+                    transform = jsIn[label]['transform'] if 'transform' in jsIn[label] else False
+                    ROOT.wrem.insertFunction(funcName, funcExpr, pars, transform)
                 iiStat += 1
 
     def addParametricUnc(self, tag, fIn):
@@ -253,20 +286,23 @@ class Recoil:
             pars = [jsIn[label]['p%d' % iParam] for iParam in range(0, jsIn[label]['nParams'])]
             funcName = "%s_%s_%s" % (tag, label, systLabel)
             funcExpr = jsIn[label]['func']
-            ROOT.wrem.insertFunction(funcName, funcExpr, pars)
+            transform = jsIn[label]['transform'] if 'transform' in jsIn[label] else False
+            ROOT.wrem.insertFunction(funcName, funcExpr, pars, transform)
             
             label = "sigma%d" % iGauss
             pars = [jsIn[label]['p%d' % iParam] for iParam in range(0, jsIn[label]['nParams'])]
             funcName = "%s_%s_%s" % (tag, label, systLabel)
             funcExpr = jsIn[label]['func']
-            ROOT.wrem.insertFunction(funcName, funcExpr, pars)
+            transform = jsIn[label]['transform'] if 'transform' in jsIn[label] else False
+            ROOT.wrem.insertFunction(funcName, funcExpr, pars, transform)
             
             if iGauss == nGauss: continue
             label = "norm%d" % iGauss
             pars = [jsIn[label]['p%d' % iParam] for iParam in range(0, jsIn[label]['nParams'])]
             funcName = "%s_%s_%s" % (tag, label, systLabel)
             funcExpr = jsIn[label]['func']
-            ROOT.wrem.insertFunction(funcName, funcExpr, pars)
+            transform = jsIn[label]['transform'] if 'transform' in jsIn[label] else False
+            ROOT.wrem.insertFunction(funcName, funcExpr, pars, transform)
             
         
         
@@ -437,7 +473,10 @@ class Recoil:
         self.results.append(self.df.HistoBoost("METx_corr_xy_npv", [self.axis_npv, self.axis_MET_xy], ["PV_npvs", "METx_corr_xy", "nominal_weight"], storage=bh.storage.Double()))
         self.results.append(self.df.HistoBoost("METy_corr_xy_npv", [self.axis_npv, self.axis_MET_xy], ["PV_npvs", "METy_corr_xy", "nominal_weight"], storage=bh.storage.Double()))
        
-    
+        if self.dataset.is_data:
+            self.results.append(self.df.HistoBoost("METx_corr_lep_runNo", [self.axis_MET_xy, self.axis_run_no], ["METx_corr_lep", "run", "nominal_weight"]))
+            self.results.append(self.df.HistoBoost("METy_corr_lep_runNo", [self.axis_MET_xy, self.axis_run_no], ["METy_corr_lep", "run", "nominal_weight"]))
+            self.results.append(self.df.HistoBoost("npv_runNo", [self.axis_npv, self.axis_run_no], ["PV_npvs", "run", "nominal_weight"]))
    
 
     def setup_recoil_Z(self):
@@ -488,7 +527,7 @@ class Recoil:
         self.df = self.df.Define("mT_corr_lep", f"wrem::mt_wlike_nano({self.trgLep_pt}, {self.trgLep_phi}, {self.nonTrgLep_pt}, {self.nonTrgLep_phi}, MET_corr_lep_pt, MET_corr_lep_phi)")
         self.df = self.df.Define("mT_corr_xy", f"wrem::mt_wlike_nano({self.trgLep_pt}, {self.trgLep_phi}, {self.nonTrgLep_pt}, {self.nonTrgLep_phi}, MET_corr_xy_pt, MET_corr_xy_phi)")
         
-
+        self.df = self.df.Define("RawMET_sumEt_sqrt", "sqrt(RawMET_sumEt)")
    
         if not self.storeHists: 
             return
@@ -497,7 +536,7 @@ class Recoil:
         self.results.append(self.df.HistoBoost("recoil_uncorr_para_qT", [self.axis_recoil_para_qT], ["recoil_uncorr_para_qT", "nominal_weight"], storage=bh.storage.Double()))
         self.results.append(self.df.HistoBoost("recoil_uncorr_para", [self.axis_recoil_para], ["recoil_uncorr_para", "nominal_weight"], storage=bh.storage.Double()))
         self.results.append(self.df.HistoBoost("recoil_uncorr_perp", [self.axis_recoil_perp], ["recoil_uncorr_perp", "nominal_weight"], storage=bh.storage.Double()))
-            
+          
         self.results.append(self.df.HistoBoost("recoil_corr_lep_magn", [self.axis_recoil_magn], ["recoil_corr_lep_magn", "nominal_weight"], storage=bh.storage.Double()))
         self.results.append(self.df.HistoBoost("recoil_corr_lep_para_qT", [self.axis_recoil_para_qT], ["recoil_corr_lep_para_qT", "nominal_weight"], storage=bh.storage.Double()))
         self.results.append(self.df.HistoBoost("recoil_corr_lep_para", [self.axis_recoil_para], ["recoil_corr_lep_para", "nominal_weight"], storage=bh.storage.Double()))
@@ -546,9 +585,22 @@ class Recoil:
         self.results.append(self.df.HistoBoost("recoil_corr_xy_para_sumEt", [self.axis_sumEt, self.axis_recoil_para_fine], ["RawMET_sumEt", "recoil_corr_xy_para", "nominal_weight"], storage=bh.storage.Double()))
         self.results.append(self.df.HistoBoost("recoil_corr_xy_perp_sumEt", [self.axis_sumEt, self.axis_recoil_perp_fine], ["RawMET_sumEt", "recoil_corr_xy_perp", "nominal_weight"], storage=bh.storage.Double()))
         
+        self.results.append(self.df.HistoBoost("RawMET_sumEt_qTbinned", [self.axis_qT, self.axis_sumEt], ["qT", "RawMET_sumEt", "nominal_weight"], storage=bh.storage.Double()))
+        self.results.append(self.df.HistoBoost("RawMET_sumEt_sqrt_qTbinned", [self.axis_qT, self.axis_sumEt_sqrt], ["qT", "RawMET_sumEt_sqrt", "nominal_weight"], storage=bh.storage.Double()))
+        
         self.results.append(self.df.HistoBoost("recoil_corr_xy_para_perp", [self.axis_recoil_para, self.axis_recoil_perp], ["recoil_corr_xy_para", "recoil_corr_xy_perp", "nominal_weight"], storage=bh.storage.Double()))
         self.results.append(self.df.HistoBoost("qT", [self.axis_qT], ["qT", "nominal_weight"], storage=bh.storage.Double()))
         self.results.append(self.df.HistoBoost("qT_qTrw", [self.axis_qT], ["qT", "nominal_weight_qTrw"], storage=bh.storage.Double()))
+        
+        if self.dataset.is_data:
+            self.results.append(self.df.HistoBoost("recoil_uncorr_para_runNo", [self.axis_recoil_para, self.axis_run_no], ["recoil_uncorr_para", "run", "nominal_weight"], storage=bh.storage.Double()))
+            self.results.append(self.df.HistoBoost("recoil_uncorr_perp_runNo", [self.axis_recoil_perp, self.axis_run_no], ["recoil_uncorr_perp", "run", "nominal_weight"], storage=bh.storage.Double()))
+            self.results.append(self.df.HistoBoost("recoil_corr_lep_para_runNo", [self.axis_recoil_para, self.axis_run_no], ["recoil_corr_lep_para", "run", "nominal_weight"], storage=bh.storage.Double()))
+            self.results.append(self.df.HistoBoost("recoil_corr_lep_perp_runNo", [self.axis_recoil_perp, self.axis_run_no], ["recoil_corr_lep_perp", "run", "nominal_weight"], storage=bh.storage.Double()))
+            self.results.append(self.df.HistoBoost("recoil_corr_xy_para_runNo", [self.axis_recoil_para, self.axis_run_no], ["recoil_corr_xy_para", "run", "nominal_weight"], storage=bh.storage.Double()))
+            self.results.append(self.df.HistoBoost("recoil_corr_xy_perp_runNo", [self.axis_recoil_perp, self.axis_run_no], ["recoil_corr_xy_perp", "run", "nominal_weight"], storage=bh.storage.Double()))
+           
+            
 
 
     def auxHists(self):
@@ -557,12 +609,14 @@ class Recoil:
         self.results.append(self.df.HistoBoost("njets", [self.axis_njets], ["njets", "nominal_weight"], storage=bh.storage.Double()))
         
         self.results.append(self.df.HistoBoost("npv", [self.axis_npv], ["PV_npvs", "nominal_weight"], storage=bh.storage.Double()))
-        self.results.append(self.df.HistoBoost("RawMET_sumEt", [self.axis_sumEt], ["RawMET_sumEt", "nominal_weight"], storage=bh.storage.Double()))
+        self.results.append(self.df.HistoBoost("RawMET_sumEt", [self.axis_npv, self.axis_sumEt], ["PV_npvs", "RawMET_sumEt", "nominal_weight"], storage=bh.storage.Double()))
+        
+        self.results.append(self.df.HistoBoost("npv_RawMET_sumEt", [self.axis_sumEt], ["RawMET_sumEt", "nominal_weight"], storage=bh.storage.Double()))
         
         # recoil resolutions vs any
-        
-
-        
+        if self.dataset.is_data:
+            self.results.append(self.df.HistoBoost("njets_runNo", [self.axis_njets, self.axis_run_no], ["njets", "run", "nominal_weight"]))
+            self.results.append(self.df.HistoBoost("RawMET_sumEt_runNo", [self.axis_sumEt, self.axis_run_no], ["RawMET_sumEt", "run", "nominal_weight"]))
 
         self.results.append(self.df.HistoBoost("recoil_corr_xy_para_qT_njets", [self.axis_njets, self.axis_recoil_para_fine], ["njets", "recoil_corr_xy_para_qT", "nominal_weight"], storage=bh.storage.Double()))
         self.results.append(self.df.HistoBoost("recoil_corr_xy_perp_njets", [self.axis_njets, self.axis_recoil_perp_fine], ["njets", "recoil_corr_xy_perp", "nominal_weight"], storage=bh.storage.Double()))
