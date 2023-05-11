@@ -447,12 +447,18 @@ class Datagroups(object):
 
     def make_yields_df(self, histName, procs, action, norm_proc=None):
         def sum_and_unc(h):
-            return (h.sum().value, math.sqrt(h.sum().variance))
+            if h.variances() is None:
+                return (h.sum(), None)
+            else:
+                return (h.sum().value, math.sqrt(h.sum().variance))
+
         df = pd.DataFrame([(k, *sum_and_unc(action(v.hists[histName]))) for k,v in self.groups.items() if k in procs], 
                 columns=["Process", "Yield", "Uncertainty"])
 
         if norm_proc and norm_proc in self.groups:
-            df[f"Ratio to {norm_proc} (%)"] = df["Yield"]/action(self.groups[norm_proc].hists[histName]).sum().value*100
+            hist = action(self.groups[norm_proc].hists[histName])
+            denom = hist.sum() if not hasattr(hist.sum(), "value") else hist.sum().value
+            df[f"Ratio to {norm_proc} (%)"] = df["Yield"]/denom*100
             
         return df
 
@@ -473,7 +479,7 @@ class Datagroups(object):
         if forceNonzero:
             h = hh.clipNegativeVals(h, createNew=False)
         if scaleToNewLumi > 0:
-            h = hh.scaleByLumi(h, scaleToNewLumi, createNew=False)                        
+            h = hh.scale(h, scaleToNewLumi, createNew=False)                        
         scale = self.processScaleFactor(proc)
         if scaleOp:
             scale = scale*scaleOp(proc)
