@@ -262,8 +262,8 @@ def build_graph(df, dataset):
 
     # couple of histograms specific for tests with fakes
     df = df.Define("deltaPhiMuonMet", "std::abs(wrem::deltaPhi(goodMuons_phi0,MET_corr_rec_phi))")
-    mTStudyForFakes = df.HistoBoost("mTStudyForFakes", mTStudyForFakes_axes, ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "transverseMass", "passIso", "hasCleanJet", "deltaPhiMuonMet", "nominal_weight"], storage=bh.storage.Double())
-    results.append(mTStudyForFakes)
+    # mTStudyForFakes = df.HistoBoost("mTStudyForFakes", mTStudyForFakes_axes, ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "transverseMass", "passIso", "hasCleanJet", "deltaPhiMuonMet", "nominal_weight"], storage=bh.storage.Double())
+    # results.append(mTStudyForFakes)
 
     dphiMuonMetCut = args.dphiMuonMetCut * np.pi
     # add filter of deltaPhi(muon,met) before other histograms (but before the previous histogram for test with fakes)
@@ -273,11 +273,10 @@ def build_graph(df, dataset):
     results.append(mtIsoJetCharge)
     
     df = df.Define("passMT", "transverseMass >= 40.0")
-    # no longer cut on jet at low mT, it biases the fakes estimate
 
-    # utility plot, mt and met together in 2D, to plot them later
-    mtAndMET = df.HistoBoost("mtAndMET", [axis_mt_fakes, axis_met, axis_charge, axis_passIso, axis_passMT], ["transverseMass", "MET_corr_rec_pt", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"], storage=bh.storage.Double())
-    results.append(mtAndMET)
+    # utility plot, mt and met, to plot them later
+    results.append(df.HistoBoost("MET", [axis_met, axis_charge, axis_passIso, axis_passMT], ["MET_corr_rec_pt", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"]))
+    results.append(df.HistoBoost("transverseMass", [axis_mt_fakes, axis_charge, axis_passIso, axis_passMT], ["transverseMass", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"]))
     ##
     
     nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
