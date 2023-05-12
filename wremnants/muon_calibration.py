@@ -9,7 +9,6 @@ import uproot
 import numpy as np
 import warnings
 from functools import reduce
-import boost_histogram as bh
 
 logger = logging.child_logger(__name__)
 
@@ -496,7 +495,7 @@ def transport_smearing_weights_to_reco(
             logger.warning("smearing weights not transported to RECO kinematics")
             return
 
-        msv_sw_reco = hist.Hist(*msv_sw_gen_smear.axes, storage=bh.storage.Double())
+        msv_sw_reco = hist.Hist(*msv_sw_gen_smear.axes, storage=hist.storage.Double())
 
         for i_unc in range(msv_sw_gen_smear.axes['unc'].size):
             sw_dn_up_gen_smear = [msv_sw_gen_smear[..., i_unc, 0], msv_sw_gen_smear[..., i_unc, 1]]
@@ -532,8 +531,8 @@ def make_alt_reco_and_gen_hists(df, results, nominal_axes, nominal_columns, matc
             nominal_cols_gen[idx[0]] = f"{matched_reco_sel}_{col}0_gen"
             nominal_cols_gen_smeared[idx[0]] = f"{matched_reco_sel}_{col}0_gen_smeared"  
 
-    results.append(df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols_gen, "nominal_weight"], storage=bh.storage.Double()))
-    results.append(df.HistoBoost("nominal_gen_smeared", nominal_axes, [*nominal_cols_gen_smeared, "nominal_weight"], storage=bh.storage.Double()))
+    results.append(df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols_gen, "nominal_weight"], storage=hist.storage.Double()))
+    results.append(df.HistoBoost("nominal_gen_smeared", nominal_axes, [*nominal_cols_gen_smeared, "nominal_weight"], storage=hist.storage.Double()))
 
     return [nominal_cols_gen, nominal_cols_gen_smeared]
     
@@ -567,10 +566,10 @@ def make_reco_over_gen_hists(df, results):
     ]
     axis_pt_reco_over_gen = hist.axis.Regular(1000, 0.9, 1.1, underflow=True, overflow=True, name = "reco_pt_over_gen")
     axis_qop_reco_over_gen = hist.axis.Regular(1000, 0.9, 1.1, underflow=True, overflow=True, name = "reco_qop_over_gen")
-    crctd_over_gen =  df.HistoBoost("crctd_over_gen", [axis_pt_reco_over_gen], [*nominal_cols_crctd_over_gen, "nominal_weight"], storage=bh.storage.Double())
-    cvh_over_gen =  df.HistoBoost("cvh_over_gen", [axis_pt_reco_over_gen], [*nominal_cols_cvh_over_gen, "nominal_weight"], storage=bh.storage.Double())
-    uncrct_over_gen = df.HistoBoost("uncrct_over_gen", [axis_pt_reco_over_gen], [*nominal_cols_uncrct_over_gen, "nominal_weight"], storage=bh.storage.Double())
-    gen_smeared_over_gen = df.HistoBoost("gen_smeared_over_gen", [axis_pt_reco_over_gen], [*nominal_cols_gen_smeared_over_gen, "nominal_weight"], storage=bh.storage.Double())
+    crctd_over_gen =  df.HistoBoost("crctd_over_gen", [axis_pt_reco_over_gen], [*nominal_cols_crctd_over_gen, "nominal_weight"], storage=hist.storage.Double())
+    cvh_over_gen =  df.HistoBoost("cvh_over_gen", [axis_pt_reco_over_gen], [*nominal_cols_cvh_over_gen, "nominal_weight"], storage=hist.storage.Double())
+    uncrct_over_gen = df.HistoBoost("uncrct_over_gen", [axis_pt_reco_over_gen], [*nominal_cols_uncrct_over_gen, "nominal_weight"], storage=hist.storage.Double())
+    gen_smeared_over_gen = df.HistoBoost("gen_smeared_over_gen", [axis_pt_reco_over_gen], [*nominal_cols_gen_smeared_over_gen, "nominal_weight"], storage=hist.storage.Double())
     
     results.append(crctd_over_gen)
     results.append(cvh_over_gen)
@@ -601,8 +600,8 @@ def define_cols_for_smearing_weights(df, helper_func):
 
 def make_hists_for_smearing_weights(df, nominal_axes, nominal_cols, results):
     axis_smearing_weight = hist.axis.Regular(1000, 0.99, 1.01, underflow=True, overflow=True, name = "smearing_weight")
-    smearing_weights_down = df.HistoBoost("smearing_weights_down", [*nominal_axes, axis_smearing_weight], [*nominal_cols, "smearing_weights_down"], storage=bh.storage.Double())
-    smearing_weights_up = df.HistoBoost("smearing_weights_up", [*nominal_axes, axis_smearing_weight], [*nominal_cols, "smearing_weights_up"], storage=bh.storage.Double())
+    smearing_weights_down = df.HistoBoost("smearing_weights_down", [*nominal_axes, axis_smearing_weight], [*nominal_cols, "smearing_weights_down"], storage=hist.storage.Double())
+    smearing_weights_up = df.HistoBoost("smearing_weights_up", [*nominal_axes, axis_smearing_weight], [*nominal_cols, "smearing_weights_up"], storage=hist.storage.Double())
     results.append(smearing_weights_down)
     results.append(smearing_weights_up)
 

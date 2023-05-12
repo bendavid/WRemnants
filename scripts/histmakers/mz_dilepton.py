@@ -10,7 +10,6 @@ import lz4.frame
 import math
 import time
 import os
-import boost_histogram as bh
 
 
 parser.add_argument("--csVarsHist", action='store_true', help="Add CS variables to dilepton hist")
@@ -164,7 +163,7 @@ def build_graph(df, dataset):
         df = df.Define("exp_weight", "weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom")
         df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
 
-        results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"], storage=bh.storage.Double()))
+        results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"], storage=hist.storage.Double()))
         results.append(df.HistoBoost("nominal", axes, [*cols, "nominal_weight"]))
 
     for obs in ["ptll", "mll", "yll"]:

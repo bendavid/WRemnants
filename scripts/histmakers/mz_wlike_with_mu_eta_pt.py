@@ -10,7 +10,6 @@ import lz4.frame
 import math
 import time
 import os
-import boost_histogram as bh
 
 parser = common.set_parser_default(parser, "pt", [34, 26, 60])
 
@@ -144,7 +143,7 @@ def build_graph(df, dataset):
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")
 
-    results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"], storage=bh.storage.Double()))
+    results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"], storage=hist.storage.Double()))
 
     if not args.noRecoil:
         df = df.Define("yZ", "ll_mom4.Rapidity()")
