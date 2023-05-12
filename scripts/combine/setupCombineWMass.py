@@ -16,7 +16,7 @@ data_dir = f"{pathlib.Path(__file__).parent}/../../wremnants/data/"
 def make_parser(parser=None):
     if not parser:
         parser = common.common_parser_combine()
-    parser.add_argument("--fitvar", help="Variable to fit", default="pt-eta")
+    parser.add_argument("--fitvar", help="Variable to fit", default="eta-pt")
     parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow). Equivalent to --excludeNuisances '.*effSystTnP|.*effStatTnP' ")
     parser.add_argument("--ewUnc", action='store_true', help="Include EW uncertainty")
     parser.add_argument("--pseudoData", type=str, help="Hist to use as pseudodata")
@@ -33,6 +33,7 @@ def make_parser(parser=None):
     parser.add_argument("--xlim", type=float, nargs=2, default=None, help="Restrict x axis to this range")
     parser.add_argument("--constrainMass", action='store_true', help="Constrain mass parameter in the fit (e.g. for ptll fit)")
     parser.add_argument("--unfold", action='store_true', help="Prepare datacard for unfolding")
+    parser.add_argument("--genAxis", type=str, default=None, nargs="+", help="Specify which gen axis should be used in unfolding, if 'None', use all (inferred from metadata).")
     parser.add_argument("--fitXsec", action='store_true', help="Fit signal inclusive cross section")
     
     return parser
@@ -66,10 +67,8 @@ def main(args,xnorm=False):
 
     if wmass:
         name = "WMass"
-        datagroups.setGenAxes(["etaGen","ptGen"])
     elif wlike:
         name = "ZMassWLike"
-        datagroups.setGenAxes(["qGen","etaGen","ptGen"])
     else:
         name = "ZMassDilepton"
 
@@ -90,6 +89,7 @@ def main(args,xnorm=False):
     elif args.fitXsec:
         datagroups.unconstrainedProcesses.append("Wmunu" if wmass else "Zmumu")
     elif args.unfold:
+        datagroups.setGenAxes(args.genAxis)
         if not args.constrainMass:
             logger.warning("Unfolding is specified but the mass is treated free floating, to constrain the mass add '--constrainMass'")
 
@@ -121,8 +121,9 @@ def main(args,xnorm=False):
     cardTool.setDatagroups(datagroups)
     logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
     cardTool.setNominalTemplate(f"{templateDir}/main.txt")
-    if args.sumChannels or xnorm:
+    if args.sumChannels or xnorm or name in ["ZMassDilepton"]:
         cardTool.setChannels(["inclusive"])
+        cardTool.setWriteByCharge(False)
     if xnorm:
         cardTool.setWriteByCharge(False)
         cardTool.setHistName(histName)
@@ -181,9 +182,9 @@ def main(args,xnorm=False):
     if args.doStatOnly:
         # print a card with only mass weights and a dummy syst
         cardTool.addLnNSystematic("dummy", processes=["Top", "Diboson"] if wmass else ["Other"], size=1.001, group="dummy")
-        cardTool.writeOutput(args=args)
+        cardTool.writeOutput(args=args, xnorm=xnorm)
         logger.info("Using option --doStatOnly: the card was created with only mass weights and a dummy LnN syst on all processes")
-        quit()
+        return
 
     if args.constrainMass:
         # add an uncertainty on the mass, e.g. for ptll fits
@@ -388,8 +389,7 @@ def main(args,xnorm=False):
         else:
             cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
 
-    cardTool.setCrossSectionOutput(xnorm)
-    cardTool.writeOutput(args=args)
+    cardTool.writeOutput(args=args, xnorm=xnorm)
     logger.info(f"Output stored in {outfolder}")
     
 if __name__ == "__main__":

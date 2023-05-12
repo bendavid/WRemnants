@@ -1,6 +1,6 @@
 import argparse
 from utilities import output_tools
-from utilities import common, logging
+from utilities import common, logging, differential
 
 parser,initargs = common.common_parser()
 parser.add_argument("--flavor", type=str, choices=["ee", "mumu"], help="Flavor (ee or mumu)", default="mumu")
@@ -66,7 +66,7 @@ axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
 
 # axes for final cards/fitting
 reco_mll_axes = [common.axis_recoil_reco_ptZ_lowpu, common.axis_mt_lowpu, axis_charge]
-gen_reco_mll_axes = [common.axis_recoil_gen_ptZ_lowpu, common.axis_recoil_reco_ptZ_lowpu, common.axis_mt_lowpu, axis_charge]
+gen_reco_mll_axes = [common.axis_recoil_gen_ptZ_lowpu, common.axis_recoil_reco_ptZ_lowpu, common.axis_mt_lowpu, axis_charge, differential.axis_fiducial]
 axis_mt = hist.axis.Regular(200, 0., 200., name = "mt", underflow=False)
 axis_xnorm = hist.axis.Regular(1, 0., 1., name = "count", underflow=False, overflow=False)
 
@@ -94,8 +94,15 @@ def build_graph(df, dataset):
 
     if dataset.name in sigProcs:
 
-        axes_xnorm = [axis_xnorm, common.axis_recoil_gen_ptZ_lowpu, axis_charge]
-        cols_xnorm = ["xnorm", "ptVgen", "TrigMuon_charge"]
+        axes_xnorm = [axis_xnorm, common.axis_recoil_gen_ptZ_lowpu, axis_charge, differential.axis_fiducial]
+        cols_xnorm = ["xnorm", "ptVgen", "TrigMuon_charge", "fiducial"]
+
+        df = theory_tools.define_prefsr_vars(df)
+        df = df.Define("fiducial", """ (abs(genl.eta()) < 2.4) && (abs(genlanti.eta()) < 2.4) 
+            && (genl.pt() > 26) && (genlanti.pt() > 26) 
+            && (genl.pt() < 55) && (genlanti.pt() < 55) 
+            && (massVgen > 60) & (massVgen < 120) 
+            && ptVgen < 150 """)
         
         df_xnorm = df
         df_xnorm = df_xnorm.DefinePerSample("exp_weight", "1.0")
@@ -295,7 +302,7 @@ def build_graph(df, dataset):
     results.append(df.HistoBoost("lep_pT", [axis_pt], ["TrigMuon_pt", "nominal_weight"]))
     results.append(df.HistoBoost("lep_pT_qTrw", [axis_pt], ["TrigMuon_pt", "nominal_weight_qTrw"]))
     
-    gen_reco_mt_cols = ["ptVgen", "recoil_corr_rec_magn", "mT_wlike", "TrigMuon_charge"]
+    gen_reco_mt_cols = ["ptVgen", "recoil_corr_rec_magn", "mT_wlike", "TrigMuon_charge", "fiducial"]
     reco_mt_cols = ["recoil_corr_rec_magn", "mT_wlike", "TrigMuon_charge"]
 
     
@@ -309,19 +316,28 @@ def build_graph(df, dataset):
 
         # QCD scale
         df = theory_tools.define_scale_tensor(df)
-        syst_tools.add_qcdScale_hist(results, df, [*gen_reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mt_cols, "ptVgen", "chargeVgen"], "reco_mT") 
-        syst_tools.add_qcdScaleByHelicityUnc_hist(results, df, qcdScaleByHelicity_helper, [*gen_reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mt_cols, "ptVgen", "chargeVgen"], base_name="reco_mT")
+        if dataset.name in sigProcs:
+            syst_tools.add_qcdScale_hist(results, df, [*gen_reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mt_cols, "ptVgen", "chargeVgen"], "reco_mT") 
+            syst_tools.add_qcdScaleByHelicityUnc_hist(results, df, qcdScaleByHelicity_helper, [*gen_reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mt_cols, "ptVgen", "chargeVgen"], base_name="reco_mT")
+        else:
+            syst_tools.add_qcdScale_hist(results, df, [*reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*reco_mt_cols, "ptVgen", "chargeVgen"], "reco_mT") 
+            syst_tools.add_qcdScaleByHelicityUnc_hist(results, df, qcdScaleByHelicity_helper, [axis_mt, axis_ptVgen, axis_chargeVgen], ["mT_corr_rec", "ptVgen", "chargeVgen"], base_name="reco_mT")
         syst_tools.add_qcdScaleByHelicityUnc_hist(results, df, qcdScaleByHelicity_helper, [axis_mt, axis_ptVgen, axis_chargeVgen], ["mT_corr_rec", "ptVgen", "chargeVgen"], base_name="mt")
     
     # TODO: Should this also be added for the mT hist?
 
     if apply_theory_corr:
-        results.extend(theory_tools.make_theory_corr_hists(df, "reco_mT", axes=gen_reco_mll_axes, cols=gen_reco_mt_cols, 
+        results.extend(theory_tools.make_theory_corr_hists(df, "reco_mT", axes=reco_mll_axes, cols=reco_mt_cols,  
             helpers=corr_helpers[dataset.name], generators=args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly)
         )
 
     if dataset.name in sigProcs:
-    
+
+        if apply_theory_corr:
+            results.extend(theory_tools.make_theory_corr_hists(df, "reco_mT", axes=gen_reco_mll_axes, cols=gen_reco_mt_cols, 
+                helpers=corr_helpers[dataset.name], generators=args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly)
+            )    
+                
         results.append(df.HistoBoost("reco_mT", gen_reco_mll_axes, [*gen_reco_mt_cols, "nominal_weight"]))
         df = recoilHelper.add_recoil_unc_Z(df, results, dataset, gen_reco_mt_cols, gen_reco_mll_axes, "reco_mT")
 

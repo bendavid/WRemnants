@@ -79,9 +79,6 @@ class CardTool(object):
     
     def setLumiScale(self, lumiScale):
         self.lumiScale = lumiScale
-
-    def setCrossSectionOutput(self, xnorm):
-        self.xnorm = xnorm
         
     def getProcsNoStatUnc(self):
         return self.noStatUncProcesses
@@ -577,7 +574,8 @@ class CardTool(object):
             self.outfile = outfile
             self.outfile.cd()
             
-    def writeOutput(self, args=None):
+    def writeOutput(self, args=None, xnorm=False):
+        self.xnorm = xnorm
         self.datagroups.loadHistsForDatagroups(
             baseName=self.nominalName, syst=self.nominalName,
             procsToRead=self.datagroups.groups.keys(),

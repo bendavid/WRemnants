@@ -7,7 +7,7 @@ def define_gen_level(df, gen_level, dataset_name, mode="wmass"):
     if gen_level not in gen_levels:
         raise ValueError(f"Unknown gen level '{gen_level}'! Supported gen level definitions are '{gen_levels}'.")
 
-    modes = ["wmass", "wlike"]
+    modes = ["wmass", "wlike", "dilepton"]
     if mode not in modes:
         raise ValueError(f"Unknown mode '{mode}'! Supported modes are '{modes}'.")
 
@@ -17,32 +17,85 @@ def define_gen_level(df, gen_level, dataset_name, mode="wmass"):
         if mode == "wmass":
             df = df.Define("ptGen", "chargeVgen < 0 ? genl.pt() : genlanti.pt()")   
             df = df.Define("etaGen", "chargeVgen < 0 ? abs(genl.eta()) : abs(genlanti.eta())")
-        elif mode == "wlike":
-            df = df.Define("ptGen", "event % 2 == 0 ? genl.pt() : genlanti.pt()")
-            df = df.Define("etaGen", "event % 2 == 0 ? abs(genl.eta()) : abs(genlanti.eta())")
+        else:
+            # needed for fiducial phase space definition
+            df = df.Alias("muGen", "genl")
+            df = df.Alias("antimuGen", "genlanti")
+            df = df.Alias("massVGen", "massVgen")
+
+            if mode == "wlike":
+                df = df.Define("ptGen", "event % 2 == 0 ? genl.pt() : genlanti.pt()")
+                df = df.Define("etaGen", "event % 2 == 0 ? abs(genl.eta()) : abs(genlanti.eta())")
+
+            elif mode == "dilepton":
+                df = df.Alias("ptVGen", "ptVgen")
+                df = df.Alias("yVGen", "yVgen")
 
     elif gen_level == "postFSR":
 
+        df = df.Define("postFSRmus", "GenPart_status == 1 && (GenPart_statusFlags & 1) && GenPart_pdgId == 13")
+        df = df.Define("postFSRantimus", "GenPart_status == 1 && (GenPart_statusFlags & 1) && GenPart_pdgId == -13")
+        df = df.Define("postFSRmuIdx", "ROOT::VecOps::ArgMax(GenPart_pt[postFSRmus])")
+        df = df.Define("postFSRantimuIdx", "ROOT::VecOps::ArgMax(GenPart_pt[postFSRantimus])")
+
         if mode == "wmass":
-            pdgId = -13 if "Wplusmunu" in dataset_name else 13
-            df = df.Define("postFSR_mu", f"GenPart_status == 1 && (GenPart_statusFlags & 1) && GenPart_pdgId == {pdgId}")
-            df = df.Define("postFSR_mu_idx", "ROOT::VecOps::ArgMax(GenPart_pt[postFSR_mu])")
-            df = df.Define("ptGen", "GenPart_pt[postFSR_mu][postFSR_mu_idx]")
-            df = df.Define("etaGen", "abs(GenPart_eta[postFSR_mu][postFSR_mu_idx])")
-        elif mode == "wlike":
-            df = df.Define("postFSRmuons", "GenPart_status == 1 && (GenPart_statusFlags & 1) && GenPart_pdgId == 13")
-            df = df.Define("postFSRantimuons", "GenPart_status == 1 && (GenPart_statusFlags & 1) && GenPart_pdgId == -13")
-            df = df.Define("postFSRmuonIdx", "ROOT::VecOps::ArgMax(GenPart_pt[postFSRmuons])")
-            df = df.Define("postFSRantimuonIdx", "ROOT::VecOps::ArgMax(GenPart_pt[postFSRantimuons])")
-            df = df.Define("ptGen", "event % 2 == 0 ? GenPart_pt[postFSRmuons][postFSRmuonIdx] : GenPart_pt[postFSRantimuons][postFSRantimuonIdx]")
-            df = df.Define("etaGen", "event % 2 == 0 ? abs(GenPart_eta[postFSRmuons][postFSRmuonIdx]) : abs(GenPart_eta[postFSRantimuons][postFSRantimuonIdx])")    
+            if "Wplusmunu" in dataset_name:
+                idx = "postFSRantimuIdx" 
+                muons = "postFSRantimus"
+            else:
+                idx = "postFSRmuIdx" 
+                muons = "postFSRmus"
+
+            df = df.Define("ptGen", f"GenPart_pt[{muons}][{idx}]")
+            df = df.Define("etaGen", f"abs(GenPart_eta[{muons}][{idx}])")                
+
+        else:
+            df = df.Define("muGen", "ROOT::Math::PtEtaPhiMVector(GenPart_pt[postFSRmus][postFSRmuIdx], GenPart_eta[postFSRmus][postFSRmuIdx], GenPart_phi[postFSRmus][postFSRmuIdx], GenPart_mass[postFSRmus][postFSRmuIdx])")
+            df = df.Define("antimuGen", "ROOT::Math::PtEtaPhiMVector(GenPart_pt[postFSRantimus][postFSRantimuIdx], GenPart_eta[postFSRantimus][postFSRantimuIdx], GenPart_phi[postFSRantimus][postFSRantimuIdx], GenPart_mass[postFSRantimus][postFSRantimuIdx])")
+            df = df.Define("VGen", "ROOT::Math::PxPyPzEVector(muGen)+ROOT::Math::PxPyPzEVector(antimuGen)")
+            df = df.Define("massVGen", "VGen.mass()")
+
+            if mode == "wlike":
+                df = df.Define("ptGen", "event % 2 == 0 ? GenPart_pt[postFSRmus][postFSRmuIdx] : GenPart_pt[postFSRantimus][postFSRantimuIdx]")
+                df = df.Define("etaGen", "event % 2 == 0 ? abs(GenPart_eta[postFSRmus][postFSRmuIdx]) : abs(GenPart_eta[postFSRantimus][postFSRantimuIdx])")    
+
+            if mode == "dilepton":
+                df = df.Define("ptVGen", "VGen.pt()")
+                df = df.Define("yVGen", "VGen.Rapidity()")  
     
     if mode == "wlike":
         df = df.Define("qGen", "event % 2 == 0 ? -1 : 1")
 
     return df
 
-        
+def define_fiducial_space(df, mode="wmass", pt_min=26, pt_max=55, gen_var=None):
+    # Define a fiducial phase space where all out of acceptance contribution is stored in a single bin 
+    #   (instead of having several overflow/underflow bins in the gen axes). 
+
+    if mode == "wmass":
+        df = df.Define("fiducial", f"""
+            (etaGen < 2.4) 
+            && (ptGen > {pt_min}) 
+            && (ptGen < {pt_max}) 
+            """)
+    elif mode == "wlike":
+        df = df.Define("fiducial", f"""
+            (abs(muGen.eta()) < 2.4) && (abs(antimuGen.eta()) < 2.4) 
+            && (muGen.pt() > {pt_min}) && (antimuGen.pt() > {pt_min}) 
+            && (muGen.pt() < {pt_max}) && (antimuGen.pt() < {pt_max}) 
+            && (massVGen > 60) & (massVGen < 120)
+            """)
+
+    elif mode == "dilepton":
+        df = df.Define("fiducial", f"""
+            (abs(muGen.eta()) < 2.4) && (abs(antimuGen.eta()) < 2.4) 
+            && (muGen.pt() > {pt_min}) && (antimuGen.pt() > {pt_min}) 
+            && (muGen.pt() < {pt_max}) && (antimuGen.pt() < {pt_max}) 
+            && (massVGen > 60) & (massVGen < 120)
+            && (ptVGen < 100)
+            """)
+
+    return df        
 
 def add_xnorm_histograms(results, df, args, dataset_name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols):
     # add histograms before any selection

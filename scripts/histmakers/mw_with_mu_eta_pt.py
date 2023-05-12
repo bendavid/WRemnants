@@ -60,8 +60,9 @@ axis_passIso = common.axis_passIso
 axis_passMT = common.axis_passMT
 
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
+nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
 
-unfolding_axes, unfolding_cols = differential.get_pt_eta_axes(args.genBins, template_minpt, template_maxpt, template_maxeta)
+unfolding_axes, unfolding_cols = differential.get_pt_eta_axes(args.genBins[0], template_minpt, template_maxpt, args.genBins[1])
 
 # axes for study of fakes
 axis_mt_fakes = hist.axis.Regular(120, 0., 120., name = "mt", underflow=False, overflow=True)
@@ -153,7 +154,13 @@ def build_graph(df, dataset):
 
     if unfold:
         df = unfolding_tools.define_gen_level(df, args.genLevel, dataset.name, mode="wmass")
+        df = unfolding_tools.define_fiducial_space(df, mode="wmass", pt_min=template_minpt, pt_max=template_maxpt)
         unfolding_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols)
+        axes = [*nominal_axes, *unfolding_axes] 
+        cols = [*nominal_cols, *unfolding_cols]
+    else:
+        axes = nominal_axes
+        cols = nominal_cols
 
     df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
     #df = df.Filter("event % 2 == 1") # test with odd/even events
@@ -280,15 +287,6 @@ def build_graph(df, dataset):
     ##
     
     nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
-
-    if unfold:
-        axes = [*nominal_axes, *unfolding_axes] 
-        cols = [*nominal_cols, *unfolding_cols]
-    else:
-        axes = nominal_axes
-        cols = nominal_cols
-
-    nominal = df.HistoBoost("nominal", axes, [*cols, "nominal_weight"])
 
     if dataset.is_data:
         nominal = df.HistoBoost("nominal", axes, cols)

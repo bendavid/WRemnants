@@ -52,8 +52,9 @@ class Datagroups(object):
         self.groups = {}
         self.nominalName = "nominal"
         self.globalAction = None
-        self.gen_axes = None
         self.unconstrainedProcesses = []
+
+        self.setGenAxes()
 
     def __del__(self):
         if self.h5file:
@@ -213,7 +214,7 @@ class Datagroups(object):
                     else:
                         logger.debug(f"No operation for member {i}: {member.name}")
 
-                if self.gen_axes:
+                if self.gen_axes != None:
                     # integrate over remaining gen axes 
                     projections = [a for a in h.axes.name if a not in self.gen_axes]
                     if len(projections) < len(h.axes.name):
@@ -382,11 +383,27 @@ class Datagroups(object):
                 raise ValueError(f"In setSelectOp(): process {proc} not found")
             self.groups[proc].selectOp = op
 
-    def setGenAxes(self, gen_axes):
+    def setGenAxes(self, gen_axes=None):
         if isinstance(gen_axes, str):
-            self.gen_axes = [gen_axes,]
-        else:
+            gen_axes = [gen_axes]
+
+        if gen_axes != None:
             self.gen_axes = gen_axes
+        else:
+            # infere gen axes from metadata
+            args = self.getMetaInfo()["args"]
+            if args.get("unfolding", False) is False:
+                self.gen_axes = None
+                return
+
+            if self.wmass:
+                self.gen_axes = ["etaGen","ptGen"]
+            elif self.wlike:
+                self.gen_axes = ["qGen","etaGen","ptGen"]
+            else:
+                self.gen_axes = args.get("genVars", [])
+
+        logger.debug(f"Gen axes are now {self.gen_axes}")
 
     def defineSignalBinsUnfolding(self, group_name):
         if group_name not in self.groups.keys():
@@ -412,7 +429,7 @@ class Datagroups(object):
 
             self.copyGroup(group_name, proc_name)
 
-            memberOp = lambda x, indices=indices, genvars=self.gen_axes: x[{var : i for var, i in zip(self.gen_axes, indices)}]
+            memberOp = lambda x, indices=indices, genvars=self.gen_axes: x[{**{var : i for var, i in zip(genvars, indices)}, "fiducial":1}]
             self.groups[proc_name].memberOp = [memberOp for m in base_members]
 
             self.unconstrainedProcesses.append(proc_name)
@@ -424,23 +441,7 @@ class Datagroups(object):
             self.groups[ooa_name].memberOp = []
             self.groups[ooa_name].members = []
         
-        # list of possible slices for each axis
-        slices = []
-        for var in self.gen_axes:
-            subslice = [{var : hist.tag.Slicer()[0:hist.overflow:hist.sum]}] 
-            if nominal_hist.axes[var].traits.__dict__["underflow"]:
-                subslice.append({var : hist.underflow})
-            if nominal_hist.axes[var].traits.__dict__["overflow"]:
-                subslice.append({var : hist.overflow})
-            slices.append(subslice)
-
-        # pick one slice for each axis from the list of possible slices
-        for condition in [functools.reduce(lambda x, y: {**x, **y}, tup) for tup in itertools.product(*slices)]:
-            # make sure that at least one axis takes the underflow/overflow, otherwise it would not be out of acceptance
-            if not any([c in [hist.underflow, hist.overflow] for c in condition.values()]):
-                continue
-            logger.debug(f"Add members with condition {condition}")
-            self.groups[ooa_name].addMembers(base_members, lambda x, c=condition: x[c])
+        self.groups[ooa_name].addMembers(base_members, lambda x: x[{"fiducial" : 0}])
 
         # Remove inclusive signal
         self.deleteGroup(group_name)

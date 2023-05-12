@@ -19,6 +19,8 @@ pushd $combinetf_dir
 eval `scram runtime -sh`
 popd
 
+set -x
+
 pushd $working_dir
 
 card_name=${working_dir}.txt
@@ -26,14 +28,12 @@ combineCards.py ${cards[@]} > $card_name
 
 outfile=${card_name/txt/hdf5}
 
-set -x
-
 if [ "$mode" == "mass" ]; then
 	text2hdf5.py --X-allow-no-signal "$card_name"
 	combinetf.py --doImpacts --binByBinStat -t -1 "$outfile"
-elif [ "$mode" == "unfold" ]; then
+elif [ "$mode" == "unfolding" ]; then
 	text2hdf5.py --X-allow-no-background --maskedChan=xnorm "$card_name"
-	combinetf.py --doImpacts --binByBinStat -t -1 --correlateXsecStat "$outfile"
+	combinetf.py --doImpacts --binByBinStat -t -1 --correlateXsecStat "$outfile" --saveHists --computeHistErrors
 fi
 
 set +x
