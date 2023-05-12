@@ -46,7 +46,7 @@ def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False):
     out[(np.abs(h2vals) < cutoff) & (np.abs(h1vals) < cutoff)] = 1.
     val = np.divide(h1vals, h2vals, out=out, where=np.abs(h2vals)>cutoff)
 
-    if h1vars is None or h2vars is None:
+    if h1._storage_type() != hist.storage.Weight() or h2._storage_type() != hist.storage.Weight():
         newh = hist.Hist(*outh.axes, data=val)
     else:
         relvars = relVariances(h1vals, h2vals, h1vars, h2vars)
@@ -127,7 +127,7 @@ def addHists(h1, h2, allowBroadcast=True, createNew=True):
                             data=np.stack((h1vals+h2vals, h1vars+h2vars), axis=-1))            
     else:
         outh.values(flow=True)[...] = h1vals + h2vals
-        if h1._storage_type() == hist.storage.Weight() or h2._storage_type() == hist.storage.Weight():
+        if h1._storage_type() == hist.storage.Weight() and h2._storage_type() == hist.storage.Weight():
             outh.variances(flow=True)[...] = h1vars + h2vars
         return outh                
 

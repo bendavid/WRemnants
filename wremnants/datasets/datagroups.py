@@ -447,7 +447,7 @@ class Datagroups(object):
 
     def make_yields_df(self, histName, procs, action, norm_proc=None):
         def sum_and_unc(h):
-            if h.variances() is None:
+            if not hasattr(h.sum(), "value"):
                 return (h.sum(), None)
             else:
                 return (h.sum().value, math.sqrt(h.sum().variance))
