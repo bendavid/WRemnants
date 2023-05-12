@@ -9,6 +9,7 @@ import hist
 import math
 import os
 
+
 parser.add_argument("--skipAngularCoeffs", action='store_true', help="Skip the conversion of helicity moments to angular coeff fractions")
 parser.add_argument("--singleLeptonHists", action='store_true', help="Also store single lepton kinematics")
 parser.add_argument("--skipEWHists", action='store_true', help="Also store histograms for EW reweighting. Use with --filter horace")
@@ -156,7 +157,6 @@ if not args.skipAngularCoeffs:
             logger.warning(f"Failed to find helicity_moments_scale hist for proc {name}. Skipping!")
             continue
         moments = resultdict[name]["output"]["helicity_moments_scale"].get()
-
         if name in common.zprocs:
             if z_moments is None:
                 z_moments = moments
