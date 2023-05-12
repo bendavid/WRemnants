@@ -6,7 +6,6 @@ from utilities import boostHistHelpers as hh,common,logging
 from wremnants import theory_corrections
 from scipy import ndimage
 import narf.clingutils
-import boost_histogram as bh
 
 logger = logging.child_logger(__name__)
 narf.clingutils.Declare('#include "theoryTools.h"')
@@ -311,12 +310,12 @@ def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_cen
             continue
         
         if i == 0 and modify_central_weight:
-            nominal_uncorr = df.HistoBoost(f"{name}_uncorr", axes, [*cols, "nominal_weight_uncorr"], storage=bh.storage.Double())
+            nominal_uncorr = df.HistoBoost(f"{name}_uncorr", axes, [*cols, "nominal_weight_uncorr"], storage=hist.storage.Double())
             res.append(nominal_uncorr)
-            res.append(df.HistoBoost("weight_uncorr", [hist.axis.Regular(100, -2, 2)], ["nominal_weight_uncorr"], storage=bh.storage.Double()))
+            res.append(df.HistoBoost("weight_uncorr", [hist.axis.Regular(100, -2, 2)], ["nominal_weight_uncorr"], storage=hist.storage.Double()))
 
         hist_name = f"{name}_{generator}Corr"
-        unc = df.HistoBoost(hist_name, axes, [*cols, f"{generator}Weight_tensor"], tensor_axes=helpers[generator].tensor_axes[-1:], storage=bh.storage.Double())
+        unc = df.HistoBoost(hist_name, axes, [*cols, f"{generator}Weight_tensor"], tensor_axes=helpers[generator].tensor_axes[-1:], storage=hist.storage.Double())
         res.append(unc)
 
     return res
@@ -339,16 +338,17 @@ def replace_by_neighbors(vals, replace):
     return vals[tuple(indices)]
 
 def moments_to_angular_coeffs(hist_moments_scales, cutoff=1e-5, sumW2=False):
-    if hist_moments_scales.sum().value == 0:
+    if hist_moments_scales.empty():
        raise ValueError("Cannot make coefficients from empty hist")
     # broadcasting happens right to left, so move to rightmost then move back
     hel_ax = hist_moments_scales.axes["helicity"]
     hel_idx = hist_moments_scales.axes.name.index("helicity")
-    vals = np.moveaxis(scale_angular_moments(hist_moments_scales).view(flow=True), hel_idx, -1) 
+    vals = np.moveaxis(scale_angular_moments(hist_moments_scales, sumW2).view(flow=True), hel_idx, -1) 
+    values = vals.value if hasattr(vals,"value") else vals
     
     # select constant term, leaving dummy axis for broadcasting
     unpol_idx = hel_ax.index(-1)
-    norm_vals = vals[...,unpol_idx:unpol_idx+1].value
+    norm_vals = values[...,unpol_idx:unpol_idx+1]
     norm_vals = np.where(np.abs(norm_vals) < cutoff, np.ones_like(norm_vals), norm_vals)
 
     # e.g. from arxiv:1708.00008 eq. 2.13, note A_0 is NOT the const term!
@@ -357,7 +357,7 @@ def moments_to_angular_coeffs(hist_moments_scales, cutoff=1e-5, sumW2=False):
     coeffs = vals / norm_vals + offsets
 
     # replace values in zero-xsec regions (otherwise A0 is spuriously set to 4.0 from offset)
-    coeffs = np.where(np.abs(vals.value) < cutoff, np.full_like(vals, hist.accumulators.WeightedSum(0,0)), coeffs)
+    coeffs = np.where(np.abs(values) < cutoff, np.full_like(vals, hist.accumulators.WeightedSum(0,0) if sumW2 else 0), coeffs)
     coeffs = np.moveaxis(coeffs, -1, hel_idx)
 
     hist_coeffs_scales = hist.Hist(*hist_moments_scales.axes, storage = hist.storage.Weight() if sumW2 else hist.storage.Double(), 
