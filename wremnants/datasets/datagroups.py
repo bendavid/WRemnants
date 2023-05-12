@@ -186,15 +186,16 @@ class Datagroups(object):
         # To speed up even more, one could directly use the per-group sum already computed for each group,
         # but this would need to assume that fakes effectively had all the single processes in each group as members
         # (usually it will be the case, but it is more difficult to handle in a fully general way and without bugs)
-        hasFake = False
         histForFake = None # to store the data-MC sums used for the fakes, for each syst
         nameFake = "Fake" # TODO: actual name might/should be configurable
-        procsToReadSort = [x for x in procsToRead]
         if nameFake in procsToRead:
             procsToReadSort = [x for x in procsToRead if x != nameFake] + [nameFake]
             hasFake = True
             fakesMembers = [m.name for m in self.groups[nameFake].members]
             fakesMembersWithSyst = []
+        else:
+            hasFake = False
+            procsToReadSort = [x for x in procsToRead]
         # Note: if 'hasFake' is kept as False (but Fake exists), the original behaviour for which Fake reads everything again is restored
             
         for procName in procsToReadSort:
