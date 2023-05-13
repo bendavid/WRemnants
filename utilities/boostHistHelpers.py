@@ -98,13 +98,17 @@ def multiplyHists(h1, h2, allowBroadcast=True, transpose=True):
             data=np.stack((val, var), axis=-1))
     return newh
 
-def addHists(h1, h2, allowBroadcast=True):
+def addHists(h1, h2, allowBroadcast=True, createNew=True):
     h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2, allowBroadcast)
     outh = h1 if not allowBroadcast else broadcastOutHist(h1, h2)
-
-    newh = hist.Hist(*outh.axes, storage=hist.storage.Weight(),
-            data=np.stack((h1vals+h2vals, h1vars+h2vars), axis=-1))
-    return newh
+    if createNew:
+        newh = hist.Hist(*outh.axes, storage=hist.storage.Weight(),
+                         data=np.stack((h1vals+h2vals, h1vars+h2vars), axis=-1))
+        return newh
+    else:
+        outh.values(flow=True)[...] = h1vals + h2vals
+        outh.variances(flow=True)[...] = h1vars + h2vars
+        return outh                
 
 def sumHists(hists):
     return reduce(addHists, hists)
@@ -129,14 +133,18 @@ def addSystAxis(h, size=1, offset=0):
     hnew[...] = np.stack((newvals, newvars), axis=-1)
     return hnew
 
-def clipNegativeVals(h, clipValue=0):
-    hnew = hist.Hist(*h.axes, storage=hist.storage.Weight())
+def clipNegativeVals(h, clipValue=0, createNew=True):
     vals = h.values(flow=True)
     vals[vals<0] = clipValue
-    hnew[...] = np.stack((vals, h.variances(flow=True)), axis=-1)
-    return hnew
-
-def scaleByLumi(h, scale, createNew=False):
+    if createNew:
+        hnew = hist.Hist(*h.axes, storage=hist.storage.Weight())
+        hnew[...] = np.stack((vals, h.variances(flow=True)), axis=-1)
+        return hnew
+    else:
+        h.values(flow=True)[...] = vals
+        return h
+    
+def scaleByLumi(h, scale, createNew=True):
     if createNew:
         hnew = hist.Hist(*h.axes, storage=hist.storage.Weight())
         hnew.values(flow=True)[...]    = scale * h.values(flow=True)
