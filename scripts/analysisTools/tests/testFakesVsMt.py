@@ -528,7 +528,7 @@ def runStudy(charge, outfolder, rootfilename, args):
     canvas_unroll.cd()
     canvas_unroll.SetBottomMargin(bottomMargin)
 
-    groups = datagroups2016(args.inputfile[0], applySelection=False)
+    groups = make_datagroups_2016(args.inputfile[0], applySelection=False)
     datasets = groups.getNames() # this has all the original defined groups
     datasetsNoQCD = list(filter(lambda x: x != "QCD", datasets)) # exclude QCD MC if present
     datasetsNoFakes = list(filter(lambda x: x != "Fake", datasets)) 
@@ -543,7 +543,7 @@ def runStudy(charge, outfolder, rootfilename, args):
     hnarf_fakerateDeltaPhi = None
     for d in datasets:
         #print(d)
-        hnarf = histInfo[d][inputHistName]
+        hnarf = histInfo[d].hists[inputHistName]
         hnarf_forplots = copy.deepcopy(hnarf)
         # rebin eta-pt for actual test with fakes, while collapsing other axes for the simple plots as needed,
         # this is only to avoid that THn are too big
@@ -616,8 +616,10 @@ def runStudy(charge, outfolder, rootfilename, args):
                      textForLines=ptBinRanges, transparentLegend=False, drawErrorAll=True,
                      onlyLineColor=True, noErrorRatioDen=False, useLineFirstHistogram=True, setOnlyLineRatio=True, lineWidth=1)
         ##
-        hnarf = hnarf[{"DphiMuonMet" : s[complex(0, 0.01+args.dphiMuonMetCut):complex(0, np.pi):hist.sum]}] # test dphi cut
+        dphiMuonMetCut = args.dphiMuonMetCut * np.pi
+        hnarf = hnarf[{"DphiMuonMet" : s[complex(0, 0.01+dphiMuonMetCut):complex(0, np.pi):hist.sum]}] # test dphi cut
         rootHists[d] = narf.hist_to_root(hnarf) # this is a THnD with eta-pt-charge-mt-passIso-hasJets-DphiMuonMet
+        hnarf_forplots = hnarf_forplots[{"DphiMuonMet" : s[complex(0, 0.01+dphiMuonMetCut):complex(0, np.pi)]}] # cut but do not integrate
         hnarf_forplots = hnarf_forplots[{"mt" : s[::hist.rebin(2)]}]
         rootHists_forplots[d] = narf.hist_to_root(hnarf_forplots) # this is a THnD with eta-pt-charge-mt-passIso-hasJets-DphiMuonMet
     ########
@@ -638,7 +640,7 @@ def runStudy(charge, outfolder, rootfilename, args):
     histInfo_nominal = groups.getDatagroups()
     rootHists_nominal = {d: None for d in datasets_nominal}
     for d in rootHists_nominal.keys():
-        hnarf_nominal = histInfo_nominal[d][inputHistName]
+        hnarf_nominal = histInfo_nominal[d].hists[inputHistName]
         rootHists_nominal[d] = narf.hist_to_root(hnarf_nominal) # this is a TH3D with eta-pt-charge
     #######
 
@@ -1028,7 +1030,8 @@ def runStudy(charge, outfolder, rootfilename, args):
                         invertePalette=args.invertePalette, passCanvas=canvas, skipLumi=True)
     if args.fitPolDegree:
         drawTH1(histoChi2diffTest,
-                "#chi^{2} difference probability (pol0 versus pol1)", "Events",
+                "#chi^{2} difference probability (pol0 versus pol1)",
+                f"Events::0,{1.2*histoChi2diffTest.GetBinContent(histoChi2diffTest.GetMaximumBin())}",
                 histoChi2diffTest.GetName(), outfolder, passCanvas=canvas1D,
                 statBoxSpec=210, skipTdrStyle=True)
         drawTH1(histoPullsPol1Slope,
@@ -1195,7 +1198,7 @@ def runStudyVsDphi(charge, outfolder, args):
     canvas_unroll.cd()
     canvas_unroll.SetBottomMargin(bottomMargin)
 
-    groups = datagroups2016(args.inputfile[0], applySelection=False)
+    groups = make_datagroups_2016(args.inputfile[0], applySelection=False)
     datasets = groups.getNames() # this has all the original defined groups
     datasetsForStudy = ["QCD", "Fake"]
     inputHistName = "mTStudyForFakes"
@@ -1203,7 +1206,7 @@ def runStudyVsDphi(charge, outfolder, args):
     groups.loadHistsForDatagroups(inputHistName, syst="", procsToRead=datasetsForStudy, applySelection=False)
     histInfo = groups.getDatagroups() # keys are same as returned by groups.getNames() 
     for d in datasetsForStudy:
-        hnarf = histInfo[d][inputHistName]
+        hnarf = histInfo[d].hists[inputHistName]
         # rebin eta-pt for actual test with fakes, while collapsing other axes for the simple plots as needed,
         # this is only to avoid that THn are too big
         s = hist.tag.Slicer()
@@ -1305,8 +1308,8 @@ if __name__ == "__main__":
     parser.add_argument("--postfix", default="", type=str, help="Postfix for folder name")
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4], help="Set verbosity level with logging, the larger the more verbose");
     parser.add_argument(     '--use-qcd-mc', dest='useQCDMC' , action='store_true',   help='Make study using QCD MC instead of data-driven fakes, as a cross check')
-    parser.add_argument("--dphiMuonMetCut", type=float, help="Threshold to cut |deltaPhi| > thr between muon and met", default=-1.0)
-    parser.add_argument(     '--dphiStudy', dest='dphiStudy' , action='store_true',   help='Only do some plots for dphi study skipping the rest')
+    parser.add_argument("--dphiMuonMetCut", type=float, help="Threshold to cut |deltaPhi| > thr*np.pi between muon and met", default=-1.0)
+    parser.add_argument("--dphiStudy", action='store_true',   help='Only do some plots for dphi study skipping the rest')
     args = parser.parse_args()
 
     logger = logging.setup_logger(os.path.basename(__file__), args.verbose)
