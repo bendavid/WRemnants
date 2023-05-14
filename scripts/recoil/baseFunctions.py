@@ -3,6 +3,58 @@
 import math
 import tensorflow as tf
 
+# Chebyshev polynomials 
+def cpol2(qT, p0, p1, p2):
+    min_ = 0
+    max_ = 100
+    qT_ = ((qT-min_)-(max_-qT))/(max_-min_)
+    return p0 + p1*qT_ + p2*(2.*tf.math.pow(qT_,2)-1.)
+    
+def cpol2_():
+    func = "[0] + [1]*x + [2]*(2.*x*x-1.)"
+    return func
+
+def cpol3(qT, p0, p1, p2, p3):
+    min_ = 0
+    max_ = 100
+    qT_ = ((qT-min_)-(max_-qT))/(max_-min_)
+    return p0 + p1*qT_ + p2*(2.*tf.math.pow(qT_,2)-1.) + p3*(4.*tf.math.pow(qT_,3)-3.*qT_)
+    
+def cpol3_():
+    func = "[0] + [1]*x + [2]*(2.*x*x-1.) + [3]*(4.*x*x*x-3*x)"
+    return func
+
+def cpol4(qT, p0, p1, p2, p3, p4):
+    min_ = 0
+    max_ = 100
+    qT_ = ((qT-min_)-(max_-qT))/(max_-min_)
+    return p0 + p1*qT_ + p2*(2.*tf.math.pow(qT_,2)-1.) + p3*(4.*tf.math.pow(qT_,3)-3.*qT_) + p4*(8.*tf.math.pow(qT_,4)-8.*tf.math.pow(qT_,2)+1.)
+    
+def cpol4_():
+    func = "[0] + [1]*x + [2]*(2.*x*x-1.) + [3]*(4.*x*x*x-3*x) + [4]*(8.*x*x*x*x-8.*x*x+1.)"
+    return func
+
+def cpol5(qT, p0, p1, p2, p3, p4, p5):
+    min_ = 0
+    max_ = 100
+    qT_ = ((qT-min_)-(max_-qT))/(max_-min_)
+    return p0 + p1*qT_ + p2*(2.*tf.math.pow(qT_,2)-1.) + p3*(4.*tf.math.pow(qT_,3)-3.*qT_) + p4*(8.*tf.math.pow(qT_,4)-8.*tf.math.pow(qT_,2)+1.) + p5*(16.*tf.math.pow(qT_,5)-20.*tf.math.pow(qT_,3)+5.*qT_)
+    
+def cpol5_():
+    func = "[0] + [1]*x + [2]*(2.*x*x-1.) + [3]*(4.*x*x*x-3*x) + [4]*(8.*x*x*x*x-8.*x*x+1.) + [5]*(16.*x*x*x*x*x-20.*x*x*x+5.*x)"
+    return func
+
+
+def cpol6(qT, p0, p1, p2, p3, p4, p5, p6):
+    min_ = 0
+    max_ = 100
+    qT_ = ((qT-min_)-(max_-qT))/(max_-min_)
+    return p0 + p1*qT_ + p2*(2.*tf.math.pow(qT_,2)-1.) + p3*(4.*tf.math.pow(qT_,3)-3.*qT_) + p4*(8.*tf.math.pow(qT_,4)-8.*tf.math.pow(qT_,2)+1.) + p5*(16.*tf.math.pow(qT_,5)-20.*tf.math.pow(qT_,3)+5.*qT_) + p6*(32.*tf.math.pow(qT_,6)-48.*tf.math.pow(qT_,4)+18.*tf.math.pow(qT_,2)-1.)
+    
+def cpol6_():
+    func = "[0] + [1]*x + [2]*(2.*x*x-1.) + [3]*(4.*x*x*x-3*x) + [4]*(8.*x*x*x*x-8.*x*x+1.) + [5]*(16.*x*x*x*x*x-20.*x*x*x+5.*x) + [6]*(32.*x*x*x*x*x*x-48.*x*x*x*x+18.*x*x-1.)"
+    return func
+
 
 def pw_poly1_power_():
     # f(x) = a + b*x + c*x^2 + d*x^3 + e*x^4
@@ -89,6 +141,17 @@ def linear0_():
     
 def quadratic(qT, p0, p1, p2):
     return p0 + qT*p1 + qT*qT*p2
+    
+def pol4(qT, p0, p1, p2, p3, p4):
+    return p0 + qT*p1 + qT*qT*p2 + qT*qT*qT*p3 + qT*qT*qT*qT*p4
+    
+
+    
+def pol4_():
+    func = "[0] + [1]*x + [2]*x*x + [3]*x*x*x + [4]*x*x*x*x"
+    return func
+    
+
  
 def pol5_():
     func = "[0] + [1]*x + [2]*x*x + [3]*x*x*x + [4]*x*x*x*x + [5]*x*x*x*x*x"
@@ -188,6 +251,12 @@ def pw_poly7_poly1_():
     func = "(x<[0])*1*({fLeft}) +0+ (x>[0])*1*(  ({dfLeftEval})*x + ({fLeftEval}-({dfLeftEval})*[0]) )".format(fLeft=fLeft, fLeftEval=fLeftEval, dfLeftEval=dfLeftEval)
     return func
     
+def pw_poly8_poly1_():
+    fLeft, dfLeft  = "[1] + [2]*x + [3]*x*x + [4]*x*x*x + [5]*x*x*x*x + [6]*x*x*x*x*x + [7]*x*x*x*x*x*x + [8]*x*x*x*x*x*x*x + [9]*x*x*x*x*x*x*x*x", "[2] + 2*[3]*x + 3*[4]*x*x + 4*[5]*x*x*x + 5*[6]*x*x*x*x + 6*[7]*x*x*x*x*x + 7*[8]*x*x*x*x*x*x + 8*[9]*x*x*x*x*x*x*x"
+    fLeftEval, dfLeftEval = fLeft.replace("x", "[0]"), dfLeft.replace("x", "[0]")
+    func = "(x<[0])*1*({fLeft}) +0+ (x>[0])*1*(  ({dfLeftEval})*x + ({fLeftEval}-({dfLeftEval})*[0]) )".format(fLeft=fLeft, fLeftEval=fLeftEval, dfLeftEval=dfLeftEval)
+    return func
+    
 def quadr_power_():
     fLeft, dfLeft  = "[1] + [2]*x + [3]*x*x", "[2] + 2*[3]*x"
     fLeftEval, dfLeftEval = fLeft.replace("x", "[0]"), dfLeft.replace("x", "[0]")
@@ -273,6 +342,17 @@ def pw_poly7_poly1(qT, p0, p1, p2, p3, p4, p5, p6, p7, p8):
     fRight = dfLeftEval*qT + fLeftEval-dfLeftEval*p0
     h = tf.experimental.numpy.heaviside(qT-x, 0)
     return ((1.0-h)*fLeft + h*fRight)
+
+
+def pw_poly8_poly1(qT, p0, p1, p2, p3, p4, p5, p6, p7, p8, p9):
+    x = p0
+    fLeft = p1 + p2*qT + p3*tf.math.pow(qT, 2) + p4*tf.math.pow(qT, 3) + p5*tf.math.pow(qT, 4) + p6*tf.math.pow(qT, 5) + p7*tf.math.pow(qT, 6) + p8*tf.math.pow(qT, 7) + p9*tf.math.pow(qT, 8)
+    fLeftEval = p1 + p2*x + p3*tf.math.pow(x, 2) + p4*tf.math.pow(x, 3) + p5*tf.math.pow(x, 4) + p6*tf.math.pow(x, 5) + p7*tf.math.pow(x, 6) + p8*tf.math.pow(x, 7) + p9*tf.math.pow(x, 8)
+    dfLeftEval = p2 + 2.0*p3*tf.math.pow(x, 1) + 3.0*p4*tf.math.pow(x, 2) + 4.0*p5*tf.math.pow(x, 3) + 5.0*p6*tf.math.pow(x, 4) + 6.0*p7*tf.math.pow(x, 5) + 7.0*p8*tf.math.pow(x, 6) + 8.0*p9*tf.math.pow(x, 7)
+    fRight = dfLeftEval*qT + fLeftEval-dfLeftEval*p0
+    h = tf.experimental.numpy.heaviside(qT-x, 0)
+    return ((1.0-h)*fLeft + h*fRight)
+
 
 def pw_poly6_poly1(qT, p0, p1, p2, p3, p4, p5, p6, p7):
     x = p0
