@@ -26,6 +26,11 @@ if args.validateByMassWeights:
 
 era = args.era
 
+if args.IsoEfficiencysmoothing:
+    DirectIsoSFsmoothing = False
+else
+    DirectIsoSFsmoothing = True
+
 # custom template binning
 template_neta = int(args.eta[0])
 template_mineta = args.eta[1]
@@ -70,7 +75,7 @@ else:
     muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile,
                                                                                                                                      era = era,
                                                                                                                                      max_pt = axis_pt.edges[-1],
-                                                                                                                                     is_w_like = True, directIsoSFsmoothing=args.directIsoSFsmoothing)
+                                                                                                                                     is_w_like = True, directIsoSFsmoothing=DirectIsoSFsmoothing)
 logger.info(f"SF file: {args.sfFile}")
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
