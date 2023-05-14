@@ -3,7 +3,6 @@ import numpy as np
 from functools import reduce
 import collections
 from utilities import common, logging
-import copy
 
 logger = logging.child_logger(__name__)
 
@@ -121,11 +120,11 @@ def mirrorHist(hvar, hnom, cutoff=1):
 
 def extendHistByMirror(hvar, hnom, downAsUp=False, downAsNomi=False):
     if downAsUp:
-        hmirror = copy.deepcopy(hvar)
+        hmirror = hvar.copy()
     elif downAsNomi:
         # temporary solution, can't just copy nominal since I have to broabcast, as done in multiplyHists/divideHists
         # surely there is a smarter way with numpy
-        hmirror = copy.deepcopy(hvar)
+        hmirror = hvar.copy()
         div = divideHists(hmirror, hvar) # essentially creates hist with ones, with same shape as hvar 
         hmirror = multiplyHists(div, hnom)
     else:
