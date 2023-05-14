@@ -29,6 +29,8 @@ parser.add_argument("--noGenMatchMC", action='store_true', help="Don't use gen m
 parser.add_argument("--dphiMuonMetCut", type=float, help="Threshold to cut |deltaPhi| > thr*np.pi between muon and met", default=0.25)
 args = parser.parse_args()
 
+args.sfFile = data_dir + "/testMuonSF/allSmooth_GtoH3Dout.root"
+
 if args.vqtTestIntegrated:
     sfFileVqtTest = f"{data_dir}/testMuonSF/IsolationEfficienciesCoarseBinning.root"
 else:
@@ -42,6 +44,11 @@ datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
                                               nanoVersion="v8" if args.v8 else "v9", base_path=args.dataPath)
 
 era = args.era
+
+if args.IsoEfficiencysmoothing:
+    DirectIsoSFsmoothing = False
+else
+    DirectIsoSFsmoothing = True
 
 # custom template binning
 template_neta = int(args.eta[0])
@@ -68,10 +75,6 @@ axis_passTrigger = hist.axis.Boolean(name = "passTrigger")
 
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
 axis_vqt_list = [-3000000000,-30,-15,-10,-5,0,5,10,15,30,3000000000] #has to match the ut binning in the 3D SFs
-#axis_vqt_list = [-3000000000,-300,-30,-22.5,-15,-12.5,-10,-7.5,-5,-2.5,0,2.5,5,7.5,10,12.5,15,22.5,30,300,3000000000] #has to match the ut binning in the 3D SFs
-#axis_vqt_list = [-3000000000,3000000000]
-#axis_vqt_list = [-3000000000,*[-100 + i*2 for i in range(101)],3000000000]
-#axis_vqt_list = [-3000000000,-30,-15,-10,-5,0,5,10,20,30,40,50,60,70,80,90,100,3000000000]
 axis_vqt = hist.axis.Variable(axis_vqt_list, name = "ut")
 nominal_axes2 = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT, axis_vqt, axis_passTrigger]
 nominal_axes3 = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT, axis_passTrigger]
@@ -128,8 +131,8 @@ if args.binnedScaleFactors:
                                                                                                                                                           includeTrigger = includeTrigger) 
 else:
     logger.info("Using smoothed scale factors and uncertainties")
-    muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile, era = era, max_pt = axis_pt.edges[-1])
-    muon_efficiency_helper2d, muon_efficiency_helper_syst2d, muon_efficiency_helper_stat2d = wremnants.make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSmooth_GtoHisosf.root", era = era, max_pt = axis_pt.edges[-1])
+    muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile, era = era, max_pt = axis_pt.edges[-1], directIsoSFsmoothing = DirectIsoSFsmoothing)
+    muon_efficiency_helper2d, muon_efficiency_helper_syst2d, muon_efficiency_helper_stat2d = wremnants.make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSmooth_GtoHout.root", era = era, max_pt = axis_pt.edges[-1], directIsoSFsmoothing = DirectIsoSFsmoothing)
 
 logger.info(f"SF file: {args.sfFile}")
 

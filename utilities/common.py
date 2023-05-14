@@ -109,7 +109,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--validationHists", action='store_true', help="make histograms used only for validations")
     parser.add_argument("--trackerMuons", action='store_true', help="Use tracker muons instead of global muons (need appropriate scale factors too)")
     parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers)")
-    parser.add_argument("--directIsoSFsmoothing", action='store_true', help="If isolation SF were smoothed directly instead of being derived from smooth efficiencies") 
+    parser.add_argument("--IsoEfficiencysmoothing", action='store_true', help="If isolation SF was derived from smooth efficiencies instead of direct smoothing") 
     parser.add_argument("--onlyMainHistograms", action='store_true', help="Only produce some histograms, skipping (most) systematics to run faster when those are not needed")
     parser.add_argument("--met", type=str, choices=["DeepMETReso", "RawPFMET"], help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")                    
     parser.add_argument("-o", "--outfolder", type=str, default="", help="Output folder")
@@ -143,7 +143,7 @@ def common_parser(for_reco_highPU=False):
         sfFile = "scaleFactorProduct_16Oct2022_TrackerMuonsHighPurity_vertexWeight_OSchargeExceptTracking.root"
     else:
         #sfFile = "scaleFactorProduct_08Oct2022_vertexWeight_OSchargeExceptTracking.root"
-        sfFile = "allSmooth_GtoH.root"
+        sfFile = "allSmooth_GtoHout.root"
     sfFile = f"{data_dir}/testMuonSF/{sfFile}"
 
     parser.add_argument("--sfFile", type=str, help="File with muon scale factors", default=sfFile)
