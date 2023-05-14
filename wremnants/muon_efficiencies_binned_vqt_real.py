@@ -104,21 +104,12 @@ def make_muon_efficiency_helpers_binned_vqt_real(filename = data_dir + "/testMuo
     filenames = ROOT.std.vector('string')() #order is isolation, triggerminus, triggerplus
     histonames = ROOT.std.vector('string')()
     isolation3dfilename = f"{data_dir}/testMuonSF/isolation3DSFUT.root"
-    #isolation3dfilename = "/gpfs/ddn/cms/user/bruschin/newfit2/Steve_Marc_Raj/files/isolation3DSF1bin.root"
-    #isolation3dfilename = "/gpfs/ddn/cms/user/bruschin/newfit2/Steve_Marc_Raj/files/isolation3DSFVQT10binsredo.root"
-    #isolation3dfilename = "/gpfs/ddn/cms/user/bruschin/newfit2/Steve_Marc_Raj/fileshighpt/isolation3DSFVQT.root"
     isolation3dhistoname = "SF3D_nominal_isolation"
     filenames.push_back(isolation3dfilename)
     histonames.push_back(isolation3dhistoname)
     triggerminus3dfilename = f"{data_dir}/testMuonSF/triggerminus3DSFUT.root"
-    #triggerminus3dfilename = "/gpfs/ddn/cms/user/bruschin/newfit2/Steve_Marc_Raj/files/triggerminus3DSF1bin.root"
-    #triggerminus3dfilename = "/gpfs/ddn/cms/user/bruschin/newfit2/Steve_Marc_Raj/files/triggerminus3DSFVQT10binsredo.root"
-    #triggerminus3dfilename = "/gpfs/ddn/cms/user/bruschin/newfit2/Steve_Marc_Raj/fileshighpt/triggerminus3DSFVQT.root"
     triggerminus3dhistoname = "SF3D_nominal_trigger_minus"
     triggerplus3dfilename = f"{data_dir}/testMuonSF/triggerplus3DSFUT.root"
-    #triggerplus3dfilename = "/gpfs/ddn/cms/user/bruschin/newfit2/Steve_Marc_Raj/files/triggerplus3DSF1bin.root"
-    #triggerplus3dfilename = "/gpfs/ddn/cms/user/bruschin/newfit2/Steve_Marc_Raj/files/triggerplus3DSFVQT10binsredo.root"
-    #triggerplus3dfilename = "/gpfs/ddn/cms/user/bruschin/newfit2/Steve_Marc_Raj/fileshighpt/triggerplus3DSFVQT.root"
     triggerplus3dhistoname = "SF3D_nominal_trigger_plus"
     filenames.push_back(triggerminus3dfilename)
     histonames.push_back(triggerminus3dhistoname)
