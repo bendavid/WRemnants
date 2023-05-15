@@ -520,7 +520,7 @@ class Datagroups(object):
         h = output[histname]
         if isinstance(h, narf.ioutils.H5PickleProxy):
             h = h.get()
-        # Do a copy to detach the modified object from the original one, so it stays unmodified.
+        # Do a copy to detach the modified object from the original one, so the latter stays unmodified.
         # This is extremely important for fakes, since they reuse the other histograms to subtract from data
         # If fakes are not used, or one changes the code to avoid reading everything again for fakes, one could
         # actually modify directly the input histograms here, which might save some time compared to the copy.
