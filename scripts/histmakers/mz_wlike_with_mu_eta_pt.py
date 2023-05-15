@@ -178,8 +178,6 @@ def build_graph(df, dataset):
     
     df = df.Filter("transverseMass >= 45.") # 40 for Wmass, thus be 45 here (roughly half the boson mass)
     
-    nominal_cols = ["trigMuons_eta0", "trigMuons_pt0", "trigMuons_charge0"]
-
     nominal = df.HistoBoost("nominal", axes, [*cols, "nominal_weight"])
     results.append(nominal)
 

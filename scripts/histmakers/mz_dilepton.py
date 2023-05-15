@@ -47,7 +47,7 @@ all_axes = {
 }
 
 for a in args.axes:
-    if a not in reco_axes.keys():
+    if a not in all_axes.keys():
         logger.error(f" {a} is not a known axes! Supported axes choices are {list(axes.keys())}")
 
 nominal_cols = args.axes
@@ -55,7 +55,7 @@ nominal_cols = args.axes
 if args.csVarsHist:
     nominal_cols += ["cosThetaStarll", "phiStarll"]
 
-nominal_axes = [reco_axes[a] for a in nominal_cols] 
+nominal_axes = [all_axes[a] for a in nominal_cols] 
 
 unfolding_axes, unfolding_cols = differential.get_ptV_axes(common.ptV_binning)
 
