@@ -118,8 +118,17 @@ def mirrorHist(hvar, hnom, cutoff=1):
     hnew = multiplyHists(div, hnom)
     return hnew
 
-def extendHistByMirror(hvar, hnom):
-    hmirror = mirrorHist(hvar, hnom)
+def extendHistByMirror(hvar, hnom, downAsUp=False, downAsNomi=False):
+    if downAsUp:
+        hmirror = hvar.copy()
+    elif downAsNomi:
+        # temporary solution, can't just copy nominal since I have to broabcast, as done in multiplyHists/divideHists
+        # surely there is a smarter way with numpy
+        hmirror = hvar.copy()
+        div = divideHists(hmirror, hvar) # essentially creates hist with ones, with same shape as hvar 
+        hmirror = multiplyHists(div, hnom)
+    else:
+        hmirror = mirrorHist(hvar, hnom)
     mirrorAx = hist.axis.Integer(0,2, name="mirror", overflow=False, underflow=False)
     hnew = hist.Hist(*hvar.axes, mirrorAx, storage=hvar._storage_type())
     hnew.view(flow=True)[...] = np.stack((hvar.view(flow=True), hmirror.view(flow=True)), axis=-1)

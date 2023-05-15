@@ -183,6 +183,17 @@ namespace wrem {
         initializeHistogram<TH1>(h, nbins, init);
     }    
 
+    template <typename T>
+    void setHistogramError(T& h, Long64_t nbins, double init = 0.0) {
+        for (Long64_t globalBin = 0; globalBin <= nbins; globalBin++) {
+            h.SetBinError(globalBin, 0.0);
+        }
+    }
+    void setRootHistogramError(TH1& h, double init = 0.0) {
+        Long64_t nbins = h.GetNcells();
+        setHistogramError<TH1>(h, nbins, init);
+    }
+    
     TH2D projectTH2FromTH3(TH3& hist3D, const char* name, size_t binStart, size_t binEnd=0) {
         if (binEnd == 0)
             binEnd = binStart;
