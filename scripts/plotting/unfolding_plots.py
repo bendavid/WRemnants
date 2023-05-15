@@ -31,9 +31,9 @@ parser.add_argument("--debug", action='store_true', help="Print debug output")
 parser.add_argument("--noData", action='store_true', help="Don't plot data")
 # parser.add_argument("--noFill", action='store_true', help="Don't fill stack")
 parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend text")
-parser.add_argument("--plots", type=str, nargs="+", default=["prefit", "postfit"], choices=["prefit", "postfit"], help="Define which plots to make")
+parser.add_argument("--plots", type=str, nargs="+", default=["postfit"], choices=["prefit", "postfit"], help="Define which plots to make")
 parser.add_argument("--lumi", type=float, default=16.8, help="Luminosity used in the fit, needed to get the absolute cross section")
-parser.add_argument("-c", "--channels", type=str, nargs="+", choices=["plus", "minus", "all"], default=["plus", "minus", "all"], help="Select channel to plot")
+parser.add_argument("-c", "--channels", type=str, nargs="+", choices=["plus", "minus", "all"], default=["plus", "minus"], help="Select channel to plot")
 
 args = parser.parse_args()
 
@@ -337,9 +337,9 @@ for fit_type in args.plots:
     if mode == "dilepton":
         channels = ["all"]
     else:
-    if "all" in channels:
-        plot(fit_type)
-    if "minus" in channels:
-        plot("prefit", bins=(None,int(nbins_reco/2)), channel="minus")
-    if "plus" in channels:
-        plot("prefit", bins=(int(nbins_reco/2), nbins_reco), channel="plus")
+        if "all" in channels:
+            plot(fit_type)
+        if "minus" in channels:
+            plot("prefit", bins=(None,int(nbins_reco/2)), channel="minus")
+        if "plus" in channels:
+            plot("prefit", bins=(int(nbins_reco/2), nbins_reco), channel="plus")
