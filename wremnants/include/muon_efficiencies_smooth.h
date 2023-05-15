@@ -224,8 +224,8 @@ namespace wrem {
         muon_efficiency_smooth_helper_stat_base(HIST_SF &&sf_type) :
             sf_type_(std::make_shared<const HIST_SF>(std::move(sf_type))) {}
 
-        // number of eta bins, number of eigen variations for pt axis, then 2 charges and Up/Down shifts
-        using stat_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<NEtaBins, NPtEigenBins, NCharges, 2>>;
+        // number of eta bins, number of eigen variations for pt axis, then 2 charges
+        using stat_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<NEtaBins, NPtEigenBins, NCharges>>;
         
         //using base_t = muon_efficiency_smooth_helper_stat_base<NEtaBins, NPtEigenBins, HIST_SF>;        
         //muon_efficiency_smooth_helper_stat_base(const base_t &other) : base_t(other) {}
@@ -267,23 +267,18 @@ namespace wrem {
             // start from 1 because first bin contains the nominal SF
             for (int tensor_eigen_idx = 1; tensor_eigen_idx <= NPtEigenBins; tensor_eigen_idx++) {
 
-                for (int downup_idx = 0; downup_idx < 2; downup_idx ++) {
-
-                    const int varDirection = downup_idx ? 1 : -1;
-                    auto const eigen_axis_idx = eigen_axis.index(varDirection * tensor_eigen_idx);
+                auto const eigen_axis_idx = eigen_axis.index(tensor_eigen_idx);
                 
-                    auto const &cell_stat = sf_type_->at(eta_idx,
-                                                         pt_idx,
-                                                         charge_idx,
-                                                         eff_type_idx,
-                                                         eigen_axis_idx);
+                auto const &cell_stat = sf_type_->at(eta_idx,
+                                                     pt_idx,
+                                                     charge_idx,
+                                                     eff_type_idx,
+                                                     eigen_axis_idx);
 
-                    const double sf_stat = cell_stat.value();
-                    const double sf_stat_variation = sf_stat / sf_nomi;
+                const double sf_stat = cell_stat.value();
+                const double sf_stat_variation = sf_stat / sf_nomi;
                     
-                    res(tensor_eta_idx, tensor_eigen_idx-1, charge_idx, downup_idx) *= sf_stat_variation;
-
-                }
+                res(tensor_eta_idx, tensor_eigen_idx-1, charge_idx) *= sf_stat_variation;
 
             }
                 
@@ -319,25 +314,17 @@ namespace wrem {
             // start from 1 because first bin contains the nominal SF
             for (int tensor_eigen_idx = 1; tensor_eigen_idx <= NPtEigenBins; tensor_eigen_idx++) {
 
-                for (int downup_idx = 0; downup_idx < 2; downup_idx ++) {
-
-                    const int varDirection = downup_idx ? 1 : -1;
-                    auto const eigen_axis_idx = eigen_axis.index(varDirection * tensor_eigen_idx);
+                auto const eigen_axis_idx = eigen_axis.index(tensor_eigen_idx);
                 
-                    auto const &cell_stat = sf_type_->at(eta_idx,
-                                                         pt_idx,
-                                                         charge_idx,
-                                                         eff_type_idx_iso,
-                                                         eigen_axis_idx);
+                auto const &cell_stat = sf_type_->at(eta_idx,
+                                                     pt_idx,
+                                                     charge_idx,
+                                                     eff_type_idx_iso,
+                                                     eigen_axis_idx);
 
-                    const double sf_stat = cell_stat.value();
-                    const double sf_stat_variation = sf_stat / sf_nomi;
-                    // if (charge < 0 and fabs(sf_stat_variation-1.0) < 1e-7 and pt < 55.0) {
-                    //     std::cout << "sf_nomi,sf_stat_variation,eta,pt,ptEigen,upDown = " << sf_nomi << "," << sf_stat_variation << "," << pt << "," << eta << "," << tensor_eigen_idx << "," << downup_idx << std::endl;
-                    // }
-                    res(tensor_eta_idx, tensor_eigen_idx-1, charge_idx, downup_idx) *= sf_stat_variation;
-
-                }
+                const double sf_stat = cell_stat.value();
+                const double sf_stat_variation = sf_stat / sf_nomi;
+                res(tensor_eta_idx, tensor_eigen_idx-1, charge_idx) *= sf_stat_variation;
 
             }
                 
