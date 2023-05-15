@@ -28,7 +28,8 @@ parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file n
 parser.add_argument("--debug", action='store_true', help="Print debug output")
 parser.add_argument("--noData", action='store_true', help="Don't plot data")
 parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend text")
-parser.add_argument("--plots", type=str, nargs="+", default=["xsec", "covariance"], choices=["xsec", "correlation", "covariance"], help="Define which plots to make")
+parser.add_argument("--plots", type=str, nargs="+", default=["xsec", "uncertainties", "covariance"], 
+    choices=["xsec", "uncertainties", "correlation", "covariance"], help="Define which plots to make")
 parser.add_argument("--lumi", type=float, default=16.8, help="Luminosity used in the fit, needed to get the absolute cross section")
 parser.add_argument("-c", "--channels", type=str, nargs="+", choices=["plus", "minus", "all"], default=["plus", "minus"], help="Select channel to plot")
 
@@ -179,7 +180,7 @@ def plot_matrix_poi(matrix="covariance_matrix_channelmu"):
         args=args,
     )
 
-def get_results(rtfile, poi_type, scale=1.0, group=True, uncertainties=["stat"]):
+def get_results(rtfile, poi_type, scale=1.0, group=True, uncertainties=None): #=["stat"]):
     results = []
 
     # pois = input_tools.getPOInames(rfile, poi_type=poi_type)
@@ -195,7 +196,10 @@ def get_results(rtfile, poi_type, scale=1.0, group=True, uncertainties=["stat"])
 
     logger.debug(f"Load ucertainties")
     # pick uncertainties
-    uncertainties = {k: impacts.values()[:,i] for i, k in enumerate(impacts.axes[1]) if k in uncertainties}
+    if uncertainties is None:
+        uncertainties = {f"err_{k}": impacts.values()[:,i] for i, k in enumerate(impacts.axes[1])}
+    else:
+        uncertainties = {f"err_{k}": impacts.values()[:,i] for i, k in enumerate(impacts.axes[1]) if k in uncertainties}
 
     # measured central value
     centrals = [fitresult[n].array()[0] for n in names]
@@ -203,11 +207,11 @@ def get_results(rtfile, poi_type, scale=1.0, group=True, uncertainties=["stat"])
     # total uncertainties
     totals = [fitresult[n+"_err"].array()[0] for n in names]
 
-    df = pd.DataFrame({"Name":names, "value":centrals, "uncertainty_total":totals, **uncertainties})
+    df = pd.DataFrame({"Name":names, "value":centrals, "err_total":totals, **uncertainties})
 
     if scale != 1:
         df["value"] /= scale
-        df["uncertainty_total"] /= scale
+        df["err_total"] /= scale
         for u in uncertainties.keys():
             df[u] /= scale
 
@@ -264,8 +268,8 @@ def plot_xsec_unfolded(data, data_asimov=None, channel=None, poi_type="mu", scal
     hist_xsec_stat = hist.Hist(
         hist.axis.Regular(bins=len(df), start=0.5, stop=len(df)+0.5, underflow=False, overflow=False), storage=hist.storage.Weight())
 
-    hist_xsec.view(flow=False)[...] = np.stack([df["value"].values/bin_widths, (df["uncertainty_total"].values/bin_widths)**2], axis=-1)
-    hist_xsec_stat.view(flow=False)[...] = np.stack([df["value"].values/bin_widths, (df["stat"].values/bin_widths)**2], axis=-1)
+    hist_xsec.view(flow=False)[...] = np.stack([df["value"].values/bin_widths, (df["err_total"].values/bin_widths)**2], axis=-1)
+    hist_xsec_stat.view(flow=False)[...] = np.stack([df["value"].values/bin_widths, (df["err_stat"].values/bin_widths)**2], axis=-1)
 
     if data_asimov is not None:
         ha_xsec = hist.Hist(
@@ -276,7 +280,7 @@ def plot_xsec_unfolded(data, data_asimov=None, channel=None, poi_type="mu", scal
 
     # make plots
     if args.ylim is None:
-        ylim = (0, 1.1 * max((df["value"]+df["uncertainty_total"]).values))
+        ylim = (0, 1.1 * max((df["value"]+df["err_total"]).values))
     else:
         ylim = args.ylim
 
@@ -348,12 +352,11 @@ def plot_xsec_unfolded(data, data_asimov=None, channel=None, poi_type="mu", scal
     hep.cms.label(ax=ax1, lumi=float(f"{args.lumi:.3g}"), fontsize=20*args.scaleleg*scale, 
         label=cms_decor, data=not args.noData)
 
+    outfile = "unfolded_xsec"
     if poi_type=="mu":
-        outfile = "mu"
+        outfile += "_mu"
     elif normalize:
-        outfile = "unfolded_xsec_normalized"
-    else: 
-        outfile = "unfolded_xsec" 
+        outfile += "_normalized"
 
     outfile += "_"+input_subdir
     outfile += (f"_{args.postfix}" if args.postfix else "")
@@ -366,6 +369,175 @@ def plot_xsec_unfolded(data, data_asimov=None, channel=None, poi_type="mu", scal
     data_yields = make_yields_df([hist_xsec], ["Data"], per_bin=True)
     plot_tools.write_index_and_log(outdir, outfile, nround=4 if normalize else 2,
         yield_tables={"Data" : data_yields, "Model": asimov_yields} if asimov else {"Data" : data_yields},
+        analysis_meta_info=None,
+        args=args,
+    )
+
+translate = {
+    "QCDscalePtChargeMiNNLO": "MiNNLO scale",
+    # "eff_stat_iso_effData":"eff_stat_iso_D",
+    # "eff_stat_iso_effMC":"eff_stat_iso_MC",
+    # "eff_stat_tracking": "eff_stat_trk",
+    # "eff_syst_tracking": "eff_syst_trk",
+    # "eff_stat_trigger": "eff_stat_hlt",
+    # "eff_syst_trigger": "eff_syst_hlt",
+    # "eff_stat_reco": "eff_stat_rec",
+    # "eff_syst_reco": "eff_syst_rec",
+    "resumNonpert": "resum. NP",
+    "resumTransition": "resum. T",
+    "binByBinStat": "MC stat",
+}
+
+def plot_uncertainties_unfolded(data, channel=None, poi_type="mu", scale=1., normalize=False, relative_uncertainty=False, logy=False):
+    logger.info(f"Make "+("normalized " if normalize else "")+"unfoled xsec plot"+(f" in channel {channel}" if channel else ""))
+
+    # read nominal values and uncertainties from fit result and fill histograms
+    logger.debug(f"Read fitresults")
+    logger.debug(f"Produce histograms")
+
+    if channel == "minus":
+        df = data.loc[data["qGen"]==0]
+        process_label = r"W$^{+}\to\mu\nu$" if base_process == "Wmunu" else r"Z$\to\mu^{+}$"
+    elif channel == "plus":
+        df = data.loc[data["qGen"]==1]
+        process_label = r"W$^{-}\to\mu\nu$" if base_process == "Wmunu" else r"Z$\to\mu^{-}$"
+    else:
+        process_label = r"W$\to\mu\nu$" if base_process == "Wmunu" else r"Z$\to\mu\mu$"
+        df = data
+
+    if len(df) == 0:
+        logger.info(f"No entries found for channel {channel}, skip!")
+        return
+
+    if normalize:
+        yLabel="1/$\sigma$ d$\sigma$("+process_label+")"
+    else:
+        yLabel="d$\sigma$("+process_label+") [pb]"
+
+    if relative_uncertainty:
+        yLabel = "$\delta$ "+ yLabel
+    else:
+        yLabel = "$\Delta$ "+ yLabel
+    
+    if dilepton:
+        bins = np.array(common.ptV_binning)
+        bin_widths = bins[1:] - bins[:-1]
+    else: 
+        bin_widths = np.ones(len(df))
+
+    #central values
+    values = df["value"].values/bin_widths
+
+    hist_xsec = hist.Hist(hist.axis.Regular(bins=len(df), start=0.5, stop=len(df)+0.5, underflow=False, overflow=False))
+
+    errors = df["err_total"].values/bin_widths
+    if relative_uncertainty:
+        errors /= values
+    
+    hist_xsec.view(flow=False)[...] = errors
+
+    # make plots
+    if args.ylim is None:
+        if logy:
+            ylim = (max(errors)/1000., 50 * max(errors))
+        else:
+            ylim = (0, 1.4 * max(errors))
+    else:
+        ylim = args.ylim
+
+    fig, ax1 = plot_tools.figure(hist_xsec, "Bin number", yLabel, ylim, logy=logy)
+
+    hep.histplot(
+        hist_xsec,
+        yerr=False,
+        histtype="step",
+        color="black",
+        label="Total",
+        ax=ax1,
+        alpha=1.,
+        binwnorm=binwnorm,
+        zorder=2,
+    )
+    uncertainties = {"Total" : make_yields_df([hist_xsec], ["Uncertainty"], per_bin=True)}
+
+    sources =["err_stat"]
+    sources += [s for s in filter(lambda x: x.startswith("err"), df.keys()) 
+        if s not in ["err_stat", "err_total"] 
+            and "eff_stat_" not in s and "eff_syst_" not in s]    # only take eff grouped stat and syst
+
+    NUM_COLORS = len(sources)-1
+    cm = mpl.colormaps["gist_rainbow"]
+    # add each source of uncertainty
+    i=0
+    for source in sources:
+
+        name = source.replace("err_","").replace("muon_","")
+
+        name = translate.get(name,name)
+
+        if source =="err_stat":
+            color = "grey"
+        else:
+            color = cm(1.*i/NUM_COLORS)
+            i += 1
+
+        hist_unc = hist.Hist(hist.axis.Regular(bins=len(df), start=0.5, stop=len(df)+0.5, underflow=False, overflow=False))
+
+        errors = df[source].values/bin_widths
+
+        if relative_uncertainty:
+            errors /= values
+        
+        hist_unc.view(flow=False)[...] = errors
+
+        hep.histplot(
+            hist_unc,
+            yerr=False,
+            histtype="step",
+            color=color,
+            label=name,
+            ax=ax1,
+            alpha=1.,
+            binwnorm=binwnorm,
+            zorder=2,
+        )
+
+        uncertainties[name] = make_yields_df([hist_unc], [name], per_bin=True)
+
+    plot_tools.addLegend(ax1, ncols=3, text_size=20*args.scaleleg)
+
+    if args.yscale:
+        ymin, ymax = ax1.get_ylim()
+        ax1.set_ylim(ymin, ymax*args.yscale)
+
+    if not logy:
+        plot_tools.redo_axis_ticks(ax1, "y")
+    plot_tools.redo_axis_ticks(ax1, "x", True)
+
+    scale = max(1, np.divide(*ax1.get_figure().get_size_inches())*0.3)
+    hep.cms.label(ax=ax1, lumi=float(f"{args.lumi:.3g}"), fontsize=20*args.scaleleg*scale, 
+        label=cms_decor, data=not args.noData)
+
+    outfile = "unfolded_uncertainties"
+
+    if relative_uncertainty:
+        outfile += "_relative"   
+
+    if poi_type=="mu":
+        outfile += "_mu"
+    elif normalize:
+        outfile += "_normalized"
+
+    if logy:
+        outfile += "_log"
+
+    outfile += "_"+input_subdir
+    outfile += (f"_{args.postfix}" if args.postfix else "")
+    outfile += (f"_{channel}" if channel else "")
+    plot_tools.save_pdf_and_png(outdir, outfile)
+
+    plot_tools.write_index_and_log(outdir, outfile, nround=4 if normalize else 2,
+        yield_tables=uncertainties,
         analysis_meta_info=None,
         args=args,
     )
@@ -387,7 +559,13 @@ for poi_type in poi_types:
         channels = args.channels
 
     for channel in channels:
-        plot_xsec_unfolded(df, df_asimov, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize)
+        if "xsec" in args.plots:
+            plot_xsec_unfolded(df, df_asimov, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize)
+        if "uncertainties" in args.plots:
+            plot_uncertainties_unfolded(df, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize)
+            plot_uncertainties_unfolded(df, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, relative_uncertainty=True)
+            plot_uncertainties_unfolded(df, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, logy=True)
+            plot_uncertainties_unfolded(df, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, relative_uncertainty=True, logy=True)
 
 if "correlation" in args.plots:
     plot_matrix_poi("correlation_matrix_channelmu")
