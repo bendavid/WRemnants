@@ -92,8 +92,11 @@ jobs:
       - name: wmass plotting
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --hists pt eta pt-eta -p $WEB_DIR -f $PLOT_DIR -a W $OUTFILE variation --varName nominal_uncorr --varLabel MiNNLO --colors red
 
-      - name: wmass plot mtAndMet
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --rebin 2 --yscale 1.5 --baseName mtAndMET --hists mt met -p $WEB_DIR -f $PLOT_DIR $OUTFILE
+      - name: wmass plot mt
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --rebin 2 --yscale 1.5 --baseName transverseMass --hists mt -p $WEB_DIR -f $PLOT_DIR $OUTFILE
+
+      - name: wmass plot MET
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --rebin 2 --yscale 1.5 --baseName MET --hists met -p $WEB_DIR -f $PLOT_DIR $OUTFILE 
 
       - name: wmass plot massShift
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py -a massVariation --yscale 1.4 --hist pt --baseName nominal -r 0.98 1.02 -p $WEB_DIR -f $PLOT_DIR $OUTFILE variation --varName massWeight --selectEntries massShift100MeVUp massShift100MeVDown --varLabel massShift100MeVUp massShift100MeVDown --selectAxis massShift --color grey grey
