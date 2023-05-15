@@ -221,7 +221,8 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
         elif isinstance(axis_eta_eff, bh.axis.Variable):
             axis_eta_eff_tensor = hist.axis.Variable(axis_eta_eff.edges, name = axis_eta_eff.name, overflow = False, underflow = False)
         axis_ptEigen_eff_tensor = hist.axis.Integer(0, effStat_manager[effStatKey]["nPtEigenBins"], underflow = False, overflow =False, name = "nPtEigenBins")    
-        helper_stat.tensor_axes = [axis_eta_eff_tensor, axis_ptEigen_eff_tensor, axis_charge_def, axis_down_up]
+        effStatTensorAxes = [axis_eta_eff_tensor, axis_ptEigen_eff_tensor, axis_charge_def]
+        helper_stat.tensor_axes = effStatTensorAxes
         effStat_manager[effStatKey]["helper"] = helper_stat
 
     fin.Close()
