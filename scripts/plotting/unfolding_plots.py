@@ -337,9 +337,11 @@ for fit_type in args.plots:
     if mode == "dilepton":
         channels = ["all"]
     else:
-        if "all" in channels:
-            plot(fit_type)
-        if "minus" in channels:
-            plot("prefit", bins=(None,int(nbins_reco/2)), channel="minus")
-        if "plus" in channels:
-            plot("prefit", bins=(int(nbins_reco/2), nbins_reco), channel="plus")
+        channels = args.channels
+
+    if "all" in channels:
+        plot(fit_type)
+    if "minus" in channels:
+        plot("prefit", bins=(None,int(nbins_reco/2)), channel="minus")
+    if "plus" in channels:
+        plot("prefit", bins=(int(nbins_reco/2), nbins_reco), channel="plus")
