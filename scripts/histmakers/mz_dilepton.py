@@ -31,9 +31,9 @@ era = args.era
 
 # available axes for dilepton validation plots
 all_axes = {
-    "mll": hist.axis.Regular(60, 60., 120., name = "mll"),
+    "mll": hist.axis.Regular(60, 60., 120., name = "mll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
     "yll": hist.axis.Regular(25, -2.5, 2.5, name = "yll"),
-    "absYll": hist.axis.Regular(25, 0., 2.5, name = "absYll"),
+    "absYll": hist.axis.Regular(25, 0., 2.5, name = "absYll", underflow=False),
     "ptll": hist.axis.Variable(common.ptV_binning if not args.finePtBinning else range(60), name = "ptll", underflow=False),
     "etaPlus": hist.axis.Regular(int(args.eta[0]), args.eta[1], args.eta[2], name = "etaPlus"),
     "etaMinus": hist.axis.Regular(int(args.eta[0]), args.eta[1], args.eta[2], name = "etaMinus"),
@@ -41,7 +41,7 @@ all_axes = {
     "etaDiff": hist.axis.Variable([-4.8, -1.0, -0.6, -0.2, 0.2, 0.6, 1.0, 4.8], name = "etaDiff"),
     "ptPlus": hist.axis.Regular(int(args.pt[0]), args.pt[1], args.pt[2], name = "ptPlus"),
     "ptMinus": hist.axis.Regular(int(args.pt[0]), args.pt[1], args.pt[2], name = "ptMinus"),
-    "cosThetaStarll": hist.axis.Regular(20, -1., 1., name = "cosThetaStarll"),
+    "cosThetaStarll": hist.axis.Regular(20, -1., 1., name = "cosThetaStarll", underflow=False, overflow=False),
     "phiStarll": hist.axis.Regular(20, -math.pi, math.pi, circular = True, name = "phiStarll"),
     "charge": hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "charge") # categorical axes in python bindings always have an overflow bin, so use a regular
 }
