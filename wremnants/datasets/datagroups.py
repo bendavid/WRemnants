@@ -262,7 +262,7 @@ class Datagroups(object):
                             fakesMembersWithSyst.append(member.name)
                         hasPartialSumForFake = True
                         # apply the correct scale for fakes
-                        scaleProcForFake = self.groups[nameFake].scale(member)
+                        scaleProcForFake = self.groups[nameFake].scaleHist(member)
                         logger.debug(f"Summing hist {read_syst} for {member.name} to {nameFake} with scale = {scaleProcForFake}")
                         hProcForFake = scaleProcForFake * h.copy()
                         histForFake = hh.addHists(hProcForFake, histForFake, createNew=False) if histForFake else hProcForFake
@@ -535,7 +535,7 @@ class Datagroups(object):
         if forceNonzero:
             h = hh.clipNegativeVals(h, createNew=False)
         if scaleToNewLumi > 0:
-            h = hh.scale(h, scaleToNewLumi, createNew=False)                        
+            h = hh.scaleHist(h, scaleToNewLumi, createNew=False)                        
         scale = self.processScaleFactor(proc)
         if scaleOp:
             scale = scale*scaleOp(proc)
