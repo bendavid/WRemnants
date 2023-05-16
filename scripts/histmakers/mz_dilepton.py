@@ -145,8 +145,10 @@ def build_graph(df, dataset):
     df = df.Define("cosThetaStarll", "csSineCosThetaPhill.costheta")
     df = df.Define("phiStarll", "std::atan2(csSineCosThetaPhill.sinphi, csSineCosThetaPhill.cosphi)")
 
+    logger.debug(f"Define weights and store nominal histograms")
+
     if dataset.is_data:
-        df = df.DefinePerSample("nominal_weight", "1.0")
+        results.append(df.HistoBoost("nominal", axes, cols))
     else:
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
         df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["trigMuons_pt0", "trigMuons_eta0", "trigMuons_SApt0", "trigMuons_SAeta0", "trigMuons_charge0",
@@ -156,11 +158,15 @@ def build_graph(df, dataset):
         df = df.Define("exp_weight", "weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom")
         df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
 
-    results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"]))
-    results.append(df.HistoBoost("nominal", axes, [*cols, "nominal_weight"]))
+        results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"], storage=hist.storage.Double()))
+        results.append(df.HistoBoost("nominal", axes, [*cols, "nominal_weight"]))
 
     for obs in ["ptll", "mll", "yll"]:
-        results.append(df.HistoBoost(f"nominal_{obs}", [all_axes[obs]], [obs, "nominal_weight"]))
+        if dataset.is_data:
+            results.append(df.HistoBoost(f"nominal_{obs}", [all_axes[obs]], [obs]))
+        else:
+            results.append(df.HistoBoost(f"nominal_{obs}", [all_axes[obs]], [obs, "nominal_weight"]))
+
 
     if not dataset.is_data and not args.onlyMainHistograms:
 
@@ -178,8 +184,7 @@ def build_graph(df, dataset):
                 syst_tools.add_muonscale_hist(
                     results, df, args.muonCorrEtaBins, args.muonCorrMag, isW, axes, cols,
                     muon_eta="trigMuons_eta0")
-
-
+    
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)

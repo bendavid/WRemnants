@@ -103,16 +103,8 @@ def applyCorrection(h, scale=1.0, offsetCorr=0.0, corrFile=None, corrHist=None, 
         f.Close()
         boost_corr = narf.root_to_hist(corr)
     # note: in fact hh.multiplyHists already creates a new histogram
-    if createNew:
-        hnew = hist.Hist(*h.axes, storage=hist.storage.Weight())
-        hnew.values(flow=True)[...]    = scale * h.values(flow=True)
-        hnew.variances(flow=True)[...] = scale * scale * h.variances(flow=True)
-        if boost_corr:
-            hnew = hh.multiplyHists(hnew, boost_corr)
-        return hnew
-    else:
-        h.values(flow=True)[...]    *= scale
-        h.variances(flow=True)[...] *= (scale * scale)
-        if boost_corr:
-            h = hh.multiplyHists(h, boost_corr)
-        return h
+    hnew = hh.scale(h, scale, createNew)
+    if boost_corr:
+        hnew = hh.multiplyHists(hnew, boost_corr)
+
+    return hnew

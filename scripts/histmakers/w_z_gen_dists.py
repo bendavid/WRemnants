@@ -101,7 +101,7 @@ def build_graph(df, dataset):
         else:
             df = df.Define('ptPrefsrLep', 'genlanti.pt()')
             df = df.Define('etaPrefsrLep', 'genlanti.eta()')
-        results.append(df.HistoBoost("nominal_genlep", lep_axes, [*lep_cols, "nominal_weight"]))
+        results.append(df.HistoBoost("nominal_genlep", lep_axes, [*lep_cols, "nominal_weight"], storage=hist.storage.Double()))
 
     if not args.skipEWHists and (isW or isZ):
         if isZ:
@@ -112,9 +112,9 @@ def build_graph(df, dataset):
         axis_ewMll = hist.axis.Variable(massBins, name = "ewMll")
         axis_ewLogDeltaM = hist.axis.Regular(100, -5, 5, name = "ewLogDeltaM")
         ew_axes = [axis_ewMll, axis_ewLogDeltaM]
-        results.append(df.HistoBoost("nominal_ew", ew_axes, [*ew_cols, "nominal_weight"]))
+        results.append(df.HistoBoost("nominal_ew", ew_axes, [*ew_cols, "nominal_weight"], storage=hist.storage.Double()))
 
-    nominal_gen = df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols, "nominal_weight"])
+    nominal_gen = df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols, "nominal_weight"], storage=hist.storage.Double())
 
     results.append(nominal_gen)
     if not 'horace' in dataset.name:
@@ -122,7 +122,7 @@ def build_graph(df, dataset):
             df = theory_tools.define_scale_tensor(df)
             syst_tools.add_qcdScale_hist(results, df, nominal_axes, nominal_cols, "nominal_gen")
             df = df.Define("helicity_moments_scale_tensor", "wrem::makeHelicityMomentScaleTensor(csSineCosThetaPhi, scaleWeights_tensor, nominal_weight)")
-            helicity_moments_scale = df.HistoBoost("helicity_moments_scale", nominal_axes, [*nominal_cols, "helicity_moments_scale_tensor"], tensor_axes = [wremnants.axis_helicity, *wremnants.scale_tensor_axes])
+            helicity_moments_scale = df.HistoBoost("helicity_moments_scale", nominal_axes, [*nominal_cols, "helicity_moments_scale_tensor"], tensor_axes = [wremnants.axis_helicity, *wremnants.scale_tensor_axes], storage=hist.storage.Double())
             results.append(helicity_moments_scale)
 
         if "LHEPdfWeight" in df.GetColumnNames():
@@ -162,13 +162,13 @@ if not args.skipAngularCoeffs:
                 z_moments = moments
             else:
                 new_moments = moments
-                z_moments = hh.addHists(z_moments, new_moments)
+                z_moments = hh.addHists(z_moments, new_moments, createNew=False)
         elif name in common.wprocs:
             if w_moments is None:
                 w_moments = moments
             else:
                 new_moments = moments
-                w_moments = hh.addHists(w_moments, new_moments)
+                w_moments = hh.addHists(w_moments, new_moments, createNew=False)
 
     coeffs={}
     # REMINDER: common.ptV_binning is not the one using 10% quantiles, and the quantiles are not a subset of this binning, but apparently it doesn't matter
