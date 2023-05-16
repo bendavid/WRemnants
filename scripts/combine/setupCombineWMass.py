@@ -282,7 +282,7 @@ def main(args,xnorm=False):
     combine_helpers.add_scale_uncertainty(cardTool, args.minnloScaleUnc, signal_samples_inctau, to_fakes, resum=args.resumUnc)
     # for Z background in W mass case (W background for Wlike is essentially 0, useless to apply QCD scales there)
     if wmass and not xnorm:
-        combine_helpers.add_scale_uncertainty(cardTool, "integrated", single_v_nonsig_samples, False, name_append="Z", resum=args.resumUnc)
+        combine_helpers.add_scale_uncertainty(cardTool, "integrated", single_v_nonsig_samples, False, name_append="Z", resum="none")
 
     if not xnorm:
         msv_config_dict = {
