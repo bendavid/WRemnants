@@ -67,14 +67,15 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
         action_args["rebinPtV"] = rebin_pt
 
     if resum != "none":
-        if pt_binned:
-            binning = np.array(common.ptV_10quantiles_binning)
-            pt30_idx = np.argmax(binning > 30)
+        binning = np.array(common.ptV_10quantiles_binning)
+        pt30_idx = np.argmax(binning > 30)
+        if helicity:
+            # Drop the uncertainties for < 30 for sigma_-1
+            skip_entries.extend([{"helicity" : -1.j, "ptVgen" : complex(0, x)} for x in binning[:pt30_idx-1]])
+        elif pt_binned:
             # Drop the uncertainties for < 30
             skip_entries.extend([{"ptVgen" : complex(0, x)} for x in binning[:pt30_idx-1]])
-        if helicity:
-            skip_entries.append({"helicity" : -1.j})
-        
+
         obs = card_tool.project[:]
         if not obs:
             raise ValueError("Failed to find the observable names for the resummation uncertainties")
