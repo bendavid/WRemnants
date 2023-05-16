@@ -6,6 +6,7 @@ import re
 logger = logging.child_logger(__name__)
 
 def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append="", resum=None, use_hel_hist=False, rebin_pt=None):
+
     if not len(samples):
         logger.warning(f"Skipping QCD scale syst '{scale_type}', no process to apply it to")
         return
@@ -135,8 +136,8 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
                 group="resumNonpert",
                 systAxes=["downUpVar"],
                 passToFakes=to_fakes,
-                actionMap={s : lambda h: hh.syst_min_and_max_env_hist(h, obs, "vars", 
-                    [x for x in h.axes["vars"] if re.match(f"^{np_nuisance}-*\d+", x)]) for s in expanded_samples},
+                actionMap={s : lambda h,np=np_nuisance: hh.syst_min_and_max_env_hist(h, obs, "vars",
+                    [x for x in h.axes["vars"] if re.match(f"^{np}-*\d+", x)]) for s in expanded_samples},
                 outNames=[f"{nuisance_name}Up", f"{nuisance_name}Down"],
                 rename=nuisance_name, 
             )
