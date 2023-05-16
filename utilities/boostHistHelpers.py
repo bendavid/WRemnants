@@ -193,7 +193,7 @@ def clipNegativeVals(h, clipValue=0, createNew=True):
         h.values(flow=True)[...] = vals
         return h
     
-def scale(h, scale, createNew=True):
+def scaleHist(h, scale, createNew=True):
     if createNew:
         if h._storage_type() == hist.storage.Double():
             hnew = hist.Hist(*h.axes)
@@ -212,7 +212,7 @@ def scale(h, scale, createNew=True):
     
 def normalize(h, scale=1e6, createNew=True):
     scale = scale/h.sum(flow=True).value
-    return scale(h, scale, createNew)
+    return scaleHist(h, scale, createNew)
 
 def makeAbsHist(h, axis_name):
     ax = h.axes[axis_name]
