@@ -104,7 +104,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
                 passToFakes=to_fakes,
                 systNameReplace=[("central", ""), ("pdf0", ""), ("+1", "Up"), ("-1", "Down"), ("-0.5", "Down"), ("+0.5", "Up"), ("up", "Up"), ("down", "Down")],
                 skipEntries=[{syst_ax : x} for x in both_exclude+scale_nuisances],
-                rename=f"resumTNP", 
+                rename=f"resumTNP{name_append}",
             )
         else:
             # Exclude the tnp uncertainty nuisances
@@ -117,7 +117,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
                 actionMap={s : lambda h: hh.syst_min_and_max_env_hist(h, obs, "vars", 
                     [x for x in h.axes["vars"] if any(re.match(y, x) for y in resumscale_nuisances)]) for s in expanded_samples},
                 outNames=["scetlibResumScaleUp", "scetlibResumScaleDown"],
-                rename=f"resumScale", 
+                rename=f"resumScale{name_append}",
             )
             card_tool.addSystematic(name=theory_unc,
                 processes=samples,
@@ -126,7 +126,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
                 systAxes=["vars"],
                 actionMap={s : lambda h: h[{"vars" : ["kappaFO0.5-kappaf2.", "kappaFO2.-kappaf0.5", "mufdown", "mufup",]}] for s in expanded_samples},
                 outNames=["scetlib_kappaUp", "scetlib_kappaDown", "scetlib_muFUp", "scetlib_muFDown"],
-                rename=f"resumFOScale", 
+                rename=f"resumFOScale{name_append}",
             )
 
         for np_nuisance in ["c_nu", "omega_nu", "Omega"]:
@@ -139,7 +139,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
                 actionMap={s : lambda h,np=np_nuisance: hh.syst_min_and_max_env_hist(h, obs, "vars",
                     [x for x in h.axes["vars"] if re.match(f"^{np}-*\d+", x)]) for s in expanded_samples},
                 outNames=[f"{nuisance_name}Up", f"{nuisance_name}Down"],
-                rename=nuisance_name, 
+                rename=nuisance_name + name_append,
             )
         card_tool.addSystematic(name=theory_unc,
             processes=samples,
@@ -150,7 +150,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
             actionMap={s : lambda h: hh.syst_min_and_max_env_hist(h, obs, "vars", 
                 [x for x in h.axes["vars"] if "transition_point" in x]) for s in expanded_samples},
             outNames=["resumTransitionUp", "resumTransitionDown"],
-            rename=f"scetlibResumTransition", 
+            rename=f"scetlibResumTransition{name_append}",
         )
 
     if helicity:
@@ -158,7 +158,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
         skip_entries.extend([{"helicity" : complex(0, i)} for i in (5,6,7)])
 
     # Skip MiNNLO unc. 
-    if resum and not (pt_binned or helicity):
+    if resum != "none" and not (pt_binned or helicity):
         logger.warning("Without pT or helicity splitting, only the SCETlib uncertainty will be applied!")
     else:
         group_name += f"MiNNLO"
