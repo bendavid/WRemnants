@@ -143,7 +143,7 @@ def build_graph(df, dataset):
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")
 
-    results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"]))
+    results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"], storage=hist.storage.Double()))
 
     if not args.noRecoil:
         df = df.Define("yZ", "ll_mom4.Rapidity()")
