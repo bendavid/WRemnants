@@ -41,8 +41,7 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
     
     fin = ROOT.TFile.Open(filename)
     if fin is None or fin.IsZombie():
-        logger.info(f"Error: file {filename} was not opened correctly")
-        quit()
+        raise IOError(f"Error: file {filename} was not opened correctly")
         
     ## start with NOMI and SYST
     sf_syst = None
