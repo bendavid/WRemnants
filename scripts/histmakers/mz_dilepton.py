@@ -15,7 +15,7 @@ import os
 parser.add_argument("--csVarsHist", action='store_true', help="Add CS variables to dilepton hist")
 parser.add_argument("--axes", type=str, nargs="*", default=["mll", "ptll"], help="")
 parser.add_argument("--finePtBinning", action='store_true', help="Use fine binning for ptll")
-parser.add_argument("--genVars", type=str, nargs="+", default=["ptVGen"], choices=["ptVGen"], help="Generator level variable")
+parser.add_argument("--genVars", type=str, nargs="+", default=["ptVGen"], choices=["ptVGen", "yVGen"], help="Generator level variable")
 
 parser = common.set_parser_default(parser, "pt", [44,26.,70.])
 parser = common.set_parser_default(parser, "eta", [6,-2.4,2.4])
@@ -30,12 +30,16 @@ datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
 
 era = args.era
 
+# dilepton invariant mass cuts
+mass_min = 60
+mass_max = 120
+
 # available axes for dilepton validation plots
 all_axes = {
-    "mll": hist.axis.Regular(60, 60., 120., name = "mll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
+    "mll": hist.axis.Regular(int(mass_max - mass_min), mass_min, mass_max, name = "mll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
     "yll": hist.axis.Regular(25, -2.5, 2.5, name = "yll"),
-    "absYll": hist.axis.Regular(25, 0., 2.5, name = "absYll", underflow=False),
-    "ptll": hist.axis.Variable(common.ptV_binning if not args.finePtBinning else range(60), name = "ptll", underflow=False),
+    "absYll": hist.axis.Variable([0.0, 0.4, 0.8, 1.2, 1.6, 2.0, 2.4, 2.8, 3.6], name = "absYll", underflow=False, overflow=not args.excludeFlow),
+    "ptll": hist.axis.Variable(common.ptV_binning if not args.finePtBinning else range(60), name = "ptll", underflow=False, overflow=not args.excludeFlow),
     "etaPlus": hist.axis.Regular(int(args.eta[0]), args.eta[1], args.eta[2], name = "etaPlus"),
     "etaMinus": hist.axis.Regular(int(args.eta[0]), args.eta[1], args.eta[2], name = "etaMinus"),
     "etaSum": hist.axis.Regular(12, -4.8, 4.8, name = "etaSum"),
@@ -58,8 +62,12 @@ if args.csVarsHist:
 
 nominal_axes = [all_axes[a] for a in nominal_cols] 
 
-unfolding_axes, unfolding_cols = differential.get_ptV_axes(common.ptV_binning)
+gen_axes = {
+    "ptVGen": hist.axis.Variable(common.ptV_binning if not args.finePtBinning else range(60), name = "ptVGen", underflow=False, overflow=False),
+    "yVGen": hist.axis.Variable([0.0, 0.4, 0.8, 1.2, 1.6, 2.0, 2.4, 2.8, 3.6], name = "yVGen", underflow=False, overflow=False),    # "ATLAS" binning
+}
 
+unfolding_axes, unfolding_cols, unfolding_selections = differential.get_dilepton_axes(args.genVars, gen_axes)
 
 # define helpers
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
@@ -114,7 +122,8 @@ def build_graph(df, dataset):
 
     if unfold:
         df = unfolding_tools.define_gen_level(df, args.genLevel, dataset.name, mode="dilepton")
-        df = unfolding_tools.define_fiducial_space(df, mode="dilepton", pt_min=args.pt[1], pt_max=args.pt[2])
+        df = unfolding_tools.define_fiducial_space(df, mode="dilepton", 
+            pt_min=args.pt[1], pt_max=args.pt[2], mass_min=mass_min, mass_max=mass_max, selections=unfolding_selections)
         unfolding_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols)
 
         axes = [*nominal_axes, *unfolding_axes] 
@@ -135,7 +144,7 @@ def build_graph(df, dataset):
 
     df = muon_selections.define_trigger_muons(df)
 
-    df = muon_selections.select_z_candidate(df, args.pt[1], args.pt[2])
+    df = muon_selections.select_z_candidate(df, args.pt[1], args.pt[2], mass_min, mass_max)
 
     df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "trigMuons")
     df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "nonTrigMuons")

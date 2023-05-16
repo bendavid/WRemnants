@@ -116,25 +116,34 @@ def get_label(name):
         return name
 
 
-def make_yields_df(hists, procs, signal=None, per_bin=False):
+def make_yields_df(hists, procs, signal=None, per_bin=False, yield_only=False, percentage=True):
     logger.debug(f"Make yield df for {procs}")
 
     if per_bin:
-        def sum_and_unc(h):
-            return (h.values(), np.sqrt(h.variances()))   
+        def sum_and_unc(h,scale=100 if percentage else 1):
+            return (h.values()*scale, np.sqrt(h.variances())*scale)   
     else:
-        def sum_and_unc(h):
-            return (sum(h.values()), np.sqrt(sum(h.variances())))
+        def sum_and_unc(h,scale=100 if percentage else 1):
+            return (sum(h.values())*scale, np.sqrt(sum(h.variances())*scale))
 
     if per_bin:
         entries = [(i, v[0], v[1]) for i,v in enumerate(zip(*sum_and_unc(hists[0])))]
+        index = "Bin"
     else:
+        index = "Process"
         if signal is not None:
             entries = [(signal, sum([ sum(v.values()) for k,v in zip(procs, hists) if signal in k]), np.sqrt(sum([ sum(v.variances()) for k,v in zip(procs, hists) if signal in k])))]
         else:
             entries = [(k, *sum_and_unc(v)) for k,v in zip(procs, hists)]
 
-    return pd.DataFrame(entries, columns=["Process", "Yield", "Uncertainty"])
+    if yield_only:
+        entries = [(e[0], e[1]) for e in entries]
+        columns = [index, *procs]
+    else:
+        columns = [index, "Yield", "Uncertainty"]
+
+
+    return pd.DataFrame(entries, columns=columns)
 
 
 def plot_matrix_poi(matrix="covariance_matrix_channelmu"):
@@ -375,14 +384,6 @@ def plot_xsec_unfolded(data, data_asimov=None, channel=None, poi_type="mu", scal
 
 translate = {
     "QCDscalePtChargeMiNNLO": "MiNNLO scale",
-    # "eff_stat_iso_effData":"eff_stat_iso_D",
-    # "eff_stat_iso_effMC":"eff_stat_iso_MC",
-    # "eff_stat_tracking": "eff_stat_trk",
-    # "eff_syst_tracking": "eff_syst_trk",
-    # "eff_stat_trigger": "eff_stat_hlt",
-    # "eff_syst_trigger": "eff_syst_hlt",
-    # "eff_stat_reco": "eff_stat_rec",
-    # "eff_syst_reco": "eff_syst_rec",
     "resumNonpert": "resum. NP",
     "resumTransition": "resum. T",
     "binByBinStat": "MC stat",
@@ -458,7 +459,7 @@ def plot_uncertainties_unfolded(data, channel=None, poi_type="mu", scale=1., nor
         binwnorm=binwnorm,
         zorder=2,
     )
-    uncertainties = {"Total" : make_yields_df([hist_xsec], ["Uncertainty"], per_bin=True)}
+    uncertainties = make_yields_df([hist_xsec], ["Total"], per_bin=True, yield_only=True, percentage=True)
 
     sources =["err_stat"]
     sources += [s for s in filter(lambda x: x.startswith("err"), df.keys()) 
@@ -502,7 +503,8 @@ def plot_uncertainties_unfolded(data, channel=None, poi_type="mu", scale=1., nor
             zorder=2,
         )
 
-        uncertainties[name] = make_yields_df([hist_unc], [name], per_bin=True)
+        unc_df = make_yields_df([hist_unc], [name], per_bin=True, yield_only=True, percentage=True)
+        uncertainties[name] = unc_df[name]
 
     plot_tools.addLegend(ax1, ncols=3, text_size=20*args.scaleleg)
 
@@ -537,7 +539,7 @@ def plot_uncertainties_unfolded(data, channel=None, poi_type="mu", scale=1., nor
     plot_tools.save_pdf_and_png(outdir, outfile)
 
     plot_tools.write_index_and_log(outdir, outfile, nround=4 if normalize else 2,
-        yield_tables=uncertainties,
+        yield_tables={"Unfolded data uncertainty [%]": uncertainties},
         analysis_meta_info=None,
         args=args,
     )
@@ -562,9 +564,12 @@ for poi_type in poi_types:
         if "xsec" in args.plots:
             plot_xsec_unfolded(df, df_asimov, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize)
         if "uncertainties" in args.plots:
-            plot_uncertainties_unfolded(df, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize)
+            # absolute uncertainty
+            # plot_uncertainties_unfolded(df, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize)
+            # plot_uncertainties_unfolded(df, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, logy=True)            
+            
+            # relative uncertainty
             plot_uncertainties_unfolded(df, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, relative_uncertainty=True)
-            plot_uncertainties_unfolded(df, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, logy=True)
             plot_uncertainties_unfolded(df, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, relative_uncertainty=True, logy=True)
 
 if "correlation" in args.plots:
