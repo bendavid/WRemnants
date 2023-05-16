@@ -68,32 +68,31 @@ def define_gen_level(df, gen_level, dataset_name, mode="wmass"):
 
     return df
 
-def define_fiducial_space(df, mode="wmass", pt_min=26, pt_max=55, gen_var=None):
+def define_fiducial_space(df, mode="wmass", pt_min=26, pt_max=55, mass_min=60, mass_max=120, selections=[]):
     # Define a fiducial phase space where all out of acceptance contribution is stored in a single bin 
     #   (instead of having several overflow/underflow bins in the gen axes). 
 
     if mode == "wmass":
-        df = df.Define("fiducial", f"""
+        selection = f"""
             (etaGen < 2.4) 
             && (ptGen > {pt_min}) 
             && (ptGen < {pt_max}) 
-            """)
-    elif mode == "wlike":
-        df = df.Define("fiducial", f"""
-            (abs(muGen.eta()) < 2.4) && (abs(antimuGen.eta()) < 2.4) 
-            && (muGen.pt() > {pt_min}) && (antimuGen.pt() > {pt_min}) 
-            && (muGen.pt() < {pt_max}) && (antimuGen.pt() < {pt_max}) 
-            && (massVGen > 60) & (massVGen < 120)
-            """)
+            """
 
-    elif mode == "dilepton":
-        df = df.Define("fiducial", f"""
+    elif mode in ["wlike", "dilepton"]:
+        selection = f"""
             (abs(muGen.eta()) < 2.4) && (abs(antimuGen.eta()) < 2.4) 
             && (muGen.pt() > {pt_min}) && (antimuGen.pt() > {pt_min}) 
             && (muGen.pt() < {pt_max}) && (antimuGen.pt() < {pt_max}) 
-            && (massVGen > 60) & (massVGen < 120)
-            && (ptVGen < 100)
-            """)
+            && (massVGen > {mass_min}) & (massVGen < {mass_max})
+            """
+    else:
+        raise NotImplementedError(f"No fiducial phase space definiton found for mode '{mode}'!") 
+
+    for sel in selections:
+        selection += f"&& ({sel})"
+
+    df = df.Define("fiducial", selection)
 
     return df        
 

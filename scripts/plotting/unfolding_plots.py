@@ -182,10 +182,12 @@ def make_yields_df(hists, procs, signal=None, per_bin=False):
 
     if per_bin:
         def sum_and_unc(h):
-            return (h.values(), np.sqrt(h.variances()))   
+            variances = h.variances() if h.variances() is not None else h.values()
+            return (h.values(), np.sqrt(variances))   
     else:
         def sum_and_unc(h):
-            return (sum(h.values()), np.sqrt(sum(h.variances())))
+            variances = h.variances() if h.variances() is not None else h.values()
+            return (sum(h.values()), np.sqrt(sum(variances)))
 
     if per_bin:
         entries = [(i, v[0], v[1]) for i,v in enumerate(zip(*sum_and_unc(hists[0])))]
@@ -323,11 +325,18 @@ def plot(fittype, bins=(None, None), channel=None):
     outfile += (f"_{channel}" if channel else "")
 
     plot_tools.save_pdf_and_png(outdir, outfile)
+
+    # make yield tables
+    stack = [s*bin_widths for s in stack]
     stack_yields = make_yields_df(stack, names)
-    signal_yields = make_yields_df(stack, names, signal=base_process)
-    # unstacked_yields = make_yields_df([hist_data], ["Data"])
+
+    # summed up
+    summed_yields = make_yields_df(stack, names, signal=base_process)
+    if not args.noData:
+        summed_yields.append(make_yields_df([hist_data*bin_widths], ["Data"]))
+
     plot_tools.write_index_and_log(outdir, outfile, 
-        yield_tables={"Stacked processes" : stack_yields, "Signal process": signal_yields},#, "Unstacked processes" : unstacked_yields},
+        yield_tables={"Stacked processes" : stack_yields, "Summed processes": summed_yields},#, "Unstacked processes" : unstacked_yields},
         analysis_meta_info=None,
         args=args,
     )

@@ -33,11 +33,25 @@ def get_pt_eta_charge_axes(n_bins_pt, min_pt, max_pt, n_bins_eta=0):
 
     return axes, cols
 
-def get_ptV_axes(binning):
-    # axes for fiducial measurement of Z in dilepton pT(l,l)
-    axis_ptVGen = hist.axis.Variable(common.ptV_binning, underflow=False, overflow=False, name = "ptVGen")
+def get_dilepton_axes(gen_vars, gen_axes):
+    # axes for fiducial measurement of Z in dilepton e.g. pT(Z), |yZ|
 
-    axes = [axis_ptVGen, axis_fiducial]
-    cols = ["ptVGen", "fiducial"]
+    axes = []
+    cols = []
+    selections = []
 
-    return axes, cols
+    for var in gen_vars:
+        axes.append(gen_axes[var])
+        cols.append(var)
+    
+    # selections for out of fiducial region
+    if "ptVGen" in gen_vars:
+        selections.append("ptVGen < {0}".format(gen_axes["ptVGen"].edges[-1]))
+
+    if "yVGen" in gen_vars:
+        selections.append("yVGen < {0}".format(gen_axes["yVGen"].edges[-1]))
+
+    axes.append(axis_fiducial)
+    cols.append("fiducial")
+
+    return axes, cols, selections
