@@ -203,17 +203,28 @@ class CardTool(object):
     # use doActionBeforeMirror to do something before it instead (so the mirroring will act on the modified histogram)
     # decorrelateByBin is to customize eta-pt decorrelation: pass dictionary with {axisName: [bin edges]}
     def addSystematic(self, name, systAxes, outNames=None, skipEntries=None, labelsByAxis=None, 
-                      baseName="", mirror=False, scale=1, processes=None, group=None, noConstraint=False,
+                      baseName="", mirror=False, mirrorDownVarEqualToUp=False, mirrorDownVarEqualToNomi=False,
+                      scale=1, processes=None, group=None, noConstraint=False,
                       action=None, doActionBeforeMirror=False, actionArgs={}, actionMap={},
                       systNameReplace=[], groupFilter=None, passToFakes=False,
                       rename=None, splitGroup={}, decorrelateByBin={},
                       ):
-
+        # note: setting Up=Down seems to be pathological for the moment, it might be due to the interpolation in the fit
+        # for now better not to use the options, although it might be useful to keep it implemented
+        if mirrorDownVarEqualToUp:
+            raise ValueError("mirrorDownVarEqualToUp currently leads to pathological results in the fit, please keep it False")
+        
         # Need to make an explicit copy of the array before appending
         procs_to_add = [x for x in (self.allMCProcesses() if processes is None else processes)]
         if passToFakes and self.getFakeName() not in procs_to_add:
             procs_to_add.append(self.getFakeName())
 
+        if not mirror and (mirrorDownVarEqualToUp or mirrorDownVarEqualToNomi):
+            raise ValueError("mirrorDownVarEqualToUp and mirrorDownVarEqualToNomi requires mirror=True")
+
+        if mirrorDownVarEqualToUp and mirrorDownVarEqualToNomi:
+            raise ValueError("mirrorDownVarEqualToUp and mirrorDownVarEqualToNomi cannot be both True")
+            
         if action and actionMap:
             raise ValueError("Only one of action and actionMap args are allowed")
 
@@ -224,7 +235,7 @@ class CardTool(object):
             return
 
         if name == self.nominalName:
-            logger.debug("Defining syst {rename} from nominal histogram")
+            logger.debug(f"Defining syst {rename} from nominal histogram")
             
         self.systematics.update({
             name if not rename else rename : {
@@ -238,6 +249,8 @@ class CardTool(object):
                 "splitGroup" : splitGroup if len(splitGroup) else {group : ".*"}, # dummy dictionary if splitGroup=None, to allow for uniform treatment
                 "scale" : scale,
                 "mirror" : mirror,
+                "mirrorDownVarEqualToUp" : mirrorDownVarEqualToUp,
+                "mirrorDownVarEqualToNomi" : mirrorDownVarEqualToNomi,
                 "action" : action,
                 "doActionBeforeMirror" : doActionBeforeMirror,
                 "actionMap" : actionMap,
@@ -388,7 +401,7 @@ class CardTool(object):
     def getBoostHistByCharge(self, h, q):
         return h[{"charge" : h.axes["charge"].index(q) if q != "sum" else hist.sum}]
 
-    def checkSysts(self, var_map, proc, thresh=0.25):
+    def checkSysts(self, var_map, proc, thresh=0.25, skipSameSide=False, skipOneAsNomi=False):
         #if self.check_variations:
         var_names = set([name.replace("Up", "").replace("Down", "") for name in var_map.keys() if name])
         if len(var_names) != len(var_map.keys())/2:
@@ -403,16 +416,19 @@ class CardTool(object):
             up = var_map[name+"Up"]
             down = var_map[name+"Down"]
             nCellsWithoutOverflows = np.product(hnom.shape)
-            try:
-                up_relsign = np.sign(up.values(flow=False)-hnom.values(flow=False))
-            except ValueError as e:
-                logger.error(f"Incompatible shapes between up and down for syst {name}")
-                raise e
-            down_relsign = np.sign(down.values(flow=False)-hnom.values(flow=False))
-            vars_sameside = (up_relsign != 0) & (up_relsign == down_relsign)
-            perc_sameside = np.count_nonzero(vars_sameside)/nCellsWithoutOverflows 
-            if perc_sameside > thresh:
-                logger.warning(f"{perc_sameside:.1%} bins are one sided for syst {name} and process {proc}!")
+            if not skipSameSide:
+                try:
+                    up_relsign = np.sign(up.values(flow=False)-hnom.values(flow=False))
+                except ValueError as e:
+                    logger.error(f"Incompatible shapes between up and down for syst {name}")
+                    raise e
+                down_relsign = np.sign(down.values(flow=False)-hnom.values(flow=False))
+                # protect against yields very close to nominal, for which it can be sign != 0 but should be treated as 0
+                # was necessary for Fake and effStat
+                vars_sameside = (up_relsign != 0) & (up_relsign == down_relsign) & np.logical_not(np.isclose(up.values(flow=False), hnom.values(flow=False), rtol=1e-07, atol=1e-08))
+                perc_sameside = np.count_nonzero(vars_sameside)/nCellsWithoutOverflows 
+                if perc_sameside > thresh:
+                    logger.warning(f"{perc_sameside:.1%} bins are one sided for syst {name} and process {proc}!")
             # check variations are not same as nominal
             # it evaluates absolute(a - b) <= (atol + rtol * absolute(b))
             up_nBinsSystSameAsNomi = np.count_nonzero(np.isclose(up.values(flow=False), hnom.values(flow=False), rtol=1e-07, atol=1e-08))/nCellsWithoutOverflows
@@ -421,8 +437,9 @@ class CardTool(object):
             # perhaps just better to check against 100%, the tolerances in np.isclose should already catch bad cases with 1.0 != 1.0 because of numerical imprecisions
             varEqNomiThreshold = 1.0
             if up_nBinsSystSameAsNomi >= varEqNomiThreshold or down_nBinsSystSameAsNomi >= varEqNomiThreshold:
-                logger.warning(f"syst {name} has Up/Down variation with {up_nBinsSystSameAsNomi:.1%}/{down_nBinsSystSameAsNomi:.1%} of bins equal to nominal")
-
+                if not skipOneAsNomi or (up_nBinsSystSameAsNomi >= varEqNomiThreshold and down_nBinsSystSameAsNomi >= varEqNomiThreshold):
+                    logger.warning(f"syst {name} has Up/Down variation with {up_nBinsSystSameAsNomi:.1%}/{down_nBinsSystSameAsNomi:.1%} of bins equal to nominal")
+                    
     def makeDecorrelatedSystNuisances(self, systNames, dcbb={}):
         # NOTE: the dictionary is supposed to have only a single key
         for k in dcbb.keys():
@@ -503,6 +520,7 @@ class CardTool(object):
     def writeForProcess(self, h, proc, syst):
         decorrelateByBin = {}
         hnom = None
+        systInfo = None
         if syst != self.nominalName:
             systInfo = self.systematics[syst]
             procDict = self.datagroups.getDatagroups()
@@ -511,24 +529,28 @@ class CardTool(object):
                 h =systInfo["action"](h, **systInfo["actionArgs"])
                 self.outfile.cd() # needed to restore the current directory in case the action opens a new root file
             if systInfo["mirror"]:
-                h = hh.extendHistByMirror(h, hnom)
+                h = hh.extendHistByMirror(h, hnom,
+                                          downAsUp=systInfo["mirrorDownVarEqualToUp"],
+                                          downAsNomi=systInfo["mirrorDownVarEqualToNomi"])
             if systInfo["decorrByBin"]:
                 decorrelateByBin = systInfo["decorrByBin"]
-        # Otherwise this is a processes not affected by the variation, don't write it out,
-        # it's only needed for the fake subtraction
-        logger.info(f"Writing systematic {syst} for process {proc}")
-        var_map = self.systHists(h, syst) 
+        logger.info(f"Preparing to write systematic {syst} for process {proc}")
+        var_map = self.systHists(h, syst)
         # TODO: Make this optional
         if syst != self.nominalName:
-            self.checkSysts(var_map, proc)
+            self.checkSysts(var_map, proc,
+                            skipSameSide=systInfo["mirrorDownVarEqualToUp"],
+                            skipOneAsNomi=systInfo["mirrorDownVarEqualToNomi"])
         setZeroStatUnc = False
         if proc in self.noStatUncProcesses:
             logger.info(f"Zeroing statistical uncertainty for process {proc}")
             setZeroStatUnc = True
+        # this is a big loop a bit slow, but it might be mainly the hist->root conversion and writing into the root file
         for name, var in var_map.items():
             if name != "":
                 self.writeHist(var, self.variationName(proc, name), setZeroStatUnc=setZeroStatUnc,
                                decorrByBin=decorrelateByBin, hnomi=hnom)
+        logger.debug("After self.writeHist(...)")
 
     def addPseudodata(self, processes, processesFromNomi=[]):
         datagroups = self.datagroups if not self.pseudodata_datagroups else self.pseudodata_datagroups
@@ -602,7 +624,7 @@ class CardTool(object):
                 preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"],
                 # Needed to avoid always reading the variation for the fakes, even for procs not specified
                 forceToNominal=[x for x in self.datagroups.getProcNames() if x not in 
-                    self.datagroups.getProcNames([p for p in processes if p != "Fake"])],
+                                self.datagroups.getProcNames([p for p in processes if p != "Fake"])],
                 scaleToNewLumi=self.lumiScale,
             )
             self.writeForProcesses(syst, label="syst", processes=processes)
@@ -740,7 +762,13 @@ class CardTool(object):
             axes = self.project[:]
             if "charge" in h.axes.name and not self.xnorm:
                 axes.append("charge")
-            h = h.project(*axes)
+            # don't project h into itself when axes to project are all axes
+            if any (ax not in h.axes.name for ax in axes):
+                logger.error("Request to project some axes not present in the histogram")
+                raise ValueError(f"Histogram has {h.axes.name} but requested axes for projection are {axes}")
+            if len(axes) < len(h.axes.name):
+                logger.debug(f"Projecting {h.axes.name} into {axes}")
+                h = h.project(*axes)
 
         if not self.nominalDim:
             self.nominalDim = h.ndim
@@ -751,9 +779,7 @@ class CardTool(object):
             raise ValueError(f"Histogram {name} does not have the correct dimensions. Found {h.ndim}, expected {self.nominalDim}")
 
         if setZeroStatUnc:
-            hist_no_error = h.copy()
-            hist_no_error.variances(flow=True)[...] = 0.
-            h = hist_no_error
+            h.variances(flow=True)[...] = 0.
 
         hists = {name: h} # always keep original variation in output file for checks
         if decorrByBin:

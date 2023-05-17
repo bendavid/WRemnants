@@ -180,8 +180,11 @@ if __name__ == "__main__":
     #h1.GetYaxis().SetTitle("")
     for ik,k in enumerate(sortedGroups):
         bincontent = nuisGroup_nameVal[k] if not args.scaleToMeV else nuisGroup_nameVal[k] * args.prefitUncertainty
-        print("%s: %2.1f" % (k,bincontent))
-        #print("%s: %2.1f" % (k,bincontent))
+        if compare:
+            bincontentAlt = nuisGroup_nameVal_alt[k] if not args.scaleToMeV else nuisGroup_nameVal_alt[k] * args.prefitUncertainty
+            print("%s: %2.3f / %2.3f" % (k,bincontent, bincontentAlt))
+        else:
+            print("%s: %2.3f" % (k,bincontent))
         label = k
         if k == "binByBinStat":
             label = "MCandFakes_stat"
