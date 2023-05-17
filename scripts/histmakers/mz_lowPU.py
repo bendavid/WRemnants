@@ -1,6 +1,6 @@
 import argparse
 from utilities import output_tools
-from utilities import common, logging, differential
+from utilities import common, logging
 
 parser,initargs = common.common_parser()
 parser.add_argument("--flavor", type=str, choices=["ee", "mumu"], help="Flavor (ee or mumu)", default="mumu")
@@ -66,7 +66,7 @@ axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
 
 # axes for final cards/fitting
 reco_mll_axes = [common.axis_recoil_reco_ptZ_lowpu, common.axis_mt_lowpu, axis_charge]
-gen_reco_mll_axes = [common.axis_recoil_gen_ptZ_lowpu, common.axis_recoil_reco_ptZ_lowpu, common.axis_mt_lowpu, axis_charge, differential.axis_fiducial]
+gen_reco_mll_axes = [common.axis_recoil_gen_ptZ_lowpu, common.axis_recoil_reco_ptZ_lowpu, common.axis_mt_lowpu, axis_charge]
 axis_mt = hist.axis.Regular(200, 0., 200., name = "mt", underflow=False)
 axis_xnorm = hist.axis.Regular(1, 0., 1., name = "count", underflow=False, overflow=False)
 
@@ -94,15 +94,8 @@ def build_graph(df, dataset):
 
     if dataset.name in sigProcs:
 
-        axes_xnorm = [axis_xnorm, common.axis_recoil_gen_ptZ_lowpu, axis_charge, differential.axis_fiducial]
-        cols_xnorm = ["xnorm", "ptVgen", "TrigMuon_charge", "fiducial"]
-
-        df = theory_tools.define_prefsr_vars(df)
-        df = df.Define("fiducial", """ (abs(genl.eta()) < 2.4) && (abs(genlanti.eta()) < 2.4) 
-            && (genl.pt() > 26) && (genlanti.pt() > 26) 
-            && (genl.pt() < 55) && (genlanti.pt() < 55) 
-            && (massVgen > 60) & (massVgen < 120) 
-            && ptVgen < 150 """)
+        axes_xnorm = [axis_xnorm, common.axis_recoil_gen_ptZ_lowpu, axis_charge]
+        cols_xnorm = ["xnorm", "ptVgen", "TrigMuon_charge"]
         
         df_xnorm = df
         df_xnorm = df_xnorm.DefinePerSample("exp_weight", "1.0")
@@ -302,7 +295,7 @@ def build_graph(df, dataset):
     results.append(df.HistoBoost("lep_pT", [axis_pt], ["TrigMuon_pt", "nominal_weight"]))
     results.append(df.HistoBoost("lep_pT_qTrw", [axis_pt], ["TrigMuon_pt", "nominal_weight_qTrw"]))
     
-    gen_reco_mt_cols = ["ptVgen", "recoil_corr_rec_magn", "mT_wlike", "TrigMuon_charge", "fiducial"]
+    gen_reco_mt_cols = ["ptVgen", "recoil_corr_rec_magn", "mT_wlike", "TrigMuon_charge"]
     reco_mt_cols = ["recoil_corr_rec_magn", "mT_wlike", "TrigMuon_charge"]
 
     

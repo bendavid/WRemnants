@@ -16,7 +16,7 @@ def define_gen_level(df, gen_level, dataset_name, mode="wmass"):
 
         if mode == "wmass":
             df = df.Define("ptGen", "chargeVgen < 0 ? genl.pt() : genlanti.pt()")   
-            df = df.Define("etaGen", "chargeVgen < 0 ? abs(genl.eta()) : abs(genlanti.eta())")
+            df = df.Define("absEtaGen", "chargeVgen < 0 ? fabs(genl.eta()) : fabs(genlanti.eta())")
         else:
             # needed for fiducial phase space definition
             df = df.Alias("muGen", "genl")
@@ -25,7 +25,7 @@ def define_gen_level(df, gen_level, dataset_name, mode="wmass"):
 
             if mode == "wlike":
                 df = df.Define("ptGen", "event % 2 == 0 ? genl.pt() : genlanti.pt()")
-                df = df.Define("etaGen", "event % 2 == 0 ? abs(genl.eta()) : abs(genlanti.eta())")
+                df = df.Define("absEtaGen", "event % 2 == 0 ? fabs(genl.eta()) : fabs(genlanti.eta())")
 
             elif mode == "dilepton":
                 df = df.Alias("ptVGen", "ptVgen")
@@ -47,7 +47,7 @@ def define_gen_level(df, gen_level, dataset_name, mode="wmass"):
                 muons = "postFSRmus"
 
             df = df.Define("ptGen", f"GenPart_pt[{muons}][{idx}]")
-            df = df.Define("etaGen", f"abs(GenPart_eta[{muons}][{idx}])")                
+            df = df.Define("absEtaGen", f"fabs(GenPart_eta[{muons}][{idx}])")                
 
         else:
             df = df.Define("muGen", "ROOT::Math::PtEtaPhiMVector(GenPart_pt[postFSRmus][postFSRmuIdx], GenPart_eta[postFSRmus][postFSRmuIdx], GenPart_phi[postFSRmus][postFSRmuIdx], GenPart_mass[postFSRmus][postFSRmuIdx])")
@@ -57,11 +57,11 @@ def define_gen_level(df, gen_level, dataset_name, mode="wmass"):
 
             if mode == "wlike":
                 df = df.Define("ptGen", "event % 2 == 0 ? GenPart_pt[postFSRmus][postFSRmuIdx] : GenPart_pt[postFSRantimus][postFSRantimuIdx]")
-                df = df.Define("etaGen", "event % 2 == 0 ? abs(GenPart_eta[postFSRmus][postFSRmuIdx]) : abs(GenPart_eta[postFSRantimus][postFSRantimuIdx])")    
+                df = df.Define("absEtaGen", "event % 2 == 0 ? fabs(GenPart_eta[postFSRmus][postFSRmuIdx]) : fabs(GenPart_eta[postFSRantimus][postFSRantimuIdx])")    
 
             if mode == "dilepton":
                 df = df.Define("ptVGen", "VGen.pt()")
-                df = df.Define("yVGen", "VGen.Rapidity()")  
+                df = df.Define("absYVGen", "fabs(VGen.Rapidity())")  
     
     if mode == "wlike":
         df = df.Define("qGen", "event % 2 == 0 ? -1 : 1")
@@ -69,28 +69,21 @@ def define_gen_level(df, gen_level, dataset_name, mode="wmass"):
     return df
 
 def define_fiducial_space(df, mode="wmass", pt_min=26, pt_max=55, mass_min=60, mass_max=120, selections=[]):
-    # Define a fiducial phase space where all out of acceptance contribution is stored in a single bin 
-    #   (instead of having several overflow/underflow bins in the gen axes). 
-
-    if mode == "wmass":
+    # Define a fiducial phase space where out of acceptance contribution is stored for additional cuts 
+    #   (not those on the unfolding axes)
+    
+    if mode == "dilepton":
         selection = f"""
-            (etaGen < 2.4) 
-            && (ptGen > {pt_min}) 
-            && (ptGen < {pt_max}) 
-            """
-
-    elif mode in ["wlike", "dilepton"]:
-        selection = f"""
-            (abs(muGen.eta()) < 2.4) && (abs(antimuGen.eta()) < 2.4) 
+            (fabs(muGen.eta()) < 2.4) && (fabs(antimuGen.eta()) < 2.4) 
             && (muGen.pt() > {pt_min}) && (antimuGen.pt() > {pt_min}) 
             && (muGen.pt() < {pt_max}) && (antimuGen.pt() < {pt_max}) 
-            && (massVGen > {mass_min}) & (massVGen < {mass_max})
+            && (massVGen > {mass_min}) && (massVGen < {mass_max})
             """
     else:
         raise NotImplementedError(f"No fiducial phase space definiton found for mode '{mode}'!") 
 
     for sel in selections:
-        selection += f"&& ({sel})"
+        selection += f" && ({sel})"
 
     df = df.Define("fiducial", selection)
 

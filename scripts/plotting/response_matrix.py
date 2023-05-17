@@ -17,7 +17,7 @@ parser.add_argument("--outpath", type=str, default=os.path.expanduser("~/www/WMa
 parser.add_argument("-f", "--outfolder", type=str, default="test", help="Subfolder for output")
 parser.add_argument("--procFilters", type=str, nargs="*", default="Zmumu", help="Filter to plot (default no filter, only specify if you want a subset")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name")
-parser.add_argument("--axes", type=str, nargs="+", default=["pt-ptGen","abs(eta)-etaGen"], help="Define for which axes the response matrix to be plotted")
+parser.add_argument("--axes", type=str, nargs="+", default=["pt-ptGen","abs(eta)-absEtaGen"], help="Define for which axes the response matrix to be plotted")
 parser.add_argument("-c", "--channels", type=str, nargs="+", choices=["plus", "minus", "all"], default="all", help="Select channel to plot")
 
 args = parser.parse_args()

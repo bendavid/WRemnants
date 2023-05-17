@@ -4,7 +4,7 @@ import hist
 logger = logging.child_logger(__name__)
 
 axis_xnorm = hist.axis.Integer(0, 1, underflow=False, overflow=False, name = "count")
-axis_fiducial = hist.axis.Boolean(name = "fiducial")
+axis_fiducial = hist.axis.Integer(1, 2, underflow=True, overflow=False, name = "fiducial") # fill with 1 = inside fiducial; 0 = outside fiducial
 
 eta_binning = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.5, 1.7, 1.9, 2.1, 2.4] # 18 eta bins
 
@@ -12,13 +12,13 @@ def get_pt_eta_axes(n_bins_pt, min_pt, max_pt, n_bins_eta=0):
 
     # gen axes for differential measurement
     if n_bins_eta > 0:
-        axis_etaGen = hist.axis.Regular(n_bins_eta, 0, 2.4, underflow=False, overflow=False, name = "etaGen")
+        axis_absEtaGen = hist.axis.Regular(n_bins_eta, 0, 2.4, underflow=False, overflow=True, name = "absEtaGen")
     else:
-        axis_etaGen = hist.axis.Variable(eta_binning, underflow=False, overflow=False, name = "etaGen")
-    axis_ptGen = hist.axis.Regular(n_bins_pt, min_pt, max_pt, underflow=False, overflow=False, name = "ptGen")    
+        axis_absEtaGen = hist.axis.Variable(eta_binning, underflow=False, overflow=True, name = "absEtaGen")
+    axis_ptGen = hist.axis.Regular(n_bins_pt, min_pt, max_pt, underflow=True, overflow=True, name = "ptGen")    
 
-    axes = [axis_ptGen, axis_etaGen, axis_fiducial]
-    cols = ["ptGen", "etaGen", "fiducial"]
+    axes = [axis_ptGen, axis_absEtaGen]
+    cols = ["ptGen", "absEtaGen"]
 
     return axes, cols
 
@@ -48,8 +48,8 @@ def get_dilepton_axes(gen_vars, gen_axes):
     if "ptVGen" in gen_vars:
         selections.append("ptVGen < {0}".format(gen_axes["ptVGen"].edges[-1]))
 
-    if "yVGen" in gen_vars:
-        selections.append("yVGen < {0}".format(gen_axes["yVGen"].edges[-1]))
+    if "absYVGen" in gen_vars:
+        selections.append("absYVGen < {0}".format(gen_axes["absYVGen"].edges[-1]))
 
     axes.append(axis_fiducial)
     cols.append("fiducial")
