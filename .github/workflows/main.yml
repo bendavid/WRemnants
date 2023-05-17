@@ -67,23 +67,23 @@ jobs:
         run: echo PLOT_DIR=$(date +%Y_%m_%d)/ScheduledBuild_$(git rev-parse --short "$GITHUB_SHA") >> $GITHUB_ENV
 
       - name: wmass setup events
-        if: github.event.schedule == '0 3 * * 2,4,6'
+        if: github.event_name != 'pull_request'
         run: echo "NTHREADS=64" >> $GITHUB_ENV
 
       - name: wmass setup events
-        if: github.event.schedule == '0 3 * * 2,4,6'
+        if: github.event_name != 'pull_request'
         run: echo "MAX_FILES=-1" >> $GITHUB_ENV
 
-      - name: wmass setup lumi scale
-        if: github.event.schedule == '0 3 * * 2,4,6'
+      - name: wmass setup full lumi 
+        if: github.event_name != 'pull_request'
         run: echo "LUMI_SCALE=1" >> $GITHUB_ENV
 
       - name: wmass setup lumi scale
-        if: github.event.schedule != '0 3 * * 2,4,6'
+        if: github.event_name == 'pull_request'
         run: echo "LUMI_SCALE=120" >> $GITHUB_ENV
 
-      - name: wmass setup lumi scale
-        if: github.event.schedule != '0 3 * * 2,4,6'
+      - name: wmass setup max files
+        if: github.event_name == 'pull_request'
         run: echo "MAX_FILES=100" >> $GITHUB_ENV
 
       - name: wmass analysis
@@ -92,8 +92,11 @@ jobs:
       - name: wmass plotting
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --hists pt eta pt-eta -p $WEB_DIR -f $PLOT_DIR -a W $OUTFILE variation --varName nominal_uncorr --varLabel MiNNLO --colors red
 
-      - name: wmass plot mtAndMet
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --rebin 2 --yscale 1.5 --baseName mtAndMET --hists mt met -p $WEB_DIR -f $PLOT_DIR $OUTFILE
+      - name: wmass plot mt
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --rebin 2 --yscale 1.5 --baseName transverseMass --hists mt -p $WEB_DIR -f $PLOT_DIR $OUTFILE
+
+      - name: wmass plot MET
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --rebin 2 --yscale 1.5 --baseName MET --hists met -p $WEB_DIR -f $PLOT_DIR $OUTFILE 
 
       - name: wmass plot massShift
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py -a massVariation --yscale 1.4 --hist pt --baseName nominal -r 0.98 1.02 -p $WEB_DIR -f $PLOT_DIR $OUTFILE variation --varName massWeight --selectEntries massShift100MeVUp massShift100MeVDown --varLabel massShift100MeVUp massShift100MeVDown --selectAxis massShift --color grey grey
@@ -120,15 +123,15 @@ jobs:
           submodules: 'true'
 
       - name: lowpu setup events
-        if: github.event.schedule == '0 3 * * 2,4,6'
+        if: github.event_name != 'pull_request'
         run: echo "MAX_FILES=-1" >> $GITHUB_ENV
 
       - name: lowpu setup lumi scale
-        if: github.event.schedule == '0 3 * * 2,4,6'
+        if: github.event_name != 'pull_request'
         run: echo "LUMI_SCALE=1" >> $GITHUB_ENV
 
       - name: lowpu setup threads
-        if: github.event.schedule == '0 3 * * 2,4,6'
+        if: github.event_name != 'pull_request'
         run: echo "NTHREADS=64" >> $GITHUB_ENV
 
       - name: lowpu w analysis
@@ -171,15 +174,15 @@ jobs:
         run: echo PLOT_DIR=$(date +%Y_%m_%d)/ScheduledBuild_$(git rev-parse --short "$GITHUB_SHA") >> $GITHUB_ENV
 
       - name: wlike setup events
-        if: github.event.schedule == '0 3 * * 2,4,6'
+        if: github.event_name != 'pull_request'
         run: echo "MAX_FILES=-1" >> $GITHUB_ENV
 
       - name: wlike setup lumi scale
-        if: github.event.schedule == '0 3 * * 2,4,6'
+        if: github.event_name != 'pull_request'
         run: echo "LUMI_SCALE=1" >> $GITHUB_ENV
 
       - name: wlike setup threads
-        if: github.event.schedule == '0 3 * * 2,4,6'
+        if: github.event_name != 'pull_request'
         run: echo "NTHREADS=64" >> $GITHUB_ENV
 
       - name: wlike analysis
@@ -235,11 +238,11 @@ jobs:
         run: echo PLOT_DIR=$(date +%Y_%m_%d)/ScheduledBuild_$(git rev-parse --short "$GITHUB_SHA") >> $GITHUB_ENV
 
       - name: dilepton setup threads
-        if: github.event.schedule == '0 3 * * 2,4,6'
+        if: github.event_name != 'pull_request'
         run: echo "NTHREADS=64" >> $GITHUB_ENV
 
       - name: dilepton setup events
-        if: github.event.schedule == '0 3 * * 2,4,6'
+        if: github.event_name != 'pull_request'
         run: echo "MAX_FILES=-1" >> $GITHUB_ENV
 
       - name: dilepton analysis

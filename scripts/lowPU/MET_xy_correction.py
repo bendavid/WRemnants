@@ -15,8 +15,8 @@ import pickle
 import narf
 import numpy as np
 
-from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU
-from wremnants.datasets.datagroups2016 import make_datagroups_2016
+from wremnants.datasets.datagroupsLowPU import datagroupsLowPU
+from wremnants.datasets.datagroups import datagroups2016
 
 def readProc(datagroups, hName, procName):
 
@@ -293,9 +293,9 @@ def METxyCorrection(direction = "x", corrType="uncorr", polyOrderData=-1, polyOr
     
 if __name__ == "__main__":
 
-    met = "RawPFMET" # PFMET, RawPFMET DeepMETReso
+    met = "DeepMETReso" # PFMET, RawPFMET DeepMETReso
     flavor = "mu" # mu, e, mumu, ee
-    lowPU = True
+    lowPU = False
 
     # DATA For electron channels!
     
@@ -304,7 +304,7 @@ if __name__ == "__main__":
         npv_max, npv_fit_min, npv_fit_max = 10, 0, 10
         lumi_header = "199 pb^{#minus1} (13 TeV)"
         
-        datagroups = make_datagroups_lowPU("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
+        datagroups = datagroupsLowPU("lowPU_%s_%s.pkl.lz4" % (flavor, met), flavor=flavor)
         procs = ['EWK', 'Top', 'Zmumu'] 
         data = "SingleMuon" if "mu" in flavor else "SingleElectron"
 
@@ -335,14 +335,14 @@ if __name__ == "__main__":
             npv_max, npv_fit_min, npv_fit_max = 60, 5, 55
             polyOrderDataX, polyOrderMCX = 3, 3
             polyOrderDataY, polyOrderMCY = 3, 3
-            datagroups = make_datagroups_2016("mz_wlike_with_mu_eta_pt_%s.pkl.lz4" % (met))
+            datagroups = datagroups2016(f"mz_wlike_with_mu_eta_pt_{met}.hdf5")
             procs = ["Zmumu", "Ztautau", "Other"]
             data = "Data"
         else:
             npv_max, npv_fit_min, npv_fit_max = 60, 0, 55
             polyOrderDataX, polyOrderMCX = 3, 3
             polyOrderDataY, polyOrderMCY = 6, 3
-            datagroups = make_datagroups_2016("mw_with_mu_eta_pt_%s.pkl.lz4" % (met))
+            datagroups = datagroups2016(f"mw_with_mu_eta_pt_{met}.hdf5")
             procs = ["Zmumu", "Ztautau", "Wtaunu", "Wmunu", "Top", "Diboson"]
             data = "Data"
             
@@ -368,4 +368,3 @@ if __name__ == "__main__":
         METxyCorrection(direction="x", corrType="corr_xy", polyOrderData=polyOrderDataX, polyOrderMC=polyOrderMCX, procs=procs, data=data, yMin=-10, yMax=6)
         METxyCorrection(direction="y", corrType="corr_xy", polyOrderData=polyOrderDataY, polyOrderMC=polyOrderMCY, procs=procs, data=data)
         print(fOut)
-        
