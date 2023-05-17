@@ -341,36 +341,36 @@ def main(args,xnorm=False):
             combine_helpers.add_recoil_uncertainty(cardTool, signal_samples, passSystToFakes=passSystToFakes, flavor="mu")
 
         if wmass:
-            cardTool.addSystematic("Z_non_closure_charge_dep", 
+            cardTool.addSystematic("Z_non_closure_parametrized", 
                 processes=single_vmu_samples,
-                group="muonScale_nonClosure_chargeDep",
-                baseName="CMS_scale_m_non_closure_charge_dep",
-                systAxes=["downUpVar"],
-                labelsByAxis=["downUpVar"],
+                group="muonScale_nonClosure_parametrized",
+                baseName="CMS_scale_m_non_closure_parametrized",
+                systAxes=["unc", "downUpVar"],
+                labelsByAxis=["unc", "downUpVar"],
                 passToFakes=passSystToFakes
             )
-            cardTool.addSystematic("Z_non_closure_charge_dep_A", 
+            cardTool.addSystematic("Z_non_closure_parametrized_A", 
                 processes=single_vmu_samples,
-                group="muonScale_nonClosure_chargeDep_A",
-                baseName="CMS_scale_m_non_closure_charge_dep_A",
-                systAxes=["downUpVar"],
-                labelsByAxis=["downUpVar"],
+                group="muonScale_nonClosure_parametrized_A",
+                baseName="CMS_scale_m_non_closure_parametrized_A",
+                systAxes=["unc", "downUpVar"],
+                labelsByAxis=["unc", "downUpVar"],
                 passToFakes=passSystToFakes
             )
-            cardTool.addSystematic("Z_non_closure_charge_dep_M", 
+            cardTool.addSystematic("Z_non_closure_parametrized_M", 
                 processes=single_vmu_samples,
-                group="muonScale_nonClosure_chargeDep_M",
-                baseName="CMS_scale_m_non_closure_charge_dep_M",
-                systAxes=["downUpVar"],
-                labelsByAxis=["downUpVar"],
+                group="muonScale_nonClosure_parametrized_M",
+                baseName="CMS_scale_m_non_closure_parametrized_M",
+                systAxes=["unc", "downUpVar"],
+                labelsByAxis=["unc", "downUpVar"],
                 passToFakes=passSystToFakes
-            )
-            cardTool.addSystematic("Z_non_closure_charge_ind", 
+            )            
+            cardTool.addSystematic("Z_non_closure_binned", 
                 processes=single_vmu_samples,
-                group="muonScale_nonClosure_chargeInd",
-                baseName="CMS_scale_m_non_closure_charge_ind",
-                systAxes=["downUpVar"],
-                labelsByAxis=["downUpVar"],
+                group="muonScale_nonClosure_binned",
+                baseName="CMS_scale_m_non_closure_binned",
+                systAxes=["unc_ieta", "unc_ipt", "downUpVar"],
+                labelsByAxis=["unc_ieta", "unc_ipt", "downUpVar"],
                 passToFakes=passSystToFakes
             )
             #cardTool.addLnNSystematic("CMS_Fakes", processes=[args.qcdProcessName], size=1.05, group="MultijetBkg")

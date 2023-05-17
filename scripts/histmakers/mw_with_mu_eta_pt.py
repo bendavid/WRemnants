@@ -122,8 +122,8 @@ bias_helper = muon_calibration.make_muon_bias_helpers(args) if args.biasCalibrat
 
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theoryCorr)
 
-z_non_closure_charge_dep_helper = muon_calibration.make_Z_non_closure_charge_dep_helper()
-z_non_closure_charge_ind_helper = muon_calibration.make_Z_non_closure_charge_ind_helper()
+z_non_closure_parametrized_helper = muon_calibration.make_Z_non_closure_parametrized_helper()
+z_non_closure_binned_helper = muon_calibration.make_Z_non_closure_binned_helper()
 
 # recoil initialization
 if not args.noRecoil:
@@ -423,8 +423,7 @@ def build_graph(df, dataset):
                         df = df.DefinePerSample("AFlag", "0x01")
                         df = df.DefinePerSample("MFlag", "0x04")
                         df = df.DefinePerSample("AMFlag", "0x01 | 0x04")
-
-                        df = df.Define("Z_non_closure_charge_dep", z_non_closure_charge_dep_helper,
+                        df = df.Define("Z_non_closure_parametrized", z_non_closure_parametrized_helper,
                             [
                                 f"{reco_sel_GF}_qop0_gen",
                                 f"{reco_sel_GF}_eta0_gen",
@@ -435,17 +434,16 @@ def build_graph(df, dataset):
                                 f"{reco_sel_GF}_covMat0",
                                 "nominal_weight",
                                 "AMFlag"
-                            ]
-                        )
-                        hist_Z_non_closure_charge_dep = df.HistoBoost(
-                            "nominal_Z_non_closure_charge_dep",
+                            ])
+                        hist_Z_non_closure_parametrized = df.HistoBoost(
+                            "Z_non_closure_parametrized_gensmear",
                             nominal_axes,
-                            [*nominal_cols_gen_smeared, "Z_non_closure_charge_dep"],
-                           tensor_axes = [common.down_up_axis]
+                            [*nominal_cols_gen_smeared, "Z_non_closure_parametrized"],
+                            tensor_axes = z_non_closure_parametrized_helper.tensor_axes
                         )
-                        results.append(hist_Z_non_closure_charge_dep)
+                        results.append(hist_Z_non_closure_parametrized)
 
-                        df = df.Define("Z_non_closure_charge_dep_A", z_non_closure_charge_dep_helper,
+                        df = df.Define("Z_non_closure_parametrized_A", z_non_closure_parametrized_helper,
                             [
                                 f"{reco_sel_GF}_qop0_gen",
                                 f"{reco_sel_GF}_eta0_gen",
@@ -458,15 +456,15 @@ def build_graph(df, dataset):
                                 "AFlag"
                             ]
                         )
-                        hist_Z_non_closure_charge_dep_A = df.HistoBoost(
-                            "nominal_Z_non_closure_charge_dep_A",
+                        hist_Z_non_closure_parametrized_A = df.HistoBoost(
+                            "Z_non_closure_parametrized_A_gensmear",
                             nominal_axes,
-                            [*nominal_cols_gen_smeared, "Z_non_closure_charge_dep_A"],
-                            tensor_axes = [common.down_up_axis]
+                            [*nominal_cols_gen_smeared, "Z_non_closure_parametrized_A"],
+                            tensor_axes = z_non_closure_parametrized_helper.tensor_axes
                         )
-                        results.append(hist_Z_non_closure_charge_dep_A)
+                        results.append(hist_Z_non_closure_parametrized_A)
 
-                        df = df.Define("Z_non_closure_charge_dep_M", z_non_closure_charge_dep_helper,
+                        df = df.Define("Z_non_closure_parametrized_M", z_non_closure_parametrized_helper,
                             [
                                 f"{reco_sel_GF}_qop0_gen",
                                 f"{reco_sel_GF}_eta0_gen",
@@ -479,15 +477,15 @@ def build_graph(df, dataset):
                                 "MFlag"
                             ]
                         )
-                        hist_Z_non_closure_charge_dep_M = df.HistoBoost(
-                            "nominal_Z_non_closure_charge_dep_M",
+                        hist_Z_non_closure_parametrized_M = df.HistoBoost(
+                            "Z_non_closure_parametrized_M_gensmear",
                             nominal_axes,
-                            [*nominal_cols_gen_smeared, "Z_non_closure_charge_dep_M"],
-                            tensor_axes = [common.down_up_axis]
+                            [*nominal_cols_gen_smeared, "Z_non_closure_parametrized_M"],
+                            tensor_axes = z_non_closure_parametrized_helper.tensor_axes
                         )
-                        results.append(hist_Z_non_closure_charge_dep_M)
+                        results.append(hist_Z_non_closure_parametrized_M)
 
-                        df = df.Define("Z_non_closure_charge_ind", z_non_closure_charge_ind_helper,
+                        df = df.Define("Z_non_closure_binned", z_non_closure_binned_helper,
                             [
                                 f"{reco_sel_GF}_qop0_gen",
                                 f"{reco_sel_GF}_pt0_gen",
@@ -501,13 +499,13 @@ def build_graph(df, dataset):
                                 "nominal_weight"
                             ]
                         )
-                        hist_Z_non_closure_charge_ind = df.HistoBoost(
-                            "nominal_Z_non_closure_charge_ind",
+                        hist_Z_non_closure_binned = df.HistoBoost(
+                            "Z_non_closure_binned_gensmear",
                             nominal_axes,
-                            [*nominal_cols_gen_smeared, "Z_non_closure_charge_ind"],
-                            tensor_axes = [common.down_up_axis]
+                            [*nominal_cols_gen_smeared, "Z_non_closure_binned"],
+                            tensor_axes = z_non_closure_binned_helper.tensor_axes
                         )
-                        results.append(hist_Z_non_closure_charge_ind)
+                        results.append(hist_Z_non_closure_binned)
 
             if args.muonScaleVariation == 'smearingWeights':
                 
