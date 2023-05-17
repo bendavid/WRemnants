@@ -30,6 +30,9 @@ era = args.era
 mass_min = 60
 mass_max = 120
 
+# transverse boson mass cut
+mtw_min=45 # 40 for Wmass, thus be 45 here (roughly half the boson mass)
+
 # custom template binning
 template_neta = int(args.eta[0])
 template_mineta = args.eta[1]
@@ -113,6 +116,8 @@ def build_graph(df, dataset):
 
     if unfold:
         df = unfolding_tools.define_gen_level(df, args.genLevel, dataset.name, mode="wlike")
+        df = unfolding_tools.define_fiducial_space(df, mode="wlike", 
+            pt_min=args.pt[1], pt_max=args.pt[2], mass_min=mass_min, mass_max=mass_max, mtw_min=mtw_min)
         unfolding_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols)
 
         axes = [*nominal_axes, *unfolding_axes] 
@@ -179,7 +184,7 @@ def build_graph(df, dataset):
     results.append(df.HistoBoost("MET", [hist.axis.Regular(20, 0, 100, name="MET")], ["MET_corr_rec_pt", "nominal_weight"]))
     ###########
     
-    df = df.Filter("transverseMass >= 45.") # 40 for Wmass, thus be 45 here (roughly half the boson mass)
+    df = df.Filter(f"transverseMass >= {mtw_min}")
     
     nominal = df.HistoBoost("nominal", axes, [*cols, "nominal_weight"])
     results.append(nominal)

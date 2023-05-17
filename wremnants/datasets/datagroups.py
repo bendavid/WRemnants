@@ -459,7 +459,9 @@ class Datagroups(object):
                 self.gen_axes = ["qGen","absEtaGen","ptGen"]
             else:
                 self.gen_axes = args.get("genVars", [])
-                self.gen_axes.append("fiducial")
+
+        # so far all unfolding scenarios have fiducial cuts    
+        self.gen_axes.append("fiducial")
 
         logger.debug(f"Gen axes are now {self.gen_axes}")
 

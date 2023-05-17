@@ -41,6 +41,9 @@ datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
 
 era = args.era
 
+# transverse boson mass cut
+mtw_min = 40
+
 # custom template binning
 template_neta = int(args.eta[0])
 template_mineta = args.eta[1]
@@ -156,6 +159,7 @@ def build_graph(df, dataset):
 
     if unfold:
         df = unfolding_tools.define_gen_level(df, args.genLevel, dataset.name, mode="wmass")
+        df = unfolding_tools.define_fiducial_space(df, mode="wmass", mtw_min=mtw_min)
         unfolding_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols)
         axes = [*nominal_axes, *unfolding_axes] 
         cols = [*nominal_cols, *unfolding_cols]
@@ -282,7 +286,7 @@ def build_graph(df, dataset):
         mtIsoJetCharge = df.HistoBoost("mtIsoJetCharge", [axis_mt_fakes, axis_iso_fakes, axis_hasjet_fakes, axis_charge], ["transverseMass", "goodMuons_pfRelIso04_all0", "hasCleanJet", "goodMuons_charge0", "nominal_weight"])
         results.append(mtIsoJetCharge)
     
-    df = df.Define("passMT", "transverseMass >= 40.0")
+    df = df.Define("passMT", f"transverseMass >= {mtw_min}")
 
     if auxiliary_histograms:
         # utility plot, mt and met, to plot them later
