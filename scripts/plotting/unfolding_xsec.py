@@ -68,7 +68,7 @@ def get_bin(name, var):
     else:
         return int(name_split[-1].split("_")[0])
 
-def getProcessBins(name, axes=["qGen", "ptGen", "etaGen"]):
+def getProcessBins(name, axes=["qGen", "ptGen", "absEtaGen"]):
     res = {
         x: get_bin(name, x) if get_bin(name, x) else 0 for x in axes
     }
@@ -98,7 +98,7 @@ def get_label(name):
 
     else:
         res = getProcessBins(name)
-        eta = res["etaGen"]
+        eta = res["absEtaGen"]
         pt = res["ptGen"]
         charge = res["qGen"]    
 
@@ -225,10 +225,10 @@ def get_results(rtfile, poi_type, scale=1.0, group=True, uncertainties=None): #=
             df[u] /= scale
 
     # try to decode the name string into bin number
-    for axis in ["qGen", "ptGen", "etaGen", "ptVGen"]:
+    for axis in ["qGen", "ptGen", "absEtaGen", "ptVGen"]:
         df[axis] = df["Name"].apply(lambda x, a=axis: get_bin(x, a))
 
-    df = df.sort_values(["qGen", "ptGen", "etaGen", "ptVGen"], ignore_index=True)
+    df = df.sort_values(["qGen", "ptGen", "absEtaGen", "ptVGen"], ignore_index=True)
     return df
 
 def plot_xsec_unfolded(data, data_asimov=None, channel=None, poi_type="mu", scale=1., normalize=False):

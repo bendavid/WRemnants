@@ -201,6 +201,7 @@ class Datagroups(object):
             
         for procName in procsToReadSort:
             logger.debug(f"Reading group {procName}")
+            
             if procName not in self.groups.keys():
                 raise RuntimeError(f"Group {procName} not known. Defined groups are {list(self.groups.keys())}.")
             group = self.groups[procName]
@@ -208,7 +209,7 @@ class Datagroups(object):
 
             for i, member in enumerate(group.members):
                 if procName == nameFake and member.name in fakesMembersWithSyst:
-                    # if we are here this process has been already use to build the fakes when running for other groups
+                    # if we are here this process has been already used to build the fakes when running for other groups
                     continue
                 logger.debug(f"Looking at group member {member.name}")
                 scale = group.scale
@@ -299,6 +300,7 @@ class Datagroups(object):
 
     #TODO: Better organize to avoid duplicated code
     def setHistsCombine(self, baseName, syst, channel, procsToRead=None, excludeProcs=[], label=None):
+        logger.debug(f"setHistsCombine()")
         if type(excludeProcs) == str: excludeProcs = excludeProcs.split(",")
         #TODO Set axis names properly
         if baseName == "x":
@@ -452,11 +454,12 @@ class Datagroups(object):
                 return
 
             if self.wmass:
-                self.gen_axes = ["etaGen","ptGen"]
+                self.gen_axes = ["absEtaGen","ptGen"]
             elif self.wlike:
-                self.gen_axes = ["qGen","etaGen","ptGen"]
+                self.gen_axes = ["qGen","absEtaGen","ptGen"]
             else:
                 self.gen_axes = args.get("genVars", [])
+                self.gen_axes.append("fiducial")
 
         logger.debug(f"Gen axes are now {self.gen_axes}")
 
@@ -465,6 +468,13 @@ class Datagroups(object):
             raise RuntimeError(f"Base group {group_name} not found in groups {self.groups.keys()}!")
 
         nominal_hist = self.results[self.groups[group_name].members[0].name]["output"]["xnorm"].get()
+
+        if "fiducial" in nominal_hist.axes.name and "fiducial" not in self.gen_axes:
+            logger.warning("Fiducial axis found in histogram. Will be added to gen_axes.")
+            self.gen_axes.append("fiducial")
+        if "fiducial" not in nominal_hist.axes.name and "fiducial" in self.gen_axes:
+            logger.warning("Fiducial axis not found in histogram but in gen_axes. Will be removed from gen_axes.")
+            self.gen_axes = [a for a in self.gen_axes if a != "fiducial"]
 
         gen_bins = []
         for gen_axis in self.gen_axes:
@@ -484,7 +494,7 @@ class Datagroups(object):
 
             self.copyGroup(group_name, proc_name)
 
-            memberOp = lambda x, indices=indices, genvars=self.gen_axes: x[{**{var : i for var, i in zip(genvars, indices)}, "fiducial":1}]
+            memberOp = lambda x, indices=indices, genvars=self.gen_axes: x[{var : i for var, i in zip(genvars, indices)}]
             self.groups[proc_name].memberOp = [memberOp for m in base_members]
 
             self.unconstrainedProcesses.append(proc_name)
@@ -496,7 +506,23 @@ class Datagroups(object):
             self.groups[ooa_name].memberOp = []
             self.groups[ooa_name].members = []
         
-        self.groups[ooa_name].addMembers(base_members, lambda x: x[{"fiducial" : 0}])
+        # list of possible out of acceptance slices for each axis
+        slices = []
+        for var in self.gen_axes:
+            subslice = [{var : hist.tag.Slicer()[0:hist.overflow:hist.sum]}] 
+            if nominal_hist.axes[var].traits.__dict__["underflow"]:
+                subslice.append({var : hist.underflow})
+            if nominal_hist.axes[var].traits.__dict__["overflow"]:
+                subslice.append({var : hist.overflow})
+            slices.append(subslice)
+
+        # pick one slice for each axis from the list of possible slices
+        for condition in [functools.reduce(lambda x, y: {**x, **y}, tup) for tup in itertools.product(*slices)]:
+            # make sure that at least one axis takes the underflow/overflow, otherwise it would not be out of acceptance
+            if not any([c in [hist.underflow, hist.overflow] for c in condition.values()]):
+                continue
+            logger.debug(f"Add members with condition {condition}")
+            self.groups[ooa_name].addMembers(base_members, lambda x, c=condition: x[c])
 
         # Remove inclusive signal
         self.deleteGroup(group_name)
@@ -524,6 +550,7 @@ class Datagroups(object):
         logger.debug(f"Reading hist {histname} for proc/group {proc.name}/{group} and syst '{syst}'")
         if histname not in output:
             raise ValueError(f"Histogram {histname} not found for process {proc.name}")
+
         h = output[histname]
         if isinstance(h, narf.ioutils.H5PickleProxy):
             h = h.get()

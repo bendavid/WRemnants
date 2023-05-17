@@ -83,7 +83,7 @@ def get_bin(name, var):
     else:
         return int(name_split[-1].split("_")[0])
 
-def getProcessBins(name, axes = ["qGen", "ptGen", "etaGen"]):
+def getProcessBins(name, axes = ["qGen", "ptGen", "absEtaGen"]):
     res = {
         x: get_bin(name, x) if get_bin(name, x) else 0 for x in axes
     }
@@ -117,7 +117,7 @@ def get_label(name):
         return label
     else:
         res = getProcessBins(name)
-        eta = res["etaGen"]
+        eta = res["absEtaGen"]
         pt = res["ptGen"]
         charge = res["qGen"]    
 
@@ -165,7 +165,7 @@ def get_color(name):
 
         else:
             res = getProcessBins(name)
-            eta = res["etaGen"]
+            eta = res["absEtaGen"]
             pt = res["ptGen"]
             charge = res["qGen"]    
 

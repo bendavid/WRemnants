@@ -15,7 +15,7 @@ import os
 parser.add_argument("--csVarsHist", action='store_true', help="Add CS variables to dilepton hist")
 parser.add_argument("--axes", type=str, nargs="*", default=["mll", "ptll"], help="")
 parser.add_argument("--finePtBinning", action='store_true', help="Use fine binning for ptll")
-parser.add_argument("--genVars", type=str, nargs="+", default=["ptVGen"], choices=["ptVGen", "yVGen"], help="Generator level variable")
+parser.add_argument("--genVars", type=str, nargs="+", default=["ptVGen"], choices=["ptVGen", "absYVGen"], help="Generator level variable")
 
 parser = common.set_parser_default(parser, "pt", [44,26.,70.])
 parser = common.set_parser_default(parser, "eta", [6,-2.4,2.4])
@@ -63,8 +63,8 @@ if args.csVarsHist:
 nominal_axes = [all_axes[a] for a in nominal_cols] 
 
 gen_axes = {
-    "ptVGen": hist.axis.Variable(common.ptV_binning if not args.finePtBinning else range(60), name = "ptVGen", underflow=False, overflow=False),
-    "yVGen": hist.axis.Variable([0.0, 0.4, 0.8, 1.2, 1.6, 2.0, 2.4, 2.8, 3.6], name = "yVGen", underflow=False, overflow=False),    # "ATLAS" binning
+    "ptVGen": hist.axis.Variable(common.ptV_binning if not args.finePtBinning else range(60), name = "ptVGen", underflow=False, overflow=True),
+    "absYVGen": hist.axis.Variable([0.0, 0.4, 0.8, 1.2, 1.6, 2.0, 2.4, 2.8, 3.6], name = "absYVGen", underflow=False, overflow=True),    # "ATLAS" binning
 }
 
 unfolding_axes, unfolding_cols, unfolding_selections = differential.get_dilepton_axes(args.genVars, gen_axes)

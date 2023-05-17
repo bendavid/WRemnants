@@ -51,7 +51,7 @@ axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, nam
 nominal_axes = [axis_eta, axis_pt, axis_charge]
 nominal_cols = ["trigMuons_eta0", "trigMuons_pt0", "trigMuons_charge0"]
 
-unfolding_axes, unfolding_cols = differential.get_pt_eta_charge_axes(args.genBins[0], template_minpt, template_maxpt, args.genBins[1])
+unfolding_axes, unfolding_cols = differential.get_pt_eta_charge_axes(template_npt, template_minpt, template_maxpt, args.genBins[1])
 
 # axes for mT measurement
 axis_mt = hist.axis.Regular(200, 0., 200., name = "mt",underflow=False, overflow=True)
@@ -113,7 +113,6 @@ def build_graph(df, dataset):
 
     if unfold:
         df = unfolding_tools.define_gen_level(df, args.genLevel, dataset.name, mode="wlike")
-        df = unfolding_tools.define_fiducial_space(df, mode="wlike", pt_min=template_minpt, pt_max=template_maxpt, mass_min=mass_min, mass_max=mass_max)
         unfolding_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols)
 
         axes = [*nominal_axes, *unfolding_axes] 
@@ -137,7 +136,7 @@ def build_graph(df, dataset):
 
     df = muon_selections.define_trigger_muons(df)
 
-    df = muon_selections.select_z_candidate(df, args.pt[1], args.pt[2], mass_min, mass_max)
+    df = muon_selections.select_z_candidate(df, template_minpt, template_maxpt, mass_min, mass_max)
 
     df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "trigMuons")
     df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "nonTrigMuons")

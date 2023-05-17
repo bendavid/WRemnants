@@ -156,7 +156,6 @@ def build_graph(df, dataset):
 
     if unfold:
         df = unfolding_tools.define_gen_level(df, args.genLevel, dataset.name, mode="wmass")
-        df = unfolding_tools.define_fiducial_space(df, mode="wmass", pt_min=template_minpt, pt_max=template_maxpt)
         unfolding_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols)
         axes = [*nominal_axes, *unfolding_axes] 
         cols = [*nominal_cols, *unfolding_cols]

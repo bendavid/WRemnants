@@ -95,10 +95,5 @@ def make_datagroups_2016(input_file, combine=False, pseudodata_pdfset = None, ap
         )
         dg.filterGroups(filterGroups)
         dg.excludeGroups(excludeGroups)
-        
-    if dg.wmass:
-        dg.gen_axes = ["etaGen", "ptGen"]
-    elif dg.wlike:
-        dg.gen_axes = ["qGen", "etaGen", "ptGen"]
 
     return dg
