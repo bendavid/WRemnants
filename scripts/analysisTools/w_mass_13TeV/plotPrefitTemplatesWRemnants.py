@@ -22,6 +22,7 @@ ROOT.gROOT.SetBatch(True)
 ROOT.PyConfig.IgnoreCommandLineOptions = True
 
 from copy import *
+import wremnants
 
 from scripts.analysisTools.plotUtils.utility import *
 
@@ -168,6 +169,7 @@ def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
 
     # plot unrolled ratio to better see how it looks like
     ratio_unrolled = unroll2Dto1D(ratio2D, newname=f"{ratio2D.GetName()}_unrolled")
+    ROOT.wrem.setRootHistogramError(ratio_unrolled, 0.0)
     drawSingleTH1(ratio_unrolled, XlabelUnroll, f"{dataTitle}/pred. ratio", "muon_etaPtUnrolledRatio",
                   outdir_dataMC, drawLineLowerPanel="", lowerPanelHeight=0.0, labelRatioTmp="", 
                   passCanvas=canvasWide,
