@@ -47,7 +47,7 @@ era = args.era
 
 if args.IsoEfficiencysmoothing:
     DirectIsoSFsmoothing = False
-else
+else :
     DirectIsoSFsmoothing = True
 
 # custom template binning
