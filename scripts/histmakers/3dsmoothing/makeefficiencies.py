@@ -8,11 +8,11 @@ import ROOT
 
 #FIRST STEP IN EFFICIENCY CREATION
 
-name = "newupdates"
+name = "newupdatesdeltaphi"
 
 histlist = []
 
-directory = "/gpfs/ddn/cms/user/bruschin/Newtest"
+directory = "/scratchnvme/bruschin/Newtest"
 
 #histlist.append(f"{directory}/mw_with_mu_eta_pt_scetlibCorr_idip{name}.hdf5")
 #histlist.append(f"{directory}/mw_with_mu_eta_pt_scetlibCorr_trigger{name}.hdf5")
