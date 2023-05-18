@@ -36,7 +36,7 @@ def broadcastOutHist(h1, h2):
     return h1 if len(h1.axes) > len(h2.axes) else h2
 
 # returns h1/h2
-def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False):
+def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False, createNew=True):
     # To get the broadcast shape right
     outh = h1 if not allowBroadcast else broadcastOutHist(h1, h2)
 
@@ -48,6 +48,7 @@ def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False):
 
     if h1._storage_type() != hist.storage.Weight() or h2._storage_type() != hist.storage.Weight():
         newh = hist.Hist(*outh.axes, data=val)
+        return newh
     else:
         relvars = relVariances(h1vals, h2vals, h1vars, h2vars)
         if rel_unc:
@@ -55,9 +56,14 @@ def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False):
             var = val*val*relvars[0]
         else:
             var = val*val*sum(relvars)
-        newh = hist.Hist(*outh.axes, storage=hist.storage.Weight(),
-                data=np.stack((val, var), axis=-1))
-    return newh
+        if createNew:
+            newh = hist.Hist(*outh.axes, storage=hist.storage.Weight(),
+                             data=np.stack((val, var), axis=-1))
+            return newh
+        else:
+            outh.values(flow=True)[...] = val
+            outh.variances(flow=True)[...] = var
+            return outh
 
 def relVariance(hvals, hvars, cutoff=1e-3, fillOnes=False):
     nonzero = np.abs(hvals) > cutoff
@@ -89,14 +95,18 @@ def multiplyWithVariance(vals1, vals2, vars1, vars2):
     var = val*val*sum(relVariances(vals1, vals2, vars1, vars2))
     return val, var
 
-def multiplyHists(h1, h2, allowBroadcast=True, transpose=True):
+def multiplyHists(h1, h2, allowBroadcast=True, transpose=True, createNew=True):
     h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2, allowBroadcast, transpose)
     val,var = multiplyWithVariance(h1vals, h2vals, h1vars, h2vars)
-
     outh = h1 if not allowBroadcast else broadcastOutHist(h1, h2)
-    newh = hist.Hist(*outh.axes, storage=hist.storage.Weight(),
-            data=np.stack((val, var), axis=-1))
-    return newh
+    if createNew:
+        newh = hist.Hist(*outh.axes, storage=hist.storage.Weight(),
+                         data=np.stack((val, var), axis=-1))
+        return newh
+    else:
+        outh.values(flow=True)[...] = val
+        outh.variances(flow=True)[...] = var
+        return outh
 
 def addHists(h1, h2, allowBroadcast=True, createNew=True):
     h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2, allowBroadcast)
@@ -113,22 +123,32 @@ def addHists(h1, h2, allowBroadcast=True, createNew=True):
 def sumHists(hists):
     return reduce(addHists, hists)
 
-def mirrorHist(hvar, hnom, cutoff=1):
-    div = divideHists(hnom, hvar, cutoff)
-    hnew = multiplyHists(div, hnom)
-    return hnew
-
+def mirrorHist(hvar, hnom, cutoff=1, createNew=True):
+    if createNew:
+        div = divideHists(hnom, hvar, cutoff)
+        hnew = multiplyHists(div, hnom)
+        return hnew
+    else:
+        # double copy needed because divideHists may update any of the two input histograms, which we don't want
+        # maybe at this point skipping the internal copy is not useful anymore
+        hnew = hvar.copy()
+        hnomiNew = hnom.copy()
+        hnew = divideHists(hnomiNew, hnew, cutoff, createNew=False)
+        hnew = multiplyHists(hnew, hnomiNew, createNew=False)
+        return hnew
+        
 def extendHistByMirror(hvar, hnom, downAsUp=False, downAsNomi=False):
     if downAsUp:
         hmirror = hvar.copy()
     elif downAsNomi:
-        # temporary solution, can't just copy nominal since I have to broabcast, as done in multiplyHists/divideHists
-        # surely there is a smarter way with numpy
+        # use multiplyHists to broadcast the nominal into the mirror, there might be a more direct way
         hmirror = hvar.copy()
-        div = divideHists(hmirror, hvar) # essentially creates hist with ones, with same shape as hvar 
-        hmirror = multiplyHists(div, hnom)
+        hmirror.view(flow=True)[...]
+        hmirror.values(flow=True)[...]    = np.ones_like(hmirror.values(flow=True))
+        hmirror.variances(flow=True)[...] = np.zeros_like(hmirror.variances(flow=True))
+        hmirror = multiplyHists(hmirror, hnom, createNew=False) 
     else:
-        hmirror = mirrorHist(hvar, hnom)
+        hmirror = mirrorHist(hvar, hnom, createNew=False)
     mirrorAx = hist.axis.Integer(0,2, name="mirror", overflow=False, underflow=False)
     hnew = hist.Hist(*hvar.axes, mirrorAx, storage=hvar._storage_type())
     hnew.view(flow=True)[...] = np.stack((hvar.view(flow=True), hmirror.view(flow=True)), axis=-1)
