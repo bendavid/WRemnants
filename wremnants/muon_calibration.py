@@ -560,8 +560,6 @@ def transport_smearing_weights_to_reco(
             if histname in proc_hists.keys():
                 hist_gensmear = proc_hists[histname].get()
                 reco_histname = 'nominal_' + histname[:-len('_gensmear')]
-                print('histname is: ', histname)
-                print('reco histname is: ', reco_histname)
                 hist_reco = hist.Hist(
                     *hist_gensmear.axes,
                     storage = hist_gensmear._storage_type()
@@ -576,7 +574,7 @@ def transport_smearing_weights_to_reco(
                         dn_up_reco = hh.combineUpDownVarHists(
                             *[hh.multiplyHists(nominal_reco, x) for x in bin_ratio_dn_up]
                         )
-                        hist_reco.view(flow = False)[..., i_unc, :] = dn_up_reco.view(flow = False)
+                        hist_reco.view()[..., i_unc, :] = dn_up_reco.view()
                 else:
                     for i_eta in range(hist_gensmear.axes['unc_ieta'].size):
                         for i_pt in range(hist_gensmear.axes['unc_ipt'].size):

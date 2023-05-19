@@ -441,7 +441,8 @@ def build_graph(df, dataset):
                             "Z_non_closure_parametrized_gensmear",
                             nominal_axes,
                             [*nominal_cols_gen_smeared, "Z_non_closure_parametrized"],
-                            tensor_axes = z_non_closure_parametrized_helper.tensor_axes
+                            tensor_axes = z_non_closure_parametrized_helper.tensor_axes,
+                            storage=hist.storage.Double()
                         )
                         results.append(hist_Z_non_closure_parametrized)
 
@@ -462,7 +463,8 @@ def build_graph(df, dataset):
                             "Z_non_closure_parametrized_A_gensmear",
                             nominal_axes,
                             [*nominal_cols_gen_smeared, "Z_non_closure_parametrized_A"],
-                            tensor_axes = z_non_closure_parametrized_helper.tensor_axes
+                            tensor_axes = z_non_closure_parametrized_helper.tensor_axes,
+                            storage=hist.storage.Double()
                         )
                         results.append(hist_Z_non_closure_parametrized_A)
 
@@ -483,7 +485,8 @@ def build_graph(df, dataset):
                             "Z_non_closure_parametrized_M_gensmear",
                             nominal_axes,
                             [*nominal_cols_gen_smeared, "Z_non_closure_parametrized_M"],
-                            tensor_axes = z_non_closure_parametrized_helper.tensor_axes
+                            tensor_axes = z_non_closure_parametrized_helper.tensor_axes,
+                            storage=hist.storage.Double()
                         )
                         results.append(hist_Z_non_closure_parametrized_M)
 
@@ -505,7 +508,8 @@ def build_graph(df, dataset):
                             "Z_non_closure_binned_gensmear",
                             nominal_axes,
                             [*nominal_cols_gen_smeared, "Z_non_closure_binned"],
-                            tensor_axes = z_non_closure_binned_helper.tensor_axes
+                            tensor_axes = z_non_closure_binned_helper.tensor_axes,
+                            storage=hist.storage.Double()
                         )
                         results.append(hist_Z_non_closure_binned)
 
