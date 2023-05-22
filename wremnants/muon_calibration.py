@@ -587,7 +587,6 @@ def transport_smearing_weights_to_reco(
                     *hist_gensmear.axes,
                     storage = hist_gensmear._storage_type()
                 )
-                n_var_axes = len(hist_reco.axes) - 5
                 
                 bin_ratio = hh.divideHists(hist_gensmear, nominal_gensmear)
                 hist_reco = hh.multiplyHists(nominal_reco, bin_ratio)
