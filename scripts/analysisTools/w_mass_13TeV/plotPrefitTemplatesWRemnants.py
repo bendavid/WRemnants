@@ -129,6 +129,29 @@ def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
     stack_pt.Write()
     den2D.Write()
 
+    # some plots to check statistical uncertainties in MC stack
+    hMCstat = copy.deepcopy(den2D.Clone("hMCstat"))
+    hMCstat.SetTitle("Sum of predicted processes")
+    ROOT.wrem.makeHistStatUncertaintyRatio(hMCstat, den2D)
+    drawCorrelationPlot(hMCstat, xAxisName, yAxisName, "#sqrt{#sum w^{2}} / #sqrt{N}::1.0,1.5",
+                        f"MCstatOverPoissonUncRatio_allProcs_{chargeLabel}", plotLabel="ForceTitle", outdir=outdir_dataMC,
+                        palette=57, passCanvas=canvas, drawOption="COLZ0", skipLumi=True, zTitleOffSet=1.3)
+    for h in hmc2D:
+        if "Wmunu" in h.GetName():
+            hMCstat_Wmunu = copy.deepcopy(h.Clone("hMCstat_Wmunu"))
+            hMCstat_Wmunu.SetTitle("Wmunu " + chargeLabel)
+            ROOT.wrem.makeHistStatUncertaintyRatio(hMCstat_Wmunu, h)
+            drawCorrelationPlot(hMCstat_Wmunu, xAxisName, yAxisName, "#sqrt{#sum w^{2}} / #sqrt{N}",
+                                f"MCstatOverPoissonUncRatio_Wmunu_{chargeLabel}", plotLabel="ForceTitle", outdir=outdir_dataMC,
+                                palette=57, passCanvas=canvas, drawOption="COLZ0", skipLumi=True, zTitleOffSet=1.3)
+        elif "Fake" in h.GetName():
+            hMCstat_Fake = copy.deepcopy(h.Clone("hMCstat_Fake"))
+            hMCstat_Fake.SetTitle("Fake " + chargeLabel)
+            ROOT.wrem.makeHistStatUncertaintyRatio(hMCstat_Fake, h)
+            drawCorrelationPlot(hMCstat_Fake, xAxisName, yAxisName, "#sqrt{#sum w^{2}} / #sqrt{N}::2,7",
+                                f"MCstatOverPoissonUncRatio_Fake_{chargeLabel}", plotLabel="ForceTitle", outdir=outdir_dataMC,
+                                palette=57, passCanvas=canvas, drawOption="COLZ0", skipLumi=True, zTitleOffSet=1.3)
+    
     ratio2D.Divide(den2D)
     ratio2D.Write()
 

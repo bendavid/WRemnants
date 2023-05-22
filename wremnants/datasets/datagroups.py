@@ -249,7 +249,12 @@ class Datagroups(object):
                 if preOpMap and member.name in preOpMap:
                     logger.debug(f"Applying preOp to {member.name}/{procName} after loading")
                     h = preOpMap[member.name](h, **preOpArgs)
-                    
+
+                # # test
+                # if all(x not in member.name for x in ["Data","data"]):
+                #     logger.warning(f"Setting variance to 0 for {member.name}/{procName}")
+                #     h.variances(flow=True)[...] = 0.
+
                 if self.globalAction:
                     h = self.globalAction(h)
                     logger.debug("Applying global action")

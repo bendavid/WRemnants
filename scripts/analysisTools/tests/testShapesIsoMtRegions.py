@@ -51,7 +51,7 @@ if __name__ == "__main__":
     parser.add_argument(     '--invertPalette', dest='invertePalette', action='store_true',   help='Inverte color ordering in palette')
     parser.add_argument('-p','--processes', default=None, nargs='*', type=str,
                         help='Choose what processes to plot, otherwise all are done')
-    parser.add_argument('-c','--charges', default=["plus", "minus"], choices=["plus", "minus"], nargs='+', type=str,
+    parser.add_argument('-c','--charges', default="both", choices=["plus", "minus", "both"], type=str,
                         help='Choose what charge to plot')
     parser.add_argument("--isoMtRegion", type=int, nargs='+', default=[0,1,2,3], choices=[0,1,2,3], help="Integer index for iso-Mt regions to plot (conversion is index = passIso * 1 + passMT * 2 as in common.getIsoMtRegionFromID)");
     args = parser.parse_args()
@@ -79,6 +79,9 @@ if __name__ == "__main__":
     xAxisName = "Muon #eta"
     yAxisName = "Muon p_{T} (GeV)"
 
+    charges = ["plus", "minus"] if args.charges == "both" else [args.charges]
+    histForFRF = {c : {} for c in charges}
+
     for isoMtID in args.isoMtRegion:
 
         ret = common.getIsoMtRegionFromID(isoMtID)
@@ -99,6 +102,7 @@ if __name__ == "__main__":
             
         groups = make_datagroups_2016(fname)
         datasets = groups.getNames()
+        logger.warning(datasets)
         if args.processes is not None and len(args.processes):
             datasets = list(filter(lambda x: x in args.processes, datasets))
         logger.info(f"Will plot datasets {datasets}")
@@ -118,8 +122,6 @@ if __name__ == "__main__":
         print("-"*30)
         rootHists = {}
 
-        charges = args.charges
-
         hist2D = {c : {} for c in charges}
         for d in datasets:
             hnarf = histInfo[d].hists[args.baseName]
@@ -130,6 +132,9 @@ if __name__ == "__main__":
                 chargeBin = 1 if charge == "minus" else 2
                 h = getTH2fromTH3(rootHists[d], f"{rootHists[d].GetName()}_{charge}", chargeBin, chargeBin)
                 h.SetTitle(f"{d} {charge}: {passMT_str} {passIso_str}")
+                if d == "Fake":
+                    regKey = f"{passIso_str}_{passMT_str}"
+                    histForFRF[charge][isoMtID] = copy.deepcopy(h.Clone(f"{d}_{charge}_{regKey}"))
                 drawCorrelationPlot(h, xAxisName, xAxisName, f"Events",
                                     f"{h.GetName()}", plotLabel="ForceTitle", outdir=outdir,
                                     smoothPlot=False, drawProfileX=False, scaleToUnitArea=False,
@@ -148,7 +153,40 @@ if __name__ == "__main__":
                 createPlotDirAndCopyPhp(outdir_dataMC)
                 plotPrefitHistograms(hist2D[c][f"Data_{c}"], hmc2D, outdir_dataMC, xAxisName=xAxisName, yAxisName=yAxisName,
                                      chargeLabel=c, canvas=canvas, canvasWide=cwide, canvas1D=canvas1D)
-                
+
+    if (args.processes == None or "Fake" in args.processes):
+        ptBinRanges = []
+        XlabelUnroll = ""
+        k = list(histForFRF.keys())[0]
+        k2 = list(histForFRF[k].keys())[0]
+        href = histForFRF[k][k2]
+        for ipt in range(1, 1+hFRF.GetNbinsY()):
+            ptBinRanges.append("#splitline{{[{ptmin},{ptmax}]}}{{GeV}}".format(ptmin=int(href.GetYaxis().GetBinLowEdge(ipt)),
+                                                                               ptmax=int(href.GetYaxis().GetBinLowEdge(ipt+1))))
+        XlabelUnroll = "unrolled template along #eta:  #eta #in [%.1f, %.1f]" % (href.GetXaxis().GetBinLowEdge(1),
+                                                                                 href.GetXaxis().GetBinLowEdge(1+href.GetNbinsX()))
+            
+            if all(x in args.isoMtRegion for x in [0, 1]):
+                hFRF = histForFRF[c][1].Clone(f"hFRF_{c}")
+                hFRF.Divide(histForFRF[c][0])
+                hFRF.SetTitle(f"FRF for charge {c}")
+                drawCorrelationPlot(hFRF, xAxisName, xAxisName, f"Fake rate factor",
+                                    f"{hFRF.GetName()}", plotLabel="ForceTitle", outdir=outdir,
+                                    smoothPlot=False, drawProfileX=False, scaleToUnitArea=False,
+                                    draw_both0_noLog1_onlyLog2=1, passCanvas=canvas,
+                                    nContours=args.nContours, palette=args.palette, invertePalette=args.invertePalette)
+                # plot unrolled FRF to better see how it looks like
+                hFRF_unrolled = unroll2Dto1D(hFRF, newname=f"{hFRF.GetName()}_unrolled")
+                drawSingleTH1(hFRF_unrolled, XlabelUnroll, f"Fake rate factor ({c})", f"{hFRF.GetName()}_unrolled",
+                              outdir, drawLineTopPanel=1.0, drawLineLowerPanel="", lowerPanelHeight=0.4,
+                              labelRatioTmp="Rel. stat. unc.::0.5,1.5", topMargin=0.06,
+                              passCanvas=cwide,
+                              legendCoords="0.15,0.85,0.86,0.94;2",
+                              leftMargin=0.05,rightMargin=0.01,lumi=16.8, 
+                              drawVertLines="{a},{b}".format(a=hFRF.GetNbinsY(),b=hFRF.GetNbinsX()),
+                              textForLines=ptBinRanges, ytextOffsetFromTop=0.3, textSize=0.04, textAngle=0)
+
+        
     # processes = ["WplusmunuPostVFP"]
     # hnomi = {}
     # for p in processes:
