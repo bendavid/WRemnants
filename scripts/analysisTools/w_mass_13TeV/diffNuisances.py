@@ -31,6 +31,17 @@ ROOT.PyConfig.IgnoreCommandLineOptions = True
 #from utility import *
 from scripts.analysisTools.plotUtils.utility import *
 
+def sortEffSyst(name):
+    sortEffSystDict = {"idip" : 0,
+                       "iso"  : 1,
+                       "reco" : 2,
+                       "tracking" : 3,
+                       "trigger"  : 4}
+    for k,v in sortEffSystDict.items():
+        if k in name:
+            return v
+    return -1
+
 def sortParameters(params):
 
     params = sorted(params)
@@ -42,8 +53,11 @@ def sortParameters(params):
     elif any(re.match('.*QCDscale.*',x) for x in params):
         params = sorted(params, key= lambda x: utilities.getNFromString(x,useAll=True) if 'QCDscale' in x else 0)
         params = sorted(params, key= lambda x: 1 if re.match(".*muR$",x) else 2 if re.match(".*muRmuF$",x) else 3 if re.match(".*muF$",x) else 0)
-    elif any(re.match('.*effStatTnP.*',x) for x in params):
+    elif any(re.match('.*effStat.*',x) for x in params):
         params = sorted(params, key = lambda x: utilities.getNFromString(x,useAll=True), reverse=False)
+    elif any(re.match('.*effSyst.*',x) for x in params):
+        params = sorted(params, key = lambda x: utilities.getNFromString(x,useAll=True), reverse=False)
+        params = sorted(params, key = lambda x: sortEffSyst(x))
     elif any(re.match('.*prefire.*',x) for x in params):
         params = sorted(params, key = lambda x: utilities.getNFromString(x,chooseIndex=0))
 
@@ -58,7 +72,7 @@ if __name__ == "__main__":
     parser.add_argument("--vtol", "--val-tolerance", dest="vtol", default=0.30, type=float, help="Report nuisances whose value changes by more than this amount of sigmas")
     parser.add_argument("--vtol2", "--val-tolerance2", dest="vtol2", default=2.0, type=float, help="Report severely nuisances whose value changes by more than this amount of sigmas")
     parser.add_argument("-A", "--abs",      dest="absolute_values",    default=False,  action="store_true", help="Report also absolute values of nuisance values, not only the ones normalized to the input values")
-    parser.add_argument("-a", "--all",      dest="show_all_parameters",    default=False,  action="store_true", help="Print all nuisances, even the ones which are unchanged w.r.t. pre-fit values.")
+    parser.add_argument("--no-all",      dest="show_all_parameters", action="store_false", help="If true print all nuisances, even the ones which are unchanged w.r.t. pre-fit values.")
     parser.add_argument("-p", "--pois",      default=None,   type=str,  help="Name of the nuisances to be plotted (comma separated list of regexps)")
     parser.add_argument("-f", "--format", default="html", choices=['text', 'latex', 'html'], type=str,  help="Output format (in addition to pdf,png)")
     parser.add_argument(     '--postfix', default='', type=str, help='postfix for the correlation matrix')

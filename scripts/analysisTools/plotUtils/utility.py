@@ -13,16 +13,18 @@ from scripts.analysisTools.plotUtils.CMS_lumi import *
 logger = logging.child_logger(__name__)
 
 #########################################################################
-colors_plots_ = {"Wmunu"      : ROOT.kRed+2,
-                 "Zmumu"      : ROOT.kAzure+2,
-                 "Wtau"       : ROOT.kCyan+1, #backward compatibility
-                 "Wtaunu"     : ROOT.kCyan+1,
-                 "Ztautau"    : ROOT.kSpring+9,
-                 "Top"        : ROOT.kGreen+2,
-                 "Diboson"    : ROOT.kViolet,
-                 "Fake"       : ROOT.kGray,
-                 "QCD"        : ROOT.kGray,
-                 "Other"      : ROOT.kGray}
+# trying to use same colors as mathplotlib in wremnants
+colors_plots_ = {"Wmunu"      : ROOT.TColor.GetColor("#8B0000"), #ROOT.kRed+2,
+                 "Zmumu"      : ROOT.TColor.GetColor("#87CEFA"), #lightskyblue, #ADD8E6 is lightblue #ROOT.kAzure+2,
+                 "Wtau"       : ROOT.TColor.GetColor("#FFA500"), #ROOT.kCyan+1, #backward compatibility
+                 "Wtaunu"     : ROOT.TColor.GetColor("#FFA500"), # orange, use #FF8C00 for darkOrange #ROOT.kCyan+1,
+                 "Ztautau"    : ROOT.TColor.GetColor("#00008B"), #ROOT.kSpring+9,
+                 "Top"        : ROOT.TColor.GetColor("#008000"), #ROOT.kGreen+2,
+                 "Diboson"    : ROOT.TColor.GetColor("#FFC0CB"), #ROOT.kViolet,
+                 "Fake"       : ROOT.TColor.GetColor("#D3D3D3"), # dimgray is "#696969" #ROOT.kGray,
+                 "QCD"        : ROOT.TColor.GetColor("#D3D3D3"), # light grey #ROOT.kGray,
+                 "Other"      : ROOT.TColor.GetColor("#808080"), # grey #ROOT.kGray}
+}
 
 legEntries_plots_ = {"Wmunu"      : "W#rightarrow#mu#nu",
                      "Zmumu"      : "Z#rightarrow#mu#mu",
@@ -720,7 +722,8 @@ def drawCorrelationPlot(h2D_tmp,
                         plotRelativeError=False,
                         lumi=None,
                         drawOption = "colz",
-                        skipLumi=False
+                        skipLumi=False,
+                        zTitleOffSet=-1
                         ):
 
 
@@ -736,7 +739,7 @@ def drawCorrelationPlot(h2D_tmp,
         else:                             h2D_tmp.RebinY(len(rebinFactorY)-1,"",array('d',rebinFactorY)) # case in which rebinFactorX is a list of bin edges
 
     if plotError or plotRelativeError:
-        herr = h2D_tmp.Clone(h2D_tmp.GetName()+"_err")
+        herr = copy.deepcopy(h2D_tmp.Clone(h2D_tmp.GetName()+"_err"))
         herr.Reset("ICESM")
         for i in range(1,herr.GetNbinsX()+1):
             for j in range(1,herr.GetNbinsY()+1):
@@ -828,9 +831,10 @@ def drawCorrelationPlot(h2D_tmp,
     if (setYAxisRangeFromUser): h2DPlot.GetYaxis().SetRangeUser(ymin,ymax)
     if (setZAxisRangeFromUser): h2DPlot.GetZaxis().SetRangeUser(zmin,zmax)
 
-
-    h2DPlot.GetZaxis().SetTitleOffset(h2DPlot.GetZaxis().GetTitleOffset()+0.4)
-
+    if (zTitleOffSet > 0):
+        h2DPlot.GetZaxis().SetTitleOffset(zTitleOffSet)
+    else:
+        h2DPlot.GetZaxis().SetTitleOffset(h2DPlot.GetZaxis().GetTitleOffset()+0.4)
 
     h2DProfile = 0
     if drawProfileX:
@@ -1094,16 +1098,15 @@ def drawSingleTH1(h1,
         latCMS.SetNDC();
         latCMS.SetTextFont(42)
         latCMS.SetTextSize(0.045)
-        latCMS.DrawLatex(0.1, 0.95, '#bf{CMS} #it{Preliminary}')
-        if lumi != None: latCMS.DrawLatex(0.85, 0.95, '%s fb^{-1} (13 TeV)' % lumi)
-        else:            latCMS.DrawLatex(0.90, 0.95, '(13 TeV)')
+        latCMS.DrawLatex(leftMargin, 0.95, '#bf{CMS} #it{Preliminary}')
+        if lumi != None: latCMS.DrawLatex(0.91, 0.95, '%s fb^{-1} (13 TeV)' % lumi)
+        else:            latCMS.DrawLatex(0.96, 0.95, '(13 TeV)')
 
     if drawLineTopPanel:
-        line = ROOT.TF1("horiz_line",f"{drawLineTopPanel}",h1.GetXaxis().GetBinLowEdge(1),h1.GetXaxis().GetBinLowEdge(h1.GetNbinsX()+1))
-        line.SetLineColor(ROOT.kRed)
-        line.SetLineWidth(1)
-        line.Draw("Lsame")
-
+        topline = ROOT.TF1("horiz_line",f"{drawLineTopPanel}",h1.GetXaxis().GetBinLowEdge(1),h1.GetXaxis().GetBinLowEdge(h1.GetNbinsX()+1))
+        topline.SetLineColor(ROOT.kRed)
+        topline.SetLineWidth(1)
+        topline.Draw("Lsame")
         
     if lowerPanelHeight:
         pad2.Draw()
