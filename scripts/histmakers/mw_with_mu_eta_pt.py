@@ -25,6 +25,7 @@ parser.add_argument("--vqtTestReal", action="store_true", help="Test of isolatio
 parser.add_argument("--vqtTestIncludeTrigger", action="store_true", help="Test of isolation SFs dependence on V q_T projection. Including trigger")
 parser.add_argument("--noGenMatchMC", action='store_true', help="Don't use gen match filter for prompt muons with MC samples (note: QCD MC never has it anyway)")
 parser.add_argument("--dphiMuonMetCut", type=float, help="Threshold to cut |deltaPhi| > thr*np.pi between muon and met", default=0.25)
+parser.add_argument("--correlatedNonClosureNP", action="store_true", help="disable the de-correlation of Z non-closure nuisance parameters after the jpsi massfit")
 args = parser.parse_args()
 
 if args.vqtTestIntegrated:
@@ -122,8 +123,12 @@ bias_helper = muon_calibration.make_muon_bias_helpers(args) if args.biasCalibrat
 
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theoryCorr)
 
-z_non_closure_parametrized_helper = muon_calibration.make_Z_non_closure_parametrized_helper()
-z_non_closure_binned_helper = muon_calibration.make_Z_non_closure_binned_helper()
+z_non_closure_parametrized_helper = muon_calibration.make_Z_non_closure_parametrized_helper(
+    correlate = args.correlatedNonClosureNP
+)
+z_non_closure_binned_helper = muon_calibration.make_Z_non_closure_binned_helper(
+    correlate = args.correlatedNonClosureNP
+)
 
 # recoil initialization
 if not args.noRecoil:
@@ -418,28 +423,6 @@ def build_graph(df, dataset):
                             )
                         dummyMuonScaleSyst_responseWeights = df.HistoBoost(
                             "muonScaleSyst_responseWeights_gensmear", axes,
-                            [*nominal_cols_gen_smeared, "muonScaleSyst_responseWeights_tensor_gensmear"],
-                            tensor_axes = jpsi_unc_helper.tensor_axes, storage=hist.storage.Double()
-                        )
-
-                        jpsi_unc_helper = jpsi_crctn_data_unc_helper
-                        df = df.Define("muonScaleSyst_responseWeights_tensor_gensmear", jpsi_unc_helper,
-                            [
-                                f"{reco_sel_GF}_genQop",
-                                f"{reco_sel_GF}_genPhi",
-                                f"{reco_sel_GF}_genEta",
-                                f"{reco_sel_GF}_genSmearedQop",
-                                f"{reco_sel_GF}_genSmearedPhi",
-                                f"{reco_sel_GF}_genSmearedEta",
-                                f"{reco_sel_GF}_genSmearedCharge",
-                                f"{reco_sel_GF}_genSmearedPt",
-                                f"{reco_sel_GF}_covMat",
-                                "nominal_weight",
-                                "bool_false"
-                            ]
-                        )
-                        dummyMuonScaleSyst_responseWeights = df.HistoBoost(
-                            "muonScaleSyst_responseWeights_gensmear", nominal_axes,
                             [*nominal_cols_gen_smeared, "muonScaleSyst_responseWeights_tensor_gensmear"],
                             tensor_axes = jpsi_unc_helper.tensor_axes, storage=hist.storage.Double()
                         )

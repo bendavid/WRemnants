@@ -773,6 +773,56 @@ private:
     std::shared_ptr<const T> correctionHist_;
 };
 
+// the parametrized Z non-closure helper without the de-correlation in output nuisances
+template <typename T, size_t NEtaBins>
+class ZNonClosureParametrizedHelperCorl {
+
+public:
+    using hist_t = T;
+    using tensor_t = typename T::storage_type::value_type::tensor_t;
+    using out_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<2>>;
+
+    ZNonClosureParametrizedHelperCorl(T&& corrections):
+        correctionHist_(std::make_shared<const T>(std::move(corrections))) {}
+
+    out_tensor_t operator() (
+        double genQop, float genEta,
+        double recoQop, float recoEta, int recoCharge, double recoPt,  
+        const RVec<float> &cov, double nominal_weight = 1.0,
+        int calVarFlags = 7   //A = 1, e = 2, M = 4
+    ) {
+        const unsigned int iEta = std::clamp(
+            correctionHist_ -> template axis<0>().index(recoEta), 0, (int)NEtaBins - 1
+        ); // clip under/overflow bins
+        const auto &params = correctionHist_->at(iEta).data();
+        const double sigma2Qop = cov[0];
+
+        double recoK = 1.0 /recoPt;
+        double recoKUnc = 0.0;
+        enum calVarFlagsScheme {AFlag = 1, eFlag = 2, MFlag = 4};
+        if (calVarFlags & AFlag) {
+            const double AUnc = params(0);
+            recoKUnc += AUnc * recoK;
+        }
+        if (calVarFlags & eFlag) {
+            const double eUnc = params(1);
+            recoKUnc += -1.0 * eUnc * recoK * recoK;
+        }
+        if (calVarFlags & MFlag) {
+            const double MUnc = params(2);
+            recoKUnc += recoCharge * MUnc;
+        }
+        double recoQopUnc = recoCharge * std::sin(calculateTheta(recoEta)) * recoKUnc;
+
+        out_tensor_t res;
+        res.setConstant(nominal_weight);
+        return res * calculateSmearingWeightsDownUp(genQop, recoQop, recoQopUnc, sigma2Qop);
+    }
+
+private:
+    std::shared_ptr<const T> correctionHist_;
+};
+
 template <typename T, size_t NEtaBins, size_t NPtBins>
 class ZNonClosureBinnedHelper {
 
@@ -807,6 +857,43 @@ public:
         res(iEta, iPt, 0) *= smearing_weight(0);
         res(iEta, iPt, 1) *= smearing_weight(1);
         return res;
+    }
+
+private:
+    std::shared_ptr<const T> correctionHist_;
+};
+
+// the binned Z non-closure helper without the de-correlation in output nuisances
+template <typename T, size_t NEtaBins, size_t NPtBins>
+class ZNonClosureBinnedHelperCorl {
+
+public:
+    using hist_t = T;
+    using out_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<2>>;
+
+    ZNonClosureBinnedHelperCorl(T&& corrections) :
+        correctionHist_(std::make_shared<const T>(std::move(corrections))) {}
+
+    // smaering weights for Z non-closure number on pt 
+    out_tensor_t operator() (
+        double genQop, float genPt, float genEta, int genCharge,
+        double recoQop, double recoPt, float recoEta, int recoCharge,
+        const RVec<float> &cov, double nominal_weight = 1.0
+    ) {
+        const unsigned int iEta = std::clamp(
+            correctionHist_->template axis<0>().index(recoEta), 0, int(NEtaBins) - 1
+        );
+        const unsigned int iPt = std::clamp(
+            correctionHist_->template axis<1>().index(recoPt), 0, int(NPtBins) - 1
+        );
+        const double nonClosure = correctionHist_->at(iEta, iPt).value();
+        const double recoKUnc = (nonClosure - 1) * (1 / recoPt);
+        const double recoQopUnc = calculateQopUnc(recoEta, recoCharge, recoKUnc);
+        const double sigma2Qop = cov[0];
+
+        out_tensor_t res;
+        res.setConstant(nominal_weight);
+        return res * calculateSmearingWeightsDownUp(genQop, recoQop, recoQopUnc, sigma2Qop);
     }
 
 private:
