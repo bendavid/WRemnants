@@ -23,6 +23,20 @@ axis_muFfact = hist.axis.Variable(
     [0.25, 0.75, 1.25, 2.75], name="muFfact", underflow=False, overflow=False
 )
 
+axis_absYVgen = hist.axis.Variable(
+    # [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4, 4.25, 4.5, 4.75, 5, 10],
+    [0., 0.25, 0.5, 0.75, 1., 1.25, 1.5, 1.75, 2., 2.25, 2.5, 2.75, 3., 3.25, 3.5, 4., 5.], # this is the same binning as hists from theory corrections
+    name = "absYVgen", underflow=False
+)
+
+axis_chargeWgen = hist.axis.Regular(
+    2, -2, 2, name="chargeVgen", underflow=False, overflow=False
+)
+
+axis_chargeZgen = hist.axis.Integer(
+    0, 1, name="chargeVgen", underflow=False, overflow=False
+)
+
 scale_tensor_axes = (axis_muRfact, axis_muFfact)
 
 pdfMap = {
@@ -302,7 +316,7 @@ def define_theory_corr(df, dataset_name, helpers, generators, modify_central_wei
 
     return df
 
-def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_central_weight):
+def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_central_weight, isW):
     res = []
     
     for i, generator in enumerate(generators):
@@ -317,6 +331,24 @@ def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_cen
         hist_name = f"{name}_{generator}Corr"
         unc = df.HistoBoost(hist_name, axes, [*cols, f"{generator}Weight_tensor"], tensor_axes=helpers[generator].tensor_axes[-1:], storage=hist.storage.Double())
         res.append(unc)
+
+        var_axis = helpers[generator].tensor_axes[-1]
+
+        # special treatment for Omega since it needs to be decorrelated in charge and rapidity
+        if "Omega0." in var_axis:
+            omegadownidx = var_axis.index("Omega0.")
+            omegaupidx = var_axis.index("Omega0.71")
+            df = df.Define(f"{generator}Omega", f"Eigen::TensorFixedSize<double, Eigen::Sizes<3>> res; res(0) = {generator}Weight_tensor(0); res(1) = {generator}Weight_tensor({omegadownidx}); res(2) = {generator}Weight_tensor({omegaupidx}); return res;")
+
+            axis_Omega = hist.axis.StrCategory([var_axis[0], var_axis[omegadownidx], var_axis[omegaupidx]], name = var_axis.name)
+
+
+            hist_name_Omega = f"{name}_{generator}Omega"
+            axis_chargegen = axis_chargeWgen if isW else axis_chargeZgen
+            axes_Omega = axes + [axis_absYVgen, axis_chargegen]
+            cols_Omega = cols + ["absYVgen", "chargeVgen", f"{generator}Omega"]
+            unc_Omega = df.HistoBoost(hist_name_Omega, axes_Omega, cols_Omega, tensor_axes = [axis_Omega])
+            res.append(unc_Omega)
 
     return res
 
