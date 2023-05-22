@@ -239,22 +239,31 @@ def main(args,xnorm=False):
                 nameReplace = [("WPSYST0", "reco"), ("WPSYST1", "tracking"), ("WPSYST2", "idip"), ("WPSYST3", "trigger"), ("WPSYST4", "iso"), ("effSystTnP", "effSyst")]
                 scale = 1.0
                 mirror = True
-                mirrorDownVarEqualToNomi=True
+                mirrorDownVarEqualToNomi=False
                 groupName = "muon_eff_syst"
                 splitGroupDict = {f"{groupName}_{x}" : f".*effSyst.*{x}" for x in list(effTypesNoIso + ["iso"])}
                 splitGroupDict[groupName] = ".*effSyst.*" # add also the group with everything
+                decorrDictEff = {                        
+                    "x" : {
+                        "label" : "eta",
+                        "edges": [round(-2.4+i*0.1,1) for i in range(49)]
+                    }
+                    # "xy" : {
+                    #     "label" : ["eta", "pt"],
+                    #     "edges": [[round(-2.4+i*0.1,1) for i in range(49)], [26.0, 30.0, 55.0]]
+                    # }
+                }
+
             else:
-                nameReplace = [] if any(x in name for x in chargeDependentSteps) else [("q0", "qall")] # for iso charge the tag id with another sensible label
+                nameReplace = [] if any(x in name for x in chargeDependentSteps) else [("q0", "qall")] # for iso change the tag id with another sensible label
                 mirror = True
                 mirrorDownVarEqualToNomi=False
                 if args.binnedScaleFactors:
                     axes = ["SF eta", "nPtBins", "SF charge"]
-                    axlabels = ["eta", "pt", "q"]
-                    nameReplace = nameReplace + [("effStatTnP_sf_", "effStatBinned_")]
                 else:
                     axes = ["SF eta", "nPtEigenBins", "SF charge"]
-                    axlabels = ["eta", "pt", "q"]
-                    nameReplace = nameReplace + [("effStatTnP_sf_", "effStatSmooth_")]                    
+                axlabels = ["eta", "pt", "q"]
+                nameReplace = nameReplace + [("effStatTnP_sf_", "effStat_")]           
                 scale = 1.0
                 groupName = "muon_eff_stat"
                 splitGroupDict = {f"{groupName}_{x}" : f".*effStat.*{x}" for x in effStatTypes}
@@ -275,6 +284,7 @@ def main(args,xnorm=False):
                 systNameReplace=nameReplace,
                 scale=scale,
                 splitGroup=splitGroupDict,
+                decorrelateByBin = decorrDictEff if "Syst" in name else {}
             )
 
     to_fakes = passSystToFakes and not args.noQCDscaleFakes and not xnorm
