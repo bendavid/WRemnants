@@ -1,9 +1,9 @@
 //MACRO WHICH IS USED TO PRODUCE ANTIISO SFs IN CASE OF DIRECT ISO SF SMOOTHING. IT NEEDS THE FILE WHICH CONTAINS ALL EFFICIENCY STEPS WITH ISO SF SMOOTHED DIRECTLY AND THE SMOOTHED W ISO EFFICIENCY (SMOOTHED WITH A SPLINE) 
 
 void implementantiisosf() {
-	TFile *filein=new TFile("/scratchnvme/bruschin/Newtest/WRemnants/wremnants/data/testMuonSF/allSmooth_GtoHisosf.root");
+	TFile *filein=new TFile("/scratchnvme/bruschin/Newtest/newupdatesdeltaphi/smoothLeptonScaleFactorsdeepmet/GtoH/allSmooth_GtoHmerge.root");
 	TFile *filein2=new TFile("/scratchnvme/bruschin/Newtest/smoothLeptonScaleFactorsredofullspline/GtoH/allSmooth_GtoH.root");
-	TFile *fileout=new TFile("/scratchnvme/bruschin/Newtest/WRemnants/wremnants/data/testMuonSF/allSmooth_GtoHisosf4_.root","RECREATE");
+	TFile *fileout=new TFile("/scratchnvme/bruschin/Newtest/WRemnants/wremnants/data/testMuonSF/allSmooth_GtoH3Disosfdeepmet.root","RECREATE");
 	fileout->cd();
 	for (auto&& keyAsObj : *(filein->GetListOfKeys())){
 		auto key = (TKey*) keyAsObj;
