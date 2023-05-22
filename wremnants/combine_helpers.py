@@ -141,7 +141,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
             card_tool.addSystematic(name=f"scetlib_dyturboOmega",
                 processes=samples,
                 group="resumNonpert",
-                systAxes=["absYVgen", "chargeVgen", "downUpVar"],
+                systAxes=["absYVgenNP", "chargeVgenNP", "downUpVar"],
                 # labelsByAxis=["AbsYVBin", "genQ", "DownUp"],
                 passToFakes=to_fakes,
                 actionMap={s : lambda h,np=np_nuisance: hh.syst_min_and_max_env_hist(syst_tools.hist_to_variations(h), obs, "vars",
