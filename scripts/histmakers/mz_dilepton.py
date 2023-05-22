@@ -32,8 +32,8 @@ era = args.era
 # available axes for dilepton validation plots
 all_axes = {
     "mll": hist.axis.Regular(60, 60., 120., name = "mll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
-    "yll": hist.axis.Regular(25, -2.5, 2.5, name = "yll"),
-    "absYll": hist.axis.Regular(25, 0., 2.5, name = "absYll", underflow=False),
+    "yll": hist.axis.Regular(20, -2.5, 2.5, name = "yll"),
+    "absYll": hist.axis.Regular(10, 0., 2.5, name = "absYll", underflow=False),
     "ptll": hist.axis.Variable(common.ptV_binning if not args.finePtBinning else range(60), name = "ptll", underflow=False),
     "etaPlus": hist.axis.Regular(int(args.eta[0]), args.eta[1], args.eta[2], name = "etaPlus"),
     "etaMinus": hist.axis.Regular(int(args.eta[0]), args.eta[1], args.eta[2], name = "etaMinus"),

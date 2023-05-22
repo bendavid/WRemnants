@@ -185,6 +185,36 @@ def scale_helicity_hist_to_variations(scale_hist, sum_axes=[], rebinPtV=None):
 
     return scale_variation_hist 
 
+def hist_to_variations(hist_in):
+
+    print("hist_in", hist_in.name, hist_in)
+
+    if hist_in.name is None:
+        out_name = "hist_variations"
+    else:
+        out_name = hist_in.name + "_variations"
+
+    s = hist.tag.Slicer()
+
+    genAxes = ["absYVgen", "chargeVgen"]
+
+    nom_hist = hist_in[{"vars" : "pdf0"}]
+    nom_hist_sum = nom_hist[{genAxis : s[::hist.sum] for genAxis in genAxes}]
+
+    print("nom_hist", nom_hist.name, nom_hist)
+    print("nom_hist_sum", nom_hist_sum.name, nom_hist_sum)
+
+    # print("hist", hist)
+    # print("nom_hist", nom_hist)
+    # systhist = hist.view(flow=True) - nom_hist.view(flow=True)
+
+    variation_data = hist_in.view(flow=True) - nom_hist.view(flow=True)[...,None] + nom_hist_sum.view(flow=True)[..., None, None, None]
+
+    variation_hist = hist.Hist(*hist_in.axes, storage = hist_in._storage_type(),
+                                     name = out_name, data = variation_data)
+
+    return variation_hist
+
 def uncertainty_hist_from_envelope(h, proj_ax, entries):
     hdown = hh.syst_min_or_max_env_hist(h, proj_ax, "vars", entries, no_flow=["ptVgen"], do_min=True)
     hup = hh.syst_min_or_max_env_hist(h, proj_ax, "vars", entries, no_flow=["ptVgen"], do_min=False)
@@ -377,12 +407,12 @@ def add_theory_hists(results, df, args, dataset_name, corr_helpers, qcdScaleByHe
     add_pdf_hists(results, df, dataset_name, axes, cols, args.pdfs, base_name=base_name)
     add_qcdScale_hist(results, df, scale_axes, scale_cols, base_name=base_name)
 
+    isZ = dataset_name in common.zprocs
+
     if args.theoryCorr and dataset_name in corr_helpers:
         results.extend(theory_tools.make_theory_corr_hists(df, base_name, axes, cols, 
-            corr_helpers[dataset_name], args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly)
+            corr_helpers[dataset_name], args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly, isW = not isZ)
         )
-
-    isZ = dataset_name in common.zprocs
 
     if for_wmass or isZ:
         # there is no W backgrounds for the Wlike, make QCD scale histograms only for Z
