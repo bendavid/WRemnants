@@ -126,6 +126,7 @@ def common_parser(for_reco_highPU=False):
         parser.add_argument("--muonScaleVariation", choices=["smearingWeights", "massWeights", "manualShift"], default="smearingWeights",  help="method to generate muon scale variation histograms")
         parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
         parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
+        parser.add_argument("--excludeFlow", action='store_true', help="Excludes underflow and overflow bins in main axes")
         parser.add_argument("--biasCalibration", type=str, default=None, choices=["binned","parameterized", "A", "M"], help="Adjust central value by calibration bias hist for simulation")
         parser.add_argument("--smearing", action='store_true', help="Smear pT such that resolution matches data") #TODO change to --no-smearing once smearing is final
         parser.add_argument("--unfolding", action='store_true', help="Add information needed for unfolding")
