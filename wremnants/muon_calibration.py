@@ -235,7 +235,7 @@ def make_jpsi_crctn_unc_helper(filepath, n_scale_params = 3, n_tot_params = 4, n
 
 def make_Z_non_closure_parametrized_helper(
     filepath = f"{data_dir}/closure/calibrationAlignmentZ_after_LBL_v721.root",
-    n_eta_bins = 24, n_scale_params = 3
+    n_eta_bins = 24, n_scale_params = 3, correlate = False
 ):
     f = uproot.open(filepath)
     M = f['MZ'].to_hist()
@@ -249,40 +249,63 @@ def make_Z_non_closure_parametrized_helper(
     hist_non_closure.view()[...,2] = M.values()
 
     hist_non_closure_cpp = narf.hist_to_pyroot_boost(hist_non_closure, tensor_rank = 1)
-    z_non_closure_helper = ROOT.wrem.ZNonClosureParametrizedHelper[
-        type(hist_non_closure_cpp).__cpp_name__,
-        n_eta_bins
-    ] (
-        ROOT.std.move(hist_non_closure_cpp)
-    )
-    z_non_closure_helper.tensor_axes = (
-        hist.axis.Regular(n_eta_bins, 0, n_eta_bins, name = 'unc'),
-        common.down_up_axis
-    )
-    return z_non_closure_helper
+    if correlate:
+        z_non_closure_helper = ROOT.wrem.ZNonClosureParametrizedHelperCorl[
+            type(hist_non_closure_cpp).__cpp_name__,
+            n_eta_bins
+        ] (
+            ROOT.std.move(hist_non_closure_cpp)
+        )
+        z_non_closure_helper.tensor_axes = tuple([common.down_up_axis])
+        return z_non_closure_helper
+    else:
+        z_non_closure_helper = ROOT.wrem.ZNonClosureParametrizedHelper[
+            type(hist_non_closure_cpp).__cpp_name__,
+            n_eta_bins
+        ] (
+            ROOT.std.move(hist_non_closure_cpp)
+        )
+        z_non_closure_helper.tensor_axes = (
+            hist.axis.Regular(n_eta_bins, 0, n_eta_bins, name = 'unc'),
+            common.down_up_axis
+        )
+        return z_non_closure_helper
 
 def make_Z_non_closure_binned_helper(
     filepath = f"{data_dir}/closure/closureZ_LBL_smeared_v721.root",
-    n_eta_bins = 24, n_pt_bins = 5
+    n_eta_bins = 24, n_pt_bins = 5, correlate = False
 ):
     f = uproot.open(filepath)
 
     # TODO: convert variable axis to regular if the bin width is uniform
     hist_non_closure = f['closure'].to_hist()
     hist_non_closure_cpp = narf.hist_to_pyroot_boost(hist_non_closure)
-    z_non_closure_helper = ROOT.wrem.ZNonClosureBinnedHelper[
-        type(hist_non_closure_cpp).__cpp_name__,
-        n_eta_bins,
-        n_pt_bins
-    ](
-        ROOT.std.move(hist_non_closure_cpp)
-    )
-    z_non_closure_helper.tensor_axes = (
-        hist.axis.Regular(n_eta_bins, 0, n_eta_bins, name = 'unc_ieta'),
-        hist.axis.Regular(n_pt_bins, 0, n_pt_bins, name = 'unc_ipt'),
-        common.down_up_axis
-    )
-    return z_non_closure_helper
+    if correlate:
+        z_non_closure_helper = ROOT.wrem.ZNonClosureBinnedHelperCorl[
+            type(hist_non_closure_cpp).__cpp_name__,
+            n_eta_bins,
+            n_pt_bins
+        ](
+            ROOT.std.move(hist_non_closure_cpp)
+        )
+        z_non_closure_helper.tensor_axes = tuple([common.down_up_axis])
+        return z_non_closure_helper
+    else:
+        z_non_closure_helper = ROOT.wrem.ZNonClosureBinnedHelper[
+            type(hist_non_closure_cpp).__cpp_name__,
+            n_eta_bins,
+            n_pt_bins
+        ](
+            ROOT.std.move(hist_non_closure_cpp)
+        )
+        z_non_closure_helper.tensor_axes = (
+            hist.axis.Regular(n_eta_bins, 0, n_eta_bins, name = 'unc_ieta'),
+            hist.axis.Regular(n_pt_bins, 0, n_pt_bins, name = 'unc_ipt'),
+            common.down_up_axis
+        )
+        print("tensor axes is: ++++++++++++++++++++++++++++++")
+        print(z_non_closure_helper.tensor_axes)
+        return z_non_closure_helper
 
 # returns the cov mat of only scale parameters in eta bins, in the form of a 2D numpy array
 # there are 3 scale params (A, e, M) + 3 resolution params for each eta bin in the jpsi calib file
@@ -564,29 +587,10 @@ def transport_smearing_weights_to_reco(
                     *hist_gensmear.axes,
                     storage = hist_gensmear._storage_type()
                 )
-                if histname != 'Z_non_closure_binned_gensmear':
-                    for i_unc in range(hist_gensmear.axes['unc'].size):
-                        dn_up_gensmear = [
-                            hist_gensmear[..., i_unc, 0],
-                            hist_gensmear[..., i_unc, 1]
-                        ]
-                        bin_ratio_dn_up = [hh.divideHists(x, nominal_gensmear) for x in dn_up_gensmear]
-                        dn_up_reco = hh.combineUpDownVarHists(
-                            *[hh.multiplyHists(nominal_reco, x) for x in bin_ratio_dn_up]
-                        )
-                        hist_reco.view()[..., i_unc, :] = dn_up_reco.view()
-                else:
-                    for i_eta in range(hist_gensmear.axes['unc_ieta'].size):
-                        for i_pt in range(hist_gensmear.axes['unc_ipt'].size):
-                            dn_up_gensmear = [
-                                hist_gensmear[..., i_eta, i_pt, 0],
-                                hist_gensmear[..., i_eta, i_pt, 1]
-                            ]
-                            bin_ratio_dn_up = [hh.divideHists(x, nominal_gensmear) for x in dn_up_gensmear]
-                            dn_up_reco = hh.combineUpDownVarHists(
-                                *[hh.multiplyHists(nominal_reco, x) for x in bin_ratio_dn_up]
-                            )
-                            hist_reco.view(flow = False)[..., i_eta, i_pt, :] = dn_up_reco.view(flow = False)
+                n_var_axes = len(hist_reco.axes) - 5
+                
+                bin_ratio = hh.divideHists(hist_gensmear, nominal_gensmear)
+                hist_reco = hh.multiplyHists(nominal_reco, bin_ratio)
                 proc_hists[reco_histname] = narf.ioutils.H5PickleProxy(hist_reco)
             else:
                 logger.warning(f"Histogram {histname} not found in {proc}")
