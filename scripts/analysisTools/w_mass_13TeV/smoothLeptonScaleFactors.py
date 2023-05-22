@@ -58,8 +58,6 @@ pol2_tf_scaled = None
 pol3_tf_scaled = None
 pol4_tf_scaled = None
 polN_tf_scaled = None
-polN_tf_scaled_sf = None
-
 # analysis acceptance, to draw vertical lines on plots
 min_pt_accept_ = 26.0
 max_pt_accept_ = 55.0
@@ -317,40 +315,47 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
                                               "hist": histAlt,
                 }
         else:
-            polindegree = 3
-            global polN_tf_scaled_sf
-            if polN_tf_scaled_sf == None:
-                polN_tf_scaled_sf = partial(polN_root_, xLowVal=minFitRange, xFitRange=xFitRange, degree=polindegree)
-            params = np.array([1.0] + [0.0 for i in range(polindegree)])
-            res_tf1_polN = narf.fit_hist(boost_hist, polN_tf_scaled_sf, params)
-            tf1_polN = ROOT.TF1(f"tf1_pol{polindegree}", polN_tf_scaled_sf, minFitRange, maxFitRange, len(params))
-            tf1_polN.SetParameters( np.array( res_tf1_polN["x"], dtype=np.dtype('d') ) )
-            tf1_polN.SetLineWidth(3)
-            tf1_polN.SetLineColor(ROOT.kRed+2)
-            fitres_TF = {"polN_tf" : res_tf1_polN}
+            global pol3_tf_scaled
+            if pol3_tf_scaled == None:
+                pol3_tf_scaled = partial(pol3_root, xLowVal=minFitRange, xFitRange=xFitRange)
+            params = np.array([1.0, 0.0, 0.0, 0.0])
+            res_tf1_pol3 = narf.fitutils.fit_hist(boost_hist, pol3_tf_scaled, params)
+            tf1_pol3 = ROOT.TF1("tf1_pol3", pol3_tf_scaled, minFitRange, maxFitRange, len(params))
+            tf1_pol3.SetParameters( np.array( res_tf1_pol3["x"], dtype=np.dtype('d') ) )
+            tf1_pol3.SetLineWidth(3)
+            tf1_pol3.SetLineColor(ROOT.kRed+2)
 
+            # tf1_pol3_test = ROOT.TF1("tf1_pol3_test", pol3_tf_scaled, minFitRange, maxFitRange, len(params))
+            # tf1_pol3_test.SetParameters( np.array( res_tf1_pol3["x"], dtype=np.dtype('d') ) )
+            # tf1_pol3_test.SetLineStyle(ROOT.kDashed)
+            # tf1_pol3_test.SetLineWidth(5)
+            # tf1_pol3_test.SetLineColor(ROOT.kBlue)
+            # fitopt = "FMBRQS+" # add FM if using Minuit   
+            # hist.Fit(tf1_pol3_test, fitopt)
+
+            fitres_TF = {"pol3_tf" : res_tf1_pol3}
             fitFunction = {
-                "polN_tf" : {
-                    "func" : tf1_polN,
-                    "leg"  : f"Pol{polindegree}",
+                "pol3_tf" : {
+                    "func" : tf1_pol3,
+                    "leg"  : "Pol3",
                     "hist": hist,
                 }
             }
-            defaultFunc = "polN_tf"
-
+            defaultFunc = "pol3_tf"
             if histAlt:
-                params = np.array([1.0] + [0.0 for i in range(polindegree)])
-                res_tf1_polN_alt = narf.fit_hist(boost_hist_alt, polN_tf_scaled_sf, params)
-                tf1_polN_alt = ROOT.TF1("tf1_polN_alt", polN_tf_scaled_sf, minFitRange, maxFitRange, len(params))
-                tf1_polN_alt.SetParameters( np.array( res_tf1_polN_alt["x"], dtype=np.dtype('d') ) )
-                tf1_polN_alt.SetLineWidth(2)
-                tf1_polN_alt.SetLineColor(ROOT.kAzure+2)
-                fitres_TF["polN_alt_tf"] = res_tf1_polN_alt
-                fitFunction["polN_alt_tf"] = {"func" : tf1_polN_alt,
+                params = np.array([1.0, 0.0, 0.0, 0.0])
+                res_tf1_pol3_alt = narf.fitutils.fit_hist(boost_hist_alt, pol3_tf_scaled, params)
+                tf1_pol3_alt = ROOT.TF1("tf1_pol3_alt", pol3_tf_scaled, minFitRange, maxFitRange, len(params))
+                tf1_pol3_alt.SetParameters( np.array( res_tf1_pol3_alt["x"], dtype=np.dtype('d') ) )
+                tf1_pol3_alt.SetLineWidth(2)
+                tf1_pol3_alt.SetLineColor(ROOT.kAzure+2)
+                fitres_TF["pol3_alt_tf"] = res_tf1_pol3_alt
+                fitFunction["pol3_alt_tf"] = {"func" : tf1_pol3_alt,
                                               "leg" : "dataAltSig",
                                               "hist": histAlt,
                 }
                 
+        ###
         badFitsID = badFitsID_sf
         badCovMatrixID = badCovMatrixID_sf
     else:
@@ -1602,3 +1607,4 @@ if __name__ == "__main__":
         outf.seek(0)
         print(outf.read())
         
+

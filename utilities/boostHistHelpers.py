@@ -23,12 +23,12 @@ def valsAndVariances(h1, h2, allowBroadcast=True, transpose=True):
         # The transpose is because numpy works right to left in broadcasting, and we've put the
         # syst axis on the right
         try:
-            res = [np.broadcast_to(x.T if transpose else x, outshape[::-1] if transpose else outshape) for x in \
+            res = [None if x is None else np.broadcast_to(x.T if transpose else x, outshape[::-1] if transpose else outshape) for x in \
                     [h1.values(flow=flow), h2.values(flow=flow), h1.variances(flow=flow), h2.variances(flow=flow)]]
         except ValueError as e:
             logger.error(f"Failed to broadcast hists! h1.axes.name {h1.axes.name}, h2.axes.name {h2.axes.name}")
             raise e
-        return [x.T for x in res] if transpose else res
+        return [None if x is None else x.T for x in res] if transpose else res
 
 def broadcastOutHist(h1, h2):
     if len(h1.axes) == len(h2.axes):
@@ -78,10 +78,15 @@ def relVariances(h1vals, h2vals, h1vars, h2vars):
 
 def sqrtHist(h):
     rootval = np.sqrt(h.values(flow=True))
-    relvar = relVariance(h.values(flow=True), h.variances(flow=True))
-    newvar = 0.5*rootval*rootval*relvar
     rooth = h.copy()
-    rooth[...] = np.stack((rootval, newvar), axis=-1)
+
+    if h._storage_type() == hist.storage.Double():
+        rooth[...] = rootval
+    else:
+        relvar = relVariance(h.values(flow=True), h.variances(flow=True))
+        newvar = 0.5*rootval*rootval*relvar
+        rooth[...] = np.stack((rootval, newvar), axis=-1)
+
     return rooth
 
 def multiplyWithVariance(vals1, vals2, vars1, vars2):
@@ -89,25 +94,41 @@ def multiplyWithVariance(vals1, vals2, vars1, vars2):
     var = val*val*sum(relVariances(vals1, vals2, vars1, vars2))
     return val, var
 
-def multiplyHists(h1, h2, allowBroadcast=True, transpose=True):
-    h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2, allowBroadcast, transpose)
-    val,var = multiplyWithVariance(h1vals, h2vals, h1vars, h2vars)
-
+def multiplyHists(h1, h2, allowBroadcast=True, transpose=True, createNew=True):
+    h1vals, h2vals, h1vars, h2vars = valsAndVariances(h1, h2, allowBroadcast, transpose)
     outh = h1 if not allowBroadcast else broadcastOutHist(h1, h2)
-    newh = hist.Hist(*outh.axes, storage=hist.storage.Weight(),
-            data=np.stack((val, var), axis=-1))
-    return newh
+
+    if createNew:
+        if h1._storage_type() == hist.storage.Double() or h2._storage_type() == hist.storage.Double():
+            val = np.multiply(h1vals, h2vals)
+            return hist.Hist(*outh.axes, data=val)
+        else:
+            val,var = multiplyWithVariance(h1vals, h2vals, h1vars, h2vars)
+            return hist.Hist(*outh.axes, storage=hist.storage.Weight(), data=np.stack((val, var), axis=-1))
+    else:
+        if h1._storage_type() == hist.storage.Double() or h2._storage_type() == hist.storage.Double():
+            val = np.multiply(h1vals, h2vals)
+        else:
+            val,var = multiplyWithVariance(h1vals, h2vals, h1vars, h2vars)
+            outh.variances(flow=True)[...] = var
+
+        outh.values(flow=True)[...] = val
+
+        return outh
 
 def addHists(h1, h2, allowBroadcast=True, createNew=True):
     h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2, allowBroadcast)
     outh = h1 if not allowBroadcast else broadcastOutHist(h1, h2)
     if createNew:
-        newh = hist.Hist(*outh.axes, storage=hist.storage.Weight(),
-                         data=np.stack((h1vals+h2vals, h1vars+h2vars), axis=-1))
-        return newh
+        if h1._storage_type() == hist.storage.Double() or h2._storage_type() == hist.storage.Double():
+            return hist.Hist(*outh.axes, data=h1vals+h2vals)
+        else:
+            return hist.Hist(*outh.axes, storage=hist.storage.Weight(),
+                            data=np.stack((h1vals+h2vals, h1vars+h2vars), axis=-1))            
     else:
         outh.values(flow=True)[...] = h1vals + h2vals
-        outh.variances(flow=True)[...] = h1vars + h2vars
+        if h1._storage_type() == hist.storage.Weight() and h2._storage_type() == hist.storage.Weight():
+            outh.variances(flow=True)[...] = h1vars + h2vars
         return outh                
 
 def sumHists(hists):
@@ -115,57 +136,83 @@ def sumHists(hists):
 
 def mirrorHist(hvar, hnom, cutoff=1):
     div = divideHists(hnom, hvar, cutoff)
-    hnew = multiplyHists(div, hnom)
+    hnew = multiplyHists(div, hnom, createNew=False)
     return hnew
 
-def extendHistByMirror(hvar, hnom):
-    hmirror = mirrorHist(hvar, hnom)
+def extendHistByMirror(hvar, hnom, downAsUp=False, downAsNomi=False):
+    if downAsUp:
+        hmirror = hvar.copy()
+    elif downAsNomi:
+        # temporary solution, can't just copy nominal since I have to broabcast, as done in multiplyHists/divideHists
+        # surely there is a smarter way with numpy
+        hmirror = hvar.copy()
+        div = divideHists(hmirror, hvar) # essentially creates hist with ones, with same shape as hvar 
+        hmirror = multiplyHists(div, hnom)
+    else:
+        hmirror = mirrorHist(hvar, hnom)
     mirrorAx = hist.axis.Integer(0,2, name="mirror", overflow=False, underflow=False)
-    hnew = hist.Hist(*hvar.axes, mirrorAx, storage=hvar._storage_type())
-    hnew.view(flow=True)[...] = np.stack((hvar.view(flow=True), hmirror.view(flow=True)), axis=-1)
+
+    if hvar._storage_type() == hist.storage.Double() or hnom._storage_type() == hist.storage.Double():
+        hnew = hist.Hist(*hvar.axes, mirrorAx)
+        hnew.view(flow=True)[...] = np.stack((hvar.values(flow=True), hmirror.values(flow=True)), axis=-1)
+    else:
+        hnew = hist.Hist(*hvar.axes, mirrorAx, storage=hist.storage.Weight())
+        hnew.view(flow=True)[...] = np.stack((hvar.view(flow=True), hmirror.view(flow=True)), axis=-1)        
+    
     return hnew
 
 def addSystAxis(h, size=1, offset=0):
-    hnew = hist.Hist(*h.axes,hist.axis.Regular(size,offset,size+offset, name="systIdx"), storage=hist.storage.Weight())
-    # Broadcast to new shape
-    newvals = hnew.values()+h.values()[...,np.newaxis]
-    newvars = hnew.variances()+h.variances()[...,np.newaxis]
-    hnew[...] = np.stack((newvals, newvars), axis=-1)
+
+    if h._storage_type() == hist.storage.Double():
+        hnew = hist.Hist(*h.axes,hist.axis.Regular(size,offset,size+offset, name="systIdx"))
+        # Broadcast to new shape
+        newvals = hnew.values()+h.values()[...,np.newaxis]
+        hnew[...] = newvals
+    else:
+        hnew = hist.Hist(*h.axes,hist.axis.Regular(size,offset,size+offset, name="systIdx"), storage=hist.storage.Weight())
+        # Broadcast to new shape
+        newvals = hnew.values()+h.values()[...,np.newaxis]
+        newvars = hnew.variances()+h.variances()[...,np.newaxis]
+        hnew[...] = np.stack((newvals, newvars), axis=-1)
+
     return hnew
 
 def clipNegativeVals(h, clipValue=0, createNew=True):
     vals = h.values(flow=True)
     vals[vals<0] = clipValue
     if createNew:
-        hnew = hist.Hist(*h.axes, storage=hist.storage.Weight())
-        hnew[...] = np.stack((vals, h.variances(flow=True)), axis=-1)
+        if h._storage_type() == hist.storage.Double():
+            hnew = hist.Hist(*h.axes)
+            hnew[...] = vals
+        else:
+            hnew = hist.Hist(*h.axes, storage=hist.storage.Weight())
+            hnew[...] = np.stack((vals, h.variances(flow=True)), axis=-1)
+
         return hnew
     else:
         h.values(flow=True)[...] = vals
         return h
     
-def scaleByLumi(h, scale, createNew=True):
+def scaleHist(h, scale, createNew=True):
     if createNew:
-        hnew = hist.Hist(*h.axes, storage=hist.storage.Weight())
-        hnew.values(flow=True)[...]    = scale * h.values(flow=True)
-        hnew.variances(flow=True)[...] = scale * h.variances(flow=True)
+        if h._storage_type() == hist.storage.Double():
+            hnew = hist.Hist(*h.axes)
+        else:
+            hnew = hist.Hist(*h.axes, storage=hist.storage.Weight())
+            hnew.variances(flow=True)[...] = scale * h.variances(flow=True)
+
+        hnew.values(flow=True)[...] = scale * h.values(flow=True)
+
         return hnew
     else:
-        h.values(flow=True)[...]    *= scale
-        h.variances(flow=True)[...] *= scale
+        h.values(flow=True)[...] *= scale
+        if h._storage_type() == hist.storage.Weight():
+            h.variances(flow=True)[...] *= scale
         return h
     
 def normalize(h, scale=1e6, createNew=True):
     scale = scale/h.sum(flow=True).value
-    if createNew:
-        hnew = hist.Hist(*h.axes, storage=hist.storage.Weight())
-        hnew.values(flow=True)[...]    = scale * h.values(flow=True)
-        hnew.variances(flow=True)[...] = scale * h.variances(flow=True)
-        return hnew
-    else:
-        h.values(flow=True)[...]    *= scale
-        h.variances(flow=True)[...] *= scale
-        return h
+    return scaleHist(h, scale, createNew)
 
 def makeAbsHist(h, axis_name):
     ax = h.axes[axis_name]
@@ -371,9 +418,8 @@ def syst_min_or_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=[], do_min=Tr
         fullview = np.moveaxis(fullview, idx, -2)
     
     op = np.argmin if do_min else np.argmax
-    # Index of min/max values considering only the eventual projection
-    # TODO: Check if it's a weighted sum or not
-    idx = op(view.value, axis=-1)
+    # Index of min/max values considering only the eventual projection  
+    idx = op(view.value if hasattr(view, "value") else view, axis=-1)
     opview = fullview[(*np.indices(fullview.shape[:-1]), idx)]
 
     hnew = h[{syst_ax : 0}]
@@ -395,6 +441,10 @@ def combineUpDownVarHists(down_hist, up_hist):
         return hnew
 
 def smoothTowardsOne(h):
+    if h._storage_type() == hist.storage.Double():
+        logger.warning("Tried to smoothTowardsOne but histogram has no variances. Proceed without doing anything!")
+        return h
+
     vals = h.values(flow=True)
     vars = h.variances(flow=True)
     relErr = np.minimum(1., relVariance(vals, vars, fillOnes=True))
