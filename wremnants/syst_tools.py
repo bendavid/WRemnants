@@ -196,7 +196,7 @@ def hist_to_variations(hist_in):
 
     s = hist.tag.Slicer()
 
-    genAxes = ["absYVgen", "chargeVgen"]
+    genAxes = ["absYVgenNP", "chargeVgenNP"]
 
     nom_hist = hist_in[{"vars" : "pdf0"}]
     nom_hist_sum = nom_hist[{genAxis : s[::hist.sum] for genAxis in genAxes}]
