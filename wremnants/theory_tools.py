@@ -26,15 +26,15 @@ axis_muFfact = hist.axis.Variable(
 axis_absYVgen = hist.axis.Variable(
     # [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4, 4.25, 4.5, 4.75, 5, 10],
     [0., 0.25, 0.5, 0.75, 1., 1.25, 1.5, 1.75, 2., 2.25, 2.5, 2.75, 3., 3.25, 3.5, 4., 5.], # this is the same binning as hists from theory corrections
-    name = "absYVgen", underflow=False
+    name = "absYVgenNP", underflow=False
 )
 
 axis_chargeWgen = hist.axis.Regular(
-    2, -2, 2, name="chargeVgen", underflow=False, overflow=False
+    2, -2, 2, name="chargeVgenNP", underflow=False, overflow=False
 )
 
 axis_chargeZgen = hist.axis.Integer(
-    0, 1, name="chargeVgen", underflow=False, overflow=False
+    0, 1, name="chargeVgenNP", underflow=False, overflow=False
 )
 
 scale_tensor_axes = (axis_muRfact, axis_muFfact)
