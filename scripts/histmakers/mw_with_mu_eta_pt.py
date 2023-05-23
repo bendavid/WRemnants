@@ -29,7 +29,7 @@ parser.add_argument("--noGenMatchMC", action='store_true', help="Don't use gen m
 parser.add_argument("--dphiMuonMetCut", type=float, help="Threshold to cut |deltaPhi| > thr*np.pi between muon and met", default=0.25)
 args = parser.parse_args()
 
-args.sfFile = data_dir + "testMuonSF/allSmooth_GtoH3Disosfdeepmet.root"
+args.sfFile = data_dir + "testMuonSF/allSmooth_GtoH3Dout.root"
 
 if args.vqtTestIntegrated:
     sfFileVqtTest = f"{data_dir}/testMuonSF/IsolationEfficienciesCoarseBinning.root"

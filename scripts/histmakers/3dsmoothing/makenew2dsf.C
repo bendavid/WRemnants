@@ -1,9 +1,9 @@
 //THIS SCRIPTS IS USED TO MERGE SCALE FACTORS FROM DIFFERENT FILES. THIS IS BECAUSE I PERFORMED THE SMOOTHING ONLY FOR TRIGGER AND ISO, THE REST IS EXACTLY THE SAME. THIS ALSO IMPLEMENTS THE CORRECTION TO ALTERNATE FITS (WHICH MOSTLY DON'T CONVERGE AS A FUNCTION OF UT, BUT THE NOMINAL ONES DO, SO WHAT IS DONE IS RESCALE THE ALT FIT EFFICIENCY TO THE 3D SMOOTH ONE, AS THE REASON BEHIND THE UNCERTAINTY BAR SHOULD BE THE SAME
 
 void makenew2dsf() {
-	TFile *file=new TFile("/gpfs/ddn/cms/user/bruschin/Newtest/WRemnants/wremnants/data/testMuonSF/allSmooth_GtoH.root");
-	TFile *file2=new TFile("/gpfs/ddn/cms/user/bruschin/Newtest/smoothLeptonScaleFactorswrongwayofdoingthingspol6/GtoH/allSmooth_GtoH2.root");
-	TFile *file3=new TFile("/gpfs/ddn/cms/user/bruschin/Newtest/WRemnants/wremnants/data/testMuonSF/allSmooth_GtoH3Dsfisowrongwayofdoingthingspol6.root","RECREATE");
+	TFile *file=new TFile("/scratchnvme/bruschin/Newtest/WRemnants/wremnants/data/testMuonSF/allSmooth_GtoH.root");
+	TFile *file2=new TFile("/scratchnvme/bruschin/Newtest/newupdatesdeltaphi/smoothLeptonScaleFactorsdeepmet/GtoH/allSmooth_GtoH.root");
+	TFile *file3=new TFile("/scratchnvme/bruschin/Newtest/newupdatesdeltaphi/smoothLeptonScaleFactorsdeepmet/GtoH/allSmooth_GtoHmerge.root","RECREATE");
 	file3->cd();
 	TH2D *Histo1, *Histo2;
 	for (auto&& keyAsObj : *(file->GetListOfKeys())){
@@ -12,6 +12,10 @@ void makenew2dsf() {
 		std::string string(key->GetName()), trigplus("trigger_plus"), trigminus("trigger_minus"), iso("iso_both"), isonotrig("isonotrig_both");
 		TNamed *object;
 		if (string.find(std::string("dataMCVar"))!= std::string::npos) continue;
+		if (string==std::string("effData_nomiAndAlt_GtoH_trigger_plus")) continue;
+		if (string==std::string("effMC_nomiAndAlt_GtoH_trigger_plus")) continue;
+		if (string==std::string("effData_nomiAndAlt_GtoH_trigger_minus")) continue;
+		if (string==std::string("effMC_nomiAndAlt_GtoH_trigger_minus")) continue;
 		if ((string.find(trigplus) != std::string::npos)||(string.find(trigminus) != std::string::npos)||(string.find(iso) != std::string::npos)) {
 			if ((string.find("original_"))!= std::string::npos) {
 				Histo1=(TH2D*)file2->Get(key->GetName())->Clone();
