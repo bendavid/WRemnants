@@ -45,11 +45,6 @@ datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
 
 era = args.era
 
-if args.IsoEfficiencysmoothing:
-    DirectIsoSFsmoothing = False
-else :
-    DirectIsoSFsmoothing = True
-
 # custom template binning
 template_neta = int(args.eta[0])
 template_mineta = args.eta[1]
@@ -131,8 +126,8 @@ if args.binnedScaleFactors:
                                                                                                                                                           includeTrigger = includeTrigger) 
 else:
     logger.info("Using smoothed scale factors and uncertainties")
-    muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile, era = era, max_pt = axis_pt.edges[-1], directIsoSFsmoothing = DirectIsoSFsmoothing)
-    muon_efficiency_helper2d, muon_efficiency_helper_syst2d, muon_efficiency_helper_stat2d = wremnants.make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSmooth_GtoHout.root", era = era, max_pt = axis_pt.edges[-1], directIsoSFsmoothing = DirectIsoSFsmoothing)
+    muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile, era = era, max_pt = axis_pt.edges[-1], isoEfficiencySmoothing = args.isoEfficiencySmoothing)
+    muon_efficiency_helper2d, muon_efficiency_helper_syst2d, muon_efficiency_helper_stat2d = wremnants.make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSmooth_GtoHout.root", era = era, max_pt = axis_pt.edges[-1], isoEfficiencySmoothing = args.isoEfficiencySmoothing)
 
 logger.info(f"SF file: {args.sfFile}")
 
