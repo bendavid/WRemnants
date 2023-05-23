@@ -144,8 +144,12 @@ bias_helper = muon_calibration.make_muon_bias_helpers(args) if args.biasCalibrat
 
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theoryCorr)
 
-z_non_closure_charge_dep_helper = muon_calibration.make_Z_non_closure_charge_dep_helper()
-z_non_closure_charge_ind_helper = muon_calibration.make_Z_non_closure_charge_ind_helper()
+z_non_closure_parametrized_helper = muon_calibration.make_Z_non_closure_parametrized_helper(
+    correlate = args.correlatedNonClosureNP
+)
+z_non_closure_binned_helper = muon_calibration.make_Z_non_closure_binned_helper(
+    correlate = args.correlatedNonClosureNP
+)
 
 # recoil initialization
 if not args.noRecoil:
@@ -467,25 +471,96 @@ def build_graph(df, dataset):
                         )
                         results.append(dummyMuonScaleSyst_responseWeights)
 
-                    else:
-                        df = df.Define("muonScaleSyst_responseWeights_tensor_gensmear", calibration_uncertainty_helper,
+                        df = df.DefinePerSample("AFlag", "0x01")
+                        df = df.DefinePerSample("MFlag", "0x04")
+                        df = df.DefinePerSample("AMFlag", "0x01 | 0x04")
+                        df = df.Define("Z_non_closure_parametrized", z_non_closure_parametrized_helper,
                             [
-                            "goodMuons_qop0_gen_smeared",
-                            "goodMuons_pt0_gen_smeared_a_la_qop",
-                            "goodMuons_eta0_gen_smeared",
-                            "goodMuons_phi0_gen_smeared",
-                            "goodMuons_charge0_gen_smeared",
-                            "covMat_goodGenMuons0",
-                            "goodMuons_qop0_gen",
-                            "goodMuons_pt0_gen",
-                            "goodMuons_eta0_gen",
-                            "goodMuons_phi0_gen",
-                            "goodMuons_charge0_gen",
-                            "nominal_weight"
+                                f"{reco_sel_GF}_qop0_gen",
+                                f"{reco_sel_GF}_eta0_gen",
+                                f"{reco_sel_GF}_qop0_gen_smeared",
+                                f"{reco_sel_GF}_eta0_gen_smeared",
+                                f"{reco_sel_GF}_charge0_gen_smeared",
+                                f"{reco_sel_GF}_pt0_gen_smeared",
+                                f"{reco_sel_GF}_covMat0",
+                                "nominal_weight",
+                                "AMFlag"
+                            ])
+                        hist_Z_non_closure_parametrized = df.HistoBoost(
+                            "Z_non_closure_parametrized_gensmear",
+                            nominal_axes,
+                            [*nominal_cols_gen_smeared, "Z_non_closure_parametrized"],
+                            tensor_axes = z_non_closure_parametrized_helper.tensor_axes,
+                            storage=hist.storage.Double()
+                        )
+                        results.append(hist_Z_non_closure_parametrized)
+
+                        df = df.Define("Z_non_closure_parametrized_A", z_non_closure_parametrized_helper,
+                            [
+                                f"{reco_sel_GF}_qop0_gen",
+                                f"{reco_sel_GF}_eta0_gen",
+                                f"{reco_sel_GF}_qop0_gen_smeared",
+                                f"{reco_sel_GF}_eta0_gen_smeared",
+                                f"{reco_sel_GF}_charge0_gen_smeared",
+                                f"{reco_sel_GF}_pt0_gen_smeared",
+                                f"{reco_sel_GF}_covMat0",
+                                "nominal_weight",
+                                "AFlag"
                             ]
                         )
-                        dummyMuonScaleSyst_responseWeights = df.HistoBoost("muonScaleSyst_responseWeights_gensmear", axes, [*nominal_cols_gen_smeared, "muonScaleSyst_responseWeights_tensor_gensmear"], tensor_axes = calibration_uncertainty_helper.tensor_axes, storage=hist.storage.Double())
-                        results.append(dummyMuonScaleSyst_responseWeights)                
+                        hist_Z_non_closure_parametrized_A = df.HistoBoost(
+                            "Z_non_closure_parametrized_A_gensmear",
+                            nominal_axes,
+                            [*nominal_cols_gen_smeared, "Z_non_closure_parametrized_A"],
+                            tensor_axes = z_non_closure_parametrized_helper.tensor_axes,
+                            storage=hist.storage.Double()
+                        )
+                        results.append(hist_Z_non_closure_parametrized_A)
+
+                        df = df.Define("Z_non_closure_parametrized_M", z_non_closure_parametrized_helper,
+                            [
+                                f"{reco_sel_GF}_qop0_gen",
+                                f"{reco_sel_GF}_eta0_gen",
+                                f"{reco_sel_GF}_qop0_gen_smeared",
+                                f"{reco_sel_GF}_eta0_gen_smeared",
+                                f"{reco_sel_GF}_charge0_gen_smeared",
+                                f"{reco_sel_GF}_pt0_gen_smeared",
+                                f"{reco_sel_GF}_covMat0",
+                                "nominal_weight",
+                                "MFlag"
+                            ]
+                        )
+                        hist_Z_non_closure_parametrized_M = df.HistoBoost(
+                            "Z_non_closure_parametrized_M_gensmear",
+                            nominal_axes,
+                            [*nominal_cols_gen_smeared, "Z_non_closure_parametrized_M"],
+                            tensor_axes = z_non_closure_parametrized_helper.tensor_axes,
+                            storage=hist.storage.Double()
+                        )
+                        results.append(hist_Z_non_closure_parametrized_M)
+
+                        df = df.Define("Z_non_closure_binned", z_non_closure_binned_helper,
+                            [
+                                f"{reco_sel_GF}_qop0_gen",
+                                f"{reco_sel_GF}_pt0_gen",
+                                f"{reco_sel_GF}_eta0_gen",
+                                f"{reco_sel_GF}_charge0_gen",
+                                f"{reco_sel_GF}_qop0_gen_smeared",
+                                f"{reco_sel_GF}_pt0_gen_smeared",
+                                f"{reco_sel_GF}_eta0_gen_smeared",
+                                f"{reco_sel_GF}_charge0_gen_smeared",
+                                f"{reco_sel_GF}_covMat0",
+                                "nominal_weight"
+                            ]
+                        )
+                        hist_Z_non_closure_binned = df.HistoBoost(
+                            "Z_non_closure_binned_gensmear",
+                            nominal_axes,
+                            [*nominal_cols_gen_smeared, "Z_non_closure_binned"],
+                            tensor_axes = z_non_closure_binned_helper.tensor_axes,
+                            storage=hist.storage.Double()
+                        )
+                        results.append(hist_Z_non_closure_binned)
 
             if args.muonScaleVariation == 'smearingWeights':
                 
