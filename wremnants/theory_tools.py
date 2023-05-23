@@ -23,6 +23,20 @@ axis_muFfact = hist.axis.Variable(
     [0.25, 0.75, 1.25, 2.75], name="muFfact", underflow=False, overflow=False
 )
 
+axis_absYVgen = hist.axis.Variable(
+    # [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4, 4.25, 4.5, 4.75, 5, 10],
+    [0., 0.25, 0.5, 0.75, 1., 1.25, 1.5, 1.75, 2., 2.25, 2.5, 2.75, 3., 3.25, 3.5, 4., 5.], # this is the same binning as hists from theory corrections
+    name = "absYVgenNP", underflow=False
+)
+
+axis_chargeWgen = hist.axis.Regular(
+    2, -2, 2, name="chargeVgenNP", underflow=False, overflow=False
+)
+
+axis_chargeZgen = hist.axis.Integer(
+    0, 1, name="chargeVgenNP", underflow=False, overflow=False
+)
+
 scale_tensor_axes = (axis_muRfact, axis_muFfact)
 
 pdfMap = {
@@ -302,7 +316,7 @@ def define_theory_corr(df, dataset_name, helpers, generators, modify_central_wei
 
     return df
 
-def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_central_weight):
+def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_central_weight, isW):
     res = []
     
     for i, generator in enumerate(generators):
@@ -310,23 +324,41 @@ def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_cen
             continue
         
         if i == 0 and modify_central_weight:
-            nominal_uncorr = df.HistoBoost(f"{name}_uncorr", axes, [*cols, "nominal_weight_uncorr"])
+            nominal_uncorr = df.HistoBoost(f"{name}_uncorr", axes, [*cols, "nominal_weight_uncorr"], storage=hist.storage.Double())
             res.append(nominal_uncorr)
-            res.append(df.HistoBoost("weight_uncorr", [hist.axis.Regular(100, -2, 2)], ["nominal_weight_uncorr"]))
+            res.append(df.HistoBoost("weight_uncorr", [hist.axis.Regular(100, -2, 2)], ["nominal_weight_uncorr"], storage=hist.storage.Double()))
 
         hist_name = f"{name}_{generator}Corr"
-        unc = df.HistoBoost(hist_name, axes, [*cols, f"{generator}Weight_tensor"], tensor_axes=helpers[generator].tensor_axes[-1:])
+        unc = df.HistoBoost(hist_name, axes, [*cols, f"{generator}Weight_tensor"], tensor_axes=helpers[generator].tensor_axes[-1:], storage=hist.storage.Double())
         res.append(unc)
+
+        var_axis = helpers[generator].tensor_axes[-1]
+
+        # special treatment for Omega since it needs to be decorrelated in charge and rapidity
+        if "Omega0." in var_axis:
+            omegadownidx = var_axis.index("Omega0.")
+            omegaupidx = var_axis.index("Omega0.71")
+            df = df.Define(f"{generator}Omega", f"Eigen::TensorFixedSize<double, Eigen::Sizes<3>> res; res(0) = {generator}Weight_tensor(0); res(1) = {generator}Weight_tensor({omegadownidx}); res(2) = {generator}Weight_tensor({omegaupidx}); return res;")
+
+            axis_Omega = hist.axis.StrCategory([var_axis[0], var_axis[omegadownidx], var_axis[omegaupidx]], name = var_axis.name)
+
+
+            hist_name_Omega = f"{name}_{generator}Omega"
+            axis_chargegen = axis_chargeWgen if isW else axis_chargeZgen
+            axes_Omega = axes + [axis_absYVgen, axis_chargegen]
+            cols_Omega = cols + ["absYVgen", "chargeVgen", f"{generator}Omega"]
+            unc_Omega = df.HistoBoost(hist_name_Omega, axes_Omega, cols_Omega, tensor_axes = [axis_Omega])
+            res.append(unc_Omega)
 
     return res
 
-def scale_angular_moments(hist_moments_scales):
+def scale_angular_moments(hist_moments_scales, sumW2=False):
     # e.g. from arxiv:1708.00008 eq. 2.13, note A_0 is NOT the const term!
     scales = np.array([1., -10., 5., 10., 4., 4., 5., 5., 4.])
 
     hel_idx = hist_moments_scales.axes.name.index("helicity")
     scaled_vals = np.moveaxis(hist_moments_scales.view(flow=True), hel_idx, -1)*scales
-    hnew = hist.Hist(*hist_moments_scales.axes, storage=hist_moments_scales._storage_type())
+    hnew = hist.Hist(*hist_moments_scales.axes, storage = hist.storage.Weight() if sumW2 else hist.storage.Double())
     hnew[...] = np.moveaxis(scaled_vals, -1, hel_idx) 
     return hnew
 
@@ -337,17 +369,18 @@ def replace_by_neighbors(vals, replace):
     indices = ndimage.distance_transform_edt(replace, return_distances=False, return_indices=True)
     return vals[tuple(indices)]
 
-def moments_to_angular_coeffs(hist_moments_scales, cutoff=1e-5):
-    if hist_moments_scales.sum().value == 0:
+def moments_to_angular_coeffs(hist_moments_scales, cutoff=1e-5, sumW2=False):
+    if hist_moments_scales.empty():
        raise ValueError("Cannot make coefficients from empty hist")
     # broadcasting happens right to left, so move to rightmost then move back
     hel_ax = hist_moments_scales.axes["helicity"]
     hel_idx = hist_moments_scales.axes.name.index("helicity")
-    vals = np.moveaxis(scale_angular_moments(hist_moments_scales).view(flow=True), hel_idx, -1) 
+    vals = np.moveaxis(scale_angular_moments(hist_moments_scales, sumW2).view(flow=True), hel_idx, -1) 
+    values = vals.value if hasattr(vals,"value") else vals
     
     # select constant term, leaving dummy axis for broadcasting
     unpol_idx = hel_ax.index(-1)
-    norm_vals = vals[...,unpol_idx:unpol_idx+1].value
+    norm_vals = values[...,unpol_idx:unpol_idx+1]
     norm_vals = np.where(np.abs(norm_vals) < cutoff, np.ones_like(norm_vals), norm_vals)
 
     # e.g. from arxiv:1708.00008 eq. 2.13, note A_0 is NOT the const term!
@@ -356,11 +389,11 @@ def moments_to_angular_coeffs(hist_moments_scales, cutoff=1e-5):
     coeffs = vals / norm_vals + offsets
 
     # replace values in zero-xsec regions (otherwise A0 is spuriously set to 4.0 from offset)
-    coeffs = np.where(np.abs(vals.value) < cutoff, np.full_like(vals, hist.accumulators.WeightedSum(0,0)), coeffs)
+    coeffs = np.where(np.abs(values) < cutoff, np.full_like(vals, hist.accumulators.WeightedSum(0,0) if sumW2 else 0), coeffs)
     coeffs = np.moveaxis(coeffs, -1, hel_idx)
 
-    hist_coeffs_scales = hist.Hist(*hist_moments_scales.axes, storage = hist_moments_scales._storage_type(), name = "hist_coeffs_scales",
-        data = coeffs
+    hist_coeffs_scales = hist.Hist(*hist_moments_scales.axes, storage = hist.storage.Weight() if sumW2 else hist.storage.Double(), 
+        name = "hist_coeffs_scales", data = coeffs
     )
 
     return hist_coeffs_scales

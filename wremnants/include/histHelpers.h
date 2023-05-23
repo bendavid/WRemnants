@@ -35,6 +35,49 @@ namespace wrem {
         //return thnp1;
     }
 
+
+    void fillTH3fromTH3part(TH3& h3out, TH3& h3in,
+                            int xbinLow=1, int ybinLow=1, int zbinLow=1 ,
+                            int xbinHigh=-1, int ybinHigh=-1, int zbinHigh=-1,
+                            int xoffset=0, int yoffset=0, int zoffset=0, // shift bins by these offsets when reading input
+                            bool fillWithValuePlusError=false,
+                            double scaleError=1.0, // fill with binContent + scaleError*binError (negative scaleError to subtract)
+                            bool fillWithError=false
+        ) {
+
+        if (xbinHigh < 0)
+            xbinHigh = h3out.GetNbinsX();
+        if (ybinHigh < 0)
+            ybinHigh = h3out.GetNbinsY();
+        if (zbinHigh < 0)
+            zbinHigh = h3out.GetNbinsZ();
+
+        double content = 0.0;
+        double error = 0.0;
+        
+        for (Int_t iz = zbinLow; iz <= zbinHigh; iz++) {
+            for (Int_t iy = ybinLow; iy <= ybinHigh; iy++) {
+                for (Int_t ix = xbinLow; ix <= xbinHigh; ix++) {
+                    double err = scaleError * h3in.GetBinError(ix + xoffset, iy + yoffset, iz + zoffset);
+                    if (fillWithValuePlusError) {
+                        content = h3in.GetBinContent(ix + xoffset, iy + yoffset, iz + zoffset) + err;
+                        error   = std::abs(err);
+                    } else if (fillWithError) {
+                        content = err;
+                        error   = 0.0;
+                    } else {
+                        content = h3in.GetBinContent(ix + xoffset, iy + yoffset, iz + zoffset);
+                        error   = std::abs(err);
+                    }
+                    h3out.SetBinContent(ix, iy, iz, content);
+                    h3out.SetBinError(  ix, iy, iz, error);
+
+                }
+            }
+        }
+    }
+    
+  
     void fillTH3fromTH3(TH3& th3out, TH3& th3in, int bin3outStart=1, int bin3inLow=1, int bin3inHigh=-1, bool copyError=true) {
 
         if (bin3inHigh < 0)
@@ -140,6 +183,17 @@ namespace wrem {
         initializeHistogram<TH1>(h, nbins, init);
     }    
 
+    template <typename T>
+    void setHistogramError(T& h, Long64_t nbins, double init = 0.0) {
+        for (Long64_t globalBin = 0; globalBin <= nbins; globalBin++) {
+            h.SetBinError(globalBin, 0.0);
+        }
+    }
+    void setRootHistogramError(TH1& h, double init = 0.0) {
+        Long64_t nbins = h.GetNcells();
+        setHistogramError<TH1>(h, nbins, init);
+    }
+    
     TH2D projectTH2FromTH3(TH3& hist3D, const char* name, size_t binStart, size_t binEnd=0) {
         if (binEnd == 0)
             binEnd = binStart;

@@ -122,7 +122,7 @@ if __name__ == "__main__":
 
         hist2D = {c : {} for c in charges}
         for d in datasets:
-            hnarf = histInfo[d][args.baseName]
+            hnarf = histInfo[d].hists[args.baseName]
             #print(f"{d}: {hnarf.sum()}")
             rootHists[d] = narf.hist_to_root(hnarf) # this is a TH3 with eta, pt, charge
             for charge in charges:

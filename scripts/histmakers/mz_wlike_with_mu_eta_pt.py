@@ -37,8 +37,8 @@ template_maxpt = args.pt[2]
 logger.info(f"Pt binning: {template_npt} bins from {template_minpt} to {template_maxpt}")
 
 # standard regular axes
-axis_eta = hist.axis.Regular(template_neta, template_mineta, template_maxeta, name = "eta")
-axis_pt = hist.axis.Regular(template_npt, template_minpt, template_maxpt, name = "pt")
+axis_eta = hist.axis.Regular(template_neta, template_mineta, template_maxeta, name = "eta", overflow=not args.excludeFlow, underflow=not args.excludeFlow)
+axis_pt = hist.axis.Regular(template_npt, template_minpt, template_maxpt, name = "pt", overflow=not args.excludeFlow, underflow=not args.excludeFlow)
 
 # categorical axes in python bindings always have an overflow bin, so use a regular
 # axis for the charge
@@ -143,7 +143,7 @@ def build_graph(df, dataset):
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")
 
-    results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"]))
+    results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"], storage=hist.storage.Double()))
 
     if not args.noRecoil:
         df = df.Define("yZ", "ll_mom4.Rapidity()")

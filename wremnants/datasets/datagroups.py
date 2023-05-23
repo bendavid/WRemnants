@@ -46,6 +46,8 @@ class Datagroups(object):
                 self.data = [x for x in self.datasets.values() if x.is_data]
                 if self.data:
                     self.lumi = sum([self.results[x.name]["lumi"] for x in self.data if x.name in self.results])
+                else:
+                    logger.warning("No data process was selected, normalizing MC to to 1/fb")
 
         self.groups = {}
         self.nominalName = "nominal"
@@ -96,9 +98,9 @@ class Datagroups(object):
         else:
             new_groupnames = list(filter(filters, self.groups.keys()))
 
-        diff = list(set(new_groupnames) - set(self.groups.keys()))
+        diff = list(self.groups.keys() - set(new_groupnames))
         if diff:
-            logger.debug(f"Filtered out following groups: {diff}")
+            logger.info(f"Datagroups.filterGroups : filtered out following groups: {diff}")
 
         self.groups = {key: self.groups[key] for key in new_groupnames}
 
@@ -118,9 +120,9 @@ class Datagroups(object):
         else:
             new_groupnames = list(filter(excludes, self.groups.keys()))
 
-        diff = list(set(new_groupnames) - set(self.groups.keys()))
+        diff = list(self.groups.keys() - set(new_groupnames))
         if diff:
-            logger.debug(f"Filtered out following groups: {diff}")
+            logger.info(f"Datagroups.excludeGroups: filtered out following groups: {diff}")
 
         self.groups = {key: self.groups[key] for key in new_groupnames}
         
@@ -168,7 +170,7 @@ class Datagroups(object):
                  excludeProcs=None, forceToNominal=[]):
         if not label:
             label = syst if syst else baseName
-        logger.debug(f"In setHists(): procsToRead = {procsToRead}")
+        logger.info(f"In setHists(): for hist {syst} procsToRead = {procsToRead}")
 
         if not procsToRead:
             if excludeProcs:
@@ -177,7 +179,26 @@ class Datagroups(object):
                 procsToRead = list(self.groups.keys())
 
         foundExact = False
-        for procName in procsToRead:
+
+        # If fakes are present do them as last group, and when running on prompt group build the sum to be used for the fakes.
+        # This makes the code faster and avoid possible bugs related to reading again the same processes
+        # NOTE:
+        # To speed up even more, one could directly use the per-group sum already computed for each group,
+        # but this would need to assume that fakes effectively had all the single processes in each group as members
+        # (usually it will be the case, but it is more difficult to handle in a fully general way and without bugs)
+        histForFake = None # to store the data-MC sums used for the fakes, for each syst
+        nameFake = "Fake" # TODO: actual name might/should be configurable
+        if nameFake in procsToRead:
+            procsToReadSort = [x for x in procsToRead if x != nameFake] + [nameFake]
+            hasFake = True
+            fakesMembers = [m.name for m in self.groups[nameFake].members]
+            fakesMembersWithSyst = []
+        else:
+            hasFake = False
+            procsToReadSort = [x for x in procsToRead]
+        # Note: if 'hasFake' is kept as False (but Fake exists), the original behaviour for which Fake reads everything again is restored
+            
+        for procName in procsToReadSort:
             logger.debug(f"Reading group {procName}")
             if procName not in self.groups.keys():
                 raise RuntimeError(f"Group {procName} not known. Defined groups are {list(self.groups.keys())}.")
@@ -185,6 +206,9 @@ class Datagroups(object):
             group.hists[label] = None
 
             for i, member in enumerate(group.members):
+                if procName == nameFake and member.name in fakesMembersWithSyst:
+                    # if we are here this process has been already use to build the fakes when running for other groups
+                    continue
                 logger.debug(f"Looking at group member {member.name}")
                 scale = group.scale
                 read_syst = syst
@@ -204,27 +228,60 @@ class Datagroups(object):
                         continue
                 logger.debug(f"Hist axes are {h.axes.name}")
 
+                ## TODO/FIXME: is the order of these operations important?
+                ## Some operations are triggered based on the group and some might be specific for fakes,
+                ## in which case they should be exported inside the "if" below, since they wouldn't be run here.
+                ## Might have a function to contain all these operations to avoid code repetition,
+                ## but not all are needed, so we should first assess whether the order is relevant before reshuffling
                 if group.memberOp:
                     if group.memberOp[i] is not None:
-                        logger.debug(f"Apply operation to member {i}: {member.name}")
+                        logger.debug(f"Apply operation to member {i}: {member.name}/{procName}")
                         h = group.memberOp[i](h)
                     else:
-                        logger.debug(f"No operation for member {i}: {member.name}")
+                        logger.debug(f"No operation for member {i}: {member.name}/{procName}")
 
                 if self.gen_axes:
                     # integrate over remaining gen axes 
-                    projections = (a for a in h.axes.name if a not in self.gen_axes)
-                    if projections != h.axes.name:
+                    projections = [a for a in h.axes.name if a not in self.gen_axes]
+                    if len(projections) < len(h.axes.name):
                         h = h.project(*projections)
 
                 if preOpMap and member.name in preOpMap:
-                    logger.debug(f"Applying preOp to {member.name} after loading")
+                    logger.debug(f"Applying preOp to {member.name}/{procName} after loading")
                     h = preOpMap[member.name](h, **preOpArgs)
-
+                    
                 if self.globalAction:
                     h = self.globalAction(h)
+                    logger.debug("Applying global action")
 
-                group.hists[label] = hh.addHists(h, group.hists[label]) if group.hists[label] else h
+                hasPartialSumForFake = False
+                if hasFake and procName != nameFake:
+                    if member.name in fakesMembers:
+                        if member.name not in fakesMembersWithSyst:
+                            fakesMembersWithSyst.append(member.name)
+                        hasPartialSumForFake = True
+                        # apply the correct scale for fakes
+                        scaleProcForFake = self.groups[nameFake].scale(member)
+                        logger.debug(f"Summing hist {read_syst} for {member.name} to {nameFake} with scale = {scaleProcForFake}")
+                        hProcForFake = scaleProcForFake * h.copy()
+                        histForFake = hh.addHists(hProcForFake, histForFake, createNew=False) if histForFake else hProcForFake
+
+                # The following must be done when the group is not Fake, or when the previous part for fakes was not done
+                # For fake this essentially happens when the process doesn't have the syst, so that the nominal is used
+                if procName != nameFake or (procName == nameFake and not hasPartialSumForFake):
+                    if procName == nameFake:
+                        logger.debug(f"Summing nominal hist instead of {syst} to {nameFake} for {member.name}")
+                    else:
+                        logger.debug(f"Summing {read_syst} to {procName} for {member.name}")
+                    group.hists[label] = hh.addHists(h, group.hists[label], createNew=False) if group.hists[label] else h
+                    logger.debug("Sum done")
+                
+            # now sum to fakes the partial sums which where not already done before
+            # (group.hists[label] contains only the contribution from nominal histograms).
+            # Then continue with the rest of the code as usual
+            if hasFake and procName == nameFake:
+                if histForFake is not None:
+                    group.hists[label] = hh.addHists(histForFake, group.hists[label], createNew=False) if group.hists[label] else histForFake
 
             # Can use to apply common rebinning or selection on top of the usual one
             if group.rebinOp:
@@ -317,7 +374,9 @@ class Datagroups(object):
         for group_name in to_expand:
             if group_name not in exclude_group:
                 for member in self.groups[group_name].members:
-                    procs.append(member.name)
+                    # protection against duplicates in the output list, they may arise from fakes
+                    if member.name not in procs:
+                        procs.append(member.name)
         return procs
 
     def sortByYields(self, histName, nominalName="nominal"):
@@ -443,28 +502,39 @@ class Datagroups(object):
 
     def make_yields_df(self, histName, procs, action=lambda x: x, norm_proc=None):
         def sum_and_unc(h):
-            return (h.sum().value, math.sqrt(h.sum().variance))
+            if not hasattr(h.sum(), "value"):
+                return (h.sum(), None)
+            else:
+                return (h.sum().value, math.sqrt(h.sum().variance))
+
         df = pd.DataFrame([(k, *sum_and_unc(action(v.hists[histName]))) for k,v in self.groups.items() if k in procs], 
                 columns=["Process", "Yield", "Uncertainty"])
 
         if norm_proc and norm_proc in self.groups:
-            df[f"Ratio to {norm_proc} (%)"] = df["Yield"]/action(self.groups[norm_proc].hists[histName]).sum().value*100
+            hist = action(self.groups[norm_proc].hists[histName])
+            denom = hist.sum() if not hasattr(hist.sum(), "value") else hist.sum().value
+            df[f"Ratio to {norm_proc} (%)"] = df["Yield"]/denom*100
             
         return df
 
     def readHist(self, baseName, proc, group, syst, scaleOp=None, forceNonzero=True, scaleToNewLumi=-1):
         output = self.results[proc.name]["output"]
         histname = self.histName(baseName, proc.name, syst)
-        logger.debug(f"Reading hist {histname} for proc {proc.name} and syst {syst}")
+        logger.debug(f"Reading hist {histname} for proc/group {proc.name}/{group} and syst '{syst}'")
         if histname not in output:
             raise ValueError(f"Histogram {histname} not found for process {proc.name}")
         h = output[histname]
         if isinstance(h, narf.ioutils.H5PickleProxy):
             h = h.get()
+        # Do a copy to detach the modified object from the original one, so the latter stays unmodified.
+        # This is extremely important for fakes, since they reuse the other histograms to subtract from data
+        # If fakes are not used, or one changes the code to avoid reading everything again for fakes, one could
+        # actually modify directly the input histograms here, which might save some time compared to the copy.
+        h = h.copy()
         if forceNonzero:
-            h = hh.clipNegativeVals(h)
+            h = hh.clipNegativeVals(h, createNew=False)
         if scaleToNewLumi > 0:
-            h = hh.scaleByLumi(h, scaleToNewLumi, createNew=True)
+            h = hh.scaleHist(h, scaleToNewLumi, createNew=False)                        
         scale = self.processScaleFactor(proc)
         if scaleOp:
             scale = scale*scaleOp(proc)
