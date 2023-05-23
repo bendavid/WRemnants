@@ -335,13 +335,23 @@ def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_cen
         var_axis = helpers[generator].tensor_axes[-1]
 
         # special treatment for Omega since it needs to be decorrelated in charge and rapidity
-        if "Omega0." in var_axis:
-            omegadownidx = var_axis.index("Omega0.")
-            omegaupidx = var_axis.index("Omega0.71")
-            df = df.Define(f"{generator}Omega", f"Eigen::TensorFixedSize<double, Eigen::Sizes<3>> res; res(0) = {generator}Weight_tensor(0); res(1) = {generator}Weight_tensor({omegadownidx}); res(2) = {generator}Weight_tensor({omegaupidx}); return res;")
+        if any(var_label.startswith("Omega") for var_label in var_axis):
+            omegaidxs = [var_axis.index(var_label) for var_label in var_axis if var_label.startswith("Omega")]
 
-            axis_Omega = hist.axis.StrCategory([var_axis[0], var_axis[omegadownidx], var_axis[omegaupidx]], name = var_axis.name)
+            # include nominal as well
+            omegaidxs = [0] + omegaidxs
 
+            df = df.Define(f"{generator}Omega",
+                            f"""
+                            constexpr std::array<std::ptrdiff_t, {len(omegaidxs)}> idxs = {{{",".join([str(idx) for idx in omegaidxs])}}};
+                            Eigen::TensorFixedSize<double, Eigen::Sizes<{len(omegaidxs)}>> res;
+                            for (std::size_t i = 0; i < idxs.size(); ++i) {{
+                              res(i) = {generator}Weight_tensor(idxs[i]);
+                            }}
+                            return res;
+                            """)
+
+            axis_Omega = hist.axis.StrCategory([var_axis[idx] for idx in omegaidxs], name = var_axis.name)
 
             hist_name_Omega = f"{name}_{generator}Omega"
             axis_chargegen = axis_chargeWgen if isW else axis_chargeZgen
