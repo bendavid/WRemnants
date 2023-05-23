@@ -887,20 +887,26 @@ def drawSingleTH1(h1,
                   canvasName="default", outdir="./",
                   rebinFactorX=0,
                   draw_both0_noLog1_onlyLog2=1,
+                  topMargin=0.1,
                   leftMargin=0.15,
                   rightMargin=0.04,
+                  bottomMargin=0.15,
                   labelRatioTmp="Rel.Unc.::0.5,1.5",
                   drawStatBox=False,
                   legendCoords="0.15,0.35,0.8,0.9",  # x1,x2,y1,y2
                   canvasSize="600,700",  # use X,Y to pass X and Y size     
                   lowerPanelHeight = 0.3,  # number from 0 to 1, 0.3 means 30% of space taken by lower panel. 0 means do not draw lower panel with relative error
+                  drawLineTopPanel=None,
                   drawLineLowerPanel="luminosity uncertainty::0.025", # if not empty, draw band at 1+ number after ::, and add legend with title
                   passCanvas=None,
                   lumi=None,
                   drawVertLines="", # "12,36": format --> N of sections (e.g: 12 pt bins), and N of bins in each section (e.g. 36 eta bins), assuming uniform bin width
                   textForLines=[],                       
                   moreText="",
-                  moreTextLatex=""
+                  moreTextLatex="",
+                  ytextOffsetFromTop=0.15,
+                  textSize=0.04,
+                  textAngle=0
                   ):
 
     # moreText is used to pass some text to write somewhere (TPaveText is used)
@@ -921,7 +927,7 @@ def drawSingleTH1(h1,
     yAxisName,setYAxisRangeFromUser,ymin,ymax = getAxisRangeFromUser(labelYtmp)
     yRatioAxisName,setRatioYAxisRangeFromUser,yminRatio,ymaxRatio = getAxisRangeFromUser(labelRatioTmp)
 
-    yAxisTitleOffset = 1.45 if leftMargin > 0.1 else 0.6
+    yAxisTitleOffset = 1.45 if leftMargin > 0.1 else 0.5
 
     addStringToEnd(outdir,"/",notAddIfEndswithMatch=True)
     createPlotDirAndCopyPhp(outdir)
@@ -934,6 +940,7 @@ def drawSingleTH1(h1,
     canvas.cd()
     canvas.SetLeftMargin(leftMargin)
     canvas.SetRightMargin(rightMargin)
+    canvas.SetTopMargin(topMargin)
     canvas.cd()
 
     pad2 = 0
@@ -946,6 +953,8 @@ def drawSingleTH1(h1,
         pad2.SetFillColor(0)
         pad2.SetGridy(1)
         pad2.SetFillStyle(0)
+    else:
+        canvas.SetBottomMargin(bottomMargin)
 
 
     frame = h1.Clone("frame")
@@ -961,9 +970,9 @@ def drawSingleTH1(h1,
     # if min and max were not set, set them based on histogram content
     if ymin == ymax == 0.0:
         ymin,ymax = getMinMaxHisto(h1,excludeEmpty=True,sumError=True)            
-        ymin *= 0.9
-        ymax *= (1.1 if leftMargin > 0.1 else 2.0)
-        if ymin < 0: ymin = 0
+        yRangeOffset = 0.05 * (ymax - ymin)
+        ymin -= yRangeOffset
+        ymax += yRangeOffset
 
     if lowerPanelHeight:
         h1.GetXaxis().SetLabelSize(0)
@@ -982,12 +991,12 @@ def drawSingleTH1(h1,
     if setXAxisRangeFromUser: h1.GetXaxis().SetRangeUser(xmin,xmax)
     h1.Draw("HIST")
     h1err = h1.Clone("h1err")
-    h1err.SetFillColor(ROOT.kRed+2)
-    h1err.SetFillStyle(3001)  # 3001 is better than 3002 for pdf, while 3002 is perfect for png
+    h1err.SetFillColor(ROOT.kGray)
+    h1err.SetFillStyle(1001)  # 3001 is better than 3002 for pdf, while 3002 is perfect for png
     #h1err.SetFillStyle(3002)
     #h1err.SetFillStyle(3005)
     h1err.Draw("E2same")
-    #h1.Draw("HIST same")
+    h1.Draw("HIST same")
 
     nColumnsLeg = 1
     if ";" in legendCoords: 
@@ -1016,9 +1025,10 @@ def drawSingleTH1(h1,
     vertline.SetLineStyle(3)
     bintext = ROOT.TLatex()
     #bintext.SetNDC()
-    bintext.SetTextSize(0.025)  # 0.03
     bintext.SetTextFont(42)
-    if len(textForLines): bintext.SetTextAngle(45 if "#eta" in textForLines[0] else 30)
+    bintext.SetTextSize(textSize)
+    bintext.SetTextAngle(textAngle)        
+    #if len(textForLines): bintext.SetTextAngle(45 if "#eta" in textForLines[0] else 30)
 
     if len(drawVertLines):
         nptBins = int(drawVertLines.split(',')[0])
@@ -1027,12 +1037,12 @@ def drawSingleTH1(h1,
         sliceLabelOffset = 6. if "#eta" in textForLines[0] else 6.
         for i in range(1,nptBins): # do not need line at canvas borders
             #vertline.DrawLine(offsetXaxisHist+etarange*i,0,offsetXaxisHist+etarange*i,canvas.GetUymax())
-            vertline.DrawLine(etarange*i-offsetXaxisHist,0,etarange*i-offsetXaxisHist,ymax)
+            vertline.DrawLine(etarange*i-offsetXaxisHist,ymin,etarange*i-offsetXaxisHist,ymax)
         if len(textForLines):
             for i in range(0,len(textForLines)): # we need nptBins texts
                 #texoffset = 0.1 * (4 - (i%4))
                 #ytext = (1. + texoffset)*ymax/2.  
-                ytext = (1.1)*ymax/2.  
+                ytext = ymax - ytextOffsetFromTop*(ymax - ymin)  
                 bintext.DrawLatex(etarange*i + etarange/sliceLabelOffset, ytext, textForLines[i])
 
     # redraw legend, or vertical lines appear on top of it
@@ -1086,8 +1096,15 @@ def drawSingleTH1(h1,
         latCMS.SetTextSize(0.045)
         latCMS.DrawLatex(0.1, 0.95, '#bf{CMS} #it{Preliminary}')
         if lumi != None: latCMS.DrawLatex(0.85, 0.95, '%s fb^{-1} (13 TeV)' % lumi)
-        else:            latCMS.DrawLatex(0.90, 0.95, '(13 TeV)' % lumi)
+        else:            latCMS.DrawLatex(0.90, 0.95, '(13 TeV)')
 
+    if drawLineTopPanel:
+        line = ROOT.TF1("horiz_line",f"{drawLineTopPanel}",h1.GetXaxis().GetBinLowEdge(1),h1.GetXaxis().GetBinLowEdge(h1.GetNbinsX()+1))
+        line.SetLineColor(ROOT.kRed)
+        line.SetLineWidth(1)
+        line.Draw("Lsame")
+
+        
     if lowerPanelHeight:
         pad2.Draw()
         pad2.cd()
@@ -1124,7 +1141,7 @@ def drawSingleTH1(h1,
         line.SetLineColor(ROOT.kRed)
         line.SetLineWidth(1)
         line.Draw("Lsame")
-
+        
         if drawLineLowerPanel:
             legEntry,yline = drawLineLowerPanel.split('::')
             line2 = ROOT.TF1("horiz_line_2",str(1+float(yline)),ratio.GetXaxis().GetBinLowEdge(1),ratio.GetXaxis().GetBinLowEdge(ratio.GetNbinsX()+1))
@@ -1145,7 +1162,6 @@ def drawSingleTH1(h1,
             leg2.SetBorderSize(0)
             leg2.AddEntry(line2,legEntry,"L")
             leg2.Draw("same")
-
         
         pad2.RedrawAxis("sameaxis")
 
@@ -1480,7 +1496,6 @@ def drawSingleTH1withFit(h1,
         
 ################################################################
 
-
 def drawNTH1(hists=[],
              legEntries=[],
              labelXtmp="xaxis", labelYtmp="yaxis",
@@ -1594,7 +1609,7 @@ def drawNTH1(hists=[],
         colors = colorVec
     else:
         colors = [ROOT.kRed+2, ROOT.kBlue, ROOT.kGreen+2, ROOT.kOrange+7,
-                  ROOT.kAzure+2, ROOT.kMagenta, ROOT.kBlack,
+                  ROOT.kAzure+2, ROOT.kMagenta,
                   ROOT.kViolet, ROOT.kCyan+1, ROOT.kPink+2, ROOT.kSpring-8]
     for ic,h in enumerate(hnums):
         # h.SetLineColor(colors[ic])
@@ -1856,7 +1871,7 @@ def drawNTH1(hists=[],
                 if h.GetFillColor():
                     ratios[-1].Draw("E2 SAME")
                 else:
-                    ratios[-1].Draw("HIST SAME")
+                    ratios[-1].Draw("HE SAME" if drawErrorAll else "HIST SAME")
             
             newymin, newymax = getMinMaxMultiHisto(ratios, excludeEmpty=True, sumError=False, 
                                                    excludeUnderflow=True, excludeOverflow=True)

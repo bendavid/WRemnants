@@ -21,7 +21,8 @@ def make_parser(parser=None):
     parser.add_argument("--ewUnc", action='store_true', help="Include EW uncertainty")
     parser.add_argument("--pseudoData", type=str, help="Hist to use as pseudodata")
     parser.add_argument("--pseudoDataIdx", type=int, default=0, help="Variation index to use as pseudodata")
-    parser.add_argument("--pseudoDataFile", type=str, help="Input file for pseudodata (if it should be read from a different file", default=None)
+    parser.add_argument("--pseudoDataFile", type=str, help="Input file for pseudodata (if it should be read from a different file)", default=None)
+    parser.add_argument("--pseudoDataProcsRegexp", type=str, default=".*", help="Regular expression for processes taken from pseudodata file (all other processes are automatically got from the nominal file). Data is excluded automatically as usual")
     parser.add_argument("-x",  "--excludeNuisances", type=str, default="", help="Regular expression to exclude some systematics from the datacard")
     parser.add_argument("-k",  "--keepNuisances", type=str, default="", help="Regular expression to keep some systematics, overriding --excludeNuisances. Can be used to keep only some systs while excluding all the others with '.*'")
     parser.add_argument("--scaleMuonCorr", type=float, default=1.0, help="Scale up/down dummy muon scale uncertainty by this factor")
@@ -138,16 +139,17 @@ def main(args,xnorm=False):
         cardTool.setProcsNoStatUnc(procs=args.qcdProcessName, resetList=False)
     cardTool.setCustomSystForCard(args.excludeNuisances, args.keepNuisances)
     if args.pseudoData:
-        cardTool.setPseudodata(args.pseudoData, args.pseudoDataIdx)
+        cardTool.setPseudodata(args.pseudoData, args.pseudoDataIdx, args.pseudoDataProcsRegexp)
         if args.pseudoDataFile:
             cardTool.setPseudodataDatagroups(make_datagroups_2016(args.pseudoDataFile,
-                                                excludeProcGroup=excludeGroup,
-                                                filterProcGroup=filterGroup))
+                                                                  excludeGroups=excludeGroup,
+                                                                  filterGroups=filterGroup)
+            )
     cardTool.setLumiScale(args.lumiScale)
 
     logger.info(f"cardTool.allMCProcesses(): {cardTool.allMCProcesses()}")
         
-    passSystToFakes = wmass and not args.skipSignalSystOnFakes and args.qcdProcessName not in excludeGroup and not xnorm
+    passSystToFakes = wmass and not args.skipSignalSystOnFakes and args.qcdProcessName not in excludeGroup and (filterGroup == None or args.qcdProcessName in filterGroup) and not xnorm
 
     single_v_samples = cardTool.filteredProcesses(lambda x: x[0] in ["W", "Z"])
     single_v_nonsig_samples = cardTool.filteredProcesses(lambda x: x[0] == ("Z" if wmass else "W"))
@@ -211,12 +213,12 @@ def main(args,xnorm=False):
         pass
 
     if args.ewUnc:
-        cardTool.addSystematic(f"horacenloewCorr_unc", 
+        cardTool.addSystematic(f"horacenloewCorr", 
             processes=single_v_samples,
             mirror=True,
             group="theory_ew",
             systAxes=["systIdx"],
-            labelsByAxis=["horacenloewCorr_unc"],
+            labelsByAxis=["horacenloewCorr"],
             skipEntries=[(0, -1), (2, -1)],
             passToFakes=passSystToFakes,
         )
@@ -237,31 +239,33 @@ def main(args,xnorm=False):
                 nameReplace = [("WPSYST0", "reco"), ("WPSYST1", "tracking"), ("WPSYST2", "idip"), ("WPSYST3", "trigger"), ("WPSYST4", "iso"), ("effSystTnP", "effSyst")]
                 scale = 1.0
                 mirror = True
+                mirrorDownVarEqualToNomi=True
                 groupName = "muon_eff_syst"
                 splitGroupDict = {f"{groupName}_{x}" : f".*effSyst.*{x}" for x in list(effTypesNoIso + ["iso"])}
                 splitGroupDict[groupName] = ".*effSyst.*" # add also the group with everything
             else:
                 nameReplace = [] if any(x in name for x in chargeDependentSteps) else [("q0", "qall")] # for iso charge the tag id with another sensible label
+                mirror = True
+                mirrorDownVarEqualToNomi=False
                 if args.binnedScaleFactors:
                     axes = ["SF eta", "nPtBins", "SF charge"]
                     axlabels = ["eta", "pt", "q"]
-                    mirror = True
                     nameReplace = nameReplace + [("effStatTnP_sf_", "effStatBinned_")]
                 else:
-                    axes = ["SF eta", "nPtEigenBins", "SF charge", "downUpVar"]
-                    axlabels = ["eta", "pt", "q", "downUpVar"]
-                    mirror = False
-                    nameReplace = nameReplace + [("effStatTnP_sf_", "effStatSmooth_")]
+                    axes = ["SF eta", "nPtEigenBins", "SF charge"]
+                    axlabels = ["eta", "pt", "q"]
+                    nameReplace = nameReplace + [("effStatTnP_sf_", "effStatSmooth_")]                    
                 scale = 1.0
                 groupName = "muon_eff_stat"
                 splitGroupDict = {f"{groupName}_{x}" : f".*effStat.*{x}" for x in effStatTypes}
                 splitGroupDict[groupName] = ".*effStat.*" # add also the group with everything
             if args.effStatLumiScale and "Syst" not in name:
                 scale /= math.sqrt(args.effStatLumiScale)
-                
+
             cardTool.addSystematic(
                 name, 
                 mirror=mirror,
+                mirrorDownVarEqualToNomi=mirrorDownVarEqualToNomi,
                 group=groupName,
                 systAxes=axes,
                 labelsByAxis=axlabels,
@@ -275,10 +279,16 @@ def main(args,xnorm=False):
 
     to_fakes = passSystToFakes and not args.noQCDscaleFakes and not xnorm
     combine_helpers.add_pdf_uncertainty(cardTool, single_v_samples, passSystToFakes, from_corr=args.pdfUncFromCorr)
-    combine_helpers.add_scale_uncertainty(cardTool, args.minnloScaleUnc, signal_samples_inctau, to_fakes, resum=args.resumUnc)
+    scale_name_W = "W"
+    scale_name_Z = "Z"
+    scale_name = scale_name_W if wmass else scale_name_Z
+    combine_helpers.add_scale_uncertainty(cardTool, args.minnloScaleUnc, signal_samples_inctau, to_fakes, resum=args.resumUnc, name_append = scale_name)
     # for Z background in W mass case (W background for Wlike is essentially 0, useless to apply QCD scales there)
     if wmass and not xnorm:
-        combine_helpers.add_scale_uncertainty(cardTool, "integrated", single_v_nonsig_samples, False, name_append="Z", resum=args.resumUnc)
+        combine_helpers.add_scale_uncertainty(cardTool, args.minnloScaleUnc, single_v_nonsig_samples, to_fakes, name_append=scale_name_Z, resum=args.resumUnc)
+
+    common_np_samples = signal_samples_inctau + single_v_nonsig_samples if wmass else signal_samples_inctau
+    combine_helpers.add_common_np_uncertainties(cardTool, common_np_samples, to_fakes)
 
     if not xnorm:
         msv_config_dict = {
@@ -353,26 +363,36 @@ def main(args,xnorm=False):
             #                        passToFakes=passSystToFakes,
             # )
             #
-        
-            if "Fake" not in excludeGroup:
-                for charge in ["plus", "minus"]:
-                    chargeId = "q1" if charge == "plus" else "q0"
-                    cardTool.addSystematic(f"nominal", # this is the histogram to read
-                                        systAxes=[],
-                                        processes=["Fake"],
-                                        mirror=True,
-                                        group="MultijetBkg",
-                                        outNames=[f"mtCorrFakes_{chargeId}{upd}" for upd in ["Up", "Down"]], # actual names for nuisances
-                                        rename=f"mtCorrFakes_{chargeId}", # this name is used only to identify the syst in CardTool's syst list
-                                        action=sel.applyCorrection,
-                                        doActionBeforeMirror=True, # to mirror after the histogram has been created
-                                        actionArgs={"scale": 1.0,
-                                                    "corrFile" : f"{data_dir}/fakesWmass/fakerateFactorMtBasedCorrection_vsEtaPt.root",
-                                                    "corrHist": f"etaPtCharge_mtCorrection_{charge}",
-                                                    "offsetCorr": 1.0,
-                                                    "createNew": True}
-                    )
 
+            ## Remove for now since it seems redundant after adding the dphi cut
+            ## keep in case it is needed again in the near future (we still have to test deepmet)
+            # if "Fake" not in excludeGroup:
+            #     for charge in ["plus", "minus"]:
+            #         chargeId = "q1" if charge == "plus" else "q0"
+            #         decorrDict = {}
+            #         # decorrDict = {                        
+            #         #     "xy" : {
+            #         #         "label" : ["eta", "pt"],
+            #         #         "edges": [[round(-2.4+i*0.4,1) for i in range(13)], [round(26.0+i*2,1) for i in range(16)]]
+            #         #     }
+            #         # }
+            #         outnames = [f"mtCorrFakes_{chargeId}{upd}" for upd in ["Up", "Down"]]
+            #         cardTool.addSystematic(f"nominal", # this is the histogram to read
+            #                                systAxes=[],
+            #                                processes=["Fake"],
+            #                                mirror=True,
+            #                                group="MultijetBkg",
+            #                                outNames=outnames, # actual names for nuisances
+            #                                rename=f"mtCorrFakes_{chargeId}", # this name is used only to identify the syst in CardTool's syst list
+            #                                action=sel.applyCorrection,
+            #                                doActionBeforeMirror=True, # to mirror after the histogram has been created
+            #                                actionArgs={"scale": 1.0,
+            #                                            "corrFile" : f"{data_dir}/fakesWmass/fakerateFactorMtBasedCorrection_vsEtaPt.root",
+            #                                            "corrHist": f"etaPtCharge_mtCorrection_{charge}",
+            #                                            "offsetCorr": 1.0,
+            #                                            "createNew": True},
+            #                                decorrelateByBin=decorrDict
+            #         )
         else:
             cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
 

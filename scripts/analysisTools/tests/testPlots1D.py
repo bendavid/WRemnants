@@ -114,7 +114,7 @@ if __name__ == "__main__":
         rootHists = {}
         
         for d in datasets:
-            hnarf = histInfo[d][p]
+            hnarf = histInfo[d].hists[p]
             rootHists[d] = narf.hist_to_root(hnarf)
             rootHists[d].SetName(f"{p}_{d}")
 

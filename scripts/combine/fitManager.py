@@ -23,6 +23,7 @@ sys.argv = args
 ROOT.gROOT.SetBatch(True)
 ROOT.PyConfig.IgnoreCommandLineOptions = True
 
+
 def safeSystem(cmd, dryRun=False, quitOnFail=True):
     print(cmd)
     if not dryRun:
@@ -37,6 +38,11 @@ def safeSystem(cmd, dryRun=False, quitOnFail=True):
         return res
     else:
         return 0
+
+def createFolder(checkdir, dryRun=False):
+    if not os.path.exists(checkdir):
+        print("Creating folder", checkdir)
+        safeSystem("mkdir -p " + checkdir, dryRun=dryRun)
 
 def prepareChargeFit(options, charges=["plus"]):
 
@@ -121,9 +127,7 @@ def prepareChargeFit(options, charges=["plus"]):
         fitdir_Asimov = fitdir_data.replace("/fit/data/", "/fit/hessian/")
         fitdir_toys = fitdir_data.replace("/fit/data/", "/fit/toys/")
         for fitdir in [fitdir_data, fitdir_Asimov]:
-            if not os.path.exists(fitdir):
-                print("Creating folder", fitdir)
-                safeSystem("mkdir -p " + fitdir, dryRun=options.dryRun)
+            createFolder(fitdir, options.dryRun)
         print("")
         fitPostfix = "" if not len(postfix) else ("_"+postfix)
 
@@ -210,9 +214,7 @@ if __name__ == "__main__":
         if not args.cardFolder.endswith("/"):
             args.cardFolder += "/"
         cardFolderFullName = args.inputdir + args.cardFolder
-        if not os.path.exists(cardFolderFullName):
-            print("Creating folder", cardFolderFullName)
-            safeSystem("mkdir -p " + cardFolderFullName, dryRun=False) # always create this folder, even for tests
+        createFolder(cardFolderFullName, dryRun=False) # always create this folder, even for tests
         fcmd = open(cardFolderFullName+"cardMaker_command.txt", "w")
         fcmd.write("%s\n\n" % " ".join(sys.argv))
         fcmd.close()

@@ -4,11 +4,12 @@ import hist
 import narf
 import numpy as np
 import boost_histogram as bh
-import logging
 import pickle
 import lz4.frame
+import pdb
 
-from utilities import common
+from utilities import common, logging
+logger = logging.child_logger(__name__)
 
 narf.clingutils.Declare('#include "muon_efficiencies_smooth.h"')
 
@@ -17,6 +18,7 @@ data_dir = f"{pathlib.Path(__file__).parent}/data/"
 def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSmooth_GtoH.root",
                                         era = None, is_w_like = False, max_pt = np.inf,
                                         directIsoSFsmoothing=False):
+    logger.debug(f"Make efficiency helper smooth")
 
     eradict = { "2016PreVFP" : "BtoF",
                 "2016PostVFP" : "GtoH" }
@@ -39,8 +41,7 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
     
     fin = ROOT.TFile.Open(filename)
     if fin is None or fin.IsZombie():
-        print(f"Error: file {filename} was not opened correctly")
-        quit()
+        raise IOError(f"Error: file {filename} was not opened correctly")
         
     ## start with NOMI and SYST
     sf_syst = None
@@ -56,11 +57,11 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
             chargeTag = charge_tag if eff_type in chargeDependentSteps else "both"
             hist_name = f"SF_{nameTag}_{eratag}_{eff_type}_{chargeTag}"
             hist_root = fin.Get(hist_name)
-            #print(ROOT.AddressOf(hist_root))
+            #logger.info(ROOT.AddressOf(hist_root))
             if hist_root is None:
-                print(f"Error: {hist_name} not found in file {filename}")
+                logger.info(f"Error: {hist_name} not found in file {filename}")
                 quit()
-            #print(f"syst: {eff_type} -> {hist_name}")
+            #logger.info(f"syst: {eff_type} -> {hist_name}")
 
             hist_hist = narf.root_to_hist(hist_root, axis_names = ["SF eta", "SF pt", "nomi-statUpDown-syst"])
 
@@ -87,10 +88,9 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
     # outpkl = filename.replace(".root", ".pkl.lz4")
     # with lz4.frame.open(outpkl, "wb") as f:
     #     pickle.dump(sf_syst, f, protocol = pickle.HIGHEST_PROTOCOL)
-    # print(f"Saved file {outpkl}")
+    # logger.info(f"Saved file {outpkl}")
     
     sf_syst_pyroot = narf.hist_to_pyroot_boost(sf_syst)
-    
     # nomi and syst are stored in the same histogram, just use different helpers to override the () operator for now, until RDF is improved
     helper = ROOT.wrem.muon_efficiency_smooth_helper[str(is_w_like).lower(), type(sf_syst_pyroot)]( ROOT.std.move(sf_syst_pyroot) )
     helper_syst = ROOT.wrem.muon_efficiency_smooth_helper_syst[str(is_w_like).lower(), type(sf_syst_pyroot)]( helper )
@@ -165,10 +165,10 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
                     nameTag += "_onlyMCVar"
                 hist_name = f"SF_{nameTag}_{eratag}_{eff_type}_{chargeTag}"
                 hist_root = fin.Get(hist_name)
-                # print(f"stat: {effStatKey}|{eff_type} -> {hist_name}")
-                # print(ROOT.AddressOf(hist_root))
+                # logger.info(f"stat: {effStatKey}|{eff_type} -> {hist_name}")
+                # logger.info(ROOT.AddressOf(hist_root))
                 if hist_root is None:
-                    print(f"Error: {hist_name} not found in file {filename}")
+                    logger.info(f"Error: {hist_name} not found in file {filename}")
                     quit()
 
                 if down_nom_up_effStat_axis is None:
@@ -220,10 +220,14 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
         elif isinstance(axis_eta_eff, bh.axis.Variable):
             axis_eta_eff_tensor = hist.axis.Variable(axis_eta_eff.edges, name = axis_eta_eff.name, overflow = False, underflow = False)
         axis_ptEigen_eff_tensor = hist.axis.Integer(0, effStat_manager[effStatKey]["nPtEigenBins"], underflow = False, overflow =False, name = "nPtEigenBins")    
-        helper_stat.tensor_axes = [axis_eta_eff_tensor, axis_ptEigen_eff_tensor, axis_charge_def, axis_down_up]
+        effStatTensorAxes = [axis_eta_eff_tensor, axis_ptEigen_eff_tensor, axis_charge_def]
+        helper_stat.tensor_axes = effStatTensorAxes
         effStat_manager[effStatKey]["helper"] = helper_stat
 
     fin.Close()
+
+    logger.debug(f"Return efficiency helper!")
+
     ####
     # return nomi, effsyst, and a dictionary with effStat to use them by name
     return helper, helper_syst, {k : effStat_manager[k]["helper"] for k in effStat_manager.keys()}
