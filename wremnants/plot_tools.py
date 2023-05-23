@@ -103,18 +103,26 @@ def makeStackPlotWithRatio(
         to_read.append("Data")
 
     stack = []
+    data_hist = None
     for k in to_read:
         if not histInfo[k].hists[histName]:
             logger.warning(f"Failed to find hist {histName} for proc {k}")
             continue
-        histInfo[k].hists[histName] = action(histInfo[k].hists[histName])[select]
+        hist = action(histInfo[k].hists[histName])[select]
         
         # Use this if the hist has been rebinned for combine
         if xlim:
-            histInfo[k].hists[histName] = histInfo[k].hists[histName][complex(0, xlim[0]):complex(0, xlim[1])]
+            hist = hist[complex(0, xlim[0]):complex(0, xlim[1])]
+
+        # If plotting from combine, apply the action to the underlying hist.
+        # Don't do this for the generic case, as it screws up the ability to make multiple plots
+        if fitresult:
+            histInfo[k].hists[histName] = hist
 
         if k != "Data":
-            stack.append(histInfo[k].hists[histName])
+            stack.append(hist)
+        else:
+            data_hist = hist
 
     fig, ax1, ax2 = figureWithRatio(stack[0], xlabel, ylabel, ylim, rlabel, rrange, xlim=xlim, 
         grid_on_ratio_plot = grid, plot_title = plot_title, title_padding = title_padding, bin_density = bin_density)
@@ -168,7 +176,6 @@ def makeStackPlotWithRatio(
         zorder=1,
     )
     
-    data_hist = histInfo["Data"].hists[histName] if "Data" in histInfo else None
     if "Data" in histInfo and ratio_to_data:
         hep.histplot(
             hh.divideHists(sum(stack), data_hist, cutoff=0.01),
@@ -206,8 +213,8 @@ def makeStackPlotWithRatio(
 
         for proc,style in zip(unstacked, linestyles):
             unstack = histInfo[proc].hists[histName]
-            if proc not in to_read:
-                unstack = action(unstack)
+            if not fitresult or proc not in to_read:
+                unstack = action(unstack)[select]
 
             hep.histplot(
                 unstack,
