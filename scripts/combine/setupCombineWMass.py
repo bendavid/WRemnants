@@ -214,17 +214,17 @@ def main(args,xnorm=False):
     else:
         pass
         
-    cardTool.addSystematic("sf2d", 
-        processes=allMCprocesses_noQCDMC,
-        outNames=["sf2dDown","sf2dUp"],
-        group="SF3Dvs2D",
-        mirror=False,
-        noConstraint=False,
-        #systAxes=[],
-        systAxes=["downUpVar"],
-        labelsByAxis=["downUpVar"],
-        passToFakes=passSystToFakes,
-    )
+    if wmass:
+        cardTool.addSystematic("sf2d", 
+            processes=allMCprocesses_noQCDMC,
+            outNames=["sf2dDown","sf2dUp"],
+            group="SF3Dvs2D",
+            mirror=False,
+            noConstraint=False,
+            systAxes=["downUpVar"],
+            labelsByAxis=["downUpVar"],
+            passToFakes=passSystToFakes,
+        )
 
     if args.ewUnc:
         cardTool.addSystematic(f"horacenloewCorr", 
