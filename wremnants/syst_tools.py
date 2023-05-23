@@ -187,8 +187,6 @@ def scale_helicity_hist_to_variations(scale_hist, sum_axes=[], rebinPtV=None):
 
 def hist_to_variations(hist_in):
 
-    print("hist_in", hist_in.name, hist_in)
-
     if hist_in.name is None:
         out_name = "hist_variations"
     else:
@@ -200,13 +198,6 @@ def hist_to_variations(hist_in):
 
     nom_hist = hist_in[{"vars" : "pdf0"}]
     nom_hist_sum = nom_hist[{genAxis : s[::hist.sum] for genAxis in genAxes}]
-
-    print("nom_hist", nom_hist.name, nom_hist)
-    print("nom_hist_sum", nom_hist_sum.name, nom_hist_sum)
-
-    # print("hist", hist)
-    # print("nom_hist", nom_hist)
-    # systhist = hist.view(flow=True) - nom_hist.view(flow=True)
 
     variation_data = hist_in.view(flow=True) - nom_hist.view(flow=True)[...,None] + nom_hist_sum.view(flow=True)[..., None, None, None]
 
