@@ -287,8 +287,9 @@ def main(args,xnorm=False):
     if wmass and not xnorm:
         combine_helpers.add_scale_uncertainty(cardTool, args.minnloScaleUnc, single_v_nonsig_samples, to_fakes, name_append=scale_name_Z, resum=args.resumUnc)
 
-    common_np_samples = signal_samples_inctau + single_v_nonsig_samples if wmass else signal_samples_inctau
-    combine_helpers.add_common_np_uncertainties(cardTool, common_np_samples, to_fakes)
+    if resum != "none":
+        common_np_samples = signal_samples_inctau + single_v_nonsig_samples if wmass else signal_samples_inctau
+        combine_helpers.add_common_np_uncertainties(cardTool, common_np_samples, to_fakes)
 
     if not xnorm:
         msv_config_dict = {
