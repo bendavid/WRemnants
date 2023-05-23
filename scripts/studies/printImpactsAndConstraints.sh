@@ -1,8 +1,8 @@
 source local_setup.sh
-declare -a combine_folders=("WMass_eta_pt_non-closure-Apr26")
+declare -a combine_folders=("WMass_pt_eta_non-closure-corl")
 declare -a fitresults_files=("fitresults-w_charge_inclusive" "fitresults-w_plus" "fitresults-w_minus")
-#declare -a postfixes=("_A-M-separated" "_A-M-combined" "_A-M-separated-dep-only" "_A-M-combined-dep-only")
-declare -a postfixes=("_A-M-combined-one-group-ind")
+declare -a postfixes=("_A-M-separated" "_A-M-combined" "_binned" "_none")
+#declare -a postfixes=("_A-M-combined-one-group-ind")
 
 for combine_folder in "${combine_folders[@]}"; do
     for fitresults_file in "${fitresults_files[@]}"; do
