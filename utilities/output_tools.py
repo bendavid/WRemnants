@@ -110,6 +110,8 @@ def write_analysis_output(results, outfile, args, update_name=True):
     logger.info(f"Output saved in {outfile}")
 
 def is_eosuser_path(path):
+    if not path:
+        return False
     path = os.path.realpath(path)
     return path.startswith("/eos/user") or path.startswith("/eos/home-")
 
@@ -121,10 +123,10 @@ def make_plot_dir(outpath, outfolder, eoscp=False):
             os.makedirs(outpath)
 
     full_outpath = os.path.join(outpath, outfolder)
-    if not os.path.isdir(outpath):
+    if outpath and not os.path.isdir(outpath):
         raise IOError(f"The path {outpath} doesn't not exist. You should create it (and possibly link it to your web area)")
         
-    if not os.path.isdir(full_outpath):
+    if full_outpath and not os.path.isdir(full_outpath):
         try:
             os.makedirs(full_outpath)
             logger.info(f"Creating folder {full_outpath}")
@@ -144,13 +146,13 @@ def copy_to_eos(outpath, outfolder):
     for f in glob.glob(tmppath+"/*"):
         if os.path.isfile(f):
             if subprocess.call(["xrdcp", "-f", f, "/".join(["root://eosuser.cern.ch", eospath, f])]):
-                logger.error("Failed to copy the files to eos! Perhaps you are missing a kerberos ticket and need to run kinit <user>@CERN.CH?"
+                raise IOError("Failed to copy the files to eos! Perhaps you are missing a kerberos ticket and need to run kinit <user>@CERN.CH?"
                     " from lxplus you can run with --skipEoscp and take your luck with the mount.")
-                return
 
     shutil.rmtree(tmppath) 
 
 def split_eos_path(path):
+
     path = os.path.realpath(path)
     if not is_eosuser_path(path):
         raise ValueError(f"Expected an path on /eos/user, found {outpath}!")
