@@ -62,7 +62,11 @@ parser.add_argument("--noFill", action='store_true', help="Don't fill stack")
 parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend text")
 parser.add_argument("--fitresult", type=str, help="Specify a fitresult root file to draw the postfit distributions with uncertainty bands")
 parser.add_argument("--prefit", action='store_true', help="Use the prefit uncertainty from the fitresult root file, instead of the postfit. (--fitresult has to be given)")
+<<<<<<< HEAD
 parser.add_argument("--eoscp", action='store_true', help="Use of xrdcp for eos output rather than the mount")
+=======
+parser.add_argument("--skipEoscp", action='store_true', help="Override use of xrdcp and use the mount instead")
+>>>>>>> 78fd283 (Write locally then copy to eosuser with xrdcp)
 
 
 subparsers = parser.add_subparsers(dest="variation")
@@ -227,5 +231,9 @@ for h in args.hists:
         args=args,
     )
 
+<<<<<<< HEAD
 if output_tools.is_eosuser_path(args.outpath) and args.eoscp:
+=======
+if output_tools.is_eosuser_path(args.outpath) and not args.skipEoscp:
+>>>>>>> 78fd283 (Write locally then copy to eosuser with xrdcp)
     output_tools.copy_to_eos(args.outpath, args.outfolder)

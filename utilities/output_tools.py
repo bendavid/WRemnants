@@ -155,7 +155,6 @@ def copy_to_eos(outpath, outfolder):
     shutil.rmtree(tmppath) 
 
 def split_eos_path(path):
-
     path = os.path.realpath(path)
     if not is_eosuser_path(path):
         raise ValueError(f"Expected an path on /eos/user, found {outpath}!")
