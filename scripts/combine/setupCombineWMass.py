@@ -35,7 +35,6 @@ def make_parser(parser=None):
     parser.add_argument("--unfold", action='store_true', help="Prepare datacard for unfolding")
     parser.add_argument("--fitXsec", action='store_true', help="Fit signal inclusive cross section")
     parser.add_argument("--correlatedNonClosureNuisances", action='store_true', help="get systematics from histograms for the Z non-closure nuisances without decorrelation in eta and pt")
-    parser.
     parser.add_argument("--nonClosureScheme", type=str, default = "A-M-separated", choices=["A-M-separated", "A-M-combined", "binned"], help = "how the non-closure numbers are derived")
     
     return parser
@@ -350,7 +349,7 @@ def main(args,xnorm=False):
                 cardTool.addSystematic("Z_non_closure_parametrized_A", 
                     processes=single_vmu_samples,
                     group="muonScale",
-                    baseName="CMS_scale_m_",
+                    baseName="Z_nonClosure_parametrized_A_",
                     systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
                     labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
                     passToFakes=passSystToFakes
@@ -358,7 +357,7 @@ def main(args,xnorm=False):
                 cardTool.addSystematic("Z_non_closure_parametrized_M", 
                     processes=single_vmu_samples,
                     group="muonScale",
-                    baseName="CMS_scale_m_",
+                    baseName="Z_nonClosure_parametrized_M_",
                     systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
                     labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
                     passToFakes=passSystToFakes
@@ -367,7 +366,7 @@ def main(args,xnorm=False):
                 cardTool.addSystematic("Z_non_closure_parametrized", 
                     processes=single_vmu_samples,
                     group="muonScale",
-                    baseName="CMS_scale_m_",
+                    baseName="Z_nonClosure_parametrized_",
                     systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
                     labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
                     passToFakes=passSystToFakes
@@ -375,8 +374,8 @@ def main(args,xnorm=False):
             elif args.nonClosureScheme == "binned":
                 cardTool.addSystematic("Z_non_closure_binned", 
                     processes=single_vmu_samples,
-                    group="muonScale_nonClosure_binned",
-                    baseName="CMS_scale_m_non_closure_binned",
+                    group="muonScale",
+                    baseName="Z_nonClosure_binned_",
                     systAxes=["unc_ieta", "unc_ipt", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
                     labelsByAxis=["unc_ieta", "unc_ipt", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
                     passToFakes=passSystToFakes
