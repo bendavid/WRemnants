@@ -10,6 +10,8 @@ import narf
 import numpy as np
 import re
 from utilities import logging
+import glob
+import shutil
 
 logger = logging.child_logger(__name__)
 
@@ -104,3 +106,61 @@ def write_analysis_output(results, outfile, args, update_name=True):
         narf.ioutils.pickle_dump_h5py("results", results, f)
     logger.info(f"Writing output: {time.time()-time0}")
     logger.info(f"Output saved in {outfile}")
+
+def is_eosuser_path(path):
+    path = os.path.realpath(path)
+    return path.startswith("/eos/user") or path.startswith("/eos/home-")
+
+def make_plot_dir(outpath, outfolder, eoscp=False):
+    if eoscp and is_eosuser_path(outpath):
+        outpath = os.path.join("temp", split_eos_path(outpath)[1])
+        if not os.path.isdir(outpath):
+            logger.info("Making temporary directory {outpath}")
+            os.makedirs(outpath)
+
+    full_outpath = os.path.join(outpath, outfolder)
+    if not os.path.isdir(outpath):
+        raise IOError(f"The path {outpath} doesn't not exist. You should create it (and possibly link it to your web area)")
+        
+    if not os.path.isdir(full_outpath):
+        try:
+            os.makedirs(full_outpath)
+            logger.info(f"Creating folder {full_outpath}")
+        except FileExistsError as e:
+            logger.warning(e)
+            pass
+
+    return full_outpath
+
+def copy_to_eos(outpath, outfolder):
+    eospath, outpath = split_eos_path(outpath)
+    logger.info(f"Copying {outpath}/{outfolder} to {eospath}")
+
+    fullpath = os.path.join(outpath, outfolder)
+    tmppath = os.path.join("temp", fullpath)
+
+    for f in glob.glob(tmppath+"/*"):
+        if os.path.isfile(f):
+            if subprocess.call(["xrdcp", "-f", f, "/".join(["root://eosuser.cern.ch", eospath, f])]):
+                logger.error("Failed to copy the files to eos! Perhaps you are missing a kerberos ticket and need to run kinit <user>@CERN.CH?"
+                    " from lxplus you can run with --skipEoscp and take your luck with the mount.")
+                return
+
+    shutil.rmtree(tmppath) 
+
+def split_eos_path(path):
+    path = os.path.realpath(path)
+    if not is_eosuser_path(path):
+        raise ValueError(f"Expected an path on /eos/user, found {outpath}!")
+        
+    splitpath = [x for x in path.split("/") if x]
+    # Can be /eos/user/<letter>/<username> or <letter-username>
+    if "home-" in splitpath[1]:
+        eospath = "/".join(["/eos/user", splitpath[1].split("-")[-1], splitpath[2]])
+        basepath = "/".join(splitpath[3:])
+    else:
+        eospath = "/".join(splitpath[:4])
+        basepath = "/".join(splitpath[4:])
+
+    return eospath, basepath
+
