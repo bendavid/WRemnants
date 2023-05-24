@@ -114,6 +114,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--met", type=str, choices=["DeepMETReso", "RawPFMET"], help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")                    
     parser.add_argument("-o", "--outfolder", type=str, default="", help="Output folder")
     parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
+    parser.add_argument("--nonClosureScheme", type=str, default = "A-M-separated", choices=["A-M-separated", "A-M-combined", "binned"], help = "how the non-closure numbers are derived")
     parser.add_argument("--correlatedNonClosureNP", action="store_true", help="disable the de-correlation of Z non-closure nuisance parameters after the jpsi massfit")
 
     if for_reco_highPU:
