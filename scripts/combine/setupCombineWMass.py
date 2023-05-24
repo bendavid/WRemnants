@@ -289,10 +289,17 @@ def main(args,xnorm=False):
 
     to_fakes = passSystToFakes and not args.noQCDscaleFakes and not xnorm
     combine_helpers.add_pdf_uncertainty(cardTool, single_v_samples, passSystToFakes, from_corr=args.pdfUncFromCorr)
-    combine_helpers.add_scale_uncertainty(cardTool, args.minnloScaleUnc, signal_samples_inctau, to_fakes, resum=args.resumUnc)
+    scale_name_W = "W"
+    scale_name_Z = "Z"
+    scale_name = scale_name_W if wmass else scale_name_Z
+    combine_helpers.add_scale_uncertainty(cardTool, args.minnloScaleUnc, signal_samples_inctau, to_fakes, resum=args.resumUnc, name_append = scale_name)
     # for Z background in W mass case (W background for Wlike is essentially 0, useless to apply QCD scales there)
     if wmass and not xnorm:
-        combine_helpers.add_scale_uncertainty(cardTool, "integrated", single_v_nonsig_samples, False, name_append="Z", resum=args.resumUnc)
+        combine_helpers.add_scale_uncertainty(cardTool, args.minnloScaleUnc, single_v_nonsig_samples, to_fakes, name_append=scale_name_Z, resum=args.resumUnc)
+
+    if args.resumUnc != "none":
+        common_np_samples = signal_samples_inctau + single_v_nonsig_samples if wmass else signal_samples_inctau
+        combine_helpers.add_common_np_uncertainties(cardTool, common_np_samples, to_fakes)
 
     if not xnorm:
         msv_config_dict = {
