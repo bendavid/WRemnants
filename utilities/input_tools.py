@@ -243,29 +243,44 @@ def getPOInames(rtfile, poi_type="mu"):
         names.append('Wmass')
 
     if len(names)==0:
-        raise ValueError('No free parameters found (neither signal strenght(s), nor W mass)')
+        logger.warning('No free parameters found (neither signal strenght(s), nor W mass)')
+        return [None]
 
     return names
     
 def readImpacts(rtfile, group, sort=True, add_total=True, stat=0.0, POI='Wmass', normalize=True):
-    poi_type = POI.split("_")[-1]
+    poi_type = POI.split("_")[-1] if POI else None
+    poi_names = getPOInames(rtfile, poi_type)
     if POI=='Wmass':
-        histname = "nuisance_group_impact_nois" if group else "nuisance_impact_nois"
-    elif POI in getPOInames(rtfile, poi_type):
-        histname = f"nuisance_group_impact_{poi_type}" if group else f"nuisance_impact_{poi_type}"
+        impact_hist = "nuisance_group_impact_nois" if group else "nuisance_impact_nois"
+    elif POI in poi_names:
+        impact_hist = f"nuisance_group_impact_{poi_type}" if group else f"nuisance_impact_{poi_type}"
     else:
         raise ValueError(f"Invalid POI: {POI}")
+
+    if group:
+        histname = impact_hist
+    else:
+        histname = "correlation_matrix_channelmu"
         
-    impacts = rtfile[histname].to_hist()
-    labels = np.array([impacts.axes[1].value(i) for i in range(impacts.axes[1].size)])
-    iPOI = 0 if POI=='Wmass' else getPOInames(rtfile, poi_type).index(POI)
-    total = rtfile["fitresults"][impacts.axes[0].value(iPOI)+"_err"].array()[0]
-    norm = rtfile["fitresults"][impacts.axes[0].value(iPOI)].array()[0]
-    impacts = impacts.values()[iPOI,:]
+    h = rtfile[histname].to_hist()
+    labels = np.array(list(h.axes["yaxis"]), dtype=object)
+
+    if impact_hist not in rtfile:
+        logger.warning("Did not find impact hist in file. Skipping!")
+        return np.zeros_like(labels), labels, 1.
+    else:
+        impacts = rtfile[impact_hist].to_hist()
+        iPOI = 0 if POI=='Wmass' else poi_names.index(POI)
+        total = rtfile["fitresults"][impacts.axes[0].value(iPOI)+"_err"].array()[0]
+        norm = rtfile["fitresults"][impacts.axes[0].value(iPOI)].array()[0]
+        impacts = impacts.values()[iPOI,:]
+
     if sort:
         order = np.argsort(impacts)
         impacts = impacts[order]
         labels = labels[order]
+
     if add_total:
         impacts = np.append(impacts, total)
         labels = np.append(labels, "Total")
