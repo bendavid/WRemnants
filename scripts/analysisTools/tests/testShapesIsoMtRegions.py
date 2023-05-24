@@ -135,6 +135,7 @@ if __name__ == "__main__":
                 if d == "Fake":
                     regKey = f"{passIso_str}_{passMT_str}"
                     histForFRF[charge][isoMtID] = copy.deepcopy(h.Clone(f"{d}_{charge}_{regKey}"))
+                    histForFRF[charge][isoMtID].SetTitle(f"{regKey} {charge}")
                 drawCorrelationPlot(h, xAxisName, xAxisName, f"Events",
                                     f"{h.GetName()}", plotLabel="ForceTitle", outdir=outdir,
                                     smoothPlot=False, drawProfileX=False, scaleToUnitArea=False,
@@ -160,12 +161,12 @@ if __name__ == "__main__":
         k = list(histForFRF.keys())[0]
         k2 = list(histForFRF[k].keys())[0]
         href = histForFRF[k][k2]
-        for ipt in range(1, 1+hFRF.GetNbinsY()):
+        for ipt in range(1, 1+href.GetNbinsY()):
             ptBinRanges.append("#splitline{{[{ptmin},{ptmax}]}}{{GeV}}".format(ptmin=int(href.GetYaxis().GetBinLowEdge(ipt)),
                                                                                ptmax=int(href.GetYaxis().GetBinLowEdge(ipt+1))))
         XlabelUnroll = "unrolled template along #eta:  #eta #in [%.1f, %.1f]" % (href.GetXaxis().GetBinLowEdge(1),
                                                                                  href.GetXaxis().GetBinLowEdge(1+href.GetNbinsX()))
-            
+        for c in charges:
             if all(x in args.isoMtRegion for x in [0, 1]):
                 hFRF = histForFRF[c][1].Clone(f"hFRF_{c}")
                 hFRF.Divide(histForFRF[c][0])
@@ -185,8 +186,22 @@ if __name__ == "__main__":
                               leftMargin=0.05,rightMargin=0.01,lumi=16.8, 
                               drawVertLines="{a},{b}".format(a=hFRF.GetNbinsY(),b=hFRF.GetNbinsX()),
                               textForLines=ptBinRanges, ytextOffsetFromTop=0.3, textSize=0.04, textAngle=0)
+            for isoMtID in [2, 3]:
+                if isoMtID in args.isoMtRegion:
+                    hQCD = histForFRF[c][isoMtID]
+                    # plot unrolled to better see how it looks like
+                    hQCD_unrolled = unroll2Dto1D(hQCD, newname=f"{hQCD.GetName()}_unrolled")
+                    drawSingleTH1(hQCD_unrolled, XlabelUnroll, f"Events ({c})",
+                                  f"{hQCD.GetName()}_unrolled",
+                                  outdir, drawLineTopPanel=1.0, drawLineLowerPanel="", lowerPanelHeight=0.4,
+                                  labelRatioTmp="Rel. stat. unc.::0.5,1.5", topMargin=0.06,
+                                  passCanvas=cwide,
+                                  legendCoords="0.15,0.85,0.86,0.94;2",
+                                  leftMargin=0.05,rightMargin=0.01,lumi=16.8, 
+                                  drawVertLines="{a},{b}".format(a=hQCD.GetNbinsY(),b=hQCD.GetNbinsX()),
+                                  textForLines=ptBinRanges, ytextOffsetFromTop=0.3, textSize=0.04, textAngle=0)
 
-        
+
     # processes = ["WplusmunuPostVFP"]
     # hnomi = {}
     # for p in processes:
