@@ -9,7 +9,7 @@ from dash import dcc
 import dash_daq as daq
 from dash import html
 from dash.dependencies import Input, Output
-from utilities import input_tools, logging
+from utilities import input_tools, output_tools, logging
 from wremnants import plot_tools
 import os
 import re
@@ -227,9 +227,11 @@ def parseArgs():
     interactive.add_argument("-i", "--interface", default="localhost", help="The network interface to bind to.")
     output = parsers.add_parser("output", help="Produce plots as output (not interactive)")
     output.add_argument("-o", "--outputFile", default="test.html", type=str, help="Output file (extension specifies if html or pdf/png)")
+    output.add_argument("--outFolder", type=str, default="", help="Output folder (created if it doesn't exist)")
     output.add_argument("--otherExtensions", default=[], type=str, nargs="*", help="Additional output file types to write")
     output.add_argument("-n", "--num", type=int, help="Number of nuisances to plot")
     output.add_argument("--noPulls", action='store_true', help="Don't show pulls (not defined for groups)")
+    output.add_argument("--skipEoscp", action='store_true', help="Override use of xrdcp and use the mount instead")
     
     return parser.parse_args()
 
@@ -311,7 +313,15 @@ def producePlots(rtfile, args, POI='Wmass', normalize=False):
         fig = plotImpacts(df, pulls=not args.noPulls and not args.group, POI=POI, normalize=not args.absolute, oneSidedImpacts=args.oneSidedImpacts)
 
         postfix = POI if POI and "mass" not in POI else None
-        writeOutput(fig, args.outputFile, args.otherExtensions, postfix=postfix, args=args)
+        
+        outdir = output_tools.make_plot_dir(args.outFolder, "", eoscp=not args.skipEoscp)
+        if outdir and not os.path.isdir(outdir):
+            os.path.makedirs(outdir)
+
+        outfile = os.path.join(outdir, args.outputFile)
+        writeOutput(fig, outfile, args.otherExtensions, postfix=postfix, args=args)
+        if not args.skipEoscp and output_tools.is_eosuser_path(args.outFolder):
+            output_tools.copy_to_eos(args.outFolder, "")
     else:
         raise ValueError("Must select mode 'interactive' or 'output'")
 
