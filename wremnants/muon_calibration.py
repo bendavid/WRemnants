@@ -556,14 +556,17 @@ def define_uncrct_reco_muon_kinematics(df, kinematic_vars = ["pt", "eta", "phi",
 def transport_smearing_weights_to_reco(
     resultdict,
     procs = ['WplusmunuPostVFP', 'WminusmunuPostVFP', 'ZmumuPostVFP'],
-    hists_to_transport = [
-            'muonScaleSyst_responseWeights_gensmear',
-            'Z_non_closure_parametrized_gensmear',
-            'Z_non_closure_parametrized_A_gensmear',
-            'Z_non_closure_parametrized_M_gensmear',
-            'Z_non_closure_binned_gensmear'
-    ]
+    nonClosureScheme = "A-M-separated"
 ):
+    hists_to_transport = ['muonScaleSyst_responseWeights_gensmear']
+    if nonClosureScheme == "A-M-separated":
+        hists_to_transport.append('Z_non_closure_parametrized_A_gensmear')
+        hists_to_transport.append('Z_non_closure_parametrized_M_gensmear')
+    elif nonClosureScheme == "A-M-combined":
+        hists_to_transport.append('Z_non_closure_parametrized_gensmear')
+    elif nonClosureScheme == "binned":
+        hists_to_transport.append('Z_non_closure_binned_gensmear')
+
     for proc in procs:
 
         if proc not in resultdict:
