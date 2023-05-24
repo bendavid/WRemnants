@@ -95,9 +95,35 @@ def makeStackPlotWithRatio(
     fill_between=False, skip_fill=0, ratio_to_data=False, baseline=True, legtext_size=20, cms_decor="Preliminary", lumi=16.8,
     no_fill=False, bin_density=300, unstacked_linestyles=[],
 ):
-    stack = [action(histInfo[k].hists[histName])[select] for k in stackedProcs if histInfo[k].hists[histName]]
     colors = [histInfo[k].color for k in stackedProcs if histInfo[k].hists[histName]]
     labels = [histInfo[k].label for k in stackedProcs if histInfo[k].hists[histName]]
+
+    to_read = stackedProcs[:]
+    if "Data" in histInfo:
+        to_read.append("Data")
+
+    stack = []
+    data_hist = None
+    for k in to_read:
+        if not histInfo[k].hists[histName]:
+            logger.warning(f"Failed to find hist {histName} for proc {k}")
+            continue
+        hist = action(histInfo[k].hists[histName])[select]
+        
+        # Use this if the hist has been rebinned for combine
+        if xlim:
+            hist = hist[complex(0, xlim[0]):complex(0, xlim[1])]
+
+        # If plotting from combine, apply the action to the underlying hist.
+        # Don't do this for the generic case, as it screws up the ability to make multiple plots
+        if fitresult:
+            histInfo[k].hists[histName] = hist
+
+        if k != "Data":
+            stack.append(hist)
+        else:
+            data_hist = hist
+
     fig, ax1, ax2 = figureWithRatio(stack[0], xlabel, ylabel, ylim, rlabel, rrange, xlim=xlim, 
         grid_on_ratio_plot = grid, plot_title = plot_title, title_padding = title_padding, bin_density = bin_density)
 
@@ -108,11 +134,20 @@ def makeStackPlotWithRatio(
         fittype = "prefit" if prefit else "postfit"
 
         # set histograms to prefit/postfit values
-        for s, p in zip(stack, stackedProcs):
-            s.values()[...] = combine_result[f"expproc_{p}_{fittype}"].to_hist().values()
+        for p in to_read:
 
+            hname = f"expproc_{p}_{fittype}" if p != "Data" else "obs"
+            vals = combine_result[hname].to_hist().values()
+            if len(histInfo[p].hists[histName].values()) != len(vals):
+                raise ValueError(f"The size of the combine histogram {(len(vals))} is not consistent with the xlim or input hist")
+
+            histInfo[p].hists[histName].values()[...] = vals
+            if p == "Data":
+                histInfo[p].hists[histName].variances()[...] = vals
+
+        
         # for postfit uncertaity bands
-        axis = stack[0].axes[0].edges
+        axis = histInfo[to_read[0]].hists[histName].axes[0].edges
 
         # need to divide by bin width
         binwidth = axis[1:]-axis[:-1]
@@ -141,9 +176,7 @@ def makeStackPlotWithRatio(
         zorder=1,
     )
     
-    data_hist = None
     if "Data" in histInfo and ratio_to_data:
-        data_hist = action(histInfo["Data"].hists[histName][select])
         hep.histplot(
             hh.divideHists(sum(stack), data_hist, cutoff=0.01),
             histtype="step",
@@ -155,10 +188,18 @@ def makeStackPlotWithRatio(
         )
 
     if unstacked:
-        linestyles = unstacked_linestyles+['solid']*(len(unstacked)-len(unstacked_linestyles))
         if type(unstacked) == str: 
             unstacked = unstacked.split(",")
-        ratio_ref = data_hist if data_hist else sum(stack) 
+
+        linestyles = ['solid']*len(unstacked)
+        data_idx = -1
+        if "Data" in unstacked:
+            data_idx = unstacked.index("Data") 
+            linestyles[data_idx] = "None"
+        linestyles = np.array(linestyles, dtype=object)
+        linestyles[data_idx+1:data_idx+1+len(unstacked_linestyles)] = unstacked_linestyles
+
+        ratio_ref = data_hist if ratio_to_data else sum(stack) 
         if baseline:
             hep.histplot(
                 hh.divideHists(ratio_ref, ratio_ref, cutoff=1e-8, rel_unc=True),
@@ -171,30 +212,27 @@ def makeStackPlotWithRatio(
             )
 
         for proc,style in zip(unstacked, linestyles):
-            logger.debug(f"Plotting proc {proc}")
-            unstack = action(histInfo[proc].hists[histName][select])
-            if proc == "Data":
-                style = "None"
+            unstack = histInfo[proc].hists[histName]
+            if not fitresult or proc not in to_read:
+                unstack = action(unstack)[select]
+
             hep.histplot(
                 unstack,
-                yerr=True if proc == "Data" else False,
-                histtype="errorbar" if (proc == "Data" or re.search("^pdf.*_sum", proc)) else "step",
+                yerr=True if style == "None" else False,
+                histtype="errorbar" if style == "None" else "step",
                 color=histInfo[proc].color,
                 label=histInfo[proc].label,
                 ax=ax1,
-                alpha=0.7 if proc != "Data" else 1.,
+                alpha=0.7 if style != "None" else 1.,
                 linestyle=style,
                 binwnorm=binwnorm,
             )
-            # TODO: Add option to leave data off ratio, I guess
-            #if proc == "Data":
-            #    continue
             hep.histplot(
                 hh.divideHists(unstack, ratio_ref, cutoff=0.01, rel_unc=True),
-                histtype="errorbar" if proc == "Data" and not data_hist else "step",
+                histtype="errorbar" if style == "None" else "step",
                 color=histInfo[proc].color,
                 label=histInfo[proc].label,
-                yerr=True if (proc == "Data" and not data_hist) else False,
+                yerr=True if style == "None" else False,
                 linewidth=2,
                 linestyle=style,
                 ax=ax2
@@ -206,11 +244,15 @@ def makeStackPlotWithRatio(
                 skip_fill = len(fill_procs) % 2
             logger.debug(f"Skip filling first {skip_fill}")
             for up,down in zip(fill_procs[skip_fill::2], fill_procs[skip_fill+1::2]):
-                unstack_up = hh.divideHists(action(histInfo[up].hists[histName][select]), ratio_ref, 1e-6)
-                unstack_down = hh.divideHists(action(histInfo[down].hists[histName][select]), ratio_ref, 1e-6)
-                ax2.fill_between(unstack_up.axes[0].edges, 
-                        np.append(unstack_up.values(), unstack_up.values()[-1]), 
-                        np.append(unstack_down.values(), unstack_up.values()[-1]),
+                unstack_up = histInfo[up].hists[histName]
+                unstack_down = histInfo[down].hists[histName]
+                unstack_upr = hh.divideHists(unstack_up, ratio_ref, 1e-6)
+                unstack_downr = hh.divideHists(unstack_down, ratio_ref, 1e-6)
+                ax2.fill_between(unstack_upr.axes[0].edges[:-1], 
+                        unstack_upr.values(), unstack_downr.values(),
+                        # FIXME: Not sure if this is needed, currently not working correctly
+                        #np.append(unstack_upr.values(), unstack_upr.values()[-1]), 
+                        #np.append(unstack_down.values(), unstack_downr.values()[-1]),
                     step='post', color=histInfo[up].color, alpha=0.5)
 
     addLegend(ax1, nlegcols, extra_text=extra_text, extra_text_loc=extra_text_loc, text_size=legtext_size)
@@ -265,7 +307,7 @@ def makePlotWithRatioToRef(
                 downr = hh.divideHists(down, hists[0], 1e-6)
                 ax2.fill_between(upr.axes[0].edges, 
                         np.append(upr.values(), upr.values()[-1]), 
-                        np.append(downr.values(), upr.values()[-1]),
+                        np.append(downr.values(), downr.values()[-1]),
                             step='post', color=color, alpha=0.5)
 
         count = len(ratio_hists) - data if not fill_between else 1
@@ -366,9 +408,9 @@ def save_pdf_and_png(outdir, basename, fig=None):
 def write_index_and_log(outpath, logname, indexname="index.php", template_dir=f"{pathlib.Path(__file__).parent}/Templates", 
         yield_tables=None, analysis_meta_info=None, args={}, nround=2):
     shutil.copyfile(f"{template_dir}/{indexname}", f"{outpath}/{indexname}")
-    logdir = outpath
+    logname = f"{outpath}/{logname}.log"
 
-    with open(f"{logdir}/{logname}.log", "w") as logf:
+    with open(logname, "w") as logf:
         meta_info = '-'*80 + '\n' + \
             f'Script called at {datetime.datetime.now()}\n' + \
             f'The command was: {output_tools.script_command_to_str(sys.argv, args)}\n' + \
@@ -393,4 +435,5 @@ def write_index_and_log(outpath, logname, indexname="index.php", template_dir=f"
                 logf.write('\n'+'-'*80+"\n")
                 logf.write(f"Meta info from input file {k}\n")
                 logf.write('\n'+'-'*80+"\n")
-                logf.write(json.dumps(analysis_info, indent=4).replace("\\n", "\n"))
+                logf.write(json.dumps(analysis_info, indent=5).replace("\\n", "\n"))
+        logger.info(f"Writing file {logname}")

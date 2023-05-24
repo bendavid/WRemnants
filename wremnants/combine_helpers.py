@@ -146,7 +146,6 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
                 passToFakes=to_fakes,
                 actionMap={s : lambda h,np=np_nuisance: hh.syst_min_and_max_env_hist(syst_tools.hist_to_variations(h), obs, "vars",
                     [x for x in h.axes["vars"] if re.match(f"^{np}-*\d+", x)]) for s in expanded_samples},
-                # outNames=[f"{nuisance_name}Up", f"{nuisance_name}Down"],
                 baseName=f"scetlibNP{nuisance_name}_",
                 rename=nuisance_name,
             )

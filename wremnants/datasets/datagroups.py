@@ -500,7 +500,7 @@ class Datagroups(object):
         # Remove inclusive signal
         self.deleteGroup(group_name)
 
-    def make_yields_df(self, histName, procs, action, norm_proc=None):
+    def make_yields_df(self, histName, procs, action=lambda x: x, norm_proc=None):
         def sum_and_unc(h):
             if not hasattr(h.sum(), "value"):
                 return (h.sum(), None)
