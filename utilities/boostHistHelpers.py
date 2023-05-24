@@ -199,7 +199,7 @@ def scaleHist(h, scale, createNew=True):
             hnew = hist.Hist(*h.axes)
         else:
             hnew = hist.Hist(*h.axes, storage=hist.storage.Weight())
-            hnew.variances(flow=True)[...] = scale * h.variances(flow=True)
+            hnew.variances(flow=True)[...] = scale*scale * h.variances(flow=True)
 
         hnew.values(flow=True)[...] = scale * h.values(flow=True)
 
@@ -207,7 +207,7 @@ def scaleHist(h, scale, createNew=True):
     else:
         h.values(flow=True)[...] *= scale
         if h._storage_type() == hist.storage.Weight():
-            h.variances(flow=True)[...] *= scale
+            h.variances(flow=True)[...] *= scale*scale
         return h
     
 def normalize(h, scale=1e6, createNew=True):

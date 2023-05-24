@@ -194,7 +194,7 @@ def add_common_np_uncertainties(card_tool, samples, to_fakes):
         logger.error("Can not add resummation uncertainties. No theory correction was applied!")
     theory_unc = theory_unc[0]+"Corr"
     if theory_unc != "scetlib_dyturboCorr":
-        raise ValueError(f"The theory uncertainty hist {theory_unc} doesn't have the resummation {resum} uncertainty implemented")
+        raise ValueError(f"The theory uncertainty hist {theory_unc} doesn't have the resummation uncertainty implemented")
 
     # NOTE: The map needs to be keyed on the base procs not the group names, which is
     # admittedly a bit nasty
@@ -203,8 +203,6 @@ def add_common_np_uncertainties(card_tool, samples, to_fakes):
     obs = card_tool.project[:]
     if not obs:
         raise ValueError("Failed to find the observable names for the resummation uncertainties")
-
-    print("theory_unc", theory_unc)
 
     for np_nuisance in ["c_nu", "omega_nu"]:
         nuisance_name = f"scetlibNP{np_nuisance}"
