@@ -43,7 +43,7 @@ def polN_2d(xvals, parms,
         powx = xscaled**dx if dx else 1.0
         for dy in range(1+degreeY):
             powy = yscaled**dy if dy else 1.0
-            ret += (parms2d[dy][dx] * powx) * powy
+            ret += parms2d[dy][dx] * powx * powy
     return ret
 
 
@@ -51,6 +51,7 @@ if __name__ == "__main__":
             
     parser = argparse.ArgumentParser()
     parser.add_argument('inputfile',  type=str, nargs=1, help='input root file with histogram')
+    parser.add_argument('histname',  type=str, nargs=1, help='Histogram name to read from the file')
     parser.add_argument('outdir', type=str, nargs=1, help='output directory to save things')
     args = parser.parse_args()
 
@@ -76,7 +77,7 @@ if __name__ == "__main__":
     canvas.SetRightMargin(rightMargin)
     canvas.cd()                           
     
-    sfhistname = "SF3D_nominal_isolation" # uT - eta - pt
+    sfhistname = args.histname[0] #"SF3D_nominal_isolation" # uT - eta - pt
     tfile = safeOpenFile(args.inputfile[0])
     hsf =   safeGetObject(tfile, sfhistname)
     hsf.GetXaxis().SetRange(2, hsf.GetNbinsX()-1) # remove extreme bins for now, they extend up to infinity
@@ -183,18 +184,19 @@ if __name__ == "__main__":
         status = res_polN_2d["status"]
         covstatus = res_polN_2d["covstatus"]
         postfit_params = res_polN_2d['x']
+        npar = len(postfit_params)
         print(f"postfit_params = {postfit_params}")
         print(f"status/covstatus = {status}/{covstatus}")
         if status != 0 or covstatus != 0:
             print("BAD FIT!!!")
             quit()
+
         for ix in range(1,1+h.GetNbinsX()):
             bincx = h.GetXaxis().GetBinCenter(ix)
             for iy in range(1,1+h.GetNbinsY()):
                 bincy = h.GetYaxis().GetBinCenter(iy)
                 fitval = polN_2d_scaled([bincx, bincy], postfit_params)
                 hpull.SetBinContent(ix, iy, (fitval - h.GetBinContent(ix, iy)) / h.GetBinError(ix, iy))
-                #hpull.SetBinError(ix, iy, relativeBinUncertainty * htest.GetBinContent(ix, iy))
         drawCorrelationPlot(hpull, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", "Pull: (fit - meas)/meas_unc::-5,5",
                             hpull.GetName(), "ForceTitle", outdir,
                             palette=87, nContours=20, passCanvas=canvas)
@@ -203,6 +205,17 @@ if __name__ == "__main__":
         utNbins = int(utRange+0.001)
         ptNbins = int(ptRange+0.001)
         hfit = ROOT.TH2D(f"fit2D_ieta{ieta}", etaRange, utNbins, utLow, utHigh, ptNbins, ptLow, ptHigh)
+        hfit_alt = []
+        # diagonalize and get eigenvalues and eigenvectors
+        print("Diagonalizing covariance matrix ...")
+        e, v = np.linalg.eigh(res_polN_2d["cov"])
+        postfit_params_alt = np.array([np.zeros(npar, dtype=np.dtype('d'))] * (npar * 2), dtype=np.dtype('d'))
+        for ivar in range(npar):
+            shift = np.sqrt(e[ivar]) * v[:, ivar]
+            postfit_params_alt[ivar]      = postfit_params + shift
+            postfit_params_alt[ivar+npar] = postfit_params - shift              
+            hfit_alt.append(ROOT.TH2D(f"fit2D_ieta{ieta}_eigen{ivar}", etaRange, utNbins, utLow, utHigh, ptNbins, ptLow, ptHigh))
+            
         print(f"Creating smooth histogram ...")
         for ix in range(1,1+hfit.GetNbinsX()):
             bincx = hfit.GetXaxis().GetBinCenter(ix)
@@ -210,8 +223,19 @@ if __name__ == "__main__":
                 bincy = hfit.GetYaxis().GetBinCenter(iy)
                 fitval = polN_2d_scaled([bincx, bincy], postfit_params)
                 hfit.SetBinContent(ix, iy, fitval)
+                #for ivar in range(npar):
+                #    fitval_alt = polN_2d_scaled([bincx, bincy], postfit_params_alt[ivar])
+                #    hfit_alt[ivar].SetBinContent(ix, iy, 1 if fitval == 0 else fitval_alt/fitval)
         drawCorrelationPlot(hfit, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", "Smooth scale factor",
                             hfit.GetName(), "ForceTitle", outdir,
                             palette=87, passCanvas=canvas)
+
+        outdir_eigen = outdir + f"eigenDecomposition/eta_{ieta}/"
+        createPlotDirAndCopyPhp(outdir_eigen)
+        # for ivar in range(npar):
+        #     hfit_alt[ivar].SetTitle(f"{etaRange}: eigen {ivar}")            
+        #     drawCorrelationPlot(hfit_alt[ivar], "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", "Alternate / nominal SF ratio",
+        #                         hfit_alt[ivar].GetName(), "ForceTitle", outdir_eigen,
+        #                         palette=87, passCanvas=canvas)
 
         print("-"*30)
