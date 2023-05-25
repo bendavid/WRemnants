@@ -87,6 +87,8 @@ def write_analysis_output(results, outfile, args, update_name=True):
         to_append.append(args.uncertainty_hist)
     if args.postfix:
         to_append.append(args.postfix)
+    if args.correlatedNonClosureNP:
+        to_append.append("NonClosureCorl")
     if args.maxFiles > 0:
         to_append.append(f"maxFiles{args.maxFiles}")
 

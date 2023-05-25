@@ -233,6 +233,80 @@ def make_jpsi_crctn_unc_helper(filepath, n_scale_params = 3, n_tot_params = 4, n
     jpsi_crctn_unc_helper.tensor_axes = (hist_scale_params_unc.axes['unc'], common.down_up_axis)
     return jpsi_crctn_unc_helper
 
+def make_Z_non_closure_parametrized_helper(
+    filepath = f"{data_dir}/closure/calibrationAlignmentZ_after_LBL_v721.root",
+    n_eta_bins = 24, n_scale_params = 3, correlate = False
+):
+    f = uproot.open(filepath)
+    M = f['MZ'].to_hist()
+    A = f['AZ'].to_hist()
+
+    axis_eta = hist.axis.Regular(n_eta_bins, -2.4, 2.4, name = 'eta')
+    axis_scale_params = hist.axis.Regular(n_scale_params, 0, 1, name = 'scale_params')
+    hist_non_closure = hist.Hist(axis_eta, axis_scale_params)
+    hist_non_closure.view()[...,0] = A.values()
+    hist_non_closure.view()[...,1] = np.zeros(n_eta_bins)
+    hist_non_closure.view()[...,2] = M.values()
+
+    hist_non_closure_cpp = narf.hist_to_pyroot_boost(hist_non_closure, tensor_rank = 1)
+    if correlate:
+        z_non_closure_helper = ROOT.wrem.ZNonClosureParametrizedHelperCorl[
+            type(hist_non_closure_cpp).__cpp_name__,
+            n_eta_bins
+        ] (
+            ROOT.std.move(hist_non_closure_cpp)
+        )
+        z_non_closure_helper.tensor_axes = tuple([common.down_up_axis])
+        return z_non_closure_helper
+    else:
+        z_non_closure_helper = ROOT.wrem.ZNonClosureParametrizedHelper[
+            type(hist_non_closure_cpp).__cpp_name__,
+            n_eta_bins
+        ] (
+            ROOT.std.move(hist_non_closure_cpp)
+        )
+        z_non_closure_helper.tensor_axes = (
+            hist.axis.Regular(n_eta_bins, 0, n_eta_bins, name = 'unc'),
+            common.down_up_axis
+        )
+        return z_non_closure_helper
+
+def make_Z_non_closure_binned_helper(
+    filepath = f"{data_dir}/closure/closureZ_LBL_smeared_v721.root",
+    n_eta_bins = 24, n_pt_bins = 5, correlate = False
+):
+    f = uproot.open(filepath)
+
+    # TODO: convert variable axis to regular if the bin width is uniform
+    hist_non_closure = f['closure'].to_hist()
+    hist_non_closure_cpp = narf.hist_to_pyroot_boost(hist_non_closure)
+    if correlate:
+        z_non_closure_helper = ROOT.wrem.ZNonClosureBinnedHelperCorl[
+            type(hist_non_closure_cpp).__cpp_name__,
+            n_eta_bins,
+            n_pt_bins
+        ](
+            ROOT.std.move(hist_non_closure_cpp)
+        )
+        z_non_closure_helper.tensor_axes = tuple([common.down_up_axis])
+        return z_non_closure_helper
+    else:
+        z_non_closure_helper = ROOT.wrem.ZNonClosureBinnedHelper[
+            type(hist_non_closure_cpp).__cpp_name__,
+            n_eta_bins,
+            n_pt_bins
+        ](
+            ROOT.std.move(hist_non_closure_cpp)
+        )
+        z_non_closure_helper.tensor_axes = (
+            hist.axis.Regular(n_eta_bins, 0, n_eta_bins, name = 'unc_ieta'),
+            hist.axis.Regular(n_pt_bins, 0, n_pt_bins, name = 'unc_ipt'),
+            common.down_up_axis
+        )
+        print("tensor axes is: ++++++++++++++++++++++++++++++")
+        print(z_non_closure_helper.tensor_axes)
+        return z_non_closure_helper
+
 # returns the cov mat of only scale parameters in eta bins, in the form of a 2D numpy array
 # there are 3 scale params (A, e, M) + 3 resolution params for each eta bin in the jpsi calib file
 def get_jpsi_scale_param_cov_mat(cov, n_scale_params = 3, n_tot_params = 4, n_eta_bins = 24, scale = 1.0):
@@ -252,6 +326,15 @@ def get_jpsi_scale_param_cov_mat(cov, n_scale_params = 3, n_tot_params = 4, n_et
             cov.values()[irow_all_params], idx_scale_params
         )
     return cov_scale_params
+
+def crop_cov_mat(filepath, n_tot_params = 4, n_cropped_eta_bins = 2):
+    f = uproot.open(filepath)
+    filename = filepath.split("/")[-1]
+    cov_mat = np.array(f['covariance_matrix'].to_hist().values())
+    start_idx = n_tot_params * n_cropped_eta_bins
+    cov_mat_cropped = cov_mat[start_idx:-start_idx, start_idx:-start_idx]
+    fout = uproot.recreate(filename.split(".")[0] + "_cropped_eta" + ".root")
+    fout['covariance_matrix'] = cov_mat_cropped 
 
 def define_lblcorr_muons(df, cvh_helper, corr_branch="cvh"):
 
@@ -473,41 +556,48 @@ def define_uncrct_reco_muon_kinematics(df, kinematic_vars = ["pt", "eta", "phi",
 def transport_smearing_weights_to_reco(
     resultdict,
     procs = ['WplusmunuPostVFP', 'WminusmunuPostVFP', 'ZmumuPostVFP'],
+    nonClosureScheme = "A-M-separated"
 ):
+    hists_to_transport = ['muonScaleSyst_responseWeights_gensmear']
+    if nonClosureScheme == "A-M-separated":
+        hists_to_transport.append('Z_non_closure_parametrized_A_gensmear')
+        hists_to_transport.append('Z_non_closure_parametrized_M_gensmear')
+    elif nonClosureScheme == "A-M-combined":
+        hists_to_transport.append('Z_non_closure_parametrized_gensmear')
+    elif nonClosureScheme == "binned":
+        hists_to_transport.append('Z_non_closure_binned_gensmear')
+
     for proc in procs:
+
         if proc not in resultdict:
-            logger.warning(f"Proc {proc} not found in output. Skipping smearing weights")
+            logger.warning(f"Proc {proc} not found in output. Skipping smearing weights transportation")
             continue
-        proc_hist = resultdict[proc]['output']
-        nominal_reco = proc_hist['nominal'].get()
+        proc_hists = resultdict[proc]['output']
 
-        if 'nominal_gen_smeared' in proc_hist.keys():
-            nominal_gen_smear = proc_hist['nominal_gen_smeared'].get()
+        nominal_reco = proc_hists['nominal'].get()
+        if 'nominal_gen_smeared' in proc_hists.keys():
+            nominal_gensmear = proc_hists['nominal_gen_smeared'].get()
         else:
-            logger.warning(f"Histogram 'nominal_gen_smeared' not found in {proc}")
-            logger.warning("smearing weights not transported to RECO kinematics")
+            logger.warning(f"Histogram nominal_gen_smeared not found in {proc}")
+            logger.warning("nuisances generated by smearing weights not transported to RECO kinematics!")
             return
 
-        if 'muonScaleSyst_responseWeights_gensmear' in proc_hist.keys():
-            msv_sw_gen_smear = proc_hist['muonScaleSyst_responseWeights_gensmear'].get()
-        else:
-            logger.warning(f"Histogram 'muonScaleSyst_responseWeights_gensmear' not found in {proc}")
-            logger.warning("smearing weights not transported to RECO kinematics")
-            return
-
-        msv_sw_reco = hist.Hist(*msv_sw_gen_smear.axes, storage=hist.storage.Double())
-
-        for i_unc in range(msv_sw_gen_smear.axes['unc'].size):
-            sw_dn_up_gen_smear = [msv_sw_gen_smear[..., i_unc, 0], msv_sw_gen_smear[..., i_unc, 1]]
-            bin_ratio_dn_up = [hh.divideHists(x, nominal_gen_smear) for x in sw_dn_up_gen_smear]
-            sw_dn_up_reco = hh.combineUpDownVarHists(
-                *[hh.multiplyHists(nominal_reco, x) for x in bin_ratio_dn_up]
-            )
-
-            msv_sw_reco.values(flow = True)[..., i_unc, :] = sw_dn_up_reco.values(flow = True)
-        resultdict[proc]['output']['nominal_muonScaleSyst_responseWeights'] = (
-            narf.ioutils.H5PickleProxy(msv_sw_reco)
-        )
+        for histname in hists_to_transport:
+            if histname in proc_hists.keys():
+                hist_gensmear = proc_hists[histname].get()
+                reco_histname = 'nominal_' + histname[:-len('_gensmear')]
+                hist_reco = hist.Hist(
+                    *hist_gensmear.axes,
+                    storage = hist_gensmear._storage_type()
+                )
+                
+                bin_ratio = hh.divideHists(hist_gensmear, nominal_gensmear)
+                hist_reco = hh.multiplyHists(nominal_reco, bin_ratio)
+                proc_hists[reco_histname] = narf.ioutils.H5PickleProxy(hist_reco)
+            else:
+                logger.warning(f"Histogram {histname} not found in {proc}")
+                logger.warning("nuisances generated by smearing weights not transported to RECO kinematics!")
+                return
 
 def muon_scale_variation_from_manual_shift(
     resultdict, procs = ['WplusmunuPostVFP', 'WminusmunuPostVFP', 'ZmumuPostVFP'],
