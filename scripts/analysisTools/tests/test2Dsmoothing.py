@@ -53,6 +53,7 @@ if __name__ == "__main__":
     parser.add_argument('inputfile',  type=str, nargs=1, help='input root file with histogram')
     parser.add_argument('histname',  type=str, nargs=1, help='Histogram name to read from the file')
     parser.add_argument('outdir', type=str, nargs=1, help='output directory to save things')
+    parser.add_argument('--eta', type=int, nargs="*", default=[], help='Select some eta bins (ID goes from 1 to Neta')
     args = parser.parse_args()
 
     ROOT.TH1.SetDefaultSumw2()
@@ -150,6 +151,8 @@ if __name__ == "__main__":
         quit()
     ## END OF ISTEST
 
+    # for consistency with how tensorflow reads the histogram to fit, it is better to use bin centers to define the range.
+    # It is then fine even if the fit function extends outside this range
     ptLow = hsf.GetZaxis().GetBinCenter(1)
     ptHigh = hsf.GetZaxis().GetBinCenter(hsf.GetNbinsZ())
     ptRange = ptHigh - ptLow
@@ -159,11 +162,18 @@ if __name__ == "__main__":
     polN_2d_scaled = partial(polN_2d,
                              xLowVal=utLow, xFitRange=utRange, degreeX=polnx,
                              yLowVal=ptLow, yFitRange=ptRange, degreeY=polny)
+    ## save actual histogram edges, useful when creating a ROOT.TF2
+    ptEdgeLow = hsf.GetZaxis().GetBinLowEdge(1)
+    ptEdgeHigh = hsf.GetZaxis().GetBinLowEdge(1 + hsf.GetNbinsZ())
+    utEdgeLow = hsf.GetXaxis().GetBinLowEdge(2) # remove first bin, whose range is too extreme
+    utEdgeHigh = hsf.GetXaxis().GetBinLowEdge(hsf.GetNbinsX()) # remove last bin, whose range is too extreme    
+
 
     # set initial parameters, starting with constant at unit
     arr = [1.0] + [0.0 for x in range((polnx+1)*(polny+1)-1)]
     ##    
-    for ieta in range(1, 1 + hsf.GetNbinsY()):
+    etaBins = args.eta if len(args.eta) else range(1, 1 + hsf.GetNbinsY())
+    for ieta in etaBins:
     # for ieta in range(1, 2):
         print(f"Going to fit eta bin {ieta}")
         hsf.GetYaxis().SetRange(ieta, ieta)
@@ -185,6 +195,8 @@ if __name__ == "__main__":
         covstatus = res_polN_2d["covstatus"]
         postfit_params = res_polN_2d['x']
         npar = len(postfit_params)
+        fitChi2 = res_polN_2d["loss_val"]
+        ndof = h.GetNbinsX()*h.GetNbinsY() - npar 
         print(f"postfit_params = {postfit_params}")
         print(f"status/covstatus = {status}/{covstatus}")
         if status != 0 or covstatus != 0:
@@ -202,9 +214,10 @@ if __name__ == "__main__":
                             palette=87, nContours=20, passCanvas=canvas)
 
         # 1 GeV for recoil and pt
-        utNbins = int(utRange+0.001)
-        ptNbins = int(ptRange+0.001)
-        hfit = ROOT.TH2D(f"fit2D_ieta{ieta}", etaRange, utNbins, utLow, utHigh, ptNbins, ptLow, ptHigh)
+        utNbins = int(utEdgeHigh - utEdgeLow + 0.001)
+        ptNbins = int(ptEdgeHigh - ptEdgeLow + 0.001)
+        print(f"utNbins = {utNbins}    ptNbins = {ptNbins}")
+        hfit = ROOT.TH2D(f"fit2D_ieta{ieta}", etaRange, utNbins, utEdgeLow, utEdgeHigh, ptNbins, ptEdgeLow, ptEdgeHigh)
         hfit_alt = []
         # diagonalize and get eigenvalues and eigenvectors
         print("Diagonalizing covariance matrix ...")
@@ -215,18 +228,38 @@ if __name__ == "__main__":
             postfit_params_alt[ivar]      = postfit_params + shift
             postfit_params_alt[ivar+npar] = postfit_params - shift              
             hfit_alt.append(ROOT.TH2D(f"fit2D_ieta{ieta}_eigen{ivar}", etaRange, utNbins, utLow, utHigh, ptNbins, ptLow, ptHigh))
-            
+
+        # create TF2 to see if retrieving the values is faster than calling the function directly
+        rtf2 = ROOT.TF2("rtf2", polN_2d_scaled, utEdgeLow, utEdgeHigh, ptEdgeLow, ptEdgeHigh, len(params), 2)
+        rtf2.SetParameters( np.array( postfit_params, dtype=np.dtype('d') ) )
+        rtf2.SetNpx(100)
+        rtf2.SetNpy(100)
+        
         print(f"Creating smooth histogram ...")
         for ix in range(1,1+hfit.GetNbinsX()):
             bincx = hfit.GetXaxis().GetBinCenter(ix)
             for iy in range(1,1+hfit.GetNbinsY()):
                 bincy = hfit.GetYaxis().GetBinCenter(iy)
                 fitval = polN_2d_scaled([bincx, bincy], postfit_params)
+                fitvalTF2 = rtf2.Eval(bincx, bincy)
+                print(f"ix,iy = {ix},{iy}    fitval/fitvalTF2 = {fitval}/{fitvalTF2}    ratio = {fitval/fitvalTF2}")
                 hfit.SetBinContent(ix, iy, fitval)
                 #for ivar in range(npar):
                 #    fitval_alt = polN_2d_scaled([bincx, bincy], postfit_params_alt[ivar])
                 #    hfit_alt[ivar].SetBinContent(ix, iy, 1 if fitval == 0 else fitval_alt/fitval)
-        drawCorrelationPlot(hfit, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", "Smooth scale factor",
+
+        # draw nominal smooth SF
+        chi2text = f"#chi^2 = {fitChi2}/{ndof}"
+        chi2prob = ROOT.TMath.Prob(chi2, ndof)
+        if chi2prob < 0.05:
+            perc_chi2prob = 100.0 * chi2prob
+            sign = "="
+            if perc_chi2prob < 0.1:
+                perc_chi2prob = 0.1
+                sign = "<"
+            chi2text += " (prob {} {}%)".format(sign, round(perc_chi2prob,1))
+                
+        drawCorrelationPlot(hfit, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", f"Smooth scale factor: {chi2text}",
                             hfit.GetName(), "ForceTitle", outdir,
                             palette=87, passCanvas=canvas)
 
