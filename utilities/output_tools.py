@@ -32,8 +32,10 @@ def script_command_to_str(argv, parser_args):
     match_expr = "|".join(["^-+([a-z]+[1-9]*-*)+"]+([] if not parser_args else [f"^-*{x.replace('_', '.')}" for x in vars(parser_args).keys()]))
     if call_args.size != 0:
         flags = np.vectorize(lambda x: bool(re.match(match_expr, x)))(call_args)
-        if np.count_nonzero(~flags):
-            call_args[~flags] = np.vectorize(lambda x: f"'{x}'")(call_args[~flags])
+        special_chars = np.vectorize(lambda x: not x.isalnum())(call_args)
+        select = ~flags & special_chars
+        if np.count_nonzero(select):
+            call_args[select] = np.vectorize(lambda x: f"'{x}'")(call_args[select])
     return " ".join([argv[0], *call_args])
 
 def metaInfoDict(exclude_diff='notebooks', args=None):
@@ -85,6 +87,8 @@ def write_analysis_output(results, outfile, args, update_name=True):
         to_append.append(args.uncertainty_hist)
     if args.postfix:
         to_append.append(args.postfix)
+    if args.correlatedNonClosureNP:
+        to_append.append("NonClosureCorl")
     if args.maxFiles > 0:
         to_append.append(f"maxFiles{args.maxFiles}")
 
