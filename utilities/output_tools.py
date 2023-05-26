@@ -145,7 +145,10 @@ def copy_to_eos(outpath, outfolder):
 
     for f in glob.glob(tmppath+"/*"):
         if os.path.isfile(f):
-            if subprocess.call(["xrdcp", "-f", f, "/".join(["root://eosuser.cern.ch", eospath, f])]):
+            command = ["xrdcp", "-f", f, "/".join(["root://eosuser.cern.ch", eospath, f.replace("temp/", "")])]
+
+            logger.debug(f"Executing {' '.join(command)}")
+            if subprocess.call(command):
                 raise IOError("Failed to copy the files to eos! Perhaps you are missing a kerberos ticket and need to run kinit <user>@CERN.CH?"
                     " from lxplus you can run with --skipEoscp and take your luck with the mount.")
 
@@ -165,6 +168,9 @@ def split_eos_path(path):
     else:
         eospath = "/".join(splitpath[:4])
         basepath = "/".join(splitpath[4:])
+
+    if path[0] == "/":
+        eospath = "/"+eospath
 
     return eospath, basepath
 
