@@ -329,7 +329,7 @@ def main(args,xnorm=False):
 
         # FIXME: remove this once msv from smearing weights is implemented for the Z
         msv_config = msv_config_dict[args.muonScaleVariation] if wmass else msv_config_dict["massWeights"]
-        
+
         cardTool.addSystematic(msv_config['hist_name'], 
             processes=single_vmu_samples,
             group="muonScale",
@@ -339,7 +339,6 @@ def main(args,xnorm=False):
             passToFakes=passSystToFakes,
             scale = args.scaleMuonCorr
         )
-
         cardTool.addSystematic("muonL1PrefireSyst", 
             processes=allMCprocesses_noQCDMC,
             group="muonPrefire",
@@ -348,7 +347,6 @@ def main(args,xnorm=False):
             labelsByAxis=["downUpVar"],
             passToFakes=passSystToFakes,
         )
-
         cardTool.addSystematic("muonL1PrefireStat", 
             processes=allMCprocesses_noQCDMC,
             group="muonPrefire",
@@ -357,7 +355,6 @@ def main(args,xnorm=False):
             labelsByAxis=["downUpVar", "etaPhiReg"],
             passToFakes=passSystToFakes,
         )
-
         cardTool.addSystematic("ecalL1Prefire", 
             processes=allMCprocesses_noQCDMC,
             group="ecalPrefire",
@@ -366,10 +363,9 @@ def main(args,xnorm=False):
             labelsByAxis=["downUpVar"],
             passToFakes=passSystToFakes,
         )
-
         if wmass or wlike:
             combine_helpers.add_recoil_uncertainty(cardTool, signal_samples, passSystToFakes=passSystToFakes, flavor="mu")
-        
+
         if wmass:
             if args.nonClosureScheme == "A-M-separated":
                 cardTool.addSystematic("Z_non_closure_parametrized_A", 
