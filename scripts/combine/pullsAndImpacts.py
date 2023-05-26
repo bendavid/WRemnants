@@ -314,13 +314,13 @@ def producePlots(rtfile, args, POI='Wmass', normalize=False):
 
         postfix = POI if POI and "mass" not in POI else None
         
-        outdir = output_tools.make_plot_dir(args.outFolder, "", eoscp=not args.eoscp)
+        outdir = output_tools.make_plot_dir(args.outFolder, "", eoscp=args.eoscp)
         if outdir and not os.path.isdir(outdir):
             os.path.makedirs(outdir)
 
         outfile = os.path.join(outdir, args.outputFile)
         writeOutput(fig, outfile, args.otherExtensions, postfix=postfix, args=args)
-        if not args.eoscp and output_tools.is_eosuser_path(args.outFolder):
+        if args.eoscp and output_tools.is_eosuser_path(args.outFolder):
             output_tools.copy_to_eos(args.outFolder, "")
     else:
         raise ValueError("Must select mode 'interactive' or 'output'")
