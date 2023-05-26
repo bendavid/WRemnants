@@ -34,13 +34,13 @@ parser.add_argument("--noData", action='store_true', help="Don't plot data")
 parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend text")
 parser.add_argument("--plots", type=str, nargs="+", default="xsec", choices=["xsec", "prefit", "postfit", "correlation", "covariance"], help="Define which plots to make")
 parser.add_argument("--lumi", type=float, default=16.8, help="Luminosity used in the fit, needed to get the absolute cross section")
-parser.add_argument("--skipEoscp", action='store_true', help="Override use of xrdcp and use the mount instead")
+parser.add_argument("--eoscp", action='store_true', help="Override use of xrdcp and use the mount instead")
 
 args = parser.parse_args()
 
 logger = logging.setup_logger("plotFitresult", 4 if args.debug else 3, False)
 
-outdir = output_tools.make_plot_dir(args.outpath, args.outfolder, eoscp=not args.skipEoscp)
+outdir = output_tools.make_plot_dir(args.outpath, args.outfolder, eoscp=args.eoscp)
 
 rfile = uproot.open(args.infile)
 if args.asimov:
@@ -497,5 +497,5 @@ if "covariance" in args.plots:
     plot_matrix_poi("covariance_matrix_channelpmaskedexp")
     plot_matrix_poi("covariance_matrix_channelpmaskedexpnorm")
 
-if output_tools.is_eosuser_path(args.outpath) and not args.skipEoscp:
+if output_tools.is_eosuser_path(args.outpath) and not args.eoscp:
     output_tools.copy_to_eos(args.outpath, args.outfolder)
