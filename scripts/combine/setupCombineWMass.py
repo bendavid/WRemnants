@@ -219,10 +219,12 @@ def main(args,xnorm=False):
             processes=allMCprocesses_noQCDMC,
             outNames=["sf2dDown","sf2dUp"],
             group="SF3Dvs2D",
-            mirror=False,
+            scale = 1.0,
+            mirror = True,
+            mirrorDownVarEqualToNomi=True,
             noConstraint=False,
-            systAxes=["downUpVar"],
-            labelsByAxis=["downUpVar"],
+            systAxes=[],
+            #labelsByAxis=["downUpVar"],
             passToFakes=passSystToFakes,
         )
 
@@ -253,7 +255,7 @@ def main(args,xnorm=False):
                 nameReplace = [("WPSYST0", "reco"), ("WPSYST1", "tracking"), ("WPSYST2", "idip"), ("WPSYST3", "trigger"), ("WPSYST4", "iso"), ("effSystTnP", "effSyst")]
                 scale = 1.0
                 mirror = True
-                mirrorDownVarEqualToNomi=True
+                mirrorDownVarEqualToNomi=False
                 groupName = "muon_eff_syst"
                 splitGroupDict = {f"{groupName}_{x}" : f".*effSyst.*{x}" for x in list(effTypesNoIso + ["iso"])}
                 splitGroupDict[groupName] = ".*effSyst.*" # add also the group with everything

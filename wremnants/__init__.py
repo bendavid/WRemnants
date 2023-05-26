@@ -10,7 +10,6 @@ narf.clingutils.Declare('#include "histHelpers.h"')
 narf.clingutils.Declare('#include "utils.h"')
 narf.clingutils.Declare('#include "csVariables.h"')
 narf.clingutils.Declare('#include "EtaPtCorrelatedEfficiency.h"')
-narf.clingutils.Declare('#include "sf3dvs2d.h"')
 
 from .datasets import datasets2016
 from .datasets import datasetsLowPU

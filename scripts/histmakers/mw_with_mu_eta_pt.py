@@ -639,10 +639,7 @@ def build_graph(df, dataset):
         if not args.binnedScaleFactors:
             df = df.Define("weight2dsfup", muon_efficiency_helper2d, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso"])
             df = df.Define("nominal_weight_2dsf", "nominal_weight/weight_fullMuonSF_withTrackingReco*weight2dsfup") #be EXTREMELY CAREFUL about the histogram files (this assumes that you have another file with the old trigger and histo SFs which also contains the same SFs for all the other steps as the central one)
-            df = df.Define("sf3dvs2d","wrem::SF3DVS2D(nominal_weight,nominal_weight_2dsf)")
-            #df = df.Define("sf3dvs2d","wrem::SF3DVS2D(nominal_weight_2dsf,nominal_weight_2dsf)")
-            sf2d = df.HistoBoost("nominal_sf2d", nominal_axes, [*nominal_cols, "sf3dvs2d"], tensor_axes = [common.down_up_axis])
-            #sf2d = df.HistoBoost("nominal_sf2d", nominal_axes, [*nominal_cols, "nominal_weight_2dsf"])
+            sf2d = df.HistoBoost("nominal_sf2d", nominal_axes, [*nominal_cols, "nominal_weight_2dsf"])
             results.append(sf2d)
                
     return results, weightsum
