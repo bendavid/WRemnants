@@ -137,7 +137,7 @@ def makeStackPlotWithRatio(
             hname = f"expproc_{p}_{fittype}" if p != "Data" else "obs"
             vals = combine_result[hname].to_hist().values()
             if len(histInfo[p].hists[histName].values()) != len(vals):
-                raise ValueError(f"The size of the combine histogram {(len(vals))} is not consistent with the xlim or input hist")
+                raise ValueError(f"The size of the combine histogram ({(vals.shape)}) is not consistent with the xlim or input hist ({histInfo[p].hists[histName].shape})")
 
             histInfo[p].hists[histName].values()[...] = vals
             if p == "Data":

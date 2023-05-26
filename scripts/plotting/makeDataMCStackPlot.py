@@ -62,7 +62,7 @@ parser.add_argument("--noFill", action='store_true', help="Don't fill stack")
 parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend text")
 parser.add_argument("--fitresult", type=str, help="Specify a fitresult root file to draw the postfit distributions with uncertainty bands")
 parser.add_argument("--prefit", action='store_true', help="Use the prefit uncertainty from the fitresult root file, instead of the postfit. (--fitresult has to be given)")
-parser.add_argument("--skipEoscp", action='store_true', help="Override use of xrdcp and use the mount instead")
+parser.add_argument("--eoscp", action='store_true', help="Use of xrdcp for eos output rather than the mount")
 
 
 subparsers = parser.add_subparsers(dest="variation")
@@ -101,7 +101,7 @@ if addVariation and (args.selectAxis or args.selectEntries):
     axes = padArray(args.selectAxis, args.varName)
     entries = padArray(args.selectEntries, args.varName)
 
-outdir = output_tools.make_plot_dir(args.outpath, args.outfolder, eoscp=not args.skipEoscp)
+outdir = output_tools.make_plot_dir(args.outpath, args.outfolder, eoscp=args.eoscp)
 
 groups = make_datagroups_2016(args.infile, filterGroups=args.procFilters, excludeGroups=None if args.procFilters else ['QCD'])
 # There is probably a better way to do this but I don't want to deal with it
@@ -227,5 +227,5 @@ for h in args.hists:
         args=args,
     )
 
-if output_tools.is_eosuser_path(args.outpath) and not args.skipEoscp:
+if output_tools.is_eosuser_path(args.outpath) and args.eoscp:
     output_tools.copy_to_eos(args.outpath, args.outfolder)
