@@ -231,7 +231,7 @@ def parseArgs():
     output.add_argument("--otherExtensions", default=[], type=str, nargs="*", help="Additional output file types to write")
     output.add_argument("-n", "--num", type=int, help="Number of nuisances to plot")
     output.add_argument("--noPulls", action='store_true', help="Don't show pulls (not defined for groups)")
-    output.add_argument("--skipEoscp", action='store_true', help="Override use of xrdcp and use the mount instead")
+    output.add_argument("--eoscp", action='store_true', help="Use of xrdcp for eos output rather than the mount")
     
     return parser.parse_args()
 
@@ -314,13 +314,13 @@ def producePlots(rtfile, args, POI='Wmass', normalize=False):
 
         postfix = POI if POI and "mass" not in POI else None
         
-        outdir = output_tools.make_plot_dir(args.outFolder, "", eoscp=not args.skipEoscp)
+        outdir = output_tools.make_plot_dir(args.outFolder, "", eoscp=not args.eoscp)
         if outdir and not os.path.isdir(outdir):
             os.path.makedirs(outdir)
 
         outfile = os.path.join(outdir, args.outputFile)
         writeOutput(fig, outfile, args.otherExtensions, postfix=postfix, args=args)
-        if not args.skipEoscp and output_tools.is_eosuser_path(args.outFolder):
+        if not args.eoscp and output_tools.is_eosuser_path(args.outFolder):
             output_tools.copy_to_eos(args.outFolder, "")
     else:
         raise ValueError("Must select mode 'interactive' or 'output'")
