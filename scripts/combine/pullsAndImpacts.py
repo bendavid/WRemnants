@@ -10,9 +10,11 @@ import dash_daq as daq
 from dash import html
 from dash.dependencies import Input, Output
 from utilities import input_tools, logging
+from wremnants import plot_tools
 import os
+import re
 
-def writeOutput(fig, outfile, extensions=[], postfix=None):
+def writeOutput(fig, outfile, extensions=[], postfix=None, args=None):
     name, ext = os.path.splitext(outfile)
     if ext not in extensions:
         extensions.append(ext)
@@ -24,14 +26,22 @@ def writeOutput(fig, outfile, extensions=[], postfix=None):
         if ext[0] != ".":
             ext = "."+ext
         func = "write_html" if ext == ".html" else "write_image"
-
         output = name+ext
         logger.debug(f"Write output file {output}")
 
         getattr(fig, func)(output)
+        
+        output = outfile.rsplit("/", 1)
+        output[1] = os.path.splitext(output[1])[0]
+        if len(output) == 1:
+            output = (None, *output)
+        plot_tools.write_index_and_log(*output, 
+            args=args,
+        )
 
-def plotImpacts(df, title, pulls=False, pullrange=[-5,5], POI='Wmass', normalize=False, oneSidedImpacts=False):
-    poi_type = POI.split("_")[-1]
+
+def plotImpacts(df, pulls=False, POI='Wmass', normalize=False, oneSidedImpacts=False):
+    poi_type = POI.split("_")[-1] if POI else None
 
     if poi_type == "Wmass":
         impact_title="Impact on mass (MeV)"
@@ -42,43 +52,72 @@ def plotImpacts(df, title, pulls=False, pullrange=[-5,5], POI='Wmass', normalize
     elif poi_type == "pmaskedexpnorm":
         impact_title=r"$\delta (\mathrm{d} \sigma / \sigma)$" if normalize else r"$\Delta(\mathrm{d} \sigma / \sigma)$"
 
-    fig = make_subplots(rows=1,cols=2 if pulls else 1,
-            horizontal_spacing=0.1, shared_yaxes=True)
+    pulls = pulls 
+    impacts = bool(df['impact'].sum())
+    ncols = pulls+impacts
+    fig = make_subplots(rows=1,cols=ncols,
+            horizontal_spacing=0.1, shared_yaxes=ncols > 1)
 
-    max_pull = np.max(df["pull"])
-    default_pr = pullrange == [-5, 5]
-    if max_pull == 0 and default_pr:
-        pullrange = [-1.5, 1.5]
-    elif default_pr:
-        r = np.max([1.5, max_pull])
-        pullrange = [-1*r, r]
+    max_pull = np.max(df["abspull"])
+    # Round up to nearest 0.5
+    pullrange = np.ceil(max_pull+1)
     
     ndisplay = len(df)
-    fig.add_trace(
-        go.Bar(
-            x=df['impact' if not oneSidedImpacts else 'absimpact'],
-            y=df['label'],
-            marker_color=df['impact_color'] if oneSidedImpacts else '#377eb8',
-            texttemplate="%{x:0.2f}",
-			textposition="outside",
-            textfont_size=12,
-			textangle=0,
-            orientation='h',
-            name="impacts_down",
-        ),
-        row=1,col=1,
+    fig.update_layout(paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        xaxis_title=impact_title if impacts else "Pull",
+        margin=dict(l=20,r=20,t=50,b=20),
+        yaxis=dict(range=[-1, ndisplay]),
+        showlegend=False,
+        height=100*(ndisplay<100)+ndisplay*20.5,width=800,
     )
-    if not oneSidedImpacts:
+
+    if impacts:
         fig.add_trace(
             go.Bar(
-                x=-1*df['impact'],
+                x=df['impact' if not oneSidedImpacts else 'absimpact'],
                 y=df['label'],
-                marker_color='#e41a1c',
-                name="impacts_up",
+                marker_color=df['impact_color'] if oneSidedImpacts else '#377eb8',
+                texttemplate="%{x:0.2f}",
+                textposition="outside",
+                textfont_size=12,
+                textangle=0,
                 orientation='h',
+                name="impacts_down",
             ),
             row=1,col=1,
-    )
+        )
+        if not oneSidedImpacts:
+            fig.add_trace(
+                go.Bar(
+                    x=-1*df['impact'],
+                    y=df['label'],
+                    marker_color='#e41a1c',
+                    name="impacts_up",
+                    orientation='h',
+                ),
+                row=1,col=1,
+        )
+        impact_range = np.ceil(df['impact'].max())
+        impact_spacing = min(impact_range, 2 if pulls else 3)
+        if impact_range % impact_spacing:
+            impact_range += impact_spacing - (impact_range % impact_spacing)
+        tick_spacing = impact_range/impact_spacing
+        if pulls and oneSidedImpacts:
+            tick_spacing /= 2.
+        fig.update_layout(barmode='relative')
+        fig.update_layout(
+            xaxis=dict(range=[-impact_range if not oneSidedImpacts else -impact_range/20, impact_range],
+                    showgrid=True, gridwidth=1,gridcolor='Gray', griddash='dash',
+                    zeroline=True, zerolinewidth=2, zerolinecolor='Gray',
+                    tickmode='linear',
+                    tickangle=0,
+                    tick0=0.,
+                    side='top',
+                    dtick=tick_spacing,
+                ),
+        )
+
     if pulls:
         fig.add_trace(
             go.Scatter(
@@ -94,53 +133,30 @@ def plotImpacts(df, title, pulls=False, pullrange=[-5,5], POI='Wmass', normalize
                 ),
                 name="pulls",
             ),
-            row=1,col=2,
-    )
-    impact_range = np.ceil(df['impact'].max())
-    impact_spacing = 2 if pulls else 3
-    if impact_range % impact_spacing:
-        impact_range += impact_spacing - (impact_range % impact_spacing)
-    tick_spacing = impact_range/impact_spacing
-    if pulls and oneSidedImpacts:
-        tick_spacing /= 2.
-    fig.update_layout(barmode='relative')
-    fig.update_layout(paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        xaxis_title=impact_title,
-        title={
-            'text': POI,
-            'y': 1.-1/float(ndisplay),
-            'x': 0.7,
-            'xanchor': 'center',
-            'yanchor': 'top'},
-        margin=dict(l=20,r=20,t=50,b=20),
-        xaxis=dict(range=[-impact_range if not oneSidedImpacts else -impact_range/20, impact_range],
-                showgrid=True, gridwidth=1,gridcolor='Gray', griddash='dash',
-                zeroline=True, zerolinewidth=2, zerolinecolor='Gray',
-                tickmode='linear',
-                tickangle=0,
-                tick0=0.,
-                side='top',
-                dtick=tick_spacing,
-            ),
-        yaxis=dict(range=[-1, ndisplay]),
-        showlegend=False,
-        height=100*(ndisplay<100)+ndisplay*20.5,width=800,
-    )
-    if pulls:
-        fig.update_layout(
-            xaxis2=dict(range=pullrange,
+            row=1,col=ncols,
+        )
+        # Keep it a factor of 0.25, but no bigger than 1
+        spacing = min(1, np.ceil(pullrange)/4.)
+        info = dict(
+            xaxis=dict(range=[-pullrange, pullrange],
                     showgrid=True, gridwidth=2,gridcolor='LightBlue',
                     zeroline=True, zerolinewidth=4, zerolinecolor='Gray',
                     tickmode='linear',
                     tick0=0.,
-                    dtick=0.5 if pullrange[1]-pullrange[0] > 2.5 else 0.25,
+                    dtick=spacing,
                     side='top',
                 ),
-            xaxis2_title="pull+constraint",
-            yaxis2=dict(range=[-1, ndisplay]),
-            yaxis2_visible=False,
+            xaxis_title="pull+constraint",
+            yaxis=dict(range=[-1, ndisplay]),
+            yaxis_visible=not impacts,
         )
+        if impacts:
+            new_info = {}
+            for k in info.keys():
+                new_info[k.replace("axis", "axis2")] = info[k]
+            info = new_info
+        fig.update_layout(**info)
+
     return fig
 
 def readFitInfoFromFile(rf,filename, group=False, sort=None, ascending=True, stat=0.0, POI='Wmass', normalize=False):    
@@ -153,8 +169,18 @@ def readFitInfoFromFile(rf,filename, group=False, sort=None, ascending=True, sta
     if True:
         impacts = impacts*100
     
-    pulls = np.zeros_like(impacts)
-    constraints = np.zeros_like(impacts)
+    if args.filters:
+        filtimpacts = []
+        filtlabels = []
+        for impact,label in zip(impacts,labels):
+            if any(re.match(f, label) for f in args.filters):
+                filtimpacts.append(impact)
+                filtlabels.append(label)
+        impacts = filtimpacts
+        labels = filtlabels
+
+    pulls = np.zeros_like(labels, dtype=float)
+    constraints = np.zeros_like(labels, dtype=float)
     if not group:
         import ROOT
         rtfile = ROOT.TFile.Open(filename)
@@ -171,6 +197,7 @@ def readFitInfoFromFile(rf,filename, group=False, sort=None, ascending=True, sta
     df = pd.DataFrame(np.array((pulls, impacts, constraints), dtype=np.float64).T, columns=["pull", "impact", "constraint"])
     df['label'] = labels
     df['absimpact'] = np.abs(df['impact'])
+    df['abspull'] = np.abs(df['pull'])
     if not group:
         df.drop(df.loc[df['label']=='massShift100MeV'].index, inplace=True)
     colors = np.full(len(df), '#377eb8')
@@ -187,13 +214,14 @@ def parseArgs():
     parser = argparse.ArgumentParser()
     parser.add_argument("-f", "--inputFile", type=str, required=True,
         help="fitresults output ROOT file from combinetf")
-    parser.add_argument("-s", "--sort", default="absimpact", type=str, choices=["label", "pull", "constraint", "absimpact"], help="Sort mode for nuisances")
+    parser.add_argument("-s", "--sort", default="absimpact", type=str, choices=["label", "abspull", "constraint", "absimpact"], help="Sort mode for nuisances")
     parser.add_argument("--stat", default=0.0, type=float, help="Overwrite stat. uncertainty with this value")
     parser.add_argument("-d", "--sortDescending", dest='ascending', action='store_false', help="Sort mode for nuisances")
     parser.add_argument("-g", "--group", action='store_true', help="Show impacts of groups")
     parser.add_argument("--absolute", action='store_true', help="Not normalize impacts on cross sections and event numbers.")
     parser.add_argument("--debug", action='store_true', help="Print debug output")
     parser.add_argument("--oneSidedImpacts", action='store_true', help="Make impacts one-sided")
+    parser.add_argument("--filters", nargs="*", type=str, help="Filter regexes to select nuisances by name")
     parsers = parser.add_subparsers(dest='mode')
     interactive = parsers.add_parser("interactive", help="Launch and interactive dash session")
     interactive.add_argument("-i", "--interface", default="localhost", help="The network interface to bind to.")
@@ -202,7 +230,6 @@ def parseArgs():
     output.add_argument("--otherExtensions", default=[], type=str, nargs="*", help="Additional output file types to write")
     output.add_argument("-n", "--num", type=int, help="Number of nuisances to plot")
     output.add_argument("--noPulls", action='store_true', help="Don't show pulls (not defined for groups)")
-    output.add_argument("-t", "--title", type=str, default="", help="Title of output plot")
     
     return parser.parse_args()
 
@@ -225,17 +252,18 @@ def draw_figure(maxShow, sortBy, sortDescending, filterLabels, groups, oneSidedI
         for label in filterLabels.split(","):
             filt = filt | (df["label"].str.find(label.strip()) >= 0)
         df = df[filt]
-    return plotImpacts(df, title="Contribution to uncertainty in mW", pulls=not groups, pullrange=[-5,5], oneSidedImpacts=oneSidedImpacts)
+    return plotImpacts(df, pulls=True, oneSidedImpacts=oneSidedImpacts)
 
 dataframe = pd.DataFrame()
 groupsdataframe = pd.DataFrame()
 
-        
-def producePlots(rtfile,args, POI='Wmass', normalize=False):
+def producePlots(rtfile, args, POI='Wmass', normalize=False):
 
-    groupsdataframe = readFitInfoFromFile(rtfile,args.inputFile, True, sort=args.sort, ascending=args.ascending, stat=args.stat/100., POI=POI, normalize=normalize)
     if not (args.group and args.mode == 'output'):
-        dataframe = readFitInfoFromFile(rtfile,args.inputFile, False, sort=args.sort, ascending=args.ascending, stat=args.stat/100., POI=POI, normalize=normalize)
+        dataframe = readFitInfoFromFile(rtfile, args.inputFile, False, sort=args.sort, ascending=args.ascending, stat=args.stat/100., POI=POI, normalize=normalize)
+    elif args.group:
+        groupsdataframe = readFitInfoFromFile(rtfile, args.inputFile, True, sort=args.sort, ascending=args.ascending, stat=args.stat/100., POI=POI, normalize=normalize)
+
     if args.mode == "interactive":
         app.layout = html.Div([
                 dcc.Input(
@@ -279,12 +307,11 @@ def producePlots(rtfile,args, POI='Wmass', normalize=False):
         df = dataframe if not args.group else groupsdataframe
         df = df.sort_values(by=args.sort, ascending=args.ascending)
         if args.num and args.num < df.size:
-            df = df[-args.num:].sort_values(by=args.sort, ascending=args.ascending)
-        fig = plotImpacts(df, title=args.title, pulls=not args.noPulls and not args.group, pullrange=[-5,5], POI=POI, normalize=not args.absolute, oneSidedImpacts=args.oneSidedImpacts)
+            df = df[-args.num:]
+        fig = plotImpacts(df, pulls=not args.noPulls and not args.group, POI=POI, normalize=not args.absolute, oneSidedImpacts=args.oneSidedImpacts)
 
-        outputfilename = args.outputFile
-        outputfilename
-        writeOutput(fig, args.outputFile, args.otherExtensions, postfix=POI)
+        postfix = POI if POI and "mass" not in POI else None
+        writeOutput(fig, args.outputFile, args.otherExtensions, postfix=postfix, args=args)
     else:
         raise ValueError("Must select mode 'interactive' or 'output'")
 
@@ -297,13 +324,13 @@ if __name__ == '__main__':
     rtfile = uproot.open(args.inputFile)
     POIs = input_tools.getPOInames(rtfile)
     for POI in POIs:
-        producePlots(rtfile,args,POI)
+        producePlots(rtfile, args, POI)
     
-    if not (POIs[0]=="Wmass" and len(POIs) == 1):
+    if POIs[0] and not (POIs[0]=="Wmass" and len(POIs) == 1):
         # masked channel
         for POI in input_tools.getPOInames(rtfile, poi_type="pmaskedexp"):
-            producePlots(rtfile,args,POI, normalize=not args.absolute)
+            producePlots(rtfile, args, POI, normalize=not args.absolute)
 
         # masked channel normalized
         for POI in input_tools.getPOInames(rtfile, poi_type="pmaskedexpnorm"):
-            producePlots(rtfile,args,POI, normalize=not args.absolute)
+            producePlots(rtfile, args, POI, normalize=not args.absolute)
