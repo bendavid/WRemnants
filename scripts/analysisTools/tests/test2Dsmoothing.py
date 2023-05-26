@@ -55,7 +55,7 @@ if __name__ == "__main__":
     parser.add_argument('outdir', type=str, nargs=1, help='output directory to save things')
     parser.add_argument('--eta', type=int, nargs="*", default=[], help='Select some eta bins (ID goes from 1 to Neta')
     parser.add_argument('--plotEigenVar', action="store_true", help='Plot eigen variations (it actually produces histogram ratios alt/nomi)')
-    parser.add_argument('-p', '--postfix', type=str, help='Postfix for plot names (can be the step name)')
+    parser.add_argument('-p', '--postfix', type=str, default="", help='Postfix for plot names (can be the step name)')
     args = parser.parse_args()
 
     ROOT.TH1.SetDefaultSumw2()
@@ -169,14 +169,26 @@ if __name__ == "__main__":
     ptEdgeHigh = hsf.GetZaxis().GetBinLowEdge(1 + hsf.GetNbinsZ())
     utEdgeLow = hsf.GetXaxis().GetBinLowEdge(2) # remove first bin, whose range is too extreme
     utEdgeHigh = hsf.GetXaxis().GetBinLowEdge(hsf.GetNbinsX()) # remove last bin, whose range is too extreme    
+    # 1 GeV for recoil and pt
+    utNbins = int(utEdgeHigh - utEdgeLow + 0.001)
+    ptNbins = int(ptEdgeHigh - ptEdgeLow + 0.001)
 
-
+    nEtaBins = hsf.GetNbinsY()
+    # to store the pull versus eta-pt for bins of uT, for some plots
+    utEdges  = [round(hsf.GetXaxis().GetBinLowEdge(i), 1) for i in range(2, 1+hsf.GetNbinsX())] # remove extreme bins for now
+    etaEdges = [round(hsf.GetYaxis().GetBinLowEdge(i), 1) for i in range(1, 2+hsf.GetNbinsY())]
+    ptEdges  = [round(hsf.GetZaxis().GetBinLowEdge(i), 1) for i in range(1, 2+hsf.GetNbinsZ())]
+    hpull_utEtaPt = ROOT.TH3D("hpull_utEtaPt", "",
+                              len(utEdges)-1, array('d', utEdges),
+                              len(etaEdges)-1, array('d', etaEdges),
+                              len(ptEdges)-1, array('d', ptEdges))
+    
     # set initial parameters, starting with constant at unit
     arr = [1.0] + [0.0 for x in range((polnx+1)*(polny+1)-1)]
     ##
     postfix = f"{args.postfix}_" if len(args.postfix) else ""
-    etaBins = args.eta if len(args.eta) else range(1, 1 + hsf.GetNbinsY())
-    for ieta in etaBins:
+    etaBinsToRun = args.eta if len(args.eta) else range(1, 1 + hsf.GetNbinsY())
+    for ieta in etaBinsToRun:
     # for ieta in range(1, 2):
         print(f"Going to fit eta bin {ieta}")
         hsf.GetYaxis().SetRange(ieta, ieta)
@@ -191,6 +203,7 @@ if __name__ == "__main__":
         drawCorrelationPlot(h, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", "Scale factor",
                             h.GetName(), "ForceTitle", outdir,
                             palette=87, passCanvas=canvas)
+                
         boost_hist = narf.root_to_hist(h)
         params = np.array(arr)
         res_polN_2d = narf.fitutils.fit_hist(boost_hist, polN_2d_scaled, params)
@@ -223,14 +236,14 @@ if __name__ == "__main__":
             for iy in range(1,1+h.GetNbinsY()):
                 bincy = h.GetYaxis().GetBinCenter(iy)
                 fitval = polN_2d_scaled([bincx, bincy], postfit_params)
-                hpull.SetBinContent(ix, iy, (fitval - h.GetBinContent(ix, iy)) / h.GetBinError(ix, iy))
+                pull = (fitval - h.GetBinContent(ix, iy)) / h.GetBinError(ix, iy)
+                hpull.SetBinContent(ix, iy, pull)
+                hpull_utEtaPt.SetBinContent(ix, ieta, iy, pull)
+
         drawCorrelationPlot(hpull, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", "Pull: (fit - meas)/meas_unc::-5,5",
                             hpull.GetName(), "ForceTitle", outdir,
                             palette=87, nContours=20, passCanvas=canvas)
 
-        # 1 GeV for recoil and pt
-        utNbins = int(utEdgeHigh - utEdgeLow + 0.001)
-        ptNbins = int(ptEdgeHigh - ptEdgeLow + 0.001)
         hfit_alt = []
         # diagonalize and get eigenvalues and eigenvectors
         print("Diagonalizing covariance matrix ...")
@@ -270,3 +283,18 @@ if __name__ == "__main__":
                                     palette=87, passCanvas=canvas)
 
         print("-"*30)
+
+
+    if not len(args.eta):
+        outdir_pull = outdir + f"pulls_etapt_utBins/"
+        createPlotDirAndCopyPhp(outdir_pull)
+        for iut in range(1, 1 + hpull_utEtaPt.GetNbinsX()):
+            hpull_utEtaPt.GetXaxis().SetRange(iut, iut)
+            hpulletapt = hpull_utEtaPt.Project3D("zye")
+            hpulletapt.SetName(f"hpull_etapt_ut{iut}")
+            utBinLow = hpull_utEtaPt.GetXaxis().GetBinLowEdge(iut)
+            utBinHigh = hpull_utEtaPt.GetXaxis().GetBinLowEdge(iut+1)
+            hpulletapt.SetTitle(f"{utBinLow} < u_{{T}} < {utBinHigh}")
+            drawCorrelationPlot(hpulletapt, "Muon #eta", "Muon p_{T} (GeV)", "Pull: (fit - meas)/meas_unc::-5,5",
+                                hpulletapt.GetName(), "ForceTitle", outdir_pull,
+                                palette=87, nContours=20, passCanvas=canvas)
