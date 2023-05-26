@@ -18,7 +18,6 @@ lumijson = f"{pathlib.Path(__file__).parent.parent}/data/Cert_271036-284044_13Te
 
 def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, nanoVersion="v9", 
         data_tag="TrackFitV722_NanoProdv2", mc_tag="TrackFitV718_NanoProdv1"):
-
     if not base_path:
         hostname = socket.gethostname()
         if hostname == "lxplus8s10.cern.ch":
