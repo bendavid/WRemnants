@@ -74,6 +74,7 @@ if __name__ == "__main__":
     parser.add_argument("-A", "--abs",      dest="absolute_values",    default=False,  action="store_true", help="Report also absolute values of nuisance values, not only the ones normalized to the input values")
     parser.add_argument("--no-all",      dest="show_all_parameters", action="store_false", help="If true print all nuisances, even the ones which are unchanged w.r.t. pre-fit values.")
     parser.add_argument("-p", "--pois",      default=None,   type=str,  help="Name of the nuisances to be plotted (comma separated list of regexps)")
+    parser.add_argument("-x", "--excludeRegexp", default=None,  type=str,  help="Exclude names matching this regular expression, after filtering a list with --pois")
     parser.add_argument("-f", "--format", default="html", choices=['text', 'latex', 'html'], type=str,  help="Output format (in addition to pdf,png)")
     parser.add_argument(     '--postfix', default='', type=str, help='postfix for the correlation matrix')
     parser.add_argument(     '--uniqueString', default=None, required= True, type=str, help='Unique name to identify the output file names, which is nuisances_XXX_SUFF.EXT, with XXX passed by this option')
@@ -134,6 +135,9 @@ if __name__ == "__main__":
                     valuesAndErrors[k]  = v #dict((k,v) for k,v in valuesAndErrors.items() if re.match(ppatt,k) and not k.endswith('_gen'))
 
     params = valuesAndErrors.keys()
+    if args.excludeRegexp != None:
+        excl = re.compile(args.excludeRegexp)
+        params = list(filter(lambda x: not excl.match(x), params))
     if len(params)==0:
         print("No parameters selected. Exiting.")
         quit()

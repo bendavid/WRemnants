@@ -286,8 +286,26 @@ def main(args,xnorm=False):
                 systNameReplace=nameReplace,
                 scale=scale,
                 splitGroup=splitGroupDict,
-                decorrelateByBin = decorrDictEff if "Syst" in name else {}
+                decorrelateByBin = {}
             )
+            if "Syst" in name and decorrDictEff != {}:
+                # add fully correlated version again
+                cardTool.addSystematic(
+                    name,
+                    rename=f"{name}_EtaDecorr",
+                    mirror=mirror,
+                    mirrorDownVarEqualToNomi=mirrorDownVarEqualToNomi,
+                    group=groupName,
+                    systAxes=axes,
+                    labelsByAxis=axlabels,
+                    baseName=name+"_",
+                    processes=allMCprocesses_noQCDMC,
+                    passToFakes=passSystToFakes,
+                    systNameReplace=nameReplace,
+                    scale=scale,
+                    splitGroup=splitGroupDict,
+                    decorrelateByBin = decorrDictEff
+                )
 
     to_fakes = passSystToFakes and not args.noQCDscaleFakes and not xnorm
     combine_helpers.add_pdf_uncertainty(cardTool, single_v_samples, passSystToFakes, from_corr=args.pdfUncFromCorr)
