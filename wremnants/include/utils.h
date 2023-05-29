@@ -31,7 +31,7 @@ float mt_2(float pt1, float phi1, float pt2, float phi2) {
     return std::sqrt(2*pt1*pt2*(1-std::cos(phi1-phi2)));
 }
 
-float mt_wlike_nano(float pt, float phi, float ptOther, float phiOther, float met, float phimet) {
+TVector2 get_met_wlike(float ptOther, float phiOther, float met, float phimet) {
 
   TVector2 pl = TVector2();
   pl.SetMagPhi(ptOther,phiOther);
@@ -40,10 +40,25 @@ float mt_wlike_nano(float pt, float phi, float ptOther, float phiOther, float me
   met_wlike.SetMagPhi(met,phimet);
   met_wlike = pl + met_wlike;
 
-  return std::sqrt(2*pt*met_wlike.Mod()*(1-std::cos(phi-met_wlike.Phi())));
+  return met_wlike;
+  
+}
+
+    
+float get_mt_wlike(float pt, float phi, float ptOther, float phiOther, float met, float phimet) {
+
+    TVector2 met_wlike = get_met_wlike(ptOther, phiOther, met, phimet);
+    return std::sqrt(2*pt*met_wlike.Mod()*(1-std::cos(phi-met_wlike.Phi())));
 
 }
 
+float get_mt_wlike(float pt, float phi, TVector2 met_wlike) {
+
+    return std::sqrt(2*pt*met_wlike.Mod()*(1-std::cos(phi-met_wlike.Phi())));
+
+}
+
+    
 double deltaPhi(float phi1, float phi2) {
     double result = phi1 - phi2;
     while (result > M_PI) result -= 2.0*M_PI;
