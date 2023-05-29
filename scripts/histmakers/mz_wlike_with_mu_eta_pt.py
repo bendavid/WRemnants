@@ -165,10 +165,10 @@ def build_graph(df, dataset):
     ###########
     met_vars = ("MET_corr_rec_pt", "MET_corr_rec_phi")
     df = df.Define("met_wlike_TV2", f"wrem::get_met_wlike(nonTrigMuons_pt0, nonTrigMuons_phi0, {', '.join(met_vars)})")
-    df = df.Define("met_wlike_TV2_pt", "met_wlike_TV2.Mod()")
     df = df.Define("transverseMass", "wrem::get_mt_wlike(trigMuons_pt0, trigMuons_phi0, met_wlike_TV2)")
     results.append(df.HistoBoost("transverseMass", [axis_mt], ["transverseMass", "nominal_weight"]))
     results.append(df.HistoBoost("MET", [hist.axis.Regular(20, 0, 100, name="MET")], ["MET_corr_rec_pt", "nominal_weight"]))
+    df = df.Define("met_wlike_TV2_pt", "met_wlike_TV2.Mod()")
     results.append(df.HistoBoost("WlikeMET", [hist.axis.Regular(20, 0, 100, name="Wlike-MET")], ["met_wlike_TV2_pt", "nominal_weight"]))
     ###########
 
@@ -176,7 +176,6 @@ def build_graph(df, dataset):
     df = df.Define("deltaPhiMuonMet", "std::abs(wrem::deltaPhi(trigMuons_phi0,met_wlike_TV2.Phi()))")
     df = df.Filter(f"deltaPhiMuonMet > {args.dphiMuonMetCut*np.pi}")
     df = df.Filter("transverseMass >= 45.") # 40 for Wmass, thus be 45 here (roughly half the boson mass)
-
                    
     nominal_cols = ["trigMuons_eta0", "trigMuons_pt0", "trigMuons_charge0"]
 
