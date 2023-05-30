@@ -6,6 +6,7 @@ import re
 logger = logging.child_logger(__name__)
 
 def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append="", resum=None, use_hel_hist=False, rebin_pt=None):
+
     if not len(samples):
         logger.warning(f"Skipping QCD scale syst '{scale_type}', no process to apply it to")
         return
@@ -66,14 +67,15 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
         action_args["rebinPtV"] = rebin_pt
 
     if resum != "none":
-        if pt_binned:
-            binning = np.array(common.ptV_10quantiles_binning)
-            pt30_idx = np.argmax(binning > 30)
+        binning = np.array(common.ptV_10quantiles_binning)
+        pt30_idx = np.argmax(binning > 30)
+        if helicity:
+            # Drop the uncertainties for < 30 for sigma_-1
+            skip_entries.extend([{"helicity" : -1.j, "ptVgen" : complex(0, x)} for x in binning[:pt30_idx-1]])
+        elif pt_binned:
             # Drop the uncertainties for < 30
             skip_entries.extend([{"ptVgen" : complex(0, x)} for x in binning[:pt30_idx-1]])
-        if helicity:
-            skip_entries.append({"helicity" : -1.j})
-        
+
         obs = card_tool.project[:]
         if not obs:
             raise ValueError("Failed to find the observable names for the resummation uncertainties")
@@ -103,7 +105,8 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
                 passToFakes=to_fakes,
                 systNameReplace=[("central", ""), ("pdf0", ""), ("+1", "Up"), ("-1", "Down"), ("-0.5", "Down"), ("+0.5", "Up"), ("up", "Up"), ("down", "Down")],
                 skipEntries=[{syst_ax : x} for x in both_exclude+scale_nuisances],
-                rename=f"resumTNP", 
+                rename=f"resumTNP{name_append}",
+                systNamePrepend=f"resumTNP{name_append}_",
             )
         else:
             # Exclude the tnp uncertainty nuisances
@@ -115,8 +118,9 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
                 systAxes=["downUpVar"], # Is added by the actionMap
                 actionMap={s : lambda h: hh.syst_min_and_max_env_hist(h, obs, "vars", 
                     [x for x in h.axes["vars"] if any(re.match(y, x) for y in resumscale_nuisances)]) for s in expanded_samples},
-                outNames=["scetlibResumScaleUp", "scetlibResumScaleDown"],
-                rename=f"resumScale", 
+                outNames=[f"scetlibResumScale{name_append}Up", f"scetlibResumScale{name_append}Down"],
+                rename=f"resumScale{name_append}",
+                systNamePrepend=f"resumScale{name_append}_",
             )
             card_tool.addSystematic(name=theory_unc,
                 processes=samples,
@@ -124,21 +128,26 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
                 passToFakes=to_fakes,
                 systAxes=["vars"],
                 actionMap={s : lambda h: h[{"vars" : ["kappaFO0.5-kappaf2.", "kappaFO2.-kappaf0.5", "mufdown", "mufup",]}] for s in expanded_samples},
-                outNames=["scetlib_kappaUp", "scetlib_kappaDown", "scetlib_muFUp", "scetlib_muFDown"],
-                rename=f"resumFOScale", 
+                outNames=[f"scetlib_kappa{name_append}Up", f"scetlib_kappa{name_append}Down", f"scetlib_muF{name_append}Up", f"scetlib_muF{name_append}Down"],
+                rename=f"resumFOScale{name_append}",
+                systNamePrepend=f"resumScale{name_append}_",
             )
 
-        for np_nuisance in ["c_nu", "omega_nu", "Omega"]:
-            nuisance_name = f"scetlibNP{np_nuisance}"
-            card_tool.addSystematic(name=theory_unc,
+        # for np_nuisance in ["c_nu", "omega_nu", "Omega"]:
+        for np_nuisance in ["Omega"]:
+            nuisance_name = f"scetlibNP{np_nuisance}{name_append}"
+            # only Omega is decorrelated between W and Z
+            #FIXME avoid hardcoding the histogram name here?
+            card_tool.addSystematic(name=f"scetlib_dyturboOmega",
                 processes=samples,
                 group="resumNonpert",
-                systAxes=["downUpVar"],
+                systAxes=["absYVgenNP", "chargeVgenNP", "downUpVar"],
+                # labelsByAxis=["AbsYVBin", "genQ", "DownUp"],
                 passToFakes=to_fakes,
-                actionMap={s : lambda h: hh.syst_min_and_max_env_hist(h, obs, "vars", 
-                    [x for x in h.axes["vars"] if re.match(f"^{np_nuisance}-*\d+", x)]) for s in expanded_samples},
-                outNames=[f"{nuisance_name}Up", f"{nuisance_name}Down"],
-                rename=nuisance_name, 
+                actionMap={s : lambda h,np=np_nuisance: hh.syst_min_and_max_env_hist(syst_tools.hist_to_variations(h), obs, "vars",
+                    [x for x in h.axes["vars"] if re.match(f"^{np}-*\d+", x)]) for s in expanded_samples},
+                baseName=f"scetlibNP{nuisance_name}_",
+                rename=nuisance_name,
             )
         card_tool.addSystematic(name=theory_unc,
             processes=samples,
@@ -148,8 +157,8 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
             # NOTE: I don't actually remember why this used no_flow=ptVgen previously, I don't think there's any harm in not using it...
             actionMap={s : lambda h: hh.syst_min_and_max_env_hist(h, obs, "vars", 
                 [x for x in h.axes["vars"] if "transition_point" in x]) for s in expanded_samples},
-            outNames=["resumTransitionUp", "resumTransitionDown"],
-            rename=f"scetlibResumTransition", 
+            outNames=[f"resumTransition{name_append}Up", f"resumTransition{name_append}Down"],
+            rename=f"scetlibResumTransition{name_append}",
         )
 
     if helicity:
@@ -157,9 +166,10 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
         skip_entries.extend([{"helicity" : complex(0, i)} for i in (5,6,7)])
 
     # Skip MiNNLO unc. 
-    if resum and not (pt_binned or helicity):
+    if resum != "none" and not (pt_binned or helicity):
         logger.warning("Without pT or helicity splitting, only the SCETlib uncertainty will be applied!")
     else:
+        #FIXME put W and Z nuisances in the same group
         group_name += f"MiNNLO"
         card_tool.addSystematic(scale_hist,
             actionMap=action_map,
@@ -175,6 +185,36 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
             baseName=group_name+"_",
             passToFakes=to_fakes,
             rename=group_name, # Needed to allow it to be called multiple times
+        )
+
+def add_common_np_uncertainties(card_tool, samples, to_fakes):
+
+    theory_unc = input_tools.args_from_metadata(card_tool, "theoryCorr")
+    if not theory_unc:
+        logger.error("Can not add resummation uncertainties. No theory correction was applied!")
+    theory_unc = theory_unc[0]+"Corr"
+    if theory_unc != "scetlib_dyturboCorr":
+        raise ValueError(f"The theory uncertainty hist {theory_unc} doesn't have the resummation uncertainty implemented")
+
+    # NOTE: The map needs to be keyed on the base procs not the group names, which is
+    # admittedly a bit nasty
+    expanded_samples = card_tool.datagroups.getProcNames(samples)
+    logger.debug(f"expanded_samples: {expanded_samples}")
+    obs = card_tool.project[:]
+    if not obs:
+        raise ValueError("Failed to find the observable names for the resummation uncertainties")
+
+    for np_nuisance in ["c_nu", "omega_nu"]:
+        nuisance_name = f"scetlibNP{np_nuisance}"
+        card_tool.addSystematic(name=theory_unc,
+            processes=samples,
+            group="resumNonpert",
+            systAxes=["downUpVar"],
+            passToFakes=to_fakes,
+            actionMap={s : lambda h,np=np_nuisance: hh.syst_min_and_max_env_hist(h, obs, "vars",
+                [x for x in h.axes["vars"] if re.match(f"^{np}-*\d+", x)]) for s in expanded_samples},
+            outNames=[f"{nuisance_name}Up", f"{nuisance_name}Down"],
+            rename=nuisance_name,
         )
 
 def add_pdf_uncertainty(card_tool, samples, to_fakes, action=None, from_corr=False):

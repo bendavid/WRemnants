@@ -199,7 +199,7 @@ def scaleHist(h, scale, createNew=True):
             hnew = hist.Hist(*h.axes)
         else:
             hnew = hist.Hist(*h.axes, storage=hist.storage.Weight())
-            hnew.variances(flow=True)[...] = scale * h.variances(flow=True)
+            hnew.variances(flow=True)[...] = scale*scale * h.variances(flow=True)
 
         hnew.values(flow=True)[...] = scale * h.values(flow=True)
 
@@ -207,7 +207,7 @@ def scaleHist(h, scale, createNew=True):
     else:
         h.values(flow=True)[...] *= scale
         if h._storage_type() == hist.storage.Weight():
-            h.variances(flow=True)[...] *= scale
+            h.variances(flow=True)[...] *= scale*scale
         return h
     
 def normalize(h, scale=1e6, createNew=True):
@@ -367,6 +367,7 @@ def projectNoFlow(h, proj_ax, exclude=[]):
     return hnoflow.project(*proj_ax) 
 
 def syst_min_and_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=[]):
+    logger.debug(f"Taking the envelope of variation axis {syst_ax}, indices {indices}")
     hup = syst_min_or_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=no_flow, do_min=False)
     hdown = syst_min_or_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=no_flow, do_min=True)
     hnew = hist.Hist(*hup.axes, common.down_up_axis, storage=hup._storage_type())
