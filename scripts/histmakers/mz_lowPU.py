@@ -83,6 +83,9 @@ def build_graph(df, dataset):
     print("build graph")
     results = []
 
+    isW = dataset.name in common.wprocs_lowpu
+    isZ = dataset.name in common.zprocs_lowpu
+
     if dataset.is_data: df = df.DefinePerSample("weight", "1.0")
     else: df = df.Define("weight", "std::copysign(1.0, genWeight)")
   
@@ -110,7 +113,7 @@ def build_graph(df, dataset):
      
         if apply_theory_corr:
             results.extend(theory_tools.make_theory_corr_hists(df_xnorm, "xnorm", axes=axes_xnorm, cols=cols_xnorm, 
-                helpers=corr_helpers[dataset.name], generators=args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly)
+                helpers=corr_helpers[dataset.name], generators=args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly, isW=isW)
             )
   
     if flavor == "mumu":
@@ -317,7 +320,7 @@ def build_graph(df, dataset):
 
     if apply_theory_corr:
         results.extend(theory_tools.make_theory_corr_hists(df, "reco_mT", axes=gen_reco_mll_axes, cols=gen_reco_mt_cols, 
-            helpers=corr_helpers[dataset.name], generators=args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly)
+            helpers=corr_helpers[dataset.name], generators=args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly, isW=isW)
         )
 
     if dataset.name in sigProcs:

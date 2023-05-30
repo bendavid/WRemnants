@@ -85,6 +85,9 @@ def padArray(ref, matchLength):
 
 addVariation = hasattr(args, "varName") and args.varName is not None
 
+if args.fitresult and len(args.hists) > 1:
+	raise ValueError("Multiple hists not supported for combine-based pre/post-fit plotting")
+
 entries = []
 if addVariation and (args.selectAxis or args.selectEntries):
     if not (args.selectAxis and args.selectEntries):
@@ -113,8 +116,10 @@ else:
     groups.setNominalName(nominalName)
     groups.loadHistsForDatagroups(nominalName, syst=args.baseName, procsToRead=datasets)
 
-exclude = ["Data"] if not args.noData else []
+exclude = ["Data"] 
 unstack = exclude[:]
+if args.noData:
+    unstack.remove("Data")
 
 # TODO: In should select the correct hist for the transform, not just the first
 transforms = syst_tools.syst_transform_map(nominalName, args.hists[0])
@@ -198,20 +203,26 @@ for h in args.hists:
 
     fitresultstring=""
     if args.fitresult:
-        fitresultstring = "_prefit" if args.prefit else "_postfit"
+        fitresultstring = "prefit" if args.prefit else "postfit"
     var_arg = None
     if "varName" in args and args.varName:
         var_arg = args.varName[0]
         if "selectEntries" in args and args.selectEntries:
             var_arg = args.selectEntries[0] if not args.selectEntries[0].isdigit() else (var_arg+args.selectEntries[0])
-    to_join = [f"{h.replace('-','_')}"]+[var_arg]+[fitresultstring, args.name_append]+[args.channel if args.channel != "all" else None]
+    to_join = [f"{h.replace('-','_')}"]+[var_arg]+[fitresultstring, args.name_append]+[args.channel.replace("all", "")]
     outfile = "_".join(filter(lambda x: x, to_join))
 
     plot_tools.save_pdf_and_png(outdir, outfile)
-    stack_yields = groups.make_yields_df(args.baseName, prednames, action, norm_proc="Data")
-    unstacked_yields = groups.make_yields_df(args.baseName, unstack, action, norm_proc="Data")
+
+    # The action has already been applied to the underlying hist in this case
+    if args.fitresult:
+        action = lambda x: x
+
+    stack_yields = groups.make_yields_df(args.baseName, prednames, norm_proc="Data", action=action)
+    unstacked_yields = groups.make_yields_df(args.baseName, unstack, norm_proc="Data", action=action)
     plot_tools.write_index_and_log(outdir, outfile, 
         yield_tables={"Stacked processes" : stack_yields, "Unstacked processes" : unstacked_yields},
         analysis_meta_info={"AnalysisOutput" : groups.getMetaInfo()},
         args=args,
     )
+
