@@ -1,5 +1,5 @@
-declare -a combine_folders=("WMass_pt_eta_non-closure-decorl")
-declare -a postfixes=("_A-M-separated" "_A-M-combined" "_binned" "_none")
+declare -a combine_folders=("WMass_pt_eta_decorl-param-sep")
+declare -a postfixes=("_none")
 #declare -a postfixes=("_A-M-combined-one-group-ind")
 
 source local_setup.sh
