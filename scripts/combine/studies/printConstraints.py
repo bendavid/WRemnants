@@ -13,7 +13,7 @@ impacts, labels, norm = input_tools.readImpacts(urf, None, normalize=False)
 tree = rf.Get('fitresults')
 tree.GetEntry(0)
 
-constraint_dic = {label:getattr(tree, label+'_err') for label in labels if 'non_closure' in label}
+constraint_dic = {label:getattr(tree, label+'_err') for label in labels if any([x in label for x in ['non_closure', 'scale_m']])}
 for kv in (sorted(constraint_dic.items(), key = lambda kv: kv[1])): print(kv)
 
 if "A-M-separated" in args.input:
@@ -33,3 +33,7 @@ elif "binned" in args.input:
     binned_constraints = [getattr(tree, label+'_err') for label in labels if 'non_closure_binned' in label]
     binned_avg = sum(binned_constraints) / len(binned_constraints)
     print("the average of constraints on binned uncs is: ", binned_avg)
+scale_constraints = [getattr(tree, label+'_err') for label in labels if any([x in label for x in ['scale_m', 'nonClosure']])]
+scale_avg = sum(scale_constraints) / len(scale_constraints)
+print("number of uncs is: ", len(scale_constraints))
+print("the average of constraints on muon scale uncs is: ", scale_avg)
