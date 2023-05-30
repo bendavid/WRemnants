@@ -210,7 +210,7 @@ def build_graph(df, dataset):
         df = muon_selections.apply_triggermatching_muon(df, dataset, "goodMuons_eta0", "goodMuons_phi0")
 
     if (args.vqt3dsmoothing) :
-        if dataset.group in ["Top", "Diboson"]:
+        if dataset.group in common.background_MCprocs:
             df = df.Define("GoodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_pt,TrigObj_l1pt,TrigObj_l2pt,TrigObj_filterBits)")
         else:
             df = df.Define("GoodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_filterBits)")
