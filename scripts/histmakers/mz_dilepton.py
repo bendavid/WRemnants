@@ -36,9 +36,9 @@ mass_max = 120
 
 # available axes for dilepton validation plots
 all_axes = {
-    "mll": hist.axis.Regular(int(mass_max - mass_min), mass_min, mass_max, name = "mll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
-    "yll": hist.axis.Regular(25, -2.5, 2.5, name = "yll"),
-    "absYll": hist.axis.Variable([0.0, 0.4, 0.8, 1.2, 1.6, 2.0, 2.4, 2.8, 3.6], name = "absYll", underflow=False, overflow=not args.excludeFlow),
+    "mll": hist.axis.Regular(60, 60., 120., name = "mll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
+    "yll": hist.axis.Regular(20, -2.5, 2.5, name = "yll"),
+    "absYll": hist.axis.Regular(10, 0., 2.5, name = "absYll", underflow=False, overflow=not args.excludeFlow),
     "ptll": hist.axis.Variable(common.ptV_binning if not args.finePtBinning else range(60), name = "ptll", underflow=False, overflow=not args.excludeFlow),
     "etaPlus": hist.axis.Regular(int(args.eta[0]), args.eta[1], args.eta[2], name = "etaPlus"),
     "etaMinus": hist.axis.Regular(int(args.eta[0]), args.eta[1], args.eta[2], name = "etaMinus"),
