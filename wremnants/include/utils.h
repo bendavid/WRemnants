@@ -44,20 +44,18 @@ TVector2 get_met_wlike(float ptOther, float phiOther, float met, float phimet) {
   
 }
 
+float get_mt_wlike(float pt, float phi, const TVector2& met_wlike) {
+
+    return mt_2(pt, phi, met_wlike.Mod(), met_wlike.Phi());
+
+}
     
 float get_mt_wlike(float pt, float phi, float ptOther, float phiOther, float met, float phimet) {
 
-    TVector2 met_wlike = get_met_wlike(ptOther, phiOther, met, phimet);
-    return std::sqrt(2*pt*met_wlike.Mod()*(1-std::cos(phi-met_wlike.Phi())));
+    const TVector2 met_wlike = get_met_wlike(ptOther, phiOther, met, phimet);
+    return get_mt_wlike(pt, phi, met_wlike);
 
 }
-
-float get_mt_wlike(float pt, float phi, TVector2 met_wlike) {
-
-    return std::sqrt(2*pt*met_wlike.Mod()*(1-std::cos(phi-met_wlike.Phi())));
-
-}
-
     
 double deltaPhi(float phi1, float phi2) {
     double result = phi1 - phi2;
