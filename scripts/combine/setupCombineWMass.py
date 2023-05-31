@@ -35,6 +35,8 @@ def make_parser(parser=None):
     parser.add_argument("--unfold", action='store_true', help="Prepare datacard for unfolding")
     parser.add_argument("--genAxis", type=str, default=None, nargs="+", help="Specify which gen axis should be used in unfolding, if 'None', use all (inferred from metadata).")
     parser.add_argument("--fitXsec", action='store_true', help="Fit signal inclusive cross section")
+    parser.add_argument("--correlatedNonClosureNuisances", action='store_true', help="get systematics from histograms for the Z non-closure nuisances without decorrelation in eta and pt")
+    parser.add_argument("--nonClosureScheme", type=str, default = "A-M-separated", choices=["A-M-separated", "A-M-combined", "binned"], help = "how the non-closure numbers are derived")
     
     return parser
 
@@ -280,10 +282,17 @@ def main(args,xnorm=False):
 
     to_fakes = passSystToFakes and not args.noQCDscaleFakes and not xnorm
     combine_helpers.add_pdf_uncertainty(cardTool, single_v_samples, passSystToFakes, from_corr=args.pdfUncFromCorr)
-    combine_helpers.add_scale_uncertainty(cardTool, args.minnloScaleUnc, signal_samples_inctau, to_fakes, resum=args.resumUnc)
+    scale_name_W = "W"
+    scale_name_Z = "Z"
+    scale_name = scale_name_W if wmass else scale_name_Z
+    combine_helpers.add_scale_uncertainty(cardTool, args.minnloScaleUnc, signal_samples_inctau, to_fakes, resum=args.resumUnc, name_append = scale_name)
     # for Z background in W mass case (W background for Wlike is essentially 0, useless to apply QCD scales there)
     if wmass and not xnorm:
-        combine_helpers.add_scale_uncertainty(cardTool, "integrated", single_v_nonsig_samples, False, name_append="Z", resum=args.resumUnc)
+        combine_helpers.add_scale_uncertainty(cardTool, args.minnloScaleUnc, single_v_nonsig_samples, to_fakes, name_append=scale_name_Z, resum=args.resumUnc)
+
+    if args.resumUnc != "none":
+        common_np_samples = signal_samples_inctau + single_v_nonsig_samples if wmass else signal_samples_inctau
+        combine_helpers.add_common_np_uncertainties(cardTool, common_np_samples, to_fakes)
 
     if not xnorm:
         msv_config_dict = {
@@ -303,6 +312,8 @@ def main(args,xnorm=False):
                 "syst_axes_labels": ["downUpVar"]
             }
         }
+
+        # FIXME: remove this once msv from smearing weights is implemented for the Z
         msv_config = msv_config_dict[args.muonScaleVariation] if wmass else msv_config_dict["massWeights"]
 
         cardTool.addSystematic(msv_config['hist_name'], 
@@ -342,10 +353,46 @@ def main(args,xnorm=False):
             combine_helpers.add_recoil_uncertainty(cardTool, signal_samples, passSystToFakes=passSystToFakes, flavor="mu")
 
         if wmass:
+            if args.nonClosureScheme == "A-M-separated":
+                cardTool.addSystematic("Z_non_closure_parametrized_A", 
+                    processes=single_vmu_samples,
+                    group="muonScale",
+                    baseName="Z_nonClosure_parametrized_A_",
+                    systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
+                    labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
+                    passToFakes=passSystToFakes
+                )
+                cardTool.addSystematic("Z_non_closure_parametrized_M", 
+                    processes=single_vmu_samples,
+                    group="muonScale",
+                    baseName="Z_nonClosure_parametrized_M_",
+                    systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
+                    labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
+                    passToFakes=passSystToFakes
+                )            
+            elif args.nonClosureScheme == "A-M-combined":
+                cardTool.addSystematic("Z_non_closure_parametrized", 
+                    processes=single_vmu_samples,
+                    group="muonScale",
+                    baseName="Z_nonClosure_parametrized_",
+                    systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
+                    labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
+                    passToFakes=passSystToFakes
+                )
+            elif args.nonClosureScheme == "binned":
+                cardTool.addSystematic("Z_non_closure_binned", 
+                    processes=single_vmu_samples,
+                    group="muonScale",
+                    baseName="Z_nonClosure_binned_",
+                    systAxes=["unc_ieta", "unc_ipt", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
+                    labelsByAxis=["unc_ieta", "unc_ipt", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
+                    passToFakes=passSystToFakes
+                )
+
             #cardTool.addLnNSystematic("CMS_Fakes", processes=[args.qcdProcessName], size=1.05, group="MultijetBkg")
             cardTool.addLnNSystematic("CMS_Top", processes=["Top"], size=1.06)
             cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16)
-
+    
             ## FIXME 1: with the jet cut removed this syst is probably no longer needed, but one could still consider
             ## it to cover for how much the fake estimate changes when modifying the composition of the QCD region
             ## FIXME 2: it doesn't really make sense to mirror this one since the systematic goes only in one direction
