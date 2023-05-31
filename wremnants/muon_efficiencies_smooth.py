@@ -34,8 +34,7 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
     isoEff_types = ["iso", "isonotrig", "antiiso", "antiisonotrig"]
     allEff_types = ["reco", "tracking", "idip", "trigger"] + isoEff_types
     axis_allEff_type = hist.axis.StrCategory(allEff_types, name = "allEff_type")
-    #effSyst_decorrEtaEdges = [round(-2.4 + 0.1*i,1) for i in range(48)]
-    effSyst_decorrEtaEdges = [round(-2.4 + 0.8*i,1) for i in range(7)]
+    effSyst_decorrEtaEdges = [round(-2.4 + 0.1*i,1) for i in range(48)]
     Nsyst = 1 + (len(effSyst_decorrEtaEdges) - 1) # inclusive variation + all decorrelated bins
     axis_nom_syst = hist.axis.Integer(0, 1+Nsyst, underflow = False, overflow =False, name = "nom-systs") # nominal in first bin
 
