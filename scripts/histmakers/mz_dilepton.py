@@ -60,7 +60,11 @@ nominal_cols = args.axes
 if args.csVarsHist:
     nominal_cols += ["cosThetaStarll", "phiStarll"]
 
+nominal_cols.append("charge")
+
 nominal_axes = [all_axes[a] for a in nominal_cols] 
+
+
 
 gen_axes = {
     "ptVGen": hist.axis.Variable(common.ptV_binning if not args.finePtBinning else range(60), name = "ptVGen", underflow=False, overflow=True),
@@ -157,6 +161,7 @@ def build_graph(df, dataset):
     df = df.Define("csSineCosThetaPhill", "trigMuons_charge0 == -1 ? wrem::csSineCosThetaPhi(trigMuons_mom4, nonTrigMuons_mom4) : wrem::csSineCosThetaPhi(nonTrigMuons_mom4, trigMuons_mom4)")
     
     # "renaming" to write out corresponding axis
+    df = df.Alias("charge", "trigMuons_charge0")
     df = df.Define("etaPlus", "trigMuons_charge0 == -1 ? nonTrigMuons_eta0 : trigMuons_eta0") 
     df = df.Define("etaMinus", "trigMuons_charge0 == 1 ? nonTrigMuons_eta0 : trigMuons_eta0") 
     df = df.Define("ptPlus", "trigMuons_charge0 == -1 ? nonTrigMuons_pt0 : trigMuons_pt0") 
