@@ -331,7 +331,7 @@ def build_graph(df, dataset):
 
         if apply_theory_corr:
             results.extend(theory_tools.make_theory_corr_hists(df, "reco_mT", axes=gen_reco_mll_axes, cols=gen_reco_mt_cols, 
-                helpers=corr_helpers[dataset.name], generators=args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly)
+                helpers=corr_helpers[dataset.name], generators=args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly, isW=isW)
             )    
                 
         results.append(df.HistoBoost("reco_mT", gen_reco_mll_axes, [*gen_reco_mt_cols, "nominal_weight"]))

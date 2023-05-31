@@ -78,21 +78,17 @@ def define_fiducial_space(df, mode="wmass", pt_min=26, pt_max=55, mass_min=60, m
     
     if mode == "wmass":
         selection = f"(mTWGen > {mtw_min})"
-    elif mode == "wlike":
-        selection = f"""
-            (fabs(muGen.eta()) < 2.4) && (fabs(antimuGen.eta()) < 2.4) 
-            && (muGen.pt() > {pt_min}) && (antimuGen.pt() > {pt_min}) 
-            && (muGen.pt() < {pt_max}) && (antimuGen.pt() < {pt_max}) 
-            && (massVGen > {mass_min}) && (massVGen < {mass_max})
-            && (mTWGen > {mtw_min})
-            """
-    elif mode == "dilepton":
+    elif mode in ["wlike", "dilepton"]:
         selection = f"""
             (fabs(muGen.eta()) < 2.4) && (fabs(antimuGen.eta()) < 2.4) 
             && (muGen.pt() > {pt_min}) && (antimuGen.pt() > {pt_min}) 
             && (muGen.pt() < {pt_max}) && (antimuGen.pt() < {pt_max}) 
             && (massVGen > {mass_min}) && (massVGen < {mass_max})
             """
+
+        if mode == "wlike":
+            selection += f"&& (mTWGen > {mtw_min})"
+
     else:
         raise NotImplementedError(f"No fiducial phase space definiton found for mode '{mode}'!") 
 
