@@ -166,21 +166,22 @@ def main(args,xnorm=False):
 
     if not args.constrainMass:
         # keep mass weights here as first systematic, in case one wants to run stat-uncertainty only with --doStatOnly
-        cardTool.addSystematic("massWeight", 
-                               processes=signal_samples_inctau,
-                               group="massShift",
-                               groupFilter=lambda x: x == "massShift100MeV",
-                               skipEntries=[(f"^massShift{i}MeV.*",) for i in range(0, 100, 10)]+[("^massShift2p1MeV.*",)],
-                               mirror=False,
-                               #TODO: Name this
-                               noConstraint=True,
-                               systAxes=["massShift"],
-                               passToFakes=passSystToFakes,
+        if wmass or wlike:
+            cardTool.addSystematic("massWeight",
+                                processes=signal_samples_inctau,
+                                group="massShift",
+                                groupFilter=lambda x: x == "massShift100MeV",
+                                skipEntries=[(f"^massShift{i}MeV.*",) for i in range(0, 100, 10)]+[("^massShift2p1MeV.*",)],
+                                mirror=False,
+                                #TODO: Name this
+                                noConstraint=True,
+                                systAxes=["massShift"],
+                                passToFakes=passSystToFakes,
         )
     
     if args.doStatOnly:
         # print a card with only mass weights and a dummy syst
-        cardTool.addLnNSystematic("dummy", processes=["Top", "Diboson"] if wmass else ["Other"], size=1.001, group="dummy")
+        # cardTool.addLnNSystematic("dummy", processes=["Top", "Diboson"] if wmass else ["Other"], size=1.001, group="dummy")
         cardTool.writeOutput(args=args)
         logger.info("Using option --doStatOnly: the card was created with only mass weights and a dummy LnN syst on all processes")
         quit()
