@@ -9,6 +9,7 @@ import hdf5plugin
 import h5py
 from narf import ioutils
 import ROOT
+import uproot
 
 logger = logging.child_logger(__name__)
 
@@ -110,7 +111,7 @@ def read_scetlib_hist(path, nonsing="none", flip_y_sign=False, charge=None):
         logger.warning("Will not include nonsingular contribution!")
     
     if flip_y_sign:
-        mid = y_axis.index(0)
+        mid = scetlibh.axes["Y"].index(0)
         s = hist.tag.Slicer()
         scetlibh[{"Y" : s[mid:]}] = scetlibh[{"Y" : s[mid:]}].view()*-1
 
@@ -128,14 +129,14 @@ def read_dyturbo_pdf_hist(base_name, pdf_members, axes, charge=None):
         
     return pdf_hist
 
-def read_dyturbo_hist(filenames, path="", axes=("y", "pt"), charge=None):
+def read_dyturbo_hist(filenames, path="", axes=("y", "pt"), charge=None, coeff=None):
     filenames = [os.path.expanduser(os.path.join(path, f)) for f in filenames]
     isfile = list(filter(lambda x: os.path.isfile(x), filenames))
 
     if not isfile:
         raise ValueError(f"Did not find any valid files in {filenames}")
 
-    hists = [read_dyturbo_file(f, axes, charge) for f in isfile]
+    hists = [read_dyturbo_file(f, axes, charge, coeff) for f in isfile]
     if len(hists) > 1:
         hists = hh.rebinHistsToCommon(hists, 0)
 
@@ -198,25 +199,33 @@ def read_text_data(filename):
         data.append(entry_data)
     return np.array(data, dtype=float)
 
-def read_dyturbo_file(filename, axnames=("Y", "qT"), charge=None):
-    charge=None
-    data = read_text_data(filename)
-    # 2 numbers per axis + result + error
-    if data.shape[1] != len(axnames)*2+2:
-        raise ValueError(f"Mismatch between number of axes advertised ({len(axnames)} ==> {axnames}) and found ({(data.shape[1]-2)/2})")
+def read_dyturbo_file(filename, axnames=("Y", "qT"), charge=None, coeff=None):
+    if filename.endswith(".root"):
+        f = uproot.open(filename)
+        hname = "_".join((["wgt", coeff] if coeff else ["s"])+[axnames[0].lower()]) 
+        h = f[hname].to_hist()
+        if coeff == "a4":
+            h = -1*h
+    else:
+        data = read_text_data(filename)
+        # 2 numbers per axis + result + error
+        if data.shape[1] != len(axnames)*2+2:
+            raise ValueError(f"Mismatch between number of axes advertised ({len(axnames)} ==> {axnames}) and found ({(data.shape[1]-2)/2})")
 
-    axes = []
-    offset = True
-    for i,name in enumerate(axnames):
-        # Normally last line is the total cross section, also possible it isn't, so check the bin ranges
-        offset = offset and data[-1,2*i] == data[0,2*i] and data[-1,2*i+1] == data[-2,2*i+1]
-        bins = sorted(list(set(data[:len(data)-offset,2*i:2*i+2].flatten())))
-        axes.append(hist.axis.Variable(bins, name=name, underflow=not (bins[0] == 0 and "qT" in name)))
+        axes = []
+        offset = True
+        for i,name in enumerate(axnames):
+            # Normally last line is the total cross section, also possible it isn't, so check the bin ranges
+            offset = offset and data[-1,2*i] == data[0,2*i] and data[-1,2*i+1] == data[-2,2*i+1]
+            bins = sorted(list(set(data[:len(data)-offset,2*i:2*i+2].flatten())))
+            axes.append(hist.axis.Variable(bins, name=name, underflow=not (bins[0] == 0 and "qT" in name)))
 
-    h = hist.Hist(*axes, storage=hist.storage.Weight())
-    h[...] = np.reshape(data[:len(data)-offset,len(axes)*2:], (*h.axes.size, 2))
+        h = hist.Hist(*axes, storage=hist.storage.Weight())
+        h[...] = np.reshape(data[:len(data)-offset,len(axes)*2:], (*h.axes.size, 2))
+
     if charge is not None:
         h = add_charge_axis(h, charge)
+
     return h*1/1000
 
 def add_charge_axis(h, charge):
@@ -294,9 +303,9 @@ def readImpacts(rtfile, group, sort=True, add_total=True, stat=0.0, POI='Wmass',
 
     return impacts, labels, norm
 
-def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo, axes=None, charge=None, fix_nons_bin0=True):
-    hsing = read_scetlib_hist(scetlib_resum, charge=charge)
-    hfo_sing = read_scetlib_hist(scetlib_fo_sing, charge=charge)
+def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo, axes=None, charge=None, fix_nons_bin0=True, coeff=None):
+    hsing = read_scetlib_hist(scetlib_resum, charge=charge, flip_y_sign=coeff=="a4")
+    hfo_sing = read_scetlib_hist(scetlib_fo_sing, charge=charge, flip_y_sign=coeff=="a4")
     if axes:
         newaxes = [*axes, "vars"]
         if charge is not None:
@@ -308,7 +317,7 @@ def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo
         pdf_members = hsing.axes["vars"].size
         hfo = read_dyturbo_pdf_hist(dyturbo_fo, pdf_members=pdf_members, axes=axes if axes else hsing.axes.name[:-1], charge=charge)
     else:
-        hfo = read_dyturbo_hist([dyturbo_fo], axes=axes if axes else hsing.axes.name[:-1], charge=charge)
+        hfo = read_dyturbo_hist([dyturbo_fo], axes=axes if axes else hsing.axes.name[:-1], charge=charge, coeff=coeff)
     for ax in ["Y", "Q"]:
         if ax in set(hfo.axes.name).intersection(set(hfo_sing.axes.name)).intersection(set(hsing.axes.name)):
             hfo, hfo_sing, hsing = hh.rebinHistsToCommon([hfo, hfo_sing, hsing], ax)

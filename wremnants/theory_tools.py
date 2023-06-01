@@ -379,7 +379,9 @@ def replace_by_neighbors(vals, replace):
     indices = ndimage.distance_transform_edt(replace, return_distances=False, return_indices=True)
     return vals[tuple(indices)]
 
-def moments_to_angular_coeffs(hist_moments_scales, cutoff=1e-5, sumW2=False):
+def moments_to_angular_coeffs(hist_moments_scales, cutoff=1e-5):
+    sumW2 = hist_moments_scales._storage_type() == hist.storage.Weight()
+
     if hist_moments_scales.empty():
        raise ValueError("Cannot make coefficients from empty hist")
     # broadcasting happens right to left, so move to rightmost then move back
