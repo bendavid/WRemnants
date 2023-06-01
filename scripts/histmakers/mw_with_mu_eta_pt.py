@@ -388,7 +388,7 @@ def build_graph(df, dataset):
                 results.append(dummyMuonScaleSystPerSeUp)
 
                 if (
-                    (args.muonCorrData == "massfit" or "massfit_lbl") and 
+                    (args.muonCorrData in ["massfit", "lbl_massfit"]) and 
                     (args.muonScaleVariation == 'smearingWeights')
                 ):
                     # muon scale variation from stats. uncertainty on the jpsi massfit
