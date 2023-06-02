@@ -16,7 +16,7 @@ data_dir = f"{pathlib.Path(__file__).parent}/../../wremnants/data/"
 def make_parser(parser=None):
     if not parser:
         parser = common.common_parser_combine()
-    parser.add_argument("--fitvar", help="Variable to fit", default="eta-pt")
+    parser.add_argument("--fitvar", help="Variable to fit", default="pt-eta")
     parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow). Equivalent to --excludeNuisances '.*effSystTnP|.*effStatTnP' ")
     parser.add_argument("--ewUnc", action='store_true', help="Include EW uncertainty")
     parser.add_argument("--pseudoData", type=str, help="Hist to use as pseudodata")
@@ -123,7 +123,7 @@ def main(args,xnorm=False):
     cardTool.setDatagroups(datagroups)
     logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
     cardTool.setNominalTemplate(f"{templateDir}/main.txt")
-    if args.sumChannels or xnorm or name in ["ZMassDilepton"]:
+    if args.sumChannels or xnorm:
         cardTool.setChannels(["inclusive"])
         cardTool.setWriteByCharge(False)
     if xnorm:
