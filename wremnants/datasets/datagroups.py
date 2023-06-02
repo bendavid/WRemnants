@@ -218,8 +218,17 @@ class Datagroups(object):
                     read_syst = ""
                     logger.debug(f"Forcing group member {member.name} to read the nominal hist for syst {syst}")
 
-                h = self.readHist(baseName, member, procName, read_syst)
-                foundExact = True
+                try:
+                    h = self.readHist(baseName, member, procName, read_syst)
+                    foundExact = True
+                except ValueError as e:
+                    if nominalIfMissing:
+                        logger.info(f"{str(e)}. Using nominal hist {self.nominalName} instead")
+                        h = self.readHist(self.nominalName, member, procName, "")
+                    else:
+                        logger.warning(str(e))
+                        continue
+                logger.debug(f"Hist axes are {h.axes.name}")
 
                 if group.memberOp:
                     if group.memberOp[i] is not None:
