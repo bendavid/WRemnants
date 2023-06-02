@@ -9,6 +9,7 @@ import pathlib
 import hist
 import copy
 import math
+import time
 
 scriptdir = f"{pathlib.Path(__file__).parent}"
 data_dir = f"{pathlib.Path(__file__).parent}/../../wremnants/data/"
@@ -36,7 +37,7 @@ def make_parser(parser=None):
     parser.add_argument("--genAxis", type=str, default=None, nargs="+", help="Specify which gen axis should be used in unfolding, if 'None', use all (inferred from metadata).")
     parser.add_argument("--fitXsec", action='store_true', help="Fit signal inclusive cross section")
     parser.add_argument("--correlatedNonClosureNuisances", action='store_true', help="get systematics from histograms for the Z non-closure nuisances without decorrelation in eta and pt")
-    parser.add_argument("--nonClosureScheme", type=str, default = "A-M-separated", choices=["A-M-separated", "A-M-combined", "binned"], help = "how the non-closure numbers are derived")
+    parser.add_argument("--nonClosureScheme", type=str, default = "A-M-separated", choices=["none", "A-M-separated", "A-M-combined", "binned"], help = "how the non-closure numbers are derived")
     
     return parser
 
@@ -438,7 +439,7 @@ def main(args,xnorm=False):
         else:
             cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
 
-    cardTool.writeOutput(args=args, xnorm=xnorm)
+    cardTool.writeOutput(args=args, xnorm=xnorm, forceNonzero=False)
     logger.info(f"Output stored in {outfolder}")
     
 if __name__ == "__main__":
@@ -446,7 +447,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
+    
+    time0 = time.time()
 
     main(args)
     if args.unfold:
         main(args,xnorm=True)
+
+    logger.info(f"Running time: {time.time()-time0}")

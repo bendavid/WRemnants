@@ -31,7 +31,7 @@ class CardTool(object):
         self.nominalTemplate = ""
         self.spacing = 28
         self.systTypeSpacing = 16
-        self.procColumnsSpacing = 30
+        self.procColumnsSpacing = 40
         self.fakeName = "Fake" # but better to set it explicitly
         self.dataName = "Data"
         self.nominalName = "nominal"
@@ -545,7 +545,9 @@ class CardTool(object):
         if proc in self.noStatUncProcesses:
             logger.info(f"Zeroing statistical uncertainty for process {proc}")
             setZeroStatUnc = True
+
         # this is a big loop a bit slow, but it might be mainly the hist->root conversion and writing into the root file
+        logger.debug("Before self.writeHist(...)")
         for name, var in var_map.items():
             if name != "":
                 self.writeHist(var, self.variationName(proc, name), setZeroStatUnc=setZeroStatUnc,
@@ -599,13 +601,14 @@ class CardTool(object):
             self.outfile = outfile
             self.outfile.cd()
             
-    def writeOutput(self, args=None, xnorm=False):
+    def writeOutput(self, args=None, xnorm=False, forceNonzero=True):
         self.xnorm = xnorm
         self.datagroups.loadHistsForDatagroups(
             baseName=self.nominalName, syst=self.nominalName,
             procsToRead=self.datagroups.groups.keys(),
             label=self.nominalName, 
-            scaleToNewLumi=self.lumiScale)
+            scaleToNewLumi=self.lumiScale,
+            forceNonzero=forceNonzero)
         self.writeForProcesses(self.nominalName, processes=self.datagroups.groups.keys(), label=self.nominalName)
         self.loadNominalCard()
         if self.pseudoData and not self.xnorm:
@@ -621,7 +624,7 @@ class CardTool(object):
             self.datagroups.loadHistsForDatagroups(
                 self.nominalName, systName, label="syst",
                 procsToRead=processes, 
-                forceNonzero=systName != "qcdScaleByHelicity",
+                forceNonzero=forceNonzero and systName != "qcdScaleByHelicity",
                 preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"],
                 # Needed to avoid always reading the variation for the fakes, even for procs not specified
                 forceToNominal=[x for x in self.datagroups.getProcNames() if x not in 

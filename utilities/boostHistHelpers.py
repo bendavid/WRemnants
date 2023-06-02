@@ -176,22 +176,6 @@ def addSystAxis(h, size=1, offset=0):
         hnew[...] = np.stack((newvals, newvars), axis=-1)
 
     return hnew
-
-def clipNegativeVals(h, clipValue=0, createNew=True):
-    vals = h.values(flow=True)
-    vals[vals<0] = clipValue
-    if createNew:
-        if h._storage_type() == hist.storage.Double():
-            hnew = hist.Hist(*h.axes)
-            hnew[...] = vals
-        else:
-            hnew = hist.Hist(*h.axes, storage=hist.storage.Weight())
-            hnew[...] = np.stack((vals, h.variances(flow=True)), axis=-1)
-
-        return hnew
-    else:
-        h.values(flow=True)[...] = vals
-        return h
     
 def scaleHist(h, scale, createNew=True):
     if createNew:
@@ -402,8 +386,11 @@ def syst_min_or_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=[], do_min=Tr
 
     if syst_ax in proj_ax:
         proj_ax.pop(proj_ax.index(syst_ax))
-        
-    hvar = projectNoFlow(h, (*proj_ax, syst_ax), exclude=no_flow)
+
+    # projectNoFlow is much slower than project and the bottleneck in this function. I don't think we need it here
+    # hvar = projectNoFlow(h, (*proj_ax, syst_ax), exclude=no_flow)
+
+    hvar = h.project(*proj_ax, syst_ax)
 
     view = np.take(hvar.view(flow=True), indices, axis=-1)
     fullview = np.take(h.view(flow=True), indices, axis=-1)
@@ -415,7 +402,7 @@ def syst_min_or_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=[], do_min=Tr
     for ax in proj_ax:
         idx = names.index(ax)
         initial_order.append(idx)
-        names.insert(-2, names.pop(idx))
+        names.insert(-1, names.pop(idx)) # -1 means second to last index
         fullview = np.moveaxis(fullview, idx, -2)
     
     op = np.argmin if do_min else np.argmax
