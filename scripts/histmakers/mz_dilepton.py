@@ -60,11 +60,7 @@ nominal_cols = args.axes
 if args.csVarsHist:
     nominal_cols += ["cosThetaStarll", "phiStarll"]
 
-nominal_cols.append("charge")
-
 nominal_axes = [all_axes[a] for a in nominal_cols] 
-
-
 
 gen_axes = {
     "ptVGen": hist.axis.Variable(common.ptV_binning if not args.finePtBinning else range(60), name = "ptVGen", underflow=False, overflow=True),

@@ -245,7 +245,7 @@ def plot(fittype, bins=(None, None), channel=None):
         ylim = args.ylim
 
     if args.rrange is None:
-        rrange = [0.90,1.1] if fit_type=="prefit" else [0.99, 1.01]
+        rrange = [0.90,1.1] if fit_type=="prefit" else [0.95, 1.05]
     else:
         rrange = args.rrange
 
