@@ -11,6 +11,7 @@ import functools
 import hist
 import pandas as pd
 import math
+import numpy as np
 
 from wremnants.datasets.datagroup import Datagroup
 
@@ -167,7 +168,7 @@ class Datagroups(object):
     ## procName are grouped into datagroups
     ## baseName takes values such as "nominal"
     def setHists(self, baseName, syst, procsToRead=None, label=None, nominalIfMissing=True, 
-                 applySelection=True, forceNonzero=True, preOpMap=None, preOpArgs=None, scaleToNewLumi=-1, 
+                 applySelection=True, forceNonzero=True, preOpMap=None, preOpArgs=None, scaleToNewLumi=1, 
                  excludeProcs=None, forceToNominal=[]):
         if not label:
             label = syst if syst else baseName
@@ -212,29 +213,14 @@ class Datagroups(object):
                     # if we are here this process has been already used to build the fakes when running for other groups
                     continue
                 logger.debug(f"Looking at group member {member.name}")
-                scale = group.scale
                 read_syst = syst
                 if member.name in forceToNominal:
                     read_syst = ""
                     logger.debug(f"Forcing group member {member.name} to read the nominal hist for syst {syst}")
 
-                try:
-                    h = self.readHist(baseName, member, procName, read_syst, scaleOp=scale, forceNonzero=forceNonzero, scaleToNewLumi=scaleToNewLumi)
-                    foundExact = True
-                except ValueError as e:
-                    if nominalIfMissing:
-                        logger.info(f"{str(e)}. Using nominal hist {self.nominalName} instead")
-                        h = self.readHist(self.nominalName, member, procName, "", scaleOp=scale, forceNonzero=forceNonzero, scaleToNewLumi=scaleToNewLumi)
-                    else:
-                        logger.warning(str(e))
-                        continue
-                logger.debug(f"Hist axes are {h.axes.name}")
+                h = self.readHist(baseName, member, procName, read_syst)
+                foundExact = True
 
-                ## TODO/FIXME: is the order of these operations important?
-                ## Some operations are triggered based on the group and some might be specific for fakes,
-                ## in which case they should be exported inside the "if" below, since they wouldn't be run here.
-                ## Might have a function to contain all these operations to avoid code repetition,
-                ## but not all are needed, so we should first assess whether the order is relevant before reshuffling
                 if group.memberOp:
                     if group.memberOp[i] is not None:
                         logger.debug(f"Apply operation to member {i}: {member.name}/{procName}")
@@ -244,17 +230,32 @@ class Datagroups(object):
 
                 if self.gen_axes != None:
                     # integrate over remaining gen axes 
+                    logger.debug(f"Integrate over gen axes")
                     projections = [a for a in h.axes.name if a not in self.gen_axes]
                     if len(projections) < len(h.axes.name):
                         h = h.project(*projections)
+                    logger.debug(f"Integrated")
 
                 if preOpMap and member.name in preOpMap:
                     logger.debug(f"Applying preOp to {member.name}/{procName} after loading")
                     h = preOpMap[member.name](h, **preOpArgs)
-                    
+
                 if self.globalAction:
-                    h = self.globalAction(h)
                     logger.debug("Applying global action")
+                    h = self.globalAction(h)
+
+                scale = self.processScaleFactor(member)
+                scale *= scaleToNewLumi
+                if group.scale:
+                    scale *= group.scale(member)
+
+                logger.debug(f"Scale hist")
+                h = h*scale
+
+                if forceNonzero:
+                    h.values(flow=True)[...] = h.values(flow=True).clip(min=0) 
+
+                logger.debug(f"Hist axes are {h.axes.name}")
 
                 hasPartialSumForFake = False
                 if hasFake and procName != nameFake:
@@ -337,7 +338,7 @@ class Datagroups(object):
     def loadHistsForDatagroups(
         self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="",
         nominalIfMissing=True, applySelection=True, forceNonzero=True, pseudodata=False,
-        preOpMap={}, preOpArgs={}, scaleToNewLumi=-1, forceToNominal=[]
+        preOpMap={}, preOpArgs={}, scaleToNewLumi=1, forceToNominal=[]
     ):
         logger.debug("Calling loadHistsForDatagroups()")
         logger.debug(f"The basename and syst is: {baseName}, {syst}")
@@ -547,7 +548,7 @@ class Datagroups(object):
             
         return df
 
-    def readHist(self, baseName, proc, group, syst, scaleOp=None, forceNonzero=True, scaleToNewLumi=-1):
+    def readHist(self, baseName, proc, group, syst):
         output = self.results[proc.name]["output"]
         histname = self.histName(baseName, proc.name, syst)
         logger.debug(f"Reading hist {histname} for proc/group {proc.name}/{group} and syst '{syst}'")
@@ -556,20 +557,10 @@ class Datagroups(object):
 
         h = output[histname]
         if isinstance(h, narf.ioutils.H5PickleProxy):
+            logger.debug(f"Get narf hist")
             h = h.get()
-        # Do a copy to detach the modified object from the original one, so the latter stays unmodified.
-        # This is extremely important for fakes, since they reuse the other histograms to subtract from data
-        # If fakes are not used, or one changes the code to avoid reading everything again for fakes, one could
-        # actually modify directly the input histograms here, which might save some time compared to the copy.
-        h = h.copy()
-        if forceNonzero:
-            h = hh.clipNegativeVals(h, createNew=False)
-        if scaleToNewLumi > 0:
-            h = hh.scaleHist(h, scaleToNewLumi, createNew=False)                        
-        scale = self.processScaleFactor(proc)
-        if scaleOp:
-            scale = scale*scaleOp(proc)
-        return h*scale
+
+        return h   
 
     def histName(self, baseName, procName="", syst=""):
         return Datagroups.histName(baseName, procName, syst, nominalName=self.nominalName)
