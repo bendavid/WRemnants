@@ -119,6 +119,7 @@ def common_parser(for_reco_highPU=False):
 
     if for_reco_highPU:
         # additional arguments specific for histmaker of reconstructed objects at high pileup (mw, mz_wlike, and mz_dilepton)
+        parser.add_argument("--dphiMuonMetCut", type=float, help="Threshold to cut |deltaPhi| > thr*np.pi between muon and met", default=0.25)
         parser.add_argument("--muonCorrMC", type=str, default="idealMC_lbltruth", 
             choices=["none", "trackfit_only", "trackfit_only_idealMC", "lbl", "idealMC_lbltruth", "idealMC_massfit", "idealMC_lbltruth_massfit"], 
             help="Type of correction to apply to the muons in simulation")

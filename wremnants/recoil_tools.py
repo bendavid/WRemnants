@@ -522,9 +522,9 @@ class Recoil:
         self.df = self.df.Define("recoil_corr_xy_perp", "recoil_corr_xy[2]")
         
         # transverse mass
-        self.df = self.df.Define("mT_uncorr", f"wrem::mt_wlike_nano({self.trgLep_pt}, {self.trgLep_phi}, {self.nonTrgLep_pt}, {self.nonTrgLep_phi}, MET_uncorr_pt, MET_uncorr_phi)")
-        self.df = self.df.Define("mT_corr_lep", f"wrem::mt_wlike_nano({self.trgLep_pt}, {self.trgLep_phi}, {self.nonTrgLep_pt}, {self.nonTrgLep_phi}, MET_corr_lep_pt, MET_corr_lep_phi)")
-        self.df = self.df.Define("mT_corr_xy", f"wrem::mt_wlike_nano({self.trgLep_pt}, {self.trgLep_phi}, {self.nonTrgLep_pt}, {self.nonTrgLep_phi}, MET_corr_xy_pt, MET_corr_xy_phi)")
+        self.df = self.df.Define("mT_uncorr", f"wrem::get_mt_wlike({self.trgLep_pt}, {self.trgLep_phi}, {self.nonTrgLep_pt}, {self.nonTrgLep_phi}, MET_uncorr_pt, MET_uncorr_phi)")
+        self.df = self.df.Define("mT_corr_lep", f"wrem::get_mt_wlike({self.trgLep_pt}, {self.trgLep_phi}, {self.nonTrgLep_pt}, {self.nonTrgLep_phi}, MET_corr_lep_pt, MET_corr_lep_phi)")
+        self.df = self.df.Define("mT_corr_xy", f"wrem::get_mt_wlike({self.trgLep_pt}, {self.trgLep_phi}, {self.nonTrgLep_pt}, {self.nonTrgLep_phi}, MET_corr_xy_pt, MET_corr_xy_phi)")
         
         self.df = self.df.Define("RawMET_sumEt_sqrt", "sqrt(RawMET_sumEt)")
    
@@ -687,7 +687,7 @@ class Recoil:
         self.df = self.df.Define("MET_corr_rec_xy_dPhi", "wrem::deltaPhi(MET_corr_rec_phi, MET_corr_xy_phi)")
         self.df = self.df.Define("METx_corr_rec", "MET_corr_rec_pt*cos(MET_corr_rec_phi)")
         self.df = self.df.Define("METy_corr_rec", "MET_corr_rec_pt*sin(MET_corr_rec_phi)")
-        self.df = self.df.Define("mT_corr_rec", f"wrem::mt_wlike_nano({self.trgLep_pt}, {self.trgLep_phi}, {self.nonTrgLep_pt}, {self.nonTrgLep_phi}, MET_corr_rec_pt, MET_corr_rec_phi)")
+        self.df = self.df.Define("mT_corr_rec", f"wrem::get_mt_wlike({self.trgLep_pt}, {self.trgLep_phi}, {self.nonTrgLep_pt}, {self.nonTrgLep_phi}, MET_corr_rec_pt, MET_corr_rec_phi)")
         
         if not self.storeHists: 
             return

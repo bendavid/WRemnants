@@ -10,6 +10,7 @@ import lz4.frame
 import math
 import time
 import os
+import numpy as np
 
 parser = common.set_parser_default(parser, "pt", [34, 26, 60])
 
@@ -159,17 +160,23 @@ def build_graph(df, dataset):
     # utility plots of transverse mass, with or without recoil corrections
     ###########
     met_vars = ("MET_pt", "MET_phi")
-    df = df.Define("transverseMass_uncorr", f"wrem::mt_wlike_nano(trigMuons_pt0, trigMuons_phi0, nonTrigMuons_pt0, nonTrigMuons_phi0, {', '.join(met_vars)})")
+    df = df.Define("transverseMass_uncorr", f"wrem::get_mt_wlike(trigMuons_pt0, trigMuons_phi0, nonTrigMuons_pt0, nonTrigMuons_phi0, {', '.join(met_vars)})")
     results.append(df.HistoBoost("transverseMass_uncorr", [axis_mt], ["transverseMass_uncorr", "nominal_weight"]))
     ###########
     met_vars = ("MET_corr_rec_pt", "MET_corr_rec_phi")
-    df = df.Define("transverseMass", f"wrem::mt_wlike_nano(trigMuons_pt0, trigMuons_phi0, nonTrigMuons_pt0, nonTrigMuons_phi0, {', '.join(met_vars)})")
+    df = df.Define("met_wlike_TV2", f"wrem::get_met_wlike(nonTrigMuons_pt0, nonTrigMuons_phi0, {', '.join(met_vars)})")
+    df = df.Define("transverseMass", "wrem::get_mt_wlike(trigMuons_pt0, trigMuons_phi0, met_wlike_TV2)")
     results.append(df.HistoBoost("transverseMass", [axis_mt], ["transverseMass", "nominal_weight"]))
     results.append(df.HistoBoost("MET", [hist.axis.Regular(20, 0, 100, name="MET")], ["MET_corr_rec_pt", "nominal_weight"]))
+    df = df.Define("met_wlike_TV2_pt", "met_wlike_TV2.Mod()")
+    results.append(df.HistoBoost("WlikeMET", [hist.axis.Regular(20, 0, 100, name="Wlike-MET")], ["met_wlike_TV2_pt", "nominal_weight"]))
     ###########
-    
+
+    # cutting after storing mt distributions for plotting, since the cut is only on corrected met
+    df = df.Define("deltaPhiMuonMet", "std::abs(wrem::deltaPhi(trigMuons_phi0,met_wlike_TV2.Phi()))")
+    df = df.Filter(f"deltaPhiMuonMet > {args.dphiMuonMetCut*np.pi}")
     df = df.Filter("transverseMass >= 45.") # 40 for Wmass, thus be 45 here (roughly half the boson mass)
-    
+                   
     nominal_cols = ["trigMuons_eta0", "trigMuons_pt0", "trigMuons_charge0"]
 
     if unfold:

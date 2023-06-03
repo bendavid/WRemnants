@@ -196,7 +196,7 @@ namespace wrem {
             constexpr bool pass_iso = true;
             const tensor_t variation_trig = base_t::sf_syst_var(trig_pt, trig_eta, trig_sapt, trig_saeta, trig_charge, pass_iso, with_trigger);
             const tensor_t variation_nontrig = base_t::sf_syst_var(nontrig_pt, nontrig_eta, nontrig_sapt, nontrig_saeta, nontrig_charge, pass_iso, without_trigger);
-            return nominal_weight*variation_trig*variation_nontrig;
+            return nominal_weight * variation_trig * variation_nontrig;
         }
 
     };
