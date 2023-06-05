@@ -236,27 +236,32 @@ def main(args,xnorm=False):
         allEffTnP = [f"effStatTnP_sf_{eff}" for eff in effStatTypes] + ["effSystTnP"]
         for name in allEffTnP:
             if "Syst" in name:
-                axes = ["reco-tracking-idip-trigger-iso"]
-                axlabels = ["WPSYST"]
-                nameReplace = [("WPSYST0", "reco"), ("WPSYST1", "tracking"), ("WPSYST2", "idip"), ("WPSYST3", "trigger"), ("WPSYST4", "iso"), ("effSystTnP", "effSyst")]
+                axes = ["reco-tracking-idip-trigger-iso", "n_syst_variations"]
+                axlabels = ["WPSYST", "_etaDecorr"]
+                nameReplace = [("WPSYST0", "reco"), ("WPSYST1", "tracking"), ("WPSYST2", "idip"), ("WPSYST3", "trigger"), ("WPSYST4", "iso"), ("effSystTnP", "effSyst"), ("etaDecorr0", "fullyCorr") ]
                 scale = 1.0
                 mirror = True
-                mirrorDownVarEqualToNomi=True
+                mirrorDownVarEqualToNomi=False
                 groupName = "muon_eff_syst"
                 splitGroupDict = {f"{groupName}_{x}" : f".*effSyst.*{x}" for x in list(effTypesNoIso + ["iso"])}
                 splitGroupDict[groupName] = ".*effSyst.*" # add also the group with everything
+                # decorrDictEff = {                        
+                #     "x" : {
+                #         "label" : "eta",
+                #         "edges": [round(-2.4+i*0.1,1) for i in range(49)]
+                #     }
+                # }
+
             else:
-                nameReplace = [] if any(x in name for x in chargeDependentSteps) else [("q0", "qall")] # for iso charge the tag id with another sensible label
+                nameReplace = [] if any(x in name for x in chargeDependentSteps) else [("q0", "qall")] # for iso change the tag id with another sensible label
                 mirror = True
                 mirrorDownVarEqualToNomi=False
                 if args.binnedScaleFactors:
                     axes = ["SF eta", "nPtBins", "SF charge"]
-                    axlabels = ["eta", "pt", "q"]
-                    nameReplace = nameReplace + [("effStatTnP_sf_", "effStatBinned_")]
                 else:
                     axes = ["SF eta", "nPtEigenBins", "SF charge"]
-                    axlabels = ["eta", "pt", "q"]
-                    nameReplace = nameReplace + [("effStatTnP_sf_", "effStatSmooth_")]                    
+                axlabels = ["eta", "pt", "q"]
+                nameReplace = nameReplace + [("effStatTnP_sf_", "effStat_")]           
                 scale = 1.0
                 groupName = "muon_eff_stat"
                 splitGroupDict = {f"{groupName}_{x}" : f".*effStat.*{x}" for x in effStatTypes}
@@ -277,7 +282,26 @@ def main(args,xnorm=False):
                 systNameReplace=nameReplace,
                 scale=scale,
                 splitGroup=splitGroupDict,
+                decorrelateByBin = {}
             )
+            # if "Syst" in name and decorrDictEff != {}:
+            #     # add fully correlated version again
+            #     cardTool.addSystematic(
+            #         name,
+            #         rename=f"{name}_EtaDecorr",
+            #         mirror=mirror,
+            #         mirrorDownVarEqualToNomi=mirrorDownVarEqualToNomi,
+            #         group=groupName,
+            #         systAxes=axes,
+            #         labelsByAxis=axlabels,
+            #         baseName=name+"_",
+            #         processes=allMCprocesses_noQCDMC,
+            #         passToFakes=passSystToFakes,
+            #         systNameReplace=nameReplace,
+            #         scale=scale,
+            #         splitGroup=splitGroupDict,
+            #         decorrelateByBin = decorrDictEff
+            #     )
 
     to_fakes = passSystToFakes and not args.noQCDscaleFakes and not xnorm
     combine_helpers.add_pdf_uncertainty(cardTool, single_v_samples, passSystToFakes, from_corr=args.pdfUncFromCorr)

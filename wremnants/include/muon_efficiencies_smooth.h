@@ -8,7 +8,7 @@ namespace wrem {
 
     // TODO use enums for integer/boolean/category axes so that the code is less error-prone?
 
-    template<typename HIST_SF>
+    template<int NSysts, typename HIST_SF>
     class muon_efficiency_smooth_helper_base {
     public:
 
@@ -60,7 +60,7 @@ namespace wrem {
 
         }
 
-        using syst_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<5>>; // 5 bins for reco, tracking, idip, trigger, iso(notrig) in this order
+        using syst_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<5, NSysts>>; // 5 bins for reco, tracking, idip, trigger, iso(notrig) in this order
 
         syst_tensor_t sf_syst_var(float pt, float eta, float sapt, float saeta, int charge, bool pass_iso, bool with_trigger) const {
 
@@ -73,18 +73,23 @@ namespace wrem {
             auto const charge_idx =  sf_all_->template axis<2>().index(charge);
 
             std::array<double,5> allSF_nomi = scale_factor_array(pt_idx, eta_idx, sapt_idx, saeta_idx, charge_idx, pass_iso, with_trigger, idx_nom_);
-            std::array<double,5> allSF_alt  = scale_factor_array(pt_idx, eta_idx, sapt_idx, saeta_idx, charge_idx, pass_iso, with_trigger, idx_alt_);
 
-            // anticorrelation between iso and antiiso already embedded in the numbers stored in the histograms
-            // also the alternate comes from data efficiency variation only, so the anticorrelation in the efficiencies is preserved in the scale factors
-            
-            // order is reco-tracking-idip-trigger-iso
-            for(int i = 0; i < allSF_nomi.size(); i++) {
-                // if (allSF_nomi[i] <= 0)
-                //     std::cout << "allSF_nomi/alt[" << i << "] = " << allSF_nomi[i] << "/" << allSF_alt[i] << " --> pt/eta/charge = " << pt << "/" << eta << "/" << charge << std::endl;
-                res(i) = allSF_alt[i] / allSF_nomi[i]; 
-            }
+            for(int ns = 0; ns < NSysts; ns++) {
                 
+                std::array<double,5> allSF_alt  = scale_factor_array(pt_idx, eta_idx, sapt_idx, saeta_idx, charge_idx, pass_iso, with_trigger, sf_all_->template axis<4>().index(ns+1) ); // 0 is the nominal, systs starts from 1
+                
+                // anticorrelation between iso and antiiso already embedded in the numbers stored in the histograms
+                // also the alternate comes from data efficiency variation only, so the anticorrelation in the efficiencies is preserved in the scale factors
+            
+                // order is reco-tracking-idip-trigger-iso
+                for(int i = 0; i < allSF_nomi.size(); i++) {
+                    // if (allSF_nomi[i] <= 0)
+                    //     std::cout << "allSF_nomi/alt[" << i << "] = " << allSF_nomi[i] << "/" << allSF_alt[i] << " --> pt/eta/charge = " << pt << "/" << eta << "/" << charge << std::endl;
+                    res(i, ns) = allSF_alt[i] / allSF_nomi[i]; 
+                }
+
+            }
+            
             return res;
      
         }
@@ -103,18 +108,18 @@ namespace wrem {
         int idx_antiiso_nontriggering_ = sf_all_->template axis<3>().index("antiisonotrig");
 
         int idx_nom_ = sf_all_->template axis<4>().index(0);
-        int idx_alt_ = sf_all_->template axis<4>().index(1);
+        // int idx_alt_ = sf_all_->template axis<4>().index(NSysts);
         
     };
 
     // base template for one-lepton case
-    template<bool do_other, typename HIST_SF>
+    template<bool do_other, int NSysts, typename HIST_SF>
     class muon_efficiency_smooth_helper:
-        public muon_efficiency_smooth_helper_base<HIST_SF> {
+        public muon_efficiency_smooth_helper_base<NSysts, HIST_SF> {
 
     public:
 
-        using base_t = muon_efficiency_smooth_helper_base<HIST_SF>;
+        using base_t = muon_efficiency_smooth_helper_base<NSysts, HIST_SF>;
         // inherit constructor
         using base_t::base_t;
 
@@ -128,13 +133,13 @@ namespace wrem {
     };
 
     // specialization for two-lepton case
-    template<typename HIST_SF>
-    class muon_efficiency_smooth_helper<true, HIST_SF> :
-        public muon_efficiency_smooth_helper_base<HIST_SF> {
+    template<typename HIST_SF, int NSysts>
+    class muon_efficiency_smooth_helper<true, NSysts, HIST_SF> :
+        public muon_efficiency_smooth_helper_base<NSysts, HIST_SF> {
 
     public:
 
-        using base_t = muon_efficiency_smooth_helper_base<HIST_SF>;
+        using base_t = muon_efficiency_smooth_helper_base<NSysts, HIST_SF>;
         // inherit constructor
         using base_t::base_t;
         
@@ -153,13 +158,13 @@ namespace wrem {
     };
         
     // base template for one lepton case
-    template<bool do_other, typename HIST_SF>
+    template<bool do_other, int NSysts, typename HIST_SF>
     class muon_efficiency_smooth_helper_syst :
-        public muon_efficiency_smooth_helper_base<HIST_SF> {
+        public muon_efficiency_smooth_helper_base<NSysts, HIST_SF> {
 
     public:
 
-        using base_t = muon_efficiency_smooth_helper_base<HIST_SF>;
+        using base_t = muon_efficiency_smooth_helper_base<NSysts, HIST_SF>;
         using tensor_t = typename base_t::syst_tensor_t;
         
         // inherit constructor
@@ -175,13 +180,13 @@ namespace wrem {
     };
 
     // specialization for two-lepton case
-    template<typename HIST_SF>
-    class muon_efficiency_smooth_helper_syst<true, HIST_SF> :
-        public muon_efficiency_smooth_helper_base<HIST_SF> {
+    template<int NSysts, typename HIST_SF>
+    class muon_efficiency_smooth_helper_syst<true, NSysts, HIST_SF> :
+        public muon_efficiency_smooth_helper_base<NSysts, HIST_SF> {
 
     public:
 
-        using base_t = muon_efficiency_smooth_helper_base<HIST_SF>;
+        using base_t = muon_efficiency_smooth_helper_base<NSysts, HIST_SF>;
         using tensor_t = typename base_t::syst_tensor_t;
 
         // inherit constructor
@@ -200,8 +205,6 @@ namespace wrem {
         }
 
     };
-
-
 
     ////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////////////
@@ -226,7 +229,7 @@ namespace wrem {
 
         // number of eta bins, number of eigen variations for pt axis, then 2 charges
         using stat_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<NEtaBins, NPtEigenBins, NCharges>>;
-        
+
         //using base_t = muon_efficiency_smooth_helper_stat_base<NEtaBins, NPtEigenBins, HIST_SF>;        
         //muon_efficiency_smooth_helper_stat_base(const base_t &other) : base_t(other) {}
 
@@ -442,8 +445,7 @@ namespace wrem {
         }
 
     };
-
-
+    
 }
 
 #endif
