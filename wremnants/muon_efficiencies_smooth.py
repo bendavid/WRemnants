@@ -7,6 +7,7 @@ import boost_histogram as bh
 import pickle
 import lz4.frame
 import pdb
+import copy
 
 from utilities import common, logging
 logger = logging.child_logger(__name__)
@@ -33,8 +34,9 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
     isoEff_types = ["iso", "isonotrig", "antiiso", "antiisonotrig"]
     allEff_types = ["reco", "tracking", "idip", "trigger"] + isoEff_types
     axis_allEff_type = hist.axis.StrCategory(allEff_types, name = "allEff_type")
-    axis_nom_syst = hist.axis.Integer(0, 2, underflow = False, overflow =False, name = "nom-syst") # only one syst for now (and the nominal in the first bin)
-    axis_down_up = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "downUpVar") # for the stat variations, to avoid stacking on same axis
+    effSyst_decorrEtaEdges = [round(-2.4 + 0.1*i,1) for i in range(48)]
+    Nsyst = 1 + (len(effSyst_decorrEtaEdges) - 1) # inclusive variation + all decorrelated bins
+    axis_nom_syst = hist.axis.Integer(0, 1+Nsyst, underflow = False, overflow =False, name = "nom-systs") # nominal in first bin
 
     charges = { -1. : "minus", 1. : "plus" }
     chargeDependentSteps = common.muonEfficiency_chargeDependentSteps
@@ -77,26 +79,34 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
             sf_syst.view(flow=True)[:, :, axis_charge.index(charge), axis_allEff_type.index(eff_type), 0] = hist_hist.view(flow=True)[:,:,1]
             # extract syst (last bin except overflow) and put in corresponding bin of destination (bin 1 is the second bin because no underflow)
             sf_syst.view(flow=True)[:, :, axis_charge.index(charge), axis_allEff_type.index(eff_type), 1] = hist_hist.view(flow=True)[:,:,axis_nomiAlt_eff.extent-2]
-
+            for isyst in range(len(effSyst_decorrEtaEdges)-1):
+                # first copy the nominal
+                sf_syst.view(flow=True)[:, :, axis_charge.index(charge), axis_allEff_type.index(eff_type), 2+isyst] = hist_hist.view(flow=True)[:,:,1]
+                # now update with actual syst all eta bins inside interval [effSyst_decorrEtaEdges[isyst], effSyst_decorrEtaEdges[isyst+1]]
+                # add epsilon to ensure picking the bin on the right of the edge (for the right edge given by
+                # effSyst_decorrEtaEdges[isyst+1]] the range selection in boost later on will stop at the left
+                #edge of the chosen bin number, e.g. h[b:b+1] will pick the range containing the single bin b, unlike in ROOT
+                # also sum 1 because sf_syst.view(flow=True) will always put the underflow in the 0 bin index
+                indexEtaLow = 1 + axis_eta_eff.index(effSyst_decorrEtaEdges[isyst] + 0.001) # add epsilon to ensure picking the bin on the right of the edge
+                indexEtaHigh = 1 + axis_eta_eff.index(effSyst_decorrEtaEdges[isyst+1] + 0.001) 
+                sf_syst.view(flow=True)[indexEtaLow:indexEtaHigh, :, axis_charge.index(charge), axis_allEff_type.index(eff_type), 2+isyst] = hist_hist.view(flow=True)[indexEtaLow:indexEtaHigh, :,axis_nomiAlt_eff.extent-2]
+                        
     # set overflow and underflow eta-pt bins equal to adjacent bins
     sf_syst.view(flow=True)[0, ...] = sf_syst.view(flow=True)[1, ...]
     sf_syst.view(flow=True)[axis_eta_eff.extent-1, ...] = sf_syst.view(flow=True)[axis_eta_eff.extent-2, ...]
     sf_syst.view(flow=True)[:, 0, ...] = sf_syst.view(flow=True)[:, 1, ...]
     sf_syst.view(flow=True)[:, axis_pt_eff.extent-1, ...] = sf_syst.view(flow=True)[:, axis_pt_eff.extent-2, ...]
-
-    # might be convenient to store them for easier usage
-    # outpkl = filename.replace(".root", ".pkl.lz4")
-    # with lz4.frame.open(outpkl, "wb") as f:
-    #     pickle.dump(sf_syst, f, protocol = pickle.HIGHEST_PROTOCOL)
-    # logger.info(f"Saved file {outpkl}")
     
     sf_syst_pyroot = narf.hist_to_pyroot_boost(sf_syst)
     # nomi and syst are stored in the same histogram, just use different helpers to override the () operator for now, until RDF is improved
-    helper = ROOT.wrem.muon_efficiency_smooth_helper[str(is_w_like).lower(), type(sf_syst_pyroot)]( ROOT.std.move(sf_syst_pyroot) )
-    helper_syst = ROOT.wrem.muon_efficiency_smooth_helper_syst[str(is_w_like).lower(), type(sf_syst_pyroot)]( helper )
+    helper = ROOT.wrem.muon_efficiency_smooth_helper[str(is_w_like).lower(), Nsyst, type(sf_syst_pyroot)]( ROOT.std.move(sf_syst_pyroot) )
+    helper_syst = ROOT.wrem.muon_efficiency_smooth_helper_syst[str(is_w_like).lower(), Nsyst, type(sf_syst_pyroot)]( helper )
     # define axis for syst variations with all steps
     axis_all = hist.axis.Integer(0, 5, underflow = False, overflow = False, name = "reco-tracking-idip-trigger-iso")
-    helper_syst.tensor_axes = [axis_all]
+    axis_nsyst = hist.axis.Integer(0, Nsyst, underflow = False, overflow = False, name = "n_syst_variations")
+    helper_syst.tensor_axes = [axis_all, axis_nsyst]
+    #
+    
     ##############
     ## now the EFFSTAT
     

@@ -501,11 +501,11 @@ def runStudy(charge, outfolder, rootfilename, args):
     histoChi2diffTest = None
     histoPullsPol1Slope = None
 
-    etaLabel = "#eta" if not args.doAbsEta else "|#eta|"
+    etaLabel = "#eta" if not args.absEta else "|#eta|"
     
     xAxisName = args.xAxisName
     yAxisName = args.yAxisName
-    zAxisName = args.zAxisName
+    zAxisName = args.met + " " + args.zAxisName
 
     createPlotDirAndCopyPhp(outfolder)
     outfolder_dataMC = f"{outfolder}/shapesDataMC/"
@@ -568,8 +568,8 @@ def runStudy(charge, outfolder, rootfilename, args):
             hnarf_fakerateDeltaPhi = hnarf_fakerateDeltaPhi[{"mt" : s[:complex(0,lowMtUpperBound):hist.sum]}]
             chargeIndex = 0 if charge == "minus" else 1
             hnarf_fakerateDeltaPhi = hnarf_fakerateDeltaPhi[{"charge" : s[chargeIndex:chargeIndex+1:hist.sum]}]
-            #rebin deltaPhi by 4 (16 bins originally)
-            hnarf_fakerateDeltaPhi = hnarf_fakerateDeltaPhi[{"DphiMuonMet" : s[::hist.rebin(4)]}]
+            #rebin deltaPhi by 4 or 2 (16 bins originally, bu only 8 in newer files)
+            hnarf_fakerateDeltaPhi = hnarf_fakerateDeltaPhi[{"DphiMuonMet" : s[::hist.rebin(2)]}]
             # make all TH of FRF in bins of dphi
             histo_fakes_dphiBins = narf.hist_to_root(hnarf_fakerateDeltaPhi) # this is a THnD with eta-pt-passIso-DphiMuonMet
             histo_FRFvsDphi = {}
@@ -654,7 +654,7 @@ def runStudy(charge, outfolder, rootfilename, args):
         
     axisVar = {0 : ["muon_eta", "#eta"],
                1 : ["muon_pt",  "p_{T} (GeV)"],
-               3 : ["mT", "m_{T} (GeV)"],
+               3 : ["mT", args.met + " m_{T} (GeV)"],
                6 : ["deltaPhiMuonMET", "#Delta#phi(#mu,MET) (GeV)"]
     }
                
@@ -833,7 +833,7 @@ def runStudy(charge, outfolder, rootfilename, args):
     #histoFailIso.Rebin3D(args.rebinEta, args.rebinPt, 1)
     #histoPassMtFailIso.Rebin3D(args.rebinEta, args.rebinPt, 1)
 
-    mtEdges = [round(int(x),1) for x in args.mtEdges.split(',')] 
+    mtEdges = [round(int(x),1) for x in args.mtBinEdges.split(',')] 
     nMtBins = len(mtEdges) -1
     ratio = []
     for imt in range(nMtBins):
@@ -844,8 +844,8 @@ def runStudy(charge, outfolder, rootfilename, args):
         h2PassIso = getTH2fromTH3(histoPassIso, f"pt_eta_mt{lowEdge}to{highEdge}_passIso", binStart, binEnd)
         h2FailIso = getTH2fromTH3(histoFailIso, f"pt_eta_mt{lowEdge}to{highEdge}_failIso", binStart, binEnd)
 
-        h2PassIso.SetTitle("Low Iso: m_{T} #in [%d, %d]" % (lowEdge, highEdge))
-        h2FailIso.SetTitle("High Iso: m_{T} #in [%d, %d]" % (lowEdge, highEdge))
+        h2PassIso.SetTitle("Low Iso: %s m_{T} #in [%d, %d]" % (args.met, lowEdge, highEdge))
+        h2FailIso.SetTitle("High Iso: %s m_{T} #in [%d, %d]" % (args.met, lowEdge, highEdge))
         if not args.skipPlot2D:
             drawCorrelationPlot(h2PassIso,
                                 xAxisName,
@@ -863,7 +863,7 @@ def runStudy(charge, outfolder, rootfilename, args):
                                 invertePalette=args.invertePalette, passCanvas=canvas, skipLumi=True)
 
         ratio.append(h2PassIso.Clone(f"fakerateFactor_mt{lowEdge}to{highEdge}"))
-        ratio[imt].SetTitle("m_{T} #in [%d, %d]" % (lowEdge, highEdge))
+        ratio[imt].SetTitle("%s m_{T} #in [%d, %d]" % (args.met, lowEdge, highEdge))
         ratio[imt].Divide(h2FailIso)
         if not args.skipPlot2D:
             drawCorrelationPlot(ratio[imt],
@@ -884,7 +884,7 @@ def runStudy(charge, outfolder, rootfilename, args):
         cropNegativeContent(h2PassIso)
         cropNegativeContent(h2FailIso)
         nominalFakerateFactor = h2PassIso.Clone(f"nominalFakerateFactor_mt{lowEdge}to{highEdge}")
-        nominalFakerateFactor.SetTitle("m_{T} #in [%d, %d]" % (lowEdge, highEdge))        
+        nominalFakerateFactor.SetTitle("%s m_{T} #in [%d, %d]" % (args.met, lowEdge, highEdge))        
         nominalFakerateFactor.Divide(h2FailIso)
 
     # rounding with python is sometimes tricky, add an epsilon to get the desired number
@@ -898,7 +898,7 @@ def runStudy(charge, outfolder, rootfilename, args):
     else:
         nPtBins = h2PassIso.GetNbinsY()
     rangeMaxPt = round(h2PassIso.GetYaxis().GetBinLowEdge(nPtBins+1)+0.01,1)
-    hFRFcorr = ROOT.TH2D(f"fakerateFactorCorrection_{charge}", "m_{T} > %d GeV" % int(args.mtNominalRange.split(',')[1]),
+    hFRFcorr = ROOT.TH2D(f"fakerateFactorCorrection_{charge}", "%s m_{T} > %d GeV" % (args.met, int(args.mtNominalRange.split(',')[1])),
                                  h2PassIso.GetNbinsX(), round(etaLow,1), round(etaHigh,1),
                                  nPtBins, round(ptLow,1), rangeMaxPt)
     hFRFcorrTestCap = copy.deepcopy(hFRFcorr.Clone(f"fakerateFactorCorrTestCap_{charge}"))
@@ -1173,7 +1173,7 @@ def runStudy(charge, outfolder, rootfilename, args):
 
 def runStudyVsDphi(charge, outfolder, args):
 
-    etaLabel = "#eta" if not args.doAbsEta else "|#eta|"
+    etaLabel = "#eta" if not args.absEta else "|#eta|"
     
     xAxisName = args.xAxisName
     yAxisName = args.yAxisName
@@ -1286,34 +1286,35 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("inputfile", type=str, nargs=1)
     parser.add_argument("outputfolder",   type=str, nargs=1)
-    parser.add_argument("-x", "--x-axis-name", dest="xAxisName", default="Muon #eta", help="x axis name")
-    parser.add_argument("-y", "--y-axis-name", dest="yAxisName", default="Muon p_{T} (GeV)", help="y axis name")
-    parser.add_argument("-z", "--z-axis-name", dest="zAxisName", default="m_{T} (GeV)", help="z axis name")
-    parser.add_argument("-c", "--charge", default="plus", choices=["plus", "minus", "both"], help="charge")
-    parser.add_argument("--mt-bin-edges", dest="mtEdges", default="0,10,20,30,40,50,60", type=str, help="Comma-separated list of bin edges for mT")
-    parser.add_argument("--mt-nominal-range", dest="mtNominalRange", default="0,40", type=str, help="Comma-separated list of 2 bin edges for mT, representing the nominal range, used to derive the correction using also option --mt-value-correction")
-    parser.add_argument("--mt-fit-range", dest="mtFitRange", default="0,50", type=str, help="Comma-separated list of 2 bin edges for mT, representing the fit range, might be the same as --mt-nominal-range but not necessarily")
-    parser.add_argument(     '--fit-pol-degree'  , dest='fitPolDegree',      default=3, type=int, help='Degree for polynomial used in the fits')
-    parser.add_argument(     '--max-pt'  , dest='maxPt', default=-1, type=float, help='Do study up to this pt value (-1 means full range)')
-    parser.add_argument("--integral-mt-method", dest="integralMtMethod", default="sideband", choices=["sideband", "fullRange"], type=str, help="How to integrate mT distribution to derive the FRF correction (default is 'sideband', orthogonal to the nominal fake region, 'fullRange' uses the full range)")
-    parser.add_argument(     '--use-binned-correction', dest='useBinnedCorrection', action='store_true',   help='Use binned FRF to derive the correction (mainly for tests, deprecated option)')
-    parser.add_argument(     '--jet-cut', dest='jetCut', action='store_true',   help='Use jet cut to derive the FRF (sample will be more QCD enriched but might bias the FRF)')
-    parser.add_argument(     "--rebin-x", dest="rebinEta", default=1, type=int, help="To rebin x axis (eta)")
-    parser.add_argument(     "--rebin-y", dest="rebinPt", default=1, type=int, help="To rebin y axis (pt)")
-    parser.add_argument(     '--nContours', dest='nContours',    default=51, type=int, help='Number of contours in palette. Default is 51 (let it be odd, so the central strip is white if not using --abs-value and the range is symmetric)')
-    parser.add_argument(     '--palette'  , dest='palette',      default=55, type=int, help='Set palette: default is a built-in one, 55 is kRainbow')
-    parser.add_argument(     '--invertPalette', dest='invertePalette' , action='store_true',   help='Inverte color ordering in palette')
-    parser.add_argument(     '--absolute-eta', dest='doAbsEta' , action='store_true',   help='Do study using histograms folded into absolute value of pseudorapidity')
-    parser.add_argument(     '--skip-plot-2D', dest='skipPlot2D' , action='store_true',   help='skip some 2D plots with FRF vs eta-Mt, pt-mT, and so on')
+    parser.add_argument("-x", "--xAxisName", default="Muon #eta", help="x axis name")
+    parser.add_argument("-y", "--yAxisName", default="Muon p_{T} (GeV)", help="y axis name")
+    parser.add_argument("-z", "--zAxisName", default="m_{T} (GeV)", help="z axis name")
+    parser.add_argument("--met", default="deepMET", choices=["deepMET","PFMET"], help="Met type, which also updates the mT definition when used as axis labels")
+    parser.add_argument("-c", "--charge", default="both", choices=["plus", "minus", "both"], help="charge")
+    parser.add_argument("--mtBinEdges", default="0,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75", type=str, help="Comma-separated list of bin edges for mT")
+    parser.add_argument("--mtNominalRange", default="0,40", type=str, help="Comma-separated list of 2 bin edges for mT, representing the nominal range, used to derive the correction using also option --mt-value-correction")
+    parser.add_argument("--mtFitRange", default="0,40", type=str, help="Comma-separated list of 2 bin edges for mT, representing the fit range, might be the same as --mtNominalRange but not necessarily")
+    parser.add_argument("--fitPolDegree", default=1, type=int, help="Degree for polynomial used in the fits")
+    parser.add_argument("--maxPt", default=50, type=float, help="Do study up to this pt value (-1 means full range)")
+    parser.add_argument("--integralMtMethod", default="sideband", choices=["sideband", "fullRange"], type=str, help="How to integrate mT distribution to derive the FRF correction (default is 'sideband', orthogonal to the nominal fake region, 'fullRange' uses the full range)")
+    parser.add_argument("--useBinnedCorrection", action="store_true",   help="Use binned FRF to derive the correction (mainly for tests, deprecated option)")
+    parser.add_argument("--jetCut", action="store_true",   help="Use jet cut to derive the FRF (sample will be more QCD enriched but might bias the FRF)")
+    parser.add_argument("--rebinx", dest="rebinEta", default=1, type=int, help="To rebin x axis (eta)")
+    parser.add_argument("--rebiny", dest="rebinPt", default=1, type=int, help="To rebin y axis (pt)")
+    parser.add_argument("--nContours", dest="nContours",    default=51, type=int, help="Number of contours in palette. Default is 51 (let it be odd, so the central strip is white if the range is symmetric)")
+    parser.add_argument("--palette"  , dest="palette",      default=87, type=int, help="Set palette: default is a built-in one, 55 is kRainbow")
+    parser.add_argument("--invertPalette", dest="invertePalette" , action="store_true",   help="Inverte color ordering in palette")
+    parser.add_argument("--absEta", dest="absEta" , action="store_true",   help="Do study using histograms folded into absolute value of pseudorapidity")
+    parser.add_argument("--allPlot2D", dest="skipPlot2D" , action="store_false",   help="Do some 2D plots with FRF vs eta-Mt, pt-mT, and so on")
     parser.add_argument("--postfix", default="", type=str, help="Postfix for folder name")
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4], help="Set verbosity level with logging, the larger the more verbose");
-    parser.add_argument(     '--use-qcd-mc', dest='useQCDMC' , action='store_true',   help='Make study using QCD MC instead of data-driven fakes, as a cross check')
+    parser.add_argument("--useQCDMC", action="store_true",   help="Make study using QCD MC instead of data-driven fakes, as a cross check")
     parser.add_argument("--dphiMuonMetCut", type=float, help="Threshold to cut |deltaPhi| > thr*np.pi between muon and met", default=-1.0)
-    parser.add_argument("--dphiStudy", action='store_true',   help='Only do some plots for dphi study skipping the rest')
+    parser.add_argument("--dphiStudy", action="store_true",   help="Only do some plots for dphi study skipping the rest")
     args = parser.parse_args()
 
     logger = logging.setup_logger(os.path.basename(__file__), args.verbose)
-    if args.doAbsEta:
+    if args.absEta:
         logger.error("Option --absolute-eta not implemented correctly yet. Abort")
         quit()
 

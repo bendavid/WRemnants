@@ -193,6 +193,22 @@ namespace wrem {
         Long64_t nbins = h.GetNcells();
         setHistogramError<TH1>(h, nbins, init);
     }
+
+    void setRootHistFromHistError(TH1& h, TH1& hin, bool poisson = false) {
+        Long64_t nbins = h.GetNcells();
+        for (Long64_t globalBin = 0; globalBin <= nbins; globalBin++) {
+            h.SetBinContent(globalBin, poisson ? std::sqrt(hin.GetBinContent(globalBin)) : hin.GetBinError(globalBin));
+            h.SetBinError(globalBin, 0.0);
+        }        
+    }
+
+    void makeHistStatUncertaintyRatio(TH1& h, TH1& hin) {
+        Long64_t nbins = h.GetNcells();
+        for (Long64_t globalBin = 0; globalBin <= nbins; globalBin++) {
+            h.SetBinContent(globalBin, hin.GetBinError(globalBin) / std::sqrt(hin.GetBinContent(globalBin)));
+            h.SetBinError(globalBin, 0.0);
+        }        
+    }
     
     TH2D projectTH2FromTH3(TH3& hist3D, const char* name, size_t binStart, size_t binEnd=0) {
         if (binEnd == 0)
