@@ -18,7 +18,7 @@ data_dir = f"{pathlib.Path(__file__).parent}/data/"
 
 def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSmooth_GtoH.root",
                                         era = None, is_w_like = False, max_pt = np.inf,
-                                        directIsoSFsmoothing=False):
+                                        isoEfficiencySmoothing = False):
     logger.debug(f"Make efficiency helper smooth")
 
     eradict = { "2016PreVFP" : "BtoF",
@@ -52,7 +52,7 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
     for charge, charge_tag in charges.items():
         for eff_type in allEff_types:
             # for iso can use histogram for efficiency variation only in data (the only one we have for now)
-            if directIsoSFsmoothing:
+            if not isoEfficiencySmoothing:
                 nameTag =  "nomiAndAlt"
             else:
                 nameTag = "nomiAndAlt_onlyDataVar" if any(x in eff_type for x in ["iso", "antiiso"]) else "nomiAndAlt"
@@ -137,7 +137,7 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
                                       "boostHist" : None,
                                       "helper" : None},
                        }
-    if directIsoSFsmoothing:
+    if not isoEfficiencySmoothing:
         effStat_manager["sf_iso"] = {"nPtEigenBins" : None,
                                      "nCharges" : None,
                                      "axisLabels" : ["iso", "isonotrig", "antiiso", "antiisonotrig"],
