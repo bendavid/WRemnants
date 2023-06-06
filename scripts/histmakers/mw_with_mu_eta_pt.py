@@ -65,7 +65,17 @@ axis_passMT = common.axis_passMT
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
 nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
 
-unfolding_axes, unfolding_cols = differential.get_pt_eta_axes(args.genBins[0], template_minpt, template_maxpt, args.genBins[1])
+# sum those groups up in post processing (if --applyXsecAndLumiScale is specified)
+groups_to_aggregate = ["Diboson", "Top", "Wtaunu"]
+
+if args.unfolding:
+    unfolding_axes, unfolding_cols = differential.get_pt_eta_axes(args.genBins[0], template_minpt, template_maxpt, args.genBins[1])
+    datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wmunu")
+    groups_to_aggregate.append("BkgWmunu")
+    # currently unfolding only works when histograms are aggregated because dataset names are given twice (histograms would be overwritten)
+    applyXsecAndLumiScale = True
+else:
+    applyXsecAndLumiScale = args.applyXsecAndLumiScale
 
 # axes for study of fakes
 axis_mt_fakes = hist.axis.Regular(120, 0., 120., name = "mt", underflow=False, overflow=True)
@@ -148,10 +158,8 @@ def build_graph(df, dataset):
     isZ = dataset.name in common.zprocs
     isTop = dataset.group == "Top"
     isQCDMC = dataset.group == "QCD"
-    require_prompt = "tau" not in dataset.name # for muon GEN-matching
-
-    unfold = args.unfolding and dataset.name in ["WplusmunuPostVFP", "WminusmunuPostVFP"]
-
+    require_prompt = "tau" not in dataset.name # for muon GEN-matching   
+    
     # disable auxiliary histograms when unfolding to reduce memory consumptions
     auxiliary_histograms = not args.unfolding
 
@@ -167,15 +175,22 @@ def build_graph(df, dataset):
 
     weightsum = df.SumAndCount("weight")
 
-    if unfold:
+    axes = nominal_axes
+    cols = nominal_cols
+    
+    if args.unfolding and dataset.name in ["WplusmunuPostVFP", "WminusmunuPostVFP"]:
         df = unfolding_tools.define_gen_level(df, args.genLevel, dataset.name, mode="wmass")
-        df = unfolding_tools.define_fiducial_space(df, mode="wmass", mtw_min=mtw_min)
-        unfolding_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols)
-        axes = [*nominal_axes, *unfolding_axes] 
-        cols = [*nominal_cols, *unfolding_cols]
-    else:
-        axes = nominal_axes
-        cols = nominal_cols
+
+        if hasattr(dataset, "out_of_acceptance"):
+            logger.debug("Reject events in fiducial phase space")
+            df = unfolding_tools.select_fiducial_space(df, mode="wmass", pt_min=args.pt[1], pt_max=args.pt[2], mtw_min=mtw_min, accept=False)
+        else:
+            logger.debug("Select events in fiducial phase space")
+            df = unfolding_tools.select_fiducial_space(df, mode="wmass", pt_min=args.pt[1], pt_max=args.pt[2], mtw_min=mtw_min, accept=True)
+
+            unfolding_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols)
+            axes = [*nominal_axes, *unfolding_axes] 
+            cols = [*nominal_cols, *unfolding_cols]
 
     df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
     #df = df.Filter("event % 2 == 1") # test with odd/even events
@@ -320,10 +335,6 @@ def build_graph(df, dataset):
         if not args.noRecoil:
             df = recoilHelper.add_recoil_unc_W(df, results, dataset, cols, axes, "nominal")
 
-        if apply_theory_corr:
-            results.extend(theory_tools.make_theory_corr_hists(df, "nominal", axes, cols, 
-                corr_helpers[dataset.name], args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly, isW = isW)
-            )
         if args.muonScaleVariation == 'smearingWeights' and (isW or isZ): 
             nominal_cols_gen, nominal_cols_gen_smeared = muon_calibration.make_alt_reco_and_gen_hists(df, results, axes, cols, reco_sel_GF)
             if args.validationHists: 
@@ -587,8 +598,10 @@ def build_graph(df, dataset):
 
     return results, weightsum
 
-resultdict = narf.build_and_run(datasets, build_graph)
+resultdict = narf.build_and_run(datasets, build_graph, scale_xsc_lumi=applyXsecAndLumiScale, groups_to_aggregate = groups_to_aggregate)
+
 if not args.onlyMainHistograms and args.muonScaleVariation == 'smearingWeights':
+    logger.debug("Apply smaringWeights")
     muon_calibration.transport_smearing_weights_to_reco(resultdict, nonClosureScheme = args.nonClosureScheme)
     muon_calibration.muon_scale_variation_from_manual_shift(resultdict)
 

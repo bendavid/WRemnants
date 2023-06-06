@@ -67,7 +67,16 @@ gen_axes = {
     "absYVGen": hist.axis.Variable([0.0, 0.4, 0.8, 1.2, 1.6, 2.0, 2.4, 2.8, 3.6], name = "absYVGen", underflow=False, overflow=True),    # "ATLAS" binning
 }
 
-unfolding_axes, unfolding_cols, unfolding_selections = differential.get_dilepton_axes(args.genVars, gen_axes)
+groups_to_aggregate = ["Others"]
+
+if args.unfolding:
+    unfolding_axes, unfolding_cols, unfolding_selections = differential.get_dilepton_axes(args.genVars, gen_axes)
+    datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Zmumu")
+    groups_to_aggregate.append("BkgZmumu")
+    # currently unfolding only works when histograms are aggregated because dataset names are given twice (histograms would be overwritten)
+    applyXsecAndLumiScale = True
+else:
+    applyXsecAndLumiScale = args.applyXsecAndLumiScale
 
 # define helpers
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
@@ -108,8 +117,6 @@ def build_graph(df, dataset):
     isW = dataset.name in common.wprocs
     isZ = dataset.name in common.zprocs
 
-    unfold = args.unfolding and dataset.name == "ZmumuPostVFP"
-
     cvh_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
     jpsi_helper = data_jpsi_crctn_helper if dataset.is_data else mc_jpsi_crctn_helper
 
@@ -120,17 +127,22 @@ def build_graph(df, dataset):
 
     weightsum = df.SumAndCount("weight")
 
-    if unfold:
-        df = unfolding_tools.define_gen_level(df, args.genLevel, dataset.name, mode="dilepton")
-        df = unfolding_tools.define_fiducial_space(df, mode="dilepton", 
-            pt_min=args.pt[1], pt_max=args.pt[2], mass_min=mass_min, mass_max=mass_max, selections=unfolding_selections)
-        unfolding_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols)
+    axes = nominal_axes
+    cols = nominal_cols
 
-        axes = [*nominal_axes, *unfolding_axes] 
-        cols = [*nominal_cols, *unfolding_cols]
-    else:
-        axes = nominal_axes
-        cols = nominal_cols
+    if args.unfolding and dataset.name == "ZmumuPostVFP":
+        df = unfolding_tools.define_gen_level(df, args.genLevel, dataset.name, mode="dilepton")
+
+        if hasattr(dataset, "out_of_acceptance"):
+            logger.debug("Reject events in fiducial phase space")
+            df = unfolding_tools.select_fiducial_space(df, mode="dilepton", pt_min=args.pt[1], pt_max=args.pt[2], mass_min=mass_min, mass_max=mass_max, selections=unfolding_selections, accept=False)
+        else:
+            logger.debug("Select events in fiducial phase space")
+            df = unfolding_tools.select_fiducial_space(df, mode="dilepton", pt_min=args.pt[1], pt_max=args.pt[2], mass_min=mass_min, mass_max=mass_max, selections=unfolding_selections, accept=True)
+
+            unfolding_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols)
+            axes = [*nominal_axes, *unfolding_axes] 
+            cols = [*nominal_cols, *unfolding_cols]
 
     df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
 
@@ -211,6 +223,6 @@ def build_graph(df, dataset):
     
     return results, weightsum
 
-resultdict = narf.build_and_run(datasets, build_graph)
+resultdict = narf.build_and_run(datasets, build_graph, scale_xsc_lumi=applyXsecAndLumiScale, groups_to_aggregate = groups_to_aggregate)
 
 output_tools.write_analysis_output(resultdict, f"{os.path.basename(__file__).replace('py', 'hdf5')}", args, update_name=not args.forceDefaultName)

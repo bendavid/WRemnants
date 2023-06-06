@@ -1,5 +1,21 @@
 from utilities import differential
 from wremnants import syst_tools, theory_tools
+from copy import deepcopy
+
+def add_out_of_acceptance(datasets, group):
+    # Copy datasets from specified group to make out of acceptance contribution
+    datasets_ooa = []
+    for dataset in datasets:
+        if dataset.group == group:
+            ds = deepcopy(dataset)
+
+            ds.out_of_acceptance = True
+            ds.group = "Bkg" + group
+            ds.name = dataset.name
+
+            datasets_ooa.append(ds)
+
+    return datasets + datasets_ooa
 
 def define_gen_level(df, gen_level, dataset_name, mode="wmass"):
     # gen level definitions
@@ -36,8 +52,8 @@ def define_gen_level(df, gen_level, dataset_name, mode="wmass"):
 
     elif gen_level == "postFSR":
 
-        df = df.Define("postFSRmus", "GenPart_status == 1 && (GenPart_statusFlags & 1) && GenPart_pdgId == 13")
-        df = df.Define("postFSRantimus", "GenPart_status == 1 && (GenPart_statusFlags & 1) && GenPart_pdgId == -13")
+        df = df.Define("postFSRmus", "GenPart_status == 1 && (GenPart_statusFlags & 1) && (GenPart_pdgId == 13 || GenPart_pdgId == 14)")
+        df = df.Define("postFSRantimus", "GenPart_status == 1 && (GenPart_statusFlags & 1) && (GenPart_pdgId == -13 || GenPart_pdgId == -14)")
         df = df.Define("postFSRmuIdx", "ROOT::VecOps::ArgMax(GenPart_pt[postFSRmus])")
         df = df.Define("postFSRantimuIdx", "ROOT::VecOps::ArgMax(GenPart_pt[postFSRantimus])")
 
@@ -72,12 +88,15 @@ def define_gen_level(df, gen_level, dataset_name, mode="wmass"):
 
     return df
 
-def define_fiducial_space(df, mode="wmass", pt_min=26, pt_max=55, mass_min=60, mass_max=120, mtw_min=40, selections=[]):
-    # Define a fiducial phase space where out of acceptance contribution is stored for additional cuts 
-    #   (those on the unfolding axes are not necessary)
+def select_fiducial_space(df, accept=True, mode="wmass", pt_min=26, pt_max=55, mass_min=60, mass_max=120, mtw_min=40, selections=[]):
+    # Define a fiducial phase space and either select events inside/outside
+    # accept = True: select events in fiducial phase space 
+    # accept = False: reject events in fiducial pahse space
     
     if mode == "wmass":
-        selection = f"(mTWGen > {mtw_min})"
+        selection = f"""
+            (ptGen > {pt_min}) && (ptGen < {pt_max}) 
+            && (absEtaGen < 2.4)"""
     elif mode in ["wlike", "dilepton"]:
         selection = f"""
             (fabs(muGen.eta()) < 2.4) && (fabs(antimuGen.eta()) < 2.4) 
@@ -85,17 +104,21 @@ def define_fiducial_space(df, mode="wmass", pt_min=26, pt_max=55, mass_min=60, m
             && (muGen.pt() < {pt_max}) && (antimuGen.pt() < {pt_max}) 
             && (massVGen > {mass_min}) && (massVGen < {mass_max})
             """
-
-        if mode == "wlike":
-            selection += f"&& (mTWGen > {mtw_min})"
-
     else:
         raise NotImplementedError(f"No fiducial phase space definiton found for mode '{mode}'!") 
+
+    if mode in ["wmass", "wlike"]:
+        selection += f" && (mTWGen > {mtw_min})"
 
     for sel in selections:
         selection += f" && ({sel})"
 
     df = df.Define("fiducial", selection)
+
+    if accept:
+        df = df.Filter("fiducial")
+    else:
+        df = df.Filter("fiducial == 0")
 
     return df        
 
