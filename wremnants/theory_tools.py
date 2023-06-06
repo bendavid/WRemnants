@@ -324,9 +324,9 @@ def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_cen
             continue
         
         if i == 0 and modify_central_weight:
-            nominal_uncorr = df.HistoBoost(f"{name}_uncorr", axes, [*cols, "nominal_weight_uncorr"], storage=hist.storage.Double())
-            res.append(nominal_uncorr)
-            res.append(df.HistoBoost("weight_uncorr", [hist.axis.Regular(100, -2, 2)], ["nominal_weight_uncorr"], storage=hist.storage.Double()))
+            res.append(df.HistoBoost(f"{name}_uncorr", axes, [*cols, "nominal_weight_uncorr"], storage=hist.storage.Double()))
+            if name == "nominal":
+                res.append(df.HistoBoost(f"weight_uncorr", [hist.axis.Regular(100, -2, 2)], ["nominal_weight_uncorr"], storage=hist.storage.Double()))
 
         hist_name = f"{name}_{generator}Corr"
         unc = df.HistoBoost(hist_name, axes, [*cols, f"{generator}Weight_tensor"], tensor_axes=helpers[generator].tensor_axes[-1:], storage=hist.storage.Double())
