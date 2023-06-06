@@ -439,7 +439,7 @@ def main(args,xnorm=False):
         else:
             cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
 
-    cardTool.writeOutput(args=args, xnorm=xnorm, forceNonzero=False)
+    cardTool.writeOutput(args=args, xnorm=xnorm, forceNonzero=not args.unfold, check_systs=not args.unfold)
     logger.info(f"Output stored in {outfolder}")
     
 if __name__ == "__main__":
