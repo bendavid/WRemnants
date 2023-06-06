@@ -473,12 +473,13 @@ class CardTool(object):
         for ax in decorrByBinDict.keys():
             decorrDict = decorrByBinDict[ax]
             decorrSystLabel = decorrDict["label"]
+            logger.info(f"Decorrelating syst {name} by {ax} bins using {decorrSystLabel}")
             if ax != "xy":
                 for ibin in range(len(decorrDict["edges"]) -1):
                     upDown = "Up" if name.endswith("Up") else "Down" if name.endswith("Down") else ""
-                    newname = name.rstrip(upDown)
+                    newname = name[:-len(upDown)] if len(upDown) else name[:]
                     newname = f"{newname}_{decorrSystLabel}{ibin}{upDown}"
-                    logger.warning(f"Decorrelating syst {name} by {ax} bins: preparing new histogram {newname}")
+                    logger.debug(f"Decorrelating syst {name} by {ax} bins: preparing new histogram {newname}")
                     # FIXME: do not assume we can only have eta and pt axes (or eta-pt when implemented)
                     # bin ID are retrieved adding some small constants to bin edges, low/high edge is increased/decreased
                     if ax == "x":
@@ -506,7 +507,7 @@ class CardTool(object):
                         ybinLow = hnomiroot.GetYaxis().FindFixBin(edgesY[iy]+0.001)
                         ybinHigh = hnomiroot.GetYaxis().FindFixBin(edgesY[iy+1]-0.001)
                         upDown = "Up" if name.endswith("Up") else "Down" if name.endswith("Down") else ""
-                        newname = name.rstrip(upDown)
+                        newname = name[:-len(upDown)] if len(upDown) else name[:]
                         newname = f"{newname}_{decorrSystLabel[0]}{ix}{decorrSystLabel[1]}{iy}{upDown}"
                         logger.warning(f"Decorrelating syst {name} by {ax} bins: preparing new histogram {newname}")
                         hsystrootDecorr = copy.deepcopy(hnomiroot.Clone(newname))

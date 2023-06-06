@@ -22,6 +22,7 @@ ROOT.gROOT.SetBatch(True)
 ROOT.PyConfig.IgnoreCommandLineOptions = True
 
 from copy import *
+import wremnants
 
 from scripts.analysisTools.plotUtils.utility import *
 
@@ -128,6 +129,29 @@ def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
     stack_pt.Write()
     den2D.Write()
 
+    # some plots to check statistical uncertainties in MC stack
+    hMCstat = copy.deepcopy(den2D.Clone("hMCstat"))
+    hMCstat.SetTitle("Sum of predicted processes")
+    ROOT.wrem.makeHistStatUncertaintyRatio(hMCstat, den2D)
+    drawCorrelationPlot(hMCstat, xAxisName, yAxisName, "#sqrt{#sum w^{2}} / #sqrt{N}::1.0,1.5",
+                        f"MCstatOverPoissonUncRatio_allProcs_{chargeLabel}", plotLabel="ForceTitle", outdir=outdir_dataMC,
+                        palette=57, passCanvas=canvas, drawOption="COLZ0", skipLumi=True, zTitleOffSet=1.3)
+    for h in hmc2D:
+        if "Wmunu" in h.GetName():
+            hMCstat_Wmunu = copy.deepcopy(h.Clone("hMCstat_Wmunu"))
+            hMCstat_Wmunu.SetTitle("Wmunu " + chargeLabel)
+            ROOT.wrem.makeHistStatUncertaintyRatio(hMCstat_Wmunu, h)
+            drawCorrelationPlot(hMCstat_Wmunu, xAxisName, yAxisName, "#sqrt{#sum w^{2}} / #sqrt{N}",
+                                f"MCstatOverPoissonUncRatio_Wmunu_{chargeLabel}", plotLabel="ForceTitle", outdir=outdir_dataMC,
+                                palette=57, passCanvas=canvas, drawOption="COLZ0", skipLumi=True, zTitleOffSet=1.3)
+        elif "Fake" in h.GetName():
+            hMCstat_Fake = copy.deepcopy(h.Clone("hMCstat_Fake"))
+            hMCstat_Fake.SetTitle("Fake " + chargeLabel)
+            ROOT.wrem.makeHistStatUncertaintyRatio(hMCstat_Fake, h)
+            drawCorrelationPlot(hMCstat_Fake, xAxisName, yAxisName, "#sqrt{#sum w^{2}} / #sqrt{N}::2,7",
+                                f"MCstatOverPoissonUncRatio_Fake_{chargeLabel}", plotLabel="ForceTitle", outdir=outdir_dataMC,
+                                palette=57, passCanvas=canvas, drawOption="COLZ0", skipLumi=True, zTitleOffSet=1.3)
+    
     ratio2D.Divide(den2D)
     ratio2D.Write()
 
@@ -168,6 +192,7 @@ def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
 
     # plot unrolled ratio to better see how it looks like
     ratio_unrolled = unroll2Dto1D(ratio2D, newname=f"{ratio2D.GetName()}_unrolled")
+    ROOT.wrem.setRootHistogramError(ratio_unrolled, 0.0)
     drawSingleTH1(ratio_unrolled, XlabelUnroll, f"{dataTitle}/pred. ratio", "muon_etaPtUnrolledRatio",
                   outdir_dataMC, drawLineLowerPanel="", lowerPanelHeight=0.0, labelRatioTmp="", 
                   passCanvas=canvasWide,

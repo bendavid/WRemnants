@@ -6,7 +6,6 @@
 
 import re
 import os, os.path
-import logging
 import argparse
 import shutil
 
@@ -123,6 +122,8 @@ if __name__ == "__main__":
     parser.add_argument(     '--source', dest='source' , type=str, default="wrem", choices=["wrem", "cmg"],  help='Select which tool was used to make histograms (cmg=CMGTools or wrem=WRemnants), the naming convention is different for processes and systematics')
     parser.add_argument('-c','--charge', dest='charge', default=None, choices=["plus", "minus"], type=str, help='For source=wrem, needs to specify the charge, since all histograms are in the same file')
     parser.add_argument(     '--systPostfix', type=str, default=None, help="Postfix for plot showing some syst variations")
+    parser.add_argument(     '--fakeSystToW', default=False , action='store_true',   help='Make additional plots where systs on fakes are translated into signal variation')
+    parser.add_argument(     '--sumFakeAndW', default=False , action='store_true',   help='In addition to other plots, and as alternative to --fakeSystToW, sum Fake and W and show variations from varying signal or Fake only')
     args = parser.parse_args()
 
     doUnrolled = (args.plot == "unrolled") or (args.plot == "all")
@@ -144,12 +145,24 @@ if __name__ == "__main__":
     inputsysts = args.systematics.split(',')
     regexp_syst = re.compile(args.systematics.replace(',','|'))
 
+    transformFakeIntoSignalVariation = False
+    if args.fakeSystToW:
+        if all(x in processes for x in ["Wmunu", "Fake"]):
+            transformFakeIntoSignalVariation = True
+        else:
+            print("--fakeSystToW requires both Fake and Wmunu histograms")
+            quit()
+    if args.sumFakeAndW:
+        if not all(x in processes for x in ["Wmunu", "Fake"]):
+            print("--sumFakeAndW requires both Fake and Wmunu histograms")
+            quit()
+            
     nominals = {p : None for p in processes}
     #print(nominals)
     ratios = {p : [] for p in processes}
 
     canvas = ROOT.TCanvas("canvas","",900,800) 
-    canvas1D = ROOT.TCanvas("canvas","",800,900) 
+    canvas1D = ROOT.TCanvas("canvas","",800,1000) 
 
     canvas_unroll = ROOT.TCanvas("canvas_unroll","",3000,800) 
     leftMargin = 0.06
@@ -203,24 +216,41 @@ if __name__ == "__main__":
     systLeg  = {p : [] for p in processes}
     systList_eta = {p : [] for p in processes}
     systList_pt  = {p : [] for p in processes}
-    for p in processes:
+    systList_FakeOnSignal = []
+    systList_eta_FakeOnSignal = []
+    systList_pt_FakeOnSignal = []
+    systList_WmunuAndFake = []
+    systList_WmunuAndFake_eta = []
+    systList_WmunuAndFake_pt = []
+    for ip,p in enumerate(processes):
         systList[p].append(unroll2Dto1D(nominals[p], newname=f"unrolled_{nominals[p].GetName()}", cropNegativeBins=False))
         systLeg[p].append(p)
         systList_eta[p].append(nominals[p].ProjectionX(f"{nominals[p].GetName()}_eta", 1, nominals[p].GetNbinsY(), "e"))
         systList_pt[p].append( nominals[p].ProjectionY(f"{nominals[p].GetName()}_pt",  1, nominals[p].GetNbinsX(), "e"))
+    if args.sumFakeAndW:
+        systList_WmunuAndFake.append(copy.deepcopy(systList["Wmunu"][-1].Clone("unrolled_WmunuAndFake")))
+        systList_WmunuAndFake_eta.append(copy.deepcopy(systList_eta["Wmunu"][-1].Clone("WmunuAndFake_eta")))
+        systList_WmunuAndFake_pt.append(copy.deepcopy(systList_pt["Wmunu"][-1].Clone("WmunuAndFake_pt")))
+        systList_WmunuAndFake[-1].Add(systList["Fake"][-1])
+        systList_WmunuAndFake_eta[-1].Add(systList_eta["Fake"][-1])
+        systList_WmunuAndFake_pt[-1].Add(systList_pt["Fake"][-1])
+
     # now make a full loop for systematics
+        
     for k in f.GetListOfKeys():
         name = k.GetName()
         if isWrem and not name.endswith(args.charge): continue
         # check name also allowing for perfect matching
         if not any(x in name for x in inputsysts) and not regexp_syst.match(name): continue
 
+        # TODO: find more general way to split name, if process or syst name has underscores
         if isWrem:
             tokens = name.split("_")
             pname = f"{tokens[1]}"
             if pname not in processes: continue
             sname = f"{'_'.join(tokens[2:-1])}"
-            systLeg[pname].append(sname)
+            snameLeg = sname.replace("effStatSmooth", "effStat").replace("qall","")
+            systLeg[pname].append(snameLeg)
             sname += f"_{args.charge}"
         else:
             tokens = name.split("__") # remove "x_" and name of nuisance
@@ -235,6 +265,19 @@ if __name__ == "__main__":
         systList[pname].append(unroll2Dto1D(alternate, newname=f"unrolled_{alternate.GetName()}", cropNegativeBins=False))
         systList_eta[pname].append(alternate.ProjectionX(f"{alternate.GetName()}_eta", 1, alternate.GetNbinsY(), "e"))
         systList_pt[pname].append( alternate.ProjectionY(f"{alternate.GetName()}_pt",  1, alternate.GetNbinsX(), "e"))
+        if transformFakeIntoSignalVariation and pname == "Fake":
+            systList_FakeOnSignal.append(copy.deepcopy(systList[pname][-1].Clone(f"unrolled_{alternate.GetName()}_FakeOnSignal")))
+            systList_eta_FakeOnSignal.append(copy.deepcopy(systList_eta[pname][-1].Clone(f"{alternate.GetName()}_eta_FakeOnSignal")))
+            systList_pt_FakeOnSignal.append(copy.deepcopy(systList_pt[pname][-1].Clone(f"{alternate.GetName()}_pt_FakeOnSignal")))
+            # subtract nominal
+            systList_FakeOnSignal[-1].Add(systList["Fake"][0], -1.0)
+            systList_eta_FakeOnSignal[-1].Add(systList_eta["Fake"][0], -1.0)
+            systList_pt_FakeOnSignal[-1].Add(systList_pt["Fake"][0], -1.0)
+            # add nominal signal
+            systList_FakeOnSignal[-1].Add(systList["Wmunu"][0])
+            systList_eta_FakeOnSignal[-1].Add(systList_eta["Wmunu"][0])
+            systList_pt_FakeOnSignal[-1].Add(systList_pt["Wmunu"][0])
+                
         ratio = alternate.Clone(f"systRatio_{sname}")
         if args.plotSystOriginal:
             if do2D:
@@ -283,20 +326,97 @@ if __name__ == "__main__":
         else:
             drawNTH1(systList[p], systLeg[p], "Unrolled eta-p_{T} bin", "Events", f"nominalAndSyst_{p}{systPostfix}", outdir,
                      leftMargin=0.06, rightMargin=0.01, labelRatioTmp="syst/nomi",
-                     legendCoords="0.1,0.9,0.82,0.9;5", lowerPanelHeight=0.5, skipLumi=True, passCanvas=canvas_unroll,
+                     legendCoords="0.06,0.99,0.82,0.98;4", lowerPanelHeight=0.5, skipLumi=True, passCanvas=canvas_unroll,
                      drawVertLines="{a},{b}".format(a=nominals[p].GetNbinsY(),b=nominals[p].GetNbinsX()),
                      textForLines=ptBinRanges, transparentLegend=False,
                      onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True, setOnlyLineRatio=True, lineWidth=1)
             #
             drawNTH1(systList_eta[p], systLeg[p], "Muon eta", "Events", f"nominalAndSyst_{p}{systPostfix}_projEta", outdir,
-                     topMargin=0.14, leftMargin=0.16, rightMargin=0.05, labelRatioTmp="syst/nomi",
-                     legendCoords="0.02,0.98,0.91,0.99;3", lowerPanelHeight=0.5, skipLumi=True, passCanvas=canvas1D,
+                     topMargin=0.25, leftMargin=0.16, rightMargin=0.05, labelRatioTmp="syst/nomi",
+                     legendCoords="0.01,0.99,0.80,0.99;2", lowerPanelHeight=0.4, skipLumi=True, passCanvas=canvas1D,
                      transparentLegend=False,
                      onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True, setOnlyLineRatio=True, lineWidth=2)
             #
             drawNTH1(systList_pt[p], systLeg[p], "Muon p_{T} (GeV)", "Events", f"nominalAndSyst_{p}{systPostfix}_projPt", outdir,
-                     topMargin=0.14, leftMargin=0.16, rightMargin=0.05, labelRatioTmp="syst/nomi",
-                     legendCoords="0.02,0.98,0.91,0.99;3", lowerPanelHeight=0.45, skipLumi=True, passCanvas=canvas1D,
+                     topMargin=0.25, leftMargin=0.16, rightMargin=0.05, labelRatioTmp="syst/nomi",
+                     legendCoords="0.01,0.99,0.80,0.99;2", lowerPanelHeight=0.4, skipLumi=True, passCanvas=canvas1D,
                      transparentLegend=False,
                      onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True, setOnlyLineRatio=True, lineWidth=2)
+            if transformFakeIntoSignalVariation and p == "Wmunu":
+                histFakesOnSignal = [systList[p][0]] + [x for x in systList_FakeOnSignal]
+                drawNTH1(histFakesOnSignal, systLeg[p], "Unrolled eta-p_{T} bin", "Events",
+                         f"nominalAndSyst_{p}{systPostfix}_FakeOnSignal", outdir,
+                         leftMargin=0.06, rightMargin=0.01, labelRatioTmp="syst/nomi",
+                         legendCoords="0.06,0.99,0.82,0.98;4", lowerPanelHeight=0.5, skipLumi=True, passCanvas=canvas_unroll,
+                         drawVertLines="{a},{b}".format(a=nominals[p].GetNbinsY(),b=nominals[p].GetNbinsX()),
+                         textForLines=ptBinRanges, transparentLegend=False,
+                         onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True,
+                         setOnlyLineRatio=True, lineWidth=1)
+                #
+                histFakesOnSignal = [systList_eta[p][0]] + [x for x in systList_eta_FakeOnSignal]
+                drawNTH1(histFakesOnSignal, systLeg[p], "Muon eta", "Events",
+                         f"nominalAndSyst_{p}{systPostfix}_projEta_FakeOnSignal", outdir,
+                         topMargin=0.25, leftMargin=0.16, rightMargin=0.05, labelRatioTmp="syst/nomi",
+                         legendCoords="0.01,0.99,0.80,0.99;2", lowerPanelHeight=0.4, skipLumi=True, passCanvas=canvas1D,
+                         transparentLegend=False,
+                         onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True,
+                         setOnlyLineRatio=True, lineWidth=2)
+                #
+                histFakesOnSignal = [systList_pt[p][0]] + [x for x in systList_pt_FakeOnSignal]
+                drawNTH1(histFakesOnSignal, systLeg[p], "Muon p_{T} (GeV)", "Events",
+                         f"nominalAndSyst_{p}{systPostfix}_projPt_FakeOnSignal", outdir,
+                         topMargin=0.25, leftMargin=0.16, rightMargin=0.05, labelRatioTmp="syst/nomi",
+                         legendCoords="0.01,0.99,0.80,0.99;2", lowerPanelHeight=0.4, skipLumi=True, passCanvas=canvas1D,
+                         transparentLegend=False,
+                         onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True,
+                         setOnlyLineRatio=True, lineWidth=2)
+
+    if args.sumFakeAndW:
+        # create syst vars
+        systLeg_WmunuAndFake = ["Wmunu + Fake"]
+        for i in range(1, len(systList["Wmunu"])):
+            systList_WmunuAndFake.append(copy.deepcopy(systList["Fake"][0].Clone(f"unrolled_WmunuAndFake_syst{i}Wmunu")))
+            systList_WmunuAndFake_eta.append(copy.deepcopy(systList_eta["Fake"][0].Clone(f"WmunuAndFake_syst{i}Wmunu_eta")))
+            systList_WmunuAndFake_pt.append(copy.deepcopy(systList_pt["Fake"][0].Clone(f"WmunuAndFake_syst{i}Wmunu_pt")))
+            # add Signal var
+            systList_WmunuAndFake[-1].Add(systList["Wmunu"][i])
+            systList_WmunuAndFake_eta[-1].Add(systList_eta["Wmunu"][i])
+            systList_WmunuAndFake_pt[-1].Add(systList_pt["Wmunu"][i])
+            systLeg_WmunuAndFake.append(systLeg["Wmunu"][i] + " (W)")
+        for i in range(1, len(systList["Fake"])):
+            systList_WmunuAndFake.append(copy.deepcopy(systList["Wmunu"][0].Clone(f"unrolled_WmunuAndFake_syst{i}Fake")))
+            systList_WmunuAndFake_eta.append(copy.deepcopy(systList_eta["Wmunu"][0].Clone(f"WmunuAndFake_syst{i}Fake_eta")))
+            systList_WmunuAndFake_pt.append(copy.deepcopy(systList_pt["Wmunu"][0].Clone(f"WmunuAndFake_syst{i}Fake_pt")))
+            # add Fake var
+            systList_WmunuAndFake[-1].Add(systList["Fake"][i])
+            systList_WmunuAndFake_eta[-1].Add(systList_eta["Fake"][i])
+            systList_WmunuAndFake_pt[-1].Add(systList_pt["Fake"][i])
+            systLeg_WmunuAndFake.append(systLeg["Fake"][i] + " (Fake)")
+            
+        drawNTH1(systList_WmunuAndFake, systLeg_WmunuAndFake, "Unrolled eta-p_{T} bin", "Events",
+                 f"nominalAndSyst_{systPostfix}_WmunuAndFake", outdir,
+                 leftMargin=0.06, rightMargin=0.01, labelRatioTmp="syst/nomi",
+                 legendCoords="0.06,0.99,0.82,0.98;4", lowerPanelHeight=0.5, skipLumi=True, passCanvas=canvas_unroll,
+                 drawVertLines="{a},{b}".format(a=nominals[p].GetNbinsY(),b=nominals[p].GetNbinsX()),
+                 textForLines=ptBinRanges, transparentLegend=False,
+                 onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True,
+                 setOnlyLineRatio=True, lineWidth=1)
+        #
+        drawNTH1(systList_WmunuAndFake_eta, systLeg_WmunuAndFake, "Muon eta", "Events",
+                 f"nominalAndSyst_{systPostfix}_projEta_WmunuAndFake", outdir,
+                 topMargin=0.25, leftMargin=0.16, rightMargin=0.05, labelRatioTmp="syst/nomi",
+                 legendCoords="0.01,0.99,0.80,0.99;2", lowerPanelHeight=0.4, skipLumi=True, passCanvas=canvas1D,
+                 transparentLegend=False,
+                 onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True,
+                 setOnlyLineRatio=True, lineWidth=2)
+        #
+        drawNTH1(systList_WmunuAndFake_pt, systLeg_WmunuAndFake, "Muon p_{T} (GeV)", "Events",
+                 f"nominalAndSyst_{systPostfix}_projPt_WmunuAndFake", outdir,
+                 topMargin=0.25, leftMargin=0.16, rightMargin=0.05, labelRatioTmp="syst/nomi",
+                 legendCoords="0.01,0.99,0.80,0.99;2", lowerPanelHeight=0.4, skipLumi=True, passCanvas=canvas1D,
+                 transparentLegend=False,
+                 onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True,
+                 setOnlyLineRatio=True, lineWidth=2)
+        #
+                
     print()
