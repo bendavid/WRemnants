@@ -30,6 +30,14 @@ def make_datagroups_2016(input_file, combine=False, pseudodata_pdfset = None, ap
         color = "lightblue",
         selectOp = sigOp,
     ) 
+    if "BkgZmumu" in [y.group for y in dg.datasets.values()]:
+        # for unfolding (out of acceptance background)
+        dg.addGroup("BkgZmumu",
+            members = list(filter(lambda y: y.group == "BkgZmumu", dg.datasets.values())),
+            label = r"Z$\to\mu\mu$",
+            color = "lightblue",
+            selectOp = sigOp,
+        )
     dg.addGroup("Ztautau",
         members = dg.getSafeListFromDataset(["ZtautauPostVFP"]),
         label = r"Z$\to\tau\tau$",
@@ -44,13 +52,21 @@ def make_datagroups_2016(input_file, combine=False, pseudodata_pdfset = None, ap
         )
     if dg.wmass:
         dg.addGroup("Wmunu",
-            members = dg.getSafeListFromDataset(["WminusmunuPostVFP", "WplusmunuPostVFP"]),
+            members = list(filter(lambda y: y.group == "Wmunu", dg.datasets.values())),
             label = r"W$^{\pm}\to\mu\nu$",
             color = "darkred",
             selectOp = sigOp,
         )
+        if "BkgWmunu" in [y.group for y in dg.datasets.values()]:
+            # for unfolding (out of acceptance background)
+            dg.addGroup("BkgWmunu",
+                members = list(filter(lambda y: y.group == "BkgWmunu", dg.datasets.values())),
+                label = r"W$^{\pm}\to\mu\nu$",
+                color = "darkred",
+                selectOp = sigOp,
+            )
         dg.addGroup("Wtaunu",
-            members = dg.getSafeListFromDataset(["WminustaunuPostVFP", "WplustaunuPostVFP"]),
+            members = list(filter(lambda y: y.group == "Wtaunu", dg.datasets.values())),
             label = r"W$^{\pm}\to\tau\nu$",
             color = "orange",
             selectOp = sigOp,

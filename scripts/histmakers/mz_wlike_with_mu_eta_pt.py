@@ -54,7 +54,17 @@ axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, nam
 nominal_axes = [axis_eta, axis_pt, axis_charge]
 nominal_cols = ["trigMuons_eta0", "trigMuons_pt0", "trigMuons_charge0"]
 
-unfolding_axes, unfolding_cols = differential.get_pt_eta_charge_axes(template_npt, template_minpt, template_maxpt, args.genBins[1])
+# sum those groups up in post processing (if --applyXsecAndLumiScale is specified)
+groups_to_aggregate = ["Others"]
+
+if args.unfolding:
+    unfolding_axes, unfolding_cols = differential.get_pt_eta_charge_axes(template_npt, template_minpt, template_maxpt, args.genBins[1])
+    datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Zmumu")
+    groups_to_aggregate.append("BkgZmumu")
+    # currently unfolding only works when histograms are aggregated because dataset names are given twice (histograms would be overwritten)
+    applyXsecAndLumiScale = True
+else:
+    applyXsecAndLumiScale = args.applyXsecAndLumiScale
 
 # axes for mT measurement
 axis_mt = hist.axis.Regular(200, 0., 200., name = "mt",underflow=False, overflow=True)
@@ -104,7 +114,6 @@ def build_graph(df, dataset):
     results = []
     isW = dataset.name in common.wprocs
     isZ = dataset.name in common.zprocs
-    unfold = args.unfolding and dataset.name == "ZmumuPostVFP"
     apply_theory_corr = args.theoryCorr and dataset.name in corr_helpers
 
     if dataset.is_data:
@@ -114,17 +123,22 @@ def build_graph(df, dataset):
 
     weightsum = df.SumAndCount("weight")
 
-    if unfold:
-        df = unfolding_tools.define_gen_level(df, args.genLevel, dataset.name, mode="wlike")
-        df = unfolding_tools.define_fiducial_space(df, mode="wlike", 
-            pt_min=args.pt[1], pt_max=args.pt[2], mass_min=mass_min, mass_max=mass_max, mtw_min=mtw_min)
-        unfolding_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols)
+    axes = nominal_axes
+    cols = nominal_cols
 
-        axes = [*nominal_axes, *unfolding_axes] 
-        cols = [*nominal_cols, *unfolding_cols]
-    else:
-        axes = nominal_axes
-        cols = nominal_cols
+    if args.unfolding and dataset.name == "ZmumuPostVFP":
+        df = unfolding_tools.define_gen_level(df, args.genLevel, dataset.name, mode="wlike")
+
+        if hasattr(dataset, "out_of_acceptance"):
+            logger.debug("Reject events in fiducial phase space")
+            df = unfolding_tools.select_fiducial_space(df, mode="wlike", pt_min=args.pt[1], pt_max=args.pt[2], mass_min=mass_min, mass_max=mass_max, mtw_min=mtw_min, accept=False)
+        else:
+            logger.debug("Select events in fiducial phase space")
+            df = unfolding_tools.select_fiducial_space(df, mode="wlike", pt_min=args.pt[1], pt_max=args.pt[2], mass_min=mass_min, mass_max=mass_max, mtw_min=mtw_min, accept=True)
+
+            unfolding_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols)
+            axes = [*nominal_axes, *unfolding_axes] 
+            cols = [*nominal_cols, *unfolding_cols]
 
     df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
 
@@ -211,6 +225,6 @@ def build_graph(df, dataset):
 
     return results, weightsum
 
-resultdict = narf.build_and_run(datasets, build_graph)
+resultdict = narf.build_and_run(datasets, build_graph, scale_xsc_lumi=applyXsecAndLumiScale, groups_to_aggregate = groups_to_aggregate)
 
 output_tools.write_analysis_output(resultdict, f"{os.path.basename(__file__).replace('py', 'hdf5')}", args, update_name=not args.forceDefaultName)

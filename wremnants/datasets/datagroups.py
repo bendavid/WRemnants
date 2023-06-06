@@ -40,7 +40,30 @@ class Datagroups(object):
         self.lumi = 1
 
         if datasets:
-            self.datasets = {x.name : x for x in datasets}
+
+            if self.results:
+
+                # only keep datasets that are found in input file
+                self.datasets = {x.name : x for x in datasets if x.name in self.results.keys()}
+
+                for g_name, group in self.results.items():
+                    # if additional datasets are specified in results (for example summed groups), get them
+                    if g_name in self.datasets.keys():
+                        continue
+                    if g_name in ["meta_info",]:
+                        continue
+
+                    logger.debug(f"Add summed group as member {g_name}")
+                    self.datasets[g_name] = narf.Dataset(**{
+                        "name": g_name,
+                        "group": g_name,
+                        "filepaths": group["dataset"]["filepaths"],
+                        "xsec": None
+                        })
+
+            else:
+                self.datasets = {x.name : x for x in datasets}
+
             logger.debug(f"Getting these datasets: {self.datasets.keys()}")
 
             if self.results:
@@ -146,7 +169,7 @@ class Datagroups(object):
         self.nominalName = name
 
     def processScaleFactor(self, proc):
-        if proc.is_data:
+        if proc.is_data or proc.xsec is None:
             return 1
         return self.lumi*1000*proc.xsec/self.results[proc.name]["weight_sum"]
 
@@ -258,10 +281,12 @@ class Datagroups(object):
                 if group.scale:
                     scale *= group.scale(member)
 
-                logger.debug(f"Scale hist")
-                h = h*scale
+                if not np.isclose(scale,1, rtol=0, atol=1e-10):
+                    logger.debug(f"Scale hist with {scale}")
+                    h = h*scale
 
                 if forceNonzero:
+                    logger.debug("force non zero")
                     h.values(flow=True)[...] = h.values(flow=True).clip(min=0) 
 
                 logger.debug(f"Hist axes are {h.axes.name}")
@@ -275,9 +300,14 @@ class Datagroups(object):
                         # apply the correct scale for fakes
                         scaleProcForFake = self.groups[nameFake].scale(member)
                         logger.debug(f"Summing hist {read_syst} for {member.name} to {nameFake} with scale = {scaleProcForFake}")
-                        hProcForFake = scaleProcForFake * h.copy()
-                        histForFake = hh.addHists(hProcForFake, histForFake, createNew=False) if histForFake else hProcForFake
-
+                        if histForFake:
+                            histForFake += h * scaleProcForFake
+                        else:
+                            if scaleProcForFake == 1:
+                                histForFake = h
+                            else:
+                                histForFake = h * scaleProcForFake
+                                
                 # The following must be done when the group is not Fake, or when the previous part for fakes was not done
                 # For fake this essentially happens when the process doesn't have the syst, so that the nominal is used
                 if procName != nameFake or (procName == nameFake and not hasPartialSumForFake):
@@ -285,7 +315,10 @@ class Datagroups(object):
                         logger.debug(f"Summing nominal hist instead of {syst} to {nameFake} for {member.name}")
                     else:
                         logger.debug(f"Summing {read_syst} to {procName} for {member.name}")
-                    group.hists[label] = hh.addHists(h, group.hists[label], createNew=False) if group.hists[label] else h
+                    if group.hists[label]:
+                        group.hists[label] += h
+                    else:
+                        group.hists[label] = h
                     logger.debug("Sum done")
                 
             # now sum to fakes the partial sums which where not already done before
@@ -470,10 +503,6 @@ class Datagroups(object):
             else:
                 self.gen_axes = args.get("genVars", [])
 
-        # so far all unfolding scenarios have fiducial cuts    
-        if "fiducial" not in self.gen_axes:
-            self.gen_axes.append("fiducial")
-
         logger.debug(f"Gen axes are now {self.gen_axes}")
 
     def defineSignalBinsUnfolding(self, group_name):
@@ -481,13 +510,6 @@ class Datagroups(object):
             raise RuntimeError(f"Base group {group_name} not found in groups {self.groups.keys()}!")
 
         nominal_hist = self.results[self.groups[group_name].members[0].name]["output"]["xnorm"].get()
-
-        if "fiducial" in nominal_hist.axes.name and "fiducial" not in self.gen_axes:
-            logger.warning("Fiducial axis found in histogram. Will be added to gen_axes.")
-            self.gen_axes.append("fiducial")
-        if "fiducial" not in nominal_hist.axes.name and "fiducial" in self.gen_axes:
-            logger.warning("Fiducial axis not found in histogram but in gen_axes. Will be removed from gen_axes.")
-            self.gen_axes = [a for a in self.gen_axes if a != "fiducial"]
 
         gen_bins = []
         for gen_axis in self.gen_axes:
@@ -511,31 +533,6 @@ class Datagroups(object):
             self.groups[proc_name].memberOp = [memberOp for m in base_members]
 
             self.unconstrainedProcesses.append(proc_name)
-
-        # add one out of acceptance group and treat as background
-        ooa_name = group_name.split("_")[0]+"_bkg"
-        if ooa_name not in self.groups.keys():
-            self.copyGroup(group_name, ooa_name)
-            self.groups[ooa_name].memberOp = []
-            self.groups[ooa_name].members = []
-        
-        # list of possible out of acceptance slices for each axis
-        slices = []
-        for var in self.gen_axes:
-            subslice = [{var : hist.tag.Slicer()[0:hist.overflow:hist.sum]}] 
-            if nominal_hist.axes[var].traits.__dict__["underflow"]:
-                subslice.append({var : hist.underflow})
-            if nominal_hist.axes[var].traits.__dict__["overflow"]:
-                subslice.append({var : hist.overflow})
-            slices.append(subslice)
-
-        # pick one slice for each axis from the list of possible slices
-        for condition in [functools.reduce(lambda x, y: {**x, **y}, tup) for tup in itertools.product(*slices)]:
-            # make sure that at least one axis takes the underflow/overflow, otherwise it would not be out of acceptance
-            if not any([c in [hist.underflow, hist.overflow] for c in condition.values()]):
-                continue
-            logger.debug(f"Add members with condition {condition}")
-            self.groups[ooa_name].addMembers(base_members, lambda x, c=condition: x[c])
 
         # Remove inclusive signal
         self.deleteGroup(group_name)
