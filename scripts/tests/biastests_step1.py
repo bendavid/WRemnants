@@ -16,6 +16,9 @@ parser.add_argument("-m","--mode", type=str, help="what kind of biastests", choi
 parser.add_argument("--histmaker", type=str, help="histmaker to perform bias tests with", 
     default="mw_with_mu_eta_pt", choices=["mw_with_mu_eta_pt","mz_wlike_with_mu_eta_pt", "mz_dilepton"])
 parser.add_argument("-o", "--outfolder", type=str, default="", help="Output folder")
+parser.add_argument("--combineOutFolder", type=str, default="./CombineStudies", help='output folder for combine files')
+parser.add_argument("--defaultPostfix", type=str, default="scetlib_dyturboCorr", help='the postfix string added to the hdf5 file by default by the histmaker')
+parser.add_argument("-j", "--nThreads", type=int, default=192, help="number of threads to run the histmaker")
 
 args = parser.parse_args()
 
@@ -39,14 +42,14 @@ elif args.mode == "scale":
         # ("default", "--smearing --bias-calibration A"),
         # ("default", "--smearing --bias-calibration M"),
         ("--smearing", "--smearing --biasCalibration parameterized"),
-        ("--smearing", "--smearing --biasCalibration binned"),
-        ("--smearing", "--smearing --biasCalibration A"),
-        ("--smearing", "--smearing --biasCalibration M"),
+        #("--smearing", "--smearing --biasCalibration binned"),
+        #("--smearing", "--smearing --biasCalibration A"),
+        #("--smearing", "--smearing --biasCalibration M"),
     ]
 
     freeze_uncertainties = (
-        ("reducedUncertainties", "-x '.*' -k 'muonScaleSyst*|CMS_scale_m_*|mass*'"), # freeze all nuisances except momentum scale
-        # ("fullUncertainties", ""),
+        #("reducedUncertainties", "-x '.*' -k 'muonScaleSyst*|CMS_scale_m_*|mass*'"), # freeze all nuisances except momentum scale
+         ("fullUncertainties", ""),
         )
 
 hists_to_plot = {
@@ -65,9 +68,6 @@ histmaker = args.histmaker
 hists_to_plot = hists_to_plot[histmaker]
 channels_to_plot = channels_to_plot[histmaker]
 
-
-nTreads = 192
-
 options = [
     # "--theory_corr scetlib",
     # "--no-recoil"
@@ -79,7 +79,7 @@ if not os.path.isdir(args.outfolder):
 
 def EXE(command):
     logger.info(command) 
-    os.system(command)  # for testing comment out this line
+    #os.system(command)  # for testing comment out this line
 
 def make_appendix(name):
         
@@ -110,18 +110,18 @@ for nominal, pseudodata in datasets:
     if "bias" in arg_pseudodata:
         arg_pseudodata += " --onlyMainHistograms"
 
-    file_nominal = f"{args.outfolder}/{histmaker}_{str_nominal}.hdf5"
-    file_pseudodata = f"{args.outfolder}/{histmaker}_{str_pseudodata}.hdf5"
+    file_nominal = f"{args.outfolder}/{histmaker}_{args.defaultPostfix}_{str_nominal}.hdf5"
+    file_pseudodata = f"{args.outfolder}/{histmaker}_{args.defaultPostfix}_{str_pseudodata}.hdf5"
 
     if not os.path.isfile(file_nominal):
         # run histmaker for nominal
-        EXE(f"python3 scripts/histmakers/{histmaker}.py -j {nTreads} -o {args.outfolder} {options} {argument} {arg_nominal} -p {str_nominal}")
+        EXE(f"python3 scripts/histmakers/{histmaker}.py -j {args.nThreads} -o {args.outfolder} {options} {argument} {arg_nominal} -p {str_nominal}")
     else:
         logger.info(f"Found file for nominal {nominal}")
 
     if not os.path.isfile(file_pseudodata):
         # run histmaker for pseudodata
-        EXE(f"python3 scripts/histmakers/{histmaker}.py -j {nTreads} -o {args.outfolder} {options} {argument} {arg_pseudodata} -p {str_pseudodata}")
+        EXE(f"python3 scripts/histmakers/{histmaker}.py -j {args.nThreads} -o {args.outfolder} {options} {argument} {arg_pseudodata} -p {str_pseudodata}")
     else:
         logger.info(f"Found file for pseudodata {pseudodata}")
         
@@ -141,10 +141,10 @@ for nominal, pseudodata in datasets:
     # make combine input        
     for freeze_name, freeze_command in freeze_uncertainties:
 
-        dir_combine = f"{args.outfolder}/{str_nominal}_vs_{str_pseudodata}_{freeze_name}"
+        dir_combine = f"{args.combineOutFolder}/{str_nominal}_vs_{str_pseudodata}_{freeze_name}"
         
         if os.path.isdir(dir_combine):
             logger.warning(f"The combine file for {dir_combine} already exists, continue with the next one!")
             continue
 
-        EXE(f"python3 scripts/combine/setupCombineWMass.py -o {dir_combine} -i {file_nominal} --skipOtherChargeSyst --pseudoDataFile {file_pseudodata} --pseudoData nominal {freeze_command}")
+        EXE(f"python3 scripts/combine/setupCombineWMass.py -o {dir_combine} -i {file_nominal} --pseudoDataFile {file_pseudodata} --pseudoData nominal {freeze_command}")
