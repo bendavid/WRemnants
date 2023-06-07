@@ -54,6 +54,7 @@ if __name__ == "__main__":
     parser.add_argument('-c','--charges', default="both", choices=["plus", "minus", "both"], type=str,
                         help='Choose what charge to plot')
     parser.add_argument("--isoMtRegion", type=int, nargs='+', default=[0,1,2,3], choices=[0,1,2,3], help="Integer index for iso-Mt regions to plot (conversion is index = passIso * 1 + passMT * 2 as in common.getIsoMtRegionFromID)");
+    parser.add_argument(     '--useQCDMC', action='store_true',   help='Use QCD MC instead of Fakes for MC stack')
     args = parser.parse_args()
 
     logger = logging.setup_logger(os.path.basename(__file__), args.verbose, True)
@@ -123,6 +124,7 @@ if __name__ == "__main__":
         rootHists = {}
 
         hist2D = {c : {} for c in charges}
+        hasData = "Data" in datasets
         for d in datasets:
             hnarf = histInfo[d].hists[args.baseName]
             #print(f"{d}: {hnarf.sum()}")
@@ -136,24 +138,28 @@ if __name__ == "__main__":
                     regKey = f"{passIso_str}_{passMT_str}"
                     histForFRF[charge][isoMtID] = copy.deepcopy(h.Clone(f"{d}_{charge}_{regKey}"))
                     histForFRF[charge][isoMtID].SetTitle(f"{regKey} {charge}")
-                drawCorrelationPlot(h, xAxisName, xAxisName, f"Events",
-                                    f"{h.GetName()}", plotLabel="ForceTitle", outdir=outdir,
-                                    smoothPlot=False, drawProfileX=False, scaleToUnitArea=False,
-                                    draw_both0_noLog1_onlyLog2=1, passCanvas=canvas,
-                                    nContours=args.nContours, palette=args.palette, invertePalette=args.invertePalette)
+                # if Data is present the 2D plots are already done inside plotPrefitHistograms
+                if not hasData:
+                    drawCorrelationPlot(h, xAxisName, xAxisName, f"Events",
+                                        f"{h.GetName()}", plotLabel="ForceTitle", outdir=outdir,
+                                        smoothPlot=False, drawProfileX=False, scaleToUnitArea=False,
+                                        draw_both0_noLog1_onlyLog2=1, passCanvas=canvas,
+                                        nContours=args.nContours, palette=args.palette, invertePalette=args.invertePalette)
                 hist2D[charge][f"{d}_{charge}"] = h
                 print()
 
         if "Data" in datasets:
             outdir_isoMtID = f"{outdir}/isoMtID_{isoMtID}/"
             createPlotDirAndCopyPhp(outdir_isoMtID)
+            ratioRange = [0.92, 1.08] if isoMtID == 3 else [0.5, 1.5] if isoMtID == 2 else [0.0, 2.0]
             for c in charges:
-                hdata2D = hist2D[c][f"Data_{c}"]        
-                hmc2D = [hist2D[c][key] for key in hist2D[c].keys() if key.split("_")[0] not in ["Data", "QCD"]]
+                hdata2D = hist2D[c][f"Data_{c}"]
+                hmc2D = [hist2D[c][key] for key in hist2D[c].keys() if key.split("_")[0] not in ["Data", "Fake" if args.useQCDMC else "QCD"]]
                 outdir_dataMC = f"{outdir_isoMtID}dataMC_{c}/"
                 createPlotDirAndCopyPhp(outdir_dataMC)
                 plotPrefitHistograms(hist2D[c][f"Data_{c}"], hmc2D, outdir_dataMC, xAxisName=xAxisName, yAxisName=yAxisName,
-                                     chargeLabel=c, canvas=canvas, canvasWide=cwide, canvas1D=canvas1D)
+                                     chargeLabel=c, canvas=canvas, canvasWide=cwide, canvas1D=canvas1D,
+                                     ratioRange=ratioRange, lumi=16.8)
 
     if (args.processes == None or "Fake" in args.processes):
         ptBinRanges = []

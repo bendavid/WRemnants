@@ -29,7 +29,7 @@ from scripts.analysisTools.plotUtils.utility import *
 sys.path.append(os.getcwd())
 
 def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
-                         lumi="", ptRangeProjection=(0,-1), chargeLabel="",
+                         lumi=None, ptRangeProjection=(0,-1), chargeLabel="",
                          canvas=None, canvasWide=None, canvas1D=None,
                          colors=None, legEntries=None, isPseudoData=False,
                          ratioRange=None):
@@ -214,7 +214,7 @@ def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
     drawTH1dataMCstack(hdata_unrolled, stack_unrolled, XlabelUnroll, YlabelUnroll, cnameUnroll,
                        outdir_dataMC, leg_unrolled, ratioPadYaxisNameTmp=f"{dataTitle}/pred{ratioRangeStr}",
                        passCanvas=canvasWide,
-                       wideCanvas=True, leftMargin=0.05,rightMargin=0.02,lumi=lumi, 
+                       wideCanvas=True, leftMargin=0.05,rightMargin=0.01,lumi=lumi, 
                        drawVertLines="{a},{b}".format(a=recoBins.Npt,b=recoBins.Neta),
                        textForLines=ptBinRanges, etaptbinning=binning, noLegendRatio=True, textSize=0.04, textAngle=30,
                        #noRatioPanel=True
