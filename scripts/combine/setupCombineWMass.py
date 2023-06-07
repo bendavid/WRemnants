@@ -31,7 +31,6 @@ def make_parser(parser=None):
     parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers and nuisances)")
     parser.add_argument("--directIsoSFsmoothing", action='store_true', help="If isolation SF were smoothed directly instead of being derived from smooth efficiencies")
     parser.add_argument("--xlim", type=float, nargs=2, default=None, help="Restrict x axis to this range")
-    parser.add_argument("--constrainMass", action='store_true', help="Constrain mass parameter in the fit (e.g. for ptll fit)")
     parser.add_argument("--unfold", action='store_true', help="Prepare datacard for unfolding")
     parser.add_argument("--fitXsec", action='store_true', help="Fit signal inclusive cross section")
     parser.add_argument("--correlatedNonClosureNuisances", action='store_true', help="get systematics from histograms for the Z non-closure nuisances without decorrelation in eta and pt")
@@ -66,6 +65,8 @@ def main(args,xnorm=False):
     wmass = datagroups.wmass
     wlike = datagroups.wlike
 
+    constrainMass = False
+
     if wmass:
         name = "WMass"
         datagroups.setGenAxes(["etaGen","ptGen"])
@@ -74,6 +75,7 @@ def main(args,xnorm=False):
         datagroups.setGenAxes(["qGen","etaGen","ptGen"])
     else:
         name = "ZMassDilepton"
+        constrainMass = "mll" not in args.fitvar
 
     tag = name+"_"+args.fitvar.replace("-","_")
     if args.doStatOnly:
@@ -92,8 +94,7 @@ def main(args,xnorm=False):
     elif args.fitXsec:
         datagroups.unconstrainedProcesses.append("Wmunu" if wmass else "Zmumu")
     elif args.unfold:
-        if not args.constrainMass:
-            logger.warning("Unfolding is specified but the mass is treated free floating, to constrain the mass add '--constrainMass'")
+        constrainMass = True
 
         if wmass:
             # split group into two
@@ -153,7 +154,7 @@ def main(args,xnorm=False):
         
     passSystToFakes = wmass and not args.skipSignalSystOnFakes and args.qcdProcessName not in excludeGroup and (filterGroup == None or args.qcdProcessName in filterGroup) and not xnorm
 
-    single_v_samples = cardTool.filteredProcesses(lambda x: x[0] in ["W", "Z"])
+    single_v_samples = cardTool.filteredProcesses(lambda x: x[0] in ["W", "Z"] and ("mu" in x or "tau" in x))
     single_v_nonsig_samples = cardTool.filteredProcesses(lambda x: x[0] == ("Z" if wmass else "W"))
     single_vmu_samples = list(filter(lambda x: "mu" in x, single_v_samples))
     signal_samples = list(filter(lambda x: x[0] == ("W" if wmass else "Z"), single_vmu_samples))
@@ -166,19 +167,22 @@ def main(args,xnorm=False):
     logger.info(f"Single V no signal samples: {single_v_nonsig_samples}")
     logger.info(f"Signal samples: {signal_samples}")
 
-    if not args.constrainMass:
-        # keep mass weights here as first systematic, in case one wants to run stat-uncertainty only with --doStatOnly
-        cardTool.addSystematic("massWeight", 
-                               processes=signal_samples_inctau,
-                               group="massShift",
-                               groupFilter=lambda x: x == "massShift100MeV",
-                               skipEntries=[(f"^massShift{i}MeV.*",) for i in range(0, 100, 10)]+[("^massShift2p1MeV.*",)],
-                               mirror=False,
-                               #TODO: Name this
-                               noConstraint=True,
-                               systAxes=["massShift"],
-                               passToFakes=passSystToFakes,
-        )
+    constrainedZ = constrainMass and not wmass
+    massSkip = [(f"^massShift{i}MeV.*",) for i in range(0, 110 if constrainedZ else 100, 10)]
+    if not (constrainMass or wmass):
+        massSkip.append(("^massShift2p1MeV.*",))
+
+    cardTool.addSystematic("massWeight", 
+                            processes=signal_samples_inctau,
+                            group=f"massShift{'W' if wmass else 'Z'}",
+                            skipEntries=massSkip,
+                            mirror=False,
+                            systNamePrepend="W" if wmass else "Z",
+                            #TODO: Name this
+                            noConstraint=not constrainMass,
+                            systAxes=["massShift"],
+                            passToFakes=passSystToFakes,
+    )
     
     if args.doStatOnly:
         # print a card with only mass weights and a dummy syst
@@ -186,18 +190,6 @@ def main(args,xnorm=False):
         cardTool.writeOutput(args=args)
         logger.info("Using option --doStatOnly: the card was created with only mass weights and a dummy LnN syst on all processes")
         quit()
-
-    if args.constrainMass:
-        # add an uncertainty on the mass, e.g. for ptll fits
-        cardTool.addSystematic("massWeight", 
-            processes=signal_samples_inctau,
-            group="massShift",
-            groupFilter=lambda x: x == "massShift20MeV" if wmass else lambda x: x == "massShift2p1MeV",
-            skipEntries=[(f"^massShift{i}MeV.*",) for i in range(0, 110, 10) if i != 20 or not wmass],
-            mirror=False,
-            systAxes=["massShift"],
-            passToFakes=passSystToFakes,
-        )
 
     if not xnorm:
         if wmass:
@@ -280,18 +272,26 @@ def main(args,xnorm=False):
             )
 
     to_fakes = passSystToFakes and not args.noQCDscaleFakes and not xnorm
-    combine_helpers.add_pdf_uncertainty(cardTool, single_v_samples, passSystToFakes, from_corr=args.pdfUncFromCorr)
-    scale_name_W = "W"
-    scale_name_Z = "Z"
-    scale_name = scale_name_W if wmass else scale_name_Z
-    combine_helpers.add_scale_uncertainty(cardTool, args.minnloScaleUnc, signal_samples_inctau, to_fakes, resum=args.resumUnc, name_append = scale_name)
+    combine_helpers.add_pdf_uncertainty(cardTool, single_v_samples, passSystToFakes, from_corr=args.pdfUncFromCorr, scale=args.scalePdf)
+    scale_name = "W" if wmass else "Z"
+    if wmass and args.resumUnc == "tnp":
+        samples = single_v_samples
+        scale_name = ""
+    else:
+        samples = signal_samples_inctau
+    combine_helpers.add_scale_uncertainty(cardTool, args.minnloScaleUnc, samples, to_fakes, 
+                                          resum=args.resumUnc, name_append=scale_name, scaleTNP=args.scaleTNP)
     # for Z background in W mass case (W background for Wlike is essentially 0, useless to apply QCD scales there)
-    if wmass and not xnorm:
-        combine_helpers.add_scale_uncertainty(cardTool, args.minnloScaleUnc, single_v_nonsig_samples, to_fakes, name_append=scale_name_Z, resum=args.resumUnc)
+    if wmass and not xnorm and args.resumUnc != "tnp":
+        combine_helpers.add_scale_uncertainty(cardTool, args.minnloScaleUnc, single_v_nonsig_samples, to_fakes, 
+                                                name_append=scale_name_Z, resum=args.resumUnc, scaleTNP=args.scaleTNP)
 
     if args.resumUnc != "none":
-        common_np_samples = signal_samples_inctau + single_v_nonsig_samples if wmass else signal_samples_inctau
+        common_np_samples = single_v_samples if wmass else signal_samples_inctau
         combine_helpers.add_common_np_uncertainties(cardTool, common_np_samples, to_fakes)
+        combine_helpers.add_decorrelated_np_uncertainties(cardTool, signal_samples_inctau, to_fakes, name_append="W" if wmass else "Z")
+        if wmass:
+            combine_helpers.add_decorrelated_np_uncertainties(cardTool, single_v_nonsig_samples, to_fakes, name_append="Z")
 
     if not xnorm:
         msv_config_dict = {
