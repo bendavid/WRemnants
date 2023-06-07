@@ -5,7 +5,7 @@ import re
 
 logger = logging.child_logger(__name__)
 
-def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append="", resum=None, use_hel_hist=False, rebin_pt=None):
+def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append="", resum=None, use_hel_hist=False, rebin_pt=None, scaleTNP=1):
 
     if not len(samples):
         logger.warning(f"Skipping QCD scale syst '{scale_type}', no process to apply it to")
@@ -80,12 +80,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
         if not obs:
             raise ValueError("Failed to find the observable names for the resummation uncertainties")
         
-        theory_unc = input_tools.args_from_metadata(card_tool, "theoryCorr")
-        if not theory_unc:
-            logger.error("Can not add resummation uncertainties. No theory correction was applied!")
-        theory_unc = theory_unc[0]+"Corr"
-        if theory_unc != "scetlib_dyturboCorr":
-            raise ValueError(f"The theory uncertainty hist {theory_unc} doesn't have the resummation {resum} uncertainty implemented")
+        theory_hist = theory_unc_hist(card_tool)
 
         if input_tools.args_from_metadata(card_tool, "theoryCorrAltOnly"):
             logger.error("The theory correction was only applied as an alternate hist. Using its syst isn't well defined!")
@@ -98,19 +93,20 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
         scale_nuisances = ["^mu.*", "^mu.*", "^nu",]
         if resum == "tnp":
             # Exclude the scale uncertainty nuisances
-            card_tool.addSystematic(name=theory_unc,
+            card_tool.addSystematic(name=theory_hist,
                 processes=samples,
                 group="resumTNP",
                 systAxes=["vars"],
                 passToFakes=to_fakes,
                 systNameReplace=[("central", ""), ("pdf0", ""), ("+1", "Up"), ("-1", "Down"), ("-0.5", "Down"), ("+0.5", "Up"), ("up", "Up"), ("down", "Down")],
+                scale=scaleTNP,
                 skipEntries=[{syst_ax : x} for x in both_exclude+scale_nuisances],
                 rename=f"resumTNP{name_append}",
-                systNamePrepend=f"resumTNP{name_append}_",
+                systNamePrepend=f"resumTNP_",
             )
         else:
             # Exclude the tnp uncertainty nuisances
-            card_tool.addSystematic(name=theory_unc,
+            card_tool.addSystematic(name=theory_hist,
                 processes=samples,
                 group="resumTNP",
                 passToFakes=to_fakes,
@@ -122,7 +118,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
                 rename=f"resumScale{name_append}",
                 systNamePrepend=f"resumScale{name_append}_",
             )
-            card_tool.addSystematic(name=theory_unc,
+            card_tool.addSystematic(name=theory_hist,
                 processes=samples,
                 group="resumScale",
                 passToFakes=to_fakes,
@@ -133,23 +129,7 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
                 systNamePrepend=f"resumScale{name_append}_",
             )
 
-        # for np_nuisance in ["c_nu", "omega_nu", "Omega"]:
-        for np_nuisance in ["Omega"]:
-            nuisance_name = f"scetlibNP{np_nuisance}{name_append}"
-            # only Omega is decorrelated between W and Z
-            #FIXME avoid hardcoding the histogram name here?
-            card_tool.addSystematic(name=f"scetlib_dyturboOmega",
-                processes=samples,
-                group="resumNonpert",
-                systAxes=["absYVgenNP", "chargeVgenNP", "downUpVar"],
-                # labelsByAxis=["AbsYVBin", "genQ", "DownUp"],
-                passToFakes=to_fakes,
-                actionMap={s : lambda h,np=np_nuisance: hh.syst_min_and_max_env_hist(syst_tools.hist_to_variations(h), obs, "vars",
-                    [x for x in h.axes["vars"] if re.match(f"^{np}-*\d+", x)]) for s in expanded_samples},
-                baseName=f"scetlibNP{nuisance_name}_",
-                rename=nuisance_name,
-            )
-        card_tool.addSystematic(name=theory_unc,
+        card_tool.addSystematic(name=theory_hist,
             processes=samples,
             group="resumTransition",
             systAxes=["downUpVar"],
@@ -187,14 +167,38 @@ def add_scale_uncertainty(card_tool, scale_type, samples, to_fakes, name_append=
             rename=group_name, # Needed to allow it to be called multiple times
         )
 
-def add_common_np_uncertainties(card_tool, samples, to_fakes):
+def add_decorrelated_np_uncertainties(card_tool, samples, to_fakes, name_append, nuisances=["Omega"]):
+    obs = card_tool.project[:]
+    if not obs:
+        raise ValueError("Failed to find the observable names for the resummation uncertainties")
 
+    expanded_samples = card_tool.datagroups.getProcNames(samples)
+    for np_nuisance in nuisances:
+        theory_hist = theory_unc_hist(card_tool, np_nuisance)
+        nuisance_name = f"scetlibNP{np_nuisance}{name_append}"
+        # only Omega is decorrelated between W and Z
+        #FIXME avoid hardcoding the histogram name here?
+        card_tool.addSystematic(name=theory_hist,
+            processes=samples,
+            group="resumNonpert",
+            systAxes=["absYVgenNP", "chargeVgenNP", "downUpVar"],
+            passToFakes=to_fakes,
+            actionMap={s : lambda h,np=np_nuisance: hh.syst_min_and_max_env_hist(syst_tools.hist_to_variations(h), obs, "vars",
+                [x for x in h.axes["vars"] if re.match(f"^{np}-*\d+", x)]) for s in expanded_samples},
+            baseName=f"scetlibNP{nuisance_name}_",
+            rename=nuisance_name,
+        )
+
+def theory_unc_hist(card_tool, unc=""):
     theory_unc = input_tools.args_from_metadata(card_tool, "theoryCorr")
     if not theory_unc:
         logger.error("Can not add resummation uncertainties. No theory correction was applied!")
-    theory_unc = theory_unc[0]+"Corr"
-    if theory_unc != "scetlib_dyturboCorr":
+    if theory_unc[0] != "scetlib_dyturbo":
         raise ValueError(f"The theory uncertainty hist {theory_unc} doesn't have the resummation uncertainty implemented")
+
+    return theory_unc[0]+("Corr" if not unc else unc)
+
+def add_common_np_uncertainties(card_tool, samples, to_fakes):
 
     # NOTE: The map needs to be keyed on the base procs not the group names, which is
     # admittedly a bit nasty
@@ -204,9 +208,11 @@ def add_common_np_uncertainties(card_tool, samples, to_fakes):
     if not obs:
         raise ValueError("Failed to find the observable names for the resummation uncertainties")
 
+    theory_hist = theory_unc_hist(card_tool)
+
     for np_nuisance in ["c_nu", "omega_nu"]:
         nuisance_name = f"scetlibNP{np_nuisance}"
-        card_tool.addSystematic(name=theory_unc,
+        card_tool.addSystematic(name=theory_hist,
             processes=samples,
             group="resumNonpert",
             systAxes=["downUpVar"],
@@ -217,7 +223,7 @@ def add_common_np_uncertainties(card_tool, samples, to_fakes):
             rename=nuisance_name,
         )
 
-def add_pdf_uncertainty(card_tool, samples, to_fakes, action=None, from_corr=False):
+def add_pdf_uncertainty(card_tool, samples, to_fakes, action=None, from_corr=False, scale=1):
     pdf = input_tools.args_from_metadata(card_tool, "pdfs")[0]
     pdfInfo = theory_tools.pdf_info_map("ZmumuPostVFP", pdf)
     pdfName = pdfInfo["name"]
@@ -242,7 +248,7 @@ def add_pdf_uncertainty(card_tool, samples, to_fakes, action=None, from_corr=Fal
         group=pdfName,
         passToFakes=to_fakes,
         actionMap=action,
-        scale=pdfInfo.get("scale", 1),
+        scale=pdfInfo.get("scale", 1)*scale,
         systAxes=[pdf_ax],
     )
     if from_corr:
