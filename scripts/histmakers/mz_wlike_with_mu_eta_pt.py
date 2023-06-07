@@ -71,7 +71,7 @@ else:
     muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile,
                                                                                                                                      era = era,
                                                                                                                                      max_pt = axis_pt.edges[-1],
-                                                                                                                                     is_w_like = True, directIsoSFsmoothing=args.directIsoSFsmoothing)
+                                                                                                                                     is_w_like = True, isoEfficiencySmoothing = args.isoEfficiencySmoothing)
 logger.info(f"SF file: {args.sfFile}")
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
