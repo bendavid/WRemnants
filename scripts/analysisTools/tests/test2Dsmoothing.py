@@ -176,7 +176,7 @@ def runSmoothing(inputfile, histname, outdir, step, args):
     sfhistname = histname #"SF3D_nominal_isolation" # uT - eta - pt
     tfile = safeOpenFile(inputfile)
     hsf =   safeGetObject(tfile, sfhistname)
-    uT_binOffset = 0 # 1 to exclude first bin, use 0 to use all
+    uT_binOffset = 1 # 1 to exclude first bin, use 0 to use all
     utEdges  = [round(hsf.GetXaxis().GetBinLowEdge(i), 1) for i in range(1+uT_binOffset, 2+hsf.GetNbinsX()-uT_binOffset)] # remove extreme bins for now
     etaEdges = [round(hsf.GetYaxis().GetBinLowEdge(i), 1) for i in range(1, 2+hsf.GetNbinsY())]
     ptEdges  = [round(hsf.GetZaxis().GetBinLowEdge(i), 1) for i in range(1, 2+hsf.GetNbinsZ())]
