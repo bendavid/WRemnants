@@ -55,8 +55,6 @@ cols = args.axes
 if args.csVarsHist:
     cols += ["cosThetaStarll", "phiStarll"]
 
-cols.append("charge")
-
 axes = [all_axes[a] for a in cols] 
 
 # define helpers
