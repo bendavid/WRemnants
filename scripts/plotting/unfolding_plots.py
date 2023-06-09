@@ -497,5 +497,5 @@ if "covariance" in args.plots:
     plot_matrix_poi("covariance_matrix_channelpmaskedexp")
     plot_matrix_poi("covariance_matrix_channelpmaskedexpnorm")
 
-if output_tools.is_eosuser_path(args.outpath) and not args.eoscp:
+if output_tools.is_eosuser_path(args.outpath) and args.eoscp:
     output_tools.copy_to_eos(args.outpath, args.outfolder)
