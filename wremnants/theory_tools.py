@@ -140,6 +140,8 @@ only_central_pdf_datasets = [
 extended_pdf_datasets = [x for x in common.vprocs+common.vprocs_lowpu if not any(y in x for y in ["NNLOPS", "MiNLO"])]
 
 def define_prefsr_vars(df):
+    logger.debug("define_prefsr_vars()")
+
     df = df.Define("prefsrLeps", "wrem::prefsrLeptons(GenPart_status, GenPart_statusFlags, GenPart_pdgId, GenPart_genPartIdxMother)")
     df = df.Define("genl", "ROOT::Math::PtEtaPhiMVector(GenPart_pt[prefsrLeps[0]], GenPart_eta[prefsrLeps[0]], GenPart_phi[prefsrLeps[0]], GenPart_mass[prefsrLeps[0]])")
     df = df.Define("genlanti", "ROOT::Math::PtEtaPhiMVector(GenPart_pt[prefsrLeps[1]], GenPart_eta[prefsrLeps[1]], GenPart_phi[prefsrLeps[1]], GenPart_mass[prefsrLeps[1]])")
@@ -295,6 +297,8 @@ def define_theory_corr(df, dataset_name, helpers, generators, modify_central_wei
     for i, generator in enumerate(generators):
         if generator not in dataset_helpers:
             continue
+        
+        logger.debug(f"Now at generator {i}: {generator}")
 
         helper = dataset_helpers[generator]
 
