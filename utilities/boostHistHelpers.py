@@ -407,7 +407,7 @@ def syst_min_or_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=[], do_min=Tr
     for ax in proj_ax:
         idx = names.index(ax)
         initial_order.append(idx)
-        names.insert(-1, names.pop(idx)) # -1 means second to last index
+        names.insert(-1, names.pop(idx))
         fullview = np.moveaxis(fullview, idx, -2)
     
     op = np.argmin if do_min else np.argmax
