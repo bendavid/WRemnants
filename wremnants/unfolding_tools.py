@@ -1,6 +1,9 @@
 from utilities import differential
-from wremnants import syst_tools, theory_tools
+from wremnants import syst_tools, theory_tools, logging
 from copy import deepcopy
+import hist
+
+logger = logging.child_logger(__name__)
 
 def add_out_of_acceptance(datasets, group):
     # Copy datasets from specified group to make out of acceptance contribution
@@ -48,7 +51,7 @@ def define_gen_level(df, gen_level, dataset_name, mode="wmass"):
 
             elif mode == "dilepton":
                 df = df.Alias("ptVGen", "ptVgen")
-                df = df.Alias("yVGen", "yVgen")
+                df = df.Alias("absYVGen", "absYVgen")
 
     elif gen_level == "postFSR":
 
@@ -111,6 +114,7 @@ def select_fiducial_space(df, accept=True, mode="wmass", pt_min=26, pt_max=55, m
         selection += f" && (mTWGen > {mtw_min})"
 
     for sel in selections:
+        logger.debug(f"Add selection {sel} for fiducial phase space")
         selection += f" && ({sel})"
 
     df = df.Define("fiducial", selection)
@@ -129,10 +133,12 @@ def add_xnorm_histograms(results, df, args, dataset_name, corr_helpers, qcdScale
 
     df_xnorm = theory_tools.define_theory_weights_and_corrs(df_xnorm, dataset_name, corr_helpers, args)
 
-    df_xnorm = df_xnorm.DefinePerSample("count", "0.5")
+    df_xnorm = df_xnorm.Define("xnorm", "0.5")
 
-    xnorm_axes = [*unfolding_axes, differential.axis_xnorm]
-    xnorm_cols = [*unfolding_cols, "count"]
+    axis_xnorm = hist.axis.Regular(1, 0., 1., name = "count", underflow=False, overflow=False)
+
+    xnorm_axes = [axis_xnorm, *unfolding_axes]
+    xnorm_cols = ["xnorm", *unfolding_cols]
     
     results.append(df_xnorm.HistoBoost("xnorm", xnorm_axes, [*xnorm_cols, "nominal_weight"]))
 
