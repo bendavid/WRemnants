@@ -276,7 +276,8 @@ def build_graph(df, dataset):
         weight_expr = "weight_pu*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom"
         if not args.noScaleFactors:
             if not (args.vqtTest and isW):
-                df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso"])
+                # FIXME: using pt as a placeholder for actual ut, for test
+                df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_pt0", "goodMuons_charge0", "passIso"])
             else:
                 df = df.Define("postFSRnus", "GenPart_status == 1 && (GenPart_statusFlags & 1) && abs(GenPart_pdgId) == 14")
                 df = df.Define("postFSRnusIdx", "wrem::postFSRLeptonsIdx(postFSRnus)")
@@ -645,7 +646,7 @@ def build_graph(df, dataset):
                 results.append(utdistro)
 
         if not args.binnedScaleFactors:
-            df = df.Define("weight2dsfup", muon_efficiency_helper2d, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso"])
+            df = df.Define("weight2dsfup", muon_efficiency_helper2d, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_pt0", "goodMuons_charge0", "passIso"])
             df = df.Define("nominal_weight_2dsf", "nominal_weight/weight_fullMuonSF_withTrackingReco*weight2dsfup") #be EXTREMELY CAREFUL about the histogram files (this assumes that you have another file with the old trigger and histo SFs which also contains the same SFs for all the other steps as the central one)
             sf2d = df.HistoBoost("nominal_sf2d", nominal_axes, [*nominal_cols, "nominal_weight_2dsf"])
             results.append(sf2d)

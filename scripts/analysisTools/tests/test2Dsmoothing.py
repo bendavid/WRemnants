@@ -217,8 +217,9 @@ def runSmoothing(inputfile, histname, outdir, step, args):
     ptEdgeHigh = hsf.GetZaxis().GetBinLowEdge(1 + hsf.GetNbinsZ())
     utEdgeLow = hsf.GetXaxis().GetBinLowEdge(1+uT_binOffset) # remove first bin, whose range is too extreme
     utEdgeHigh = hsf.GetXaxis().GetBinLowEdge(hsf.GetNbinsX()+1-uT_binOffset) # remove last bin, whose range is too extreme    
-    # 1 GeV for recoil and pt
-    utNbins = int(utEdgeHigh - utEdgeLow + 0.001) # 1 GeV width
+    # set number of bins for ut and pt after smoothing
+    utBinWidth = 2
+    utNbins = int((utEdgeHigh - utEdgeLow + 0.001) / utBinWidth) # multiple of 1 GeV width
     ptNbins = 5 * int(ptEdgeHigh - ptEdgeLow + 0.001) # 0.2 GeV width
 
     nEtaBins = hsf.GetNbinsY()

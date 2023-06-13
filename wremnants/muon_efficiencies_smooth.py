@@ -16,6 +16,13 @@ narf.clingutils.Declare('#include "muon_efficiencies_smooth.h"')
 
 data_dir = f"{pathlib.Path(__file__).parent}/data/"
 
+def cloneAxis(ax, overflow=False, underflow=False):
+    if isinstance(ax, bh.axis.Regular):
+        newax = hist.axis.Regular(ax.size, ax.edges[0], ax.edges[-1], name = ax.name, overflow=overflow, underflow=underflow)
+    elif isinstance(ax, bh.axis.Variable):
+        newax = hist.axis.Variable(ax.edges, name = ax.name, overflow = False, underflow = False)
+    return newax
+
 def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSmooth_GtoH.root",
                                         era = None, is_w_like = False, max_pt = np.inf,
                                         isoEfficiencySmoothing = False):
@@ -33,79 +40,148 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
     axis_charge_inclusive = hist.axis.Regular(1, -2., 2., underflow=False, overflow=False, name = "SF charge") # for isolation and effStat only
     isoEff_types = ["iso", "isonotrig", "antiiso", "antiisonotrig"]
     allEff_types = ["reco", "tracking", "idip", "trigger"] + isoEff_types
+    eff_types_3D = ["trigger"] + [x for x in isoEff_types] # if this is set to [] the code should revert back to all 2D SF 
+    eff_types_2D = [x for x in allEff_types if x not in eff_types_3D]
     axis_allEff_type = hist.axis.StrCategory(allEff_types, name = "allEff_type")
+    axis_eff_type_2D = hist.axis.StrCategory(eff_types_2D, name = "eff_types_2D_etapt")
+    axis_eff_type_3D = hist.axis.StrCategory(eff_types_3D, name = "eff_types_3D_etaptut")
     effSyst_decorrEtaEdges = [round(-2.4 + 0.1*i,1) for i in range(48)]
     Nsyst = 1 + (len(effSyst_decorrEtaEdges) - 1) # inclusive variation + all decorrelated bins
     axis_nom_syst = hist.axis.Integer(0, 1+Nsyst, underflow = False, overflow =False, name = "nom-systs") # nominal in first bin
 
     charges = { -1. : "minus", 1. : "plus" }
     chargeDependentSteps = common.muonEfficiency_chargeDependentSteps
-    
+  
     fin = ROOT.TFile.Open(filename)
     if fin is None or fin.IsZombie():
         raise IOError(f"Error: file {filename} was not opened correctly")
         
     ## start with NOMI and SYST
-    sf_syst = None
+    sf_syst_2D = None
     ############
-    # all steps, for the nominal and systematics
+    # all ut-independent steps, for the nominal and systematics
     for charge, charge_tag in charges.items():
-        for eff_type in allEff_types:
+        for eff_type in axis_eff_type_2D:
             # for iso can use histogram for efficiency variation only in data (the only one we have for now)
-            if not isoEfficiencySmoothing:
-                nameTag =  "nomiAndAlt"
-            else:
-                nameTag = "nomiAndAlt_onlyDataVar" if any(x in eff_type for x in ["iso", "antiiso"]) else "nomiAndAlt"
+            nameTag = "nomiAndAlt_onlyDataVar" if (isoEfficiencySmoothing and any(x in eff_type for x in ["iso", "antiiso"])) else "nomiAndAlt"
             chargeTag = charge_tag if eff_type in chargeDependentSteps else "both"
             hist_name = f"SF_{nameTag}_{eratag}_{eff_type}_{chargeTag}"
             hist_root = fin.Get(hist_name)
-            #logger.info(ROOT.AddressOf(hist_root))
             if hist_root is None:
                 logger.info(f"Error: {hist_name} not found in file {filename}")
                 quit()
-            #logger.info(f"syst: {eff_type} -> {hist_name}")
+            logger.debug(f"syst: {eff_type} -> {hist_name}")
 
             hist_hist = narf.root_to_hist(hist_root, axis_names = ["SF eta", "SF pt", "nomi-statUpDown-syst"])
 
-            if sf_syst is None:
+            if sf_syst_2D is None:
                 axis_eta_eff = hist_hist.axes[0]
                 axis_pt_eff = hist_hist.axes[1]
                 # store all systs (currently only 1) with the nominal, for all efficiency steps
-                sf_syst = hist.Hist(axis_eta_eff, axis_pt_eff, axis_charge, axis_allEff_type, axis_nom_syst, name = "sf_syst", storage = hist.storage.Weight())
+                sf_syst_2D = hist.Hist(axis_eta_eff, axis_pt_eff, axis_charge, axis_eff_type_2D, axis_nom_syst, name = "sf_syst_2D", storage = hist.storage.Weight())
             # this axis might change for different histograms, because of a different number of effStat variations
             axis_nomiAlt_eff = hist_hist.axes[2]
             # could use max_pt to remove some of the pt bins for the input histogram
             # extract nominal (first bin that is not underflow) and put in corresponding bin of destination (bin 0 is the first bin because no underflow)
-            sf_syst.view(flow=True)[:, :, axis_charge.index(charge), axis_allEff_type.index(eff_type), 0] = hist_hist.view(flow=True)[:,:,1]
+            sf_syst_2D.view(flow=True)[:, :, axis_charge.index(charge), axis_eff_type_2D.index(eff_type), 0] = hist_hist.view(flow=True)[:,:,1]
             # extract syst (last bin except overflow) and put in corresponding bin of destination (bin 1 is the second bin because no underflow)
-            sf_syst.view(flow=True)[:, :, axis_charge.index(charge), axis_allEff_type.index(eff_type), 1] = hist_hist.view(flow=True)[:,:,axis_nomiAlt_eff.extent-2]
+            sf_syst_2D.view(flow=True)[:, :, axis_charge.index(charge), axis_eff_type_2D.index(eff_type), 1] = hist_hist.view(flow=True)[:,:,axis_nomiAlt_eff.extent-2]
             for isyst in range(len(effSyst_decorrEtaEdges)-1):
                 # first copy the nominal
-                sf_syst.view(flow=True)[:, :, axis_charge.index(charge), axis_allEff_type.index(eff_type), 2+isyst] = hist_hist.view(flow=True)[:,:,1]
+                sf_syst_2D.view(flow=True)[:, :, axis_charge.index(charge), axis_eff_type_2D.index(eff_type), 2+isyst] = hist_hist.view(flow=True)[:,:,1]
                 # now update with actual syst all eta bins inside interval [effSyst_decorrEtaEdges[isyst], effSyst_decorrEtaEdges[isyst+1]]
                 # add epsilon to ensure picking the bin on the right of the edge (for the right edge given by
                 # effSyst_decorrEtaEdges[isyst+1]] the range selection in boost later on will stop at the left
                 #edge of the chosen bin number, e.g. h[b:b+1] will pick the range containing the single bin b, unlike in ROOT
-                # also sum 1 because sf_syst.view(flow=True) will always put the underflow in the 0 bin index
+                # also sum 1 because sf_syst_2D.view(flow=True) will always put the underflow in the 0 bin index
                 indexEtaLow = 1 + axis_eta_eff.index(effSyst_decorrEtaEdges[isyst] + 0.001) # add epsilon to ensure picking the bin on the right of the edge
                 indexEtaHigh = 1 + axis_eta_eff.index(effSyst_decorrEtaEdges[isyst+1] + 0.001) 
-                sf_syst.view(flow=True)[indexEtaLow:indexEtaHigh, :, axis_charge.index(charge), axis_allEff_type.index(eff_type), 2+isyst] = hist_hist.view(flow=True)[indexEtaLow:indexEtaHigh, :,axis_nomiAlt_eff.extent-2]
+                sf_syst_2D.view(flow=True)[indexEtaLow:indexEtaHigh, :, axis_charge.index(charge), axis_eff_type_2D.index(eff_type), 2+isyst] = hist_hist.view(flow=True)[indexEtaLow:indexEtaHigh, :,axis_nomiAlt_eff.extent-2]
                         
     # set overflow and underflow eta-pt bins equal to adjacent bins
-    sf_syst.view(flow=True)[0, ...] = sf_syst.view(flow=True)[1, ...]
-    sf_syst.view(flow=True)[axis_eta_eff.extent-1, ...] = sf_syst.view(flow=True)[axis_eta_eff.extent-2, ...]
-    sf_syst.view(flow=True)[:, 0, ...] = sf_syst.view(flow=True)[:, 1, ...]
-    sf_syst.view(flow=True)[:, axis_pt_eff.extent-1, ...] = sf_syst.view(flow=True)[:, axis_pt_eff.extent-2, ...]
-    
-    sf_syst_pyroot = narf.hist_to_pyroot_boost(sf_syst)
-    # nomi and syst are stored in the same histogram, just use different helpers to override the () operator for now, until RDF is improved
-    helper = ROOT.wrem.muon_efficiency_smooth_helper[str(is_w_like).lower(), Nsyst, type(sf_syst_pyroot)]( ROOT.std.move(sf_syst_pyroot) )
-    helper_syst = ROOT.wrem.muon_efficiency_smooth_helper_syst[str(is_w_like).lower(), Nsyst, type(sf_syst_pyroot)]( helper )
-    # define axis for syst variations with all steps
-    axis_all = hist.axis.Integer(0, 5, underflow = False, overflow = False, name = "reco-tracking-idip-trigger-iso")
-    axis_nsyst = hist.axis.Integer(0, Nsyst, underflow = False, overflow = False, name = "n_syst_variations")
-    helper_syst.tensor_axes = [axis_all, axis_nsyst]
-    #
+    sf_syst_2D.view(flow=True)[0, ...] = sf_syst_2D.view(flow=True)[1, ...]
+    sf_syst_2D.view(flow=True)[axis_eta_eff.extent-1, ...] = sf_syst_2D.view(flow=True)[axis_eta_eff.extent-2, ...]
+    sf_syst_2D.view(flow=True)[:, 0, ...] = sf_syst_2D.view(flow=True)[:, 1, ...]
+    sf_syst_2D.view(flow=True)[:, axis_pt_eff.extent-1, ...] = sf_syst_2D.view(flow=True)[:, axis_pt_eff.extent-2, ...]
+
+    ## now proceed with loading 3D SF if existing, then create helpers as appropriate
+    if len(eff_types_3D):
+        
+        dict_SF3D = None
+        # temporary file stored locally for tests
+        fileSF3D = data_dir + "/testMuonSF/smoothSF3D.pkl.lz4"
+        with lz4.frame.open(fileSF3D) as f3D:
+            dict_SF3D = pickle.load(f3D)
+
+        sf_syst_3D = None
+        ############
+        # all ut-dependent steps, for the nominal and systematics
+        for charge, charge_tag in charges.items():
+            for eff_type in axis_eff_type_3D:
+                effTypeNameInHist = f"{eff_type}{charge_tag}" if eff_type == "trigger" else eff_type
+                if "anti" in effTypeNameInHist:
+                    effTypeNameInHist = effTypeNameInHist.replace("anti", "") # temporary until we have all
+                hist_hist = dict_SF3D[f"smoothSF3D_{effTypeNameInHist}"] 
+                if sf_syst_3D is None:
+                    ## Redefine axes to force the existence of overflow bins
+                    axis_eta_eff = cloneAxis(hist_hist.axes[0], overflow=True, underflow=True)
+                    axis_pt_eff = cloneAxis(hist_hist.axes[1], overflow=True, underflow=True)
+                    axis_ut_eff = cloneAxis(hist_hist.axes[2], overflow=True, underflow=True)
+                    # ut axis is put last to keep same axes sorting as for 2D histograms created before
+                    sf_syst_3D = hist.Hist(axis_eta_eff, axis_pt_eff, axis_charge,
+                                           axis_eff_type_3D, axis_nom_syst, axis_ut_eff,
+                                           name = "sf_syst_2D", storage = hist.storage.Weight())
+                # could use max_pt to remove some of the pt bins for the input histogram
+                # extract nominal (first bin that is not underflow) and put in corresponding bin of destination (bin 0 is the first bin because no underflow)
+                ## Note: must call sf_syst_3D with flow=False because it has overflow bins but hist_hist does not
+                sf_syst_3D.view(flow=False)[:, :, axis_charge.index(charge), axis_eff_type_3D.index(eff_type), 0, :] = hist_hist.view(flow=True)[:,:,:,0]
+                # extract syst (last bin except overflow) and put in corresponding bin of destination (bin 1 is the second bin because no underflow)
+                ##
+                ## FIXME: for now using syst=nominal since we don't have syst (must copy from 2D version)
+                ##
+                sf_syst_3D.view(flow=False)[:, :, axis_charge.index(charge), axis_eff_type_3D.index(eff_type), 1, :] = hist_hist.view(flow=True)[:,:,:,0]  ## <---- FIX THIS !!!
+                for isyst in range(len(effSyst_decorrEtaEdges)-1):
+                    # first copy the nominal
+                    sf_syst_3D.view(flow=False)[:, :, axis_charge.index(charge), axis_eff_type_3D.index(eff_type), 2+isyst, :] = hist_hist.view(flow=True)[:,:,:,0]
+                    # now update with actual syst all eta bins inside interval [effSyst_decorrEtaEdges[isyst], effSyst_decorrEtaEdges[isyst+1]]
+                    # add epsilon to ensure picking the bin on the right of the edge (for the right edge given by
+                    # effSyst_decorrEtaEdges[isyst+1]] the range selection in boost later on will stop at the left
+                    #edge of the chosen bin number, e.g. h[b:b+1] will pick the range containing the single bin b, unlike in ROOT
+                    # also do not sum 1 because sf_syst_3D.view(flow=False) will consider 0 the first bin index (with flow=True instead 0 is the underflow but only if it exists)
+                    indexEtaLow = axis_eta_eff.index(effSyst_decorrEtaEdges[isyst] + 0.001) # add epsilon to ensure picking the bin on the right of the edge
+                    indexEtaHigh = axis_eta_eff.index(effSyst_decorrEtaEdges[isyst+1] + 0.001) 
+                    sf_syst_3D.view(flow=False)[indexEtaLow:indexEtaHigh, :, axis_charge.index(charge), axis_eff_type_3D.index(eff_type), 2+isyst, :] = hist_hist.view(flow=True)[indexEtaLow:indexEtaHigh, :, :, 0]
+
+        # set overflow and underflow eta-pt bins equal to adjacent bins
+        sf_syst_3D.view(flow=True)[0, ...] = sf_syst_3D.view(flow=True)[1, ...]
+        sf_syst_3D.view(flow=True)[axis_eta_eff.extent-1, ...] = sf_syst_3D.view(flow=True)[axis_eta_eff.extent-2, ...]
+        sf_syst_3D.view(flow=True)[:, 0, ...] = sf_syst_3D.view(flow=True)[:, 1, ...]
+        sf_syst_3D.view(flow=True)[:, axis_pt_eff.extent-1, ...] = sf_syst_3D.view(flow=True)[:, axis_pt_eff.extent-2, ...]
+        sf_syst_3D.view(flow=True)[..., 0] = sf_syst_3D.view(flow=True)[..., 1]
+        sf_syst_3D.view(flow=True)[..., axis_ut_eff.extent-1] = sf_syst_3D.view(flow=True)[..., axis_ut_eff.extent-2]
+        
+        sf_syst_2D_pyroot = narf.hist_to_pyroot_boost(sf_syst_2D)
+        sf_syst_3D_pyroot = narf.hist_to_pyroot_boost(sf_syst_3D)
+        # nomi and syst are stored in the same histogram, just use different helpers to override the () operator for now, until RDF is improved
+        helper = ROOT.wrem.muon_efficiency_smooth_helper[str(is_w_like).lower(), Nsyst, type(sf_syst_2D_pyroot), type(sf_syst_3D_pyroot)]( ROOT.std.move(sf_syst_2D_pyroot), ROOT.std.move(sf_syst_3D_pyroot) )
+        helper_syst = ROOT.wrem.muon_efficiency_smooth_helper_syst[str(is_w_like).lower(), Nsyst, type(sf_syst_2D_pyroot), type(sf_syst_3D_pyroot)]( helper )
+        # define axis for syst variations with all steps
+        axis_all = hist.axis.Integer(0, 5, underflow = False, overflow = False, name = "reco-tracking-idip-trigger-iso")
+        axis_nsyst = hist.axis.Integer(0, Nsyst, underflow = False, overflow = False, name = "n_syst_variations")
+        helper_syst.tensor_axes = [axis_all, axis_nsyst]
+        #
+
+    else:
+        # case with only 2D histograms
+        sf_syst_2D_pyroot = narf.hist_to_pyroot_boost(sf_syst_2D)
+        # nomi and syst are stored in the same histogram, just use different helpers to override the () operator for now, until RDF is improved
+        helper = ROOT.wrem.muon_efficiency_smooth_helper[str(is_w_like).lower(), Nsyst, type(sf_syst_2D_pyroot)]( ROOT.std.move(sf_syst_2D_pyroot) )
+        helper_syst = ROOT.wrem.muon_efficiency_smooth_helper_syst[str(is_w_like).lower(), Nsyst, type(sf_syst_2D_pyroot)]( helper )
+        # define axis for syst variations with all steps
+        axis_all = hist.axis.Integer(0, 5, underflow = False, overflow = False, name = "reco-tracking-idip-trigger-iso")
+        axis_nsyst = hist.axis.Integer(0, Nsyst, underflow = False, overflow = False, name = "n_syst_variations")
+        helper_syst.tensor_axes = [axis_all, axis_nsyst]
+        #
     
     ##############
     ## now the EFFSTAT
@@ -156,7 +232,7 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
                                            "helper" : None}
         
     for effStatKey in effStat_manager.keys():
-        down_nom_up_effStat_axis = None
+        nom_up_effStat_axis = None
         axis_eff_type = None
         axis_charge_def = None
         for ic, (charge, charge_tag) in enumerate(charges.items()):
@@ -181,12 +257,12 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
                     logger.info(f"Error: {hist_name} not found in file {filename}")
                     quit()
 
-                if down_nom_up_effStat_axis is None:
+                if nom_up_effStat_axis is None:
                     # Z axis has nominal, 2*N effStat (first N up then N down) and one syst in the last bin
                     nPtEigenBins = int(int(hist_root.GetNbinsZ() - 2)/ 2)
                     effStat_manager[effStatKey]["nPtEigenBins"] = nPtEigenBins
                     effStat_manager[effStatKey]["nCharges"] = 2 if eff_type in chargeDependentSteps else 1
-                    down_nom_up_effStat_axis = hist.axis.Regular(int(1+2*nPtEigenBins), -0.5-nPtEigenBins, 0.5+nPtEigenBins, underflow=False, overflow=False, name = "downNomUpVar")
+                    nom_up_effStat_axis = hist.axis.Regular(int(1+nPtEigenBins), -0.5, 0.5+nPtEigenBins, underflow=False, overflow=False, name = "nomUpVar")
 
                 hist_hist = narf.root_to_hist(hist_root, axis_names = ["SF eta", "SF pt", "nomi-statUpDown-syst"])
 
@@ -196,20 +272,17 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
                     axis_eff_type = hist.axis.StrCategory(effStat_manager[effStatKey]["axisLabels"], name = f"{effStatKey}_eff_type")
                     effStat_manager[effStatKey]["boostHist"] = hist.Hist(axis_eta_eff, axis_pt_eff, axis_charge_def,
                                                                          axis_eff_type,
-                                                                         down_nom_up_effStat_axis,
+                                                                         nom_up_effStat_axis,
                                                                          name = effStatKey,
                                                                          storage = hist.storage.Weight())
                     
                 # extract nominal (first bin that is not underflow)
-                effStat_manager[effStatKey]["boostHist"].view(flow=True)[:, :, axis_charge_def.index(charge), axis_eff_type.index(eff_type), down_nom_up_effStat_axis.index(0)] = hist_hist.view(flow=True)[:,:,1]
+                effStat_manager[effStatKey]["boostHist"].view(flow=True)[:, :, axis_charge_def.index(charge), axis_eff_type.index(eff_type), nom_up_effStat_axis.index(0)] = hist_hist.view(flow=True)[:,:,1]
                 # now extract the stat variations
                 # note that for hist_hist the nominal bin of the third axis is number 1 when the underflow is active
                 for iup in range(1, 1 + nPtEigenBins):
-                    # up variations
-                    effStat_manager[effStatKey]["boostHist"].view(flow=True)[:, :, axis_charge_def.index(charge), axis_eff_type.index(eff_type), down_nom_up_effStat_axis.index(iup)] = hist_hist.view(flow=True)[:,:,1+iup]
-                    # down variations
-                    idown = -1 * iup
-                    effStat_manager[effStatKey]["boostHist"].view(flow=True)[:, :, axis_charge_def.index(charge), axis_eff_type.index(eff_type), down_nom_up_effStat_axis.index(idown)] = hist_hist.view(flow=True)[:,:,1+iup+nPtEigenBins]
+                    # up variations (down are going to be created later by mirroring in CardTool.py
+                    effStat_manager[effStatKey]["boostHist"].view(flow=True)[:, :, axis_charge_def.index(charge), axis_eff_type.index(eff_type), nom_up_effStat_axis.index(iup)] = hist_hist.view(flow=True)[:,:,1+iup]
                 
         # set overflow and underflow equal to adjacent bins
         effStat_manager[effStatKey]["boostHist"].view(flow=True)[0, ...] = effStat_manager[effStatKey]["boostHist"].view(flow=True)[1, ...]
