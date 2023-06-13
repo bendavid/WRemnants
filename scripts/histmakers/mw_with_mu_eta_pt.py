@@ -147,7 +147,7 @@ if args.nonClosureScheme in ["binned", "binned-plus-M"]:
     z_non_closure_binned_helper = muon_calibration.make_Z_non_closure_binned_helper(
         correlate = args.correlatedNonClosureNP
     )
-elif args.nonClosureScheme in ["A-M-separated", "A-M-combined", "binned-plus-M"]:
+if args.nonClosureScheme in ["A-M-separated", "A-M-combined", "binned-plus-M"]:
     z_non_closure_parametrized_helper = muon_calibration.make_Z_non_closure_parametrized_helper(
         correlate = args.correlatedNonClosureNP
     )
