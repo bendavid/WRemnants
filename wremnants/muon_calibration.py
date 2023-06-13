@@ -566,6 +566,9 @@ def transport_smearing_weights_to_reco(
         hists_to_transport.append('Z_non_closure_parametrized_gensmear')
     elif nonClosureScheme == "binned":
         hists_to_transport.append('Z_non_closure_binned_gensmear')
+    elif nonClosureScheme == "binned-plus-M":
+        hists_to_transport.append('Z_non_closure_parametrized_M_gensmear')
+        hists_to_transport.append('Z_non_closure_binned_gensmear')
 
     for proc in procs:
 

@@ -143,11 +143,11 @@ bias_helper = muon_calibration.make_muon_bias_helpers(args) if args.biasCalibrat
 
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theoryCorr)
 
-if args.nonClosureScheme == "binned":
+if args.nonClosureScheme in ["binned", "binned-plus-M"]:
     z_non_closure_binned_helper = muon_calibration.make_Z_non_closure_binned_helper(
         correlate = args.correlatedNonClosureNP
     )
-else:
+elif args.nonClosureScheme in ["A-M-separated", "A-M-combined", "binned-plus-M"]:
     z_non_closure_parametrized_helper = muon_calibration.make_Z_non_closure_parametrized_helper(
         correlate = args.correlatedNonClosureNP
     )
