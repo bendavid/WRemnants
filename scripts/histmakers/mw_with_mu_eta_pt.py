@@ -503,7 +503,7 @@ def build_graph(df, dataset):
                             storage=hist.storage.Double()
                         )
                         results.append(hist_Z_non_closure_parametrized_A)
-
+                    if args.nonClosureScheme in ["A-M-separated", "binned-plus-M"]:
                         df = df.Define("Z_non_closure_parametrized_M", z_non_closure_parametrized_helper,
                             [
                                 f"{reco_sel_GF}_qop0_gen",
@@ -525,7 +525,7 @@ def build_graph(df, dataset):
                             storage=hist.storage.Double()
                         )
                         results.append(hist_Z_non_closure_parametrized_M)
-                    elif args.nonClosureScheme == "A-M-combined":
+                    if args.nonClosureScheme == "A-M-combined":
                         df = df.DefinePerSample("AMFlag", "0x01 | 0x04")
                         df = df.Define("Z_non_closure_parametrized", z_non_closure_parametrized_helper,
                             [
@@ -547,7 +547,7 @@ def build_graph(df, dataset):
                             storage=hist.storage.Double()
                         )
                         results.append(hist_Z_non_closure_parametrized)
-                    elif args.nonClosureScheme == "binned":
+                    if args.nonClosureScheme in ["binned", "binned-plus-M"]:
                         df = df.Define("Z_non_closure_binned", z_non_closure_binned_helper,
                             [
                                 f"{reco_sel_GF}_qop0_gen",
