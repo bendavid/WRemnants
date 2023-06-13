@@ -394,7 +394,7 @@ def main(args,xnorm=False):
             if args.nonClosureScheme == "A-M-separated":
                 cardTool.addSystematic("Z_non_closure_parametrized_A", 
                     processes=single_vmu_samples,
-                    group="muonScale",
+                    group="nonClosure" if args.sepImpactForNC else "muonScale",
                     baseName="Z_nonClosure_parametrized_A_",
                     systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
                     labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
@@ -402,7 +402,7 @@ def main(args,xnorm=False):
                 )
                 cardTool.addSystematic("Z_non_closure_parametrized_M", 
                     processes=single_vmu_samples,
-                    group="muonScale",
+                    group="nonClosure" if args.sepImpactForNC else "muonScale",
                     baseName="Z_nonClosure_parametrized_M_",
                     systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
                     labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
@@ -411,7 +411,7 @@ def main(args,xnorm=False):
             elif args.nonClosureScheme == "A-M-combined":
                 cardTool.addSystematic("Z_non_closure_parametrized", 
                     processes=single_vmu_samples,
-                    group="muonScale",
+                    group="nonClosure" if args.sepImpactForNC else "muonScale",
                     baseName="Z_nonClosure_parametrized_",
                     systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
                     labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
@@ -420,7 +420,7 @@ def main(args,xnorm=False):
             elif args.nonClosureScheme == "binned":
                 cardTool.addSystematic("Z_non_closure_binned", 
                     processes=single_vmu_samples,
-                    group="muonScale",
+                    group="nonClosure" if args.sepImpactForNC else "muonScale",
                     baseName="Z_nonClosure_binned_",
                     systAxes=["unc_ieta", "unc_ipt", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
                     labelsByAxis=["unc_ieta", "unc_ipt", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
