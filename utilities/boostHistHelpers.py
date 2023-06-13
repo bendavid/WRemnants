@@ -7,6 +7,9 @@ from utilities import common, logging
 logger = logging.child_logger(__name__)
 
 def valsAndVariances(h1, h2, allowBroadcast=True, transpose=True):
+    if h1.view(flow=True).shape == h2.view(flow=True).shape:
+        return h1.values(flow=True), h2.values(flow=True), h1.variances(flow=True), h2.variances(flow=True)
+
     if not allowBroadcast and len(h1.axes) != len(h2.axes):
         raise ValueError("Incompatible hists for math operation")
 
@@ -60,12 +63,12 @@ def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False):
     return newh
 
 def relVariance(hvals, hvars, cutoff=1e-3, fillOnes=False):
-    nonzero = np.abs(hvals) > cutoff
+    out = np.empty(hvars)
+    np.multiply(hvars, hvals, out=out)
+    np.clip(out, min=cutoff, max=None, out=out)
+    np.divide(hvars, out, out=out)
     if fillOnes:
-        out = np.ones(hvars.shape)
-    else:
-        out = np.copy(hvars)
-    np.divide(hvars, hvals*hvals, out=out, where=nonzero)
+        out[hvals<cutoff] = 1.
     return out
 
 def relVariances(h1vals, h2vals, h1vars, h2vars):
@@ -89,32 +92,36 @@ def sqrtHist(h):
 
     return rooth
 
-def multiplyWithVariance(vals1, vals2, vars1, vars2):
-    val = np.multiply(vals1, vals2)
-    var = val*val*sum(relVariances(vals1, vals2, vars1, vars2))
-    return val, var
+def multiplyWithVariance(vals1, vals2, vars1=None, vars2=None):
+    outvals = np.empty(vals1.shape)
+    outvars = np.empty(vars1.shape) if (vars1 and vars2) else None
+    np.multiply(vals1, vals2, out=outvals)
+    if outvars:
+        np.mulitply(outvals, outvals, out=outvars)
+        relvar1, relvar2 = relVariances(vals1, vals2, vars1, vars2)
+        np.add(relvar1, relvar2, out=relvar1)
+        np.multiply(outvars, relvar1, out=outvars)
+        
+    return outvals, outvars
 
 def multiplyHists(h1, h2, allowBroadcast=True, transpose=True, createNew=True):
-    h1vals, h2vals, h1vars, h2vars = valsAndVariances(h1, h2, allowBroadcast, transpose)
-    outh = h1 if not allowBroadcast else broadcastOutHist(h1, h2)
+    #h1vals, h2vals, h1vars, h2vars = valsAndVariances(h1, h2, allowBroadcast, transpose)
+    #outh = h1 if not allowBroadcast else broadcastOutHist(h1, h2)
+    #if not (h1._storage_type() == hist.storage.Weight() and h2._storage_type() == hist.storage.Weight()):
+    #    h1vars,h2vars = None,None
+
+    #vals, varis = multiplyWithVariance(h1vals, h2vals, h1vars, h2vars)
+    outh = h1
+    vals, varis = multiplyWithVariance(h1.values(flow=True), h2.values(flow=True), None, None)
 
     if createNew:
-        if h1._storage_type() == hist.storage.Double() or h2._storage_type() == hist.storage.Double():
-            val = np.multiply(h1vals, h2vals)
-            return hist.Hist(*outh.axes, data=val)
-        else:
-            val,var = multiplyWithVariance(h1vals, h2vals, h1vars, h2vars)
-            return hist.Hist(*outh.axes, storage=hist.storage.Weight(), data=np.stack((val, var), axis=-1))
-    else:
-        if h1._storage_type() == hist.storage.Double() or h2._storage_type() == hist.storage.Double():
-            val = np.multiply(h1vals, h2vals)
-        else:
-            val,var = multiplyWithVariance(h1vals, h2vals, h1vars, h2vars)
-            outh.variances(flow=True)[...] = var
+        outh = hist.Hist(*outh.axes, data=vals, storage=outh._storage_type())
 
-        outh.values(flow=True)[...] = val
+    outh.values(flow=True)[...] = vals
+    if varis:
+        outh.variances(flow=True)[...] = varis
 
-        return outh
+    return outh
 
 def addHists(h1, h2, allowBroadcast=True, createNew=True):
     h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2, allowBroadcast)
@@ -126,9 +133,9 @@ def addHists(h1, h2, allowBroadcast=True, createNew=True):
             return hist.Hist(*outh.axes, storage=hist.storage.Weight(),
                             data=np.stack((h1vals+h2vals, h1vars+h2vars), axis=-1))            
     else:
-        outh.values(flow=True)[...] = h1vals + h2vals
+        np.add(h1vals, h2vals, out=h1vals if h1.shape == outh.shape else h2vals)
         if h1._storage_type() == hist.storage.Weight() and h2._storage_type() == hist.storage.Weight():
-            outh.variances(flow=True)[...] = h1vars + h2vars
+            np.add(h1vars, h2vars, out=h1vars if h1.shape == outh.shape else h2vars)
         return outh                
 
 def sumHists(hists):
