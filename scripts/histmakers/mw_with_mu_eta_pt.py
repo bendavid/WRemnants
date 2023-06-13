@@ -480,7 +480,6 @@ def build_graph(df, dataset):
                     # for the Z non-closure nuisances
                     if args.nonClosureScheme == "A-M-separated":
                         df = df.DefinePerSample("AFlag", "0x01")
-                        df = df.DefinePerSample("MFlag", "0x04")
 
                         df = df.Define("Z_non_closure_parametrized_A", z_non_closure_parametrized_helper,
                             [
@@ -504,6 +503,7 @@ def build_graph(df, dataset):
                         )
                         results.append(hist_Z_non_closure_parametrized_A)
                     if args.nonClosureScheme in ["A-M-separated", "binned-plus-M"]:
+                        df = df.DefinePerSample("MFlag", "0x04")
                         df = df.Define("Z_non_closure_parametrized_M", z_non_closure_parametrized_helper,
                             [
                                 f"{reco_sel_GF}_qop0_gen",
