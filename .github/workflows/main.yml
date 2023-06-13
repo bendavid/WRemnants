@@ -223,7 +223,7 @@ jobs:
         run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ unfold ZMassWLike_pt_eta plus=ZMassWLike_plus.txt minus=ZMassWLike_minus.txt xnorm=ZMassWLike_inclusive_xnorm.txt
 
       - name: wlike combine unfolding results 
-        run: scripts/ci/run_with_singularity.sh scripts/ci/show_unfolded_results.sh ZMassWLike_pt_eta/fitresults_123456789.root $WEB_DIR/$PLOT_DIR/
+        run: scripts/ci/run_with_singularity.sh scripts/ci/show_unfolded_results.sh ZMassWLike_pt_eta/fitresults_123456789.root $WEB_DIR $PLOT_DIR/
 
 
 
