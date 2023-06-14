@@ -314,25 +314,8 @@ def main(args,xnorm=False):
 
     to_fakes = passSystToFakes and not args.noQCDscaleFakes and not xnorm
     combine_helpers.add_pdf_uncertainty(cardTool, single_v_samples, passSystToFakes, from_corr=args.pdfUncFromCorr, scale=args.scalePdf)
-    scale_name = "W" if wmass else "Z"
-    if wmass and args.resumUnc == "tnp":
-        samples = single_v_samples
-        scale_name = ""
-    else:
-        samples = signal_samples_inctau
-    combine_helpers.add_scale_uncertainty(cardTool, args.minnloScaleUnc, samples, to_fakes, 
-                                          resum=args.resumUnc, name_append=scale_name, scaleTNP=args.scaleTNP)
-    # for Z background in W mass case (W background for Wlike is essentially 0, useless to apply QCD scales there)
-    if wmass and not xnorm and args.resumUnc != "tnp":
-        combine_helpers.add_scale_uncertainty(cardTool, args.minnloScaleUnc, single_v_nonsig_samples, to_fakes, 
-                                                name_append=scale_name_Z, resum=args.resumUnc, scaleTNP=args.scaleTNP)
-
-    if args.resumUnc != "none":
-        common_np_samples = single_v_samples if wmass else signal_samples_inctau
-        combine_helpers.add_common_np_uncertainties(cardTool, common_np_samples, to_fakes)
-        combine_helpers.add_decorrelated_np_uncertainties(cardTool, signal_samples_inctau, to_fakes, name_append="W" if wmass else "Z")
-        if wmass:
-            combine_helpers.add_decorrelated_np_uncertainties(cardTool, single_v_nonsig_samples, to_fakes, name_append="Z")
+    combine_helpers.add_modeling_uncertainty(cardTool, args.minnloScaleUnc, signal_samples_inctau, 
+        single_v_nonsig_samples if not xnorm else None, to_fakes, args.resumUnc, wmass, scaleTNP=args.scaleTNP, rebin_pt=args.rebinPtV)
 
     if not xnorm:
         msv_config_dict = {
