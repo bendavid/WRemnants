@@ -133,13 +133,14 @@ def syst_transform_map(base_hist, hist_name):
 
 def scale_helicity_hist_to_variations(scale_hist, sum_axes=[], rebinPtV=None):
     s = hist.tag.Slicer()
+    axisNames = scale_hist.axes.name
 
     sum_expr = {axis : s[::hist.sum] for axis in sum_axes if axis in axisNames}
     scale_hist = scale_hist[sum_expr]
+    axisNames = scale_hist.axes.name
     
     # select nominal QCD scales, but keep the sliced axis at size 1 for broadcasting
     nom_scale_hist = scale_hist[{"muRfact" : s[1.j:1.j+1], "muFfact" : s[1.j:1.j+1]}]
-    axisNames = scale_hist.axes.name
     # select nominal QCD scales and project down to nominal axes
     genAxes = ["ptVgen", "chargeVgen", "helicity"]
     nom_sel = {"muRfact" : s[1.j], "muFfact" : s[1.j] }
