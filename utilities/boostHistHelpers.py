@@ -147,11 +147,7 @@ def mirrorHist(hvar, hnom, cutoff=1):
     return hnew
 
 def extendHistByMirror(hvar, hnom, downAsUp=False, downAsNomi=False):
-    print("Shapes are", hvar.shape, hnom.shape)
     hmirror = mirrorHist(hvar, hnom)
-    print("Mirror shape is", hvar.shape)
-    print("hvar storage", hvar._storage_type)
-    print("mirror storage", hmirror._storage_type)
     if downAsNomi:
         hvar,hmirror = hmirror,hvar
 
@@ -182,22 +178,11 @@ def addSystAxis(h, size=1, offset=0):
 
     return hnew
 
-def clipNegativeVals(h, clipValue=0, createNew=True):
-    vals = h.values(flow=True)
-    vals[vals<0] = clipValue
-    if createNew:
-        if h._storage_type == hist.storage.Double():
-            hnew = hist.Hist(*h.axes)
-            hnew[...] = vals
-        else:
-            hnew = hist.Hist(*h.axes, storage=hist.storage.Weight())
-            hnew[...] = np.stack((vals, h.variances(flow=True)), axis=-1)
+def clipNegativeVals(h, clipValue=0, createNew=False):
+    newh = h.copy() if createNew else h
+    np.clip(newh.values(flow=True), a_min=clipValue, a_max=None, out=newh.values(flow=True))
+    return newh
 
-        return hnew
-    else:
-        h.values(flow=True)[...] = vals
-        return h
-    
 def scaleHist(h, scale, createNew=True):
     if createNew:
         if h._storage_type == hist.storage.Double():
