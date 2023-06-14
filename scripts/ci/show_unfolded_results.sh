@@ -1,9 +1,9 @@
 #!/bin/bash
 
-if [[ $# -lt 2 ]]; then
-	echo "Requires at least two arguments: show_unfolded_results.sh <input_file> <output_folder>"
+if [[ $# -lt 3 ]]; then
+	echo "Requires at least three arguments: show_unfolded_results.sh <input_file> <output_path> <output_folder>"
 	exit 1
 fi
 
 . ./setup.sh
-python3 scripts/plotting/unfolding_plots.py $1 -o $2
+python3 scripts/plotting/unfolding_plots.py $1 -o $2 -f $3 --eoscp
