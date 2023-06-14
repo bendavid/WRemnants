@@ -6,66 +6,59 @@ from utilities import common, logging
 
 logger = logging.child_logger(__name__)
 
-def valsAndVariances(h1, h2, allowBroadcast=True, transpose=True):
-    if h1.view(flow=True).shape == h2.view(flow=True).shape:
-        return h1.values(flow=True), h2.values(flow=True), h1.variances(flow=True), h2.variances(flow=True)
-
-    if not allowBroadcast and len(h1.axes) != len(h2.axes):
-        raise ValueError("Incompatible hists for math operation")
-
-    flow = True
-    for i,j in zip(h1.axes.traits, h2.axes.traits):
-        flow = i.overflow == j.overflow and i.underflow == j.underflow
-        if not flow:
-            break
-
-    if len(h1.axes) == len(h2.axes):
-        return (h1.values(flow=flow), h2.values(flow=flow), h1.variances(flow=flow), h2.variances(flow=flow))
-    else:
-        outshape = h1.view(flow=flow).shape if len(h1.shape) > len(h2.shape) else h2.view(flow=flow).shape
-        # The transpose is because numpy works right to left in broadcasting, and we've put the
-        # syst axis on the right
-        try:
-            res = [None if x is None else np.broadcast_to(x.T if transpose else x, outshape[::-1] if transpose else outshape) for x in \
-                    [h1.values(flow=flow), h2.values(flow=flow), h1.variances(flow=flow), h2.variances(flow=flow)]]
-        except ValueError as e:
-            logger.error(f"Failed to broadcast hists! h1.axes.name {h1.axes.name}, h2.axes.name {h2.axes.name}")
-            raise e
-        return [None if x is None else x.T for x in res] if transpose else res
+def valsAndVariances(h1, h2):
+    return h1.values(flow=True),h2.values(flow=True),h1.variances(flow=True),h2.variances(flow=True)
 
 def broadcastOutHist(h1, h2):
     if len(h1.axes) == len(h2.axes):
         return h1 if h1.axes[-1].size >= h2.axes[-1].size else h2
     return h1 if len(h1.axes) > len(h2.axes) else h2
 
-# returns h1/h2
-def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False):
-    # To get the broadcast shape right
-    outh = h1 if not allowBroadcast else broadcastOutHist(h1, h2)
+# Broadcast h1 to match the shape of h2
+def broadcastSystHist(h1, h2):
+    if h1.ndim > h2.ndim or h1.shape == h2.shape:
+        return h1
+    
+    # Transpose because we keep syst axis last, but numpy broadcasts from the front
+    new_vals = np.broadcast_to(h1.view(flow=True).T, h2.view(flow=True).T.shape).T
 
-    h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2, allowBroadcast)
-    out = np.zeros_like(h2vals)
+    return hist.Hist(*h2.axes, data=new_vals, storage=h1._storage_type())
+
+# returns h1/h2
+def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False, createNew=False):
+    if allowBroadcast:
+        h1 = broadcastSystHist(h1, h2)
+        h2 = broadcastSystHist(h2, h1)
+
+    outh = h1 if not createNew else hist.Hist(*h1.axes, storage=h1._storage_type)
+
+    out = outh.values(flow=True)
+    h1vals,h2vals = h1.values(flow=True), h2.values(flow=True)
+    h1vars,h2vars = h1.variances(flow=True), h2.variances(flow=True)
     # By the argument that 0/0 = 1
     out[(np.abs(h2vals) < cutoff) & (np.abs(h1vals) < cutoff)] = 1.
     val = np.divide(h1vals, h2vals, out=out, where=np.abs(h2vals)>cutoff)
 
-    if h1._storage_type() != hist.storage.Weight() or h2._storage_type() != hist.storage.Weight():
+    if h1._storage_type != hist.storage.Weight or h2._storage_type != hist.storage.Weight:
         newh = hist.Hist(*outh.axes, data=val)
     else:
         relvars = relVariances(h1vals, h2vals, h1vars, h2vars)
+        val2 = np.multiply(val, val, out=val)
         if rel_unc:
             # Treat the divisor as a constant
-            var = val*val*relvars[0]
+            var = np.mulitiply(val2, relvars[0])
         else:
-            var = val*val*sum(relvars)
+            relsum = np.multiply(*relvars, out=relvars[0])
+            var = np.multiply(relsum, val2, out=relsum)
+
         newh = hist.Hist(*outh.axes, storage=hist.storage.Weight(),
                 data=np.stack((val, var), axis=-1))
     return newh
 
 def relVariance(hvals, hvars, cutoff=1e-3, fillOnes=False):
-    out = np.empty(hvars)
+    out = np.empty(hvars.shape)
     np.multiply(hvars, hvals, out=out)
-    np.clip(out, min=cutoff, max=None, out=out)
+    np.clip(out, a_min=cutoff, a_max=None, out=out)
     np.divide(hvars, out, out=out)
     if fillOnes:
         out[hvals<cutoff] = 1.
@@ -83,7 +76,7 @@ def sqrtHist(h):
     rootval = np.sqrt(h.values(flow=True))
     rooth = h.copy()
 
-    if h._storage_type() == hist.storage.Double():
+    if h._storage_type == hist.storage.Double():
         rooth[...] = rootval
     else:
         relvar = relVariance(h.values(flow=True), h.variances(flow=True))
@@ -94,47 +87,54 @@ def sqrtHist(h):
 
 def multiplyWithVariance(vals1, vals2, vars1=None, vars2=None):
     outvals = np.empty(vals1.shape)
-    outvars = np.empty(vars1.shape) if (vars1 and vars2) else None
+    outvars = np.empty(vars1.shape) if (vars1 is not None and vars2 is not None) else None
     np.multiply(vals1, vals2, out=outvals)
-    if outvars:
-        np.mulitply(outvals, outvals, out=outvars)
+    if outvars is not None:
+        np.multiply(outvals, outvals, out=outvars)
         relvar1, relvar2 = relVariances(vals1, vals2, vars1, vars2)
         np.add(relvar1, relvar2, out=relvar1)
         np.multiply(outvars, relvar1, out=outvars)
         
     return outvals, outvars
 
-def multiplyHists(h1, h2, allowBroadcast=True, transpose=True, createNew=True):
-    #h1vals, h2vals, h1vars, h2vars = valsAndVariances(h1, h2, allowBroadcast, transpose)
-    #outh = h1 if not allowBroadcast else broadcastOutHist(h1, h2)
-    #if not (h1._storage_type() == hist.storage.Weight() and h2._storage_type() == hist.storage.Weight()):
-    #    h1vars,h2vars = None,None
+def multiplyHists(h1, h2, allowBroadcast=True, createNew=True):
+    if allowBroadcast:
+        h1 = broadcastSystHist(h1, h2)
+        h2 = broadcastSystHist(h2, h1)
 
-    #vals, varis = multiplyWithVariance(h1vals, h2vals, h1vars, h2vars)
+    if h1._storage_type == hist.storage.Double and h2._storage_type == hist.storage.Double:
+        return h1*h2 
+
+    with_variance = h1._storage_type == hist.storage.Weight and h2._storage_type == hist.storage.Weight
     outh = h1
-    vals, varis = multiplyWithVariance(h1.values(flow=True), h2.values(flow=True), None, None)
+    vals, varis = multiplyWithVariance(h1.values(flow=True), h2.values(flow=True), 
+                        h1.variances(flow=True) if with_variance else None, h2.variances(flow=True) if with_variance else None)
 
     if createNew:
-        outh = hist.Hist(*outh.axes, data=vals, storage=outh._storage_type())
+        outh = hist.Hist(*outh.axes, storage=outh._storage_type)
 
     outh.values(flow=True)[...] = vals
-    if varis:
+    if varis is not None:
         outh.variances(flow=True)[...] = varis
 
     return outh
 
 def addHists(h1, h2, allowBroadcast=True, createNew=True):
-    h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2, allowBroadcast)
-    outh = h1 if not allowBroadcast else broadcastOutHist(h1, h2)
+    if allowBroadcast:
+        h1 = broadcastSystHist(h1, h2)
+        h2 = broadcastSystHist(h2, h1)
+
+    h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2)
+    outh = h1
     if createNew:
-        if h1._storage_type() == hist.storage.Double() or h2._storage_type() == hist.storage.Double():
+        if h1._storage_type == hist.storage.Double() or h2._storage_type == hist.storage.Double():
             return hist.Hist(*outh.axes, data=h1vals+h2vals)
         else:
             return hist.Hist(*outh.axes, storage=hist.storage.Weight(),
                             data=np.stack((h1vals+h2vals, h1vars+h2vars), axis=-1))            
     else:
         np.add(h1vals, h2vals, out=h1vals if h1.shape == outh.shape else h2vals)
-        if h1._storage_type() == hist.storage.Weight() and h2._storage_type() == hist.storage.Weight():
+        if h1._storage_type == hist.storage.Weight and h2._storage_type == hist.storage.Weight:
             np.add(h1vars, h2vars, out=h1vars if h1.shape == outh.shape else h2vars)
         return outh                
 
@@ -142,35 +142,33 @@ def sumHists(hists):
     return reduce(addHists, hists)
 
 def mirrorHist(hvar, hnom, cutoff=1):
-    div = divideHists(hnom, hvar, cutoff)
+    div = divideHists(hnom, hvar, cutoff, createNew=True)
     hnew = multiplyHists(div, hnom, createNew=False)
     return hnew
 
 def extendHistByMirror(hvar, hnom, downAsUp=False, downAsNomi=False):
-    if downAsUp:
-        hmirror = hvar.copy()
-    elif downAsNomi:
-        # temporary solution, can't just copy nominal since I have to broabcast, as done in multiplyHists/divideHists
-        # surely there is a smarter way with numpy
-        hmirror = hvar.copy()
-        div = divideHists(hmirror, hvar) # essentially creates hist with ones, with same shape as hvar 
-        hmirror = multiplyHists(div, hnom)
-    else:
-        hmirror = mirrorHist(hvar, hnom)
+    print("Shapes are", hvar.shape, hnom.shape)
+    hmirror = mirrorHist(hvar, hnom)
+    print("Mirror shape is", hvar.shape)
+    print("hvar storage", hvar._storage_type)
+    print("mirror storage", hmirror._storage_type)
+    if downAsNomi:
+        hvar,hmirror = hmirror,hvar
+
     mirrorAx = hist.axis.Integer(0,2, name="mirror", overflow=False, underflow=False)
 
-    if hvar._storage_type() == hist.storage.Double() or hnom._storage_type() == hist.storage.Double():
-        hnew = hist.Hist(*hvar.axes, mirrorAx)
-        hnew.view(flow=True)[...] = np.stack((hvar.values(flow=True), hmirror.values(flow=True)), axis=-1)
+    if hvar._storage_type == hist.storage.Weight and hnom._storage_type == hist.storage.Weight:
+        hnew = hist.Hist(*hvar.axes, mirrorAx, storage=hist.storage.Weight(),
+                         data=np.stack((hvar.view(flow=True), hmirror.view(flow=True)), axis=-1))
     else:
-        hnew = hist.Hist(*hvar.axes, mirrorAx, storage=hist.storage.Weight())
-        hnew.view(flow=True)[...] = np.stack((hvar.view(flow=True), hmirror.view(flow=True)), axis=-1)        
+        hnew = hist.Hist(*hvar.axes, mirrorAx,
+                        data=np.stack((hvar.values(flow=True), hmirror.values(flow=True)), axis=-1))
     
     return hnew
 
 def addSystAxis(h, size=1, offset=0):
 
-    if h._storage_type() == hist.storage.Double():
+    if h._storage_type == hist.storage.Double():
         hnew = hist.Hist(*h.axes,hist.axis.Regular(size,offset,size+offset, name="systIdx"))
         # Broadcast to new shape
         newvals = hnew.values()+h.values()[...,np.newaxis]
@@ -188,7 +186,7 @@ def clipNegativeVals(h, clipValue=0, createNew=True):
     vals = h.values(flow=True)
     vals[vals<0] = clipValue
     if createNew:
-        if h._storage_type() == hist.storage.Double():
+        if h._storage_type == hist.storage.Double():
             hnew = hist.Hist(*h.axes)
             hnew[...] = vals
         else:
@@ -202,7 +200,7 @@ def clipNegativeVals(h, clipValue=0, createNew=True):
     
 def scaleHist(h, scale, createNew=True):
     if createNew:
-        if h._storage_type() == hist.storage.Double():
+        if h._storage_type == hist.storage.Double():
             hnew = hist.Hist(*h.axes)
         else:
             hnew = hist.Hist(*h.axes, storage=hist.storage.Weight())
@@ -213,7 +211,7 @@ def scaleHist(h, scale, createNew=True):
         return hnew
     else:
         h.values(flow=True)[...] *= scale
-        if h._storage_type() == hist.storage.Weight():
+        if h._storage_type == hist.storage.Weight:
             h.variances(flow=True)[...] *= scale*scale
         return h
     
@@ -276,7 +274,7 @@ def rebinHist(h, axis_name, edges):
     # want to drop this value. Add tolerance of 1/2 min bin width to avoid numeric issues
     hnew.values(flow=flow)[...] = np.add.reduceat(h.values(flow=flow), edge_idx, 
             axis=ax_idx).take(indices=range(new_ax.size+underflow+overflow), axis=ax_idx)
-    if hnew._storage_type() == hist.storage.Weight():
+    if hnew._storage_type() == hist.storage.Weight:
         hnew.variances(flow=flow)[...] = np.add.reduceat(h.variances(flow=flow), edge_idx, 
                 axis=ax_idx).take(indices=range(new_ax.size+underflow+overflow), axis=ax_idx)
     return hnew
@@ -357,7 +355,7 @@ def rebinHistsToCommon(hists, axis_idx, keep_full_range=False):
             zero_pad_shape = list(newh.shape)
             zero_pad_shape[axis_idx] -= vals.shape[axis_idx]
             vals = np.append(vals, np.full(zero_pad_shape, 
-                hist.accumulators.WeightedSum(0, 0) if newh._storage_type() == hist.storage.Weight() else 0.))
+                hist.accumulators.WeightedSum(0, 0) if newh._storage_type() == hist.storage.Weight else 0.))
             newh[...] = vals
             full_hists.append(newh)
 
