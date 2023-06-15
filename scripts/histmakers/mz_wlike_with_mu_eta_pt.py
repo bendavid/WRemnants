@@ -66,6 +66,9 @@ if args.unfolding:
     groups_to_aggregate.append("BkgZmumu")
 
 
+# sum those groups up in post processing
+groups_to_aggregate = args.aggregateGroups
+
 # axes for mT measurement
 axis_mt = hist.axis.Regular(200, 0., 200., name = "mt",underflow=False, overflow=True)
 axis_eta_mT = hist.axis.Variable([-2.4, 2.4], name = "eta")
