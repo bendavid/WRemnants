@@ -12,7 +12,7 @@ import boost_histogram as bh
 import hist
 import pdb
 
-from utilities import boostHistHelpers as hh, logging, input_tools, common, differential
+from utilities import boostHistHelpers as hh, logging, input_tools, common, differential, output_tools
 from wremnants import plot_tools
 
 hep.style.use(hep.style.ROOT)
@@ -34,6 +34,7 @@ parser.add_argument("--plots", type=str, nargs="+", default=["xsec", "uncertaint
     choices=["xsec", "uncertainties", "correlation", "covariance", "pulls"], help="Define which plots to make")
 parser.add_argument("--lumi", type=float, default=16.8, help="Luminosity used in the fit, needed to get the absolute cross section")
 parser.add_argument("-c", "--channels", type=str, nargs="+", choices=["plus", "minus", "all"], default=["plus", "minus"], help="Select channel to plot")
+parser.add_argument("--eoscp", action='store_true', help="Override use of xrdcp and use the mount instead")
 
 args = parser.parse_args()
 
@@ -675,3 +676,6 @@ if "covariance" in args.plots:
     plot_matrix_poi("covariance_matrix_channelmu")
     plot_matrix_poi("covariance_matrix_channelpmaskedexp")
     plot_matrix_poi("covariance_matrix_channelpmaskedexpnorm")
+
+if output_tools.is_eosuser_path(args.outpath) and args.eoscp:
+    output_tools.copy_to_eos(args.outpath, args.outfolder)

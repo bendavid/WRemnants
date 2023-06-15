@@ -10,7 +10,7 @@ import boost_histogram as bh
 import hist
 import pdb
 
-from utilities import boostHistHelpers as hh, logging, input_tools, common
+from utilities import boostHistHelpers as hh, logging, input_tools, common, output_tools
 from wremnants import plot_tools
 
 hep.style.use(hep.style.ROOT)
@@ -20,7 +20,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("infile", help="Combine fitresult root file")
 # parser.add_argument("--ratioToData", action='store_true', help="Use data as denominator in ratio")
 parser.add_argument("-o", "--outpath", type=str, default=os.path.expanduser("~/www/WMassAnalysis"), help="Base path for output")
-parser.add_argument("-f", "--outfolder", type=str, default="./", help="Subfolder for output")
+parser.add_argument("-f", "--outfolder", type=str, default="", help="Subfolder for output")
 parser.add_argument("-r", "--rrange", type=float, nargs=2, default=None, help="y range for ratio plot")
 # parser.add_argument("--rebin", type=int, default=1, help="Rebin (for now must be an int)")
 parser.add_argument("--ylim", type=float, nargs=2, help="Min and max values for y axis (if not specified, range set automatically)")
@@ -34,12 +34,13 @@ parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend te
 parser.add_argument("--plots", type=str, nargs="+", default=["postfit"], choices=["prefit", "postfit"], help="Define which plots to make")
 parser.add_argument("--lumi", type=float, default=16.8, help="Luminosity used in the fit, needed to get the absolute cross section")
 parser.add_argument("-c", "--channels", type=str, nargs="+", choices=["plus", "minus", "all"], default=["plus", "minus"], help="Select channel to plot")
+parser.add_argument("--eoscp", action='store_true', help="Override use of xrdcp and use the mount instead")
 
 args = parser.parse_args()
 
 logger = logging.setup_logger("plotFitresult", 4 if args.debug else 3, False)
 
-outdir = plot_tools.make_plot_dir(args.outpath, args.outfolder)
+outdir = output_tools.make_plot_dir(args.outpath, args.outfolder, eoscp=args.eoscp)
 
 rfile = uproot.open(args.infile)
 
@@ -354,3 +355,6 @@ for fit_type in args.plots:
         plot("prefit", bins=(None,int(nbins_reco/2)), channel="minus")
     if "plus" in channels:
         plot("prefit", bins=(int(nbins_reco/2), nbins_reco), channel="plus")
+
+if output_tools.is_eosuser_path(args.outpath) and args.eoscp:
+    output_tools.copy_to_eos(args.outpath, args.outfolder)
