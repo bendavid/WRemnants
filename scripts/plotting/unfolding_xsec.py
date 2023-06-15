@@ -1,5 +1,7 @@
 import mplhep as hep
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
+
 import uproot
 import argparse
 import os
@@ -10,7 +12,7 @@ import boost_histogram as bh
 import hist
 import pdb
 
-from utilities import boostHistHelpers as hh, logging, input_tools, common
+from utilities import boostHistHelpers as hh, logging, input_tools, common, differential
 from wremnants import plot_tools
 
 hep.style.use(hep.style.ROOT)
@@ -28,8 +30,8 @@ parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file n
 parser.add_argument("--debug", action='store_true', help="Print debug output")
 parser.add_argument("--noData", action='store_true', help="Don't plot data")
 parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend text")
-parser.add_argument("--plots", type=str, nargs="+", default=["xsec", "uncertainties", "covariance"], 
-    choices=["xsec", "uncertainties", "correlation", "covariance"], help="Define which plots to make")
+parser.add_argument("--plots", type=str, nargs="+", default=["xsec", "uncertainties", "covariance", "pulls"], 
+    choices=["xsec", "uncertainties", "correlation", "covariance", "pulls"], help="Define which plots to make")
 parser.add_argument("--lumi", type=float, default=16.8, help="Luminosity used in the fit, needed to get the absolute cross section")
 parser.add_argument("-c", "--channels", type=str, nargs="+", choices=["plus", "minus", "all"], default=["plus", "minus"], help="Select channel to plot")
 
@@ -189,7 +191,27 @@ def plot_matrix_poi(matrix="covariance_matrix_channelmu"):
         args=args,
     )
 
-def get_results(rtfile, poi_type, scale=1.0, group=True, uncertainties=None): #=["stat"]):
+def get_pulls(rtfile, uncertainties=None, poi_type="mu"):
+    fitresult = rtfile["fitresults"]
+
+    histname = f"nuisance_impact_{poi_type}"
+
+    impacts = rtfile[histname].to_hist()
+
+    logger.debug(f"Load pulls & constraints")
+    # pick pulls & constraints
+    if uncertainties is None:
+        names = np.array([n for n in impacts.axes[1]])
+        pulls = np.array([fitresult[n].array()[0] for n in impacts.axes[1]])
+        constraints = np.array([fitresult[n+"_err"].array()[0] for n in impacts.axes[1]])
+    else:
+        names = np.array([n for n in impacts.axes[1]])
+        pulls = np.array([fitresult[n].array()[0] for n in impacts.axes[1] if k in uncertainties])
+        constraints = np.array([fitresult[n+"_err"].array()[0] for n in impacts.axes[1] if k in uncertainties])
+
+    return names, pulls, constraints
+
+def get_results(rtfile, poi_type, scale=1.0, group=True, uncertainties=None):
     results = []
 
     # pois = input_tools.getPOInames(rfile, poi_type=poi_type)
@@ -270,7 +292,11 @@ def plot_xsec_unfolded(data, data_asimov=None, channel=None, poi_type="mu", scal
         bins = np.array(common.ptV_binning)
         bin_widths = bins[1:] - bins[:-1]
     else: 
-        bin_widths = np.ones(len(df))
+        bins_y = np.array(differential.eta_binning)
+        bin_widths_y = bins_y[1:] - bins_y[:-1]
+        bin_widths_x = 2 * np.ones(int(len(df)/len(bin_widths_y)))
+
+        bin_widths = np.tensordot(bin_widths_x,bin_widths_y, axes=0).flatten()
 
     hist_xsec = hist.Hist(
         hist.axis.Regular(bins=len(df), start=0.5, stop=len(df)+0.5, underflow=False, overflow=False), storage=hist.storage.Weight())
@@ -286,10 +312,9 @@ def plot_xsec_unfolded(data, data_asimov=None, channel=None, poi_type="mu", scal
 
         ha_xsec.view(flow=False)[...] = df_asimov["value"].values/bin_widths
 
-
     # make plots
     if args.ylim is None:
-        ylim = (0, 1.1 * max((df["value"]+df["err_total"]).values))
+        ylim = (0, 1.1 * max((hist_xsec.values() + np.sqrt(hist_xsec.variances()))))
     else:
         ylim = args.ylim
 
@@ -424,7 +449,11 @@ def plot_uncertainties_unfolded(data, channel=None, poi_type="mu", scale=1., nor
         bins = np.array(common.ptV_binning)
         bin_widths = bins[1:] - bins[:-1]
     else: 
-        bin_widths = np.ones(len(df))
+        bins_y = np.array(differential.eta_binning)
+        bin_widths_y = bins_y[1:] - bins_y[:-1]
+        bin_widths_x = 2 * np.ones(int(len(df)/len(bin_widths_y)))
+
+        bin_widths = np.tensordot(bin_widths_x,bin_widths_y, axes=0).flatten()
 
     #central values
     values = df["value"].values/bin_widths
@@ -544,33 +573,98 @@ def plot_uncertainties_unfolded(data, channel=None, poi_type="mu", scale=1., nor
         args=args,
     )
 
+def plot_pulls(rtfile):
+    names, pulls, constraints = get_pulls(rfile)
+
+    for g, f in [
+        ("general", ["CMS_Top", "CMS_VV", "lumi", "massShift20MeV"]),
+        ("scale", lambda x: x.startswith("CMS_scale")),
+        ("prefire", lambda x: x.startswith("CMS_prefire")),
+        ("recoil", lambda x: x.startswith("recoil")),
+        ("pdf", lambda x: x.startswith("pdf")),
+        ("scetlib", lambda x: x.startswith("scetlib")),
+        ("resum", lambda x: x.startswith("resum")),
+    ]:
+        logger.debug(f"Make pull plot for {g}")
+
+        if isinstance(f, list):
+            indices = np.array([n in f for n in names])
+        else:
+            indices = np.array([f(n) for n in names])
+
+        g_names = names[indices]
+        g_pulls = pulls[indices]
+        g_constraints = constraints[indices]
+
+        n = len(g_names)
+
+        y = np.arange(n)
+        x = g_pulls
+        x_err = g_constraints
+
+        fig = plt.figure(figsize=(6.0,10.0))
+        ax1 = fig.add_subplot(111)
+        fig.subplots_adjust(hspace=0.0, left=0.4, right=0.98, top=0.92, bottom=0.15)
+
+        plt.plot([-1,-1], [min(y),max(y)], color="grey", linestyle="--")
+        plt.plot([0,0], [min(y),max(y)], color="grey", linestyle="-")
+        plt.plot([1,1], [min(y),max(y)], color="grey", linestyle="--")
+
+        plt.errorbar(x, y, xerr=x_err, color="black", linestyle='', marker=".", capsize=1.0)
+
+        ax1.set_yticks(y)
+        ax1.set_yticklabels(g_names, fontsize=12)
+
+        max_x = max(max(x+x_err), 1)
+        min_x = min(min(x-x_err), -max_x)
+        max_x = max(max_x, -min_x)
+
+        range_x = max_x - min_x
+        ax1.set_xlim([min_x-range_x*0.1, max_x+range_x*0.1])
+
+        ax1.yaxis.set_minor_locator(ticker.NullLocator())
+
+        ax1.set_xlabel("Pulls")
+
+
+        plt.savefig(f"{outdir}/pulls_{g}.png")
+
+
+
 poi_types = ["pmaskedexp", "pmaskedexpnorm"]
-for poi_type in poi_types:
-    normalize = poi_type=="pmaskedexpnorm"
-    scale = 1 if normalize else args.lumi * 1000
 
-    df = get_results(rfile, poi_type=poi_type, scale=scale)
-    if asimov:
-        df_asimov = get_results(asimov, poi_type=poi_type, scale=scale)
-    else:
-        df_asimov = None
+if any([key in args.plots for key in ["xsec", "uncertainties"]]):
+    for poi_type in poi_types:
 
-    if len(set(df["qGen"].values)) == 1:
-        channels = ["all"]
-    else:
-        channels = args.channels
+        normalize = poi_type=="pmaskedexpnorm"
+        scale = 1 if normalize else args.lumi * 1000
 
-    for channel in channels:
-        if "xsec" in args.plots:
-            plot_xsec_unfolded(df, df_asimov, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize)
-        if "uncertainties" in args.plots:
-            # absolute uncertainty
-            # plot_uncertainties_unfolded(df, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize)
-            # plot_uncertainties_unfolded(df, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, logy=True)            
-            
-            # relative uncertainty
-            plot_uncertainties_unfolded(df, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, relative_uncertainty=True)
-            plot_uncertainties_unfolded(df, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, relative_uncertainty=True, logy=True)
+        df = get_results(rfile, poi_type=poi_type, scale=scale)
+        if asimov:
+            df_asimov = get_results(asimov, poi_type=poi_type, scale=scale)
+        else:
+            df_asimov = None
+
+        if len(set(df["qGen"].values)) == 1:
+            channels = ["all"]
+        else:
+            channels = args.channels
+
+        for channel in channels:
+            if "xsec" in args.plots:
+                plot_xsec_unfolded(df, df_asimov, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize)
+            if "uncertainties" in args.plots:
+                # absolute uncertainty
+                # plot_uncertainties_unfolded(df, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize)
+                # plot_uncertainties_unfolded(df, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, logy=True)            
+                
+                # relative uncertainty
+                plot_uncertainties_unfolded(df, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, relative_uncertainty=True)
+                plot_uncertainties_unfolded(df, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, relative_uncertainty=True, logy=True)
+
+if "pulls" in args.plots:
+    plot_pulls(rfile)
+
 
 if "correlation" in args.plots:
     plot_matrix_poi("correlation_matrix_channelmu")
