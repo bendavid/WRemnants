@@ -11,6 +11,7 @@ import functools
 import hist
 import pandas as pd
 import math
+import numpy as np
 
 from wremnants.datasets.datagroup import Datagroup
 
@@ -165,7 +166,7 @@ class Datagroups(object):
         self.nominalName = name
 
     def processScaleFactor(self, proc):
-        if proc.is_data:
+        if proc.is_data or proc.xsec is None:
             return 1
         return self.lumi*1000*proc.xsec/self.results[proc.name]["weight_sum"]
 
