@@ -521,7 +521,7 @@ class CardTool(object):
         return ret
 
                 
-    def writeForProcess(self, h, proc, syst):
+    def writeForProcess(self, h, proc, syst, check_systs=True):
         decorrelateByBin = {}
         hnom = None
         systInfo = None
@@ -540,8 +540,7 @@ class CardTool(object):
                 decorrelateByBin = systInfo["decorrByBin"]
         logger.info(f"Preparing to write systematic {syst} for process {proc}")
         var_map = self.systHists(h, syst)
-        # TODO: Make this optional
-        if syst != self.nominalName:
+        if check_systs and syst != self.nominalName:
             self.checkSysts(var_map, proc,
                             skipSameSide=systInfo["mirrorDownVarEqualToUp"],
                             skipOneAsNomi=systInfo["mirrorDownVarEqualToNomi"])
@@ -583,12 +582,12 @@ class CardTool(object):
                 hdata = hdata[{systAxName : self.pseudoDataIdx }] 
         self.writeHist(hdata, self.pseudoData+"_sum")
 
-    def writeForProcesses(self, syst, processes, label):
+    def writeForProcesses(self, syst, processes, label, check_systs=True):
         for process in processes:
             hvar = self.datagroups.groups[process].hists[label]
             if not hvar:
                 raise RuntimeError(f"Failed to load hist for process {process}, systematic {syst}")
-            self.writeForProcess(hvar, process, syst)
+            self.writeForProcess(hvar, process, syst, check_systs=check_systs)
         if syst != self.nominalName:
             self.fillCardWithSyst(syst)
 
@@ -603,13 +602,14 @@ class CardTool(object):
             self.outfile = outfile
             self.outfile.cd()
             
-    def writeOutput(self, args=None):
+    def writeOutput(self, args=None, forceNonzero=True, check_systs=True):
         self.datagroups.loadHistsForDatagroups(
             baseName=self.nominalName, syst=self.nominalName,
             procsToRead=self.datagroups.groups.keys(),
             label=self.nominalName, 
-            scaleToNewLumi=self.lumiScale)
-        self.writeForProcesses(self.nominalName, processes=self.datagroups.groups.keys(), label=self.nominalName)
+            scaleToNewLumi=self.lumiScale, 
+            forceNonzero=True)
+        self.writeForProcesses(self.nominalName, processes=self.datagroups.groups.keys(), label=self.nominalName, check_systs=check_systs)
         self.loadNominalCard()
         if self.pseudoData and not self.xnorm:
             self.addPseudodata([x for x in self.datagroups.groups.keys() if x != "Data"],
@@ -624,14 +624,14 @@ class CardTool(object):
             self.datagroups.loadHistsForDatagroups(
                 self.nominalName, systName, label="syst",
                 procsToRead=processes, 
-                forceNonzero=systName != "qcdScaleByHelicity",
+                forceNonzero=forceNonzero and systName != "qcdScaleByHelicity",
                 preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"],
                 # Needed to avoid always reading the variation for the fakes, even for procs not specified
                 forceToNominal=[x for x in self.datagroups.getProcNames() if x not in 
                                 self.datagroups.getProcNames([p for p in processes if p != "Fake"])],
                 scaleToNewLumi=self.lumiScale,
             )
-            self.writeForProcesses(syst, label="syst", processes=processes)
+            self.writeForProcesses(syst, label="syst", processes=processes, check_systs=check_systs)
             
         output_tools.writeMetaInfoToRootFile(self.outfile, exclude_diff='notebooks', args=args)
         if self.skipHist:
