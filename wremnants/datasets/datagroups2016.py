@@ -44,13 +44,13 @@ def make_datagroups_2016(input_file, combine=False, pseudodata_pdfset = None, ap
         )
     if dg.wmass:
         dg.addGroup("Wmunu",
-            members = dg.getSafeListFromDataset(["WminusmunuPostVFP", "WplusmunuPostVFP"]),
+            members = list(filter(lambda y: y.group == "Wmunu", dg.datasets.values())),
             label = r"W$^{\pm}\to\mu\nu$",
             color = "darkred",
             selectOp = sigOp,
         )
         dg.addGroup("Wtaunu",
-            members = dg.getSafeListFromDataset(["WminustaunuPostVFP", "WplustaunuPostVFP"]),
+            members = list(filter(lambda y: y.group == "Wtaunu", dg.datasets.values())),
             label = r"W$^{\pm}\to\tau\nu$",
             color = "orange",
             selectOp = sigOp,
