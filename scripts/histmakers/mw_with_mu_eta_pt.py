@@ -6,6 +6,7 @@ parser,initargs = common.common_parser(True)
 import narf
 import wremnants
 from wremnants import theory_tools,syst_tools,theory_corrections, muon_calibration, muon_selections, muon_validation, unfolding_tools
+from wremnants.histmaker_tools import scale_to_data, aggregate_groups
 import hist
 import lz4.frame
 import math
@@ -78,17 +79,15 @@ nominal_axes3 = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT, axis
 
 nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
 
-# sum those groups up in post processing (if --applyXsecAndLumiScale is specified)
-groups_to_aggregate = ["Diboson", "Top", "Wtaunu"]
+# sum those groups up in post processing
+groups_to_aggregate = args.aggregateGroups
 
 if args.unfolding:
     unfolding_axes, unfolding_cols = differential.get_pt_eta_axes(args.genBins[0], template_minpt, template_maxpt, args.genBins[1])
     datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wmunu")
     groups_to_aggregate.append("BkgWmunu")
     # currently unfolding only works when histograms are aggregated because dataset names are given twice (histograms would be overwritten)
-    applyXsecAndLumiScale = True
-else:
-    applyXsecAndLumiScale = args.applyXsecAndLumiScale
+
 
 # axes for study of fakes
 axis_mt_fakes = hist.axis.Regular(120, 0., 120., name = "mt", underflow=False, overflow=True)
@@ -665,7 +664,11 @@ def build_graph(df, dataset):
                
     return results, weightsum
 
-resultdict = narf.build_and_run(datasets, build_graph, scale_xsc_lumi=applyXsecAndLumiScale, groups_to_aggregate = groups_to_aggregate)
+resultdict = narf.build_and_run(datasets, build_graph)
+
+if not args.noScaleToData:
+    scale_to_data(resultdict)
+    aggregate_groups(datasets, resultdict, groups_to_aggregate)
 
 if not args.onlyMainHistograms and args.muonScaleVariation == 'smearingWeights':
     logger.debug("Apply smaringWeights")
