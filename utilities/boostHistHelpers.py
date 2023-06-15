@@ -30,7 +30,8 @@ def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False, createN
         h1 = broadcastSystHist(h1, h2)
         h2 = broadcastSystHist(h2, h1)
 
-    outh = h1 if not createNew else hist.Hist(*h1.axes, storage=h1._storage_type)
+    storage = h1._storage_type() if h1._storage_type == h2._storage_type else hist.storage.Double()
+    outh = h1 if not createNew else hist.Hist(*h1.axes, storage=storage)
 
     out = outh.values(flow=True)
     h1vals,h2vals = h1.values(flow=True), h2.values(flow=True)
@@ -39,9 +40,8 @@ def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False, createN
     out[(np.abs(h2vals) < cutoff) & (np.abs(h1vals) < cutoff)] = 1.
     val = np.divide(h1vals, h2vals, out=out, where=np.abs(h2vals)>cutoff)
 
-    if h1._storage_type != hist.storage.Weight or h2._storage_type != hist.storage.Weight:
-        newh = hist.Hist(*outh.axes, data=val)
-    else:
+    outh.values(flow=True)[...] = val
+    if outh.storage_type == hist.storage.Weight:
         relvars = relVariances(h1vals, h2vals, h1vars, h2vars)
         val2 = np.multiply(val, val, out=val)
         if rel_unc:
@@ -51,9 +51,8 @@ def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False, createN
             relsum = np.multiply(*relvars, out=relvars[0])
             var = np.multiply(relsum, val2, out=relsum)
 
-        newh = hist.Hist(*outh.axes, storage=hist.storage.Weight(),
-                data=np.stack((val, var), axis=-1))
-    return newh
+        outh.variances(flow=True)[...] = var
+    return outh
 
 def relVariance(hvals, hvars, cutoff=1e-3, fillOnes=False):
     out = np.empty(hvars.shape)
@@ -76,7 +75,7 @@ def sqrtHist(h):
     rootval = np.sqrt(h.values(flow=True))
     rooth = h.copy()
 
-    if h._storage_type == hist.storage.Double():
+    if h._storage_type == hist.storage.Double:
         rooth[...] = rootval
     else:
         relvar = relVariance(h.values(flow=True), h.variances(flow=True))
@@ -111,7 +110,7 @@ def multiplyHists(h1, h2, allowBroadcast=True, createNew=True):
                         h1.variances(flow=True) if with_variance else None, h2.variances(flow=True) if with_variance else None)
 
     if createNew:
-        outh = hist.Hist(*outh.axes, storage=outh._storage_type)
+        outh = hist.Hist(*outh.axes, storage=outh._storage_type())
 
     outh.values(flow=True)[...] = vals
     if varis is not None:
@@ -259,7 +258,7 @@ def rebinHist(h, axis_name, edges):
     # want to drop this value. Add tolerance of 1/2 min bin width to avoid numeric issues
     hnew.values(flow=flow)[...] = np.add.reduceat(h.values(flow=flow), edge_idx, 
             axis=ax_idx).take(indices=range(new_ax.size+underflow+overflow), axis=ax_idx)
-    if hnew._storage_type() == hist.storage.Weight:
+    if hnew._storage_type == hist.storage.Weight:
         hnew.variances(flow=flow)[...] = np.add.reduceat(h.variances(flow=flow), edge_idx, 
                 axis=ax_idx).take(indices=range(new_ax.size+underflow+overflow), axis=ax_idx)
     return hnew
@@ -432,7 +431,7 @@ def combineUpDownVarHists(down_hist, up_hist):
         return hnew
 
 def smoothTowardsOne(h):
-    if h._storage_type() == hist.storage.Double():
+    if h._storage_type == hist.storage.Double:
         logger.warning("Tried to smoothTowardsOne but histogram has no variances. Proceed without doing anything!")
         return h
 
