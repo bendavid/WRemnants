@@ -13,8 +13,6 @@ def add_out_of_acceptance(datasets, group):
             ds = deepcopy(dataset)
 
             ds.out_of_acceptance = True
-            ds.group = "Bkg" + group
-            ds.name = dataset.name
 
             datasets_ooa.append(ds)
 
