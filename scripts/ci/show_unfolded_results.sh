@@ -1,7 +1,7 @@
 #!/bin/bash
 
-if [[ $# -lt 3 ]]; then
-	echo "Requires at least three arguments: show_unfolded_results.sh <input_file> <output_path> <output_folder>"
+if [[ $# -lt 2 ]]; then
+	echo "Requires at least two arguments: show_unfolded_results.sh <input_file> <output_path>"
 	exit 1
 fi
 
