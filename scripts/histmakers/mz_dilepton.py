@@ -5,6 +5,7 @@ parser,initargs = common.common_parser(True)
 import narf
 import wremnants
 from wremnants import theory_tools,syst_tools,theory_corrections, muon_validation, muon_calibration, muon_selections, unfolding_tools
+from wremnants.histmaker_tools import scale_to_data, aggregate_groups
 import hist
 import lz4.frame
 import math
@@ -19,6 +20,7 @@ parser.add_argument("--genVars", type=str, nargs="+", default=["ptVGen"], choice
 
 parser = common.set_parser_default(parser, "pt", [44,26.,70.])
 parser = common.set_parser_default(parser, "eta", [6,-2.4,2.4])
+parser = common.set_parser_default(parser, "aggregateGroups", ["Diboson", "Top", "Wtaunu", "Wmunu"])
 
 args = parser.parse_args()
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
@@ -67,16 +69,12 @@ gen_axes = {
     "absYVGen": hist.axis.Variable([0.0, 0.4, 0.8, 1.2, 1.6, 2.0, 2.4, 2.8, 3.6], name = "absYVGen", underflow=False, overflow=False),    # "ATLAS" binning
 }
 
-groups_to_aggregate = ["Diboson", "Top", "Wtaunu", "Wmunu"]
+groups_to_aggregate = args.aggregateGroups
 
 if args.unfolding:
     unfolding_axes, unfolding_cols, unfolding_selections = differential.get_dilepton_axes(args.genVars, gen_axes)
     datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Zmumu")
     groups_to_aggregate.append("BkgZmumu")
-    # currently unfolding only works when histograms are aggregated because dataset names are given twice (histograms would be overwritten)
-    applyXsecAndLumiScale = True
-else:
-    applyXsecAndLumiScale = args.applyXsecAndLumiScale
 
 # define helpers
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
@@ -228,6 +226,10 @@ def build_graph(df, dataset):
     
     return results, weightsum
 
-resultdict = narf.build_and_run(datasets, build_graph, scale_xsc_lumi=applyXsecAndLumiScale, groups_to_aggregate = groups_to_aggregate)
+resultdict = narf.build_and_run(datasets, build_graph)
+
+if not args.noScaleToData:
+    scale_to_data(resultdict)
+    aggregate_groups(datasets, resultdict, groups_to_aggregate)
 
 output_tools.write_analysis_output(resultdict, f"{os.path.basename(__file__).replace('py', 'hdf5')}", args, update_name=not args.forceDefaultName)
