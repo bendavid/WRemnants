@@ -6,6 +6,7 @@ parser,initargs = common.common_parser(True)
 import narf
 import wremnants
 from wremnants import theory_tools,syst_tools,theory_corrections, muon_calibration, muon_selections, muon_validation, unfolding_tools
+from wremnants.histmaker_tools import scale_to_data, aggregate_groups
 import hist
 import lz4.frame
 import math
@@ -74,6 +75,9 @@ nominal_axes2 = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT, axis
 nominal_axes3 = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT, axis_passTrigger]
 
 unfolding_axes, unfolding_cols = differential.get_pt_eta_axes(args.genBins, template_minpt, template_maxpt, template_maxeta)
+
+# sum those groups up in post processing
+groups_to_aggregate = args.aggregateGroups
 
 # axes for study of fakes
 axis_mt_fakes = hist.axis.Regular(120, 0., 120., name = "mt", underflow=False, overflow=True)
@@ -653,7 +657,13 @@ def build_graph(df, dataset):
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)
+
+if not args.noScaleToData:
+    scale_to_data(resultdict)
+    aggregate_groups(datasets, resultdict, groups_to_aggregate)
+
 if not args.onlyMainHistograms and args.muonScaleVariation == 'smearingWeights':
+    logger.debug("Apply smaringWeights")
     muon_calibration.transport_smearing_weights_to_reco(resultdict, nonClosureScheme = args.nonClosureScheme)
     muon_calibration.muon_scale_variation_from_manual_shift(resultdict)
 
