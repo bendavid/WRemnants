@@ -57,17 +57,9 @@ axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, nam
 nominal_axes = [axis_eta, axis_pt, axis_charge]
 nominal_cols = ["trigMuons_eta0", "trigMuons_pt0", "trigMuons_charge0"]
 
-# sum those groups up in post processing
-groups_to_aggregate = args.aggregateGroups
-
 if args.unfolding:
     unfolding_axes, unfolding_cols = differential.get_pt_eta_charge_axes(template_npt, template_minpt, template_maxpt, args.genBins[1])
     datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Zmumu")
-    groups_to_aggregate.append("BkgZmumu")
-
-
-# sum those groups up in post processing
-groups_to_aggregate = args.aggregateGroups
 
 # axes for mT measurement
 axis_mt = hist.axis.Regular(200, 0., 200., name = "mt",underflow=False, overflow=True)
@@ -232,12 +224,16 @@ def build_graph(df, dataset):
                     results, df, args.muonCorrEtaBins, args.muonCorrMag, isW, axes, cols,
                     muon_eta="trigMuons_eta0")
 
+    if hasattr(dataset, "out_of_acceptance"):
+        # Rename dataset to not overwrite the original one
+        dataset.name = "Bkg"+dataset.name
+
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)
 
 if not args.noScaleToData:
     scale_to_data(resultdict)
-    aggregate_groups(datasets, resultdict, groups_to_aggregate)
+    aggregate_groups(datasets, resultdict, args.aggregateGroups)
 
 output_tools.write_analysis_output(resultdict, f"{os.path.basename(__file__).replace('py', 'hdf5')}", args, update_name=not args.forceDefaultName)

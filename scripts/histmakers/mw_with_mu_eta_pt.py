@@ -86,11 +86,6 @@ if args.unfolding:
     unfolding_axes, unfolding_cols = differential.get_pt_eta_axes(args.genBins[0], template_minpt, template_maxpt, args.genBins[1])
     datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wmunu")
     groups_to_aggregate.append("BkgWmunu")
-    # currently unfolding only works when histograms are aggregated because dataset names are given twice (histograms would be overwritten)
-
-
-# sum those groups up in post processing
-groups_to_aggregate = args.aggregateGroups
 
 # axes for study of fakes
 axis_mt_fakes = hist.axis.Regular(120, 0., 120., name = "mt", underflow=False, overflow=True)
@@ -664,7 +659,12 @@ def build_graph(df, dataset):
             df = df.Define("nominal_weight_2dsf", "nominal_weight/weight_fullMuonSF_withTrackingReco*weight2dsfup") #be EXTREMELY CAREFUL about the histogram files (this assumes that you have another file with the old trigger and histo SFs which also contains the same SFs for all the other steps as the central one)
             sf2d = df.HistoBoost("nominal_sf2d", nominal_axes, [*nominal_cols, "nominal_weight_2dsf"])
             results.append(sf2d)
-               
+
+
+    if hasattr(dataset, "out_of_acceptance"):
+        # Rename dataset to not overwrite the original one
+        dataset.name = "Bkg"+dataset.name
+
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)

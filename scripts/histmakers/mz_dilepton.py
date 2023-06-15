@@ -69,14 +69,10 @@ gen_axes = {
     "absYVGen": hist.axis.Variable([0.0, 0.4, 0.8, 1.2, 1.6, 2.0, 2.4, 2.8, 3.6], name = "absYVGen", underflow=False, overflow=False),    # "ATLAS" binning
 }
 
-groups_to_aggregate = args.aggregateGroups
-
 if args.unfolding:
     unfolding_axes, unfolding_cols, unfolding_selections = differential.get_dilepton_axes(args.genVars, gen_axes)
     datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Zmumu")
-    groups_to_aggregate.append("BkgZmumu")
 
-groups_to_aggregate = args.aggregateGroups
 
 # define helpers
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
@@ -225,6 +221,10 @@ def build_graph(df, dataset):
                 syst_tools.add_muonscale_hist(
                     results, df, args.muonCorrEtaBins, args.muonCorrMag, isW, axes, cols,
                     muon_eta="trigMuons_eta0")
+
+    if hasattr(dataset, "out_of_acceptance"):
+        # Rename dataset to not overwrite the original one
+        dataset.name = "Bkg"+dataset.name
     
     return results, weightsum
 
@@ -232,6 +232,6 @@ resultdict = narf.build_and_run(datasets, build_graph)
 
 if not args.noScaleToData:
     scale_to_data(resultdict)
-    aggregate_groups(datasets, resultdict, groups_to_aggregate)
+    aggregate_groups(datasets, resultdict, args.aggregateGroups)
 
 output_tools.write_analysis_output(resultdict, f"{os.path.basename(__file__).replace('py', 'hdf5')}", args, update_name=not args.forceDefaultName)
