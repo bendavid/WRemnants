@@ -34,8 +34,7 @@ def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False, createN
     outh = h1 if not createNew else hist.Hist(*h1.axes, storage=storage)
 
     out = outh.values(flow=True)
-    h1vals,h2vals = h1.values(flow=True), h2.values(flow=True)
-    h1vars,h2vars = h1.variances(flow=True), h2.variances(flow=True)
+    h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2)
     # By the argument that 0/0 = 1
     out[(np.abs(h2vals) < cutoff) & (np.abs(h1vals) < cutoff)] = 1.
     val = np.divide(h1vals, h2vals, out=out, where=np.abs(h2vals)>cutoff)
@@ -126,7 +125,7 @@ def addHists(h1, h2, allowBroadcast=True, createNew=True):
     h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2)
     outh = h1
     if createNew:
-        if h1._storage_type == hist.storage.Double() or h2._storage_type == hist.storage.Double():
+        if h1._storage_type != hist.storage.Weight or h2._storage_type != hist.storage.Weight:
             return hist.Hist(*outh.axes, data=h1vals+h2vals)
         else:
             return hist.Hist(*outh.axes, storage=hist.storage.Weight(),
