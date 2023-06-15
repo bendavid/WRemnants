@@ -105,8 +105,6 @@ def addLegend(ax, ncols=2, extra_text=None, extra_text_loc=(0.8, 0.7), text_size
     if len(handles) % 2 and ncols == 2:
         handles.insert(math.floor(len(handles)/2), patches.Patch(color='none', label = ' '))
         labels.insert(math.floor(len(labels)/2), ' ')
-    #handles= reversed(handles)
-    #labels= reversed(labels)
     text_size = text_size*(0.7 if shape == 1 else 1.3)
     leg = ax.legend(handles=handles, labels=labels, prop={'size' : text_size}, ncol=ncols, loc='upper right')
 
@@ -173,7 +171,7 @@ def makeStackPlotWithRatio(
             hname = f"expproc_{p}_{fittype}" if p != "Data" else "obs"
             vals = combine_result[hname].to_hist().values()
             if len(histInfo[p].hists[histName].values()) != len(vals):
-                raise ValueError(f"The size of the combine histogram {(len(vals))} is not consistent with the xlim or input hist")
+                raise ValueError(f"The size of the combine histogram ({(vals.shape)}) is not consistent with the xlim or input hist ({histInfo[p].hists[histName].shape})")
 
             histInfo[p].hists[histName].values()[...] = vals
             if p == "Data":
@@ -413,21 +411,6 @@ def format_axis_num(val):
         # This is kinda dumb and I might change it
         return f"{val:.0f}" if val > 5 else f"{val:0.1f}"
     return f"{val:0.3g}" if val > 10 else f"{val:0.2g}"
-
-def make_plot_dir(outpath, outfolder):
-    full_outpath = "/".join([outpath, outfolder])
-    if not os.path.isdir(outpath):
-        raise IOError(f"The path {outpath} doesn't not exist. You should create it (and possibly link it to your web area)")
-        
-    if not os.path.isdir(full_outpath):
-        try:
-            os.makedirs(full_outpath)
-            logger.info(f"Creating folder {full_outpath}")
-        except FileExistsError as e:
-            logger.warning(e)
-            pass
-
-    return full_outpath
 
 def save_pdf_and_png(outdir, basename, fig=None):
     fname = f"{outdir}/{basename}.pdf"
