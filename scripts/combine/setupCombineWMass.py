@@ -97,9 +97,12 @@ def main(args,xnorm=False):
             logger.warning("Unfolding is specified but the mass is treated free floating, to constrain the mass add '--constrainMass'")
 
         if wmass:
+            # out of acceptance contribution
+            datagroups.copyGroup("Wmunu", "BkgWmunu", member_filter=lambda x: x.name.startswith("Bkg"))
+
             # split group into two
-            datagroups.copyGroup("Wmunu", "Wmunu_qGen0", member_filter=lambda x: "Wminusmunu" in x.name)
-            datagroups.copyGroup("Wmunu", "Wmunu_qGen1", member_filter=lambda x: "Wplusmunu" in x.name)
+            datagroups.copyGroup("Wmunu", "Wmunu_qGen0", member_filter=lambda x: x.name.startswith("Wminusmunu"))
+            datagroups.copyGroup("Wmunu", "Wmunu_qGen1", member_filter=lambda x: x.name.startswith("Wplusmunu"))
 
             datagroups.deleteGroup("Wmunu")
 
@@ -107,6 +110,11 @@ def main(args,xnorm=False):
             datagroups.defineSignalBinsUnfolding("Wmunu_qGen1")
 
         else:
+            # out of acceptance contribution
+            datagroups.copyGroup("Zmumu", "BkgZmumu", member_filter=lambda x: x.name.startswith("Bkg"))
+
+            datagroups.groups["Zmumu"].deleteMembers([m for m in datagroups.groups["Zmumu"].members if "BkgZmumu" in m.name])
+
             datagroups.defineSignalBinsUnfolding("Zmumu")
 
         if xnorm:
