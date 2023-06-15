@@ -18,7 +18,7 @@ def scale_to_data(result_dict, data_name = "dataPostVFP"):
 
         logger.debug(f"For dataset {d_name} with xsec={xsec}")
 
-        scale = lumi * xsec / result["weight_sum"]
+        scale = lumi * 1000 * xsec / result["weight_sum"]
 
         result["weight_sum"] = result["weight_sum"]*scale
 
