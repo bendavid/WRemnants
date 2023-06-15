@@ -6,5 +6,5 @@ if [[ $# -lt 3 ]]; then
 fi
 
 . ./setup.sh
-python3 scripts/plotting/unfolding_xsec.py $1 --asimov $1 -o $2 -f unfolding --eoscp
-python3 scripts/plotting/unfolding_plots.py $1 -o $2 -f unfolding --eoscp
+python3 scripts/plotting/unfolding_xsec.py $1 --asimov $1 -o $2 -f unfolding #--eoscp
+python3 scripts/plotting/unfolding_plots.py $1 -o $2 -f unfolding #--eoscp

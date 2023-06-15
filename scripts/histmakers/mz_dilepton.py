@@ -76,6 +76,8 @@ if args.unfolding:
     datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Zmumu")
     groups_to_aggregate.append("BkgZmumu")
 
+groups_to_aggregate = args.aggregateGroups
+
 # define helpers
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 

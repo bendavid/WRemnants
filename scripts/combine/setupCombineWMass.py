@@ -489,6 +489,8 @@ if __name__ == "__main__":
     
     time0 = time.time()
 
+    time0 = time.time()
+
     main(args)
     if args.unfold:
         main(args,xnorm=True)

@@ -89,6 +89,9 @@ if args.unfolding:
     # currently unfolding only works when histograms are aggregated because dataset names are given twice (histograms would be overwritten)
 
 
+# sum those groups up in post processing
+groups_to_aggregate = args.aggregateGroups
+
 # axes for study of fakes
 axis_mt_fakes = hist.axis.Regular(120, 0., 120., name = "mt", underflow=False, overflow=True)
 axis_iso_fakes = hist.axis.Regular(60, 0., 0.6, name = "PFrelIso04", underflow=False, overflow=True)
