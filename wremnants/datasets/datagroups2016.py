@@ -24,14 +24,14 @@ def make_datagroups_2016(input_file, combine=False, pseudodata_pdfset = None, ap
         selectOp = sigOp,
     )
     dg.addGroup("Zmumu",
-        members = dg.getSafeListFromDataset(["ZmumuPostVFP", "BkgZmumuPostVFP"]),
+        members = list(filter(lambda y: y.group == "Zmumu", dg.datasets.values())),
         #label = r"Z$\to\mu\mu$ (N$^{3}LL+NNLO)$",
         label = r"Z$\to\mu\mu$",
         color = "lightblue",
         selectOp = sigOp,
     ) 
     dg.addGroup("Ztautau",
-        members = dg.getSafeListFromDataset(["ZtautauPostVFP"]),
+        members = list(filter(lambda y: y.group == "Ztautau", dg.datasets.values())),
         label = r"Z$\to\tau\tau$",
         color = "darkblue",
         selectOp = sigOp,
@@ -44,13 +44,13 @@ def make_datagroups_2016(input_file, combine=False, pseudodata_pdfset = None, ap
         )
     if dg.wmass:
         dg.addGroup("Wmunu",
-            members = dg.getSafeListFromDataset(["WminusmunuPostVFP", "WplusmunuPostVFP", "BkgWminusmunuPostVFP", "BkgWplusmunuPostVFP"]),
+            members = list(filter(lambda y: y.group == "Wmunu", dg.datasets.values())),
             label = r"W$^{\pm}\to\mu\nu$",
             color = "darkred",
             selectOp = sigOp,
         )
         dg.addGroup("Wtaunu",
-            members = dg.getSafeListFromDataset(["WminustaunuPostVFP", "WplustaunuPostVFP"]),
+            members = list(filter(lambda y: y.group == "Wtaunu", dg.datasets.values())),
             label = r"W$^{\pm}\to\tau\nu$",
             color = "orange",
             selectOp = sigOp,
@@ -75,7 +75,7 @@ def make_datagroups_2016(input_file, combine=False, pseudodata_pdfset = None, ap
         )   
     else:
         dg.addGroup("Other",
-            members = [x for x in dg.datasets.values() if not x.is_data and x.name not in ["ZmumuPostVFP", "BkgZmumuPostVFP", "ZtautauPostVFP"] and x.group != "QCD"],
+            members = [x for x in dg.datasets.values() if not x.is_data and x.group not in ["Zmumu", "Ztautau"] and x.group != "QCD"],
             label = "Other",
             color = "grey",
         )

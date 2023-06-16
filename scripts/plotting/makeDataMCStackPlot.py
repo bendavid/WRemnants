@@ -186,7 +186,7 @@ def collapseSyst(h):
             return h[{ax : 0}].copy()
     return h
 
-overflow_ax = ["ptll", "chargeVgen", "massVgen", "ptVgen", "absEtaGen", "ptGen", "ptVGen", "absYVGen", "fiducial"]
+overflow_ax = ["ptll", "chargeVgen", "massVgen", "ptVgen", "absEtaGen", "ptGen", "ptVGen", "absYVGen"]
 for h in args.hists:
     if len(h.split("-")) > 1:
         action = lambda x: sel.unrolledHist(collapseSyst(x[select]), obs=h.split("-"))

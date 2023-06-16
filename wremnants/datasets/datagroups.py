@@ -52,9 +52,12 @@ class Datagroups(object):
                     if d_name in ["meta_info",]:
                         continue
 
+                    g_name = d_name.replace("Bkg","") if d_name.startswith("Bkg") else d_name
+                    
                     logger.debug(f"Add dataset {d_name}")
                     self.datasets[d_name] = narf.Dataset(**{
                         "name": d_name,
+                        "group": g_name,
                         "filepaths": dataset["dataset"]["filepaths"],
                         "xsec": dataset["dataset"].get("xsec", None)
                         })
