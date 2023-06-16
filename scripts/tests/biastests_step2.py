@@ -17,7 +17,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-i","--input", type=str, help="input path to combine subfolders")
 args = parser.parse_args()
 
-fittype = "WMass_eta_pt"   
+fittype = "WMass_pt_eta"
 
 combineDir = args.input
 

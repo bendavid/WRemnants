@@ -79,7 +79,7 @@ if not os.path.isdir(args.outfolder):
 
 def EXE(command):
     logger.info(command) 
-    #os.system(command)  # for testing comment out this line
+    os.system(command)  # for testing comment out this line
 
 def make_appendix(name):
         
