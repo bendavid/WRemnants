@@ -292,6 +292,7 @@ def add_muon_efficiency_unc_hists(results, df, helper_stat, helper_syst, axes, c
         muon_columns_syst = ["trigMuons_pt0", "trigMuons_eta0", "trigMuons_SApt0", "trigMuons_SAeta0", "trigMuons_charge0",
             "nonTrigMuons_pt0", "nonTrigMuons_eta0", "nonTrigMuons_SApt0", "nonTrigMuons_SAeta0", "nonTrigMuons_charge0"]
     else:
+        # FIXME: this should read standalone variables when effStat is for tracking
         muon_columns_stat = ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0"]
         muon_columns_syst = ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso"]
 
@@ -308,7 +309,7 @@ def add_muon_efficiency_unc_hists(results, df, helper_stat, helper_syst, axes, c
     name = Datagroups.histName(base_name, syst=f"effSystTnP")
     effSystTnP = df.HistoBoost(name, axes, [*cols, "effSystTnP_weight"], tensor_axes = helper_syst.tensor_axes, storage=hist.storage.Double())
     results.append(effSystTnP)
-
+    
     return df
 
 def add_L1Prefire_unc_hists(results, df, helper_stat, helper_syst, axes, cols, base_name="nominal"):

@@ -29,7 +29,7 @@ def make_parser(parser=None):
     parser.add_argument("--noHist", action='store_true', help="Skip the making of 2D histograms (root file is left untouched if existing)")
     parser.add_argument("--effStatLumiScale", type=float, default=None, help="Rescale equivalent luminosity for efficiency stat uncertainty by this value (e.g. 10 means ten times more data from tag and probe)")
     parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers and nuisances)")
-    parser.add_argument("--directIsoSFsmoothing", action='store_true', help="If isolation SF were smoothed directly instead of being derived from smooth efficiencies")
+    parser.add_argument("--isoEfficiencySmoothing", action='store_true', help="If isolation SF was derived from smooth efficiencies instead of direct smoothing")
     parser.add_argument("--xlim", type=float, nargs=2, default=None, help="Restrict x axis to this range")
     parser.add_argument("--unfold", action='store_true', help="Prepare datacard for unfolding")
     parser.add_argument("--fitXsec", action='store_true', help="Fit signal inclusive cross section")
@@ -124,8 +124,9 @@ def main(args,xnorm=False):
     cardTool.setDatagroups(datagroups)
     logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
     cardTool.setNominalTemplate(f"{templateDir}/main.txt")
-    if args.sumChannels or xnorm:
+    if args.sumChannels or xnorm or name in ["ZMassDilepton"]:
         cardTool.setChannels(["inclusive"])
+        cardTool.setWriteByCharge(False)
     if xnorm:
         cardTool.setWriteByCharge(False)
         cardTool.setHistName(histName)
@@ -200,11 +201,26 @@ def main(args,xnorm=False):
                                    systAxes=["downUpVar"],
                                    labelsByAxis=["downUpVar"],
                                    passToFakes=passSystToFakes)
+
         else:
             # TOCHECK: no fakes here, most likely
             cardTool.addLnNSystematic("luminosity", processes=allMCprocesses_noQCDMC, size=1.012, group="luminosity")
     else:
         pass
+        
+    if wmass:
+        cardTool.addSystematic("sf2d", 
+            processes=allMCprocesses_noQCDMC,
+            outNames=["sf2dDown","sf2dUp"],
+            group="SF3Dvs2D",
+            scale = 1.0,
+            mirror = True,
+            mirrorDownVarEqualToNomi=True,
+            noConstraint=False,
+            systAxes=[],
+            #labelsByAxis=["downUpVar"],
+            passToFakes=passSystToFakes,
+        )
 
     if args.ewUnc:
         cardTool.addSystematic(f"horacenloewCorr", 
@@ -221,34 +237,39 @@ def main(args,xnorm=False):
         chargeDependentSteps = common.muonEfficiency_chargeDependentSteps
         effTypesNoIso = ["reco", "tracking", "idip", "trigger"]
         effStatTypes = [x for x in effTypesNoIso]
-        if args.binnedScaleFactors or args.directIsoSFsmoothing:
+        if args.binnedScaleFactors or not args.isoEfficiencySmoothing:
             effStatTypes.extend(["iso"])
         else:
             effStatTypes.extend(["iso_effData", "iso_effMC"])
         allEffTnP = [f"effStatTnP_sf_{eff}" for eff in effStatTypes] + ["effSystTnP"]
         for name in allEffTnP:
             if "Syst" in name:
-                axes = ["reco-tracking-idip-trigger-iso"]
-                axlabels = ["WPSYST"]
-                nameReplace = [("WPSYST0", "reco"), ("WPSYST1", "tracking"), ("WPSYST2", "idip"), ("WPSYST3", "trigger"), ("WPSYST4", "iso"), ("effSystTnP", "effSyst")]
+                axes = ["reco-tracking-idip-trigger-iso", "n_syst_variations"]
+                axlabels = ["WPSYST", "_etaDecorr"]
+                nameReplace = [("WPSYST0", "reco"), ("WPSYST1", "tracking"), ("WPSYST2", "idip"), ("WPSYST3", "trigger"), ("WPSYST4", "iso"), ("effSystTnP", "effSyst"), ("etaDecorr0", "fullyCorr") ]
                 scale = 1.0
                 mirror = True
-                mirrorDownVarEqualToNomi=True
+                mirrorDownVarEqualToNomi=False
                 groupName = "muon_eff_syst"
                 splitGroupDict = {f"{groupName}_{x}" : f".*effSyst.*{x}" for x in list(effTypesNoIso + ["iso"])}
                 splitGroupDict[groupName] = ".*effSyst.*" # add also the group with everything
+                # decorrDictEff = {                        
+                #     "x" : {
+                #         "label" : "eta",
+                #         "edges": [round(-2.4+i*0.1,1) for i in range(49)]
+                #     }
+                # }
+
             else:
-                nameReplace = [] if any(x in name for x in chargeDependentSteps) else [("q0", "qall")] # for iso charge the tag id with another sensible label
+                nameReplace = [] if any(x in name for x in chargeDependentSteps) else [("q0", "qall")] # for iso change the tag id with another sensible label
                 mirror = True
                 mirrorDownVarEqualToNomi=False
                 if args.binnedScaleFactors:
                     axes = ["SF eta", "nPtBins", "SF charge"]
-                    axlabels = ["eta", "pt", "q"]
-                    nameReplace = nameReplace + [("effStatTnP_sf_", "effStatBinned_")]
                 else:
                     axes = ["SF eta", "nPtEigenBins", "SF charge"]
-                    axlabels = ["eta", "pt", "q"]
-                    nameReplace = nameReplace + [("effStatTnP_sf_", "effStatSmooth_")]                    
+                axlabels = ["eta", "pt", "q"]
+                nameReplace = nameReplace + [("effStatTnP_sf_", "effStat_")]           
                 scale = 1.0
                 groupName = "muon_eff_stat"
                 splitGroupDict = {f"{groupName}_{x}" : f".*effStat.*{x}" for x in effStatTypes}
@@ -269,7 +290,26 @@ def main(args,xnorm=False):
                 systNameReplace=nameReplace,
                 scale=scale,
                 splitGroup=splitGroupDict,
+                decorrelateByBin = {}
             )
+            # if "Syst" in name and decorrDictEff != {}:
+            #     # add fully correlated version again
+            #     cardTool.addSystematic(
+            #         name,
+            #         rename=f"{name}_EtaDecorr",
+            #         mirror=mirror,
+            #         mirrorDownVarEqualToNomi=mirrorDownVarEqualToNomi,
+            #         group=groupName,
+            #         systAxes=axes,
+            #         labelsByAxis=axlabels,
+            #         baseName=name+"_",
+            #         processes=allMCprocesses_noQCDMC,
+            #         passToFakes=passSystToFakes,
+            #         systNameReplace=nameReplace,
+            #         scale=scale,
+            #         splitGroup=splitGroupDict,
+            #         decorrelateByBin = decorrDictEff
+            #     )
 
     to_fakes = passSystToFakes and not args.noQCDscaleFakes and not xnorm
     combine_helpers.add_pdf_uncertainty(cardTool, single_v_samples, passSystToFakes, from_corr=args.pdfUncFromCorr, scale=args.scalePdf)
