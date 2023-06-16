@@ -532,9 +532,9 @@ class CardTool(object):
                 h =systInfo["action"](h, **systInfo["actionArgs"])
                 self.outfile.cd() # needed to restore the current directory in case the action opens a new root file
             if systInfo["mirror"]:
-                h = hh.extendHistByMirror(h, hnom,
-                                          downAsUp=systInfo["mirrorDownVarEqualToUp"],
-                                          downAsNomi=systInfo["mirrorDownVarEqualToNomi"])
+                h = hh.extendHistByMirror(h, hnom)
+                                          #downAsUp=systInfo["mirrorDownVarEqualToUp"],
+                                          #downAsNomi=systInfo["mirrorDownVarEqualToNomi"])
             if systInfo["decorrByBin"]:
                 decorrelateByBin = systInfo["decorrByBin"]
         logger.info(f"Preparing to write systematic {syst} for process {proc}")
