@@ -10,7 +10,7 @@ import boost_histogram as bh
 import hist
 import pdb
 
-from utilities import boostHistHelpers as hh, logging, input_tools
+from utilities import boostHistHelpers as hh, logging, input_tools, output_tools
 from wremnants import plot_tools
 
 hep.style.use(hep.style.ROOT)
@@ -21,7 +21,7 @@ parser.add_argument("infile", help="Combine fitresult root file")
 parser.add_argument("--asimov",  type=str, default=None, help="Optional combine fitresult root file from an asimov fit for comparison")
 # parser.add_argument("--ratioToData", action='store_true', help="Use data as denominator in ratio")
 parser.add_argument("-o", "--outpath", type=str, default=os.path.expanduser("~/www/WMassAnalysis"), help="Base path for output")
-parser.add_argument("-f", "--outfolder", type=str, default="./", help="Subfolder for output")
+parser.add_argument("-f", "--outfolder", type=str, default="", help="Subfolder for output")
 parser.add_argument("-r", "--rrange", type=float, nargs=2, default=None, help="y range for ratio plot")
 # parser.add_argument("--rebin", type=int, default=1, help="Rebin (for now must be an int)")
 parser.add_argument("--ylim", type=float, nargs=2, help="Min and max values for y axis (if not specified, range set automatically)")
@@ -34,12 +34,13 @@ parser.add_argument("--noData", action='store_true', help="Don't plot data")
 parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend text")
 parser.add_argument("--plots", type=str, nargs="+", default="xsec", choices=["xsec", "prefit", "postfit", "correlation", "covariance"], help="Define which plots to make")
 parser.add_argument("--lumi", type=float, default=16.8, help="Luminosity used in the fit, needed to get the absolute cross section")
+parser.add_argument("--eoscp", action='store_true', help="Override use of xrdcp and use the mount instead")
 
 args = parser.parse_args()
 
 logger = logging.setup_logger("plotFitresult", 4 if args.debug else 3, False)
 
-outdir = plot_tools.make_plot_dir(args.outpath, args.outfolder)
+outdir = output_tools.make_plot_dir(args.outpath, args.outfolder, eoscp=args.eoscp)
 
 rfile = uproot.open(args.infile)
 if args.asimov:
@@ -495,3 +496,6 @@ if "covariance" in args.plots:
     plot_matrix_poi("covariance_matrix_channelmu")
     plot_matrix_poi("covariance_matrix_channelpmaskedexp")
     plot_matrix_poi("covariance_matrix_channelpmaskedexpnorm")
+
+if output_tools.is_eosuser_path(args.outpath) and args.eoscp:
+    output_tools.copy_to_eos(args.outpath, args.outfolder)
