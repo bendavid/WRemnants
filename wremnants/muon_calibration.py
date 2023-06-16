@@ -562,11 +562,11 @@ def transport_smearing_weights_to_reco(
     if nonClosureScheme == "A-M-separated":
         hists_to_transport.append('Z_non_closure_parametrized_A_gensmear')
         hists_to_transport.append('Z_non_closure_parametrized_M_gensmear')
-    elif nonClosureScheme == "A-M-combined":
+    if nonClosureScheme == "A-M-combined":
         hists_to_transport.append('Z_non_closure_parametrized_gensmear')
-    elif nonClosureScheme == "binned":
+    if nonClosureScheme == "binned":
         hists_to_transport.append('Z_non_closure_binned_gensmear')
-    elif nonClosureScheme == "binned-plus-M":
+    if nonClosureScheme == "binned-plus-M":
         hists_to_transport.append('Z_non_closure_parametrized_M_gensmear')
         hists_to_transport.append('Z_non_closure_binned_gensmear')
 
