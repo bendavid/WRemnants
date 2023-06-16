@@ -41,7 +41,7 @@ def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False, createN
         val2 = np.multiply(val, val)
         if rel_unc:
             # Treat the divisor as a constant
-            var = np.mulitiply(val2, relvars[0], out=val2)
+            var = np.multiply(val2, relvars[0], out=val2)
         else:
             relsum = np.multiply(*relvars)
             var = np.multiply(relsum, val2, out=val2)
