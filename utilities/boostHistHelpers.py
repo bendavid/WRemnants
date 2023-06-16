@@ -33,7 +33,8 @@ def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False, createN
     storage = h1._storage_type() if h1._storage_type == h2._storage_type else hist.storage.Double()
     outh = h1 if not createNew else hist.Hist(*h1.axes, storage=storage)
 
-    out = outh.values(flow=True)
+    # Careful not to overwrite the values of h1
+    out = np.empty(outh.values(flow=True).shape) if not createNew else outh.values(flow=True)
     h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2)
     # By the argument that 0/0 = 1
     out[(np.abs(h2vals) < cutoff) & (np.abs(h1vals) < cutoff)] = 1.
@@ -42,13 +43,13 @@ def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False, createN
     outh.values(flow=True)[...] = val
     if outh.storage_type == hist.storage.Weight:
         relvars = relVariances(h1vals, h2vals, h1vars, h2vars)
-        val2 = np.multiply(val, val, out=val)
+        val2 = np.multiply(val, val)
         if rel_unc:
             # Treat the divisor as a constant
-            var = np.mulitiply(val2, relvars[0])
+            var = np.mulitiply(val2, relvars[0], out=val2)
         else:
-            relsum = np.multiply(*relvars, out=relvars[0])
-            var = np.multiply(relsum, val2, out=relsum)
+            relsum = np.multiply(*relvars)
+            var = np.multiply(relsum, val2, out=val2)
 
         outh.variances(flow=True)[...] = var
     return outh
