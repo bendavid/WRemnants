@@ -249,7 +249,7 @@ class Datagroups(object):
                 if preOpMap and member.name in preOpMap:
                     logger.debug(f"Applying preOp to {member.name}/{procName} after loading")
                     h = preOpMap[member.name](h, **preOpArgs)
-                    
+
                 if self.globalAction:
                     h = self.globalAction(h)
                     logger.debug("Applying global action")

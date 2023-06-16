@@ -27,7 +27,7 @@ def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, na
         elif "mit.edu" in hostname:
             base_path = "/scratch/submit/cms/wmass/NanoAOD"
         elif hostname == "cmsanalysis.pi.infn.it":
-            base_path = "/scratchnvme/wmass/NANOV9/postVFP" #temporary
+            base_path = "/scratchnvme/wmass/NANOV9/postVFP"
 
     logger.info(f"Loading samples from {base_path}.")
 

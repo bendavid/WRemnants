@@ -9,11 +9,6 @@ logger = logging.child_logger(__name__)
 def valsAndVariances(h1, h2):
     return h1.values(flow=True),h2.values(flow=True),h1.variances(flow=True),h2.variances(flow=True)
 
-def broadcastOutHist(h1, h2):
-    if len(h1.axes) == len(h2.axes):
-        return h1 if h1.axes[-1].size >= h2.axes[-1].size else h2
-    return h1 if len(h1.axes) > len(h2.axes) else h2
-
 # Broadcast h1 to match the shape of h2
 def broadcastSystHist(h1, h2):
     if h1.ndim > h2.ndim or h1.shape == h2.shape:

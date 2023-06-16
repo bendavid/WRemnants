@@ -101,9 +101,9 @@ if __name__ == "__main__":
     else:
         print("Error: you should specify an output folder using option -o <name>. Exit")
         quit()
-    #if not args.outfilename:
-    #    print("Error: you should specify an output file name using option -f <name>. Exit")
-    #    quit()
+    if not args.outfilename:
+        print("Error: you should specify an output file name using option -f <name>. Exit")
+        quit()
     if not args.outhistname:
         print("Error: you should specify an output histogram name using option -n <name>. ")
         print("If FILE is used, take same name as the output file, removing the extension")
@@ -318,16 +318,30 @@ if __name__ == "__main__":
                                                                                    ptmax=int(hratio.GetYaxis().GetBinLowEdge(iybin+2))))
         zAxisTitle_unroll = zAxisTitle if "::" not in zAxisTitle else str(zAxisTitle.split("::")[0])
         whatUncertainty = "numerator" if args.setRatioUnc == "num" else "denominator" if args.setRatioUnc == "den" else "total"
-        drawNTH1([ratio_unrolled, ratioUnc, unitLine], [f"Ratio {args.histTitle}", f"Uncertainty ({whatUncertainty})", "Unity"],
-                 f"Unrolled bin: '{yAxisTitle}' vs '{xAxisTitle}'", zAxisTitle_unroll,
-                 ratio_unrolled.GetName(), outname,
-                 leftMargin=0.06, rightMargin=0.01,
-                 legendCoords="0.06,0.99,0.91,0.99;3", lowerPanelHeight=0.0, skipLumi=True, passCanvas=canvas_unroll,
-                 drawVertLines="{a},{b}".format(a=hratio.GetNbinsY(),b=hratio.GetNbinsX()),
-                 textForLines=yBinRanges, transparentLegend=False,
-                 onlyLineColor=False, useLineFirstHistogram=True, drawErrorAll=True, lineWidth=1,
-                 fillStyleSecondHistogram=1001, fillColorSecondHistogram=ROOT.kGray,
-                 colorVec=[ROOT.kBlack, ROOT.kRed])
+        if args.divideError or args.divideRelativeError:
+            drawNTH1([ratio_unrolled, unitLine], [f"Ratio {args.histTitle}", "Unity"],
+                     f"Unrolled bin: '{yAxisTitle}' vs '{xAxisTitle}'", zAxisTitle_unroll,
+                     ratio_unrolled.GetName(), outname,
+                     leftMargin=0.06, rightMargin=0.01,
+                     legendCoords="0.06,0.99,0.91,0.99;3", lowerPanelHeight=0.0, skipLumi=True, passCanvas=canvas_unroll,
+                    drawVertLines="{a},{b}".format(a=hratio.GetNbinsY(),b=hratio.GetNbinsX()),
+                     textForLines=yBinRanges, transparentLegend=False,
+                     onlyLineColor=True, useLineFirstHistogram=True, drawErrorAll=True, lineWidth=1,
+                     colorVec=[ROOT.kRed])
+        else:
+            unrollHists = [ratio_unrolled, ratioUnc, unitLine]
+            legUnrollHists = [f"Ratio {args.histTitle}", f"Uncertainty ({whatUncertainty})", "Unity"]
+            colorUnrollHists = [ROOT.kBlack, ROOT.kRed] # only from second histogram onwards
+            drawNTH1(unrollHists, legUnrollHists,
+                     f"Unrolled bin: '{yAxisTitle}' vs '{xAxisTitle}'", zAxisTitle_unroll,
+                     ratio_unrolled.GetName(), outname,
+                     leftMargin=0.06, rightMargin=0.01,
+                     legendCoords="0.06,0.99,0.91,0.99;3", lowerPanelHeight=0.0, skipLumi=True, passCanvas=canvas_unroll,
+                     drawVertLines="{a},{b}".format(a=hratio.GetNbinsY(),b=hratio.GetNbinsX()),
+                     textForLines=yBinRanges, transparentLegend=False,
+                     onlyLineColor=False, useLineFirstHistogram=True, drawErrorAll=True, lineWidth=1,
+                     fillStyleSecondHistogram=1001, fillColorSecondHistogram=ROOT.kGray,
+                     colorVec=colorUnrollHists)
 
     
     # making distribution of pulls
