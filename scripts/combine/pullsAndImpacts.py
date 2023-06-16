@@ -232,7 +232,6 @@ def parseArgs():
     output.add_argument("-n", "--num", type=int, help="Number of nuisances to plot")
     output.add_argument("--noPulls", action='store_true', help="Don't show pulls (not defined for groups)")
     output.add_argument("--eoscp", action='store_true', help="Use of xrdcp for eos output rather than the mount")
-    output.add_argument("--skipEoscp", action='store_true', help="Override use of xrdcp and use the mount instead")
     
     return parser.parse_args()
 
