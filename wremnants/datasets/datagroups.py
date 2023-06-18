@@ -44,15 +44,20 @@ class Datagroups(object):
             if self.results:
                 # only keep datasets that are found in input file
                 self.datasets = {x.name : x for x in datasets if x.name in self.results.keys()}
+                
+                # dictionary that maps dataset names to groups 
+                dataset_to_group = {d_key: d.group for d_key, d in self.datasets.items()}
 
                 for d_name, dataset in self.results.items():
-                    # if additional datasets are specified in results (for example aggregated groups), get them
+                    # if additional datasets are specified in results (for example aggregated groups or re-named datasets), get them
                     if d_name in self.datasets.keys():
                         continue
                     if d_name in ["meta_info",]:
                         continue
-
+                    
                     g_name = d_name.replace("Bkg","") if d_name.startswith("Bkg") else d_name
+                    if g_name not in dataset_to_group.values():
+                        g_name = dataset_to_group.get(g_name, g_name)
                     
                     logger.debug(f"Add dataset {d_name}")
                     self.datasets[d_name] = narf.Dataset(**{
