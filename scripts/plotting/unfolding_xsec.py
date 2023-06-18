@@ -30,7 +30,7 @@ parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file n
 parser.add_argument("--debug", action='store_true', help="Print debug output")
 parser.add_argument("--noData", action='store_true', help="Don't plot data")
 parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend text")
-parser.add_argument("--plots", type=str, nargs="+", default=["xsec", "uncertainties", "covariance", "pulls"], 
+parser.add_argument("--plots", type=str, nargs="+", default=["xsec", "uncertainties", "pulls"], 
     choices=["xsec", "uncertainties", "correlation", "covariance", "pulls"], help="Define which plots to make")
 parser.add_argument("--lumi", type=float, default=16.8, help="Luminosity used in the fit, needed to get the absolute cross section")
 parser.add_argument("-c", "--channels", type=str, nargs="+", choices=["plus", "minus", "all"], default=["plus", "minus"], help="Select channel to plot")
@@ -40,7 +40,7 @@ args = parser.parse_args()
 
 logger = logging.setup_logger("plotFitresult", 4 if args.debug else 3, False)
 
-outdir = plot_tools.make_plot_dir(args.outpath, args.outfolder)
+outdir = output_tools.make_plot_dir(args.outpath, args.outfolder)
 
 rfile = uproot.open(args.infile)
 if args.asimov:
@@ -170,7 +170,7 @@ def plot_matrix_poi(matrix="covariance_matrix_channelmu"):
 
     xlabels = [get_label(x[1]) for x in xentries]
 
-    fig = plt.figure()#figsize=(8*width,8))
+    fig = plt.figure(figsize=(8*width,8))
     ax = fig.add_subplot() 
 
     hep.hist2dplot(cov_mat)#, labels=(xlabels,ylabels))
@@ -193,6 +193,8 @@ def plot_matrix_poi(matrix="covariance_matrix_channelmu"):
     )
 
 def get_pulls(rtfile, uncertainties=None, poi_type="mu"):
+    logger.info(f"get pulls and constraints")
+
     fitresult = rtfile["fitresults"]
 
     histname = f"nuisance_impact_{poi_type}"
@@ -324,7 +326,7 @@ def plot_xsec_unfolded(data, data_asimov=None, channel=None, poi_type="mu", scal
     else:
         rrange = args.rrange
 
-    fig, ax1, ax2 = plot_tools.figureWithRatio(hist_xsec, "Bin number", yLabel, ylim, "Data/Pred.", rrange)
+    fig, ax1, ax2 = plot_tools.figureWithRatio(hist_xsec, "Bin number", yLabel, ylim, "Data/Pred.", rrange, width_scale=2)
 
     hep.histplot(
         hist_xsec,
@@ -409,10 +411,15 @@ def plot_xsec_unfolded(data, data_asimov=None, channel=None, poi_type="mu", scal
     )
 
 translate = {
-    "QCDscalePtChargeMiNNLO": "MiNNLO scale",
+    "QCDscalePtChargeMiNNLO": "QCD scale",
+    "QCDscaleZPtChargeMiNNLO": "QCD scale (Z)",
+    "QCDscaleWPtChargeMiNNLO": "QCD scale (W)",
+    "QCDscaleZPtHelicityMiNNLO": "QCD scale (Z)",
+    "QCDscaleWPtHelicityMiNNLO": "QCD scale (W)",
     "resumNonpert": "resum. NP",
     "resumTransition": "resum. T",
-    "binByBinStat": "MC stat",
+    "binByBinStat": "BB lite",
+    "CMS_recoil": "recoil",
 }
 
 def plot_uncertainties_unfolded(data, channel=None, poi_type="mu", scale=1., normalize=False, relative_uncertainty=False, logy=False):
@@ -476,7 +483,7 @@ def plot_uncertainties_unfolded(data, channel=None, poi_type="mu", scale=1., nor
     else:
         ylim = args.ylim
 
-    fig, ax1 = plot_tools.figure(hist_xsec, "Bin number", yLabel, ylim, logy=logy)
+    fig, ax1 = plot_tools.figure(hist_xsec, "Bin number", yLabel, ylim, logy=logy, width_scale=2)
 
     hep.histplot(
         hist_xsec,
@@ -512,6 +519,13 @@ def plot_uncertainties_unfolded(data, channel=None, poi_type="mu", scale=1., nor
             color = cm(1.*i/NUM_COLORS)
             i += 1
 
+        if i%3 == 0:
+            linestype = "-" 
+        elif i%3 == 1:
+            linestype = "--" 
+        else:
+            linestype = ":" 
+
         hist_unc = hist.Hist(hist.axis.Regular(bins=len(df), start=0.5, stop=len(df)+0.5, underflow=False, overflow=False))
 
         errors = df[source].values/bin_widths
@@ -526,6 +540,7 @@ def plot_uncertainties_unfolded(data, channel=None, poi_type="mu", scale=1., nor
             yerr=False,
             histtype="step",
             color=color,
+            linestyle=linestype,
             label=name,
             ax=ax1,
             alpha=1.,
@@ -585,8 +600,9 @@ def plot_pulls(rtfile):
         ("pdf", lambda x: x.startswith("pdf")),
         ("scetlib", lambda x: x.startswith("scetlib")),
         ("resum", lambda x: x.startswith("resum")),
+        ("eff_stat", lambda x: x.startswith("effStat")),
+        ("eff_syst", lambda x: x.startswith("effSyst")),
     ]:
-        logger.debug(f"Make pull plot for {g}")
 
         if isinstance(f, list):
             indices = np.array([n in f for n in names])
@@ -598,37 +614,49 @@ def plot_pulls(rtfile):
         g_constraints = constraints[indices]
 
         n = len(g_names)
+        if n <= 0:
+            logger.warning(f"No match found for {g}! Continue with next one.")
+            continue
+        else:
+            logger.debug(f"Make pull plot for {g}")
 
-        y = np.arange(n)
-        x = g_pulls
-        x_err = g_constraints
+        for ni in range(int(n/50.)):
+            first = 50 * ni
+            last  = min(50 * (ni+1), n-1)
+            i_names = g_names[first: last]
+            i_pulls = g_pulls[first: last]
+            i_constraints = g_constraints[first: last]
 
-        fig = plt.figure(figsize=(6.0,10.0))
-        ax1 = fig.add_subplot(111)
-        fig.subplots_adjust(hspace=0.0, left=0.4, right=0.98, top=0.92, bottom=0.15)
+            y = np.arange(last-first)
+            x = i_pulls
+            x_err = i_constraints
 
-        plt.plot([-1,-1], [min(y),max(y)], color="grey", linestyle="--")
-        plt.plot([0,0], [min(y),max(y)], color="grey", linestyle="-")
-        plt.plot([1,1], [min(y),max(y)], color="grey", linestyle="--")
+            fig = plt.figure(figsize=(6.0,10.0))
+            ax1 = fig.add_subplot(111)
+            fig.subplots_adjust(hspace=0.0, left=0.4, right=0.98, top=0.92, bottom=0.15)
 
-        plt.errorbar(x, y, xerr=x_err, color="black", linestyle='', marker=".", capsize=1.0)
+            plt.plot([-1,-1], [min(y),max(y)], color="grey", linestyle="--")
+            plt.plot([0,0], [min(y),max(y)], color="grey", linestyle="-")
+            plt.plot([1,1], [min(y),max(y)], color="grey", linestyle="--")
 
-        ax1.set_yticks(y)
-        ax1.set_yticklabels(g_names, fontsize=12)
+            plt.errorbar(x, y, xerr=x_err, color="black", linestyle='', marker=".", capsize=1.0)
 
-        max_x = max(max(x+x_err), 1)
-        min_x = min(min(x-x_err), -max_x)
-        max_x = max(max_x, -min_x)
+            ax1.set_yticks(y)
+            ax1.set_yticklabels(i_names, fontsize=12)
 
-        range_x = max_x - min_x
-        ax1.set_xlim([min_x-range_x*0.1, max_x+range_x*0.1])
+            max_x = max(max(x+x_err), 1)
+            min_x = min(min(x-x_err), -max_x)
+            max_x = max(max_x, -min_x)
 
-        ax1.yaxis.set_minor_locator(ticker.NullLocator())
+            range_x = max_x - min_x
+            ax1.set_xlim([min_x-range_x*0.1, max_x+range_x*0.1])
 
-        ax1.set_xlabel("Pulls")
+            ax1.yaxis.set_minor_locator(ticker.NullLocator())
+
+            ax1.set_xlabel("Pulls")
 
 
-        plt.savefig(f"{outdir}/pulls_{g}.png")
+            plt.savefig(f"{outdir}/pulls_{g}_{ni}.png")
 
 
 
