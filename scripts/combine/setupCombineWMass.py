@@ -113,7 +113,6 @@ def main(args,xnorm=False):
             # out of acceptance contribution
             datagroups.copyGroup("Zmumu", "BkgZmumu", member_filter=lambda x: x.name.startswith("Bkg"))
 
-
             datagroups.groups["Zmumu"].deleteMembers([m for m in datagroups.groups["Zmumu"].members if "BkgZmumu" in m.name])
 
             datagroups.defineSignalBinsUnfolding("Zmumu")
