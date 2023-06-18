@@ -744,6 +744,9 @@ class CardTool(object):
                 "histName" : self.histName,
                 "pseudodataHist" : self.pseudoData+"_sum" if self.pseudoData else f"{self.histName}_{self.dataName}"
             }
+            # use the relative path because absolute paths are slow in text2hdf5.py conversion
+            args["inputfile"] = args["inputfile"].split("/")[-1]
+
             self.cardContent[chan] = output_tools.readTemplate(self.nominalTemplate, args)
             self.cardGroups[chan] = ""
             
