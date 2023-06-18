@@ -674,7 +674,7 @@ if not args.noScaleToData:
     aggregate_groups(datasets, resultdict, groups_to_aggregate)
 
 if not args.onlyMainHistograms and args.muonScaleVariation == 'smearingWeights':
-    logger.debug("Apply smaringWeights")
+    logger.debug("Apply smearingWeights")
     muon_calibration.transport_smearing_weights_to_reco(resultdict, nonClosureScheme = args.nonClosureScheme)
     muon_calibration.muon_scale_variation_from_manual_shift(resultdict)
 
