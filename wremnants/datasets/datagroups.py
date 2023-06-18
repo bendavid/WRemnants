@@ -290,7 +290,7 @@ class Datagroups(object):
 
                 if not np.isclose(scale,1, rtol=0, atol=1e-10):
                     logger.debug(f"Scale hist with {scale}")
-                    h = bh.scaleHist(h, scale, createNew=False)
+                    h = hh.scaleHist(h, scale, createNew=False)
 
                 if forceNonzero:
                     logger.debug("force non zero")
