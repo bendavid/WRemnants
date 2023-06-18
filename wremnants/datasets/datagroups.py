@@ -258,6 +258,8 @@ class Datagroups(object):
                         continue
                 logger.debug(f"Hist axes are {h.axes.name}")
 
+                h = h.copy()
+
                 if group.memberOp:
                     if group.memberOp[i] is not None:
                         logger.debug(f"Apply operation to member {i}: {member.name}/{procName}")
@@ -288,11 +290,11 @@ class Datagroups(object):
 
                 if not np.isclose(scale,1, rtol=0, atol=1e-10):
                     logger.debug(f"Scale hist with {scale}")
-                    h = h*scale
+                    h = bh.scaleHist(h, scale, createNew=False)
 
                 if forceNonzero:
                     logger.debug("force non zero")
-                    h.values(flow=True)[...] = h.values(flow=True).clip(min=0) 
+                    np.clip(h.values(flow=True), a_min=0, a_max=None, out=h.values(flow=True))
 
                 logger.debug(f"Hist axes are {h.axes.name}")
 
@@ -571,7 +573,7 @@ class Datagroups(object):
             logger.debug(f"Get narf hist")
             h = h.get()
 
-        return h   
+        return h
 
     def histName(self, baseName, procName="", syst=""):
         return Datagroups.histName(baseName, procName, syst, nominalName=self.nominalName)
