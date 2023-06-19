@@ -140,6 +140,10 @@ only_central_pdf_datasets = [
 extended_pdf_datasets = [x for x in common.vprocs+common.vprocs_lowpu if not any(y in x for y in ["NNLOPS", "MiNLO"])]
 
 def define_prefsr_vars(df):
+    if "prefsrLeps" in df.GetColumnNames():
+        logger.debug("Pre fsr leptons are already defined, do nothing here.")
+        return df
+
     logger.debug("define_prefsr_vars()")
 
     df = df.Define("prefsrLeps", "wrem::prefsrLeptons(GenPart_status, GenPart_statusFlags, GenPart_pdgId, GenPart_genPartIdxMother)")
@@ -242,8 +246,7 @@ def define_central_pdf_weight(df, dataset_name, pdf):
     return df.Define("central_pdf_weight", f"std::clamp<float>({pdfBranch}[0], -theory_weight_truncate, theory_weight_truncate)")
 
 def define_theory_weights_and_corrs(df, dataset_name, helpers, args):
-    if "prefsrLeps" not in df.GetColumnNames():
-        df = define_prefsr_vars(df)
+    df = define_prefsr_vars(df)
         
     df = define_ew_vars(df)
 

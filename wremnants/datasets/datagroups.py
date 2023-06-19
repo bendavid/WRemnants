@@ -302,6 +302,7 @@ class Datagroups(object):
                 hasPartialSumForFake = False
                 if hasFake and procName != nameFake:
                     if member.name in fakesMembers:
+                        logger.debug("Make partial sums for fakes")
                         if member.name not in fakesMembersWithSyst:
                             fakesMembersWithSyst.append(member.name)
                         hasPartialSumForFake = True
