@@ -98,7 +98,7 @@ def main(args,xnorm=False):
 
         if wmass:
             # out of acceptance contribution
-            datagroups.copyGroup("Wmunu", "BkgWmunu", member_filter=lambda x: x.name.startswith("Bkg"))
+            datagroups.copyGroup("Wmunu", "WmunuBkg", member_filter=lambda x: x.name.startswith("Bkg"))
 
             # split group into two
             datagroups.copyGroup("Wmunu", "Wmunu_qGen0", member_filter=lambda x: x.name.startswith("Wminusmunu"))
@@ -111,7 +111,7 @@ def main(args,xnorm=False):
 
         else:
             # out of acceptance contribution
-            datagroups.copyGroup("Zmumu", "BkgZmumu", member_filter=lambda x: x.name.startswith("Bkg"))
+            datagroups.copyGroup("Zmumu", "ZmumuBkg", member_filter=lambda x: x.name.startswith("Bkg"))
 
             datagroups.groups["Zmumu"].deleteMembers([m for m in datagroups.groups["Zmumu"].members if "BkgZmumu" in m.name])
 
