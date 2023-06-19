@@ -295,7 +295,7 @@ class Datagroups(object):
 
                 if forceNonzero:
                     logger.debug("force non zero")
-                    np.clip(h.values(flow=True), a_min=0, a_max=None, out=h.values(flow=True))
+                    hh.clipNegativeVals(h, createNew=False)
 
                 logger.debug(f"Hist axes are {h.axes.name}")
 
