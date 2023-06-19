@@ -223,6 +223,7 @@ class Datagroups(object):
             hasFake = True
             fakesMembers = [m.name for m in self.groups[nameFake].members]
             fakesMembersWithSyst = []
+            logger.debug(f"Has fake members: {fakesMembers}")
         else:
             hasFake = False
             procsToReadSort = [x for x in procsToRead]
@@ -288,7 +289,7 @@ class Datagroups(object):
                 if group.scale:
                     scale *= group.scale(member)
 
-                if not np.isclose(scale,1, rtol=0, atol=1e-10):
+                if not np.isclose(scale, 1, rtol=0, atol=1e-10):
                     logger.debug(f"Scale hist with {scale}")
                     h = hh.scaleHist(h, scale, createNew=False)
 
@@ -307,13 +308,8 @@ class Datagroups(object):
                         # apply the correct scale for fakes
                         scaleProcForFake = self.groups[nameFake].scale(member)
                         logger.debug(f"Summing hist {read_syst} for {member.name} to {nameFake} with scale = {scaleProcForFake}")
-                        if histForFake:
-                            histForFake += h * scaleProcForFake
-                        else:
-                            if scaleProcForFake == 1:
-                                histForFake = h
-                            else:
-                                histForFake = h * scaleProcForFake
+                        hProcForFake = scaleProcForFake * h
+                        histForFake = hh.addHists(hProcForFake, histForFake, createNew=False) if histForFake else hProcForFake
                                 
                 # The following must be done when the group is not Fake, or when the previous part for fakes was not done
                 # For fake this essentially happens when the process doesn't have the syst, so that the nominal is used
@@ -322,10 +318,7 @@ class Datagroups(object):
                         logger.debug(f"Summing nominal hist instead of {syst} to {nameFake} for {member.name}")
                     else:
                         logger.debug(f"Summing {read_syst} to {procName} for {member.name}")
-                    if group.hists[label]:
-                        group.hists[label] += h
-                    else:
-                        group.hists[label] = h
+                    group.hists[label] = hh.addHists(h, group.hists[label], createNew=False) if group.hists[label] else h
                     logger.debug("Sum done")
                 
             # now sum to fakes the partial sums which where not already done before
@@ -337,13 +330,16 @@ class Datagroups(object):
 
             # Can use to apply common rebinning or selection on top of the usual one
             if group.rebinOp:
+                logger.debug(f"Apply rebin operation for process {procName}")
                 group.hists[label] = group.rebinOp(group.hists[label])
 
             if group.selectOp:
                 if not applySelection:
                     logger.warning(f"Selection requested for process {procName} but applySelection=False, thus it will be ignored")
                 elif label in group.hists.keys():
+                    logger.debug(f"Apply selection for process {procName}")
                     group.hists[label] = group.selectOp(group.hists[label], **group.selectOpArgs)
+
         # Avoid situation where the nominal is read for all processes for this syst
         if not foundExact:
             raise ValueError(f"Did not find systematic {syst} for any processes!")

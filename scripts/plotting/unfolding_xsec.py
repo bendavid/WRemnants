@@ -409,6 +409,7 @@ def plot_xsec_unfolded(data, data_asimov=None, channel=None, poi_type="mu", scal
         analysis_meta_info=None,
         args=args,
     )
+    plt.close()
 
 translate = {
     "QCDscalePtChargeMiNNLO": "QCD scale",
@@ -589,25 +590,35 @@ def plot_uncertainties_unfolded(data, channel=None, poi_type="mu", scale=1., nor
         args=args,
     )
 
+    plt.close()
+
+
 def plot_pulls(rtfile):
     names, pulls, constraints = get_pulls(rfile)
 
+    other_indices = np.array([False]*len(names))
     for g, f in [
-        ("general", ["CMS_Top", "CMS_VV", "lumi", "massShift20MeV"]),
+        # ("general", ["CMS_Top", "CMS_VV", "lumi", "massShift20MeV"]),
         ("scale", lambda x: x.startswith("CMS_scale")),
         ("prefire", lambda x: x.startswith("CMS_prefire")),
         ("recoil", lambda x: x.startswith("recoil")),
         ("pdf", lambda x: x.startswith("pdf")),
         ("scetlib", lambda x: x.startswith("scetlib")),
         ("resum", lambda x: x.startswith("resum")),
+        ("angularCoefficients", lambda x: "AngCoeff" in x),
         ("eff_stat", lambda x: x.startswith("effStat")),
         ("eff_syst", lambda x: x.startswith("effSyst")),
+        ("others", None)
     ]:
 
-        if isinstance(f, list):
+        if g == "others":
+            indices = ~other_indices
+        elif isinstance(f, list):
             indices = np.array([n in f for n in names])
         else:
             indices = np.array([f(n) for n in names])
+        
+        other_indices = other_indices | indices
 
         g_names = names[indices]
         g_pulls = pulls[indices]
@@ -620,9 +631,13 @@ def plot_pulls(rtfile):
         else:
             logger.debug(f"Make pull plot for {g}")
 
-        for ni in range(int(n/50.)):
+        for ni in range(int(n/50.)+1):
             first = 50 * ni
             last  = min(50 * (ni+1), n-1)
+            
+            if last-first <= 0:
+                continue
+
             i_names = g_names[first: last]
             i_pulls = g_pulls[first: last]
             i_constraints = g_constraints[first: last]
@@ -631,6 +646,8 @@ def plot_pulls(rtfile):
             x = i_pulls
             x_err = i_constraints
 
+            plt.close()
+    
             fig = plt.figure(figsize=(6.0,10.0))
             ax1 = fig.add_subplot(111)
             fig.subplots_adjust(hspace=0.0, left=0.4, right=0.98, top=0.92, bottom=0.15)
@@ -654,7 +671,6 @@ def plot_pulls(rtfile):
             ax1.yaxis.set_minor_locator(ticker.NullLocator())
 
             ax1.set_xlabel("Pulls")
-
 
             plt.savefig(f"{outdir}/pulls_{g}_{ni}.png")
 
