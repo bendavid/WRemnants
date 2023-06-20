@@ -38,7 +38,7 @@ def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False, createN
     val = np.divide(h1vals, h2vals, out=out, where=np.abs(h2vals)>cutoff)
 
     if outh.storage_type == hist.storage.Weight:
-        relvars = relVariances(h1vals, h2vals, h1vars, h2vars)
+        relvars = relVariances(h1vals, h2vals, h1vars, h2vars, cutoff=cutoff)
         val2 = np.multiply(val, val)
         if rel_unc:
             # Treat the divisor as a constant
@@ -53,7 +53,7 @@ def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False, createN
 
     return outh
 
-def relVariance(hvals, hvars, cutoff=1e-3, fillOnes=False):
+def relVariance(hvals, hvars, cutoff=1e-5, fillOnes=False):
     out = np.empty(hvars.shape)
     np.multiply(hvals, hvals, out=out)
     np.clip(out, a_min=cutoff, a_max=None, out=out)
@@ -62,9 +62,9 @@ def relVariance(hvals, hvars, cutoff=1e-3, fillOnes=False):
         out[hvals<cutoff] = 1.
     return out
 
-def relVariances(h1vals, h2vals, h1vars, h2vars):
-    rel1 = relVariance(h1vals, h1vars)
-    rel2 = relVariance(h2vals, h2vars)
+def relVariances(h1vals, h2vals, h1vars, h2vars, cutoff=1e-5):
+    rel1 = relVariance(h1vals, h1vars, cutoff=cutoff)
+    rel2 = relVariance(h2vals, h2vars, cutoff=cutoff)
     return (rel1, rel2)
 
 # TODO: Implement this rather than relying on pdf unc function
