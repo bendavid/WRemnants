@@ -216,20 +216,6 @@ def main(args,xnorm=False):
             cardTool.addLnNSystematic("luminosity", processes=allMCprocesses_noQCDMC, size=1.012, group="luminosity")
     else:
         pass
-        
-    if wmass:
-        cardTool.addSystematic("sf2d", 
-            processes=allMCprocesses_noQCDMC,
-            outNames=["sf2dDown","sf2dUp"],
-            group="SF3Dvs2D",
-            scale = 1.0,
-            mirror = True,
-            mirrorDownVarEqualToNomi=True,
-            noConstraint=False,
-            systAxes=[],
-            #labelsByAxis=["downUpVar"],
-            passToFakes=passSystToFakes,
-        )
 
     if args.ewUnc:
         cardTool.addSystematic(f"horacenloewCorr", 
@@ -243,6 +229,21 @@ def main(args,xnorm=False):
         )
 
     if not args.noEfficiencyUnc and not xnorm:
+
+        if wmass:
+            cardTool.addSystematic("sf2d", 
+                processes=allMCprocesses_noQCDMC,
+                outNames=["sf2dDown","sf2dUp"],
+                group="SF3Dvs2D",
+                scale = 1.0,
+                mirror = True,
+                mirrorDownVarEqualToNomi=True,
+                noConstraint=False,
+                systAxes=[],
+                #labelsByAxis=["downUpVar"],
+                passToFakes=passSystToFakes,
+            )
+
         chargeDependentSteps = common.muonEfficiency_chargeDependentSteps
         effTypesNoIso = ["reco", "tracking", "idip", "trigger"]
         effStatTypes = [x for x in effTypesNoIso]

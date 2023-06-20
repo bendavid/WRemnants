@@ -258,7 +258,6 @@ class Datagroups(object):
                         logger.warning(str(e))
                         continue
                 
-                # h = h.copy()
                 h_id = id(h)
 
                 logger.debug(f"Hist axes are {h.axes.name}")

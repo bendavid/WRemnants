@@ -87,6 +87,7 @@ if args.unfolding:
     datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wmunu")
     groups_to_aggregate.append("BkgWmunu")
 
+
 # axes for study of fakes
 axis_mt_fakes = hist.axis.Regular(120, 0., 120., name = "mt", underflow=False, overflow=True)
 axis_iso_fakes = hist.axis.Regular(60, 0., 0.6, name = "PFrelIso04", underflow=False, overflow=True)
@@ -657,7 +658,7 @@ def build_graph(df, dataset):
         if not args.binnedScaleFactors:
             df = df.Define("weight2dsfup", muon_efficiency_helper2d, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso"])
             df = df.Define("nominal_weight_2dsf", "nominal_weight/weight_fullMuonSF_withTrackingReco*weight2dsfup") #be EXTREMELY CAREFUL about the histogram files (this assumes that you have another file with the old trigger and histo SFs which also contains the same SFs for all the other steps as the central one)
-            sf2d = df.HistoBoost("nominal_sf2d", nominal_axes, [*nominal_cols, "nominal_weight_2dsf"])
+            sf2d = df.HistoBoost("nominal_sf2d", axes, [*cols, "nominal_weight_2dsf"], storage=hist.storage.Double())
             results.append(sf2d)
 
 
@@ -673,9 +674,13 @@ if not args.noScaleToData:
     scale_to_data(resultdict)
     aggregate_groups(datasets, resultdict, groups_to_aggregate)
 
+processes = []
+for proc in resultdict.keys():
+    if proc in ['WplusmunuPostVFP', 'WminusmunuPostVFP', 'BkgWplusmunuPostVFP', 'BkgWminusmunuPostVFP', 'BkgWmunu', 'ZmumuPostVFP']:
+        processes.append(proc)
+
 if not args.onlyMainHistograms and args.muonScaleVariation == 'smearingWeights':
-    logger.debug("Apply smearingWeights")
-    muon_calibration.transport_smearing_weights_to_reco(resultdict, nonClosureScheme = args.nonClosureScheme)
-    muon_calibration.muon_scale_variation_from_manual_shift(resultdict)
+    muon_calibration.transport_smearing_weights_to_reco(resultdict, nonClosureScheme = args.nonClosureScheme, procs = processes)
+    muon_calibration.muon_scale_variation_from_manual_shift(resultdict, procs = processes)
 
 output_tools.write_analysis_output(resultdict, f"{os.path.basename(__file__).replace('py', 'hdf5')}", args, update_name=not args.forceDefaultName)
