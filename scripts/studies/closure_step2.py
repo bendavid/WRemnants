@@ -4,7 +4,7 @@ import pdb
 import json
 import argparse
 
-os.sys.path.append(os.path.expandvars('/home/d/dwalter/WRemnants/'))
+os.sys.path.append(os.path.expandvars('/home/submit/tyjyang/analysis/wmass/WRemnants/'))
 
 from utilities import logging
 logger = logging.setup_logger(__file__, 3, True)
@@ -15,15 +15,17 @@ logger = logging.setup_logger(__file__, 3, True)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-i","--input", type=str, help="input path to combine subfolders")
+parser.add_argument("--infoOnly", action="store_true", help="only print the commands without actually running them")
 args = parser.parse_args()
 
-fittype = "WMass_pt_eta"
+fittype = "WMass_pt_eta"   
 
 combineDir = args.input
 
 def EXE(command):
-    logger.info(command) 
-    os.system(command)  # for testing comment out this line
+    logger.info(command)
+    if not args.infoOnly:
+        os.system(command)  # for testing comment out this line
 
 def get_card(name):
     card = glob.glob(name)
@@ -94,9 +96,8 @@ for subdir in glob.glob(f"{combineDir}/*_vs_*/{fittype}"):
             logger.info("Existing fitresult file found")
 
         # make asimov fit if it was not done already
-        if channel not in results[nominal][nominal].keys():
+        if channel not in results[nominal][nominal].keys() and "fullUncertainties" in pseudodata:
             fitresult_asimov = fitresult.replace(".root","_asimov.root")
-
             if not os.path.isfile(fitresult_asimov):
                 # run combine fit to asimov data
                 EXE(f"combinetf.py -t -1 {input_hdf5} --saveHists --computeHistErrors --doImpacts --binByBinStat -o {fitresult_asimov}")
@@ -106,6 +107,38 @@ for subdir in glob.glob(f"{combineDir}/*_vs_*/{fittype}"):
             results[nominal][nominal][channel] = fitresult_asimov
 
         results[nominal][pseudodata][channel] = fitresult
+    
+subfolder = f"{combineDir}/sepImpact/{fittype}"
+card_plus = f"{subfolder}/WMass_plus.txt"
+card_minus = f"{subfolder}/WMass_minus.txt"
+card_combined = card_minus.replace("_minus.txt",".txt")
+EXE(f"mv {card_minus} {card_plus} ./")
+EXE("combineCards.py "+card_minus.split("/")[-1]+" "+card_plus.split("/")[-1]+" > "+card_combined.split("/")[-1])
+EXE("mv "+card_combined.split("/")[-1]+" "+card_combined)
+EXE("mv "+card_minus.split("/")[-1]+" "+card_minus)
+EXE("mv "+card_plus.split("/")[-1]+" "+card_plus)
+results[nominal]['sepImpact'] = {}
+for card, channel in (
+    (card_minus, "minus"), 
+    (card_plus, "plus"),
+    (card_combined, "combined")
+):
+    logger.info(f"Now at {channel}") 
+    input_hdf5 = card.replace(".txt",".hdf5")
+
+    if not os.path.isfile(input_hdf5):
+        # convert .txt into .hdf5
+        EXE(f"text2hdf5.py {card} --X-allow-no-signal")
+
+    fitresult_asimov = card.replace(".txt","_fitresult_asimov.root")
+
+    if not os.path.isfile(fitresult_asimov):
+        # run combine fit to pseudodata
+        EXE(f"combinetf.py -t -1 {input_hdf5} --doImpacts --binByBinStat -o {fitresult_asimov}")
+    else:
+        logger.info("Existing fitresult file found")
+
+    results[nominal]['sepImpact'][channel] = fitresult_asimov
 
 with open(f"{combineDir}/results.json","w") as rfile:
     json.dump(results, rfile, indent=4)
