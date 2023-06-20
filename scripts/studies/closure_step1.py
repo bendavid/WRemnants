@@ -12,45 +12,34 @@ logger = logging.setup_logger(__file__, 3, True)
 #   A second script, `biastests_step2.py` , has to be run in the cmsssw-7 environment and the fits are performed and the information is read out
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-m","--mode", type=str, help="what kind of biastests", choices=["pdf","scale"])
 parser.add_argument("--histmaker", type=str, help="histmaker to perform bias tests with", 
     default="mw_with_mu_eta_pt", choices=["mw_with_mu_eta_pt","mz_wlike_with_mu_eta_pt", "mz_dilepton"])
-parser.add_argument("-o", "--outfolder", type=str, default="", help="Output folder")
-parser.add_argument("--combineOutFolder", type=str, default="./CombineStudies", help='output folder for combine files')
+parser.add_argument("-o", "--outfolder", type=str, default="/scratch/submit/cms/tyjyang/", help="Output folder")
+parser.add_argument("--combineOutFolder", type=str, default="./CombineStudies/nonClosure/", help='output folder for combine files')
 parser.add_argument("--defaultPostfix", type=str, default="scetlib_dyturboCorr", help='the postfix string added to the hdf5 file by default by the histmaker')
 parser.add_argument("-j", "--nThreads", type=int, default=192, help="number of threads to run the histmaker")
+parser.add_argument("--infoOnly", action="store_true", help="only print the commands without actually running them") 
 
 args = parser.parse_args()
 
-if args.mode == "pdf":
-    argument = "--pdfs"
+datasets = [
+    # ("default", "--smearing"),
+    # ("default", "--smearing --bias-calibration parameterized"),
+    # ("default", "--smearing --bias-calibration A"),
+    # ("default", "--smearing --bias-calibration M"),
+    ("--smearing", "--smearing --biasCalibration parameterized"),
+    ("--smearing", "--smearing --biasCalibration binned"),
+    ("--smearing --nonClosureScheme binned-plus-M", "--smearing --biasCalibration parameterized"),
+    ("--smearing --nonClosureScheme binned-plus-M", "--smearing --biasCalibration binned")
+    #("--smearing", "--smearing --biasCalibration binned"),
+    #("--smearing", "--smearing --biasCalibration A"),
+    #("--smearing", "--smearing --biasCalibration M"),
+]
 
-    pdfsets = ["nnpdf31", "nnpdf40", "msht20", "pdf4lhc21", "ct18"]
-
-    datasets = itertools.product(pdfsets, pdfsets)
-
-    freeze_uncertainties = (
-        ("reducedUncertainties", "-x '.*' -k 'pdf*|AlphaS*|mass*'"), # freeze all nuisances except pdf and alphaS
-        ("fullUncertainties", ""))
-
-elif args.mode == "scale":
-    argument = ""
-
-    datasets = [
-        # ("default", "--smearing"),
-        # ("default", "--smearing --bias-calibration parameterized"),
-        # ("default", "--smearing --bias-calibration A"),
-        # ("default", "--smearing --bias-calibration M"),
-        ("--smearing", "--smearing --biasCalibration parameterized"),
-        #("--smearing", "--smearing --biasCalibration binned"),
-        #("--smearing", "--smearing --biasCalibration A"),
-        #("--smearing", "--smearing --biasCalibration M"),
-    ]
-
-    freeze_uncertainties = (
-        #("reducedUncertainties", "-x '.*' -k 'muonScaleSyst*|CMS_scale_m_*|mass*'"), # freeze all nuisances except momentum scale
-         ("fullUncertainties", ""),
-        )
+freeze_uncertainties = [
+    ("reducedUncertainties", "-x '.*' -k '(mass.*|muonScaleSyst.*|CMS_scale_m.*|Z_non_closure.*|Z_nonClosure.*)'"), # freeze all nuisances except momentum scale #-k '(CMS_scale_m.*|mass.*|Z_nonClosure.*)'
+    ("fullUncertainties", "")
+]
 
 hists_to_plot = {
     "mw_with_mu_eta_pt": "pt eta pt-eta",
@@ -79,7 +68,8 @@ if not os.path.isdir(args.outfolder):
 
 def EXE(command):
     logger.info(command) 
-    os.system(command)  # for testing comment out this line
+    if not args.infoOnly:
+        os.system(command)  # for testing comment out this line
 
 def make_appendix(name):
         
@@ -93,6 +83,7 @@ def make_appendix(name):
     
     return "_".join(parts)
 
+    file_sep_impact = ""
 for nominal, pseudodata in datasets:
     
     if nominal == pseudodata:
@@ -111,17 +102,18 @@ for nominal, pseudodata in datasets:
         arg_pseudodata += " --onlyMainHistograms"
 
     file_nominal = f"{args.outfolder}/{histmaker}_{args.defaultPostfix}_{str_nominal}.hdf5"
+    file_sep_impact = file_nominal if not "BinnedPlus" in file_nominal else file_sep_impact
     file_pseudodata = f"{args.outfolder}/{histmaker}_{args.defaultPostfix}_{str_pseudodata}.hdf5"
 
     if not os.path.isfile(file_nominal):
         # run histmaker for nominal
-        EXE(f"python3 scripts/histmakers/{histmaker}.py -j {args.nThreads} -o {args.outfolder} {options} {argument} {arg_nominal} -p {str_nominal}")
+        EXE(f"python3 scripts/histmakers/{histmaker}.py -j {args.nThreads} -o {args.outfolder} {options} {arg_nominal} -p {str_nominal}")
     else:
         logger.info(f"Found file for nominal {nominal}")
 
     if not os.path.isfile(file_pseudodata):
         # run histmaker for pseudodata
-        EXE(f"python3 scripts/histmakers/{histmaker}.py -j {args.nThreads} -o {args.outfolder} {options} {argument} {arg_pseudodata} -p {str_pseudodata}")
+        EXE(f"python3 scripts/histmakers/{histmaker}.py -j {args.nThreads} -o {args.outfolder} {options} {arg_pseudodata} -p {str_pseudodata}")
     else:
         logger.info(f"Found file for pseudodata {pseudodata}")
         
@@ -143,8 +135,12 @@ for nominal, pseudodata in datasets:
 
         dir_combine = f"{args.combineOutFolder}/{str_nominal}_vs_{str_pseudodata}_{freeze_name}"
         
-        if os.path.isdir(dir_combine):
-            logger.warning(f"The combine file for {dir_combine} already exists, continue with the next one!")
-            continue
-
-        EXE(f"python3 scripts/combine/setupCombineWMass.py -o {dir_combine} -i {file_nominal} --pseudoDataFile {file_pseudodata} --pseudoData nominal {freeze_command}")
+        #if os.path.isdir(dir_combine):
+        #    logger.warning(f"The combine file for {dir_combine} already exists, continue with the next one!")
+        #    continue
+        #if "reduced" in dir_combine: continue
+        non_closure_scheme = "--nonClosureScheme binned-plus-M" if "binned-plus-M" in nominal else ""
+        EXE(f"python3 scripts/combine/setupCombineWMass.py -o {dir_combine} -i {file_nominal} --pseudoDataFile {file_pseudodata} --pseudoData nominal --muonScaleVariation smearingWeights {non_closure_scheme} {freeze_command}")
+dir_combine = f"{args.combineOutFolder}/sepImpact"
+if not os.path.isfile(f"{dir_combine}/WMassCombineInput.root"):
+    EXE(f"python3 scripts/combine/setupCombineWMass.py -o {dir_combine} -i {file_sep_impact} --muonScaleVariation smearingWeights --sepImpactForNC")
