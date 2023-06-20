@@ -392,11 +392,11 @@ class CardTool(object):
 
         return {name : var for name,var in zip(systInfo["outNames"], variations) if name}
 
-    def variationName(self, name):
+    def variationName(self, proc, name):
         if name == self.nominalName:
-            return f"{self.histName}"
+            return f"{self.histName}_{proc}"
         else:
-            return f"{self.histName}_{name}"
+            return f"{self.histName}_{proc}_{name}"
 
     def getBoostHistByCharge(self, h, q):
         return h[{"charge" : h.axes["charge"].index(q) if q != "sum" else hist.sum}]
@@ -579,7 +579,8 @@ class CardTool(object):
         for systAxName in ["systIdx", "tensor_axis_0", "vars"]:
             if systAxName in [ax.name for ax in hdata.axes]:
                 hdata = hdata[{systAxName : self.pseudoDataIdx }] 
-        self.writeHist(hdata, self.pseudoData+"_sum")
+
+        self.writeHist(hdata, self.dataName, self.pseudoData+"_sum")
 
     def writeForProcesses(self, syst, processes, label, check_systs=True):
         for process in processes:
@@ -742,10 +743,10 @@ class CardTool(object):
                 "inputfile" : self.outfile if type(self.outfile) == str  else self.outfile.GetName(),
                 "dataName" : self.dataName,
                 "histName" : self.histName,
-                "pseudodataHist" : self.pseudoData+"_sum" if self.pseudoData else f"{self.dataName}/{self.histName}"
+                "pseudodataHist" : f"{self.histName}_{self.dataName}_{self.pseudoData}_sum" if self.pseudoData else f"{self.histName}_{self.dataName}"
             }
             # use the relative path because absolute paths are slow in text2hdf5.py conversion
-            args["inputfile"] = args["inputfile"].split("/")[-1]
+            args["inputfile"] = os.path.basename(args["inputfile"])
 
             self.cardContent[chan] = output_tools.readTemplate(self.nominalTemplate, args)
             self.cardGroups[chan] = ""
@@ -788,12 +789,11 @@ class CardTool(object):
         if setZeroStatUnc:
             h.variances(flow=True)[...] = 0.
 
-
         # make sub directories for each process or return existing sub directory
         directory = self.outfile.mkdir(proc, proc, True)
         directory.cd()
 
-        name = self.variationName(syst)
+        name = self.variationName(proc, syst)
 
         hists = {name: h} # always keep original variation in output file for checks
         if decorrByBin:
