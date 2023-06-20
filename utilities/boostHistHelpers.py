@@ -20,22 +20,23 @@ def broadcastSystHist(h1, h2):
     return hist.Hist(*h2.axes, data=new_vals, storage=h1._storage_type())
 
 # returns h1/h2
-def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False, createNew=False):
+def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False, createNew=True):
     if allowBroadcast:
         h1 = broadcastSystHist(h1, h2)
         h2 = broadcastSystHist(h2, h1)
 
     storage = h1._storage_type() if h1._storage_type == h2._storage_type else hist.storage.Double()
-    outh = h1 if not createNew else hist.Hist(*h1.axes, storage=storage)
+    outh = hist.Hist(*h1.axes, storage=storage) if createNew else h1
+
+    h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2)
 
     # Careful not to overwrite the values of h1
-    out = np.empty(outh.values(flow=True).shape) if not createNew else outh.values(flow=True)
-    h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2)
+    out = outh.values(flow=True) if createNew else np.empty(outh.values(flow=True).shape)
+
     # By the argument that 0/0 = 1
     out[(np.abs(h2vals) < cutoff) & (np.abs(h1vals) < cutoff)] = 1.
     val = np.divide(h1vals, h2vals, out=out, where=np.abs(h2vals)>cutoff)
 
-    outh.values(flow=True)[...] = val
     if outh.storage_type == hist.storage.Weight:
         relvars = relVariances(h1vals, h2vals, h1vars, h2vars)
         val2 = np.multiply(val, val)
@@ -46,12 +47,15 @@ def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False, createN
             relsum = np.multiply(*relvars)
             var = np.multiply(relsum, val2, out=val2)
 
-        outh.variances(flow=True)[...] = var
+        outh.view(flow=True)[...] = np.stack((val, var), axis=-1)
+    else:
+        outh.values(flow=True)[...] = val
+
     return outh
 
 def relVariance(hvals, hvars, cutoff=1e-3, fillOnes=False):
     out = np.empty(hvars.shape)
-    np.multiply(hvars, hvals, out=out)
+    np.multiply(hvals, hvals, out=out)
     np.clip(out, a_min=cutoff, a_max=None, out=out)
     np.divide(hvars, out, out=out)
     if fillOnes:
