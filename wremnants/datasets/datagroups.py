@@ -257,9 +257,11 @@ class Datagroups(object):
                     else:
                         logger.warning(str(e))
                         continue
-                logger.debug(f"Hist axes are {h.axes.name}")
+                
+                # h = h.copy()
+                h_id = id(h)
 
-                h = h.copy()
+                logger.debug(f"Hist axes are {h.axes.name}")
 
                 if group.memberOp:
                     if group.memberOp[i] is not None:
@@ -275,6 +277,10 @@ class Datagroups(object):
                     if len(projections) < len(h.axes.name):
                         h = h.project(*projections)
                     logger.debug(f"Integrated")
+
+                if h_id == id(h):
+                    logger.debug(f"Make explicit copy")
+                    h = h.copy()
 
                 if preOpMap and member.name in preOpMap:
                     logger.debug(f"Applying preOp to {member.name}/{procName} after loading")
@@ -296,8 +302,6 @@ class Datagroups(object):
                 if forceNonzero:
                     logger.debug("force non zero")
                     hh.clipNegativeVals(h, createNew=False)
-
-                logger.debug(f"Hist axes are {h.axes.name}")
 
                 hasPartialSumForFake = False
                 if hasFake and procName != nameFake:
