@@ -393,8 +393,6 @@ def main(args,xnorm=False):
 
         if wmass:
             non_closure_scheme = input_tools.args_from_metadata(cardTool, "nonClosureScheme")
-            print(non_closure_scheme)
-            print("______________________________________")
             if non_closure_scheme == "A-M-separated":
                 cardTool.addSystematic("Z_non_closure_parametrized_A", 
                     processes=single_vmu_samples,
