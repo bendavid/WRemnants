@@ -2,7 +2,7 @@
 from wremnants import CardTool,theory_tools,syst_tools,combine_helpers
 from wremnants import histselections as sel
 from wremnants.datasets.datagroups2016 import make_datagroups_2016
-from utilities import common, logging
+from utilities import common, logging, input_tools
 import argparse
 import os
 import pathlib
@@ -35,7 +35,6 @@ def make_parser(parser=None):
     parser.add_argument("--unfold", action='store_true', help="Prepare datacard for unfolding")
     parser.add_argument("--fitXsec", action='store_true', help="Fit signal inclusive cross section")
     parser.add_argument("--correlatedNonClosureNuisances", action='store_true', help="get systematics from histograms for the Z non-closure nuisances without decorrelation in eta and pt")
-    parser.add_argument("--nonClosureScheme", type=str, default = "A-M-separated", choices=["A-M-separated", "A-M-combined", "binned", "binned-plus-M"], help = "how the non-closure numbers are derived")
     parser.add_argument("--sepImpactForNC", action="store_true", help="use a dedicated impact gropu for non closure nuisances, instead of putting them in muonScale")
     
     return parser
@@ -393,7 +392,8 @@ def main(args,xnorm=False):
             combine_helpers.add_recoil_uncertainty(cardTool, signal_samples, passSystToFakes=passSystToFakes, flavor="mu")
 
         if wmass:
-            if args.nonClosureScheme == "A-M-separated":
+            non_closure_scheme = input_tools.args_from_metadata(cardTool, "nonClosureScheme")
+            if non_closure_scheme == "A-M-separated":
                 cardTool.addSystematic("Z_non_closure_parametrized_A", 
                     processes=single_vmu_samples,
                     group="nonClosure" if args.sepImpactForNC else "muonScale",
@@ -402,7 +402,7 @@ def main(args,xnorm=False):
                     labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
                     passToFakes=passSystToFakes
                 )
-            if args.nonClosureScheme in ["A-M-separated", "binned-plus-M"]:
+            if non_closure_scheme in ["A-M-separated", "binned-plus-M"]:
                 cardTool.addSystematic("Z_non_closure_parametrized_M", 
                     processes=single_vmu_samples,
                     group="nonClosure" if args.sepImpactForNC else "muonScale",
@@ -411,7 +411,7 @@ def main(args,xnorm=False):
                     labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
                     passToFakes=passSystToFakes
                 )            
-            if args.nonClosureScheme == "A-M-combined":
+            if non_closure_scheme == "A-M-combined":
                 cardTool.addSystematic("Z_non_closure_parametrized", 
                     processes=single_vmu_samples,
                     group="nonClosure" if args.sepImpactForNC else "muonScale",
@@ -420,7 +420,7 @@ def main(args,xnorm=False):
                     labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
                     passToFakes=passSystToFakes
                 )
-            if args.nonClosureScheme in ["binned", "binned-plus-M"]:
+            if non_closure_scheme in ["binned", "binned-plus-M"]:
                 cardTool.addSystematic("Z_non_closure_binned", 
                     processes=single_vmu_samples,
                     group="nonClosure" if args.sepImpactForNC else "muonScale",
