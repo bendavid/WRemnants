@@ -735,7 +735,7 @@ class CardTool(object):
             args = {
                 "channel" :  chan,
                 "channelPerProc" : chan.ljust(self.procColumnsSpacing)*nprocs,
-                "processes" : "".join([x.ljust(self.procColumnsSpacing) for x in procs]),
+                "processes" : " ".join([x.ljust(self.procColumnsSpacing) for x in procs]),
                 "labels" : "".join([str(x).ljust(self.procColumnsSpacing) for x in self.processLabels()]),
                 # Could write out the proper normalizations pretty easily
                 "rates" : "-1".ljust(self.procColumnsSpacing)*nprocs,
