@@ -170,11 +170,25 @@ RVec<int> postFSRLeptonsIdx(RVec<bool> postFSRleptons) {
 }
 
 float zqtproj0(const float &goodMuons_pt0, const float &goodMuons_eta0, const float &goodMuons_phi0, RVec<float> &GenPart_pt, RVec<float> &GenPart_eta, RVec<float> &GenPart_phi, RVec<int> &postFSRnusIdx) {
-  ROOT::Math::PtEtaPhiMVector muon, neutrino;
-  muon.SetPt(goodMuons_pt0); muon.SetEta(goodMuons_eta0); muon.SetPhi(goodMuons_phi0); muon.SetM(muon_mass);
-  neutrino.SetPt(GenPart_pt[postFSRnusIdx[0]]); neutrino.SetEta(GenPart_eta[postFSRnusIdx[0]]); neutrino.SetPhi(GenPart_phi[postFSRnusIdx[0]]); neutrino.SetM(0.);
-  TVector2 Muon(muon.X(), muon.Y()), Neutrino(neutrino.X(), neutrino.Y());
-  return (Muon*((Muon+Neutrino)))/sqrt(Muon*Muon);
+    ROOT::Math::PtEtaPhiMVector muon(goodMuons_pt0, goodMuons_eta0, goodMuons_phi0, muon_mass);
+    ROOT::Math::PtEtaPhiMVector neutrino(GenPart_pt[postFSRnusIdx[0]], GenPart_eta[postFSRnusIdx[0]], GenPart_phi[postFSRnusIdx[0]], 0.);
+    TVector2 Muon(muon.X(), muon.Y()), Neutrino(neutrino.X(), neutrino.Y());
+    return (Muon*((Muon+Neutrino)))/sqrt(Muon*Muon);
+}
+    
+float zqtproj0(float pt, float phi, float ptOther, float phiOther) {
+    TVector2 lep, boson;
+    lep.SetMagPhi(pt,phi);
+    boson.SetMagPhi(ptOther,phiOther);
+    boson += lep;
+    return (lep*boson)/pt;
+}
+
+float zqtproj0_boson(float pt, float phi, float bosonPt, float bosonPhi) {
+    TVector2 lep, boson;
+    lep.SetMagPhi(pt,phi);
+    boson.SetMagPhi(bosonPt, bosonPhi);
+    return (lep*boson)/pt;
 }
 
     

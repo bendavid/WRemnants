@@ -140,17 +140,19 @@ only_central_pdf_datasets = [
 extended_pdf_datasets = [x for x in common.vprocs+common.vprocs_lowpu if not any(y in x for y in ["NNLOPS", "MiNLO"])]
 
 def define_prefsr_vars(df):
-    df = df.Define("prefsrLeps", "wrem::prefsrLeptons(GenPart_status, GenPart_statusFlags, GenPart_pdgId, GenPart_genPartIdxMother)")
-    df = df.Define("genl", "ROOT::Math::PtEtaPhiMVector(GenPart_pt[prefsrLeps[0]], GenPart_eta[prefsrLeps[0]], GenPart_phi[prefsrLeps[0]], GenPart_mass[prefsrLeps[0]])")
-    df = df.Define("genlanti", "ROOT::Math::PtEtaPhiMVector(GenPart_pt[prefsrLeps[1]], GenPart_eta[prefsrLeps[1]], GenPart_phi[prefsrLeps[1]], GenPart_mass[prefsrLeps[1]])")
-    df = df.Define("genV", "ROOT::Math::PxPyPzEVector(genl)+ROOT::Math::PxPyPzEVector(genlanti)")
-    df = df.Define("ptVgen", "genV.pt()")
-    df = df.Define("massVgen", "genV.mass()")
-    df = df.Define("yVgen", "genV.Rapidity()")
-    df = df.Define("phiVgen", "genV.Phi()")
-    df = df.Define("absYVgen", "std::fabs(yVgen)")
-    df = df.Define("chargeVgen", "GenPart_pdgId[prefsrLeps[0]] + GenPart_pdgId[prefsrLeps[1]]")
-    df = df.Define("csSineCosThetaPhi", "wrem::csSineCosThetaPhi(genlanti, genl)")
+    if "prefsrLeps" not in df.GetColumnNames():
+        logger.info("Defining preFSR variables")
+        df = df.Define("prefsrLeps", "wrem::prefsrLeptons(GenPart_status, GenPart_statusFlags, GenPart_pdgId, GenPart_genPartIdxMother)")
+        df = df.Define("genl", "ROOT::Math::PtEtaPhiMVector(GenPart_pt[prefsrLeps[0]], GenPart_eta[prefsrLeps[0]], GenPart_phi[prefsrLeps[0]], GenPart_mass[prefsrLeps[0]])")
+        df = df.Define("genlanti", "ROOT::Math::PtEtaPhiMVector(GenPart_pt[prefsrLeps[1]], GenPart_eta[prefsrLeps[1]], GenPart_phi[prefsrLeps[1]], GenPart_mass[prefsrLeps[1]])")
+        df = df.Define("genV", "ROOT::Math::PxPyPzEVector(genl)+ROOT::Math::PxPyPzEVector(genlanti)")
+        df = df.Define("ptVgen", "genV.pt()")
+        df = df.Define("massVgen", "genV.mass()")
+        df = df.Define("yVgen", "genV.Rapidity()")
+        df = df.Define("phiVgen", "genV.Phi()")
+        df = df.Define("absYVgen", "std::fabs(yVgen)")
+        df = df.Define("chargeVgen", "GenPart_pdgId[prefsrLeps[0]] + GenPart_pdgId[prefsrLeps[1]]")
+        df = df.Define("csSineCosThetaPhi", "wrem::csSineCosThetaPhi(genlanti, genl)")
     return df
 
 def define_scale_tensor(df):
@@ -240,8 +242,7 @@ def define_central_pdf_weight(df, dataset_name, pdf):
     return df.Define("central_pdf_weight", f"std::clamp<float>({pdfBranch}[0], -theory_weight_truncate, theory_weight_truncate)")
 
 def define_theory_weights_and_corrs(df, dataset_name, helpers, args):
-    if "prefsrLeps" not in df.GetColumnNames():
-        df = define_prefsr_vars(df)
+    df = define_prefsr_vars(df)
         
     df = define_ew_vars(df)
 

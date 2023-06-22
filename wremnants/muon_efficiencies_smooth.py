@@ -18,14 +18,20 @@ data_dir = f"{pathlib.Path(__file__).parent}/data/"
 
 def cloneAxis(ax, overflow=False, underflow=False):
     if isinstance(ax, bh.axis.Regular):
-        newax = hist.axis.Regular(ax.size, ax.edges[0], ax.edges[-1], name = ax.name, overflow=overflow, underflow=underflow)
+        #logger.debug(f"Cloning regular axis {ax.name} with {ax.size} bins from {ax.edges[0]} to {ax.edges[-1]}, and underflow/overflow = {underflow}/{overflow}")
+        newax = hist.axis.Regular(ax.size, ax.edges[0], ax.edges[-1], name=ax.name, overflow=overflow, underflow=underflow)
     elif isinstance(ax, bh.axis.Variable):
-        newax = hist.axis.Variable(ax.edges, name = ax.name, overflow = False, underflow = False)
+        #logger.debug(f"Cloning Variable axis {ax.name} with {len(ax.edges)-1} bins from {ax.edges[0]} to {ax.edges[-1]}, and underflow/overflow = {underflow}/{overflow}")
+        newax = hist.axis.Variable(ax.edges, name=ax.name, overflow=overflow, underflow=underflow)
+    else:
+        logger.error(f"In cloneAxis(): only Regular and Variable axes are supported for now")
+        quit()
     return newax
 
 def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSmooth_GtoH.root",
                                         era = None, is_w_like = False, max_pt = np.inf,
-                                        isoEfficiencySmoothing = False):
+                                        isoEfficiencySmoothing = False,
+                                        smooth3D=False):
     logger.debug(f"Make efficiency helper smooth")
 
     eradict = { "2016PreVFP" : "BtoF",
@@ -40,12 +46,13 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
     axis_charge_inclusive = hist.axis.Regular(1, -2., 2., underflow=False, overflow=False, name = "SF charge") # for isolation and effStat only
     isoEff_types = ["iso", "isonotrig", "antiiso", "antiisonotrig"]
     allEff_types = ["reco", "tracking", "idip", "trigger"] + isoEff_types
-    eff_types_3D = ["trigger"] + [x for x in isoEff_types] # if this is set to [] the code should revert back to all 2D SF 
+    #eff_types_3D = ["trigger"] + [x for x in isoEff_types] # if this is set to [] the code should revert back to all 2D SF
+    eff_types_3D = [] if not smooth3D else ["trigger"] + [x for x in isoEff_types]
     eff_types_2D = [x for x in allEff_types if x not in eff_types_3D]
     axis_allEff_type = hist.axis.StrCategory(allEff_types, name = "allEff_type")
     axis_eff_type_2D = hist.axis.StrCategory(eff_types_2D, name = "eff_types_2D_etapt")
     axis_eff_type_3D = hist.axis.StrCategory(eff_types_3D, name = "eff_types_3D_etaptut")
-    effSyst_decorrEtaEdges = [round(-2.4 + 0.1*i,1) for i in range(48)]
+    effSyst_decorrEtaEdges = [round(-2.4 + 0.1*i,1) for i in range(49)]
     Nsyst = 1 + (len(effSyst_decorrEtaEdges) - 1) # inclusive variation + all decorrelated bins
     axis_nom_syst = hist.axis.Integer(0, 1+Nsyst, underflow = False, overflow =False, name = "nom-systs") # nominal in first bin
 
@@ -106,7 +113,8 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
 
     ## now proceed with loading 3D SF if existing, then create helpers as appropriate
     if len(eff_types_3D):
-        
+
+        logger.warning("Using SF in 3D for trigger/isolation")
         dict_SF3D = None
         # temporary file stored locally for tests
         fileSF3D = data_dir + "/testMuonSF/smoothSF3D.pkl.lz4"
@@ -120,8 +128,9 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
             for eff_type in axis_eff_type_3D:
                 effTypeNameInHist = f"{eff_type}{charge_tag}" if eff_type == "trigger" else eff_type
                 if "anti" in effTypeNameInHist:
-                    effTypeNameInHist = effTypeNameInHist.replace("anti", "") # temporary until we have all
-                hist_hist = dict_SF3D[f"smoothSF3D_{effTypeNameInHist}"] 
+                    effTypeNameInHist = effTypeNameInHist.replace("anti", "") # FIXME temporary until we have all
+                hist_hist = dict_SF3D[f"smoothSF3D_{effTypeNameInHist}"]
+                logger.debug(f"{charge} {eff_type}: hist_hist = {hist_hist.axes}")
                 if sf_syst_3D is None:
                     ## Redefine axes to force the existence of overflow bins
                     axis_eta_eff = cloneAxis(hist_hist.axes[0], overflow=True, underflow=True)
@@ -130,7 +139,7 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
                     # ut axis is put last to keep same axes sorting as for 2D histograms created before
                     sf_syst_3D = hist.Hist(axis_eta_eff, axis_pt_eff, axis_charge,
                                            axis_eff_type_3D, axis_nom_syst, axis_ut_eff,
-                                           name = "sf_syst_2D", storage = hist.storage.Weight())
+                                           name = "sf_syst_3D", storage = hist.storage.Weight())
                 # could use max_pt to remove some of the pt bins for the input histogram
                 # extract nominal (first bin that is not underflow) and put in corresponding bin of destination (bin 0 is the first bin because no underflow)
                 ## Note: must call sf_syst_3D with flow=False because it has overflow bins but hist_hist does not
@@ -151,7 +160,7 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
                     indexEtaLow = axis_eta_eff.index(effSyst_decorrEtaEdges[isyst] + 0.001) # add epsilon to ensure picking the bin on the right of the edge
                     indexEtaHigh = axis_eta_eff.index(effSyst_decorrEtaEdges[isyst+1] + 0.001) 
                     sf_syst_3D.view(flow=False)[indexEtaLow:indexEtaHigh, :, axis_charge.index(charge), axis_eff_type_3D.index(eff_type), 2+isyst, :] = hist_hist.view(flow=True)[indexEtaLow:indexEtaHigh, :, :, 0]
-
+                    
         # set overflow and underflow eta-pt bins equal to adjacent bins
         sf_syst_3D.view(flow=True)[0, ...] = sf_syst_3D.view(flow=True)[1, ...]
         sf_syst_3D.view(flow=True)[axis_eta_eff.extent-1, ...] = sf_syst_3D.view(flow=True)[axis_eta_eff.extent-2, ...]
@@ -159,12 +168,24 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
         sf_syst_3D.view(flow=True)[:, axis_pt_eff.extent-1, ...] = sf_syst_3D.view(flow=True)[:, axis_pt_eff.extent-2, ...]
         sf_syst_3D.view(flow=True)[..., 0] = sf_syst_3D.view(flow=True)[..., 1]
         sf_syst_3D.view(flow=True)[..., axis_ut_eff.extent-1] = sf_syst_3D.view(flow=True)[..., axis_ut_eff.extent-2]
+
+        ## try rebinning
+        #sf_syst_3D = sf_syst_3D[{axis_ut_eff.name : hist.rebin(60)}]
+        #logger.debug(f"sf_syst_3D.shape = {sf_syst_3D.shape}")
+        logger.debug(f"sf_syst_2D.axes = {sf_syst_2D.axes}")
+        logger.debug("")
+        logger.debug(f"sf_syst_3D.axes = {sf_syst_3D.axes}")
         
         sf_syst_2D_pyroot = narf.hist_to_pyroot_boost(sf_syst_2D)
         sf_syst_3D_pyroot = narf.hist_to_pyroot_boost(sf_syst_3D)
         # nomi and syst are stored in the same histogram, just use different helpers to override the () operator for now, until RDF is improved
-        helper = ROOT.wrem.muon_efficiency_smooth_helper[str(is_w_like).lower(), Nsyst, type(sf_syst_2D_pyroot), type(sf_syst_3D_pyroot)]( ROOT.std.move(sf_syst_2D_pyroot), ROOT.std.move(sf_syst_3D_pyroot) )
-        helper_syst = ROOT.wrem.muon_efficiency_smooth_helper_syst[str(is_w_like).lower(), Nsyst, type(sf_syst_2D_pyroot), type(sf_syst_3D_pyroot)]( helper )
+        helper = ROOT.wrem.muon_efficiency_smooth3D_helper[str(is_w_like).lower(), Nsyst,
+                                                           type(sf_syst_2D_pyroot),
+                                                           type(sf_syst_3D_pyroot)](
+                                                               ROOT.std.move(sf_syst_2D_pyroot),
+                                                               ROOT.std.move(sf_syst_3D_pyroot)
+                                                           )
+        helper_syst = ROOT.wrem.muon_efficiency_smooth3D_helper_syst[str(is_w_like).lower(), Nsyst, type(sf_syst_2D_pyroot), type(sf_syst_3D_pyroot)]( helper )
         # define axis for syst variations with all steps
         axis_all = hist.axis.Integer(0, 5, underflow = False, overflow = False, name = "reco-tracking-idip-trigger-iso")
         axis_nsyst = hist.axis.Integer(0, Nsyst, underflow = False, overflow = False, name = "n_syst_variations")
@@ -172,6 +193,7 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
         #
 
     else:
+        logger.warning("Using all SF in 2D")
         # case with only 2D histograms
         sf_syst_2D_pyroot = narf.hist_to_pyroot_boost(sf_syst_2D)
         # nomi and syst are stored in the same histogram, just use different helpers to override the () operator for now, until RDF is improved
@@ -182,7 +204,7 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
         axis_nsyst = hist.axis.Integer(0, Nsyst, underflow = False, overflow = False, name = "n_syst_variations")
         helper_syst.tensor_axes = [axis_all, axis_nsyst]
         #
-    
+                       
     ##############
     ## now the EFFSTAT
     

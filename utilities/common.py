@@ -136,10 +136,8 @@ def common_parser(for_reco_highPU=False):
         parser.add_argument("--unfolding", action='store_true', help="Add information needed for unfolding")
         parser.add_argument("--genLevel", type=str, default='postFSR', choices=["preFSR", "postFSR"], help="Generator level definition for unfolding")
         parser.add_argument("--genBins", type=int, default=[3, 2], help="Number of generator level bins")
-        parser.add_argument("--validateByMassWeights", 
-            action = "store_true",
-            help = "validate the muon momentum scale shift weights by massweights"
-        )
+        parser.add_argument("--validateByMassWeights", action = "store_true", help = "validate the muon momentum scale shift weights by massweights")
+        parser.add_argument("--smooth3dsf", action='store_true', help="Use smooth 3D scale factors instead of the original 2D ones (test option for now)")
 
     commonargs,_ = parser.parse_known_args()
 
