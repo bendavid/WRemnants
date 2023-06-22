@@ -608,7 +608,7 @@ class CardTool(object):
             procsToRead=self.datagroups.groups.keys(),
             label=self.nominalName, 
             scaleToNewLumi=self.lumiScale, 
-            forceNonzero=True)
+            forceNonzero=forceNonzero)
         self.writeForProcesses(self.nominalName, processes=self.datagroups.groups.keys(), label=self.nominalName, check_systs=check_systs)
         self.loadNominalCard()
         if self.pseudoData and not self.xnorm:
