@@ -219,7 +219,10 @@ namespace wrem {
         muon_efficiency_smooth3D_helper_base(HIST_SF &&sf_all, HIST_SF3D &&sf3D_all) :
             sf_all_(std::make_shared<const HIST_SF>(std::move(sf_all))),
             sf3D_all_(std::make_shared<const HIST_SF3D>(std::move(sf3D_all)))
-            {}
+            {
+                // const bool is_inclusive = boost::histogram::axis::traits::inclusive(sf3D_all_->template axis<5>());
+                // std:: cout << is_inclusive << std::endl;
+            }
     
         std::array<double,5> scale_factor_array(int pt_idx, int eta_idx, int sapt_idx, int saeta_idx, int ut_idx,
                                                 int charge_idx, bool pass_iso, bool with_trigger, int idx_nom_alt) const {
@@ -232,16 +235,19 @@ namespace wrem {
             auto const eff_type_idx_iso_fail = with_trigger ? idx3D_antiiso_triggering_ : idx3D_antiiso_nontriggering_;
             auto const eff_type_idx_iso = pass_iso ? eff_type_idx_iso_pass : eff_type_idx_iso_fail;
 
-            std::cout << "Value for eff_type_idx_trig,eff_type_idx_iso = " << eff_type_idx_trig << ", " << eff_type_idx_iso << std::endl;
+            //std::cout << "Value for eff_type_idx_trig,eff_type_idx_iso = " << eff_type_idx_trig << ", " << eff_type_idx_iso << std::endl;
 
             const double reco      = sf_all_->at(  eta_idx,   pt_idx, charge_idx, eff_type_idx_reco,     idx_nom_alt).value();
             const double tracking  = sf_all_->at(saeta_idx, sapt_idx, charge_idx, eff_type_idx_tracking, idx_nom_alt).value();
             const double idip      = sf_all_->at(  eta_idx,   pt_idx, charge_idx, eff_type_idx_idip,     idx_nom_alt).value();
             double trig = 1.0;
+            std::cout << "Before trigger" << std::endl;
             if (with_trigger) trig = sf3D_all_->at(eta_idx, pt_idx, ut_idx, charge_idx, eff_type_idx_trig, idx_nom_alt).value();
+            std::cout << "Before isolation" << std::endl;
             const double iso       = sf3D_all_->at(eta_idx, pt_idx, ut_idx, charge_idx, eff_type_idx_iso,  idx_nom_alt).value();
             std::array<double,5> ret = {reco, tracking, idip, trig, iso};
-
+            std::cout << "End of scale_factor_array" << std::endl;
+            
             return ret;
             
         }
@@ -249,7 +255,7 @@ namespace wrem {
         double scale_factor_product(float pt, float eta, float sapt, float saeta, float ut,
                                     int charge, bool pass_iso, bool with_trigger, int idx_nom_alt) const {
 
-            // FIXME: this assumes the same eta and pt binning, for 2D and 3D SF.
+            // FIXME: this assumes the same eta and pt binning, for 2D and 3D SF, which for now is verified
             //        Keeping same binning is surely better to have, but be careful
             auto const eta_idx = sf_all_->template axis<0>().index(eta);
             auto const pt_idx = sf_all_->template axis<1>().index(pt);
@@ -258,14 +264,13 @@ namespace wrem {
             auto const sapt_idx = sf_all_->template axis<1>().index(sapt);
             auto const ut_idx = sf3D_all_->template axis<5>().index(ut);
             std::cout << "Value for pt,eta,sapt,saeta,ut = " << pt << ", " << eta << ", " << sapt << ", " << saeta << ", " << ut << std::endl;
-            std::cout << "Value for pass_iso,with_trigger,idx_nom_alt = " << pass_iso << ", " << with_trigger << ", " << idx_nom_alt << std::endl;
-            // std::cout << "Index for pt,eta,ut = " << pt_idx << ", " << eta_idx << ", " << ut_idx << std::endl;
-            // const bool is_inclusive = sf3D_all_->template axis<5>().inclusive();
-            // std::cout << "sf3D_all_->template axis<5>().inclusive() = " << is_inclusive << std::endl;
+            //std::cout << "Value for pass_iso,with_trigger,idx_nom_alt = " << pass_iso << ", " << with_trigger << ", " << idx_nom_alt << std::endl;
+            std::cout << "Index for pt,eta,ut = " << pt_idx << ", " << eta_idx << ", " << ut_idx << std::endl;
+            // apparently avoiding index = -1 helps, not clear why given that the underflow bin exists
             auto ut_idx_new = ut_idx;
             if (ut_idx_new < 0) {
                 ut_idx_new = 0;
-                // std::cout << "Setting ut_idx to " << ut_idx_new << std::endl;
+                std::cout << "Setting ut_idx to " << ut_idx_new << std::endl;
             }
                 
             std::array<double,5> allSF = scale_factor_array(pt_idx, eta_idx, sapt_idx, saeta_idx, ut_idx_new,

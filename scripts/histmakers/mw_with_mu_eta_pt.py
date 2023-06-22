@@ -206,14 +206,14 @@ def build_graph(df, dataset):
     df = muon_selections.veto_electrons(df)
     df = muon_selections.apply_met_filters(df)
     if not (args.vqt3dsmoothing and (args.vqtTestStep < 2)) :
-        df = muon_selections.apply_triggermatching_muon(df, dataset, "goodMuons_eta0", "goodMuons_phi0")
-
-    if (args.vqt3dsmoothing) :
-        if dataset.group in common.background_MCprocs:
-            df = df.Define("GoodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_pt,TrigObj_l1pt,TrigObj_l2pt,TrigObj_filterBits)")
-        else:
-            df = df.Define("GoodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_filterBits)")
-        df = df.Define("passTrigger","wrem::hasTriggerMatch(goodMuons_eta0,goodMuons_phi0,TrigObj_eta[GoodTrigObjs],TrigObj_phi[GoodTrigObjs])")
+         df = muon_selections.apply_triggermatching_muon(df, dataset, "goodMuons_eta0", "goodMuons_phi0")
+    ## MARCO: temporarily commented out code
+    # if (args.vqt3dsmoothing) :
+    #     if dataset.group in common.background_MCprocs:
+    #         df = df.Define("GoodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_pt,TrigObj_l1pt,TrigObj_l2pt,TrigObj_filterBits)")
+    #     else:
+    #         df = df.Define("GoodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_filterBits)")
+    #     df = df.Define("passTrigger","wrem::hasTriggerMatch(goodMuons_eta0,goodMuons_phi0,TrigObj_eta[GoodTrigObjs],TrigObj_phi[GoodTrigObjs])")
 
     # gen match to bare muons to select only prompt muons from MC processes, but also including tau decays
     # status flags in NanoAOD: https://cms-nanoaod-integration.web.cern.ch/autoDoc/NanoAODv9/2016ULpostVFP/doc_TTToSemiLeptonic_TuneCP5_13TeV-powheg-pythia8_RunIISummer20UL16NanoAODv9-106X_mcRun2_asymptotic_v17-v1.html
@@ -285,19 +285,21 @@ def build_graph(df, dataset):
             columnsForSF.remove(recoilVarSF)
             
         if not args.noScaleFactors:
-            if not (args.vqtTest and isW):
-                df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, columnsForSF)
-            else:
-                df = df.Define("postFSRnus", "GenPart_status == 1 && (GenPart_statusFlags & 1) && abs(GenPart_pdgId) == 14")
-                df = df.Define("postFSRnusIdx", "wrem::postFSRLeptonsIdx(postFSRnus)")
-                df = df.Define("goodMuons_zqtproj0","wrem::zqtproj0(goodMuons_pt0, goodMuons_eta0, goodMuons_phi0, GenPart_pt, GenPart_eta, GenPart_phi, postFSRnusIdx)")
-                if args.vqtTestIntegrated:
-                    df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper_vqt, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso"])
-                else:
-                    df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper_vqt, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso", "goodMuons_zqtproj0"])
-                    if args.vqt3dsmoothing:
-                        df = df.Define("weight_fullMuonSF_withTrackingRecoMC", muon_efficiency_helper_vqt2, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso", "goodMuons_zqtproj0"])
-                        df = df.Define("weight_fullMuonSF_withTrackingRecoErr", muon_efficiency_helper_vqt3, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso", "goodMuons_zqtproj0"])
+            df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, columnsForSF)
+            ## MARCO: temporarily commented out code
+            # if not (args.vqtTest and isW):
+            #     df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, columnsForSF)
+            # else:
+            #     df = df.Define("postFSRnus", "GenPart_status == 1 && (GenPart_statusFlags & 1) && abs(GenPart_pdgId) == 14")
+            #     df = df.Define("postFSRnusIdx", "wrem::postFSRLeptonsIdx(postFSRnus)")
+            #     df = df.Define("goodMuons_zqtproj0","wrem::zqtproj0(goodMuons_pt0, goodMuons_eta0, goodMuons_phi0, GenPart_pt, GenPart_eta, GenPart_phi, postFSRnusIdx)")
+            #     if args.vqtTestIntegrated:
+            #         df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper_vqt, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso"])
+            #     else:
+            #         df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper_vqt, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso", "goodMuons_zqtproj0"])
+            #         if args.vqt3dsmoothing:
+            #             df = df.Define("weight_fullMuonSF_withTrackingRecoMC", muon_efficiency_helper_vqt2, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso", "goodMuons_zqtproj0"])
+            #             df = df.Define("weight_fullMuonSF_withTrackingRecoErr", muon_efficiency_helper_vqt3, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso", "goodMuons_zqtproj0"])
             weight_expr += "*weight_fullMuonSF_withTrackingReco"
 
         if not args.noVertexWeight:
@@ -385,11 +387,12 @@ def build_graph(df, dataset):
         df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, axes, cols, smooth3D=args.smooth3dsf)
         df = syst_tools.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, axes, cols)
 
-        if args.vqtTest:
-            if args.vqtTestIntegrated:
-                df = df.Define("effSystTnP_weight_vqt", muon_efficiency_helper_vqt_syst, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso", "nominal_weight"])
-                effSystTnP_vqt = df.HistoBoost("effSystTnP_vqt", axes, [*cols, "effSystTnP_weight_vqt"], tensor_axes = muon_efficiency_helper_vqt_syst.tensor_axes, storage=hist.storage.Double())
-                results.append(effSystTnP_vqt)
+        ## MARCO: temporarily commented out code
+        # if args.vqtTest:
+        #     if args.vqtTestIntegrated:
+        #         df = df.Define("effSystTnP_weight_vqt", muon_efficiency_helper_vqt_syst, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso", "nominal_weight"])
+        #         effSystTnP_vqt = df.HistoBoost("effSystTnP_vqt", axes, [*cols, "effSystTnP_weight_vqt"], tensor_axes = muon_efficiency_helper_vqt_syst.tensor_axes, storage=hist.storage.Double())
+        #         results.append(effSystTnP_vqt)
         
         # luminosity, done here as shape variation despite being a flat scaling so to facilitate propagating to fakes afterwards
         df = df.Define("luminosityScaling", f"wrem::constantScaling(nominal_weight, {args.lumiUncertainty})")
@@ -637,23 +640,25 @@ def build_graph(df, dataset):
 
             df = df.Define("Muon_cvhMomCov", "wrem::splitNestedRVec(Muon_cvhMomCov_Vals, Muon_cvhMomCov_Counts)")
 
-            if args.vqt3dsmoothing and isW:
-                df = df.Define("nominal_weight_pt", "nominal_weight*goodMuons_pt0")
-                df = df.Define("nominal_weight_MC", "nominal_weight/weight_fullMuonSF_withTrackingReco*weight_fullMuonSF_withTrackingRecoMC")
-                df = df.Define("nominal_weight_Err", "nominal_weight/weight_fullMuonSF_withTrackingReco*weight_fullMuonSF_withTrackingRecoErr")
-                new_nom_cols_MC = [*nominal_cols, "passTrigger"]
-                smoothMC = df.HistoBoost("nominal_smoothMC", nominal_axes3, [*new_nom_cols_MC, "nominal_weight_MC"])
-                results.append(smoothMC)
-                new_nom_cols = [*nominal_cols, "goodMuons_zqtproj0", "passTrigger"]
-                smoothErr = df.HistoBoost("nominal_smoothErr", nominal_axes2, [*new_nom_cols, "nominal_weight_Err"])
-                results.append(smoothErr)
-                new_nom_cols_noeta = ["goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT", "passTrigger"]
-                nominal_axes4 = [axis_pt, axis_charge, axis_passIso, axis_passMT, axis_passTrigger]
-                smoothpt = df.HistoBoost("nominal_smoothpt", nominal_axes4, [*new_nom_cols_noeta, "nominal_weight_pt"])
-                results.append(smoothpt)
-                utdistro = df.HistoBoost("nominal_utdistro", nominal_axes2, [*new_nom_cols, "nominal_weight_MC"])
-                results.append(utdistro)
+            ## MARCO: temporarily commented out code
+            # if args.vqt3dsmoothing and isW:
+            #     df = df.Define("nominal_weight_pt", "nominal_weight*goodMuons_pt0")
+            #     df = df.Define("nominal_weight_MC", "nominal_weight/weight_fullMuonSF_withTrackingReco*weight_fullMuonSF_withTrackingRecoMC")
+            #     df = df.Define("nominal_weight_Err", "nominal_weight/weight_fullMuonSF_withTrackingReco*weight_fullMuonSF_withTrackingRecoErr")
+            #     new_nom_cols_MC = [*nominal_cols, "passTrigger"]
+            #     smoothMC = df.HistoBoost("nominal_smoothMC", nominal_axes3, [*new_nom_cols_MC, "nominal_weight_MC"])
+            #     results.append(smoothMC)
+            #     new_nom_cols = [*nominal_cols, "goodMuons_zqtproj0", "passTrigger"]
+            #     smoothErr = df.HistoBoost("nominal_smoothErr", nominal_axes2, [*new_nom_cols, "nominal_weight_Err"])
+            #     results.append(smoothErr)
+            #     new_nom_cols_noeta = ["goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT", "passTrigger"]
+            #     nominal_axes4 = [axis_pt, axis_charge, axis_passIso, axis_passMT, axis_passTrigger]
+            #     smoothpt = df.HistoBoost("nominal_smoothpt", nominal_axes4, [*new_nom_cols_noeta, "nominal_weight_pt"])
+            #     results.append(smoothpt)
+            #     utdistro = df.HistoBoost("nominal_utdistro", nominal_axes2, [*new_nom_cols, "nominal_weight_MC"])
+            #     results.append(utdistro)
 
+        ## MARCO: temporarily commented out code
         # if not args.binnedScaleFactors:
         #     df = df.Define("weight2dsfup", muon_efficiency_helper2d, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_pt0", "goodMuons_charge0", "passIso"])
         #     df = df.Define("nominal_weight_2dsf", "nominal_weight/weight_fullMuonSF_withTrackingReco*weight2dsfup") #be EXTREMELY CAREFUL about the histogram files (this assumes that you have another file with the old trigger and histo SFs which also contains the same SFs for all the other steps as the central one)

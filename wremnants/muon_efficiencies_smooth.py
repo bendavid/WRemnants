@@ -130,7 +130,7 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
                 if "anti" in effTypeNameInHist:
                     effTypeNameInHist = effTypeNameInHist.replace("anti", "") # FIXME temporary until we have all
                 hist_hist = dict_SF3D[f"smoothSF3D_{effTypeNameInHist}"]
-                logger.debug(f"{charge} {eff_type}: hist_hist = {hist_hist.axes}")
+                #logger.debug(f"{charge} {eff_type}: hist_hist = {hist_hist.axes}")
                 if sf_syst_3D is None:
                     ## Redefine axes to force the existence of overflow bins
                     axis_eta_eff = cloneAxis(hist_hist.axes[0], overflow=True, underflow=True)
@@ -143,36 +143,45 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
                 # could use max_pt to remove some of the pt bins for the input histogram
                 # extract nominal (first bin that is not underflow) and put in corresponding bin of destination (bin 0 is the first bin because no underflow)
                 ## Note: must call sf_syst_3D with flow=False because it has overflow bins but hist_hist does not
-                sf_syst_3D.view(flow=False)[:, :, axis_charge.index(charge), axis_eff_type_3D.index(eff_type), 0, :] = hist_hist.view(flow=True)[:,:,:,0]
+                sf_syst_3D.view(flow=False)[:, :, axis_charge.index(charge), axis_eff_type_3D.index(eff_type), 0, :] = hist_hist.view(flow=False)[:,:,:,0]
                 # extract syst (last bin except overflow) and put in corresponding bin of destination (bin 1 is the second bin because no underflow)
                 ##
                 ## FIXME: for now using syst=nominal since we don't have syst (must copy from 2D version)
                 ##
-                sf_syst_3D.view(flow=False)[:, :, axis_charge.index(charge), axis_eff_type_3D.index(eff_type), 1, :] = hist_hist.view(flow=True)[:,:,:,0]  ## <---- FIX THIS !!!
+                sf_syst_3D.view(flow=False)[:, :, axis_charge.index(charge), axis_eff_type_3D.index(eff_type), 1, :] = hist_hist.view(flow=False)[:,:,:,0]  ## <---- FIX THIS !!!
                 for isyst in range(len(effSyst_decorrEtaEdges)-1):
                     # first copy the nominal
-                    sf_syst_3D.view(flow=False)[:, :, axis_charge.index(charge), axis_eff_type_3D.index(eff_type), 2+isyst, :] = hist_hist.view(flow=True)[:,:,:,0]
+                    sf_syst_3D.view(flow=False)[:, :, axis_charge.index(charge), axis_eff_type_3D.index(eff_type), 2+isyst, :] = hist_hist.view(flow=False)[:,:,:,0]
                     # now update with actual syst all eta bins inside interval [effSyst_decorrEtaEdges[isyst], effSyst_decorrEtaEdges[isyst+1]]
                     # add epsilon to ensure picking the bin on the right of the edge (for the right edge given by
                     # effSyst_decorrEtaEdges[isyst+1]] the range selection in boost later on will stop at the left
                     #edge of the chosen bin number, e.g. h[b:b+1] will pick the range containing the single bin b, unlike in ROOT
-                    # also do not sum 1 because sf_syst_3D.view(flow=False) will consider 0 the first bin index (with flow=True instead 0 is the underflow but only if it exists)
+                    # also do not sum 1 because sf_syst_3D.view(flow=False) will consider 0 the first bin index (with flow=True instead 0 is the underflow but only if it exists, otherwise 0 is the first bin)
                     indexEtaLow = axis_eta_eff.index(effSyst_decorrEtaEdges[isyst] + 0.001) # add epsilon to ensure picking the bin on the right of the edge
                     indexEtaHigh = axis_eta_eff.index(effSyst_decorrEtaEdges[isyst+1] + 0.001) 
-                    sf_syst_3D.view(flow=False)[indexEtaLow:indexEtaHigh, :, axis_charge.index(charge), axis_eff_type_3D.index(eff_type), 2+isyst, :] = hist_hist.view(flow=True)[indexEtaLow:indexEtaHigh, :, :, 0]
+                    sf_syst_3D.view(flow=False)[indexEtaLow:indexEtaHigh, :, axis_charge.index(charge), axis_eff_type_3D.index(eff_type), 2+isyst, :] = hist_hist.view(flow=False)[indexEtaLow:indexEtaHigh, :, :, 0]
                     
         # set overflow and underflow eta-pt bins equal to adjacent bins
-        sf_syst_3D.view(flow=True)[0, ...] = sf_syst_3D.view(flow=True)[1, ...]
-        sf_syst_3D.view(flow=True)[axis_eta_eff.extent-1, ...] = sf_syst_3D.view(flow=True)[axis_eta_eff.extent-2, ...]
-        sf_syst_3D.view(flow=True)[:, 0, ...] = sf_syst_3D.view(flow=True)[:, 1, ...]
+        sf_syst_3D.view(flow=True)[0, ...]                       = sf_syst_3D.view(flow=True)[1, ...]
+        sf_syst_3D.view(flow=True)[axis_eta_eff.extent-1, ...]   = sf_syst_3D.view(flow=True)[axis_eta_eff.extent-2, ...]
+        sf_syst_3D.view(flow=True)[:, 0, ...]                    = sf_syst_3D.view(flow=True)[:, 1, ...]
         sf_syst_3D.view(flow=True)[:, axis_pt_eff.extent-1, ...] = sf_syst_3D.view(flow=True)[:, axis_pt_eff.extent-2, ...]
-        sf_syst_3D.view(flow=True)[..., 0] = sf_syst_3D.view(flow=True)[..., 1]
-        sf_syst_3D.view(flow=True)[..., axis_ut_eff.extent-1] = sf_syst_3D.view(flow=True)[..., axis_ut_eff.extent-2]
+        sf_syst_3D.view(flow=True)[..., 0]                       = sf_syst_3D.view(flow=True)[..., 1]
+        sf_syst_3D.view(flow=True)[..., axis_ut_eff.extent-1]    = sf_syst_3D.view(flow=True)[..., axis_ut_eff.extent-2]
 
+        #logger.error(f"axis_pt_eff.extent = {axis_pt_eff.extent}")
+        #logger.error(f"axis_eta_eff.extent = {axis_eta_eff.extent}")
+        #logger.error(f"axis_ut_eff.extent = {axis_ut_eff.extent}")
         ## try rebinning
-        #sf_syst_3D = sf_syst_3D[{axis_ut_eff.name : hist.rebin(60)}]
-        #logger.debug(f"sf_syst_3D.shape = {sf_syst_3D.shape}")
-        logger.debug(f"sf_syst_2D.axes = {sf_syst_2D.axes}")
+        rebinUt = True:
+        if rebinUt:
+            rebin = 60
+            logger.error(f"Attention, rebinning ut by {rebin} as a test")
+            sf_syst_3D = sf_syst_3D[{axis_ut_eff.name : hist.rebin(rebin)}] # try with and without rebinning
+        logger.debug("")
+        logger.debug(f"sf_syst_3D.shape = {sf_syst_3D.shape}") # this is currently (48, 205, 2, 5, 50, N_ut) for eta,pt,charge,effType,nomiAndSyst,ut
+        #logger.debug("")
+        #logger.debug(f"sf_syst_2D.axes = {sf_syst_2D.axes}")
         logger.debug("")
         logger.debug(f"sf_syst_3D.axes = {sf_syst_3D.axes}")
         
