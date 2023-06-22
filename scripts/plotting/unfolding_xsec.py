@@ -59,6 +59,9 @@ elif input_subdir.startswith("ZMassDilepton"):
     base_process = "Zmumu"
     dilepton=True
 
+    # gen_axes = ["ptVGen"]
+    gen_axes = ["ptVGen", "absYVGen"]
+
 
 cms_decor = "Preliminary" if not args.noData else "Simulation Preliminary"
 
@@ -93,8 +96,9 @@ def get_label(name):
         return labelmap[name]
 
     if dilepton:
-        res = getProcessBins(name, axes=["ptVGen"])
-        idx = res["ptVGen"]
+        res = getProcessBins(name, axes=gen_axes)
+        idx = res[gen_axes]
+
         label = r"Z"
         label += f"({idx})"
         return label
@@ -118,6 +122,28 @@ def get_label(name):
         logger.warning(f"No label found for {name}")
         return name
 
+def get_bin_widths(dilepton=False, gen_axes=None):
+    if dilepton:
+        if "ptVGen" in gen_axes and "absYVGen" in gen_axes:
+            bins_y = np.array(common.ptV_binning)
+            bin_widths_y = bins_y[1:] - bins_y[:-1]
+            bin_widths_x = np.ones(int(len(df)/len(bin_widths_y)))
+            
+            bin_widths = np.tensordot(bin_widths_y, bin_widths_x, axes=0).flatten()
+
+        elif "ptVGen" in gen_axes:
+            bins = np.array(common.ptV_binning)
+            bin_widths = bins[1:] - bins[:-1]
+        elif "absYVGen" in gen_axes:
+            bin_widths = np.ones(int(len(df)))
+    else: 
+        bins_y = np.array(differential.eta_binning)
+        bin_widths_y = bins_y[1:] - bins_y[:-1]
+        bin_widths_x = 2 * np.ones(int(len(df)/len(bin_widths_y)))
+
+        bin_widths = np.tensordot(bin_widths_x,bin_widths_y, axes=0).flatten()
+
+    return bin_widths
 
 def make_yields_df(hists, procs, signal=None, per_bin=False, yield_only=False, percentage=True):
     logger.debug(f"Make yield df for {procs}")
@@ -250,10 +276,10 @@ def get_results(rtfile, poi_type, scale=1.0, group=True, uncertainties=None):
             df[u] /= scale
 
     # try to decode the name string into bin number
-    for axis in ["qGen", "ptGen", "absEtaGen", "ptVGen"]:
+    for axis in ["qGen", "ptGen", "absEtaGen", "ptVGen", "absYVGen"]:
         df[axis] = df["Name"].apply(lambda x, a=axis: get_bin(x, a))
 
-    df = df.sort_values(["qGen", "ptGen", "absEtaGen", "ptVGen"], ignore_index=True)
+    df = df.sort_values(["qGen", "ptGen", "absEtaGen", "ptVGen", "absYVGen"], ignore_index=True)
     return df
 
 def plot_xsec_unfolded(data, data_asimov=None, channel=None, poi_type="mu", scale=1., normalize=False):
@@ -265,10 +291,10 @@ def plot_xsec_unfolded(data, data_asimov=None, channel=None, poi_type="mu", scal
 
     if channel == "minus":
         df = data.loc[data["qGen"]==0]
-        process_label = r"W$^{+}\to\mu\nu$" if base_process == "Wmunu" else r"Z$\to\mu^{+}$"
+        process_label = r"W$^{-}\to\mu\nu$" if base_process == "Wmunu" else r"Z$\to\mu^{-}$"
     elif channel == "plus":
         df = data.loc[data["qGen"]==1]
-        process_label = r"W$^{-}\to\mu\nu$" if base_process == "Wmunu" else r"Z$\to\mu^{-}$"
+        process_label = r"W$^{+}\to\mu\nu$" if base_process == "Wmunu" else r"Z$\to\mu^{+}$"
     else:
         process_label = r"W$\to\mu\nu$" if base_process == "Wmunu" else r"Z$\to\mu\mu$"
         df = data
@@ -291,15 +317,7 @@ def plot_xsec_unfolded(data, data_asimov=None, channel=None, poi_type="mu", scal
     else:
         yLabel="d$\sigma$("+process_label+") [pb]"
 
-    if dilepton:
-        bins = np.array(common.ptV_binning)
-        bin_widths = bins[1:] - bins[:-1]
-    else: 
-        bins_y = np.array(differential.eta_binning)
-        bin_widths_y = bins_y[1:] - bins_y[:-1]
-        bin_widths_x = 2 * np.ones(int(len(df)/len(bin_widths_y)))
-
-        bin_widths = np.tensordot(bin_widths_x,bin_widths_y, axes=0).flatten()
+    bin_widths = get_bin_widths(dilepton, gen_axes)
 
     hist_xsec = hist.Hist(
         hist.axis.Regular(bins=len(df), start=0.5, stop=len(df)+0.5, underflow=False, overflow=False), storage=hist.storage.Weight())
@@ -326,7 +344,7 @@ def plot_xsec_unfolded(data, data_asimov=None, channel=None, poi_type="mu", scal
     else:
         rrange = args.rrange
 
-    fig, ax1, ax2 = plot_tools.figureWithRatio(hist_xsec, "Bin number", yLabel, ylim, "Data/Pred.", rrange, width_scale=2)
+    fig, ax1, ax2 = plot_tools.figureWithRatio(hist_xsec, "Bin number", yLabel, ylim, "Pred./Data", rrange, width_scale=2)
 
     hep.histplot(
         hist_xsec,
@@ -340,25 +358,36 @@ def plot_xsec_unfolded(data, data_asimov=None, channel=None, poi_type="mu", scal
         zorder=2,
     )    
 
-    hep.histplot(
-        hh.divideHists(hist_xsec, hist_xsec, cutoff=0, rel_unc=True),
-        histtype="errorbar",
-        color="black",
-        label="Data",
-        yerr=True,
-        linewidth=2,
-        ax=ax2
-    )
 
-    hep.histplot(
-        hh.divideHists(hist_xsec_stat, hist_xsec, cutoff=0, rel_unc=True),
-        histtype="errorbar",
-        color="black",
-        label="Data",
-        yerr=True,
-        linewidth=2,
-        ax=ax2, capsize=2, elinewidth=0, markersize=0
-    )
+    unc_ratio = np.sqrt(hist_xsec.variances()) /hist_xsec.values() 
+    unc_ratio_stat = np.sqrt(hist_xsec_stat.variances()) /hist_xsec.values() 
+
+    centers = hist_xsec.axes.centers[0]
+
+    ax2.bar(centers, height=2*unc_ratio, bottom=1-unc_ratio, width=1, color="silver")
+    ax2.bar(centers, height=2*unc_ratio_stat, bottom=1-unc_ratio_stat, width=1, color="gold")
+
+    # ax2.plot([0, len(df)+1], [1,1], color="black", linestyle="-")
+
+    # hep.histplot(
+    #     hh.divideHists(hist_xsec_stat, hist_xsec, cutoff=0, rel_unc=True),
+    #     histtype="errorbar",
+    #     color="black",
+    #     label="Data",
+    #     yerr=True,
+    #     linewidth=2,
+    #     ax=ax2, capsize=2, elinewidth=0, markersize=0
+    # )
+
+    # hep.histplot(
+    #     hh.divideHists(hist_xsec, hist_xsec, cutoff=0, rel_unc=True),
+    #     histtype="errorbar",
+    #     color="black",
+    #     label="Data",
+    #     yerr=True,
+    #     linewidth=2,
+    #     ax=ax2
+    # )
 
     if data_asimov is not None:
         hep.histplot(
@@ -432,10 +461,10 @@ def plot_uncertainties_unfolded(data, channel=None, poi_type="mu", scale=1., nor
 
     if channel == "minus":
         df = data.loc[data["qGen"]==0]
-        process_label = r"W$^{+}\to\mu\nu$" if base_process == "Wmunu" else r"Z$\to\mu^{+}$"
+        process_label = r"W$^{-}\to\mu\nu$" if base_process == "Wmunu" else r"Z$\to\mu^{+}$"
     elif channel == "plus":
         df = data.loc[data["qGen"]==1]
-        process_label = r"W$^{-}\to\mu\nu$" if base_process == "Wmunu" else r"Z$\to\mu^{-}$"
+        process_label = r"W$^{+}\to\mu\nu$" if base_process == "Wmunu" else r"Z$\to\mu^{-}$"
     else:
         process_label = r"W$\to\mu\nu$" if base_process == "Wmunu" else r"Z$\to\mu\mu$"
         df = data
@@ -454,15 +483,7 @@ def plot_uncertainties_unfolded(data, channel=None, poi_type="mu", scale=1., nor
     else:
         yLabel = "$\Delta$ "+ yLabel
     
-    if dilepton:
-        bins = np.array(common.ptV_binning)
-        bin_widths = bins[1:] - bins[:-1]
-    else: 
-        bins_y = np.array(differential.eta_binning)
-        bin_widths_y = bins_y[1:] - bins_y[:-1]
-        bin_widths_x = 2 * np.ones(int(len(df)/len(bin_widths_y)))
-
-        bin_widths = np.tensordot(bin_widths_x,bin_widths_y, axes=0).flatten()
+    bin_widths = get_bin_widths(dilepton, gen_axes)
 
     #central values
     values = df["value"].values/bin_widths
@@ -478,9 +499,9 @@ def plot_uncertainties_unfolded(data, channel=None, poi_type="mu", scale=1., nor
     # make plots
     if args.ylim is None:
         if logy:
-            ylim = (max(errors)/1000., 50 * max(errors))
+            ylim = (max(errors)/10000., 1000 * max(errors))
         else:
-            ylim = (0, 1.4 * max(errors))
+            ylim = (0, 2 * max(errors))
     else:
         ylim = args.ylim
 
@@ -593,8 +614,11 @@ def plot_uncertainties_unfolded(data, channel=None, poi_type="mu", scale=1., nor
     plt.close()
 
 
-def plot_pulls(rtfile):
+def plot_pulls(rtfile, asmiov=None, max_nuisances=50):
     names, pulls, constraints = get_pulls(rfile)
+
+    if asmiov != None:
+        a_names, a_pulls, a_constraints = get_pulls(asmiov)
 
     other_indices = np.array([False]*len(names))
     for g, f in [
@@ -624,6 +648,11 @@ def plot_pulls(rtfile):
         g_pulls = pulls[indices]
         g_constraints = constraints[indices]
 
+        if asmiov != None:
+            g_a_names = a_names[indices]
+            g_a_pulls = a_pulls[indices]
+            g_a_constraints = a_constraints[indices]
+
         n = len(g_names)
         if n <= 0:
             logger.warning(f"No match found for {g}! Continue with next one.")
@@ -631,50 +660,62 @@ def plot_pulls(rtfile):
         else:
             logger.debug(f"Make pull plot for {g}")
 
-        for ni in range(int(n/50.)+1):
-            first = 50 * ni
-            last  = min(50 * (ni+1), n-1)
+        for ni in range(int(n/max_nuisances)+1):
+            first = max_nuisances * ni
+            last  = min(max_nuisances * (ni+1), n)
             
-            if last-first <= 0:
+            n_nuisances = last-first
+            if n_nuisances <= 0:
                 continue
 
             i_names = g_names[first: last]
             i_pulls = g_pulls[first: last]
             i_constraints = g_constraints[first: last]
 
-            y = np.arange(last-first)
+            if asmiov != None:
+                i_a_names = g_a_names[first: last]
+                i_a_pulls = g_a_pulls[first: last]
+                i_a_constraints = g_a_constraints[first: last]
+
+            y = np.arange(n_nuisances)
             x = i_pulls
             x_err = i_constraints
 
-            plt.close()
-    
-            fig = plt.figure(figsize=(6.0,10.0))
-            ax1 = fig.add_subplot(111)
-            fig.subplots_adjust(hspace=0.0, left=0.4, right=0.98, top=0.92, bottom=0.15)
+            max_x = max(max(x+x_err), 1)
+            min_x = min(min(x-x_err), -max_x)
+            max_x = max(max_x, -min_x)
 
-            plt.plot([-1,-1], [min(y),max(y)], color="grey", linestyle="--")
-            plt.plot([0,0], [min(y),max(y)], color="grey", linestyle="-")
-            plt.plot([1,1], [min(y),max(y)], color="grey", linestyle="--")
+            min_y = -2.0
+            max_y = n_nuisances + 1.0
+
+            plt.close()
+
+            fig_height = 8*(3+n_nuisances)/(3+max_nuisances) + 2
+            fig = plt.figure(figsize=(6.0, fig_height))
+            ax1 = fig.add_subplot(111)
+            fig.subplots_adjust(hspace=0.0, left=0.4, right=0.98, top=1.0, bottom=0.1 * 10/fig_height)
+
+            if asmiov != None:
+                plt.bar(i_a_pulls, bottom=y-0.4, height=0.8, width=i_constraints*2 , color="grey", alpha=0.5)
+
+            plt.plot([-1,-1], [min_y, max_y], color="grey", linestyle="--")
+            plt.plot([0,0], [min_y, max_y], color="grey", linestyle="-")
+            plt.plot([1,1], [min_y, max_y], color="grey", linestyle="--")
 
             plt.errorbar(x, y, xerr=x_err, color="black", linestyle='', marker=".", capsize=1.0)
 
             ax1.set_yticks(y)
             ax1.set_yticklabels(i_names, fontsize=12)
 
-            max_x = max(max(x+x_err), 1)
-            min_x = min(min(x-x_err), -max_x)
-            max_x = max(max_x, -min_x)
-
             range_x = max_x - min_x
             ax1.set_xlim([min_x-range_x*0.1, max_x+range_x*0.1])
+            ax1.set_ylim([min_y, max_y])
 
             ax1.yaxis.set_minor_locator(ticker.NullLocator())
 
             ax1.set_xlabel("Pulls")
 
             plt.savefig(f"{outdir}/pulls_{g}_{ni}.png")
-
-
 
 poi_types = ["pmaskedexp", "pmaskedexpnorm"]
 
@@ -685,6 +726,7 @@ if any([key in args.plots for key in ["xsec", "uncertainties"]]):
         scale = 1 if normalize else args.lumi * 1000
 
         df = get_results(rfile, poi_type=poi_type, scale=scale)
+
         if asimov:
             df_asimov = get_results(asimov, poi_type=poi_type, scale=scale)
         else:
@@ -708,8 +750,7 @@ if any([key in args.plots for key in ["xsec", "uncertainties"]]):
                 plot_uncertainties_unfolded(df, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, relative_uncertainty=True, logy=True)
 
 if "pulls" in args.plots:
-    plot_pulls(rfile)
-
+    plot_pulls(rfile, asimov)
 
 if "correlation" in args.plots:
     plot_matrix_poi("correlation_matrix_channelmu")

@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from wremnants import logging
 from wremnants import plot_tools
 from wremnants.datasets.datagroups2016 import make_datagroups_2016
-from utilities import boostHistHelpers as hh
+from utilities import boostHistHelpers as hh, output_tools
 
 import pdb
 
@@ -18,13 +18,13 @@ parser.add_argument("-f", "--outfolder", type=str, default="test", help="Subfold
 parser.add_argument("--procFilters", type=str, nargs="*", default="Zmumu", help="Filter to plot (default no filter, only specify if you want a subset")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name")
 parser.add_argument("--axes", type=str, nargs="+", default=["pt-ptGen","abs(eta)-absEtaGen"], help="Define for which axes the response matrix to be plotted")
-parser.add_argument("-c", "--channels", type=str, nargs="+", choices=["plus", "minus", "all"], default="all", help="Select channel to plot")
+parser.add_argument("-c", "--channels", type=str, nargs="+", choices=["plus", "minus", "all"], default=["all"], help="Select channel to plot")
 
 args = parser.parse_args()
 
 logger = logging.setup_logger("makeDataMCStackPlot", 4 if args.debug else 3)
 
-outdir = plot_tools.make_plot_dir(args.outpath, args.outfolder)
+outdir = output_tools.make_plot_dir(args.outpath, args.outfolder)
 
 groups = make_datagroups_2016(args.infile, filterGroups=args.procFilters)
 datasets = groups.getNames()

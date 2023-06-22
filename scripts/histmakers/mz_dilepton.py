@@ -66,7 +66,7 @@ nominal_axes = [all_axes[a] for a in nominal_cols]
 
 gen_axes = {
     "ptVGen": hist.axis.Variable(common.ptV_binning if not args.finePtBinning else range(60), name = "ptVGen", underflow=False, overflow=False),
-    "absYVGen": hist.axis.Variable([0.0, 0.4, 0.8, 1.2, 1.6, 2.0, 2.4, 2.8, 3.6], name = "absYVGen", underflow=False, overflow=False),    # "ATLAS" binning
+    "absYVGen": hist.axis.Regular(10, 0, 2.5, name = "absYVGen", underflow=False, overflow=False),  
 }
 
 if args.unfolding:
