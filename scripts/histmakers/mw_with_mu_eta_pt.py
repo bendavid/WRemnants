@@ -692,8 +692,8 @@ def build_graph(df, dataset):
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)
-#if not args.onlyMainHistograms and args.muonScaleVariation == 'smearingWeights':
-#    muon_calibration.transport_smearing_weights_to_reco(resultdict, nonClosureScheme = args.nonClosureScheme)
-#    muon_calibration.muon_scale_variation_from_manual_shift(resultdict)
+if not args.onlyMainHistograms and args.muonScaleVariation == 'smearingWeights' and not args.addHelicityHistos:
+    muon_calibration.transport_smearing_weights_to_reco(resultdict, nonClosureScheme = args.nonClosureScheme)
+    muon_calibration.muon_scale_variation_from_manual_shift(resultdict)
 
 output_tools.write_analysis_output(resultdict, f"{os.path.basename(__file__).replace('py', 'hdf5')}", args, update_name=not args.forceDefaultName)
