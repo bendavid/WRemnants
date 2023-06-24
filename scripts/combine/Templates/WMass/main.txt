@@ -2,8 +2,8 @@ imax 1
 jmax *
 kmax *
 ##----------------------------------
-shapes *  *  ${inputfile} ${histName}_$$PROCESS_$$CHANNEL ${histName}_$$PROCESS_$$SYSTEMATIC_$$CHANNEL
-shapes data_obs * ${inputfile} ${pseudodataHist}_$$CHANNEL 
+shapes *  *  ${inputfile} $$PROCESS/${histName}_$$PROCESS_$$CHANNEL $$PROCESS/${histName}_$$PROCESS_$$SYSTEMATIC_$$CHANNEL
+shapes data_obs * ${inputfile} Data/${pseudodataHist}_$$CHANNEL 
 ##----------------------------------
 bin   ${channel} 
 observation    -1

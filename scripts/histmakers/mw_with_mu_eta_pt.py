@@ -149,11 +149,11 @@ bias_helper = muon_calibration.make_muon_bias_helpers(args) if args.biasCalibrat
 
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theoryCorr)
 
-if args.nonClosureScheme == "binned":
+if args.nonClosureScheme in ["binned", "binned-plus-M"]:
     z_non_closure_binned_helper = muon_calibration.make_Z_non_closure_binned_helper(
         correlate = args.correlatedNonClosureNP
     )
-else:
+if args.nonClosureScheme in ["A-M-separated", "A-M-combined", "binned-plus-M"]:
     z_non_closure_parametrized_helper = muon_calibration.make_Z_non_closure_parametrized_helper(
         correlate = args.correlatedNonClosureNP
     )
@@ -519,7 +519,6 @@ def build_graph(df, dataset):
                     # for the Z non-closure nuisances
                     if args.nonClosureScheme == "A-M-separated":
                         df = df.DefinePerSample("AFlag", "0x01")
-                        df = df.DefinePerSample("MFlag", "0x04")
 
                         df = df.Define("Z_non_closure_parametrized_A", z_non_closure_parametrized_helper,
                             [
@@ -542,7 +541,8 @@ def build_graph(df, dataset):
                             storage=hist.storage.Double()
                         )
                         results.append(hist_Z_non_closure_parametrized_A)
-
+                    if args.nonClosureScheme in ["A-M-separated", "binned-plus-M"]:
+                        df = df.DefinePerSample("MFlag", "0x04")
                         df = df.Define("Z_non_closure_parametrized_M", z_non_closure_parametrized_helper,
                             [
                                 f"{reco_sel_GF}_qop0_gen",
@@ -564,7 +564,7 @@ def build_graph(df, dataset):
                             storage=hist.storage.Double()
                         )
                         results.append(hist_Z_non_closure_parametrized_M)
-                    elif args.nonClosureScheme == "A-M-combined":
+                    if args.nonClosureScheme == "A-M-combined":
                         df = df.DefinePerSample("AMFlag", "0x01 | 0x04")
                         df = df.Define("Z_non_closure_parametrized", z_non_closure_parametrized_helper,
                             [
@@ -586,7 +586,7 @@ def build_graph(df, dataset):
                             storage=hist.storage.Double()
                         )
                         results.append(hist_Z_non_closure_parametrized)
-                    elif args.nonClosureScheme == "binned":
+                    if args.nonClosureScheme in ["binned", "binned-plus-M"]:
                         df = df.Define("Z_non_closure_binned", z_non_closure_binned_helper,
                             [
                                 f"{reco_sel_GF}_qop0_gen",

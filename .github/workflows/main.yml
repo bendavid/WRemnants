@@ -118,7 +118,7 @@ jobs:
         run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ mass WMass_pt_eta WMass_plus.txt WMass_minus.txt ZMassDilepton_inclusive.txt
 
       - name: wmass combine impacts
-        run: scripts/ci/run_with_singularity.sh scripts/ci/show_impacts.sh WMass_pt_eta/fitresults_123456789.root $WEB_DIR/$PLOT_DIR/impactsW.html
+        run: scripts/ci/run_with_singularity.sh scripts/ci/show_impacts.sh WMass_pt_eta/fitresults_123456789.root $WEB_DIR/$PLOT_DIR impactsW.html
 
 
   lowpu:
@@ -214,7 +214,7 @@ jobs:
         run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ mass ZMassWLike_pt_eta ZMassWLike_plus.txt ZMassWLike_minus.txt 
 
       - name: wlike combine impacts
-        run: scripts/ci/run_with_singularity.sh scripts/ci/show_impacts.sh ZMassWLike_pt_eta/fitresults_123456789.root $WEB_DIR/$PLOT_DIR/impactsWlike.html
+        run: scripts/ci/run_with_singularity.sh scripts/ci/show_impacts.sh ZMassWLike_pt_eta/fitresults_123456789.root $WEB_DIR/$PLOT_DIR impactsWlike.html
 
       - name: wlike combine unfolding setup
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $OUTFILE --verbose 4 --lumiScale $LUMI_SCALE --unfold --constrainMass --noEfficiencyUnc --minnloScaleUnc integrated
@@ -223,7 +223,7 @@ jobs:
         run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ unfold ZMassWLike_pt_eta plus=ZMassWLike_plus.txt minus=ZMassWLike_minus.txt xnorm=ZMassWLike_inclusive_xnorm.txt
 
       - name: wlike combine unfolding results 
-        run: scripts/ci/run_with_singularity.sh scripts/ci/show_unfolded_results.sh ZMassWLike_pt_eta/fitresults_123456789.root $WEB_DIR/$PLOT_DIR/
+        run: scripts/ci/run_with_singularity.sh scripts/ci/show_unfolded_results.sh ZMassWLike_pt_eta/fitresults_123456789.root $WEB_DIR $PLOT_DIR/
 
 
 
