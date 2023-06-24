@@ -173,7 +173,7 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
         #logger.error(f"axis_eta_eff.extent = {axis_eta_eff.extent}")
         #logger.error(f"axis_ut_eff.extent = {axis_ut_eff.extent}")
         ## try rebinning
-        rebinUt = True:
+        rebinUt = True
         if rebinUt:
             rebin = 60
             logger.error(f"Attention, rebinning ut by {rebin} as a test")

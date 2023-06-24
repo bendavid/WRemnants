@@ -4,6 +4,7 @@ import os, re, array, math
 import argparse
 from copy import *
 
+import itertools
 import numpy as np
 import tensorflow as tf
 import hist
@@ -14,6 +15,7 @@ import pickle
 import lz4.frame
 import time
 from functools import partial
+from scipy.interpolate import RegularGridInterpolator
 
 ## safe batch mode
 import sys
@@ -46,109 +48,8 @@ def polN_2d(xvals, parms,
     return ret
 
 
-# def runTests(args, test=1):
-    
-#     outdir = args.outdir[0]
-#     addStringToEnd(outdir,"/",notAddIfEndswithMatch=True)
-#     outdir += os.path.basename(args.inputfile[0]).replace(".root","")
-#     outdir += "/"
-#     createPlotDirAndCopyPhp(outdir)
-#     inputfile = args.inputfile[0]
-    
-#     adjustSettings_CMS_lumi()
-    
-#     leftMargin = 0.15
-#     rightMargin = 0.04
-#     bottomMargin = 0.12
-#     canvas = ROOT.TCanvas(f"canvas","",800,700)
-#     canvas.SetTickx(1)
-#     canvas.SetTicky(1)
-#     canvas.cd()
-#     canvas.SetLeftMargin(leftMargin)
-#     canvas.SetBottomMargin(bottomMargin)
-#     canvas.SetRightMargin(rightMargin)
-#     canvas.cd()                           
-    
-#     sfhistname = args.histname[0] #"SF3D_nominal_isolation" # uT - eta - pt
-#     tfile = safeOpenFile(inputfile)
-#     hsf =   safeGetObject(tfile, sfhistname)
-#     hsf.GetXaxis().SetRange(2, hsf.GetNbinsX()-1) # remove extreme bins for now, they extend up to infinity
+def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
 
-#     # 
-#     polnx = args.polDegree[0]
-#     polny = args.polDegree[1]
-
-#     isTest = 0
-
-#     if isTest:
-#         # just a test    
-#         hsf.GetYaxis().SetRange(1, 1)
-#         htest = copy.deepcopy(hsf.Project3D("zxe").Clone("htest"))
-#         htest.SetTitle(f"Test")
-#         print("Preparing test histogram")
-#         relativeBinUncertainty = 0.1
-#         if isTest == 1:
-#             # here when I start with only 3 non zero parameters, removing the pt (i.e. "y") dependence, I get a bias on the other
-#             # parameters, which should be 0 but are about 1e-3 or 1e-4. This is with relative uncertainty in each bin of 10%,
-#             # if I reduce it to 0.1% the bias gets smaller (parameters which should be 0 are returned as ~1e-14
-#             ptLow = hsf.GetZaxis().GetBinLowEdge(1)
-#             utLow = hsf.GetXaxis().GetBinLowEdge(2)
-#             ptRange = hsf.GetZaxis().GetBinLowEdge(1+hsf.GetNbinsZ()) - ptLow
-#             utRange = hsf.GetXaxis().GetBinLowEdge(hsf.GetNbinsX()) - utLow
-#             polN_2d_scaled = partial(polN_2d,
-#                                      xLowVal=utLow, xFitRange=utRange, degreeX=polnx,
-#                                      yLowVal=ptLow, yFitRange=ptRange, degreeY=polny)
-#             arr = [2.0, 0.05, 0.2] + [0.0 for i in range(9)]
-#             params = np.array(arr)
-#             for ix in range(1,1+htest.GetNbinsX()):
-#                 bincx = htest.GetXaxis().GetBinCenter(ix)
-#                 for iy in range(1,1+htest.GetNbinsY()):
-#                     bincy = htest.GetYaxis().GetBinCenter(iy)
-#                     htest.SetBinContent(ix, iy, polN_2d_scaled([bincx, bincy], params))
-#                     htest.SetBinError(ix, iy, relativeBinUncertainty * htest.GetBinContent(ix, iy))
-#             ## reset parameters to see if the fit can find the original ones
-#             arr = [1.0 for x in range((polnx+1)*(polny+1))]
-#             params = np.array(arr)
-#         elif isTest == 2:
-#             ptLow = hsf.GetZaxis().GetBinCenter(1)
-#             utLow = hsf.GetXaxis().GetBinCenter(2)
-#             ptRange = hsf.GetZaxis().GetBinCenter(hsf.GetNbinsZ()) - ptLow
-#             utRange = hsf.GetXaxis().GetBinCenter(hsf.GetNbinsX()-1) - utLow
-#             polN_2d_scaled = partial(polN_2d,
-#                                      xLowVal=utLow, xFitRange=utRange, degreeX=polnx,
-#                                      yLowVal=ptLow, yFitRange=ptRange, degreeY=polny)
-#             for ix in range(1,1+htest.GetNbinsX()):
-#                 bincx = (htest.GetXaxis().GetBinCenter(ix) - utLow) / utRange
-#                 for iy in range(1,1+htest.GetNbinsY()):
-#                     #bincy = (htest.GetYaxis().GetBinCenter(iy) - ptLow) / ptRange
-#                     htest.SetBinContent(ix, iy, 2.0 + 0.05 * bincx + 0.2 * bincx * bincx)
-#                     htest.SetBinError(ix, iy, relativeBinUncertainty * htest.GetBinContent(ix, iy))
-#             arr = [1.0 for x in range((polnx+1)*(polny+1))]
-#             params = np.array(arr)
-                    
-#         # draw and fit
-#         drawCorrelationPlot(htest, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", "Scale factor",
-#                             htest.GetName(), "ForceTitle", outdir,
-#                             palette=87, passCanvas=canvas)
-        
-#         boost_hist = narf.root_to_hist(htest)
-#         print("Test fit")
-#         params = np.array(arr)
-#         res_polN_2d = narf.fitutils.fit_hist(boost_hist, polN_2d_scaled, params)
-#         status = res_polN_2d["status"]
-#         covstatus = res_polN_2d["covstatus"]
-#         print(res_polN_2d["x"])
-#         print(f"status/covstatus = {status}/{covstatus}")
-#         quit()
-#     ## END OF ISTEST
-
-
-def runSmoothing(inputfile, histname, outdir, step, args):
-
-    #inputfile = args.inputfile[0]
-    #histname = args.histname[0]
-    #outdir = args.outdir[0]
-    #step = args.step[0]
     outdirNew = outdir
     addStringToEnd(outdirNew, "/", notAddIfEndswithMatch=True)
     outdirNew += os.path.basename(inputfile).replace(".root","")
@@ -171,8 +72,9 @@ def runSmoothing(inputfile, histname, outdir, step, args):
     canvas.SetLeftMargin(leftMargin)
     canvas.SetBottomMargin(bottomMargin)
     canvas.SetRightMargin(rightMargin)
-    canvas.cd()                           
-    
+    canvas.cd()                                   
+        
+    dtype = tf.float64
     sfhistname = histname #"SF3D_nominal_isolation" # uT - eta - pt
     tfile = safeOpenFile(inputfile)
     hsf =   safeGetObject(tfile, sfhistname)
@@ -196,7 +98,7 @@ def runSmoothing(inputfile, histname, outdir, step, args):
         logger.warning(f"Setting first and last uT edges to {utEdges[0]} and {utEdges[-1]}")
         
     hsf.GetXaxis().SetRange(1+uT_binOffset, hsf.GetNbinsX()-uT_binOffset) # remove extreme bins for now, they extend up to infinity
-
+    
     # 
     polnx = args.polDegree[0]
     polny = args.polDegree[1]
@@ -223,6 +125,7 @@ def runSmoothing(inputfile, histname, outdir, step, args):
     ptNbins = 5 * int(ptEdgeHigh - ptEdgeLow + 0.001) # 0.2 GeV width
 
     nEtaBins = hsf.GetNbinsY()
+    etaBinsToRun = args.eta if len(args.eta) else range(1, 1 + nEtaBins)
     
     # to store the pull versus eta-pt for bins of uT, for some plots
     hpull_utEtaPt = ROOT.TH3D("hpull_utEtaPt", "",
@@ -239,12 +142,75 @@ def runSmoothing(inputfile, histname, outdir, step, args):
     histSF3D = hist.Hist(axis_eta, axis_pt, axis_ut, axis_var,
                          name = f"smoothSF3D_{step}",
                          storage = hist.storage.Weight())
-    
+    histEffi3D = hist.Hist(axis_eta, axis_pt, axis_ut,
+                           name = f"smoothEffi3D_{step}",
+                           storage = hist.storage.Weight())
+    histEffi2D_ptut = hist.Hist(axis_ut, axis_pt,
+                                name = f"smoothEffi2D_{step}_ptut",
+                                storage = hist.storage.Weight())
+
+    if effHist != None:
+        effHist.GetZaxis().SetRange(2, effHist.GetNbinsZ()-1)
+        eff_boost = narf.root_to_hist(effHist)
+        s = bh.tag.Slicer()
+        eff_boost = eff_boost[{2: s[complex(0, -100.0):complex(0, 100.0)]}] 
+        # make some plots of efficiencies versus eta-ut to see how they behave
+        outdirEff = outdirNew + "efficiencies/"
+        for ieta in etaBinsToRun:
+            etaLow = round(effHist.GetXaxis().GetBinLowEdge(ieta), 1)
+            etaHigh = round(effHist.GetXaxis().GetBinLowEdge(ieta+1), 1)
+            etaRange = f"{etaLow} < #eta < {etaHigh}"
+            etaCenter = effHist.GetXaxis().GetBinCenter(ieta)
+            eta_index = eff_boost.axes[0].index(etaCenter)
+            #print(f"eta_index = {eta_index}")
+            eff_boost_ptut = eff_boost[{0 : eta_index}] # from 3D (eta-pt-ut) to 2D (pt-ut)
+            #print(f"eff_boost_ptut.shape = {eff_boost_ptut.shape}") 
+            eff_boost_ptut = eff_boost_ptut.project(1, 0) # project second axis (uT) as x and first axis (pT) as y
+            #logger.warning(eff_boost_ptut.axes)
+            #logger.warning("")
+            # utvals = [heff.GetXaxis().GetBinCenter(iut) for iut in range(1, 1+heff.GetNbinsX())]
+            # ptvals = [heff.GetYaxis().GetBinCenter(ipt) for ipt in range(1, 1+heff.GetNbinsY())]
+            xvals = [tf.constant(center, dtype=dtype) for center in eff_boost_ptut.axes.centers]
+            utvals = np.reshape(xvals[0], [-1])
+            ptvals = np.reshape(xvals[1], [-1])
+            yvals = eff_boost_ptut.values()
+            yvals[np.isnan(yvals)] = 0 # protection against bins where no events were selected (extreme ut for instance), set efficiency to 0 instead of 1
+            eff_boost_ptut.values()[...] = yvals
+            # plot with root
+            heff = narf.hist_to_root(eff_boost_ptut)
+            heff.SetName(f"{effHist.GetName()}_eta{ieta}")
+            heff.SetTitle(etaRange)
+            drawCorrelationPlot(heff, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", "W MC efficiency::0.5,1",
+                                heff.GetName(), "ForceTitle", outdirEff,
+                                palette=87, passCanvas=canvas)
+
+            # logger.warning(utvals)
+            # logger.warning(ptvals)
+            # logger.warning(yvals)
+            # the grid interpolator will be created up to the extreme bin centers, so need bounds_error=False to allow the extrapolation to extend outside, and then we can set its value to fill_value (None does an extrapolation)
+            interp = RegularGridInterpolator((utvals, ptvals), yvals, method='cubic', bounds_error=False, fill_value=None)
+            xvalsFine = [tf.constant(center, dtype=dtype) for center in histEffi2D_ptut.axes.centers]
+            utvalsFine = np.reshape(xvalsFine[0], [-1])
+            ptvalsFine = np.reshape(xvalsFine[1], [-1])
+            points = list(itertools.product(*[utvalsFine,ptvalsFine]))
+            #print(f"Have to interpolate {len(points)} points ({len(utvalsFine)}*{len(ptvalsFine)} uT-pT fine bins)")            
+            pts = np.array(points)
+            #print(pts)
+            smoothVals = interp(pts)
+            #print(smoothVals)
+            histEffi2D_ptut.values()[:] = np.reshape(smoothVals, (utNbins, ptNbins))
+            histEffi3D.values()[eta_index, ...] = histEffi2D_ptut.values().T
+            heffSmooth = narf.hist_to_root(histEffi2D_ptut)
+            heffSmooth.SetName(f"{effHist.GetName()}_eta{ieta}_smooth")
+            heffSmooth.SetTitle(etaRange)
+            drawCorrelationPlot(heffSmooth, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", "Smoothed W MC efficiency::0.5,1",
+                                heffSmooth.GetName(), "ForceTitle", outdirEff,
+                                palette=87, passCanvas=canvas)
+
     # set initial parameters, starting with constant at unit
     arr = [1.0] + [0.0 for x in range((polnx+1)*(polny+1)-1)]
     ##
     postfix = f"{args.postfix}_" if len(args.postfix) else ""
-    etaBinsToRun = args.eta if len(args.eta) else range(1, 1 + hsf.GetNbinsY())
 
     hpull1D_uTpT = ROOT.TH1D("hpull1D", "", 20, -5, 5)
     hpullSummary_eta_mean  = ROOT.TH1D("hpullSummary_eta_mean",  "Pull distribution mean",  nEtaBins, etaEdges[0], etaEdges[-1])
@@ -330,7 +296,6 @@ def runSmoothing(inputfile, histname, outdir, step, args):
                                       name = f"htmp_fit2D_ieta{ieta}",
                                       storage = hist.storage.Weight())
 
-        dtype = tf.float64
         xvals = [tf.constant(center, dtype=dtype) for center in boost_hist_smooth.axes.centers]
         boost_hist_smooth.values()[...] = polN_2d_scaled(xvals, postfit_params)
         # copy into final histograms with 3D smoothed SF
@@ -388,7 +353,7 @@ def runSmoothing(inputfile, histname, outdir, step, args):
                       passCanvas=canvas, skipLumi=True)
 
 
-    return histSF3D
+    return [histSF3D, histEffi3D]
 
 
 if __name__ == "__main__":
@@ -406,19 +371,29 @@ if __name__ == "__main__":
 
     ROOT.TH1.SetDefaultSumw2()
     
+    effSmoothFile = "/home/m/mciprian/efficiencieswremnantsmceff2d.root"
+    effHist = {}
+    tfile = safeOpenFile(effSmoothFile)
+    effHist["iso"] = safeGetObject(tfile, "isoMCPlus") # temporary patch
+    effHist["isonotrig"] = safeGetObject(tfile, "isoMCMinus") # temporary patch
+    effHist["triggerplus"] = safeGetObject(tfile, "triggerMCPlus")
+    effHist["triggerminus"] = safeGetObject(tfile, "triggerMCMinus")
+    tfile.Close()
+    
     work = []
-    work.append(["/home/m/mciprian/isolation3DSFUT.root",     "SF3D_nominal_isolation",     "iso"])
-    work.append(["/home/m/mciprian/isonotrigger3DSFVQT.root", "SF3D_nominal_isonotrigger",  "isonotrig"])
-    work.append(["/home/m/mciprian/triggerplus3DSFUT.root",   "SF3D_nominal_trigger_plus",  "triggerplus"])
-    work.append(["/home/m/mciprian/triggerminus3DSFUT.root",  "SF3D_nominal_trigger_minus", "triggerminus"])
+    work.append(["/home/m/mciprian/isolation3DSFUT.root",     "SF3D_nominal_isolation",     "iso", effHist["iso"]])
+    #work.append(["/home/m/mciprian/isonotrigger3DSFVQT.root", "SF3D_nominal_isonotrigger",  "isonotrig", effHist["isonotrig"]])
+    #work.append(["/home/m/mciprian/triggerplus3DSFUT.root",   "SF3D_nominal_trigger_plus",  "triggerplus", effHist["triggerplus"]])
+    #work.append(["/home/m/mciprian/triggerminus3DSFUT.root",  "SF3D_nominal_trigger_minus", "triggerminus", effHist["triggerminus"]])
 
     outdir = args.outdir[0]
     
     resultDict = {}
     for w in work:
-        inputfile, histname, step = w
-        ret = runSmoothing(inputfile, histname, outdir, step, args)
-        resultDict[ret.name] = ret
+        inputfile, histname, step, eff = w
+        rets = runSmoothing(inputfile, histname, outdir, step, args, effHist=eff)
+        for ret in rets:
+            resultDict[ret.name] = ret
         
     outfile = outdir + "smoothSF3D.pkl.lz4"
     logger.info(f"Going to store histograms {resultDict.keys()} in file {outfile}")
