@@ -22,8 +22,8 @@ parser.add_argument("--vqtTest", action="store_true", help="Test of isolation SF
 parser.add_argument("--sfFileVqtTest", type=str, help="File with muon scale factors as a function of V q_T projection", default=f"{data_dir}/testMuonSF/fits_2.root")
 parser.add_argument("--vqtTestIntegrated", action="store_true", help="Test of isolation SFs dependence on V q_T projection, integrated (would be the same as default SF, but pt-eta binning is different)")
 parser.add_argument("--vqtTestReal", action="store_true", help="Test of isolation SFs dependence on V q_T projection, using 3D SFs directly (instead of the Vqt fits)")
-parser.add_argument("--vqtTestStep", default=2, type=int , help="Test of isolation SFs dependence on V q_T projection. Index to determine up to which step the selection is applied (for 3d smoothing). Values are 0,1,2")
-parser.add_argument("--vqtTestCorrectionStep", default=2, type=int , help="Test of isolation SFs dependence on V q_T projection. Index to determine up to which step the 3D SFs are applied. Values are 0,1,2")
+parser.add_argument("--vqtTestStep", default=2, choices=[0, 1, 2], type=int , help="Test of isolation SFs dependence on V q_T projection. Index to determine up to which step the selection is applied (for 3d smoothing). Values are 0,1,2")
+parser.add_argument("--vqtTestCorrectionStep", default=2, choices=[0, 1, 2], type=int , help="Test of isolation SFs dependence on V q_T projection. Index to determine up to which step the 3D SFs are applied. Values are 0,1,2")
 parser.add_argument("--vqt3dsmoothing", action="store_true", help="3D Smoothing")
 parser.add_argument("--noGenMatchMC", action='store_true', help="Don't use gen match filter for prompt muons with MC samples (note: QCD MC never has it anyway)")
 args = parser.parse_args()
@@ -60,7 +60,7 @@ if not args.vqt3dsmoothing:
     axis_pt = hist.axis.Regular(template_npt, template_minpt, template_maxpt, name = "pt", overflow=not args.excludeFlow, underflow=not args.excludeFlow)
 else :
     axis_pt_list = [24.,26.,28.,30.,32.,34.,36.,38.,40., 42., 44., 47., 50., 55., 60., 65.]
-    axis_pt = hist.axis.Variable(axis_pt_list, name = "pt")
+    axis_pt = hist.axis.Variable(axis_pt_list, name = "pt", overflow=not args.excludeFlow, underflow=not args.excludeFlow)
 
 axis_charge = common.axis_charge
 axis_passIso = common.axis_passIso
@@ -74,6 +74,12 @@ nominal_axes2 = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT, axis
 nominal_axes3 = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT, axis_passTrigger]
 
 unfolding_axes, unfolding_cols = differential.get_pt_eta_axes(args.genBins, template_minpt, template_maxpt, template_maxeta)
+
+## MARCO
+# axes for W MC efficiencies with uT dependence for iso and trigger
+#axis_ut_edges = [(-100.0 + 5.0*i) for i in range(41)]
+axis_ut = hist.axis.Regular(40, -100, 100, overflow=not args.excludeFlow, underflow=not args.excludeFlow, name = "ut")
+axes_WeffMC = [axis_eta, axis_pt, axis_ut, axis_charge, axis_passIso, axis_passMT, axis_passTrigger]
 
 # axes for study of fakes
 axis_mt_fakes = hist.axis.Regular(120, 0., 120., name = "mt", underflow=False, overflow=True)
@@ -188,8 +194,11 @@ def build_graph(df, dataset):
         df = unfolding_tools.define_gen_level(df, args.genLevel, dataset.name, mode="wmass")
         unfolding_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols)
 
-    if not (args.vqt3dsmoothing and (args.vqtTestStep < 2)) :
+    if not args.vqt3dsmoothing:
         df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
+    ## MARCO: temporarily commented out code
+    # if not (args.vqt3dsmoothing and (args.vqtTestStep < 2)):
+    #     df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
 
     #df = df.Filter("event % 2 == 1") # test with odd/even events
 
@@ -205,9 +214,18 @@ def build_graph(df, dataset):
  
     df = muon_selections.veto_electrons(df)
     df = muon_selections.apply_met_filters(df)
-    if not (args.vqt3dsmoothing and (args.vqtTestStep < 2)) :
-         df = muon_selections.apply_triggermatching_muon(df, dataset, "goodMuons_eta0", "goodMuons_phi0")
+    if args.vqt3dsmoothing:
+        if dataset.group in common.background_MCprocs:
+            df = df.Define("GoodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_pt,TrigObj_l1pt,TrigObj_l2pt,TrigObj_filterBits)")
+        else:
+            df = df.Define("GoodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_filterBits)")
+        df = df.Define("passTrigger","(HLT_IsoTkMu24 || HLT_IsoMu24) && wrem::hasTriggerMatch(goodMuons_eta0,goodMuons_phi0,TrigObj_eta[GoodTrigObjs],TrigObj_phi[GoodTrigObjs])")
+
+    else:
+        df = muon_selections.apply_triggermatching_muon(df, dataset, "goodMuons_eta0", "goodMuons_phi0")
     ## MARCO: temporarily commented out code
+    # if not (args.vqt3dsmoothing and (args.vqtTestStep < 2)):
+    #      df = muon_selections.apply_triggermatching_muon(df, dataset, "goodMuons_eta0", "goodMuons_phi0")
     # if (args.vqt3dsmoothing) :
     #     if dataset.group in common.background_MCprocs:
     #         df = df.Define("GoodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_pt,TrigObj_l1pt,TrigObj_l2pt,TrigObj_filterBits)")
@@ -218,8 +236,8 @@ def build_graph(df, dataset):
     # gen match to bare muons to select only prompt muons from MC processes, but also including tau decays
     # status flags in NanoAOD: https://cms-nanoaod-integration.web.cern.ch/autoDoc/NanoAODv9/2016ULpostVFP/doc_TTToSemiLeptonic_TuneCP5_13TeV-powheg-pythia8_RunIISummer20UL16NanoAODv9-106X_mcRun2_asymptotic_v17-v1.html
     if not dataset.is_data and not isQCDMC and not args.noGenMatchMC:
-            df = df.Define("postFSRmuons", "GenPart_status == 1 && (GenPart_statusFlags & 1 || GenPart_statusFlags & (5<<1)) && abs(GenPart_pdgId) == 13")
-            df = df.Filter("wrem::hasMatchDR2(goodMuons_eta0,goodMuons_phi0,GenPart_eta[postFSRmuons],GenPart_phi[postFSRmuons],0.09)")
+        df = df.Define("postFSRmuons", "GenPart_status == 1 && (GenPart_statusFlags & 1 || GenPart_statusFlags & (5<<1)) && abs(GenPart_pdgId) == 13")
+        df = df.Filter("wrem::hasMatchDR2(goodMuons_eta0,goodMuons_phi0,GenPart_eta[postFSRmuons],GenPart_phi[postFSRmuons],0.09)")
         
     if isW or isZ:
         df = muon_calibration.define_cvh_reco_muon_kinematics(df)
@@ -336,8 +354,9 @@ def build_graph(df, dataset):
     
     df = df.Define("passMT", "transverseMass >= 40.0")
 
-    if args.vqt3dsmoothing:
-        df = df.Filter("passMT")
+    ## MARCO: temporarily commented out code 
+    # if args.vqt3dsmoothing:
+    #    df = df.Filter("passMT")
 
     if auxiliary_histograms:
         # utility plot, mt and met, to plot them later
@@ -345,7 +364,7 @@ def build_graph(df, dataset):
         results.append(df.HistoBoost("transverseMass", [axis_mt_fakes, axis_charge, axis_passIso, axis_passMT], ["transverseMass", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"]))
     
     nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
-
+    
     if unfold:
         axes = [*nominal_axes, *unfolding_axes] 
         cols = [*nominal_cols, *unfolding_cols]
@@ -361,15 +380,22 @@ def build_graph(df, dataset):
         results.append(nominal)
 
     else:  
-        if not args.vqt3dsmoothing:
-            nominal = df.HistoBoost("nominal", axes, [*cols, "nominal_weight"])
-        else:
-            nominal = df.HistoBoost("nominal", nominal_axes3, [*nominal_cols, "passTrigger", "nominal_weight"])
+        nominal = df.HistoBoost("nominal", axes, [*cols, "nominal_weight"])
+        ## MARCO: temporarily commented out code
+        # if not args.vqt3dsmoothing:
+        #     nominal = df.HistoBoost("nominal", axes, [*cols, "nominal_weight"])
+        # else:
+        #     nominal = df.HistoBoost("nominal", nominal_axes3, [*nominal_cols, "passTrigger", "nominal_weight"])
 
         results.append(nominal)
 
         results.append(df.HistoBoost("nominal_weight", [hist.axis.Regular(200, -4, 4)], ["nominal_weight"], storage=hist.storage.Double()))
-
+        
+        if args.vqt3dsmoothing:
+            cols_WeffMC = ["goodMuons_eta0", "goodMuons_pt0", recoilVarSF, "goodMuons_charge0",
+                           "passIso", "passMT", "passTrigger"]
+            yieldsForWeffMC = df.HistoBoost("yieldsForWeffMC", axes_WeffMC, [*cols_WeffMC, "nominal_weight"])
+        
         if not args.noRecoil:
             df = recoilHelper.add_recoil_unc_W(df, results, dataset, cols, axes, "nominal")
 

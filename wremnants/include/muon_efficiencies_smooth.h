@@ -220,18 +220,14 @@ namespace wrem {
             sf_all_(std::make_shared<const HIST_SF>(std::move(sf_all))),
             sf3D_all_(std::make_shared<const HIST_SF3D>(std::move(sf3D_all)))
             {
-                const bool is_inclusive = boost::histogram::axis::traits::inclusive(sf3D_all_->template axis<5>());
-                std:: cout << is_inclusive << std::endl;
-                std:: cout << "extent for axis " << 0 << " = " << boost::histogram::axis::traits::extent(sf3D_all_->template axis<0>()) << std::endl;
-                std:: cout << "extent for axis " << 1 << " = " << boost::histogram::axis::traits::extent(sf3D_all_->template axis<1>()) << std::endl;
-                std:: cout << "extent for axis " << 2 << " = " << boost::histogram::axis::traits::extent(sf3D_all_->template axis<2>()) << std::endl;
-                std:: cout << "extent for axis " << 3 << " = " << boost::histogram::axis::traits::extent(sf3D_all_->template axis<3>()) << std::endl;
-                std:: cout << "extent for axis " << 4 << " = " << boost::histogram::axis::traits::extent(sf3D_all_->template axis<4>()) << std::endl;
-                std:: cout << "extent for axis " << 5 << " = " << boost::histogram::axis::traits::extent(sf3D_all_->template axis<5>()) << std::endl;
-                // for (int i = 0; i <= 5; i++) {
-                //     auto extent = boost::histogram::axis::traits::extent(sf3D_all_->template axis<i>());
-                //     std:: cout << "extent for axis " << i << " = " << extent << std::endl;
-                // }
+                // const bool is_inclusive = boost::histogram::axis::traits::inclusive(sf3D_all_->template axis<5>());
+                // std:: cout << is_inclusive << std::endl;
+                // std:: cout << "extent for axis " << 0 << " = " << boost::histogram::axis::traits::extent(sf3D_all_->template axis<0>()) << std::endl;
+                // std:: cout << "extent for axis " << 1 << " = " << boost::histogram::axis::traits::extent(sf3D_all_->template axis<1>()) << std::endl;
+                // std:: cout << "extent for axis " << 2 << " = " << boost::histogram::axis::traits::extent(sf3D_all_->template axis<2>()) << std::endl;
+                // std:: cout << "extent for axis " << 3 << " = " << boost::histogram::axis::traits::extent(sf3D_all_->template axis<3>()) << std::endl;
+                // std:: cout << "extent for axis " << 4 << " = " << boost::histogram::axis::traits::extent(sf3D_all_->template axis<4>()) << std::endl;
+                // std:: cout << "extent for axis " << 5 << " = " << boost::histogram::axis::traits::extent(sf3D_all_->template axis<5>()) << std::endl;
             }
     
         std::array<double,5> scale_factor_array(int pt_idx, int eta_idx, int sapt_idx, int saeta_idx, int ut_idx,
@@ -251,12 +247,12 @@ namespace wrem {
             const double tracking  = sf_all_->at(saeta_idx, sapt_idx, charge_idx, eff_type_idx_tracking, idx_nom_alt).value();
             const double idip      = sf_all_->at(  eta_idx,   pt_idx, charge_idx, eff_type_idx_idip,     idx_nom_alt).value();
             double trig = 1.0;
-            std::cout << "Before trigger" << std::endl;
+            // std::cout << "Before trigger" << std::endl;
             if (with_trigger) trig = sf3D_all_->at(eta_idx, pt_idx, ut_idx, charge_idx, eff_type_idx_trig, idx_nom_alt).value();
-            std::cout << "Before isolation" << std::endl;
+            // std::cout << "Before isolation" << std::endl;
             const double iso       = sf3D_all_->at(eta_idx, pt_idx, ut_idx, charge_idx, eff_type_idx_iso,  idx_nom_alt).value();
             std::array<double,5> ret = {reco, tracking, idip, trig, iso};
-            std::cout << "End of scale_factor_array" << std::endl;
+            // std::cout << "End of scale_factor_array" << std::endl;
             
             return ret;
             
@@ -273,14 +269,14 @@ namespace wrem {
             auto const saeta_idx = sf_all_->template axis<0>().index(saeta);
             auto const sapt_idx = sf_all_->template axis<1>().index(sapt);
             auto const ut_idx = sf3D_all_->template axis<5>().index(ut);
-            std::cout << "Value for pt,eta,sapt,saeta,ut,charge = " << pt << ", " << eta << ", " << sapt << ", " << saeta << ", " << ut << ", " << charge << std::endl;
-            //std::cout << "Value for pass_iso,with_trigger,idx_nom_alt = " << pass_iso << ", " << with_trigger << ", " << idx_nom_alt << std::endl;
-            std::cout << "Index for pt,eta,sapt,saeta,charge,ut = " << pt_idx << ", " << eta_idx << ", " << sapt_idx << ", " << saeta_idx << ", " << charge_idx << ", " << ut_idx << std::endl;
+            // std::cout << "Value for pt,eta,sapt,saeta,ut,charge = " << pt << ", " << eta << ", " << sapt << ", " << saeta << ", " << ut << ", " << charge << std::endl;
+            // //std::cout << "Value for pass_iso,with_trigger,idx_nom_alt = " << pass_iso << ", " << with_trigger << ", " << idx_nom_alt << std::endl;
+            // std::cout << "Index for pt,eta,sapt,saeta,charge,ut = " << pt_idx << ", " << eta_idx << ", " << sapt_idx << ", " << saeta_idx << ", " << charge_idx << ", " << ut_idx << std::endl;
             // apparently avoiding index = -1 helps, not clear why given that the underflow bin exists
             auto ut_idx_new = ut_idx;
             if (ut_idx_new < 0) {
                 ut_idx_new = 0;
-                std::cout << "Setting ut_idx to " << ut_idx_new << std::endl;
+                // std::cout << "Setting ut_idx to " << ut_idx_new << std::endl;
             }
                 
             std::array<double,5> allSF = scale_factor_array(pt_idx, eta_idx, sapt_idx, saeta_idx, ut_idx_new,
