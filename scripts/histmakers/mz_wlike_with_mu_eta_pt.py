@@ -58,7 +58,7 @@ nominal_axes = [axis_eta, axis_pt, axis_charge]
 nominal_cols = ["trigMuons_eta0", "trigMuons_pt0", "trigMuons_charge0"]
 
 if args.unfolding:
-    unfolding_axes, unfolding_cols = differential.get_pt_eta_charge_axes(template_npt, template_minpt, template_maxpt, args.genBins[1])
+    unfolding_axes, unfolding_cols = differential.get_pt_eta_charge_axes(args.genBins[0], template_minpt, template_maxpt, args.genBins[1])
     datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Zmumu")
 
 # axes for mT measurement
