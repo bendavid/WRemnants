@@ -26,7 +26,13 @@ constexpr double muon_mass = 0.1056583745;
         return res;
 
     }
-        
+
+    // template <typename T>
+    // bool printVar(const T& var) {
+    //     std::cout << var << std::endl;
+    //     return 1;
+    // }
+    
 float mt_2(float pt1, float phi1, float pt2, float phi2) {
     return std::sqrt(2*pt1*pt2*(1-std::cos(phi1-phi2)));
 }

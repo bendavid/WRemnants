@@ -287,7 +287,8 @@ def build_graph(df, dataset):
     if dataset.is_data:
         df = df.DefinePerSample("nominal_weight", "1.0")            
     else:
-        df = theory_tools.define_prefsr_vars(df)
+        if isW or isZ:
+            df = theory_tools.define_prefsr_vars(df)
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
         df = df.Define("weight_vtx", vertex_helper, ["GenVtx_z", "Pileup_nTrueInt"])
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId"])
@@ -296,10 +297,14 @@ def build_graph(df, dataset):
         # define recoil uT, muon projected on boson pt, the latter is made using preFSR variables
         # TODO: fix it for not W/Z processes
         recoilVarSF = "recoilProj_uT"
-        columnsForSF = ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", recoilVarSF, "goodMuons_charge0", "passIso"]   
-        if args.smooth3dsf:
+        columnsForSF = ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", recoilVarSF, "goodMuons_charge0", "passIso"]
+        if isW or isZ:
             df = df.Define(recoilVarSF, "wrem::zqtproj0_boson(goodMuons_pt0, goodMuons_phi0, ptVgen, phiVgen)")
         else:
+            # dummy for now
+            df = df.Define(recoilVarSF, "0.0")
+            
+        if not args.smooth3dsf:
             columnsForSF.remove(recoilVarSF)
             
         if not args.noScaleFactors:
@@ -325,6 +330,7 @@ def build_graph(df, dataset):
         
         df = df.Define("exp_weight", weight_expr)
         df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
+
     ########################################################################
     
     if not args.noRecoil:
@@ -351,9 +357,8 @@ def build_graph(df, dataset):
     if auxiliary_histograms:
         mtIsoJetCharge = df.HistoBoost("mtIsoJetCharge", [axis_mt_fakes, axis_iso_fakes, axis_hasjet_fakes, axis_charge], ["transverseMass", "goodMuons_pfRelIso04_all0", "hasCleanJet", "goodMuons_charge0", "nominal_weight"])
         results.append(mtIsoJetCharge)
-    
-    df = df.Define("passMT", "transverseMass >= 40.0")
 
+    df = df.Define("passMT", "transverseMass >= 40.0")
     ## MARCO: temporarily commented out code 
     # if args.vqt3dsmoothing:
     #    df = df.Filter("passMT")
@@ -391,11 +396,13 @@ def build_graph(df, dataset):
 
         results.append(df.HistoBoost("nominal_weight", [hist.axis.Regular(200, -4, 4)], ["nominal_weight"], storage=hist.storage.Double()))
         
-        if args.vqt3dsmoothing:
+        if args.vqt3dsmoothing and auxiliary_histograms:
             cols_WeffMC = ["goodMuons_eta0", "goodMuons_pt0", recoilVarSF, "goodMuons_charge0",
                            "passIso", "passMT", "passTrigger"]
             yieldsForWeffMC = df.HistoBoost("yieldsForWeffMC", axes_WeffMC, [*cols_WeffMC, "nominal_weight"])
-        
+            results.append(yieldsForWeffMC)
+        # df = df.Filter(f"wrem::printVar(nominal_weight)")
+            
         if not args.noRecoil:
             df = recoilHelper.add_recoil_unc_W(df, results, dataset, cols, axes, "nominal")
 
