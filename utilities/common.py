@@ -117,7 +117,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--nonClosureScheme", type=str, default = "A-M-separated", choices=["A-M-separated", "A-M-combined", "binned", "binned-plus-M"], help = "source of the Z non-closure nuisances")
     parser.add_argument("--correlatedNonClosureNP", action="store_true", help="disable the de-correlation of Z non-closure nuisance parameters after the jpsi massfit")
     parser.add_argument("--noScaleToData", action="store_true", help="Do not scale the MC histograms with xsec*lumi/sum(gen weights) in the postprocessing step")
-    parser.add_argument("--aggregateGroups", type=str, default=["Diboson", "Top", "Wtaunu"], help="Sum up histograms from members of given groups in the postprocessing step")
+    parser.add_argument("--aggregateGroups", type=str, nargs="*", default=["Diboson", "Top", "Wtaunu"], help="Sum up histograms from members of given groups in the postprocessing step")
 
     if for_reco_highPU:
         # additional arguments specific for histmaker of reconstructed objects at high pileup (mw, mz_wlike, and mz_dilepton)
