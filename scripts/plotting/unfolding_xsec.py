@@ -50,19 +50,6 @@ else:
 
 input_subdir = args.infile.split("/")[-2]
 
-dilepton=False
-if input_subdir.startswith("WMass"):
-    base_process = "Wmunu"
-elif input_subdir.startswith("ZMassWLike"):
-    base_process = "Zmumu"
-elif input_subdir.startswith("ZMassDilepton"):
-    base_process = "Zmumu"
-    dilepton=True
-
-    # gen_axes = ["ptVGen"]
-    gen_axes = ["ptVGen", "absYVGen"]
-
-
 cms_decor = "Preliminary" if not args.noData else "Simulation Preliminary"
 
 binwnorm = 1.0
@@ -70,7 +57,7 @@ binwnorm = 1.0
 def get_bin(name, var):
     name_split = name.split(var)
     if len(name_split) == 1:
-        return 0
+        return -1
     else:
         return int(name_split[-1].split("_")[0])
 
@@ -90,7 +77,7 @@ labelmap = {
     "Wtaunu" : r"W$^{\pm}\to\tau\nu$",
 } 
 
-def get_label(name):
+def get_label(name, gen_axes=["qGen", "ptGen", "absEtaGen", "ptVGen", "absYVGen"]):
     logger.debug(f"Get label for {name}")
     if name in labelmap.keys():
         return labelmap[name]
@@ -122,7 +109,7 @@ def get_label(name):
         logger.warning(f"No label found for {name}")
         return name
 
-def get_bin_widths(dilepton=False, gen_axes=None):
+def get_bin_widths(df, dilepton=False, gen_axes=None):
     if dilepton:
         if "ptVGen" in gen_axes and "absYVGen" in gen_axes:
             bins_y = np.array(common.ptV_binning)
@@ -194,18 +181,23 @@ def plot_matrix_poi(matrix="covariance_matrix_channelmu"):
         for j, ja in xentries:
             cov_mat[i][j] = hist2d[i,j]
 
-    xlabels = [get_label(x[1]) for x in xentries]
-
-    fig = plt.figure(figsize=(8*width,8))
+    fig = plt.figure(figsize=(8,8))
     ax = fig.add_subplot() 
 
     hep.hist2dplot(cov_mat)#, labels=(xlabels,ylabels))
 
+    # calculate condition number
+    cond = np.linalg.cond(cov_mat)
+    logger.info(f"Condition number: {cond}")
+    plt.text(0.9, 0.9, round(cond), horizontalalignment='right', verticalalignment='top', transform=ax.transAxes)
 
-    ax.set_xticks(np.arange(len(xlabels))+0.5)
-    ax.set_yticks(np.arange(len(xlabels))+0.5)
-    ax.set_xticklabels(xlabels, rotation = 90)
-    ax.set_yticklabels(xlabels)
+    if len(xentries) < 50:
+        xlabels = [get_label(x[1]) for x in xentries]
+
+        ax.set_xticks(np.arange(len(xlabels))+0.5)
+        ax.set_yticks(np.arange(len(xlabels))+0.5)
+        ax.set_xticklabels(xlabels, rotation = 90)
+        ax.set_yticklabels(xlabels)
 
     outfile = "covariance" if "covariance" in matrix else "correlation"
 
@@ -282,26 +274,12 @@ def get_results(rtfile, poi_type, scale=1.0, group=True, uncertainties=None):
     df = df.sort_values(["qGen", "ptGen", "absEtaGen", "ptVGen", "absYVGen"], ignore_index=True)
     return df
 
-def plot_xsec_unfolded(data, data_asimov=None, channel=None, poi_type="mu", scale=1., normalize=False):
+def plot_xsec_unfolded(df, data_asimov=None, channel=None, poi_type="mu", scale=1., normalize=False,process_label="", dilepton=False):
     logger.info(f"Make "+("normalized " if normalize else "")+"unfoled xsec plot"+(f" in channel {channel}" if channel else ""))
 
     # read nominal values and uncertainties from fit result and fill histograms
     logger.debug(f"Read fitresults")
     logger.debug(f"Produce histograms")
-
-    if channel == "minus":
-        df = data.loc[data["qGen"]==0]
-        process_label = r"W$^{-}\to\mu\nu$" if base_process == "Wmunu" else r"Z$\to\mu^{-}$"
-    elif channel == "plus":
-        df = data.loc[data["qGen"]==1]
-        process_label = r"W$^{+}\to\mu\nu$" if base_process == "Wmunu" else r"Z$\to\mu^{+}$"
-    else:
-        process_label = r"W$\to\mu\nu$" if base_process == "Wmunu" else r"Z$\to\mu\mu$"
-        df = data
-
-    if len(df) == 0:
-        logger.info(f"No entries found for channel {channel}, skip!")
-        return
 
     if data_asimov is not None:
         logger.debug(f"Read fitresults for asimov")
@@ -317,7 +295,7 @@ def plot_xsec_unfolded(data, data_asimov=None, channel=None, poi_type="mu", scal
     else:
         yLabel="d$\sigma$("+process_label+") [pb]"
 
-    bin_widths = get_bin_widths(dilepton, gen_axes)
+    bin_widths = get_bin_widths(df, dilepton, gen_axes)
 
     hist_xsec = hist.Hist(
         hist.axis.Regular(bins=len(df), start=0.5, stop=len(df)+0.5, underflow=False, overflow=False), storage=hist.storage.Weight())
@@ -427,6 +405,7 @@ def plot_xsec_unfolded(data, data_asimov=None, channel=None, poi_type="mu", scal
     outfile += "_"+input_subdir
     outfile += (f"_{args.postfix}" if args.postfix else "")
     outfile += (f"_{channel}" if channel else "")
+    outfile += f"_{base_process}"
     plot_tools.save_pdf_and_png(outdir, outfile)
 
     if data_asimov is not None:
@@ -452,26 +431,12 @@ translate = {
     "CMS_recoil": "recoil",
 }
 
-def plot_uncertainties_unfolded(data, channel=None, poi_type="mu", scale=1., normalize=False, relative_uncertainty=False, logy=False):
+def plot_uncertainties_unfolded(df, channel=None, poi_type="mu", scale=1., normalize=False, relative_uncertainty=False, logy=False, process_label="", dilepton=False):
     logger.info(f"Make "+("normalized " if normalize else "")+"unfoled xsec plot"+(f" in channel {channel}" if channel else ""))
 
     # read nominal values and uncertainties from fit result and fill histograms
     logger.debug(f"Read fitresults")
     logger.debug(f"Produce histograms")
-
-    if channel == "minus":
-        df = data.loc[data["qGen"]==0]
-        process_label = r"W$^{-}\to\mu\nu$" if base_process == "Wmunu" else r"Z$\to\mu^{+}$"
-    elif channel == "plus":
-        df = data.loc[data["qGen"]==1]
-        process_label = r"W$^{+}\to\mu\nu$" if base_process == "Wmunu" else r"Z$\to\mu^{-}$"
-    else:
-        process_label = r"W$\to\mu\nu$" if base_process == "Wmunu" else r"Z$\to\mu\mu$"
-        df = data
-
-    if len(df) == 0:
-        logger.info(f"No entries found for channel {channel}, skip!")
-        return
 
     if normalize:
         yLabel="1/$\sigma$ d$\sigma$("+process_label+")"
@@ -483,7 +448,7 @@ def plot_uncertainties_unfolded(data, channel=None, poi_type="mu", scale=1., nor
     else:
         yLabel = "$\Delta$ "+ yLabel
     
-    bin_widths = get_bin_widths(dilepton, gen_axes)
+    bin_widths = get_bin_widths(df, dilepton, gen_axes)
 
     #central values
     values = df["value"].values/bin_widths
@@ -603,6 +568,7 @@ def plot_uncertainties_unfolded(data, channel=None, poi_type="mu", scale=1., nor
     outfile += "_"+input_subdir
     outfile += (f"_{args.postfix}" if args.postfix else "")
     outfile += (f"_{channel}" if channel else "")
+    outfile += base_process
     plot_tools.save_pdf_and_png(outdir, outfile)
 
     plot_tools.write_index_and_log(outdir, outfile, nround=4 if normalize else 2,
@@ -725,29 +691,69 @@ if any([key in args.plots for key in ["xsec", "uncertainties"]]):
         normalize = poi_type=="pmaskedexpnorm"
         scale = 1 if normalize else args.lumi * 1000
 
-        df = get_results(rfile, poi_type=poi_type, scale=scale)
+        data = get_results(rfile, poi_type=poi_type, scale=scale)
 
         if asimov:
-            df_asimov = get_results(asimov, poi_type=poi_type, scale=scale)
+            data_asimov = get_results(asimov, poi_type=poi_type, scale=scale)
         else:
-            df_asimov = None
+            data_asimov = None
 
-        if len(set(df["qGen"].values)) == 1:
-            channels = ["all"]
-        else:
-            channels = args.channels
 
-        for channel in channels:
-            if "xsec" in args.plots:
-                plot_xsec_unfolded(df, df_asimov, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize)
-            if "uncertainties" in args.plots:
-                # absolute uncertainty
-                # plot_uncertainties_unfolded(df, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize)
-                # plot_uncertainties_unfolded(df, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, logy=True)            
-                
-                # relative uncertainty
-                plot_uncertainties_unfolded(df, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, relative_uncertainty=True)
-                plot_uncertainties_unfolded(df, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, relative_uncertainty=True, logy=True)
+        for dilepton, gen_axes in (
+            (True, ["ptVGen", "absYVGen"]),
+            (False, ["qGen", "ptGen", "absEtaGen"]),
+        ):
+
+            data_group = data.loc[sum([data[ax] != -1 for ax in gen_axes]) == len(gen_axes)]
+
+            if len(data_group) == 0:
+                logger.info(f"No entries found with gen axes {gen_axes}, next one!")
+                continue
+
+            if asimov:
+                data_group_asimov = data_asimov.loc[sum([data_asimov[ax] != -1 for ax in gen_axes]) == len(gen_axes)]
+
+            if len(set(data_group["qGen"].values)) == 1:
+                channels = ["all"]
+            else:
+                channels = args.channels
+            
+            base_process = [x for x in set(data_group["Name"].apply(lambda x: x.split("_")[0]))]
+            if len(base_process) != 1:
+                logger.warning(f"Mutliple base processes are found: {base_process}, take first one")
+            else:
+                base_process = base_process[0]
+
+            for channel in channels:
+                logger.info(f"Now at channel {channel}")
+
+                if channel == "minus":
+                    data_channel = data_group.loc[data_group["qGen"]==0]
+                    data_channel_asimov = data_group_asimov.loc[data_group_asimov["qGen"]==0] if asimov else None
+                    process_label = r"W$^{-}\to\mu\nu$" if base_process == "Wmunu" else r"Z$\to\mu^{-}$"
+                elif channel == "plus":
+                    data_channel = data_group.loc[data_group["qGen"]==1]
+                    data_channel_asimov = data_group_asimov.loc[data_group_asimov["qGen"]==1] if asimov else None
+                    process_label = r"W$^{+}\to\mu\nu$" if base_process == "Wmunu" else r"Z$\to\mu^{+}$"
+                else:
+                    process_label = r"W$\to\mu\nu$" if base_process == "Wmunu" else r"Z$\to\mu\mu$"
+                    data_channel = data_group
+                    data_channel_asimov = data_group_asimov if asimov else None
+
+                if len(data_channel) == 0:
+                    logger.info(f"No entries found for channel {channel}, skip!")
+                    continue
+
+                if "xsec" in args.plots:
+                    plot_xsec_unfolded(data_channel, data_channel_asimov, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, process_label = process_label, dilepton=dilepton)
+                if "uncertainties" in args.plots:
+                    # absolute uncertainty
+                    # plot_uncertainties_unfolded(data_channel, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, process_label = process_label, dilepton=dilepton)
+                    # plot_uncertainties_unfolded(data_channel, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, logy=True, process_label = process_label, dilepton=dilepton)            
+                    
+                    # relative uncertainty
+                    plot_uncertainties_unfolded(data_channel, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, relative_uncertainty=True, process_label = process_label, dilepton=dilepton)
+                    plot_uncertainties_unfolded(data_channel, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, relative_uncertainty=True, logy=True, process_label = process_label, dilepton=dilepton)
 
 if "pulls" in args.plots:
     plot_pulls(rfile, asimov)
