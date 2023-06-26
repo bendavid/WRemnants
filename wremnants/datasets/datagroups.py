@@ -57,19 +57,19 @@ class Datagroups(object):
                         "name": g_name,
                         "group": g_name,
                         "filepaths": group["dataset"]["filepaths"],
-                        "xsec": None
+                        "xsec": group["dataset"]["xsec"],
                         })
-            else:
-                self.datasets = {x.name : x for x in datasets}
 
-            logger.debug(f"Getting these datasets: {self.datasets.keys()}")
-
-            if self.results:
                 self.data = [x for x in self.datasets.values() if x.is_data]
                 if self.data:
                     self.lumi = sum([self.results[x.name]["lumi"] for x in self.data if x.name in self.results])
                 else:
                     logger.warning("No data process was selected, normalizing MC to to 1/fb")
+
+            else:
+                self.datasets = {x.name : x for x in datasets}
+                
+            logger.debug(f"Getting these datasets: {self.datasets.keys()}")
 
         self.groups = {}
         self.nominalName = "nominal"
