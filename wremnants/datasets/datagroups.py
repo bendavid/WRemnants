@@ -11,6 +11,7 @@ import functools
 import hist
 import pandas as pd
 import math
+import numpy as np
 
 from wremnants.datasets.datagroup import Datagroup
 
@@ -39,7 +40,28 @@ class Datagroups(object):
         self.lumi = 1
 
         if datasets:
-            self.datasets = {x.name : x for x in datasets}
+
+            if self.results:
+                # only keep datasets that are found in input file
+                self.datasets = {x.name : x for x in datasets if x.name in self.results.keys()}
+
+                for g_name, group in self.results.items():
+                    # if additional datasets are specified in results (for example aggregated groups), get them
+                    if g_name in self.datasets.keys():
+                        continue
+                    if g_name in ["meta_info",]:
+                        continue
+
+                    logger.debug(f"Add aggregated group as {g_name}")
+                    self.datasets[g_name] = narf.Dataset(**{
+                        "name": g_name,
+                        "group": g_name,
+                        "filepaths": group["dataset"]["filepaths"],
+                        "xsec": None
+                        })
+            else:
+                self.datasets = {x.name : x for x in datasets}
+
             logger.debug(f"Getting these datasets: {self.datasets.keys()}")
 
             if self.results:
@@ -144,7 +166,7 @@ class Datagroups(object):
         self.nominalName = name
 
     def processScaleFactor(self, proc):
-        if proc.is_data:
+        if proc.is_data or proc.xsec is None:
             return 1
         return self.lumi*1000*proc.xsec/self.results[proc.name]["weight_sum"]
 
@@ -400,10 +422,10 @@ class Datagroups(object):
         return self.results
 
     def addSummedProc(self, refname, name, label, color="red", exclude=["Data"], relabel=None, 
-            procsToRead=None, reload=False, rename=None, action=None, preOpMap={}, preOpArgs={}):
+            procsToRead=None, reload=False, rename=None, action=None, preOpMap={}, preOpArgs={}, forceNonzero=True):
         if reload:
             self.loadHistsForDatagroups(refname, syst=name, excluded_procs=exclude,
-                procsToRead=procsToRead, preOpMap=preOpMap, preOpArgs=preOpArgs)
+                procsToRead=procsToRead, preOpMap=preOpMap, preOpArgs=preOpArgs, forceNonzero=forceNonzero)
 
         if not rename:
             rename = name
