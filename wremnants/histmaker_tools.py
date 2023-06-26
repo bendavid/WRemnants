@@ -8,7 +8,11 @@ def scale_to_data(result_dict, data_name = "dataPostVFP"):
     # scale histograms by lumi*xsec/sum(gen weights)
     time0 = time.time()
 
-    lumi = result_dict[data_name]["lumi"]
+    if data_name in result_dict.keys():
+        lumi = result_dict[data_name]["lumi"]
+    else:
+        lumi = 1
+
     logger.debug(f"Scale histograms with lumi={lumi}")
     for d_name, result in result_dict.items():
         if result["dataset"]["is_data"]:
@@ -36,9 +40,12 @@ def aggregate_groups(datasets, result_dict, groups_to_aggregate):
     time0 = time.time()
 
     for group in groups_to_aggregate:
-        logger.debug(f"Aggregate group {group}")
 
         dataset_names = [d.name for d in datasets if d.group == group]
+        if len(dataset_names) == 0:
+            continue
+
+        logger.debug(f"Aggregate group {group}")
 
         resdict = None
         members = {}
@@ -60,17 +67,18 @@ def aggregate_groups(datasets, result_dict, groups_to_aggregate):
                     "n_members": 1,
                     "dataset": {
                         "name": group,
+                        "xsec": result["dataset"]["xsec"],
                         "filepaths": result["dataset"]["filepaths"],
                     },
                     "weight_sum": float(result["weight_sum"]),
                     "event_count": float(result["event_count"])
                 }
             else:
+                resdict["dataset"]["xsec"] += result["dataset"]["xsec"]
                 resdict["dataset"]["filepaths"] += result["dataset"]["filepaths"]
                 resdict["n_members"] += 1
                 resdict["weight_sum"] += float(result["weight_sum"])
                 resdict["event_count"] += float(result["event_count"])
-
 
             to_del.append(name)
 
