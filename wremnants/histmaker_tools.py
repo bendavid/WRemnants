@@ -79,7 +79,7 @@ def aggregate_groups(datasets, result_dict, groups_to_aggregate):
 
             if len(histograms) != resdict["n_members"]:
                 logger.warning(f"There is a different number of histograms ({len(histograms)}) than original members ("+str(dsetresult_group[g_name]["n_members"])+f") for {h_name} from group {g_name}")
-                logger.warning("Summing them up probably leads to wrong behavious")
+                logger.warning("Summing them up probably leads to wrong behaviour")
 
             output[h_name] = H5PickleProxy(sum(histograms))
         result_dict[group] = resdict

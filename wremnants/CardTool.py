@@ -608,7 +608,7 @@ class CardTool(object):
             baseName=self.nominalName, syst=self.nominalName,
             procsToRead=self.datagroups.groups.keys(),
             label=self.nominalName, 
-            scaleToNewLumi=self.lumiScale,
+            scaleToNewLumi=self.lumiScale, 
             forceNonzero=forceNonzero)
         self.writeForProcesses(self.nominalName, processes=self.datagroups.groups.keys(), label=self.nominalName, check_systs=check_systs)
         self.loadNominalCard()
@@ -736,7 +736,7 @@ class CardTool(object):
             args = {
                 "channel" :  chan,
                 "channelPerProc" : chan.ljust(self.procColumnsSpacing)*nprocs,
-                "processes" : "".join([x.ljust(self.procColumnsSpacing) for x in procs]),
+                "processes" : " ".join([x.ljust(self.procColumnsSpacing) for x in procs]),
                 "labels" : "".join([str(x).ljust(self.procColumnsSpacing) for x in self.processLabels()]),
                 # Could write out the proper normalizations pretty easily
                 "rates" : "-1".ljust(self.procColumnsSpacing)*nprocs,
