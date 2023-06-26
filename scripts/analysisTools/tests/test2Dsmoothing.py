@@ -150,17 +150,25 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
                                 storage = hist.storage.Weight())
 
     if effHist != None:
-        effHist.GetZaxis().SetRange(2, effHist.GetNbinsZ()-1)
-        eff_boost = narf.root_to_hist(effHist)
-        s = bh.tag.Slicer()
-        eff_boost = eff_boost[{2: s[complex(0, -100.0):complex(0, 100.0)]}] 
+        ## this commented code refers to when effHist was a root histogram, now it is boost already
+        #
+        # effHistRoot = effHist
+        # effHistRoot.GetZaxis().SetRange(2, effHist.GetNbinsZ()-1)
+        # eff_boost = narf.root_to_hist(effHistRoot)
+        # s = bh.tag.Slicer()
+        # eff_boost = eff_boost[{2: s[complex(0, -100.0):complex(0, 100.0)]}]
+        #
+        # now the actual code
+        eff_boost = effHist
+        effHistRoot = narf.hist_to_root(eff_boost)
+        effHistRoot.SetName(f"Wmunu_MC_effi_{step}")
         # make some plots of efficiencies versus eta-ut to see how they behave
         outdirEff = outdirNew + "efficiencies/"
         for ieta in etaBinsToRun:
-            etaLow = round(effHist.GetXaxis().GetBinLowEdge(ieta), 1)
-            etaHigh = round(effHist.GetXaxis().GetBinLowEdge(ieta+1), 1)
+            etaLow = round(effHistRoot.GetXaxis().GetBinLowEdge(ieta), 1)
+            etaHigh = round(effHistRoot.GetXaxis().GetBinLowEdge(ieta+1), 1)
             etaRange = f"{etaLow} < #eta < {etaHigh}"
-            etaCenter = effHist.GetXaxis().GetBinCenter(ieta)
+            etaCenter = effHistRoot.GetXaxis().GetBinCenter(ieta)
             eta_index = eff_boost.axes[0].index(etaCenter)
             #print(f"eta_index = {eta_index}")
             eff_boost_ptut = eff_boost[{0 : eta_index}] # from 3D (eta-pt-ut) to 2D (pt-ut)
@@ -178,7 +186,7 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
             eff_boost_ptut.values()[...] = yvals
             # plot with root
             heff = narf.hist_to_root(eff_boost_ptut)
-            heff.SetName(f"{effHist.GetName()}_eta{ieta}")
+            heff.SetName(f"{effHistRoot.GetName()}_eta{ieta}")
             heff.SetTitle(etaRange)
             drawCorrelationPlot(heff, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", "W MC efficiency::0.5,1",
                                 heff.GetName(), "ForceTitle", outdirEff,
@@ -201,7 +209,7 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
             histEffi2D_ptut.values()[:] = np.reshape(smoothVals, (utNbins, ptNbins))
             histEffi3D.values()[eta_index, ...] = histEffi2D_ptut.values().T
             heffSmooth = narf.hist_to_root(histEffi2D_ptut)
-            heffSmooth.SetName(f"{effHist.GetName()}_eta{ieta}_smooth")
+            heffSmooth.SetName(f"{effHistRoot.GetName()}_eta{ieta}_smooth")
             heffSmooth.SetTitle(etaRange)
             drawCorrelationPlot(heffSmooth, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", "Smoothed W MC efficiency::0.5,1",
                                 heffSmooth.GetName(), "ForceTitle", outdirEff,
@@ -371,18 +379,27 @@ if __name__ == "__main__":
 
     ROOT.TH1.SetDefaultSumw2()
     
-    effSmoothFile = "/home/m/mciprian/efficiencieswremnantsmceff2d.root"
+    #effSmoothFile = "/home/m/mciprian/efficiencieswremnantsmceff2d.root"
+    # effHist = {}
+    # tfile = safeOpenFile(effSmoothFile)
+    # effHist["iso"] = safeGetObject(tfile, "isoMCPlus") # temporary patch
+    # effHist["isonotrig"] = safeGetObject(tfile, "isoMCMinus") # temporary patch
+    # effHist["triggerplus"] = safeGetObject(tfile, "triggerMCPlus")
+    # effHist["triggerminus"] = safeGetObject(tfile, "triggerMCMinus")
+    # tfile.Close()
+
+    effSmoothFile = "/eos/user/m/mciprian/www/WMassAnalysis/test2Dsmoothing/makeWMCefficiency3D//noMuonCorr_noSF/efficiencies3D.pkl.lz4"
+    with lz4.frame.open(effSmoothFile) as fileEff:
+        allMCeff = pickle.load(fileEff)
+
     effHist = {}
-    tfile = safeOpenFile(effSmoothFile)
-    effHist["iso"] = safeGetObject(tfile, "isoMCPlus") # temporary patch
-    effHist["isonotrig"] = safeGetObject(tfile, "isoMCMinus") # temporary patch
-    effHist["triggerplus"] = safeGetObject(tfile, "triggerMCPlus")
-    effHist["triggerminus"] = safeGetObject(tfile, "triggerMCMinus")
-    tfile.Close()
-    
+    for step in ["iso", "isonotrig", "isoantitrig", "triggerplus", "triggerminus"]:
+        effHist[step] = allMCeff[f"Wmunu_MC_eff_{step}_etaptut"]
+        
     work = []
     work.append(["/home/m/mciprian/isolation3DSFUT.root",     "SF3D_nominal_isolation",     "iso", effHist["iso"]])
     #work.append(["/home/m/mciprian/isonotrigger3DSFVQT.root", "SF3D_nominal_isonotrigger",  "isonotrig", effHist["isonotrig"]])
+    #work.append(["/home/m/mciprian/isofailtrigger3DSFVQT.root", "SF3D_nominal_isofailtrigger",  "isoantitrig", effHist["isoantitrig"]])
     #work.append(["/home/m/mciprian/triggerplus3DSFUT.root",   "SF3D_nominal_trigger_plus",  "triggerplus", effHist["triggerplus"]])
     #work.append(["/home/m/mciprian/triggerminus3DSFUT.root",  "SF3D_nominal_trigger_minus", "triggerminus", effHist["triggerminus"]])
 
