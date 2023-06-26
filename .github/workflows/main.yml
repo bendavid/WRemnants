@@ -283,7 +283,7 @@ jobs:
 
   combined:
     runs-on: [self-hosted, linux, x64]
-    needs: [wmass, dilepton]
+    needs: [w-analysis, dilepton]
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v3
