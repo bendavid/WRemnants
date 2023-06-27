@@ -55,43 +55,34 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: setup plot folder
-        run: echo PLOT_DIR=$(date +%Y_%m_%d)/PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') >> $GITHUB_ENV
+        run: echo PLOT_DIR=$(date +%Y_%m_%d)/PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') >> $GITHUB_OUTPUT
 
       - name: setup plot folder nightly
         if: github.event.schedule == '0 3 * * 2,4,6'
-        run: echo PLOT_DIR=$(date +%Y_%m_%d)/ScheduledBuild_$(git rev-parse --short "$GITHUB_SHA") >> $GITHUB_ENV
+        run: echo PLOT_DIR=$(date +%Y_%m_%d)/ScheduledBuild_$(git rev-parse --short "$GITHUB_SHA") >> $GITHUB_OUTPUT
 
       - name: setup threads
         if: github.event_name != 'pull_request'
-        run: echo "NTHREADS=64" >> $GITHUB_ENV
+        run: echo "NTHREADS=64" >> $GITHUB_OUTPUT
 
       - name: setup events
         if: github.event_name != 'pull_request'
-        run: echo "MAX_FILES=-1" >> $GITHUB_ENV
+        run: echo "MAX_FILES=-1" >> $GITHUB_OUTPUT
 
       - name: setup full lumi 
         if: github.event_name != 'pull_request'
-        run: echo "LUMI_SCALE=1" >> $GITHUB_ENV
+        run: echo "LUMI_SCALE=1" >> $GITHUB_OUTPUT
 
       - name: setup outdir
-        run: echo "WREMNANTS_OUTDIR=/tmp/${USER}/$(uuidgen)" >> $GITHUB_ENV
-
-      - name: wlike env
-        run: echo "HIST_FILE_WLIKE=${WREMNANTS_OUTDIR}/${OUTFILE_WLIKE}" >> $GITHUB_ENV
-
-      - name: wmass env
-        run: echo "HIST_FILE_WMASS=${WREMNANTS_OUTDIR}/${OUTFILE_WLIKE}" >> $GITHUB_ENV
-
-      - name: dilepton env
-        run: echo "HIST_FILE_DILEPTON=${WREMNANTS_OUTDIR}/${OUTFILE_WLIKE}" >> $GITHUB_ENV
-
-      - name: setup info
-        run: echo "Plot dir is $PLOT_DIR" "Output dir is $WREMNANTS_OUTDIR, hists files are $HIST_FILE_WMASS, $HIST_FILE_WLIKE, $HIST_FILE_DILEPTON"
+        run: echo "WREMNANTS_OUTDIR=/tmp/${USER}/$(uuidgen)" >> $GITHUB_OUTPUT
 
   w-analysis:
     # The type of runner that the job will run on
     runs-on: [self-hosted, linux, x64]
     needs: set-env
+      - env:
+          WREMNANTS_OUTDIR: ${needs.set-env.outputs.WREMNANTS_OUTDIR}
+          PLOT_DIR: ${needs.set-env.outputs.PLOT_DIR}
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -102,6 +93,9 @@ jobs:
 
       - name: test
         run: echo "$WREMNANTS_OUTDIR" "$HIST_FILE_WMASS"
+
+      - name: outfile
+        run: echo "HIST_FILE=${WREMNANTS_OUTDIR}/${OUTFILE_WMASS}" >> $GITHUB_ENV
 
       - name: wmass setup lumi scale
         if: github.event_name == 'pull_request'
@@ -171,7 +165,7 @@ jobs:
         run: echo "NTHREADS=64" >> $GITHUB_ENV
 
       - name: lowpu w analysis
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_lowPU.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_lowPU.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4 -o $WREMNANTS_OUTDIR
 
         #TODO: test low pu combine (and combined fit)
           #- name: lowpu w combine
