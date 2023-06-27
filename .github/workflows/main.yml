@@ -16,7 +16,8 @@ env:
   MAX_FILES: 20
   LUMI_SCALE: 760
   NTHREADS: 16
-  WEB_DIR: /home/c/cmsmwbot/www/WMassAnalysis/PRValidation
+  LOCAL_WEB_DIR: www/WMassAnalysis/PRValidation
+  EOS_DIR: /eos/user/c/cmsmwbot
   OUTFILE_WMASS: "mw_with_mu_eta_pt.hdf5"
   OUTFILE_DILEPTON: "mz_dilepton.hdf5"
   OUTFILE_WLIKE: "mz_wlike_with_mu_eta_pt.hdf5"
@@ -73,13 +74,19 @@ jobs:
         run: |
           echo "NTHREADS=64" >> $GITHUB_ENV
           echo "MAX_FILES=-1" >> $GITHUB_ENV
+          echo "WREMNANTS_OUTDIR=/tmp/${USER}/$(uuidgen)" >> $GITHUB_ENV
+          echo "WEB_DIR=$WREMNANTS_OUTDIR/$LOCAL_WEB_DIR" >> $GITHUB_ENV
 
       - id: export
         run: |
           echo "PLOT_DIR=$PLOT_DIR/$(date +%Y_%m)" >> $GITHUB_OUTPUT
           echo "MAX_FILES=$MAX_FILES" >> $GITHUB_OUTPUT
           echo "NTHREADS=$NTHREADS" >> $GITHUB_OUTPUT
-          echo "WREMNANTS_OUTDIR=/tmp/${USER}/$(uuidgen)" >> $GITHUB_OUTPUT
+          echo "WREMNANTS_OUTDIR=$WREMNANTS_OUTDIR" >> $GITHUB_OUTPUT
+          echo "WEB_DIR=$WEB_DIR" >> $GITHUB_OUTPUT
+
+      - name: create outdir
+        run: mkdir $WEB_DIR
 
   w-analysis:
     # The type of runner that the job will run on
@@ -375,4 +382,6 @@ jobs:
 
       - name: clean
         if: ${{ always() }}
-        run: rm -r $WREMNANTS_OUTDIR
+        run: |
+          xrdcp -R $WREMNANTS_OUTDIR/$LOCAL_WEB_DIR root://eoscms.cern.ch/$EOS_DIR/$LOCAL_WEB_DIR
+          rm -r $WREMNANTS_OUTDIR
