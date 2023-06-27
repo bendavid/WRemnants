@@ -74,16 +74,16 @@ jobs:
         run: echo "LUMI_SCALE=1" >> $GITHUB_ENV
 
       - name: setup outdir
-        run: echo "WREMNANTS_OUTDIR=/tmp/${USER}/$(uuidgen)" >> GITHUB_ENV
+        run: echo "WREMNANTS_OUTDIR=/tmp/${USER}/$(uuidgen)" >> $GITHUB_ENV
 
       - name: wlike env
-        run: echo "HIST_FILE_WLIKE=${WREMNANTS_OUTDIR}/${OUTFILE_WLIKE}" >> GITHUB_ENV
+        run: echo "HIST_FILE_WLIKE=${WREMNANTS_OUTDIR}/${OUTFILE_WLIKE}" >> $GITHUB_ENV
 
       - name: wmass env
-        run: echo "HIST_FILE_WMASS=${WREMNANTS_OUTDIR}/${OUTFILE_WLIKE}" >> GITHUB_ENV
+        run: echo "HIST_FILE_WMASS=${WREMNANTS_OUTDIR}/${OUTFILE_WLIKE}" >> $GITHUB_ENV
 
       - name: dilepton env
-        run: echo "HIST_FILE_DILEPTON=${WREMNANTS_OUTDIR}/${OUTFILE_WLIKE}" >> GITHUB_ENV
+        run: echo "HIST_FILE_DILEPTON=${WREMNANTS_OUTDIR}/${OUTFILE_WLIKE}" >> $GITHUB_ENV
 
       - name: setup info
         run: echo "Plot dir is $PLOT_DIR" "Output dir is $WREMNANTS_OUTDIR, hists files are $HIST_FILE_WMASS, $HIST_FILE_WLIKE, $HIST_FILE_DILEPTON"
