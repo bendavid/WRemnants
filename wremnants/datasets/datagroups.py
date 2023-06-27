@@ -43,9 +43,10 @@ class Datagroups(object):
             logger.debug(f"Getting these datasets: {self.datasets.keys()}")
 
             if self.results:
-                self.data = [x for x in self.datasets.values() if x.is_data]
+                self.data = [x for x in self.datasets.values() if (x.is_data and x.name in self.results)]
                 if self.data:
-                    self.lumi = sum([self.results[x.name]["lumi"] for x in self.data if x.name in self.results])
+                    self.lumi = sum([self.results[x.name]["lumi"] for x in self.data])
+                    logger.debug(f"Normalizing MC to available data: {self.lumi}/fb")
                 else:
                     logger.warning("No data process was selected, normalizing MC to to 1/fb")
 

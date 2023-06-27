@@ -299,6 +299,11 @@ def build_graph(df, dataset):
         recoilVarSF = "recoilProj_uT"
         columnsForSF = ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", recoilVarSF, "goodMuons_charge0", "passIso"]
         if isW or isZ:
+            # preFSR or postFSR boson (with reco muon for the latter to form the W) gives the same results when integrating uT
+            # df = df.Define("postFSRnus", "GenPart_status == 1 && (GenPart_statusFlags & 1) && abs(GenPart_pdgId) == 14")
+            # df = df.Define("postFSRnusIdx", "wrem::postFSRLeptonsIdx(postFSRnus)")
+            # df = df.Define(recoilVarSF, "wrem::zqtproj0(goodMuons_pt0, goodMuons_eta0, goodMuons_phi0, GenPart_pt, GenPart_eta, GenPart_phi, postFSRnusIdx)")
+            #
             df = df.Define(recoilVarSF, "wrem::zqtproj0_boson(goodMuons_pt0, goodMuons_phi0, ptVgen, phiVgen)")
         else:
             # dummy for now

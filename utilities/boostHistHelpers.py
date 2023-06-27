@@ -36,14 +36,14 @@ def broadcastOutHist(h1, h2):
     return h1 if len(h1.axes) > len(h2.axes) else h2
 
 # returns h1/h2
-def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False, createNew=True):
+def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False, createNew=True, ratioValAtCutoff=1.):
     # To get the broadcast shape right
     outh = h1 if not allowBroadcast else broadcastOutHist(h1, h2)
 
     h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2, allowBroadcast)
     out = np.zeros_like(h2vals)
     # By the argument that 0/0 = 1
-    out[(np.abs(h2vals) < cutoff) & (np.abs(h1vals) < cutoff)] = 1.
+    out[(np.abs(h2vals) < cutoff) & (np.abs(h1vals) < cutoff)] = ratioValAtCutoff
     val = np.divide(h1vals, h2vals, out=out, where=np.abs(h2vals)>cutoff)
 
     if h1._storage_type() != hist.storage.Weight() or h2._storage_type() != hist.storage.Weight():
@@ -120,18 +120,29 @@ def multiplyHists(h1, h2, allowBroadcast=True, transpose=True, createNew=True):
         outh.values(flow=True)[...] = val
         return outh
 
-def addHists(h1, h2, allowBroadcast=True, createNew=True):
+def addHists(h1, h2, allowBroadcast=True, createNew=True, scale1=None, scale2=None):
     h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2, allowBroadcast)
+    hasWeights = h1._storage_type() == hist.storage.Weight() and h2._storage_type() == hist.storage.Weight()
+    # avoid scaling the variance if not needed, to save some time
+    # I couldn't use hvals *= scale, otherwise I get this error: ValueError: output array is read-only
+    if scale1 is not None:
+        h1vals = scale1 * h1vals
+        if hasWeights:
+            h1vars = (scale1*scale1) * h1vars
+    if scale2 is not None:
+        h2vals = scale2 * h2vals
+        if hasWeights:
+            h2vars = (scale2*scale2) * h2vars
     outh = h1 if not allowBroadcast else broadcastOutHist(h1, h2)
     if createNew:
-        if h1._storage_type() == hist.storage.Double() or h2._storage_type() == hist.storage.Double():
-            return hist.Hist(*outh.axes, data=h1vals+h2vals)
+        if not hasWeights:
+            return hist.Hist(*outh.axes, data=h1vals + h2vals)
         else:
             return hist.Hist(*outh.axes, storage=hist.storage.Weight(),
-                            data=np.stack((h1vals+h2vals, h1vars+h2vars), axis=-1))            
+                            data=np.stack((h1vals + h2vals, h1vars + h2vars), axis=-1))            
     else:
         outh.values(flow=True)[...] = h1vals + h2vals
-        if h1._storage_type() == hist.storage.Weight() and h2._storage_type() == hist.storage.Weight():
+        if hasWeights:
             outh.variances(flow=True)[...] = h1vars + h2vars
         return outh                
 

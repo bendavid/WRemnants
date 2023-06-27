@@ -16,6 +16,7 @@ import lz4.frame
 import time
 from functools import partial
 from scipy.interpolate import RegularGridInterpolator
+from utilities import boostHistHelpers as hh
 
 ## safe batch mode
 import sys
@@ -133,23 +134,28 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
                               len(etaEdges)-1, array('d', etaEdges),
                               len(ptEdges)-1, array('d', ptEdges))
 
+    # extend uT range for plotting purpose, even if eventually the final histogram will be stored in a narrower range
+    extendedRange_ut = [-50.0, 50.0]
+    extendedRange_ut_nBins = int((extendedRange_ut[1] - extendedRange_ut[0] + 0.001) / utBinWidth)
     # create final boost histogram with smooth SF, eta-pt-ut-ivar
     axis_eta = hist.axis.Regular(nEtaBins, etaEdges[0], etaEdges[-1], name = "eta", overflow = False, underflow = False)
     axis_pt  = hist.axis.Regular(ptNbins,  ptEdgeLow,   ptEdgeHigh,   name = "pt",  overflow = False, underflow = False)
     axis_ut  = hist.axis.Regular(utNbins,  utEdgeLow,   utEdgeHigh,   name = "ut",  overflow = False, underflow = False)
+    axis_ut_eff  = hist.axis.Regular(extendedRange_ut_nBins, extendedRange_ut[0], extendedRange_ut[1], name = "ut",  overflow = False, underflow = False)
     axis_var = hist.axis.Integer(0, 1+(1+polnx)*(1+polny), underflow = False, overflow =False, name = "nomi-eigenVars")
 
-    histSF3D = hist.Hist(axis_eta, axis_pt, axis_ut, axis_var,
-                         name = f"smoothSF3D_{step}",
-                         storage = hist.storage.Weight())
-    histEffi3D = hist.Hist(axis_eta, axis_pt, axis_ut,
+    histSF3D_withStatVars = hist.Hist(axis_eta, axis_pt, axis_ut, axis_var,
+                                      name = f"smoothSF3D_{step}",
+                                      storage = hist.storage.Weight())
+    histEffi3D = hist.Hist(axis_eta, axis_pt, axis_ut_eff,
                            name = f"smoothEffi3D_{step}",
                            storage = hist.storage.Weight())
-    histEffi2D_ptut = hist.Hist(axis_ut, axis_pt,
+    histEffi2D_ptut = hist.Hist(axis_ut_eff, axis_pt,
                                 name = f"smoothEffi2D_{step}_ptut",
                                 storage = hist.storage.Weight())
 
     if effHist != None:
+        logger.info("Preparing efficiencies")
         ## this commented code refers to when effHist was a root histogram, now it is boost already
         #
         # effHistRoot = effHist
@@ -176,8 +182,6 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
             eff_boost_ptut = eff_boost_ptut.project(1, 0) # project second axis (uT) as x and first axis (pT) as y
             #logger.warning(eff_boost_ptut.axes)
             #logger.warning("")
-            # utvals = [heff.GetXaxis().GetBinCenter(iut) for iut in range(1, 1+heff.GetNbinsX())]
-            # ptvals = [heff.GetYaxis().GetBinCenter(ipt) for ipt in range(1, 1+heff.GetNbinsY())]
             xvals = [tf.constant(center, dtype=dtype) for center in eff_boost_ptut.axes.centers]
             utvals = np.reshape(xvals[0], [-1])
             ptvals = np.reshape(xvals[1], [-1])
@@ -185,16 +189,13 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
             yvals[np.isnan(yvals)] = 0 # protection against bins where no events were selected (extreme ut for instance), set efficiency to 0 instead of 1
             eff_boost_ptut.values()[...] = yvals
             # plot with root
-            heff = narf.hist_to_root(eff_boost_ptut)
-            heff.SetName(f"{effHistRoot.GetName()}_eta{ieta}")
-            heff.SetTitle(etaRange)
-            drawCorrelationPlot(heff, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", "W MC efficiency::0.5,1",
-                                heff.GetName(), "ForceTitle", outdirEff,
-                                palette=87, passCanvas=canvas)
-
-            # logger.warning(utvals)
-            # logger.warning(ptvals)
-            # logger.warning(yvals)
+            if len(args.eta):
+                heff = narf.hist_to_root(eff_boost_ptut)
+                heff.SetName(f"{effHistRoot.GetName()}_eta{ieta}")
+                heff.SetTitle(etaRange)
+                drawCorrelationPlot(heff, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", "W MC efficiency::0.5,1",
+                                    heff.GetName(), "ForceTitle", outdirEff,
+                                    palette=87, passCanvas=canvas)
             # the grid interpolator will be created up to the extreme bin centers, so need bounds_error=False to allow the extrapolation to extend outside, and then we can set its value to fill_value (None does an extrapolation)
             interp = RegularGridInterpolator((utvals, ptvals), yvals, method='cubic', bounds_error=False, fill_value=None)
             xvalsFine = [tf.constant(center, dtype=dtype) for center in histEffi2D_ptut.axes.centers]
@@ -206,19 +207,23 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
             #print(pts)
             smoothVals = interp(pts)
             #print(smoothVals)
-            histEffi2D_ptut.values()[:] = np.reshape(smoothVals, (utNbins, ptNbins))
+            histEffi2D_ptut.values()[:] = np.reshape(smoothVals, (axis_ut_eff.size, ptNbins))
             histEffi3D.values()[eta_index, ...] = histEffi2D_ptut.values().T
-            heffSmooth = narf.hist_to_root(histEffi2D_ptut)
-            heffSmooth.SetName(f"{effHistRoot.GetName()}_eta{ieta}_smooth")
-            heffSmooth.SetTitle(etaRange)
-            drawCorrelationPlot(heffSmooth, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", "Smoothed W MC efficiency::0.5,1",
-                                heffSmooth.GetName(), "ForceTitle", outdirEff,
-                                palette=87, passCanvas=canvas)
+            # set errors to 0 explicitly, although they should already be 0, we don't use them
+            histEffi3D.variances()[...] = np.zeros_like(histEffi3D.variances())
+            if len(args.eta):
+                heffSmooth = narf.hist_to_root(histEffi2D_ptut)
+                heffSmooth.SetName(f"{effHistRoot.GetName()}_eta{ieta}_smooth")
+                heffSmooth.SetTitle(etaRange)
+                drawCorrelationPlot(heffSmooth, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", "Smoothed W MC efficiency::0.5,1",
+                                    heffSmooth.GetName(), "ForceTitle", outdirEff,
+                                    palette=87, passCanvas=canvas)
+        logger.info("Done with efficiencies")
 
     # set initial parameters, starting with constant at unit
     arr = [1.0] + [0.0 for x in range((polnx+1)*(polny+1)-1)]
     ##
-    postfix = f"{args.postfix}_" if len(args.postfix) else ""
+    postfix = f"_{args.postfix}" if len(args.postfix) else ""
 
     hpull1D_uTpT = ROOT.TH1D("hpull1D", "", 20, -5, 5)
     hpullSummary_eta_mean  = ROOT.TH1D("hpullSummary_eta_mean",  "Pull distribution mean",  nEtaBins, etaEdges[0], etaEdges[-1])
@@ -310,10 +315,10 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
         # first swap pt and ut axes from uT-pT to pT-uT by projecting onto itself with reshuffled axes
         #axes = [axis_pt.name, axis_ut.name]
         #hswap = boost_hist_smooth.project(*axes)
-        histSF3D.values()[eta_index, :, :, 0] = boost_hist_smooth.values().T # hswap.values()[:,:]
+        histSF3D_withStatVars.values()[eta_index, :, :, 0] = boost_hist_smooth.values().T # hswap.values()[:,:]
         # convert to root for plotting
         hfit = narf.hist_to_root(boost_hist_smooth)
-        hfit.SetName(f"fit2D_ieta{ieta}_{postfix}")
+        hfit.SetName(f"{{hsf.GetName()}}_ieta{ieta}{postfix}")
         hfit.SetTitle(f"{etaRange}   {chi2text}")
         drawCorrelationPlot(hfit, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", f"Smooth scale factor",
                             hfit.GetName(), "ForceTitle", outdirNew,
@@ -321,9 +326,9 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
 
         for ivar in range(npar):
             boost_hist_smooth.values()[...] = polN_2d_scaled(xvals, postfit_params_alt[ivar])
-            histSF3D.values()[eta_index, :, :, ivar+1] = boost_hist_smooth.values().T
+            histSF3D_withStatVars.values()[eta_index, :, :, ivar+1] = boost_hist_smooth.values().T
             hfit_alt.append(narf.hist_to_root(boost_hist_smooth))
-            hfit_alt[ivar].SetName(f"fit2D_ieta{ieta}_eigen{ivar}_{postfix}")
+            hfit_alt[ivar].SetName(f"fit2D_ieta{ieta}_eigen{ivar}{postfix}")
             hfit_alt[ivar].SetTitle(f"{etaRange}: eigen {ivar}")            
 
         if args.plotEigenVar:
@@ -360,8 +365,27 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
                       lowerPanelHeight=0.0, drawLineTopPanel=1.0,
                       passCanvas=canvas, skipLumi=True)
 
-
-    return [histSF3D, histEffi3D]
+    # should the following be done for each eta bin as above? At least one could plot things vs pt-ut more easily
+    if effHist != None and step in ["iso", "triggerplus", "triggerminus"]:
+        # compute antiiso_SF = (1-SF*effMC)/ (1-effMC)
+        # first make uT axis consistent
+        s = bh.tag.Slicer()
+        histEffi3D_asSF = histEffi3D[{"ut" : s[complex(0,axis_ut.edges[0]):complex(0,axis_ut.edges[-1])]}]
+        logger.warning("Resizing ut axis for efficiency to match SF histogram")
+        logger.warning(f"{histEffi3D_asSF.axes}")
+        # remember that histSF3D_withStatVars has 4 axes, 4th is the stat variation
+        num = histSF3D_withStatVars.copy()
+        den = histSF3D_withStatVars.copy()
+        num.values()[...] = np.ones_like(histSF3D_withStatVars.values()) # num = 1
+        den = num.copy() # now den is filled with all 1
+        num = hh.addHists(num, hh.multiplyHists(histSF3D_withStatVars, histEffi3D_asSF, createNew=True), createNew=False, scale2=-1.0) # 1 - SF*effMC
+        den = hh.addHists(den, histEffi3D_asSF, scale2=-1.0, createNew=False) # 1 - effMC
+        antiSF = hh.divideHists(num, den, createNew=True)
+        antiSF.name = f"smoothSF3D_anti{step}"
+    else:
+        antiSF = None
+        
+    return [histSF3D_withStatVars, histEffi3D if effHist != None else None, antiSF]
 
 
 if __name__ == "__main__":
@@ -398,10 +422,10 @@ if __name__ == "__main__":
         
     work = []
     work.append(["/home/m/mciprian/isolation3DSFUT.root",     "SF3D_nominal_isolation",     "iso", effHist["iso"]])
-    #work.append(["/home/m/mciprian/isonotrigger3DSFVQT.root", "SF3D_nominal_isonotrigger",  "isonotrig", effHist["isonotrig"]])
-    #work.append(["/home/m/mciprian/isofailtrigger3DSFVQT.root", "SF3D_nominal_isofailtrigger",  "isoantitrig", effHist["isoantitrig"]])
-    #work.append(["/home/m/mciprian/triggerplus3DSFUT.root",   "SF3D_nominal_trigger_plus",  "triggerplus", effHist["triggerplus"]])
-    #work.append(["/home/m/mciprian/triggerminus3DSFUT.root",  "SF3D_nominal_trigger_minus", "triggerminus", effHist["triggerminus"]])
+    work.append(["/home/m/mciprian/isonotrigger3DSFVQT.root", "SF3D_nominal_isonotrigger",  "isonotrig", None]) # , effHist["isonotrig"]])
+    work.append(["/home/m/mciprian/isofailtrigger3DSFVQT.root", "SF3D_nominal_isofailtrigger",  "isoantitrig", None]) # , effHist["isoantitrig"]])
+    work.append(["/home/m/mciprian/triggerplus3DSFUT.root",   "SF3D_nominal_trigger_plus",  "triggerplus", effHist["triggerplus"]])
+    work.append(["/home/m/mciprian/triggerminus3DSFUT.root",  "SF3D_nominal_trigger_minus", "triggerminus", effHist["triggerminus"]])
 
     outdir = args.outdir[0]
     
@@ -410,10 +434,12 @@ if __name__ == "__main__":
         inputfile, histname, step, eff = w
         rets = runSmoothing(inputfile, histname, outdir, step, args, effHist=eff)
         for ret in rets:
-            resultDict[ret.name] = ret
+            if ret != None:
+                resultDict[ret.name] = ret
         
     outfile = outdir + "smoothSF3D.pkl.lz4"
-    logger.info(f"Going to store histograms {resultDict.keys()} in file {outfile}")
+    logger.info(f"Going to store histograms in file {outfile}")
+    logger.info(f"All keys: {resultDict.keys()}")
     time0 = time.time()
     with lz4.frame.open(outfile, 'wb') as f:
         pickle.dump(resultDict, f, protocol=pickle.HIGHEST_PROTOCOL)
