@@ -20,7 +20,7 @@ def broadcastSystHist(h1, h2):
     return hist.Hist(*h2.axes, data=new_vals, storage=h1.storage_type())
 
 # returns h1/h2
-def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False, createNew=True):
+def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False, cutoff_val=1., createNew=True):
     if allowBroadcast:
         h1 = broadcastSystHist(h1, h2)
         h2 = broadcastSystHist(h2, h1)
@@ -31,10 +31,10 @@ def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False, createN
     h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2)
 
     # Careful not to overwrite the values of h1
-    out = outh.values(flow=True) if createNew else np.empty(outh.values(flow=True).shape)
+    out = outh.values(flow=True) if createNew else np.full(outh.values(flow=True).shape, cutoff_val)
 
     # By the argument that 0/0 = 1
-    out[(np.abs(h2vals) < cutoff) & (np.abs(h1vals) < cutoff)] = 1.
+    out[(np.abs(h2vals) < cutoff) & (np.abs(h1vals) < cutoff)] = cutoff_val
     val = np.divide(h1vals, h2vals, out=out, where=np.abs(h2vals)>cutoff)
 
     if outh.storage_type == hist.storage.Weight:
