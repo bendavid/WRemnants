@@ -9,6 +9,7 @@ import uproot
 import numpy as np
 import warnings
 from functools import reduce
+import narf.tfliteutils
 
 logger = logging.child_logger(__name__)
 
@@ -747,3 +748,13 @@ def define_passthrough_corrections_jpsi_calibration_ntuples(df):
     df = df.Define("Jpsicor_mom4", "ROOT::Math::PtEtaPhiMVector(Jpsicor_pt, Jpsicor_eta, Jpsicor_phi, Jpsicor_mass)")
 
     return df
+
+def make_smearing_weight_test_helper(filename = f"{data_dir}/calibration//muon_response.tflite"):
+
+    nvar = 5
+    helper = ROOT.wrem.SmearingWeightTestHelper[nvar](filename)
+
+    res = ROOT.wrem.test_SmearingWeightTestHelper(helper)
+    print("test_SmearingWeightTestHelper", res)
+
+    return helper

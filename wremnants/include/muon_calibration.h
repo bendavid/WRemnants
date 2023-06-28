@@ -11,6 +11,7 @@
 #include <typeinfo>
 #include <algorithm>
 #include "defines.h"
+#include "tfliteutils.h"
 
 namespace wrem {
 
@@ -1071,5 +1072,87 @@ private:
     std::vector<TRandom3> myRndGens; 
     std::shared_ptr<const TH2D> hsmear;
 };
+
+template <std::size_t N_VARIATIONS>
+class SmearingWeightTestHelper {
+public:
+    SmearingWeightTestHelper(const std::string &filename) : helper_(std::make_shared<narf::tflite_helper>(filename, "serving_default", ROOT::GetThreadPoolSize())) {}
+
+    using out_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<N_VARIATIONS>>;
+
+    out_tensor_t operator() (unsigned int slot, const RVec<float> &recPts, const RVec<float> &recEtas, const RVec<int> &recCharges, const RVec<float> &genPts, const RVec<float> &genEtas, const RVec<int> &genCharges, double nominal_weight = 1.0) {
+
+        auto const nmuons = recPts.size();
+
+        out_tensor_t alt_weights_all;
+        alt_weights_all.setConstant(nominal_weight);
+
+        for (std::size_t i = 0; i < nmuons; ++i) {
+
+            auto const &recPt = recPts[i];
+            auto const &recEta = recEtas[i];
+            auto const &recCharge = recCharges[i];
+
+            auto const &genPt = genPts[i];
+            auto const &genEta = genEtas[i];
+            auto const &genCharge = genCharges[i];
+
+
+            const double qoprec = recCharge*1./(recPt*std::cosh(recEta));
+            const double qopgen = genCharge*1./(genPt*std::cosh(genEta));
+
+            // compute qoprec/qopgen needed to compute the weights
+            const double qopr = qoprec/qopgen;
+
+            // fill input tensors
+            Eigen::TensorFixedSize<double, Eigen::Sizes<>> genPt_tensor;
+            Eigen::TensorFixedSize<double, Eigen::Sizes<>> genEta_tensor;
+            Eigen::TensorFixedSize<double, Eigen::Sizes<>> genCharge_tensor;
+            Eigen::TensorFixedSize<double, Eigen::Sizes<>> qopr_tensor;
+
+            genPt_tensor(0) = genPt;
+            genEta_tensor(0) = genEta;
+            genCharge_tensor(0) = genCharge;
+            qopr_tensor(0) = qopr;
+
+            // define output tensors
+            Eigen::TensorFixedSize<double, Eigen::Sizes<>> delta_weight_tensor;
+
+            // build tuples of inputs and outputs (use std::tie so the tuples contain references to the tensors above)
+            auto const inputs = std::tie(genPt_tensor, genEta_tensor, genCharge_tensor, qopr_tensor);
+            auto outputs = std::tie(delta_weight_tensor);
+
+            // call the tensorflow lite model to fill the outputs
+            (*helper_)(slot, inputs, outputs);
+
+            // get the output value
+            const double dweightdqop = delta_weight_tensor(0);
+
+            out_tensor_t delta_qop;
+            // TODO this should be filled with the actual qop variations from diagonalized calibration parameter uncertainties or whatever
+            delta_qop.setConstant(1e-3*qopgen);
+
+
+            const out_tensor_t alt_weights = dweightdqop*delta_qop + 1.;
+
+            // total weight is the product over all the muons
+            alt_weights_all *= alt_weights;
+        }
+
+        return alt_weights_all;
+
+    }
+
+private:
+    std::shared_ptr<narf::tflite_helper> helper_;
+
+};
+
+void test_SmearingWeightTestHelper(SmearingWeightTestHelper<5> &helper) {
+    auto res = helper(0, RVec<float>(), RVec<float>(), RVec<int>(), RVec<float>(), RVec<float>(), RVec<int>(), 1.);
+
+    std::cout << res << std::endl;
+
+}
 
 }
