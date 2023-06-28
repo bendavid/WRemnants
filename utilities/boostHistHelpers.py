@@ -33,9 +33,11 @@ def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False, cutoff_
     # Careful not to overwrite the values of h1
     out = outh.values(flow=True) if createNew else np.full(outh.values(flow=True).shape, cutoff_val)
 
-    # By the argument that 0/0 = 1
-    out[(np.abs(h2vals) < cutoff) & (np.abs(h1vals) < cutoff)] = cutoff_val
-    val = np.divide(h1vals, h2vals, out=out, where=np.abs(h2vals)>cutoff)
+    # Apply cutoff to both numerator and denominator
+    cutoff_criteria = (np.abs(h2vals) < cutoff) & (np.abs(h1vals) < cutoff)
+    if not createNew:
+        out[cutoff_criteria] = cutoff_val
+    val = np.divide(h1vals, h2vals, out=out, where=~cutoff_criteria)
 
     if outh.storage_type == hist.storage.Weight:
         relvars = relVariances(h1vals, h2vals, h1vars, h2vars, cutoff=cutoff)
