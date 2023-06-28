@@ -161,6 +161,10 @@ def main(args,xnorm=False):
             )
     cardTool.setLumiScale(args.lumiScale)
 
+    if args.unfold:
+        cardTool.cardSumGroups = "" # reset needed for xnorm
+        cardTool.addPOISumGroups()
+
     logger.info(f"cardTool.allMCProcesses(): {cardTool.allMCProcesses()}")
         
     passSystToFakes = wmass and not args.skipSignalSystOnFakes and args.qcdProcessName not in excludeGroup and (filterGroup == None or args.qcdProcessName in filterGroup) and not xnorm

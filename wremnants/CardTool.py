@@ -28,10 +28,11 @@ class CardTool(object):
         self.channels = ["plus", "minus"]
         self.cardContent = {}
         self.cardGroups = {}
+        self.cardSumGroups = "" # POI sum groups
         self.nominalTemplate = ""
         self.spacing = 28
         self.systTypeSpacing = 16
-        self.procColumnsSpacing = 50
+        self.procColumnsSpacing = 30
         self.fakeName = "Fake" # but better to set it explicitly
         self.dataName = "Data"
         self.nominalName = "nominal"
@@ -646,6 +647,7 @@ class CardTool(object):
                 card.write(self.cardContent[chan])
                 card.write("\n")
                 card.write(self.cardGroups[chan])
+                card.write(self.cardSumGroups)
 
     def addSystToGroup(self, groupName, chan, members, groupLabel="group"):
         group_expr = f"{groupName} {groupLabel} ="
@@ -654,6 +656,46 @@ class CardTool(object):
             self.cardGroups[chan] = self.cardGroups[chan][:idx] + " " + members + self.cardGroups[chan][idx:]
         else:
             self.cardGroups[chan] += f"\n{group_expr} {members}"                                              
+
+    def addPOISumGroups(self, keys=None):
+        
+        if keys is None:
+            # make a sum group for each gen axis
+            keys = self.datagroups.gen_axes
+            # also include combinations of axes in case there are more than 2 axes
+            for n in range(2, len(self.datagroups.gen_axes)):
+                keys += [k for k in itertools.combinations(self.datagroups.gen_axes, n)]
+
+        for axes in keys:
+            logger.debug(f"Add sum group for {axes}")
+
+            if isinstance(axes, str):
+                axes = [axes]
+
+            pois_axis = [x for x in self.unconstrainedProcesses if all([a in x for a in axes])]
+
+            # in case of multiple base processes (e.g. in simultaneous unfoldings) loop over all base processes
+            base_processes = set(map(lambda x: x.split("_")[0], pois_axis))
+            for base_process in base_processes:
+                pois = [x for x in pois_axis if base_process in x.split("_")]
+
+                sum_groups = set(["_".join([a + p.split(a)[1].split("_")[0] for a in axes]) for p in pois])
+
+                for sum_group in sorted(sum_groups):
+                    members = " ".join([p for p in pois if all([g in p.split("_") for g in sum_group.split("_")])])
+                    self.addPOISumGroup(f"{base_process}_{sum_group}", members)
+
+    def addPOISumGroup(self, groupName, members, groupLabel="sumGroup"):
+        # newName sumGroup = poi_bin1 poi_bin2 poi_bin3
+        group_expr = f"{groupName} {groupLabel} ="
+        if groupName in self.cardSumGroups.split(" "):
+            logger.debug(f"Append existing POI sum group {groupName} with members {members}")
+            idx = self.cardSumGroups.index(groupName)+len(group_expr)
+            self.cardSumGroups = self.cardSumGroups[:idx] + " " + members + self.cardSumGroups[idx:]
+        else:
+            logger.debug(f"Add new POI sum group {groupName} with members {members}")
+            self.cardSumGroups += f"\n{group_expr} {members}"   
+        
 
     def writeLnNSystematics(self):
         nondata = self.predictedProcesses()
