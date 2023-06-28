@@ -403,10 +403,12 @@ jobs:
     steps:
       - env:
           WREMNANTS_OUTDIR: ${{ needs.setenv.outputs.WREMNANTS_OUTDIR }}
+          PLOT_DIR: ${{ needs.setenv.outputs.PLOT_DIR }}
           WEB_DIR: ${{ needs.setenv.outputs.WEB_DIR }}
         run: |
           echo "WREMNANTS_OUTDIR=${WREMNANTS_OUTDIR}" >> $GITHUB_ENV
           echo "WEB_DIR=${WEB_DIR}" >> $GITHUB_ENV
+          echo "PLOT_DIR=${PLOT_DIR}" >> $GITHUB_ENV
           echo "COMBINED_DIR=$WREMNANTS_OUTDIR/WMass_ZDilepton" >> $GITHUB_ENV
 
       - name: aggregate combine inputs
@@ -435,5 +437,5 @@ jobs:
         run: |
           # TODO: Figure out how to get this working with permissions
           #xrdcp -R -f $WREMNANTS_OUTDIR/$LOCAL_WEB_DIR root://eoscms.cern.ch/$EOS_DIR/$LOCAL_WEB_DIR
-          echo "Removing contents of temp directory $WREMNANTS_OUTDIR"
+          echo "Removing temp directory $WREMNANTS_OUTDIR"
           rm -r $WREMNANTS_OUTDIR
