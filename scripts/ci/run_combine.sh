@@ -23,7 +23,7 @@ set -x
 
 pushd $working_dir
 
-card_name=${working_dir}.txt
+card_name=$(basename ${working_dir}).txt
 combineCards.py ${cards[@]} > $card_name
 
 outfile=${card_name/txt/hdf5}
