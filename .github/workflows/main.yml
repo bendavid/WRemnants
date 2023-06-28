@@ -105,7 +105,7 @@ jobs:
       - env:
           WREMNANTS_OUTDIR: ${{ needs.setenv.outputs.WREMNANTS_OUTDIR }}
           WEB_DIR: ${{ needs.setenv.outputs.WEB_DIR }}
-          NTHREADS: ${{ needs.setenv.outputs.NTHREADS }}
+          NTHREADS: ${{ needs.setenv.outputs.NTHREADS }}*2
           MAX_FILES: ${{ needs.setenv.outputs.MAX_FILES }}*10
         run: |
           echo "WREMNANTS_OUTDIR=${WREMNANTS_OUTDIR}" >> $GITHUB_ENV
@@ -124,7 +124,7 @@ jobs:
         run: echo "LUMI_SCALE=120" >> $GITHUB_ENV
 
       - name: wmass analysis
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_with_mu_eta_pt.py -j $NTHREADS --maxFiles $((MAX_FILES)) --verbose 4 --forceDefaultName -o $WREMNANTS_OUTDIR
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_with_mu_eta_pt.py -j $((NTHREADS)) --maxFiles $((MAX_FILES)) --verbose 4 --forceDefaultName -o $WREMNANTS_OUTDIR
 
       - name: wmass combine setup
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $HIST_FILE --verbose 4 --lumiScale $LUMI_SCALE -o $WREMNANTS_OUTDIR
