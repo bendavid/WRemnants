@@ -357,7 +357,7 @@ def main(args,xnorm=False):
         msv_config = msv_config_dict[args.muonScaleVariation] if wmass else msv_config_dict["massWeights"]
 
         cardTool.addSystematic(msv_config['hist_name'], 
-            processes=single_v_samples,
+            processes=single_v_samples if wmass else single_vmu_samples,
             group="muonScale",
             baseName="CMS_scale_m_",
             systAxes=msv_config['syst_axes'],
