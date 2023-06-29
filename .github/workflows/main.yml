@@ -64,11 +64,11 @@ jobs:
 
       - name: setup scheduled
         if: github.event.schedule != '0 3 * * 2,4,6'
-        run: echo PLOT_DIR=PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') >> $GITHUB_ENV
+        run: echo PLOT_DIR=PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }')/$(date +%Y_%m_%d) >> $GITHUB_ENV
 
       - name: setup pr
         if: github.event.schedule == '0 3 * * 2,4,6'
-        run: echo PLOT_DIR=ScheduledBuild_$(date +%Y_%m)_$(git rev-parse --short "$GITHUB_SHA") >> $GITHUB_ENV
+        run: echo PLOT_DIR=ScheduledBuild_$(date +%Y_%m_%d)_$(git rev-parse --short "$GITHUB_SHA") >> $GITHUB_ENV
 
       - name: setup nonpr
         if: github.event_name != 'pull_request'
@@ -89,7 +89,7 @@ jobs:
 
       - id: export
         run: |
-          echo "PLOT_DIR=$PLOT_DIR/$(date +%Y_%m)" >> $GITHUB_OUTPUT
+          echo "PLOT_DIR=$PLOT_DIR" >> $GITHUB_OUTPUT
           echo "MAX_FILES=$MAX_FILES" >> $GITHUB_OUTPUT
           echo "NTHREADS=$NTHREADS" >> $GITHUB_OUTPUT
           echo "WREMNANTS_OUTDIR=$WREMNANTS_OUTDIR" >> $GITHUB_OUTPUT
