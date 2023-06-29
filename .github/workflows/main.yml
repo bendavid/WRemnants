@@ -428,6 +428,7 @@ jobs:
   copy-clean:
     runs-on: [self-hosted, linux, x64]
     needs: [setenv, w-analysis, lowpu, dilepton, wlike, gen, combined-fit, wlike-plotting, w-plotting, wlike-unfolding ]
+    if: always() 
     steps:
       - env:
           WREMNANTS_OUTDIR: ${{ needs.setenv.outputs.WREMNANTS_OUTDIR }}
@@ -435,7 +436,6 @@ jobs:
           echo "WREMNANTS_OUTDIR=${WREMNANTS_OUTDIR}" >> $GITHUB_ENV
 
       - name: clean
-        if: always() 
         run: |
           # TODO: Figure out how to get this working with permissions
           #xrdcp -R -f $WREMNANTS_OUTDIR/$LOCAL_WEB_DIR root://eoscms.cern.ch/$EOS_DIR/$LOCAL_WEB_DIR
