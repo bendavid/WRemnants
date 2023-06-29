@@ -9,6 +9,7 @@ import pathlib
 import hist
 import copy
 import math
+import time
 
 scriptdir = f"{pathlib.Path(__file__).parent}"
 data_dir = f"{pathlib.Path(__file__).parent}/../../wremnants/data/"
@@ -480,7 +481,7 @@ def main(args,xnorm=False):
             cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
 
     cardTool.setCrossSectionOutput(xnorm)
-    cardTool.writeOutput(args=args)
+    cardTool.writeOutput(args=args, forceNonzero=not args.unfold, check_systs=not args.unfold)
     logger.info(f"Output stored in {outfolder}")
     
 if __name__ == "__main__":
@@ -489,6 +490,10 @@ if __name__ == "__main__":
 
     logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
+    time0 = time.time()
+
     main(args)
     if args.unfold:
         main(args,xnorm=True)
+
+    logger.info(f"Running time: {time.time()-time0}")
