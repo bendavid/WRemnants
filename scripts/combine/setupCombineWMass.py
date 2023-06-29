@@ -32,7 +32,7 @@ def make_parser(parser=None):
     parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers and nuisances)")
     parser.add_argument("--isoEfficiencySmoothing", action='store_true', help="If isolation SF was derived from smooth efficiencies instead of direct smoothing")
     parser.add_argument("--xlim", type=float, nargs=2, default=None, help="Restrict x axis to this range")
-    parser.add_argument("--unfold", action='store_true', help="Prepare datacard for unfolding")
+    parser.add_argument("--unfolding", action='store_true', help="Prepare datacard for unfolding")
     parser.add_argument("--genAxis", type=str, default=None, nargs="+", help="Specify which gen axis should be used in unfolding, if 'None', use all (inferred from metadata).")
     parser.add_argument("--fitXsec", action='store_true', help="Fit signal inclusive cross section")
     parser.add_argument("--correlatedNonClosureNuisances", action='store_true', help="get systematics from histograms for the Z non-closure nuisances without decorrelation in eta and pt")
@@ -90,11 +90,11 @@ def main(args,xnorm=False):
 
     templateDir = f"{scriptdir}/Templates/WMass"
 
-    if args.unfold and args.fitXsec:
+    if args.unfolding and args.fitXsec:
         raise ValueError("Options --unfolding and --fitXsec are incompatible. Please choose one or the other")
     elif args.fitXsec:
         datagroups.unconstrainedProcesses.append("Wmunu" if wmass else "Zmumu")
-    elif args.unfold:
+    elif args.unfolding:
         constrainMass = True
         datagroups.setGenAxes(args.genAxis)
         
@@ -161,7 +161,7 @@ def main(args,xnorm=False):
             )
     cardTool.setLumiScale(args.lumiScale)
 
-    if args.unfold:
+    if args.unfolding:
         cardTool.cardSumGroups = "" # reset needed for xnorm
         cardTool.addPOISumGroups()
 
@@ -476,7 +476,7 @@ def main(args,xnorm=False):
         else:
             cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
 
-    cardTool.writeOutput(args=args, xnorm=xnorm, forceNonzero=not args.unfold, check_systs=not args.unfold)
+    cardTool.writeOutput(args=args, xnorm=xnorm, forceNonzero=not args.unfolding, check_systs=not args.unfolding)
     logger.info(f"Output stored in {outfolder}")
     
 if __name__ == "__main__":
@@ -490,7 +490,7 @@ if __name__ == "__main__":
     time0 = time.time()
 
     main(args)
-    if args.unfold:
+    if args.unfolding:
         main(args,xnorm=True)
 
     logger.info(f"Running time: {time.time()-time0}")
