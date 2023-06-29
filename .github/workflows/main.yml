@@ -296,7 +296,7 @@ jobs:
           submodules: 'true'
 
       - name: wlike combine unfolding setup
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $HIST_FILE --verbose 4 --lumiScale $LUMI_SCALE --unfold --constrainMass --noEfficiencyUnc --minnloScaleUnc integrated -o $WREMNANTS_OUTDIR
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $HIST_FILE --verbose 4 --lumiScale $LUMI_SCALE --unfold --noEfficiencyUnc --minnloScaleUnc integrated -o $WREMNANTS_OUTDIR
 
       - name: wlike combine unfolding fit 
         run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ unfold $WREMNANTS_OUTDIR/ZMassWLike_pt_eta plus=ZMassWLike_plus.txt minus=ZMassWLike_minus.txt xnorm=ZMassWLike_inclusive_xnorm.txt
@@ -328,10 +328,10 @@ jobs:
           submodules: 'true'
 
       - name: dilepton analysis
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_dilepton.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4 --axes ptll yll --forceDefaultName -o $WREMNANTS_OUTDIR
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_dilepton.py -o $WREMNANTS_OUTDIR -j $NTHREADS --maxFiles $MAX_FILES --verbose 4 --axes ptll yll --forceDefaultName --unfold
 
       - name: dilepton combine ptll setup
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $HIST_FILE --fitvar ptll-yll --constrainMass --lumiScale $LUMI_SCALE -o $WREMNANTS_OUTDIR
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $HIST_FILE --fitvar ptll-yll --lumiScale $LUMI_SCALE -o $WREMNANTS_OUTDIR
 
       - name: dilepton combine ptll fit
         run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ mass $WREMNANTS_OUTDIR/ZMassDilepton_ptll_yll ZMassDilepton_inclusive.txt 
