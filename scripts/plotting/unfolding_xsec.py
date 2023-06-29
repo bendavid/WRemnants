@@ -189,7 +189,7 @@ def plot_matrix_poi(matrix="covariance_matrix_channelmu"):
     # calculate condition number
     cond = np.linalg.cond(cov_mat)
     logger.info(f"Condition number: {cond}")
-    plt.text(0.9, 0.9, round(cond), horizontalalignment='right', verticalalignment='top', transform=ax.transAxes)
+    plt.text(0.1, 0.9, round(cond), horizontalalignment='right', verticalalignment='top', transform=ax.transAxes)
 
     if len(xentries) < 50:
         xlabels = [get_label(x[1]) for x in xentries]
@@ -681,7 +681,10 @@ def plot_pulls(rtfile, asmiov=None, max_nuisances=50):
 
             ax1.set_xlabel("Pulls")
 
-            plt.savefig(f"{outdir}/pulls_{g}_{ni}.png")
+            outfile = f"pulls_{g}_{ni}"
+
+            plot_tools.save_pdf_and_png(outdir, outfile)
+
 
 poi_types = ["pmaskedexp", "pmaskedexpnorm"]
 
