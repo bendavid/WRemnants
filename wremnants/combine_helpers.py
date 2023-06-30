@@ -14,6 +14,8 @@ def add_modeling_uncertainty(card_tool, minnlo_scale, signal_samples, background
     if do_resum:
         add_resum_uncertainty(card_tool, resum_samples, to_fakes, 
                                             uncType=resumType, scale=scaleTNP, name_append=scale_label)
+        # Don't correlate transition uncertainty
+        add_resum_transition_uncertainty(card_tool, signal_samples, to_fakes, name_append=scale_name)
 
     add_minnlo_scale_uncertainty(card_tool, minnlo_scale, signal_samples, to_fakes, 
                                           resum=do_resum, name_append=scale_name)
@@ -22,6 +24,8 @@ def add_modeling_uncertainty(card_tool, minnlo_scale, signal_samples, background
     if wmass and background_samples:
         add_minnlo_scale_uncertainty(card_tool, minnlo_scale, background_samples, to_fakes, 
                                             resum=do_resum, name_append="Z")
+        add_resum_transition_uncertainty(card_tool, background_samples, to_fakes, name_append="Z")
+
         if resumType != "tnp":
             add_resum_uncertainty(card_tool, background_samples, to_fakes, 
                                             uncType=resumType, scale=scaleTNP, name_append="Z")
@@ -184,6 +188,11 @@ def add_resum_uncertainty(card_tool, samples, to_fakes, uncType, name_append="",
             systNamePrepend=f"resumScale{name_append}_",
         )
 
+def add_resum_transition_uncertainty(card_tool, samples, to_fakes, name_append=""):
+    obs = card_tool.project[:]
+    theory_hist = theory_unc_hist(card_tool)
+    expanded_samples = card_tool.datagroups.getProcNames(samples)
+
     card_tool.addSystematic(name=theory_hist,
         processes=samples,
         group="resumTransition",
@@ -195,7 +204,6 @@ def add_resum_uncertainty(card_tool, samples, to_fakes, uncType, name_append="",
         outNames=[f"resumTransition{name_append}Up", f"resumTransition{name_append}Down"],
         rename=f"scetlibResumTransition{name_append}",
     )
-
 
 def add_decorrelated_np_uncertainties(card_tool, samples, to_fakes, name_append, nuisances=["Omega"]):
     obs = card_tool.project[:]
