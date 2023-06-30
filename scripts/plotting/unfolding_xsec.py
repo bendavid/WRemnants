@@ -409,16 +409,16 @@ def plot_xsec_unfolded(df, data_asimov=None, channel=None, poi_type="mu", scale=
     hep.cms.label(ax=ax1, lumi=float(f"{args.lumi:.3g}"), fontsize=20*args.scaleleg*scale, 
         label=cms_decor, data=not args.noData)
 
-    outfile = "unfolded_xsec"
+    outfile = f"{input_subdir}_unfolded_xsec"
     if poi_type=="mu":
         outfile += "_mu"
     elif normalize:
         outfile += "_normalized"
 
-    outfile += "_"+input_subdir
-    outfile += (f"_{args.postfix}" if args.postfix else "")
-    outfile += (f"_{channel}" if channel else "")
     outfile += f"_{base_process}"
+    outfile += (f"_{channel}" if channel else "")
+
+    outfile += (f"_{args.postfix}" if args.postfix else "")
     plot_tools.save_pdf_and_png(outdir, outfile)
 
     if data_asimov is not None:
@@ -566,7 +566,7 @@ def plot_uncertainties_unfolded(df, channel=None, poi_type="mu", scale=1., norma
     hep.cms.label(ax=ax1, lumi=float(f"{args.lumi:.3g}"), fontsize=20*args.scaleleg*scale, 
         label=cms_decor, data=not args.noData)
 
-    outfile = "unfolded_uncertainties"
+    outfile = f"{input_subdir}_unfolded_uncertainties"
 
     if relative_uncertainty:
         outfile += "_relative"   
@@ -579,10 +579,10 @@ def plot_uncertainties_unfolded(df, channel=None, poi_type="mu", scale=1., norma
     if logy:
         outfile += "_log"
 
-    outfile += "_"+input_subdir
-    outfile += (f"_{args.postfix}" if args.postfix else "")
+    outfile += f"_{base_process}"
     outfile += (f"_{channel}" if channel else "")
-    outfile += base_process
+
+    outfile += (f"_{args.postfix}" if args.postfix else "")
     plot_tools.save_pdf_and_png(outdir, outfile)
 
     plot_tools.write_index_and_log(outdir, outfile, nround=4 if normalize else 2,
@@ -695,7 +695,10 @@ def plot_pulls(rtfile, asmiov=None, max_nuisances=50):
 
             ax1.set_xlabel("Pulls")
 
-            outfile = f"pulls_{g}_{ni}"
+            outfile = f"{input_subdir}_pulls_{g}_{ni}"
+
+            outfile += (f"_{args.postfix}" if args.postfix else "")
+            plot_tools.save_pdf_and_png(outdir, outfile)
 
             plot_tools.save_pdf_and_png(outdir, outfile)
 
@@ -717,6 +720,7 @@ if any([key in args.plots for key in ["xsec", "uncertainties"]]):
 
 
         for dilepton, gen_axes in (
+            (True, ["ptVGen"]),
             (True, ["ptVGen", "absYVGen"]),
             (False, ["qGen", "ptGen", "absEtaGen"]),
         ):
