@@ -67,10 +67,13 @@ axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
 # axes for final cards/fitting
 reco_mll_axes = [common.axis_recoil_reco_ptZ_lowpu, common.axis_mt_lowpu, axis_charge]
 gen_reco_mll_axes = [common.axis_recoil_gen_ptZ_lowpu, common.axis_recoil_reco_ptZ_lowpu, common.axis_mt_lowpu, axis_charge]
+
+# corresponding columns
+reco_mt_cols = ["recoil_corr_rec_magn", "mT_wlike", "TrigMuon_charge"]
+gen_reco_mt_cols = ["ptVgen", "recoil_corr_rec_magn", "mT_wlike", "TrigMuon_charge"]
+
 axis_mt = hist.axis.Regular(200, 0., 200., name = "mt", underflow=False)
 axis_xnorm = hist.axis.Regular(1, 0., 1., name = "count", underflow=False, overflow=False)
-
-
 
 # recoil initialization
 from wremnants import recoil_tools
@@ -79,8 +82,8 @@ recoilHelper = recoil_tools.Recoil("lowPU", args, flavor)
 
 
 def build_graph(df, dataset):
+    logger.info(f"build graph for dataset: {dataset.name}")
 
-    print("build graph")
     results = []
 
     isW = dataset.name in common.wprocs_lowpu
@@ -297,11 +300,7 @@ def build_graph(df, dataset):
     
     results.append(df.HistoBoost("lep_pT", [axis_pt], ["TrigMuon_pt", "nominal_weight"]))
     results.append(df.HistoBoost("lep_pT_qTrw", [axis_pt], ["TrigMuon_pt", "nominal_weight_qTrw"]))
-    
-    gen_reco_mt_cols = ["ptVgen", "recoil_corr_rec_magn", "mT_wlike", "TrigMuon_charge"]
-    reco_mt_cols = ["recoil_corr_rec_magn", "mT_wlike", "TrigMuon_charge"]
-
-    
+        
     if dataset.name in common.zprocs_lowpu:
     
         if dataset.name in sigProcs:

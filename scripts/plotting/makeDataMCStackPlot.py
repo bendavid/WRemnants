@@ -1,4 +1,5 @@
 from wremnants.datasets.datagroups2016 import make_datagroups_2016
+from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU
 from wremnants import histselections as sel
 from wremnants import plot_tools,theory_tools,syst_tools
 from utilities import boostHistHelpers as hh,common,output_tools
@@ -45,7 +46,7 @@ parser.add_argument("infile", help="Output file of the analysis stage, containin
 parser.add_argument("--ratioToData", action='store_true', help="Use data as denominator in ratio")
 parser.add_argument("-n", "--baseName", type=str, help="Histogram name in the file (e.g., 'nominal')", default="nominal")
 parser.add_argument("--nominalRef", type=str, help="Specify the nominal his if baseName is a variation hist (for plotting alt hists)")
-parser.add_argument("--hists", type=str, nargs='+', required=True, choices=xlabels.keys(), help="List of histograms to plot")
+parser.add_argument("--hists", type=str, nargs='+', required=True, help="List of histograms to plot")
 parser.add_argument("-c", "--channel", type=str, choices=["plus", "minus", "all"], default="all", help="Select channel to plot")
 parser.add_argument("-p", "--outpath", type=str, default=os.path.expanduser("~/www/WMassAnalysis"), help="Base path for output")
 parser.add_argument("-f", "--outfolder", type=str, default="test", help="Subfolder for output")
@@ -103,7 +104,11 @@ if addVariation and (args.selectAxis or args.selectEntries):
 
 outdir = output_tools.make_plot_dir(args.outpath, args.outfolder, eoscp=args.eoscp)
 
-groups = make_datagroups_2016(args.infile, filterGroups=args.procFilters, excludeGroups=None if args.procFilters else ['QCD'])
+if os.path.basename(args.infile).startswith("lowPU"):
+    groups = make_datagroups_lowPU(args.infile, filterGroups=args.procFilters, flavor="mu", excludeGroups=None if args.procFilters else ['QCD'])
+else:
+    groups = make_datagroups_2016(args.infile, filterGroups=args.procFilters, excludeGroups=None if args.procFilters else ['QCD'])
+
 # There is probably a better way to do this but I don't want to deal with it
 datasets = groups.getNames()
 logger.info(f"Will plot datasets {datasets}")
@@ -197,7 +202,7 @@ for h in args.hists:
             skip_fill=args.skipFillBetween if hasattr(args, "skipFillBetween") else 0,
             action=action, unstacked=unstack, 
             fitresult=args.fitresult, prefit=args.prefit,
-            xlabel=xlabels[h], ylabel="Events/bin", rrange=args.rrange, binwnorm=1.0, lumi=groups.lumi,
+            xlabel=xlabels.get(h,h), ylabel="Events/bin", rrange=args.rrange, binwnorm=1.0, lumi=groups.lumi,
             ratio_to_data=args.ratioToData, rlabel="Pred./Data" if args.ratioToData else "Data/Pred.",
             xlim=args.xlim, no_fill=args.noFill, cms_decor="Preliminary" if not args.noData else "Simulation Preliminary",
             legtext_size=20*args.scaleleg, unstacked_linestyles=args.linestyle if hasattr(args, "linestyle") else [])

@@ -40,8 +40,6 @@ ROOT.gInterpreter.Declare('#include "lowpu_rochester.h"')
 ROOT.gInterpreter.Declare('#include "lowpu_recoil.h"')
 
 
-
-
 # standard regular axes
 axis_eta = hist.axis.Regular(24, -2.4, 2.4, name = "eta", underflow=False, overflow=False)
 axis_pt = hist.axis.Regular(75, 25., 100., name = "pt", underflow=False)
@@ -68,6 +66,10 @@ reco_mT_axes = [common.axis_recoil_reco_ptW_lowpu, common.axis_mt_lowpu, axis_ch
 gen_reco_mT_axes = [common.axis_recoil_gen_ptW_lowpu, common.axis_recoil_reco_ptW_lowpu, common.axis_mt_lowpu, axis_charge, axis_passMT, axis_passIso]
 axis_xnorm = hist.axis.Regular(1, 0., 1., name = "count", underflow=False, overflow=False)
 
+# corresponding columns
+gen_reco_mT_cols = ["ptVgen", "recoil_corr_rec_magn", "mT", "Lep_charge", "passMT", "passIso"]
+reco_mT_cols = ["recoil_corr_rec_magn", "mT", "Lep_charge", "passMT", "passIso"]
+    
 
 # extra axes which can be used to label tensor_axes
 down_up_axis = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "downUpVar")
@@ -80,8 +82,8 @@ recoilHelper = recoil_tools.Recoil("lowPU", args, flavor)
 
 
 def build_graph(df, dataset):
+    logger.info(f"build graph for dataset: {dataset.name}")
 
-    print("build graph")
     results = []
 
     if dataset.is_data: df = df.DefinePerSample("weight", "1.0")
@@ -233,14 +235,7 @@ def build_graph(df, dataset):
     results.append(df.HistoBoost("lep_pt", [axis_pt, axis_charge, axis_passMT, axis_passIso], ["Lep_pt", "Lep_charge", "passMT", "passIso", "nominal_weight"]))
     results.append(df.HistoBoost("lep_iso", [axis_iso], ["Lep_iso", "nominal_weight"]))
    
-    results.append(df.HistoBoost("qcd_space", [axis_pt, axis_eta, axis_iso, axis_charge, axis_mT], ["Lep_pt", "Lep_eta", "Lep_iso", "Lep_charge", "mT", "nominal_weight"]))
-
-    
-    gen_reco_mT_cols = ["ptVgen", "recoil_corr_rec_magn", "mT", "Lep_charge", "passMT", "passIso"]
-    reco_mT_cols = ["recoil_corr_rec_magn", "mT", "Lep_charge", "passMT", "passIso"]
-    
-    
-    
+    results.append(df.HistoBoost("qcd_space", [axis_pt, axis_eta, axis_iso, axis_charge, axis_mT], ["Lep_pt", "Lep_eta", "Lep_iso", "Lep_charge", "mT", "nominal_weight"]))  
     
     if dataset.name in common.vprocs_lowpu:
     
@@ -297,8 +292,8 @@ def build_graph(df, dataset):
 
 
 def build_graph_cutFlow(df, dataset):
+    logger.info(f"build graph for dataset: {dataset.name}")
 
-    print("build graph")
     results = []
 
     if dataset.is_data: df = df.DefinePerSample("weight", "1.0")
