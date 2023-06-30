@@ -123,10 +123,23 @@ def get_bin_widths(df, dilepton=False, gen_axes=None):
             bin_widths = bins[1:] - bins[:-1]
         elif "absYVGen" in gen_axes:
             bin_widths = np.ones(int(len(df)))
-    else: 
-        bins_y = np.array(differential.eta_binning)
+    else:
+        nEtaBins = len(set(df["absEtaGen"].values))
+        if nEtaBins == 18:
+            bins_y = np.array(differential.eta_binning)
+        else:
+            bins_y = np.linspace(0, 2.4, nEtaBins+1)
         bin_widths_y = bins_y[1:] - bins_y[:-1]
-        bin_widths_x = 2 * np.ones(int(len(df)/len(bin_widths_y)))
+
+        nPtBins = len(set(df["ptGen"].values))
+
+        base_process = df["Name"].apply(lambda x: x.split("_")[0]).values[0]
+        if base_process == "Zmumu":
+            bin_width_x = 34/nPtBins
+        else:
+            bin_width_x = 30/nPtBins
+
+        bin_widths_x = bin_width_x * np.ones(int(len(df)/len(bin_widths_y)))
 
         bin_widths = np.tensordot(bin_widths_x,bin_widths_y, axes=0).flatten()
 
@@ -345,7 +358,7 @@ def plot_xsec_unfolded(df, data_asimov=None, channel=None, poi_type="mu", scale=
     ax2.bar(centers, height=2*unc_ratio, bottom=1-unc_ratio, width=1, color="silver")
     ax2.bar(centers, height=2*unc_ratio_stat, bottom=1-unc_ratio_stat, width=1, color="gold")
 
-    # ax2.plot([0, len(df)+1], [1,1], color="black", linestyle="-")
+    ax2.plot([0, len(df)+1], [1,1], color="black", linestyle="-")
 
     # hep.histplot(
     #     hh.divideHists(hist_xsec_stat, hist_xsec, cutoff=0, rel_unc=True),
@@ -538,7 +551,9 @@ def plot_uncertainties_unfolded(df, channel=None, poi_type="mu", scale=1., norma
         unc_df = make_yields_df([hist_unc], [name], per_bin=True, yield_only=True, percentage=True)
         uncertainties[name] = unc_df[name]
 
-    plot_tools.addLegend(ax1, ncols=3, text_size=20*args.scaleleg)
+    scale = max(1, np.divide(*ax1.get_figure().get_size_inches())*0.3)
+
+    plot_tools.addLegend(ax1, ncols=4, text_size=18*args.scaleleg*scale)
 
     if args.yscale:
         ymin, ymax = ax1.get_ylim()
@@ -548,7 +563,6 @@ def plot_uncertainties_unfolded(df, channel=None, poi_type="mu", scale=1., norma
         plot_tools.redo_axis_ticks(ax1, "y")
     plot_tools.redo_axis_ticks(ax1, "x", True)
 
-    scale = max(1, np.divide(*ax1.get_figure().get_size_inches())*0.3)
     hep.cms.label(ax=ax1, lumi=float(f"{args.lumi:.3g}"), fontsize=20*args.scaleleg*scale, 
         label=cms_decor, data=not args.noData)
 
@@ -710,8 +724,10 @@ if any([key in args.plots for key in ["xsec", "uncertainties"]]):
             data_group = data.loc[sum([data[ax] != -1 for ax in gen_axes]) == len(gen_axes)]
 
             if len(data_group) == 0:
-                logger.info(f"No entries found with gen axes {gen_axes}, next one!")
+                logger.debug(f"No entries found with gen axes {gen_axes}, next one!")
                 continue
+
+            logger.debug(f"Make plots for gen axes {gen_axes}")
 
             if asimov:
                 data_group_asimov = data_asimov.loc[sum([data_asimov[ax] != -1 for ax in gen_axes]) == len(gen_axes)]
