@@ -59,8 +59,8 @@ def plotImpacts(df, pulls=False, POI='Wmass', normalize=False, oneSidedImpacts=F
             horizontal_spacing=0.1, shared_yaxes=ncols > 1)
 
     max_pull = np.max(df["abspull"])
-    # Round up to nearest 0.5
-    pullrange = np.ceil(max_pull*1.1+1)
+    # Round up to nearest 0.25, add 1.1 for display
+    pullrange = .5*np.ceil(max_pull/0.5)+1.1
     
     ndisplay = len(df)
     fig.update_layout(paper_bgcolor='rgba(0,0,0,0)',
@@ -199,8 +199,7 @@ def readFitInfoFromFile(rf,filename, group=False, sort=None, ascending=True, sta
     df['absimpact'] = np.abs(df['impact'])
     df['abspull'] = np.abs(df['pull'])
     if not group:
-        df.drop(df.loc[df['label']=='WmassShift100MeV'].index, inplace=True)
-        df.drop(df.loc[df['label']=='ZmassShift100MeV'].index, inplace=True)
+        df.drop(df.loc[df['label'].str.contains('massShift100MeV')].index, inplace=True)
     colors = np.full(len(df), '#377eb8')
     if not group:
         colors[df['impact'] > 0.] = '#e41a1c'
