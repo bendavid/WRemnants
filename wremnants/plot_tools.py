@@ -19,7 +19,7 @@ hep.style.use(hep.style.ROOT)
 
 logger = logging.child_logger(__name__)
 
-def figure(href, xlabel, ylabel, ylim, xlim=None,
+def figure(href, xlabel, ylabel, ylim=None, xlim=None,
     grid = False, plot_title = None, title_padding = 0,
     bin_density = 300, cms_label = None, logy=False, logx=False,
     width_scale=1
@@ -40,7 +40,7 @@ def figure(href, xlabel, ylabel, ylim, xlim=None,
     ax1.set_ylabel(ylabel)
     ax1.set_xlim(xlim)
 
-    if ylim:
+    if ylim is not None:
         ax1.set_ylim(ylim)
     else:
         ax1.autoscale(axis='y')

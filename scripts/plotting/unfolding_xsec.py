@@ -50,7 +50,7 @@ else:
 
 input_subdir = args.infile.split("/")[-2]
 
-cms_decor = "Preliminary" if not args.noData else "Simulation Preliminary"
+cms_decor = "Preliminary"
 
 binwnorm = 1.0
 
