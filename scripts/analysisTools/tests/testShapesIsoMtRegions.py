@@ -161,6 +161,13 @@ if __name__ == "__main__":
                                      chargeLabel=c, canvas=canvas, canvasWide=cwide, canvas1D=canvas1D,
                                      ratioRange=ratioRange, lumi=16.8)
 
+    rootfile = safeOpenFile(f"{outdir}/shapes.root", mode="RECREATE")
+    for c in charges:
+        for k in hist2D[c].keys():
+            hist2D[c][k].Write()
+    logger.info(f"Writing some shapes in {rootfile.GetName()}")
+    rootfile.Close()
+
     if (args.processes == None or "Fake" in args.processes):
         ptBinRanges = []
         XlabelUnroll = ""

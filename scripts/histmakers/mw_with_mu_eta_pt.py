@@ -28,7 +28,7 @@ parser.add_argument("--vqt3dsmoothing", action="store_true", help="3D Smoothing"
 parser.add_argument("--noGenMatchMC", action='store_true', help="Don't use gen match filter for prompt muons with MC samples (note: QCD MC never has it anyway)")
 args = parser.parse_args()
 
-args.sfFile = data_dir + "testMuonSF/allSmooth_GtoH3Dout.root"
+args.sfFile = data_dir + "testMuonSF/allSmooth_GtoH.root"
 
 if args.vqtTestIntegrated:
     sfFileVqtTest = f"{data_dir}/testMuonSF/IsolationEfficienciesCoarseBinning.root"
@@ -68,16 +68,15 @@ axis_passMT = common.axis_passMT
 axis_passTrigger = hist.axis.Boolean(name = "passTrigger")
 
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
-axis_vqt_list = [-3000000000,-30,-15,-10,-5,0,5,10,15,30,3000000000] #has to match the ut binning in the 3D SFs
-axis_vqt = hist.axis.Variable(axis_vqt_list, name = "ut")
-nominal_axes2 = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT, axis_vqt, axis_passTrigger]
-nominal_axes3 = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT, axis_passTrigger]
+## MARCO temporarily commented code
+# axis_vqt_list = [-3000000000,-30,-15,-10,-5,0,5,10,15,30,3000000000] #has to match the ut binning in the 3D SFs
+# axis_vqt = hist.axis.Variable(axis_vqt_list, name = "ut")
+# nominal_axes2 = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT, axis_vqt, axis_passTrigger]
+# nominal_axes3 = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT, axis_passTrigger]
 
 unfolding_axes, unfolding_cols = differential.get_pt_eta_axes(args.genBins, template_minpt, template_maxpt, template_maxeta)
 
-## MARCO
 # axes for W MC efficiencies with uT dependence for iso and trigger
-#axis_ut_edges = [(-100.0 + 5.0*i) for i in range(41)]
 axis_ut = hist.axis.Regular(40, -100, 100, overflow=not args.excludeFlow, underflow=not args.excludeFlow, name = "ut")
 axes_WeffMC = [axis_eta, axis_pt, axis_ut, axis_charge, axis_passIso, axis_passMT, axis_passTrigger]
 
@@ -298,17 +297,20 @@ def build_graph(df, dataset):
         # TODO: fix it for not W/Z processes
         recoilVarSF = "recoilProj_uT"
         columnsForSF = ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", recoilVarSF, "goodMuons_charge0", "passIso"]
-        if isW or isZ:
-            # preFSR or postFSR boson (with reco muon for the latter to form the W) gives the same results when integrating uT
-            # df = df.Define("postFSRnus", "GenPart_status == 1 && (GenPart_statusFlags & 1) && abs(GenPart_pdgId) == 14")
-            # df = df.Define("postFSRnusIdx", "wrem::postFSRLeptonsIdx(postFSRnus)")
-            # df = df.Define(recoilVarSF, "wrem::zqtproj0(goodMuons_pt0, goodMuons_eta0, goodMuons_phi0, GenPart_pt, GenPart_eta, GenPart_phi, postFSRnusIdx)")
-            #
-            df = df.Define(recoilVarSF, "wrem::zqtproj0_boson(goodMuons_pt0, goodMuons_phi0, ptVgen, phiVgen)")
+        if args.smooth3dsf:
+            if isW or isZ:
+                # preFSR or postFSR boson (with reco muon for the latter to form the W) gives the same results when integrating uT
+                # df = df.Define("postFSRnus", "GenPart_status == 1 && (GenPart_statusFlags & 1) && abs(GenPart_pdgId) == 14")
+                # df = df.Define("postFSRnusIdx", "wrem::postFSRLeptonsIdx(postFSRnus)")
+                # df = df.Define(recoilVarSF, "wrem::zqtproj0(goodMuons_pt0, goodMuons_eta0, goodMuons_phi0, GenPart_pt, GenPart_eta, GenPart_phi, postFSRnusIdx)")
+                #
+                df = df.Define(recoilVarSF, "wrem::zqtproj0_boson(goodMuons_pt0, goodMuons_phi0, ptVgen, phiVgen)")
+            else:
+                # dummy for now
+                df = df.Define(recoilVarSF, "0.0f")
         else:
-            # dummy for now
-            df = df.Define(recoilVarSF, "0.0")
-            
+            df = df.Define(recoilVarSF, "0.0f")
+                
         if not args.smooth3dsf:
             columnsForSF.remove(recoilVarSF)
             

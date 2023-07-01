@@ -8,7 +8,7 @@ namespace wrem {
 
     // TODO use enums for integer/boolean/category axes so that the code is less error-prone?
 
-        template<int NSysts, typename HIST_SF>
+    template<int NSysts, typename HIST_SF>
     class muon_efficiency_smooth_helper_base {
     public:
 
@@ -16,21 +16,21 @@ namespace wrem {
             sf_all_(std::make_shared<const HIST_SF>(std::move(sf_all))) {
         }
     
-        std::array<double,5> scale_factor_array(int pt_idx, int eta_idx, int sapt_idx, int saeta_idx, int charge_idx, bool pass_iso, bool with_trigger, int idx_nom_alt) const {
+        std::array<double,5> scale_factor_array(int pt_idx, int eta_idx, int sapt_idx, int saeta_idx, int charge_idx, bool pass_iso, bool pass_trigger, bool iso_with_trigger, int idx_nom_alt) const {
 
             auto const eff_type_idx_reco = idx_reco_;
             auto const eff_type_idx_tracking = idx_tracking_;
             auto const eff_type_idx_idip = idx_idip_;
-            auto const eff_type_idx_trig = idx_trig_;
-            auto const eff_type_idx_iso_pass = with_trigger ? idx_iso_triggering_ : idx_iso_nontriggering_;
-            auto const eff_type_idx_iso_fail = with_trigger ? idx_antiiso_triggering_ : idx_antiiso_nontriggering_;
+            auto const eff_type_idx_trig = pass_trigger ? idx_trig_ : idx_antitrig_;
+            auto const eff_type_idx_iso_pass = iso_with_trigger ? (pass_trigger ? idx_iso_triggering_: idx_iso_antitriggering_) : idx_iso_nontriggering_;
+            auto const eff_type_idx_iso_fail = idx_antiiso_triggering_; // for now we never consider the case with failing isolation and failed trigger (antiiso only needed for Wmass)
             auto const eff_type_idx_iso = pass_iso ? eff_type_idx_iso_pass : eff_type_idx_iso_fail;
 
             const double reco      = sf_all_->at(  eta_idx,   pt_idx, charge_idx, eff_type_idx_reco,      idx_nom_alt).value();
             const double tracking  = sf_all_->at(saeta_idx, sapt_idx, charge_idx, eff_type_idx_tracking,  idx_nom_alt).value();
             const double idip      = sf_all_->at(  eta_idx,   pt_idx, charge_idx, eff_type_idx_idip,      idx_nom_alt).value();
             double trig = 1.0;
-            if (with_trigger) trig = sf_all_->at(  eta_idx,   pt_idx, charge_idx, eff_type_idx_trig,      idx_nom_alt).value();
+            if (iso_with_trigger) trig = sf_all_->at(  eta_idx,   pt_idx, charge_idx, eff_type_idx_trig,      idx_nom_alt).value();
             const double iso       = sf_all_->at(  eta_idx,   pt_idx, charge_idx, eff_type_idx_iso,       idx_nom_alt).value();
 
             std::array<double,5> ret = {reco, tracking, idip, trig, iso};
@@ -41,7 +41,7 @@ namespace wrem {
             
         }
 
-        double scale_factor_product(float pt, float eta, float sapt, float saeta, int charge, bool pass_iso, bool with_trigger, int idx_nom_alt) const {
+        double scale_factor_product(float pt, float eta, float sapt, float saeta, int charge, bool pass_iso, bool pass_trigger, bool iso_with_trigger, int idx_nom_alt) const {
 
             auto const eta_idx = sf_all_->template axis<0>().index(eta);
             auto const pt_idx = sf_all_->template axis<1>().index(pt);
@@ -49,7 +49,7 @@ namespace wrem {
             auto const saeta_idx = sf_all_->template axis<0>().index(saeta);
             auto const sapt_idx = sf_all_->template axis<1>().index(sapt);
 
-            std::array<double,5> allSF = scale_factor_array(pt_idx, eta_idx, sapt_idx, saeta_idx, charge_idx, pass_iso, with_trigger, idx_nom_alt);
+            std::array<double,5> allSF = scale_factor_array(pt_idx, eta_idx, sapt_idx, saeta_idx, charge_idx, pass_iso, pass_trigger, iso_with_trigger, idx_nom_alt);
             double sf = 1.0;
             for(int i = 0; i < allSF.size(); i++) {
                 // std::cout << "Scale factor i = " << i << " --> " << allSF[i] << std::endl;
@@ -62,7 +62,7 @@ namespace wrem {
 
         using syst_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<5, NSysts>>; // 5 bins for reco, tracking, idip, trigger, iso(notrig) in this order
 
-        syst_tensor_t sf_syst_var(float pt, float eta, float sapt, float saeta, int charge, bool pass_iso, bool with_trigger) const {
+        syst_tensor_t sf_syst_var(float pt, float eta, float sapt, float saeta, int charge, bool pass_iso, bool pass_trigger, bool iso_with_trigger) const {
 
             syst_tensor_t res;
 
@@ -72,11 +72,11 @@ namespace wrem {
             auto const sapt_idx =    sf_all_->template axis<1>().index(sapt);
             auto const charge_idx =  sf_all_->template axis<2>().index(charge);
 
-            std::array<double,5> allSF_nomi = scale_factor_array(pt_idx, eta_idx, sapt_idx, saeta_idx, charge_idx, pass_iso, with_trigger, idx_nom_);
+            std::array<double,5> allSF_nomi = scale_factor_array(pt_idx, eta_idx, sapt_idx, saeta_idx, charge_idx, pass_iso, pass_trigger, iso_with_trigger, idx_nom_);
 
             for(int ns = 0; ns < NSysts; ns++) {
                 
-                std::array<double,5> allSF_alt  = scale_factor_array(pt_idx, eta_idx, sapt_idx, saeta_idx, charge_idx, pass_iso, with_trigger, sf_all_->template axis<4>().index(ns+1) ); // 0 is the nominal, systs starts from 1
+                std::array<double,5> allSF_alt  = scale_factor_array(pt_idx, eta_idx, sapt_idx, saeta_idx, charge_idx, pass_iso, pass_trigger, iso_with_trigger, sf_all_->template axis<4>().index(ns+1) ); // 0 is the nominal, systs starts from 1
                 
                 // anticorrelation between iso and antiiso already embedded in the numbers stored in the histograms
                 // also the alternate comes from data efficiency variation only, so the anticorrelation in the efficiencies is preserved in the scale factors
@@ -102,10 +102,11 @@ namespace wrem {
         int idx_tracking_ = sf_all_->template axis<3>().index("tracking");
         int idx_idip_ = sf_all_->template axis<3>().index("idip");
         int idx_trig_ = sf_all_->template axis<3>().index("trigger");
+        int idx_antitrig_ = sf_all_->template axis<3>().index("antitrigger");
         int idx_iso_triggering_ = sf_all_->template axis<3>().index("iso");
         int idx_antiiso_triggering_ = sf_all_->template axis<3>().index("antiiso");
         int idx_iso_nontriggering_ = sf_all_->template axis<3>().index("isonotrig");
-        int idx_antiiso_nontriggering_ = sf_all_->template axis<3>().index("antiisonotrig");
+        int idx_iso_antitriggering_ = sf_all_->template axis<3>().index("isoantitrig");
 
         int idx_nom_ = sf_all_->template axis<4>().index(0);
         // int idx_alt_ = sf_all_->template axis<4>().index(NSysts);
@@ -113,7 +114,7 @@ namespace wrem {
     };
 
     // base template for one-lepton case
-    template<bool do_other, int NSysts, typename HIST_SF>
+    template<int analysisType, int NSysts, typename HIST_SF>
     class muon_efficiency_smooth_helper:
         public muon_efficiency_smooth_helper_base<NSysts, HIST_SF> {
 
@@ -126,15 +127,16 @@ namespace wrem {
         muon_efficiency_smooth_helper(const base_t &other) : base_t(other) {}
         
         double operator() (float pt, float eta, float sapt, float saeta, int charge, bool pass_iso) {
-            constexpr bool with_trigger = true;
-            return base_t::scale_factor_product(pt, eta, sapt, saeta, charge, pass_iso, with_trigger, base_t::idx_nom_);
+            constexpr bool iso_with_trigger = true;
+            constexpr bool pass_trigger = true;
+            return base_t::scale_factor_product(pt, eta, sapt, saeta, charge, pass_iso, pass_trigger, iso_with_trigger, base_t::idx_nom_);
         }
 
     };
 
-    // specialization for two-lepton case
+    // specialization for two-lepton case Wlike
     template<int NSysts, typename HIST_SF>
-    class muon_efficiency_smooth_helper<true, NSysts, HIST_SF> :
+    class muon_efficiency_smooth_helper<1, NSysts, HIST_SF> :
         public muon_efficiency_smooth_helper_base<NSysts, HIST_SF> {
 
     public:
@@ -145,20 +147,51 @@ namespace wrem {
         
         muon_efficiency_smooth_helper(const base_t &other) : base_t(other) {}
 
-        double operator() (float trig_pt, float trig_eta, float trig_sapt, float trig_saeta, int trig_charge,
+        double operator() (float trig_pt,    float trig_eta,    float trig_sapt,    float trig_saeta,    int trig_charge,
                            float nontrig_pt, float nontrig_eta, float nontrig_sapt, float nontrig_saeta, int nontrig_charge) {
-            constexpr bool with_trigger = true;
-            constexpr bool without_trigger = false;
+            constexpr bool iso_with_trigger = true;
+            constexpr bool pass_trigger = true; // can be true also for second lepton, since it will be overridden by iso_without_trigger anyway
+            constexpr bool iso_without_trigger = false;
             constexpr bool pass_iso = true;
-            const double sftrig = base_t::scale_factor_product(trig_pt, trig_eta, trig_sapt, trig_saeta, trig_charge, pass_iso, with_trigger, base_t::idx_nom_);
-            const double sfnontrig = base_t::scale_factor_product(nontrig_pt, nontrig_eta, nontrig_sapt, nontrig_saeta, nontrig_charge, pass_iso, without_trigger, base_t::idx_nom_);
+            const double sftrig = base_t::scale_factor_product(   trig_pt, trig_eta, trig_sapt, trig_saeta, trig_charge,
+                                                                  pass_iso, pass_trigger, iso_with_trigger, base_t::idx_nom_);
+            const double sfnontrig = base_t::scale_factor_product(nontrig_pt, nontrig_eta, nontrig_sapt, nontrig_saeta, nontrig_charge,
+                                                                  pass_iso, pass_trigger, iso_without_trigger, base_t::idx_nom_);
             return sftrig*sfnontrig;
         }
 
     };
+
+    // specialization for two-lepton case Dilepton
+    template<int NSysts, typename HIST_SF>
+    class muon_efficiency_smooth_helper<2, NSysts, HIST_SF> :
+        public muon_efficiency_smooth_helper_base<NSysts, HIST_SF> {
+
+    public:
+
+        using base_t = muon_efficiency_smooth_helper_base<NSysts, HIST_SF>;
+        // inherit constructor
+        using base_t::base_t;
         
+        muon_efficiency_smooth_helper(const base_t &other) : base_t(other) {}
+
+        // may also assume the first is the one passing the trigger for sure, but it depends on how these operators are called in the loop
+        // keeping both flags is redundant but more flexible since there is no assumption on the sorting
+        double operator() (float first_pt,  float first_eta,  float first_sapt,  float first_saeta,  int first_charge,  bool first_passtrigger,
+                           float second_pt, float second_eta, float second_sapt, float second_saeta, int second_charge, bool second_passtrigger) {
+            constexpr bool iso_with_trigger = true; // will be P(iso|passTrigger) or P(iso|failTrigger) depending on first_passtrigger and second_passtrigger 
+            constexpr bool pass_iso = true;
+            const double sftrig = base_t::scale_factor_product(first_pt, first_eta, first_sapt, first_saeta, first_charge, pass_iso, first_passtrigger, iso_with_trigger, base_t::idx_nom_);
+            const double sfnontrig = base_t::scale_factor_product(second_pt, second_eta, second_sapt, second_saeta, second_charge, pass_iso, second_passtrigger, iso_with_trigger, base_t::idx_nom_);
+            return sftrig*sfnontrig;
+        }
+
+    };
+
+    // Now the syst, which is similar to the nominal
+    //
     // base template for one lepton case
-    template<bool do_other, int NSysts, typename HIST_SF>
+    template<int analysisType, int NSysts, typename HIST_SF>
     class muon_efficiency_smooth_helper_syst :
         public muon_efficiency_smooth_helper_base<NSysts, HIST_SF> {
 
@@ -173,15 +206,16 @@ namespace wrem {
         muon_efficiency_smooth_helper_syst(const base_t &other) : base_t(other) {}
         
         tensor_t operator() (float pt, float eta, float sapt, float saeta, int charge, bool pass_iso, double nominal_weight = 1.0) {
-            constexpr bool with_trigger = true;
-            return nominal_weight*base_t::sf_syst_var(pt, eta, sapt, saeta, charge, pass_iso, with_trigger);
+            constexpr bool iso_with_trigger = true;
+            constexpr bool pass_trigger = true;
+            return nominal_weight*base_t::sf_syst_var(pt, eta, sapt, saeta, charge, pass_iso, pass_trigger, iso_with_trigger);
         }
 
     };
 
-    // specialization for two-lepton case
+    // specialization for two-lepton case Wlike
     template<int NSysts, typename HIST_SF>
-    class muon_efficiency_smooth_helper_syst<true, NSysts, HIST_SF> :
+    class muon_efficiency_smooth_helper_syst<1, NSysts, HIST_SF> :
         public muon_efficiency_smooth_helper_base<NSysts, HIST_SF> {
 
     public:
@@ -194,13 +228,44 @@ namespace wrem {
         
         muon_efficiency_smooth_helper_syst(const base_t &other) : base_t(other) {}
 
-        tensor_t operator() (float trig_pt, float trig_eta, float trig_sapt, float trig_saeta, int trig_charge,
-                             float nontrig_pt, float nontrig_eta, float nontrig_sapt, float nontrig_saeta, int nontrig_charge, double nominal_weight = 1.0) {
-            constexpr bool with_trigger = true;
-            constexpr bool without_trigger = false;
+        tensor_t operator() (float trig_pt,    float trig_eta,    float trig_sapt,    float trig_saeta,    int trig_charge,
+                             float nontrig_pt, float nontrig_eta, float nontrig_sapt, float nontrig_saeta, int nontrig_charge,
+                             double nominal_weight = 1.0) {
+            constexpr bool iso_with_trigger = true;
+            constexpr bool pass_trigger = true; // can be true also for second lepton, since it will be overridden by iso_without_trigger anyway
+            constexpr bool iso_without_trigger = false;
             constexpr bool pass_iso = true;
-            const tensor_t variation_trig = base_t::sf_syst_var(trig_pt, trig_eta, trig_sapt, trig_saeta, trig_charge, pass_iso, with_trigger);
-            const tensor_t variation_nontrig = base_t::sf_syst_var(nontrig_pt, nontrig_eta, nontrig_sapt, nontrig_saeta, nontrig_charge, pass_iso, without_trigger);
+            const tensor_t variation_trig = base_t::sf_syst_var(trig_pt, trig_eta, trig_sapt, trig_saeta, trig_charge, pass_iso, pass_trigger, iso_with_trigger);
+            const tensor_t variation_nontrig = base_t::sf_syst_var(nontrig_pt, nontrig_eta, nontrig_sapt, nontrig_saeta, nontrig_charge, pass_iso, pass_trigger, iso_without_trigger);
+            return nominal_weight * variation_trig * variation_nontrig;
+        }
+
+    };
+    
+    // specialization for two-lepton case Dilepton
+    template<int NSysts, typename HIST_SF>
+    class muon_efficiency_smooth_helper_syst<2, NSysts, HIST_SF> :
+        public muon_efficiency_smooth_helper_base<NSysts, HIST_SF> {
+
+    public:
+
+        using base_t = muon_efficiency_smooth_helper_base<NSysts, HIST_SF>;
+        using tensor_t = typename base_t::syst_tensor_t;
+
+        // inherit constructor
+        using base_t::base_t;
+        
+        muon_efficiency_smooth_helper_syst(const base_t &other) : base_t(other) {}
+
+        // may also assume the first is the one passing the trigger for sure, but it depends on how these operators are called in the loop
+        // keeping both flags is redundant but more flexible since there is no assumption on the sorting
+        tensor_t operator() (float first_pt,  float first_eta,  float first_sapt,  float first_saeta,  int first_charge,  bool first_passtrigger,
+                             float second_pt, float second_eta, float second_sapt, float second_saeta, int second_charge, bool second_passtrigger,
+                             double nominal_weight = 1.0) {
+            constexpr bool iso_with_trigger = true; // will be P(iso|passTrigger) or P(iso|failTrigger) depending on first_passtrigger and second_passtrigger 
+            constexpr bool pass_iso = true;
+            const tensor_t variation_trig = base_t::sf_syst_var(first_pt, first_eta, first_sapt, first_saeta, first_charge, pass_iso, first_passtrigger, iso_with_trigger);
+            const tensor_t variation_nontrig = base_t::sf_syst_var(second_pt, second_eta, second_sapt, second_saeta, second_charge, pass_iso, second_passtrigger, iso_with_trigger);
             return nominal_weight * variation_trig * variation_nontrig;
         }
 
@@ -231,35 +296,32 @@ namespace wrem {
             }
     
         std::array<double,5> scale_factor_array(int pt_idx, int eta_idx, int sapt_idx, int saeta_idx, int ut_idx,
-                                                int charge_idx, bool pass_iso, bool with_trigger, int idx_nom_alt) const {
+                                                int charge_idx,
+                                                bool pass_iso, bool pass_trigger, bool iso_with_trigger,
+                                                int idx_nom_alt) const {
 
             auto const eff_type_idx_reco = idx_reco_;
             auto const eff_type_idx_tracking = idx_tracking_;
             auto const eff_type_idx_idip = idx_idip_;
-            auto const eff_type_idx_trig = idx3D_trig_;
-            auto const eff_type_idx_iso_pass = with_trigger ? idx3D_iso_triggering_ : idx3D_iso_nontriggering_;
-            auto const eff_type_idx_iso_fail = with_trigger ? idx3D_antiiso_triggering_ : idx3D_antiiso_nontriggering_;
+            auto const eff_type_idx_trig = pass_trigger ? idx3D_trig_ : idx3D_antitrig_;
+            auto const eff_type_idx_iso_pass = iso_with_trigger ? (pass_trigger ? idx3D_iso_triggering_: idx3D_iso_antitriggering_) : idx3D_iso_nontriggering_;
+            auto const eff_type_idx_iso_fail = idx3D_antiiso_triggering_; // for now we never consider the case with failing isolation and failed trigger (antiiso only needed for Wmass)
             auto const eff_type_idx_iso = pass_iso ? eff_type_idx_iso_pass : eff_type_idx_iso_fail;
-
-            //std::cout << "Value for eff_type_idx_trig,eff_type_idx_iso = " << eff_type_idx_trig << ", " << eff_type_idx_iso << std::endl;
 
             const double reco      = sf_all_->at(  eta_idx,   pt_idx, charge_idx, eff_type_idx_reco,     idx_nom_alt).value();
             const double tracking  = sf_all_->at(saeta_idx, sapt_idx, charge_idx, eff_type_idx_tracking, idx_nom_alt).value();
             const double idip      = sf_all_->at(  eta_idx,   pt_idx, charge_idx, eff_type_idx_idip,     idx_nom_alt).value();
             double trig = 1.0;
-            // std::cout << "Before trigger" << std::endl;
-            if (with_trigger) trig = sf3D_all_->at(eta_idx, pt_idx, ut_idx, charge_idx, eff_type_idx_trig, idx_nom_alt).value();
-            // std::cout << "Before isolation" << std::endl;
-            const double iso       = sf3D_all_->at(eta_idx, pt_idx, ut_idx, charge_idx, eff_type_idx_iso,  idx_nom_alt).value();
+            if (iso_with_trigger) trig = sf3D_all_->at(eta_idx, pt_idx, charge_idx, eff_type_idx_trig, idx_nom_alt, ut_idx).value();
+            const double iso       = sf3D_all_->at(eta_idx, pt_idx, charge_idx, eff_type_idx_iso,  idx_nom_alt, ut_idx).value();
             std::array<double,5> ret = {reco, tracking, idip, trig, iso};
-            // std::cout << "End of scale_factor_array" << std::endl;
             
             return ret;
             
         }
 
         double scale_factor_product(float pt, float eta, float sapt, float saeta, float ut,
-                                    int charge, bool pass_iso, bool with_trigger, int idx_nom_alt) const {
+                                    int charge, bool pass_iso, bool pass_trigger, bool iso_with_trigger, int idx_nom_alt) const {
 
             // FIXME: this assumes the same eta and pt binning, for 2D and 3D SF, which for now is verified
             //        Keeping same binning is surely better to have, but be careful
@@ -269,18 +331,9 @@ namespace wrem {
             auto const saeta_idx = sf_all_->template axis<0>().index(saeta);
             auto const sapt_idx = sf_all_->template axis<1>().index(sapt);
             auto const ut_idx = sf3D_all_->template axis<5>().index(ut);
-            // std::cout << "Value for pt,eta,sapt,saeta,ut,charge = " << pt << ", " << eta << ", " << sapt << ", " << saeta << ", " << ut << ", " << charge << std::endl;
-            // //std::cout << "Value for pass_iso,with_trigger,idx_nom_alt = " << pass_iso << ", " << with_trigger << ", " << idx_nom_alt << std::endl;
-            // std::cout << "Index for pt,eta,sapt,saeta,charge,ut = " << pt_idx << ", " << eta_idx << ", " << sapt_idx << ", " << saeta_idx << ", " << charge_idx << ", " << ut_idx << std::endl;
-            // apparently avoiding index = -1 helps, not clear why given that the underflow bin exists
-            auto ut_idx_new = ut_idx;
-            if (ut_idx_new < 0) {
-                ut_idx_new = 0;
-                // std::cout << "Setting ut_idx to " << ut_idx_new << std::endl;
-            }
                 
-            std::array<double,5> allSF = scale_factor_array(pt_idx, eta_idx, sapt_idx, saeta_idx, ut_idx_new,
-                                                            charge_idx, pass_iso, with_trigger, idx_nom_alt);
+            std::array<double,5> allSF = scale_factor_array(pt_idx, eta_idx, sapt_idx, saeta_idx, ut_idx,
+                                                            charge_idx, pass_iso, pass_trigger, iso_with_trigger, idx_nom_alt);
             double sf = 1.0;
             for(int i = 0; i < allSF.size(); i++) {
                 sf *= allSF[i];
@@ -292,7 +345,7 @@ namespace wrem {
         using syst_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<5, NSysts>>; // 5 bins for reco, tracking, idip, trigger, iso(notrig) in this order
 
         syst_tensor_t sf_syst_var(float pt, float eta, float sapt, float saeta, float ut,
-                                  int charge, bool pass_iso, bool with_trigger) const {
+                                  int charge, bool pass_iso, bool pass_trigger, bool iso_with_trigger) const {
 
             syst_tensor_t res;
 
@@ -304,11 +357,12 @@ namespace wrem {
             auto const ut_idx =    sf3D_all_->template axis<5>().index(ut);
             
             std::array<double,5> allSF_nomi = scale_factor_array(pt_idx, eta_idx, sapt_idx, saeta_idx, ut_idx,
-                                                                 charge_idx, pass_iso, with_trigger, idx_nom_);
+                                                                 charge_idx, pass_iso, pass_trigger, iso_with_trigger, idx_nom_);
 
             for(int ns = 0; ns < NSysts; ns++) {
                 
-                std::array<double,5> allSF_alt  = scale_factor_array(pt_idx, eta_idx, sapt_idx, saeta_idx, ut_idx, charge_idx, pass_iso, with_trigger, sf_all_->template axis<4>().index(ns+1) ); // 0 is the nominal, systs starts from 1
+                std::array<double,5> allSF_alt  = scale_factor_array(pt_idx, eta_idx, sapt_idx, saeta_idx, ut_idx,
+                                                                     charge_idx, pass_iso, pass_trigger, iso_with_trigger, sf_all_->template axis<4>().index(ns+1) ); // 0 is the nominal, systs starts from 1
                 
                 // anticorrelation between iso and antiiso already embedded in the numbers stored in the histograms
                 // also the alternate comes from data efficiency variation only, so the anticorrelation in the efficiencies is preserved in the scale factors
@@ -331,25 +385,21 @@ namespace wrem {
         int idx_reco_ = sf_all_->template axis<3>().index("reco");
         int idx_tracking_ = sf_all_->template axis<3>().index("tracking");
         int idx_idip_ = sf_all_->template axis<3>().index("idip");
-        // int idx_trig_ = sf_all_->template axis<3>().index("trigger");
-        // int idx_iso_triggering_ = sf_all_->template axis<3>().index("iso");
-        // int idx_antiiso_triggering_ = sf_all_->template axis<3>().index("antiiso");
-        // int idx_iso_nontriggering_ = sf_all_->template axis<3>().index("isonotrig");
-        // int idx_antiiso_nontriggering_ = sf_all_->template axis<3>().index("antiisonotrig");
         int idx_nom_ = sf_all_->template axis<4>().index(0);
-        // now 3D SF (only trigger and (anti)iso/isonotrig
+        // now 3D SF
         // note that ut is put on the last axis to maintain the same structure of axes as in the 2D case
         std::shared_ptr<const HIST_SF3D> sf3D_all_;
         int idx3D_trig_ = sf3D_all_->template axis<3>().index("trigger");
+        int idx3D_antitrig_ = sf3D_all_->template axis<3>().index("antitrigger");
         int idx3D_iso_triggering_ = sf3D_all_->template axis<3>().index("iso");
         int idx3D_antiiso_triggering_ = sf3D_all_->template axis<3>().index("antiiso");
         int idx3D_iso_nontriggering_ = sf3D_all_->template axis<3>().index("isonotrig");
-        int idx3D_antiiso_nontriggering_ = sf3D_all_->template axis<3>().index("antiisonotrig");
+        int idx3D_iso_antitriggering_ = sf3D_all_->template axis<3>().index("isoantitrig");
 
     };
 
     // base template for one-lepton case
-    template<bool do_other, int NSysts, typename HIST_SF, typename HIST_SF3D>
+    template<int analysisType, int NSysts, typename HIST_SF, typename HIST_SF3D>
     class muon_efficiency_smooth3D_helper:
         public muon_efficiency_smooth3D_helper_base<NSysts, HIST_SF, HIST_SF3D> {
 
@@ -362,15 +412,17 @@ namespace wrem {
         muon_efficiency_smooth3D_helper(const base_t &other) : base_t(other) {}
         
         double operator() (float pt, float eta, float sapt, float saeta, float ut, int charge, bool pass_iso) {
-            constexpr bool with_trigger = true;
-            return base_t::scale_factor_product(pt, eta, sapt, saeta, ut, charge, pass_iso, with_trigger, base_t::idx_nom_);
+            constexpr bool iso_with_trigger = true;
+            constexpr bool pass_trigger = true;
+            return base_t::scale_factor_product(pt, eta, sapt, saeta, ut, charge,
+                                                pass_iso, pass_trigger, iso_with_trigger, base_t::idx_nom_);
         }
 
     };
 
-    // specialization for two-lepton case
+    // specialization for two-lepton case Wlike
     template<int NSysts, typename HIST_SF, typename HIST_SF3D>
-    class muon_efficiency_smooth3D_helper<true, NSysts, HIST_SF, HIST_SF3D> :
+    class muon_efficiency_smooth3D_helper<1, NSysts, HIST_SF, HIST_SF3D> :
         public muon_efficiency_smooth3D_helper_base<NSysts, HIST_SF, HIST_SF3D> {
 
     public:
@@ -381,20 +433,49 @@ namespace wrem {
         
         muon_efficiency_smooth3D_helper(const base_t &other) : base_t(other) {}
 
-        double operator() (float trig_pt, float trig_eta, float trig_sapt, float trig_saeta, float trig_ut, int trig_charge,
+        double operator() (float trig_pt,    float trig_eta,    float trig_sapt,    float trig_saeta,    float trig_ut,    int trig_charge,
                            float nontrig_pt, float nontrig_eta, float nontrig_sapt, float nontrig_saeta, float nontrig_ut, int nontrig_charge) {
-            constexpr bool with_trigger = true;
-            constexpr bool without_trigger = false;
+            constexpr bool iso_with_trigger = true;
+            constexpr bool pass_trigger = true; // can be true also for second lepton, since it will be overridden by iso_without_trigger anyway
+            constexpr bool iso_without_trigger = false;
             constexpr bool pass_iso = true;
-            const double sftrig = base_t::scale_factor_product(trig_pt, trig_eta, trig_sapt, trig_saeta, trig_ut, trig_charge, pass_iso, with_trigger, base_t::idx_nom_);
-            const double sfnontrig = base_t::scale_factor_product(nontrig_pt, nontrig_eta, nontrig_sapt, nontrig_saeta, nontrig_ut, nontrig_charge, pass_iso, without_trigger, base_t::idx_nom_);
+            const double sftrig = base_t::scale_factor_product(trig_pt, trig_eta, trig_sapt, trig_saeta, trig_ut, trig_charge,
+                                                               pass_iso, pass_trigger, iso_with_trigger, base_t::idx_nom_);
+            const double sfnontrig = base_t::scale_factor_product(nontrig_pt, nontrig_eta, nontrig_sapt, nontrig_saeta, nontrig_ut, nontrig_charge,
+                                                                  pass_iso, pass_trigger, iso_without_trigger, base_t::idx_nom_);
             return sftrig*sfnontrig;
         }
 
     };
+
+    // specialization for two-lepton case Dilepton
+    template<int NSysts, typename HIST_SF, typename HIST_SF3D>
+    class muon_efficiency_smooth3D_helper<2, NSysts, HIST_SF, HIST_SF3D> :
+        public muon_efficiency_smooth3D_helper_base<NSysts, HIST_SF, HIST_SF3D> {
+
+    public:
+
+        using base_t = muon_efficiency_smooth3D_helper_base<NSysts, HIST_SF, HIST_SF3D>;
+        // inherit constructor
+        using base_t::base_t;
+        
+        muon_efficiency_smooth3D_helper(const base_t &other) : base_t(other) {}
+
+        double operator() (float first_pt,  float first_eta,  float first_sapt,  float first_saeta,  float first_ut,  int first_charge,  bool first_passtrigger,
+                           float second_pt, float second_eta, float second_sapt, float second_saeta, float second_ut, int second_charge, bool second_passtrigger) {
+            constexpr bool iso_with_trigger = true; // will be P(iso|passTrigger) or P(iso|failTrigger) depending on first_passtrigger and second_passtrigger
+            constexpr bool pass_iso = true;
+
+            const double sftrig = base_t::scale_factor_product(first_pt, first_eta, first_sapt, first_saeta, first_ut, first_charge, pass_iso, first_passtrigger, iso_with_trigger, base_t::idx_nom_);
+            const double sfnontrig = base_t::scale_factor_product(second_pt, second_eta, second_sapt, second_saeta, second_ut, second_charge, pass_iso, second_passtrigger, iso_with_trigger, base_t::idx_nom_);
+            return sftrig*sfnontrig;
+        }
+
+    };
+    
         
     // base template for one lepton case
-    template<bool do_other, int NSysts, typename HIST_SF, typename HIST_SF3D>
+    template<int analysisType, int NSysts, typename HIST_SF, typename HIST_SF3D>
     class muon_efficiency_smooth3D_helper_syst :
         public muon_efficiency_smooth3D_helper_base<NSysts, HIST_SF, HIST_SF3D> {
 
@@ -409,15 +490,15 @@ namespace wrem {
         muon_efficiency_smooth3D_helper_syst(const base_t &other) : base_t(other) {}
         
         tensor_t operator() (float pt, float eta, float sapt, float saeta, float ut, int charge, bool pass_iso, double nominal_weight = 1.0) {
-            constexpr bool with_trigger = true;
-            return nominal_weight*base_t::sf_syst_var(pt, eta, sapt, saeta, ut, charge, pass_iso, with_trigger);
+            constexpr bool iso_with_trigger = true;
+            return nominal_weight*base_t::sf_syst_var(pt, eta, sapt, saeta, ut, charge, pass_iso, iso_with_trigger);
         }
 
     };
 
-    // specialization for two-lepton case
+    // specialization for two-lepton case Wlike
     template<int NSysts, typename HIST_SF, typename HIST_SF3D>
-    class muon_efficiency_smooth3D_helper_syst<true, NSysts, HIST_SF, HIST_SF3D> :
+    class muon_efficiency_smooth3D_helper_syst<1, NSysts, HIST_SF, HIST_SF3D> :
         public muon_efficiency_smooth3D_helper_base<NSysts, HIST_SF, HIST_SF3D> {
 
     public:
@@ -430,14 +511,42 @@ namespace wrem {
         
         muon_efficiency_smooth3D_helper_syst(const base_t &other) : base_t(other) {}
 
-        tensor_t operator() (float trig_pt, float trig_eta, float trig_sapt, float trig_saeta, float trig_ut, int trig_charge,
-                             float nontrig_pt, float nontrig_eta, float nontrig_sapt, float nontrig_saeta, float nontrig_ut,
-                             int nontrig_charge, double nominal_weight = 1.0) {
-            constexpr bool with_trigger = true;
-            constexpr bool without_trigger = false;
+        tensor_t operator() (float trig_pt,    float trig_eta,    float trig_sapt,    float trig_saeta,    float trig_ut,    int trig_charge,
+                             float nontrig_pt, float nontrig_eta, float nontrig_sapt, float nontrig_saeta, float nontrig_ut, int nontrig_charge,
+                             double nominal_weight = 1.0) {
+            constexpr bool iso_with_trigger = true;
+            constexpr bool pass_trigger = true; // can be true also for second lepton, since it will be overridden by iso_without_trigger anyway
+            constexpr bool iso_without_trigger = false;
             constexpr bool pass_iso = true;
-            const tensor_t variation_trig = base_t::sf_syst_var(trig_pt, trig_eta, trig_sapt, trig_saeta, trig_ut, trig_charge, pass_iso, with_trigger);
-            const tensor_t variation_nontrig = base_t::sf_syst_var(nontrig_pt, nontrig_eta, nontrig_sapt, nontrig_saeta, nontrig_ut, nontrig_charge, pass_iso, without_trigger);
+            const tensor_t variation_trig = base_t::sf_syst_var(trig_pt, trig_eta, trig_sapt, trig_saeta, trig_ut, trig_charge, pass_iso, pass_trigger, iso_with_trigger);
+            const tensor_t variation_nontrig = base_t::sf_syst_var(nontrig_pt, nontrig_eta, nontrig_sapt, nontrig_saeta, nontrig_ut, nontrig_charge, pass_iso, pass_trigger, iso_without_trigger);
+            return nominal_weight * variation_trig * variation_nontrig;
+        }
+
+    };
+
+    // specialization for two-lepton case Dilepton
+    template<int NSysts, typename HIST_SF, typename HIST_SF3D>
+    class muon_efficiency_smooth3D_helper_syst<2, NSysts, HIST_SF, HIST_SF3D> :
+        public muon_efficiency_smooth3D_helper_base<NSysts, HIST_SF, HIST_SF3D> {
+
+    public:
+
+        using base_t = muon_efficiency_smooth3D_helper_base<NSysts, HIST_SF, HIST_SF3D>;
+        using tensor_t = typename base_t::syst_tensor_t;
+
+        // inherit constructor
+        using base_t::base_t;
+        
+        muon_efficiency_smooth3D_helper_syst(const base_t &other) : base_t(other) {}
+
+        tensor_t operator() (float first_pt,  float first_eta,  float first_sapt,  float first_saeta,  float first_ut,  int first_charge,  bool first_passtrigger,
+                             float second_pt, float second_eta, float second_sapt, float second_saeta, float second_ut, int second_charge, bool second_passtrigger,
+                             double nominal_weight = 1.0) {
+            constexpr bool iso_with_trigger = true; // will be P(iso|passTrigger) or P(iso|failTrigger) depending on first_passtrigger and second_passtrigger
+            constexpr bool pass_iso = true;
+            const tensor_t variation_trig = base_t::sf_syst_var(first_pt, first_eta, first_sapt, first_saeta, first_ut, first_charge, pass_iso, first_passtrigger, iso_with_trigger);
+            const tensor_t variation_nontrig = base_t::sf_syst_var(second_pt, second_eta, second_sapt, second_saeta, second_ut, second_charge, pass_iso, second_passtrigger, iso_with_trigger);
             return nominal_weight * variation_trig * variation_nontrig;
         }
 
@@ -450,7 +559,6 @@ namespace wrem {
     ////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////////////
-
     
     ////
     // STAT UNCERTAINTY
@@ -479,14 +587,15 @@ namespace wrem {
         }
         
         // general case with no isolation (and no uT dependence)
-        stat_tensor_t sf_stat_var(float pt, float eta, int charge) const {
+        // TODO: develop separate method for trigger specifically? Or even merge them all again?
+        stat_tensor_t sf_stat_var(float pt, float eta, int charge, bool passTrigger) const {
             stat_tensor_t res;
             res.setConstant(1.0);
 
             auto const eta_idx = sf_type_->template axis<0>().index(eta);
             auto const pt_idx = sf_type_->template axis<1>().index(pt);
             auto const charge_idx = sf_type_->template axis<2>().index(charge);
-            auto const eff_type_idx = 0; // TODO FIXME, use first (and only existent) bin
+            auto const eff_type_idx = isTriggerStep_ ? (passTrigger ? idx_trig_ : idx_antitrig_) : 0;
             auto const eigen_axis = sf_type_->template axis<4>();
 
             // overflow/underflow are attributed to adjacent bin
@@ -522,7 +631,7 @@ namespace wrem {
         }
 
         // special case for isolation (and no uT dependence)
-        stat_tensor_t sf_stat_var_iso(float pt, float eta, int charge, bool pass_iso, bool with_trigger) const {
+        stat_tensor_t sf_stat_var_iso(float pt, float eta, int charge, bool pass_iso, bool pass_trigger, bool iso_with_trigger) const {
             stat_tensor_t res;
             res.setConstant(1.0);
 
@@ -531,8 +640,8 @@ namespace wrem {
             auto const charge_idx = sf_type_->template axis<2>().index(charge);
             auto const eigen_axis = sf_type_->template axis<4>();
 
-            auto const eff_type_idx_iso_pass = with_trigger ? idx_iso_triggering_ : idx_iso_nontriggering_;
-            auto const eff_type_idx_iso_fail = with_trigger ? idx_antiiso_triggering_ : idx_antiiso_nontriggering_;
+            auto const eff_type_idx_iso_pass = iso_with_trigger ? (pass_trigger ? idx_iso_triggering_: idx_iso_antitriggering_) : idx_iso_nontriggering_;
+            auto const eff_type_idx_iso_fail = idx_antiiso_triggering_;
             auto const eff_type_idx_iso = pass_iso ? eff_type_idx_iso_pass : eff_type_idx_iso_fail;
 
             // overflow/underflow are attributed to adjacent bin
@@ -568,15 +677,15 @@ namespace wrem {
 
         ///// case for uT dependence
         //
-        // general case with no isolation (and ut dependence, in practice it will be only trigger)
-        stat_tensor_t sf_stat_var(float pt, float eta, float ut, int charge) const {
+        // general case with no isolation (and ut dependence)
+        stat_tensor_t sf_stat_var(float pt, float eta, float ut, int charge, bool pass_trigger) const {
             stat_tensor_t res;
             res.setConstant(1.0);
 
             auto const eta_idx = sf_type_->template axis<0>().index(eta);
             auto const pt_idx = sf_type_->template axis<1>().index(pt);
             auto const charge_idx = sf_type_->template axis<2>().index(charge);
-            auto const eff_type_idx = 0; // TODO FIXME, use first (and only existent) bin
+            auto const eff_type_idx = isTriggerStep_ ? (passTrigger ? idx_trig_ : idx_antitrig_) : 0;
             auto const eigen_axis = sf_type_->template axis<4>();
             auto const ut_idx = sf_type_->template axis<5>().index(ut);
 
@@ -615,7 +724,7 @@ namespace wrem {
         }
 
         // special case for isolation with ut dependence
-        stat_tensor_t sf_stat_var_iso(float pt, float eta, float ut, int charge, bool pass_iso, bool with_trigger) const {
+        stat_tensor_t sf_stat_var_iso(float pt, float eta, float ut, int charge, bool pass_iso, bool pass_trigger, bool iso_with_trigger) const {
             stat_tensor_t res;
             res.setConstant(1.0);
 
@@ -625,8 +734,8 @@ namespace wrem {
             auto const eigen_axis = sf_type_->template axis<4>();
             auto const ut_idx = sf_type_->template axis<5>().index(ut);
 
-            auto const eff_type_idx_iso_pass = with_trigger ? idx_iso_triggering_ : idx_iso_nontriggering_;
-            auto const eff_type_idx_iso_fail = with_trigger ? idx_antiiso_triggering_ : idx_antiiso_nontriggering_;
+            auto const eff_type_idx_iso_pass = iso_with_trigger ? (pass_trigger ? idx_iso_triggering_: idx_iso_antitriggering_) : idx_iso_nontriggering_;
+            auto const eff_type_idx_iso_fail = idx_antiiso_triggering_;
             auto const eff_type_idx_iso = pass_iso ? eff_type_idx_iso_pass : eff_type_idx_iso_fail;
 
             // overflow/underflow are attributed to adjacent bin
@@ -666,13 +775,17 @@ namespace wrem {
 
         std::shared_ptr<const HIST_SF> sf_type_;
         // cache the bin indices since the string category lookup is slow
-        int idx_nom_ = sf_type_->template axis<4>().index(0); // input effStat axis is organized as DownVar - nomi - UpVar, with nomi centered at 0
-        int isTriggerStep_ = sf_type_->template axis<3>().value(0) == "trigger"; // special treatment for the stat variation in 2 lepton case
+        int idx_nom_ = sf_type_->template axis<4>().index(0); // input effStat axis is organized as nomi - UpVar, with nomi centered at 0
+        //int isTriggerStep_ = sf_type_->template axis<3>().value(0) == "trigger"; // special treatment for the stat variation in 2 lepton case Wlike
+        int isTriggerStep_ = (checkEffTypeInAxis(sf_type_->template axis<3>(), "trigger") >= 0); // special treatment for the stat variation in 2 lepton case Wlike
         // check if axis name exists in histogram, return -1 (invalid index) if not found
+        int idx_trig_     = checkEffTypeInAxis(sf_type_->template axis<3>(), "trigger");
+        int idx_antitrig_ = checkEffTypeInAxis(sf_type_->template axis<3>(), "antitrigger");
+        int idx_iso_triggering_        = checkEffTypeInAxis(sf_type_->template axis<3>(), "iso");
         int idx_iso_triggering_        = checkEffTypeInAxis(sf_type_->template axis<3>(), "iso");
         int idx_antiiso_triggering_    = checkEffTypeInAxis(sf_type_->template axis<3>(), "antiiso");
         int idx_iso_nontriggering_     = checkEffTypeInAxis(sf_type_->template axis<3>(), "isonotrig");
-        int idx_antiiso_nontriggering_ = checkEffTypeInAxis(sf_type_->template axis<3>(), "antiisonotrig");
+        int idx_iso_antitriggering_    = checkEffTypeInAxis(sf_type_->template axis<3>(), "isoantitrig");
 
     };
 
@@ -681,7 +794,7 @@ namespace wrem {
     ////
 
     // base template for one lepton case
-    template<bool do_other, int NEtaBins, int NPtEigenBins, int NCharges, typename HIST_SF>
+    template<int analysisType, int NEtaBins, int NPtEigenBins, int NCharges, typename HIST_SF>
     class muon_efficiency_smooth_helper_stat :
         public muon_efficiency_smooth_helper_stat_base<NEtaBins, NPtEigenBins, NCharges, HIST_SF> {
         
@@ -693,14 +806,15 @@ namespace wrem {
         using stat_base_t::stat_base_t;
         
         tensor_t operator() (float pt, float eta, int charge, double nominal_weight = 1.0) {
-            return nominal_weight*stat_base_t::sf_stat_var(pt, eta, charge);
+            constexpr bool pass_trigger = true;
+            return nominal_weight*stat_base_t::sf_stat_var(pt, eta, charge, pass_trigger);
         }
 
     };
 
-    // specialization for two-lepton case
+    // specialization for two-lepton case Wlike
     template<int NEtaBins, int NPtEigenBins, int NCharges, typename HIST_SF>
-    class muon_efficiency_smooth_helper_stat<true, NEtaBins, NPtEigenBins, NCharges, HIST_SF> :
+    class muon_efficiency_smooth_helper_stat<1, NEtaBins, NPtEigenBins, NCharges, HIST_SF> :
         public muon_efficiency_smooth_helper_stat_base<NEtaBins, NPtEigenBins, NCharges, HIST_SF> {
 
     public:
@@ -713,11 +827,12 @@ namespace wrem {
         tensor_t operator() (float trig_pt, float trig_eta, int trig_charge,
                              float nontrig_pt, float nontrig_eta, int nontrig_charge, double nominal_weight = 1.0) {
 
-            const tensor_t variation_trig = stat_base_t::sf_stat_var(trig_pt, trig_eta, trig_charge);
+            constexpr bool pass_trigger = true; // can be used on second lepton since it does nothing when step is not trigger
+            const tensor_t variation_trig = stat_base_t::sf_stat_var(trig_pt, trig_eta, trig_charge, pass_trigger);
             if (stat_base_t::isTriggerStep_) {
                 return nominal_weight * variation_trig;
             } else {
-                const tensor_t variation_nontrig = stat_base_t::sf_stat_var(nontrig_pt, nontrig_eta, nontrig_charge);
+                const tensor_t variation_nontrig = stat_base_t::sf_stat_var(nontrig_pt, nontrig_eta, nontrig_charge, pass_trigger);
                 return nominal_weight * variation_trig * variation_nontrig;
             }
         }
@@ -729,7 +844,7 @@ namespace wrem {
     ////
 
     // base template for one lepton case
-    template<bool do_other, int NEtaBins, int NPtEigenBins, int NCharges, typename HIST_SF>
+    template<int analysisType, int NEtaBins, int NPtEigenBins, int NCharges, typename HIST_SF>
     class muon_efficiency_smooth_helper_stat_iso :
         public muon_efficiency_smooth_helper_stat_base<NEtaBins, NPtEigenBins, NCharges, HIST_SF> {
         
@@ -741,15 +856,16 @@ namespace wrem {
         using stat_base_t::stat_base_t;
         
         tensor_t operator() (float pt, float eta, int charge, bool pass_iso, double nominal_weight = 1.0) {
-            constexpr bool with_trigger = true;
-            return nominal_weight*stat_base_t::sf_stat_var_iso(pt, eta, charge, pass_iso, with_trigger);
+            constexpr bool iso_with_trigger = true;
+            constexpr bool pass_trigger = true;
+            return nominal_weight*stat_base_t::sf_stat_var_iso(pt, eta, charge, pass_iso, pass_trigger, iso_with_trigger);
         }
 
     };
 
     // specialization for two-lepton case
     template<int NEtaBins, int NPtEigenBins, int NCharges, typename HIST_SF>
-    class muon_efficiency_smooth_helper_stat_iso<true, NEtaBins, NPtEigenBins, NCharges, HIST_SF> :
+    class muon_efficiency_smooth_helper_stat_iso<1, NEtaBins, NPtEigenBins, NCharges, HIST_SF> :
         public muon_efficiency_smooth_helper_stat_base<NEtaBins, NPtEigenBins, NCharges, HIST_SF> {
 
     public:
@@ -761,21 +877,22 @@ namespace wrem {
 
         tensor_t operator() (float trig_pt, float trig_eta, int trig_charge,
                              float nontrig_pt, float nontrig_eta, int nontrig_charge, double nominal_weight = 1.0) {
-            constexpr bool with_trigger = true;
-            constexpr bool without_trigger = false;
+            constexpr bool iso_with_trigger = true;
+            constexpr bool pass_trigger = true; // overridden by iso_without_trigger for nontrig lepton
+            constexpr bool iso_without_trigger = false;
             constexpr bool pass_iso = true;
 
-            const tensor_t variation_trig    = stat_base_t::sf_stat_var_iso(   trig_pt,    trig_eta,    trig_charge, pass_iso, with_trigger);
-            const tensor_t variation_nontrig = stat_base_t::sf_stat_var_iso(nontrig_pt, nontrig_eta, nontrig_charge, pass_iso, without_trigger);
+            const tensor_t variation_trig    = stat_base_t::sf_stat_var_iso(   trig_pt,    trig_eta,    trig_charge, pass_iso, pass_trigger, iso_with_trigger);
+            const tensor_t variation_nontrig = stat_base_t::sf_stat_var_iso(nontrig_pt, nontrig_eta, nontrig_charge, pass_iso, pass_trigger, iso_without_trigger);
             return nominal_weight * variation_trig * variation_nontrig;
             
         }
 
     };
 
-    /// case with ut dependence (since isolation is another special class, this is basically only trigger)
+    /// case with ut dependence (since isolation is another special class, this would be only trigger, but in fact it can be used for any step)
     // base template for one lepton case
-    template<bool do_other, int NEtaBins, int NPtEigenBins, int NCharges, typename HIST_SF>
+    template<int analysisType, int NEtaBins, int NPtEigenBins, int NCharges, typename HIST_SF>
     class muon_efficiency_smooth_helper_stat_utDep :
         public muon_efficiency_smooth_helper_stat_base<NEtaBins, NPtEigenBins, NCharges, HIST_SF> {
         
@@ -787,14 +904,15 @@ namespace wrem {
         using stat_base_t::stat_base_t;
         
         tensor_t operator() (float pt, float eta, float ut, int charge, double nominal_weight = 1.0) {
-            return nominal_weight*stat_base_t::sf_stat_var(pt, eta, ut, charge);
+            constexpr bool pass_trigger = true;
+            return nominal_weight*stat_base_t::sf_stat_var(pt, eta, ut, charge, pass_trigger);
         }
 
     };
 
-    // specialization for two-lepton case
+    // specialization for two-lepton case Wlike
     template<int NEtaBins, int NPtEigenBins, int NCharges, typename HIST_SF>
-    class muon_efficiency_smooth_helper_stat_utDep<true, NEtaBins, NPtEigenBins, NCharges, HIST_SF> :
+    class muon_efficiency_smooth_helper_stat_utDep<1, NEtaBins, NPtEigenBins, NCharges, HIST_SF> :
         public muon_efficiency_smooth_helper_stat_base<NEtaBins, NPtEigenBins, NCharges, HIST_SF> {
 
     public:
@@ -808,11 +926,12 @@ namespace wrem {
                              float nontrig_pt, float nontrig_eta, float nontrig_ut, int nontrig_charge,
                              double nominal_weight = 1.0) {
 
-            const tensor_t variation_trig = stat_base_t::sf_stat_var(trig_pt, trig_eta, trig_ut, trig_charge);
+            constexpr bool pass_trigger = true; // can be used on second lepton since it does nothing when step is not trigger
+            const tensor_t variation_trig = stat_base_t::sf_stat_var(trig_pt, trig_eta, trig_ut, trig_charge, pass_trigger);
             if (stat_base_t::isTriggerStep_) {
                 return nominal_weight * variation_trig;
             } else {
-                const tensor_t variation_nontrig = stat_base_t::sf_stat_var(nontrig_pt, nontrig_eta, nontrig_ut, nontrig_charge);
+                const tensor_t variation_nontrig = stat_base_t::sf_stat_var(nontrig_pt, nontrig_eta, nontrig_ut, nontrig_charge, pass_trigger);
                 return nominal_weight * variation_trig * variation_nontrig;
             }
         }
@@ -824,7 +943,7 @@ namespace wrem {
     ////
 
     // base template for one lepton case
-    template<bool do_other, int NEtaBins, int NPtEigenBins, int NCharges, typename HIST_SF>
+    template<int analysisType, int NEtaBins, int NPtEigenBins, int NCharges, typename HIST_SF>
     class muon_efficiency_smooth_helper_stat_iso_utDep :
         public muon_efficiency_smooth_helper_stat_base<NEtaBins, NPtEigenBins, NCharges, HIST_SF> {
         
@@ -836,15 +955,16 @@ namespace wrem {
         using stat_base_t::stat_base_t;
         
         tensor_t operator() (float pt, float eta, float ut, int charge, bool pass_iso, double nominal_weight = 1.0) {
-            constexpr bool with_trigger = true;
-            return nominal_weight*stat_base_t::sf_stat_var_iso(pt, eta, ut, charge, pass_iso, with_trigger);
+            constexpr bool iso_with_trigger = true;
+            constexpr bool pass_trigger = true;
+            return nominal_weight*stat_base_t::sf_stat_var_iso(pt, eta, ut, charge, pass_iso, pass_trigger, iso_with_trigger);
         }
 
     };
 
-    // specialization for two-lepton case
+    // specialization for two-lepton case Wlike
     template<int NEtaBins, int NPtEigenBins, int NCharges, typename HIST_SF>
-    class muon_efficiency_smooth_helper_stat_iso_utDep<true, NEtaBins, NPtEigenBins, NCharges, HIST_SF> :
+    class muon_efficiency_smooth_helper_stat_iso_utDep<1, NEtaBins, NPtEigenBins, NCharges, HIST_SF> :
         public muon_efficiency_smooth_helper_stat_base<NEtaBins, NPtEigenBins, NCharges, HIST_SF> {
 
     public:
@@ -857,14 +977,15 @@ namespace wrem {
         tensor_t operator() (float trig_pt, float trig_eta, float trig_ut, int trig_charge,
                              float nontrig_pt, float nontrig_eta, float nontrig_ut, int nontrig_charge,
                              double nominal_weight = 1.0) {
-            constexpr bool with_trigger = true;
-            constexpr bool without_trigger = false;
+            constexpr bool iso_with_trigger = true;
+            constexpr bool pass_trigger = true;
+            constexpr bool iso_without_trigger = false;
             constexpr bool pass_iso = true;
 
             const tensor_t variation_trig    = stat_base_t::sf_stat_var_iso(   trig_pt,    trig_eta,    trig_ut,    trig_charge,
-                                                                               pass_iso, with_trigger);
+                                                                            pass_iso, pass_trigger, iso_with_trigger);
             const tensor_t variation_nontrig = stat_base_t::sf_stat_var_iso(nontrig_pt, nontrig_eta, nontrig_ut, nontrig_charge,
-                                                                            pass_iso, without_trigger);
+                                                                            pass_iso, pass_trigger, iso_without_trigger);
             return nominal_weight * variation_trig * variation_nontrig;
             
         }

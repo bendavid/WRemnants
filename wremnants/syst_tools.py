@@ -291,21 +291,20 @@ def add_QCDbkg_jetPt_hist(results, df, nominal_axes, nominal_cols, base_name="no
                                         
 def add_muon_efficiency_unc_hists(results, df, helper_stat, helper_syst, axes, cols, base_name="nominal", is_w_like=False, smooth3D=False):
 
-    # FIXME: use actual ut instead of pt, this is just used temporarily for test
     if is_w_like:
         muon_columns_stat = ["trigMuons_pt0", "trigMuons_eta0", "trigMuons_charge0", "nonTrigMuons_pt0", "nonTrigMuons_eta0", "nonTrigMuons_charge0"]
         muon_columns_stat_tracking = ["trigMuons_SApt0", "trigMuons_SAeta0", "trigMuons_charge0", "nonTrigMuons_SApt0", "nonTrigMuons_SAeta0", "nonTrigMuons_charge0"]
         muon_columns_syst = ["trigMuons_pt0", "trigMuons_eta0", "trigMuons_SApt0", "trigMuons_SAeta0", "trigMuons_recoilProj_uT", "trigMuons_charge0",
                              "nonTrigMuons_pt0", "nonTrigMuons_eta0", "nonTrigMuons_SApt0", "nonTrigMuons_SAeta0", "nonTrigMuons_recoilProj_uT", "nonTrigMuons_charge0"]
     else:
-        muon_columns_stat = ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0"]
-        muon_columns_stat_tracking = ["goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0"]
+        muon_columns_stat = ["goodMuons_pt0", "goodMuons_eta0", "recoilProj_uT", "goodMuons_charge0"]
+        muon_columns_stat_tracking = ["goodMuons_SApt0", "goodMuons_SAeta0", "recoilProj_uT", "goodMuons_charge0"]
         muon_columns_syst = ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "recoilProj_uT", "goodMuons_charge0", "passIso"]
 
     if not smooth3D:
         # will use different helpers and member functions
-        #muon_columns_stat = [x for x in muon_columns_stat if "recoil" not in x]
-        #muon_columns_stat_tracking = [x for x in muon_columns_stat_tracking if "recoil" not in x]
+        muon_columns_stat = [x for x in muon_columns_stat if "recoil" not in x]
+        muon_columns_stat_tracking = [x for x in muon_columns_stat_tracking if "recoil" not in x]
         muon_columns_syst = [x for x in muon_columns_syst if "recoil" not in x]
         
     for key,helper in helper_stat.items():
