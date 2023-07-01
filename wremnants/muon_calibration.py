@@ -606,6 +606,9 @@ def muon_scale_variation_from_manual_shift(
     resultdict, procs = ['WplusmunuPostVFP', 'WminusmunuPostVFP', 'ZmumuPostVFP'],
 ):
     for proc in procs:
+        if proc not in resultdict:
+            logger.warning(f"Proc {proc} not found in output. Skipping variation from manual shift")
+            continue
         proc_hists = resultdict[proc]['output']
         manual_shift_hists = [proc_hists['nominal_muonScaleVariationDnTenthmil'].get(), proc_hists['nominal_muonScaleVariationUpTenthmil'].get()]
         proc_hists['muonScaleSyst_manualShift'] = hh.combineUpDownVarHists(*manual_shift_hists)
