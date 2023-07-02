@@ -104,10 +104,9 @@ if addVariation and (args.selectAxis or args.selectEntries):
 
 outdir = output_tools.make_plot_dir(args.outpath, args.outfolder, eoscp=args.eoscp)
 
-if os.path.basename(args.infile).startswith("lowPU"):
-    groups = make_datagroups_lowPU(args.infile, filterGroups=args.procFilters, flavor="mu", excludeGroups=None if args.procFilters else ['QCD'])
-else:
-    groups = make_datagroups_2016(args.infile, filterGroups=args.procFilters, excludeGroups=None if args.procFilters else ['QCD'])
+make_datagroup = make_datagroups_lowPU if os.path.basename(args.infile).startswith("lowPU") else make_datagroups_2016
+
+groups = make_datagroup(args.infile, filterGroups=args.procFilters, excludeGroups=None if args.procFilters else ['QCD'])
 
 # There is probably a better way to do this but I don't want to deal with it
 datasets = groups.getNames()

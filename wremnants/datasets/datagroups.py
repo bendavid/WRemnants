@@ -79,6 +79,12 @@ class Datagroups(object):
                 
             logger.debug(f"Getting these datasets: {self.datasets.keys()}")
 
+        if self.result:
+            args = self.getMetaInfo()["args"]
+            self.flavor = args.get("flavor", None)
+        else:
+            self.flavor = None
+
         self.groups = {}
         self.nominalName = "nominal"
         self.globalAction = None

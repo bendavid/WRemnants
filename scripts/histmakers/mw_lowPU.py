@@ -1,15 +1,16 @@
 import argparse
-from utilities import output_tools
+from utilities import output_tools, differential
 from utilities import common, logging
 
 parser,initargs = common.common_parser()
 parser.add_argument("--flavor", type=str, choices=["e", "mu"], help="Flavor (e or mu)", default="mu")
+parser.add_argument("--genVars", type=str, nargs="+", default=["ptVGen"], choices=["ptVGen",], help="Generator level variable")
 args = parser.parse_args()
 
 
 import narf
 import wremnants
-from wremnants import theory_tools,syst_tools,theory_corrections
+from wremnants import theory_tools, syst_tools, theory_corrections, muon_selections, unfolding_tools
 import math
 import hist
 import ROOT
@@ -30,6 +31,8 @@ datasets = wremnants.datasetsLowPU.getDatasets(maxFiles=args.maxFiles,
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
 for d in datasets: logger.info(f"Dataset {d.name}")
+
+mtw_min=40 # for Wmass (roughly half the boson mass)
 
 # load lowPU specific libs
 #ROOT.gInterpreter.AddIncludePath(f"{pathlib.Path(__file__).parent}/include/")
@@ -57,18 +60,33 @@ qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = F
 axis_ptVgen = qcdScaleByHelicity_helper.hist.axes["ptVgen"]
 axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
 
+gen_axes = {
+    "ptVGen": hist.axis.Variable([0, 5, 10, 15, 20, 30, 40, 50, 60, 75, 90, 150], name = "ptVGen", underflow=False, overflow=False),
+}
 
+if args.unfolding:
+    unfolding_axes, unfolding_cols, unfolding_selections = differential.get_dilepton_axes(args.genVars, gen_axes)
+    datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wmunu")
 
 # axes for final cards/fitting
-axis_mT = hist.axis.Variable([0] + list(range(40, 110, 1)) + [110, 112, 114, 116, 118, 120, 125, 130, 140, 160, 180, 200], name = "mt",underflow=False, overflow=True)
-axis_mT = hist.axis.Regular(100, 0, 200, name = "mt", underflow=False)
-reco_mT_axes = [common.axis_recoil_reco_ptW_lowpu, common.axis_mt_lowpu, axis_charge, axis_passMT, axis_passIso]
-gen_reco_mT_axes = [common.axis_recoil_gen_ptW_lowpu, common.axis_recoil_reco_ptW_lowpu, common.axis_mt_lowpu, axis_charge, axis_passMT, axis_passIso]
-axis_xnorm = hist.axis.Regular(1, 0., 1., name = "count", underflow=False, overflow=False)
+nominal_axes = [
+    hist.axis.Variable([0, 5, 10, 15, 20, 30, 40, 50, 60, 75, 90, 150], name = "ptll", underflow=False, overflow=True),
+    axis_charge, axis_passMT, axis_passIso]
 
 # corresponding columns
-gen_reco_mT_cols = ["ptVgen", "recoil_corr_rec_magn", "mT", "Lep_charge", "passMT", "passIso"]
-reco_mT_cols = ["recoil_corr_rec_magn", "mT", "Lep_charge", "passMT", "passIso"]
+nominal_cols = ["ptll", "Lep_charge", "passMT", "passIso"]
+
+# mt final cards/fitting
+axis_mT = hist.axis.Variable([0] + list(range(40, 110, 1)) + [110, 112, 114, 116, 118, 120, 125, 130, 140, 160, 180, 200], name = "mt",underflow=False, overflow=True)
+axis_mT = hist.axis.Regular(100, 0, 200, name = "mt", underflow=False)
+
+# reco_mT_axes = [common.axis_recoil_reco_ptW_lowpu, common.axis_mt_lowpu, axis_charge, axis_passMT, axis_passIso]
+# gen_reco_mT_axes = [common.axis_recoil_gen_ptW_lowpu, common.axis_recoil_reco_ptW_lowpu, common.axis_mt_lowpu, axis_charge, axis_passMT, axis_passIso]
+# axis_xnorm = hist.axis.Regular(1, 0., 1., name = "count", underflow=False, overflow=False)
+
+# # corresponding columns
+# gen_reco_mT_cols = ["ptVgen", "recoil_corr_rec_magn", "mT", "Lep_charge", "passMT", "passIso"]
+# reco_mT_cols = ["recoil_corr_rec_magn", "mT", "Lep_charge", "passMT", "passIso"]
     
 
 # extra axes which can be used to label tensor_axes
@@ -89,26 +107,26 @@ def build_graph(df, dataset):
     if dataset.is_data: df = df.DefinePerSample("weight", "1.0")
     else: df = df.Define("weight", "std::copysign(1.0, genWeight)")
     weightsum = df.SumAndCount("weight")
-    
-    
-    # normalization xsecs (propagate pdfs/qcdscales)
-    if dataset.name in sigProcs:
 
-        axes_xnorm = [axis_xnorm, common.axis_recoil_gen_ptZ_lowpu, axis_charge]
-        cols_xnorm = ["xnorm", "ptVgen", "chargeVgen"]
-        
-        df_xnorm = df
-        df_xnorm = df_xnorm.DefinePerSample("exp_weight", "1.0")
-        df_xnorm = theory_tools.define_theory_weights_and_corrs(df_xnorm, dataset.name, corr_helpers, args)
-        df_xnorm = df_xnorm.Define("xnorm", "0.5")
-        results.append(df_xnorm.HistoBoost("xnorm", axes_xnorm, [*cols_xnorm, "nominal_weight"]))
+    axes = nominal_axes
+    cols = nominal_cols
 
-        df_xnorm = theory_tools.define_scale_tensor(df_xnorm)        
-        syst_tools.add_pdf_hists(results, df_xnorm, dataset.name, axes_xnorm, cols_xnorm, args.pdfs, "xnorm")
-        syst_tools.add_qcdScale_hist(results, df_xnorm, [*axes_xnorm, axis_ptVgen, axis_chargeVgen], [*cols_xnorm, "ptVgen", "chargeVgen"], "xnorm")
-        syst_tools.add_qcdScaleByHelicityUnc_hist(results, df_xnorm, qcdScaleByHelicity_helper, [*axes_xnorm, axis_ptVgen, axis_chargeVgen], [*cols_xnorm, "ptVgen", "chargeVgen"], base_name="xnorm")
-     
-        
+    if args.unfolding and dataset.name == "ZmumuPostVFP":
+        df = unfolding_tools.define_gen_level(df, args.genLevel, dataset.name, mode="wmass")
+
+        if hasattr(dataset, "out_of_acceptance"):
+            logger.debug("Reject events in fiducial phase space")
+            df = unfolding_tools.select_fiducial_space(df, mode="wmass", pt_min=args.pt[1], pt_max=args.pt[2], 
+                mtw_min=mtw_min, selections=unfolding_selections, accept=False)
+        else:
+            logger.debug("Select events in fiducial phase space")
+            df = unfolding_tools.select_fiducial_space(df, mode="wmass", pt_min=args.pt[1], pt_max=args.pt[2], 
+                mtw_min=mtw_min, selections=unfolding_selections, accept=True)
+
+            unfolding_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols)
+            axes = [*axes, *unfolding_axes] 
+            cols = [*cols, *unfolding_cols]
+    
     
     if flavor == "mu":
     
@@ -131,7 +149,7 @@ def build_graph(df, dataset):
         df = df.Define("vetoElectrons", "Electron_pt > 10 && Electron_cutBased > 0 && abs(Electron_eta) < 2.4")
         df = df.Filter("Sum(vetoElectrons) == 0")
         
-        df = df.Define("goodLeptons", "vetoMuons && Muon_pt_corr > 25 && Muon_mediumId") # ISO requirement comes later   && Muon_pfRelIso04_all < 0.15
+        df = df.Define("goodLeptons", f"vetoMuons && Muon_pt_corr > {args.pt[1]} && Muon_mediumId") # ISO requirement comes later   && Muon_pfRelIso04_all < 0.15
         df = df.Define("goodLeptonsPlus", "goodLeptons && Muon_charge > 0")
         df = df.Define("goodLeptonsMinus", "goodLeptons && Muon_charge < 0")
         df = df.Filter("Sum(goodLeptons) == 1")
@@ -174,12 +192,12 @@ def build_graph(df, dataset):
         #df = df.Alias("Electron_pt_corr", "Electron_pt")
         
         df = df.Define("vetoElectrons", "Electron_pt_corr > 10 && Electron_cutBased > 0 && abs(Electron_eta) < 2.4")
-        df = df.Filter("Sum(vetoElectrons)==2")
+        df = df.Filter("Sum(vetoElectrons)==1")
         
         df = df.Define("vetoMuons", "Muon_pt > 10 && Muon_looseId && abs(Muon_eta) < 2.4 && abs(Muon_dxybs) < 0.05 && abs(Muon_dz)< 0.2")
         df = df.Filter("Sum(vetoMuons) == 0")
         
-        df = df.Define("goodLeptons", "vetoElectrons && Electron_pt_corr > 25 && Electron_cutBased >= 3 && !(abs(Electron_eta) > 1.4442 && abs(Electron_eta) < 1.566)")
+        df = df.Define("goodLeptons", f"vetoElectrons && Electron_pt_corr > {args.pt[1]} && Electron_cutBased >= 3 && !(abs(Electron_eta) > 1.4442 && abs(Electron_eta) < 1.566)")
         df = df.Define("goodLeptonsPlus", "goodLeptons && Electron_charge > 0")
         df = df.Define("goodLeptonsMinus", "goodLeptons && Electron_charge < 0")
         df = df.Filter("Sum(goodLeptons) == 1")
@@ -207,8 +225,8 @@ def build_graph(df, dataset):
     
    
 
-    df = df.Filter("Lep_pt > 25")
-    df = df.Filter("Flag_globalSuperTightHalo2016Filter && Flag_EcalDeadCellTriggerPrimitiveFilter && Flag_goodVertices && Flag_HBHENoiseIsoFilter && Flag_HBHENoiseFilter && Flag_BadPFMuonFilter")
+    df = df.Filter(f"Lep_pt > {args.pt[1]} && Lep_pt < {args.pt[2]}")
+    df = muon_selections.apply_met_filters(df)
     df = df.Define("passIso", "Lep_iso < 0.15")
 
 
@@ -227,66 +245,54 @@ def build_graph(df, dataset):
     df = recoilHelper.recoil_W(df, results, dataset, common.vprocs_lowpu, lep_cols) # produces corrected MET as MET_corr_rec_pt/phi  vprocs_lowpu wprocs_recoil_lowpu
    
     df = df.Alias("mT", "mT_corr_rec")
-    df = df.Define("passMT", "mT > 40")
-    
+    df = df.Define("passMT", f"mT > {mtw_min}")
+
     results.append(df.HistoBoost("lep_pt", [axis_pt, axis_charge, axis_passMT, axis_passIso], ["Lep_pt", "Lep_charge", "passMT", "passIso", "nominal_weight"]))
     results.append(df.HistoBoost("lep_eta", [axis_eta, axis_charge, axis_passMT, axis_passIso], ["Lep_eta", "Lep_charge", "passMT", "passIso", "nominal_weight"]))
     results.append(df.HistoBoost("lep_phi", [axis_phi, axis_charge, axis_passMT, axis_passIso], ["Lep_phi", "Lep_charge", "passMT", "passIso", "nominal_weight"]))
     results.append(df.HistoBoost("lep_pt", [axis_pt, axis_charge, axis_passMT, axis_passIso], ["Lep_pt", "Lep_charge", "passMT", "passIso", "nominal_weight"]))
     results.append(df.HistoBoost("lep_iso", [axis_iso], ["Lep_iso", "nominal_weight"]))
    
-    results.append(df.HistoBoost("qcd_space", [axis_pt, axis_eta, axis_iso, axis_charge, axis_mT], ["Lep_pt", "Lep_eta", "Lep_iso", "Lep_charge", "mT", "nominal_weight"]))  
-    
+    # results.append(df.HistoBoost("qcd_space", [axis_pt, axis_eta, axis_iso, axis_charge, axis_mT], ["Lep_pt", "Lep_eta", "Lep_iso", "Lep_charge", "mT", "nominal_weight"]))  
+
+    df = df.Define("pxll", "Lep_pt * std::cos(Lep_phi) + MET_corr_rec_pt * std::cos(MET_corr_rec_phi)")
+    df = df.Define("pyll", "Lep_pt * std::sin(Lep_phi) + MET_corr_rec_pt * std::sin(MET_corr_rec_phi)")
+    df = df.Define("ptll", "std::sqrt(pxll*pxll + pyll*pyll)")
+
     if dataset.name in common.vprocs_lowpu:
     
         # pdfs
-        if dataset.name in sigProcs:
-            syst_tools.add_pdf_hists(results, df, dataset.name, gen_reco_mT_axes, gen_reco_mT_cols, args.pdfs, "reco_mT")
-        else:
-            syst_tools.add_pdf_hists(results, df, dataset.name, reco_mT_axes, reco_mT_cols, args.pdfs, "reco_mT")
+        syst_tools.add_pdf_hists(results, df, dataset.name, axes, cols, args.pdfs, "nominal")
         syst_tools.add_pdf_hists(results, df, dataset.name, [axis_mT], ["mT"], args.pdfs, "mT")
 
         # QCD scale
         df = theory_tools.define_scale_tensor(df)
-        syst_tools.add_qcdScale_hist(results, df, [*gen_reco_mT_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mT_cols, "ptVgen", "chargeVgen"], "reco_mT") 
-        syst_tools.add_qcdScaleByHelicityUnc_hist(results, df, qcdScaleByHelicity_helper, [*gen_reco_mT_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mT_cols, "ptVgen", "chargeVgen"], base_name="reco_mT")
+        syst_tools.add_qcdScale_hist(results, df, [*axes, axis_ptVgen, axis_chargeVgen], [*cols, "ptVgen", "chargeVgen"], "nominal") 
+        syst_tools.add_qcdScaleByHelicityUnc_hist(results, df, qcdScaleByHelicity_helper, [*axes, axis_ptVgen, axis_chargeVgen], [*cols, "ptVgen", "chargeVgen"], base_name="nominal")
         syst_tools.add_qcdScaleByHelicityUnc_hist(results, df, qcdScaleByHelicity_helper, [axis_mT, axis_ptVgen, axis_chargeVgen], ["mT", "ptVgen", "chargeVgen"], base_name="mT")
 
+    results.append(df.HistoBoost("nominal", axes, [*cols, "nominal_weight"]))
+    df = recoilHelper.add_recoil_unc_W(df, results, dataset, cols, axes, "nominal")
 
-    if dataset.name in sigProcs:
-    
-        results.append(df.HistoBoost("reco_mT", gen_reco_mT_axes, [*gen_reco_mT_cols, "nominal_weight"]))
-        df = recoilHelper.add_recoil_unc_W(df, results, dataset, gen_reco_mT_cols, gen_reco_mT_axes, "reco_mT")
-
-        
+    # if dataset.name in sigProcs:
+           
         # mass weights (Breit-Wigner and nominal)
         #df = syst_tools.define_mass_weights(df, dataset.name)
-        #syst_tools.add_massweights_hist(results, df, gen_reco_mT_axes, [*gen_reco_mT_cols], base_name="reco_mT_massWeight", proc=dataset.name)
+        #syst_tools.add_massweights_hist(results, df, axes, [*cols], base_name="reco_mT_massWeight", proc=dataset.name)
         #syst_tools.add_massweights_hist(results, df, [axis_mT], ["mT"], base_name="mT_massWeight", proc=dataset.name)
 
-
         # Muon momentum scale
-        '''
-        netabins = 1
-        nweights = 21
-        mag = 1.e-4
-        df = df.Define(f"muonScaleDummy{netabins}Bins", f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(nominal_weight, massWeight_tensor_unscaled, Lep_abs_eta, {mag})")
-        scale_etabins_axis = hist.axis.Regular(netabins, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
-        dummyMuonScaleSyst = df.HistoBoost("mT_corr_rec_muonScaleSyst", [axis_mT, axis_charge, axis_passMT, axis_passIso], ["mT", "Lep_charge", "passMT", "passIso", f"muonScaleDummy{netabins}Bins"], tensor_axes=[down_up_axis, scale_etabins_axis])
-        results.append(dummyMuonScaleSyst)
-        '''
+        # netabins = 1
+        # nweights = 21
+        # mag = 1.e-4
+        # df = df.Define(f"muonScaleDummy{netabins}Bins", f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(nominal_weight, massWeight_tensor_unscaled, Lep_abs_eta, {mag})")
+        # scale_etabins_axis = hist.axis.Regular(netabins, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
+        # dummyMuonScaleSyst = df.HistoBoost("mT_corr_rec_muonScaleSyst", [axis_mT, axis_charge, axis_passMT, axis_passIso], ["mT", "Lep_charge", "passMT", "passIso", f"muonScaleDummy{netabins}Bins"], tensor_axes=[down_up_axis, scale_etabins_axis])
+        # results.append(dummyMuonScaleSyst)
 
-
-
-    else:
-    
-        results.append(df.HistoBoost("reco_mT", reco_mT_axes, [*reco_mT_cols, "nominal_weight"]))
-        if dataset.is_data: return results, weightsum
-        
-        df = recoilHelper.add_recoil_unc_W(df, results, dataset, reco_mT_cols, reco_mT_axes, "reco_mT")
-
-    
-        
+    if hasattr(dataset, "out_of_acceptance"):
+        # Rename dataset to not overwrite the original one
+        dataset.name = "Bkg"+dataset.name
      
     return results, weightsum
 

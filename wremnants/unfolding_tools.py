@@ -90,7 +90,7 @@ def define_gen_level(df, gen_level, dataset_name, mode="wmass"):
 
     return df
 
-def select_fiducial_space(df, accept=True, mode="wmass", pt_min=26, pt_max=55, mass_min=60, mass_max=120, mtw_min=40, selections=[]):
+def select_fiducial_space(df, accept=True, mode="wmass", pt_min=26, pt_max=55, mass_min=60, mass_max=120, mtw_min=0, selections=[]):
     # Define a fiducial phase space and either select events inside/outside
     # accept = True: select events in fiducial phase space 
     # accept = False: reject events in fiducial pahse space
@@ -109,7 +109,7 @@ def select_fiducial_space(df, accept=True, mode="wmass", pt_min=26, pt_max=55, m
     else:
         raise NotImplementedError(f"No fiducial phase space definiton found for mode '{mode}'!") 
 
-    if mode in ["wmass", "wlike"]:
+    if mtw_min > 0:
         selection += f" && (mTWGen > {mtw_min})"
 
     for sel in selections:
