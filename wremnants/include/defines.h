@@ -13,11 +13,11 @@ namespace wrem {
     using Vec_i = ROOT::VecOps::RVec<int>;
     using Vec_ui = ROOT::VecOps::RVec<unsigned int>;
 
-    typedef enum {
+    enum class AnalysisType {
         Wmass=0,
         Wlike,
         Dilepton
-    } AnalysisType;
+    };
         
     const unsigned int MUON_PDGID = 13;
     

@@ -2,6 +2,7 @@ from utilities import boostHistHelpers as hh, common, output_tools, logging, dif
 
 parser,initargs = common.common_parser(True)
 
+import ROOT
 import narf
 import wremnants
 from wremnants import theory_tools,syst_tools,theory_corrections, muon_validation, muon_calibration, muon_selections, unfolding_tools
@@ -16,7 +17,8 @@ parser = common.set_parser_default(parser, "pt", [34, 26, 60])
 
 args = parser.parse_args()
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
-    
+
+thisAnalysis = ROOT.wrem.AnalysisType.Wlike
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
                                               filt=args.filterProcs,
                                               excl=args.excludeProcs, 
@@ -62,16 +64,10 @@ qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = T
 if args.binnedScaleFactors:
     logger.info("Using binned scale factors and uncertainties")
     # add usePseudoSmoothing=True for tests with Asimov
-    muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_binned(filename = args.sfFile,
-                                                                                                                                     era = era,
-                                                                                                                                     max_pt = axis_pt.edges[-1],
-                                                                                                                                     is_w_like = True) 
+    muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_binned(filename = args.sfFile, era = era, max_pt = axis_pt.edges[-1], is_w_like = True) 
 else:
     logger.info("Using smoothed scale factors and uncertainties")
-    muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile,
-                                                                                                                                     era = era,
-                                                                                                                                     max_pt = axis_pt.edges[-1],
-                                                                                                                                     is_w_like = True, isoEfficiencySmoothing = args.isoEfficiencySmoothing)
+    muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile, era = era, what_analysis = thisAnalysis, max_pt = axis_pt.edges[-1], isoEfficiencySmoothing = args.isoEfficiencySmoothing, smooth3D=args.smooth3dsf)
 logger.info(f"SF file: {args.sfFile}")
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
@@ -135,8 +131,22 @@ def build_graph(df, dataset):
 
     if not dataset.is_data:
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
-        df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["trigMuons_pt0", "trigMuons_eta0", "trigMuons_SApt0", "trigMuons_SAeta0", "trigMuons_charge0",
-                                                                                      "nonTrigMuons_pt0", "nonTrigMuons_eta0", "nonTrigMuons_SApt0", "nonTrigMuons_SAeta0", "nonTrigMuons_charge0"])
+        if args.smooth3dsf:
+            if isW or isZ:
+                df = theory_tools.define_prefsr_vars(df)
+                df = df.Define("trigMuons_uT0", "wrem::zqtproj0_boson(trigMuons_pt0, trigMuons_phi0, ptVgen, phiVgen)")
+                df = df.Define("nonTrigMuons_uT0", "wrem::zqtproj0_boson(nonTrigMuons_pt0, nonTrigMuons_phi0, ptVgen, phiVgen)")
+            else:
+                # FIXME dummy for now
+                df = df.Define("trigMuons_uT0", "0.0f")
+                df = df.Define("nonTrigMuons_uT0", "0.0f")
+        else:
+            # this is a dummy, the uT axis when present will have a single bin
+            df = df.Define("trigMuons_uT0", "0.0f")
+            df = df.Define("nonTrigMuons_uT0", "0.0f")
+
+        df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["trigMuons_pt0", "trigMuons_eta0", "trigMuons_SApt0", "trigMuons_SAeta0", "trigMuons_uT0", "trigMuons_charge0",
+                                                                                      "nonTrigMuons_pt0", "nonTrigMuons_eta0", "nonTrigMuons_SApt0", "nonTrigMuons_SAeta0", "nonTrigMuons_uT0", "nonTrigMuons_charge0"])
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId"])
 
         df = df.Define("exp_weight", "weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom")
@@ -194,7 +204,7 @@ def build_graph(df, dataset):
 
     if not dataset.is_data and not args.onlyMainHistograms:
 
-        df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, axes, cols, is_w_like=True)
+        df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, axes, cols, what_analysis=thisAnalysis, smooth3D=args.smooth3dsf)
         df = syst_tools.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, axes, cols)
 
         # n.b. this is the W analysis so mass weights shouldn't be propagated

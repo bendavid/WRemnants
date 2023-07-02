@@ -3,6 +3,7 @@ from utilities import output_tools, common, rdf_tools, logging, differential
 
 parser,initargs = common.common_parser(True)
 
+import ROOT
 import narf
 import wremnants
 from wremnants import theory_tools,syst_tools,theory_corrections, muon_calibration, muon_selections, muon_validation, unfolding_tools
@@ -28,7 +29,7 @@ parser.add_argument("--vqt3dsmoothing", action="store_true", help="3D Smoothing"
 parser.add_argument("--noGenMatchMC", action='store_true', help="Don't use gen match filter for prompt muons with MC samples (note: QCD MC never has it anyway)")
 args = parser.parse_args()
 
-args.sfFile = data_dir + "testMuonSF/allSmooth_GtoH.root"
+args.sfFile = data_dir + "testMuonSF/allSmooth_GtoH3Dout.root"
 
 if args.vqtTestIntegrated:
     sfFileVqtTest = f"{data_dir}/testMuonSF/IsolationEfficienciesCoarseBinning.root"
@@ -37,6 +38,7 @@ else:
 
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
+thisAnalysis = thisAnalysis
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
                                               filt=args.filterProcs,
                                               excl=args.excludeProcs, 
@@ -130,7 +132,7 @@ if args.binnedScaleFactors:
                                                                                                                                                           includeTrigger = includeTrigger) 
 else:
     logger.info("Using smoothed scale factors and uncertainties")
-    muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile, era = era, max_pt = axis_pt.edges[-1], isoEfficiencySmoothing = args.isoEfficiencySmoothing, smooth3D=args.smooth3dsf)
+    muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile, era = era, what_analysis = thisAnalysis, max_pt = axis_pt.edges[-1], isoEfficiencySmoothing = args.isoEfficiencySmoothing, smooth3D=args.smooth3dsf)
     #muon_efficiency_helper2d, muon_efficiency_helper_syst2d, muon_efficiency_helper_stat2d = wremnants.make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSmooth_GtoHout.root", era = era, max_pt = axis_pt.edges[-1], isoEfficiencySmoothing = args.isoEfficiencySmoothing, smooth3D=args.smooth3dsf)
 
 logger.info(f"SF file: {args.sfFile}")
@@ -295,24 +297,25 @@ def build_graph(df, dataset):
         weight_expr = "weight_pu*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom"
         # define recoil uT, muon projected on boson pt, the latter is made using preFSR variables
         # TODO: fix it for not W/Z processes
-        recoilVarSF = "recoilProj_uT"
-        columnsForSF = ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", recoilVarSF, "goodMuons_charge0", "passIso"]
+        columnsForSF = ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_uT0", "goodMuons_charge0", "passIso"]
         if args.smooth3dsf:
             if isW or isZ:
                 # preFSR or postFSR boson (with reco muon for the latter to form the W) gives the same results when integrating uT
+                ## MARCO temporarily commented out code
                 # df = df.Define("postFSRnus", "GenPart_status == 1 && (GenPart_statusFlags & 1) && abs(GenPart_pdgId) == 14")
                 # df = df.Define("postFSRnusIdx", "wrem::postFSRLeptonsIdx(postFSRnus)")
-                # df = df.Define(recoilVarSF, "wrem::zqtproj0(goodMuons_pt0, goodMuons_eta0, goodMuons_phi0, GenPart_pt, GenPart_eta, GenPart_phi, postFSRnusIdx)")
+                # df = df.Define("goodMuons_uT0", "wrem::zqtproj0(goodMuons_pt0, goodMuons_eta0, goodMuons_phi0, GenPart_pt, GenPart_eta, GenPart_phi, postFSRnusIdx)")
                 #
-                df = df.Define(recoilVarSF, "wrem::zqtproj0_boson(goodMuons_pt0, goodMuons_phi0, ptVgen, phiVgen)")
+                df = df.Define("goodMuons_uT0", "wrem::zqtproj0_boson(goodMuons_pt0, goodMuons_phi0, ptVgen, phiVgen)")
             else:
                 # dummy for now
-                df = df.Define(recoilVarSF, "0.0f")
+                df = df.Define("goodMuons_uT0", "0.0f")
         else:
-            df = df.Define(recoilVarSF, "0.0f")
-                
+            # this is a dummy, the uT axis when present will have a single bin
+            df = df.Define("goodMuons_uT0", "0.0f")
+        # FIXME: this should go in previous part, and maybe we will still have the uT axis        
         if not args.smooth3dsf:
-            columnsForSF.remove(recoilVarSF)
+            columnsForSF.remove("goodMuons_uT0")
             
         if not args.noScaleFactors:
             df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, columnsForSF)
@@ -404,7 +407,7 @@ def build_graph(df, dataset):
         results.append(df.HistoBoost("nominal_weight", [hist.axis.Regular(200, -4, 4)], ["nominal_weight"], storage=hist.storage.Double()))
         
         if args.vqt3dsmoothing and auxiliary_histograms:
-            cols_WeffMC = ["goodMuons_eta0", "goodMuons_pt0", recoilVarSF, "goodMuons_charge0",
+            cols_WeffMC = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_uT0", "goodMuons_charge0",
                            "passIso", "passMT", "passTrigger"]
             yieldsForWeffMC = df.HistoBoost("yieldsForWeffMC", axes_WeffMC, [*cols_WeffMC, "nominal_weight"])
             results.append(yieldsForWeffMC)
@@ -424,7 +427,7 @@ def build_graph(df, dataset):
 
     if not dataset.is_data and not args.onlyMainHistograms:
         
-        df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, axes, cols, smooth3D=args.smooth3dsf)
+        df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, axes, cols, what_analysis=thisAnalysis, smooth3D=args.smooth3dsf)
         df = syst_tools.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, axes, cols)
 
         ## MARCO: temporarily commented out code
