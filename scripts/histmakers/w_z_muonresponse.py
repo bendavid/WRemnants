@@ -109,7 +109,7 @@ def build_graph(df, dataset):
 
         if args.testHelper:
 
-            df = df.DefineSlot("smearing_weight_test", smearing_test_helper, ["selMuons_correctedPt", "selMuons_correctedEta", "selMuons_correctedCharge", "selMuons_genPt", "selMuons_genEta", "selMuons_genCharge", "nominal_weight"])
+            df = df.Define("smearing_weight_test", smearing_test_helper, ["selMuons_correctedPt", "selMuons_correctedEta", "selMuons_correctedCharge", "selMuons_genPt", "selMuons_genEta", "selMuons_genCharge", "nominal_weight"])
 
             # just use the output so that it gets evaluated for testing
             df = df.Define("smearing_weight_test0", "smearing_weight_test(0)")

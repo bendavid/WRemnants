@@ -1080,7 +1080,7 @@ public:
 
     using out_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<N_VARIATIONS>>;
 
-    out_tensor_t operator() (unsigned int slot, const RVec<float> &recPts, const RVec<float> &recEtas, const RVec<int> &recCharges, const RVec<float> &genPts, const RVec<float> &genEtas, const RVec<int> &genCharges, double nominal_weight = 1.0) {
+    out_tensor_t operator() (const RVec<float> &recPts, const RVec<float> &recEtas, const RVec<int> &recCharges, const RVec<float> &genPts, const RVec<float> &genEtas, const RVec<int> &genCharges, double nominal_weight = 1.0) {
 
         auto const nmuons = recPts.size();
 
@@ -1123,7 +1123,7 @@ public:
             auto outputs = std::tie(delta_weight_tensor);
 
             // call the tensorflow lite model to fill the outputs
-            (*helper_)(slot, inputs, outputs);
+            (*helper_)(inputs, outputs);
 
             // get the output value
             const double dweightdqop = delta_weight_tensor(0);
@@ -1149,7 +1149,7 @@ private:
 };
 
 void test_SmearingWeightTestHelper(SmearingWeightTestHelper<5> &helper) {
-    auto res = helper(0, RVec<float>(), RVec<float>(), RVec<int>(), RVec<float>(), RVec<float>(), RVec<int>(), 1.);
+    auto res = helper(RVec<float>(), RVec<float>(), RVec<int>(), RVec<float>(), RVec<float>(), RVec<int>(), 1.);
 
     std::cout << res << std::endl;
 
