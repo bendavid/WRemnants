@@ -90,9 +90,10 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
     ## start with NOMI and SYST
     sf_syst_2D = None
     ############
+    sf_syst_from2D_for3D = {}
     # all ut-independent steps, for the nominal and systematics
     for charge, charge_tag in charges.items():
-        for eff_type in axis_eff_type_2D:
+        for eff_type in allEff_types: # should only loop on axis_eff_type_2D but must get syst in 2D to propagate to 3D later
             # for iso can use histogram for efficiency variation only in data (the only one we have for now)
             nameTag = "nomiAndAlt_onlyDataVar" if (isoEfficiencySmoothing and any(x in eff_type for x in ["iso", "antiiso"])) else "nomiAndAlt"
             chargeTag = charge_tag if eff_type in chargeDependentSteps else "both"
@@ -108,14 +109,21 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
             #logger.debug(f"syst: {eff_type} -> {hist_name}")
 
             hist_hist = narf.root_to_hist(hist_root, axis_names = ["SF eta", "SF pt", "nomi-statUpDown-syst"])
-
+            # the following axis might change for different histograms, because of a different number of effStat variations
+            axis_nomiAlt_eff = hist_hist.axes[2]
+            if eff_type not in axis_eff_type_2D:
+                key = f"{eff_type}_{chargeTag}"
+                if key not in sf_syst_from2D_for3D.keys():
+                    sf_syst_from2D_for3D[k] = hist_hist.view(flow=False)[:,:,axis_nomiAlt_eff.size-1]
+                    logger.debug(f"Storing 2D eta-pt syst for {k} SF to propagate to 3D version")
+                    # histogram is saved, now skip the rest
+                continue
+            
             if sf_syst_2D is None:
                 axis_eta_eff = hist_hist.axes[0]
                 axis_pt_eff = hist_hist.axes[1]
                 # store all systs (currently only 1) with the nominal, for all efficiency steps
                 sf_syst_2D = hist.Hist(axis_eta_eff, axis_pt_eff, axis_charge, axis_eff_type_2D, axis_nom_syst, name = "sf_syst_2D", storage = hist.storage.Weight())
-            # this axis might change for different histograms, because of a different number of effStat variations
-            axis_nomiAlt_eff = hist_hist.axes[2]
             # could use max_pt to remove some of the pt bins for the input histogram
             # extract nominal (first bin that is not underflow) and put in corresponding bin of destination
             sf_syst_2D.view(flow=False)[:, :, axis_charge.index(charge), axis_eff_type_2D.index(eff_type), 0] = hist_hist.view(flow=False)[:,:,0]
@@ -159,17 +167,27 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
                                            axis_eff_type_3D, axis_nom_syst, axis_ut_eff,
                                            name = "sf_syst_3D", storage = hist.storage.Weight())
                 # could use max_pt to remove some of the pt bins for the input histogram
+                #
                 # extract nominal (first bin that is not underflow) and put in corresponding bin of destination (bin 0 is the first bin because no underflow)
-                ## Note: must call sf_syst_3D with flow=False because it has overflow bins but hist_hist does not
-                sf_syst_3D.view(flow=False)[:, :, axis_charge.index(charge), axis_eff_type_3D.index(eff_type), 0, :] = hist_hist.view(flow=False)[:,:,:,0]
+                ## Note: must call sf_syst_3D with flow=False because it has overflow bins but hist_hist does not (it was made without them in 4D)
+                nominalLayer = hist_hist.view(flow=False)[:,:,:,0]
+                sf_syst_3D.view(flow=False)[:, :, axis_charge.index(charge), axis_eff_type_3D.index(eff_type), 0, :] = nominalLayer #hist_hist.view(flow=False)[:,:,:,0]
                 # extract syst (last bin except overflow) and put in corresponding bin of destination (bin 1 is the second bin because no underflow)
                 ##
                 ## FIXME: for now using syst=nominal since we don't have syst (must copy from 2D version)
                 ##
-                sf_syst_3D.view(flow=False)[:, :, axis_charge.index(charge), axis_eff_type_3D.index(eff_type), 1, :] = hist_hist.view(flow=False)[:,:,:,0]  ## <---- FIX THIS !!!
+                # take syst histogram in 2D (eta-pt), and broadcast into eta-pt-ut)
+                chargeTag = charge_tag if eff_type in chargeDependentSteps else "both"
+                syst_view_etaPt = sf_syst_from2D_for3D[f"{eff_type}_{chargeTag}"]
+                # broadcast systOverNomi into a 3D histogram adding ut axis
+                shape_etaPtUt = nominalLayer.shape
+                # The transpose is because numpy works right to left in broadcasting, and we have the ut axis on the right
+                tmp_broadcast = np.broadcast_to(syst_view_etaPt.T, shape_etaPtUt[::-1])
+                syst_view_etaPtUt = tmp_broadcast.T
+                sf_syst_3D.view(flow=False)[:, :, axis_charge.index(charge), axis_eff_type_3D.index(eff_type), 1, :] = syst_view_etaPtUt # hist_hist.view(flow=False)[:,:,:,0]  ## <---- FIX THIS !!!
                 for isyst in range(len(effSyst_decorrEtaEdges)-1):
                     # first copy the nominal
-                    sf_syst_3D.view(flow=False)[:, :, axis_charge.index(charge), axis_eff_type_3D.index(eff_type), 2+isyst, :] = hist_hist.view(flow=False)[:,:,:,0]
+                    sf_syst_3D.view(flow=False)[:, :, axis_charge.index(charge), axis_eff_type_3D.index(eff_type), 2+isyst, :] = nominalLayer # hist_hist.view(flow=False)[:,:,:,0]
                     # now update with actual syst all eta bins inside interval [effSyst_decorrEtaEdges[isyst], effSyst_decorrEtaEdges[isyst+1]]
                     # add epsilon to ensure picking the bin on the right of the edge (for the right edge given by
                     # effSyst_decorrEtaEdges[isyst+1]] the range selection in boost later on will stop at the left
@@ -177,7 +195,7 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
                     # also do not sum 1 because sf_syst_3D.view(flow=False) will consider 0 the first bin index (with flow=True instead 0 is the underflow but only if it exists, otherwise 0 is the first bin)
                     indexEtaLow = axis_eta_eff.index(effSyst_decorrEtaEdges[isyst] + 0.001) # add epsilon to ensure picking the bin on the right of the edge
                     indexEtaHigh = axis_eta_eff.index(effSyst_decorrEtaEdges[isyst+1] + 0.001) 
-                    sf_syst_3D.view(flow=False)[indexEtaLow:indexEtaHigh, :, axis_charge.index(charge), axis_eff_type_3D.index(eff_type), 2+isyst, :] = hist_hist.view(flow=False)[indexEtaLow:indexEtaHigh, :, :, 0]
+                    sf_syst_3D.view(flow=False)[indexEtaLow:indexEtaHigh, :, axis_charge.index(charge), axis_eff_type_3D.index(eff_type), 2+isyst, :] = syst_view_etaPtUt[indexEtaLow:indexEtaHigh, :, :] # hist_hist.view(flow=False)[indexEtaLow:indexEtaHigh, :, :, 0]
                     
         # set overflow and underflow eta-pt bins equal to adjacent bins
         sf_syst_3D.view(flow=True)[0, ...]                       = sf_syst_3D.view(flow=True)[1, ...]
@@ -335,24 +353,39 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
                     axis_pt_eff = cloneAxis(hist_hist.axes[1], overflow=True, underflow=True, newName="SF pt")
                     axis_ut_eff = cloneAxis(hist_hist.axes[2], overflow=True, underflow=True, newName="SF ut") if is3D else hist.axis.Regular(1, -1e6, 1e6, name = "SF ut")
                     axis_eff_type = hist.axis.StrCategory(effStat_manager[effStatKey]["axisLabels"], name = f"{effStatKey}_eff_type")
-                    effStat_manager[effStatKey]["boostHist"] = hist.Hist(axis_eta_eff, axis_pt_eff, axis_charge_def,
-                                                                         axis_eff_type,
-                                                                         nom_up_effStat_axis,
-                                                                         axis_ut_eff,
-                                                                         name = effStatKey,
-                                                                         storage = hist.storage.Weight())
+                    if smooth3D:
+                        effStat_manager[effStatKey]["boostHist"] = hist.Hist(axis_eta_eff, axis_pt_eff, axis_charge_def,
+                                                                             axis_eff_type,
+                                                                             nom_up_effStat_axis,
+                                                                             axis_ut_eff,
+                                                                             name = effStatKey,
+                                                                             storage = hist.storage.Weight())
+                    else:
+                        effStat_manager[effStatKey]["boostHist"] = hist.Hist(axis_eta_eff, axis_pt_eff, axis_charge_def,
+                                                                             axis_eff_type,
+                                                                             nom_up_effStat_axis,
+                                                                             name = effStatKey,
+                                                                             storage = hist.storage.Weight())
 
+                        
                 # hist_hist may or may not have overflows, but the left-hand side histogram have them: read with flow=False to get only things in acceptance here
-                if is3D:
-                    # hist_hist has dimension 4, ut as third axes
-                    effStat_manager[effStatKey]["boostHist"].view(flow=False)[:, :, axis_charge_def.index(charge), axis_eff_type.index(eff_type), nom_up_effStat_axis.index(0), :] = hist_hist.view(flow=False)[:,:,:, 0]
-                    for iup in range(1, 1 + nPtEigenBins):
-                        effStat_manager[effStatKey]["boostHist"].view(flow=False)[:, :, axis_charge_def.index(charge), axis_eff_type.index(eff_type), nom_up_effStat_axis.index(iup), :] = hist_hist.view(flow=False)[:,:,:, iup]
+                if smooth3D:
+                    if is3D:
+                        # hist_hist has dimension 4, ut as third axes
+                        effStat_manager[effStatKey]["boostHist"].view(flow=False)[:, :, axis_charge_def.index(charge), axis_eff_type.index(eff_type), nom_up_effStat_axis.index(0), :] = hist_hist.view(flow=False)[:,:,:, 0]
+                        for iup in range(1, 1 + nPtEigenBins):
+                            effStat_manager[effStatKey]["boostHist"].view(flow=False)[:, :, axis_charge_def.index(charge), axis_eff_type.index(eff_type), nom_up_effStat_axis.index(iup), :] = hist_hist.view(flow=False)[:,:,:, iup]
+                    else:
+                        # hist_hist has dimension 3, no ut axis
+                        effStat_manager[effStatKey]["boostHist"].view(flow=False)[:, :, axis_charge_def.index(charge), axis_eff_type.index(eff_type), nom_up_effStat_axis.index(0), 0] = hist_hist.view(flow=False)[:,:, 0]
+                        for iup in range(1, 1 + nPtEigenBins):
+                            effStat_manager[effStatKey]["boostHist"].view(flow=False)[:, :, axis_charge_def.index(charge), axis_eff_type.index(eff_type), nom_up_effStat_axis.index(iup), 0] = hist_hist.view(flow=False)[:,:, iup]
                 else:
-                    # hist_hist has dimension 3, no ut axis
-                    effStat_manager[effStatKey]["boostHist"].view(flow=False)[:, :, axis_charge_def.index(charge), axis_eff_type.index(eff_type), nom_up_effStat_axis.index(0), 0] = hist_hist.view(flow=False)[:,:, 0]
+                    # boostHist has no ut axis
+                    effStat_manager[effStatKey]["boostHist"].view(flow=False)[:, :, axis_charge_def.index(charge), axis_eff_type.index(eff_type), nom_up_effStat_axis.index(0)] = hist_hist.view(flow=False)[:,:, 0]
                     for iup in range(1, 1 + nPtEigenBins):
-                        effStat_manager[effStatKey]["boostHist"].view(flow=False)[:, :, axis_charge_def.index(charge), axis_eff_type.index(eff_type), nom_up_effStat_axis.index(iup), 0] = hist_hist.view(flow=False)[:,:, iup]
+                        effStat_manager[effStatKey]["boostHist"].view(flow=False)[:, :, axis_charge_def.index(charge), axis_eff_type.index(eff_type), nom_up_effStat_axis.index(iup)] = hist_hist.view(flow=False)[:,:, iup]
+                    
 
         # set overflow and underflow equal to adjacent bins
         effStat_manager[effStatKey]["boostHist"].view(flow=True)[0, ...] = effStat_manager[effStatKey]["boostHist"].view(flow=True)[1, ...]

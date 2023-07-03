@@ -338,15 +338,15 @@ def add_muon_efficiency_unc_hists(results, df, helper_stat, helper_syst, axes, c
         muon_columns_stat_tracking = [x for x in muon_columns_stat_tracking if "uT0" not in x]
         muon_columns_syst = [x for x in muon_columns_syst if "uT0" not in x]
         
-    for key,helper in helper_stat.items():
-        muon_columns_stat_step = muon_columns_stat_tracking if "tracking" in key else muon_columns_stat
-        if "iso" in key and what_analysis == ROOT.wrem.AnalysisType.Wmass:
-            df = df.Define(f"effStatTnP_{key}_tensor", helper, [*muon_columns_stat_step, "passIso", "nominal_weight"])
-        else:
-            df = df.Define(f"effStatTnP_{key}_tensor", helper, [*muon_columns_stat_step, "nominal_weight"])
-        name = Datagroups.histName(base_name, syst=f"effStatTnP_{key}")
-        effStatTnP = df.HistoBoost(name, axes, [*cols, f"effStatTnP_{key}_tensor"], tensor_axes = helper.tensor_axes, storage=hist.storage.Double())
-        results.append(effStatTnP)
+    # for key,helper in helper_stat.items():
+    #     muon_columns_stat_step = muon_columns_stat_tracking if "tracking" in key else muon_columns_stat
+    #     if "iso" in key and what_analysis == ROOT.wrem.AnalysisType.Wmass:
+    #         df = df.Define(f"effStatTnP_{key}_tensor", helper, [*muon_columns_stat_step, "passIso", "nominal_weight"])
+    #     else:
+    #         df = df.Define(f"effStatTnP_{key}_tensor", helper, [*muon_columns_stat_step, "nominal_weight"])
+    #     name = Datagroups.histName(base_name, syst=f"effStatTnP_{key}")
+    #     effStatTnP = df.HistoBoost(name, axes, [*cols, f"effStatTnP_{key}_tensor"], tensor_axes = helper.tensor_axes, storage=hist.storage.Double())
+    #     results.append(effStatTnP)
     
     df = df.Define("effSystTnP_weight", helper_syst, [*muon_columns_syst, "nominal_weight"])
     name = Datagroups.histName(base_name, syst=f"effSystTnP")
