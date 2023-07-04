@@ -1,5 +1,7 @@
 from copy import deepcopy
-
+import hist
+from narf.ioutils import H5PickleProxy
+import numpy as np
 from utilities import logging
 
 logger = logging.child_logger(__name__)
@@ -21,7 +23,6 @@ class Datagroup(object):
         self.memberOp = memberOp            # list of operations that is applied on single members
 
         self.hists = {}                     # list of histograms processed from narf datasets
-
 
     def copy(self, new_name, member_filter=None):
         logger.debug(f"Make a copy of group {self.name}, named {new_name}!")
@@ -73,3 +74,32 @@ class Datagroup(object):
             self.memberOp = [v for (v, i) in zip(self.memberOp, mask) if i]
 
         self.members = [m for (m, i) in zip(self.members, mask) if i]
+
+    def add_member_axis(self, name, results, member_filters=[], hist_filter=None):
+        # adds an axis depending on the group members
+        # member_filters is a list of member filter to specific which members 
+
+        nBins = len(member_filters) 
+
+        axis = hist.axis.Regular(nBins, 0, nBins, underflow=False, overflow=False, name = name)
+
+        for member in self.members:
+            logger.debug(f"Add new member axis for member {member.name}")
+            
+            for h_name, h in results[member.name]["output"].items():
+                
+                if hist_filter is not None and not hist_filter(h_name):
+                    continue
+
+                hold = h.get()
+                hnew = hist.Hist(axis, *hold.axes, storage=hold.storage_type())
+
+                for i, member_filter in enumerate(member_filters):
+                    if member_filter(member):
+                        logger.debug(f"Fill bin {i} for member {member.name}, hist {h_name}")                    
+                        hnew.view(flow=True)[...] = np.stack(
+                            [hnew[{name: i}].view(flow=True) if i != j else hold.view(flow=True) for j in range(nBins)], 
+                            axis = 0)
+
+                results[member.name]["output"][h_name] = H5PickleProxy(hnew)
+

@@ -539,6 +539,8 @@ def define_corrected_reco_muon_kinematics(df, muons="goodMuons", kinematic_vars 
     return df
 
 def transport_smearing_weights_to_reco(resultdict, procs, nonClosureScheme = "A-M-separated"):
+    time0 = time.time()
+    
     hists_to_transport = ['muonScaleSyst_responseWeights_gensmear']
     if nonClosureScheme == "A-M-separated":
         hists_to_transport.append('Z_non_closure_parametrized_A_gensmear')
