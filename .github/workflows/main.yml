@@ -8,7 +8,8 @@ on:
   pull_request:
     branches: [ main ]
   schedule:
-    - cron: '0 3 * * 2,4,6' # Run on Wednesday and Saturday morning at 3h00 UTC
+    - cron: '0 3 * * 2,4,6' # Run on Tuesday, Thursday, and Saturday morning at 3h00 UTC
+    - cron: '30 5 * * 1-5' # Run on weekdays
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
@@ -62,16 +63,21 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: setup scheduled
-        if: github.event.schedule != '0 3 * * 2,4,6'
+      - name: setup unscheduled
+        if: github.event_name != 'schedule'
         run: echo PLOT_DIR=PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }')/$(date +%Y_%m_%d) >> $GITHUB_ENV
 
-      - name: setup pr
+      - name: setup scheduled build
         if: github.event.schedule == '0 3 * * 2,4,6'
-        run: echo PLOT_DIR=ScheduledBuild_$(date +%Y_%m_%d)_$(git rev-parse --short "$GITHUB_SHA") >> $GITHUB_ENV
+        run: |
+          echo PLOT_DIR=ScheduledBuilds/$(date +%Y_%m_%d)_$(git rev-parse --short "$GITHUB_SHA") >> $GITHUB_ENV
 
-      - name: setup nonpr
-        if: github.event_name != 'pull_request'
+      - name: setup reference run
+        if: github.event.schedule == '30 5 * * 1-5'
+        run: echo PLOT_DIR=ReferenceRuns/$(date +%Y_%m_%d)_$(git rev-parse --short "$GITHUB_SHA") >> $GITHUB_ENV
+
+      - name: setup full events
+        if: github.event_name != 'pull_request' && github.event.schedule != '30 5 * * 1-5'
         run: |
           echo "NTHREADS=64" >> $GITHUB_ENV
           echo "MAX_FILES=-1" >> $GITHUB_ENV
