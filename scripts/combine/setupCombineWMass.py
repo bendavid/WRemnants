@@ -36,9 +36,9 @@ def make_parser(parser=None):
     parser.add_argument("--genAxis", type=str, default=None, nargs="+", help="Specify which gen axis should be used in unfolding, if 'None', use all (inferred from metadata).")
     parser.add_argument("--fitXsec", action='store_true', help="Fit signal inclusive cross section")
     parser.add_argument("--correlatedNonClosureNuisances", action='store_true', help="get systematics from histograms for the Z non-closure nuisances without decorrelation in eta and pt")
-    parser.add_argument("--nonClosureScheme", type=str, default = "A-M-separated", choices=["none", "A-M-separated", "A-M-combined", "binned", "binned-plus-M"], help = "how the non-closure numbers are derived")
     parser.add_argument("--sepImpactForNC", action="store_true", help="use a dedicated impact gropu for non closure nuisances, instead of putting them in muonScale")
-    
+    parser.add_argument("--genModel", action="store_true", help="Produce datacard with the xnorm as model (binned according to axes defined in --fitvar)")
+
     return parser
 
 def main(args,xnorm=False):   
@@ -99,30 +99,15 @@ def main(args,xnorm=False):
         datagroups.setGenAxes(args.genAxis)
         
         if wmass:
+            # gen level bins, split by charge
+            datagroups.defineSignalBinsUnfolding("Wmunu", "Wmunu_qGen0", member_filter=lambda x: x.name.startswith("Wminusmunu"))
+            datagroups.defineSignalBinsUnfolding("Wmunu", "Wmunu_qGen1", member_filter=lambda x: x.name.startswith("Wplusmunu"))
             # out of acceptance contribution
-            datagroups.copyGroup("Wmunu", "WmunuBkg", member_filter=lambda x: x.name.startswith("Bkg"))
-
-            # split group into two
-            datagroups.copyGroup("Wmunu", "Wmunu_qGen0", member_filter=lambda x: x.name.startswith("Wminusmunu"))
-            datagroups.copyGroup("Wmunu", "Wmunu_qGen1", member_filter=lambda x: x.name.startswith("Wplusmunu"))
-
-            datagroups.deleteGroup("Wmunu")
-
-            datagroups.defineSignalBinsUnfolding("Wmunu_qGen0")
-            datagroups.defineSignalBinsUnfolding("Wmunu_qGen1")
-
+            datagroups.groups["Wmunu"].deleteMembers([m for m in datagroups.groups["Wmunu"].members if not m.name.startswith("Bkg")])
         else:
+            datagroups.defineSignalBinsUnfolding("Zmumu", member_filter=lambda x: x.name.startswith("Zmumu"))
             # out of acceptance contribution
-            datagroups.copyGroup("Zmumu", "ZmumuBkg", member_filter=lambda x: x.name.startswith("Bkg"))
-
-            datagroups.groups["Zmumu"].deleteMembers([m for m in datagroups.groups["Zmumu"].members if "BkgZmumu" in m.name])
-
-            datagroups.defineSignalBinsUnfolding("Zmumu")
-
-        if xnorm:
-            toDel = [group for group in datagroups.groups if not group in datagroups.unconstrainedProcesses]
-            datagroups.deleteGroups(toDel)
-            histName = "xnorm"
+            datagroups.groups["Zmumu"].deleteMembers([m for m in datagroups.groups["Zmumu"].members if not m.name.startswith("Bkg")])
 
     if args.noHist and args.noStatUncFakes:
         raise ValueError("Option --noHist would override --noStatUncFakes. Please select only one of them")
@@ -134,16 +119,30 @@ def main(args,xnorm=False):
     cardTool.setDatagroups(datagroups)
     logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
     cardTool.setNominalTemplate(f"{templateDir}/main.txt")
+    cardTool.setProjectionAxes(args.fitvar.split("-"))
     if args.sumChannels or xnorm or name in ["ZMassDilepton"]:
         cardTool.setChannels(["inclusive"])
         cardTool.setWriteByCharge(False)
     if xnorm:
+        histName = "xnorm"
         cardTool.setWriteByCharge(False)
         cardTool.setHistName(histName)
         cardTool.setNominalName(histName)
-        cardTool.setProjectionAxes(["count"])
-    else:
-        cardTool.setProjectionAxes(args.fitvar.split("-"))
+        datagroups.select_xnorm_groups() # only keep processes where xnorm is defined
+        if args.unfolding:
+            cardTool.setProjectionAxes(["count"])
+        else:
+            if wmass:
+                # add gen charge as additional axis
+                datagroups.groups["Wmunu"].add_member_axis("qGen", datagroups.results, 
+                    member_filters=[lambda x: x.name.startswith("Wminusmunu"), lambda x: x.name.startswith("Wplusmunu")], 
+                    hist_filter=lambda x: x.startswith("xnorm"))
+                datagroups.deleteGroup("Fake")
+            cardTool.unroll = True
+            # remove projection axes from gen axes, otherwise they will be integrated before
+            datagroups.setGenAxes([a for a in datagroups.gen_axes if a not in cardTool.project])
+    if args.unfolding:
+        cardTool.addPOISumGroups()
     if args.noHist:
         cardTool.skipHistograms()
     cardTool.setOutfile(os.path.abspath(f"{outfolder}/{name}CombineInput{suffix}.root"))
@@ -160,10 +159,6 @@ def main(args,xnorm=False):
                                                                   filterGroups=filterGroup)
             )
     cardTool.setLumiScale(args.lumiScale)
-
-    if args.unfolding:
-        cardTool.cardSumGroups = "" # reset needed for xnorm
-        cardTool.addPOISumGroups()
 
     logger.info(f"cardTool.allMCProcesses(): {cardTool.allMCProcesses()}")
         
@@ -488,10 +483,11 @@ if __name__ == "__main__":
     
     time0 = time.time()
 
-    time0 = time.time()
-
-    main(args)
-    if args.unfolding:
-        main(args,xnorm=True)
+    if args.genModel:
+        main(args, xnorm=True)
+    else:
+        main(args)
+        if args.unfolding:
+            main(args, xnorm=True)
 
     logger.info(f"Running time: {time.time()-time0}")

@@ -395,10 +395,7 @@ def syst_min_or_max_env_hist(h, proj_ax, syst_ax, indices, no_flow=[], do_min=Tr
     if syst_ax in proj_ax:
         proj_ax.pop(proj_ax.index(syst_ax))
 
-    # projectNoFlow is much slower than project and the bottleneck in this function. I don't think we need it here
-    # hvar = projectNoFlow(h, (*proj_ax, syst_ax), exclude=no_flow)
-
-    hvar = h.project(*proj_ax, syst_ax)
+    hvar = projectNoFlow(h, (*proj_ax, syst_ax), exclude=no_flow)
 
     view = np.take(hvar.view(flow=True), indices, axis=-1)
     fullview = np.take(h.view(flow=True), indices, axis=-1)

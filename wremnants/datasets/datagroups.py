@@ -290,6 +290,10 @@ class Datagroups(object):
                     logger.debug("Applying global action")
                     h = self.globalAction(h)
 
+                if forceNonzero:
+                    logger.debug("force non zero")
+                    h = hh.clipNegativeVals(h, createNew=False)
+
                 scale = self.processScaleFactor(member)
                 scale *= scaleToNewLumi
                 if group.scale:
@@ -298,10 +302,6 @@ class Datagroups(object):
                 if not np.isclose(scale, 1, rtol=0, atol=1e-10):
                     logger.debug(f"Scale hist with {scale}")
                     h = hh.scaleHist(h, scale, createNew=False)
-
-                if forceNonzero:
-                    logger.debug("force non zero")
-                    hh.clipNegativeVals(h, createNew=False)
 
                 hasPartialSumForFake = False
                 if hasFake and procName != nameFake:
@@ -314,7 +314,7 @@ class Datagroups(object):
                         scaleProcForFake = self.groups[nameFake].scale(member)
                         logger.debug(f"Summing hist {read_syst} for {member.name} to {nameFake} with scale = {scaleProcForFake}")
                         hProcForFake = scaleProcForFake * h
-                        histForFake = hh.addHists(hProcForFake, histForFake, createNew=False) if histForFake else hProcForFake
+                        histForFake = hh.addHists(histForFake, hProcForFake, createNew=False) if histForFake else hProcForFake
                                 
                 # The following must be done when the group is not Fake, or when the previous part for fakes was not done
                 # For fake this essentially happens when the process doesn't have the syst, so that the nominal is used
@@ -323,15 +323,16 @@ class Datagroups(object):
                         logger.debug(f"Summing nominal hist instead of {syst} to {nameFake} for {member.name}")
                     else:
                         logger.debug(f"Summing {read_syst} to {procName} for {member.name}")
-                    group.hists[label] = hh.addHists(h, group.hists[label], createNew=False) if group.hists[label] else h
+
+                    group.hists[label] = hh.addHists(group.hists[label], h, createNew=False) if group.hists[label] else h
                     logger.debug("Sum done")
-                
+
             # now sum to fakes the partial sums which where not already done before
             # (group.hists[label] contains only the contribution from nominal histograms).
             # Then continue with the rest of the code as usual
             if hasFake and procName == nameFake:
                 if histForFake is not None:
-                    group.hists[label] = hh.addHists(histForFake, group.hists[label], createNew=False) if group.hists[label] else histForFake
+                    group.hists[label] = hh.addHists(group.hists[label], histForFake, createNew=False) if group.hists[label] else histForFake
 
             # Can use to apply common rebinning or selection on top of the usual one
             if group.rebinOp:
@@ -513,11 +514,16 @@ class Datagroups(object):
 
         logger.debug(f"Gen axes are now {self.gen_axes}")
 
-    def defineSignalBinsUnfolding(self, group_name):
+    def defineSignalBinsUnfolding(self, group_name, new_name=None, member_filter=None):
         if group_name not in self.groups.keys():
             raise RuntimeError(f"Base group {group_name} not found in groups {self.groups.keys()}!")
 
-        nominal_hist = self.results[self.groups[group_name].members[0].name]["output"]["xnorm"].get()
+        base_members = self.groups[group_name].members[:]
+
+        if member_filter is not None:
+            base_members = [m for m in filter(lambda x, f=member_filter: f(x), base_members)]            
+
+        nominal_hist = self.results[base_members[0].name]["output"]["xnorm"].get()
 
         gen_bins = []
         for gen_axis in self.gen_axes:
@@ -527,23 +533,39 @@ class Datagroups(object):
             gen_bin_edges = nominal_hist.axes[gen_axis].edges
             gen_bins.append(range(len(gen_bin_edges)-1))
 
-        base_members = self.groups[group_name].members[:]
-
         for indices in itertools.product(*gen_bins):
 
-            proc_name = group_name
+            proc_name = group_name if new_name is None else new_name
             for idx, var in zip(indices, self.gen_axes):
                 proc_name += f"_{var}{idx}"
 
-            self.copyGroup(group_name, proc_name)
+            self.copyGroup(group_name, proc_name, member_filter=member_filter)
 
             memberOp = lambda x, indices=indices, genvars=self.gen_axes: x[{var : i for var, i in zip(genvars, indices)}]
             self.groups[proc_name].memberOp = [memberOp for m in base_members]
 
             self.unconstrainedProcesses.append(proc_name)
 
-        # Remove inclusive signal
-        self.deleteGroup(group_name)
+    def select_xnorm_groups(self):
+        # only keep members and groups where xnorm is defined 
+        toDel_groups = []
+        for g_name, group in self.groups.items():
+            toDel_members = []
+            for member in group.members:
+                if member.name not in self.results.keys():
+                    raise RuntimeError(f"The member {member.name} of group {g_name} was not found in the results!")
+
+                if "xnorm" not in self.results[member.name]["output"].keys():
+                    logger.debug(f"Member {member.name} has no xnorm and will be deleted")
+                    toDel_members.append(member)
+
+            if len(toDel_members) == len(group.members):
+                logger.debug(f"All members of group {g_name} have no xnorm and the group will be deleted")
+                toDel_groups.append(g_name)
+            else:
+                group.deleteMembers(toDel_members)
+
+        self.deleteGroups(toDel_groups)
 
     def make_yields_df(self, histName, procs, action=lambda x: x, norm_proc=None):
         def sum_and_unc(h):
