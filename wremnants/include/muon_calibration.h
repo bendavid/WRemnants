@@ -703,7 +703,6 @@ private:
             double recoKUnc = (AUnc - eUnc * recoK) * recoK + recoCharge * MUnc;
             Eigen::Vector3d parmvar = Eigen::Vector3d::Zero();   
             parmvar[0] = recoCharge * std::sin(calculateTheta(recoEta)) * recoKUnc;
-
             for (std::ptrdiff_t idownup = 0; idownup < 2; ++idownup) {
                 const double dir = idownup == 0 ? -1. : 1.;
                 const Eigen::Vector3d deltaparmsalt = deltaparms + dir*parmvar;
@@ -1095,9 +1094,6 @@ public:
             )
         ),
         correctionHist_(std::make_shared<const T>(std::move(corrections))) {
-            cout << "+++++++++++++++++++++++++++++++" << std::endl;
-            cout << "Thread pool size is: " << ROOT::GetThreadPoolSize() << std::endl;
-            cout << "+++++++++++++++++++++++++++++++" << std::endl; 
         }
 
     // helper for bin lookup which implements the compile-time loop over axes
@@ -1178,9 +1174,6 @@ public:
             }
 
             const out_tensor_t alt_weights = dweightdqop*delta_qop + 1.;
-            cout << "weights for 143rd variation are: " << std::endl;
-            cout << alt_weights(143,0) << ", " << alt_weights(143,1) << std::endl;
-
             // total weight is the product over all the muons
             alt_weights_all *= alt_weights;
         }

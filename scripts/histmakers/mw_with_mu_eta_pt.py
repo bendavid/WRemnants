@@ -484,7 +484,7 @@ def build_graph(df, dataset):
                         )
                         results.append(dummyMuonScaleSyst_responseWeights)
 
-                        df = df.DefineSlot("muonScaleSyst_responseWeights_spline_tensor", spline_helper,
+                        df = df.Define("muonScaleSyst_responseWeights_spline_tensor", spline_helper,
                             [
                                 f"{reco_sel_GF}_recoPt",
                                 f"{reco_sel_GF}_recoEta",
@@ -502,6 +502,23 @@ def build_graph(df, dataset):
                         )
                         results.append(dummyMuonScaleSyst_responseWeights_spline)
 
+#                        axis_delta_qop = hist.axis.Regular(1000, -5, 5, underflow=True, overflow=True, name = "axis_delta_qop")
+#                        df = df.Define("deltaQopSpline", "muonScaleSyst_responseWeights_spline_tensor(0,0)")
+#                        deltaQopSpline = df.HistoBoost(
+#                            "nominal_deltaQopSpline",
+#                            [axis_delta_qop],
+#                            ["deltaQopSpline"], 
+#                            storage=hist.storage.Double()
+#                        )
+#                        results.append(deltaQopSpline)
+#                        df = df.Define("deltaQopGensmear", "muonScaleSyst_responseWeights_tensor_gensmear(0,0)")
+#                        deltaQopGensmear = df.HistoBoost(
+#                            "nominal_deltaQopGensmear",
+#                            [axis_delta_qop],
+#                            ["deltaQopGensmear"], 
+#                            storage=hist.storage.Double()
+#                        )
+#                        results.append(deltaQopGensmear)
                     # for the Z non-closure nuisances
                     if args.nonClosureScheme == "A-M-separated":
                         df = df.DefinePerSample("AFlag", "0x01")
