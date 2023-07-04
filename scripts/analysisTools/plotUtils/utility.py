@@ -3701,7 +3701,7 @@ def unroll2Dto1D(h, newname='', cropNegativeBins=True, silent=False):
         for ibin in range(1, nbins+1):
             if newh.GetBinContent(ibin)<0:
                 if not silent:
-                    logger.warning('cropping to zero bin %d in %s (was %f)'%(ibin, newh.GetName(), newh.GetBinContent(ibin)))
+                    logger.warning('unroll2Dto1D(): cropping to zero bin %d in %s (was %f)'%(ibin, newh.GetName(), newh.GetBinContent(ibin)))
                 newh.SetBinContent(ibin, 0)
     return newh
 

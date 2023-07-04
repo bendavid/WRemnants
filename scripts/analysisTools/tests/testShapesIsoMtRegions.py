@@ -57,7 +57,7 @@ if __name__ == "__main__":
     parser.add_argument(     '--useQCDMC', action='store_true',   help='Use QCD MC instead of Fakes for MC stack')
     args = parser.parse_args()
 
-    logger = logging.setup_logger(os.path.basename(__file__), args.verbose, True)
+    logger = logging.setup_logger(os.path.basename(__file__), args.verbose)
     # if 0:
     #     logger.critical("TEST LOGGER CRITICAL")
     #     logger.error("TEST LOGGER ERROR")
@@ -146,7 +146,7 @@ if __name__ == "__main__":
                                         draw_both0_noLog1_onlyLog2=1, passCanvas=canvas,
                                         nContours=args.nContours, palette=args.palette, invertePalette=args.invertePalette)
                 hist2D[charge][f"{d}_{charge}"] = h
-                print()
+        print()
 
         if "Data" in datasets:
             outdir_isoMtID = f"{outdir}/isoMtID_{isoMtID}/"
@@ -201,17 +201,17 @@ if __name__ == "__main__":
                               textForLines=ptBinRanges, ytextOffsetFromTop=0.3, textSize=0.04, textAngle=0)
             for isoMtID in [2, 3]:
                 if isoMtID in args.isoMtRegion:
-                    hQCD = histForFRF[c][isoMtID]
+                    hFakeYields = histForFRF[c][isoMtID]
                     # plot unrolled to better see how it looks like
-                    hQCD_unrolled = unroll2Dto1D(hQCD, newname=f"{hQCD.GetName()}_unrolled")
-                    drawSingleTH1(hQCD_unrolled, XlabelUnroll, f"Events ({c})",
-                                  f"{hQCD.GetName()}_unrolled",
+                    hFakeYields_unrolled = unroll2Dto1D(hFakeYields, newname=f"{hFakeYields.GetName()}_unrolled")
+                    drawSingleTH1(hFakeYields_unrolled, XlabelUnroll, f"Events ({c})",
+                                  f"{hFakeYields.GetName()}_unrolled",
                                   outdir, drawLineTopPanel=1.0, drawLineLowerPanel="", lowerPanelHeight=0.4,
                                   labelRatioTmp="Rel. stat. unc.::0.5,1.5", topMargin=0.06,
                                   passCanvas=cwide,
                                   legendCoords="0.15,0.85,0.86,0.94;2",
                                   leftMargin=0.05,rightMargin=0.01,lumi=16.8, 
-                                  drawVertLines="{a},{b}".format(a=hQCD.GetNbinsY(),b=hQCD.GetNbinsX()),
+                                  drawVertLines="{a},{b}".format(a=hFakeYields.GetNbinsY(),b=hFakeYields.GetNbinsX()),
                                   textForLines=ptBinRanges, ytextOffsetFromTop=0.3, textSize=0.04, textAngle=0)
 
 

@@ -2,6 +2,7 @@ from utilities import boostHistHelpers as hh, common, output_tools, logging
 
 parser,initargs = common.common_parser(True)
 
+import ROOT
 import narf
 import wremnants
 from wremnants import theory_tools,syst_tools,theory_corrections, muon_validation, muon_calibration, muon_selections

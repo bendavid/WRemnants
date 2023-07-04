@@ -196,7 +196,8 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
                 drawCorrelationPlot(heff, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", "W MC efficiency::0.5,1",
                                     heff.GetName(), "ForceTitle", outdirEff,
                                     palette=87, passCanvas=canvas)
-            # the grid interpolator will be created up to the extreme bin centers, so need bounds_error=False to allow the extrapolation to extend outside, and then we can set its value to fill_value (None does an extrapolation)
+            # the grid interpolator will be created up to the extreme bin centers, so need bounds_error=False to allow the extrapolation to extend outside until the bin edges
+            # and then we can set its extrapolation value to fill_value ('None' uses the extrapolation from the curve inside accpetance)
             interp = RegularGridInterpolator((utvals, ptvals), yvals, method='cubic', bounds_error=False, fill_value=None)
             xvalsFine = [tf.constant(center, dtype=dtype) for center in histEffi2D_ptut.axes.centers]
             utvalsFine = np.reshape(xvalsFine[0], [-1])
@@ -371,8 +372,8 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
         # first make uT axis consistent
         s = bh.tag.Slicer()
         histEffi3D_asSF = histEffi3D[{"ut" : s[complex(0,axis_ut.edges[0]):complex(0,axis_ut.edges[-1])]}]
-        logger.warning("Resizing ut axis for efficiency to match SF histogram")
-        logger.warning(f"{histEffi3D_asSF.axes}")
+        #logger.warning("Resizing ut axis for efficiency to match SF histogram")
+        #logger.warning(f"{histEffi3D_asSF.axes}")
         # remember that histSF3D_withStatVars has 4 axes, 4th is the stat variation
         num = histSF3D_withStatVars.copy()
         den = histSF3D_withStatVars.copy()
@@ -382,6 +383,20 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
         den = hh.addHists(den, histEffi3D_asSF, scale2=-1.0, createNew=False) # 1 - effMC
         antiSF = hh.divideHists(num, den, createNew=True)
         antiSF.name = f"smoothSF3D_anti{step}"
+        # make sure the numerator is not negative, i.e. SF*effMC < 1 or equivalently 1 - SF*effMC > 0
+        denVals = den.values()
+        numVals = num.values()
+        # note, efficiencies are already capped to be in [0,1], but could also be exactly 0 or exactly 1
+        # set antiSF=1 if eff == 1 (i.e. den=0, or num < 0, or (num < 0.5% and eff > 99.5% (i.e. den < 0.5%))
+        antiSF_values = antiSF.values()
+        cellsToChange = (denVals <= 0.0) | (numVals < 0) | ((numVals < 0.005) & (denVals < 0.005))
+        nChangedCells = np.count_nonzero(cellsToChange)
+        if nChangedCells > 0:
+            frac = nChangedCells/np.product(cellsToChange.shape)
+            logger.warning(f"Setting antiSF = 1.0 in {nChangedCells}/{np.product(cellsToChange.shape)} cells for step {step} ({frac:.1%})")
+            antiSF_values[cellsToChange] = 1.0
+            antiSF.values()[...] = antiSF_values
+        #
     else:
         antiSF = None
         
@@ -396,7 +411,7 @@ if __name__ == "__main__":
     parser.add_argument('outdir', type=str, nargs=1, help='output directory to save things')
     #parser.add_argument('step', type=str, nargs=1, help='Step, also to name output histogram (should be parsed from input file though)')
     parser.add_argument('--eta', type=int, nargs="*", default=[], help='Select some eta bins (ID goes from 1 to Neta')
-    parser.add_argument('--polDegree', type=int, nargs=2, default=[2, 3], help='Select degree of polynomial for 2D smoothing')
+    parser.add_argument('--polDegree', type=int, nargs=2, default=[2, 3], help='Select degree of polynomial for 2D smoothing (uT-pT)')
     parser.add_argument('--plotEigenVar', action="store_true", help='Plot eigen variations (it actually produces histogram ratios alt/nomi)')
     parser.add_argument('-p', '--postfix', type=str, default="", help='Postfix for plot names (can be the step name)')
     args = parser.parse_args()

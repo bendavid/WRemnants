@@ -9,6 +9,7 @@ import lz4.frame
 import pdb
 import copy
 
+from utilities import boostHistHelpers as hh
 from utilities import common, logging, input_tools
 logger = logging.child_logger(__name__)
 
@@ -114,8 +115,9 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
             if eff_type not in axis_eff_type_2D:
                 key = f"{eff_type}_{chargeTag}"
                 if key not in sf_syst_from2D_for3D.keys():
-                    sf_syst_from2D_for3D[k] = hist_hist.view(flow=False)[:,:,axis_nomiAlt_eff.size-1]
-                    logger.debug(f"Storing 2D eta-pt syst for {k} SF to propagate to 3D version")
+                    # take syst/nomi histogram ratio in 2D (eta-pt)
+                    sf_syst_from2D_for3D[key] = hh.divideHists(hist_hist[:,:,axis_nomiAlt_eff.size-1], hist_hist[:,:,0], createNew=True)
+                    logger.debug(f"Storing 2D eta-pt syst for {key} SF to propagate to 3D version")
                     # histogram is saved, now skip the rest
                 continue
             
@@ -176,15 +178,18 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
                 ##
                 ## FIXME: for now using syst=nominal since we don't have syst (must copy from 2D version)
                 ##
-                # take syst histogram in 2D (eta-pt), and broadcast into eta-pt-ut)
+                # take syst/nomi histogram ratio in 2D (eta-pt), and broadcast into eta-pt-ut)
                 chargeTag = charge_tag if eff_type in chargeDependentSteps else "both"
-                syst_view_etaPt = sf_syst_from2D_for3D[f"{eff_type}_{chargeTag}"]
+                syst_view_etaPt = sf_syst_from2D_for3D[f"{eff_type}_{chargeTag}"].values(flow=False) #only need values
                 # broadcast systOverNomi into a 3D histogram adding ut axis
                 shape_etaPtUt = nominalLayer.shape
                 # The transpose is because numpy works right to left in broadcasting, and we have the ut axis on the right
                 tmp_broadcast = np.broadcast_to(syst_view_etaPt.T, shape_etaPtUt[::-1])
                 syst_view_etaPtUt = tmp_broadcast.T
-                sf_syst_3D.view(flow=False)[:, :, axis_charge.index(charge), axis_eff_type_3D.index(eff_type), 1, :] = syst_view_etaPtUt # hist_hist.view(flow=False)[:,:,:,0]  ## <---- FIX THIS !!!
+                # fill syst with product of nominal and 2D syst/nomi ratio
+                # first copy the nominal and then update values (no variances) multiplying by the syst/nomi ratio
+                sf_syst_3D.view(flow=False)[:, :, axis_charge.index(charge), axis_eff_type_3D.index(eff_type), 1, :] = nominalLayer
+                sf_syst_3D.values(flow=False)[:, :, axis_charge.index(charge), axis_eff_type_3D.index(eff_type), 1, :] *= syst_view_etaPtUt
                 for isyst in range(len(effSyst_decorrEtaEdges)-1):
                     # first copy the nominal
                     sf_syst_3D.view(flow=False)[:, :, axis_charge.index(charge), axis_eff_type_3D.index(eff_type), 2+isyst, :] = nominalLayer # hist_hist.view(flow=False)[:,:,:,0]
@@ -195,7 +200,7 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
                     # also do not sum 1 because sf_syst_3D.view(flow=False) will consider 0 the first bin index (with flow=True instead 0 is the underflow but only if it exists, otherwise 0 is the first bin)
                     indexEtaLow = axis_eta_eff.index(effSyst_decorrEtaEdges[isyst] + 0.001) # add epsilon to ensure picking the bin on the right of the edge
                     indexEtaHigh = axis_eta_eff.index(effSyst_decorrEtaEdges[isyst+1] + 0.001) 
-                    sf_syst_3D.view(flow=False)[indexEtaLow:indexEtaHigh, :, axis_charge.index(charge), axis_eff_type_3D.index(eff_type), 2+isyst, :] = syst_view_etaPtUt[indexEtaLow:indexEtaHigh, :, :] # hist_hist.view(flow=False)[indexEtaLow:indexEtaHigh, :, :, 0]
+                    sf_syst_3D.view(flow=False)[indexEtaLow:indexEtaHigh, :, axis_charge.index(charge), axis_eff_type_3D.index(eff_type), 2+isyst, :] *= syst_view_etaPtUt[indexEtaLow:indexEtaHigh, :, :] # hist_hist.view(flow=False)[indexEtaLow:indexEtaHigh, :, :, 0]
                     
         # set overflow and underflow eta-pt bins equal to adjacent bins
         sf_syst_3D.view(flow=True)[0, ...]                       = sf_syst_3D.view(flow=True)[1, ...]

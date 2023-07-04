@@ -197,6 +197,30 @@ float zqtproj0_boson(float pt, float phi, float bosonPt, float bosonPhi) {
     return (lep*boson)/pt;
 }
 
+float zqtproj0_boson(float pt, float phi, const TVector2& boson) {
+    TVector2 lep;
+    lep.SetMagPhi(pt,phi);
+    return (lep*boson)/pt;
+}
+
+float zqtproj0_boson(const TVector2& lep, const TVector2& boson) {
+    return (lep*boson)/lep.Mod();
+}
+    
+TVector2 transverseVectorSum(const Vec_f& pt, const Vec_f& phi) {
+
+    TVector2 sum = TVector2();
+    for (unsigned int i = 0; i < pt.size(); ++i) {
+        if (i == 0) {
+            sum.SetMagPhi(pt[i], phi[i]);
+        } else {
+            TVector2 part = TVector2();
+            part.SetMagPhi(pt[i], phi[i]);
+            sum += part;
+        }
+    }
+    return sum;
+}
     
 template<std::ptrdiff_t N, typename V>
 auto vec_to_tensor(const V &vec, std::size_t start = 0) {

@@ -199,8 +199,7 @@ def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
                   legendCoords="0.15,0.85,0.82,0.9;2",
                   leftMargin=0.05,rightMargin=0.01,lumi=lumi, 
                   drawVertLines="{a},{b}".format(a=recoBins.Npt,b=recoBins.Neta),
-                  textForLines=ptBinRanges, ytextOffsetFromTop=0.3, textSize=0.04, textAngle=30, drawLineTopPanel=1.0)
-                       
+                  textForLines=ptBinRanges, ytextOffsetFromTop=0.3, textSize=0.04, textAngle=30, drawLineTopPanel=1.0)                       
 
     allHists = hmc2D + [hdata2D]
     hdata2D.SetTitle(f"{dataTitle} {chargeLabel}")

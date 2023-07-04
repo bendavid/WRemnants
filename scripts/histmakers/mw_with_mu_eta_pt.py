@@ -309,8 +309,13 @@ def build_graph(df, dataset):
                 #
                 df = df.Define("goodMuons_uT0", "wrem::zqtproj0_boson(goodMuons_pt0, goodMuons_phi0, ptVgen, phiVgen)")
             else:
-                # dummy for now
-                df = df.Define("goodMuons_uT0", "0.0f")
+                # for background processes (Top and Diboson, since Wtaunu and Ztautau are part of isW or isZ)
+                # sum all gen e, mu, tau, or neutrinos to define the boson proxy
+                # choose particles with status 1 (stable) and statusFlag & 1 (prompt) or taus with status 2 (decayed)
+                # there is no double counting for leptons from tau decays, since they have status 1 but not statusFlag & 1
+                df = df.Define("GenPart_leptonAndPhoton","(GenPart_status == 1 || (GenPart_status == 2 && abs(GenPart_pdgId) == 15)) && (GenPart_statusFlags & 1) && (abs(GenPart_pdgId) == 22 || (abs(GenPart_pdgId) >= 11 && abs(GenPart_pdgId) <= 16 ) )")
+                df = df.Define("vecSumLeptonAndPhoton_TV2", f"wrem::transverseVectorSum(GenPart_pt[GenPart_leptonAndPhoton],GenPart_phi[GenPart_leptonAndPhoton])")
+                df = df.Define("goodMuons_uT0", "wrem::zqtproj0_boson(goodMuons_pt0, goodMuons_phi0, vecSumLeptonAndPhoton_TV2)")
         else:
             # this is a dummy, the uT axis when present will have a single bin
             df = df.Define("goodMuons_uT0", "0.0f")
