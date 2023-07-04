@@ -14,7 +14,7 @@ on:
 
 env: 
   MAX_FILES: 10
-  LUMI_SCALE: 760
+  LUMI_SCALE: 1
   NTHREADS: 16
   LOCAL_WEB_DIR: www/WMassAnalysis/PRValidation
   EOS_DIR: /eos/user/c/cmsmwbot
@@ -395,6 +395,14 @@ jobs:
       - uses: actions/checkout@v3
         with:
           submodules: 'true'
+
+
+      # As of now the gen output isn't used for anything, so there's no point in running more files
+      - name: setup nonpr
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "NTHREADS=8" >> $GITHUB_ENV
+          echo "MAX_FILES=10" >> $GITHUB_ENV
 
       - name: gen analysis
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/w_z_gen_dists.py -o $WREMNANTS_OUTDIR -j $NTHREADS --maxFiles $MAX_FILES --verbose 4
