@@ -139,8 +139,7 @@ for nominal, pseudodata in datasets:
         #    logger.warning(f"The combine file for {dir_combine} already exists, continue with the next one!")
         #    continue
         #if "reduced" in dir_combine: continue
-        non_closure_scheme = "--nonClosureScheme binned-plus-M" if "binned-plus-M" in nominal else ""
-        EXE(f"python3 scripts/combine/setupCombineWMass.py -o {dir_combine} -i {file_nominal} --pseudoDataFile {file_pseudodata} --pseudoData nominal --muonScaleVariation smearingWeights {non_closure_scheme} {freeze_command}")
+        EXE(f"python3 scripts/combine/setupCombineWMass.py -o {dir_combine} -i {file_nominal} --pseudoDataFile {file_pseudodata} --pseudoData nominal --muonScaleVariation smearingWeights {freeze_command}")
 dir_combine = f"{args.combineOutFolder}/sepImpact"
 if not os.path.isfile(f"{dir_combine}/WMassCombineInput.root"):
     EXE(f"python3 scripts/combine/setupCombineWMass.py -o {dir_combine} -i {file_sep_impact} --muonScaleVariation smearingWeights --sepImpactForNC")

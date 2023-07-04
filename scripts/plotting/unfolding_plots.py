@@ -38,7 +38,7 @@ parser.add_argument("--eoscp", action='store_true', help="Override use of xrdcp 
 
 args = parser.parse_args()
 
-logger = logging.setup_logger("plotFitresult", 4 if args.debug else 3, False)
+logger = logging.setup_logger("plotFitresult", 4 if args.debug else 3)
 
 outdir = output_tools.make_plot_dir(args.outpath, args.outfolder, eoscp=args.eoscp)
 

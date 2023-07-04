@@ -33,7 +33,7 @@ parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend te
 parser.add_argument("--plots", type=str, nargs="+", default=["xsec", "uncertainties", "pulls"], 
     choices=["xsec", "uncertainties", "correlation", "covariance", "pulls"], help="Define which plots to make")
 parser.add_argument("--lumi", type=float, default=16.8, help="Luminosity used in the fit, needed to get the absolute cross section")
-parser.add_argument("-c", "--channels", type=str, nargs="+", choices=["plus", "minus", "all"], default=["plus", "minus"], help="Select channel to plot")
+parser.add_argument("-c", "--channels", type=str, nargs="+", choices=["plus", "minus", "all"], default=["plus", "minus", "all"], help="Select channel to plot")
 parser.add_argument("--eoscp", action='store_true', help="Override use of xrdcp and use the mount instead")
 
 args = parser.parse_args()
@@ -123,10 +123,23 @@ def get_bin_widths(df, dilepton=False, gen_axes=None):
             bin_widths = bins[1:] - bins[:-1]
         elif "absYVGen" in gen_axes:
             bin_widths = np.ones(int(len(df)))
-    else: 
-        bins_y = np.array(differential.eta_binning)
+    else:
+        nEtaBins = len(set(df["absEtaGen"].values))
+        if nEtaBins == 18:
+            bins_y = np.array(differential.eta_binning)
+        else:
+            bins_y = np.linspace(0, 2.4, nEtaBins+1)
         bin_widths_y = bins_y[1:] - bins_y[:-1]
-        bin_widths_x = 2 * np.ones(int(len(df)/len(bin_widths_y)))
+
+        nPtBins = len(set(df["ptGen"].values))
+
+        base_process = df["Name"].apply(lambda x: x.split("_")[0]).values[0]
+        if base_process == "Zmumu":
+            bin_width_x = 34/nPtBins
+        else:
+            bin_width_x = 30/nPtBins
+
+        bin_widths_x = bin_width_x * np.ones(int(len(df)/len(bin_widths_y)))
 
         bin_widths = np.tensordot(bin_widths_x,bin_widths_y, axes=0).flatten()
 
@@ -162,8 +175,7 @@ def make_yields_df(hists, procs, signal=None, per_bin=False, yield_only=False, p
     return pd.DataFrame(entries, columns=columns)
 
 
-def plot_matrix_poi(matrix="covariance_matrix_channelmu"):
-
+def matrix_poi(matrix="covariance_matrix_channelmu", base_process=None, axes=None, keys=None):
     if matrix not in [c.replace(";1","") for c in rfile.keys()]:
         logger.error(f"Histogram {matrix} was not found in the fit results file!")
         return
@@ -173,39 +185,75 @@ def plot_matrix_poi(matrix="covariance_matrix_channelmu"):
     # select signal parameters
     key = matrix.split("channel")[-1]
     xentries = [(i, hist2d.axes[0][i]) for i in range(len(hist2d.axes[0])) if hist2d.axes[0][i].endswith(key)]
-    xentries = sorted(xentries, key=lambda x: get_bin(x[1], "ptVGen"), reverse=True)
+
+    if base_process is not None:
+        xentries = [x for x in xentries if base_process in x[1]]  
+
+    if keys is not None:
+        xentries = [v for v in filter(lambda x, keys=keys: all([f"_{k}_" in x[1] for k in keys]), xentries)]
+
+    if axes is not None:
+        if isinstance(axes, str):
+            axes = [axes]
+        
+        # select specified axes
+        xentries = [v for v in filter(lambda x, axes=axes: all([f"_{a}" in x[1] for a in axes]), xentries)]
+
+        # sort them in the specified order
+        xentries = sorted(xentries, key=lambda x, axes=axes: [get_bin(x[1], a) for a in axes], reverse=False)
 
     # make matrix between POIs only
     cov_mat = np.zeros((len(xentries), len(xentries)))
-    for i, ia in xentries:
-        for j, ja in xentries:
-            cov_mat[i][j] = hist2d[i,j]
+    for i, ia in enumerate(xentries):
+        for j, ja in enumerate(xentries):
+            cov_mat[i][j] = hist2d[ia[0], ja[0]]
+
+    hist_cov = hist.Hist(
+        hist.axis.Regular(bins=len(xentries), start=0.5, stop=len(xentries)+0.5, underflow=False, overflow=False), 
+        hist.axis.Regular(bins=len(xentries), start=0.5, stop=len(xentries)+0.5, underflow=False, overflow=False), 
+        storage=hist.storage.Double())
+    hist_cov.view(flow=False)[...] = cov_mat
+
+    return hist_cov
+
+
+def plot_matrix_poi(matrix="covariance_matrix_channelmu", base_process=None, axes=None, keys=None):
+    hist_cov = matrix_poi(matrix, base_process=base_process, axes=axes, keys=keys)
 
     fig = plt.figure(figsize=(8,8))
     ax = fig.add_subplot() 
 
-    hep.hist2dplot(cov_mat)#, labels=(xlabels,ylabels))
+    hep.hist2dplot(hist_cov)#, labels=(xlabels,ylabels))
 
     # calculate condition number
-    cond = np.linalg.cond(cov_mat)
+    cond = np.linalg.cond(hist_cov.values())
     logger.info(f"Condition number: {cond}")
-    plt.text(0.1, 0.9, round(cond), horizontalalignment='right', verticalalignment='top', transform=ax.transAxes)
+    plt.text(0.2, 0.9, round(cond), horizontalalignment='right', verticalalignment='top', transform=ax.transAxes)
 
-    if len(xentries) < 50:
-        xlabels = [get_label(x[1]) for x in xentries]
+    # if len(xentries) < 50:
+    #     xlabels = [get_label(x[1]) for x in xentries]
 
-        ax.set_xticks(np.arange(len(xlabels))+0.5)
-        ax.set_yticks(np.arange(len(xlabels))+0.5)
-        ax.set_xticklabels(xlabels, rotation = 90)
-        ax.set_yticklabels(xlabels)
+    #     ax.set_xticks(np.arange(len(xlabels))+0.5)
+    #     ax.set_yticks(np.arange(len(xlabels))+0.5)
+    #     ax.set_xticklabels(xlabels, rotation = 90)
+    #     ax.set_yticklabels(xlabels)
 
     outfile = "covariance" if "covariance" in matrix else "correlation"
+
+    if base_process is not None:
+        outfile += f"_{base_process}"
+
+    if keys is not None:
+        outfile += "_" + "_".join(keys)
+
+    if axes is not None:
+        outfile += "_" + "_".join(axes)
 
     outfile += (f"_{args.postfix}_" if args.postfix else "_") + matrix.split("_")[-1].replace("channel","")
 
     plot_tools.save_pdf_and_png(outdir, outfile)
     plot_tools.write_index_and_log(outdir, outfile, 
-        yield_tables={"Values" : cov_mat}, nround=2 if "correlation" in matrix else 10,
+        yield_tables={"Values" : hist_cov.values()}, nround=2 if "correlation" in matrix else 10,
         analysis_meta_info=None,
         args=args,
     )
@@ -345,7 +393,7 @@ def plot_xsec_unfolded(df, data_asimov=None, channel=None, poi_type="mu", scale=
     ax2.bar(centers, height=2*unc_ratio, bottom=1-unc_ratio, width=1, color="silver")
     ax2.bar(centers, height=2*unc_ratio_stat, bottom=1-unc_ratio_stat, width=1, color="gold")
 
-    # ax2.plot([0, len(df)+1], [1,1], color="black", linestyle="-")
+    ax2.plot([0, len(df)+1], [1,1], color="black", linestyle="-")
 
     # hep.histplot(
     #     hh.divideHists(hist_xsec_stat, hist_xsec, cutoff=0, rel_unc=True),
@@ -396,16 +444,16 @@ def plot_xsec_unfolded(df, data_asimov=None, channel=None, poi_type="mu", scale=
     hep.cms.label(ax=ax1, lumi=float(f"{args.lumi:.3g}"), fontsize=20*args.scaleleg*scale, 
         label=cms_decor, data=not args.noData)
 
-    outfile = "unfolded_xsec"
+    outfile = f"{input_subdir}_unfolded_xsec"
     if poi_type=="mu":
         outfile += "_mu"
     elif normalize:
         outfile += "_normalized"
 
-    outfile += "_"+input_subdir
-    outfile += (f"_{args.postfix}" if args.postfix else "")
-    outfile += (f"_{channel}" if channel else "")
     outfile += f"_{base_process}"
+    outfile += (f"_{channel}" if channel else "")
+
+    outfile += (f"_{args.postfix}" if args.postfix else "")
     plot_tools.save_pdf_and_png(outdir, outfile)
 
     if data_asimov is not None:
@@ -538,7 +586,9 @@ def plot_uncertainties_unfolded(df, channel=None, poi_type="mu", scale=1., norma
         unc_df = make_yields_df([hist_unc], [name], per_bin=True, yield_only=True, percentage=True)
         uncertainties[name] = unc_df[name]
 
-    plot_tools.addLegend(ax1, ncols=3, text_size=20*args.scaleleg)
+    scale = max(1, np.divide(*ax1.get_figure().get_size_inches())*0.3)
+
+    plot_tools.addLegend(ax1, ncols=4, text_size=18*args.scaleleg*scale)
 
     if args.yscale:
         ymin, ymax = ax1.get_ylim()
@@ -548,11 +598,10 @@ def plot_uncertainties_unfolded(df, channel=None, poi_type="mu", scale=1., norma
         plot_tools.redo_axis_ticks(ax1, "y")
     plot_tools.redo_axis_ticks(ax1, "x", True)
 
-    scale = max(1, np.divide(*ax1.get_figure().get_size_inches())*0.3)
     hep.cms.label(ax=ax1, lumi=float(f"{args.lumi:.3g}"), fontsize=20*args.scaleleg*scale, 
         label=cms_decor, data=not args.noData)
 
-    outfile = "unfolded_uncertainties"
+    outfile = f"{input_subdir}_unfolded_uncertainties"
 
     if relative_uncertainty:
         outfile += "_relative"   
@@ -565,10 +614,10 @@ def plot_uncertainties_unfolded(df, channel=None, poi_type="mu", scale=1., norma
     if logy:
         outfile += "_log"
 
-    outfile += "_"+input_subdir
-    outfile += (f"_{args.postfix}" if args.postfix else "")
+    outfile += f"_{base_process}"
     outfile += (f"_{channel}" if channel else "")
-    outfile += base_process
+
+    outfile += (f"_{args.postfix}" if args.postfix else "")
     plot_tools.save_pdf_and_png(outdir, outfile)
 
     plot_tools.write_index_and_log(outdir, outfile, nround=4 if normalize else 2,
@@ -681,10 +730,15 @@ def plot_pulls(rtfile, asmiov=None, max_nuisances=50):
 
             ax1.set_xlabel("Pulls")
 
-            outfile = f"pulls_{g}_{ni}"
+            outfile = f"{input_subdir}_pulls_{g}_{ni}"
+
+            outfile += (f"_{args.postfix}" if args.postfix else "")
+            plot_tools.save_pdf_and_png(outdir, outfile)
 
             plot_tools.save_pdf_and_png(outdir, outfile)
 
+# store unfolded data
+outfile = uproot.recreate(f"{outdir}/unfolded_data.root")
 
 poi_types = ["pmaskedexp", "pmaskedexpnorm"]
 
@@ -703,6 +757,7 @@ if any([key in args.plots for key in ["xsec", "uncertainties"]]):
 
 
         for dilepton, gen_axes in (
+            # (True, ["ptVGen"]),
             (True, ["ptVGen", "absYVGen"]),
             (False, ["qGen", "ptGen", "absEtaGen"]),
         ):
@@ -710,7 +765,7 @@ if any([key in args.plots for key in ["xsec", "uncertainties"]]):
             data_group = data.loc[sum([data[ax] != -1 for ax in gen_axes]) == len(gen_axes)]
 
             if len(data_group) == 0:
-                logger.info(f"No entries found with gen axes {gen_axes}, next one!")
+                logger.debug(f"No entries found with gen axes {gen_axes}, next one!")
                 continue
 
             if asimov:
@@ -727,39 +782,74 @@ if any([key in args.plots for key in ["xsec", "uncertainties"]]):
             else:
                 base_process = base_process[0]
 
+            logger.info(f"Make plots for process {base_process} and gen axes {gen_axes}")
+
             for channel in channels:
                 logger.info(f"Now at channel {channel}")
 
                 if channel == "minus":
                     data_channel = data_group.loc[data_group["qGen"]==0]
+                    channel_keys = ["qGen0"]
+                    channel_axes = [a for a in gen_axes if a != "qGen"]
                     data_channel_asimov = data_group_asimov.loc[data_group_asimov["qGen"]==0] if asimov else None
                     process_label = r"W$^{-}\to\mu\nu$" if base_process == "Wmunu" else r"Z$\to\mu^{-}$"
                 elif channel == "plus":
                     data_channel = data_group.loc[data_group["qGen"]==1]
+                    channel_keys = ["qGen1"]
+                    channel_axes = [a for a in gen_axes if a != "qGen"]
                     data_channel_asimov = data_group_asimov.loc[data_group_asimov["qGen"]==1] if asimov else None
                     process_label = r"W$^{+}\to\mu\nu$" if base_process == "Wmunu" else r"Z$\to\mu^{+}$"
                 else:
                     process_label = r"W$\to\mu\nu$" if base_process == "Wmunu" else r"Z$\to\mu\mu$"
+                    channel_keys = None
+                    channel_axes = gen_axes
                     data_channel = data_group
                     data_channel_asimov = data_group_asimov if asimov else None
 
                 if len(data_channel) == 0:
                     logger.info(f"No entries found for channel {channel}, skip!")
                     continue
+                
+                # sort values
+                data_c = data_channel.sort_values(by=channel_axes)
+                data_c_asimov = data_channel_asimov.sort_values(by=channel_axes) if asimov else None
+
+                if not normalize:
+                    # write out 1D distributions
+                    logger.info(f"Save measured differential cross secction distribution")
+                    hist_xsec = hist.Hist(
+                        hist.axis.Regular(bins=len(data_c), start=0.5, stop=len(data_c)+0.5, underflow=False, overflow=False), storage=hist.storage.Weight())
+                    hist_xsec.view(flow=False)[...] = np.stack([data_c["value"].values, (data_c["err_total"].values)**2], axis=-1)
+
+                    histname = f"data_{base_process}"
+                    covname = f"covariance_matrix_{base_process}"
+                    if channel != "all":
+                        histname += f"_{channel}"
+                        covname += f"_{channel}"
+
+                    outfile[histname] = hist_xsec
+                    
+                    # write out covariance as 2D hist
+                    hist_cov = matrix_poi(f"covariance_matrix_channel{poi_type}", base_process=base_process, axes=channel_axes, keys=channel_keys)
+                    
+                    outfile[covname] = hist_cov
 
                 if "xsec" in args.plots:
-                    plot_xsec_unfolded(data_channel, data_channel_asimov, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, process_label = process_label, dilepton=dilepton)
+                    plot_xsec_unfolded(data_c, data_c_asimov, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, process_label = process_label, dilepton=dilepton)
+
+                if "correlation" in args.plots:
+                    plot_matrix_poi(f"correlation_matrix_channel{poi_type}", base_process=base_process, axes=channel_axes, keys=channel_keys)
+                if "covariance" in args.plots:
+                    plot_matrix_poi(f"covariance_matrix_channel{poi_type}", base_process=base_process, axes=channel_axes, keys=channel_keys)
+
                 if "uncertainties" in args.plots:
                     # absolute uncertainty
-                    # plot_uncertainties_unfolded(data_channel, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, process_label = process_label, dilepton=dilepton)
-                    # plot_uncertainties_unfolded(data_channel, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, logy=True, process_label = process_label, dilepton=dilepton)            
+                    # plot_uncertainties_unfolded(data_c, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, process_label = process_label, dilepton=dilepton)
+                    # plot_uncertainties_unfolded(data_c, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, logy=True, process_label = process_label, dilepton=dilepton)            
                     
                     # relative uncertainty
-                    plot_uncertainties_unfolded(data_channel, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, relative_uncertainty=True, process_label = process_label, dilepton=dilepton)
-                    plot_uncertainties_unfolded(data_channel, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, relative_uncertainty=True, logy=True, process_label = process_label, dilepton=dilepton)
-
-if "pulls" in args.plots:
-    plot_pulls(rfile, asimov)
+                    plot_uncertainties_unfolded(data_c, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, relative_uncertainty=True, process_label = process_label, dilepton=dilepton)
+                    plot_uncertainties_unfolded(data_c, channel=channel, poi_type=poi_type, scale=scale, normalize=normalize, relative_uncertainty=True, logy=True, process_label = process_label, dilepton=dilepton)
 
 if "correlation" in args.plots:
     plot_matrix_poi("correlation_matrix_channelmu")
@@ -770,6 +860,9 @@ if "covariance" in args.plots:
     plot_matrix_poi("covariance_matrix_channelmu")
     plot_matrix_poi("covariance_matrix_channelpmaskedexp")
     plot_matrix_poi("covariance_matrix_channelpmaskedexpnorm")
+
+if "pulls" in args.plots:
+    plot_pulls(rfile, asimov)
 
 if output_tools.is_eosuser_path(args.outpath) and args.eoscp:
     output_tools.copy_to_eos(args.outpath, args.outfolder)
