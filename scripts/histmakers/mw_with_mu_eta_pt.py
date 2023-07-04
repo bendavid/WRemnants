@@ -616,6 +616,10 @@ def build_graph(df, dataset):
 
     if hasattr(dataset, "out_of_acceptance"):
         # Rename dataset to not overwrite the original one
+
+        if len(smearing_weights_procs) > 0 and smearing_weights_procs[-1] == dataset.name:
+            smearing_weights_procs[-1] = "Bkg"+dataset.name
+
         dataset.name = "Bkg"+dataset.name
 
     return results, weightsum
@@ -634,14 +638,5 @@ if not args.onlyMainHistograms and args.muonScaleVariation == 'smearingWeights':
 if not args.noScaleToData:
     scale_to_data(resultdict)
     aggregate_groups(datasets, resultdict, groups_to_aggregate)
-
-processes = []
-for proc in resultdict.keys():
-    if proc in ['WplusmunuPostVFP', 'WminusmunuPostVFP', 'BkgWplusmunuPostVFP', 'BkgWminusmunuPostVFP', 'BkgWmunu', 'ZmumuPostVFP']:
-        processes.append(proc)
-
-if not args.onlyMainHistograms and args.muonScaleVariation == 'smearingWeights':
-    muon_calibration.transport_smearing_weights_to_reco(resultdict, nonClosureScheme = args.nonClosureScheme, procs = processes)
-    muon_calibration.muon_scale_variation_from_manual_shift(resultdict, procs = processes)
 
 output_tools.write_analysis_output(resultdict, f"{os.path.basename(__file__).replace('py', 'hdf5')}", args, update_name=not args.forceDefaultName)
