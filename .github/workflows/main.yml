@@ -134,9 +134,9 @@ jobs:
 
       - name: wmass setup lumi scale
         if: github.event_name == 'pull_request' || github.event.schedule == '30 5 * * 1-5'
-        echo "NTRHEADS=${NTHREADS}*2" >> $GITHUB_ENV
         run: | 
           echo "LUMI_SCALE=120" >> $GITHUB_ENV
+          echo "NTRHEADS=${NTHREADS}*2" >> $GITHUB_ENV
 
       - name: wmass analysis
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_with_mu_eta_pt.py -j $((NTHREADS)) --maxFiles $((MAX_FILES)) --verbose 4 --forceDefaultName -o $WREMNANTS_OUTDIR
