@@ -1173,7 +1173,7 @@ public:
                 }
             }
 
-            const out_tensor_t alt_weights = dweightdqop*delta_qop + 1.;
+            const out_tensor_t alt_weights = dweightdqop * (delta_qop / qopgen) + 1.;
             // total weight is the product over all the muons
             alt_weights_all *= alt_weights;
         }
