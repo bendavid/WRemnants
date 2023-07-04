@@ -530,6 +530,17 @@ def define_matched_genSmeared_muon_kinematics(df, reco_sel = "goodMuons"):
     df = df.Define(f"{reco_sel}_genSmearedCharge", f"{reco_sel}_genCharge")
     return df
 
+def define_matched_reco_muon_kinematics(
+    df, reco_sel = "goodMuons", kinematic_vars = ["pt", "eta", "phi", "charge"]
+):
+    for var in kinematic_vars:
+        reco_muon_col = muon_var_name("Muon_corrected", var)
+        df = df.Define(
+            f"{reco_sel}_reco{var.capitalize()}",
+            f"{reco_muon_col}[{reco_sel}];"
+        )
+    return df
+
 def define_corrected_reco_muon_kinematics(df, muons="goodMuons", kinematic_vars = ["pt", "eta", "phi", "charge"], index=0):
     for var in kinematic_vars:
         df = df.Define(
@@ -749,12 +760,40 @@ def define_passthrough_corrections_jpsi_calibration_ntuples(df):
 
     return df
 
-def make_smearing_weight_test_helper(filename = f"{data_dir}/calibration//muon_response.tflite"):
+def make_smearing_weight_test_helper(
+    args,
+    filepath_tflite = f"{data_dir}/calibration//muon_response.tflite",
+    n_scale_params = 3, n_tot_params = 4, n_eta_bins = 48, scale = 1.0
+):
+    if args.muonCorrData == "massfit":
+        data_corrfile = "calibrationJDATA_ideal.root"
+    elif args.muonCorrData == "lbl_massfit":
+        data_corrfile = "calibrationJDATA_rewtgr_3dmap_LBL_MCstat.root" 
+    filepath_data_corrfile = f"{data_dir}/calibration/{data_corrfile}"
 
-    nvar = 5
-    helper = ROOT.wrem.SmearingWeightTestHelper[nvar](filename)
+    f = uproot.open(filepath_data_corrfile)
+    cov = f['covariance_matrix'].to_hist()
+    cov_scale_params = get_jpsi_scale_param_cov_mat(cov, n_scale_params, n_tot_params, n_eta_bins, scale)
 
-    res = ROOT.wrem.test_SmearingWeightTestHelper(helper)
-    print("test_SmearingWeightTestHelper", res)
+    w,v = np.linalg.eigh(cov_scale_params)    
+    var_mat = np.sqrt(w) * v
+    axis_eta = hist.axis.Regular(n_eta_bins, -2.4, 2.4, name = 'eta')
+    axis_scale_params = hist.axis.Regular(n_scale_params, 0, 1, name = 'scale_params')
+    axis_scale_params_unc = hist.axis.Regular(
+        n_eta_bins * n_scale_params, 0, 1,
+        underflow = False, overflow = False,  name = 'unc'
+    )
+    hist_scale_params_unc = hist.Hist(axis_eta, axis_scale_params, axis_scale_params_unc)
+    for i in range(n_eta_bins):
+        lb, ub = i * n_scale_params, (i + 1) * n_scale_params
+        hist_scale_params_unc.view()[i,...] = var_mat[lb:ub][:]
+    hist_scale_params_unc_cpp = narf.hist_to_pyroot_boost(hist_scale_params_unc, tensor_rank = 2)
 
+    helper = ROOT.wrem.SmearingWeightTestHelper[type(hist_scale_params_unc_cpp).__cpp_name__](
+        filepath_tflite,
+        ROOT.std.move(hist_scale_params_unc_cpp)
+    )
+    helper.tensor_axes = (hist_scale_params_unc.axes['unc'], common.down_up_axis)
+    #res = ROOT.wrem.test_SmearingWeightTestHelper(helper)
+    #print("test_SmearingWeightTestHelper", res)
     return helper

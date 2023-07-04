@@ -139,6 +139,8 @@ vertex_helper = wremnants.make_vertex_helper(era = era)
 
 mc_jpsi_crctn_helper, data_jpsi_crctn_helper, jpsi_crctn_MC_unc_helper, jpsi_crctn_data_unc_helper = muon_calibration.make_jpsi_crctn_helpers(args, make_uncertainty_helper=True)
 
+spline_helper = muon_calibration.make_smearing_weight_test_helper(args)
+
 mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = muon_calibration.make_muon_calibration_helpers(args)
 
 smearing_helper = muon_calibration.make_muon_smearing_helpers() if args.smearing else None
@@ -237,6 +239,7 @@ def build_graph(df, dataset):
             df = muon_calibration.define_matched_gen_muons_kinematics(df, reco_sel_GF)
             df = muon_calibration.calculate_matched_gen_muon_kinematics(df, reco_sel_GF)
             df = muon_calibration.define_matched_genSmeared_muon_kinematics(df, reco_sel_GF)
+            df = muon_calibration.define_matched_reco_muon_kinematics(df, reco_sel_GF)
 
             reco_sel = "goodMuons"
             df = muon_calibration.define_matched_gen_muons_kinematics(df, reco_sel)
@@ -474,12 +477,30 @@ def build_graph(df, dataset):
                                 "bool_false"
                             ]
                         )
-                    dummyMuonScaleSyst_responseWeights = df.HistoBoost(
-                        "muonScaleSyst_responseWeights_gensmear", axes,
-                        [*nominal_cols_gen_smeared, "muonScaleSyst_responseWeights_tensor_gensmear"],
-                        tensor_axes = jpsi_unc_helper.tensor_axes, storage=hist.storage.Double()
-                    )
-                    results.append(dummyMuonScaleSyst_responseWeights)
+                        dummyMuonScaleSyst_responseWeights = df.HistoBoost(
+                            "muonScaleSyst_responseWeights_gensmear", axes,
+                            [*nominal_cols_gen_smeared, "muonScaleSyst_responseWeights_tensor_gensmear"],
+                            tensor_axes = jpsi_unc_helper.tensor_axes, storage=hist.storage.Double()
+                        )
+                        results.append(dummyMuonScaleSyst_responseWeights)
+
+                        df = df.DefineSlot("muonScaleSyst_responseWeights_spline_tensor", spline_helper,
+                            [
+                                f"{reco_sel_GF}_recoPt",
+                                f"{reco_sel_GF}_recoEta",
+                                f"{reco_sel_GF}_recoCharge",
+                                f"{reco_sel_GF}_genPt",
+                                f"{reco_sel_GF}_genEta",
+                                f"{reco_sel_GF}_genCharge",
+                                "nominal_weight",
+                            ]
+                        )
+                        dummyMuonScaleSyst_responseWeights_spline = df.HistoBoost(
+                            "muonScaleSyst_responseWeights_spline", axes,
+                            [*nominal_cols, "muonScaleSyst_responseWeights_spline_tensor"],
+                            tensor_axes = spline_helper.tensor_axes, storage=hist.storage.Double()
+                        )
+                        results.append(dummyMuonScaleSyst_responseWeights_spline)
 
                     # for the Z non-closure nuisances
                     if args.nonClosureScheme == "A-M-separated":

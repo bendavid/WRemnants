@@ -501,14 +501,20 @@ private:
         return (charge * std::sin(theta) / qop);
     }
 
-    double calculateQopUnc(float eta, int charge, double KUnc) {
+    double calculateQopUnc(float eta, int charge, double kUnc) {
         double theta = calculateTheta(eta);
-        return (charge * std::sin(theta) * KUnc);
+        return (charge * std::sin(theta) * kUnc);
     }
 
     double calculateQopUnc(float pt, float eta, int charge, double ptUnc) {
         double theta = calculateTheta(eta);
         return ((-1. * charge * std::sin(theta)) / pow(pt, 2)) * ptUnc;
+    }
+
+    double calculateQopUnc(float pt, float eta, int charge, double AUnc, double eUnc, double MUnc) {
+        double k = 1 / pt;
+        double kUnc = (AUnc - eUnc * k) * k + charge * MUnc;
+        return calculateQopUnc(eta, charge, kUnc);
     }
 
     Eigen::TensorFixedSize<double, Eigen::Sizes<2>> calculateSmearingWeightsDownUp(
@@ -1073,14 +1079,43 @@ private:
     std::shared_ptr<const TH2D> hsmear;
 };
 
-template <std::size_t N_VARIATIONS>
+template <typename T>
 class SmearingWeightTestHelper {
 public:
-    SmearingWeightTestHelper(const std::string &filename) : helper_(std::make_shared<narf::tflite_helper>(filename, "serving_default", ROOT::GetThreadPoolSize())) {}
+    using hist_t = T;
+    using tensor_t = typename T::storage_type::value_type::tensor_t;
+    static constexpr auto sizes = narf::tensor_traits<tensor_t>::sizes;
+    static constexpr auto nUnc = sizes[sizes.size() - 1];
+    using out_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<nUnc, 2>>;
 
-    using out_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<N_VARIATIONS>>;
+    SmearingWeightTestHelper(const std::string &filename, T&& corrections) : 
+        helper_(
+            std::make_shared<narf::tflite_helper>(
+                filename, "serving_default", ROOT::GetThreadPoolSize()
+            )
+        ),
+        correctionHist_(std::make_shared<const T>(std::move(corrections))) {
+            cout << "+++++++++++++++++++++++++++++++" << std::endl;
+            cout << "Thread pool size is: " << ROOT::GetThreadPoolSize() << std::endl;
+            cout << "+++++++++++++++++++++++++++++++" << std::endl; 
+        }
 
-    out_tensor_t operator() (const RVec<float> &recPts, const RVec<float> &recEtas, const RVec<int> &recCharges, const RVec<float> &genPts, const RVec<float> &genEtas, const RVec<int> &genCharges, double nominal_weight = 1.0) {
+    // helper for bin lookup which implements the compile-time loop over axes
+    template<typename... Xs, std::size_t... Idxs>
+    const tensor_t &get_tensor_impl(std::index_sequence<Idxs...>, const Xs&... xs) {
+        return correctionHist_->at(correctionHist_->template axis<Idxs>().index(xs)...).data();
+    }
+
+    // variadic templated bin lookup
+    template<typename... Xs>
+    const tensor_t &get_tensor(const Xs&... xs) {
+        return get_tensor_impl(std::index_sequence_for<Xs...>{}, xs...);
+    }
+
+    out_tensor_t operator() (
+        const RVec<float> &recPts, const RVec<float> &recEtas, const RVec<int> &recCharges,
+        const RVec<float> &genPts, const RVec<float> &genEtas, const RVec<int> &genCharges,
+        double nominal_weight = 1.0) {
 
         auto const nmuons = recPts.size();
 
@@ -1129,30 +1164,39 @@ public:
             const double dweightdqop = delta_weight_tensor(0);
 
             out_tensor_t delta_qop;
-            // TODO this should be filled with the actual qop variations from diagonalized calibration parameter uncertainties or whatever
-            delta_qop.setConstant(1e-3*qopgen);
 
+            const auto &params = get_tensor(recEta);
+            for (std::ptrdiff_t ivar = 0; ivar < nUnc; ++ivar) {
+                const double AUnc = params(0, ivar);
+                const double eUnc = params(1, ivar);
+                const double MUnc = params(2, ivar);  
+                double recoQopUnc = calculateQopUnc(recPt, recEta, recCharge, AUnc, eUnc, MUnc);
+                for (std::ptrdiff_t idownup = 0; idownup < 2; ++idownup) {
+                    const double dir = idownup == 0 ? -1. : 1.;
+                    delta_qop(ivar, idownup) = recoQopUnc * dir;
+                }
+            }
 
             const out_tensor_t alt_weights = dweightdqop*delta_qop + 1.;
+            cout << "weights for 143rd variation are: " << std::endl;
+            cout << alt_weights(143,0) << ", " << alt_weights(143,1) << std::endl;
 
             // total weight is the product over all the muons
             alt_weights_all *= alt_weights;
         }
-
         return alt_weights_all;
-
     }
 
 private:
     std::shared_ptr<narf::tflite_helper> helper_;
-
+    std::shared_ptr<const T> correctionHist_;
 };
 
+/*
 void test_SmearingWeightTestHelper(SmearingWeightTestHelper<5> &helper) {
     auto res = helper(RVec<float>(), RVec<float>(), RVec<int>(), RVec<float>(), RVec<float>(), RVec<int>(), 1.);
 
     std::cout << res << std::endl;
-
 }
-
+*/
 }
