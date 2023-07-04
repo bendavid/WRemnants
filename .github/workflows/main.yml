@@ -15,7 +15,7 @@ on:
 
 env: 
   MAX_FILES: 10
-  LUMI_SCALE: 1
+  LUMI_SCALE: 760
   NTHREADS: 16
   LOCAL_WEB_DIR: www/WMassAnalysis/PRValidation
   EOS_DIR: /eos/user/c/cmsmwbot
@@ -59,6 +59,7 @@ jobs:
       PLOT_DIR: ${{steps.export.outputs.PLOT_DIR}}
       NTHREADS: ${{steps.export.outputs.NTHREADS}}
       MAX_FILES: ${{steps.export.outputs.MAX_FILES}}
+      LUMI_SCALE: ${{steps.export.outputs.LUMI_SCALE}}
 
     steps:
       - uses: actions/checkout@v3
@@ -81,6 +82,7 @@ jobs:
         run: |
           echo "NTHREADS=64" >> $GITHUB_ENV
           echo "MAX_FILES=-1" >> $GITHUB_ENV
+          echo "LUMI_SCALE=1" >> $GITHUB_ENV
 
       - name: setup outdir
         run: echo "WREMNANTS_OUTDIR=/tmp/${USER}/$(uuidgen)" >> $GITHUB_ENV
@@ -97,6 +99,7 @@ jobs:
         run: |
           echo "PLOT_DIR=$PLOT_DIR" >> $GITHUB_OUTPUT
           echo "MAX_FILES=$MAX_FILES" >> $GITHUB_OUTPUT
+          echo "LUMI_SCALE=$LUMI_SCALE" >> $GITHUB_OUTPUT
           echo "NTHREADS=$NTHREADS" >> $GITHUB_OUTPUT
           echo "WREMNANTS_OUTDIR=$WREMNANTS_OUTDIR" >> $GITHUB_OUTPUT
           echo "WEB_DIR=$WEB_DIR" >> $GITHUB_OUTPUT
@@ -114,12 +117,14 @@ jobs:
           PLOT_DIR: ${{ needs.setenv.outputs.PLOT_DIR }}
           NTHREADS: ${{ needs.setenv.outputs.NTHREADS }}
           MAX_FILES: ${{ needs.setenv.outputs.MAX_FILES }}*10
+          LUMI_SCALE: ${{ needs.setenv.outputs.LUMI_SCALE }}
         run: |
           echo "WREMNANTS_OUTDIR=${WREMNANTS_OUTDIR}" >> $GITHUB_ENV
           echo "WEB_DIR=${WEB_DIR}" >> $GITHUB_ENV
           echo "PLOT_DIR=${PLOT_DIR}" >> $GITHUB_ENV
           echo "NTHREADS=${NTHREADS}" >> $GITHUB_ENV
           echo "MAX_FILES=${MAX_FILES}" >> $GITHUB_ENV
+          echo "LUMI_SCALE=${LUMI_SCALE}" >> $GITHUB_ENV
           echo "HIST_FILE=${WREMNANTS_OUTDIR}/${OUTFILE_WMASS}" >> $GITHUB_ENV
 
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -128,7 +133,7 @@ jobs:
           submodules: 'true'
 
       - name: wmass setup lumi scale
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || github.event.schedule == '30 5 * * 1-5'
         run: echo "LUMI_SCALE=120" >> $GITHUB_ENV
 
       - name: wmass analysis
@@ -189,10 +194,12 @@ jobs:
           WREMNANTS_OUTDIR: ${{ needs.setenv.outputs.WREMNANTS_OUTDIR }}
           NTHREADS: ${{ needs.setenv.outputs.NTHREADS }}
           MAX_FILES: ${{ needs.setenv.outputs.MAX_FILES }}
+          LUMI_SCALE: ${{ needs.setenv.outputs.LUMI_SCALE }}
         run: |
           echo "WREMNANTS_OUTDIR=${WREMNANTS_OUTDIR}" >> $GITHUB_ENV
           echo "NTHREADS=${NTHREADS}" >> $GITHUB_ENV
           echo "MAX_FILES=${MAX_FILES}" >> $GITHUB_ENV
+          echo "LUMI_SCALE=$LUMI_SCALE" >> $GITHUB_ENV
           echo "HIST_FILE=${WREMNANTS_OUTDIR}/lowPU_mumu.hdf5" >> $GITHUB_ENV
 
       - uses: actions/checkout@v3
@@ -231,12 +238,14 @@ jobs:
           PLOT_DIR: ${{ needs.setenv.outputs.PLOT_DIR }}
           NTHREADS: ${{ needs.setenv.outputs.NTHREADS }}
           MAX_FILES: ${{ needs.setenv.outputs.MAX_FILES }}
+          LUMI_SCALE: ${{ needs.setenv.outputs.LUMI_SCALE }}
         run: |
           echo "WREMNANTS_OUTDIR=${WREMNANTS_OUTDIR}" >> $GITHUB_ENV
           echo "WEB_DIR=${WEB_DIR}" >> $GITHUB_ENV
           echo "PLOT_DIR=${PLOT_DIR}" >> $GITHUB_ENV
           echo "NTHREADS=${NTHREADS}" >> $GITHUB_ENV
           echo "MAX_FILES=${MAX_FILES}" >> $GITHUB_ENV
+          echo "LUMI_SCALE=$LUMI_SCALE" >> $GITHUB_ENV
           echo "HIST_FILE=${WREMNANTS_OUTDIR}/${OUTFILE_WLIKE}" >> $GITHUB_ENV
 
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -324,10 +333,12 @@ jobs:
           WREMNANTS_OUTDIR: ${{ needs.setenv.outputs.WREMNANTS_OUTDIR }}
           NTHREADS: ${{ needs.setenv.outputs.NTHREADS }}
           MAX_FILES: ${{ needs.setenv.outputs.MAX_FILES }}
+          LUMI_SCALE: ${{ needs.setenv.outputs.LUMI_SCALE }}
         run: |
           echo "WREMNANTS_OUTDIR=${WREMNANTS_OUTDIR}" >> $GITHUB_ENV
           echo "NTHREADS=${NTHREADS}" >> $GITHUB_ENV
           echo "MAX_FILES=${MAX_FILES}" >> $GITHUB_ENV
+          echo "LUMI_SCALE=$LUMI_SCALE" >> $GITHUB_ENV
           echo "HIST_FILE=${WREMNANTS_OUTDIR}/${OUTFILE_DILEPTON}" >> $GITHUB_ENV
 
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
