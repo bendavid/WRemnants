@@ -60,11 +60,11 @@ def metaInfoDict(exclude_diff='notebooks', args=None):
 
 def analysis_debug_output(results):
     logger.debug("")
-    logger.debug("Unweighted events (before cut)")
+    logger.debug("Unweighted (Weighted) events, before cut")
     logger.debug("-"*30)
     for key,val in results.items():
         if "event_count" in val:
-            logger.debug(f"Dataset {key.ljust(30)}:  {val['event_count']}")
+            logger.debug(f"Dataset {key.ljust(30)}:  {str(val['event_count']).ljust(15)} ({round(val['weight_sum'],1)})")
             logger.debug("-"*30)
     logger.debug("")
 

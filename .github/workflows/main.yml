@@ -8,7 +8,8 @@ on:
   pull_request:
     branches: [ main ]
   schedule:
-    - cron: '0 3 * * 2,4,6' # Run on Wednesday and Saturday morning at 3h00 UTC
+    - cron: '0 3 * * 2,4,6' # Run on Tuesday, Thursday, and Saturday morning at 3h00 UTC
+    - cron: '30 5 * * 1-5' # Run on weekdays
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
@@ -58,23 +59,30 @@ jobs:
       PLOT_DIR: ${{steps.export.outputs.PLOT_DIR}}
       NTHREADS: ${{steps.export.outputs.NTHREADS}}
       MAX_FILES: ${{steps.export.outputs.MAX_FILES}}
+      LUMI_SCALE: ${{steps.export.outputs.LUMI_SCALE}}
 
     steps:
       - uses: actions/checkout@v3
 
-      - name: setup scheduled
-        if: github.event.schedule != '0 3 * * 2,4,6'
-        run: echo PLOT_DIR=PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') >> $GITHUB_ENV
+      - name: setup unscheduled
+        if: github.event_name != 'schedule'
+        run: echo PLOT_DIR=PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }')/$(date +%Y_%m_%d) >> $GITHUB_ENV
 
-      - name: setup pr
+      - name: setup scheduled build
         if: github.event.schedule == '0 3 * * 2,4,6'
-        run: echo PLOT_DIR=ScheduledBuild_$(date +%Y_%m)_$(git rev-parse --short "$GITHUB_SHA") >> $GITHUB_ENV
+        run: |
+          echo PLOT_DIR=ScheduledBuilds/$(date +%Y_%m_%d)_$(git rev-parse --short "$GITHUB_SHA") >> $GITHUB_ENV
 
-      - name: setup nonpr
-        if: github.event_name != 'pull_request'
+      - name: setup reference run
+        if: github.event.schedule == '30 5 * * 1-5'
+        run: echo PLOT_DIR=ReferenceRuns/$(date +%Y_%m_%d)_$(git rev-parse --short "$GITHUB_SHA") >> $GITHUB_ENV
+
+      - name: setup full events
+        if: github.event_name != 'pull_request' && github.event.schedule != '30 5 * * 1-5'
         run: |
           echo "NTHREADS=64" >> $GITHUB_ENV
           echo "MAX_FILES=-1" >> $GITHUB_ENV
+          echo "LUMI_SCALE=1" >> $GITHUB_ENV
 
       - name: setup outdir
         run: echo "WREMNANTS_OUTDIR=/tmp/${USER}/$(uuidgen)" >> $GITHUB_ENV
@@ -89,8 +97,9 @@ jobs:
 
       - id: export
         run: |
-          echo "PLOT_DIR=$PLOT_DIR/$(date +%Y_%m)" >> $GITHUB_OUTPUT
+          echo "PLOT_DIR=$PLOT_DIR" >> $GITHUB_OUTPUT
           echo "MAX_FILES=$MAX_FILES" >> $GITHUB_OUTPUT
+          echo "LUMI_SCALE=$LUMI_SCALE" >> $GITHUB_OUTPUT
           echo "NTHREADS=$NTHREADS" >> $GITHUB_OUTPUT
           echo "WREMNANTS_OUTDIR=$WREMNANTS_OUTDIR" >> $GITHUB_OUTPUT
           echo "WEB_DIR=$WEB_DIR" >> $GITHUB_OUTPUT
@@ -108,12 +117,14 @@ jobs:
           PLOT_DIR: ${{ needs.setenv.outputs.PLOT_DIR }}
           NTHREADS: ${{ needs.setenv.outputs.NTHREADS }}
           MAX_FILES: ${{ needs.setenv.outputs.MAX_FILES }}*10
+          LUMI_SCALE: ${{ needs.setenv.outputs.LUMI_SCALE }}
         run: |
           echo "WREMNANTS_OUTDIR=${WREMNANTS_OUTDIR}" >> $GITHUB_ENV
           echo "WEB_DIR=${WEB_DIR}" >> $GITHUB_ENV
           echo "PLOT_DIR=${PLOT_DIR}" >> $GITHUB_ENV
           echo "NTHREADS=${NTHREADS}" >> $GITHUB_ENV
           echo "MAX_FILES=${MAX_FILES}" >> $GITHUB_ENV
+          echo "LUMI_SCALE=${LUMI_SCALE}" >> $GITHUB_ENV
           echo "HIST_FILE=${WREMNANTS_OUTDIR}/${OUTFILE_WMASS}" >> $GITHUB_ENV
 
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -122,10 +133,10 @@ jobs:
           submodules: 'true'
 
       - name: wmass setup lumi scale
-        if: github.event_name == 'pull_request'
-        run: |
+        if: github.event_name == 'pull_request' || github.event.schedule == '30 5 * * 1-5'
+        echo "NTRHEADS=${NTHREADS}*2" >> $GITHUB_ENV
+        run: | 
           echo "LUMI_SCALE=120" >> $GITHUB_ENV
-          echo "NTRHEADS=${NTHREADS}*2" >> $GITHUB_ENV
 
       - name: wmass analysis
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_with_mu_eta_pt.py -j $((NTHREADS)) --maxFiles $((MAX_FILES)) --verbose 4 --forceDefaultName -o $WREMNANTS_OUTDIR
@@ -185,10 +196,12 @@ jobs:
           WREMNANTS_OUTDIR: ${{ needs.setenv.outputs.WREMNANTS_OUTDIR }}
           NTHREADS: ${{ needs.setenv.outputs.NTHREADS }}
           MAX_FILES: ${{ needs.setenv.outputs.MAX_FILES }}
+          LUMI_SCALE: ${{ needs.setenv.outputs.LUMI_SCALE }}
         run: |
           echo "WREMNANTS_OUTDIR=${WREMNANTS_OUTDIR}" >> $GITHUB_ENV
           echo "NTHREADS=${NTHREADS}" >> $GITHUB_ENV
           echo "MAX_FILES=${MAX_FILES}" >> $GITHUB_ENV
+          echo "LUMI_SCALE=$LUMI_SCALE" >> $GITHUB_ENV
           echo "HIST_FILE=${WREMNANTS_OUTDIR}/lowPU_mumu.hdf5" >> $GITHUB_ENV
 
       - uses: actions/checkout@v3
@@ -227,12 +240,14 @@ jobs:
           PLOT_DIR: ${{ needs.setenv.outputs.PLOT_DIR }}
           NTHREADS: ${{ needs.setenv.outputs.NTHREADS }}
           MAX_FILES: ${{ needs.setenv.outputs.MAX_FILES }}
+          LUMI_SCALE: ${{ needs.setenv.outputs.LUMI_SCALE }}
         run: |
           echo "WREMNANTS_OUTDIR=${WREMNANTS_OUTDIR}" >> $GITHUB_ENV
           echo "WEB_DIR=${WEB_DIR}" >> $GITHUB_ENV
           echo "PLOT_DIR=${PLOT_DIR}" >> $GITHUB_ENV
           echo "NTHREADS=${NTHREADS}" >> $GITHUB_ENV
           echo "MAX_FILES=${MAX_FILES}" >> $GITHUB_ENV
+          echo "LUMI_SCALE=$LUMI_SCALE" >> $GITHUB_ENV
           echo "HIST_FILE=${WREMNANTS_OUTDIR}/${OUTFILE_WLIKE}" >> $GITHUB_ENV
 
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -320,10 +335,12 @@ jobs:
           WREMNANTS_OUTDIR: ${{ needs.setenv.outputs.WREMNANTS_OUTDIR }}
           NTHREADS: ${{ needs.setenv.outputs.NTHREADS }}
           MAX_FILES: ${{ needs.setenv.outputs.MAX_FILES }}
+          LUMI_SCALE: ${{ needs.setenv.outputs.LUMI_SCALE }}
         run: |
           echo "WREMNANTS_OUTDIR=${WREMNANTS_OUTDIR}" >> $GITHUB_ENV
           echo "NTHREADS=${NTHREADS}" >> $GITHUB_ENV
           echo "MAX_FILES=${MAX_FILES}" >> $GITHUB_ENV
+          echo "LUMI_SCALE=$LUMI_SCALE" >> $GITHUB_ENV
           echo "HIST_FILE=${WREMNANTS_OUTDIR}/${OUTFILE_DILEPTON}" >> $GITHUB_ENV
 
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -397,6 +414,14 @@ jobs:
       - uses: actions/checkout@v3
         with:
           submodules: 'true'
+
+
+      # As of now the gen output isn't used for anything, so there's no point in running more files
+      - name: setup nonpr
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "NTHREADS=8" >> $GITHUB_ENV
+          echo "MAX_FILES=10" >> $GITHUB_ENV
 
       - name: gen analysis
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/w_z_gen_dists.py -o $WREMNANTS_OUTDIR -j $NTHREADS --maxFiles $MAX_FILES --verbose 4
