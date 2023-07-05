@@ -113,7 +113,7 @@ dataDictV9 = {
     #                 'group' : "Diboson",
     # },
     ##
-    'WWTo2L2Nu' : { 
+    'WWTo2L2NuPostVFP' : { 
         'filepaths' : 
         ["{BASE_PATH}/BKGV9/WWTo2L2Nu_TuneCP5_13TeV-powheg-pythia8/*/*.root"],
         'xsec' : 12.6, # 118.7*0.1086*0.1086*9

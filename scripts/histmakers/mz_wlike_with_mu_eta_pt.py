@@ -6,6 +6,7 @@ import ROOT
 import narf
 import wremnants
 from wremnants import theory_tools,syst_tools,theory_corrections, muon_validation, muon_calibration, muon_selections, unfolding_tools
+from wremnants.histmaker_tools import scale_to_data, aggregate_groups
 import hist
 import lz4.frame
 import math
@@ -14,6 +15,7 @@ import os
 import numpy as np
 
 parser = common.set_parser_default(parser, "pt", [34, 26, 60])
+parser = common.set_parser_default(parser, "aggregateGroups", ["Diboson", "Top", "Wtaunu", "Wmunu"])
 
 args = parser.parse_args()
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
@@ -50,6 +52,9 @@ axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, nam
 nominal_axes = [axis_eta, axis_pt, axis_charge]
 
 unfolding_axes, unfolding_cols = differential.get_pt_eta_charge_axes(args.genBins, template_minpt, template_maxpt, template_maxeta)
+
+# sum those groups up in post processing
+groups_to_aggregate = args.aggregateGroups
 
 # axes for mT measurement
 axis_mt = hist.axis.Regular(200, 0., 200., name = "mt",underflow=False, overflow=True)
@@ -222,5 +227,9 @@ def build_graph(df, dataset):
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)
+
+if not args.noScaleToData:
+    scale_to_data(resultdict)
+    aggregate_groups(datasets, resultdict, groups_to_aggregate)
 
 output_tools.write_analysis_output(resultdict, f"{os.path.basename(__file__).replace('py', 'hdf5')}", args, update_name=not args.forceDefaultName)
