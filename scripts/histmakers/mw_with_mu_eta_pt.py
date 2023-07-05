@@ -352,7 +352,7 @@ def build_graph(df, dataset):
     
     if not args.onlyMainHistograms:
         syst_tools.add_QCDbkg_jetPt_hist(results, df, axes, cols, jet_pt=30)
-        
+
     if dataset.is_data:
         nominal = df.HistoBoost("nominal", axes, cols)
         results.append(nominal)
@@ -369,7 +369,10 @@ def build_graph(df, dataset):
 
         if not args.noRecoil:
             df = recoilHelper.add_recoil_unc_W(df, results, dataset, cols, axes, "nominal")
-
+        if apply_theory_corr:
+            results.extend(theory_tools.make_theory_corr_hists(df, "nominal", axes, cols, 
+                corr_helpers[dataset.name], args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly, isW = isW)
+            )
         if args.muonScaleVariation == 'smearingWeights' and (isW or isZ): 
             nominal_cols_gen, nominal_cols_gen_smeared = muon_calibration.make_alt_reco_and_gen_hists(df, results, axes, cols, reco_sel_GF)
             if args.validationHists: 

@@ -90,6 +90,7 @@ def aggregate_groups(datasets, result_dict, groups_to_aggregate):
                 logger.warning("Summing them up probably leads to wrong behaviour")
 
             output[h_name] = H5PickleProxy(sum(histograms))
+
         result_dict[group] = resdict
         result_dict[group]["output"] = output
 

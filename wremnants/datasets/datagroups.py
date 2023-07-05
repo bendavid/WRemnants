@@ -513,11 +513,16 @@ class Datagroups(object):
 
         logger.debug(f"Gen axes are now {self.gen_axes}")
 
-    def defineSignalBinsUnfolding(self, group_name):
+    def defineSignalBinsUnfolding(self, group_name, new_name=None, member_filter=None):
         if group_name not in self.groups.keys():
             raise RuntimeError(f"Base group {group_name} not found in groups {self.groups.keys()}!")
 
-        nominal_hist = self.results[self.groups[group_name].members[0].name]["output"]["xnorm"].get()
+        base_members = self.groups[group_name].members[:]
+
+        if member_filter is not None:
+            base_members = [m for m in filter(lambda x, f=member_filter: f(x), base_members)]            
+
+        nominal_hist = self.results[base_members[0].name]["output"]["xnorm"].get()
 
         gen_bins = []
         for gen_axis in self.gen_axes:
@@ -527,23 +532,18 @@ class Datagroups(object):
             gen_bin_edges = nominal_hist.axes[gen_axis].edges
             gen_bins.append(range(len(gen_bin_edges)-1))
 
-        base_members = self.groups[group_name].members[:]
-
         for indices in itertools.product(*gen_bins):
 
-            proc_name = group_name
+            proc_name = group_name if new_name is None else new_name
             for idx, var in zip(indices, self.gen_axes):
                 proc_name += f"_{var}{idx}"
 
-            self.copyGroup(group_name, proc_name)
+            self.copyGroup(group_name, proc_name, member_filter=member_filter)
 
             memberOp = lambda x, indices=indices, genvars=self.gen_axes: x[{var : i for var, i in zip(genvars, indices)}]
             self.groups[proc_name].memberOp = [memberOp for m in base_members]
 
             self.unconstrainedProcesses.append(proc_name)
-
-        # Remove inclusive signal
-        self.deleteGroup(group_name)
 
     def select_xnorm_groups(self):
         # only keep members and groups where xnorm is defined 
