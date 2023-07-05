@@ -41,9 +41,9 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
     # need the following hack to call the helpers with this enum class from python
     if what_analysis == ROOT.wrem.AnalysisType.Wmass:
         templateAnalysisArg = "wrem::AnalysisType::Wmass"
-    elif whatAnalysis == ROOT.wrem.AnalysisType.Wlike:
+    elif what_analysis == ROOT.wrem.AnalysisType.Wlike:
         templateAnalysisArg = "wrem::AnalysisType::Wlike"
-    elif whatAnalysis == ROOT.wrem.AnalysisType.Dilepton:
+    elif what_analysis == ROOT.wrem.AnalysisType.Dilepton:
         templateAnalysisArg = "wrem::AnalysisType::Dilepton"
     else:
         logger.error(f"Analysis {what_analysis} not implemented. Please check")
