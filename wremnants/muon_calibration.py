@@ -225,8 +225,17 @@ def make_jpsi_crctn_unc_helper(filepath, n_scale_params = 3, n_tot_params = 4, n
     )
     hist_scale_params_unc = hist.Hist(axis_eta, axis_scale_params, axis_scale_params_unc)
     for i in range(n_eta_bins):
-        lb, ub = i * n_scale_params, (i + 1) * n_scale_params
-        hist_scale_params_unc.view()[i,...] = var_mat[lb:ub][:]
+        if True:
+            AUnc_eta = f['A'].to_hist().values() * 1e-4
+            nvar = n_scale_params * n_eta_bins
+            AUnc = np.zeros(nvar)
+            AUnc.fill(AUnc_eta[i])
+            eUnc = np.zeros(nvar)
+            MUnc = np.zeros(nvar)
+            hist_scale_params_unc.view()[i,...] = np.stack([AUnc, eUnc, MUnc])
+        else: 
+            lb, ub = i * n_scale_params, (i + 1) * n_scale_params
+            hist_scale_params_unc.view()[i,...] = var_mat[lb:ub][:]
     hist_scale_params_unc_cpp = narf.hist_to_pyroot_boost(hist_scale_params_unc, tensor_rank = 2)
     jpsi_crctn_unc_helper = ROOT.wrem.JpsiCorrectionsUncHelper[type(hist_scale_params_unc_cpp).__cpp_name__](
         ROOT.std.move(hist_scale_params_unc_cpp)
