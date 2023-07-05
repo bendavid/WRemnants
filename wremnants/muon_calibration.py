@@ -697,8 +697,17 @@ def make_smearing_weight_test_helper(
     )
     hist_scale_params_unc = hist.Hist(axis_eta, axis_scale_params, axis_scale_params_unc)
     for i in range(n_eta_bins):
-        lb, ub = i * n_scale_params, (i + 1) * n_scale_params
-        hist_scale_params_unc.view()[i,...] = var_mat[lb:ub][:]
+        if True:
+            AUnc_eta = f['A'].to_hist().values() * 1e-4
+            nvar = n_scale_params * n_eta_bins
+            AUnc = np.zeros(nvar)
+            AUnc.fill(AUnc_eta[i])
+            eUnc = np.zeros(nvar)
+            MUnc = np.zeros(nvar)
+            hist_scale_params_unc.view()[i,...] = np.stack([AUnc, eUnc, MUnc])
+        else: 
+            lb, ub = i * n_scale_params, (i + 1) * n_scale_params
+            hist_scale_params_unc.view()[i,...] = var_mat[lb:ub][:]
     hist_scale_params_unc_cpp = narf.hist_to_pyroot_boost(hist_scale_params_unc, tensor_rank = 2)
 
     helper = ROOT.wrem.SmearingWeightTestHelper[type(hist_scale_params_unc_cpp).__cpp_name__](
