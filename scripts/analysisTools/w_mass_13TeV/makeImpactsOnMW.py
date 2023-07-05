@@ -37,7 +37,8 @@ def readNuisances(args, infile=None):
 
     print(f"Starting with file {infile} ...")
 
-    massNuisanceName = "WmassShift{s}MeV".format(s=int(args.prefitUncertainty))
+    #massNuisanceName = "WmassShift{s}MeV".format(s=int(args.prefitUncertainty))
+    massNuisanceName = "massShift{s}MeV".format(s=int(args.prefitUncertainty))
     valuesAndErrors = utilities.getFromHessian(infile,params=[massNuisanceName])
     totalUncertainty = valuesAndErrors[massNuisanceName][1] - valuesAndErrors[massNuisanceName][0]
     if args.scaleToMeV:

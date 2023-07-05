@@ -192,14 +192,17 @@ def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
 
     # plot unrolled ratio to better see how it looks like
     ratio_unrolled = unroll2Dto1D(ratio2D, newname=f"{ratio2D.GetName()}_unrolled")
+    #logger.error("HERE")
     ROOT.wrem.setRootHistogramError(ratio_unrolled, 0.0)
+    #logger.error("NOW HERE")
     drawSingleTH1(ratio_unrolled, XlabelUnroll, f"{dataTitle}/pred. ratio", "muon_etaPtUnrolledRatio",
                   outdir_dataMC, drawLineLowerPanel="", lowerPanelHeight=0.0, labelRatioTmp="", 
                   passCanvas=canvasWide,
                   legendCoords="0.15,0.85,0.82,0.9;2",
                   leftMargin=0.05,rightMargin=0.01,lumi=lumi, 
                   drawVertLines="{a},{b}".format(a=recoBins.Npt,b=recoBins.Neta),
-                  textForLines=ptBinRanges, ytextOffsetFromTop=0.3, textSize=0.04, textAngle=30, drawLineTopPanel=1.0)                       
+                  textForLines=ptBinRanges, ytextOffsetFromTop=0.3, textSize=0.04, textAngle=30, drawLineTopPanel=1.0)
+    #logger.error("AND FINALLY HERE")                       
 
     allHists = hmc2D + [hdata2D]
     hdata2D.SetTitle(f"{dataTitle} {chargeLabel}")

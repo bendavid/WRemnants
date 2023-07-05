@@ -82,7 +82,8 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
     dict_SF3D = None
     if len(eff_types_3D):
         # temporary file stored locally for tests
-        fileSF3D = data_dir + "/testMuonSF/smoothSF3D.pkl.lz4"
+        #fileSF3D = data_dir + "/testMuonSF/smoothSF3D.pkl.lz4"
+        fileSF3D = data_dir + "/testMuonSF/smoothSF3D_safeAntiSF.pkl.lz4"
         with lz4.frame.open(fileSF3D) as f3D:
             dict_SF3D = pickle.load(f3D)
     else:
