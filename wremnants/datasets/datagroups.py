@@ -545,6 +545,27 @@ class Datagroups(object):
         # Remove inclusive signal
         self.deleteGroup(group_name)
 
+    def select_xnorm_groups(self):
+        # only keep members and groups where xnorm is defined 
+        toDel_groups = []
+        for g_name, group in self.groups.items():
+            toDel_members = []
+            for member in group.members:
+                if member.name not in self.results.keys():
+                    raise RuntimeError(f"The member {member.name} of group {g_name} was not found in the results!")
+
+                if "xnorm" not in self.results[member.name]["output"].keys():
+                    logger.debug(f"Member {member.name} has no xnorm and will be deleted")
+                    toDel_members.append(member)
+
+            if len(toDel_members) == len(group.members):
+                logger.debug(f"All members of group {g_name} have no xnorm and the group will be deleted")
+                toDel_groups.append(g_name)
+            else:
+                group.deleteMembers(toDel_members)
+
+        self.deleteGroups(toDel_groups)
+
     def make_yields_df(self, histName, procs, action=lambda x: x, norm_proc=None):
         def sum_and_unc(h):
             if not hasattr(h.sum(), "value"):
