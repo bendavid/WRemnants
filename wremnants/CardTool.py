@@ -521,7 +521,7 @@ class CardTool(object):
         return ret
 
                 
-    def writeForProcess(self, h, proc, syst):
+    def writeForProcess(self, h, proc, syst, check_systs=True):
         decorrelateByBin = {}
         hnom = None
         systInfo = None
@@ -540,8 +540,7 @@ class CardTool(object):
                 decorrelateByBin = systInfo["decorrByBin"]
         logger.info(f"Preparing to write systematic {syst} for process {proc}")
         var_map = self.systHists(h, syst)
-        # TODO: Make this optional
-        if syst != self.nominalName:
+        if check_systs and syst != self.nominalName:
             self.checkSysts(var_map, proc,
                             skipSameSide=systInfo["mirrorDownVarEqualToUp"],
                             skipOneAsNomi=systInfo["mirrorDownVarEqualToNomi"])
@@ -552,7 +551,7 @@ class CardTool(object):
         # this is a big loop a bit slow, but it might be mainly the hist->root conversion and writing into the root file
         for name, var in var_map.items():
             if name != "":
-                self.writeHist(var, self.variationName(proc, name), setZeroStatUnc=setZeroStatUnc,
+                self.writeHist(var, proc, name, setZeroStatUnc=setZeroStatUnc,
                                decorrByBin=decorrelateByBin, hnomi=hnom)
         logger.debug("After self.writeHist(...)")
 
@@ -581,14 +580,15 @@ class CardTool(object):
         for systAxName in ["systIdx", "tensor_axis_0", "vars"]:
             if systAxName in [ax.name for ax in hdata.axes]:
                 hdata = hdata[{systAxName : self.pseudoDataIdx }] 
-        self.writeHist(hdata, self.pseudoData+"_sum")
 
-    def writeForProcesses(self, syst, processes, label):
+        self.writeHist(hdata, self.dataName, self.pseudoData+"_sum")
+
+    def writeForProcesses(self, syst, processes, label, check_systs=True):
         for process in processes:
             hvar = self.datagroups.groups[process].hists[label]
             if not hvar:
                 raise RuntimeError(f"Failed to load hist for process {process}, systematic {syst}")
-            self.writeForProcess(hvar, process, syst)
+            self.writeForProcess(hvar, process, syst, check_systs=check_systs)
         if syst != self.nominalName:
             self.fillCardWithSyst(syst)
 
@@ -603,13 +603,14 @@ class CardTool(object):
             self.outfile = outfile
             self.outfile.cd()
             
-    def writeOutput(self, args=None):
+    def writeOutput(self, args=None, forceNonzero=True, check_systs=True):
         self.datagroups.loadHistsForDatagroups(
             baseName=self.nominalName, syst=self.nominalName,
             procsToRead=self.datagroups.groups.keys(),
             label=self.nominalName, 
-            scaleToNewLumi=self.lumiScale)
-        self.writeForProcesses(self.nominalName, processes=self.datagroups.groups.keys(), label=self.nominalName)
+            scaleToNewLumi=self.lumiScale, 
+            forceNonzero=forceNonzero)
+        self.writeForProcesses(self.nominalName, processes=self.datagroups.groups.keys(), label=self.nominalName, check_systs=check_systs)
         self.loadNominalCard()
         if self.pseudoData and not self.xnorm:
             self.addPseudodata([x for x in self.datagroups.groups.keys() if x != "Data"],
@@ -624,14 +625,14 @@ class CardTool(object):
             self.datagroups.loadHistsForDatagroups(
                 self.nominalName, systName, label="syst",
                 procsToRead=processes, 
-                forceNonzero=systName != "qcdScaleByHelicity",
+                forceNonzero=forceNonzero and systName != "qcdScaleByHelicity",
                 preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"],
                 # Needed to avoid always reading the variation for the fakes, even for procs not specified
                 forceToNominal=[x for x in self.datagroups.getProcNames() if x not in 
                                 self.datagroups.getProcNames([p for p in processes if p != "Fake"])],
                 scaleToNewLumi=self.lumiScale,
             )
-            self.writeForProcesses(syst, label="syst", processes=processes)
+            self.writeForProcesses(syst, label="syst", processes=processes, check_systs=check_systs)
             
         output_tools.writeMetaInfoToRootFile(self.outfile, exclude_diff='notebooks', args=args)
         if self.skipHist:
@@ -735,15 +736,18 @@ class CardTool(object):
             args = {
                 "channel" :  chan,
                 "channelPerProc" : chan.ljust(self.procColumnsSpacing)*nprocs,
-                "processes" : "".join([x.ljust(self.procColumnsSpacing) for x in procs]),
+                "processes" : " ".join([x.ljust(self.procColumnsSpacing) for x in procs]),
                 "labels" : "".join([str(x).ljust(self.procColumnsSpacing) for x in self.processLabels()]),
                 # Could write out the proper normalizations pretty easily
                 "rates" : "-1".ljust(self.procColumnsSpacing)*nprocs,
                 "inputfile" : self.outfile if type(self.outfile) == str  else self.outfile.GetName(),
                 "dataName" : self.dataName,
                 "histName" : self.histName,
-                "pseudodataHist" : self.pseudoData+"_sum" if self.pseudoData else f"{self.histName}_{self.dataName}"
+                "pseudodataHist" : f"{self.histName}_{self.dataName}_{self.pseudoData}_sum" if self.pseudoData else f"{self.histName}_{self.dataName}"
             }
+            # use the relative path because absolute paths are slow in text2hdf5.py conversion
+            args["inputfile"] = os.path.basename(args["inputfile"])
+
             self.cardContent[chan] = output_tools.readTemplate(self.nominalTemplate, args)
             self.cardGroups[chan] = ""
             
@@ -753,13 +757,13 @@ class CardTool(object):
             hout = narf.hist_to_root(self.getBoostHistByCharge(h, q))
             hout.SetName(name+f"_{charge}")
             hout.Write()
-
+        
     def writeHistWithCharges(self, h, name):
         hout = narf.hist_to_root(h)
         hout.SetName(f"{name}_{self.channels[0]}")
         hout.Write()
     
-    def writeHist(self, h, name, setZeroStatUnc=False, decorrByBin={}, hnomi=None):
+    def writeHist(self, h, proc, syst, setZeroStatUnc=False, decorrByBin={}, hnomi=None):
         if self.skipHist:
             return
         if self.project:
@@ -780,17 +784,24 @@ class CardTool(object):
                 raise ValueError("Cannot write hists with > 3 dimensions as combinetf does not accept THn")
 
         if h.ndim != self.nominalDim:
-            raise ValueError(f"Histogram {name} does not have the correct dimensions. Found {h.ndim}, expected {self.nominalDim}")
+            raise ValueError(f"Histogram {proc}/{syst} does not have the correct dimensions. Found {h.ndim}, expected {self.nominalDim}")
 
         if setZeroStatUnc:
             h.variances(flow=True)[...] = 0.
 
+        # make sub directories for each process or return existing sub directory
+        directory = self.outfile.mkdir(proc, proc, True)
+        directory.cd()
+
+        name = self.variationName(proc, syst)
+
         hists = {name: h} # always keep original variation in output file for checks
         if decorrByBin:
-            hists.update(self.makeDecorrelatedSystHistograms(h, hnomi, name, decorrByBin))
+            hists.update(self.makeDecorrelatedSystHistograms(h, hnomi, syst, decorrByBin))
             
-        for hname,histo in hists.items():
+        for hname, histo in hists.items():
             if self.writeByCharge:
                 self.writeHistByCharge(histo, hname)
             else:
                 self.writeHistWithCharges(histo, hname)
+        self.outfile.cd()
