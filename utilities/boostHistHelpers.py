@@ -24,10 +24,10 @@ def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False, cutoff_
     if allowBroadcast:
         h1 = broadcastSystHist(h1, h2)
         h2 = broadcastSystHist(h2, h1)
-
+        
     storage = h1.storage_type() if h1.storage_type == h2.storage_type else hist.storage.Double()
     outh = hist.Hist(*h1.axes, storage=storage) if createNew else h1
-
+    
     h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2)
 
     # Careful not to overwrite the values of h1
@@ -125,7 +125,7 @@ def multiplyHists(h1, h2, allowBroadcast=True, createNew=True):
     return outh
 
 def addHists(h1, h2, allowBroadcast=True, createNew=True, scale1=None, scale2=None):
-   if allowBroadcast:
+    if allowBroadcast:
         h1 = broadcastSystHist(h1, h2)
         h2 = broadcastSystHist(h2, h1)
     h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2)
