@@ -27,6 +27,7 @@ parser.add_argument("--vqtTestStep", default=2, type=int , help="Test of isolati
 parser.add_argument("--vqtTestCorrectionStep", default=2, type=int , help="Test of isolation SFs dependence on V q_T projection. Index to determine up to which step the 3D SFs are applied. Values are 0,1,2")
 parser.add_argument("--vqt3dsmoothing", action="store_true", help="3D Smoothing")
 parser.add_argument("--noGenMatchMC", action='store_true', help="Don't use gen match filter for prompt muons with MC samples (note: QCD MC never has it anyway)")
+parser.add_argument("--addHelicityHistos", action='store_true', help="Add V qT,Y axes and helicity axes for W samples")
 args = parser.parse_args()
 
 args.sfFile = data_dir + "testMuonSF/allSmooth_GtoH3Dout.root"
@@ -38,8 +39,10 @@ else:
 
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
+procfilt = ['Wplusmunu', 'Wminusmunu'] if args.addHelicityHistos else args.filterProcs 
+
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
-                                              filt=args.filterProcs,
+                                              filt=procfilt,
                                               excl=args.excludeProcs, 
                                               nanoVersion="v8" if args.v8 else "v9", base_path=args.dataPath)
 
@@ -169,6 +172,35 @@ if args.nonClosureScheme in ["A-M-separated", "A-M-combined", "binned-plus-M"]:
 if not args.noRecoil:
     from wremnants import recoil_tools
     recoilHelper = recoil_tools.Recoil("highPU", args, flavor="mu")
+
+#graph building for Wsample with helicity weights
+def whistosbyHelicity(df, results, dataset, reco_sel_GF, era):
+    #list(range(0,50,5)).append(np.inf) ,
+    axis_ptVgen = hist.axis.Variable(
+        [0., 5., 10., 15., 20., 25., 30., 35., 40., 45., 50.],
+        name = "ptVgen", underflow=False, overflow=False
+    )
+    #axis_ptVgen.append(np.inf)
+    #Taken from w-z gen histomaker     
+    axis_absYVgen = hist.axis.Variable(
+        #[0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4., 5., np.inf], 
+        [0, 0.25, 0.5, 0.75, 1., 1.5, 2.5, 5.],
+        name = "absYVgen", underflow=False, overflow=False
+    )
+    print('Entered function whistobyHelicity')                
+    nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT", "absYVgen", "ptVgen"]
+    nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT, axis_absYVgen, axis_ptVgen]
+    weightsByHelicity_helper = wremnants.makehelicityWeightHelper()
+    df = df.Define("helWeight_tensor", weightsByHelicity_helper, ["massVgen", "yVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "nominal_weight"])
+    df=df.Define("nominal_weight_helicity", "wrem::scalarmultiplyHelWeightTensor(nominal_weight,helWeight_tensor)")
+    axes_helicity=hist.axis.Integer(-1, 5, name="helicity", overflow=False, underflow=False)
+    nominalByHelicity = df.HistoBoost("nominal", nominal_axes, [*nominal_cols,"nominal_weight_helicity"], tensor_axes=[axes_helicity])
+    results.append(nominalByHelicity)
+    
+    df = syst_tools.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, nominal_axes, nominal_cols, addhelicity=True)
+    df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, nominal_axes, nominal_cols, addhelicity=True)
+    df = syst_tools.add_theory_hists(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, nominal_axes, nominal_cols, for_wmass=True, addhelicity=True)
+
 
 smearing_weights_procs = []
 def build_graph(df, dataset):
@@ -349,7 +381,11 @@ def build_graph(df, dataset):
         # utility plot, mt and met, to plot them later
         results.append(df.HistoBoost("MET", [axis_met, axis_charge, axis_passIso, axis_passMT], ["MET_corr_rec_pt", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"]))
         results.append(df.HistoBoost("transverseMass", [axis_mt_fakes, axis_charge, axis_passIso, axis_passMT], ["transverseMass", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"]))
-    
+
+    if isW and args.addHelicityHistos:
+        whistosbyHelicity(df, results, dataset, reco_sel_GF, era=era)
+        return results, weightsum
+        
     if not args.onlyMainHistograms:
         syst_tools.add_QCDbkg_jetPt_hist(results, df, axes, cols, jet_pt=30)
 
@@ -628,7 +664,7 @@ def build_graph(df, dataset):
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)
-if not args.onlyMainHistograms and args.muonScaleVariation == 'smearingWeights':
+if not args.onlyMainHistograms and args.muonScaleVariation == 'smearingWeights' and not args.addHelicityHistos:
     logger.debug("Apply smearingWeights")
     muon_calibration.transport_smearing_weights_to_reco(
         resultdict,
