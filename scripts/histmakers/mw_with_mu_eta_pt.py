@@ -39,9 +39,7 @@ else:
 
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
-print('Args add helicity given ?', args.addHelicityHistos)
 procfilt = ['Wplusmunu', 'Wminusmunu'] if args.addHelicityHistos else args.filterProcs 
-print(procfilt)
 
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
                                               filt=procfilt,
@@ -199,9 +197,9 @@ def whistosbyHelicity(df, results, dataset, reco_sel_GF, era):
     nominalByHelicity = df.HistoBoost("nominal", nominal_axes, [*nominal_cols,"nominal_weight_helicity"], tensor_axes=[axes_helicity])
     results.append(nominalByHelicity)
     
-    df = syst_tools_helicity.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, nominal_axes, nominal_cols)
-    df = syst_tools_helicity.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, nominal_axes, nominal_cols)
-    df = syst_tools_helicity.add_theory_hists(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, nominal_axes, nominal_cols, for_wmass=True)
+    df = syst_tools.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, nominal_axes, nominal_cols, addhelicity=True)
+    df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, nominal_axes, nominal_cols, addhelicity=True)
+    df = syst_tools.add_theory_hists(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, nominal_axes, nominal_cols, for_wmass=True, addhelicity=True)
 
 
 def build_graph(df, dataset):

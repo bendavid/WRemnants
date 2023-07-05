@@ -79,7 +79,6 @@ def make_muon_prefiring_helper_syst_byHelicity(nhelicity=6):
 #this is helicity X <Neta,2> type
 def make_muon_prefiring_helper_stat_byHelicity(helper_stat, nhelicity=6):
     nEta = helper_stat.tensor_axes[0].size
-    print('Mu prefire #eta bins: {}'.format(nEta))
     helper_stat_helicity = ROOT.wrem.tensorupdownvar_helper_helicity[nEta, nhelicity]()
     tensor_axes = [axis_helicity_multidim, *helper_stat.tensor_axes]
     return helper_stat_helicity, tensor_axes
