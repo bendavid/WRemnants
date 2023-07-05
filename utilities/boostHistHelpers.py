@@ -147,11 +147,11 @@ def addHists(h1, h2, allowBroadcast=True, createNew=True, scale1=None, scale2=No
     else:
         outvals = h1vals if h1.shape == outh.shape else h2vals
         np.add(h1vals, h2vals, out=outvals)
-        outh.values()[...] = outvals
+        outh.values(flow=True)[...] = outvals
         if hasWeights:
             outvars = h1vars if h1.shape == outh.shape else h2vars
             np.add(h1vars, h2vars, out=outvars)
-            outh.variances()[...] = outvars
+            outh.variances(flow=True)[...] = outvars
         return outh
 
 def sumHists(hists):
