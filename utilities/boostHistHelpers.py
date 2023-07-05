@@ -119,7 +119,7 @@ def multiplyHists(h1, h2, allowBroadcast=True, createNew=True):
 
     return outh
 
-def addHists(h1, h2, allowBroadcast=True, createNew=True):
+def addHists(h1, h2, allowBroadcast=True, createNew=True, scale1=None, scale2=None):
     if allowBroadcast:
         h1 = broadcastSystHist(h1, h2)
         h2 = broadcastSystHist(h2, h1)
