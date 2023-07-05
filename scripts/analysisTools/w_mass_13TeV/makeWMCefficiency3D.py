@@ -51,7 +51,7 @@ def getBoostEff(n_pass, n_tot, integrateVar=[]):
     else:
         num = n_pass
         den = n_tot
-    eff_boost = hh.divideHists(num, den, cutoff=0.1, allowBroadcast=True, createNew=True, ratioValAtCutoff=0.0)
+    eff_boost = hh.divideHists(num, den, cutoff=0.1, allowBroadcast=True, createNew=True, cutoff_val=0.0)
     vals = eff_boost.values()
     vals[vals < 0.0] = 0.0
     vals[vals > 1.0] = 1.0
