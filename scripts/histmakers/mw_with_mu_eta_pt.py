@@ -39,10 +39,9 @@ else:
 
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
-procfilt = ['Wplusmunu', 'Wminusmunu'] if args.addHelicityHistos else args.filterProcs 
 
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
-                                              filt=procfilt,
+                                              filt=args.filterProcs,
                                               excl=args.excludeProcs, 
                                               nanoVersion="v8" if args.v8 else "v9", base_path=args.dataPath)
 
@@ -213,7 +212,7 @@ def build_graph(df, dataset):
     require_prompt = "tau" not in dataset.name # for muon GEN-matching   
     
     # disable auxiliary histograms when unfolding to reduce memory consumptions
-    auxiliary_histograms = not args.unfolding
+    auxiliary_histograms = not args.unfolding and not args.addHelicityHistos
 
     apply_theory_corr = args.theoryCorr and dataset.name in corr_helpers
 
