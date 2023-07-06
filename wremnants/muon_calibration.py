@@ -62,8 +62,8 @@ def make_jpsi_crctn_helpers(args, make_uncertainty_helper=False):
     data_helper = make_jpsi_crctn_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}") if data_corrfile else None
 
     if make_uncertainty_helper:
-        mc_unc_helper = make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{mc_corrfile}", n_eta_bins = 24) if mc_corrfile else None
-        data_unc_helper = make_jpsi_crctn_unc_helper(filepath=f"{common.data_dir}/calibration/{data_corrfile}") if data_corrfile else None
+        mc_unc_helper = make_jpsi_crctn_unc_helper(args, filepath=f"{common.data_dir}/calibration/{mc_corrfile}", n_eta_bins = 24) if mc_corrfile else None
+        data_unc_helper = make_jpsi_crctn_unc_helper(args, filepath=f"{common.data_dir}/calibration/{data_corrfile}") if data_corrfile else None
 
         return mc_helper, data_helper, mc_unc_helper, data_unc_helper
     else:
@@ -210,7 +210,7 @@ def make_jpsi_crctn_helper(filepath):
     )
     return jpsi_crctn_helper
 
-def make_jpsi_crctn_unc_helper(filepath, n_scale_params = 3, n_tot_params = 4, n_eta_bins = 48, scale = 1.0):
+def make_jpsi_crctn_unc_helper(args, filepath, n_scale_params = 3, n_tot_params = 4, n_eta_bins = 48, scale = 1.0):
     f = uproot.open(filepath)
     cov = f['covariance_matrix'].to_hist()
     cov_scale_params = get_jpsi_scale_param_cov_mat(cov, n_scale_params, n_tot_params, n_eta_bins, scale)
@@ -225,11 +225,10 @@ def make_jpsi_crctn_unc_helper(filepath, n_scale_params = 3, n_tot_params = 4, n
     )
     hist_scale_params_unc = hist.Hist(axis_eta, axis_scale_params, axis_scale_params_unc)
     for i in range(n_eta_bins):
-        if True:
-            AUnc_eta = f['A'].to_hist().values() * 1e-4
+        if args.dummyVar:
             nvar = n_scale_params * n_eta_bins
             AUnc = np.zeros(nvar)
-            AUnc.fill(AUnc_eta[i])
+            AUnc.fill(1e-4)
             eUnc = np.zeros(nvar)
             MUnc = np.zeros(nvar)
             hist_scale_params_unc.view()[i,...] = np.stack([AUnc, eUnc, MUnc])
@@ -697,11 +696,10 @@ def make_smearing_weight_test_helper(
     )
     hist_scale_params_unc = hist.Hist(axis_eta, axis_scale_params, axis_scale_params_unc)
     for i in range(n_eta_bins):
-        if True:
-            AUnc_eta = f['A'].to_hist().values() * 1e-4
+        if args.dummyVar:
             nvar = n_scale_params * n_eta_bins
             AUnc = np.zeros(nvar)
-            AUnc.fill(AUnc_eta[i])
+            AUnc.fill(1e-4)
             eUnc = np.zeros(nvar)
             MUnc = np.zeros(nvar)
             hist_scale_params_unc.view()[i,...] = np.stack([AUnc, eUnc, MUnc])

@@ -27,6 +27,7 @@ parser.add_argument("--vqtTestStep", default=2, type=int , help="Test of isolati
 parser.add_argument("--vqtTestCorrectionStep", default=2, type=int , help="Test of isolation SFs dependence on V q_T projection. Index to determine up to which step the 3D SFs are applied. Values are 0,1,2")
 parser.add_argument("--vqt3dsmoothing", action="store_true", help="3D Smoothing")
 parser.add_argument("--noGenMatchMC", action='store_true', help="Don't use gen match filter for prompt muons with MC samples (note: QCD MC never has it anyway)")
+parser.add_argument("--dummyVar", action='store_true', help='Use a dummy 1e-4 variation on the muon scale instead of reading from the calibration file')
 args = parser.parse_args()
 
 args.sfFile = data_dir + "testMuonSF/allSmooth_GtoH3Dout.root"
@@ -439,13 +440,18 @@ def build_graph(df, dataset):
                 df = df.DefinePerSample("bool_true", "true")
                 df = df.DefinePerSample("bool_false", "false")
                 smearing_weights_procs.append(dataset.name)
-                if args.validateByMassWeights:
+
+                # alternate methods to derive the scale variation 
+                if args.validationHists:
+
+                    # smearing weights via mass weights
+                    nweights = 23 if isZ else 21
                     jpsi_unc_helper = muon_validation.make_jpsi_crctn_unc_helper_massweights(
-                        "wremnants/data/calibration/calibrationJDATA_rewtgr_3dmap_LBL.root",
-                        nweights,
-                        scale = 3.04
+                        args,
+                        "wremnants/data/calibration/calibrationJDATA_rewtgr_3dmap_LBL_MCstat.root",
+                        nweights
                     )
-                    df = df.Define("muonScaleSyst_responseWeights_tensor_gensmear", jpsi_unc_helper,
+                    df = df.Define("muonScaleSyst_responseWeights_tensor_gensmear_massweights", jpsi_unc_helper,
                         [
                             f"{reco_sel_GF}_eta0_gen_smeared",
                             f"{reco_sel_GF}_charge0_gen_smeared",
@@ -455,31 +461,15 @@ def build_graph(df, dataset):
                             f"bool_{str(isW).lower()}"
                         ]
                     )
-                else:
-                    jpsi_unc_helper = jpsi_crctn_data_unc_helper
-                    df = df.Define("muonScaleSyst_responseWeights_tensor_gensmear", jpsi_unc_helper,
-                        [
-                            f"{reco_sel_GF}_genQop",
-                            f"{reco_sel_GF}_genPhi",
-                            f"{reco_sel_GF}_genEta",
-                            f"{reco_sel_GF}_genSmearedQop",
-                            f"{reco_sel_GF}_genSmearedPhi",
-                            f"{reco_sel_GF}_genSmearedEta",
-                            f"{reco_sel_GF}_genSmearedCharge",
-                            f"{reco_sel_GF}_genSmearedPt",
-                            f"{reco_sel_GF}_covMat",
-                            "nominal_weight",
-                            "bool_false"
-                        ]
-                    )
-                    dummyMuonScaleSyst_responseWeights = df.HistoBoost(
-                        "muonScaleSyst_responseWeights_gensmear", axes,
-                        [*nominal_cols_gen_smeared, "muonScaleSyst_responseWeights_tensor_gensmear"],
+                    dummyMuonScaleSyst_responseWeights_massWeights = df.HistoBoost(
+                        "muonScaleSyst_responseWeights_gensmear_massweights", axes,
+                        [*nominal_cols_gen_smeared, "muonScaleSyst_responseWeights_tensor_gensmear_massweights"],
                         tensor_axes = jpsi_unc_helper.tensor_axes, storage=hist.storage.Double()
                     )
-                    print(dataset.name)
-                    results.append(dummyMuonScaleSyst_responseWeights)
-                    df = df.Define("muonScaleSyst_responseWeights_spline_tensor", spline_helper,
+                    results.append(dummyMuonScaleSyst_responseWeights_massWeights)
+
+                    # smearing weights via splines
+                    df = df.Define("muonScaleSyst_responseWeights_tensor_spline", spline_helper,
                         [
                             f"{reco_sel_GF}_recoPt",
                             f"{reco_sel_GF}_recoEta",
@@ -492,28 +482,57 @@ def build_graph(df, dataset):
                     )
                     dummyMuonScaleSyst_responseWeights_spline = df.HistoBoost(
                         "muonScaleSyst_responseWeights_spline", axes,
-                        [*nominal_cols, "muonScaleSyst_responseWeights_spline_tensor"],
+                        [*nominal_cols, "muonScaleSyst_responseWeights_tensor_spline"],
                         tensor_axes = spline_helper.tensor_axes, storage=hist.storage.Double()
                     )
                     results.append(dummyMuonScaleSyst_responseWeights_spline)
 
-#                    axis_delta_qop = hist.axis.Regular(1000, -5, 5, underflow=True, overflow=True, name = "axis_delta_qop")
-#                    df = df.Define("deltaQopSpline", "muonScaleSyst_responseWeights_spline_tensor(0,0)")
-#                    deltaQopSpline = df.HistoBoost(
-#                        "nominal_deltaQopSpline",
-#                        [axis_delta_qop],
-#                        ["deltaQopSpline"], 
-#                        storage=hist.storage.Double()
-#                    )
-#                    results.append(deltaQopSpline)
-#                    df = df.Define("deltaQopGensmear", "muonScaleSyst_responseWeights_tensor_gensmear(0,0)")
-#                    deltaQopGensmear = df.HistoBoost(
-#                        "nominal_deltaQopGensmear",
-#                        [axis_delta_qop],
-#                        ["deltaQopGensmear"], 
-#                        storage=hist.storage.Double()
-#                    )
-#                    results.append(deltaQopGensmear)
+                jpsi_unc_helper = jpsi_crctn_data_unc_helper
+                df = df.Define("muonScaleSyst_responseWeights_tensor_gensmear", jpsi_unc_helper,
+                    [
+                        f"{reco_sel_GF}_genQop",
+                        f"{reco_sel_GF}_genPhi",
+                        f"{reco_sel_GF}_genEta",
+                        f"{reco_sel_GF}_genSmearedQop",
+                        f"{reco_sel_GF}_genSmearedPhi",
+                        f"{reco_sel_GF}_genSmearedEta",
+                        f"{reco_sel_GF}_genSmearedCharge",
+                        f"{reco_sel_GF}_genSmearedPt",
+                        f"{reco_sel_GF}_covMat",
+                        "nominal_weight",
+                        "bool_false"
+                    ]
+                )
+
+                # use the weights derived via mass weights as the nominal to transport to reco
+                if args.validateByMassWeights:
+                    df= df.Redefine("muonScaleSyst_responseWeights_tensor_gensmear", "muonScaleSyst_responseWeights_tensor_gensmear_massweights")
+
+                dummyMuonScaleSyst_responseWeights = df.HistoBoost(
+                    "muonScaleSyst_responseWeights_gensmear", axes,
+                    [*nominal_cols_gen_smeared, "muonScaleSyst_responseWeights_tensor_gensmear"],
+                    tensor_axes = jpsi_unc_helper.tensor_axes, storage=hist.storage.Double()
+                )
+                results.append(dummyMuonScaleSyst_responseWeights)
+
+
+#                axis_delta_qop = hist.axis.Regular(1000, -5, 5, underflow=True, overflow=True, name = "axis_delta_qop")
+#                df = df.Define("deltaQopSpline", "muonScaleSyst_responseWeights_spline_tensor(0,0)")
+#                deltaQopSpline = df.HistoBoost(
+#                    "nominal_deltaQopSpline",
+#                    [axis_delta_qop],
+#                    ["deltaQopSpline"], 
+#                    storage=hist.storage.Double()
+#                )
+#                results.append(deltaQopSpline)
+#                df = df.Define("deltaQopGensmear", "muonScaleSyst_responseWeights_tensor_gensmear(0,0)")
+#                deltaQopGensmear = df.HistoBoost(
+#                    "nominal_deltaQopGensmear",
+#                    [axis_delta_qop],
+#                    ["deltaQopGensmear"], 
+#                    storage=hist.storage.Double()
+#                )
+#                results.append(deltaQopGensmear)
                 # for the Z non-closure nuisances
                 if args.nonClosureScheme == "A-M-separated":
                     df = df.DefinePerSample("AFlag", "0x01")
@@ -607,16 +626,27 @@ def build_graph(df, dataset):
                     )
                     results.append(hist_Z_non_closure_binned)
 
-            if args.muonScaleVariation == 'smearingWeights':
-                if args.validationHists:
-                    df = muon_validation.define_cols_for_smearing_weights_perse(
-                        df, jpsi_crctn_data_unc_helper, reco_sel_GF
-                    )
-                    df = muon_validation.define_cols_for_manual_shifts(df)
-                    muon_validation.make_hists_for_smearing_weights_perse(df, axes, cols, results)
-                    muon_validation.make_hists_for_manual_scale_shifts(
-                        df, axes, cols, nominal_cols_gen_smeared, results
-                    )
+            if args.muonScaleVariation == 'smearingWeights' and args.validationHists:
+                df = muon_validation.make_hists_for_smearing_weights_perse(
+                    df, axes, cols, 
+                    "muonScaleSyst_responseWeights_tensor_gensmear", "gensmear",
+                    results
+                ) 
+                df = muon_validation.make_hists_for_smearing_weights_perse(
+                    df, axes, cols, 
+                    "muonScaleSyst_responseWeights_tensor_spline", "spline",
+                    results
+                ) 
+                df = muon_validation.make_hists_for_smearing_weights_perse(
+                    df, axes, cols, 
+                    "muonScaleSyst_responseWeights_tensor_gensmear_massweights", "massweights",
+                    results
+                ) 
+            if args.validationHists:
+                df = muon_validation.define_cols_for_manual_shifts(df)
+                muon_validation.make_hists_for_manual_scale_shifts(
+                    df, axes, cols, nominal_cols_gen_smeared, results
+                )
 
             df = df.Define("Muon_cvhMomCov", "wrem::splitNestedRVec(Muon_cvhMomCov_Vals, Muon_cvhMomCov_Counts)")
 

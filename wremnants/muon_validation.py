@@ -13,7 +13,7 @@ narf.clingutils.Declare('#include "muon_validation.h"')
 logger = logging.child_logger(__name__)
 
 def make_jpsi_crctn_unc_helper_massweights(
-    filepath, n_massweights,
+    args, filepath, n_massweights,
     n_scale_params = 3, n_tot_params = 4, n_eta_bins = 48, scale = 1.0
 ):
     f = uproot.open(filepath)
@@ -30,11 +30,10 @@ def make_jpsi_crctn_unc_helper_massweights(
     )
     hist_scale_params_unc = hist.Hist(axis_eta, axis_scale_params, axis_scale_params_unc)
     for i in range(n_eta_bins):
-        if True:
-            AUnc_eta = f['A'].to_hist().values() * 1e-4
+        if args.dummyVar:
             nvar = n_scale_params * n_eta_bins
             AUnc = np.zeros(nvar)
-            AUnc.fill(AUnc_eta[i])
+            AUnc.fill(1e-4)
             eUnc = np.zeros(nvar)
             MUnc = np.zeros(nvar)
             hist_scale_params_unc.view()[i,...] = np.stack([AUnc, eUnc, MUnc])
@@ -208,30 +207,6 @@ def make_reco_over_gen_hists(df, results):
     results.append(uncrct_over_gen)
     results.append(gen_smeared_over_gen)
 
-def define_cols_for_smearing_weights_perse(df, helper_func, reco_sel_GF):
-    if not ("unity" in df.GetColumnNames()):
-        df = df.Define("unity", "1.0")
-    if not ("bool_false" in df.GetColumnNames()):
-        df = df.DefinePerSample("bool_false", "false")
-    df = df.Define("muonScaleSyst_smearingWeightsPerSe_tensor", helper_func,
-        [
-            f"{reco_sel_GF}_genQop",
-            f"{reco_sel_GF}_genPhi",
-            f"{reco_sel_GF}_genEta",
-            f"{reco_sel_GF}_genSmearedQop",
-            f"{reco_sel_GF}_genSmearedPhi",
-            f"{reco_sel_GF}_genSmearedEta",
-            f"{reco_sel_GF}_genSmearedCharge",
-            f"{reco_sel_GF}_genSmearedPt",
-            f"{reco_sel_GF}_covMat",
-            "unity",
-            "bool_false"
-        ]
-    )
-    df = df.Define("smearing_weights_down", "muonScaleSyst_smearingWeightsPerSe_tensor(0,0)")
-    df = df.Define("smearing_weights_up", "muonScaleSyst_smearingWeightsPerSe_tensor(0,1)")
-    return df
-
 def define_cols_for_manual_shifts(df):
     df = df.Define("goodMuons_pt0_gen_smeared_scaleUp_mil", "goodMuons_pt0_gen_smeared * 1.001")
     df = df.Define("goodMuons_pt0_gen_smeared_scaleDn_mil", "goodMuons_pt0_gen_smeared / 1.001")
@@ -241,12 +216,25 @@ def define_cols_for_manual_shifts(df):
     df = df.Define("goodMuons_pt0_gen_smeared_scaleDn_tenthmil", "goodMuons_pt0_gen_smeared / 1.0001")
     return df
 
-def make_hists_for_smearing_weights_perse(df, nominal_axes, nominal_cols, results):
-    axis_smearing_weight = hist.axis.Regular(1000, 0.99, 1.01, underflow=True, overflow=True, name = "smearing_weight")
-    smearing_weights_down = df.HistoBoost("smearing_weights_down", [*nominal_axes, axis_smearing_weight], [*nominal_cols, "smearing_weights_down"], storage=hist.storage.Double())
-    smearing_weights_up = df.HistoBoost("smearing_weights_up", [*nominal_axes, axis_smearing_weight], [*nominal_cols, "smearing_weights_up"], storage=hist.storage.Double())
-    results.append(smearing_weights_down)
-    results.append(smearing_weights_up)
+def make_hists_for_smearing_weights_perse(df, nominal_axes, nominal_cols, weights_col, method, results):
+    df = df.Define(f"weights_{method}_dn", f"{weights_col}(0,0)")
+    df = df.Define(f"weights_{method}_up", f"{weights_col}(0,1)")
+    axis_weights = hist.axis.Regular(1000, 0.99, 1.01, underflow=True, overflow=True, name = "weights")
+    weights_dn = df.HistoBoost(
+        f"weights_{method}_dn", 
+        [*nominal_axes, axis_weights],
+        [*nominal_cols, f"weights_{method}_dn"], 
+        storage=hist.storage.Double()
+    )
+    weights_up = df.HistoBoost(
+        f"weights_{method}_up", 
+        [*nominal_axes, axis_weights],
+        [*nominal_cols, f"weights_{method}_up"], 
+        storage=hist.storage.Double()
+    )
+    results.append(weights_dn)
+    results.append(weights_up)
+    return df
 
 # make the histograms for muon momentum scale shifts by
 # manually shift the muon pt by a certain proportion
