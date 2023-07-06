@@ -192,7 +192,7 @@ def hist_to_variations(hist_in):
 
     genAxes = ["absYVgenNP", "chargeVgenNP"]
 
-    nom_hist = hist_in[{"vars" : "pdf0"}]
+    nom_hist = hist_in[{"vars" : 0}]
     nom_hist_sum = nom_hist[{genAxis : s[::hist.sum] for genAxis in genAxes}]
 
     variation_data = hist_in.view(flow=True) - nom_hist.view(flow=True)[...,None] + nom_hist_sum.view(flow=True)[..., None, None, None]
@@ -219,7 +219,7 @@ def define_mass_weights(df, proc):
     return df
 
 def add_massweights_hist(results, df, axes, cols, base_name="nominal", proc=""):
-    name = Datagroups.histName(base_name, syst="massWeight")
+    name = Datagroups.histName(base_name, syst="massWeight"+proc[0])
     massWeight = df.HistoBoost(name, axes, [*cols, "massWeight_tensor_wnom"], 
                     tensor_axes=[hist.axis.StrCategory(massWeightNames(proc=proc), name="massShift")], 
                     storage=hist.storage.Double())
@@ -228,7 +228,7 @@ def add_massweights_hist(results, df, axes, cols, base_name="nominal", proc=""):
 def massWeightNames(matches=None, proc=""):
     central=10
     nweights=21
-    names = [f"massShift{int(abs(central-i)*10)}MeV{'' if i == central else ('Down' if i < central else 'Up')}" for i in range(nweights)]
+    names = [f"massShift{proc[0]}{int(abs(central-i)*10)}MeV{'' if i == central else ('Down' if i < central else 'Up')}" for i in range(nweights)]
     if proc and proc in common.zprocs_all:
         # This is the PDG uncertainty (turned off for now since it doesn't seem to have been read into the nano)
         names.extend(["massShift2p1MeVDown", "massShift2p1MeVUp"])

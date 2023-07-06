@@ -3,6 +3,7 @@ from wremnants import CardTool,theory_tools,syst_tools,combine_helpers
 from wremnants import histselections as sel
 from wremnants.datasets.datagroups2016 import make_datagroups_2016
 from utilities import common, logging, input_tools
+import itertools
 import argparse
 import os
 import pathlib
@@ -17,11 +18,11 @@ data_dir = f"{pathlib.Path(__file__).parent}/../../wremnants/data/"
 def make_parser(parser=None):
     if not parser:
         parser = common.common_parser_combine()
-    parser.add_argument("--fitvar", help="Variable to fit", default="pt-eta")
+    parser.add_argument("--fitvar", nargs="+", help="Variable to fit", default=["pt", "eta"])
     parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow). Equivalent to --excludeNuisances '.*effSystTnP|.*effStatTnP' ")
     parser.add_argument("--ewUnc", action='store_true', help="Include EW uncertainty")
     parser.add_argument("--pseudoData", type=str, help="Hist to use as pseudodata")
-    parser.add_argument("--pseudoDataIdx", type=int, default=0, help="Variation index to use as pseudodata")
+    parser.add_argument("--pseudoDataIdx", type=str, default="0", help="Variation index to use as pseudodata")
     parser.add_argument("--pseudoDataFile", type=str, help="Input file for pseudodata (if it should be read from a different file)", default=None)
     parser.add_argument("--pseudoDataProcsRegexp", type=str, default=".*", help="Regular expression for processes taken from pseudodata file (all other processes are automatically got from the nominal file). Data is excluded automatically as usual")
     parser.add_argument("-x",  "--excludeNuisances", type=str, default="", help="Regular expression to exclude some systematics from the datacard")
@@ -31,7 +32,8 @@ def make_parser(parser=None):
     parser.add_argument("--effStatLumiScale", type=float, default=None, help="Rescale equivalent luminosity for efficiency stat uncertainty by this value (e.g. 10 means ten times more data from tag and probe)")
     parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers and nuisances)")
     parser.add_argument("--isoEfficiencySmoothing", action='store_true', help="If isolation SF was derived from smooth efficiencies instead of direct smoothing")
-    parser.add_argument("--xlim", type=float, nargs=2, default=None, help="Restrict x axis to this range")
+    parser.add_argument("--axlim", type=float, default=[], nargs='*', help="Restrict axis to this range (assumes pairs of values by axis, with trailing axes optional)")
+    parser.add_argument("--constrainMass", action='store_true', help="Constrain mass parameter in the fit (e.g. for ptll fit)")
     parser.add_argument("--unfold", action='store_true', help="Prepare datacard for unfolding")
     parser.add_argument("--fitXsec", action='store_true', help="Fit signal inclusive cross section")
     parser.add_argument("--correlatedNonClosureNuisances", action='store_true', help="get systematics from histograms for the Z non-closure nuisances without decorrelation in eta and pt")
@@ -57,11 +59,23 @@ def main(args,xnorm=False):
     
     datagroups = make_datagroups_2016(args.inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm)
 
-    if args.xlim:
-        if len(args.fitvar.split("-")) > 1:
-            raise ValueError("Restricting the x axis not supported for 2D hist")
-        s = hist.tag.Slicer()
-        datagroups.setGlobalAction(lambda h: h[{args.fitvar : s[complex(0, args.xlim[0]):complex(0, args.xlim[1])]}])
+    if args.axlim or args.rebin:
+        if len(args.axlim) % 2 or len(args.axlim)/2 > len(args.fitvar) or len(args.rebin) > len(args.fitvar):
+            raise ValueError("Inconsistent rebin or axlim arguments. axlim must be at most two entries per axis, and rebin at most one")
+
+        sel = {}
+        for var,low,high,rebin in itertools.zip_longest(args.fitvar, args.axlim[::2], args.axlim[1::2], args.rebin):
+            s = hist.tag.Slicer()
+            if low and high:
+                logger.info(f"Restricting the axis '{var}' to range [{low}, {high}]")
+                sel[var] = s[complex(0, low):complex(0, high):hist.rebin(rebin) if rebin else None]
+            elif rebin:
+                sel[var] = s[hist.rebin(rebin)]
+            if rebin:
+                logger.info(f"Rebinning the axis '{var}' by [{rebin}]")
+
+        logger.info(f"Will apply the global selection {sel}")
+        datagroups.setGlobalAction(lambda h: h[sel])
 
     wmass = datagroups.wmass
     wlike = datagroups.wlike
@@ -78,7 +92,7 @@ def main(args,xnorm=False):
         name = "ZMassDilepton"
         constrainMass = "mll" not in args.fitvar
 
-    tag = name+"_"+args.fitvar.replace("-","_")
+    tag = "_".join([name]+args.fitvar)
     if args.doStatOnly:
         tag += "_statOnly"
     if args.postfix:
@@ -134,7 +148,7 @@ def main(args,xnorm=False):
         cardTool.setNominalName(histName)
         cardTool.setProjectionAxes(["count"])
     else:
-        cardTool.setProjectionAxes(args.fitvar.split("-"))
+        cardTool.setProjectionAxes(args.fitvar)
     if args.noHist:
         cardTool.skipHistograms()
     cardTool.setOutfile(os.path.abspath(f"{outfolder}/{name}CombineInput{suffix}.root"))
@@ -170,16 +184,16 @@ def main(args,xnorm=False):
     logger.info(f"Signal samples: {signal_samples}")
 
     constrainedZ = constrainMass and not wmass
-    massSkip = [(f"^massShift{i}MeV.*",) for i in range(0, 110 if constrainedZ else 100, 10)]
+    label = 'W' if wmass else 'Z'
+    massSkip = [(f"^massShift{label}{i}MeV.*",) for i in range(0, 110 if constrainedZ else 100, 10)]
     if not (constrainMass or wmass):
-        massSkip.append(("^massShift2p1MeV.*",))
+        massSkip.append(("^massShiftZ2p1MeV.*",))
 
-    cardTool.addSystematic("massWeight", 
+    cardTool.addSystematic(f"massWeight{label}",
                             processes=signal_samples_inctau,
-                            group=f"massShift{'W' if wmass else 'Z'}",
+                            group=f"massShift{label}",
                             skipEntries=massSkip,
                             mirror=False,
-                            systNamePrepend="W" if wmass else "Z",
                             #TODO: Name this
                             noConstraint=not constrainMass,
                             systAxes=["massShift"],
@@ -315,7 +329,7 @@ def main(args,xnorm=False):
     to_fakes = passSystToFakes and not args.noQCDscaleFakes and not xnorm
     combine_helpers.add_pdf_uncertainty(cardTool, single_v_samples, passSystToFakes, from_corr=args.pdfUncFromCorr, scale=args.scalePdf)
     combine_helpers.add_modeling_uncertainty(cardTool, args.minnloScaleUnc, signal_samples_inctau, 
-        single_v_nonsig_samples if not xnorm else [], to_fakes, args.resumUnc, wmass, scaleTNP=args.scaleTNP, rebin_pt=args.rebinPtV)
+        single_v_nonsig_samples if not xnorm else [], to_fakes, args.resumUnc, wmass, scaleTNP=args.scaleTNP)
 
     if not xnorm:
         msv_config_dict = {
