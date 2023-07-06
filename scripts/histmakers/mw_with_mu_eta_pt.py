@@ -39,10 +39,8 @@ else:
 
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
-#procfilt = ['Wplusmunu', 'Wminusmunu'] if args.addHelicityHistos else args.filterProcs 
 
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
-                                              #filt=procfilt,
                                               filt=args.filterProcs,
                                               excl=args.excludeProcs, 
                                               nanoVersion="v8" if args.v8 else "v9", base_path=args.dataPath)
