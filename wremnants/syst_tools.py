@@ -219,7 +219,7 @@ def define_mass_weights(df, proc):
     return df
 
 def add_massweights_hist(results, df, axes, cols, base_name="nominal", proc=""):
-    name = Datagroups.histName(base_name, syst="massWeight"+proc[0])
+    name = Datagroups.histName(base_name, syst="massWeight"+(proc[0] if len(proc) else proc))
     massWeight = df.HistoBoost(name, axes, [*cols, "massWeight_tensor_wnom"], 
                     tensor_axes=[hist.axis.StrCategory(massWeightNames(proc=proc), name="massShift")], 
                     storage=hist.storage.Double())
@@ -228,7 +228,7 @@ def add_massweights_hist(results, df, axes, cols, base_name="nominal", proc=""):
 def massWeightNames(matches=None, proc=""):
     central=10
     nweights=21
-    names = [f"massShift{proc[0]}{int(abs(central-i)*10)}MeV{'' if i == central else ('Down' if i < central else 'Up')}" for i in range(nweights)]
+    names = [f"massShift{proc[0] if len(proc) else proc}{int(abs(central-i)*10)}MeV{'' if i == central else ('Down' if i < central else 'Up')}" for i in range(nweights)]
     if proc and proc in common.zprocs_all:
         # This is the PDG uncertainty (turned off for now since it doesn't seem to have been read into the nano)
         names.extend(["massShift2p1MeVDown", "massShift2p1MeVUp"])
