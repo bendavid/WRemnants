@@ -59,18 +59,15 @@ template_maxpt = args.pt[2]
 print(f"Pt binning: {template_npt} bins from {template_minpt} to {template_maxpt}")
 
 # standard regular axes
+axis_eta = hist.axis.Regular(template_neta, template_mineta, template_maxeta, name = "eta", overflow=not args.excludeFlow, underflow=not args.excludeFlow)
 ## MARCO temporarily commented out code
-# axis_eta = hist.axis.Regular(template_neta, template_mineta, template_maxeta, name = "eta", overflow=not args.excludeFlow, underflow=not args.excludeFlow)
 # if not args.vqt3dsmoothing:
 #     axis_pt = hist.axis.Regular(template_npt, template_minpt, template_maxpt, name = "pt", overflow=not args.excludeFlow, underflow=not args.excludeFlow)
 # else :
 #     axis_pt_list = [24.,26.,28.,30.,32.,34.,36.,38.,40., 42., 44., 47., 50., 55., 60., 65.]
 #     axis_pt = hist.axis.Variable(axis_pt_list, name = "pt", overflow=not args.excludeFlow, underflow=not args.excludeFlow)
-
 axis_pt = hist.axis.Regular(template_npt, template_minpt, template_maxpt, name = "pt", overflow=not args.excludeFlow, underflow=not args.excludeFlow)
 
-makeMCefficiency
-    
 axis_charge = common.axis_charge
 axis_passIso = common.axis_passIso
 axis_passMT = common.axis_passMT
@@ -186,6 +183,7 @@ def build_graph(df, dataset):
     results = []
     isW = dataset.name in common.wprocs
     isZ = dataset.name in common.zprocs
+    isWorZ = isW or isZ
     isTop = dataset.group == "Top"
     isQCDMC = dataset.group == "QCD"
     require_prompt = "tau" not in dataset.name # for muon GEN-matching
@@ -257,7 +255,7 @@ def build_graph(df, dataset):
         df = df.Define("postFSRmuons", "GenPart_status == 1 && (GenPart_statusFlags & 1 || GenPart_statusFlags & (5<<1)) && abs(GenPart_pdgId) == 13")
         df = df.Filter("wrem::hasMatchDR2(goodMuons_eta0,goodMuons_phi0,GenPart_eta[postFSRmuons],GenPart_phi[postFSRmuons],0.09)")
         
-    if isW or isZ:
+    if isWorZ:
         df = muon_validation.define_cvh_reco_muon_kinematics(df)
         #FIXME: make the smearing weights work without filtering on taus
         if args.muonScaleVariation == 'smearingWeights':
@@ -299,8 +297,6 @@ def build_graph(df, dataset):
     if dataset.is_data:
         df = df.DefinePerSample("nominal_weight", "1.0")            
     else:
-        if isW or isZ:
-            df = theory_tools.define_prefsr_vars(df)
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
         df = df.Define("weight_vtx", vertex_helper, ["GenVtx_z", "Pileup_nTrueInt"])
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId"])
@@ -309,12 +305,12 @@ def build_graph(df, dataset):
         # define recoil uT, muon projected on boson pt, the latter is made using preFSR variables
         # TODO: fix it for not W/Z processes
         columnsForSF = ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_uT0", "goodMuons_charge0", "passIso"]
-        df = define_muon_uT_variable(df, smooth3dsf=args.smooth3dsf, colNamePrefix="goodMuons")
+        df = muon_selections.define_muon_uT_variable(df, isWorZ, smooth3dsf=args.smooth3dsf, colNamePrefix="goodMuons")
         if not args.smooth3dsf:
             columnsForSF.remove("goodMuons_uT0")
         ## MARCO next commented part to be removed, it is inside define_muon_uT_variable
         # if args.smooth3dsf:
-        #     if isW or isZ:
+        #     if isWorZ:
         #         # preFSR or postFSR boson (with reco muon for the latter to form the W) gives the same results when integrating uT
         #         ## MARCO temporarily commented out code
         #         # df = df.Define("postFSRnus", "GenPart_status == 1 && (GenPart_statusFlags & 1) && abs(GenPart_pdgId) == 14")
@@ -441,7 +437,7 @@ def build_graph(df, dataset):
             results.extend(theory_tools.make_theory_corr_hists(df, "nominal", axes, cols, 
                 corr_helpers[dataset.name], args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly, isW = isW)
             )
-        if args.muonScaleVariation == 'smearingWeights' and (isW or isZ): 
+        if args.muonScaleVariation == 'smearingWeights' and (isWorZ): 
             nominal_cols_gen, nominal_cols_gen_smeared = muon_calibration.make_alt_reco_and_gen_hists(df, results, axes, cols, reco_sel_GF)
             if args.validationHists: 
                 muon_validation.make_reco_over_gen_hists(df, results)
@@ -466,7 +462,7 @@ def build_graph(df, dataset):
         # n.b. this is the W analysis so mass weights shouldn't be propagated
         # on the Z samples (but can still use it for dummy muon scale)
         
-        if isW or isZ:
+        if isWorZ:
 
             df = syst_tools.add_theory_hists(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, axes, cols, for_wmass=True)
 

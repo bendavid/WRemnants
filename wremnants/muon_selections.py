@@ -1,5 +1,6 @@
-
+import ROOT
 from wremnants import muon_calibration
+from wremnants import theory_tools
 from utilities.common import background_MCprocs as bkgMCprocs
 
 def apply_met_filters(df):
@@ -44,11 +45,12 @@ def define_trigger_muons(df, what_analysis=ROOT.wrem.AnalysisType.Dilepton):
         # TODO: rename to something more meaningful, like positive/negative, or first/second
         df = df.DefinePerSample("trigMuons_charge0", "1")
         df = df.DefinePerSample("nonTrigMuons_charge0", "-1")
-    elif what_analysis=ROOT.wrem.AnalysisType.Wlike:
+    elif what_analysis == ROOT.wrem.AnalysisType.Wlike:
         # mu- for even event numbers, mu+ for odd event numbers
         df = df.Define("trigMuons_charge0", "event % 2 == 0 ? -1 : 1")
         df = df.Define("nonTrigMuons_charge0", "-trigMuons_charge0")
     else:
+        # Wmass currently doesn't call this function
         raise NotImplementedError(f"define_trigger_muons(): no implementation for analysis {what_analysis}")
 
     df = df.Define("trigMuons", "goodMuons && Muon_correctedCharge == trigMuons_charge0")
@@ -59,9 +61,10 @@ def define_trigger_muons(df, what_analysis=ROOT.wrem.AnalysisType.Dilepton):
 
     return df
 
-def define_muon_uT_variable(df, smooth3dsf=False, colNamePrefix="goodMuons"):    
+def define_muon_uT_variable(df, isWorZ, smooth3dsf=False, colNamePrefix="goodMuons"):    
     if smooth3dsf:
-        if isW or isZ:
+        if isWorZ:
+            df = theory_tools.define_prefsr_vars(df)
             df = df.Define(f"{colNamePrefix}_uT0", f"wrem::zqtproj0_boson({colNamePrefix}_pt0, {colNamePrefix}_phi0, ptVgen, phiVgen)")
         else:
             # for background processes (Top and Diboson, since Wtaunu and Ztautau are part of isW or isZ)
@@ -102,7 +105,7 @@ def apply_triggermatching_muon(df, dataset, muon_eta, muon_phi, otherMuon_eta=No
         # implement OR of trigger matching condition (for dilepton), also created corresponding flags
         # FIXME: must find a better way to pass the variables' name prefix
         df = df.Define("trigMuons_passTrigger0", f"wrem::hasTriggerMatch({muon_eta},{muon_phi},TrigObj_eta[goodTrigObjs],TrigObj_phi[goodTrigObjs])")
-        df = df.Define("nonTrigMuons_passTrigger0", f"wrem::hasTriggerMatch({OtherMuon_eta},{otherMuon_phi},TrigObj_eta[goodTrigObjs],TrigObj_phi[goodTrigObjs])")
+        df = df.Define("nonTrigMuons_passTrigger0", f"wrem::hasTriggerMatch({otherMuon_eta},{otherMuon_phi},TrigObj_eta[goodTrigObjs],TrigObj_phi[goodTrigObjs])")
         df = df.Filter(f"trigMuons_passTrigger0 || nonTrigMuons_passTrigger0")
     else:
         df = df.Filter(f"wrem::hasTriggerMatch({muon_eta},{muon_phi},TrigObj_eta[goodTrigObjs],TrigObj_phi[goodTrigObjs])")

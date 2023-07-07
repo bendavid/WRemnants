@@ -142,17 +142,17 @@ def common_parser(for_reco_highPU=False):
         parser.add_argument("--validateByMassWeights", action = "store_true", help = "validate the muon momentum scale shift weights by massweights")
         parser.add_argument("--smooth3dsf", action='store_true', help="Use smooth 3D scale factors instead of the original 2D ones (test option for now)")
         parser.add_argument("--sf2DnoUt", action='store_true', help="Use older smooth 2D scale factors with no ut dependence")
-        parser.add_argument("--scaleFactors", type=str, default="3D", choices=["2D", "2Dut", "3D", "none"], help="Which smoothed scale factors to use for global muons.")
+        #parser.add_argument("--scaleFactors", type=str, default="3D", choices=["2D", "2Dut", "3D"], help="Which smoothed scale factors to use for global muons.")
 
     commonargs,_ = parser.parse_known_args()
 
     if commonargs.trackerMuons:
         sfFile = "scaleFactorProduct_16Oct2022_TrackerMuonsHighPurity_vertexWeight_OSchargeExceptTracking.root"
     else:
-        if args.scaleFactors:
-            logger.error("--scaleFactors not yet implemented. Abort")
-            quit()
-        if args.sf2DnoUt:
+        #if commonargs.scaleFactors:
+        #    logger.error("--scaleFactors not yet implemented. Abort")
+        #    quit()
+        if commonargs.sf2DnoUt:
             sfFile = "allSmooth_GtoHout.root" # 2D SF without ut integration
         else:
             sfFile = "allSmooth_GtoH3Dout.root" # 2D SF from 3D with ut-integration

@@ -48,7 +48,7 @@ all_axes = {
     "ptMinus": hist.axis.Regular(int(args.pt[0]), args.pt[1], args.pt[2], name = "ptMinus"),
     "cosThetaStarll": hist.axis.Regular(20, -1., 1., name = "cosThetaStarll", underflow=False, overflow=False),
     "phiStarll": hist.axis.Regular(20, -math.pi, math.pi, circular = True, name = "phiStarll"),
-    "charge": hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "charge") # categorical axes in python bindings always have an overflow bin, so use a regular
+    #"charge": hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "charge") # categorical axes in python bindings always have an overflow bin, so use a regular
 }
 
 for a in args.axes:
@@ -104,7 +104,8 @@ def build_graph(df, dataset):
     results = []
     isW = dataset.name in common.wprocs
     isZ = dataset.name in common.zprocs
-
+    isWorZ = isW or isZ
+        
     if dataset.is_data:
         df = df.DefinePerSample("weight", "1.0")
     else:
@@ -125,6 +126,7 @@ def build_graph(df, dataset):
     df = muon_selections.select_veto_muons(df, nMuons=2)
     df = muon_selections.select_good_muons(df, nMuons=2, use_trackerMuons=args.trackerMuons, use_isolation=True)
 
+    # for dilepton analysis we will call trigMuons (nonTrigMuons) those with charge plus (minus). In fact both might be triggering, naming scheme might be improved
     df = muon_selections.define_trigger_muons(df, what_analysis=thisAnalysis)
 
     df = muon_selections.select_z_candidate(df, args.pt[1], args.pt[2])
@@ -137,17 +139,16 @@ def build_graph(df, dataset):
     df = df.Define("ptll", "ll_mom4.pt()")
     df = df.Define("yll", "ll_mom4.Rapidity()")
     df = df.Define("absYll", "std::fabs(yll)")
-    df = df.Define("csSineCosThetaPhill", "trigMuons_charge0 == -1 ? wrem::csSineCosThetaPhi(trigMuons_mom4, nonTrigMuons_mom4) : wrem::csSineCosThetaPhi(nonTrigMuons_mom4, trigMuons_mom4)")
+    df = df.Define("csSineCosThetaPhill", "wrem::csSineCosThetaPhi(nonTrigMuons_mom4, trigMuons_mom4)")
     
     # "renaming" to write out corresponding axis
-    df = df.Alias("charge", "trigMuons_charge0")
-    df = df.Define("etaPlus", "trigMuons_charge0 == -1 ? nonTrigMuons_eta0 : trigMuons_eta0") 
-    df = df.Define("etaMinus", "trigMuons_charge0 == 1 ? nonTrigMuons_eta0 : trigMuons_eta0") 
-    df = df.Define("ptPlus", "trigMuons_charge0 == -1 ? nonTrigMuons_pt0 : trigMuons_pt0") 
-    df = df.Define("ptMinus", "trigMuons_charge0 == 1 ? nonTrigMuons_pt0 : trigMuons_pt0") 
+    df = df.Define("etaPlus", "trigMuons_eta0")
+    df = df.Define("etaMinus", "nonTrigMuons_eta0")
+    df = df.Define("ptPlus", "trigMuons_pt0")
+    df = df.Define("ptMinus", "nonTrigMuons_pt0")
 
     df = df.Define("etaSum", "nonTrigMuons_eta0 + trigMuons_eta0") 
-    df = df.Define("etaDiff", "nonTrigMuons_eta0 - trigMuons_eta0") 
+    df = df.Define("etaDiff", "trigMuons_eta0-nonTrigMuons_eta0") # plus - minus 
 
     df = df.Define("cosThetaStarll", "csSineCosThetaPhill.costheta")
     df = df.Define("phiStarll", "std::atan2(csSineCosThetaPhill.sinphi, csSineCosThetaPhill.cosphi)")
@@ -160,8 +161,8 @@ def build_graph(df, dataset):
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
         columnsForSF = ["trigMuons_pt0", "trigMuons_eta0", "trigMuons_SApt0", "trigMuons_SAeta0", "trigMuons_uT0", "trigMuons_charge0", "trigMuons_passTrigger0",
                         "nonTrigMuons_pt0", "nonTrigMuons_eta0", "nonTrigMuons_SApt0", "nonTrigMuons_SAeta0", "nonTrigMuons_uT0", "nonTrigMuons_charge0", "nonTrigMuons_passTrigger0"]
-        df = define_muon_uT_variable(df, smooth3dsf=args.smooth3dsf, colNamePrefix="trigMuons")
-        df = define_muon_uT_variable(df, smooth3dsf=args.smooth3dsf, colNamePrefix="nonTrigMuons")
+        df = muon_selections.define_muon_uT_variable(df, isWorZ, smooth3dsf=args.smooth3dsf, colNamePrefix="trigMuons")
+        df = muon_selections.define_muon_uT_variable(df, isWorZ, smooth3dsf=args.smooth3dsf, colNamePrefix="nonTrigMuons")
         if not args.smooth3dsf:
             columnsForSF.remove("trigMuons_uT0")
             columnsForSF.remove("nonTrigMuons_uT0")
@@ -176,12 +177,11 @@ def build_graph(df, dataset):
         results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"], storage=hist.storage.Double()))
         results.append(df.HistoBoost("nominal", axes, [*cols, "nominal_weight"]))
 
-    for obs in ["ptll", "mll", "yll"]:
+    for obs in ["ptll", "mll", "yll", "etaPlus", "etaMinus", "ptPlus", "ptMinus"]:
         if dataset.is_data:
             results.append(df.HistoBoost(f"nominal_{obs}", [all_axes[obs]], [obs]))
         else:
             results.append(df.HistoBoost(f"nominal_{obs}", [all_axes[obs]], [obs, "nominal_weight"]))
-
 
     if not dataset.is_data and not args.onlyMainHistograms:
 
@@ -190,7 +190,7 @@ def build_graph(df, dataset):
 
         # n.b. this is the W analysis so mass weights shouldn't be propagated
         # on the Z samples (but can still use it for dummy muon scale)
-        if isW or isZ:
+        if isWorZ:
 
             df = syst_tools.add_theory_hists(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, axes, cols, for_wmass=False)
 

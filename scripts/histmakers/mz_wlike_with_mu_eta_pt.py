@@ -98,6 +98,7 @@ def build_graph(df, dataset):
     results = []
     isW = dataset.name in common.wprocs
     isZ = dataset.name in common.zprocs
+    isWorZ = isW or isZ
     unfold = args.unfolding and dataset.name == "ZmumuPostVFP"
     apply_theory_corr = args.theoryCorr and dataset.name in corr_helpers
 
@@ -139,8 +140,8 @@ def build_graph(df, dataset):
 
         columnsForSF = ["trigMuons_pt0", "trigMuons_eta0", "trigMuons_SApt0", "trigMuons_SAeta0", "trigMuons_uT0", "trigMuons_charge0",
                         "nonTrigMuons_pt0", "nonTrigMuons_eta0", "nonTrigMuons_SApt0", "nonTrigMuons_SAeta0", "nonTrigMuons_uT0", "nonTrigMuons_charge0"]
-        df = define_muon_uT_variable(df, smooth3dsf=args.smooth3dsf, colNamePrefix="trigMuons")
-        df = define_muon_uT_variable(df, smooth3dsf=args.smooth3dsf, colNamePrefix="nonTrigMuons")
+        df = muon_selections.define_muon_uT_variable(df, isWorZ, smooth3dsf=args.smooth3dsf, colNamePrefix="trigMuons")
+        df = muon_selections.define_muon_uT_variable(df, isWorZ, smooth3dsf=args.smooth3dsf, colNamePrefix="nonTrigMuons")
         if not args.smooth3dsf:
             columnsForSF.remove("trigMuons_uT0")
             columnsForSF.remove("nonTrigMuons_uT0")
@@ -208,7 +209,7 @@ def build_graph(df, dataset):
 
         # n.b. this is the W analysis so mass weights shouldn't be propagated
         # on the Z samples (but can still use it for dummy muon scale)
-        if isW or isZ:
+        if isWorZ:
 
             df = syst_tools.add_theory_hists(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, axes, cols, for_wmass=False)
 
