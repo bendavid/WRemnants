@@ -139,3 +139,29 @@ def add_xnorm_histograms(results, df, args, dataset_name, corr_helpers, qcdScale
     results.append(df_xnorm.HistoBoost("xnorm", xnorm_axes, [*xnorm_cols, "nominal_weight"]))
 
     syst_tools.add_theory_hists(results, df_xnorm, args, dataset_name, corr_helpers, qcdScaleByHelicity_helper, xnorm_axes, xnorm_cols, base_name="xnorm")
+
+
+### for plotting
+
+def get_bin(name, var):
+    name_split = name.split(var)
+    if len(name_split) == 1:
+        return -1
+    else:
+        return int(name_split[-1].split("_")[0])
+
+def getProcessBins(name, axes=["qGen", "ptGen", "absEtaGen", "ptVGen", "absYVGen"], base_processes=["Zmumu","Wmunu", "Z", "W"]):
+    res = {
+        x: get_bin(name, x) if get_bin(name, x) else 0 for x in axes
+    }
+    res["name"] = name
+
+    for p in base_processes:
+        if p in name:
+            res["proc"] = p
+            break
+
+    if not res.get("proc", False):
+        res["proc"] = None
+    
+    return res

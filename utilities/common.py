@@ -120,6 +120,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--aggregateGroups", type=str, nargs="*", default=["Diboson", "Top", "Wtaunu"], help="Sum up histograms from members of given groups in the postprocessing step")
     parser.add_argument("--unfolding", action='store_true', help="Add information needed for unfolding")
     parser.add_argument("--genLevel", type=str, default='postFSR', choices=["preFSR", "postFSR"], help="Generator level definition for unfolding")
+    parser.add_argument("--genVars", type=str, nargs="+", default=["qGen", "ptGen", "absEtaGen"], choices=["qGen", "ptGen", "absEtaGen", "ptVGen", "absYVGen"], help="Generator level variable")
     parser.add_argument("--genBins", type=int, nargs="+", default=[3, 2], help="Number of generator level bins")
 
     if for_reco_highPU:

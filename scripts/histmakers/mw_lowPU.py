@@ -3,14 +3,17 @@ from utilities import output_tools, differential
 from utilities import common, logging
 
 parser,initargs = common.common_parser()
+parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for luminosity in excess to 1 (e.g. 1.012 means 1.2\%)", default=1.012)
 parser.add_argument("--flavor", type=str, choices=["e", "mu"], help="Flavor (e or mu)", default="mu")
-parser.add_argument("--genVars", type=str, nargs="+", default=["ptVGen"], choices=["ptVGen",], help="Generator level variable")
+
+parser = common.set_parser_default(parser, "genVars", ["ptVGen"])
 args = parser.parse_args()
 
 
 import narf
 import wremnants
 from wremnants import theory_tools, syst_tools, theory_corrections, muon_selections, unfolding_tools
+from wremnants.histmaker_tools import scale_to_data, aggregate_groups
 import math
 import hist
 import ROOT
@@ -19,9 +22,14 @@ import scripts.lowPU.config as lowPUcfg
 
 ###################################
 flavor = args.flavor # mu, e
-sigProcs = ["WminusJetsToMuNu", "WplusJetsToMuNu"] if flavor == "mu" else ["WminusJetsToENu", "WplusJetsToENu"]
+if flavor == "mu":
+    sigProcs = ["WminusJetsToMuNu", "WplusJetsToMuNu"]
+    base_group = "Wmunu"
+else:
+    sigProcs = ["WminusJetsToENu", "WplusJetsToENu"]
+    base_group = "Wenu"
 
-corr_helpers = theory_corrections.load_corr_helpers(common.wprocs_lowpu, args.theoryCorr)
+corr_helpers = theory_corrections.load_corr_helpers(common.vprocs_lowpu, args.theoryCorr)
 
 datasets = wremnants.datasetsLowPU.getDatasets(maxFiles=args.maxFiles,
                                               filt=args.filterProcs,
@@ -56,7 +64,7 @@ axis_lin = hist.axis.Regular(5, 0, 5, name = "lin")
 
 
 
-qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper(is_w_like = False)
+qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper()
 axis_ptVgen = qcdScaleByHelicity_helper.hist.axes["ptVgen"]
 axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
 
@@ -64,13 +72,16 @@ gen_axes = {
     "ptVGen": hist.axis.Variable([0, 5, 10, 15, 20, 30, 40, 50, 60, 75, 90, 150], name = "ptVGen", underflow=False, overflow=False),
 }
 
+groups_to_aggregate = args.aggregateGroups
+
 if args.unfolding:
     unfolding_axes, unfolding_cols, unfolding_selections = differential.get_dilepton_axes(args.genVars, gen_axes)
-    datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wmunu")
+    datasets = unfolding_tools.add_out_of_acceptance(datasets, group = base_group)
+    groups_to_aggregate.append(f"Bkg{base_group}")
 
 # axes for final cards/fitting
 nominal_axes = [
-    hist.axis.Variable([0, 5, 10, 15, 20, 30, 40, 50, 60, 75, 90, 150], name = "ptll", underflow=False, overflow=True),
+    hist.axis.Variable([0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 25, 30, 40, 50, 60, 75, 90, 150], name = "ptll", underflow=False, overflow=True),
     axis_charge, axis_passMT, axis_passIso]
 
 # corresponding columns
@@ -85,7 +96,6 @@ cols_mT = ["transverseMass", "Lep_charge", "passMT", "passIso"]
 
 # reco_mT_axes = [common.axis_recoil_reco_ptW_lowpu, common.axis_mt_lowpu, axis_charge, axis_passMT, axis_passIso]
 # gen_reco_mT_axes = [common.axis_recoil_gen_ptW_lowpu, common.axis_recoil_reco_ptW_lowpu, common.axis_mt_lowpu, axis_charge, axis_passMT, axis_passIso]
-# axis_xnorm = hist.axis.Regular(1, 0., 1., name = "count", underflow=False, overflow=False)
 
 # # corresponding columns
 # gen_reco_mT_cols = ["ptVgen", "recoil_corr_rec_magn", "mt", "Lep_charge", "passMT", "passIso"]
@@ -98,9 +108,9 @@ axis_cutFlow = hist.axis.Regular(1, 0, 1, name = "cutFlow")
 
 
 # recoil initialization
-from wremnants import recoil_tools
-recoilHelper = recoil_tools.Recoil("lowPU", args, flavor)
-
+if not args.noRecoil:
+    from wremnants import recoil_tools
+    recoilHelper = recoil_tools.Recoil("lowPU", args, flavor)
 
 def build_graph(df, dataset):
     logger.info(f"build graph for dataset: {dataset.name}")
@@ -205,19 +215,19 @@ def build_graph(df, dataset):
         df = df.Define("goodLeptonsMinus", "goodLeptons && Electron_charge < 0")
         df = df.Filter("Sum(goodLeptons) == 1")
         
-        df = df.Filter("(Electron_charge[goodLeptons][0] + Electron_charge[goodLeptons][1]) == 0")
         df = df.Define("goodTrigObjs", "wrem::goodElectronTriggerCandidateLowPU(TrigObj_id, TrigObj_pt, TrigObj_l1pt, TrigObj_l2pt, TrigObj_filterBits)")
         df = df.Define("trigMatch", "wrem::hasTriggerMatchLowPU(Electron_eta[goodLeptons], Electron_phi[goodLeptons], TrigObj_eta[goodTrigObjs], TrigObj_phi[goodTrigObjs])")
         df = df.Define("nonTrigMatch", "wrem::inverse(trigMatch)")
         df = df.Filter("Sum(trigMatch) > 0")
         
-        df = df.Define("Lep_pt_uncorr", "Electron_pt[goodLeptons]")
-        df = df.Define("Lep_pt", "Electron_pt_corr[goodLeptons]")
-        df = df.Define("Lep_eta", "Electron_eta[goodLeptons]")
-        df = df.Define("Lep_phi", "Electron_phi[goodLeptons]")
+        df = df.Define("Lep_pt_uncorr", "Electron_pt[goodLeptons][0]")
+        df = df.Define("Lep_pt", "Electron_pt_corr[goodLeptons][0]")
+        df = df.Define("Lep_eta", "Electron_eta[goodLeptons][0]")
+        df = df.Define("Lep_phi", "Electron_phi[goodLeptons][0]")
         df = df.Define("Lep_charge", "Electron_charge[goodLeptons][0]")
-        df = df.Define("Lep_mass", "Electron_mass[goodLeptons]")
-        
+        df = df.Define("Lep_mass", "Electron_mass[goodLeptons][0]")
+        df = df.Define("Lep_iso", "Electron_pfRelIso03_all[goodLeptons][0]")
+
         if not dataset.is_data:
             df = df.Define("lepSF_IDISO", "wrem::lepSF(Electron_pt_corr[goodLeptons], Electron_eta[goodLeptons], Electron_charge[goodLeptons], 3)")
             df = df.Define("lepSF_HLT", "wrem::lepSF_HLT_q(Electron_pt_corr[goodLeptons], Electron_eta[goodLeptons], Electron_charge[goodLeptons], 11)")
@@ -225,13 +235,10 @@ def build_graph(df, dataset):
             df = df.Define("SFMC", "lepSF_IDISO*lepSF_HLT*prefireCorr")
         
         else: df = df.Define("SFMC", "1.0")    
-    
-   
 
     df = df.Filter(f"Lep_pt > {args.pt[1]} && Lep_pt < {args.pt[2]}")
     df = muon_selections.apply_met_filters(df)
     df = df.Define("passIso", "Lep_iso < 0.15")
-
 
     if not dataset.is_data: 
         df = df.Define("exp_weight", "SFMC")
@@ -242,11 +249,15 @@ def build_graph(df, dataset):
     df = df.Define("noTrigMatch", "Sum(trigMatch)")
     results.append(df.HistoBoost("noTrigMatch", [axis_lin], ["noTrigMatch", "nominal_weight"]))
 
-
     # Recoil calibrations
-    lep_cols = ["Lep_pt", "Lep_phi", "Lep_charge", "Lep_pt_uncorr"]
-    df = recoilHelper.recoil_W(df, results, dataset, common.vprocs_lowpu, lep_cols) # produces corrected MET as MET_corr_rec_pt/phi  vprocs_lowpu wprocs_recoil_lowpu
-   
+    if not args.noRecoil:
+        lep_cols = ["Lep_pt", "Lep_phi", "Lep_charge", "Lep_pt_uncorr"]
+        df = recoilHelper.recoil_W(df, results, dataset, common.vprocs_lowpu, lep_cols) # produces corrected MET as MET_corr_rec_pt/phi  vprocs_lowpu wprocs_recoil_lowpu
+    else:
+        df = df.Alias("MET_corr_rec_pt", "MET_pt")
+        df = df.Alias("MET_corr_rec_phi", "MET_phi")
+        df = df.Define("mT_corr_rec", "wrem::mt_2(Lep_pt, Lep_phi, MET_corr_rec_pt, MET_corr_rec_phi)")
+
     df = df.Alias("transverseMass", "mT_corr_rec")
     df = df.Define("passMT", f"transverseMass > {mtw_min}")
 
@@ -263,26 +274,20 @@ def build_graph(df, dataset):
     df = df.Define("ptll", "std::sqrt(pxll*pxll + pyll*pyll)")
 
     if dataset.name in common.vprocs_lowpu:
-    
-        # pdfs
-        syst_tools.add_pdf_hists(results, df, dataset.name, axes, cols, args.pdfs, "nominal")
-        syst_tools.add_pdf_hists(results, df, dataset.name, axes_mT, cols_mT, args.pdfs, "transverseMass")
-
-        # QCD scale
-        df = theory_tools.define_scale_tensor(df)
-        syst_tools.add_qcdScale_hist(results, df, [*axes, axis_ptVgen, axis_chargeVgen], [*cols, "ptVgen", "chargeVgen"], "nominal") 
-        syst_tools.add_qcdScaleByHelicityUnc_hist(results, df, qcdScaleByHelicity_helper, [*axes, axis_ptVgen, axis_chargeVgen], [*cols, "ptVgen", "chargeVgen"], base_name="nominal")
-        syst_tools.add_qcdScaleByHelicityUnc_hist(results, df, qcdScaleByHelicity_helper, [*axes_mT, axis_ptVgen, axis_chargeVgen], [*cols_mT, "ptVgen", "chargeVgen"], base_name="transverseMass")
-
-    if args.theoryCorr and dataset.name in corr_helpers:
-        results.extend(theory_tools.make_theory_corr_hists(df, "nominal", axes=axes, cols=cols, 
-            helpers=corr_helpers[dataset.name], generators=args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly, isW=True)
-        )
+        df = syst_tools.add_theory_hists(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, axes, cols)
+        df = syst_tools.add_theory_hists(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, axes_mT, cols_mT, base_name="transverseMass")
 
     results.append(df.HistoBoost("nominal", axes, [*cols, "nominal_weight"]))
     results.append(df.HistoBoost("transverseMass", axes_mT, [*cols_mT, "nominal_weight"]))
 
-    df = recoilHelper.add_recoil_unc_W(df, results, dataset, cols, axes, "nominal")
+    if not dataset.is_data and not args.onlyMainHistograms:
+        if not args.noRecoil:
+            df = recoilHelper.add_recoil_unc_W(df, results, dataset, cols, axes, "nominal")
+            
+        # luminosity, done here as shape variation despite being a flat scaling so to facilitate propagating to fakes afterwards
+        df = df.Define("luminosityScaling", f"wrem::constantScaling(nominal_weight, {args.lumiUncertainty})")
+        results.append(df.HistoBoost("nominal_luminosity", axes, [*cols, "luminosityScaling"], tensor_axes = [common.down_up_axis], storage=hist.storage.Double()))
+        results.append(df.HistoBoost("transverseMass_luminosity", axes_mT, [*cols_mT, "luminosityScaling"], tensor_axes = [common.down_up_axis], storage=hist.storage.Double()))
 
     # if dataset.name in sigProcs:
            
@@ -441,12 +446,13 @@ def build_graph_cutFlow(df, dataset):
         
         else: df = df.Define("SFMC", "1.0")    
     
-   
-
-
     return results, weightsum
 
 
 resultdict = narf.build_and_run(datasets, build_graph)
-fname = f"lowPU_{flavor}.hdf5"
-output_tools.write_analysis_output(resultdict, fname, args)
+
+if not args.noScaleToData:
+    scale_to_data(resultdict)
+    aggregate_groups(datasets, resultdict, groups_to_aggregate)
+
+output_tools.write_analysis_output(resultdict, f"mw_lowPU_{flavor}.hdf5", args, update_name=not args.forceDefaultName)

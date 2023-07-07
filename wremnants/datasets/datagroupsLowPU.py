@@ -1,19 +1,19 @@
 from utilities import boostHistHelpers as hh, logging
 from wremnants import histselections as sel
-from wremnants.datasets import datasetsLowPU
-from wremnants.datasets.datagroups import Datagroups
 import hist
 
 logger = logging.child_logger(__name__)
 
-def make_datagroups_lowPU(input_file, combine=False, excludeGroups=None, filterGroups=None):
+def make_datagroups_lowPU(dg, combine=False, excludeGroups=None, filterGroups=None, applySelection=True):
+    # reset datagroups
+    dg.groups = {}
 
-    dg = Datagroups(input_file, combine, datasetsLowPU.getDatasets())
-
-    if dg.wmass:
+    if dg.wmass and applySelection:
         sigOp = sel.signalHistWmass
+        fakeOp = lambda x: sel.fakeHistABCD(x, low_PU=True)
     else:
         sigOp = None
+        fakeOp = None
 
     # data
     if dg.flavor == "mu" or dg.flavor == "mumu":  
@@ -104,7 +104,7 @@ def make_datagroups_lowPU(input_file, combine=False, excludeGroups=None, filterG
             scale = lambda x: 1. if x.is_data else -1,
             label = "Nonprompt",
             color = "grey",
-            selectOp = sel.fakeHistABCD,
+            selectOp = fakeOp,
         )
         dg.filterGroups(filterGroups)
         dg.excludeGroups(excludeGroups)

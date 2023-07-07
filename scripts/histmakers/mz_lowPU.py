@@ -4,19 +4,23 @@ from utilities import common, logging
 
 parser,initargs = common.common_parser()
 parser.add_argument("--flavor", type=str, choices=["ee", "mumu"], help="Flavor (ee or mumu)", default="mumu")
-parser.add_argument("--genVars", type=str, nargs="+", default=["ptVGen"], choices=["ptVGen", "absYVGen"], help="Generator level variable")
-args = parser.parse_args()
 
+parser = common.set_parser_default(parser, "genVars", ["ptVGen"])
+parser = common.set_parser_default(parser, "pt", [34, 26, 60])
+parser = common.set_parser_default(parser, "aggregateGroups", ["Diboson", "Top", "Wtaunu", "Wmunu"])
+
+args = parser.parse_args()
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
 import narf
 import wremnants
 from wremnants import theory_tools, syst_tools, theory_corrections, muon_selections, unfolding_tools
+from wremnants.histmaker_tools import scale_to_data, aggregate_groups
 import hist
 import scripts.lowPU.config as lowPUcfg
 
 
-corr_helpers = theory_corrections.load_corr_helpers(common.zprocs_lowpu, args.theoryCorr)
+corr_helpers = theory_corrections.load_corr_helpers(common.vprocs_lowpu, args.theoryCorr)
 
 ###################################
 flavor = args.flavor # mumu, ee
@@ -67,7 +71,7 @@ axis_ptVgen = qcdScaleByHelicity_helper.hist.axes["ptVgen"]
 axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
 
 gen_axes = {
-    "ptVGen": hist.axis.Variable([0, 5, 10, 15, 20, 30, 40, 50, 60, 75, 90, 150], name = "ptVGen", underflow=False, overflow=False),
+    "ptVGen": hist.axis.Variable([0, 8, 14, 20, 30, 40, 50, 60, 75, 90, 150], name = "ptVGen", underflow=False, overflow=False),
     "absYVGen": hist.axis.Regular(10, 0, 2.5, name = "absYVGen", underflow=False, overflow=False),  
 }
 
@@ -78,7 +82,7 @@ if args.unfolding:
 
 # axes for final cards/fitting
 nominal_axes = [
-    hist.axis.Variable([0, 5, 10, 15, 20, 30, 40, 50, 60, 75, 90, 150], name = "ptll", underflow=False, overflow=True),
+    hist.axis.Variable([0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 25, 30, 40, 50, 60, 75, 90, 150], name = "ptll", underflow=False, overflow=True),
     hist.axis.Regular(20, -2.5, 2.5, name = "yll", overflow=True, underflow=True), 
     axis_charge]
 
@@ -86,10 +90,13 @@ nominal_axes = [
 nominal_cols = ["ptll", "yll", "TrigMuon_charge"]
 
 axis_mt = hist.axis.Regular(200, 0., 200., name = "mt", underflow=False)
+axes_mT = [axis_mt]
+cols_mT = ["transverseMass"]
 
 # recoil initialization
-from wremnants import recoil_tools
-recoilHelper = recoil_tools.Recoil("lowPU", args, flavor)
+if not args.noRecoil:
+    from wremnants import recoil_tools
+    recoilHelper = recoil_tools.Recoil("lowPU", args, flavor)
 
 
 def build_graph(df, dataset):
@@ -291,16 +298,21 @@ def build_graph(df, dataset):
     df = df.Define("NonTrigMuon_eta", "Lep_eta[nonTrigMuons][0]")
     df = df.Define("NonTrigMuon_phi", "Lep_phi[nonTrigMuons][0]")
 
-    lep_cols = ["Lep_pt", "Lep_phi", "Lep_pt_uncorr"]
-    trg_cols = ["TrigMuon_pt", "TrigMuon_phi", "NonTrigMuon_pt", "NonTrigMuon_phi"]
-    df = recoilHelper.recoil_Z(df, results, dataset, common.zprocs_recoil_lowpu, lep_cols, trg_cols) # produces corrected MET as MET_corr_rec_pt/phi
-    
+    # Recoil calibrations
+    if not args.noRecoil:
+        lep_cols = ["Lep_pt", "Lep_phi", "Lep_pt_uncorr"]
+        trg_cols = ["TrigMuon_pt", "TrigMuon_phi", "NonTrigMuon_pt", "NonTrigMuon_phi"]
+        df = recoilHelper.recoil_Z(df, results, dataset, common.zprocs_recoil_lowpu, lep_cols, trg_cols) # produces corrected MET as MET_corr_rec_pt/phi
+    else:
+        df = df.Alias("MET_corr_rec_pt", "MET_pt")
+        df = df.Alias("MET_corr_rec_phi", "MET_phi")
+
     results.append(df.HistoBoost("mll", [axis_mll], ["mll", "nominal_weight"]))
     results.append(df.HistoBoost("yll", [axis_yll], ["yll", "nominal_weight"]))
     results.append(df.HistoBoost("ptll", [axis_ptll], ["ptll", "nominal_weight"]))
     
     df = df.Define("transverseMass", f"wrem::get_mt_wlike(TrigMuon_pt, TrigMuon_phi, NonTrigMuon_pt, NonTrigMuon_phi, MET_corr_rec_pt, MET_corr_rec_phi)")
-    results.append(df.HistoBoost("transverseMass", [axis_mt], ["transverseMass", "nominal_weight"]))
+    results.append(df.HistoBoost("transverseMass", axes_mT, [*cols_mT, "nominal_weight"]))
     
     if mtw_min > 0:
         df = df.Filter(f"transverseMass >= {mtw_min}")
@@ -308,24 +320,9 @@ def build_graph(df, dataset):
     results.append(df.HistoBoost("lep_pT", [axis_pt], ["TrigMuon_pt", "nominal_weight"]))
     results.append(df.HistoBoost("lep_pT_qTrw", [axis_pt], ["TrigMuon_pt", "nominal_weight_qTrw"]))
         
-    if dataset.name in common.zprocs_lowpu:
-    
-        syst_tools.add_pdf_hists(results, df, dataset.name, axes, cols, args.pdfs, "nominal")
-
-        # QCD scale
-        df = theory_tools.define_scale_tensor(df)
-        syst_tools.add_qcdScale_hist(results, df, [*axes, axis_ptVgen, axis_chargeVgen], [*cols, "ptVgen", "chargeVgen"], "nominal") 
-        syst_tools.add_qcdScaleByHelicityUnc_hist(results, df, qcdScaleByHelicity_helper, [*axes, axis_ptVgen, axis_chargeVgen], [*cols, "ptVgen", "chargeVgen"], base_name="nominal")
-
-        syst_tools.add_pdf_hists(results, df, dataset.name, [axis_mt], ["mT_corr_rec"], args.pdfs, "mt")
-        syst_tools.add_qcdScaleByHelicityUnc_hist(results, df, qcdScaleByHelicity_helper, [axis_mt, axis_ptVgen, axis_chargeVgen], ["mT_corr_rec", "ptVgen", "chargeVgen"], base_name="mt")
-    
-    # TODO: Should this also be added for the mT hist?
-
-    if args.theoryCorr and dataset.name in corr_helpers:
-        results.extend(theory_tools.make_theory_corr_hists(df, "nominal", axes=axes, cols=cols, 
-            helpers=corr_helpers[dataset.name], generators=args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly, isW=isW)
-        )
+    if dataset.name in common.vprocs_lowpu:
+        df = syst_tools.add_theory_hists(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, axes, cols, for_wmass=False)
+        df = syst_tools.add_theory_hists(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, axes_mT, cols_mT, base_name="transverseMass", for_wmass=False)
 
     results.append(df.HistoBoost("nominal", axes, [*cols, "nominal_weight"]))
 
@@ -346,15 +343,17 @@ def build_graph(df, dataset):
     results.append(df.HistoBoost("nominal_prefireCorr", [*axes], [*cols, "prefireCorr_syst_tensor"], tensor_axes = [common.down_up_axis]))
 
     if dataset.name in sigProcs:
-                
-        df = recoilHelper.add_recoil_unc_Z(df, results, dataset, cols, axes, "nominal")
-        
+
         # mass weights (Breit-Wigner and nominal)
         df = syst_tools.define_mass_weights(df, dataset.name)
         syst_tools.add_massweights_hist(results, df, axes, [*cols], base_name="nominal", proc=dataset.name)
-
+        syst_tools.add_massweights_hist(results, df, axes_mT, cols_mT, base_name="transverseMass", proc=dataset.name)   
         syst_tools.add_massweights_hist(results, df, [common.axis_mll_lowpu], ["mll"], base_name="mll_massWeight", proc=dataset.name)
-        syst_tools.add_massweights_hist(results, df, [axis_mt], ["mT_corr_rec"], base_name="mt", proc=dataset.name)   
+
+    if not dataset.is_data and not args.onlyMainHistograms:
+        if not args.noRecoil:
+            df = recoilHelper.add_recoil_unc_W(df, results, dataset, cols, axes, "nominal")
+            
 
     if hasattr(dataset, "out_of_acceptance"):
         # Rename dataset to not overwrite the original one
@@ -363,5 +362,9 @@ def build_graph(df, dataset):
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)
-fname = f"lowPU_{flavor}.hdf5"
-output_tools.write_analysis_output(resultdict, fname, args, update_name=not args.forceDefaultName)
+
+if not args.noScaleToData:
+    scale_to_data(resultdict)
+    aggregate_groups(datasets, resultdict, args.aggregateGroups)
+
+output_tools.write_analysis_output(resultdict, f"mz_lowPU_{flavor}.hdf5", args, update_name=not args.forceDefaultName)

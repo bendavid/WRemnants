@@ -160,6 +160,9 @@ def define_prefsr_vars(df):
     return df
 
 def define_scale_tensor(df):
+    if "scaleWeights_tensor" in df.GetColumnNames():
+        logger.debug("scaleWeight_tensor already defined, do nothing here.")
+        return df
     # convert vector of scale weights to 3x3 tensor and clip weights to |weight|<10.
     df = df.Define("scaleWeights_tensor", f"wrem::makeScaleTensor(LHEScaleWeight, theory_weight_truncate);")
     df = df.Define("scaleWeights_tensor_wnom", "auto res = scaleWeights_tensor; res = nominal_weight*res; return res;")

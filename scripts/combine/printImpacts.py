@@ -22,7 +22,7 @@ def printImpacts(args,rtfile,POI='Wmass'):
         print(f"Impact of nuisance {args.nuisance} is {impacts[list(labels).index(args.nuisance)]*100} {unit}")
     else:
         print(f"Impact of all systematics (in {unit})")
-        print("\n".join([f"   {k}: {round(v*100, 2)}" for k,v in zip(labels, impacts)]))
+        print("\n".join([f"   {k}: {round(v*100, 5)}" for k,v in zip(labels, impacts)]))
 
 
 if __name__ == '__main__':

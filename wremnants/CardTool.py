@@ -7,6 +7,7 @@ import uproot
 import time
 import numpy as np
 import os
+import pathlib
 import itertools
 import re
 import hist
@@ -18,10 +19,10 @@ def notImplemented(operation="Unknown"):
     raise NotImplementedError(f"Required operation '{operation}' is not implemented!")
 
 class CardTool(object):
-    def __init__(self, cardName="card.txt"):
+    def __init__(self, outpath="./", xnorm=False):
+    
         self.skipHist = False # don't produce/write histograms, file with them already exists
         self.outfile = None
-        self.cardName = cardName
         self.systematics = {}
         self.lnNSystematics = {}
         self.predictedProcs = []
@@ -54,11 +55,17 @@ class CardTool(object):
         #self.loadArgs = {"operation" : "self.loadProcesses (reading hists from file)"}
         self.lumiScale = 1.
         self.project = None
-        self.xnorm = False
+        self.xnorm = xnorm
         self.chargeIdDict = {"minus" : {"val" : -1, "id" : "q0", "badId" : "q1"},
                              "plus"  : {"val" : 1., "id" : "q1", "badId" : "q0"},
                              "inclusive" : {"val" : "sum", "id" : "none", "badId" : None},
                              }
+
+        self.setNominalTemplate()
+
+        if xnorm:
+            self.setHistName("xnorm")
+            self.setNominalName("xnorm")
 
     def skipHistograms(self):
         self.skipHist = True
@@ -147,8 +154,8 @@ class CardTool(object):
     def setWriteByCharge(self, writeByCharge):
         self.writeByCharge = writeByCharge
 
-    def setNominalTemplate(self, template):
-        if not os.path.isfile(template):
+    def setNominalTemplate(self, template=f"{pathlib.Path(__file__).parent}/../scripts/combine/Templates/datacard.txt"):
+        if not os.path.abspath(template):
             raise IOError(f"Template file {template} is not a valid file")
         self.nominalTemplate = template
 
@@ -603,9 +610,37 @@ class CardTool(object):
         else:
             self.outfile = outfile
             self.outfile.cd()
-            
-    def writeOutput(self, args=None, xnorm=False, forceNonzero=True, check_systs=True):
-        self.xnorm = xnorm
+
+    def setOutput(self, outfolder, fitvars=[], doStatOnly=False, postfix=None):
+        if self.datagroups.wmass:
+            prefix = "WMass"
+        elif self.datagroups.wlike:
+            prefix = "ZMassWLike"
+        else:
+            prefix = "ZMassDilepton"
+        if self.datagroups.lowPU:
+            prefix += "_lowPU"
+
+        tag = prefix+"_"+"_".join(fitvars)
+        if doStatOnly:
+            tag += "_statOnly"
+        if self.datagroups.flavor:
+            tag += f"_{self.datagroups.flavor}"
+        if postfix is not None:
+            tag += f"_{postfix}"
+
+        self.outfolder = f"{outfolder}/{tag}/"
+        if not os.path.isdir(self.outfolder):
+            os.makedirs(self.outfolder)
+
+        suffix = f"_{self.datagroups.flavor}" if self.datagroups.flavor else ""
+        if self.xnorm:
+            suffix += '_xnorm'
+
+        self.cardName = (f"{self.outfolder}/{prefix}_{{chan}}{suffix}.txt")
+        self.setOutfile(os.path.abspath(f"{self.outfolder}/{prefix}CombineInput{suffix}.root"))
+
+    def writeOutput(self, args=None, forceNonzero=True, check_systs=True):
         self.datagroups.loadHistsForDatagroups(
             baseName=self.nominalName, syst=self.nominalName,
             procsToRead=self.datagroups.groups.keys(),
@@ -640,7 +675,7 @@ class CardTool(object):
         if self.skipHist:
             logger.info("Histograms will not be written because 'skipHist' flag is set to True")
         self.writeCard()
-
+        logger.info(f"Output stored in {self.outfolder}")
         
     def writeCard(self):
         for chan in self.channels:

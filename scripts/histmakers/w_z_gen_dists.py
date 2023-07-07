@@ -15,6 +15,7 @@ parser.add_argument("--singleLeptonHists", action='store_true', help="Also store
 parser.add_argument("--skipEWHists", action='store_true', help="Also store histograms for EW reweighting. Use with --filter horace")
 parser.add_argument("--absY", action='store_true', help="use absolute |Y|")
 
+parser = common.set_parser_default(parser, "genVars", ["ptVGen"])
 parser = common.set_parser_default(parser, "filterProcs", common.vprocs)
 
 args = parser.parse_args()

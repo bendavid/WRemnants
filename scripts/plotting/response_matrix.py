@@ -6,8 +6,7 @@ import numpy as np
 
 from wremnants import logging
 from wremnants import plot_tools
-from wremnants.datasets.datagroups2016 import make_datagroups_2016
-from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU
+from wremnants.datasets.datagroups import Datagroups
 from utilities import boostHistHelpers as hh, output_tools
 
 import pdb
@@ -15,7 +14,7 @@ import pdb
 parser = argparse.ArgumentParser()
 parser.add_argument("infile", help="Output file of the analysis stage, containing ND boost histogrdams")
 parser.add_argument("--debug", action='store_true', help="Print debug output")
-parser.add_argument("--outpath", type=str, default=os.path.expanduser("~/www/WMassAnalysis"), help="Base path for output")
+parser.add_argument("-o", "--outpath", type=str, default=os.path.expanduser("~/www/WMassAnalysis"), help="Base path for output")
 parser.add_argument("-f", "--outfolder", type=str, default="test", help="Subfolder for output")
 parser.add_argument("--procFilters", type=str, nargs="*", default="Zmumu", help="Filter to plot (default no filter, only specify if you want a subset")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name")
@@ -28,9 +27,7 @@ logger = logging.setup_logger("makeDataMCStackPlot", 4 if args.debug else 3)
 
 outdir = output_tools.make_plot_dir(args.outpath, args.outfolder)
 
-make_datagroup = make_datagroups_lowPU if os.path.basename(args.infile).startswith("lowPU") else make_datagroups_2016
-
-groups = make_datagroup(args.infile, filterGroups=args.procFilters, excludeGroups=None if args.procFilters else ['QCD'])
+groups = Datagroups(args.infile, filterGroups=args.procFilters, excludeGroups=None if args.procFilters else ['QCD'])
 
 groups.setGenAxes([]) # set gen axes empty to not integrate over when loading
 
@@ -48,8 +45,6 @@ if "Zmumu" in groups.groups:
 
 datasets = groups.getNames()
 logger.info(f"Will plot datasets {datasets}")
-
-pdb.set_trace()
 
 groups.loadHistsForDatagroups("nominal", syst="nominal", procsToRead=datasets)
 
@@ -118,7 +113,6 @@ for g_name, group in datagroups.items():
 
             outname = g_name+"_"+"_".join([a.replace("(","").replace(")","") for a in axes])
 
-
             # plot purity
             fig = plt.figure(figsize=(8,4))
             ax = fig.add_subplot() 
@@ -178,7 +172,7 @@ for g_name, group in datagroups.items():
             # calculate condition number
             cond = np.linalg.cond(values)
             logger.info(f"Condition number: {cond}")
-            plt.text(0.15, 0.9, round(cond,1), horizontalalignment='right', verticalalignment='top', transform=ax.transAxes, color="white")
+            plt.text(0.2, 0.94, round(cond,1), horizontalalignment='right', verticalalignment='top', transform=ax.transAxes, color="white")
 
             # ax.set_xticks(np.arange(len(xlabels))+0.5)
             # ax.set_yticks(np.arange(len(xlabels))+0.5)

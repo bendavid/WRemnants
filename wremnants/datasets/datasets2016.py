@@ -29,7 +29,7 @@ def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, na
         elif hostname == "cmsanalysis.pi.infn.it":
             base_path = "/scratchnvme/wmass/NANOV9/postVFP"
 
-    logger.info(f"Loading samples from {base_path}.")
+    logger.info(f"Loading 2016 samples from {base_path}.")
 
     if nanoVersion == "v8":
         dataDict = dataDictV8
