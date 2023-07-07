@@ -108,9 +108,6 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--dataPath", type=str, default=None, help="Access samples from eos")
     parser.add_argument("--noVertexWeight", action='store_true', help="Do not apply reweighting of vertex z distribution in MC to match data")
     parser.add_argument("--validationHists", action='store_true', help="make histograms used only for validations")
-    parser.add_argument("--trackerMuons", action='store_true', help="Use tracker muons instead of global muons (need appropriate scale factors too)")
-    parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers)")
-    parser.add_argument("--isoEfficiencySmoothing", action='store_true', help="If isolation SF was derived from smooth efficiencies instead of direct smoothing") 
     parser.add_argument("--onlyMainHistograms", action='store_true', help="Only produce some histograms, skipping (most) systematics to run faster when those are not needed")
     parser.add_argument("--met", type=str, choices=["DeepMETReso", "RawPFMET"], help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")                    
     parser.add_argument("-o", "--outfolder", type=str, default="", help="Output folder")
@@ -140,20 +137,25 @@ def common_parser(for_reco_highPU=False):
         parser.add_argument("--genLevel", type=str, default='postFSR', choices=["preFSR", "postFSR"], help="Generator level definition for unfolding")
         parser.add_argument("--genBins", type=int, nargs="+", default=[3, 2], help="Number of generator level bins")
         parser.add_argument("--validateByMassWeights", action = "store_true", help = "validate the muon momentum scale shift weights by massweights")
-        parser.add_argument("--smooth3dsf", action='store_true', help="Use smooth 3D scale factors instead of the original 2D ones (test option for now)")
+        # options for efficiencies
+        parser.add_argument("--trackerMuons", action='store_true', help="Use tracker muons instead of global muons (need appropriate scale factors too). This is obsolete")
+        parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers)")
+        parser.add_argument("--noSmooth3dsf", dest="smooth3dsf", action='store_false', help="If true (defaul) use smooth 3D scale factors instead of the original 2D ones (but eff. systs are still obtained from 2D version)")
         parser.add_argument("--sf2DnoUt", action='store_true', help="Use older smooth 2D scale factors with no ut dependence")
-        #parser.add_argument("--scaleFactors", type=str, default="3D", choices=["2D", "2Dut", "3D"], help="Which smoothed scale factors to use for global muons.")
+        parser.add_argument("--isoEfficiencySmoothing", action='store_true', help="If isolation SF was derived from smooth efficiencies instead of direct smoothing") 
 
     commonargs,_ = parser.parse_known_args()
 
     if for_reco_highPU:
         if commonargs.trackerMuons:
+            logger.warning("Using tracker muons, but keep in mind that scale factors are obsolete and not recommended.")
             sfFile = "scaleFactorProduct_16Oct2022_TrackerMuonsHighPurity_vertexWeight_OSchargeExceptTracking.root"
         else:
-            #if commonargs.scaleFactors:
-            #    logger.error("--scaleFactors not yet implemented. Abort")
-            #    quit()
-            # FIXME: this part is technically only for high PU, so these options would not exist at low PU
+            # note: any of the following file is fine for reco, tracking, and IDIP.
+            # Instead, for trigger and isolation one would actually use 3D SF vs eta-pt-ut.
+            # However, even when using the 3D SF one still needs the 2D ones to read the syst/nomi ratio,
+            # since the dataAltSig tag-and-probe fits were not run in 3D (it is assumed for simplicity that the syst/nomi ratio is independent from uT)
+            # the syst variations are the same in both files also for trigger/isolation (since they had been copied over)
             if commonargs.sf2DnoUt:
                 sfFile = "allSmooth_GtoHout.root" # 2D SF without ut integration
             else:
