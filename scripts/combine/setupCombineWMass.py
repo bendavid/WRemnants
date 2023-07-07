@@ -135,7 +135,7 @@ def main(args,xnorm=False):
             if wmass:
                 # add gen charge as additional axis
                 datagroups.groups["Wmunu"].add_member_axis("qGen", datagroups.results, 
-                    member_filters=[lambda x: x.name.startswith("Wminusmunu"), lambda x: x.name.startswith("Wplusmunu")], 
+                    member_filters={-1: lambda x: x.name.startswith("Wminusmunu"), 1: lambda x: x.name.startswith("Wplusmunu")}, 
                     hist_filter=lambda x: x.startswith("xnorm"))
                 datagroups.deleteGroup("Fake")
             cardTool.unroll = True
