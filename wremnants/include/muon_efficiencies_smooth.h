@@ -498,11 +498,9 @@ namespace wrem {
         muon_efficiency_smooth3D_helper(const base_t &other) : base_t(other) {}
 
         double operator() (float first_pt,  float first_eta,  float first_sapt,  float first_saeta,
-                           float first_ut,  int first_charge,
-                           bool first_passtrigger,
+                           float first_ut,  int first_charge, bool first_passtrigger,
                            float second_pt, float second_eta, float second_sapt, float second_saeta,
-                           float second_ut, int second_charge,
-                           bool second_passtrigger) {
+                           float second_ut, int second_charge, bool second_passtrigger) {
             constexpr bool iso_with_trigger = true; // will be P(iso|passTrigger) or P(iso|failTrigger) depending on first_passtrigger and second_passtrigger
             constexpr bool pass_iso = true;
 
@@ -1138,6 +1136,36 @@ namespace wrem {
                                                                             nontrig_ut, nontrig_charge,
                                                                             pass_iso, pass_trigger, iso_without_trigger);
             return nominal_weight * variation_trig * variation_nontrig;
+            
+        }
+
+    };
+
+    // specialization for two-lepton case Dilepton
+    template<int NEtaBins, int NPtEigenBins, int NCharges, typename HIST_SF>
+    class muon_efficiency_smooth_helper_stat_iso_utDep<AnalysisType::Dilepton, NEtaBins, NPtEigenBins, NCharges, HIST_SF> :
+        public muon_efficiency_smooth_helper_stat_base<NEtaBins, NPtEigenBins, NCharges, HIST_SF> {
+
+    public:
+
+        using stat_base_t = muon_efficiency_smooth_helper_stat_base<NEtaBins, NPtEigenBins, NCharges, HIST_SF>;
+        using tensor_t = typename stat_base_t::stat_tensor_t;
+
+        using stat_base_t::stat_base_t;
+
+        tensor_t operator() (float first_pt, float first_eta, float first_ut, int first_charge, bool first_passtrigger,
+                             float second_pt, float second_eta, float second_ut, int second_charge, bool second_passtrigger,
+                             double nominal_weight = 1.0) {
+            constexpr bool iso_with_trigger = true;
+            constexpr bool pass_iso = true;
+
+            const tensor_t variation_first  = stat_base_t::sf_stat_var_iso(first_pt, first_eta,
+                                                                           first_ut, first_charge,
+                                                                           pass_iso, first_passtrigger, iso_with_trigger);
+            const tensor_t variation_second = stat_base_t::sf_stat_var_iso(second_pt, second_eta,
+                                                                           second_ut, second_charge,
+                                                                           pass_iso, second_passtrigger, iso_with_trigger);
+            return nominal_weight * variation_first * variation_second;
             
         }
 

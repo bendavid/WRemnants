@@ -125,7 +125,7 @@ def build_graph(df, dataset):
     df = muon_selections.select_veto_muons(df, nMuons=2)
     df = muon_selections.select_good_muons(df, nMuons=2, use_trackerMuons=args.trackerMuons, use_isolation=True)
 
-    df = muon_selections.define_trigger_muons(df)
+    df = muon_selections.define_trigger_muons(df, what_analysis=thisAnalysis)
 
     df = muon_selections.select_z_candidate(df, args.pt[1], args.pt[2])
 
@@ -136,22 +136,16 @@ def build_graph(df, dataset):
 
     if not dataset.is_data:
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
-        if args.smooth3dsf:
-            if isW or isZ:
-                df = theory_tools.define_prefsr_vars(df)
-                df = df.Define("trigMuons_uT0", "wrem::zqtproj0_boson(trigMuons_pt0, trigMuons_phi0, ptVgen, phiVgen)")
-                df = df.Define("nonTrigMuons_uT0", "wrem::zqtproj0_boson(nonTrigMuons_pt0, nonTrigMuons_phi0, ptVgen, phiVgen)")
-            else:
-                # FIXME dummy for now
-                df = df.Define("trigMuons_uT0", "0.0f")
-                df = df.Define("nonTrigMuons_uT0", "0.0f")
-        else:
-            # this is a dummy, the uT axis when present will have a single bin
-            df = df.Define("trigMuons_uT0", "0.0f")
-            df = df.Define("nonTrigMuons_uT0", "0.0f")
 
-        df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, ["trigMuons_pt0", "trigMuons_eta0", "trigMuons_SApt0", "trigMuons_SAeta0", "trigMuons_uT0", "trigMuons_charge0",
-                                                                                      "nonTrigMuons_pt0", "nonTrigMuons_eta0", "nonTrigMuons_SApt0", "nonTrigMuons_SAeta0", "nonTrigMuons_uT0", "nonTrigMuons_charge0"])
+        columnsForSF = ["trigMuons_pt0", "trigMuons_eta0", "trigMuons_SApt0", "trigMuons_SAeta0", "trigMuons_uT0", "trigMuons_charge0",
+                        "nonTrigMuons_pt0", "nonTrigMuons_eta0", "nonTrigMuons_SApt0", "nonTrigMuons_SAeta0", "nonTrigMuons_uT0", "nonTrigMuons_charge0"]
+        df = define_muon_uT_variable(df, smooth3dsf=args.smooth3dsf, colNamePrefix="trigMuons")
+        df = define_muon_uT_variable(df, smooth3dsf=args.smooth3dsf, colNamePrefix="nonTrigMuons")
+        if not args.smooth3dsf:
+            columnsForSF.remove("trigMuons_uT0")
+            columnsForSF.remove("nonTrigMuons_uT0")
+        
+        df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, columnsForSF)
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId"])
 
         df = df.Define("exp_weight", "weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom")

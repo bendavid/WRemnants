@@ -37,8 +37,8 @@ def readNuisances(args, infile=None):
 
     print(f"Starting with file {infile} ...")
 
-    #massNuisanceName = "WmassShift{s}MeV".format(s=int(args.prefitUncertainty))
-    massNuisanceName = "massShift{s}MeV".format(s=int(args.prefitUncertainty))
+    massNuisanceName = "WmassShift{s}MeV".format(s=int(args.prefitUncertainty))
+    #massNuisanceName = "massShift{s}MeV".format(s=int(args.prefitUncertainty))
     valuesAndErrors = utilities.getFromHessian(infile,params=[massNuisanceName])
     totalUncertainty = valuesAndErrors[massNuisanceName][1] - valuesAndErrors[massNuisanceName][0]
     if args.scaleToMeV:
@@ -158,7 +158,8 @@ if __name__ == "__main__":
 
     if compare:
         totalUncertainty_mW_alt, nuisGroup_nameVal_alt = readNuisances(args, args.compareFile)
-        nuisGroup_nameVal_alt["stat"] = args.setStatAlt if args.setStatAlt > 0.0 else nuisGroup_nameVal["stat"]
+        if args.setStatAlt > 0.0:
+            nuisGroup_nameVal_alt["stat"] = args.setStatAlt
 
     sortedGroups = sorted(nuisGroup_nameVal.keys(), key= lambda x: nuisGroup_nameVal[x])
 
