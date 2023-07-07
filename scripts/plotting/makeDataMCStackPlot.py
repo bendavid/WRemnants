@@ -79,7 +79,7 @@ variation.add_argument("--skipFillBetween", type=int, default=0, help="Don't fil
 
 args = parser.parse_args()
 
-logger = logging.setup_logger("makeDataMCStackPlot", 4 if args.debug else 3, True)
+logger = logging.setup_logger("makeDataMCStackPlot", 4 if args.debug else 3)
 
 def padArray(ref, matchLength):
     return ref+ref[-1:]*(len(matchLength)-len(ref))
@@ -186,7 +186,7 @@ def collapseSyst(h):
             return h[{ax : 0}].copy()
     return h
 
-overflow_ax = ["ptll", "chargeVgen", "massVgen", "ptVgen"]
+overflow_ax = ["ptll", "chargeVgen", "massVgen", "ptVgen", "absEtaGen", "ptGen", "ptVGen", "absYVGen"]
 for h in args.hists:
     if len(h.split("-")) > 1:
         action = lambda x: sel.unrolledHist(collapseSyst(x[select]), obs=h.split("-"))
