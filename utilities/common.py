@@ -82,7 +82,6 @@ def common_parser(for_reco_highPU=False):
         ROOT.ROOT.EnableImplicitMT()
     elif initargs.nThreads != 1:
         ROOT.ROOT.EnableImplicitMT(initargs.nThreads)
-
     import narf
     import wremnants
     from wremnants import theory_tools
