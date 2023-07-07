@@ -230,19 +230,20 @@ def main(args,xnorm=False):
 
     if not args.noEfficiencyUnc and not xnorm:
 
-        if wmass:
-            cardTool.addSystematic("sf2d", 
-                processes=allMCprocesses_noQCDMC,
-                outNames=["sf2dDown","sf2dUp"],
-                group="SF3Dvs2D",
-                scale = 1.0,
-                mirror = True,
-                mirrorDownVarEqualToNomi=False, # keep False
-                noConstraint=False,
-                systAxes=[],
-                #labelsByAxis=["downUpVar"],
-                passToFakes=passSystToFakes,
-            )
+        ## this is only needed when using 2D SF from 3D with ut-integration, let's comment for now
+        # if wmass:
+        #     cardTool.addSystematic("sf2d", 
+        #         processes=allMCprocesses_noQCDMC,
+        #         outNames=["sf2dDown","sf2dUp"],
+        #         group="SF3Dvs2D",
+        #         scale = 1.0,
+        #         mirror = True,
+        #         mirrorDownVarEqualToNomi=False, # keep False, True is pathological
+        #         noConstraint=False,
+        #         systAxes=[],
+        #         #labelsByAxis=["downUpVar"],
+        #         passToFakes=passSystToFakes,
+        #     )
 
         chargeDependentSteps = common.muonEfficiency_chargeDependentSteps
         effTypesNoIso = ["reco", "tracking", "idip", "trigger"]

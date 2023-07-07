@@ -138,11 +138,11 @@ def common_parser(for_reco_highPU=False):
         parser.add_argument("--smearing", action='store_true', help="Smear pT such that resolution matches data") #TODO change to --no-smearing once smearing is final
         parser.add_argument("--unfolding", action='store_true', help="Add information needed for unfolding")
         parser.add_argument("--genLevel", type=str, default='postFSR', choices=["preFSR", "postFSR"], help="Generator level definition for unfolding")
+        parser.add_argument("--genBins", type=int, nargs="+", default=[3, 2], help="Number of generator level bins")
         parser.add_argument("--validateByMassWeights", action = "store_true", help = "validate the muon momentum scale shift weights by massweights")
         parser.add_argument("--smooth3dsf", action='store_true', help="Use smooth 3D scale factors instead of the original 2D ones (test option for now)")
         parser.add_argument("--sf2DnoUt", action='store_true', help="Use older smooth 2D scale factors with no ut dependence")
         #parser.add_argument("--scaleFactors", type=str, default="3D", choices=["2D", "2Dut", "3D"], help="Which smoothed scale factors to use for global muons.")
-        parser.add_argument("--genBins", type=int, nargs="+", default=[3, 2], help="Number of generator level bins")
 
     commonargs,_ = parser.parse_known_args()
 
@@ -152,6 +152,7 @@ def common_parser(for_reco_highPU=False):
         #if commonargs.scaleFactors:
         #    logger.error("--scaleFactors not yet implemented. Abort")
         #    quit()
+        # FIXME: this part is technically only for high PU, so these options would not exist at low PU
         if commonargs.sf2DnoUt:
             sfFile = "allSmooth_GtoHout.root" # 2D SF without ut integration
         else:

@@ -694,10 +694,8 @@ def build_graph(df, dataset):
                
     if hasattr(dataset, "out_of_acceptance"):
         # Rename dataset to not overwrite the original one
-
         if len(smearing_weights_procs) > 0 and smearing_weights_procs[-1] == dataset.name:
             smearing_weights_procs[-1] = "Bkg"+dataset.name
-
         dataset.name = "Bkg"+dataset.name
 
     return results, weightsum
