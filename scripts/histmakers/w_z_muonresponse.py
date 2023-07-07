@@ -31,10 +31,10 @@ datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
 era = args.era
 
 
-axis_genPt = hist.axis.Regular(51, 9., 60., name = "genPt")
+axis_genPt = hist.axis.Regular(45, 9., 81., name = "genPt")
 axis_genEta = hist.axis.Regular(48, -2.4, 2.4, name = "genEta")
 axis_genCharge =  hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "genCharge")
-axis_qopr = hist.axis.Regular(500, 0., 2.0, name = "qopr")
+axis_qopr = hist.axis.Regular(1001, 0., 2.0, name = "qopr")
 
 response_axes = [axis_genPt, axis_genEta, axis_genCharge, axis_qopr]
 

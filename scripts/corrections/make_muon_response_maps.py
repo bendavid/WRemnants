@@ -5,6 +5,8 @@ import numpy as np
 import scipy
 import tensorflow as tf
 import tensorflow_probability as tfp
+import matplotlib.pyplot as plt
+
 
 infile = "w_z_muonresponse_scetlib_dyturboCorr.hdf5"
 
@@ -36,9 +38,11 @@ hist_response = hist_response.project("genCharge", "qopr", "genPt", "genEta")
 
 print(hist_response)
 
-interp_sigmas = np.linspace(-3., 3., 9)
+interp_sigmas = np.linspace(-5., 5., 21)
 interp_cdfvals = 0.5*(1. + scipy.special.erf(interp_sigmas/np.sqrt(2.)))
 interp_cdfvals = np.concatenate([[0.], interp_cdfvals, [1.]])
+
+# interp_cdfvals = np.linspace(0., 1., 101)
 
 quant_cdfvals = tf.constant(interp_cdfvals, tf.float64)
 
@@ -56,9 +60,18 @@ grid_points = grid_points[2:]
 grid_points = tuple(grid_points)
 
 
+
 qopr_edges_flat = np.reshape(hist_response.axes[1].edges, [-1])
 qopr_low = tf.constant(qopr_edges_flat[0], tf.float64)
 qopr_high = tf.constant(qopr_edges_flat[-1], tf.float64)
+
+pt_edges_flat = np.reshape(hist_response.axes[2].edges, [-1])
+pt_low = tf.constant(pt_edges_flat[0], tf.float64)
+pt_high = tf.constant(pt_edges_flat[-1], tf.float64)
+
+eta_edges_flat = np.reshape(hist_response.axes[3].edges, [-1])
+eta_low = tf.constant(eta_edges_flat[0], tf.float64)
+eta_high = tf.constant(eta_edges_flat[-1], tf.float64)
 
 def interp_cdf(genPt, genEta, genCharge, qopr):
     chargeIdx = tf.where(genCharge > 0., 1, 0)
@@ -90,8 +103,15 @@ def interp_dweight(genPt, genEta, genCharge, qopr):
     dweight = dpdf/pdf
 
 
-    dweight = tf.where(qopr < qopr_low, tf.zeros_like(dweight), dweight)
-    dweight = tf.where(qopr > qopr_high, tf.zeros_like(dweight), dweight)
+    dweight = tf.where(qopr <= qopr_low, tf.zeros_like(dweight), dweight)
+    dweight = tf.where(qopr >= qopr_high, tf.zeros_like(dweight), dweight)
+
+    dweight = tf.where(genPt < pt_low, tf.zeros_like(dweight), dweight)
+    dweight = tf.where(genPt > pt_high, tf.zeros_like(dweight), dweight)
+
+    dweight = tf.where(genEta < eta_low, tf.zeros_like(dweight), dweight)
+    dweight = tf.where(genEta > eta_high, tf.zeros_like(dweight), dweight)
+
     return dweight
 
 genPt_test = tf.constant(25., tf.float64)
@@ -133,6 +153,47 @@ print(test_interp.get_signature_list())
 with open('muon_response.tflite', 'wb') as f:
   f.write(tflite_model)
 
-print(res)
-print(res2)
+
+
+#this is just for plotting
+def func_pdf(h):
+    dtype = tf.float64
+    xvals = [tf.constant(center, dtype=dtype) for center in h.axes.centers]
+    xedges = [tf.constant(edge, dtype=dtype) for edge in h.axes.edges]
+    axis=1
+
+    cdf = narf.fitutils.pchip_interpolate(xi = quants, yi = quant_cdfvals, x = xedges[axis], axis=axis)
+
+    pdf = cdf[:,1:] - cdf[:,:-1]
+    # pdf = tf.maximum(pdf, tf.zeros_like(pdf))
+
+    return pdf
+
+# print(res)
+# print(res2)
+
+# etaidx = 47
+# ptidx = 20
+
+ptidx = 20
+etaidx = 24
+
+pdfvals = func_pdf(hist_response)
+pdfvals_sel = pdfvals[1, :, ptidx, etaidx]
+hist_response_sel = hist_response[1, :, ptidx, etaidx]
+
+pdfvals_sel *= hist_response_sel.sum().value/np.sum(pdfvals_sel)
+
+
+# hplot = htest[5]
+
+plot = plt.figure()
+hist_response_sel.plot()
+plt.plot(hist_response_sel.axes[0].centers, pdfvals_sel)
+# plt.show()
+plt.xlim([0.9, 1.1])
+# plt.xlim([0.8, 1.2])
+plot.savefig("test.png")
+plt.yscale("log")
+plot.savefig("test_log.png")
 
