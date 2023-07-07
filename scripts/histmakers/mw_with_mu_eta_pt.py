@@ -255,6 +255,8 @@ def build_graph(df, dataset):
 
                 df = df.Define(f"{reco_sel}_{var.lower()}0_gen_smeared", f"{reco_sel}_genSmeared{var.capitalize()}[0]")
                 df = df.Define(f"{reco_sel_GF}_{var.lower()}0_gen_smeared", f"{reco_sel_GF}_genSmeared{var.capitalize()}[0]")
+                if var != 'Qop':
+                    df = df.Define(f"{reco_sel_GF}_{var.lower()}0_reco", f"{reco_sel_GF}_reco{var.capitalize()}[0]")
             df = df.Define(f"{reco_sel_GF}_covMat0", f"{reco_sel_GF}_covMat[0]")
 
         if args.validationHists:
@@ -441,6 +443,23 @@ def build_graph(df, dataset):
                 df = df.DefinePerSample("bool_false", "false")
                 smearing_weights_procs.append(dataset.name)
 
+                jpsi_unc_helper = jpsi_crctn_data_unc_helper
+                df = df.Define("muonScaleSyst_responseWeights_tensor_gensmear", jpsi_unc_helper,
+                    [
+                        f"{reco_sel_GF}_genQop",
+                        f"{reco_sel_GF}_genPhi",
+                        f"{reco_sel_GF}_genEta",
+                        f"{reco_sel_GF}_genSmearedQop",
+                        f"{reco_sel_GF}_genSmearedPhi",
+                        f"{reco_sel_GF}_genSmearedEta",
+                        f"{reco_sel_GF}_genSmearedCharge",
+                        f"{reco_sel_GF}_genSmearedPt",
+                        f"{reco_sel_GF}_covMat",
+                        "nominal_weight",
+                        "bool_false"
+                    ]
+                )
+
                 # alternate methods to derive the scale variation 
                 if args.validationHists:
 
@@ -451,19 +470,19 @@ def build_graph(df, dataset):
                         "wremnants/data/calibration/calibrationJDATA_rewtgr_3dmap_LBL_MCstat.root",
                         nweights
                     )
-                    df = df.Define("muonScaleSyst_responseWeights_tensor_gensmear_massweights", jpsi_unc_helper,
+                    df = df.Define("muonScaleSyst_responseWeights_tensor_massweights", jpsi_unc_helper,
                         [
-                            f"{reco_sel_GF}_eta0_gen_smeared",
-                            f"{reco_sel_GF}_charge0_gen_smeared",
-                            f"{reco_sel_GF}_pt0_gen_smeared",
+                            f"{reco_sel_GF}_eta0_reco",
+                            f"{reco_sel_GF}_charge0_reco",
+                            f"{reco_sel_GF}_pt0_reco",
                             "massWeight_tensor",
                             "nominal_weight",
                             f"bool_{str(isW).lower()}"
                         ]
                     )
                     dummyMuonScaleSyst_responseWeights_massWeights = df.HistoBoost(
-                        "muonScaleSyst_responseWeights_gensmear_massweights", axes,
-                        [*nominal_cols_gen_smeared, "muonScaleSyst_responseWeights_tensor_gensmear_massweights"],
+                        "muonScaleSyst_responseWeights_massweights", axes,
+                        [*cols, "muonScaleSyst_responseWeights_tensor_massweights"],
                         tensor_axes = jpsi_unc_helper.tensor_axes, storage=hist.storage.Double()
                     )
                     results.append(dummyMuonScaleSyst_responseWeights_massWeights)
@@ -487,26 +506,12 @@ def build_graph(df, dataset):
                     )
                     results.append(dummyMuonScaleSyst_responseWeights_spline)
 
-                jpsi_unc_helper = jpsi_crctn_data_unc_helper
-                df = df.Define("muonScaleSyst_responseWeights_tensor_gensmear", jpsi_unc_helper,
-                    [
-                        f"{reco_sel_GF}_genQop",
-                        f"{reco_sel_GF}_genPhi",
-                        f"{reco_sel_GF}_genEta",
-                        f"{reco_sel_GF}_genSmearedQop",
-                        f"{reco_sel_GF}_genSmearedPhi",
-                        f"{reco_sel_GF}_genSmearedEta",
-                        f"{reco_sel_GF}_genSmearedCharge",
-                        f"{reco_sel_GF}_genSmearedPt",
-                        f"{reco_sel_GF}_covMat",
-                        "nominal_weight",
-                        "bool_false"
-                    ]
-                )
-
                 # use the weights derived via mass weights as the nominal to transport to reco
                 if args.validateByMassWeights:
-                    df= df.Redefine("muonScaleSyst_responseWeights_tensor_gensmear", "muonScaleSyst_responseWeights_tensor_gensmear_massweights")
+                    df= df.Redefine(
+                        "muonScaleSyst_responseWeights_tensor_gensmear",
+                        "muonScaleSyst_responseWeights_tensor_gensmear_massweights"
+                    )
 
                 dummyMuonScaleSyst_responseWeights = df.HistoBoost(
                     "muonScaleSyst_responseWeights_gensmear", axes,
@@ -629,17 +634,17 @@ def build_graph(df, dataset):
             if args.muonScaleVariation == 'smearingWeights' and args.validationHists:
                 df = muon_validation.make_hists_for_smearing_weights_perse(
                     df, axes, cols, 
-                    "muonScaleSyst_responseWeights_tensor_gensmear", "gensmear",
+                    "muonScaleSyst_responseWeights_tensor_gensmear", "nominal_weight", "gensmear",
                     results
                 ) 
                 df = muon_validation.make_hists_for_smearing_weights_perse(
                     df, axes, cols, 
-                    "muonScaleSyst_responseWeights_tensor_spline", "spline",
+                    "muonScaleSyst_responseWeights_tensor_spline", "nominal_weight", "spline",
                     results
                 ) 
                 df = muon_validation.make_hists_for_smearing_weights_perse(
                     df, axes, cols, 
-                    "muonScaleSyst_responseWeights_tensor_gensmear_massweights", "massweights",
+                    "muonScaleSyst_responseWeights_tensor_massweights", "nominal_weight", "massweights",
                     results
                 ) 
             if args.validationHists:

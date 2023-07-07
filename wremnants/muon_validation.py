@@ -216,9 +216,12 @@ def define_cols_for_manual_shifts(df):
     df = df.Define("goodMuons_pt0_gen_smeared_scaleDn_tenthmil", "goodMuons_pt0_gen_smeared / 1.0001")
     return df
 
-def make_hists_for_smearing_weights_perse(df, nominal_axes, nominal_cols, weights_col, method, results):
-    df = df.Define(f"weights_{method}_dn", f"{weights_col}(0,0)")
-    df = df.Define(f"weights_{method}_up", f"{weights_col}(0,1)")
+def make_hists_for_smearing_weights_perse(
+        df, nominal_axes, nominal_cols,
+        weights_col, nominal_weight_col, method, results
+    ):
+    df = df.Define(f"weights_{method}_dn", f"{weights_col}(0,0)/{nominal_weight_col}")
+    df = df.Define(f"weights_{method}_up", f"{weights_col}(0,1)/{nominal_weight_col}")
     axis_weights = hist.axis.Regular(1000, 0.99, 1.01, underflow=True, overflow=True, name = "weights")
     weights_dn = df.HistoBoost(
         f"weights_{method}_dn", 
