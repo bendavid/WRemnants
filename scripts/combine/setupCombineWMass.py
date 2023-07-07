@@ -33,12 +33,13 @@ def make_parser(parser=None):
     parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers and nuisances)")
     parser.add_argument("--isoEfficiencySmoothing", action='store_true', help="If isolation SF was derived from smooth efficiencies instead of direct smoothing")
     parser.add_argument("--axlim", type=float, default=[], nargs='*', help="Restrict axis to this range (assumes pairs of values by axis, with trailing axes optional)")
-    parser.add_argument("--constrainMass", action='store_true', help="Constrain mass parameter in the fit (e.g. for ptll fit)")
-    parser.add_argument("--unfold", action='store_true', help="Prepare datacard for unfolding")
+    parser.add_argument("--unfolding", action='store_true', help="Prepare datacard for unfolding")
+    parser.add_argument("--genAxis", type=str, default=None, nargs="+", help="Specify which gen axis should be used in unfolding, if 'None', use all (inferred from metadata).")
     parser.add_argument("--fitXsec", action='store_true', help="Fit signal inclusive cross section")
     parser.add_argument("--correlatedNonClosureNuisances", action='store_true', help="get systematics from histograms for the Z non-closure nuisances without decorrelation in eta and pt")
     parser.add_argument("--sepImpactForNC", action="store_true", help="use a dedicated impact gropu for non closure nuisances, instead of putting them in muonScale")
-    
+    parser.add_argument("--genModel", action="store_true", help="Produce datacard with the xnorm as model (binned according to axes defined in --fitvar)")
+
     return parser
 
 def main(args,xnorm=False):   
@@ -84,10 +85,8 @@ def main(args,xnorm=False):
 
     if wmass:
         name = "WMass"
-        datagroups.setGenAxes(["etaGen","ptGen"])
     elif wlike:
         name = "ZMassWLike"
-        datagroups.setGenAxes(["qGen","etaGen","ptGen"])
     else:
         name = "ZMassDilepton"
         constrainMass = "mll" not in args.fitvar
@@ -104,30 +103,24 @@ def main(args,xnorm=False):
 
     templateDir = f"{scriptdir}/Templates/WMass"
 
-    if args.unfold and args.fitXsec:
+    if args.unfolding and args.fitXsec:
         raise ValueError("Options --unfolding and --fitXsec are incompatible. Please choose one or the other")
     elif args.fitXsec:
         datagroups.unconstrainedProcesses.append("Wmunu" if wmass else "Zmumu")
-    elif args.unfold:
+    elif args.unfolding:
         constrainMass = True
-
+        datagroups.setGenAxes(args.genAxis)
+        
         if wmass:
-            # split group into two
-            datagroups.copyGroup("Wmunu", "Wmunu_qGen0", member_filter=lambda x: "Wminusmunu" in x.name)
-            datagroups.copyGroup("Wmunu", "Wmunu_qGen1", member_filter=lambda x: "Wplusmunu" in x.name)
-
-            datagroups.deleteGroup("Wmunu")
-
-            datagroups.defineSignalBinsUnfolding("Wmunu_qGen0")
-            datagroups.defineSignalBinsUnfolding("Wmunu_qGen1")
-
+            # gen level bins, split by charge
+            datagroups.defineSignalBinsUnfolding("Wmunu", "Wmunu_qGen0", member_filter=lambda x: x.name.startswith("Wminusmunu"))
+            datagroups.defineSignalBinsUnfolding("Wmunu", "Wmunu_qGen1", member_filter=lambda x: x.name.startswith("Wplusmunu"))
+            # out of acceptance contribution
+            datagroups.groups["Wmunu"].deleteMembers([m for m in datagroups.groups["Wmunu"].members if not m.name.startswith("Bkg")])
         else:
-            datagroups.defineSignalBinsUnfolding("Zmumu")
-
-        if xnorm:
-            toDel = [group for group in datagroups.groups if not group in datagroups.unconstrainedProcesses]
-            datagroups.deleteGroups(toDel)
-            histName = "xnorm"
+            datagroups.defineSignalBinsUnfolding("Zmumu", member_filter=lambda x: x.name.startswith("Zmumu"))
+            # out of acceptance contribution
+            datagroups.groups["Zmumu"].deleteMembers([m for m in datagroups.groups["Zmumu"].members if not m.name.startswith("Bkg")])
 
     if args.noHist and args.noStatUncFakes:
         raise ValueError("Option --noHist would override --noStatUncFakes. Please select only one of them")
@@ -139,16 +132,30 @@ def main(args,xnorm=False):
     cardTool.setDatagroups(datagroups)
     logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
     cardTool.setNominalTemplate(f"{templateDir}/main.txt")
+    cardTool.setProjectionAxes(args.fitvar.split("-"))
     if args.sumChannels or xnorm or name in ["ZMassDilepton"]:
         cardTool.setChannels(["inclusive"])
         cardTool.setWriteByCharge(False)
     if xnorm:
+        histName = "xnorm"
         cardTool.setWriteByCharge(False)
         cardTool.setHistName(histName)
         cardTool.setNominalName(histName)
-        cardTool.setProjectionAxes(["count"])
-    else:
-        cardTool.setProjectionAxes(args.fitvar)
+        datagroups.select_xnorm_groups() # only keep processes where xnorm is defined
+        if args.unfolding:
+            cardTool.setProjectionAxes(["count"])
+        else:
+            if wmass:
+                # add gen charge as additional axis
+                datagroups.groups["Wmunu"].add_member_axis("qGen", datagroups.results, 
+                    member_filters={-1: lambda x: x.name.startswith("Wminusmunu"), 1: lambda x: x.name.startswith("Wplusmunu")}, 
+                    hist_filter=lambda x: x.startswith("xnorm"))
+                datagroups.deleteGroup("Fake")
+            cardTool.unroll = True
+            # remove projection axes from gen axes, otherwise they will be integrated before
+            datagroups.setGenAxes([a for a in datagroups.gen_axes if a not in cardTool.project])
+    if args.unfolding:
+        cardTool.addPOISumGroups()
     if args.noHist:
         cardTool.skipHistograms()
     cardTool.setOutfile(os.path.abspath(f"{outfolder}/{name}CombineInput{suffix}.root"))
@@ -203,9 +210,9 @@ def main(args,xnorm=False):
     if args.doStatOnly:
         # print a card with only mass weights and a dummy syst
         cardTool.addLnNSystematic("dummy", processes=["Top", "Diboson"] if wmass else ["Other"], size=1.001, group="dummy")
-        cardTool.writeOutput(args=args)
+        cardTool.writeOutput(args=args, xnorm=xnorm)
         logger.info("Using option --doStatOnly: the card was created with only mass weights and a dummy LnN syst on all processes")
-        quit()
+        return
 
     if not xnorm:
         if wmass:
@@ -222,20 +229,6 @@ def main(args,xnorm=False):
             cardTool.addLnNSystematic("luminosity", processes=allMCprocesses_noQCDMC, size=1.012, group="luminosity")
     else:
         pass
-        
-    if wmass:
-        cardTool.addSystematic("sf2d", 
-            processes=allMCprocesses_noQCDMC,
-            outNames=["sf2dDown","sf2dUp"],
-            group="SF3Dvs2D",
-            scale = 1.0,
-            mirror = True,
-            mirrorDownVarEqualToNomi=True,
-            noConstraint=False,
-            systAxes=[],
-            #labelsByAxis=["downUpVar"],
-            passToFakes=passSystToFakes,
-        )
 
     if args.ewUnc:
         cardTool.addSystematic(f"horacenloewCorr", 
@@ -249,6 +242,21 @@ def main(args,xnorm=False):
         )
 
     if not args.noEfficiencyUnc and not xnorm:
+
+        if wmass:
+            cardTool.addSystematic("sf2d", 
+                processes=allMCprocesses_noQCDMC,
+                outNames=["sf2dDown","sf2dUp"],
+                group="SF3Dvs2D",
+                scale = 1.0,
+                mirror = True,
+                mirrorDownVarEqualToNomi=True,
+                noConstraint=False,
+                systAxes=[],
+                #labelsByAxis=["downUpVar"],
+                passToFakes=passSystToFakes,
+            )
+
         chargeDependentSteps = common.muonEfficiency_chargeDependentSteps
         effTypesNoIso = ["reco", "tracking", "idip", "trigger"]
         effStatTypes = [x for x in effTypesNoIso]
@@ -477,8 +485,7 @@ def main(args,xnorm=False):
         else:
             cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
 
-    cardTool.setCrossSectionOutput(xnorm)
-    cardTool.writeOutput(args=args, forceNonzero=not args.unfold, check_systs=not args.unfold)
+    cardTool.writeOutput(args=args, xnorm=xnorm, forceNonzero=not args.unfolding, check_systs=not args.unfolding)
     logger.info(f"Output stored in {outfolder}")
     
 if __name__ == "__main__":
@@ -486,11 +493,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
-
+    
     time0 = time.time()
 
-    main(args)
-    if args.unfold:
-        main(args,xnorm=True)
+    if args.genModel:
+        main(args, xnorm=True)
+    else:
+        main(args)
+        if args.unfolding:
+            main(args, xnorm=True)
 
     logger.info(f"Running time: {time.time()-time0}")

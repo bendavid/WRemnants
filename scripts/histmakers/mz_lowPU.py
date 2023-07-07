@@ -312,8 +312,12 @@ def build_graph(df, dataset):
 
         # QCD scale
         df = theory_tools.define_scale_tensor(df)
-        syst_tools.add_qcdScale_hist(results, df, [*gen_reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mt_cols, "ptVgen", "chargeVgen"], "reco_mT") 
-        syst_tools.add_qcdScaleByHelicityUnc_hist(results, df, qcdScaleByHelicity_helper, [*gen_reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mt_cols, "ptVgen", "chargeVgen"], base_name="reco_mT")
+        if dataset.name in sigProcs:
+            syst_tools.add_qcdScale_hist(results, df, [*gen_reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mt_cols, "ptVgen", "chargeVgen"], "reco_mT") 
+            syst_tools.add_qcdScaleByHelicityUnc_hist(results, df, qcdScaleByHelicity_helper, [*gen_reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mt_cols, "ptVgen", "chargeVgen"], base_name="reco_mT")
+        else:
+            syst_tools.add_qcdScale_hist(results, df, [*reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*reco_mt_cols, "ptVgen", "chargeVgen"], "reco_mT") 
+            syst_tools.add_qcdScaleByHelicityUnc_hist(results, df, qcdScaleByHelicity_helper, [axis_mt, axis_ptVgen, axis_chargeVgen], ["mT_corr_rec", "ptVgen", "chargeVgen"], base_name="reco_mT")
         syst_tools.add_qcdScaleByHelicityUnc_hist(results, df, qcdScaleByHelicity_helper, [axis_mt, axis_ptVgen, axis_chargeVgen], ["mT_corr_rec", "ptVgen", "chargeVgen"], base_name="mt")
     
     # TODO: Should this also be added for the mT hist?
@@ -324,7 +328,12 @@ def build_graph(df, dataset):
         )
 
     if dataset.name in sigProcs:
-    
+
+        if apply_theory_corr:
+            results.extend(theory_tools.make_theory_corr_hists(df, "reco_mT", axes=gen_reco_mll_axes, cols=gen_reco_mt_cols, 
+                helpers=corr_helpers[dataset.name], generators=args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly, isW=isW)
+            )    
+                
         results.append(df.HistoBoost("reco_mT", gen_reco_mll_axes, [*gen_reco_mt_cols, "nominal_weight"]))
         df = recoilHelper.add_recoil_unc_Z(df, results, dataset, gen_reco_mt_cols, gen_reco_mll_axes, "reco_mT")
 
