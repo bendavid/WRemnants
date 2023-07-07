@@ -114,7 +114,7 @@ def build_graph(df, dataset):
     axes = nominal_axes
     cols = nominal_cols
 
-    if args.unfolding and dataset.name == "ZmumuPostVFP":
+    if args.unfolding and dataset.name in sigProcs:
         df = unfolding_tools.define_gen_level(df, args.genLevel, dataset.name, mode="wmass")
 
         if hasattr(dataset, "out_of_acceptance"):
@@ -448,5 +448,5 @@ def build_graph_cutFlow(df, dataset):
 
 
 resultdict = narf.build_and_run(datasets, build_graph)
-fname = "lowPU_%s.hdf5" % flavor
+fname = f"lowPU_{flavor}.hdf5"
 output_tools.write_analysis_output(resultdict, fname, args)

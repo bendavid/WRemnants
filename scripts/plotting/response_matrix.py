@@ -7,6 +7,7 @@ import numpy as np
 from wremnants import logging
 from wremnants import plot_tools
 from wremnants.datasets.datagroups2016 import make_datagroups_2016
+from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU
 from utilities import boostHistHelpers as hh, output_tools
 
 import pdb
@@ -27,15 +28,17 @@ logger = logging.setup_logger("makeDataMCStackPlot", 4 if args.debug else 3)
 
 outdir = output_tools.make_plot_dir(args.outpath, args.outfolder)
 
-groups = make_datagroups_2016(args.infile, filterGroups=args.procFilters)
+make_datagroup = make_datagroups_lowPU if os.path.basename(args.infile).startswith("lowPU") else make_datagroups_2016
+
+groups = make_datagroup(args.infile, filterGroups=args.procFilters, excludeGroups=None if args.procFilters else ['QCD'])
 
 groups.setGenAxes([]) # set gen axes empty to not integrate over when loading
 
 cms_decor = "Preliminary"
 
 if "Wmunu" in groups.groups:
-    groups.copyGroup("Wmunu", "Wmunu_qGen0", member_filter=lambda x: x.name.startswith("Wminusmunu"))
-    groups.copyGroup("Wmunu", "Wmunu_qGen1", member_filter=lambda x: x.name.startswith("Wplusmunu"))
+    groups.copyGroup("Wmunu", "Wmunu_qGen0", member_filter=lambda x: x.name.startswith("Wminus"))
+    groups.copyGroup("Wmunu", "Wmunu_qGen1", member_filter=lambda x: x.name.startswith("Wplus"))
 
     groups.deleteGroup("Wmunu")
 
@@ -45,6 +48,8 @@ if "Zmumu" in groups.groups:
 
 datasets = groups.getNames()
 logger.info(f"Will plot datasets {datasets}")
+
+pdb.set_trace()
 
 groups.loadHistsForDatagroups("nominal", syst="nominal", procsToRead=datasets)
 

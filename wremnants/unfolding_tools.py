@@ -32,25 +32,23 @@ def define_gen_level(df, gen_level, dataset_name, mode="wmass"):
     if gen_level == "preFSR":
         df = theory_tools.define_prefsr_vars(df)
 
+        # needed for fiducial phase space definition
+        df = df.Alias("muGen", "genl")
+        df = df.Alias("antimuGen", "genlanti")
+
+        df = df.Alias("massVGen", "massVgen")
+        df = df.Alias("ptVGen", "ptVgen")
+        df = df.Alias("absYVGen", "absYVgen")
+
         if mode in ["wmass", "wlike"]:
             df = df.Define("mTWGen", "wrem::mt_2(genl.pt(), genl.phi(), genlanti.pt(), genlanti.phi())")   
 
         if mode == "wmass":
             df = df.Define("ptGen", "chargeVgen < 0 ? genl.pt() : genlanti.pt()")   
             df = df.Define("absEtaGen", "chargeVgen < 0 ? fabs(genl.eta()) : fabs(genlanti.eta())")
-        else:
-            # needed for fiducial phase space definition
-            df = df.Alias("muGen", "genl")
-            df = df.Alias("antimuGen", "genlanti")
-            df = df.Alias("massVGen", "massVgen")
-
-            if mode == "wlike":
-                df = df.Define("ptGen", "event % 2 == 0 ? genl.pt() : genlanti.pt()")
-                df = df.Define("absEtaGen", "event % 2 == 0 ? fabs(genl.eta()) : fabs(genlanti.eta())")
-
-            elif mode == "dilepton":
-                df = df.Alias("ptVGen", "ptVgen")
-                df = df.Alias("absYVGen", "absYVgen")
+        elif mode == "wlike":
+            df = df.Define("ptGen", "event % 2 == 0 ? genl.pt() : genlanti.pt()")
+            df = df.Define("absEtaGen", "event % 2 == 0 ? fabs(genl.eta()) : fabs(genlanti.eta())")
 
     elif gen_level == "postFSR":
 
@@ -63,7 +61,7 @@ def define_gen_level(df, gen_level, dataset_name, mode="wmass"):
             df = df.Define("mTWGen", "wrem::mt_2(GenPart_pt[postFSRmus][postFSRmuIdx], GenPart_phi[postFSRmus][postFSRmuIdx], GenPart_pt[postFSRantimus][postFSRantimuIdx], GenPart_phi[postFSRantimus][postFSRantimuIdx])")   
 
         if mode == "wmass":
-            if "Wplusmunu" in dataset_name:
+            if "Wplus" in dataset_name:
                 idx = "postFSRantimuIdx" 
                 muons = "postFSRantimus"
             else:
@@ -72,18 +70,17 @@ def define_gen_level(df, gen_level, dataset_name, mode="wmass"):
 
             df = df.Define("ptGen", f"GenPart_pt[{muons}][{idx}]")
             df = df.Define("absEtaGen", f"fabs(GenPart_eta[{muons}][{idx}])")                
-        else:
-            df = df.Define("muGen", "ROOT::Math::PtEtaPhiMVector(GenPart_pt[postFSRmus][postFSRmuIdx], GenPart_eta[postFSRmus][postFSRmuIdx], GenPart_phi[postFSRmus][postFSRmuIdx], GenPart_mass[postFSRmus][postFSRmuIdx])")
-            df = df.Define("antimuGen", "ROOT::Math::PtEtaPhiMVector(GenPart_pt[postFSRantimus][postFSRantimuIdx], GenPart_eta[postFSRantimus][postFSRantimuIdx], GenPart_phi[postFSRantimus][postFSRantimuIdx], GenPart_mass[postFSRantimus][postFSRantimuIdx])")
-            df = df.Define("VGen", "ROOT::Math::PxPyPzEVector(muGen)+ROOT::Math::PxPyPzEVector(antimuGen)")
-            df = df.Define("massVGen", "VGen.mass()")
+        elif mode == "wlike":
+            df = df.Define("ptGen", "event % 2 == 0 ? GenPart_pt[postFSRmus][postFSRmuIdx] : GenPart_pt[postFSRantimus][postFSRantimuIdx]")
+            df = df.Define("absEtaGen", "event % 2 == 0 ? fabs(GenPart_eta[postFSRmus][postFSRmuIdx]) : fabs(GenPart_eta[postFSRantimus][postFSRantimuIdx])")    
 
-            if mode == "wlike":
-                df = df.Define("ptGen", "event % 2 == 0 ? GenPart_pt[postFSRmus][postFSRmuIdx] : GenPart_pt[postFSRantimus][postFSRantimuIdx]")
-                df = df.Define("absEtaGen", "event % 2 == 0 ? fabs(GenPart_eta[postFSRmus][postFSRmuIdx]) : fabs(GenPart_eta[postFSRantimus][postFSRantimuIdx])")    
-            elif mode == "dilepton":
-                df = df.Define("ptVGen", "VGen.pt()")
-                df = df.Define("absYVGen", "fabs(VGen.Rapidity())")  
+        df = df.Define("muGen", "ROOT::Math::PtEtaPhiMVector(GenPart_pt[postFSRmus][postFSRmuIdx], GenPart_eta[postFSRmus][postFSRmuIdx], GenPart_phi[postFSRmus][postFSRmuIdx], GenPart_mass[postFSRmus][postFSRmuIdx])")
+        df = df.Define("antimuGen", "ROOT::Math::PtEtaPhiMVector(GenPart_pt[postFSRantimus][postFSRantimuIdx], GenPart_eta[postFSRantimus][postFSRantimuIdx], GenPart_phi[postFSRantimus][postFSRantimuIdx], GenPart_mass[postFSRantimus][postFSRantimuIdx])")
+        df = df.Define("VGen", "ROOT::Math::PxPyPzEVector(muGen)+ROOT::Math::PxPyPzEVector(antimuGen)")
+
+        df = df.Define("massVGen", "VGen.mass()")
+        df = df.Define("ptVGen", "VGen.pt()")
+        df = df.Define("absYVGen", "fabs(VGen.Rapidity())")  
     
     if mode == "wlike":
         df = df.Define("qGen", "event % 2 == 0 ? -1 : 1")

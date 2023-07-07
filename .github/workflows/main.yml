@@ -508,7 +508,7 @@ jobs:
 
   copy-clean:
     runs-on: [self-hosted, linux, x64]
-    needs: [setenv, w-analysis, lowpu, dilepton, wlike, gen, combined-fit, wlike-plotting, w-plotting, wlike-unfolding ]
+    needs: [setenv, w-analysis, lowpu-w, lowpu-z, dilepton, wlike, gen, combined-fit, wlike-plotting, w-plotting, wlike-unfolding ]
     if: always() 
     steps:
       - env:
