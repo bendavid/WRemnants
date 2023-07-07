@@ -273,7 +273,9 @@ def add_qcdScale_hist(results, df, axes, cols, base_name="nominal"):
 
 def add_qcdScaleByHelicityUnc_hist(results, df, helper, axes, cols, base_name="nominal"):
     name = Datagroups.histName(base_name, syst="qcdScaleByHelicity")
-    df = df.Define("helicityWeight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
+    if "helicityWeight_tensor" not in df.GetColumnNames():
+        df = df.Define("helicityWeight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
+        return df
     qcdScaleByHelicityUnc = df.HistoBoost(name, axes, [*cols,"helicityWeight_tensor"], tensor_axes=helper.tensor_axes, storage=hist.storage.Double())
     results.append(qcdScaleByHelicityUnc)
 
