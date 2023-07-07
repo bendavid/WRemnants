@@ -43,7 +43,7 @@ def main(args, xnorm=False):
 
     if args.fitType == "differential":
 
-        datagroups.setGenAxes("recoil_gen")
+        datagroups.setGenAxes(["recoil_gen"])
         datagroups.defineSignalBinsUnfolding(sigProc)
 
     elif args.fitType == "wmass": 

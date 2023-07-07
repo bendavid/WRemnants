@@ -81,7 +81,7 @@ def define_muon_uT_variable(df, isWorZ, smooth3dsf=False, colNamePrefix="goodMuo
         
     return df
 
-def select_z_candidate(df, ptLow, ptHigh):
+def select_z_candidate(df, ptLow, ptHigh, mass_min=60, mass_max=120):
 
     df = df.Filter("Sum(trigMuons) == 1 && Sum(nonTrigMuons) == 1")
     df = df.Filter(f"trigMuons_pt0 > {ptLow} && trigMuons_pt0 < {ptHigh}")
@@ -92,7 +92,7 @@ def select_z_candidate(df, ptLow, ptHigh):
     df = df.Define("ll_mom4", "ROOT::Math::PxPyPzEVector(trigMuons_mom4)+ROOT::Math::PxPyPzEVector(nonTrigMuons_mom4)")
     df = df.Define("mll", "ll_mom4.mass()")
 
-    df = df.Filter("mll >= 60. && mll < 120.")
+    df = df.Filter(f"mll >= {mass_min} && mll < {mass_max}")
 
     return df
 

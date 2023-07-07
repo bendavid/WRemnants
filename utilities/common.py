@@ -115,7 +115,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--met", type=str, choices=["DeepMETReso", "RawPFMET"], help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")                    
     parser.add_argument("-o", "--outfolder", type=str, default="", help="Output folder")
     parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
-    parser.add_argument("--nonClosureScheme", type=str, default = "A-M-separated", choices=["A-M-separated", "A-M-combined", "binned", "binned-plus-M"], help = "source of the Z non-closure nuisances")
+    parser.add_argument("--nonClosureScheme", type=str, default = "A-M-separated", choices=["none", "A-M-separated", "A-M-combined", "binned", "binned-plus-M"], help = "source of the Z non-closure nuisances")
     parser.add_argument("--correlatedNonClosureNP", action="store_true", help="disable the de-correlation of Z non-closure nuisance parameters after the jpsi massfit")
     parser.add_argument("--noScaleToData", action="store_true", help="Do not scale the MC histograms with xsec*lumi/sum(gen weights) in the postprocessing step")
     parser.add_argument("--aggregateGroups", type=str, nargs="*", default=["Diboson", "Top", "Wtaunu"], help="Sum up histograms from members of given groups in the postprocessing step")
@@ -138,11 +138,11 @@ def common_parser(for_reco_highPU=False):
         parser.add_argument("--smearing", action='store_true', help="Smear pT such that resolution matches data") #TODO change to --no-smearing once smearing is final
         parser.add_argument("--unfolding", action='store_true', help="Add information needed for unfolding")
         parser.add_argument("--genLevel", type=str, default='postFSR', choices=["preFSR", "postFSR"], help="Generator level definition for unfolding")
-        parser.add_argument("--genBins", type=int, default=[3, 2], help="Number of generator level bins")
         parser.add_argument("--validateByMassWeights", action = "store_true", help = "validate the muon momentum scale shift weights by massweights")
         parser.add_argument("--smooth3dsf", action='store_true', help="Use smooth 3D scale factors instead of the original 2D ones (test option for now)")
         parser.add_argument("--sf2DnoUt", action='store_true', help="Use older smooth 2D scale factors with no ut dependence")
         #parser.add_argument("--scaleFactors", type=str, default="3D", choices=["2D", "2Dut", "3D"], help="Which smoothed scale factors to use for global muons.")
+        parser.add_argument("--genBins", type=int, nargs="+", default=[3, 2], help="Number of generator level bins")
 
     commonargs,_ = parser.parse_known_args()
 

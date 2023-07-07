@@ -1,11 +1,11 @@
-from utilities import boostHistHelpers as hh, common, output_tools, logging
+from utilities import boostHistHelpers as hh, common, output_tools, logging, differential
 
 parser,initargs = common.common_parser(True)
 
 import ROOT
 import narf
 import wremnants
-from wremnants import theory_tools,syst_tools,theory_corrections, muon_validation, muon_calibration, muon_selections
+from wremnants import theory_tools,syst_tools,theory_corrections, muon_validation, muon_calibration, muon_selections, unfolding_tools
 from wremnants.histmaker_tools import scale_to_data, aggregate_groups
 import hist
 import lz4.frame
@@ -17,6 +17,7 @@ import os
 parser.add_argument("--csVarsHist", action='store_true', help="Add CS variables to dilepton hist")
 parser.add_argument("--axes", type=str, nargs="*", default=["mll", "ptll"], help="")
 parser.add_argument("--finePtBinning", action='store_true', help="Use fine binning for ptll")
+parser.add_argument("--genVars", type=str, nargs="+", default=["ptVGen"], choices=["ptVGen", "absYVGen"], help="Generator level variable")
 
 parser = common.set_parser_default(parser, "pt", [44,26.,70.])
 parser = common.set_parser_default(parser, "eta", [6,-2.4,2.4])
@@ -34,12 +35,16 @@ datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
 
 era = args.era
 
+# dilepton invariant mass cuts
+mass_min = 60
+mass_max = 120
+
 # available axes for dilepton validation plots
 all_axes = {
     "mll": hist.axis.Regular(60, 60., 120., name = "mll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
-    "yll": hist.axis.Regular(20, -2.5, 2.5, name = "yll"),
-    "absYll": hist.axis.Regular(10, 0., 2.5, name = "absYll", underflow=False),
-    "ptll": hist.axis.Variable(common.ptV_binning if not args.finePtBinning else range(60), name = "ptll", underflow=False),
+    "yll": hist.axis.Regular(20, -2.5, 2.5, name = "yll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
+    "absYll": hist.axis.Regular(10, 0., 2.5, name = "absYll", underflow=False, overflow=not args.excludeFlow),
+    "ptll": hist.axis.Variable(common.ptV_binning if not args.finePtBinning else range(60), name = "ptll", underflow=False, overflow=not args.excludeFlow),
     "etaPlus": hist.axis.Regular(int(args.eta[0]), args.eta[1], args.eta[2], name = "etaPlus"),
     "etaMinus": hist.axis.Regular(int(args.eta[0]), args.eta[1], args.eta[2], name = "etaMinus"),
     "etaSum": hist.axis.Regular(12, -4.8, 4.8, name = "etaSum"),
@@ -55,14 +60,22 @@ for a in args.axes:
     if a not in all_axes.keys():
         logger.error(f" {a} is not a known axes! Supported axes choices are {list(axes.keys())}")
 
-cols = args.axes
+nominal_cols = args.axes
 
 if args.csVarsHist:
-    cols += ["cosThetaStarll", "phiStarll"]
+    nominal_cols += ["cosThetaStarll", "phiStarll"]
 
-axes = [all_axes[a] for a in cols] 
+nominal_axes = [all_axes[a] for a in nominal_cols] 
 
-groups_to_aggregate = args.aggregateGroups
+gen_axes = {
+    "ptVGen": hist.axis.Variable(common.ptV_binning if not args.finePtBinning else range(60), name = "ptVGen", underflow=False, overflow=False),
+    "absYVGen": hist.axis.Regular(10, 0, 2.5, name = "absYVGen", underflow=False, overflow=False),  
+}
+
+if args.unfolding:
+    unfolding_axes, unfolding_cols, unfolding_selections = differential.get_dilepton_axes(args.genVars, gen_axes)
+    datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Zmumu")
+
 
 # define helpers
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
@@ -105,7 +118,9 @@ def build_graph(df, dataset):
     isW = dataset.name in common.wprocs
     isZ = dataset.name in common.zprocs
     isWorZ = isW or isZ
-        
+
+    cvh_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
+    jpsi_helper = data_jpsi_crctn_helper if dataset.is_data else mc_jpsi_crctn_helper
     if dataset.is_data:
         df = df.DefinePerSample("weight", "1.0")
     else:
@@ -113,13 +128,29 @@ def build_graph(df, dataset):
 
     weightsum = df.SumAndCount("weight")
 
+    axes = nominal_axes
+    cols = nominal_cols
+
+    if args.unfolding and dataset.name == "ZmumuPostVFP":
+        df = unfolding_tools.define_gen_level(df, args.genLevel, dataset.name, mode="dilepton")
+
+        if hasattr(dataset, "out_of_acceptance"):
+            logger.debug("Reject events in fiducial phase space")
+            df = unfolding_tools.select_fiducial_space(df, mode="dilepton", pt_min=args.pt[1], pt_max=args.pt[2], 
+                mass_min=mass_min, mass_max=mass_max, selections=unfolding_selections, accept=False)
+        else:
+            logger.debug("Select events in fiducial phase space")
+            df = unfolding_tools.select_fiducial_space(df, mode="dilepton", pt_min=args.pt[1], pt_max=args.pt[2], 
+                mass_min=mass_min, mass_max=mass_max, selections=unfolding_selections, accept=True)
+
+            unfolding_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols)
+            axes = [*nominal_axes, *unfolding_axes] 
+            cols = [*nominal_cols, *unfolding_cols]
+
     df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
 
     df = muon_selections.veto_electrons(df)
     df = muon_selections.apply_met_filters(df)
-
-    cvh_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
-    jpsi_helper = data_jpsi_crctn_helper if dataset.is_data else mc_jpsi_crctn_helper
 
     df = muon_calibration.define_corrected_muons(df, cvh_helper, jpsi_helper, args, dataset, smearing_helper, bias_helper)
 
@@ -129,7 +160,7 @@ def build_graph(df, dataset):
     # for dilepton analysis we will call trigMuons (nonTrigMuons) those with charge plus (minus). In fact both might be triggering, naming scheme might be improved
     df = muon_selections.define_trigger_muons(df, what_analysis=thisAnalysis)
 
-    df = muon_selections.select_z_candidate(df, args.pt[1], args.pt[2])
+    df = muon_selections.select_z_candidate(df, args.pt[1], args.pt[2], mass_min, mass_max)
 
     df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "trigMuons")
     df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "nonTrigMuons")
@@ -139,8 +170,6 @@ def build_graph(df, dataset):
     df = df.Define("ptll", "ll_mom4.pt()")
     df = df.Define("yll", "ll_mom4.Rapidity()")
     df = df.Define("absYll", "std::fabs(yll)")
-    df = df.Define("csSineCosThetaPhill", "wrem::csSineCosThetaPhi(nonTrigMuons_mom4, trigMuons_mom4)")
-    
     # "renaming" to write out corresponding axis
     df = df.Define("etaPlus", "trigMuons_eta0")
     df = df.Define("etaMinus", "nonTrigMuons_eta0")
@@ -150,8 +179,11 @@ def build_graph(df, dataset):
     df = df.Define("etaSum", "nonTrigMuons_eta0 + trigMuons_eta0") 
     df = df.Define("etaDiff", "trigMuons_eta0-nonTrigMuons_eta0") # plus - minus 
 
-    df = df.Define("cosThetaStarll", "csSineCosThetaPhill.costheta")
-    df = df.Define("phiStarll", "std::atan2(csSineCosThetaPhill.sinphi, csSineCosThetaPhill.cosphi)")
+    if args.csVarsHist:
+        df = df.Define("csSineCosThetaPhill", "wrem::csSineCosThetaPhi(nonTrigMuons_mom4, trigMuons_mom4)")
+    
+        df = df.Define("cosThetaStarll", "csSineCosThetaPhill.costheta")
+        df = df.Define("phiStarll", "std::atan2(csSineCosThetaPhill.sinphi, csSineCosThetaPhill.cosphi)")
 
     logger.debug(f"Define weights and store nominal histograms")
 
@@ -199,6 +231,10 @@ def build_graph(df, dataset):
                 syst_tools.add_muonscale_hist(
                     results, df, args.muonCorrEtaBins, args.muonCorrMag, isW, axes, cols,
                     muon_eta="trigMuons_eta0")
+
+    if hasattr(dataset, "out_of_acceptance"):
+        # Rename dataset to not overwrite the original one
+        dataset.name = "Bkg"+dataset.name
     
     return results, weightsum
 
@@ -206,6 +242,6 @@ resultdict = narf.build_and_run(datasets, build_graph)
 
 if not args.noScaleToData:
     scale_to_data(resultdict)
-    aggregate_groups(datasets, resultdict, groups_to_aggregate)
+    aggregate_groups(datasets, resultdict, args.aggregateGroups)
 
 output_tools.write_analysis_output(resultdict, f"{os.path.basename(__file__).replace('py', 'hdf5')}", args, update_name=not args.forceDefaultName)
