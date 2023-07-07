@@ -75,13 +75,14 @@ class Datagroup(object):
 
         self.members = [m for (m, i) in zip(self.members, mask) if i]
 
-    def add_member_axis(self, name, results, member_filters=[], hist_filter=None):
+    def add_member_axis(self, axis_name, results, member_filters={}, hist_filter=None):
         # adds an axis depending on the group members
-        # member_filters is a list of member filter to specific which members 
+        # member_filters is a dict with key of bin name/integer and value of member filter to specify which members are filled in the corresponding bin
 
-        nBins = len(member_filters) 
-
-        axis = hist.axis.Regular(nBins, 0, nBins, underflow=False, overflow=False, name = name)
+        if all([isinstance(x,int) for x in member_filters.keys()]):
+            axis = hist.axis.IntCategory(member_filters.keys(), name = axis_name)
+        else:
+            axis = hist.axis.StrCategory([str(x) for x in member_filters.keys()], name = axis_name)
 
         for member in self.members:
             logger.debug(f"Add new member axis for member {member.name}")
@@ -94,12 +95,13 @@ class Datagroup(object):
                 hold = h.get()
                 hnew = hist.Hist(axis, *hold.axes, storage=hold.storage_type())
 
-                for i, member_filter in enumerate(member_filters):
+                for filter_bin, member_filter in member_filters.items():
                     if member_filter(member):
-                        logger.debug(f"Fill bin {i} for member {member.name}, hist {h_name}")                    
-                        hnew.view(flow=True)[...] = np.stack(
-                            [hnew[{name: i}].view(flow=True) if i != j else hold.view(flow=True) for j in range(nBins)], 
-                            axis = 0)
+                        logger.debug(f"Fill bin {filter_bin} for member {member.name}, hist {h_name}")
+
+                        idx = hnew.axes[axis_name].index(filter_bin)
+
+                        hnew.view(flow=True)[idx,...] = hnew.view(flow=True)[idx,...] + hold.view(flow=True)
 
                 results[member.name]["output"][h_name] = H5PickleProxy(hnew)
 
