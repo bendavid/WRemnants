@@ -119,7 +119,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--correlatedNonClosureNP", action="store_true", help="disable the de-correlation of Z non-closure nuisance parameters after the jpsi massfit")
     parser.add_argument("--noScaleToData", action="store_true", help="Do not scale the MC histograms with xsec*lumi/sum(gen weights) in the postprocessing step")
     parser.add_argument("--aggregateGroups", type=str, nargs="*", default=["Diboson", "Top", "Wtaunu"], help="Sum up histograms from members of given groups in the postprocessing step")
-
+    
     if for_reco_highPU:
         # additional arguments specific for histmaker of reconstructed objects at high pileup (mw, mz_wlike, and mz_dilepton)
         parser.add_argument("--dphiMuonMetCut", type=float, help="Threshold to cut |deltaPhi| > thr*np.pi between muon and met", default=0.25)
@@ -146,19 +146,22 @@ def common_parser(for_reco_highPU=False):
 
     commonargs,_ = parser.parse_known_args()
 
-    if commonargs.trackerMuons:
-        sfFile = "scaleFactorProduct_16Oct2022_TrackerMuonsHighPurity_vertexWeight_OSchargeExceptTracking.root"
-    else:
-        #if commonargs.scaleFactors:
-        #    logger.error("--scaleFactors not yet implemented. Abort")
-        #    quit()
-        # FIXME: this part is technically only for high PU, so these options would not exist at low PU
-        if commonargs.sf2DnoUt:
-            sfFile = "allSmooth_GtoHout.root" # 2D SF without ut integration
+    if for_reco_highPU:
+        if commonargs.trackerMuons:
+            sfFile = "scaleFactorProduct_16Oct2022_TrackerMuonsHighPurity_vertexWeight_OSchargeExceptTracking.root"
         else:
-            sfFile = "allSmooth_GtoH3Dout.root" # 2D SF from 3D with ut-integration
+            #if commonargs.scaleFactors:
+            #    logger.error("--scaleFactors not yet implemented. Abort")
+            #    quit()
+            # FIXME: this part is technically only for high PU, so these options would not exist at low PU
+            if commonargs.sf2DnoUt:
+                sfFile = "allSmooth_GtoHout.root" # 2D SF without ut integration
+            else:
+                sfFile = "allSmooth_GtoH3Dout.root" # 2D SF from 3D with ut-integration
 
-    sfFile = f"{data_dir}/testMuonSF/{sfFile}"
+        sfFile = f"{data_dir}/testMuonSF/{sfFile}"
+    else:
+        sfFile = ""
 
     parser.add_argument("--sfFile", type=str, help="File with muon scale factors", default=sfFile)
         
