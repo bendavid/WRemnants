@@ -1128,12 +1128,12 @@ public:
             // get the output value
             const double dweightdqop = delta_weight_tensor(0);
 
-            out_tensor_t delta_qop;
-            // TODO this should be filled with the actual qop variations from diagonalized calibration parameter uncertainties or whatever
-            delta_qop.setConstant(1e-3*qopgen);
+            out_tensor_t delta_qopr;
+            // TODO this should be filled with the actual qopr (qopr=qop_rec/qop_gen) variations from diagonalized calibration parameter uncertainties or whatever
+            delta_qopr.setConstant(1e-3);
 
 
-            const out_tensor_t alt_weights = dweightdqop*delta_qop + 1.;
+            const out_tensor_t alt_weights = dweightdqop*delta_qopr + 1.;
 
             // total weight is the product over all the muons
             alt_weights_all *= alt_weights;
