@@ -19,9 +19,10 @@ hep.style.use(hep.style.ROOT)
 
 logger = logging.child_logger(__name__)
 
-def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None,
-    grid_on_main_plot = False, grid_on_ratio_plot = False, plot_title = None, title_padding = 0,
-    x_ticks_ndp = None, bin_density = 300, cms_label = None, logy=False, logx=False,
+def figure(href, xlabel, ylabel, ylim=None, xlim=None,
+    grid = False, plot_title = None, title_padding = 0,
+    bin_density = 300, cms_label = None, logy=False, logx=False,
+    width_scale=1
 ):
     if not xlim:
         xlim = [href.axes[0].edges[0], href.axes[0].edges[-1]]
@@ -31,7 +32,42 @@ def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None,
     raw_width = (hax.size/float(bin_density)) * (xlim_range / original_xrange)
     width = math.ceil(raw_width)
 
-    fig = plt.figure(figsize=(8*width,8))
+    fig = plt.figure(figsize=(width_scale*8*width,8))
+    ax1 = fig.add_subplot() 
+    if cms_label: hep.cms.text(cms_label)
+
+    ax1.set_xlabel(xlabel)
+    ax1.set_ylabel(ylabel)
+    ax1.set_xlim(xlim)
+
+    if ylim is not None:
+        ax1.set_ylim(ylim)
+    else:
+        ax1.autoscale(axis='y')
+
+    if logy:
+        ax1.set_yscale('log')
+    if logx:
+        ax1.set_xscale('log')
+
+    if grid:  ax1.grid(which = "both")
+    if plot_title: ax1.set_title(plot_title, pad = title_padding)
+    return fig,ax1 
+
+def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None,
+    grid_on_main_plot = False, grid_on_ratio_plot = False, plot_title = None, title_padding = 0,
+    x_ticks_ndp = None, bin_density = 300, cms_label = None, logy=False, logx=False,
+    width_scale=1
+):
+    if not xlim:
+        xlim = [href.axes[0].edges[0], href.axes[0].edges[-1]]
+    hax = href.axes[0]
+    xlim_range = float(xlim[1] - xlim[0])
+    original_xrange = float(hax.edges[-1] - hax.edges[0])
+    raw_width = (hax.size/float(bin_density)) * (xlim_range / original_xrange)
+    width = math.ceil(raw_width)
+
+    fig = plt.figure(figsize=(width_scale*8*width,8))
     ax1 = fig.add_subplot(4, 1, (1, 3)) 
     if cms_label: hep.cms.text(cms_label)
     ax2 = fig.add_subplot(4, 1, 4) 

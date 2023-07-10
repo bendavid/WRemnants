@@ -24,14 +24,14 @@ def make_datagroups_2016(input_file, combine=False, pseudodata_pdfset = None, ap
         selectOp = sigOp,
     )
     dg.addGroup("Zmumu",
-        members = dg.getSafeListFromDataset(["ZmumuPostVFP"]),
+        members = list(filter(lambda y: y.group == "Zmumu", dg.datasets.values())),
         #label = r"Z$\to\mu\mu$ (N$^{3}LL+NNLO)$",
         label = r"Z$\to\mu\mu$",
         color = "lightblue",
         selectOp = sigOp,
     ) 
     dg.addGroup("Ztautau",
-        members = dg.getSafeListFromDataset(["ZtautauPostVFP"]),
+        members = list(filter(lambda y: y.group == "Ztautau", dg.datasets.values())),
         label = r"Z$\to\tau\tau$",
         color = "darkblue",
         selectOp = sigOp,
@@ -72,11 +72,10 @@ def make_datagroups_2016(input_file, combine=False, pseudodata_pdfset = None, ap
             label = "QCD MC",
             color = "grey",
             selectOp = sigOp,
-        )
-        
+        )   
     else:
         dg.addGroup("Other",
-            members = [x for x in dg.datasets.values() if not x.is_data and x.name not in ["ZmumuPostVFP", "ZtautauPostVFP"] and x.group != "QCD"],
+            members = [x for x in dg.datasets.values() if not x.is_data and x.group not in ["Zmumu", "Ztautau"] and x.group != "QCD"],
             label = "Other",
             color = "grey",
         )
@@ -95,10 +94,5 @@ def make_datagroups_2016(input_file, combine=False, pseudodata_pdfset = None, ap
         )
         dg.filterGroups(filterGroups)
         dg.excludeGroups(excludeGroups)
-        
-    if dg.wmass:
-        dg.gen_axes = ["etaGen", "ptGen"]
-    elif dg.wlike:
-        dg.gen_axes = ["qGen", "etaGen", "ptGen"]
-
+    
     return dg

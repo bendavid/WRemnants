@@ -46,6 +46,9 @@ datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
 
 era = args.era
 
+# transverse boson mass cut
+mtw_min = 40
+
 # custom template binning
 template_neta = int(args.eta[0])
 template_mineta = args.eta[1]
@@ -75,10 +78,16 @@ axis_vqt = hist.axis.Variable(axis_vqt_list, name = "ut")
 nominal_axes2 = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT, axis_vqt, axis_passTrigger]
 nominal_axes3 = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT, axis_passTrigger]
 
-unfolding_axes, unfolding_cols = differential.get_pt_eta_axes(args.genBins, template_minpt, template_maxpt, template_maxeta)
+nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
 
 # sum those groups up in post processing
 groups_to_aggregate = args.aggregateGroups
+
+if args.unfolding:
+    unfolding_axes, unfolding_cols = differential.get_pt_eta_axes(args.genBins[0], template_minpt, template_maxpt, args.genBins[1])
+    datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wmunu")
+    groups_to_aggregate.append("BkgWmunu")
+
 
 # axes for study of fakes
 axis_mt_fakes = hist.axis.Regular(120, 0., 120., name = "mt", underflow=False, overflow=True)
@@ -159,7 +168,6 @@ if args.nonClosureScheme in ["A-M-separated", "A-M-combined", "binned-plus-M"]:
         correlate = args.correlatedNonClosureNP
     )
 
-
 # recoil initialization
 if not args.noRecoil:
     from wremnants import recoil_tools
@@ -173,10 +181,8 @@ def build_graph(df, dataset):
     isZ = dataset.name in common.zprocs
     isTop = dataset.group == "Top"
     isQCDMC = dataset.group == "QCD"
-    require_prompt = "tau" not in dataset.name # for muon GEN-matching
-
-    unfold = args.unfolding and dataset.name in ["WplusmunuPostVFP", "WminusmunuPostVFP"]
-
+    require_prompt = "tau" not in dataset.name # for muon GEN-matching   
+    
     # disable auxiliary histograms when unfolding to reduce memory consumptions
     auxiliary_histograms = not args.unfolding
 
@@ -192,9 +198,22 @@ def build_graph(df, dataset):
 
     weightsum = df.SumAndCount("weight")
 
-    if unfold:
+    axes = nominal_axes
+    cols = nominal_cols
+    
+    if args.unfolding and dataset.name in ["WplusmunuPostVFP", "WminusmunuPostVFP"]:
         df = unfolding_tools.define_gen_level(df, args.genLevel, dataset.name, mode="wmass")
-        unfolding_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols)
+
+        if hasattr(dataset, "out_of_acceptance"):
+            logger.debug("Reject events in fiducial phase space")
+            df = unfolding_tools.select_fiducial_space(df, mode="wmass", pt_min=args.pt[1], pt_max=args.pt[2], mtw_min=mtw_min, accept=False)
+        else:
+            logger.debug("Select events in fiducial phase space")
+            df = unfolding_tools.select_fiducial_space(df, mode="wmass", pt_min=args.pt[1], pt_max=args.pt[2], mtw_min=mtw_min, accept=True)
+
+            unfolding_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols)
+            axes = [*nominal_axes, *unfolding_axes] 
+            cols = [*nominal_cols, *unfolding_cols]
 
     if not (args.vqt3dsmoothing and (args.vqtTestStep < 2)) :
         df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
@@ -327,7 +346,7 @@ def build_graph(df, dataset):
         mtIsoJetCharge = df.HistoBoost("mtIsoJetCharge", [axis_mt_fakes, axis_iso_fakes, axis_hasjet_fakes, axis_charge], ["transverseMass", "goodMuons_pfRelIso04_all0", "hasCleanJet", "goodMuons_charge0", "nominal_weight"])
         results.append(mtIsoJetCharge)
     
-    df = df.Define("passMT", "transverseMass >= 40.0")
+    df = df.Define("passMT", f"transverseMass >= {mtw_min}")
 
     if args.vqt3dsmoothing:
         df = df.Filter("passMT")
@@ -337,15 +356,6 @@ def build_graph(df, dataset):
         results.append(df.HistoBoost("MET", [axis_met, axis_charge, axis_passIso, axis_passMT], ["MET_corr_rec_pt", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"]))
         results.append(df.HistoBoost("transverseMass", [axis_mt_fakes, axis_charge, axis_passIso, axis_passMT], ["transverseMass", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"]))
     
-    nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
-
-    if unfold:
-        axes = [*nominal_axes, *unfolding_axes] 
-        cols = [*nominal_cols, *unfolding_cols]
-    else:
-        axes = nominal_axes
-        cols = nominal_cols
-
     if not args.onlyMainHistograms:
         syst_tools.add_QCDbkg_jetPt_hist(results, df, axes, cols, jet_pt=30)
 
@@ -365,7 +375,6 @@ def build_graph(df, dataset):
 
         if not args.noRecoil:
             df = recoilHelper.add_recoil_unc_W(df, results, dataset, cols, axes, "nominal")
-
         if apply_theory_corr:
             results.extend(theory_tools.make_theory_corr_hists(df, "nominal", axes, cols, 
                 corr_helpers[dataset.name], args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly, isW = isW)
@@ -675,9 +684,18 @@ def build_graph(df, dataset):
         if not args.binnedScaleFactors:
             df = df.Define("weight2dsfup", muon_efficiency_helper2d, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso"])
             df = df.Define("nominal_weight_2dsf", "nominal_weight/weight_fullMuonSF_withTrackingReco*weight2dsfup") #be EXTREMELY CAREFUL about the histogram files (this assumes that you have another file with the old trigger and histo SFs which also contains the same SFs for all the other steps as the central one)
-            sf2d = df.HistoBoost("nominal_sf2d", nominal_axes, [*nominal_cols, "nominal_weight_2dsf"])
+            sf2d = df.HistoBoost("nominal_sf2d", axes, [*cols, "nominal_weight_2dsf"], storage=hist.storage.Double())
             results.append(sf2d)
-               
+
+
+    if hasattr(dataset, "out_of_acceptance"):
+        # Rename dataset to not overwrite the original one
+
+        if len(smearing_weights_procs) > 0 and smearing_weights_procs[-1] == dataset.name:
+            smearing_weights_procs[-1] = "Bkg"+dataset.name
+
+        dataset.name = "Bkg"+dataset.name
+
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)
