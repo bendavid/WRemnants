@@ -113,7 +113,9 @@ muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = 
 
 qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper()
 
-if args.binnedScaleFactors:
+if args.noScaleFactors:
+    logger.info("Running with no scale factors")
+elif args.binnedScaleFactors:
     logger.info("Using binned scale factors and uncertainties")
     # add usePseudoSmoothing=True for tests with Asimov
     muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_binned(filename = data_dir + "/testMuonSF/allSmooth_GtoH3D.root", era = era, max_pt = axis_pt.edges[-1], usePseudoSmoothing=True)
@@ -396,9 +398,10 @@ def build_graph(df, dataset):
         mTStudyForFakes = df.HistoBoost("mTStudyForFakes", mTStudyForFakes_axes, ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "transverseMass", "passIso", "hasCleanJet", "deltaPhiMuonMet", "nominal_weight"])
         results.append(mTStudyForFakes)
 
-    dphiMuonMetCut = args.dphiMuonMetCut * np.pi
     # add filter of deltaPhi(muon,met) before other histograms (but before the previous histogram for test with fakes)
-    df = df.Filter(f"deltaPhiMuonMet > {dphiMuonMetCut}") # pi/4 was found to be a good threshold for signal with mT > 40 GeV
+    if not args.makeMCefficiency:
+        dphiMuonMetCut = args.dphiMuonMetCut * np.pi
+        df = df.Filter(f"deltaPhiMuonMet > {dphiMuonMetCut}") # pi/4 was found to be a good threshold for signal with mT > 40 GeV
 
     if auxiliary_histograms:
         mtIsoJetCharge = df.HistoBoost("mtIsoJetCharge", [axis_mt_fakes, axis_iso_fakes, axis_hasjet_fakes, axis_charge], ["transverseMass", "goodMuons_pfRelIso04_all0", "hasCleanJet", "goodMuons_charge0", "nominal_weight"])
@@ -452,8 +455,9 @@ def build_graph(df, dataset):
                 muon_validation.make_reco_over_gen_hists(df, results)
 
     if not dataset.is_data and not args.onlyMainHistograms:
-        
-        df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, axes, cols, what_analysis=thisAnalysis, smooth3D=args.smooth3dsf)
+
+        if not args.noScaleFactors:
+            df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, axes, cols, what_analysis=thisAnalysis, smooth3D=args.smooth3dsf)
         df = syst_tools.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, axes, cols)
 
         ## MARCO: temporarily commented out code

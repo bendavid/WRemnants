@@ -427,7 +427,8 @@ if __name__ == "__main__":
     # effHist["triggerminus"] = safeGetObject(tfile, "triggerMCMinus")
     # tfile.Close()
 
-    effSmoothFile = "/eos/user/m/mciprian/www/WMassAnalysis/test2Dsmoothing/makeWMCefficiency3D//noMuonCorr_noSF/efficiencies3D.pkl.lz4"
+    # efficiencies made with scripts/analysisTools/w_mass_13TeV/makeWMCefficiency3D.py
+    effSmoothFile = "/eos/user/m/mciprian/www/WMassAnalysis/test2Dsmoothing/makeWMCefficiency3D/noMuonCorr_noSF_allProc_noDphiCut/efficiencies3D.pkl.lz4"
     with lz4.frame.open(effSmoothFile) as fileEff:
         allMCeff = pickle.load(fileEff)
 

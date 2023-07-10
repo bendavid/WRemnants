@@ -92,7 +92,7 @@ if __name__ == "__main__":
 
     canvas = ROOT.TCanvas("canvas", "", 800, 700)
     adjustSettings_CMS_lumi()
-    #canvas1D = ROOT.TCanvas("canvas1D", "", 800, 900)
+    canvas1D = ROOT.TCanvas("canvas1D", "", 800, 900)
     xAxisName = "Muon #eta"
     yAxisName = "Muon p_{T} (GeV)"
 
@@ -109,25 +109,14 @@ if __name__ == "__main__":
     resultDict = {}
     for d in datasets:
         logger.info(f"Running on process {d}")
-        h = histInfo[d].hists[inputHistName]
-        logger.debug(h.axes)
-        logger.debug(h.sum(flow=True))
+        hin = histInfo[d].hists[inputHistName]
+        logger.debug(hin.axes)
+        #logger.debug(h.sum(flow=True))
 
-        # if args.baseName == "nominal":
-        #     # just a debug tests
-        #     h = h[{"charge" : s[::hist.sum],
-        #            "passIso" : True,
-        #            "passMT" : True}]
-        #     logger.debug(h.axes)
-        #     hroot = narf.hist_to_root(h)
-        #     hroot.SetName("nominal")
-        #     drawCorrelationPlot(hroot, xAxisName, xAxisName, f"Events",
-        #                         f"{hroot.GetName()}", plotLabel="ForceTitle", outdir=outdir,
-        #                         smoothPlot=False, drawProfileX=False, scaleToUnitArea=False,
-        #                         draw_both0_noLog1_onlyLog2=1, passCanvas=canvas,
-        #                         nContours=args.nContours, palette=args.palette, invertePalette=args.invertPalette)
-        #     quit()
-
+        # create copy to do other checks with uT
+        hTestUt = hin.copy()
+        h = hin.copy()
+        
         if args.passMt:
             h = h[{"passMT" : True}]
         else:
@@ -220,7 +209,34 @@ if __name__ == "__main__":
         resultDict[f"{d}_MC_eff_isoantitrig_etaptut"] = eff_isoantitrig_3D
         resultDict[f"{d}_MC_eff_triggerplus_etaptut"] = eff_triggerplus_3D
         resultDict[f"{d}_MC_eff_triggerminus_etaptut"] = eff_triggerminus_3D
-        
+
+        # plot uT distribution for each charge, vs mT (pass or fail, or inclusive), integrate anything else
+        # do it for events passing trigger ans isolation
+        nPtBins = hTestUt.axes["pt"].size
+        hTestUt = hTestUt[{"eta" : s[::hist.sum],
+                           "pt" :  s[0:nPtBins-1:hist.sum], # would s[::hist.sum] sum overflow pt bins?
+                           "passTrigger" : True,
+                           "passIso" : True}]
+        for charge in [-1, 1]:
+            chargeStr = "plus" if charge > 0 else "minus"
+            hut = hTestUt[{"charge" : s[complex(0,charge)]}]
+            hut_allMt = hut[{"passMT": s[::hist.sum]}]
+            hut_passMt = hut[{"passMT": True}]
+            hut_failMt = hut[{"passMT": False}]
+            allHists = [hut_allMt, hut_passMt, hut_failMt]
+            allHistsRoot = []
+            hNamesRoot = ["allMT", "passMT", "failMT"]
+            for ih,htmp in enumerate(allHists):
+                hroot = narf.hist_to_root(htmp)
+                hroot.Scale(1./hroot.Integral()) # normalize to unit area to get shape
+                hNamesRoot[ih] += f"_{chargeStr}_{d}"
+                hroot.SetName(hNamesRoot[ih])
+                allHistsRoot.append(hroot)                
+            drawNTH1(allHistsRoot, hNamesRoot, "Projected recoil u_{T} (GeV)", "Normalized units", f"ut_{d}_{chargeStr}",
+                     outdir, draw_both0_noLog1_onlyLog2=1, topMargin=0.05, labelRatioTmp="X / incl.::0.5,1.5",
+                     legendCoords="0.2,0.8,0.77,0.92;1", passCanvas=canvas1D, skipLumi=True,
+                     onlyLineColor=True, useLineFirstHistogram=True)
+                
     postfix = ""
     toAppend = []
     #if args.passMt:

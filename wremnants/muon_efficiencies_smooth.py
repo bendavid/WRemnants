@@ -81,9 +81,9 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
 
     dict_SF3D = None
     if len(eff_types_3D):
-        # temporary file stored locally for tests
-        #fileSF3D = data_dir + "/testMuonSF/smoothSF3D_safeAntiSF.pkl.lz4"
-        fileSF3D = "/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/scaleFactors3D_boost/smoothSF3D_safeAntiSF.pkl.lz4"
+        #os.system(f"xrdcp root://eoscms.cern.ch//eos/cms/store/cmst3/group/wmass/w-mass-13TeV/scaleFactors3D_boost/smoothSF3D_safeAntiSF_effiNoDphiCut.pkl.lz4 {data_dir}/testMuonSF/")
+        #fileSF3D = "/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/scaleFactors3D_boost/smoothSF3D_safeAntiSF_effiNoDphiCut.pkl.lz4"
+        fileSF3D = data_dir + "/testMuonSF/smoothSF3D_safeAntiSF_effiNoDphiCut.pkl.lz4"
         logger.info(f"3D SF read from {fileSF3D}")
         with lz4.frame.open(fileSF3D) as f3D:
             dict_SF3D = pickle.load(f3D)
@@ -176,10 +176,6 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
                 ## Note: must call sf_syst_3D with flow=False because it has overflow bins but hist_hist does not (it was made without them in 4D)
                 nominalLayer = hist_hist.view(flow=False)[:,:,:,0]
                 sf_syst_3D.view(flow=False)[:, :, axis_charge.index(charge), axis_eff_type_3D.index(eff_type), 0, :] = nominalLayer #hist_hist.view(flow=False)[:,:,:,0]
-                # extract syst (last bin except overflow) and put in corresponding bin of destination (bin 1 is the second bin because no underflow)
-                ##
-                ## FIXME: for now using syst=nominal since we don't have syst (must copy from 2D version)
-                ##
                 # take syst/nomi histogram ratio in 2D (eta-pt), and broadcast into eta-pt-ut)
                 chargeTag = charge_tag if eff_type in chargeDependentSteps else "both"
                 syst_view_etaPt = sf_syst_from2D_for3D[f"{eff_type}_{chargeTag}"].values(flow=False) #only need values

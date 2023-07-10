@@ -133,7 +133,7 @@ def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
     hMCstat = copy.deepcopy(den2D.Clone("hMCstat"))
     hMCstat.SetTitle("Sum of predicted processes")
     ROOT.wrem.makeHistStatUncertaintyRatio(hMCstat, den2D)
-    drawCorrelationPlot(hMCstat, xAxisName, yAxisName, "#sqrt{#sum w^{2}} / #sqrt{N}::1.0,1.5",
+    drawCorrelationPlot(hMCstat, xAxisName, yAxisName, "#sqrt{#sum w^{2}} / #sqrt{N}",
                         f"MCstatOverPoissonUncRatio_allProcs_{chargeLabel}", plotLabel="ForceTitle", outdir=outdir_dataMC,
                         palette=57, passCanvas=canvas, drawOption="COLZ0", skipLumi=True, zTitleOffSet=1.3)
     for h in hmc2D:
@@ -192,9 +192,7 @@ def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
 
     # plot unrolled ratio to better see how it looks like
     ratio_unrolled = unroll2Dto1D(ratio2D, newname=f"{ratio2D.GetName()}_unrolled")
-    #logger.error("HERE")
     ROOT.wrem.setRootHistogramError(ratio_unrolled, 0.0)
-    #logger.error("NOW HERE")
     drawSingleTH1(ratio_unrolled, XlabelUnroll, f"{dataTitle}/pred. ratio", "muon_etaPtUnrolledRatio",
                   outdir_dataMC, drawLineLowerPanel="", lowerPanelHeight=0.0, labelRatioTmp="", 
                   passCanvas=canvasWide,
@@ -202,7 +200,6 @@ def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
                   leftMargin=0.05,rightMargin=0.01,lumi=lumi, 
                   drawVertLines="{a},{b}".format(a=recoBins.Npt,b=recoBins.Neta),
                   textForLines=ptBinRanges, ytextOffsetFromTop=0.3, textSize=0.04, textAngle=30, drawLineTopPanel=1.0)
-    #logger.error("AND FINALLY HERE")                       
 
     allHists = hmc2D + [hdata2D]
     hdata2D.SetTitle(f"{dataTitle} {chargeLabel}")
@@ -268,7 +265,7 @@ if __name__ == "__main__":
         nomihists = {}
         infile = safeOpenFile(fname)
         for proc in processes:
-            nomihists[proc] = safeGetObject(infile, f"x_{proc}_{charge}", detach=True)
+            nomihists[proc] = safeGetObject(infile, f"{proc}/x_{proc}_{charge}", detach=True) # process name as subfolder
         if args.pseudodata:
             nomihists["Data"] = safeGetObject(infile, f"{args.pseudodata}_{charge}", detach=True)
         infile.Close()

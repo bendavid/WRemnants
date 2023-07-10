@@ -102,8 +102,8 @@ def apply_triggermatching_muon(df, dataset, muon_eta, muon_phi, otherMuon_eta=No
     else:
         df = df.Define("goodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_filterBits)")
     if otherMuon_eta is not None:
-        # implement OR of trigger matching condition (for dilepton), also created corresponding flags
-        # FIXME: must find a better way to pass the variables' name prefix
+        # implement OR of trigger matching condition (for dilepton), also create corresponding flags
+        # FIXME: should find a better way to pass the variables' name prefix
         df = df.Define("trigMuons_passTrigger0", f"wrem::hasTriggerMatch({muon_eta},{muon_phi},TrigObj_eta[goodTrigObjs],TrigObj_phi[goodTrigObjs])")
         df = df.Define("nonTrigMuons_passTrigger0", f"wrem::hasTriggerMatch({otherMuon_eta},{otherMuon_phi},TrigObj_eta[goodTrigObjs],TrigObj_phi[goodTrigObjs])")
         df = df.Filter(f"trigMuons_passTrigger0 || nonTrigMuons_passTrigger0")

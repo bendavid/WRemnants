@@ -3,7 +3,7 @@
 from wremnants.datasets.datagroups2016 import make_datagroups_2016
 from wremnants import histselections as sel
 #from wremnants import plot_tools,theory_tools,syst_tools
-from utilities import boostHistHelpers as hh,common
+from utilities import boostHistHelpers as hh,common, logging
 
 import narf
 import wremnants
@@ -88,7 +88,7 @@ if __name__ == "__main__":
     parser.add_argument("-x", "--x-axis-name", dest="xAxisName", nargs='+', type=str, help="x axis name")
     args = parser.parse_args()
     
-    logger = common.setup_test_logger("testPlots1D", args.verbose)
+    logger = logging.setup_logger(os.path.basename(__file__), args.verbose)
     
     fname = args.inputfile[0]
     outdir = args.outputfolder[0]
