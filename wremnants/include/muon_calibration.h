@@ -1159,7 +1159,7 @@ public:
             // get the output value
             const double dweightdqop = delta_weight_tensor(0);
 
-            out_tensor_t delta_qop;
+            out_tensor_t delta_qopr;
 
             const auto &params = get_tensor(recEta);
             for (std::ptrdiff_t ivar = 0; ivar < nUnc; ++ivar) {
@@ -1173,7 +1173,8 @@ public:
                 }
             }
 
-            const out_tensor_t alt_weights = dweightdqop * (delta_qop / qopgen) + 1.;
+            const out_tensor_t alt_weights = dweightdqop*delta_qopr + 1.;
+
             // total weight is the product over all the muons
             alt_weights_all *= alt_weights;
         }

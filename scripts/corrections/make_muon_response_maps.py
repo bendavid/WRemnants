@@ -6,6 +6,7 @@ import scipy
 import tensorflow as tf
 import tensorflow_probability as tfp
 import matplotlib.pyplot as plt
+import narf.tfutils
 
 
 infile = "w_z_muonresponse_scetlib_dyturboCorr.hdf5"
@@ -73,6 +74,10 @@ eta_edges_flat = np.reshape(hist_response.axes[3].edges, [-1])
 eta_low = tf.constant(eta_edges_flat[0], tf.float64)
 eta_high = tf.constant(eta_edges_flat[-1], tf.float64)
 
+print("qopr bounds:", qopr_low, qopr_high)
+print("pt bounds:", pt_low, pt_high)
+print("eta bounds:", eta_low, eta_high)
+
 def interp_cdf(genPt, genEta, genCharge, qopr):
     chargeIdx = tf.where(genCharge > 0., 1, 0)
     quants_charge = quants[chargeIdx]
@@ -102,13 +107,12 @@ def interp_dweight(genPt, genEta, genCharge, qopr):
     dpdf = t0.gradient(pdf, qopr)
     dweight = dpdf/pdf
 
-
     dweight = tf.where(qopr <= qopr_low, tf.zeros_like(dweight), dweight)
     dweight = tf.where(qopr >= qopr_high, tf.zeros_like(dweight), dweight)
 
     dweight = tf.where(genPt < pt_low, tf.zeros_like(dweight), dweight)
     dweight = tf.where(genPt > pt_high, tf.zeros_like(dweight), dweight)
-
+    #
     dweight = tf.where(genEta < eta_low, tf.zeros_like(dweight), dweight)
     dweight = tf.where(genEta > eta_high, tf.zeros_like(dweight), dweight)
 
@@ -122,38 +126,18 @@ qopr_test = tf.constant(1.002, tf.float64)
 res = interp_cdf(genPt_test, genEta_test, genCharge_test, qopr_test)
 res2 = interp_dweight(genPt_test, genEta_test, genCharge_test, qopr_test)
 
+print("res", res)
+print("res2", res2)
+
 scalar_spec = tf.TensorSpec([], tf.float64)
+input_signature = 4*[scalar_spec]
 
-class TestMod(tf.Module):
-    @tf.function(input_signature =  [scalar_spec, scalar_spec, scalar_spec, scalar_spec])
-    def __call__(self, genPt, genEta, genCharge, qopr):
-        return interp_dweight(genPt, genEta, genCharge, qopr)
+tflite_model = narf.tfutils.function_to_tflite(interp_dweight, input_signature)
 
-module = TestMod()
+output_filename = "muon_response.tflite"
 
-concrete_function = module.__call__.get_concrete_function()
-# Convert the model
-converter = tf.lite.TFLiteConverter.from_concrete_functions([concrete_function], module)
-
-converter.target_spec.supported_ops = [
-  tf.lite.OpsSet.TFLITE_BUILTINS, # enable TensorFlow Lite ops.
-  tf.lite.OpsSet.SELECT_TF_OPS # enable TensorFlow ops.
-]
-
-tflite_model = converter.convert()
-
-test_interp = tf.lite.Interpreter(model_content = tflite_model)
-print(test_interp.get_input_details())
-print(test_interp.get_output_details())
-print(test_interp.get_signature_list())
-
-# print(tflite_model)
-
-
-with open('muon_response.tflite', 'wb') as f:
-  f.write(tflite_model)
-
-
+with open(output_filename, 'wb') as f:
+    f.write(tflite_model)
 
 #this is just for plotting
 def func_pdf(h):
@@ -169,8 +153,7 @@ def func_pdf(h):
 
     return pdf
 
-# print(res)
-# print(res2)
+
 
 # etaidx = 47
 # ptidx = 20
