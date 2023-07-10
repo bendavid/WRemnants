@@ -1169,7 +1169,7 @@ public:
                 double recoQopUnc = calculateQopUnc(recPt, recEta, recCharge, AUnc, eUnc, MUnc);
                 for (std::ptrdiff_t idownup = 0; idownup < 2; ++idownup) {
                     const double dir = idownup == 0 ? -1. : 1.;
-                    delta_qop(ivar, idownup) = recoQopUnc * dir;
+                    delta_qopr(ivar, idownup) = recoQopUnc * dir / qopgen;
                 }
             }
 
