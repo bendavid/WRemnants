@@ -16,7 +16,7 @@ import lz4.frame
 import time
 from functools import partial
 from scipy.interpolate import RegularGridInterpolator
-from utilities import boostHistHelpers as hh
+from utilities import boostHistHelpers as hh, output_tools, logging
 
 ## safe batch mode
 import sys
@@ -410,6 +410,7 @@ if __name__ == "__main__":
     #parser.add_argument('histname',  type=str, nargs=1, help='Histogram name to read from the file')
     parser.add_argument('outdir', type=str, nargs=1, help='output directory to save things')
     #parser.add_argument('step', type=str, nargs=1, help='Step, also to name output histogram (should be parsed from input file though)')
+    parser.add_argument('-n', '--outfilename', type=str, default='smoothSF3D.pkl.lz4', help='Output file name, extension must be pkl.lz4, which is automatically added if no extension is given')
     parser.add_argument('--eta', type=int, nargs="*", default=[], help='Select some eta bins (ID goes from 1 to Neta')
     parser.add_argument('--polDegree', type=int, nargs=2, default=[2, 3], help='Select degree of polynomial for 2D smoothing (uT-pT)')
     parser.add_argument('--plotEigenVar', action="store_true", help='Plot eigen variations (it actually produces histogram ratios alt/nomi)')
@@ -417,7 +418,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     ROOT.TH1.SetDefaultSumw2()
-    
+
+    if not args.outfilename.endswith(".pkl.lz4"):
+        if "." in args.outfilename:
+            logger.error(f"Invalid extension for output file name {args.outfilename}. It must be 'pkl.lz4'")
+            quit()
+        else:
+            logger.info(f"Adding pkl.lz4 extension for output file name {args.outfilename}")
+            args.outfilename += ".pkl.lz4"        
     #effSmoothFile = "/home/m/mciprian/efficiencieswremnantsmceff2d.root"
     # effHist = {}
     # tfile = safeOpenFile(effSmoothFile)
@@ -452,11 +460,14 @@ if __name__ == "__main__":
         for ret in rets:
             if ret != None:
                 resultDict[ret.name] = ret
-        
-    outfile = outdir + "smoothSF3D.pkl.lz4"
+                
+    resultDict.update({"meta_info" : output_tools.metaInfoDict(args=args)})
+    
+    outfile = outdir + args.outfilename
     logger.info(f"Going to store histograms in file {outfile}")
     logger.info(f"All keys: {resultDict.keys()}")
     time0 = time.time()
     with lz4.frame.open(outfile, 'wb') as f:
         pickle.dump(resultDict, f, protocol=pickle.HIGHEST_PROTOCOL)
     logger.info(f"Output saved: {time.time()-time0}")
+    

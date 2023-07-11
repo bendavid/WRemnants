@@ -82,20 +82,22 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
 
     dict_SF3D = None
     if len(eff_types_3D):
-        # os.system(f"xrdcp root://eoscms.cern.ch//eos/cms/store/cmst3/group/wmass/w-mass-13TeV/scaleFactors3D_boost/smoothSF3D_safeAntiSF_effiNoDphiCut.pkl.lz4 {data_dir}/testMuonSF/")
-        # first try the eos mount (works with CI on cern machine,
-        # if it doesn't work try local file (assuming it was already copied, otherwise make sure you copy it first)
-        fileSF3D_name = "smoothSF3D_safeAntiSF_effiNoDphiCut.pkl.lz4"
-        fileSF3D_eos = f"/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/scaleFactors3D_boost/{fileSF3D_name}"
-        fileSF3D_local = f"{data_dir}/testMuonSF/{fileSF3D_name}"
-        if os.path.isfile(fileSF3D_eos):
-            fileSF3D = fileSF3D_eos
-        elif os.path.isfile(fileSF3D_local):
-            logger.warning(f"Couldn't read 3D SF file {fileSF3D_eos}, trying local file if it exists")
-            fileSF3D = fileSF3D_local
-        else:
-            logger.error(f"Couldn't find 3D SF file {fileSF3D_local}, make sure you have it.")
-            quit()  
+        ## first try the eos mount (works with CI on cern machine,
+        ## if it doesn't work try local file (assuming it was already copied, otherwise make sure you copy it first)
+        # fileSF3D_name = "smoothSF3D_safeAntiSF_effiNoDphiCut_fixIsoAntitrigger.pkl.lz4"
+        # fileSF3D_eos = f"/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/scaleFactors3D_boost/{fileSF3D_name}"
+        # fileSF3D_local = f"{data_dir}/testMuonSF/{fileSF3D_name}"
+        # if os.path.isfile(fileSF3D_eos):
+        #     fileSF3D = fileSF3D_eos
+        # elif os.path.isfile(fileSF3D_local):
+        #     logger.warning(f"Couldn't read 3D SF file {fileSF3D_eos}, trying local file if it exists")
+        #     fileSF3D = fileSF3D_local
+        # else:
+        #     logger.error(f"Couldn't find 3D SF file {fileSF3D_local}, make sure you have it.")
+        #     quit()
+        #
+        fileSF3D = f"{data_dir}/testMuonSF/smoothSF3D_safeAntiSF_effiNoDphiCut_fixIsoAntitrigger.pkl.lz4"
+        #fileSF3D = "/cvmfs/cms.cern.ch/phys_generator/gridpacks/slc6_amd64_gcc700/13TeV/powheg/Vj_NNLOPS/smoothSF3D_safeAntiSF_effiNoDphiCut_fixIsoAntitrigger_V1.pkl.lz4.tgz"
         logger.info(f"3D SF read from {fileSF3D}")
         with lz4.frame.open(fileSF3D) as f3D:
             dict_SF3D = pickle.load(f3D)
