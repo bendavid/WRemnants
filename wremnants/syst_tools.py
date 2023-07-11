@@ -1,3 +1,4 @@
+import ROOT
 import hist
 import numpy as np
 from utilities import boostHistHelpers as hh, common, logging
@@ -308,23 +309,56 @@ def add_QCDbkg_jetPt_hist(results, df, nominal_axes, nominal_cols, base_name="no
     dQCDbkGVar = dQCDbkGVar.Filter(f"passMT || Sum(goodCleanJetsPt{jet_pt})>=1")
     qcdJetPt = dQCDbkGVar.HistoBoost(name, nominal_axes, [*nominal_cols, "nominal_weight"], storage=hist.storage.Double())
     results.append(qcdJetPt)
-                                        
-def add_muon_efficiency_unc_hists(results, df, helper_stat, helper_syst, axes, cols, base_name="nominal", is_w_like=False, addhelicity=False):
 
-    if is_w_like:
-        muon_columns_stat = ["trigMuons_pt0", "trigMuons_eta0", "trigMuons_charge0", "nonTrigMuons_pt0", "nonTrigMuons_eta0", "nonTrigMuons_charge0"]
-        muon_columns_syst = ["trigMuons_pt0", "trigMuons_eta0", "trigMuons_SApt0", "trigMuons_SAeta0", "trigMuons_charge0",
-            "nonTrigMuons_pt0", "nonTrigMuons_eta0", "nonTrigMuons_SApt0", "nonTrigMuons_SAeta0", "nonTrigMuons_charge0"]
+def add_muon_efficiency_unc_hists(results, df, helper_stat, helper_syst, axes, cols, base_name="nominal", what_analysis=ROOT.wrem.AnalysisType.Wmass, smooth3D=False, addhelicity=False):
+    # TODO: update for dilepton
+    if what_analysis == ROOT.wrem.AnalysisType.Dilepton:
+        muon_columns_stat = ["trigMuons_pt0", "trigMuons_eta0",
+                             "trigMuons_uT0", "trigMuons_charge0", "trigMuons_passTrigger0",
+                             "nonTrigMuons_pt0", "nonTrigMuons_eta0",
+                             "nonTrigMuons_uT0", "nonTrigMuons_charge0", "nonTrigMuons_passTrigger0"]
+        muon_columns_syst = ["trigMuons_pt0", "trigMuons_eta0",
+                             "trigMuons_SApt0", "trigMuons_SAeta0",
+                             "trigMuons_uT0", "trigMuons_charge0", "trigMuons_passTrigger0",
+                             "nonTrigMuons_pt0", "nonTrigMuons_eta0",
+                             "nonTrigMuons_SApt0", "nonTrigMuons_SAeta0",
+                             "nonTrigMuons_uT0", "nonTrigMuons_charge0", "nonTrigMuons_passTrigger0"]
+    elif what_analysis == ROOT.wrem.AnalysisType.Wlike:
+        muon_columns_stat = ["trigMuons_pt0", "trigMuons_eta0",
+                             "trigMuons_uT0", "trigMuons_charge0",
+                             "nonTrigMuons_pt0", "nonTrigMuons_eta0",
+                             "nonTrigMuons_uT0", "nonTrigMuons_charge0"]
+        muon_columns_syst = ["trigMuons_pt0", "trigMuons_eta0",
+                             "trigMuons_SApt0", "trigMuons_SAeta0",
+                             "trigMuons_uT0", "trigMuons_charge0",
+                             "nonTrigMuons_pt0", "nonTrigMuons_eta0",
+                             "nonTrigMuons_SApt0", "nonTrigMuons_SAeta0",
+                             "nonTrigMuons_uT0", "nonTrigMuons_charge0"]
     else:
-        # FIXME: this should read standalone variables when effStat is for tracking
-        muon_columns_stat = ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0"]
-        muon_columns_syst = ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso"]
+        muon_columns_stat = ["goodMuons_pt0", "goodMuons_eta0",
+                             "goodMuons_uT0", "goodMuons_charge0"]
+        muon_columns_syst = ["goodMuons_pt0", "goodMuons_eta0",
+                             "goodMuons_SApt0", "goodMuons_SAeta0",
+                             "goodMuons_uT0", "goodMuons_charge0",
+                             "passIso"]
+        
+    if not smooth3D:
+        # will use different helpers and member functions
+        muon_columns_stat = [x for x in muon_columns_stat if "_uT0" not in x]
+        muon_columns_syst = [x for x in muon_columns_syst if "_uT0" not in x]
 
+    # change variables for tracking, to use standalone variables
+    muon_columns_stat_tracking = [x.replace("_pt0", "_SApt0").replace("_eta0", "_SAeta0") for x in muon_columns_stat]
+        
     for key,helper in helper_stat.items():
-        if "iso" in key and not is_w_like:
-            df = df.Define(f"effStatTnP_{key}_tensor", helper, [*muon_columns_stat, "passIso", "nominal_weight"])        
+        if "tracking" in key:
+            muon_columns_stat_step = muon_columns_stat_tracking
+        elif "iso" in key and what_analysis == ROOT.wrem.AnalysisType.Wmass:
+            muon_columns_stat_step = muon_columns_stat + ["passIso"]
         else:
-            df = df.Define(f"effStatTnP_{key}_tensor", helper, [*muon_columns_stat, "nominal_weight"])
+            muon_columns_stat_step = muon_columns_stat
+            
+        df = df.Define(f"effStatTnP_{key}_tensor", helper, [*muon_columns_stat_step, "nominal_weight"])
         name = Datagroups.histName(base_name, syst=f"effStatTnP_{key}")
         if addhelicity:
             helper_helicity, helper_helicity_axes = make_muon_eff_stat_helpers_helicity(helper)
@@ -339,7 +373,7 @@ def add_muon_efficiency_unc_hists(results, df, helper_stat, helper_syst, axes, c
     if addhelicity:
         helper_syst_helicity, helper_syst_helicity_axes = make_muon_eff_syst_helper_helicity(helper_syst)
         df = df.Define("effSystTnP_weight_ByHelicity_tensor", helper_syst_helicity, ["effSystTnP_weight", "helWeight_tensor"])
-        effSystTnP = df.HistoBoost(name, axes, [*cols, "effSystTnP_weight_ByHelicity_tensor"], tensor_axes = helper_syst_helicity_axes)
+        effSystTnP = df.HistoBoost(name, axes, [*cols, "effSystTnP_weight_ByHelicity_tensor"], tensor_axes = helper_syst_helicity_axes, storage=hist.storage.Double())
     else:
         effSystTnP = df.HistoBoost(name, axes, [*cols, "effSystTnP_weight"], tensor_axes = helper_syst.tensor_axes, storage=hist.storage.Double())
     results.append(effSystTnP)

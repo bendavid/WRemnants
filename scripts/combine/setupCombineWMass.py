@@ -132,9 +132,17 @@ def main(args,xnorm=False):
         cardTool.setWriteByCharge(False)
         cardTool.setHistName(histName)
         cardTool.setNominalName(histName)
+        datagroups.select_xnorm_groups() # only keep processes where xnorm is defined
         if args.unfolding:
             cardTool.setProjectionAxes(["count"])
         else:
+            if wmass:
+                # add gen charge as additional axis
+                datagroups.groups["Wmunu"].add_member_axis("qGen", datagroups.results, 
+                    member_filters={-1: lambda x: x.name.startswith("Wminusmunu"), 1: lambda x: x.name.startswith("Wplusmunu")}, 
+                    hist_filter=lambda x: x.startswith("xnorm"))
+                datagroups.deleteGroup("Fake")
+            cardTool.unroll = True
             # remove projection axes from gen axes, otherwise they will be integrated before
             datagroups.setGenAxes([a for a in datagroups.gen_axes if a not in cardTool.project])
     if args.unfolding:
@@ -226,19 +234,20 @@ def main(args,xnorm=False):
 
     if not args.noEfficiencyUnc and not xnorm:
 
-        if wmass:
-            cardTool.addSystematic("sf2d", 
-                processes=allMCprocesses_noQCDMC,
-                outNames=["sf2dDown","sf2dUp"],
-                group="SF3Dvs2D",
-                scale = 1.0,
-                mirror = True,
-                mirrorDownVarEqualToNomi=True,
-                noConstraint=False,
-                systAxes=[],
-                #labelsByAxis=["downUpVar"],
-                passToFakes=passSystToFakes,
-            )
+        ## this is only needed when using 2D SF from 3D with ut-integration, let's comment for now
+        # if wmass:
+        #     cardTool.addSystematic("sf2d", 
+        #         processes=allMCprocesses_noQCDMC,
+        #         outNames=["sf2dDown","sf2dUp"],
+        #         group="SF3Dvs2D",
+        #         scale = 1.0,
+        #         mirror = True,
+        #         mirrorDownVarEqualToNomi=False, # keep False, True is pathological
+        #         noConstraint=False,
+        #         systAxes=[],
+        #         #labelsByAxis=["downUpVar"],
+        #         passToFakes=passSystToFakes,
+        #     )
 
         chargeDependentSteps = common.muonEfficiency_chargeDependentSteps
         effTypesNoIso = ["reco", "tracking", "idip", "trigger"]

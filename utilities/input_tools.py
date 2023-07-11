@@ -354,7 +354,7 @@ def safeGetRootObject(fileObject, objectName, quitOnFail=True, silent=False, det
     obj = fileObject.Get(objectName)
     if obj == None:
         if not silent:
-            print(f"Error getting {objectName} from file {fileObject.GetName()}")
+            logger.error(f"Error getting {objectName} from file {fileObject.GetName()}")
         if quitOnFail:
             quit()
         return None
@@ -367,14 +367,14 @@ def safeOpenRootFile(fileName, quitOnFail=True, silent=False, mode="READ"):
     fileObject = ROOT.TFile.Open(fileName, mode)
     if not fileObject or fileObject.IsZombie():
         if not silent:
-            print(f"Error when opening file {fileName}")
+            logger.error(f"Error when opening file {fileName}")
         if quitOnFail:
             quit()
         else:
             return None
     elif not fileObject.IsOpen():
         if not silent:
-            print(f"File {fileName} was not opened")
+            logger.error(f"File {fileName} was not opened")
         if quitOnFail:
             quit()
         else:

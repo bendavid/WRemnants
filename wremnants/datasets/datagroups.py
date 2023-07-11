@@ -290,6 +290,10 @@ class Datagroups(object):
                     logger.debug("Applying global action")
                     h = self.globalAction(h)
 
+                if forceNonzero:
+                    logger.debug("force non zero")
+                    h = hh.clipNegativeVals(h, createNew=False)
+
                 scale = self.processScaleFactor(member)
                 scale *= scaleToNewLumi
                 if group.scale:
@@ -298,10 +302,6 @@ class Datagroups(object):
                 if not np.isclose(scale, 1, rtol=0, atol=1e-10):
                     logger.debug(f"Scale hist with {scale}")
                     h = hh.scaleHist(h, scale, createNew=False)
-
-                if forceNonzero:
-                    logger.debug("force non zero")
-                    hh.clipNegativeVals(h, createNew=False)
 
                 hasPartialSumForFake = False
                 if hasFake and procName != nameFake:
@@ -314,7 +314,7 @@ class Datagroups(object):
                         scaleProcForFake = self.groups[nameFake].scale(member)
                         logger.debug(f"Summing hist {read_syst} for {member.name} to {nameFake} with scale = {scaleProcForFake}")
                         hProcForFake = scaleProcForFake * h
-                        histForFake = hh.addHists(hProcForFake, histForFake, createNew=False) if histForFake else hProcForFake
+                        histForFake = hh.addHists(histForFake, hProcForFake, createNew=False) if histForFake else hProcForFake
                                 
                 # The following must be done when the group is not Fake, or when the previous part for fakes was not done
                 # For fake this essentially happens when the process doesn't have the syst, so that the nominal is used
@@ -323,15 +323,16 @@ class Datagroups(object):
                         logger.debug(f"Summing nominal hist instead of {syst} to {nameFake} for {member.name}")
                     else:
                         logger.debug(f"Summing {read_syst} to {procName} for {member.name}")
-                    group.hists[label] = hh.addHists(h, group.hists[label], createNew=False) if group.hists[label] else h
+
+                    group.hists[label] = hh.addHists(group.hists[label], h, createNew=False) if group.hists[label] else h
                     logger.debug("Sum done")
-                
+
             # now sum to fakes the partial sums which where not already done before
             # (group.hists[label] contains only the contribution from nominal histograms).
             # Then continue with the rest of the code as usual
             if hasFake and procName == nameFake:
                 if histForFake is not None:
-                    group.hists[label] = hh.addHists(histForFake, group.hists[label], createNew=False) if group.hists[label] else histForFake
+                    group.hists[label] = hh.addHists(group.hists[label], histForFake, createNew=False) if group.hists[label] else histForFake
 
             # Can use to apply common rebinning or selection on top of the usual one
             if group.rebinOp:

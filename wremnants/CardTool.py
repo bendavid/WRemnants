@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from wremnants import histselections as sel
 from utilities import boostHistHelpers as hh, common, output_tools, logging
 import narf
 import ROOT
@@ -48,6 +49,7 @@ class CardTool(object):
         self.pseudoDataProcsRegexp = None
         self.excludeSyst = None
         self.writeByCharge = True
+        self.unroll = False # unroll final histogram before writing to root
         self.keepSyst = None # to override previous one with exceptions for special cases
         #self.loadArgs = {"operation" : "self.loadProcesses (reading hists from file)"}
         self.lumiScale = 1.
@@ -818,6 +820,10 @@ class CardTool(object):
             if len(axes) < len(h.axes.name):
                 logger.debug(f"Projecting {h.axes.name} into {axes}")
                 h = h.project(*axes)
+
+        if self.unroll:
+            logger.debug(f"Unrolling histogram")
+            h = sel.unrolledHist(h, axes)
 
         if not self.nominalDim:
             self.nominalDim = h.ndim

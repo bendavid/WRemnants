@@ -24,10 +24,10 @@ def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False, cutoff_
     if allowBroadcast:
         h1 = broadcastSystHist(h1, h2)
         h2 = broadcastSystHist(h2, h1)
-
+        
     storage = h1.storage_type() if h1.storage_type == h2.storage_type else hist.storage.Double()
     outh = hist.Hist(*h1.axes, storage=storage) if createNew else h1
-
+    
     h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2)
 
     # Careful not to overwrite the values of h1
@@ -36,10 +36,13 @@ def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False, cutoff_
     # Apply cutoff to both numerator and denominator
     cutoff_criteria = np.abs(h2vals) > cutoff
     # By the argument that 0/0 = 1
-    out[(np.abs(h2vals) < cutoff) & (np.abs(h1vals) < cutoff)] = 1.
-    if not createNew:
-        out[cutoff_criteria] = cutoff_val
+    # should use commented code below, but testing since I am not sure it does what I want
+    out[(np.abs(h2vals) < cutoff) & (np.abs(h1vals) < cutoff)] = cutoff_val
     val = np.divide(h1vals, h2vals, out=out, where=cutoff_criteria)
+#     out[(np.abs(h2vals) < cutoff) & (np.abs(h1vals) < cutoff)] = 1.
+#     if not createNew:
+#         out[cutoff_criteria] = cutoff_val
+#     val = np.divide(h1vals, h2vals, out=out, where=cutoff_criteria)
 
     if outh.storage_type == hist.storage.Weight:
         relvars = relVariances(h1vals, h2vals, h1vars, h2vars, cutoff=cutoff)
@@ -121,22 +124,33 @@ def multiplyHists(h1, h2, allowBroadcast=True, createNew=True):
 
     return outh
 
-def addHists(h1, h2, allowBroadcast=True, createNew=True):
+def addHists(h1, h2, allowBroadcast=True, createNew=True, scale1=None, scale2=None):
     if allowBroadcast:
         h1 = broadcastSystHist(h1, h2)
         h2 = broadcastSystHist(h2, h1)
-
     h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2)
+    hasWeights = h1._storage_type() == hist.storage.Weight() and h2._storage_type() == hist.storage.Weight()
+    # avoid scaling the variance if not needed, to save some time
+    # I couldn't use hvals *= scale, otherwise I get this error: ValueError: output array is read-only
+    if scale1 is not None:
+        h1vals = scale1 * h1vals
+        if hasWeights:
+            h1vars = (scale1*scale1) * h1vars
+    if scale2 is not None:
+        h2vals = scale2 * h2vals
+        if hasWeights:
+            h2vars = (scale2*scale2) * h2vars
     outh = h1
     if createNew:
-        if h1.storage_type != hist.storage.Weight or h2.storage_type != hist.storage.Weight:
-            return hist.Hist(*outh.axes, data=h1vals+h2vals)
+        if not hasWeights:
+            return hist.Hist(*outh.axes, data=h1vals + h2vals)
         else:
             return hist.Hist(*outh.axes, storage=hist.storage.Weight(),
-                            data=np.stack((h1vals+h2vals, h1vars+h2vars), axis=-1))            
+                            data=np.stack((h1vals + h2vals, h1vars + h2vars), axis=-1))            
     else:
+        # FIXME: check this one
         np.add(h1vals, h2vals, out=h1vals if h1.shape == outh.shape else h2vals)
-        if h1.storage_type == hist.storage.Weight and h2.storage_type == hist.storage.Weight:
+        if hasWeights:
             np.add(h1vars, h2vars, out=h1vars if h1.shape == outh.shape else h2vars)
         return outh                
 
