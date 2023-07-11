@@ -499,7 +499,7 @@ class Datagroups(object):
         if gen_axes != None:
             self.gen_axes = gen_axes
         else:
-            # infere gen axes from metadata
+            # infer gen axes from metadata
             args = self.getMetaInfo()["args"]
             if args.get("unfolding", False) is False:
                 self.gen_axes = None

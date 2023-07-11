@@ -199,10 +199,9 @@ def main(args,xnorm=False):
     )
     
     if args.doStatOnly:
-        # print a card with only mass weights and a dummy syst
-        cardTool.addLnNSystematic("dummy", processes=["Top", "Diboson"] if wmass else ["Other"], size=1.001, group="dummy")
+        # print a card with only mass weights, dummy syst no longer needed since combinetf is fixed now
         cardTool.writeOutput(args=args, xnorm=xnorm)
-        logger.info("Using option --doStatOnly: the card was created with only mass weights and a dummy LnN syst on all processes")
+        logger.info("Using option --doStatOnly: the card was created with only mass nuisance parameter")
         return
 
     if not xnorm:
@@ -216,7 +215,6 @@ def main(args,xnorm=False):
                                    passToFakes=passSystToFakes)
 
         else:
-            # TOCHECK: no fakes here, most likely
             cardTool.addLnNSystematic("luminosity", processes=allMCprocesses_noQCDMC, size=1.012, group="luminosity")
     else:
         pass
