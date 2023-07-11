@@ -14,7 +14,7 @@ logger = logging.child_logger(__name__)
 
 narf.clingutils.Declare('#include "muon_efficiencies_smooth.h"')
 
-data_dir = f"{pathlib.Path(__file__).parent}/data/"
+data_dir = common.data_dir
 
 def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSmooth_GtoH.root",
                                         era = None, is_w_like = False, max_pt = np.inf,
