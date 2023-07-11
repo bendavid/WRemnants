@@ -193,8 +193,19 @@ def main(args,xnorm=False):
     constrainedZ = constrainMass and not wmass
     label = 'W' if wmass else 'Z'
     massSkip = [(f"^massShift{label}{i}MeV.*",) for i in range(0, 110 if constrainedZ else 100, 10)]
+    if wmass:
+        cardTool.addSystematic(f"massWeightZ",
+                                processes=single_v_nonsig_samples,
+                                group=f"massShiftZ",
+                                skipEntries=massSkip,
+                                mirror=False,
+                                noConstraint=False,
+                                systAxes=["massShift"],
+                                passToFakes=passSystToFakes,
+        )
+
     if not (constrainMass or wmass):
-        massSkip.append(("^massShiftZ2p1MeV.*",))
+        massSkip.append(("^massShift.*2p1MeV.*",))
 
     cardTool.addSystematic(f"massWeight{label}",
                             processes=signal_samples_inctau,

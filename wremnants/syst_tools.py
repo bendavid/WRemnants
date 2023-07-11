@@ -231,7 +231,7 @@ def massWeightNames(matches=None, proc=""):
     names = [f"massShift{proc[0] if len(proc) else proc}{int(abs(central-i)*10)}MeV{'' if i == central else ('Down' if i < central else 'Up')}" for i in range(nweights)]
     if proc and proc in common.zprocs_all:
         # This is the PDG uncertainty (turned off for now since it doesn't seem to have been read into the nano)
-        names.extend(["massShift2p1MeVDown", "massShift2p1MeVUp"])
+        names.extend(["massShiftZ2p1MeVDown", "massShiftZ2p1MeVUp"])
 
     # If name is "" it won't be stored
     return [x if not matches or any(y in x for y in matches) else "" for x in names]
