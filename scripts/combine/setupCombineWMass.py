@@ -197,7 +197,7 @@ def main(args,xnorm=False):
         cardTool.addSystematic(f"massWeightZ",
                                 processes=single_v_nonsig_samples,
                                 group=f"massShiftZ",
-                                skipEntries=massSkip,
+                                skipEntries=massSkip+[("^massShift.*100MeV.*",)],
                                 mirror=False,
                                 noConstraint=False,
                                 systAxes=["massShift"],
@@ -210,7 +210,7 @@ def main(args,xnorm=False):
     cardTool.addSystematic(f"massWeight{label}",
                             processes=signal_samples_inctau,
                             group=f"massShift{label}",
-                            skipEntries=massSkip+["^massShift.*100MeV.*"],
+                            skipEntries=massSkip,
                             mirror=False,
                             #TODO: Name this
                             noConstraint=not constrainMass,
