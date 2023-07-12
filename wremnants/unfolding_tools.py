@@ -123,7 +123,7 @@ def select_fiducial_space(df, accept=True, mode="wmass", pt_min=26, pt_max=55, m
     else:
         df = df.Filter("fiducial == 0")
 
-    return df        
+    return df
 
 def add_xnorm_histograms(results, df, args, dataset_name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols):
     # add histograms before any selection
