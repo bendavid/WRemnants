@@ -67,8 +67,8 @@ jobs:
           submodules: 'recursive'
           lfs: 'true'
 
-      - name: lfs pull
-        run: git lfs pull
+      - name: lfs checkout
+        run: git lfs checkout
 
       - name: setup unscheduled
         if: github.event_name != 'schedule'
@@ -139,8 +139,8 @@ jobs:
           submodules: 'recursive'
           lfs: 'true'
 
-      - name: lfs pull
-        run: git lfs pull
+      - name: lfs checkout
+        run: git lfs checkout
 
       - name: wmass setup lumi scale
         if: github.event_name == 'pull_request' || github.event.schedule == '30 5 * * 1-5'
@@ -181,8 +181,8 @@ jobs:
           submodules: 'recursive'
           lfs: 'true'
 
-      - name: lfs pull
-        run: git lfs pull
+      - name: lfs checkout
+        run: git lfs checkout
 
       - name: test
         run: echo "The web dir is $WEB_DIR plot dir is ${PLOT_DIR}"
@@ -223,8 +223,8 @@ jobs:
           submodules: 'recursive'
           lfs: 'true'
 
-      - name: lfs pull
-        run: git lfs pull
+      - name: lfs checkout
+        run: git lfs checkout
 
       - name: lowpu w analysis
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_lowPU.py -j $NTHREADS --maxFiles $MAX_FILES --verbose 4 -o $WREMNANTS_OUTDIR
@@ -274,8 +274,8 @@ jobs:
           submodules: 'recursive'
           lfs: 'true'
 
-      - name: lfs pull
-        run: git lfs pull
+      - name: lfs checkout
+        run: git lfs checkout
 
       - name: wlike analysis
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_wlike_with_mu_eta_pt.py -o $WREMNANTS_OUTDIR -j $NTHREADS --maxFiles $MAX_FILES --verbose 4 --forceDefaultName --unfolding
@@ -308,8 +308,8 @@ jobs:
           submodules: 'recursive'
           lfs: 'true'
 
-      - name: lfs pull
-        run: git lfs pull
+      - name: lfs checkout
+        run: git lfs checkout
 
       - name: wlike plotting
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal --nominalRef nominal --hists pt eta pt-eta -p $WEB_DIR -f $PLOT_DIR -a wlike $HIST_FILE variation --varName nominal_uncorr --varLabel MiNNLO --colors red
@@ -341,8 +341,8 @@ jobs:
           submodules: 'recursive'
           lfs: 'true'
 
-      - name: lfs pull
-        run: git lfs pull
+      - name: lfs checkout
+        run: git lfs checkout
 
       - name: wlike combine unfolding setup
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $HIST_FILE --verbose 4 --lumiScale $LUMI_SCALE --unfolding --noEfficiencyUnc --minnloScaleUnc integrated -o $WREMNANTS_OUTDIR
@@ -379,8 +379,8 @@ jobs:
           submodules: 'recursive'
           lfs: 'true'
 
-      - name: lfs pull
-        run: git lfs pull
+      - name: lfs checkout
+        run: git lfs checkout
 
       - name: dilepton analysis
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_dilepton.py -o $WREMNANTS_OUTDIR -j $NTHREADS --maxFiles $MAX_FILES --verbose 4 --axes ptll yll --forceDefaultName --unfolding
@@ -417,8 +417,8 @@ jobs:
           submodules: 'recursive'
           lfs: 'true'
 
-      - name: lfs pull
-        run: git lfs pull
+      - name: lfs checkout
+        run: git lfs checkout
 
       - name: test
         run: echo "The web dir is $WEB_DIR plot dir is ${PLOT_DIR}"
@@ -462,8 +462,8 @@ jobs:
           submodules: 'recursive'
           lfs: 'true'
 
-      - name: lfs pull
-        run: git lfs pull
+      - name: lfs checkout
+        run: git lfs checkout
 
       # As of now the gen output isn't used for anything, so there's no point in running more files
       - name: setup nonpr
