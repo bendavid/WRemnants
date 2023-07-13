@@ -534,7 +534,7 @@ class CardTool(object):
             procDict = self.datagroups.getDatagroups()
             hnom = procDict[proc].hists[self.nominalName]
             if systInfo["doActionBeforeMirror"] and systInfo["action"]:
-                h =systInfo["action"](h, **systInfo["actionArgs"])
+                h = systInfo["action"](h, **systInfo["actionArgs"])
                 self.outfile.cd() # needed to restore the current directory in case the action opens a new root file
             if systInfo["mirror"]:
                 h = hh.extendHistByMirror(h, hnom,
