@@ -29,6 +29,7 @@ parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for lumin
 # parser.add_argument("--vqtTestCorrectionStep", default=2, choices=[0, 1, 2], type=int , help="Test of isolation SFs dependence on V q_T projection. Index to determine up to which step the 3D SFs are applied. Values are 0,1,2")
 # parser.add_argument("--vqt3dsmoothing", action="store_true", help="3D Smoothing")
 parser.add_argument("--noGenMatchMC", action='store_true', help="Don't use gen match filter for prompt muons with MC samples (note: QCD MC never has it anyway)")
+parser.add_argument("--halfMCstat", action='store_true', help="Test half MC stat, selecting odd events")
 parser.add_argument("--makeMCefficiency", action="store_true", help="Save yields vs eta-pt-ut-passMT-passIso-passTrigger to derive 3D efficiencies for MC isolation and trigger (can run also with --onlyMainHistograms)")
 args = parser.parse_args()
 
@@ -237,7 +238,8 @@ def build_graph(df, dataset):
     # if not (args.vqt3dsmoothing and (args.vqtTestStep < 2)):
     #     df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
 
-    #df = df.Filter("event % 2 == 1") # test with odd/even events
+    if args.halfMCstat and not dataset.is_data:
+        df = df.Filter("event % 2 == 1") # test with odd/even events
 
     df = muon_calibration.define_corrected_muons(df, cvh_helper, jpsi_helper, args, dataset, smearing_helper, bias_helper)
 
