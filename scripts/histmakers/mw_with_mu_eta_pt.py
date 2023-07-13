@@ -16,7 +16,7 @@ import pathlib
 import os
 import numpy as np
 
-data_dir = f"{pathlib.Path(__file__).parent}/../../wremnants/data/"
+data_dir = common.data_dir
 parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency (legacy option for tests)")
 parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for luminosity in excess to 1 (e.g. 1.012 means 1.2\%)", default=1.012)
 parser.add_argument("--vqtTest", action="store_true", help="Test of isolation SFs dependence on V q_T projection (at the moment just for the W)")

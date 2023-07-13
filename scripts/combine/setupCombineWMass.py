@@ -11,7 +11,7 @@ import copy
 import math
 import time
 
-data_dir = f"{pathlib.Path(__file__).parent}/../../wremnants/data/"
+data_dir = common.data_dir
 
 def make_parser(parser=None):
     if not parser:

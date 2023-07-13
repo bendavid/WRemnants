@@ -4,10 +4,11 @@ import hist
 import narf
 import numpy as np
 import boost_histogram as bh
+from utilities import common
 
 narf.clingutils.Declare('#include "vertex.h"')
 
-data_dir = f"{pathlib.Path(__file__).parent}/data/"
+data_dir = common.data_dir
 
 def make_vertex_helper(era = None,
                        filename = data_dir + "/vertex/vertexPileupWeights.root"):

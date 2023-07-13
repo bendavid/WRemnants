@@ -6,7 +6,7 @@ import os
 from utilities import logging
 
 wremnants_dir = f"{pathlib.Path(__file__).parent}/../wremnants"
-data_dir = f"{wremnants_dir}/data/"
+data_dir =  f"{pathlib.Path(__file__).parent}/../wremnants-data/data/"
 
 wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP", 'WplusToMuNu_horace-lo-photos', 'WplusToMuNu_horace-qed', 'WplusToMuNu_horace-nlo', 'WminusToMuNu_horace-lo-photos', 'WminusToMuNu_horace-qed', 'WminusToMuNu_horace-nlo']
 zprocs = ["ZmumuPostVFP", "ZtautauPostVFP", "ZmumuMiNLO", "ZmumuNNLOPS", 'ZToMuMu_horace-lo-photos', 'ZToMuMu_horace-qed', 'ZToMuMu_horace-nlo']
