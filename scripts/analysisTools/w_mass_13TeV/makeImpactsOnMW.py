@@ -184,7 +184,8 @@ if __name__ == "__main__":
         bincontent = nuisGroup_nameVal[k] if not args.scaleToMeV else nuisGroup_nameVal[k] * args.prefitUncertainty
         if compare:
             print(k)
-            bincontentAlt = nuisGroup_nameVal_alt[k.replace("QCDscaleWPtHelicityMiNNLO","QCDscalePtHelicityMiNNLO")]
+            #bincontentAlt = nuisGroup_nameVal_alt[k.replace("QCDscaleWPtHelicityMiNNLO","QCDscalePtHelicityMiNNLO")]
+            bincontentAlt = nuisGroup_nameVal_alt[k]
             if args.scaleToMeV: bincontentAlt *= args.prefitUncertainty
             print("%s: %2.3f / %2.3f" % (k,bincontent, bincontentAlt))
         else:
@@ -197,7 +198,8 @@ if __name__ == "__main__":
         h1.GetXaxis().SetBinLabel(ik+1, label)
         h1.SetBinContent(ik+1,bincontent)
         if compare:
-            bincontentAlt = nuisGroup_nameVal_alt[k.replace("QCDscaleWPtHelicityMiNNLO","QCDscalePtHelicityMiNNLO")]
+            #bincontentAlt = nuisGroup_nameVal_alt[k.replace("QCDscaleWPtHelicityMiNNLO","QCDscalePtHelicityMiNNLO")]
+            bincontentAlt = nuisGroup_nameVal_alt[k]
             if args.scaleToMeV: bincontentAlt *= args.prefitUncertainty
             h2.SetBinContent(ik+1,bincontentAlt)
     if args.showTotal:
