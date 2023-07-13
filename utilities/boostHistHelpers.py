@@ -36,7 +36,6 @@ def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False, cutoff_
     # Apply cutoff to both numerator and denominator
     cutoff_criteria = np.abs(h2vals) > cutoff
     # By the argument that 0/0 = 1
-    # should use commented code below, but testing since I am not sure it does what I want
     out[(np.abs(h2vals) < cutoff) & (np.abs(h1vals) < cutoff)] = cutoff_val
     val = np.divide(h1vals, h2vals, out=out, where=cutoff_criteria)
 #     out[(np.abs(h2vals) < cutoff) & (np.abs(h1vals) < cutoff)] = 1.
@@ -143,16 +142,19 @@ def addHists(h1, h2, allowBroadcast=True, createNew=True, scale1=None, scale2=No
     outh = h1
     if createNew:
         if not hasWeights:
-            return hist.Hist(*outh.axes, data=h1vals + h2vals)
+            return hist.Hist(*outh.axes, data=h1vals+h2vals)
         else:
             return hist.Hist(*outh.axes, storage=hist.storage.Weight(),
                             data=np.stack((h1vals + h2vals, h1vars + h2vars), axis=-1))            
     else:
-        # FIXME: check this one
-        np.add(h1vals, h2vals, out=h1vals if h1.shape == outh.shape else h2vals)
+        outvals = h1vals if h1.shape == outh.shape else h2vals
+        np.add(h1vals, h2vals, out=outvals)
+        outh.values(flow=True)[...] = outvals
         if hasWeights:
-            np.add(h1vars, h2vars, out=h1vars if h1.shape == outh.shape else h2vars)
-        return outh                
+            outvars = h1vars if h1.shape == outh.shape else h2vars
+            np.add(h1vars, h2vars, out=outvars)
+            outh.variances(flow=True)[...] = outvars
+        return outh
 
 def sumHists(hists):
     return reduce(addHists, hists)
