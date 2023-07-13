@@ -13,7 +13,7 @@ import math
 import time
 import pathlib
 
-data_dir = f"{pathlib.Path(__file__).parent}/../../wremnants/data/"
+data_dir = common.data_dir
 
 logging.basicConfig(level=logging.INFO)
 
