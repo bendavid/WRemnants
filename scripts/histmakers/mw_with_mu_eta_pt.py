@@ -73,14 +73,17 @@ axes_WeffMC = [axis_eta, axis_pt_eff, axis_ut, axis_charge, axis_passIso, axis_p
 groups_to_aggregate = args.aggregateGroups
 
 if args.unfolding:
+    
     unfolding_axes, unfolding_cols = differential.get_pt_eta_axes(args.genBins[0], template_minpt, template_maxpt, args.genBins[1])
     datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wmunu")
     groups_to_aggregate.append("BkgWmunu")
+    
 elif args.addHelicityHistos:
+
     #list(range(0,50,5)).append(np.inf) ,
     axis_ptVgen = hist.axis.Variable(
         [0., 5., 10., 15., 20., 25., 30., 35., 40., 45., 50.],
-        name = "ptVgen", underflow=False, overflow=False
+        name = "ptVgenSig", underflow=False, overflow=False
     )
     #axis_ptVgen.append(np.inf)
     #Taken from w-z gen histomaker     
@@ -88,10 +91,10 @@ elif args.addHelicityHistos:
         #[0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4., 5., np.inf], 
         # [0, 0.25, 0.5, 0.75, 1., 1.5, 2.5],
         [0, 0.5, 1., 1.5, 2.0, 2.5],
-        name = "absYVgen", underflow=False, overflow=False
+        name = "absYVgenSig", underflow=False, overflow=False
     )
     theoryAgnostic_axes = [axis_absYVgen, axis_ptVgen]
-    theoryAgnostic_cols = ["absYVgen", "ptVgen"]
+    theoryAgnostic_cols = ["absYVgen", "ptVgen"] # name of the branch, not of the axis
     axis_helicity=hist.axis.Integer(-1, 5, name="helicity", overflow=False, underflow=False)
     # the following just prepares the existence of the group for out-of-acceptance signal, but doesn't create or define the histogram yet
     datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wmunu")
@@ -114,17 +117,26 @@ def select_fiducial_space_theoryAgnostic(df, ptVgenMax, absYVgenMax, accept=True
         logger.debug(f"Theory agnostic fiducial cut (out-of-acceptace): not ({selection})")
     return df
 
+def define_helicity_weights(df):
+    # define the helicity tensor, here nominal_weight will only have theory weights, no experimental pieces, it is defined in theory_tools.define_theory_weights_and_corrs
+    weightsByHelicity_helper = wremnants.makehelicityWeightHelper()
+    df = df.Define("helWeight_tensor", weightsByHelicity_helper, ["massVgen", "yVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "nominal_weight"])
+    df = df.Define("nominal_weight_helicity", "wrem::scalarmultiplyHelWeightTensor(nominal_weight,helWeight_tensor)")
+    return df
+
 def add_xnorm_histograms_theoryAgnostic(results, df, args, dataset_name, corr_helpers, qcdScaleByHelicity_helper, theoryAgnostic_axes, theoryAgnostic_cols):
     # add histograms before any selection
     df_xnorm = df
     df_xnorm = df_xnorm.DefinePerSample("exp_weight", "1.0")
     df_xnorm = theory_tools.define_theory_weights_and_corrs(df_xnorm, dataset_name, corr_helpers, args)
+    # define the helicity tensor, here nominal_weight will only have theory weights, no experimental pieces, it is defined in theory_tools.define_theory_weights_and_corrs
+    df_xnorm = define_helicity_weights(df_xnorm)
     df_xnorm = df_xnorm.Define("xnorm", "0.5")
     axis_xnorm = hist.axis.Regular(1, 0., 1., name = "count", underflow=False, overflow=False)
     xnorm_axes = [axis_xnorm, *theoryAgnostic_axes]
     xnorm_cols = ["xnorm", *theoryAgnostic_cols]
     results.append(df_xnorm.HistoBoost("xnorm", xnorm_axes, [*xnorm_cols, "nominal_weight"]))
-    syst_tools.add_theory_hists(results, df_xnorm, args, dataset_name, corr_helpers, qcdScaleByHelicity_helper, xnorm_axes, xnorm_cols, base_name="xnorm")
+    syst_tools.add_theory_hists(results, df_xnorm, args, dataset_name, corr_helpers, qcdScaleByHelicity_helper, xnorm_axes, xnorm_cols, base_name="xnorm", for_wmass=True, addhelicity=True)
 ######################################################
 ######################################################
 
@@ -187,9 +199,7 @@ if not args.noRecoil:
 #graph building for Wsample with helicity weights
 def whistosbyHelicity(df, results, dataset, reco_sel_GF, era, nominal_axes_thAgn, nominal_cols_thAgn, args):
     logger.info("Entered function whistobyHelicity")
-    weightsByHelicity_helper = wremnants.makehelicityWeightHelper()
-    df = df.Define("helWeight_tensor", weightsByHelicity_helper, ["massVgen", "yVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "nominal_weight"])
-    df = df.Define("nominal_weight_helicity", "wrem::scalarmultiplyHelWeightTensor(nominal_weight,helWeight_tensor)")
+    df = define_helicity_weights(df)
     nominalByHelicity = df.HistoBoost("nominal", nominal_axes_thAgn, [*nominal_cols_thAgn, "nominal_weight_helicity"], tensor_axes=[axis_helicity])
     results.append(nominalByHelicity)
     
@@ -227,31 +237,32 @@ def build_graph(df, dataset):
     axes = nominal_axes
     cols = nominal_cols
 
-    if dataset.name in ["WplusmunuPostVFP", "WminusmunuPostVFP"]:
-        if args.unfolding:
-            df = unfolding_tools.define_gen_level(df, args.genLevel, dataset.name, mode="wmass")
-            if hasattr(dataset, "out_of_acceptance"):
-                logger.debug("Reject events in fiducial phase space")
-                df = unfolding_tools.select_fiducial_space(df, mode="wmass", pt_min=args.pt[1], pt_max=args.pt[2], mtw_min=mtw_min, accept=False)
-            else:
-                logger.debug("Select events in fiducial phase space")
-                df = unfolding_tools.select_fiducial_space(df, mode="wmass", pt_min=args.pt[1], pt_max=args.pt[2], mtw_min=mtw_min, accept=True)
+    if args.unfolding and dataset.name in ["WplusmunuPostVFP", "WminusmunuPostVFP"]:
+        df = unfolding_tools.define_gen_level(df, args.genLevel, dataset.name, mode="wmass")
+        if hasattr(dataset, "out_of_acceptance"):
+            logger.debug("Reject events in fiducial phase space")
+            df = unfolding_tools.select_fiducial_space(df, mode="wmass", pt_min=args.pt[1], pt_max=args.pt[2], mtw_min=mtw_min, accept=False)
+        else:
+            logger.debug("Select events in fiducial phase space")
+            df = unfolding_tools.select_fiducial_space(df, mode="wmass", pt_min=args.pt[1], pt_max=args.pt[2], mtw_min=mtw_min, accept=True)
+            
+            unfolding_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols)
+            axes = [*nominal_axes, *unfolding_axes] 
+            cols = [*nominal_cols, *unfolding_cols]
 
-                unfolding_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols)
-                axes = [*nominal_axes, *unfolding_axes] 
-                cols = [*nominal_cols, *unfolding_cols]
-        elif args.addHelicityHistos:
-            df = theory_tools.define_prefsr_vars(df)
-            if hasattr(dataset, "out_of_acceptance"):
-                logger.debug("Reject events in fiducial phase space")
-                df = select_fiducial_space_theoryAgnostic(df, axis_ptVgen.edges[-1], axis_absYVgen.edges[-1], accept=False)
-            else:
-                logger.debug("Select events in fiducial phase space for theory agnostic analysis")
-                df = select_fiducial_space_theoryAgnostic(df, axis_ptVgen.edges[-1], axis_absYVgen.edges[-1], accept=True)
-                add_xnorm_histograms_theoryAgnostic(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, theoryAgnostic_axes, theoryAgnostic_cols)
-                # helicity axis is special, defined through a tensor later, theoryAgnostic_ only includes W rapidity and pt for now
-                axes = [*nominal_cols, *theoryAgnostic_cols]
-                cols = [*nominal_axes, *theoryAgnostic_axes]
+    if args.addHelicityHistos and isW:
+        # helWeight_tensor is already needed here for the prefit cross section before selections
+        df = theory_tools.define_prefsr_vars(df)
+        if hasattr(dataset, "out_of_acceptance"):
+            logger.debug("Reject events in fiducial phase space")
+            df = select_fiducial_space_theoryAgnostic(df, axis_ptVgen.edges[-1], axis_absYVgen.edges[-1], accept=False)
+        else:
+            logger.debug("Select events in fiducial phase space for theory agnostic analysis")
+            df = select_fiducial_space_theoryAgnostic(df, axis_ptVgen.edges[-1], axis_absYVgen.edges[-1], accept=True)
+            add_xnorm_histograms_theoryAgnostic(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, theoryAgnostic_axes, theoryAgnostic_cols)
+            # helicity axis is special, defined through a tensor later, theoryAgnostic_ only includes W rapidity and pt for now
+            axes = [*nominal_cols, *theoryAgnostic_cols]
+            cols = [*nominal_axes, *theoryAgnostic_axes]
             
                 
     if not args.makeMCefficiency:
