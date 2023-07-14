@@ -7,7 +7,7 @@ parser.add_argument("--flavor", type=str, choices=["ee", "mumu"], help="Flavor (
 
 parser = common.set_parser_default(parser, "genVars", ["ptVGen"])
 parser = common.set_parser_default(parser, "pt", [34, 26, 60])
-parser = common.set_parser_default(parser, "aggregateGroups", ["Diboson", "Top", "Wtaunu", "Wmunu"])
+parser = common.set_parser_default(parser, "aggregateGroups", ["Diboson", "Top", "Wtaunu", "Wmunu", "Wenu"])
 
 args = parser.parse_args()
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
@@ -25,6 +25,7 @@ corr_helpers = theory_corrections.load_corr_helpers(common.vprocs_lowpu, args.th
 ###################################
 flavor = args.flavor # mumu, ee
 sigProcs = ["Zmumu"] if flavor == "mumu" else ["Zee"]
+base_group = sigProcs[0]
 
 # dilepton invariant mass cuts
 mass_min = 60
@@ -48,6 +49,7 @@ narf.clingutils.Declare('#include "lowpu_efficiencies.h"')
 narf.clingutils.Declare('#include "lowpu_prefire.h"')
 narf.clingutils.Declare('#include "lowpu_rochester.h"')
 narf.clingutils.Declare('#include "lowpu_recoil.h"')
+narf.clingutils.Declare('#include "electron_selections.h"')
 
 
 # standard regular axes
@@ -77,9 +79,8 @@ gen_axes = {
 
 if args.unfolding:
     unfolding_axes, unfolding_cols, unfolding_selections = differential.get_dilepton_axes(args.genVars, gen_axes)
-    datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Zmumu")
-
-
+    datasets = unfolding_tools.add_out_of_acceptance(datasets, group = base_group)
+    
 # axes for final cards/fitting
 nominal_axes = [
     hist.axis.Variable([0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 25, 30, 40, 50, 60, 75, 90, 150], name = "ptll", underflow=False, overflow=True),
@@ -121,11 +122,11 @@ def build_graph(df, dataset):
         if hasattr(dataset, "out_of_acceptance"):
             logger.debug("Reject events in fiducial phase space")
             df = unfolding_tools.select_fiducial_space(df, mode="wlike", pt_min=args.pt[1], pt_max=args.pt[2], 
-                mass_min=mass_min, mass_max=mass_max, mtw_min=mtw_min, selections=unfolding_selections, accept=False)
+                mass_min=mass_min, mass_max=mass_max, mtw_min=0, selections=unfolding_selections, accept=False)
         else:
             logger.debug("Select events in fiducial phase space")
             df = unfolding_tools.select_fiducial_space(df, mode="wlike", pt_min=args.pt[1], pt_max=args.pt[2], 
-                mass_min=mass_min, mass_max=mass_max, mtw_min=mtw_min, selections=unfolding_selections, accept=True)
+                mass_min=mass_min, mass_max=mass_max, mtw_min=0, selections=unfolding_selections, accept=True)
 
             unfolding_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols)
             axes = [*axes, *unfolding_axes] 
@@ -153,7 +154,7 @@ def build_graph(df, dataset):
         
         df = df.Define("vetoElectrons", "Electron_pt > 10 && Electron_cutBased > 0 && abs(Electron_eta) < 2.4")
         df = df.Filter("Sum(vetoElectrons) == 0")
-        
+
         df = df.Define("goodLeptons", f"vetoMuons && Muon_pt_corr > {args.pt[1]} && Muon_mediumId && Muon_pfRelIso04_all < 0.15")
         df = df.Define("goodLeptonsPlus", "goodLeptons && Muon_charge > 0")
         df = df.Define("goodLeptonsMinus", "goodLeptons && Muon_charge < 0")
@@ -201,11 +202,13 @@ def build_graph(df, dataset):
         
         df = df.Define("vetoMuons", "Muon_pt > 10 && Muon_looseId && abs(Muon_eta) < 2.4 && abs(Muon_dxybs) < 0.05 && abs(Muon_dz)< 0.2")
         df = df.Filter("Sum(vetoMuons) == 0")
-        
-        df = df.Define("goodLeptons", f"vetoElectrons && Electron_pt_corr > {args.pt[1]} && Electron_cutBased >= 3 && !(abs(Electron_eta) > 1.4442 && abs(Electron_eta) < 1.566)")
+
+        df = df.Define("Electron_MediumID", "wrem::electron_id::pass_cutbased<3>(Electron_vidNestedWPBitmap)")
+        df = df.Define("goodLeptons", "Electron_MediumID > 0")
+        df = df.Filter("Sum(goodLeptons)==2")
+
         df = df.Define("goodLeptonsPlus", "goodLeptons && Electron_charge > 0")
         df = df.Define("goodLeptonsMinus", "goodLeptons && Electron_charge < 0")
-        df = df.Filter("Sum(goodLeptons) == 2")
         
         df = df.Filter("(Electron_charge[goodLeptons][0] + Electron_charge[goodLeptons][1]) == 0")
         df = df.Define("goodTrigObjs", "wrem::goodElectronTriggerCandidateLowPU(TrigObj_id, TrigObj_pt, TrigObj_l1pt, TrigObj_l2pt, TrigObj_filterBits)")
@@ -306,6 +309,7 @@ def build_graph(df, dataset):
     else:
         df = df.Alias("MET_corr_rec_pt", "MET_pt")
         df = df.Alias("MET_corr_rec_phi", "MET_phi")
+        df = df.Alias("nominal_weight_qTrw", "nominal_weight")
 
     results.append(df.HistoBoost("mll", [axis_mll], ["mll", "nominal_weight"]))
     results.append(df.HistoBoost("yll", [axis_yll], ["yll", "nominal_weight"]))

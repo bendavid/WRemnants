@@ -88,7 +88,7 @@ def make_datagroups_lowPU(dg, combine=False, excludeGroups=None, filterGroups=No
         )
     else:
         dg.addGroup("Other",
-            members = [x for x in dg.datasets.values() if not x.is_data and x.group not in ["Zmumu", "Zee" "Ztautau"] and x.group != "QCD"],
+            members = [x for x in dg.datasets.values() if not x.is_data and x.group not in ["Zmumu", "Zee", "Ztautau", "QCD"]],
             label = "Other",
             color = "grey",
         )

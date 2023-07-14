@@ -32,7 +32,7 @@ def make_parser(parser=None):
     parser.add_argument("--isoEfficiencySmoothing", action='store_true', help="If isolation SF was derived from smooth efficiencies instead of direct smoothing")
     parser.add_argument("--xlim", type=float, nargs=2, default=None, help="Restrict x axis to this range")
     parser.add_argument("--unfolding", action='store_true', help="Prepare datacard for unfolding")
-    parser.add_argument("--genAxis", type=str, default=None, nargs="+", help="Specify which gen axis should be used in unfolding, if 'None', use all (inferred from metadata).")
+    parser.add_argument("--genAxes", type=str, default=None, nargs="+", help="Specify which gen axis should be used in unfolding, if 'None', use all (inferred from metadata).")
     parser.add_argument("--fitXsec", action='store_true', help="Fit signal inclusive cross section")
     parser.add_argument("--correlatedNonClosureNuisances", action='store_true', help="get systematics from histograms for the Z non-closure nuisances without decorrelation in eta and pt")
     parser.add_argument("--sepImpactForNC", action="store_true", help="use a dedicated impact gropu for non closure nuisances, instead of putting them in muonScale")
@@ -83,7 +83,7 @@ def setup(args,xnorm=False):
         datagroups.unconstrainedProcesses.append(base_group)
     elif args.unfolding:
         constrainMass = True
-        datagroups.setGenAxes(args.genAxis)
+        datagroups.setGenAxes(args.genAxes)
         
         if wmass:
             # gen level bins, split by charge

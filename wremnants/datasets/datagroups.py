@@ -298,7 +298,7 @@ class Datagroups(object):
                     projections = [a for a in h.axes.name if a not in self.gen_axes]
                     if len(projections) < len(h.axes.name):
                         h = h.project(*projections)
-                    logger.debug(f"Integrated")
+                    logger.debug(f"Integrated, Hist axes are {h.axes.name}")
 
                 if h_id == id(h):
                     logger.debug(f"Make explicit copy")
@@ -530,7 +530,6 @@ class Datagroups(object):
             if len(args.get("genVars", [])) > 0:
                 self.gen_axes = args.get("genVars", [])
             else:
-                self.gen_axes = ["ptGen", "absEtaGen"]
                 logger.warning(f"Unknown gen axes!")
 
         logger.debug(f"Gen axes are now {self.gen_axes}")

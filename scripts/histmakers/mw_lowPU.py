@@ -49,6 +49,7 @@ ROOT.gInterpreter.Declare('#include "lowpu_efficiencies.h"')
 ROOT.gInterpreter.Declare('#include "lowpu_prefire.h"')
 ROOT.gInterpreter.Declare('#include "lowpu_rochester.h"')
 ROOT.gInterpreter.Declare('#include "lowpu_recoil.h"')
+ROOT.gInterpreter.Declare('#include "electron_selections.h"')
 
 
 # standard regular axes
@@ -144,7 +145,6 @@ def build_graph(df, dataset):
     if flavor == "mu":
     
         if not dataset.is_data: 
-        
             df = df.Define("Muon_pt_corr", "wrem::applyRochesterMC(Muon_pt, Muon_eta, Muon_phi, Muon_charge, Muon_genPartIdx, GenPart_pt, Muon_nTrackerLayers)")
             #df = df.Alias("Muon_pt_corr", "Muon_pt")
             df = df.Filter("HLT_Mu17")
@@ -154,7 +154,6 @@ def build_graph(df, dataset):
             df = df.Define("Muon_pt_corr", "wrem::applyRochesterData(Muon_pt, Muon_eta, Muon_phi, Muon_charge)")
             #df = df.Alias("Muon_pt_corr", "Muon_pt")
             df = df.Filter("HLT_HIMu17")
-        
         
         df = df.Define("vetoMuons", "Muon_pt_corr > 10 && Muon_looseId && abs(Muon_eta) < 2.4 && abs(Muon_dxybs) < 0.05")
         df = df.Filter("Sum(vetoMuons) == 1")
@@ -180,7 +179,9 @@ def build_graph(df, dataset):
         df = df.Define("Lep_charge", "Muon_charge[goodLeptons][0]")
         df = df.Define("Lep_mass", "Muon_mass[goodLeptons][0]")
         df = df.Define("Lep_iso", "Muon_pfRelIso04_all[goodLeptons][0]")
-        
+
+        df = df.Define("passIso", "Lep_iso < 0.15")
+
         if not dataset.is_data:
             df = df.Define("lepSF_ISO", "wrem::lepSF(Muon_pt_corr[goodLeptons], Muon_eta[goodLeptons], Muon_charge[goodLeptons], 1)")
             df = df.Define("lepSF_IDIP", "wrem::lepSF(Muon_pt_corr[goodLeptons], Muon_eta[goodLeptons], Muon_charge[goodLeptons], 2)") # largest effect
@@ -199,21 +200,20 @@ def build_graph(df, dataset):
         else: 
             df = df.Define("Electron_pt_corr", "wrem::applyEGammaScaleSmearingUnc(1, Electron_pt, Electron_eta, Electron_dEscaleUp, Electron_dEscaleDown, Electron_dEsigmaUp, Electron_dEsigmaDown, 0)")
             df = df.Filter("HLT_HIEle20_WPLoose_Gsf")
-            
-        # by default the E/gamma smearings are applied, but are they propagated to the MET? 
-        #df = df.Define("Electron_pt_uncorr", "wrem::Egamma_undoCorrection(Electron_pt, Electron_eta, Electron_ecalCorr)")    
-        #df = df.Alias("Electron_pt_corr", "Electron_pt")
-        
+
+
         df = df.Define("vetoElectrons", "Electron_pt_corr > 10 && Electron_cutBased > 0 && abs(Electron_eta) < 2.4")
         df = df.Filter("Sum(vetoElectrons)==1")
         
         df = df.Define("vetoMuons", "Muon_pt > 10 && Muon_looseId && abs(Muon_eta) < 2.4 && abs(Muon_dxybs) < 0.05 && abs(Muon_dz)< 0.2")
         df = df.Filter("Sum(vetoMuons) == 0")
-        
-        df = df.Define("goodLeptons", f"vetoElectrons && Electron_pt_corr > {args.pt[1]} && Electron_cutBased >= 3 && !(abs(Electron_eta) > 1.4442 && abs(Electron_eta) < 1.566)")
+
+        df = df.Define("Electron_MediumID", "wrem::electron_id::pass_cutbased_noiso<3>(Electron_vidNestedWPBitmap)")
+        df = df.Define("goodLeptons", "Electron_MediumID > 0")
+        df = df.Filter("Sum(goodLeptons)==1")
+
         df = df.Define("goodLeptonsPlus", "goodLeptons && Electron_charge > 0")
         df = df.Define("goodLeptonsMinus", "goodLeptons && Electron_charge < 0")
-        df = df.Filter("Sum(goodLeptons) == 1")
         
         df = df.Define("goodTrigObjs", "wrem::goodElectronTriggerCandidateLowPU(TrigObj_id, TrigObj_pt, TrigObj_l1pt, TrigObj_l2pt, TrigObj_filterBits)")
         df = df.Define("trigMatch", "wrem::hasTriggerMatchLowPU(Electron_eta[goodLeptons], Electron_phi[goodLeptons], TrigObj_eta[goodTrigObjs], TrigObj_phi[goodTrigObjs])")
@@ -236,9 +236,10 @@ def build_graph(df, dataset):
         
         else: df = df.Define("SFMC", "1.0")    
 
+        df = df.Define("passIso", "wrem::electron_id::pass_iso<3>(Electron_vidNestedWPBitmap[goodLeptons])[0] > 0")
+
     df = df.Filter(f"Lep_pt > {args.pt[1]} && Lep_pt < {args.pt[2]}")
     df = muon_selections.apply_met_filters(df)
-    df = df.Define("passIso", "Lep_iso < 0.15")
 
     if not dataset.is_data: 
         df = df.Define("exp_weight", "SFMC")

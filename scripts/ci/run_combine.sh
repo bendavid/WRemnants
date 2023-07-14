@@ -16,7 +16,6 @@ for card in ${@:4}; do
 	if [[ $card == xnorm* ]]; then
 		IFS="=" read -ra parts <<< "$card"
 		key="${parts[0]}"
-		echo $key
 		maskedChannels+=( "--maskedChan=${key}" )
 	fi
 done
@@ -40,7 +39,7 @@ if [ "$mode" == "mass" ]; then
 	combinetf.py --doImpacts --binByBinStat -t -1 "$outfile"
 elif [ "$mode" == "unfolding" ]; then
 	text2hdf5.py --X-allow-no-background "${maskedChannels[@]}" "$card_name"
-	combinetf.py --doImpacts --binByBinStat -t -1 --correlateXsecStat "$outfile" --saveHists --computeHistErrors
+	combinetf.py --doImpacts --binByBinStat -t -1 "$outfile" --correlateXsecStat --saveHists --computeHistErrors
 fi
 
 set +x

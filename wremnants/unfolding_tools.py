@@ -33,8 +33,8 @@ def define_gen_level(df, gen_level, dataset_name, mode="wmass"):
         df = theory_tools.define_prefsr_vars(df)
 
         # needed for fiducial phase space definition
-        df = df.Alias("muGen", "genl")
-        df = df.Alias("antimuGen", "genlanti")
+        df = df.Alias("lepGen", "genl")
+        df = df.Alias("antilepGen", "genlanti")
 
         df = df.Alias("massVGen", "massVgen")
         df = df.Alias("ptVGen", "ptVgen")
@@ -52,31 +52,31 @@ def define_gen_level(df, gen_level, dataset_name, mode="wmass"):
 
     elif gen_level == "postFSR":
 
-        df = df.Define("postFSRmus", "GenPart_status == 1 && (GenPart_statusFlags & 1) && (GenPart_pdgId == 13 || GenPart_pdgId == 14)")
-        df = df.Define("postFSRantimus", "GenPart_status == 1 && (GenPart_statusFlags & 1) && (GenPart_pdgId == -13 || GenPart_pdgId == -14)")
-        df = df.Define("postFSRmuIdx", "ROOT::VecOps::ArgMax(GenPart_pt[postFSRmus])")
-        df = df.Define("postFSRantimuIdx", "ROOT::VecOps::ArgMax(GenPart_pt[postFSRantimus])")
+        df = df.Define("postFSRleps", "GenPart_status == 1 && (GenPart_statusFlags & 1) && (GenPart_pdgId >= 11 && GenPart_pdgId <= 16)")
+        df = df.Define("postFSRantileps", "GenPart_status == 1 && (GenPart_statusFlags & 1) && (GenPart_pdgId <= -11 && GenPart_pdgId >= -16)")
+        df = df.Define("postFSRlepIdx", "ROOT::VecOps::ArgMax(GenPart_pt[postFSRleps])")
+        df = df.Define("postFSRantilepIdx", "ROOT::VecOps::ArgMax(GenPart_pt[postFSRantileps])")
 
         if mode in ["wmass", "wlike"]:
-            df = df.Define("mTWGen", "wrem::mt_2(GenPart_pt[postFSRmus][postFSRmuIdx], GenPart_phi[postFSRmus][postFSRmuIdx], GenPart_pt[postFSRantimus][postFSRantimuIdx], GenPart_phi[postFSRantimus][postFSRantimuIdx])")   
+            df = df.Define("mTWGen", "wrem::mt_2(GenPart_pt[postFSRleps][postFSRlepIdx], GenPart_phi[postFSRleps][postFSRlepIdx], GenPart_pt[postFSRantileps][postFSRantilepIdx], GenPart_phi[postFSRantileps][postFSRantilepIdx])")   
 
         if mode == "wmass":
             if "Wplus" in dataset_name:
-                idx = "postFSRantimuIdx" 
-                muons = "postFSRantimus"
+                idx = "postFSRantilepIdx" 
+                muons = "postFSRantileps"
             else:
-                idx = "postFSRmuIdx" 
-                muons = "postFSRmus"
+                idx = "postFSRlepIdx" 
+                muons = "postFSRleps"
 
             df = df.Define("ptGen", f"GenPart_pt[{muons}][{idx}]")
             df = df.Define("absEtaGen", f"fabs(GenPart_eta[{muons}][{idx}])")                
         elif mode == "wlike":
-            df = df.Define("ptGen", "event % 2 == 0 ? GenPart_pt[postFSRmus][postFSRmuIdx] : GenPart_pt[postFSRantimus][postFSRantimuIdx]")
-            df = df.Define("absEtaGen", "event % 2 == 0 ? fabs(GenPart_eta[postFSRmus][postFSRmuIdx]) : fabs(GenPart_eta[postFSRantimus][postFSRantimuIdx])")    
+            df = df.Define("ptGen", "event % 2 == 0 ? GenPart_pt[postFSRleps][postFSRlepIdx] : GenPart_pt[postFSRantileps][postFSRantilepIdx]")
+            df = df.Define("absEtaGen", "event % 2 == 0 ? fabs(GenPart_eta[postFSRleps][postFSRlepIdx]) : fabs(GenPart_eta[postFSRantileps][postFSRantilepIdx])")    
 
-        df = df.Define("muGen", "ROOT::Math::PtEtaPhiMVector(GenPart_pt[postFSRmus][postFSRmuIdx], GenPart_eta[postFSRmus][postFSRmuIdx], GenPart_phi[postFSRmus][postFSRmuIdx], GenPart_mass[postFSRmus][postFSRmuIdx])")
-        df = df.Define("antimuGen", "ROOT::Math::PtEtaPhiMVector(GenPart_pt[postFSRantimus][postFSRantimuIdx], GenPart_eta[postFSRantimus][postFSRantimuIdx], GenPart_phi[postFSRantimus][postFSRantimuIdx], GenPart_mass[postFSRantimus][postFSRantimuIdx])")
-        df = df.Define("VGen", "ROOT::Math::PxPyPzEVector(muGen)+ROOT::Math::PxPyPzEVector(antimuGen)")
+        df = df.Define("lepGen", "ROOT::Math::PtEtaPhiMVector(GenPart_pt[postFSRleps][postFSRlepIdx], GenPart_eta[postFSRleps][postFSRlepIdx], GenPart_phi[postFSRleps][postFSRlepIdx], GenPart_mass[postFSRleps][postFSRlepIdx])")
+        df = df.Define("antilepGen", "ROOT::Math::PtEtaPhiMVector(GenPart_pt[postFSRantileps][postFSRantilepIdx], GenPart_eta[postFSRantileps][postFSRantilepIdx], GenPart_phi[postFSRantileps][postFSRantilepIdx], GenPart_mass[postFSRantileps][postFSRantilepIdx])")
+        df = df.Define("VGen", "ROOT::Math::PxPyPzEVector(lepGen)+ROOT::Math::PxPyPzEVector(antilepGen)")
 
         df = df.Define("massVGen", "VGen.mass()")
         df = df.Define("ptVGen", "VGen.pt()")
@@ -98,9 +98,9 @@ def select_fiducial_space(df, accept=True, mode="wmass", pt_min=26, pt_max=55, m
             && (absEtaGen < 2.4)"""
     elif mode in ["wlike", "dilepton"]:
         selection = f"""
-            (fabs(muGen.eta()) < 2.4) && (fabs(antimuGen.eta()) < 2.4) 
-            && (muGen.pt() > {pt_min}) && (antimuGen.pt() > {pt_min}) 
-            && (muGen.pt() < {pt_max}) && (antimuGen.pt() < {pt_max}) 
+            (fabs(lepGen.eta()) < 2.4) && (fabs(antilepGen.eta()) < 2.4) 
+            && (lepGen.pt() > {pt_min}) && (antilepGen.pt() > {pt_min}) 
+            && (lepGen.pt() < {pt_max}) && (antilepGen.pt() < {pt_max}) 
             && (massVGen > {mass_min}) && (massVGen < {mass_max})
             """
     else:
