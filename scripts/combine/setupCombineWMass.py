@@ -33,6 +33,7 @@ def make_parser(parser=None):
     parser.add_argument("--isoEfficiencySmoothing", action='store_true', help="If isolation SF was derived from smooth efficiencies instead of direct smoothing")
     parser.add_argument("--xlim", type=float, nargs=2, default=None, help="Restrict x axis to this range")
     parser.add_argument("--unfolding", action='store_true', help="Prepare datacard for unfolding")
+    parser.add_argument("--theoryAgnostic", action='store_true', help="Prepare datacard for theory agnostic analysis, similar to unfolding but different axis and possibly other differences")
     parser.add_argument("--genAxis", type=str, default=None, nargs="+", help="Specify which gen axis should be used in unfolding, if 'None', use all (inferred from metadata).")
     parser.add_argument("--fitXsec", action='store_true', help="Fit signal inclusive cross section")
     parser.add_argument("--correlatedNonClosureNuisances", action='store_true', help="get systematics from histograms for the Z non-closure nuisances without decorrelation in eta and pt")
@@ -44,6 +45,13 @@ def make_parser(parser=None):
 
 def main(args,xnorm=False):   
 
+    if args.theoryAgnostic:
+        args.unfolding = True
+        logger.warning("For now setting --theoryAgnostic activates --unfolding, they should do the same things")
+        if args.genAxis is None:
+            logger.error("For now you must specify gen axes with --genAxis when using --theoryAgnostic, please do!")
+            quit()
+    
     # NOTE: args.filterProcGroups and args.excludeProcGroups should in principle not be used together
     #       (because filtering is equivalent to exclude something), however the exclusion is also meant to skip
     #       processes which are defined in the original process dictionary but are not supposed to be (always) run on
@@ -59,7 +67,8 @@ def main(args,xnorm=False):
     logger.debug(f"Excluding these groups of processes: {args.excludeProcGroups}")
     
     datagroups = make_datagroups_2016(args.inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm)
-
+    logger.error(f"datagroups.getNames(): {datagroups.getNames()}")
+    
     if args.xlim:
         if len(args.fitvar.split("-")) > 1:
             raise ValueError("Restricting the x axis not supported for 2D hist")
@@ -189,8 +198,9 @@ def main(args,xnorm=False):
     if not (constrainMass or wmass):
         massSkip.append(("^massShift2p1MeV.*",))
 
+    logger.error("Temporarily not using mass weights for Wtaunu. Please update when possible")
     cardTool.addSystematic("massWeight", 
-                            processes=signal_samples_inctau,
+                            processes=signal_samples, #signal_samples_inctau,
                             group=f"massShift{'W' if wmass else 'Z'}",
                             skipEntries=massSkip,
                             mirror=False,

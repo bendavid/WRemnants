@@ -102,7 +102,7 @@ elif args.addHelicityHistos:
     axis_helicity = hist.axis.Integer(-1, 5, name="helicity", overflow=False, underflow=False)
     # the following just prepares the existence of the group for out-of-acceptance signal, but doesn't create or define the histogram yet
     datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wmunu")
-    groups_to_aggregate.append("BkgWmunu")    
+    groups_to_aggregate.append("BkgWmunu")
 
 # axes for study of fakes
 axis_mt_fakes = hist.axis.Regular(120, 0., 120., name = "mt", underflow=False, overflow=True)
@@ -195,13 +195,14 @@ def add_xnorm_histograms_theoryAgnostic(results, df, args, dataset_name, corr_he
     axis_xnorm = hist.axis.Regular(1, 0., 1., name = "count", underflow=False, overflow=False)
     xnorm_axes = [axis_xnorm, *theoryAgnostic_axes]
     xnorm_cols = ["xnorm", *theoryAgnostic_cols]
-    results.append(df_xnorm.HistoBoost("xnorm", xnorm_axes, [*xnorm_cols, "nominal_weight"]))
+    xnormByHelicity = df_xnorm.HistoBoost("xnorm", xnorm_axes, [*xnorm_cols, "nominal_weight_helicity"], tensor_axes=[axis_helicity])
+    results.append(xnormByHelicity)
     if not args.onlyMainHistograms:
         syst_tools.add_theory_hists(results, df_xnorm, args, dataset_name, corr_helpers, qcdScaleByHelicity_helper, xnorm_axes, xnorm_cols, base_name="xnorm", for_wmass=True, addhelicity=True)
     else:
         #FIXME: hardcoded to keep mass weights, this would be done in add_theory_hists
         df_xnorm = syst_tools.define_mass_weights(df_xnorm, dataset_name)
-        syst_tools.add_massweights_hist(results, df_xnorm, xnorm_axes, xnorm_cols, proc=dataset_name, addhelicity=True)
+        syst_tools.add_massweights_hist(results, df_xnorm, xnorm_axes, xnorm_cols, base_name="xnorm", proc=dataset_name, addhelicity=True)
         
 # graph building for W sample with helicity weights
 def whistosbyHelicity(df, results, dataset, reco_sel_GF, era, nominal_axes_thAgn, nominal_cols_thAgn, args):
@@ -228,6 +229,7 @@ def build_graph(df, dataset):
     logger.info(f"build graph for dataset: {dataset.name}")
     results = []
     isW = dataset.name in common.wprocs
+    isWmunu = dataset.name in ["WplusmunuPostVFP", "WminusmunuPostVFP"]
     isZ = dataset.name in common.zprocs
     isWorZ = isW or isZ
     isTop = dataset.group == "Top"
@@ -252,7 +254,7 @@ def build_graph(df, dataset):
     axes = nominal_axes
     cols = nominal_cols
 
-    if args.unfolding and dataset.name in ["WplusmunuPostVFP", "WminusmunuPostVFP"]:
+    if args.unfolding and isWmunu:
         df = unfolding_tools.define_gen_level(df, args.genLevel, dataset.name, mode="wmass")
         if hasattr(dataset, "out_of_acceptance"):
             logger.debug("Reject events in fiducial phase space")
@@ -265,7 +267,7 @@ def build_graph(df, dataset):
             axes = [*nominal_axes, *unfolding_axes] 
             cols = [*nominal_cols, *unfolding_cols]
 
-    if args.addHelicityHistos and isW:
+    if args.addHelicityHistos and isWmunu: # should be isW to do also Wtaunu
         df = theory_tools.define_prefsr_vars(df)
         if hasattr(dataset, "out_of_acceptance"):
             logger.debug("Reject events in fiducial phase space")
@@ -412,8 +414,13 @@ def build_graph(df, dataset):
         results.append(df.HistoBoost("MET", [axis_met, axis_charge, axis_passIso, axis_passMT], ["MET_corr_rec_pt", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"]))
         results.append(df.HistoBoost("transverseMass", [axis_mt_fakes, axis_charge, axis_passIso, axis_passMT], ["transverseMass", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"]))
 
-    if isW and args.addHelicityHistos:
+    # FIXME: should be isW, to include Wtaunu
+    if isWmunu and args.addHelicityHistos:
         whistosbyHelicity(df, results, dataset, reco_sel_GF, era, axes, cols, args)
+        ## TODO: this part should be better melted in the rest of the code, there is too much duplication of what could happen later in the loop
+        if hasattr(dataset, "out_of_acceptance"):
+            # Rename dataset to not overwrite the original one
+            dataset.name = "Bkg"+dataset.name
         return results, weightsum
         
     if not args.onlyMainHistograms:
