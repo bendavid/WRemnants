@@ -28,4 +28,4 @@ from .theory_tools import axis_helicity, scale_tensor_axes, define_prefsr_vars, 
 from .muon_calibration import *
 from .helicity_utils import *
 
-data_dir = f"{pathlib.Path(__file__).parent}/data/"
+data_dir = f"{pathlib.Path(__file__).parent}/../wremnants-data/data/"

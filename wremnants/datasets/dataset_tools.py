@@ -17,13 +17,21 @@ def buildXrdFileList(path, xrd):
         return [f"root://{xrd}/{f}" for f in glob.glob(path)]
 
 #TODO add the rest of the samples!
-def makeFilelist(paths, maxFiles=-1, format_args={}):
+def makeFilelist(paths, maxFiles=-1, format_args={}, is_data=False, oneMCfileEveryN=None):
     filelist = []
     for path in paths:
         if format_args:
             path = path.format(**format_args)
             logger.debug(f"Reading files from path {path}")
         filelist.extend(glob.glob(path) if path[:4] != "/eos" else buildXrdFileList(path, "eoscms.cern.ch"))
+
+    if oneMCfileEveryN != None and not is_data:
+        tmplist = []
+        for i,f in enumerate(filelist):
+            if i % oneMCfileEveryN == 0:
+                tmplist.append(f)
+        logger.warning(f"Using {len(tmplist)} files instead of {len(filelist)}")
+        filelist = tmplist
 
     return filelist if maxFiles < 0 or len(filelist) < maxFiles else random.Random(1).sample(filelist, maxFiles)
 

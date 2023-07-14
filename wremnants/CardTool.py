@@ -55,6 +55,7 @@ class CardTool(object):
         self.lumiScale = 1.
         self.project = None
         self.xnorm = False
+        self.absolutePathShapeFileInCard = False
         self.chargeIdDict = {"minus" : {"val" : -1, "id" : "q0", "badId" : "q1"},
                              "plus"  : {"val" : 1., "id" : "q1", "badId" : "q0"},
                              "inclusive" : {"val" : "sum", "id" : "none", "badId" : None},
@@ -82,6 +83,9 @@ class CardTool(object):
     
     def setLumiScale(self, lumiScale):
         self.lumiScale = lumiScale
+
+    def setAbsolutePathShapeInCard(self, setRelative=False):
+        self.absolutePathShapeFileInCard = False if setRelative else True
         
     def getProcsNoStatUnc(self):
         return self.noStatUncProcesses
@@ -788,8 +792,9 @@ class CardTool(object):
                 "histName" : self.histName,
                 "pseudodataHist" : f"{self.histName}_{self.dataName}_{self.pseudoData}_sum" if self.pseudoData else f"{self.histName}_{self.dataName}"
             }
-            # use the relative path because absolute paths are slow in text2hdf5.py conversion
-            args["inputfile"] = os.path.basename(args["inputfile"])
+            if not self.absolutePathShapeFileInCard:
+                # use the relative path because absolute paths are slow in text2hdf5.py conversion
+                args["inputfile"] = os.path.basename(args["inputfile"])
 
             self.cardContent[chan] = output_tools.readTemplate(self.nominalTemplate, args)
             self.cardGroups[chan] = ""
