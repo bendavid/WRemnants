@@ -67,7 +67,6 @@ def main(args,xnorm=False):
     logger.debug(f"Excluding these groups of processes: {args.excludeProcGroups}")
     
     datagroups = make_datagroups_2016(args.inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm)
-    logger.error(f"datagroups.getNames(): {datagroups.getNames()}")
     
     if args.xlim:
         if len(args.fitvar.split("-")) > 1:
@@ -198,9 +197,10 @@ def main(args,xnorm=False):
     if not (constrainMass or wmass):
         massSkip.append(("^massShift2p1MeV.*",))
 
-    logger.error("Temporarily not using mass weights for Wtaunu. Please update when possible")
+    if args.theoryAgnostic:
+        logger.error("Temporarily not using mass weights for Wtaunu. Please update when possible")
     cardTool.addSystematic("massWeight", 
-                            processes=signal_samples, #signal_samples_inctau,
+                            processes=signal_samples if args.theoryAgnostic else signal_samples_inctau,
                             group=f"massShift{'W' if wmass else 'Z'}",
                             skipEntries=massSkip,
                             mirror=False,
@@ -504,6 +504,7 @@ if __name__ == "__main__":
     else:
         main(args)
         if args.unfolding:
+            logger.debug("Now running with xnorm = True")
             main(args, xnorm=True)
 
     logger.info(f"Running time: {time.time()-time0}")

@@ -472,8 +472,10 @@ def add_theory_hists(results, df, args, dataset_name, corr_helpers, qcdScaleByHe
     #for hel analysis, ptVgen is part of axes/col
     ## FIXME:
     ## here should probably not force suing the same ptVgen axis when addhelicity=True
-    scale_axes = [*axes, axis_chargeVgen] if addhelicity else [*axes, axis_ptVgen, axis_chargeVgen]
-    scale_cols = [*cols, "chargeVgen"] if addhelicity else [*cols, "ptVgen", "chargeVgen"]
+    #scale_axes = [*axes, axis_chargeVgen] if addhelicity else [*axes, axis_ptVgen, axis_chargeVgen]
+    #scale_cols = [*cols, "chargeVgen"] if addhelicity else [*cols, "ptVgen", "chargeVgen"]
+    scale_axes = [*axes, axis_ptVgen, axis_chargeVgen]
+    scale_cols = [*cols, "ptVgen", "chargeVgen"]
 
     df = theory_tools.define_scale_tensor(df)
     df = define_mass_weights(df, dataset_name)

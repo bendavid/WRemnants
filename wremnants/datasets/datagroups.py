@@ -497,16 +497,16 @@ class Datagroups(object):
             gen_axes = [gen_axes]
 
         if gen_axes != None:
-            self.gen_axes = gen_axes
+            self.gen_axes = [x for x in gen_axes] # don't just copy gen_axes, can modify the object outside this function
         else:
             # infer gen axes from metadata
             args = self.getMetaInfo()["args"]
-            if args.get("unfolding", False) is False:
+            if args.get("unfolding", False) is False and args.get("addHelicityHistos", False) is False:
                 self.gen_axes = None
                 return
-
+            
             if self.wmass:
-                self.gen_axes = ["absEtaGen","ptGen"]
+                self.gen_axes = ["absEtaGen","ptGen"] if args.get("addHelicityHistos", False) is False else ["absYVgenSig", "ptVgenSig", "helicity"]
             elif self.wlike:
                 self.gen_axes = ["qGen","absEtaGen","ptGen"]
             else:
