@@ -18,7 +18,7 @@ def make_datagroups_lowPU(dg, combine=False, excludeGroups=None, filterGroups=No
     # data
     if dg.flavor == "mu" or dg.flavor == "mumu":  
         dg.addGroup("Data",
-            members=[dg.datasets["singlemuon"]],
+            members = list(filter(lambda y: y.name == "singlemuon", dg.datasets.values())),
             label="Data",
             color = "black",
             selectOp = sigOp,
@@ -39,7 +39,7 @@ def make_datagroups_lowPU(dg, combine=False, excludeGroups=None, filterGroups=No
 
     if dg.flavor == "e" or dg.flavor == "ee":  
         dg.addGroup("Data",
-            members=[dg.datasets["singleelectron"]],
+            members = list(filter(lambda y: y.name == "singleelectron", dg.datasets.values())),
             label="Data",
             color = "black",
             selectOp = sigOp,

@@ -110,6 +110,7 @@ def setup(args,xnorm=False):
         cardTool.setWriteByCharge(False)
     if xnorm:
         datagroups.select_xnorm_groups() # only keep processes where xnorm is defined
+        datagroups.deleteGroup("Fake")
         if args.unfolding:
             cardTool.setProjectionAxes(["count"])
         else:
@@ -118,7 +119,6 @@ def setup(args,xnorm=False):
                 datagroups.groups[base_group].add_member_axis("qGen", datagroups.results, 
                     member_filters={-1: lambda x: x.name.startswith("Wminus"), 1: lambda x: x.name.startswith("Wplus")}, 
                     hist_filter=lambda x: x.startswith("xnorm"))
-                datagroups.deleteGroup("Fake")
             cardTool.unroll = True
             # remove projection axes from gen axes, otherwise they will be integrated before
             datagroups.setGenAxes([a for a in datagroups.gen_axes if a not in cardTool.project])

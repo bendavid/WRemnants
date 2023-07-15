@@ -281,9 +281,10 @@ def build_weight_expr(df, exclude_weights=[]):
 
     if "extra_weight" in valid_cols:
         logger.info("Adding additional weight '{extra_weight}'")
-        found_weights.append(extra_weight)
+        found_weights.append("extra_weight")
 
     weight_expr = "*".join(found_weights)
+
     logger.debug(f"Weight is {weight_expr}")
 
     return weight_expr
@@ -323,7 +324,8 @@ def define_theory_corr(df, dataset_name, helpers, generators, modify_central_wei
             df = df.Define(f"{generator}Weight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "nominal_weight_uncorr"])
 
         if i == 0 and modify_central_weight:
-            df = df.Define("theory_corr_weight", f"{generator}Weight_tensor(0)/nominal_weight_uncorr")
+            var = f"{generator}Weight_tensor(0)/nominal_weight_uncorr"
+            df = df.Define("theory_corr_weight", f"std::isnan({var}) ? 0 : {var}")
 
     return df
 
