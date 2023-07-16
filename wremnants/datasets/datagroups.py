@@ -519,7 +519,7 @@ class Datagroups(object):
             gen_axes = [gen_axes]
 
         if gen_axes != None:
-            self.gen_axes = gen_axes
+            self.gen_axes = gen_axes.copy()
         else:
             # infere gen axes from metadata
             args = self.getMetaInfo()["args"]
