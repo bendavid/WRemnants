@@ -123,7 +123,7 @@ def setup(args,xnorm=False):
             # remove projection axes from gen axes, otherwise they will be integrated before
             datagroups.setGenAxes([a for a in datagroups.gen_axes if a not in cardTool.project])
     if args.unfolding:
-        cardTool.addPOISumGroups()
+        cardTool.addPOISumGroups(additional_axes=["qGen"] if base_group[0] == "W" else None)
     if args.noHist:
         cardTool.skipHistograms()
     cardTool.setFakeName(args.qcdProcessName)

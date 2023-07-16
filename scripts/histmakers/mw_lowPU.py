@@ -70,7 +70,7 @@ axis_ptVgen = qcdScaleByHelicity_helper.hist.axes["ptVgen"]
 axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
 
 gen_axes = {
-    "ptVGen": hist.axis.Variable([0, 5, 10, 15, 20, 30, 40, 50, 60, 75, 90, 150], name = "ptVGen", underflow=False, overflow=False),
+    "ptVGen": hist.axis.Variable([0, 8, 14, 20, 30, 40, 50, 60, 75, 90, 150], name = "ptVGen", underflow=False, overflow=False),
 }
 
 groups_to_aggregate = args.aggregateGroups
