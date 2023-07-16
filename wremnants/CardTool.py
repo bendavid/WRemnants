@@ -664,11 +664,12 @@ class CardTool(object):
         else:
             self.cardGroups[chan] += f"\n{group_expr} {members}"                                              
 
-    def addPOISumGroups(self, keys=None):
+    def addPOISumGroups(self, keys=None, genCharge=None):
+        # genCharge is qGen0 or qGen1, it is appended to the group name and used to filter relevant POIs 
         
         if keys is None:
             # make a sum group for each gen axis
-            keys = self.datagroups.gen_axes
+            keys = [x for x in self.datagroups.gen_axes]
             # also include combinations of axes in case there are more than 2 axes
             for n in range(2, len(self.datagroups.gen_axes)):
                 keys += [k for k in itertools.combinations(self.datagroups.gen_axes, n)]
@@ -689,8 +690,12 @@ class CardTool(object):
                 sum_groups = set(["_".join([a + p.split(a)[1].split("_")[0] for a in axes]) for p in pois])
 
                 for sum_group in sorted(sum_groups):
-                    members = " ".join([p for p in pois if all([g in p.split("_") for g in sum_group.split("_")])])
-                    self.addPOISumGroup(f"{base_process}_{sum_group}", members)
+                    if genCharge is None:
+                        members = " ".join([p for p in pois if all([g in p.split("_") for g in sum_group.split("_")])])
+                        self.addPOISumGroup(f"{base_process}_{sum_group}", members)
+                    else:
+                        members = " ".join([p for p in pois if all([g in p.split("_") for g in sum_group.split("_")]) and genCharge in p])
+                        self.addPOISumGroup(f"{base_process}_{sum_group}_{genCharge}", members)
 
     def addPOISumGroup(self, groupName, members, groupLabel="sumGroup"):
         # newName sumGroup = poi_bin1 poi_bin2 poi_bin3

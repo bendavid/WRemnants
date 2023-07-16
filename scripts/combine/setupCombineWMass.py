@@ -153,12 +153,14 @@ def main(args,xnorm=False):
             # remove projection axes from gen axes, otherwise they will be integrated before
             datagroups.setGenAxes([a for a in datagroups.gen_axes if a not in cardTool.project])
     if args.unfolding:
-        cardTool.addPOISumGroups()
+        # TODO: make this less hardcoded to filter the charge (if the charge is not present this will duplicate things)
+        cardTool.addPOISumGroups(genCharge="qGen0")
+        cardTool.addPOISumGroups(genCharge="qGen1")
     if args.noHist:
         cardTool.skipHistograms()
     cardTool.setOutfile(os.path.abspath(f"{outfolder}/{name}CombineInput{suffix}.root"))
     cardTool.setFakeName(args.qcdProcessName)
-    cardTool.setSpacing(52)
+    cardTool.setSpacing(28)
     if args.noStatUncFakes:
         cardTool.setProcsNoStatUnc(procs=args.qcdProcessName, resetList=False)
     cardTool.setCustomSystForCard(args.excludeNuisances, args.keepNuisances)

@@ -249,10 +249,16 @@ if __name__ == "__main__":
 
         # TODO: find more general way to split name, if process or syst name has underscores
         if isWrem:
-            tokens = name.split("_")
-            pname = f"{tokens[1]}"
+            if len(processes) == 1:
+                pname = processes[0]
+                tokens = name.split("_")
+                sname = name.split(f"{pname}_")[1]
+                sname = f"{'_'.join(sname.split('_')[:-1])}"
+            else:
+                tokens = name.split("_")
+                pname = f"{tokens[1]}"
+                sname = f"{'_'.join(tokens[2:-1])}"
             if pname not in processes: continue
-            sname = f"{'_'.join(tokens[2:-1])}"
             snameLeg = sname.replace("effStatSmooth", "effStat").replace("qall","")
             systLeg[pname].append(snameLeg)
             sname += f"_{args.charge}"
