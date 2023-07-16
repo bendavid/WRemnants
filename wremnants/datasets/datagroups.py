@@ -272,7 +272,7 @@ class Datagroups(object):
 
                 if self.gen_axes != None:
                     # integrate over remaining gen axes 
-                    logger.debug(f"Integrate over gen axes")
+                    logger.debug(f"Integrate over gen axes {self.gen_axes}")
                     projections = [a for a in h.axes.name if a not in self.gen_axes]
                     if len(projections) < len(h.axes.name):
                         h = h.project(*projections)
@@ -519,10 +519,10 @@ class Datagroups(object):
             raise RuntimeError(f"Base group {group_name} not found in groups {self.groups.keys()}!")
 
         base_members = self.groups[group_name].members[:]
-        logger.error(f"Before filter: {[x.name for x in base_members]}")
+        #logger.debug(f"Before filter: {[x.name for x in base_members]}")
         if member_filter is not None:
             base_members = [m for m in filter(lambda x, f=member_filter: f(x), base_members)]            
-        logger.error(f"After filter: {[x.name for x in base_members]}")
+        #logger.debug(f"After filter: {[x.name for x in base_members]}")
 
         nominal_hist = self.results[base_members[0].name]["output"]["xnorm"].get()
 

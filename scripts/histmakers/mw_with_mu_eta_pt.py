@@ -82,8 +82,8 @@ elif args.addHelicityHistos:
 
     #list(range(0,50,5)).append(np.inf) ,
     axis_ptVgen = hist.axis.Variable(
-        [0., 20., 40., 60.],
-        #[0., 5., 10., 15., 20., 25., 30., 35., 40., 45., 50.],
+        #[0., 20., 40., 60.],
+        [0., 5., 10., 15., 20., 25., 30., 35., 40., 45., 50.],
         name = "ptVgenSig", underflow=False, overflow=False
     )
     #axis_ptVgen.append(np.inf)
@@ -91,15 +91,14 @@ elif args.addHelicityHistos:
     axis_absYVgen = hist.axis.Variable(
         #[0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4., 5., np.inf], 
         # [0, 0.25, 0.5, 0.75, 1., 1.5, 2.5],
-        #[0, 0.5, 1., 1.5, 2.0, 2.5],
-        [0, 1.25, 2.5],
+        [0, 0.5, 1., 1.5, 2.0, 2.5],
+        #[0, 1.25, 2.5],
         name = "absYVgenSig", underflow=False, overflow=False
     )
     theoryAgnostic_axes = [axis_absYVgen, axis_ptVgen]
     theoryAgnostic_cols = ["absYVgen", "ptVgen"] # name of the branch, not of the axis
-    # can get this one from helicity_utils (unless name has to be modified, but should make sure we use the same number of Ai anyway
-    #axis_helicity = helicity_utils.axis_helicity_multidim
-    axis_helicity = hist.axis.Integer(-1, 5, name="helicity", overflow=False, underflow=False)
+    axis_helicity = helicity_utils.axis_helicity_multidim
+    # axis_helicity = hist.axis.Integer(-1, 5, name="helicity", overflow=False, underflow=False)
     # the following just prepares the existence of the group for out-of-acceptance signal, but doesn't create or define the histogram yet
     datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wmunu")
     groups_to_aggregate.append("BkgWmunu")

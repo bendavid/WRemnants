@@ -44,13 +44,6 @@ def make_parser(parser=None):
     return parser
 
 def main(args,xnorm=False):   
-
-    if args.theoryAgnostic:
-        args.unfolding = True
-        logger.warning("For now setting --theoryAgnostic activates --unfolding, they should do the same things")
-        if args.genAxis is None:
-            logger.error("For now you must specify gen axes with --genAxis when using --theoryAgnostic, please do!")
-            quit()
     
     # NOTE: args.filterProcGroups and args.excludeProcGroups should in principle not be used together
     #       (because filtering is equivalent to exclude something), however the exclusion is also meant to skip
@@ -124,8 +117,10 @@ def main(args,xnorm=False):
     suffix = '_xnorm' if xnorm else ''
 
     if xnorm:
+        # FIXME: this is repeated below, is it needed twice?
         # only keep processes where xnorm is defined
         datagroups.select_xnorm_groups()
+        datagroups.deleteGroup("Fake") # delete fakes from xnorm channel
 
     # Start to create the CardTool object, customizing everything
     cardTool = CardTool.CardTool(f"{outfolder}/{name}_{{chan}}{suffix}.txt")
@@ -143,7 +138,8 @@ def main(args,xnorm=False):
         cardTool.setWriteByCharge(False)
         cardTool.setHistName(histName)
         cardTool.setNominalName(histName)
-        datagroups.select_xnorm_groups() # only keep processes where xnorm is defined
+        ### FIXME: this line was repeated (appears above), I am not yet sure it must be used twice
+        # datagroups.select_xnorm_groups() # only keep processes where xnorm is defined
         if args.unfolding:
             cardTool.setProjectionAxes(["count"])
         else:
@@ -152,7 +148,7 @@ def main(args,xnorm=False):
                 datagroups.groups["Wmunu"].add_member_axis("qGen", datagroups.results, 
                     member_filters={-1: lambda x: x.name.startswith("Wminusmunu"), 1: lambda x: x.name.startswith("Wplusmunu")}, 
                     hist_filter=lambda x: x.startswith("xnorm"))
-                datagroups.deleteGroup("Fake")
+                #datagroups.deleteGroup("Fake")
             cardTool.unroll = True
             # remove projection axes from gen axes, otherwise they will be integrated before
             datagroups.setGenAxes([a for a in datagroups.gen_axes if a not in cardTool.project])
@@ -213,7 +209,7 @@ def main(args,xnorm=False):
     
     if args.doStatOnly:
         # print a card with only mass weights, dummy syst no longer needed since combinetf is fixed now
-        cardTool.writeOutput(args=args, xnorm=xnorm)
+        cardTool.writeOutput(args=args, xnorm=xnorm, forceNonzero=not args.unfolding)
         logger.info("Using option --doStatOnly: the card was created with only mass nuisance parameter")
         return
 
@@ -499,12 +495,19 @@ if __name__ == "__main__":
     
     time0 = time.time()
 
+    if args.theoryAgnostic:
+        args.unfolding = True
+        logger.warning("For now setting --theoryAgnostic activates --unfolding, they should do the same things")
+        if args.genAxis is None:
+            logger.error("For now you must specify gen axes with --genAxis when using --theoryAgnostic, please do!")
+            quit()
+    
     if args.genModel:
         main(args, xnorm=True)
     else:
         main(args)
         if args.unfolding:
-            logger.debug("Now running with xnorm = True")
+            logger.warning("Now running with xnorm = True")
             main(args, xnorm=True)
 
     logger.info(f"Running time: {time.time()-time0}")

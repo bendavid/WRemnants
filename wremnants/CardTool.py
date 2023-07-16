@@ -215,8 +215,8 @@ class CardTool(object):
                       ):
         # note: setting Up=Down seems to be pathological for the moment, it might be due to the interpolation in the fit
         # for now better not to use the options, although it might be useful to keep it implemented
-        if mirrorDownVarEqualToUp:
-            raise ValueError("mirrorDownVarEqualToUp currently leads to pathological results in the fit, please keep it False")
+        if mirrorDownVarEqualToUp or mirrorDownVarEqualToNomi:
+            raise ValueError("mirrorDownVarEqualToUp and mirrorDownVarEqualToNomi currently lead to pathological results in the fit, please keep them False")
         
         # Need to make an explicit copy of the array before appending
         procs_to_add = [x for x in (self.allMCProcesses() if processes is None else processes)]
@@ -336,7 +336,7 @@ class CardTool(object):
                 skip_arr = np.array([a.real for a in skip_arr])
                 skip_arr[to_lookup] += bin_lookup
             updated_skip.append(skip_arr)
-            logger.debug(f"Updated skip entry to {skip_arr}")
+            #logger.debug(f"Updated skip entry to {skip_arr}") # this produces a lot of annoying lines which hide other debugging
 
         return updated_skip
 
@@ -542,7 +542,7 @@ class CardTool(object):
                                           downAsNomi=systInfo["mirrorDownVarEqualToNomi"])
             if systInfo["decorrByBin"]:
                 decorrelateByBin = systInfo["decorrByBin"]
-        logger.info(f"Preparing to write systematic {syst} for process {proc}")
+        logger.info(f"   {syst} for process {proc}")
         var_map = self.systHists(h, syst)
         if check_systs and syst != self.nominalName:
             self.checkSysts(var_map, proc,
@@ -553,12 +553,12 @@ class CardTool(object):
             logger.info(f"Zeroing statistical uncertainty for process {proc}")
             setZeroStatUnc = True
         # this is a big loop a bit slow, but it might be mainly the hist->root conversion and writing into the root file
-        logger.debug("Before self.writeHist(...)")
+        # logger.debug("Before self.writeHist(...)")
         for name, var in var_map.items():
             if name != "":
                 self.writeHist(var, proc, name, setZeroStatUnc=setZeroStatUnc,
                                decorrByBin=decorrelateByBin, hnomi=hnom)
-        logger.debug("After self.writeHist(...)")
+        # logger.debug("After self.writeHist(...)")
 
     def addPseudodata(self, processes, processesFromNomi=[]):
         datagroups = self.datagroups if not self.pseudodata_datagroups else self.pseudodata_datagroups
@@ -589,6 +589,8 @@ class CardTool(object):
         self.writeHist(hdata, self.dataName, self.pseudoData+"_sum")
 
     def writeForProcesses(self, syst, processes, label, check_systs=True):
+        logger.info("-"*50)
+        logger.info(f"Preparing to write systematic {syst}")
         for process in processes:
             hvar = self.datagroups.groups[process].hists[label]
             if not hvar:
