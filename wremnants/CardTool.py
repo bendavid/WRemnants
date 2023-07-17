@@ -690,13 +690,15 @@ class CardTool(object):
                 sum_groups = set(["_".join([a + p.split(a)[1].split("_")[0] for a in axes]) for p in pois])
 
                 for sum_group in sorted(sum_groups):
-                    if genCharge is None:
-                        members = " ".join([p for p in pois if all([g in p.split("_") for g in sum_group.split("_")])])
-                        self.addPOISumGroup(f"{base_process}_{sum_group}", members)
-                    else:
-                        members = " ".join([p for p in pois if all([g in p.split("_") for g in sum_group.split("_")]) and genCharge in p])
-                        self.addPOISumGroup(f"{base_process}_{sum_group}_{genCharge}", members)
+                    membersList = [p for p in pois if all([g in p.split("_") for g in sum_group.split("_")])]
+                    sum_group_name = f"{base_process}_{sum_group}"
+                    if genCharge is not None:                
+                        membersList = list(filter(lambda x: genCharge in x, membersList))
+                        sum_group_name += f"_{genCharge}"
+                    members = " ".join(membersList)
+                    self.addPOISumGroup(sum_group_name, members)
 
+                        
     def addPOISumGroup(self, groupName, members, groupLabel="sumGroup"):
         # newName sumGroup = poi_bin1 poi_bin2 poi_bin3
         group_expr = f"{groupName} {groupLabel} ="
