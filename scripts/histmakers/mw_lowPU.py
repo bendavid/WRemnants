@@ -292,11 +292,6 @@ def build_graph(df, dataset):
 
     # if dataset.name in sigProcs:
            
-        # mass weights (Breit-Wigner and nominal)
-        #df = syst_tools.define_mass_weights(df, dataset.name)
-        #syst_tools.add_massweights_hist(results, df, axes, [*cols], base_name="reco_mT_massWeight", proc=dataset.name)
-        #syst_tools.add_massweights_hist(results, df, axes_mT, cols_mT, base_name="mT_massWeight", proc=dataset.name)
-
         # Muon momentum scale
         # netabins = 1
         # nweights = 21

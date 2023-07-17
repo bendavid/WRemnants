@@ -346,14 +346,6 @@ def build_graph(df, dataset):
     df = df.Define("prefireCorr_syst_tensor", "Eigen::TensorFixedSize<double, Eigen::Sizes<2>> res; auto w = nominal_weight*prefireCorr_syst; std::copy(std::begin(w), std::end(w), res.data()); return res;")
     results.append(df.HistoBoost("nominal_prefireCorr", [*axes], [*cols, "prefireCorr_syst_tensor"], tensor_axes = [common.down_up_axis]))
 
-    if dataset.name in sigProcs:
-
-        # mass weights (Breit-Wigner and nominal)
-        df = syst_tools.define_mass_weights(df, dataset.name)
-        syst_tools.add_massweights_hist(results, df, axes, [*cols], base_name="nominal", proc=dataset.name)
-        syst_tools.add_massweights_hist(results, df, axes_mT, cols_mT, base_name="transverseMass", proc=dataset.name)   
-        syst_tools.add_massweights_hist(results, df, [common.axis_mll_lowpu], ["mll"], base_name="mll_massWeight", proc=dataset.name)
-
     if not dataset.is_data and not args.onlyMainHistograms:
         if not args.noRecoil:
             df = recoilHelper.add_recoil_unc_W(df, results, dataset, cols, axes, "nominal")
