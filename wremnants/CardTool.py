@@ -695,8 +695,9 @@ class CardTool(object):
                     if genCharge is not None:                
                         membersList = list(filter(lambda x: genCharge in x, membersList))
                         sum_group_name += f"_{genCharge}"
-                    members = " ".join(membersList)
-                    self.addPOISumGroup(sum_group_name, members)
+                    if len(membersList):
+                        members = " ".join(membersList)
+                        self.addPOISumGroup(sum_group_name, members)
 
                         
     def addPOISumGroup(self, groupName, members, groupLabel="sumGroup"):

@@ -41,6 +41,8 @@ def make_parser(parser=None):
     parser.add_argument("--genModel", action="store_true", help="Produce datacard with the xnorm as model (binned according to axes defined in --fitvar)")
     # TODO: move next option in common.py? 
     parser.add_argument("--absolutePathInCard", action="store_true", help="In the datacard, set Absolute path for the root file where shapes are stored")
+    parser.add_argument("--recoCharge", type=str, default=["plus", "minus"], nargs="+", choices=["plus", "minus"], help="Specify reco charge to use, default uses both. This is a workaround for unfolding/theory-agnostic fit when running a single reco charge, as gen bins with opposite gen charge have to be filtered out")
+    
     return parser
 
 def main(args,xnorm=False):   
@@ -102,8 +104,10 @@ def main(args,xnorm=False):
         
         if wmass:
             # gen level bins, split by charge
-            datagroups.defineSignalBinsUnfolding("Wmunu", "Wmunu_qGen0", member_filter=lambda x: x.name.startswith("Wminusmunu"))
-            datagroups.defineSignalBinsUnfolding("Wmunu", "Wmunu_qGen1", member_filter=lambda x: x.name.startswith("Wplusmunu"))
+            if "minus" in args.recoCharge:
+                datagroups.defineSignalBinsUnfolding("Wmunu", "Wmunu_qGen0", member_filter=lambda x: x.name.startswith("Wminusmunu"))
+            if "plus" in args.recoCharge:
+                datagroups.defineSignalBinsUnfolding("Wmunu", "Wmunu_qGen1", member_filter=lambda x: x.name.startswith("Wplusmunu"))
             # out of acceptance contribution
             datagroups.groups["Wmunu"].deleteMembers([m for m in datagroups.groups["Wmunu"].members if not m.name.startswith("Bkg")])
         else:
@@ -133,6 +137,9 @@ def main(args,xnorm=False):
     if args.sumChannels or xnorm or name in ["ZMassDilepton"]:
         cardTool.setChannels(["inclusive"])
         cardTool.setWriteByCharge(False)
+    else:
+        cardTool.setChannels(args.recoCharge)
+
     if xnorm:
         histName = "xnorm"
         cardTool.setWriteByCharge(False)
