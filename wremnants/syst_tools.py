@@ -236,6 +236,37 @@ def massWeightNames(matches=None, proc=""):
     # If name is "" it won't be stored
     return [x if not matches or any(y in x for y in matches) else "" for x in names]
 
+def define_width_weights(df, proc):
+    if "widthWeight_tensor" in df.GetColumnNames():
+        logger.debug("widthWeight_tensor already defined, do nothing here.")
+        return df
+    nweights = 5
+    df = df.Define("widthWeight_tensor", f"wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeightAltSet1)")
+    df = df.Define("widthWeight_tensor_wnom", "auto res = widthWeight_tensor; res = nominal_weight*res; return res;")
+
+    return df
+
+def add_widthweights_hist(results, df, axes, cols, base_name="nominal", proc=""):
+    name = Datagroups.histName(base_name, syst="widthWeight"+(proc[0] if len(proc) else proc))
+    widthWeight = df.HistoBoost(name, axes, [*cols, "widthWeight_tensor_wnom"], 
+                    tensor_axes=[hist.axis.StrCategory(widthWeightNames(proc=proc), name="width")], 
+                    storage=hist.storage.Double())
+    results.append(widthWeight)
+
+def widthWeightNames(matches=None, proc=""):
+    central=3
+    nweights=5
+    if proc[0] == "Z":
+        widths=(2.49333, 2.49493, 2.4929, 2.4952, 2.4975) 
+    elif proc[0] == "W":
+        widths=(2.09053, 2.09173, 2.043, 2.085, 2.127) 
+    else:
+        raise RuntimeError(f"No width found for process {proc}")
+    
+    names = [f"width{proc[0]}{str(widths[i]).replace('.','p')}MeV{'' if i == central else ('Down' if widths[i] < widths[central] else 'Up')}" for i in range(nweights)]
+    return [x if not matches or any(y in x for y in matches) else "" for x in names]
+
+
 def add_pdf_hists(results, df, dataset, axes, cols, pdfs, base_name="nominal"):
     for pdf in pdfs:
         try:
@@ -391,6 +422,7 @@ def add_theory_hists(results, df, args, dataset_name, corr_helpers, qcdScaleByHe
 
     df = theory_tools.define_scale_tensor(df)
     df = define_mass_weights(df, dataset_name)
+    df = define_width_weights(df, dataset_name)
 
     add_pdf_hists(results, df, dataset_name, axes, cols, args.pdfs, base_name=base_name)
     add_qcdScale_hist(results, df, scale_axes, scale_cols, base_name=base_name)
@@ -411,5 +443,6 @@ def add_theory_hists(results, df, args, dataset_name, corr_helpers, qcdScaleByHe
 
         # TODO: Should have consistent order here with the scetlib correction function
         add_massweights_hist(results, df, axes, cols, proc=dataset_name, base_name=base_name)
+        add_widthweights_hist(results, df, axes, cols, proc=dataset_name, base_name=base_name)
 
     return df

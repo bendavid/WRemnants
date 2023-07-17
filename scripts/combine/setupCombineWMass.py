@@ -203,6 +203,15 @@ def main(args,xnorm=False):
                                 systAxes=["massShift"],
                                 passToFakes=passSystToFakes,
         )
+        cardTool.addSystematic(f"widthWeightZ",
+                                processes=single_v_nonsig_samples,
+                                group=f"widthZ",
+                                skipEntries=[(0,), (1,)],
+                                mirror=False,
+                                noConstraint=False,
+                                systAxes=["width"],
+                                passToFakes=passSystToFakes,
+        )
 
     if not (constrainMass or wmass):
         massSkip.append(("^massShift.*2p1MeV.*",))
@@ -217,7 +226,17 @@ def main(args,xnorm=False):
                             systAxes=["massShift"],
                             passToFakes=passSystToFakes,
     )
-    
+    cardTool.addSystematic(f"widthWeight{label}",
+                            processes=signal_samples_inctau,
+                            skipEntries=[(0,), (1,)],
+                            group=f"width{label}",
+                            mirror=False,
+                            #TODO: Name this
+                            noConstraint=not constrainMass,
+                            systAxes=["width"],
+                            passToFakes=passSystToFakes,
+    )
+
     if args.doStatOnly:
         # print a card with only mass weights and a dummy syst
         cardTool.addLnNSystematic("dummy", processes=["Top", "Diboson"] if wmass else ["Other"], size=1.001, group="dummy")
