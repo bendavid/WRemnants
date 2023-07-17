@@ -199,7 +199,7 @@ def readFitInfoFromFile(rf,filename, group=False, sort=None, ascending=True, sta
     df['absimpact'] = np.abs(df['impact'])
     df['abspull'] = np.abs(df['pull'])
     if not group:
-        df.drop(df.loc[df['label'].str.contains('massShift100MeV')].index, inplace=True)
+        df.drop(df.loc[df['label'].str.contains('massShift.*100MeV', regex=True)].index, inplace=True)
     colors = np.full(len(df), '#377eb8')
     if not group:
         colors[df['impact'] > 0.] = '#e41a1c'
