@@ -101,7 +101,7 @@ def main(args,xnorm=False):
     elif args.fitXsec:
         datagroups.unconstrainedProcesses.append("Wmunu" if wmass else "Zmumu")
     elif args.unfolding:
-        constrainMass = True
+        constrainMass = False if args.theoryAgnostic else True
         datagroups.setGenAxes(args.genAxis)
         
         if wmass:

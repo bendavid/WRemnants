@@ -136,7 +136,7 @@ def prepareChargeFit(options, charges=["plus"]):
         if options.combinetfOption:
             combineCmd += " %s" % options.combinetfOption
         if args.theoryAgnostic:
-            combineCmd += " --POIMode mu"
+            combineCmd += " --POIMode mu --allowNegativePOI"
         else:
             combineCmd += " --POIMode none"                        
             
