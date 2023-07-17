@@ -116,7 +116,6 @@ def setup(args,xnorm=False):
     cardTool = CardTool.CardTool(xnorm=xnorm)
     cardTool.setDatagroups(datagroups)
     logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
-    cardTool.setNominalTemplate(f"{templateDir}/main.txt")
     cardTool.setProjectionAxes(args.fitvar)
     if args.sumChannels or xnorm or dilepton:
         cardTool.setChannels(["inclusive"])

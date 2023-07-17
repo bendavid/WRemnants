@@ -284,7 +284,7 @@ jobs:
           echo "WEB_DIR=${WEB_DIR}" >> $GITHUB_ENV
           echo "PLOT_DIR=${PLOT_DIR}" >> $GITHUB_ENV
           echo "NTHREADS=${NTHREADS}" >> $GITHUB_ENV
-          echo "HIST_FILE_MUMU=${WREMNANTS_OUTDIR}/${OUTFILE_LOWPU_MUMU} >> $GITHUB_ENV
+          echo "HIST_FILE_MUMU=${WREMNANTS_OUTDIR}/${OUTFILE_LOWPU_MUMU}" >> $GITHUB_ENV
           echo "HIST_FILE_EE=${WREMNANTS_OUTDIR}/${OUTFILE_LOWPU_EE}" >> $GITHUB_ENV
 
       - uses: actions/checkout@v3
