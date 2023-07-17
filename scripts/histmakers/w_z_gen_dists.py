@@ -138,8 +138,8 @@ def build_graph(df, dataset):
             )
 
     if "MEParamWeight" in df.GetColumnNames():
-        df = syst_tools.define_mass_weights(df, isW)
-        syst_tools.add_massweights_hist(results, df, nominal_axes, nominal_cols, "nominal_gen")
+        df = syst_tools.define_mass_weights(df, proc=dataset.name)
+        syst_tools.add_massweights_hist(results, df, nominal_axes, nominal_cols, "nominal_gen", proc=dataset.name)
 
     return results, weightsum
 

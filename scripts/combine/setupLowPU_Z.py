@@ -117,7 +117,7 @@ def main(args, xnorm=False):
     pdfAction = {x : lambda h: h[{"recoil_gen" : s[::hist.sum]}] for x in Zmumu_procs if "gen" not in x},
     combine_helpers.add_pdf_uncertainty(cardTool, constrainedProcs+datagroups.unconstrainedProcesses, False, action=pdfAction)
     combine_helpers.add_modeling_uncertainty(cardTool, args.minnloScaleUnc, constrainedProcs+datagroups.unconstrainedProcesses, 
-        [], False, args.resumUnc, False, scaleTNP=args.scaleTNP, rebin_pt=args.rebinPtV)
+        [], False, args.resumUnc, False, scaleTNP=args.scaleTNP)
     
     if not xnorm:
 
