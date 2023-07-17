@@ -85,6 +85,8 @@ def main(args,xnorm=False):
     tag = name+"_"+args.fitvar.replace("-","_")
     if args.doStatOnly:
         tag += "_statOnly"
+    if len(args.recoCharge) == 1:
+        tag += f"_reco{args.recoCharge[0].capitalize()}Only"
     if args.postfix:
         tag += f"_{args.postfix}"
 
