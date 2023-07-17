@@ -324,8 +324,7 @@ def define_theory_corr(df, dataset_name, helpers, generators, modify_central_wei
             df = df.Define(f"{generator}Weight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "nominal_weight_uncorr"])
 
         if i == 0 and modify_central_weight:
-            var = f"{generator}Weight_tensor(0)/nominal_weight_uncorr"
-            df = df.Define("theory_corr_weight", f"std::isnan({var}) ? 0 : {var}")
+            df = df.Define("theory_corr_weight", f"nominal_weight_uncorr == 0 ? 0 : {generator}Weight_tensor(0)/nominal_weight_uncorr")
 
     return df
 
