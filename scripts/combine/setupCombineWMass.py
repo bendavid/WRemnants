@@ -238,7 +238,7 @@ def setup(args,xnorm=False):
                                 passToFakes=passSystToFakes)
     else:
         cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
-        cardTool.addLnNSystematic("luminosity", processes=allMCprocesses_noQCDMC, size=1.012, group="luminosity")
+        cardTool.addLnNSystematic("luminosity", processes=allMCprocesses_noQCDMC, size=1.017 if lowPU else 1.012, group="luminosity")
 
     if not args.noEfficiencyUnc:
 

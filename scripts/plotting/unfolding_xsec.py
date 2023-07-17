@@ -37,6 +37,7 @@ parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend te
 parser.add_argument("--plots", type=str, nargs="+", default=["xsec", "uncertainties"], choices=["xsec", "uncertainties"], help="Define which plots to make")
 parser.add_argument("--normalize", action='store_true', help="Plot normalized distributions")
 parser.add_argument("--lumi", type=float, default=16.8, help="Luminosity used in the fit, needed to get the absolute cross section")
+parser.add_argument("--plotSumPOIs", action='store_true', help="Plot xsecs from sum POI groups")
 parser.add_argument("--eoscp", action='store_true', help="Override use of xrdcp and use the mount instead")
 
 args = parser.parse_args()
@@ -115,7 +116,12 @@ def make_yields_df(hists, procs, signal=None, per_bin=False, yield_only=False, p
 
 def get_results(rtfile, poi_type, scale=1.0, group=True, uncertainties=None):
     if isinstance(poi_type, list):
-        return pd.concat([get_results(rtfile, p, scale=scale, group=group, uncertainties=uncertainties) for p in poi_type]) 
+        results = []
+        for p in poi_type:
+            result = get_results(rtfile, p, scale=scale, group=group, uncertainties=uncertainties)
+            if result is not None:
+                results.append(result)
+        return pd.concat(results)
 
     results = []
 
@@ -125,6 +131,8 @@ def get_results(rtfile, poi_type, scale=1.0, group=True, uncertainties=None):
 
     histname = f"nuisance_group_impact_{poi_type}" if group else f"nuisance_impact_{poi_type}"
 
+    if f"{histname};1" not in rtfile.keys():
+        return None
     impacts = rtfile[histname].to_hist()
 
     # process names
@@ -193,6 +201,9 @@ def plot_xsec_unfolded(df, df_asimov=None, edges=None, channel=None, poi_type="m
         rrange = args.rrange
 
     xlabel = "-".join([get_xlabel(a, process_label) for a in axes])
+    if len(axes) >= 2:
+        xlabel = xlabel.replace("[GeV]","")
+        xlabel += " Bin"
 
     fig, ax1, ax2 = plot_tools.figureWithRatio(hist_xsec, xlabel, yLabel, ylim, "Pred./Data", rrange, width_scale=2)
 
@@ -312,7 +323,7 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, poi_type="mu", sca
     if normalize:
         yLabel="1/$\sigma$ d$\sigma("+process_label+")$"
     else:
-        yLabel="d$\sigma ()"+process_label+")$ [pb]"
+        yLabel="d$\sigma ("+process_label+")$ [pb]"
 
     if relative_uncertainty:
         yLabel = "$\delta$ "+ yLabel
@@ -342,6 +353,9 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, poi_type="mu", sca
         ylim = args.ylim
 
     xlabel = "-".join([get_xlabel(a, process_label) for a in axes])
+    if len(axes) >= 2:
+        xlabel.replace("[GeV]","")
+        xlabel += "Bin"
 
     fig, ax1 = plot_tools.figure(hist_xsec, xlabel, yLabel, ylim, logy=logy, width_scale=2)
 
@@ -464,9 +478,10 @@ else:
 
 # make all possible gen axes 
 gen_axes_permutations = [gen_axes]
-# Include all combinations of axes
-for n in range(1, len(gen_axes)):
-    gen_axes_permutations += [k for k in itertools.combinations(gen_axes, n)]
+if args.plotSumPOIs:
+    # Include all combinations of axes
+    for n in range(1, len(gen_axes)):
+        gen_axes_permutations += [k for k in itertools.combinations(gen_axes, n)]
 
 all_axes = ["qGen", "ptGen",  "absEtaGen",  "ptVGen",  "absYVGen"]
 
@@ -519,14 +534,19 @@ for axes in gen_axes_permutations:
         
         # find bin widths
         histo = groups.results[groups.groups[process].members[0].name]["output"][args.baseName].get()
-        
-        edges = []
-        for x in channel_axes:
-            edges += [a.edges for a in histo.axes if a.name == x]
-        edges = np.array(edges).flatten()
-        
-        if len(axes) == 1 and axes[0] == "qGen":
-            edges = np.array([-2,0,2])
+
+        hproj = histo.project(*channel_axes)
+        bins = np.product(hproj.axes.size)
+
+        if len(channel_axes) == 1:
+            if channel_axes[0] == "qGen":
+                edges = np.array([-2,0,2])
+            else:
+                edges = np.array(histo.axes[channel_axes[0]].edges)
+        else:
+            hproj = histo.project(*channel_axes)
+            bins = np.product(hproj.axes.size)
+            edges = np.arange(0.5, bins+1.5, 1.0)
 
         # sort values
         data_c = data_channel.sort_values(by=channel_axes)

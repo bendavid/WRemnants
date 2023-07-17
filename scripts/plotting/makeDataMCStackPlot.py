@@ -115,8 +115,9 @@ if args.selection:
     for selection in args.selection.split(","):
         axis, value = selection.split("=")
         select[axis] = int(value)
+    applySelection=False
 else:
-    applySelection = True
+    applySelection=True
 
 if not args.nominalRef:
     nominalName = args.baseName.rsplit("_", 1)[0]

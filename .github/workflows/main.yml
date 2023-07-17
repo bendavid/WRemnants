@@ -551,7 +551,7 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/pulls.py $WREMNANTS_OUTDIR/ZMassDilepton_ptll/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR/unfolding --debug --groups pdf
 
       - name: dilepton combine unfolding plot xsec 
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py $HIST_FILE --fitresult $WREMNANTS_OUTDIR/ZMassDilepton_ptll/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR/unfolding --debug --rrange 0.9 1.1 --lumi=$LUMI_SCALE
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py $HIST_FILE --fitresult $WREMNANTS_OUTDIR/ZMassDilepton_ptll/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR/unfolding --debug --rrange 0.9 1.1
 
   gen:
     # The type of runner that the job will run on
