@@ -218,7 +218,7 @@ def setup(args,xnorm=False):
     to_fakes = passSystToFakes and not args.noQCDscaleFakes and not xnorm
     combine_helpers.add_pdf_uncertainty(cardTool, single_v_samples, passSystToFakes, from_corr=args.pdfUncFromCorr, scale=args.scalePdf)
     combine_helpers.add_modeling_uncertainty(cardTool, args.minnloScaleUnc, signal_samples_inctau, 
-        single_v_nonsig_samples if not xnorm else [], to_fakes, args.resumUnc, wmass, scaleTNP=args.scaleTNP, rebin_pt=args.rebinPtV)
+        single_v_nonsig_samples if not xnorm else [], to_fakes, args.resumUnc, wmass, scaleTNP=args.scaleTNP)
 
     if xnorm:
         return cardTool
