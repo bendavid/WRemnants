@@ -17,7 +17,6 @@ import os
 parser.add_argument("--csVarsHist", action='store_true', help="Add CS variables to dilepton hist")
 parser.add_argument("--axes", type=str, nargs="*", default=["mll", "ptll"], help="")
 parser.add_argument("--finePtBinning", action='store_true', help="Use fine binning for ptll")
-parser.add_argument("--testPlots", action='store_true', help="Add some plots to test the scale factors")
 parser.add_argument("--genVars", type=str, nargs="+", default=["ptVGen"], choices=["ptVGen", "absYVGen"], help="Generator level variable")
 
 parser = common.set_parser_default(parser, "pt", [44,26.,70.])
@@ -216,7 +215,7 @@ def build_graph(df, dataset):
         else:
             results.append(df.HistoBoost(f"nominal_{obs}", [all_axes[obs]], [obs, "nominal_weight"]))
     # test plots
-    if args.testPlots:
+    if args.validationHists:
         df_plusTrig = df.Filter("trigMuons_passTrigger0")
         df_minusTrig = df.Filter("nonTrigMuons_passTrigger0")
         df_bothTrig = df.Filter("trigMuons_passTrigger0 && nonTrigMuons_passTrigger0")
