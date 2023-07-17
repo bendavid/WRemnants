@@ -63,9 +63,7 @@ parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend te
 parser.add_argument("--fitresult", type=str, help="Specify a fitresult root file to draw the postfit distributions with uncertainty bands")
 parser.add_argument("--prefit", action='store_true', help="Use the prefit uncertainty from the fitresult root file, instead of the postfit. (--fitresult has to be given)")
 parser.add_argument("--eoscp", action='store_true', help="Use of xrdcp for eos output rather than the mount")
-parser.add_argument("--failIso", action='store_true', help="Select failIso events")
-parser.add_argument("--failMT", action='store_true', help="Select failMT events")
-
+parser.add_argument("--selection", type=str, help="Specify custom selections as comma seperated list (e.g. '--selection passIso=0,passMT=1' )")
 
 subparsers = parser.add_subparsers(dest="variation")
 variation = subparsers.add_parser("variation", help="Arguments for adding variation hists")
@@ -113,10 +111,10 @@ logger.info(f"Will plot datasets {datasets}")
 
 select = {} if args.channel == "all" else {"charge" : -1.j if args.channel == "minus" else 1.j}
 
-if args.failIso or args.failMT:
-    applySelection = False
-    select["passIso"] = not args.failIso
-    select["passMT"] = not args.failMT
+if args.selection:
+    for selection in args.selection.split(","):
+        axis, value = selection.split("=")
+        select[axis] = int(value)
 else:
     applySelection = True
 
