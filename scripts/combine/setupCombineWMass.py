@@ -42,7 +42,7 @@ def make_parser(parser=None):
     # TODO: move next option in common.py? 
     parser.add_argument("--absolutePathInCard", action="store_true", help="In the datacard, set Absolute path for the root file where shapes are stored")
     parser.add_argument("--recoCharge", type=str, default=["plus", "minus"], nargs="+", choices=["plus", "minus"], help="Specify reco charge to use, default uses both. This is a workaround for unfolding/theory-agnostic fit when running a single reco charge, as gen bins with opposite gen charge have to be filtered out")
-    
+    parser.add_argument("--forceRecoChargeAsGen", action="store_true", help="Force gen charge to match reco charge in CardTool, this only works when the reco charge is used to define the channel")
     return parser
 
 def main(args,xnorm=False):   
@@ -144,6 +144,9 @@ def main(args,xnorm=False):
         cardTool.setWriteByCharge(False)
     else:
         cardTool.setChannels(args.recoCharge)
+        if args.forceRecoChargeAsGen:
+            cardTool.setExcludePOIforChannel("plus", ".*qGen0")
+            cardTool.setExcludePOIforChannel("minus", ".*qGen1")
 
     if xnorm:
         histName = "xnorm"
@@ -166,8 +169,9 @@ def main(args,xnorm=False):
             datagroups.setGenAxes([a for a in datagroups.gen_axes if a not in cardTool.project])
     if args.unfolding:
         # TODO: make this less hardcoded to filter the charge (if the charge is not present this will duplicate things)
-        cardTool.addPOISumGroups(genCharge="qGen0")
-        cardTool.addPOISumGroups(genCharge="qGen1")
+        #cardTool.addPOISumGroups(genCharge="qGen0")
+        #cardTool.addPOISumGroups(genCharge="qGen1")
+        pass
     if args.noHist:
         cardTool.skipHistograms()
     cardTool.setOutfile(os.path.abspath(f"{outfolder}/{name}CombineInput{suffix}.root"))
@@ -207,10 +211,10 @@ def main(args,xnorm=False):
     if not (constrainMass or wmass):
         massSkip.append(("^massShift2p1MeV.*",))
 
-    if args.theoryAgnostic:
-        logger.error("Temporarily not using mass weights for Wtaunu. Please update when possible")
+    #if args.theoryAgnostic:
+    #    logger.error("Temporarily not using mass weights for Wtaunu. Please update when possible")
     cardTool.addSystematic("massWeight", 
-                            processes=signal_samples if args.theoryAgnostic else signal_samples_inctau,
+                            processes=signal_samples_inctau,  #signal_samples if args.theoryAgnostic else signal_samples_inctau,
                             group=f"massShift{'W' if wmass else 'Z'}",
                             skipEntries=massSkip,
                             mirror=False,

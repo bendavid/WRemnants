@@ -24,6 +24,7 @@ parser.add_argument("--noGenMatchMC", action='store_true', help="Don't use gen m
 parser.add_argument("--addHelicityHistos", action='store_true', help="Add V qT,Y axes and helicity axes for W samples")
 parser.add_argument("--halfStat", action='store_true', help="Test half data and MC stat, selecting odd events, just for tests")
 parser.add_argument("--makeMCefficiency", action="store_true", help="Save yields vs eta-pt-ut-passMT-passIso-passTrigger to derive 3D efficiencies for MC isolation and trigger (can run also with --onlyMainHistograms)")
+parser.add_argument("--onlyTheorySyst", action="store_true", help="Keep only theory systematic variations, mainly for tests")
 parser.add_argument("--oneMCfileEveryN", type=int, default=None, help="Use 1 MC file every N, where N is given by this option. Mainly for tests")
 args = parser.parse_args()
 
@@ -211,8 +212,9 @@ def whistosbyHelicity(df, results, dataset, reco_sel_GF, era, nominal_axes_thAgn
     results.append(nominalByHelicity)
 
     if not args.onlyMainHistograms:
-        df = syst_tools.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, nominal_axes_thAgn, nominal_cols_thAgn, addhelicity=True)
-        df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, nominal_axes_thAgn, nominal_cols_thAgn, what_analysis=thisAnalysis, addhelicity=True)
+        if not args.onlyTheorySyst:
+            df = syst_tools.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, nominal_axes_thAgn, nominal_cols_thAgn, addhelicity=True)
+            df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, nominal_axes_thAgn, nominal_cols_thAgn, what_analysis=thisAnalysis, addhelicity=True)
         df = syst_tools.add_theory_hists(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, nominal_axes_thAgn, nominal_cols_thAgn, for_wmass=True, addhelicity=True)
     else:
         #FIXME: hardcoded to keep mass weights, this would be done in add_theory_hists
@@ -454,14 +456,15 @@ def build_graph(df, dataset):
 
     if not dataset.is_data and not args.onlyMainHistograms:
 
-        if not args.noScaleFactors:
-            df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, axes, cols, what_analysis=thisAnalysis, smooth3D=args.smooth3dsf)
-        df = syst_tools.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, axes, cols)
-        
-        # luminosity, done here as shape variation despite being a flat scaling so to facilitate propagating to fakes afterwards
-        df = df.Define("luminosityScaling", f"wrem::constantScaling(nominal_weight, {args.lumiUncertainty})")
-        luminosity = df.HistoBoost("nominal_luminosity", axes, [*cols, "luminosityScaling"], tensor_axes = [common.down_up_axis], storage=hist.storage.Double())
-        results.append(luminosity)
+        if not args.onlyTheorySyst:
+            if not args.noScaleFactors:
+                df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, axes, cols, what_analysis=thisAnalysis, smooth3D=args.smooth3dsf)
+            df = syst_tools.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, axes, cols)
+
+            # luminosity, done here as shape variation despite being a flat scaling so to facilitate propagating to fakes afterwards
+            df = df.Define("luminosityScaling", f"wrem::constantScaling(nominal_weight, {args.lumiUncertainty})")
+            luminosity = df.HistoBoost("nominal_luminosity", axes, [*cols, "luminosityScaling"], tensor_axes = [common.down_up_axis], storage=hist.storage.Double())
+            results.append(luminosity)
                 
         # n.b. this is the W analysis so mass weights shouldn't be propagated
         # on the Z samples (but can still use it for dummy muon scale)
@@ -471,7 +474,7 @@ def build_graph(df, dataset):
             df = syst_tools.add_theory_hists(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, axes, cols, for_wmass=True)
 
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
-            if not "tau" in dataset.name:
+            if not args.onlyTheorySyst and not "tau" in dataset.name:
                 df = syst_tools.add_muonscale_hist(results, df, args.muonCorrEtaBins, args.muonCorrMag, isW, axes, cols)
 
                 if args.muonScaleVariation == 'smearingWeights':
