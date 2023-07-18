@@ -5,6 +5,7 @@ from wremnants import theory_tools
 from wremnants.datasets.datagroups import Datagroups
 import re
 import collections.abc
+from decimal import Decimal
 
 logger = logging.child_logger(__name__)
 
@@ -244,6 +245,10 @@ def define_width_weights(df, proc):
     df = df.Define("widthWeight_tensor", f"wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeightAltSet1)")
     df = df.Define("widthWeight_tensor_wnom", "auto res = widthWeight_tensor; res = nominal_weight*res; return res;")
 
+    # df = df.Define("widthWeight_nominal", "widthWeight_tensor[3]")
+    # df = df.Define("widthWeight_down", "widthWeight_tensor[2]/widthWeight_nominal")
+    # df = df.Define("widthWeight_up", "widthWeight_tensor[4]/widthWeight_nominal")
+
     return df
 
 def add_widthweights_hist(results, df, axes, cols, base_name="nominal", proc=""):
@@ -255,17 +260,21 @@ def add_widthweights_hist(results, df, axes, cols, base_name="nominal", proc="")
 
 def widthWeightNames(matches=None, proc=""):
     central=3
-    nweights=5
+
     if proc[0] == "Z":
-        widths=(2.49333, 2.49493, 2.4929, 2.4952, 2.4975) 
+        widths=(2.49333, 2.49493, 2.4929, 2.4952, 2.4975)
     elif proc[0] == "W":
         widths=(2.09053, 2.09173, 2.043, 2.085, 2.127) 
     else:
         raise RuntimeError(f"No width found for process {proc}")
-    
-    names = [f"width{proc[0]}{str(widths[i]).replace('.','p')}MeV{'' if i == central else ('Down' if widths[i] < widths[central] else 'Up')}" for i in range(nweights)]
-    return [x if not matches or any(y in x for y in matches) else "" for x in names]
+    # 0 and 1 are for reference
+    names = [f"width{proc[0]}{str(widths[i]).replace('.','p')}GeV" for i in (0, 1)]
+    # 2, 3, and 4 are Down, Central, Up
+    names.append(f"widthShift{proc[0]}{str(2.3 if proc[0] == 'Z' else 42).replace('.','p')}MeVDown")
+    names.append(f"width{proc[0]}{str(widths[central]).replace('.','p')}GeV")
+    names.append(f"widthShift{proc[0]}{str(2.3 if proc[0] == 'Z' else 42).replace('.','p')}MeVUp")
 
+    return [x if not matches or any(y in x for y in matches) else "" for x in names]
 
 def add_pdf_hists(results, df, dataset, axes, cols, pdfs, base_name="nominal"):
     for pdf in pdfs:

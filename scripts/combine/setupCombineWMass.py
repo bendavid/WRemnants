@@ -193,6 +193,8 @@ def main(args,xnorm=False):
     constrainedZ = constrainMass and not wmass
     label = 'W' if wmass else 'Z'
     massSkip = [(f"^massShift[W|Z]{i}MeV.*",) for i in range(0, 110 if constrainedZ else 100, 10)]
+    widthSkipZ = [("widthZ2p49333GeV",), ("widthZ2p49493GeV",), ("widthZ2p4952GeV",)] 
+    widthSkipW = [("widthW2p09053GeV",), ("widthW2p09173GeV",), ("widthW2p085GeV",)]
     if wmass and not xnorm:
         cardTool.addSystematic(f"massWeightZ",
                                 processes=single_v_nonsig_samples,
@@ -206,9 +208,8 @@ def main(args,xnorm=False):
         cardTool.addSystematic(f"widthWeightZ",
                                 processes=single_v_nonsig_samples,
                                 group=f"widthZ",
-                                skipEntries=[(0,), (1,)],
+                                skipEntries=widthSkipZ[:],
                                 mirror=False,
-                                noConstraint=False,
                                 systAxes=["width"],
                                 passToFakes=passSystToFakes,
         )
@@ -228,11 +229,10 @@ def main(args,xnorm=False):
     )
     cardTool.addSystematic(f"widthWeight{label}",
                             processes=signal_samples_inctau,
-                            skipEntries=[(0,), (1,)],
+                            skipEntries=widthSkipZ[:] if label=="Z" else widthSkipW[:],
                             group=f"width{label}",
                             mirror=False,
                             #TODO: Name this
-                            noConstraint=not constrainMass,
                             systAxes=["width"],
                             passToFakes=passSystToFakes,
     )
