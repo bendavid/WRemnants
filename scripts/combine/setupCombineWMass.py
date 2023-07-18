@@ -122,6 +122,9 @@ def main(args,xnorm=False):
 
     suffix = '_xnorm' if xnorm else ''
 
+    if "BkgWmunu" in args.excludeProcGroups:
+        datagroups.deleteGroup("Wmunu") # remove out of acceptance signal
+    
     if xnorm:
         # FIXME: this is repeated below, is it needed twice?
         # only keep processes where xnorm is defined
