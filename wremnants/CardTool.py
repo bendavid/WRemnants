@@ -126,7 +126,7 @@ class CardTool(object):
 
     def setPseudodata(self, pseudodata, idx = 0, pseudoDataProcsRegexp=".*"):
         self.pseudoData = pseudodata
-        self.pseudoDataIdx = idx
+        self.pseudoDataIdx = idx if not idx.isdigit() else int(idx)
         self.pseudoDataProcsRegexp = re.compile(pseudoDataProcsRegexp)
         
     # Needs to be increased from default for long proc names
@@ -568,7 +568,7 @@ class CardTool(object):
     def addPseudodata(self, processes, processesFromNomi=[]):
         datagroups = self.datagroups if not self.pseudodata_datagroups else self.pseudodata_datagroups
         datagroups.loadHistsForDatagroups(
-            baseName=self.pseudoData, syst="", label=self.pseudoData,
+            baseName=self.nominalName, syst=self.pseudoData, label=self.pseudoData,
             procsToRead=processes,
             scaleToNewLumi=self.lumiScale)
         procDict = datagroups.getDatagroups()
@@ -579,7 +579,7 @@ class CardTool(object):
             logger.warning(f"These processes are taken from nominal datagroups: {processesFromNomi}")
             datagroupsFromNomi = self.datagroups
             datagroupsFromNomi.loadHistsForDatagroups(
-                baseName=self.pseudoData, syst="", label=self.pseudoData,
+                baseName=self.pseudoData, syst=self.nominalName, label=self.pseudoData,
                 procsToRead=processesFromNomi,
                 scaleToNewLumi=self.lumiScale)
             procDictFromNomi = datagroupsFromNomi.getDatagroups()

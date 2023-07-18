@@ -194,7 +194,7 @@ def hist_to_variations(hist_in):
 
     genAxes = ["absYVgenNP", "chargeVgenNP"]
 
-    nom_hist = hist_in[{"vars" : "pdf0"}]
+    nom_hist = hist_in[{"vars" : 0}]
     nom_hist_sum = nom_hist[{genAxis : s[::hist.sum] for genAxis in genAxes}]
 
     variation_data = hist_in.view(flow=True) - nom_hist.view(flow=True)[...,None] + nom_hist_sum.view(flow=True)[..., None, None, None]
@@ -221,28 +221,24 @@ def define_mass_weights(df, proc):
     return df
 
 def add_massweights_hist(results, df, axes, cols, base_name="nominal", proc="", addhelicity=False):
-    name = Datagroups.histName(base_name, syst="massWeight")
+    name = Datagroups.histName(base_name, syst="massWeight"+(proc[0] if len(proc) else proc))
     if addhelicity:
         mass_axis = hist.axis.StrCategory(massWeightNames(proc=proc), name="massShift")
         massweightHelicity, massWeight_axes = make_massweight_helper_helicity(mass_axis)
-        df=df.Define("massWeight_tensor_wnom_helicity", massweightHelicity, ['massWeight_tensor_wnom', 'helWeight_tensor'])
-        massWeight = df.HistoBoost(name, axes, [*cols, "massWeight_tensor_wnom_helicity"],
-                        tensor_axes=massWeight_axes,
-                        storage=hist.storage.Double())
+        df = df.Define("massWeight_tensor_wnom_helicity", massweightHelicity, ['massWeight_tensor_wnom', 'helWeight_tensor'])
     else:
         massWeight = df.HistoBoost(name, axes, [*cols, "massWeight_tensor_wnom"], 
                                    tensor_axes=[hist.axis.StrCategory(massWeightNames(proc=proc), name="massShift")], 
                                    storage=hist.storage.Double())
-
     results.append(massWeight)
 
 def massWeightNames(matches=None, proc=""):
     central=10
     nweights=21
-    names = [f"massShift{int(abs(central-i)*10)}MeV{'' if i == central else ('Down' if i < central else 'Up')}" for i in range(nweights)]
+    names = [f"massShift{proc[0] if len(proc) else proc}{int(abs(central-i)*10)}MeV{'' if i == central else ('Down' if i < central else 'Up')}" for i in range(nweights)]
     if proc and proc in common.zprocs_all:
         # This is the PDG uncertainty (turned off for now since it doesn't seem to have been read into the nano)
-        names.extend(["massShift2p1MeVDown", "massShift2p1MeVUp"])
+        names.extend(["massShiftZ2p1MeVDown", "massShiftZ2p1MeVUp"])
 
     # If name is "" it won't be stored
     return [x if not matches or any(y in x for y in matches) else "" for x in names]
