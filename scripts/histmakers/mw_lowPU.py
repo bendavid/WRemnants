@@ -284,6 +284,7 @@ def build_graph(df, dataset):
     if not dataset.is_data and not args.onlyMainHistograms:
         if not args.noRecoil:
             df = recoilHelper.add_recoil_unc_W(df, results, dataset, cols, axes, "nominal")
+            df = recoilHelper.add_recoil_unc_W(df, results, dataset, cols_mT, axes_mT, "transverseMass")
             
         # luminosity, done here as shape variation despite being a flat scaling so to facilitate propagating to fakes afterwards
         df = df.Define("luminosityScaling", f"wrem::constantScaling(nominal_weight, {args.lumiUncertainty})")

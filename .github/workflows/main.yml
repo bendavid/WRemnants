@@ -208,6 +208,7 @@ jobs:
           echo "WEB_DIR=${WEB_DIR}" >> $GITHUB_ENV
           echo "PLOT_DIR=${PLOT_DIR}" >> $GITHUB_ENV
           echo "NTHREADS=${NTHREADS}" >> $GITHUB_ENV
+          echo "COMBINED_DIR=$WREMNANTS_OUTDIR/WMass_lowPU_mt" >> $GITHUB_ENV
           echo "HIST_FILE_MU=${WREMNANTS_OUTDIR}/${OUTFILE_LOWPU_MU}" >> $GITHUB_ENV
           echo "HIST_FILE_E=${WREMNANTS_OUTDIR}/${OUTFILE_LOWPU_E}" >> $GITHUB_ENV
 
@@ -231,6 +232,9 @@ jobs:
       - name: lowpu w mu plot mt
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --rebin 2 --baseName transverseMass --hists mt -a mu -p $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_MU
 
+      - name: lowpu w mu combine mt setup
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $HIST_FILE_MU --verbose 4 --baseName transverseMass --fitvar mt --noEfficiencyUnc -o $WREMNANTS_OUTDIR
+
       - name: lowpu w mu plot response matrix
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/response_matrix.py --axes ptll-ptVGen --procFilters Wmunu -p mu -o $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_MU
 
@@ -252,11 +256,26 @@ jobs:
       - name: lowpu w e plot mt
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --rebin 2 --baseName transverseMass --hists mt -a e -p $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_E
 
+      - name: lowpu w e combine mt setup
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $HIST_FILE_E --verbose 4 --baseName transverseMass --fitvar mt --noEfficiencyUnc -o $WREMNANTS_OUTDIR
+
       - name: lowpu w e plot response matrix
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/response_matrix.py --axes ptll-ptVGen --procFilters Wenu -p e -o $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_E
 
       - name: lowpu w e combine unfolding setup
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $HIST_FILE_E --verbose 4 --unfolding --fitvar ptll --noEfficiencyUnc -o $WREMNANTS_OUTDIR
+
+      - name: aggregate combine inputs
+        run: |
+          mkdir -p $COMBINED_DIR
+          cp -p $WREMNANTS_OUTDIR/WMass_lowPU_mt_mu/* $COMBINED_DIR
+          cp -p $WREMNANTS_OUTDIR/WMass_lowPU_mt_e/* $COMBINED_DIR
+
+      - name: lowpu combine mt fit 
+        run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ mass $COMBINED_DIR WMass_lowPU_minus_mu.txt WMass_lowPU_plus_mu.txt WMass_lowPU_minus_e.txt WMass_lowPU_plus_e.txt 
+
+      - name: wmass combine impacts
+        run: scripts/ci/run_with_singularity.sh scripts/ci/show_impacts.sh $COMBINED_DIR/fitresults_123456789.root $WEB_DIR/$PLOT_DIR/lowPU impactsW.html
 
       # - name: lowpu w e combine unfolding fit 
       #   run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ unfolding $WREMNANTS_OUTDIR/WMass_lowPU_ptll/ WMass_lowPU_plus.txt WMass_lowPU_minus.txt xnorm=WMass_lowPU_inclusive_xnorm.txt

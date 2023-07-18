@@ -18,6 +18,7 @@ def make_parser(parser=None):
     if not parser:
         parser = common.common_parser_combine()
     parser.add_argument("--fitvar", nargs="+", help="Variable to fit", default=["pt", "eta"])
+    parser.add_argument("-n", "--baseName", type=str, help="Histogram name in the file (e.g., 'nominal')", default="nominal")
     parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow). Equivalent to --excludeNuisances '.*effSystTnP|.*effStatTnP' ")
     parser.add_argument("--ewUnc", action='store_true', help="Include EW uncertainty")
     parser.add_argument("--pseudoData", type=str, help="Hist to use as pseudodata")
@@ -134,6 +135,9 @@ def setup(args,xnorm=False):
             cardTool.unroll = True
             # remove projection axes from gen axes, otherwise they will be integrated before
             datagroups.setGenAxes([a for a in datagroups.gen_axes if a not in cardTool.project])
+    else:
+        cardTool.setHistName(args.baseName)
+        cardTool.setNominalName(args.baseName)
     if args.unfolding:
         cardTool.addPOISumGroups(additional_axes=["qGen"] if base_group[0] == "W" else None)
     if args.noHist:
