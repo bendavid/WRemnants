@@ -238,15 +238,15 @@ def main(args,xnorm=False):
 
     #if args.theoryAgnostic:
     #    logger.error("Temporarily not using mass weights for Wtaunu. Please update when possible")
-    cardTool.addSystematic("massWeight{label}", 
-                            processes=signal_samples_inctau,  #signal_samples if args.theoryAgnostic else signal_samples_inctau,
-                            group=f"massShift{label}",
-                            skipEntries=massSkip,
-                            mirror=False,
-                            #TODO: Name this
-                            noConstraint=not constrainMass,
-                            systAxes=["massShift"],
-                            passToFakes=passSystToFakes,
+    cardTool.addSystematic(f"massWeight{label}", 
+                           processes=signal_samples_inctau,  #signal_samples if args.theoryAgnostic else signal_samples_inctau,
+                           group=f"massShift{label}",
+                           skipEntries=massSkip,
+                           mirror=False,
+                           #TODO: Name this
+                           noConstraint=not constrainMass,
+                           systAxes=["massShift"],
+                           passToFakes=passSystToFakes,
     )
     
     if args.doStatOnly:
