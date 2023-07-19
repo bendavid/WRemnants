@@ -37,7 +37,8 @@ def readNuisances(args, infile=None):
 
     print(f"Starting with file {infile} ...")
 
-    massNuisanceName = "massShift{s}MeV".format(s=int(args.prefitUncertainty))
+    massNuisanceName = "WmassShift{s}MeV".format(s=int(args.prefitUncertainty))
+    #massNuisanceName = "massShift{s}MeV".format(s=int(args.prefitUncertainty))
     valuesAndErrors = utilities.getFromHessian(infile,params=[massNuisanceName])
     totalUncertainty = valuesAndErrors[massNuisanceName][1] - valuesAndErrors[massNuisanceName][0]
     if args.scaleToMeV:
@@ -75,24 +76,24 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("rootfile", type=str, nargs=1)
-    parser.add_argument('-o','--outdir',     dest='outdir',     default='',   type=str, help='output directory to save the matrix')    
-    parser.add_argument(     '--nuisgroups', dest='nuisgroups', default='ALL',   type=str, help='nuis groups for which you want to show the impacts (can pass comma-separated list to make all of them one after the other). Use full name, no regular expressions. By default, all are made')
+    parser.add_argument('-o','--outdir',     default='./',   type=str, help='output directory to save the matrix')    
+    parser.add_argument(     '--nuisgroups', default='ALL',   type=str, help='nuis groups for which you want to show the impacts (can pass comma-separated list to make all of them one after the other). Use full name, no regular expressions. By default, all are made')
     parser.add_argument(     '--keepNuisgroups', default='.*',   type=str, help='nuis groups for which you want to show the impacts, using regular expressions')
-    parser.add_argument('-x', '--excludeNuisgroups', dest='excludeNuisgroups', default=None,   type=str, help='Regular expression for nuisances to be excluded (note that it wins against --keepNuisgroups since evaluated before it')
-    parser.add_argument(     '--set-stat'  , dest='setStat',    default=-1.0, type=float, help='If positive, use this value for stat (this is before scaling to MeV) until combinetf is fixed')
-    parser.add_argument(     '--postfix',     dest='postfix',     default='',   type=str, help='postfix for the output name')
-    parser.add_argument(     '--canvasSize', dest='canvasSize', default='800,1200', type=str, help='Pass canvas dimensions as "width,height" ')
+    parser.add_argument('-x', '--excludeNuisgroups', default=None,   type=str, help='Regular expression for nuisances to be excluded (note that it wins against --keepNuisgroups since evaluated before it')
+    parser.add_argument(     '--setStat',   default=-1.0, type=float, help='If positive, use this value for stat (this is before scaling to MeV) until combinetf is fixed')
+    parser.add_argument(     '--postfix',     default='',   type=str, help='postfix for the output name')
+    parser.add_argument(     '--canvasSize', default='800,1200', type=str, help='Pass canvas dimensions as "width,height" ')
     # parser.add_argument(     '--draw-option', dest='drawOption', default='COLZ TEXT', type=str, help='Options for drawing TH2')
-    parser.add_argument(     '--margin',     dest='margin',     default='', type=str, help='Pass canvas margin as "left,right,top,bottom" ')
-    parser.add_argument(     '--nContours', dest='nContours',    default=51, type=int, help='Number of contours in palette. Default is 51 (let it be odd, so the central strip is white if not using --abs-value and the range is symmetric)')
-    parser.add_argument(     '--palette'  , dest='palette',      default=0, type=int, help='Set palette: default is a built-in one, 55 is kRainbow')
-    parser.add_argument(     '--invertPalette', dest='invertePalette' , default=False , action='store_true',   help='Inverte color ordering in palette')
-    parser.add_argument(     '--scaleToMeV', dest='scaleToMeV' , default=False , action='store_true',   help='Report numbers in terms of uncertainty on mW in MeV (default is to report percentage of prefit uncertainty)')
-    parser.add_argument(     '--showTotal', dest='showTotal' , default=False , action='store_true',   help='Show total uncertainty in plot')
-    parser.add_argument(     '--prefitUncertainty'  , dest='prefitUncertainty',      default=100.0, type=float, help='prefit uncertainty on mW in MeV')
+    parser.add_argument(     '--margin',   default='', type=str, help='Pass canvas margin as "left,right,top,bottom" ')
+    parser.add_argument(     '--nContours',    default=51, type=int, help='Number of contours in palette. Default is 51 (let it be odd, so the central strip is white if not using --abs-value and the range is symmetric)')
+    parser.add_argument(     '--palette',      default=0, type=int, help='Set palette: default is a built-in one, 55 is kRainbow')
+    parser.add_argument(     '--invertPalette', default=False , action='store_true',   help='Inverte color ordering in palette')
+    parser.add_argument(     '--scaleToMeV', default=False , action='store_true',   help='Report numbers in terms of uncertainty on mW in MeV (default is to report percentage of prefit uncertainty)')
+    parser.add_argument(     '--showTotal', default=False , action='store_true',   help='Show total uncertainty in plot')
+    parser.add_argument(     '--prefitUncertainty',      default=100.0, type=float, help='prefit uncertainty on mW in MeV')
     parser.add_argument(     '--wlike', dest='isWlike', action="store_true", default=False, help="impacts for W-like analysis (it prints mZ accordingly). Default is Wmass");
-    parser.add_argument(     '--compareFile', dest='compareFile', default='', type=str, help='Additional file to compare impacts with (must have the same impact labels)')
-    parser.add_argument(     '--set-stat-alt'  , dest='setStatAlt',    default=-1.0, type=float, help='If positive, use this value for stat of the file passed with compareFile, otherwise use the same as the other file')
+    parser.add_argument(     '--compareFile', default='', type=str, help='Additional file to compare impacts with (must have the same impact labels)')
+    parser.add_argument(     '--setStatAlt', default=-1.0, type=float, help='If positive, use this value for stat of the file passed with compareFile, otherwise use the same as the other file')
     parser.add_argument(     '--legendEntries', nargs=2, type=str, help="Legend entries when comparing files", default=["Nominal", "Alternate"])
     parser.add_argument(     '--printAltVal', action='store_true', help='When comparing to a second file, also print the values for the alternative')
     args = parser.parse_args()
@@ -157,7 +158,8 @@ if __name__ == "__main__":
 
     if compare:
         totalUncertainty_mW_alt, nuisGroup_nameVal_alt = readNuisances(args, args.compareFile)
-        nuisGroup_nameVal_alt["stat"] = args.setStatAlt if args.setStatAlt > 0.0 else nuisGroup_nameVal["stat"]
+        if args.setStatAlt > 0.0:
+            nuisGroup_nameVal_alt["stat"] = args.setStatAlt
 
     sortedGroups = sorted(nuisGroup_nameVal.keys(), key= lambda x: nuisGroup_nameVal[x])
 
@@ -181,7 +183,10 @@ if __name__ == "__main__":
     for ik,k in enumerate(sortedGroups):
         bincontent = nuisGroup_nameVal[k] if not args.scaleToMeV else nuisGroup_nameVal[k] * args.prefitUncertainty
         if compare:
-            bincontentAlt = nuisGroup_nameVal_alt[k] if not args.scaleToMeV else nuisGroup_nameVal_alt[k] * args.prefitUncertainty
+            print(k)
+            #bincontentAlt = nuisGroup_nameVal_alt[k.replace("QCDscaleWPtHelicityMiNNLO","QCDscalePtHelicityMiNNLO")]
+            bincontentAlt = nuisGroup_nameVal_alt[k]
+            if args.scaleToMeV: bincontentAlt *= args.prefitUncertainty
             print("%s: %2.3f / %2.3f" % (k,bincontent, bincontentAlt))
         else:
             print("%s: %2.3f" % (k,bincontent))
@@ -193,7 +198,9 @@ if __name__ == "__main__":
         h1.GetXaxis().SetBinLabel(ik+1, label)
         h1.SetBinContent(ik+1,bincontent)
         if compare:
-            bincontentAlt = nuisGroup_nameVal_alt[k] if not args.scaleToMeV else nuisGroup_nameVal_alt[k] * args.prefitUncertainty
+            #bincontentAlt = nuisGroup_nameVal_alt[k.replace("QCDscaleWPtHelicityMiNNLO","QCDscalePtHelicityMiNNLO")]
+            bincontentAlt = nuisGroup_nameVal_alt[k]
+            if args.scaleToMeV: bincontentAlt *= args.prefitUncertainty
             h2.SetBinContent(ik+1,bincontentAlt)
     if args.showTotal:
         h1.GetXaxis().SetBinLabel(nbins,"total")
@@ -289,4 +296,4 @@ if __name__ == "__main__":
         postfix = "_" + postfix
     smallBoson = "z" if args.isWlike else "w"
     for ext in ["pdf", "png"]:
-        c1.SaveAs(args.outdir + f"/impactsOnM{smallBoson}{postfix}_chart.{ext}")
+        c1.SaveAs(f"{args.outdir}/impactsOnM{smallBoson}{postfix}.{ext}")

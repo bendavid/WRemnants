@@ -353,10 +353,11 @@ def read_json(fIn):
 def safeGetRootObject(fileObject, objectName, quitOnFail=True, silent=False, detach=True):
     obj = fileObject.Get(objectName)
     if obj == None:
+        error_msg = f"Error getting {objectName} from file {fileObject.GetName()}"
         if not silent:
-            print(f"Error getting {objectName} from file {fileObject.GetName()}")
+            logger.error(error_msg)
         if quitOnFail:
-            quit()
+            raise IOError(error_msg)
         return None
     else:
         if detach:
@@ -366,17 +367,19 @@ def safeGetRootObject(fileObject, objectName, quitOnFail=True, silent=False, det
 def safeOpenRootFile(fileName, quitOnFail=True, silent=False, mode="READ"):
     fileObject = ROOT.TFile.Open(fileName, mode)
     if not fileObject or fileObject.IsZombie():
+        error_msg = f"Error when opening file {fileName}"
         if not silent:
-            print(f"Error when opening file {fileName}")
+            logger.error(error_msg)
         if quitOnFail:
-            quit()
+            raise IOError(error_msg)
         else:
             return None
     elif not fileObject.IsOpen():
+        error_msg = f"File {fileName} was not opened"
         if not silent:
-            print(f"File {fileName} was not opened")
+            logger.error(error_msg)
         if quitOnFail:
-            quit()
+            raise IOError(error_msg)
         else:
             return None
     else:
