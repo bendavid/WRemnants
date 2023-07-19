@@ -231,7 +231,7 @@ def add_massweights_hist(results, df, axes, cols, base_name="nominal", proc="", 
                         storage=hist.storage.Double())
     else:
         massWeight = df.HistoBoost(name, axes, [*cols, "massWeight_tensor_wnom"], 
-                                   tensor_axes=mass_axis, 
+                                   tensor_axes=[mass_axis], 
                                    storage=hist.storage.Double())
     results.append(massWeight)
 
