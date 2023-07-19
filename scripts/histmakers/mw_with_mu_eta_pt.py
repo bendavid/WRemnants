@@ -28,7 +28,6 @@ parser.add_argument("--onlyTheorySyst", action="store_true", help="Keep only the
 parser.add_argument("--oneMCfileEveryN", type=int, default=None, help="Use 1 MC file every N, where N is given by this option. Mainly for tests")
 args = parser.parse_args()
 
-
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
 thisAnalysis = ROOT.wrem.AnalysisType.Wmass
@@ -127,7 +126,7 @@ elif args.binnedScaleFactors:
 else:
     logger.info("Using smoothed scale factors and uncertainties")
     muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile, era = era, what_analysis = thisAnalysis, max_pt = axis_pt.edges[-1], isoEfficiencySmoothing = args.isoEfficiencySmoothing, smooth3D=args.smooth3dsf)
-    ## this is needed to define the syst on SF from 2D ut-integrated and original no-ut-dependent SF
+    ## this is needed to define the syst on SF from 2D ut-integrated and original no-ut-dependent SF  
     if not args.smooth3dsf and not args.sf2DnoUt:
         muon_efficiency_helper2d, muon_efficiency_helper_syst2d, muon_efficiency_helper_stat2d = wremnants.make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSmooth_GtoHout.root", era = era, max_pt = axis_pt.edges[-1], isoEfficiencySmoothing = args.isoEfficiencySmoothing, smooth3D=args.smooth3dsf)
 
@@ -667,7 +666,8 @@ def build_graph(df, dataset):
 
         if not args.binnedScaleFactors and not args.smooth3dsf and not args.sf2DnoUt:
             df = df.Define("weight2dsfup", muon_efficiency_helper2d, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_pt0", "goodMuons_charge0", "passIso"])
-            df = df.Define("nominal_weight_2dsf", "nominal_weight/weight_fullMuonSF_withTrackingReco*weight2dsfup") #be EXTREMELY CAREFUL about the histogram files (this assumes that you have another file with the old trigger and histo SFs which also contains the same SFs for all the other steps as the central one)
+            # be EXTREMELY CAREFUL about the histogram files (this assumes that you have another file with the old trigger and histo SFs which also contains the same SFs for all the other steps as the central one)
+            df = df.Define("nominal_weight_2dsf", "nominal_weight/weight_fullMuonSF_withTrackingReco*weight2dsfup")
             sf2d = df.HistoBoost("nominal_sf2d", nominal_axes, [*nominal_cols, "nominal_weight_2dsf"])
             results.append(sf2d)
                

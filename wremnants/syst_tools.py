@@ -311,35 +311,31 @@ def add_QCDbkg_jetPt_hist(results, df, nominal_axes, nominal_cols, base_name="no
 
 def add_muon_efficiency_unc_hists(results, df, helper_stat, helper_syst, axes, cols, base_name="nominal", what_analysis=ROOT.wrem.AnalysisType.Wmass, smooth3D=False, addhelicity=False):
     # TODO: update for dilepton
-    if what_analysis == ROOT.wrem.AnalysisType.Dilepton:
-        muon_columns_stat = ["trigMuons_pt0", "trigMuons_eta0",
-                             "trigMuons_uT0", "trigMuons_charge0", "trigMuons_passTrigger0",
-                             "nonTrigMuons_pt0", "nonTrigMuons_eta0",
-                             "nonTrigMuons_uT0", "nonTrigMuons_charge0", "nonTrigMuons_passTrigger0"]
-        muon_columns_syst = ["trigMuons_pt0", "trigMuons_eta0",
-                             "trigMuons_SApt0", "trigMuons_SAeta0",
-                             "trigMuons_uT0", "trigMuons_charge0", "trigMuons_passTrigger0",
-                             "nonTrigMuons_pt0", "nonTrigMuons_eta0",
-                             "nonTrigMuons_SApt0", "nonTrigMuons_SAeta0",
-                             "nonTrigMuons_uT0", "nonTrigMuons_charge0", "nonTrigMuons_passTrigger0"]
-    elif what_analysis == ROOT.wrem.AnalysisType.Wlike:
-        muon_columns_stat = ["trigMuons_pt0", "trigMuons_eta0",
-                             "trigMuons_uT0", "trigMuons_charge0",
-                             "nonTrigMuons_pt0", "nonTrigMuons_eta0",
-                             "nonTrigMuons_uT0", "nonTrigMuons_charge0"]
-        muon_columns_syst = ["trigMuons_pt0", "trigMuons_eta0",
-                             "trigMuons_SApt0", "trigMuons_SAeta0",
-                             "trigMuons_uT0", "trigMuons_charge0",
-                             "nonTrigMuons_pt0", "nonTrigMuons_eta0",
-                             "nonTrigMuons_SApt0", "nonTrigMuons_SAeta0",
-                             "nonTrigMuons_uT0", "nonTrigMuons_charge0"]
-    else:
+    if what_analysis == ROOT.wrem.AnalysisType.Wmass:
         muon_columns_stat = ["goodMuons_pt0", "goodMuons_eta0",
                              "goodMuons_uT0", "goodMuons_charge0"]
         muon_columns_syst = ["goodMuons_pt0", "goodMuons_eta0",
                              "goodMuons_SApt0", "goodMuons_SAeta0",
                              "goodMuons_uT0", "goodMuons_charge0",
                              "passIso"]
+    else:
+        muvars_stat = ["pt0", "eta0", "uT0", "charge0"]
+        muon_columns_stat_trig    = [f"trigMuons_{v}" for v in muvars_stat]
+        muon_columns_stat_nonTrig = [f"nonTrigMuons_{v}" for v in muvars_stat]
+
+        muvars_syst = ["pt0", "eta0", "SApt0", "SAeta0", "uT0", "charge0"]
+        muon_columns_syst_trig    = [f"trigMuons_{v}" for v in muvars_syst]
+        muon_columns_syst_nonTrig = [f"nonTrigMuons_{v}" for v in muvars_syst]
+        
+        if what_analysis == ROOT.wrem.AnalysisType.Wlike:
+            muon_columns_stat = [*muon_columns_stat_trig, *muon_columns_stat_nonTrig]
+            muon_columns_syst = [*muon_columns_syst_trig, *muon_columns_syst_nonTrig]
+        elif what_analysis == ROOT.wrem.AnalysisType.Dilepton:
+            muon_columns_stat = [*muon_columns_stat_trig, "trigMuons_passTrigger0", *muon_columns_stat_nonTrig, "nonTrigMuons_passTrigger0"]
+            muon_columns_syst = [*muon_columns_syst_trig, "trigMuons_passTrigger0", *muon_columns_syst_nonTrig, "nonTrigMuons_passTrigger0"]
+        else:
+            raise ValueError(f"add_muon_efficiency_unc_hists: analysis {what_analysis} not implemented.")
+            
         
     if not smooth3D:
         # will use different helpers and member functions
