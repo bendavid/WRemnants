@@ -101,8 +101,8 @@ if __name__ == "__main__":
     else:
         print("Error: you should specify an output folder using option -o <name>. Exit")
         quit()
-    if not args.outfilename:
-        print("Error: you should specify an output file name using option -f <name>. Exit")
+    if not args.outfilename and args.outhistname == "FILE":
+        print("Error: to use -n FILE you should specify an output file name using option -f <name>. Exit")
         quit()
     if not args.outhistname:
         print("Error: you should specify an output histogram name using option -n <name>. ")

@@ -1,3 +1,4 @@
+import ROOT
 import hist
 import numpy as np
 from utilities import boostHistHelpers as hh, common, logging
@@ -284,23 +285,52 @@ def add_QCDbkg_jetPt_hist(results, df, nominal_axes, nominal_cols, base_name="no
     dQCDbkGVar = dQCDbkGVar.Filter(f"passMT || Sum(goodCleanJetsPt{jet_pt})>=1")
     qcdJetPt = dQCDbkGVar.HistoBoost(name, nominal_axes, [*nominal_cols, "nominal_weight"], storage=hist.storage.Double())
     results.append(qcdJetPt)
-                                        
-def add_muon_efficiency_unc_hists(results, df, helper_stat, helper_syst, axes, cols, base_name="nominal", is_w_like=False):
 
-    if is_w_like:
-        muon_columns_stat = ["trigMuons_pt0", "trigMuons_eta0", "trigMuons_charge0", "nonTrigMuons_pt0", "nonTrigMuons_eta0", "nonTrigMuons_charge0"]
-        muon_columns_syst = ["trigMuons_pt0", "trigMuons_eta0", "trigMuons_SApt0", "trigMuons_SAeta0", "trigMuons_charge0",
-            "nonTrigMuons_pt0", "nonTrigMuons_eta0", "nonTrigMuons_SApt0", "nonTrigMuons_SAeta0", "nonTrigMuons_charge0"]
+def add_muon_efficiency_unc_hists(results, df, helper_stat, helper_syst, axes, cols, base_name="nominal", what_analysis=ROOT.wrem.AnalysisType.Wmass, smooth3D=False):
+    # TODO: update for dilepton
+    if what_analysis == ROOT.wrem.AnalysisType.Wmass:
+        muon_columns_stat = ["goodMuons_pt0", "goodMuons_eta0",
+                             "goodMuons_uT0", "goodMuons_charge0"]
+        muon_columns_syst = ["goodMuons_pt0", "goodMuons_eta0",
+                             "goodMuons_SApt0", "goodMuons_SAeta0",
+                             "goodMuons_uT0", "goodMuons_charge0",
+                             "passIso"]
     else:
-        # FIXME: this should read standalone variables when effStat is for tracking
-        muon_columns_stat = ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0"]
-        muon_columns_syst = ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso"]
+        muvars_stat = ["pt0", "eta0", "uT0", "charge0"]
+        muon_columns_stat_trig    = [f"trigMuons_{v}" for v in muvars_stat]
+        muon_columns_stat_nonTrig = [f"nonTrigMuons_{v}" for v in muvars_stat]
 
-    for key,helper in helper_stat.items():
-        if "iso" in key and not is_w_like:
-            df = df.Define(f"effStatTnP_{key}_tensor", helper, [*muon_columns_stat, "passIso", "nominal_weight"])        
+        muvars_syst = ["pt0", "eta0", "SApt0", "SAeta0", "uT0", "charge0"]
+        muon_columns_syst_trig    = [f"trigMuons_{v}" for v in muvars_syst]
+        muon_columns_syst_nonTrig = [f"nonTrigMuons_{v}" for v in muvars_syst]
+        
+        if what_analysis == ROOT.wrem.AnalysisType.Wlike:
+            muon_columns_stat = [*muon_columns_stat_trig, *muon_columns_stat_nonTrig]
+            muon_columns_syst = [*muon_columns_syst_trig, *muon_columns_syst_nonTrig]
+        elif what_analysis == ROOT.wrem.AnalysisType.Dilepton:
+            muon_columns_stat = [*muon_columns_stat_trig, "trigMuons_passTrigger0", *muon_columns_stat_nonTrig, "nonTrigMuons_passTrigger0"]
+            muon_columns_syst = [*muon_columns_syst_trig, "trigMuons_passTrigger0", *muon_columns_syst_nonTrig, "nonTrigMuons_passTrigger0"]
         else:
-            df = df.Define(f"effStatTnP_{key}_tensor", helper, [*muon_columns_stat, "nominal_weight"])
+            raise ValueError(f"add_muon_efficiency_unc_hists: analysis {what_analysis} not implemented.")
+            
+        
+    if not smooth3D:
+        # will use different helpers and member functions
+        muon_columns_stat = [x for x in muon_columns_stat if "_uT0" not in x]
+        muon_columns_syst = [x for x in muon_columns_syst if "_uT0" not in x]
+
+    # change variables for tracking, to use standalone variables
+    muon_columns_stat_tracking = [x.replace("_pt0", "_SApt0").replace("_eta0", "_SAeta0") for x in muon_columns_stat]
+        
+    for key,helper in helper_stat.items():
+        if "tracking" in key:
+            muon_columns_stat_step = muon_columns_stat_tracking
+        elif "iso" in key and what_analysis == ROOT.wrem.AnalysisType.Wmass:
+            muon_columns_stat_step = muon_columns_stat + ["passIso"]
+        else:
+            muon_columns_stat_step = muon_columns_stat
+            
+        df = df.Define(f"effStatTnP_{key}_tensor", helper, [*muon_columns_stat_step, "nominal_weight"])
         name = Datagroups.histName(base_name, syst=f"effStatTnP_{key}")
         effStatTnP = df.HistoBoost(name, axes, [*cols, f"effStatTnP_{key}_tensor"], tensor_axes = helper.tensor_axes, storage=hist.storage.Double())
         results.append(effStatTnP)

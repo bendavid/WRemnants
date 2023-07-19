@@ -157,9 +157,13 @@ def quickPlotTH1(c, h, outname,channel, postfix=""):
 
 #########
 
-def getCoordinateNDC(x, canvas):
+def getCoordinateNDC(x, canvas, vert=False):
     canvas.Update() # might be needed
-    return (x - canvas.GetX1()) / (canvas.GetX2() - canvas.GetX1())
+    if vert:
+        return (x - canvas.GetY1()) / (canvas.GetY2() - canvas.GetY1())
+    else:
+        return (x - canvas.GetX1()) / (canvas.GetX2() - canvas.GetX1())
+
 
 def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit=True, 
                 step=None,
@@ -577,19 +581,6 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
         downLeg = max(0.5, downLeg - 0.03) # add some more vertical space, but not too much
     leftLeg = 0.16
     rightLeg = 0.95
-
-    # now draw vertical lines to highlight acceptance (could have shadow panels too)
-    vertline = ROOT.TLine(36, canvas.GetUymin(), 36, canvas.GetUymax())
-    vertline.SetLineColor(ROOT.kBlack)
-    vertline.SetLineStyle(2)
-    vertline.SetLineWidth(2)
-    min_pt_accept_NDC = getCoordinateNDC(min_pt_accept_, canvas)
-    max_pt_accept_NDC = getCoordinateNDC(max_pt_accept_, canvas)
-    vertline.DrawLineNDC(min_pt_accept_NDC, bottomMargin, min_pt_accept_NDC, downLeg)
-    vertline.DrawLineNDC(max_pt_accept_NDC, bottomMargin, max_pt_accept_NDC, downLeg)
-    #vertline.DrawLine(min_pt_accept_, miny, min_pt_accept_, maxy)
-    #vertline.DrawLine(max_pt_accept_, miny, max_pt_accept_, maxy)
-    ###########
     
     leg = ROOT.TLegend(leftLeg, downLeg, rightLeg, upLeg)
     leg.SetFillColor(0)
@@ -663,6 +654,20 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
     # lat.DrawLatex(xmin, yhi, line);
     # lat.DrawLatex(xmin, yhi-0.05, lineChi2);
 
+    ### Draw band to highlight acceptance
+    hAcceptBand = copy.deepcopy(hist.Clone("hAcceptBand"))
+    yMaxBand = downLeg * (canvas.GetY2() - canvas.GetY1()) + canvas.GetY1()
+    for i in range(1, 1 + hAcceptBand.GetNbinsX()):
+        if hAcceptBand.GetBinCenter(i) > 26.0 and hAcceptBand.GetBinCenter(i) < 55.0:
+            hAcceptBand.SetBinContent(i, 0.0)
+            hAcceptBand.SetBinError(i, 0.0)
+        else:
+            hAcceptBand.SetBinContent(i, yMaxBand)
+            hAcceptBand.SetBinError(i, 0.0)
+    hAcceptBand.SetFillColorAlpha(ROOT.kYellow+1, 0.5)
+    hAcceptBand.Draw("HIST SAME")
+    ########################################
+    
     # Now the bottom panel
     pad2.Draw()
     pad2.cd()
@@ -751,6 +756,34 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
         drawOpt = "C" # like HIST but smooth curve through points
         p.Draw(f"{drawOpt}SAME")    
     dataRatio.Draw("EP SAME")
+
+    # # now draw vertical lines to highlight acceptance (could have shadow panels too)
+    # vertline = ROOT.TLine(36, canvas.GetUymin(), 36, canvas.GetUymax())
+    # vertline.SetLineColor(ROOT.kBlack)
+    # vertline.SetLineStyle(2)
+    # vertline.SetLineWidth(2)
+    # min_pt_accept_NDC = getCoordinateNDC(min_pt_accept_, canvas)
+    # max_pt_accept_NDC = getCoordinateNDC(max_pt_accept_, canvas)
+    # vertline.DrawLineNDC(min_pt_accept_NDC, bottomMargin, min_pt_accept_NDC, downLeg)
+    # vertline.DrawLineNDC(max_pt_accept_NDC, bottomMargin, max_pt_accept_NDC, downLeg)
+    # #vertline.DrawLine(min_pt_accept_, miny, min_pt_accept_, maxy)
+    # #vertline.DrawLine(max_pt_accept_, miny, max_pt_accept_, maxy)
+    # ###########
+
+    ### Draw band to highlight acceptance
+    hAcceptBandRatio = copy.deepcopy(hist.Clone("hAcceptBandRatio"))
+    yMaxBand = maxy
+    for i in range(1, 1 + hAcceptBandRatio.GetNbinsX()):
+        if hAcceptBandRatio.GetBinCenter(i) > 26.0 and hAcceptBandRatio.GetBinCenter(i) < 55.0:
+            hAcceptBandRatio.SetBinContent(i, 0.0)
+            hAcceptBandRatio.SetBinError(i, 0.0)
+        else:
+            hAcceptBandRatio.SetBinContent(i, yMaxBand)
+            hAcceptBandRatio.SetBinError(i, 0.0)
+    hAcceptBandRatio.SetFillColorAlpha(ROOT.kYellow+1, 0.5)
+    hAcceptBandRatio.Draw("HIST SAME")
+    ########################################
+    
     pad2.RedrawAxis("sameaxis")
 
     #---------------------------------
@@ -925,7 +958,8 @@ def runFiles(args):
 
     steps = args.doSteps
     era = args.era
-    
+
+    print(f"---> steps = {steps}")
     print("Running these commands")
     print()
     for step in steps:
@@ -976,7 +1010,8 @@ if __name__ == "__main__":
     parser.add_argument(     '--do-merge', dest='doMerge', action="store_true", default=False, help='Merge efficiency files if they all exist')
     
     args = parser.parse_args()
-
+    logger = logging.setup_logger(os.path.basename(__file__), 3, True)
+    
     if args.fitPolDegreeEfficiency < -1:
         args.fitPolDegreeEfficiency = -1
         

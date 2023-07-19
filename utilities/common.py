@@ -4,6 +4,7 @@ import argparse
 import numpy as np
 import os
 from utilities import logging
+from enum import Enum
 
 wremnants_dir = f"{pathlib.Path(__file__).parent}/../wremnants"
 data_dir =  f"{pathlib.Path(__file__).parent}/../wremnants-data/data/"
@@ -56,10 +57,10 @@ axis_passIso = hist.axis.Boolean(name = "passIso")
 axis_passMT = hist.axis.Boolean(name = "passMT")
 
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
-
+    
 # following list is used in other scripts to track what steps are charge dependent
 # but assumes the corresponding efficiencies were made that way
-muonEfficiency_chargeDependentSteps = ["reco", "tracking", "idip", "trigger"]
+muonEfficiency_chargeDependentSteps = ["reco", "tracking", "idip", "trigger", "antitrigger"] # antitrigger = P(failTrig|IDIP), similar to antiiso = P(failIso|trigger)
 muonEfficiency_standaloneNumberOfValidHits = 1 # to use as "var >= this" (if this=0 the define for the cut is not used at all)
 
 def getIsoMtRegionID(passIso=True, passMT=True):
@@ -107,9 +108,6 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--dataPath", type=str, default=None, help="Access samples from eos")
     parser.add_argument("--noVertexWeight", action='store_true', help="Do not apply reweighting of vertex z distribution in MC to match data")
     parser.add_argument("--validationHists", action='store_true', help="make histograms used only for validations")
-    parser.add_argument("--trackerMuons", action='store_true', help="Use tracker muons instead of global muons (need appropriate scale factors too)")
-    parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers)")
-    parser.add_argument("--isoEfficiencySmoothing", action='store_true', help="If isolation SF was derived from smooth efficiencies instead of direct smoothing") 
     parser.add_argument("--onlyMainHistograms", action='store_true', help="Only produce some histograms, skipping (most) systematics to run faster when those are not needed")
     parser.add_argument("--met", type=str, choices=["DeepMETReso", "RawPFMET"], help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")                    
     parser.add_argument("-o", "--outfolder", type=str, default="", help="Output folder")
@@ -118,7 +116,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--correlatedNonClosureNP", action="store_true", help="disable the de-correlation of Z non-closure nuisance parameters after the jpsi massfit")
     parser.add_argument("--noScaleToData", action="store_true", help="Do not scale the MC histograms with xsec*lumi/sum(gen weights) in the postprocessing step")
     parser.add_argument("--aggregateGroups", type=str, nargs="*", default=["Diboson", "Top", "Wtaunu"], help="Sum up histograms from members of given groups in the postprocessing step")
-
+    
     if for_reco_highPU:
         # additional arguments specific for histmaker of reconstructed objects at high pileup (mw, mz_wlike, and mz_dilepton)
         parser.add_argument("--dphiMuonMetCut", type=float, help="Threshold to cut |deltaPhi| > thr*np.pi between muon and met", default=0.25)
@@ -138,20 +136,34 @@ def common_parser(for_reco_highPU=False):
         parser.add_argument("--unfolding", action='store_true', help="Add information needed for unfolding")
         parser.add_argument("--genLevel", type=str, default='postFSR', choices=["preFSR", "postFSR"], help="Generator level definition for unfolding")
         parser.add_argument("--genBins", type=int, nargs="+", default=[3, 2], help="Number of generator level bins")
-        parser.add_argument("--validateByMassWeights", 
-            action = "store_true",
-            help = "validate the muon momentum scale shift weights by massweights"
-        )
+        parser.add_argument("--validateByMassWeights", action = "store_true", help = "validate the muon momentum scale shift weights by massweights")
+        # options for efficiencies
+        parser.add_argument("--trackerMuons", action='store_true', help="Use tracker muons instead of global muons (need appropriate scale factors too). This is obsolete")
+        parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers)")
+        parser.add_argument("--noSmooth3dsf", dest="smooth3dsf", action='store_false', help="If true (defaul) use smooth 3D scale factors instead of the original 2D ones (but eff. systs are still obtained from 2D version)")
+        parser.add_argument("--sf2DnoUt", action='store_true', help="Use older smooth 2D scale factors with no ut dependence")
+        parser.add_argument("--isoEfficiencySmoothing", action='store_true', help="If isolation SF was derived from smooth efficiencies instead of direct smoothing") 
 
     commonargs,_ = parser.parse_known_args()
 
-    if commonargs.trackerMuons:
-        #sfFile = "scaleFactorProduct_12Oct2022_TrackerMuons_vertexWeight_OSchargeExceptTracking.root"
-        sfFile = "scaleFactorProduct_16Oct2022_TrackerMuonsHighPurity_vertexWeight_OSchargeExceptTracking.root"
+    if for_reco_highPU:
+        if commonargs.trackerMuons:
+            logger.warning("Using tracker muons, but keep in mind that scale factors are obsolete and not recommended.")
+            sfFile = "scaleFactorProduct_16Oct2022_TrackerMuonsHighPurity_vertexWeight_OSchargeExceptTracking.root"
+        else:
+            # note: any of the following file is fine for reco, tracking, and IDIP.
+            # Instead, for trigger and isolation one would actually use 3D SF vs eta-pt-ut.
+            # However, even when using the 3D SF one still needs the 2D ones to read the syst/nomi ratio,
+            # since the dataAltSig tag-and-probe fits were not run in 3D (it is assumed for simplicity that the syst/nomi ratio is independent from uT)
+            # the syst variations are the same in both files also for trigger/isolation (since they had been copied over)
+            if commonargs.sf2DnoUt:
+                sfFile = "allSmooth_GtoHout.root" # 2D SF without ut integration
+            else:
+                sfFile = "allSmooth_GtoH3Dout.root" # 2D SF from 3D with ut-integration
+
+        sfFile = f"{data_dir}/testMuonSF/{sfFile}"
     else:
-        #sfFile = "scaleFactorProduct_08Oct2022_vertexWeight_OSchargeExceptTracking.root"
-        sfFile = "allSmooth_GtoHout.root"
-    sfFile = f"{data_dir}/testMuonSF/{sfFile}"
+        sfFile = ""
 
     parser.add_argument("--sfFile", type=str, help="File with muon scale factors", default=sfFile)
         

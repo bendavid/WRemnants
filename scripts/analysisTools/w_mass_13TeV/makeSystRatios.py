@@ -178,9 +178,13 @@ if __name__ == "__main__":
 
     setTDRStyle() # this one removes the stat box
     
-    f = safeOpenFile(fname)
+    rf = safeOpenFile(fname)
     # get nominals
     for p in processes:
+        if (rf.GetDirectory(p)):
+            print(f"Browsing file into subfolder {p}")
+            f = rf.GetDirectory(p)
+            #f.cd(p)
         if isWrem:
             nominals[p] = safeGetObject(f, f"x_{p}_{args.charge}")
         else:

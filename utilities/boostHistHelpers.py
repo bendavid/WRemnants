@@ -24,10 +24,10 @@ def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False, cutoff_
     if allowBroadcast:
         h1 = broadcastSystHist(h1, h2)
         h2 = broadcastSystHist(h2, h1)
-
+        
     storage = h1.storage_type() if h1.storage_type == h2.storage_type else hist.storage.Double()
     outh = hist.Hist(*h1.axes, storage=storage) if createNew else h1
-
+    
     h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2)
 
     # Careful not to overwrite the values of h1
@@ -123,7 +123,6 @@ def addHists(h1, h2, allowBroadcast=True, createNew=True, scale1=None, scale2=No
     if allowBroadcast:
         h1 = broadcastSystHist(h1, h2)
         h2 = broadcastSystHist(h2, h1)
-
     h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2)
     hasWeights = h1._storage_type() == hist.storage.Weight() and h2._storage_type() == hist.storage.Weight()
     # avoid scaling the variance if not needed, to save some time
@@ -136,14 +135,13 @@ def addHists(h1, h2, allowBroadcast=True, createNew=True, scale1=None, scale2=No
         h2vals = scale2 * h2vals
         if hasWeights:
             h2vars = (scale2*scale2) * h2vars
-                    
     outh = h1
     if createNew:
         if not hasWeights:
             return hist.Hist(*outh.axes, data=h1vals+h2vals)
         else:
             return hist.Hist(*outh.axes, storage=hist.storage.Weight(),
-                            data=np.stack((h1vals+h2vals, h1vars+h2vars), axis=-1))            
+                            data=np.stack((h1vals + h2vals, h1vars + h2vars), axis=-1))            
     else:
         outvals = h1vals if h1.shape == outh.shape else h2vals
         np.add(h1vals, h2vals, out=outvals)
