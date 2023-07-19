@@ -191,7 +191,7 @@ def add_xnorm_histograms_theoryAgnostic(results, df, args, dataset_name, corr_he
     df_xnorm = theory_tools.define_theory_weights_and_corrs(df_xnorm, dataset_name, corr_helpers, args)
     # define the helicity tensor, here nominal_weight will only have theory weights, no experimental pieces, it is defined in theory_tools.define_theory_weights_and_corrs
     df_xnorm = define_helicity_weights(df_xnorm)
-    df_xnorm = df_xnorm.Define("xnorm", "0.5")
+    df_xnorm = df_xnorm.DefinePerSample("xnorm", "0.5")
     axis_xnorm = hist.axis.Regular(1, 0., 1., name = "count", underflow=False, overflow=False)
     xnorm_axes = [axis_xnorm, *theoryAgnostic_axes]
     xnorm_cols = ["xnorm", *theoryAgnostic_cols]

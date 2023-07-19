@@ -42,6 +42,7 @@ def make_parser(parser=None):
     parser.add_argument("--genModel", action="store_true", help="Produce datacard with the xnorm as model (binned according to axes defined in --fitvar)")
     # TODO: move next option in common.py? 
     parser.add_argument("--absolutePathInCard", action="store_true", help="In the datacard, set Absolute path for the root file where shapes are stored")
+    # utility options to deal with charge when relevant, mainly for theory agnostic but also unfolding
     parser.add_argument("--recoCharge", type=str, default=["plus", "minus"], nargs="+", choices=["plus", "minus"], help="Specify reco charge to use, default uses both. This is a workaround for unfolding/theory-agnostic fit when running a single reco charge, as gen bins with opposite gen charge have to be filtered out")
     parser.add_argument("--forceRecoChargeAsGen", action="store_true", help="Force gen charge to match reco charge in CardTool, this only works when the reco charge is used to define the channel")
     return parser
@@ -158,8 +159,8 @@ def main(args,xnorm=False):
     else:
         cardTool.setChannels(args.recoCharge)
         if args.forceRecoChargeAsGen:
-            cardTool.setExcludePOIforChannel("plus", ".*qGen0")
-            cardTool.setExcludePOIforChannel("minus", ".*qGen1")
+            cardTool.setExcludeProcessForChannel("plus", ".*qGen0")
+            cardTool.setExcludeProcessForChannel("minus", ".*qGen1")
 
     if xnorm:
         histName = "xnorm"
@@ -182,8 +183,8 @@ def main(args,xnorm=False):
             datagroups.setGenAxes([a for a in datagroups.gen_axes if a not in cardTool.project])
     if args.unfolding:
         # TODO: make this less hardcoded to filter the charge (if the charge is not present this will duplicate things)
-        #cardTool.addPOISumGroups(genCharge="qGen0")
-        #cardTool.addPOISumGroups(genCharge="qGen1")
+        # cardTool.addPOISumGroups(genCharge="qGen0")
+        # cardTool.addPOISumGroups(genCharge="qGen1")
         pass
     if args.noHist:
         cardTool.skipHistograms()
@@ -222,7 +223,7 @@ def main(args,xnorm=False):
     constrainedZ = constrainMass and not wmass
     label = 'W' if wmass else 'Z'
     massSkip = [(f"^massShift[W|Z]{i}MeV.*",) for i in range(0, 110 if constrainedZ else 100, 10)]
-    if wmass and not xnorm:
+    if wmass and not xnorm and not args.doStatOnly:
         cardTool.addSystematic(f"massWeightZ",
                                 processes=single_v_nonsig_samples,
                                 group=f"massShiftZ",
@@ -236,10 +237,12 @@ def main(args,xnorm=False):
     if not (constrainMass or wmass):
         massSkip.append(("^massShift.*2p1MeV.*",))
 
-    #if args.theoryAgnostic:
-    #    logger.error("Temporarily not using mass weights for Wtaunu. Please update when possible")
-    cardTool.addSystematic(f"massWeight{label}", 
-                           processes=signal_samples_inctau,  #signal_samples if args.theoryAgnostic else signal_samples_inctau,
+    signal_samples_forMass = signal_samples_inctau
+    if args.theoryAgnostic:
+        logger.error("Temporarily not using mass weights for Wtaunu. Please update when possible")
+        signal_samples_forMass = signal_samples
+    cardTool.addSystematic(f"massWeight{label}",
+                           processes=signal_samples_forMass,
                            group=f"massShift{label}",
                            skipEntries=massSkip,
                            mirror=False,

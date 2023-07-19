@@ -226,6 +226,9 @@ def add_massweights_hist(results, df, axes, cols, base_name="nominal", proc="", 
         mass_axis = hist.axis.StrCategory(massWeightNames(proc=proc), name="massShift")
         massweightHelicity, massWeight_axes = make_massweight_helper_helicity(mass_axis)
         df = df.Define("massWeight_tensor_wnom_helicity", massweightHelicity, ['massWeight_tensor_wnom', 'helWeight_tensor'])
+        massWeight = df.HistoBoost(name, axes, [*cols, "massWeight_tensor_wnom_helicity"],
+                                   tensor_axes=massWeight_axes,
+                                   storage=hist.storage.Double())
     else:
         massWeight = df.HistoBoost(name, axes, [*cols, "massWeight_tensor_wnom"], 
                                    tensor_axes=[hist.axis.StrCategory(massWeightNames(proc=proc), name="massShift")], 

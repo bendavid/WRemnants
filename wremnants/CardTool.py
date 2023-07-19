@@ -56,7 +56,7 @@ class CardTool(object):
         self.project = None
         self.xnorm = False
         self.absolutePathShapeFileInCard = False
-        self.excludePOIforChannel = {} # can be used to exclue some POI when runnig a specific name (use case, force gen and reco charges to match)
+        self.excludeProcessForChannel = {} # can be used to exclue some POI when runnig a specific name (use case, force gen and reco charges to match)
         self.chargeIdDict = {"minus" : {"val" : -1, "id" : "q0", "badId" : "q1"},
                              "plus"  : {"val" : 1., "id" : "q1", "badId" : "q0"},
                              "inclusive" : {"val" : "sum", "id" : "none", "badId" : None},
@@ -67,9 +67,9 @@ class CardTool(object):
         if len(self.noStatUncProcesses):
             logger.info("Attention: histograms are not saved according to input options, thus statistical uncertainty won't be zeroed")
 
-    def setExcludePOIforChannel(self, channel, POIregexp, canUpdate=False):
-        if canUpdate or channel not in self.excludePOIforChannel.keys():
-            self.excludePOIforChannel[channel] = re.compile(POIregexp)
+    def setExcludeProcessForChannel(self, channel, POIregexp, canUpdate=False):
+        if canUpdate or channel not in self.excludeProcessForChannel.keys():
+            self.excludeProcessForChannel[channel] = re.compile(POIregexp)
             
     def setProjectionAxes(self, project):
         self.project = project
@@ -646,12 +646,11 @@ class CardTool(object):
                 scaleToNewLumi=self.lumiScale,
             )
             self.writeForProcesses(syst, label="syst", processes=processes, check_systs=check_systs)
-            
+
         output_tools.writeMetaInfoToRootFile(self.outfile, exclude_diff='notebooks', args=args)
         if self.skipHist:
             logger.info("Histograms will not be written because 'skipHist' flag is set to True")
         self.writeCard()
-
         
     def writeCard(self):
         for chan in self.channels:
@@ -659,7 +658,7 @@ class CardTool(object):
                 card.write(self.cardContent[chan])
                 card.write("\n")
                 card.write(self.cardGroups[chan])
-                card.write(self.cardSumGroups) ## TODO: avoid gen plus charge for minus reco charge when the match is requested
+                card.write(self.cardSumGroups)
 
     def addSystToGroup(self, groupName, chan, members, groupLabel="group"):
         group_expr = f"{groupName} {groupLabel} ="
@@ -719,16 +718,19 @@ class CardTool(object):
 
     def writeLnNSystematics(self):
         nondata = self.predictedProcesses()
+        nondata_chan = {chan: nondata.copy() for chan in self.channels}
+        for chan in self.excludeProcessForChannel.keys():
+            nondata_chan[chan] = list(filter(lambda x: not self.excludeProcessForChannel[chan].match(x), nondata))
         # exit this function when a syst is applied to no process (can happen when some are excluded)
         for name,info in self.lnNSystematics.items():
             if self.isExcludedNuisance(name): continue
             if all(x not in info["processes"] for x in nondata):
                 logger.warning(f"Skipping syst {name}, procs to apply it to would be {info['processes']}, and predicted processes are {nondata}")
                 return
-            include = [(str(info["size"]) if x in info["processes"] else "-").ljust(self.procColumnsSpacing) for x in nondata]
             group = info["group"]
             groupFilter = info["groupFilter"]
             for chan in self.channels:
+                include = [(str(info["size"]) if x in info["processes"] else "-").ljust(self.procColumnsSpacing) for x in nondata_chan[chan]]
                 self.cardContent[chan] += f'{name.ljust(self.spacing)} lnN{" "*(self.systTypeSpacing-2)} {"".join(include)}\n'
                 if group and len(list(filter(groupFilter, [name]))):
                     self.addSystToGroup(group, chan, name)
@@ -744,8 +746,8 @@ class CardTool(object):
         label = "group" if not systInfo["noConstraint"] else "noiGroup"
         nondata = self.predictedProcesses()
         nondata_chan = {chan: nondata.copy() for chan in self.channels}
-        for chan in self.excludePOIforChannel.keys():
-            nondata_chan[chan] = list(filter(lambda x: not self.excludePOIforChannel[chan].match(x), nondata))
+        for chan in self.excludeProcessForChannel.keys():
+            nondata_chan[chan] = list(filter(lambda x: not self.excludeProcessForChannel[chan].match(x), nondata))
             
         names = [x[:-2] if "Up" in x[-2:] else (x[:-4] if "Down" in x[-4:] else x) 
                     for x in filter(lambda x: x != "", systInfo["outNames"])]
@@ -802,8 +804,8 @@ class CardTool(object):
         procs = self.predictedProcesses()
         nprocs = len(procs)
         for chan in self.channels:
-            if chan in self.excludePOIforChannel.keys():
-                procs = list(filter(lambda x: not self.excludePOIforChannel[chan].match(x), self.predictedProcesses()))
+            if chan in self.excludeProcessForChannel.keys():
+                procs = list(filter(lambda x: not self.excludeProcessForChannel[chan].match(x), self.predictedProcesses()))
                 nprocs = len(procs)
             args = {
                 "channel" :  chan,
