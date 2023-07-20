@@ -904,6 +904,7 @@ def drawSingleTH1(h1,
                   drawLineLowerPanel="luminosity uncertainty::0.025", # if not empty, draw band at 1+ number after ::, and add legend with title
                   passCanvas=None,
                   lumi=None,
+                  skipLumi=False,
                   drawVertLines="", # "12,36": format --> N of sections (e.g: 12 pt bins), and N of bins in each section (e.g. 36 eta bins), assuming uniform bin width
                   textForLines=[],                       
                   moreText="",
@@ -1002,19 +1003,20 @@ def drawSingleTH1(h1,
     h1err.Draw("E2same")
     h1.Draw("HIST same")
 
-    nColumnsLeg = 1
-    if ";" in legendCoords: 
-        nColumnsLeg = int(legendCoords.split(";")[1])
-    legcoords = [float(x) for x in (legendCoords.split(";")[0]).split(',')]
-    lx1,lx2,ly1,ly2 = legcoords[0],legcoords[1],legcoords[2],legcoords[3]
-    leg = ROOT.TLegend(lx1,ly1,lx2,ly2)
-    #leg.SetFillColor(0)
-    #leg.SetFillStyle(0)
-    #leg.SetBorderSize(0)
-    leg.SetNColumns(nColumnsLeg)
-    leg.AddEntry(h1,"Value","L")
-    leg.AddEntry(h1err,"Uncertainty","F")
-    leg.Draw("same")
+    if legendCoords != None and len(legendCoords) > 0:
+        nColumnsLeg = 1
+        if ";" in legendCoords: 
+            nColumnsLeg = int(legendCoords.split(";")[1])
+        legcoords = [float(x) for x in (legendCoords.split(";")[0]).split(',')]
+        lx1,lx2,ly1,ly2 = legcoords[0],legcoords[1],legcoords[2],legcoords[3]
+        leg = ROOT.TLegend(lx1,ly1,lx2,ly2)
+        #leg.SetFillColor(0)
+        #leg.SetFillStyle(0)
+        #leg.SetBorderSize(0)
+        leg.SetNColumns(nColumnsLeg)
+        leg.AddEntry(h1,"Value","L")
+        leg.AddEntry(h1err,"Uncertainty","F")
+        leg.Draw("same")
     canvas.RedrawAxis("sameaxis")
 
     if drawStatBox:
@@ -1050,8 +1052,9 @@ def drawSingleTH1(h1,
                 bintext.DrawLatex(etarange*i + etarange/sliceLabelOffset, ytext, textForLines[i])
 
     # redraw legend, or vertical lines appear on top of it
-    leg.Draw("same")
-
+    if legendCoords != None and len(legendCoords) > 0:
+        leg.Draw("same")
+    
     if len(moreText):
         realtext = moreText.split("::")[0]
         x1,y1,x2,y2 = 0.7,0.8,0.9,0.9
@@ -1090,19 +1093,20 @@ def drawSingleTH1(h1,
   # }
 
     setTDRStyle()
-    if leftMargin > 0.1:
-        if lumi != None: CMS_lumi(canvas,lumi,True,False)
-        else:            CMS_lumi(canvas,"",True,False)
-    else:
-        latCMS = ROOT.TLatex()
-        latCMS.SetNDC();
-        latCMS.SetTextFont(42)
-        latCMS.SetTextSize(0.045)
-        latCMS.DrawLatex(leftMargin, 0.95, '#bf{CMS} #it{Preliminary}')
-        if lumi != None: latCMS.DrawLatex(0.91, 0.95, '%s fb^{-1} (13 TeV)' % lumi)
-        else:            latCMS.DrawLatex(0.96, 0.95, '(13 TeV)')
+    if not skipLumi:
+        if leftMargin > 0.1:
+            if lumi != None: CMS_lumi(canvas,lumi,True,False)
+            else:            CMS_lumi(canvas,"",True,False)
+        else:
+            latCMS = ROOT.TLatex()
+            latCMS.SetNDC();
+            latCMS.SetTextFont(42)
+            latCMS.SetTextSize(0.045)
+            latCMS.DrawLatex(leftMargin, 0.95, '#bf{CMS} #it{Preliminary}')
+            if lumi != None: latCMS.DrawLatex(0.91, 0.95, '%s fb^{-1} (13 TeV)' % lumi)
+            else:            latCMS.DrawLatex(0.96, 0.95, '(13 TeV)')
 
-    if drawLineTopPanel:
+    if drawLineTopPanel != None:
         topline = ROOT.TF1("horiz_line",f"{drawLineTopPanel}",h1.GetXaxis().GetBinLowEdge(1),h1.GetXaxis().GetBinLowEdge(h1.GetNbinsX()+1))
         topline.SetLineColor(ROOT.kRed)
         topline.SetLineWidth(1)
@@ -2357,7 +2361,7 @@ def drawTH1dataMCstack(h1, thestack,
                        etaptbinning=[],
                        drawLumiLatex=False,
                        skipLumi=False,
-                       xcmsText=0.1, # customize x when using drawLumiLatex
+                       xcmsText=-1, # customize x when using drawLumiLatex
                        noLegendRatio=False,
                        textSize=0.035,
                        textAngle=0.10,
@@ -2434,7 +2438,7 @@ def drawTH1dataMCstack(h1, thestack,
     h1.SetLineColor(ROOT.kBlack)
     h1.SetMarkerColor(ROOT.kBlack)
     h1.SetMarkerStyle(20)
-    h1.SetMarkerSize(1)
+    h1.SetMarkerSize(0.5 if (wideCanvas or leftMargin < 0.1) else 1.0)
 
     if not noRatioPanel:
         h1.GetXaxis().SetLabelSize(0)
@@ -2498,9 +2502,9 @@ def drawTH1dataMCstack(h1, thestack,
         latCMS.SetNDC();
         latCMS.SetTextFont(42)
         latCMS.SetTextSize(0.045)
-        latCMS.DrawLatex(0.1, 0.95, '#bf{CMS} #it{Preliminary}')
-        if lumi != None: latCMS.DrawLatex(0.85, 0.95, '%s fb^{-1} (13 TeV)' % lumi)
-        else:            latCMS.DrawLatex(0.90, 0.95, '(13 TeV)')
+        latCMS.DrawLatex(leftMargin, 0.95, '#bf{CMS} #it{Preliminary}')
+        if lumi != None: latCMS.DrawLatex(0.91, 0.95, '%s fb^{-1} (13 TeV)' % lumi)
+        else:            latCMS.DrawLatex(0.96, 0.95, '(13 TeV)')
     else:    
         if not skipLumi:
             if not drawLumiLatex:
@@ -2511,7 +2515,7 @@ def drawTH1dataMCstack(h1, thestack,
                 latCMS.SetNDC();
                 latCMS.SetTextFont(42)
                 latCMS.SetTextSize(0.035 if lumi != None else 0.04)
-                latCMS.DrawLatex(xcmsText, 0.95, '#bf{CMS} #it{Preliminary}')
+                latCMS.DrawLatex(leftMargin if xcmsText < 0 else xcmsText, 0.95, '#bf{CMS} #it{Preliminary}')
                 if lumi != None: latCMS.DrawLatex(0.7, 0.95, '%s fb^{-1} (13 TeV)' % lumi)
                 else:            latCMS.DrawLatex(0.8, 0.95, '(13 TeV)')
 
@@ -2551,7 +2555,7 @@ def drawTH1dataMCstack(h1, thestack,
         den.SetMarkerSize(0)
         #den.SetLineColor(ROOT.kRed)
         frame.Draw()        
-        ratio.SetMarkerSize(0.85)
+        ratio.SetMarkerSize(0.6 if (wideCanvas or leftMargin < 0.1) else 0.85)
         ratio.SetMarkerStyle(20) 
         den.Draw("E2same")
         ratio.Draw("EPsame")
@@ -3697,7 +3701,7 @@ def unroll2Dto1D(h, newname='', cropNegativeBins=True, silent=False):
         for ibin in range(1, nbins+1):
             if newh.GetBinContent(ibin)<0:
                 if not silent:
-                    logger.warning('cropping to zero bin %d in %s (was %f)'%(ibin, newh.GetName(), newh.GetBinContent(ibin)))
+                    logger.warning('unroll2Dto1D(): cropping to zero bin %d in %s (was %f)'%(ibin, newh.GetName(), newh.GetBinContent(ibin)))
                 newh.SetBinContent(ibin, 0)
     return newh
 

@@ -29,16 +29,17 @@ ROOT.PyConfig.IgnoreCommandLineOptions = True
 #from utility import *
 from scripts.analysisTools.plotUtils.utility import *
 
-def lepInFakeSystForSort(name):
-    if re.match("Uncorrelated\d+mu",name): 
-        return 1
-    else:
-        return 2
-
-
 def niceName(name):
 
-    if "CMS_prefire" in name:
+    if "helicity" in name:
+        ret = name.split("_helicity")[0]
+        if "qGen" in ret:
+            Wcharge = "W^{+}" if "qGen1" in ret else "W^{ -}"
+            ret = Wcharge + " " + ret.split("qGen")[1].split("_",1)[1]
+        ret = ret.replace("gen","")
+        return ret
+    
+    elif "CMS_prefire" in name:
         if "prefire_stat_m" in name:
             num = re.findall(r'\d+', name) # get number
             if int(num[0]) == 11:
@@ -258,6 +259,19 @@ if __name__ == "__main__":
     ROOT.gStyle.SetPaintTextFormat('.3f')
 
     #date = datetime.date.today().isoformat()
+    # these are no longer needed anymore for this fit, except for channelnone
+    filter_matrixType_poiPostfix = {"channelpmaskedexp"     : "pmaskedexp",
+                                    "channelpmaskedexpnorm" : "pmaskedexpnorm",
+                                    "channelsumpois"        : "sumxsec",
+                                    "channelsumpoisnorm"    : "sumxsecnorm",
+                                    "channelchargepois"     : "chargeasym",
+                                    "channelchargemetapois" : "chargemetaasym",
+                                    "channelratiometapois"  : "ratiometaratio",
+                                    "channelpolpois"        : "a4",  #  check if it is correct
+                                    "channelnone"           : "pmaskedexp", # dummy, there are no POIs in this case
+                                    "channelnois"           : "pmaskedexp", # dummy, there are no POIs in this case
+                                    "channelmu"             : "mu",
+    }
 
     parser = argparse.ArgumentParser()
     parser.add_argument('fitresult', type=str, nargs=1, help="fitresult.root file from combinetf")
@@ -271,10 +285,10 @@ if __name__ == "__main__":
     parser.add_argument(     '--vertical-labels-X', dest='verticalLabelsX',    default=False, action='store_true', help='Set labels on X axis vertically (sometimes they overlap if rotated)')
     parser.add_argument(     '--title'  , default='', type=str, help='Title for matrix ')
     parser.add_argument(     '--show-more-correlated' , dest='showMoreCorrelated',    default=0, type=int, help='Show the N nuisances more correlated (in absolute value) with the parameters given with --params. If 0, do not do this part')
-    parser.add_argument('-m','--matrix-type', dest='matrixType',    default='channelnone', type=str, help='Select which matrix to read from file')
-    parser.add_argument(     '--margin',  default='0.15,0.15,0.07,0.15', type=str, help='Pass canvas margin as "left,right,top,bottom" ')
+    parser.add_argument('-m','--matrix-type', dest='matrixType',    default='channelnone', choices=list(filter_matrixType_poiPostfix.keys()), type=str, help='Select which matrix to read from file')
+    parser.add_argument(     '--margin',  default='0.2,0.16,0.07,0.2', type=str, help='Pass canvas margin as "left,right,top,bottom"')
+    parser.add_argument(     '--textMargin',  default='0.2', type=str, help='Canvas bottom and left margins (same value, to make text fit)')
     parser.add_argument(     '--canvasSize', default='', type=str, help='Pass canvas dimensions as "width,height" ')
-    parser.add_argument('-c','--channel',     dest='channel',     default='mu', type=str, help='Channel (muon only for now)')
     parser.add_argument(     '--show-all-nuisances', dest='showAllNuisances',  action='store_true', help='Show all nuisances in the matrix (e.g. to prepare HEPdata entries): this implies that option --params is only used to filter POIs (for fixed POI fit with no real POI it is suggested using --params "NOTEXISTING", otherwise leaving --params empty makes all nuisances be treated as POI for the sake of building the matrix)')
     parser.add_argument('--which-matrix',  dest='whichMatrix', choices=["both","covariance","correlation"], default='correlation', type=str, help='Which matrix: covariance|correlation|both')
     parser.add_argument(     '--skipLatexOnTop', action='store_true', help='Do not write "CMS blabla" on top (mainly useful when a title is needed)')
@@ -369,20 +383,6 @@ if __name__ == "__main__":
         print(f"nPois = {nPois}")
         print(f"nNuisances = {nNuisances}")
 
-    # these are no longer needed anymore for this fit, except for channelnone
-    filter_matrixType_poiPostfix = {"channelpmaskedexp"     : "pmaskedexp",
-                                    "channelpmaskedexpnorm" : "pmaskedexpnorm",
-                                    "channelsumpois"        : "sumxsec",
-                                    "channelsumpoisnorm"    : "sumxsecnorm",
-                                    "channelchargepois"     : "chargeasym",
-                                    "channelchargemetapois" : "chargemetaasym",
-                                    "channelratiometapois"  : "ratiometaratio",
-                                    "channelpolpois"        : "a4",  #  check if it is correct
-                                    "channelnone"           : "pmaskedexp", # dummy, there are no POIs in this case
-                                    "channelnois"           : "pmaskedexp", # dummy, there are no POIs in this case
-                                    "channelmu"             : "pmaskedexp" # dummy, there are no POIs in this case (kenneth ran the fit without --POIMode None, but all processes were backgrounds)
-    }
-
     poiPostfix = filter_matrixType_poiPostfix[args.matrixType]
 
     print("Preparing list of parameters to build the matrix ...")
@@ -406,26 +406,20 @@ if __name__ == "__main__":
     p_tmp = set(params)
     params = list(p_tmp)
 
-    ## sort the floatParams. alphabetically, except for pdfs, which are sorted by number
-    ## for mu* QCD scales, distinguish among muR and muRXX with XX in 1-10
-    
+    ## sort the floatParams. alphabetically
     params = sorted(params)
-    params = sorted(params, key = lambda x: 0 if "Plus" in x else 1 if "Minus" in x else 2)
+    params = sorted(params, key = lambda x: 0 if "qGen1" in x else 1 if "qGen0" in x else 2)
     params = sorted(params, key= lambda x: 1 if x.endswith(poiPostfix) else 0)
 
     # sort if not using all params (otherwise the order should be already ok, as it is taken from the original matrix)
     if not args.showAllNuisances:
 
-        params = sorted(params, key= lambda x: utilities.getNFromString(x, chooseIndex=0) if 'pdf' in x else 101 if 'alphaS' in x else 0)
-        params = sorted(params, key= lambda x: int(re.sub('\D','',x)) if ('muRmuF' in x and x != "muRmuF")  else 0)
-        params = sorted(params, key= lambda x: int(re.sub('\D','',x)) if ('muR' in x and x != "muR" and 'muRmuF' not in x) else 0)
-        params = sorted(params, key= lambda x: int(re.sub('\D','',x)) if ('muF' in x and x != "muF" and 'muRmuF' not in x) else 0)
-        params = sorted(params, key= lambda x: utilities.getNFromString(x) if 'effStatTnP' in x else 0)            
-        params = sorted(params, key= lambda x: lepInFakeSystForSort(x) if 'Fakes' in x else 0)   
-        params = sorted(params, key= lambda x: utilities.getNFromString(x) if 'FakesEtaUncorrelated' in x else 0)    
-        params = sorted(params, key= lambda x: utilities.getNFromString(x) if 'FakesPtNormUncorrelated' in x else 0)
-        params = sorted(params, key= lambda x: utilities.getNFromString(x) if 'FakesEtaChargeUncorrelated' in x else 0) 
-        params = sorted(params, key= lambda x: utilities.getNFromString(x) if 'FakesPtSlopeUncorrelated' in x else 0)   
+        params = sorted(params, key= lambda x: utilities.getNFromString(x, chooseIndex=0) if 'pdf' in x else 0)
+        #params = sorted(params, key= lambda x: int(re.sub('\D','',x)) if ('muRmuF' in x and x != "muRmuF")  else 0)
+        #params = sorted(params, key= lambda x: int(re.sub('\D','',x)) if ('muR' in x and x != "muR" and 'muRmuF' not in x) else 0)
+        #params = sorted(params, key= lambda x: int(re.sub('\D','',x)) if ('muF' in x and x != "muF" and 'muRmuF' not in x) else 0)
+        #params = sorted(params, key= lambda x: utilities.getNFromString(x) if 'effStat' in x else 0)            
+        #params = sorted(params, key= lambda x: lepInFakeSystForSort(x) if 'Fakes' in x else 0)   
         # sort by charge if needed     
 
     print('='*30)
@@ -445,11 +439,14 @@ if __name__ == "__main__":
     if args.palette:   ROOT.gStyle.SetPalette(args.palette)
 
     clm = 0.15
-    crm = 0.15
+    crm = 0.16
     cbm = 0.15
     ctm = 0.07
     if args.margin:
         clm,crm,ctm,cbm = (float(x) for x in args.margin.split(','))
+    if args.textMargin:
+        clm = float(args.textMargin)
+        cbm = float(args.textMargin)
     c.SetLeftMargin(clm)
     c.SetRightMargin(crm)
     c.SetBottomMargin(cbm)
@@ -529,7 +526,12 @@ if __name__ == "__main__":
         tmp_mat.SetTitle("")
         if args.title: 
             tmp_mat.SetTitle(args.title)
-
+            tmp_mat.GetZaxis().SetTitle(corcov)
+            tmp_mat.GetZaxis().SetTitleSize(0.04)
+            tmp_mat.GetZaxis().SetTitleOffset(1.2)
+                       
+            args.skipLatexOnTop = True
+            
         if args.outdir:
             ROOT.gStyle.SetPaintTextFormat('1.2f')
             if len(params)<30: tmp_mat.Draw('colz text45')

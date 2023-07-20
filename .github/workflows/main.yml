@@ -218,7 +218,7 @@ jobs:
           lfs: 'true'
 
       - name: lowpu w mu analysis
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_lowPU.py -o $WREMNANTS_OUTDIR -j $NTHREADS --verbose 4 --forceDefaultName --unfolding
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_lowPU.py -o $WREMNANTS_OUTDIR -j $NTHREADS --verbose 4 --forceDefaultName --noRecoil --unfolding
 
       - name: lowpu w mu plot ptll
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --hists ptll -p $WEB_DIR -f $PLOT_DIR/lowPU -a mu $HIST_FILE_MU variation --varName nominal_uncorr --varLabel MiNNLO --colors red
@@ -311,7 +311,7 @@ jobs:
           submodules: 'true'
 
       - name: lowpu z mumu analysis
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_lowPU.py -o $WREMNANTS_OUTDIR -j $NTHREADS --verbose 4 --forceDefaultName --unfolding
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_lowPU.py -o $WREMNANTS_OUTDIR -j $NTHREADS --verbose 4 --forceDefaultName --noRecoil --unfolding
 
       - name: lowpu z mumu plot ptll yll
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --hists ptll yll -p $WEB_DIR -f $PLOT_DIR/lowPU -a mumu $HIST_FILE_MUMU variation --varName nominal_uncorr --varLabel MiNNLO --colors red

@@ -7,25 +7,27 @@
 
 namespace wrem {
 
-using Vec_b = ROOT::VecOps::RVec<bool>;
-using Vec_d = ROOT::VecOps::RVec<double>;
-using Vec_f = ROOT::VecOps::RVec<float>;
-using Vec_i = ROOT::VecOps::RVec<int>;
-using Vec_ui = ROOT::VecOps::RVec<unsigned int>;
+    using Vec_b = ROOT::VecOps::RVec<bool>;
+    using Vec_d = ROOT::VecOps::RVec<double>;
+    using Vec_f = ROOT::VecOps::RVec<float>;
+    using Vec_i = ROOT::VecOps::RVec<int>;
+    using Vec_ui = ROOT::VecOps::RVec<unsigned int>;
 
-const unsigned int MUON_PDGID = 13;
-
-bool isOddEvent(ULong64_t evt) {
-
-  return (evt%2) ? 1 : 0;
-
-}
-
-bool isEvenEvent(ULong64_t evt) {
-
-  return (evt%2) ? 0 : 1;
-
-}
+    enum class AnalysisType {
+        Wmass=0,
+        Wlike,
+        Dilepton
+    };
+        
+    const unsigned int MUON_PDGID = 13;
+    
+    bool isOddEvent(ULong64_t evt) {
+        return (evt%2) ? 1 : 0;
+    }
+        
+    bool isEvenEvent(ULong64_t evt) {
+        return (evt%2) ? 0 : 1;   
+    }
 
 }
 
