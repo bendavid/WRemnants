@@ -37,10 +37,18 @@ def readNuisances(args, infile=None):
 
     print(f"Starting with file {infile} ...")
 
-    massNuisanceName = "WmassShift{s}MeV".format(s=int(args.prefitUncertainty))
+    #massNuisanceName = "WmassShift{s}MeV".format(s=int(args.prefitUncertainty))
+    massNuisanceName = ".*massShift.*{s}MeV$".format(s=int(args.prefitUncertainty))
     #massNuisanceName = "massShift{s}MeV".format(s=int(args.prefitUncertainty))
     valuesAndErrors = utilities.getFromHessian(infile,params=[massNuisanceName])
-    totalUncertainty = valuesAndErrors[massNuisanceName][1] - valuesAndErrors[massNuisanceName][0]
+    if len(valuesAndErrors) == 1:
+        masskey = list(valuesAndErrors.keys())[0]
+        totalUncertainty = valuesAndErrors[masskey][1] - valuesAndErrors[masskey][0]
+    else:
+        print(f"Warning: found more parameters matching expected mass expression: {valuesAndErrors.keys()}")
+        quit()
+        #totalUncertainty = valuesAndErrors[massNuisanceName][1] - valuesAndErrors[massNuisanceName][0]
+
     if args.scaleToMeV:
         totalUncertainty *= args.prefitUncertainty
         print("Total m%s uncertainty: %2.1f MeV" % (boson, totalUncertainty))
@@ -76,7 +84,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("rootfile", type=str, nargs=1)
-    parser.add_argument('-o','--outdir',     default='./',   type=str, help='output directory to save the matrix')    
+    parser.add_argument('-o','--outdir',     default='./makeImpactsOnMW/',   type=str, help='output directory to save the plot (not needed with --justPrint)')    
     parser.add_argument(     '--nuisgroups', default='ALL',   type=str, help='nuis groups for which you want to show the impacts (can pass comma-separated list to make all of them one after the other). Use full name, no regular expressions. By default, all are made')
     parser.add_argument(     '--keepNuisgroups', default='.*',   type=str, help='nuis groups for which you want to show the impacts, using regular expressions')
     parser.add_argument('-x', '--excludeNuisgroups', default=None,   type=str, help='Regular expression for nuisances to be excluded (note that it wins against --keepNuisgroups since evaluated before it')
@@ -96,6 +104,7 @@ if __name__ == "__main__":
     parser.add_argument(     '--setStatAlt', default=-1.0, type=float, help='If positive, use this value for stat of the file passed with compareFile, otherwise use the same as the other file')
     parser.add_argument(     '--legendEntries', nargs=2, type=str, help="Legend entries when comparing files", default=["Nominal", "Alternate"])
     parser.add_argument(     '--printAltVal', action='store_true', help='When comparing to a second file, also print the values for the alternative')
+    parser.add_argument(     '--justPrint', action='store_true', help='Print without plotting')
     args = parser.parse_args()
 
     # palettes:
@@ -144,9 +153,7 @@ if __name__ == "__main__":
                                              255,  0.95)
 
     boson = "Z" if args.isWlike else "W"
-
-    createPlotDirAndCopyPhp(args.outdir)
-
+    
     compare = True if len(args.compareFile) else False
     if not compare and args.printAltVal:
         print("Warning: --printAltVal only works with --compareFile. Please try again")
@@ -183,13 +190,13 @@ if __name__ == "__main__":
     for ik,k in enumerate(sortedGroups):
         bincontent = nuisGroup_nameVal[k] if not args.scaleToMeV else nuisGroup_nameVal[k] * args.prefitUncertainty
         if compare:
-            print(k)
+            #print(k)
             #bincontentAlt = nuisGroup_nameVal_alt[k.replace("QCDscaleWPtHelicityMiNNLO","QCDscalePtHelicityMiNNLO")]
             bincontentAlt = nuisGroup_nameVal_alt[k]
             if args.scaleToMeV: bincontentAlt *= args.prefitUncertainty
-            print("%s: %2.3f / %2.3f" % (k,bincontent, bincontentAlt))
+            print("%s: %2.3f / %2.3f" % (k, bincontent, bincontentAlt))
         else:
-            print("%s: %2.3f" % (k,bincontent))
+            print("%s: %2.3f" % (k, bincontent))
         label = k
         if k == "binByBinStat":
             label = "MCandFakes_stat"
@@ -202,6 +209,10 @@ if __name__ == "__main__":
             bincontentAlt = nuisGroup_nameVal_alt[k]
             if args.scaleToMeV: bincontentAlt *= args.prefitUncertainty
             h2.SetBinContent(ik+1,bincontentAlt)
+
+    if args.justPrint:
+        quit()
+            
     if args.showTotal:
         h1.GetXaxis().SetBinLabel(nbins,"total")
         h1.SetBinContent(nbins,totalUncertainty_mW)
@@ -295,5 +306,6 @@ if __name__ == "__main__":
     if len(postfix) and  not postfix.startswith("_"):
         postfix = "_" + postfix
     smallBoson = "z" if args.isWlike else "w"
+    createPlotDirAndCopyPhp(args.outdir)
     for ext in ["pdf", "png"]:
         c1.SaveAs(f"{args.outdir}/impactsOnM{smallBoson}{postfix}.{ext}")

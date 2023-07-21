@@ -192,7 +192,8 @@ if __name__ == "__main__":
         nominals[p].SetTitle(p)
         if args.plotNominal:
             if do2D:
-                drawCorrelationPlot(nominals[p], "Muon #eta", "Muon p_{T} (GeV)", f"Events",
+                minnomi,maxnomi = getMinMaxHisto(nominals[p], excludeEmpty=True, sumError=False)
+                drawCorrelationPlot(nominals[p], "Muon #eta", "Muon p_{T} (GeV)", f"Events::{minnomi},{maxnomi}",
                                     nominals[p].GetName(), plotLabel="ForceTitle", outdir=outdir,
                                     smoothPlot=False, drawProfileX=False, scaleToUnitArea=False, draw_both0_noLog1_onlyLog2=1,
                                     palette=args.palette, nContours=args.nContours, invertePalette=args.invertePalette,
@@ -304,7 +305,8 @@ if __name__ == "__main__":
         ratio.Divide(nominals[pname])
         ratio.SetTitle(f"syst: {sname}")
         if do2D:
-            drawCorrelationPlot(ratio, "Muon #eta", "Muon p_{T} (GeV)", f"{pname}: syst / nominal",
+            minratio,maxratio = getMinMaxHisto(ratio, excludeEmpty=True, sumError=False)
+            drawCorrelationPlot(ratio, "Muon #eta", "Muon p_{T} (GeV)", f"{pname}: syst / nominal::{minratio},{maxratio}",
                                 name, plotLabel="ForceTitle", outdir=outdir,
                                 smoothPlot=False, drawProfileX=False, scaleToUnitArea=False, draw_both0_noLog1_onlyLog2=1,
                                 palette=args.palette, nContours=args.nContours, invertePalette=args.invertePalette,

@@ -201,7 +201,8 @@ class Datagroups(object):
                  excludeProcs=None, forceToNominal=[]):
         if not label:
             label = syst if syst else baseName
-        logger.info(f"In setHists(): for hist {syst} procsToRead = {procsToRead}")
+        # this line is annoying for the theory agnostic, too many processes for signal
+        logger.debug(f"In setHists(): for hist {syst} procsToRead = {procsToRead}")
 
         if not procsToRead:
             if excludeProcs:

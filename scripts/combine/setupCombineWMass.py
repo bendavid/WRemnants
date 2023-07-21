@@ -65,7 +65,7 @@ def main(args,xnorm=False):
     
     datagroups = make_datagroups_2016(args.inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm)
 
-    if args.axlim or args.rebin:
+    if not xnorm and (args.axlim or args.rebin):
         if len(args.axlim) % 2 or len(args.axlim)/2 > len(args.fitvar) or len(args.rebin) > len(args.fitvar):
             raise ValueError("Inconsistent rebin or axlim arguments. axlim must be at most two entries per axis, and rebin at most one")
 
@@ -183,9 +183,12 @@ def main(args,xnorm=False):
             datagroups.setGenAxes([a for a in datagroups.gen_axes if a not in cardTool.project])
     if args.unfolding:
         # TODO: make this less hardcoded to filter the charge (if the charge is not present this will duplicate things)
-        # cardTool.addPOISumGroups(genCharge="qGen0")
-        # cardTool.addPOISumGroups(genCharge="qGen1")
-        pass
+        if args.theoryAgnostic:
+            pass
+            #cardTool.addPOISumGroups(genCharge="qGen0")
+            #cardTool.addPOISumGroups(genCharge="qGen1")
+        else:
+            cardTool.addPOISumGroups()
     if args.noHist:
         cardTool.skipHistograms()
     cardTool.setOutfile(os.path.abspath(f"{outfolder}/{name}CombineInput{suffix}.root"))
@@ -203,7 +206,8 @@ def main(args,xnorm=False):
             )
     cardTool.setLumiScale(args.lumiScale)
 
-    logger.info(f"cardTool.allMCProcesses(): {cardTool.allMCProcesses()}")
+    if not args.theoryAgnostic:
+        logger.info(f"cardTool.allMCProcesses(): {cardTool.allMCProcesses()}")
         
     passSystToFakes = wmass and not args.skipSignalSystOnFakes and args.qcdProcessName not in excludeGroup and (filterGroup == None or args.qcdProcessName in filterGroup) and not xnorm
 
@@ -214,11 +218,12 @@ def main(args,xnorm=False):
     signal_samples_inctau = list(filter(lambda x: x[0] == ("W" if wmass else "Z"), single_v_samples))
 
     allMCprocesses_noQCDMC = [x for x in cardTool.allMCProcesses() if x != "QCD"]
-    
-    logger.info(f"All MC processes {allMCprocesses_noQCDMC}")
-    logger.info(f"Single V samples: {single_v_samples}")
-    logger.info(f"Single V no signal samples: {single_v_nonsig_samples}")
-    logger.info(f"Signal samples: {signal_samples}")
+
+    if not args.theoryAgnostic:
+        logger.info(f"All MC processes {allMCprocesses_noQCDMC}")
+        logger.info(f"Single V samples: {single_v_samples}")
+        logger.info(f"Single V no signal samples: {single_v_nonsig_samples}")
+        logger.info(f"Signal samples: {signal_samples}")
 
     constrainedZ = constrainMass and not wmass
     label = 'W' if wmass else 'Z'
