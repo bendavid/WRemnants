@@ -460,11 +460,8 @@ def build_graph(df, dataset):
             if not args.noScaleFactors:
                 df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, axes, cols, what_analysis=thisAnalysis, smooth3D=args.smooth3dsf)
             df = syst_tools.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, axes, cols)
-
-            # luminosity, done here as shape variation despite being a flat scaling so to facilitate propagating to fakes afterwards
-            df = df.Define("luminosityScaling", f"wrem::constantScaling(nominal_weight, {args.lumiUncertainty})")
-            luminosity = df.HistoBoost("nominal_luminosity", axes, [*cols, "luminosityScaling"], tensor_axes = [common.down_up_axis], storage=hist.storage.Double())
-            results.append(luminosity)
+            # luminosity, as shape variation despite being a flat scaling to facilitate propagation to fakes
+            df = syst_tools.add_luminosity_unc_hists(results, df, args, axes, cols)
                 
         # n.b. this is the W analysis so mass weights shouldn't be propagated
         # on the Z samples (but can still use it for dummy muon scale)

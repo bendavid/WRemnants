@@ -124,6 +124,7 @@ if __name__ == "__main__":
     parser.add_argument(     '--systPostfix', type=str, default=None, help="Postfix for plot showing some syst variations")
     parser.add_argument(     '--fakeSystToW', default=False , action='store_true',   help='Make additional plots where systs on fakes are translated into signal variation')
     parser.add_argument(     '--sumFakeAndW', default=False , action='store_true',   help='In addition to other plots, and as alternative to --fakeSystToW, sum Fake and W and show variations from varying signal or Fake only')
+    parser.add_argument(     '--difference', dest='addDifference',  action='store_true', help='Also plot difference of syst and nomi, not just their ratio')
     args = parser.parse_args()
 
     doUnrolled = (args.plot == "unrolled") or (args.plot == "all")
@@ -290,6 +291,7 @@ if __name__ == "__main__":
             systList_pt_FakeOnSignal[-1].Add(systList_pt["Wmunu"][0])
                 
         ratio = alternate.Clone(f"systRatio_{sname}")
+        difference = alternate.Clone(f"systDiff_{sname}")
         if args.plotSystOriginal:
             if do2D:
                 drawCorrelationPlot(alternate, "Muon #eta", "Muon p_{T} (GeV)", "Events",
@@ -303,18 +305,34 @@ if __name__ == "__main__":
         ratio.SetDirectory(0)
         #ratios[pname].append(htmp.Divide(nominals[pname]))
         ratio.Divide(nominals[pname])
-        ratio.SetTitle(f"syst: {sname}")
+        ratio.SetTitle(f"#splitline{{syst: {sname}}}{{proc: {pname}}}")
+        if args.addDifference:
+            difference.SetDirectory(0)
+            difference.Add(nominals[pname], -1.0)
+            difference.SetTitle(f"#splitline{{syst: {sname}}}{{proc: {pname}}}")
+
         if do2D:
             minratio,maxratio = getMinMaxHisto(ratio, excludeEmpty=True, sumError=False)
             drawCorrelationPlot(ratio, "Muon #eta", "Muon p_{T} (GeV)", f"{pname}: syst / nominal::{minratio},{maxratio}",
-                                name, plotLabel="ForceTitle", outdir=outdir,
+                                f"ratio_{name}", plotLabel="ForceTitle", outdir=outdir,
                                 smoothPlot=False, drawProfileX=False, scaleToUnitArea=False, draw_both0_noLog1_onlyLog2=1,
                                 palette=args.palette, nContours=args.nContours, invertePalette=args.invertePalette,
                                 passCanvas=canvas, drawOption="COLZ0")
+            if args.addDifference:
+                drawCorrelationPlot(difference, "Muon #eta", "Muon p_{T} (GeV)", f"Difference: syst - nominal",
+                                    f"diff_{name}", plotLabel="ForceTitle", outdir=outdir,
+                                    smoothPlot=False, drawProfileX=False, scaleToUnitArea=False, draw_both0_noLog1_onlyLog2=1,
+                                    palette=args.palette, nContours=args.nContours, invertePalette=args.invertePalette,
+                                    passCanvas=canvas, drawOption="COLZ0")
+
         if doUnrolled:
             ratio_unrolled = unroll2Dto1D(ratio, newname=f"unrolledRatio_{name}", cropNegativeBins=False)
             plotUnrolledHistogram(ratio_unrolled, pname, sname, outdir, canvas_unroll, ratio, errorBars=args.addErrorBars, channelCharge=args.charge, canvasFullName=ratio_unrolled.GetName())
-
+            if args.addDifference:
+                difference_unrolled = unroll2Dto1D(difference, newname=f"unrolledDifference_{name}", cropNegativeBins=False)
+                plotUnrolledHistogram(difference_unrolled, pname, sname, outdir, canvas_unroll, ratio, errorBars=args.addErrorBars, channelCharge=args.charge, canvasFullName=difference_unrolled.GetName(), yAxisTitle="syst - nomi")
+                
+            
             if args.statUncRatio:
                 statUncNomi = nominals[pname].Clone(f"statUnc_{nominals[pname].GetName()}")
                 fillTH2fromTH2part(statUncNomi, nominals[pname], fillWithError=True)

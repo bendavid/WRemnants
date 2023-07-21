@@ -161,7 +161,7 @@ def main(args,xnorm=False):
         if args.forceRecoChargeAsGen:
             cardTool.setExcludeProcessForChannel("plus", ".*qGen0")
             cardTool.setExcludeProcessForChannel("minus", ".*qGen1")
-
+            
     if xnorm:
         histName = "xnorm"
         cardTool.setWriteByCharge(False)
@@ -181,14 +181,22 @@ def main(args,xnorm=False):
             cardTool.unroll = True
             # remove projection axes from gen axes, otherwise they will be integrated before
             datagroups.setGenAxes([a for a in datagroups.gen_axes if a not in cardTool.project])
+
+    # define sumGroups for integrated cross section
     if args.unfolding:
         # TODO: make this less hardcoded to filter the charge (if the charge is not present this will duplicate things)
         if args.theoryAgnostic:
-            pass
-            #cardTool.addPOISumGroups(genCharge="qGen0")
-            #cardTool.addPOISumGroups(genCharge="qGen1")
+            if "plus" in args.recoCharge:
+                cardTool.addPOISumGroups(genCharge="qGen1")
+            if "minus" in args.recoCharge:
+                cardTool.addPOISumGroups(genCharge="qGen0")
         else:
-            cardTool.addPOISumGroups()
+            if args.sumChannels or name in ["ZMassDilepton"]:
+                cardTool.addPOISumGroups()
+            else:
+                cardTool.addPOISumGroups(genCharge="qGen0")
+                cardTool.addPOISumGroups(genCharge="qGen1")
+
     if args.noHist:
         cardTool.skipHistograms()
     cardTool.setOutfile(os.path.abspath(f"{outfolder}/{name}CombineInput{suffix}.root"))

@@ -314,6 +314,16 @@ def add_QCDbkg_jetPt_hist(results, df, nominal_axes, nominal_cols, base_name="no
     qcdJetPt = dQCDbkGVar.HistoBoost(name, nominal_axes, [*nominal_cols, "nominal_weight"], storage=hist.storage.Double())
     results.append(qcdJetPt)
 
+def add_luminosity_unc_hists(results, df, args, axes, cols, addhelicity=False):
+    # TODO: implement for theory agnostic with addhelicity=True
+    if addhelicity:
+        pass
+    else:
+        df = df.Define("luminosityScaling", f"wrem::constantScaling(nominal_weight, {args.lumiUncertainty})")
+        luminosity = df.HistoBoost("nominal_luminosity", axes, [*cols, "luminosityScaling"], tensor_axes = [common.down_up_axis], storage=hist.storage.Double())
+        results.append(luminosity)
+    return df
+    
 def add_muon_efficiency_unc_hists(results, df, helper_stat, helper_syst, axes, cols, base_name="nominal", what_analysis=ROOT.wrem.AnalysisType.Wmass, smooth3D=False, addhelicity=False):
     # TODO: update for dilepton
     if what_analysis == ROOT.wrem.AnalysisType.Wmass:
@@ -339,8 +349,7 @@ def add_muon_efficiency_unc_hists(results, df, helper_stat, helper_syst, axes, c
             muon_columns_stat = [*muon_columns_stat_trig, "trigMuons_passTrigger0", *muon_columns_stat_nonTrig, "nonTrigMuons_passTrigger0"]
             muon_columns_syst = [*muon_columns_syst_trig, "trigMuons_passTrigger0", *muon_columns_syst_nonTrig, "nonTrigMuons_passTrigger0"]
         else:
-            raise ValueError(f"add_muon_efficiency_unc_hists: analysis {what_analysis} not implemented.")
-            
+            raise ValueError(f"add_muon_efficiency_unc_hists: analysis {what_analysis} not implemented.")            
         
     if not smooth3D:
         # will use different helpers and member functions
