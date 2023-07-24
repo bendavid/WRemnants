@@ -6,7 +6,6 @@ from wremnants import theory_tools
 from wremnants.datasets.datagroups import Datagroups
 import re
 import collections.abc
-from decimal import Decimal
 
 logger = logging.child_logger(__name__)
 
@@ -245,11 +244,6 @@ def define_width_weights(df, proc):
     nweights = 5
     df = df.Define("widthWeight_tensor", f"wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeightAltSet1)")
     df = df.Define("widthWeight_tensor_wnom", "auto res = widthWeight_tensor; res = nominal_weight*res; return res;")
-
-    # df = df.Define("widthWeight_nominal", "widthWeight_tensor[3]")
-    # df = df.Define("widthWeight_down", "widthWeight_tensor[2]/widthWeight_nominal")
-    # df = df.Define("widthWeight_up", "widthWeight_tensor[4]/widthWeight_nominal")
-
     return df
 
 def add_widthweights_hist(results, df, axes, cols, base_name="nominal", proc=""):
@@ -261,7 +255,6 @@ def add_widthweights_hist(results, df, axes, cols, base_name="nominal", proc="")
 
 def widthWeightNames(matches=None, proc=""):
     central=3
-
     if proc[0] == "Z":
         widths=(2.49333, 2.49493, 2.4929, 2.4952, 2.4975)
     elif proc[0] == "W":
