@@ -211,7 +211,7 @@ class CardTool(object):
                       scale=1, processes=None, group=None, noConstraint=False,
                       action=None, doActionBeforeMirror=False, actionArgs={}, actionMap={},
                       systNameReplace=[], systNamePrepend=None, groupFilter=None, passToFakes=False,
-                      rename=None, splitGroup={}, decorrelateByBin={},
+                      rename=None, splitGroup={}, decorrelateByBin={}, noiGroup=False
                       ):
         # note: setting Up=Down seems to be pathological for the moment, it might be due to the interpolation in the fit
         # for now better not to use the options, although it might be useful to keep it implemented
@@ -249,6 +249,7 @@ class CardTool(object):
                 "systAxes" : systAxes,
                 "labelsByAxis" : systAxes if not labelsByAxis else labelsByAxis,
                 "group" : group,
+                "noiGroup": noiGroup,
                 "groupFilter" : groupFilter,
                 "splitGroup" : splitGroup if len(splitGroup) else {group : ".*"}, # dummy dictionary if splitGroup=None, to allow for uniform treatment
                 "scale" : scale,
@@ -597,6 +598,112 @@ class CardTool(object):
         if syst != self.nominalName:
             self.fillCardWithSyst(syst)
 
+    def setSimultaneousABCD(self):
+        # Having 1 process for fakes, for each bin 3 free floating parameters, 2 normalization for lowMT and highMT and one fakerate between iso and anti iso
+        logger.info(f"Set processes for simultaneous ABCD fit")
+
+        # expected fake contribution
+        hist_fake = sum([group.hists[self.nominalName] if name == "Data" else -1*group.hists[self.nominalName] for name, group in self.datagroups.groups.items()])
+        
+        # setting errors to 0
+        hist_fake.view(flow=True)[...] = np.stack((hist_fake.values(flow=True), np.zeros_like(hist_fake.values(flow=True))), axis=-1)
+
+        if "passIso" not in hist_fake.axes.name or "passMT" not in hist_fake.axes.name:
+            raise RuntimeError('"passIso" and "passMT" expected to be found in histogram, but only have axes ')
+
+        # axes in the correct ordering
+        axes = ["passIso", "passMT"]
+        axes = [*axes, "charge"] if "charge" not in self.project else axes
+        axes += [ax for ax in self.project if ax not in axes]
+
+        if set(hist_fake.axes.name) != set(axes) or hist_fake.axes.name[0] != "passIso" or hist_fake.axes.name[1] != "passMT":
+            logger.debug("Axes in histogram are not the same as required or in a different order than expected, try to project")
+            hist_fake = hist_fake.project(*axes)
+
+        # set the expected values in the signal region
+        hist_fake.view(flow=True)[1,1,...] = sel.fakeHistABCD(hist_fake).view(flow=True)
+        
+        fakename = "Nonprompt"
+
+        self.datagroups.addGroup(fakename, label = "Nonprompt", color = "grey", members=[],)
+        self.datagroups.groups[fakename].hists[f"{self.nominalName}"] = hist_fake
+
+        bin_sizes = [ax.size for ax in hist_fake.axes if ax.name in axes and ax.name not in ["passIso","passMT"]]
+        axes = [ax.name for ax in hist_fake.axes if ax.name in axes and ax.name not in ["passIso","passMT"]]
+
+        for i in range(np.product(bin_sizes)):
+            current_i = i
+            ax_idx = []
+            for num in reversed(bin_sizes):
+                ax_idx.insert(0, current_i % num)
+                current_i //= num
+
+            bin_name = "_".join([f"{ax}{ax_idx[j]}" for j, ax in enumerate(axes)])
+
+            logger.debug(f"Now at {i}/{np.product(bin_sizes)}: {bin_name}")
+
+            other_indices = {ax: ax_idx[j] for j, ax in enumerate(axes)}
+
+            n_failMT_failIso = hist_fake[{**{"passIso":0, "passMT":0}, **other_indices}].value
+            n_failMT_passIso = hist_fake[{**{"passIso":1, "passMT":0}, **other_indices}].value
+            n_passMT_failIso = hist_fake[{**{"passIso":0, "passMT":1}, **other_indices}].value
+
+            n_failMT = n_failMT_failIso + n_failMT_passIso
+            fr = n_failMT_failIso / n_failMT
+            n_passMT = n_passMT_failIso / fr
+
+            # systematic variation for fake normalization
+            for nameMT, passMT, n in (("LowMT", 0, n_failMT), ("HighMT", 1, n_passMT)):
+
+                hist_var = hist.Hist(*[*hist_fake.axes, common.down_up_axis], storage=hist.storage.Double())
+                hist_var.view(flow=True)[...] = np.stack((hist_fake.values(flow=True), hist_fake.values(flow=True)), axis=-1)
+
+                hist_var[{**{"passIso":0, "passMT":passMT, "downUpVar":0}, **other_indices}] = 0.9 * n * fr
+                hist_var[{**{"passIso":1, "passMT":passMT, "downUpVar":0}, **other_indices}] = 0.9 * n * (1-fr)
+
+                hist_var[{**{"passIso":0, "passMT":passMT, "downUpVar":1}, **other_indices}] = 1.1 * n * fr
+                hist_var[{**{"passIso":1, "passMT":passMT, "downUpVar":1}, **other_indices}] = 1.1 * n * (1-fr)
+
+                self.datagroups.groups[fakename].hists[f"{self.nominalName}_N{fakename}{nameMT}_{bin_name}"] = hist_var
+
+                self.addSystematic(f"N{fakename}{nameMT}_{bin_name}",
+                    processes=[fakename],
+                    group=f"{fakename}{nameMT}",
+                    noConstraint=True,
+                    outNames=[f"N{fakename}{nameMT}_{bin_name}Down", f"N{fakename}{nameMT}_{bin_name}Up"],
+                    systAxes=["downUpVar"],
+                    labelsByAxis=["downUpVar"],
+                )
+
+            # systematic variation for fakerate, should be smaller 1 and bigger 0
+            diff = min(fr, 1-fr)
+            frUp = fr + 0.5 * diff
+            frDn = fr - 0.5 * diff
+
+            hist_var = hist.Hist(*[*hist_fake.axes, common.down_up_axis], storage=hist.storage.Double())
+            hist_var.view(flow=True)[...] = np.stack((hist_fake.values(flow=True), hist_fake.values(flow=True)), axis=-1)
+
+            hist_var[{**{"passIso":0, "passMT":0, "downUpVar":0}, **other_indices}] = n_failMT * frDn
+            hist_var[{**{"passIso":1, "passMT":0, "downUpVar":0}, **other_indices}] = n_failMT * (1-frDn)
+            hist_var[{**{"passIso":0, "passMT":1, "downUpVar":0}, **other_indices}] = n_passMT * frDn
+            hist_var[{**{"passIso":1, "passMT":1, "downUpVar":0}, **other_indices}] = n_passMT * (1-frDn)
+
+            hist_var[{**{"passIso":0, "passMT":0, "downUpVar":1}, **other_indices}] = n_failMT * frUp
+            hist_var[{**{"passIso":1, "passMT":0, "downUpVar":1}, **other_indices}] = n_failMT * (1-frUp)
+            hist_var[{**{"passIso":0, "passMT":1, "downUpVar":1}, **other_indices}] = n_passMT * frUp
+            hist_var[{**{"passIso":1, "passMT":1, "downUpVar":1}, **other_indices}] = n_passMT * (1-frUp)
+
+            self.datagroups.groups[fakename].hists[f"{self.nominalName}_fakerate_{bin_name}"] = hist_var
+
+            self.addSystematic(f"fakerate_{bin_name}",
+                processes=[fakename],
+                group=f"fakerate",
+                noConstraint=True,
+                outNames=[f"fakerate_{bin_name}Down", f"fakerate_{bin_name}Up"],
+                systAxes=["downUpVar"],
+                labelsByAxis=["downUpVar"],
+            )
+
     def setOutfile(self, outfile):
         if type(outfile) == str:
             if self.skipHist:
@@ -608,7 +715,7 @@ class CardTool(object):
             self.outfile = outfile
             self.outfile.cd()
             
-    def writeOutput(self, args=None, xnorm=False, forceNonzero=True, check_systs=True):
+    def writeOutput(self, args=None, xnorm=False, forceNonzero=True, check_systs=True, simultaneousABCD=False):
         self.xnorm = xnorm
         self.datagroups.loadHistsForDatagroups(
             baseName=self.nominalName, syst=self.nominalName,
@@ -616,6 +723,8 @@ class CardTool(object):
             label=self.nominalName, 
             scaleToNewLumi=self.lumiScale, 
             forceNonzero=forceNonzero)
+        if simultaneousABCD and not self.xnorm:
+            self.setSimultaneousABCD()
         self.writeForProcesses(self.nominalName, processes=self.datagroups.groups.keys(), label=self.nominalName, check_systs=check_systs)
         self.loadNominalCard()
         if self.pseudoData and not self.xnorm:
@@ -726,7 +835,7 @@ class CardTool(object):
         procs = systInfo["processes"]
         group = systInfo["group"]
         groupFilter = systInfo["groupFilter"]
-        label = "group" if not systInfo["noConstraint"] else "noiGroup"
+        label = "group" if not systInfo["noiGroup"] else "noiGroup"
         nondata = self.predictedProcesses()
         names = [x[:-2] if "Up" in x[-2:] else (x[:-4] if "Down" in x[-4:] else x) 
                     for x in filter(lambda x: x != "", systInfo["outNames"])]

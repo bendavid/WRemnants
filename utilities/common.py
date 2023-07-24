@@ -174,6 +174,7 @@ def common_parser_combine():
     parser.add_argument("--wlike", action='store_true', help="Run W-like analysis of mZ")
     parser.add_argument("-o", "--outfolder", type=str, default=".", help="Output folder with the root file storing all histograms and datacards for single charge (subfolder WMass or ZMassWLike is created automatically inside)")
     parser.add_argument("-i", "--inputFile", type=str)
+    parser.add_argument("--absolutePathInCard", action="store_true", help="In the datacard, set Absolute path for the root file where shapes are stored")
     parser.add_argument("--minnloScaleUnc", choices=["byHelicityPt", "byHelicityPtCharge", "byHelicityCharge", "byPtCharge", "byPt", "byCharge", "integrated",], default="byHelicityPt",
             help="Decorrelation for QCDscale")
     parser.add_argument("--rebin", type=int, nargs='*', default=[], help="Rebin axis by this value (default does nothing)")

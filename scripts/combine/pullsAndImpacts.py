@@ -333,7 +333,7 @@ if __name__ == '__main__':
     logger = logging.setup_logger("pullsAndImpacts", 4 if args.debug else 3)
 
     rtfile = uproot.open(args.inputFile)
-    POIs = input_tools.getPOInames(rtfile)
+    POIs = input_tools.getPOInames(rtfile, poi_type=None)
     for POI in POIs:
         do_both = args.mode == "both"
         if args.mode == "both":
