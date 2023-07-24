@@ -141,10 +141,10 @@ extended_pdf_datasets = [x for x in common.vprocs+common.vprocs_lowpu if not any
 
 def define_prefsr_vars(df):
     if "prefsrLeps" in df.GetColumnNames():
-        logger.debug("Pre fsr leptons are already defined, do nothing here.")
+        logger.debug("PreFSR leptons are already defined, do nothing here.")
         return df
 
-    logger.debug("define_prefsr_vars()")
+    logger.info("Defining preFSR variables")
 
     df = df.Define("prefsrLeps", "wrem::prefsrLeptons(GenPart_status, GenPart_statusFlags, GenPart_pdgId, GenPart_genPartIdxMother)")
     df = df.Define("genl", "ROOT::Math::PtEtaPhiMVector(GenPart_pt[prefsrLeps[0]], GenPart_eta[prefsrLeps[0]], GenPart_phi[prefsrLeps[0]], GenPart_mass[prefsrLeps[0]])")

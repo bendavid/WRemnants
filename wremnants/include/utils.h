@@ -26,7 +26,13 @@ constexpr double muon_mass = 0.1056583745;
         return res;
 
     }
-        
+
+    // template <typename T>
+    // bool printVar(const T& var) {
+    //     std::cout << var << std::endl;
+    //     return 1;
+    // }
+    
 float mt_2(float pt1, float phi1, float pt2, float phi2) {
     return std::sqrt(2*pt1*pt2*(1-std::cos(phi1-phi2)));
 }
@@ -170,13 +176,51 @@ RVec<int> postFSRLeptonsIdx(RVec<bool> postFSRleptons) {
 }
 
 float zqtproj0(const float &goodMuons_pt0, const float &goodMuons_eta0, const float &goodMuons_phi0, RVec<float> &GenPart_pt, RVec<float> &GenPart_eta, RVec<float> &GenPart_phi, RVec<int> &postFSRnusIdx) {
-  ROOT::Math::PtEtaPhiMVector muon, neutrino;
-  muon.SetPt(goodMuons_pt0); muon.SetEta(goodMuons_eta0); muon.SetPhi(goodMuons_phi0); muon.SetM(muon_mass);
-  neutrino.SetPt(GenPart_pt[postFSRnusIdx[0]]); neutrino.SetEta(GenPart_eta[postFSRnusIdx[0]]); neutrino.SetPhi(GenPart_phi[postFSRnusIdx[0]]); neutrino.SetM(0.);
-  TVector2 Muon(muon.X(), muon.Y()), Neutrino(neutrino.X(), neutrino.Y());
-  return (Muon*((Muon+Neutrino)))/sqrt(Muon*Muon);
+    ROOT::Math::PtEtaPhiMVector muon(goodMuons_pt0, goodMuons_eta0, goodMuons_phi0, muon_mass);
+    ROOT::Math::PtEtaPhiMVector neutrino(GenPart_pt[postFSRnusIdx[0]], GenPart_eta[postFSRnusIdx[0]], GenPart_phi[postFSRnusIdx[0]], 0.);
+    TVector2 Muon(muon.X(), muon.Y()), Neutrino(neutrino.X(), neutrino.Y());
+    return (Muon*((Muon+Neutrino)))/sqrt(Muon*Muon);
+}
+    
+float zqtproj0(float pt, float phi, float ptOther, float phiOther) {
+    TVector2 lep, boson;
+    lep.SetMagPhi(pt,phi);
+    boson.SetMagPhi(ptOther,phiOther);
+    boson += lep;
+    return (lep*boson)/pt;
 }
 
+float zqtproj0_boson(float pt, float phi, float bosonPt, float bosonPhi) {
+    TVector2 lep, boson;
+    lep.SetMagPhi(pt,phi);
+    boson.SetMagPhi(bosonPt, bosonPhi);
+    return (lep*boson)/pt;
+}
+
+float zqtproj0_boson(float pt, float phi, const TVector2& boson) {
+    TVector2 lep;
+    lep.SetMagPhi(pt,phi);
+    return (lep*boson)/pt;
+}
+
+float zqtproj0_boson(const TVector2& lep, const TVector2& boson) {
+    return (lep*boson)/lep.Mod();
+}
+    
+TVector2 transverseVectorSum(const Vec_f& pt, const Vec_f& phi) {
+
+    TVector2 sum = TVector2();
+    for (unsigned int i = 0; i < pt.size(); ++i) {
+        if (i == 0) {
+            sum.SetMagPhi(pt[i], phi[i]);
+        } else {
+            TVector2 part = TVector2();
+            part.SetMagPhi(pt[i], phi[i]);
+            sum += part;
+        }
+    }
+    return sum;
+}
     
 template<std::ptrdiff_t N, typename V>
 auto vec_to_tensor(const V &vec, std::size_t start = 0) {
