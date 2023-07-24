@@ -268,9 +268,9 @@ def widthWeightNames(matches=None, proc=""):
         widths=(2.09053, 2.09173, 2.043, 2.085, 2.127) 
     else:
         raise RuntimeError(f"No width found for process {proc}")
-    # 0 and 1 are for reference
+    # 0 and 1 are Up, Down from mass uncertainty EW fit (already accounted for in mass variations)
     names = [f"width{proc[0]}{str(widths[i]).replace('.','p')}GeV" for i in (0, 1)]
-    # 2, 3, and 4 are Down, Central, Up
+    # 2, 3, and 4 are PDG width Down, Central, Up
     names.append(f"widthShift{proc[0]}{str(2.3 if proc[0] == 'Z' else 42).replace('.','p')}MeVDown")
     names.append(f"width{proc[0]}{str(widths[central]).replace('.','p')}GeV")
     names.append(f"widthShift{proc[0]}{str(2.3 if proc[0] == 'Z' else 42).replace('.','p')}MeVUp")
@@ -461,7 +461,8 @@ def add_theory_hists(results, df, args, dataset_name, corr_helpers, qcdScaleByHe
 
     df = theory_tools.define_scale_tensor(df)
     df = define_mass_weights(df, dataset_name)
-    df = define_width_weights(df, dataset_name)
+    if args.widthVariations:
+        df = define_width_weights(df, dataset_name)
 
     add_pdf_hists(results, df, dataset_name, axes, cols, args.pdfs, base_name=base_name)
     add_qcdScale_hist(results, df, scale_axes, scale_cols, base_name=base_name)
@@ -482,6 +483,7 @@ def add_theory_hists(results, df, args, dataset_name, corr_helpers, qcdScaleByHe
 
         # TODO: Should have consistent order here with the scetlib correction function
         add_massweights_hist(results, df, axes, cols, proc=dataset_name, base_name=base_name)
-        add_widthweights_hist(results, df, axes, cols, proc=dataset_name, base_name=base_name)
+        if args.widthVariations:
+            add_widthweights_hist(results, df, axes, cols, proc=dataset_name, base_name=base_name)
 
     return df
