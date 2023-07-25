@@ -51,7 +51,7 @@ def readNuisances(args, infile=None):
 
     if args.scaleToMeV:
         totalUncertainty *= args.prefitUncertainty
-        print("Total m%s uncertainty: %2.1f MeV" % (boson, totalUncertainty))
+        print("Total m%s uncertainty: %2.2f MeV" % (boson, totalUncertainty))
     else:
         print("Total m%s uncertainty: %2.3f (\% of prefit)" % (boson, totalUncertainty))
         

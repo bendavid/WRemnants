@@ -38,6 +38,18 @@ sys.path.append(os.getcwd())
 
 # should really avoid having numbers by hand, but this started with less then 10 in all graphs together :) 
 
+def getTrueDataUncertainty(yvals_data, yvals_halfMC_data, alpha=2):
+    yvals_true  = [0.0 for i in range(len(yvals_data))]
+    for iy,y in enumerate(yvals_data):
+        r = yvals_halfMC_data[iy]/y
+        if r < 1./np.sqrt(alpha):
+            print(f"Error for x = {xvals[iy]}: r = {r} is too small for alpha = {alpha} (must be >= 1./sqrt({alpha}) )")
+            fact = 0
+        else:
+            fact = r * np.sqrt(alpha - 1)/ np.sqrt(alpha * r * r - 1.0)
+        yvals_true[iy] = fact * y
+    return yvals_true
+
 def runWithBkg():
     
     outdir = "/eos/user/m/mciprian/www/WMassAnalysis/fromMyWremnants/fitResults/theoryAgnostic/v2/WMass_pt_eta_statOnly/impactScalingWithRecoPtBinning/"
@@ -143,8 +155,15 @@ def runSignalOnly():
     gmc_halfMC   = ROOT.TGraph(len(xvals), array('d', xvals), array('d', yvals_halfMC_gmc))
     gtot_halfMC  = ROOT.TGraph(len(xvals), array('d', xvals), array('d', yvals_halfMC_gtot))
     glist_halfMC = [gtot_halfMC, gdata_halfMC, gmc_halfMC]
-    tag = "(1/2 MC stat)"
-    leg_halfMC = [f"{l} {tag}" for l in leg]
+    tag_halfMC = "(1/2 MC stat)"
+    leg_halfMC = [f"{l} {tag_halfMC}" for l in leg]
+
+    yvals_halfMCother_gdata = [ 5.701, 7.905, 10.832, 12.942, 16.463, 17.954, 20.133, 23.537]
+    yvals_halfMCother_gtot  = [ 9.62,  13.35, 18.31,  21.91,  27.92,  30.47,  34.16,  40.00]
+    gdata_halfMCother = ROOT.TGraph(len(xvals), array('d', xvals), array('d', yvals_halfMCother_gdata))
+    gtot_halfMCother  = ROOT.TGraph(len(xvals), array('d', xvals), array('d', yvals_halfMCother_gtot))
+    tag_halfMCother = "(1/2 MC stat other)"
+    leg_halfMCother = [f"{l} {tag_halfMCother}" for l in leg]
     
     drawGraphCMS(glist_halfMC, "p_{T} bin width (GeV)", "Impact on m_{W} (MeV)::0,50", "impacts_mw_ptRecoBinWidth_halfMCstat",
                  outdir, leg_halfMC,
@@ -155,7 +174,7 @@ def runSignalOnly():
                  passCanvas=canvas1D, graphDrawStyle="pl", legEntryStyle="PL",
                  skipLumi=True)
 
-    # together
+    # together full and 1/2 stat
     drawGraphCMS([*glist, *glist_halfMC], "p_{T} bin width (GeV)", "Impact on m_{W} (MeV)::0,50",
                  "impacts_mw_ptRecoBinWidth_overlaid",
                  outdir, [*leg, *leg_halfMC],
@@ -166,30 +185,111 @@ def runSignalOnly():
                  passCanvas=canvas1D, graphDrawStyle="pl", legEntryStyle="PL",
                  skipLumi=True)
 
-    # compute true sigma from Lorenzo's calculations, using gdata
-    yvals_true_gdata  = [0.0 for i in range(len(yvals_gdata))]
-    for iy,y in enumerate(yvals_gdata):
-        r = yvals_halfMC_gdata[iy]/y
-        if r < 1./np.sqrt(2):
-            print("Error for x = {xvals[iy]}: r = {r} is too small (must be >= 1./sqrt(2) )")
-            fact = 0
-        else:
-            fact = r / np.sqrt(2 * r * r - 1.0)
-        yvals_true_gdata[iy] = fact * y
-        
-    gdata_true = ROOT.TGraph(len(xvals), array('d', xvals), array('d', yvals_true_gdata))
+    yvals_1over4MC_gdata = [ 4.142, 5.805, 8.099, 9.784, 12.966, 14.361, 16.029, 20.351]
+    yvals_1over4MC_gtot = [ 8.9, 12.5, 17.5, 21.1, 28.0, 31.0, 34.6, 44.0]
+    gdata_1over4MC = ROOT.TGraph(len(xvals), array('d', xvals), array('d', yvals_1over4MC_gdata))
+    gtot_1over4MC = ROOT.TGraph(len(xvals), array('d', xvals), array('d', yvals_1over4MC_gtot))
+    tag_1over4MC = "(1/4 MC stat)"
+    leg_1over4MC = [f"{l} {tag_1over4MC}" for l in leg]
 
-    drawGraphCMS([gdata_true, gdata, gdata_halfMC], "p_{T} bin width (GeV)", "Impact on m_{W} (MeV)::0,50",
+    yvals_other1over4MC_gdata = [4.122, 5.798, 8.147, 9.884, 12.809, 14.061, 15.813, 19.158]
+    yvals_other1over4MC_gtot = [ 8.91,  12.54, 17.63, 21.41, 27.78,  30.49,  34.39, 41.68]
+    gdata_other1over4MC = ROOT.TGraph(len(xvals), array('d', xvals), array('d', yvals_other1over4MC_gdata))
+    gtot_other1over4MC = ROOT.TGraph(len(xvals), array('d', xvals), array('d', yvals_other1over4MC_gtot))
+    tag_other1over4MC = "(1/4 MC stat other)"
+    leg_other1over4MC = [f"{l} {tag_other1over4MC}" for l in leg]
+
+    # compute true sigma from Lorenzo's calculations, using gdata
+    yvals_true_gdata = getTrueDataUncertainty(yvals_gdata, yvals_halfMC_gdata)
+    gdata_true = ROOT.TGraph(len(xvals), array('d', xvals), array('d', yvals_true_gdata))
+    # same but other half of MC, in case the stat was not equally divided
+    yvals_true_gdata_otherHalf = getTrueDataUncertainty(yvals_gdata, yvals_halfMCother_gdata)
+    gdata_true_otherHalf = ROOT.TGraph(len(xvals), array('d', xvals), array('d', yvals_true_gdata_otherHalf))
+
+    yvals_true_gdata_fromHalf = getTrueDataUncertainty(yvals_halfMC_gdata, yvals_1over4MC_gdata)
+    gdata_true_fromHalf = ROOT.TGraph(len(xvals), array('d', xvals), array('d', yvals_true_gdata_fromHalf))
+    # same but from other half (might also use another fourth, to be done
+    # here, because of how this half and fourth were made, they are really independent events, before they were subsets
+    yvals_true_gdata_fromOtherHalf = getTrueDataUncertainty(yvals_halfMCother_gdata, yvals_1over4MC_gdata)
+    gdata_true_fromOtherHalf = ROOT.TGraph(len(xvals), array('d', xvals), array('d', yvals_true_gdata_fromOtherHalf))
+    # another case
+    yvals_true_gdata_fromHalfOtherFourth = getTrueDataUncertainty(yvals_halfMC_gdata, yvals_other1over4MC_gdata)
+    gdata_true_fromHalfOtherFourth = ROOT.TGraph(len(xvals), array('d', xvals), array('d', yvals_true_gdata_fromHalfOtherFourth))
+    
+    drawGraphCMS([gdata_true, gdata, gdata_halfMC],
+                 "p_{T} bin width (GeV)", "Impact on m_{W} (MeV)::0,50",
                  "impacts_mw_ptRecoBinWidth_trueSensitivityData",
-                 outdir, ["Data stat true", "Data stat (full MC stat)", f"Data stat {tag}"],
+                 outdir,
+                 ["Data stat true", "Data stat (full MC stat)", f"Data stat {tag_halfMC}"],
                  legendCoords="0.2,0.7,0.6,0.88;1",
                  vecMCcolors=[ROOT.kBlack, ROOT.kRed, ROOT.kBlue],
                  vecLineStyle=[1,1,1],
                  vecMarkerStyle=[20,20,20],
                  passCanvas=canvas1D, graphDrawStyle="pl", legEntryStyle="PL",
                  skipLumi=True)
-    
 
+    drawGraphCMS([gdata_true, gdata_true_otherHalf, gdata, gdata_halfMC, gdata_halfMCother],
+                 "p_{T} bin width (GeV)", "Impact on m_{W} (MeV)::0,50",
+                 "impacts_mw_ptRecoBinWidth_trueSensitivityData_testOtherHalfMC",
+                 outdir,
+                 ["Data stat true", "Data stat true (other)", "Data stat (full MC stat)", f"Data stat {tag_halfMC}", f"Data stat {tag_halfMCother}"],
+                 legendCoords="0.2,0.68,0.6,0.93;1",
+                 vecMCcolors=[ROOT.kBlack, ROOT.kBlack, ROOT.kRed, ROOT.kBlue, ROOT.kBlue],
+                 vecLineStyle=[1,2,1,1,2],
+                 vecMarkerStyle=[20,25,20,20,25],
+                 passCanvas=canvas1D, graphDrawStyle="pl", legEntryStyle="PL",
+                 skipLumi=True)
+
+    drawGraphCMS([gdata, gdata_halfMC, gdata_halfMCother, gdata_1over4MC, gdata_other1over4MC],
+                 "p_{T} bin width (GeV)", "Impact on m_{W} (MeV)::0,50",
+                 "impacts_mw_ptRecoBinWidth_testAllData",
+                 outdir,
+                 ["Data stat (full MC stat)", f"Data stat {tag_halfMC}", f"Data stat {tag_halfMCother}", f"Data stat {tag_1over4MC}", f"Data stat {tag_other1over4MC}"],
+                 legendCoords="0.2,0.68,0.6,0.93;1",
+                 vecMCcolors=[ROOT.kBlack, ROOT.kRed, ROOT.kRed, ROOT.kBlue, ROOT.kBlue],
+                 vecLineStyle=[1,1,2,1,2],
+                 vecMarkerStyle=[20,20,25,20,25],
+                 passCanvas=canvas1D, graphDrawStyle="pl", legEntryStyle="PL",
+                 skipLumi=True)
+    
+    drawGraphCMS([gtot, gtot_halfMC, gtot_halfMCother, gtot_1over4MC, gtot_other1over4MC],
+                 "p_{T} bin width (GeV)", "Impact on m_{W} (MeV)::0,50",
+                 "impacts_mw_ptRecoBinWidth_totalCompareFractionMC",
+                 outdir,
+                 ["Total (full MC stat)", f"Total {tag_halfMC}", f"Total {tag_halfMCother}", f"Total {tag_1over4MC}", f"Total {tag_other1over4MC}"],
+                 legendCoords="0.48,0.2,0.92,0.5;1",
+                 vecMCcolors=[ROOT.kBlack, ROOT.kRed, ROOT.kRed, ROOT.kBlue, ROOT.kBlue],
+                 vecLineStyle=[1,1,2,1,2],
+                 vecMarkerStyle=[20,20,25,20,25],
+                 passCanvas=canvas1D, graphDrawStyle="pl", legEntryStyle="PL",
+                 skipLumi=True)
+
+    
+    drawGraphCMS([gdata_true, gdata_true_fromHalf, gdata, gdata_halfMC, gdata_1over4MC],
+                 "p_{T} bin width (GeV)", "Impact on m_{W} (MeV)::0,50",
+                 "impacts_mw_ptRecoBinWidth_trueSensitivityData_add1over4",
+                 outdir,
+                 ["Data stat true (1/2 to full)", "Data stat true (1/4 to 1/2)", "Data stat (full MC stat)", f"Data stat {tag_halfMC}", f"Data stat {tag_1over4MC}"],
+                 legendCoords="0.2,0.62,0.6,0.92;1",
+                 vecMCcolors=[ROOT.kBlack, ROOT.kBlack, ROOT.kRed, ROOT.kBlue, ROOT.kBlue],
+                 vecLineStyle=[1,2,1,1,2],
+                 vecMarkerStyle=[20,25,20,20,25],
+                 passCanvas=canvas1D, graphDrawStyle="pl", legEntryStyle="PL",
+                 skipLumi=True)
+
+    drawGraphCMS([gdata_true, gdata_true_otherHalf, gdata_true_fromHalf, gdata_true_fromOtherHalf, gdata_true_fromHalfOtherFourth],
+                 "p_{T} bin width (GeV)", "Impact on m_{W} (MeV)::0,50",
+                 "impacts_mw_ptRecoBinWidth_trueSensitivityData_add1over4_testDifferentHalf",
+                 outdir,
+                 ["Data stat true (1/2 to full)", "Data stat true (other 1/2 to full)", "Data stat true (1/4 to 1/2)", "Data stat true (1/4 to other 1/2)", "Data stat true (other 1/4 to other 1/2)"],
+                 legendCoords="0.4,0.17,0.92,0.52;1",
+                 vecMCcolors=[ROOT.kBlack, ROOT.kBlack, ROOT.kRed, ROOT.kBlue, ROOT.kBlue],
+                 vecLineStyle=[1,2,1,2,2],
+                 vecMarkerStyle=[20,25,20,20,25],
+                 passCanvas=canvas1D, graphDrawStyle="pl", legEntryStyle="PL",
+                 skipLumi=True)
+
+    
     rf = safeOpenFile(outdir+"impactMW_signalOnly_statOnly.root", mode="RECREATE")
     rf.cd()
     gdata.Write("gdata_fullMCstat")  
