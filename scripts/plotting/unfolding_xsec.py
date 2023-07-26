@@ -311,6 +311,10 @@ translate = {
     "resumTransition": "resumT",
     "binByBinStat": "BBlite",
     "CMS_recoil": "recoil",
+    "NonpromptHighMT": "NPhighMT",
+    "NonpromptLowMT": "NPlowMT",
+    "massShiftZ": "massZ",
+    "massShiftW": "massW",
 }
 
 def plot_uncertainties_unfolded(df, channel=None, edges=None, poi_type="mu", scale=1., normalize=False, relative_uncertainty=False, logy=False, process_label="", axes=None):
@@ -354,7 +358,7 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, poi_type="mu", sca
 
     xlabel = "-".join([get_xlabel(a, process_label) for a in axes])
     if len(axes) >= 2:
-        xlabel.replace("[GeV]","")
+        xlabel = xlabel.replace("[GeV]","")
         xlabel += "Bin"
 
     fig, ax1 = plot_tools.figure(hist_xsec, xlabel, yLabel, ylim, logy=logy, width_scale=2)
@@ -372,8 +376,9 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, poi_type="mu", sca
     uncertainties = make_yields_df([hist_xsec], ["Total"], per_bin=True, yield_only=True, percentage=True)
 
     sources =["err_stat"]
+    sources += ["err_NonpromptHighMT", "err_NonpromptLowMT", "err_fakerate"]
     sources += [s for s in filter(lambda x: x.startswith("err"), df.keys()) 
-        if s not in ["err_stat", "err_total"] 
+        if s not in ["err_stat", "err_total", "err_NonpromptHighMT", "err_NonpromptLowMT", "err_fakerate"] 
             and "eff_stat_" not in s and "eff_syst_" not in s]    # only take eff grouped stat and syst
 
     NUM_COLORS = len(sources)-1
@@ -401,6 +406,10 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, poi_type="mu", sca
 
         hist_unc = hist.Hist(hist.axis.Variable(edges, underflow=False, overflow=False))
 
+        if source not in df:
+            logger.warning(f"Source {source} not found in dataframe")
+            continue
+
         errors = df[source].values/bin_widths
 
         if relative_uncertainty:
@@ -425,7 +434,7 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, poi_type="mu", sca
 
     scale = max(1, np.divide(*ax1.get_figure().get_size_inches())*0.3)
 
-    plot_tools.addLegend(ax1, ncols=4, text_size=18*args.scaleleg*scale)
+    plot_tools.addLegend(ax1, ncols=4, text_size=15*args.scaleleg*scale)
 
     if args.yscale:
         ymin, ymax = ax1.get_ylim()
