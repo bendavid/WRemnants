@@ -212,6 +212,9 @@ def uncertainty_hist_from_envelope(h, proj_ax, entries):
     return hnew
 
 def define_mass_weights(df, proc):
+    if "massWeight_tensor" in df.GetColumnNames():
+        logger.debug("massWeight_tensor is already defined, do nothing here.")
+        return df
     nweights = 23 if proc in common.zprocs_all else 21
     # from -100 to 100 MeV with 10 MeV increment
     df = df.Define("massWeight_tensor", f"wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeight)")
@@ -254,9 +257,8 @@ def add_pdf_hists(results, df, dataset, axes, cols, pdfs, base_name="nominal"):
         pdf_ax = hist.axis.StrCategory(names, name="pdfVar")
         if tensorName not in df.GetColumnNames():
             logger.warning(f"PDF {pdf} was not found for sample {dataset}. Skipping uncertainty hist!")
-            continue
+            continue        
         pdfHist = df.HistoBoost(name, axes, [*cols, tensorName], tensor_axes=[pdf_ax], storage=hist.storage.Double())
-
         if pdfInfo["alphasRange"] == "001":
             name = Datagroups.histName(base_name, syst=f"{pdfName}alphaS001")
             as_ax = hist.axis.StrCategory(["as0117", "as0119"], name="alphasVar")
@@ -274,7 +276,8 @@ def add_qcdScale_hist(results, df, axes, cols, base_name="nominal"):
 
 def add_qcdScaleByHelicityUnc_hist(results, df, helper, axes, cols, base_name="nominal"):
     name = Datagroups.histName(base_name, syst="qcdScaleByHelicity")
-    df = df.Define("helicityWeight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
+    if "helicityWeight_tensor" not in df.GetColumnNames():
+        df = df.Define("helicityWeight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
     qcdScaleByHelicityUnc = df.HistoBoost(name, axes, [*cols,"helicityWeight_tensor"], tensor_axes=helper.tensor_axes, storage=hist.storage.Double())
     results.append(qcdScaleByHelicityUnc)
 

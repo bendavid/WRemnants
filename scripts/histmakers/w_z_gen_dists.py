@@ -112,7 +112,7 @@ def build_graph(df, dataset):
         axis_ewMll = hist.axis.Variable(massBins, name = "ewMll")
         axis_ewLogDeltaM = hist.axis.Regular(100, -5, 5, name = "ewLogDeltaM")
         ew_axes = [axis_ewMll, axis_ewLogDeltaM]
-        results.append(df.HistoBoost("nominal_ew", ew_axes, [*ew_cols, "nominal_weight"], storage=hist.storage.Double()))
+        results.append(df.HistoBoost("nominal_ew", ew_axes, [*ew_cols, "nominal_weight"], storage=hist.storage.Weight()))
 
     nominal_gen = df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols, "nominal_weight"], storage=hist.storage.Double())
 

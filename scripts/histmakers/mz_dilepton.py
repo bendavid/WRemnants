@@ -214,6 +214,9 @@ def build_graph(df, dataset):
             results.append(df.HistoBoost(f"nominal_{obs}", [all_axes[obs]], [obs]))
         else:
             results.append(df.HistoBoost(f"nominal_{obs}", [all_axes[obs]], [obs, "nominal_weight"]))
+            if isWorZ:
+                df = syst_tools.add_theory_hists(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, [all_axes[obs]], [obs], base_name=f"nominal_{obs}", for_wmass=False)
+
     # test plots
     if args.validationHists:
         df_plusTrig = df.Filter("trigMuons_passTrigger0")

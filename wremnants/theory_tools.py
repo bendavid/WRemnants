@@ -160,6 +160,10 @@ def define_prefsr_vars(df):
     return df
 
 def define_scale_tensor(df):
+    if "scaleWeights_tensor" in df.GetColumnNames():
+        logger.debug("scaleWeights_tensor is already defined, do nothing here.")
+        return df
+
     # convert vector of scale weights to 3x3 tensor and clip weights to |weight|<10.
     df = df.Define("scaleWeights_tensor", f"wrem::makeScaleTensor(LHEScaleWeight, theory_weight_truncate);")
     df = df.Define("scaleWeights_tensor_wnom", "auto res = scaleWeights_tensor; res = nominal_weight*res; return res;")
@@ -343,21 +347,22 @@ def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_cen
         var_axis = helpers[generator].tensor_axes[-1]
 
         # special treatment for Omega since it needs to be decorrelated in charge and rapidity
-        if any(var_label.startswith("Omega") for var_label in var_axis):
+        if isinstance(var_axis, hist.axis.StrCategory) and any(var_label.startswith("Omega") for var_label in var_axis):
             omegaidxs = [var_axis.index(var_label) for var_label in var_axis if var_label.startswith("Omega")]
 
             # include nominal as well
             omegaidxs = [0] + omegaidxs
 
-            df = df.Define(f"{generator}Omega",
-                            f"""
-                            constexpr std::array<std::ptrdiff_t, {len(omegaidxs)}> idxs = {{{",".join([str(idx) for idx in omegaidxs])}}};
-                            Eigen::TensorFixedSize<double, Eigen::Sizes<{len(omegaidxs)}>> res;
-                            for (std::size_t i = 0; i < idxs.size(); ++i) {{
-                              res(i) = {generator}Weight_tensor(idxs[i]);
-                            }}
-                            return res;
-                            """)
+            if f"{generator}Omega" not in df.GetColumnNames():
+                df = df.Define(f"{generator}Omega",
+                                f"""
+                                constexpr std::array<std::ptrdiff_t, {len(omegaidxs)}> idxs = {{{",".join([str(idx) for idx in omegaidxs])}}};
+                                Eigen::TensorFixedSize<double, Eigen::Sizes<{len(omegaidxs)}>> res;
+                                for (std::size_t i = 0; i < idxs.size(); ++i) {{
+                                res(i) = {generator}Weight_tensor(idxs[i]);
+                                }}
+                                return res;
+                                """)
 
             axis_Omega = hist.axis.StrCategory([var_axis[idx] for idx in omegaidxs], name = var_axis.name)
 

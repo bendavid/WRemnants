@@ -18,6 +18,7 @@ xlabels = {
     "ptll" : r"p$_{\mathrm{T}}^{\ell\ell}$ (GeV)",
     "yll" : r"y$^{\ell\ell}$",
     "mll" : r"m$_{\ell\ell}$ (GeV)",
+    "ewMll" : r"m$^{\mathrm{EW}}_{\ell\ell}$ (GeV)",
     "costhetastarll" : r"$\cos{\phi^{\star}_{\ell\ell}}$",
     "phistarll" : r"$\phi^{\star}_{\ell\ell}$",
     "MET_pt" : r"p$_{\mathrm{T}}^{miss}$ (GeV)",
