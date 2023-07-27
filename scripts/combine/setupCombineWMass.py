@@ -181,7 +181,9 @@ def main(args,xnorm=False):
     passSystToFakes = wmass and not args.skipSignalSystOnFakes and args.qcdProcessName not in excludeGroup and (filterGroup == None or args.qcdProcessName in filterGroup) and not xnorm
 
     cardTool.addProcessGroup("single_v_samples", lambda x: x[0] in ["W", "Z"] and ("mu" in x or "tau" in x))
-    cardTool.addProcessGroup("single_v_nonsig_samples", lambda x: ((x[0] == "Z" and wmass) or (x[0] == "W" and not wmass)) and ("mu" in x or "tau" in x))
+    if wmass:
+        cardTool.addProcessGroup("single_v_nonsig_samples", lambda x: x[0] == "Z"and ("mu" in x or "tau" in x))
+
     cardTool.addProcessGroup("single_vmu_samples", lambda x: x[0] in ["W", "Z"] and "mu" in x)
     cardTool.addProcessGroup("signal_samples", lambda x: ((x[0] == "W" and wmass) or (x[0] == "Z" and not wmass)) and "mu" in x)
     cardTool.addProcessGroup("signal_samples_inctau", lambda x: ((x[0] == "W" and wmass) or (x[0] == "Z" and not wmass)) and ("mu" in x or "tau" in x))
@@ -189,7 +191,8 @@ def main(args,xnorm=False):
 
     logger.info(f"All MC processes {cardTool.procGroups['MCnoQCD']}")
     logger.info(f"Single V samples: {cardTool.procGroups['single_v_samples']}")
-    logger.info(f"Single V no signal samples: {cardTool.procGroups['single_v_nonsig_samples']}")
+    if wmass:
+        logger.info(f"Single V no signal samples: {cardTool.procGroups['single_v_nonsig_samples']}")
     logger.info(f"Signal samples: {cardTool.procGroups['signal_samples']}")
 
     constrainedZ = constrainMass and not wmass
