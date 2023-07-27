@@ -38,15 +38,31 @@ sys.path.append(os.getcwd())
 
 # should really avoid having numbers by hand, but this started with less then 10 in all graphs together :) 
 
-def getTrueDataUncertainty(yvals_data, yvals_halfMC_data, alpha=2):
-    yvals_true  = [0.0 for i in range(len(yvals_data))]
-    for iy,y in enumerate(yvals_data):
-        r = yvals_halfMC_data[iy]/y
-        if r < 1./np.sqrt(alpha):
+# true data uncertainty with no BBB
+def getTrueDataUncertainty(yvals_data_N, yvals_data_NoverAlpha, alpha=2):
+    yvals_true  = [0.0 for i in range(len(yvals_data_N))]
+    for iy,y in enumerate(yvals_data_N):
+        r = yvals_data_NoverAlpha[iy]/y
+        denFact = alpha * r * r - 1.0
+        if denFact <= 0.0:
             print(f"Error for x = {xvals[iy]}: r = {r} is too small for alpha = {alpha} (must be >= 1./sqrt({alpha}) )")
             fact = 0
         else:
-            fact = r * np.sqrt(alpha - 1)/ np.sqrt(alpha * r * r - 1.0)
+            fact = r * np.sqrt(alpha - 1)/ np.sqrt(denFact)
+        yvals_true[iy] = fact * y
+    return yvals_true
+
+# true data uncertainty with BBB
+def getTrueTotalUncertainty(yvals_data_N, yvals_data_NoverAlpha, alpha=2, rho=1):
+    yvals_true  = [0.0 for i in range(len(yvals_data_N))]
+    for iy,y in enumerate(yvals_data_N):
+        r = yvals_data_NoverAlpha[iy]/y
+        denFact2 = alpha * r * r * (1+rho) / (1+alpha*rho) - 1.0
+        if denFact2 < 0.0:
+            print(f"Error for x = {xvals[iy]}: denFact2 = {denFact2} is too small for alpha = {alpha} and rho = {rho}")
+            fact = 0
+        else:
+            fact = np.sqrt((alpha - 1)/ (1.0 + alpha * rho)) * r / np.sqrt(denFact2)
         yvals_true[iy] = fact * y
     return yvals_true
 
@@ -215,6 +231,14 @@ def runSignalOnly():
     # another case
     yvals_true_gdata_fromHalfOtherFourth = getTrueDataUncertainty(yvals_halfMC_gdata, yvals_other1over4MC_gdata)
     gdata_true_fromHalfOtherFourth = ROOT.TGraph(len(xvals), array('d', xvals), array('d', yvals_true_gdata_fromHalfOtherFourth))
+
+    # now go from 1/4 to 1 directly
+    yvals_true_gdata_FourthToFull = getTrueDataUncertainty(yvals_gdata, yvals_1over4MC_gdata, alpha=4)
+    gdata_true_FourthToFull = ROOT.TGraph(len(xvals), array('d', xvals), array('d', yvals_true_gdata_FourthToFull))
+
+    yvals_true_gdata_otherFourthToFull = getTrueDataUncertainty(yvals_gdata, yvals_other1over4MC_gdata, alpha=4)
+    gdata_true_otherFourthToFull = ROOT.TGraph(len(xvals), array('d', xvals), array('d', yvals_true_gdata_otherFourthToFull))
+    ###
     
     drawGraphCMS([gdata_true, gdata, gdata_halfMC],
                  "p_{T} bin width (GeV)", "Impact on m_{W} (MeV)::0,50",
@@ -263,7 +287,6 @@ def runSignalOnly():
                  vecMarkerStyle=[20,20,25,20,25],
                  passCanvas=canvas1D, graphDrawStyle="pl", legEntryStyle="PL",
                  skipLumi=True)
-
     
     drawGraphCMS([gdata_true, gdata_true_fromHalf, gdata, gdata_halfMC, gdata_1over4MC],
                  "p_{T} bin width (GeV)", "Impact on m_{W} (MeV)::0,50",
@@ -284,11 +307,66 @@ def runSignalOnly():
                  ["Data stat true (1/2 to full)", "Data stat true (other 1/2 to full)", "Data stat true (1/4 to 1/2)", "Data stat true (1/4 to other 1/2)", "Data stat true (other 1/4 to other 1/2)"],
                  legendCoords="0.4,0.17,0.92,0.52;1",
                  vecMCcolors=[ROOT.kBlack, ROOT.kBlack, ROOT.kRed, ROOT.kBlue, ROOT.kBlue],
-                 vecLineStyle=[1,2,1,2,2],
+                 vecLineStyle=[1,2,1,2,1],
                  vecMarkerStyle=[20,25,20,20,25],
                  passCanvas=canvas1D, graphDrawStyle="pl", legEntryStyle="PL",
                  skipLumi=True)
 
+    ##
+    drawGraphCMS([gdata_true, gdata_true_FourthToFull, gdata_true_otherFourthToFull, gdata, gdata_1over4MC, gdata_other1over4MC],
+                 "p_{T} bin width (GeV)", "Impact on m_{W} (MeV)::0,50",
+                 "impacts_mw_ptRecoBinWidth_trueSensitivityData_checkFourthToFull",
+                 outdir,
+                 ["Data stat true (1/2 to full)", "Data stat true (1/4 to 1)", "Data stat true (other 1/4 to 1)", "Data stat (full MC stat)", f"Data stat {tag_1over4MC}", f"Data stat {tag_other1over4MC}"],
+                 legendCoords="0.18,0.65,0.62,0.99;1",
+                 vecMCcolors=[ROOT.kBlack, ROOT.kGreen+3, ROOT.kGreen+3, ROOT.kRed, ROOT.kBlue, ROOT.kBlue],
+                 vecLineStyle=[1,1,2,1,1,2],
+                 vecMarkerStyle=[20,20,25,20,20,25],
+                 passCanvas=canvas1D, graphDrawStyle="pl", legEntryStyle="PL",
+                 skipLumi=True, solidLegend=True)
+
+    # now use total uncertainty with extended formula
+    yvals_true_gtot_FourthToFull = getTrueTotalUncertainty(yvals_gtot, yvals_1over4MC_gtot, alpha=4, rho=1)
+    yvals_true_gtot_otherFourthToFull = getTrueTotalUncertainty(yvals_gtot, yvals_other1over4MC_gtot, alpha=4, rho=1)
+    #
+    yvals_true_gtot_HalfToFull = getTrueTotalUncertainty(yvals_gtot, yvals_halfMC_gtot, alpha=2, rho=1)
+    yvals_true_gtot_otherHalfToFull = getTrueTotalUncertainty(yvals_gtot, yvals_halfMCother_gtot, alpha=2, rho=1)
+    #
+    yvals_true_gtot_fromHalfAndFourth = getTrueTotalUncertainty(yvals_halfMC_gtot, yvals_1over4MC_gtot, alpha=2, rho=2)
+    yvals_true_gtot_fromOtherHalfAndFourth = getTrueTotalUncertainty(yvals_halfMCother_gtot, yvals_1over4MC_gtot, alpha=2, rho=2)
+    ###
+    gtot_true_FourthToFull = ROOT.TGraph(len(xvals), array('d', xvals), array('d', yvals_true_gtot_FourthToFull))
+    gtot_true_otherFourthToFull = ROOT.TGraph(len(xvals), array('d', xvals), array('d', yvals_true_gtot_otherFourthToFull))
+    #
+    gtot_true_HalfToFull = ROOT.TGraph(len(xvals), array('d', xvals), array('d', yvals_true_gtot_HalfToFull))
+    gtot_true_otherHalfToFull = ROOT.TGraph(len(xvals), array('d', xvals), array('d', yvals_true_gtot_otherHalfToFull))
+    #
+    gtot_true_fromHalfAndFourth = ROOT.TGraph(len(xvals), array('d', xvals), array('d', yvals_true_gtot_fromHalfAndFourth))
+    gtot_true_fromOtherHalfAndFourth = ROOT.TGraph(len(xvals), array('d', xvals), array('d', yvals_true_gtot_fromOtherHalfAndFourth))
+
+    drawGraphCMS([gtot, gtot_true_HalfToFull, gtot_true_otherHalfToFull, gtot_true_FourthToFull, gtot_true_otherFourthToFull],
+                 "p_{T} bin width (GeV)", "Impact on m_{W} (MeV)::0,50",
+                 "impacts_mw_ptRecoBinWidth_trueTotalFromFormulaWithBBB_fractToFull",
+                 outdir,
+                 ["Total (full MC stat)", "True total (1/2 MC to full)", "True total (other 1/2 MC to full)", "True total (1/4 MC to full)", "True total (other 1/4 MC to full)"],
+                 legendCoords="0.48,0.15,0.92,0.5;1",
+                 vecMCcolors=[ROOT.kBlack, ROOT.kRed, ROOT.kRed, ROOT.kBlue, ROOT.kBlue],
+                 vecLineStyle=[1,1,2,1,2],
+                 vecMarkerStyle=[20,20,25,20,25],
+                 passCanvas=canvas1D, graphDrawStyle="pl", legEntryStyle="PL",
+                 skipLumi=True)
+
+    drawGraphCMS([gtot, gtot_true_HalfToFull, gtot_true_otherHalfToFull, gtot_true_fromHalfAndFourth, gtot_true_fromOtherHalfAndFourth],
+                 "p_{T} bin width (GeV)", "Impact on m_{W} (MeV)::0,50",
+                 "impacts_mw_ptRecoBinWidth_trueTotalFromFormulaWithBBB_halfToFull",
+                 outdir,
+                 ["Total (full MC stat)", "True total (1/2 MC to full)", "True total (other 1/2 MC to full)", "True total (1/4 to 1/2 MC)", "True total (1/4 to other 1/2 MC)"],
+                 legendCoords="0.48,0.15,0.92,0.5;1",
+                 vecMCcolors=[ROOT.kBlack, ROOT.kRed, ROOT.kRed, ROOT.kBlue, ROOT.kBlue],
+                 vecLineStyle=[1,1,2,1,2],
+                 vecMarkerStyle=[20,20,25,20,25],
+                 passCanvas=canvas1D, graphDrawStyle="pl", legEntryStyle="PL",
+                 skipLumi=True)
     
     rf = safeOpenFile(outdir+"impactMW_signalOnly_statOnly.root", mode="RECREATE")
     rf.cd()
