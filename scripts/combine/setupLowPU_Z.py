@@ -93,7 +93,7 @@ def main(args, xnorm=False):
     Zmumu_procs = cardTool.filteredProcesses(lambda x: "Zmumu" in x)
     Zmumu_procsIncTau = Zmumu_procs + ["Ztautau"]
     # TODO: Does this need to take into account the different gen bins?
-    cardTool.addProcessGroup("signal_samples_inctau", lambda x: x in Zmumu_procs or signalProc in x)
+    cardTool.addProcessGroup("signal_samples_inctau", lambda x: x in Zmumu_procsIncTau or sigProc in x)
     cardTool.addProcessGroup("signal_samples", lambda x: x == sigProc)
 
     logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
