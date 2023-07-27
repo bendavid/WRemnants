@@ -349,8 +349,6 @@ def main(args,xnorm=False):
             #     )
 
     to_fakes = passSystToFakes and not args.noQCDscaleFakes and not xnorm
-    #combine_helpers.add_modeling_uncertainty(cardTool, args.minnloScaleUnc, signal_samples_inctau, 
-    #    single_v_nonsig_samples if not xnorm else [], to_fakes, args.resumUnc, wmass, scaleTNP=args.scaleTNP)
 
     theory_helper = combine_theory_helper.TheoryHelper(cardTool)
     theory_helper.configure(resumUnc=args.resumUnc, 

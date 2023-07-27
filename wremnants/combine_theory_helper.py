@@ -8,7 +8,7 @@ logger = logging.child_logger(__name__)
 class TheoryHelper(object):
     valid_np_models = ["Lambda", "Omega", "Delta_Lambda", "Delta_Omega", "binned_Omega", "none"]
     def __init__(self, card_tool):
-        for group in ['signal_samples', 'single_v_nonsig_samples', 'signal_samples_inctau',]:
+        for group in ['signal_samples', 'signal_samples_inctau',]:
             if group not in card_tool.procGroups:
                 raise ValueError(f"Must define '{group}' procGroup in CardTool for theory uncertainties")
         
@@ -35,6 +35,7 @@ class TheoryHelper(object):
             tnp_magnitude=1,
             mirror_tnp=True,
             pdf_from_corr=False,
+            pdf_action=None,
             scale_pdf_unc=1.):
 
         self.set_resum_unc_type(resumUnc)
@@ -44,12 +45,13 @@ class TheoryHelper(object):
         self.tnp_magnitude = tnp_magnitude
         self.mirror_tnp = mirror_tnp
         self.pdf_from_corr = pdf_from_corr
+        self.pdf_action = pdf_action
         self.scale_pdf_unc = scale_pdf_unc
 
     def add_all_theory_unc(self):
         self.add_nonpert_unc(model=self.np_model)
         self.add_resum_unc(magnitude=self.tnp_magnitude, mirror=self.mirror_tnp)
-        self.add_pdf_uncertainty(from_corr=self.pdf_from_corr, scale=self.scale_pdf_unc)
+        self.add_pdf_uncertainty(from_corr=self.pdf_from_corr, action=self.pdf_action, scale=self.scale_pdf_unc)
 
     def set_resum_unc_type(self, resumUnc):
         if not self.corr_hist_name:
@@ -81,7 +83,8 @@ class TheoryHelper(object):
 
         if minnloUnc and minnloUnc != "none":
             for sample_group in ["signal_samples_inctau", "single_v_nonsig_samples"]:
-                self.add_minnlo_scale_uncertainty(minnloUnc, sample_group)
+                if sample_group in self.card_tool.procGroups:
+                    self.add_minnlo_scale_uncertainty(minnloUnc, sample_group)
 
     def add_minnlo_scale_uncertainty(self, scale_type, sample_group, use_hel_hist=False, rebin_pt=None):
         if not sample_group:
@@ -338,6 +341,8 @@ class TheoryHelper(object):
                     raise ValueError(f"Failed to find all vars {vals} for var {label} in hist {self.np_hist_name}")
 
         for sample_group in ["signal_samples_inctau", "single_v_nonsig_samples"]:
+            if sample_group not in self.card_tool.procGroups:
+                continue
             label = self.sample_label(sample_group)
             for nuisance,vals in np_map.items():
                 entries = [nuisance+v for v in vals]
@@ -414,6 +419,8 @@ class TheoryHelper(object):
         obs = self.card_tool.project[:]
 
         for samples in ["single_v_nonsig_samples", "signal_samples_inctau"]:
+            if sample_group not in self.card_tool.procGroups:
+                continue
             expanded_samples = self.card_tool.getProcNames([samples])
             name_append = self.sample_label(samples)
 
