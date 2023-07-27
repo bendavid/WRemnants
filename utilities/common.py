@@ -85,7 +85,7 @@ def common_parser(for_reco_highPU=False):
         ROOT.ROOT.EnableImplicitMT(initargs.nThreads)
     import narf
     import wremnants
-    from wremnants import theory_corrections
+    from wremnants import theory_corrections,theory_tools
 
     parser.add_argument("--pdfs", type=str, nargs="*", default=["msht20"], choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for")
     parser.add_argument("--altPdfOnlyCentral", action='store_true', help="Only store central value for alternate PDF sets")

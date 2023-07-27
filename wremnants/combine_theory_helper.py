@@ -1,6 +1,7 @@
 from utilities import input_tools,logging,common
-from wremnants import syst_tools
+from wremnants import syst_tools,theory_tools
 import numpy as np
+import re
 
 logger = logging.child_logger(__name__)
 
@@ -17,13 +18,38 @@ class TheoryHelper(object):
         self.syst_ax = "vars"
         self.corr_hist = None
         self.resumUnc = None
-        self.np_model = "delta_lambda"
+        self.np_model = "Delta_Lambda"
+        self.pdf_from_corr = False
+        self.scale_pdf_unc = 1.
+        self.tnp_magnitude = 1.
+        self.mirror_tnp = True
 
     def sample_label(self, sample_group):
         if sample_group not in self.card_tool.procGroups or not self.card_tool.procGroups[sample_group]:
             raise ValueError(f"Failed to find sample group {sample_group} in predefined groups")
 
         return self.card_tool.procGroups[sample_group][0][0] 
+
+    def configure(self, resumUnc, np_model,
+            propagate_to_fakes=True, 
+            tnp_magnitude=1,
+            mirror_tnp=True,
+            pdf_from_corr=False,
+            scale_pdf_unc=1.):
+
+        self.set_resum_unc_type(resumUnc)
+        self.set_np_model(np_model)
+        self.set_propagate_to_fakes(propagate_to_fakes)
+
+        self.tnp_magnitude = tnp_magnitude
+        self.mirror_tnp = mirror_tnp
+        self.pdf_from_corr = pdf_from_corr
+        self.scale_pdf_unc = scale_pdf_unc
+
+    def add_all_theory_unc(self):
+        self.add_nonpert_unc(model=self.np_model)
+        self.add_resum_unc(magnitude=self.tnp_magnitude, mirror=self.mirror_tnp)
+        self.add_pdf_uncertainty(from_corr=self.pdf_from_corr, scale=self.scale_pdf_unc)
 
     def set_resum_unc_type(self, resumUnc):
         if not self.corr_hist_name:
@@ -45,8 +71,6 @@ class TheoryHelper(object):
             
         self.resumUnc = resumUnc
         
-    #def add_resum_scale_unc(self):
-
     def add_resum_unc(self, magnitude=1, mirror=False, scale=1, minnloUnc='byHelicityPtCharge'):
         if not self.resumUnc:
             logger.warning("No resummation uncertainty will be applied!")
@@ -253,6 +277,40 @@ class TheoryHelper(object):
             rename=nuisance_name,
         )
 
+    def add_resum_scale_uncertainty():
+        obs = self.card_tool.project[:]
+        if not obs:
+            raise ValueError("Failed to find the observable names for the resummation uncertainties")
+        
+        theory_hist = self.card_tool.getHistsForProcAndSyst(samples[0], theory_hist_name)
+        resumscale_nuisances = match_str_axis_entries(h.axes[syst_ax], ["^nuB.*", "nuS.*", "^muB.*", "^muS.*",])
+
+        expanded_samples = card_tool.datagroups.getProcNames(samples)
+        syst_ax = "vars"
+
+        card_tool.addSystematic(name=theory_hist,
+            processes=samples,
+            group="resumScale",
+            passToFakes=to_fakes,
+            skipEntries=[{syst_ax : x} for x in both_exclude+tnp_nuisances],
+            systAxes=["downUpVar"], # Is added by the actionMap
+            actionMap={s : lambda h: hh.syst_min_and_max_env_hist(h, obs, "vars", resumscale_nuisances) for s in expanded_samples},
+            outNames=[f"scetlibResumScale{name_append}Up", f"scetlibResumScale{name_append}Down"],
+            rename=f"resumScale{name_append}",
+            systNamePrepend=f"resumScale{name_append}_",
+        )
+        #TODO: check if this is actually the proper treatment of these uncertainties
+        card_tool.addSystematic(name=theory_hist,
+            processes=samples,
+            group="resumScale",
+            passToFakes=to_fakes,
+            systAxes=["vars"],
+            actionMap={s : lambda h: h[{"vars" : ["kappaFO0.5-kappaf2.", "kappaFO2.-kappaf0.5", "mufdown", "mufup",]}] for s in expanded_samples},
+            outNames=[f"scetlib_kappa{name_append}Up", f"scetlib_kappa{name_append}Down", f"scetlib_muF{name_append}Up", f"scetlib_muF{name_append}Down"],
+            rename=f"resumFOScale{name_append}",
+            systNamePrepend=f"resumScale{name_append}_",
+        )
+
     def add_uncorrelated_np_uncertainties(self):
         np_map = {
             "Lambda2" : ["-0.25", "0.25",],
@@ -263,24 +321,110 @@ class TheoryHelper(object):
             "Delta_Omega" : ["-0.02", "0.02"],
         }
 
+        if "Delta" not in self.resumUnc:
+            to_remove = list(filter(lambda x: "Delta" in x, np_map.keys()))
+            for k in to_remove:
+                np_map.pop(k)
+
+        central_var = self.np_hist.axes[self.syst_ax][0]
+
         for label,vals in np_map.items():
             if not all(label+v in self.np_hist.axes[self.syst_ax] for v in vals):
-                raise ValueError(f"Failed to find {label+val} in hist {self.np_hist_name}")
+                tmpvals = [x.replace(label, "") for x in self.np_hist.axes[self.syst_ax] if re.match(f"^{label}\d+", x)]
+                if tmpvals:
+                    logger.warning(f"Using variations {tmpvals} rather than default values {vals}!")
+                    np_map[label] = tmpvals
+                else:
+                    raise ValueError(f"Failed to find all vars {vals} for var {label} in hist {self.np_hist_name}")
 
         for sample_group in ["signal_samples_inctau", "single_v_nonsig_samples"]:
             label = self.sample_label(sample_group)
             for nuisance,vals in np_map.items():
-                if "Delta" in nuisance and "Delta" not in self.np_model:
-                    continue
-
+                entries = [nuisance+v for v in vals]
+                binned = "binned" in self.np_model
+                if binned:
+                    action=lambda h,e=entries: syst_tools.hist_to_variations(h[{self.syst_ax : [central_var, *e]}])
+                else:
+                    action=lambda h,e=entries: h[{self.syst_ax : e}]
                 rename = f"scetlibNP{label}{nuisance}"
                 self.card_tool.addSystematic(name=self.np_hist_name,
                     processes=[sample_group],
                     group="resumNonpert",
-                    systAxes=[self.syst_ax,],
+                    systAxes=[self.syst_ax] if not binned else ["absYVgenNP", "chargeVgenNP", "vars"],
                     passToFakes=self.propagate_to_fakes,
-                    action=lambda h,n=nuisance,vs=vals: h[{self.syst_ax : [n+v for v in vs]}],
-                    outNames=[f"{rename}Down", f"{rename}Up"],
+                    action=action,
+                    outNames=[f"{rename}Down", f"{rename}Up"] if not binned else None,
+                    systNameReplace=[(entries[1], f"{rename}Up"), (entries[0], f"{rename}Down"), ],
+                    skipEntries=[{self.syst_ax : central_var}],
                     rename=rename,
                 )
 
+    def add_pdf_uncertainty(self, action=None, from_corr=False, scale=1):
+        pdf = input_tools.args_from_metadata(self.card_tool, "pdfs")[0]
+        pdfInfo = theory_tools.pdf_info_map("ZmumuPostVFP", pdf)
+        pdfName = pdfInfo["name"]
+        pdf_hist = pdfName
+
+        if from_corr:
+            theory_unc = input_tools.args_from_metadata(self.card_tool, "theoryCorr")
+            if not theory_unc:
+                logger.error("Can not add resummation uncertainties. No theory correction was applied!")
+            pdf_hist = f"scetlib_dyturbo{pdf.upper()}Vars" 
+            if pdf_hist not in theory_unc:
+                logger.error(f"Did not find {pdf_hist} correction in file! Cannot use SCETlib+DYTurbo PDF uncertainties")
+            pdf_hist += "Corr"
+
+        logger.info(f"Using PDF hist {pdf_hist}")
+
+        pdf_ax = self.syst_ax if from_corr else "pdfVar"
+        symHessian = pdfInfo["combine"] == "symHessian"
+        pdf_args = dict(
+            processes=["single_v_samples"],
+            mirror=True if symHessian else False,
+            group=pdfName,
+            passToFakes=self.propagate_to_fakes,
+            actionMap=action,
+            scale=pdfInfo.get("scale", 1)*scale,
+            systAxes=[pdf_ax],
+        )
+        if from_corr:
+            self.card_tool.addSystematic(pdf_hist, 
+                outNames=[""]+theory_tools.pdfNamesAsymHessian(pdfInfo['entries'], pdfset=pdf.upper())[1:],
+                **pdf_args
+            )
+        else:
+            self.card_tool.addSystematic(pdf_hist, 
+                skipEntries=[{pdf_ax : "^pdf0[a-z]*"}],
+                **pdf_args
+            )
+
+        # TODO: For now only MiNNLO alpha_s is supported
+        asRange = pdfInfo['alphasRange']
+        self.card_tool.addSystematic(f"{pdfName}alphaS{asRange}", 
+            processes=["single_v_samples"],
+            mirror=False,
+            group=pdfName,
+            systAxes=["alphasVar"],
+            systNameReplace=[("as", "pdfAlphaS")]+[("0116", "Down"), ("0120", "Up")] if asRange == "002" else [("0117", "Down"), ("0119", "Up")],
+            scale=0.75, # TODO: this depends on the set, should be provided in theory_tools.py
+            passToFakes=self.propagate_to_fakes,
+        )
+
+    def add_resum_transition_uncertainty(self):
+        obs = self.card_tool.project[:]
+
+        for samples in ["single_v_nonsig_samples", "signal_samples_inctau"]:
+            expanded_samples = self.card_tool.getProcNames([samples])
+            name_append = self.sample_label(samples)
+
+            self.card_tool.addSystematic(name=self.corr_hist_name,
+                processes=["single_v_samples"],
+                group="resumTransition",
+                systAxes=["downUpVar"],
+                passToFakes=to_fakes,
+                # NOTE: I don't actually remember why this used no_flow=ptVgen previously, I don't think there's any harm in not using it...
+                actionMap={s : lambda h: hh.syst_min_and_max_env_hist(h, obs, self.syst_ax, 
+                    [x for x in h.axes["vars"] if "transition_point" in x]) for s in expanded_samples},
+                outNames=[f"resumTransition{name_append}Up", f"resumTransition{name_append}Down"],
+                rename=f"scetlibResumTransition{name_append}",
+            )

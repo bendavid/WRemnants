@@ -349,15 +349,19 @@ def main(args,xnorm=False):
             #     )
 
     to_fakes = passSystToFakes and not args.noQCDscaleFakes and not xnorm
-    combine_helpers.add_pdf_uncertainty(cardTool, ['single_v_samples'], passSystToFakes, from_corr=args.pdfUncFromCorr, scale=args.scalePdf)
     #combine_helpers.add_modeling_uncertainty(cardTool, args.minnloScaleUnc, signal_samples_inctau, 
     #    single_v_nonsig_samples if not xnorm else [], to_fakes, args.resumUnc, wmass, scaleTNP=args.scaleTNP)
 
     theory_helper = combine_theory_helper.TheoryHelper(cardTool)
-    theory_helper.set_resum_unc_type(args.resumUnc)
-    theory_helper.set_propagate_to_fakes(to_fakes)
-    theory_helper.add_nonpert_unc(model=args.npUnc)
-    theory_helper.add_resum_unc(magnitude=args.tnpMagnitude, mirror=True)
+    theory_helper.configure(resumUnc=args.resumUnc, 
+        propagate_to_fakes=to_fakes,
+        np_model=args.npUnc,
+        tnp_magnitude=args.tnpMagnitude,
+        mirror_tnp=True,
+        pdf_from_corr=args.pdfUncFromCorr,
+        scale_pdf_unc=args.scalePdf,
+    )
+    theory_helper.add_all_theory_unc()
 
     if not xnorm:
         msv_config_dict = {

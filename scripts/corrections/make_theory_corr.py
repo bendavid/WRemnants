@@ -76,8 +76,8 @@ def read_corr(procName, generator, corr_files):
 if args.proc == "z":
     filesByProc = { "ZmumuPostVFP" : args.corr_files }
 elif args.proc == "w":
-    wpfiles = list(filter(lambda x: "wp" in x.lower(), args.corr_files))
-    wmfiles = list(filter(lambda x: "wm" in x.lower(), args.corr_files))
+    wpfiles = list(filter(lambda x: "wp" in os.path.basename(x).lower(), args.corr_files))
+    wmfiles = list(filter(lambda x: "wm" in os.path.basename(x).lower(), args.corr_files))
     if len(wpfiles) != len(wmfiles):
         raise ValueError(f"Expected equal number of files for W+ and W-, found {len(wpfiles)} (Wp) and {len(wmfiles)} (Wm)")
     filesByProc = { "WplusmunuPostVFP" : wpfiles,
