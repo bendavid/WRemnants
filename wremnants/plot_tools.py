@@ -142,21 +142,21 @@ def makeStackPlotWithRatio(
         if not histInfo[k].hists[histName]:
             logger.warning(f"Failed to find hist {histName} for proc {k}")
             continue
-        hist = action(histInfo[k].hists[histName])[select]
+        h = action(histInfo[k].hists[histName])[select]
         
         # Use this if the hist has been rebinned for combine
         if xlim:
-            hist = hist[complex(0, xlim[0]):complex(0, xlim[1])]
+            h = h[complex(0, xlim[0]):complex(0, xlim[1])]
 
         # If plotting from combine, apply the action to the underlying hist.
         # Don't do this for the generic case, as it screws up the ability to make multiple plots
         if fitresult:
-            histInfo[k].hists[histName] = hist
+            histInfo[k].hists[histName] = h
 
         if k != "Data":
-            stack.append(hist)
+            stack.append(h)
         else:
-            data_hist = hist
+            data_hist = h
 
     fig, ax1, ax2 = figureWithRatio(stack[0], xlabel, ylabel, ylim, rlabel, rrange, xlim=xlim, 
         grid_on_ratio_plot = grid, plot_title = plot_title, title_padding = title_padding, bin_density = bin_density)

@@ -68,7 +68,7 @@ def main(args,xnorm=False):
         sel = {}
         for var,low,high,rebin in itertools.zip_longest(args.fitvar, args.axlim[::2], args.axlim[1::2], args.rebin):
             s = hist.tag.Slicer()
-            if low and high:
+            if low is not None and high is not None:
                 logger.info(f"Restricting the axis '{var}' to range [{low}, {high}]")
                 sel[var] = s[complex(0, low):complex(0, high):hist.rebin(rebin) if rebin else None]
             elif rebin:

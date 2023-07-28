@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from wremnants import CardTool,theory_tools,syst_tools,combine_helpers
+from wremnants import CardTool,theory_tools,syst_tools,combine_helpers,combine_theory_helper
 from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU
 from utilities import common, logging
 import argparse
