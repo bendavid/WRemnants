@@ -1519,6 +1519,7 @@ def drawNTH1(hists=[],
              legendCoords="0.15,0.35,0.8,0.9",  # x1,x2,y1,y2
              canvasSize="600,700",  # use X,Y to pass X and Y size     
              lowerPanelHeight = 0.3,  # number from 0 to 1, 0.3 means 30% of space taken by lower panel. 0 means do not draw lower panel with relative error
+             drawLineTopPanel=None,
              drawLineLowerPanel="", # if not empty, draw band at 1+ number after ::, and add legend with title
              passCanvas=None,
              lumi=None,
@@ -1794,6 +1795,13 @@ def drawNTH1(hists=[],
             latCMS.DrawLatex(0.1, 0.95, '#bf{CMS} #it{Preliminary}')
             if lumi != None: latCMS.DrawLatex(0.85, 0.95, '%s fb^{-1} (13 TeV)' % lumi)
             else:            latCMS.DrawLatex(0.90, 0.95, '(13 TeV)')
+
+    if drawLineTopPanel != None:
+        topline = ROOT.TF1("horiz_line",f"{drawLineTopPanel}",h1.GetXaxis().GetBinLowEdge(1),h1.GetXaxis().GetBinLowEdge(h1.GetNbinsX()+1))
+        topline.SetLineColor(ROOT.kBlack)
+        topline.SetLineWidth(1)
+        topline.SetLineStyle(2)
+        topline.Draw("Lsame")
 
     if lowerPanelHeight:
         pad2.Draw()

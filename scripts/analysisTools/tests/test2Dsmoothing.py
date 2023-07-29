@@ -89,7 +89,7 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
         utEdges[0] = utEdges[1] - stretch * (utEdges[2] - utEdges[1])
         utEdges[-1] = utEdges[-2] - stretch * (utEdges[-3] - utEdges[-2])
         name = hsf.GetName()
-        hsf.SetName(f"{hsf.GetName()}_AAA")
+        hsf.SetName(f"{name}_AAA")
         hsfTmp = ROOT.TH3D(name, hsf.GetTitle(),
                            len(utEdges)-1, array('d', utEdges),
                            len(etaEdges)-1, array('d', etaEdges),
@@ -319,7 +319,7 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
         histSF3D_withStatVars.values()[eta_index, :, :, 0] = boost_hist_smooth.values().T # hswap.values()[:,:]
         # convert to root for plotting
         hfit = narf.hist_to_root(boost_hist_smooth)
-        hfit.SetName(f"{{hsf.GetName()}}_ieta{ieta}{postfix}")
+        hfit.SetName(f"smoothSF2D_{step}_ieta{ieta}{postfix}")
         hfit.SetTitle(f"{etaRange}   {chi2text}")
         drawCorrelationPlot(hfit, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", f"Smooth scale factor",
                             hfit.GetName(), "ForceTitle", outdirNew,
@@ -329,16 +329,17 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
             boost_hist_smooth.values()[...] = polN_2d_scaled(xvals, postfit_params_alt[ivar])
             histSF3D_withStatVars.values()[eta_index, :, :, ivar+1] = boost_hist_smooth.values().T
             hfit_alt.append(narf.hist_to_root(boost_hist_smooth))
-            hfit_alt[ivar].SetName(f"fit2D_ieta{ieta}_eigen{ivar}{postfix}")
+            hfit_alt[ivar].SetName(f"smoothSF2D_{step}_ieta{ieta}_eigen{ivar}{postfix}")
             hfit_alt[ivar].SetTitle(f"{etaRange}: eigen {ivar}")            
 
         if args.plotEigenVar:
             outdir_eigen = outdirNew + f"eigenDecomposition/eta_{ieta}/"
             createPlotDirAndCopyPhp(outdir_eigen)
             for ivar in range(npar):
-                hratio = copy.deepcopy(hfit_alt[ivar].Clone(f"ratioSF_hfit_alt[ivar].GetName()"))
+                hratio = copy.deepcopy(hfit_alt[ivar].Clone(f"ratioSF_{hfit_alt[ivar].GetName()}"))
                 hratio.Divide(hfit)
-                drawCorrelationPlot(hratio, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", "Alternate / nominal SF ratio",
+                drawCorrelationPlot(hratio, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)",
+                                    f"Alternate / nominal {step} SF ratio",
                                     hratio.GetName(), "ForceTitle", outdir_eigen,
                                     palette=87, passCanvas=canvas)
 
@@ -415,6 +416,7 @@ if __name__ == "__main__":
     parser.add_argument('--polDegree', type=int, nargs=2, default=[2, 3], help='Select degree of polynomial for 2D smoothing (uT-pT)')
     parser.add_argument('--plotEigenVar', action="store_true", help='Plot eigen variations (it actually produces histogram ratios alt/nomi)')
     parser.add_argument('-p', '--postfix', type=str, default="", help='Postfix for plot names (can be the step name)')
+    parser.add_argument('--extended', action="store_true", help='Use SF with uT range extended above +30 GeV')
     args = parser.parse_args()
 
     ROOT.TH1.SetDefaultSumw2()
@@ -425,16 +427,25 @@ if __name__ == "__main__":
             quit()
         else:
             logger.info(f"Adding pkl.lz4 extension for output file name {args.outfilename}")
-            args.outfilename += ".pkl.lz4"        
-    #effSmoothFile = "/home/m/mciprian/efficiencieswremnantsmceff2d.root"
-    # effHist = {}
-    # tfile = safeOpenFile(effSmoothFile)
-    # effHist["iso"] = safeGetObject(tfile, "isoMCPlus") # temporary patch
-    # effHist["isonotrig"] = safeGetObject(tfile, "isoMCMinus") # temporary patch
-    # effHist["triggerplus"] = safeGetObject(tfile, "triggerMCPlus")
-    # effHist["triggerminus"] = safeGetObject(tfile, "triggerMCMinus")
-    # tfile.Close()
+            args.outfilename += ".pkl.lz4"
 
+    inputRootFile = {"iso"          : "/home/m/mciprian/isolation3DSFUT.root",
+                     "isonotrig"    : "/home/m/mciprian/isonotrigger3DSFVQT.root",
+                     "isoantitrig"  : "/home/m/mciprian/isofailtrigger3DSFVQT.root",
+                     "triggerplus"  : "/home/m/mciprian/triggerplus3DSFUT.root",
+                     "triggerminus"  : "/home/m/mciprian/triggerminus3DSFUT.root",
+                     }
+
+    if args.extended:
+        args.outfilename = args.outfilename.replace(".pkl.lz4", "_extended.pkl.lz4")
+        inputRootFile = {"iso"          : "/home/m/mciprian/iso3DSFVQTextended.root",
+                         "isonotrig"    : "/home/m/mciprian/isonotrigger3DSFVQTextended.root",
+                         "isoantitrig"  : "/home/m/mciprian/isofailtrigger3DSFVQTextended.root",
+                         "triggerplus"  : "/home/m/mciprian/triggerplus3DSFVQTextended.root",
+                         "triggerminus"  : "/home/m/mciprian/triggerminus3DSFVQTextended.root",
+                         }
+
+        
     # efficiencies made with scripts/analysisTools/w_mass_13TeV/makeWMCefficiency3D.py
     effSmoothFile = "/eos/user/m/mciprian/www/WMassAnalysis/test2Dsmoothing/makeWMCefficiency3D/noMuonCorr_noSF_allProc_noDphiCut/efficiencies3D.pkl.lz4"
     with lz4.frame.open(effSmoothFile) as fileEff:
@@ -442,14 +453,14 @@ if __name__ == "__main__":
 
     effHist = {}
     for step in ["iso", "isonotrig", "isoantitrig", "triggerplus", "triggerminus"]:
-        effHist[step] = allMCeff[f"Wmunu_MC_eff_{step}_etaptut"]
+        effHist[step] = allMCeff[f"Wmunu_MC_eff_{step}_etaptut"]    
         
     work = []
-    work.append(["/home/m/mciprian/isolation3DSFUT.root",     "SF3D_nominal_isolation",     "iso", effHist["iso"]])
-    work.append(["/home/m/mciprian/isonotrigger3DSFVQT.root", "SF3D_nominal_isonotrigger",  "isonotrig", None]) # , effHist["isonotrig"]])
-    work.append(["/home/m/mciprian/isofailtrigger3DSFVQT.root", "SF3D_nominal_isofailtrigger",  "isoantitrig", None]) # , effHist["isoantitrig"]])
-    work.append(["/home/m/mciprian/triggerplus3DSFUT.root",   "SF3D_nominal_trigger_plus",  "triggerplus", effHist["triggerplus"]])
-    work.append(["/home/m/mciprian/triggerminus3DSFUT.root",  "SF3D_nominal_trigger_minus", "triggerminus", effHist["triggerminus"]])
+    work.append([inputRootFile["iso"],          "SF3D_nominal_iso" if args.extended else "SF3D_nominal_isolation",     "iso", effHist["iso"]])
+    work.append([inputRootFile["isonotrig"],    "SF3D_nominal_isonotrigger",  "isonotrig", None]) # , effHist["isonotrig"]])
+    work.append([inputRootFile["isoantitrig"],  "SF3D_nominal_isofailtrigger",  "isoantitrig", None]) # , effHist["isoantitrig"]])
+    work.append([inputRootFile["triggerplus"],  "SF3D_nominal_trigger_plus",  "triggerplus", effHist["triggerplus"]])
+    work.append([inputRootFile["triggerminus"], "SF3D_nominal_trigger_minus", "triggerminus", effHist["triggerminus"]])
 
     outdir = args.outdir[0]
     

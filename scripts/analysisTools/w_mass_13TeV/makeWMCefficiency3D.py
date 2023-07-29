@@ -214,7 +214,7 @@ if __name__ == "__main__":
         # do it for events passing trigger ans isolation
         nPtBins = hTestUt.axes["pt"].size
         hTestUt = hTestUt[{"eta" : s[::hist.sum],
-                           "pt" :  s[0:nPtBins-1:hist.sum], # would s[::hist.sum] sum overflow pt bins?
+                           "pt" :  s[0:nPtBins:hist.sum], # would s[::hist.sum] sum overflow pt bins?
                            "passTrigger" : True,
                            "passIso" : True}]
         for charge in [-1, 1]:
