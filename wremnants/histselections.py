@@ -14,20 +14,39 @@ hist_map = {
     "ptll_mll" : "nominal",
 }
 
-def fakeHistABCD(h, low_PU=False):
+def fakeHistABCD(h, low_PU=False,
+                 boolMT=True, thresholdMT=40.0, axisNameMT="mt", integrateMT=True):
+    # boolMT=False generalizes the method when mT is a real axis (i.e. no need for passMT)
+    # integrateMT keeps the mT axis in the returned histogram (can be used to have fakes vs mT)
     if low_PU and "mt" in [ax.name for ax in h.axes]:
         return h[{"passIso" : False, "passMT" : True}]*h[{"passIso" : True, "passMT" : False}].sum().value / h[{"passIso" : False, "passMT" : False}].sum().value
 
-    return hh.multiplyHists(
-        hh.divideHists(h[{"passIso" : True, "passMT" : False}], 
-            h[{"passIso" : False, "passMT" : False}],
-                cutoff=1,
-                createNew=True,
-            ),
-                #where=h[{"passIso" : False, "passMT" : True}].values(flow=True)>1),
-        h[{"passIso" : False, "passMT" : True}], 
-    )
-
+    elif boolMT:
+        return hh.multiplyHists(
+            hh.divideHists(h[{"passIso" : True, "passMT" : False}],
+                           h[{"passIso" : False, "passMT" : False}],
+                           cutoff=1,
+                           createNew=True,
+                           ),
+            #where=h[{"passIso" : False, "passMT" : True}].values(flow=True)>1),
+            h[{"passIso" : False, "passMT" : True}],
+        )
+    else:
+        s = hist.tag.Slicer()
+        hFRF = hh.divideHists(h[{"passIso" : True,  axisNameMT : s[0:complex(0,thresholdMT):hist.sum]}], 
+                              h[{"passIso" : False, axisNameMT : s[0:complex(0,thresholdMT):hist.sum]}],
+                              cutoff=1,
+                              createNew=True,
+                              )
+        if integrateMT:
+            return hh.multiplyHists(hFRF,
+                                    h[{"passIso" : False, axisNameMT : s[complex(0,thresholdMT):hist.overflow:hist.sum]}]
+                                    )
+        else:
+            return hh.multiplyHists(hFRF,
+                                    h[{"passIso" : False, axisNameMT : s[complex(0,thresholdMT):hist.overflow]}],
+                                    )
+        
 def fakeHistIsoRegion(h, scale=1.):
     #return h[{"iso" : 0.3j, "mt" : hist.rebin(10)}]*scale
     return h[{"iso" : 4}]*scale
