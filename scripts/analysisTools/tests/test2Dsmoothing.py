@@ -227,8 +227,8 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
     postfix = f"_{args.postfix}" if len(args.postfix) else ""
 
     hpull1D_uTpT = ROOT.TH1D("hpull1D", "", 20, -5, 5)
-    hpullSummary_eta_mean  = ROOT.TH1D("hpullSummary_eta_mean",  "Pull distribution mean",  nEtaBins, etaEdges[0], etaEdges[-1])
-    hpullSummary_eta_sigma = ROOT.TH1D("hpullSummary_eta_sigma", "Pull distribution width", nEtaBins, etaEdges[0], etaEdges[-1])
+    hpullSummary_eta_mean  = ROOT.TH1D(f"hpullSummary_{step}_eta_mean",  f"Pull distribution mean {step}",  nEtaBins, etaEdges[0], etaEdges[-1])
+    hpullSummary_eta_sigma = ROOT.TH1D(f"hpullSummary_{step}_eta_sigma", f"Pull distribution width {step}", nEtaBins, etaEdges[0], etaEdges[-1])
     
     for ieta in etaBinsToRun:
     # for ieta in range(1, 2):
@@ -290,7 +290,7 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
         hpullSummary_eta_mean.SetBinError(ieta, hpull1D_uTpT.GetMeanError())
         hpullSummary_eta_sigma.SetBinContent(ieta, hpull1D_uTpT.GetStdDev())
         hpullSummary_eta_sigma.SetBinError(ieta, hpull1D_uTpT.GetStdDevError())
-                
+        
         drawCorrelationPlot(hpull, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", "Pull: (fit - meas)/meas_unc::-5,5",
                             hpull.GetName(), "ForceTitle", outdirNew,
                             palette=87, nContours=20, passCanvas=canvas)
