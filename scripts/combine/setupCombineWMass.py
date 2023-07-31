@@ -21,6 +21,7 @@ def make_parser(parser=None):
     parser.add_argument("-n", "--baseName", type=str, help="Histogram name in the file (e.g., 'nominal')", default="nominal")
     parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow). Equivalent to --excludeNuisances '.*effSystTnP|.*effStatTnP' ")
     parser.add_argument("--ewUnc", action='store_true', help="Include EW uncertainty")
+    parser.add_argument("--widthUnc", action='store_true', help="Include uncertainty on W and Z width")
     parser.add_argument("--pseudoData", type=str, help="Hist to use as pseudodata")
     parser.add_argument("--pseudoDataIdx", type=str, default="0", help="Variation index to use as pseudodata")
     parser.add_argument("--pseudoDataFile", type=str, help="Input file for pseudodata (if it should be read from a different file)", default=None)
@@ -204,11 +205,50 @@ def setup(args,xnorm=False):
                             systAxes=["massShift"],
                             passToFakes=passSystToFakes,
     )
-    
+
     if args.doStatOnly:
-        # print a card with only mass weights and a dummy syst
-        logger.info("Using option --doStatOnly: the card was created with only mass weights and a dummy LnN syst on all processes")
+        # print a card with only mass weights, no longer need a dummy syst since combinetf is fixed now
+        cardTool.writeOutput(args=args, xnorm=xnorm)
+        logger.info("Using option --doStatOnly: the card was created with only mass nuisance parameter")
         return cardTool
+    
+    if args.widthUnc:
+        widthSkipZ = [("widthZ2p49333GeV",), ("widthZ2p49493GeV",), ("widthZ2p4952GeV",)] 
+        widthSkipW = [("widthW2p09053GeV",), ("widthW2p09173GeV",), ("widthW2p085GeV",)]
+        if wmass and not xnorm:
+            cardTool.addSystematic(f"widthWeightZ",
+                                    processes=single_v_nonsig_samples,
+                                    group=f"widthZ",
+                                    skipEntries=widthSkipZ[:],
+                                    mirror=False,
+                                    systAxes=["width"],
+                                    passToFakes=passSystToFakes,
+            )
+        cardTool.addSystematic(f"widthWeight{label}",
+                                processes=signal_samples_inctau,
+                                skipEntries=widthSkipZ[:] if label=="Z" else widthSkipW[:],
+                                group=f"width{label}",
+                                mirror=False,
+                                #TODO: Name this
+                                systAxes=["width"],
+                                passToFakes=passSystToFakes,
+        )
+
+    if not xnorm:
+        if wmass:
+            cardTool.addSystematic("luminosity",
+                                   processes=allMCprocesses_noQCDMC,
+                                   outNames=["lumiDown", "lumiUp"],
+                                   group="luminosity",
+                                   systAxes=["downUpVar"],
+                                   labelsByAxis=["downUpVar"],
+                                   passToFakes=passSystToFakes)
+
+        else:
+            # TOCHECK: no fakes here, most likely
+            cardTool.addLnNSystematic("luminosity", processes=allMCprocesses_noQCDMC, size=1.012, group="luminosity")
+    else:
+        pass
 
     if args.ewUnc:
         cardTool.addSystematic(f"horacenloewCorr", 
