@@ -1,3 +1,4 @@
+import ROOT
 import hist
 import numpy as np
 from utilities import boostHistHelpers as hh, common, logging
@@ -192,7 +193,7 @@ def hist_to_variations(hist_in):
 
     genAxes = ["absYVgenNP", "chargeVgenNP"]
 
-    nom_hist = hist_in[{"vars" : "pdf0"}]
+    nom_hist = hist_in[{"vars" : 0}]
     nom_hist_sum = nom_hist[{genAxis : s[::hist.sum] for genAxis in genAxes}]
 
     variation_data = hist_in.view(flow=True) - nom_hist.view(flow=True)[...,None] + nom_hist_sum.view(flow=True)[..., None, None, None]
@@ -219,7 +220,7 @@ def define_mass_weights(df, proc):
     return df
 
 def add_massweights_hist(results, df, axes, cols, base_name="nominal", proc=""):
-    name = Datagroups.histName(base_name, syst="massWeight")
+    name = Datagroups.histName(base_name, syst="massWeight"+(proc[0] if len(proc) else proc))
     massWeight = df.HistoBoost(name, axes, [*cols, "massWeight_tensor_wnom"], 
                     tensor_axes=[hist.axis.StrCategory(massWeightNames(proc=proc), name="massShift")], 
                     storage=hist.storage.Double())
@@ -228,12 +229,45 @@ def add_massweights_hist(results, df, axes, cols, base_name="nominal", proc=""):
 def massWeightNames(matches=None, proc=""):
     central=10
     nweights=21
-    names = [f"massShift{int(abs(central-i)*10)}MeV{'' if i == central else ('Down' if i < central else 'Up')}" for i in range(nweights)]
+    names = [f"massShift{proc[0] if len(proc) else proc}{int(abs(central-i)*10)}MeV{'' if i == central else ('Down' if i < central else 'Up')}" for i in range(nweights)]
     if proc and proc in common.zprocs_all:
         # This is the PDG uncertainty (turned off for now since it doesn't seem to have been read into the nano)
-        names.extend(["massShift2p1MeVDown", "massShift2p1MeVUp"])
+        names.extend(["massShiftZ2p1MeVDown", "massShiftZ2p1MeVUp"])
 
     # If name is "" it won't be stored
+    return [x if not matches or any(y in x for y in matches) else "" for x in names]
+
+def define_width_weights(df, proc):
+    if "widthWeight_tensor" in df.GetColumnNames():
+        logger.debug("widthWeight_tensor already defined, do nothing here.")
+        return df
+    nweights = 5
+    df = df.Define("widthWeight_tensor", f"wrem::vec_to_tensor_t<double, {nweights}>(MEParamWeightAltSet1)")
+    df = df.Define("widthWeight_tensor_wnom", "auto res = widthWeight_tensor; res = nominal_weight*res; return res;")
+    return df
+
+def add_widthweights_hist(results, df, axes, cols, base_name="nominal", proc=""):
+    name = Datagroups.histName(base_name, syst="widthWeight"+(proc[0] if len(proc) else proc))
+    widthWeight = df.HistoBoost(name, axes, [*cols, "widthWeight_tensor_wnom"], 
+                    tensor_axes=[hist.axis.StrCategory(widthWeightNames(proc=proc), name="width")], 
+                    storage=hist.storage.Double())
+    results.append(widthWeight)
+
+def widthWeightNames(matches=None, proc=""):
+    central=3
+    if proc[0] == "Z":
+        widths=(2.49333, 2.49493, 2.4929, 2.4952, 2.4975)
+    elif proc[0] == "W":
+        widths=(2.09053, 2.09173, 2.043, 2.085, 2.127) 
+    else:
+        raise RuntimeError(f"No width found for process {proc}")
+    # 0 and 1 are Up, Down from mass uncertainty EW fit (already accounted for in mass variations)
+    names = [f"width{proc[0]}{str(widths[i]).replace('.','p')}GeV" for i in (0, 1)]
+    # 2, 3, and 4 are PDG width Down, Central, Up
+    names.append(f"widthShift{proc[0]}{str(2.3 if proc[0] == 'Z' else 42).replace('.','p')}MeVDown")
+    names.append(f"width{proc[0]}{str(widths[central]).replace('.','p')}GeV")
+    names.append(f"widthShift{proc[0]}{str(2.3 if proc[0] == 'Z' else 42).replace('.','p')}MeVUp")
+
     return [x if not matches or any(y in x for y in matches) else "" for x in names]
 
 def add_pdf_hists(results, df, dataset, axes, cols, pdfs, base_name="nominal"):
@@ -284,23 +318,52 @@ def add_QCDbkg_jetPt_hist(results, df, nominal_axes, nominal_cols, base_name="no
     dQCDbkGVar = dQCDbkGVar.Filter(f"passMT || Sum(goodCleanJetsPt{jet_pt})>=1")
     qcdJetPt = dQCDbkGVar.HistoBoost(name, nominal_axes, [*nominal_cols, "nominal_weight"], storage=hist.storage.Double())
     results.append(qcdJetPt)
-                                        
-def add_muon_efficiency_unc_hists(results, df, helper_stat, helper_syst, axes, cols, base_name="nominal", is_w_like=False):
 
-    if is_w_like:
-        muon_columns_stat = ["trigMuons_pt0", "trigMuons_eta0", "trigMuons_charge0", "nonTrigMuons_pt0", "nonTrigMuons_eta0", "nonTrigMuons_charge0"]
-        muon_columns_syst = ["trigMuons_pt0", "trigMuons_eta0", "trigMuons_SApt0", "trigMuons_SAeta0", "trigMuons_charge0",
-            "nonTrigMuons_pt0", "nonTrigMuons_eta0", "nonTrigMuons_SApt0", "nonTrigMuons_SAeta0", "nonTrigMuons_charge0"]
+def add_muon_efficiency_unc_hists(results, df, helper_stat, helper_syst, axes, cols, base_name="nominal", what_analysis=ROOT.wrem.AnalysisType.Wmass, smooth3D=False):
+    # TODO: update for dilepton
+    if what_analysis == ROOT.wrem.AnalysisType.Wmass:
+        muon_columns_stat = ["goodMuons_pt0", "goodMuons_eta0",
+                             "goodMuons_uT0", "goodMuons_charge0"]
+        muon_columns_syst = ["goodMuons_pt0", "goodMuons_eta0",
+                             "goodMuons_SApt0", "goodMuons_SAeta0",
+                             "goodMuons_uT0", "goodMuons_charge0",
+                             "passIso"]
     else:
-        # FIXME: this should read standalone variables when effStat is for tracking
-        muon_columns_stat = ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_charge0"]
-        muon_columns_syst = ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_charge0", "passIso"]
+        muvars_stat = ["pt0", "eta0", "uT0", "charge0"]
+        muon_columns_stat_trig    = [f"trigMuons_{v}" for v in muvars_stat]
+        muon_columns_stat_nonTrig = [f"nonTrigMuons_{v}" for v in muvars_stat]
 
-    for key,helper in helper_stat.items():
-        if "iso" in key and not is_w_like:
-            df = df.Define(f"effStatTnP_{key}_tensor", helper, [*muon_columns_stat, "passIso", "nominal_weight"])        
+        muvars_syst = ["pt0", "eta0", "SApt0", "SAeta0", "uT0", "charge0"]
+        muon_columns_syst_trig    = [f"trigMuons_{v}" for v in muvars_syst]
+        muon_columns_syst_nonTrig = [f"nonTrigMuons_{v}" for v in muvars_syst]
+        
+        if what_analysis == ROOT.wrem.AnalysisType.Wlike:
+            muon_columns_stat = [*muon_columns_stat_trig, *muon_columns_stat_nonTrig]
+            muon_columns_syst = [*muon_columns_syst_trig, *muon_columns_syst_nonTrig]
+        elif what_analysis == ROOT.wrem.AnalysisType.Dilepton:
+            muon_columns_stat = [*muon_columns_stat_trig, "trigMuons_passTrigger0", *muon_columns_stat_nonTrig, "nonTrigMuons_passTrigger0"]
+            muon_columns_syst = [*muon_columns_syst_trig, "trigMuons_passTrigger0", *muon_columns_syst_nonTrig, "nonTrigMuons_passTrigger0"]
         else:
-            df = df.Define(f"effStatTnP_{key}_tensor", helper, [*muon_columns_stat, "nominal_weight"])
+            raise ValueError(f"add_muon_efficiency_unc_hists: analysis {what_analysis} not implemented.")
+            
+        
+    if not smooth3D:
+        # will use different helpers and member functions
+        muon_columns_stat = [x for x in muon_columns_stat if "_uT0" not in x]
+        muon_columns_syst = [x for x in muon_columns_syst if "_uT0" not in x]
+
+    # change variables for tracking, to use standalone variables
+    muon_columns_stat_tracking = [x.replace("_pt0", "_SApt0").replace("_eta0", "_SAeta0") for x in muon_columns_stat]
+        
+    for key,helper in helper_stat.items():
+        if "tracking" in key:
+            muon_columns_stat_step = muon_columns_stat_tracking
+        elif "iso" in key and what_analysis == ROOT.wrem.AnalysisType.Wmass:
+            muon_columns_stat_step = muon_columns_stat + ["passIso"]
+        else:
+            muon_columns_stat_step = muon_columns_stat
+            
+        df = df.Define(f"effStatTnP_{key}_tensor", helper, [*muon_columns_stat_step, "nominal_weight"])
         name = Datagroups.histName(base_name, syst=f"effStatTnP_{key}")
         effStatTnP = df.HistoBoost(name, axes, [*cols, f"effStatTnP_{key}_tensor"], tensor_axes = helper.tensor_axes, storage=hist.storage.Double())
         results.append(effStatTnP)
@@ -391,6 +454,8 @@ def add_theory_hists(results, df, args, dataset_name, corr_helpers, qcdScaleByHe
 
     df = theory_tools.define_scale_tensor(df)
     df = define_mass_weights(df, dataset_name)
+    if args.widthVariations:
+        df = define_width_weights(df, dataset_name)
 
     add_pdf_hists(results, df, dataset_name, axes, cols, args.pdfs, base_name=base_name)
     add_qcdScale_hist(results, df, scale_axes, scale_cols, base_name=base_name)
@@ -411,5 +476,7 @@ def add_theory_hists(results, df, args, dataset_name, corr_helpers, qcdScaleByHe
 
         # TODO: Should have consistent order here with the scetlib correction function
         add_massweights_hist(results, df, axes, cols, proc=dataset_name, base_name=base_name)
+        if args.widthVariations:
+            add_widthweights_hist(results, df, axes, cols, proc=dataset_name, base_name=base_name)
 
     return df

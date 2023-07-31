@@ -29,7 +29,7 @@ from scripts.analysisTools.plotUtils.utility import *
 sys.path.append(os.getcwd())
 
 def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
-                         lumi="", ptRangeProjection=(0,-1), chargeLabel="",
+                         lumi=None, ptRangeProjection=(0,-1), chargeLabel="",
                          canvas=None, canvasWide=None, canvas1D=None,
                          colors=None, legEntries=None, isPseudoData=False,
                          ratioRange=None):
@@ -133,7 +133,7 @@ def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
     hMCstat = copy.deepcopy(den2D.Clone("hMCstat"))
     hMCstat.SetTitle("Sum of predicted processes")
     ROOT.wrem.makeHistStatUncertaintyRatio(hMCstat, den2D)
-    drawCorrelationPlot(hMCstat, xAxisName, yAxisName, "#sqrt{#sum w^{2}} / #sqrt{N}::1.0,1.5",
+    drawCorrelationPlot(hMCstat, xAxisName, yAxisName, "#sqrt{#sum w^{2}} / #sqrt{N}",
                         f"MCstatOverPoissonUncRatio_allProcs_{chargeLabel}", plotLabel="ForceTitle", outdir=outdir_dataMC,
                         palette=57, passCanvas=canvas, drawOption="COLZ0", skipLumi=True, zTitleOffSet=1.3)
     for h in hmc2D:
@@ -200,7 +200,6 @@ def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
                   leftMargin=0.05,rightMargin=0.01,lumi=lumi, 
                   drawVertLines="{a},{b}".format(a=recoBins.Npt,b=recoBins.Neta),
                   textForLines=ptBinRanges, ytextOffsetFromTop=0.3, textSize=0.04, textAngle=30, drawLineTopPanel=1.0)
-                       
 
     allHists = hmc2D + [hdata2D]
     hdata2D.SetTitle(f"{dataTitle} {chargeLabel}")
@@ -214,7 +213,7 @@ def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
     drawTH1dataMCstack(hdata_unrolled, stack_unrolled, XlabelUnroll, YlabelUnroll, cnameUnroll,
                        outdir_dataMC, leg_unrolled, ratioPadYaxisNameTmp=f"{dataTitle}/pred{ratioRangeStr}",
                        passCanvas=canvasWide,
-                       wideCanvas=True, leftMargin=0.05,rightMargin=0.02,lumi=lumi, 
+                       wideCanvas=True, leftMargin=0.05,rightMargin=0.01,lumi=lumi, 
                        drawVertLines="{a},{b}".format(a=recoBins.Npt,b=recoBins.Neta),
                        textForLines=ptBinRanges, etaptbinning=binning, noLegendRatio=True, textSize=0.04, textAngle=30,
                        #noRatioPanel=True
@@ -266,7 +265,7 @@ if __name__ == "__main__":
         nomihists = {}
         infile = safeOpenFile(fname)
         for proc in processes:
-            nomihists[proc] = safeGetObject(infile, f"x_{proc}_{charge}", detach=True)
+            nomihists[proc] = safeGetObject(infile, f"{proc}/x_{proc}_{charge}", detach=True) # process name as subfolder
         if args.pseudodata:
             nomihists["Data"] = safeGetObject(infile, f"{args.pseudodata}_{charge}", detach=True)
         infile.Close()
