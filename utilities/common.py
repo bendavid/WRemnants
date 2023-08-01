@@ -53,8 +53,16 @@ axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, nam
 down_up_axis = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "downUpVar")
 down_nom_up_axis = hist.axis.Regular(3, -1.5, 1.5, underflow=False, overflow=False, name = "downNomUpVar")
 
-axis_passIso = hist.axis.Boolean(name = "passIso")
-axis_passMT = hist.axis.Boolean(name = "passMT")
+passIsoName = "passIso"
+passMTName = "passMT"
+
+passIso = {passIsoName: True}
+failIso = {passIsoName: False}
+passMT = {passMTName: True}
+failMT = {passMTName: False}
+
+axis_passIso = hist.axis.Boolean(name = passIsoName)
+axis_passMT = hist.axis.Boolean(name = passMTName)
 
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
     
@@ -67,8 +75,8 @@ def getIsoMtRegionID(passIso=True, passMT=True):
     return passIso * 1 + passMT * 2
 
 def getIsoMtRegionFromID(regionID):
-    return {"passIso" : regionID & 1,
-            "passMT"  : regionID & 2}
+    return {passIsoName : regionID & 1,
+            passMTName  : regionID & 2}
 
 def common_parser(for_reco_highPU=False):
     parser = argparse.ArgumentParser()
