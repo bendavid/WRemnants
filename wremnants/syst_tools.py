@@ -222,8 +222,8 @@ def define_mass_weights(df, proc):
 
 def add_massweights_hist(results, df, axes, cols, base_name="nominal", proc="", addhelicity=False):
     name = Datagroups.histName(base_name, syst="massWeight"+(proc[0] if len(proc) else proc))
+    mass_axis = hist.axis.StrCategory(massWeightNames(proc=proc), name="massShift")
     if addhelicity:
-        mass_axis = hist.axis.StrCategory(massWeightNames(proc=proc), name="massShift")
         massweightHelicity, massWeight_axes = make_massweight_helper_helicity(mass_axis)
         df = df.Define("massWeight_tensor_wnom_helicity", massweightHelicity, ['massWeight_tensor_wnom', 'helWeight_tensor'])
         massWeight = df.HistoBoost(name, axes, [*cols, "massWeight_tensor_wnom_helicity"],
@@ -231,7 +231,7 @@ def add_massweights_hist(results, df, axes, cols, base_name="nominal", proc="", 
                                    storage=hist.storage.Double())
     else:
         massWeight = df.HistoBoost(name, axes, [*cols, "massWeight_tensor_wnom"], 
-                                   tensor_axes=[hist.axis.StrCategory(massWeightNames(proc=proc), name="massShift")], 
+                                   tensor_axes=[mass_axis], 
                                    storage=hist.storage.Double())
     results.append(massWeight)
 
@@ -513,7 +513,7 @@ def add_theory_hists(results, df, args, dataset_name, corr_helpers, qcdScaleByHe
     )
     #for hel analysis, ptVgen is part of axes/col
     ## FIXME:
-    ## here should probably not force suing the same ptVgen axis when addhelicity=True
+    ## here should probably not force using the same ptVgen axis when addhelicity=True
     #scale_axes = [*axes, axis_chargeVgen] if addhelicity else [*axes, axis_ptVgen, axis_chargeVgen]
     #scale_cols = [*cols, "chargeVgen"] if addhelicity else [*cols, "ptVgen", "chargeVgen"]
     scale_axes = [*axes, axis_ptVgen, axis_chargeVgen]

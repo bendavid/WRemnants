@@ -16,7 +16,7 @@ import lz4.frame
 import time
 from functools import partial
 from scipy.interpolate import RegularGridInterpolator
-from utilities import boostHistHelpers as hh, output_tools, logging
+from utilities import boostHistHelpers as hh, common, output_tools, logging
 
 ## safe batch mode
 import sys
@@ -26,6 +26,8 @@ import ROOT
 sys.argv = args
 ROOT.gROOT.SetBatch(True)
 ROOT.PyConfig.IgnoreCommandLineOptions = True
+
+data_dir = common.data_dir
 
 from scripts.analysisTools.plotUtils.utility import *
 
@@ -429,20 +431,21 @@ if __name__ == "__main__":
             logger.info(f"Adding pkl.lz4 extension for output file name {args.outfilename}")
             args.outfilename += ".pkl.lz4"
 
-    inputRootFile = {"iso"          : "/home/m/mciprian/isolation3DSFUT.root",
-                     "isonotrig"    : "/home/m/mciprian/isonotrigger3DSFVQT.root",
-                     "isoantitrig"  : "/home/m/mciprian/isofailtrigger3DSFVQT.root",
-                     "triggerplus"  : "/home/m/mciprian/triggerplus3DSFUT.root",
-                     "triggerminus"  : "/home/m/mciprian/triggerminus3DSFUT.root",
+    sfFolder = data_dir + "/testMuonSF/"
+    inputRootFile = {"iso"          : f"{sfFolder}isolation3DSFUT.root",
+                     "isonotrig"    : f"{sfFolder}isonotrigger3DSFVQT.root",
+                     "isoantitrig"  : f"{sfFolder}isofailtrigger3DSFVQT.root",
+                     "triggerplus"  : f"{sfFolder}triggerplus3DSFUT.root",
+                     "triggerminus"  : f"{sfFolder}triggerminus3DSFUT.root",
                      }
 
     if args.extended:
         args.outfilename = args.outfilename.replace(".pkl.lz4", "_extended.pkl.lz4")
-        inputRootFile = {"iso"          : "/home/m/mciprian/iso3DSFVQTextended.root",
-                         "isonotrig"    : "/home/m/mciprian/isonotrigger3DSFVQTextended.root",
-                         "isoantitrig"  : "/home/m/mciprian/isofailtrigger3DSFVQTextended.root",
-                         "triggerplus"  : "/home/m/mciprian/triggerplus3DSFVQTextended.root",
-                         "triggerminus"  : "/home/m/mciprian/triggerminus3DSFVQTextended.root",
+        inputRootFile = {"iso"          : f"{sfFolder}iso3DSFVQTextended.root",
+                         "isonotrig"    : f"{sfFolder}isonotrigger3DSFVQTextended.root",
+                         "isoantitrig"  : f"{sfFolder}isofailtrigger3DSFVQTextended.root",
+                         "triggerplus"  : f"{sfFolder}triggerplus3DSFVQTextended.root",
+                         "triggerminus"  : f"{sfFolder}triggerminus3DSFVQTextended.root",
                          }
 
         
