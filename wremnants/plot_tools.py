@@ -6,6 +6,7 @@ from matplotlib import patches
 from matplotlib.ticker import StrMethodFormatter # for setting number of decimal places on tick labels
 from utilities import boostHistHelpers as hh,common,output_tools,logging
 from wremnants import histselections as sel
+import hist
 import math
 import numpy as np
 import re
@@ -185,8 +186,11 @@ def makeStackPlotWithRatio(
 
         # need to divide by bin width
         binwidth = axis[1:]-axis[:-1]
-        nom = combine_result[f"expfull_{fittype}"].to_hist().values() / binwidth
-        std = np.sqrt(combine_result[f"expfull_{fittype}"].to_hist().variances()) / binwidth
+        hexp = combine_result[f"expfull_{fittype}"].to_hist()
+        if hexp.storage_type != hist.storage.Weight:
+            raise ValueError(f"Did not find uncertainties in {fittype} hist. Make sure you run combinetf with --computeHistErrors!")
+        nom = hexp.values() / binwidth
+        std = np.sqrt(hexp.variances()) / binwidth
 
         hatchstyle = '///'
         ax1.fill_between(axis, 

@@ -8,7 +8,7 @@ logger = logging.child_logger(__name__)
 class TheoryHelper(object):
     valid_np_models = ["Lambda", "Omega", "Delta_Lambda", "Delta_Omega", "binned_Omega", "none"]
     def __init__(self, card_tool):
-        for group in ['signal_samples', 'signal_samples_inctau',]:
+        for group in ['signal_samples', 'signal_samples_inctau', 'single_v_samples']:
             if group not in card_tool.procGroups:
                 raise ValueError(f"Must define '{group}' procGroup in CardTool for theory uncertainties")
         
