@@ -737,42 +737,47 @@ public:
         correctionHist_(std::make_shared<const T>(std::move(corrections))) {}
 
     out_tensor_t operator() (
-        double genQop, float genEta,
-        double recoQop, float recoEta, int recoCharge, double recoPt,  
-        const RVec<float> &cov, double nominal_weight = 1.0,
+        const RVec<double> &genQops,
+        const RVec<double> &recoQops,
+        const RVec<float> &recoEtas,
+        const RVec<int> &recoCharges,
+        const RVec<double> &recoPts,  
+        const RVec<RVec<float>> &covs,
+        double nominal_weight = 1.0,
         int calVarFlags = 7   //A = 1, e = 2, M = 4
     ) {
-        const unsigned int iEta = std::clamp(
-            correctionHist_ -> template axis<0>().index(recoEta), 0, (int)NEtaBins - 1
-        ); // clip under/overflow bins 
-        const auto &params = correctionHist_->at(iEta).data();
-        const double sigma2Qop = cov[0];
-
-        double recoK = 1.0 /recoPt;
-        double recoKUnc = 0.0;
-        enum calVarFlagsScheme {AFlag = 1, eFlag = 2, MFlag = 4};
-        if (calVarFlags & AFlag) {
-            const double AUnc = params(0);
-            recoKUnc += AUnc * recoK;
-        }
-        if (calVarFlags & eFlag) {
-            const double eUnc = params(1);
-            recoKUnc += -1.0 * eUnc * recoK * recoK;
-        }
-        if (calVarFlags & MFlag) {
-            const double MUnc = params(2);
-            recoKUnc += recoCharge * MUnc;
-        }
-        double recoQopUnc = recoCharge * std::sin(calculateTheta(recoEta)) * recoKUnc;
-
         out_tensor_t res;
         res.setConstant(nominal_weight);
-        out_tensor_chip_t smearing_weight = \
-            calculateSmearingWeightsDownUp(genQop, recoQop, recoQopUnc, sigma2Qop);
-        res(iEta, 0) *= smearing_weight(0);
-        res(iEta, 1) *= smearing_weight(1);
 
-
+        for (std::size_t i = 0; i < recoPts.size(); ++i) {
+            const unsigned int iEta = std::clamp(
+                correctionHist_ -> template axis<0>().index(recoEtas[i]), 0, (int)NEtaBins - 1
+            ); // clip under/overflow bins 
+            const auto &params = correctionHist_->at(iEta).data();
+            const double sigma2Qop = covs[i][0];
+    
+            double recoK = 1.0 /recoPts[i];
+            double recoKUnc = 0.0;
+            enum calVarFlagsScheme {AFlag = 1, eFlag = 2, MFlag = 4};
+            if (calVarFlags & AFlag) {
+                const double AUnc = params(0);
+                recoKUnc += AUnc * recoK;
+            }
+            if (calVarFlags & eFlag) {
+                const double eUnc = params(1);
+                recoKUnc += -1.0 * eUnc * recoK * recoK;
+            }
+            if (calVarFlags & MFlag) {
+                const double MUnc = params(2);
+                recoKUnc += recoCharges[i] * MUnc;
+            }
+            double recoQopUnc = recoCharges[i] * std::sin(calculateTheta(recoEtas[i])) * recoKUnc;
+    
+            out_tensor_chip_t smearing_weight = \
+                calculateSmearingWeightsDownUp(genQops[i], recoQops[i], recoQopUnc, sigma2Qop);
+            res(iEta, 0) *= smearing_weight(0);
+            res(iEta, 1) *= smearing_weight(1);
+        }
         return res;
     }
 private:
@@ -780,6 +785,7 @@ private:
 };
 
 // the parametrized Z non-closure helper without the de-correlation in output nuisances
+// TODO: vectorize the helper for multiple muons
 template <typename T, size_t NEtaBins>
 class ZNonClosureParametrizedHelperCorl {
 
@@ -792,37 +798,44 @@ public:
         correctionHist_(std::make_shared<const T>(std::move(corrections))) {}
 
     out_tensor_t operator() (
-        double genQop, float genEta,
-        double recoQop, float recoEta, int recoCharge, double recoPt,  
-        const RVec<float> &cov, double nominal_weight = 1.0,
+        const RVec<double> &genQops,
+        const RVec<double> &recoQops,
+        const RVec<float> &recoEtas,
+        const RVec<int> &recoCharges,
+        const RVec<double> &recoPts,  
+        const RVec<RVec<float>> &covs,
+        double nominal_weight = 1.0,
         int calVarFlags = 7   //A = 1, e = 2, M = 4
     ) {
-        const unsigned int iEta = std::clamp(
-            correctionHist_ -> template axis<0>().index(recoEta), 0, (int)NEtaBins - 1
-        ); // clip under/overflow bins
-        const auto &params = correctionHist_->at(iEta).data();
-        const double sigma2Qop = cov[0];
-
-        double recoK = 1.0 /recoPt;
-        double recoKUnc = 0.0;
-        enum calVarFlagsScheme {AFlag = 1, eFlag = 2, MFlag = 4};
-        if (calVarFlags & AFlag) {
-            const double AUnc = params(0);
-            recoKUnc += AUnc * recoK;
-        }
-        if (calVarFlags & eFlag) {
-            const double eUnc = params(1);
-            recoKUnc += -1.0 * eUnc * recoK * recoK;
-        }
-        if (calVarFlags & MFlag) {
-            const double MUnc = params(2);
-            recoKUnc += recoCharge * MUnc;
-        }
-        double recoQopUnc = recoCharge * std::sin(calculateTheta(recoEta)) * recoKUnc;
-
         out_tensor_t res;
         res.setConstant(nominal_weight);
-        return res * calculateSmearingWeightsDownUp(genQop, recoQop, recoQopUnc, sigma2Qop);
+
+        for (std::size_t i = 0; i < recoPts.size(); ++i) {
+            const unsigned int iEta = std::clamp(
+                correctionHist_ -> template axis<0>().index(recoEtas[i]), 0, (int)NEtaBins - 1
+            ); // clip under/overflow bins
+            const auto &params = correctionHist_->at(iEta).data();
+            const double sigma2Qop = covs[i][0];
+    
+            double recoK = 1.0 / recoPts[i];
+            double recoKUnc = 0.0;
+            enum calVarFlagsScheme {AFlag = 1, eFlag = 2, MFlag = 4};
+            if (calVarFlags & AFlag) {
+                const double AUnc = params(0);
+                recoKUnc += AUnc * recoK;
+            }
+            if (calVarFlags & eFlag) {
+                const double eUnc = params(1);
+                recoKUnc += -1.0 * eUnc * recoK * recoK;
+            }
+            if (calVarFlags & MFlag) {
+                const double MUnc = params(2);
+                recoKUnc += recoCharges[i] * MUnc;
+            }
+            double recoQopUnc = recoCharges[i] * std::sin(calculateTheta(recoEtas[i])) * recoKUnc;
+            res *= calculateSmearingWeightsDownUp(genQops[i], recoQops[i], recoQopUnc, sigma2Qop);
+        }
+        return res;
     }
 
 private:
@@ -842,26 +855,33 @@ public:
 
     // smaering weights for Z non-closure number on pt 
     out_tensor_t operator() (
-        double genQop, float genPt, float genEta, int genCharge,
-        double recoQop, double recoPt, float recoEta, int recoCharge,
-        const RVec<float> &cov, double nominal_weight = 1.0
+        const RVec<double> &genQops, 
+        const RVec<double> &recoQops,
+        const RVec<double> &recoPts,
+        const RVec<float> &recoEtas,
+        const RVec<int> &recoCharges,
+        const RVec<RVec<float>> &covs,
+        double nominal_weight = 1.0
     ) {
-        const unsigned int iEta = std::clamp(
-            correctionHist_->template axis<0>().index(recoEta), 0, int(NEtaBins) - 1
-        );
-        const unsigned int iPt = std::clamp(
-            correctionHist_->template axis<1>().index(recoPt), 0, int(NPtBins) - 1
-        );
-        const double nonClosure = correctionHist_->at(iEta, iPt).value();
-        const double recoKUnc = (nonClosure - 1) * (1 / recoPt);
-        const double recoQopUnc = calculateQopUnc(recoEta, recoCharge, recoKUnc);
-        const double sigma2Qop = cov[0];
         out_tensor_t res;
         res.setConstant(nominal_weight);
-        out_tensor_chip_t smearing_weight = \
-            calculateSmearingWeightsDownUp(genQop, recoQop, recoQopUnc, sigma2Qop);
-        res(iEta, iPt, 0) *= smearing_weight(0);
-        res(iEta, iPt, 1) *= smearing_weight(1);
+
+        for (std::size_t i = 0; i < recoPts.size(); ++i) {
+            const unsigned int iEta = std::clamp(
+                correctionHist_->template axis<0>().index(recoEtas[i]), 0, int(NEtaBins) - 1
+            );
+            const unsigned int iPt = std::clamp(
+                correctionHist_->template axis<1>().index(recoPts[i]), 0, int(NPtBins) - 1
+            );
+            const double nonClosure = correctionHist_->at(iEta, iPt).value();
+            const double recoKUnc = (nonClosure - 1) * (1 / recoPts[i]);
+            const double recoQopUnc = calculateQopUnc(recoEtas[i], recoCharges[i], recoKUnc);
+            const double sigma2Qop = covs[i][0];
+            out_tensor_chip_t smearing_weight = \
+                calculateSmearingWeightsDownUp(genQops[i], recoQops[i], recoQopUnc, sigma2Qop);
+            res(iEta, iPt, 0) *= smearing_weight(0);
+            res(iEta, iPt, 1) *= smearing_weight(1);
+        }
         return res;
     }
 
@@ -870,6 +890,7 @@ private:
 };
 
 // the binned Z non-closure helper without the de-correlation in output nuisances
+// TODO: vectorize the helper for multiple muons
 template <typename T, size_t NEtaBins, size_t NPtBins>
 class ZNonClosureBinnedHelperCorl {
 
@@ -882,24 +903,31 @@ public:
 
     // smaering weights for Z non-closure number on pt 
     out_tensor_t operator() (
-        double genQop, float genPt, float genEta, int genCharge,
-        double recoQop, double recoPt, float recoEta, int recoCharge,
-        const RVec<float> &cov, double nominal_weight = 1.0
+        const RVec<double> &genQops, 
+        const RVec<double> &recoQops,
+        const RVec<double> &recoPts,
+        const RVec<float> &recoEtas,
+        const RVec<int> &recoCharges,
+        const RVec<RVec<float>> &covs,
+        double nominal_weight = 1.0
     ) {
-        const unsigned int iEta = std::clamp(
-            correctionHist_->template axis<0>().index(recoEta), 0, int(NEtaBins) - 1
-        );
-        const unsigned int iPt = std::clamp(
-            correctionHist_->template axis<1>().index(recoPt), 0, int(NPtBins) - 1
-        );
-        const double nonClosure = correctionHist_->at(iEta, iPt).value();
-        const double recoKUnc = (nonClosure - 1) * (1 / recoPt);
-        const double recoQopUnc = calculateQopUnc(recoEta, recoCharge, recoKUnc);
-        const double sigma2Qop = cov[0];
-
         out_tensor_t res;
         res.setConstant(nominal_weight);
-        return res * calculateSmearingWeightsDownUp(genQop, recoQop, recoQopUnc, sigma2Qop);
+
+        for (std::size_t i = 0; i < recoPts.size(); ++i) {
+            const unsigned int iEta = std::clamp(
+                correctionHist_->template axis<0>().index(recoEtas[i]), 0, int(NEtaBins) - 1
+            );
+            const unsigned int iPt = std::clamp(
+                correctionHist_->template axis<1>().index(recoPts[i]), 0, int(NPtBins) - 1
+            );
+            const double nonClosure = correctionHist_->at(iEta, iPt).value();
+            const double recoKUnc = (nonClosure - 1) * (1 / recoPts[i]);
+            const double recoQopUnc = calculateQopUnc(recoEtas[i], recoCharges[i], recoKUnc);
+            const double sigma2Qop = covs[i][0];
+            res *= calculateSmearingWeightsDownUp(genQops[i], recoQops[i], recoQopUnc, sigma2Qop);
+        }
+        return res;
     }
 
 private:

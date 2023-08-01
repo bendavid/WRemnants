@@ -511,13 +511,12 @@ def build_graph(df, dataset):
                     df = df.DefinePerSample("AFlag", "0x01")
                     df = df.Define("Z_non_closure_parametrized_A", z_non_closure_parametrized_helper,
                         [
-                            f"{reco_sel_GF}_qop0_gen",
-                            f"{reco_sel_GF}_eta0_gen",
-                            f"{reco_sel_GF}_qop0_gen_smeared",
-                            f"{reco_sel_GF}_eta0_gen_smeared",
-                            f"{reco_sel_GF}_charge0_gen_smeared",
-                            f"{reco_sel_GF}_pt0_gen_smeared",
-                            f"{reco_sel_GF}_covMat0",
+                            f"{reco_sel_GF}_genQop",
+                            f"{reco_sel_GF}_genSmearedQop",
+                            f"{reco_sel_GF}_genSmearedEta",
+                            f"{reco_sel_GF}_genSmearedCharge",
+                            f"{reco_sel_GF}_genSmearedPt",
+                            f"{reco_sel_GF}_covMat",
                             "nominal_weight",
                             "AFlag"
                         ]
@@ -534,13 +533,12 @@ def build_graph(df, dataset):
                     df = df.DefinePerSample("MFlag", "0x04")
                     df = df.Define("Z_non_closure_parametrized_M", z_non_closure_parametrized_helper,
                         [
-                            f"{reco_sel_GF}_qop0_gen",
-                            f"{reco_sel_GF}_eta0_gen",
-                            f"{reco_sel_GF}_qop0_gen_smeared",
-                            f"{reco_sel_GF}_eta0_gen_smeared",
-                            f"{reco_sel_GF}_charge0_gen_smeared",
-                            f"{reco_sel_GF}_pt0_gen_smeared",
-                            f"{reco_sel_GF}_covMat0",
+                            f"{reco_sel_GF}_genQop",
+                            f"{reco_sel_GF}_genSmearedQop",
+                            f"{reco_sel_GF}_genSmearedEta",
+                            f"{reco_sel_GF}_genSmearedCharge",
+                            f"{reco_sel_GF}_genSmearedPt",
+                            f"{reco_sel_GF}_covMat",
                             "nominal_weight",
                             "MFlag"
                         ]
@@ -557,16 +555,16 @@ def build_graph(df, dataset):
                     df = df.DefinePerSample("AMFlag", "0x01 | 0x04")
                     df = df.Define("Z_non_closure_parametrized", z_non_closure_parametrized_helper,
                         [
-                            f"{reco_sel_GF}_qop0_gen",
-                            f"{reco_sel_GF}_eta0_gen",
-                            f"{reco_sel_GF}_qop0_gen_smeared",
-                            f"{reco_sel_GF}_eta0_gen_smeared",
-                            f"{reco_sel_GF}_charge0_gen_smeared",
-                            f"{reco_sel_GF}_pt0_gen_smeared",
-                            f"{reco_sel_GF}_covMat0",
+                            f"{reco_sel_GF}_genQop",
+                            f"{reco_sel_GF}_genSmearedQop",
+                            f"{reco_sel_GF}_genSmearedEta",
+                            f"{reco_sel_GF}_genSmearedCharge",
+                            f"{reco_sel_GF}_genSmearedPt",
+                            f"{reco_sel_GF}_covMat",
                             "nominal_weight",
                             "AMFlag"
-                        ])
+                        ]
+                    )
                     hist_Z_non_closure_parametrized = df.HistoBoost(
                         "Z_non_closure_parametrized_gensmear",
                         nominal_axes,
@@ -578,14 +576,11 @@ def build_graph(df, dataset):
                 if args.nonClosureScheme in ["binned", "binned-plus-M"]:
                     df = df.Define("Z_non_closure_binned", z_non_closure_binned_helper,
                         [
-                            f"{reco_sel_GF}_qop0_gen",
-                            f"{reco_sel_GF}_pt0_gen",
-                            f"{reco_sel_GF}_eta0_gen",
-                            f"{reco_sel_GF}_charge0_gen",
-                            f"{reco_sel_GF}_qop0_gen_smeared",
-                            f"{reco_sel_GF}_pt0_gen_smeared",
-                            f"{reco_sel_GF}_eta0_gen_smeared",
-                            f"{reco_sel_GF}_charge0_gen_smeared",
+                            f"{reco_sel_GF}_genQop",
+                            f"{reco_sel_GF}_genSmearedQop",
+                            f"{reco_sel_GF}_genSmearedPt",
+                            f"{reco_sel_GF}_genSmearedEta",
+                            f"{reco_sel_GF}_genSmearedCharge",
                             f"{reco_sel_GF}_covMat0",
                             "nominal_weight"
                         ]

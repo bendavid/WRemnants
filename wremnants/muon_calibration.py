@@ -313,8 +313,6 @@ def make_Z_non_closure_binned_helper(
             hist.axis.Regular(n_pt_bins, 0, n_pt_bins, name = 'unc_ipt'),
             common.down_up_axis
         )
-        print("tensor axes is: ++++++++++++++++++++++++++++++")
-        print(z_non_closure_helper.tensor_axes)
         return z_non_closure_helper
 
 # returns the cov mat of only scale parameters in eta bins, in the form of a 2D numpy array
