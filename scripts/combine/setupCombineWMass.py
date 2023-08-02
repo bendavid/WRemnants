@@ -41,6 +41,9 @@ def make_parser(parser=None):
     parser.add_argument("--genModel", action="store_true", help="Produce datacard with the xnorm as model (binned according to axes defined in --fitvar)")
     # TODO: move next option in common.py? 
     parser.add_argument("--absolutePathInCard", action="store_true", help="In the datacard, set Absolute path for the root file where shapes are stored")
+    parser.add_argument("--hdf5", action="store_true", help="Write out datacard in hdf5")
+    parser.add_argument("--sparse", action="store_true", help="Write out datacard in sparse mode (only for when using hdf5)")
+
     return parser
 
 def main(args,xnorm=False):   
@@ -135,7 +138,8 @@ def main(args,xnorm=False):
     cardTool.setNominalTemplate(f"{templateDir}/main.txt")
     if args.absolutePathInCard:
         cardTool.setAbsolutePathShapeInCard()
-    cardTool.setProjectionAxes(args.fitvar)
+    cardTool.setProjectionAxes(["charge", "eta", "pt"])
+    # cardTool.setProjectionAxes(args.fitvar)
     if args.sumChannels or xnorm or name in ["ZMassDilepton"]:
         cardTool.setChannels(["inclusive"])
         cardTool.setWriteByCharge(False)
@@ -217,6 +221,7 @@ def main(args,xnorm=False):
                             mirror=False,
                             #TODO: Name this
                             noConstraint=not constrainMass,
+                            noi=not constrainMass,
                             systAxes=["massShift"],
                             passToFakes=passSystToFakes,
     )
@@ -224,7 +229,10 @@ def main(args,xnorm=False):
     if args.doStatOnly:
         # print a card with only mass weights, no longer need a dummy syst since combinetf is fixed now
         #cardTool.addLnNSystematic("dummy", processes=["Top", "Diboson"] if wmass else ["Other"], size=1.001, group="dummy")
-        cardTool.writeOutput(args=args, xnorm=xnorm)
+        if not args.hdf5:
+            cardTool.writeOutput(args=args, xnorm=xnorm)
+        else:
+            cardTool.writeOutputHDF5(args=args, xnorm=xnorm, sparse=args.sparse)
         logger.info("Using option --doStatOnly: the card was created with only mass nuisance parameter")
         return
 
@@ -409,8 +417,8 @@ def main(args,xnorm=False):
             labelsByAxis=["downUpVar"],
             passToFakes=passSystToFakes,
         )
-        if wmass or wlike:
-            combine_helpers.add_recoil_uncertainty(cardTool, signal_samples, passSystToFakes=passSystToFakes, flavor="mu")
+        # if wmass or wlike:
+        #     combine_helpers.add_recoil_uncertainty(cardTool, signal_samples, passSystToFakes=passSystToFakes, flavor="mu")
 
         if wmass:
             non_closure_scheme = input_tools.args_from_metadata(cardTool, "nonClosureScheme")
@@ -500,7 +508,11 @@ def main(args,xnorm=False):
         else:
             cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
 
-    cardTool.writeOutput(args=args, xnorm=xnorm, forceNonzero=not args.unfolding, check_systs=not args.unfolding)
+    if not args.hdf5:
+        cardTool.writeOutput(args=args, xnorm=xnorm, forceNonzero=not args.unfolding, check_systs=not args.unfolding)
+    else:
+        cardTool.writeOutputHDF5(args=args, xnorm=xnorm, forceNonzero=not args.unfolding, check_systs=not args.unfolding, sparse=args.sparse)
+
     logger.info(f"Output stored in {outfolder}")
     
 if __name__ == "__main__":

@@ -12,6 +12,11 @@ import re
 import hist
 import copy
 
+import h5py
+from utilities.h5pyutils import writeFlatInChunks, writeSparse
+import math
+import pdb
+
 logger = logging.child_logger(__name__)
 
 def notImplemented(operation="Unknown"):
@@ -208,7 +213,7 @@ class CardTool(object):
     # decorrelateByBin is to customize eta-pt decorrelation: pass dictionary with {axisName: [bin edges]}
     def addSystematic(self, name, systAxes, outNames=None, skipEntries=None, labelsByAxis=None, 
                       baseName="", mirror=False, mirrorDownVarEqualToUp=False, mirrorDownVarEqualToNomi=False,
-                      scale=1, processes=None, group=None, noConstraint=False,
+                      scale=1, processes=None, group=None, noi=False, noConstraint=False, noProfile=False,
                       action=None, doActionBeforeMirror=False, actionArgs={}, actionMap={},
                       systNameReplace=[], systNamePrepend=None, groupFilter=None, passToFakes=False,
                       rename=None, splitGroup={}, decorrelateByBin={},
@@ -249,6 +254,7 @@ class CardTool(object):
                 "systAxes" : systAxes,
                 "labelsByAxis" : systAxes if not labelsByAxis else labelsByAxis,
                 "group" : group,
+                "noi": noi,
                 "groupFilter" : groupFilter,
                 "splitGroup" : splitGroup if len(splitGroup) else {group : ".*"}, # dummy dictionary if splitGroup=None, to allow for uniform treatment
                 "scale" : scale,
@@ -261,6 +267,7 @@ class CardTool(object):
                 "actionArgs" : actionArgs,
                 "systNameReplace" : systNameReplace,
                 "noConstraint" : noConstraint,
+                "noProfile" : noProfile,
                 "skipEntries" : [] if not skipEntries else skipEntries,
                 "name" : name,
                 "decorrByBin": decorrelateByBin,
@@ -619,8 +626,8 @@ class CardTool(object):
         self.writeForProcesses(self.nominalName, processes=self.datagroups.groups.keys(), label=self.nominalName, check_systs=check_systs)
         self.loadNominalCard()
         if self.pseudoData and not self.xnorm:
-            self.addPseudodata([x for x in self.datagroups.groups.keys() if x != "Data"],
-                               [x for x in self.datagroups.groups.keys() if x != "Data" and not self.pseudoDataProcsRegexp.match(x)])
+            self.addPseudodata([x for x in self.datagroups.groups.keys() if x != self.dataName],
+                               [x for x in self.datagroups.groups.keys() if x != self.dataName and not self.pseudoDataProcsRegexp.match(x)])
 
         self.writeLnNSystematics()
         for syst in self.systematics.keys():
@@ -644,6 +651,691 @@ class CardTool(object):
         if self.skipHist:
             logger.info("Histograms will not be written because 'skipHist' flag is set to True")
         self.writeCard()
+
+    def writeOutputHDF5(self, args=None, xnorm=False, theoryFit=False,
+        forceNonzero=True, check_systs=True, allowNegativeExpectation=False, 
+        sparse=False, dtype="float64", chunkSize=4*1024**2,
+        logkepsilon=math.log(1e-3), #numerical cutoff in case of zeros in systematic variations
+        clipSystVariations=False,
+        clipSystVariationsSignal=False,
+    ):
+
+        dict_noigroups = {}
+        dict_systgroups = {}
+
+        # the number of systematics is not known before loading the histograms, the systematics are therefore stored in a temporary dict
+        systs = set()
+        systsnoconstraint = set()
+        systsnoprofile = set()
+
+        #list of groups of systematics (nuisances) and lists of indexes
+        systgroups = []
+        systgroupidxs = []
+
+        #list of groups of signal processes by charge
+        chargegroups = []
+        chargegroupidxs = []
+
+        #list of groups of signal processes by polarization
+        polgroups = []
+        polgroupidxs = []
+
+        #list of groups of signal processes by helicity xsec
+        helgroups = []
+        helgroupidxs = []
+
+        #list of groups of signal processes to be summed
+        sumgroups = []
+        sumgroupsegmentids = []
+        sumgroupidxs = []
+
+        #list of groups of signal processes by chargemeta
+        chargemetagroups = []
+        chargemetagroupidxs = []
+
+        #list of groups of signal processes by ratiometa
+        ratiometagroups = []
+        ratiometagroupidxs = []
+
+        #list of groups of signal processes by helmeta
+        helmetagroups = []
+        helmetagroupidxs = []
+
+        #list of groups of signal processes for regularization
+        reggroups = []
+        reggroupidxs = []
+
+        poly1dreggroups = []
+        poly1dreggroupfirstorder = []
+        poly1dreggrouplastorder = []
+        poly1dreggroupnames = []
+        poly1dreggroupbincenters = []
+
+        poly2dreggroups = []
+        poly2dreggroupfirstorder = []
+        poly2dreggrouplastorder = []
+        poly2dreggroupfullorder = []
+        poly2dreggroupnames = []
+        poly2dreggroupbincenters0 = []
+        poly2dreggroupbincenters1 = []
+
+        #list of groups of systematics to be treated as additional outputs for impacts, etc (aka "nuisances of interest")
+        noigroups = []
+        noigroupidxs = []
+
+        #list of channels, ordered such that masked channels are last, right now, only one channel is supported
+        # TODO support multiple channels
+        chans = [self.nominalName]
+        maskedchans = []
+
+        if xnorm:
+            chans.append("xnorm")
+            maskedchans.append("xnorm")
+
+        signals = self.unconstrainedProcesses
+        bkgs = [p for p in self.predictedProcesses() if p not in self.unconstrainedProcesses]
+        procs = list(sorted(signals)) + list(sorted(bkgs))
+        nproc = len(procs)
+
+        dict_norm = {c : {} for c in chans}
+        dict_logkavg = {c : {} for c in chans}
+        dict_logkhalfdiff = {c : {} for c in chans}
+
+        # load data and nominal ans syst histograms
+        self.datagroups.loadHistsForDatagroups(
+            baseName=self.nominalName, syst=self.nominalName,
+            procsToRead=self.datagroups.groups.keys(),
+            label=self.nominalName, 
+            scaleToNewLumi=self.lumiScale, 
+            forceNonzero=forceNonzero)
+
+        data_obs_hist = self.datagroups.groups[self.dataName].hists[self.nominalName]
+        data_axes = data_obs_hist.axes
+        data_obs = data_obs_hist.values(flow=False).flatten().astype(dtype)
+        nbins = len(data_obs)
+
+        nbinsfull = nbins
+        if xnorm:
+            nbinsfull += 1
+
+        sumw = np.zeros([nbins], dtype)
+        sumw2 = np.zeros([nbins], dtype)
+
+        #keep track of bins per channel
+        ibins = []
+        
+        #nominal histograms
+        for chan in chans:
+
+            if not chan in maskedchans:                
+                nbinschan = nbins
+
+                if theoryFit:
+                    pass
+                    # TODO
+                    # data_cov_chan_hist = MB.getShape(chan,options.covname)
+                    # data_cov_chan = hist2array(data_cov_chan_hist, include_overflow=False).astype(dtype)
+                    # data_cov_chan_hist.Delete()
+                    # #write to output array (block-diagonal for now)
+                    # data_cov[ibin:ibin+nbinschan,ibin:ibin+nbinschan] = data_cov_chan
+                    # data_cov_chan = None
+            else:
+                nbinschan = 1
+            ibins.append(nbinschan)
+
+            for proc in procs:
+                logger.debug(f"Now at process {proc}")
+                
+                # nominal histograms of prediction
+                norm_proc_hist = self.datagroups.groups[proc].hists[chan]
+                norm_proc = norm_proc_hist.values(flow=False).flatten().astype(dtype)
+
+                if not chan in maskedchans:                
+                    if data_axes != norm_proc_hist.axes:
+                        raise Exception(f"Mismatch between data axes {data_axes} ({nbins} bins) and {proc} axes {norm_proc_hist.axes} ({len(norm_proc)} bins)")
+
+                    # check if variances are available
+                    if norm_proc_hist.storage_type != hist.storage.Weight:
+                        raise RuntimeError(f"Sumw2 not filled for {proc} but needed for binByBin uncertainties")
+
+                    sumw2_proc = norm_proc_hist.variances(flow=False).flatten().astype(dtype)
+                else:
+                    if norm_proc.shape[0] != nbinschan:
+                        raise Exception("Mismatch between number of bins in channel for data and template")
+
+                if not allowNegativeExpectation:
+                    norm_proc = np.maximum(norm_proc, 0.)
+
+                if not chan in maskedchans:                
+                    sumw += norm_proc
+                    sumw2 += sumw2_proc
+                    sumw2_proc = None
+
+                dict_norm[chan][proc] = norm_proc
+
+            dict_logkavg[chan] = {p : {} for p in procs}
+            dict_logkhalfdiff[chan] = {p : {} for p in procs}
+
+            # lnN systematics
+            for name, syst in self.lnNSystematics.items():
+                logger.debug(f"Now at lnN systematic {name}")
+
+                if self.isExcludedNuisance(name): 
+                    continue
+
+                ksyst = syst["size"]
+                if type(ksyst) is list:
+                    ksystup = ksyst[1]
+                    ksystdown = ksyst[0]
+                    if ksystup == 0. and ksystdown==0.:
+                        continue
+                    if ksystup == 0.:
+                        ksystup = 1.
+                    if ksystdown == 0.:
+                        ksystdown = 1.
+                    logkup_proc = math.log(ksystup)*np.ones([nbins],dtype=dtype)
+                    logkdown_proc = -math.log(ksystdown)*np.ones([nbins],dtype=dtype)
+                    logkavg_proc = 0.5*(logkup_proc + logkdown_proc)
+                    logkhalfdiff_proc = 0.5*(logkup_proc - logkdown_proc)
+                    logkup_proc = None
+                    logkdown_proc = None
+                else:
+                    if ksyst == 0.:
+                        continue
+                    logkavg_proc = math.log(ksyst)*np.ones([nbins],dtype=dtype)
+                    logkhalfdiff_proc = np.zeros([nbins],dtype=dtype)
+
+                for proc in syst['processes']:
+                    logger.debug(f"Now at proc {proc}!")
+
+                    # save for later
+                    dict_logkavg[chan][proc][name] = logkavg_proc
+                    dict_logkhalfdiff[chan][proc][name] = logkhalfdiff_proc
+
+                systs.add(name)
+
+            # shape systematics
+            for systKey, syst in self.systematics.items():
+                if self.isExcludedNuisance(systKey): 
+                    continue
+                systName = systKey if not syst["name"] else syst["name"]
+
+                logger.debug(f"Now at shape systematic group {systKey}")
+
+                self.datagroups.loadHistsForDatagroups(
+                    chan, systName, label="syst",
+                    procsToRead=syst["processes"], 
+                    forceNonzero=forceNonzero and systName != "qcdScaleByHelicity",
+                    preOpMap=syst["actionMap"], preOpArgs=syst["actionArgs"],
+                    # Needed to avoid always reading the variation for the fakes, even for procs not specified
+                    forceToNominal=[x for x in self.datagroups.getProcNames() if x not in 
+                        self.datagroups.getProcNames([p for p in syst["processes"] if p != "Fake"])],
+                    scaleToNewLumi=self.lumiScale,
+                )
+                for proc in syst['processes']:
+                    logger.debug(f"Now at proc {proc}!")
+
+                    hnom = self.datagroups.groups[proc].hists[chan]
+                    hvar = self.datagroups.groups[proc].hists["syst"]
+
+                    if syst["doActionBeforeMirror"] and syst["action"]:
+                        logger.debug(f"Do action before mirror")
+                        hvar = syst["action"](hvar, **syst["actionArgs"])
+                    if syst["decorrByBin"]:
+                        raise NotImplementedError("By bin decorrelation is not supported for writing output in hdf5")
+
+                    var_map = self.systHists(hvar, systKey)
+                    var_names = [x[:-2] if "Up" in x[-2:] else (x[:-4] if "Down" in x[-4:] else x) 
+                        for x in filter(lambda x: x != "", var_map.keys())]
+                    # Deduplicate while keeping order
+                    var_names = list(dict.fromkeys(var_names))
+                    norm_proc = dict_norm[chan][proc]
+                    for var_name in var_names:
+                        kfac = syst["scale"]
+
+                        if syst["mirror"]:
+                            syst_proc_hist = var_map[var_name]
+                            syst_proc = syst_proc_hist.values(flow=False).flatten().astype(dtype)
+
+                            if data_axes != syst_proc_hist.axes:
+                                raise Exception(f"Mismatch between data axes {data_axes} ({nbinschan} bins) and {proc} axes {syst_proc_hist.axes} ({len(syst_proc)} bins)")
+
+                            logkup_proc = kfac*np.log(syst_proc/norm_proc)
+                            # check if there is a sign flip between systematic and variation
+                            # we do a multiplicative mirroring, if the up variation is on the same side as nominal, also the down variation is
+                            logkup_proc = np.where(np.equal(np.sign(norm_proc*syst_proc),1), logkup_proc, logkepsilon*np.ones_like(logkup_proc))
+                            logkdown_proc = np.where(np.equal(np.sign(norm_proc*syst_proc),1), logkup_proc, -logkepsilon*np.ones_like(logkup_proc))
+                            syst_proc = None
+                        else:
+                            systup_proc_hist = var_map[var_name+"Up"]
+                            systdown_proc_hist = var_map[var_name+"Down"]
+                            systup_proc = systup_proc_hist.values(flow=False).flatten().astype(dtype)
+                            systdown_proc = systdown_proc_hist.values(flow=False).flatten().astype(dtype)
+
+                            if data_axes != systup_proc_hist.axes:
+                                raise Exception(f"Mismatch between data axes {data_axes} ({nbinschan} bins) and {proc} axes {systup_proc_hist.axes} ({len(systup_proc)} bins)")
+                            if data_axes != systdown_proc_hist.axes:
+                                raise Exception(f"Mismatch between data axes {data_axes} ({nbinschan} bins) and {proc} axes {systdown_proc_hist.axes} ({len(systdown_proc)} bins)")
+
+                            logkup_proc = kfac*np.log(systup_proc/norm_proc)
+                            logkdown_proc = -kfac*np.log(systdown_proc/norm_proc)
+                            logkup_proc = np.where(np.equal(np.sign(norm_proc*systup_proc),1), logkup_proc, logkepsilon*np.ones_like(logkup_proc))
+                            logkdown_proc = np.where(np.equal(np.sign(norm_proc*systdown_proc),1), logkdown_proc, -logkepsilon*np.ones_like(logkdown_proc))
+                            systup_proc = None
+                            systdown_proc = None
+
+                        if clipSystVariations>0.:
+                            cliplow = -np.abs(np.log(clipSystVariations))
+                            cliphigh = np.abs(np.log(clipSystVariations))
+                            logkup_proc = np.clip(logkup_proc,cliplow,cliphigh)
+                            logkdown_proc = np.clip(logkdown_proc,cliplow,cliphigh)
+                            
+                        if clipSystVariationsSignal>0. and proc in signals:
+                            cliplow = -np.abs(np.log(clipSystVariationsSignal))
+                            cliphigh = np.abs(np.log(clipSystVariationsSignal))
+                            logkup_proc = np.clip(logkup_proc,cliplow,cliphigh)
+                            logkdown_proc = np.clip(logkdown_proc,cliplow,cliphigh)
+
+                        logkavg_proc = 0.5*(logkup_proc + logkdown_proc)
+                        logkhalfdiff_proc = 0.5*(logkup_proc - logkdown_proc)
+                        logkup_proc = None
+                        logkdown_proc = None
+
+                        #ensure that systematic tensor is sparse where normalization matrix is sparse
+                        logkavg_proc = np.where(np.equal(norm_proc,0.), 0., logkavg_proc)
+                        logkhalfdiff_proc = np.where(np.equal(norm_proc,0.), 0., logkhalfdiff_proc)
+
+                        # save for later
+                        dict_logkavg[chan][proc][var_name] = logkavg_proc
+                        dict_logkhalfdiff[chan][proc][var_name] = logkhalfdiff_proc
+
+                        systs.add(var_name)
+
+                        if syst['noProfile']:
+                            systsnoprofile.add(var_name)
+                        elif syst["noConstraint"] or syst["noi"]:
+                            systsnoconstraint.add(var_name)
+
+                        group = syst["group"]
+                        if syst["noi"]:
+                            if group not in dict_noigroups:
+                                dict_noigroups[group] = set([var_name])
+                            else:
+                                dict_noigroups[group].add(var_name)
+                        else:
+                            if group not in dict_systgroups:
+                                dict_systgroups[group] = set([var_name])
+                            else:
+                                dict_systgroups[group].add(var_name)
+
+        systs = list(sorted(systs))
+        nsyst = len(systs)
+        systsnoprofile = list(systsnoprofile)
+        systsnoconstraint = list(systsnoconstraint)
+        constraintweights = np.ones([nsyst],dtype=dtype)
+        for syst in systsnoconstraint:
+            constraintweights[systs.index(syst)] = 0.
+
+        for group, members in dict_noigroups.items():
+            noigroups.append(group)
+            noigroupidx = []
+            for syst in members:
+                noigroupidx.append(systs.index(syst))
+            noigroupidxs.append(noigroupidx)
+
+        for group, members in dict_systgroups.items():
+            systgroups.append(group)
+            systgroupidx = []
+            for syst in members:
+                systgroupidx.append(systs.index(syst))
+            systgroupidxs.append(systgroupidx)
+
+        if sparse:
+            logger.info(f"Write out sparse array")
+
+            idxdtype = 'int32'
+            maxsparseidx = max(nbinsfull*nproc,2*nsyst)
+            if maxsparseidx > np.iinfo(idxdtype).max:
+                logger.info("sparse array shapes are too large for index datatype, switching to int64")
+                idxdtype = 'int64'
+
+            norm_sparse_size = 0
+            norm_sparse_indices = np.zeros([norm_sparse_size,2],idxdtype)
+            norm_sparse_values = np.zeros([norm_sparse_size],dtype)
+
+            logk_sparse_size = 0
+            logk_sparse_normindices = np.zeros([logk_sparse_size,1],idxdtype)
+            logk_sparse_systindices = np.zeros([logk_sparse_size,1],idxdtype)
+            logk_sparse_values = np.zeros([logk_sparse_size],dtype)
+
+            ibin = 0
+            for nbinschan, chan in zip(ibins, chans):
+                dict_norm_chan = dict_norm[chan]
+                dict_logkavg_chan = dict_logkavg[chan]
+                dict_logkhalfdiff_chan = dict_logkhalfdiff[chan]
+
+                for iproc, proc in enumerate(procs):
+                    norm_proc = dict_norm_chan[proc]
+
+                    norm_indices = np.transpose(np.nonzero(norm_proc))
+                    norm_values = np.reshape(norm_proc[norm_indices],[-1])
+                        
+                    nvals = len(norm_values)
+                    oldlength = norm_sparse_size
+                    norm_sparse_size = oldlength + nvals
+                    norm_sparse_indices.resize([norm_sparse_size,2])
+                    norm_sparse_values.resize([norm_sparse_size])
+                    
+                    out_indices = np.array([[ibin,iproc]]) + np.pad(norm_indices,((0,0),(0,1)),'constant')
+                    norm_indices = None
+                    
+                    norm_sparse_indices[oldlength:norm_sparse_size] = out_indices
+                    out_indices = None
+                    
+                    norm_sparse_values[oldlength:norm_sparse_size] = norm_values
+                    norm_values = None
+                    
+                    norm_idx_map = np.cumsum(np.not_equal(norm_proc, 0.)) - 1 + oldlength
+
+                    dict_logkavg_proc = dict_logkavg_chan[proc]
+                    dict_logkhalfdiff_proc = dict_logkhalfdiff_chan[proc]
+                    for isyst, syst in enumerate(systs):
+                        if syst not in dict_logkavg_proc.keys():
+                            continue
+
+                        logkavg_proc = dict_logkavg_proc[syst]
+                        logkhalfdiff_proc = dict_logkhalfdiff_proc[syst]
+
+                        logkavg_proc_indices = np.transpose(np.nonzero(logkavg_proc))
+                        logkavg_proc_values = np.reshape(logkavg_proc[logkavg_proc_indices],[-1])
+                        
+                        nvals_proc = len(logkavg_proc_values)
+                        oldlength = logk_sparse_size
+                        logk_sparse_size = oldlength + nvals_proc
+                        logk_sparse_normindices.resize([logk_sparse_size,1])
+                        logk_sparse_systindices.resize([logk_sparse_size,1])
+                        logk_sparse_values.resize([logk_sparse_size])
+
+                        #first dimension of output indices are NOT in the dense [nbin,nproc] space, but rather refer to indices in the norm_sparse vectors
+                        #second dimension is flattened in the [2,nsyst] space, where logkavg corresponds to [0,isyst] flattened to isyst
+                        #two dimensions are kept in separate arrays for now to reduce the number of copies needed later
+                        out_normindices = norm_idx_map[logkavg_proc_indices]
+                        logkavg_proc_indices = None
+                        
+                        logk_sparse_normindices[oldlength:logk_sparse_size] = out_normindices
+                        logk_sparse_systindices[oldlength:logk_sparse_size] = isyst
+                        out_normindices = None
+                        
+                        logk_sparse_values[oldlength:logk_sparse_size] = logkavg_proc_values
+                        logkavg_proc_values = None
+                        
+                        logkhalfdiff_proc_indices = np.transpose(np.nonzero(logkhalfdiff_proc))
+                        logkhalfdiff_proc_values = np.reshape(logkhalfdiff_proc[logkhalfdiff_proc_indices],[-1])
+                                
+                        nvals_proc = len(logkhalfdiff_proc_values)
+                        oldlength = logk_sparse_size
+                        logk_sparse_size = oldlength + nvals_proc
+                        logk_sparse_normindices.resize([logk_sparse_size,1])
+                        logk_sparse_systindices.resize([logk_sparse_size,1])
+                        logk_sparse_values.resize([logk_sparse_size])
+                                
+                        #out_indices = np.array([[ibin,iproc,isyst,1]]) + np.pad(logkhalfdiff_proc_indices,((0,0),(0,3)),'constant')
+                        #first dimension of output indices are NOT in the dense [nbin,nproc] space, but rather refer to indices in the norm_sparse vectors
+                        #second dimension is flattened in the [2,nsyst] space, where logkhalfdiff corresponds to [1,isyst] flattened to nsyst + isyst
+                        #two dimensions are kept in separate arrays for now to reduce the number of copies needed later
+                        out_normindices = norm_idx_map[logkhalfdiff_proc_indices]
+                        logkhalfdiff_proc_indices = None
+                        
+                        logk_sparse_normindices[oldlength:logk_sparse_size] = out_normindices
+                        logk_sparse_systindices[oldlength:logk_sparse_size] = nsyst + isyst
+                        out_normindices = None
+                        
+                        logk_sparse_values[oldlength:logk_sparse_size] = logkhalfdiff_proc_values
+                    logkhalfdiff_proc_values = None        
+    
+                    # free memory
+                    logkavg_proc = None
+                    logkhalfdiff_proc = None
+
+                # free memory
+                norm_proc = None
+                norm_idx_map = None
+
+                ibin += nbinschan
+
+            
+            logger.info(f"Resize and sort sparse arrays into canonical order")
+            #resize sparse arrays to actual length
+            norm_sparse_indices.resize([norm_sparse_size,2])
+            norm_sparse_values.resize([norm_sparse_size])
+            logk_sparse_normindices.resize([logk_sparse_size,1])
+            logk_sparse_systindices.resize([logk_sparse_size,1])
+            logk_sparse_values.resize([logk_sparse_size])
+            
+            #straightforward sorting of norm_sparse into canonical order
+            norm_sparse_dense_shape = (nbinsfull, nproc)
+            norm_sort_indices = np.argsort(np.ravel_multi_index(np.transpose(norm_sparse_indices),norm_sparse_dense_shape))
+            norm_sparse_indices = norm_sparse_indices[norm_sort_indices]
+            norm_sparse_values = norm_sparse_values[norm_sort_indices]
+                
+            #now permute the indices of the first dimension of logk_sparse corresponding to the resorting of norm_sparse
+            
+            #compute the inverse permutation from the sorting of norm_sparse
+            #since the final indices are filled from here, need to ensure it has the correct data type
+            logk_permute_indices = np.argsort(norm_sort_indices).astype(idxdtype)
+            norm_sort_indices = None
+            logk_sparse_normindices = logk_permute_indices[logk_sparse_normindices]
+            logk_permute_indices = None
+            logk_sparse_indices = np.concatenate([logk_sparse_normindices, logk_sparse_systindices],axis=-1)
+            logk_normindices = None
+
+            #now straightforward sorting of logk_sparse into canonical order
+            logk_sparse_dense_shape = (norm_sparse_indices.shape[0], 2*nsyst)
+            logk_sort_indices = np.argsort(np.ravel_multi_index(np.transpose(logk_sparse_indices),logk_sparse_dense_shape))
+            logk_sparse_indices = logk_sparse_indices[logk_sort_indices]
+            logk_sparse_values = logk_sparse_values[logk_sort_indices]
+            logk_sort_indices = None
+
+        else:
+            logger.info(f"Write out dense array")
+            #initialize with zeros, i.e. no variation
+            norm = np.zeros([nbinsfull,nproc], dtype)
+            logk = np.zeros([nbinsfull,nproc,2,nsyst], dtype)
+
+            ibin = 0
+            for nbinschan, chan in zip(ibins, chans):
+                dict_norm_chan = dict_norm[chan]
+                dict_logkavg_chan = dict_logkavg[chan]
+                dict_logkhalfdiff_chan = dict_logkhalfdiff[chan]
+
+                for iproc, proc in enumerate(procs):
+                    norm[ibin:ibin+nbinschan, iproc] = dict_norm_chan[proc]
+
+                    dict_logkavg_proc = dict_logkavg_chan[proc]
+                    dict_logkhalfdiff_proc = dict_logkhalfdiff_chan[proc]
+                    for isyst, syst in enumerate(systs):
+                        if syst not in dict_logkavg_proc.keys():
+                            continue
+
+                        logk[ibin:ibin+nbinschan,iproc,0,isyst] = dict_logkavg_proc[syst]
+                        logk[ibin:ibin+nbinschan,iproc,1,isyst] = dict_logkhalfdiff_proc[syst]
+                        
+                ibin += nbinschan
+
+
+        #free memory
+        # logkavg_proc = None
+        # logkhalfdiff_proc = None
+            
+        #compute poisson parameter for Barlow-Beeston bin-by-bin statistical uncertainties
+        kstat = np.square(sumw)/sumw2
+        #numerical protection to avoid poorly defined constraint
+        kstat = np.where(np.equal(sumw,0.), 1., kstat)
+
+        #write results to hdf5 file
+        procSize = nproc*np.dtype(dtype).itemsize
+        systSize = 2*nsyst*np.dtype(dtype).itemsize
+        amax = np.amax([procSize,systSize])
+        if amax > chunkSize:
+            logger.warning(f"Maximum chunk size in bytes was increased from {chunkSize} to {amax} to align with tensor sizes and allow more efficient reading/writing.")
+            chunkSize = amax
+
+        #create HDF5 file (chunk cache set to the chunk size since we can guarantee fully aligned writes
+        outfilename = self.cardName.replace('_{chan}.txt','.hdf5')
+        if sparse:
+            outfilename = outfilename.replace('.hdf5','_sparse.hdf5')
+        f = h5py.File(outfilename, rdcc_nbytes=chunkSize, mode='w')
+
+        #save some lists of strings to the file for later use
+        hprocs = f.create_dataset("hprocs", [len(procs)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
+        hprocs[...] = procs
+
+        hsignals = f.create_dataset("hsignals", [len(signals)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
+        hsignals[...] = signals
+
+        hsysts = f.create_dataset("hsysts", [len(systs)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
+        hsysts[...] = systs
+
+        hsystsnoprofile = f.create_dataset("hsystsnoprofile", [len(systsnoprofile)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
+        hsystsnoprofile[...] = systsnoprofile
+
+        hsystsnoconstraint = f.create_dataset("hsystsnoconstraint", [len(systsnoconstraint)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
+        hsystsnoconstraint[...] = systsnoconstraint
+
+        hsystgroups = f.create_dataset("hsystgroups", [len(systgroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
+        hsystgroups[...] = systgroups
+
+        hsystgroupidxs = f.create_dataset("hsystgroupidxs", [len(systgroupidxs)], dtype=h5py.special_dtype(vlen=np.dtype('int32')), compression="gzip")
+        hsystgroupidxs[...] = systgroupidxs
+
+        hchargegroups = f.create_dataset("hchargegroups", [len(chargegroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
+        hchargegroups[...] = chargegroups
+
+        hchargegroupidxs = f.create_dataset("hchargegroupidxs", [len(chargegroups),2], dtype='int32', compression="gzip")
+        hchargegroupidxs[...] = chargegroupidxs
+
+        hpolgroups = f.create_dataset("hpolgroups", [len(polgroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
+        hpolgroups[...] = polgroups
+
+        hpolgroupidxs = f.create_dataset("hpolgroupidxs", [len(polgroups),3], dtype='int32', compression="gzip")
+        hpolgroupidxs[...] = polgroupidxs
+
+        hhelgroups = f.create_dataset("hhelgroups", [len(helgroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
+        hhelgroups[...] = helgroups
+
+        hhelgroupidxs = f.create_dataset("hhelgroupidxs", [len(helgroups),6], dtype='int32', compression="gzip")
+        hhelgroupidxs[...] = helgroupidxs
+
+        hsumgroups = f.create_dataset("hsumgroups", [len(sumgroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
+        hsumgroups[...] = sumgroups
+
+        hsumgroupsegmentids = f.create_dataset("hsumgroupsegmentids", [len(sumgroupsegmentids)], dtype='int32', compression="gzip")
+        hsumgroupsegmentids[...] = sumgroupsegmentids
+
+        hsumgroupidxs = f.create_dataset("hsumgroupidxs", [len(sumgroupidxs)], dtype='int32', compression="gzip")
+        hsumgroupidxs[...] = sumgroupidxs
+
+        hchargemetagroups = f.create_dataset("hchargemetagroups", [len(chargemetagroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
+        hchargemetagroups[...] = chargemetagroups
+
+        hchargemetagroupidxs = f.create_dataset("hchargemetagroupidxs", [len(chargemetagroups),2], dtype='int32', compression="gzip")
+        hchargemetagroupidxs[...] = chargemetagroupidxs
+
+        hratiometagroups = f.create_dataset("hratiometagroups", [len(ratiometagroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
+        hratiometagroups[...] = ratiometagroups
+
+        hratiometagroupidxs = f.create_dataset("hratiometagroupidxs", [len(ratiometagroups),2], dtype='int32', compression="gzip")
+        hratiometagroupidxs[...] = ratiometagroupidxs
+
+        hhelmetagroups = f.create_dataset("hhelmetagroups", [len(helmetagroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
+        hhelmetagroups[...] = helmetagroups
+
+        hhelmetagroupidxs = f.create_dataset("hhelmetagroupidxs", [len(helmetagroups),6], dtype='int32', compression="gzip")
+        hhelmetagroupidxs[...] = helmetagroupidxs
+
+        hreggroups = f.create_dataset("hreggroups", [len(reggroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
+        hreggroups[...] = reggroups
+
+        hreggroupidxs = f.create_dataset("hreggroupidxs", [len(reggroupidxs)], dtype=h5py.special_dtype(vlen=np.dtype('int32')), compression="gzip")
+        hreggroupidxs[...] = reggroupidxs
+
+        hpoly1dreggroups = f.create_dataset("hpoly1dreggroups", [len(poly1dreggroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
+        hpoly1dreggroups[...] = poly1dreggroups
+
+        hpoly1dreggroupfirstorder = f.create_dataset("hpoly1dreggroupfirstorder", [len(poly1dreggroupfirstorder)], dtype='int32', compression="gzip")
+        hpoly1dreggroupfirstorder[...] = poly1dreggroupfirstorder
+
+        hpoly1dreggrouplastorder = f.create_dataset("hpoly1dreggrouplastorder", [len(poly1dreggrouplastorder)], dtype='int32', compression="gzip")
+        hpoly1dreggrouplastorder[...] = poly1dreggrouplastorder
+
+        hpoly1dreggroupnames = f.create_dataset("hpoly1dreggroupnames", [len(poly1dreggroupnames)], dtype=h5py.special_dtype(vlen="S256"), compression="gzip")
+        hpoly1dreggroupnames[...] = poly1dreggroupnames
+
+        hpoly1dreggroupbincenters = f.create_dataset("hpoly1dreggroupbincenters", [len(poly1dreggroupbincenters)], dtype=h5py.special_dtype(vlen=np.dtype('float64')), compression="gzip")
+        hpoly1dreggroupbincenters[...] = poly1dreggroupbincenters
+
+        hpoly2dreggroups = f.create_dataset("hpoly2dreggroups", [len(poly2dreggroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
+        hpoly2dreggroups[...] = poly2dreggroups
+
+        hpoly2dreggroupfirstorder = f.create_dataset("hpoly2dreggroupfirstorder", [len(poly2dreggroupfirstorder),2], dtype='int32', compression="gzip")
+        hpoly2dreggroupfirstorder[...] = poly2dreggroupfirstorder
+
+        hpoly2dreggrouplastorder = f.create_dataset("hpoly2dreggrouplastorder", [len(poly2dreggrouplastorder),2], dtype='int32', compression="gzip")
+        hpoly2dreggrouplastorder[...] = poly2dreggrouplastorder
+
+        hpoly2dreggroupfullorder = f.create_dataset("hpoly2dreggroupfullorder", [len(poly2dreggroupfullorder),2], dtype='int32', compression="gzip")
+        hpoly2dreggroupfullorder[...] = poly2dreggroupfullorder
+
+        hpoly2dreggroupnames = f.create_dataset("hpoly2dreggroupnames", [len(poly2dreggroupnames)], dtype=h5py.special_dtype(vlen="S256"), compression="gzip")
+        hpoly2dreggroupnames[...] = poly2dreggroupnames
+
+        hpoly2dreggroupbincenters0 = f.create_dataset("hpoly2dreggroupbincenters0", [len(poly2dreggroupbincenters0)], dtype=h5py.special_dtype(vlen=np.dtype('float64')), compression="gzip")
+        hpoly2dreggroupbincenters0[...] = poly2dreggroupbincenters0
+
+        hpoly2dreggroupbincenters1 = f.create_dataset("hpoly2dreggroupbincenters1", [len(poly2dreggroupbincenters1)], dtype=h5py.special_dtype(vlen=np.dtype('float64')), compression="gzip")
+        hpoly2dreggroupbincenters1[...] = poly2dreggroupbincenters1
+
+        hnoigroups = f.create_dataset("hnoigroups", [len(noigroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
+        hnoigroups[...] = noigroups
+
+        hnoigroupidxs = f.create_dataset("hnoigroupidxs", [len(noigroupidxs)], dtype='int32', compression="gzip")
+        hnoigroupidxs[...] = noigroupidxs
+
+        hmaskedchans = f.create_dataset("hmaskedchans", [len(maskedchans)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
+        hmaskedchans[...] = maskedchans
+
+        #create h5py datasets with optimized chunk shapes
+        nbytes = 0
+
+        nbytes += writeFlatInChunks(constraintweights, f, "hconstraintweights", maxChunkBytes = chunkSize)
+        constraintweights = None
+
+        nbytes += writeFlatInChunks(data_obs, f, "hdata_obs", maxChunkBytes = chunkSize)
+        data_obs = None
+
+        # if theoryFit:
+        #     nbytes += writeFlatInChunks(data_cov, f, "hdata_cov", maxChunkBytes = chunkSize)
+        #     data_cov = None
+
+        nbytes += writeFlatInChunks(kstat, f, "hkstat", maxChunkBytes = chunkSize)
+        kstat = None
+
+        if sparse:
+            nbytes += writeSparse(norm_sparse_indices, norm_sparse_values, norm_sparse_dense_shape, f, "hnorm_sparse", maxChunkBytes = chunkSize)
+            norm_sparse_indices = None
+            norm_sparse_values = None
+            nbytes += writeSparse(logk_sparse_indices, logk_sparse_values, logk_sparse_dense_shape, f, "hlogk_sparse", maxChunkBytes = chunkSize)
+            logk_sparse_indices = None
+            logk_sparse_values = None
+        else:
+            nbytes += writeFlatInChunks(norm, f, "hnorm", maxChunkBytes = chunkSize)
+            norm = None
+            nbytes += writeFlatInChunks(logk, f, "hlogk", maxChunkBytes = chunkSize)
+            logk = None
+
+        logger.info(f"Total raw bytes in arrays = {nbytes}")
+
+
 
         
     def writeCard(self):
@@ -726,7 +1418,7 @@ class CardTool(object):
         procs = systInfo["processes"]
         group = systInfo["group"]
         groupFilter = systInfo["groupFilter"]
-        label = "group" if not systInfo["noConstraint"] else "noiGroup"
+        label = "group" if not systInfo["noi"] else "noiGroup"
         nondata = self.predictedProcesses()
         names = [x[:-2] if "Up" in x[-2:] else (x[:-4] if "Down" in x[-4:] else x) 
                     for x in filter(lambda x: x != "", systInfo["outNames"])]
