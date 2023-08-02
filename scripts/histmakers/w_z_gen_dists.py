@@ -110,7 +110,7 @@ def build_graph(df, dataset):
             massBins = theory_tools.make_ew_binning(mass = 80.3815, width = 2.0904, initialStep=0.010)
         ew_cols = ['ewMll', 'ewLogDeltaM']
         axis_ewMll = hist.axis.Variable(massBins, name = "ewMll")
-        axis_ewLogDeltaM = hist.axis.Regular(100, -5, 5, name = "ewLogDeltaM")
+        axis_ewLogDeltaM = hist.axis.Regular(100, -10, 4, name = "ewLogDeltaM")
         ew_axes = [axis_ewMll, axis_ewLogDeltaM]
         results.append(df.HistoBoost("nominal_ew", ew_axes, [*ew_cols, "nominal_weight"], storage=hist.storage.Weight()))
 

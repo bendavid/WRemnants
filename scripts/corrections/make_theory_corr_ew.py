@@ -2,6 +2,7 @@ import numpy as np
 import mplhep as hep
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
+from matplotlib import cm, ticker
 import lz4.frame
 import pickle
 from wremnants import plot_tools, theory_corrections, theory_tools
@@ -21,7 +22,6 @@ parser.add_argument("--noSmoothing", action="store_true", default=False, help="D
 parser.add_argument("--debug", action='store_true', help="Print debug output")
 parser.add_argument("--outpath", type=str, default=f"{common.data_dir}/TheoryCorrections", help="Output path")
 parser.add_argument("-o", "--plotdir", type=str, help="Output directory for plots")
-parser.add_argument("--logPlots", action='store_true', help="Plot with logarithmic color code")
 
 args = parser.parse_args()
 
@@ -29,6 +29,12 @@ logger = logging.setup_logger("make_theory_corr_ew", 4 if args.debug else 3)
 
 procs = ['ZToMuMu', 'WplusToMuNu', 'WminusToMuNu']
 charge_dict = {'ZToMuMu': 0, 'WplusToMuNu': 1, 'WminusToMuNu': 0}
+
+procs_dict = {
+    "ZToMuMu": "ZmumuPostVFP",
+    "WminusToMuNu": "WminusmunuPostVFP",
+    "WplusToMuNu": "WplusmunuPostVFP",
+}
 
 # file created with `python WRemnants/scripts/histmakers/w_z_gen_dists.py --skipAngularCoeffs --filter horace -p ewinput`
 f = h5py.File(args.input, 'r')
@@ -50,8 +56,16 @@ labels = {
 for proc in procs:
     # Make 2D ratio
     logger.info(f'Make 2D ratio for {proc}')
-    hnum = res[f'{proc}_{args.num}']['output']['nominal_ew'].get()
-    hden = res[f'{proc}_{args.den}']['output']['nominal_ew'].get()
+    if args.num == 'MiNNLO':
+        hnum = res[procs_dict[proc]]['output']['nominal_ew'].get()
+    else:
+        hnum = res[f'{proc}_{args.num}']['output']['nominal_ew'].get()
+
+    if args.den == 'MiNNLO':
+        hden = res[procs_dict[proc]]['output']['nominal_ew'].get()
+    else:
+        hden = res[f'{proc}_{args.den}']['output']['nominal_ew'].get()
+
     logger.info('Integrals {0} {1}'.format(np.sum(hnum.values(flow=True)), np.sum(hden.values(flow=True))))
     hnum = hh.normalize(hnum)
     hden = hh.normalize(hden)
@@ -101,7 +115,7 @@ for proc in procs:
 
     project = ["ewMll", "ewLogDeltaM"]
 
-    def make_plot_2d(h, name, plot_error=False, cmin=None, cmax=None, flow=True):
+    def make_plot_2d(h, name, plot_error=False, cmin=None, cmax=None, flow=True, density=False, log=False):
 
         nBinsTotal = h.values(flow=flow).size
         nBins = h.project(*project).values(flow=flow).size
@@ -126,20 +140,29 @@ for proc in procs:
             ybins = np.insert(ybins, 0, ybins[0] - rangey*0.02)
             ybins = np.append(ybins, ybins[-1] + rangey*0.02)
 
+        # z = h2d.values(flow=flow).T
+
+        if density:
+            xbinwidths = xbins[1:]-xbins[:-1]
+            ybinwidths = ybins[1:]-ybins[:-1]
+            binwidths = np.outer(xbinwidths, ybinwidths) 
+            h2d.values(flow=flow)[...] = h2d.values(flow=flow) / binwidths
+
         if plot_error:
             # plot relative errors instead
             h2d.values(flow=flow)[...] = np.sqrt(hh.relVariance(h2d.values(flow=flow), h2d.variances(flow=flow), fillOnes=True))
 
         fig, ax = plot_tools.figure(h2d, xlabel=xlabel, ylabel=ylabel, cms_label="Preliminary", automatic_scale=False, width_scale=1.2)
 
-        if args.logPlots:
-            cmin = min(h2d.values(flow=flow)[h2d.values(flow=flow)>0]) # smallest value that is not 0
-            cmax = h2d.values(flow=flow).max()
-            colormesh = ax.pcolormesh(xbins, ybins, h2d.values(flow=flow).T, norm=LogNorm(vmin=1, vmax=1000))
+        if log:
+            cmin = min(h2d.values(flow=flow)[h2d.values(flow=flow)>0]) if cmin is None else cmin # smallest value that is not 0
+            cmax = h2d.values(flow=flow).max() if cmax is None else cmax
+            colormesh = ax.pcolormesh(xbins, ybins, h2d.values(flow=flow).T, norm=LogNorm(vmin=cmin, vmax=cmax), cmap=cm.RdBu)
         else:
             cmin = 0 if cmin is None else cmin
             cmax = h2d.values(flow=flow).max() if cmax is None else cmax
-            colormesh = ax.pcolormesh(xbins, ybins, h2d.values(flow=flow).T, vmin=cmin, vmax=cmax)
+            crange = max((cmax-1), (cmin+1))
+            colormesh = ax.pcolormesh(xbins, ybins, h2d.values(flow=flow).T, vmin=1-crange, vmax=1+crange, cmap=cm.RdBu)
 
         cbar = fig.colorbar(colormesh, ax=ax)
 
@@ -147,7 +170,7 @@ for proc in procs:
         plot_name = f"hist2d_{name}_{proc}"
         if args.noSmoothing and "_div_" in name:
             plot_name += "_noSmoothing"
-        if args.logPlots:
+        if log:
             plot_name += "_log"
         plot_tools.save_pdf_and_png(args.plotdir, plot_name)
         plot_tools.write_index_and_log(args.plotdir, plot_name, args=args, analysis_meta_info=meta)
@@ -162,7 +185,12 @@ for proc in procs:
         nBins = hists[0].project(axis).values(flow=flow).size
         logger.info(f"Make plot {name} with axes {hists[0].axes.name} and {nBins}/{nBinsTotal} bins")
         # average over bins
-        h1ds = [h.project(axis)*nBins/nBinsTotal for h in hists]
+        if proc[0] == 'W':
+            factor=2
+        else:
+            factor=1
+
+        h1ds = [h.project(axis)*nBins/nBinsTotal*factor for h in hists]
 
         if normalize:
             h1ds = [h/np.sum(h.values(flow=True)) for h in h1ds]
@@ -204,18 +232,14 @@ for proc in procs:
         plot_tools.write_index_and_log(args.plotdir, plot_name, args=args, analysis_meta_info=meta)
 
     if not args.noSmoothing:
-        make_plot_2d(hnum, args.num)
-        make_plot_2d(hden, args.den)
+        make_plot_2d(hnum, args.num, density=True, cmin=10e-6, cmax=10e6, log=True)
+        make_plot_2d(hden, args.den, density=True, cmin=10e-6, cmax=10e6, log=True)
 
-        make_plot_2d(hnum, f"{args.num}_err", plot_error=True)
-        make_plot_2d(hden, f"{args.den}_err", plot_error=True)
+        make_plot_2d(hnum, f"{args.num}_err", plot_error=True, log=True)
+        make_plot_2d(hden, f"{args.den}_err", plot_error=True, log=True)
 
     make_plot_2d(hratio, f"{args.num}_div_{args.den}", cmin=0, cmax=3)
-    make_plot_2d(hratio, f"{args.num}_div_{args.den}_err", plot_error=True)
-
-    if args.logPlots:
-        # no log plots for 1d histgrams
-        continue
+    make_plot_2d(hratio, f"{args.num}_div_{args.den}_err", plot_error=True, log=True)
 
     for ax in project:
         make_plot_1d(hratio, f"{args.num}_div_{args.den}", ax)
