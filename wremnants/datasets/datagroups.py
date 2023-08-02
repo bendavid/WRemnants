@@ -258,6 +258,13 @@ class Datagroups(object):
             if procName not in self.groups.keys():
                 raise RuntimeError(f"Group {procName} not known. Defined groups are {list(self.groups.keys())}.")
             group = self.groups[procName]
+
+            # Check if the histogram is already there and in case use it
+            if Datagroups.histName(baseName, procName, syst) in group.hists:
+                logger.debug(f"Existing histogram for proc {procName} base name {baseName} syst {syst} found.")
+                group.hists[label] = group.hists[Datagroups.histName(baseName, procName, syst)]
+                foundExact = True
+                continue
             group.hists[label] = None
 
             for i, member in enumerate(group.members):   

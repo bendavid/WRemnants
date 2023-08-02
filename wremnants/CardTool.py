@@ -1,5 +1,6 @@
 from collections import OrderedDict
 from wremnants import histselections as sel
+from wremnants.combine_helpers import setSimultaneousABCD
 from utilities import boostHistHelpers as hh, common, output_tools, logging
 import narf
 import ROOT
@@ -218,7 +219,7 @@ class CardTool(object):
                       scale=1, processes=None, group=None, noConstraint=False,
                       action=None, doActionBeforeMirror=False, actionArgs={}, actionMap={},
                       systNameReplace=[], systNamePrepend=None, groupFilter=None, passToFakes=False,
-                      rename=None, splitGroup={}, decorrelateByBin={},
+                      rename=None, splitGroup={}, decorrelateByBin={}, noiGroup=False
                       ):
         # note: setting Up=Down seems to be pathological for the moment, it might be due to the interpolation in the fit
         # for now better not to use the options, although it might be useful to keep it implemented
@@ -256,6 +257,7 @@ class CardTool(object):
                 "systAxes" : systAxes,
                 "labelsByAxis" : systAxes if not labelsByAxis else labelsByAxis,
                 "group" : group,
+                "noiGroup": noiGroup,
                 "groupFilter" : groupFilter,
                 "splitGroup" : splitGroup if len(splitGroup) else {group : ".*"}, # dummy dictionary if splitGroup=None, to allow for uniform treatment
                 "scale" : scale,
@@ -643,14 +645,17 @@ class CardTool(object):
 
         self.cardName = (f"{self.outfolder}/{prefix}_{{chan}}{suffix}.txt")
         self.setOutfile(os.path.abspath(f"{self.outfolder}/{prefix}CombineInput{suffix}.root"))
-
-    def writeOutput(self, args=None, forceNonzero=True, check_systs=True):
+            
+    def writeOutput(self, args=None, xnorm=False, forceNonzero=True, check_systs=True, simultaneousABCD=False):
+        self.xnorm = xnorm
         self.datagroups.loadHistsForDatagroups(
             baseName=self.nominalName, syst=self.nominalName,
             procsToRead=self.datagroups.groups.keys(),
             label=self.nominalName, 
             scaleToNewLumi=self.lumiScale, 
             forceNonzero=forceNonzero)
+        if simultaneousABCD and not self.xnorm:
+            setSimultaneousABCD(self)
         self.writeForProcesses(self.nominalName, processes=self.datagroups.groups.keys(), label=self.nominalName, check_systs=check_systs)
         self.loadNominalCard()
         if self.pseudoData and not self.xnorm:
@@ -765,7 +770,7 @@ class CardTool(object):
         procs = systInfo["processes"]
         group = systInfo["group"]
         groupFilter = systInfo["groupFilter"]
-        label = "group" if not systInfo["noConstraint"] else "noiGroup"
+        label = "group" if not systInfo["noiGroup"] else "noiGroup"
         nondata = self.predictedProcesses()
         names = [x[:-2] if "Up" in x[-2:] else (x[:-4] if "Down" in x[-4:] else x) 
                     for x in filter(lambda x: x != "", systInfo["outNames"])]

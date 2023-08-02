@@ -40,8 +40,7 @@ def make_parser(parser=None):
     parser.add_argument("--correlatedNonClosureNuisances", action='store_true', help="get systematics from histograms for the Z non-closure nuisances without decorrelation in eta and pt")
     parser.add_argument("--sepImpactForNC", action="store_true", help="use a dedicated impact gropu for non closure nuisances, instead of putting them in muonScale")
     parser.add_argument("--genModel", action="store_true", help="Produce datacard with the xnorm as model (binned according to axes defined in --fitvar)")
-    # TODO: move next option in common.py? 
-    parser.add_argument("--absolutePathInCard", action="store_true", help="In the datacard, set Absolute path for the root file where shapes are stored")
+    parser.add_argument("--simultaneousABCD", action="store_true", help="Produce datacard for simultaneous fit of ABCD regions")
     return parser
 
 
@@ -58,10 +57,12 @@ def setup(args,xnorm=False):
             args.excludeProcGroups.append("QCD")
     filterGroup = args.filterProcGroups if args.filterProcGroups else None
     excludeGroup = args.excludeProcGroups if args.excludeProcGroups else None
+    if args.simultaneousABCD and (excludeGroup is None or "Fake" not in excludeGroup):
+        excludeGroup.append("Fake")
     logger.debug(f"Filtering these groups of processes: {args.filterProcGroups}")
     logger.debug(f"Excluding these groups of processes: {args.excludeProcGroups}")
 
-    datagroups = Datagroups(args.inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm)
+    datagroups = Datagroups(args.inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm and not args.simultaneousABCD)
 
     if args.axlim or args.rebin:
         if len(args.axlim) % 2 or len(args.axlim)/2 > len(args.fitvar) or len(args.rebin) > len(args.fitvar):
@@ -122,6 +123,12 @@ def setup(args,xnorm=False):
     if args.absolutePathInCard:
         cardTool.setAbsolutePathShapeInCard()
     cardTool.setProjectionAxes(args.fitvar)
+    if wmass and args.simultaneousABCD:
+        cardTool.setChannels(["inclusive"])
+        cardTool.setWriteByCharge(False)
+        fitvars = ["passIso", "passMT", *args.fitvar]
+        cardTool.setProjectionAxes(fitvars)
+        cardTool.unroll=True
     if args.sumChannels or xnorm or dilepton:
         cardTool.setChannels(["inclusive"])
         cardTool.setWriteByCharge(False)
@@ -198,6 +205,7 @@ def setup(args,xnorm=False):
     cardTool.addSystematic(f"massWeight{label}",
                             processes=signal_samples_inctau,
                             group=f"massShift{label}",
+                            noiGroup=not constrainMass,
                             skipEntries=massSkip,
                             mirror=False,
                             #TODO: Name this
@@ -207,8 +215,7 @@ def setup(args,xnorm=False):
     )
 
     if args.doStatOnly:
-        # print a card with only mass weights, no longer need a dummy syst since combinetf is fixed now
-        cardTool.writeOutput(args=args, xnorm=xnorm)
+        # print a card with only mass weights
         logger.info("Using option --doStatOnly: the card was created with only mass nuisance parameter")
         return cardTool
     
@@ -527,7 +534,7 @@ def setup(args,xnorm=False):
 def main(args,xnorm=False):
     cardTool = setup(args, xnorm)
     cardTool.setOutput(args.outfolder, fitvars=args.fitvar, doStatOnly=args.doStatOnly, postfix=args.postfix)
-    cardTool.writeOutput(args=args, forceNonzero=not args.unfolding, check_systs=not args.unfolding)
+    cardTool.writeOutput(args=args, forceNonzero=not args.unfolding, check_systs=not args.unfolding, simultaneousABCD=args.simultaneousABCD)
     return
 
 if __name__ == "__main__":
