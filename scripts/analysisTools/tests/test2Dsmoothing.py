@@ -82,7 +82,11 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
     tfile = safeOpenFile(inputfile)
     hsf =   safeGetObject(tfile, sfhistname)
     uT_binOffset = 1 # 1 to exclude first bin, use 0 to use all
-    utEdges  = [round(hsf.GetXaxis().GetBinLowEdge(i), 1) for i in range(1+uT_binOffset, 2+hsf.GetNbinsX()-uT_binOffset)] # remove extreme bins for now
+    uT_binOffset_high = uT_binOffset
+    if args.utHigh is not None:
+        lastUtBinToFit = hsf.GetXaxis().FindFixBin(args.utHigh+0.001) - 1 # -1 because if we choose uT = 70 then the last bin is the one with 70 as upper edge
+        uT_binOffset_high = hsf.GetNbinsX() - lastUtBinToFit
+    utEdges  = [round(hsf.GetXaxis().GetBinLowEdge(i), 1) for i in range(1+uT_binOffset, 2+hsf.GetNbinsX()-uT_binOffset_high)] # remove extreme bins for now
     etaEdges = [round(hsf.GetYaxis().GetBinLowEdge(i), 1) for i in range(1, 2+hsf.GetNbinsY())]
     ptEdges  = [round(hsf.GetZaxis().GetBinLowEdge(i), 1) for i in range(1, 2+hsf.GetNbinsZ())]
     if uT_binOffset == 0:
@@ -100,7 +104,7 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
         hsf = hsfTmp # replace the input histogram, to use it later
         logger.warning(f"Setting first and last uT edges to {utEdges[0]} and {utEdges[-1]}")
         
-    hsf.GetXaxis().SetRange(1+uT_binOffset, hsf.GetNbinsX()-uT_binOffset) # remove extreme bins for now, they extend up to infinity
+    hsf.GetXaxis().SetRange(1+uT_binOffset, hsf.GetNbinsX()-uT_binOffset_high) # remove extreme bins for now, they extend up to infinity
     
     # 
     polnx = args.polDegree[0]
@@ -112,7 +116,7 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
     ptHigh = hsf.GetZaxis().GetBinCenter(hsf.GetNbinsZ())
     ptRange = ptHigh - ptLow
     utLow = hsf.GetXaxis().GetBinCenter(1+uT_binOffset) # remove first bin, whose range is too extreme
-    utHigh = hsf.GetXaxis().GetBinCenter(hsf.GetNbinsX()-uT_binOffset) # remove last bin, whose range is too extreme    
+    utHigh = hsf.GetXaxis().GetBinCenter(hsf.GetNbinsX()-uT_binOffset_high) # remove last bin, whose range is too extreme    
     utRange = utHigh - utLow  
     polN_2d_scaled = partial(polN_2d,
                              xLowVal=utLow, xFitRange=utRange, degreeX=polnx,
@@ -121,7 +125,7 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
     ptEdgeLow = hsf.GetZaxis().GetBinLowEdge(1)
     ptEdgeHigh = hsf.GetZaxis().GetBinLowEdge(1 + hsf.GetNbinsZ())
     utEdgeLow = hsf.GetXaxis().GetBinLowEdge(1+uT_binOffset) # remove first bin, whose range is too extreme
-    utEdgeHigh = hsf.GetXaxis().GetBinLowEdge(hsf.GetNbinsX()+1-uT_binOffset) # remove last bin, whose range is too extreme    
+    utEdgeHigh = hsf.GetXaxis().GetBinLowEdge(hsf.GetNbinsX()+1-uT_binOffset_high) # remove last bin, whose range is too extreme    
     # set number of bins for ut and pt after smoothing
     utBinWidth = 2
     utNbins = int((utEdgeHigh - utEdgeLow + 0.001) / utBinWidth) # multiple of 1 GeV width
@@ -137,7 +141,7 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
                               len(ptEdges)-1, array('d', ptEdges))
 
     # extend uT range for plotting purpose, even if eventually the final histogram will be stored in a narrower range
-    extendedRange_ut = [-50.0, 50.0]
+    extendedRange_ut = [min(-50.0, utEdgeLow), max(50.0, utEdgeHigh)]
     extendedRange_ut_nBins = int((extendedRange_ut[1] - extendedRange_ut[0] + 0.001) / utBinWidth)
     # create final boost histogram with smooth SF, eta-pt-ut-ivar
     axis_eta = hist.axis.Regular(nEtaBins, etaEdges[0], etaEdges[-1], name = "eta", overflow = False, underflow = False)
@@ -158,15 +162,6 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
 
     if effHist != None:
         logger.info("Preparing efficiencies")
-        ## this commented code refers to when effHist was a root histogram, now it is boost already
-        #
-        # effHistRoot = effHist
-        # effHistRoot.GetZaxis().SetRange(2, effHist.GetNbinsZ()-1)
-        # eff_boost = narf.root_to_hist(effHistRoot)
-        # s = bh.tag.Slicer()
-        # eff_boost = eff_boost[{2: s[complex(0, -100.0):complex(0, 100.0)]}]
-        #
-        # now the actual code
         eff_boost = effHist
         effHistRoot = narf.hist_to_root(eff_boost)
         effHistRoot.SetName(f"Wmunu_MC_effi_{step}")
@@ -419,6 +414,7 @@ if __name__ == "__main__":
     parser.add_argument('--plotEigenVar', action="store_true", help='Plot eigen variations (it actually produces histogram ratios alt/nomi)')
     parser.add_argument('-p', '--postfix', type=str, default="", help='Postfix for plot names (can be the step name)')
     parser.add_argument('--extended', action="store_true", help='Use SF with uT range extended above +30 GeV')
+    parser.add_argument('--utHigh', '--utHigh', type=float, default=None, help='Choose maximum uT at which the fit must be run (default uses full range except very last bin which is up to infinity)')
     args = parser.parse_args()
 
     ROOT.TH1.SetDefaultSumw2()
@@ -441,11 +437,11 @@ if __name__ == "__main__":
 
     if args.extended:
         args.outfilename = args.outfilename.replace(".pkl.lz4", "_extended.pkl.lz4")
-        inputRootFile = {"iso"          : f"{sfFolder}iso3DSFVQTextended.root",
-                         "isonotrig"    : f"{sfFolder}isonotrigger3DSFVQTextended.root",
-                         "isoantitrig"  : f"{sfFolder}isofailtrigger3DSFVQTextended.root",
-                         "triggerplus"  : f"{sfFolder}triggerplus3DSFVQTextended.root",
-                         "triggerminus"  : f"{sfFolder}triggerminus3DSFVQTextended.root",
+        inputRootFile = {"iso"          : "/home/m/mciprian/iso3DSFVQTextended.root",
+                         "isonotrig"    : "/home/m/mciprian/isonotrigger3DSFVQTextended.root",
+                         "isoantitrig"  : "/home/m/mciprian/isofailtrigger3DSFVQTextended.root",
+                         "triggerplus"  : "/home/m/mciprian/triggerplus3DSFVQTextended.root",
+                         "triggerminus"  : "/home/m/mciprian/triggerminus3DSFVQTextended.root",
                          }
 
         

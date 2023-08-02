@@ -31,10 +31,9 @@ args = parser.parse_args()
 
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
-procfilt = ['Wplusmunu', 'Wminusmunu'] if args.addHelicityHistos else args.filterProcs 
 thisAnalysis = ROOT.wrem.AnalysisType.Wmass
 datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
-                                              filt=procfilt,
+                                              filt=args.filterProcs,
                                               excl=args.excludeProcs, 
                                               nanoVersion="v8" if args.v8 else "v9", base_path=args.dataPath, oneMCfileEveryN=args.oneMCfileEveryN)
 
@@ -174,7 +173,7 @@ def select_fiducial_space_theoryAgnostic(df, ptVgenMax, absYVgenMax, accept=True
         logger.debug(f"Theory agnostic fiducial cut: {selection}")
     else:
         df = df.Filter("fiducial == 0")
-        logger.debug(f"Theory agnostic fiducial cut (out-of-acceptace): not ({selection})")
+        logger.debug(f"Theory agnostic fiducial cut (out-of-acceptance): not ({selection})")
     return df
 
 def define_helicity_weights(df):
