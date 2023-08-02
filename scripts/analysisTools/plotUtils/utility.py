@@ -3692,7 +3692,7 @@ def roll1Dto2D(h1d, histo, invertXY=False):
 
     return histo
 
-def unroll2Dto1D(h, newname='', cropNegativeBins=True, silent=False):
+def unroll2Dto1D(h, newname='', cropNegativeBins=True, silent=False, invertUnroll=False):
     nbins = h.GetNbinsX() * h.GetNbinsY()
     goodname = h.GetName()
     #h.SetName(goodname+"_2d")
@@ -3700,11 +3700,19 @@ def unroll2Dto1D(h, newname='', cropNegativeBins=True, silent=False):
     newh.Sumw2()
     if 'TH2' not in h.ClassName():
         raise RuntimeError("Calling rebin2Dto1D on something that is not TH2")
-    for i in range(h.GetNbinsX()):
-        for j in range(h.GetNbinsY()):
-            ibin = 1 + i + j * h.GetNbinsX()
-            newh.SetBinContent(ibin, h.GetBinContent(i+1, j+1))
-            newh.SetBinError(ibin, h.GetBinError(i+1, j+1))
+    if invertUnroll:
+        for i in range(h.GetNbinsX()):
+            for j in range(h.GetNbinsY()):
+                ibin = 1 + j + i * h.GetNbinsY()
+                newh.SetBinContent(ibin, h.GetBinContent(i+1, j+1))
+                newh.SetBinError(ibin, h.GetBinError(i+1, j+1))
+    else:
+        for i in range(h.GetNbinsX()):
+            for j in range(h.GetNbinsY()):
+                ibin = 1 + i + j * h.GetNbinsX()
+                newh.SetBinContent(ibin, h.GetBinContent(i+1, j+1))
+                newh.SetBinError(ibin, h.GetBinError(i+1, j+1))
+
     if cropNegativeBins:
         for ibin in range(1, nbins+1):
             if newh.GetBinContent(ibin)<0:

@@ -190,7 +190,7 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
                 heff = narf.hist_to_root(eff_boost_ptut)
                 heff.SetName(f"{effHistRoot.GetName()}_eta{ieta}")
                 heff.SetTitle(etaRange)
-                drawCorrelationPlot(heff, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", "W MC efficiency::0.5,1",
+                drawCorrelationPlot(heff, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", "W MC {step} efficiency::0.5,1",
                                     heff.GetName(), "ForceTitle", outdirEff,
                                     palette=87, passCanvas=canvas)
             # the grid interpolator will be created up to the extreme bin centers, so need bounds_error=False to allow the extrapolation to extend outside until the bin edges
@@ -213,7 +213,7 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
                 heffSmooth = narf.hist_to_root(histEffi2D_ptut)
                 heffSmooth.SetName(f"{effHistRoot.GetName()}_eta{ieta}_smooth")
                 heffSmooth.SetTitle(etaRange)
-                drawCorrelationPlot(heffSmooth, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", "Smoothed W MC efficiency::0.5,1",
+                drawCorrelationPlot(heffSmooth, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", "Smooth W MC {step} efficiency::0.5,1",
                                     heffSmooth.GetName(), "ForceTitle", outdirEff,
                                     palette=87, passCanvas=canvas)
         logger.info("Done with efficiencies")
@@ -242,7 +242,7 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
         hpull = copy.deepcopy(h.Clone(f"{h.GetName()}_pull2Dfit"))
         hpull.Reset("ICESM")
         hpull1D_uTpT.Reset("ICESM")
-        drawCorrelationPlot(h, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", "Scale factor",
+        drawCorrelationPlot(h, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", "{step} scale factor",
                             h.GetName(), "ForceTitle", outdirNew,
                             palette=87, passCanvas=canvas)
                 
@@ -262,7 +262,7 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
             quit()
 
         # get chi2    
-        chi2text = f"#chi^{{2}} = {fitChi2}/{ndof}"
+        chi2text = f"#chi^{{2}} = {fitChi2} / {ndof}"
         chi2prob = ROOT.TMath.Prob(fitChi2, ndof)
         if chi2prob < 0.05:
             perc_chi2prob = 100.0 * chi2prob
@@ -318,7 +318,7 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
         hfit = narf.hist_to_root(boost_hist_smooth)
         hfit.SetName(f"smoothSF2D_{step}_ieta{ieta}{postfix}")
         hfit.SetTitle(f"{etaRange}   {chi2text}")
-        drawCorrelationPlot(hfit, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", f"Smooth scale factor",
+        drawCorrelationPlot(hfit, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", f"Smooth {step} scale factor",
                             hfit.GetName(), "ForceTitle", outdirNew,
                             palette=87, passCanvas=canvas)
 
@@ -414,7 +414,7 @@ if __name__ == "__main__":
     parser.add_argument('--plotEigenVar', action="store_true", help='Plot eigen variations (it actually produces histogram ratios alt/nomi)')
     parser.add_argument('-p', '--postfix', type=str, default="", help='Postfix for plot names (can be the step name)')
     parser.add_argument('--extended', action="store_true", help='Use SF with uT range extended above +30 GeV')
-    parser.add_argument('--utHigh', '--utHigh', type=float, default=None, help='Choose maximum uT at which the fit must be run (default uses full range except very last bin which is up to infinity)')
+    parser.add_argument('--utHigh', type=float, default=None, help='Choose maximum uT at which the fit must be run (default uses full range except very last bin which is up to infinity)')
     args = parser.parse_args()
 
     ROOT.TH1.SetDefaultSumw2()
@@ -428,25 +428,30 @@ if __name__ == "__main__":
             args.outfilename += ".pkl.lz4"
 
     sfFolder = data_dir + "/testMuonSF/"
+    # efficiencies made with scripts/analysisTools/w_mass_13TeV/makeWMCefficiency3D.py
+    #
+    #effSmoothFile = "/eos/user/m/mciprian/www/WMassAnalysis/test2Dsmoothing/makeWMCefficiency3D/noMuonCorr_noSF_allProc_noDphiCut/efficiencies3D.pkl.lz4"
+    effSmoothFile = f"{sfFolder}efficiencies3D.pkl.lz4"
+    #
     inputRootFile = {"iso"          : f"{sfFolder}isolation3DSFUT.root",
                      "isonotrig"    : f"{sfFolder}isonotrigger3DSFVQT.root",
                      "isoantitrig"  : f"{sfFolder}isofailtrigger3DSFVQT.root",
                      "triggerplus"  : f"{sfFolder}triggerplus3DSFUT.root",
-                     "triggerminus"  : f"{sfFolder}triggerminus3DSFUT.root",
+                     "triggerminus" : f"{sfFolder}triggerminus3DSFUT.root",
                      }
 
     if args.extended:
+        #effSmoothFile = "/eos/user/m/mciprian/www/WMassAnalysis/test2Dsmoothing/makeWMCefficiency3D/noMuonCorr_noSF_allProc_noDphiCut_rebinUt2/efficiencies3D_rebinUt2.pkl.lz4"
+        effSmoothFile = f"{sfFolder}efficiencies3D_rebinUt2.pkl.lz4"
+        #
         args.outfilename = args.outfilename.replace(".pkl.lz4", "_extended.pkl.lz4")
-        inputRootFile = {"iso"          : "/home/m/mciprian/iso3DSFVQTextended.root",
-                         "isonotrig"    : "/home/m/mciprian/isonotrigger3DSFVQTextended.root",
-                         "isoantitrig"  : "/home/m/mciprian/isofailtrigger3DSFVQTextended.root",
-                         "triggerplus"  : "/home/m/mciprian/triggerplus3DSFVQTextended.root",
-                         "triggerminus"  : "/home/m/mciprian/triggerminus3DSFVQTextended.root",
+        inputRootFile = {"iso"          : f"{sfFolder}iso3DSFVQTextended.root",
+                         "isonotrig"    : f"{sfFolder}isonotrigger3DSFVQTextended.root",
+                         "isoantitrig"  : f"{sfFolder}isofailtrigger3DSFVQTextended.root",
+                         "triggerplus"  : f"{sfFolder}triggerplus3DSFVQTextended.root",
+                         "triggerminus" : f"{sfFolder}triggerminus3DSFVQTextended.root",
                          }
-
         
-    # efficiencies made with scripts/analysisTools/w_mass_13TeV/makeWMCefficiency3D.py
-    effSmoothFile = "/eos/user/m/mciprian/www/WMassAnalysis/test2Dsmoothing/makeWMCefficiency3D/noMuonCorr_noSF_allProc_noDphiCut/efficiencies3D.pkl.lz4"
     with lz4.frame.open(effSmoothFile) as fileEff:
         allMCeff = pickle.load(fileEff)
 
@@ -480,4 +485,3 @@ if __name__ == "__main__":
     with lz4.frame.open(outfile, 'wb') as f:
         pickle.dump(resultDict, f, protocol=pickle.HIGHEST_PROTOCOL)
     logger.info(f"Output saved: {time.time()-time0}")
-    

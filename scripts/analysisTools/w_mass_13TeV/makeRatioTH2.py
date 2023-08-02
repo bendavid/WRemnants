@@ -78,7 +78,8 @@ if __name__ == "__main__":
     parser.add_argument('-a', '--make-asymmetry', dest="makeAsymmetry", action="store_true", help="Make ratio of difference over the sum. For this to make sense, the binning of the two inputs must be consistent")
     parser.add_argument('-p', '--make-pulls', dest="makePulls", action="store_true", help="Make pulls of input histograms, i.e. (h1-h2)/error, where error is taken as the quadrature sum of the errors of the input")
     parser.add_argument(       '--pull-error-ScaleFactor', dest='pullErrorScaleFactor', default='1.', type=float, help='Inflate the error by this factor when making the pulls (because it is assumed the inputs are uncorrelated, so the error might need a correction)')
-    parser.add_argument('-u', '--unroll', action="store_true",  help="Make plot of unrilled 1D histogram from the 2D ratio")
+    parser.add_argument('-u', '--unroll', action="store_true",  help="Make plot of unrolled 1D histogram from the 2D ratio (along x)")
+    parser.add_argument(      '--unrolly', action="store_true",  help="Unroll along y instead of along x")
     parser.add_argument(      '--roll1Dto2D', action="store_true",  help="Input histograms are 1D distributions to be unrolled into 2D. Need binning from option --binning-file-to-roll")
     parser.add_argument(      '--binning-file-to-roll', dest="binFileToRoll", default="", help="File with binning to roll 1D into 2D (the reco binning is used)")
     parser.add_argument(      '--drawOption',  default='colz0', type=str, help='Draw option for TH2')
@@ -288,7 +289,7 @@ if __name__ == "__main__":
         )
 
     # unroll 2D ratio into a 1D
-    if args.unroll:
+    if args.unroll or args.unrolly:
         canvas_unroll = ROOT.TCanvas("canvas_unroll","",3000,800)
         bottomMargin = 0.12
         canvas_unroll.SetTickx(1)
@@ -296,7 +297,7 @@ if __name__ == "__main__":
         canvas_unroll.cd()
         canvas_unroll.SetBottomMargin(bottomMargin)                                            
         
-        ratio_unrolled = unroll2Dto1D(hratio, newname=f"unrolled_{hratio.GetName()}", cropNegativeBins=False)
+        ratio_unrolled = unroll2Dto1D(hratio, newname=f"unrolled_{hratio.GetName()}", cropNegativeBins=False, invertUnroll=args.unrolly)
         unitLine = copy.deepcopy(ratio_unrolled.Clone("tmp_horizontalLineAt1"))
         unitLine.Reset("ICESM")
         ratioUnc = copy.deepcopy(ratio_unrolled.Clone("tmp_ratioUnc"))
