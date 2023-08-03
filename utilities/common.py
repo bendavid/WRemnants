@@ -53,8 +53,16 @@ axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, nam
 down_up_axis = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "downUpVar")
 down_nom_up_axis = hist.axis.Regular(3, -1.5, 1.5, underflow=False, overflow=False, name = "downNomUpVar")
 
-axis_passIso = hist.axis.Boolean(name = "passIso")
-axis_passMT = hist.axis.Boolean(name = "passMT")
+passIsoName = "passIso"
+passMTName = "passMT"
+
+passIso = {passIsoName: True}
+failIso = {passIsoName: False}
+passMT = {passMTName: True}
+failMT = {passMTName: False}
+
+axis_passIso = hist.axis.Boolean(name = passIsoName)
+axis_passMT = hist.axis.Boolean(name = passMTName)
 
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
     
@@ -67,8 +75,8 @@ def getIsoMtRegionID(passIso=True, passMT=True):
     return passIso * 1 + passMT * 2
 
 def getIsoMtRegionFromID(regionID):
-    return {"passIso" : regionID & 1,
-            "passMT"  : regionID & 2}
+    return {passIsoName : regionID & 1,
+            passMTName  : regionID & 2}
 
 def common_parser(for_reco_highPU=False):
     parser = argparse.ArgumentParser()
@@ -175,6 +183,7 @@ def common_parser_combine():
     parser.add_argument("--wlike", action='store_true', help="Run W-like analysis of mZ")
     parser.add_argument("-o", "--outfolder", type=str, default=".", help="Output folder with the root file storing all histograms and datacards for single charge (subfolder WMass or ZMassWLike is created automatically inside)")
     parser.add_argument("-i", "--inputFile", type=str)
+    parser.add_argument("--absolutePathInCard", action="store_true", help="In the datacard, set Absolute path for the root file where shapes are stored")
     parser.add_argument("--minnloScaleUnc", choices=["byHelicityPt", "byHelicityPtCharge", "byHelicityCharge", "byPtCharge", "byPt", "byCharge", "integrated",], default="byHelicityPt",
             help="Decorrelation for QCDscale")
     parser.add_argument("--rebin", type=int, nargs='*', default=[], help="Rebin axis by this value (default does nothing)")
