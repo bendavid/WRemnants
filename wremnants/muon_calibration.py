@@ -244,8 +244,10 @@ def make_jpsi_crctn_unc_helper(args, filepath, n_scale_params = 3, n_tot_params 
     return jpsi_crctn_unc_helper
 
 def make_Z_non_closure_parametrized_helper(
+    args,
     filepath = f"{data_dir}/closure/calibrationAlignmentZ_after_LBL_v721.root",
-    n_eta_bins = 24, n_scale_params = 3, correlate = False
+    filepath_tflite = f"{data_dir}/calibration//muon_response.tflite",
+    n_eta_bins = 24, n_scale_params = 3
 ):
     f = uproot.open(filepath)
     M = f['MZ'].to_hist()
@@ -259,7 +261,7 @@ def make_Z_non_closure_parametrized_helper(
     hist_non_closure.view()[...,2] = M.values()
 
     hist_non_closure_cpp = narf.hist_to_pyroot_boost(hist_non_closure, tensor_rank = 1)
-    if correlate:
+    if args.correlatedNonClosureNP:
         z_non_closure_helper = ROOT.wrem.ZNonClosureParametrizedHelperCorl[
             type(hist_non_closure_cpp).__cpp_name__,
             n_eta_bins
@@ -269,12 +271,21 @@ def make_Z_non_closure_parametrized_helper(
         z_non_closure_helper.tensor_axes = tuple([common.down_up_axis])
         return z_non_closure_helper
     else:
-        z_non_closure_helper = ROOT.wrem.ZNonClosureParametrizedHelper[
-            type(hist_non_closure_cpp).__cpp_name__,
-            n_eta_bins
-        ] (
-            ROOT.std.move(hist_non_closure_cpp)
-        )
+        if args.muonScaleVariation == 'smearingWeightsSplines':
+            z_non_closure_helper = ROOT.wrem.ZNonClosureParametrizedHelperSplines[
+                type(hist_non_closure_cpp).__cpp_name__,
+                n_eta_bins
+            ] (
+                filepath_tflite,
+                ROOT.std.move(hist_non_closure_cpp)
+            )
+        else:
+            z_non_closure_helper = ROOT.wrem.ZNonClosureParametrizedHelper[
+                type(hist_non_closure_cpp).__cpp_name__,
+                n_eta_bins
+            ] (
+                ROOT.std.move(hist_non_closure_cpp)
+            )
         z_non_closure_helper.tensor_axes = (
             hist.axis.Regular(n_eta_bins, 0, n_eta_bins, name = 'unc'),
             common.down_up_axis
@@ -282,8 +293,10 @@ def make_Z_non_closure_parametrized_helper(
         return z_non_closure_helper
 
 def make_Z_non_closure_binned_helper(
+    args,
     filepath = f"{data_dir}/closure/closureZ_LBL_smeared_v721.root",
-    n_eta_bins = 24, n_pt_bins = 5, correlate = False
+    filepath_tflite = f"{data_dir}/calibration//muon_response.tflite",
+    n_eta_bins = 24, n_pt_bins = 5
 ):
     f = uproot.open(filepath)
 
@@ -301,13 +314,23 @@ def make_Z_non_closure_binned_helper(
         z_non_closure_helper.tensor_axes = tuple([common.down_up_axis])
         return z_non_closure_helper
     else:
-        z_non_closure_helper = ROOT.wrem.ZNonClosureBinnedHelper[
-            type(hist_non_closure_cpp).__cpp_name__,
-            n_eta_bins,
-            n_pt_bins
-        ](
-            ROOT.std.move(hist_non_closure_cpp)
-        )
+        if args.muonScaleVariation == 'smearingWeightsSplines':
+            z_non_closure_helper = ROOT.wrem.ZNonClosureBinnedHelperSplines[
+                type(hist_non_closure_cpp).__cpp_name__,
+                n_eta_bins,
+                n_pt_bins
+            ](
+                filepath_tflite,
+                ROOT.std.move(hist_non_closure_cpp)
+            )
+        else:
+            z_non_closure_helper = ROOT.wrem.ZNonClosureBinnedHelper[
+                type(hist_non_closure_cpp).__cpp_name__,
+                n_eta_bins,
+                n_pt_bins
+            ](
+                ROOT.std.move(hist_non_closure_cpp)
+            )
         z_non_closure_helper.tensor_axes = (
             hist.axis.Regular(n_eta_bins, 0, n_eta_bins, name = 'unc_ieta'),
             hist.axis.Regular(n_pt_bins, 0, n_pt_bins, name = 'unc_ipt'),
@@ -559,17 +582,17 @@ def define_corrected_reco_muon_kinematics(df, muons="goodMuons", kinematic_vars 
 def transport_smearing_weights_to_reco(resultdict, procs, nonClosureScheme = "A-M-separated"):
     time0 = time.time()
     
-    hists_to_transport = ['muonScaleSyst_responseWeights_gensmear']
+    hists_to_transport = ['muonScaleSyst_responseWeights_gaus']
     if nonClosureScheme == "A-M-separated":
-        hists_to_transport.append('Z_non_closure_parametrized_A_gensmear')
-        hists_to_transport.append('Z_non_closure_parametrized_M_gensmear')
+        hists_to_transport.append('Z_non_closure_parametrized_A_gaus')
+        hists_to_transport.append('Z_non_closure_parametrized_M_gaus')
     if nonClosureScheme == "A-M-combined":
-        hists_to_transport.append('Z_non_closure_parametrized_gensmear')
+        hists_to_transport.append('Z_non_closure_parametrized_gaus')
     if nonClosureScheme == "binned":
-        hists_to_transport.append('Z_non_closure_binned_gensmear')
+        hists_to_transport.append('Z_non_closure_binned_gaus')
     if nonClosureScheme == "binned-plus-M":
-        hists_to_transport.append('Z_non_closure_parametrized_M_gensmear')
-        hists_to_transport.append('Z_non_closure_binned_gensmear')
+        hists_to_transport.append('Z_non_closure_parametrized_M_gaus')
+        hists_to_transport.append('Z_non_closure_binned_gaus')
 
     for proc in procs:
 
@@ -591,7 +614,7 @@ def transport_smearing_weights_to_reco(resultdict, procs, nonClosureScheme = "A-
         for histname in hists_to_transport:
             if histname in proc_hists.keys():
                 hist_gensmear = proc_hists[histname].get()
-                reco_histname = 'nominal_' + histname[:-len('_gensmear')]
+                reco_histname = 'nominal_' + histname[:-len('_gaus')]
                 hist_reco = hist.Hist(
                     *hist_gensmear.axes,
                     storage = hist_gensmear._storage_type()
