@@ -624,17 +624,10 @@ public:
     // for smearing weights derived from propagating uncs on A, e, M to uncs on qop
 
     out_tensor_t operator() (
-        const RVec<double> &genQops, 
-        const RVec<float> &genPhis,
-        const RVec<float> &genEtas,
-        const RVec<double> &recoQops,
-        const RVec<float> &recoPhis,
-        const RVec<float> &recoEtas,
-        const RVec<int> &recoCharges,
-        const RVec<double> &recoPts,
-        const RVec<RVec<float>> &covs, // for sigma on the Gaussian
-        double nominal_weight = 1.0,
-        bool fullParam = false
+        const RVec<double> &genQops, const RVec<float> &genPhis, const RVec<float> &genEtas,
+        const RVec<double> &recoQops, const RVec<float> &recoPhis, const RVec<float> &recoEtas,
+        const RVec<int> &recoCharges, const RVec<double> &recoPts, const RVec<RVec<float>> &covs,
+        double nominal_weight = 1.0, bool fullParam = false
     ) {
         out_tensor_t res;
         res.setConstant(nominal_weight);
@@ -737,14 +730,9 @@ public:
         correctionHist_(std::make_shared<const T>(std::move(corrections))) {}
 
     out_tensor_t operator() (
-        const RVec<double> &genQops,
-        const RVec<double> &recoQops,
-        const RVec<float> &recoEtas,
-        const RVec<int> &recoCharges,
-        const RVec<double> &recoPts,  
-        const RVec<RVec<float>> &covs,
-        double nominal_weight = 1.0,
-        int calVarFlags = 7   //A = 1, e = 2, M = 4
+        const RVec<double> &genQops, const RVec<double> &recoQops, const RVec<float> &recoEtas,
+        const RVec<double> &recoPts, const RVec<int> &recoCharges, const RVec<RVec<float>> &covs,
+        double nominal_weight = 1.0, int calVarFlags = 7   //A = 1, e = 2, M = 4
     ) {
         out_tensor_t res;
         res.setConstant(nominal_weight);
@@ -798,14 +786,9 @@ public:
         correctionHist_(std::make_shared<const T>(std::move(corrections))) {}
 
     out_tensor_t operator() (
-        const RVec<double> &genQops,
-        const RVec<double> &recoQops,
-        const RVec<float> &recoEtas,
-        const RVec<int> &recoCharges,
-        const RVec<double> &recoPts,  
-        const RVec<RVec<float>> &covs,
-        double nominal_weight = 1.0,
-        int calVarFlags = 7   //A = 1, e = 2, M = 4
+        const RVec<double> &genQops, const RVec<double> &recoQops, const RVec<float> &recoEtas,
+        const RVec<double> &recoPts, const RVec<int> &recoCharges, const RVec<RVec<float>> &covs,
+        double nominal_weight = 1.0, int calVarFlags = 7   //A = 1, e = 2, M = 4
     ) {
         out_tensor_t res;
         res.setConstant(nominal_weight);
@@ -855,12 +838,8 @@ public:
 
     // smaering weights for Z non-closure number on pt 
     out_tensor_t operator() (
-        const RVec<double> &genQops, 
-        const RVec<double> &recoQops,
-        const RVec<double> &recoPts,
-        const RVec<float> &recoEtas,
-        const RVec<int> &recoCharges,
-        const RVec<RVec<float>> &covs,
+        const RVec<double> &genQops, const RVec<double> &recoQops, const RVec<float> &recoEtas,
+        const RVec<double> &recoPts, const RVec<int> &recoCharges, const RVec<RVec<float>> &covs,
         double nominal_weight = 1.0
     ) {
         out_tensor_t res;
@@ -903,12 +882,8 @@ public:
 
     // smaering weights for Z non-closure number on pt 
     out_tensor_t operator() (
-        const RVec<double> &genQops, 
-        const RVec<double> &recoQops,
-        const RVec<double> &recoPts,
-        const RVec<float> &recoEtas,
-        const RVec<int> &recoCharges,
-        const RVec<RVec<float>> &covs,
+        const RVec<double> &genQops, const RVec<double> &recoQops, const RVec<float> &recoEtas,
+        const RVec<double> &recoPts, const RVec<int> &recoCharges, const RVec<RVec<float>> &covs,
         double nominal_weight = 1.0
     ) {
         out_tensor_t res;
@@ -1122,7 +1097,7 @@ public:
             )
         ),
         correctionHist_(std::make_shared<const T>(std::move(corrections))) {
-        }
+    }
 
     // helper for bin lookup which implements the compile-time loop over axes
     template<typename... Xs, std::size_t... Idxs>
@@ -1214,6 +1189,186 @@ private:
     std::shared_ptr<const T> correctionHist_;
 };
 
+template <typename T, size_t NEtaBins>
+class ZNonClosureParametrizedHelperSplines {
+
+public:
+    using hist_t = T;
+    using out_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<NEtaBins, 2>>;
+    using out_tensor_chip_t = Eigen::TensorFixedSize<double, Eigen::Sizes<2>>;
+
+    ZNonClosureParametrizedHelperSplines(const std::string &filename, T&& corrections) : 
+        helper_(
+            std::make_shared<narf::tflite_helper>(
+                filename, "serving_default", ROOT::GetThreadPoolSize()
+            )
+        ),
+        correctionHist_(std::make_shared<const T>(std::move(corrections))) {
+    }
+
+    out_tensor_t operator() (
+        const RVec<float> &recPts, const RVec<float> &recEtas, const RVec<int> &recCharges,
+        const RVec<float> &genPts, const RVec<float> &genEtas, const RVec<int> &genCharges,
+        double nominal_weight = 1.0 , int calVarFlags = 7 //A = 1, e = 2, M = 4
+    ) {
+
+        auto const nmuons = recPts.size();
+
+        out_tensor_t res;
+        res.setConstant(nominal_weight);
+
+        for (std::size_t i = 0; i < nmuons; ++i) {
+            const double qoprec = recCharges[i]*1./(recPts[i]*std::cosh(recEtas[i]));
+            const double qopgen = genCharges[i]*1./(genPts[i]*std::cosh(genEtas[i]));
+            const double qopr = qoprec/qopgen;
+            Eigen::TensorFixedSize<double, Eigen::Sizes<>> genPt_tensor;
+            Eigen::TensorFixedSize<double, Eigen::Sizes<>> genEta_tensor;
+            Eigen::TensorFixedSize<double, Eigen::Sizes<>> genCharge_tensor;
+            Eigen::TensorFixedSize<double, Eigen::Sizes<>> qopr_tensor;
+            genPt_tensor(0) = genPts[i];
+            genEta_tensor(0) = genEtas[i];
+            genCharge_tensor(0) = genCharges[i];
+            qopr_tensor(0) = qopr;
+
+            // define output tensors
+            Eigen::TensorFixedSize<double, Eigen::Sizes<>> delta_weight_tensor;
+
+            // build tuples of inputs and outputs (use std::tie so the tuples contain references to the tensors above)
+            auto const inputs = std::tie(genPt_tensor, genEta_tensor, genCharge_tensor, qopr_tensor);
+            auto outputs = std::tie(delta_weight_tensor);
+
+            // call the tensorflow lite model to fill the outputs
+            (*helper_)(inputs, outputs);
+
+            // get the output value
+            const double dweightdqop = delta_weight_tensor(0);
+
+            out_tensor_chip_t delta_qopr;
+
+            const unsigned int iEta = std::clamp(
+                correctionHist_ -> template axis<0>().index(recEtas[i]), 0, (int)NEtaBins - 1
+            ); // clip under/overflow bins 
+            const auto &params = correctionHist_->at(iEta).data();
+            double recoK = 1.0 /recPts[i];
+            double recoKUnc = 0.0;
+            enum calVarFlagsScheme {AFlag = 1, eFlag = 2, MFlag = 4};
+            if (calVarFlags & AFlag) {
+                const double AUnc = params(0);
+                recoKUnc += AUnc * recoK;
+            }
+            if (calVarFlags & eFlag) {
+                const double eUnc = params(1);
+                recoKUnc += -1.0 * eUnc * recoK * recoK;
+            }
+            if (calVarFlags & MFlag) {
+                const double MUnc = params(2);
+                recoKUnc += recCharges[i] * MUnc;
+            }
+            double recoQopUnc = recCharges[i] * std::sin(calculateTheta(recEtas[i])) * recoKUnc;
+
+            for (std::ptrdiff_t idownup = 0; idownup < 2; ++idownup) {
+                const double dir = idownup == 0 ? -1. : 1.;
+                delta_qopr(idownup) = recoQopUnc * dir / qopgen;
+            }
+
+            const out_tensor_chip_t alt_weights = dweightdqop*delta_qopr + 1.;
+
+            // total weight is the product over all the muons
+            res(iEta, 0) *= alt_weights(0);
+            res(iEta, 1) *= alt_weights(1);
+        }
+        return res;
+    }
+
+private:
+    std::shared_ptr<narf::tflite_helper> helper_;
+    std::shared_ptr<const T> correctionHist_;
+};
+
+template <typename T, size_t NEtaBins, size_t NPtBins>
+class ZNonClosureBinnedHelperSplines {
+
+public:
+    using hist_t = T;
+    using out_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<NEtaBins, NPtBins, 2>>;
+    using out_tensor_chip_t = Eigen::TensorFixedSize<double, Eigen::Sizes<2>>;
+
+    ZNonClosureBinnedHelperSplines(const std::string &filename, T&& corrections) : 
+        helper_(
+            std::make_shared<narf::tflite_helper>(
+                filename, "serving_default", ROOT::GetThreadPoolSize()
+            )
+        ),
+        correctionHist_(std::make_shared<const T>(std::move(corrections))) {
+    }
+
+    out_tensor_t operator() (
+        const RVec<float> &recPts, const RVec<float> &recEtas, const RVec<int> &recCharges,
+        const RVec<float> &genPts, const RVec<float> &genEtas, const RVec<int> &genCharges,
+        double nominal_weight = 1.0
+    ) {
+
+        auto const nmuons = recPts.size();
+
+        out_tensor_t res;
+        res.setConstant(nominal_weight);
+
+        for (std::size_t i = 0; i < nmuons; ++i) {
+            const double qoprec = recCharges[i]*1./(recPts[i]*std::cosh(recEtas[i]));
+            const double qopgen = genCharges[i]*1./(genPts[i]*std::cosh(genEtas[i]));
+            const double qopr = qoprec/qopgen;
+            Eigen::TensorFixedSize<double, Eigen::Sizes<>> genPt_tensor;
+            Eigen::TensorFixedSize<double, Eigen::Sizes<>> genEta_tensor;
+            Eigen::TensorFixedSize<double, Eigen::Sizes<>> genCharge_tensor;
+            Eigen::TensorFixedSize<double, Eigen::Sizes<>> qopr_tensor;
+            genPt_tensor(0) = genPts[i];
+            genEta_tensor(0) = genEtas[i];
+            genCharge_tensor(0) = genCharges[i];
+            qopr_tensor(0) = qopr;
+
+            // define output tensors
+            Eigen::TensorFixedSize<double, Eigen::Sizes<>> delta_weight_tensor;
+
+            // build tuples of inputs and outputs (use std::tie so the tuples contain references to the tensors above)
+            auto const inputs = std::tie(genPt_tensor, genEta_tensor, genCharge_tensor, qopr_tensor);
+            auto outputs = std::tie(delta_weight_tensor);
+
+            // call the tensorflow lite model to fill the outputs
+            (*helper_)(inputs, outputs);
+
+            // get the output value
+            const double dweightdqop = delta_weight_tensor(0);
+
+            out_tensor_chip_t delta_qopr;
+
+            const unsigned int iEta = std::clamp(
+                correctionHist_->template axis<0>().index(recEtas[i]), 0, int(NEtaBins) - 1
+            );
+            const unsigned int iPt = std::clamp(
+                correctionHist_->template axis<1>().index(recPts[i]), 0, int(NPtBins) - 1
+            );
+            const double nonClosure = correctionHist_->at(iEta, iPt).value();
+            const double recoKUnc = (nonClosure - 1) * (1 / recPts[i]);
+            const double recoQopUnc = calculateQopUnc(recEtas[i], recCharges[i], recoKUnc);
+
+            for (std::ptrdiff_t idownup = 0; idownup < 2; ++idownup) {
+                const double dir = idownup == 0 ? -1. : 1.;
+                delta_qopr(idownup) = recoQopUnc * dir / qopgen;
+            }
+
+            const out_tensor_chip_t alt_weights = dweightdqop*delta_qopr + 1.;
+
+            // total weight is the product over all the muons
+            res(iEta, iPt, 0) *= alt_weights(0);
+            res(iEta, iPt, 1) *= alt_weights(1);
+        }
+        return res;
+    }
+
+private:
+    std::shared_ptr<narf::tflite_helper> helper_;
+    std::shared_ptr<const T> correctionHist_;
+};
 /*
 void test_SmearingWeightTestHelper(SmearingWeightTestHelper<5> &helper) {
     auto res = helper(RVec<float>(), RVec<float>(), RVec<int>(), RVec<float>(), RVec<float>(), RVec<int>(), 1.);
