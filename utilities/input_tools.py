@@ -243,7 +243,7 @@ def add_charge_axis(h, charge):
 
 def getPOInames(rtfile, poi_type="mu"):
     names = []
-    if f'nuisance_impact_{poi_type}' in [k.replace(";1","") for k in rtfile.keys()]:
+    if poi_type is not None and f'nuisance_impact_{poi_type}' in [k.replace(";1","") for k in rtfile.keys()]:
         impacts = rtfile[f'nuisance_impact_{poi_type}'].to_hist()
         names = [impacts.axes[0].value(i) for i in range(impacts.axes[0].size)]
 

@@ -137,7 +137,7 @@ only_central_pdf_datasets = [
     "Zmumu_bugfix_slc7",
 ]
 
-extended_pdf_datasets = [x for x in common.vprocs+common.vprocs_lowpu if not any(y in x for y in ["NNLOPS", "MiNLO"])]
+extended_pdf_datasets = [x for x in common.vprocs_all if not any(y in x for y in ["NNLOPS", "MiNLO"])]
 
 def define_prefsr_vars(df):
     if "prefsrLeps" in df.GetColumnNames():
@@ -161,9 +161,8 @@ def define_prefsr_vars(df):
 
 def define_scale_tensor(df):
     if "scaleWeights_tensor" in df.GetColumnNames():
-        logger.debug("scaleWeights_tensor is already defined, do nothing here.")
+        logger.debug("scaleWeight_tensor already defined, do nothing here.")
         return df
-
     # convert vector of scale weights to 3x3 tensor and clip weights to |weight|<10.
     df = df.Define("scaleWeights_tensor", f"wrem::makeScaleTensor(LHEScaleWeight, theory_weight_truncate);")
     df = df.Define("scaleWeights_tensor_wnom", "auto res = scaleWeights_tensor; res = nominal_weight*res; return res;")
@@ -282,9 +281,10 @@ def build_weight_expr(df, exclude_weights=[]):
 
     if "extra_weight" in valid_cols:
         logger.info("Adding additional weight '{extra_weight}'")
-        found_weights.append(extra_weight)
+        found_weights.append("extra_weight")
 
     weight_expr = "*".join(found_weights)
+
     logger.debug(f"Weight is {weight_expr}")
 
     return weight_expr
@@ -324,7 +324,7 @@ def define_theory_corr(df, dataset_name, helpers, generators, modify_central_wei
             df = df.Define(f"{generator}Weight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "nominal_weight_uncorr"])
 
         if i == 0 and modify_central_weight:
-            df = df.Define("theory_corr_weight", f"{generator}Weight_tensor(0)/nominal_weight_uncorr")
+            df = df.Define("theory_corr_weight", f"nominal_weight_uncorr == 0 ? 0 : {generator}Weight_tensor(0)/nominal_weight_uncorr")
 
     return df
 

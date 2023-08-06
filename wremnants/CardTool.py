@@ -1,5 +1,6 @@
 from collections import OrderedDict
 from wremnants import histselections as sel
+from wremnants.combine_helpers import setSimultaneousABCD
 from utilities import boostHistHelpers as hh, common, output_tools, logging
 import narf
 import ROOT
@@ -7,6 +8,7 @@ import uproot
 import time
 import numpy as np
 import os
+import pathlib
 import itertools
 import re
 import hist
@@ -23,10 +25,10 @@ def notImplemented(operation="Unknown"):
     raise NotImplementedError(f"Required operation '{operation}' is not implemented!")
 
 class CardTool(object):
-    def __init__(self, cardName="card.txt"):
+    def __init__(self, outpath="./", xnorm=False):
+    
         self.skipHist = False # don't produce/write histograms, file with them already exists
         self.outfile = None
-        self.cardName = cardName
         self.systematics = {}
         self.lnNSystematics = {}
         self.predictedProcs = []
@@ -59,12 +61,18 @@ class CardTool(object):
         #self.loadArgs = {"operation" : "self.loadProcesses (reading hists from file)"}
         self.lumiScale = 1.
         self.project = None
-        self.xnorm = False
+        self.xnorm = xnorm
         self.absolutePathShapeFileInCard = False
         self.chargeIdDict = {"minus" : {"val" : -1, "id" : "q0", "badId" : "q1"},
                              "plus"  : {"val" : 1., "id" : "q1", "badId" : "q0"},
                              "inclusive" : {"val" : "sum", "id" : "none", "badId" : None},
                              }
+
+        self.setNominalTemplate()
+
+        if xnorm:
+            self.setHistName("xnorm")
+            self.setNominalName("xnorm")
 
     def skipHistograms(self):
         self.skipHist = True
@@ -156,8 +164,8 @@ class CardTool(object):
     def setWriteByCharge(self, writeByCharge):
         self.writeByCharge = writeByCharge
 
-    def setNominalTemplate(self, template):
-        if not os.path.isfile(template):
+    def setNominalTemplate(self, template=f"{pathlib.Path(__file__).parent}/../scripts/combine/Templates/datacard.txt"):
+        if not os.path.abspath(template):
             raise IOError(f"Template file {template} is not a valid file")
         self.nominalTemplate = template
 
@@ -216,7 +224,7 @@ class CardTool(object):
                       scale=1, processes=None, group=None, noi=False, noConstraint=False, noProfile=False,
                       action=None, doActionBeforeMirror=False, actionArgs={}, actionMap={},
                       systNameReplace=[], systNamePrepend=None, groupFilter=None, passToFakes=False,
-                      rename=None, splitGroup={}, decorrelateByBin={},
+                      rename=None, splitGroup={}, decorrelateByBin={}, noiGroup=False
                       ):
         # note: setting Up=Down seems to be pathological for the moment, it might be due to the interpolation in the fit
         # for now better not to use the options, although it might be useful to keep it implemented
@@ -360,7 +368,8 @@ class CardTool(object):
         # Jan: moved above the mirror action, as this action can cause mirroring
         if systInfo["action"] and not systInfo["doActionBeforeMirror"]:
             hvar = systInfo["action"](hvar, **systInfo["actionArgs"])
-        self.outfile.cd() # needed to restore the current directory in case the action opens a new root file
+        if self.outfile:
+            self.outfile.cd() # needed to restore the current directory in case the action opens a new root file
             
         axNames = systAxes[:]
         axLabels = systAxesLabels[:]
@@ -614,8 +623,44 @@ class CardTool(object):
         else:
             self.outfile = outfile
             self.outfile.cd()
-            
-    def writeOutput(self, args=None, xnorm=False, forceNonzero=True, check_systs=True):
+
+    def setOutput(self, outfolder, fitvars=[], doStatOnly=False, postfix=None, hdf5=False):
+        if self.datagroups.wmass:
+            prefix = "WMass"
+        elif self.datagroups.wlike:
+            prefix = "ZMassWLike"
+        else:
+            prefix = "ZMassDilepton"
+        if self.datagroups.lowPU:
+            prefix += "_lowPU"
+
+        tag = prefix+"_"+"_".join(fitvars)
+        if doStatOnly:
+            tag += "_statOnly"
+        if self.datagroups.flavor:
+            tag += f"_{self.datagroups.flavor}"
+        if postfix is not None:
+            tag += f"_{postfix}"
+
+        self.outfolder = f"{outfolder}/{tag}/"
+        if not os.path.isdir(self.outfolder):
+            os.makedirs(self.outfolder)
+
+        suffix = f"_{self.datagroups.flavor}" if self.datagroups.flavor else ""
+        if self.xnorm:
+            suffix += '_xnorm'
+
+        self.cardName = (f"{self.outfolder}/{prefix}_{{chan}}{suffix}.txt")
+        if not hdf5:
+            self.setOutfile(os.path.abspath(f"{self.outfolder}/{prefix}CombineInput{suffix}.root"))
+
+    def writeOutput(self, args=None, hdf5=False, sparse=False, **kwargs):
+        if not hdf5:
+            self.writeRootOutput(args, **kwargs)
+        else:
+            self.writeHDF5Output(args, sparse=sparse, **kwargs)
+
+    def writeRootOutput(self, args=None, xnorm=False, forceNonzero=True, check_systs=True, simultaneousABCD=False):
         self.xnorm = xnorm
         self.datagroups.loadHistsForDatagroups(
             baseName=self.nominalName, syst=self.nominalName,
@@ -623,6 +668,8 @@ class CardTool(object):
             label=self.nominalName, 
             scaleToNewLumi=self.lumiScale, 
             forceNonzero=forceNonzero)
+        if simultaneousABCD and not self.xnorm:
+            setSimultaneousABCD(self)
         self.writeForProcesses(self.nominalName, processes=self.datagroups.groups.keys(), label=self.nominalName, check_systs=check_systs)
         self.loadNominalCard()
         if self.pseudoData and not self.xnorm:
@@ -652,7 +699,8 @@ class CardTool(object):
             logger.info("Histograms will not be written because 'skipHist' flag is set to True")
         self.writeCard()
 
-    def writeOutputHDF5(self, args=None, xnorm=False, theoryFit=False,
+    def writeHDF5Output(self, args=None, xnorm=False, theoryFit=False,
+        simultaneousABCD=False,
         forceNonzero=True, check_systs=True, allowNegativeExpectation=False, 
         sparse=False, dtype="float64", chunkSize=4*1024**2,
         logkepsilon=math.log(1e-3), #numerical cutoff in case of zeros in systematic variations
@@ -732,43 +780,61 @@ class CardTool(object):
             chans.append("xnorm")
             maskedchans.append("xnorm")
 
+        nbins = 0
+        nbinsfull = 0
+
         signals = self.unconstrainedProcesses
         bkgs = [p for p in self.predictedProcesses() if p not in self.unconstrainedProcesses]
         procs = list(sorted(signals)) + list(sorted(bkgs))
         nproc = len(procs)
 
+        dict_data_obs = {}
+        dict_sumw2 = {c : {} for c in chans}
         dict_norm = {c : {} for c in chans}
         dict_logkavg = {c : {} for c in chans}
         dict_logkhalfdiff = {c : {} for c in chans}
-
-        # load data and nominal ans syst histograms
-        self.datagroups.loadHistsForDatagroups(
-            baseName=self.nominalName, syst=self.nominalName,
-            procsToRead=self.datagroups.groups.keys(),
-            label=self.nominalName, 
-            scaleToNewLumi=self.lumiScale, 
-            forceNonzero=forceNonzero)
-
-        data_obs_hist = self.datagroups.groups[self.dataName].hists[self.nominalName]
-        data_axes = data_obs_hist.axes
-        data_obs = data_obs_hist.values(flow=False).flatten().astype(dtype)
-        nbins = len(data_obs)
-
-        nbinsfull = nbins
-        if xnorm:
-            nbinsfull += 1
-
-        sumw = np.zeros([nbins], dtype)
-        sumw2 = np.zeros([nbins], dtype)
 
         #keep track of bins per channel
         ibins = []
         
         #nominal histograms
         for chan in chans:
+            logger.debug(f"Now in channel {chan}")
+
+            if chan in maskedchans:
+                self.datagroups.select_xnorm_groups() # only keep processes where xnorm is defined
+                self.datagroups.deleteGroup("Fake")
+                # TODO gen model
+                # if self.datagroups.wmass:
+                #     # add gen charge as additional axis
+                #     self.datagroups.groups["Wmunu"].add_member_axis("qGen", self.datagroups.results, 
+                #         member_filters={-1: lambda x: x.name.startswith("Wminus"), 1: lambda x: x.name.startswith("Wplus")}, 
+                #         hist_filter=lambda x: x.startswith("xnorm"))
+                # # remove projection axes from gen axes, otherwise they will be integrated before
+                # self.datagroups.setGenAxes([a for a in self.datagroups.gen_axes if a not in self.project])
+
+            procs_chan = self.datagroups.groups.keys()
+
+            # load data and nominal ans syst histograms
+            self.datagroups.loadHistsForDatagroups(
+                baseName=chan, syst=chan,
+                procsToRead=procs_chan,
+                label=chan, 
+                scaleToNewLumi=self.lumiScale, 
+                forceNonzero=forceNonzero)
 
             if not chan in maskedchans:                
-                nbinschan = nbins
+
+                if simultaneousABCD:
+                    setSimultaneousABCD(self)
+
+                data_obs_hist = self.datagroups.groups[self.dataName].hists[chan]
+                if data_obs_hist.axes.name != self.project:
+                    data_obs_hist = data_obs_hist.project(*self.project)
+                data_obs = data_obs_hist.values(flow=False).flatten().astype(dtype)
+                dict_data_obs[chan] = data_obs
+                nbinschan = len(data_obs)
+                nbins += nbinschan
 
                 if theoryFit:
                     pass
@@ -780,47 +846,52 @@ class CardTool(object):
                     # data_cov[ibin:ibin+nbinschan,ibin:ibin+nbinschan] = data_cov_chan
                     # data_cov_chan = None
             else:
+                self.setProjectionAxes(["count"])
                 nbinschan = 1
+
             ibins.append(nbinschan)
 
-            for proc in procs:
-                logger.debug(f"Now at process {proc}")
+            for proc in procs_chan:
+                logger.debug(f"Now  in channel {chan} at process {proc}")
                 
                 # nominal histograms of prediction
                 norm_proc_hist = self.datagroups.groups[proc].hists[chan]
-                norm_proc = norm_proc_hist.values(flow=False).flatten().astype(dtype)
 
                 if not chan in maskedchans:                
-                    if data_axes != norm_proc_hist.axes:
-                        raise Exception(f"Mismatch between data axes {data_axes} ({nbins} bins) and {proc} axes {norm_proc_hist.axes} ({len(norm_proc)} bins)")
 
+                    if norm_proc_hist.axes != self.project:
+                        norm_proc_hist = norm_proc_hist.project(*self.project)
+                    
                     # check if variances are available
                     if norm_proc_hist.storage_type != hist.storage.Weight:
                         raise RuntimeError(f"Sumw2 not filled for {proc} but needed for binByBin uncertainties")
 
+                    norm_proc = norm_proc_hist.values(flow=False).flatten().astype(dtype)
                     sumw2_proc = norm_proc_hist.variances(flow=False).flatten().astype(dtype)
                 else:
+                    norm_proc = norm_proc_hist.values(flow=False).flatten().astype(dtype)
                     if norm_proc.shape[0] != nbinschan:
-                        raise Exception("Mismatch between number of bins in channel for data and template")
+                        raise Exception(f"Mismatch between number of bins in channel {chan} for expected ({nbinschan}) and template ({norm_proc.shape[0]})")
 
                 if not allowNegativeExpectation:
                     norm_proc = np.maximum(norm_proc, 0.)
 
                 if not chan in maskedchans:                
-                    sumw += norm_proc
-                    sumw2 += sumw2_proc
-                    sumw2_proc = None
+                    dict_sumw2[chan][proc] = sumw2_proc
 
                 dict_norm[chan][proc] = norm_proc
 
-            dict_logkavg[chan] = {p : {} for p in procs}
-            dict_logkhalfdiff[chan] = {p : {} for p in procs}
+            dict_logkavg[chan] = {p : {} for p in procs_chan}
+            dict_logkhalfdiff[chan] = {p : {} for p in procs_chan}
 
             # lnN systematics
             for name, syst in self.lnNSystematics.items():
-                logger.debug(f"Now at lnN systematic {name}")
+                logger.debug(f"Now in channel {chan} at lnN systematic {name}")
 
                 if self.isExcludedNuisance(name): 
+                    continue
+                procs_syst = [p for p in syst["processes"] if p in procs_chan]
+                if len(procs_syst) == 0:
                     continue
 
                 ksyst = syst["size"]
@@ -833,8 +904,8 @@ class CardTool(object):
                         ksystup = 1.
                     if ksystdown == 0.:
                         ksystdown = 1.
-                    logkup_proc = math.log(ksystup)*np.ones([nbins],dtype=dtype)
-                    logkdown_proc = -math.log(ksystdown)*np.ones([nbins],dtype=dtype)
+                    logkup_proc = math.log(ksystup)*np.ones([nbinschan],dtype=dtype)
+                    logkdown_proc = -math.log(ksystdown)*np.ones([nbinschan],dtype=dtype)
                     logkavg_proc = 0.5*(logkup_proc + logkdown_proc)
                     logkhalfdiff_proc = 0.5*(logkup_proc - logkdown_proc)
                     logkup_proc = None
@@ -842,10 +913,10 @@ class CardTool(object):
                 else:
                     if ksyst == 0.:
                         continue
-                    logkavg_proc = math.log(ksyst)*np.ones([nbins],dtype=dtype)
-                    logkhalfdiff_proc = np.zeros([nbins],dtype=dtype)
+                    logkavg_proc = math.log(ksyst)*np.ones([nbinschan],dtype=dtype)
+                    logkhalfdiff_proc = np.zeros([nbinschan],dtype=dtype)
 
-                for proc in syst['processes']:
+                for proc in procs_syst:
                     logger.debug(f"Now at proc {proc}!")
 
                     # save for later
@@ -856,23 +927,29 @@ class CardTool(object):
 
             # shape systematics
             for systKey, syst in self.systematics.items():
+                logger.debug(f"Now in channel {chan} at shape systematic group {systKey}")
+
                 if self.isExcludedNuisance(systKey): 
                     continue
-                systName = systKey if not syst["name"] else syst["name"]
 
-                logger.debug(f"Now at shape systematic group {systKey}")
+                # some channels (e.g. xnorm) don't have all processes affected by the systematic
+                procs_syst = [p for p in syst["processes"] if p in procs_chan]
+                if len(procs_syst) == 0:
+                    continue
+
+                systName = systKey if not syst["name"] else syst["name"]
 
                 self.datagroups.loadHistsForDatagroups(
                     chan, systName, label="syst",
-                    procsToRead=syst["processes"], 
+                    procsToRead=procs_syst, 
                     forceNonzero=forceNonzero and systName != "qcdScaleByHelicity",
                     preOpMap=syst["actionMap"], preOpArgs=syst["actionArgs"],
                     # Needed to avoid always reading the variation for the fakes, even for procs not specified
                     forceToNominal=[x for x in self.datagroups.getProcNames() if x not in 
-                        self.datagroups.getProcNames([p for p in syst["processes"] if p != "Fake"])],
+                        self.datagroups.getProcNames([p for p in procs_syst if p != "Fake"])],
                     scaleToNewLumi=self.lumiScale,
                 )
-                for proc in syst['processes']:
+                for proc in procs_syst:
                     logger.debug(f"Now at proc {proc}!")
 
                     hnom = self.datagroups.groups[proc].hists[chan]
@@ -895,10 +972,11 @@ class CardTool(object):
 
                         if syst["mirror"]:
                             syst_proc_hist = var_map[var_name]
-                            syst_proc = syst_proc_hist.values(flow=False).flatten().astype(dtype)
 
-                            if data_axes != syst_proc_hist.axes:
-                                raise Exception(f"Mismatch between data axes {data_axes} ({nbinschan} bins) and {proc} axes {syst_proc_hist.axes} ({len(syst_proc)} bins)")
+                            if syst_proc_hist.axes != self.project:
+                                syst_proc_hist = syst_proc_hist.project(*self.project)
+
+                            syst_proc = syst_proc_hist.values(flow=False).flatten().astype(dtype)
 
                             logkup_proc = kfac*np.log(syst_proc/norm_proc)
                             # check if there is a sign flip between systematic and variation
@@ -909,13 +987,14 @@ class CardTool(object):
                         else:
                             systup_proc_hist = var_map[var_name+"Up"]
                             systdown_proc_hist = var_map[var_name+"Down"]
+
+                            if systup_proc_hist.axes != self.project:
+                                systup_proc_hist = systup_proc_hist.project(*self.project)
+                            if systdown_proc_hist.axes != self.project:
+                                systdown_proc_hist = systdown_proc_hist.project(*self.project)
+
                             systup_proc = systup_proc_hist.values(flow=False).flatten().astype(dtype)
                             systdown_proc = systdown_proc_hist.values(flow=False).flatten().astype(dtype)
-
-                            if data_axes != systup_proc_hist.axes:
-                                raise Exception(f"Mismatch between data axes {data_axes} ({nbinschan} bins) and {proc} axes {systup_proc_hist.axes} ({len(systup_proc)} bins)")
-                            if data_axes != systdown_proc_hist.axes:
-                                raise Exception(f"Mismatch between data axes {data_axes} ({nbinschan} bins) and {proc} axes {systdown_proc_hist.axes} ({len(systdown_proc)} bins)")
 
                             logkup_proc = kfac*np.log(systup_proc/norm_proc)
                             logkdown_proc = -kfac*np.log(systdown_proc/norm_proc)
@@ -990,6 +1069,24 @@ class CardTool(object):
                 systgroupidx.append(systs.index(syst))
             systgroupidxs.append(systgroupidx)
 
+        nbinsfull = sum(ibins)
+
+        logger.info(f"Write out nominal arrays")
+        sumw = np.zeros([nbins], dtype)
+        sumw2 = np.zeros([nbins], dtype)
+        data_obs = np.zeros([nbins], dtype)
+        ibin = 0
+        for nbinschan, chan in zip(ibins, chans):
+            if chan in maskedchans:
+                continue
+            data_obs[ibin:ibin+nbinschan] = dict_data_obs[chan]
+            for iproc, proc in enumerate(procs):
+                if proc not in dict_norm[chan]:
+                    continue
+                sumw[ibin:ibin+nbinschan] += dict_norm[chan][proc]
+                sumw2[ibin:ibin+nbinschan] += dict_sumw2[chan][proc]
+
+        ibin = 0
         if sparse:
             logger.info(f"Write out sparse array")
 
@@ -1015,6 +1112,8 @@ class CardTool(object):
                 dict_logkhalfdiff_chan = dict_logkhalfdiff[chan]
 
                 for iproc, proc in enumerate(procs):
+                    if proc not in dict_norm_chan:
+                        continue
                     norm_proc = dict_norm_chan[proc]
 
                     norm_indices = np.transpose(np.nonzero(norm_proc))
@@ -1149,6 +1248,8 @@ class CardTool(object):
                 dict_logkhalfdiff_chan = dict_logkhalfdiff[chan]
 
                 for iproc, proc in enumerate(procs):
+                    if proc not in dict_norm_chan:
+                        continue
                     norm[ibin:ibin+nbinschan, iproc] = dict_norm_chan[proc]
 
                     dict_logkavg_proc = dict_logkavg_chan[proc]
@@ -1334,9 +1435,6 @@ class CardTool(object):
             logk = None
 
         logger.info(f"Total raw bytes in arrays = {nbytes}")
-
-
-
         
     def writeCard(self):
         for chan in self.channels:
@@ -1354,16 +1452,20 @@ class CardTool(object):
         else:
             self.cardGroups[chan] += f"\n{group_expr} {members}"                                              
 
-    def addPOISumGroups(self, keys=None):
-        
-        if keys is None:
-            # make a sum group for each gen axis
-            keys = self.datagroups.gen_axes
-            # also include combinations of axes in case there are more than 2 axes
-            for n in range(2, len(self.datagroups.gen_axes)):
-                keys += [k for k in itertools.combinations(self.datagroups.gen_axes, n)]
-
-        for axes in keys:
+    def addPOISumGroups(self, gen_axes=None, additional_axes=None):
+        if gen_axes is None:
+            gen_axes = self.datagroups.gen_axes.copy()
+        if additional_axes is not None:
+            gen_axes += additional_axes
+        # if only one or none gen axes, it is already included as main POI and no sumGroups are needed
+        if len(gen_axes) <= 1:
+            return
+        # make a sum group for each gen axis
+        axes_combinations = gen_axes
+        # also include combinations of axes in case there are more than 2 axes
+        for n in range(2, len(self.datagroups.gen_axes)):
+            axes_combinations += [k for k in itertools.combinations(self.datagroups.gen_axes, n)]
+        for axes in axes_combinations:
             logger.debug(f"Add sum group for {axes}")
 
             if isinstance(axes, str):

@@ -53,8 +53,16 @@ axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, nam
 down_up_axis = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "downUpVar")
 down_nom_up_axis = hist.axis.Regular(3, -1.5, 1.5, underflow=False, overflow=False, name = "downNomUpVar")
 
-axis_passIso = hist.axis.Boolean(name = "passIso")
-axis_passMT = hist.axis.Boolean(name = "passMT")
+passIsoName = "passIso"
+passMTName = "passMT"
+
+passIso = {passIsoName: True}
+failIso = {passIsoName: False}
+passMT = {passMTName: True}
+failMT = {passMTName: False}
+
+axis_passIso = hist.axis.Boolean(name = passIsoName)
+axis_passMT = hist.axis.Boolean(name = passMTName)
 
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
     
@@ -67,8 +75,8 @@ def getIsoMtRegionID(passIso=True, passMT=True):
     return passIso * 1 + passMT * 2
 
 def getIsoMtRegionFromID(regionID):
-    return {"passIso" : regionID & 1,
-            "passMT"  : regionID & 2}
+    return {passIsoName : regionID & 1,
+            passMTName  : regionID & 2}
 
 def common_parser(for_reco_highPU=False):
     parser = argparse.ArgumentParser()
@@ -99,6 +107,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--theoryCorr", nargs="*", default=["scetlib_dyturbo"], choices=theory_corrections.valid_theory_corrections(),
         help="Apply corrections from indicated generator. First will be nominal correction.")
     parser.add_argument("--theoryCorrAltOnly", action='store_true', help="Save hist for correction hists but don't modify central weight")
+    parser.add_argument("--widthVariations", action='store_true', help="Store variations of W and Z widths.")   
     parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")
     parser.add_argument("--eta", nargs=3, type=float, help="Eta binning as 'nbins min max' (only uniform for now)", default=[48,-2.4,2.4])
     parser.add_argument("--pt", nargs=3, type=float, help="Pt binning as 'nbins,min,max' (only uniform for now)", default=[29,26.,55.])
@@ -116,7 +125,11 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--correlatedNonClosureNP", action="store_true", help="disable the de-correlation of Z non-closure nuisance parameters after the jpsi massfit")
     parser.add_argument("--noScaleToData", action="store_true", help="Do not scale the MC histograms with xsec*lumi/sum(gen weights) in the postprocessing step")
     parser.add_argument("--aggregateGroups", type=str, nargs="*", default=["Diboson", "Top", "Wtaunu"], help="Sum up histograms from members of given groups in the postprocessing step")
-    
+    parser.add_argument("--unfolding", action='store_true', help="Add information needed for unfolding")
+    parser.add_argument("--genLevel", type=str, default='postFSR', choices=["preFSR", "postFSR"], help="Generator level definition for unfolding")
+    parser.add_argument("--genVars", type=str, nargs="+", default=["ptGen", "absEtaGen"], choices=["qGen", "ptGen", "absEtaGen", "ptVGen", "absYVGen"], help="Generator level variable")
+    parser.add_argument("--genBins", type=int, nargs="+", default=[3, 2], help="Number of generator level bins")
+
     if for_reco_highPU:
         # additional arguments specific for histmaker of reconstructed objects at high pileup (mw, mz_wlike, and mz_dilepton)
         parser.add_argument("--dphiMuonMetCut", type=float, help="Threshold to cut |deltaPhi| > thr*np.pi between muon and met", default=0.25)
@@ -133,9 +146,6 @@ def common_parser(for_reco_highPU=False):
         parser.add_argument("--excludeFlow", action='store_true', help="Excludes underflow and overflow bins in main axes")
         parser.add_argument("--biasCalibration", type=str, default=None, choices=["binned","parameterized", "A", "M"], help="Adjust central value by calibration bias hist for simulation")
         parser.add_argument("--smearing", action='store_true', help="Smear pT such that resolution matches data") #TODO change to --no-smearing once smearing is final
-        parser.add_argument("--unfolding", action='store_true', help="Add information needed for unfolding")
-        parser.add_argument("--genLevel", type=str, default='postFSR', choices=["preFSR", "postFSR"], help="Generator level definition for unfolding")
-        parser.add_argument("--genBins", type=int, nargs="+", default=[3, 2], help="Number of generator level bins")
         parser.add_argument("--validateByMassWeights", action = "store_true", help = "validate the muon momentum scale shift weights by massweights")
         # options for efficiencies
         parser.add_argument("--trackerMuons", action='store_true', help="Use tracker muons instead of global muons (need appropriate scale factors too). This is obsolete")
@@ -174,6 +184,7 @@ def common_parser_combine():
     parser.add_argument("--wlike", action='store_true', help="Run W-like analysis of mZ")
     parser.add_argument("-o", "--outfolder", type=str, default=".", help="Output folder with the root file storing all histograms and datacards for single charge (subfolder WMass or ZMassWLike is created automatically inside)")
     parser.add_argument("-i", "--inputFile", type=str)
+    parser.add_argument("--absolutePathInCard", action="store_true", help="In the datacard, set Absolute path for the root file where shapes are stored")
     parser.add_argument("--minnloScaleUnc", choices=["byHelicityPt", "byHelicityPtCharge", "byHelicityCharge", "byPtCharge", "byPt", "byCharge", "integrated",], default="byHelicityPt",
             help="Decorrelation for QCDscale")
     parser.add_argument("--rebin", type=int, nargs='*', default=[], help="Rebin axis by this value (default does nothing)")

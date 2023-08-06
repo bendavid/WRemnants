@@ -1,7 +1,8 @@
-from utilities import boostHistHelpers as hh
 import hist
 import numpy as np
 from utilities.input_tools import safeOpenRootFile, safeGetRootObject
+from utilities import boostHistHelpers as hh
+from utilities.common import passMT, failMT, passIso, failIso
 import narf
 import ROOT
 
@@ -16,16 +17,16 @@ hist_map = {
 
 def fakeHistABCD(h, low_PU=False):
     if low_PU and "mt" in [ax.name for ax in h.axes]:
-        return h[{"passIso" : False, "passMT" : True}]*h[{"passIso" : True, "passMT" : False}].sum().value / h[{"passIso" : False, "passMT" : False}].sum().value
+        return h[{**failIso, **passMT}]*h[{**passIso, **failMT}].sum().value / h[{**failIso, **failMT}].sum().value
 
     return hh.multiplyHists(
-        hh.divideHists(h[{"passIso" : True, "passMT" : False}], 
-            h[{"passIso" : False, "passMT" : False}],
+        hh.divideHists(h[{**passIso, **failMT}], 
+            h[{**failIso, **failMT}],
                 cutoff=1,
                 createNew=True,
             ),
-                #where=h[{"passIso" : False, "passMT" : True}].values(flow=True)>1),
-        h[{"passIso" : False, "passMT" : True}], 
+                #where=h[{**failIso, "passMT" : True}].values(flow=True)>1),
+        h[{**failIso, **passMT}], 
     )
 
 def fakeHistIsoRegion(h, scale=1.):
@@ -40,11 +41,11 @@ def fakeHistIsoRegionIntGen(h, scale=1.):
     print("Slicing")
     return h[{"iso" : 0, "qTgen" : s[::hist.sum]}]
 
-def signalHistWmass(h, charge=None, passIso=True, passMT=True, genBin=None):
+def signalHistWmass(h, charge=None, passIso=passIso, passMT=passMT, genBin=None):
     if genBin != None:
         h = h[{"recoil_gen" : genBin}]
 
-    sel = {"passIso" : passIso, "passMT" : passMT}
+    sel = {**passIso, **passMT}
     if charge in [-1, 1]:
         sel.update({"charge" : -1j if charge < 0 else 1j})
 
@@ -57,16 +58,16 @@ def signalHistWmass(h, charge=None, passIso=True, passMT=True, genBin=None):
 
 # the following are utility wrapper functions for signalHistWmass with proper region selection
 def histWmass_failMT_passIso(h, charge=None):
-    return signalHistWmass(h, charge, True, False)
+    return signalHistWmass(h, charge, passIso, failMT)
 
 def histWmass_failMT_failIso(h, charge=None):
-    return signalHistWmass(h, charge, False, False)
+    return signalHistWmass(h, charge, failIso, failMT)
 
 def histWmass_passMT_failIso(h, charge=None):
-    return signalHistWmass(h, charge, False, True)
+    return signalHistWmass(h, charge, failIso, passMT)
 
 def histWmass_passMT_passIso(h, charge=None):
-    return signalHistWmass(h, charge, True, True)
+    return signalHistWmass(h, charge, passIso, passMT)
 
 # TODO: Not all hists are made with these axes
 def signalHistLowPileupW(h):
