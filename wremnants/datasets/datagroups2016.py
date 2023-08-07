@@ -1,14 +1,11 @@
 from utilities import boostHistHelpers as hh, logging
 from wremnants import histselections as sel
-from wremnants.datasets.datagroups import Datagroups
-from wremnants.datasets.datagroup import Datagroup
-from wremnants.datasets import datasets2016
 
 logger = logging.child_logger(__name__)
     
-def make_datagroups_2016(input_file, combine=False, pseudodata_pdfset = None, applySelection=True, excludeGroups=None, filterGroups=None):
-
-    dg = Datagroups(input_file, combine, datasets2016.getDatasets())
+def make_datagroups_2016(dg, combine=False, pseudodata_pdfset = None, applySelection=True, excludeGroups=None, filterGroups=None):
+    # reset datagroups
+    dg.groups = {}
 
     if dg.wmass and applySelection:
         sigOp = sel.signalHistWmass
@@ -94,5 +91,5 @@ def make_datagroups_2016(input_file, combine=False, pseudodata_pdfset = None, ap
         )
         dg.filterGroups(filterGroups)
         dg.excludeGroups(excludeGroups)
-    
+
     return dg

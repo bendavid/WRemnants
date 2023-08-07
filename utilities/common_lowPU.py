@@ -20,10 +20,7 @@ axis_passIso = hist.axis.Boolean(name = "passIso")
 axis_passMT = hist.axis.Boolean(name = "passMT")
 down_up_axis = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "downUpVar")
 
-
-
-
-
+ptV_binning = [0, 5, 10, 15, 20, 30, 40, 50, 60, 75, 90, 150]
 
 def common_parser():
     parser = argparse.ArgumentParser()

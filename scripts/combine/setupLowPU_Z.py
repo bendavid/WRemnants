@@ -32,7 +32,7 @@ def main(args, xnorm=False):
 
     if not args.inputFile: args.inputFile = "lowPU_%s_%s.hdf5" % (args.flavor, args.met)
 
-    datagroups = make_datagroups_lowPU(args.inputFile, flavor=args.flavor)
+    datagroups = make_datagroups_lowPU(args.inputFile)
     constrainedProcs = []   # constrained signal procs
     bkgProcs = ["Other", "Ztautau"] if args.fitType == "wmass" else ["Top", "EWK"] # background procs
     dataProc = "SingleMuon" if args.flavor == "mumu" else "SingleElectron"

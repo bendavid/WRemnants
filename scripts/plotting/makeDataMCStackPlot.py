@@ -1,4 +1,4 @@
-from wremnants.datasets.datagroups2016 import make_datagroups_2016
+from wremnants.datasets.datagroups import Datagroups
 from wremnants import histselections as sel
 from wremnants import plot_tools,theory_tools,syst_tools
 from utilities import boostHistHelpers as hh,common,output_tools
@@ -45,7 +45,7 @@ parser.add_argument("infile", help="Output file of the analysis stage, containin
 parser.add_argument("--ratioToData", action='store_true', help="Use data as denominator in ratio")
 parser.add_argument("-n", "--baseName", type=str, help="Histogram name in the file (e.g., 'nominal')", default="nominal")
 parser.add_argument("--nominalRef", type=str, help="Specify the nominal his if baseName is a variation hist (for plotting alt hists)")
-parser.add_argument("--hists", type=str, nargs='+', required=True, choices=xlabels.keys(), help="List of histograms to plot")
+parser.add_argument("--hists", type=str, nargs='+', required=True, help="List of histograms to plot")
 parser.add_argument("-c", "--channel", type=str, choices=["plus", "minus", "all"], default="all", help="Select channel to plot")
 parser.add_argument("-p", "--outpath", type=str, default=os.path.expanduser("~/www/WMassAnalysis"), help="Base path for output")
 parser.add_argument("-f", "--outfolder", type=str, default="test", help="Subfolder for output")
@@ -63,7 +63,7 @@ parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend te
 parser.add_argument("--fitresult", type=str, help="Specify a fitresult root file to draw the postfit distributions with uncertainty bands")
 parser.add_argument("--prefit", action='store_true', help="Use the prefit uncertainty from the fitresult root file, instead of the postfit. (--fitresult has to be given)")
 parser.add_argument("--eoscp", action='store_true', help="Use of xrdcp for eos output rather than the mount")
-
+parser.add_argument("--selection", type=str, help="Specify custom selections as comma seperated list (e.g. '--selection passIso=0,passMT=1' )")
 
 subparsers = parser.add_subparsers(dest="variation")
 variation = subparsers.add_parser("variation", help="Arguments for adding variation hists")
@@ -103,19 +103,30 @@ if addVariation and (args.selectAxis or args.selectEntries):
 
 outdir = output_tools.make_plot_dir(args.outpath, args.outfolder, eoscp=args.eoscp)
 
-groups = make_datagroups_2016(args.infile, filterGroups=args.procFilters, excludeGroups=None if args.procFilters else ['QCD'])
+groups = Datagroups(args.infile, filterGroups=args.procFilters, excludeGroups=None if args.procFilters else ['QCD'])
+
 # There is probably a better way to do this but I don't want to deal with it
 datasets = groups.getNames()
 logger.info(f"Will plot datasets {datasets}")
 
+select = {} if args.channel == "all" else {"charge" : -1.j if args.channel == "minus" else 1.j}
+
+if args.selection:
+    for selection in args.selection.split(","):
+        axis, value = selection.split("=")
+        select[axis] = int(value)
+    applySelection=False
+else:
+    applySelection=True
+
 if not args.nominalRef:
     nominalName = args.baseName.rsplit("_", 1)[0]
     groups.setNominalName(nominalName)
-    groups.loadHistsForDatagroups(args.baseName, syst="", procsToRead=datasets)
+    groups.loadHistsForDatagroups(args.baseName, syst="", procsToRead=datasets, applySelection=applySelection)
 else:
     nominalName = args.nominalRef
     groups.setNominalName(nominalName)
-    groups.loadHistsForDatagroups(nominalName, syst=args.baseName, procsToRead=datasets)
+    groups.loadHistsForDatagroups(nominalName, syst=args.baseName, procsToRead=datasets, applySelection=applySelection)
 
 exclude = ["Data"] 
 unstack = exclude[:]
@@ -168,15 +179,12 @@ if addVariation:
         exclude.append(varname)
         unstack.append(varname)
 
-
 groups.sortByYields(args.baseName, nominalName=nominalName)
 histInfo = groups.getDatagroups()
 
 logger.info(f"Unstacked processes are {exclude}")
 prednames = list(reversed(groups.getNames([d for d in datasets if d not in exclude], exclude=False)))
 logger.info(f"Stacked processes are {prednames}")
-
-select = {} if args.channel == "all" else {"charge" : -1.j if args.channel == "minus" else 1.j}
 
 def collapseSyst(h):
     if type(h.axes[-1]) == hist.axis.StrCategory:
@@ -197,9 +205,9 @@ for h in args.hists:
             skip_fill=args.skipFillBetween if hasattr(args, "skipFillBetween") else 0,
             action=action, unstacked=unstack, 
             fitresult=args.fitresult, prefit=args.prefit,
-            xlabel=xlabels[h], ylabel="Events/bin", rrange=args.rrange, binwnorm=1.0, lumi=groups.lumi,
+            xlabel=xlabels.get(h,h), ylabel="Events/bin", rrange=args.rrange, binwnorm=1.0, lumi=groups.lumi,
             ratio_to_data=args.ratioToData, rlabel="Pred./Data" if args.ratioToData else "Data/Pred.",
-            xlim=args.xlim, no_fill=args.noFill, cms_decor="Preliminary" if not args.noData else "Simulation Preliminary",
+            xlim=args.xlim, no_fill=args.noFill, cms_decor="Preliminary",
             legtext_size=20*args.scaleleg, unstacked_linestyles=args.linestyle if hasattr(args, "linestyle") else [])
 
     fitresultstring=""

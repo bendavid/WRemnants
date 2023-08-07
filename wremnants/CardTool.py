@@ -1,5 +1,6 @@
 from collections import OrderedDict
 from wremnants import histselections as sel
+from wremnants.combine_helpers import setSimultaneousABCD
 from utilities import boostHistHelpers as hh, common, output_tools, logging
 import narf
 import ROOT
@@ -7,6 +8,7 @@ import uproot
 import time
 import numpy as np
 import os
+import pathlib
 import itertools
 import re
 import hist
@@ -18,10 +20,10 @@ def notImplemented(operation="Unknown"):
     raise NotImplementedError(f"Required operation '{operation}' is not implemented!")
 
 class CardTool(object):
-    def __init__(self, cardName="card.txt"):
+    def __init__(self, outpath="./", xnorm=False):
+    
         self.skipHist = False # don't produce/write histograms, file with them already exists
         self.outfile = None
-        self.cardName = cardName
         self.systematics = {}
         self.lnNSystematics = {}
         self.predictedProcs = []
@@ -53,7 +55,7 @@ class CardTool(object):
         self.keepSyst = None # to override previous one with exceptions for special cases
         self.lumiScale = 1.
         self.project = None
-        self.xnorm = False
+        self.xnorm = xnorm
         self.absolutePathShapeFileInCard = False
         self.signalProcesses = []
         self.singleVBackground = []
@@ -92,6 +94,12 @@ class CardTool(object):
             return self.procGroups[process]
 
         return [process]
+
+        self.setNominalTemplate()
+
+        if xnorm:
+            self.setHistName("xnorm")
+            self.setNominalName("xnorm")
 
     def skipHistograms(self):
         self.skipHist = True
@@ -177,8 +185,8 @@ class CardTool(object):
     def setWriteByCharge(self, writeByCharge):
         self.writeByCharge = writeByCharge
 
-    def setNominalTemplate(self, template):
-        if not os.path.isfile(template):
+    def setNominalTemplate(self, template=f"{pathlib.Path(__file__).parent}/../scripts/combine/Templates/datacard.txt"):
+        if not os.path.abspath(template):
             raise IOError(f"Template file {template} is not a valid file")
         self.nominalTemplate = template
 
@@ -237,7 +245,7 @@ class CardTool(object):
                       scale=1, processes=None, group=None, noConstraint=False,
                       action=None, doActionBeforeMirror=False, actionArgs={}, actionMap={},
                       systNameReplace=[], systNamePrepend=None, groupFilter=None, passToFakes=False,
-                      rename=None, splitGroup={}, decorrelateByBin={},
+                      rename=None, splitGroup={}, decorrelateByBin={}, noiGroup=False
                       ):
         # note: setting Up=Down seems to be pathological for the moment, it might be due to the interpolation in the fit
         # for now better not to use the options, although it might be useful to keep it implemented
@@ -276,6 +284,7 @@ class CardTool(object):
                 "systAxes" : systAxes,
                 "labelsByAxis" : systAxes if not labelsByAxis else labelsByAxis,
                 "group" : group,
+                "noiGroup": noiGroup,
                 "groupFilter" : groupFilter,
                 "splitGroup" : splitGroup if len(splitGroup) else {group : ".*"}, # dummy dictionary if splitGroup=None, to allow for uniform treatment
                 "scale" : scale,
@@ -645,8 +654,37 @@ class CardTool(object):
         else:
             self.outfile = outfile
             self.outfile.cd()
+
+    def setOutput(self, outfolder, fitvars=[], doStatOnly=False, postfix=None):
+        if self.datagroups.wmass:
+            prefix = "WMass"
+        elif self.datagroups.wlike:
+            prefix = "ZMassWLike"
+        else:
+            prefix = "ZMassDilepton"
+        if self.datagroups.lowPU:
+            prefix += "_lowPU"
+
+        tag = prefix+"_"+"_".join(fitvars)
+        if doStatOnly:
+            tag += "_statOnly"
+        if self.datagroups.flavor:
+            tag += f"_{self.datagroups.flavor}"
+        if postfix is not None:
+            tag += f"_{postfix}"
+
+        self.outfolder = f"{outfolder}/{tag}/"
+        if not os.path.isdir(self.outfolder):
+            os.makedirs(self.outfolder)
+
+        suffix = f"_{self.datagroups.flavor}" if self.datagroups.flavor else ""
+        if self.xnorm:
+            suffix += '_xnorm'
+
+        self.cardName = (f"{self.outfolder}/{prefix}_{{chan}}{suffix}.txt")
+        self.setOutfile(os.path.abspath(f"{self.outfolder}/{prefix}CombineInput{suffix}.root"))
             
-    def writeOutput(self, args=None, xnorm=False, forceNonzero=True, check_systs=True):
+    def writeOutput(self, args=None, xnorm=False, forceNonzero=True, check_systs=True, simultaneousABCD=False):
         self.xnorm = xnorm
         self.datagroups.loadHistsForDatagroups(
             baseName=self.nominalName, syst=self.nominalName,
@@ -654,6 +692,8 @@ class CardTool(object):
             label=self.nominalName, 
             scaleToNewLumi=self.lumiScale, 
             forceNonzero=forceNonzero)
+        if simultaneousABCD and not self.xnorm:
+            setSimultaneousABCD(self)
         self.writeForProcesses(self.nominalName, processes=self.datagroups.groups.keys(), label=self.nominalName, check_systs=check_systs)
         self.loadNominalCard()
         if self.pseudoData and not self.xnorm:
@@ -682,7 +722,8 @@ class CardTool(object):
         if self.skipHist:
             logger.info("Histograms will not be written because 'skipHist' flag is set to True")
         self.writeCard()
-
+        logger.info(f"Output stored in {self.outfolder}")
+        
     def match_str_axis_entries(self, str_axis, match_re):
         return [x for x in str_axis if any(re.match(r, x) for r in match_re)]
 
@@ -702,16 +743,20 @@ class CardTool(object):
         else:
             self.cardGroups[chan] += f"\n{group_expr} {members}"                                              
 
-    def addPOISumGroups(self, keys=None):
-        
-        if keys is None:
-            # make a sum group for each gen axis
-            keys = self.datagroups.gen_axes
-            # also include combinations of axes in case there are more than 2 axes
-            for n in range(2, len(self.datagroups.gen_axes)):
-                keys += [k for k in itertools.combinations(self.datagroups.gen_axes, n)]
-
-        for axes in keys:
+    def addPOISumGroups(self, gen_axes=None, additional_axes=None):
+        if gen_axes is None:
+            gen_axes = self.datagroups.gen_axes.copy()
+        if additional_axes is not None:
+            gen_axes += additional_axes
+        # if only one or none gen axes, it is already included as main POI and no sumGroups are needed
+        if len(gen_axes) <= 1:
+            return
+        # make a sum group for each gen axis
+        axes_combinations = gen_axes
+        # also include combinations of axes in case there are more than 2 axes
+        for n in range(2, len(self.datagroups.gen_axes)):
+            axes_combinations += [k for k in itertools.combinations(self.datagroups.gen_axes, n)]
+        for axes in axes_combinations:
             logger.debug(f"Add sum group for {axes}")
 
             if isinstance(axes, str):
@@ -766,7 +811,7 @@ class CardTool(object):
         procs = systInfo["processes"]
         group = systInfo["group"]
         groupFilter = systInfo["groupFilter"]
-        label = "group" if not systInfo["noConstraint"] else "noiGroup"
+        label = "group" if not systInfo["noiGroup"] else "noiGroup"
         nondata = self.predictedProcesses()
         names = [x[:-2] if "Up" in x[-2:] else (x[:-4] if "Down" in x[-4:] else x) 
                     for x in filter(lambda x: x != "", systInfo["outNames"])]

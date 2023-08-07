@@ -8,10 +8,11 @@ def scale_to_data(result_dict, data_name = "dataPostVFP"):
     # scale histograms by lumi*xsec/sum(gen weights)
     time0 = time.time()
 
-    if data_name in result_dict.keys():
-        lumi = result_dict[data_name]["lumi"]
-    else:
+    lumi = [result["lumi"] for result in result_dict.values() if result["dataset"]["is_data"]]
+    if len(lumi) == 0:
         lumi = 1
+    else:
+        lumi = sum(lumi)
 
     logger.debug(f"Scale histograms with lumi={lumi}")
     for d_name, result in result_dict.items():

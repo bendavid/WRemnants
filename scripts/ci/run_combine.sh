@@ -8,10 +8,16 @@ combinetf_dir=$1
 mode=$2
 working_dir=$3
 
+maskedChannels=()
 cards=()
 for card in ${@:4}; do
 	echo $card
 	cards+=( $card )
+	if [[ $card == xnorm* ]]; then
+		IFS="=" read -ra parts <<< "$card"
+		key="${parts[0]}"
+		maskedChannels+=( "--maskedChan=${key}" )
+	fi
 done
 
 source /cvmfs/cms.cern.ch/cmsset_default.sh
@@ -32,8 +38,8 @@ if [ "$mode" == "mass" ]; then
 	text2hdf5.py --X-allow-no-signal "$card_name"
 	combinetf.py --doImpacts --binByBinStat -t -1 "$outfile"
 elif [ "$mode" == "unfolding" ]; then
-	text2hdf5.py --X-allow-no-background --maskedChan=xnorm "$card_name"
-	combinetf.py --doImpacts --binByBinStat -t -1 --correlateXsecStat "$outfile" --saveHists --computeHistErrors
+	text2hdf5.py --X-allow-no-background "${maskedChannels[@]}" "$card_name"
+	combinetf.py --doImpacts --binByBinStat -t -1 "$outfile" --correlateXsecStat --saveHists --computeHistErrors
 fi
 
 set +x
