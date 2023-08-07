@@ -372,7 +372,7 @@ def build_graph(df, dataset):
             results.extend(theory_tools.make_theory_corr_hists(df, "nominal", axes, cols, 
                 corr_helpers[dataset.name], args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly, isW = isW)
             )
-        if args.muonScaleVariation == 'smearingWeightsGaus' and (isWorZ): 
+        if (args.muonScaleVariation == 'smearingWeightsGaus' or args.validationHists) and (isWorZ): 
             nominal_cols_gen, nominal_cols_gen_smeared = muon_calibration.make_alt_reco_and_gen_hists(df, results, axes, cols, reco_sel_GF)
             if args.validationHists: 
                 muon_validation.make_reco_over_gen_hists(df, results)
@@ -399,7 +399,7 @@ def build_graph(df, dataset):
             if not "tau" in dataset.name:
                 df = syst_tools.add_muonscale_hist(results, df, args.muonCorrEtaBins, args.muonCorrMag, isW, axes, cols)
 
-                if 'smearingWeights' in args.muonScaleVariation:
+                if args.muonScaleVariation == 'smearingWeightsGaus':
                     df = syst_tools.add_muonscale_smeared_hist(results, df, args.muonCorrEtaBins, args.muonCorrMag, isW, axes, nominal_cols_gen_smeared)
 
                 # TODO: Move to syst_tools
@@ -539,6 +539,7 @@ def build_graph(df, dataset):
                         f"{reco_sel_GF}_genEta",
                         f"{reco_sel_GF}_genCharge"
                     ]
+                    nominal_cols_non_closure = cols
                 else:
                     input_kinematics = [
                         f"{reco_sel_GF}_genQop",
@@ -548,6 +549,7 @@ def build_graph(df, dataset):
                         f"{reco_sel_GF}_genSmearedCharge",
                         f"{reco_sel_GF}_covMat",
                     ]
+                    nominal_cols_non_closure = nominal_cols_gen_smeared
                 if args.nonClosureScheme == "A-M-separated":
                     df = df.DefinePerSample("AFlag", "0x01")
                     df = df.Define("Z_non_closure_parametrized_A", z_non_closure_parametrized_helper,
@@ -560,7 +562,7 @@ def build_graph(df, dataset):
                     hist_Z_non_closure_parametrized_A = df.HistoBoost(
                         "Z_non_closure_parametrized_A_gaus" if args.muonScaleVariation == 'smearingWeightsGaus' else "nominal_Z_non_closure_parametrized_A",
                         nominal_axes,
-                        [*nominal_cols_gen_smeared, "Z_non_closure_parametrized_A"],
+                        [*nominal_cols_non_closure, "Z_non_closure_parametrized_A"],
                         tensor_axes = z_non_closure_parametrized_helper.tensor_axes,
                         storage=hist.storage.Double()
                     )
@@ -577,7 +579,7 @@ def build_graph(df, dataset):
                     hist_Z_non_closure_parametrized_M = df.HistoBoost(
                         "Z_non_closure_parametrized_M_gaus" if args.muonScaleVariation == 'smearingWeightsGaus' else "nominal_Z_non_closure_parametrized_M",
                         nominal_axes,
-                        [*nominal_cols_gen_smeared, "Z_non_closure_parametrized_M"],
+                        [*nominal_cols_non_closure, "Z_non_closure_parametrized_M"],
                         tensor_axes = z_non_closure_parametrized_helper.tensor_axes,
                         storage=hist.storage.Double()
                     )
@@ -594,7 +596,7 @@ def build_graph(df, dataset):
                     hist_Z_non_closure_parametrized = df.HistoBoost(
                         "Z_non_closure_parametrized_gaus" if args.muonScaleVariation == 'smearingWeightsGaus' else "nominal_Z_non_closure_parametrized",
                         nominal_axes,
-                        [*nominal_cols_gen_smeared, "Z_non_closure_parametrized"],
+                        [*nominal_cols_non_closure, "Z_non_closure_parametrized"],
                         tensor_axes = z_non_closure_parametrized_helper.tensor_axes,
                         storage=hist.storage.Double()
                     )
@@ -609,7 +611,7 @@ def build_graph(df, dataset):
                     hist_Z_non_closure_binned = df.HistoBoost(
                         "Z_non_closure_binned_gaus" if args.muonScaleVariation == 'smearingWeightsGaus' else "nominal_Z_non_closure_binned",
                         nominal_axes,
-                        [*nominal_cols_gen_smeared, "Z_non_closure_binned"],
+                        [*nominal_cols_non_closure, "Z_non_closure_binned"],
                         tensor_axes = z_non_closure_binned_helper.tensor_axes,
                         storage=hist.storage.Double()
                     )
