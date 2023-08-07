@@ -356,6 +356,9 @@ class Datagroups(object):
                     group.hists[label] = hh.addHists(group.hists[label], h, createNew=False) if group.hists[label] else h
                     logger.debug("Sum done")
 
+            if not nominalIfMissing and group.hists[label] is None:
+                continue
+
             # now sum to fakes the partial sums which where not already done before
             # (group.hists[label] contains only the contribution from nominal histograms).
             # Then continue with the rest of the code as usual
@@ -376,7 +379,7 @@ class Datagroups(object):
                     group.hists[label] = group.selectOp(group.hists[label], **group.selectOpArgs)
 
         # Avoid situation where the nominal is read for all processes for this syst
-        if not foundExact:
+        if nominalIfMissing and not foundExact:
             raise ValueError(f"Did not find systematic {syst} for any processes!")
 
     #TODO: Better organize to avoid duplicated code

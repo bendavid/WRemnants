@@ -940,7 +940,7 @@ class CardTool(object):
                 systName = systKey if not syst["name"] else syst["name"]
 
                 self.datagroups.loadHistsForDatagroups(
-                    chan, systName, label="syst",
+                    chan, systName, label=systKey,
                     procsToRead=procs_syst, 
                     forceNonzero=forceNonzero and systName != "qcdScaleByHelicity",
                     preOpMap=syst["actionMap"], preOpArgs=syst["actionArgs"],
@@ -948,12 +948,16 @@ class CardTool(object):
                     forceToNominal=[x for x in self.datagroups.getProcNames() if x not in 
                         self.datagroups.getProcNames([p for p in procs_syst if p != "Fake"])],
                     scaleToNewLumi=self.lumiScale,
+                    nominalIfMissing=not chan in maskedchans # for masked channels not all systematics exist (we can skip loading nominal since Fake does not exist)
                 )
                 for proc in procs_syst:
                     logger.debug(f"Now at proc {proc}!")
 
+                    if chan in maskedchans and self.datagroups.groups[proc].hists.get(systKey, None) is None:
+                        continue
+
                     hnom = self.datagroups.groups[proc].hists[chan]
-                    hvar = self.datagroups.groups[proc].hists["syst"]
+                    hvar = self.datagroups.groups[proc].hists[systKey]
 
                     if syst["doActionBeforeMirror"] and syst["action"]:
                         logger.debug(f"Do action before mirror")
@@ -1046,6 +1050,8 @@ class CardTool(object):
                                 dict_systgroups[group] = set([var_name])
                             else:
                                 dict_systgroups[group].add(var_name)
+
+                    self.datagroups.groups[proc].hists[systKey] = None
 
         systs = list(sorted(systs))
         nsyst = len(systs)
