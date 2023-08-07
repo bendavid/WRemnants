@@ -75,7 +75,7 @@ class CardTool(object):
     def addProcessGroup(self, name, procFilter):
         self.procGroups[name] = self.filteredProcesses(procFilter)
         if not self.procGroups[name]:
-            raise ValueError(f"Did not match any processes to filter for group {name}")
+            raise ValueError(f"Did not match any processes to filter for group {name}! Valid procs are {self.datagroups.groups.keys()}")
 
     def expandProcesses(self, processes):
         if type(processes) == str:
@@ -464,7 +464,7 @@ class CardTool(object):
                 try:
                     up_relsign = np.sign(up.values(flow=False)-hnom.values(flow=False))
                 except ValueError as e:
-                    logger.error(f"Incompatible shapes between up and down for syst {name}")
+                    logger.error(f"Incompatible shapes between up {up.shape} and nominal {hnom.shape} for syst {name}")
                     raise e
                 down_relsign = np.sign(down.values(flow=False)-hnom.values(flow=False))
                 # protect against yields very close to nominal, for which it can be sign != 0 but should be treated as 0
