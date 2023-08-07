@@ -147,9 +147,12 @@ def common_parser(for_reco_highPU=False):
 
     commonargs,_ = parser.parse_known_args()
 
+    if commonargs.sf2DnoUt and commonargs.smooth3dsf:
+        raise ValueError(f"Option --sf2DnoUt was called without --noSmooth3dsf, both are needed.")
+
     if for_reco_highPU:
         if commonargs.trackerMuons:
-            logger.warning("Using tracker muons, but keep in mind that scale factors are obsolete and not recommended.")
+            logging.warning("Using tracker muons, but keep in mind that scale factors are obsolete and not recommended.")
             sfFile = "scaleFactorProduct_16Oct2022_TrackerMuonsHighPurity_vertexWeight_OSchargeExceptTracking.root"
         else:
             # note: any of the following file is fine for reco, tracking, and IDIP.
