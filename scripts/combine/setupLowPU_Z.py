@@ -91,8 +91,7 @@ def main(args, xnorm=False):
     cardTool.setLumiScale(args.lumiScale)
 
     Zmumu_procs = cardTool.filteredProcesses(lambda x: "Zmumu" in x)
-    Zmumu_procsIncTau = Zmumu_procs + ["Ztautau"]
-    # TODO: Does this need to take into account the different gen bins?
+    Zmumu_procsIncTau = cardTool.filteredProcesses(lambda x: "Zmumu" in x or "Ztautau" in x)
     cardTool.addProcessGroup("signal_samples_inctau", lambda x: x in Zmumu_procsIncTau or sigProc in x)
     cardTool.addProcessGroup("single_v_samples", lambda x: any(y in x for y in ["Zmumu", "Zee", "Ztautau"]))
     cardTool.addProcessGroup("signal_samples", lambda x: sigProc in x)

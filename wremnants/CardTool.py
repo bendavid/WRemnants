@@ -81,17 +81,10 @@ class CardTool(object):
         if type(processes) == str:
             processes = [processes]
 
-        expanded_procs = []
-        for proc in processes:
-            expanded_procs += self.expandProcess(proc)
-
-        return expanded_procs
+        return [x for y in processes for x in self.expandProcess(y)]
 
     def expandProcess(self, process):
-        if process in self.procGroups:
-            return self.procGroups[process]
-
-        return [process]
+        return self.procGroups.get(process, [process])
 
     def skipHistograms(self):
         self.skipHist = True
