@@ -89,7 +89,7 @@ def excludeProcs(excludes, datasets):
     else:
         return datasets
 
-def getDataPath(lowpu=False):
+def getDataPath(mode=None):
     import socket
     hostname = socket.gethostname()
 
@@ -102,16 +102,16 @@ def getDataPath(lowpu=False):
     elif hostname == "cmsanalysis.pi.infn.it":
         base_path = "/scratchnvme/wmass/NANOV9/postVFP"
 
-    if lowpu:
+    # NOTE: If anyone wants to run this at Pisa they'd probably want a different path
+    if mode == "lowPU":
         base_path = f"{base_path}/LowPU/"
 
     return base_path
 
 def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, nanoVersion="v9", 
                 data_tag="TrackFitV722_NanoProdv2", mc_tag="TrackFitV718_NanoProdv1", oneMCfileEveryN=None):
-    # useMCfraction is an integer > 1 to use 1 file every useMCfraction
     if not base_path:
-        base_path = getDataPath()
+        base_path = getDataPath(mode)
     logger.info(f"Loading 2016 samples from {base_path}.")
 
     if nanoVersion == "v8":
