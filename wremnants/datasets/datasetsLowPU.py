@@ -2,7 +2,7 @@ import narf
 import os
 import pathlib
 import socket
-from wremnants.datasets.dataset_tools import filterProcs, excludeProcs, makeFilelist
+from wremnants.datasets import dataset_tools
 from utilities import logging, common
 
 logger = logging.child_logger(__name__)
@@ -15,13 +15,7 @@ lumicsv_el = f"{common.data_dir}/lowPU/bylsoutput_HLT_HIEle20_Full.csv"
 def getDatasets(maxFiles=-1, filt=None, excl=None, flavor="",base_path=None):
 
     if not base_path:
-        hostname = socket.gethostname()
-        if hostname == "lxplus8s10.cern.ch":
-            base_path = "/scratch/shared/lowPU/"
-        elif "mit.edu" in hostname:
-            base_path = "/data/submit/cms/store/wmass/lowPU/"
-        elif "cmswmass2.cern.ch" in hostname:
-            base_path = "/data/shared/lowPU/"
+        base_path = dataset_tools.getDataPath(lowpu=True)
 
     logger.info(f"Loading lowPU samples from {base_path}.")
 
@@ -31,21 +25,21 @@ def getDatasets(maxFiles=-1, filt=None, excl=None, flavor="",base_path=None):
     
         narf.Dataset(
             name="TTTo2L2Nu",
-            filepaths=makeFilelist(["{BASE_PATH}/NanoAOD_v2/TTTo2L2Nu_TuneCP5_13TeV-powheg-pythia8/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
+            filepaths=dataset_tools.makeFilelist(["{BASE_PATH}/NanoAOD_v2/TTTo2L2Nu_TuneCP5_13TeV-powheg-pythia8/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
             xsec=87.31483776,
             is_data=False,
             group="Top",
         ),
         narf.Dataset(
             name="TTToSemiLeptonic",
-            filepaths=makeFilelist(["{BASE_PATH}/NanoAOD_v2/TTToSemiLeptonic_TuneCP5_13TeV-powheg-pythia8/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
+            filepaths=dataset_tools.makeFilelist(["{BASE_PATH}/NanoAOD_v2/TTToSemiLeptonic_TuneCP5_13TeV-powheg-pythia8/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
             xsec=364.35,
             is_data=False,
             group="Top",
         ),
         # narf.Dataset(
         #     name="TTToHadronic",
-        #     filepaths=makeFilelist(["{BASE_PATH}/NanoAOD_v2/TTToHadronic_TuneCP5_13TeV-powheg-pythia8/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
+        #     filepaths=dataset_tools.makeFilelist(["{BASE_PATH}/NanoAOD_v2/TTToHadronic_TuneCP5_13TeV-powheg-pythia8/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
         #     xsec=380.10,
         #     is_data=False,
         #     group="Top",
@@ -53,42 +47,42 @@ def getDatasets(maxFiles=-1, filt=None, excl=None, flavor="",base_path=None):
 
         narf.Dataset(
             name="WWTo2L2Nu",
-            filepaths=makeFilelist(["{BASE_PATH}/NanoAOD_v2/WWTo2L2Nu_TuneCP5_13TeV-powheg-pythia8/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
+            filepaths=dataset_tools.makeFilelist(["{BASE_PATH}/NanoAOD_v2/WWTo2L2Nu_TuneCP5_13TeV-powheg-pythia8/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
             xsec=118.7*BR_W_LEP*BR_W_LEP,
             is_data=False,
             group="Diboson",
         ),
         narf.Dataset(
             name="WZTo3LNu",
-            filepaths=makeFilelist(["{BASE_PATH}/NanoAOD_v2/WZTo3LNu_TuneCP5_13TeV-powheg-pythia8/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
+            filepaths=dataset_tools.makeFilelist(["{BASE_PATH}/NanoAOD_v2/WZTo3LNu_TuneCP5_13TeV-powheg-pythia8/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
             xsec=4.912,
             is_data=False,
             group="Diboson",
         ),
         narf.Dataset(
             name="ZZ",
-            filepaths=makeFilelist(["{BASE_PATH}/NanoAOD_v2/ZZ_TuneCP5_13TeV-pythia8/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
+            filepaths=dataset_tools.makeFilelist(["{BASE_PATH}/NanoAOD_v2/ZZ_TuneCP5_13TeV-pythia8/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
             xsec=16.523,
             is_data=False,
             group="Diboson",
         ),
         narf.Dataset(
             name="Ztautau",
-            filepaths=makeFilelist(["{BASE_PATH}/NanoAOD_v3/DYJetsToTauTau_M-50_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
+            filepaths=dataset_tools.makeFilelist(["{BASE_PATH}/NanoAOD_v3/DYJetsToTauTau_M-50_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
             xsec=2025.74,
             is_data=False,
             group="Ztautau",
         ),
         narf.Dataset(
             name="WminusJetsToTauNu",
-            filepaths=makeFilelist(["{BASE_PATH}/NanoAOD_v3/WminusJetsToTauNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
+            filepaths=dataset_tools.makeFilelist(["{BASE_PATH}/NanoAOD_v3/WminusJetsToTauNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
             xsec=8677.3,
             is_data=False,
             group="Wtaunu",
         ),
         narf.Dataset(
             name="WplusJetsToTauNu",
-            filepaths=makeFilelist(["{BASE_PATH}/NanoAOD_v3/WplusJetsToTauNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
+            filepaths=dataset_tools.makeFilelist(["{BASE_PATH}/NanoAOD_v3/WplusJetsToTauNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
             xsec=11572.19,
             is_data=False,
             group="Wtaunu",
@@ -99,27 +93,27 @@ def getDatasets(maxFiles=-1, filt=None, excl=None, flavor="",base_path=None):
         allProcs += [
             narf.Dataset(
                 name="WminusJetsToMuNu",
-                filepaths=makeFilelist(["{BASE_PATH}/NanoAOD_v3/WminusJetsToMuNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
+                filepaths=dataset_tools.makeFilelist(["{BASE_PATH}/NanoAOD_v3/WminusJetsToMuNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
                 xsec=8677.3, # 8562.66
                 is_data=False,
                 group="Wmunu",
             ),
             narf.Dataset(
                 name="WplusJetsToMuNu",
-                filepaths=makeFilelist(["{BASE_PATH}/NanoAOD_v3/WplusJetsToMuNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
+                filepaths=dataset_tools.makeFilelist(["{BASE_PATH}/NanoAOD_v3/WplusJetsToMuNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
                 xsec=11811.4, # 11572.19 
                 is_data=False,
                 group="Wmunu",
             ),
             narf.Dataset(
                 name="Zmumu",
-                filepaths=makeFilelist(["{BASE_PATH}/NanoAOD_v3/DYJetsToMuMu_M-50_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
+                filepaths=dataset_tools.makeFilelist(["{BASE_PATH}/NanoAOD_v3/DYJetsToMuMu_M-50_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
                 xsec=2025.74, # 1976.1
                 is_data=False,
                 group="Zmumu",
             ),
             narf.Dataset(
-                filepaths=makeFilelist(["{BASE_PATH}/NanoAOD_v2/SingleMuon/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
+                filepaths=dataset_tools.makeFilelist(["{BASE_PATH}/NanoAOD_v2/SingleMuon/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
                 name="singlemuon",
                 is_data=True,
                 lumi_json = lumijson,
@@ -132,27 +126,27 @@ def getDatasets(maxFiles=-1, filt=None, excl=None, flavor="",base_path=None):
         allProcs += [
             narf.Dataset(
                 name="WminusJetsToENu",
-                filepaths=makeFilelist(["{BASE_PATH}/NanoAOD_v3/WminusJetsToENu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
+                filepaths=dataset_tools.makeFilelist(["{BASE_PATH}/NanoAOD_v3/WminusJetsToENu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
                 xsec=8677.3,
                 is_data=False,
                 group="Wenu",
             ),
             narf.Dataset(
                 name="WplusJetsToENu",
-                filepaths=makeFilelist(["{BASE_PATH}/NanoAOD_v3/WplusJetsToENu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
+                filepaths=dataset_tools.makeFilelist(["{BASE_PATH}/NanoAOD_v3/WplusJetsToENu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
                 xsec=11572.19, # 
                 is_data=False,
                 group="Wenu",
             ),
             narf.Dataset(
                 name="Zee",
-                filepaths=makeFilelist(["{BASE_PATH}/NanoAOD_v3/DYJetsToEE_M-50_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
+                filepaths=dataset_tools.makeFilelist(["{BASE_PATH}/NanoAOD_v3/DYJetsToEE_M-50_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
                 xsec=2025.74,
                 is_data=False,
                 group="Zee",
             ),
             narf.Dataset(
-                filepaths=makeFilelist(["{BASE_PATH}/NanoAOD_v2/HighEGJet/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
+                filepaths=dataset_tools.makeFilelist(["{BASE_PATH}/NanoAOD_v2/HighEGJet/*/*/*/*.root"], maxFiles, format_args=dict(BASE_PATH=base_path)),
                 name="singleelectron",
                 is_data=True,
                 lumi_json = lumijson,
@@ -161,11 +155,11 @@ def getDatasets(maxFiles=-1, filt=None, excl=None, flavor="",base_path=None):
             ),
         ]
 
-    allProcs = filterProcs(filt, allProcs)
-    allProcs = excludeProcs(excl, allProcs)
+    allProcs = dataset_tools.filterProcs(filt, allProcs)
+    allProcs = dataset_tools.excludeProcs(excl, allProcs)
 
     for sample in allProcs:
         if not sample.filepaths:
-            logger.warning(f"Failed to find any files for sample {sample.name}!")
+            logger.warning(f"Failed to find any files for dataset {sample.name}. Skipping!")
 
     return allProcs

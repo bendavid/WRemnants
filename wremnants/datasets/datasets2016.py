@@ -9,7 +9,7 @@ from wremnants.datasets.datasetDict_v9 import dataDictV9
 from wremnants.datasets.datasetDict_v8 import dataDictV8
 from wremnants.datasets.datasetDict_gen import genDataDict
 
-from wremnants.datasets.dataset_tools import filterProcs, excludeProcs, makeFilelist
+from wremnants.datasets import dataset_tools 
 
 logger = logging.child_logger(__name__)
 
@@ -20,16 +20,7 @@ def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, na
                 data_tag="TrackFitV722_NanoProdv2", mc_tag="TrackFitV718_NanoProdv1", oneMCfileEveryN=None):
     # useMCfraction is an integer > 1 to use 1 file every useMCfraction
     if not base_path:
-        hostname = socket.gethostname()
-        if hostname == "lxplus8s10.cern.ch":
-            base_path = "/scratch/shared/NanoAOD"
-        if hostname == "cmswmass2.cern.ch":
-            base_path = "/data/shared/NanoAOD"
-        elif "mit.edu" in hostname:
-            base_path = "/scratch/submit/cms/wmass/NanoAOD"
-        elif hostname == "cmsanalysis.pi.infn.it":
-            base_path = "/scratchnvme/wmass/NANOV9/postVFP"
-
+        base_path = dataset_tools.getDataPath(lowpu=True)
     logger.info(f"Loading 2016 samples from {base_path}.")
 
     if nanoVersion == "v8":
@@ -51,7 +42,7 @@ def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, na
         is_data = "data" in sample[:4]
 
         prod_tag = data_tag if is_data else mc_tag 
-        paths = makeFilelist(info["filepaths"], maxFiles, format_args=dict(BASE_PATH=base_path, NANO_PROD_TAG=prod_tag), is_data=is_data, oneMCfileEveryN=oneMCfileEveryN)
+        paths = dataset_tools.makeFilelist(info["filepaths"], maxFiles, format_args=dict(BASE_PATH=base_path, NANO_PROD_TAG=prod_tag), is_data=is_data, oneMCfileEveryN=oneMCfileEveryN)
 
         if not paths:
             logger.warning(f"Failed to find any files for dataset {sample}. Looking at {info['filepaths']}. Skipping!")
@@ -79,8 +70,8 @@ def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, na
             )
         narf_datasets.append(narf.Dataset(**narf_info))
     
-    narf_datasets = filterProcs(filt, narf_datasets)
-    narf_datasets = excludeProcs(excl, narf_datasets)
+    narf_datasets = dataset_tools.filterProcs(filt, narf_datasets)
+    narf_datasets = dataset_tools.excludeProcs(excl, narf_datasets)
 
     for sample in narf_datasets:
         if not sample.filepaths:

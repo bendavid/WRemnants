@@ -62,7 +62,7 @@ class Datagroups(object):
             from wremnants.datasets.datagroups2016 import make_datagroups_2016 as make_datagroups
 
         if datasets is None:
-            datasets = getDatasets()
+            datasets = self.getDatasets()
 
         self.setDatasets(datasets)
         self.setGenAxes()
@@ -652,3 +652,4 @@ class Datagroups(object):
         if re.search("^pdf.*_sum", procName): # for pseudodata from alternative pdfset
             return("_".join([procName, channel])) 
         return name
+
