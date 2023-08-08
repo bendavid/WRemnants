@@ -58,8 +58,16 @@ axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, nam
 down_up_axis = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "downUpVar")
 down_nom_up_axis = hist.axis.Regular(3, -1.5, 1.5, underflow=False, overflow=False, name = "downNomUpVar")
 
-axis_passIso = hist.axis.Boolean(name = "passIso")
-axis_passMT = hist.axis.Boolean(name = "passMT")
+passIsoName = "passIso"
+passMTName = "passMT"
+
+passIso = {passIsoName: True}
+failIso = {passIsoName: False}
+passMT = {passMTName: True}
+failMT = {passMTName: False}
+
+axis_passIso = hist.axis.Boolean(name = passIsoName)
+axis_passMT = hist.axis.Boolean(name = passMTName)
 
 nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
     
@@ -72,8 +80,8 @@ def getIsoMtRegionID(passIso=True, passMT=True):
     return passIso * 1 + passMT * 2
 
 def getIsoMtRegionFromID(regionID):
-    return {"passIso" : regionID & 1,
-            "passMT"  : regionID & 2}
+    return {passIsoName : regionID & 1,
+            passMTName  : regionID & 2}
 
 def common_parser(for_reco_highPU=False):
     parser = argparse.ArgumentParser()
@@ -90,8 +98,7 @@ def common_parser(for_reco_highPU=False):
         ROOT.ROOT.EnableImplicitMT(initargs.nThreads)
     import narf
     import wremnants
-    from wremnants import theory_tools
-    from wremnants import theory_corrections
+    from wremnants import theory_corrections,theory_tools
 
     parser.add_argument("--pdfs", type=str, nargs="*", default=["msht20"], choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for")
     parser.add_argument("--altPdfOnlyCentral", action='store_true', help="Only store central value for alternate PDF sets")
@@ -104,6 +111,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--theoryCorr", nargs="*", default=["scetlib_dyturbo"], choices=theory_corrections.valid_theory_corrections(),
         help="Apply corrections from indicated generator. First will be nominal correction.")
     parser.add_argument("--theoryCorrAltOnly", action='store_true', help="Save hist for correction hists but don't modify central weight")
+    parser.add_argument("--widthVariations", action='store_true', help="Store variations of W and Z widths.")   
     parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")
     parser.add_argument("--eta", nargs=3, type=float, help="Eta binning as 'nbins min max' (only uniform for now)", default=[48,-2.4,2.4])
     parser.add_argument("--pt", nargs=3, type=float, help="Pt binning as 'nbins,min,max' (only uniform for now)", default=[29,26.,55.])
@@ -175,14 +183,19 @@ def common_parser(for_reco_highPU=False):
     return parser,initargs
 
 def common_parser_combine():
+    from wremnants import theory_tools,combine_theory_helper
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--wlike", action='store_true', help="Run W-like analysis of mZ")
     parser.add_argument("-o", "--outfolder", type=str, default=".", help="Output folder with the root file storing all histograms and datacards for single charge (subfolder WMass or ZMassWLike is created automatically inside)")
     parser.add_argument("-i", "--inputFile", type=str)
+    parser.add_argument("--absolutePathInCard", action="store_true", help="In the datacard, set Absolute path for the root file where shapes are stored")
     parser.add_argument("--minnloScaleUnc", choices=["byHelicityPt", "byHelicityPtCharge", "byHelicityCharge", "byPtCharge", "byPt", "byCharge", "integrated",], default="byHelicityPt",
             help="Decorrelation for QCDscale")
     parser.add_argument("--rebin", type=int, nargs='*', default=[], help="Rebin axis by this value (default does nothing)")
     parser.add_argument("--resumUnc", default="tnp", type=str, choices=["scale", "tnp", "none"], help="Include SCETlib uncertainties")
+    parser.add_argument("--npUnc", default="Delta_Lambda", type=str, choices=combine_theory_helper.TheoryHelper.valid_np_models, help="Nonperturbative uncertainty model")
+    parser.add_argument("--tnpMagnitude", default=1, type=float, help="Variation size for the TNP")
     parser.add_argument("--scaleTNP", default=1, type=float, help="Scale the TNP uncertainties by this factor")
     parser.add_argument("--scalePdf", default=1, type=float, help="Scale the PDF hessian uncertainties by this factor")
     parser.add_argument("--pdfUncFromCorr", action='store_true', help="Take PDF uncertainty from correction hist (Requires having run that correction)")

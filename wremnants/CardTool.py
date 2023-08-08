@@ -1,5 +1,6 @@
 from collections import OrderedDict
 from wremnants import histselections as sel
+from wremnants.combine_helpers import setSimultaneousABCD
 from utilities import boostHistHelpers as hh, common, output_tools, logging
 import narf
 import ROOT
@@ -51,15 +52,40 @@ class CardTool(object):
         self.writeByCharge = True
         self.unroll = False # unroll final histogram before writing to root
         self.keepSyst = None # to override previous one with exceptions for special cases
-        #self.loadArgs = {"operation" : "self.loadProcesses (reading hists from file)"}
         self.lumiScale = 1.
         self.project = None
         self.xnorm = False
         self.absolutePathShapeFileInCard = False
+        self.signalProcesses = []
+        self.singleVBackground = []
         self.chargeIdDict = {"minus" : {"val" : -1, "id" : "q0", "badId" : "q1"},
                              "plus"  : {"val" : 1., "id" : "q1", "badId" : "q0"},
                              "inclusive" : {"val" : "sum", "id" : "none", "badId" : None},
                              }
+        self.procGroups = {}
+
+    def getProcNames(self, grouped_procs):
+        expanded_procs = []
+        for group in grouped_procs:
+            procs = self.expandProcess(group)
+            for ungrouped in procs:
+                expanded_procs.extend(self.datagroups.getProcNames([ungrouped]))
+
+        return expanded_procs
+
+    def addProcessGroup(self, name, procFilter):
+        self.procGroups[name] = self.filteredProcesses(procFilter)
+        if not self.procGroups[name]:
+            raise ValueError(f"Did not match any processes to filter for group {name}! Valid procs are {self.datagroups.groups.keys()}")
+
+    def expandProcesses(self, processes):
+        if type(processes) == str:
+            processes = [processes]
+
+        return [x for y in processes for x in self.expandProcess(y)]
+
+    def expandProcess(self, process):
+        return self.procGroups.get(process, [process])
 
     def skipHistograms(self):
         self.skipHist = True
@@ -107,12 +133,6 @@ class CardTool(object):
         else:
             return False
         
-    # Function call to load hists for processes (e.g., read from a ROOT file)
-    # Extra args will be passed to each call
-    def setLoadDatagroups(self, datagroups, extraArgs={}):
-        self.datagroups = datagroups
-        self.loadArgs = extraArgs
-    
     def setFakeName(self, name):
         self.fakeName = name
 
@@ -195,7 +215,7 @@ class CardTool(object):
     def addLnNSystematic(self, name, size, processes, group=None, groupFilter=None):
         if not self.isExcludedNuisance(name):
             self.lnNSystematics.update({name : {"size" : size,
-                                                "processes" : processes,
+                                                "processes" : self.expandProcesses(processes),
                                                 "group" : group,
                                                 "groupFilter" : groupFilter}
             })
@@ -211,7 +231,7 @@ class CardTool(object):
                       scale=1, processes=None, group=None, noConstraint=False,
                       action=None, doActionBeforeMirror=False, actionArgs={}, actionMap={},
                       systNameReplace=[], systNamePrepend=None, groupFilter=None, passToFakes=False,
-                      rename=None, splitGroup={}, decorrelateByBin={},
+                      rename=None, splitGroup={}, decorrelateByBin={}, noiGroup=False
                       ):
         # note: setting Up=Down seems to be pathological for the moment, it might be due to the interpolation in the fit
         # for now better not to use the options, although it might be useful to keep it implemented
@@ -220,6 +240,7 @@ class CardTool(object):
         
         # Need to make an explicit copy of the array before appending
         procs_to_add = [x for x in (self.allMCProcesses() if processes is None else processes)]
+        procs_to_add = self.expandProcesses(procs_to_add)
         if passToFakes and self.getFakeName() not in procs_to_add:
             procs_to_add.append(self.getFakeName())
 
@@ -249,6 +270,7 @@ class CardTool(object):
                 "systAxes" : systAxes,
                 "labelsByAxis" : systAxes if not labelsByAxis else labelsByAxis,
                 "group" : group,
+                "noiGroup": noiGroup,
                 "groupFilter" : groupFilter,
                 "splitGroup" : splitGroup if len(splitGroup) else {group : ".*"}, # dummy dictionary if splitGroup=None, to allow for uniform treatment
                 "scale" : scale,
@@ -267,6 +289,16 @@ class CardTool(object):
                 "systNamePrepend" : systNamePrepend,
             }
         })
+
+    # Read a specific hist, useful if you need to check info about the file
+    def getHistsForProcAndSyst(self, proc, syst):
+        if not self.datagroups:
+            raise RuntimeError("No datagroups defined! Must call setDatagroups before accessing histograms")
+        self.datagroups.loadHistsForDatagroups(
+            baseName=self.nominalName, syst=syst, label="syst",
+            procsToRead=[proc],
+            scaleToNewLumi=self.lumiScale)
+        return self.datagroups.getDatagroups()[proc].hists["syst"]
         
     def setMirrorForSyst(self, syst, mirror=True):
         self.systematics[syst]["mirror"] = mirror
@@ -427,7 +459,7 @@ class CardTool(object):
                 try:
                     up_relsign = np.sign(up.values(flow=False)-hnom.values(flow=False))
                 except ValueError as e:
-                    logger.error(f"Incompatible shapes between up and down for syst {name}")
+                    logger.error(f"Incompatible shapes between up {up.shape} and nominal {hnom.shape} for syst {name}")
                     raise e
                 down_relsign = np.sign(down.values(flow=False)-hnom.values(flow=False))
                 # protect against yields very close to nominal, for which it can be sign != 0 but should be treated as 0
@@ -534,7 +566,7 @@ class CardTool(object):
             procDict = self.datagroups.getDatagroups()
             hnom = procDict[proc].hists[self.nominalName]
             if systInfo["doActionBeforeMirror"] and systInfo["action"]:
-                h =systInfo["action"](h, **systInfo["actionArgs"])
+                h = systInfo["action"](h, **systInfo["actionArgs"])
                 self.outfile.cd() # needed to restore the current directory in case the action opens a new root file
             if systInfo["mirror"]:
                 h = hh.extendHistByMirror(h, hnom,
@@ -562,6 +594,7 @@ class CardTool(object):
 
     def addPseudodata(self, processes, processesFromNomi=[]):
         datagroups = self.datagroups if not self.pseudodata_datagroups else self.pseudodata_datagroups
+        processes = self.expandProcesses(processes)
         datagroups.loadHistsForDatagroups(
             baseName=self.nominalName, syst=self.pseudoData, label=self.pseudoData,
             procsToRead=processes,
@@ -608,7 +641,7 @@ class CardTool(object):
             self.outfile = outfile
             self.outfile.cd()
             
-    def writeOutput(self, args=None, xnorm=False, forceNonzero=True, check_systs=True):
+    def writeOutput(self, args=None, xnorm=False, forceNonzero=True, check_systs=True, simultaneousABCD=False):
         self.xnorm = xnorm
         self.datagroups.loadHistsForDatagroups(
             baseName=self.nominalName, syst=self.nominalName,
@@ -616,6 +649,8 @@ class CardTool(object):
             label=self.nominalName, 
             scaleToNewLumi=self.lumiScale, 
             forceNonzero=forceNonzero)
+        if simultaneousABCD and not self.xnorm:
+            setSimultaneousABCD(self)
         self.writeForProcesses(self.nominalName, processes=self.datagroups.groups.keys(), label=self.nominalName, check_systs=check_systs)
         self.loadNominalCard()
         if self.pseudoData and not self.xnorm:
@@ -635,7 +670,7 @@ class CardTool(object):
                 preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"],
                 # Needed to avoid always reading the variation for the fakes, even for procs not specified
                 forceToNominal=[x for x in self.datagroups.getProcNames() if x not in 
-                                self.datagroups.getProcNames([p for p in processes if p != "Fake"])],
+                                self.datagroups.getProcNames([p for g in processes for p in self.expandProcesses(g) if p != "Fake"])],
                 scaleToNewLumi=self.lumiScale,
             )
             self.writeForProcesses(syst, label="syst", processes=processes, check_systs=check_systs)
@@ -645,7 +680,9 @@ class CardTool(object):
             logger.info("Histograms will not be written because 'skipHist' flag is set to True")
         self.writeCard()
 
-        
+    def match_str_axis_entries(self, str_axis, match_re):
+        return [x for x in str_axis if any(re.match(r, x) for r in match_re)]
+
     def writeCard(self):
         for chan in self.channels:
             with open(self.cardName.format(chan=chan), "w") as card:
@@ -726,7 +763,7 @@ class CardTool(object):
         procs = systInfo["processes"]
         group = systInfo["group"]
         groupFilter = systInfo["groupFilter"]
-        label = "group" if not systInfo["noConstraint"] else "noiGroup"
+        label = "group" if not systInfo["noiGroup"] else "noiGroup"
         nondata = self.predictedProcesses()
         names = [x[:-2] if "Up" in x[-2:] else (x[:-4] if "Down" in x[-4:] else x) 
                     for x in filter(lambda x: x != "", systInfo["outNames"])]
