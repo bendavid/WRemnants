@@ -283,9 +283,6 @@ jobs:
       # - name: lowpu w combine unfolding plot xsec 
       #   run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py $HIST_FILE_E --fitresult $WREMNANTS_OUTDIR/WMass_lowPU_ptll/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR/lowPU --debug --rrange 0.0 2.0 --lumi=0.200181002
 
-      # - name: lowpu w combine unfolding plot pulls 
-      #   run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/pulls.py $WREMNANTS_OUTDIR/WMass_lowPU_ptll/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR/lowPU --debug --groups recoil
-
   lowpu-z:
     # The type of runner that the job will run on
     runs-on: [self-hosted, linux, x64]
@@ -567,7 +564,7 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_plots.py $WREMNANTS_OUTDIR/ZMassDilepton_ptll/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR/unfolding --debug --rrange 0.9 1.1 --channels all --lumi=$LUMI_SCALE
 
       - name: dilepton combine unfolding plot pulls 
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/pulls.py $WREMNANTS_OUTDIR/ZMassDilepton_ptll/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR/unfolding --debug --groups pdf
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/pullsAndImpacts.py -f $WREMNANTS_OUTDIR/ZMassDilepton_ptll/fitresults_123456789.root -m ungrouped --sortDescending -s constraint --debug output --outFolder $WEB_DIR/$PLOT_DIR/unfolding -o pulls_unfolding_ptll.html -n 50 --otherExtensions png pdf
 
       - name: dilepton combine unfolding plot xsec 
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py $HIST_FILE --fitresult $WREMNANTS_OUTDIR/ZMassDilepton_ptll/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR/unfolding --debug --rrange 0.9 1.1

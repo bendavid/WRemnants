@@ -168,14 +168,20 @@ def readFitInfoFromFile(rf,filename, group=False, sort=None, ascending=True, sta
     # TODO: Make configurable
     if True:
         impacts = impacts*100
-    
-    if args.filters:
+
+    # skip POIs in case of unfolding, want only nuisances
+    pois = input_tools.getPOInames(rf) if POI is None else []
+
+    if args.filters or len(pois) > 0:
         filtimpacts = []
         filtlabels = []
         for impact,label in zip(impacts,labels):
-            if any(re.match(f, label) for f in args.filters):
-                filtimpacts.append(impact)
-                filtlabels.append(label)
+            if label in pois:
+                continue
+            if args.filters and not any(re.match(f, label) for f in args.filters):
+                continue
+            filtimpacts.append(impact)
+            filtlabels.append(label)
         impacts = filtimpacts
         labels = filtlabels
 
