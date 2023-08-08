@@ -12,3 +12,7 @@ echo "Created environment variable COMBINE_STUDIES=${COMBINE_STUDIES}"
 
 export PLOTS="${WREM_BASE}/scripts/analysisTools/"
 echo "Created environment variable PLOTS=${PLOTS}"
+
+# setup git
+eval "$(ssh-agent)"
+#ssh-add ~/.ssh/id_ed25519

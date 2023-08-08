@@ -70,6 +70,7 @@ except ValueError as e:
 
 labels = {
     "ewMll": "$m_{\ell\ell}$", 
+    "ewMlly": "$m_{\ell\ell\gamma}$", 
     "ewLogDeltaM": "$\log_{10}(m_{\ell\ell\gamma} - m_{\ell\ell})$"
 }
 
