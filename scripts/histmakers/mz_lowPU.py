@@ -348,7 +348,7 @@ def build_graph(df, dataset):
 
     if not dataset.is_data and not args.onlyMainHistograms:
         if not args.noRecoil:
-            df = recoilHelper.add_recoil_unc_W(df, results, dataset, cols, axes, "nominal")
+            df = recoilHelper.add_recoil_unc_Z(df, results, dataset, cols, axes, "nominal")
             
 
     if hasattr(dataset, "out_of_acceptance"):
