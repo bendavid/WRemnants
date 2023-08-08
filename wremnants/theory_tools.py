@@ -203,6 +203,7 @@ def pdf_info_map(dataset, pdfset):
 def define_pdf_columns(df, dataset_name, pdfs, noAltUnc):
     if dataset_name not in common.vprocs_all or \
             "horace" in dataset_name or \
+            "winhac" in dataset_name or \
             "LHEPdfWeight" not in df.GetColumnNames():
         logger.warning(f"Did not find PDF weights for sample {dataset_name}! Using nominal PDF in sample")
         return df
