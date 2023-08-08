@@ -243,7 +243,7 @@ def add_charge_axis(h, charge):
 
 def getPOInames(rtfile, poi_type="mu"):
     names = []
-    if f'nuisance_impact_{poi_type}' in [k.replace(";1","") for k in rtfile.keys()]:
+    if poi_type is not None and f'nuisance_impact_{poi_type}' in [k.replace(";1","") for k in rtfile.keys()]:
         impacts = rtfile[f'nuisance_impact_{poi_type}'].to_hist()
         names = [impacts.axes[0].value(i) for i in range(impacts.axes[0].size)]
 
@@ -324,7 +324,7 @@ def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo
     if "vars" in hfo.axes.name and hfo.axes["vars"].size != hfo_sing.axes["vars"].size:
         if hfo.axes["vars"].size == 1:
             hfo = hfo[{"vars" : 0}]
-    hnonsing = hh.addHists(-1*hfo_sing, hfo)
+    hnonsing = hh.addHists(-1*hfo_sing, hfo, flow=False)
     if fix_nons_bin0:
         # The 2 is for the WeightedSum
         res = np.zeros((*hnonsing[{"qT" : 0}].shape, 2))
