@@ -104,12 +104,12 @@ def setup(args,xnorm=False):
         
         if wmass:
             # gen level bins, split by charge
-            datagroups.defineSignalBinsUnfolding(base_group, "W_qGen0", member_filter=lambda x: x.name.startswith("Wminus"))
-            datagroups.defineSignalBinsUnfolding(base_group, "W_qGen1", member_filter=lambda x: x.name.startswith("Wplus"))
+            datagroups.defineSignalBinsUnfolding(base_group, f"{base_group}_qGen0", member_filter=lambda x: x.name.startswith("Wminus"))
+            datagroups.defineSignalBinsUnfolding(base_group, f"{base_group}_qGen1", member_filter=lambda x: x.name.startswith("Wplus"))
             # out of acceptance contribution
             datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if not m.name.startswith("Bkg")])
         else:
-            datagroups.defineSignalBinsUnfolding(base_group, "Z", member_filter=lambda x: x.name.startswith(base_group))
+            datagroups.defineSignalBinsUnfolding(base_group, base_group, member_filter=lambda x: x.name.startswith(base_group))
             # out of acceptance contribution
             datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if not m.name.startswith("Bkg")])
 
@@ -133,6 +133,9 @@ def setup(args,xnorm=False):
         cardTool.setChannels(["inclusive"])
         cardTool.setWriteByCharge(False)
     if xnorm:
+        histName = "xnorm"
+        cardTool.setHistName(histName)
+        cardTool.setNominalName(histName)
         datagroups.select_xnorm_groups() # only keep processes where xnorm is defined
         datagroups.deleteGroup("Fake")
         if args.unfolding:
@@ -172,13 +175,13 @@ def setup(args,xnorm=False):
         
     passSystToFakes = wmass and not args.skipSignalSystOnFakes and args.qcdProcessName not in excludeGroup and (filterGroup == None or args.qcdProcessName in filterGroup) and not xnorm
 
-    cardTool.addProcessGroup("single_v_samples", lambda x: x[0] in ["W", "Z"] and ("mu" in x or "tau" in x))
+    cardTool.addProcessGroup("single_v_samples", lambda x: x[0] in ["W", "Z"] and x[1] not in ["W","Z"])
     if wmass:
-        cardTool.addProcessGroup("single_v_nonsig_samples", lambda x: x[0] == "Z"and ("mu" in x or "tau" in x))
+        cardTool.addProcessGroup("single_v_nonsig_samples", lambda x: x[0] == "Z" and x[1] not in ["W","Z"])
 
     cardTool.addProcessGroup("single_vmu_samples", lambda x: x[0] in ["W", "Z"] and "mu" in x)
-    cardTool.addProcessGroup("signal_samples", lambda x: ((x[0] == "W" and wmass) or (x[0] == "Z" and not wmass)) and "mu" in x)
-    cardTool.addProcessGroup("signal_samples_inctau", lambda x: ((x[0] == "W" and wmass) or (x[0] == "Z" and not wmass)) and ("mu" in x or "tau" in x))
+    cardTool.addProcessGroup("signal_samples", lambda x: ((x[0] == "W" and wmass) or (x[0] == "Z" and not wmass)) and x[1] not in ["W","Z"] and "tau" not in x)
+    cardTool.addProcessGroup("signal_samples_inctau", lambda x: ((x[0] == "W" and wmass) or (x[0] == "Z" and not wmass)) and x[1] not in ["W","Z"])
     cardTool.addProcessGroup("MCnoQCD", lambda x: x not in ["QCD", "Data"])
 
     logger.info(f"All MC processes {cardTool.procGroups['MCnoQCD']}")
@@ -271,9 +274,17 @@ def setup(args,xnorm=False):
         )
 
     to_fakes = passSystToFakes and not args.noQCDscaleFakes and not xnorm
-    combine_helpers.add_pdf_uncertainty(cardTool, single_v_samples, passSystToFakes, from_corr=args.pdfUncFromCorr, scale=args.scalePdf)
-    combine_helpers.add_modeling_uncertainty(cardTool, args.minnloScaleUnc, signal_samples_inctau, 
-        single_v_nonsig_samples if not xnorm else [], to_fakes, args.resumUnc, wmass, scaleTNP=args.scaleTNP)
+    
+    theory_helper = combine_theory_helper.TheoryHelper(cardTool)
+    theory_helper.configure(resumUnc=args.resumUnc, 
+        propagate_to_fakes=to_fakes,
+        np_model=args.npUnc,
+        tnp_magnitude=args.tnpMagnitude,
+        mirror_tnp=True,
+        pdf_from_corr=args.pdfUncFromCorr,
+        scale_pdf_unc=args.scalePdf,
+    )
+    theory_helper.add_all_theory_unc()
 
     if xnorm:
         return cardTool
@@ -285,7 +296,7 @@ def setup(args,xnorm=False):
         cardTool.addLnNSystematic("CMS_Top", processes=["Top"], size=1.06)
         cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16)
         cardTool.addSystematic("luminosity",
-                                processes=allMCprocesses_noQCDMC,
+                                processes=['MCnoQCD'],
                                 outNames=["lumiDown", "lumiUp"],
                                 group="luminosity",
                                 systAxes=["downUpVar"],
@@ -293,14 +304,14 @@ def setup(args,xnorm=False):
                                 passToFakes=passSystToFakes)
     else:
         cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
-        cardTool.addLnNSystematic("luminosity", processes=allMCprocesses_noQCDMC, size=1.017 if lowPU else 1.012, group="luminosity")
+        cardTool.addLnNSystematic("luminosity", processes=['MCnoQCD'], size=1.017 if lowPU else 1.012, group="luminosity")
 
     if not args.noEfficiencyUnc:
 
         ## this is only needed when using 2D SF from 3D with ut-integration, let's comment for now
         # if wmass:
         #     cardTool.addSystematic("sf2d", 
-        #         processes=allMCprocesses_noQCDMC,
+        #         processes=['MCnoQCD'],
         #         outNames=["sf2dDown","sf2dUp"],
         #         group="SF3Dvs2D",
         #         scale = 1.0,
@@ -381,7 +392,7 @@ def setup(args,xnorm=False):
             #         systAxes=axes,
             #         labelsByAxis=axlabels,
             #         baseName=name+"_",
-            #         processes=allMCprocesses_noQCDMC,
+            #         processes=['MCnoQCD'],
             #         passToFakes=passSystToFakes,
             #         systNameReplace=nameReplace,
             #         scale=scale,
@@ -390,17 +401,6 @@ def setup(args,xnorm=False):
             #     )
 
     to_fakes = passSystToFakes and not args.noQCDscaleFakes and not xnorm
-
-    theory_helper = combine_theory_helper.TheoryHelper(cardTool)
-    theory_helper.configure(resumUnc=args.resumUnc, 
-        propagate_to_fakes=to_fakes,
-        np_model=args.npUnc,
-        tnp_magnitude=args.tnpMagnitude,
-        mirror_tnp=True,
-        pdf_from_corr=args.pdfUncFromCorr,
-        scale_pdf_unc=args.scalePdf,
-    )
-    theory_helper.add_all_theory_unc()
 
     msv_config_dict = {
         "smearingWeights":{

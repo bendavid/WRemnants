@@ -57,11 +57,13 @@ class Datagroups(object):
 
         if self.lowPU:
             from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU as make_datagroups
+            mode="lowPU"
         else:
             from wremnants.datasets.datagroups2016 import make_datagroups_2016 as make_datagroups
+            mode=None
 
         if datasets is None:
-            datasets = getDatasets()
+            datasets = getDatasets(mode=mode)
 
         self.setDatasets(datasets)
         self.setGenAxes()

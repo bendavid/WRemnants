@@ -32,7 +32,7 @@ class CardTool(object):
         self.cardContent = {}
         self.cardGroups = {}
         self.cardSumGroups = "" # POI sum groups
-        self.nominalTemplate = ""
+        self.nominalTemplate = f"{pathlib.Path(__file__).parent}/../scripts/combine/Templates/datacard.txt"
         self.spacing = 28
         self.systTypeSpacing = 16
         self.procColumnsSpacing = 30
@@ -87,12 +87,6 @@ class CardTool(object):
 
     def expandProcess(self, process):
         return self.procGroups.get(process, [process])
-
-        self.setNominalTemplate()
-
-        if xnorm:
-            self.setHistName("xnorm")
-            self.setNominalName("xnorm")
 
     def skipHistograms(self):
         self.skipHist = True
@@ -178,7 +172,7 @@ class CardTool(object):
     def setWriteByCharge(self, writeByCharge):
         self.writeByCharge = writeByCharge
 
-    def setNominalTemplate(self, template=f"{pathlib.Path(__file__).parent}/../scripts/combine/Templates/datacard.txt"):
+    def setNominalTemplate(self, template):
         if not os.path.abspath(template):
             raise IOError(f"Template file {template} is not a valid file")
         self.nominalTemplate = template

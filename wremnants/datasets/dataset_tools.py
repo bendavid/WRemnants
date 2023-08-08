@@ -132,7 +132,7 @@ def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, na
         if sample in genDataDict:
             base_path = base_path.replace("NanoAOD", "NanoGen")
 
-        is_data = info["group"] == "Data"
+        is_data = info.get("group","") == "Data"
 
         prod_tag = data_tag if is_data else mc_tag 
         paths = makeFilelist(info["filepaths"], maxFiles, format_args=dict(BASE_PATH=base_path, NANO_PROD_TAG=prod_tag), is_data=is_data, oneMCfileEveryN=oneMCfileEveryN)
