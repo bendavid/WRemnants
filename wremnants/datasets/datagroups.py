@@ -14,6 +14,7 @@ import math
 import numpy as np
 
 from wremnants.datasets.datagroup import Datagroup
+from wremnants.datasets.dataset_tools import getDatasets
 
 logger = logging.child_logger(__name__)
 
@@ -55,14 +56,12 @@ class Datagroups(object):
         self.unconstrainedProcesses = []
 
         if self.lowPU:
-            from wremnants.datasets.datasetsLowPU import getDatasets
             from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU as make_datagroups
         else:
-            from wremnants.datasets.datasets2016 import getDatasets
             from wremnants.datasets.datagroups2016 import make_datagroups_2016 as make_datagroups
 
         if datasets is None:
-            datasets = self.getDatasets()
+            datasets = getDatasets()
 
         self.setDatasets(datasets)
         self.setGenAxes()

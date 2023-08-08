@@ -16,6 +16,7 @@ import narf
 import wremnants
 from wremnants import theory_tools, syst_tools, theory_corrections, muon_selections, unfolding_tools
 from wremnants.histmaker_tools import scale_to_data, aggregate_groups
+from wremnants.datasets.dataset_tools import getDatasets
 import hist
 import scripts.lowPU.config as lowPUcfg
 
@@ -33,10 +34,11 @@ mass_max = 120
 # transverse boson mass cut
 mtw_min=45 # 40 for Wmass, thus be 45 here (roughly half the boson mass)
 
-datasets = wremnants.datasetsLowPU.getDatasets(maxFiles=args.maxFiles,
-                                              filt=args.filterProcs,
-                                              excl=args.excludeProcs, 
-                                              flavor=flavor)
+datasets = getDatasets(maxFiles=args.maxFiles,
+                        filt=args.filterProcs,
+                        excl=list(set(args.excludeProcs + ["singlemuon"] if flavor=="ee" else ["singleelectron"])),
+                        mode="lowPU"
+                        )
 
 
 for d in datasets: logger.info(f"Dataset {d.name}")

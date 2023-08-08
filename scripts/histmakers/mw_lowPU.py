@@ -14,6 +14,7 @@ import narf
 import wremnants
 from wremnants import theory_tools, syst_tools, theory_corrections, muon_selections, unfolding_tools
 from wremnants.histmaker_tools import scale_to_data, aggregate_groups
+from wremnants.datasets.dataset_tools import getDatasets
 import math
 import hist
 import ROOT
@@ -31,10 +32,10 @@ else:
 
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs_lowpu, args.theoryCorr)
 
-datasets = wremnants.datasetsLowPU.getDatasets(maxFiles=args.maxFiles,
-                                              filt=args.filterProcs,
-                                              excl=args.excludeProcs, 
-                                              flavor=flavor)
+datasets = getDatasets(maxFiles=args.maxFiles,
+                        filt=args.filterProcs,
+                        excl=list(set(args.excludeProcs + ["singlemuon"] if flavor=="e" else ["singleelectron"])),
+                        mode="lowPU")
 
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 

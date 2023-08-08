@@ -8,6 +8,7 @@ import narf
 import wremnants
 from wremnants import theory_tools,syst_tools,theory_corrections, muon_calibration, muon_selections, muon_validation, unfolding_tools
 from wremnants.histmaker_tools import scale_to_data, aggregate_groups
+from wremnants.datasets.dataset_tools import getDatasets
 import hist
 import lz4.frame
 import math
@@ -31,10 +32,10 @@ logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
 procfilt = ['Wplusmunu', 'Wminusmunu'] if args.addHelicityHistos else args.filterProcs 
 thisAnalysis = ROOT.wrem.AnalysisType.Wmass
-datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
-                                              filt=procfilt,
-                                              excl=args.excludeProcs, 
-                                              nanoVersion="v8" if args.v8 else "v9", base_path=args.dataPath, oneMCfileEveryN=args.oneMCfileEveryN)
+datasets = getDatasets(maxFiles=args.maxFiles,
+                        filt=procfilt,
+                        excl=args.excludeProcs, 
+                        nanoVersion="v8" if args.v8 else "v9", base_path=args.dataPath, oneMCfileEveryN=args.oneMCfileEveryN)
 
 era = args.era
 

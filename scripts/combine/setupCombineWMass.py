@@ -502,6 +502,8 @@ def setup(args,xnorm=False):
                     labelsByAxis=["unc_ieta", "unc_ipt", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
                     passToFakes=passSystToFakes
                 )
+    
+    # Previously we had a QCD uncertainty for the mt dependence on the fakes, see: https://github.com/WMass/WRemnants/blob/f757c2c8137a720403b64d4c83b5463a2b27e80f/scripts/combine/setupCombineWMass.py#L359
 
     return cardTool
 
