@@ -20,7 +20,7 @@ def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, na
                 data_tag="TrackFitV722_NanoProdv2", mc_tag="TrackFitV718_NanoProdv1", oneMCfileEveryN=None):
     # useMCfraction is an integer > 1 to use 1 file every useMCfraction
     if not base_path:
-        base_path = dataset_tools.getDataPath(lowpu=True)
+        base_path = dataset_tools.getDataPath()
     logger.info(f"Loading 2016 samples from {base_path}.")
 
     if nanoVersion == "v8":
