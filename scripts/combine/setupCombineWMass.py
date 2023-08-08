@@ -503,49 +503,6 @@ def setup(args,xnorm=False):
                     passToFakes=passSystToFakes
                 )
 
-        ## FIXME 1: with the jet cut removed this syst is probably no longer needed, but one could still consider
-        ## it to cover for how much the fake estimate changes when modifying the composition of the QCD region
-        ## FIXME 2: it doesn't really make sense to mirror this one since the systematic goes only in one direction
-        # cardTool.addSystematic(f"qcdJetPt30", 
-        #                        processes=["Fake"],
-        #                        mirror=True,
-        #                        group="MultijetBkg",
-        #                        systAxes=[],
-        #                        outNames=["qcdJetPt30Down", "qcdJetPt30Up"],
-        #                        passToFakes=passSystToFakes,
-        # )
-        #
-
-        ## Remove for now since it seems redundant after adding the dphi cut
-        ## keep in case it is needed again in the near future (we still have to test deepmet)
-        # if "Fake" not in excludeGroup:
-        #     for charge in ["plus", "minus"]:
-        #         chargeId = "q1" if charge == "plus" else "q0"
-        #         decorrDict = {}
-        #         # decorrDict = {                        
-        #         #     "xy" : {
-        #         #         "label" : ["eta", "pt"],
-        #         #         "edges": [[round(-2.4+i*0.4,1) for i in range(13)], [round(26.0+i*2,1) for i in range(16)]]
-        #         #     }
-        #         # }
-        #         outnames = [f"mtCorrFakes_{chargeId}{upd}" for upd in ["Up", "Down"]]
-        #         cardTool.addSystematic(f"nominal", # this is the histogram to read
-        #                                systAxes=[],
-        #                                processes=["Fake"],
-        #                                mirror=True,
-        #                                group="MultijetBkg",
-        #                                outNames=outnames, # actual names for nuisances
-        #                                rename=f"mtCorrFakes_{chargeId}", # this name is used only to identify the syst in CardTool's syst list
-        #                                action=sel.applyCorrection,
-        #                                doActionBeforeMirror=True, # to mirror after the histogram has been created
-        #                                actionArgs={"scale": 1.0,
-        #                                            "corrFile" : f"{data_dir}/fakesWmass/fakerateFactorMtBasedCorrection_vsEtaPt.root",
-        #                                            "corrHist": f"etaPtCharge_mtCorrection_{charge}",
-        #                                            "offsetCorr": 1.0,
-        #                                            "createNew": True},
-        #                                decorrelateByBin=decorrDict
-        #         )
-
     return cardTool
 
 def main(args,xnorm=False):

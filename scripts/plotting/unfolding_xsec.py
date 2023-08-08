@@ -14,7 +14,7 @@ import pdb
 
 from wremnants.datasets.datagroups import Datagroups
 
-from utilities import boostHistHelpers as hh, logging, input_tools, common, common_lowPU, differential, output_tools
+from utilities import boostHistHelpers as hh, logging, input_tools, common, differential, output_tools
 from wremnants import plot_tools
 from wremnants.unfolding_tools import get_bin, getProcessBins
 
