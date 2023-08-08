@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from wremnants import CardTool,theory_tools,syst_tools,combine_helpers
+from wremnants import CardTool,theory_tools,syst_tools,combine_helpers,combine_theory_helper
 from wremnants import histselections as sel
 from wremnants.datasets.datagroups import Datagroups
 from utilities import common, logging, input_tools
@@ -71,7 +71,7 @@ def setup(args,xnorm=False):
         sel = {}
         for var,low,high,rebin in itertools.zip_longest(args.fitvar, args.axlim[::2], args.axlim[1::2], args.rebin):
             s = hist.tag.Slicer()
-            if low and high:
+            if low is not None and high is not None:
                 logger.info(f"Restricting the axis '{var}' to range [{low}, {high}]")
                 sel[var] = s[complex(0, low):complex(0, high):hist.rebin(rebin) if rebin else None]
             elif rebin:
@@ -172,25 +172,27 @@ def setup(args,xnorm=False):
         
     passSystToFakes = wmass and not args.skipSignalSystOnFakes and args.qcdProcessName not in excludeGroup and (filterGroup == None or args.qcdProcessName in filterGroup) and not xnorm
 
-    single_v_samples = cardTool.filteredProcesses(lambda x: x[0] in ["W", "Z"] and ("e" in x or "mu" in x or "tau" in x))
-    single_v_nonsig_samples = cardTool.filteredProcesses(lambda x: x[0] == ("Z" if wmass else "W"))
-    single_v_samples_notau = list(filter(lambda x: "tau" not in x, single_v_samples))
-    signal_samples = list(filter(lambda x: x[0] == ("W" if wmass else "Z"), single_v_samples_notau))
-    signal_samples_inctau = list(filter(lambda x: x[0] == ("W" if wmass else "Z"), single_v_samples))
+    cardTool.addProcessGroup("single_v_samples", lambda x: x[0] in ["W", "Z"] and ("mu" in x or "tau" in x))
+    if wmass:
+        cardTool.addProcessGroup("single_v_nonsig_samples", lambda x: x[0] == "Z"and ("mu" in x or "tau" in x))
 
-    allMCprocesses_noQCDMC = [x for x in cardTool.allMCProcesses() if x != "QCD"]
-    
-    logger.info(f"All MC processes {allMCprocesses_noQCDMC}")
-    logger.info(f"Single V samples: {single_v_samples}")
-    logger.info(f"Single V no signal samples: {single_v_nonsig_samples}")
-    logger.info(f"Signal samples: {signal_samples}")
+    cardTool.addProcessGroup("single_vmu_samples", lambda x: x[0] in ["W", "Z"] and "mu" in x)
+    cardTool.addProcessGroup("signal_samples", lambda x: ((x[0] == "W" and wmass) or (x[0] == "Z" and not wmass)) and "mu" in x)
+    cardTool.addProcessGroup("signal_samples_inctau", lambda x: ((x[0] == "W" and wmass) or (x[0] == "Z" and not wmass)) and ("mu" in x or "tau" in x))
+    cardTool.addProcessGroup("MCnoQCD", lambda x: x not in ["QCD", "Data"])
+
+    logger.info(f"All MC processes {cardTool.procGroups['MCnoQCD']}")
+    logger.info(f"Single V samples: {cardTool.procGroups['single_v_samples']}")
+    if wmass:
+        logger.info(f"Single V no signal samples: {cardTool.procGroups['single_v_nonsig_samples']}")
+    logger.info(f"Signal samples: {cardTool.procGroups['signal_samples']}")
 
     constrainedZ = constrainMass and not wmass
     label = 'W' if wmass else 'Z'
     massSkip = [(f"^massShift[W|Z]{i}MeV.*",) for i in range(0, 110 if constrainedZ else 100, 10)]
     if wmass:
         cardTool.addSystematic(f"massWeightZ",
-                                processes=single_v_nonsig_samples,
+                                processes=['single_v_nonsig_samples'],
                                 group=f"massShiftZ",
                                 skipEntries=massSkip[:]+[("^massShiftZ100MeV.*",)],
                                 mirror=False,
@@ -202,8 +204,8 @@ def setup(args,xnorm=False):
     if not (constrainMass or wmass):
         massSkip.append(("^massShift.*2p1MeV.*",))
 
-    cardTool.addSystematic(f"massWeight{label}",
-                            processes=signal_samples_inctau,
+    cardTool.addSystematic(f"massWeight{label}", 
+                            processes=["signal_samples_inctau"],
                             group=f"massShift{label}",
                             noiGroup=not constrainMass,
                             skipEntries=massSkip,
@@ -244,7 +246,7 @@ def setup(args,xnorm=False):
     if not xnorm:
         if wmass:
             cardTool.addSystematic("luminosity",
-                                   processes=allMCprocesses_noQCDMC,
+                                   processes=['MCnoQCD'],
                                    outNames=["lumiDown", "lumiUp"],
                                    group="luminosity",
                                    systAxes=["downUpVar"],
@@ -253,13 +255,13 @@ def setup(args,xnorm=False):
 
         else:
             # TOCHECK: no fakes here, most likely
-            cardTool.addLnNSystematic("luminosity", processes=allMCprocesses_noQCDMC, size=1.012, group="luminosity")
+            cardTool.addLnNSystematic("luminosity", processes=['MCnoQCD'], size=1.012, group="luminosity")
     else:
         pass
 
     if args.ewUnc:
         cardTool.addSystematic(f"horacenloewCorr", 
-            processes=single_v_samples,
+            processes=['single_v_samples'],
             mirror=True,
             group="theory_ew",
             systAxes=["systIdx"],
@@ -361,7 +363,7 @@ def setup(args,xnorm=False):
                 systAxes=axes,
                 labelsByAxis=axlabels,
                 baseName=name+"_",
-                processes=allMCprocesses_noQCDMC,
+                processes=['MCnoQCD'],
                 passToFakes=passSystToFakes,
                 systNameReplace=nameReplace,
                 scale=scale,
@@ -387,6 +389,19 @@ def setup(args,xnorm=False):
             #         decorrelateByBin = decorrDictEff
             #     )
 
+    to_fakes = passSystToFakes and not args.noQCDscaleFakes and not xnorm
+
+    theory_helper = combine_theory_helper.TheoryHelper(cardTool)
+    theory_helper.configure(resumUnc=args.resumUnc, 
+        propagate_to_fakes=to_fakes,
+        np_model=args.npUnc,
+        tnp_magnitude=args.tnpMagnitude,
+        mirror_tnp=True,
+        pdf_from_corr=args.pdfUncFromCorr,
+        scale_pdf_unc=args.scalePdf,
+    )
+    theory_helper.add_all_theory_unc()
+
     msv_config_dict = {
         "smearingWeights":{
             "hist_name": "muonScaleSyst_responseWeights",
@@ -410,7 +425,7 @@ def setup(args,xnorm=False):
         msv_config = msv_config_dict[args.muonScaleVariation] if wmass else msv_config_dict["massWeights"]
 
         cardTool.addSystematic(msv_config['hist_name'], 
-            processes=single_v_samples if wmass else single_v_samples_notau,
+            processes=['single_v_samples' if wmass else 'single_vmu_samples'],
             group="muonScale",
             baseName="CMS_scale_m_",
             systAxes=msv_config['syst_axes'],
@@ -419,7 +434,7 @@ def setup(args,xnorm=False):
             scale = args.scaleMuonCorr
         )
         cardTool.addSystematic("muonL1PrefireSyst", 
-            processes=allMCprocesses_noQCDMC,
+            processes=['MCnoQCD'],
             group="muonPrefire",
             baseName="CMS_prefire_syst_m",
             systAxes=["downUpVar"],
@@ -427,7 +442,7 @@ def setup(args,xnorm=False):
             passToFakes=passSystToFakes,
         )
         cardTool.addSystematic("muonL1PrefireStat", 
-            processes=allMCprocesses_noQCDMC,
+            processes=['MCnoQCD'],
             group="muonPrefire",
             baseName="CMS_prefire_stat_m_",
             systAxes=["downUpVar", "etaPhiRegion"],
@@ -435,13 +450,15 @@ def setup(args,xnorm=False):
             passToFakes=passSystToFakes,
         )
         cardTool.addSystematic("ecalL1Prefire", 
-            processes=allMCprocesses_noQCDMC,
+            processes=['MCnoQCD'],
             group="ecalPrefire",
             baseName="CMS_prefire_ecal",
             systAxes=["downUpVar"],
             labelsByAxis=["downUpVar"],
             passToFakes=passSystToFakes,
         )
+        if wmass or wlike:
+            combine_helpers.add_recoil_uncertainty(cardTool, ['signal_samples'], passSystToFakes=passSystToFakes, flavor="mu")
 
     if (wmass or wlike) and not input_tools.args_from_metadata(cardTool, "noRecoil"):
         combine_helpers.add_recoil_uncertainty(cardTool, signal_samples, passSystToFakes=passSystToFakes, flavor=datagroups.flavor if datagroups.flavor else "mu")
@@ -451,7 +468,7 @@ def setup(args,xnorm=False):
             non_closure_scheme = input_tools.args_from_metadata(cardTool, "nonClosureScheme")
             if non_closure_scheme == "A-M-separated":
                 cardTool.addSystematic("Z_non_closure_parametrized_A", 
-                    processes=single_v_samples,
+                    processes=['single_v_samples'],
                     group="nonClosure" if args.sepImpactForNC else "muonScale",
                     baseName="Z_nonClosure_parametrized_A_",
                     systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
@@ -460,7 +477,7 @@ def setup(args,xnorm=False):
                 )
             if non_closure_scheme in ["A-M-separated", "binned-plus-M"]:
                 cardTool.addSystematic("Z_non_closure_parametrized_M", 
-                    processes=single_v_samples,
+                    processes=['single_v_samples'],
                     group="nonClosure" if args.sepImpactForNC else "muonScale",
                     baseName="Z_nonClosure_parametrized_M_",
                     systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
@@ -469,7 +486,7 @@ def setup(args,xnorm=False):
                 )            
             if non_closure_scheme == "A-M-combined":
                 cardTool.addSystematic("Z_non_closure_parametrized", 
-                    processes=single_v_samples,
+                    processes=['single_v_samples'],
                     group="nonClosure" if args.sepImpactForNC else "muonScale",
                     baseName="Z_nonClosure_parametrized_",
                     systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
@@ -478,7 +495,7 @@ def setup(args,xnorm=False):
                 )
             if non_closure_scheme in ["binned", "binned-plus-M"]:
                 cardTool.addSystematic("Z_non_closure_binned", 
-                    processes=single_v_samples,
+                    processes=['single_v_samples'],
                     group="nonClosure" if args.sepImpactForNC else "muonScale",
                     baseName="Z_nonClosure_binned_",
                     systAxes=["unc_ieta", "unc_ipt", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],

@@ -93,8 +93,7 @@ def common_parser(for_reco_highPU=False):
         ROOT.ROOT.EnableImplicitMT(initargs.nThreads)
     import narf
     import wremnants
-    from wremnants import theory_tools
-    from wremnants import theory_corrections
+    from wremnants import theory_corrections,theory_tools
 
     parser.add_argument("--pdfs", type=str, nargs="*", default=["msht20"], choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for")
     parser.add_argument("--altPdfOnlyCentral", action='store_true', help="Only store central value for alternate PDF sets")
@@ -180,6 +179,8 @@ def common_parser(for_reco_highPU=False):
     return parser,initargs
 
 def common_parser_combine():
+    from wremnants import theory_tools,combine_theory_helper
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--wlike", action='store_true', help="Run W-like analysis of mZ")
     parser.add_argument("-o", "--outfolder", type=str, default=".", help="Output folder with the root file storing all histograms and datacards for single charge (subfolder WMass or ZMassWLike is created automatically inside)")
@@ -189,6 +190,8 @@ def common_parser_combine():
             help="Decorrelation for QCDscale")
     parser.add_argument("--rebin", type=int, nargs='*', default=[], help="Rebin axis by this value (default does nothing)")
     parser.add_argument("--resumUnc", default="tnp", type=str, choices=["scale", "tnp", "none"], help="Include SCETlib uncertainties")
+    parser.add_argument("--npUnc", default="Delta_Lambda", type=str, choices=combine_theory_helper.TheoryHelper.valid_np_models, help="Nonperturbative uncertainty model")
+    parser.add_argument("--tnpMagnitude", default=1, type=float, help="Variation size for the TNP")
     parser.add_argument("--scaleTNP", default=1, type=float, help="Scale the TNP uncertainties by this factor")
     parser.add_argument("--scalePdf", default=1, type=float, help="Scale the PDF hessian uncertainties by this factor")
     parser.add_argument("--pdfUncFromCorr", action='store_true', help="Take PDF uncertainty from correction hist (Requires having run that correction)")

@@ -6,6 +6,7 @@ from matplotlib import patches
 from matplotlib.ticker import StrMethodFormatter # for setting number of decimal places on tick labels
 from utilities import boostHistHelpers as hh,common,output_tools,logging
 from wremnants import histselections as sel
+import hist
 import math
 import numpy as np
 import re
@@ -142,21 +143,21 @@ def makeStackPlotWithRatio(
         if not histInfo[k].hists[histName]:
             logger.warning(f"Failed to find hist {histName} for proc {k}")
             continue
-        hist = action(histInfo[k].hists[histName])[select]
+        h = action(histInfo[k].hists[histName])[select]
         
         # Use this if the hist has been rebinned for combine
         if xlim:
-            hist = hist[complex(0, xlim[0]):complex(0, xlim[1])]
+            h = h[complex(0, xlim[0]):complex(0, xlim[1])]
 
         # If plotting from combine, apply the action to the underlying hist.
         # Don't do this for the generic case, as it screws up the ability to make multiple plots
         if fitresult:
-            histInfo[k].hists[histName] = hist
+            histInfo[k].hists[histName] = h
 
         if k != "Data":
-            stack.append(hist)
+            stack.append(h)
         else:
-            data_hist = hist
+            data_hist = h
 
     fig, ax1, ax2 = figureWithRatio(stack[0], xlabel, ylabel, ylim, rlabel, rrange, xlim=xlim, 
         grid_on_ratio_plot = grid, plot_title = plot_title, title_padding = title_padding, bin_density = bin_density)
@@ -185,8 +186,11 @@ def makeStackPlotWithRatio(
 
         # need to divide by bin width
         binwidth = axis[1:]-axis[:-1]
-        nom = combine_result[f"expfull_{fittype}"].to_hist().values() / binwidth
-        std = np.sqrt(combine_result[f"expfull_{fittype}"].to_hist().variances()) / binwidth
+        hexp = combine_result[f"expfull_{fittype}"].to_hist()
+        if hexp.storage_type != hist.storage.Weight:
+            raise ValueError(f"Did not find uncertainties in {fittype} hist. Make sure you run combinetf with --computeHistErrors!")
+        nom = hexp.values() / binwidth
+        std = np.sqrt(hexp.variances()) / binwidth
 
         hatchstyle = '///'
         ax1.fill_between(axis, 

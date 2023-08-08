@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from wremnants import CardTool,theory_tools,syst_tools,combine_helpers
+from wremnants import CardTool,theory_tools,syst_tools,combine_helpers,combine_theory_helper
 from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU
 from utilities import common, logging
 import argparse
@@ -92,6 +92,10 @@ def main(args, xnorm=False):
 
     Zmumu_procs = cardTool.filteredProcesses(lambda x: "Zmumu" in x)
     Zmumu_procsIncTau = Zmumu_procs + ["Ztautau"]
+    # TODO: Does this need to take into account the different gen bins?
+    cardTool.addProcessGroup("signal_samples_inctau", lambda x: x in Zmumu_procsIncTau or sigProc in x)
+    cardTool.addProcessGroup("single_v_samples", lambda x: x in ["Zmumu", "Zee", "Ztautau"])
+    cardTool.addProcessGroup("signal_samples", lambda x: x == sigProc)
 
     logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
     
@@ -115,9 +119,16 @@ def main(args, xnorm=False):
         return
 
     pdfAction = {x : lambda h: h[{"recoil_gen" : s[::hist.sum]}] for x in Zmumu_procs if "gen" not in x},
-    combine_helpers.add_pdf_uncertainty(cardTool, constrainedProcs+datagroups.unconstrainedProcesses, False, action=pdfAction)
-    combine_helpers.add_modeling_uncertainty(cardTool, args.minnloScaleUnc, constrainedProcs+datagroups.unconstrainedProcesses, 
-        [], False, args.resumUnc, False, scaleTNP=args.scaleTNP)
+    theory_helper = combine_theory_helper.TheoryHelper(cardTool)
+    theory_helper.configure(resumUnc=args.resumUnc, 
+        propagate_to_fakes=False,
+        np_model=args.npUnc,
+        tnp_magnitude=args.tnpMagnitude,
+        mirror_tnp=True,
+        pdf_from_corr=args.pdfUncFromCorr,
+        scale_pdf_unc=args.scalePdf,
+    )
+    theory_helper.add_all_theory_unc()
     
     if not xnorm:
 

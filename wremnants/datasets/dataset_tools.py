@@ -81,3 +81,21 @@ def excludeProcs(excludes, datasets):
             return list(filter(excludes, datasets))
     else:
         return datasets
+
+def getDataPath(lowpu=False):
+    import socket
+    hostname = socket.gethostname()
+
+    if hostname == "lxplus8s10.cern.ch":
+        base_path = "/scratch/shared/NanoAOD"
+    if hostname == "cmswmass2.cern.ch":
+        base_path = "/data/shared/NanoAOD"
+    elif "mit.edu" in hostname:
+        base_path = "/scratch/submit/cms/wmass/NanoAOD"
+    elif hostname == "cmsanalysis.pi.infn.it":
+        base_path = "/scratchnvme/wmass/NANOV9/postVFP"
+
+    if lowpu:
+        base_path = f"{base_path}/LowPU/"
+
+    return base_path
