@@ -58,6 +58,9 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
     outdirNew += os.path.basename(inputfile).replace(".root","")
     outdirNew += "/"
     createPlotDirAndCopyPhp(outdirNew)
+    if args.debugPlots:
+        outdir_debug = outdirNew + f"/debugPlots/"
+        createPlotDirAndCopyPhp(outdir_debug)
 
     logger.info(inputfile)
     logger.info(histname)
@@ -190,7 +193,7 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
                 heff = narf.hist_to_root(eff_boost_ptut)
                 heff.SetName(f"{effHistRoot.GetName()}_eta{ieta}")
                 heff.SetTitle(etaRange)
-                drawCorrelationPlot(heff, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", "W MC {step} efficiency::0.5,1",
+                drawCorrelationPlot(heff, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", f"W MC {step} efficiency::0.5,1",
                                     heff.GetName(), "ForceTitle", outdirEff,
                                     palette=87, passCanvas=canvas)
             # the grid interpolator will be created up to the extreme bin centers, so need bounds_error=False to allow the extrapolation to extend outside until the bin edges
@@ -213,7 +216,7 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
                 heffSmooth = narf.hist_to_root(histEffi2D_ptut)
                 heffSmooth.SetName(f"{effHistRoot.GetName()}_eta{ieta}_smooth")
                 heffSmooth.SetTitle(etaRange)
-                drawCorrelationPlot(heffSmooth, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", "Smooth W MC {step} efficiency::0.5,1",
+                drawCorrelationPlot(heffSmooth, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", f"Smooth W MC {step} efficiency::0.5,1",
                                     heffSmooth.GetName(), "ForceTitle", outdirEff,
                                     palette=87, passCanvas=canvas)
         logger.info("Done with efficiencies")
@@ -242,7 +245,7 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
         hpull = copy.deepcopy(h.Clone(f"{h.GetName()}_pull2Dfit"))
         hpull.Reset("ICESM")
         hpull1D_uTpT.Reset("ICESM")
-        drawCorrelationPlot(h, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", "{step} scale factor",
+        drawCorrelationPlot(h, "Projected recoil u_{T} (GeV)", "Muon p_{T} (GeV)", f"{step} scale factor",
                             h.GetName(), "ForceTitle", outdirNew,
                             palette=87, passCanvas=canvas)
                 
@@ -283,6 +286,17 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
                 hpull_utEtaPt.SetBinContent(ix, ieta, iy, pull)
                 hpull1D_uTpT.Fill(pull)
 
+        #
+        if args.debugPlots:
+            drawTH1(hpull1D_uTpT,
+                    "Pulls in u_{T}-p_{T} plane",
+                    "Number of events",
+                    f"hpull_utpt_ieta{ieta}_1D",
+                    outdir_debug,
+                    passCanvas=canvas,
+                    fitString="gaus;LEMSQ+;;-5;5",
+                    plotTitleLatex=etaRange)
+                
         hpullSummary_eta_mean.SetBinContent(ieta, hpull1D_uTpT.GetMean())
         hpullSummary_eta_mean.SetBinError(ieta, hpull1D_uTpT.GetMeanError())
         hpullSummary_eta_sigma.SetBinContent(ieta, hpull1D_uTpT.GetStdDev())
@@ -341,28 +355,28 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
                                     palette=87, passCanvas=canvas)
 
         logger.info("-"*30)
-
+            
     if not len(args.eta):
-        outdir_pull = outdirNew + f"/pulls_etapt_utBins/"
-        createPlotDirAndCopyPhp(outdir_pull)
-        for iut in range(1, 1 + hpull_utEtaPt.GetNbinsX()):
-            hpull_utEtaPt.GetXaxis().SetRange(iut, iut)
-            hpulletapt = hpull_utEtaPt.Project3D("zye")
-            hpulletapt.SetName(f"hpull_etapt_ut{iut}")
-            utBinLow = hpull_utEtaPt.GetXaxis().GetBinLowEdge(iut)
-            utBinHigh = hpull_utEtaPt.GetXaxis().GetBinLowEdge(iut+1)
-            hpulletapt.SetTitle(f"{utBinLow} < u_{{T}} < {utBinHigh}")
-            drawCorrelationPlot(hpulletapt, "Muon #eta", "Muon p_{T} (GeV)", "Pull: (fit - meas)/meas_unc::-5,5",
-                                hpulletapt.GetName(), "ForceTitle", outdir_pull,
-                                palette=87, nContours=20, passCanvas=canvas)
-        drawSingleTH1(hpullSummary_eta_mean, "Muon #eta", "Mean of pulls in u_{T}-p_{T} plane::-1, 1",
-                      hpullSummary_eta_mean.GetName(), outdir_pull, legendCoords=None,
-                      lowerPanelHeight=0.0, drawLineTopPanel=0.0,
-                      passCanvas=canvas, skipLumi=True)
-        drawSingleTH1(hpullSummary_eta_sigma, "Muon #eta", "Width of pulls in u_{T}-p_{T} plane::0, 2",
-                      hpullSummary_eta_sigma.GetName(), outdir_pull, legendCoords=None,
-                      lowerPanelHeight=0.0, drawLineTopPanel=1.0,
-                      passCanvas=canvas, skipLumi=True)
+    outdir_pull = outdirNew + f"/pulls_etapt_utBins/"
+    createPlotDirAndCopyPhp(outdir_pull)
+    for iut in range(1, 1 + hpull_utEtaPt.GetNbinsX()):
+        hpull_utEtaPt.GetXaxis().SetRange(iut, iut)
+        hpulletapt = hpull_utEtaPt.Project3D("zye")
+        hpulletapt.SetName(f"hpull_etapt_ut{iut}")
+        utBinLow = hpull_utEtaPt.GetXaxis().GetBinLowEdge(iut)
+        utBinHigh = hpull_utEtaPt.GetXaxis().GetBinLowEdge(iut+1)
+        hpulletapt.SetTitle(f"{utBinLow} < u_{{T}} < {utBinHigh}")
+        drawCorrelationPlot(hpulletapt, "Muon #eta", "Muon p_{T} (GeV)", "Pull: (fit - meas)/meas_unc::-5,5",
+                            hpulletapt.GetName(), "ForceTitle", outdir_pull,
+                            palette=87, nContours=20, passCanvas=canvas)
+    drawSingleTH1(hpullSummary_eta_mean, "Muon #eta", "Mean of pulls in u_{T}-p_{T} plane::-1, 1",
+                  hpullSummary_eta_mean.GetName(), outdir_pull, legendCoords=None,
+                  lowerPanelHeight=0.0, drawLineTopPanel=0.0,
+                  passCanvas=canvas, skipLumi=True)
+    drawSingleTH1(hpullSummary_eta_sigma, "Muon #eta", "Width of pulls in u_{T}-p_{T} plane::0, 2",
+                  hpullSummary_eta_sigma.GetName(), outdir_pull, legendCoords=None,
+                  lowerPanelHeight=0.0, drawLineTopPanel=1.0,
+                  passCanvas=canvas, skipLumi=True)
 
     # should the following be done for each eta bin as above? At least one could plot things vs pt-ut more easily
     if effHist != None and step in ["iso", "triggerplus", "triggerminus"]:
@@ -402,30 +416,6 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
 
 
 if __name__ == "__main__":
-            
-    parser = argparse.ArgumentParser()
-    #parser.add_argument('inputfile',  type=str, nargs=1, help='input root file with histogram')
-    #parser.add_argument('histname',  type=str, nargs=1, help='Histogram name to read from the file')
-    parser.add_argument('outdir', type=str, nargs=1, help='output directory to save things')
-    #parser.add_argument('step', type=str, nargs=1, help='Step, also to name output histogram (should be parsed from input file though)')
-    parser.add_argument('-n', '--outfilename', type=str, default='smoothSF3D.pkl.lz4', help='Output file name, extension must be pkl.lz4, which is automatically added if no extension is given')
-    parser.add_argument('--eta', type=int, nargs="*", default=[], help='Select some eta bins (ID goes from 1 to Neta')
-    parser.add_argument('--polDegree', type=int, nargs=2, default=[2, 3], help='Select degree of polynomial for 2D smoothing (uT-pT)')
-    parser.add_argument('--plotEigenVar', action="store_true", help='Plot eigen variations (it actually produces histogram ratios alt/nomi)')
-    parser.add_argument('-p', '--postfix', type=str, default="", help='Postfix for plot names (can be the step name)')
-    parser.add_argument('--extended', action="store_true", help='Use SF with uT range extended above +30 GeV')
-    parser.add_argument('--utHigh', type=float, default=None, help='Choose maximum uT at which the fit must be run (default uses full range except very last bin which is up to infinity)')
-    args = parser.parse_args()
-
-    ROOT.TH1.SetDefaultSumw2()
-
-    if not args.outfilename.endswith(".pkl.lz4"):
-        if "." in args.outfilename:
-            logger.error(f"Invalid extension for output file name {args.outfilename}. It must be 'pkl.lz4'")
-            quit()
-        else:
-            logger.info(f"Adding pkl.lz4 extension for output file name {args.outfilename}")
-            args.outfilename += ".pkl.lz4"
 
     sfFolder = data_dir + "/testMuonSF/"
     # efficiencies made with scripts/analysisTools/w_mass_13TeV/makeWMCefficiency3D.py
@@ -439,6 +429,32 @@ if __name__ == "__main__":
                      "triggerplus"  : f"{sfFolder}triggerplus3DSFUT.root",
                      "triggerminus" : f"{sfFolder}triggerminus3DSFUT.root",
                      }
+    
+    parser = argparse.ArgumentParser()
+    #parser.add_argument('inputfile',  type=str, nargs=1, help='input root file with histogram')
+    #parser.add_argument('histname',  type=str, nargs=1, help='Histogram name to read from the file')
+    parser.add_argument('outdir', type=str, nargs=1, help='output directory to save things')
+    #parser.add_argument('step', type=str, nargs=1, help='Step, also to name output histogram (should be parsed from input file though)')
+    parser.add_argument('-n', '--outfilename', type=str, default='smoothSF3D.pkl.lz4', help='Output file name, extension must be pkl.lz4, which is automatically added if no extension is given')
+    parser.add_argument('--eta', type=int, nargs="*", default=[], help='Select some eta bins (ID goes from 1 to Neta')
+    parser.add_argument('--polDegree', type=int, nargs=2, default=[2, 3], help='Select degree of polynomial for 2D smoothing (uT-pT)')
+    parser.add_argument('--plotEigenVar', action="store_true", help='Plot eigen variations (it actually produces histogram ratios alt/nomi)')
+    parser.add_argument('-p', '--postfix', type=str, default="", help='Postfix for plot names (can be the step name)')
+    parser.add_argument('-s', '--step', type=str, nargs="*", default=[], choices=list(inputRootFile.keys()), help='Do only these steps (default uses all)')
+    parser.add_argument('--extended', action="store_true", help='Use SF with uT range extended above +30 GeV')
+    parser.add_argument('--utHigh', type=float, default=None, help='Choose maximum uT at which the fit must be run (default uses full range except very last bin which is up to infinity)')
+    parser.add_argument('--debugPlots', action="store_true", help='Run additional plots for debugging (might become default eventually)')
+    args = parser.parse_args()
+
+    ROOT.TH1.SetDefaultSumw2()
+
+    if not args.outfilename.endswith(".pkl.lz4"):
+        if "." in args.outfilename:
+            logger.error(f"Invalid extension for output file name {args.outfilename}. It must be 'pkl.lz4'")
+            quit()
+        else:
+            logger.info(f"Adding pkl.lz4 extension for output file name {args.outfilename}")
+            args.outfilename += ".pkl.lz4"
 
     if args.extended:
         #effSmoothFile = "/eos/user/m/mciprian/www/WMassAnalysis/test2Dsmoothing/makeWMCefficiency3D/noMuonCorr_noSF_allProc_noDphiCut_rebinUt2/efficiencies3D_rebinUt2.pkl.lz4"
@@ -471,6 +487,8 @@ if __name__ == "__main__":
     resultDict = {}
     for w in work:
         inputfile, histname, step, eff = w
+        if len(args.step) and step not in args.step:
+            continue
         rets = runSmoothing(inputfile, histname, outdir, step, args, effHist=eff)
         for ret in rets:
             if ret != None:

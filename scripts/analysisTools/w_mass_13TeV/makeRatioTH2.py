@@ -296,8 +296,30 @@ if __name__ == "__main__":
         canvas_unroll.SetTicky(1)
         canvas_unroll.cd()
         canvas_unroll.SetBottomMargin(bottomMargin)                                            
-        
-        ratio_unrolled = unroll2Dto1D(hratio, newname=f"unrolled_{hratio.GetName()}", cropNegativeBins=False, invertUnroll=args.unrolly)
+
+        unrollNameID = "unrolled"
+        xAxisTitle_unroll = f"Unrolled bin: '{yAxisTitle}' vs '{xAxisTitle}'"
+        vertLineDivisions="{a},{b}".format(a=hratio.GetNbinsY(),b=hratio.GetNbinsX())
+        nBinsUnrollVar = hratio.GetNbinsY()
+        unrollAxis = hratio.GetYaxis()
+        if args.unrolly:
+            unrollNameID = "unrolledY"
+            xAxisTitle_unroll = f"Unrolled bin: '{xAxisTitle}' vs '{yAxisTitle}'"
+            vertLineDivisions="{a},{b}".format(a=hratio.GetNbinsX(),b=hratio.GetNbinsY())
+            nBinsUnrollVar = hratio.GetNbinsX()
+            unrollAxis = hratio.GetXaxis()
+
+        unrollBinRanges = []
+        if nBinsUnrollVar > 15:
+            for ibin in range(nBinsUnrollVar):
+                unrollBinRanges.append("") # keep dummy otherwise there's too much text most of the time
+        else:
+            for ibin in range(nBinsUnrollVar):
+                unrollBinRanges.append("#splitline{{{v} in}}{{[{vmin},{vmax}]}}".format(v="x" if args.unrolly else "y",
+                                                                                        vmin=int(unrollAxis.GetBinLowEdge(ibin+1)),
+                                                                                        vmax=int(unrollAxis.GetBinLowEdge(ibin+2))))
+         
+        ratio_unrolled = unroll2Dto1D(hratio, newname=f"{unrollNameID}_{hratio.GetName()}", cropNegativeBins=False, invertUnroll=args.unrolly)
         unitLine = copy.deepcopy(ratio_unrolled.Clone("tmp_horizontalLineAt1"))
         unitLine.Reset("ICESM")
         ratioUnc = copy.deepcopy(ratio_unrolled.Clone("tmp_ratioUnc"))
@@ -309,24 +331,17 @@ if __name__ == "__main__":
             ratioUnc.SetBinContent(ib, 1.0)
             ratioUnc.SetBinError(ib, 0.0 if (args.divideRelativeError or args.divideError) else ratio_unrolled.GetBinError(ib))
             ratio_unrolled.SetBinError(ib, 0.0)
-        yBinRanges = []
-        if hratio.GetNbinsY() > 15:
-            for iybin in range(hratio.GetNbinsY()):
-                yBinRanges.append("") # keep dummy otherwise there's too much text most of the time
-        else:
-            for iybin in range(hratio.GetNbinsY()):
-                yBinRanges.append("#splitline{{y in}}{{[{ptmin},{ptmax}]}}".format(ptmin=int(hratio.GetYaxis().GetBinLowEdge(iybin+1)),
-                                                                                   ptmax=int(hratio.GetYaxis().GetBinLowEdge(iybin+2))))
+
         zAxisTitle_unroll = zAxisTitle if "::" not in zAxisTitle else str(zAxisTitle.split("::")[0])
         whatUncertainty = "numerator" if args.setRatioUnc == "num" else "denominator" if args.setRatioUnc == "den" else "total"
         if args.divideError or args.divideRelativeError:
             drawNTH1([ratio_unrolled, unitLine], [f"Ratio {args.histTitle}", "Unity"],
-                     f"Unrolled bin: '{yAxisTitle}' vs '{xAxisTitle}'", zAxisTitle_unroll,
+                     xAxisTitle_unroll, zAxisTitle_unroll,
                      ratio_unrolled.GetName(), outname,
                      leftMargin=0.06, rightMargin=0.01,
                      legendCoords="0.06,0.99,0.91,0.99;3", lowerPanelHeight=0.0, skipLumi=True, passCanvas=canvas_unroll,
-                    drawVertLines="{a},{b}".format(a=hratio.GetNbinsY(),b=hratio.GetNbinsX()),
-                     textForLines=yBinRanges, transparentLegend=False,
+                     drawVertLines=vertLineDivisions,
+                     textForLines=unrollBinRanges, transparentLegend=False,
                      onlyLineColor=True, useLineFirstHistogram=True, drawErrorAll=True, lineWidth=1,
                      colorVec=[ROOT.kRed])
         else:
@@ -334,12 +349,12 @@ if __name__ == "__main__":
             legUnrollHists = [f"Ratio {args.histTitle}", f"Uncertainty ({whatUncertainty})", "Unity"]
             colorUnrollHists = [ROOT.kBlack, ROOT.kRed] # only from second histogram onwards
             drawNTH1(unrollHists, legUnrollHists,
-                     f"Unrolled bin: '{yAxisTitle}' vs '{xAxisTitle}'", zAxisTitle_unroll,
+                     xAxisTitle_unroll, zAxisTitle_unroll,
                      ratio_unrolled.GetName(), outname,
                      leftMargin=0.06, rightMargin=0.01,
                      legendCoords="0.06,0.99,0.91,0.99;3", lowerPanelHeight=0.0, skipLumi=True, passCanvas=canvas_unroll,
-                     drawVertLines="{a},{b}".format(a=hratio.GetNbinsY(),b=hratio.GetNbinsX()),
-                     textForLines=yBinRanges, transparentLegend=False,
+                     drawVertLines=vertLineDivisions,
+                     textForLines=unrollBinRanges, transparentLegend=False,
                      onlyLineColor=False, useLineFirstHistogram=True, drawErrorAll=True, lineWidth=1,
                      fillStyleSecondHistogram=1001, fillColorSecondHistogram=ROOT.kGray,
                      colorVec=colorUnrollHists)

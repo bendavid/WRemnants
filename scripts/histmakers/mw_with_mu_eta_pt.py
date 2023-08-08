@@ -74,11 +74,11 @@ axes_WeffMC = [axis_eta, axis_pt_eff, axis_ut, axis_charge, axis_passIso, axis_p
 groups_to_aggregate = args.aggregateGroups
 
 if args.unfolding:
-    
+
     unfolding_axes, unfolding_cols = differential.get_pt_eta_axes(args.genBins[0], template_minpt, template_maxpt, args.genBins[1])
     datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wmunu")
     groups_to_aggregate.append("BkgWmunu")
-    
+
 elif args.addHelicityHistos:
 
     #list(range(0,50,5)).append(np.inf) ,
