@@ -221,7 +221,7 @@ def setup(args,xnorm=False):
     if args.widthUnc:
         widthSkipZ = [("widthZ2p49333GeV",), ("widthZ2p49493GeV",), ("widthZ2p4952GeV",)] 
         widthSkipW = [("widthW2p09053GeV",), ("widthW2p09173GeV",), ("widthW2p085GeV",)]
-        if wmass and not xnorm:
+        if wmass:
             cardTool.addSystematic(f"widthWeightZ",
                                     processes=["single_v_nonsig_samples"],
                                     group=f"widthZ",
