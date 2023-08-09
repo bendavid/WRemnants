@@ -312,7 +312,7 @@ def build_graph(df, dataset):
 
         # QCD scale
         df = theory_tools.define_scale_tensor(df)
-        if dataset.name in sigProcs:
+        if dataset.name in common.vprocs_lowpu:
             syst_tools.add_qcdScale_hist(results, df, [*gen_reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mt_cols, "ptVgen", "chargeVgen"], "reco_mT") 
             syst_tools.add_qcdScaleByHelicityUnc_hist(results, df, qcdScaleByHelicity_helper, [*gen_reco_mll_axes, axis_ptVgen, axis_chargeVgen], [*gen_reco_mt_cols, "ptVgen", "chargeVgen"], base_name="reco_mT")
         else:
