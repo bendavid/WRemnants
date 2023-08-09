@@ -1,46 +1,70 @@
 #!/usr/bin/env python3
-from wremnants import CardTool,theory_tools,syst_tools,combine_helpers,combine_theory_helper
-from wremnants import histselections as sel
+from wremnants import CardTool,combine_helpers,combine_theory_helper
 from wremnants.datasets.datagroups import Datagroups
 from utilities import common, logging, input_tools
 import itertools
 import argparse
-import os
-import pathlib
 import hist
-import copy
 import math
-import time
-
-data_dir = common.data_dir
 
 def make_parser(parser=None):
-    if not parser:
-        parser = common.common_parser_combine()
-    parser.add_argument("--fitvar", nargs="+", help="Variable to fit", default=["pt", "eta"])
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-o", "--outfolder", type=str, default=".", help="Output folder with the root file storing all histograms and datacards for single charge (subfolder WMass or ZMassWLike is created automatically inside)")
+    parser.add_argument("-i", "--inputFile", type=str)
+    parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
+    parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
+                        help="Set verbosity level with logging, the larger the more verbose")
+    parser.add_argument("--noColorLogger", action="store_true", help="Do not use logging with colors")
+    parser.add_argument("--excludeProcGroups", type=str, nargs="*", help="Don't run over processes belonging to these groups (only accepts exact group names)", default=["QCD"])
+    parser.add_argument("--filterProcGroups", type=str, nargs="*", help="Only run over processes belonging to these groups", default=[])
+    parser.add_argument("-x", "--excludeNuisances", type=str, default="", help="Regular expression to exclude some systematics from the datacard")
+    parser.add_argument("-k", "--keepNuisances", type=str, default="", help="Regular expression to keep some systematics, overriding --excludeNuisances. Can be used to keep only some systs while excluding all the others with '.*'")
+    parser.add_argument("--absolutePathInCard", action="store_true", help="In the datacard, set Absolute path for the root file where shapes are stored")
     parser.add_argument("-n", "--baseName", type=str, help="Histogram name in the file (e.g., 'nominal')", default="nominal")
-    parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow). Equivalent to --excludeNuisances '.*effSystTnP|.*effStatTnP' ")
+    parser.add_argument("--noHist", action='store_true', help="Skip the making of 2D histograms (root file is left untouched if existing)")
+    parser.add_argument("--qcdProcessName" , type=str, default="Fake", help="Name for QCD process")
+    # setting on the fit behaviour
+    parser.add_argument("--fitvar", nargs="+", help="Variable to fit", default=["pt", "eta"])
+    parser.add_argument("--rebin", type=int, nargs='*', default=[], help="Rebin axis by this value (default does nothing)")
+    parser.add_argument("--axlim", type=float, default=[], nargs='*', help="Restrict axis to this range (assumes pairs of values by axis, with trailing axes optional)")
+    parser.add_argument("--lumiScale", type=float, default=1.0, help="Rescale equivalent luminosity by this value (e.g. 10 means ten times more data and MC)")
+    parser.add_argument("--sumChannels", action='store_true', help="Only use one channel")
+    parser.add_argument("--fitXsec", action='store_true', help="Fit signal inclusive cross section")
+    parser.add_argument("--genModel", action="store_true", help="Produce datacard with the xnorm as model (binned according to axes defined in --fitvar)")
+    parser.add_argument("--simultaneousABCD", action="store_true", help="Produce datacard for simultaneous fit of ABCD regions")
+    # settings on the nuisances itself
+    parser.add_argument("--doStatOnly", action="store_true", default=False, help="Set up fit to get stat-only uncertainty (currently combinetf with -S 0 doesn't work)")
+    parser.add_argument("--minnloScaleUnc", choices=["byHelicityPt", "byHelicityPtCharge", "byHelicityCharge", "byPtCharge", "byPt", "byCharge", "integrated",], default="byHelicityPt",
+            help="Decorrelation for QCDscale")
+    parser.add_argument("--resumUnc", default="tnp", type=str, choices=["scale", "tnp", "none"], help="Include SCETlib uncertainties")
+    parser.add_argument("--npUnc", default="Delta_Lambda", type=str, choices=combine_theory_helper.TheoryHelper.valid_np_models, help="Nonperturbative uncertainty model")
+    parser.add_argument("--tnpMagnitude", default=1, type=float, help="Variation size for the TNP")
+    parser.add_argument("--scaleTNP", default=1, type=float, help="Scale the TNP uncertainties by this factor")
+    parser.add_argument("--scalePdf", default=1, type=float, help="Scale the PDF hessian uncertainties by this factor")
+    parser.add_argument("--pdfUncFromCorr", action='store_true', help="Take PDF uncertainty from correction hist (Requires having run that correction)")
     parser.add_argument("--ewUnc", action='store_true', help="Include EW uncertainty")
     parser.add_argument("--widthUnc", action='store_true', help="Include uncertainty on W and Z width")
+    parser.add_argument("--noStatUncFakes" , action="store_true",   help="Set bin error for QCD background templates to 0, to check MC stat uncertainties for signal only")
+    parser.add_argument("--skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
+    parser.add_argument("--noQCDscaleFakes", action="store_true",   help="Do not apply QCd scale uncertainties on fakes, mainly for debugging")
+    parser.add_argument("--addQCDMC", action="store_true", help="Include QCD MC when making datacards (otherwise by default it will always be excluded)")
+    parser.add_argument("--muonScaleVariation", choices=["smearingWeights", "massWeights", "manualShift"], default="smearingWeights", help="the method with which the muon scale variation histograms are derived")
+    parser.add_argument("--scaleMuonCorr", type=float, default=1.0, help="Scale up/down dummy muon scale uncertainty by this factor")
+    parser.add_argument("--correlatedNonClosureNuisances", action='store_true', help="get systematics from histograms for the Z non-closure nuisances without decorrelation in eta and pt")
+    parser.add_argument("--sepImpactForNC", action="store_true", help="use a dedicated impact gropu for non closure nuisances, instead of putting them in muonScale")
+    parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow). Equivalent to --excludeNuisances '.*effSystTnP|.*effStatTnP' ")
+    parser.add_argument("--effStatLumiScale", type=float, default=None, help="Rescale equivalent luminosity for efficiency stat uncertainty by this value (e.g. 10 means ten times more data from tag and probe)")
+    parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers and nuisances)")
+    parser.add_argument("--isoEfficiencySmoothing", action='store_true', help="If isolation SF was derived from smooth efficiencies instead of direct smoothing")
+    # pseudodata
     parser.add_argument("--pseudoData", type=str, help="Hist to use as pseudodata")
     parser.add_argument("--pseudoDataIdx", type=str, default="0", help="Variation index to use as pseudodata")
     parser.add_argument("--pseudoDataFile", type=str, help="Input file for pseudodata (if it should be read from a different file)", default=None)
     parser.add_argument("--pseudoDataProcsRegexp", type=str, default=".*", help="Regular expression for processes taken from pseudodata file (all other processes are automatically got from the nominal file). Data is excluded automatically as usual")
-    parser.add_argument("-x",  "--excludeNuisances", type=str, default="", help="Regular expression to exclude some systematics from the datacard")
-    parser.add_argument("-k",  "--keepNuisances", type=str, default="", help="Regular expression to keep some systematics, overriding --excludeNuisances. Can be used to keep only some systs while excluding all the others with '.*'")
-    parser.add_argument("--scaleMuonCorr", type=float, default=1.0, help="Scale up/down dummy muon scale uncertainty by this factor")
-    parser.add_argument("--noHist", action='store_true', help="Skip the making of 2D histograms (root file is left untouched if existing)")
-    parser.add_argument("--effStatLumiScale", type=float, default=None, help="Rescale equivalent luminosity for efficiency stat uncertainty by this value (e.g. 10 means ten times more data from tag and probe)")
-    parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers and nuisances)")
-    parser.add_argument("--isoEfficiencySmoothing", action='store_true', help="If isolation SF was derived from smooth efficiencies instead of direct smoothing")
-    parser.add_argument("--axlim", type=float, default=[], nargs='*', help="Restrict axis to this range (assumes pairs of values by axis, with trailing axes optional)")
+    # unfolding/differential
     parser.add_argument("--unfolding", action='store_true', help="Prepare datacard for unfolding")
     parser.add_argument("--genAxes", type=str, default=None, nargs="+", help="Specify which gen axis should be used in unfolding, if 'None', use all (inferred from metadata).")
-    parser.add_argument("--fitXsec", action='store_true', help="Fit signal inclusive cross section")
-    parser.add_argument("--correlatedNonClosureNuisances", action='store_true', help="get systematics from histograms for the Z non-closure nuisances without decorrelation in eta and pt")
-    parser.add_argument("--sepImpactForNC", action="store_true", help="use a dedicated impact gropu for non closure nuisances, instead of putting them in muonScale")
-    parser.add_argument("--genModel", action="store_true", help="Produce datacard with the xnorm as model (binned according to axes defined in --fitvar)")
-    parser.add_argument("--simultaneousABCD", action="store_true", help="Produce datacard for simultaneous fit of ABCD regions")
+ 
     return parser
 
 
@@ -240,22 +264,6 @@ def setup(args,xnorm=False):
                                 passToFakes=passSystToFakes,
         )
 
-    if not xnorm:
-        if wmass:
-            cardTool.addSystematic("luminosity",
-                                   processes=['MCnoQCD'],
-                                   outNames=["lumiDown", "lumiUp"],
-                                   group="luminosity",
-                                   systAxes=["downUpVar"],
-                                   labelsByAxis=["downUpVar"],
-                                   passToFakes=passSystToFakes)
-
-        else:
-            # TOCHECK: no fakes here, most likely
-            cardTool.addLnNSystematic("luminosity", processes=['MCnoQCD'], size=1.012, group="luminosity")
-    else:
-        pass
-
     if args.ewUnc:
         cardTool.addSystematic(f"horacenloewCorr", 
             processes=['single_v_samples'],
@@ -302,104 +310,134 @@ def setup(args,xnorm=False):
 
     if not args.noEfficiencyUnc:
 
-        ## this is only needed when using 2D SF from 3D with ut-integration, let's comment for now
-        # if wmass:
-        #     cardTool.addSystematic("sf2d", 
-        #         processes=['MCnoQCD'],
-        #         outNames=["sf2dDown","sf2dUp"],
-        #         group="SF3Dvs2D",
-        #         scale = 1.0,
-        #         mirror = True,
-        #         mirrorDownVarEqualToNomi=False, # keep False, True is pathological
-        #         noConstraint=False,
-        #         systAxes=[],
-        #         #labelsByAxis=["downUpVar"],
-        #         passToFakes=passSystToFakes,
-        #     )
+        if not lowPU:
 
-        chargeDependentSteps = common.muonEfficiency_chargeDependentSteps
-        effTypesNoIso = ["reco", "tracking", "idip", "trigger"]
-        effStatTypes = [x for x in effTypesNoIso]
-        if args.binnedScaleFactors or not args.isoEfficiencySmoothing:
-            effStatTypes.extend(["iso"])
-        else:
-            effStatTypes.extend(["iso_effData", "iso_effMC"])
-        allEffTnP = [f"effStatTnP_sf_{eff}" for eff in effStatTypes] + ["effSystTnP"]
-        for name in allEffTnP:
-            if "Syst" in name:
-                axes = ["reco-tracking-idip-trigger-iso", "n_syst_variations"]
-                axlabels = ["WPSYST", "_etaDecorr"]
-                nameReplace = [("WPSYST0", "reco"), ("WPSYST1", "tracking"), ("WPSYST2", "idip"), ("WPSYST3", "trigger"), ("WPSYST4", "iso"), ("effSystTnP", "effSyst"), ("etaDecorr0", "fullyCorr") ]
-                scale = 1.0
-                mirror = True
-                mirrorDownVarEqualToNomi=False
-                groupName = "muon_eff_syst"
-                splitGroupDict = {f"{groupName}_{x}" : f".*effSyst.*{x}" for x in list(effTypesNoIso + ["iso"])}
-                splitGroupDict[groupName] = ".*effSyst.*" # add also the group with everything
-                # decorrDictEff = {                        
-                #     "x" : {
-                #         "label" : "eta",
-                #         "edges": [round(-2.4+i*0.1,1) for i in range(49)]
-                #     }
-                # }
-
-            else:
-                nameReplace = [] if any(x in name for x in chargeDependentSteps) else [("q0", "qall")] # for iso change the tag id with another sensible label
-                mirror = True
-                mirrorDownVarEqualToNomi=False
-                if args.binnedScaleFactors:
-                    axes = ["SF eta", "nPtBins", "SF charge"]
-                else:
-                    axes = ["SF eta", "nPtEigenBins", "SF charge"]
-                axlabels = ["eta", "pt", "q"]
-                nameReplace = nameReplace + [("effStatTnP_sf_", "effStat_")]           
-                scale = 1.0
-                groupName = "muon_eff_stat"
-                splitGroupDict = {f"{groupName}_{x}" : f".*effStat.*{x}" for x in effStatTypes}
-                splitGroupDict[groupName] = ".*effStat.*" # add also the group with everything
-            if args.effStatLumiScale and "Syst" not in name:
-                scale /= math.sqrt(args.effStatLumiScale)
-
-            cardTool.addSystematic(
-                name, 
-                mirror=mirror,
-                mirrorDownVarEqualToNomi=mirrorDownVarEqualToNomi,
-                group=groupName,
-                systAxes=axes,
-                labelsByAxis=axlabels,
-                baseName=name+"_",
-                processes=['MCnoQCD'],
-                passToFakes=passSystToFakes,
-                systNameReplace=nameReplace,
-                scale=scale,
-                splitGroup=splitGroupDict,
-                decorrelateByBin = {}
-            )
-            # if "Syst" in name and decorrDictEff != {}:
-            #     # add fully correlated version again
-            #     cardTool.addSystematic(
-            #         name,
-            #         rename=f"{name}_EtaDecorr",
-            #         mirror=mirror,
-            #         mirrorDownVarEqualToNomi=mirrorDownVarEqualToNomi,
-            #         group=groupName,
-            #         systAxes=axes,
-            #         labelsByAxis=axlabels,
-            #         baseName=name+"_",
+            ## this is only needed when using 2D SF from 3D with ut-integration, let's comment for now
+            # if wmass:
+            #     cardTool.addSystematic("sf2d", 
             #         processes=['MCnoQCD'],
+            #         outNames=["sf2dDown","sf2dUp"],
+            #         group="SF3Dvs2D",
+            #         scale = 1.0,
+            #         mirror = True,
+            #         mirrorDownVarEqualToNomi=False, # keep False, True is pathological
+            #         noConstraint=False,
+            #         systAxes=[],
+            #         #labelsByAxis=["downUpVar"],
             #         passToFakes=passSystToFakes,
-            #         systNameReplace=nameReplace,
-            #         scale=scale,
-            #         splitGroup=splitGroupDict,
-            #         decorrelateByBin = decorrDictEff
             #     )
 
-    to_fakes = passSystToFakes and not args.noQCDscaleFakes and not xnorm
+            chargeDependentSteps = common.muonEfficiency_chargeDependentSteps
+            effTypesNoIso = ["reco", "tracking", "idip", "trigger"]
+            effStatTypes = [x for x in effTypesNoIso]
+            if args.binnedScaleFactors or not args.isoEfficiencySmoothing:
+                effStatTypes.extend(["iso"])
+            else:
+                effStatTypes.extend(["iso_effData", "iso_effMC"])
+            allEffTnP = [f"effStatTnP_sf_{eff}" for eff in effStatTypes] + ["effSystTnP"]
+            for name in allEffTnP:
+                if "Syst" in name:
+                    axes = ["reco-tracking-idip-trigger-iso", "n_syst_variations"]
+                    axlabels = ["WPSYST", "_etaDecorr"]
+                    nameReplace = [("WPSYST0", "reco"), ("WPSYST1", "tracking"), ("WPSYST2", "idip"), ("WPSYST3", "trigger"), ("WPSYST4", "iso"), ("effSystTnP", "effSyst"), ("etaDecorr0", "fullyCorr") ]
+                    scale = 1.0
+                    mirror = True
+                    mirrorDownVarEqualToNomi=False
+                    groupName = "muon_eff_syst"
+                    splitGroupDict = {f"{groupName}_{x}" : f".*effSyst.*{x}" for x in list(effTypesNoIso + ["iso"])}
+                    splitGroupDict[groupName] = ".*effSyst.*" # add also the group with everything
+                    # decorrDictEff = {                        
+                    #     "x" : {
+                    #         "label" : "eta",
+                    #         "edges": [round(-2.4+i*0.1,1) for i in range(49)]
+                    #     }
+                    # }
 
+                else:
+                    nameReplace = [] if any(x in name for x in chargeDependentSteps) else [("q0", "qall")] # for iso change the tag id with another sensible label
+                    mirror = True
+                    mirrorDownVarEqualToNomi=False
+                    if args.binnedScaleFactors:
+                        axes = ["SF eta", "nPtBins", "SF charge"]
+                    else:
+                        axes = ["SF eta", "nPtEigenBins", "SF charge"]
+                    axlabels = ["eta", "pt", "q"]
+                    nameReplace = nameReplace + [("effStatTnP_sf_", "effStat_")]           
+                    scale = 1.0
+                    groupName = "muon_eff_stat"
+                    splitGroupDict = {f"{groupName}_{x}" : f".*effStat.*{x}" for x in effStatTypes}
+                    splitGroupDict[groupName] = ".*effStat.*" # add also the group with everything
+                if args.effStatLumiScale and "Syst" not in name:
+                    scale /= math.sqrt(args.effStatLumiScale)
+
+                cardTool.addSystematic(
+                    name, 
+                    mirror=mirror,
+                    mirrorDownVarEqualToNomi=mirrorDownVarEqualToNomi,
+                    group=groupName,
+                    systAxes=axes,
+                    labelsByAxis=axlabels,
+                    baseName=name+"_",
+                    processes=['MCnoQCD'],
+                    passToFakes=passSystToFakes,
+                    systNameReplace=nameReplace,
+                    scale=scale,
+                    splitGroup=splitGroupDict,
+                    decorrelateByBin = {}
+                )
+                # if "Syst" in name and decorrDictEff != {}:
+                #     # add fully correlated version again
+                #     cardTool.addSystematic(
+                #         name,
+                #         rename=f"{name}_EtaDecorr",
+                #         mirror=mirror,
+                #         mirrorDownVarEqualToNomi=mirrorDownVarEqualToNomi,
+                #         group=groupName,
+                #         systAxes=axes,
+                #         labelsByAxis=axlabels,
+                #         baseName=name+"_",
+                #         processes=['MCnoQCD'],
+                #         passToFakes=passSystToFakes,
+                #         systNameReplace=nameReplace,
+                #         scale=scale,
+                #         splitGroup=splitGroupDict,
+                #         decorrelateByBin = decorrDictEff
+                #     )
+        else:
+            if datagroups.flavor in ["mu", "mumu"]:
+                lepEffs = ["muSF_HLT_DATA_stat", "muSF_HLT_DATA_syst", "muSF_HLT_MC_stat", "muSF_HLT_MC_syst", "muSF_ISO_stat", "muSF_ISO_DATA_syst", "muSF_ISO_MC_syst", "muSF_IDIP_stat", "muSF_IDIP_DATA_syst", "muSF_IDIP_MC_syst"]
+            else:
+                lepEffs = [] # ["elSF_HLT_syst", "elSF_IDISO_stat"]
+
+            for lepEff in lepEffs:
+                cardTool.addSystematic(lepEff,
+                    processes=cardTool.allMCProcesses(),
+                    mirror = True,
+                    group="CMS_lepton_eff",
+                    baseName=lepEff,
+                    systAxes = ["tensor_axis_0"],
+                    labelsByAxis = [""],
+                )
+                
     if (wmass or wlike) and not input_tools.args_from_metadata(cardTool, "noRecoil"):
-        combine_helpers.add_recoil_uncertainty(cardTool, ["signal_samples"], passSystToFakes=passSystToFakes, flavor=datagroups.flavor if datagroups.flavor else "mu")
+        combine_helpers.add_recoil_uncertainty(cardTool, ["signal_samples"], 
+            passSystToFakes=passSystToFakes, 
+            flavor=datagroups.flavor if datagroups.flavor else "mu",
+            pu_type="lowPU" if lowPU else "highPU")
 
     if lowPU:
+
+        if datagroups.flavor in ["e", "ee"]:
+            # disable, prefiring for muons currently broken? (fit fails)
+            cardTool.addSystematic("prefireCorr",
+                processes=cardTool.allMCProcesses(),
+                mirror = False,
+                group="CMS_prefire17",
+                baseName="CMS_prefire17",
+                systAxes = ["downUpVar"],
+                labelsByAxis = ["downUpVar"],
+            )
+
         return cardTool
 
     # Below: all that is highPU specific

@@ -87,21 +87,21 @@ nominal_axes = [
     axis_charge, axis_passMT, axis_passIso]
 
 # corresponding columns
-nominal_cols = ["ptll", "Lep_charge", "passMT", "passIso"]
+nominal_cols = ["ptll", "lep_charge", "passMT", "passIso"]
 
 # mt final cards/fitting
 axis_mT = hist.axis.Variable([0] + list(range(40, 110, 1)) + [110, 112, 114, 116, 118, 120, 125, 130, 140, 160, 180, 200], name = "mt",underflow=False, overflow=True)
 axis_mT = hist.axis.Regular(100, 0, 200, name = "mt", underflow=False)
 
 axes_mT = [axis_mT, axis_charge, axis_passMT, axis_passIso]
-cols_mT = ["transverseMass", "Lep_charge", "passMT", "passIso"]
+cols_mT = ["transverseMass", "lep_charge", "passMT", "passIso"]
 
 # reco_mT_axes = [common.axis_recoil_reco_ptW_lowpu, common.axis_mt_lowpu, axis_charge, axis_passMT, axis_passIso]
 # gen_reco_mT_axes = [common.axis_recoil_gen_ptW_lowpu, common.axis_recoil_reco_ptW_lowpu, common.axis_mt_lowpu, axis_charge, axis_passMT, axis_passIso]
 
 # # corresponding columns
-# gen_reco_mT_cols = ["ptVgen", "recoil_corr_rec_magn", "mt", "Lep_charge", "passMT", "passIso"]
-# reco_mT_cols = ["recoil_corr_rec_magn", "mt", "Lep_charge", "passMT", "passIso"]
+# gen_reco_mT_cols = ["ptVgen", "recoil_corr_rec_magn", "mt", "lep_charge", "passMT", "passIso"]
+# reco_mT_cols = ["recoil_corr_rec_magn", "mt", "lep_charge", "passMT", "passIso"]
     
 
 # extra axes which can be used to label tensor_axes
@@ -166,34 +166,23 @@ def build_graph(df, dataset):
         df = df.Define("goodLeptonsPlus", "goodLeptons && Muon_charge > 0")
         df = df.Define("goodLeptonsMinus", "goodLeptons && Muon_charge < 0")
         df = df.Filter("Sum(goodLeptons) == 1")
-        
-        df = df.Define("goodTrigObjs", "wrem::goodMuonTriggerCandidateLowPU(TrigObj_id, TrigObj_pt, TrigObj_l1pt, TrigObj_l2pt, TrigObj_filterBits)")
-        df = df.Define("trigMatch", "wrem::hasTriggerMatchLowPU(Muon_eta[goodLeptons], Muon_phi[goodLeptons], TrigObj_eta[goodTrigObjs], TrigObj_phi[goodTrigObjs])")
-        df = df.Define("nonTrigMatch", "wrem::inverse(trigMatch)")
-        df = df.Filter("Sum(trigMatch) > 0")
 
-        df = df.Define("Lep_pt_uncorr", "Muon_pt[goodLeptons][0]")
-        df = df.Define("Lep_pt", "Muon_pt_corr[goodLeptons][0]")
-        df = df.Define("Lep_eta", "Muon_eta[goodLeptons][0]")
+        df = df.Define("goodTrigObjs", "wrem::goodMuonTriggerCandidateLowPU(TrigObj_id, TrigObj_pt, TrigObj_l1pt, TrigObj_l2pt, TrigObj_filterBits)")
+
+        df = df.Define("Lep_pt_uncorr", "Muon_pt[goodLeptons]")
+        df = df.Define("Lep_pt", "Muon_pt_corr[goodLeptons]")
+        df = df.Define("Lep_eta", "Muon_eta[goodLeptons]")
         df = df.Define("Lep_abs_eta", "abs(Lep_eta)")
-        df = df.Define("Lep_phi", "Muon_phi[goodLeptons][0]")
-        df = df.Define("Lep_charge", "Muon_charge[goodLeptons][0]")
-        df = df.Define("Lep_mass", "Muon_mass[goodLeptons][0]")
-        df = df.Define("Lep_iso", "Muon_pfRelIso04_all[goodLeptons][0]")
+        df = df.Define("Lep_phi", "Muon_phi[goodLeptons]")
+        df = df.Define("Lep_charge", "Muon_charge[goodLeptons]")
+        df = df.Define("Lep_mass", "Muon_mass[goodLeptons]")
+        df = df.Define("Lep_iso", "Muon_pfRelIso04_all[goodLeptons]")
 
         df = df.Define("passIso", "Lep_iso < 0.15")
 
-        if not dataset.is_data:
-            df = df.Define("lepSF_ISO", "wrem::lepSF(Muon_pt_corr[goodLeptons], Muon_eta[goodLeptons], Muon_charge[goodLeptons], 1)")
-            df = df.Define("lepSF_IDIP", "wrem::lepSF(Muon_pt_corr[goodLeptons], Muon_eta[goodLeptons], Muon_charge[goodLeptons], 2)") # largest effect
-            df = df.Define("lepSF_HLT", "wrem::lepSF_HLT_q(Muon_pt_corr[goodLeptons], Muon_eta[goodLeptons], Muon_charge[goodLeptons], 13)")
-            df = df.Define("prefireCorr", "wrem::prefireCorr(0, Jet_pt, Jet_eta, Jet_phi, Jet_muEF, Jet_neEmEF, Jet_chEmEF, Photon_pt, Photon_eta, Photon_phi, Muon_pt_corr[goodLeptons], Muon_eta[goodLeptons], Muon_phi[goodLeptons])")
-            df = df.Define("SFMC", "lepSF_IDIP*lepSF_ISO*lepSF_HLT*prefireCorr")
-        
-        else: df = df.Define("SFMC", "1.0")
-    
     else:
-
+        # undo the scale/smearing corrections, needed to correct RawMET
+        df = df.Define("Electron_pt_uncorr", "wrem::Egamma_undoCorrection(Electron_pt, Electron_eta, Electron_ecalCorr)")
         if not dataset.is_data: 
             df = df.Define("Electron_pt_corr", "wrem::applyEGammaScaleSmearingUnc(0, Electron_pt, Electron_eta, Electron_dEscaleUp, Electron_dEscaleDown, Electron_dEsigmaUp, Electron_dEsigmaDown, 0)")
             df = df.Filter("HLT_Ele20_WPLoose_Gsf")
@@ -201,7 +190,6 @@ def build_graph(df, dataset):
         else: 
             df = df.Define("Electron_pt_corr", "wrem::applyEGammaScaleSmearingUnc(1, Electron_pt, Electron_eta, Electron_dEscaleUp, Electron_dEscaleDown, Electron_dEsigmaUp, Electron_dEsigmaDown, 0)")
             df = df.Filter("HLT_HIEle20_WPLoose_Gsf")
-
 
         df = df.Define("vetoElectrons", "Electron_pt_corr > 10 && Electron_cutBased > 0 && abs(Electron_eta) < 2.4")
         df = df.Filter("Sum(vetoElectrons)==1")
@@ -215,35 +203,49 @@ def build_graph(df, dataset):
 
         df = df.Define("goodLeptonsPlus", "goodLeptons && Electron_charge > 0")
         df = df.Define("goodLeptonsMinus", "goodLeptons && Electron_charge < 0")
-        
+
         df = df.Define("goodTrigObjs", "wrem::goodElectronTriggerCandidateLowPU(TrigObj_id, TrigObj_pt, TrigObj_l1pt, TrigObj_l2pt, TrigObj_filterBits)")
-        df = df.Define("trigMatch", "wrem::hasTriggerMatchLowPU(Electron_eta[goodLeptons], Electron_phi[goodLeptons], TrigObj_eta[goodTrigObjs], TrigObj_phi[goodTrigObjs])")
-        df = df.Define("nonTrigMatch", "wrem::inverse(trigMatch)")
-        df = df.Filter("Sum(trigMatch) > 0")
-        
-        df = df.Define("Lep_pt_uncorr", "Electron_pt[goodLeptons][0]")
-        df = df.Define("Lep_pt", "Electron_pt_corr[goodLeptons][0]")
-        df = df.Define("Lep_eta", "Electron_eta[goodLeptons][0]")
-        df = df.Define("Lep_phi", "Electron_phi[goodLeptons][0]")
-        df = df.Define("Lep_charge", "Electron_charge[goodLeptons][0]")
-        df = df.Define("Lep_mass", "Electron_mass[goodLeptons][0]")
-        df = df.Define("Lep_iso", "Electron_pfRelIso03_all[goodLeptons][0]")
 
-        if not dataset.is_data:
-            df = df.Define("lepSF_IDISO", "wrem::lepSF(Electron_pt_corr[goodLeptons], Electron_eta[goodLeptons], Electron_charge[goodLeptons], 3)")
-            df = df.Define("lepSF_HLT", "wrem::lepSF_HLT_q(Electron_pt_corr[goodLeptons], Electron_eta[goodLeptons], Electron_charge[goodLeptons], 11)")
-            df = df.Define("prefireCorr", "wrem::prefireCorr(0, Jet_pt, Jet_eta, Jet_phi, Jet_muEF, Jet_neEmEF, Jet_chEmEF, Photon_pt, Photon_eta, Photon_phi, Electron_pt_corr[goodLeptons], Electron_eta[goodLeptons], Electron_phi[goodLeptons])")
-            df = df.Define("SFMC", "lepSF_IDISO*lepSF_HLT*prefireCorr")
-
-        else: df = df.Define("SFMC", "1.0")    
+        df = df.Define("Lep_pt_uncorr", "Electron_pt_uncorr[goodLeptons]")
+        df = df.Define("Lep_pt", "Electron_pt_corr[goodLeptons]")
+        df = df.Define("Lep_eta", "Electron_eta[goodLeptons]")
+        df = df.Define("Lep_phi", "Electron_phi[goodLeptons]")
+        df = df.Define("Lep_charge", "Electron_charge[goodLeptons]")
+        df = df.Define("Lep_mass", "Electron_mass[goodLeptons]")
+        df = df.Define("Lep_iso", "Electron_pfRelIso03_all[goodLeptons]")
 
         df = df.Define("passIso", "wrem::electron_id::pass_iso<3>(Electron_vidNestedWPBitmap[goodLeptons])[0] > 0")
 
-    df = df.Filter(f"Lep_pt > {args.pt[1]} && Lep_pt < {args.pt[2]}")
+    df = df.Define("trigMatch", "wrem::hasTriggerMatchLowPU(Lep_eta, Lep_phi, TrigObj_eta[goodTrigObjs], TrigObj_phi[goodTrigObjs])")
+    df = df.Define("nonTrigMatch", "wrem::inverse(trigMatch)")
+    df = df.Filter("Sum(trigMatch) > 0")
+
+    df = df.Define("lep_pt_uncorr", "Lep_pt_uncorr[0]")
+    df = df.Define("lep_pt", "Lep_pt[0]")
+    df = df.Define("lep_eta", "Lep_eta[0]")
+    df = df.Define("lep_phi", "Lep_phi[0]")
+    df = df.Define("lep_charge", "Lep_charge[0]")
+    df = df.Define("lep_mass", "Lep_mass[0]")
+    df = df.Define("lep_iso", "Lep_iso[0]")
+    
+    df = df.Filter(f"lep_pt > {args.pt[1]} && lep_pt < {args.pt[2]}")
     df = muon_selections.apply_met_filters(df)
 
     if not dataset.is_data: 
-        df = df.Define("exp_weight", "SFMC")
+
+        if flavor == "mu":
+            df = df.Define("lepSF_ISO", "wrem::lepSF(Lep_pt, Lep_eta, Lep_charge, 1)")
+            df = df.Define("lepSF_IDIP", "wrem::lepSF(Lep_pt, Lep_eta, Lep_charge, 2)") # largest effect
+            df = df.Define("lepSF_HLT", "wrem::lepSF_HLT_q(Lep_pt, Lep_eta, Lep_charge, 13)")
+            df = df.Define("prefireCorr", "wrem::prefireCorr(0, Jet_pt, Jet_eta, Jet_phi, Jet_muEF, Jet_neEmEF, Jet_chEmEF, Photon_pt, Photon_eta, Photon_phi, Lep_pt, Lep_eta, Lep_phi)")
+            df = df.Define("SFMC", "lepSF_IDIP*lepSF_ISO*lepSF_HLT*prefireCorr")
+        else:
+            df = df.Define("lepSF_IDISO", "wrem::lepSF(Lep_pt, Lep_eta, Lep_charge, 3)")
+            df = df.Define("lepSF_HLT", "wrem::lepSF_HLT_q(Lep_pt, Lep_eta, Lep_charge, 11)")
+            df = df.Define("prefireCorr", "wrem::prefireCorr(0, Jet_pt, Jet_eta, Jet_phi, Jet_muEF, Jet_neEmEF, Jet_chEmEF, Photon_pt, Photon_eta, Photon_phi, Lep_pt, Lep_eta, Lep_phi)")
+            df = df.Define("SFMC", "lepSF_IDISO*lepSF_HLT*prefireCorr")
+
+        df = df.Define("exp_weight", "1.0")# "SFMC")
         df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")
@@ -253,44 +255,68 @@ def build_graph(df, dataset):
 
     # Recoil calibrations
     if not args.noRecoil:
-        lep_cols = ["Lep_pt", "Lep_phi", "Lep_charge", "Lep_pt_uncorr"]
+        lep_cols = ["lep_pt", "lep_phi", "lep_charge", "lep_pt_uncorr"]
         df = recoilHelper.recoil_W(df, results, dataset, common.vprocs_lowpu, lep_cols) # produces corrected MET as MET_corr_rec_pt/phi  vprocs_lowpu wprocs_recoil_lowpu
     else:
         df = df.Alias("MET_corr_rec_pt", "MET_pt")
         df = df.Alias("MET_corr_rec_phi", "MET_phi")
-        df = df.Define("mT_corr_rec", "wrem::mt_2(Lep_pt, Lep_phi, MET_corr_rec_pt, MET_corr_rec_phi)")
+        df = df.Define("mT_corr_rec", "wrem::mt_2(lep_pt, lep_phi, MET_corr_rec_pt, MET_corr_rec_phi)")
 
     df = df.Alias("transverseMass", "mT_corr_rec")
     df = df.Define("passMT", f"transverseMass > {mtw_min}")
 
-    results.append(df.HistoBoost("lep_pt", [axis_pt, axis_charge, axis_passMT, axis_passIso], ["Lep_pt", "Lep_charge", "passMT", "passIso", "nominal_weight"]))
-    results.append(df.HistoBoost("lep_eta", [axis_eta, axis_charge, axis_passMT, axis_passIso], ["Lep_eta", "Lep_charge", "passMT", "passIso", "nominal_weight"]))
-    results.append(df.HistoBoost("lep_phi", [axis_phi, axis_charge, axis_passMT, axis_passIso], ["Lep_phi", "Lep_charge", "passMT", "passIso", "nominal_weight"]))
-    results.append(df.HistoBoost("lep_pt", [axis_pt, axis_charge, axis_passMT, axis_passIso], ["Lep_pt", "Lep_charge", "passMT", "passIso", "nominal_weight"]))
-    results.append(df.HistoBoost("lep_iso", [axis_iso], ["Lep_iso", "nominal_weight"]))
+    results.append(df.HistoBoost("lep_pt", [axis_pt, axis_charge, axis_passMT, axis_passIso], ["lep_pt", "lep_charge", "passMT", "passIso", "nominal_weight"]))
+    results.append(df.HistoBoost("lep_eta", [axis_eta, axis_charge, axis_passMT, axis_passIso], ["lep_eta", "lep_charge", "passMT", "passIso", "nominal_weight"]))
+    results.append(df.HistoBoost("lep_phi", [axis_phi, axis_charge, axis_passMT, axis_passIso], ["lep_phi", "lep_charge", "passMT", "passIso", "nominal_weight"]))
+    results.append(df.HistoBoost("lep_pt", [axis_pt, axis_charge, axis_passMT, axis_passIso], ["lep_pt", "lep_charge", "passMT", "passIso", "nominal_weight"]))
+    results.append(df.HistoBoost("lep_iso", [axis_iso], ["lep_iso", "nominal_weight"]))
    
-    # results.append(df.HistoBoost("qcd_space", [axis_pt, axis_eta, axis_iso, axis_charge, axis_mT], ["Lep_pt", "Lep_eta", "Lep_iso", "Lep_charge", "transverseMass", "nominal_weight"]))  
+    # results.append(df.HistoBoost("qcd_space", [axis_pt, axis_eta, axis_iso, axis_charge, axis_mT], ["lep_pt", "lep_eta", "lep_iso", "lep_charge", "transverseMass", "nominal_weight"]))  
 
-    df = df.Define("pxll", "Lep_pt * std::cos(Lep_phi) + MET_corr_rec_pt * std::cos(MET_corr_rec_phi)")
-    df = df.Define("pyll", "Lep_pt * std::sin(Lep_phi) + MET_corr_rec_pt * std::sin(MET_corr_rec_phi)")
+    df = df.Define("pxll", "lep_pt * std::cos(lep_phi) + MET_corr_rec_pt * std::cos(MET_corr_rec_phi)")
+    df = df.Define("pyll", "lep_pt * std::sin(lep_phi) + MET_corr_rec_pt * std::sin(MET_corr_rec_phi)")
     df = df.Define("ptll", "std::sqrt(pxll*pxll + pyll*pyll)")
-
-    if dataset.name in common.vprocs_lowpu:
-        df = syst_tools.add_theory_hists(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, axes, cols)
-        df = syst_tools.add_theory_hists(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, axes_mT, cols_mT, base_name="transverseMass")
 
     results.append(df.HistoBoost("nominal", axes, [*cols, "nominal_weight"]))
     results.append(df.HistoBoost("transverseMass", axes_mT, [*cols_mT, "nominal_weight"]))
 
-    if not dataset.is_data and not args.onlyMainHistograms:
-        if not args.noRecoil:
-            df = recoilHelper.add_recoil_unc_W(df, results, dataset, cols, axes, "nominal")
-            df = recoilHelper.add_recoil_unc_W(df, results, dataset, cols_mT, axes_mT, "transverseMass")
-            
+    if not dataset.is_data: 
+        # prefire
+        df = df.Define("prefireCorr_syst", "wrem::prefireCorr_syst(Jet_pt, Jet_eta, Jet_phi, Jet_muEF, Jet_neEmEF, Jet_chEmEF, Photon_pt, Photon_eta, Photon_phi, Lep_pt, Lep_eta, Lep_phi)")
+        df = df.Define("prefireCorr_syst_tensor", "Eigen::TensorFixedSize<double, Eigen::Sizes<2>> res; auto w = nominal_weight*prefireCorr_syst; std::copy(std::begin(w), std::end(w), res.data()); return res;")
+
         # luminosity, done here as shape variation despite being a flat scaling so to facilitate propagating to fakes afterwards
         df = df.Define("luminosityScaling", f"wrem::constantScaling(nominal_weight, {args.lumiUncertainty})")
-        results.append(df.HistoBoost("nominal_luminosity", axes, [*cols, "luminosityScaling"], tensor_axes = [common.down_up_axis], storage=hist.storage.Double()))
-        results.append(df.HistoBoost("transverseMass_luminosity", axes_mT, [*cols_mT, "luminosityScaling"], tensor_axes = [common.down_up_axis], storage=hist.storage.Double()))
+
+        for n, c, a in (("nominal", cols, axes), ("transverseMass", cols_mT, axes_mT)):
+                        
+            results.append(df.HistoBoost(f"{n}_prefireCorr", [*a], [*c, "prefireCorr_syst_tensor"], tensor_axes = [common.down_up_axis]))
+
+            if dataset.name in common.vprocs_lowpu:
+                df = syst_tools.add_theory_hists(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, a, c, base_name=n)
+
+            # lepton efficiencies
+            if flavor == "mu":
+                df = lowPUcfg.lepSF_systs(df, results, "muSF_HLT_DATA_stat", 120, "wrem::lepSF_HLT_var_mu(1, Lep_pt, Lep_eta, Lep_charge)", n, a, c)
+                df = lowPUcfg.lepSF_systs(df, results, "muSF_HLT_DATA_syst", 120, "wrem::lepSF_HLT_var_mu(2, Lep_pt, Lep_eta, Lep_charge)", n, a, c)
+                df = lowPUcfg.lepSF_systs(df, results, "muSF_HLT_MC_stat",   120, "wrem::lepSF_HLT_var_mu(-1, Lep_pt, Lep_eta, Lep_charge)", n, a, c)
+                df = lowPUcfg.lepSF_systs(df, results, "muSF_HLT_MC_syst",   120, "wrem::lepSF_HLT_var_mu(-2, Lep_pt, Lep_eta, Lep_charge)", n, a, c)
+                df = lowPUcfg.lepSF_systs(df, results, "muSF_ISO_stat",      36,  "wrem::lepSF_ISO_var_mu(1, Lep_pt, Lep_eta, Lep_charge)", n, a, c)
+                df = lowPUcfg.lepSF_systs(df, results, "muSF_ISO_DATA_syst", 36,  "wrem::lepSF_ISO_var_mu(2, Lep_pt, Lep_eta, Lep_charge)", n, a, c)
+                df = lowPUcfg.lepSF_systs(df, results, "muSF_ISO_MC_syst",   36,  "wrem::lepSF_ISO_var_mu(-2, Lep_pt, Lep_eta, Lep_charge)", n, a, c)
+                df = lowPUcfg.lepSF_systs(df, results, "muSF_IDIP_stat",     36,  "wrem::lepSF_IDIP_var_mu(1, Lep_pt, Lep_eta, Lep_charge)", n, a, c)
+                df = lowPUcfg.lepSF_systs(df, results, "muSF_IDIP_DATA_syst",36,  "wrem::lepSF_IDIP_var_mu(2, Lep_pt, Lep_eta, Lep_charge)", n, a, c)
+                df = lowPUcfg.lepSF_systs(df, results, "muSF_IDIP_MC_syst",  36,  "wrem::lepSF_IDIP_var_mu(-2, Lep_pt, Lep_eta, Lep_charge)", n, a, c)
+            # electron efficiency uncertainties currently don't work
+            # else:
+            #     df = lowPUcfg.lepSF_systs(df, results, "elSF_HLT_syst",      120, "wrem::lepSF_el_HLT_syst(Lep_pt, Lep_eta, Lep_charge)", n, a, c)
+            #     df = lowPUcfg.lepSF_systs(df, results, "elSF_IDISO_syst",    36,  "wrem::lepSF_el_IDISO_syst(Lep_pt, Lep_eta, Lep_charge)", n, a, c)
+
+            results.append(df.HistoBoost(f"{n}_luminosity", a, [*c, "luminosityScaling"], tensor_axes = [common.down_up_axis], storage=hist.storage.Double()))
+
+            if not args.noRecoil:
+                df = recoilHelper.add_recoil_unc_W(df, results, dataset, c, a, n)
+            
 
     # if dataset.name in sigProcs:
            

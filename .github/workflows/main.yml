@@ -233,13 +233,13 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --rebin 2 --baseName transverseMass --hists mt -a mu -p $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_MU
 
       - name: lowpu w mu combine mt setup
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $HIST_FILE_MU --baseName transverseMass --fitvar mt --noEfficiencyUnc -o $WREMNANTS_OUTDIR
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $HIST_FILE_MU --baseName transverseMass --fitvar mt -o $WREMNANTS_OUTDIR
 
       - name: lowpu w mu plot response matrix
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/response_matrix.py --axes ptll-ptVGen --procFilters Wmunu -p mu -o $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_MU
 
       - name: lowpu w mu combine unfolding setup
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $HIST_FILE_MU --unfolding --fitvar ptll --noEfficiencyUnc -o $WREMNANTS_OUTDIR
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $HIST_FILE_MU --unfolding --fitvar ptll -o $WREMNANTS_OUTDIR
 
       - name: lowpu w e analysis
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_lowPU.py -o $WREMNANTS_OUTDIR -j $NTHREADS --forceDefaultName --unfolding --noRecoil --flavor e
@@ -257,13 +257,13 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --rebin 2 --baseName transverseMass --hists mt -a e -p $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_E
 
       - name: lowpu w e combine mt setup
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $HIST_FILE_E --baseName transverseMass --fitvar mt --noEfficiencyUnc -o $WREMNANTS_OUTDIR
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $HIST_FILE_E --baseName transverseMass --fitvar mt -o $WREMNANTS_OUTDIR
 
       - name: lowpu w e plot response matrix
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/response_matrix.py --axes ptll-ptVGen --procFilters Wenu -p e -o $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_E
 
       - name: lowpu w e combine unfolding setup
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $HIST_FILE_E --unfolding --fitvar ptll --noEfficiencyUnc -o $WREMNANTS_OUTDIR
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $HIST_FILE_E --unfolding --fitvar ptll -o $WREMNANTS_OUTDIR
 
       - name: aggregate combine inputs
         run: |
@@ -320,7 +320,7 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --rebin 2 --baseName transverseMass --hists mt -a mumu -p $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_MUMU
 
       - name: lowpu z mumu combine unfolding setup
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $HIST_FILE_MUMU --unfolding --fitvar ptll --noEfficiencyUnc -o $WREMNANTS_OUTDIR --sumChannels
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $HIST_FILE_MUMU --unfolding --fitvar ptll -o $WREMNANTS_OUTDIR --sumChannels
 
       - name: lowpu z ee analysis
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_lowPU.py -o $WREMNANTS_OUTDIR -j $NTHREADS --forceDefaultName --noRecoil --unfolding --flavor ee
@@ -335,7 +335,7 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --rebin 2 --baseName transverseMass --hists mt -a ee -p $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_EE
 
       - name: lowpu z ee combine unfolding setup
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $HIST_FILE_EE --unfolding --fitvar ptll --noEfficiencyUnc -o $WREMNANTS_OUTDIR --sumChannels
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $HIST_FILE_EE --unfolding --fitvar ptll -o $WREMNANTS_OUTDIR --sumChannels
 
       # - name: lowpu z combine unfolding fit 
       #   run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ unfolding $WREMNANTS_OUTDIR/ZMassDilepton_lowPU_ptll/ ZMassDilepton_lowPU_inclusive.txt xnorm=ZMassDilepton_lowPU_inclusive_xnorm.txt

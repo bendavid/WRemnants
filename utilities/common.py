@@ -124,6 +124,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--correlatedNonClosureNP", action="store_true", help="disable the de-correlation of Z non-closure nuisance parameters after the jpsi massfit")
     parser.add_argument("--noScaleToData", action="store_true", help="Do not scale the MC histograms with xsec*lumi/sum(gen weights) in the postprocessing step")
     parser.add_argument("--aggregateGroups", type=str, nargs="*", default=["Diboson", "Top", "Wtaunu"], help="Sum up histograms from members of given groups in the postprocessing step")
+    # options for unfolding/differential
     parser.add_argument("--unfolding", action='store_true', help="Add information needed for unfolding")
     parser.add_argument("--genLevel", type=str, default='postFSR', choices=["preFSR", "postFSR"], help="Generator level definition for unfolding")
     parser.add_argument("--genVars", type=str, nargs="+", default=["ptGen", "absEtaGen"], choices=["qGen", "ptGen", "absEtaGen", "ptVGen", "absYVGen"], help="Generator level variable")
@@ -177,40 +178,6 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--sfFile", type=str, help="File with muon scale factors", default=sfFile)
         
     return parser,initargs
-
-def common_parser_combine():
-    from wremnants import theory_tools,combine_theory_helper
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--wlike", action='store_true', help="Run W-like analysis of mZ")
-    parser.add_argument("-o", "--outfolder", type=str, default=".", help="Output folder with the root file storing all histograms and datacards for single charge (subfolder WMass or ZMassWLike is created automatically inside)")
-    parser.add_argument("-i", "--inputFile", type=str)
-    parser.add_argument("--absolutePathInCard", action="store_true", help="In the datacard, set Absolute path for the root file where shapes are stored")
-    parser.add_argument("--minnloScaleUnc", choices=["byHelicityPt", "byHelicityPtCharge", "byHelicityCharge", "byPtCharge", "byPt", "byCharge", "integrated",], default="byHelicityPt",
-            help="Decorrelation for QCDscale")
-    parser.add_argument("--rebin", type=int, nargs='*', default=[], help="Rebin axis by this value (default does nothing)")
-    parser.add_argument("--resumUnc", default="tnp", type=str, choices=["scale", "tnp", "none"], help="Include SCETlib uncertainties")
-    parser.add_argument("--npUnc", default="Delta_Lambda", type=str, choices=combine_theory_helper.TheoryHelper.valid_np_models, help="Nonperturbative uncertainty model")
-    parser.add_argument("--tnpMagnitude", default=1, type=float, help="Variation size for the TNP")
-    parser.add_argument("--scaleTNP", default=1, type=float, help="Scale the TNP uncertainties by this factor")
-    parser.add_argument("--scalePdf", default=1, type=float, help="Scale the PDF hessian uncertainties by this factor")
-    parser.add_argument("--pdfUncFromCorr", action='store_true', help="Take PDF uncertainty from correction hist (Requires having run that correction)")
-    parser.add_argument("--qcdProcessName" , type=str, default="Fake",   help="Name for QCD process")
-    parser.add_argument("--noStatUncFakes" , action="store_true",   help="Set bin error for QCD background templates to 0, to check MC stat uncertainties for signal only")
-    parser.add_argument("--skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
-    parser.add_argument("--noQCDscaleFakes", action="store_true",   help="Do not apply QCd scale uncertainties on fakes, mainly for debugging")
-    parser.add_argument("--doStatOnly", action="store_true", default=False, help="Set up fit to get stat-only uncertainty (currently combinetf with -S 0 doesn't work)")
-    parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
-    parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
-                        help="Set verbosity level with logging, the larger the more verbose")
-    parser.add_argument("--noColorLogger", action="store_true", help="Do not use logging with colors")
-    parser.add_argument("--sumChannels", action='store_true', help="Only use one channel")
-    parser.add_argument("--lumiScale", type=float, default=1.0, help="Rescale equivalent luminosity by this value (e.g. 10 means ten times more data and MC)")
-    parser.add_argument("--addQCDMC", action="store_true", help="Include QCD MC when making datacards (otherwise by default it will always be excluded)")
-    parser.add_argument("--excludeProcGroups", type=str, nargs="*", help="Don't run over processes belonging to these groups (only accepts exact group names)", default=["QCD"])
-    parser.add_argument("--filterProcGroups", type=str, nargs="*", help="Only run over processes belonging to these groups", default=[])
-    parser.add_argument("--muonScaleVariation", choices=["smearingWeights", "massWeights", "manualShift"], default="smearingWeights", help="the method with which the muon scale variation histograms are derived")
-    return parser
 
 def set_parser_default(parser, argument, newDefault):
     # change the default argument of the parser, must be called before parse_arguments

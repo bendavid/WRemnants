@@ -307,6 +307,8 @@ translate = {
     "QCDscaleWPtChargeMiNNLO": "QCDscaleW",
     "QCDscaleZPtHelicityMiNNLO": "QCDscaleZ",
     "QCDscaleWPtHelicityMiNNLO": "QCDscaleW",
+    "QCDscaleZPtChargeHelicityMiNNLO": "QCDscaleZ",
+    "QCDscaleWPtChargeHelicityMiNNLO": "QCDscaleW",
     "resumNonpert": "resumNP",
     "resumTransition": "resumT",
     "binByBinStat": "BBlite",
