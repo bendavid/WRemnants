@@ -382,7 +382,7 @@ def add_muon_efficiency_unc_hists(results, df, helper_stat, helper_syst, axes, c
             muon_columns_stat = [*muon_columns_stat_trig, "trigMuons_passTrigger0", *muon_columns_stat_nonTrig, "nonTrigMuons_passTrigger0"]
             muon_columns_syst = [*muon_columns_syst_trig, "trigMuons_passTrigger0", *muon_columns_syst_nonTrig, "nonTrigMuons_passTrigger0"]
         else:
-            raise ValueError(f"add_muon_efficiency_unc_hists: analysis {what_analysis} not implemented.")            
+            raise NotImplementedError(f"add_muon_efficiency_unc_hists: analysis {what_analysis} not implemented.")            
         
     if not smooth3D:
         # will use different helpers and member functions

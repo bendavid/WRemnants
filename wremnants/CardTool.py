@@ -373,7 +373,6 @@ class CardTool(object):
                 skip_arr = np.array([a.real for a in skip_arr])
                 skip_arr[to_lookup] += bin_lookup
             updated_skip.append(skip_arr)
-            #logger.debug(f"Updated skip entry to {skip_arr}") # this produces a lot of annoying lines which hide other debugging
 
         return updated_skip
 
@@ -590,12 +589,10 @@ class CardTool(object):
             logger.info(f"Zeroing statistical uncertainty for process {proc}")
             setZeroStatUnc = True
         # this is a big loop a bit slow, but it might be mainly the hist->root conversion and writing into the root file
-        # logger.debug("Before self.writeHist(...)")
         for name, var in var_map.items():
             if name != "":
                 self.writeHist(var, proc, name, setZeroStatUnc=setZeroStatUnc,
                                decorrByBin=decorrelateByBin, hnomi=hnom)
-        # logger.debug("After self.writeHist(...)")
 
     def addPseudodata(self, processes, processesFromNomi=[]):
         datagroups = self.datagroups if not self.pseudodata_datagroups else self.pseudodata_datagroups
@@ -711,7 +708,7 @@ class CardTool(object):
         
         if keys is None:
             # make a sum group for each gen axis
-            keys = [x for x in self.datagroups.gen_axes]
+            keys = list(self.datagroups.gen_axes)
             # also include combinations of axes in case there are more than 2 axes
             for n in range(2, len(self.datagroups.gen_axes)):
                 keys += [k for k in itertools.combinations(self.datagroups.gen_axes, n)]

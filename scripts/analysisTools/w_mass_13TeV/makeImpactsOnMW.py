@@ -13,6 +13,7 @@ import os, datetime, re, operator, math
 import argparse
 import shutil
 
+from utilities import logging
 from array import array
 from copy import *
 
@@ -30,12 +31,14 @@ utilities = utilitiesCMG.util()
 
 from scripts.analysisTools.plotUtils.utility import *
 
+logger = logging.child_logger(__name__)
+
 def readNuisances(args, infile=None):
 
     if infile is None:
         infile = args.rootfile[0]
 
-    print(f"Starting with file {infile} ...")
+    logger.info(f"Starting with file {infile} ...")
 
     #massNuisanceName = "WmassShift{s}MeV".format(s=int(args.prefitUncertainty))
     massNuisanceName = ".*massShift.*{s}MeV$".format(s=int(args.prefitUncertainty))
@@ -45,29 +48,29 @@ def readNuisances(args, infile=None):
         masskey = list(valuesAndErrors.keys())[0]
         totalUncertainty = valuesAndErrors[masskey][1] - valuesAndErrors[masskey][0]
     else:
-        print(f"Warning: found more parameters matching expected mass expression: {valuesAndErrors.keys()}")
-        quit()
+        error_msg = f"Found more parameters matching expected mass expression: {valuesAndErrors.keys()}"
+        raise IOError(error_msg)
         #totalUncertainty = valuesAndErrors[massNuisanceName][1] - valuesAndErrors[massNuisanceName][0]
 
     if args.scaleToMeV:
         totalUncertainty *= args.prefitUncertainty
-        print("Total m%s uncertainty: %2.2f MeV" % (boson, totalUncertainty))
+        logger.info("Total m%s uncertainty: %2.2f MeV" % (boson, totalUncertainty))
     else:
-        print("Total m%s uncertainty: %2.3f (\% of prefit)" % (boson, totalUncertainty))
+        logger.info("Total m%s uncertainty: %2.3f (\% of prefit)" % (boson, totalUncertainty))
         
     group = 'group_' if len(args.nuisgroups) else ''
     th2name = 'nuisance_{group}impact_nois'.format(group=group)
     hessfile = ROOT.TFile(infile,'read')
     impMat = hessfile.Get(th2name)
-    if impMat==None:
-        print("ERROR: Cannot find the impact TH2 named ",th2name," in the input file. Maybe you didn't run --doImpacts?\nSkipping.")
-        sys.exit()
-
+    if impMat == None:
+        error_msg = f"Cannot find the impact TH2 named {th2name} in input file. Maybe you didn't run --doImpacts?")
+        raise IOError(error_msg)
+        
     matchKeep = re.compile(args.keepNuisgroups)
     if args.excludeNuisgroups:
         matchExclude = re.compile(args.excludeNuisgroups)
     
-    print("Histograms loaded successfully ...")
+    logger.info("Histograms loaded successfully ...")
     nuisGroup_nameVal = {}
     for iy in range(1,impMat.GetNbinsY()+1):
         label = impMat.GetYaxis().GetBinLabel(iy)
@@ -123,10 +126,6 @@ if __name__ == "__main__":
     # 56 kInvertedDarkBodyRadiator
     # 100 kSolar + inverted
 
-
-    # if len(args.nuis) and len(args.nuisgroups):
-    #     print('You can specify either single nuis (--nuis) or poi groups (--nuisgroups), not both!')
-    #     sys.exit()
     ROOT.TColor.CreateGradientColorTable(3,
                                          array ("d", [0.00, 0.50, 1.00]),
                                          ##array ("d", [1.00, 1.00, 0.00]),
@@ -156,8 +155,8 @@ if __name__ == "__main__":
     
     compare = True if len(args.compareFile) else False
     if not compare and args.printAltVal:
-        print("Warning: --printAltVal only works with --compareFile. Please try again")
-        quit()
+        error_msg = "--printAltVal only works with --compareFile. Please try again"
+        raise IOError(error_msg)
     
     totalUncertainty_mW, nuisGroup_nameVal = readNuisances(args, args.rootfile[0])
     if args.setStat > 0.0:
@@ -172,7 +171,7 @@ if __name__ == "__main__":
 
     ROOT.gStyle.SetPaintTextFormat('2.1f' if args.scaleToMeV else '0.3f')
 
-    print("Creating output histogram ...")
+    logger.info("Creating output histogram ...")
     # add 1 more bin for total
     nbins = len(sortedGroups)
     if args.showTotal:
@@ -194,9 +193,9 @@ if __name__ == "__main__":
             #bincontentAlt = nuisGroup_nameVal_alt[k.replace("QCDscaleWPtHelicityMiNNLO","QCDscalePtHelicityMiNNLO")]
             bincontentAlt = nuisGroup_nameVal_alt[k]
             if args.scaleToMeV: bincontentAlt *= args.prefitUncertainty
-            print("%s: %2.3f / %2.3f" % (k, bincontent, bincontentAlt))
+            logger.info("%s: %2.3f / %2.3f" % (k, bincontent, bincontentAlt))
         else:
-            print("%s: %2.3f" % (k, bincontent))
+            logger.info("%s: %2.3f" % (k, bincontent))
         label = k
         if k == "binByBinStat":
             label = "MCandFakes_stat"

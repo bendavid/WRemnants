@@ -599,8 +599,8 @@ if __name__ == "__main__":
         args.unfolding = True
         logger.warning("For now setting --theoryAgnostic activates --unfolding, they should do the same things")
         if args.genAxis is None:
-            logger.error("For now you must specify gen axes with --genAxis when using --theoryAgnostic, please do!")
-            quit()
+            args.genAxis = ["absYVgenSig", "ptVgenSig", "helicity"]
+            logger.warning("Automatically setting '--genAxis absYVgenSig ptVgenSig helicity' for theory agnostic analysis")
     
     if args.genModel:
         main(args, xnorm=True)

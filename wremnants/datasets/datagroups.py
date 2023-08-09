@@ -505,7 +505,7 @@ class Datagroups(object):
             gen_axes = [gen_axes]
 
         if gen_axes != None:
-            self.gen_axes = [x for x in gen_axes] # don't just copy gen_axes, can modify the object outside this function
+            self.gen_axes = list(gen_axes)
         else:
             # infer gen axes from metadata
             args = self.getMetaInfo()["args"]
