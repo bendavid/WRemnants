@@ -77,7 +77,9 @@ class CardTool(object):
     def addProcessGroup(self, name, procFilter):
         self.procGroups[name] = self.filteredProcesses(procFilter)
         if not self.procGroups[name]:
-            raise ValueError(f"Did not match any processes to filter for group {name}! Valid procs are {self.datagroups.groups.keys()}")
+            logger.warning(f"Did not match any processes to filter for group {name}! Valid procs are {self.datagroups.groups.keys()}")
+        else:
+            logger.info(f"Process group {name} samples: {self.procGroups[name]}")
 
     def expandProcesses(self, processes):
         if type(processes) == str:
@@ -239,6 +241,8 @@ class CardTool(object):
         if mirrorDownVarEqualToUp:
             raise ValueError("mirrorDownVarEqualToUp currently leads to pathological results in the fit, please keep it False")
         
+        if isinstance(processes, str):
+            processes = [processes]
         # Need to make an explicit copy of the array before appending
         procs_to_add = [x for x in (self.allMCProcesses() if processes is None else processes)]
         procs_to_add = self.expandProcesses(procs_to_add)
