@@ -42,7 +42,7 @@ parser.add_argument("--eoscp", action='store_true', help="Override use of xrdcp 
 
 args = parser.parse_args()
 
-logger = logging.setup_logger("plotFitresult", 4 if args.debug else 3)
+logger = logging.setup_logger("unfolding_xsec", 4 if args.debug else 3)
 
 cms_decor = "Preliminary"
 
