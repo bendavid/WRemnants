@@ -161,8 +161,8 @@ if not args.noRecoil:
 
 # graph building for W sample with helicity weights
 def setTheoryAgnosticGraph(df, results, dataset, reco_sel_GF, era, nominal_axes_thAgn, nominal_cols_thAgn, args):
-    logger.info("Entered function whistobyHelicity")
-    df = define_helicity_weights(df)
+    logger.info(f"Setting theory agnostic graph for {dataset.name}")
+    df = theoryAgnostic_tools.define_helicity_weights(df)
     nominalByHelicity = df.HistoBoost("nominal", nominal_axes_thAgn, [*nominal_cols_thAgn, "nominal_weight_helicity"], tensor_axes=[axis_helicity])
     results.append(nominalByHelicity)
 
