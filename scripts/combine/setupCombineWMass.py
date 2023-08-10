@@ -48,7 +48,7 @@ def make_parser(parser=None):
     return parser
 
 def main(args,xnorm=False):   
-    
+        
     # NOTE: args.filterProcGroups and args.excludeProcGroups should in principle not be used together
     #       (because filtering is equivalent to exclude something), however the exclusion is also meant to skip
     #       processes which are defined in the original process dictionary but are not supposed to be (always) run on
@@ -140,12 +140,6 @@ def main(args,xnorm=False):
 
     if "BkgWmunu" in args.excludeProcGroups:
         datagroups.deleteGroup("Wmunu") # remove out of acceptance signal
-    
-    if xnorm:
-        # FIXME: this is repeated below, is it needed twice?
-        # only keep processes where xnorm is defined
-        datagroups.select_xnorm_groups()
-        datagroups.deleteGroup("Fake") # delete fakes from xnorm channel
 
     # Start to create the CardTool object, customizing everything
     cardTool = CardTool.CardTool(f"{outfolder}/{name}_{{chan}}{suffix}.txt")
@@ -175,8 +169,8 @@ def main(args,xnorm=False):
         cardTool.setWriteByCharge(False)
         cardTool.setHistName(histName)
         cardTool.setNominalName(histName)
-        ### FIXME: this line was repeated (appears above), I am not yet sure it must be used twice
-        # datagroups.select_xnorm_groups() # only keep processes where xnorm is defined
+        datagroups.select_xnorm_groups()
+        datagroups.deleteGroup("Fake") # delete fakes from xnorm channel
         if args.unfolding:
             cardTool.setProjectionAxes(["count"])
         else:
@@ -590,9 +584,9 @@ def main(args,xnorm=False):
 if __name__ == "__main__":
     parser = make_parser()
     args = parser.parse_args()
-
-    logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
     
+    logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
+                                  
     time0 = time.time()
 
     if args.theoryAgnostic:
@@ -601,6 +595,9 @@ if __name__ == "__main__":
         if args.genAxis is None:
             args.genAxis = ["absYVgenSig", "ptVgenSig", "helicity"]
             logger.warning("Automatically setting '--genAxis absYVgenSig ptVgenSig helicity' for theory agnostic analysis")
+        # The following is temporary, just to avoid passing the option explicitly
+        logger.warning("For now setting --theoryAgnostic activates --doStatOnly")
+        args.doStatOnly = True
     
     if args.genModel:
         main(args, xnorm=True)

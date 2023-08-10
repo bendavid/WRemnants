@@ -47,12 +47,12 @@ source WRemnants/setup.sh
 
 Make histograms (only nominal and mass variations for now, systematics are being developed)
 ```
-/usr/bin/time -v python scripts/histmakers/mw_with_mu_eta_pt.py -o outputFolder/ --met DeepMETReso  --addHelicityHistos --pt 30 26.0 56.0 --onlyMainHistograms
+/usr/bin/time -v python scripts/histmakers/mw_with_mu_eta_pt.py -o outputFolder/ --met DeepMETReso  --theoryAgnostic
 ```
 
 Prepare datacards and root files with TH2 (stat-only for now)
 ```
-/usr/bin/time -v python scripts/combine/setupCombineWMass.py -i outputFolder/mw_with_mu_eta_pt_scetlib_dyturboCorr.hdf5  -o outputFolder/  --absolutePathInCard --theoryAgnostic --genAxis absYVgenSig ptVgenSig helicity --doStatOnly
+/usr/bin/time -v python scripts/combine/setupCombineWMass.py -i outputFolder/mw_with_mu_eta_pt_scetlib_dyturboCorr.hdf5  -o outputFolder/  --absolutePathInCard --theoryAgnostic
 ```
 To remove the backgrounds and run signal only one can add __--excludeProcGroups Top Diboson Fake Zmumu Ztautau Wtaunu BkgWmunu__
 

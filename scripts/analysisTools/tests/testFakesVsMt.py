@@ -20,7 +20,6 @@ import lz4.frame, pickle
 from wremnants.datasets.datagroups2016 import make_datagroups_2016
 from wremnants import histselections as sel
 
-import hist
 import numpy as np
 
 from utilities import boostHistHelpers as hh, common, logging
