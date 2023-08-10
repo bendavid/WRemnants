@@ -20,7 +20,7 @@ def make_parser(parser=None):
         parser = common.common_parser_combine()
     parser.add_argument("--fitvar", nargs="+", help="Variable to fit", default=["pt", "eta"])
     parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow). Equivalent to --excludeNuisances '.*effSystTnP|.*effStatTnP' ")
-    parser.add_argument("--ewUnc", action='store_true', help="Include EW uncertainty")
+    parser.add_argument("--ewUnc", type=str, nargs="*", default=[], choices=["horacenloew", "winhacnloew"], help="Include EW uncertainty")
     parser.add_argument("--widthUnc", action='store_true', help="Include uncertainty on W and Z width")
     parser.add_argument("--pseudoData", type=str, help="Hist to use as pseudodata")
     parser.add_argument("--pseudoDataIdx", type=str, default="0", help="Variation index to use as pseudodata")
@@ -190,6 +190,7 @@ def main(args,xnorm=False):
 
     cardTool.addProcessGroup("single_v_samples", lambda x: x[0] in ["W", "Z"] and ("mu" in x or "tau" in x))
     if wmass:
+        cardTool.addProcessGroup("w_samples", lambda x: x[0] == "W" and ("mu" in x or "tau" in x))
         cardTool.addProcessGroup("single_v_nonsig_samples", lambda x: x[0] == "Z"and ("mu" in x or "tau" in x))
 
     cardTool.addProcessGroup("single_vmu_samples", lambda x: x[0] in ["W", "Z"] and "mu" in x)
@@ -276,16 +277,19 @@ def main(args,xnorm=False):
     else:
         pass
 
-    if args.ewUnc:
-        cardTool.addSystematic(f"horacenloewCorr", 
-            processes=['single_v_samples'],
+    for ewUnc in args.ewUnc:
+        if ewUnc=="winhacnloew" and not wmass:
+            logger.error("Winhac is not implemented for any other processes than W")
+        cardTool.addSystematic(f"{ewUnc}Corr", 
+            processes=['w_samples'] if ewUnc=="winhacnloew" else ['single_v_samples'],
             mirror=True,
             group="theory_ew",
             systAxes=["systIdx"],
-            labelsByAxis=["horacenloewCorr"],
+            labelsByAxis=[f"{ewUnc}nloewCorr"],
             skipEntries=[(0, -1), (2, -1)],
             passToFakes=passSystToFakes,
         )
+
 
     if not args.noEfficiencyUnc and not xnorm:
 

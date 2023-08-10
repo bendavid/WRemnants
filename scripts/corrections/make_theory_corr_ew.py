@@ -255,11 +255,19 @@ for proc in procs:
             hnums.append(hnum)
 
     hden = prepare_hist(args.den)
-    
-    hratios = [hh.divideHists(hnum, hden) for hnum in hnums]
 
+    if hden is None:
+        logger.warning(f"Denominator {args.den} for process {proc} not found! Continue with next process.")
+        continue
+
+    if len(hnums) < 1:
+        logger.warning(f"No nominator found for {args.nums} for process {proc}! Continue with next process.")
+        continue
+
+    hratios = []
     corrhs = {}
-    for num, hratio in zip(nums, hratios):
+    for num, hnum in zip(nums, hnums):
+        hratio = hh.divideHists(hnum, hden)
         if not args.noSmoothing:
             hratio = hh.smoothTowardsOne(hratio)
             scale = np.sum(hden.values(flow=True)) / np.sum(hden.values(flow=True)*hratio.values(flow=True))
@@ -282,12 +290,14 @@ for proc in procs:
         hcharge.view(flow=True)[...,charge_dict[proc]] = hratio.view(flow=True)
         hratio = hcharge
 
+        hratios.append(hratio)
+
         # Add syst axis
-        corrh[proc] = hist.Hist(*hratio.axes, hist.axis.Regular(3, 0, 3, underflow=False, overflow=False, name="systIdx"), storage=hist.storage.Weight())
+        corrh[proc] = hist.Hist(*hratio.axes, hist.axis.Regular(3, 0, 3, underflow=False, overflow=False, name="systIdx"), storage=hist.storage.Double())
         # Variations: 0=original MiNNLO, 1=Horace NLO, 2=mirrored
-        hones = hist.Hist(*hratio.axes, storage=hist.storage.Weight())
+        hones = hist.Hist(*hratio.axes, storage=hist.storage.Double())
         hones.values(flow=True)[...,charge_dict[proc]] = np.ones(hdummy.values(flow=True).shape)
-        hmirror = hist.Hist(*hratio.axes, storage=hist.storage.Weight())
+        hmirror = hist.Hist(*hratio.axes, storage=hist.storage.Double())
         hmirror.values(flow=True)[...] = 2*hratio.values(flow=True) - hones.values(flow=True)
         mirrorscale = np.sum(hden.values(flow=True)) / np.sum(hden.values(flow=True)*hmirror.values(flow=True)[...,0,charge_dict[proc]])
         # logger.info(f'{proc} mirrorscale = {mirrorscale}')
@@ -310,7 +320,7 @@ for proc in procs:
                 make_plot_2d(hnum, f"{nums[i]}_err", proc, plot_error=True, log=True)
 
         for i, hratio in enumerate(hratios):
-            make_plot_2d(hratio, f"{nums[i]}_div_{args.den}", proc, cmin=0, cmax=3)
+            make_plot_2d(hratio, f"{nums[i]}_div_{args.den}", proc, cmin=0, cmax=2)
             if "2Derr" in args.plots:
                 make_plot_2d(hratio, f"{nums[i]}_div_{args.den}_err", proc, plot_error=True, log=True)
 
@@ -318,10 +328,10 @@ for proc in procs:
         logger.info("Make 1D control plots")
 
         for ax in project:
-            if ax == "ewMll":
+            if ax in ["ewMll", "ewMlly"]:
                 ymin, ymax = 0.8, 1.2
             else:
-                ymin, ymax = 0, 4
+                ymin, ymax = 0, 2
 
             hratios1D = [hh.divideHists(hnum.project(ax), hden.project(ax)) for hnum in hnums]
 

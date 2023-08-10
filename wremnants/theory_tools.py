@@ -315,12 +315,11 @@ def define_theory_corr(df, dataset_name, helpers, generators, modify_central_wei
         elif 'ew' in generator:
             # Used as a placeholder to match the helper dimensionality 
             df = df.DefinePerSample(f"{generator}Dummy", "0.")
-            multiplicative_weight = i != 0 and modify_central_weight
             if i != 0 and modify_central_weight:
-                df = df.Define(f"ew_corr_weight", build_weight_expr(df))
+                df = df.Define(f"ew_{generator}corr_weight", build_weight_expr(df))
             else:
-                df = df.Alias("ew_corr_weight", "nominal_weight_uncorr")
-            df = df.Define(f"{generator}Weight_tensor", helper, ["ewMll", "ewLogDeltaM", f"{generator}Dummy", "chargeVgen", "ew_corr_weight"]) # multiplying with nominal QCD weight
+                df = df.Alias(f"ew_{generator}corr_weight", "nominal_weight_uncorr")
+            df = df.Define(f"{generator}Weight_tensor", helper, ["ewMll", "ewLogDeltaM", f"{generator}Dummy", "chargeVgen", f"ew_{generator}corr_weight"]) # multiplying with nominal QCD weight
         else:
             df = df.Define(f"{generator}Weight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "nominal_weight_uncorr"])
 
