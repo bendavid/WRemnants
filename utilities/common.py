@@ -78,7 +78,20 @@ def getIsoMtRegionFromID(regionID):
     return {passIsoName : regionID & 1,
             passMTName  : regionID & 2}
 
+def set_parser_default(parser, argument, newDefault):
+    # change the default argument of the parser, must be called before parse_arguments
+    logger = logging.child_logger(__name__)
+    f = next((x for x in parser._actions if x.dest ==argument), None)
+    if f:
+        logger.info(f" Modifying default of {f.dest} from {f.default} to {newDefault}")
+        f.default = newDefault
+    else:
+        logger.warning(f" Parser argument {argument} not found!")
+    return parser
+
+
 def common_parser(for_reco_highPU=False):
+
     parser = argparse.ArgumentParser()
     parser.add_argument("-j", "--nThreads", type=int, help="number of threads")
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
@@ -86,6 +99,10 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--noColorLogger", action="store_true", help="Do not use logging with colors")
     initargs,_ = parser.parse_known_args()
 
+    # initName for this internal logger is needed to avoid conflicts with the main logger named "wremnants" by default,
+    # otherwise the logger is apparently propagated back to the root logger causing each following message to be printed twice 
+    common_logger = logging.setup_logger(__file__, initargs.verbose, initargs.noColorLogger, initName="common_logger_wremnants")
+    
     import ROOT
     if not initargs.nThreads:
         ROOT.ROOT.EnableImplicitMT()
@@ -157,8 +174,11 @@ def common_parser(for_reco_highPU=False):
     commonargs,_ = parser.parse_known_args()
 
     if for_reco_highPU:
+        if commonargs.sf2DnoUt and commonargs.smooth3dsf:
+            parser = set_parser_default(parser, "smooth3dsf", False)
+            common_logger.warning(f"Option --sf2DnoUt was called without --noSmooth3dsf, it will also activate --noSmooth3dsf.")
         if commonargs.trackerMuons:
-            logger.warning("Using tracker muons, but keep in mind that scale factors are obsolete and not recommended.")
+            common_logger.warning("Using tracker muons, but keep in mind that scale factors are obsolete and not recommended.")
             sfFile = "scaleFactorProduct_16Oct2022_TrackerMuonsHighPurity_vertexWeight_OSchargeExceptTracking.root"
         else:
             # note: any of the following file is fine for reco, tracking, and IDIP.
@@ -178,17 +198,6 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--sfFile", type=str, help="File with muon scale factors", default=sfFile)
         
     return parser,initargs
-
-def set_parser_default(parser, argument, newDefault):
-    # change the default argument of the parser, must be called before parse_arguments
-    logger = logging.child_logger(__name__)
-    f = next((x for x in parser._actions if x.dest ==argument), None)
-    if f:
-        logger.info(f" Modifying default of {f.dest} from {f.default} to {newDefault}")
-        f.default = newDefault
-    else:
-        logger.warning(f" Parser argument {argument} not found!")
-    return parser
 
 '''
 INPUT -------------------------------------------------------------------------

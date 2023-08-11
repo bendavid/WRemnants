@@ -31,10 +31,10 @@ logging_verboseLevel = [logging.CRITICAL, logging.ERROR, logging.WARNING, loggin
 def set_logging_level(log, verbosity):
     log.setLevel(logging_verboseLevel[max(0, min(4, verbosity))])
 
-def setup_logger(basefile, verbosity=3, no_colors=False):
+def setup_logger(basefile, verbosity=3, no_colors=False, initName="wremnants"):
 
     setup_func = setup_base_logger if no_colors else setup_color_logger
-    logger = setup_func(os.path.basename(basefile), verbosity)
+    logger = setup_func(os.path.basename(basefile), verbosity, initName)
     # count messages of base logger
     base_logger = logging.getLogger("wremnants")
     add_logging_counter(base_logger)
@@ -42,8 +42,8 @@ def setup_logger(basefile, verbosity=3, no_colors=False):
     add_time_info("Total time")
     return logger
 
-def setup_color_logger(name, verbosity):
-    base_logger = logging.getLogger("wremnants")
+def setup_color_logger(name, verbosity, initName="wremnants"):
+    base_logger = logging.getLogger(initName)
     # set console handler
     ch = logging.StreamHandler()
     ch.setFormatter(CustomFormatter())
@@ -52,15 +52,15 @@ def setup_color_logger(name, verbosity):
     base_logger.propagate = False # to avoid propagating back to root logger, which would print messages twice
     return base_logger.getChild(name)
     
-def setup_base_logger(name, verbosity):
+def setup_base_logger(name, verbosity, initName="wremnants"):
     logging.basicConfig(format='%(levelname)s: %(message)s')
-    base_logger = logging.getLogger("wremnants")
+    base_logger = logging.getLogger(initName)
     set_logging_level(base_logger, verbosity)
     return base_logger.getChild(name)
     
-def child_logger(name):
+def child_logger(name, initName="wremnants"):
     # count messages of child logger
-    logger = logging.getLogger("wremnants").getChild(name)
+    logger = logging.getLogger(initName).getChild(name)
     add_logging_counter(logger)
     return logger
 

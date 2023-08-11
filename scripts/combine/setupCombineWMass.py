@@ -61,12 +61,15 @@ def make_parser(parser=None):
     parser.add_argument("--pseudoDataIdx", type=str, default="0", help="Variation index to use as pseudodata")
     parser.add_argument("--pseudoDataFile", type=str, help="Input file for pseudodata (if it should be read from a different file)", default=None)
     parser.add_argument("--pseudoDataProcsRegexp", type=str, default=".*", help="Regular expression for processes taken from pseudodata file (all other processes are automatically got from the nominal file). Data is excluded automatically as usual")
-    # unfolding/differential
+    # unfolding/differential/theory agnostic
     parser.add_argument("--unfolding", action='store_true', help="Prepare datacard for unfolding")
     parser.add_argument("--genAxes", type=str, default=None, nargs="+", help="Specify which gen axis should be used in unfolding, if 'None', use all (inferred from metadata).")
- 
-    return parser
+    parser.add_argument("--theoryAgnostic", action='store_true', help="Prepare datacard for theory agnostic analysis, similar to unfolding but different axis and possibly other differences")
+    # utility options to deal with charge when relevant, mainly for theory agnostic but also unfolding
+    parser.add_argument("--recoCharge", type=str, default=["plus", "minus"], nargs="+", choices=["plus", "minus"], help="Specify reco charge to use, default uses both. This is a workaround for unfolding/theory-agnostic fit when running a single reco charge, as gen bins with opposite gen charge have to be filtered out")
+    parser.add_argument("--forceRecoChargeAsGen", action="store_true", help="Force gen charge to match reco charge in CardTool, this only works when the reco charge is used to define the channel")
 
+    return parser
 
 def setup(args,xnorm=False):   
 
@@ -88,7 +91,7 @@ def setup(args,xnorm=False):
 
     datagroups = Datagroups(args.inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm and not args.simultaneousABCD)
 
-    if args.axlim or args.rebin:
+    if not xnorm and (args.axlim or args.rebin):
         if len(args.axlim) % 2 or len(args.axlim)/2 > len(args.fitvar) or len(args.rebin) > len(args.fitvar):
             raise ValueError("Inconsistent rebin or axlim arguments. axlim must be at most two entries per axis, and rebin at most one")
 
@@ -123,13 +126,15 @@ def setup(args,xnorm=False):
     elif args.fitXsec:
         datagroups.unconstrainedProcesses.append(base_group)
     elif args.unfolding:
-        constrainMass = True
+        constrainMass = False if args.theoryAgnostic else True
         datagroups.setGenAxes(args.genAxes)
         
         if wmass:
             # gen level bins, split by charge
-            datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen0", member_filter=lambda x: x.name.startswith("Wminus"))
-            datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen1", member_filter=lambda x: x.name.startswith("Wplus"))
+            if "minus" in args.recoCharge:
+                datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen0", member_filter=lambda x: x.name.startswith("Wminus"))
+            if "plus" in args.recoCharge:
+                datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen1", member_filter=lambda x: x.name.startswith("Wplus"))
             # out of acceptance contribution
             datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if not m.name.startswith("Bkg")])
         else:
@@ -139,6 +144,9 @@ def setup(args,xnorm=False):
 
     if args.noHist and args.noStatUncFakes:
         raise ValueError("Option --noHist would override --noStatUncFakes. Please select only one of them")
+
+    if "BkgWmunu" in args.excludeProcGroups:
+        datagroups.deleteGroup("Wmunu") # remove out of acceptance signal
 
     # Start to create the CardTool object, customizing everything
     cardTool = CardTool.CardTool(xnorm=xnorm)
@@ -156,12 +164,18 @@ def setup(args,xnorm=False):
     if args.sumChannels or xnorm or dilepton:
         cardTool.setChannels(["inclusive"])
         cardTool.setWriteByCharge(False)
+    else:
+        cardTool.setChannels(args.recoCharge)
+        if args.forceRecoChargeAsGen:
+            cardTool.setExcludeProcessForChannel("plus", ".*qGen0")
+            cardTool.setExcludeProcessForChannel("minus", ".*qGen1")
+            
     if xnorm:
         histName = "xnorm"
         cardTool.setHistName(histName)
         cardTool.setNominalName(histName)
-        datagroups.select_xnorm_groups() # only keep processes where xnorm is defined
-        datagroups.deleteGroup("Fake")
+        datagroups.select_xnorm_groups()
+        datagroups.deleteGroup("Fake") # delete fakes from xnorm channel
         if args.unfolding:
             cardTool.setProjectionAxes(["count"])
         else:
@@ -170,18 +184,30 @@ def setup(args,xnorm=False):
                 datagroups.groups[base_group].add_member_axis("qGen", datagroups.results, 
                     member_filters={-1: lambda x: x.name.startswith("Wminus"), 1: lambda x: x.name.startswith("Wplus")}, 
                     hist_filter=lambda x: x.startswith("xnorm"))
+                #datagroups.deleteGroup("Fake")
             cardTool.unroll = True
             # remove projection axes from gen axes, otherwise they will be integrated before
             datagroups.setGenAxes([a for a in datagroups.gen_axes if a not in cardTool.project])
-    else:
-        cardTool.setHistName(args.baseName)
-        cardTool.setNominalName(args.baseName)
+
+    # define sumGroups for integrated cross section
     if args.unfolding:
-        cardTool.addPOISumGroups(additional_axes=["qGen"] if base_group[0] == "W" else None)
+        # TODO: make this less hardcoded to filter the charge (if the charge is not present this will duplicate things)
+        if args.theoryAgnostic:
+            if "plus" in args.recoCharge:
+                cardTool.addPOISumGroups(genCharge="qGen1")
+            if "minus" in args.recoCharge:
+                cardTool.addPOISumGroups(genCharge="qGen0")
+        else:
+            if args.sumChannels or name in ["ZMassDilepton"]:
+                cardTool.addPOISumGroups()
+            else:
+                cardTool.addPOISumGroups(genCharge="qGen0")
+                cardTool.addPOISumGroups(genCharge="qGen1")
+
     if args.noHist:
         cardTool.skipHistograms()
     cardTool.setFakeName(args.qcdProcessName)
-    cardTool.setSpacing(52)
+    cardTool.setSpacing(28)
     if args.noStatUncFakes:
         cardTool.setProcsNoStatUnc(procs=args.qcdProcessName, resetList=False)
     cardTool.setCustomSystForCard(args.excludeNuisances, args.keepNuisances)
@@ -195,7 +221,8 @@ def setup(args,xnorm=False):
             )
     cardTool.setLumiScale(args.lumiScale)
 
-    logger.info(f"cardTool.allMCProcesses(): {cardTool.allMCProcesses()}")
+    if not args.theoryAgnostic:
+        logger.info(f"cardTool.allMCProcesses(): {cardTool.allMCProcesses()}")
         
     passSystToFakes = wmass and not args.skipSignalSystOnFakes and args.qcdProcessName not in excludeGroup and (filterGroup == None or args.qcdProcessName in filterGroup) and not xnorm
 
@@ -208,10 +235,17 @@ def setup(args,xnorm=False):
     cardTool.addProcessGroup("signal_samples_inctau", lambda x: ((x[0] == "W" and wmass) or (x[0] == "Z" and not wmass)) and x[1] not in ["W","Z"])
     cardTool.addProcessGroup("MCnoQCD", lambda x: x not in ["QCD", "Data"])
 
+    if not args.theoryAgnostic:
+        logger.info(f"All MC processes {cardTool.procGroups['MCnoQCD']}")
+        logger.info(f"Single V samples: {cardTool.procGroups['single_v_samples']}")
+        if wmass:
+            logger.info(f"Single V no signal samples: {cardTool.procGroups['single_v_nonsig_samples']}")
+        logger.info(f"Signal samples: {cardTool.procGroups['signal_samples']}")
+
     constrainedZ = constrainMass and not wmass
     label = 'W' if wmass else 'Z'
     massSkip = [(f"^massShift[W|Z]{i}MeV.*",) for i in range(0, 110 if constrainedZ else 100, 10)]
-    if wmass:
+    if wmass and not xnorm and not args.doStatOnly:
         cardTool.addSystematic(f"massWeightZ",
                                 processes=['single_v_nonsig_samples'],
                                 group=f"massShiftZ",
@@ -225,16 +259,20 @@ def setup(args,xnorm=False):
     if not (constrainMass or wmass):
         massSkip.append(("^massShift.*2p1MeV.*",))
 
-    cardTool.addSystematic(f"massWeight{label}", 
-                            processes=["signal_samples_inctau"],
-                            group=f"massShift{label}",
-                            noiGroup=not constrainMass,
-                            skipEntries=massSkip,
-                            mirror=False,
-                            #TODO: Name this
-                            noConstraint=not constrainMass,
-                            systAxes=["massShift"],
-                            passToFakes=passSystToFakes,
+    signal_samples_forMass = ["signal_samples_inctau"]
+    if args.theoryAgnostic:
+        logger.error("Temporarily not using mass weights for Wtaunu. Please update when possible")
+        signal_samples_forMass = ["signal_samples"]
+    cardTool.addSystematic(f"massWeight{label}",
+                           processes=signal_samples_forMass,
+                           group=f"massShift{label}",
+                           noiGroup=not constrainMass,
+                           skipEntries=massSkip,
+                           mirror=False,
+                           #TODO: Name this
+                           noConstraint=not constrainMass,
+                           systAxes=["massShift"],
+                           passToFakes=passSystToFakes,
     )
 
     if args.doStatOnly:
@@ -549,14 +587,25 @@ def main(args,xnorm=False):
 if __name__ == "__main__":
     parser = make_parser()
     args = parser.parse_args()
-
+    
     logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
+                                  
+    if args.theoryAgnostic:
+        args.unfolding = True
+        logger.warning("For now setting --theoryAgnostic activates --unfolding, they should do the same things")
+        if args.genAxis is None:
+            args.genAxis = ["absYVgenSig", "ptVgenSig", "helicity"]
+            logger.warning("Automatically setting '--genAxis absYVgenSig ptVgenSig helicity' for theory agnostic analysis")
+        # The following is temporary, just to avoid passing the option explicitly
+        logger.warning("For now setting --theoryAgnostic activates --doStatOnly")
+        args.doStatOnly = True
     
     if args.genModel:
         main(args, xnorm=True)
     else:
         main(args)
         if args.unfolding:
+            logger.warning("Now running with xnorm = True")
             main(args, xnorm=True)
 
     logging.summary()

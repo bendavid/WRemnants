@@ -57,6 +57,7 @@ class CardTool(object):
         self.project = None
         self.xnorm = xnorm
         self.absolutePathShapeFileInCard = False
+        self.excludeProcessForChannel = {} # can be used to exclue some POI when runnig a specific name (use case, force gen and reco charges to match)
         self.signalProcesses = []
         self.singleVBackground = []
         self.chargeIdDict = {"minus" : {"val" : -1, "id" : "q0", "badId" : "q1"},
@@ -78,8 +79,6 @@ class CardTool(object):
         self.procGroups[name] = self.filteredProcesses(procFilter)
         if not self.procGroups[name]:
             logger.warning(f"Did not match any processes to filter for group {name}! Valid procs are {self.datagroups.groups.keys()}")
-        else:
-            logger.info(f"Process group {name} samples: {self.procGroups[name]}")
 
     def expandProcesses(self, processes):
         if type(processes) == str:
@@ -95,6 +94,10 @@ class CardTool(object):
         if len(self.noStatUncProcesses):
             logger.info("Attention: histograms are not saved according to input options, thus statistical uncertainty won't be zeroed")
 
+    def setExcludeProcessForChannel(self, channel, POIregexp, canUpdate=False):
+        if canUpdate or channel not in self.excludeProcessForChannel.keys():
+            self.excludeProcessForChannel[channel] = re.compile(POIregexp)
+            
     def setProjectionAxes(self, project):
         self.project = project
 
@@ -238,8 +241,8 @@ class CardTool(object):
                       ):
         # note: setting Up=Down seems to be pathological for the moment, it might be due to the interpolation in the fit
         # for now better not to use the options, although it might be useful to keep it implemented
-        if mirrorDownVarEqualToUp:
-            raise ValueError("mirrorDownVarEqualToUp currently leads to pathological results in the fit, please keep it False")
+        if mirrorDownVarEqualToUp or mirrorDownVarEqualToNomi:
+            raise ValueError("mirrorDownVarEqualToUp and mirrorDownVarEqualToNomi currently lead to pathological results in the fit, please keep them False")
         
         if isinstance(processes, str):
             processes = [processes]
@@ -373,7 +376,6 @@ class CardTool(object):
                 skip_arr = np.array([a.real for a in skip_arr])
                 skip_arr[to_lookup] += bin_lookup
             updated_skip.append(skip_arr)
-            logger.debug(f"Updated skip entry to {skip_arr}")
 
         return updated_skip
 
@@ -579,7 +581,7 @@ class CardTool(object):
                                           downAsNomi=systInfo["mirrorDownVarEqualToNomi"])
             if systInfo["decorrByBin"]:
                 decorrelateByBin = systInfo["decorrByBin"]
-        logger.info(f"Preparing to write systematic {syst} for process {proc}")
+        logger.info(f"   {syst} for process {proc}")
         var_map = self.systHists(h, syst)
         if check_systs and syst != self.nominalName:
             self.checkSysts(var_map, proc,
@@ -590,12 +592,10 @@ class CardTool(object):
             logger.info(f"Zeroing statistical uncertainty for process {proc}")
             setZeroStatUnc = True
         # this is a big loop a bit slow, but it might be mainly the hist->root conversion and writing into the root file
-        logger.debug("Before self.writeHist(...)")
         for name, var in var_map.items():
             if name != "":
                 self.writeHist(var, proc, name, setZeroStatUnc=setZeroStatUnc,
                                decorrByBin=decorrelateByBin, hnomi=hnom)
-        logger.debug("After self.writeHist(...)")
 
     def addPseudodata(self, processes, processesFromNomi=[]):
         datagroups = self.datagroups if not self.pseudodata_datagroups else self.pseudodata_datagroups
@@ -627,6 +627,8 @@ class CardTool(object):
         self.writeHist(hdata, self.dataName, self.pseudoData+"_sum")
 
     def writeForProcesses(self, syst, processes, label, check_systs=True):
+        logger.info("-"*50)
+        logger.info(f"Preparing to write systematic {syst}")
         for process in processes:
             hvar = self.datagroups.groups[process].hists[label]
             if not hvar:
@@ -708,7 +710,7 @@ class CardTool(object):
                 scaleToNewLumi=self.lumiScale,
             )
             self.writeForProcesses(syst, label="syst", processes=processes, check_systs=check_systs)
-            
+
         output_tools.writeMetaInfoToRootFile(self.outfile, exclude_diff='notebooks', args=args)
         if self.skipHist:
             logger.info("Histograms will not be written because 'skipHist' flag is set to True")
@@ -734,7 +736,7 @@ class CardTool(object):
         else:
             self.cardGroups[chan] += f"\n{group_expr} {members}"                                              
 
-    def addPOISumGroups(self, gen_axes=None, additional_axes=None):
+    def addPOISumGroups(self, gen_axes=None, additional_axes=None, genCharge=None):
         if gen_axes is None:
             gen_axes = self.datagroups.gen_axes.copy()
         if additional_axes is not None:
@@ -763,9 +765,16 @@ class CardTool(object):
                 sum_groups = set(["_".join([a + p.split(a)[1].split("_")[0] for a in axes]) for p in pois])
 
                 for sum_group in sorted(sum_groups):
-                    members = " ".join([p for p in pois if all([g in p.split("_") for g in sum_group.split("_")])])
-                    self.addPOISumGroup(f"{base_process}_{sum_group}", members)
+                    membersList = [p for p in pois if all([g in p.split("_") for g in sum_group.split("_")])]
+                    sum_group_name = f"{base_process}_{sum_group}"
+                    if genCharge is not None:                
+                        membersList = list(filter(lambda x: genCharge in x, membersList))
+                        sum_group_name += f"_{genCharge}"
+                    if len(membersList):
+                        members = " ".join(membersList)
+                        self.addPOISumGroup(sum_group_name, members)
 
+                        
     def addPOISumGroup(self, groupName, members, groupLabel="sumGroup"):
         # newName sumGroup = poi_bin1 poi_bin2 poi_bin3
         group_expr = f"{groupName} {groupLabel} ="
@@ -780,16 +789,19 @@ class CardTool(object):
 
     def writeLnNSystematics(self):
         nondata = self.predictedProcesses()
+        nondata_chan = {chan: nondata.copy() for chan in self.channels}
+        for chan in self.excludeProcessForChannel.keys():
+            nondata_chan[chan] = list(filter(lambda x: not self.excludeProcessForChannel[chan].match(x), nondata))
         # exit this function when a syst is applied to no process (can happen when some are excluded)
         for name,info in self.lnNSystematics.items():
             if self.isExcludedNuisance(name): continue
             if all(x not in info["processes"] for x in nondata):
                 logger.warning(f"Skipping syst {name}, procs to apply it to would be {info['processes']}, and predicted processes are {nondata}")
                 return
-            include = [(str(info["size"]) if x in info["processes"] else "-").ljust(self.procColumnsSpacing) for x in nondata]
             group = info["group"]
             groupFilter = info["groupFilter"]
             for chan in self.channels:
+                include = [(str(info["size"]) if x in info["processes"] else "-").ljust(self.procColumnsSpacing) for x in nondata_chan[chan]]
                 self.cardContent[chan] += f'{name.ljust(self.spacing)} lnN{" "*(self.systTypeSpacing-2)} {"".join(include)}\n'
                 if group and len(list(filter(groupFilter, [name]))):
                     self.addSystToGroup(group, chan, name)
@@ -804,13 +816,20 @@ class CardTool(object):
         groupFilter = systInfo["groupFilter"]
         label = "group" if not systInfo["noiGroup"] else "noiGroup"
         nondata = self.predictedProcesses()
+        nondata_chan = {chan: nondata.copy() for chan in self.channels}
+        for chan in self.excludeProcessForChannel.keys():
+            nondata_chan[chan] = list(filter(lambda x: not self.excludeProcessForChannel[chan].match(x), nondata))
+            
         names = [x[:-2] if "Up" in x[-2:] else (x[:-4] if "Down" in x[-4:] else x) 
                     for x in filter(lambda x: x != "", systInfo["outNames"])]
         # exit this function when a syst is applied to no process (can happen when some are excluded)
         if all(x not in procs for x in nondata):
             return 0
         
-        include = [(str(scale) if x in procs else "-").ljust(self.procColumnsSpacing) for x in nondata]
+        #include = [(str(scale) if x in procs else "-").ljust(self.procColumnsSpacing) for x in nondata]
+        include_chan = {}
+        for chan in nondata_chan.keys():
+            include_chan[chan] = [(str(scale) if x in procs else "-").ljust(self.procColumnsSpacing) for x in nondata_chan[chan]]
 
         splitGroupDict = systInfo["splitGroup"]
         shape = "shape" if not systInfo["noConstraint"] else "shapeNoConstraint"
@@ -829,7 +848,7 @@ class CardTool(object):
             for systname in systNames:
                 shape = "shape" if not systInfo["noConstraint"] else "shapeNoConstraint"
                 # do not write systs which should only apply to other charge, to simplify card
-                self.cardContent[chan] += f"{systname.ljust(self.spacing)} {shape.ljust(self.systTypeSpacing)} {''.join(include)}\n"
+                self.cardContent[chan] += f"{systname.ljust(self.spacing)} {shape.ljust(self.systTypeSpacing)} {''.join(include_chan[chan])}\n"
             # unlike for LnN systs, here it is simpler to act on the list of these systs to form groups, rather than doing it syst by syst 
             if group:
                 systNamesForGroupPruned = systNames[:]
@@ -845,8 +864,8 @@ class CardTool(object):
     def setUnconstrainedProcs(self, procs):
         self.unconstrainedProcesses = procs
 
-    def processLabels(self):
-        nondata = np.array(self.predictedProcesses())
+    def processLabels(self, procs=None):
+        nondata = np.array(self.predictedProcesses() if procs is None else procs)
         labels = np.arange(len(nondata))+1
         issig = np.isin(nondata, self.unconstrainedProcesses)
         labels[issig] = -np.arange(np.count_nonzero(issig))-1
@@ -856,11 +875,14 @@ class CardTool(object):
         procs = self.predictedProcesses()
         nprocs = len(procs)
         for chan in self.channels:
+            if chan in self.excludeProcessForChannel.keys():
+                procs = list(filter(lambda x: not self.excludeProcessForChannel[chan].match(x), self.predictedProcesses()))
+                nprocs = len(procs)
             args = {
                 "channel" :  chan,
                 "channelPerProc" : chan.ljust(self.procColumnsSpacing)*nprocs,
                 "processes" : " ".join([x.ljust(self.procColumnsSpacing) for x in procs]),
-                "labels" : "".join([str(x).ljust(self.procColumnsSpacing) for x in self.processLabels()]),
+                "labels" : "".join([str(x).ljust(self.procColumnsSpacing) for x in self.processLabels(procs)]),
                 # Could write out the proper normalizations pretty easily
                 "rates" : "-1".ljust(self.procColumnsSpacing)*nprocs,
                 "inputfile" : self.outfile if type(self.outfile) == str  else self.outfile.GetName(),

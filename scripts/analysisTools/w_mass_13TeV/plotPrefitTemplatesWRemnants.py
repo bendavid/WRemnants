@@ -148,7 +148,10 @@ def plotPrefitHistograms(hdata2D, hmc2D, outdir_dataMC, xAxisName, yAxisName,
             hMCstat_Fake = copy.deepcopy(h.Clone("hMCstat_Fake"))
             hMCstat_Fake.SetTitle("Fake " + chargeLabel)
             ROOT.wrem.makeHistStatUncertaintyRatio(hMCstat_Fake, h)
-            drawCorrelationPlot(hMCstat_Fake, xAxisName, yAxisName, "#sqrt{#sum w^{2}} / #sqrt{N}::2,7",
+            minyFake,maxyFake = getMinMaxHisto(hMCstat_Fake, sumError=False)
+            maxyFake = min(7.0,maxyFake)
+            minyFake = max(0.0, minyFake)
+            drawCorrelationPlot(hMCstat_Fake, xAxisName, yAxisName, "#sqrt{#sum w^{2}} / #sqrt{N}"+f"::{minyFake},{maxyFake}",
                                 f"MCstatOverPoissonUncRatio_Fake_{chargeLabel}", plotLabel="ForceTitle", outdir=outdir_dataMC,
                                 palette=57, passCanvas=canvas, drawOption="COLZ0", skipLumi=True, zTitleOffSet=1.3)
     

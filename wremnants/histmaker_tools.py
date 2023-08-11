@@ -14,7 +14,7 @@ def scale_to_data(result_dict, data_name = "dataPostVFP"):
     else:
         lumi = sum(lumi)
 
-    logger.debug(f"Scale histograms with lumi={lumi}")
+    logger.warning(f"Scale histograms with luminosity = {lumi} /fb")
     for d_name, result in result_dict.items():
         if result["dataset"]["is_data"]:
             continue
