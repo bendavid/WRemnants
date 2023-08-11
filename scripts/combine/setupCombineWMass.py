@@ -171,13 +171,14 @@ def setup(args,xnorm=False):
         if args.forceRecoChargeAsGen:
             cardTool.setExcludeProcessForChannel("plus", ".*qGen0")
             cardTool.setExcludeProcessForChannel("minus", ".*qGen1")
-            
+
     if xnorm:
         histName = "xnorm"
         cardTool.setHistName(histName)
         cardTool.setNominalName(histName)
         datagroups.select_xnorm_groups()
-        datagroups.deleteGroup("Fake") # delete fakes from xnorm channel
+        if "Fake" in datagroups.groups.keys():
+            datagroups.deleteGroup("Fake") # delete fakes from xnorm channel
         if args.unfolding:
             cardTool.setProjectionAxes(["count"])
         else:

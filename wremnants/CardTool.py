@@ -345,7 +345,9 @@ class CardTool(object):
         return False
 
     def skipEntryDictToArray(self, h, skipEntry, syst):
-        nsyst = len(self.systematics[syst]["systAxes"])+self.systematics[syst]["mirror"]
+        nsyst = len(self.systematics[syst]["systAxes"])
+        if h.axes[-1].name == "mirror":
+            nsyst += 1
 
         if type(skipEntry) == dict:
             skipEntryArr = np.full(nsyst, -1, dtype=object)
@@ -391,9 +393,7 @@ class CardTool(object):
 
         systInfo = self.systematics[syst] 
         systAxes = systInfo["systAxes"]
-        systAxesLabels = systAxes
-        if "labelsByAxis" in systInfo:
-            systAxesLabels = systInfo["labelsByAxis"]
+        systAxesLabels = systInfo.get("labelsByAxis", systAxes)
 
         # Jan: moved above the mirror action, as this action can cause mirroring
         if systInfo["action"] and not systInfo["doActionBeforeMirror"]:
@@ -415,10 +415,10 @@ class CardTool(object):
 
         # Converting to a list becasue otherwise if you print it for debugging you loose it
         entries = list(itertools.product(*[[x for x in ax] if type(ax) == hist.axis.StrCategory else range(ax.size) for ax in axes]))
-        
+
         if len(systInfo["outNames"]) == 0:
+            skipEntries = None if "skipEntries" not in systInfo else self.expandSkipEntries(hvar, syst, systInfo["skipEntries"])
             for entry in entries:
-                skipEntries = None if "skipEntries" not in systInfo else self.expandSkipEntries(hvar, syst, systInfo["skipEntries"])
                 if skipEntries and self.excludeSystEntry(entry, skipEntries):
                     systInfo["outNames"].append("")
                 else:
@@ -732,7 +732,7 @@ class CardTool(object):
 
     def writeHDF5Output(self, args=None, xnorm=False, theoryFit=False,
         simultaneousABCD=False,
-        forceNonzero=True, check_systs=True, allowNegativeExpectation=False, 
+        forceNonzero=True, check_systs=False, allowNegativeExpectation=False, 
         sparse=False, dtype="float64", chunkSize=4*1024**2,
         logkepsilon=math.log(1e-3), #numerical cutoff in case of zeros in systematic variations
         clipSystVariations=False,
@@ -743,7 +743,7 @@ class CardTool(object):
         dict_systgroups = {}
 
         # the number of systematics is not known before loading the histograms, the systematics are therefore stored in a temporary dict
-        systs = set()
+        systsstandard = set()
         systsnoconstraint = set()
         systsnoprofile = set()
 
@@ -834,7 +834,8 @@ class CardTool(object):
 
             if chan in maskedchans:
                 self.datagroups.select_xnorm_groups() # only keep processes where xnorm is defined
-                self.datagroups.deleteGroup("Fake")
+                if "Fake" in self.datagroups.groups.keys():
+                    self.datagroups.deleteGroup("Fake")
                 # TODO gen model
                 # if self.datagroups.wmass:
                 #     # add gen charge as additional axis
@@ -954,7 +955,7 @@ class CardTool(object):
                     dict_logkavg[chan][proc][name] = logkavg_proc
                     dict_logkhalfdiff[chan][proc][name] = logkhalfdiff_proc
 
-                systs.add(name)
+                systsstandard.add(name)
 
             # shape systematics
             for systKey, syst in self.systematics.items():
@@ -981,6 +982,7 @@ class CardTool(object):
                     scaleToNewLumi=self.lumiScale,
                     nominalIfMissing=not chan in maskedchans # for masked channels not all systematics exist (we can skip loading nominal since Fake does not exist)
                 )
+
                 for proc in procs_syst:
                     logger.debug(f"Now at proc {proc}!")
 
@@ -996,12 +998,14 @@ class CardTool(object):
                     if syst["decorrByBin"]:
                         raise NotImplementedError("By bin decorrelation is not supported for writing output in hdf5")
 
+
                     var_map = self.systHists(hvar, systKey)
                     var_names = [x[:-2] if "Up" in x[-2:] else (x[:-4] if "Down" in x[-4:] else x) 
                         for x in filter(lambda x: x != "", var_map.keys())]
                     # Deduplicate while keeping order
                     var_names = list(dict.fromkeys(var_names))
                     norm_proc = dict_norm[chan][proc]
+
                     for var_name in var_names:
                         kfac = syst["scale"]
 
@@ -1063,12 +1067,13 @@ class CardTool(object):
                         dict_logkavg[chan][proc][var_name] = logkavg_proc
                         dict_logkhalfdiff[chan][proc][var_name] = logkhalfdiff_proc
 
-                        systs.add(var_name)
 
                         if syst['noProfile']:
                             systsnoprofile.add(var_name)
                         elif syst["noConstraint"] or syst["noi"]:
                             systsnoconstraint.add(var_name)
+                        else:
+                            systsstandard.add(var_name)
 
                         group = syst["group"]
                         if syst["noi"]:
@@ -1084,10 +1089,14 @@ class CardTool(object):
 
                     self.datagroups.groups[proc].hists[systKey] = None
 
-        systs = list(sorted(systs))
+
+        systsstandard = list(sorted(systsstandard))
+        systsnoprofile = list(sorted(systsnoprofile))
+        systsnoconstraint = list(sorted(systsnoconstraint))
+
+        systs = systsnoconstraint + systsstandard + systsnoprofile
         nsyst = len(systs)
-        systsnoprofile = list(systsnoprofile)
-        systsnoconstraint = list(systsnoconstraint)
+
         constraintweights = np.ones([nsyst],dtype=dtype)
         for syst in systsnoconstraint:
             constraintweights[systs.index(syst)] = 0.
@@ -1319,7 +1328,7 @@ class CardTool(object):
             chunkSize = amax
 
         #create HDF5 file (chunk cache set to the chunk size since we can guarantee fully aligned writes
-        outfilename = self.cardName.replace('_{chan}.txt','.hdf5')
+        outfilename = self.cardName.replace('_{chan}','').replace('.txt','.hdf5')
         if sparse:
             outfilename = outfilename.replace('.hdf5','_sparse.hdf5')
         f = h5py.File(outfilename, rdcc_nbytes=chunkSize, mode='w')
