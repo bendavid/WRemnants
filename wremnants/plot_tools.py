@@ -30,13 +30,13 @@ def figure(href, xlabel, ylabel, ylim=None, xlim=None,
     hax = href.axes[0]
     xlim_range = float(xlim[1] - xlim[0])
     original_xrange = float(hax.edges[-1] - hax.edges[0])
-    raw_width = (hax.size/float(bin_density)) * (xlim_range / original_xrange)
-    width = math.ceil(raw_width)
-
     if automatic_scale:
-        fig = plt.figure(figsize=(width_scale*8*width,8))
+        raw_width = (hax.size/float(bin_density)) * (xlim_range / original_xrange)
+        width = math.ceil(raw_width)
     else:
-        fig = plt.figure(figsize=(width_scale*8, 8))
+        width=1
+
+    fig = plt.figure(figsize=(width_scale*8*width,8))
 
     ax1 = fig.add_subplot() 
     if cms_label: hep.cms.text(cms_label)

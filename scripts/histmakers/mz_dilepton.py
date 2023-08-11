@@ -7,6 +7,7 @@ import narf
 import wremnants
 from wremnants import theory_tools,syst_tools,theory_corrections, muon_validation, muon_calibration, muon_selections, unfolding_tools
 from wremnants.histmaker_tools import scale_to_data, aggregate_groups
+from wremnants.datasets.dataset_tools import getDatasets
 import hist
 import lz4.frame
 import math
@@ -17,8 +18,9 @@ import os
 parser.add_argument("--csVarsHist", action='store_true', help="Add CS variables to dilepton hist")
 parser.add_argument("--axes", type=str, nargs="*", default=["mll", "ptll"], help="")
 parser.add_argument("--finePtBinning", action='store_true', help="Use fine binning for ptll")
-parser.add_argument("--genVars", type=str, nargs="+", default=["ptVGen"], choices=["ptVGen", "absYVGen"], help="Generator level variable")
+parser.add_argument("--noAuxiliaryHistograms", action="store_true", help="Remove auxiliary histograms to save memory (removed by default with --unfolding or --theoryAgnostic)")
 
+parser = common.set_parser_default(parser, "genVars", ["ptVGen", "absYVGen"])
 parser = common.set_parser_default(parser, "pt", [44,26.,70.])
 parser = common.set_parser_default(parser, "eta", [48,-2.4,2.4])
 parser = common.set_parser_default(parser, "aggregateGroups", ["Diboson", "Top", "Wtaunu", "Wmunu"])
@@ -28,10 +30,10 @@ logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
 thisAnalysis = ROOT.wrem.AnalysisType.Dilepton
 
-datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
-                                              filt=args.filterProcs,
-                                              excl=args.excludeProcs, 
-                                              nanoVersion="v8" if args.v8 else "v9", base_path=args.dataPath)
+datasets = getDatasets(maxFiles=args.maxFiles,
+                        filt=args.filterProcs,
+                        excl=args.excludeProcs, 
+                        nanoVersion="v8" if args.v8 else "v9", base_path=args.dataPath)
 
 era = args.era
 
@@ -61,6 +63,10 @@ all_axes = {
     "ewMlly": hist.axis.Variable(ewMassBins, name = "ewMlly", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
     "ewLogDeltaM": hist.axis.Regular(100, -10, 4, name = "ewLogDeltaM", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
 }
+
+auxiliary_gen_axes = ["massVgen", # preFSR variables
+    "ewMll", "ewMlly", "ewLogDeltaM" # ew variables
+    ]
 
 for a in args.axes:
     if a not in all_axes.keys():
@@ -153,12 +159,9 @@ def build_graph(df, dataset):
             axes = [*nominal_axes, *unfolding_axes] 
             cols = [*nominal_cols, *unfolding_cols]
 
-    if isZ:
+    if not args.noAuxiliaryHistograms and isZ:
         # gen level variables before selection
-        for obs in [
-            "massVgen", # preFSR variables
-            "ewMll", "ewMlly", "ewLogDeltaM" # ew variables
-        ]:
+        for obs in auxiliary_gen_axes:
             df_gen = df
             df_gen = df_gen.DefinePerSample("exp_weight", "1.0")
 
@@ -237,12 +240,9 @@ def build_graph(df, dataset):
             if isWorZ:
                 df = syst_tools.add_theory_hists(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, [all_axes[obs]], [obs], base_name=f"nominal_{obs}", for_wmass=False)
 
-    if isZ:
+    if not args.noAuxiliaryHistograms and isZ:
         # gen level variables
-        for obs in [
-            "massVgen", # preFSR variables
-            "ewMll", "ewMlly", "ewLogDeltaM" # ew variables
-        ]:
+        for obs in auxiliary_gen_axes:
             results.append(df.HistoBoost(f"nominal_{obs}", [all_axes[obs]], [obs, "nominal_weight"]))
             df = syst_tools.add_theory_hists(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, [all_axes[obs]], [obs], base_name=f"nominal_{obs}", for_wmass=False)
 
