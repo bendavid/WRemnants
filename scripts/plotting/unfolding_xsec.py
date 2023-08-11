@@ -313,6 +313,7 @@ translate = {
     "resumTransition": "resumT",
     "binByBinStat": "BBlite",
     "CMS_recoil": "recoil",
+    "CMS_background": "Bkg.",
     "NonpromptHighMT": "NPhighMT",
     "NonpromptLowMT": "NPlowMT",
     "massShiftZ": "massZ",
@@ -379,9 +380,9 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, poi_type="mu", sca
 
     sources =["err_stat"]
     sources += ["err_NonpromptHighMT", "err_NonpromptLowMT", "err_fakerate"]
-    sources += [s for s in filter(lambda x: x.startswith("err"), df.keys()) 
+    sources += list(sorted([s for s in filter(lambda x: x.startswith("err"), df.keys()) 
         if s not in ["err_stat", "err_total", "err_NonpromptHighMT", "err_NonpromptLowMT", "err_fakerate"] 
-            and "eff_stat_" not in s and "eff_syst_" not in s]    # only take eff grouped stat and syst
+            and "eff_stat_" not in s and "eff_syst_" not in s]))    # only take eff grouped stat and syst
 
     NUM_COLORS = len(sources)-1
     cm = mpl.colormaps["gist_rainbow"]

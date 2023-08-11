@@ -223,12 +223,13 @@ class CardTool(object):
     def allMCProcesses(self):
         return self.filteredProcesses(lambda x: self.isMC(x))
 
-    def addLnNSystematic(self, name, size, processes, group=None, groupFilter=None):
+    def addLnNSystematic(self, name, size, processes, group=None, groupFilter=None, xnorm=True):
         if not self.isExcludedNuisance(name):
             self.lnNSystematics.update({name : {"size" : size,
                                                 "processes" : self.expandProcesses(processes),
                                                 "group" : group,
-                                                "groupFilter" : groupFilter}
+                                                "groupFilter" : groupFilter,
+                                                "xnorm":xnorm }
             })
 
     # action will be applied to the sum of all the individual samples contributing, actionMap should be used
@@ -242,7 +243,7 @@ class CardTool(object):
                       scale=1, processes=None, group=None, noi=False, noConstraint=False, noProfile=False,
                       action=None, doActionBeforeMirror=False, actionArgs={}, actionMap={},
                       systNameReplace=[], systNamePrepend=None, groupFilter=None, passToFakes=False,
-                      rename=None, splitGroup={}, decorrelateByBin={}, noiGroup=False
+                      rename=None, splitGroup={}, decorrelateByBin={}, xnorm=True
                       ):
         # note: setting Up=Down seems to be pathological for the moment, it might be due to the interpolation in the fit
         # for now better not to use the options, although it might be useful to keep it implemented
@@ -301,6 +302,7 @@ class CardTool(object):
                 "name" : name,
                 "decorrByBin": decorrelateByBin,
                 "systNamePrepend" : systNamePrepend,
+                "xnorm":xnorm
             }
         })
 
@@ -739,13 +741,40 @@ class CardTool(object):
         clipSystVariationsSignal=False,
     ):
 
+        if "charge" not in self.project:
+            self.project.append("charge")
+
+        # the number of systematics is not known before loading the histograms, the systematics are therefore stored in temporary dicts and sets
         dict_noigroups = {}
         dict_systgroups = {}
 
-        # the number of systematics is not known before loading the histograms, the systematics are therefore stored in a temporary dict
         systsstandard = set()
         systsnoconstraint = set()
         systsnoprofile = set()
+
+        def book_systematic(syst, name):
+            if syst.get('noProfile', False):
+                systsnoprofile.add(name)
+            elif syst.get("noConstraint", False) or syst.get("noi", False):
+                systsnoconstraint.add(name)
+            else:
+                systsstandard.add(name)
+            group = syst["group"]
+            if group is None:
+                logger.warning(f"Systemtaic {name} is not a member of any group")
+                return 
+                #TODO: adding a group with the name of the member instead?
+                # group = name 
+            if syst.get("noi", False):
+                if group not in dict_noigroups:
+                    dict_noigroups[group] = set([name])
+                else:
+                    dict_noigroups[group].add(name)
+            else:
+                if group not in dict_systgroups:
+                    dict_systgroups[group] = set([name])
+                else:
+                    dict_systgroups[group].add(name)
 
         #list of groups of systematics (nuisances) and lists of indexes
         systgroups = []
@@ -816,6 +845,8 @@ class CardTool(object):
 
         signals = self.unconstrainedProcesses
         bkgs = [p for p in self.predictedProcesses() if p not in self.unconstrainedProcesses]
+        if simultaneousABCD:
+            bkgs.append("Nonprompt")
         procs = list(sorted(signals)) + list(sorted(bkgs))
         nproc = len(procs)
 
@@ -845,12 +876,10 @@ class CardTool(object):
                 # # remove projection axes from gen axes, otherwise they will be integrated before
                 # self.datagroups.setGenAxes([a for a in self.datagroups.gen_axes if a not in self.project])
 
-            procs_chan = self.datagroups.groups.keys()
-
             # load data and nominal ans syst histograms
             self.datagroups.loadHistsForDatagroups(
                 baseName=chan, syst=chan,
-                procsToRead=procs_chan,
+                procsToRead=self.datagroups.groups.keys(),
                 label=chan, 
                 scaleToNewLumi=self.lumiScale, 
                 forceNonzero=forceNonzero)
@@ -883,6 +912,7 @@ class CardTool(object):
 
             ibins.append(nbinschan)
 
+            procs_chan = self.datagroups.groups.keys()
             for proc in procs_chan:
                 logger.debug(f"Now  in channel {chan} at process {proc}")
                 
@@ -920,6 +950,9 @@ class CardTool(object):
             for name, syst in self.lnNSystematics.items():
                 logger.debug(f"Now in channel {chan} at lnN systematic {name}")
 
+                if chan in maskedchans and not syst["xnorm"]:
+                    continue
+
                 if self.isExcludedNuisance(name): 
                     continue
                 procs_syst = [p for p in syst["processes"] if p in procs_chan]
@@ -955,11 +988,14 @@ class CardTool(object):
                     dict_logkavg[chan][proc][name] = logkavg_proc
                     dict_logkhalfdiff[chan][proc][name] = logkhalfdiff_proc
 
-                systsstandard.add(name)
+                book_systematic(syst, name)
 
             # shape systematics
             for systKey, syst in self.systematics.items():
                 logger.debug(f"Now in channel {chan} at shape systematic group {systKey}")
+
+                if chan in maskedchans and not syst["xnorm"]:
+                    continue
 
                 if self.isExcludedNuisance(systKey): 
                     continue
@@ -986,8 +1022,8 @@ class CardTool(object):
                 for proc in procs_syst:
                     logger.debug(f"Now at proc {proc}!")
 
-                    if chan in maskedchans and self.datagroups.groups[proc].hists.get(systKey, None) is None:
-                        continue
+                    # if chan in maskedchans and self.datagroups.groups[proc].hists.get(systKey, None) is None:
+                    #     continue
 
                     hnom = self.datagroups.groups[proc].hists[chan]
                     hvar = self.datagroups.groups[proc].hists[systKey]
@@ -1067,25 +1103,7 @@ class CardTool(object):
                         dict_logkavg[chan][proc][var_name] = logkavg_proc
                         dict_logkhalfdiff[chan][proc][var_name] = logkhalfdiff_proc
 
-
-                        if syst['noProfile']:
-                            systsnoprofile.add(var_name)
-                        elif syst["noConstraint"] or syst["noi"]:
-                            systsnoconstraint.add(var_name)
-                        else:
-                            systsstandard.add(var_name)
-
-                        group = syst["group"]
-                        if syst["noi"]:
-                            if group not in dict_noigroups:
-                                dict_noigroups[group] = set([var_name])
-                            else:
-                                dict_noigroups[group].add(var_name)
-                        else:
-                            if group not in dict_systgroups:
-                                dict_systgroups[group] = set([var_name])
-                            else:
-                                dict_systgroups[group].add(var_name)
+                        book_systematic(syst, var_name)
 
                     self.datagroups.groups[proc].hists[systKey] = None
 

@@ -26,7 +26,7 @@ def make_parser(parser=None):
     parser.add_argument("--noHist", action='store_true', help="Skip the making of 2D histograms (root file is left untouched if existing)")
     parser.add_argument("--qcdProcessName" , type=str, default="Fake", help="Name for QCD process")
     # setting on the fit behaviour
-    parser.add_argument("--fitvar", nargs="+", help="Variable to fit", default=["pt", "eta"])
+    parser.add_argument("--fitvar", nargs="+", help="Variable to fit", default=["eta", "pt"])
     parser.add_argument("--rebin", type=int, nargs='*', default=[], help="Rebin axis by this value (default does nothing)")
     parser.add_argument("--axlim", type=float, default=[], nargs='*', help="Restrict axis to this range (assumes pairs of values by axis, with trailing axes optional)")
     parser.add_argument("--lumiScale", type=float, default=1.0, help="Rescale equivalent luminosity by this value (e.g. 10 means ten times more data and MC)")
@@ -272,7 +272,7 @@ def setup(args,xnorm=False):
     cardTool.addSystematic(f"massWeight{label}",
                            processes=signal_samples_forMass,
                            group=f"massShift{label}",
-                           noiGroup=not constrainMass,
+                           noi=not constrainMass,
                            skipEntries=massSkip,
                            mirror=False,
                            #TODO: Name this
@@ -339,18 +339,19 @@ def setup(args,xnorm=False):
 
     if wmass:
         #cardTool.addLnNSystematic("CMS_Fakes", processes=[args.qcdProcessName], size=1.05, group="MultijetBkg")
-        cardTool.addLnNSystematic("CMS_Top", processes=["Top"], size=1.06)
-        cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16)
+        cardTool.addLnNSystematic("CMS_Top", processes=["Top"], size=1.06, xnorm=False)
+        cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16, xnorm=False)
         cardTool.addSystematic("luminosity",
                                 processes=['MCnoQCD'],
                                 outNames=["lumiDown", "lumiUp"],
                                 group="luminosity",
                                 systAxes=["downUpVar"],
                                 labelsByAxis=["downUpVar"],
-                                passToFakes=passSystToFakes)
+                                passToFakes=passSystToFakes, 
+                                xnorm=False)
     else:
-        cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
-        cardTool.addLnNSystematic("luminosity", processes=['MCnoQCD'], size=1.017 if lowPU else 1.012, group="luminosity")
+        cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15, xnorm=False)
+        cardTool.addLnNSystematic("luminosity", processes=['MCnoQCD'], size=1.017 if lowPU else 1.012, group="luminosity", xnorm=False)
 
     if not args.noEfficiencyUnc:
 
@@ -427,7 +428,8 @@ def setup(args,xnorm=False):
                     systNameReplace=nameReplace,
                     scale=scale,
                     splitGroup=splitGroupDict,
-                    decorrelateByBin = {}
+                    decorrelateByBin = {}, 
+                    xnorm=False
                 )
                 # if "Syst" in name and decorrDictEff != {}:
                 #     # add fully correlated version again
@@ -460,7 +462,8 @@ def setup(args,xnorm=False):
                     group="CMS_lepton_eff",
                     baseName=lepEff,
                     systAxes = ["tensor_axis_0"],
-                    labelsByAxis = [""],
+                    labelsByAxis = [""], 
+                    xnorm=False,
                 )
                 
     if (wmass or wlike) and not input_tools.args_from_metadata(cardTool, "noRecoil"):
@@ -479,7 +482,8 @@ def setup(args,xnorm=False):
                 group="CMS_prefire17",
                 baseName="CMS_prefire17",
                 systAxes = ["downUpVar"],
-                labelsByAxis = ["downUpVar"],
+                labelsByAxis = ["downUpVar"], 
+                xnorm=False,
             )
 
         return cardTool
@@ -514,7 +518,8 @@ def setup(args,xnorm=False):
         systAxes=msv_config['syst_axes'],
         labelsByAxis=msv_config['syst_axes_labels'],
         passToFakes=passSystToFakes,
-        scale = args.scaleMuonCorr
+        scale = args.scaleMuonCorr, 
+        xnorm=False
     )
     cardTool.addSystematic("muonL1PrefireSyst", 
         processes=['MCnoQCD'],
@@ -522,7 +527,8 @@ def setup(args,xnorm=False):
         baseName="CMS_prefire_syst_m",
         systAxes=["downUpVar"],
         labelsByAxis=["downUpVar"],
-        passToFakes=passSystToFakes,
+        passToFakes=passSystToFakes, 
+        xnorm=False,
     )
     cardTool.addSystematic("muonL1PrefireStat", 
         processes=['MCnoQCD'],
@@ -530,7 +536,8 @@ def setup(args,xnorm=False):
         baseName="CMS_prefire_stat_m_",
         systAxes=["downUpVar", "etaPhiRegion"],
         labelsByAxis=["downUpVar", "etaPhiReg"],
-        passToFakes=passSystToFakes,
+        passToFakes=passSystToFakes, 
+        xnorm=False,
     )
     cardTool.addSystematic("ecalL1Prefire", 
         processes=['MCnoQCD'],
@@ -538,7 +545,8 @@ def setup(args,xnorm=False):
         baseName="CMS_prefire_ecal",
         systAxes=["downUpVar"],
         labelsByAxis=["downUpVar"],
-        passToFakes=passSystToFakes,
+        passToFakes=passSystToFakes, 
+        xnorm=False,
     )
 
     if wmass:
@@ -550,7 +558,8 @@ def setup(args,xnorm=False):
                 baseName="Z_nonClosure_parametrized_A_",
                 systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
                 labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
-                passToFakes=passSystToFakes
+                passToFakes=passSystToFakes, 
+                xnorm=False
             )
         if non_closure_scheme in ["A-M-separated", "binned-plus-M"]:
             cardTool.addSystematic("Z_non_closure_parametrized_M", 
@@ -559,7 +568,8 @@ def setup(args,xnorm=False):
                 baseName="Z_nonClosure_parametrized_M_",
                 systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
                 labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
-                passToFakes=passSystToFakes
+                passToFakes=passSystToFakes, 
+                xnorm=False
             )            
         if non_closure_scheme == "A-M-combined":
             cardTool.addSystematic("Z_non_closure_parametrized", 
@@ -568,7 +578,8 @@ def setup(args,xnorm=False):
                 baseName="Z_nonClosure_parametrized_",
                 systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
                 labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
-                passToFakes=passSystToFakes
+                passToFakes=passSystToFakes, 
+                xnorm=False
             )
         if non_closure_scheme in ["binned", "binned-plus-M"]:
             cardTool.addSystematic("Z_non_closure_binned", 
@@ -577,7 +588,8 @@ def setup(args,xnorm=False):
                 baseName="Z_nonClosure_binned_",
                 systAxes=["unc_ieta", "unc_ipt", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
                 labelsByAxis=["unc_ieta", "unc_ipt", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
-                passToFakes=passSystToFakes
+                passToFakes=passSystToFakes, 
+                xnorm=False
             )
     
     # Previously we had a QCD uncertainty for the mt dependence on the fakes, see: https://github.com/WMass/WRemnants/blob/f757c2c8137a720403b64d4c83b5463a2b27e80f/scripts/combine/setupCombineWMass.py#L359

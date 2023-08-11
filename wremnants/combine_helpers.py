@@ -45,11 +45,13 @@ def setSimultaneousABCD(cardTool, variation_fakerate=0.5, variation_normalizatio
 
     # axes in the correct ordering
     axes = [common.passIsoName, common.passMTName]
-    axes = [*axes, "charge"] if "charge" not in cardTool.project else axes
     axes += [ax for ax in cardTool.project if ax not in axes]
 
+    if "charge" not in axes:
+        axes.append("charge")
+
     if set(hist_fake.axes.name) != set(axes) or hist_fake.axes.name[0] != common.passIsoName or hist_fake.axes.name[1] != common.passMTName:
-        logger.debug("Axes in histogram are not the same as required or in a different order than expected, try to project")
+        logger.debug(f"Axes in histogram '{hist_fake.axes.name}' are not the same as required '{axes}' or in a different order than expected, try to project")
         hist_fake = hist_fake.project(*axes)
 
     # set the expected values in the signal region
