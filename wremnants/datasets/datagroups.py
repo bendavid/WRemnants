@@ -531,29 +531,16 @@ class Datagroups(object):
             gen_axes = [gen_axes]
 
         if gen_axes != None:
-<<<<<<< HEAD
-            self.gen_axes = gen_axes.copy()
-=======
             self.gen_axes = list(gen_axes)
->>>>>>> ab48056eca728bd65f42354057debac0dc72c42b
         else:
             # infer gen axes from metadata
             args = self.getMetaInfo()["args"]
             if args.get("unfolding", False) is False and args.get("addHelicityHistos", False) is False:
                 self.gen_axes = None
                 return
-<<<<<<< HEAD
 
             if len(args.get("genVars", [])) > 0:
-=======
-            
-            if self.wmass:
-                self.gen_axes = ["absEtaGen","ptGen"] if args.get("addHelicityHistos", False) is False else ["absYVgenSig", "ptVgenSig", "helicity"]
-            elif self.wlike:
-                self.gen_axes = ["qGen","absEtaGen","ptGen"]
-            else:
->>>>>>> ab48056eca728bd65f42354057debac0dc72c42b
-                self.gen_axes = args.get("genVars", [])
+                self.gen_axes = args["genVars"]
             else:
                 logger.warning(f"Unknown gen axes!")
 
