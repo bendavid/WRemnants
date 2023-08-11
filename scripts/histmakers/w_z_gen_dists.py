@@ -5,6 +5,7 @@ parser,initargs = common.common_parser()
 import narf
 import wremnants
 from wremnants import theory_tools,syst_tools,theory_corrections
+from wremnants.datasets.dataset_tools import getDatasets
 import hist
 import math
 import os
@@ -21,10 +22,10 @@ args = parser.parse_args()
 
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
-datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
-                                              filt=args.filterProcs,
-                                              excl=args.excludeProcs, 
-                                              nanoVersion="v8" if args.v8 else "v9", base_path=args.dataPath, mode='gen')
+datasets = getDatasets(maxFiles=args.maxFiles,
+                        filt=args.filterProcs,
+                        excl=args.excludeProcs, 
+                        nanoVersion="v8" if args.v8 else "v9", base_path=args.dataPath, mode='gen')
 
 logger.debug(f"Will process samples {[d.name for d in datasets]}")
 

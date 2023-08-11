@@ -14,7 +14,7 @@ import pdb
 
 from wremnants.datasets.datagroups import Datagroups
 
-from utilities import boostHistHelpers as hh, logging, input_tools, common, common_lowPU, differential, output_tools
+from utilities import boostHistHelpers as hh, logging, input_tools, common, differential, output_tools
 from wremnants import plot_tools
 from wremnants.unfolding_tools import get_bin, getProcessBins
 
@@ -42,7 +42,7 @@ parser.add_argument("--eoscp", action='store_true', help="Override use of xrdcp 
 
 args = parser.parse_args()
 
-logger = logging.setup_logger("plotFitresult", 4 if args.debug else 3)
+logger = logging.setup_logger("unfolding_xsec", 4 if args.debug else 3)
 
 cms_decor = "Preliminary"
 
@@ -307,6 +307,8 @@ translate = {
     "QCDscaleWPtChargeMiNNLO": "QCDscaleW",
     "QCDscaleZPtHelicityMiNNLO": "QCDscaleZ",
     "QCDscaleWPtHelicityMiNNLO": "QCDscaleW",
+    "QCDscaleZPtChargeHelicityMiNNLO": "QCDscaleZ",
+    "QCDscaleWPtChargeHelicityMiNNLO": "QCDscaleW",
     "resumNonpert": "resumNP",
     "resumTransition": "resumT",
     "binByBinStat": "BBlite",
