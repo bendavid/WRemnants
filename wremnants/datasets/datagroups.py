@@ -14,11 +14,13 @@ import math
 import numpy as np
 
 from wremnants.datasets.datagroup import Datagroup
+from wremnants.datasets.dataset_tools import getDatasets
 
 logger = logging.child_logger(__name__)
 
 class Datagroups(object):
-    def __init__(self, infile, combine=False, datasets=None):
+
+    def __init__(self, infile, combine=False, datasets=None, **kwargs):
         self.combine = combine
         self.h5file = None
         self.rtfile = None
@@ -36,61 +38,82 @@ class Datagroups(object):
 
         self.wmass = os.path.basename(self.getScriptCommand().split()[0]).startswith("mw")
         self.wlike = os.path.basename(self.getScriptCommand().split()[0]).startswith("mz_wlike")
+        self.dilepton = os.path.basename(self.getScriptCommand().split()[0]).startswith("mz_dilepton")
+
+        self.lowPU = "lowPU" in os.path.basename(self.getScriptCommand().split()[0])
 
         self.lumi = 1
 
-        if datasets:
-
-            if self.results:
-                # only keep datasets that are found in input file
-                self.datasets = {x.name : x for x in datasets if x.name in self.results.keys()}
-                
-                # dictionary that maps dataset names to groups 
-                dataset_to_group = {d_key: d.group for d_key, d in self.datasets.items()}
-
-                for d_name, dataset in self.results.items():
-                    # if additional datasets are specified in results (for example aggregated groups or re-named datasets), get them
-                    if d_name in self.datasets.keys():
-                        continue
-                    if d_name in ["meta_info",]:
-                        continue
-                    
-                    g_name = d_name.replace("Bkg","") if d_name.startswith("Bkg") else d_name
-                    if g_name not in dataset_to_group.values():
-                        g_name = dataset_to_group.get(g_name, g_name)
-                    
-                    logger.debug(f"Add dataset {d_name}")
-                    self.datasets[d_name] = narf.Dataset(**{
-                        "name": d_name,
-                        "group": g_name,
-                        "filepaths": dataset["dataset"]["filepaths"],
-                        "xsec": dataset["dataset"].get("xsec", None)
-                        })
-
-                self.data = [x for x in self.datasets.values() if x.is_data]
-                if self.data:
-                    self.lumi = sum([self.results[x.name]["lumi"] for x in self.data if x.name in self.results])
-                    logger.info(f"Integrated luminosity from data: {self.lumi}/fb")
-                else:
-                    logger.warning("No data process was selected, normalizing MC to 1/fb")
-
-            else:
-                self.datasets = {x.name : x for x in datasets}
-                
-            logger.debug(f"Getting these datasets: {self.datasets.keys()}")
+        if self.results:
+            args = self.getMetaInfo()["args"]
+            self.flavor = args.get("flavor", None)
+        else:
+            self.flavor = None
 
         self.groups = {}
         self.nominalName = "nominal"
         self.globalAction = None
         self.unconstrainedProcesses = []
 
+        if self.lowPU:
+            from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU as make_datagroups
+            mode="lowPU"
+        else:
+            from wremnants.datasets.datagroups2016 import make_datagroups_2016 as make_datagroups
+            mode=None
+
+        if datasets is None:
+            datasets = getDatasets(mode=mode)
+
+        self.setDatasets(datasets)
         self.setGenAxes()
+                    
+        make_datagroups(self, **kwargs)
 
     def __del__(self):
         if self.h5file:
             self.h5file.close()
         if self.rtfile:
             self.rtfile.Close()
+
+    def setDatasets(self, datasets):
+        if self.results:
+            # only keep datasets that are found in input file
+            self.datasets = {x.name : x for x in datasets if x.name in self.results.keys()}
+            
+            # dictionary that maps dataset names to groups 
+            dataset_to_group = {d_key: d.group for d_key, d in self.datasets.items()}
+
+            for d_name, dataset in self.results.items():
+                # if additional datasets are specified in results (for example aggregated groups or re-named datasets), get them
+                if d_name in self.datasets.keys():
+                    continue
+                if d_name in ["meta_info",]:
+                    continue
+                
+                g_name = d_name.replace("Bkg","") if d_name.startswith("Bkg") else d_name
+                if g_name not in dataset_to_group.values():
+                    g_name = dataset_to_group.get(g_name, g_name)
+                
+                logger.debug(f"Add dataset {d_name}")
+                self.datasets[d_name] = narf.Dataset(**{
+                    "name": d_name,
+                    "group": g_name,
+                    "filepaths": dataset["dataset"]["filepaths"],
+                    "xsec": dataset["dataset"].get("xsec", None)
+                    })
+
+            self.data = [x for x in self.datasets.values() if x.is_data]
+            if self.data:
+                self.lumi = sum([self.results[x.name]["lumi"] for x in self.data if x.name in self.results])
+                logger.info(f"Integrated luminosity from data: {self.lumi}/fb")
+            else:
+                logger.warning("No data process was selected, normalizing MC to 1/fb")
+
+        else:
+            self.datasets = {x.name : x for x in datasets}
+
+        logger.debug(f"Getting these datasets: {self.datasets.keys()}")
 
     def addGroup(self, name, **kwargs):
         group = Datagroup(name, **kwargs)
@@ -246,7 +269,7 @@ class Datagroups(object):
                 continue
             group.hists[label] = None
 
-            for i, member in enumerate(group.members):
+            for i, member in enumerate(group.members):   
                 if procName == nameFake and member.name in fakesMembersWithSyst:
                     # if we are here this process has been already used to build the fakes when running for other groups
                     continue
@@ -266,7 +289,7 @@ class Datagroups(object):
                     else:
                         logger.warning(str(e))
                         continue
-                
+
                 h_id = id(h)
 
                 logger.debug(f"Hist axes are {h.axes.name}")
@@ -284,7 +307,7 @@ class Datagroups(object):
                     projections = [a for a in h.axes.name if a not in self.gen_axes]
                     if len(projections) < len(h.axes.name):
                         h = h.project(*projections)
-                    logger.debug(f"Integrated")
+                    logger.debug(f"Integrated, Hist axes are {h.axes.name}")
 
                 if h_id == id(h):
                     logger.debug(f"Make explicit copy")
@@ -512,13 +535,11 @@ class Datagroups(object):
             if args.get("unfolding", False) is False and args.get("addHelicityHistos", False) is False:
                 self.gen_axes = None
                 return
-            
-            if self.wmass:
-                self.gen_axes = ["absEtaGen","ptGen"] if args.get("addHelicityHistos", False) is False else ["absYVgenSig", "ptVgenSig", "helicity"]
-            elif self.wlike:
-                self.gen_axes = ["qGen","absEtaGen","ptGen"]
+
+            if len(args.get("genVars", [])) > 0:
+                self.gen_axes = args["genVars"]
             else:
-                self.gen_axes = args.get("genVars", [])
+                logger.warning(f"Unknown gen axes!")
 
         logger.debug(f"Gen axes are now {self.gen_axes}")
 
@@ -632,3 +653,4 @@ class Datagroups(object):
         if re.search("^pdf.*_sum", procName): # for pseudodata from alternative pdfset
             return("_".join([procName, channel])) 
         return name
+

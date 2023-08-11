@@ -25,8 +25,10 @@ class TheoryHelper(object):
         self.mirror_tnp = True
 
     def sample_label(self, sample_group):
-        if sample_group not in self.card_tool.procGroups or not self.card_tool.procGroups[sample_group]:
+        if sample_group not in self.card_tool.procGroups:
             raise ValueError(f"Failed to find sample group {sample_group} in predefined groups")
+        if not self.card_tool.procGroups[sample_group]:
+            logger.warning(f"Sample group {sample_group} is empty")
 
         return self.card_tool.procGroups[sample_group][0][0] 
 
@@ -83,7 +85,7 @@ class TheoryHelper(object):
 
         if minnloUnc and minnloUnc != "none":
             for sample_group in ["signal_samples_inctau", "single_v_nonsig_samples"]:
-                if sample_group in self.card_tool.procGroups:
+                if self.card_tool.procGroups.get(sample_group, None):
                     self.add_minnlo_scale_uncertainty(minnloUnc, sample_group)
 
     def add_minnlo_scale_uncertainty(self, scale_type, sample_group, use_hel_hist=False, rebin_pt=None):
@@ -341,7 +343,7 @@ class TheoryHelper(object):
                     raise ValueError(f"Failed to find all vars {vals} for var {label} in hist {self.np_hist_name}")
 
         for sample_group in ["signal_samples_inctau", "single_v_nonsig_samples"]:
-            if sample_group not in self.card_tool.procGroups:
+            if not self.card_tool.procGroups.get(sample_group, None):
                 continue
             label = self.sample_label(sample_group)
             for nuisance,vals in np_map.items():
@@ -418,11 +420,11 @@ class TheoryHelper(object):
     def add_resum_transition_uncertainty(self):
         obs = self.card_tool.project[:]
 
-        for samples in ["single_v_nonsig_samples", "signal_samples_inctau"]:
-            if sample_group not in self.card_tool.procGroups:
+        for sample_group in ["single_v_nonsig_samples", "signal_samples_inctau"]:
+            if self.card_tool.procGroups.get(sample_group, None):
                 continue
-            expanded_samples = self.card_tool.getProcNames([samples])
-            name_append = self.sample_label(samples)
+            expanded_samples = self.card_tool.getProcNames([sample_group])
+            name_append = self.sample_label(sample_group)
 
             self.card_tool.addSystematic(name=self.corr_hist_name,
                 processes=["single_v_samples"],

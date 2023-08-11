@@ -1,4 +1,8 @@
 import copy
+from utilities import common
+
+lumicsv = f"{common.data_dir}/bylsoutput.csv"
+lumijson = f"{common.data_dir}/Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.txt"
 
 BR_TAUToMU = 0.1739
 BR_TAUToE = 0.1782
@@ -14,7 +18,8 @@ dataDictV9 = {
                                      "{BASE_PATH}/SingleMuon/NanoV9Run2016HDataPostVFP_{NANO_PROD_TAG}/*/*/*.root",
                                      ],
                       'group': "Data",
-
+                      "lumicsv":lumicsv,
+                      "lumijson":lumijson
     },
     'ZmumuPostVFP' : { 
                    'filepaths' :

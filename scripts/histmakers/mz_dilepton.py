@@ -7,6 +7,7 @@ import narf
 import wremnants
 from wremnants import theory_tools,syst_tools,theory_corrections, muon_validation, muon_calibration, muon_selections, unfolding_tools
 from wremnants.histmaker_tools import scale_to_data, aggregate_groups
+from wremnants.datasets.dataset_tools import getDatasets
 import hist
 import lz4.frame
 import math
@@ -17,8 +18,8 @@ import os
 parser.add_argument("--csVarsHist", action='store_true', help="Add CS variables to dilepton hist")
 parser.add_argument("--axes", type=str, nargs="*", default=["mll", "ptll"], help="")
 parser.add_argument("--finePtBinning", action='store_true', help="Use fine binning for ptll")
-parser.add_argument("--genVars", type=str, nargs="+", default=["ptVGen"], choices=["ptVGen", "absYVGen"], help="Generator level variable")
 
+parser = common.set_parser_default(parser, "genVars", ["ptVGen", "absYVGen"])
 parser = common.set_parser_default(parser, "pt", [44,26.,70.])
 parser = common.set_parser_default(parser, "eta", [48,-2.4,2.4])
 parser = common.set_parser_default(parser, "aggregateGroups", ["Diboson", "Top", "Wtaunu", "Wmunu"])
@@ -28,10 +29,10 @@ logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
 thisAnalysis = ROOT.wrem.AnalysisType.Dilepton
 
-datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
-                                              filt=args.filterProcs,
-                                              excl=args.excludeProcs, 
-                                              nanoVersion="v8" if args.v8 else "v9", base_path=args.dataPath)
+datasets = getDatasets(maxFiles=args.maxFiles,
+                        filt=args.filterProcs,
+                        excl=args.excludeProcs, 
+                        nanoVersion="v8" if args.v8 else "v9", base_path=args.dataPath)
 
 era = args.era
 
