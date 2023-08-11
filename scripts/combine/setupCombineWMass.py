@@ -188,7 +188,10 @@ def setup(args,xnorm=False):
             cardTool.unroll = True
             # remove projection axes from gen axes, otherwise they will be integrated before
             datagroups.setGenAxes([a for a in datagroups.gen_axes if a not in cardTool.project])
-
+    else:
+        cardTool.setHistName(args.baseName)
+        cardTool.setNominalName(args.baseName)
+        
     # define sumGroups for integrated cross section
     if args.unfolding:
         # TODO: make this less hardcoded to filter the charge (if the charge is not present this will duplicate things)
@@ -198,7 +201,7 @@ def setup(args,xnorm=False):
             if "minus" in args.recoCharge:
                 cardTool.addPOISumGroups(genCharge="qGen0")
         else:
-            if args.sumChannels or name in ["ZMassDilepton"]:
+            if args.sumChannels or dilepton:
                 cardTool.addPOISumGroups()
             else:
                 cardTool.addPOISumGroups(genCharge="qGen0")
