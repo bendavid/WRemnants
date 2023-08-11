@@ -201,7 +201,8 @@ class Datagroups(object):
                  excludeProcs=None, forceToNominal=[]):
         if not label:
             label = syst if syst else baseName
-        logger.info(f"In setHists(): for hist {syst} procsToRead = {procsToRead}")
+        # this line is annoying for the theory agnostic, too many processes for signal
+        logger.debug(f"In setHists(): for hist {syst} procsToRead = {procsToRead}")
 
         if not procsToRead:
             if excludeProcs:
@@ -279,7 +280,7 @@ class Datagroups(object):
 
                 if self.gen_axes != None:
                     # integrate over remaining gen axes 
-                    logger.debug(f"Integrate over gen axes")
+                    logger.debug(f"Integrate over gen axes {self.gen_axes}")
                     projections = [a for a in h.axes.name if a not in self.gen_axes]
                     if len(projections) < len(h.axes.name):
                         h = h.project(*projections)
@@ -504,16 +505,16 @@ class Datagroups(object):
             gen_axes = [gen_axes]
 
         if gen_axes != None:
-            self.gen_axes = gen_axes
+            self.gen_axes = list(gen_axes)
         else:
-            # infere gen axes from metadata
+            # infer gen axes from metadata
             args = self.getMetaInfo()["args"]
-            if args.get("unfolding", False) is False:
+            if args.get("unfolding", False) is False and args.get("addHelicityHistos", False) is False:
                 self.gen_axes = None
                 return
-
+            
             if self.wmass:
-                self.gen_axes = ["absEtaGen","ptGen"]
+                self.gen_axes = ["absEtaGen","ptGen"] if args.get("addHelicityHistos", False) is False else ["absYVgenSig", "ptVgenSig", "helicity"]
             elif self.wlike:
                 self.gen_axes = ["qGen","absEtaGen","ptGen"]
             else:
@@ -526,7 +527,6 @@ class Datagroups(object):
             raise RuntimeError(f"Base group {group_name} not found in groups {self.groups.keys()}!")
 
         base_members = self.groups[group_name].members[:]
-
         if member_filter is not None:
             base_members = [m for m in filter(lambda x, f=member_filter: f(x), base_members)]            
 
