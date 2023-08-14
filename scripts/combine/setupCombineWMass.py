@@ -237,7 +237,7 @@ def setup(args,xnorm=False):
     cardTool.addProcessGroup("signal_samples_inctau", lambda x: ((x[0] == "W" and wmass) or (x[0] == "Z" and not wmass)) and x[1] not in ["W","Z"])
     cardTool.addProcessGroup("MCnoQCD", lambda x: x not in ["QCD", "Data"])
 
-    if not args.theoryAgnostic:
+    if not (args.theoryAgnostic or args.unfolding) :
         logger.info(f"All MC processes {cardTool.procGroups['MCnoQCD']}")
         logger.info(f"Single V samples: {cardTool.procGroups['single_v_samples']}")
         if wmass:
@@ -595,7 +595,7 @@ def setup(args,xnorm=False):
 def main(args,xnorm=False):
     cardTool = setup(args, xnorm)
     cardTool.setOutput(args.outfolder, fitvars=args.fitvar, doStatOnly=args.doStatOnly, postfix=args.postfix, hdf5=args.hdf5)
-    cardTool.writeOutput(args=args, hdf5=args.hdf5, sparse=args.sparse, xnorm=args.unfolding,
+    cardTool.writeOutput(args=args, hdf5=args.hdf5, sparse=args.sparse, xnorm=xnorm or args.hdf5,
         forceNonzero=not args.unfolding, check_systs=not args.unfolding, simultaneousABCD=args.simultaneousABCD)
     return
 

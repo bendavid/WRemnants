@@ -240,7 +240,7 @@ class TheoryHelper(object):
             logger.warning("Will not add any nonperturbative uncertainty!")
 
     def set_np_model(self, model):
-        if model == "none":
+        if model in ["none", None]:
             self.np_model = None
             return
 

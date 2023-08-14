@@ -17,6 +17,7 @@ import copy
 import h5py
 from utilities.h5pyutils import writeFlatInChunks, writeSparse
 import math
+import pandas as pd
 import pdb
 
 logger = logging.child_logger(__name__)
@@ -36,7 +37,7 @@ class CardTool(object):
         self.channels = ["plus", "minus"]
         self.cardContent = {}
         self.cardGroups = {}
-        self.cardSumGroups = "" # POI sum groups
+        self.cardSumGroups = {} # POI sum groups
         self.nominalTemplate = f"{pathlib.Path(__file__).parent}/../scripts/combine/Templates/datacard.txt"
         self.spacing = 28
         self.systTypeSpacing = 16
@@ -70,6 +71,10 @@ class CardTool(object):
                              "inclusive" : {"val" : "sum", "id" : "none", "badId" : None},
                              }
         self.procGroups = {}
+        # settings for writing out hdf5 files
+        self.dtype="float64"
+        self.chunkSize=4*1024**2
+        self.logkepsilon=math.log(1e-3) #numerical cutoff in case of zeros in systematic variations
 
     def getProcNames(self, grouped_procs):
         expanded_procs = []
@@ -735,15 +740,10 @@ class CardTool(object):
     def writeHDF5Output(self, args=None, xnorm=False, theoryFit=False,
         simultaneousABCD=False,
         forceNonzero=True, check_systs=False, allowNegativeExpectation=False, 
-        sparse=False, dtype="float64", chunkSize=4*1024**2,
-        logkepsilon=math.log(1e-3), #numerical cutoff in case of zeros in systematic variations
+        sparse=False,
         clipSystVariations=False,
         clipSystVariationsSignal=False,
     ):
-
-        if "charge" not in self.project:
-            self.project.append("charge")
-
         # the number of systematics is not known before loading the histograms, the systematics are therefore stored in temporary dicts and sets
         dict_noigroups = {}
         dict_systgroups = {}
@@ -776,6 +776,25 @@ class CardTool(object):
                 else:
                     dict_systgroups[group].add(name)
 
+        #list of channels, ordered such that masked channels are last, right now, only one channel is supported
+        # TODO support multiple channels
+        chans = [self.nominalName]
+        maskedchans = []
+
+        if xnorm:
+            chans.append("xnorm")
+            maskedchans.append("xnorm")
+
+        nbins = 0
+        nbinsfull = 0
+
+        signals = self.unconstrainedProcesses[:]
+        bkgs = [p for p in self.predictedProcesses() if p not in self.unconstrainedProcesses]
+        if simultaneousABCD:
+            bkgs.append("Nonprompt")
+        procs = signals + bkgs
+        nproc = len(procs)
+
         #list of groups of systematics (nuisances) and lists of indexes
         systgroups = []
         systgroupidxs = []
@@ -796,6 +815,11 @@ class CardTool(object):
         sumgroups = []
         sumgroupsegmentids = []
         sumgroupidxs = []
+        for igroup, (group, members) in enumerate(self.cardSumGroups.items()):
+            sumgroups.append(group)
+            for proc in members:
+                sumgroupsegmentids.append(igroup)
+                sumgroupidxs.append(procs.index(proc))
 
         #list of groups of signal processes by chargemeta
         chargemetagroups = []
@@ -830,25 +854,6 @@ class CardTool(object):
         #list of groups of systematics to be treated as additional outputs for impacts, etc (aka "nuisances of interest")
         noigroups = []
         noigroupidxs = []
-
-        #list of channels, ordered such that masked channels are last, right now, only one channel is supported
-        # TODO support multiple channels
-        chans = [self.nominalName]
-        maskedchans = []
-
-        if xnorm:
-            chans.append("xnorm")
-            maskedchans.append("xnorm")
-
-        nbins = 0
-        nbinsfull = 0
-
-        signals = self.unconstrainedProcesses
-        bkgs = [p for p in self.predictedProcesses() if p not in self.unconstrainedProcesses]
-        if simultaneousABCD:
-            bkgs.append("Nonprompt")
-        procs = list(sorted(signals)) + list(sorted(bkgs))
-        nproc = len(procs)
 
         dict_data_obs = {}
         dict_sumw2 = {c : {} for c in chans}
@@ -892,7 +897,7 @@ class CardTool(object):
                 data_obs_hist = self.datagroups.groups[self.dataName].hists[chan]
                 if data_obs_hist.axes.name != self.project:
                     data_obs_hist = data_obs_hist.project(*self.project)
-                data_obs = data_obs_hist.values(flow=False).flatten().astype(dtype)
+                data_obs = data_obs_hist.values(flow=False).flatten().astype(self.dtype)
                 dict_data_obs[chan] = data_obs
                 nbinschan = len(data_obs)
                 nbins += nbinschan
@@ -901,7 +906,7 @@ class CardTool(object):
                     pass
                     # TODO
                     # data_cov_chan_hist = MB.getShape(chan,options.covname)
-                    # data_cov_chan = hist2array(data_cov_chan_hist, include_overflow=False).astype(dtype)
+                    # data_cov_chan = hist2array(data_cov_chan_hist, include_overflow=False).astype(self.dtype)
                     # data_cov_chan_hist.Delete()
                     # #write to output array (block-diagonal for now)
                     # data_cov[ibin:ibin+nbinschan,ibin:ibin+nbinschan] = data_cov_chan
@@ -928,10 +933,10 @@ class CardTool(object):
                     if norm_proc_hist.storage_type != hist.storage.Weight:
                         raise RuntimeError(f"Sumw2 not filled for {proc} but needed for binByBin uncertainties")
 
-                    norm_proc = norm_proc_hist.values(flow=False).flatten().astype(dtype)
-                    sumw2_proc = norm_proc_hist.variances(flow=False).flatten().astype(dtype)
+                    norm_proc = norm_proc_hist.values(flow=False).flatten().astype(self.dtype)
+                    sumw2_proc = norm_proc_hist.variances(flow=False).flatten().astype(self.dtype)
                 else:
-                    norm_proc = norm_proc_hist.values(flow=False).flatten().astype(dtype)
+                    norm_proc = norm_proc_hist.values(flow=False).flatten().astype(self.dtype)
                     if norm_proc.shape[0] != nbinschan:
                         raise Exception(f"Mismatch between number of bins in channel {chan} for expected ({nbinschan}) and template ({norm_proc.shape[0]})")
 
@@ -969,8 +974,8 @@ class CardTool(object):
                         ksystup = 1.
                     if ksystdown == 0.:
                         ksystdown = 1.
-                    logkup_proc = math.log(ksystup)*np.ones([nbinschan],dtype=dtype)
-                    logkdown_proc = -math.log(ksystdown)*np.ones([nbinschan],dtype=dtype)
+                    logkup_proc = math.log(ksystup)*np.ones([nbinschan],dtype=self.dtype)
+                    logkdown_proc = -math.log(ksystdown)*np.ones([nbinschan],dtype=self.dtype)
                     logkavg_proc = 0.5*(logkup_proc + logkdown_proc)
                     logkhalfdiff_proc = 0.5*(logkup_proc - logkdown_proc)
                     logkup_proc = None
@@ -978,8 +983,8 @@ class CardTool(object):
                 else:
                     if ksyst == 0.:
                         continue
-                    logkavg_proc = math.log(ksyst)*np.ones([nbinschan],dtype=dtype)
-                    logkhalfdiff_proc = np.zeros([nbinschan],dtype=dtype)
+                    logkavg_proc = math.log(ksyst)*np.ones([nbinschan],dtype=self.dtype)
+                    logkhalfdiff_proc = np.zeros([nbinschan],dtype=self.dtype)
 
                 for proc in procs_syst:
                     logger.debug(f"Now at proc {proc}!")
@@ -1034,7 +1039,6 @@ class CardTool(object):
                     if syst["decorrByBin"]:
                         raise NotImplementedError("By bin decorrelation is not supported for writing output in hdf5")
 
-
                     var_map = self.systHists(hvar, systKey)
                     var_names = [x[:-2] if "Up" in x[-2:] else (x[:-4] if "Down" in x[-4:] else x) 
                         for x in filter(lambda x: x != "", var_map.keys())]
@@ -1051,13 +1055,13 @@ class CardTool(object):
                             if syst_proc_hist.axes != self.project:
                                 syst_proc_hist = syst_proc_hist.project(*self.project)
 
-                            syst_proc = syst_proc_hist.values(flow=False).flatten().astype(dtype)
+                            syst_proc = syst_proc_hist.values(flow=False).flatten().astype(self.dtype)
 
                             logkup_proc = kfac*np.log(syst_proc/norm_proc)
                             # check if there is a sign flip between systematic and variation
                             # we do a multiplicative mirroring, if the up variation is on the same side as nominal, also the down variation is
-                            logkup_proc = np.where(np.equal(np.sign(norm_proc*syst_proc),1), logkup_proc, logkepsilon*np.ones_like(logkup_proc))
-                            logkdown_proc = np.where(np.equal(np.sign(norm_proc*syst_proc),1), logkup_proc, -logkepsilon*np.ones_like(logkup_proc))
+                            logkup_proc = np.where(np.equal(np.sign(norm_proc*syst_proc),1), logkup_proc, self.logkepsilon*np.ones_like(logkup_proc))
+                            logkdown_proc = np.where(np.equal(np.sign(norm_proc*syst_proc),1), logkup_proc, -self.logkepsilon*np.ones_like(logkup_proc))
                             syst_proc = None
                         else:
                             systup_proc_hist = var_map[var_name+"Up"]
@@ -1068,13 +1072,13 @@ class CardTool(object):
                             if systdown_proc_hist.axes != self.project:
                                 systdown_proc_hist = systdown_proc_hist.project(*self.project)
 
-                            systup_proc = systup_proc_hist.values(flow=False).flatten().astype(dtype)
-                            systdown_proc = systdown_proc_hist.values(flow=False).flatten().astype(dtype)
+                            systup_proc = systup_proc_hist.values(flow=False).flatten().astype(self.dtype)
+                            systdown_proc = systdown_proc_hist.values(flow=False).flatten().astype(self.dtype)
 
                             logkup_proc = kfac*np.log(systup_proc/norm_proc)
                             logkdown_proc = -kfac*np.log(systdown_proc/norm_proc)
-                            logkup_proc = np.where(np.equal(np.sign(norm_proc*systup_proc),1), logkup_proc, logkepsilon*np.ones_like(logkup_proc))
-                            logkdown_proc = np.where(np.equal(np.sign(norm_proc*systdown_proc),1), logkdown_proc, -logkepsilon*np.ones_like(logkdown_proc))
+                            logkup_proc = np.where(np.equal(np.sign(norm_proc*systup_proc),1), logkup_proc, self.logkepsilon*np.ones_like(logkup_proc))
+                            logkdown_proc = np.where(np.equal(np.sign(norm_proc*systdown_proc),1), logkdown_proc, -self.logkepsilon*np.ones_like(logkdown_proc))
                             systup_proc = None
                             systdown_proc = None
 
@@ -1107,15 +1111,14 @@ class CardTool(object):
 
                     self.datagroups.groups[proc].hists[systKey] = None
 
-
-        systsstandard = list(sorted(systsstandard))
-        systsnoprofile = list(sorted(systsnoprofile))
-        systsnoconstraint = list(sorted(systsnoconstraint))
+        systsstandard = list(systsstandard)
+        systsnoprofile = list(systsnoprofile)
+        systsnoconstraint = list(systsnoconstraint)
 
         systs = systsnoconstraint + systsstandard + systsnoprofile
         nsyst = len(systs)
 
-        constraintweights = np.ones([nsyst],dtype=dtype)
+        constraintweights = np.ones([nsyst],dtype=self.dtype)
         for syst in systsnoconstraint:
             constraintweights[systs.index(syst)] = 0.
 
@@ -1136,9 +1139,9 @@ class CardTool(object):
         nbinsfull = sum(ibins)
 
         logger.info(f"Write out nominal arrays")
-        sumw = np.zeros([nbins], dtype)
-        sumw2 = np.zeros([nbins], dtype)
-        data_obs = np.zeros([nbins], dtype)
+        sumw = np.zeros([nbins], self.dtype)
+        sumw2 = np.zeros([nbins], self.dtype)
+        data_obs = np.zeros([nbins], self.dtype)
         ibin = 0
         for nbinschan, chan in zip(ibins, chans):
             if chan in maskedchans:
@@ -1162,12 +1165,12 @@ class CardTool(object):
 
             norm_sparse_size = 0
             norm_sparse_indices = np.zeros([norm_sparse_size,2],idxdtype)
-            norm_sparse_values = np.zeros([norm_sparse_size],dtype)
+            norm_sparse_values = np.zeros([norm_sparse_size],self.dtype)
 
             logk_sparse_size = 0
             logk_sparse_normindices = np.zeros([logk_sparse_size,1],idxdtype)
             logk_sparse_systindices = np.zeros([logk_sparse_size,1],idxdtype)
-            logk_sparse_values = np.zeros([logk_sparse_size],dtype)
+            logk_sparse_values = np.zeros([logk_sparse_size],self.dtype)
 
             ibin = 0
             for nbinschan, chan in zip(ibins, chans):
@@ -1265,7 +1268,6 @@ class CardTool(object):
                 norm_idx_map = None
 
                 ibin += nbinschan
-
             
             logger.info(f"Resize and sort sparse arrays into canonical order")
             #resize sparse arrays to actual length
@@ -1302,8 +1304,8 @@ class CardTool(object):
         else:
             logger.info(f"Write out dense array")
             #initialize with zeros, i.e. no variation
-            norm = np.zeros([nbinsfull,nproc], dtype)
-            logk = np.zeros([nbinsfull,nproc,2,nsyst], dtype)
+            norm = np.zeros([nbinsfull,nproc], self.dtype)
+            logk = np.zeros([nbinsfull,nproc,2,nsyst], self.dtype)
 
             ibin = 0
             for nbinschan, chan in zip(ibins, chans):
@@ -1326,11 +1328,6 @@ class CardTool(object):
                         logk[ibin:ibin+nbinschan,iproc,1,isyst] = dict_logkhalfdiff_proc[syst]
                         
                 ibin += nbinschan
-
-
-        #free memory
-        # logkavg_proc = None
-        # logkhalfdiff_proc = None
             
         #compute poisson parameter for Barlow-Beeston bin-by-bin statistical uncertainties
         kstat = np.square(sumw)/sumw2
@@ -1338,164 +1335,92 @@ class CardTool(object):
         kstat = np.where(np.equal(sumw,0.), 1., kstat)
 
         #write results to hdf5 file
-        procSize = nproc*np.dtype(dtype).itemsize
-        systSize = 2*nsyst*np.dtype(dtype).itemsize
-        amax = np.amax([procSize,systSize])
-        if amax > chunkSize:
-            logger.warning(f"Maximum chunk size in bytes was increased from {chunkSize} to {amax} to align with tensor sizes and allow more efficient reading/writing.")
-            chunkSize = amax
+        procSize = nproc*np.dtype(self.dtype).itemsize
+        systSize = 2*nsyst*np.dtype(self.dtype).itemsize
+        amax = np.max([procSize,systSize])
+        if amax > self.chunkSize:
+            logger.warning(f"Maximum chunk size in bytes was increased from {self.chunkSize} to {amax} to align with tensor sizes and allow more efficient reading/writing.")
+            self.chunkSize = amax
 
         #create HDF5 file (chunk cache set to the chunk size since we can guarantee fully aligned writes
         outfilename = self.cardName.replace('_{chan}','').replace('.txt','.hdf5')
         if sparse:
             outfilename = outfilename.replace('.hdf5','_sparse.hdf5')
-        f = h5py.File(outfilename, rdcc_nbytes=chunkSize, mode='w')
+        f = h5py.File(outfilename, rdcc_nbytes=self.chunkSize, mode='w')
+
+        def create_dataset(name, content, length=None, dtype=h5py.special_dtype(vlen=str), compression="gzip"):
+            dimension=[len(content), length] if length else [len(content)]
+            ds = f.create_dataset(f"h{name}", dimension, dtype=dtype, compression=compression)
+            ds[...] = content
 
         #save some lists of strings to the file for later use
-        hprocs = f.create_dataset("hprocs", [len(procs)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
-        hprocs[...] = procs
-
-        hsignals = f.create_dataset("hsignals", [len(signals)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
-        hsignals[...] = signals
-
-        hsysts = f.create_dataset("hsysts", [len(systs)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
-        hsysts[...] = systs
-
-        hsystsnoprofile = f.create_dataset("hsystsnoprofile", [len(systsnoprofile)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
-        hsystsnoprofile[...] = systsnoprofile
-
-        hsystsnoconstraint = f.create_dataset("hsystsnoconstraint", [len(systsnoconstraint)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
-        hsystsnoconstraint[...] = systsnoconstraint
-
-        hsystgroups = f.create_dataset("hsystgroups", [len(systgroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
-        hsystgroups[...] = systgroups
-
-        hsystgroupidxs = f.create_dataset("hsystgroupidxs", [len(systgroupidxs)], dtype=h5py.special_dtype(vlen=np.dtype('int32')), compression="gzip")
-        hsystgroupidxs[...] = systgroupidxs
-
-        hchargegroups = f.create_dataset("hchargegroups", [len(chargegroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
-        hchargegroups[...] = chargegroups
-
-        hchargegroupidxs = f.create_dataset("hchargegroupidxs", [len(chargegroups),2], dtype='int32', compression="gzip")
-        hchargegroupidxs[...] = chargegroupidxs
-
-        hpolgroups = f.create_dataset("hpolgroups", [len(polgroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
-        hpolgroups[...] = polgroups
-
-        hpolgroupidxs = f.create_dataset("hpolgroupidxs", [len(polgroups),3], dtype='int32', compression="gzip")
-        hpolgroupidxs[...] = polgroupidxs
-
-        hhelgroups = f.create_dataset("hhelgroups", [len(helgroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
-        hhelgroups[...] = helgroups
-
-        hhelgroupidxs = f.create_dataset("hhelgroupidxs", [len(helgroups),6], dtype='int32', compression="gzip")
-        hhelgroupidxs[...] = helgroupidxs
-
-        hsumgroups = f.create_dataset("hsumgroups", [len(sumgroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
-        hsumgroups[...] = sumgroups
-
-        hsumgroupsegmentids = f.create_dataset("hsumgroupsegmentids", [len(sumgroupsegmentids)], dtype='int32', compression="gzip")
-        hsumgroupsegmentids[...] = sumgroupsegmentids
-
-        hsumgroupidxs = f.create_dataset("hsumgroupidxs", [len(sumgroupidxs)], dtype='int32', compression="gzip")
-        hsumgroupidxs[...] = sumgroupidxs
-
-        hchargemetagroups = f.create_dataset("hchargemetagroups", [len(chargemetagroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
-        hchargemetagroups[...] = chargemetagroups
-
-        hchargemetagroupidxs = f.create_dataset("hchargemetagroupidxs", [len(chargemetagroups),2], dtype='int32', compression="gzip")
-        hchargemetagroupidxs[...] = chargemetagroupidxs
-
-        hratiometagroups = f.create_dataset("hratiometagroups", [len(ratiometagroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
-        hratiometagroups[...] = ratiometagroups
-
-        hratiometagroupidxs = f.create_dataset("hratiometagroupidxs", [len(ratiometagroups),2], dtype='int32', compression="gzip")
-        hratiometagroupidxs[...] = ratiometagroupidxs
-
-        hhelmetagroups = f.create_dataset("hhelmetagroups", [len(helmetagroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
-        hhelmetagroups[...] = helmetagroups
-
-        hhelmetagroupidxs = f.create_dataset("hhelmetagroupidxs", [len(helmetagroups),6], dtype='int32', compression="gzip")
-        hhelmetagroupidxs[...] = helmetagroupidxs
-
-        hreggroups = f.create_dataset("hreggroups", [len(reggroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
-        hreggroups[...] = reggroups
-
-        hreggroupidxs = f.create_dataset("hreggroupidxs", [len(reggroupidxs)], dtype=h5py.special_dtype(vlen=np.dtype('int32')), compression="gzip")
-        hreggroupidxs[...] = reggroupidxs
-
-        hpoly1dreggroups = f.create_dataset("hpoly1dreggroups", [len(poly1dreggroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
-        hpoly1dreggroups[...] = poly1dreggroups
-
-        hpoly1dreggroupfirstorder = f.create_dataset("hpoly1dreggroupfirstorder", [len(poly1dreggroupfirstorder)], dtype='int32', compression="gzip")
-        hpoly1dreggroupfirstorder[...] = poly1dreggroupfirstorder
-
-        hpoly1dreggrouplastorder = f.create_dataset("hpoly1dreggrouplastorder", [len(poly1dreggrouplastorder)], dtype='int32', compression="gzip")
-        hpoly1dreggrouplastorder[...] = poly1dreggrouplastorder
-
-        hpoly1dreggroupnames = f.create_dataset("hpoly1dreggroupnames", [len(poly1dreggroupnames)], dtype=h5py.special_dtype(vlen="S256"), compression="gzip")
-        hpoly1dreggroupnames[...] = poly1dreggroupnames
-
-        hpoly1dreggroupbincenters = f.create_dataset("hpoly1dreggroupbincenters", [len(poly1dreggroupbincenters)], dtype=h5py.special_dtype(vlen=np.dtype('float64')), compression="gzip")
-        hpoly1dreggroupbincenters[...] = poly1dreggroupbincenters
-
-        hpoly2dreggroups = f.create_dataset("hpoly2dreggroups", [len(poly2dreggroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
-        hpoly2dreggroups[...] = poly2dreggroups
-
-        hpoly2dreggroupfirstorder = f.create_dataset("hpoly2dreggroupfirstorder", [len(poly2dreggroupfirstorder),2], dtype='int32', compression="gzip")
-        hpoly2dreggroupfirstorder[...] = poly2dreggroupfirstorder
-
-        hpoly2dreggrouplastorder = f.create_dataset("hpoly2dreggrouplastorder", [len(poly2dreggrouplastorder),2], dtype='int32', compression="gzip")
-        hpoly2dreggrouplastorder[...] = poly2dreggrouplastorder
-
-        hpoly2dreggroupfullorder = f.create_dataset("hpoly2dreggroupfullorder", [len(poly2dreggroupfullorder),2], dtype='int32', compression="gzip")
-        hpoly2dreggroupfullorder[...] = poly2dreggroupfullorder
-
-        hpoly2dreggroupnames = f.create_dataset("hpoly2dreggroupnames", [len(poly2dreggroupnames)], dtype=h5py.special_dtype(vlen="S256"), compression="gzip")
-        hpoly2dreggroupnames[...] = poly2dreggroupnames
-
-        hpoly2dreggroupbincenters0 = f.create_dataset("hpoly2dreggroupbincenters0", [len(poly2dreggroupbincenters0)], dtype=h5py.special_dtype(vlen=np.dtype('float64')), compression="gzip")
-        hpoly2dreggroupbincenters0[...] = poly2dreggroupbincenters0
-
-        hpoly2dreggroupbincenters1 = f.create_dataset("hpoly2dreggroupbincenters1", [len(poly2dreggroupbincenters1)], dtype=h5py.special_dtype(vlen=np.dtype('float64')), compression="gzip")
-        hpoly2dreggroupbincenters1[...] = poly2dreggroupbincenters1
-
-        hnoigroups = f.create_dataset("hnoigroups", [len(noigroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
-        hnoigroups[...] = noigroups
-
-        hnoigroupidxs = f.create_dataset("hnoigroupidxs", [len(noigroupidxs)], dtype='int32', compression="gzip")
-        hnoigroupidxs[...] = noigroupidxs
-
-        hmaskedchans = f.create_dataset("hmaskedchans", [len(maskedchans)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
-        hmaskedchans[...] = maskedchans
+        create_dataset("procs", procs)
+        create_dataset("signals", signals)
+        create_dataset("systs", systs)
+        create_dataset("systsnoprofile", systsnoprofile)
+        create_dataset("systsnoconstraint", systsnoconstraint)
+        create_dataset("systgroups", systgroups)
+        create_dataset("systgroupidxs", systgroupidxs, dtype=h5py.special_dtype(vlen=np.dtype('int32')))
+        create_dataset("chargegroups", chargegroups)
+        create_dataset("chargegroupidxs", chargegroups, 2, dtype='int32')
+        create_dataset("polgroups", polgroups)
+        create_dataset("polgroupidxs", polgroups, 3, dtype='int32')
+        create_dataset("helgroups", helgroups)
+        create_dataset("helgroupidxs", helgroups, 6, dtype='int32')
+        create_dataset("sumgroups", sumgroups)
+        create_dataset("sumgroupsegmentids", sumgroupsegmentids, dtype='int32')
+        create_dataset("sumgroupidxs", sumgroupidxs, dtype='int32')
+        create_dataset("chargemetagroups", chargemetagroups)
+        create_dataset("chargemetagroupidxs", chargemetagroups, 2, dtype='int32')
+        create_dataset("ratiometagroups", ratiometagroups)
+        create_dataset("ratiometagroupidxs", ratiometagroups, 2, dtype='int32')
+        create_dataset("helmetagroups", helmetagroups)
+        create_dataset("helmetagroupidxs", helmetagroups, 6, dtype='int32')
+        create_dataset("reggroups", reggroups)
+        create_dataset("reggroupidxs", reggroupidxs, dtype=h5py.special_dtype(vlen=np.dtype('int32')))
+        create_dataset("poly1dreggroups", poly1dreggroups)
+        create_dataset("poly1dreggroupfirstorder", poly1dreggroupfirstorder, dtype='int32')
+        create_dataset("poly1dreggrouplastorder", poly1dreggrouplastorder, dtype='int32')
+        create_dataset("poly1dreggroupnames", poly1dreggroupnames, dtype=h5py.special_dtype(vlen="S256"))
+        create_dataset("poly1dreggroupbincenters", poly1dreggroupbincenters, dtype=h5py.special_dtype(vlen=np.dtype('float64')))
+        create_dataset("poly2dreggroups", poly2dreggroups)
+        create_dataset("poly2dreggroupfirstorder", poly2dreggroupfirstorder, 2, dtype='int32')
+        create_dataset("poly2dreggrouplastorder", poly2dreggrouplastorder, 2, dtype='int32')
+        create_dataset("poly2dreggroupfullorder", poly2dreggroupfullorder, 2, dtype='int32')
+        create_dataset("poly2dreggroupnames", poly2dreggroupnames, dtype=h5py.special_dtype(vlen="S256"))
+        create_dataset("poly2dreggroupbincenters0", poly2dreggroupbincenters0, dtype=h5py.special_dtype(vlen=np.dtype('float64')))
+        create_dataset("poly2dreggroupbincenters1", poly2dreggroupbincenters1, dtype=h5py.special_dtype(vlen=np.dtype('float64')))
+        create_dataset("noigroups", noigroups)
+        create_dataset("noigroupidxs", noigroupidxs, dtype='int32')
+        create_dataset("maskedchans", maskedchans)
 
         #create h5py datasets with optimized chunk shapes
         nbytes = 0
 
-        nbytes += writeFlatInChunks(constraintweights, f, "hconstraintweights", maxChunkBytes = chunkSize)
+        nbytes += writeFlatInChunks(constraintweights, f, "hconstraintweights", maxChunkBytes = self.chunkSize)
         constraintweights = None
 
-        nbytes += writeFlatInChunks(data_obs, f, "hdata_obs", maxChunkBytes = chunkSize)
+        nbytes += writeFlatInChunks(data_obs, f, "hdata_obs", maxChunkBytes = self.chunkSize)
         data_obs = None
 
         # if theoryFit:
-        #     nbytes += writeFlatInChunks(data_cov, f, "hdata_cov", maxChunkBytes = chunkSize)
+        #     nbytes += writeFlatInChunks(data_cov, f, "hdata_cov", maxChunkBytes = self.chunkSize)
         #     data_cov = None
 
-        nbytes += writeFlatInChunks(kstat, f, "hkstat", maxChunkBytes = chunkSize)
+        nbytes += writeFlatInChunks(kstat, f, "hkstat", maxChunkBytes = self.chunkSize)
         kstat = None
 
         if sparse:
-            nbytes += writeSparse(norm_sparse_indices, norm_sparse_values, norm_sparse_dense_shape, f, "hnorm_sparse", maxChunkBytes = chunkSize)
+            nbytes += writeSparse(norm_sparse_indices, norm_sparse_values, norm_sparse_dense_shape, f, "hnorm_sparse", maxChunkBytes = self.chunkSize)
             norm_sparse_indices = None
             norm_sparse_values = None
-            nbytes += writeSparse(logk_sparse_indices, logk_sparse_values, logk_sparse_dense_shape, f, "hlogk_sparse", maxChunkBytes = chunkSize)
+            nbytes += writeSparse(logk_sparse_indices, logk_sparse_values, logk_sparse_dense_shape, f, "hlogk_sparse", maxChunkBytes = self.chunkSize)
             logk_sparse_indices = None
             logk_sparse_values = None
         else:
-            nbytes += writeFlatInChunks(norm, f, "hnorm", maxChunkBytes = chunkSize)
+            nbytes += writeFlatInChunks(norm, f, "hnorm", maxChunkBytes = self.chunkSize)
             norm = None
-            nbytes += writeFlatInChunks(logk, f, "hlogk", maxChunkBytes = chunkSize)
+            nbytes += writeFlatInChunks(logk, f, "hlogk", maxChunkBytes = self.chunkSize)
             logk = None
 
         logger.info(f"Total raw bytes in arrays = {nbytes}")
@@ -1509,7 +1434,7 @@ class CardTool(object):
                 card.write(self.cardContent[chan])
                 card.write("\n")
                 card.write(self.cardGroups[chan])
-                card.write(self.cardSumGroups)
+                card.write(self.writePOISumGroupToText())
 
     def addSystToGroup(self, groupName, chan, members, groupLabel="group"):
         group_expr = f"{groupName} {groupLabel} ="
@@ -1553,23 +1478,24 @@ class CardTool(object):
                     if genCharge is not None:                
                         membersList = list(filter(lambda x: genCharge in x, membersList))
                         sum_group_name += f"_{genCharge}"
-                    if len(membersList):
-                        members = " ".join(membersList)
-                        self.addPOISumGroup(sum_group_name, members)
-
+                    if len(membersList):                            
+                        self.addPOISumGroup(sum_group_name, membersList)
                         
-    def addPOISumGroup(self, groupName, members, groupLabel="sumGroup"):
-        # newName sumGroup = poi_bin1 poi_bin2 poi_bin3
-        group_expr = f"{groupName} {groupLabel} ="
-        if groupName in self.cardSumGroups.split(" "):
-            logger.debug(f"Append existing POI sum group {groupName} with members {members}")
-            idx = self.cardSumGroups.index(groupName)+len(group_expr)
-            self.cardSumGroups = self.cardSumGroups[:idx] + " " + members + self.cardSumGroups[idx:]
+    def addPOISumGroup(self, groupName, members):
+        if groupName in self.cardSumGroups:
+            self.cardSumGroups[groupName].append(members)
         else:
-            logger.debug(f"Add new POI sum group {groupName} with members {members}")
-            self.cardSumGroups += f"\n{group_expr} {members}"   
-        
+            self.cardSumGroups[groupName] = members
 
+    def writePOISumGroupToText(self, groupLabel="sumGroup"):
+        # newName sumGroup = poi_bin1 poi_bin2 poi_bin3
+        text = ""
+        for groupName, membersList in self.cardSumGroups.items():
+            members = " ".join(membersList)
+            logger.debug(f"Write POI sum group {groupName} with members {members}")
+            text += f"\n{groupName} {groupLabel} = {members}"
+        return text
+        
     def writeLnNSystematics(self):
         nondata = self.predictedProcesses()
         nondata_chan = {chan: nondata.copy() for chan in self.channels}

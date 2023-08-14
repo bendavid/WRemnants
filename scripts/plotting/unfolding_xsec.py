@@ -132,6 +132,7 @@ def get_results(rtfile, poi_type, scale=1.0, group=True, uncertainties=None):
     histname = f"nuisance_group_impact_{poi_type}" if group else f"nuisance_impact_{poi_type}"
 
     if f"{histname};1" not in rtfile.keys():
+        logger.debug(f"Histogram {histname};1 not found in fitresult file")
         return None
     impacts = rtfile[histname].to_hist()
 
@@ -166,7 +167,7 @@ def get_results(rtfile, poi_type, scale=1.0, group=True, uncertainties=None):
     df = df.sort_values(["qGen", "ptGen", "absEtaGen", "ptVGen", "absYVGen"], ignore_index=True)
     return df
 
-def plot_xsec_unfolded(df, df_asimov=None, edges=None, channel=None, poi_type="mu", scale=1., normalize=False, process_label="V", axes=None):
+def plot_xsec_unfolded(df, df_asimov=None, edges=None, bin_widths=None, channel=None, scale=1., normalize=False, process_label="V", axes=None):
     logger.info(f"Make "+("normalized " if normalize else "")+"unfoled xsec plot"+(f" in channel {channel}" if channel else ""))
 
     if normalize:
@@ -179,7 +180,8 @@ def plot_xsec_unfolded(df, df_asimov=None, edges=None, channel=None, poi_type="m
     hist_xsec_stat = hist.Hist(
         hist.axis.Variable(edges, underflow=False, overflow=False), storage=hist.storage.Weight())
 
-    bin_widths = edges[1:] - edges[:-1]
+    if bin_widths is None:
+        bin_widths = edges[1:] - edges[:-1]
 
     hist_xsec.view(flow=False)[...] = np.stack([df["value"].values/bin_widths, (df["err_total"].values/bin_widths)**2], axis=-1)
     hist_xsec_stat.view(flow=False)[...] = np.stack([df["value"].values/bin_widths, (df["err_stat"].values/bin_widths)**2], axis=-1)
@@ -223,8 +225,8 @@ def plot_xsec_unfolded(df, df_asimov=None, edges=None, channel=None, poi_type="m
 
     centers = hist_xsec.axes.centers[0]
 
-    ax2.bar(centers, height=2*unc_ratio, bottom=1-unc_ratio, width=bin_widths, color="silver", label="Total")
-    ax2.bar(centers, height=2*unc_ratio_stat, bottom=1-unc_ratio_stat, width=bin_widths, color="gold", label="Stat")
+    ax2.bar(centers, height=2*unc_ratio, bottom=1-unc_ratio, width=edges[1:] - edges[:-1], color="silver", label="Total")
+    ax2.bar(centers, height=2*unc_ratio_stat, bottom=1-unc_ratio_stat, width=edges[1:] - edges[:-1], color="gold", label="Stat")
 
     ax2.plot([min(edges), max(edges)], [1,1], color="black", linestyle="-")
 
@@ -278,9 +280,8 @@ def plot_xsec_unfolded(df, df_asimov=None, edges=None, channel=None, poi_type="m
         label=cms_decor, data=not args.noData)
 
     outfile = f"{input_subdir}_unfolded_xsec"
-    if poi_type=="mu":
-        outfile += "_mu"
-    elif normalize:
+
+    if normalize:
         outfile += "_normalized"
 
     outfile += f"_{base_process}"
@@ -320,7 +321,7 @@ translate = {
     "massShiftW": "massW",
 }
 
-def plot_uncertainties_unfolded(df, channel=None, edges=None, poi_type="mu", scale=1., normalize=False, relative_uncertainty=False, logy=False, process_label="", axes=None):
+def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normalize=False, relative_uncertainty=False, logy=False, process_label="", axes=None):
     logger.info(f"Make "+("normalized " if normalize else "")+"unfoled xsec plot"+(f" in channel {channel}" if channel else ""))
 
     # read nominal values and uncertainties from fit result and fill histograms
@@ -454,9 +455,7 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, poi_type="mu", sca
 
     if relative_uncertainty:
         outfile += "_relative"   
-    if poi_type=="mu":
-        outfile += "_mu"
-    elif normalize:
+    if normalize:
         outfile += "_normalized"
     if logy:
         outfile += "_log"
@@ -479,7 +478,9 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, poi_type="mu", sca
 # outfile = uproot.recreate(f"{outdir}/unfolded_data.root")
 scale = 1 if args.normalize else args.lumi * 1000
 
-poi_type = ["pmaskedexpnorm", "sumpoisnorm"] if args.normalize else ["pmaskedexp", "sumpois"]
+poi_type = ["pmaskedexpnorm",] if args.normalize else ["pmaskedexp",]
+if args.plotSumPOIs:
+    poi_type += ["sumpoisnorm",] if args.normalize else ["sumpois",]
 
 data = get_results(rfile, poi_type=poi_type, scale=scale)
 
@@ -550,11 +551,18 @@ for axes in gen_axes_permutations:
         hproj = histo.project(*channel_axes)
         bins = np.product(hproj.axes.size)
 
+        binwidths = None
         if len(channel_axes) == 1:
             if channel_axes[0] == "qGen":
                 edges = np.array([-2,0,2])
             else:
                 edges = np.array(histo.axes[channel_axes[0]].edges)
+        elif len(channel_axes) == 2:
+            xbins, ybins = [a.edges for a in histo.axes if a.name in channel_axes]
+            xbinwidths = xbins[1:]-xbins[:-1]
+            ybinwidths = ybins[1:]-ybins[:-1]
+            binwidths = np.outer(xbinwidths, ybinwidths).flatten()
+            edges = np.arange(0.5, len(binwidths)+1.5, 1.0)
         else:
             hproj = histo.project(*channel_axes)
             bins = np.product(hproj.axes.size)
@@ -565,16 +573,16 @@ for axes in gen_axes_permutations:
         data_c_asimov = data_channel_asimov.sort_values(by=channel_axes) if asimov else None
 
         if "xsec" in args.plots:
-            plot_xsec_unfolded(data_c, data_c_asimov, edges=edges, channel=channel, poi_type=poi_type, scale=scale, normalize=args.normalize, process_label = process_label, axes=channel_axes)
+            plot_xsec_unfolded(data_c, data_c_asimov, edges=edges, bin_widths=binwidths, channel=channel, scale=scale, normalize=args.normalize, process_label = process_label, axes=channel_axes)
 
         if "uncertainties" in args.plots:
             # absolute uncertainty
-            # plot_uncertainties_unfolded(data_c, channel=channel, poi_type=poi_type, scale=scale, normalize=args.normalize, process_label = process_label)
-            # plot_uncertainties_unfolded(data_c, channel=channel, poi_type=poi_type, scale=scale, normalize=args.normalize, logy=True, process_label = process_label)            
+            # plot_uncertainties_unfolded(data_c, channel=channel, scale=scale, normalize=args.normalize, process_label = process_label)
+            # plot_uncertainties_unfolded(data_c, channel=channel, scale=scale, normalize=args.normalize, logy=True, process_label = process_label)            
             
             # relative uncertainty
-            # plot_uncertainties_unfolded(data_c, channel=channel, poi_type=poi_type, scale=scale, normalize=args.normalize, relative_uncertainty=True, process_label = process_label)
-            plot_uncertainties_unfolded(data_c, edges=edges, channel=channel, poi_type=poi_type, scale=scale, normalize=args.normalize, relative_uncertainty=True, logy=True, process_label = process_label, axes=channel_axes)
+            # plot_uncertainties_unfolded(data_c, channel=channel, scale=scale, normalize=args.normalize, relative_uncertainty=True, process_label = process_label)
+            plot_uncertainties_unfolded(data_c, edges=edges, channel=channel, scale=scale, normalize=args.normalize, relative_uncertainty=True, logy=True, process_label = process_label, axes=channel_axes)
 
 
         # if not args.normalize:
