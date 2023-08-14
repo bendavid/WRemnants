@@ -7,6 +7,8 @@ parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for lumin
 parser.add_argument("--flavor", type=str, choices=["e", "mu"], help="Flavor (e or mu)", default="mu")
 
 parser = common.set_parser_default(parser, "genVars", ["ptVGen"])
+parser = common.set_parser_default(parser, "pt", [5, 26, 56])
+parser = common.set_parser_default(parser, "eta", [12, -2.4, 2.4])
 args = parser.parse_args()
 
 
@@ -83,11 +85,12 @@ if args.unfolding:
 
 # axes for final cards/fitting
 nominal_axes = [
-    hist.axis.Variable([0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 25, 30, 40, 50, 60, 75, 90, 150], name = "ptll", underflow=False, overflow=True),
+    hist.axis.Variable([0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 25, 30, 40, 50, 60, 75, 90, 150], name = "ptW", underflow=False, overflow=True),
+    axis_pt, axis_eta,
     axis_charge, axis_passMT, axis_passIso]
 
 # corresponding columns
-nominal_cols = ["ptll", "lep_charge", "passMT", "passIso"]
+nominal_cols = ["ptW", "lep_charge", "passMT", "passIso"]
 
 # mt final cards/fitting
 axis_mT = hist.axis.Variable([0] + list(range(40, 110, 1)) + [110, 112, 114, 116, 118, 120, 125, 130, 140, 160, 180, 200], name = "mt",underflow=False, overflow=True)
@@ -273,9 +276,9 @@ def build_graph(df, dataset):
    
     # results.append(df.HistoBoost("qcd_space", [axis_pt, axis_eta, axis_iso, axis_charge, axis_mT], ["lep_pt", "lep_eta", "lep_iso", "lep_charge", "transverseMass", "nominal_weight"]))  
 
-    df = df.Define("pxll", "lep_pt * std::cos(lep_phi) + MET_corr_rec_pt * std::cos(MET_corr_rec_phi)")
-    df = df.Define("pyll", "lep_pt * std::sin(lep_phi) + MET_corr_rec_pt * std::sin(MET_corr_rec_phi)")
-    df = df.Define("ptll", "std::sqrt(pxll*pxll + pyll*pyll)")
+    df = df.Define("pxW", "Lep_pt * std::cos(Lep_phi) + MET_corr_rec_pt * std::cos(MET_corr_rec_phi)")
+    df = df.Define("pyW", "Lep_pt * std::sin(Lep_phi) + MET_corr_rec_pt * std::sin(MET_corr_rec_phi)")
+    df = df.Define("ptW", "std::sqrt(pxW*pxW + pyW*pyW)")
 
     results.append(df.HistoBoost("nominal", axes, [*cols, "nominal_weight"]))
     results.append(df.HistoBoost("transverseMass", axes_mT, [*cols_mT, "nominal_weight"]))

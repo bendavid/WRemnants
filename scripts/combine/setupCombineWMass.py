@@ -90,6 +90,7 @@ def setup(args,xnorm=False):
     logger.debug(f"Excluding these groups of processes: {args.excludeProcGroups}")
 
     datagroups = Datagroups(args.inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm and not args.simultaneousABCD)
+    print(datagroups.getProcNames())
 
     if not xnorm and (args.axlim or args.rebin):
         if len(args.axlim) % 2 or len(args.axlim)/2 > len(args.fitvar) or len(args.rebin) > len(args.fitvar):
@@ -112,7 +113,8 @@ def setup(args,xnorm=False):
     wmass = datagroups.wmass
     wlike = datagroups.wlike
     lowPU = datagroups.lowPU
-    dilepton = datagroups.dilepton
+    # Detect lowpu dilepton
+    dilepton = datagroups.dilepton or any(x in ["ptll", "mll"] for x in args.fitvar)
 
     constrainMass = dilepton and not "mll" in args.fitvar
 

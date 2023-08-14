@@ -240,7 +240,7 @@ def makeStackPlotWithRatio(
         ratio_ref = data_hist if ratio_to_data else sum(stack) 
         if baseline:
             hep.histplot(
-                hh.divideHists(ratio_ref, ratio_ref, cutoff=1e-8, rel_unc=True),
+                hh.divideHists(ratio_ref, ratio_ref, cutoff=1e-8, rel_unc=True, flow=False),
                 histtype="step",
                 color="grey",
                 alpha=0.5,
@@ -268,7 +268,7 @@ def makeStackPlotWithRatio(
                 binwnorm=binwnorm,
             )
             hep.histplot(
-                hh.divideHists(unstack, ratio_ref, cutoff=0.01, rel_unc=True),
+                hh.divideHists(unstack, ratio_ref, cutoff=0.01, rel_unc=True, flow=False),
                 histtype="errorbar" if style == "None" else "step",
                 color=histInfo[proc].color,
                 label=histInfo[proc].label,
@@ -284,10 +284,10 @@ def makeStackPlotWithRatio(
                 skip_fill = len(fill_procs) % 2
             logger.debug(f"Skip filling first {skip_fill}")
             for up,down in zip(fill_procs[skip_fill::2], fill_procs[skip_fill+1::2]):
-                unstack_up = histInfo[up].hists[histName]
-                unstack_down = histInfo[down].hists[histName]
-                unstack_upr = hh.divideHists(unstack_up, ratio_ref, 1e-6)
-                unstack_downr = hh.divideHists(unstack_down, ratio_ref, 1e-6)
+                unstack_up = action(histInfo[up].hists[histName])
+                unstack_down = action(histInfo[down].hists[histName])
+                unstack_upr = hh.divideHists(unstack_up, ratio_ref, 1e-6, flow=False)
+                unstack_downr = hh.divideHists(unstack_down, ratio_ref, 1e-6, flow=False)
                 ax2.fill_between(unstack_upr.axes[0].edges[:-1], 
                         unstack_upr.values(), unstack_downr.values(),
                         # FIXME: Not sure if this is needed, currently not working correctly
@@ -316,7 +316,7 @@ def makePlotWithRatioToRef(
     if len(hists) != len(labels) or len(hists) != len(colors):
         raise ValueError(f"Number of hists ({len(hists)}), colors ({len(colors)}), and labels ({len(labels)}) must agree!")
     # nominal is always at first, data is always at last, if included
-    ratio_hists = [hh.divideHists(h, hists[0], cutoff=0.00001) for h in hists[not baseline:]]
+    ratio_hists = [hh.divideHists(h, hists[0], cutoff=1e-6, flow=False) for h in hists[not baseline:]]
     fig, ax1, ax2 = figureWithRatio(
         hists[0], xlabel, ylabel, ylim, rlabel, rrange, xlim=xlim, 
         grid_on_ratio_plot = grid, plot_title = plot_title, title_padding=title_padding,

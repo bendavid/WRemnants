@@ -36,6 +36,7 @@ class Datagroups(object):
         else:
             raise ValueError("Unsupported file type")
 
+        self.gen = os.path.basename(self.getScriptCommand().split()[0]).startswith("w_z_gen")
         self.wmass = os.path.basename(self.getScriptCommand().split()[0]).startswith("mw")
         self.wlike = os.path.basename(self.getScriptCommand().split()[0]).startswith("mz_wlike")
         self.dilepton = os.path.basename(self.getScriptCommand().split()[0]).startswith("mz_dilepton")
