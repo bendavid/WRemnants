@@ -198,17 +198,13 @@ def setup(args,xnorm=False):
     # define sumGroups for integrated cross section
     if args.unfolding:
         # TODO: make this less hardcoded to filter the charge (if the charge is not present this will duplicate things)
-        if args.theoryAgnostic:
+        if wmass:
             if "plus" in args.recoCharge:
                 cardTool.addPOISumGroups(genCharge="qGen1")
             if "minus" in args.recoCharge:
                 cardTool.addPOISumGroups(genCharge="qGen0")
         else:
-            if args.sumChannels or dilepton:
-                cardTool.addPOISumGroups()
-            else:
-                cardTool.addPOISumGroups(genCharge="qGen0")
-                cardTool.addPOISumGroups(genCharge="qGen1")
+            cardTool.addPOISumGroups()
 
     if args.noHist:
         cardTool.skipHistograms()
