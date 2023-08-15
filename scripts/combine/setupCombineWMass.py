@@ -42,7 +42,7 @@ def make_parser(parser=None):
     parser.add_argument("--scaleTNP", default=1, type=float, help="Scale the TNP uncertainties by this factor")
     parser.add_argument("--scalePdf", default=1, type=float, help="Scale the PDF hessian uncertainties by this factor")
     parser.add_argument("--pdfUncFromCorr", action='store_true', help="Take PDF uncertainty from correction hist (Requires having run that correction)")
-    parser.add_argument("--ewUnc", action='store_true', help="Include EW uncertainty")
+    parser.add_argument("--ewUnc", type=str, nargs="*", default=[], choices=["horacenloew", "winhacnloew"], help="Include EW uncertainty")
     parser.add_argument("--widthUnc", action='store_true', help="Include uncertainty on W and Z width")
     parser.add_argument("--noStatUncFakes" , action="store_true",   help="Set bin error for QCD background templates to 0, to check MC stat uncertainties for signal only")
     parser.add_argument("--skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
@@ -227,6 +227,7 @@ def setup(args,xnorm=False):
 
     cardTool.addProcessGroup("single_v_samples", lambda x: x[0] in ["W", "Z"] and x[1] not in ["W","Z"])
     if wmass:
+        cardTool.addProcessGroup("w_samples", lambda x: x[0] == "W" and x[1] not in ["W","Z"])
         cardTool.addProcessGroup("single_v_nonsig_samples", lambda x: x[0] == "Z" and x[1] not in ["W","Z"])
 
     cardTool.addProcessGroup("single_vmu_samples", lambda x: x[0] in ["W", "Z"] and x[1] not in ["W","Z"] and "tau" not in x)
@@ -301,13 +302,19 @@ def setup(args,xnorm=False):
                                 passToFakes=passSystToFakes,
         )
 
-    if args.ewUnc:
-        cardTool.addSystematic(f"horacenloewCorr", 
-            processes=['single_v_samples'],
+
+
+    for ewUnc in args.ewUnc:
+        if ewUnc=="winhacnloew" and not wmass:
+            logger.warning("Winhac is not implemented for any other process than W")
+            continue
+
+        cardTool.addSystematic(f"{ewUnc}Corr", 
+            processes=['w_samples'] if ewUnc=="winhacnloew" else ['single_v_samples'],
             mirror=True,
             group="theory_ew",
             systAxes=["systIdx"],
-            labelsByAxis=["horacenloewCorr"],
+            labelsByAxis=[f"{ewUnc}nloewCorr"],
             skipEntries=[(0, -1), (2, -1)],
             passToFakes=passSystToFakes,
         )

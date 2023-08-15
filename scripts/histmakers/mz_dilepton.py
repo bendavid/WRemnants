@@ -18,6 +18,7 @@ import os
 parser.add_argument("--csVarsHist", action='store_true', help="Add CS variables to dilepton hist")
 parser.add_argument("--axes", type=str, nargs="*", default=["mll", "ptll"], help="")
 parser.add_argument("--finePtBinning", action='store_true', help="Use fine binning for ptll")
+parser.add_argument("--noAuxiliaryHistograms", action="store_true", help="Remove auxiliary histograms to save memory (removed by default with --unfolding or --theoryAgnostic)")
 
 parser = common.set_parser_default(parser, "genVars", ["ptVGen", "absYVGen"])
 parser = common.set_parser_default(parser, "pt", [44,26.,70.])
@@ -40,6 +41,8 @@ era = args.era
 mass_min = 60
 mass_max = 120
 
+ewMassBins = theory_tools.make_ew_binning(mass = 91.1535, width = 2.4932, initialStep=0.010)
+
 # available axes for dilepton validation plots
 all_axes = {
     "mll": hist.axis.Regular(60, 60., 120., name = "mll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
@@ -55,7 +58,15 @@ all_axes = {
     "cosThetaStarll": hist.axis.Regular(20, -1., 1., name = "cosThetaStarll", underflow=False, overflow=False),
     "phiStarll": hist.axis.Regular(20, -math.pi, math.pi, circular = True, name = "phiStarll"),
     #"charge": hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "charge") # categorical axes in python bindings always have an overflow bin, so use a regular
+    "massVgen": hist.axis.Variable(ewMassBins, name = "massVgen", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
+    "ewMll": hist.axis.Variable(ewMassBins, name = "ewMll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
+    "ewMlly": hist.axis.Variable(ewMassBins, name = "ewMlly", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
+    "ewLogDeltaM": hist.axis.Regular(100, -10, 4, name = "ewLogDeltaM", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
 }
+
+auxiliary_gen_axes = ["massVgen", # preFSR variables
+    "ewMll", "ewMlly", "ewLogDeltaM" # ew variables
+    ]
 
 for a in args.axes:
     if a not in all_axes.keys():
@@ -148,6 +159,17 @@ def build_graph(df, dataset):
             axes = [*nominal_axes, *unfolding_axes] 
             cols = [*nominal_cols, *unfolding_cols]
 
+    if not args.noAuxiliaryHistograms and isZ:
+        # gen level variables before selection
+        for obs in auxiliary_gen_axes:
+            df_gen = df
+            df_gen = df_gen.DefinePerSample("exp_weight", "1.0")
+
+            df_gen = theory_tools.define_theory_weights_and_corrs(df_gen, dataset.name, corr_helpers, args)
+
+            results.append(df_gen.HistoBoost(f"gen_{obs}", [all_axes[obs]], [obs, "nominal_weight"]))
+            df_gen = syst_tools.add_theory_hists(results, df_gen, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, [all_axes[obs]], [obs], base_name=f"gen_{obs}", for_wmass=False)
+
     df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
 
     df = muon_selections.veto_electrons(df)
@@ -215,6 +237,15 @@ def build_graph(df, dataset):
             results.append(df.HistoBoost(f"nominal_{obs}", [all_axes[obs]], [obs]))
         else:
             results.append(df.HistoBoost(f"nominal_{obs}", [all_axes[obs]], [obs, "nominal_weight"]))
+            if isWorZ:
+                df = syst_tools.add_theory_hists(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, [all_axes[obs]], [obs], base_name=f"nominal_{obs}", for_wmass=False)
+
+    if not args.noAuxiliaryHistograms and isZ:
+        # gen level variables
+        for obs in auxiliary_gen_axes:
+            results.append(df.HistoBoost(f"nominal_{obs}", [all_axes[obs]], [obs, "nominal_weight"]))
+            df = syst_tools.add_theory_hists(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, [all_axes[obs]], [obs], base_name=f"nominal_{obs}", for_wmass=False)
+
     # test plots
     if args.validationHists:
         df_plusTrig = df.Filter("trigMuons_passTrigger0")

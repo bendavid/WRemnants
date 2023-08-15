@@ -202,6 +202,7 @@ def pdf_info_map(dataset, pdfset):
 def define_pdf_columns(df, dataset_name, pdfs, noAltUnc):
     if dataset_name not in common.vprocs_all or \
             "horace" in dataset_name or \
+            "winhac" in dataset_name or \
             "LHEPdfWeight" not in df.GetColumnNames():
         logger.warning(f"Did not find PDF weights for sample {dataset_name}! Using nominal PDF in sample")
         return df
@@ -314,12 +315,11 @@ def define_theory_corr(df, dataset_name, helpers, generators, modify_central_wei
         elif 'ew' in generator:
             # Used as a placeholder to match the helper dimensionality 
             df = df.DefinePerSample(f"{generator}Dummy", "0.")
-            multiplicative_weight = i != 0 and modify_central_weight
             if i != 0 and modify_central_weight:
-                df = df.Define(f"ew_corr_weight", build_weight_expr(df))
+                df = df.Define(f"ew_{generator}corr_weight", build_weight_expr(df))
             else:
-                df = df.Alias("ew_corr_weight", "nominal_weight_uncorr")
-            df = df.Define(f"{generator}Weight_tensor", helper, ["ewMll", "ewLogDeltaM", f"{generator}Dummy", "chargeVgen", "ew_corr_weight"]) # multiplying with nominal QCD weight
+                df = df.Alias(f"ew_{generator}corr_weight", "nominal_weight_uncorr")
+            df = df.Define(f"{generator}Weight_tensor", helper, ["ewMll", "ewLogDeltaM", f"{generator}Dummy", "chargeVgen", f"ew_{generator}corr_weight"]) # multiplying with nominal QCD weight
         else:
             df = df.Define(f"{generator}Weight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "nominal_weight_uncorr"])
 
@@ -347,21 +347,22 @@ def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_cen
         var_axis = helpers[generator].tensor_axes[-1]
 
         # special treatment for Omega since it needs to be decorrelated in charge and rapidity
-        if any(var_label.startswith("Omega") for var_label in var_axis):
+        if isinstance(var_axis, hist.axis.StrCategory) and any(var_label.startswith("Omega") for var_label in var_axis):
             omegaidxs = [var_axis.index(var_label) for var_label in var_axis if var_label.startswith("Omega")]
 
             # include nominal as well
             omegaidxs = [0] + omegaidxs
 
-            df = df.Define(f"{generator}Omega",
-                            f"""
-                            constexpr std::array<std::ptrdiff_t, {len(omegaidxs)}> idxs = {{{",".join([str(idx) for idx in omegaidxs])}}};
-                            Eigen::TensorFixedSize<double, Eigen::Sizes<{len(omegaidxs)}>> res;
-                            for (std::size_t i = 0; i < idxs.size(); ++i) {{
-                              res(i) = {generator}Weight_tensor(idxs[i]);
-                            }}
-                            return res;
-                            """)
+            if f"{generator}Omega" not in df.GetColumnNames():
+                df = df.Define(f"{generator}Omega",
+                                f"""
+                                constexpr std::array<std::ptrdiff_t, {len(omegaidxs)}> idxs = {{{",".join([str(idx) for idx in omegaidxs])}}};
+                                Eigen::TensorFixedSize<double, Eigen::Sizes<{len(omegaidxs)}>> res;
+                                for (std::size_t i = 0; i < idxs.size(); ++i) {{
+                                res(i) = {generator}Weight_tensor(idxs[i]);
+                                }}
+                                return res;
+                                """)
 
             axis_Omega = hist.axis.StrCategory([var_axis[idx] for idx in omegaidxs], name = var_axis.name)
 
