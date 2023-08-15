@@ -3,7 +3,7 @@ from utilities import output_tools, common, rdf_tools, logging, differential
 
 parser,initargs = common.common_parser(True)
 
-import narf
+mport narf
 import wremnants
 from wremnants import theory_tools,syst_tools,theory_corrections, muon_calibration, muon_selections, muon_validation, unfolding_tools
 from wremnants.histmaker_tools import scale_to_data, aggregate_groups
@@ -41,7 +41,8 @@ response_axes = [axis_genPt, axis_genEta, axis_genCharge, axis_qopr]
 pileup_helper = wremnants.make_pileup_helper(era = era)
 vertex_helper = wremnants.make_vertex_helper(era = era)
 
-mc_jpsi_crctn_helper, data_jpsi_crctn_helper, jpsi_crctn_MC_unc_helper, jpsi_crctn_data_unc_helper = muon_calibration.make_jpsi_crctn_helpers(args, make_uncertainty_helper=True)
+calib_filepaths = common.calib_filepaths
+mc_jpsi_crctn_helper, data_jpsi_crctn_helper, jpsi_crctn_MC_unc_helper, jpsi_crctn_data_unc_helper = muon_calibration.make_jpsi_crctn_helpers(args, calib_filepaths, make_uncertainty_helper=True)
 
 mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = muon_calibration.make_muon_calibration_helpers(args)
 
@@ -49,7 +50,10 @@ smearing_helper = muon_calibration.make_muon_smearing_helpers() if args.smearing
 bias_helper = muon_calibration.make_muon_bias_helpers(args) if args.biasCalibration else None
 
 if args.testHelper:
-    smearing_test_helper = muon_calibration.make_smearing_weight_test_helper()
+    smearing_weights_helper = muon_calibration.make_jpsi_crctn_unc_helper(
+        calib_filepaths['data_corrfile'][args.muonCorrData],
+        calib_filepaths['tflite_file'],
+    )
 
 def build_graph(df, dataset):
     logger.info(f"build graph for dataset: {dataset.name}")
@@ -109,7 +113,7 @@ def build_graph(df, dataset):
 
         if args.testHelper:
 
-            df = df.Define("smearing_weight_test", smearing_test_helper, ["selMuons_correctedPt", "selMuons_correctedEta", "selMuons_correctedCharge", "selMuons_genPt", "selMuons_genEta", "selMuons_genCharge", "nominal_weight"])
+            df = df.Define("smearing_weight_test", smearing_weights_helper, ["selMuons_correctedPt", "selMuons_correctedEta", "selMuons_correctedCharge", "selMuons_genPt", "selMuons_genEta", "selMuons_genCharge", "nominal_weight"])
 
             # just use the output so that it gets evaluated for testing
             df = df.Define("smearing_weight_test0", "smearing_weight_test(0)")

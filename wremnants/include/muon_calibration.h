@@ -1082,7 +1082,7 @@ private:
 };
 
 template <typename T>
-class SmearingWeightTestHelper {
+class JpsiCorrectionsUncHelperSplines {
 public:
     using hist_t = T;
     using tensor_t = typename T::storage_type::value_type::tensor_t;
@@ -1090,7 +1090,7 @@ public:
     static constexpr auto nUnc = sizes[sizes.size() - 1];
     using out_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<nUnc, 2>>;
 
-    SmearingWeightTestHelper(const std::string &filename, T&& corrections) : 
+    JpsiCorrectionsUncHelperSplines(const std::string &filename, T&& corrections) : 
         helper_(
             std::make_shared<narf::tflite_helper>(
                 filename, "serving_default", ROOT::GetThreadPoolSize()

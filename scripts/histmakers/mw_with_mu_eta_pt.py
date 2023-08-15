@@ -21,7 +21,7 @@ data_dir = common.data_dir
 parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency (legacy option for tests)")
 parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for luminosity in excess to 1 (e.g. 1.012 means 1.2\%)", default=1.012)
 parser.add_argument("--noGenMatchMC", action='store_true', help="Don't use gen match filter for prompt muons with MC samples (note: QCD MC never has it anyway)")
-parser.add_argument("--dummyVar", action='store_true', help='Use a dummy 1e-4 variation on the muon scale instead of reading from the calibration file')
+parser.add_argument("--dummyMuScaleVar", action='store_true', help='Use a dummy 1e-4 variation on the muon scale instead of reading from the calibration file')
 parser.add_argument("--addHelicityHistos", action='store_true', help="Add V qT,Y axes and helicity axes for W samples")
 parser.add_argument("--halfStat", action='store_true', help="Test half data and MC stat, selecting odd events, just for tests")
 parser.add_argument("--makeMCefficiency", action="store_true", help="Save yields vs eta-pt-ut-passMT-passIso-passTrigger to derive 3D efficiencies for MC isolation and trigger (can run also with --onlyMainHistograms)")
@@ -111,9 +111,11 @@ logger.info(f"SF file: {args.sfFile}")
 pileup_helper = wremnants.make_pileup_helper(era = era)
 vertex_helper = wremnants.make_vertex_helper(era = era)
 
-mc_jpsi_crctn_helper, data_jpsi_crctn_helper, jpsi_crctn_MC_unc_helper, jpsi_crctn_data_unc_helper = muon_calibration.make_jpsi_crctn_helpers(args, make_uncertainty_helper=True)
+calib_filepaths = common.calib_filepaths
+closure_filepaths = common.closure_filepaths
+mc_jpsi_crctn_helper, data_jpsi_crctn_helper, jpsi_crctn_MC_unc_helper, jpsi_crctn_data_unc_helper = muon_calibration.make_jpsi_crctn_helpers(args, calib_filepaths, make_uncertainty_helper=True)
 
-spline_helper = muon_calibration.make_smearing_weight_test_helper(args)
+z_non_closure_parametrized_helper, z_non_closure_binned_helper = muon_calibration.make_Z_non_closure_helpers(args, calib_filepaths, closure_filepaths)
 
 mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = muon_calibration.make_muon_calibration_helpers(args)
 
@@ -122,11 +124,6 @@ smearing_helper = muon_calibration.make_muon_smearing_helpers() if args.smearing
 bias_helper = muon_calibration.make_muon_bias_helpers(args) if args.biasCalibration else None
 
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theoryCorr)
-
-if args.nonClosureScheme in ["binned", "binned-plus-M"]:
-    z_non_closure_binned_helper = muon_calibration.make_Z_non_closure_binned_helper(args)
-if args.nonClosureScheme in ["A-M-separated", "A-M-combined", "binned-plus-M"]:
-    z_non_closure_parametrized_helper = muon_calibration.make_Z_non_closure_parametrized_helper(args)
 
 # recoil initialization
 if not args.noRecoil:
@@ -242,32 +239,31 @@ def build_graph(df, dataset):
         
     if isWorZ:
         df = muon_validation.define_cvh_reco_muon_kinematics(df)
-        if 'smearingWeights' in args.muonScaleVariation or args.validationHists:
-            reco_sel = "vetoMuonsPre"
-            df = muon_calibration.define_genFiltered_recoMuonSel(df, reco_sel, require_prompt)
-            reco_sel_GF = muon_calibration.getColName_genFiltered_recoMuonSel(reco_sel, require_prompt)
-            df = muon_calibration.define_covMatFiltered_recoMuonSel(df, reco_sel_GF)
-            df = muon_calibration.define_matched_gen_muons_covMat(df, reco_sel_GF)
-            df = muon_calibration.define_matched_gen_muons_kinematics(df, reco_sel_GF)
-            df = muon_calibration.calculate_matched_gen_muon_kinematics(df, reco_sel_GF)
-            df = muon_calibration.define_matched_genSmeared_muon_kinematics(df, reco_sel_GF)
-            df = muon_calibration.define_matched_reco_muon_kinematics(df, reco_sel_GF)
+        reco_sel = "vetoMuonsPre"
+        df = muon_calibration.define_genFiltered_recoMuonSel(df, reco_sel, require_prompt)
+        reco_sel_GF = muon_calibration.getColName_genFiltered_recoMuonSel(reco_sel, require_prompt)
+        df = muon_calibration.define_covMatFiltered_recoMuonSel(df, reco_sel_GF)
+        df = muon_calibration.define_matched_gen_muons_covMat(df, reco_sel_GF)
+        df = muon_calibration.define_matched_gen_muons_kinematics(df, reco_sel_GF)
+        df = muon_calibration.calculate_matched_gen_muon_kinematics(df, reco_sel_GF)
+        df = muon_calibration.define_matched_genSmeared_muon_kinematics(df, reco_sel_GF)
+        df = muon_calibration.define_matched_reco_muon_kinematics(df, reco_sel_GF)
 
-            reco_sel = "goodMuons"
-            df = muon_calibration.define_matched_gen_muons_kinematics(df, reco_sel)
-            df = muon_calibration.calculate_matched_gen_muon_kinematics(df, reco_sel)
-            df = muon_calibration.define_matched_gen_muons_covMat(df, reco_sel)
-            df = muon_calibration.define_matched_genSmeared_muon_kinematics(df, reco_sel)
+        reco_sel = "goodMuons"
+        df = muon_calibration.define_matched_gen_muons_kinematics(df, reco_sel)
+        df = muon_calibration.calculate_matched_gen_muon_kinematics(df, reco_sel)
+        df = muon_calibration.define_matched_gen_muons_covMat(df, reco_sel)
+        df = muon_calibration.define_matched_genSmeared_muon_kinematics(df, reco_sel)
 
-            for var in ['Pt', 'Eta', 'Charge', 'Qop']:
-                df = df.Define(f"{reco_sel}_{var.lower()}0_gen", f"{reco_sel}_gen{var.capitalize()}[0]")
-                df = df.Define(f"{reco_sel_GF}_{var.lower()}0_gen", f"{reco_sel_GF}_gen{var.capitalize()}[0]")
+        for var in ['Pt', 'Eta', 'Charge', 'Qop']:
+            df = df.Define(f"{reco_sel}_{var.lower()}0_gen", f"{reco_sel}_gen{var.capitalize()}[0]")
+            df = df.Define(f"{reco_sel_GF}_{var.lower()}0_gen", f"{reco_sel_GF}_gen{var.capitalize()}[0]")
 
-                df = df.Define(f"{reco_sel}_{var.lower()}0_gen_smeared", f"{reco_sel}_genSmeared{var.capitalize()}[0]")
-                df = df.Define(f"{reco_sel_GF}_{var.lower()}0_gen_smeared", f"{reco_sel_GF}_genSmeared{var.capitalize()}[0]")
-                if var != 'Qop':
-                    df = df.Define(f"{reco_sel_GF}_{var.lower()}0_reco", f"{reco_sel_GF}_reco{var.capitalize()}[0]")
-            df = df.Define(f"{reco_sel_GF}_covMat0", f"{reco_sel_GF}_covMat[0]")
+            df = df.Define(f"{reco_sel}_{var.lower()}0_gen_smeared", f"{reco_sel}_genSmeared{var.capitalize()}[0]")
+            df = df.Define(f"{reco_sel_GF}_{var.lower()}0_gen_smeared", f"{reco_sel_GF}_genSmeared{var.capitalize()}[0]")
+            if var != 'Qop':
+                df = df.Define(f"{reco_sel_GF}_{var.lower()}0_reco", f"{reco_sel_GF}_reco{var.capitalize()}[0]")
+        df = df.Define(f"{reco_sel_GF}_covMat0", f"{reco_sel_GF}_covMat[0]")
 
         if args.validationHists:
             for reco_type in ['crctd', 'cvh', 'uncrct', 'gen_smeared']:
@@ -372,7 +368,7 @@ def build_graph(df, dataset):
             results.extend(theory_tools.make_theory_corr_hists(df, "nominal", axes, cols, 
                 corr_helpers[dataset.name], args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly, isW = isW)
             )
-        if (args.muonScaleVariation == 'smearingWeightsGaus' or args.validationHists) and (isWorZ): 
+        if isWorZ:
             nominal_cols_gen, nominal_cols_gen_smeared = muon_calibration.make_alt_reco_and_gen_hists(df, results, axes, cols, reco_sel_GF)
             if args.validationHists: 
                 muon_validation.make_reco_over_gen_hists(df, results)
@@ -398,245 +394,28 @@ def build_graph(df, dataset):
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:
                 df = syst_tools.add_muonscale_hist(results, df, args.muonCorrEtaBins, args.muonCorrMag, isW, axes, cols)
-
                 if args.muonScaleVariation == 'smearingWeightsGaus':
                     df = syst_tools.add_muonscale_smeared_hist(results, df, args.muonCorrEtaBins, args.muonCorrMag, isW, axes, nominal_cols_gen_smeared)
 
-                # TODO: Move to syst_tools
-                netabins = args.muonCorrEtaBins
-                nweights = 23 if isZ else 21
-                mag = args.muonCorrMag
-
-                df = df.Define("unity", "1.0")
-                df = df.Define(
-                    f"muonScaleDummy{netabins}Bins_PerSe",
-                    f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(unity, massWeight_tensor, goodMuons_eta0, {mag}, {str(isW).lower()})"
-                )
-                df = df.Define("massweights_down", f"muonScaleDummy{netabins}Bins_PerSe(0,0)")
-                df = df.Define("massweights_up", f"muonScaleDummy{netabins}Bins_PerSe(1,0)")
-
-                axis_mass_weight = hist.axis.Regular(1000, 0.9, 1.1, underflow=True, overflow=True, name = "axis_mass_weight")
-                dummyMuonScaleSystPerSeDown = df.HistoBoost(
-                    "nominal_muonScaleSystPerSeDown",
-                    [axis_mass_weight],
-                    ["massweights_down"], 
-                    storage=hist.storage.Double()
-                )
-                dummyMuonScaleSystPerSeUp = df.HistoBoost(
-                    "nominal_muonScaleSystPerSeUp",
-                    [axis_mass_weight],
-                    ["massweights_up"], 
-                    storage=hist.storage.Double()
-                )
-                results.append(dummyMuonScaleSystPerSeDown)
-                results.append(dummyMuonScaleSystPerSeUp)
-
+            ####################################################
+            # nuisances from the muon momemtum scale calibration 
             if (args.muonCorrData in ["massfit", "lbl_massfit"]):
-
                 # muon scale variation from stats. uncertainty on the jpsi massfit
-                if args.muonScaleVariation == 'smearingWeightsGaus' or args.validationHists:
-                    df = df.DefinePerSample("bool_true", "true")
-                    df = df.DefinePerSample("bool_false", "false")
-                    smearing_weights_procs.append(dataset.name)
-                    jpsi_unc_helper = jpsi_crctn_data_unc_helper
-
-                    df = df.Define("muonScaleSyst_responseWeights_tensor_gaus", jpsi_unc_helper,
-                        [
-                            f"{reco_sel_GF}_genQop",
-                            f"{reco_sel_GF}_genPhi",
-                            f"{reco_sel_GF}_genEta",
-                            f"{reco_sel_GF}_genSmearedQop",
-                            f"{reco_sel_GF}_genSmearedPhi",
-                            f"{reco_sel_GF}_genSmearedEta",
-                            f"{reco_sel_GF}_genSmearedCharge",
-                            f"{reco_sel_GF}_genSmearedPt",
-                            f"{reco_sel_GF}_covMat",
-                            "nominal_weight",
-                            "bool_false"
-                        ]
-                    )
-                    muonScaleSyst_responseWeights_gaus = df.HistoBoost(
-                        "muonScaleSyst_responseWeights_gaus", axes,
-                        [*nominal_cols_gen_smeared, "muonScaleSyst_responseWeights_tensor_gaus"],
-                        tensor_axes = jpsi_unc_helper.tensor_axes, storage=hist.storage.Double()
-                    )
-                    results.append(muonScaleSyst_responseWeights_gaus)
-
-                if args.muonScaleVariation == 'smearingWeightsSplines' or args.validationHists:
-                    df = df.Define("muonScaleSyst_responseWeights_tensor_splines", spline_helper,
-                        [
-                            f"{reco_sel_GF}_recoPt",
-                            f"{reco_sel_GF}_recoEta",
-                            f"{reco_sel_GF}_recoCharge",
-                            f"{reco_sel_GF}_genPt",
-                            f"{reco_sel_GF}_genEta",
-                            f"{reco_sel_GF}_genCharge",
-                            "nominal_weight",
-                        ]
-                    )
-                    muonScaleSyst_responseWeights_splines = df.HistoBoost(
-                        "muonScaleSyst_responseWeights_splines", axes,
-                        [*nominal_cols, "muonScaleSyst_responseWeights_tensor_splines"],
-                        tensor_axes = spline_helper.tensor_axes, storage=hist.storage.Double()
-                    )
-                    results.append(muonScaleSyst_responseWeights_splines)
-
-                if args.muonScaleVariation == 'massWeights' or args.validationHists:
-                    # smearing weights via mass weights
-                    nweights = 23 if isZ else 21
-                    jpsi_unc_helper = muon_validation.make_jpsi_crctn_unc_helper_massweights(
-                        args,
-                        f"{data_dir}/calibration/calibrationJDATA_rewtgr_3dmap_LBL_MCstat.root",
-                        nweights
-                    )
-
-                    df = df.Define("muonScaleSyst_responseWeights_tensor_massWeights", jpsi_unc_helper,
-                        [
-                            f"{reco_sel_GF}_eta0_reco",
-                            f"{reco_sel_GF}_charge0_reco",
-                            f"{reco_sel_GF}_pt0_reco",
-                            "massWeight_tensor",
-                            "nominal_weight",
-                            f"bool_{str(isW).lower()}"
-                        ]
-                    )
-                    muonScaleSyst_responseWeights_massWeights = df.HistoBoost(
-                        "muonScaleSyst_responseWeights_massWeights", axes,
-                        [*cols, "muonScaleSyst_responseWeights_tensor_massWeights"],
-                        tensor_axes = jpsi_unc_helper.tensor_axes, storage=hist.storage.Double()
-                    )
-                    results.append(muonScaleSyst_responseWeights_massWeights)
-
-                # Set the nominal muon scale variation.
-                # If the scale var is derived from smearingWeightsGaus on the smeared-GEN,
-                # the nominal will be the transported variation on RECO
-                if not args.muonScaleVariation == 'smearingWeightsGaus':
-                    if args.muonScaleVariation == 'smearingWeightsSplines':
-                        df= df.Define(
-                            "nominal_muonScaleSyst_responseWeights_tensor",
-                            "muonScaleSyst_responseWeights_tensor_splines"
-                        )
-                    elif args.muonScaleVariation == 'massWeights':
-                        df= df.Define(
-                            "nominal_muonScaleSyst_responseWeights_tensor",
-                            "muonScaleSyst_responseWeights_tensor_massWeights"
-                        )
-                    nominal_muonScaleSyst_responseWeights = df.HistoBoost(
-                        "nominal_muonScaleSyst_responseWeights", axes,
-                        [*cols, "nominal_muonScaleSyst_responseWeights_tensor"],
-                        tensor_axes = jpsi_crctn_data_unc_helper.tensor_axes,
-                        storage = hist.storage.Double()
-                    )
-                    results.append(nominal_muonScaleSyst_responseWeights)
-
-                # for the Z non-closure nuisances
-                if args.muonScaleVariation == 'smearingWeightsSplines':
-                    input_kinematics = [
-                        f"{reco_sel_GF}_recoPt",
-                        f"{reco_sel_GF}_recoEta",
-                        f"{reco_sel_GF}_recoCharge",
-                        f"{reco_sel_GF}_genPt",
-                        f"{reco_sel_GF}_genEta",
-                        f"{reco_sel_GF}_genCharge"
-                    ]
-                    nominal_cols_non_closure = cols
-                else:
-                    input_kinematics = [
-                        f"{reco_sel_GF}_genQop",
-                        f"{reco_sel_GF}_genSmearedQop",
-                        f"{reco_sel_GF}_genSmearedEta",
-                        f"{reco_sel_GF}_genSmearedPt",
-                        f"{reco_sel_GF}_genSmearedCharge",
-                        f"{reco_sel_GF}_covMat",
-                    ]
-                    nominal_cols_non_closure = nominal_cols_gen_smeared
-                if args.nonClosureScheme == "A-M-separated":
-                    df = df.DefinePerSample("AFlag", "0x01")
-                    df = df.Define("Z_non_closure_parametrized_A", z_non_closure_parametrized_helper,
-                        [
-                            *input_kinematics,
-                            "nominal_weight",
-                            "AFlag"
-                        ]
-                    )
-                    hist_Z_non_closure_parametrized_A = df.HistoBoost(
-                        "Z_non_closure_parametrized_A_gaus" if args.muonScaleVariation == 'smearingWeightsGaus' else "nominal_Z_non_closure_parametrized_A",
-                        nominal_axes,
-                        [*nominal_cols_non_closure, "Z_non_closure_parametrized_A"],
-                        tensor_axes = z_non_closure_parametrized_helper.tensor_axes,
-                        storage=hist.storage.Double()
-                    )
-                    results.append(hist_Z_non_closure_parametrized_A)
-                if args.nonClosureScheme in ["A-M-separated", "binned-plus-M"]:
-                    df = df.DefinePerSample("MFlag", "0x04")
-                    df = df.Define("Z_non_closure_parametrized_M", z_non_closure_parametrized_helper,
-                        [
-                            *input_kinematics,
-                            "nominal_weight",
-                            "MFlag"
-                        ]
-                    )
-                    hist_Z_non_closure_parametrized_M = df.HistoBoost(
-                        "Z_non_closure_parametrized_M_gaus" if args.muonScaleVariation == 'smearingWeightsGaus' else "nominal_Z_non_closure_parametrized_M",
-                        nominal_axes,
-                        [*nominal_cols_non_closure, "Z_non_closure_parametrized_M"],
-                        tensor_axes = z_non_closure_parametrized_helper.tensor_axes,
-                        storage=hist.storage.Double()
-                    )
-                    results.append(hist_Z_non_closure_parametrized_M)
-                if args.nonClosureScheme == "A-M-combined":
-                    df = df.DefinePerSample("AMFlag", "0x01 | 0x04")
-                    df = df.Define("Z_non_closure_parametrized", z_non_closure_parametrized_helper,
-                        [
-                            *input_kinematics,
-                            "nominal_weight",
-                            "AMFlag"
-                        ]
-                    )
-                    hist_Z_non_closure_parametrized = df.HistoBoost(
-                        "Z_non_closure_parametrized_gaus" if args.muonScaleVariation == 'smearingWeightsGaus' else "nominal_Z_non_closure_parametrized",
-                        nominal_axes,
-                        [*nominal_cols_non_closure, "Z_non_closure_parametrized"],
-                        tensor_axes = z_non_closure_parametrized_helper.tensor_axes,
-                        storage=hist.storage.Double()
-                    )
-                    results.append(hist_Z_non_closure_parametrized)
-                if args.nonClosureScheme in ["binned", "binned-plus-M"]:
-                    df = df.Define("Z_non_closure_binned", z_non_closure_binned_helper,
-                        [
-                            *input_kinematics,
-                            "nominal_weight"
-                        ]
-                    )
-                    hist_Z_non_closure_binned = df.HistoBoost(
-                        "Z_non_closure_binned_gaus" if args.muonScaleVariation == 'smearingWeightsGaus' else "nominal_Z_non_closure_binned",
-                        nominal_axes,
-                        [*nominal_cols_non_closure, "Z_non_closure_binned"],
-                        tensor_axes = z_non_closure_binned_helper.tensor_axes,
-                        storage=hist.storage.Double()
-                    )
-                    results.append(hist_Z_non_closure_binned)
-
+                df = muon_calibration.make_jpsi_crctn_stats_unc_hists(
+                    args, df, axes, results, nominal_cols, nominal_cols_gen_smeared,
+                    calib_filepaths, jpsi_crctn_data_unc_helper, smearing_weights_procs,
+                    reco_sel_GF, dataset.name, isW
+                )
+                # add the ad-hoc Z non-closure nuisances from the jpsi massfit to muon scale unc
+                df = muon_calibration.make_jpsi_crctn_Z_non_closure_hists(
+                    args, df, axes, results, nominal_cols, nominal_cols_gen_smeared,
+                    z_non_closure_parametrized_helper, z_non_closure_binned_helper, reco_sel_GF
+                )
                 if args.validationHists:
-                    df = muon_validation.make_hists_for_smearing_weights_perse(
-                        df, axes, cols, 
-                        "muonScaleSyst_responseWeights_tensor_gaus", "nominal_weight", "gaus",
-                        results
-                    ) 
-                    df = muon_validation.make_hists_for_smearing_weights_perse(
-                        df, axes, cols, 
-                        "muonScaleSyst_responseWeights_tensor_splines", "nominal_weight", "splines",
-                        results
-                    ) 
-                    df = muon_validation.make_hists_for_smearing_weights_perse(
-                        df, axes, cols, 
-                        "muonScaleSyst_responseWeights_tensor_massWeights", "nominal_weight", "massweights",
-                        results
-                    ) 
-                    df = muon_validation.define_cols_for_manual_shifts(df)
-                    muon_validation.make_hists_for_manual_scale_shifts(
-                        df, axes, cols, nominal_cols_gen_smeared, results
+                    df = muon_validation.make_hists_for_muon_scale_var_weights(
+                        df, axes, results, cols, nominal_cols_gen_smeared
                     )
+            ####################################################
 
             df = df.Define("Muon_cvhMomCov", "wrem::splitNestedRVec(Muon_cvhMomCov_Vals, Muon_cvhMomCov_Counts)")
 
