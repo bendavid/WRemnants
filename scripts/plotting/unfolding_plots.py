@@ -12,14 +12,15 @@ import pdb
 
 from utilities import boostHistHelpers as hh, logging, input_tools, common, output_tools
 from wremnants import plot_tools
+from wremnants.datasets.datagroups import Datagroups
 from wremnants.unfolding_tools import get_bin, getProcessBins
 
 hep.style.use(hep.style.ROOT)
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("infile", help="Combine fitresult root file")
-# parser.add_argument("--ratioToData", action='store_true', help="Use data as denominator in ratio")
+parser.add_argument("infile", type=str, help="Output file of the analysis stage, containing ND boost histogrdams")
+parser.add_argument("--fitresult",  type=str, help="Combine fitresult root file")# parser.add_argument("--ratioToData", action='store_true', help="Use data as denominator in ratio")
 parser.add_argument("-o", "--outpath", type=str, default=os.path.expanduser("~/www/WMassAnalysis"), help="Base path for output")
 parser.add_argument("-f", "--outfolder", type=str, default="", help="Subfolder for output")
 parser.add_argument("-r", "--rrange", type=float, nargs=2, default=None, help="y range for ratio plot")
@@ -31,10 +32,11 @@ parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file n
 parser.add_argument("--debug", action='store_true', help="Print debug output")
 parser.add_argument("--noData", action='store_true', help="Don't plot data")
 # parser.add_argument("--noFill", action='store_true', help="Don't fill stack")
+parser.add_argument("-n", "--baseName", type=str, help="Histogram name in the file (e.g., 'nominal')", default="nominal")
 parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend text")
 parser.add_argument("--plots", type=str, nargs="+", default=["postfit"], choices=["prefit", "postfit"], help="Define which plots to make")
 parser.add_argument("--lumi", type=float, default=16.8, help="Luminosity used in the fit, needed to get the absolute cross section")
-parser.add_argument("-c", "--channels", type=str, nargs="+", choices=["plus", "minus", "all"], default=["plus", "minus", "all"], help="Select channel to plot")
+parser.add_argument("-c", "--channels", type=str, nargs="+", default=["plus", "minus"], choices=["plus", "minus", "all"], help="Select channel to plot")
 parser.add_argument("--eoscp", action='store_true', help="Override use of xrdcp and use the mount instead")
 
 args = parser.parse_args()
@@ -43,9 +45,25 @@ logger = logging.setup_logger("plotFitresult", 4 if args.debug else 3)
 
 outdir = output_tools.make_plot_dir(args.outpath, args.outfolder, eoscp=args.eoscp)
 
-rfile = uproot.open(args.infile)
+groups = Datagroups(args.infile)
 
-input_subdir = args.infile.split("/")[-2]
+if groups.wmass:
+    process = "Wenu" if groups.flavor == "e" else "Wmunu"
+else:
+    process = "Zee" if groups.flavor == "ee" else "Zmumu"
+
+base_process = process[0]
+
+gen_axes = groups.gen_axes
+if base_process == "W":
+    gen_axes.append("qGen")
+
+groups.setNominalName(args.baseName)
+groups.loadHistsForDatagroups(args.baseName, syst="", procsToRead=[process], nominalIfMissing=False)
+
+rfile = uproot.open(args.fitresult)
+
+input_subdir = args.fitresult.split("/")[-2]
 
 
 if input_subdir.startswith("W"):
@@ -150,8 +168,8 @@ def make_yields_df(hists, procs, signal=None, per_bin=False):
     return pd.DataFrame(entries, columns=["Process", "Yield", "Uncertainty"])
 
 
-
-def plot(fittype, channel=None, data=True, stack=True, density=False, ratio=True, backgrounds=True):
+def plot(fittype, channel=None, data=True, edges=None, bin_widths=None, stack=True, density=False, ratio=True, backgrounds=True, scale=1,
+    ylabel="Events/bin"):
     logger.info(f"Make {fittype} plot"+(f" in channel {channel}" if channel else ""))
 
     procs = [p for p in filter(lambda x: x.startswith("expproc_") and x.endswith(f"_{fittype};1"), rfile.keys())]
@@ -193,10 +211,13 @@ def plot(fittype, channel=None, data=True, stack=True, density=False, ratio=True
     #     bins = np.array(common.ptV_binning)
     #     bin_widths = bins[1:] - bins[:-1]
     # else: 
-    bin_widths = np.ones(nbins)    
+    if bin_widths is None:
+        bin_widths = np.ones(nbins)
+    
+    bin_widths /= scale
 
-    hist_data /= bin_widths
-    hist_pred /= bin_widths
+    hist_data = hh.scaleHist(hist_data, 1./bin_widths, createNew=True, flow=False)
+    hist_pred = hh.scaleHist(hist_pred, 1./bin_widths, createNew=True, flow=False)
 
     processes = [rfile[p].to_hist()[bin_lo:bin_hi]/bin_widths for p in proc_sig["name"]]
     names = [p.replace("expproc_","").replace(f"_{fittype};1","") for p in proc_sig["name"]]
@@ -220,14 +241,12 @@ def plot(fittype, channel=None, data=True, stack=True, density=False, ratio=True
         ylim = args.ylim
 
     if args.rrange is None:
-        rrange = [0.90,1.1] if fit_type=="prefit" else [0.95, 1.05]
+        rrange = [0.95,1.05] if fit_type=="prefit" else [0.999, 1.001]
     else:
         rrange = args.rrange
-
+        
     if density:
         ylabel = "a.u."    
-    else:
-        ylabel = "Events/bin"
 
     if ratio:
         fig, ax1, ax2 = plot_tools.figureWithRatio(hist_data, "Bin number", ylabel, ylim, "Data/Pred.", rrange)
@@ -255,7 +274,7 @@ def plot(fittype, channel=None, data=True, stack=True, density=False, ratio=True
     if data:
         hep.histplot(
             hist_data,
-            yerr=True,
+            yerr=False, #FIXME (no error on data from unfolded fit results)
             histtype="errorbar",
             color="black",
             label="Data",
@@ -327,10 +346,46 @@ def plot(fittype, channel=None, data=True, stack=True, density=False, ratio=True
         args=args,
     )
 
+if args.baseName == "xnorm":
+    axes = gen_axes
+else:
+    axes = groups.project
+
 for fit_type in args.plots:
     for channel in args.channels:
-        plot(fit_type, channel, data=not args.noData)
-        plot(fit_type, channel, data=False, stack=False, ratio=False, backgrounds=False, density=True)
+
+        if channel == "minus":
+            process_label = r"\mathrm{W}^{-}" if base_process == "W" else r"\mathrm{Z}"
+        elif channel == "plus":
+            process_label = r"\mathrm{W}^{+}" if base_process == "W" else r"\mathrm{Z}"
+        else:
+            channel_axes = [*axes]
+
+        # find bin widths
+        histo = groups.results[groups.groups[process].members[0].name]["output"][args.baseName].get()
+
+        hproj = histo.project(*channel_axes)
+        bins = np.product(hproj.axes.size)
+
+        binwidths = None
+        if len(channel_axes) == 1:
+            if channel_axes[0] == "qGen":
+                edges = np.array([-2,0,2])
+            else:
+                edges = np.array(histo.axes[channel_axes[0]].edges)
+        elif len(channel_axes) == 2:
+            xbins, ybins = [a.edges for a in histo.axes if a.name in channel_axes]
+            xbinwidths = xbins[1:]-xbins[:-1]
+            ybinwidths = ybins[1:]-ybins[:-1]
+            binwidths = np.outer(xbinwidths, ybinwidths).flatten()
+            edges = np.arange(0.5, len(binwidths)+1.5, 1.0)
+        else:
+            hproj = histo.project(*channel_axes)
+            bins = np.product(hproj.axes.size)
+            edges = np.arange(0.5, bins+1.5, 1.0)
+
+        plot(fit_type, channel, data=not args.noData, edges=edges, bin_widths=binwidths, scale=1./(groups.lumi*1000), ylabel="d$\sigma ("+process_label+")$ [pb]")
+        # plot(fit_type, channel, data=False, stack=False, ratio=False, backgrounds=False, density=True)
 
 if output_tools.is_eosuser_path(args.outpath) and args.eoscp:
     output_tools.copy_to_eos(args.outpath, args.outfolder)

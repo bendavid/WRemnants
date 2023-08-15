@@ -1,9 +1,10 @@
 from utilities import boostHistHelpers as hh, common, logging, input_tools
-from wremnants import syst_tools,theory_tools,recoil_tools
+from wremnants import syst_tools,theory_tools,recoil_tools, unfolding_tools
+
 from wremnants import histselections as sel
 import hist
 import numpy as np
-import re
+import uproot
 
 logger = logging.child_logger(__name__)
 
@@ -137,3 +138,24 @@ def setSimultaneousABCD(cardTool, variation_fakerate=0.5, variation_normalizatio
             systAxes=["downUpVar"],
             labelsByAxis=["downUpVar"],
         )
+
+def setTheoryFitData(cardTool, fitresult):
+    logger.info(f"Prepare theory fit: load measured differential cross secction distribution and covariance matrix")
+
+    poi_type="pmaskedexp"
+    base_process = "W" if cardTool.datagroups.wmass else "Z"
+
+    rfile = uproot.open(fitresult)
+    df = unfolding_tools.get_results(rfile, poi_type)
+
+    # write out unfolded data as 1D hist
+    hist_xsec = hist.Hist(
+        hist.axis.Regular(bins=len(df), start=0.5, stop=len(df)+0.5, underflow=False, overflow=False), storage=hist.storage.Weight())
+    hist_xsec.view(flow=False)[...] = np.stack([df["value"].values, (df["err_total"].values)**2], axis=-1)
+
+    cardTool.theoryFitData = hist_xsec
+
+    # write out covariance as 2D hist
+    cardTool.theoryFitDataCov = unfolding_tools.matrix_poi(rfile, poi_type, base_process=base_process, axes=cardTool.project) 
+
+    cardTool.theoryFit = True

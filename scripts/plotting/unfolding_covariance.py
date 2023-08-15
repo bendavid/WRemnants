@@ -51,48 +51,6 @@ def get_bin(name, var):
     else:
         return int(name_split[-1].split("_")[0])
 
-def matrix_poi(matrix="covariance_matrix_channelmu", base_process=None, axes=None, keys=None):
-    if matrix not in [c.replace(";1","") for c in rfile.keys()]:
-        logger.error(f"Histogram {matrix} was not found in the fit results file!")
-        return
-
-    hist2d = rfile[matrix].to_hist()
-
-    # select signal parameters
-    key = matrix.split("channel")[-1]
-    xentries = [(i, hist2d.axes[0][i]) for i in range(len(hist2d.axes[0])) if hist2d.axes[0][i].endswith(key)]
-
-    if base_process is not None:
-        xentries = [x for x in xentries if base_process in x[1]]  
-
-    if keys is not None:
-        xentries = [v for v in filter(lambda x, keys=keys: all([f"_{k}_" in x[1] for k in keys]), xentries)]
-
-    if axes is not None:
-        if isinstance(axes, str):
-            axes = [axes]
-        
-        # select specified axes
-        xentries = [v for v in filter(lambda x, axes=axes: all([f"_{a}" in x[1] for a in axes]), xentries)]
-
-        # sort them in the specified order
-        xentries = sorted(xentries, key=lambda x, axes=axes: [get_bin(x[1], a) for a in axes], reverse=False)
-
-    # make matrix between POIs only
-    cov_mat = np.zeros((len(xentries), len(xentries)))
-    for i, ia in enumerate(xentries):
-        for j, ja in enumerate(xentries):
-            cov_mat[i][j] = hist2d[ia[0], ja[0]]
-
-    hist_cov = hist.Hist(
-        hist.axis.Regular(bins=len(xentries), start=0.5, stop=len(xentries)+0.5, underflow=False, overflow=False), 
-        hist.axis.Regular(bins=len(xentries), start=0.5, stop=len(xentries)+0.5, underflow=False, overflow=False), 
-        storage=hist.storage.Double())
-    hist_cov.view(flow=False)[...] = cov_mat
-
-    return hist_cov
-
-
 def plot_matrix_poi(matrix="covariance_matrix_channelmu", base_process=None, axes=None, keys=None):
     hist_cov = matrix_poi(matrix, base_process=base_process, axes=axes, keys=keys)
 

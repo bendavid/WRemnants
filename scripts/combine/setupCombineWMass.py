@@ -33,6 +33,7 @@ def make_parser(parser=None):
     parser.add_argument("--sumChannels", action='store_true', help="Only use one channel")
     parser.add_argument("--fitXsec", action='store_true', help="Fit signal inclusive cross section")
     parser.add_argument("--genModel", action="store_true", help="Produce datacard with the xnorm as model (binned according to axes defined in --fitvar)")
+    parser.add_argument("--fitresult", type=str, default=None ,help="Use data and covariance matrix from fitresult (for making a theory fit)")
     parser.add_argument("--simultaneousABCD", action="store_true", help="Produce datacard for simultaneous fit of ABCD regions")
     # settings on the nuisances itself
     parser.add_argument("--doStatOnly", action="store_true", default=False, help="Set up fit to get stat-only uncertainty (currently combinetf with -S 0 doesn't work)")
@@ -187,10 +188,12 @@ def setup(args,xnorm=False):
                 datagroups.groups[base_group].add_member_axis("qGen", datagroups.results, 
                     member_filters={-1: lambda x: x.name.startswith("Wminus"), 1: lambda x: x.name.startswith("Wplus")}, 
                     hist_filter=lambda x: x.startswith("xnorm"))
-                #datagroups.deleteGroup("Fake")
             cardTool.unroll = True
             # remove projection axes from gen axes, otherwise they will be integrated before
-            datagroups.setGenAxes([a for a in datagroups.gen_axes if a not in cardTool.project])
+            datagroups.gen_axes = ["qGen", *datagroups.gen_axes]
+            if datagroups.gen_axes != cardTool.project:
+                raise NotImplementedError(f"The gen axes of the model {datagroups.gen_axes} do not agree with the ones requested {cardTool.project}")
+            datagroups.setGenAxes([]) # [a for a in datagroups.gen_axes if a not in cardTool.project])
     else:
         cardTool.setHistName(args.baseName)
         cardTool.setNominalName(args.baseName)
@@ -595,6 +598,10 @@ def setup(args,xnorm=False):
 def main(args,xnorm=False):
     cardTool = setup(args, xnorm)
     cardTool.setOutput(args.outfolder, fitvars=args.fitvar, doStatOnly=args.doStatOnly, postfix=args.postfix, hdf5=args.hdf5)
+
+    if args.genModel and args.fitresult:
+        combine_helpers.setTheoryFitData(cardTool, args.fitresult)
+
     cardTool.writeOutput(args=args, hdf5=args.hdf5, sparse=args.sparse, xnorm=xnorm or args.hdf5,
         forceNonzero=not args.unfolding, check_systs=not args.unfolding, simultaneousABCD=args.simultaneousABCD)
     return

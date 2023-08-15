@@ -197,21 +197,21 @@ def clipNegativeVals(h, clipValue=0, createNew=False):
     np.clip(newh.values(flow=True), a_min=clipValue, a_max=None, out=newh.values(flow=True))
     return newh
 
-def scaleHist(h, scale, createNew=True):
+def scaleHist(h, scale, createNew=True, flow=True):
     if createNew:
         if h.storage_type == hist.storage.Double:
             hnew = hist.Hist(*h.axes)
         else:
             hnew = hist.Hist(*h.axes, storage=hist.storage.Weight())
-            hnew.variances(flow=True)[...] = scale*scale * h.variances(flow=True)
+            hnew.variances(flow=flow)[...] = scale*scale * h.variances(flow=flow)
 
-        hnew.values(flow=True)[...] = scale * h.values(flow=True)
+        hnew.values(flow=flow)[...] = scale * h.values(flow=flow)
 
         return hnew
     else:
-        h.values(flow=True)[...] *= scale
+        h.values(flow=flow)[...] *= scale
         if h.storage_type == hist.storage.Weight:
-            h.variances(flow=True)[...] *= scale*scale
+            h.variances(flow=flow)[...] *= scale*scale
         return h
     
 def normalize(h, scale=1e6, createNew=True):

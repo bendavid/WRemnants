@@ -71,6 +71,10 @@ class CardTool(object):
                              "inclusive" : {"val" : "sum", "id" : "none", "badId" : None},
                              }
         self.procGroups = {}
+        # for theory fit
+        self.theoryFit = False
+        self.theoryFitData = None
+        self.theoryFitDataCov = None
         # settings for writing out hdf5 files
         self.dtype="float64"
         self.chunkSize=4*1024**2
@@ -737,7 +741,7 @@ class CardTool(object):
             logger.info("Histograms will not be written because 'skipHist' flag is set to True")
         self.writeCard()
 
-    def writeHDF5Output(self, args=None, xnorm=False, theoryFit=False,
+    def writeHDF5Output(self, args=None, xnorm=False,
         simultaneousABCD=False,
         forceNonzero=True, check_systs=False, allowNegativeExpectation=False, 
         sparse=False,
@@ -778,12 +782,16 @@ class CardTool(object):
 
         #list of channels, ordered such that masked channels are last, right now, only one channel is supported
         # TODO support multiple channels
-        chans = [self.nominalName]
-        maskedchans = []
 
-        if xnorm:
-            chans.append("xnorm")
-            maskedchans.append("xnorm")
+        if self.theoryFit:
+            chans = ["xnorm"]
+            maskedchans = []
+        else:
+            chans = [self.nominalName]
+            maskedchans = []
+            if xnorm:
+                chans.append("xnorm")
+                maskedchans.append("xnorm")
 
         nbins = 0
         nbinsfull = 0
@@ -856,6 +864,7 @@ class CardTool(object):
         noigroupidxs = []
 
         dict_data_obs = {}
+        dict_data_obs_cov = {}
         dict_sumw2 = {c : {} for c in chans}
         dict_norm = {c : {} for c in chans}
         dict_logkavg = {c : {} for c in chans}
@@ -891,26 +900,26 @@ class CardTool(object):
 
             if not chan in maskedchans:                
 
-                if simultaneousABCD:
-                    setSimultaneousABCD(self)
+                if self.theoryFit:
+                    if self.theoryFitData is None or self.theoryFitDataCov is None:
+                        raise RuntimeError("No data or covariance found to perform theory fit")
 
-                data_obs_hist = self.datagroups.groups[self.dataName].hists[chan]
-                if data_obs_hist.axes.name != self.project:
-                    data_obs_hist = data_obs_hist.project(*self.project)
+                    data_obs_hist = self.theoryFitData
+                    dict_data_obs_cov[chan] = self.theoryFitDataCov.values(flow=False).astype(self.dtype)
+                else:
+                    if simultaneousABCD:
+                        setSimultaneousABCD(self)
+
+                    data_obs_hist = self.datagroups.groups[self.dataName].hists[chan]
+
+                    if data_obs_hist.axes.name != self.project:
+                        data_obs_hist = data_obs_hist.project(*self.project)
+                
                 data_obs = data_obs_hist.values(flow=False).flatten().astype(self.dtype)
                 dict_data_obs[chan] = data_obs
                 nbinschan = len(data_obs)
                 nbins += nbinschan
 
-                if theoryFit:
-                    pass
-                    # TODO
-                    # data_cov_chan_hist = MB.getShape(chan,options.covname)
-                    # data_cov_chan = hist2array(data_cov_chan_hist, include_overflow=False).astype(self.dtype)
-                    # data_cov_chan_hist.Delete()
-                    # #write to output array (block-diagonal for now)
-                    # data_cov[ibin:ibin+nbinschan,ibin:ibin+nbinschan] = data_cov_chan
-                    # data_cov_chan = None
             else:
                 self.setProjectionAxes(["count"])
                 nbinschan = 1
@@ -1142,11 +1151,16 @@ class CardTool(object):
         sumw = np.zeros([nbins], self.dtype)
         sumw2 = np.zeros([nbins], self.dtype)
         data_obs = np.zeros([nbins], self.dtype)
+        if self.theoryFit:
+            data_cov = np.zeros([nbins,nbins], self.dtype)
         ibin = 0
         for nbinschan, chan in zip(ibins, chans):
             if chan in maskedchans:
                 continue
             data_obs[ibin:ibin+nbinschan] = dict_data_obs[chan]
+            if self.theoryFit:
+                data_cov[ibin:ibin+nbinschan,ibin:ibin+nbinschan] = dict_data_obs_cov[chan]
+
             for iproc, proc in enumerate(procs):
                 if proc not in dict_norm[chan]:
                     continue
@@ -1403,9 +1417,9 @@ class CardTool(object):
         nbytes += writeFlatInChunks(data_obs, f, "hdata_obs", maxChunkBytes = self.chunkSize)
         data_obs = None
 
-        # if theoryFit:
-        #     nbytes += writeFlatInChunks(data_cov, f, "hdata_cov", maxChunkBytes = self.chunkSize)
-        #     data_cov = None
+        if self.theoryFit:
+            nbytes += writeFlatInChunks(data_cov, f, "hdata_cov", maxChunkBytes = self.chunkSize)
+            data_cov = None
 
         nbytes += writeFlatInChunks(kstat, f, "hkstat", maxChunkBytes = self.chunkSize)
         kstat = None

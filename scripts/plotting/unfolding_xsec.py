@@ -10,13 +10,15 @@ import numpy as np
 import matplotlib as mpl
 import pandas as pd
 import hist
-import pdb
+import h5py
 
-from wremnants.datasets.datagroups import Datagroups
 
 from utilities import boostHistHelpers as hh, logging, input_tools, common, differential, output_tools
 from wremnants import plot_tools
-from wremnants.unfolding_tools import get_bin, getProcessBins
+from wremnants.datasets.datagroups import Datagroups
+from wremnants.unfolding_tools import get_bin, getProcessBins, get_results, matrix_poi
+
+import pdb
 
 hep.style.use(hep.style.ROOT)
 
@@ -113,59 +115,6 @@ def make_yields_df(hists, procs, signal=None, per_bin=False, yield_only=False, p
 
 
     return pd.DataFrame(entries, columns=columns)
-
-def get_results(rtfile, poi_type, scale=1.0, group=True, uncertainties=None):
-    if isinstance(poi_type, list):
-        results = []
-        for p in poi_type:
-            result = get_results(rtfile, p, scale=scale, group=group, uncertainties=uncertainties)
-            if result is not None:
-                results.append(result)
-        return pd.concat(results)
-
-    results = []
-
-    # pois = input_tools.getPOInames(rfile, poi_type=poi_type)
-
-    fitresult = rtfile["fitresults"]
-
-    histname = f"nuisance_group_impact_{poi_type}" if group else f"nuisance_impact_{poi_type}"
-
-    if f"{histname};1" not in rtfile.keys():
-        logger.debug(f"Histogram {histname};1 not found in fitresult file")
-        return None
-    impacts = rtfile[histname].to_hist()
-
-    # process names
-    names = [k for k in impacts.axes[0]]
-
-    logger.debug(f"Load ucertainties")
-    # pick uncertainties
-    if uncertainties is None:
-        uncertainties = {f"err_{k}": impacts.values()[:,i] for i, k in enumerate(impacts.axes[1])}
-    else:
-        uncertainties = {f"err_{k}": impacts.values()[:,i] for i, k in enumerate(impacts.axes[1]) if k in uncertainties}
-
-    # measured central value
-    centrals = [fitresult[n].array()[0] for n in names]
-
-    # total uncertainties
-    totals = [fitresult[n+"_err"].array()[0] for n in names]
-
-    df = pd.DataFrame({"Name":names, "value":centrals, "err_total":totals, **uncertainties})
-
-    if scale != 1:
-        df["value"] /= scale
-        df["err_total"] /= scale
-        for u in uncertainties.keys():
-            df[u] /= scale
-
-    # try to decode the name string into bin number
-    for axis in ["qGen", "ptGen", "absEtaGen", "ptVGen", "absYVGen"]:
-        df[axis] = df["Name"].apply(lambda x, a=axis: get_bin(x, a))
-
-    df = df.sort_values(["qGen", "ptGen", "absEtaGen", "ptVGen", "absYVGen"], ignore_index=True)
-    return df
 
 def plot_xsec_unfolded(df, df_asimov=None, edges=None, bin_widths=None, channel=None, scale=1., normalize=False, process_label="V", axes=None):
     logger.info(f"Make "+("normalized " if normalize else "")+"unfoled xsec plot"+(f" in channel {channel}" if channel else ""))
@@ -267,7 +216,7 @@ def plot_xsec_unfolded(df, df_asimov=None, edges=None, bin_widths=None, channel=
             yerr=False,
             histtype="step",
             color="blue",
-            label="Model",
+            # label="Model",
             ax=ax2
         )
 
@@ -475,6 +424,8 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normaliz
     plt.close()
 
 # # store unfolded data
+outfile = h5py.File(f'{outdir}/fitresult.hdf5', 'w')
+
 # outfile = uproot.recreate(f"{outdir}/unfolded_data.root")
 scale = 1 if args.normalize else args.lumi * 1000
 
@@ -585,31 +536,37 @@ for axes in gen_axes_permutations:
             plot_uncertainties_unfolded(data_c, edges=edges, channel=channel, scale=scale, normalize=args.normalize, relative_uncertainty=True, logy=True, process_label = process_label, axes=channel_axes)
 
 
-        # if not args.normalize:
-        #     # write out 1D distributions
-        #     logger.info(f"Save measured differential cross secction distribution")
-        #     hist_xsec = hist.Hist(
-        #         hist.axis.Regular(bins=len(data_c), start=0.5, stop=len(data_c)+0.5, underflow=False, overflow=False), storage=hist.storage.Weight())
-        #     hist_xsec.view(flow=False)[...] = np.stack([data_c["value"].values, (data_c["err_total"].values)**2], axis=-1)
+        if not args.normalize:
+            if set(gen_axes) != set(axes):
+                continue
 
-        #     histname = f"data_{base_process}"
-        #     covname = f"covariance_matrix_{base_process}"
-        #     if channel != "all":
-        #         histname += f"_{channel}"
-        #         covname += f"_{channel}"
+            # write out 1D distributions
+            logger.info(f"Save measured differential cross secction distribution")
+            hist_xsec = hist.Hist(
+                hist.axis.Regular(bins=len(data_c), start=0.5, stop=len(data_c)+0.5, underflow=False, overflow=False), storage=hist.storage.Weight())
+            hist_xsec.view(flow=False)[...] = np.stack([data_c["value"].values, (data_c["err_total"].values)**2], axis=-1)
 
-        #     outfile[histname] = hist_xsec
+            # write out covariance as 2D hist
+            hist_cov = matrix_poi(rfile, poi_type[0], base_process=base_process, axes=channel_axes, keys=channel_keys)
             
-        #     # write out covariance as 2D hist
-        #     hist_cov = matrix_poi(f"covariance_matrix_channel{poi_type}", base_process=base_process, axes=channel_axes, keys=channel_keys)
-            
-        #     outfile[covname] = hist_cov
+            histname = f"data_{base_process}"
+            covname = f"covariance_matrix_{base_process}"
+            if channel != "all":
+                histname += f"_{channel}_"
+                covname += f"_{channel}_"
 
+            histname += "_".join(axes)
+            covname += "_".join(axes)
+
+            outfile.create_dataset(histname, data=hist_xsec)
+            outfile.create_dataset(covname, data=hist_cov)
 
         # if "correlation" in args.plots:
         #     plot_matrix_poi(f"correlation_matrix_channel{poi_type}", base_process=base_process, axes=channel_axes, keys=channel_keys)
         # if "covariance" in args.plots:
         #     plot_matrix_poi(f"covariance_matrix_channel{poi_type}", base_process=base_process, axes=channel_axes, keys=channel_keys)
+
+outfile.close()
 
 if output_tools.is_eosuser_path(args.outpath) and args.eoscp:
     output_tools.copy_to_eos(args.outpath, args.outfolder)
