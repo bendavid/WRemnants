@@ -5,6 +5,7 @@ parser,initargs = common.common_parser()
 import narf
 import wremnants
 from wremnants import theory_tools,syst_tools,theory_corrections
+from wremnants.datasets.dataset_tools import getDatasets
 import hist
 import math
 import os
@@ -21,10 +22,10 @@ args = parser.parse_args()
 
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
-datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
-                                              filt=args.filterProcs,
-                                              excl=args.excludeProcs, 
-                                              nanoVersion="v8" if args.v8 else "v9", base_path=args.dataPath, mode='gen')
+datasets = getDatasets(maxFiles=args.maxFiles,
+                        filt=args.filterProcs,
+                        excl=args.excludeProcs, 
+                        nanoVersion="v8" if args.v8 else "v9", base_path=args.dataPath, mode='gen')
 
 logger.debug(f"Will process samples {[d.name for d in datasets]}")
 
@@ -62,8 +63,8 @@ axis_l_pt_gen = hist.axis.Regular(29, 26., 55., name = "pt")
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theoryCorr)
 
 def build_graph(df, dataset):
-    print("build graph")
-    print(dataset.name)
+    logger.info("build graph")
+    logger.info(dataset.name)
     results = []
     
     if dataset.is_data:
@@ -110,9 +111,12 @@ def build_graph(df, dataset):
             massBins = theory_tools.make_ew_binning(mass = 80.3815, width = 2.0904, initialStep=0.010)
         ew_cols = ['ewMll', 'ewLogDeltaM']
         axis_ewMll = hist.axis.Variable(massBins, name = "ewMll")
-        axis_ewLogDeltaM = hist.axis.Regular(100, -5, 5, name = "ewLogDeltaM")
+        axis_ewLogDeltaM = hist.axis.Regular(90, -5, 4, name = "ewLogDeltaM")
         ew_axes = [axis_ewMll, axis_ewLogDeltaM]
-        results.append(df.HistoBoost("nominal_ew", ew_axes, [*ew_cols, "nominal_weight"], storage=hist.storage.Double()))
+        results.append(df.HistoBoost("nominal_ew", ew_axes, [*ew_cols, "nominal_weight"], storage=hist.storage.Weight()))
+        # auxiliary hists
+        axis_ewMlly = hist.axis.Variable(massBins, name = "ewMlly")
+        results.append(df.HistoBoost("nominal_ewMlly", [axis_ewMlly], ["ewMlly", "nominal_weight"], storage=hist.storage.Weight()))
 
     nominal_gen = df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols, "nominal_weight"], storage=hist.storage.Double())
 
@@ -146,7 +150,7 @@ def build_graph(df, dataset):
 resultdict = narf.build_and_run(datasets, build_graph)
 output_tools.write_analysis_output(resultdict, f"{os.path.basename(__file__).replace('py', 'hdf5')}", args, update_name=not args.forceDefaultName)
 
-print("computing angular coefficients")
+logger.info("computing angular coefficients")
 z_moments = None
 w_moments = None
 

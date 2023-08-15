@@ -9,8 +9,13 @@ from enum import Enum
 wremnants_dir = f"{pathlib.Path(__file__).parent}/../wremnants"
 data_dir =  f"{pathlib.Path(__file__).parent}/../wremnants-data/data/"
 
-wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP", 'WplusToMuNu_horace-lo-photos', 'WplusToMuNu_horace-qed', 'WplusToMuNu_horace-nlo', 'WminusToMuNu_horace-lo-photos', 'WminusToMuNu_horace-qed', 'WminusToMuNu_horace-nlo']
-zprocs = ["ZmumuPostVFP", "ZtautauPostVFP", "ZmumuMiNLO", "ZmumuNNLOPS", 'ZToMuMu_horace-lo-photos', 'ZToMuMu_horace-qed', 'ZToMuMu_horace-nlo']
+wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP", 
+    'WplusToMuNu_horace-lo-photos', 'WplusToMuNu_horace-qed', 'WplusToMuNu_horace-nlo', 
+    'WminusToMuNu_horace-lo-photos', 'WminusToMuNu_horace-qed', 'WminusToMuNu_horace-nlo',
+    'WplusToMuNu_horace-lo', 'WminusToMuNu_horace-lo',
+    'WplusToMuNu_winhac-lo-photos', 'WplusToMuNu_winhac-lo', 'WplusToMuNu_winhac-nlo', 
+    'WminusToMuNu_winhac-lo-photos', 'WminusToMuNu_winhac-lo', 'WminusToMuNu_winhac-nlo']
+zprocs = ["ZmumuPostVFP", "ZtautauPostVFP", "ZmumuMiNLO", "ZmumuNNLOPS", 'ZToMuMu_horace-lo-photos', 'ZToMuMu_horace-qed', 'ZToMuMu_horace-nlo', 'ZToMuMu_horace-lo']
 vprocs = wprocs+zprocs
 zprocs_recoil = ["ZmumuPostVFP"]
 wprocs_recoil = ["WplusmunuPostVFP", "WminusmunuPostVFP"]
@@ -97,7 +102,20 @@ def getIsoMtRegionFromID(regionID):
     return {passIsoName : regionID & 1,
             passMTName  : regionID & 2}
 
+def set_parser_default(parser, argument, newDefault):
+    # change the default argument of the parser, must be called before parse_arguments
+    logger = logging.child_logger(__name__)
+    f = next((x for x in parser._actions if x.dest ==argument), None)
+    if f:
+        logger.info(f" Modifying default of {f.dest} from {f.default} to {newDefault}")
+        f.default = newDefault
+    else:
+        logger.warning(f" Parser argument {argument} not found!")
+    return parser
+
+
 def common_parser(for_reco_highPU=False):
+
     parser = argparse.ArgumentParser()
     parser.add_argument("-j", "--nThreads", type=int, help="number of threads")
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
@@ -105,6 +123,10 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--noColorLogger", action="store_true", help="Do not use logging with colors")
     initargs,_ = parser.parse_known_args()
 
+    # initName for this internal logger is needed to avoid conflicts with the main logger named "wremnants" by default,
+    # otherwise the logger is apparently propagated back to the root logger causing each following message to be printed twice 
+    common_logger = logging.setup_logger(__file__, initargs.verbose, initargs.noColorLogger, initName="common_logger_wremnants")
+    
     import ROOT
     if not initargs.nThreads:
         ROOT.ROOT.EnableImplicitMT()
@@ -143,7 +165,12 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--correlatedNonClosureNP", action="store_true", help="disable the de-correlation of Z non-closure nuisance parameters after the jpsi massfit")
     parser.add_argument("--noScaleToData", action="store_true", help="Do not scale the MC histograms with xsec*lumi/sum(gen weights) in the postprocessing step")
     parser.add_argument("--aggregateGroups", type=str, nargs="*", default=["Diboson", "Top", "Wtaunu"], help="Sum up histograms from members of given groups in the postprocessing step")
-    
+    # options for unfolding/differential
+    parser.add_argument("--unfolding", action='store_true', help="Add information needed for unfolding")
+    parser.add_argument("--genLevel", type=str, default='postFSR', choices=["preFSR", "postFSR"], help="Generator level definition for unfolding")
+    parser.add_argument("--genVars", type=str, nargs="+", default=["ptGen", "absEtaGen"], choices=["qGen", "ptGen", "absEtaGen", "ptVGen", "absYVGen"], help="Generator level variable")
+    parser.add_argument("--genBins", type=int, nargs="+", default=[3, 2], help="Number of generator level bins")
+
     if for_reco_highPU:
         # additional arguments specific for histmaker of reconstructed objects at high pileup (mw, mz_wlike, and mz_dilepton)
         parser.add_argument("--dphiMuonMetCut", type=float, help="Threshold to cut |deltaPhi| > thr*np.pi between muon and met", default=0.25)
@@ -160,9 +187,6 @@ def common_parser(for_reco_highPU=False):
         parser.add_argument("--excludeFlow", action='store_true', help="Excludes underflow and overflow bins in main axes")
         parser.add_argument("--biasCalibration", type=str, default=None, choices=["binned","parameterized", "A", "M"], help="Adjust central value by calibration bias hist for simulation")
         parser.add_argument("--smearing", action='store_true', help="Smear pT such that resolution matches data") #TODO change to --no-smearing once smearing is final
-        parser.add_argument("--unfolding", action='store_true', help="Add information needed for unfolding")
-        parser.add_argument("--genLevel", type=str, default='postFSR', choices=["preFSR", "postFSR"], help="Generator level definition for unfolding")
-        parser.add_argument("--genBins", type=int, nargs="+", default=[3, 2], help="Number of generator level bins")
         # options for efficiencies
         parser.add_argument("--trackerMuons", action='store_true', help="Use tracker muons instead of global muons (need appropriate scale factors too). This is obsolete")
         parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers)")
@@ -173,8 +197,11 @@ def common_parser(for_reco_highPU=False):
     commonargs,_ = parser.parse_known_args()
 
     if for_reco_highPU:
+        if commonargs.sf2DnoUt and commonargs.smooth3dsf:
+            parser = set_parser_default(parser, "smooth3dsf", False)
+            common_logger.warning(f"Option --sf2DnoUt was called without --noSmooth3dsf, it will also activate --noSmooth3dsf.")
         if commonargs.trackerMuons:
-            logger.warning("Using tracker muons, but keep in mind that scale factors are obsolete and not recommended.")
+            common_logger.warning("Using tracker muons, but keep in mind that scale factors are obsolete and not recommended.")
             sfFile = "scaleFactorProduct_16Oct2022_TrackerMuonsHighPurity_vertexWeight_OSchargeExceptTracking.root"
         else:
             # note: any of the following file is fine for reco, tracking, and IDIP.
@@ -194,51 +221,6 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--sfFile", type=str, help="File with muon scale factors", default=sfFile)
         
     return parser,initargs
-
-def common_parser_combine():
-    from wremnants import theory_tools,combine_theory_helper
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--wlike", action='store_true', help="Run W-like analysis of mZ")
-    parser.add_argument("-o", "--outfolder", type=str, default=".", help="Output folder with the root file storing all histograms and datacards for single charge (subfolder WMass or ZMassWLike is created automatically inside)")
-    parser.add_argument("-i", "--inputFile", type=str)
-    parser.add_argument("--absolutePathInCard", action="store_true", help="In the datacard, set Absolute path for the root file where shapes are stored")
-    parser.add_argument("--minnloScaleUnc", choices=["byHelicityPt", "byHelicityPtCharge", "byHelicityCharge", "byPtCharge", "byPt", "byCharge", "integrated",], default="byHelicityPt",
-            help="Decorrelation for QCDscale")
-    parser.add_argument("--rebin", type=int, nargs='*', default=[], help="Rebin axis by this value (default does nothing)")
-    parser.add_argument("--resumUnc", default="tnp", type=str, choices=["scale", "tnp", "none"], help="Include SCETlib uncertainties")
-    parser.add_argument("--npUnc", default="Delta_Lambda", type=str, choices=combine_theory_helper.TheoryHelper.valid_np_models, help="Nonperturbative uncertainty model")
-    parser.add_argument("--tnpMagnitude", default=1, type=float, help="Variation size for the TNP")
-    parser.add_argument("--scaleTNP", default=1, type=float, help="Scale the TNP uncertainties by this factor")
-    parser.add_argument("--scalePdf", default=1, type=float, help="Scale the PDF hessian uncertainties by this factor")
-    parser.add_argument("--pdfUncFromCorr", action='store_true', help="Take PDF uncertainty from correction hist (Requires having run that correction)")
-    parser.add_argument("--qcdProcessName" , type=str, default="Fake",   help="Name for QCD process")
-    parser.add_argument("--noStatUncFakes" , action="store_true",   help="Set bin error for QCD background templates to 0, to check MC stat uncertainties for signal only")
-    parser.add_argument("--skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
-    parser.add_argument("--noQCDscaleFakes", action="store_true",   help="Do not apply QCd scale uncertainties on fakes, mainly for debugging")
-    parser.add_argument("--doStatOnly", action="store_true", default=False, help="Set up fit to get stat-only uncertainty (currently combinetf with -S 0 doesn't work)")
-    parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
-    parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
-                        help="Set verbosity level with logging, the larger the more verbose")
-    parser.add_argument("--noColorLogger", action="store_true", help="Do not use logging with colors")
-    parser.add_argument("--sumChannels", action='store_true', help="Only use one channel")
-    parser.add_argument("--lumiScale", type=float, default=1.0, help="Rescale equivalent luminosity by this value (e.g. 10 means ten times more data and MC)")
-    parser.add_argument("--addQCDMC", action="store_true", help="Include QCD MC when making datacards (otherwise by default it will always be excluded)")
-    parser.add_argument("--excludeProcGroups", type=str, nargs="*", help="Don't run over processes belonging to these groups (only accepts exact group names)", default=["QCD"])
-    parser.add_argument("--filterProcGroups", type=str, nargs="*", help="Only run over processes belonging to these groups", default=[])
-    parser.add_argument("--muonScaleVariation", choices=["smearingWeights", "massWeights", "manualShift"], default="smearingWeights", help="the method with which the muon scale variation histograms are derived")
-    return parser
-
-def set_parser_default(parser, argument, newDefault):
-    # change the default argument of the parser, must be called before parse_arguments
-    logger = logging.child_logger(__name__)
-    f = next((x for x in parser._actions if x.dest ==argument), None)
-    if f:
-        logger.info(f" Modifying default of {f.dest} from {f.default} to {newDefault}")
-        f.default = newDefault
-    else:
-        logger.warning(f" Parser argument {argument} not found!")
-    return parser
 
 '''
 INPUT -------------------------------------------------------------------------

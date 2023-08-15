@@ -6,8 +6,9 @@ parser,initargs = common.common_parser(True)
 import ROOT
 import narf
 import wremnants
-from wremnants import theory_tools,syst_tools,theory_corrections, muon_calibration, muon_selections, muon_validation, unfolding_tools
+from wremnants import theory_tools,syst_tools,theory_corrections, muon_calibration, muon_selections, muon_validation, unfolding_tools, theoryAgnostic_tools, helicity_utils
 from wremnants.histmaker_tools import scale_to_data, aggregate_groups
+from wremnants.datasets.dataset_tools import getDatasets
 import hist
 import lz4.frame
 import math
@@ -21,21 +22,34 @@ data_dir = common.data_dir
 parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency (legacy option for tests)")
 parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for luminosity in excess to 1 (e.g. 1.012 means 1.2\%)", default=1.012)
 parser.add_argument("--noGenMatchMC", action='store_true', help="Don't use gen match filter for prompt muons with MC samples (note: QCD MC never has it anyway)")
+<<<<<<< HEAD
 parser.add_argument("--dummyMuScaleVar", action='store_true', help='Use a dummy 1e-4 variation on the muon scale instead of reading from the calibration file')
 parser.add_argument("--addHelicityHistos", action='store_true', help="Add V qT,Y axes and helicity axes for W samples")
+=======
+parser.add_argument("--theoryAgnostic", action='store_true', help="Add V qT,Y axes and helicity axes for W samples")
+>>>>>>> upstream/main
 parser.add_argument("--halfStat", action='store_true', help="Test half data and MC stat, selecting odd events, just for tests")
 parser.add_argument("--makeMCefficiency", action="store_true", help="Save yields vs eta-pt-ut-passMT-passIso-passTrigger to derive 3D efficiencies for MC isolation and trigger (can run also with --onlyMainHistograms)")
+parser.add_argument("--onlyTheorySyst", action="store_true", help="Keep only theory systematic variations, mainly for tests")
 parser.add_argument("--oneMCfileEveryN", type=int, default=None, help="Use 1 MC file every N, where N is given by this option. Mainly for tests")
+parser.add_argument("--noAuxiliaryHistograms", action="store_true", help="Remove auxiliary histograms to save memory (removed by default with --unfolding or --theoryAgnostic)")
 args = parser.parse_args()
 
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
-procfilt = ['Wplusmunu', 'Wminusmunu'] if args.addHelicityHistos else args.filterProcs 
+if args.theoryAgnostic:
+    # temporary, to ensure running with stat only until systematics are all implemented
+    logger.warning("Running theory agnostic with only nominal and mass weight histograms for now.")
+    parser = common.set_parser_default(parser, "onlyMainHistograms", True)
+    parser = common.set_parser_default(parser, "pt", [30,26.0,56.0])
+    parser = common.set_parser_default(parser, "genVars", ["absYVgenSig", "ptVgenSig", "helicity"])
+    args = parser.parse_args()
+    
 thisAnalysis = ROOT.wrem.AnalysisType.Wmass
-datasets = wremnants.datasets2016.getDatasets(maxFiles=args.maxFiles,
-                                              filt=procfilt,
-                                              excl=args.excludeProcs, 
-                                              nanoVersion="v8" if args.v8 else "v9", base_path=args.dataPath, oneMCfileEveryN=args.oneMCfileEveryN)
+datasets = getDatasets(maxFiles=args.maxFiles,
+                        filt=args.filterProcs,
+                        excl=args.excludeProcs, 
+                        nanoVersion="v8" if args.v8 else "v9", base_path=args.dataPath, oneMCfileEveryN=args.oneMCfileEveryN)
 
 era = args.era
 
@@ -74,7 +88,16 @@ axes_WeffMC = [axis_eta, axis_pt_eff, axis_ut, axis_charge, axis_passIso, axis_p
 groups_to_aggregate = args.aggregateGroups
 
 if args.unfolding:
+
     unfolding_axes, unfolding_cols = differential.get_pt_eta_axes(args.genBins[0], template_minpt, template_maxpt, args.genBins[1])
+    datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wmunu")
+    groups_to_aggregate.append("BkgWmunu")
+
+elif args.theoryAgnostic:
+
+    theoryAgnostic_axes, theoryAgnostic_cols = differential.get_theoryAgnostic_axes()
+    axis_helicity = helicity_utils.axis_helicity_multidim
+    # the following just prepares the existence of the group for out-of-acceptance signal, but doesn't create or define the histogram yet
     datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wmunu")
     groups_to_aggregate.append("BkgWmunu")
 
@@ -98,7 +121,6 @@ elif args.binnedScaleFactors:
     logger.info("Using binned scale factors and uncertainties")
     # add usePseudoSmoothing=True for tests with Asimov
     muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_binned(filename = data_dir + "/testMuonSF/allSmooth_GtoH3D.root", era = era, max_pt = axis_pt.edges[-1], usePseudoSmoothing=True)
-    
 else:
     logger.info("Using smoothed scale factors and uncertainties")
     muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile, era = era, what_analysis = thisAnalysis, max_pt = axis_pt.edges[-1], isoEfficiencySmoothing = args.isoEfficiencySmoothing, smooth3D=args.smooth3dsf)
@@ -123,47 +145,49 @@ smearing_helper = muon_calibration.make_muon_smearing_helpers() if args.smearing
 
 bias_helper = muon_calibration.make_muon_bias_helpers(args) if args.biasCalibration else None
 
-corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theoryCorr)
+corr_helpers = theory_corrections.load_corr_helpers([d.name for d in datasets if d.name in common.vprocs], args.theoryCorr)
 
 # recoil initialization
 if not args.noRecoil:
     from wremnants import recoil_tools
     recoilHelper = recoil_tools.Recoil("highPU", args, flavor="mu")
 
-smearing_weights_procs = []
-#graph building for Wsample with helicity weights
-def whistosbyHelicity(df, results, dataset, reco_sel_GF, era):
-    #list(range(0,50,5)).append(np.inf) ,
-    axis_ptVgen = hist.axis.Variable(
-        [0., 5., 10., 15., 20., 25., 30., 35., 40., 45., 50.],
-        name = "ptVgen", underflow=False, overflow=False
-    )
-    #axis_ptVgen.append(np.inf)
-    #Taken from w-z gen histomaker     
-    axis_absYVgen = hist.axis.Variable(
-        #[0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4., 5., np.inf], 
-        [0, 0.25, 0.5, 0.75, 1., 1.5, 2.5, 5.],
-        name = "absYVgen", underflow=False, overflow=False
-    )
-    print('Entered function whistobyHelicity')                
-    nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT", "absYVgen", "ptVgen"]
-    nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT, axis_absYVgen, axis_ptVgen]
-    weightsByHelicity_helper = wremnants.makehelicityWeightHelper()
-    df = df.Define("helWeight_tensor", weightsByHelicity_helper, ["massVgen", "yVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "nominal_weight"])
-    df=df.Define("nominal_weight_helicity", "wrem::scalarmultiplyHelWeightTensor(nominal_weight,helWeight_tensor)")
-    axes_helicity=hist.axis.Integer(-1, 5, name="helicity", overflow=False, underflow=False)
-    nominalByHelicity = df.HistoBoost("nominal", nominal_axes, [*nominal_cols,"nominal_weight_helicity"], tensor_axes=[axes_helicity])
-    results.append(nominalByHelicity)
-    
-    df = syst_tools.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, nominal_axes, nominal_cols, addhelicity=True)
-    df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, nominal_axes, nominal_cols, addhelicity=True)
-    df = syst_tools.add_theory_hists(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, nominal_axes, nominal_cols, for_wmass=True, addhelicity=True)
+######################################################
+######################################################
+######################################################
+## FIXME/TODO
+## next function should have been imported from theoryAgnostic_tools.py, but requires too many things as input,
+## such as the helpers created here. Since it is effectively a specialization of the loop flow,
+## it is part of the histmaker and is probably fine to have it here.
+## In fact, having this custom function overriding the main graph is probably not the best idea, should rather use the same
 
+# graph building for W sample with helicity weights
+def setTheoryAgnosticGraph(df, results, dataset, reco_sel_GF, era, nominal_axes_thAgn, nominal_cols_thAgn, args):
+    logger.info(f"Setting theory agnostic graph for {dataset.name}")
+    df = theoryAgnostic_tools.define_helicity_weights(df)
+    nominalByHelicity = df.HistoBoost("nominal", nominal_axes_thAgn, [*nominal_cols_thAgn, "nominal_weight_helicity"], tensor_axes=[axis_helicity])
+    results.append(nominalByHelicity)
+
+    if not args.onlyMainHistograms:
+        if not args.onlyTheorySyst:
+            df = syst_tools.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, nominal_axes_thAgn, nominal_cols_thAgn, addhelicity=True)
+            df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, nominal_axes_thAgn, nominal_cols_thAgn, what_analysis=thisAnalysis, addhelicity=True)
+        df = syst_tools.add_theory_hists(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, nominal_axes_thAgn, nominal_cols_thAgn, for_wmass=True, addhelicity=True)
+    else:
+        #FIXME: hardcoded to keep mass weights, this would be done in add_theory_hists
+        df = syst_tools.define_mass_weights(df, dataset.name)
+        syst_tools.add_massweights_hist(results, df, nominal_axes_thAgn, nominal_cols_thAgn, proc=dataset.name, addhelicity=True)
+######################################################
+######################################################
+######################################################
+    
+smearing_weights_procs = []
 
 def build_graph(df, dataset):
     logger.info(f"build graph for dataset: {dataset.name}")
     results = []
     isW = dataset.name in common.wprocs
+    isWmunu = dataset.name in ["WplusmunuPostVFP", "WminusmunuPostVFP"]
     isZ = dataset.name in common.zprocs
     isWorZ = isW or isZ
     isTop = dataset.group == "Top"
@@ -171,7 +195,7 @@ def build_graph(df, dataset):
     require_prompt = "tau" not in dataset.name # for muon GEN-matching   
     
     # disable auxiliary histograms when unfolding to reduce memory consumptions
-    auxiliary_histograms = not args.unfolding
+    auxiliary_histograms = not args.unfolding and not args.theoryAgnostic and not args.noAuxiliaryHistograms
 
     apply_theory_corr = args.theoryCorr and dataset.name in corr_helpers
 
@@ -187,10 +211,9 @@ def build_graph(df, dataset):
 
     axes = nominal_axes
     cols = nominal_cols
-    
-    if args.unfolding and dataset.name in ["WplusmunuPostVFP", "WminusmunuPostVFP"]:
-        df = unfolding_tools.define_gen_level(df, args.genLevel, dataset.name, mode="wmass")
 
+    if args.unfolding and isWmunu:
+        df = unfolding_tools.define_gen_level(df, args.genLevel, dataset.name, mode="wmass")
         if hasattr(dataset, "out_of_acceptance"):
             logger.debug("Reject events in fiducial phase space")
             df = unfolding_tools.select_fiducial_space(df, mode="wmass", pt_min=args.pt[1], pt_max=args.pt[2], accept=False)
@@ -201,6 +224,19 @@ def build_graph(df, dataset):
             unfolding_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols)
             axes = [*nominal_axes, *unfolding_axes] 
             cols = [*nominal_cols, *unfolding_cols]
+
+    if args.theoryAgnostic and isWmunu: # should be isW to do also Wtaunu
+        df = theory_tools.define_prefsr_vars(df)
+        if hasattr(dataset, "out_of_acceptance"):
+            logger.debug("Reject events in fiducial phase space")
+            df = theoryAgnostic_tools.select_fiducial_space(df, theoryAgnostic_axes[0].edges[-1], theoryAgnostic_axes[1].edges[-1], accept=False)
+        else:
+            logger.debug("Select events in fiducial phase space for theory agnostic analysis")
+            df = theoryAgnostic_tools.select_fiducial_space(df, theoryAgnostic_axes[0].edges[-1], theoryAgnostic_axes[1].edges[-1], accept=True)
+            theoryAgnostic_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, theoryAgnostic_axes, theoryAgnostic_cols)
+            # helicity axis is special, defined through a tensor later, theoryAgnostic_ only includes W rapidity and pt for now
+            axes = [*nominal_axes, *theoryAgnostic_axes]
+            cols = [*nominal_cols, *theoryAgnostic_cols]
 
     if not args.makeMCefficiency:
         # remove trigger, it will be part of the efficiency selection for passing trigger
@@ -337,8 +373,13 @@ def build_graph(df, dataset):
         results.append(df.HistoBoost("MET", [axis_met, axis_charge, axis_passIso, axis_passMT], ["MET_corr_rec_pt", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"]))
         results.append(df.HistoBoost("transverseMass", [axis_mt_fakes, axis_charge, axis_passIso, axis_passMT], ["transverseMass", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"]))
 
-    if isW and args.addHelicityHistos:
-        whistosbyHelicity(df, results, dataset, reco_sel_GF, era=era)
+    ## TODO: next part should be improved, there is quite a lot of duplication of what could happen later in the loop
+    ## FIXME: should be isW, to include Wtaunu
+    if isWmunu and args.theoryAgnostic:
+        setTheoryAgnosticGraph(df, results, dataset, reco_sel_GF, era, axes, cols, args)
+        if hasattr(dataset, "out_of_acceptance"):
+            # Rename dataset to not overwrite the original one
+            dataset.name = "Bkg"+dataset.name
         return results, weightsum
         
     if not args.onlyMainHistograms:
@@ -350,9 +391,7 @@ def build_graph(df, dataset):
 
     else:  
         nominal = df.HistoBoost("nominal", axes, [*cols, "nominal_weight"])
-
         results.append(nominal)
-
         results.append(df.HistoBoost("nominal_weight", [hist.axis.Regular(200, -4, 4)], ["nominal_weight"], storage=hist.storage.Double()))
         
         if args.makeMCefficiency:
@@ -375,14 +414,12 @@ def build_graph(df, dataset):
 
     if not dataset.is_data and not args.onlyMainHistograms:
 
-        if not args.noScaleFactors:
-            df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, axes, cols, what_analysis=thisAnalysis, smooth3D=args.smooth3dsf)
-        df = syst_tools.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, axes, cols)
-        
-        # luminosity, done here as shape variation despite being a flat scaling so to facilitate propagating to fakes afterwards
-        df = df.Define("luminosityScaling", f"wrem::constantScaling(nominal_weight, {args.lumiUncertainty})")
-        luminosity = df.HistoBoost("nominal_luminosity", axes, [*cols, "luminosityScaling"], tensor_axes = [common.down_up_axis], storage=hist.storage.Double())
-        results.append(luminosity)
+        if not args.onlyTheorySyst:
+            if not args.noScaleFactors:
+                df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, axes, cols, what_analysis=thisAnalysis, smooth3D=args.smooth3dsf)
+            df = syst_tools.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, axes, cols)
+            # luminosity, as shape variation despite being a flat scaling to facilitate propagation to fakes
+            df = syst_tools.add_luminosity_unc_hists(results, df, args, axes, cols)
                 
         # n.b. this is the W analysis so mass weights shouldn't be propagated
         # on the Z samples (but can still use it for dummy muon scale)
@@ -392,7 +429,7 @@ def build_graph(df, dataset):
             df = syst_tools.add_theory_hists(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, axes, cols, for_wmass=True)
 
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
-            if not "tau" in dataset.name:
+            if not args.onlyTheorySyst and not "tau" in dataset.name:
                 df = syst_tools.add_muonscale_hist(results, df, args.muonCorrEtaBins, args.muonCorrMag, isW, axes, cols)
                 if args.muonScaleVariation == 'smearingWeightsGaus':
                     df = syst_tools.add_muonscale_smeared_hist(results, df, args.muonCorrEtaBins, args.muonCorrMag, isW, axes, nominal_cols_gen_smeared)
@@ -435,15 +472,15 @@ def build_graph(df, dataset):
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)
-if not args.onlyMainHistograms and args.muonScaleVariation == 'smearingWeightsGaus':
+if not args.onlyMainHistograms and args.muonScaleVariation == 'smearingWeightsGaus' and not args.theoryAgnostic:
     logger.debug("Apply smearingWeights")
     muon_calibration.transport_smearing_weights_to_reco(
         resultdict,
         smearing_weights_procs,
         nonClosureScheme = args.nonClosureScheme
     )
-    if args.validationHists:
-        muon_validation.muon_scale_variation_from_manual_shift(resultdict)
+if args.validationHists:
+    muon_validation.muon_scale_variation_from_manual_shift(resultdict)
 
 if not args.noScaleToData:
     scale_to_data(resultdict)
