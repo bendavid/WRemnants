@@ -23,17 +23,21 @@ logger = logging.child_logger(__name__)
 def figure(href, xlabel, ylabel, ylim=None, xlim=None,
     grid = False, plot_title = None, title_padding = 0,
     bin_density = 300, cms_label = None, logy=False, logx=False,
-    width_scale=1
+    width_scale=1, automatic_scale=True
 ):
     if not xlim:
         xlim = [href.axes[0].edges[0], href.axes[0].edges[-1]]
     hax = href.axes[0]
     xlim_range = float(xlim[1] - xlim[0])
     original_xrange = float(hax.edges[-1] - hax.edges[0])
-    raw_width = (hax.size/float(bin_density)) * (xlim_range / original_xrange)
-    width = math.ceil(raw_width)
+    if automatic_scale:
+        raw_width = (hax.size/float(bin_density)) * (xlim_range / original_xrange)
+        width = math.ceil(raw_width)
+    else:
+        width=1
 
     fig = plt.figure(figsize=(width_scale*8*width,8))
+
     ax1 = fig.add_subplot() 
     if cms_label: hep.cms.text(cms_label)
 
