@@ -603,7 +603,7 @@ def define_corrected_reco_muon_kinematics(df, muons="goodMuons", kinematic_vars 
         )
     return df
 
-def make_jpsi_crctn_stats_unc_hists(
+def add_jpsi_crctn_stats_unc_hists(
     args, df, axes, results, nominal_cols, nominal_cols_gen_smeared,
     calib_filepaths, jpsi_crctn_data_unc_helper, smearing_weights_procs, reco_sel_GF, dataset_name, isW
 ):
@@ -662,7 +662,7 @@ def make_jpsi_crctn_stats_unc_hists(
                 f"{reco_sel_GF}_genPt",
                 f"{reco_sel_GF}_genEta",
                 f"{reco_sel_GF}_genCharge",
-                "nominal_weight",
+                "nominal_weight"
             ]
         )
         if args.validationHists:
@@ -724,7 +724,7 @@ def make_jpsi_crctn_stats_unc_hists(
         results.append(nominal_muonScaleSyst_responseWeights)
     return df
 
-def make_jpsi_crctn_Z_non_closure_hists(
+def add_jpsi_crctn_Z_non_closure_hists(
     args, df, nominal_axes, results, nominal_cols, nominal_cols_gen_smeared,
     z_non_closure_parametrized_helper, z_non_closure_binned_helper, reco_sel_GF
 ):

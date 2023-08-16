@@ -182,6 +182,7 @@ def common_parser(for_reco_highPU=False):
             help="Type of correction to apply to the muons in data")
         parser.add_argument("--muScaleBins", type=int, default=1, help="Number of bins for muon scale uncertainty")
         parser.add_argument("--muonScaleVariation", choices=["smearingWeightsGaus", "smearingWeightsSplines", "massWeights"], default="smearingWeightsSplines",  help="method to generate nominal muon scale variation histograms")
+        parser.add_argument("--dummyMuScaleVar", action='store_true', help='Use a dummy 1e-4 variation on the muon scale instead of reading from the calibration file')
         parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
         parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
         parser.add_argument("--excludeFlow", action='store_true', help="Excludes underflow and overflow bins in main axes")

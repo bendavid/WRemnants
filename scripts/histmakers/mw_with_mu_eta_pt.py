@@ -22,7 +22,6 @@ data_dir = common.data_dir
 parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency (legacy option for tests)")
 parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for luminosity in excess to 1 (e.g. 1.012 means 1.2\%)", default=1.012)
 parser.add_argument("--noGenMatchMC", action='store_true', help="Don't use gen match filter for prompt muons with MC samples (note: QCD MC never has it anyway)")
-parser.add_argument("--dummyMuScaleVar", action='store_true', help='Use a dummy 1e-4 variation on the muon scale instead of reading from the calibration file')
 parser.add_argument("--addHelicityHistos", action='store_true', help="Add V qT,Y axes and helicity axes for W samples")
 parser.add_argument("--theoryAgnostic", action='store_true', help="Add V qT,Y axes and helicity axes for W samples")
 parser.add_argument("--halfStat", action='store_true', help="Test half data and MC stat, selecting odd events, just for tests")
@@ -435,13 +434,13 @@ def build_graph(df, dataset):
             # nuisances from the muon momemtum scale calibration 
             if (args.muonCorrData in ["massfit", "lbl_massfit"]):
                 # muon scale variation from stats. uncertainty on the jpsi massfit
-                df = muon_calibration.make_jpsi_crctn_stats_unc_hists(
+                df = muon_calibration.add_jpsi_crctn_stats_unc_hists(
                     args, df, axes, results, nominal_cols, nominal_cols_gen_smeared,
                     calib_filepaths, jpsi_crctn_data_unc_helper, smearing_weights_procs,
                     reco_sel_GF, dataset.name, isW
                 )
                 # add the ad-hoc Z non-closure nuisances from the jpsi massfit to muon scale unc
-                df = muon_calibration.make_jpsi_crctn_Z_non_closure_hists(
+                df = muon_calibration.add_jpsi_crctn_Z_non_closure_hists(
                     args, df, axes, results, nominal_cols, nominal_cols_gen_smeared,
                     z_non_closure_parametrized_helper, z_non_closure_binned_helper, reco_sel_GF
                 )
