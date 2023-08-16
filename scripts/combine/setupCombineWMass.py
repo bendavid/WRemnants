@@ -322,6 +322,7 @@ def setup(args,xnorm=False):
         mirror_tnp=True,
         pdf_from_corr=args.pdfUncFromCorr,
         scale_pdf_unc=args.scalePdf,
+        minnloScaleUnc=args.minnloScaleUnc,
     )
     theory_helper.add_all_theory_unc()
 
