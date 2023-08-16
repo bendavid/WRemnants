@@ -60,13 +60,13 @@ def make_jpsi_crctn_helpers(args, calib_filepaths, make_uncertainty_helper=False
             filepath_correction = mc_corrfile,
             filepath_tflite = tflite_file,
             n_eta_bins = 24, scale_var_method = args.muonScaleVariation,
-            dummy_mu_scale_var = args.dummyMuScaleVar
+            dummy_mu_scale_var = args.dummyMuScaleVar, dummy_var_mag = args.muonCorrMag
         ) if mc_corrfile else None
         data_unc_helper = make_jpsi_crctn_unc_helper(
             filepath_correction = data_corrfile,
             filepath_tflite = tflite_file,
             scale_var_method = args.muonScaleVariation,
-            dummy_mu_scale_var = args.dummyMuScaleVar
+            dummy_mu_scale_var = args.dummyMuScaleVar, dummy_var_mag = args.muonCorrMag
         ) if data_corrfile else None
 
         return mc_helper, data_helper, mc_unc_helper, data_unc_helper
@@ -228,7 +228,7 @@ def make_jpsi_crctn_helper(filepath):
 def make_jpsi_crctn_unc_helper(
     filepath_correction, filepath_tflite, 
     n_scale_params = 3, n_tot_params = 4, n_eta_bins = 48, scale = 1.0, isW = True,
-    scale_var_method = 'smearingWeightsSplines', dummy_mu_scale_var = False
+    scale_var_method = 'smearingWeightsSplines', dummy_mu_scale_var = False, dummy_var_mag = 1e-4
 ):
     f = uproot.open(filepath_correction)
     cov = f['covariance_matrix'].to_hist()
@@ -246,8 +246,7 @@ def make_jpsi_crctn_unc_helper(
     for i in range(n_eta_bins):
         if dummy_mu_scale_var:
             nvar = n_scale_params * n_eta_bins
-            AUnc = np.zeros(nvar)
-            AUnc.fill(1e-4)
+            AUnc = np.full(nvar, dummy_var_mag)
             eUnc = np.zeros(nvar)
             MUnc = np.zeros(nvar)
             hist_scale_params_unc.view()[i,...] = np.stack([AUnc, eUnc, MUnc])
@@ -619,7 +618,7 @@ def add_jpsi_crctn_stats_unc_hists(
                 calib_filepaths['data_corrfile'][args.muonCorrData],
                 calib_filepaths['tflite_file'],
                 scale_var_method = 'smearingWeightsGaus',
-                dummy_mu_scale_var = args.dummyMuScaleVar
+                dummy_mu_scale_var = args.dummyMuScaleVar, dummy_var_mag = args.muonCorrMag
             )
         df = df.Define("muonScaleSyst_responseWeights_tensor_gaus", jpsi_unc_helper,
             [
@@ -652,7 +651,7 @@ def add_jpsi_crctn_stats_unc_hists(
                 calib_filepaths['data_corrfile'][args.muonCorrData],
                 calib_filepaths['tflite_file'],
                 scale_var_method = 'smearingWeightsSplines',
-                dummy_mu_scale_var = args.dummyMuScaleVar
+                dummy_mu_scale_var = args.dummyMuScaleVar, dummy_var_mag = args.muonCorrMag
             )
         df = df.Define("muonScaleSyst_responseWeights_tensor_splines", jpsi_unc_helper,
             [
@@ -681,7 +680,7 @@ def add_jpsi_crctn_stats_unc_hists(
                 calib_filepaths['data_corrfile'][args.muonCorrData],
                 calib_filepaths['tflite_file'], isW = isW,
                 scale_var_method = 'massWeights',
-                dummy_mu_scale_var = args.dummyMuScaleVar
+                dummy_mu_scale_var = args.dummyMuScaleVar, dummy_var_mag = args.muonCorrMag
             ) # need to make a new massweights helper due to different nweights for Z and W
         df = df.Define("muonScaleSyst_responseWeights_tensor_massWeights", jpsi_unc_helper,
             [

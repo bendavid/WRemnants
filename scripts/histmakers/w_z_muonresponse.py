@@ -52,7 +52,7 @@ bias_helper = muon_calibration.make_muon_bias_helpers(args) if args.biasCalibrat
 if args.testHelper:
     smearing_weights_helper = muon_calibration.make_jpsi_crctn_unc_helper(
         calib_filepaths['data_corrfile'][args.muonCorrData],
-        calib_filepaths['tflite_file'],
+        calib_filepaths['tflite_file']
     )
 
 def build_graph(df, dataset):
