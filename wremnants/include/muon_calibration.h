@@ -512,7 +512,7 @@ private:
     }
 
     double calculateQopUnc(float pt, float eta, int charge, double AUnc, double eUnc, double MUnc) {
-        double k = 1 / pt;
+        float k = 1 / pt;
         double kUnc = (AUnc - eUnc * k) * k + charge * MUnc;
         return calculateQopUnc(eta, charge, kUnc);
     }
