@@ -250,7 +250,7 @@ def build_graph(df, dataset):
                     [*input_kinematics, "nominal_weight"]
                 )
                 muonScaleSyst_responseWeights = df.HistoBoost(
-                    "nominal_muonScaleSyst_responseWeights", axes,
+                    "nominal_muonScaleSyst_responseWeights", nominal_axes,
                     [*nominal_cols, "nominal_muonScaleSyst_responseWeights_tensor"],
                     tensor_axes = data_jpsi_crctn_unc_helper.tensor_axes, storage=hist.storage.Double()
                 )
