@@ -505,7 +505,7 @@ def setup(args,xnorm=False):
     }
 
     # FIXME: remove this once msv from smearing weights is implemented for the Z
-    msv_config = msv_config_dict[args.muonScaleVariation] if wmass else msv_config_dict["massWeights"]
+    msv_config = msv_config_dict[args.muonScaleVariation]
 
     cardTool.addSystematic(msv_config['hist_name'], 
         processes=['single_v_samples' if wmass else 'single_vmu_samples'],

@@ -306,8 +306,8 @@ def build_graph(df, dataset):
                     [*input_kinematics, "nominal_weight"]
                 )
                 muonScaleSyst_responseWeights = df.HistoBoost(
-                    "nominal_muonScaleSyst_responseWeights", nominal_axes,
-                    [*nominal_cols, "nominal_muonScaleSyst_responseWeights_tensor"],
+                    "nominal_muonScaleSyst_responseWeights", axes,
+                    [*cols, "nominal_muonScaleSyst_responseWeights_tensor"],
                     tensor_axes = data_jpsi_crctn_unc_helper.tensor_axes, storage=hist.storage.Double()
                 )
                 results.append(muonScaleSyst_responseWeights)
@@ -320,7 +320,7 @@ def build_graph(df, dataset):
                 )
                 hist_Z_non_closure_parametrized_A = df.HistoBoost(
                     "nominal_Z_non_closure_parametrized_A",
-                    nominal_axes, [*nominal_cols, "Z_non_closure_parametrized_A"],
+                    axes, [*cols, "Z_non_closure_parametrized_A"],
                     tensor_axes = z_non_closure_parametrized_helper.tensor_axes,
                     storage=hist.storage.Double()
                 )
@@ -333,7 +333,7 @@ def build_graph(df, dataset):
                 )
                 hist_Z_non_closure_parametrized_M = df.HistoBoost(
                     "nominal_Z_non_closure_parametrized_M",
-                    nominal_axes, [*nominal_cols, "Z_non_closure_parametrized_M"],
+                    axes, [*cols, "Z_non_closure_parametrized_M"],
                     tensor_axes = z_non_closure_parametrized_helper.tensor_axes,
                     storage=hist.storage.Double()
                 )

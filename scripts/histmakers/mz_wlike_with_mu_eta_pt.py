@@ -225,7 +225,8 @@ def build_graph(df, dataset):
 
             df = syst_tools.add_theory_hists(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, axes, cols, for_wmass=False)
 
-            reco_sel = "vetoMuonsPre"
+            df = df.Define('trigMuons_vetoMuonsPre', 'vetoMuonsPre && Muon_correctedCharge == trigMuons_charge0')
+            reco_sel = "trigMuons_vetoMuonsPre"
             require_prompt = "tau" not in dataset.name
             df = muon_calibration.define_genFiltered_recoMuonSel(df, reco_sel, require_prompt)
             reco_sel_GF = muon_calibration.getColName_genFiltered_recoMuonSel(reco_sel, require_prompt)
@@ -250,8 +251,8 @@ def build_graph(df, dataset):
                     [*input_kinematics, "nominal_weight"]
                 )
                 muonScaleSyst_responseWeights = df.HistoBoost(
-                    "nominal_muonScaleSyst_responseWeights", nominal_axes,
-                    [*nominal_cols, "nominal_muonScaleSyst_responseWeights_tensor"],
+                    "nominal_muonScaleSyst_responseWeights", axes,
+                    [*cols, "nominal_muonScaleSyst_responseWeights_tensor"],
                     tensor_axes = data_jpsi_crctn_unc_helper.tensor_axes, storage=hist.storage.Double()
                 )
                 results.append(muonScaleSyst_responseWeights)
@@ -264,7 +265,7 @@ def build_graph(df, dataset):
                 )
                 hist_Z_non_closure_parametrized_A = df.HistoBoost(
                     "nominal_Z_non_closure_parametrized_A",
-                    nominal_axes, [*nominal_cols, "Z_non_closure_parametrized_A"],
+                    axes, [*cols, "Z_non_closure_parametrized_A"],
                     tensor_axes = z_non_closure_parametrized_helper.tensor_axes,
                     storage=hist.storage.Double()
                 )
@@ -277,7 +278,7 @@ def build_graph(df, dataset):
                 )
                 hist_Z_non_closure_parametrized_M = df.HistoBoost(
                     "nominal_Z_non_closure_parametrized_M",
-                    nominal_axes, [*nominal_cols, "Z_non_closure_parametrized_M"],
+                    axes, [*cols, "Z_non_closure_parametrized_M"],
                     tensor_axes = z_non_closure_parametrized_helper.tensor_axes,
                     storage=hist.storage.Double()
                 )
