@@ -225,8 +225,7 @@ def build_graph(df, dataset):
 
             df = syst_tools.add_theory_hists(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, axes, cols, for_wmass=False)
 
-            df = df.Define('trigMuons_vetoMuonsPre', 'vetoMuonsPre && Muon_correctedCharge == trigMuons_charge0')
-            reco_sel = "trigMuons_vetoMuonsPre"
+            reco_sel = "vetoMuonsPre"
             require_prompt = "tau" not in dataset.name
             df = muon_calibration.define_genFiltered_recoMuonSel(df, reco_sel, require_prompt)
             reco_sel_GF = muon_calibration.getColName_genFiltered_recoMuonSel(reco_sel, require_prompt)
