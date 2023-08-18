@@ -222,7 +222,7 @@ class Datagroups(object):
     ## baseName takes values such as "nominal"
     def setHists(self, baseName, syst, procsToRead=None, label=None, nominalIfMissing=True, 
                  applySelection=True, forceNonzero=True, preOpMap=None, preOpArgs=None, scaleToNewLumi=1, 
-                 excludeProcs=None, forceToNominal=[]):
+                 excludeProcs=None, forceToNominal=[], sum_axes=[]):
         if not label:
             label = syst if syst else baseName
         # this line is annoying for the theory agnostic, too many processes for signal
@@ -290,6 +290,9 @@ class Datagroups(object):
                     else:
                         logger.warning(str(e))
                         continue
+
+                if sum_axes:
+                    h = h[{ax : hist.sum for ax in sum_axes if ax in h.axes.name}]
 
                 h_id = id(h)
 
@@ -421,7 +424,7 @@ class Datagroups(object):
     def loadHistsForDatagroups(
         self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="",
         nominalIfMissing=True, applySelection=True, forceNonzero=True, pseudodata=False,
-        preOpMap={}, preOpArgs={}, scaleToNewLumi=1, forceToNominal=[]
+        preOpMap={}, preOpArgs={}, scaleToNewLumi=1, forceToNominal=[], sum_axes=[],
     ):
         logger.debug("Calling loadHistsForDatagroups()")
         logger.debug(f"The basename and syst is: {baseName}, {syst}")
@@ -432,7 +435,8 @@ class Datagroups(object):
             self.setHists(baseName, syst, procsToRead, label, nominalIfMissing, applySelection,
                           forceNonzero, preOpMap, preOpArgs,
                           scaleToNewLumi=scaleToNewLumi, 
-                          excludeProcs=excluded_procs, forceToNominal=forceToNominal)
+                          excludeProcs=excluded_procs, forceToNominal=forceToNominal,
+                          sum_axes=sum_axes)
 
     def getDatagroups(self):
         return self.groups

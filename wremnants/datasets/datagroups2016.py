@@ -39,7 +39,7 @@ def make_datagroups_2016(dg, combine=False, pseudodata_pdfset = None, applySelec
             label = f"pdf{pseudodata_pdfset.upper()}",
             color = "dimgray"
         )
-    if dg.wmass:
+    if dg.wmass or dg.gen:
         dg.addGroup("Wmunu",
             members = list(filter(lambda y: y.group == "Wmunu", dg.datasets.values())),
             label = r"W$^{\pm}\to\mu\nu$",

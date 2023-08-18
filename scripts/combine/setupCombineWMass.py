@@ -34,7 +34,7 @@ def make_parser(parser=None):
     parser.add_argument("--simultaneousABCD", action="store_true", help="Produce datacard for simultaneous fit of ABCD regions")
     # settings on the nuisances itself
     parser.add_argument("--doStatOnly", action="store_true", default=False, help="Set up fit to get stat-only uncertainty (currently combinetf with -S 0 doesn't work)")
-    parser.add_argument("--minnloScaleUnc", choices=["byHelicityPt", "byHelicityPtCharge", "byHelicityCharge", "byPtCharge", "byPt", "byCharge", "integrated",], default="byHelicityPt",
+    parser.add_argument("--minnloScaleUnc", choices=["byHelicityPt", "byHelicityPtCharge", "byHelicityCharge", "byPtCharge", "byPt", "byCharge", "integrated", "none"], default="byHelicityPt",
             help="Decorrelation for QCDscale")
     parser.add_argument("--resumUnc", default="tnp", type=str, choices=["scale", "tnp", "none"], help="Include SCETlib uncertainties")
     parser.add_argument("--npUnc", default="Delta_Lambda", type=str, choices=combine_theory_helper.TheoryHelper.valid_np_models, help="Nonperturbative uncertainty model")
@@ -90,7 +90,22 @@ def setup(args,xnorm=False):
     logger.debug(f"Excluding these groups of processes: {args.excludeProcGroups}")
 
     datagroups = Datagroups(args.inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm and not args.simultaneousABCD)
-    print(datagroups.getProcNames())
+    wmass = datagroups.wmass
+    wlike = datagroups.wlike
+    lowPU = datagroups.lowPU
+    # Detect lowpu dilepton
+    dilepton = datagroups.dilepton or any(x in ["ptll", "mll"] for x in args.fitvar)
+
+    cardTool = CardTool.CardTool(xnorm=xnorm)
+    cardTool.setDatagroups(datagroups)
+    cardTool.addProcessGroup("single_v_samples", lambda x: x[0] in ["W", "Z"] and x[1] not in ["W","Z"])
+    if wmass:
+        cardTool.addProcessGroup("single_v_nonsig_samples", lambda x: x[0] == "Z" and x[1] not in ["W","Z"])
+
+    cardTool.addProcessGroup("single_vmu_samples", lambda x: x[0] in ["W", "Z"] and x[1] not in ["W","Z"] and "tau" not in x)
+    cardTool.addProcessGroup("signal_samples", lambda x: ((x[0] == "W" and wmass) or (x[0] == "Z" and not wmass)) and x[1] not in ["W","Z"] and "tau" not in x)
+    cardTool.addProcessGroup("signal_samples_inctau", lambda x: ((x[0] == "W" and wmass) or (x[0] == "Z" and not wmass)) and x[1] not in ["W","Z"])
+    cardTool.addProcessGroup("MCnoQCD", lambda x: x not in ["QCD", "Data"])
 
     if not xnorm and (args.axlim or args.rebin):
         if len(args.axlim) % 2 or len(args.axlim)/2 > len(args.fitvar) or len(args.rebin) > len(args.fitvar):
@@ -110,11 +125,6 @@ def setup(args,xnorm=False):
         logger.info(f"Will apply the global selection {sel}")
         datagroups.setGlobalAction(lambda h: h[sel])
 
-    wmass = datagroups.wmass
-    wlike = datagroups.wlike
-    lowPU = datagroups.lowPU
-    # Detect lowpu dilepton
-    dilepton = datagroups.dilepton or any(x in ["ptll", "mll"] for x in args.fitvar)
 
     constrainMass = dilepton and not "mll" in args.fitvar
 
@@ -151,19 +161,18 @@ def setup(args,xnorm=False):
         datagroups.deleteGroup("Wmunu") # remove out of acceptance signal
 
     # Start to create the CardTool object, customizing everything
-    cardTool = CardTool.CardTool(xnorm=xnorm)
-    cardTool.setDatagroups(datagroups)
     logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
     if args.absolutePathInCard:
         cardTool.setAbsolutePathShapeInCard()
-    cardTool.setProjectionAxes(args.fitvar)
+
+    fitvars = args.fitvar
     if wmass and args.simultaneousABCD:
         cardTool.setChannels(["inclusive"])
         cardTool.setWriteByCharge(False)
         fitvars = ["passIso", "passMT", *args.fitvar]
-        cardTool.setProjectionAxes(fitvars)
         cardTool.unroll=True
-    if args.sumChannels or xnorm or dilepton:
+
+    if args.sumChannels or xnorm or dilepton or datagroups.gen:
         cardTool.setChannels(["inclusive"])
         cardTool.setWriteByCharge(False)
     else:
@@ -179,7 +188,7 @@ def setup(args,xnorm=False):
         datagroups.select_xnorm_groups()
         datagroups.deleteGroup("Fake") # delete fakes from xnorm channel
         if args.unfolding:
-            cardTool.setProjectionAxes(["count"])
+            cardTool.setFitAxes(["count"])
         else:
             if wmass:
                 # add gen charge as additional axis
@@ -193,6 +202,7 @@ def setup(args,xnorm=False):
     else:
         cardTool.setHistName(args.baseName)
         cardTool.setNominalName(args.baseName)
+        cardTool.setFitAxes(fitvars)
         
     # define sumGroups for integrated cross section
     if args.unfolding:
@@ -226,15 +236,6 @@ def setup(args,xnorm=False):
         logger.info(f"cardTool.allMCProcesses(): {cardTool.allMCProcesses()}")
         
     passSystToFakes = wmass and not args.skipSignalSystOnFakes and args.qcdProcessName not in excludeGroup and (filterGroup == None or args.qcdProcessName in filterGroup) and not xnorm
-
-    cardTool.addProcessGroup("single_v_samples", lambda x: x[0] in ["W", "Z"] and x[1] not in ["W","Z"])
-    if wmass:
-        cardTool.addProcessGroup("single_v_nonsig_samples", lambda x: x[0] == "Z" and x[1] not in ["W","Z"])
-
-    cardTool.addProcessGroup("single_vmu_samples", lambda x: x[0] in ["W", "Z"] and x[1] not in ["W","Z"] and "tau" not in x)
-    cardTool.addProcessGroup("signal_samples", lambda x: ((x[0] == "W" and wmass) or (x[0] == "Z" and not wmass)) and x[1] not in ["W","Z"] and "tau" not in x)
-    cardTool.addProcessGroup("signal_samples_inctau", lambda x: ((x[0] == "W" and wmass) or (x[0] == "Z" and not wmass)) and x[1] not in ["W","Z"])
-    cardTool.addProcessGroup("MCnoQCD", lambda x: x not in ["QCD", "Data"])
 
     if not args.theoryAgnostic:
         logger.info(f"All MC processes {cardTool.procGroups['MCnoQCD']}")
@@ -318,6 +319,7 @@ def setup(args,xnorm=False):
     
     theory_helper = combine_theory_helper.TheoryHelper(cardTool)
     theory_helper.configure(resumUnc=args.resumUnc, 
+        minnlo_unc=args.minnloScaleUnc, 
         propagate_to_fakes=to_fakes,
         np_model=args.npUnc,
         tnp_magnitude=args.tnpMagnitude,
@@ -327,7 +329,7 @@ def setup(args,xnorm=False):
     )
     theory_helper.add_all_theory_unc()
 
-    if xnorm:
+    if xnorm or datagroups.gen:
         return cardTool
 
     # Below: experimental uncertainties

@@ -33,6 +33,7 @@ class TheoryHelper(object):
         return self.card_tool.procGroups[sample_group][0][0] 
 
     def configure(self, resumUnc, np_model,
+            minnlo_unc="byHelicityPt",
             propagate_to_fakes=True, 
             tnp_magnitude=1,
             mirror_tnp=True,
@@ -43,6 +44,7 @@ class TheoryHelper(object):
         self.set_resum_unc_type(resumUnc)
         self.set_np_model(np_model)
         self.set_propagate_to_fakes(propagate_to_fakes)
+        self.set_minnlo_unc(minnlo_unc)
 
         self.tnp_magnitude = tnp_magnitude
         self.mirror_tnp = mirror_tnp
@@ -52,10 +54,17 @@ class TheoryHelper(object):
 
     def add_all_theory_unc(self):
         self.add_nonpert_unc(model=self.np_model)
-        self.add_resum_unc(magnitude=self.tnp_magnitude, mirror=self.mirror_tnp)
+        self.add_resum_unc(magnitude=self.tnp_magnitude, mirror=self.mirror_tnp, minnloUnc=self.minnlo_unc)
         self.add_pdf_uncertainty(from_corr=self.pdf_from_corr, action=self.pdf_action, scale=self.scale_pdf_unc)
 
+    def set_minnlo_unc(self, minnloUnc):
+        self.minnlo_unc = minnloUnc
+
     def set_resum_unc_type(self, resumUnc):
+        if not resumUnc or resumUnc == "none":
+            self.resumUnc = None
+            return
+
         if not self.corr_hist_name:
             raise ValueError("Cannot add resummation uncertainties. No theory correction was applied!")
 
@@ -75,10 +84,9 @@ class TheoryHelper(object):
             
         self.resumUnc = resumUnc
         
-    def add_resum_unc(self, magnitude=1, mirror=False, scale=1, minnloUnc='byHelicityPtCharge'):
+    def add_resum_unc(self, magnitude=1, mirror=False, scale=1, minnloUnc='byHelicityPt'):
         if not self.resumUnc:
             logger.warning("No resummation uncertainty will be applied!")
-            return
 
         if self.resumUnc == "tnp":
             self.add_resum_tnp_unc(magnitude, mirror, scale)
@@ -86,7 +94,7 @@ class TheoryHelper(object):
         if minnloUnc and minnloUnc != "none":
             for sample_group in ["signal_samples_inctau", "single_v_nonsig_samples"]:
                 if self.card_tool.procGroups.get(sample_group, None):
-                    self.add_minnlo_scale_uncertainty(minnloUnc, sample_group)
+                    self.add_minnlo_scale_uncertainty(minnloUnc, sample_group, rebin_pt=common.ptV_binning)
 
     def add_minnlo_scale_uncertainty(self, scale_type, sample_group, use_hel_hist=False, rebin_pt=None):
         if not sample_group:
@@ -96,15 +104,24 @@ class TheoryHelper(object):
         helicity = "Helicity" in scale_type
         pt_binned = "Pt" in scale_type
         scale_hist = "qcdScale" if not (helicity or use_hel_hist) else "qcdScaleByHelicity"
+        if "helicity" in scale_hist.lower():
+            use_hel_hist = True
 
         # All possible syst_axes
         # TODO: Move the axes to common and refer to axis_chargeVgen etc by their name attribute, not just
         # assuming the name is unchanged
-        syst_axes = ["ptVgen", "chargeVgen", "muRfact", "muFfact"]
+        obs = self.card_tool.fit_axes
+        pt_ax = "ptVgen" if "ptVgen" not in obs else "ptVgenAlt"
+        charge_ax = "chargeVgen" if "chargeVgen" not in obs else "chargeVgenAlt"
+        sum_axes = [pt_ax, charge_ax]
+
+        syst_axes = sum_axes + ["muRfact", "muFfact"]
         syst_ax_labels = ["PtVBin", "genQ", "muR", "muF"]
-        if helicity:
+        if use_hel_hist:
             syst_axes.insert(2, "helicity")
             syst_ax_labels.insert(2, "AngCoeff")
+
+        print("Syst axes are", syst_axes)
 
         group_name = f"QCDscale{self.sample_label(sample_group)}"
         # Exclude all combinations where muR = muF = 1 (nominal) or where
@@ -117,16 +134,22 @@ class TheoryHelper(object):
                             ("muR0muF1", "muRDown"), ("muR1muF0", "muFDown"), ("muR1muF2", "muFUp"),
         ]
         action_map = {}
-        sum_axes = ["ptVgen", "chargeVgen",]
-        if use_hel_hist or helicity:
-            sum_axes.append("helicity")
 
         # NOTE: The map needs to be keyed on the base procs not the group names, which is
         # admittedly a bit nasty
         expanded_samples = self.card_tool.getProcNames([sample_group])
         logger.debug(f"using {scale_hist} histogram for QCD scale systematics")
         logger.debug(f"expanded_samples: {expanded_samples}")
-        action_map = {proc : syst_tools.scale_helicity_hist_to_variations for proc in expanded_samples}
+        func = syst_tools.scale_helicity_hist_to_variations 
+        action_args = {"sum_axes" : sum_axes}
+        if self.card_tool.datagroups.gen:
+            func = syst_tools.gen_scale_helicity_hist_to_variations
+            action_args["gen_obs"] = obs
+            action_args["sum_axes"].extend(["y", "massVgen"])
+            action_args["pt_ax"] = pt_ax
+            action_args["gen_axes"] = syst_axes[:-2] #TODO: Might want to incorporate support for yVgen also
+
+        action_map = {proc : func for proc in expanded_samples}
             
         # Determine if it should be summed over based on scale_type passed in. If not,
         # Remove it from the sum list and set names appropriately
@@ -143,22 +166,26 @@ class TheoryHelper(object):
         for ax,name in zip(sum_axes[:], ["Pt", "Charge", "Helicity"]):
             set_sum_over_axis(name, ax)
 
-        action_args = {"sum_axes" : sum_axes}
         if pt_binned:
             action_args["rebinPtV"] = rebin_pt
+            # A bit janky, but refer to the original ptVgen ax since the alt hasn't been added yet
+            signal_samples = self.card_tool.procGroups['signal_samples']
+            binning = rebin_pt
+            if not binning:
+                hscale = self.card_tool.getHistsForProcAndSyst(signal_samples[0], scale_hist)
+                binning = scale_hist[pt_ax.replace("Alt", "")].edges
+            if resumUnc:
+                pt30_idx = np.argmax(binning > 30)
+                if helicity:
+                    # Drop the uncertainties for < 30 for sigma_-1
+                    skip_entries.extend([{"helicity" : -1.j, pt_ax : complex(0, x)} for x in binning[:pt30_idx-1]])
+                else:
+                    # Drop the uncertainties for < 30
+                    skip_entries.extend([{pt_ax : complex(0, x)} for x in binning[:pt30_idx-1]])
 
-        if helicity and self.resumUnc:
+        if helicity:
             # Drop the uncertainty of A5,A6,A7
             skip_entries.extend([{"helicity" : complex(0, i)} for i in (5,6,7)])
-
-        binning = np.array(common.ptV_10quantiles_binning)
-        pt30_idx = np.argmax(binning > 30)
-        if helicity:
-            # Drop the uncertainties for < 30 for sigma_-1
-            skip_entries.extend([{"helicity" : -1.j, "ptVgen" : complex(0, x)} for x in binning[:pt30_idx-1]])
-        elif pt_binned:
-            # Drop the uncertainties for < 30
-            skip_entries.extend([{"ptVgen" : complex(0, x)} for x in binning[:pt30_idx-1]])
 
         # Skip MiNNLO unc. 
         if self.resumUnc and not (pt_binned or helicity):
@@ -232,6 +259,9 @@ class TheoryHelper(object):
         )
 
     def add_nonpert_unc(self, model):
+        if not self.resumUnc:
+            return
+
         self.set_np_model(model)
         if self.np_model:
             self.add_gamma_np_uncertainties()
@@ -283,7 +313,7 @@ class TheoryHelper(object):
         )
 
     def add_resum_scale_uncertainty():
-        obs = self.card_tool.project[:]
+        obs = self.card_tool.fit_axes[:]
         if not obs:
             raise ValueError("Failed to find the observable names for the resummation uncertainties")
         
@@ -418,7 +448,7 @@ class TheoryHelper(object):
         )
 
     def add_resum_transition_uncertainty(self):
-        obs = self.card_tool.project[:]
+        obs = self.card_tool.fit_axes[:]
 
         for sample_group in ["single_v_nonsig_samples", "signal_samples_inctau"]:
             if self.card_tool.procGroups.get(sample_group, None):
