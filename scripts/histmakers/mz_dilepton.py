@@ -114,7 +114,10 @@ logger.info(f"SF file: {args.sfFile}")
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
 
-mc_jpsi_crctn_helper, data_jpsi_crctn_helper = muon_calibration.make_jpsi_crctn_helpers(args)
+calib_filepaths = common.calib_filepaths
+closure_filepaths = common.closure_filepaths
+mc_jpsi_crctn_helper, data_jpsi_crctn_helper, mc_jpsi_crctn_unc_helper, data_jpsi_crctn_unc_helper = muon_calibration.make_jpsi_crctn_helpers(args, calib_filepaths, make_uncertainty_helper=True)
+z_non_closure_parametrized_helper, z_non_closure_binned_helper = muon_calibration.make_Z_non_closure_helpers(args, calib_filepaths, closure_filepaths)
 
 mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = muon_calibration.make_muon_calibration_helpers(args)
 
@@ -277,6 +280,65 @@ def build_graph(df, dataset):
         if isWorZ:
 
             df = syst_tools.add_theory_hists(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, axes, cols, for_wmass=False)
+
+            reco_sel = "vetoMuonsPre"
+            require_prompt = "tau" not in dataset.name
+            df = muon_calibration.define_genFiltered_recoMuonSel(df, reco_sel, require_prompt)
+            reco_sel_GF = muon_calibration.getColName_genFiltered_recoMuonSel(reco_sel, require_prompt)
+            df = muon_calibration.define_matched_gen_muons_kinematics(df, reco_sel_GF)
+            df = muon_calibration.calculate_matched_gen_muon_kinematics(df, reco_sel_GF)
+            df = muon_calibration.define_matched_reco_muon_kinematics(df, reco_sel_GF)
+
+            ####################################################
+            # nuisances from the muon momemtum scale calibration 
+            if (args.muonCorrData in ["massfit", "lbl_massfit"]):
+                input_kinematics = [
+                    f"{reco_sel_GF}_recoPt",
+                    f"{reco_sel_GF}_recoEta",
+                    f"{reco_sel_GF}_recoCharge",
+                    f"{reco_sel_GF}_genPt",
+                    f"{reco_sel_GF}_genEta",
+                    f"{reco_sel_GF}_genCharge"
+                ]
+                # muon scale variation from stats. uncertainty on the jpsi massfit
+                df = df.Define(
+                    "nominal_muonScaleSyst_responseWeights_tensor", data_jpsi_crctn_unc_helper,
+                    [*input_kinematics, "nominal_weight"]
+                )
+                muonScaleSyst_responseWeights = df.HistoBoost(
+                    "nominal_muonScaleSyst_responseWeights", axes,
+                    [*cols, "nominal_muonScaleSyst_responseWeights_tensor"],
+                    tensor_axes = data_jpsi_crctn_unc_helper.tensor_axes, storage=hist.storage.Double()
+                )
+                results.append(muonScaleSyst_responseWeights)
+
+                # add the ad-hoc Z non-closure nuisances from the jpsi massfit to muon scale unc
+                df = df.DefinePerSample("AFlag", "0x01")
+                df = df.Define(
+                    "Z_non_closure_parametrized_A", z_non_closure_parametrized_helper,
+                    [*input_kinematics, "nominal_weight", "AFlag"]
+                )
+                hist_Z_non_closure_parametrized_A = df.HistoBoost(
+                    "nominal_Z_non_closure_parametrized_A",
+                    axes, [*cols, "Z_non_closure_parametrized_A"],
+                    tensor_axes = z_non_closure_parametrized_helper.tensor_axes,
+                    storage=hist.storage.Double()
+                )
+                results.append(hist_Z_non_closure_parametrized_A)
+
+                df = df.DefinePerSample("MFlag", "0x04")
+                df = df.Define(
+                    "Z_non_closure_parametrized_M", z_non_closure_parametrized_helper,
+                    [*input_kinematics, "nominal_weight", "MFlag"]
+                )
+                hist_Z_non_closure_parametrized_M = df.HistoBoost(
+                    "nominal_Z_non_closure_parametrized_M",
+                    axes, [*cols, "Z_non_closure_parametrized_M"],
+                    tensor_axes = z_non_closure_parametrized_helper.tensor_axes,
+                    storage=hist.storage.Double()
+                )
+                results.append(hist_Z_non_closure_parametrized_M)
+            ####################################################
 
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
             if not "tau" in dataset.name:
