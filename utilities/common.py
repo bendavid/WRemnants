@@ -31,6 +31,25 @@ zprocs_all = zprocs_lowpu+zprocs
 wprocs_all = wprocs_lowpu+wprocs
 vprocs_all = vprocs_lowpu+vprocs
 
+# input files for muon momentum scale nuisances
+calib_dir = f"{data_dir}/calibration/"
+closure_dir = f"{data_dir}/closure/"
+calib_filepaths = {
+    'mc_corrfile': {
+        'idealMC_massfit': f"{calib_dir}/calibrationJMC_smeared_v718_nominal.root",
+        'idealMC_lbltruth_massfit': f"{calib_dir}/calibrationJMC_smeared_v718_nominalLBL.root"
+    },
+    'data_corrfile': {
+        'massfit': f"{calib_dir}/calibrationJDATA_ideal.root",
+        'lbl_massfit': f"{calib_dir}/calibrationJDATA_rewtgr_3dmap_LBL_MCstat.root"
+    },
+    'tflite_file': f"{calib_dir}/muon_response.tflite"
+}
+closure_filepaths = {
+    'parametrized': f"{closure_dir}/calibrationAlignmentZ_after_LBL_v721.root",
+    'binned': f"{closure_dir}/closureZ_LBL_smeared_v721.root"
+}
+
 # unfolding axes for low pu
 axis_recoil_reco_ptZ_lowpu = hist.axis.Variable([0, 5, 10, 15, 20, 30, 40, 50, 60, 75, 90, 150], name = "recoil_reco", underflow=False, overflow=True)
 axis_recoil_gen_ptZ_lowpu = hist.axis.Variable([0.0, 10.0, 20.0, 40.0, 60.0, 90.0, 150], name = "recoil_gen", underflow=False, overflow=True)
@@ -162,13 +181,13 @@ def common_parser(for_reco_highPU=False):
             choices=["none", "trackfit_only", "lbl", "massfit", "lbl_massfit"], 
             help="Type of correction to apply to the muons in data")
         parser.add_argument("--muScaleBins", type=int, default=1, help="Number of bins for muon scale uncertainty")
-        parser.add_argument("--muonScaleVariation", choices=["smearingWeights", "massWeights", "manualShift"], default="smearingWeights",  help="method to generate muon scale variation histograms")
+        parser.add_argument("--muonScaleVariation", choices=["smearingWeightsGaus", "smearingWeightsSplines", "massWeights"], default="smearingWeightsSplines",  help="method to generate nominal muon scale variation histograms")
+        parser.add_argument("--dummyMuScaleVar", action='store_true', help='Use a dummy 1e-4 variation on the muon scale instead of reading from the calibration file')
         parser.add_argument("--muonCorrMag", default=1.e-4, type=float, help="Magnitude of dummy muon momentum calibration uncertainty")
         parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
         parser.add_argument("--excludeFlow", action='store_true', help="Excludes underflow and overflow bins in main axes")
         parser.add_argument("--biasCalibration", type=str, default=None, choices=["binned","parameterized", "A", "M"], help="Adjust central value by calibration bias hist for simulation")
         parser.add_argument("--smearing", action='store_true', help="Smear pT such that resolution matches data") #TODO change to --no-smearing once smearing is final
-        parser.add_argument("--validateByMassWeights", action = "store_true", help = "validate the muon momentum scale shift weights by massweights")
         # options for efficiencies
         parser.add_argument("--trackerMuons", action='store_true', help="Use tracker muons instead of global muons (need appropriate scale factors too). This is obsolete")
         parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers)")
