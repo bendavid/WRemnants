@@ -19,13 +19,15 @@ import pdb
 generator_choices = ["horace-nlo", "horace-lo-photos", "horace-qed", "horace-lo", "winhac-nlo", "winhac-lo-photos", "winhac-lo", "MiNNLO"]
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-i", "--input", type=str, default="w_z_gen_dists_scetlib_dyturboCorr_ewinput.hdf5", help="File containing EW hists")
+parser.add_argument("-i", "--input", nargs="+", type=str, default=["w_z_gen_dists_scetlib_dyturboCorr_ewinput.hdf5"], help="File containing EW hists")
 parser.add_argument("--nums", nargs="+", type=str, default=["horace-nlo"], choices=generator_choices, help="Numerators")
 parser.add_argument("--den", type=str, default="horace-lo-photos", choices=generator_choices, help="Denominatos")
 parser.add_argument("--normalize", action="store_true", default=False, help="Normalize distributions before computing ratio")
 parser.add_argument("--noSmoothing", action="store_true", default=False, help="Disable smoothing of corrections")
 parser.add_argument("--debug", action='store_true', help="Print debug output")
 parser.add_argument("--plots", nargs="*", type=str, default=["1D","2D"], choices=["1D","2D", "2Derr"], help="What plots to produce")
+parser.add_argument("--baseName", default="nominal_ew", type=str, help="histogram name")
+parser.add_argument("--project", default=["ewMll", "ewLogDeltaM"], nargs="*", type=str, help="axes to project to")
 parser.add_argument("--showFlow", action='store_true', help="Show underlfow and overflow bins in plots")
 parser.add_argument("--outpath", type=str, default=f"{common.data_dir}/TheoryCorrections", help="Output path")
 parser.add_argument("-o", "--plotdir", type=str, help="Output directory for plots")
@@ -49,16 +51,22 @@ text_dict = {
     "WminusToMuNu": r"$\mathrm{W}^-\rightarrow\mu\nu$"
 }
 
-base_name = 'nominal_ew'
-project = ["ewMll", "ewLogDeltaM"]
-
-# base_name = 'nominal_ewMlly'
-# project = ["ewMlly"]
-
+project = args.project
 
 # file created with `python WRemnants/scripts/histmakers/w_z_gen_dists.py --skipAngularCoeffs --filter horace -p ewinput`
-f = h5py.File(args.input, 'r')
-res = narf.ioutils.pickle_load_h5py(f["results"])
+res = {}
+meta = {}
+for inpt in args.input:
+    logger.info(f"Load {inpt}")
+    f = h5py.File(inpt, 'r')
+    res.update(narf.ioutils.pickle_load_h5py(f["results"]))
+
+    try:
+        meta.update(input_tools.get_metadata(inpt))
+    except ValueError as e:
+        logger.warning(f"No meta data found for file {inpt}")
+        pass
+
 
 corrh = {}
 
@@ -234,7 +242,7 @@ for proc in procs:
         if proc_name not in res:
             return None
 
-        histo = res[proc_name]['output'][base_name].get()
+        histo = res[proc_name]['output'][args.baseName].get()
         logger.info(f'Integrals for {name} {np.sum(histo.values(flow=True))}')
 
         if args.normalize:

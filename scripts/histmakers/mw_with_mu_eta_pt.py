@@ -28,6 +28,8 @@ parser.add_argument("--makeMCefficiency", action="store_true", help="Save yields
 parser.add_argument("--onlyTheorySyst", action="store_true", help="Keep only theory systematic variations, mainly for tests")
 parser.add_argument("--oneMCfileEveryN", type=int, default=None, help="Use 1 MC file every N, where N is given by this option. Mainly for tests")
 parser.add_argument("--noAuxiliaryHistograms", action="store_true", help="Remove auxiliary histograms to save memory (removed by default with --unfolding or --theoryAgnostic)")
+
+parser = common.set_parser_default(parser, "theoryCorr", ["scetlib_dyturbo", "winhacnloew"])
 args = parser.parse_args()
 
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
@@ -36,7 +38,6 @@ if args.theoryAgnostic:
     # temporary, to ensure running with stat only until systematics are all implemented
     logger.warning("Running theory agnostic with only nominal and mass weight histograms for now.")
     parser = common.set_parser_default(parser, "onlyMainHistograms", True)
-    parser = common.set_parser_default(parser, "pt", [30,26.0,56.0])
     parser = common.set_parser_default(parser, "genVars", ["absYVgenSig", "ptVgenSig", "helicity"])
     args = parser.parse_args()
     
