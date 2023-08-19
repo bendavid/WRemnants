@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from wremnants import CardTool,combine_helpers,combine_theory_helper
 from wremnants.datasets.datagroups import Datagroups
-from utilities import common, logging, input_tools
+from utilities import common, logging, input_tools, boostHistHelpers as hh
 import itertools
 import argparse
 import hist
@@ -27,14 +27,15 @@ def make_parser(parser=None):
     parser.add_argument("--qcdProcessName" , type=str, default="Fake", help="Name for QCD process")
     # setting on the fit behaviour
     parser.add_argument("--fitvar", nargs="+", help="Variable to fit", default=["eta", "pt"])
-    parser.add_argument("--rebin", type=int, nargs='*', default=[], help="Rebin axis by this value (default does nothing)")
+    parser.add_argument("--rebin", type=int, nargs='*', default=[], help="Rebin axis by this value (default, 1, does nothing)")
+    parser.add_argument("--absval", type=int, nargs='*', default=[], help="Take absolute value of axis if 1 (default, 0, does nothing)")
     parser.add_argument("--axlim", type=float, default=[], nargs='*', help="Restrict axis to this range (assumes pairs of values by axis, with trailing axes optional)")
     parser.add_argument("--lumiScale", type=float, default=1.0, help="Rescale equivalent luminosity by this value (e.g. 10 means ten times more data and MC)")
     parser.add_argument("--sumChannels", action='store_true', help="Only use one channel")
     parser.add_argument("--fitXsec", action='store_true', help="Fit signal inclusive cross section")
     parser.add_argument("--genModel", action="store_true", help="Produce datacard with the xnorm as model (binned according to axes defined in --fitvar)")
     parser.add_argument("--fitresult", type=str, default=None ,help="Use data and covariance matrix from fitresult (for making a theory fit)")
-    parser.add_argument("--simultaneousABCD", action="store_true", help="Produce datacard for simultaneous fit of ABCD regions")
+    parser.add_argument("--ABCD", action="store_true", help="Produce datacard for simultaneous fit of ABCD regions")
     # settings on the nuisances itself
     parser.add_argument("--doStatOnly", action="store_true", default=False, help="Set up fit to get stat-only uncertainty (currently combinetf with -S 0 doesn't work)")
     parser.add_argument("--minnloScaleUnc", choices=["byHelicityPt", "byHelicityPtCharge", "byHelicityCharge", "byPtCharge", "byPt", "byCharge", "integrated",], default="byHelicityPt",
@@ -87,14 +88,14 @@ def setup(args,xnorm=False):
             args.excludeProcGroups.append("QCD")
     filterGroup = args.filterProcGroups if args.filterProcGroups else None
     excludeGroup = args.excludeProcGroups if args.excludeProcGroups else None
-    if args.simultaneousABCD and (excludeGroup is None or "Fake" not in excludeGroup):
+    if args.ABCD and (excludeGroup is None or "Fake" not in excludeGroup):
         excludeGroup.append("Fake")
     logger.debug(f"Filtering these groups of processes: {args.filterProcGroups}")
     logger.debug(f"Excluding these groups of processes: {args.excludeProcGroups}")
 
-    datagroups = Datagroups(args.inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm and not args.simultaneousABCD)
+    datagroups = Datagroups(args.inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm and not args.ABCD)
 
-    if not xnorm and (args.axlim or args.rebin):
+    if not xnorm and (args.axlim or args.rebin or args.absval):
         if len(args.axlim) % 2 or len(args.axlim)/2 > len(args.fitvar) or len(args.rebin) > len(args.fitvar):
             raise ValueError("Inconsistent rebin or axlim arguments. axlim must be at most two entries per axis, and rebin at most one")
 
@@ -109,15 +110,22 @@ def setup(args,xnorm=False):
             if rebin:
                 logger.info(f"Rebinning the axis '{var}' by [{rebin}]")
 
-        logger.info(f"Will apply the global selection {sel}")
-        datagroups.setGlobalAction(lambda h: h[sel])
+        if len(sel) > 0:
+            logger.info(f"Will apply the global selection {sel}")
+            datagroups.setGlobalAction(lambda h: h[sel])
+
+        for i, (var, absval) in enumerate(itertools.zip_longest(args.fitvar, args.absval)):
+            if absval:
+                logger.info(f"Taking the absolute value of axis '{var}'")
+                datagroups.setGlobalAction(lambda h, ax=var: hh.makeAbsHist(h, ax))
+                args.fitvar[i] = f"abs{var}"
 
     wmass = datagroups.wmass
     wlike = datagroups.wlike
     lowPU = datagroups.lowPU
     dilepton = datagroups.dilepton
 
-    constrainMass = dilepton and not "mll" in args.fitvar
+    constrainMass = (dilepton and not "mll" in args.fitvar) or args.fitXsec
 
     if wmass:
         base_group = "Wenu" if datagroups.flavor == "e" else "Wmunu"
@@ -158,7 +166,7 @@ def setup(args,xnorm=False):
     if args.absolutePathInCard:
         cardTool.setAbsolutePathShapeInCard()
     cardTool.setProjectionAxes(args.fitvar)
-    if wmass and args.simultaneousABCD:
+    if wmass and args.ABCD:
         cardTool.setChannels(["inclusive"])
         cardTool.setWriteByCharge(False)
         fitvars = ["passIso", "passMT", *args.fitvar]
@@ -269,6 +277,14 @@ def setup(args,xnorm=False):
     if args.theoryAgnostic:
         logger.error("Temporarily not using mass weights for Wtaunu. Please update when possible")
         signal_samples_forMass = ["signal_samples"]
+    if constrainMass and args.doStatOnly:
+        logger.info("Using option --doStatOnly: the card was created without nuisance parameters")
+        return cardTool
+
+    if args.doStatOnly and constrainMass:
+        # no mass weight uncertainty for stat only fits if mass weight is a nuisance (e.g. unfolding, xsec, ...)
+        return cardTool
+
     cardTool.addSystematic(f"massWeight{label}",
                            processes=signal_samples_forMass,
                            group=f"massShift{label}",
@@ -335,6 +351,7 @@ def setup(args,xnorm=False):
         mirror_tnp=True,
         pdf_from_corr=args.pdfUncFromCorr,
         scale_pdf_unc=args.scalePdf,
+        minnloUnc=args.minnloScaleUnc
     )
     theory_helper.add_all_theory_unc()
 
@@ -609,8 +626,8 @@ def main(args,xnorm=False):
     if args.genModel and args.fitresult:
         combine_helpers.setTheoryFitData(cardTool, args.fitresult)
 
-    cardTool.writeOutput(args=args, hdf5=args.hdf5, sparse=args.sparse, xnorm=xnorm or args.hdf5,
-        forceNonzero=not args.unfolding, check_systs=not args.unfolding, simultaneousABCD=args.simultaneousABCD)
+    cardTool.writeOutput(args=args, hdf5=args.hdf5, sparse=args.sparse, xnorm=xnorm or (args.hdf5 and args.unfolding),
+        forceNonzero=not args.unfolding, check_systs=not args.unfolding, ABCD=args.ABCD)
     return
 
 if __name__ == "__main__":

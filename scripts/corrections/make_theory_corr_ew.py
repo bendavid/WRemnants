@@ -16,16 +16,21 @@ import h5py
 import narf
 import pdb
 
-generator_choices = ["horace-nlo", "horace-lo-photos", "horace-qed", "horace-lo", "winhac-nlo", "winhac-lo-photos", "winhac-lo", "MiNNLO"]
+generator_choices = ["horace-nlo", "horace-lo-photos", "horace-qed", "horace-lo", "horace-new", 
+    "horace-nlo", "horace-lo-photos", "horace-qed", "horace-lo", "horace-new", 
+    'horace-alpha-fsr-off-isr-off', 'horace-alpha-old-fsr-off-isr-off', 'horace-alpha-old-fsr-off-isr-pythia', 
+    "winhac-nlo", "winhac-lo-photos", "winhac-lo", "MiNNLO"]
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-i", "--input", type=str, default="w_z_gen_dists_scetlib_dyturboCorr_ewinput.hdf5", help="File containing EW hists")
+parser.add_argument("-i", "--input", nargs="+", type=str, default=["w_z_gen_dists_scetlib_dyturboCorr_ewinput.hdf5"], help="File containing EW hists")
 parser.add_argument("--nums", nargs="+", type=str, default=["horace-nlo"], choices=generator_choices, help="Numerators")
 parser.add_argument("--den", type=str, default="horace-lo-photos", choices=generator_choices, help="Denominatos")
 parser.add_argument("--normalize", action="store_true", default=False, help="Normalize distributions before computing ratio")
 parser.add_argument("--noSmoothing", action="store_true", default=False, help="Disable smoothing of corrections")
 parser.add_argument("--debug", action='store_true', help="Print debug output")
 parser.add_argument("--plots", nargs="*", type=str, default=["1D","2D"], choices=["1D","2D", "2Derr"], help="What plots to produce")
+parser.add_argument("--baseName", default="nominal_ew", type=str, help="histogram name")
+parser.add_argument("--project", default=["ewMll", "ewLogDeltaM"], nargs="*", type=str, help="axes to project to")
 parser.add_argument("--showFlow", action='store_true', help="Show underlfow and overflow bins in plots")
 parser.add_argument("--outpath", type=str, default=f"{common.data_dir}/TheoryCorrections", help="Output path")
 parser.add_argument("-o", "--plotdir", type=str, help="Output directory for plots")
@@ -49,29 +54,49 @@ text_dict = {
     "WminusToMuNu": r"$\mathrm{W}^-\rightarrow\mu\nu$"
 }
 
-base_name = 'nominal_ew'
-project = ["ewMll", "ewLogDeltaM"]
+project = args.project # ["Mll"]
 
-# base_name = 'nominal_ewMlly'
-# project = ["ewMlly"]
+def rebin_hist(histo, new_edges, flow=True):
+    # rebin a histogram of variable edges
 
+    edges_original = histo.axes.edges[0]
+    values_original = histo.values(flow=flow)
+    variances_original = histo.variances(flow=flow)
+
+    # Calculate new histogram values
+    new_values = np.zeros(len(new_edges) - 1)
+    new_variances = np.zeros(len(new_edges) - 1)
+    for i in range(len(new_values)):
+        new_indices = np.where((edges_original >= new_edges[i]) &
+                                (edges_original <= new_edges[i + 1]))[0]
+        new_values[i] = values_original[new_indices].sum()
+        new_variances[i] = variances_original[new_indices].sum()
+
+    # Create a new histogram with the rebinned data
+    rebinned_histogram = hist.Hist(hist.axis.Variable(new_edges, name=histo.axes.name[0]), storage=hist.storage.Weight())
+    rebinned_histogram[...] = np.stack((new_values, new_variances), axis=-1)
+    return rebinned_histogram
 
 # file created with `python WRemnants/scripts/histmakers/w_z_gen_dists.py --skipAngularCoeffs --filter horace -p ewinput`
-f = h5py.File(args.input, 'r')
-res = narf.ioutils.pickle_load_h5py(f["results"])
+res = {}
+meta = {}
+for inpt in args.input:
+    logger.info(f"Load {inpt}")
+    f = h5py.File(inpt, 'r')
+    res.update(narf.ioutils.pickle_load_h5py(f["results"]))
+
+    try:
+        meta.update(input_tools.get_metadata(inpt))
+    except ValueError as e:
+        logger.warning(f"No meta data found for file {inpt}")
+        pass
 
 corrh = {}
 
-try:
-    meta = input_tools.get_metadata(args.input)
-except ValueError as e:
-    logger.warning(f"No meta data found for file {args.input}")
-    pass
-
 labels = {
-    "ewMll": "$m_{\ell\ell}$", 
-    "ewMlly": "$m_{\ell\ell\gamma}$", 
-    "ewLogDeltaM": "$\log_{10}(m_{\ell\ell\gamma} - m_{\ell\ell})$"
+    "ewMll": "post FSR $m_{\ell\ell}$", 
+    "ewMlly": "post FSR $m_{\ell\ell\gamma}$", 
+    "ewLogDeltaM": "post FSR $\log_{10}(m_{\ell\ell\gamma} - m_{\ell\ell})$"
 }
 
 colors = mpl.colormaps["tab10"]
@@ -141,8 +166,8 @@ def make_plot_2d(h, name, proc, plot_error=False, cmin=None, cmax=None, flow=Tru
     plot_tools.save_pdf_and_png(args.plotdir, plot_name)
     plot_tools.write_index_and_log(args.plotdir, plot_name, args=args, analysis_meta_info=meta)
 
-def make_plot_1d(hists, name, proc, axis, ratio=False, normalize=False, ymin=None, ymax=None, flow=True, density=False):
-    logger.info(f"Make 1D plot for {name} with axes {axis}")
+def make_plot_1d(hists, name, proc, axis, ratio=False, normalize=False, xmin=None, xmax=None, ymin=None, ymax=None, flow=True, density=False):
+    logger.info(f"Make 1D plot for {name} with axis {axis}")
 
     if not isinstance(hists, list):
         hists = [hists]
@@ -206,12 +231,15 @@ def make_plot_1d(hists, name, proc, axis, ratio=False, normalize=False, ymin=Non
 
         # outname += f"_{name[i]}"
 
+    if xmin is not None:
+        ax.set_xlim(xmin, xmax)
+
     ax.text(1.0, 1.003, text_dict[proc], transform=ax.transAxes, fontsize=30,
             verticalalignment='bottom', horizontalalignment="right")
-    plot_tools.addLegend(ax, text_size=16)
+    plot_tools.addLegend(ax, ncols=1, text_size=16)
 
     output_tools.make_plot_dir(*args.plotdir.rsplit("/", 1))
-    plot_name = f"hist{outname}_{axis}_{proc}"
+    plot_name = f"hist{outname}_{axis}_{proc}_{name[-1]}"
     if ratio:
         plot_name += "_div"
     if args.noSmoothing and "_div_" in name[0]:
@@ -234,7 +262,7 @@ for proc in procs:
         if proc_name not in res:
             return None
 
-        histo = res[proc_name]['output'][base_name].get()
+        histo = res[proc_name]['output'][args.baseName].get()
         logger.info(f'Integrals for {name} {np.sum(histo.values(flow=True))}')
 
         if args.normalize:
@@ -328,15 +356,20 @@ for proc in procs:
         logger.info("Make 1D control plots")
 
         for ax in project:
-            if ax in ["ewMll", "ewMlly"]:
+            # xmin, xmax = 60, 120
+            xmin, xmax = None, None
+
+            if ax in ["ewMll", "Mll"]:
+                ymin, ymax = 0.95, 1.05
+            elif ax in ["ewMlly", "Mlly"]:
                 ymin, ymax = 0.8, 1.2
             else:
                 ymin, ymax = 0, 2
 
             hratios1D = [hh.divideHists(hnum.project(ax), hden.project(ax)) for hnum in hnums]
 
-            make_plot_1d(hratios1D, [f"{n}_div_{args.den}" for n in nums], proc, ax, ymin=ymin, ymax=ymax, ratio=True)
-            make_plot_1d([*hnums, hden], [*nums, args.den], proc, ax, ymin=0, density=False)
+            make_plot_1d([*hnums, hden], [*nums, args.den], proc, ax, xmin=xmin, xmax=xmax, ymin=0, density=False)
+            make_plot_1d(hratios1D, [f"{n}_div_{args.den}" for n in nums], proc, ax, xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax, ratio=True)
 
 for num, corrh in corrhs.items():
     outname = num.replace('-', '') + 'ew'

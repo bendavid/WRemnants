@@ -89,6 +89,23 @@ def excludeProcs(excludes, datasets):
     else:
         return datasets
 
+def getDatasetDict(mode=None, nanoVersion="v9"):
+    if mode == "lowPU":
+        return dataDictLowPU
+
+    if nanoVersion == "v8":
+        dataDict = dataDictV8
+        logger.info('Using NanoAOD V8')
+    elif nanoVersion == "v9":
+        dataDict = dataDictV9
+    else:
+        raise ValueError("Only NanoAODv8 and NanoAODv9 are supported")
+
+    if mode == "gen":
+        dataDict.update(genDataDict)     
+
+    return dataDict
+
 def getDataPath(mode=None):
     import socket
     hostname = socket.gethostname()
@@ -114,18 +131,7 @@ def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, na
         base_path = getDataPath(mode)
     logger.info(f"Loading 2016 samples from {base_path}.")
 
-    if nanoVersion == "v8":
-        dataDict = dataDictV8
-        logger.info('Using NanoAOD V8')
-    elif nanoVersion == "v9":
-        dataDict = dataDictV9
-    else:
-        raise ValueError("Only NanoAODv8 and NanoAODv9 are supported")
-
-    if mode == "gen":
-        dataDict.update(genDataDict)     
-    elif mode == "lowPU":
-        dataDict = dataDictLowPU
+    dataDict = getDatasetDict(mode, nanoVersion)
 
     narf_datasets = []
     for sample,info in dataDict.items():

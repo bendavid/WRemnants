@@ -15,6 +15,7 @@ parser.add_argument("--skipAngularCoeffs", action='store_true', help="Skip the c
 parser.add_argument("--singleLeptonHists", action='store_true', help="Also store single lepton kinematics")
 parser.add_argument("--skipEWHists", action='store_true', help="Also store histograms for EW reweighting. Use with --filter horace")
 parser.add_argument("--absY", action='store_true', help="use absolute |Y|")
+parser.add_argument("--applySelection", action='store_true', help="Apply selection on leptons")
 
 parser = common.set_parser_default(parser, "filterProcs", common.vprocs)
 
@@ -85,6 +86,13 @@ def build_graph(df, dataset):
 
     df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
 
+    if args.applySelection:
+        if isZ:
+            df = df.Filter("ewLeptons[0].pt()>25 && ewLeptons[1].pt()>25 && std::fabs(ewLeptons[0].eta())<3.5 && std::fabs(ewLeptons[1].eta())<3.5")
+            # TODO
+        # elif isW:
+            # df = df.Filter("ewLeptons[0].pt()>25 && ewLeptons[1].pt()>25 && std::fabs(ewLeptons[0].eta())<3.5 && std::fabs(ewLeptons[1].eta())<3.5")
+
     if isZ:
         nominal_axes = [axis_massZgen, axis_rapidity, axis_ptVgen, axis_chargeZgen]
         lep_axes = [axis_l_eta_gen, axis_l_pt_gen, axis_chargeZgen]
@@ -117,6 +125,11 @@ def build_graph(df, dataset):
         # auxiliary hists
         axis_ewMlly = hist.axis.Variable(massBins, name = "ewMlly")
         results.append(df.HistoBoost("nominal_ewMlly", [axis_ewMlly], ["ewMlly", "nominal_weight"], storage=hist.storage.Weight()))
+        # coarse binning
+        axis_Mll = hist.axis.Regular(100, 50, 150, name = "Mll")
+        results.append(df.HistoBoost("nominal_Mll", [axis_Mll], ["ewMll", "nominal_weight"], storage=hist.storage.Weight()))
+        axis_Mlly = hist.axis.Regular(100, 50, 150, name = "Mlly")
+        results.append(df.HistoBoost("nominal_Mlly", [axis_Mlly], ["ewMlly", "nominal_weight"], storage=hist.storage.Weight()))
 
     nominal_gen = df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols, "nominal_weight"], storage=hist.storage.Double())
 

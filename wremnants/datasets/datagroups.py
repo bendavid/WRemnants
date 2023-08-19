@@ -192,7 +192,10 @@ class Datagroups(object):
     
     def setGlobalAction(self, action):
         # To be used for applying a selection, rebinning, etc.
-        self.globalAction = action
+        if self.globalAction is None:
+            self.globalAction = action
+        else:
+            self.globalAction = lambda h, old_action=self.globalAction: action(old_action(h))
 
     def setNominalName(self, name):
         self.nominalName = name

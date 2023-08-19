@@ -702,7 +702,7 @@ class CardTool(object):
         else:
             self.writeHDF5Output(args, sparse=sparse, **kwargs)
 
-    def writeRootOutput(self, args=None, xnorm=False, forceNonzero=True, check_systs=True, simultaneousABCD=False):
+    def writeRootOutput(self, args=None, xnorm=False, forceNonzero=True, check_systs=True, ABCD=False):
         self.xnorm = xnorm
         self.datagroups.loadHistsForDatagroups(
             baseName=self.nominalName, syst=self.nominalName,
@@ -710,7 +710,7 @@ class CardTool(object):
             label=self.nominalName, 
             scaleToNewLumi=self.lumiScale, 
             forceNonzero=forceNonzero)
-        if simultaneousABCD and not self.xnorm:
+        if ABCD and not self.xnorm:
             setSimultaneousABCD(self)
         self.writeForProcesses(self.nominalName, processes=self.datagroups.groups.keys(), label=self.nominalName, check_systs=check_systs)
         self.loadNominalCard()
@@ -742,43 +742,13 @@ class CardTool(object):
         self.writeCard()
 
     def writeHDF5Output(self, args=None, xnorm=False,
-        simultaneousABCD=False,
+        ABCD=False,
         forceNonzero=True, check_systs=False, allowNegativeExpectation=False, 
         sparse=False,
         clipSystVariations=False,
         clipSystVariationsSignal=False,
+        noMCStat=False,
     ):
-        # the number of systematics is not known before loading the histograms, the systematics are therefore stored in temporary dicts and sets
-        dict_noigroups = {}
-        dict_systgroups = {}
-
-        systsstandard = set()
-        systsnoconstraint = set()
-        systsnoprofile = set()
-
-        def book_systematic(syst, name):
-            if syst.get('noProfile', False):
-                systsnoprofile.add(name)
-            elif syst.get("noConstraint", False) or syst.get("noi", False):
-                systsnoconstraint.add(name)
-            else:
-                systsstandard.add(name)
-            group = syst["group"]
-            if group is None:
-                logger.warning(f"Systemtaic {name} is not a member of any group")
-                return 
-                #TODO: adding a group with the name of the member instead?
-                # group = name 
-            if syst.get("noi", False):
-                if group not in dict_noigroups:
-                    dict_noigroups[group] = set([name])
-                else:
-                    dict_noigroups[group].add(name)
-            else:
-                if group not in dict_systgroups:
-                    dict_systgroups[group] = set([name])
-                else:
-                    dict_systgroups[group].add(name)
 
         #list of channels, ordered such that masked channels are last, right now, only one channel is supported
         # TODO support multiple channels
@@ -793,75 +763,16 @@ class CardTool(object):
                 chans.append("xnorm")
                 maskedchans.append("xnorm")
 
-        nbins = 0
-        nbinsfull = 0
 
         signals = self.unconstrainedProcesses[:]
         bkgs = [p for p in self.predictedProcesses() if p not in self.unconstrainedProcesses]
-        if simultaneousABCD:
+        if ABCD:
             bkgs.append("Nonprompt")
         procs = signals + bkgs
         nproc = len(procs)
 
-        #list of groups of systematics (nuisances) and lists of indexes
-        systgroups = []
-        systgroupidxs = []
-
-        #list of groups of signal processes by charge
-        chargegroups = []
-        chargegroupidxs = []
-
-        #list of groups of signal processes by polarization
-        polgroups = []
-        polgroupidxs = []
-
-        #list of groups of signal processes by helicity xsec
-        helgroups = []
-        helgroupidxs = []
-
-        #list of groups of signal processes to be summed
-        sumgroups = []
-        sumgroupsegmentids = []
-        sumgroupidxs = []
-        for igroup, (group, members) in enumerate(self.cardSumGroups.items()):
-            sumgroups.append(group)
-            for proc in members:
-                sumgroupsegmentids.append(igroup)
-                sumgroupidxs.append(procs.index(proc))
-
-        #list of groups of signal processes by chargemeta
-        chargemetagroups = []
-        chargemetagroupidxs = []
-
-        #list of groups of signal processes by ratiometa
-        ratiometagroups = []
-        ratiometagroupidxs = []
-
-        #list of groups of signal processes by helmeta
-        helmetagroups = []
-        helmetagroupidxs = []
-
-        #list of groups of signal processes for regularization
-        reggroups = []
-        reggroupidxs = []
-
-        poly1dreggroups = []
-        poly1dreggroupfirstorder = []
-        poly1dreggrouplastorder = []
-        poly1dreggroupnames = []
-        poly1dreggroupbincenters = []
-
-        poly2dreggroups = []
-        poly2dreggroupfirstorder = []
-        poly2dreggrouplastorder = []
-        poly2dreggroupfullorder = []
-        poly2dreggroupnames = []
-        poly2dreggroupbincenters0 = []
-        poly2dreggroupbincenters1 = []
-
-        #list of groups of systematics to be treated as additional outputs for impacts, etc (aka "nuisances of interest")
-        noigroups = []
-        noigroupidxs = []
+        # the number of systematics is not known before loading the histograms, the systematics are therefore stored in temporary dicts and sets
+        cardInfo = Hdf5CardInfo()
 
         dict_data_obs = {}
         dict_data_obs_cov = {}
@@ -872,12 +783,14 @@ class CardTool(object):
 
         #keep track of bins per channel
         ibins = []
+        nbins = 0
         
         #nominal histograms
         for chan in chans:
-            logger.debug(f"Now in channel {chan}")
+            logger.info(f"Now in channel {chan}")
 
             if chan in maskedchans:
+                self.datagroups.globalAction = None # reset global action in case of rebinning or such
                 self.datagroups.select_xnorm_groups() # only keep processes where xnorm is defined
                 if "Fake" in self.datagroups.groups.keys():
                     self.datagroups.deleteGroup("Fake")
@@ -904,18 +817,19 @@ class CardTool(object):
                     if self.theoryFitData is None or self.theoryFitDataCov is None:
                         raise RuntimeError("No data or covariance found to perform theory fit")
 
-                    data_obs_hist = self.theoryFitData
-                    dict_data_obs_cov[chan] = self.theoryFitDataCov.values(flow=False).astype(self.dtype)
+                    data_obs = self.theoryFitData
+                    dict_data_obs_cov[chan] = self.theoryFitDataCov
                 else:
-                    if simultaneousABCD:
+                    if ABCD:
                         setSimultaneousABCD(self)
 
                     data_obs_hist = self.datagroups.groups[self.dataName].hists[chan]
 
                     if data_obs_hist.axes.name != self.project:
                         data_obs_hist = data_obs_hist.project(*self.project)
-                
-                data_obs = data_obs_hist.values(flow=False).flatten().astype(self.dtype)
+
+                    data_obs = data_obs_hist.values(flow=False).flatten().astype(self.dtype)
+
                 dict_data_obs[chan] = data_obs
                 nbinschan = len(data_obs)
                 nbins += nbinschan
@@ -926,7 +840,7 @@ class CardTool(object):
 
             ibins.append(nbinschan)
 
-            procs_chan = self.datagroups.groups.keys()
+            procs_chan = self.predictedProcesses()
             for proc in procs_chan:
                 logger.debug(f"Now  in channel {chan} at process {proc}")
                 
@@ -962,7 +876,7 @@ class CardTool(object):
 
             # lnN systematics
             for name, syst in self.lnNSystematics.items():
-                logger.debug(f"Now in channel {chan} at lnN systematic {name}")
+                logger.info(f"Now in channel {chan} at lnN systematic {name}")
 
                 if chan in maskedchans and not syst["xnorm"]:
                     continue
@@ -1002,11 +916,11 @@ class CardTool(object):
                     dict_logkavg[chan][proc][name] = logkavg_proc
                     dict_logkhalfdiff[chan][proc][name] = logkhalfdiff_proc
 
-                book_systematic(syst, name)
+                cardInfo.book_systematic(syst, name)
 
             # shape systematics
             for systKey, syst in self.systematics.items():
-                logger.debug(f"Now in channel {chan} at shape systematic group {systKey}")
+                logger.info(f"Now in channel {chan} at shape systematic group {systKey}")
 
                 if chan in maskedchans and not syst["xnorm"]:
                     continue
@@ -1116,36 +1030,9 @@ class CardTool(object):
                         dict_logkavg[chan][proc][var_name] = logkavg_proc
                         dict_logkhalfdiff[chan][proc][var_name] = logkhalfdiff_proc
 
-                        book_systematic(syst, var_name)
+                        cardInfo.book_systematic(syst, var_name)
 
                     self.datagroups.groups[proc].hists[systKey] = None
-
-        systsstandard = list(systsstandard)
-        systsnoprofile = list(systsnoprofile)
-        systsnoconstraint = list(systsnoconstraint)
-
-        systs = systsnoconstraint + systsstandard + systsnoprofile
-        nsyst = len(systs)
-
-        constraintweights = np.ones([nsyst],dtype=self.dtype)
-        for syst in systsnoconstraint:
-            constraintweights[systs.index(syst)] = 0.
-
-        for group, members in dict_noigroups.items():
-            noigroups.append(group)
-            noigroupidx = []
-            for syst in members:
-                noigroupidx.append(systs.index(syst))
-            noigroupidxs.append(noigroupidx)
-
-        for group, members in dict_systgroups.items():
-            systgroups.append(group)
-            systgroupidx = []
-            for syst in members:
-                systgroupidx.append(systs.index(syst))
-            systgroupidxs.append(systgroupidx)
-
-        nbinsfull = sum(ibins)
 
         logger.info(f"Write out nominal arrays")
         sumw = np.zeros([nbins], self.dtype)
@@ -1166,6 +1053,11 @@ class CardTool(object):
                     continue
                 sumw[ibin:ibin+nbinschan] += dict_norm[chan][proc]
                 sumw2[ibin:ibin+nbinschan] += dict_sumw2[chan][proc]
+
+        systs = cardInfo.get_systs()
+        nsyst = len(systs)
+
+        nbinsfull = sum(ibins)
 
         ibin = 0
         if sparse:
@@ -1367,6 +1259,22 @@ class CardTool(object):
             ds = f.create_dataset(f"h{name}", dimension, dtype=dtype, compression=compression)
             ds[...] = content
 
+        systsnoprofile = cardInfo.get_systsnoprofile()
+        systsnoconstraint = cardInfo.get_systsnoconstraint()
+
+        noigroups, noigroupidxs = cardInfo.get_noigroups()
+        systgroups, systgroupidxs = cardInfo.get_systgroups()
+        sumgroups, sumgroupsegmentids, sumgroupidxs = cardInfo.get_sumgroups(self.cardSumGroups, procs)
+        chargegroups, chargegroupidxs = cardInfo.get_chargegroups()
+        polgroups, polgroupidxs = cardInfo.get_polgroups()
+        helgroups, helgroupidxs = cardInfo.get_helgroups()
+        chargemetagroups, chargemetagroupidxs = cardInfo.get_chargemetagroups()
+        ratiometagroups, ratiometagroupidxs = cardInfo.get_ratiometagroups()
+        helmetagroups, helmetagroupidxs = cardInfo.get_helmetagroups()
+        reggroups, reggroupidxs = cardInfo.get_reggroups()
+        poly1dreggroups, poly1dreggroupfirstorder, poly1dreggrouplastorder, poly1dreggroupnames, poly1dreggroupbincenters = cardInfo.get_poly1dreggroups()
+        poly2dreggroups, poly2dreggroupfirstorder, poly2dreggrouplastorder, poly2dreggroupfullorder, poly2dreggroupnames, poly2dreggroupbincenters0, poly2dreggroupbincenters1 = cardInfo.get_poly2dreggroups()
+
         #save some lists of strings to the file for later use
         create_dataset("procs", procs)
         create_dataset("signals", signals)
@@ -1411,6 +1319,7 @@ class CardTool(object):
         #create h5py datasets with optimized chunk shapes
         nbytes = 0
 
+        constraintweights = cardInfo.get_constraintweights(self.dtype)
         nbytes += writeFlatInChunks(constraintweights, f, "hconstraintweights", maxChunkBytes = self.chunkSize)
         constraintweights = None
 
@@ -1418,8 +1327,10 @@ class CardTool(object):
         data_obs = None
 
         if self.theoryFit:
-            nbytes += writeFlatInChunks(data_cov, f, "hdata_cov", maxChunkBytes = self.chunkSize)
+            full_cov = data_cov if noMCStat else np.add(data_cov,np.diag(sumw2))              
+            nbytes += writeFlatInChunks(np.linalg.inv(full_cov), f, "hdata_cov_inv", maxChunkBytes = self.chunkSize)
             data_cov = None
+            full_cov = None
 
         nbytes += writeFlatInChunks(kstat, f, "hkstat", maxChunkBytes = self.chunkSize)
         kstat = None
@@ -1637,7 +1548,7 @@ class CardTool(object):
             return
         if self.project:
             axes = self.project[:]
-            if "charge" in h.axes.name and not self.xnorm:
+            if "charge" in h.axes.name and "charge" not in axes and not self.xnorm:
                 axes.append("charge")
             # don't project h into itself when axes to project are all axes
             if any (ax not in h.axes.name for ax in axes):
@@ -1671,10 +1582,130 @@ class CardTool(object):
         hists = {name: h} # always keep original variation in output file for checks
         if decorrByBin:
             hists.update(self.makeDecorrelatedSystHistograms(h, hnomi, syst, decorrByBin))
-            
+
         for hname, histo in hists.items():
             if self.writeByCharge:
                 self.writeHistByCharge(histo, hname)
             else:
                 self.writeHistWithCharges(histo, hname)
         self.outfile.cd()
+
+class Hdf5CardInfo(object):
+    def __init__(self):
+        self.dict_noigroups = {}
+        self.dict_systgroups = {}
+
+        self.systsstandard = set()
+        self.systsnoconstraint = set()
+        self.systsnoprofile = set()
+        
+    def book_systematic(self, syst, name):
+        if syst.get('noProfile', False):
+            self.systsnoprofile.add(name)
+        elif syst.get("noConstraint", False) or syst.get("noi", False):
+            self.systsnoconstraint.add(name)
+        else:
+            self.systsstandard.add(name)
+        group = syst["group"]
+        if group is None:
+            logger.warning(f"Systemtaic {name} is not a member of any group")
+            return 
+            #TODO: adding a group with the name of the member instead?
+            # group = name 
+        if syst.get("noi", False):
+            if group not in self.dict_noigroups:
+                self.dict_noigroups[group] = set([name])
+            else:
+                self.dict_noigroups[group].add(name)
+        else:
+            if group not in self.dict_systgroups:
+                self.dict_systgroups[group] = set([name])
+            else:
+                self.dict_systgroups[group].add(name)
+
+    def get_systsstandard(self):
+        return list(self.systsstandard)
+
+    def get_systsnoprofile(self):
+        return list(self.systsnoprofile)
+
+    def get_systsnoconstraint(self):
+        return list(self.systsnoconstraint)
+
+    def get_systs(self):
+        return self.get_systsnoconstraint() + self.get_systsstandard() + self.get_systsnoprofile()
+
+    def get_constraintweights(self, dtype):
+        systs = self.get_systs()
+        constraintweights = np.ones([len(systs)], dtype=dtype)
+        for syst in self.get_systsnoconstraint():
+            constraintweights[systs.index(syst)] = 0.
+        return constraintweights
+
+    def get_groups(self, group_dict):
+        systs = self.get_systs()
+        groups = []
+        idxs = []
+        for group, members in group_dict.items():
+            groups.append(group)
+            idx = []
+            for syst in members:
+                idx.append(systs.index(syst))
+            idxs.append(idx)
+        return groups, idxs
+
+    def get_noigroups(self):
+        #list of groups of systematics to be treated as additional outputs for impacts, etc (aka "nuisances of interest")
+        return self.get_groups(self.dict_noigroups)
+
+    def get_systgroups(self):
+        #list of groups of systematics (nuisances) and lists of indexes
+        return self.get_groups(self.dict_systgroups)
+
+    def get_sumgroups(self, dict_sumgroups, procs):
+        #list of groups of signal processes to be summed
+        sumgroups = []
+        sumgroupsegmentids = []
+        sumgroupidxs = []
+        for igroup, (group, members) in enumerate(dict_sumgroups.items()):
+            sumgroups.append(group)
+            for proc in members:
+                sumgroupsegmentids.append(igroup)
+                sumgroupidxs.append(procs.index(proc))
+        return sumgroups, sumgroupsegmentids, sumgroupidxs
+
+    def get_chargegroups(self):
+        #list of groups of signal processes by charge
+        return [], []
+
+    def get_polgroups(self):
+        #list of groups of signal processes by polarization
+        return [], []
+
+    def get_helgroups(self):
+        #list of groups of signal processes by helicity xsec
+        return [], []
+
+    def get_chargemetagroups(self):
+        #list of groups of signal processes by chargemeta
+        return [], []
+
+    def get_ratiometagroups(self):
+        #list of groups of signal processes by ratiometa
+        return [], []
+
+    def get_helmetagroups(self):
+        #list of groups of signal processes by helmeta
+        return [], []
+
+    def get_reggroups(self):
+        #list of groups of signal processes for regularization
+        return [], []
+
+    def get_poly1dreggroups(self):
+        #list of groups of signal processes for regularization
+        return [], [], [], [], []
+
+    def get_poly2dreggroups(self):
+        #list of groups of signal processes for regularization
+        return [], [], [], [], [], [], []

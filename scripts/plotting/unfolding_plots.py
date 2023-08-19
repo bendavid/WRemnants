@@ -34,7 +34,7 @@ parser.add_argument("--noData", action='store_true', help="Don't plot data")
 # parser.add_argument("--noFill", action='store_true', help="Don't fill stack")
 parser.add_argument("-n", "--baseName", type=str, help="Histogram name in the file (e.g., 'nominal')", default="nominal")
 parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend text")
-parser.add_argument("--plots", type=str, nargs="+", default=["postfit"], choices=["prefit", "postfit"], help="Define which plots to make")
+parser.add_argument("--plots", type=str, nargs="+", default=["prefit", "postfit"], choices=["prefit", "postfit"], help="Define which plots to make")
 parser.add_argument("--lumi", type=float, default=16.8, help="Luminosity used in the fit, needed to get the absolute cross section")
 parser.add_argument("-c", "--channels", type=str, nargs="+", default=["plus", "minus"], choices=["plus", "minus", "all"], help="Select channel to plot")
 parser.add_argument("--eoscp", action='store_true', help="Override use of xrdcp and use the mount instead")
@@ -241,7 +241,7 @@ def plot(fittype, channel=None, data=True, edges=None, bin_widths=None, stack=Tr
         ylim = args.ylim
 
     if args.rrange is None:
-        rrange = [0.95,1.05] if fit_type=="prefit" else [0.999, 1.001]
+        rrange = [0.95,1.05] if fit_type=="prefit" else [0.95, 1.05]
     else:
         rrange = args.rrange
         
@@ -277,7 +277,7 @@ def plot(fittype, channel=None, data=True, edges=None, bin_widths=None, stack=Tr
             yerr=False, #FIXME (no error on data from unfolded fit results)
             histtype="errorbar",
             color="black",
-            label="Data",
+            label="Unfolded data",
             ax=ax1,
             alpha=1.,
             zorder=2,
@@ -288,7 +288,6 @@ def plot(fittype, channel=None, data=True, edges=None, bin_widths=None, stack=Tr
                 hh.divideHists(hist_data, hist_pred, cutoff=0.01, rel_unc=False),
                 histtype="errorbar",
                 color="black",
-                label="Data",
                 yerr=False,
                 linewidth=2,
                 ax=ax2
@@ -316,7 +315,7 @@ def plot(fittype, channel=None, data=True, edges=None, bin_widths=None, stack=Tr
 
         plot_tools.fix_axes(ax1, ax2, yscale=args.yscale)
 
-    # plot_tools.addLegend(ax1, ncols=4, text_size=20*args.scaleleg)
+    plot_tools.addLegend(ax1, ncols=2, text_size=20*args.scaleleg)
 
     scale = max(1, np.divide(*ax1.get_figure().get_size_inches())*0.3)
     hep.cms.label(ax=ax1, lumi=float(f"{args.lumi:.3g}"), fontsize=20*args.scaleleg*scale, 
@@ -356,8 +355,10 @@ for fit_type in args.plots:
 
         if channel == "minus":
             process_label = r"\mathrm{W}^{-}" if base_process == "W" else r"\mathrm{Z}"
+            channel_axes = [a for a in axes if a != "qGen"]
         elif channel == "plus":
             process_label = r"\mathrm{W}^{+}" if base_process == "W" else r"\mathrm{Z}"
+            channel_axes = [a for a in axes if a != "qGen"]
         else:
             channel_axes = [*axes]
 
@@ -384,7 +385,7 @@ for fit_type in args.plots:
             bins = np.product(hproj.axes.size)
             edges = np.arange(0.5, bins+1.5, 1.0)
 
-        plot(fit_type, channel, data=not args.noData, edges=edges, bin_widths=binwidths, scale=1./(groups.lumi*1000), ylabel="d$\sigma ("+process_label+")$ [pb]")
+        plot(fit_type, channel, data=not args.noData, stack=args.baseName != "xnorm", edges=edges, bin_widths=binwidths, scale=1./(groups.lumi*1000), ylabel="d$\sigma ("+process_label+")$ [pb]")
         # plot(fit_type, channel, data=False, stack=False, ratio=False, backgrounds=False, density=True)
 
 if output_tools.is_eosuser_path(args.outpath) and args.eoscp:

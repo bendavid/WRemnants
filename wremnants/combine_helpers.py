@@ -5,6 +5,7 @@ from wremnants import histselections as sel
 import hist
 import numpy as np
 import uproot
+import h5py
 
 logger = logging.child_logger(__name__)
 
@@ -28,6 +29,7 @@ def add_recoil_uncertainty(card_tool, samples, passSystToFakes=False, pu_type="h
             group = recoil_grps[i],
             systAxes = ["recoilVar"],
             passToFakes=passSystToFakes,
+            xnorm=False
         )
 
 
@@ -48,15 +50,12 @@ def setSimultaneousABCD(cardTool, variation_fakerate=0.5, variation_normalizatio
     axes = [common.passIsoName, common.passMTName]
     axes += [ax for ax in cardTool.project if ax not in axes]
 
-    if "charge" not in axes:
-        axes.append("charge")
-
     if set(hist_fake.axes.name) != set(axes) or hist_fake.axes.name[0] != common.passIsoName or hist_fake.axes.name[1] != common.passMTName:
         logger.debug(f"Axes in histogram '{hist_fake.axes.name}' are not the same as required '{axes}' or in a different order than expected, try to project")
         hist_fake = hist_fake.project(*axes)
 
     # set the expected values in the signal region
-    hist_fake.view(flow=True)[1,1,...] = sel.fakeHistABCD(hist_fake).view(flow=True)
+    hist_fake.values(flow=True)[1,1,...] = sel.fakeHistABCD(hist_fake).values(flow=True)
     
     fakename = "Nonprompt"
 
@@ -108,6 +107,7 @@ def setSimultaneousABCD(cardTool, variation_fakerate=0.5, variation_normalizatio
                 outNames=[f"N{fakename}{nameMT}_{bin_name}Down", f"N{fakename}{nameMT}_{bin_name}Up"],
                 systAxes=["downUpVar"],
                 labelsByAxis=["downUpVar"],
+                xnorm=False
             )
 
         # systematic variation for fakerate, should be smaller 1 and bigger 0
@@ -137,6 +137,7 @@ def setSimultaneousABCD(cardTool, variation_fakerate=0.5, variation_normalizatio
             outNames=[f"fakerate_{bin_name}Down", f"fakerate_{bin_name}Up"],
             systAxes=["downUpVar"],
             labelsByAxis=["downUpVar"],
+            xnorm=False
         )
 
 def setTheoryFitData(cardTool, fitresult):
@@ -145,17 +146,29 @@ def setTheoryFitData(cardTool, fitresult):
     poi_type="pmaskedexp"
     base_process = "W" if cardTool.datagroups.wmass else "Z"
 
-    rfile = uproot.open(fitresult)
-    df = unfolding_tools.get_results(rfile, poi_type)
+    if fitresult.endswith(".root"):
+        
+        rfile = uproot.open(fitresult)
+        df = unfolding_tools.get_results(rfile, poi_type)
 
-    # write out unfolded data as 1D hist
-    hist_xsec = hist.Hist(
-        hist.axis.Regular(bins=len(df), start=0.5, stop=len(df)+0.5, underflow=False, overflow=False), storage=hist.storage.Weight())
-    hist_xsec.view(flow=False)[...] = np.stack([df["value"].values, (df["err_total"].values)**2], axis=-1)
+        # write out unfolded data as 1D hist
+        hist_xsec = hist.Hist(
+            hist.axis.Regular(bins=len(df), start=0.5, stop=len(df)+0.5, underflow=False, overflow=False), storage=hist.storage.Weight())
+        hist_xsec.view(flow=False)[...] = np.stack([df["value"].values, (df["err_total"].values)**2], axis=-1)
 
-    cardTool.theoryFitData = hist_xsec
+        cardTool.theoryFitData = hist_xsec.values(flow=False).flatten()
 
-    # write out covariance as 2D hist
-    cardTool.theoryFitDataCov = unfolding_tools.matrix_poi(rfile, poi_type, base_process=base_process, axes=cardTool.project) 
+        # write out covariance as 2D hist
+        cardTool.theoryFitDataCov = unfolding_tools.matrix_poi(rfile, poi_type, base_process=base_process, axes=cardTool.project).values(flow=False)
+    elif fitresult.endswith(".hdf5"):
+        hfile = h5py.File(fitresult, mode='r')
 
+        cardTool.theoryFitData = hfile["pmaskedexp_outvals"][...]
+
+        npoi = len(cardTool.theoryFitData)
+        # make matrix between POIs only; assume POIs come first
+        cardTool.theoryFitDataCov = hfile["pmaskedexp_outcov"][:npoi,:npoi]
+    else:
+        raise NotImplementedError(f"Unkown data type for fitresult {fitresult}")
+    
     cardTool.theoryFit = True

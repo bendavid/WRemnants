@@ -33,10 +33,10 @@ args = parser.parse_args()
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
 if args.theoryAgnostic or args.unfolding:
-    # temporary, to ensure running with stat only until systematics are all implemented
     parser = common.set_parser_default(parser, "pt", [30,26.0,56.0])
     parser = common.set_parser_default(parser, "nonClosureScheme", "none")
     if args.theoryAgnostic:
+        # temporary, to ensure running with stat only until systematics are all implemented
         logger.warning("Running theory agnostic with only nominal and mass weight histograms for now.")
         parser = common.set_parser_default(parser, "onlyMainHistograms", True)
         parser = common.set_parser_default(parser, "genVars", ["absYVgenSig", "ptVgenSig", "helicity"])
