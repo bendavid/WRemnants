@@ -507,7 +507,7 @@ jobs:
           lfs: 'true'
 
       - name: dilepton analysis
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_dilepton.py -o $WREMNANTS_OUTDIR -j $NTHREADS --maxFiles $MAX_FILES --axes ptll --forceDefaultName --unfolding --genVars ptVGen --genLevel preFSR
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_dilepton.py -o $WREMNANTS_OUTDIR -j $NTHREADS --maxFiles $MAX_FILES --axes ptll yll --forceDefaultName --unfolding --genVars ptVGen --genLevel preFSR
 
       - name: dilepton combine ptll setup
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombineWMass.py -i $HIST_FILE --fitvar ptll yll --lumiScale $LUMI_SCALE -o $WREMNANTS_OUTDIR

@@ -16,15 +16,10 @@ import h5py
 import narf
 import pdb
 
-generator_choices = ["horace-nlo", "horace-lo-photos", "horace-qed", "horace-lo", "horace-new", 
-    "horace-nlo", "horace-lo-photos", "horace-qed", "horace-lo", "horace-new", 
-    'horace-alpha-fsr-off-isr-off', 'horace-alpha-old-fsr-off-isr-off', 'horace-alpha-old-fsr-off-isr-pythia', 
-    "winhac-nlo", "winhac-lo-photos", "winhac-lo", "MiNNLO"]
-
 parser = argparse.ArgumentParser()
 parser.add_argument("-i", "--input", nargs="+", type=str, default=["w_z_gen_dists_scetlib_dyturboCorr_ewinput.hdf5"], help="File containing EW hists")
-parser.add_argument("--nums", nargs="+", type=str, default=["horace-nlo"], choices=generator_choices, help="Numerators")
-parser.add_argument("--den", type=str, default="horace-lo-photos", choices=generator_choices, help="Denominatos")
+parser.add_argument("--nums", nargs="+", type=str, default=["horace-nlo"], help="Numerators")
+parser.add_argument("--den", type=str, default="horace-lo-photos", help="Denominatos")
 parser.add_argument("--normalize", action="store_true", default=False, help="Normalize distributions before computing ratio")
 parser.add_argument("--noSmoothing", action="store_true", default=False, help="Disable smoothing of corrections")
 parser.add_argument("--debug", action='store_true', help="Print debug output")
@@ -73,9 +68,9 @@ for inpt in args.input:
 corrh = {}
 
 labels = {
-    "ewMll": "post FSR $m_{\ell\ell}$", 
-    "ewMlly": "post FSR $m_{\ell\ell\gamma}$", 
-    "ewLogDeltaM": "post FSR $\log_{10}(m_{\ell\ell\gamma} - m_{\ell\ell})$"
+    "ewMll": "$m_{\ell\ell}$", 
+    "ewMlly": "$m_{\ell\ell\gamma}$", 
+    "ewLogDeltaM": "$\log_{10}(m_{\ell\ell\gamma} - m_{\ell\ell})$"
 }
 
 colors = mpl.colormaps["tab10"]
