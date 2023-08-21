@@ -11,7 +11,7 @@ import matplotlib as mpl
 import pandas as pd
 import hist
 import h5py
-
+from wremnants import histselections as sel
 
 from utilities import boostHistHelpers as hh, logging, input_tools, common, differential, output_tools
 from wremnants import plot_tools
@@ -66,12 +66,6 @@ if base_process == "W":
 groups.setNominalName(args.baseName)
 groups.loadHistsForDatagroups(args.baseName, syst="", procsToRead=[process])
 
-rfile = uproot.open(args.fitresult)
-if args.asimov:
-    asimov = uproot.open(args.asimov)
-else:
-    asimov=None
-
 input_subdir = args.fitresult.split("/")[-2]
 
 xlabels = {
@@ -116,7 +110,7 @@ def make_yields_df(hists, procs, signal=None, per_bin=False, yield_only=False, p
 
     return pd.DataFrame(entries, columns=columns)
 
-def plot_xsec_unfolded(df, df_asimov=None, edges=None, bin_widths=None, channel=None, scale=1., normalize=False, process_label="V", axes=None):
+def plot_xsec_unfolded(df, df_asimov=None, hreco=None, hxnorm=None, edges=None, bin_widths=None, channel=None, scale=1., normalize=False, process_label="V", axes=None):
     logger.info(f"Make "+("normalized " if normalize else "")+"unfoled xsec plot"+(f" in channel {channel}" if channel else ""))
 
     if normalize:
@@ -126,18 +120,32 @@ def plot_xsec_unfolded(df, df_asimov=None, edges=None, bin_widths=None, channel=
 
     hist_xsec = hist.Hist(
         hist.axis.Variable(edges, underflow=False, overflow=False), storage=hist.storage.Weight())
-    hist_xsec_stat = hist.Hist(
-        hist.axis.Variable(edges, underflow=False, overflow=False), storage=hist.storage.Weight())
 
     if bin_widths is None:
         bin_widths = edges[1:] - edges[:-1]
 
     hist_xsec.view(flow=False)[...] = np.stack([df["value"].values/bin_widths, (df["err_total"].values/bin_widths)**2], axis=-1)
-    hist_xsec_stat.view(flow=False)[...] = np.stack([df["value"].values/bin_widths, (df["err_stat"].values/bin_widths)**2], axis=-1)
+
+    if hreco:
+        hreco_flat = hist.Hist(
+            hist.axis.Variable(edges, underflow=False, overflow=False), storage=hist.storage.Weight())
+        hreco_flat.view(flow=False)[...] = np.stack([hreco.values().flatten()/bin_widths, hreco.variances().flatten()/bin_widths**2], axis=-1)
+
+    if hxnorm:
+        hxnorm_flat = hist.Hist(
+            hist.axis.Variable(edges, underflow=False, overflow=False), storage=hist.storage.Weight())
+        hxnorm_flat.view(flow=False)[...] = np.stack([hxnorm.values().flatten()/bin_widths, hxnorm.variances().flatten()/bin_widths**2], axis=-1)
+
+    unc_ratio = np.sqrt(hist_xsec.variances()) /hist_xsec.values() 
+
+    if "err_stat" in df.keys():
+        hist_xsec_stat = hist.Hist(
+            hist.axis.Variable(edges, underflow=False, overflow=False), storage=hist.storage.Weight())
+        hist_xsec_stat.view(flow=False)[...] = np.stack([df["value"].values/bin_widths, (df["err_stat"].values/bin_widths)**2], axis=-1)
+        unc_ratio_stat = np.sqrt(hist_xsec_stat.variances()) /hist_xsec.values() 
 
     if data_asimov is not None:
         ha_xsec = hist.Hist(hist.axis.Variable(edges, underflow=False, overflow=False))
-
         ha_xsec.view(flow=False)[...] = df_asimov["value"].values/bin_widths
 
     # make plots
@@ -169,13 +177,34 @@ def plot_xsec_unfolded(df, df_asimov=None, edges=None, bin_widths=None, channel=
         zorder=2,
     )    
 
-    unc_ratio = np.sqrt(hist_xsec.variances()) /hist_xsec.values() 
-    unc_ratio_stat = np.sqrt(hist_xsec_stat.variances()) /hist_xsec.values() 
+    if hreco_flat:
+        hep.histplot(
+            hreco_flat,
+            yerr=False,
+            histtype="step",
+            color="grey",
+            label="Reconstructed data",
+            ax=ax1,
+            alpha=1.,
+            zorder=2,
+        )            
+    if hxnorm_flat:
+        hep.histplot(
+            hxnorm_flat,
+            yerr=False,
+            histtype="step",
+            color="blue",
+            label="Theory model",
+            ax=ax1,
+            alpha=1.,
+            zorder=2,
+        )        
 
     centers = hist_xsec.axes.centers[0]
 
     ax2.bar(centers, height=2*unc_ratio, bottom=1-unc_ratio, width=edges[1:] - edges[:-1], color="silver", label="Total")
-    ax2.bar(centers, height=2*unc_ratio_stat, bottom=1-unc_ratio_stat, width=edges[1:] - edges[:-1], color="gold", label="Stat")
+    if "err_stat" in df.keys():
+        ax2.bar(centers, height=2*unc_ratio_stat, bottom=1-unc_ratio_stat, width=edges[1:] - edges[:-1], color="gold", label="Stat")
 
     ax2.plot([min(edges), max(edges)], [1,1], color="black", linestyle="-")
 
@@ -220,6 +249,23 @@ def plot_xsec_unfolded(df, df_asimov=None, edges=None, bin_widths=None, channel=
             ax=ax2
         )
 
+    if hreco_flat:
+        hep.histplot(
+            hh.divideHists(hreco_flat, hist_xsec, cutoff=0, rel_unc=True),
+            yerr=False,
+            histtype="step",
+            color="grey",
+            ax=ax2,
+        )            
+    if hxnorm_flat:
+        hep.histplot(
+            hh.divideHists(hxnorm_flat, hist_xsec, cutoff=0, rel_unc=True),
+            yerr=False,
+            histtype="step",
+            color="blue",
+            ax=ax2,
+        )     
+
     plot_tools.addLegend(ax1, ncols=2, text_size=15*args.scaleleg)
     plot_tools.addLegend(ax2, ncols=2, text_size=15*args.scaleleg)
     plot_tools.fix_axes(ax1, ax2, yscale=args.yscale)
@@ -245,7 +291,7 @@ def plot_xsec_unfolded(df, df_asimov=None, edges=None, bin_widths=None, channel=
         asimov_yields["Uncertainty"] *= 0 # artificially set uncertainty on model hard coded to 0
     data_yields = make_yields_df([hist_xsec], ["Data"], per_bin=True)
     plot_tools.write_index_and_log(outdir, outfile, nround=4 if normalize else 2,
-        yield_tables={"Data" : data_yields, "Model": asimov_yields} if asimov else {"Data" : data_yields},
+        yield_tables={"Data" : data_yields, "Model": asimov_yields} if df_asimov else {"Data" : data_yields},
         analysis_meta_info=None,
         args=args,
     )
@@ -274,7 +320,6 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normaliz
     logger.info(f"Make "+("normalized " if normalize else "")+"unfoled xsec plot"+(f" in channel {channel}" if channel else ""))
 
     # read nominal values and uncertainties from fit result and fill histograms
-    logger.debug(f"Read fitresults")
     logger.debug(f"Produce histograms")
 
     if normalize:
@@ -423,22 +468,17 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normaliz
 
     plt.close()
 
-# # store unfolded data
-outfile = h5py.File(f'{outdir}/fitresult.hdf5', 'w')
+# store unfolded data
+# outfile = h5py.File(f'{outdir}/fitresult.hdf5', 'w')
 
-# outfile = uproot.recreate(f"{outdir}/unfolded_data.root")
 scale = 1 if args.normalize else args.lumi * 1000
 
 poi_type = ["pmaskedexpnorm",] if args.normalize else ["pmaskedexp",]
 if args.plotSumPOIs:
     poi_type += ["sumpoisnorm",] if args.normalize else ["sumpois",]
 
-data = get_results(rfile, poi_type=poi_type, scale=scale)
-
-if asimov:
-    data_asimov = get_results(asimov, poi_type=poi_type, scale=scale)
-else:
-    data_asimov = None
+data = get_results(args.fitresult, poi_type=poi_type, scale=scale)
+data_asimov = get_results(args.asimov, poi_type=poi_type, scale=scale)
 
 # make all possible gen axes 
 gen_axes_permutations = [gen_axes]
@@ -458,7 +498,7 @@ for axes in gen_axes_permutations:
         logger.debug(f"No entries found with gen axes {axes}, next one!")
         continue
 
-    if asimov:
+    if data_asimov:
         data_group_asimov = data_asimov.loc[(sum([data_asimov[ax] != -1 for ax in axes]) == len(axes)) 
             & (np.product([data_asimov[ax] == -1 for ax in data_asimov.keys() if ax in all_axes and ax not in axes], axis=0))
             & (data["Name"].apply(lambda x: x[0] == base_process))]
@@ -475,31 +515,39 @@ for axes in gen_axes_permutations:
 
         if channel == "minus":
             data_channel = data_group.loc[data_group["qGen"]==0]
-            channel_keys = ["qGen0"]
+            channel_keys = {"qGen":-1}
             channel_axes = [a for a in axes if a != "qGen"]
-            data_channel_asimov = data_group_asimov.loc[data_group_asimov["qGen"]==0] if asimov else None
+            data_channel_asimov = data_group_asimov.loc[data_group_asimov["qGen"]==0] if data_asimov else None
             process_label = r"\mathrm{W}^{-}" if base_process == "W" else r"\mathrm{Z}"
         elif channel == "plus":
             data_channel = data_group.loc[data_group["qGen"]==1]
-            channel_keys = ["qGen1"]
+            channel_keys = {"qGen":1}
             channel_axes = [a for a in axes if a != "qGen"]
-            data_channel_asimov = data_group_asimov.loc[data_group_asimov["qGen"]==1] if asimov else None
+            data_channel_asimov = data_group_asimov.loc[data_group_asimov["qGen"]==1] if data_asimov else None
             process_label = r"\mathrm{W}^{+}" if base_process == "W" else r"\mathrm{Z}"
         else:
             process_label = r"\mathrm{W}" if base_process == "W" else r"\mathrm{Z}"
             channel_keys = None
             channel_axes = [*axes]
             data_channel = data_group
-            data_channel_asimov = data_group_asimov if asimov else None
+            data_channel_asimov = data_group_asimov if data_asimov else None
 
         if len(data_channel) == 0:
             logger.info(f"No entries found for channel {channel}, skip!")
             continue
         
         # find bin widths
-        histo = groups.results[groups.groups[process].members[0].name]["output"][args.baseName].get()
-
+        histo = sum([groups.results[m.name]["output"][args.baseName].get() for m in groups.groups[process].members 
+            if channel=="all" and not m.name.startswith("Bkg") or channel in m.name])
+        
         hproj = histo.project(*channel_axes)
+        hproj = hh.scaleHist(hproj, 1./scale)
+
+        hxnorm = sum([groups.results[m.name]["output"]["xnorm"].get() for m in groups.groups[process].members 
+            if channel=="all" and not m.name.startswith("Bkg") or channel in m.name])
+        hxproj = hxnorm.project(*channel_axes)
+        hxproj = hh.scaleHist(hxproj, 1./scale)
+
         bins = np.product(hproj.axes.size)
 
         binwidths = None
@@ -515,16 +563,15 @@ for axes in gen_axes_permutations:
             binwidths = np.outer(xbinwidths, ybinwidths).flatten()
             edges = np.arange(0.5, len(binwidths)+1.5, 1.0)
         else:
-            hproj = histo.project(*channel_axes)
             bins = np.product(hproj.axes.size)
             edges = np.arange(0.5, bins+1.5, 1.0)
 
         # sort values
         data_c = data_channel.sort_values(by=channel_axes)
-        data_c_asimov = data_channel_asimov.sort_values(by=channel_axes) if asimov else None
+        data_c_asimov = data_channel_asimov.sort_values(by=channel_axes) if data_asimov else None
 
         if "xsec" in args.plots:
-            plot_xsec_unfolded(data_c, data_c_asimov, edges=edges, bin_widths=binwidths, channel=channel, scale=scale, normalize=args.normalize, process_label = process_label, axes=channel_axes)
+            plot_xsec_unfolded(data_c, data_c_asimov, hproj, hxproj, edges=edges, bin_widths=binwidths, channel=channel, scale=scale, normalize=args.normalize, process_label = process_label, axes=channel_axes)
 
         if "uncertainties" in args.plots:
             # absolute uncertainty
@@ -536,37 +583,37 @@ for axes in gen_axes_permutations:
             plot_uncertainties_unfolded(data_c, edges=edges, channel=channel, scale=scale, normalize=args.normalize, relative_uncertainty=True, logy=True, process_label = process_label, axes=channel_axes)
 
 
-        if not args.normalize:
-            if set(gen_axes) != set(axes):
-                continue
+        # if not args.normalize:
+        #     if set(gen_axes) != set(axes):
+        #         continue
 
-            # write out 1D distributions
-            logger.info(f"Save measured differential cross secction distribution")
-            hist_xsec = hist.Hist(
-                hist.axis.Regular(bins=len(data_c), start=0.5, stop=len(data_c)+0.5, underflow=False, overflow=False), storage=hist.storage.Weight())
-            hist_xsec.view(flow=False)[...] = np.stack([data_c["value"].values, (data_c["err_total"].values)**2], axis=-1)
+        #     # write out 1D distributions
+        #     logger.info(f"Save measured differential cross secction distribution")
+        #     hist_xsec = hist.Hist(
+        #         hist.axis.Regular(bins=len(data_c), start=0.5, stop=len(data_c)+0.5, underflow=False, overflow=False), storage=hist.storage.Weight())
+        #     hist_xsec.view(flow=False)[...] = np.stack([data_c["value"].values, (data_c["err_total"].values)**2], axis=-1)
 
-            # write out covariance as 2D hist
-            hist_cov = matrix_poi(rfile, poi_type[0], base_process=base_process, axes=channel_axes, keys=channel_keys)
+        #     # write out covariance as 2D hist
+        #     hist_cov = matrix_poi(rfile, poi_type[0], base_process=base_process, axes=channel_axes, keys=channel_keys)
             
-            histname = f"data_{base_process}"
-            covname = f"covariance_matrix_{base_process}"
-            if channel != "all":
-                histname += f"_{channel}_"
-                covname += f"_{channel}_"
+        #     histname = f"data_{base_process}"
+        #     covname = f"covariance_matrix_{base_process}"
+        #     if channel != "all":
+        #         histname += f"_{channel}_"
+        #         covname += f"_{channel}_"
 
-            histname += "_".join(axes)
-            covname += "_".join(axes)
+        #     histname += "_".join(axes)
+        #     covname += "_".join(axes)
 
-            outfile.create_dataset(histname, data=hist_xsec)
-            outfile.create_dataset(covname, data=hist_cov)
+        #     outfile.create_dataset(histname, data=hist_xsec)
+        #     outfile.create_dataset(covname, data=hist_cov)
 
         # if "correlation" in args.plots:
         #     plot_matrix_poi(f"correlation_matrix_channel{poi_type}", base_process=base_process, axes=channel_axes, keys=channel_keys)
         # if "covariance" in args.plots:
         #     plot_matrix_poi(f"covariance_matrix_channel{poi_type}", base_process=base_process, axes=channel_axes, keys=channel_keys)
 
-outfile.close()
+# outfile.close()
 
 if output_tools.is_eosuser_path(args.outpath) and args.eoscp:
     output_tools.copy_to_eos(args.outpath, args.outfolder)

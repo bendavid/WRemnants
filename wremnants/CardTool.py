@@ -794,14 +794,6 @@ class CardTool(object):
                 self.datagroups.select_xnorm_groups() # only keep processes where xnorm is defined
                 if "Fake" in self.datagroups.groups.keys():
                     self.datagroups.deleteGroup("Fake")
-                # TODO gen model
-                # if self.datagroups.wmass:
-                #     # add gen charge as additional axis
-                #     self.datagroups.groups["Wmunu"].add_member_axis("qGen", self.datagroups.results, 
-                #         member_filters={-1: lambda x: x.name.startswith("Wminus"), 1: lambda x: x.name.startswith("Wplus")}, 
-                #         hist_filter=lambda x: x.startswith("xnorm"))
-                # # remove projection axes from gen axes, otherwise they will be integrated before
-                # self.datagroups.setGenAxes([a for a in self.datagroups.gen_axes if a not in self.project])
 
             # load data and nominal ans syst histograms
             self.datagroups.loadHistsForDatagroups(

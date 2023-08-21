@@ -4,6 +4,8 @@ from copy import deepcopy
 import hist
 import numpy as np
 import pandas as pd
+import h5py
+import uproot
 
 logger = logging.child_logger(__name__)
 
@@ -214,14 +216,57 @@ def matrix_poi(rfile, poi_type="mu", base_process=None, axes=None, keys=None):
 
     return hist_cov
 
-def get_results(rtfile, poi_type, scale=1.0, group=True, uncertainties=None, gen_axes=["qGen", "ptGen", "absEtaGen", "ptVGen", "absYVGen"]):
+def get_results(fitresult, poi_type, scale=1.0, group=True, uncertainties=None, gen_axes=["qGen", "ptGen", "absEtaGen", "ptVGen", "absYVGen"]):
+    # return a collection of histograms from the POIs
+    if fitresult is None:
+        return None
     if isinstance(poi_type, list):
         results = []
         for p in poi_type:
-            result = get_results(rtfile, p, scale=scale, group=group, uncertainties=uncertainties)
+            result = get_results(fitresult, p, scale=scale, group=group, uncertainties=uncertainties, gen_axes=gen_axes)
             if result is not None:
                 results.append(result)
         return pd.concat(results)
+
+    if fitresult.endswith(".root"):
+        res = get_results_root(fitresult, poi_type, group, uncertainties)
+    elif fitresult.endswith(".hdf5"):
+        res = get_results_hdf5(fitresult, poi_type)
+    else:
+        logger.warning(f"Unknown format of fitresult {fitresult}")
+        return None
+
+    df = pd.DataFrame({"Name":res[0], "value":res[1], "err_total":res[2], **res[3]})
+
+    if scale != 1:
+        df["value"] /= scale
+        df["err_total"] /= scale
+        for u in res[3].keys():
+            df[u] /= scale
+
+    # try to decode the name string into bin number
+    for axis in gen_axes:
+        df[axis] = df["Name"].apply(lambda x, a=axis: get_bin(x, a))
+
+    df = df.sort_values(gen_axes, ignore_index=True)
+    return df
+
+def get_results_hdf5(fitresult, poi_type):
+    hfile = h5py.File(fitresult, mode='r')
+
+
+    hnames = hfile[f"{poi_type}_names"][...].astype(str)
+    hdata = hfile[f"{poi_type}_outvals"][...]
+
+    npoi = len(hnames)
+    # make matrix between POIs only; assume POIs come first
+    herr = np.sqrt(np.diagonal(hfile[f"{poi_type}_outcov"][:npoi,:npoi]))
+
+    return hnames, hdata, herr, {}
+
+def get_results_root(fitresult, poi_type, group=True, uncertainties=None):
+
+    rtfile = uproot.open(fitresult)
 
     results = []
 
@@ -250,17 +295,5 @@ def get_results(rtfile, poi_type, scale=1.0, group=True, uncertainties=None, gen
     # total uncertainties
     totals = [fitresult[n+"_err"].array()[0] for n in names]
 
-    df = pd.DataFrame({"Name":names, "value":centrals, "err_total":totals, **uncertainties})
+    return names, centrals, totals, uncertainties
 
-    if scale != 1:
-        df["value"] /= scale
-        df["err_total"] /= scale
-        for u in uncertainties.keys():
-            df[u] /= scale
-
-    # try to decode the name string into bin number
-    for axis in gen_axes:
-        df[axis] = df["Name"].apply(lambda x, a=axis: get_bin(x, a))
-
-    df = df.sort_values(gen_axes, ignore_index=True)
-    return df
