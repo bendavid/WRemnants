@@ -117,6 +117,11 @@ def build_graph(df, dataset):
         # auxiliary hists
         axis_ewMlly = hist.axis.Variable(massBins, name = "ewMlly")
         results.append(df.HistoBoost("nominal_ewMlly", [axis_ewMlly], ["ewMlly", "nominal_weight"], storage=hist.storage.Weight()))
+        # coarse binning
+        axis_Mll = hist.axis.Regular(100, 50, 150, name = "Mll")
+        results.append(df.HistoBoost("nominal_Mll", [axis_Mll], ["ewMll", "nominal_weight"], storage=hist.storage.Weight()))
+        axis_Mlly = hist.axis.Regular(100, 50, 150, name = "Mlly")
+        results.append(df.HistoBoost("nominal_Mlly", [axis_Mlly], ["ewMlly", "nominal_weight"], storage=hist.storage.Weight()))
 
     nominal_gen = df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols, "nominal_weight"], storage=hist.storage.Double())
 

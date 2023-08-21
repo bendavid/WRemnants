@@ -46,7 +46,7 @@ def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False, cutoff_
             # Treat the divisor as a constant
             var = np.multiply(val2, relvars[0], out=val2)
         else:
-            relsum = np.multiply(*relvars)
+            relsum = np.add(*relvars)
             var = np.multiply(relsum, val2, out=val2)
 
         outh.view(flow=True)[...] = np.stack((val, var), axis=-1)

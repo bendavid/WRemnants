@@ -42,7 +42,7 @@ def make_parser(parser=None):
     parser.add_argument("--scaleTNP", default=1, type=float, help="Scale the TNP uncertainties by this factor")
     parser.add_argument("--scalePdf", default=1, type=float, help="Scale the PDF hessian uncertainties by this factor")
     parser.add_argument("--pdfUncFromCorr", action='store_true', help="Take PDF uncertainty from correction hist (Requires having run that correction)")
-    parser.add_argument("--ewUnc", type=str, nargs="*", default=[], choices=["horacenloew", "winhacnloew"], help="Include EW uncertainty")
+    parser.add_argument("--ewUnc", type=str, nargs="*", default=["winhacnloew"], choices=["horacenloew", "winhacnloew"], help="Include EW uncertainty")
     parser.add_argument("--widthUnc", action='store_true', help="Include uncertainty on W and Z width")
     parser.add_argument("--noStatUncFakes" , action="store_true",   help="Set bin error for QCD background templates to 0, to check MC stat uncertainties for signal only")
     parser.add_argument("--skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
@@ -306,7 +306,7 @@ def setup(args,xnorm=False):
 
     for ewUnc in args.ewUnc:
         if ewUnc=="winhacnloew" and not wmass:
-            logger.warning("Winhac is not implemented for any other process than W")
+            logger.warning("Winhac is not implemented for any other process than W, proceed w/o winhac EW uncertainty")
             continue
 
         cardTool.addSystematic(f"{ewUnc}Corr", 
@@ -329,6 +329,7 @@ def setup(args,xnorm=False):
         mirror_tnp=True,
         pdf_from_corr=args.pdfUncFromCorr,
         scale_pdf_unc=args.scalePdf,
+        minnloScaleUnc=args.minnloScaleUnc,
     )
     theory_helper.add_all_theory_unc()
 
@@ -339,8 +340,8 @@ def setup(args,xnorm=False):
 
     if wmass:
         #cardTool.addLnNSystematic("CMS_Fakes", processes=[args.qcdProcessName], size=1.05, group="MultijetBkg")
-        cardTool.addLnNSystematic("CMS_Top", processes=["Top"], size=1.06)
-        cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16)
+        cardTool.addLnNSystematic("CMS_Top", processes=["Top"], size=1.06, group="CMS_background")
+        cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16, group="CMS_background")
         cardTool.addSystematic("luminosity",
                                 processes=['MCnoQCD'],
                                 outNames=["lumiDown", "lumiUp"],
@@ -349,7 +350,7 @@ def setup(args,xnorm=False):
                                 labelsByAxis=["downUpVar"],
                                 passToFakes=passSystToFakes)
     else:
-        cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15)
+        cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15, group="CMS_background")
         cardTool.addLnNSystematic("luminosity", processes=['MCnoQCD'], size=1.017 if lowPU else 1.012, group="luminosity")
 
     if not args.noEfficiencyUnc:
