@@ -579,7 +579,7 @@ def setup(args,xnorm=False):
             baseName="Z_nonClosure_parametrized_A_",
             systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
             labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
-            passToFakes=passSystToFakes
+            passToFakes=passSystToFakes,
             xnorm=False
         )
     if non_closure_scheme in ["A-M-separated", "binned-plus-M"]:
@@ -589,7 +589,7 @@ def setup(args,xnorm=False):
             baseName="Z_nonClosure_parametrized_M_",
             systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
             labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
-            passToFakes=passSystToFakes
+            passToFakes=passSystToFakes,
             xnorm=False
         )            
     if non_closure_scheme == "A-M-combined":
@@ -599,7 +599,7 @@ def setup(args,xnorm=False):
             baseName="Z_nonClosure_parametrized_",
             systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
             labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
-            passToFakes=passSystToFakes
+            passToFakes=passSystToFakes,
             xnorm=False
         )
     if non_closure_scheme in ["binned", "binned-plus-M"]:
@@ -609,7 +609,7 @@ def setup(args,xnorm=False):
             baseName="Z_nonClosure_binned_",
             systAxes=["unc_ieta", "unc_ipt", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
             labelsByAxis=["unc_ieta", "unc_ipt", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
-            passToFakes=passSystToFakes
+            passToFakes=passSystToFakes,
             xnorm=False
         )
     
