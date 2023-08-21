@@ -600,7 +600,8 @@ jobs:
           echo "MAX_FILES=10" >> $GITHUB_ENV
 
       - name: gen analysis
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/w_z_gen_dists.py -o $WREMNANTS_OUTDIR -j $NTHREADS --maxFiles $MAX_FILES
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/w_z_gen_dists.py -o $WREMNANTS_OUTDIR -j $NTHREADS --maxFiles $MAX_FILES --filterProcs WplusmunuPostVFP WminusmunuPostVFP WplustaunuPostVFP WminustaunuPostVFP ZmumuPostVFP ZtautauPostVFP WplusToMuNu_horace-nlo WplusToMuNu_winhac-lo-photos ZToMuMu_horace-lo-photos
+
 
   combined-fit:
     runs-on: [self-hosted, linux, x64]

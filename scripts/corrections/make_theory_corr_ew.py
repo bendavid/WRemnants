@@ -54,28 +54,7 @@ text_dict = {
     "WminusToMuNu": r"$\mathrm{W}^-\rightarrow\mu\nu$"
 }
 
-project = args.project # ["Mll"]
-
-def rebin_hist(histo, new_edges, flow=True):
-    # rebin a histogram of variable edges
-
-    edges_original = histo.axes.edges[0]
-    values_original = histo.values(flow=flow)
-    variances_original = histo.variances(flow=flow)
-
-    # Calculate new histogram values
-    new_values = np.zeros(len(new_edges) - 1)
-    new_variances = np.zeros(len(new_edges) - 1)
-    for i in range(len(new_values)):
-        new_indices = np.where((edges_original >= new_edges[i]) &
-                                (edges_original <= new_edges[i + 1]))[0]
-        new_values[i] = values_original[new_indices].sum()
-        new_variances[i] = variances_original[new_indices].sum()
-
-    # Create a new histogram with the rebinned data
-    rebinned_histogram = hist.Hist(hist.axis.Variable(new_edges, name=histo.axes.name[0]), storage=hist.storage.Weight())
-    rebinned_histogram[...] = np.stack((new_values, new_variances), axis=-1)
-    return rebinned_histogram
+project = args.project
 
 # file created with `python WRemnants/scripts/histmakers/w_z_gen_dists.py --skipAngularCoeffs --filter horace -p ewinput`
 res = {}

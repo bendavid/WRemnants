@@ -28,13 +28,14 @@ parser.add_argument("--makeMCefficiency", action="store_true", help="Save yields
 parser.add_argument("--onlyTheorySyst", action="store_true", help="Keep only theory systematic variations, mainly for tests")
 parser.add_argument("--oneMCfileEveryN", type=int, default=None, help="Use 1 MC file every N, where N is given by this option. Mainly for tests")
 parser.add_argument("--noAuxiliaryHistograms", action="store_true", help="Remove auxiliary histograms to save memory (removed by default with --unfolding or --theoryAgnostic)")
+
+parser = common.set_parser_default(parser, "theoryCorr", ["scetlib_dyturbo", "winhacnloew"])
 args = parser.parse_args()
 
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
 if args.theoryAgnostic or args.unfolding:
-    parser = common.set_parser_default(parser, "pt", [30,26.0,56.0])
-    parser = common.set_parser_default(parser, "nonClosureScheme", "none")
+    parser = common.set_parser_default(parser, "excludeFlow", True)
     if args.theoryAgnostic:
         # temporary, to ensure running with stat only until systematics are all implemented
         logger.warning("Running theory agnostic with only nominal and mass weight histograms for now.")
@@ -57,11 +58,11 @@ mtw_min = 40
 template_neta = int(args.eta[0])
 template_mineta = args.eta[1]
 template_maxeta = args.eta[2]
-print(f"Eta binning: {template_neta} bins from {template_mineta} to {template_maxeta}")
+logger.info(f"Eta binning: {template_neta} bins from {template_mineta} to {template_maxeta}")
 template_npt = int(args.pt[0])
 template_minpt = args.pt[1]
 template_maxpt = args.pt[2]
-print(f"Pt binning: {template_npt} bins from {template_minpt} to {template_maxpt}")
+logger.info(f"Pt binning: {template_npt} bins from {template_minpt} to {template_maxpt}")
 
 # standard regular axes
 axis_eta = hist.axis.Regular(template_neta, template_mineta, template_maxeta, name = "eta", overflow=not args.excludeFlow, underflow=not args.excludeFlow)

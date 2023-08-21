@@ -23,7 +23,7 @@ class TheoryHelper(object):
         self.scale_pdf_unc = 1.
         self.tnp_magnitude = 1.
         self.mirror_tnp = True
-        self.minnloUnc = 'byHelicityPt'
+        self.minnloScaleUnc = 'byHelicityPt'
 
     def sample_label(self, sample_group):
         if sample_group not in self.card_tool.procGroups:
@@ -40,7 +40,7 @@ class TheoryHelper(object):
             pdf_from_corr=False,
             pdf_action=None,
             scale_pdf_unc=1.,
-            minnloUnc='byHelicityPt'):
+            minnloScaleUnc='byHelicityPt'):
 
         self.set_resum_unc_type(resumUnc)
         self.set_np_model(np_model)
@@ -51,7 +51,7 @@ class TheoryHelper(object):
         self.pdf_from_corr = pdf_from_corr
         self.pdf_action = pdf_action
         self.scale_pdf_unc = scale_pdf_unc
-        self.minnloUnc = minnloUnc
+        self.minnloScaleUnc = minnloScaleUnc
 
     def add_all_theory_unc(self):
         self.add_nonpert_unc(model=self.np_model)
@@ -86,10 +86,10 @@ class TheoryHelper(object):
         if self.resumUnc == "tnp":
             self.add_resum_tnp_unc(magnitude, mirror, scale)
 
-        if self.minnloUnc and self.minnloUnc != "none":
+        if self.minnloScaleUnc and self.minnloScaleUnc not in ["none", None]:
             for sample_group in ["signal_samples_inctau", "single_v_nonsig_samples"]:
                 if self.card_tool.procGroups.get(sample_group, None):
-                    self.add_minnlo_scale_uncertainty(self.minnloUnc, sample_group)
+                    self.add_minnlo_scale_uncertainty(self.minnloScaleUnc, sample_group)
 
     def add_minnlo_scale_uncertainty(self, scale_type, sample_group, use_hel_hist=False, rebin_pt=None):
         if not sample_group:
