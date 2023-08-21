@@ -176,7 +176,7 @@ class CardTool(object):
         self.unconstrainedProcesses = datagroups.unconstrainedProcesses
         if self.nominalName:
             self.datagroups.setNominalName(self.nominalName)
-        if datagroups.gen:
+        if datagroups.mode == "vgen":
             self.charge_ax = "chargeVgen"
         
     def setPseudodataDatagroups(self, datagroups):
@@ -672,25 +672,8 @@ class CardTool(object):
             self.outfile = outfile
             self.outfile.cd()
 
-    def setOutput(self, outfolder, fitvars=[], doStatOnly=False, postfix=None):
-        if self.datagroups.wmass:
-            prefix = "WMass"
-        elif self.datagroups.wlike:
-            prefix = "ZMassWLike"
-        else:
-            prefix = "ZMassDilepton"
-        if self.datagroups.lowPU:
-            prefix += "_lowPU"
-
-        tag = prefix+"_"+"_".join(fitvars)
-        if doStatOnly:
-            tag += "_statOnly"
-        if self.datagroups.flavor:
-            tag += f"_{self.datagroups.flavor}"
-        if postfix is not None:
-            tag += f"_{postfix}"
-
-        self.outfolder = f"{outfolder}/{tag}/"
+    def setOutput(self, outfolder, basename):
+        self.outfolder = outfolder
         if not os.path.isdir(self.outfolder):
             os.makedirs(self.outfolder)
 
@@ -698,8 +681,8 @@ class CardTool(object):
         if self.xnorm:
             suffix += '_xnorm'
 
-        self.cardName = (f"{self.outfolder}/{prefix}_{{chan}}{suffix}.txt")
-        self.setOutfile(os.path.abspath(f"{self.outfolder}/{prefix}CombineInput{suffix}.root"))
+        self.cardName = (f"{self.outfolder}/{basename}_{{chan}}{suffix}.txt")
+        self.setOutfile(os.path.abspath(f"{self.outfolder}/{basename}CombineInput{suffix}.root"))
             
     def writeOutput(self, args=None, xnorm=False, forceNonzero=True, check_systs=True, simultaneousABCD=False):
         self.xnorm = xnorm

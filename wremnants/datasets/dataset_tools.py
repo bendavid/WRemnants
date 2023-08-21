@@ -103,7 +103,7 @@ def getDataPath(mode=None):
         base_path = "/scratchnvme/wmass/NANOV9/postVFP"
 
     # NOTE: If anyone wants to run this at Pisa they'd probably want a different path
-    if mode == "lowPU":
+    if "lowpu" in mode:
         base_path = f"{base_path}/LowPU/"
 
     return base_path

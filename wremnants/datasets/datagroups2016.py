@@ -7,7 +7,7 @@ def make_datagroups_2016(dg, combine=False, pseudodata_pdfset = None, applySelec
     # reset datagroups
     dg.groups = {}
 
-    if dg.wmass and applySelection:
+    if dg.mode == "wmass" and applySelection:
         sigOp = sel.signalHistWmass
         fakeOp = sel.fakeHistABCD
     else:
@@ -39,7 +39,7 @@ def make_datagroups_2016(dg, combine=False, pseudodata_pdfset = None, applySelec
             label = f"pdf{pseudodata_pdfset.upper()}",
             color = "dimgray"
         )
-    if dg.wmass or dg.gen:
+    if dg.mode in ["vgen", "wmass"]:
         dg.addGroup("Wmunu",
             members = list(filter(lambda y: y.group == "Wmunu", dg.datasets.values())),
             label = r"W$^{\pm}\to\mu\nu$",
@@ -80,7 +80,7 @@ def make_datagroups_2016(dg, combine=False, pseudodata_pdfset = None, applySelec
     dg.filterGroups(filterGroups)
     dg.excludeGroups(excludeGroups)
 
-    if dg.wmass:
+    if dg.mode == "wmass":
         # add all processes to the fake contributions after filtered and excluded groups
         dg.addGroup("Fake",
             members = [member for sublist in [v.members for k, v in dg.groups.items() if k != "QCD"] for member in sublist],

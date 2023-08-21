@@ -36,12 +36,17 @@ class Datagroups(object):
         else:
             raise ValueError("Unsupported file type")
 
-        self.gen = os.path.basename(self.getScriptCommand().split()[0]).startswith("w_z_gen")
-        self.wmass = os.path.basename(self.getScriptCommand().split()[0]).startswith("mw")
-        self.wlike = os.path.basename(self.getScriptCommand().split()[0]).startswith("mz_wlike")
-        self.dilepton = os.path.basename(self.getScriptCommand().split()[0]).startswith("mz_dilepton")
-
-        self.lowPU = "lowPU" in os.path.basename(self.getScriptCommand().split()[0])
+        mode_map = {
+            "w_z_gen_dists.py" : "vgen",
+            "mz_wlike_with_mu_eta_pt.py" : "wlike",
+            "mw_with_mu_eta_pt.py" : "wmass",
+            "mw_lowPU.py" : "lowpu_w",
+            "mz_lowPU.py" : "lowpu_z",
+        }
+        analysis_script = os.path.basename(self.getScriptCommand().split()[0])
+        if analysis_script not in mode_map:
+            raise ValueError(f"Unrecognized analysis script {analysis_script}! Expected one of {mode_map.keys()}")
+        self.mode = mode_map[analysis_script]
 
         self.lumi = 1
 
@@ -56,15 +61,13 @@ class Datagroups(object):
         self.globalAction = None
         self.unconstrainedProcesses = []
 
-        if self.lowPU:
+        if "lowpu" in self.mode:
             from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU as make_datagroups
-            mode="lowPU"
         else:
             from wremnants.datasets.datagroups2016 import make_datagroups_2016 as make_datagroups
-            mode=None
 
         if datasets is None:
-            datasets = getDatasets(mode=mode)
+            datasets = getDatasets(mode=self.mode)
 
         self.setDatasets(datasets)
         self.setGenAxes()

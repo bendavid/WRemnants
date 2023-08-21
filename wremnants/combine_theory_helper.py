@@ -121,8 +121,6 @@ class TheoryHelper(object):
             syst_axes.insert(2, "helicity")
             syst_ax_labels.insert(2, "AngCoeff")
 
-        print("Syst axes are", syst_axes)
-
         group_name = f"QCDscale{self.sample_label(sample_group)}"
         # Exclude all combinations where muR = muF = 1 (nominal) or where
         # they are extreme values (ratio = 4 or 1/4)
@@ -142,7 +140,7 @@ class TheoryHelper(object):
         logger.debug(f"expanded_samples: {expanded_samples}")
         func = syst_tools.scale_helicity_hist_to_variations 
         action_args = {"sum_axes" : sum_axes}
-        if self.card_tool.datagroups.gen:
+        if self.card_tool.datagroups.mode == "vgen":
             func = syst_tools.gen_scale_helicity_hist_to_variations
             action_args["gen_obs"] = obs
             action_args["sum_axes"].extend(["y", "massVgen"])
@@ -169,12 +167,13 @@ class TheoryHelper(object):
         if pt_binned:
             action_args["rebinPtV"] = rebin_pt
             # A bit janky, but refer to the original ptVgen ax since the alt hasn't been added yet
-            signal_samples = self.card_tool.procGroups['signal_samples']
-            binning = rebin_pt
-            if not binning:
-                hscale = self.card_tool.getHistsForProcAndSyst(signal_samples[0], scale_hist)
-                binning = scale_hist[pt_ax.replace("Alt", "")].edges
-            if resumUnc:
+            if self.resumUnc:
+                signal_samples = self.card_tool.procGroups['signal_samples']
+                binning = rebin_pt
+                if not binning:
+                    hscale = self.card_tool.getHistsForProcAndSyst(signal_samples[0], scale_hist)
+                    binning = scale_hist[pt_ax.replace("Alt", "")].edges
+
                 pt30_idx = np.argmax(binning > 30)
                 if helicity:
                     # Drop the uncertainties for < 30 for sigma_-1
