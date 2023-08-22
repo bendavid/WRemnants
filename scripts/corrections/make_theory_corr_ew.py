@@ -52,18 +52,8 @@ text_dict = {
 project = args.project
 
 # file created with `python WRemnants/scripts/histmakers/w_z_gen_dists.py --skipAngularCoeffs --filter horace -p ewinput`
-res = {}
-meta = {}
-for inpt in args.input:
-    logger.info(f"Load {inpt}")
-    f = h5py.File(inpt, 'r')
-    res.update(narf.ioutils.pickle_load_h5py(f["results"]))
 
-    try:
-        meta.update(input_tools.get_metadata(inpt))
-    except ValueError as e:
-        logger.warning(f"No meta data found for file {inpt}")
-        pass
+res, meta, _ = input_tools.read_infile(args.infile)
 
 corrh = {}
 

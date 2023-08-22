@@ -85,17 +85,17 @@ if args.unfolding:
 # axes for final cards/fitting
 nominal_axes = [
     hist.axis.Variable([0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 25, 30, 40, 50, 60, 75, 90, 150], name = "ptll", underflow=False, overflow=True),
-    axis_charge, axis_passMT, axis_passIso]
+    axis_charge, axis_passIso, axis_passMT]
 
 # corresponding columns
-nominal_cols = ["ptll", "lep_charge", "passMT", "passIso"]
+nominal_cols = ["ptll", "lep_charge", "passIso",  "passMT"]
 
 # mt final cards/fitting
 axis_mT = hist.axis.Variable([0] + list(range(40, 110, 1)) + [110, 112, 114, 116, 118, 120, 125, 130, 140, 160, 180, 200], name = "mt",underflow=False, overflow=True)
 axis_mT = hist.axis.Regular(100, 0, 200, name = "mt", underflow=False)
 
-axes_mT = [axis_mT, axis_charge, axis_passMT, axis_passIso]
-cols_mT = ["transverseMass", "lep_charge", "passMT", "passIso"]
+axes_mT = [axis_mT, axis_charge, axis_passIso, axis_passMT]
+cols_mT = ["transverseMass", "lep_charge", "passIso", "passMT"]
 
 # reco_mT_axes = [common.axis_recoil_reco_ptW_lowpu, common.axis_mt_lowpu, axis_charge, axis_passMT, axis_passIso]
 # gen_reco_mT_axes = [common.axis_recoil_gen_ptW_lowpu, common.axis_recoil_reco_ptW_lowpu, common.axis_mt_lowpu, axis_charge, axis_passMT, axis_passIso]

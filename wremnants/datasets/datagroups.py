@@ -54,6 +54,7 @@ class Datagroups(object):
         self.nominalName = "nominal"
         self.globalAction = None
         self.unconstrainedProcesses = []
+        self.fakeName = "Fake"
 
         if self.lowPU:
             from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU as make_datagroups
@@ -224,7 +225,7 @@ class Datagroups(object):
     ## baseName takes values such as "nominal"
     def setHists(self, baseName, syst, procsToRead=None, label=None, nominalIfMissing=True, 
                  applySelection=True, forceNonzero=True, preOpMap=None, preOpArgs=None, scaleToNewLumi=1, 
-                 excludeProcs=None, forceToNominal=[]):
+                 excludeProcs=None, forceToNominal=[], sumFakesPartial=True):
         if not label:
             label = syst if syst else baseName
         # this line is annoying for the theory agnostic, too many processes for signal
@@ -245,11 +246,10 @@ class Datagroups(object):
         # but this would need to assume that fakes effectively had all the single processes in each group as members
         # (usually it will be the case, but it is more difficult to handle in a fully general way and without bugs)
         histForFake = None # to store the data-MC sums used for the fakes, for each syst
-        nameFake = "Fake" # TODO: actual name might/should be configurable
-        if nameFake in procsToRead:
-            procsToReadSort = [x for x in procsToRead if x != nameFake] + [nameFake]
+        if sumFakesPartial and self.fakeName in procsToRead:
+            procsToReadSort = [x for x in procsToRead if x != self.fakeName] + [self.fakeName]
             hasFake = True
-            fakesMembers = [m.name for m in self.groups[nameFake].members]
+            fakesMembers = [m.name for m in self.groups[self.fakeName].members]
             fakesMembersWithSyst = []
             logger.debug(f"Has fake members: {fakesMembers}")
         else:
@@ -273,7 +273,7 @@ class Datagroups(object):
             group.hists[label] = None
 
             for i, member in enumerate(group.members):   
-                if procName == nameFake and member.name in fakesMembersWithSyst:
+                if procName == self.fakeName and member.name in fakesMembersWithSyst:
                     # if we are here this process has been already used to build the fakes when running for other groups
                     continue
                 logger.debug(f"Looking at group member {member.name}")
@@ -338,23 +338,23 @@ class Datagroups(object):
                     h = hh.scaleHist(h, scale, createNew=False)
 
                 hasPartialSumForFake = False
-                if hasFake and procName != nameFake:
+                if hasFake and procName != self.fakeName:
                     if member.name in fakesMembers:
                         logger.debug("Make partial sums for fakes")
                         if member.name not in fakesMembersWithSyst:
                             fakesMembersWithSyst.append(member.name)
                         hasPartialSumForFake = True
                         # apply the correct scale for fakes
-                        scaleProcForFake = self.groups[nameFake].scale(member)
-                        logger.debug(f"Summing hist {read_syst} for {member.name} to {nameFake} with scale = {scaleProcForFake}")
+                        scaleProcForFake = self.groups[self.fakeName].scale(member)
+                        logger.debug(f"Summing hist {read_syst} for {member.name} to {self.fakeName} with scale = {scaleProcForFake}")
                         hProcForFake = scaleProcForFake * h
                         histForFake = hh.addHists(histForFake, hProcForFake, createNew=False) if histForFake else hProcForFake
                                 
                 # The following must be done when the group is not Fake, or when the previous part for fakes was not done
                 # For fake this essentially happens when the process doesn't have the syst, so that the nominal is used
-                if procName != nameFake or (procName == nameFake and not hasPartialSumForFake):
-                    if procName == nameFake:
-                        logger.debug(f"Summing nominal hist instead of {syst} to {nameFake} for {member.name}")
+                if procName != self.fakeName or (procName == self.fakeName and not hasPartialSumForFake):
+                    if procName == self.fakeName:
+                        logger.debug(f"Summing nominal hist instead of {syst} to {self.fakeName} for {member.name}")
                     else:
                         logger.debug(f"Summing {read_syst} to {procName} for {member.name}")
 
@@ -367,7 +367,7 @@ class Datagroups(object):
             # now sum to fakes the partial sums which where not already done before
             # (group.hists[label] contains only the contribution from nominal histograms).
             # Then continue with the rest of the code as usual
-            if hasFake and procName == nameFake:
+            if hasFake and procName == self.fakeName:
                 if histForFake is not None:
                     group.hists[label] = hh.addHists(group.hists[label], histForFake, createNew=False) if group.hists[label] else histForFake
 
@@ -426,7 +426,7 @@ class Datagroups(object):
     def loadHistsForDatagroups(
         self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="",
         nominalIfMissing=True, applySelection=True, forceNonzero=True, pseudodata=False,
-        preOpMap={}, preOpArgs={}, scaleToNewLumi=1, forceToNominal=[]
+        preOpMap={}, preOpArgs={}, scaleToNewLumi=1, forceToNominal=[], sumFakesPartial=True
     ):
         logger.debug("Calling loadHistsForDatagroups()")
         logger.debug(f"The basename and syst is: {baseName}, {syst}")
@@ -437,7 +437,7 @@ class Datagroups(object):
             self.setHists(baseName, syst, procsToRead, label, nominalIfMissing, applySelection,
                           forceNonzero, preOpMap, preOpArgs,
                           scaleToNewLumi=scaleToNewLumi, 
-                          excludeProcs=excluded_procs, forceToNominal=forceToNominal)
+                          excludeProcs=excluded_procs, forceToNominal=forceToNominal, sumFakesPartial=sumFakesPartial)
 
     def getDatagroups(self):
         return self.groups
@@ -592,7 +592,8 @@ class Datagroups(object):
                 if "xnorm" not in self.results[member.name]["output"].keys():
                     logger.debug(f"Member {member.name} has no xnorm and will be deleted")
                     toDel_members.append(member)
-
+                elif g_name.startswith("Fake"):
+                    toDel_members.append(member)
             if len(toDel_members) == len(group.members):
                 logger.debug(f"All members of group {g_name} have no xnorm and the group will be deleted")
                 toDel_groups.append(g_name)

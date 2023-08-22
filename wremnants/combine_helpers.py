@@ -29,17 +29,18 @@ def add_recoil_uncertainty(card_tool, samples, passSystToFakes=False, pu_type="h
             group = recoil_grps[i],
             systAxes = ["recoilVar"],
             passToFakes=passSystToFakes,
-            xnorm=False
         )
-
 
 def setSimultaneousABCD(cardTool, variation_fakerate=0.5, variation_normalization_fake=0.1):
     # Having 1 process for fakes, for each bin 3 free floating parameters, 2 normalization for lowMT and highMT and one fakerate between iso and anti iso
     logger.info(f"Set processes for simultaneous ABCD fit")
 
     # expected fake contribution
-    hist_fake = sum([group.hists[cardTool.nominalName] if name == "Data" else -1*group.hists[cardTool.nominalName] for name, group in cardTool.datagroups.groups.items()])
-    
+    hist_fake = sum([group.hists[cardTool.nominalName] if name == cardTool.dataName else -1*group.hists[cardTool.nominalName] for name, group in cardTool.datagroups.groups.items()])
+
+    import pdb
+    pdb.set_trace()
+
     # setting errors to 0
     hist_fake.view(flow=True)[...] = np.stack((hist_fake.values(flow=True), np.zeros_like(hist_fake.values(flow=True))), axis=-1)
 
@@ -47,19 +48,19 @@ def setSimultaneousABCD(cardTool, variation_fakerate=0.5, variation_normalizatio
         raise RuntimeError(f'{common.passIsoName} and {common.passMTName} expected to be found in histogram, but only have axes {hist_fake.axes.name}')
 
     # axes in the correct ordering
-    axes = [common.passIsoName, common.passMTName]
-    axes += [ax for ax in cardTool.project if ax not in axes]
+    axes = cardTool.project[:]
+    axes += [ax for ax in [common.passIsoName, common.passMTName] if ax not in axes]
 
-    if set(hist_fake.axes.name) != set(axes) or hist_fake.axes.name[0] != common.passIsoName or hist_fake.axes.name[1] != common.passMTName:
-        logger.debug(f"Axes in histogram '{hist_fake.axes.name}' are not the same as required '{axes}' or in a different order than expected, try to project")
+    if set(hist_fake.axes.name) != set(axes) or hist_fake.axes.name[-2] != common.passIsoName or hist_fake.axes.name[-1] != common.passMTName:
+        logger.info(f"Axes in histogram '{hist_fake.axes.name}' are not the same as required '{axes}' or in a different order than expected, try to project")
         hist_fake = hist_fake.project(*axes)
 
     # set the expected values in the signal region
-    hist_fake.values(flow=True)[1,1,...] = sel.fakeHistABCD(hist_fake).values(flow=True)
+    hist_fake.values(flow=True)[...,1,1] = sel.fakeHistABCD(hist_fake).values(flow=True)
     
-    fakename = "Nonprompt"
+    fakename = cardTool.getFakeName()
 
-    cardTool.datagroups.addGroup(fakename, label = "Nonprompt", color = "grey", members=[],)
+    cardTool.datagroups.addGroup(fakename, label = fakename, color = "grey", members=[],) #TODO check if existing group can be used
     cardTool.datagroups.groups[fakename].hists[f"{cardTool.nominalName}"] = hist_fake
 
     bin_sizes = [ax.size for ax in hist_fake.axes if ax.name in axes and ax.name not in [common.passIsoName, common.passMTName]]
@@ -107,7 +108,6 @@ def setSimultaneousABCD(cardTool, variation_fakerate=0.5, variation_normalizatio
                 outNames=[f"N{fakename}{nameMT}_{bin_name}Down", f"N{fakename}{nameMT}_{bin_name}Up"],
                 systAxes=["downUpVar"],
                 labelsByAxis=["downUpVar"],
-                xnorm=False
             )
 
         # systematic variation for fakerate, should be smaller 1 and bigger 0
@@ -128,16 +128,15 @@ def setSimultaneousABCD(cardTool, variation_fakerate=0.5, variation_normalizatio
         hist_var[{**common.failIso, **common.passMT, **{"downUpVar":1}, **other_indices}] = n_passMT * frUp
         hist_var[{**common.passIso, **common.passMT, **{"downUpVar":1}, **other_indices}] = n_passMT * (1-frUp)
 
-        cardTool.datagroups.groups[fakename].hists[f"{cardTool.nominalName}_fakerate_{bin_name}"] = hist_var
+        cardTool.datagroups.groups[fakename].hists[f"{cardTool.nominalName}_r{fakename}_{bin_name}"] = hist_var
 
-        cardTool.addSystematic(f"fakerate_{bin_name}",
+        cardTool.addSystematic(f"r{fakename}_{bin_name}",
             processes=[fakename],
-            group=f"fakerate",
+            group=f"r{fakename}",
             noConstraint=True,
-            outNames=[f"fakerate_{bin_name}Down", f"fakerate_{bin_name}Up"],
+            outNames=[f"r{fakename}_{bin_name}Down", f"r{fakename}_{bin_name}Up"],
             systAxes=["downUpVar"],
             labelsByAxis=["downUpVar"],
-            xnorm=False
         )
 
 def setTheoryFitData(cardTool, fitresult):

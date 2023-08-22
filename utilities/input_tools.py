@@ -411,3 +411,32 @@ def get_metadata(infile):
         raise ValueError("Failed to find results dict. Note that only pkl, hdf5, and pkl.lz4 file types are supported")
 
     return results["meta_info"] if "meta_info" in results else results["meta_data"]
+
+
+def read_infile(self, inputs):
+    # read histogramer input file(s)
+    results = {}
+    meta = []
+    infiles = []
+    if isinstance(input_file, list):
+        for inpt in inputs:
+            r, m, h = read_infile(inpt)
+            result.update(r)
+            meta.append(m)
+            infiles.append(h)
+        return result, meta, h5file
+    
+    logger.info(f"Load {inpt}")
+    if inputs.endswith(".pkl.lz4"):
+        with lz4.frame.open(inputs) as f:
+            result = pickle.load(f)
+        i
+    elif inputs.endswith(".hdf5"):
+        infiles = [h5py.File(inputs, "r")]
+        result = narf.ioutils.pickle_load_h5py(h5file["results"])
+    else:
+        raise ValueError("Unsupported file type")
+
+    meta = result["meta_info"] if "meta_info" in result else result["meta_data"]
+
+    return result, meta, h5file

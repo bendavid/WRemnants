@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from wremnants import CardTool,combine_helpers,combine_theory_helper
+from wremnants import CardTool,combine_helpers,combine_theory_helper, HDF5Writer
 from wremnants.datasets.datagroups import Datagroups
 from utilities import common, logging, input_tools, boostHistHelpers as hh
 import itertools
@@ -10,7 +10,7 @@ import math
 def make_parser(parser=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("-o", "--outfolder", type=str, default=".", help="Output folder with the root file storing all histograms and datacards for single charge (subfolder WMass or ZMassWLike is created automatically inside)")
-    parser.add_argument("-i", "--inputFile", type=str)
+    parser.add_argument("-i", "--inputFile", nargs="+", type=str)
     parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
                         help="Set verbosity level with logging, the larger the more verbose")
@@ -26,7 +26,7 @@ def make_parser(parser=None):
     parser.add_argument("--noHist", action='store_true', help="Skip the making of 2D histograms (root file is left untouched if existing)")
     parser.add_argument("--qcdProcessName" , type=str, default="Fake", help="Name for QCD process")
     # setting on the fit behaviour
-    parser.add_argument("--fitvar", nargs="+", help="Variable to fit", default=["eta", "pt"])
+    parser.add_argument("--fitvar", nargs="+", help="Variable to fit", default=["eta-pt-charge"])
     parser.add_argument("--rebin", type=int, nargs='*', default=[], help="Rebin axis by this value (default, 1, does nothing)")
     parser.add_argument("--absval", type=int, nargs='*', default=[], help="Take absolute value of axis if 1 (default, 0, does nothing)")
     parser.add_argument("--axlim", type=float, default=[], nargs='*', help="Restrict axis to this range (assumes pairs of values by axis, with trailing axes optional)")
@@ -75,7 +75,7 @@ def make_parser(parser=None):
 
     return parser
 
-def setup(args,xnorm=False):   
+def setup(args, inputFile, fitvar, xnorm=False, ABCD=False):
 
     # NOTE: args.filterProcGroups and args.excludeProcGroups should in principle not be used together
     #       (because filtering is equivalent to exclude something), however the exclusion is also meant to skip
@@ -93,14 +93,14 @@ def setup(args,xnorm=False):
     logger.debug(f"Filtering these groups of processes: {args.filterProcGroups}")
     logger.debug(f"Excluding these groups of processes: {args.excludeProcGroups}")
 
-    datagroups = Datagroups(args.inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm and not args.ABCD)
+    datagroups = Datagroups(inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm and not ABCD)
 
     if not xnorm and (args.axlim or args.rebin or args.absval):
-        if len(args.axlim) % 2 or len(args.axlim)/2 > len(args.fitvar) or len(args.rebin) > len(args.fitvar):
+        if len(args.axlim) % 2 or len(args.axlim)/2 > len(fitvar) or len(args.rebin) > len(fitvar):
             raise ValueError("Inconsistent rebin or axlim arguments. axlim must be at most two entries per axis, and rebin at most one")
 
         sel = {}
-        for var,low,high,rebin in itertools.zip_longest(args.fitvar, args.axlim[::2], args.axlim[1::2], args.rebin):
+        for var,low,high,rebin in itertools.zip_longest(fitvar, args.axlim[::2], args.axlim[1::2], args.rebin):
             s = hist.tag.Slicer()
             if low is not None and high is not None:
                 logger.info(f"Restricting the axis '{var}' to range [{low}, {high}]")
@@ -114,18 +114,18 @@ def setup(args,xnorm=False):
             logger.info(f"Will apply the global selection {sel}")
             datagroups.setGlobalAction(lambda h: h[sel])
 
-        for i, (var, absval) in enumerate(itertools.zip_longest(args.fitvar, args.absval)):
+        for i, (var, absval) in enumerate(itertools.zip_longest(fitvar, args.absval)):
             if absval:
                 logger.info(f"Taking the absolute value of axis '{var}'")
                 datagroups.setGlobalAction(lambda h, ax=var: hh.makeAbsHist(h, ax))
-                args.fitvar[i] = f"abs{var}"
+                fitvar[i] = f"abs{var}"
 
     wmass = datagroups.wmass
     wlike = datagroups.wlike
     lowPU = datagroups.lowPU
     dilepton = datagroups.dilepton
 
-    constrainMass = (dilepton and not "mll" in args.fitvar) or args.fitXsec
+    constrainMass = (dilepton and not "mll" in fitvar) or args.fitXsec
 
     if wmass:
         base_group = "Wenu" if datagroups.flavor == "e" else "Wmunu"
@@ -160,17 +160,17 @@ def setup(args,xnorm=False):
         datagroups.deleteGroup("Wmunu") # remove out of acceptance signal
 
     # Start to create the CardTool object, customizing everything
-    cardTool = CardTool.CardTool(xnorm=xnorm)
+    cardTool = CardTool.CardTool(xnorm=xnorm, ABCD=ABCD)
     cardTool.setDatagroups(datagroups)
+    cardTool.setFakeName(args.qcdProcessName + (f"_{datagroups.flavor}" if datagroups.flavor else ""))
     logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
     if args.absolutePathInCard:
         cardTool.setAbsolutePathShapeInCard()
-    cardTool.setProjectionAxes(args.fitvar)
-    if wmass and args.ABCD:
+    cardTool.setProjectionAxes(fitvar)
+    if wmass and ABCD:
         cardTool.setChannels(["inclusive"])
         cardTool.setWriteByCharge(False)
-        fitvars = ["passIso", "passMT", *args.fitvar]
-        cardTool.setProjectionAxes(fitvars)
+        cardTool.setProjectionAxes([*fitvar, "passIso", "passMT"])
         cardTool.unroll=True
     if args.sumChannels or xnorm or dilepton:
         cardTool.setChannels(["inclusive"])
@@ -180,14 +180,11 @@ def setup(args,xnorm=False):
         if args.forceRecoChargeAsGen:
             cardTool.setExcludeProcessForChannel("plus", ".*qGen0")
             cardTool.setExcludeProcessForChannel("minus", ".*qGen1")
-
     if xnorm:
         histName = "xnorm"
         cardTool.setHistName(histName)
         cardTool.setNominalName(histName)
         datagroups.select_xnorm_groups()
-        if "Fake" in datagroups.groups.keys():
-            datagroups.deleteGroup("Fake") # delete fakes from xnorm channel
         if args.unfolding:
             cardTool.setProjectionAxes(["count"])
         else:
@@ -219,7 +216,6 @@ def setup(args,xnorm=False):
 
     if args.noHist:
         cardTool.skipHistograms()
-    cardTool.setFakeName(args.qcdProcessName)
     cardTool.setSpacing(28)
     if args.noStatUncFakes:
         cardTool.setProcsNoStatUnc(procs=args.qcdProcessName, resetList=False)
@@ -242,7 +238,8 @@ def setup(args,xnorm=False):
     cardTool.addProcessGroup("single_v_samples", lambda x: x[0] in ["W", "Z"] and x[1] not in ["W","Z"])
     if wmass:
         cardTool.addProcessGroup("w_samples", lambda x: x[0] == "W" and x[1] not in ["W","Z"])
-        cardTool.addProcessGroup("single_v_nonsig_samples", lambda x: x[0] == "Z" and x[1] not in ["W","Z"])
+        if not xnorm:
+            cardTool.addProcessGroup("single_v_nonsig_samples", lambda x: x[0] == "Z" and x[1] not in ["W","Z"])
 
     cardTool.addProcessGroup("single_vmu_samples", lambda x: x[0] in ["W", "Z"] and x[1] not in ["W","Z"] and "tau" not in x)
     cardTool.addProcessGroup("signal_samples", lambda x: ((x[0] == "W" and wmass) or (x[0] == "Z" and not wmass)) and x[1] not in ["W","Z"] and "tau" not in x)
@@ -252,7 +249,7 @@ def setup(args,xnorm=False):
     if not (args.theoryAgnostic or args.unfolding) :
         logger.info(f"All MC processes {cardTool.procGroups['MCnoQCD']}")
         logger.info(f"Single V samples: {cardTool.procGroups['single_v_samples']}")
-        if wmass:
+        if wmass and not xnorm:
             logger.info(f"Single V no signal samples: {cardTool.procGroups['single_v_nonsig_samples']}")
         logger.info(f"Signal samples: {cardTool.procGroups['signal_samples']}")
 
@@ -327,7 +324,7 @@ def setup(args,xnorm=False):
 
 
     for ewUnc in args.ewUnc:
-        if ewUnc=="winhacnloew" and not wmass:
+        if ewUnc=="winhacnloew" and (not wmass or datagroups.flavor == "e"):
             logger.warning("Winhac is not implemented for any other process than W, proceed w/o winhac EW uncertainty")
             continue
 
@@ -336,7 +333,7 @@ def setup(args,xnorm=False):
             mirror=True,
             group="theory_ew",
             systAxes=["systIdx"],
-            labelsByAxis=[f"{ewUnc}nloewCorr"],
+            labelsByAxis=[f"{ewUnc}Corr"],
             skipEntries=[(0, -1), (2, -1)],
             passToFakes=passSystToFakes,
         )
@@ -362,19 +359,18 @@ def setup(args,xnorm=False):
 
     if wmass:
         #cardTool.addLnNSystematic("CMS_Fakes", processes=[args.qcdProcessName], size=1.05, group="MultijetBkg")
-        cardTool.addLnNSystematic("CMS_Top", processes=["Top"], size=1.06, group="CMS_background", xnorm=False)
-        cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16, group="CMS_background", xnorm=False)
+        cardTool.addLnNSystematic("CMS_Top", processes=["Top"], size=1.06, group="CMS_background")
+        cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16, group="CMS_background")
         cardTool.addSystematic("luminosity",
                                 processes=['MCnoQCD'],
                                 outNames=["lumiDown", "lumiUp"],
                                 group="luminosity",
                                 systAxes=["downUpVar"],
                                 labelsByAxis=["downUpVar"],
-                                passToFakes=passSystToFakes, 
-                                xnorm=False)
+                                passToFakes=passSystToFakes)
     else:
-        cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15, group="CMS_background", xnorm=False)
-        cardTool.addLnNSystematic("luminosity", processes=['MCnoQCD'], size=1.017 if lowPU else 1.012, group="luminosity", xnorm=False)
+        cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15, group="CMS_background")
+        cardTool.addLnNSystematic("luminosity", processes=['MCnoQCD'], size=1.017 if lowPU else 1.012, group="luminosity")
 
     if not args.noEfficiencyUnc:
 
@@ -451,8 +447,7 @@ def setup(args,xnorm=False):
                     systNameReplace=nameReplace,
                     scale=scale,
                     splitGroup=splitGroupDict,
-                    decorrelateByBin = {}, 
-                    xnorm=False
+                    decorrelateByBin = {}
                 )
                 # if "Syst" in name and decorrDictEff != {}:
                 #     # add fully correlated version again
@@ -486,7 +481,6 @@ def setup(args,xnorm=False):
                     baseName=lepEff,
                     systAxes = ["tensor_axis_0"],
                     labelsByAxis = [""], 
-                    xnorm=False,
                 )
                 
     if (wmass or wlike) and not input_tools.args_from_metadata(cardTool, "noRecoil"):
@@ -506,7 +500,6 @@ def setup(args,xnorm=False):
                 baseName="CMS_prefire17",
                 systAxes = ["downUpVar"],
                 labelsByAxis = ["downUpVar"], 
-                xnorm=False,
             )
 
         return cardTool
@@ -541,7 +534,6 @@ def setup(args,xnorm=False):
         labelsByAxis=msv_config['syst_axes_labels'],
         passToFakes=passSystToFakes,
         scale = args.scaleMuonCorr, 
-        xnorm=False
     )
     cardTool.addSystematic("muonL1PrefireSyst", 
         processes=['MCnoQCD'],
@@ -550,7 +542,6 @@ def setup(args,xnorm=False):
         systAxes=["downUpVar"],
         labelsByAxis=["downUpVar"],
         passToFakes=passSystToFakes, 
-        xnorm=False,
     )
     cardTool.addSystematic("muonL1PrefireStat", 
         processes=['MCnoQCD'],
@@ -559,7 +550,6 @@ def setup(args,xnorm=False):
         systAxes=["downUpVar", "etaPhiRegion"],
         labelsByAxis=["downUpVar", "etaPhiReg"],
         passToFakes=passSystToFakes, 
-        xnorm=False,
     )
     cardTool.addSystematic("ecalL1Prefire", 
         processes=['MCnoQCD'],
@@ -568,7 +558,6 @@ def setup(args,xnorm=False):
         systAxes=["downUpVar"],
         labelsByAxis=["downUpVar"],
         passToFakes=passSystToFakes, 
-        xnorm=False,
     )
 
     non_closure_scheme = input_tools.args_from_metadata(cardTool, "nonClosureScheme")
@@ -580,7 +569,6 @@ def setup(args,xnorm=False):
             systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
             labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
             passToFakes=passSystToFakes,
-            xnorm=False
         )
     if non_closure_scheme in ["A-M-separated", "binned-plus-M"]:
         cardTool.addSystematic("Z_non_closure_parametrized_M", 
@@ -590,7 +578,6 @@ def setup(args,xnorm=False):
             systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
             labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
             passToFakes=passSystToFakes,
-            xnorm=False
         )            
     if non_closure_scheme == "A-M-combined":
         cardTool.addSystematic("Z_non_closure_parametrized", 
@@ -600,7 +587,6 @@ def setup(args,xnorm=False):
             systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
             labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
             passToFakes=passSystToFakes,
-            xnorm=False
         )
     if non_closure_scheme in ["binned", "binned-plus-M"]:
         cardTool.addSystematic("Z_non_closure_binned", 
@@ -610,22 +596,22 @@ def setup(args,xnorm=False):
             systAxes=["unc_ieta", "unc_ipt", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
             labelsByAxis=["unc_ieta", "unc_ipt", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
             passToFakes=passSystToFakes,
-            xnorm=False
         )
     
     # Previously we had a QCD uncertainty for the mt dependence on the fakes, see: https://github.com/WMass/WRemnants/blob/f757c2c8137a720403b64d4c83b5463a2b27e80f/scripts/combine/setupCombineWMass.py#L359
 
     return cardTool
 
-def main(args,xnorm=False):
-    cardTool = setup(args, xnorm)
-    cardTool.setOutput(args.outfolder, fitvars=args.fitvar, doStatOnly=args.doStatOnly, postfix=args.postfix, hdf5=args.hdf5)
+def main(args, xnorm=False):
+    fitvar = args.fitvar[0].split("-")
+    cardTool = setup(args, inputFile=args.inputFile[0], fitvar=fitvar, xnorm=xnorm, ABCD=ABCD)
+
+    cardTool.setOutput(args.outfolder, fitvars=fitvar, doStatOnly=args.doStatOnly, postfix=args.postfix)
 
     if args.genModel and args.fitresult:
         combine_helpers.setTheoryFitData(cardTool, args.fitresult)
 
-    cardTool.writeOutput(args=args, hdf5=args.hdf5, sparse=args.sparse, xnorm=xnorm or (args.hdf5 and args.unfolding),
-        forceNonzero=not args.unfolding, check_systs=not args.unfolding, ABCD=args.ABCD)
+    cardTool.writeOutput(args=args, hdf5=args.hdf5, sparse=args.sparse, forceNonzero=not args.unfolding, check_systs=not args.unfolding)
     return
 
 if __name__ == "__main__":
@@ -644,13 +630,29 @@ if __name__ == "__main__":
         logger.warning("For now setting --theoryAgnostic activates --doStatOnly")
         args.doStatOnly = True
     
-    if args.genModel:
-        main(args, xnorm=True)
+    if args.hdf5: 
+        writer = HDF5Writer.HDF5Writer()
+
+        # loop over all files
+        for i, ifile in enumerate(args.inputFile):
+            fitvar = args.fitvar[i].split("-")
+            cardTool = setup(args, ifile, fitvar, xnorm=False, ABCD=args.ABCD)
+            writer.add_channel(cardTool)
+            if args.unfolding:
+                cardTool = setup(args, ifile, fitvar, xnorm=True)
+                writer.add_channel(cardTool)
+
+        writer.write(outfolder=args.outfolder, doStatOnly=args.doStatOnly, postfix=args.postfix, sparse=args.sparse)
     else:
-        main(args)
-        if args.unfolding and not args.hdf5:
-            # in case of unfolding and hdf5, the xnorm histograms are directly written into the hdf5
-            logger.warning("Now running with xnorm = True")
+        if len(args.inputFile) > 1:
+            raise IOError(f"Multiple input files only supported within --hdf5 mode")
+
+        if args.genModel:
             main(args, xnorm=True)
+        else:
+            main(args)
+            if args.unfolding:
+                # in case of unfolding and hdf5, the xnorm histograms are directly written into the hdf5
+                main(args, xnorm=True)
 
     logging.summary()
