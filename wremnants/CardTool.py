@@ -36,8 +36,6 @@ class CardTool(object):
         self.spacing = 28
         self.systTypeSpacing = 16
         self.procColumnsSpacing = 30
-        self.fakeName = "Fake" # but better to set it explicitly
-        self.dataName = "Data"
         self.nominalName = "nominal"
         self.datagroups = None
         self.pseudodata_datagroups = None
@@ -139,14 +137,12 @@ class CardTool(object):
                 return True
         else:
             return False
-        
-    def setFakeName(self, name):
-        self.fakeName = name
-        if self.datagroups:
-            self.datagroups.fakeName = name
 
     def getFakeName(self):
-        return self.fakeName
+        return self.datagroups.fakeName
+
+    def getDataName(self):
+        return self.datagroups.dataName
 
     def setPseudodata(self, pseudodata, idx = 0, pseudoDataProcsRegexp=".*"):
         self.pseudoData = pseudodata
@@ -159,9 +155,6 @@ class CardTool(object):
         
     def setProcColumnsSpacing(self, spacing):
         self.procColumnsSpacing = spacing
-
-    def setDataName(self, name):
-        self.dataName = name
 
     def setDatagroups(self, datagroups, resetGroups=False):
         self.datagroups = datagroups
@@ -188,7 +181,7 @@ class CardTool(object):
     def predictedProcesses(self):
         if self.predictedProcs:
             return self.predictedProcs
-        return list(filter(lambda x: x != self.dataName, self.datagroups.groups.keys()))
+        return list(filter(lambda x: x != self.getDataName(), self.datagroups.groups.keys()))
 
     def setHistName(self, histName):
         self.histName = histName
@@ -343,7 +336,9 @@ class CardTool(object):
         return False
 
     def skipEntryDictToArray(self, h, skipEntry, syst):
-        nsyst = len(self.systematics[syst]["systAxes"])+self.systematics[syst]["mirror"]
+        nsyst = len(self.systematics[syst]["systAxes"])
+        if h.axes[-1].name == "mirror":
+            nsyst += 1
 
         if type(skipEntry) == dict:
             skipEntryArr = np.full(nsyst, -1, dtype=object)
@@ -627,7 +622,7 @@ class CardTool(object):
             if systAxName in [ax.name for ax in hdata.axes]:
                 hdata = hdata[{systAxName : self.pseudoDataIdx }] 
 
-        self.writeHist(hdata, self.dataName, self.pseudoData+"_sum")
+        self.writeHist(hdata, self.getDataName(), self.pseudoData+"_sum")
 
     def writeForProcesses(self, syst, processes, label, check_systs=True):
         logger.info("-"*50)
@@ -690,8 +685,8 @@ class CardTool(object):
         self.writeForProcesses(self.nominalName, processes=self.datagroups.groups.keys(), label=self.nominalName, check_systs=check_systs)
         self.loadNominalCard()
         if self.pseudoData and not self.xnorm:
-            self.addPseudodata([x for x in self.datagroups.groups.keys() if x != self.dataName],
-                               [x for x in self.datagroups.groups.keys() if x != self.dataName and not self.pseudoDataProcsRegexp.match(x)])
+            self.addPseudodata([x for x in self.datagroups.groups.keys() if x != self.getDataName()],
+                               [x for x in self.datagroups.groups.keys() if x != self.getDataName() and not self.pseudoDataProcsRegexp.match(x)])
 
         self.writeLnNSystematics()
         for syst in self.systematics.keys():
@@ -706,7 +701,7 @@ class CardTool(object):
                 preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"],
                 # Needed to avoid always reading the variation for the fakes, even for procs not specified
                 forceToNominal=[x for x in self.datagroups.getProcNames() if x not in 
-                                self.datagroups.getProcNames([p for g in processes for p in self.expandProcesses(g) if p != "Fake"])],
+                                self.datagroups.getProcNames([p for g in processes for p in self.expandProcesses(g) if p != self.getFakeName()])],
                 scaleToNewLumi=self.lumiScale,
             )
             self.writeForProcesses(syst, label="syst", processes=processes, check_systs=check_systs)
@@ -886,9 +881,9 @@ class CardTool(object):
                 # Could write out the proper normalizations pretty easily
                 "rates" : "-1".ljust(self.procColumnsSpacing)*nprocs,
                 "inputfile" : self.outfile if type(self.outfile) == str  else self.outfile.GetName(),
-                "dataName" : self.dataName,
+                "dataName" : self.getDataName(),
                 "histName" : self.histName,
-                "pseudodataHist" : f"{self.histName}_{self.dataName}_{self.pseudoData}_sum" if self.pseudoData else f"{self.histName}_{self.dataName}"
+                "pseudodataHist" : f"{self.histName}_{self.getDataName()}_{self.pseudoData}_sum" if self.pseudoData else f"{self.histName}_{self.getDataName()}"
             }
             if not self.absolutePathShapeFileInCard:
                 # use the relative path because absolute paths are slow in text2hdf5.py conversion

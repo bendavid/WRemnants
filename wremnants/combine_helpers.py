@@ -38,9 +38,6 @@ def setSimultaneousABCD(cardTool, variation_fakerate=0.5, variation_normalizatio
     # expected fake contribution
     hist_fake = sum([group.hists[cardTool.nominalName] if name == cardTool.dataName else -1*group.hists[cardTool.nominalName] for name, group in cardTool.datagroups.groups.items()])
 
-    import pdb
-    pdb.set_trace()
-
     # setting errors to 0
     hist_fake.view(flow=True)[...] = np.stack((hist_fake.values(flow=True), np.zeros_like(hist_fake.values(flow=True))), axis=-1)
 
@@ -60,7 +57,7 @@ def setSimultaneousABCD(cardTool, variation_fakerate=0.5, variation_normalizatio
     
     fakename = cardTool.getFakeName()
 
-    cardTool.datagroups.addGroup(fakename, label = fakename, color = "grey", members=[],) #TODO check if existing group can be used
+    cardTool.datagroups.addGroup(fakename, label = "Nonprompt", color = "grey", members=[],) #TODO check if existing group can be used
     cardTool.datagroups.groups[fakename].hists[f"{cardTool.nominalName}"] = hist_fake
 
     bin_sizes = [ax.size for ax in hist_fake.axes if ax.name in axes and ax.name not in [common.passIsoName, common.passMTName]]

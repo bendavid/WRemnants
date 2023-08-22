@@ -53,7 +53,7 @@ project = args.project
 
 # file created with `python WRemnants/scripts/histmakers/w_z_gen_dists.py --skipAngularCoeffs --filter horace -p ewinput`
 
-res, meta, _ = input_tools.read_infile(args.infile)
+res, meta, _ = input_tools.read_infile(args.input)
 
 corrh = {}
 
@@ -128,7 +128,7 @@ def make_plot_2d(h, name, proc, plot_error=False, cmin=None, cmax=None, flow=Tru
     if log:
         plot_name += "_log"
     plot_tools.save_pdf_and_png(args.plotdir, plot_name)
-    plot_tools.write_index_and_log(args.plotdir, plot_name, args=args, analysis_meta_info=meta)
+    plot_tools.write_index_and_log(args.plotdir, plot_name, args=args, analysis_meta_info=meta[0])
 
 def make_plot_1d(hists, name, proc, axis, ratio=False, normalize=False, xmin=None, xmax=None, ymin=None, ymax=None, flow=True, density=False):
     logger.info(f"Make 1D plot for {name} with axis {axis}")
@@ -211,7 +211,7 @@ def make_plot_1d(hists, name, proc, axis, ratio=False, normalize=False, xmin=Non
     if args.normalize:
         plot_name += "_normalize"
     plot_tools.save_pdf_and_png(args.plotdir, plot_name)
-    plot_tools.write_index_and_log(args.plotdir, plot_name, args=args, analysis_meta_info=meta)
+    plot_tools.write_index_and_log(args.plotdir, plot_name, args=args, analysis_meta_info=meta[0])
 
 for proc in procs:
 

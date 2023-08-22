@@ -10,6 +10,7 @@ import h5py
 from narf import ioutils
 import ROOT
 import uproot
+import narf
 
 logger = logging.child_logger(__name__)
 
@@ -413,30 +414,30 @@ def get_metadata(infile):
     return results["meta_info"] if "meta_info" in results else results["meta_data"]
 
 
-def read_infile(self, inputs):
+def read_infile(input):
     # read histogramer input file(s)
-    results = {}
+    result = {}
     meta = []
     infiles = []
-    if isinstance(input_file, list):
-        for inpt in inputs:
+    if isinstance(input, list):
+        for inpt in input:
             r, m, h = read_infile(inpt)
             result.update(r)
-            meta.append(m)
-            infiles.append(h)
-        return result, meta, h5file
+            meta += m
+            infiles += h
+        return result, meta, infiles
     
-    logger.info(f"Load {inpt}")
-    if inputs.endswith(".pkl.lz4"):
-        with lz4.frame.open(inputs) as f:
+    logger.info(f"Load {input}")
+    if input.endswith(".pkl.lz4"):
+        with lz4.frame.open(input) as f:
             result = pickle.load(f)
-        i
-    elif inputs.endswith(".hdf5"):
-        infiles = [h5py.File(inputs, "r")]
+    elif input.endswith(".hdf5"):
+        h5file = h5py.File(input, "r")
+        infiles = [h5file]
         result = narf.ioutils.pickle_load_h5py(h5file["results"])
     else:
         raise ValueError("Unsupported file type")
 
     meta = result["meta_info"] if "meta_info" in result else result["meta_data"]
 
-    return result, meta, h5file
+    return result, [meta], [infiles]

@@ -55,6 +55,7 @@ class Datagroups(object):
         self.globalAction = None
         self.unconstrainedProcesses = []
         self.fakeName = "Fake"
+        self.dataName = "Data"
 
         if self.lowPU:
             from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU as make_datagroups
@@ -582,6 +583,8 @@ class Datagroups(object):
 
     def select_xnorm_groups(self):
         # only keep members and groups where xnorm is defined 
+        if self.fakeName in self.groups:
+            self.deleteGroup(self.fakeName)
         toDel_groups = []
         for g_name, group in self.groups.items():
             toDel_members = []
@@ -592,14 +595,11 @@ class Datagroups(object):
                 if "xnorm" not in self.results[member.name]["output"].keys():
                     logger.debug(f"Member {member.name} has no xnorm and will be deleted")
                     toDel_members.append(member)
-                elif g_name.startswith("Fake"):
-                    toDel_members.append(member)
             if len(toDel_members) == len(group.members):
                 logger.debug(f"All members of group {g_name} have no xnorm and the group will be deleted")
                 toDel_groups.append(g_name)
             else:
                 group.deleteMembers(toDel_members)
-
         self.deleteGroups(toDel_groups)
 
     def make_yields_df(self, histName, procs, action=lambda x: x, norm_proc=None):

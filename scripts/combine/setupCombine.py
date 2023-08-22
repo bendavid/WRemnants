@@ -24,7 +24,7 @@ def make_parser(parser=None):
     parser.add_argument("--absolutePathInCard", action="store_true", help="In the datacard, set Absolute path for the root file where shapes are stored")
     parser.add_argument("-n", "--baseName", type=str, help="Histogram name in the file (e.g., 'nominal')", default="nominal")
     parser.add_argument("--noHist", action='store_true', help="Skip the making of 2D histograms (root file is left untouched if existing)")
-    parser.add_argument("--qcdProcessName" , type=str, default="Fake", help="Name for QCD process")
+    parser.add_argument("--qcdProcessName" , type=str, default=None, help="Name for QCD process")
     # setting on the fit behaviour
     parser.add_argument("--fitvar", nargs="+", help="Variable to fit", default=["eta-pt-charge"])
     parser.add_argument("--rebin", type=int, nargs='*', default=[], help="Rebin axis by this value (default, 1, does nothing)")
@@ -75,7 +75,7 @@ def make_parser(parser=None):
 
     return parser
 
-def setup(args, inputFile, fitvar, xnorm=False, ABCD=False):
+def setup(args, inputFile, fitvar, xnorm=False):
 
     # NOTE: args.filterProcGroups and args.excludeProcGroups should in principle not be used together
     #       (because filtering is equivalent to exclude something), however the exclusion is also meant to skip
@@ -93,7 +93,7 @@ def setup(args, inputFile, fitvar, xnorm=False, ABCD=False):
     logger.debug(f"Filtering these groups of processes: {args.filterProcGroups}")
     logger.debug(f"Excluding these groups of processes: {args.excludeProcGroups}")
 
-    datagroups = Datagroups(inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm and not ABCD)
+    datagroups = Datagroups(inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm and not args.ABCD)
 
     if not xnorm and (args.axlim or args.rebin or args.absval):
         if len(args.axlim) % 2 or len(args.axlim)/2 > len(fitvar) or len(args.rebin) > len(fitvar):
@@ -160,14 +160,17 @@ def setup(args, inputFile, fitvar, xnorm=False, ABCD=False):
         datagroups.deleteGroup("Wmunu") # remove out of acceptance signal
 
     # Start to create the CardTool object, customizing everything
-    cardTool = CardTool.CardTool(xnorm=xnorm, ABCD=ABCD)
+    cardTool = CardTool.CardTool(xnorm=xnorm, ABCD=wmass and args.ABCD)
     cardTool.setDatagroups(datagroups)
-    cardTool.setFakeName(args.qcdProcessName + (f"_{datagroups.flavor}" if datagroups.flavor else ""))
+    if args.qcdProcessName:
+        cardTool.setFakeName(args.qcdProcessName)
     logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
     if args.absolutePathInCard:
         cardTool.setAbsolutePathShapeInCard()
     cardTool.setProjectionAxes(fitvar)
-    if wmass and ABCD:
+    if wmass and args.ABCD:
+        # In case of ABCD we need to have different fake processes to have uncorrelated uncertainties
+        cardTool.setFakeName(datagroups.fakeName + (datagroups.flavor if datagroups.flavor else "")) 
         cardTool.setChannels(["inclusive"])
         cardTool.setWriteByCharge(False)
         cardTool.setProjectionAxes([*fitvar, "passIso", "passMT"])
@@ -533,7 +536,7 @@ def setup(args, inputFile, fitvar, xnorm=False, ABCD=False):
         systAxes=msv_config['syst_axes'],
         labelsByAxis=msv_config['syst_axes_labels'],
         passToFakes=passSystToFakes,
-        scale = args.scaleMuonCorr, 
+        scale = args.scaleMuonCorr,
     )
     cardTool.addSystematic("muonL1PrefireSyst", 
         processes=['MCnoQCD'],
@@ -541,7 +544,7 @@ def setup(args, inputFile, fitvar, xnorm=False, ABCD=False):
         baseName="CMS_prefire_syst_m",
         systAxes=["downUpVar"],
         labelsByAxis=["downUpVar"],
-        passToFakes=passSystToFakes, 
+        passToFakes=passSystToFakes,
     )
     cardTool.addSystematic("muonL1PrefireStat", 
         processes=['MCnoQCD'],
@@ -549,7 +552,7 @@ def setup(args, inputFile, fitvar, xnorm=False, ABCD=False):
         baseName="CMS_prefire_stat_m_",
         systAxes=["downUpVar", "etaPhiRegion"],
         labelsByAxis=["downUpVar", "etaPhiReg"],
-        passToFakes=passSystToFakes, 
+        passToFakes=passSystToFakes,
     )
     cardTool.addSystematic("ecalL1Prefire", 
         processes=['MCnoQCD'],
@@ -557,7 +560,7 @@ def setup(args, inputFile, fitvar, xnorm=False, ABCD=False):
         baseName="CMS_prefire_ecal",
         systAxes=["downUpVar"],
         labelsByAxis=["downUpVar"],
-        passToFakes=passSystToFakes, 
+        passToFakes=passSystToFakes,
     )
 
     non_closure_scheme = input_tools.args_from_metadata(cardTool, "nonClosureScheme")
@@ -568,7 +571,7 @@ def setup(args, inputFile, fitvar, xnorm=False, ABCD=False):
             baseName="Z_nonClosure_parametrized_A_",
             systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
             labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
-            passToFakes=passSystToFakes,
+            passToFakes=passSystToFakes
         )
     if non_closure_scheme in ["A-M-separated", "binned-plus-M"]:
         cardTool.addSystematic("Z_non_closure_parametrized_M", 
@@ -577,7 +580,7 @@ def setup(args, inputFile, fitvar, xnorm=False, ABCD=False):
             baseName="Z_nonClosure_parametrized_M_",
             systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
             labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
-            passToFakes=passSystToFakes,
+            passToFakes=passSystToFakes
         )            
     if non_closure_scheme == "A-M-combined":
         cardTool.addSystematic("Z_non_closure_parametrized", 
@@ -586,7 +589,7 @@ def setup(args, inputFile, fitvar, xnorm=False, ABCD=False):
             baseName="Z_nonClosure_parametrized_",
             systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
             labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
-            passToFakes=passSystToFakes,
+            passToFakes=passSystToFakes
         )
     if non_closure_scheme in ["binned", "binned-plus-M"]:
         cardTool.addSystematic("Z_non_closure_binned", 
@@ -595,7 +598,7 @@ def setup(args, inputFile, fitvar, xnorm=False, ABCD=False):
             baseName="Z_nonClosure_binned_",
             systAxes=["unc_ieta", "unc_ipt", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
             labelsByAxis=["unc_ieta", "unc_ipt", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
-            passToFakes=passSystToFakes,
+            passToFakes=passSystToFakes
         )
     
     # Previously we had a QCD uncertainty for the mt dependence on the fakes, see: https://github.com/WMass/WRemnants/blob/f757c2c8137a720403b64d4c83b5463a2b27e80f/scripts/combine/setupCombineWMass.py#L359
@@ -604,14 +607,14 @@ def setup(args, inputFile, fitvar, xnorm=False, ABCD=False):
 
 def main(args, xnorm=False):
     fitvar = args.fitvar[0].split("-")
-    cardTool = setup(args, inputFile=args.inputFile[0], fitvar=fitvar, xnorm=xnorm, ABCD=ABCD)
+    cardTool = setup(args, inputFile=args.inputFile[0], fitvar=fitvar, xnorm=xnorm)
 
     cardTool.setOutput(args.outfolder, fitvars=fitvar, doStatOnly=args.doStatOnly, postfix=args.postfix)
 
     if args.genModel and args.fitresult:
         combine_helpers.setTheoryFitData(cardTool, args.fitresult)
 
-    cardTool.writeOutput(args=args, hdf5=args.hdf5, sparse=args.sparse, forceNonzero=not args.unfolding, check_systs=not args.unfolding)
+    cardTool.writeOutput(args=args, forceNonzero=not args.unfolding, check_systs=not args.unfolding)
     return
 
 if __name__ == "__main__":
@@ -636,7 +639,9 @@ if __name__ == "__main__":
         # loop over all files
         for i, ifile in enumerate(args.inputFile):
             fitvar = args.fitvar[i].split("-")
-            cardTool = setup(args, ifile, fitvar, xnorm=False, ABCD=args.ABCD)
+            cardTool = setup(args, ifile, fitvar, xnorm=False)
+            if args.genModel and args.fitresult:
+                combine_helpers.setTheoryFitData(cardTool, args.fitresult)
             writer.add_channel(cardTool)
             if args.unfolding:
                 cardTool = setup(args, ifile, fitvar, xnorm=True)

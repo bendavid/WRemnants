@@ -110,7 +110,9 @@ def make_yields_df(hists, procs, signal=None, per_bin=False, yield_only=False, p
 
     return pd.DataFrame(entries, columns=columns)
 
-def plot_xsec_unfolded(df, df_asimov=None, hreco=None, hxnorm=None, edges=None, bin_widths=None, channel=None, scale=1., normalize=False, process_label="V", axes=None):
+def plot_xsec_unfolded(df, edges, df_asimov=None, bin_widths=None, channel=None, scale=1., normalize=False, process_label="V", axes=None,
+    hist_others=[], label_others=[], color_others=[]
+):
     logger.info(f"Make "+("normalized " if normalize else "")+"unfoled xsec plot"+(f" in channel {channel}" if channel else ""))
 
     if normalize:
@@ -125,16 +127,6 @@ def plot_xsec_unfolded(df, df_asimov=None, hreco=None, hxnorm=None, edges=None, 
         bin_widths = edges[1:] - edges[:-1]
 
     hist_xsec.view(flow=False)[...] = np.stack([df["value"].values/bin_widths, (df["err_total"].values/bin_widths)**2], axis=-1)
-
-    if hreco:
-        hreco_flat = hist.Hist(
-            hist.axis.Variable(edges, underflow=False, overflow=False), storage=hist.storage.Weight())
-        hreco_flat.view(flow=False)[...] = np.stack([hreco.values().flatten()/bin_widths, hreco.variances().flatten()/bin_widths**2], axis=-1)
-
-    if hxnorm:
-        hxnorm_flat = hist.Hist(
-            hist.axis.Variable(edges, underflow=False, overflow=False), storage=hist.storage.Weight())
-        hxnorm_flat.view(flow=False)[...] = np.stack([hxnorm.values().flatten()/bin_widths, hxnorm.variances().flatten()/bin_widths**2], axis=-1)
 
     unc_ratio = np.sqrt(hist_xsec.variances()) /hist_xsec.values() 
 
@@ -177,29 +169,6 @@ def plot_xsec_unfolded(df, df_asimov=None, hreco=None, hxnorm=None, edges=None, 
         zorder=2,
     )    
 
-    if hreco_flat:
-        hep.histplot(
-            hreco_flat,
-            yerr=False,
-            histtype="step",
-            color="grey",
-            label="Reconstructed data",
-            ax=ax1,
-            alpha=1.,
-            zorder=2,
-        )            
-    if hxnorm_flat:
-        hep.histplot(
-            hxnorm_flat,
-            yerr=False,
-            histtype="step",
-            color="blue",
-            label="Theory model",
-            ax=ax1,
-            alpha=1.,
-            zorder=2,
-        )        
-
     centers = hist_xsec.axes.centers[0]
 
     ax2.bar(centers, height=2*unc_ratio, bottom=1-unc_ratio, width=edges[1:] - edges[:-1], color="silver", label="Total")
@@ -208,25 +177,30 @@ def plot_xsec_unfolded(df, df_asimov=None, hreco=None, hxnorm=None, edges=None, 
 
     ax2.plot([min(edges), max(edges)], [1,1], color="black", linestyle="-")
 
-    # hep.histplot(
-    #     hh.divideHists(hist_xsec_stat, hist_xsec, cutoff=0, rel_unc=True),
-    #     histtype="errorbar",
-    #     color="black",
-    #     label="Data",
-    #     yerr=True,
-    #     linewidth=2,
-    #     ax=ax2, capsize=2, elinewidth=0, markersize=0
-    # )
+    for h, l, c in zip(hist_others, label_others, color_others):
+        h_flat = hist.Hist(
+            hist.axis.Variable(edges, underflow=False, overflow=False), storage=hist.storage.Weight())
+        h_flat.view(flow=False)[...] = np.stack([h.values().flatten()/bin_widths, h.variances().flatten()/bin_widths**2], axis=-1)
 
-    # hep.histplot(
-    #     hh.divideHists(hist_xsec, hist_xsec, cutoff=0, rel_unc=True),
-    #     histtype="errorbar",
-    #     color="black",
-    #     label="Data",
-    #     yerr=True,
-    #     linewidth=2,
-    #     ax=ax2
-    # )
+        hep.histplot(
+            h_flat,
+            yerr=False,
+            histtype="step",
+            color=c,
+            label=l,
+            ax=ax1,
+            alpha=1.,
+            zorder=2,
+        )            
+
+        hep.histplot(
+            hh.divideHists(h_flat, hist_xsec, cutoff=0, rel_unc=True),
+            yerr=False,
+            histtype="step",
+            color=c,
+            ax=ax2,
+            zorder=2,
+        )            
 
     if data_asimov is not None:
         hep.histplot(
@@ -248,23 +222,6 @@ def plot_xsec_unfolded(df, df_asimov=None, hreco=None, hxnorm=None, edges=None, 
             # label="Model",
             ax=ax2
         )
-
-    if hreco_flat:
-        hep.histplot(
-            hh.divideHists(hreco_flat, hist_xsec, cutoff=0, rel_unc=True),
-            yerr=False,
-            histtype="step",
-            color="grey",
-            ax=ax2,
-        )            
-    if hxnorm_flat:
-        hep.histplot(
-            hh.divideHists(hxnorm_flat, hist_xsec, cutoff=0, rel_unc=True),
-            yerr=False,
-            histtype="step",
-            color="blue",
-            ax=ax2,
-        )     
 
     plot_tools.addLegend(ax1, ncols=2, text_size=15*args.scaleleg)
     plot_tools.addLegend(ax2, ncols=2, text_size=15*args.scaleleg)
@@ -537,33 +494,34 @@ for axes in gen_axes_permutations:
             continue
         
         # find bin widths
-        histo = sum([groups.results[m.name]["output"][args.baseName].get() for m in groups.groups[process].members 
-            if channel=="all" and not m.name.startswith("Bkg") or channel in m.name])
-        
-        hproj = histo.project(*channel_axes)
-        hproj = hh.scaleHist(hproj, 1./scale)
+        def get_histo(name):
+            h = sum([groups.results[m.name]["output"][name].get() for m in groups.groups[process].members 
+                if not m.name.startswith("Bkg") and (base_process=="Z" or channel=="all" or channel in m.name)])
+            h = h.project(*channel_axes)
+            this_scale=2*scale if channel in ["plus", "minus"] and base_process=="Z" else scale
+            h = hh.scaleHist(h, 1./this_scale)
+            return h
 
-        hxnorm = sum([groups.results[m.name]["output"]["xnorm"].get() for m in groups.groups[process].members 
-            if channel=="all" and not m.name.startswith("Bkg") or channel in m.name])
-        hxproj = hxnorm.project(*channel_axes)
-        hxproj = hh.scaleHist(hxproj, 1./scale)
-
-        bins = np.product(hproj.axes.size)
+        histo = get_histo(args.baseName)
+        hxnorm = get_histo("xnorm")
+        hMiNNLO = get_histo("xnorm_uncorr")
+     
+        bins = np.product(histo.axes.size)
 
         binwidths = None
         if len(channel_axes) == 1:
             if channel_axes[0] == "qGen":
                 edges = np.array([-2,0,2])
             else:
-                edges = np.array(histo.axes[channel_axes[0]].edges)
+                edges = np.array(histo.axes.edges[0])
         elif len(channel_axes) == 2:
-            xbins, ybins = [a.edges for a in histo.axes if a.name in channel_axes]
-            xbinwidths = xbins[1:]-xbins[:-1]
-            ybinwidths = ybins[1:]-ybins[:-1]
+            xbins, ybins = histo.axes.edges
+            xbinwidths = np.diff(xbins.flatten())
+            ybinwidths = np.diff(ybins.flatten())
             binwidths = np.outer(xbinwidths, ybinwidths).flatten()
             edges = np.arange(0.5, len(binwidths)+1.5, 1.0)
         else:
-            bins = np.product(hproj.axes.size)
+            bins = np.product(histo.axes.size)
             edges = np.arange(0.5, bins+1.5, 1.0)
 
         # sort values
@@ -571,7 +529,9 @@ for axes in gen_axes_permutations:
         data_c_asimov = data_channel_asimov.sort_values(by=channel_axes) if data_asimov else None
 
         if "xsec" in args.plots:
-            plot_xsec_unfolded(data_c, data_c_asimov, hproj, hxproj, edges=edges, bin_widths=binwidths, channel=channel, scale=scale, normalize=args.normalize, process_label = process_label, axes=channel_axes)
+            plot_xsec_unfolded(data_c, edges, data_c_asimov, bin_widths=binwidths, channel=channel, scale=scale, normalize=args.normalize, process_label = process_label, axes=channel_axes,
+                hist_others=[hxnorm, hMiNNLO], label_others=["SCETlib+DYTurbo", "MiNNLO"], color_others=["blue", "red"]
+            )
 
         if "uncertainties" in args.plots:
             # absolute uncertainty

@@ -6,12 +6,22 @@ fi
 
 combinetf_dir=$1
 mode=$2
+working_dir=$3
 
-if [[ $3 == *.hdf5 ]]; then
+source /cvmfs/cms.cern.ch/cmsset_default.sh
+pushd $combinetf_dir
+eval `scram runtime -sh`
+popd
+
+set -x
+
+pushd $working_dir
+
+
+if [[ $4 == *.hdf5 ]]; then
 	# in case the card was written out as hdf5
-    working_dir="${string%.hdf5}"
-	outfile=$3
 
+	outfile=$4
 
 	if [ "$mode" == "mass" ]; then
 		combinetf.py --doImpacts --binByBinStat -t -1 "$outfile" --doh5Output
@@ -22,8 +32,6 @@ if [[ $3 == *.hdf5 ]]; then
 
 else
 	# in case the card(s) were written out as .txt
-    working_dir=$3
-
 	maskedChannels=()
 	cards=()
 	for card in ${@:4}; do
@@ -35,15 +43,6 @@ else
 			maskedChannels+=( "--maskedChan=${key}" )
 		fi
 	done
-
-	source /cvmfs/cms.cern.ch/cmsset_default.sh
-	pushd $combinetf_dir
-	eval `scram runtime -sh`
-	popd
-
-	set -x
-
-	pushd $working_dir
 
 	card_name=$(basename ${working_dir}).txt
 	combineCards.py ${cards[@]} > $card_name
@@ -57,6 +56,5 @@ else
 		combinetf.py --doImpacts --binByBinStat -t -1 "$outfile" --correlateXsecStat --saveHists --computeHistErrors
 	fi
 fi
-
 
 set +x

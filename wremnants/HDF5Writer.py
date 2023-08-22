@@ -97,8 +97,8 @@ class HDF5Writer(object):
                 self.masked_channels.append(chan)
                 dg.globalAction = None # reset global action in case of rebinning or such
                 dg.select_xnorm_groups() # only keep processes where xnorm is defined
-                if chanInfo.fakeName in dg.groups.keys():
-                    dg.deleteGroup(chanInfo.fakeName)
+                if dg.fakeName in dg.groups.keys():
+                    dg.deleteGroup(dg.fakeName)
 
             # load data and nominal ans syst histograms
             dg.loadHistsForDatagroups(
@@ -120,7 +120,7 @@ class HDF5Writer(object):
                     if chanInfo.ABCD:
                         setSimultaneousABCD(chanInfo)
 
-                    data_obs_hist = dg.groups[chanInfo.dataName].hists[chanInfo.nominalName]
+                    data_obs_hist = dg.groups[dg.dataName].hists[chanInfo.nominalName]
 
                     if data_obs_hist.axes.name != chanInfo.project:
                         data_obs_hist = data_obs_hist.project(*chanInfo.project)
