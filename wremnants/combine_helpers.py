@@ -45,7 +45,6 @@ def setSimultaneousABCD(cardTool, variation_fakerate=0.5, variation_normalizatio
 
     # axes in the correct ordering
     axes = [common.passIsoName, common.passMTName]
-    axes = [*axes, "charge"] if "charge" not in cardTool.project else axes
     axes += [ax for ax in cardTool.project if ax not in axes]
 
     if set(hist_fake.axes.name) != set(axes) or hist_fake.axes.name[0] != common.passIsoName or hist_fake.axes.name[1] != common.passMTName:
@@ -53,7 +52,7 @@ def setSimultaneousABCD(cardTool, variation_fakerate=0.5, variation_normalizatio
         hist_fake = hist_fake.project(*axes)
 
     # set the expected values in the signal region
-    hist_fake.view(flow=True)[1,1,...] = sel.fakeHistABCD(hist_fake).view(flow=True)
+    hist_fake.values(flow=True)[1,1,...] = sel.fakeHistABCD(hist_fake).values(flow=True)
     
     fakename = "Nonprompt"
 
