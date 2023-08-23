@@ -45,7 +45,9 @@ col_rapidity =  "absYVgen" if args.absY else "yVgen"
 
 axis_ptVgen = hist.axis.Variable(
     # list(range(0,151))+[160., 190.0, 220.0, 250.0, 300.0, 400.0, 500.0, 800.0, 1500.0], 
-    list(range(0,101)), # this is the same binning as hists from theory corrections
+    #list(range(0,101)), # this is the same binning as hists from theory corrections
+    #common.ptV_binning,
+    common.ptV_10quantiles_binning,
     name = "ptVgen", underflow=False,
 )
 
@@ -154,10 +156,10 @@ w_moments = None
 if not args.skipAngularCoeffs:
     for dataset in datasets:
         name = dataset.name
-        if "helicity_moments_scale" not in resultdict[name]["output"]:
+        if "nominal_gen_helicity_moments_scale" not in resultdict[name]["output"]:
             logger.warning(f"Failed to find helicity_moments_scale hist for proc {name}. Skipping!")
             continue
-        moments = resultdict[name]["output"]["helicity_moments_scale"].get()
+        moments = resultdict[name]["output"]["nominal_gen_helicity_moments_scale"].get()
         if name in common.zprocs:
             if z_moments is None:
                 z_moments = moments

@@ -331,7 +331,7 @@ def makePlotWithRatioToRef(
         histtype="step",
         color=colors[:count],
         label=labels[:count],
-        linestyle=linestyles,
+        linestyle=linestyles[:count],
         stack=False,
         ax=ax1,
         yerr=yerr,
@@ -341,6 +341,7 @@ def makePlotWithRatioToRef(
 
     if len(hists) > 1:
         ratio_hists = [hh.divideHists(h, hists[0], cutoff=0.00001) for h in hists[not baseline:]]
+        print(ratio_hists)
         if fill_between:
             for up,down,color in zip(hists[1::2], hists[2::2], colors[1::2]):
                 upr = hh.divideHists(up, hists[0], 1e-6)
@@ -353,10 +354,10 @@ def makePlotWithRatioToRef(
         count = len(ratio_hists) - data if not fill_between else 1
         hep.histplot(
             ratio_hists[(not baseline):count],
-            histtype="step",
+            histtype="errorbar",
             color=colors[(not baseline):count],
-            linestyle=linestyles,
-            yerr=False,
+            linestyle=linestyles[(not baseline):count],
+            yerr=yerr,
             stack=False,
             ax=ax2,
             alpha=alpha,
@@ -373,12 +374,11 @@ def makePlotWithRatioToRef(
             alpha=alpha,
         )
         hep.histplot(
-            hh.divideHists(data, hists[0], cutoff=1.e-8),
+            hh.divideHists(hists[-1], hists[0], cutoff=1.e-8),
             histtype="errorbar",
             color=colors[-1],
-            label=labels[-1],
             xerr=False,
-            yerr=False,
+            yerr=True,
             stack=False,
             ax=ax2,
             alpha=alpha,

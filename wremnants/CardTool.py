@@ -250,7 +250,7 @@ class CardTool(object):
                       scale=1, processes=None, group=None, noConstraint=False,
                       action=None, doActionBeforeMirror=False, actionArgs={}, actionMap={},
                       systNameReplace=[], systNamePrepend=None, groupFilter=None, passToFakes=False,
-                      rename=None, splitGroup={}, decorrelateByBin={}, noiGroup=False
+                      rename=None, splitGroup={}, decorrelateByBin={}, noiGroup=False, formatWithValue=False,
                       ):
         # note: setting Up=Down seems to be pathological for the moment, it might be due to the interpolation in the fit
         # for now better not to use the options, although it might be useful to keep it implemented
@@ -308,6 +308,7 @@ class CardTool(object):
                 "name" : name,
                 "decorrByBin": decorrelateByBin,
                 "systNamePrepend" : systNamePrepend,
+                "formatWithValue" : formatWithValue,
             }
         })
 
@@ -329,7 +330,7 @@ class CardTool(object):
     def setMirrorForSyst(self, syst, mirror=True):
         self.systematics[syst]["mirror"] = mirror
 
-    def systLabelForAxis(self, axLabel, entry, axis):
+    def systLabelForAxis(self, axLabel, entry, axis, formatWithValue=False):
         if type(axis) == hist.axis.StrCategory:
             if entry in axis:
                 return entry
@@ -341,7 +342,13 @@ class CardTool(object):
             return 'Up' if entry else 'Down'
         if "{i}" in axLabel:
             return axLabel.format(i=entry)
-        return axLabel+str(entry)
+        if formatWithValue:
+            entry = axis.centers[entry]
+
+        if type(entry) in [float, np.float64]:
+            entry = f"{entry:0.1f}".replace(".", "p") if not entry.is_integer() else str(int(entry))
+
+        return f"{axLabel}{entry}"
 
     # TODO: Really would be better to use the axis names, not just indices
     def excludeSystEntry(self, entry, entries_to_skip):
@@ -438,7 +445,7 @@ class CardTool(object):
                     systInfo["outNames"].append("")
                 else:
                     name = systInfo["baseName"]
-                    name += "".join([self.systLabelForAxis(al, entry[i], ax) for i,(al,ax) in enumerate(zip(axLabels,axes))])
+                    name += "".join([self.systLabelForAxis(al, entry[i], ax, systInfo["formatWithValue"]) for i,(al,ax) in enumerate(zip(axLabels,axes))])
                     if "systNameReplace" in systInfo and systInfo["systNameReplace"]:
                         for rep in systInfo["systNameReplace"]:
                             name = name.replace(*rep)

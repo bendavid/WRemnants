@@ -241,13 +241,18 @@ def makeAbsHist(h, axis_name):
     hnew[...] = h[{axis_name : s[ax.index(0):]}].view() + np.flip(h[{axis_name : s[:ax.index(0)]}].view(), axis=axidx)
     return hnew
 
+# Checks if edges1 could be rebinned to edges2. Order is important!
+def compatibleBins(edges1, edges2):
+    comparef = np.vectorize(lambda x: np.isclose(x, edges1).any())
+    return np.all(comparef(edges2))
+
 def rebinHist(h, axis_name, edges):
     if type(edges) == int:
         return h[{axis_name : hist.rebin(edges)}]
 
     ax = h.axes[axis_name]
     ax_idx = [a.name for a in h.axes].index(axis_name)
-    if not all([np.isclose(x, ax.edges).any() for x in edges]):
+    if not compatibleBins(ax.edges, edges):
         raise ValueError(f"Cannot rebin histogram due to incompatible edges for axis '{ax.name}'\n"
                             f"Edges of histogram are {ax.edges}, requested rebinning to {edges}")
         

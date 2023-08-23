@@ -38,6 +38,7 @@ class Datagroups(object):
 
         mode_map = {
             "w_z_gen_dists.py" : "vgen",
+            "mz_dilepton.py" : "dilepton",
             "mz_wlike_with_mu_eta_pt.py" : "wlike",
             "mw_with_mu_eta_pt.py" : "wmass",
             "mw_lowPU.py" : "lowpu_w",
