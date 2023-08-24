@@ -48,7 +48,7 @@ all_axes = {
     "mll": hist.axis.Regular(60, 60., 120., name = "mll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
     "yll": hist.axis.Regular(20, -2.5, 2.5, name = "yll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
     "absYll": hist.axis.Regular(10, 0., 2.5, name = "absYll", underflow=False, overflow=not args.excludeFlow),
-    "ptll": hist.axis.Variable(common.ptV_10quantiles_binning if not args.finePtBinning else range(60), name = "ptll", underflow=False, overflow=not args.excludeFlow),
+    "ptll": hist.axis.Variable(common.ptV_binning if not args.finePtBinning else range(60), name = "ptll", underflow=False, overflow=not args.excludeFlow),
     "etaPlus": hist.axis.Regular(int(args.eta[0]), args.eta[1], args.eta[2], name = "etaPlus"),
     "etaMinus": hist.axis.Regular(int(args.eta[0]), args.eta[1], args.eta[2], name = "etaMinus"),
     "etaSum": hist.axis.Regular(12, -4.8, 4.8, name = "etaSum"),
@@ -80,7 +80,7 @@ if args.csVarsHist:
 nominal_axes = [all_axes[a] for a in nominal_cols] 
 
 gen_axes = {
-    "ptVGen": hist.axis.Variable(common.ptV_10quantiles_binning if not args.finePtBinning else range(60), name = "ptVGen", underflow=False, overflow=False),
+    "ptVGen": hist.axis.Variable(common.ptV_binning if not args.finePtBinning else range(60), name = "ptVGen", underflow=False, overflow=False),
     "absYVGen": hist.axis.Regular(10, 0, 2.5, name = "absYVGen", underflow=False, overflow=False),  
 }
 
@@ -301,16 +301,16 @@ def build_graph(df, dataset):
                     f"{reco_sel_GF}_genCharge"
                 ]
                 # muon scale variation from stats. uncertainty on the jpsi massfit
-                df = df.Define(
-                    "nominal_muonScaleSyst_responseWeights_tensor", data_jpsi_crctn_unc_helper,
-                    [*input_kinematics, "nominal_weight"]
-                )
-                muonScaleSyst_responseWeights = df.HistoBoost(
-                    "nominal_muonScaleSyst_responseWeights", axes,
-                    [*cols, "nominal_muonScaleSyst_responseWeights_tensor"],
-                    tensor_axes = data_jpsi_crctn_unc_helper.tensor_axes, storage=hist.storage.Double()
-                )
-                results.append(muonScaleSyst_responseWeights)
+                #df = df.Define(
+                #    "nominal_muonScaleSyst_responseWeights_tensor", data_jpsi_crctn_unc_helper,
+                #    [*input_kinematics, "nominal_weight"]
+                #)
+                #muonScaleSyst_responseWeights = df.HistoBoost(
+                #    "nominal_muonScaleSyst_responseWeights", axes,
+                #    [*cols, "nominal_muonScaleSyst_responseWeights_tensor"],
+                #    tensor_axes = data_jpsi_crctn_unc_helper.tensor_axes, storage=hist.storage.Double()
+                #)
+                #results.append(muonScaleSyst_responseWeights)
 
                 # add the ad-hoc Z non-closure nuisances from the jpsi massfit to muon scale unc
                 df = df.DefinePerSample("AFlag", "0x01")

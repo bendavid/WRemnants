@@ -20,7 +20,7 @@ logger = logging.child_logger(__name__)
 
 class Datagroups(object):
 
-    def __init__(self, infile, combine=False, datasets=None, **kwargs):
+    def __init__(self, infile, combine=False, filter_datasets=[], mode=None, **kwargs):
         self.combine = combine
         self.h5file = None
         self.rtfile = None
@@ -44,16 +44,24 @@ class Datagroups(object):
             "mw_lowPU.py" : "lowpu_w",
             "mz_lowPU.py" : "lowpu_z",
         }
-        analysis_script = os.path.basename(self.getScriptCommand().split()[0])
-        if analysis_script not in mode_map:
-            raise ValueError(f"Unrecognized analysis script {analysis_script}! Expected one of {mode_map.keys()}")
-        self.mode = mode_map[analysis_script]
+        if mode == None:
+            analysis_script = os.path.basename(self.getScriptCommand().split()[0])
+            if analysis_script not in mode_map:
+                raise ValueError(f"Unrecognized analysis script {analysis_script}! Expected one of {mode_map.keys()}")
+            self.mode = mode_map[analysis_script]
+        else:
+            if mode not in mode_map.values():
+                raise ValueError(f"Unrecognized mode '{mode}.' Must be one of {set(mode_map.values())}")
+            self.mode = mode
 
         self.lumi = 1
 
         if self.results:
-            args = self.getMetaInfo()["args"]
-            self.flavor = args.get("flavor", None)
+            try:
+                args = self.getMetaInfo()["args"]
+                self.flavor = args.get("flavor", None)
+            except ValueError as e:
+                self.flavor = None
         else:
             self.flavor = None
 
@@ -67,10 +75,9 @@ class Datagroups(object):
         else:
             from wremnants.datasets.datagroups2016 import make_datagroups_2016 as make_datagroups
 
-        if datasets is None:
-            datasets = getDatasets(mode=self.mode)
+        datasets = getDatasets(mode=self.mode)
 
-        self.setDatasets(datasets)
+        self.setDatasets(datasets, filter_datasets)
         self.setGenAxes()
                     
         make_datagroups(self, **kwargs)
@@ -81,10 +88,10 @@ class Datagroups(object):
         if self.rtfile:
             self.rtfile.Close()
 
-    def setDatasets(self, datasets):
+    def setDatasets(self, datasets, filter_datasets=True):
         if self.results:
             # only keep datasets that are found in input file
-            self.datasets = {x.name : x for x in datasets if x.name in self.results.keys()}
+            self.datasets = {x.name : x for x in datasets if not filter_datasets or x.name in self.results.keys() }
             
             # dictionary that maps dataset names to groups 
             dataset_to_group = {d_key: d.group for d_key, d in self.datasets.items()}
@@ -93,7 +100,7 @@ class Datagroups(object):
                 # if additional datasets are specified in results (for example aggregated groups or re-named datasets), get them
                 if d_name in self.datasets.keys():
                     continue
-                if d_name in ["meta_info",]:
+                if d_name in ["meta_info",] or d_name.startswith("hist"):
                     continue
                 
                 g_name = d_name.replace("Bkg","") if d_name.startswith("Bkg") else d_name
@@ -209,6 +216,8 @@ class Datagroups(object):
 
     def getMetaInfo(self):
         if self.results:
+            if "meta_info" not in self.results and "meta_data" not in self.results:
+                raise ValueError("Did not find meta data in results file")
             return self.results["meta_info"] if "meta_info" in self.results else self.results["meta_data"]
         raise NotImplementedError("Currently can't access meta data as dict for ROOT file")
 
@@ -216,7 +225,7 @@ class Datagroups(object):
         if self.rtfile:
             return self.rtfile.Get("meta_info/command").GetTitle()
         else:
-            meta_info = self.results["meta_info"] if "meta_info" in self.results else self.results["meta_data"]
+            meta_info = self.getMetaInfo()
             return meta_info["command"]
         
     # for reading pickle files
@@ -536,13 +545,18 @@ class Datagroups(object):
         if isinstance(gen_axes, str):
             gen_axes = [gen_axes]
 
+        self.gen_axes = None
+
         if gen_axes != None:
             self.gen_axes = list(gen_axes)
         else:
             # infer gen axes from metadata
-            args = self.getMetaInfo()["args"]
+            try:
+                args = self.getMetaInfo()["args"]
+            except ValueError as e:
+                logger.warning("No meta data found so no gen axes could be auto set")
+                return
             if args.get("unfolding", False) is False and args.get("addHelicityHistos", False) is False:
-                self.gen_axes = None
                 return
 
             if len(args.get("genVars", [])) > 0:

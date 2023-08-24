@@ -548,8 +548,7 @@ def add_theory_hists(results, df, args, dataset_name, corr_helpers, qcdScaleByHe
     logger.debug(f"Make theory histograms for {dataset_name} dataset, histogram {base_name}")
     axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
     axis_ptVgen = hist.axis.Variable(
-        common.ptV_10quantiles_binning, 
-        #common.ptV_binning, 
+        common.ptV_binning, 
         name = "ptVgen", underflow=False
     )
     #for hel analysis, ptVgen is part of axes/col

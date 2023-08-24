@@ -23,21 +23,17 @@ logger = logging.child_logger(__name__)
 def figure(href, xlabel, ylabel, ylim=None, xlim=None,
     grid = False, plot_title = None, title_padding = 0,
     bin_density = 300, cms_label = None, logy=False, logx=False,
-    width_scale=1, automatic_scale=True
+    width_scale=1
 ):
     if not xlim:
         xlim = [href.axes[0].edges[0], href.axes[0].edges[-1]]
     hax = href.axes[0]
     xlim_range = float(xlim[1] - xlim[0])
     original_xrange = float(hax.edges[-1] - hax.edges[0])
-    if automatic_scale:
-        raw_width = (hax.size/float(bin_density)) * (xlim_range / original_xrange)
-        width = math.ceil(raw_width)
-    else:
-        width=1
+    raw_width = (hax.size/float(bin_density)) * (xlim_range / original_xrange)
+    width = math.ceil(raw_width)
 
     fig = plt.figure(figsize=(width_scale*8*width,8))
-
     ax1 = fig.add_subplot() 
     if cms_label: hep.cms.text(cms_label)
 
@@ -144,7 +140,8 @@ def makeStackPlotWithRatio(
     stack = []
     data_hist = None
     for k in to_read:
-        if not histInfo[k].hists[histName]:
+        print(histInfo[k].hists)
+        if histName not in histInfo[k].hists or not histInfo[k].hists[histName]:
             logger.warning(f"Failed to find hist {histName} for proc {k}")
             continue
         h = action(histInfo[k].hists[histName])[select]
@@ -344,7 +341,7 @@ def makePlotWithRatioToRef(
     )
 
     if len(hists) > 1:
-        ratio_hists = [hh.divideHists(h, hists[0], cutoff=0.00001) for h in hists[not baseline:]]
+        ratio_hists = [hh.divideHists(h, hists[0], cutoff=1e-6, rel_unc=True) for i,h in enumerate(hists[not baseline:])]
         print(ratio_hists)
         if fill_between:
             for up,down,color in zip(hists[1::2], hists[2::2], colors[1::2]):
@@ -358,7 +355,7 @@ def makePlotWithRatioToRef(
         count = len(ratio_hists) - data if not fill_between else 1
         hep.histplot(
             ratio_hists[(not baseline):count],
-            histtype="errorbar",
+            histtype="step",
             color=colors[(not baseline):count],
             linestyle=linestyles[(not baseline):count],
             yerr=yerr,
