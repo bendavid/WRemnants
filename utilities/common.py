@@ -5,6 +5,7 @@ import numpy as np
 import os
 from utilities import logging
 from enum import Enum
+import re
 
 wremnants_dir = f"{pathlib.Path(__file__).parent}/../wremnants"
 data_dir =  f"{pathlib.Path(__file__).parent}/../wremnants-data/data/"
@@ -115,7 +116,6 @@ def set_parser_default(parser, argument, newDefault):
         logger.warning(f" Parser argument {argument} not found!")
     return parser
 
-
 def common_parser(for_reco_highPU=False):
 
     parser = argparse.ArgumentParser()
@@ -225,6 +225,19 @@ def common_parser(for_reco_highPU=False):
         
     return parser,initargs
 
+
+def natural_sort_key(s):
+    # Sort string in a number aware way by plitting the string into alphabetic and numeric parts
+    parts = re.split(r'(\d+)', s)
+    return [int(part) if part.isdigit() else part.lower() for part in parts]
+
+def natural_sort(strings):
+    return sorted(strings, key=natural_sort_key)
+    
+def natural_sort_dict(dictionary):
+    sorted_keys = natural_sort(dictionary.keys())
+    sorted_dict = {key: dictionary[key] for key in sorted_keys}
+    return sorted_dict
 '''
 INPUT -------------------------------------------------------------------------
 |* (str) string: the string to be converted to list

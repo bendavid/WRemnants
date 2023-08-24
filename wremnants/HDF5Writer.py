@@ -1,5 +1,5 @@
-from wremnants.combine_helpers import setSimultaneousABCD
-from utilities import logging
+from wremnants.combine_helpers import getTheoryFitData, setSimultaneousABCD
+from utilities import common,logging
 import time
 import numpy as np
 import hist
@@ -22,7 +22,6 @@ class HDF5Writer(object):
         self.chunkSize=4*1024**2
         self.logkepsilon=math.log(1e-3) #numerical cutoff in case of zeros in systematic variations
 
-        # for theory fit, currently only supported for a single datacard
         self.theoryFit = False
         self.theoryFitData = None
         self.theoryFitDataCov = None
@@ -38,6 +37,24 @@ class HDF5Writer(object):
         self.channels = {}
         self.masked_channels = []
 
+        self.clipSystVariations=False
+        self.clipSystVariationsSignal=False
+        if self.clipSystVariations>0.:
+            self.cliplow = -np.abs(np.log(clipSystVariations))
+            self.cliphigh = np.abs(np.log(clipSystVariations))
+        if self.clipSystVariationsSignal>0.:
+            self.cliplowSig = -np.abs(np.log(clipSystVariationsSignal))
+            self.cliphighSig = np.abs(np.log(clipSystVariationsSignal))
+
+
+    def set_fitresult(self, fitresult):
+        # for theory fit, currently not supported for sumPOI groups
+        self.theoryFit = True
+        base_processes = ["W" if c.datagroups.wmass else "Z" for c in self.get_channels().values()]
+        data, self.theoryFitDataCov = getTheoryFitData(fitresult, base_processes)
+        # theoryfit data for each channel
+        self.theoryFitData = {c: d for c, d in zip(self.get_channels().keys(), data)}
+
     def add_channel(self, cardTool, name=None):
         if name is None:
             name = f"ch{len(self.channels)+1}"
@@ -52,30 +69,23 @@ class HDF5Writer(object):
         signals = set()
         for chan, chanInfo in self.get_channels().items():
             signals.update(chanInfo.unconstrainedProcesses[:])
-        return list(signals)
+        return list(common.natural_sort(signals))
 
     def get_backgrounds(self):
         bkgs = set()
         for chan, chanInfo in self.get_channels().items():
-            bkgs.update([p for p in chanInfo.predictedProcesses() if p not in chanInfo.unconstrainedProcesses])
-            if chanInfo.ABCD:
-                bkgs.add("Nonprompt")        
-        return list(bkgs)
+            bkgs.update([p for p in chanInfo.predictedProcesses() if p not in chanInfo.unconstrainedProcesses])      
+        return list(common.natural_sort(bkgs))
 
     def write(self, 
         forceNonzero=True, 
         check_systs=False, 
         allowNegativeExpectation=False, 
         sparse=False,
-        clipSystVariations=False,
-        clipSystVariationsSignal=False,
         outfolder="./", postfix=None, doStatOnly=False
     ):
         signals = self.get_signals() 
         bkgs = self.get_backgrounds() 
-
-        procs = signals + bkgs
-        nproc = len(procs)
 
         dict_data_obs = {}
         dict_data_obs_cov = {}
@@ -89,12 +99,12 @@ class HDF5Writer(object):
         nbins = 0
         
         for chan, chanInfo in self.get_channels().items():
-            logger.info(f"Now in channel {chan} xnorm={chanInfo.xnorm}")
+            masked = chanInfo.xnorm and not self.theoryFit
+            logger.info(f"Now in channel {chan} masked={masked}")
 
             dg = chanInfo.datagroups
 
             if chanInfo.xnorm:
-                self.masked_channels.append(chan)
                 dg.globalAction = None # reset global action in case of rebinning or such
                 dg.select_xnorm_groups() # only keep processes where xnorm is defined
                 if dg.fakeName in dg.groups.keys():
@@ -108,17 +118,16 @@ class HDF5Writer(object):
                 scaleToNewLumi=chanInfo.lumiScale, 
                 forceNonzero=forceNonzero)
 
-            if not chanInfo.xnorm:                
-
+            if not masked:                
                 if self.theoryFit:
                     if self.theoryFitData is None or self.theoryFitDataCov is None:
                         raise RuntimeError("No data or covariance found to perform theory fit")
-
-                    data_obs = self.theoryFitData
-                    dict_data_obs_cov[chan] = self.theoryFitDataCov
+                    data_obs = self.theoryFitData[chan]
                 else:
                     if chanInfo.ABCD:
                         setSimultaneousABCD(chanInfo)
+                        if dg.fakeName not in bkgs:
+                            bkgs.append(dg.fakeName)
 
                     data_obs_hist = dg.groups[dg.dataName].hists[chanInfo.nominalName]
 
@@ -132,6 +141,7 @@ class HDF5Writer(object):
                 nbins += nbinschan
 
             else:
+                self.masked_channels.append(chan)
                 chanInfo.setProjectionAxes(["count"])
                 nbinschan = 1
 
@@ -144,7 +154,7 @@ class HDF5Writer(object):
                 # nominal histograms of prediction
                 norm_proc_hist = dg.groups[proc].hists[chanInfo.nominalName]
 
-                if not chanInfo.xnorm:                
+                if not masked:                
 
                     if norm_proc_hist.axes != chanInfo.project:
                         norm_proc_hist = norm_proc_hist.project(*chanInfo.project)
@@ -163,7 +173,7 @@ class HDF5Writer(object):
                 if not allowNegativeExpectation:
                     norm_proc = np.maximum(norm_proc, 0.)
 
-                if not chanInfo.xnorm:                
+                if not masked:                
                     dict_sumw2[chan][proc] = sumw2_proc
 
                 dict_norm[chan][proc] = norm_proc
@@ -227,13 +237,13 @@ class HDF5Writer(object):
                 systName = systKey if not syst["name"] else syst["name"]
 
                 dg.loadHistsForDatagroups(
-                    chanInfo.nominalName, systName, label=systKey,
+                    chanInfo.nominalName, systName, label="syst",
                     procsToRead=procs_syst, 
                     forceNonzero=forceNonzero and systName != "qcdScaleByHelicity",
                     preOpMap=syst["actionMap"], preOpArgs=syst["actionArgs"],
                     # Needed to avoid always reading the variation for the fakes, even for procs not specified
                     forceToNominal=[x for x in dg.getProcNames() if x not in 
-                        dg.getProcNames([p for p in procs_syst if p != "Fake"])],
+                        dg.getProcNames([p for p in procs_syst if p != dg.fakeName])],
                     scaleToNewLumi=chanInfo.lumiScale,
                     nominalIfMissing=not chanInfo.xnorm # for masked channels not all systematics exist (we can skip loading nominal since Fake does not exist)
                 )
@@ -242,7 +252,7 @@ class HDF5Writer(object):
                     logger.debug(f"Now at proc {proc}!")
 
                     hnom = dg.groups[proc].hists[chanInfo.nominalName]
-                    hvar = dg.groups[proc].hists[systKey]
+                    hvar = dg.groups[proc].hists["syst"]
 
                     if syst["doActionBeforeMirror"] and syst["action"]:
                         logger.debug(f"Do action before mirror")
@@ -260,55 +270,41 @@ class HDF5Writer(object):
                     for var_name in var_names:
                         kfac = syst["scale"]
 
-                        if syst["mirror"]:
-                            syst_proc_hist = var_map[var_name]
-
-                            if syst_proc_hist.axes != chanInfo.project:
-                                syst_proc_hist = syst_proc_hist.project(*chanInfo.project)
-
-                            syst_proc = syst_proc_hist.values(flow=False).flatten().astype(self.dtype)
-
-                            logkup_proc = kfac*np.log(syst_proc/norm_proc)
+                        def get_logk(histname, var_type=""):
+                            _hist = var_map[histname+var_type]
+                            if _hist.axes != chanInfo.project:
+                                _hist = _hist.project(*chanInfo.project)
+                            _syst = _hist.values(flow=False).flatten().astype(self.dtype)
+                            
                             # check if there is a sign flip between systematic and variation
                             # we do a multiplicative mirroring, if the up variation is on the same side as nominal, also the down variation is
-                            logkup_proc = np.where(np.equal(np.sign(norm_proc*syst_proc),1), logkup_proc, self.logkepsilon*np.ones_like(logkup_proc))
-                            logkdown_proc = np.where(np.equal(np.sign(norm_proc*syst_proc),1), logkup_proc, -self.logkepsilon*np.ones_like(logkup_proc))
-                            syst_proc = None
+                            if var_type=="Down":
+                                _logk = -kfac*np.log(_syst/norm_proc)
+                                _logk_view = np.where(np.equal(np.sign(norm_proc*_syst),1), _logk, -self.logkepsilon*np.ones_like(_logk))
+                            else:
+                                _logk = kfac*np.log(_syst/norm_proc)
+                                _logk_view = np.where(np.equal(np.sign(norm_proc*_syst),1), _logk, self.logkepsilon*np.ones_like(_logk))
+                            _syst = None
+
+                            if self.clipSystVariations>0.:
+                                _logk = np.clip(_logk,self.cliplow,self.cliphigh)
+                            if self.clipSystVariationsSignal>0. and proc in signals:
+                                _logk = np.clip(_logk,self.cliplowSig,self.cliphighSig)
+
+                            return _logk_view
+
+                        if syst["mirror"]:
+                            logkavg_proc = get_logk(var_name)
+                            logkhalfdiff_proc = np.zeros_like(logkavg_proc)
                         else:
-                            systup_proc_hist = var_map[var_name+"Up"]
-                            systdown_proc_hist = var_map[var_name+"Down"]
+                            logkup_proc = get_logk(var_name, "Up")
+                            logkdown_proc = get_logk(var_name, "Down")
 
-                            if systup_proc_hist.axes != chanInfo.project:
-                                systup_proc_hist = systup_proc_hist.project(*chanInfo.project)
-                            if systdown_proc_hist.axes != chanInfo.project:
-                                systdown_proc_hist = systdown_proc_hist.project(*chanInfo.project)
+                            logkavg_proc = 0.5*(logkup_proc + logkdown_proc)
+                            logkhalfdiff_proc = 0.5*(logkup_proc - logkdown_proc)
 
-                            systup_proc = systup_proc_hist.values(flow=False).flatten().astype(self.dtype)
-                            systdown_proc = systdown_proc_hist.values(flow=False).flatten().astype(self.dtype)
-
-                            logkup_proc = kfac*np.log(systup_proc/norm_proc)
-                            logkdown_proc = -kfac*np.log(systdown_proc/norm_proc)
-                            logkup_proc = np.where(np.equal(np.sign(norm_proc*systup_proc),1), logkup_proc, self.logkepsilon*np.ones_like(logkup_proc))
-                            logkdown_proc = np.where(np.equal(np.sign(norm_proc*systdown_proc),1), logkdown_proc, -self.logkepsilon*np.ones_like(logkdown_proc))
-                            systup_proc = None
-                            systdown_proc = None
-
-                        if clipSystVariations>0.:
-                            cliplow = -np.abs(np.log(clipSystVariations))
-                            cliphigh = np.abs(np.log(clipSystVariations))
-                            logkup_proc = np.clip(logkup_proc,cliplow,cliphigh)
-                            logkdown_proc = np.clip(logkdown_proc,cliplow,cliphigh)
-                            
-                        if clipSystVariationsSignal>0. and proc in signals:
-                            cliplow = -np.abs(np.log(clipSystVariationsSignal))
-                            cliphigh = np.abs(np.log(clipSystVariationsSignal))
-                            logkup_proc = np.clip(logkup_proc,cliplow,cliphigh)
-                            logkdown_proc = np.clip(logkdown_proc,cliplow,cliphigh)
-
-                        logkavg_proc = 0.5*(logkup_proc + logkdown_proc)
-                        logkhalfdiff_proc = 0.5*(logkup_proc - logkdown_proc)
-                        logkup_proc = None
-                        logkdown_proc = None
+                            logkup_proc = None
+                            logkdown_proc = None
 
                         #ensure that systematic tensor is sparse where normalization matrix is sparse
                         logkavg_proc = np.where(np.equal(norm_proc,0.), 0., logkavg_proc)
@@ -320,21 +316,19 @@ class HDF5Writer(object):
 
                         self.book_systematic(syst, var_name)
 
-                    dg.groups[proc].hists[systKey] = None
+        procs = signals + bkgs
+        nproc = len(procs)
 
         logger.info(f"Write out nominal arrays")
         sumw = np.zeros([nbins], self.dtype)
         sumw2 = np.zeros([nbins], self.dtype)
         data_obs = np.zeros([nbins], self.dtype)
-        if self.theoryFit:
-            data_cov = np.zeros([nbins,nbins], self.dtype)
         ibin = 0
         for nbinschan, (chan, chanInfo) in zip(ibins, self.get_channels().items()):
-            if chanInfo.xnorm:
+            masked = chanInfo.xnorm and not self.theoryFit
+            if masked:
                 continue
             data_obs[ibin:ibin+nbinschan] = dict_data_obs[chan]
-            if self.theoryFit:
-                data_cov[ibin:ibin+nbinschan,ibin:ibin+nbinschan] = dict_data_obs_cov[chan]
 
             for iproc, proc in enumerate(procs):
                 if proc not in dict_norm[chan]:
@@ -614,6 +608,9 @@ class HDF5Writer(object):
         data_obs = None
 
         if self.theoryFit:
+            data_cov = self.theoryFitDataCov
+            if data_cov.shape != (nbins,nbins):
+                raise RuntimeError(f"covariance matrix has incompatible shape of {data_cov.shape}, expected is {(nbins,nbins)}!")
             full_cov = np.add(data_cov,np.diag(sumw2)) if self.theoryFitMCStat else data_cov
             nbytes += writeFlatInChunks(np.linalg.inv(full_cov), f, "hdata_cov_inv", maxChunkBytes = self.chunkSize)
             data_cov = None
@@ -644,9 +641,9 @@ class HDF5Writer(object):
         outfilename = f"{outfolder}/{self.cardName}"
 
         if doStatOnly:
-            tag += "_statOnly"
+            outfilename += "_statOnly"
         if postfix is not None:
-            tag += f"_{postfix}"
+            outfilename += f"_{postfix}"
         if sparse:
             outfilename += "_sparse"
 
@@ -678,13 +675,13 @@ class HDF5Writer(object):
                 self.dict_systgroups[group].add(name)
 
     def get_systsstandard(self):
-        return list(sorted(self.systsstandard))
+        return list(common.natural_sort(self.systsstandard))
 
     def get_systsnoprofile(self):
-        return list(sorted(self.systsnoprofile))
+        return list(common.natural_sort(self.systsnoprofile))
 
     def get_systsnoconstraint(self):
-        return list(sorted(self.systsnoconstraint))
+        return list(common.natural_sort(self.systsnoconstraint))
 
     def get_systs(self):
         return self.get_systsnoconstraint() + self.get_systsstandard() + self.get_systsnoprofile()
@@ -724,7 +721,7 @@ class HDF5Writer(object):
         dict_sumgroups = {}
         for chanInfo in self.get_channels().values():
             dict_sumgroups.update(chanInfo.cardSumGroups)
-        for igroup, (group, members) in enumerate(dict_sumgroups.items()):
+        for igroup, (group, members) in enumerate(common.natural_sort_dict(dict_sumgroups).items()):
             sumgroups.append(group)
             for proc in members:
                 sumgroupsegmentids.append(igroup)

@@ -179,55 +179,55 @@ if horace_v2:
 
 if horace_v3:
     genDataDict.update({
-        'ZToMuMu_horace-3-lo-photos' : { 
+        'ZToMuMu_horace-v3-lo-photos' : { 
                 'filepaths' :
                 ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/Horace_v3/ZToMuMu_TuneCP5_13TeV-horace-born-fsr-photos_nopair-isr-pythia/job*.root"],
                 'xsec' : xsec_ZmmPostVFP,
                 'group': "Zmumu",
         },
-        'ZToMuMu_horace-3-qed' : { 
+        'ZToMuMu_horace-v3-qed' : { 
                 'filepaths' :
                 ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/Horace_v3/ZToMuMu_TuneCP5_13TeV-horace-exp-old-fsr-off-isr-pythia/job*.root"],
                 'xsec' : xsec_ZmmPostVFP,
                 'group': "Zmumu",
         },
-        'ZToMuMu_horace-3-nlo' : { 
+        'ZToMuMu_horace-v3-nlo' : { 
                 'filepaths' :
                 ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/Horace_v3/ZToMuMu_TuneCP5_13TeV-horace-exp-new-fsr-off-isr-off/job*.root"],
                 'xsec' : xsec_ZmmPostVFP,
                 'group': "Zmumu",
         },
-        'WplusToMuNu_horace-3-lo-photos' : { 
+        'WplusToMuNu_horace-v3-lo-photos' : { 
                 'filepaths' :
                 ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/Horace_v3/WplusToMuNu_TuneCP5_13TeV-horace-born-fsr-photos_nopair-isr-pythia/job*.root"],
                 'xsec' : xsec_WpmunuPostVFP,
                 'group': "Wmunu",
         },
-        'WplusToMuNu_horace-3-qed' : { 
+        'WplusToMuNu_horace-v3-qed' : { 
                 'filepaths' :
                 ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/Horace_v3/WplusToMuNu_TuneCP5_13TeV-horace-exp-old-fsr-off-isr-pythia/job*.root"],
                 'xsec' : xsec_WpmunuPostVFP,
                 'group': "Wmunu",
         },
-        'WplusToMuNu_horace-3-nlo' : { 
+        'WplusToMuNu_horace-v3-nlo' : { 
                 'filepaths' :
                 ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/Horace_v3/WplusToMuNu_TuneCP5_13TeV-horace-exp-new-fsr-off-isr-off/job*.root"],
                 'xsec' : xsec_WpmunuPostVFP,
                 'group': "Wmunu",
         },
-        'WminusToMuNu_horace-3-lo-photos' : { 
+        'WminusToMuNu_horace-v3-lo-photos' : { 
                 'filepaths' :
                 ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/Horace_v3/WminusToMuNu_TuneCP5_13TeV-horace-born-fsr-photos_nopair-isr-pythia/job*.root"],
                 'xsec' : xsec_WmmunuPostVFP,
                 'group': "Wmunu",
         },
-        'WminusToMuNu_horace-3-qed' : { 
+        'WminusToMuNu_horace-v3-qed' : { 
                 'filepaths' :
                 ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/Horace_v3/WminusToMuNu_TuneCP5_13TeV-horace-exp-old-fsr-off-isr-pythia/job*.root"],
                 'xsec' : xsec_WmmunuPostVFP,
                 'group': "Wmunu",
         },
-        'WminusToMuNu_horace-3-nlo' : { 
+        'WminusToMuNu_horace-v3-nlo' : { 
                 'filepaths' :
                 ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/Horace_v3/WminusToMuNu_TuneCP5_13TeV-horace-exp-new-fsr-off-isr-off/job*.root"],
                 'xsec' : xsec_WmmunuPostVFP,

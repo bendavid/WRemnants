@@ -137,9 +137,15 @@ class CardTool(object):
                 return True
         else:
             return False
+    
+    def setFakeName(self, name):
+        self.datagroups.fakeName = name
 
     def getFakeName(self):
         return self.datagroups.fakeName
+
+    def setDataName(self, name):
+        self.datagroups.dataName = name
 
     def getDataName(self):
         return self.datagroups.dataName
@@ -228,7 +234,7 @@ class CardTool(object):
     # action takes place after mirroring
     # use doActionBeforeMirror to do something before it instead (so the mirroring will act on the modified histogram)
     # decorrelateByBin is to customize eta-pt decorrelation: pass dictionary with {axisName: [bin edges]}
-    def addSystematic(self, name, systAxes, outNames=None, skipEntries=None, labelsByAxis=None, 
+    def addSystematic(self, name, systAxes=[], outNames=None, skipEntries=None, labelsByAxis=None, 
                       baseName="", mirror=False, mirrorDownVarEqualToUp=False, mirrorDownVarEqualToNomi=False,
                       scale=1, processes=None, group=None, noi=False, noConstraint=False, noProfile=False,
                       action=None, doActionBeforeMirror=False, actionArgs={}, actionMap={},
@@ -245,7 +251,7 @@ class CardTool(object):
         # Need to make an explicit copy of the array before appending
         procs_to_add = [x for x in (self.allMCProcesses() if processes is None else processes)]
         procs_to_add = self.expandProcesses(procs_to_add)
-        if passToFakes and self.getFakeName() not in procs_to_add:
+        if passToFakes and self.getFakeName() not in procs_to_add and not self.ABCD:
             procs_to_add.append(self.getFakeName())
 
         if not mirror and (mirrorDownVarEqualToUp or mirrorDownVarEqualToNomi):
@@ -430,7 +436,9 @@ class CardTool(object):
                 raise RuntimeError(f"Did not find any valid variations for syst {syst}")
 
         variations = [hvar[{ax : binnum for ax,binnum in zip(axNames, entry)}] for entry in entries]
-        if len(variations) != len(systInfo["outNames"]):
+        if hvar.axes[-1].name == "mirror" and len(variations) == 2*len(systInfo["outNames"]):
+            systInfo["outNames"] = [n + d for n in systInfo["outNames"] for d in ["Up", "Down"]]
+        elif len(variations) != len(systInfo["outNames"]):
             logger.warning(f"The number of variations doesn't match the number of names for "
                 f"syst {syst}. Found {len(systInfo['outNames'])} names and {len(variations)} variations.")
 

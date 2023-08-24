@@ -33,7 +33,6 @@ def make_parser(parser=None):
     parser.add_argument("--lumiScale", type=float, default=1.0, help="Rescale equivalent luminosity by this value (e.g. 10 means ten times more data and MC)")
     parser.add_argument("--sumChannels", action='store_true', help="Only use one channel")
     parser.add_argument("--fitXsec", action='store_true', help="Fit signal inclusive cross section")
-    parser.add_argument("--genModel", action="store_true", help="Produce datacard with the xnorm as model (binned according to axes defined in --fitvar)")
     parser.add_argument("--fitresult", type=str, default=None ,help="Use data and covariance matrix from fitresult (for making a theory fit)")
     parser.add_argument("--ABCD", action="store_true", help="Produce datacard for simultaneous fit of ABCD regions")
     # settings on the nuisances itself
@@ -485,7 +484,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                     systAxes = ["tensor_axis_0"],
                     labelsByAxis = [""], 
                 )
-                
+
     if (wmass or wlike) and not input_tools.args_from_metadata(cardTool, "noRecoil"):
         combine_helpers.add_recoil_uncertainty(cardTool, ["signal_samples"], 
             passSystToFakes=passSystToFakes, 
@@ -493,7 +492,6 @@ def setup(args, inputFile, fitvar, xnorm=False):
             pu_type="lowPU" if lowPU else "highPU")
 
     if lowPU:
-
         if datagroups.flavor in ["e", "ee"]:
             # disable, prefiring for muons currently broken? (fit fails)
             cardTool.addSystematic("prefireCorr",
@@ -611,9 +609,6 @@ def main(args, xnorm=False):
 
     cardTool.setOutput(args.outfolder, fitvars=fitvar, doStatOnly=args.doStatOnly, postfix=args.postfix)
 
-    if args.genModel and args.fitresult:
-        combine_helpers.setTheoryFitData(cardTool, args.fitresult)
-
     cardTool.writeOutput(args=args, forceNonzero=not args.unfolding, check_systs=not args.unfolding)
     return
 
@@ -639,25 +634,21 @@ if __name__ == "__main__":
         # loop over all files
         for i, ifile in enumerate(args.inputFile):
             fitvar = args.fitvar[i].split("-")
-            cardTool = setup(args, ifile, fitvar, xnorm=False)
-            if args.genModel and args.fitresult:
-                combine_helpers.setTheoryFitData(cardTool, args.fitresult)
+            cardTool = setup(args, ifile, fitvar, xnorm=args.fitresult is not None)
             writer.add_channel(cardTool)
             if args.unfolding:
                 cardTool = setup(args, ifile, fitvar, xnorm=True)
                 writer.add_channel(cardTool)
-
+        if args.fitresult:
+            writer.set_fitresult(args.fitresult)
         writer.write(outfolder=args.outfolder, doStatOnly=args.doStatOnly, postfix=args.postfix, sparse=args.sparse)
     else:
         if len(args.inputFile) > 1:
             raise IOError(f"Multiple input files only supported within --hdf5 mode")
 
-        if args.genModel:
+        main(args)
+        if args.unfolding:
+            # in case of unfolding and hdf5, the xnorm histograms are directly written into the hdf5
             main(args, xnorm=True)
-        else:
-            main(args)
-            if args.unfolding:
-                # in case of unfolding and hdf5, the xnorm histograms are directly written into the hdf5
-                main(args, xnorm=True)
 
     logging.summary()

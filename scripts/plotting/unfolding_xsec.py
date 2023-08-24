@@ -40,6 +40,7 @@ parser.add_argument("--plots", type=str, nargs="+", default=["xsec", "uncertaint
 parser.add_argument("--normalize", action='store_true', help="Plot normalized distributions")
 parser.add_argument("--lumi", type=float, default=16.8, help="Luminosity used in the fit, needed to get the absolute cross section")
 parser.add_argument("--plotSumPOIs", action='store_true', help="Plot xsecs from sum POI groups")
+parser.add_argument("--scaleXsec", type=float, default=1.0, help="Scale xsec predictions with this number")
 parser.add_argument("--eoscp", action='store_true', help="Override use of xrdcp and use the mount instead")
 
 args = parser.parse_args()
@@ -267,8 +268,9 @@ translate = {
     "binByBinStat": "BBlite",
     "CMS_recoil": "recoil",
     "CMS_background": "Bkg.",
-    "NonpromptHighMT": "NPhighMT",
-    "NonpromptLowMT": "NPlowMT",
+    "FakeHighMT": "FakeHighMT",
+    "FakeLowMT": "FakeLowMT",
+    "rFake": "fakerate",
     "massShiftZ": "massZ",
     "massShiftW": "massW",
 }
@@ -331,9 +333,9 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normaliz
     uncertainties = make_yields_df([hist_xsec], ["Total"], per_bin=True, yield_only=True, percentage=True)
 
     sources =["err_stat"]
-    sources += ["err_NonpromptHighMT", "err_NonpromptLowMT", "err_fakerate"]
+    sources += ["err_FakeHighMT", "err_FakeLowMT", "err_rFake"]
     sources += list(sorted([s for s in filter(lambda x: x.startswith("err"), df.keys()) 
-        if s not in ["err_stat", "err_total", "err_NonpromptHighMT", "err_NonpromptLowMT", "err_fakerate"] 
+        if s not in ["err_stat", "err_total", "err_FakeHighMT", "err_FakeLowMT", "err_rFake"] 
             and "eff_stat_" not in s and "eff_syst_" not in s]))    # only take eff grouped stat and syst
 
     NUM_COLORS = len(sources)-1
@@ -428,7 +430,7 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normaliz
 # store unfolded data
 # outfile = h5py.File(f'{outdir}/fitresult.hdf5', 'w')
 
-scale = 1 if args.normalize else args.lumi * 1000
+scale = args.scaleXsec if args.normalize else args.scaleXsec * args.lumi * 1000
 
 poi_type = ["pmaskedexpnorm",] if args.normalize else ["pmaskedexp",]
 if args.plotSumPOIs:
@@ -498,7 +500,8 @@ for axes in gen_axes_permutations:
             h = sum([groups.results[m.name]["output"][name].get() for m in groups.groups[process].members 
                 if not m.name.startswith("Bkg") and (base_process=="Z" or channel=="all" or channel in m.name)])
             h = h.project(*channel_axes)
-            this_scale=2*scale if channel in ["plus", "minus"] and base_process=="Z" else scale
+            # for wlike the sample is randomly split in two based on reco charge
+            this_scale = 2*scale if channel in ["plus", "minus"] and base_process=="Z" else scale
             h = hh.scaleHist(h, 1./this_scale)
             return h
 

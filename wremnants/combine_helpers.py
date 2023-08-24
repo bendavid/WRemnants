@@ -36,7 +36,7 @@ def setSimultaneousABCD(cardTool, variation_fakerate=0.5, variation_normalizatio
     logger.info(f"Set processes for simultaneous ABCD fit")
 
     # expected fake contribution
-    hist_fake = sum([group.hists[cardTool.nominalName] if name == cardTool.dataName else -1*group.hists[cardTool.nominalName] for name, group in cardTool.datagroups.groups.items()])
+    hist_fake = sum([group.hists[cardTool.nominalName] if name == cardTool.getDataName() else -1*group.hists[cardTool.nominalName] for name, group in cardTool.datagroups.groups.items()])
 
     # setting errors to 0
     hist_fake.view(flow=True)[...] = np.stack((hist_fake.values(flow=True), np.zeros_like(hist_fake.values(flow=True))), axis=-1)
@@ -87,14 +87,11 @@ def setSimultaneousABCD(cardTool, variation_fakerate=0.5, variation_normalizatio
         # systematic variation for fake normalization
         for nameMT, mtCut, n in (("LowMT", common.failMT, n_failMT), ("HighMT", common.passMT, n_passMT)):
 
-            hist_var = hist.Hist(*[*hist_fake.axes, common.down_up_axis], storage=hist.storage.Double())
-            hist_var.view(flow=True)[...] = np.stack((hist_fake.values(flow=True), hist_fake.values(flow=True)), axis=-1)
+            hist_var = hist.Hist(*hist_fake.axes, storage=hist.storage.Double())
+            hist_var.view(flow=True)[...] = hist_fake.values(flow=True)
 
-            hist_var[{**common.failIso, **mtCut, **{"downUpVar":0}, **other_indices}] = (1-variation_normalization_fake) * n * fr
-            hist_var[{**common.passIso, **mtCut, **{"downUpVar":0}, **other_indices}] = (1-variation_normalization_fake) * n * (1-fr)
-
-            hist_var[{**common.failIso, **mtCut, **{"downUpVar":1}, **other_indices}] = (1+variation_normalization_fake) * n * fr
-            hist_var[{**common.passIso, **mtCut, **{"downUpVar":1}, **other_indices}] = (1+variation_normalization_fake) * n * (1-fr)
+            hist_var[{**common.failIso, **mtCut, **other_indices}] = (1+variation_normalization_fake) * n * fr
+            hist_var[{**common.passIso, **mtCut, **other_indices}] = (1+variation_normalization_fake) * n * (1-fr)
 
             cardTool.datagroups.groups[fakename].hists[f"{cardTool.nominalName}_N{fakename}{nameMT}_{bin_name}"] = hist_var
 
@@ -102,28 +99,21 @@ def setSimultaneousABCD(cardTool, variation_fakerate=0.5, variation_normalizatio
                 processes=[fakename],
                 group=f"{fakename}{nameMT}",
                 noConstraint=True,
-                outNames=[f"N{fakename}{nameMT}_{bin_name}Down", f"N{fakename}{nameMT}_{bin_name}Up"],
-                systAxes=["downUpVar"],
-                labelsByAxis=["downUpVar"],
+                outNames=[f"N{fakename}{nameMT}_{bin_name}"],
+                mirror=True
             )
 
         # systematic variation for fakerate, should be smaller 1 and bigger 0
         diff = min(fr, 1-fr)
         frUp = fr + variation_fakerate * diff
-        frDn = fr - variation_fakerate * diff
+        
+        hist_var = hist.Hist(*hist_fake.axes, storage=hist.storage.Double())
+        hist_var.view(flow=True)[...] = hist_fake.values(flow=True)
 
-        hist_var = hist.Hist(*[*hist_fake.axes, common.down_up_axis], storage=hist.storage.Double())
-        hist_var.view(flow=True)[...] = np.stack((hist_fake.values(flow=True), hist_fake.values(flow=True)), axis=-1)
-
-        hist_var[{**common.failIso, **common.failMT, **{"downUpVar":0}, **other_indices}] = n_failMT * frDn
-        hist_var[{**common.passIso, **common.failMT, **{"downUpVar":0}, **other_indices}] = n_failMT * (1-frDn)
-        hist_var[{**common.failIso, **common.passMT, **{"downUpVar":0}, **other_indices}] = n_passMT * frDn
-        hist_var[{**common.passIso, **common.passMT, **{"downUpVar":0}, **other_indices}] = n_passMT * (1-frDn)
-
-        hist_var[{**common.failIso, **common.failMT, **{"downUpVar":1}, **other_indices}] = n_failMT * frUp
-        hist_var[{**common.passIso, **common.failMT, **{"downUpVar":1}, **other_indices}] = n_failMT * (1-frUp)
-        hist_var[{**common.failIso, **common.passMT, **{"downUpVar":1}, **other_indices}] = n_passMT * frUp
-        hist_var[{**common.passIso, **common.passMT, **{"downUpVar":1}, **other_indices}] = n_passMT * (1-frUp)
+        hist_var[{**common.failIso, **common.failMT, **other_indices}] = n_failMT * frUp
+        hist_var[{**common.passIso, **common.failMT, **other_indices}] = n_failMT * (1-frUp)
+        hist_var[{**common.failIso, **common.passMT, **other_indices}] = n_passMT * frUp
+        hist_var[{**common.passIso, **common.passMT, **other_indices}] = n_passMT * (1-frUp)
 
         cardTool.datagroups.groups[fakename].hists[f"{cardTool.nominalName}_r{fakename}_{bin_name}"] = hist_var
 
@@ -131,18 +121,16 @@ def setSimultaneousABCD(cardTool, variation_fakerate=0.5, variation_normalizatio
             processes=[fakename],
             group=f"r{fakename}",
             noConstraint=True,
-            outNames=[f"r{fakename}_{bin_name}Down", f"r{fakename}_{bin_name}Up"],
-            systAxes=["downUpVar"],
-            labelsByAxis=["downUpVar"],
+            outNames=[f"r{fakename}_{bin_name}"],
+            mirror=True
         )
 
-def setTheoryFitData(cardTool, fitresult):
+def getTheoryFitData(fitresult, axes=None, base_processes = "W", poi_type="pmaskedexp"):
     logger.info(f"Prepare theory fit: load measured differential cross secction distribution and covariance matrix")
 
-    poi_type="pmaskedexp"
-    base_process = "W" if cardTool.datagroups.wmass else "Z"
-
     if fitresult.endswith(".root"):
+        if project is None:
+            raise RuntimeError("When fitresult is provided as root file the axes need to be specified")
         
         rfile = uproot.open(fitresult)
         df = unfolding_tools.get_results(rfile, poi_type)
@@ -152,19 +140,31 @@ def setTheoryFitData(cardTool, fitresult):
             hist.axis.Regular(bins=len(df), start=0.5, stop=len(df)+0.5, underflow=False, overflow=False), storage=hist.storage.Weight())
         hist_xsec.view(flow=False)[...] = np.stack([df["value"].values, (df["err_total"].values)**2], axis=-1)
 
-        cardTool.theoryFitData = hist_xsec.values(flow=False).flatten()
+        data = hist_xsec.values(flow=False).flatten()
 
         # write out covariance as 2D hist
-        cardTool.theoryFitDataCov = unfolding_tools.matrix_poi(rfile, poi_type, base_process=base_process, axes=cardTool.project).values(flow=False)
+        cov = unfolding_tools.matrix_poi(rfile, poi_type, base_process=base_processes[0], axes=axes).values(flow=False)
     elif fitresult.endswith(".hdf5"):
         hfile = h5py.File(fitresult, mode='r')
 
-        cardTool.theoryFitData = hfile["pmaskedexp_outvals"][...]
+        outvals = hfile[f"{poi_type}_outvals"][...]
+        npoi = len(outvals)
+        # make matrix between POIs only; assume POIs come first (which should be the case in combinetf)
+        outcov = hfile[f"{poi_type}_outcov"][:npoi,:npoi]
 
-        npoi = len(cardTool.theoryFitData)
-        # make matrix between POIs only; assume POIs come first
-        cardTool.theoryFitDataCov = hfile["pmaskedexp_outcov"][:npoi,:npoi]
+        # select POIs for each base process, assume correct order
+        all_indices = np.zeros(npoi, dtype=bool)
+        data = []
+        for p in base_processes:
+            indices = np.array([s.startswith(p) for s in hfile[f"{poi_type}_names"][...].astype(str)], dtype=bool)
+
+            data.append(outvals[indices])
+
+            all_indices = all_indices | indices
+        #select rows and columns
+        cov = outcov[all_indices][:, all_indices]
+
     else:
         raise NotImplementedError(f"Unkown data type for fitresult {fitresult}")
     
-    cardTool.theoryFit = True
+    return data, cov

@@ -200,7 +200,7 @@ def make_plot_1d(hists, name, proc, axis, ratio=False, normalize=False, xmin=Non
 
     ax.text(1.0, 1.003, text_dict[proc], transform=ax.transAxes, fontsize=30,
             verticalalignment='bottom', horizontalalignment="right")
-    plot_tools.addLegend(ax, ncols=1, text_size=16)
+    plot_tools.addLegend(ax, ncols=2, text_size=12)
 
     output_tools.make_plot_dir(*args.plotdir.rsplit("/", 1))
     plot_name = f"hist{outname}_{axis}_{proc}_{name[-1]}"

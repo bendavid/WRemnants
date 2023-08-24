@@ -357,10 +357,10 @@ jobs:
         run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ unfolding $COMBINED_DIR card_sparse.hdf5 
 
       - name: lowpu combine unfolding plot xsec 
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py $HIST_FILE_MU --fitresult $COMBINED_DIR/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR/lowPU --debug --rrange 0.0 2.0 --lumi=0.200181002
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py $HIST_FILE_MU --fitresult $COMBINED_DIR/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR/lowPU --debug --rrange 0.0 2.0 --lumi=0.200181002 --scaleXsec 2
 
       - name: lowpu combine unfolding plot xsec 
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py $HIST_FILE_MUMU --fitresult $COMBINED_DIR/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR/lowPU --debug --rrange 0.0 2.0 --lumi=0.200181002
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py $HIST_FILE_MUMU --fitresult $COMBINED_DIR/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR/lowPU --debug --rrange 0.0 2.0 --lumi=0.200181002 --scaleXsec 2
 
   wlike:
     # The type of runner that the job will run on

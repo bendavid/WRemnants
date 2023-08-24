@@ -5,7 +5,8 @@ import glob
 import random
 import pathlib
 import socket
-#set the debug level for logging incase of full printout 
+import ROOT
+
 from wremnants.datasets.datasetDict_v9 import dataDictV9
 from wremnants.datasets.datasetDict_v8 import dataDictV8
 from wremnants.datasets.datasetDict_gen import genDataDict
@@ -125,8 +126,21 @@ def getDataPath(mode=None):
 
     return base_path
 
+def is_zombie(file_path):
+    # Try opening the ROOT file and check if it's a zombie file
+    try:
+        file = ROOT.TFile.Open(file_path)
+        if not file or file.IsZombie():
+            logger.warning(f"Found zombie file: {file_path}")
+            return True
+        file.Close()
+        return False
+    except:
+        logger.warning(f"Found zombie file: {file_path}")
+        return True
+
 def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, nanoVersion="v9", 
-                data_tag="TrackFitV722_NanoProdv2", mc_tag="TrackFitV718_NanoProdv1", oneMCfileEveryN=None):
+                data_tag="TrackFitV722_NanoProdv2", mc_tag="TrackFitV718_NanoProdv1", oneMCfileEveryN=None, checkFileForZombie=False):
     if not base_path:
         base_path = getDataPath(mode)
     logger.info(f"Loading 2016 samples from {base_path}.")
@@ -142,6 +156,9 @@ def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, na
 
         prod_tag = data_tag if is_data else mc_tag 
         paths = makeFilelist(info["filepaths"], maxFiles, format_args=dict(BASE_PATH=base_path, NANO_PROD_TAG=prod_tag), is_data=is_data, oneMCfileEveryN=oneMCfileEveryN)
+
+        if checkFileForZombie:
+            paths = [p for p in paths if not is_zombie(p)]
 
         if not paths:
             logger.warning(f"Failed to find any files for dataset {sample}. Looking at {info['filepaths']}. Skipping!")
