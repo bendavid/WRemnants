@@ -20,7 +20,7 @@ logger = logging.child_logger(__name__)
 
 class Datagroups(object):
 
-    def __init__(self, infile, combine=False, filter_datasets=[], mode=None, **kwargs):
+    def __init__(self, infile, combine=False, filter_datasets=True, mode=None, **kwargs):
         self.combine = combine
         self.h5file = None
         self.rtfile = None
@@ -92,6 +92,7 @@ class Datagroups(object):
         if self.results:
             # only keep datasets that are found in input file
             self.datasets = {x.name : x for x in datasets if not filter_datasets or x.name in self.results.keys() }
+            print("filter", filter_datasets, self.datasets)
             
             # dictionary that maps dataset names to groups 
             dataset_to_group = {d_key: d.group for d_key, d in self.datasets.items()}

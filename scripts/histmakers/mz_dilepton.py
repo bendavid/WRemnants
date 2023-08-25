@@ -301,16 +301,16 @@ def build_graph(df, dataset):
                     f"{reco_sel_GF}_genCharge"
                 ]
                 # muon scale variation from stats. uncertainty on the jpsi massfit
-                #df = df.Define(
-                #    "nominal_muonScaleSyst_responseWeights_tensor", data_jpsi_crctn_unc_helper,
-                #    [*input_kinematics, "nominal_weight"]
-                #)
-                #muonScaleSyst_responseWeights = df.HistoBoost(
-                #    "nominal_muonScaleSyst_responseWeights", axes,
-                #    [*cols, "nominal_muonScaleSyst_responseWeights_tensor"],
-                #    tensor_axes = data_jpsi_crctn_unc_helper.tensor_axes, storage=hist.storage.Double()
-                #)
-                #results.append(muonScaleSyst_responseWeights)
+                df = df.Define(
+                    "nominal_muonScaleSyst_responseWeights_tensor", data_jpsi_crctn_unc_helper,
+                    [*input_kinematics, "nominal_weight"]
+                )
+                muonScaleSyst_responseWeights = df.HistoBoost(
+                    "nominal_muonScaleSyst_responseWeights", axes,
+                    [*cols, "nominal_muonScaleSyst_responseWeights_tensor"],
+                    tensor_axes = data_jpsi_crctn_unc_helper.tensor_axes, storage=hist.storage.Double()
+                )
+                results.append(muonScaleSyst_responseWeights)
 
                 # add the ad-hoc Z non-closure nuisances from the jpsi massfit to muon scale unc
                 df = df.DefinePerSample("AFlag", "0x01")
