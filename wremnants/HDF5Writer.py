@@ -1,5 +1,5 @@
 from wremnants.combine_helpers import getTheoryFitData, setSimultaneousABCD
-from utilities import common,logging
+from utilities import common, logging, output_tools
 import time
 import numpy as np
 import hist
@@ -9,6 +9,7 @@ import math
 import pandas as pd
 import os
 import pdb
+import narf
 
 logger = logging.child_logger(__name__)
 
@@ -51,7 +52,7 @@ class HDF5Writer(object):
         # for theory fit, currently not supported for sumPOI groups
         self.theoryFit = True
         base_processes = ["W" if c.datagroups.wmass else "Z" for c in self.get_channels().values()]
-        data, self.theoryFitDataCov = getTheoryFitData(fitresult, base_processes)
+        data, self.theoryFitDataCov = getTheoryFitData(fitresult, base_processes=base_processes)
         # theoryfit data for each channel
         self.theoryFitData = {c: d for c, d in zip(self.get_channels().keys(), data)}
 
@@ -78,11 +79,10 @@ class HDF5Writer(object):
         return list(common.natural_sort(bkgs))
 
     def write(self, 
+        args,
         forceNonzero=True, 
         check_systs=False, 
-        allowNegativeExpectation=False, 
-        sparse=False,
-        outfolder="./", postfix=None, doStatOnly=False
+        allowNegativeExpectation=False,
     ):
         signals = self.get_signals() 
         bkgs = self.get_backgrounds() 
@@ -344,7 +344,7 @@ class HDF5Writer(object):
         nbinsfull = sum(ibins)
 
         ibin = 0
-        if sparse:
+        if args.sparse:
             logger.info(f"Write out sparse array")
 
             idxdtype = 'int32'
@@ -531,9 +531,13 @@ class HDF5Writer(object):
             self.chunkSize = amax
 
         #create HDF5 file (chunk cache set to the chunk size since we can guarantee fully aligned writes
-        outfilename = self.get_output_filename(sparse=sparse, outfolder=outfolder, postfix=postfix, doStatOnly=doStatOnly)
+        outfilename = self.get_output_filename(sparse=args.sparse, outfolder=args.outfolder, postfix=args.postfix, doStatOnly=args.doStatOnly)
         logger.info(f"Write output file {outfilename}")
         f = h5py.File(outfilename, rdcc_nbytes=self.chunkSize, mode='w')
+
+        # propagate meta info into result file
+        meta = {"meta_info" : output_tools.metaInfoDict(args=args)}
+        narf.ioutils.pickle_dump_h5py("meta", meta, f)
 
         systsnoprofile = self.get_systsnoprofile()
         systsnoconstraint = self.get_systsnoconstraint()
@@ -619,7 +623,7 @@ class HDF5Writer(object):
         nbytes += writeFlatInChunks(kstat, f, "hkstat", maxChunkBytes = self.chunkSize)
         kstat = None
 
-        if sparse:
+        if args.sparse:
             nbytes += writeSparse(norm_sparse_indices, norm_sparse_values, norm_sparse_dense_shape, f, "hnorm_sparse", maxChunkBytes = self.chunkSize)
             norm_sparse_indices = None
             norm_sparse_values = None

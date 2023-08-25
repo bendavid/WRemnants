@@ -430,7 +430,7 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normaliz
 # store unfolded data
 # outfile = h5py.File(f'{outdir}/fitresult.hdf5', 'w')
 
-scale = args.scaleXsec if args.normalize else args.scaleXsec * args.lumi * 1000
+scale = 1 if args.normalize else args.lumi * 1000
 
 poi_type = ["pmaskedexpnorm",] if args.normalize else ["pmaskedexp",]
 if args.plotSumPOIs:
@@ -502,6 +502,8 @@ for axes in gen_axes_permutations:
             h = h.project(*channel_axes)
             # for wlike the sample is randomly split in two based on reco charge
             this_scale = 2*scale if channel in ["plus", "minus"] and base_process=="Z" else scale
+            if "xnorm" in name:
+                this_scale *= args.scaleXsec
             h = hh.scaleHist(h, 1./this_scale)
             return h
 

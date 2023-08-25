@@ -195,9 +195,13 @@ def setup(args, inputFile, fitvar, xnorm=False):
                 datagroups.groups[base_group].add_member_axis("qGen", datagroups.results, 
                     member_filters={-1: lambda x: x.name.startswith("Wminus"), 1: lambda x: x.name.startswith("Wplus")}, 
                     hist_filter=lambda x: x.startswith("xnorm"))
+                datagroups.gen_axes = ["qGen", *datagroups.gen_axes]
+            else:
+                datagroups.gen_axes = datagroups.gen_axes[:]
+
             cardTool.unroll = True
             # remove projection axes from gen axes, otherwise they will be integrated before
-            datagroups.gen_axes = ["qGen", *datagroups.gen_axes]
+            
             if datagroups.gen_axes != cardTool.project:
                 raise NotImplementedError(f"The gen axes of the model {datagroups.gen_axes} do not agree with the ones requested {cardTool.project}")
             datagroups.setGenAxes([]) # [a for a in datagroups.gen_axes if a not in cardTool.project])
@@ -485,11 +489,11 @@ def setup(args, inputFile, fitvar, xnorm=False):
                     labelsByAxis = [""], 
                 )
 
-    if (wmass or wlike) and not input_tools.args_from_metadata(cardTool, "noRecoil"):
-        combine_helpers.add_recoil_uncertainty(cardTool, ["signal_samples"], 
-            passSystToFakes=passSystToFakes, 
-            flavor=datagroups.flavor if datagroups.flavor else "mu",
-            pu_type="lowPU" if lowPU else "highPU")
+    # if (wmass or wlike) and not input_tools.args_from_metadata(cardTool, "noRecoil"):
+    #     combine_helpers.add_recoil_uncertainty(cardTool, ["signal_samples"], 
+    #         passSystToFakes=passSystToFakes, 
+    #         flavor=datagroups.flavor if datagroups.flavor else "mu",
+    #         pu_type="lowPU" if lowPU else "highPU")
 
     if lowPU:
         if datagroups.flavor in ["e", "ee"]:
@@ -507,35 +511,35 @@ def setup(args, inputFile, fitvar, xnorm=False):
 
     # Below: all that is highPU specific
 
-    msv_config_dict = {
-        "smearingWeights":{
-            "hist_name": "muonScaleSyst_responseWeights",
-            "syst_axes": ["unc", "downUpVar"],
-            "syst_axes_labels": ["unc", "downUpVar"]
-        },
-        "massWeights":{
-            "hist_name": "muonScaleSyst",
-            "syst_axes": ["downUpVar", "scaleEtaSlice"],
-            "syst_axes_labels": ["downUpVar", "ieta"]
-        },
-        "manualShift":{
-            "hist_name": "muonScaleSyst_manualShift",
-            "syst_axes": ["downUpVar"],
-            "syst_axes_labels": ["downUpVar"]
-        }
-    }
+    # msv_config_dict = {
+    #     "smearingWeights":{
+    #         "hist_name": "muonScaleSyst_responseWeights",
+    #         "syst_axes": ["unc", "downUpVar"],
+    #         "syst_axes_labels": ["unc", "downUpVar"]
+    #     },
+    #     "massWeights":{
+    #         "hist_name": "muonScaleSyst",
+    #         "syst_axes": ["downUpVar", "scaleEtaSlice"],
+    #         "syst_axes_labels": ["downUpVar", "ieta"]
+    #     },
+    #     "manualShift":{
+    #         "hist_name": "muonScaleSyst_manualShift",
+    #         "syst_axes": ["downUpVar"],
+    #         "syst_axes_labels": ["downUpVar"]
+    #     }
+    # }
 
-    msv_config = msv_config_dict[args.muonScaleVariation]
+    # msv_config = msv_config_dict[args.muonScaleVariation]
 
-    cardTool.addSystematic(msv_config['hist_name'], 
-        processes=['single_v_samples' if wmass else 'single_vmu_samples'],
-        group="muonScale",
-        baseName="CMS_scale_m_",
-        systAxes=msv_config['syst_axes'],
-        labelsByAxis=msv_config['syst_axes_labels'],
-        passToFakes=passSystToFakes,
-        scale = args.scaleMuonCorr,
-    )
+    # cardTool.addSystematic(msv_config['hist_name'], 
+    #     processes=['single_v_samples' if wmass else 'single_vmu_samples'],
+    #     group="muonScale",
+    #     baseName="CMS_scale_m_",
+    #     systAxes=msv_config['syst_axes'],
+    #     labelsByAxis=msv_config['syst_axes_labels'],
+    #     passToFakes=passSystToFakes,
+    #     scale = args.scaleMuonCorr,
+    # )
     cardTool.addSystematic("muonL1PrefireSyst", 
         processes=['MCnoQCD'],
         group="muonPrefire",
@@ -561,43 +565,43 @@ def setup(args, inputFile, fitvar, xnorm=False):
         passToFakes=passSystToFakes,
     )
 
-    non_closure_scheme = input_tools.args_from_metadata(cardTool, "nonClosureScheme")
-    if non_closure_scheme == "A-M-separated":
-        cardTool.addSystematic("Z_non_closure_parametrized_A", 
-            processes=['single_v_samples'],
-            group="nonClosure" if args.sepImpactForNC else "muonScale",
-            baseName="Z_nonClosure_parametrized_A_",
-            systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
-            labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
-            passToFakes=passSystToFakes
-        )
-    if non_closure_scheme in ["A-M-separated", "binned-plus-M"]:
-        cardTool.addSystematic("Z_non_closure_parametrized_M", 
-            processes=['single_v_samples'],
-            group="nonClosure" if args.sepImpactForNC else "muonScale",
-            baseName="Z_nonClosure_parametrized_M_",
-            systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
-            labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
-            passToFakes=passSystToFakes
-        )            
-    if non_closure_scheme == "A-M-combined":
-        cardTool.addSystematic("Z_non_closure_parametrized", 
-            processes=['single_v_samples'],
-            group="nonClosure" if args.sepImpactForNC else "muonScale",
-            baseName="Z_nonClosure_parametrized_",
-            systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
-            labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
-            passToFakes=passSystToFakes
-        )
-    if non_closure_scheme in ["binned", "binned-plus-M"]:
-        cardTool.addSystematic("Z_non_closure_binned", 
-            processes=['single_v_samples'],
-            group="nonClosure" if args.sepImpactForNC else "muonScale",
-            baseName="Z_nonClosure_binned_",
-            systAxes=["unc_ieta", "unc_ipt", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
-            labelsByAxis=["unc_ieta", "unc_ipt", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
-            passToFakes=passSystToFakes
-        )
+    # non_closure_scheme = input_tools.args_from_metadata(cardTool, "nonClosureScheme")
+    # if non_closure_scheme == "A-M-separated":
+    #     cardTool.addSystematic("Z_non_closure_parametrized_A", 
+    #         processes=['single_v_samples'],
+    #         group="nonClosure" if args.sepImpactForNC else "muonScale",
+    #         baseName="Z_nonClosure_parametrized_A_",
+    #         systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
+    #         labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
+    #         passToFakes=passSystToFakes
+    #     )
+    # if non_closure_scheme in ["A-M-separated", "binned-plus-M"]:
+    #     cardTool.addSystematic("Z_non_closure_parametrized_M", 
+    #         processes=['single_v_samples'],
+    #         group="nonClosure" if args.sepImpactForNC else "muonScale",
+    #         baseName="Z_nonClosure_parametrized_M_",
+    #         systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
+    #         labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
+    #         passToFakes=passSystToFakes
+    #     )            
+    # if non_closure_scheme == "A-M-combined":
+    #     cardTool.addSystematic("Z_non_closure_parametrized", 
+    #         processes=['single_v_samples'],
+    #         group="nonClosure" if args.sepImpactForNC else "muonScale",
+    #         baseName="Z_nonClosure_parametrized_",
+    #         systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
+    #         labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
+    #         passToFakes=passSystToFakes
+    #     )
+    # if non_closure_scheme in ["binned", "binned-plus-M"]:
+    #     cardTool.addSystematic("Z_non_closure_binned", 
+    #         processes=['single_v_samples'],
+    #         group="nonClosure" if args.sepImpactForNC else "muonScale",
+    #         baseName="Z_nonClosure_binned_",
+    #         systAxes=["unc_ieta", "unc_ipt", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
+    #         labelsByAxis=["unc_ieta", "unc_ipt", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
+    #         passToFakes=passSystToFakes
+    #     )
     
     # Previously we had a QCD uncertainty for the mt dependence on the fakes, see: https://github.com/WMass/WRemnants/blob/f757c2c8137a720403b64d4c83b5463a2b27e80f/scripts/combine/setupCombineWMass.py#L359
 
@@ -641,7 +645,7 @@ if __name__ == "__main__":
                 writer.add_channel(cardTool)
         if args.fitresult:
             writer.set_fitresult(args.fitresult)
-        writer.write(outfolder=args.outfolder, doStatOnly=args.doStatOnly, postfix=args.postfix, sparse=args.sparse)
+        writer.write(args)
     else:
         if len(args.inputFile) > 1:
             raise IOError(f"Multiple input files only supported within --hdf5 mode")
