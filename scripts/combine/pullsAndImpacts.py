@@ -14,7 +14,7 @@ from wremnants import plot_tools
 import os
 import re
 
-def writeOutput(fig, outfile, extensions=[], postfix=None, args=None):
+def writeOutput(fig, outfile, extensions=[], postfix=None, args=None, meta_info=None):
     name, ext = os.path.splitext(outfile)
     if ext not in extensions:
         extensions.append(ext)
@@ -37,8 +37,8 @@ def writeOutput(fig, outfile, extensions=[], postfix=None, args=None):
             output = (None, *output)
         plot_tools.write_index_and_log(*output, 
             args=args,
+            analysis_meta_info={"AnalysisOutput" : meta_info},
         )
-
 
 def plotImpacts(df, pulls=False, POI='Wmass', normalize=False, oneSidedImpacts=False):
     poi_type = POI.split("_")[-1] if POI else None
@@ -160,8 +160,6 @@ def plotImpacts(df, pulls=False, POI='Wmass', normalize=False, oneSidedImpacts=F
     return fig
 
 def readFitInfoFromFile(rf,filename, group=False, sort=None, ascending=True, stat=0.0, POI='Wmass', normalize=False):    
-    treename = "fitresults"
-    tree = rf[treename]
     # TODO: Make add_total configurable
     add_total = group
     impacts, labels, _ = input_tools.readImpacts(rf, group, sort=sort, add_total=add_total, stat=stat, POI=POI, normalize=normalize)
@@ -189,8 +187,8 @@ def readFitInfoFromFile(rf,filename, group=False, sort=None, ascending=True, sta
     constraints = np.zeros_like(labels, dtype=float)
     if not group:
         import ROOT
-        rtfile = ROOT.TFile.Open(filename)
-        rtree = rtfile.Get(treename)
+        rtfile = ROOT.TFile.Open(filename.replace(".hdf5",".root"))
+        rtree = rtfile.Get("fitresults")
         rtree.GetEntry(0)
         for i, label in enumerate(labels):
             if not hasattr(rtree, label):
@@ -320,13 +318,15 @@ def producePlots(rtfile, args, POI='Wmass', normalize=False):
         fig = plotImpacts(df, pulls=not args.noPulls and not group, POI=POI, normalize=not args.absolute, oneSidedImpacts=args.oneSidedImpacts)
 
         postfix = POI if POI and "mass" not in POI else None
-        
+
+        meta = input_tools.load_results(rtfile["meta"])["meta_info"]
+
         outdir = output_tools.make_plot_dir(args.outFolder, "", eoscp=args.eoscp)
         if outdir and not os.path.isdir(outdir):
             os.path.makedirs(outdir)
 
         outfile = os.path.join(outdir, args.outputFile)
-        writeOutput(fig, outfile, args.otherExtensions, postfix=postfix, args=args)
+        writeOutput(fig, outfile, args.otherExtensions, postfix=postfix, args=args, meta_info=meta)
         if args.eoscp and output_tools.is_eosuser_path(args.outFolder):
             output_tools.copy_to_eos(args.outFolder, "")
     else:
@@ -338,24 +338,26 @@ if __name__ == '__main__':
 
     logger = logging.setup_logger("pullsAndImpacts", 4 if args.debug else 3)
 
-    rtfile = uproot.open(args.inputFile)
-    POIs = input_tools.getPOInames(rtfile, poi_type=None)
+    rfile = input_tools.getFitresult(args.inputFile)
+
+    POIs = input_tools.getPOInames(rfile, poi_type=None)
+
     for POI in POIs:
         do_both = args.mode == "both"
         if args.mode == "both":
             args.mode = "ungrouped"
-        producePlots(rtfile, args, POI)
+        producePlots(rfile, args, POI)
         if do_both:
             args.mode = "group"
             outfile = os.path.splitext(args.outputFile)
             args.outputFile = "".join([outfile[0]+"_group", outfile[1]])
-            producePlots(rtfile, args, POI)
+            producePlots(rfile, args, POI)
     
     if POIs[0] and not (POIs[0]=="Wmass" and len(POIs) == 1):
         # masked channel
-        for POI in input_tools.getPOInames(rtfile, poi_type="pmaskedexp"):
-            producePlots(rtfile, args, POI, normalize=not args.absolute)
+        for POI in input_tools.getPOInames(rfile, poi_type="pmaskedexp"):
+            producePlots(rfile, args, POI, normalize=not args.absolute)
 
         # masked channel normalized
-        for POI in input_tools.getPOInames(rtfile, poi_type="pmaskedexpnorm"):
-            producePlots(rtfile, args, POI, normalize=not args.absolute)
+        for POI in input_tools.getPOInames(rfile, poi_type="pmaskedexpnorm"):
+            producePlots(rfile, args, POI, normalize=not args.absolute)

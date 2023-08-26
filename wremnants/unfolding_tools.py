@@ -231,7 +231,7 @@ def get_results(fitresult, poi_type, scale=1.0, group=True, uncertainties=None, 
     if fitresult.endswith(".root"):
         res = get_results_root(fitresult, poi_type, group, uncertainties)
     elif fitresult.endswith(".hdf5"):
-        res = get_results_hdf5(fitresult, poi_type)
+        res = get_results_hdf5(fitresult, poi_type, group, uncertainties)
     else:
         logger.warning(f"Unknown format of fitresult {fitresult}")
         return None
@@ -251,9 +251,8 @@ def get_results(fitresult, poi_type, scale=1.0, group=True, uncertainties=None, 
     df = df.sort_values(gen_axes, ignore_index=True)
     return df
 
-def get_results_hdf5(fitresult, poi_type):
+def get_results_hdf5(fitresult, poi_type, group=True, uncertainties=None):
     hfile = h5py.File(fitresult, mode='r')
-
 
     hnames = hfile[f"{poi_type}_names"][...].astype(str)
     hdata = hfile[f"{poi_type}_outvals"][...]
@@ -262,7 +261,26 @@ def get_results_hdf5(fitresult, poi_type):
     # make matrix between POIs only; assume POIs come first
     herr = np.sqrt(np.diagonal(hfile[f"{poi_type}_outcov"][:npoi,:npoi]))
 
-    return hnames, hdata, herr, {}
+    impact_hist = f"nuisance_group_impact_{poi_type}" if group else f"nuisance_impact_{poi_type}"
+
+    impacts = hfile[impact_hist][...]
+
+    if group:
+        labels = hfile["hsystgroups"][...].astype(str)
+        labels = np.append(labels, "stat")
+        if len(labels)+1 == impacts.shape[1]:
+            labels = np.append(labels, "binByBinStat")
+    else:
+        labels = hfile["hsysts"][...].astype(str)
+
+    logger.debug(f"Load ucertainties")
+    # pick uncertainties
+    if uncertainties is None:
+        uncertainties = {f"err_{k}": impacts[:,i] for i, k in enumerate(labels)}
+    else:
+        uncertainties = {f"err_{k}": impacts[:,i] for i, k in enumerate(labels) if k in uncertainties}
+
+    return hnames, hdata, herr, uncertainties
 
 def get_results_root(fitresult, poi_type, group=True, uncertainties=None):
 

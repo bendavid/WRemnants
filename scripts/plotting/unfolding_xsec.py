@@ -51,6 +51,8 @@ cms_decor = "Preliminary"
 
 outdir = output_tools.make_plot_dir(args.outpath, args.outfolder)
 
+meta_info = input_tools.get_metadata(args.fitresult)
+
 groups = Datagroups(args.infile)
 
 if groups.wmass:
@@ -250,7 +252,7 @@ def plot_xsec_unfolded(df, edges, df_asimov=None, bin_widths=None, channel=None,
     data_yields = make_yields_df([hist_xsec], ["Data"], per_bin=True)
     plot_tools.write_index_and_log(outdir, outfile, nround=4 if normalize else 2,
         yield_tables={"Data" : data_yields, "Model": asimov_yields} if df_asimov else {"Data" : data_yields},
-        analysis_meta_info=None,
+        analysis_meta_info={"AnalysisOutput" : meta_info},
         args=args,
     )
     plt.close()
@@ -421,7 +423,7 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normaliz
 
     plot_tools.write_index_and_log(outdir, outfile, nround=4 if normalize else 2,
         yield_tables={"Unfolded data uncertainty [%]": uncertainties},
-        analysis_meta_info=None,
+        analysis_meta_info={"AnalysisOutput" : meta_info},
         args=args,
     )
 
