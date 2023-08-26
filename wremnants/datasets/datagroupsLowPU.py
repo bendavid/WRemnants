@@ -10,7 +10,7 @@ def make_datagroups_lowPU(dg, combine=False, excludeGroups=None, filterGroups=No
 
     if dg.wmass and applySelection:
         sigOp = sel.signalHistWmass
-        fakeOp = lambda x: sel.fakeHistABCD(x, low_PU=True)
+        fakeOp = lambda x: sel.fakeHistABCD(x)
     else:
         sigOp = None
         fakeOp = None
