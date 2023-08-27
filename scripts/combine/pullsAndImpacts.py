@@ -319,7 +319,10 @@ def producePlots(rtfile, args, POI='Wmass', normalize=False):
 
         postfix = POI if POI and "mass" not in POI else None
 
-        meta = input_tools.load_results(rtfile["meta"])["meta_info"]
+        if "meta" in rfile.keys():
+            meta = input_tools.load_results(rtfile["meta"])["meta_info"]
+        else:
+            meta = None
 
         outdir = output_tools.make_plot_dir(args.outFolder, "", eoscp=args.eoscp)
         if outdir and not os.path.isdir(outdir):

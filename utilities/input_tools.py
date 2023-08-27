@@ -321,18 +321,22 @@ def readImpactsH5(h5file, group, POI='Wmass'):
 
     iPOI = 0 if POI=='Wmass' else poi_names.index(POI)
 
-    impacts = h5file[impact_hist][...][iPOI]
-
     if group:
         labels = h5file["hsystgroups"][...].astype(str)
         labels = np.append(labels, "stat")
-        if len(labels)+1 == len(impacts):
-            labels = np.append(labels, "binByBinStat")
-    else:
+    if not group:
         labels = h5file["hsysts"][...].astype(str)
 
+    if poi_type is None:
+        impacts = np.zeros_like(labels, dtype=int)
+    else:
+        impacts = h5file[impact_hist][...][iPOI]
+
+    if len(labels)+1 == len(impacts): 
+        labels = np.append(labels, "binByBinStat")
+
     # TODO add central values (norm) and total uncertainty
-    norm = np.zeros_like(labels)
+    norm = np.zeros_like(labels, dtype=int)
     total = 0.
 
     return impacts, labels, norm, total
@@ -357,7 +361,7 @@ def readImpactsRoot(rtfile, group, POI='Wmass'):
 
     if impact_hist not in rtfile:
         logger.warning("Did not find impact hist in file. Skipping!")
-        return np.zeros_like(labels), labels, 1.
+        return np.zeros_like(labels), labels, 1., 1.
     else:
         impacts = rtfile[impact_hist].to_hist()
         iPOI = 0 if POI=='Wmass' else poi_names.index(POI)
@@ -472,8 +476,10 @@ def get_metadata(infile):
             results = pickle.load(f)
     elif infile.endswith(".hdf5"):
         h5file = h5py.File(infile, "r")
-        results = load_results(h5file.get("result", h5file["meta"]))
-    else:
+        meta = h5file.get("result", h5file.get("meta", None))
+        results = load_results(meta) if meta else None
+
+    if results is None:
         logger.warning("Failed to find results dict. Note that only pkl, hdf5, and pkl.lz4 file types are supported")
         return None
 

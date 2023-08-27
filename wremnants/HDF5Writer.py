@@ -170,6 +170,9 @@ class HDF5Writer(object):
                     if norm_proc.shape[0] != nbinschan:
                         raise Exception(f"Mismatch between number of bins in channel {chan} for expected ({nbinschan}) and template ({norm_proc.shape[0]})")
 
+                # free memory
+                dg.groups[proc].hists[chanInfo.nominalName] = None
+
                 if not allowNegativeExpectation:
                     norm_proc = np.maximum(norm_proc, 0.)
 
@@ -217,8 +220,10 @@ class HDF5Writer(object):
                     logger.debug(f"Now at proc {proc}!")
 
                     # save for later
-                    dict_logkavg[chan][proc][name] = logkavg_proc
-                    dict_logkhalfdiff[chan][proc][name] = logkhalfdiff_proc
+                    norm_proc = dict_norm[chan][proc]
+                    #ensure that systematic tensor is sparse where normalization matrix is sparse
+                    dict_logkavg[chan][proc][name] = np.where(np.equal(norm_proc,0.), 0., logkavg_proc)
+                    dict_logkhalfdiff[chan][proc][name] = np.where(np.equal(norm_proc,0.), 0., logkhalfdiff_proc)
 
                 self.book_systematic(syst, name)
 
@@ -251,7 +256,6 @@ class HDF5Writer(object):
                 for proc in procs_syst:
                     logger.debug(f"Now at proc {proc}!")
 
-                    hnom = dg.groups[proc].hists[chanInfo.nominalName]
                     hvar = dg.groups[proc].hists["syst"]
 
                     if syst["doActionBeforeMirror"] and syst["action"]:
@@ -295,7 +299,7 @@ class HDF5Writer(object):
 
                         if syst["mirror"]:
                             logkavg_proc = get_logk(var_name)
-                            logkhalfdiff_proc = np.zeros_like(logkavg_proc)
+                            logkhalfdiff_proc = np.zeros([nbinschan],dtype=self.dtype)
                         else:
                             logkup_proc = get_logk(var_name, "Up")
                             logkdown_proc = get_logk(var_name, "Down")
@@ -315,6 +319,11 @@ class HDF5Writer(object):
                         dict_logkhalfdiff[chan][proc][var_name] = logkhalfdiff_proc
 
                         self.book_systematic(syst, var_name)
+
+                    # free memory
+                    for var in var_map.keys():
+                        var_map[var] = None
+                    dg.groups[proc].hists["syst"] = None
 
         procs = signals + bkgs
         nproc = len(procs)
