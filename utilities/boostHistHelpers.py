@@ -15,21 +15,22 @@ def broadcastSystHist(h1, h2):
         return h1
 
     a1 = h1.view(flow=True)
-    a2 = h2.view(flow=True)
+    a2shape = [d for d in h2.view(flow=True).shape]
 
     # the additional axes have to be trailing, if they ar not, they must be moved
     moves = []
     offset = 0
     for i, a in enumerate(h1.axes.name):
-        b = h2.axes.name[i+offset]
+        b = h2.axes.name[i+offset]  
         if a != b:
             idx = h2.axes.name.index(b)
             moves.append(idx)
-            a2 = np.moveaxis(a2, idx, -1)
+            element = a2shape.pop(idx)
+            a2shape.append(element)
             offset += 1
 
     # Transpose because we keep syst axis last, but numpy broadcasts from the front
-    new_vals = np.broadcast_to(a1.T, a2.T.shape).T
+    new_vals = np.broadcast_to(a1.T, a2shape[::-1]).T
 
     # move back to original order, in reversed order
     for idx in moves[::-1]:
