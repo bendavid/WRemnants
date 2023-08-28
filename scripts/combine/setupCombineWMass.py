@@ -315,7 +315,7 @@ def setup(args,xnorm=False):
             group="theory_ew",
             systAxes=["systIdx"],
             labelsByAxis=[f"{ewUnc}nloewCorr"],
-            skipEntries=[(0, -1), (2, -1)],
+            skipEntries=[(0, -1), (1, -1)],
             passToFakes=passSystToFakes,
         )
 

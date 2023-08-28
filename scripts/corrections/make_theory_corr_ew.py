@@ -16,12 +16,10 @@ import h5py
 import narf
 import pdb
 
-generator_choices = ["horace-nlo", "horace-lo-photos", "horace-qed", "horace-lo", "winhac-nlo", "winhac-lo-photos", "winhac-lo", "MiNNLO"]
-
 parser = argparse.ArgumentParser()
 parser.add_argument("-i", "--input", nargs="+", type=str, default=["w_z_gen_dists_scetlib_dyturboCorr_ewinput.hdf5"], help="File containing EW hists")
-parser.add_argument("--nums", nargs="+", type=str, default=["horace-nlo"], choices=generator_choices, help="Numerators")
-parser.add_argument("--den", type=str, default="horace-lo-photos", choices=generator_choices, help="Denominatos")
+parser.add_argument("--nums", nargs="+", type=str, default=["horace-nlo"], help="Numerators")
+parser.add_argument("--den", type=str, default="horace-lo-photos", help="Denominatos")
 parser.add_argument("--normalize", action="store_true", default=False, help="Normalize distributions before computing ratio")
 parser.add_argument("--noSmoothing", action="store_true", default=False, help="Disable smoothing of corrections")
 parser.add_argument("--debug", action='store_true', help="Print debug output")
@@ -54,27 +52,10 @@ text_dict = {
 project = args.project
 
 # file created with `python WRemnants/scripts/histmakers/w_z_gen_dists.py --skipAngularCoeffs --filter horace -p ewinput`
-res = {}
-meta = {}
-for inpt in args.input:
-    logger.info(f"Load {inpt}")
-    f = h5py.File(inpt, 'r')
-    res.update(narf.ioutils.pickle_load_h5py(f["results"]))
 
-    try:
-        meta.update(input_tools.get_metadata(inpt))
-    except ValueError as e:
-        logger.warning(f"No meta data found for file {inpt}")
-        pass
-
+res, meta, _ = input_tools.read_infile(args.input)
 
 corrh = {}
-
-try:
-    meta = input_tools.get_metadata(args.input)
-except ValueError as e:
-    logger.warning(f"No meta data found for file {args.input}")
-    pass
 
 labels = {
     "ewMll": "$m_{\ell\ell}$", 
@@ -147,10 +128,10 @@ def make_plot_2d(h, name, proc, plot_error=False, cmin=None, cmax=None, flow=Tru
     if log:
         plot_name += "_log"
     plot_tools.save_pdf_and_png(args.plotdir, plot_name)
-    plot_tools.write_index_and_log(args.plotdir, plot_name, args=args, analysis_meta_info=meta)
+    plot_tools.write_index_and_log(args.plotdir, plot_name, args=args, analysis_meta_info=meta[0])
 
-def make_plot_1d(hists, name, proc, axis, ratio=False, normalize=False, ymin=None, ymax=None, flow=True, density=False):
-    logger.info(f"Make 1D plot for {name} with axes {axis}")
+def make_plot_1d(hists, name, proc, axis, ratio=False, normalize=False, xmin=None, xmax=None, ymin=None, ymax=None, flow=True, density=False):
+    logger.info(f"Make 1D plot for {name} with axis {axis}")
 
     if not isinstance(hists, list):
         hists = [hists]
@@ -214,12 +195,15 @@ def make_plot_1d(hists, name, proc, axis, ratio=False, normalize=False, ymin=Non
 
         # outname += f"_{name[i]}"
 
+    if xmin is not None:
+        ax.set_xlim(xmin, xmax)
+
     ax.text(1.0, 1.003, text_dict[proc], transform=ax.transAxes, fontsize=30,
             verticalalignment='bottom', horizontalalignment="right")
-    plot_tools.addLegend(ax, text_size=16)
+    plot_tools.addLegend(ax, ncols=2, text_size=12)
 
     output_tools.make_plot_dir(*args.plotdir.rsplit("/", 1))
-    plot_name = f"hist{outname}_{axis}_{proc}"
+    plot_name = f"hist{outname}_{axis}_{proc}_{name[-1]}"
     if ratio:
         plot_name += "_div"
     if args.noSmoothing and "_div_" in name[0]:
@@ -227,7 +211,7 @@ def make_plot_1d(hists, name, proc, axis, ratio=False, normalize=False, ymin=Non
     if args.normalize:
         plot_name += "_normalize"
     plot_tools.save_pdf_and_png(args.plotdir, plot_name)
-    plot_tools.write_index_and_log(args.plotdir, plot_name, args=args, analysis_meta_info=meta)
+    plot_tools.write_index_and_log(args.plotdir, plot_name, args=args, analysis_meta_info=meta[0])
 
 for proc in procs:
 
@@ -336,15 +320,20 @@ for proc in procs:
         logger.info("Make 1D control plots")
 
         for ax in project:
-            if ax in ["ewMll", "ewMlly"]:
+            # xmin, xmax = 60, 120
+            xmin, xmax = None, None
+
+            if ax in ["ewMll", "Mll"]:
+                ymin, ymax = 0.95, 1.05
+            elif ax in ["ewMlly", "Mlly"]:
                 ymin, ymax = 0.8, 1.2
             else:
                 ymin, ymax = 0, 2
 
             hratios1D = [hh.divideHists(hnum.project(ax), hden.project(ax)) for hnum in hnums]
 
-            make_plot_1d(hratios1D, [f"{n}_div_{args.den}" for n in nums], proc, ax, ymin=ymin, ymax=ymax, ratio=True)
-            make_plot_1d([*hnums, hden], [*nums, args.den], proc, ax, ymin=0, density=False)
+            make_plot_1d([*hnums, hden], [*nums, args.den], proc, ax, xmin=xmin, xmax=xmax, ymin=0, density=False)
+            make_plot_1d(hratios1D, [f"{n}_div_{args.den}" for n in nums], proc, ax, xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax, ratio=True)
 
 for num, corrh in corrhs.items():
     outname = num.replace('-', '') + 'ew'
