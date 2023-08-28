@@ -14,27 +14,17 @@ def broadcastSystHist(h1, h2):
     if h1.ndim > h2.ndim or h1.shape == h2.shape:
         return h1
 
-    a1 = h1.view(flow=True)
-    a2shape = [d for d in h2.view(flow=True).shape]
+    s1 = h1.view(flow=True).shape
+    s2 = h2.view(flow=True).shape
 
-    # the additional axes have to be trailing, if they ar not, they must be moved
-    moves = []
-    offset = 0
-    for i, a in enumerate(h1.axes.name):
-        b = h2.axes.name[i+offset]  
-        if a != b:
-            idx = h2.axes.name.index(b)
-            moves.append(idx)
-            element = a2shape.pop(idx)
-            a2shape.append(element)
-            offset += 1
+    # the additional axes have to be broadcasted as leading
+    moves = {i: e for i, (e, n2) in enumerate(zip(s2, h2.axes.name)) if n2 not in h1.axes.name}
+    broadcast_shape = list(moves.values()) + list(s1)
 
-    # Transpose because we keep syst axis last, but numpy broadcasts from the front
-    new_vals = np.broadcast_to(a1.T, a2shape[::-1]).T
+    new_vals = np.broadcast_to(h1.view(flow=True), broadcast_shape)
 
-    # move back to original order, in reversed order
-    for idx in moves[::-1]:
-        new_vals = np.moveaxis(new_vals, -1, idx)
+    # move back to original order
+    new_vals = np.moveaxis(new_vals, np.arange(len(moves)), list(moves.keys()))
 
     return hist.Hist(*h2.axes, data=new_vals, storage=h1.storage_type())
 

@@ -55,6 +55,9 @@ ROOT.gInterpreter.Declare('#include "lowpu_rochester.h"')
 ROOT.gInterpreter.Declare('#include "lowpu_recoil.h"')
 ROOT.gInterpreter.Declare('#include "electron_selections.h"')
 
+# axes used in fakerate calculation
+axis_fakerate_pt = hist.axis.Variable([26., 27., 28., 29., 30., 32., 34., 37., 40., 44., 49., 56.], name = "pt", underflow=False)
+axis_fakerate_eta = hist.axis.Regular(12, -2.4, 2.4, name = "eta", underflow=False, overflow=False)
 
 # standard regular axes
 axis_eta = hist.axis.Regular(args.eta[0], args.eta[1], args.eta[2], name = "eta", underflow=False, overflow=False)
@@ -86,7 +89,7 @@ if args.unfolding:
 
 # axes for final cards/fitting
 nominal_axes = [
-    axis_pt, axis_eta, axis_charge, 
+    axis_fakerate_pt, axis_fakerate_eta, axis_charge, 
     hist.axis.Variable([0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 25, 30, 40, 50, 60, 75, 90, 150], name = "ptll", underflow=False, overflow=True),    
     axis_passIso, axis_passMT]
 
@@ -97,7 +100,7 @@ nominal_cols = ["lep_pt", "lep_eta", "lep_charge", "ptll", "passIso",  "passMT"]
 axis_mT = hist.axis.Variable([0] + list(range(40, 110, 1)) + [110, 112, 114, 116, 118, 120, 125, 130, 140, 160, 180, 200], name = "mt",underflow=False, overflow=True)
 axis_mT = hist.axis.Regular(100, 0, 200, name = "mt", underflow=False)
 
-axes_mT = [axis_pt, axis_eta, axis_charge, axis_mT, axis_passIso]
+axes_mT = [axis_fakerate_pt, axis_fakerate_eta, axis_charge, axis_mT, axis_passIso]
 cols_mT = ["lep_pt", "lep_eta", "lep_charge", "transverseMass",  "passIso"]
 
 # reco_mT_axes = [common.axis_recoil_reco_ptW_lowpu, common.axis_mt_lowpu, axis_charge, axis_passMT, axis_passIso]
