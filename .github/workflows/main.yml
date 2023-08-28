@@ -640,6 +640,7 @@ jobs:
 
       - name: clean
         run: |
-          xrdcp -R -f $WREMNANTS_OUTDIR/$LOCAL_WEB_DIR root://eoscms.cern.ch/$EOS_DIR/$LOCAL_WEB_DIR
+          echo "xrdcp -R -f $WREMNANTS_OUTDIR/$LOCAL_WEB_DIR root://eosuser.cern.ch//$EOS_DIR/$LOCAL_WEB_DIR"
+          xrdcp -R -f $WREMNANTS_OUTDIR/$LOCAL_WEB_DIR root://eosuser.cern.ch//$EOS_DIR/$LOCAL_WEB_DIR
           echo "Removing temp directory $WREMNANTS_OUTDIR"
           rm -r $WREMNANTS_OUTDIR
