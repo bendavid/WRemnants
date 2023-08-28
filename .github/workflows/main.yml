@@ -93,8 +93,7 @@ jobs:
 
       - name: setup webdir
         # TODO: Get the local writing+copy to eos working
-        #run: echo "WEB_DIR=$WREMNANTS_OUTDIR/$LOCAL_WEB_DIR" >> $GITHUB_ENV
-        run: echo "WEB_DIR=$EOS_DIR/$LOCAL_WEB_DIR" >> $GITHUB_ENV
+        run: echo "WEB_DIR=$WREMNANTS_OUTDIR/$LOCAL_WEB_DIR" >> $GITHUB_ENV
 
       - name: create webdir
         run: mkdir -p ${{env.WEB_DIR}}
@@ -641,7 +640,6 @@ jobs:
 
       - name: clean
         run: |
-          # TODO: Figure out how to get this working with permissions
-          #xrdcp -R -f $WREMNANTS_OUTDIR/$LOCAL_WEB_DIR root://eoscms.cern.ch/$EOS_DIR/$LOCAL_WEB_DIR
+          xrdcp -R -f $WREMNANTS_OUTDIR/$LOCAL_WEB_DIR root://eoscms.cern.ch/$EOS_DIR/$LOCAL_WEB_DIR
           echo "Removing temp directory $WREMNANTS_OUTDIR"
           rm -r $WREMNANTS_OUTDIR
