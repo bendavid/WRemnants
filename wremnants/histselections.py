@@ -2,9 +2,11 @@ import hist
 import numpy as np
 from utilities.input_tools import safeOpenRootFile, safeGetRootObject
 from utilities import boostHistHelpers as hh
-from utilities import common
+from utilities import common, logging
 import narf
 import ROOT
+
+logger = logging.child_logger(__name__)
 
 hist_map = {
     "eta_pt" : "nominal",
@@ -16,33 +18,31 @@ hist_map = {
 }
 
 def fakeHistABCD(h, thresholdMT=40.0, fakerate_integration_axes=["ptll"], axis_name_mt="mt", integrateMT=False):
-    # boolMT=False generalizes the method when mT is a real axis (i.e. no need for passMT)
     # integrateMT=False keeps the mT axis in the returned histogram (can be used to have fakes vs mT)
 
     if axis_name_mt in h.axes.name:
         s = hist.tag.Slicer()
-        low = hist.underflow if h.axes["mt"].traits.underflow else 0
+        low = hist.underflow if h.axes[axis_name_mt].traits.underflow else 0
         failMT = {axis_name_mt : s[low:complex(0,thresholdMT):hist.sum]}
         if integrateMT:
             passMT = {axis_name_mt : s[complex(0,thresholdMT):hist.overflow:hist.sum]}
         else:
             passMT = {axis_name_mt : s[complex(0,thresholdMT):hist.overflow]}
-        fakerate_integration_axes.append(axis_name_mt)        
     else:
         failMT = common.failMT
         passMT = common.passMT
-        fakerate_integration_axes.append(common.passMTName)
 
     if any(a in h.axes.name for a in fakerate_integration_axes):
-        fakerate_axes = [n for n in h.axes.name if n not in [*fakerate_integration_axes, common.passIsoName]]
+        fakerate_axes = [n for n in h.axes.name if n not in [*fakerate_integration_axes, common.passIsoName, *failMT.keys()]]
         hPassIsoFailMT = h[{**common.passIso, **failMT}].project(*fakerate_axes)
         hFailIsoFailMT = h[{**common.failIso, **failMT}].project(*fakerate_axes)
     else:
         hPassIsoFailMT = h[{**common.passIso, **failMT}]
         hFailIsoFailMT = h[{**common.failIso, **failMT}]
 
-    fakerate = hh.divideHists(hPassIsoFailMT, hFailIsoFailMT, cutoff=1, createNew=True)
-    return hh.multiplyHists(fakerate, h[{**common.failIso, **passMT}])
+    hFRF = hh.divideHists(hPassIsoFailMT, hFailIsoFailMT, cutoff=1, createNew=True)   
+
+    return hh.multiplyHists(hFRF, h[{**common.failIso, **passMT}])
     
 def fakeHistIsoRegion(h, scale=1.):
     #return h[{"iso" : 0.3j, "mt" : hist.rebin(10)}]*scale
