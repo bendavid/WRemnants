@@ -67,6 +67,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: 'recursive'
+          lfs: 'true'
 
       - name: setup unscheduled
         if: github.event_name != 'schedule'
@@ -133,7 +136,7 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v3
         with:
-          submodules: 'true'
+          submodules: 'recursive'
           lfs: 'true'
 
       - name: wmass setup lumi scale
@@ -172,7 +175,7 @@ jobs:
           echo "HIST_FILE=${WREMNANTS_OUTDIR}/${OUTFILE_WMASS}" >> $GITHUB_ENV
       - uses: actions/checkout@v3
         with:
-          submodules: 'true'
+          submodules: 'recursive'
           lfs: 'true'
 
       - name: test
@@ -213,7 +216,7 @@ jobs:
 
       - uses: actions/checkout@v3
         with:
-          submodules: 'true'
+          submodules: 'recursive'
           lfs: 'true'
 
       - name: lowpu w mu analysis
@@ -304,7 +307,8 @@ jobs:
 
       - uses: actions/checkout@v3
         with:
-          submodules: 'true'
+          submodules: 'recursive'
+          lfs: 'true'
 
       - name: lowpu z mumu analysis
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_lowPU.py -o $WREMNANTS_OUTDIR -j $NTHREADS --forceDefaultName --noRecoil --unfolding
@@ -404,7 +408,7 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v3
         with:
-          submodules: 'true'
+          submodules: 'recursive'
           lfs: 'true'
 
       - name: wlike analysis
@@ -435,7 +439,7 @@ jobs:
 
       - uses: actions/checkout@v3
         with:
-          submodules: 'true'
+          submodules: 'recursive'
           lfs: 'true'
 
       - name: wlike plotting
@@ -467,7 +471,7 @@ jobs:
 
       - uses: actions/checkout@v3
         with:
-          submodules: 'true'
+          submodules: 'recursive'
           lfs: 'true'
 
       - name: wlike combine unfolding setup
@@ -502,7 +506,7 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v3
         with:
-          submodules: 'true'
+          submodules: 'recursive'
           lfs: 'true'
 
       - name: dilepton analysis
@@ -538,7 +542,7 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v3
         with:
-          submodules: 'true'
+          submodules: 'recursive'
           lfs: 'true'
 
       - name: test
@@ -587,7 +591,7 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v3
         with:
-          submodules: 'true'
+          submodules: 'recursive'
           lfs: 'true'
 
 
