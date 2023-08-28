@@ -1,5 +1,7 @@
 # WRemnants
 
+dummy change to trigger ci
+
 ## Instructions:
 
 Activate the singularity image (to be done every time before running code)
