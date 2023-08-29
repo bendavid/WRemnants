@@ -231,10 +231,10 @@ for proc in procs:
 
         if args.normalize:
             histo = hh.normalize(histo)
-            logger.info(f'Integrals for {name} after normalizing {np.sum(histo.values(flow=True))}')
+            logger.info(f'Integral for {name} after normalizing {np.sum(histo.values(flow=True))}')
         else:
-            histo = hh.scaleHist(histo, 10e6/res[proc_name]['event_count'], createNew=False)
-            logger.info(f'Integrals for {name} after scaling {np.sum(histo.values(flow=True))}')
+            histo = hh.scaleHist(histo, res[proc_name]["dataset"]["xsec"]*10e6/res[proc_name]['weight_sum'], createNew=False)
+            logger.info(f'Integral for {name} after scaling {np.sum(histo.values(flow=True))}')
 
         return histo
     
@@ -262,10 +262,11 @@ for proc in procs:
         hratio = hh.divideHists(hnum, hden)
         if not args.noSmoothing:
             hratio = hh.smoothTowardsOne(hratio)
-            scale = np.sum(hden.values(flow=True)) / np.sum(hden.values(flow=True)*hratio.values(flow=True))
-            logger.info('Adjustment after smoothing {0}'.format(scale))
-            hratio = hh.scaleHist(hratio, scale)
-            logger.info('Integrals after adjustment {0} {1}'.format(np.sum(hden.values(flow=True)), np.sum(hden.values(flow=True)*hratio.values(flow=True))))
+            logger.info('Integrals after smoothing {0} {1}'.format(np.sum(hden.values(flow=True)), np.sum(hden.values(flow=True)*hratio.values(flow=True))))
+            if args.normalize:
+                scale = np.sum(hden.values(flow=True)) / np.sum(hden.values(flow=True)*hratio.values(flow=True))
+                hratio = hh.scaleHist(hratio, scale)
+                logger.info('Integrals after adjustment {0} {1}'.format(np.sum(hden.values(flow=True)), np.sum(hden.values(flow=True)*hratio.values(flow=True))))
 
         # Add dummy axis
         axis_dummy = hist.axis.Regular(1, -10., 10., underflow=False, overflow=False, name = "dummy")
@@ -291,9 +292,10 @@ for proc in procs:
         hones.values(flow=True)[...,charge_dict[proc]] = np.ones(hdummy.values(flow=True).shape)
         hmirror = hist.Hist(*hratio.axes, storage=hist.storage.Double())
         hmirror.values(flow=True)[...] = 2*hratio.values(flow=True) - hones.values(flow=True)
-        mirrorscale = np.sum(hden.values(flow=True)) / np.sum(hden.values(flow=True)*hmirror.values(flow=True)[...,0,charge_dict[proc]])
-        # logger.info(f'{proc} mirrorscale = {mirrorscale}')
-        hmirror = hh.scaleHist(hmirror, mirrorscale)
+        if args.normalize:
+            mirrorscale = np.sum(hden.values(flow=True)) / np.sum(hden.values(flow=True)*hmirror.values(flow=True)[...,0,charge_dict[proc]])
+            logger.info(f'{proc} mirrorscale = {mirrorscale}')
+            hmirror = hh.scaleHist(hmirror, mirrorscale)
         corrh[proc].values(flow=True)[...,0] = hones.values(flow=True)
         corrh[proc].values(flow=True)[...,1] = hratio.values(flow=True)
         corrh[proc].values(flow=True)[...,2] = hmirror.values(flow=True)

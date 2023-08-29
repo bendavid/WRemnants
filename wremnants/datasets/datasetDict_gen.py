@@ -1,5 +1,11 @@
 from wremnants.datasets.datasetDict_v9 import xsec_ZmmPostVFP,xsec_WpmunuPostVFP,xsec_WmmunuPostVFP
 
+# winhac cross sections from: https://gitlab.cern.ch/cms-wmass/private/issue-tracking/-/issues/34#note_7052239
+xsec_winhac_WminusToMuNu_LO = 7.57405974
+xsec_winhac_WminusToMuNu_NLOEW = 7.58516621
+xsec_winhac_WplusToMuNu_LO = 10.10450380
+xsec_winhac_WplusToMuNu_NLOEW = 10.11709477
+
 horace_v1 = False
 horace_v2 = False
 horace_v3 = False
@@ -56,19 +62,19 @@ genDataDict = {
     'WplusToMuNu_winhac-lo-photos' : { 
                    'filepaths' :
                     ["{BASE_PATH}/WplusJetsToMuNu_LO_TuneCP5_13TeV-winhac-pythia8-photospp/*/*.root"],
-                   'xsec' : xsec_WpmunuPostVFP,
+                   'xsec' : xsec_winhac_WplusToMuNu_LO,
                     'group': "Wmunu",
     },
     'WplusToMuNu_winhac-lo' : { 
                    'filepaths' :
                     ["{BASE_PATH}/WplusJetsToMuNu_LO_TuneCP5_13TeV-winhac-pythia8/*/*.root"],
-                   'xsec' : xsec_WpmunuPostVFP,
+                   'xsec' : xsec_winhac_WplusToMuNu_LO,
                     'group': "Wmunu",
     },
     'WplusToMuNu_winhac-nlo' : { 
                    'filepaths' :
                     ["{BASE_PATH}/WplusJetsToMuNu_NLOEW_TuneCP5_13TeV-winhac-pythia8/*/*.root"],
-                   'xsec' : xsec_WpmunuPostVFP,
+                   'xsec' : xsec_winhac_WplusToMuNu_NLOEW,
                     'group': "Wmunu",
     },
     'WminusToMuNu_horace-lo-photos' : { 
@@ -92,19 +98,19 @@ genDataDict = {
     'WminusToMuNu_winhac-lo-photos' : { 
                    'filepaths' :
                     ["{BASE_PATH}/WminusJetsToMuNu_LO_TuneCP5_13TeV-winhac-pythia8-photospp/*/*.root"],
-                   'xsec' : xsec_WmmunuPostVFP,
+                   'xsec' : xsec_winhac_WminusToMuNu_LO,
                     'group': "Wmunu",
     },
     'WminusToMuNu_winhac-lo' : { 
                    'filepaths' :
                     ["{BASE_PATH}/WminusJetsToMuNu_LO_TuneCP5_13TeV-winhac-pythia8/*/*.root"],
-                   'xsec' : xsec_WmmunuPostVFP,
+                   'xsec' : xsec_winhac_WminusToMuNu_LO,
                     'group': "Wmunu",
     },
     'WminusToMuNu_winhac-nlo' : { 
                    'filepaths' :
                     ["{BASE_PATH}/WminusJetsToMuNu_NLOEW_TuneCP5_13TeV-winhac-pythia8/*/*.root"],
-                   'xsec' : xsec_WmmunuPostVFP,
+                   'xsec' : xsec_winhac_WminusToMuNu_NLOEW,
                     'group': "Wmunu",
     },
 }
