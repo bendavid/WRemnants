@@ -131,11 +131,13 @@ else:
 if not args.nominalRef:
     nominalName = args.baseName.rsplit("_", 1)[0]
     groups.setNominalName(nominalName)
-    groups.loadHistsForDatagroups(args.baseName, syst="", procsToRead=datasets, applySelection=applySelection)
+    groups.loadHistsForDatagroups(args.baseName, syst="", procsToRead=datasets, applySelection=applySelection, 
+        fakerateIntegrationAxes=list(set([x for h in args.hists for x in h.split("-") if x not in ["pt", "eta", "charge"]])))
 else:
     nominalName = args.nominalRef
     groups.setNominalName(nominalName)
-    groups.loadHistsForDatagroups(nominalName, syst=args.baseName, procsToRead=datasets, applySelection=applySelection)
+    groups.loadHistsForDatagroups(nominalName, syst=args.baseName, procsToRead=datasets, applySelection=applySelection,
+        fakerateIntegrationAxes=list(set([x for h in args.hists for x in h.split("-") if x not in ["pt", "eta", "charge"]])))
 
 exclude = ["Data"] 
 unstack = exclude[:]

@@ -17,7 +17,7 @@ hist_map = {
     "ptll_mll" : "nominal",
 }
 
-def fakeHistABCD(h, thresholdMT=40.0, fakerate_integration_axes=["ptll"], axis_name_mt="mt", integrateMT=False):
+def fakeHistABCD(h, thresholdMT=40.0, fakerate_integration_axes=[], axis_name_mt="mt", integrateMT=False):
     # integrateMT=False keeps the mT axis in the returned histogram (can be used to have fakes vs mT)
 
     if axis_name_mt in h.axes.name:
