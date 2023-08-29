@@ -24,10 +24,10 @@ if [[ $4 == *.hdf5 ]]; then
 	outfile=$4
 
 	if [ "$mode" == "mass" ]; then
-		combinetf.py --doImpacts --binByBinStat -t -1 "$outfile" --doh5Output
+		combinetf.py --doImpacts --binByBinStat -t -1 "$outfile"
 
 	elif [ "$mode" == "unfolding" ]; then
-		combinetf.py --doImpacts --binByBinStat -t -1 "$outfile" --correlateXsecStat --saveHists --computeHistErrors --doh5Output
+		combinetf.py --doImpacts --binByBinStat -t -1 "$outfile" --correlateXsecStat --saveHists --computeHistErrors
 	fi
 
 else
