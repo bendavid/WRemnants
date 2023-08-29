@@ -1376,4 +1376,111 @@ void test_SmearingWeightTestHelper(SmearingWeightTestHelper<5> &helper) {
     std::cout << res << std::endl;
 }
 */
+
+template <typename T>
+class DataMCResoUncHelperSplines {
+public:
+    using hist_t = T;
+    using tensor_t = typename T::storage_type::value_type::tensor_t;
+    static constexpr auto sizes = narf::tensor_traits<tensor_t>::sizes;
+    static constexpr auto nUnc = sizes[sizes.size() - 1];
+    using out_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<nUnc, 2>>;
+
+    DataMCResoUncHelperSplines(const std::string &filename, T&& corrections) : 
+        helper_(
+            std::make_shared<narf::tflite_helper>(
+                filename, "serving_default", ROOT::GetThreadPoolSize()
+            )
+        ),
+        correctionHist_(std::make_shared<const T>(std::move(corrections))) {
+    }
+
+    // helper for bin lookup which implements the compile-time loop over axes
+    template<typename... Xs, std::size_t... Idxs>
+    const tensor_t &get_tensor_impl(std::index_sequence<Idxs...>, const Xs&... xs) {
+        return correctionHist_->at(correctionHist_->template axis<Idxs>().index(xs)...).data();
+    }
+
+    // variadic templated bin lookup
+    template<typename... Xs>
+    const tensor_t &get_tensor(const Xs&... xs) {
+        return get_tensor_impl(std::index_sequence_for<Xs...>{}, xs...);
+    }
+
+    out_tensor_t operator() (
+        const RVec<float> &recPts, const RVec<float> &recEtas, const RVec<int> &recCharges,
+        const RVec<float> &genPts, const RVec<float> &genEtas, const RVec<int> &genCharges,
+        double nominal_weight = 1.0) {
+
+        auto const nmuons = recPts.size();
+
+        out_tensor_t alt_weights_all;
+        alt_weights_all.setConstant(nominal_weight);
+
+        for (std::size_t i = 0; i < nmuons; ++i) {
+
+            auto const &recPt = recPts[i];
+            auto const &recEta = recEtas[i];
+            auto const &recCharge = recCharges[i];
+
+            auto const &genPt = genPts[i];
+            auto const &genEta = genEtas[i];
+            auto const &genCharge = genCharges[i];
+
+
+            const double qoprec = recCharge*1./(recPt*std::cosh(recEta));
+            const double qopgen = genCharge*1./(genPt*std::cosh(genEta));
+
+            // compute qoprec/qopgen needed to compute the weights
+            const double qopr = qoprec/qopgen;
+
+            // fill input tensors
+            Eigen::TensorFixedSize<double, Eigen::Sizes<>> genPt_tensor;
+            Eigen::TensorFixedSize<double, Eigen::Sizes<>> genEta_tensor;
+            Eigen::TensorFixedSize<double, Eigen::Sizes<>> genCharge_tensor;
+            Eigen::TensorFixedSize<double, Eigen::Sizes<>> qopr_tensor;
+
+            genPt_tensor(0) = genPt;
+            genEta_tensor(0) = genEta;
+            genCharge_tensor(0) = genCharge;
+            qopr_tensor(0) = qopr;
+
+            // define output tensors
+            Eigen::TensorFixedSize<double, Eigen::Sizes<>> delta_weight_tensor;
+
+            // build tuples of inputs and outputs (use std::tie so the tuples contain references to the tensors above)
+            auto const inputs = std::tie(genPt_tensor, genEta_tensor, genCharge_tensor, qopr_tensor);
+            auto outputs = std::tie(delta_weight_tensor);
+
+            // call the tensorflow lite model to fill the outputs
+            (*helper_)(inputs, outputs);
+
+            // get the output value
+            const double dweightdqop = delta_weight_tensor(0);
+
+            out_tensor_t delta_qopr;
+
+            const auto &params = get_tensor(recEta, recPt);
+            for (std::ptrdiff_t ivar = 0; ivar < nUnc; ++ivar) {
+                const double recoKUnc = params(ivar);
+                double recoQopUnc = calculateQopUnc(recEta, recCharge, recoKUnc);
+                for (std::ptrdiff_t idownup = 0; idownup < 2; ++idownup) {
+                    const double dir = idownup == 0 ? -1. : 1.;
+                    delta_qopr(ivar, idownup) = recoQopUnc * dir / qopgen;
+                }
+            }
+
+            const out_tensor_t alt_weights = dweightdqop*delta_qopr + 1.;
+
+            // total weight is the product over all the muons
+            alt_weights_all *= alt_weights;
+        }
+        return alt_weights_all;
+    }
+
+private:
+    std::shared_ptr<narf::tflite_helper> helper_;
+    std::shared_ptr<const T> correctionHist_;
+};
+
 }

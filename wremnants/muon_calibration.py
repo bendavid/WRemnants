@@ -170,7 +170,7 @@ def make_muon_smearing_helpers(muonCorrMC="idealMC_lbltruth"):
     # this helper smears muon pT to match the resolution in data
 
     if muonCorrMC == "idealMC_lbltruth":
-        filename = "smearing_LBL"
+        filename = "smearing_LBL_JYZ.root"
     elif muonCorrMC == "idealMC_massfit":
         filename = "smearing"
         logger.warning("You are using an outdated smearing file!")
@@ -362,6 +362,33 @@ def make_Z_non_closure_binned_helper(
             common.down_up_axis
         )
         return z_non_closure_helper
+
+def make_dataMC_resolution_unc_helper(
+    filepath_tflite, filepath_reso_data, filepath_reso_MC, 
+    n_eta_bins = 24, n_pt_bins = 5
+):
+    f_data = uproot.open(filepath_reso_data)
+    f_MC = uproot.open(filepath_reso_MC)
+    cov = f_data['covariance_matrix'].to_hist().values() + f_MC['covariance_matrix'].to_hist().values()
+    w,v = np.linalg.eigh(cov)    
+    var_mat = np.sqrt(w) * v
+    axis_eta = hist.axis.Regular(n_eta_bins, -2.4, 2.4, name = 'eta')
+    axis_pt = hist.axis.Variable([25, 35, 45, 55, 65, 85], name = 'pt')
+    axis_unc = hist.axis.Regular(
+        n_eta_bins * n_pt_bins, 0, 1,
+        underflow = False, overflow = False,  name = 'unc'
+    )
+    hist_reso_unc = hist.Hist(axis_eta, axis_pt, axis_unc)
+    for i in range(n_eta_bins):
+        lb, ub = i * n_pt_bins, (i + 1) * n_pt_bins
+        hist_reso_unc.view()[i,...] = var_mat[lb:ub][:]
+    hist_reso_unc_cpp = narf.hist_to_pyroot_boost(hist_reso_unc, tensor_rank = 1)
+    helper = ROOT.wrem.DataMCResoUncHelperSplines[type(hist_reso_unc_cpp).__cpp_name__](
+        filepath_tflite,
+        ROOT.std.move(hist_reso_unc_cpp)
+    )
+    helper.tensor_axes = (hist_reso_unc.axes['unc'], common.down_up_axis)
+    return helper
 
 # returns the cov mat of only scale parameters in eta bins, in the form of a 2D numpy array
 # there are 3 scale params (A, e, M) + 3 resolution params for each eta bin in the jpsi calib file
@@ -813,6 +840,26 @@ def add_jpsi_crctn_Z_non_closure_hists(
             storage=hist.storage.Double()
         )
         results.append(hist_Z_non_closure_binned)
+    return df
+
+def add_dataMC_reso_unc_hists(df, results, reso_unc_helper, nominal_axes, nominal_cols, reco_sel_GF):
+    df = df.Define("dataMC_reso_unc_tensor", reso_unc_helper,
+        [
+            f"{reco_sel_GF}_recoPt",
+            f"{reco_sel_GF}_recoEta",
+            f"{reco_sel_GF}_recoCharge",
+            f"{reco_sel_GF}_genPt",
+            f"{reco_sel_GF}_genEta",
+            f"{reco_sel_GF}_genCharge",
+            "nominal_weight"
+        ]
+    )
+    hist_dataMC_reso_unc = df.HistoBoost(
+        "dataMC_reso_unc", nominal_axes,
+        [*nominal_cols, "dataMC_reso_unc_tensor"],
+        tensor_axes = reso_unc_helper.tensor_axes, storage=hist.storage.Double()
+    )
+    results.append(hist_dataMC_reso_unc)
     return df
 
 def transport_smearing_weights_to_reco(resultdict, procs, nonClosureScheme = "A-M-separated"):

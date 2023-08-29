@@ -43,6 +43,8 @@ calib_filepaths = {
         'massfit': f"{calib_dir}/calibrationJDATA_ideal.root",
         'lbl_massfit': f"{calib_dir}/calibrationJDATA_rewtgr_3dmap_LBL_MCstat.root"
     },
+    'mc_resofile': f"{calib_dir}/sigmaMC_LBL_JYZ.root",
+    'data_resofile': f"{calib_dir}/sigmaDATA_LBL_JYZ.root",
     'tflite_file': f"{calib_dir}/muon_response.tflite"
 }
 closure_filepaths = {
