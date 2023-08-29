@@ -170,11 +170,12 @@ def setup(args, inputFile, fitvar, xnorm=False):
     if wmass and args.ABCD:
         # In case of ABCD we need to have different fake processes to have uncorrelated uncertainties
         cardTool.setFakeName(datagroups.fakeName + (datagroups.flavor if datagroups.flavor else "")) 
-        cardTool.setChannels(["inclusive"])
-        cardTool.setWriteByCharge(False)
-        cardTool.setProjectionAxes([*fitvar, "passIso", "passMT"])
+        # projection_axes = [*fitvar, "passIso"]
+        # if "mt" not in fitvar:
+        #     projection_axes.append("mt")
+        # cardTool.setProjectionAxes(projection_axes)
         cardTool.unroll=True
-    if args.sumChannels or xnorm or dilepton:
+    if args.sumChannels or xnorm or dilepton or args.ABCD:
         cardTool.setChannels(["inclusive"])
         cardTool.setWriteByCharge(False)
     else:
