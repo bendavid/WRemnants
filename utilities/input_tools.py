@@ -10,7 +10,6 @@ import h5py
 from narf import ioutils
 import ROOT
 import uproot
-import narf
 
 logger = logging.child_logger(__name__)
 
@@ -463,9 +462,6 @@ def args_from_metadata(card_tool, arg):
 
     return meta_data["args"][arg]
 
-def load_results(h5file):
-    return narf.ioutils.pickle_load_h5py(h5file)
-
 def get_metadata(infile):
     results = None
     if infile.endswith(".pkl.lz4"):
@@ -477,7 +473,7 @@ def get_metadata(infile):
     elif infile.endswith(".hdf5"):
         h5file = h5py.File(infile, "r")
         meta = h5file.get("result", h5file.get("meta", None))
-        results = load_results(meta) if meta else None
+        results = ioutils.pickle_load_h5py(meta) if meta else None
 
     if results is None:
         logger.warning("Failed to find results dict. Note that only pkl, hdf5, and pkl.lz4 file types are supported")
@@ -505,7 +501,7 @@ def read_infile(input):
     elif input.endswith(".hdf5"):
         h5file = h5py.File(input, "r")
         infiles = [h5file]
-        result = load_results(h5file["results"])
+        result = ioutils.pickle_load_h5py(h5file["results"])
     else:
         raise ValueError("Unsupported file type")
 

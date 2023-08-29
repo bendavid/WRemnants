@@ -194,3 +194,4 @@ def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, na
             logger.warning(f"Failed to find any files for sample {sample.name}!")
 
     return narf_datasets
+

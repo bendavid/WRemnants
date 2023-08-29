@@ -382,7 +382,7 @@ class Datagroups(object):
                     logger.warning(f"Selection requested for process {procName} but applySelection=False, thus it will be ignored")
                 elif label in group.hists.keys():
                     logger.debug(f"Apply selection for process {procName}")
-                    if procName == nameFake and "fakerate_integration_axes" not in group.selectOpArgs:
+                    if procName == self.fakeName and "fakerate_integration_axes" not in group.selectOpArgs:
                         opArgs = {**group.selectOpArgs, "fakerate_integration_axes": fakerateIntegrationAxes}
                     else:
                         opArgs = group.selectOpArgs

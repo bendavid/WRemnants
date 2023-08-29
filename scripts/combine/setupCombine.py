@@ -340,7 +340,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
             group="theory_ew",
             systAxes=["systIdx"],
             labelsByAxis=[f"{ewUnc}Corr"],
-            skipEntries=[(0, -1), (2, -1)],
+            skipEntries=[(0, -1), (1, -1)],
             passToFakes=passSystToFakes,
         )
 
