@@ -20,17 +20,7 @@ hist_map = {
 def fakeHistABCD(h, thresholdMT=40.0, fakerate_integration_axes=[], axis_name_mt="mt", integrateMT=False):
     # integrateMT=False keeps the mT axis in the returned histogram (can be used to have fakes vs mT)
 
-    if axis_name_mt in h.axes.name:
-        s = hist.tag.Slicer()
-        low = hist.underflow if h.axes[axis_name_mt].traits.underflow else 0
-        failMT = {axis_name_mt : s[low:complex(0,thresholdMT):hist.sum]}
-        if integrateMT:
-            passMT = {axis_name_mt : s[complex(0,thresholdMT):hist.overflow:hist.sum]}
-        else:
-            passMT = {axis_name_mt : s[complex(0,thresholdMT):hist.overflow]}
-    else:
-        failMT = common.failMT
-        passMT = common.passMT
+    failMT, passMT = get_mt_selection(h, thresholdMT, axis_name_mt, integrateMT)
 
     if any(a in h.axes.name for a in fakerate_integration_axes):
         fakerate_axes = [n for n in h.axes.name if n not in [*fakerate_integration_axes, common.passIsoName, *failMT.keys()]]
@@ -60,12 +50,7 @@ def signalHistWmass(h, thresholdMT=40.0, charge=None, passIso=common.passIso, pa
     if genBin != None:
         h = h[{"recoil_gen" : genBin}]
 
-    if axis_name_mt in h.axes.name:
-        s = hist.tag.Slicer()
-        if integrateMT:
-            passMT = {axis_name_mt : s[complex(0,thresholdMT):hist.overflow:hist.sum]}
-        else:
-            passMT = {axis_name_mt : s[complex(0,thresholdMT):hist.overflow]}
+    failMT, passMT = get_mt_selection(h, thresholdMT, axis_name_mt, integrateMT)
 
     sel = {**passIso, **passMT}
     if charge in [-1, 1]:
@@ -100,6 +85,20 @@ def signalHistLowPileupW(h):
     
 def signalHistLowPileupZ(h):
     return h
+
+def get_mt_selection(h, thresholdMT=40.0, axis_name_mt="mt", integrateMT=False):
+    if axis_name_mt in h.axes.name:
+        s = hist.tag.Slicer()
+        low = hist.underflow if h.axes[axis_name_mt].traits.underflow else 0
+        failMT = {axis_name_mt : s[low:complex(0,thresholdMT):hist.sum]}
+        if integrateMT:
+            passMT = {axis_name_mt : s[complex(0,thresholdMT):hist.overflow:hist.sum]}
+        else:
+            passMT = {axis_name_mt : s[complex(0,thresholdMT):hist.overflow]}
+    else:
+        failMT = common.failMT
+        passMT = common.passMT
+    return failMT, passMT
 
 def unrolledHist(h, obs=["pt", "eta"]):
     hproj = h.project(*obs)
