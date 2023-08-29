@@ -71,6 +71,11 @@ jobs:
           submodules: 'recursive'
           lfs: 'true'
 
+      - name: check Xrootd
+        run: |
+          echo "xrdfs root://eosuser.cern.ch// ls $EOS_DIR"
+          xrdfs root://eosuser.cern.ch// ls $EOS_DIR
+
       - name: setup unscheduled
         if: github.event_name != 'schedule'
         run: echo PLOT_DIR=PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }')/$(date +%Y_%m_%d) >> $GITHUB_ENV
@@ -82,7 +87,8 @@ jobs:
 
       - name: setup reference run
         if: github.event.schedule == '30 5 * * 1-5'
-        run: echo PLOT_DIR=ReferenceRuns/$(date +%Y_%m_%d)_$(git rev-parse --short "$GITHUB_SHA") >> $GITHUB_ENV
+        run: |
+          echo PLOT_DIR=ReferenceRuns/$(date +%Y_%m_%d)_$(git rev-parse --short "$GITHUB_SHA") >> $GITHUB_ENV
 
       - name: setup full events
         if: github.event_name != 'pull_request' && github.event.schedule != '30 5 * * 1-5'
@@ -642,9 +648,20 @@ jobs:
         run: |
           echo "WREMNANTS_OUTDIR=${WREMNANTS_OUTDIR}" >> $GITHUB_ENV
 
-      - name: clean
+      - name: copy clean plots
         run: |
           echo "xrdcp --parallel 4 -R -f $WREMNANTS_OUTDIR/$LOCAL_WEB_DIR/* root://eosuser.cern.ch//$EOS_DIR/$LOCAL_WEB_DIR"
           xrdcp --parallel 4 -R -f $WREMNANTS_OUTDIR/$LOCAL_WEB_DIR/* root://eosuser.cern.ch//$EOS_DIR/$LOCAL_WEB_DIR
+          echo "Removing temp directory $WREMNANTS_OUTDIR/$LOCAL_WEB_DIR"
+          rm -r $WREMNANTS_OUTDIR/$LOCAL_WEB_DIR
+          
+      - name: save analysis files
+        if: github.event_name != 'pull_request' && github.event.schedule == '0 3 * * 2,4,6'
+        run: |
+          echo "xrdcp --parallel 4 -R -f $WREMNANTS_OUTDIR/* root://eosuser.cern.ch//$EOS_DIR/$PLOT_DIR/"
+          xrdcp --parallel 4 -R -f $WREMNANTS_OUTDIR/* root://eosuser.cern.ch//$EOS_DIR/$PLOT_DIR/
+
+      - name: clean
+        run: |
           echo "Removing temp directory $WREMNANTS_OUTDIR"
           rm -r $WREMNANTS_OUTDIR
