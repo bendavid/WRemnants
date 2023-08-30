@@ -170,7 +170,7 @@ def make_muon_smearing_helpers(muonCorrMC="idealMC_lbltruth"):
     # this helper smears muon pT to match the resolution in data
 
     if muonCorrMC == "idealMC_lbltruth":
-        filename = "smearing_LBL_JYZ.root"
+        filename = "smearing_LBL_JYZ"
     elif muonCorrMC == "idealMC_massfit":
         filename = "smearing"
         logger.warning("You are using an outdated smearing file!")
@@ -370,8 +370,10 @@ def make_dataMC_resolution_unc_helper(
     f_data = uproot.open(filepath_reso_data)
     f_MC = uproot.open(filepath_reso_MC)
     cov = f_data['covariance_matrix'].to_hist().values() + f_MC['covariance_matrix'].to_hist().values()
-    w,v = np.linalg.eigh(cov)    
-    var_mat = np.sqrt(w) * v
+    #w,v = np.linalg.eigh(cov)    
+    #var_mat = np.sqrt(w) * v
+    var_mat = np.sqrt(abs(cov))
+    print(var_mat)
     axis_eta = hist.axis.Regular(n_eta_bins, -2.4, 2.4, name = 'eta')
     axis_pt = hist.axis.Variable([25, 35, 45, 55, 65, 85], name = 'pt')
     axis_unc = hist.axis.Regular(
