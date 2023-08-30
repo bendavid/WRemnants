@@ -273,6 +273,12 @@ translate = {
     "FakeHighMT": "FakeHighMT",
     "FakeLowMT": "FakeLowMT",
     "rFake": "fakerate",
+    "FakemuHighMT": "FakeHighMT",
+    "FakemuLowMT": "FakeLowMT",
+    "rFakemu": "fakerate",
+    "FakeeHighMT": "FakeHighMT",
+    "FakeeLowMT": "FakeLowMT",
+    "rFakee": "fakerate",
     "massShiftZ": "massZ",
     "massShiftW": "massW",
 }
@@ -333,11 +339,11 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normaliz
         zorder=2,
     )
     uncertainties = make_yields_df([hist_xsec], ["Total"], per_bin=True, yield_only=True, percentage=True)
-
+    fakerate = ["err_FakemuHighMT", "err_FakemuLowMT", "err_rFakemu"]
     sources =["err_stat"]
-    sources += ["err_FakeHighMT", "err_FakeLowMT", "err_rFake"]
+    sources += fakerate
     sources += list(sorted([s for s in filter(lambda x: x.startswith("err"), df.keys()) 
-        if s not in ["err_stat", "err_total", "err_FakeHighMT", "err_FakeLowMT", "err_rFake"] 
+        if s not in ["err_stat", "err_total", *fakerate] 
             and "eff_stat_" not in s and "eff_syst_" not in s]))    # only take eff grouped stat and syst
 
     NUM_COLORS = len(sources)-1

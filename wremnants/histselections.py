@@ -17,32 +17,22 @@ hist_map = {
     "ptll_mll" : "nominal",
 }
 
-def fakeHistABCD(h, thresholdMT=40.0, fakerate_integration_axes=[], axis_name_mt="mt", integrateMT=False):
+def fakeHistABCD(h, thresholdMT=40.0, fakerate_integration_axes=[], axis_name_mt="mt", integrateLowMT=True, integrateHighMT=False):
     # integrateMT=False keeps the mT axis in the returned histogram (can be used to have fakes vs mT)
 
-    if axis_name_mt in h.axes.name:
-        s = hist.tag.Slicer()
-        low = hist.underflow if h.axes[axis_name_mt].traits.underflow else 0
-        failMT = {axis_name_mt : s[low:complex(0,thresholdMT):hist.sum]}
-        if integrateMT:
-            passMT = {axis_name_mt : s[complex(0,thresholdMT):hist.overflow:hist.sum]}
-        else:
-            passMT = {axis_name_mt : s[complex(0,thresholdMT):hist.overflow]}
-    else:
-        failMT = common.failMT
-        passMT = common.passMT
+    nameMT, failMT, passMT = get_mt_selection(h, thresholdMT, axis_name_mt, integrateLowMT, integrateHighMT)
 
     if any(a in h.axes.name for a in fakerate_integration_axes):
-        fakerate_axes = [n for n in h.axes.name if n not in [*fakerate_integration_axes, common.passIsoName, *failMT.keys()]]
-        hPassIsoFailMT = h[{**common.passIso, **failMT}].project(*fakerate_axes)
-        hFailIsoFailMT = h[{**common.failIso, **failMT}].project(*fakerate_axes)
+        fakerate_axes = [n for n in h.axes.name if n not in [*fakerate_integration_axes, common.passIsoName, nameMT]]
+        hPassIsoFailMT = h[{**common.passIso, nameMT: failMT}].project(*fakerate_axes)
+        hFailIsoFailMT = h[{**common.failIso, nameMT: failMT}].project(*fakerate_axes)
     else:
-        hPassIsoFailMT = h[{**common.passIso, **failMT}]
-        hFailIsoFailMT = h[{**common.failIso, **failMT}]
+        hPassIsoFailMT = h[{**common.passIso, nameMT: failMT}]
+        hFailIsoFailMT = h[{**common.failIso, nameMT: failMT}]
 
     hFRF = hh.divideHists(hPassIsoFailMT, hFailIsoFailMT, cutoff=1, createNew=True)   
 
-    return hh.multiplyHists(hFRF, h[{**common.failIso, **passMT}])
+    return hh.multiplyHists(hFRF, h[{**common.failIso, nameMT: passMT}])
     
 def fakeHistIsoRegion(h, scale=1.):
     #return h[{"iso" : 0.3j, "mt" : hist.rebin(10)}]*scale
@@ -56,18 +46,13 @@ def fakeHistIsoRegionIntGen(h, scale=1.):
     print("Slicing")
     return h[{"iso" : 0, "qTgen" : s[::hist.sum]}]
 
-def signalHistWmass(h, thresholdMT=40.0, charge=None, passIso=common.passIso, passMT=common.passMT, axis_name_mt="mt", integrateMT=False, genBin=None):
+def signalHistWmass(h, thresholdMT=40.0, charge=None, passIso=common.passIso, passMT=True, axis_name_mt="mt", integrateLowMT=True, integrateHighMT=False, genBin=None):
     if genBin != None:
         h = h[{"recoil_gen" : genBin}]
 
-    if axis_name_mt in h.axes.name:
-        s = hist.tag.Slicer()
-        if integrateMT:
-            passMT = {axis_name_mt : s[complex(0,thresholdMT):hist.overflow:hist.sum]}
-        else:
-            passMT = {axis_name_mt : s[complex(0,thresholdMT):hist.overflow]}
+    nameMT, failMT, passMT = get_mt_selection(h, thresholdMT, axis_name_mt, integrateLowMT, integrateHighMT)
 
-    sel = {**passIso, **passMT}
+    sel = {**passIso, nameMT: passMT}
     if charge in [-1, 1]:
         sel.update({"charge" : -1j if charge < 0 else 1j})
 
@@ -100,6 +85,20 @@ def signalHistLowPileupW(h):
     
 def signalHistLowPileupZ(h):
     return h
+
+def get_mt_selection(h, thresholdMT=40.0, axis_name_mt="mt", integrateLowMT=True, integrateHighMT=False):
+    if axis_name_mt in h.axes.name:
+        s = hist.tag.Slicer()
+        high = h.axes[axis_name_mt].index(thresholdMT)
+        failMT = s[:high:hist.sum] if integrateLowMT else s[:high:]
+        passMT = s[high:hist.sum] if integrateHighMT else s[high:]
+        nameMT = axis_name_mt
+    else:
+        failMT = 0
+        passMT = 1
+        nameMT = common.passMTName
+
+    return nameMT, failMT, passMT
 
 def unrolledHist(h, obs=["pt", "eta"]):
     hproj = h.project(*obs)

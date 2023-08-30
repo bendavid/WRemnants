@@ -34,6 +34,7 @@ def make_parser(parser=None):
     parser.add_argument("--sumChannels", action='store_true', help="Only use one channel")
     parser.add_argument("--fitXsec", action='store_true', help="Fit signal inclusive cross section")
     parser.add_argument("--fitresult", type=str, default=None ,help="Use data and covariance matrix from fitresult (for making a theory fit)")
+    parser.add_argument("--fakerateAxes", nargs="+", help="Axes for the fakerate binning", default=["eta","pt","charge"])
     parser.add_argument("--ABCD", action="store_true", help="Produce datacard for simultaneous fit of ABCD regions")
     # settings on the nuisances itself
     parser.add_argument("--doStatOnly", action="store_true", default=False, help="Set up fit to get stat-only uncertainty (currently combinetf with -S 0 doesn't work)")
@@ -167,14 +168,16 @@ def setup(args, inputFile, fitvar, xnorm=False):
     if args.absolutePathInCard:
         cardTool.setAbsolutePathShapeInCard()
     cardTool.setProjectionAxes(fitvar)
+    cardTool.setFakerateAxes(args.fakerateAxes)
     if wmass and args.ABCD:
         # In case of ABCD we need to have different fake processes to have uncorrelated uncertainties
         cardTool.setFakeName(datagroups.fakeName + (datagroups.flavor if datagroups.flavor else "")) 
-        cardTool.setChannels(["inclusive"])
-        cardTool.setWriteByCharge(False)
-        cardTool.setProjectionAxes([*fitvar, "passIso", "passMT"])
+        # projection_axes = [*fitvar, "passIso"]
+        # if "mt" not in fitvar:
+        #     projection_axes.append("mt")
+        # cardTool.setProjectionAxes(projection_axes)
         cardTool.unroll=True
-    if args.sumChannels or xnorm or dilepton:
+    if args.sumChannels or xnorm or dilepton or args.ABCD:
         cardTool.setChannels(["inclusive"])
         cardTool.setWriteByCharge(False)
     else:
