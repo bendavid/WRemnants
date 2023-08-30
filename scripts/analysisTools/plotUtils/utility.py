@@ -66,7 +66,7 @@ def checkHistInFile(h, hname, fname, message=""):
 
 def safeGetObject(fileObject, objectName, quitOnFail=True, silent=False, detach=True):
     obj = fileObject.Get(objectName)
-    if obj == None:
+    if obj is None:
         if not silent:
             logger.error(f"Could not get {objectName} from file {fileObject.GetName()}")
         if quitOnFail:

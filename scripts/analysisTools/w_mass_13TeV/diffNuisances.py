@@ -60,6 +60,11 @@ def sortParameters(params):
         params = sorted(params, key = lambda x: sortEffSyst(x))
     elif any(re.match('.*prefire.*',x) for x in params):
         params = sorted(params, key = lambda x: utilities.getNFromString(x,chooseIndex=0))
+    elif any(re.match('.*CMS_scale_m.*',x) for x in params):
+        params = sorted(params, key = lambda x: utilities.getNFromString(x,chooseIndex=0))
+    elif any(re.match('.*Z_nonClosure.*',x) for x in params):
+        params = sorted(params, key = lambda x: utilities.getNFromString(x,chooseIndex=0))
+        params = sorted(params, key = lambda x: 0 if "_A_" in x else 1)
 
     return params
 

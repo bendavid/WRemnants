@@ -118,9 +118,12 @@ Make plot with mW impacts from a single fit result
 ```
 python scripts/analysisTools/w_mass_13TeV/makeImpactsOnMW.py fitresults_123456789.root -o outputFolder/  --scaleToMeV --showTotal -x ".*eff_(stat|syst)_" [--postfix plotNamePostfix]
 ```
+
 Make plot with mW impacts comparing two fit results
 ```
 python scripts/analysisTools/w_mass_13TeV/makeImpactsOnMW.py fitresults_123456789.root -o outputFolder/  --scaleToMeV --showTotal --compareFile fitresults_123456789_toCompare.root --printAltVal --legendEntries "Nominal" "Alternate" -x ".*eff_(stat|syst)_" [--postfix plotNamePostfix]
+```
+
 Print impacts without plotting (no need to specify output folder)
 ```
 python w_mass_13TeV/makeImpactsOnMW.py fitresults_123456789.root --scaleToMeV --showTotal --justPrint

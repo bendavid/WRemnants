@@ -63,7 +63,7 @@ def readNuisances(args, infile=None):
     hessfile = ROOT.TFile(infile,'read')
     impMat = hessfile.Get(th2name)
     if impMat == None:
-        error_msg = f"Cannot find the impact TH2 named {th2name} in input file. Maybe you didn't run --doImpacts?")
+        error_msg = f"Cannot find the impact TH2 named {th2name} in input file. Maybe you didn't run --doImpacts?"
         raise IOError(error_msg)
         
     matchKeep = re.compile(args.keepNuisgroups)

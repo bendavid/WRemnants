@@ -91,7 +91,7 @@ def niceName(name):
             ncoeff = int(coeffnum[0].split("AngCoeff")[1]) - 1
             coeffText = f"A_{{{ncoeff}}}"
         scale = "#mu_{R}#mu_{F}" if "muRmuF" in name else "#mu_{R}" if "muR" in name else "#mu_{F}"
-        return f"{boson}{chargetext} {coeffText} {ptText} {scale}"
+        return f"{boson}{chargeText} {coeffText} {ptText} {scale}"
     elif "CMS_" in name:
         return name
     else:  
