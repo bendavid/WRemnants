@@ -17,10 +17,10 @@ hist_map = {
     "ptll_mll" : "nominal",
 }
 
-def fakeHistABCD(h, thresholdMT=40.0, fakerate_integration_axes=[], axis_name_mt="mt", integrateMT=False):
+def fakeHistABCD(h, thresholdMT=40.0, fakerate_integration_axes=[], axis_name_mt="mt", integrateLowMT=True, integrateHighMT=False):
     # integrateMT=False keeps the mT axis in the returned histogram (can be used to have fakes vs mT)
 
-    nameMT, failMT, passMT = get_mt_selection(h, thresholdMT, axis_name_mt, integrateMT)
+    nameMT, failMT, passMT = get_mt_selection(h, thresholdMT, axis_name_mt, integrateLowMT, integrateHighMT)
 
     if any(a in h.axes.name for a in fakerate_integration_axes):
         fakerate_axes = [n for n in h.axes.name if n not in [*fakerate_integration_axes, common.passIsoName, nameMT]]
@@ -46,11 +46,11 @@ def fakeHistIsoRegionIntGen(h, scale=1.):
     print("Slicing")
     return h[{"iso" : 0, "qTgen" : s[::hist.sum]}]
 
-def signalHistWmass(h, thresholdMT=40.0, charge=None, passIso=common.passIso, passMT=True, axis_name_mt="mt", integrateMT=False, genBin=None):
+def signalHistWmass(h, thresholdMT=40.0, charge=None, passIso=common.passIso, passMT=True, axis_name_mt="mt", integrateLowMT=True, integrateHighMT=False, genBin=None):
     if genBin != None:
         h = h[{"recoil_gen" : genBin}]
 
-    nameMT, failMT, passMT = get_mt_selection(h, thresholdMT, axis_name_mt, integrateMT)
+    nameMT, failMT, passMT = get_mt_selection(h, thresholdMT, axis_name_mt, integrateLowMT, integrateHighMT)
 
     sel = {**passIso, nameMT: passMT}
     if charge in [-1, 1]:
@@ -86,19 +86,16 @@ def signalHistLowPileupW(h):
 def signalHistLowPileupZ(h):
     return h
 
-def get_mt_selection(h, thresholdMT=40.0, axis_name_mt="mt", integrateMT=False):
+def get_mt_selection(h, thresholdMT=40.0, axis_name_mt="mt", integrateLowMT=True, integrateHighMT=False):
     if axis_name_mt in h.axes.name:
         s = hist.tag.Slicer()
         high = h.axes[axis_name_mt].index(thresholdMT)
-        failMT = s[:high:hist.sum]
-        if integrateMT:
-            passMT = s[high::hist.sum]
-        else:
-            passMT = s[high:]
+        failMT = s[:high:hist.sum] if integrateLowMT else s[:high:]
+        passMT = s[high:hist.sum] if integrateHighMT else s[high:]
         nameMT = axis_name_mt
     else:
-        failMT = False
-        passMT = True
+        failMT = 0
+        passMT = 1
         nameMT = common.passMTName
 
     return nameMT, failMT, passMT

@@ -1,4 +1,4 @@
-from wremnants.combine_helpers import getTheoryFitData, setSimultaneousABCD
+from wremnants.combine_helpers import getTheoryFitData, setSimultaneousABCD, projectABCD
 from utilities import common, logging, output_tools
 import time
 import numpy as np
@@ -41,11 +41,9 @@ class HDF5Writer(object):
         self.clipSystVariations=False
         self.clipSystVariationsSignal=False
         if self.clipSystVariations>0.:
-            self.cliplow = -np.abs(np.log(clipSystVariations))
-            self.cliphigh = np.abs(np.log(clipSystVariations))
+            self.clip = np.abs(np.log(clipSystVariations))
         if self.clipSystVariationsSignal>0.:
-            self.cliplowSig = -np.abs(np.log(clipSystVariationsSignal))
-            self.cliphighSig = np.abs(np.log(clipSystVariationsSignal))
+            self.clipSig = np.abs(np.log(clipSystVariationsSignal))
 
 
     def set_fitresult(self, fitresult):
@@ -124,17 +122,20 @@ class HDF5Writer(object):
                         raise RuntimeError("No data or covariance found to perform theory fit")
                     data_obs = self.theoryFitData[chan]
                 else:
+                    data_obs_hist = dg.groups[dg.dataName].hists[chanInfo.nominalName]
+
                     if chanInfo.ABCD:
                         setSimultaneousABCD(chanInfo)
                         if dg.fakeName not in bkgs:
                             bkgs.append(dg.fakeName)
 
-                    data_obs_hist = dg.groups[dg.dataName].hists[chanInfo.nominalName]
+                    if chanInfo.ABCD and set(chanInfo.fakerateAxes) != set(chanInfo.project):
+                        data_obs = projectABCD(chanInfo, data_obs_hist)
+                    else:
+                        if data_obs_hist.axes.name != chanInfo.project:
+                            data_obs_hist = data_obs_hist.project(*chanInfo.project)
 
-                    if data_obs_hist.axes.name != chanInfo.project:
-                        data_obs_hist = data_obs_hist.project(*chanInfo.project)
-
-                    data_obs = data_obs_hist.values(flow=False).flatten().astype(self.dtype)
+                        data_obs = data_obs_hist.values(flow=False).flatten().astype(self.dtype)
 
                 dict_data_obs[chan] = data_obs
                 nbinschan = len(data_obs)
@@ -155,16 +156,18 @@ class HDF5Writer(object):
                 norm_proc_hist = dg.groups[proc].hists[chanInfo.nominalName]
 
                 if not masked:                
-
-                    if norm_proc_hist.axes != chanInfo.project:
-                        norm_proc_hist = norm_proc_hist.project(*chanInfo.project)
-                    
                     # check if variances are available
                     if norm_proc_hist.storage_type != hist.storage.Weight:
                         raise RuntimeError(f"Sumw2 not filled for {proc} but needed for binByBin uncertainties")
 
-                    norm_proc = norm_proc_hist.values(flow=False).flatten().astype(self.dtype)
-                    sumw2_proc = norm_proc_hist.variances(flow=False).flatten().astype(self.dtype)
+                    if chanInfo.ABCD and set(chanInfo.fakerateAxes) != set(chanInfo.project):
+                        norm_proc, sumw2_proc = projectABCD(chanInfo, norm_proc_hist, return_variances=True)
+                    else:
+                        if norm_proc_hist.axes != chanInfo.project:
+                            norm_proc_hist = norm_proc_hist.project(*chanInfo.project)
+
+                        norm_proc = norm_proc_hist.values(flow=False).flatten().astype(self.dtype)
+                        sumw2_proc = norm_proc_hist.variances(flow=False).flatten().astype(self.dtype)
                 else:
                     norm_proc = norm_proc_hist.values(flow=False).flatten().astype(self.dtype)
                     if norm_proc.shape[0] != nbinschan:
@@ -276,24 +279,23 @@ class HDF5Writer(object):
 
                         def get_logk(histname, var_type=""):
                             _hist = var_map[histname+var_type]
-                            if _hist.axes != chanInfo.project:
-                                _hist = _hist.project(*chanInfo.project)
-                            _syst = _hist.values(flow=False).flatten().astype(self.dtype)
-                            
-                            # check if there is a sign flip between systematic and variation
-                            # we do a multiplicative mirroring, if the up variation is on the same side as nominal, also the down variation is
-                            if var_type=="Down":
-                                _logk = -kfac*np.log(_syst/norm_proc)
-                                _logk_view = np.where(np.equal(np.sign(norm_proc*_syst),1), _logk, -self.logkepsilon*np.ones_like(_logk))
+
+                            if not masked and chanInfo.ABCD and set(chanInfo.fakerateAxes) != set(chanInfo.project):
+                                _syst = projectABCD(chanInfo, _hist)
                             else:
-                                _logk = kfac*np.log(_syst/norm_proc)
-                                _logk_view = np.where(np.equal(np.sign(norm_proc*_syst),1), _logk, self.logkepsilon*np.ones_like(_logk))
+                                if _hist.axes != chanInfo.project:
+                                    _hist = _hist.project(*chanInfo.project)
+                                _syst = _hist.values(flow=False).flatten().astype(self.dtype)
+                            
+                            # check if there is a sign flip between systematic and nominal
+                            _logk = kfac*np.log(_syst/norm_proc)
+                            _logk_view = np.where(np.equal(np.sign(norm_proc*_syst),1), _logk, self.logkepsilon*np.ones_like(_logk))
                             _syst = None
 
                             if self.clipSystVariations>0.:
-                                _logk = np.clip(_logk,self.cliplow,self.cliphigh)
+                                _logk = np.clip(_logk,-self.clip,self.clip)
                             if self.clipSystVariationsSignal>0. and proc in signals:
-                                _logk = np.clip(_logk,self.cliplowSig,self.cliphighSig)
+                                _logk = np.clip(_logk,-self.clipSig,self.clipSig)
 
                             return _logk_view
 
@@ -304,8 +306,8 @@ class HDF5Writer(object):
                             logkup_proc = get_logk(var_name, "Up")
                             logkdown_proc = get_logk(var_name, "Down")
 
-                            logkavg_proc = 0.5*(logkup_proc + logkdown_proc)
-                            logkhalfdiff_proc = 0.5*(logkup_proc - logkdown_proc)
+                            logkavg_proc = 0.5*(logkup_proc - logkdown_proc)
+                            logkhalfdiff_proc = 0.5*(logkup_proc + logkdown_proc)
 
                             logkup_proc = None
                             logkdown_proc = None
