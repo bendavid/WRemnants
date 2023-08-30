@@ -505,7 +505,7 @@ for axes in gen_axes_permutations:
             # for wlike the sample is randomly split in two based on reco charge
             this_scale = 2*scale if channel in ["plus", "minus"] and base_process=="Z" else scale
             if "xnorm" in name:
-                this_scale *= args.scaleXsec
+                this_scale /= args.scaleXsec
             h = hh.scaleHist(h, 1./this_scale)
             return h
 
@@ -537,7 +537,7 @@ for axes in gen_axes_permutations:
 
         if "xsec" in args.plots:
             plot_xsec_unfolded(data_c, edges, data_c_asimov, bin_widths=binwidths, channel=channel, scale=scale, normalize=args.normalize, process_label = process_label, axes=channel_axes,
-                hist_others=[hxnorm, hMiNNLO], label_others=["SCETlib+DYTurbo", "MiNNLO"], color_others=["blue", "red"]
+                hist_others=[hxnorm, hMiNNLO], label_others=[r"MiNNLO $\times$ SCETlib+DYTurbo", "MiNNLO"], color_others=["blue", "red"]
             )
 
         if "uncertainties" in args.plots:
