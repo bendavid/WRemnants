@@ -16,16 +16,16 @@ import h5py
 import narf
 import pdb
 
-generator_choices = ["horace-nlo", "horace-lo-photos", "horace-qed", "horace-lo", "winhac-nlo", "winhac-lo-photos", "winhac-lo", "MiNNLO"]
-
 parser = argparse.ArgumentParser()
-parser.add_argument("-i", "--input", type=str, default="w_z_gen_dists_scetlib_dyturboCorr_ewinput.hdf5", help="File containing EW hists")
-parser.add_argument("--nums", nargs="+", type=str, default=["horace-nlo"], choices=generator_choices, help="Numerators")
-parser.add_argument("--den", type=str, default="horace-lo-photos", choices=generator_choices, help="Denominatos")
+parser.add_argument("-i", "--input", nargs="+", type=str, default=["w_z_gen_dists_scetlib_dyturboCorr_ewinput.hdf5"], help="File containing EW hists")
+parser.add_argument("--nums", nargs="+", type=str, default=["horace-nlo"], help="Numerators")
+parser.add_argument("--den", type=str, default="horace-lo-photos", help="Denominatos")
 parser.add_argument("--normalize", action="store_true", default=False, help="Normalize distributions before computing ratio")
 parser.add_argument("--noSmoothing", action="store_true", default=False, help="Disable smoothing of corrections")
 parser.add_argument("--debug", action='store_true', help="Print debug output")
 parser.add_argument("--plots", nargs="*", type=str, default=["1D","2D"], choices=["1D","2D", "2Derr"], help="What plots to produce")
+parser.add_argument("--baseName", default="nominal_ew", type=str, help="histogram name")
+parser.add_argument("--project", default=["ewMll", "ewLogDeltaM"], nargs="*", type=str, help="axes to project to")
 parser.add_argument("--showFlow", action='store_true', help="Show underlfow and overflow bins in plots")
 parser.add_argument("--outpath", type=str, default=f"{common.data_dir}/TheoryCorrections", help="Output path")
 parser.add_argument("-o", "--plotdir", type=str, help="Output directory for plots")
@@ -49,24 +49,13 @@ text_dict = {
     "WminusToMuNu": r"$\mathrm{W}^-\rightarrow\mu\nu$"
 }
 
-base_name = 'nominal_ew'
-project = ["ewMll", "ewLogDeltaM"]
-
-# base_name = 'nominal_ewMlly'
-# project = ["ewMlly"]
-
+project = args.project
 
 # file created with `python WRemnants/scripts/histmakers/w_z_gen_dists.py --skipAngularCoeffs --filter horace -p ewinput`
-f = h5py.File(args.input, 'r')
-res = narf.ioutils.pickle_load_h5py(f["results"])
+
+res, meta, _ = input_tools.read_infile(args.input)
 
 corrh = {}
-
-try:
-    meta = input_tools.get_metadata(args.input)
-except ValueError as e:
-    logger.warning(f"No meta data found for file {args.input}")
-    pass
 
 labels = {
     "ewMll": "$m_{\ell\ell}$", 
@@ -139,10 +128,10 @@ def make_plot_2d(h, name, proc, plot_error=False, cmin=None, cmax=None, flow=Tru
     if log:
         plot_name += "_log"
     plot_tools.save_pdf_and_png(args.plotdir, plot_name)
-    plot_tools.write_index_and_log(args.plotdir, plot_name, args=args, analysis_meta_info=meta)
+    plot_tools.write_index_and_log(args.plotdir, plot_name, args=args, analysis_meta_info=meta[0])
 
-def make_plot_1d(hists, name, proc, axis, ratio=False, normalize=False, ymin=None, ymax=None, flow=True, density=False):
-    logger.info(f"Make 1D plot for {name} with axes {axis}")
+def make_plot_1d(hists, name, proc, axis, ratio=False, normalize=False, xmin=None, xmax=None, ymin=None, ymax=None, flow=True, density=False):
+    logger.info(f"Make 1D plot for {name} with axis {axis}")
 
     if not isinstance(hists, list):
         hists = [hists]
@@ -206,12 +195,15 @@ def make_plot_1d(hists, name, proc, axis, ratio=False, normalize=False, ymin=Non
 
         # outname += f"_{name[i]}"
 
+    if xmin is not None:
+        ax.set_xlim(xmin, xmax)
+
     ax.text(1.0, 1.003, text_dict[proc], transform=ax.transAxes, fontsize=30,
             verticalalignment='bottom', horizontalalignment="right")
-    plot_tools.addLegend(ax, text_size=16)
+    plot_tools.addLegend(ax, ncols=2, text_size=12)
 
     output_tools.make_plot_dir(*args.plotdir.rsplit("/", 1))
-    plot_name = f"hist{outname}_{axis}_{proc}"
+    plot_name = f"hist{outname}_{axis}_{proc}_{name[-1]}"
     if ratio:
         plot_name += "_div"
     if args.noSmoothing and "_div_" in name[0]:
@@ -219,7 +211,7 @@ def make_plot_1d(hists, name, proc, axis, ratio=False, normalize=False, ymin=Non
     if args.normalize:
         plot_name += "_normalize"
     plot_tools.save_pdf_and_png(args.plotdir, plot_name)
-    plot_tools.write_index_and_log(args.plotdir, plot_name, args=args, analysis_meta_info=meta)
+    plot_tools.write_index_and_log(args.plotdir, plot_name, args=args, analysis_meta_info=meta[0])
 
 for proc in procs:
 
@@ -234,15 +226,15 @@ for proc in procs:
         if proc_name not in res:
             return None
 
-        histo = res[proc_name]['output'][base_name].get()
+        histo = res[proc_name]['output'][args.baseName].get()
         logger.info(f'Integrals for {name} {np.sum(histo.values(flow=True))}')
 
         if args.normalize:
             histo = hh.normalize(histo)
-            logger.info(f'Integrals for {name} after normalizing {np.sum(histo.values(flow=True))}')
+            logger.info(f'Integral for {name} after normalizing {np.sum(histo.values(flow=True))}')
         else:
-            histo = hh.scaleHist(histo, 10e6/res[proc_name]['event_count'], createNew=False)
-            logger.info(f'Integrals for {name} after scaling {np.sum(histo.values(flow=True))}')
+            histo = hh.scaleHist(histo, res[proc_name]["dataset"]["xsec"]*10e6/res[proc_name]['weight_sum'], createNew=False)
+            logger.info(f'Integral for {name} after scaling {np.sum(histo.values(flow=True))}')
 
         return histo
     
@@ -270,10 +262,11 @@ for proc in procs:
         hratio = hh.divideHists(hnum, hden)
         if not args.noSmoothing:
             hratio = hh.smoothTowardsOne(hratio)
-            scale = np.sum(hden.values(flow=True)) / np.sum(hden.values(flow=True)*hratio.values(flow=True))
-            logger.info('Adjustment after smoothing {0}'.format(scale))
-            hratio = hh.scaleHist(hratio, scale)
-            logger.info('Integrals after adjustment {0} {1}'.format(np.sum(hden.values(flow=True)), np.sum(hden.values(flow=True)*hratio.values(flow=True))))
+            logger.info('Integrals after smoothing {0} {1}'.format(np.sum(hden.values(flow=True)), np.sum(hden.values(flow=True)*hratio.values(flow=True))))
+            if args.normalize:
+                scale = np.sum(hden.values(flow=True)) / np.sum(hden.values(flow=True)*hratio.values(flow=True))
+                hratio = hh.scaleHist(hratio, scale)
+                logger.info('Integrals after adjustment {0} {1}'.format(np.sum(hden.values(flow=True)), np.sum(hden.values(flow=True)*hratio.values(flow=True))))
 
         # Add dummy axis
         axis_dummy = hist.axis.Regular(1, -10., 10., underflow=False, overflow=False, name = "dummy")
@@ -299,9 +292,10 @@ for proc in procs:
         hones.values(flow=True)[...,charge_dict[proc]] = np.ones(hdummy.values(flow=True).shape)
         hmirror = hist.Hist(*hratio.axes, storage=hist.storage.Double())
         hmirror.values(flow=True)[...] = 2*hratio.values(flow=True) - hones.values(flow=True)
-        mirrorscale = np.sum(hden.values(flow=True)) / np.sum(hden.values(flow=True)*hmirror.values(flow=True)[...,0,charge_dict[proc]])
-        # logger.info(f'{proc} mirrorscale = {mirrorscale}')
-        hmirror = hh.scaleHist(hmirror, mirrorscale)
+        if args.normalize:
+            mirrorscale = np.sum(hden.values(flow=True)) / np.sum(hden.values(flow=True)*hmirror.values(flow=True)[...,0,charge_dict[proc]])
+            logger.info(f'{proc} mirrorscale = {mirrorscale}')
+            hmirror = hh.scaleHist(hmirror, mirrorscale)
         corrh[proc].values(flow=True)[...,0] = hones.values(flow=True)
         corrh[proc].values(flow=True)[...,1] = hratio.values(flow=True)
         corrh[proc].values(flow=True)[...,2] = hmirror.values(flow=True)
@@ -328,15 +322,20 @@ for proc in procs:
         logger.info("Make 1D control plots")
 
         for ax in project:
-            if ax in ["ewMll", "ewMlly"]:
+            # xmin, xmax = 60, 120
+            xmin, xmax = None, None
+
+            if ax in ["ewMll", "Mll"]:
+                ymin, ymax = 0.95, 1.05
+            elif ax in ["ewMlly", "Mlly"]:
                 ymin, ymax = 0.8, 1.2
             else:
                 ymin, ymax = 0, 2
 
             hratios1D = [hh.divideHists(hnum.project(ax), hden.project(ax)) for hnum in hnums]
 
-            make_plot_1d(hratios1D, [f"{n}_div_{args.den}" for n in nums], proc, ax, ymin=ymin, ymax=ymax, ratio=True)
-            make_plot_1d([*hnums, hden], [*nums, args.den], proc, ax, ymin=0, density=False)
+            make_plot_1d([*hnums, hden], [*nums, args.den], proc, ax, xmin=xmin, xmax=xmax, ymin=0, density=False)
+            make_plot_1d(hratios1D, [f"{n}_div_{args.den}" for n in nums], proc, ax, xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax, ratio=True)
 
 for num, corrh in corrhs.items():
     outname = num.replace('-', '') + 'ew'

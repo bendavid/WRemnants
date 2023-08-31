@@ -7,6 +7,7 @@ parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for lumin
 parser.add_argument("--flavor", type=str, choices=["e", "mu"], help="Flavor (e or mu)", default="mu")
 
 parser = common.set_parser_default(parser, "genVars", ["ptVGen"])
+parser = common.set_parser_default(parser, "theoryCorr", ["scetlib_dyturbo", "winhacnloew"])
 args = parser.parse_args()
 
 
@@ -52,9 +53,12 @@ ROOT.gInterpreter.Declare('#include "lowpu_rochester.h"')
 ROOT.gInterpreter.Declare('#include "lowpu_recoil.h"')
 ROOT.gInterpreter.Declare('#include "electron_selections.h"')
 
+# axes used in fakerate calculation
+axis_fakerate_pt = hist.axis.Variable([26., 27., 28., 29., 30., 32., 34., 37., 40., 44., 49., 56.], name = "pt", underflow=False)
+axis_fakerate_eta = hist.axis.Regular(12, -2.4, 2.4, name = "eta", underflow=False, overflow=False)
 
 # standard regular axes
-axis_eta = hist.axis.Regular(24, -2.4, 2.4, name = "eta", underflow=False, overflow=False)
+axis_eta = hist.axis.Regular(args.eta[0], args.eta[1], args.eta[2], name = "eta", underflow=False, overflow=False)
 axis_pt = hist.axis.Regular(args.pt[0], args.pt[1], args.pt[2], name = "pt", underflow=False)
 axis_phi = hist.axis.Regular(50, -4, 4, name = "phi")
 axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "charge")
@@ -83,18 +87,19 @@ if args.unfolding:
 
 # axes for final cards/fitting
 nominal_axes = [
-    hist.axis.Variable([0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 25, 30, 40, 50, 60, 75, 90, 150], name = "ptll", underflow=False, overflow=True),
-    axis_charge, axis_passMT, axis_passIso]
+    axis_fakerate_pt, axis_fakerate_eta, axis_charge, 
+    hist.axis.Variable([0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 25, 30, 40, 50, 60, 75, 90, 150], name = "ptll", underflow=False, overflow=True),    
+    axis_passIso, axis_passMT]
 
 # corresponding columns
-nominal_cols = ["ptll", "lep_charge", "passMT", "passIso"]
+nominal_cols = ["lep_pt", "lep_eta", "lep_charge", "ptll", "passIso",  "passMT"]
 
 # mt final cards/fitting
 axis_mT = hist.axis.Variable([0] + list(range(40, 110, 1)) + [110, 112, 114, 116, 118, 120, 125, 130, 140, 160, 180, 200], name = "mt",underflow=False, overflow=True)
 axis_mT = hist.axis.Regular(100, 0, 200, name = "mt", underflow=False)
 
-axes_mT = [axis_mT, axis_charge, axis_passMT, axis_passIso]
-cols_mT = ["transverseMass", "lep_charge", "passMT", "passIso"]
+axes_mT = [axis_fakerate_pt, axis_fakerate_eta, axis_charge, axis_mT, axis_passIso]
+cols_mT = ["lep_pt", "lep_eta", "lep_charge", "transverseMass",  "passIso"]
 
 # reco_mT_axes = [common.axis_recoil_reco_ptW_lowpu, common.axis_mt_lowpu, axis_charge, axis_passMT, axis_passIso]
 # gen_reco_mT_axes = [common.axis_recoil_gen_ptW_lowpu, common.axis_recoil_reco_ptW_lowpu, common.axis_mt_lowpu, axis_charge, axis_passMT, axis_passIso]
@@ -268,7 +273,6 @@ def build_graph(df, dataset):
     results.append(df.HistoBoost("lep_pt", [axis_pt, axis_charge, axis_passMT, axis_passIso], ["lep_pt", "lep_charge", "passMT", "passIso", "nominal_weight"]))
     results.append(df.HistoBoost("lep_eta", [axis_eta, axis_charge, axis_passMT, axis_passIso], ["lep_eta", "lep_charge", "passMT", "passIso", "nominal_weight"]))
     results.append(df.HistoBoost("lep_phi", [axis_phi, axis_charge, axis_passMT, axis_passIso], ["lep_phi", "lep_charge", "passMT", "passIso", "nominal_weight"]))
-    results.append(df.HistoBoost("lep_pt", [axis_pt, axis_charge, axis_passMT, axis_passIso], ["lep_pt", "lep_charge", "passMT", "passIso", "nominal_weight"]))
     results.append(df.HistoBoost("lep_iso", [axis_iso], ["lep_iso", "nominal_weight"]))
    
     # results.append(df.HistoBoost("qcd_space", [axis_pt, axis_eta, axis_iso, axis_charge, axis_mT], ["lep_pt", "lep_eta", "lep_iso", "lep_charge", "transverseMass", "nominal_weight"]))  

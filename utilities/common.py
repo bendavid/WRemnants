@@ -152,7 +152,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--widthVariations", action='store_true', help="Store variations of W and Z widths.")   
     parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")
     parser.add_argument("--eta", nargs=3, type=float, help="Eta binning as 'nbins min max' (only uniform for now)", default=[48,-2.4,2.4])
-    parser.add_argument("--pt", nargs=3, type=float, help="Pt binning as 'nbins,min,max' (only uniform for now)", default=[29,26.,55.])
+    parser.add_argument("--pt", nargs=3, type=float, help="Pt binning as 'nbins,min,max' (only uniform for now)", default=[30,26.,56.])
     parser.add_argument("--noRecoil", action='store_true', help="Don't apply recoild correction")
     parser.add_argument("--recoilHists", action='store_true', help="Save all recoil related histograms for calibration and validation")
     parser.add_argument("--highptscales", action='store_true', help="Apply highptscales option in MiNNLO for better description of data at high pT")

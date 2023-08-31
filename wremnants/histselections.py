@@ -2,9 +2,11 @@ import hist
 import numpy as np
 from utilities.input_tools import safeOpenRootFile, safeGetRootObject
 from utilities import boostHistHelpers as hh
-from utilities.common import passMT, failMT, passIso, failIso
+from utilities import common, logging
 import narf
 import ROOT
+
+logger = logging.child_logger(__name__)
 
 hist_map = {
     "eta_pt" : "nominal",
@@ -15,39 +17,33 @@ hist_map = {
     "ptll_mll" : "nominal",
 }
 
-def fakeHistABCD(h, low_PU=False,
-                 boolMT=True, thresholdMT=40.0, axisNameMT="mt", integrateMT=True):
-    # boolMT=False generalizes the method when mT is a real axis (i.e. no need for passMT)
+def fakeHistABCD(h, thresholdMT=40.0, fakerate_integration_axes=[], axis_name_mt="mt", integrateMT=False):
     # integrateMT=False keeps the mT axis in the returned histogram (can be used to have fakes vs mT)
-    if low_PU and "mt" in [ax.name for ax in h.axes]:
-        return h[{**failIso, **passMT}]*h[{**passIso, **failMT}].sum().value / h[{**failIso, **failMT}].sum().value
 
-    elif boolMT:
-        return hh.multiplyHists(
-            hh.divideHists(h[{**passIso, **failMT}],
-                           h[{**failIso, **failMT}],
-                           cutoff=1,
-                           createNew=True,
-                           ),
-            #where=h[{"passIso" : False, "passMT" : True}].values(flow=True)>1),
-            h[{"passIso" : False, "passMT" : True}],
-        )
-    else:
+    if axis_name_mt in h.axes.name:
         s = hist.tag.Slicer()
-        hFRF = hh.divideHists(h[{**passIso,  axisNameMT : s[0:complex(0,thresholdMT):hist.sum]}], 
-                              h[{**failIso, axisNameMT : s[0:complex(0,thresholdMT):hist.sum]}],
-                              cutoff=1,
-                              createNew=True,
-                              )
+        low = hist.underflow if h.axes[axis_name_mt].traits.underflow else 0
+        failMT = {axis_name_mt : s[low:complex(0,thresholdMT):hist.sum]}
         if integrateMT:
-            return hh.multiplyHists(hFRF,
-                                    h[{**failIso, axisNameMT : s[complex(0,thresholdMT):hist.overflow:hist.sum]}]
-                                    )
+            passMT = {axis_name_mt : s[complex(0,thresholdMT):hist.overflow:hist.sum]}
         else:
-            return hh.multiplyHists(hFRF,
-                                    h[{**failIso, axisNameMT : s[complex(0,thresholdMT):hist.overflow]}],
-                                    )
-        
+            passMT = {axis_name_mt : s[complex(0,thresholdMT):hist.overflow]}
+    else:
+        failMT = common.failMT
+        passMT = common.passMT
+
+    if any(a in h.axes.name for a in fakerate_integration_axes):
+        fakerate_axes = [n for n in h.axes.name if n not in [*fakerate_integration_axes, common.passIsoName, *failMT.keys()]]
+        hPassIsoFailMT = h[{**common.passIso, **failMT}].project(*fakerate_axes)
+        hFailIsoFailMT = h[{**common.failIso, **failMT}].project(*fakerate_axes)
+    else:
+        hPassIsoFailMT = h[{**common.passIso, **failMT}]
+        hFailIsoFailMT = h[{**common.failIso, **failMT}]
+
+    hFRF = hh.divideHists(hPassIsoFailMT, hFailIsoFailMT, cutoff=1, createNew=True)   
+
+    return hh.multiplyHists(hFRF, h[{**common.failIso, **passMT}])
+    
 def fakeHistIsoRegion(h, scale=1.):
     #return h[{"iso" : 0.3j, "mt" : hist.rebin(10)}]*scale
     return h[{"iso" : 4}]*scale
@@ -60,9 +56,16 @@ def fakeHistIsoRegionIntGen(h, scale=1.):
     print("Slicing")
     return h[{"iso" : 0, "qTgen" : s[::hist.sum]}]
 
-def signalHistWmass(h, charge=None, passIso=passIso, passMT=passMT, genBin=None):
+def signalHistWmass(h, thresholdMT=40.0, charge=None, passIso=common.passIso, passMT=common.passMT, axis_name_mt="mt", integrateMT=False, genBin=None):
     if genBin != None:
         h = h[{"recoil_gen" : genBin}]
+
+    if axis_name_mt in h.axes.name:
+        s = hist.tag.Slicer()
+        if integrateMT:
+            passMT = {axis_name_mt : s[complex(0,thresholdMT):hist.overflow:hist.sum]}
+        else:
+            passMT = {axis_name_mt : s[complex(0,thresholdMT):hist.overflow]}
 
     sel = {**passIso, **passMT}
     if charge in [-1, 1]:
@@ -77,16 +80,16 @@ def signalHistWmass(h, charge=None, passIso=passIso, passMT=passMT, genBin=None)
 
 # the following are utility wrapper functions for signalHistWmass with proper region selection
 def histWmass_failMT_passIso(h, charge=None):
-    return signalHistWmass(h, charge, passIso, failMT)
+    return signalHistWmass(h, charge, common.passIso, common.failMT)
 
 def histWmass_failMT_failIso(h, charge=None):
-    return signalHistWmass(h, charge, failIso, failMT)
+    return signalHistWmass(h, charge, common.failIso, common.failMT)
 
 def histWmass_passMT_failIso(h, charge=None):
-    return signalHistWmass(h, charge, failIso, passMT)
+    return signalHistWmass(h, charge, common.failIso, common.passMT)
 
 def histWmass_passMT_passIso(h, charge=None):
-    return signalHistWmass(h, charge, passIso, passMT)
+    return signalHistWmass(h, charge, common.passIso, common.passMT)
 
 # TODO: Not all hists are made with these axes
 def signalHistLowPileupW(h):

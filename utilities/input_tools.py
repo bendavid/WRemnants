@@ -395,7 +395,6 @@ def args_from_metadata(card_tool, arg):
     return meta_data["args"][arg]
 
 def get_metadata(infile):
-    import narf
     results = None
     if infile.endswith(".pkl.lz4"):
         with lz4.frame.open(infile) as f:
@@ -405,9 +404,37 @@ def get_metadata(infile):
             results = pickle.load(f)
     elif infile.endswith(".hdf5"):
         h5file = h5py.File(infile, "r")
-        results = narf.ioutils.pickle_load_h5py(h5file["results"])
+        results = ioutils.pickle_load_h5py(h5file["results"])
 
     if not results:
         raise ValueError("Failed to find results dict. Note that only pkl, hdf5, and pkl.lz4 file types are supported")
 
     return results["meta_info"] if "meta_info" in results else results["meta_data"]
+
+def read_infile(input):
+    # read histogramer input file(s)
+    result = {}
+    meta = []
+    infiles = []
+    if isinstance(input, list):
+        for inpt in input:
+            r, m, h = read_infile(inpt)
+            result.update(r)
+            meta += m
+            infiles += h
+        return result, meta, infiles
+    
+    logger.info(f"Load {input}")
+    if input.endswith(".pkl.lz4"):
+        with lz4.frame.open(input) as f:
+            result = pickle.load(f)
+    elif input.endswith(".hdf5"):
+        h5file = h5py.File(input, "r")
+        infiles = [h5file]
+        result = ioutils.pickle_load_h5py(h5file["results"])
+    else:
+        raise ValueError("Unsupported file type")
+
+    meta = result["meta_info"] if "meta_info" in result else result["meta_data"]
+
+    return result, [meta], [infiles]
