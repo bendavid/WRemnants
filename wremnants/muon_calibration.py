@@ -661,7 +661,7 @@ def add_jpsi_crctn_stats_unc_hists(
                 f"{reco_sel_GF}_genPt",
                 f"{reco_sel_GF}_genEta",
                 f"{reco_sel_GF}_genCharge",
-                "dweightdqoprs",
+                f"{reco_sel_GF}_dweightdqoprs",
                 "nominal_weight"
             ]
         )
@@ -736,7 +736,7 @@ def add_jpsi_crctn_Z_non_closure_hists(
             f"{reco_sel_GF}_genPt",
             f"{reco_sel_GF}_genEta",
             f"{reco_sel_GF}_genCharge",
-            "dweightdqoprs"
+            f"{reco_sel_GF}_dweightdqoprs"
         ]
         nominal_cols_non_closure = nominal_cols
     else:
