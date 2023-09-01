@@ -131,6 +131,9 @@ vertex_helper = wremnants.make_vertex_helper(era = era)
 
 calib_filepaths = common.calib_filepaths
 closure_filepaths = common.closure_filepaths
+
+diff_weights_helper = ROOT.wrem.SplinesDifferentialWeightsHelper(calib_filepaths['tflite_file']) if (args.muonScaleVariation == 'smearingWeightsSplines' or args.validationHists) else None
+
 mc_jpsi_crctn_helper, data_jpsi_crctn_helper, jpsi_crctn_MC_unc_helper, jpsi_crctn_data_unc_helper = muon_calibration.make_jpsi_crctn_helpers(args, calib_filepaths, make_uncertainty_helper=True)
 
 z_non_closure_parametrized_helper, z_non_closure_binned_helper = muon_calibration.make_Z_non_closure_helpers(args, calib_filepaths, closure_filepaths)
@@ -433,6 +436,18 @@ def build_graph(df, dataset):
             ####################################################
             # nuisances from the muon momemtum scale calibration 
             if (args.muonCorrData in ["massfit", "lbl_massfit"]):
+                if diff_weights_helper:
+                    df = df.Define(f'{reco_sel_GF}_dweightdqoprs', diff_weights_helper,
+                        [
+                            f"{reco_sel_GF}_recoPt",
+                            f"{reco_sel_GF}_recoEta",
+                            f"{reco_sel_GF}_recoCharge",
+                            f"{reco_sel_GF}_genPt",
+                            f"{reco_sel_GF}_genEta",
+                            f"{reco_sel_GF}_genCharge"
+                        ]
+                    )
+
                 # muon scale variation from stats. uncertainty on the jpsi massfit
                 df = muon_calibration.add_jpsi_crctn_stats_unc_hists(
                     args, df, axes, results, nominal_cols, nominal_cols_gen_smeared,
