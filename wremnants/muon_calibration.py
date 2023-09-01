@@ -661,6 +661,7 @@ def add_jpsi_crctn_stats_unc_hists(
                 f"{reco_sel_GF}_genPt",
                 f"{reco_sel_GF}_genEta",
                 f"{reco_sel_GF}_genCharge",
+                "dweightdqoprs",
                 "nominal_weight"
             ]
         )
@@ -734,7 +735,8 @@ def add_jpsi_crctn_Z_non_closure_hists(
             f"{reco_sel_GF}_recoCharge",
             f"{reco_sel_GF}_genPt",
             f"{reco_sel_GF}_genEta",
-            f"{reco_sel_GF}_genCharge"
+            f"{reco_sel_GF}_genCharge",
+            "dweightdqoprs"
         ]
         nominal_cols_non_closure = nominal_cols
     else:
@@ -744,7 +746,7 @@ def add_jpsi_crctn_Z_non_closure_hists(
             f"{reco_sel_GF}_genSmearedEta",
             f"{reco_sel_GF}_genSmearedPt",
             f"{reco_sel_GF}_genSmearedCharge",
-            f"{reco_sel_GF}_covMat",
+            f"{reco_sel_GF}_covMat"
         ]
         nominal_cols_non_closure = nominal_cols_gen_smeared
     if args.nonClosureScheme == "A-M-separated":
