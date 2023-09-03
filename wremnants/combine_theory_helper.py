@@ -36,6 +36,7 @@ class TheoryHelper(object):
     def configure(self, resumUnc, np_model,
             propagate_to_fakes=True, 
             tnp_magnitude=1,
+            tnp_scale=1.,
             mirror_tnp=True,
             pdf_from_corr=False,
             pdf_action=None,
@@ -47,6 +48,7 @@ class TheoryHelper(object):
         self.set_propagate_to_fakes(propagate_to_fakes)
 
         self.tnp_magnitude = tnp_magnitude
+        self.tnp_scale = tnp_scale
         self.mirror_tnp = mirror_tnp
         self.pdf_from_corr = pdf_from_corr
         self.pdf_action = pdf_action
@@ -55,7 +57,7 @@ class TheoryHelper(object):
 
     def add_all_theory_unc(self):
         self.add_nonpert_unc(model=self.np_model)
-        self.add_resum_unc(magnitude=self.tnp_magnitude, mirror=self.mirror_tnp)
+        self.add_resum_unc(magnitude=self.tnp_magnitude, mirror=self.mirror_tnp, scale=self.tnp_scale)
         self.add_pdf_uncertainty(from_corr=self.pdf_from_corr, action=self.pdf_action, scale=self.scale_pdf_unc)
 
     def set_resum_unc_type(self, resumUnc):

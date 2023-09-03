@@ -326,6 +326,7 @@ def setup(args,xnorm=False):
         propagate_to_fakes=to_fakes,
         np_model=args.npUnc,
         tnp_magnitude=args.tnpMagnitude,
+        tnp_scale = args.scaleTNP,
         mirror_tnp=True,
         pdf_from_corr=args.pdfUncFromCorr,
         scale_pdf_unc=args.scalePdf,
