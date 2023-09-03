@@ -31,12 +31,22 @@ utilities = utilitiesCMG.util()
 
 from scripts.analysisTools.plotUtils.utility import *
 
-logger = logging.child_logger(__name__)
+def getBetterLabel(k, isWlike):
+    if k == "binByBinStat":
+        label = "MC_stat" if isWlike else "MCandFakes_stat"
+    elif k == "stat":
+        label = "data_stat"
+    else:
+        label = k
+    return label
 
-def readNuisances(args, infile=None):
+def readNuisances(args, infile=None, logger=None):
 
     if infile is None:
         infile = args.rootfile[0]
+
+    if logger == None:
+        logger = logging.setup_logger(os.path.basename(__file__), 3)
 
     logger.info(f"Starting with file {infile} ...")
 
@@ -110,6 +120,7 @@ if __name__ == "__main__":
     parser.add_argument(     '--justPrint', action='store_true', help='Print without plotting')
     args = parser.parse_args()
 
+    logger = logging.setup_logger(os.path.basename(__file__), 3)
     # palettes:
     # 69 + inverted, using TColor::InvertPalette(), kBeach
     # 70 + inverted, using TColor::InvertPalette(), kBlackBody
@@ -158,12 +169,12 @@ if __name__ == "__main__":
         error_msg = "--printAltVal only works with --compareFile. Please try again"
         raise IOError(error_msg)
     
-    totalUncertainty_mW, nuisGroup_nameVal = readNuisances(args, args.rootfile[0])
+    totalUncertainty_mW, nuisGroup_nameVal = readNuisances(args, args.rootfile[0], logger=logger)
     if args.setStat > 0.0:
         nuisGroup_nameVal["stat"] = args.setStat
 
     if compare:
-        totalUncertainty_mW_alt, nuisGroup_nameVal_alt = readNuisances(args, args.compareFile)
+        totalUncertainty_mW_alt, nuisGroup_nameVal_alt = readNuisances(args, args.compareFile, logger=logger)
         if args.setStatAlt > 0.0:
             nuisGroup_nameVal_alt["stat"] = args.setStatAlt
 
@@ -188,19 +199,15 @@ if __name__ == "__main__":
     #h1.GetYaxis().SetTitle("")
     for ik,k in enumerate(sortedGroups):
         bincontent = nuisGroup_nameVal[k] if not args.scaleToMeV else nuisGroup_nameVal[k] * args.prefitUncertainty
+        label = getBetterLabel(k, args.isWlike)
         if compare:
             #print(k)
             #bincontentAlt = nuisGroup_nameVal_alt[k.replace("QCDscaleWPtHelicityMiNNLO","QCDscalePtHelicityMiNNLO")]
             bincontentAlt = nuisGroup_nameVal_alt[k]
             if args.scaleToMeV: bincontentAlt *= args.prefitUncertainty
-            logger.info("%s: %2.3f / %2.3f" % (k, bincontent, bincontentAlt))
+            logger.info("%s: %2.3f / %2.3f" % (label, bincontent, bincontentAlt))
         else:
-            logger.info("%s: %2.3f" % (k, bincontent))
-        label = k
-        if k == "binByBinStat":
-            label = "MCandFakes_stat"
-        elif k == "stat":
-            label = "data_stat"
+            logger.info("%s: %2.3f" % (label, bincontent))
         h1.GetXaxis().SetBinLabel(ik+1, label)
         h1.SetBinContent(ik+1,bincontent)
         if compare:
