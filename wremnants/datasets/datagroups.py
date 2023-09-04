@@ -428,7 +428,7 @@ class Datagroups(object):
     def loadHistsForDatagroups(
         self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="",
         nominalIfMissing=True, applySelection=True, fakerateIntegrationAxes=[], forceNonzero=True, pseudodata=False,
-        preOpMap={}, preOpArgs={}, scaleToNewLumi=1, forceToNominal=[], sum_axes[],
+        preOpMap={}, preOpArgs={}, scaleToNewLumi=1, forceToNominal=[], sum_axes=[],
     ):
         logger.debug("Calling loadHistsForDatagroups()")
         logger.debug(f"The basename and syst is: {baseName}, {syst}")
