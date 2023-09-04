@@ -53,10 +53,8 @@ def plotImpacts(df, pulls=False, POI='Wmass', normalize=False, oneSidedImpacts=F
         impact_title=r"$\delta (\mathrm{d} \sigma / \sigma)$" if normalize else r"$\Delta(\mathrm{d} \sigma / \sigma)$"
 
     pulls = pulls 
-    print(df)
     impacts = bool(np.count_nonzero(df['absimpact']))
     ncols = pulls+impacts
-    print("Number of cols", ncols)
     fig = make_subplots(rows=1,cols=ncols,
             horizontal_spacing=0.1, shared_yaxes=ncols > 1)
 
@@ -74,7 +72,6 @@ def plotImpacts(df, pulls=False, POI='Wmass', normalize=False, oneSidedImpacts=F
         height=100*(ndisplay<100)+ndisplay*20.5,width=800,
     )
 
-    print("Impacts is", impacts)
     if impacts:
         fig.add_trace(
             go.Bar(
@@ -273,7 +270,6 @@ def producePlots(rtfile, args, POI='Wmass', normalize=False):
     group = args.mode == "group"
     if not (group and args.output_mode == 'output'):
         dataframe = readFitInfoFromFile(rtfile, args.inputFile, False, sort=args.sort, ascending=args.ascending, stat=args.stat/100., POI=POI, normalize=normalize)
-        print(dataframe)
     elif group:
         groupsdataframe = readFitInfoFromFile(rtfile, args.inputFile, True, sort=args.sort, ascending=args.ascending, stat=args.stat/100., POI=POI, normalize=normalize)
 
