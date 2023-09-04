@@ -71,8 +71,10 @@ jobs:
           submodules: 'recursive'
           lfs: 'true'
 
-      - name: check Xrootd
+      - name: setup kerberos
         run: |
+          kinit -kt ~/private/.keytab cmsmwbot
+          klist -k -t -e ~/private/.keytab
           echo "xrdfs root://eosuser.cern.ch// ls $EOS_DIR"
           xrdfs root://eosuser.cern.ch// ls $EOS_DIR
 
