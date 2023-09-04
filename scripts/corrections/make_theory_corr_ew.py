@@ -58,10 +58,17 @@ res, meta, _ = input_tools.read_infile(args.input)
 corrh = {}
 
 labels = {
-    "ewMll": "$m_{\ell\ell}$", 
-    "ewMlly": "$m_{\ell\ell\gamma}$", 
-    "ewLogDeltaM": "$\log_{10}(m_{\ell\ell\gamma} - m_{\ell\ell})$"
+    "PTll": r"$p_\mathrm{T}^{\ell\ell}$",
+    "Yll": r"$Y^{\ell\ell}$", 
+    "Mll": r"$m^{\ell\ell}$", 
+    "ewMll": r"$m^{\ell\ell}$", 
+    "PTlly": r"$p_\mathrm{T}^{\ell\ell\gamma}$", 
+    "Ylly": r"$Y^{\ell\ell\gamma}$", 
+    "Mlly": r"$m^{\ell\ell\gamma}$", 
+    "ewMlly": r"$m^{\ell\ell\gamma}$",
+    "ewLogDeltaM": r"$\log_{10}(m^{\ell\ell\gamma} - m^{\ell\ell})$"
 }
+
 
 colors = mpl.colormaps["tab10"]
 
@@ -82,13 +89,19 @@ def make_plot_2d(h, name, proc, plot_error=False, cmin=None, cmax=None, flow=Tru
 
     if flow:
         # add extra bin with bin wdith of 1% of total width
-        rangex = xbins[-1] - xbins[0]
-        xbins = np.insert(xbins, 0, xbins[0] - rangex*0.02)
-        xbins = np.append(xbins, xbins[-1] + rangex*0.02)
+        rangex = xbins[-1] - xbins[0]            
+        if h2d.axes[0].traits.underflow:
+            xbins = np.insert(xbins, 0, xbins[0] - rangex*0.02)
+        if h2d.axes[0].traits.overflow:
+            xbins = np.append(xbins, xbins[-1] + rangex*0.02)
+
 
         rangey = ybins[-1] - ybins[0]
-        ybins = np.insert(ybins, 0, ybins[0] - rangey*0.02)
-        ybins = np.append(ybins, ybins[-1] + rangey*0.02)
+        if h2d.axes[1].traits.underflow:
+            ybins = np.insert(ybins, 0, ybins[0] - rangey*0.02)
+        if h2d.axes[1].traits.overflow:
+            ybins = np.append(ybins, ybins[-1] + rangey*0.02)
+
 
     # z = h2d.values(flow=flow).T
 
@@ -140,7 +153,7 @@ def make_plot_1d(hists, name, proc, axis, ratio=False, normalize=False, xmin=Non
     h1ds = [h.project(axis) for h in hists]
 
     if normalize:
-        h1ds = [h/np.sum(h.values(flow=True)) for h in h1ds]
+        h1ds = [h/np.sum(h.values(flow=flow)) for h in h1ds]
     if density:
         for i, h1d in enumerate(h1ds):
             x = h1d.axes.edges[0]
@@ -184,8 +197,10 @@ def make_plot_1d(hists, name, proc, axis, ratio=False, normalize=False, xmin=Non
             # add extra bin with bin wdith of 1% of total width
             rangex = x[-1] - x[0]
 
-            x = np.insert(x, 0, x[0] - rangex*0.02)
-            x = np.append(x, x[-1] + rangex*0.02)
+            if h1d.axes[0].traits.underflow:
+                x = np.insert(x, 0, x[0] - rangex*0.02)
+            if h1d.axes[0].traits.overflow:
+                x = np.append(x, x[-1] + rangex*0.02)
 
         if args.showFlow:
             ax.set_xlim((min(x),max(x)))
@@ -210,6 +225,8 @@ def make_plot_1d(hists, name, proc, axis, ratio=False, normalize=False, xmin=Non
         plot_name += "_noSmoothing"
     if args.normalize:
         plot_name += "_normalize"
+    if args.postfix:
+        plot_name += f"_{args.postfix}"
     plot_tools.save_pdf_and_png(args.plotdir, plot_name)
     plot_tools.write_index_and_log(args.plotdir, plot_name, args=args, analysis_meta_info=meta[0])
 
@@ -270,7 +287,7 @@ for proc in procs:
 
         # Add dummy axis
         axis_dummy = hist.axis.Regular(1, -10., 10., underflow=False, overflow=False, name = "dummy")
-        hdummy = hist.Hist(*hratio.axes, axis_dummy, storage=hist.storage.Weight())
+        hdummy = hist.Hist(*hratio.axes, axis_dummy, storage=hratio._storage_type())
         hdummy.view(flow=True)[...,0] = hratio.view(flow=True)
         hratio = hdummy
 
@@ -279,7 +296,7 @@ for proc in procs:
             axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "charge")
         elif proc[0] == 'Z':
             axis_charge = hist.axis.Regular(1, -1., 1., underflow=False, overflow=False, name = "charge")
-        hcharge = hist.Hist(*hratio.axes, axis_charge, storage=hist.storage.Weight())
+        hcharge = hist.Hist(*hratio.axes, axis_charge, storage=hratio._storage_type())
         hcharge.view(flow=True)[...,charge_dict[proc]] = hratio.view(flow=True)
         hratio = hcharge
 
@@ -325,12 +342,16 @@ for proc in procs:
             # xmin, xmax = 60, 120
             xmin, xmax = None, None
 
-            if ax in ["ewMll", "Mll"]:
+            if ax in ["PTll", "PTlly", "Yll", "Ylly"]:
+                ymin, ymax = 0.98, 1.02
+            elif ax in ["ewMll", "Mll"]:
                 ymin, ymax = 0.95, 1.05
             elif ax in ["ewMlly", "Mlly"]:
                 ymin, ymax = 0.8, 1.2
+            elif ax in ["ewLogDeltaM"]:
+                ymin, ymax = 0., 2.
             else:
-                ymin, ymax = 0, 2
+                ymin, ymax = 0.9, 1.1
 
             hratios1D = [hh.divideHists(hnum.project(ax), hden.project(ax)) for hnum in hnums]
 

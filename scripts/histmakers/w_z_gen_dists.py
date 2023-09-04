@@ -15,8 +15,11 @@ parser.add_argument("--skipAngularCoeffs", action='store_true', help="Skip the c
 parser.add_argument("--singleLeptonHists", action='store_true', help="Also store single lepton kinematics")
 parser.add_argument("--skipEWHists", action='store_true', help="Also store histograms for EW reweighting. Use with --filter horace")
 parser.add_argument("--absY", action='store_true', help="use absolute |Y|")
+parser.add_argument("--applySelection", action='store_true', help="Apply selection on leptons")
+parser.add_argument("--auxiliaryHistograms", action="store_true", help="Safe auxiliary histograms (mainly for ew analysis)")
 
 parser = common.set_parser_default(parser, "filterProcs", common.vprocs)
+parser = common.set_parser_default(parser, "theoryCorr", [])
 
 args = parser.parse_args()
 
@@ -83,6 +86,13 @@ def build_graph(df, dataset):
     elif "NNLOPS" in dataset.name:
         weight_expr = f"{weight_expr}*LHEScaleWeightAltSet1[4]"
 
+    if args.applySelection:
+         if isZ:
+             df = df.Filter("ewLeptons[0].pt()>25 && ewLeptons[1].pt()>25 && std::fabs(ewLeptons[0].eta())<3.5 && std::fabs(ewLeptons[1].eta())<3.5")
+        elif isW:
+            df = df.Filter("""(ewLeptons[0].mass() == 0 || (ewLeptons[0].pt()>25 && std::fabs(ewLeptons[0].eta())<3.5))
+                           && (ewLeptons[1].mass() == 0 || (ewLeptons[1].pt()>25 && std::fabs(ewLeptons[1].eta())<3.5))""")
+
     df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
 
     if isZ:
@@ -114,19 +124,49 @@ def build_graph(df, dataset):
         axis_ewLogDeltaM = hist.axis.Regular(90, -5, 4, name = "ewLogDeltaM")
         ew_axes = [axis_ewMll, axis_ewLogDeltaM]
         results.append(df.HistoBoost("nominal_ew", ew_axes, [*ew_cols, "nominal_weight"], storage=hist.storage.Weight()))
-        # auxiliary hists
-        axis_ewMlly = hist.axis.Variable(massBins, name = "ewMlly")
-        results.append(df.HistoBoost("nominal_ewMlly", [axis_ewMlly], ["ewMlly", "nominal_weight"], storage=hist.storage.Weight()))
-        # coarse binning
-        axis_Mll = hist.axis.Regular(100, 50, 150, name = "Mll")
-        results.append(df.HistoBoost("nominal_Mll", [axis_Mll], ["ewMll", "nominal_weight"], storage=hist.storage.Weight()))
-        axis_Mlly = hist.axis.Regular(100, 50, 150, name = "Mlly")
-        results.append(df.HistoBoost("nominal_Mlly", [axis_Mlly], ["ewMlly", "nominal_weight"], storage=hist.storage.Weight()))
+        if args.auxiliaryHistograms:
+            axis_ewMlly = hist.axis.Variable(massBins, name = "ewMlly")
+            results.append(df.HistoBoost("nominal_ewMlly", [axis_ewMlly], ["ewMlly", "nominal_weight"], storage=hist.storage.Weight()))
+            # coarse binning
+            axis_Mll = hist.axis.Regular(100, 50, 150, name = "Mll")
+            results.append(df.HistoBoost("nominal_Mll", [axis_Mll], ["ewMll", "nominal_weight"], storage=hist.storage.Weight()))
+            axis_Mlly = hist.axis.Regular(100, 50, 150, name = "Mlly")
+            results.append(df.HistoBoost("nominal_Mlly", [axis_Mlly], ["ewMlly", "nominal_weight"], storage=hist.storage.Weight()))
+
+            axis_PTll =  hist.axis.Regular(100, 0, 100, name = "PTll")
+            axis_PTlly = hist.axis.Regular(100, 0, 100, name = "PTlly")
+            axis_Yll =  hist.axis.Regular(100, -5, 5, name = "Yll")
+            axis_Ylly = hist.axis.Regular(100, -5, 5, name = "Ylly")
+            results.append(df.HistoBoost("nominal_PTll",  [axis_PTll],  ["ewPTll", "nominal_weight"], storage=hist.storage.Weight()))
+            results.append(df.HistoBoost("nominal_PTlly", [axis_PTlly], ["ewPTlly", "nominal_weight"], storage=hist.storage.Weight()))
+            results.append(df.HistoBoost("nominal_Yll",  [axis_Yll],  ["ewYll", "nominal_weight"], storage=hist.storage.Weight()))
+            results.append(df.HistoBoost("nominal_Ylly", [axis_Ylly], ["ewYlly", "nominal_weight"], storage=hist.storage.Weight()))
+
+            # single lepton hists
+            if isZ:
+                # first lepton is leading in pT
+                df = df.Define('ewLepPt1', 'ewLeptons[0].pt()')
+                df = df.Define('ewLepPt2', 'ewLeptons[1].pt()')
+                df = df.Define('ewLepEta1', 'ewLeptons[0].eta()')
+                df = df.Define('ewLepEta2', 'ewLeptons[1].eta()')
+            if isW:
+                # first lepton is charged
+                df = df.Define('ewLepPt1', 'ewLeptons[0].mass() == 0 ? ewLeptons[1].pt() : ewLeptons[0].pt()')
+                df = df.Define('ewLepPt2', 'ewLeptons[0].mass() == 0 ? ewLeptons[0].pt() : ewLeptons[1].pt()')
+                df = df.Define('ewLepEta1', 'ewLeptons[0].mass() == 0 ? ewLeptons[1].eta() : ewLeptons[0].eta()')
+                df = df.Define('ewLepEta2', 'ewLeptons[0].mass() == 0 ? ewLeptons[0].eta() : ewLeptons[1].eta()')
+
+            axis_ewLepPt = hist.axis.Regular(100, 0, 100, name = "lepPt")
+            results.append(df.HistoBoost("nominal_ewLepPt1", [axis_ewLepPt], ["ewLepPt1", "nominal_weight"], storage=hist.storage.Weight()))
+            results.append(df.HistoBoost("nominal_ewLepPt2", [axis_ewLepPt], ["ewLepPt2", "nominal_weight"], storage=hist.storage.Weight()))
+            axis_ewLepEta = hist.axis.Regular(100, -5, 5, name = "lepEta")
+            results.append(df.HistoBoost("nominal_ewLepEta1", [axis_ewLepEta], ["ewLepEta1", "nominal_weight"], storage=hist.storage.Weight()))
+            results.append(df.HistoBoost("nominal_ewLepEta2", [axis_ewLepEta], ["ewLepEta2", "nominal_weight"], storage=hist.storage.Weight()))
 
     nominal_gen = df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols, "nominal_weight"], storage=hist.storage.Double())
 
     results.append(nominal_gen)
-    if not 'horace' in dataset.name:
+    if not 'horace' in dataset.name and not 'winhac' in dataset.name:
         if "LHEScaleWeight" in df.GetColumnNames():
             df = theory_tools.define_scale_tensor(df)
             syst_tools.add_qcdScale_hist(results, df, nominal_axes, nominal_cols, "nominal_gen")

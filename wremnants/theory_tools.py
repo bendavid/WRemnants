@@ -170,11 +170,17 @@ def define_scale_tensor(df):
     return df
 
 def define_ew_vars(df):
-    df = df.Define("ewLeptons", "wrem::ewLeptons(GenPart_status, GenPart_statusFlags, GenPart_pdgId, GenPart_genPartIdxMother, GenPart_pt, GenPart_eta, GenPart_phi)")
+    df = df.Define("ewLeptons", "wrem::ewLeptons(GenPart_status, GenPart_statusFlags, GenPart_pdgId, GenPart_pt, GenPart_eta, GenPart_phi)")
     df = df.Define("ewPhotons", "wrem::ewPhotons(GenPart_status, GenPart_statusFlags, GenPart_pdgId, GenPart_pt, GenPart_eta, GenPart_phi)")
+    df = df.Define('ewGenV', 'wrem::ewGenVPhos(ewLeptons, ewPhotons)')
     df = df.Define('ewMll', '(ewLeptons[0]+ewLeptons[1]).mass()')
-    df = df.Define('ewMlly', 'wrem::ewMLepPhos(ewLeptons, ewPhotons)')
+    df = df.Define('ewMlly', 'ewGenV.mass()')
     df = df.Define('ewLogDeltaM', 'log10(ewMlly-ewMll)')
+
+    df = df.Define('ewPTll', '(ewLeptons[0]+ewLeptons[1]).pt()')
+    df = df.Define('ewPTlly', 'ewGenV.pt()')
+    df = df.Define('ewYll', '(ewLeptons[0]+ewLeptons[1]).Rapidity()')
+    df = df.Define('ewYlly', 'ewGenV.Rapidity()')
 
     return df
 

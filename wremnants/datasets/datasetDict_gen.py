@@ -29,7 +29,7 @@ genDataDict = {
                    'xsec' : xsec_ZmmPostVFP,
                    'group': "Zmumu",
     },
-    'ZToMuMu_horace-lo' : { 
+    'ZToMuMu_horace-qed' : { 
                    'filepaths' :
                     ["{BASE_PATH}/DYJetsJetsToMuMu_LO_TuneCP5_13TeV-horace-pythia8/*/*.root"],
                    'xsec' : xsec_ZmmPostVFP,
@@ -47,7 +47,7 @@ genDataDict = {
                    'xsec' : xsec_WpmunuPostVFP,
                     'group': "Wmunu",
     },
-    'WplusToMuNu_horace-lo' : { 
+    'WplusToMuNu_horace-qed' : { 
                    'filepaths' :
                     ["{BASE_PATH}/WplusJetsToMuNu_LO_TuneCP5_13TeV-horace-pythia8/*/*.root"],
                    'xsec' : xsec_WpmunuPostVFP,
@@ -83,7 +83,7 @@ genDataDict = {
                    'xsec' : xsec_WmmunuPostVFP,
                     'group': "Wmunu",
     },
-    'WminusToMuNu_horace-lo' : { 
+    'WminusToMuNu_horace-qed' : { 
                    'filepaths' :
                     ["{BASE_PATH}/WminusJetsToMuNu_LO_TuneCP5_13TeV-horace-pythia8/*/*.root"],
                    'xsec' : xsec_WmmunuPostVFP,
@@ -135,7 +135,7 @@ if horace_v1:
                 'xsec' : xsec_ZmmPostVFP,
                 'group': "Zmumu",
         },
-        'ZToMuMu_horace-v1-born-fsr-photosnopair-isr-pythia' : { 
+        'ZToMuMu_horace-v1-lo-photos' : { 
                 'filepaths' :
                 ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/Horace_v1/ZToMuMu_TuneCP5_13TeV-horace-born-fsr-photosnopair-isr-pythia/job*.root"],
                 'xsec' : xsec_ZmmPostVFP,
@@ -147,13 +147,13 @@ if horace_v1:
                 'xsec' : xsec_ZmmPostVFP,
                 'group': "Zmumu",
         },
-        'ZToMuMu_horace-v1-exp-fsr-off-isr-off' : { 
+        'ZToMuMu_horace-v1-nlo' : { 
                 'filepaths' :
                 ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/Horace_v1/ZToMuMu_TuneCP5_13TeV-horace-exp-fsr-off-isr-off/job*.root"],
                 'xsec' : xsec_ZmmPostVFP,
                 'group': "Zmumu",
         },
-        'ZToMuMu_horace-v1-exp-old-fsr-off-isr-pythia' : { 
+        'ZToMuMu_horace-v1-qed' : { 
                 'filepaths' :
                 ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/Horace_v1/ZToMuMu_TuneCP5_13TeV-horace-exp-old-fsr-off-isr-pythia/job*.root"],
                 'xsec' : xsec_ZmmPostVFP,
@@ -163,19 +163,19 @@ if horace_v1:
 
 if horace_v2:
     genDataDict.update({
-        'ZToMuMu_horace-v2-born-fsr-photos_nopair-isr-pythia' : { 
+        'ZToMuMu_horace-v2-lo-photos' : { 
                 'filepaths' :
                 ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/Horace_v2/ZToMuMu_TuneCP5_13TeV-horace-born-fsr-photos_nopair-isr-pythia/job*.root"],
                 'xsec' : xsec_ZmmPostVFP,
                 'group': "Zmumu",
         },
-        'ZToMuMu_horace-v2-exp-new-fsr-off-isr-off' : { 
+        'ZToMuMu_horace-v2-nlo' : { 
                 'filepaths' :
                 ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/Horace_v2/ZToMuMu_TuneCP5_13TeV-horace-exp-new-fsr-off-isr-off/job*.root"],
                 'xsec' : xsec_ZmmPostVFP,
                 'group': "Zmumu",
         },
-        'ZToMuMu_horace-v2-exp-old-fsr-off-isr-pythia' : { 
+        'ZToMuMu_horace-v2-qed' : { 
                 'filepaths' :
                 ["/eos/cms/store/cmst3/group/wmass/w-mass-13TeV/NanoGen/Horace_v2/ZToMuMu_TuneCP5_13TeV-horace-exp-old-fsr-off-isr-pythia/job*.root"],
                 'xsec' : xsec_ZmmPostVFP,
@@ -239,4 +239,32 @@ if horace_v3:
                 'xsec' : xsec_WmmunuPostVFP,
                 'group': "Wmunu",
         }
+    })
+
+if horace_v5:
+     genDataDict.update({
+        'ZToMuMu_horace-v5-alpha-fsr-off-isr-off' : { 
+                 'filepaths' :
+                ["{BASE_PATH}/Horace_v5/ZToMuMu_TuneCP5_13TeV-horace-alpha-fsr-off-isr-off/*.root"],
+                 'xsec' : xsec_ZmmPostVFP,
+                 'group': "Zmumu",
+         },
+        'ZToMuMu_horace-v5-alpha-old-fsr-off-isr-off' : { 
+                 'filepaths' :
+                ["{BASE_PATH}/Horace_v5/ZToMuMu_TuneCP5_13TeV-horace-alpha-old-fsr-off-isr-off/*.root"],
+                 'xsec' : xsec_ZmmPostVFP,
+                 'group': "Zmumu",
+         },
+        'ZToMuMu_horace-v5-alpha-old-fsr-off-isr-pythia' : { 
+                 'filepaths' :
+                ["{BASE_PATH}/Horace_v5/ZToMuMu_TuneCP5_13TeV-horace-alpha-old-fsr-off-isr-pythia/*.root"],
+                 'xsec' : xsec_ZmmPostVFP,
+                 'group': "Zmumu",
+         },
+        'ZToMuMu_horace-v5-nlo' : { 
+                 'filepaths' :
+                ["{BASE_PATH}/Horace_v5/ZToMuMu_TuneCP5_13TeV-horace-exp-new-fsr-off-isr-off/*.root"],
+                 'xsec' : xsec_ZmmPostVFP,
+                 'group': "Zmumu",
+         },
     })
