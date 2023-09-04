@@ -23,6 +23,7 @@ class TheoryHelper(object):
         self.scale_pdf_unc = 1.
         self.tnp_magnitude = 1.
         self.mirror_tnp = True
+        self.minnlo_unc = 'byHelicityPt'
 
     def sample_label(self, sample_group):
         if sample_group not in self.card_tool.procGroups:
@@ -39,7 +40,8 @@ class TheoryHelper(object):
             mirror_tnp=True,
             pdf_from_corr=False,
             pdf_action=None,
-            scale_pdf_unc=1.):
+            scale_pdf_unc=1.,
+            minnloScaleUnc='byHelicityPt'):
 
         self.set_resum_unc_type(resumUnc)
         self.set_np_model(np_model)
@@ -51,10 +53,11 @@ class TheoryHelper(object):
         self.pdf_from_corr = pdf_from_corr
         self.pdf_action = pdf_action
         self.scale_pdf_unc = scale_pdf_unc
+        self.minnlo_unc = minnloScaleUnc
 
     def add_all_theory_unc(self):
         self.add_nonpert_unc(model=self.np_model)
-        self.add_resum_unc(magnitude=self.tnp_magnitude, mirror=self.mirror_tnp, minnloUnc=self.minnlo_unc)
+        self.add_resum_unc(magnitude=self.tnp_magnitude, mirror=self.mirror_tnp)
         self.add_pdf_uncertainty(from_corr=self.pdf_from_corr, action=self.pdf_action, scale=self.scale_pdf_unc)
 
     def set_minnlo_unc(self, minnloUnc):
@@ -84,14 +87,14 @@ class TheoryHelper(object):
             
         self.resumUnc = resumUnc
         
-    def add_resum_unc(self, magnitude=1, mirror=False, scale=1, minnloUnc='byHelicityPt'):
+    def add_resum_unc(self, magnitude=1, mirror=False, scale=1):
         if not self.resumUnc:
             logger.warning("No resummation uncertainty will be applied!")
 
         if self.resumUnc == "tnp":
             self.add_resum_tnp_unc(magnitude, mirror, scale)
 
-        if minnloUnc and minnloUnc != "none":
+        if self.minnlo_unc and self.minnlo_unc not in ["none", None]:
             for sample_group in ["signal_samples_inctau", "single_v_nonsig_samples"]:
                 if self.card_tool.procGroups.get(sample_group, None):
                     self.add_minnlo_scale_uncertainty(minnloUnc, sample_group, rebin_pt=common.ptV_binning)
@@ -270,7 +273,7 @@ class TheoryHelper(object):
             logger.warning("Will not add any nonperturbative uncertainty!")
 
     def set_np_model(self, model):
-        if model == "none":
+        if model in ["none", None]:
             self.np_model = None
             return
 

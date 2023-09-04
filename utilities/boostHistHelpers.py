@@ -13,14 +13,23 @@ def valsAndVariances(h1, h2, flow=True):
 def broadcastSystHist(h1, h2, flow=True):
     if h1.ndim > h2.ndim or h1.shape == h2.shape:
         return h1
-    
-    # Transpose because we keep syst axis last, but numpy broadcasts from the front
+
+    s1 = h1.view(flow=flow).shape
+    s2 = h2.view(flow=flow).shape
+
+    # the additional axes have to be broadcasted as leading
+    moves = {i: e for i, (e, n2) in enumerate(zip(s2, h2.axes.name)) if n2 not in h1.axes.name}
+    broadcast_shape = list(moves.values()) + list(s1)
+
     try:
-        new_vals = np.broadcast_to(h1.view(flow=flow).T, h2.view(flow=flow).T.shape).T
+        new_vals = np.broadcast_to(h1.view(flow=flow), broadcast_shape)
     except ValueError as e:
         raise ValueError("Cannot broadcast hists with incompatible axes!\n" 
                          f"    h1.axes: {h1.axes}\n"
                          f"    h2.axes: {h2.axes}")
+
+    # move back to original order
+    new_vals = np.moveaxis(new_vals, np.arange(len(moves)), list(moves.keys()))
 
     return hist.Hist(*h2.axes, data=new_vals, storage=h1.storage_type())
 
@@ -51,7 +60,7 @@ def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False, cutoff_
             # Treat the divisor as a constant
             var = np.multiply(val2, relvars[0], out=val2)
         else:
-            relsum = np.multiply(*relvars)
+            relsum = np.add(*relvars)
             var = np.multiply(relsum, val2, out=val2)
 
         outh.view(flow=flow)[...] = np.stack((val, var), axis=-1)

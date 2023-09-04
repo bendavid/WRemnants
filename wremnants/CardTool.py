@@ -112,6 +112,11 @@ class CardTool(object):
             logger.warning("Failed to set sum_axes!")
             logger.warning(f"Error message was {str(e)}")
 
+        self.setFakerateAxes(fakerate_integration_axes=axes)
+
+    def setFakerateAxes(self, fakerate_axes=["pt", "eta", "charge"], fakerate_integration_axes=[]):
+        self.fakerateIntegrationAxes = [x for x in fakerate_integration_axes if x not in fakerate_axes]
+
     def setProcsNoStatUnc(self, procs, resetList=True):
         if self.skipHist:
             logger.info("Attention: trying to set statistical uncertainty to 0 for some processes, but histograms won't be saved according to input options")
@@ -318,8 +323,13 @@ class CardTool(object):
         self.datagroups.loadHistsForDatagroups(
             baseName=self.nominalName, syst=syst, label="syst",
             procsToRead=[proc],
+<<<<<<< HEAD
             scaleToNewLumi=self.lumiScale,
             sum_axes=self.sum_axes)
+=======
+            scaleToNewLumi=self.lumiScale, 
+            fakerateIntegrationAxes=self.fakerateIntegrationAxes)
+>>>>>>> upstream/main
         return self.datagroups.getDatagroups()[proc].hists["syst"]
 
     def getNominalHistForSignal(self):
@@ -625,8 +635,13 @@ class CardTool(object):
         datagroups.loadHistsForDatagroups(
             baseName=self.nominalName, syst=self.pseudoData, label=self.pseudoData,
             procsToRead=processes,
+<<<<<<< HEAD
             scaleToNewLumi=self.lumiScale,
             sum_axes=self.sum_axes)
+=======
+            scaleToNewLumi=self.lumiScale, 
+            fakerateIntegrationAxes=self.fakerateIntegrationAxes)
+>>>>>>> upstream/main
         procDict = datagroups.getDatagroups()
         hists = [procDict[proc].hists[self.pseudoData] for proc in processes if proc not in processesFromNomi]
         # now add possible processes from nominal
@@ -638,7 +653,11 @@ class CardTool(object):
                 baseName=self.pseudoData, syst=self.nominalName, label=self.pseudoData,
                 procsToRead=processesFromNomi,
                 scaleToNewLumi=self.lumiScale,
+<<<<<<< HEAD
                 sum_axes=self.sum_axes)
+=======
+                fakerateIntegrationAxes=self.fakerateIntegrationAxes)
+>>>>>>> upstream/main
             procDictFromNomi = datagroupsFromNomi.getDatagroups()
             hists.extend([procDictFromNomi[proc].hists[self.pseudoData] for proc in processesFromNomi])
         # done, now sum all histograms
@@ -709,7 +728,11 @@ class CardTool(object):
             label=self.nominalName, 
             scaleToNewLumi=self.lumiScale, 
             forceNonzero=forceNonzero,
+<<<<<<< HEAD
             sum_axes=self.sum_axes)
+=======
+            fakerateIntegrationAxes=self.fakerateIntegrationAxes)
+>>>>>>> upstream/main
         if simultaneousABCD and not self.xnorm:
             setSimultaneousABCD(self)
         self.writeForProcesses(self.nominalName, processes=self.datagroups.groups.keys(), label=self.nominalName, check_systs=check_systs)
@@ -733,7 +756,11 @@ class CardTool(object):
                 forceToNominal=[x for x in self.datagroups.getProcNames() if x not in 
                                 self.datagroups.getProcNames([p for g in processes for p in self.expandProcesses(g) if p != "Fake"])],
                 scaleToNewLumi=self.lumiScale,
+<<<<<<< HEAD
                 sum_axes=self.sum_axes,
+=======
+                fakerateIntegrationAxes=self.fakerateIntegrationAxes,
+>>>>>>> upstream/main
             )
             self.writeForProcesses(syst, label="syst", processes=processes, check_systs=check_systs)
 

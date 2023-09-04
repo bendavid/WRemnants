@@ -221,7 +221,7 @@ class Datagroups(object):
     ## procName are grouped into datagroups
     ## baseName takes values such as "nominal"
     def setHists(self, baseName, syst, procsToRead=None, label=None, nominalIfMissing=True, 
-                 applySelection=True, forceNonzero=True, preOpMap=None, preOpArgs=None, scaleToNewLumi=1, 
+                 applySelection=True, fakerateIntegrationAxes=[], forceNonzero=True, preOpMap=None, preOpArgs=None, scaleToNewLumi=1, 
                  excludeProcs=None, forceToNominal=[], sum_axes=[]):
         if not label:
             label = syst if syst else baseName
@@ -379,7 +379,11 @@ class Datagroups(object):
                     logger.warning(f"Selection requested for process {procName} but applySelection=False, thus it will be ignored")
                 elif label in group.hists.keys():
                     logger.debug(f"Apply selection for process {procName}")
-                    group.hists[label] = group.selectOp(group.hists[label], **group.selectOpArgs)
+                    if procName == nameFake and "fakerate_integration_axes" not in group.selectOpArgs:
+                        opArgs = {**group.selectOpArgs, "fakerate_integration_axes": fakerateIntegrationAxes}
+                    else:
+                        opArgs = group.selectOpArgs
+                    group.hists[label] = group.selectOp(group.hists[label], **opArgs)
 
         # Avoid situation where the nominal is read for all processes for this syst
         if not foundExact:
@@ -423,8 +427,8 @@ class Datagroups(object):
 
     def loadHistsForDatagroups(
         self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="",
-        nominalIfMissing=True, applySelection=True, forceNonzero=True, pseudodata=False,
-        preOpMap={}, preOpArgs={}, scaleToNewLumi=1, forceToNominal=[], sum_axes=[],
+        nominalIfMissing=True, applySelection=True, fakerateIntegrationAxes=[], forceNonzero=True, pseudodata=False,
+        preOpMap={}, preOpArgs={}, scaleToNewLumi=1, forceToNominal=[], sum_axes[],
     ):
         logger.debug("Calling loadHistsForDatagroups()")
         logger.debug(f"The basename and syst is: {baseName}, {syst}")
@@ -432,9 +436,9 @@ class Datagroups(object):
         if self.rtfile and self.combine:
             self.setHistsCombine(baseName, syst, channel, procsToRead, excluded_procs, label)
         else:
-            self.setHists(baseName, syst, procsToRead, label, nominalIfMissing, applySelection,
+            self.setHists(baseName, syst, procsToRead, label, nominalIfMissing, applySelection, fakerateIntegrationAxes,
                           forceNonzero, preOpMap, preOpArgs,
-                          scaleToNewLumi=scaleToNewLumi, 
+                          scaleToNewLumi=scaleToNewLumi,  
                           excludeProcs=excluded_procs, forceToNominal=forceToNominal,
                           sum_axes=sum_axes)
 
