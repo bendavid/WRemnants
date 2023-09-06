@@ -543,13 +543,14 @@ def setup(args,xnorm=False):
     )
 
     non_closure_scheme = input_tools.args_from_metadata(cardTool, "nonClosureScheme")
+    correlated_non_closure = input_tools.args_from_metadata(cardTool, "correlatedNonClosureNP")
     if non_closure_scheme in ["A-M-separated", "A-only"]:
         cardTool.addSystematic("Z_non_closure_parametrized_A", 
             processes=['single_v_samples'],
             group="nonClosure" if args.sepImpactForNC else "muonScale",
             baseName="Z_nonClosure_parametrized_A_",
-            systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
-            labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
+            systAxes=["unc", "downUpVar"] if not correlated_non_closure  else ["downUpVar"],
+            labelsByAxis=["unc", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
             passToFakes=passSystToFakes
         )
     if non_closure_scheme in ["A-M-separated", "M-only", "binned-plus-M"]:
@@ -557,8 +558,8 @@ def setup(args,xnorm=False):
             processes=['single_v_samples'],
             group="nonClosure" if args.sepImpactForNC else "muonScale",
             baseName="Z_nonClosure_parametrized_M_",
-            systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
-            labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
+            systAxes=["unc", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
+            labelsByAxis=["unc", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
             passToFakes=passSystToFakes
         )            
     if non_closure_scheme == "A-M-combined":
@@ -566,8 +567,8 @@ def setup(args,xnorm=False):
             processes=['single_v_samples'],
             group="nonClosure" if args.sepImpactForNC else "muonScale",
             baseName="Z_nonClosure_parametrized_",
-            systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
-            labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
+            systAxes=["unc", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
+            labelsByAxis=["unc", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
             passToFakes=passSystToFakes
         )
     if non_closure_scheme in ["binned", "binned-plus-M"]:
@@ -575,8 +576,8 @@ def setup(args,xnorm=False):
             processes=['single_v_samples'],
             group="nonClosure" if args.sepImpactForNC else "muonScale",
             baseName="Z_nonClosure_binned_",
-            systAxes=["unc_ieta", "unc_ipt", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
-            labelsByAxis=["unc_ieta", "unc_ipt", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
+            systAxes=["unc_ieta", "unc_ipt", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
+            labelsByAxis=["unc_ieta", "unc_ipt", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
             passToFakes=passSystToFakes
         )
     
