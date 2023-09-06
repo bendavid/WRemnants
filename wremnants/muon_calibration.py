@@ -277,7 +277,7 @@ def make_jpsi_crctn_unc_helper(
 def make_Z_non_closure_parametrized_helper(
     filepath_correction, filepath_tflite,
     n_eta_bins = 24, n_scale_params = 3, correlated = False, scale_var_method = 'smearingWeightsSplines',
-    dummy_A = True, dummy_M = False, dummy_A_mag = 7.5e-4, dummy_M_mag = 0
+    dummy_A = True, dummy_M = False, dummy_A_mag = 7.5e-5, dummy_M_mag = 0
 ):
     f = uproot.open(filepath_correction)
     M = f['MZ'].to_hist()
