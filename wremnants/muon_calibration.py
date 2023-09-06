@@ -77,7 +77,7 @@ def make_Z_non_closure_helpers(args, calib_filepaths, closure_filepaths):
     parametrized_helper = make_Z_non_closure_parametrized_helper(
         closure_filepaths['parametrized'], calib_filepaths['tflite_file'],
         correlated = args.correlatedNonClosureNP, scale_var_method = args.muonScaleVariation,
-        dummy_A = (not args.realisticNonClosureA), dummy_M = args.dummyNonClosureM,
+        dummy_A = args.dummyNonClosureA, dummy_M = args.dummyNonClosureM,
         dummy_A_mag = args.dummyNonClosureAMag, dummy_M_mag = args.dummyNonClosureMMag
     ) if (args.nonClosureScheme in ["A-M-separated", "A-M-combined", "A-only", "M-only", "binned-plus-M"]) else None
     binned_helper = make_Z_non_closure_binned_helper(
@@ -235,7 +235,6 @@ def make_jpsi_crctn_unc_helper(
     f = uproot.open(filepath_correction)
     cov = f['covariance_matrix'].to_hist()
     cov_scale_params = get_jpsi_scale_param_cov_mat(cov, n_scale_params, n_tot_params, n_eta_bins, scale)
-
     w,v = np.linalg.eigh(cov_scale_params)    
     var_mat = np.sqrt(w) * v
     axis_eta = hist.axis.Regular(n_eta_bins, -2.4, 2.4, name = 'eta')
@@ -298,12 +297,20 @@ def make_Z_non_closure_parametrized_helper(
 
     hist_non_closure_cpp = narf.hist_to_pyroot_boost(hist_non_closure, tensor_rank = 1)
     if correlated:
-        z_non_closure_helper = ROOT.wrem.ZNonClosureParametrizedHelperCorl[
-            type(hist_non_closure_cpp).__cpp_name__,
-            n_eta_bins
-        ] (
-            ROOT.std.move(hist_non_closure_cpp)
-        )
+        if scale_var_method == 'smearingWeightsSplines':
+            z_non_closure_helper = ROOT.wrem.ZNonClosureParametrizedHelperSplinesCorl[
+                type(hist_non_closure_cpp).__cpp_name__,
+                n_eta_bins
+            ] (
+                ROOT.std.move(hist_non_closure_cpp)
+            )
+        else:
+            z_non_closure_helper = ROOT.wrem.ZNonClosureParametrizedHelperCorl[
+                type(hist_non_closure_cpp).__cpp_name__,
+                n_eta_bins
+            ] (
+                ROOT.std.move(hist_non_closure_cpp)
+            )
         z_non_closure_helper.tensor_axes = tuple([common.down_up_axis])
         return z_non_closure_helper
     else:
