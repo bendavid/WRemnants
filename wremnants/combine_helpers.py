@@ -30,15 +30,16 @@ def add_recoil_uncertainty(card_tool, samples, passSystToFakes=False, pu_type="h
                 passToFakes=passSystToFakes,
             )
     if met == "DeepMETReso":
-        tags = ["para", "perp"]
-        for i, tag in enumerate(tags):
-            card_tool.addSystematic("recoilUnc_%s" % tag,
-                processes=samples,
-                mirror = True,
-                group = "recoil",
-                systAxes = ["recoilVar"],
-                passToFakes=passSystToFakes,
-            )
+        if input_tools.args_from_metadata(card_tool, "recoilUnc"):
+            tags = ["para", "perp"]
+            for i, tag in enumerate(tags):
+                card_tool.addSystematic("recoilUnc_%s" % tag,
+                    processes=samples,
+                    mirror = True,
+                    group = "recoil",
+                    systAxes = ["recoilVar"],
+                    passToFakes=passSystToFakes,
+                )
 
 def setSimultaneousABCD(cardTool, variation_fakerate=0.5, variation_normalization_fake=0.1):
     # Having 1 process for fakes, for each bin 3 free floating parameters, 2 normalization for lowMT and highMT and one fakerate between iso and anti iso
