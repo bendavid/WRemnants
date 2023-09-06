@@ -77,7 +77,7 @@ def make_Z_non_closure_helpers(args, calib_filepaths, closure_filepaths):
     parametrized_helper = make_Z_non_closure_parametrized_helper(
         closure_filepaths['parametrized'], calib_filepaths['tflite_file'],
         correlated = args.correlatedNonClosureNP, scale_var_method = args.muonScaleVariation,
-        dummy_A = args.dummyNonClosureA, dummy_M = args.dummyNonClosureM,
+        dummy_A = (not args.realisticNonClosureA), dummy_M = args.dummyNonClosureM,
         dummy_A_mag = args.dummyNonClosureAMag, dummy_M_mag = args.dummyNonClosureMMag
     ) if (args.nonClosureScheme in ["A-M-separated", "A-M-combined", "A-only", "M-only", "binned-plus-M"]) else None
     binned_helper = make_Z_non_closure_binned_helper(
@@ -277,7 +277,7 @@ def make_jpsi_crctn_unc_helper(
 def make_Z_non_closure_parametrized_helper(
     filepath_correction, filepath_tflite,
     n_eta_bins = 24, n_scale_params = 3, correlated = False, scale_var_method = 'smearingWeightsSplines',
-    dummy_A = False, dummy_M = False, dummy_A_mag = 7.5e-4, dummy_M_mag = 0
+    dummy_A = True, dummy_M = False, dummy_A_mag = 7.5e-4, dummy_M_mag = 0
 ):
     f = uproot.open(filepath_correction)
     M = f['MZ'].to_hist()
