@@ -543,7 +543,7 @@ def setup(args,xnorm=False):
     )
 
     non_closure_scheme = input_tools.args_from_metadata(cardTool, "nonClosureScheme")
-    if non_closure_scheme == "A-M-separated":
+    if non_closure_scheme in ["A-M-separated", "A-only"]:
         cardTool.addSystematic("Z_non_closure_parametrized_A", 
             processes=['single_v_samples'],
             group="nonClosure" if args.sepImpactForNC else "muonScale",
@@ -552,7 +552,7 @@ def setup(args,xnorm=False):
             labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
             passToFakes=passSystToFakes
         )
-    if non_closure_scheme in ["A-M-separated", "binned-plus-M"]:
+    if non_closure_scheme in ["A-M-separated", "M-only", "binned-plus-M"]:
         cardTool.addSystematic("Z_non_closure_parametrized_M", 
             processes=['single_v_samples'],
             group="nonClosure" if args.sepImpactForNC else "muonScale",
