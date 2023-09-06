@@ -153,6 +153,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--pt", nargs=3, type=float, help="Pt binning as 'nbins,min,max' (only uniform for now)", default=[30,26.,56.])
     parser.add_argument("--noRecoil", action='store_true', help="Don't apply recoild correction")
     parser.add_argument("--recoilHists", action='store_true', help="Save all recoil related histograms for calibration and validation")
+    parser.add_argument("--recoilUnc", action='store_true', help="Run the recoil calibration with uncertainties (slower)")
     parser.add_argument("--highptscales", action='store_true', help="Apply highptscales option in MiNNLO for better description of data at high pT")
     parser.add_argument("--dataPath", type=str, default=None, help="Access samples from eos")
     parser.add_argument("--noVertexWeight", action='store_true', help="Do not apply reweighting of vertex z distribution in MC to match data")
