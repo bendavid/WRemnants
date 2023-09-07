@@ -28,6 +28,7 @@ parser.add_argument("--baseName", default="nominal_ew", type=str, help="histogra
 parser.add_argument("--project", default=["ewMll", "ewLogDeltaM"], nargs="*", type=str, help="axes to project to")
 parser.add_argument("--showFlow", action='store_true', help="Show underlfow and overflow bins in plots")
 parser.add_argument("--outpath", type=str, default=f"{common.data_dir}/TheoryCorrections", help="Output path")
+parser.add_argument("-p", "--postfix", type=str, help="Postfix for plots and correction files")
 parser.add_argument("-o", "--plotdir", type=str, help="Output directory for plots")
 
 args = parser.parse_args()
@@ -58,6 +59,10 @@ res, meta, _ = input_tools.read_infile(args.input)
 corrh = {}
 
 labels = {
+    "n": r"$N^{\gamma}$",
+    "pt": r"$\log_{10}(p_\mathrm{T}^{\gamma})$",
+    "eta": r"$\eta^{\gamma}$",
+    "ewPtll": r"$p_\mathrm{T}^{\ell\ell}$",
     "PTll": r"$p_\mathrm{T}^{\ell\ell}$",
     "Yll": r"$Y^{\ell\ell}$", 
     "Mll": r"$m^{\ell\ell}$", 
@@ -66,7 +71,8 @@ labels = {
     "Ylly": r"$Y^{\ell\ell\gamma}$", 
     "Mlly": r"$m^{\ell\ell\gamma}$", 
     "ewMlly": r"$m^{\ell\ell\gamma}$",
-    "ewLogDeltaM": r"$\log_{10}(m^{\ell\ell\gamma} - m^{\ell\ell})$"
+    "ewLogDeltaM": r"$\log_{10}(m^{\ell\ell\gamma} - m^{\ell\ell})$",
+    "ewPhosPtSum": r"$\sum (p_\mathrm{T}^{\gamma})$"
 }
 
 
@@ -124,7 +130,7 @@ def make_plot_2d(h, name, proc, plot_error=False, cmin=None, cmax=None, flow=Tru
     else:
         cmin = 0 if cmin is None else cmin
         cmax = h2d.values(flow=flow).max() if cmax is None else cmax
-        crange = max((cmax-1), (cmin+1))
+        crange = max((cmax-1), (1-cmin))
         colormesh = ax.pcolormesh(xbins, ybins, h2d.values(flow=flow).T, vmin=1-crange, vmax=1+crange, cmap=cm.RdBu)
 
     cbar = fig.colorbar(colormesh, ax=ax)
@@ -140,6 +146,8 @@ def make_plot_2d(h, name, proc, plot_error=False, cmin=None, cmax=None, flow=Tru
         plot_name += "_normalize"
     if log:
         plot_name += "_log"
+    if args.postfix:
+        plot_name += f"_{args.postfix}"
     plot_tools.save_pdf_and_png(args.plotdir, plot_name)
     plot_tools.write_index_and_log(args.plotdir, plot_name, args=args, analysis_meta_info=meta[0])
 
@@ -331,7 +339,7 @@ for proc in procs:
                 make_plot_2d(hnum, f"{nums[i]}_err", proc, plot_error=True, log=True)
 
         for i, hratio in enumerate(hratios):
-            make_plot_2d(hratio, f"{nums[i]}_div_{args.den}", proc, cmin=0, cmax=2)
+            make_plot_2d(hratio, f"{nums[i]}_div_{args.den}", proc, cmin=0.8, cmax=1.2)
             if "2Derr" in args.plots:
                 make_plot_2d(hratio, f"{nums[i]}_div_{args.den}_err", proc, plot_error=True, log=True)
 
@@ -346,7 +354,7 @@ for proc in procs:
                 ymin, ymax = 0.98, 1.02
             elif ax in ["ewMll", "Mll"]:
                 ymin, ymax = 0.95, 1.05
-            elif ax in ["ewMlly", "Mlly"]:
+            elif ax in ["ewMlly", "Mlly", "pt"]:
                 ymin, ymax = 0.8, 1.2
             elif ax in ["ewLogDeltaM"]:
                 ymin, ymax = 0., 2.
@@ -355,11 +363,13 @@ for proc in procs:
 
             hratios1D = [hh.divideHists(hnum.project(ax), hden.project(ax)) for hnum in hnums]
 
-            make_plot_1d([*hnums, hden], [*nums, args.den], proc, ax, xmin=xmin, xmax=xmax, ymin=0, density=False)
+            make_plot_1d([*hnums, hden], [*nums, args.den], proc, ax, xmin=xmin, xmax=xmax, ymin=0, density=True)
             make_plot_1d(hratios1D, [f"{n}_div_{args.den}" for n in nums], proc, ax, xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax, ratio=True)
 
 for num, corrh in corrhs.items():
     outname = num.replace('-', '') + 'ew'
+    if args.postfix is not None:
+        outname += f"_{args.postfix}"
     if 'ZToMuMu' in corrh:
         with lz4.frame.open(f"{args.outpath}/{outname}CorrZ.pkl.lz4", "wb") as f:
             pickle.dump({

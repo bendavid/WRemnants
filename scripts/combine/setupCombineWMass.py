@@ -42,7 +42,7 @@ def make_parser(parser=None):
     parser.add_argument("--scaleTNP", default=5, type=float, help="Scale the TNP uncertainties by this factor")
     parser.add_argument("--scalePdf", default=1, type=float, help="Scale the PDF hessian uncertainties by this factor")
     parser.add_argument("--pdfUncFromCorr", action='store_true', help="Take PDF uncertainty from correction hist (Requires having run that correction)")
-    parser.add_argument("--ewUnc", type=str, nargs="*", default=["winhacnloew"], choices=["horacenloew", "winhacnloew"], help="Include EW uncertainty")
+    parser.add_argument("--ewUnc", type=str, nargs="*", default=["horacenloew"], choices=["horacenloew", "winhacnloew"], help="Include EW uncertainty")
     parser.add_argument("--widthUnc", action='store_true', help="Include uncertainty on W and Z width")
     parser.add_argument("--noStatUncFakes" , action="store_true",   help="Set bin error for QCD background templates to 0, to check MC stat uncertainties for signal only")
     parser.add_argument("--skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
@@ -314,7 +314,7 @@ def setup(args,xnorm=False):
             mirror=True,
             group="theory_ew",
             systAxes=["systIdx"],
-            labelsByAxis=[f"{ewUnc}nloewCorr"],
+            labelsByAxis=[f"{ewUnc}Corr"],
             skipEntries=[(0, -1), (1, -1)],
             passToFakes=passSystToFakes,
         )

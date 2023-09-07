@@ -69,17 +69,19 @@ def make_corr_helper_fromnp(filename=f"{common.data_dir}/N3LLCorrections/inclusi
 
     return makeCorrectionsTensor(corrh, ROOT.wrem.TensorCorrectionsHelper, tensor_rank=1)
 
-def make_corr_helper(filename, proc, histname):
+def load_corr_hist(filename, proc, histname):
     with lz4.frame.open(filename) as f:
         corr = pickle.load(f)
         corrh = corr[proc][histname]
+    return corrh
+
+def make_corr_helper(filename, proc, histname):
+    corrh = load_corr_hist(filename, proc, histname)
 
     return makeCorrectionsTensor(corrh, ROOT.wrem.TensorCorrectionsHelper, tensor_rank=1)
 
 def make_corr_by_helicity_helper(filename, proc, histname):
-    with lz4.frame.open(filename) as f:
-        corr = pickle.load(f)
-        corrh = corr[proc][histname]
+    corrh = load_corr_hist(filename, proc, histname)
 
     return makeCorrectionsTensor(corrh, ROOT.wrem.CentralCorrByHelicityHelper, tensor_rank=3)
 
