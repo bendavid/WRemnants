@@ -147,7 +147,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--theoryCorr", nargs="*", default=["scetlib_dyturbo"], choices=theory_corrections.valid_theory_corrections(),
         help="Apply corrections from indicated generator. First will be nominal correction.")
     parser.add_argument("--theoryCorrAltOnly", action='store_true', help="Save hist for correction hists but don't modify central weight")
-    parser.add_argument("--widthVariations", action='store_true', help="Store variations of W and Z widths.")   
+    parser.add_argument("--widthVariations", action='store_true', help="Store variations of W and Z widths.")
     parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")
     parser.add_argument("--eta", nargs=3, type=float, help="Eta binning as 'nbins min max' (only uniform for now)", default=[48,-2.4,2.4])
     parser.add_argument("--pt", nargs=3, type=float, help="Pt binning as 'nbins,min,max' (only uniform for now)", default=[30,26.,56.])
@@ -159,7 +159,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--noVertexWeight", action='store_true', help="Do not apply reweighting of vertex z distribution in MC to match data")
     parser.add_argument("--validationHists", action='store_true', help="make histograms used only for validations")
     parser.add_argument("--onlyMainHistograms", action='store_true', help="Only produce some histograms, skipping (most) systematics to run faster when those are not needed")
-    parser.add_argument("--met", type=str, choices=["DeepMETReso", "RawPFMET"], help="MET (DeepMETReso or RawPFMET)", default="RawPFMET")                    
+    parser.add_argument("--met", type=str, choices=["DeepMETReso", "RawPFMET"], help="MET (DeepMETReso or RawPFMET)", default="DeepMETReso")
     parser.add_argument("-o", "--outfolder", type=str, default="", help="Output folder")
     parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
     parser.add_argument("--nonClosureScheme", type=str, default = "A-M-separated", choices=["none", "A-M-separated", "A-M-combined", "binned", "binned-plus-M"], help = "source of the Z non-closure nuisances")

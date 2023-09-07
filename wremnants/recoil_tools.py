@@ -127,15 +127,10 @@ class Recoil:
             self.nvars_perp = 440
 
             f_tflite = f"{common.data_dir}/recoil/highPU/mumu_DeepMETReso/recoil_DeepMETReso.tflite"
-            if args.recoilUnc:
-                self.recoilHelper_para = ROOT.wrem.RecoilCalibrationHelper[self.nvars_para](f_tflite, "transform_para", -100, 100)
-                self.recoilHelper_perp = ROOT.wrem.RecoilCalibrationHelper[self.nvars_perp](f_tflite, "transform_perp", -100, 100)
-            else:
-                self.recoilHelper_para = ROOT.wrem.RecoilCalibrationHelperNoUnc[self.nvars_para](f_tflite, "transform_para_no_unc", -100, 100)
-                self.recoilHelper_perp = ROOT.wrem.RecoilCalibrationHelperNoUnc[self.nvars_perp](f_tflite, "transform_perp_no_unc", -100, 100)
+            self.recoilHelper_para = ROOT.wrem.RecoilCalibrationHelper[self.nvars_para](f_tflite, "transform_para", -100, 100, args.recoilUnc)
+            self.recoilHelper_perp = ROOT.wrem.RecoilCalibrationHelper[self.nvars_perp](f_tflite, "transform_perp", -100, 100, args.recoilUnc)
             self.responseCorrector = ROOT.wrem.ResponseCorrector(f_tflite, "response_corr")
 
-            
         logger.info(f"Apply recoil corrections for {pu_type}, {flavor}, {self.met}")
         setattr(ROOT.wrem, "applyRecoilCorrection", True)
         setattr(ROOT.wrem, "recoil_correction_qTmax", recoil_cfg[rtag]['qTmax'])
@@ -175,8 +170,8 @@ class Recoil:
         self.axis_run_no = hist.axis.Variable(list(range(277770, 284045, 1)) + [284045], name = "run_no")
         
         self.axis_recoil_magn_fine = hist.axis.Regular(300, 0, 300, name = "recoil_magn", underflow=False)
-        self.axis_recoil_para_fine = hist.axis.Regular(1000, -500, 500, name = "recoil_para")
-        self.axis_recoil_perp_fine = hist.axis.Regular(1000, -500, 500, name = "recoil_perp")
+        self.axis_recoil_para_fine = hist.axis.Regular(1000, -200, 200, name = "recoil_para")
+        self.axis_recoil_perp_fine = hist.axis.Regular(1000, -200, 200, name = "recoil_perp")
         self.axis_MET_xy = hist.axis.Regular(200, -100, 100, name = "MET_xy")
 
         self.axis_mt = hist.axis.Regular(200, 0., 200., name = "mt", underflow=False)
@@ -681,7 +676,7 @@ class Recoil:
         if self.dataset.name in self.datasets_to_apply:
 
             if self.parametric:
-                self.df.Define("recoil_corr_rec", "wrem::recoilCorrectionParametric(recoil_corr_xy_para, recoil_corr_xy_perp, qT)")
+                self.df = self.df.Define("recoil_corr_rec", "wrem::recoilCorrectionParametric(recoil_corr_xy_para, recoil_corr_xy_perp, qT)")
                 self.df = self.df.Define("recoil_corr_rec_magn", "recoil_corr_rec[0]")
                 self.df = self.df.Define("recoil_corr_rec_para_qT", "recoil_corr_rec[1] - qT")
                 self.df = self.df.Define("recoil_corr_rec_para", "recoil_corr_rec[1]")
@@ -816,7 +811,7 @@ class Recoil:
         self.df = self.df.Define("recoil_corr_rec_magn", f"wrem::recoilComponents(MET_corr_xy_pt, MET_corr_xy_phi, {self.leptons_pt}, {self.leptons_phi})")
         
         self.df = self.df.Define("mT_corr_rec", f"wrem::mt_2({self.leptons_pt}, {self.leptons_phi}, MET_corr_rec_pt, MET_corr_rec_phi)")
-        self.df = self.df.Define("passMT_rec", "mT_corr_rec > 40")
+        self.df = self.df.Define("passMT_rec", f"mT_corr_rec > {self.mtw_min}")
 
         if not self.storeHists: 
             return

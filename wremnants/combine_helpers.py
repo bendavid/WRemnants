@@ -29,7 +29,7 @@ def add_recoil_uncertainty(card_tool, samples, passSystToFakes=False, pu_type="h
                 systAxes = ["recoilVar"],
                 passToFakes=passSystToFakes,
             )
-    if met == "DeepMETReso":
+    elif met == "DeepMETReso":
         if input_tools.args_from_metadata(card_tool, "recoilUnc"):
             tags = ["para", "perp"]
             for i, tag in enumerate(tags):

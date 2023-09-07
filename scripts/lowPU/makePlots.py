@@ -812,10 +812,10 @@ if __name__ == "__main__":
     met = "DeepMETReso" # DeepMETReso RawPFMET
     charge = "combined" # combined plus minus
     lowPU = False
-    doSyst = False
+    doSyst = True
 
     suffix = "scetlib_dyturbo"
-    #suffix = ""
+    suffix = ""
     #suffix = "_scetlibCorr"
 
     if lowPU:
@@ -867,8 +867,8 @@ if __name__ == "__main__":
         
 
         if flavor == "mumu":
-            #groups = datagroups.Datagroups(f"mz_wlike_with_mu_eta_pt_{met}.hdf5")
-            groups = datagroups.Datagroups(f"mz_wlike_with_mu_eta_pt_scetlib_dyturboCorr.hdf5")
+            groups = datagroups.Datagroups(f"mz_wlike_with_mu_eta_pt_{met}.hdf5")
+            #groups = datagroups.Datagroups(f"mz_wlike_with_mu_eta_pt_scetlib_dyturboCorr.hdf5")
             
             groups.groups['Zmumu'].color = "#F8CE68"
             groups.groups['Zmumu'].label = "DY #rightarrow #mu^{#plus}#mu^{#minus} (MiNNLO)"

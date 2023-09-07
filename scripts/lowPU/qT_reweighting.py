@@ -15,7 +15,7 @@ import pickle
 import narf
 import numpy as np
 
-import wremnants.datasets.datagroups as datagroups
+from wremnants.datasets import datagroups
 
 
 
