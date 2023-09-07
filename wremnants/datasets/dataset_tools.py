@@ -30,8 +30,8 @@ def makeFilelist(paths, maxFiles=-1, format_args={}, is_data=False, oneMCfileEve
     for path in paths:
         if format_args:
             path = path.format(**format_args)
-            if replaceDict:
-                path = path.replace(replaceDict) # needed because format_args works assuming same strings appearing in all samples
+            for rd in replaceDict.keys():                
+                path = path.replace(rd, replaceDict[rd]) # might exploit format_args, but these are predefined in the dataset dictionary and are less flexible
             logger.debug(f"Reading files from path {path}")
         filelist.extend(glob.glob(path) if path[:4] != "/eos" else buildXrdFileList(path, "eoscms.cern.ch"))
 
@@ -157,11 +157,12 @@ def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, na
         is_data = info.get("group","") == "Data"
 
         prod_tag = data_tag if is_data else mc_tag
-        pdfExt_tag = ""
+        replaceDict = {}
+        # hack for new W samples avaialble only from eos for now
         if "/eos/cms/store/" in base_path and useNewMCx4 and any(x in sample for x in ["Wplus", "Wminus"]):
             prod_tag = "0"
-            pdfExt_tag = "_PDFExt"
-        paths = makeFilelist(info["filepaths"], maxFiles, format_args=dict(BASE_PATH=base_path, PDF_EXT_TAG=pdfExt_tag, NANO_PROD_TAG=prod_tag), is_data=is_data, oneMCfileEveryN=oneMCfileEveryN)
+            replaceDict["H2ErratumFix_"] = "H2ErratumFix_PDFExt_"
+        paths = makeFilelist(info["filepaths"], maxFiles, format_args=dict(BASE_PATH=base_path, NANO_PROD_TAG=prod_tag), is_data=is_data, oneMCfileEveryN=oneMCfileEveryN, replaceDict=replaceDict)
             
         if checkFileForZombie:
             paths = [p for p in paths if not is_zombie(p)]
