@@ -400,7 +400,7 @@ def build_graph(df, dataset):
             results.append(yieldsForWeffMC)
         # df = df.Filter(f"wrem::printVar(nominal_weight)")
             
-        if not args.noRecoil:
+        if not args.noRecoil and args.recoilUnc:
             df = recoilHelper.add_recoil_unc_W(df, results, dataset, cols, axes, "nominal")
         if apply_theory_corr:
             results.extend(theory_tools.make_theory_corr_hists(df, "nominal", axes, cols, 

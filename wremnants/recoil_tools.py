@@ -723,7 +723,7 @@ class Recoil:
         self.df = self.df.Define("MET_corr_rec_ll_dPhi", "wrem::deltaPhi(MET_corr_rec_phi, Z_mom2.Phi())")
         self.df = self.df.Define("ll_phi", "Z_mom2.Phi()")
 
-        if not self.storeHists: 
+        if not self.storeHists:
             return
 
         self.add_histo("recoil_corr_rec_magn", ["recoil_corr_rec_magn"], [self.axis_recoil_magn])
@@ -932,7 +932,7 @@ class Recoil:
         return self.add_recoil_unc_Z(df, results, dataset, cols, axes, hName) # currently use the Z implementation
 
     def setup_recoil_Z_unc(self):
-        if not self.dataset.name in self.datasets_to_apply:
+        if not self.dataset.name in self.datasets_to_apply or not self.storeHists:
             return
 
         hNames, cols, axes = [], [], [] 
@@ -1021,9 +1021,9 @@ class Recoil:
 
 
     def setup_recoil_W_unc(self):
-        if not self.dataset.name in self.datasets_to_apply:
+        if not self.dataset.name in self.datasets_to_apply or not self.storeHists:
             return
-    
+
         hNames, cols, axes = [], [], [] 
         if self.storeHists:
             hNames = ["MET_corr_rec_pt", "mT_corr_rec"]
@@ -1035,7 +1035,7 @@ class Recoil:
             for item in recoil_unc_no:
                 tag = item.first
                 nVars = recoil_unc_no[tag]
-              
+
                 val = "recoil_corr_xy_para_gen" if "para" in tag else "recoil_corr_xy_perp_gen"
                 tag_nom = "%s_%s" % ("target" if "target" in tag else "source", "para" if "para" in tag else "perp")
                 recoilWeights = f"recoilWeights_{tag}"
@@ -1078,8 +1078,7 @@ class Recoil:
             for hName, col, ax in zip(hNames, cols, axes):
                     self.results.append(self.df.HistoBoost(f"{hName}_qTrw_recoilUnc_perp", ax if isinstance(col, list) else [ax], (col if isinstance(col, list) else [col]) + [recoilTensorWeights_qTrw], tensor_axes=[recoil_var_ax]))
 
-               
-        
+
         elif self.parametric and not self.smearWeights:
         
             recoil_unc_no = getattr(ROOT.wrem, "recoil_unc_no")
