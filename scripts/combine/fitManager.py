@@ -132,7 +132,7 @@ def prepareChargeFit(options, charges=["plus"]):
             
         bbboptions = " --binByBinStat "
         if not options.noCorrelateXsecStat: bbboptions += "--correlateXsecStat "
-        combineCmd = 'combinetf.py -t -1 {bbb} {metafile} --doImpacts --saveHists --computeHistErrors --doh5Output '.format(metafile=metafilename, bbb="" if options.noBBB else bbboptions)
+        combineCmd = 'combinetf.py -t -1 {bbb} {metafile} --doImpacts --saveHists --computeHistErrors '.format(metafile=metafilename, bbb="" if options.noBBB else bbboptions)
         if options.combinetfOption:
             combineCmd += " %s" % options.combinetfOption
         if args.theoryAgnostic:
