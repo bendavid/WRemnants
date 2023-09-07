@@ -28,6 +28,7 @@ parser.add_argument("--makeMCefficiency", action="store_true", help="Save yields
 parser.add_argument("--onlyTheorySyst", action="store_true", help="Keep only theory systematic variations, mainly for tests")
 parser.add_argument("--oneMCfileEveryN", type=int, default=None, help="Use 1 MC file every N, where N is given by this option. Mainly for tests")
 parser.add_argument("--noAuxiliaryHistograms", action="store_true", help="Remove auxiliary histograms to save memory (removed by default with --unfolding or --theoryAgnostic)")
+parser.add_argument("--useNewMCx4", action="store_true", help="Temporary option to use new W MC with x4 more stat, which is only available on EOS for now.")
 
 parser = common.set_parser_default(parser, "theoryCorr", ["scetlib_dyturbo", "winhacnloew"])
 args = parser.parse_args()
@@ -43,9 +44,10 @@ if args.theoryAgnostic:
     
 thisAnalysis = ROOT.wrem.AnalysisType.Wmass
 datasets = getDatasets(maxFiles=args.maxFiles,
-                        filt=args.filterProcs,
-                        excl=args.excludeProcs, 
-                        nanoVersion="v8" if args.v8 else "v9", base_path=args.dataPath, oneMCfileEveryN=args.oneMCfileEveryN)
+                       filt=args.filterProcs,
+                       excl=args.excludeProcs, 
+                       nanoVersion="v8" if args.v8 else "v9", base_path=args.dataPath, oneMCfileEveryN=args.oneMCfileEveryN,
+                       useNewMCx4=args.useNewMCx4)
 
 era = args.era
 

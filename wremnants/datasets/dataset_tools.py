@@ -25,11 +25,13 @@ def buildXrdFileList(path, xrd):
         return [f"root://{xrd}/{f}" for f in glob.glob(path)]
 
 #TODO add the rest of the samples!
-def makeFilelist(paths, maxFiles=-1, format_args={}, is_data=False, oneMCfileEveryN=None):
+def makeFilelist(paths, maxFiles=-1, format_args={}, is_data=False, oneMCfileEveryN=None, replaceDict={}):
     filelist = []
     for path in paths:
         if format_args:
             path = path.format(**format_args)
+            if replaceDict:
+                path = path.replace(replaceDict) # needed because format_args works assuming same strings appearing in all samples
             logger.debug(f"Reading files from path {path}")
         filelist.extend(glob.glob(path) if path[:4] != "/eos" else buildXrdFileList(path, "eoscms.cern.ch"))
 
@@ -140,7 +142,7 @@ def is_zombie(file_path):
         return True
 
 def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, nanoVersion="v9", 
-                data_tag="TrackFitV722_NanoProdv2", mc_tag="TrackFitV718_NanoProdv1", oneMCfileEveryN=None, checkFileForZombie=False):
+                data_tag="TrackFitV722_NanoProdv2", mc_tag="TrackFitV718_NanoProdv1", oneMCfileEveryN=None, checkFileForZombie=False, useNewMCx4=False):
     if not base_path:
         base_path = getDataPath(mode)
     logger.info(f"Loading 2016 samples from {base_path}.")
@@ -154,9 +156,13 @@ def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, na
 
         is_data = info.get("group","") == "Data"
 
-        prod_tag = data_tag if is_data else mc_tag 
-        paths = makeFilelist(info["filepaths"], maxFiles, format_args=dict(BASE_PATH=base_path, NANO_PROD_TAG=prod_tag), is_data=is_data, oneMCfileEveryN=oneMCfileEveryN)
-
+        prod_tag = data_tag if is_data else mc_tag
+        pdfExt_tag = ""
+        if "/eos/cms/store/" in base_path and useNewMCx4 and any(x in sample for x in ["Wplus", "Wminus"]):
+            prod_tag = "0"
+            pdfExt_tag = "_PDFExt"
+        paths = makeFilelist(info["filepaths"], maxFiles, format_args=dict(BASE_PATH=base_path, PDF_EXT_TAG=pdfExt_tag, NANO_PROD_TAG=prod_tag), is_data=is_data, oneMCfileEveryN=oneMCfileEveryN)
+            
         if checkFileForZombie:
             paths = [p for p in paths if not is_zombie(p)]
 
