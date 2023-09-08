@@ -306,7 +306,6 @@ def define_theory_corr(df, dataset_name, helpers, generators, modify_central_wei
 
     if not modify_central_weight or not generators or generators[0] not in dataset_helpers:
         df = df.DefinePerSample("theory_corr_weight", "1.0")
-        return df
 
     for i, generator in enumerate(generators):
         if generator not in dataset_helpers:

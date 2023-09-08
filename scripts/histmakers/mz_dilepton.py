@@ -21,7 +21,7 @@ parser.add_argument("--finePtBinning", action='store_true', help="Use fine binni
 parser.add_argument("--noAuxiliaryHistograms", action="store_true", help="Remove auxiliary histograms to save memory (removed by default with --unfolding or --theoryAgnostic)")
 
 parser = common.set_parser_default(parser, "genVars", ["ptVGen", "absYVGen"])
-parser = common.set_parser_default(parser, "pt", [44,26.,70.])
+parser = common.set_parser_default(parser, "pt", [34,26.,60.])
 parser = common.set_parser_default(parser, "eta", [48,-2.4,2.4])
 parser = common.set_parser_default(parser, "aggregateGroups", ["Diboson", "Top", "Wtaunu", "Wmunu"])
 

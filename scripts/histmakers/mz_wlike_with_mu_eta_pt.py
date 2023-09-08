@@ -48,8 +48,8 @@ template_maxpt = args.pt[2]
 logger.info(f"Pt binning: {template_npt} bins from {template_minpt} to {template_maxpt}")
 
 # standard regular axes
-axis_eta = hist.axis.Regular(template_neta, template_mineta, template_maxeta, name = "eta", overflow=not args.excludeFlow, underflow=not args.excludeFlow)
-axis_pt = hist.axis.Regular(template_npt, template_minpt, template_maxpt, name = "pt", overflow=not args.excludeFlow, underflow=not args.excludeFlow)
+axis_eta = hist.axis.Regular(template_neta, template_mineta, template_maxeta, name = "eta", overflow=False, underflow=False)
+axis_pt = hist.axis.Regular(template_npt, template_minpt, template_maxpt, name = "pt", overflow=False, underflow=False)
 
 # categorical axes in python bindings always have an overflow bin, so use a regular
 # axis for the charge
