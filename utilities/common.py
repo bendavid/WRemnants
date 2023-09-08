@@ -144,7 +144,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--v8", action='store_true', help="Use NanoAODv8. Default is v9")
     parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
     parser.add_argument("--forceDefaultName", help="Don't modify the name", action='store_true')
-    parser.add_argument("--theoryCorr", nargs="*", default=["scetlib_dyturbo"], choices=theory_corrections.valid_theory_corrections(),
+    parser.add_argument("--theoryCorr", nargs="*", default=["scetlib_dyturbo", "horacenloew"], choices=theory_corrections.valid_theory_corrections(),
         help="Apply corrections from indicated generator. First will be nominal correction.")
     parser.add_argument("--theoryCorrAltOnly", action='store_true', help="Save hist for correction hists but don't modify central weight")
     parser.add_argument("--widthVariations", action='store_true', help="Store variations of W and Z widths.")

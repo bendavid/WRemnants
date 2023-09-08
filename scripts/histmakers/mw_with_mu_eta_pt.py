@@ -29,7 +29,6 @@ parser.add_argument("--onlyTheorySyst", action="store_true", help="Keep only the
 parser.add_argument("--oneMCfileEveryN", type=int, default=None, help="Use 1 MC file every N, where N is given by this option. Mainly for tests")
 parser.add_argument("--noAuxiliaryHistograms", action="store_true", help="Remove auxiliary histograms to save memory (removed by default with --unfolding or --theoryAgnostic)")
 
-parser = common.set_parser_default(parser, "theoryCorr", ["scetlib_dyturbo", "winhacnloew"])
 args = parser.parse_args()
 
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
