@@ -7,7 +7,6 @@ parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for lumin
 parser.add_argument("--flavor", type=str, choices=["e", "mu"], help="Flavor (e or mu)", default="mu")
 
 parser = common.set_parser_default(parser, "genVars", ["ptVGen"])
-parser = common.set_parser_default(parser, "theoryCorr", ["scetlib_dyturbo", "winhacnloew"])
 args = parser.parse_args()
 
 
