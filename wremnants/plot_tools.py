@@ -20,14 +20,10 @@ hep.style.use(hep.style.ROOT)
 
 logger = logging.child_logger(__name__)
 
-def figure(href, xlabel, ylabel, ylim=None, xlim=None,
-    grid = False, plot_title = None, title_padding = 0,
-    bin_density = 300, cms_label = None, logy=False, logx=False,
-    width_scale=1, automatic_scale=True
-):
-    if not xlim:
-        xlim = [href.axes[0].edges[0], href.axes[0].edges[-1]]
+def cfgFigure(href, xlim=None, bin_density = 300,  width_scale=1, automatic_scale=True):
     hax = href.axes[0]
+    if not xlim:
+        xlim = [hax.edges[0], hax.edges[-1]]
     xlim_range = float(xlim[1] - xlim[0])
     original_xrange = float(hax.edges[-1] - hax.edges[0])
     if automatic_scale:
@@ -36,7 +32,14 @@ def figure(href, xlabel, ylabel, ylim=None, xlim=None,
     else:
         width=1
 
-    fig = plt.figure(figsize=(width_scale*8*width,8))
+    return plt.figure(figsize=(width_scale*8*width,8)), xlim
+
+def figure(href, xlabel, ylabel, ylim=None, xlim=None,
+    grid = False, plot_title = None, title_padding = 0,
+    bin_density = 300, cms_label = None, logy=False, logx=False,
+    width_scale=1, automatic_scale=True
+):
+    fig, xlim = cfgFigure(href, xlim, bin_density, width_scale, automatic_scale)
 
     ax1 = fig.add_subplot() 
     if cms_label: hep.cms.text(cms_label)
@@ -64,15 +67,8 @@ def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None,
     x_ticks_ndp = None, bin_density = 300, cms_label = None, logy=False, logx=False,
     width_scale=1
 ):
-    if not xlim:
-        xlim = [href.axes[0].edges[0], href.axes[0].edges[-1]]
-    hax = href.axes[0]
-    xlim_range = float(xlim[1] - xlim[0])
-    original_xrange = float(hax.edges[-1] - hax.edges[0])
-    raw_width = (hax.size/float(bin_density)) * (xlim_range / original_xrange)
-    width = math.ceil(raw_width)
-
-    fig = plt.figure(figsize=(width_scale*8*width,8))
+    fig = cfgFigure(href, xlim, bin_density, width_scale, automatic_scale)
+    
     ax1 = fig.add_subplot(4, 1, (1, 3)) 
     if cms_label: hep.cms.text(cms_label)
     ax2 = fig.add_subplot(4, 1, 4) 
@@ -396,6 +392,22 @@ def makePlotWithRatioToRef(
     fix_axes(ax1, ax2, yscale=yscale, logy=logy)
     if x_ticks_ndp: ax2.xaxis.set_major_formatter(StrMethodFormatter('{x:.' + str(x_ticks_ndp) + 'f}'))
     return fig
+
+def extendEdgesByFlow(href, bin_flow_width=0.02):
+    # add extra bin with bin wdith of a fraction of the total width
+    all_edges = []
+    for axis in href.axes:
+        edges = axis.edges
+        axis_range = edges[-1] - edges[0]
+        if axis.traits.underflow:
+            edges = np.insert(edges, 0, edges[0] - axis_range*bin_flow_width)
+        if axis.traits.overflow:
+            edges = np.append(edges, edges[-1] + axis_range*bin_flow_width)
+        all_edges.append(edges)
+    if len(all_edges) == 1:
+        return all_edges[0]
+    else:
+        return all_edges
 
 def fix_axes(ax1, ax2, yscale=None, logy=False):
     #TODO: Would be good to get this working

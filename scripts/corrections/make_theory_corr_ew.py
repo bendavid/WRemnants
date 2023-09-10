@@ -62,7 +62,7 @@ labels = {
     "n": r"$N^{\gamma}$",
     "pt": r"$\log_{10}(p_\mathrm{T}^{\gamma})$",
     "eta": r"$\eta^{\gamma}$",
-    "ewPtll": r"$p_\mathrm{T}^{\ell\ell}$",
+    "ewPTll": r"$p_\mathrm{T}^{\ell\ell}$",
     "PTll": r"$p_\mathrm{T}^{\ell\ell}$",
     "Yll": r"$Y^{\ell\ell}$", 
     "Mll": r"$m^{\ell\ell}$", 
@@ -80,40 +80,23 @@ colors = mpl.colormaps["tab10"]
 
 def make_plot_2d(h, name, proc, plot_error=False, cmin=None, cmax=None, flow=True, density=False, log=False):
 
-    nBinsTotal = h.values(flow=flow).size
-    nBins = h.project(*project).values(flow=flow).size
-    logger.info(f"Make plot {name} with axes {h.axes.name} and {nBins}/{nBinsTotal} bins")
+    logger.info(f"Make plot {name} with axes {h.axes.name}")
     # average over bins
-    h2d = h.project(*project) #*nBins/nBinsTotal
+    h2d = h.project(*project)
 
     xlabel = labels.get(project[0],project[0])
     ylabel = labels.get(project[1],project[1])
 
-    edges = h2d.axes.edges
-    xbins = np.reshape(edges[0], len(edges[0]))
-    ybins = edges[1][0]
-
     if flow:
-        # add extra bin with bin wdith of 1% of total width
-        rangex = xbins[-1] - xbins[0]            
-        if h2d.axes[0].traits.underflow:
-            xbins = np.insert(xbins, 0, xbins[0] - rangex*0.02)
-        if h2d.axes[0].traits.overflow:
-            xbins = np.append(xbins, xbins[-1] + rangex*0.02)
-
-
-        rangey = ybins[-1] - ybins[0]
-        if h2d.axes[1].traits.underflow:
-            ybins = np.insert(ybins, 0, ybins[0] - rangey*0.02)
-        if h2d.axes[1].traits.overflow:
-            ybins = np.append(ybins, ybins[-1] + rangey*0.02)
-
-
-    # z = h2d.values(flow=flow).T
+        xedges, yedges = plot_tools.extendEdgesByFlow(h2d)
+    else:
+        edges = h2d.axes.edges
+        xedges = np.reshape(edges[0], len(edges[0]))
+        yedges = edges[1][0]
 
     if density:
-        xbinwidths = xbins[1:]-xbins[:-1]
-        ybinwidths = ybins[1:]-ybins[:-1]
+        xbinwidths = np.diff(xedges)
+        ybinwidths = np.diff(yedges)
         binwidths = np.outer(xbinwidths, ybinwidths) 
         h2d.values(flow=flow)[...] = h2d.values(flow=flow) / binwidths
 
@@ -121,17 +104,20 @@ def make_plot_2d(h, name, proc, plot_error=False, cmin=None, cmax=None, flow=Tru
         # plot relative errors instead
         h2d.values(flow=flow)[...] = np.sqrt(hh.relVariance(h2d.values(flow=flow), h2d.variances(flow=flow), fillOnes=True))
 
-    fig, ax = plot_tools.figure(h2d, xlabel=xlabel, ylabel=ylabel, cms_label="Preliminary", automatic_scale=False, width_scale=1.2)
+    xlim = (xedges[0],xedges[-1]) if args.showFlow else (xedges[1],xedges[-2])
+    ylim = (yedges[0],yedges[-1]) if args.showFlow else (yedges[1],yedges[-2])
+
+    fig, ax = plot_tools.figure(h2d, xlabel=xlabel, ylabel=ylabel, cms_label="Preliminary", automatic_scale=False, width_scale=1.2, xlim=xlim, ylim=ylim)
 
     if log:
         cmin = min(h2d.values(flow=flow)[h2d.values(flow=flow)>0]) if cmin is None else cmin # smallest value that is not 0
         cmax = h2d.values(flow=flow).max() if cmax is None else cmax
-        colormesh = ax.pcolormesh(xbins, ybins, h2d.values(flow=flow).T, norm=LogNorm(vmin=cmin, vmax=cmax), cmap=cm.RdBu)
+        colormesh = ax.pcolormesh(xedges, yedges, h2d.values(flow=flow).T, norm=LogNorm(vmin=cmin, vmax=cmax), cmap=cm.RdBu)
     else:
         cmin = 0 if cmin is None else cmin
         cmax = h2d.values(flow=flow).max() if cmax is None else cmax
         crange = max((cmax-1), (1-cmin))
-        colormesh = ax.pcolormesh(xbins, ybins, h2d.values(flow=flow).T, vmin=1-crange, vmax=1+crange, cmap=cm.RdBu)
+        colormesh = ax.pcolormesh(xedges, yedges, h2d.values(flow=flow).T, vmin=1-crange, vmax=1+crange, cmap=cm.RdBu)
 
     cbar = fig.colorbar(colormesh, ax=ax)
 
@@ -160,18 +146,16 @@ def make_plot_1d(hists, name, proc, axis, ratio=False, normalize=False, xmin=Non
     
     h1ds = [h.project(axis) for h in hists]
 
+    if flow:
+        xedges = plot_tools.extendEdgesByFlow(h1ds[0])
+    else:
+        xedges = h1ds[0].axes.edges[0]
+
     if normalize:
         h1ds = [h/np.sum(h.values(flow=flow)) for h in h1ds]
     if density:
         for i, h1d in enumerate(h1ds):
-            x = h1d.axes.edges[0]
-            if flow:
-                # add extra bin with bin wdith of 1% of total width
-                rangex = x[-1] - x[0]
-
-                x = np.insert(x, 0, x[0] - rangex*0.02)
-                x = np.append(x, x[-1] + rangex*0.02)
-            binwidths = x[1:]-x[:-1]
+            binwidths = xedges[1:]-xedges[:-1]
             hh.scaleHist(h1d, 1./binwidths, createNew=False)
 
     ymax = ymax if ymax is not None else max([max(h.values(flow=args.showFlow)) for h in h1ds])
@@ -180,50 +164,35 @@ def make_plot_1d(hists, name, proc, axis, ratio=False, normalize=False, xmin=Non
     ymin = ymin if ymin == 0 else ymin - yrange*0.3
     ymax = ymax + yrange*0.3
 
+    if xmin is not None:
+        xlim = (xmin, xmax)
+    elif args.showFlow:
+        xlim = (xedges[0],xedges[-1])
+    else:
+        xlim = (xedges[1],xedges[-2])
+
     if ratio:
         ylabel = "1/{0}".format(name[0].split("_div_")[-1])
     else:
         ylabel = "a.u."
 
     fig, ax = plot_tools.figure(h1ds[0], xlabel=labels.get(axis,project[0]), ylabel=ylabel, cms_label="Preliminary", automatic_scale=False, width_scale=1.2,
-        ylim=(ymin, ymax))
+        ylim=(ymin, ymax), xlim=xlim)
 
     if ratio:
-        x = h1ds[0].axes.edges[0][:-1]
-        ax.plot([min(x), max(x)], [1,1], color="black", linestyle="--")
+        ax.plot([min(xedges), max(xedges)], [1,1], color="black", linestyle="--")
 
     outname = ""
     for i, h1d in enumerate(h1ds):
-        x = h1d.axes.edges[0][:-1]
         y = h1d.values(flow=flow)
         err = np.sqrt(h1d.variances(flow=flow))
 
-        ax.set_xlim((min(x),max(x)))
-        ax.set_ylim((ymin,ymax))
-
-        if flow:
-            # add extra bin with bin wdith of 1% of total width
-            rangex = x[-1] - x[0]
-
-            if h1d.axes[0].traits.underflow:
-                x = np.insert(x, 0, x[0] - rangex*0.02)
-            if h1d.axes[0].traits.overflow:
-                x = np.append(x, x[-1] + rangex*0.02)
-
-        if args.showFlow:
-            ax.set_xlim((min(x),max(x)))
-
-        ax.step(x, y, color=colors(i), label=name[i].split("_div_")[0], where="post")
-        ax.fill_between(x, y - err, y + err, alpha=0.3, color=colors(i), step="post")
-
-        # outname += f"_{name[i]}"
-
-    if xmin is not None:
-        ax.set_xlim(xmin, xmax)
+        ax.stairs(y, xedges, color=colors(i), label=name[i].split("_div_")[0])
+        ax.bar(x=xedges[:-1], height=2*err, bottom=y - err, width=np.diff(xedges), align='edge', linewidth=0, alpha=0.3, color=colors(i), zorder=-1)
 
     ax.text(1.0, 1.003, text_dict[proc], transform=ax.transAxes, fontsize=30,
             verticalalignment='bottom', horizontalalignment="right")
-    plot_tools.addLegend(ax, ncols=2, text_size=12)
+    plot_tools.addLegend(ax, ncols=1, text_size=12)
 
     output_tools.make_plot_dir(*args.plotdir.rsplit("/", 1))
     plot_name = f"hist{outname}_{axis}_{proc}_{name[-1]}"
@@ -327,7 +296,7 @@ for proc in procs:
 
         corrhs[num] = corrh
 
-    if "2D" in args.plots:
+    if "2D" in args.plots and len(project) > 1:
         logger.info("Make 2D control plots")
         make_plot_2d(hden, args.den, proc, density=True, cmin=10e-6, cmax=10e6, log=True)
         if "2Derr" in args.plots:
