@@ -187,9 +187,9 @@ if __name__ == "__main__":
             f = rf.GetDirectory(p)
             #f.cd(p)
         if isWrem:
-            nominals[p] = safeGetObject(f, f"x_{p}_{args.charge}")
+            nominals[p] = safeGetObject(f, f"nominal_{p}_{args.charge}")
         else:
-            nominals[p] = safeGetObject(f, f"x_{p}")
+            nominals[p] = safeGetObject(f, f"nominal_{p}")
         nominals[p].SetTitle(p)
         if args.plotNominal:
             if do2D:

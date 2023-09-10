@@ -79,17 +79,17 @@ def signalHistWmass(h, thresholdMT=40.0, charge=None, passIso=common.passIso, pa
     return h[sel]
 
 # the following are utility wrapper functions for signalHistWmass with proper region selection
-def histWmass_failMT_passIso(h, charge=None):
-    return signalHistWmass(h, charge, common.passIso, common.failMT)
+def histWmass_failMT_passIso(h, thresholdMT=40.0, charge=None):
+    return signalHistWmass(h, thresholdMT, charge, common.passIso, common.failMT)
 
-def histWmass_failMT_failIso(h, charge=None):
-    return signalHistWmass(h, charge, common.failIso, common.failMT)
+def histWmass_failMT_failIso(h, thresholdMT=40.0, charge=None):
+    return signalHistWmass(h, thresholdMT, charge, common.failIso, common.failMT)
 
-def histWmass_passMT_failIso(h, charge=None):
-    return signalHistWmass(h, charge, common.failIso, common.passMT)
+def histWmass_passMT_failIso(h, thresholdMT=40.0, charge=None):
+    return signalHistWmass(h, thresholdMT, charge, common.failIso, common.passMT)
 
-def histWmass_passMT_passIso(h, charge=None):
-    return signalHistWmass(h, charge, common.passIso, common.passMT)
+def histWmass_passMT_passIso(h, thresholdMT=40.0, charge=None):
+    return signalHistWmass(h, thresholdMT, charge, common.passIso, common.passMT)
 
 # TODO: Not all hists are made with these axes
 def signalHistLowPileupW(h):
