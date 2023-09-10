@@ -319,7 +319,7 @@ def plot(fittype, channel=None, data=True, stack=True, density=False, ratio=True
     base_process = set(proc_sig["name"])
     summed_yields = make_yields_df(processes, names, signal=base_process)
     if not args.noData:
-        summed_yields.append(make_yields_df([hist_data*bin_widths], ["Data"]))
+        summed_yields = pd.concat([summed_yields, make_yields_df([hist_data*bin_widths], ["Data"])])
 
     plot_tools.write_index_and_log(outdir, outfile, 
         yield_tables={"Processes" : processes_yields, "Summed processes": summed_yields},#, "Unstacked processes" : unstacked_yields},
