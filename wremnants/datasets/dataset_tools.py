@@ -140,7 +140,7 @@ def is_zombie(file_path):
         return True
 
 def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, nanoVersion="v9", 
-                data_tag="TrackFitV722_NanoProdv2", mc_tag="TrackFitV718_NanoProdv1", oneMCfileEveryN=None, checkFileForZombie=False, useNewMCx4=False):
+                data_tag="TrackFitV722_NanoProdv2", mc_tag="TrackFitV718_NanoProdv1", oneMCfileEveryN=None, checkFileForZombie=False):
     if not base_path:
         base_path = getDataPath(mode)
     logger.info(f"Loading 2016 samples from {base_path}.")
