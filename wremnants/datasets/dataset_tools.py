@@ -31,7 +31,10 @@ def makeFilelist(paths, maxFiles=-1, format_args={}, is_data=False, oneMCfileEve
         if format_args:
             path = path.format(**format_args)
             logger.debug(f"Reading files from path {path}")
-        filelist.extend(glob.glob(path) if path[:4] != "/eos" else buildXrdFileList(path, "eoscms.cern.ch"))
+        files = glob.glob(path) if path[:4] != "/eos" else buildXrdFileList(path, "eoscms.cern.ch")
+        if len(files) == 0:
+            logger.warning(f"Did not find any files matching path {path}!")
+        filelist.extend(files)
 
     if oneMCfileEveryN != None and not is_data:
         tmplist = []
