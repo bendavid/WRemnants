@@ -74,8 +74,8 @@ def build_graph(df, dataset):
     if dataset.is_data:
         raise RuntimeError("Running GEN analysis over data is not supported")
 
-    isW = dataset.name in common.wprocs
-    isZ = dataset.name in common.zprocs
+    isW = dataset.name.startswith("W") and dataset.name[1] not in ["W", "Z"] #in common.wprocs
+    isZ = dataset.name.startswith("Z") and dataset.name[1] not in ["W", "Z"] #in common.zprocs
 
     weight_expr = "std::copysign(1.0, genWeight)"
     df = df.Define("weight", weight_expr)
@@ -117,10 +117,10 @@ def build_graph(df, dataset):
 
     if not args.skipEWHists and (isW or isZ):
         if isZ:
-            massBins = theory_tools.make_ew_binning(mass = 91.1535, width = 2.4932, initialStep=0.010)
+            massBins = theory_tools.make_ew_binning(mass = 91.1535, width = 2.4932, initialStep=0.010, low_edge=50)
         else:
             massBins = theory_tools.make_ew_binning(mass = 80.3815, width = 2.0904, initialStep=0.010)
-        axis_ewMll = hist.axis.Variable(massBins, name = "ewMll")
+        axis_ewMll = hist.axis.Variable(massBins, name = "ewMll", underflow=False)
         axis_ewLogDeltaM = hist.axis.Regular(90, -5, 4, name = "ewLogDeltaM")
         axis_ewPtll = hist.axis.Variable(common.ptV_binning, underflow=False, name = "ewPTll") # hist.axis.Regular(100, 0, 100, name = "ewPtll")
 

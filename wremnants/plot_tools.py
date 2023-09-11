@@ -65,9 +65,9 @@ def figure(href, xlabel, ylabel, ylim=None, xlim=None,
 def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None,
     grid_on_main_plot = False, grid_on_ratio_plot = False, plot_title = None, title_padding = 0,
     x_ticks_ndp = None, bin_density = 300, cms_label = None, logy=False, logx=False,
-    width_scale=1
+    width_scale=1, automatic_scale=True
 ):
-    fig = cfgFigure(href, xlim, bin_density, width_scale, automatic_scale)
+    fig, xlim = cfgFigure(href, xlim, bin_density, width_scale, automatic_scale)
     
     ax1 = fig.add_subplot(4, 1, (1, 3)) 
     if cms_label: hep.cms.text(cms_label)

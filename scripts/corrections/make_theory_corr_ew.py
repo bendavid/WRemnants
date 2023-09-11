@@ -104,8 +104,8 @@ def make_plot_2d(h, name, proc, plot_error=False, cmin=None, cmax=None, flow=Tru
         # plot relative errors instead
         h2d.values(flow=flow)[...] = np.sqrt(hh.relVariance(h2d.values(flow=flow), h2d.variances(flow=flow), fillOnes=True))
 
-    xlim = (xedges[0],xedges[-1]) if args.showFlow else (xedges[1],xedges[-2])
-    ylim = (yedges[0],yedges[-1]) if args.showFlow else (yedges[1],yedges[-2])
+    xlim = (xedges[0],xedges[-1])
+    ylim = (yedges[0],yedges[-1])
 
     fig, ax = plot_tools.figure(h2d, xlabel=xlabel, ylabel=ylabel, cms_label="Preliminary", automatic_scale=False, width_scale=1.2, xlim=xlim, ylim=ylim)
 
@@ -166,10 +166,8 @@ def make_plot_1d(hists, name, proc, axis, ratio=False, normalize=False, xmin=Non
 
     if xmin is not None:
         xlim = (xmin, xmax)
-    elif args.showFlow:
-        xlim = (xedges[0],xedges[-1])
     else:
-        xlim = (xedges[1],xedges[-2])
+        xlim = (xedges[0],xedges[-1])
 
     if ratio:
         ylabel = "1/{0}".format(name[0].split("_div_")[-1])
@@ -252,21 +250,20 @@ for proc in procs:
 
     hratios = []
     corrhs = {}
-    for num, hnum in zip(nums, hnums):
-        hratio = hh.divideHists(hnum, hden)
-        if not args.noSmoothing:
-            hratio = hh.smoothTowardsOne(hratio)
-            logger.info('Integrals after smoothing {0} {1}'.format(np.sum(hden.values(flow=True)), np.sum(hden.values(flow=True)*hratio.values(flow=True))))
-            if args.normalize:
-                scale = np.sum(hden.values(flow=True)) / np.sum(hden.values(flow=True)*hratio.values(flow=True))
-                hratio = hh.scaleHist(hratio, scale)
-                logger.info('Integrals after adjustment {0} {1}'.format(np.sum(hden.values(flow=True)), np.sum(hden.values(flow=True)*hratio.values(flow=True))))
 
-        # Add dummy axis
-        axis_dummy = hist.axis.Regular(1, -10., 10., underflow=False, overflow=False, name = "dummy")
-        hdummy = hist.Hist(*hratio.axes, axis_dummy, storage=hratio._storage_type())
-        hdummy.view(flow=True)[...,0] = hratio.view(flow=True)
-        hratio = hdummy
+    def make_correction(h1, h2, name):
+        hratio = hh.divideHists(h1, h2)
+        if not args.noSmoothing and not len(hratio.axes)>1:
+            # 2D smoothing
+            hratio = hh.smoothTowardsOne(hratio)
+            logger.info('Integrals after smoothing {0} {1}'.format(np.sum(h2.values(flow=True)), np.sum(h2.values(flow=True)*hratio.values(flow=True))))
+            if args.normalize:
+                scale = np.sum(h2.values(flow=True)) / np.sum(h2.values(flow=True)*hratio.values(flow=True))
+                hratio = hh.scaleHist(hratio, scale)
+                logger.info('Integrals after adjustment {0} {1}'.format(np.sum(h2.values(flow=True)), np.sum(h2.values(flow=True)*hratio.values(flow=True))))
+
+        if len(hratio.axes)>1:
+            hratios.append(hratio)
 
         # Add charge axis
         if proc[0] == 'W':
@@ -275,26 +272,36 @@ for proc in procs:
             axis_charge = hist.axis.Regular(1, -1., 1., underflow=False, overflow=False, name = "charge")
         hcharge = hist.Hist(*hratio.axes, axis_charge, storage=hratio._storage_type())
         hcharge.view(flow=True)[...,charge_dict[proc]] = hratio.view(flow=True)
-        hratio = hcharge
 
-        hratios.append(hratio)
-
-        # Add syst axis
-        corrh[proc] = hist.Hist(*hratio.axes, hist.axis.Regular(3, 0, 3, underflow=False, overflow=False, name="systIdx"), storage=hist.storage.Double())
-        # Variations: 0=original MiNNLO, 1=Horace NLO, 2=mirrored
-        hones = hist.Hist(*hratio.axes, storage=hist.storage.Double())
-        hones.values(flow=True)[...,charge_dict[proc]] = np.ones(hdummy.values(flow=True).shape)
-        hmirror = hist.Hist(*hratio.axes, storage=hist.storage.Double())
-        hmirror.values(flow=True)[...] = 2*hratio.values(flow=True) - hones.values(flow=True)
+        # Variations: 0=original MiNNLO, 1=Horace NLO, 2=mirrored (doubled)
+        hones = hist.Hist(*hcharge.axes, storage=hist.storage.Double())
+        hones.values(flow=True)[...,charge_dict[proc]] = np.ones(hratio.values(flow=True).shape)
+        hmirror = hist.Hist(*hcharge.axes, storage=hist.storage.Double())
+        hmirror.values(flow=True)[...] = 2*hcharge.values(flow=True) - hones.values(flow=True)
         if args.normalize:
-            mirrorscale = np.sum(hden.values(flow=True)) / np.sum(hden.values(flow=True)*hmirror.values(flow=True)[...,0,charge_dict[proc]])
+            mirrorscale = np.sum(h2.values(flow=True)) / np.sum(h2.values(flow=True)*hmirror.values(flow=True)[...,0,charge_dict[proc]])
             logger.info(f'{proc} mirrorscale = {mirrorscale}')
             hmirror = hh.scaleHist(hmirror, mirrorscale)
-        corrh[proc].values(flow=True)[...,0] = hones.values(flow=True)
-        corrh[proc].values(flow=True)[...,1] = hratio.values(flow=True)
-        corrh[proc].values(flow=True)[...,2] = hmirror.values(flow=True)
 
-        corrhs[num] = corrh
+        # Add syst axis
+        if name not in corrh:
+            corrh[name] = {}
+        corrh[name][proc] = hist.Hist(*hcharge.axes, hist.axis.Regular(3, 0, 3, underflow=False, overflow=False, name="systIdx"), storage=hist.storage.Double())
+        corrh[name][proc].values(flow=True)[...,0] = hones.values(flow=True)
+        corrh[name][proc].values(flow=True)[...,1] = hcharge.values(flow=True)
+        corrh[name][proc].values(flow=True)[...,2] = hmirror.values(flow=True)
+
+        corrhs[name] = corrh[name]
+
+    for num, hnum in zip(nums, hnums):
+       
+        make_correction(hnum, hden, f"{num}ew")
+
+        for ax in project:
+            hnum1D = hnum.project(ax)
+            hden1D = hden.project(ax)
+
+            make_correction(hnum1D, hden1D, f"{num}ew_{ax}")
 
     if "2D" in args.plots and len(project) > 1:
         logger.info("Make 2D control plots")
@@ -336,11 +343,13 @@ for proc in procs:
             make_plot_1d(hratios1D, [f"{n}_div_{args.den}" for n in nums], proc, ax, xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax, ratio=True)
 
 for num, corrh in corrhs.items():
-    outname = num.replace('-', '') + 'ew'
+    outname = num.replace('-', '')
     if args.postfix is not None:
         outname += f"_{args.postfix}"
     if 'ZToMuMu' in corrh:
-        with lz4.frame.open(f"{args.outpath}/{outname}CorrZ.pkl.lz4", "wb") as f:
+        outfile = f"{args.outpath}/{outname}CorrZ.pkl.lz4"
+        logger.info(f"Write correction file {outfile}")
+        with lz4.frame.open(outfile, "wb") as f:
             pickle.dump({
                     'Z' : {
                         f"{outname}_minnlo_ratio" : corrh['ZToMuMu'],
@@ -350,7 +359,9 @@ for num, corrh in corrhs.items():
 
     if 'WplusToMuNu' in corrh and "WminusToMuNu" in corrh:
         corrh['W'] = corrh['WplusToMuNu']+corrh['WminusToMuNu']
-        with lz4.frame.open(f"{args.outpath}/{outname}CorrW.pkl.lz4", "wb") as f:
+        outfile = f"{args.outpath}/{outname}CorrW.pkl.lz4"
+        logger.info(f"Write correction file {outfile}")
+        with lz4.frame.open(outfile, "wb") as f:
             pickle.dump({
                     'W' : {
                         f"{outname}_minnlo_ratio" : corrh['W'],
