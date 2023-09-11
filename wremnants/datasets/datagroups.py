@@ -282,7 +282,6 @@ class Datagroups(object):
                 if member.name in forceToNominal:
                     read_syst = ""
                     logger.debug(f"Forcing group member {member.name} to read the nominal hist for syst {syst}")
-
                 try:
                     h = self.readHist(baseName, member, procName, read_syst)
                     foundExact = True
@@ -305,6 +304,10 @@ class Datagroups(object):
                     else:
                         logger.debug(f"No operation for member {i}: {member.name}/{procName}")
 
+                if preOpMap and member.name in preOpMap:
+                    logger.debug(f"Applying preOp to {member.name}/{procName} after loading")
+                    h = preOpMap[member.name](h, **preOpArgs)
+
                 if self.gen_axes != None:
                     # integrate over remaining gen axes 
                     logger.debug(f"Integrate over gen axes {self.gen_axes}")
@@ -316,10 +319,6 @@ class Datagroups(object):
                 if h_id == id(h):
                     logger.debug(f"Make explicit copy")
                     h = h.copy()
-
-                if preOpMap and member.name in preOpMap:
-                    logger.debug(f"Applying preOp to {member.name}/{procName} after loading")
-                    h = preOpMap[member.name](h, **preOpArgs)
 
                 if self.globalAction:
                     logger.debug("Applying global action")
@@ -554,6 +553,16 @@ class Datagroups(object):
 
         logger.debug(f"Gen axes are now {self.gen_axes}")
 
+    def getGenBinIndices(self, h):
+        gen_bins = []
+        for gen_axis in self.gen_axes:
+            if gen_axis not in h.axes.name:
+                raise RuntimeError(f"Gen axis '{gen_axis}' not found in histogram axes '{h.axes.name}'!")
+
+            gen_bin_edges = h.axes[gen_axis].edges
+            gen_bins.append(range(len(gen_bin_edges)-1))
+        return gen_bins
+
     def defineSignalBinsUnfolding(self, group_name, new_name=None, member_filter=None):
         if group_name not in self.groups.keys():
             raise RuntimeError(f"Base group {group_name} not found in groups {self.groups.keys()}!")
@@ -564,15 +573,9 @@ class Datagroups(object):
 
         nominal_hist = self.results[base_members[0].name]["output"]["xnorm"].get()
 
-        gen_bins = []
-        for gen_axis in self.gen_axes:
-            if gen_axis not in nominal_hist.axes.name:
-                raise RuntimeError(f"Gen axis '{gen_axis}' not found in histogram axes '{nominal_hist.axes.name}'!")
+        gen_bin_indices = self.getGenBinIndices(nominal_hist)
 
-            gen_bin_edges = nominal_hist.axes[gen_axis].edges
-            gen_bins.append(range(len(gen_bin_edges)-1))
-
-        for indices in itertools.product(*gen_bins):
+        for indices in itertools.product(*gen_bin_indices):
 
             proc_name = group_name if new_name is None else new_name
             for idx, var in zip(indices, self.gen_axes):

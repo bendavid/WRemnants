@@ -8,8 +8,8 @@ from utilities.h5pyutils import writeFlatInChunks, writeSparse
 import math
 import pandas as pd
 import os
-import pdb
 import narf
+import pdb
 
 logger = logging.child_logger(__name__)
 
@@ -243,6 +243,12 @@ class HDF5Writer(object):
                     continue
 
                 systName = systKey if not syst["name"] else syst["name"]
+                if syst["fromNominal"]:
+                    forceToNominal = dg.getProcNames()
+                else:
+                    # Needed to avoid always reading the variation for the fakes, even for procs not specified
+                    forceToNominal=[x for x in dg.getProcNames() if x not in 
+                        dg.getProcNames([p for g in procs_syst for p in chanInfo.expandProcesses(g) if p != dg.fakeName])]
 
                 dg.loadHistsForDatagroups(
                     chanInfo.nominalName, systName, label="syst",
@@ -250,8 +256,7 @@ class HDF5Writer(object):
                     forceNonzero=forceNonzero and systName != "qcdScaleByHelicity",
                     preOpMap=syst["actionMap"], preOpArgs=syst["actionArgs"],
                     # Needed to avoid always reading the variation for the fakes, even for procs not specified
-                    forceToNominal=[x for x in dg.getProcNames() if x not in 
-                        dg.getProcNames([p for p in procs_syst if p != dg.fakeName])],
+                    forceToNominal=forceToNominal,
                     scaleToNewLumi=chanInfo.lumiScale,
                     nominalIfMissing=not chanInfo.xnorm # for masked channels not all systematics exist (we can skip loading nominal since Fake does not exist)
                 )
@@ -722,7 +727,14 @@ class HDF5Writer(object):
 
     def get_noigroups(self):
         #list of groups of systematics to be treated as additional outputs for impacts, etc (aka "nuisances of interest")
-        return self.get_groups(self.dict_noigroups)
+        systs = self.get_systs()
+        groups = []
+        idxs = []
+        for group, members in self.dict_noigroups.items():
+            groups.append(group)
+            for syst in members:
+                idxs.append(systs.index(syst))
+        return groups, idxs
 
     def get_systgroups(self):
         #list of groups of systematics (nuisances) and lists of indexes
