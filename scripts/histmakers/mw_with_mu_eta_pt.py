@@ -42,9 +42,9 @@ if args.theoryAgnostic:
     
 thisAnalysis = ROOT.wrem.AnalysisType.Wmass
 datasets = getDatasets(maxFiles=args.maxFiles,
-                        filt=args.filterProcs,
-                        excl=args.excludeProcs, 
-                        nanoVersion="v8" if args.v8 else "v9", base_path=args.dataPath, oneMCfileEveryN=args.oneMCfileEveryN)
+                       filt=args.filterProcs,
+                       excl=args.excludeProcs, 
+                       nanoVersion="v8" if args.v8 else "v9", base_path=args.dataPath, oneMCfileEveryN=args.oneMCfileEveryN)
 
 era = args.era
 

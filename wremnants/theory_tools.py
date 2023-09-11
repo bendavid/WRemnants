@@ -297,6 +297,7 @@ def build_weight_expr(df, exclude_weights=[]):
     return weight_expr
 
 def define_nominal_weight(df):
+    logger.debug("Defining nominal weight")
     return df.Define(f"nominal_weight", build_weight_expr(df))
 
 def define_theory_corr(df, dataset_name, helpers, generators, modify_central_weight):
