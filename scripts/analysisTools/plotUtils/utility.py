@@ -16,6 +16,7 @@ logger = logging.child_logger(__name__)
 # trying to use same colors as mathplotlib in wremnants
 colors_plots_ = {"Wmunu"      : ROOT.TColor.GetColor("#8B0000"), #ROOT.kRed+2,
                  "Zmumu"      : ROOT.TColor.GetColor("#87CEFA"), #lightskyblue, #ADD8E6 is lightblue #ROOT.kAzure+2,
+                 "DYlowMass"  : ROOT.TColor.GetColor("#00BFFF"), #deepskyblue,
                  "Wtau"       : ROOT.TColor.GetColor("#FFA500"), #ROOT.kCyan+1, #backward compatibility
                  "Wtaunu"     : ROOT.TColor.GetColor("#FFA500"), # orange, use #FF8C00 for darkOrange #ROOT.kCyan+1,
                  "Ztautau"    : ROOT.TColor.GetColor("#00008B"), #ROOT.kSpring+9,
@@ -28,6 +29,7 @@ colors_plots_ = {"Wmunu"      : ROOT.TColor.GetColor("#8B0000"), #ROOT.kRed+2,
 
 legEntries_plots_ = {"Wmunu"      : "W#rightarrow#mu#nu",
                      "Zmumu"      : "Z#rightarrow#mu#mu",
+                     "DYlowMass"  : "Z#rightarrow#mu#mu 10<m<50 GeV",
                      "Wtau"       : "W#rightarrow#tau#nu", #backward compatibility
                      "Wtaunu"     : "W#rightarrow#tau#nu",
                      "Ztautau"    : "Z#rightarrow#tau#tau",
