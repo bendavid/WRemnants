@@ -37,27 +37,35 @@ dataDictV9 = {
 
     'WplusmunuPostVFP' : { 
                       'filepaths' : 
-                      ["{BASE_PATH}/WplusJetsToMuNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}/*/*/*.root"],
+                      ["{BASE_PATH}/WplusJetsToMuNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}/*/*/*.root",
+                       "{BASE_PATH}/WplusJetsToMuNu_H2ErratumFix_PDFExt_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}/*/*/*.root"
+                      ],
                       'xsec' : xsec_WpmunuPostVFP,
                       'group': "Wmunu",
     },
     'WminusmunuPostVFP' : { 
                       'filepaths' : 
-                      ["{BASE_PATH}/WminusJetsToMuNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}/*/*/*.root"],
+                      ["{BASE_PATH}/WminusJetsToMuNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}/*/*/*.root",
+                       "{BASE_PATH}/WminusJetsToMuNu_H2ErratumFix_PDFExt_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}/*/*/*.root",
+                      ],
                       'xsec' : xsec_WmmunuPostVFP,
                       'group': "Wmunu",
     },
 
     'WplustaunuPostVFP' : { 
                          'filepaths' : 
-                         ["{BASE_PATH}/WplusJetsToTauNu_TauToMu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}/*/*/*.root"],
+                         ["{BASE_PATH}/WplusJetsToTauNu_TauToMu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}/*/*/*.root",
+                          "{BASE_PATH}/WplusJetsToTauNu_TauToMu_H2ErratumFix_PDFExt_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}/*/*/*.root",
+                         ],
                          'xsec' : BR_TAUToMU*xsec_WpmunuPostVFP,
                          'group': "Wtaunu",
     },
     
     'WminustaunuPostVFP' : { 
                          'filepaths' : 
-                         ["{BASE_PATH}/WminusJetsToTauNu_TauToMu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}/*/*/*.root"],
+                         ["{BASE_PATH}/WminusJetsToTauNu_TauToMu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}/*/*/*.root",
+                          "{BASE_PATH}/WminusJetsToTauNu_TauToMu_H2ErratumFix_PDFExt_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}/*/*/*.root",
+                         ],
                          'xsec' : BR_TAUToMU*xsec_WmmunuPostVFP,
                          'group': "Wtaunu",
     },
