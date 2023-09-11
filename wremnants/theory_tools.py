@@ -184,7 +184,7 @@ def define_ew_vars(df):
 
     return df
 
-def make_ew_binning(mass = 91.1535, width = 2.4932, initialStep = 0.1):
+def make_ew_binning(mass = 91.1535, width = 2.4932, initialStep = 0.1, low_edge=0):
     maxVal = ROOT.Math.breitwigner_pdf(mass, width, mass)
     bins = [mass]
     currentMass = mass
@@ -193,7 +193,7 @@ def make_ew_binning(mass = 91.1535, width = 2.4932, initialStep = 0.1):
         currentMass += binSize
         bins.append(currentMass)
         lowMass = 2*mass - currentMass
-        if lowMass - binSize > 0:
+        if lowMass - binSize > low_edge:
             bins.insert(0, lowMass)
     bins.insert(0, 0.)
     return bins
