@@ -8,8 +8,6 @@ parser.add_argument("--flavor", type=str, choices=["e", "mu"], help="Flavor (e o
 
 parser = common.set_parser_default(parser, "genVars", ["ptVGen"])
 parser = common.set_parser_default(parser, "theoryCorr", ["scetlib_dyturbo", "winhacnloew"])
-parser = common.set_parser_default(parser, "pt", [10,26.,56.])
-parser = common.set_parser_default(parser, "eta", [12,-2.4,2.4])
 args = parser.parse_args()
 
 

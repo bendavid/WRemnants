@@ -14,23 +14,35 @@ def add_recoil_uncertainty(card_tool, samples, passSystToFakes=False, pu_type="h
     met = input_tools.args_from_metadata(card_tool, "met")
     if flavor == "":
         flavor = input_tools.args_from_metadata(card_tool, "flavor")
-    rtag = f"{pu_type}_{flavor}_{met}"
-    if not rtag in recoil_tools.recoil_cfg:
-        logger.warning(f"Recoil corrections for {pu_type}, {flavor}, {met} not available.")
-        return
-    recoil_cfg = recoil_tools.recoil_cfg[rtag]
-    recoil_vars = list(recoil_cfg['corr_z'].keys()) + list(recoil_cfg['unc_z'].keys())
-    recoil_grps = recoil_vars
-    if group_compact:
-        recoil_grps = ["CMS_recoil"]*len(recoil_cfg)
-    for i, tag in enumerate(recoil_vars):
-        card_tool.addSystematic("recoilUnc_%s" % tag,
-            processes=samples,
-            mirror = False,
-            group = recoil_grps[i],
-            systAxes = ["recoilVar"],
-            passToFakes=passSystToFakes,
-        )
+    if met == "RawPFMET":
+        rtag = f"{pu_type}_{flavor}_{met}"
+        if not rtag in recoil_tools.recoil_cfg:
+            logger.warning(f"Recoil corrections for {pu_type}, {flavor}, {met} not available.")
+            return
+        recoil_cfg = recoil_tools.recoil_cfg[rtag]
+        recoil_vars = list(recoil_cfg['corr_z'].keys()) + list(recoil_cfg['unc_z'].keys())
+        recoil_grps = recoil_vars
+        if group_compact:
+            recoil_grps = ["CMS_recoil"]*len(recoil_cfg)
+        for i, tag in enumerate(recoil_vars):
+            card_tool.addSystematic("recoilUnc_%s" % tag,
+                processes=samples,
+                mirror = False,
+                group = recoil_grps[i],
+                systAxes = ["recoilVar"],
+                passToFakes=passSystToFakes,
+            )
+    elif met == "DeepMETReso":
+        if input_tools.args_from_metadata(card_tool, "recoilUnc"):
+            tags = ["para", "perp"]
+            for i, tag in enumerate(tags):
+                card_tool.addSystematic("recoilUnc_%s" % tag,
+                    processes=samples,
+                    mirror = True,
+                    group = "recoil",
+                    systAxes = ["recoilVar"],
+                    passToFakes=passSystToFakes,
+                )
 
 def varyHistByBin(hnom, 
     variation_magnitude=0.01, 
@@ -38,7 +50,6 @@ def varyHistByBin(hnom,
 ):
     # Vary a single bin of a histogram up by variatio_magnitude
     # index_info is a dict with gen axes and bin indices e.g. {"ax1": 1, "ax2": 2}
-
     hvar = hist.Hist(*hnom.axes, storage=hist.storage.Double())
 
     values = hnom.values(flow=True).copy()

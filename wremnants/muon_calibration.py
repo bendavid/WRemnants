@@ -76,8 +76,10 @@ def make_jpsi_crctn_helpers(args, calib_filepaths, make_uncertainty_helper=False
 def make_Z_non_closure_helpers(args, calib_filepaths, closure_filepaths):
     parametrized_helper = make_Z_non_closure_parametrized_helper(
         closure_filepaths['parametrized'], calib_filepaths['tflite_file'],
-        correlated = args.correlatedNonClosureNP, scale_var_method = args.muonScaleVariation
-    ) if (args.nonClosureScheme in ["A-M-separated", "A-M-combined", "binned-plus-M"]) else None
+        correlated = args.correlatedNonClosureNP, scale_var_method = args.muonScaleVariation,
+        dummy_A = args.dummyNonClosureA, dummy_M = args.dummyNonClosureM,
+        dummy_A_mag = args.dummyNonClosureAMag, dummy_M_mag = args.dummyNonClosureMMag
+    ) if (args.nonClosureScheme in ["A-M-separated", "A-M-combined", "A-only", "M-only", "binned-plus-M"]) else None
     binned_helper = make_Z_non_closure_binned_helper(
         closure_filepaths['binned'], calib_filepaths['tflite_file'],
         correlated = args.correlatedNonClosureNP, scale_var_method = args.muonScaleVariation
@@ -233,7 +235,6 @@ def make_jpsi_crctn_unc_helper(
     f = uproot.open(filepath_correction)
     cov = f['covariance_matrix'].to_hist()
     cov_scale_params = get_jpsi_scale_param_cov_mat(cov, n_scale_params, n_tot_params, n_eta_bins, scale)
-
     w,v = np.linalg.eigh(cov_scale_params)    
     var_mat = np.sqrt(w) * v
     axis_eta = hist.axis.Regular(n_eta_bins, -2.4, 2.4, name = 'eta')
@@ -274,7 +275,8 @@ def make_jpsi_crctn_unc_helper(
 
 def make_Z_non_closure_parametrized_helper(
     filepath_correction, filepath_tflite,
-    n_eta_bins = 24, n_scale_params = 3, correlated = False, scale_var_method = 'smearingWeightsSplines'
+    n_eta_bins = 24, n_scale_params = 3, correlated = False, scale_var_method = 'smearingWeightsSplines',
+    dummy_A = True, dummy_M = False, dummy_A_mag = 7.5e-5, dummy_M_mag = 0
 ):
     f = uproot.open(filepath_correction)
     M = f['MZ'].to_hist()
@@ -283,18 +285,32 @@ def make_Z_non_closure_parametrized_helper(
     axis_eta = hist.axis.Regular(n_eta_bins, -2.4, 2.4, name = 'eta')
     axis_scale_params = hist.axis.Regular(n_scale_params, 0, 1, name = 'scale_params')
     hist_non_closure = hist.Hist(axis_eta, axis_scale_params)
-    hist_non_closure.view()[...,0] = A.values()
+    if dummy_A:
+        hist_non_closure.view()[...,0] = np.full(n_eta_bins, dummy_A_mag)
+    else:
+        hist_non_closure.view()[...,0] = A.values()
     hist_non_closure.view()[...,1] = np.zeros(n_eta_bins)
-    hist_non_closure.view()[...,2] = M.values()
+    if dummy_M:
+        hist_non_closure.view()[...,2] = np.full(n_eta_bins, dummy_M_mag)
+    else:
+        hist_non_closure.view()[...,2] = M.values()
 
     hist_non_closure_cpp = narf.hist_to_pyroot_boost(hist_non_closure, tensor_rank = 1)
     if correlated:
-        z_non_closure_helper = ROOT.wrem.ZNonClosureParametrizedHelperCorl[
-            type(hist_non_closure_cpp).__cpp_name__,
-            n_eta_bins
-        ] (
-            ROOT.std.move(hist_non_closure_cpp)
-        )
+        if scale_var_method == 'smearingWeightsSplines':
+            z_non_closure_helper = ROOT.wrem.ZNonClosureParametrizedHelperSplinesCorl[
+                type(hist_non_closure_cpp).__cpp_name__,
+                n_eta_bins
+            ] (
+                ROOT.std.move(hist_non_closure_cpp)
+            )
+        else:
+            z_non_closure_helper = ROOT.wrem.ZNonClosureParametrizedHelperCorl[
+                type(hist_non_closure_cpp).__cpp_name__,
+                n_eta_bins
+            ] (
+                ROOT.std.move(hist_non_closure_cpp)
+            )
         z_non_closure_helper.tensor_axes = tuple([common.down_up_axis])
         return z_non_closure_helper
     else:
@@ -661,6 +677,7 @@ def add_jpsi_crctn_stats_unc_hists(
                 f"{reco_sel_GF}_genPt",
                 f"{reco_sel_GF}_genEta",
                 f"{reco_sel_GF}_genCharge",
+                f"{reco_sel_GF}_dweightdqoprs",
                 "nominal_weight"
             ]
         )
@@ -734,7 +751,8 @@ def add_jpsi_crctn_Z_non_closure_hists(
             f"{reco_sel_GF}_recoCharge",
             f"{reco_sel_GF}_genPt",
             f"{reco_sel_GF}_genEta",
-            f"{reco_sel_GF}_genCharge"
+            f"{reco_sel_GF}_genCharge",
+            f"{reco_sel_GF}_dweightdqoprs"
         ]
         nominal_cols_non_closure = nominal_cols
     else:
@@ -744,10 +762,10 @@ def add_jpsi_crctn_Z_non_closure_hists(
             f"{reco_sel_GF}_genSmearedEta",
             f"{reco_sel_GF}_genSmearedPt",
             f"{reco_sel_GF}_genSmearedCharge",
-            f"{reco_sel_GF}_covMat",
+            f"{reco_sel_GF}_covMat"
         ]
         nominal_cols_non_closure = nominal_cols_gen_smeared
-    if args.nonClosureScheme == "A-M-separated":
+    if args.nonClosureScheme in ["A-M-separated", "A-only"]:
         df = df.DefinePerSample("AFlag", "0x01")
         df = df.Define("Z_non_closure_parametrized_A", z_non_closure_parametrized_helper,
             [
@@ -764,7 +782,7 @@ def add_jpsi_crctn_Z_non_closure_hists(
             storage=hist.storage.Double()
         )
         results.append(hist_Z_non_closure_parametrized_A)
-    if args.nonClosureScheme in ["A-M-separated", "binned-plus-M"]:
+    if args.nonClosureScheme in ["A-M-separated", "binned-plus-M", "M-only"]:
         df = df.DefinePerSample("MFlag", "0x04")
         df = df.Define("Z_non_closure_parametrized_M", z_non_closure_parametrized_helper,
             [

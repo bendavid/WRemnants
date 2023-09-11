@@ -116,6 +116,7 @@ pileup_helper = wremnants.make_pileup_helper(era = era)
 
 calib_filepaths = common.calib_filepaths
 closure_filepaths = common.closure_filepaths
+diff_weights_helper = ROOT.wrem.SplinesDifferentialWeightsHelper(calib_filepaths['tflite_file']) if (args.muonScaleVariation == 'smearingWeightsSplines' or args.validationHists) else None
 mc_jpsi_crctn_helper, data_jpsi_crctn_helper, mc_jpsi_crctn_unc_helper, data_jpsi_crctn_unc_helper = muon_calibration.make_jpsi_crctn_helpers(args, calib_filepaths, make_uncertainty_helper=True)
 z_non_closure_parametrized_helper, z_non_closure_binned_helper = muon_calibration.make_Z_non_closure_helpers(args, calib_filepaths, closure_filepaths)
 
@@ -181,12 +182,12 @@ def build_graph(df, dataset):
     df = muon_calibration.define_corrected_muons(df, cvh_helper, jpsi_helper, args, dataset, smearing_helper, bias_helper)
 
     df = muon_selections.select_veto_muons(df, nMuons=2)
-    df = muon_selections.select_good_muons(df, nMuons=2, use_trackerMuons=args.trackerMuons, use_isolation=True)
+    df = muon_selections.select_good_muons(df, args.pt[1], args.pt[2], nMuons=2, use_trackerMuons=args.trackerMuons, use_isolation=True)
 
     # for dilepton analysis we will call trigMuons (nonTrigMuons) those with charge plus (minus). In fact both might be triggering, naming scheme might be improved
     df = muon_selections.define_trigger_muons(df, what_analysis=thisAnalysis)
 
-    df = muon_selections.select_z_candidate(df, args.pt[1], args.pt[2], mass_min, mass_max)
+    df = muon_selections.select_z_candidate(df, mass_min, mass_max)
 
     df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "trigMuons")
     df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "nonTrigMuons")
@@ -300,6 +301,10 @@ def build_graph(df, dataset):
                     f"{reco_sel_GF}_genEta",
                     f"{reco_sel_GF}_genCharge"
                 ]
+                if diff_weights_helper:
+                    df = df.Define(f'{reco_sel_GF}_dweightdqoprs', diff_weights_helper, [*input_kinematics])
+                    input_kinematics.append(f'{reco_sel_GF}_dweightdqoprs')
+
                 # muon scale variation from stats. uncertainty on the jpsi massfit
                 df = df.Define(
                     "nominal_muonScaleSyst_responseWeights_tensor", data_jpsi_crctn_unc_helper,
