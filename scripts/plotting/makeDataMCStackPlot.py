@@ -85,8 +85,7 @@ variation.add_argument("--selectEntries", type=str, nargs='+', help="entries to 
 variation.add_argument("--colors", type=str, nargs='+', help="Variation colors")
 variation.add_argument("--linestyle", type=str, default=[], nargs='+', help="Linestyle for variations")
 variation.add_argument("--doubleColors", action='store_true', help="Auto generate colors in pairs (useful for systematics)")
-variation.add_argument("--fillBetween", action='store_true', help="Fill between uncertainty hists in ratio")
-variation.add_argument("--skipFillBetween", type=int, default=0, help="Don't fill between the first N hists (only relevant if --fillBetween = True)")
+variation.add_argument("--fillBetween", type=int, help="Fill between first n variation hists in ratio")
 
 args = parser.parse_args()
 
@@ -215,7 +214,6 @@ for h in args.hists:
         action = lambda x: hh.projectNoFlow(collapseSyst(x[select]), h, overflow_ax)
     fig = plot_tools.makeStackPlotWithRatio(histInfo, prednames, histName=args.baseName, ylim=args.ylim, yscale=args.yscale,
             fill_between=args.fillBetween if hasattr(args, "fillBetween") else None, 
-            skip_fill=args.skipFillBetween if hasattr(args, "skipFillBetween") else 0,
             action=action, unstacked=unstack, 
             fitresult=args.fitresult, prefit=args.prefit,
             xlabel=xlabels.get(h,h), ylabel="Events/bin", rrange=args.rrange, binwnorm=1.0, lumi=groups.lumi,

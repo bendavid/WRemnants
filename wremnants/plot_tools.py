@@ -131,7 +131,7 @@ def makeStackPlotWithRatio(
     xlabel="", ylabel="Events/bin", rlabel = "Data/Pred.", rrange=[0.9, 1.1], ylim=None, xlim=None, nlegcols=2,
     binwnorm=None, select={},  action = (lambda x: x), extra_text=None, extra_text_loc=(0.8, 0.7), grid = False, 
     plot_title = None, title_padding = 0, yscale=None,
-    fill_between=False, skip_fill=0, ratio_to_data=False, baseline=True, legtext_size=20, cms_decor="Preliminary", lumi=16.8,
+    fill_between=False, ratio_to_data=False, baseline=True, legtext_size=20, cms_decor="Preliminary", lumi=16.8,
     no_fill=False, bin_density=300, unstacked_linestyles=[],
     ratio_error=True,
 ):
@@ -290,10 +290,11 @@ def makeStackPlotWithRatio(
 
         if fill_between:
             fill_procs = [x for x in unstacked if x != "Data"]
-            if not skip_fill:
-                skip_fill = len(fill_procs) % 2
-            logger.debug(f"Skip filling first {skip_fill}")
-            for up,down in zip(fill_procs[skip_fill::2], fill_procs[skip_fill+1::2]):
+            if fill_between < 0:
+                fill_between = len(fill_procs)
+            logger.debug(f"Filling first {fill_between}")
+            for up,down in zip(fill_procs[:fill_between:2], fill_procs[1:fill_between:2]):
+                print("Up", up, "down", down)
                 unstack_up = action(histInfo[up].hists[histName])
                 unstack_down = action(histInfo[down].hists[histName])
                 unstack_upr = hh.divideHists(unstack_up, ratio_ref, 1e-6, flow=False)
@@ -464,7 +465,7 @@ def write_index_and_log(outpath, logname, indexname="index.php", template_dir=f"
             if "Unstacked processes" in yield_tables and "Stacked processes" in yield_tables:
                 if "Data" in yield_tables["Unstacked processes"]["Process"].values:
                     unstacked = yield_tables["Unstacked processes"]
-                    data_yield = unstacked[unstacked["Process"] == "Data"]["Yield"]
+                    data_yield = unstacked[unstacked["Process"] == "Data"]["Yield"].iloc[0]
                     ratio = float(yield_tables["Stacked processes"]["Yield"].sum()/data_yield)*100
                     logf.write(f"===> Sum unstacked to data is {ratio:.2f}%")
 
