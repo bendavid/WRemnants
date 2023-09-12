@@ -14,15 +14,15 @@ def broadcastSystHist(h1, h2, flow=True):
     if h1.ndim > h2.ndim or h1.shape == h2.shape:
         return h1
 
-    s1 = h1.view(flow=flow).shape
-    s2 = h2.view(flow=flow).shape
+    s1 = h1.values(flow=flow).shape 
+    s2 = h2.values(flow=flow).shape
 
     # the additional axes have to be broadcasted as leading
     moves = {i: e for i, (e, n2) in enumerate(zip(s2, h2.axes.name)) if n2 not in h1.axes.name}
     broadcast_shape = list(moves.values()) + list(s1)
 
     try:
-        new_vals = np.broadcast_to(h1.view(flow=flow), broadcast_shape)
+        new_vals = np.broadcast_to(h1.values(flow=flow), broadcast_shape)
     except ValueError as e:
         raise ValueError("Cannot broadcast hists with incompatible axes!\n" 
                          f"    h1.axes: {h1.axes}\n"
@@ -30,6 +30,10 @@ def broadcastSystHist(h1, h2, flow=True):
 
     # move back to original order
     new_vals = np.moveaxis(new_vals, np.arange(len(moves)), list(moves.keys()))
+    if h1.storage_type == hist.storage.Weight:
+        new_vars = np.broadcast_to(h1.variances(flow=flow), broadcast_shape)
+        new_vars = np.moveaxis(new_vars, np.arange(len(moves)), list(moves.keys()))
+        new_vals = np.stack((new_vals, new_vars), axis=-1)
 
     return hist.Hist(*h2.axes, data=new_vals, storage=h1.storage_type())
 

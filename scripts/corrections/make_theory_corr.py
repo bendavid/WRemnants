@@ -22,11 +22,22 @@ parser.add_argument("--minnloh", default="nominal_gen", type=str, help="Referenc
 parser.add_argument("--axes", nargs="*", type=str, default=None, help="Use only specified axes in hist")
 parser.add_argument("--debug", action='store_true', help="Print debug output")
 parser.add_argument("--noColorLogger", action="store_true", default=False, help="Do not use logging with colors")
+parser.add_argument("--notaus", dest="addtaus", action='store_false', help="Add in tau samples")
 parser.add_argument("-o", "--plotdir", type=str, help="Output directory for plots")
+parser.add_argument("--eoscp", action="store_true", help="Copy folder to eos with xrdcp rather than using the mount")
 
 args = parser.parse_args()
 
 logger = logging.setup_logger("make_theory_corr", 4 if args.debug else 3, args.noColorLogger)
+
+ax_map = {
+    "ptVgen" : "qT",
+    "absYVgen" : "absY",
+    "absy" : "absY",
+    "massVgen" : "Q",
+    "chargeVgen" : "charge",
+    "pdfVar" : "vars",
+}
 
 def read_corr(procName, generator, corr_files):
     charge = 0 if procName[0] == "Z" else (1 if "Wplus" in procName else -1)
@@ -84,56 +95,59 @@ elif args.proc == "w":
     filesByProc = { "WplusmunuPostVFP" : wpfiles,
         "WminusmunuPostVFP" : wmfiles}
 
-minnloh = input_tools.read_all_and_scale(args.minnlo_file, list(filesByProc.keys()), [args.minnloh])[0]
+minnloh = None
+for proc in filesByProc.keys():
+    htmp = input_tools.read_and_scale(args.minnlo_file, proc, args.minnloh, apply_xsec=False)
+    sumw = input_tools.read_sumw(args.minnlo_file, proc)
+    # Get more stats in the correction
+    if args.addtaus:
+        logger.info(f"Combining muon and tau decay samples for increased stats for process {proc}")
+        taus = proc.replace("mu", "tau")
+        taush = input_tools.read_and_scale(args.minnlo_file, taus, args.minnloh, apply_xsec=False)
+        htmp += taush
+        sumw += input_tools.read_sumw(args.minnlo_file, taus)
+
+    xsec = input_tools.read_xsec(args.minnlo_file, proc)
+    htmp *= xsec/sumw
+
+    if not minnloh:
+        minnloh = htmp
+    else:
+        minnloh += htmp
 
 if "y" in minnloh.axes.name:
     minnloh = hh.makeAbsHist(minnloh, "y")
 
-# Get more stats in the correction
-add_taus = True 
-if add_taus:
-    logger.info("Combining muon and tau decay samples for increased stats")
-    from wremnants.datasets.datasetDict_v9 import Z_TAU_TO_LEP_RATIO,BR_TAUToMU
-    taus = ["WplustaunuPostVFP", "WminustaunuPostVFP"] if args.proc == "w" else ["ZtautauPostVFP"]
-    taush = input_tools.read_all_and_scale(args.minnlo_file, taus, [args.minnloh])[0]
-    if "y" in taush.axes.name:
-        taush = hh.makeAbsHist(taush, "y")
-    # Rescale taus to mu to effectively have more stats
-    minnloh = 0.5*(minnloh + taush/(Z_TAU_TO_LEP_RATIO if args.proc == "z" else BR_TAUToMU))
+# Rename minnlo axes to match corr, needed for the broadcast now
+for ax in minnloh.axes:
+    if ax.name in ax_map:
+        ax._ax.metadata["name"] = ax_map[ax.name]
 
 numh = hh.sumHists([read_corr(procName, args.generator, corr_file) for procName, corr_file in filesByProc.items()])
 
 if numh.ndim-1 < minnloh.ndim:
-    ax_map = {
-        "ptVgen" : "qT",
-        "absYVgen" : "absY",
-        "absy" : "absY",
-        "massVgen" : "Q",
-        "chargeVgen" : "charge",
-        "pdfVar" : "vars",
-    }
     axes = []
     # NOTE: This leaves out the flow, but there shouldn't be any for the theory pred anyway
     data = numh.view()
-    for i, ax in enumerate(minnloh.axes.name):
-        axname = ax_map[ax]
-        if axname in numh.axes.name:
-            axes.append(numh.axes[axname])
+    for i, ax in enumerate(minnloh.axes):
+        if ax.name in numh.axes.name:
+            axes.append(numh.axes[ax.name])
         else:
-            minnlo_ax = minnloh.axes[ax]
             # TODO: Should be a little careful because this won't include overflow, as long as the
             # axis range is large enough, it shouldn't matter much
-            axes.append(hist.axis.Regular(1, minnlo_ax.edges[0], minnlo_ax.edges[-1], 
-                flow=True, name=ax))
+            axes.append(hist.axis.Regular(1, ax.edges[0], ax.edges[-1], 
+                underflow=ax.traits.underflow, overflow=ax.traits.overflow, name=ax.name))
             data = np.expand_dims(data, i)
+
     if axes[-1].name != "vars" and numh.axes.name[-1] == "vars":
         axes.append(numh.axes["vars"])
-
-    print([a.name for a in axes])
-    numh = hist.Hist(*axes, storage=numh._storage_type(), data=data)
-
+    
+    numh = hist.Hist(*axes, storage=numh.storage_type(), data=data)
 
 corrh_unc, minnloh, numh  = theory_corrections.make_corr_from_ratio(minnloh, numh)
+
+logger.info(f"Minnlo norm in corr region is {minnloh.sum()}, corrh norm is {numh[...,0].sum()}")
+
 corrh = hist.Hist(*corrh_unc.axes, name=corrh_unc.name, storage=hist.storage.Double(), data=corrh_unc.values(flow=True))
 
 if args.postfix:
@@ -168,7 +182,7 @@ for ax in corrh.axes:
     logger.info(f"Axis {ax.name}: {ax.edges}")
 
 num_yield = numh[{'vars' : 0 }].sum()
-denom_yield = minnloh.sum() if minnloh.axes.name[-1] == "chargeVgen" else minnloh[...,0].sum()
+denom_yield = minnloh.sum() if minnloh.axes.name[-1] != "vars" else minnloh[...,0].sum()
 to_val = lambda x: x.value if hasattr(x, "value") else x
 norm_ratio = to_val(num_yield)/to_val(denom_yield)
 
@@ -184,27 +198,27 @@ if args.plotdir:
     }
 
     xlabel = {
-        "massVgen" : "$m_{{{final_state}}}$ (GeV)",
-        "ptVgen" : "$p_{{T}}^{{{final_state}}}$ (GeV)",
-        "absy" : "$|y^{{{final_state}}}|$",
+        "Q" : "$m_{{{final_state}}}$ (GeV)",
+        "qT" : "$p_{{T}}^{{{final_state}}}$ (GeV)",
+        "absY" : "$|y^{{{final_state}}}|$",
     }
     
-    for charge in minnloh.axes["chargeVgen"].centers:
+    for charge in minnloh.axes["charge"].centers:
         charge = complex(0, charge)
         proc = 'Z' if args.proc == 'z' else ("Wp" if charge.imag > 0 else "Wm")
 
         fig, ax = plt.subplots(figsize=(6, 6))
-        corrh[{"vars" : 0, "charge" : charge, "massVgen" : 0}].plot(ax=ax)
+        corrh[{"vars" : 0, "charge" : charge, "Q" : 0}].plot(ax=ax, cmin=0.5, cmax=1.5)
         final_state = "\\ell\\ell" if args.proc == 'z' else ("\\ell^{+}\\nu" if charge.imag > 0 else "\\ell^{-}\\nu")
 
-        output_tools.make_plot_dir(*args.plotdir.rsplit("/", 1))
+        outdir = output_tools.make_plot_dir(*args.plotdir.rsplit("/", 1), eoscp=args.eoscp)
         plot_name = f"corr2D_{args.generator}_MiNNLO_{proc}"
-        plot_tools.save_pdf_and_png(args.plotdir, plot_name)
-        plot_tools.write_index_and_log(args.plotdir, plot_name, args=args, analysis_meta_info=meta_dict)
+        plot_tools.save_pdf_and_png(outdir, plot_name)
+        plot_tools.write_index_and_log(outdir, plot_name, args=args, analysis_meta_info=meta_dict)
         
         for varm,varn in zip(minnloh.axes.name[:-1], numh.axes.name[:-2]):
             fig = plot_tools.makePlotWithRatioToRef(
-                [minnloh[{"chargeVgen" : charge}].project(varm),
+                [minnloh[{"charge" : charge}].project(varm),
                     numh[{"vars" : 0, "charge" : charge}].project(varn),
                 ],
                 ["MiNNLO", args.generator, 
@@ -220,6 +234,8 @@ if args.plotdir:
                 xlim=None, binwnorm=1.0, baseline=True
             )
             plot_name = f"{varm}_{args.generator}_MiNNLO_{proc}"
-            plot_tools.save_pdf_and_png(args.plotdir, plot_name)
-            plot_tools.write_index_and_log(args.plotdir, plot_name, args=args,
+            plot_tools.save_pdf_and_png(outdir, plot_name)
+            plot_tools.write_index_and_log(outdir, plot_name, args=args,
                 analysis_meta_info=meta_dict)
+    if output_tools.is_eosuser_path(args.plotdir) and args.eoscp:
+        output_tools.copy_to_eos(args.plotdir)

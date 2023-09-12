@@ -115,14 +115,16 @@ def is_eosuser_path(path):
     path = os.path.realpath(path)
     return path.startswith("/eos/user") or path.startswith("/eos/home-")
 
-def make_plot_dir(outpath, outfolder, eoscp=False):
+def make_plot_dir(outpath, outfolder=None, eoscp=False):
     if eoscp and is_eosuser_path(outpath):
         outpath = os.path.join("temp", split_eos_path(outpath)[1])
         if not os.path.isdir(outpath):
             logger.info("Making temporary directory {outpath}")
             os.makedirs(outpath)
 
-    full_outpath = os.path.join(outpath, outfolder)
+    full_outpath = outpath
+    if outfolder:
+        full_outpath = os.path.join(outpath, outfolder)
     if outpath and not os.path.isdir(outpath):
         raise IOError(f"The path {outpath} doesn't not exist. You should create it (and possibly link it to your web area)")
         
@@ -136,11 +138,13 @@ def make_plot_dir(outpath, outfolder, eoscp=False):
 
     return full_outpath
 
-def copy_to_eos(outpath, outfolder):
+def copy_to_eos(outpath, outfolder=None):
     eospath, outpath = split_eos_path(outpath)
-    logger.info(f"Copying {outpath}/{outfolder} to {eospath}")
+    fullpath = outpath
+    if outfolder:
+        fullpath = os.path.join(outpath, outfolder)
+        logger.info(f"Copying {outpath} to {eospath}")
 
-    fullpath = os.path.join(outpath, outfolder)
     tmppath = os.path.join("temp", fullpath)
 
     for f in glob.glob(tmppath+"/*"):
@@ -150,7 +154,7 @@ def copy_to_eos(outpath, outfolder):
             logger.debug(f"Executing {' '.join(command)}")
             if subprocess.call(command):
                 raise IOError("Failed to copy the files to eos! Perhaps you are missing a kerberos ticket and need to run kinit <user>@CERN.CH?"
-                    " from lxplus you can run with --skipEoscp and take your luck with the mount.")
+                    " from lxplus you can run without eoscp and take your luck with the mount.")
 
     shutil.rmtree(tmppath) 
 

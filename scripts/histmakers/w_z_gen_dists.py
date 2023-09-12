@@ -123,7 +123,7 @@ def build_graph(df, dataset):
         axis_Mlly = hist.axis.Regular(100, 50, 150, name = "Mlly")
         results.append(df.HistoBoost("nominal_Mlly", [axis_Mlly], ["ewMlly", "nominal_weight"], storage=hist.storage.Weight()))
 
-    nominal_gen = df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols, "nominal_weight"], storage=hist.storage.Double())
+    nominal_gen = df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols, "nominal_weight"], storage=hist.storage.Weight())
 
     results.append(nominal_gen)
     if not 'horace' in dataset.name:

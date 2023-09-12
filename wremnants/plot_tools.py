@@ -344,11 +344,11 @@ def makePlotWithRatioToRef(
     )
 
     if len(hists) > 1:
-        ratio_hists = [hh.divideHists(h, hists[0], cutoff=0.00001) for h in hists[not baseline:]]
+        ratio_hists = [hh.divideHists(h, hists[0], cutoff=0.00001, flow=False) for h in hists[not baseline:]]
         if fill_between:
             for up,down,color in zip(hists[1::2], hists[2::2], colors[1::2]):
-                upr = hh.divideHists(up, hists[0], 1e-6)
-                downr = hh.divideHists(down, hists[0], 1e-6)
+                upr = hh.divideHists(up, hists[0], 1e-6, flow=False)
+                downr = hh.divideHists(down, hists[0], 1e-6,flow=False)
                 ax2.fill_between(upr.axes[0].edges, 
                         np.append(upr.values(), upr.values()[-1]), 
                         np.append(downr.values(), downr.values()[-1]),
@@ -377,7 +377,7 @@ def makePlotWithRatioToRef(
             alpha=alpha,
         )
         hep.histplot(
-            hh.divideHists(data, hists[0], cutoff=1.e-8),
+            hh.divideHists(data, hists[0], cutoff=1.e-8, flow=False),
             histtype="errorbar",
             color=colors[-1],
             label=labels[-1],
