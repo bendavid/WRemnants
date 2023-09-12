@@ -170,22 +170,47 @@ def getProcessBins(name, axes=["qGen", "ptGen", "absEtaGen", "ptVGen", "absYVGen
     
     return res
 
-def matrix_poi(rfile, poi_type="mu", base_process=None, axes=None, keys=None):   
-    if isinstance(poi_type, list):
-        poi_type = poi_type[0]
-    
-    matrix = f"covariance_matrix_channel{poi_type}"
+def load_fitresult(filename):
+    if filename.endswith(".root"):
+        logger.debug(f"Load fitresult file {filename}")
+        return uproot.open(filename)
+    elif filename.endswith(".hdf5"):
+        logger.debug(f"Load fitresult file {filename}")
+        return h5py.File(filename, mode='r')
+    else:
+        raise IOError(f"Unknown fitresult format for file {rfile}")
 
-    if matrix not in [c.replace(";1","") for c in rfile.keys()]:
-        logger.error(f"Histogram {matrix} was not found in the fit results file!")
-        return
+def load_poi_matrix(fitresult, poi_type="mu", base_process=None, axes=None, keys=None):   
+    if isinstance(fitresult, str):
+        logger.warning("Fitresult file has not been loaded, try to load it")
+        fitresult = load_fitresult(fitresult)
 
-    hist2d = rfile[matrix].to_hist()
+    if isinstance(fitresult, uproot.ReadOnlyDirectory):
+        matrix_key = f"covariance_matrix_channel{poi_type}"
+        if matrix_key not in [c.replace(";1","") for c in fitresult.keys()]:
+            IOError(f"Histogram {matrix_key} was not found in the fit results file!")
+        hist2d = fitresult[matrix_key].to_hist()
+        names = [n for n in hist2d.axes[0]]
+        hcov = hist2d.values()
+    elif isinstance(fitresult, h5py.File):
+        matrix_key = f"{poi_type}_outcov"
+        names_key = f"{poi_type}_names"
+        if matrix_key not in fitresult.keys():
+            IOError(f"Matrix {matrix_key} was not found in the fit results file!")
+        if names_key not in fitresult.keys():
+            IOError(f"Names {names_key} not found in the fit results file!")
+        
+        names = fitresult[names_key][...].astype(str)
+        npoi = len(names)
+        # make matrix between POIs only; assume POIs come first
+        hcov = fitresult[f"{poi_type}_outcov"][:npoi,:npoi]
+    else:
+        raise IOError(f"Unknown fitresult format for object {fitresult}")
+
 
     # select signal parameters
-    key = matrix.split("channel")[-1]
-    xentries = [(i, hist2d.axes[0][i]) for i in range(len(hist2d.axes[0])) if hist2d.axes[0][i].endswith(key)]
-
+    key = matrix_key.split("channel")[-1].replace("_outcov", "").replace("sumpois","sumxsec")
+    xentries = [(i, n) for i, n in enumerate(names) if n.endswith(key)]
     if base_process is not None:
         xentries = [x for x in xentries if base_process in x[1]]  
 
@@ -206,7 +231,7 @@ def matrix_poi(rfile, poi_type="mu", base_process=None, axes=None, keys=None):
     cov_mat = np.zeros((len(xentries), len(xentries)))
     for i, ia in enumerate(xentries):
         for j, ja in enumerate(xentries):
-            cov_mat[i][j] = hist2d[ia[0], ja[0]]
+            cov_mat[i][j] = hcov[ia[0], ja[0]]
 
     hist_cov = hist.Hist(
         hist.axis.Regular(bins=len(xentries), start=0.5, stop=len(xentries)+0.5, underflow=False, overflow=False), 
