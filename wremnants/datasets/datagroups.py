@@ -380,6 +380,7 @@ class Datagroups(object):
                 elif label in group.hists.keys():
                     logger.debug(f"Apply selection for process {procName}")
                     if procName == nameFake and "fakerate_integration_axes" not in group.selectOpArgs:
+                        print("fakerate_integration_axes", fakerateIntegrationAxes)
                         opArgs = {**group.selectOpArgs, "fakerate_integration_axes": fakerateIntegrationAxes}
                     else:
                         opArgs = group.selectOpArgs
@@ -495,10 +496,12 @@ class Datagroups(object):
         return self.results
 
     def addSummedProc(self, refname, name, label, color="red", exclude=["Data"], relabel=None, 
-            procsToRead=None, reload=False, rename=None, action=None, preOpMap={}, preOpArgs={}, forceNonzero=True):
+            procsToRead=None, reload=False, rename=None, action=None, preOpMap={}, preOpArgs={}, forceNonzero=True,
+            fakerateIntegrationAxes=[]):
         if reload:
             self.loadHistsForDatagroups(refname, syst=name, excluded_procs=exclude,
-                procsToRead=procsToRead, preOpMap=preOpMap, preOpArgs=preOpArgs, forceNonzero=forceNonzero)
+                procsToRead=procsToRead, preOpMap=preOpMap, preOpArgs=preOpArgs, forceNonzero=forceNonzero,
+                fakerateIntegrationAxes=fakerateIntegrationAxes)
 
         if not rename:
             rename = name

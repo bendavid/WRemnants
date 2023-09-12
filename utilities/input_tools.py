@@ -26,6 +26,11 @@ def read_hist_names(fname, proc):
             raise ValueError(f"Invalid process {proc}! No output found in file {fname}")
         return results[proc]["output"].keys()
 
+def read_keys(fname):
+    with h5py.File(fname, "r") as h5file:
+        results = ioutils.pickle_load_h5py(h5file["results"])
+        return results.keys()
+
 def read_xsec(fname, proc):
     with h5py.File(fname, "r") as h5file:
         results = ioutils.pickle_load_h5py(h5file["results"])
