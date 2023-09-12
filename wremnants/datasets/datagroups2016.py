@@ -22,8 +22,8 @@ def make_datagroups_2016(dg, combine=False, pseudodata_pdfset = None, applySelec
     )
     dg.addGroup("Zmumu",
         members = list(filter(lambda y: y.group == "Zmumu", dg.datasets.values())),
-        #label = r"Z$\to\mu\mu$ (N$^{3}LL+NNLO)$",
-        label = r"Z$\to\mu\mu$",
+        label = r"Z$\to\mu\mu$ (N$^{3}LL+NNLO)$",
+        #label = r"Z$\to\mu\mu\times 1.03$", # With fudgefactor
         color = "lightblue",
         selectOp = sigOp,
     ) 

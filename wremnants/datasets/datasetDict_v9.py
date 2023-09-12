@@ -24,7 +24,7 @@ dataDictV9 = {
     'ZmumuPostVFP' : { 
                    'filepaths' :
                     ["{BASE_PATH}/DYJetsToMuMu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}/*/*/*.root"],
-                   'xsec' : xsec_ZmmPostVFP,
+                   'xsec' : xsec_ZmmPostVFP, # Fudge factor to get the norm to match data *1.028,
                    'group': "Zmumu",
     },
     'ZtautauPostVFP' : { 
