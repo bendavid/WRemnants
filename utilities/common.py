@@ -29,7 +29,7 @@ vprocs_lowpu = wprocs_lowpu+zprocs_lowpu
 zprocs_recoil_lowpu = ["Zmumu", "Zee"]
 wprocs_recoil_lowpu = ["WminusJetsToMuNu", "WminusJetsToENu", "WplusJetsToMuNu", "WplusJetsToENu"]
 
-background_MCprocs = ["Top", "Diboson", "QCD"]
+background_MCprocs = ["Top", "Diboson", "QCD", "DYlowMass"]
 zprocs_all = zprocs_lowpu+zprocs
 wprocs_all = wprocs_lowpu+wprocs
 vprocs_all = vprocs_lowpu+vprocs

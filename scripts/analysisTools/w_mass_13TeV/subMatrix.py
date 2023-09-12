@@ -94,6 +94,8 @@ def niceName(name):
         return f"{boson}{chargeText} {coeffText} {ptText} {scale}"
     elif "CMS_" in name:
         return name
+    elif name == "Z_nonClosure_parametrized_A_":
+        return "muonScale_ZnonClosure"
     else:  
         return name
 
