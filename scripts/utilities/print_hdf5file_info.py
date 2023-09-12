@@ -13,8 +13,13 @@ args = parser.parse_args()
 
 if args.mode == "hists":
     names = input_tools.read_hist_names(args.infile, args.sample)
-    print("Valid names for process {args.sample} are:")
-    print(names)
+    if not args.hist:
+        print(f"Valid names for process {args.sample} are:")
+        print(names)
+    else:
+        h = input_tools.read_and_scale(args.infile, args.sample, args.hist)
+        print(f"Histogram {args.hist}")
+        print(h)
 
 if args.mode == "samples":
     keys = input_tools.read_keys(args.infile)

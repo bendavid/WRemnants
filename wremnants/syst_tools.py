@@ -93,11 +93,13 @@ def syst_transform_map(base_hist, hist_name):
                     do_min=True)},
        "resumNPUp" : {
             "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", 
-                 [x for x in h.axes["vars"] if "Omega" in x or "cnu" in x or "omega" in x],
+                 ["c_nu-0.1-omega_nu0.5", "omega_nu0.5", "Lambda2-0.25", "Lambda20.25", "Lambda4.01", 
+                     "Lambda4.16","Delta_Lambda2-0.02", "Delta_Lambda20.02",],
                  no_flow=["ptVgen"], do_min=False) if "vars" in h.axes.name else h},
         "resumNPDown" : {
             "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", 
-                 [x for x in h.axes["vars"] if "omega" in x or "cnu" in x or "omega" in x],
+                 ["c_nu-0.1-omega_nu0.5", "omega_nu0.5", "Lambda2-0.25", "Lambda20.25", "Lambda4.01", 
+                     "Lambda4.16","Delta_Lambda2-0.02", "Delta_Lambda20.02",],
                  no_flow=["ptVgen"], do_min=True) if "vars" in h.axes.name else h},
        "resumNPOmegaUp" : {
             "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", 
