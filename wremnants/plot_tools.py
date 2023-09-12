@@ -133,6 +133,7 @@ def makeStackPlotWithRatio(
     plot_title = None, title_padding = 0, yscale=None,
     fill_between=False, skip_fill=0, ratio_to_data=False, baseline=True, legtext_size=20, cms_decor="Preliminary", lumi=16.8,
     no_fill=False, bin_density=300, unstacked_linestyles=[],
+    ratio_error=True,
 ):
     colors = [histInfo[k].color for k in stackedProcs if histInfo[k].hists[histName]]
     labels = [histInfo[k].label for k in stackedProcs if histInfo[k].hists[histName]]
@@ -216,6 +217,7 @@ def makeStackPlotWithRatio(
         ax=ax1,
         binwnorm=binwnorm,
         zorder=1,
+        flow='none',
     )
     
     if "Data" in histInfo and ratio_to_data:
@@ -227,6 +229,7 @@ def makeStackPlotWithRatio(
             yerr=False,
             ax=ax2,
             zorder=3,
+            flow='none',
         )
 
     if unstacked:
@@ -248,9 +251,10 @@ def makeStackPlotWithRatio(
                 histtype="step",
                 color="grey",
                 alpha=0.5,
-                yerr=True,
+                yerr=ratio_error,
                 ax=ax2,
                 linewidth=2,
+                flow='none',
             )
 
         for proc,style in zip(unstacked, linestyles):
@@ -270,6 +274,7 @@ def makeStackPlotWithRatio(
                 alpha=0.7 if style != "None" else 1.,
                 linestyle=style,
                 binwnorm=binwnorm,
+                flow='none',
             )
             hep.histplot(
                 hh.divideHists(unstack, ratio_ref, cutoff=0.01, rel_unc=True, flow=False),
@@ -279,7 +284,8 @@ def makeStackPlotWithRatio(
                 yerr=True if style == "None" else False,
                 linewidth=2,
                 linestyle=style,
-                ax=ax2
+                ax=ax2,
+                flow='none',
             )
 
         if fill_between:
@@ -364,6 +370,7 @@ def makePlotWithRatioToRef(
             stack=False,
             ax=ax2,
             alpha=alpha,
+            flow='none',
         )
     if data:
         hep.histplot(
@@ -375,6 +382,7 @@ def makePlotWithRatioToRef(
             ax=ax1,
             binwnorm=binwnorm,
             alpha=alpha,
+            flow='none',
         )
         hep.histplot(
             hh.divideHists(data, hists[0], cutoff=1.e-8, flow=False),
@@ -386,6 +394,7 @@ def makePlotWithRatioToRef(
             stack=False,
             ax=ax2,
             alpha=alpha,
+            flow='none',
         )
 
     addLegend(ax1, nlegcols, extra_text=extra_text, extra_text_loc=extra_text_loc, text_size=legtext_size)

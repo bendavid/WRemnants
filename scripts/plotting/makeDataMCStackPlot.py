@@ -14,6 +14,7 @@ import re
 
 xlabels = {
     "pt" : r"p$_{T}^{\ell}$ (GeV)",
+    "ptW" : r"p$_{T}^{\ell+p_{\mathrm{T}}^{miss}}$ (GeV)",
     "eta" : r"$\eta^{\ell}$",
     "ptll" : r"p$_{\mathrm{T}}^{\ell\ell}$ (GeV)",
     "yll" : r"y$^{\ell\ell}$",
@@ -72,6 +73,7 @@ parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend te
 parser.add_argument("--fitresult", type=str, help="Specify a fitresult root file to draw the postfit distributions with uncertainty bands")
 parser.add_argument("--prefit", action='store_true', help="Use the prefit uncertainty from the fitresult root file, instead of the postfit. (--fitresult has to be given)")
 parser.add_argument("--eoscp", action='store_true', help="Use of xrdcp for eos output rather than the mount")
+parser.add_argument("--noRatioErr", action='store_false', dest="ratioError", help="Don't show stat unc in ratio")
 parser.add_argument("--selection", type=str, help="Specify custom selections as comma seperated list (e.g. '--selection passIso=0,passMT=1' )")
 
 subparsers = parser.add_subparsers(dest="variation")
@@ -219,7 +221,8 @@ for h in args.hists:
             xlabel=xlabels.get(h,h), ylabel="Events/bin", rrange=args.rrange, binwnorm=1.0, lumi=groups.lumi,
             ratio_to_data=args.ratioToData, rlabel="Pred./Data" if args.ratioToData else "Data/Pred.",
             xlim=args.xlim, no_fill=args.noFill, cms_decor="Preliminary",
-            legtext_size=20*args.scaleleg, unstacked_linestyles=args.linestyle if hasattr(args, "linestyle") else [])
+            legtext_size=20*args.scaleleg, unstacked_linestyles=args.linestyle if hasattr(args, "linestyle") else [],
+            ratio_error=args.ratioError)
 
     fitresultstring=""
     if args.fitresult:
