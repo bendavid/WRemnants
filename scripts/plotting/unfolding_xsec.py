@@ -30,6 +30,7 @@ parser.add_argument("-o", "--outpath", type=str, default=os.path.expanduser("~/w
 parser.add_argument("-f", "--outfolder", type=str, default="./", help="Subfolder for output")
 parser.add_argument("-r", "--rrange", type=float, nargs=2, default=None, help="y range for ratio plot")
 parser.add_argument("--ylim", type=float, nargs=2, help="Min and max values for y axis (if not specified, range set automatically)")
+parser.add_argument("--logy", action='store_true', help="Make the yscale logarithmic")
 parser.add_argument("--yscale", type=float, help="Scale the upper y axis by this factor (useful when auto scaling cuts off legend)")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name")
 parser.add_argument("--debug", action='store_true', help="Print debug output")
@@ -258,32 +259,43 @@ def plot_xsec_unfolded(df, edges, df_asimov=None, bin_widths=None, channel=None,
     plt.close()
 
 translate = {
-    "QCDscalePtChargeMiNNLO": "QCDscale",
-    "QCDscaleZPtChargeMiNNLO": "QCDscaleZ",
-    "QCDscaleWPtChargeMiNNLO": "QCDscaleW",
-    "QCDscaleZPtHelicityMiNNLO": "QCDscaleZ",
-    "QCDscaleWPtHelicityMiNNLO": "QCDscaleW",
-    "QCDscaleZPtChargeHelicityMiNNLO": "QCDscaleZ",
-    "QCDscaleWPtChargeHelicityMiNNLO": "QCDscaleW",
-    "resumNonpert": "resumNP",
-    "resumTransition": "resumT",
-    "binByBinStat": "BBlite",
+    "QCDscalePtChargeMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
+    "QCDscaleZPtChargeMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
+    "QCDscaleWPtChargeMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
+    "QCDscaleZPtHelicityMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
+    "QCDscaleWPtHelicityMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
+    "QCDscaleZPtChargeHelicityMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
+    "QCDscaleWPtChargeHelicityMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
+    "binByBinStat": "Bin-by-bin stat.",
     "CMS_recoil": "recoil",
     "CMS_background": "Bkg.",
     "FakeHighMT": "FakeHighMT",
     "FakeLowMT": "FakeLowMT",
     "rFake": "fakerate",
+    "rFakemu": "fakerate",
+    "rFakee": "fakerate",
     "FakemuHighMT": "FakeHighMT",
     "FakemuLowMT": "FakeLowMT",
-    "rFakemu": "fakerate",
     "FakeeHighMT": "FakeHighMT",
     "FakeeLowMT": "FakeLowMT",
-    "rFakee": "fakerate",
-    "massShiftZ": "massZ",
-    "massShiftW": "massW",
+    "massShiftZ": "Z mass",
+    "massShiftW": "W mass",
+    "pdfMSHT20": "PDF",
+    "pdfMSHT20AlphaS": r"PDF $\alpha_\mathrm{S}$",
+    "resumTNP": "Non purt. trans.",
+    "resumNonpert": "Non pert.",
+    "pdfMSHT20": "PDF",
+    "pdfMSHT20": "PDF",
+    "eff_stat": "$\epsilon^{\mu}_\mathrm{stat}$",
+    "eff_syst": "$\epsilon^{\mu}_\mathrm{syst}$",
+    "muonPrefire": "L1 prefire",
+    "stat": "Data stat.",
+    "luminosity": "Luminosity",
+
+
 }
 
-def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normalize=False, relative_uncertainty=False, logy=False, process_label="", axes=None):
+def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normalize=False, logy=False, process_label="", axes=None, relative_uncertainty=False, percentage=True):
     logger.info(f"Make "+("normalized " if normalize else "")+"unfoled xsec plot"+(f" in channel {channel}" if channel else ""))
 
     # read nominal values and uncertainties from fit result and fill histograms
@@ -297,9 +309,13 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normaliz
     if relative_uncertainty:
         yLabel = "$\delta$ "+ yLabel
         yLabel = yLabel.replace(" [pb]","")
+        if percentage:
+            yLabel += " [%]"
     else:
         yLabel = "$\Delta$ "+ yLabel
     
+
+
     #central values
     bin_widths = edges[1:] - edges[:-1]
 
@@ -310,7 +326,9 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normaliz
     errors = df["err_total"].values/bin_widths
     if relative_uncertainty:
         errors /= values
-    
+        if percentage:
+            errors *= 100
+
     hist_xsec.view(flow=False)[...] = errors
 
     # make plots
@@ -339,12 +357,13 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normaliz
         alpha=1.,
         zorder=2,
     )
-    uncertainties = make_yields_df([hist_xsec], ["Total"], per_bin=True, yield_only=True, percentage=True)
-    fakerate = ["err_FakemuHighMT", "err_FakemuLowMT", "err_rFakemu"]
+    uncertainties = make_yields_df([hist_xsec], ["Total"], per_bin=True, yield_only=True, percentage=percentage)
+    # fakerate = ["err_FakemuHighMT", "err_FakemuLowMT", "err_rFakemu"]
     sources =["err_stat"]
-    sources += fakerate
+    # sources += fakerate
+    remove = ["massShiftZ", "ecalPrefire", "QCDscaleZPtChargeMiNNLO", "QCDscaleZPtHelicityMiNNLO", "QCDscaleZPtChargeHelicityMiNNLO", ]
     sources += list(sorted([s for s in filter(lambda x: x.startswith("err"), df.keys()) 
-        if s not in ["err_stat", "err_total", *fakerate] 
+        if s.replace("err_","") not in ["stat", "total", "FakeHighMT", "FakeLowMT", "rFake", "resumTNP", *remove]#, ] 
             and "eff_stat_" not in s and "eff_syst_" not in s]))    # only take eff grouped stat and syst
 
     NUM_COLORS = len(sources)-1
@@ -380,6 +399,8 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normaliz
 
         if relative_uncertainty:
             errors /= values
+            if percentage:
+                errors *= 100
         
         hist_unc.view(flow=False)[...] = errors
 
@@ -554,7 +575,7 @@ for axes in gen_axes_permutations:
             
             # relative uncertainty
             # plot_uncertainties_unfolded(data_c, channel=channel, scale=scale, normalize=args.normalize, relative_uncertainty=True, process_label = process_label)
-            plot_uncertainties_unfolded(data_c, edges=edges, channel=channel, scale=scale, normalize=args.normalize, relative_uncertainty=True, logy=True, process_label = process_label, axes=channel_axes)
+            plot_uncertainties_unfolded(data_c, edges=edges, channel=channel, scale=scale, normalize=args.normalize, relative_uncertainty=True, logy=args.logy, process_label = process_label, axes=channel_axes)
 
 
         # if not args.normalize:
