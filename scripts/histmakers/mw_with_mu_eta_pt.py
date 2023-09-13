@@ -340,7 +340,7 @@ def build_graph(df, dataset):
     
     if not args.noRecoil:
         lep_cols = ["goodMuons_pt0", "goodMuons_phi0", "goodMuons_charge0", "Muon_pt[goodMuons][0]"]
-        df = recoilHelper.recoil_W(df, results, dataset, common.vprocs, lep_cols, cols_fakerate=nominal_cols, axes_fakerate=nominal_axes, mtw_min=mtw_min) # produces corrected MET as MET_corr_rec_pt/phi
+        df = recoilHelper.recoil_W(df, results, dataset, common.vprocs, lep_cols, cols_fakerate=nominal_cols, axes_fakerate=nominal_cols, mtw_min=mtw_min) # produces corrected MET as MET_corr_rec_pt/phi
     else:
         df = df.Alias("MET_corr_rec_pt", "MET_pt")
         df = df.Alias("MET_corr_rec_phi", "MET_phi")
@@ -406,7 +406,7 @@ def build_graph(df, dataset):
                 corr_helpers[dataset.name], args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly, isW = isW)
             )
         if isWorZ:
-            nominal_cols_gen, nominal_cols_gen_smeared = muon_calibration.make_alt_reco_and_gen_hists(df, results, axes, cols, reco_sel_GF)
+            cols_gen, cols_gen_smeared = muon_calibration.make_alt_reco_and_gen_hists(df, results, axes, cols, reco_sel_GF)
             if args.validationHists: 
                 muon_validation.make_reco_over_gen_hists(df, results)
 
@@ -430,7 +430,7 @@ def build_graph(df, dataset):
             if not args.onlyTheorySyst and not "tau" in dataset.name:
                 df = syst_tools.add_muonscale_hist(results, df, args.muonCorrEtaBins, args.muonCorrMag, isW, axes, cols)
                 if args.muonScaleVariation == 'smearingWeightsGaus':
-                    df = syst_tools.add_muonscale_smeared_hist(results, df, args.muonCorrEtaBins, args.muonCorrMag, isW, axes, nominal_cols_gen_smeared)
+                    df = syst_tools.add_muonscale_smeared_hist(results, df, args.muonCorrEtaBins, args.muonCorrMag, isW, axes, cols_gen_smeared)
 
             ####################################################
             # nuisances from the muon momemtum scale calibration 
@@ -449,18 +449,18 @@ def build_graph(df, dataset):
 
                 # muon scale variation from stats. uncertainty on the jpsi massfit
                 df = muon_calibration.add_jpsi_crctn_stats_unc_hists(
-                    args, df, axes, results, nominal_cols, nominal_cols_gen_smeared,
+                    args, df, axes, results, cols, cols_gen_smeared,
                     calib_filepaths, jpsi_crctn_data_unc_helper, smearing_weights_procs,
                     reco_sel_GF, dataset.name, isW
                 )
                 # add the ad-hoc Z non-closure nuisances from the jpsi massfit to muon scale unc
                 df = muon_calibration.add_jpsi_crctn_Z_non_closure_hists(
-                    args, df, axes, results, nominal_cols, nominal_cols_gen_smeared,
+                    args, df, axes, results, cols, cols_gen_smeared,
                     z_non_closure_parametrized_helper, z_non_closure_binned_helper, reco_sel_GF
                 )
                 if args.validationHists:
                     df = muon_validation.make_hists_for_muon_scale_var_weights(
-                        df, axes, results, cols, nominal_cols_gen_smeared
+                        df, axes, results, cols, cols_gen_smeared
                     )
             ####################################################
 
