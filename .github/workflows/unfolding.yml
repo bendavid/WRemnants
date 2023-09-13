@@ -355,7 +355,7 @@ jobs:
       - name: dilepton analysis
         run: >-
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_dilepton.py 
-          -j $((NTHREADS)) --maxFiles $((MAX_FILES)) --forceDefaultName -o $WREMNANTS_OUTDIR --axes ptll yll --unfolding
+          -j $((NTHREADS)) --maxFiles $((MAX_FILES)) --forceDefaultName -o $WREMNANTS_OUTDIR --axes ptll yll --postfix unfolding --unfolding
 
   dilepton-unfolding:
     # The type of runner that the job will run on
