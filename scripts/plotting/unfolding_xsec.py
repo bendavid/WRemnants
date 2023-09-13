@@ -16,7 +16,7 @@ from wremnants import histselections as sel
 from utilities import boostHistHelpers as hh, logging, input_tools, common, differential, output_tools
 from wremnants import plot_tools
 from wremnants.datasets.datagroups import Datagroups
-from wremnants.unfolding_tools import get_bin, getProcessBins, get_results, matrix_poi
+from wremnants.unfolding_tools import get_bin, getProcessBins, get_results, load_poi_matrix
 
 import pdb
 
@@ -296,6 +296,7 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normaliz
 
     if relative_uncertainty:
         yLabel = "$\delta$ "+ yLabel
+        yLabel = yLabel.replace(" [pb]","")
     else:
         yLabel = "$\Delta$ "+ yLabel
     
@@ -567,7 +568,7 @@ for axes in gen_axes_permutations:
         #     hist_xsec.view(flow=False)[...] = np.stack([data_c["value"].values, (data_c["err_total"].values)**2], axis=-1)
 
         #     # write out covariance as 2D hist
-        #     hist_cov = matrix_poi(rfile, poi_type[0], base_process=base_process, axes=channel_axes, keys=channel_keys)
+        #     hist_cov = load_poi_matrix(rfile, poi_type[0], base_process=base_process, axes=channel_axes, keys=channel_keys)
             
         #     histname = f"data_{base_process}"
         #     covname = f"covariance_matrix_{base_process}"
