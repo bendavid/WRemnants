@@ -62,7 +62,9 @@ labels = {
     "n": r"$N^{\gamma}$",
     "pt": r"$\log_{10}(p_\mathrm{T}^{\gamma})$",
     "eta": r"$\eta^{\gamma}$",
+    "ewPtll": r"$p_\mathrm{T}^{\ell\ell}$",
     "ewPTll": r"$p_\mathrm{T}^{\ell\ell}$",
+    "Ptll": r"$p_\mathrm{T}^{\ell\ell}$",
     "PTll": r"$p_\mathrm{T}^{\ell\ell}$",
     "Yll": r"$Y^{\ell\ell}$", 
     "Mll": r"$m^{\ell\ell}$", 
@@ -248,7 +250,7 @@ for proc in procs:
         logger.warning(f"No nominator found for {args.nums} for process {proc}! Continue with next process.")
         continue
 
-    hratios = []
+    h2Dratios = []
     corrhs = {}
 
     def make_correction(h1, h2, name):
@@ -263,7 +265,7 @@ for proc in procs:
                 logger.info('Integrals after adjustment {0} {1}'.format(np.sum(h2.values(flow=True)), np.sum(h2.values(flow=True)*hratio.values(flow=True))))
 
         if len(hratio.axes)>1:
-            hratios.append(hratio)
+            h2Dratios.append(hratio)
 
         # Add charge axis
         if proc[0] == 'W':
@@ -314,10 +316,10 @@ for proc in procs:
             if "2Derr" in args.plots:
                 make_plot_2d(hnum, f"{nums[i]}_err", proc, plot_error=True, log=True)
 
-        for i, hratio in enumerate(hratios):
-            make_plot_2d(hratio, f"{nums[i]}_div_{args.den}", proc, cmin=0.8, cmax=1.2)
+        for i, h2Dratio in enumerate(h2Dratios):
+            make_plot_2d(h2Dratio, f"{nums[i]}_div_{args.den}", proc, cmin=0.8, cmax=1.2)
             if "2Derr" in args.plots:
-                make_plot_2d(hratio, f"{nums[i]}_div_{args.den}_err", proc, plot_error=True, log=True)
+                make_plot_2d(h2Dratio, f"{nums[i]}_div_{args.den}_err", proc, plot_error=True, log=True)
 
     if "1D" in args.plots:
         logger.info("Make 1D control plots")
@@ -326,7 +328,7 @@ for proc in procs:
             # xmin, xmax = 60, 120
             xmin, xmax = None, None
 
-            if ax in ["PTll", "PTlly", "Yll", "Ylly"]:
+            if ax in ["Ptll", "ewPtll", "ewPTll","PTll", "PTlly", "Yll", "Ylly"]:
                 ymin, ymax = 0.98, 1.02
             elif ax in ["ewMll", "Mll"]:
                 ymin, ymax = 0.95, 1.05

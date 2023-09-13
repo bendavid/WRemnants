@@ -126,7 +126,7 @@ smearing_helper = muon_calibration.make_muon_smearing_helpers() if args.smearing
 
 bias_helper = muon_calibration.make_muon_bias_helpers(args) 
 
-corr_helpers = theory_corrections.load_corr_helpers([x.name for x in datasets if x.name in common.vprocs], args.theoryCorr)
+corr_helpers = theory_corrections.load_corr_helpers([d.name for d in datasets if d.name in common.vprocs], args.theoryCorr)
 
 def build_graph(df, dataset):
     logger.info(f"build graph for dataset: {dataset.name}")

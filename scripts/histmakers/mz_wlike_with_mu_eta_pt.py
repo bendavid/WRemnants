@@ -95,7 +95,7 @@ smearing_helper = muon_calibration.make_muon_smearing_helpers() if args.smearing
 
 bias_helper = muon_calibration.make_muon_bias_helpers(args) if args.biasCalibration else None
 
-corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theoryCorr)
+corr_helpers = theory_corrections.load_corr_helpers([d.name for d in datasets if d.name in common.vprocs], args.theoryCorr)
 
 # recoil initialization
 if not args.noRecoil:

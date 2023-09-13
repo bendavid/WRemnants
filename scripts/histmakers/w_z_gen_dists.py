@@ -117,7 +117,7 @@ def build_graph(df, dataset):
 
     if not args.skipEWHists and (isW or isZ):
         if isZ:
-            massBins = theory_tools.make_ew_binning(mass = 91.1535, width = 2.4932, initialStep=0.010, low_edge=50)
+            massBins = theory_tools.make_ew_binning(mass = 91.1535, width = 2.4932, initialStep=0.010, bin_edges_low=[0,50,60], bin_edges_high=[120])
         else:
             massBins = theory_tools.make_ew_binning(mass = 80.3815, width = 2.0904, initialStep=0.010)
         axis_ewMll = hist.axis.Variable(massBins, name = "ewMll", underflow=False)
@@ -125,7 +125,7 @@ def build_graph(df, dataset):
         axis_ewPtll = hist.axis.Variable(common.ptV_binning, underflow=False, name = "ewPTll") # hist.axis.Regular(100, 0, 100, name = "ewPtll")
 
         results.append(df.HistoBoost("nominal_ew", [axis_ewMll, axis_ewLogDeltaM], ['ewMll', 'ewLogDeltaM', "nominal_weight"], storage=hist.storage.Weight()))
-        results.append(df.HistoBoost("nominal_ewMllPtll", [axis_ewMll, axis_ewPtll], ["ewMll", "ewPTll", "nominal_weight"], storage=hist.storage.Weight()))
+        results.append(df.HistoBoost("nominal_ewMllPTll", [axis_ewMll, axis_ewPtll], ["ewMll", "ewPTll", "nominal_weight"], storage=hist.storage.Weight()))
         if args.auxiliaryHistograms:
             axis_ewMlly = hist.axis.Variable(massBins, name = "ewMlly")
             results.append(df.HistoBoost("nominal_ewMlly", [axis_ewMlly], ["ewMlly", "nominal_weight"], storage=hist.storage.Weight()))
