@@ -588,7 +588,7 @@ def setup(args,xnorm=False):
 def main(args,xnorm=False):
     cardTool = setup(args, xnorm)
     cardTool.setOutput(args.outfolder, fitvars=args.fitvar, doStatOnly=args.doStatOnly, postfix=args.postfix)
-    cardTool.writeOutput(args=args, forceNonzero=not args.unfolding, check_systs=not args.unfolding, simultaneousABCD=args.simultaneousABCD)
+    cardTool.writeOutput(args=args, forceNonzero=not args.unfolding, check_systs=not args.unfolding, simultaneousABCD=args.simultaneousABCD, xnorm=xnorm)
     return
 
 if __name__ == "__main__":

@@ -693,11 +693,11 @@ class CardTool(object):
             scaleToNewLumi=self.lumiScale, 
             forceNonzero=forceNonzero,
             fakerateIntegrationAxes=self.fakerateIntegrationAxes)
-        if simultaneousABCD and not self.xnorm:
+        if simultaneousABCD and not xnorm:
             setSimultaneousABCD(self)
         self.writeForProcesses(self.nominalName, processes=self.datagroups.groups.keys(), label=self.nominalName, check_systs=check_systs)
         self.loadNominalCard()
-        if self.pseudoData and not self.xnorm:
+        if self.pseudoData and not xnorm:
             self.addPseudodata([x for x in self.datagroups.groups.keys() if x != "Data"],
                                [x for x in self.datagroups.groups.keys() if x != "Data" and not self.pseudoDataProcsRegexp.match(x)])
 
