@@ -119,7 +119,7 @@ python WRemnants/scripts/combine/fitManager.py -i outputFolder/WMass_pt_eta/ --f
 ```
 
 **NOTE**:
- * to run __fitManager.py__ one has to set a Centos 7 environment with __cmsssw-cc7__. Then, one has to activate __cmsenv__ from the folder where combine is installed (once the environment is set one can keep working from inside WRemnants).
+ * to run __fitManager.py__ one has to set a Centos 7 environment with __cmssw-cc7__. Then, one has to activate __cmsenv__ from the folder where combine is installed (once the environment is set one can keep working from inside WRemnants).
  * Each script has tons of options, to customize a gazillion of things, it's simpler to learn them by asking an expert rather that having an incomplete summary here (developments happen faster than documentation anyway).
 
 ### Making plots
