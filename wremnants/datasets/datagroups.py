@@ -236,7 +236,7 @@ class Datagroups(object):
     ## baseName takes values such as "nominal"
     def setHists(self, baseName, syst, procsToRead=None, label=None, nominalIfMissing=True, 
                  applySelection=True, forceNonzero=True, preOpMap=None, preOpArgs=None, scaleToNewLumi=1, 
-                 excludeProcs=None, forceToNominal=[], sum_axes=[]):
+                 fakerateIntegrationAxes=[], excludeProcs=None, forceToNominal=[], sum_axes=[]):
         if not label:
             label = syst if syst else baseName
         # this line is annoying for the theory agnostic, too many processes for signal
@@ -393,6 +393,10 @@ class Datagroups(object):
                     logger.warning(f"Selection requested for process {procName} but applySelection=False, thus it will be ignored")
                 elif label in group.hists.keys():
                     logger.debug(f"Apply selection for process {procName}")
+                    if procName == nameFake and "fakerate_integration_axes" not in group.selectOpArgs and len(fakerateIntegrationAxes):
+                        opArgs = {**group.selectOpArgs, "fakerate_integration_axes": fakerateIntegrationAxes}
+                    else:
+                        opArgs = group.selectOpArgs
                     group.hists[label] = group.selectOp(group.hists[label], **group.selectOpArgs)
 
         # Avoid situation where the nominal is read for all processes for this syst
@@ -437,7 +441,7 @@ class Datagroups(object):
 
     def loadHistsForDatagroups(
         self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="",
-        nominalIfMissing=True, applySelection=True, forceNonzero=True, pseudodata=False,
+        nominalIfMissing=True, fakerateIntegrationAxes=[], applySelection=True, forceNonzero=True, pseudodata=False,
         preOpMap={}, preOpArgs={}, scaleToNewLumi=1, forceToNominal=[], sum_axes=[],
     ):
         logger.debug("Calling loadHistsForDatagroups()")
@@ -450,6 +454,7 @@ class Datagroups(object):
                           forceNonzero, preOpMap, preOpArgs,
                           scaleToNewLumi=scaleToNewLumi, 
                           excludeProcs=excluded_procs, forceToNominal=forceToNominal,
+                          fakerateIntegrationAxes=fakerateIntegrationAxes,
                           sum_axes=sum_axes)
 
     def getDatagroups(self):
