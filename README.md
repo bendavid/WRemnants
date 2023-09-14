@@ -26,6 +26,39 @@ git pull --recurse-submodules upstream main
 git push origin main
 ```
 
+Get combinetf. Need to use cmssw-cc7 to work in a special centos7 environment to work with CMSSW
+If you plan to contribute to the combinetf code, you may first fork from: https://github.com/bendavid/HiggsAnalysis-CombinedLimit
+```
+    cmssw-cc7
+    cd /some/path/to/download/code/
+    export SCRAM_ARCH="slc7_amd64_gcc700"
+    cmsrel CMSSW_10_6_19_patch2
+    cd CMSSW_10_6_19_patch2/src/
+    cmsenv
+    git clone -o bendavid -b tensorflowfit git@github.com:bendavid/HiggsAnalysis-CombinedLimit.git HiggsAnalysis/CombinedLimit
+    cd HiggsAnalysis/CombinedLimit
+    make -j 8
+    #
+    # if everything worked fine, folder scripts/ contains "combineCards.py, combinetf.py, commentUncerts.py, pruneUncerts.py, text2hdf5.py, text2workspace.py"
+    # the reference branch is bendavid/tensorflowfit
+    # so your current local branch should also be tensorflowfit
+    #
+    # optional for developments, if you have your own remote fork
+    git remote add origin git@github.com:<YOUR_GITHUB_USER>/HiggsAnalysis-CombinedLimit.git
+    git checkout -b myBranch 
+    git push origin myBranch
+```
+
+To run the fit with combinetf
+    ```
+    cmssw-cc7
+    cd /path/to/CMSSW_10_6_19_patch2/src/HiggsAnalysis/CombinedLimit/
+    cmsenv
+    cd /wherever/you/like/
+    <commands to run fit> # e.g. using WRemnants/scripts/combine/fitManager.py
+    ```
+    
+        
 ### Contribute to the code
 
 **Guidelines**
