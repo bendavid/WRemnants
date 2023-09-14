@@ -8,9 +8,9 @@ def make_datagroups_lowPU(dg, combine=False, excludeGroups=None, filterGroups=No
     # reset datagroups
     dg.groups = {}
 
-    if dg.wmass and applySelection:
+    if dg.mode == "lowpu_w" and applySelection:
         sigOp = sel.signalHistWmass
-        fakeOp = sel.fakeHistABCD
+        fakeOp = lambda x: sel.fakeHistABCD(x, low_PU=True)
     else:
         sigOp = None
         fakeOp = None
@@ -29,7 +29,7 @@ def make_datagroups_lowPU(dg, combine=False, excludeGroups=None, filterGroups=No
             color = "lightblue",
             selectOp = sigOp,
         ) 
-        if dg.wmass:
+        if dg.mode == "lowpu_w":
             dg.addGroup("Wmunu",
                 members = list(filter(lambda y: y.group == "Wmunu", dg.datasets.values())),
                 label = r"W$^{\pm}\to\mu\nu$",
@@ -50,7 +50,7 @@ def make_datagroups_lowPU(dg, combine=False, excludeGroups=None, filterGroups=No
             color = "lightblue",
             selectOp = sigOp,
         ) 
-        if dg.wmass:
+        if dg.mode == "lowpu_w":
             dg.addGroup("Wenu",
                 members = list(filter(lambda y: y.group == "Wenu", dg.datasets.values())),
                 label = r"W$^{\pm}\to e\nu$",
@@ -67,7 +67,7 @@ def make_datagroups_lowPU(dg, combine=False, excludeGroups=None, filterGroups=No
     )
 
 
-    if dg.wmass:
+    if dg.mode == "lowpu_w":
         dg.addGroup("Wtaunu",
             members = list(filter(lambda y: y.group == "Wtaunu", dg.datasets.values())),
             label = r"W$^{\pm}\to\tau\nu$",
@@ -97,7 +97,7 @@ def make_datagroups_lowPU(dg, combine=False, excludeGroups=None, filterGroups=No
     dg.filterGroups(filterGroups)
     dg.excludeGroups(excludeGroups)
 
-    if dg.wmass:
+    if dg.mode == "lowpu_w":
         # add all processes to the fake contributions after filtered and excluded groups
         dg.addGroup("Fake",
             members = [member for sublist in [v.members for k, v in dg.groups.items() if k != "QCD"] for member in sublist],

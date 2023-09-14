@@ -468,11 +468,10 @@ def pdfSymmetricShifts(hdiff, axis_name):
 def pdfAsymmetricShifts(hdiff, axis_name):
     # Assuming that the last axis is the syst axis
     # TODO: add some check to verify this
-    def shiftHist(vals, varis, hdiff, axis_name):
-        hnew = hdiff.copy()[{axis_name : 0}]
-        vals, varis = hh.multiplyWithVariance(vals, vals, varis, varis)
-        ss = np.stack((np.sum(vals, axis=-1), np.sum(varis, axis=-1)), axis=-1)
-        hnew[...] = ss
+    def shiftHist(vals, hdiff, axis_name):
+        hnew = hdiff[{axis_name : 0}]
+        vals = vals*vals
+        hnew[...] = np.sum(vals, axis=-1)
         return hh.sqrtHist(hnew)
 
     ax = hdiff.axes[axis_name] 
@@ -482,21 +481,17 @@ def pdfAsymmetricShifts(hdiff, axis_name):
         # Remove the overflow from the categorical axis
         end = int((ax.size-1)/2)
         upvals = hdiff[{axis_name : [x for x in ax if "Up" in x]}].values(flow=True)[...,:end]
-        upvars = hdiff[{axis_name : [x for x in ax if "Up" in x]}].variances(flow=True)[...,:end]
         downvals = hdiff[{axis_name : [x for x in ax if "Down" in x]}].values(flow=True)[...,:end]
-        downvars = hdiff[{axis_name : [x for x in ax if "Down" in x]}].variances(flow=True)[...,:end]
         if upvals.shape != downvals.shape:
             raise ValueError("Malformed PDF uncertainty hist! Expect equal number of up and down vars")
     else:
         end = ax.size+underflow
         upvals = hdiff.values(flow=True)[...,1+underflow:end:2]
-        upvars = hdiff.variances(flow=True)[...,1+underflow:end:2]
         downvals = hdiff.values(flow=True)[...,2+underflow:end:2]
-        downvars = hdiff.variances(flow=True)[...,2+underflow:end:2]
 
     # The error sets are ordered up,down,up,down...
-    upshift = shiftHist(upvals, upvars, hdiff, axis_name)
-    downshift = shiftHist(downvals, downvars, hdiff, axis_name)
+    upshift = shiftHist(upvals, hdiff, axis_name)
+    downshift = shiftHist(downvals, hdiff, axis_name)
     return upshift, downshift 
 
 def hessianPdfUnc(h, axis_name="pdfVar", uncType="symHessian", scale=1.):
