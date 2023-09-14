@@ -923,7 +923,7 @@ class CardTool(object):
             return
         if self.project:
             axes = self.project[:]
-            if "charge" in h.axes.name and not self.xnorm:
+            if "charge" in h.axes.name and not self.xnorm and "charge" not in axes:
                 axes.append("charge")
             # don't project h into itself when axes to project are all axes
             if any (ax not in h.axes.name for ax in axes):
