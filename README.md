@@ -26,8 +26,7 @@ git pull --recurse-submodules upstream main
 git push origin main
 ```
 
-Get combinetf. Need to use cmssw-cc7 to work in a special centos7 environment to work with CMSSW
-If you plan to contribute to the combinetf code, you may first fork from: https://github.com/bendavid/HiggsAnalysis-CombinedLimit
+Get combinetf. Need to use cmssw-cc7 to work in a special centos7 environment to work with CMSSW. If you plan to contribute to the combinetf code, you may first fork from: https://github.com/bendavid/HiggsAnalysis-CombinedLimit
 ```
     cmssw-cc7
     cd /some/path/to/download/code/
@@ -50,13 +49,13 @@ If you plan to contribute to the combinetf code, you may first fork from: https:
 ```
 
 To run the fit with combinetf
-    ```
+```
     cmssw-cc7
     cd /path/to/CMSSW_10_6_19_patch2/src/HiggsAnalysis/CombinedLimit/
     cmsenv
     cd /wherever/you/like/
     <commands to run fit> # e.g. using WRemnants/scripts/combine/fitManager.py
-    ```
+```
     
         
 ### Contribute to the code
