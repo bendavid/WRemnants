@@ -336,7 +336,7 @@ def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo
         hfo = read_dyturbo_hist([dyturbo_fo], axes=axes if axes else hsing.axes.name[:-1], charge=charge, coeff=coeff)
     for ax in ["Y", "Q"]:
         if ax in set(hfo.axes.name).intersection(set(hfo_sing.axes.name)).intersection(set(hsing.axes.name)):
-            hfo, hfo_sing, hsing = hh.rebinHistsToCommon([hfo, hfo_sing, hsing], ax)
+            hfo, hfo_sing, hsing = hh.ebinHistsToCommon([hfo, hfo_sing, hsing], ax)
     if "vars" in hfo.axes.name and hfo.axes["vars"].size != hfo_sing.axes["vars"].size:
         if hfo.axes["vars"].size == 1:
             hfo = hfo[{"vars" : 0}]

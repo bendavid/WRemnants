@@ -23,21 +23,17 @@ logger = logging.child_logger(__name__)
 def figure(href, xlabel, ylabel, ylim=None, xlim=None,
     grid = False, plot_title = None, title_padding = 0,
     bin_density = 300, cms_label = None, logy=False, logx=False,
-    width_scale=1, automatic_scale=True
+    width_scale=1
 ):
     if not xlim:
         xlim = [href.axes[0].edges[0], href.axes[0].edges[-1]]
     hax = href.axes[0]
     xlim_range = float(xlim[1] - xlim[0])
     original_xrange = float(hax.edges[-1] - hax.edges[0])
-    if automatic_scale:
-        raw_width = (hax.size/float(bin_density)) * (xlim_range / original_xrange)
-        width = math.ceil(raw_width)
-    else:
-        width=1
+    raw_width = (hax.size/float(bin_density)) * (xlim_range / original_xrange)
+    width = math.ceil(raw_width)
 
     fig = plt.figure(figsize=(width_scale*8*width,8))
-
     ax1 = fig.add_subplot() 
     if cms_label: hep.cms.text(cms_label)
 
@@ -145,7 +141,8 @@ def makeStackPlotWithRatio(
     stack = []
     data_hist = None
     for k in to_read:
-        if not histInfo[k].hists[histName]:
+        print(histInfo[k].hists)
+        if histName not in histInfo[k].hists or not histInfo[k].hists[histName]:
             logger.warning(f"Failed to find hist {histName} for proc {k}")
             continue
         h = action(histInfo[k].hists[histName])[select]
@@ -342,7 +339,7 @@ def makePlotWithRatioToRef(
         histtype="step",
         color=colors[:count],
         label=labels[:count],
-        linestyle=linestyles,
+        linestyle=linestyles[:count],
         stack=False,
         ax=ax1,
         yerr=yerr,
@@ -366,8 +363,8 @@ def makePlotWithRatioToRef(
             ratio_hists[(not baseline):count],
             histtype="step",
             color=colors[(not baseline):count],
-            linestyle=linestyles,
-            yerr=False,
+            linestyle=linestyles[(not baseline):count],
+            yerr=yerr,
             stack=False,
             ax=ax2,
             alpha=alpha,
@@ -389,9 +386,8 @@ def makePlotWithRatioToRef(
             hh.divideHists(data, hists[0], cutoff=1.e-8, flow=False),
             histtype="errorbar",
             color=colors[-1],
-            label=labels[-1],
             xerr=False,
-            yerr=False,
+            yerr=True,
             stack=False,
             ax=ax2,
             alpha=alpha,

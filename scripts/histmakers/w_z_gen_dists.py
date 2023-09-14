@@ -44,8 +44,9 @@ axis_rapidity = axis_absYVgen if args.absY else axis_ygen
 col_rapidity =  "absYVgen" if args.absY else "yVgen"
 
 axis_ptVgen = hist.axis.Variable(
-    # list(range(0,151))+[160., 190.0, 220.0, 250.0, 300.0, 400.0, 500.0, 800.0, 1500.0], 
-    list(range(0,101)), # this is the same binning as hists from theory corrections
+     list(range(0,151))+[160., 190.0, 220.0, 250.0, 300.0, 400.0, 500.0, 800.0, 13000.0], 
+    #list(range(0,101)), # this is the same binning as hists from theory corrections
+    #common.ptV_binning,
     name = "ptVgen", underflow=False,
 )
 
@@ -162,10 +163,10 @@ w_moments = None
 if not args.skipAngularCoeffs:
     for dataset in datasets:
         name = dataset.name
-        if "helicity_moments_scale" not in resultdict[name]["output"]:
+        if "nominal_gen_helicity_moments_scale" not in resultdict[name]["output"]:
             logger.warning(f"Failed to find helicity_moments_scale hist for proc {name}. Skipping!")
             continue
-        moments = resultdict[name]["output"]["helicity_moments_scale"].get()
+        moments = resultdict[name]["output"]["nominal_gen_helicity_moments_scale"].get()
         if name in common.zprocs:
             if z_moments is None:
                 z_moments = moments
@@ -180,13 +181,13 @@ if not args.skipAngularCoeffs:
                 w_moments = hh.addHists(w_moments, new_moments, createNew=False)
 
     coeffs={}
-    # REMINDER: common.ptV_binning is not the one using 10% quantiles, and the quantiles are not a subset of this binning, but apparently it doesn't matter
+    # Common.ptV_binning is the approximate 5% quantiles, rounded to integers. Rebin for approx 10% quantiles
     if z_moments:
-        z_moments = hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning)
+        z_moments = hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning[::2])
         z_moments = hh.rebinHist(z_moments, axis_massZgen.name, axis_massZgen.edges[::2])
         coeffs["Z"] = wremnants.moments_to_angular_coeffs(z_moments)
     if w_moments:
-        w_moments = hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning)
+        w_moments = hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning[::2])
         coeffs["W"] = wremnants.moments_to_angular_coeffs(w_moments)
     if coeffs:
         outfname = "w_z_coeffs_absY.hdf5" if args.absY else "w_z_coeffs.hdf5"

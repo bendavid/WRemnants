@@ -182,7 +182,7 @@ class CardTool(object):
         self.unconstrainedProcesses = datagroups.unconstrainedProcesses
         if self.nominalName:
             self.datagroups.setNominalName(self.nominalName)
-        if datagroups.gen:
+        if datagroups.mode == "vgen":
             self.charge_ax = "chargeVgen"
         
     def setPseudodataDatagroups(self, datagroups):
@@ -256,7 +256,7 @@ class CardTool(object):
                       scale=1, processes=None, group=None, noConstraint=False,
                       action=None, doActionBeforeMirror=False, actionArgs={}, actionMap={},
                       systNameReplace=[], systNamePrepend=None, groupFilter=None, passToFakes=False,
-                      rename=None, splitGroup={}, decorrelateByBin={}, noiGroup=False
+                      rename=None, splitGroup={}, decorrelateByBin={}, noiGroup=False, formatWithValue=False,
                       ):
         # note: setting Up=Down seems to be pathological for the moment, it might be due to the interpolation in the fit
         # for now better not to use the options, although it might be useful to keep it implemented
@@ -314,6 +314,7 @@ class CardTool(object):
                 "name" : name,
                 "decorrByBin": decorrelateByBin,
                 "systNamePrepend" : systNamePrepend,
+                "formatWithValue" : formatWithValue,
             }
         })
 
@@ -336,7 +337,7 @@ class CardTool(object):
     def setMirrorForSyst(self, syst, mirror=True):
         self.systematics[syst]["mirror"] = mirror
 
-    def systLabelForAxis(self, axLabel, entry, axis):
+    def systLabelForAxis(self, axLabel, entry, axis, formatWithValue=False):
         if type(axis) == hist.axis.StrCategory:
             if entry in axis:
                 return entry
@@ -348,7 +349,13 @@ class CardTool(object):
             return 'Up' if entry else 'Down'
         if "{i}" in axLabel:
             return axLabel.format(i=entry)
-        return axLabel+str(entry)
+        if formatWithValue:
+            entry = axis.centers[entry]
+
+        if type(entry) in [float, np.float64]:
+            entry = f"{entry:0.1f}".replace(".", "p") if not entry.is_integer() else str(int(entry))
+
+        return f"{axLabel}{entry}"
 
     # TODO: Really would be better to use the axis names, not just indices
     def excludeSystEntry(self, entry, entries_to_skip):
@@ -445,7 +452,7 @@ class CardTool(object):
                     systInfo["outNames"].append("")
                 else:
                     name = systInfo["baseName"]
-                    name += "".join([self.systLabelForAxis(al, entry[i], ax) for i,(al,ax) in enumerate(zip(axLabels,axes))])
+                    name += "".join([self.systLabelForAxis(al, entry[i], ax, systInfo["formatWithValue"]) for i,(al,ax) in enumerate(zip(axLabels,axes))])
                     if "systNameReplace" in systInfo and systInfo["systNameReplace"]:
                         for rep in systInfo["systNameReplace"]:
                             name = name.replace(*rep)
@@ -681,25 +688,8 @@ class CardTool(object):
             self.outfile = outfile
             self.outfile.cd()
 
-    def setOutput(self, outfolder, fitvars=[], doStatOnly=False, postfix=None):
-        if self.datagroups.wmass:
-            prefix = "WMass"
-        elif self.datagroups.wlike:
-            prefix = "ZMassWLike"
-        else:
-            prefix = "ZMassDilepton"
-        if self.datagroups.lowPU:
-            prefix += "_lowPU"
-
-        tag = prefix+"_"+"_".join(fitvars)
-        if doStatOnly:
-            tag += "_statOnly"
-        if self.datagroups.flavor:
-            tag += f"_{self.datagroups.flavor}"
-        if postfix is not None:
-            tag += f"_{postfix}"
-
-        self.outfolder = f"{outfolder}/{tag}/"
+    def setOutput(self, outfolder, basename):
+        self.outfolder = outfolder
         if not os.path.isdir(self.outfolder):
             os.makedirs(self.outfolder)
 
@@ -707,8 +697,8 @@ class CardTool(object):
         if self.xnorm:
             suffix += '_xnorm'
 
-        self.cardName = (f"{self.outfolder}/{prefix}_{{chan}}{suffix}.txt")
-        self.setOutfile(os.path.abspath(f"{self.outfolder}/{prefix}CombineInput{suffix}.root"))
+        self.cardName = (f"{self.outfolder}/{basename}_{{chan}}{suffix}.txt")
+        self.setOutfile(os.path.abspath(f"{self.outfolder}/{basename}CombineInput{suffix}.root"))
             
     def writeOutput(self, args=None, xnorm=False, forceNonzero=True, check_systs=True, simultaneousABCD=False):
         self.xnorm = xnorm

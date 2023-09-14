@@ -347,7 +347,7 @@ def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_cen
         var_axis = helpers[generator].tensor_axes[-1]
 
         # special treatment for Omega since it needs to be decorrelated in charge and rapidity
-        if type(var_axis) == hist.axis.StrCategory and any(var_label.startswith("Omega") for var_label in var_axis):
+        if isinstance(var_axis, hist.axis.StrCategory) and any(var_label.startswith("Omega") for var_label in var_axis):
             omegaidxs = [var_axis.index(var_label) for var_label in var_axis if var_label.startswith("Omega")]
 
             # include nominal as well

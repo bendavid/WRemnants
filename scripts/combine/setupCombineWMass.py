@@ -90,11 +90,11 @@ def setup(args,xnorm=False):
     logger.debug(f"Excluding these groups of processes: {args.excludeProcGroups}")
 
     datagroups = Datagroups(args.inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm and not args.simultaneousABCD)
-    wmass = datagroups.wmass
-    wlike = datagroups.wlike
-    lowPU = datagroups.lowPU
+    wmass = datagroups.mode == "wmass"
+    wlike = datagroups.mode == "wmass"
+    lowPU = "lowpu" in datagroups.mode
     # Detect lowpu dilepton
-    dilepton = datagroups.dilepton or any(x in ["ptll", "mll"] for x in args.fitvar)
+    dilepton = "dilepton" in datagroups.mode or any(x in ["ptll", "mll"] for x in args.fitvar)
 
     cardTool = CardTool.CardTool(xnorm=xnorm)
     cardTool.setDatagroups(datagroups)
@@ -126,7 +126,7 @@ def setup(args,xnorm=False):
         datagroups.setGlobalAction(lambda h: h[sel])
 
 
-    constrainMass = dilepton and not "mll" in args.fitvar
+    constrainMass = (dilepton and not "mll" in args.fitvar) or analysis_label(cardTool) == "ZGen"
 
     if wmass:
         base_group = "Wenu" if datagroups.flavor == "e" else "Wmunu"
@@ -172,7 +172,7 @@ def setup(args,xnorm=False):
         fitvars = ["passIso", "passMT", *args.fitvar]
         cardTool.unroll=True
 
-    if args.sumChannels or xnorm or dilepton or datagroups.gen:
+    if args.sumChannels or xnorm or dilepton or datagroups.mode == "vgen":
         cardTool.setChannels(["inclusive"])
         cardTool.setWriteByCharge(False)
     else:
@@ -336,7 +336,7 @@ def setup(args,xnorm=False):
     )
     theory_helper.add_all_theory_unc()
 
-    if xnorm or datagroups.gen:
+    if xnorm or datagroups.mode == "vgen":
         return cardTool
 
     # Below: experimental uncertainties
@@ -586,11 +586,38 @@ def setup(args,xnorm=False):
 
     return cardTool
 
+def analysis_label(card_tool):
+    print(card_tool)
+    analysis_name_map = {
+        "wmass" : "WMass",
+        "vgen" : "ZGen" if card_tool.getProcesses()[0][0] == "Z" else "WGen",
+        "wlike" : "ZMassWLike", 
+        "dilepton" : "ZMassDilepton",
+        "lowpu_w" : "WMass_lowPU",
+        "lowpu_z" : "ZMass_lowPU",
+    }
+
+    if card_tool.datagroups.mode not in analysis_name_map:
+        raise ValueError(f"Invalid datagroups mode {datagroups.mode}")
+
+    return analysis_name_map[card_tool.datagroups.mode]
+
+def outputFolderName(outfolder, card_tool, doStatOnly, postfix):
+    to_join = [analysis_label(card_tool)]+card_tool.fit_axes
+
+    if doStatOnly:
+        to_join.append("statOnly")
+    if card_tool.datagroups.flavor:
+        tag.append(card_tool.datagroups.flavor)
+    if postfix is not None:
+        to_join.append(postfix)
+
+    return f"{outfolder}/{'_'.join(to_join)}/"
+
 def main(args,xnorm=False):
     cardTool = setup(args, xnorm)
-    cardTool.setOutput(args.outfolder, fitvars=args.fitvar, doStatOnly=args.doStatOnly, postfix=args.postfix)
+    cardTool.setOutput(outputFolderName(args.outfolder, cardTool, args.doStatOnly, args.postfix), analysis_label(cardTool))
     cardTool.writeOutput(args=args, forceNonzero=not args.unfolding, check_systs=not args.unfolding, simultaneousABCD=args.simultaneousABCD)
-    return
 
 if __name__ == "__main__":
     parser = make_parser()
