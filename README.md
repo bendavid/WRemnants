@@ -36,7 +36,7 @@ Get combinetf. Need to use cmssw-cc7 to work in a special centos7 environment to
     cmsenv
     git clone -o bendavid -b tensorflowfit git@github.com:bendavid/HiggsAnalysis-CombinedLimit.git HiggsAnalysis/CombinedLimit
     cd HiggsAnalysis/CombinedLimit
-    make -j 8
+    scram b -j 8
     #
     # if everything worked fine, folder scripts/ contains "combineCards.py, combinetf.py, commentUncerts.py, pruneUncerts.py, text2hdf5.py, text2workspace.py"
     # the reference branch is bendavid/tensorflowfit
