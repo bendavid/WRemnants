@@ -21,8 +21,6 @@ import hist
 import scripts.lowPU.config as lowPUcfg
 
 
-corr_helpers = theory_corrections.load_corr_helpers(common.vprocs_lowpu, args.theoryCorr)
-
 ###################################
 flavor = args.flavor # mumu, ee
 sigProcs = ["Zmumu"] if flavor == "mumu" else ["Zee"]
@@ -93,6 +91,8 @@ nominal_cols = ["ptll", "yll", "TrigLep_charge"]
 axis_mt = hist.axis.Regular(200, 0., 200., name = "mt", underflow=False)
 axes_mT = [axis_mt]
 cols_mT = ["transverseMass"]
+
+corr_helpers = theory_corrections.load_corr_helpers([d.name for d in datasets if d.name in common.vprocs_lowpu], args.theoryCorr)
 
 # recoil initialization
 if not args.noRecoil:
