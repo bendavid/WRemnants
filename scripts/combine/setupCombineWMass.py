@@ -42,7 +42,7 @@ def make_parser(parser=None):
     parser.add_argument("--scaleTNP", default=5, type=float, help="Scale the TNP uncertainties by this factor")
     parser.add_argument("--scalePdf", default=1, type=float, help="Scale the PDF hessian uncertainties by this factor")
     parser.add_argument("--pdfUncFromCorr", action='store_true', help="Take PDF uncertainty from correction hist (Requires having run that correction)")
-    parser.add_argument("--ewUnc", type=str, nargs="*", default=["winhacnloew"], choices=["horacenloew", "winhacnloew"], help="Include EW uncertainty")
+    parser.add_argument("--ewUnc", type=str, nargs="*", default=["horacenloew"], choices=["horacenloew", "winhacnloew"], help="Include EW uncertainty")
     parser.add_argument("--widthUnc", action='store_true', help="Include uncertainty on W and Z width")
     parser.add_argument("--noStatUncFakes" , action="store_true",   help="Set bin error for QCD background templates to 0, to check MC stat uncertainties for signal only")
     parser.add_argument("--skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
@@ -316,7 +316,7 @@ def setup(args,xnorm=False):
             mirror=True,
             group="theory_ew",
             systAxes=["systIdx"],
-            labelsByAxis=[f"{ewUnc}nloewCorr"],
+            labelsByAxis=[f"{ewUnc}Corr"],
             skipEntries=[(0, -1), (1, -1)],
             passToFakes=passSystToFakes,
         )
@@ -329,6 +329,7 @@ def setup(args,xnorm=False):
         propagate_to_fakes=to_fakes,
         np_model=args.npUnc,
         tnp_magnitude=args.tnpMagnitude,
+        tnp_scale = args.scaleTNP,
         mirror_tnp=True,
         pdf_from_corr=args.pdfUncFromCorr,
         scale_pdf_unc=args.scalePdf,
@@ -545,22 +546,23 @@ def setup(args,xnorm=False):
     )
 
     non_closure_scheme = input_tools.args_from_metadata(cardTool, "nonClosureScheme")
-    if non_closure_scheme == "A-M-separated":
+    correlated_non_closure = input_tools.args_from_metadata(cardTool, "correlatedNonClosureNP")
+    if non_closure_scheme in ["A-M-separated", "A-only"]:
         cardTool.addSystematic("Z_non_closure_parametrized_A", 
             processes=['single_v_samples'],
             group="nonClosure" if args.sepImpactForNC else "muonScale",
             baseName="Z_nonClosure_parametrized_A_",
-            systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
-            labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
+            systAxes=["unc", "downUpVar"] if not correlated_non_closure  else ["downUpVar"],
+            labelsByAxis=["unc", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
             passToFakes=passSystToFakes
         )
-    if non_closure_scheme in ["A-M-separated", "binned-plus-M"]:
+    if non_closure_scheme in ["A-M-separated", "M-only", "binned-plus-M"]:
         cardTool.addSystematic("Z_non_closure_parametrized_M", 
             processes=['single_v_samples'],
             group="nonClosure" if args.sepImpactForNC else "muonScale",
             baseName="Z_nonClosure_parametrized_M_",
-            systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
-            labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
+            systAxes=["unc", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
+            labelsByAxis=["unc", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
             passToFakes=passSystToFakes
         )            
     if non_closure_scheme == "A-M-combined":
@@ -568,8 +570,8 @@ def setup(args,xnorm=False):
             processes=['single_v_samples'],
             group="nonClosure" if args.sepImpactForNC else "muonScale",
             baseName="Z_nonClosure_parametrized_",
-            systAxes=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
-            labelsByAxis=["unc", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
+            systAxes=["unc", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
+            labelsByAxis=["unc", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
             passToFakes=passSystToFakes
         )
     if non_closure_scheme in ["binned", "binned-plus-M"]:
@@ -577,8 +579,8 @@ def setup(args,xnorm=False):
             processes=['single_v_samples'],
             group="nonClosure" if args.sepImpactForNC else "muonScale",
             baseName="Z_nonClosure_binned_",
-            systAxes=["unc_ieta", "unc_ipt", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
-            labelsByAxis=["unc_ieta", "unc_ipt", "downUpVar"] if not (args.correlatedNonClosureNuisances) else ["downUpVar"],
+            systAxes=["unc_ieta", "unc_ipt", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
+            labelsByAxis=["unc_ieta", "unc_ipt", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
             passToFakes=passSystToFakes
         )
     

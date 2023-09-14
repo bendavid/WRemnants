@@ -23,7 +23,7 @@ class TheoryHelper(object):
         self.scale_pdf_unc = 1.
         self.tnp_magnitude = 1.
         self.mirror_tnp = True
-        self.minnloScaleUnc = 'byHelicityPt'
+        self.minnlo_unc = 'byHelicityPt'
 
     def sample_label(self, sample_group):
         if sample_group not in self.card_tool.procGroups:
@@ -37,11 +37,12 @@ class TheoryHelper(object):
             minnlo_unc="byHelicityPt",
             propagate_to_fakes=True, 
             tnp_magnitude=1,
+            tnp_scale=1.,
             mirror_tnp=True,
             pdf_from_corr=False,
             pdf_action=None,
             scale_pdf_unc=1.,
-            minnloScaleUnc='byHelicityPt'):
+            minnlo_unc='byHelicityPt'):
 
         self.set_resum_unc_type(resumUnc)
         self.set_np_model(np_model)
@@ -49,15 +50,16 @@ class TheoryHelper(object):
         self.set_minnlo_unc(minnlo_unc)
 
         self.tnp_magnitude = tnp_magnitude
+        self.tnp_scale = tnp_scale
         self.mirror_tnp = mirror_tnp
         self.pdf_from_corr = pdf_from_corr
         self.pdf_action = pdf_action
         self.scale_pdf_unc = scale_pdf_unc
-        self.minnloScaleUnc = minnloScaleUnc
+        self.minnlo_unc = minnlo_unc
 
     def add_all_theory_unc(self):
         self.add_nonpert_unc(model=self.np_model)
-        self.add_resum_unc(magnitude=self.tnp_magnitude, mirror=self.mirror_tnp, minnloUnc=self.minnlo_unc)
+        self.add_resum_unc(magnitude=self.tnp_magnitude, mirror=self.mirror_tnp, scale=self.tnp_scale)
         self.add_pdf_uncertainty(from_corr=self.pdf_from_corr, action=self.pdf_action, scale=self.scale_pdf_unc)
 
     def set_minnlo_unc(self, minnloUnc):
@@ -94,7 +96,7 @@ class TheoryHelper(object):
         if self.resumUnc == "tnp":
             self.add_resum_tnp_unc(magnitude, mirror, scale)
 
-        if self.minnloScaleUnc and self.minnloScaleUnc not in ["none", None]:
+        if self.minnlo_unc and self.minnlo_unc not in ["none", None]:
             for sample_group in ["signal_samples_inctau", "single_v_nonsig_samples"]:
                 if self.card_tool.procGroups.get(sample_group, None):
                     self.add_minnlo_scale_uncertainty(minnloUnc, sample_group, rebin_pt=common.ptV_binning)

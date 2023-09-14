@@ -625,7 +625,7 @@ class CardTool(object):
                             skipOneAsNomi=systInfo["mirrorDownVarEqualToNomi"])
         setZeroStatUnc = False
         if proc in self.noStatUncProcesses:
-            logger.info(f"Zeroing statistical uncertainty for process {proc}")
+            logger.warning(f"Zeroing statistical uncertainty for process {proc}")
             setZeroStatUnc = True
         # this is a big loop a bit slow, but it might be mainly the hist->root conversion and writing into the root file
         for name, var in var_map.items():

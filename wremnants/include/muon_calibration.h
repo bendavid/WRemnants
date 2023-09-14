@@ -1125,9 +1125,7 @@ public:
             auto const &genEta = genEtas[i];
             auto const &genCharge = genCharges[i];
 
-            const double qoprec = recCharge*1./(recPt*std::cosh(recEta));
             const double qopgen = genCharge*1./(genPt*std::cosh(genEta));
-            const double qopr = qoprec/qopgen;
 
             auto const &dweightdqopr = dweightdqoprs[i]; 
             const auto &params = get_tensor(recEta);
@@ -1188,9 +1186,7 @@ public:
             auto const &genEta = genEtas[i];
             auto const &genCharge = genCharges[i];
 
-            const double qoprec = recCharge*1./(recPt*std::cosh(recEta));
             const double qopgen = genCharge*1./(genPt*std::cosh(genEta));
-            const double qopr = qoprec/qopgen;
 
             const double &dweightdqopr = dweightdqoprs[i];
 
@@ -1215,7 +1211,7 @@ public:
                 const double MUnc = params(2);
                 recoKUnc += recCharges[i] * MUnc;
             }
-            double recoQopUnc = recCharges[i] * std::sin(calculateTheta(recEtas[i])) * recoKUnc;
+            double recoQopUnc = recCharge * std::sin(calculateTheta(recEta)) * recoKUnc;
 
             for (std::ptrdiff_t idownup = 0; idownup < 2; ++idownup) {
                 const double dir = idownup == 0 ? -1. : 1.;
@@ -1227,6 +1223,83 @@ public:
             // total weight is the product over all the muons
             res(iEta, 0) *= alt_weights(0);
             res(iEta, 1) *= alt_weights(1);
+        }
+        return res;
+    }
+
+private:
+    std::shared_ptr<const T> correctionHist_;
+};
+
+// the parametrized Z non-closure helper without the de-correlation in output nuisances
+// TODO: vectorize the helper for multiple muons
+template <typename T, size_t NEtaBins>
+class ZNonClosureParametrizedHelperSplinesCorl {
+
+public:
+    using hist_t = T;
+    using tensor_t = typename T::storage_type::value_type::tensor_t;
+    using out_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<2>>;
+
+    ZNonClosureParametrizedHelperSplinesCorl(T&& corrections):
+        correctionHist_(std::make_shared<const T>(std::move(corrections))) {}
+
+    out_tensor_t operator() (
+        const RVec<float> &recPts, const RVec<float> &recEtas, const RVec<int> &recCharges,
+        const RVec<float> &genPts, const RVec<float> &genEtas, const RVec<int> &genCharges,
+        const RVec<double> &dweightdqoprs, double nominal_weight = 1.0, 
+        int calVarFlags = 7 //A = 1, e = 2, M = 4
+    ) {
+
+        auto const nmuons = recPts.size();
+        out_tensor_t res;
+        res.setConstant(nominal_weight);
+
+        for (std::size_t i = 0; i < nmuons; ++i) {
+            auto const &recPt = recPts[i];
+            auto const &recEta = recEtas[i];
+            auto const &recCharge = recCharges[i];
+
+            auto const &genPt = genPts[i];
+            auto const &genEta = genEtas[i];
+            auto const &genCharge = genCharges[i];
+
+            const double qopgen = genCharge*1./(genPt*std::cosh(genEta));
+
+            const double &dweightdqopr = dweightdqoprs[i];
+
+            out_tensor_t delta_qopr;
+
+            const unsigned int iEta = std::clamp(
+                correctionHist_ -> template axis<0>().index(recEtas[i]), 0, (int)NEtaBins - 1
+            ); // clip under/overflow bins 
+            const auto &params = correctionHist_->at(iEta).data();
+            double recoK = 1.0 /recPts[i];
+            double recoKUnc = 0.0;
+            enum calVarFlagsScheme {AFlag = 1, eFlag = 2, MFlag = 4};
+            if (calVarFlags & AFlag) {
+                const double AUnc = params(0);
+                recoKUnc += AUnc * recoK;
+            }
+            if (calVarFlags & eFlag) {
+                const double eUnc = params(1);
+                recoKUnc += -1.0 * eUnc * recoK * recoK;
+            }
+            if (calVarFlags & MFlag) {
+                const double MUnc = params(2);
+                recoKUnc += recCharges[i] * MUnc;
+            }
+            double recoQopUnc = recCharge * std::sin(calculateTheta(recEta)) * recoKUnc;
+
+            for (std::ptrdiff_t idownup = 0; idownup < 2; ++idownup) {
+                const double dir = idownup == 0 ? -1. : 1.;
+                delta_qopr(idownup) = recoQopUnc * dir / qopgen;
+            }
+
+            const out_tensor_t alt_weights = dweightdqopr*delta_qopr + 1.;
+
+            // total weight is the product over all the muons
+            res *= alt_weights;
         }
         return res;
     }
@@ -1267,9 +1340,7 @@ public:
             auto const &genEta = genEtas[i];
             auto const &genCharge = genCharges[i];
 
-            const double qoprec = recCharge*1./(recPt*std::cosh(recEta));
             const double qopgen = genCharge*1./(genPt*std::cosh(genEta));
-            const double qopr = qoprec/qopgen;
 
             const double &dweightdqopr = dweightdqoprs[i];
 

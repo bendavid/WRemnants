@@ -30,7 +30,10 @@ def makeFilelist(paths, maxFiles=-1, format_args={}, is_data=False, oneMCfileEve
         if format_args:
             path = path.format(**format_args)
             logger.debug(f"Reading files from path {path}")
-        filelist.extend(glob.glob(path) if path[:4] != "/eos" else buildXrdFileList(path, "eoscms.cern.ch"))
+        files = glob.glob(path) if path[:4] != "/eos" else buildXrdFileList(path, "eoscms.cern.ch")
+        if len(files) == 0:
+            logger.warning(f"Did not find any files matching path {path}!")
+        filelist.extend(files)
 
     if oneMCfileEveryN != None and not is_data:
         tmplist = []
@@ -134,8 +137,11 @@ def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, na
 
         is_data = info.get("group","") == "Data"
 
-        prod_tag = data_tag if is_data else mc_tag 
+        prod_tag = data_tag if is_data else mc_tag
         paths = makeFilelist(info["filepaths"], maxFiles, format_args=dict(BASE_PATH=base_path, NANO_PROD_TAG=prod_tag), is_data=is_data, oneMCfileEveryN=oneMCfileEveryN)
+            
+        if checkFileForZombie:
+            paths = [p for p in paths if not is_zombie(p)]
 
         if not paths:
             logger.warning(f"Failed to find any files for dataset {sample}. Looking at {info['filepaths']}. Skipping!")
