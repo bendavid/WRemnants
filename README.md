@@ -26,7 +26,7 @@ git pull --recurse-submodules upstream main
 git push origin main
 ```
 
-Get combinetf. Need to use cmssw-cc7 to work in a special centos7 environment to work with CMSSW. If you plan to contribute to the combinetf code, you may first fork from: https://github.com/bendavid/HiggsAnalysis-CombinedLimit
+Get combinetf. Need to run cmssw-cc7 (outside of the other singularity image) to work in a special centos7 environment, which allows you to work with CMSSW. If you plan to contribute to the combinetf code, you may first fork from: https://github.com/bendavid/HiggsAnalysis-CombinedLimit
 ```
     cmssw-cc7
     cd /some/path/to/download/code/
