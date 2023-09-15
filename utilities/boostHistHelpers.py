@@ -178,6 +178,7 @@ def sumHists(hists):
 def mirrorHist(hvar, hnom, cutoff=1):
     div = divideHists(hnom, hvar, cutoff, createNew=True)
     hnew = multiplyHists(div, hnom, createNew=False)
+    print("Var", hvar.sum(), "nom", hnom.sum(), "new", hnew.sum())
     return hnew
 
 def extendHistByMirror(hvar, hnom, downAsUp=False, downAsNomi=False):

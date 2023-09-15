@@ -397,7 +397,8 @@ class Datagroups(object):
                         opArgs = {**group.selectOpArgs, "fakerate_integration_axes": fakerateIntegrationAxes}
                     else:
                         opArgs = group.selectOpArgs
-                    group.hists[label] = group.selectOp(group.hists[label], **group.selectOpArgs)
+                    if group.hists[label]:
+                        group.hists[label] = group.selectOp(group.hists[label], **group.selectOpArgs)
 
         # Avoid situation where the nominal is read for all processes for this syst
         if not foundExact:
@@ -510,10 +511,12 @@ class Datagroups(object):
         return self.results
 
     def addSummedProc(self, refname, name, label, color="red", exclude=["Data"], relabel=None, 
-            procsToRead=None, reload=False, rename=None, action=None, preOpMap={}, preOpArgs={}, forceNonzero=True):
+            procsToRead=None, reload=False, rename=None, action=None, preOpMap={}, preOpArgs={}, 
+            fakerateIntegrationAxes=[], forceNonzero=True):
         if reload:
             self.loadHistsForDatagroups(refname, syst=name, excluded_procs=exclude,
-                procsToRead=procsToRead, preOpMap=preOpMap, preOpArgs=preOpArgs, forceNonzero=forceNonzero)
+                procsToRead=procsToRead, preOpMap=preOpMap, preOpArgs=preOpArgs, 
+                fakerateIntegrationAxes=fakerateIntegrationAxes, forceNonzero=forceNonzero)
 
         if not rename:
             rename = name

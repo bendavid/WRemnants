@@ -34,7 +34,6 @@ class TheoryHelper(object):
         return self.card_tool.procGroups[sample_group][0][0] 
 
     def configure(self, resumUnc, np_model,
-            minnlo_unc="byHelicityPt",
             propagate_to_fakes=True, 
             tnp_magnitude=1,
             tnp_scale=1.,

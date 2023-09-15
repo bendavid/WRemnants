@@ -138,7 +138,6 @@ def makeStackPlotWithRatio(
     stack = []
     data_hist = None
     for k in to_read:
-        print(histInfo[k].hists)
         if histName not in histInfo[k].hists or not histInfo[k].hists[histName]:
             logger.warning(f"Failed to find hist {histName} for proc {k}")
             continue
@@ -285,10 +284,9 @@ def makeStackPlotWithRatio(
         if fill_between:
             fill_procs = [x for x in unstacked if x != "Data"]
             if fill_between < 0:
-                fill_between = len(fill_procs)
+                fill_between = len(fill_procs)+1
             logger.debug(f"Filling first {fill_between}")
             for up,down in zip(fill_procs[:fill_between:2], fill_procs[1:fill_between:2]):
-                print("Up", up, "down", down)
                 unstack_up = action(histInfo[up].hists[histName])
                 unstack_down = action(histInfo[down].hists[histName])
                 unstack_upr = hh.divideHists(unstack_up, ratio_ref, 1e-6, flow=False)

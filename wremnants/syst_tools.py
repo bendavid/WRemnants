@@ -130,9 +130,12 @@ def syst_transform_map(base_hist, hist_name):
         "resumScaleMin" : {
             "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", range(9,44), no_flow=["ptVgen"], do_min=True)},
     })
-    #for k,v in transforms.items():
-    #    if any([x in k for x in ["QCDscale", "resum", "pdf"]]):
-    #        #v["procs"] = common.vprocs 
+    for k in ['gamma_cusp+5', 'gamma_mu_q+5', 'gamma_nu+5', 's+5', 'b_qqV+5', 'b_qqbarV+5', 'b_qqS+5', 'b_qqDS+5', 'b_qg+5']:
+        transforms[k.replace("+5", "-5")] = {"action" : lambda h,v=k: h if "vars" not in h.axes.name else hh.mirrorHist(h[{"vars" : v}], h[{"vars" : "pdf0"}])}
+    transforms['h_qqV+2.0'] = {"action" : lambda h: h if "vars" not in h.axes.name else hh.mirrorHist(h[{"vars" : 'h_qqV-2.0'}], h[{"vars" : 'pdf0'}])}
+    for k in ['gamma_cusp+1', 'gamma_mu_q+1', 'gamma_nu+1', 's+1', 'b_qqV+1', 'b_qqbarV+1', 'b_qqS+1', 'b_qqDS+1', 'b_qg+1']:
+        transforms[k.replace("+1", "-1")] = {"action" : lambda h,v=k: h if "vars" not in h.axes.name else hh.mirrorHist(h[{"vars" : v}], h[{"vars" : "pdf0"}])}
+    transforms['h_qqV+0.5'] = {"action" : lambda h: h if "vars" not in h.axes.name else hh.mirrorHist(h[{"vars" : 'h_qqV-0.5'}], h[{"vars" : 'pdf0'}])}
 
     return transforms
 def gen_scale_helicity_hist_to_variations(scale_hist, gen_obs, sum_axes=[], pt_ax="ptVgen", gen_axes=["ptVgen", "chargeVgen", "helicity"], rebinPtV=None):

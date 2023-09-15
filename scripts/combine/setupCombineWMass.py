@@ -325,7 +325,6 @@ def setup(args,xnorm=False):
     
     theory_helper = combine_theory_helper.TheoryHelper(cardTool)
     theory_helper.configure(resumUnc=args.resumUnc, 
-        minnlo_unc=args.minnloScaleUnc, 
         propagate_to_fakes=to_fakes,
         np_model=args.npUnc,
         tnp_magnitude=args.tnpMagnitude,
@@ -333,7 +332,7 @@ def setup(args,xnorm=False):
         mirror_tnp=True,
         pdf_from_corr=args.pdfUncFromCorr,
         scale_pdf_unc=args.scalePdf,
-        minnloScaleUnc=args.minnloScaleUnc,
+        minnlo_unc=args.minnloScaleUnc,
     )
     theory_helper.add_all_theory_unc()
 
