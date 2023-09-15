@@ -23,6 +23,7 @@ parser.add_argument("--noScaleFactors", action="store_true", help="Don't use sca
 parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for luminosity in excess to 1 (e.g. 1.012 means 1.2\%)", default=1.012)
 parser.add_argument("--noGenMatchMC", action='store_true', help="Don't use gen match filter for prompt muons with MC samples (note: QCD MC never has it anyway)")
 parser.add_argument("--theoryAgnostic", action='store_true', help="Add V qT,Y axes and helicity axes for W samples")
+parser.add_argument("--poiAsNoi", action='store_true', help="Experimental option only with --theoryAgnostic, it will make the histogram to do the POIs and NOIs trick (some postprocessing will happen later in CardTool.py)")
 parser.add_argument("--halfStat", action='store_true', help="Test half data and MC stat, selecting odd events, just for tests")
 parser.add_argument("--makeMCefficiency", action="store_true", help="Save yields vs eta-pt-ut-passMT-passIso-passTrigger to derive 3D efficiencies for MC isolation and trigger (can run also with --onlyMainHistograms)")
 parser.add_argument("--onlyTheorySyst", action="store_true", help="Keep only theory systematic variations, mainly for tests")
@@ -35,8 +36,9 @@ logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
 if args.theoryAgnostic:
     # temporary, to ensure running with stat only until systematics are all implemented
-    logger.warning("Running theory agnostic with only nominal and mass weight histograms for now.")
-    parser = common.set_parser_default(parser, "onlyMainHistograms", True)
+    if not args.poiAsNoi:
+        logger.warning("Running theory agnostic with only nominal and mass weight histograms for now.")
+        parser = common.set_parser_default(parser, "onlyMainHistograms", True)
     parser = common.set_parser_default(parser, "genVars", ["absYVgenSig", "ptVgenSig", "helicity"])
     args = parser.parse_args()
     
@@ -98,12 +100,16 @@ elif args.theoryAgnostic:
 
 # axes for study of fakes
 axis_mt_fakes = hist.axis.Regular(120, 0., 120., name = "mt", underflow=False, overflow=True)
-axis_iso_fakes = hist.axis.Regular(60, 0., 0.6, name = "PFrelIso04", underflow=False, overflow=True)
 axis_dphi_fakes = hist.axis.Regular(8, 0., np.pi, name = "DphiMuonMet", underflow=False, overflow=False)
 axis_hasjet_fakes = hist.axis.Boolean(name = "hasJets") # only need case with 0 jets or > 0 for now
 mTStudyForFakes_axes = [axis_eta, axis_pt, axis_charge, axis_mt_fakes, axis_passIso, axis_hasjet_fakes, axis_dphi_fakes]
 
-axis_met = hist.axis.Regular(200, 0., 200., name = "met", underflow=False, overflow=True)
+# for mt, met, ptW plots, to compute the fakes properly (but FR pretty stable vs pt and also vs eta)
+# may not exactly reproduce the same pt range as analysis, though
+axis_eta_utilityHist = hist.axis.Regular(24, -2.4, 2.4, name = "eta", overflow=False, underflow=False)
+axis_pt_utilityHist = hist.axis.Regular(6, 26, 56, name = "pt", overflow=False, underflow=False)
+
+axis_met = hist.axis.Regular(150, 0., 150., name = "met", underflow=False, overflow=True)
 
 # define helpers
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
@@ -162,9 +168,6 @@ if not args.noRecoil:
 # graph building for W sample with helicity weights
 def setTheoryAgnosticGraph(df, results, dataset, reco_sel_GF, era, nominal_axes_thAgn, nominal_cols_thAgn, args):
     logger.info(f"Setting theory agnostic graph for {dataset.name}")
-    df = theoryAgnostic_tools.define_helicity_weights(df)
-    nominalByHelicity = df.HistoBoost("nominal", nominal_axes_thAgn, [*nominal_cols_thAgn, "nominal_weight_helicity"], tensor_axes=[axis_helicity])
-    results.append(nominalByHelicity)
 
     if not args.onlyMainHistograms:
         if not args.onlyTheorySyst:
@@ -193,7 +196,7 @@ def build_graph(df, dataset):
     require_prompt = "tau" not in dataset.name # for muon GEN-matching   
     
     # disable auxiliary histograms when unfolding to reduce memory consumptions
-    auxiliary_histograms = not args.unfolding and not args.theoryAgnostic and not args.noAuxiliaryHistograms
+    auxiliary_histograms = not args.unfolding and not (args.theoryAgnostic and not args.poiAsNoi) and not args.noAuxiliaryHistograms
 
     apply_theory_corr = args.theoryCorr and dataset.name in corr_helpers
 
@@ -231,7 +234,8 @@ def build_graph(df, dataset):
         else:
             logger.debug("Select events in fiducial phase space for theory agnostic analysis")
             df = theoryAgnostic_tools.select_fiducial_space(df, theoryAgnostic_axes[0].edges[-1], theoryAgnostic_axes[1].edges[-1], accept=True)
-            theoryAgnostic_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, theoryAgnostic_axes, theoryAgnostic_cols)
+            if not args.poiAsNoi:
+                theoryAgnostic_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, theoryAgnostic_axes, theoryAgnostic_cols)
             # helicity axis is special, defined through a tensor later, theoryAgnostic_ only includes W rapidity and pt for now
             axes = [*nominal_axes, *theoryAgnostic_axes]
             cols = [*nominal_cols, *theoryAgnostic_cols]
@@ -359,26 +363,29 @@ def build_graph(df, dataset):
     if not args.makeMCefficiency:
         dphiMuonMetCut = args.dphiMuonMetCut * np.pi
         df = df.Filter(f"deltaPhiMuonMet > {dphiMuonMetCut}") # pi/4 was found to be a good threshold for signal with mT > 40 GeV
-
-    if auxiliary_histograms:
-        mtIsoJetCharge = df.HistoBoost("mtIsoJetCharge", [axis_mt_fakes, axis_iso_fakes, axis_hasjet_fakes, axis_charge], ["transverseMass", "goodMuons_pfRelIso04_all0", "hasCleanJet", "goodMuons_charge0", "nominal_weight"])
-        results.append(mtIsoJetCharge)
         
     df = df.Define("passMT", f"transverseMass >= {mtw_min}")
 
     if auxiliary_histograms:
-        # utility plot, mt and met, to plot them later
-        results.append(df.HistoBoost("MET", [axis_met, axis_charge, axis_passIso, axis_passMT], ["MET_corr_rec_pt", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"]))
-        results.append(df.HistoBoost("transverseMass", [axis_mt_fakes, axis_charge, axis_passIso, axis_passMT], ["transverseMass", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"]))
+        # utility plot, mt and met, to plot them later (need eta-pt to make fakes)
+        results.append(df.HistoBoost("MET", [axis_met, axis_eta_utilityHist, axis_pt_utilityHist, axis_charge, axis_passIso, axis_passMT], ["MET_corr_rec_pt", "goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"]))
+        results.append(df.HistoBoost("transverseMass", [axis_mt_fakes, axis_eta_utilityHist, axis_pt_utilityHist, axis_charge, axis_passIso], ["transverseMass", "goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "nominal_weight"]))
 
     ## TODO: next part should be improved, there is quite a lot of duplication of what could happen later in the loop
     ## FIXME: should be isW, to include Wtaunu
     if isWmunu and args.theoryAgnostic:
-        setTheoryAgnosticGraph(df, results, dataset, reco_sel_GF, era, axes, cols, args)
-        if hasattr(dataset, "out_of_acceptance"):
-            # Rename dataset to not overwrite the original one
-            dataset.name = "Bkg"+dataset.name
-        return results, weightsum
+        df = theoryAgnostic_tools.define_helicity_weights(df)
+        if args.poiAsNoi:
+            logger.debug("Creating special histogram 'yieldsTheoryAgnostic' for theory agnostic to treat POIs as NOIs")
+            results.append(df.HistoBoost("yieldsTheoryAgnostic", axes, [*cols, "nominal_weight_helicity"], tensor_axes=[axis_helicity]))
+        else:
+            results.append(df.HistoBoost("nominal", axes, [*cols, "nominal_weight_helicity"], tensor_axes=[axis_helicity]))
+            setTheoryAgnosticGraph(df, results, dataset, reco_sel_GF, era, axes, cols, args)
+            if hasattr(dataset, "out_of_acceptance"):
+                # Rename dataset to not overwrite the original one
+                dataset.name = "Bkg"+dataset.name
+            # End graph here only for standard theory agnostic analysis, otherwise use same loop as traditional analysis
+            return results, weightsum
         
     if not args.onlyMainHistograms:
         syst_tools.add_QCDbkg_jetPt_hist(results, df, axes, cols, jet_pt=30)
