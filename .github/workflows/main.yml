@@ -193,11 +193,8 @@ jobs:
       - name: wmass plotting
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --hists pt eta pt-eta -p $WEB_DIR -f $PLOT_DIR -a W $HIST_FILE variation --varName nominal_uncorr --varLabel MiNNLO --colors red
 
-      - name: wmass plot mt_plus
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --rebin 2 --yscale 1.5 --baseName mTStudyForFakes --hists mt -p $WEB_DIR -f $PLOT_DIR $HIST_FILE --presel hasJets DphiMuonMet=0.7854,3.1416 -c plus
-
-      - name: wmass plot mt_minus
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --rebin 2 --yscale 1.5 --baseName mTStudyForFakes --hists mt -p $WEB_DIR -f $PLOT_DIR $HIST_FILE --presel hasJets DphiMuonMet=0.7854,3.1416 -c minus
+      - name: wmass plot mt
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --rebin 2 --yscale 1.5 --baseName transverseMass --hists mt -p $WEB_DIR -f $PLOT_DIR $HIST_FILE
 
       - name: wmass plot MET
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --rebin 2 --yscale 1.5 --baseName MET --hists met -p $WEB_DIR -f $PLOT_DIR $HIST_FILE
