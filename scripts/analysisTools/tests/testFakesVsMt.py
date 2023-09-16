@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 ## example
-# python tests/testFakesVsMt.py /scratch/mciprian/CombineStudies/12July2023/mw_with_mu_eta_pt_scetlib_dyturboCorr_testFakes_deepMet.hdf5 plots/fromMyWremnants/fitResults/12July2023/testFakes_3DSF/deepMET/noDphiCut/testFakesVsMt/ --palette 87 --rebinx 4 --rebiny 2 --mtBinEdges "0,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75" --mtNominalRange "0,40" --mtFitRange "0,40" --fitPolDegree 1 --integralMtMethod sideband -v 4 --maxPt 50  --met deepMET [--dphiStudy] [--jetCut] [--dphiMuonMetCut 0.25]
+# python tests/testFakesVsMt.py /scratch/mciprian/CombineStudies/12July2023/mw_with_mu_eta_pt_scetlib_dyturboCorr_testFakes_deepMet.hdf5 plots/fromMyWremnants/fitResults/12July2023/testFakes_3DSF/deepMET/noDphiCut/testFakesVsMt/ --palette 87 --rebinx 4 --rebiny 2 --mtBinEdges "0,5,10,15,20,25,30,35,40,45,50,55,60,65" --mtNominalRange "0,40" --mtFitRange "0,40" --fitPolDegree 1 --integralMtMethod sideband -v 4 --maxPt 50  --met deepMET [--dphiStudy] [--jetCut] [--dphiMuonMetCut 0.25]
 #
 # Note: --jet-cut is used to enforce the jet requirement to derive the FRF,
 #       however the validation is made using the nominal histogram, which may or may not have had that cut included
@@ -17,7 +17,7 @@ import narf.fitutils
 import wremnants
 import hist
 import lz4.frame, pickle
-from wremnants.datasets.datagroups2016 import make_datagroups_2016
+from wremnants.datasets.datagroups import Datagroups
 from wremnants import histselections as sel
 
 import numpy as np
@@ -516,7 +516,7 @@ def runStudy(charge, outfolder, rootfilename, args):
     canvas_unroll.cd()
     canvas_unroll.SetBottomMargin(bottomMargin)
 
-    groups = make_datagroups_2016(args.inputfile[0], applySelection=False)
+    groups = Datagroups(args.inputfile[0])
     datasets = groups.getNames() # this has all the original defined groups
     datasetsNoQCD = list(filter(lambda x: x != "QCD", datasets)) # exclude QCD MC if present
     datasetsNoFakes = list(filter(lambda x: x != "Fake", datasets)) 
@@ -623,11 +623,13 @@ def runStudy(charge, outfolder, rootfilename, args):
         if d == "Fake":
             # do ABCD method for Fakes, using binned mT axis
             hnarf_asNominal = sel.fakeHistABCD(hnarf_asNominal,
-                                               boolMT=False, thresholdMT=mtThreshold,
-                                               axisNameMT="mt", integrateMT=True)
+                                               thresholdMT=mtThreshold,
+                                               axis_name_mt="mt",
+                                               integrateMT=True)
             hnarf_forMtWithDataDrivenFakes = sel.fakeHistABCD(hnarf_forMtWithDataDrivenFakes,
-                                                              boolMT=False, thresholdMT=mtThreshold,
-                                                              axisNameMT="mt", integrateMT=False)
+                                                              thresholdMT=mtThreshold,
+                                                              axis_name_mt="mt",
+                                                              integrateMT=False)
         else:
             nMtBins = hnarf_asNominal.axes["mt"].size
             # just select signal region: pass isolation and mT > mtThreshold with overflow included

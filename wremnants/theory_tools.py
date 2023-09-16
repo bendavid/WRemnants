@@ -184,7 +184,7 @@ def define_ew_vars(df):
 
     return df
 
-def make_ew_binning(mass = 91.1535, width = 2.4932, initialStep = 0.1):
+def make_ew_binning(mass = 91.1535, width = 2.4932, initialStep = 0.1, bin_edges_low=[], bin_edges_high=[]):
     maxVal = ROOT.Math.breitwigner_pdf(mass, width, mass)
     bins = [mass]
     currentMass = mass
@@ -196,6 +196,12 @@ def make_ew_binning(mass = 91.1535, width = 2.4932, initialStep = 0.1):
         if lowMass - binSize > 0:
             bins.insert(0, lowMass)
     bins.insert(0, 0.)
+
+    if bin_edges_low:
+        bins = bin_edges_low + [b for b in bins if b > bin_edges_low[-1]][1:]
+    if bin_edges_high:
+        bins = [b for b in bins if b < bin_edges_high[-1]][:-1] + bin_edges_high
+
     return bins
 
 def pdf_info_map(dataset, pdfset):
@@ -307,7 +313,6 @@ def define_theory_corr(df, dataset_name, helpers, generators, modify_central_wei
 
     if not modify_central_weight or not generators or generators[0] not in dataset_helpers:
         df = df.DefinePerSample("theory_corr_weight", "1.0")
-        return df
 
     for i, generator in enumerate(generators):
         if generator not in dataset_helpers:
@@ -326,7 +331,7 @@ def define_theory_corr(df, dataset_name, helpers, generators, modify_central_wei
                 df = df.Define(f"ew_{generator}corr_weight", build_weight_expr(df))
             else:
                 df = df.Alias(f"ew_{generator}corr_weight", "nominal_weight_uncorr")
-            df = df.Define(f"{generator}Weight_tensor", helper, [*helper.hist.axes.name[:-3], f"{generator}Dummy", "chargeVgen", f"ew_{generator}corr_weight"]) # multiplying with nominal QCD weight
+            df = df.Define(f"{generator}Weight_tensor", helper, [*helper.hist.axes.name[:-2], "chargeVgen", f"ew_{generator}corr_weight"]) # multiplying with nominal QCD weight
         else:
             df = df.Define(f"{generator}Weight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "nominal_weight_uncorr"])
 

@@ -67,7 +67,7 @@ def make_corr_helper_fromnp(filename=f"{common.data_dir}/N3LLCorrections/inclusi
     corrh[:,hist.overflow,...] = 1.
     corrh[:,:,hist.overflow,...] = 1.
 
-    return makeCorrectionsTensor(corrh, ROOT.wrem.TensorCorrectionsHelper, tensor_rank=1)
+    return makeCorrectionsTensor(corrh)
 
 def load_corr_hist(filename, proc, histname):
     with lz4.frame.open(filename) as f:
@@ -77,12 +77,10 @@ def load_corr_hist(filename, proc, histname):
 
 def make_corr_helper(filename, proc, histname):
     corrh = load_corr_hist(filename, proc, histname)
-
-    return makeCorrectionsTensor(corrh, ROOT.wrem.TensorCorrectionsHelper, tensor_rank=1)
+    return makeCorrectionsTensor(corrh)
 
 def make_corr_by_helicity_helper(filename, proc, histname):
     corrh = load_corr_hist(filename, proc, histname)
-
     return makeCorrectionsTensor(corrh, ROOT.wrem.CentralCorrByHelicityHelper, tensor_rank=3)
 
 def get_corr_name(generator):

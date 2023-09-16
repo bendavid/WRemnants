@@ -21,7 +21,7 @@ parser.add_argument("--finePtBinning", action='store_true', help="Use fine binni
 parser.add_argument("--noAuxiliaryHistograms", action="store_true", help="Remove auxiliary histograms to save memory (removed by default with --unfolding or --theoryAgnostic)")
 
 parser = common.set_parser_default(parser, "genVars", ["ptVGen", "absYVGen"])
-parser = common.set_parser_default(parser, "pt", [44,26.,60.])
+parser = common.set_parser_default(parser, "pt", [34,26.,60.])
 parser = common.set_parser_default(parser, "eta", [48,-2.4,2.4])
 parser = common.set_parser_default(parser, "aggregateGroups", ["Diboson", "Top", "Wtaunu", "Wmunu"])
 
@@ -126,7 +126,7 @@ smearing_helper = muon_calibration.make_muon_smearing_helpers() if args.smearing
 
 bias_helper = muon_calibration.make_muon_bias_helpers(args) 
 
-corr_helpers = theory_corrections.load_corr_helpers([x.name for x in datasets if x.name in common.vprocs], args.theoryCorr)
+corr_helpers = theory_corrections.load_corr_helpers([d.name for d in datasets if d.name in common.vprocs], args.theoryCorr)
 
 def build_graph(df, dataset):
     logger.info(f"build graph for dataset: {dataset.name}")

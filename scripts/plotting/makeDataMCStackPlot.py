@@ -11,6 +11,7 @@ from wremnants import logging
 import pathlib
 import hist
 import re
+import numpy as np
 
 xlabels = {
     "pt" : r"p$_{T}^{\ell}$ (GeV)",
@@ -73,6 +74,7 @@ parser.add_argument("--fitresult", type=str, help="Specify a fitresult root file
 parser.add_argument("--prefit", action='store_true', help="Use the prefit uncertainty from the fitresult root file, instead of the postfit. (--fitresult has to be given)")
 parser.add_argument("--eoscp", action='store_true', help="Use of xrdcp for eos output rather than the mount")
 parser.add_argument("--selection", type=str, help="Specify custom selections as comma seperated list (e.g. '--selection passIso=0,passMT=1' )")
+parser.add_argument("--presel", type=str, nargs="*", default=[], help="Specify custom selections on input histograms to integrate some axes, giving axis name and min,max (e.g. '--presel pt=ptmin,ptmax' ) or just axis name for bool axes")
 
 subparsers = parser.add_subparsers(dest="variation")
 variation = subparsers.add_parser("variation", help="Arguments for adding variation hists")
@@ -119,6 +121,22 @@ datasets = groups.getNames()
 logger.info(f"Will plot datasets {datasets}")
 
 select = {} if args.channel == "all" else {"charge" : -1.j if args.channel == "minus" else 1.j}
+
+if len(args.presel):
+    s = hist.tag.Slicer()
+    presel = {}
+    logger.debug(args.presel)
+    logger.debug(f"Will apply the global preselection")
+    for ps in args.presel:
+        if "=" in ps:
+            axName,axRange = ps.split("=")
+            axMin,axMax = map(float, axRange.split(","))
+            logger.info(f"{axName} in [{axMin},{axMax}]")
+            presel[axName] = s[complex(0, axMin):complex(0, axMax):hist.sum]
+        else:
+            logger.info(f"Integrating boolean {ps} axis")
+            presel[ps] = s[::hist.sum]
+    groups.setGlobalAction(lambda h: h[presel])
 
 if args.selection:
     for selection in args.selection.split(","):

@@ -202,8 +202,7 @@ if __name__ == "__main__":
         label = getBetterLabel(k, args.isWlike)
         if compare:
             #print(k)
-            #bincontentAlt = nuisGroup_nameVal_alt[k.replace("QCDscaleWPtHelicityMiNNLO","QCDscalePtHelicityMiNNLO")]
-            bincontentAlt = nuisGroup_nameVal_alt[k]
+            bincontentAlt = nuisGroup_nameVal_alt[k] if k in nuisGroup_nameVal_alt.keys() else 0.0
             if args.scaleToMeV: bincontentAlt *= args.prefitUncertainty
             logger.info("%s: %2.3f / %2.3f" % (label, bincontent, bincontentAlt))
         else:
@@ -211,9 +210,6 @@ if __name__ == "__main__":
         h1.GetXaxis().SetBinLabel(ik+1, label)
         h1.SetBinContent(ik+1,bincontent)
         if compare:
-            #bincontentAlt = nuisGroup_nameVal_alt[k.replace("QCDscaleWPtHelicityMiNNLO","QCDscalePtHelicityMiNNLO")]
-            bincontentAlt = nuisGroup_nameVal_alt[k]
-            if args.scaleToMeV: bincontentAlt *= args.prefitUncertainty
             h2.SetBinContent(ik+1,bincontentAlt)
 
     if args.justPrint:

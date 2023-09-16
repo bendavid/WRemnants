@@ -30,8 +30,6 @@ else:
     sigProcs = ["WminusJetsToENu", "WplusJetsToENu"]
     base_group = "Wenu"
 
-corr_helpers = theory_corrections.load_corr_helpers(common.vprocs_lowpu, args.theoryCorr)
-
 datasets = getDatasets(maxFiles=args.maxFiles,
                         filt=args.filterProcs,
                         excl=list(set(args.excludeProcs + ["singlemuon"] if flavor=="e" else ["singleelectron"])),
@@ -112,6 +110,7 @@ cols_mT = ["lep_pt", "lep_eta", "lep_charge", "transverseMass",  "passIso"]
 down_up_axis = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "downUpVar")
 axis_cutFlow = hist.axis.Regular(1, 0, 1, name = "cutFlow")
 
+corr_helpers = theory_corrections.load_corr_helpers([d.name for d in datasets if d.name in common.vprocs_lowpu], args.theoryCorr)
 
 # recoil initialization
 if not args.noRecoil:
