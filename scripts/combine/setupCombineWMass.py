@@ -24,7 +24,7 @@ def make_parser(parser=None):
     parser.add_argument("--noHist", action='store_true', help="Skip the making of 2D histograms (root file is left untouched if existing)")
     parser.add_argument("--qcdProcessName" , type=str, default="Fake", help="Name for QCD process")
     # setting on the fit behaviour
-    parser.add_argument("--fitvar", nargs="+", help="Variable to fit", default=["pt", "eta"])
+    parser.add_argument("--fitvar", nargs="+", help="Variable to fit", default=["pt", "eta", "charge"])
     parser.add_argument("--rebin", type=int, nargs='*', default=[], help="Rebin axis by this value (default does nothing)")
     parser.add_argument("--axlim", type=float, default=[], nargs='*', help="Restrict axis to this range (assumes pairs of values by axis, with trailing axes optional)")
     parser.add_argument("--lumiScale", type=float, default=1.0, help="Rescale equivalent luminosity by this value (e.g. 10 means ten times more data and MC)")
@@ -167,12 +167,10 @@ def setup(args,xnorm=False):
 
     fitvars = args.fitvar
     if wmass and args.simultaneousABCD:
-        cardTool.setChannels(["inclusive"])
-        cardTool.setWriteByCharge(False)
         fitvars = ["passIso", "passMT", *args.fitvar]
         cardTool.unroll=True
 
-    if args.sumChannels or xnorm or dilepton or datagroups.mode == "vgen":
+    if args.sumChannels or xnorm or dilepton or datagroups.mode == "vgen" or (wmass and args.simultaneousABCD):
         cardTool.setChannels(["inclusive"])
         cardTool.setWriteByCharge(False)
     else:
@@ -180,7 +178,7 @@ def setup(args,xnorm=False):
         if args.forceRecoChargeAsGen:
             cardTool.setExcludeProcessForChannel("plus", ".*qGen0")
             cardTool.setExcludeProcessForChannel("minus", ".*qGen1")
-            
+
     if xnorm:
         histName = "xnorm"
         cardTool.setHistName(histName)
@@ -618,7 +616,8 @@ def outputFolderName(outfolder, card_tool, doStatOnly, postfix):
 def main(args,xnorm=False):
     cardTool = setup(args, xnorm)
     cardTool.setOutput(outputFolderName(args.outfolder, cardTool, args.doStatOnly, args.postfix), analysis_label(cardTool))
-    cardTool.writeOutput(args=args, forceNonzero=not args.unfolding, check_systs=not args.unfolding, simultaneousABCD=args.simultaneousABCD)
+    cardTool.writeOutput(args=args, forceNonzero=not args.unfolding, check_systs=not args.unfolding, simultaneousABCD=args.simultaneousABCD, xnorm=xnorm)
+    return
 
 if __name__ == "__main__":
     parser = make_parser()

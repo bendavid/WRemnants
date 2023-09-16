@@ -710,11 +710,11 @@ class CardTool(object):
             forceNonzero=forceNonzero,
             sum_axes=self.sum_axes,
             fakerateIntegrationAxes=self.fakerateIntegrationAxes)
-        if simultaneousABCD and not self.xnorm:
+        if simultaneousABCD and not xnorm:
             setSimultaneousABCD(self)
         self.writeForProcesses(self.nominalName, processes=self.datagroups.groups.keys(), label=self.nominalName, check_systs=check_systs)
         self.loadNominalCard()
-        if self.pseudoData and not self.xnorm:
+        if self.pseudoData and not xnorm:
             self.addPseudodata([x for x in self.datagroups.groups.keys() if x != "Data"],
                                [x for x in self.datagroups.groups.keys() if x != "Data" and not self.pseudoDataProcsRegexp.match(x)])
 
@@ -939,6 +939,17 @@ class CardTool(object):
     def writeHist(self, h, proc, syst, setZeroStatUnc=False, decorrByBin={}, hnomi=None):
         if self.skipHist:
             return
+        if self.fit_axes:
+            axes = self.fit_axes[:]
+            if self.charge_ax in h.axes.name and not self.xnorm and self.charge_ax not in axes:
+                axes.append(self.charge_ax)
+            # don't project h into itself when axes to project are all axes
+            if any (ax not in h.axes.name for ax in axes):
+                logger.error("Request to project some axes not present in the histogram")
+                raise ValueError(f"Histogram has {h.axes.name} but requested axes for projection are {axes}")
+            if len(axes) < len(h.axes.name):
+                logger.debug(f"Projecting {h.axes.name} into {axes}")
+                h = h.project(*axes)
 
         if self.unroll:
             logger.debug(f"Unrolling histogram")
