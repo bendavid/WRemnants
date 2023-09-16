@@ -98,10 +98,14 @@ elif args.theoryAgnostic:
 
 # axes for study of fakes
 axis_mt_fakes = hist.axis.Regular(120, 0., 120., name = "mt", underflow=False, overflow=True)
-axis_iso_fakes = hist.axis.Regular(60, 0., 0.6, name = "PFrelIso04", underflow=False, overflow=True)
 axis_dphi_fakes = hist.axis.Regular(8, 0., np.pi, name = "DphiMuonMet", underflow=False, overflow=False)
 axis_hasjet_fakes = hist.axis.Boolean(name = "hasJets") # only need case with 0 jets or > 0 for now
 mTStudyForFakes_axes = [axis_eta, axis_pt, axis_charge, axis_mt_fakes, axis_passIso, axis_hasjet_fakes, axis_dphi_fakes]
+
+# for mt, met, ptW plots, to compute the fakes properly (but FR pretty stable vs pt and also vs eta)
+# may not exactly reproduce the same pt range as analysis, though
+axis_eta_utilityHist = hist.axis.Regular(24, -2.4, 2.4, name = "eta", overflow=False, underflow=False)
+axis_pt_utilityHist = hist.axis.Regular(6, 26, 56, name = "pt", overflow=False, underflow=False)
 
 axis_met = hist.axis.Regular(200, 0., 200., name = "met", underflow=False, overflow=True)
 
@@ -360,16 +364,12 @@ def build_graph(df, dataset):
         dphiMuonMetCut = args.dphiMuonMetCut * np.pi
         df = df.Filter(f"deltaPhiMuonMet > {dphiMuonMetCut}") # pi/4 was found to be a good threshold for signal with mT > 40 GeV
 
-    if auxiliary_histograms:
-        mtIsoJetCharge = df.HistoBoost("mtIsoJetCharge", [axis_mt_fakes, axis_iso_fakes, axis_hasjet_fakes, axis_charge], ["transverseMass", "goodMuons_pfRelIso04_all0", "hasCleanJet", "goodMuons_charge0", "nominal_weight"])
-        results.append(mtIsoJetCharge)
-        
     df = df.Define("passMT", f"transverseMass >= {mtw_min}")
 
     if auxiliary_histograms:
         # utility plot, mt and met, to plot them later
-        results.append(df.HistoBoost("MET", [axis_met, axis_charge, axis_passIso, axis_passMT], ["MET_corr_rec_pt", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"]))
-        results.append(df.HistoBoost("transverseMass", [axis_mt_fakes, axis_charge, axis_passIso, axis_passMT], ["transverseMass", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"]))
+        results.append(df.HistoBoost("MET", [axis_met, axis_eta_utilityHist, axis_pt_utilityHist, axis_charge, axis_passIso, axis_passMT], ["MET_corr_rec_pt", "goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"]))
+        results.append(df.HistoBoost("transverseMass", [axis_mt_fakes, axis_eta_utilityHist, axis_pt_utilityHist, axis_charge, axis_passIso], ["transverseMass", "goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "nominal_weight"]))
 
     ## TODO: next part should be improved, there is quite a lot of duplication of what could happen later in the loop
     ## FIXME: should be isW, to include Wtaunu

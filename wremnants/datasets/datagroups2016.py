@@ -54,7 +54,7 @@ def make_datagroups_2016(dg, combine=False, pseudodata_pdfset = None, applySelec
         )
         dg.addGroup("DYlowMass",
             members = list(filter(lambda y: y.group == "DYlowMass", dg.datasets.values())),
-            label = r"Z$\to\mu\mu$ $10<m<50$\,GeV",
+            label = r"Z$\to\mu\mu$, $10<m<50$ GeV",
             color = "deepskyblue",
             selectOp = sigOp,
         )
