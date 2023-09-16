@@ -693,11 +693,11 @@ class CardTool(object):
             scaleToNewLumi=self.lumiScale, 
             forceNonzero=forceNonzero,
             fakerateIntegrationAxes=self.fakerateIntegrationAxes)
-        if simultaneousABCD and not self.xnorm:
+        if simultaneousABCD and not xnorm:
             setSimultaneousABCD(self)
         self.writeForProcesses(self.nominalName, processes=self.datagroups.groups.keys(), label=self.nominalName, check_systs=check_systs)
         self.loadNominalCard()
-        if self.pseudoData and not self.xnorm:
+        if self.pseudoData and not xnorm:
             self.addPseudodata([x for x in self.datagroups.groups.keys() if x != "Data"],
                                [x for x in self.datagroups.groups.keys() if x != "Data" and not self.pseudoDataProcsRegexp.match(x)])
 
@@ -923,7 +923,7 @@ class CardTool(object):
             return
         if self.project:
             axes = self.project[:]
-            if "charge" in h.axes.name and not self.xnorm:
+            if "charge" in h.axes.name and not self.xnorm and "charge" not in axes:
                 axes.append("charge")
             # don't project h into itself when axes to project are all axes
             if any (ax not in h.axes.name for ax in axes):
