@@ -65,6 +65,8 @@ def make_parser(parser=None):
     parser.add_argument("--unfolding", action='store_true', help="Prepare datacard for unfolding")
     parser.add_argument("--genAxes", type=str, default=None, nargs="+", help="Specify which gen axis should be used in unfolding, if 'None', use all (inferred from metadata).")
     parser.add_argument("--theoryAgnostic", action='store_true', help="Prepare datacard for theory agnostic analysis, similar to unfolding but different axis and possibly other differences")
+    parser.add_argument("--poiAsNoi", action='store_true', help="Experimental option only with --theoryAgnostic, to treat POIs ad NOIs, with a single signal histogram")
+    parser.add_argument("--priorNormXsec", type=float, default=1.0, help="Prior for shape uncertainties on cross sections for theory agnostic analysis with POIs as NOIs (1 means 100\%). If negative, it will use shapeNoConstraint in the fit")
     # utility options to deal with charge when relevant, mainly for theory agnostic but also unfolding
     parser.add_argument("--recoCharge", type=str, default=["plus", "minus"], nargs="+", choices=["plus", "minus"], help="Specify reco charge to use, default uses both. This is a workaround for unfolding/theory-agnostic fit when running a single reco charge, as gen bins with opposite gen charge have to be filtered out")
     parser.add_argument("--forceRecoChargeAsGen", action="store_true", help="Force gen charge to match reco charge in CardTool, this only works when the reco charge is used to define the channel")
@@ -126,21 +128,36 @@ def setup(args,xnorm=False):
     elif args.fitXsec:
         datagroups.unconstrainedProcesses.append(base_group)
     elif args.unfolding:
-        constrainMass = False if args.theoryAgnostic else True
-        datagroups.setGenAxes(args.genAxes)
+
+        if args.theoryAgnostic and args.poiAsNoi:
+            pass
         
-        if wmass:
-            # gen level bins, split by charge
-            if "minus" in args.recoCharge:
-                datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen0", member_filter=lambda x: x.name.startswith("Wminus"))
-            if "plus" in args.recoCharge:
-                datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen1", member_filter=lambda x: x.name.startswith("Wplus"))
-            # out of acceptance contribution
-            datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if not m.name.startswith("Bkg")])
+            ## currently the following doesn't work because datagroups.defineSignalBinsUnfolding require xnorm histograms
+            # if wmass:
+            #     # gen level bins, split only by charge
+            #     if "minus" in args.recoCharge:
+            #         datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen0", member_filter=lambda x: x.name.startswith("Wminus"))
+            #     if "plus" in args.recoCharge:
+            #         datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen1", member_filter=lambda x: x.name.startswith("Wplus"))
+            # else:
+            #     datagroups.defineSignalBinsUnfolding(base_group, "Z", member_filter=lambda x: x.name.startswith(base_group))
+
         else:
-            datagroups.defineSignalBinsUnfolding(base_group, "Z", member_filter=lambda x: x.name.startswith(base_group))
-            # out of acceptance contribution
-            datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if not m.name.startswith("Bkg")])
+            constrainMass = False if args.theoryAgnostic else True
+            datagroups.setGenAxes(args.genAxes)
+
+            if wmass:
+                # gen level bins, split by charge
+                if "minus" in args.recoCharge:
+                    datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen0", member_filter=lambda x: x.name.startswith("Wminus"))
+                if "plus" in args.recoCharge:
+                    datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen1", member_filter=lambda x: x.name.startswith("Wplus"))
+                # out of acceptance contribution
+                datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if not m.name.startswith("Bkg")])
+            else:
+                datagroups.defineSignalBinsUnfolding(base_group, "Z", member_filter=lambda x: x.name.startswith(base_group))
+                # out of acceptance contribution
+                datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if not m.name.startswith("Bkg")])
 
     if args.noHist and args.noStatUncFakes:
         raise ValueError("Option --noHist would override --noStatUncFakes. Please select only one of them")
@@ -193,7 +210,7 @@ def setup(args,xnorm=False):
         cardTool.setNominalName(args.baseName)
         
     # define sumGroups for integrated cross section
-    if args.unfolding:
+    if args.unfolding and not (args.theoryAgnostic and args.poiAsNoi):
         # TODO: make this less hardcoded to filter the charge (if the charge is not present this will duplicate things)
         if wmass:
             if "plus" in args.recoCharge:
@@ -260,7 +277,7 @@ def setup(args,xnorm=False):
         massSkip.append(("^massShift.*2p1MeV.*",))
 
     signal_samples_forMass = ["signal_samples_inctau"]
-    if args.theoryAgnostic:
+    if args.theoryAgnostic and not args.poiAsNoi:
         logger.error("Temporarily not using mass weights for Wtaunu. Please update when possible")
         signal_samples_forMass = ["signal_samples"]
     cardTool.addSystematic(f"massWeight{label}",
@@ -275,6 +292,22 @@ def setup(args,xnorm=False):
                            passToFakes=passSystToFakes,
     )
 
+    # TODO: move this after the doStatOnly
+    if args.theoryAgnostic and args.poiAsNoi:
+        cardTool.addSystematic("yieldsTheoryAgnostic",
+                               processes=["signal_samples"],
+                               group=f"normXsec{label}",
+                               mirror=True,
+                               baseName=f"norm{label}CHANNEL_",
+                               #scaleAndSumNominal=args.priorNormXsec, # multiply yields of input hist by 0.5 and then sum the nominal
+                               scale=1 if args.priorNormXsec < 0 else args.priorNormXsec, # histogram represents an (args.priorNormXsec*100)% prior
+                               sumNominal=True,
+                               noConstraint=True if args.priorNormXsec < 0 else False,
+                               systAxes=[x for x in args.genAxes],
+                               labelsByAxis=["PtVBin", "YVBin", "AngCoeff"],
+                               passToFakes=passSystToFakes,
+                               )
+        
     if args.doStatOnly:
         # print a card with only mass weights
         logger.info("Using option --doStatOnly: the card was created with only mass nuisance parameter")
@@ -596,22 +629,31 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
-                                  
+
+    if args.poiAsNoi and not args.theoryAgnostic:
+        message = "Option --poiAsNoi currently requires --theoryAgnostic"
+        logger.warning(message)
+        raise NotImplementedError(message)    
+    
     if args.theoryAgnostic:
         args.unfolding = True
         logger.warning("For now setting --theoryAgnostic activates --unfolding, they should do the same things")
-        if args.genAxis is None:
-            args.genAxis = ["absYVgenSig", "ptVgenSig", "helicity"]
-            logger.warning("Automatically setting '--genAxis absYVgenSig ptVgenSig helicity' for theory agnostic analysis")
-        # The following is temporary, just to avoid passing the option explicitly
-        logger.warning("For now setting --theoryAgnostic activates --doStatOnly")
-        args.doStatOnly = True
+        if args.genAxes is None:
+            args.genAxes = ["absYVgenSig", "ptVgenSig", "helicity"]
+            logger.warning("Automatically setting '--genAxes absYVgenSig ptVgenSig helicity' for theory agnostic analysis")
+            if args.poiAsNoi:
+                logger.warning("This is only needed to properly get the systematic axes")
+                
+        if not args.poiAsNoi:
+            # The following is temporary, just to avoid passing the option explicitly
+            logger.warning("For now setting --theoryAgnostic activates --doStatOnly")
+            args.doStatOnly = True
     
     if args.genModel:
         main(args, xnorm=True)
     else:
         main(args)
-        if args.unfolding:
+        if args.unfolding and not (args.theoryAgnostic and args.poiAsNoi):
             logger.warning("Now running with xnorm = True")
             main(args, xnorm=True)
 

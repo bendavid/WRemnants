@@ -241,7 +241,11 @@ class CardTool(object):
                       scale=1, processes=None, group=None, noConstraint=False,
                       action=None, doActionBeforeMirror=False, actionArgs={}, actionMap={},
                       systNameReplace=[], systNamePrepend=None, groupFilter=None, passToFakes=False,
-                      rename=None, splitGroup={}, decorrelateByBin={}, noiGroup=False
+                      rename=None, splitGroup={}, decorrelateByBin={}, noiGroup=False,
+                      scaleAndSumNominal=0.0,
+                      sumNominal=False,
+                      # "scaleAndSumNominal" scales histogram by this constant (not nuisance in card) and sum the nominal
+                      # TODO: use action to apply this, have to see how to correctly code the usage of the nominal
                       ):
         # note: setting Up=Down seems to be pathological for the moment, it might be due to the interpolation in the fit
         # for now better not to use the options, although it might be useful to keep it implemented
@@ -286,6 +290,8 @@ class CardTool(object):
                 "groupFilter" : groupFilter,
                 "splitGroup" : splitGroup if len(splitGroup) else {group : ".*"}, # dummy dictionary if splitGroup=None, to allow for uniform treatment
                 "scale" : scale,
+                "sumNominal" : sumNominal,
+                "scaleAndSumNominal" : scaleAndSumNominal,
                 "mirror" : mirror,
                 "mirrorDownVarEqualToUp" : mirrorDownVarEqualToUp,
                 "mirrorDownVarEqualToNomi" : mirrorDownVarEqualToNomi,
@@ -577,7 +583,16 @@ class CardTool(object):
             systInfo = self.systematics[syst]
             procDict = self.datagroups.getDatagroups()
             hnom = procDict[proc].hists[self.nominalName]
+            if systInfo["sumNominal"]:
+                logger.warning(f"Adding histogram for syst = {syst} to nominal to define actual variation")
+                h = hh.addHists(h, hnom, allowBroadcast=True, createNew=True, scale1=None, scale2=None)
+            elif systInfo["scaleAndSumNominal"]:
+                scaleHist = systInfo["scaleAndSumNominal"]
+                logger.warning(f"Scaling histogram for syst = {syst} by {scaleHist} and adding nominal to it")
+                h = hh.addHists(h, hnom, allowBroadcast=True, createNew=True, scale1=scaleHist, scale2=None)
             if systInfo["doActionBeforeMirror"] and systInfo["action"]:
+                logger.debug("Applying action before mirroring:")
+                logger.debug(f"action={systInfo['action']}     actionArgs={systInfo['actionArgs']}")
                 h = systInfo["action"](h, **systInfo["actionArgs"])
                 self.outfile.cd() # needed to restore the current directory in case the action opens a new root file
             if systInfo["mirror"]:
@@ -854,13 +869,14 @@ class CardTool(object):
         systnamesPruned = [s for s in systNames if not self.isExcludedNuisance(s)]
         systNames = systnamesPruned[:]
         for chan in self.channels:
-            for systname in systNames:
+            systNamesChan = [x.replace("CHANNEL",chan) for x in systNames]
+            for systname in systNamesChan:
                 shape = "shape" if not systInfo["noConstraint"] else "shapeNoConstraint"
                 # do not write systs which should only apply to other charge, to simplify card
                 self.cardContent[chan] += f"{systname.ljust(self.spacing)} {shape.ljust(self.systTypeSpacing)} {''.join(include_chan[chan])}\n"
             # unlike for LnN systs, here it is simpler to act on the list of these systs to form groups, rather than doing it syst by syst 
             if group:
-                systNamesForGroupPruned = systNames[:]
+                systNamesForGroupPruned = systNamesChan[:]
                 systNamesForGroup = list(systNamesForGroupPruned if not groupFilter else filter(groupFilter, systNamesForGroupPruned))
                 if len(systNamesForGroup):
                     for subgroup in splitGroupDict.keys():
@@ -906,11 +922,11 @@ class CardTool(object):
             self.cardContent[chan] = output_tools.readTemplate(self.nominalTemplate, args)
             self.cardGroups[chan] = ""
             
-    def writeHistByCharge(self, h, name, decorrCharge=False):
+    def writeHistByCharge(self, h, name):
         for charge in self.channels:
             q = self.chargeIdDict[charge]["val"]
             hout = narf.hist_to_root(self.getBoostHistByCharge(h, q))
-            hout.SetName(name+f"_{charge}")
+            hout.SetName(name.replace("CHANNEL",charge)+f"_{charge}")
             hout.Write()
         
     def writeHistWithCharges(self, h, name):

@@ -1,5 +1,6 @@
 import argparse
 from utilities import output_tools, common, rdf_tools, logging, differential
+from wremnants.datasets.datagroups import Datagroups
 
 parser,initargs = common.common_parser(True)
 
@@ -34,6 +35,11 @@ args = parser.parse_args()
 
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
+if args.poiAsNoi and not args.theoryAgnostic:
+    message = "Option --poiAsNoi currently requires --theoryAgnostic"
+    logger.warning(message)
+    raise NotImplementedError(message)
+    
 if args.theoryAgnostic:
     # temporary, to ensure running with stat only until systematics are all implemented
     if not args.poiAsNoi:
@@ -95,8 +101,9 @@ elif args.theoryAgnostic:
     theoryAgnostic_axes, theoryAgnostic_cols = differential.get_theoryAgnostic_axes()
     axis_helicity = helicity_utils.axis_helicity_multidim
     # the following just prepares the existence of the group for out-of-acceptance signal, but doesn't create or define the histogram yet
-    datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wmunu")
-    groups_to_aggregate.append("BkgWmunu")
+    if not args.poiAsNoi:
+        datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wmunu")
+        groups_to_aggregate.append("BkgWmunu")
 
 # axes for study of fakes
 axis_mt_fakes = hist.axis.Regular(120, 0., 120., name = "mt", underflow=False, overflow=True)
@@ -234,11 +241,14 @@ def build_graph(df, dataset):
         else:
             logger.debug("Select events in fiducial phase space for theory agnostic analysis")
             df = theoryAgnostic_tools.select_fiducial_space(df, theoryAgnostic_axes[0].edges[-1], theoryAgnostic_axes[1].edges[-1], accept=True)
-            if not args.poiAsNoi:
+            if args.poiAsNoi:
+                nominal_axes_theoryAgnostic = [*nominal_axes, *theoryAgnostic_axes]
+                nominal_cols_theoryAgnostic = [*nominal_cols, *theoryAgnostic_cols]
+            else:
                 theoryAgnostic_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, theoryAgnostic_axes, theoryAgnostic_cols)
-            # helicity axis is special, defined through a tensor later, theoryAgnostic_ only includes W rapidity and pt for now
-            axes = [*nominal_axes, *theoryAgnostic_axes]
-            cols = [*nominal_cols, *theoryAgnostic_cols]
+                # helicity axis is special, defined through a tensor later, theoryAgnostic_ only includes W rapidity and pt for now
+                axes = [*nominal_axes, *theoryAgnostic_axes]
+                cols = [*nominal_cols, *theoryAgnostic_cols]
 
     if not args.makeMCefficiency:
         # remove trigger, it will be part of the efficiency selection for passing trigger
@@ -376,8 +386,9 @@ def build_graph(df, dataset):
     if isWmunu and args.theoryAgnostic:
         df = theoryAgnostic_tools.define_helicity_weights(df)
         if args.poiAsNoi:
-            logger.debug("Creating special histogram 'yieldsTheoryAgnostic' for theory agnostic to treat POIs as NOIs")
-            results.append(df.HistoBoost("yieldsTheoryAgnostic", axes, [*cols, "nominal_weight_helicity"], tensor_axes=[axis_helicity]))
+            theoryAgnosticHistName = Datagroups.histName("nominal", syst="yieldsTheoryAgnostic")
+            logger.debug(f"Creating special histogram '{theoryAgnosticHistName}' for theory agnostic to treat POIs as NOIs")
+            results.append(df.HistoBoost(theoryAgnosticHistName, nominal_axes_theoryAgnostic, [*nominal_cols_theoryAgnostic, "nominal_weight_helicity"], tensor_axes=[axis_helicity]))
         else:
             results.append(df.HistoBoost("nominal", axes, [*cols, "nominal_weight_helicity"], tensor_axes=[axis_helicity]))
             setTheoryAgnosticGraph(df, results, dataset, reco_sel_GF, era, axes, cols, args)
