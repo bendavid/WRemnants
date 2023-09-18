@@ -353,7 +353,7 @@ class CardTool(object):
 
     def skipEntryDictToArray(self, h, skipEntry, syst):
         nsyst = len(self.systematics[syst]["systAxes"])
-        if h.axes[-1].name == "mirror":
+        if self.systematics[syst]["mirror"]:
             nsyst += 1
 
         if type(skipEntry) == dict:
@@ -703,6 +703,7 @@ class CardTool(object):
             fakerateIntegrationAxes=self.getFakerateIntegrationAxes())
         if self.ABCD and not self.xnorm:
             setSimultaneousABCD(self)
+        
         self.writeForProcesses(self.nominalName, processes=self.datagroups.groups.keys(), label=self.nominalName, check_systs=check_systs)
         self.loadNominalCard()
         if self.pseudoData and not self.xnorm:
@@ -935,8 +936,13 @@ class CardTool(object):
             return
         if self.project:
             axes = self.project[:]
-            if "charge" in h.axes.name and not self.xnorm and "charge" not in axes:
+            if "charge" in h.axes.name and "charge" not in axes and not self.xnorm :
                 axes.append("charge")
+            if self.ABCD and not self.xnorm:
+                if self.nameMT not in axes:
+                    axes.append(self.nameMT)
+                if common.passIsoName not in axes:
+                    axes.append(common.passIsoName)
             # don't project h into itself when axes to project are all axes
             if any (ax not in h.axes.name for ax in axes):
                 logger.error("Request to project some axes not present in the histogram")

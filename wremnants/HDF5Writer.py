@@ -101,6 +101,7 @@ class HDF5Writer(object):
             logger.info(f"Now in channel {chan} masked={masked}")
 
             dg = chanInfo.datagroups
+            axes = chanInfo.project[:]
 
             if chanInfo.xnorm:
                 dg.globalAction = None # reset global action in case of rebinning or such
@@ -129,11 +130,16 @@ class HDF5Writer(object):
                         if dg.fakeName not in bkgs:
                             bkgs.append(dg.fakeName)
 
+                        if chanInfo.nameMT not in axes:
+                            axes.append(chanInfo.nameMT)
+                        if common.passIsoName not in axes:
+                            axes.append(common.passIsoName)
+
                     if chanInfo.ABCD and set(chanInfo.fakerateAxes) != set(chanInfo.project):
                         data_obs = projectABCD(chanInfo, data_obs_hist)
                     else:
-                        if data_obs_hist.axes.name != chanInfo.project:
-                            data_obs_hist = data_obs_hist.project(*chanInfo.project)
+                        if data_obs_hist.axes.name != axes:
+                            data_obs_hist = data_obs_hist.project(*axes)
 
                         data_obs = data_obs_hist.values(flow=False).flatten().astype(self.dtype)
 
@@ -143,7 +149,7 @@ class HDF5Writer(object):
 
             else:
                 self.masked_channels.append(chan)
-                chanInfo.setProjectionAxes(["count"])
+                axes = ["count"]
                 nbinschan = 1
 
             ibins.append(nbinschan)
@@ -163,8 +169,8 @@ class HDF5Writer(object):
                     if chanInfo.ABCD and set(chanInfo.fakerateAxes) != set(chanInfo.project):
                         norm_proc, sumw2_proc = projectABCD(chanInfo, norm_proc_hist, return_variances=True)
                     else:
-                        if norm_proc_hist.axes != chanInfo.project:
-                            norm_proc_hist = norm_proc_hist.project(*chanInfo.project)
+                        if norm_proc_hist.axes != axes:
+                            norm_proc_hist = norm_proc_hist.project(*axes)
 
                         norm_proc = norm_proc_hist.values(flow=False).flatten().astype(self.dtype)
                         sumw2_proc = norm_proc_hist.variances(flow=False).flatten().astype(self.dtype)
@@ -288,8 +294,8 @@ class HDF5Writer(object):
                             if not masked and chanInfo.ABCD and set(chanInfo.fakerateAxes) != set(chanInfo.project):
                                 _syst = projectABCD(chanInfo, _hist)
                             else:
-                                if _hist.axes != chanInfo.project:
-                                    _hist = _hist.project(*chanInfo.project)
+                                if _hist.axes != axes:
+                                    _hist = _hist.project(*axes)
                                 _syst = _hist.values(flow=False).flatten().astype(self.dtype)
                             
                             # check if there is a sign flip between systematic and nominal
@@ -349,6 +355,7 @@ class HDF5Writer(object):
             for iproc, proc in enumerate(procs):
                 if proc not in dict_norm[chan]:
                     continue
+
                 sumw[ibin:ibin+nbinschan] += dict_norm[chan][proc]
                 sumw2[ibin:ibin+nbinschan] += dict_sumw2[chan][proc]
             

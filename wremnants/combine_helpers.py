@@ -249,26 +249,23 @@ def setSimultaneousABCD(cardTool,
 
                 all_ax_idx = fakerate_ax_idx + other_ax_idx
 
-                highMT_bin_name = "_".join([f"{ax}{all_ax_idx[k]}" for k, ax in enumerate(all_axes) if ax in cardTool.project])
+                highMT_bin_name = "_".join([f"{ax}{all_ax_idx[k]}" for k, ax in enumerate(all_axes)])
                 highMT_histname = f"{cardTool.nominalName}_N{fakename}HighMT_{highMT_bin_name}"
 
-                # systematic variation for fake normalization in high MT, only define one time for each high mT bin
-                if highMT_histname not in cardTool.datagroups.groups[fakename].hists:
-                    logger.debug(f"Create new hist with name {highMT_histname}")
-                    hist_var_highMT = hist.Hist(*hist_fake.axes, storage=hist.storage.Double())
-                    hist_var_highMT.view(flow=True)[...] = hist_fake.values(flow=True)
+                # systematic variation for fake normalization in high MT
+                logger.debug(f"Create new hist with name {highMT_histname}")
+                hist_var_highMT = hist.Hist(*hist_fake.axes, storage=hist.storage.Double())
+                hist_var_highMT.view(flow=True)[...] = hist_fake.values(flow=True)
 
-                    cardTool.datagroups.groups[fakename].hists[highMT_histname] = hist_var_highMT
+                cardTool.datagroups.groups[fakename].hists[highMT_histname] = hist_var_highMT
 
-                    cardTool.addSystematic(f"N{fakename}HighMT_{highMT_bin_name}",
-                        processes=[fakename],
-                        group=f"{fakename}HighMT",
-                        noConstraint=True,
-                        outNames=[f"N{fakename}HighMT_{highMT_bin_name}"],
-                        mirror=True
-                    )
-                else:
-                    hist_var_highMT = cardTool.datagroups.groups[fakename].hists[highMT_histname]
+                cardTool.addSystematic(f"N{fakename}HighMT_{highMT_bin_name}",
+                    processes=[fakename],
+                    group=f"{fakename}HighMT",
+                    noConstraint=True,
+                    outNames=[f"N{fakename}HighMT_{highMT_bin_name}"],
+                    mirror=True
+                )
 
                 n_highMT = hist_fake[{**common.failIso, nameMT: passMT, **fakerate_indices, **other_indices}].value \
                     + hist_fake[{**common.passIso, nameMT: passMT, **fakerate_indices, **other_indices}].value
@@ -291,23 +288,29 @@ def projectABCD(cardTool, h, return_variances=False, dtype="float64"):
     fakerate_axes = [n for n in h.axes.name if n in cardTool.fakerateAxes]
 
     lowMT_axes = [n for n in h.axes.name if n in fakerate_axes]
-    highMT_axes = [n for n in h.axes.name if n in cardTool.project]
+    highMT_failIso_axes = [n for n in h.axes.name if n in [*fakerate_axes, *cardTool.project]]
+    highMT_passIso_axes = [n for n in h.axes.name if n in cardTool.project]
 
     hist_lowMT = h[{cardTool.nameMT : cardTool.failMT}].project(*[*lowMT_axes, common.passIsoName])
-    hist_highMT = h[{cardTool.nameMT : cardTool.passMT}].project(*[*highMT_axes, common.passIsoName])
+    hist_highMT_failIso = h[{cardTool.nameMT : cardTool.passMT, **common.failIso}].project(*[*highMT_failIso_axes])
+    hist_highMT_passIso = h[{cardTool.nameMT : cardTool.passMT, **common.passIso}].project(*[*highMT_passIso_axes])
 
     flat_lowMT = hist_lowMT.values(flow=False).flatten().astype(dtype)
-    flat_highMT = hist_highMT.values(flow=False).flatten().astype(dtype)
+    flat_highMT_failIso = hist_highMT_failIso.values(flow=False).flatten().astype(dtype)
+    flat_highMT_passIso = hist_highMT_passIso.values(flow=False).flatten().astype(dtype)
 
-    flat = np.append(flat_lowMT, flat_highMT)
+    flat = np.append(flat_lowMT, flat_highMT_failIso)
+    flat = np.append(flat, flat_highMT_passIso)
 
     if not return_variances:
         return flat
 
     flat_variances_lowMT = hist_lowMT.variances(flow=False).flatten().astype(dtype)
-    flat_variances_highMT = hist_highMT.variances(flow=False).flatten().astype(dtype)
+    flat_variances_highMT_failIso = hist_highMT_failIso.variances(flow=False).flatten().astype(dtype)
+    flat_variances_highMT_passIso = hist_highMT_passIso.variances(flow=False).flatten().astype(dtype)
 
-    flat_variances = np.append(flat_variances_lowMT, flat_variances_highMT)
+    flat_variances = np.append(flat_variances_lowMT, flat_variances_highMT_failIso)
+    flat_variances = np.append(flat_variances, flat_variances_highMT_passIso)
 
     return flat, flat_variances
 
