@@ -147,7 +147,7 @@ jobs:
   w-fit:
     # The type of runner that the job will run on
     runs-on: [self-hosted, linux, x64]
-    needs: setenv
+    needs: [setenv, w-analysis]
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -617,7 +617,7 @@ jobs:
 
   combined-fit:
     runs-on: [self-hosted, linux, x64]
-    needs: [setenv, w-analysis, dilepton]
+    needs: [setenv, w-fit, dilepton]
     steps:
       - env:
           WREMNANTS_OUTDIR: ${{ needs.setenv.outputs.WREMNANTS_OUTDIR }}
@@ -643,7 +643,7 @@ jobs:
 
   copy-clean:
     runs-on: [self-hosted, linux, x64]
-    needs: [setenv, w-analysis, w-fit, w-plotting, lowpu-w, lowpu-z, lowpu-combined-unfolding, wlike, wlike-plotting, dilepton-mll, dilepton, dilepton-plotting, gen, combined-fit ]
+    needs: [setenv, w-analysis, w-fit, w-plotting, lowpu-w, lowpu-z, lowpu-combined-unfolding, wlike, wlike-plotting, dilepton-mll, dilepton, dilepton-plotting, gen, combined-fit]
     if: always() 
     steps:
       - env:
@@ -659,9 +659,6 @@ jobs:
           xrdcp --parallel 4 -R -f $WREMNANTS_OUTDIR/$LOCAL_WEB_DIR/* root://eosuser.cern.ch//$EOS_DIR/$LOCAL_WEB_DIR
           echo "Removing temp directory $WREMNANTS_OUTDIR/$LOCAL_WEB_DIR"
           rm -r $WREMNANTS_OUTDIR/$LOCAL_WEB_DIR
-
-      - name: create webdir
-        run: 
 
       - name: save analysis files
         if: github.event_name != 'pull_request' && github.event.schedule == '0 3 * * 2,4,6'

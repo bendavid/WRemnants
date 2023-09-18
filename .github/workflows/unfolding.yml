@@ -182,7 +182,7 @@ jobs:
       - name: wmass combine unfolding plot xsec 
         run: >-
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py $HIST_FILE 
-          --fitresult $WREMNANTS_OUTDIR/WMass_eta_pt_charge_unfolding/fitresults_123456789.hdf5 -o $WEB_DIR -f $PLOT_DIR --debug --rrange 0.9 1.1
+          --fitresult $WREMNANTS_OUTDIR/WMass_eta_pt_charge_unfolding/fitresults_123456789.hdf5 -o $WEB_DIR -f $PLOT_DIR --debug --rrange 0.9 1.1 --logy
 
   w-theoryfit:
     # The type of runner that the job will run on
@@ -322,7 +322,7 @@ jobs:
           echo "WREMNANTS_OUTDIR=${WREMNANTS_OUTDIR}" >> $GITHUB_ENV
           echo "WEB_DIR=${WEB_DIR}" >> $GITHUB_ENV
           echo "PLOT_DIR=${PLOT_DIR}" >> $GITHUB_ENV
-          echo "HIST_FILE=${WREMNANTS_OUTDIR}/${OUTFILE_WMASS}" >> $GITHUB_ENV
+          echo "HIST_FILE=${WREMNANTS_OUTDIR}/${OUTFILE_WLIKE}" >> $GITHUB_ENV
       - uses: actions/checkout@v3
         with:
           submodules: 'recursive'
@@ -428,7 +428,7 @@ jobs:
       - name: dilepton combine unfolding plot prefit 
         run: >-
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_plots.py 
-          $WREMNANTS_OUTDIR/ZMassDilepton_ptll_unfolding/fitresults_123456789.hdf5 -o $WEB_DIR -f $PLOT_DIR --debug 
+          $WREMNANTS_OUTDIR/ZMassDilepton_ptll_unfolding/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR --debug 
           --rrange 0.9 1.1 --channels all --lumi=$LUMI_SCALE
 
       - name: dilepton combine unfolding plot pulls 
@@ -440,13 +440,13 @@ jobs:
       - name: dilepton combine unfolding plot xsec 
         run: >- 
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py $HIST_FILE 
-          --fitresult $WREMNANTS_OUTDIR/ZMassDilepton_ptll_unfolding/fitresults_123456789.hdf5 -o $WEB_DIR -f $PLOT_DIR --debug --rrange 0.9 1.1
+          --fitresult $WREMNANTS_OUTDIR/ZMassDilepton_ptll_unfolding/fitresults_123456789.hdf5 -o $WEB_DIR -f $PLOT_DIR --debug --rrange 0.9 1.1 --logy
 
 
   copy-clean:
     runs-on: [self-hosted, linux, x64]
-    needs: [setenv, w-analysis, w-unfolding, #wlike-theoryfit, 
-      wlike-analysis, wlike-unfolding, #wlike-theoryfit, 
+    needs: [setenv, w-analysis, w-unfolding, w-theoryfit, 
+      wlike-analysis, wlike-unfolding, wlike-theoryfit, 
       dilepton, dilepton-unfolding]
     if: always() 
     steps:
