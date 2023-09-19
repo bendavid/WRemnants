@@ -129,20 +129,7 @@ def setup(args,xnorm=False):
         datagroups.unconstrainedProcesses.append(base_group)
     elif args.unfolding:
 
-        if args.theoryAgnostic and args.poiAsNoi:
-            pass
-        
-            ## currently the following doesn't work because datagroups.defineSignalBinsUnfolding require xnorm histograms
-            # if wmass:
-            #     # gen level bins, split only by charge
-            #     if "minus" in args.recoCharge:
-            #         datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen0", member_filter=lambda x: x.name.startswith("Wminus"))
-            #     if "plus" in args.recoCharge:
-            #         datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen1", member_filter=lambda x: x.name.startswith("Wplus"))
-            # else:
-            #     datagroups.defineSignalBinsUnfolding(base_group, "Z", member_filter=lambda x: x.name.startswith(base_group))
-
-        else:
+        if not (args.theoryAgnostic and args.poiAsNoi):
             constrainMass = False if args.theoryAgnostic else True
             datagroups.setGenAxes(args.genAxes)
 

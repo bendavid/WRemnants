@@ -209,7 +209,7 @@ if __name__ == "__main__":
     parser.add_argument("-D", "--dataset",  dest="dataname", default="data_obs",  type=str,  help="Name of the observed dataset (pass name without x_ in the beginning). Useful to fit another pseudodata histogram")
     parser.add_argument("--combinetf-option",  dest="combinetfOption", default="",  type=str,  help="Pass other options to combinetf (TODO: some are already activated with other options, might move them here)")
     parser.add_argument("-t",  "--toys", type=int, default=0, help="Run combinetf for N toys if argument N is positive")
-    parser.add_argument(       '--theoryAgnostic', action='store_true', help='Run theory agnostic fit, with masked channels and so on')
+    parser.add_argument(       '--theoryAgnostic', action='store_true', help='Run theory agnostic fit, with masked channels and so on (not needed when using POIs as NOIs)')
     args = parser.parse_args()
 
     if not args.dryRun:

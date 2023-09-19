@@ -105,11 +105,11 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
             ## temporary patch for missing histograms
             if eff_type == "antitrigger":
                 hist_name = hist_name.replace("antitrigger", "trigger")
-                if templateAnalysisArg != "wrem::AnalysisType::Dilepton":
+                if templateAnalysisArg == "wrem::AnalysisType::Dilepton":
                     logger.warning(f"Substituting temporarily missing 2D histogram for 'antitrigger' with 'trigger'")
             elif eff_type == "isoantitrig":
                 hist_name = hist_name.replace("isoantitrig", "isonotrig")
-                if templateAnalysisArg != "wrem::AnalysisType::Dilepton":
+                if templateAnalysisArg == "wrem::AnalysisType::Dilepton":
                     logger.warning(f"Substituting temporarily missing 2D histogram for 'isoantitrig' with 'isonotrig'")
             hist_root = input_tools.safeGetRootObject(fin, hist_name)
             #logger.debug(f"syst: {eff_type} -> {hist_name}")

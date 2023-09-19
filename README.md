@@ -79,20 +79,36 @@ source WRemnants/setup.sh
 
 Make histograms (only nominal and mass variations for now, systematics are being developed)
 ```
-/usr/bin/time -v python scripts/histmakers/mw_with_mu_eta_pt.py -o outputFolder/ --met DeepMETReso  --theoryAgnostic
+/usr/bin/time -v python scripts/histmakers/mw_with_mu_eta_pt.py -o outputFolder/ --theoryAgnostic --noAuxiliaryHistograms
 ```
 
 Prepare datacards and root files with TH2 (stat-only for now)
 ```
 /usr/bin/time -v python scripts/combine/setupCombineWMass.py -i outputFolder/mw_with_mu_eta_pt_scetlib_dyturboCorr.hdf5  -o outputFolder/  --absolutePathInCard --theoryAgnostic
 ```
-To remove the backgrounds and run signal only one can add __--excludeProcGroups Top Diboson Fake Zmumu Ztautau Wtaunu BkgWmunu__
+To remove the backgrounds and run signal only one can add __--excludeProcGroups Top Diboson Fake Zmumu DYlowMass Ztautau Wtaunu BkgWmunu__
 
 Run the fit (for charge combination)
 ```
 python WRemnants/scripts/combine/fitManager.py -i outputFolder/WMass_pt_eta_statOnly/ --skip-fit-data --theoryAgnostic --comb
 ```
+### Theory agnostic analysis with POIs as NOIs
 
+Make histograms (only nominal and mass variations for now, systematics are being developed)
+```
+/usr/bin/time -v python scripts/histmakers/mw_with_mu_eta_pt.py -o outputFolder/ --theoryAgnostic --poiAsNoi
+```
+
+Prepare datacards and root files with TH2 (stat-only for now)
+```
+/usr/bin/time -v python scripts/combine/setupCombineWMass.py -i outputFolder/mw_with_mu_eta_pt_scetlib_dyturboCorr.hdf5  -o outputFolder/ --absolutePathInCard --theoryAgnostic --poiAsNoi --priorNormXsec 0.5
+```
+To remove the backgrounds and run signal only one can add __--filterProcGroups Wmunu__
+
+Run the fit (for charge combination). Note that it is the same command as the traditional analysis
+```
+python WRemnants/scripts/combine/fitManager.py -i outputFolder/WMass_pt_eta_statOnly/ --skip-fit-data --comb
+```
             
 ### Traditional analysis
     
@@ -107,7 +123,7 @@ Make the datacards for single charges and prepare the TH2 histograms for combine
 python WRemnants/scripts/combine/setupCombineWMass.py -i outputFolder/mw_with_mu_eta_pt_scetlib_dyturboCorr.hdf5 -o outputFolder/
 ```
 The input file is the output of the previous step.
-The default path specified with __-o__ is the local folder. A subfolder with name identifying the specific analysis (e.g. WMass_pt_eta/) is automatically created inside it. Some options may add tags to the folder name: for example, using --doStatOnly will  call the folder WMass_pt_eta_statOnly/.
+The default path specified with __-o__ is the local folder. A subfolder with name identifying the specific analysis (e.g. WMass_pt_eta/) is automatically created inside it. Some options may add tags to the folder name: for example, using --doStatOnly will  call the folder WMass_pt_eta_statOnly/. Can use --absolutePathInCard to write absolute path for files in the datacard, so to allow one to run the fit from any location.
  
 Combine the datacards for single charges and run the fit (Asimov only)
 ```
@@ -115,7 +131,7 @@ python WRemnants/scripts/combine/fitManager.py -i outputFolder/WMass_pt_eta/ --c
 ```
 Run the fits for single charges (Asimov only). These can be produced in the same output folder as the combination, since a postfix is automatically appended to the output card and fit result files.
 ```
-python WRemnants/scripts/combine/fitManager.py -i outputFolder/WMass_pt_eta/ --fit-single-charge --skip-fit-data [-c plus|minus|both]
+python WRemnants/scripts/combine/fitManager.py -i outputFolder/WMass_pt_eta/ --fit-single-charge --skip-fit-data [-c <plus|minus|both>]
 ```
 
 **NOTE**:
