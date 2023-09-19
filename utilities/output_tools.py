@@ -87,8 +87,6 @@ def write_analysis_output(results, outfile, args, update_name=True):
         to_append.append(args.theoryCorr[0]+"Corr")
     if hasattr(args, "uncertainty_hist") and args.uncertainty_hist != "nominal":
         to_append.append(args.uncertainty_hist)
-    if args.correlatedNonClosureNP:
-        to_append.append("NonClosureCorl")
     if args.maxFiles > 0:
         to_append.append(f"maxFiles{args.maxFiles}")
 

@@ -323,7 +323,8 @@ def widthWeightNames(matches=None, proc=""):
     return [x if not matches or any(y in x for y in matches) else "" for x in names]
 
 def add_pdf_hists(results, df, dataset, axes, cols, pdfs, base_name="nominal", addhelicity=False):
-    for pdf in pdfs:
+    # Remove duplicates but preserve the order of the first set
+    for pdf in (pdfs[0], *set([x for x in pdfs[1:] if x != pdfs[0]])):
         try:
             pdfInfo = theory_tools.pdf_info_map(dataset, pdf)
         except ValueError as e:

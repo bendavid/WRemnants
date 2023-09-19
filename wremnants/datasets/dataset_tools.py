@@ -116,7 +116,7 @@ def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, na
                 oneMCfileEveryN=None, checkFileForZombie=False):
     if not base_path:
         base_path = getDataPath(mode)
-    logger.info(f"Loading 2016 samples from {base_path}.")
+    logger.info(f"Loading samples from {base_path}.")
 
     if nanoVersion == "v8":
         dataDict = dataDictV8
@@ -128,7 +128,7 @@ def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, na
 
     if mode == "gen":
         dataDict.update(genDataDict)     
-    elif mode == "lowPU":
+    elif "lowpu" in mode:
         dataDict = dataDictLowPU
 
     narf_datasets = []

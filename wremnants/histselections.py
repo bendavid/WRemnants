@@ -20,6 +20,7 @@ hist_map = {
 def fakeHistABCD(h, thresholdMT=40.0, fakerate_integration_axes=[], axis_name_mt="mt", integrateMT=False):
     # integrateMT=False keeps the mT axis in the returned histogram (can be used to have fakes vs mT)
 
+    print("IOntegrate over", fakerate_integration_axes)
     if axis_name_mt in h.axes.name:
         s = hist.tag.Slicer()
         low = hist.underflow if h.axes[axis_name_mt].traits.underflow else 0

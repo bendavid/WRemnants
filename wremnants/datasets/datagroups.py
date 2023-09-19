@@ -92,7 +92,6 @@ class Datagroups(object):
         if self.results:
             # only keep datasets that are found in input file
             self.datasets = {x.name : x for x in datasets if not filter_datasets or x.name in self.results.keys() }
-            print("filter", filter_datasets, self.datasets)
             
             # dictionary that maps dataset names to groups 
             dataset_to_group = {d_key: d.group for d_key, d in self.datasets.items()}
@@ -398,7 +397,7 @@ class Datagroups(object):
                     else:
                         opArgs = group.selectOpArgs
                     if group.hists[label]:
-                        group.hists[label] = group.selectOp(group.hists[label], **group.selectOpArgs)
+                        group.hists[label] = group.selectOp(group.hists[label], **opArgs)
 
         # Avoid situation where the nominal is read for all processes for this syst
         if not foundExact:

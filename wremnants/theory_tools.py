@@ -207,7 +207,10 @@ def make_ew_binning(mass = 91.1535, width = 2.4932, initialStep = 0.1, bin_edges
 def pdf_info_map(dataset, pdfset):
     infoMap = pdfMap if dataset not in extended_pdf_datasets else pdfMapExtended
 
-    if "horace" in dataset or (pdfset != "nnpdf31" and dataset in only_central_pdf_datasets) or pdfset not in infoMap:
+    # Just ignore PDF variations for non W/Z samples
+    if not (dataset[0] in ["W", "Z"] and dataset[1] not in ["W", "Z"]) \
+        "horace" in dataset or (pdfset != "nnpdf31" and dataset in only_central_pdf_datasets) \
+        or pdfset not in infoMap:
         raise ValueError(f"Skipping PDF {pdfset} for dataset {dataset}")
     return infoMap[pdfset]
 
@@ -219,7 +222,7 @@ def define_pdf_columns(df, dataset_name, pdfs, noAltUnc):
         logger.warning(f"Did not find PDF weights for sample {dataset_name}! Using nominal PDF in sample")
         return df
 
-    for i, pdf in enumerate(pdfs):
+    for i, pdf in enumerate((pdfs[0], *set([x for x in pdfs[1:] if x != pdfs[0]]))):
         try:
             pdfInfo = pdf_info_map(dataset_name, pdf)
         except ValueError as e:

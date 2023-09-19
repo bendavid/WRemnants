@@ -100,7 +100,7 @@ class CardTool(object):
             
     def setFitAxes(self, axes):
         self.fit_axes = axes[:]
-        if self.writeByCharge and self.charge_ax:
+        if self.writeByCharge and self.charge_ax not in self.fit_axes:
             logger.info(f"Adding charge axis {self.charge_ax} to fit axes")
             self.fit_axes.append(self.charge_ax)
 

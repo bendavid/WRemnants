@@ -196,7 +196,7 @@ def setup(args,xnorm=False):
                 #datagroups.deleteGroup("Fake")
             cardTool.unroll = True
             # remove projection axes from gen axes, otherwise they will be integrated before
-            datagroups.setGenAxes([a for a in datagroups.gen_axes if a not in cardTool.project])
+            datagroups.setGenAxes([a for a in datagroups.gen_axes if a not in cardTool.fit_axes])
     else:
         cardTool.setHistName(args.baseName)
         cardTool.setNominalName(args.baseName)
