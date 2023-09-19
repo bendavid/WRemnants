@@ -301,9 +301,11 @@ def setup(args,xnorm=False):
                                baseName=f"norm{label}CHANNEL_",
                                #scaleAndSumNominal=args.priorNormXsec, # multiply yields of input hist by 0.5 and then sum the nominal
                                scale=1 if args.priorNormXsec < 0 else args.priorNormXsec, # histogram represents an (args.priorNormXsec*100)% prior
+                               #noiGroup=args.priorNormXsec < 0, # should not be needed
                                sumNominal=True,
                                noConstraint=True if args.priorNormXsec < 0 else False,
-                               systAxes=[x for x in args.genAxes],
+                               customizeNuisance={".*AngCoeff4" : {"scale" : 1, "shape": "shapeNoConstraint"}},
+                               systAxes=["ptVgenSig", "absYVgenSig", "helicity"],
                                labelsByAxis=["PtVBin", "YVBin", "AngCoeff"],
                                passToFakes=passSystToFakes,
                                )

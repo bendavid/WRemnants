@@ -84,6 +84,7 @@ if __name__ == "__main__":
     parser.add_argument(      '--binning-file-to-roll', dest="binFileToRoll", default="", help="File with binning to roll 1D into 2D (the reco binning is used)")
     parser.add_argument(      '--drawOption',  default='colz0', type=str, help='Draw option for TH2')
     parser.add_argument(      '--set-ratio-unc', dest="setRatioUnc", default="num", choices=["num", "den", "both"], help="Set how to compute uncertainty for the ratio (num or den simply use the one of those component, neglecting the other, both propagates both) ")
+    parser.add_argument(      '--integrate1D', action="store_true",  help="In addition to other plots, integrate the shapes in 1D and plot them as TH1 with ratio panel")
     args = parser.parse_args()
     
     f1 = args.file1[0]
@@ -148,10 +149,6 @@ if __name__ == "__main__":
         # this is needed only for muons, for electrons I save directly the smoothed FR (PR)
         neta = hist1.GetNbinsX()
         etabins = [hist1.GetXaxis().GetBinLowEdge(i) for i in range(1,2+neta)]
-        #etamin = hist1.GetXaxis().GetBinLowEdge(1)
-        #etamax = hist1.GetXaxis().GetBinLowEdge(1+neta)
-        #hFR1 = ROOT.TH2D(hist1.GetName()+"_FRorPR","",195,26,65,neta,etamin,etamax)
-        #hFR2 = ROOT.TH2D(hist2.GetName()+"_FRorPR","",195,26,65,neta,etamin,etamax)
         hFR1 = ROOT.TH2D(hist1.GetName()+"_FRorPR","",195,26,65,neta,array('d',etabins))
         hFR2 = ROOT.TH2D(hist2.GetName()+"_FRorPR","",195,26,65,neta,array('d',etabins))
         for ix in range (1,1+hFR1.GetNbinsX()):
@@ -176,6 +173,9 @@ if __name__ == "__main__":
             print("Error: you need to pass the binning to roll 1D histograms into 2D")
             quit()
 
+    if args.integrate1D:
+        pass
+            
     xMin = args.xRange[0]
     xMax = args.xRange[1]
     yMin = args.yRange[0]
