@@ -74,7 +74,7 @@ parser.add_argument("--fitresult", type=str, help="Specify a fitresult root file
 parser.add_argument("--prefit", action='store_true', help="Use the prefit uncertainty from the fitresult root file, instead of the postfit. (--fitresult has to be given)")
 parser.add_argument("--eoscp", action='store_true', help="Use of xrdcp for eos output rather than the mount")
 parser.add_argument("--selection", type=str, help="Specify custom selections as comma seperated list (e.g. '--selection passIso=0,passMT=1' )")
-parser.add_argument("--presel", type=str, nargs="*", help="Specify custom selections on input histograms to integrate some axes, giving axis name and min,max (e.g. '--presel pt=ptmin,ptmax' ) or just axis name for bool axes")
+parser.add_argument("--presel", type=str, nargs="*", default=[], help="Specify custom selections on input histograms to integrate some axes, giving axis name and min,max (e.g. '--presel pt=ptmin,ptmax' ) or just axis name for bool axes")
 
 subparsers = parser.add_subparsers(dest="variation")
 variation = subparsers.add_parser("variation", help="Arguments for adding variation hists")
