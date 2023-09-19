@@ -96,13 +96,6 @@ def build_graph(df, dataset):
 
     df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
 
-    if args.applySelection:
-        if isZ:
-            df = df.Filter("ewLeptons[0].pt()>25 && ewLeptons[1].pt()>25 && std::fabs(ewLeptons[0].eta())<3.5 && std::fabs(ewLeptons[1].eta())<3.5")
-            # TODO
-        # elif isW:
-            # df = df.Filter("ewLeptons[0].pt()>25 && ewLeptons[1].pt()>25 && std::fabs(ewLeptons[0].eta())<3.5 && std::fabs(ewLeptons[1].eta())<3.5")
-
     if isZ:
         nominal_axes = [axis_massZgen, axis_rapidity, axis_ptVgen, axis_chargeZgen]
         lep_axes = [axis_l_eta_gen, axis_l_pt_gen, axis_chargeZgen]

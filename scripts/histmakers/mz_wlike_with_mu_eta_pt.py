@@ -16,6 +16,7 @@ import os
 import numpy as np
 
 parser = common.set_parser_default(parser, "genVars", ["qGen", "ptGen", "absEtaGen"])
+parser = common.set_parser_default(parser, "genBins", [17, 0])
 parser = common.set_parser_default(parser, "pt", [34, 26, 60])
 parser = common.set_parser_default(parser, "aggregateGroups", ["Diboson", "Top", "Wtaunu", "Wmunu"])
 

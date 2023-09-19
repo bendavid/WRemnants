@@ -14,6 +14,15 @@ from wremnants import plot_tools
 import os
 import re
 
+translate_label = {
+    # "stat": "Unfolding",
+    "resumNonpert": "Non perturbative QCD",
+    "pdfMSHT20": "pdf",
+    "pdfMSHT20AlphaS": r"$\mathrm{pdf}\ \alpha_\mathrm{S}$",
+    "QCDscaleWPtHelicityMiNNLO": "Perturbative QCD",
+    "theory_ew": "EW",
+}
+
 def writeOutput(fig, outfile, extensions=[], postfix=None, args=None, meta_info=None):
     name, ext = os.path.splitext(outfile)
     if ext not in extensions:
@@ -35,10 +44,10 @@ def writeOutput(fig, outfile, extensions=[], postfix=None, args=None, meta_info=
         output[1] = os.path.splitext(output[1])[0]
         if len(output) == 1:
             output = (None, *output)
-        plot_tools.write_index_and_log(*output, 
-            args=args,
-            analysis_meta_info={"AnalysisOutput" : meta_info},
-        )
+    plot_tools.write_index_and_log(*output, 
+        args=args,
+        analysis_meta_info={"AnalysisOutput" : meta_info},
+    )
 
 def plotImpacts(df, pulls=False, POI='Wmass', normalize=False, oneSidedImpacts=False):
     poi_type = POI.split("_")[-1] if POI else None
@@ -198,6 +207,8 @@ def readFitInfoFromFile(rf,filename, group=False, sort=None, ascending=True, sta
             pulls[i] = getattr(rtree, label)
             constraints[i] = getattr(rtree, label+"_err")
     
+    labels = [translate_label.get(l, l) for l in labels]
+
     df = pd.DataFrame(np.array((pulls, impacts, constraints), dtype=np.float64).T, columns=["pull", "impact", "constraint"])
     df['label'] = labels
     df['absimpact'] = np.abs(df['impact'])
@@ -311,22 +322,28 @@ def producePlots(rtfile, args, POI='Wmass', normalize=False):
 
         app.run_server(debug=True, port=3389, host=args.interface)
     elif args.output_mode == 'output':
-        df = dataframe if not group else groupsdataframe
-        df = df.sort_values(by=args.sort, ascending=args.ascending)
-        if args.num and args.num < df.size:
-            df = df[-args.num:]
-        fig = plotImpacts(df, pulls=not args.noPulls and not group, POI=POI, normalize=not args.absolute, oneSidedImpacts=args.oneSidedImpacts)
-
         postfix = POI if POI and "mass" not in POI else None
-
         meta = input_tools.get_metadata(args.inputFile)
-
         outdir = output_tools.make_plot_dir(args.outFolder, "", eoscp=args.eoscp)
         if outdir and not os.path.isdir(outdir):
             os.path.makedirs(outdir)
-
         outfile = os.path.join(outdir, args.outputFile)
-        writeOutput(fig, outfile, args.otherExtensions, postfix=postfix, args=args, meta_info=meta)
+        extensions = [outfile.split(".")[-1], *args.otherExtensions]
+
+        df = dataframe if not group else groupsdataframe
+        df = df.sort_values(by=args.sort, ascending=args.ascending)
+        if args.num and args.num < df.size:
+            # in case multiple extensions are given including html, don't do the skimming on html but all other formats
+            if "html" in extensions and len(extensions)>1:
+                fig = plotImpacts(df, pulls=not args.noPulls and not group, POI=POI, normalize=not args.absolute, oneSidedImpacts=args.oneSidedImpacts)
+                outfile_html = outfile.replace(outfile.split(".")[-1], "html")
+                writeOutput(fig, outfile_html, postfix=postfix)
+                extensions = [e for e in extensions if e != "html"]
+                outfile = outfile.replace(outfile.split(".")[-1], extensions[0])
+            df = df[-args.num:]
+
+        fig = plotImpacts(df, pulls=not args.noPulls and not group, POI=POI, normalize=not args.absolute, oneSidedImpacts=args.oneSidedImpacts)
+        writeOutput(fig, outfile, extensions[0:], postfix=postfix, args=args, meta_info=meta)      
         if args.eoscp and output_tools.is_eosuser_path(args.outFolder):
             output_tools.copy_to_eos(args.outFolder, "")
     else:

@@ -308,12 +308,14 @@ def readImpacts(fitresult_file, group, sort=True, add_total=True, stat=0.0, POI=
 
     return impacts, labels, norm
 
-def readImpactsH5(h5file, group, POI='Wmass'):
+def readImpactsH5(h5file, group, POI='Wmass', skip_systNoConstraint=True):
     poi_type = POI.split("_")[-1] if POI else None
     poi_names = getPOInames(h5file, poi_type)
     if POI=='Wmass':
+        impact_hist_total = "nuisance_impact_nois"
         impact_hist = "nuisance_group_impact_nois" if group else "nuisance_impact_nois"
     elif POI in poi_names:
+        impact_hist_total = f"nuisance_impact_{poi_type}"
         impact_hist = f"nuisance_group_impact_{poi_type}" if group else f"nuisance_impact_{poi_type}"
     else:
         raise ValueError(f"Invalid POI: {POI}")
@@ -328,15 +330,20 @@ def readImpactsH5(h5file, group, POI='Wmass'):
 
     if poi_type is None:
         impacts = np.zeros_like(labels, dtype=int)
+        total = 0.
+        norm = 0.
     else:
         impacts = h5file[impact_hist][...][iPOI]
+        total = h5file[impact_hist_total][...][iPOI,iPOI]
+        norm = h5file["x"][...][iPOI]
 
     if len(labels)+1 == len(impacts): 
         labels = np.append(labels, "binByBinStat")
 
-    # TODO add central values (norm) and total uncertainty
-    norm = np.zeros_like(labels, dtype=int)
-    total = 0.
+    if skip_systNoConstraint:
+        noConstraint = np.array([l in h5file["hsystsnoconstraint"][...].astype(str) for l in labels])
+        labels = labels[~noConstraint]
+        impacts = impacts[~noConstraint]
 
     return impacts, labels, norm, total
 

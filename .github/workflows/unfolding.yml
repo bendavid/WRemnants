@@ -58,7 +58,7 @@ jobs:
       - name: setup scheduled build
         if: github.event.schedule == '0 3 * * 1,3,5'
         run: |
-          echo PLOT_DIR=ScheduledBuilds/$(date +%Y_%m_%d)_$(git rev-parse --short "$GITHUB_SHA")/unfolding >> $GITHUB_ENV
+          echo PLOT_DIR=ScheduledBuilds_unfolding/$(date +%Y_%m_%d)_$(git rev-parse --short "$GITHUB_SHA")/unfolding >> $GITHUB_ENV
 
       - name: setup reference run
         if: github.event.schedule == '30 5 * * 1-5'
@@ -218,8 +218,8 @@ jobs:
 
       - name: wmass theoryfit combine impacts
         run: >-
-          scripts/ci/run_with_singularity.sh scripts/ci/show_impacts.sh $WREMNANTS_OUTDIR/WMass_eta_pt_charge_theoryfit/fitresults_123456789.hdf5 
-          $WEB_DIR/$PLOT_DIR impactsW.html
+          scripts/ci/run_with_singularity.sh scripts/ci/show_impacts.sh 
+          $WREMNANTS_OUTDIR/WMass_eta_pt_charge_theoryfit/fitresults_123456789.hdf5 $WEB_DIR/$PLOT_DIR impactsW.html
 
   wlike-analysis:
     # The type of runner that the job will run on

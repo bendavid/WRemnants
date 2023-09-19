@@ -72,6 +72,43 @@ groups.loadHistsForDatagroups(args.baseName, syst="", procsToRead=[process])
 
 input_subdir = args.fitresult.split("/")[-2]
 
+translate = {
+    "QCDscalePtChargeMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
+    "QCDscaleZPtChargeMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
+    "QCDscaleWPtChargeMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
+    "QCDscaleZPtHelicityMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
+    "QCDscaleWPtHelicityMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
+    "QCDscaleZPtChargeHelicityMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
+    "QCDscaleWPtChargeHelicityMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
+    "binByBinStat": "Bin-by-bin stat.",
+    "CMS_recoil": "recoil",
+    "CMS_background": "Bkg.",
+    "FakeHighMT": "FakeHighMT",
+    "FakeLowMT": "FakeLowMT",
+    "rFake": "fakerate",
+    "rFakemu": "fakerate",
+    "rFakee": "fakerate",
+    "FakemuHighMT": "FakeHighMT",
+    "FakemuLowMT": "FakeLowMT",
+    "FakeeHighMT": "FakeHighMT",
+    "FakeeLowMT": "FakeLowMT",
+    "massShiftZ": "Z mass",
+    "massShiftW": "W mass",
+    "pdfMSHT20": "PDF",
+    "pdfMSHT20AlphaS": r"PDF $\alpha_\mathrm{S}$",
+    "resumTNP": "Non purt. trans.",
+    "resumNonpert": "Non pert.",
+    "pdfMSHT20": "PDF",
+    "pdfMSHT20": "PDF",
+    "eff_stat": "$\epsilon^{\mu}_\mathrm{stat}$",
+    "eff_syst": "$\epsilon^{\mu}_\mathrm{syst}$",
+    "muonPrefire": "L1 prefire",
+    "ecalPrefire": "L1 ecal prefire"
+    "stat": "Data stat.",
+    "luminosity": "Luminosity",
+    "theory_ew": "EW",
+}
+
 xlabels = {
     "ptGen" : r"$p_{T}^{\ell}$ [GeV]",
     "absEtaGen" : r"$|\eta^{\ell}|$",
@@ -258,44 +295,10 @@ def plot_xsec_unfolded(df, edges, df_asimov=None, bin_widths=None, channel=None,
     )
     plt.close()
 
-translate = {
-    "QCDscalePtChargeMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
-    "QCDscaleZPtChargeMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
-    "QCDscaleWPtChargeMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
-    "QCDscaleZPtHelicityMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
-    "QCDscaleWPtHelicityMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
-    "QCDscaleZPtChargeHelicityMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
-    "QCDscaleWPtChargeHelicityMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
-    "binByBinStat": "Bin-by-bin stat.",
-    "CMS_recoil": "recoil",
-    "CMS_background": "Bkg.",
-    "FakeHighMT": "FakeHighMT",
-    "FakeLowMT": "FakeLowMT",
-    "rFake": "fakerate",
-    "rFakemu": "fakerate",
-    "rFakee": "fakerate",
-    "FakemuHighMT": "FakeHighMT",
-    "FakemuLowMT": "FakeLowMT",
-    "FakeeHighMT": "FakeHighMT",
-    "FakeeLowMT": "FakeLowMT",
-    "massShiftZ": "Z mass",
-    "massShiftW": "W mass",
-    "pdfMSHT20": "PDF",
-    "pdfMSHT20AlphaS": r"PDF $\alpha_\mathrm{S}$",
-    "resumTNP": "Non purt. trans.",
-    "resumNonpert": "Non pert.",
-    "pdfMSHT20": "PDF",
-    "pdfMSHT20": "PDF",
-    "eff_stat": "$\epsilon^{\mu}_\mathrm{stat}$",
-    "eff_syst": "$\epsilon^{\mu}_\mathrm{syst}$",
-    "muonPrefire": "L1 prefire",
-    "stat": "Data stat.",
-    "luminosity": "Luminosity",
-
-
-}
-
-def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normalize=False, logy=False, process_label="", axes=None, relative_uncertainty=False, percentage=True):
+def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normalize=False, 
+    logy=False, process_label="", axes=None, relative_uncertainty=False, percentage=True,
+    error_threshold=0.01,   # only uncertainties are shown with a max error larger than this threshold
+):
     logger.info(f"Make "+("normalized " if normalize else "")+"unfoled xsec plot"+(f" in channel {channel}" if channel else ""))
 
     # read nominal values and uncertainties from fit result and fill histograms
@@ -313,8 +316,6 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normaliz
             yLabel += " [%]"
     else:
         yLabel = "$\Delta$ "+ yLabel
-    
-
 
     #central values
     bin_widths = edges[1:] - edges[:-1]
@@ -361,9 +362,9 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normaliz
     # fakerate = ["err_FakemuHighMT", "err_FakemuLowMT", "err_rFakemu"]
     sources =["err_stat"]
     # sources += fakerate
-    remove = ["massShiftZ", "ecalPrefire", "QCDscaleZPtChargeMiNNLO", "QCDscaleZPtHelicityMiNNLO", "QCDscaleZPtChargeHelicityMiNNLO", ]
+    remove = []#["massShiftZ", "ecalPrefire", "QCDscaleZPtChargeMiNNLO", "QCDscaleZPtHelicityMiNNLO", "QCDscaleZPtChargeHelicityMiNNLO", ]
     sources += list(sorted([s for s in filter(lambda x: x.startswith("err"), df.keys()) 
-        if s.replace("err_","") not in ["stat", "total", "FakeHighMT", "FakeLowMT", "rFake", "resumTNP", *remove]#, ] 
+        if s.replace("err_","") not in ["stat", "total", "FakeHighMT", "FakeLowMT", "rFake", "resumTNP", *remove] 
             and "eff_stat_" not in s and "eff_syst_" not in s]))    # only take eff grouped stat and syst
 
     NUM_COLORS = len(sources)-1
@@ -397,6 +398,9 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normaliz
 
         errors = df[source].values/bin_widths
 
+        if max(errors) < error_threshold:
+            continue
+
         if relative_uncertainty:
             errors /= values
             if percentage:
@@ -429,7 +433,7 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normaliz
 
     if not logy:
         plot_tools.redo_axis_ticks(ax1, "y")
-    plot_tools.redo_axis_ticks(ax1, "x", True)
+    plot_tools.redo_axis_ticks(ax1, "x", no_labels=len(axes) >= 2)
 
     hep.cms.label(ax=ax1, lumi=float(f"{args.lumi:.3g}"), fontsize=20*args.scaleleg*scale, 
         label=cms_decor, data=not args.noData)
