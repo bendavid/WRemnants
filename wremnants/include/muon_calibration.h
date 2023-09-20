@@ -1159,9 +1159,10 @@ public:
             }
 
             const out_tensor_t alt_weights = dweightdqop * delta_qop + 1.;
+            const out_tensor_t alt_weights_clamped = wrem::clip_tensor(alt_weights, 10.);
 
             // total weight is the product over all the muons
-            alt_weights_all *= alt_weights;
+            alt_weights_all *= alt_weights_clamped;
         }
         return alt_weights_all;
     }
@@ -1235,10 +1236,11 @@ public:
             }
 
             const out_tensor_chip_t alt_weights = dweightdqop*delta_qop + 1.;
+            const out_tensor_chip_t alt_weights_clamped = wrem::clip_tensor(alt_weights, 10.);
 
             // total weight is the product over all the muons
-            res(iEta, 0) *= alt_weights(0);
-            res(iEta, 1) *= alt_weights(1);
+            res(iEta, 0) *= alt_weights_clamped(0);
+            res(iEta, 1) *= alt_weights_clamped(1);
         }
         return res;
     }
@@ -1313,9 +1315,10 @@ public:
             }
 
             const out_tensor_t alt_weights = dweightdqop*delta_qop + 1.;
+            const out_tensor_t alt_weights_clamped = wrem::clip_tensor(alt_weights, 10.);
 
             // total weight is the product over all the muons
-            res *= alt_weights;
+            res *= alt_weights_clamped;
         }
         return res;
     }
@@ -1378,10 +1381,11 @@ public:
             }
 
             const out_tensor_chip_t alt_weights = dweightdqop*delta_qop + 1.;
+            const out_tensor_chip_t alt_weights_clamped = wrem::clip_tensor(alt_weights, 10.);
 
             // total weight is the product over all the muons
-            res(iEta, iPt, 0) *= alt_weights(0);
-            res(iEta, iPt, 1) *= alt_weights(1);
+            res(iEta, iPt, 0) *= alt_weights_clamped(0);
+            res(iEta, iPt, 1) *= alt_weights_clamped(1);
         }
         return res;
     }
