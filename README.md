@@ -94,20 +94,20 @@ python WRemnants/scripts/combine/fitManager.py -i outputFolder/WMass_pt_eta_stat
 ```
 ### Theory agnostic analysis with POIs as NOIs
 
-Make histograms (only nominal and mass variations for now, systematics are being developed)
+Make histograms (this has all systematics too unlike the standard theory agnostic setup)
 ```
 /usr/bin/time -v python scripts/histmakers/mw_with_mu_eta_pt.py -o outputFolder/ --theoryAgnostic --poiAsNoi
 ```
 
-Prepare datacards and root files with TH2 (stat-only for now)
+Prepare datacards and root files with TH2
 ```
 /usr/bin/time -v python scripts/combine/setupCombineWMass.py -i outputFolder/mw_with_mu_eta_pt_scetlib_dyturboCorr.hdf5  -o outputFolder/ --absolutePathInCard --theoryAgnostic --poiAsNoi --priorNormXsec 0.5
 ```
 To remove the backgrounds and run signal only one can add __--filterProcGroups Wmunu__
 
-Run the fit (for charge combination). Note that it is the same command as the traditional analysis
+Run the fit (for charge combination). Note that it is the same command as the traditional analysis, without --theoryAgnostic
 ```
-python WRemnants/scripts/combine/fitManager.py -i outputFolder/WMass_pt_eta_statOnly/ --skip-fit-data --comb
+python WRemnants/scripts/combine/fitManager.py -i outputFolder/WMass_pt_eta/ --skip-fit-data --comb
 ```
             
 ### Traditional analysis

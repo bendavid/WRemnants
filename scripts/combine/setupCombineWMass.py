@@ -289,7 +289,7 @@ def setup(args,xnorm=False):
                                #noiGroup=args.priorNormXsec < 0, # should not be needed
                                sumNominal=True,
                                noConstraint=True if args.priorNormXsec < 0 else False,
-                               customizeNuisance={".*AngCoeff4" : {"scale" : 1, "shape": "shapeNoConstraint"}},
+                               #customizeNuisance={".*AngCoeff4" : {"scale" : 1, "shape": "shapeNoConstraint"}},
                                systAxes=["ptVgenSig", "absYVgenSig", "helicity"],
                                labelsByAxis=["PtVBin", "YVBin", "AngCoeff"],
                                passToFakes=passSystToFakes,
@@ -626,8 +626,8 @@ if __name__ == "__main__":
         args.unfolding = True
         logger.warning("For now setting --theoryAgnostic activates --unfolding, they should do the same things")
         if args.genAxes is None:
-            args.genAxes = ["absYVgenSig", "ptVgenSig", "helicity"]
-            logger.warning("Automatically setting '--genAxes absYVgenSig ptVgenSig helicity' for theory agnostic analysis")
+            args.genAxes = ["ptVgenSig", "absYVgenSig", "helicity"]
+            logger.warning("Automatically setting '--genAxes ptVgenSig absYVgenSig helicity' for theory agnostic analysis")
             if args.poiAsNoi:
                 logger.warning("This is only needed to properly get the systematic axes")
                 
