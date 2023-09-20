@@ -249,7 +249,7 @@ class HDF5Writer(object):
                     continue
 
                 systName = systKey if not syst["name"] else syst["name"]
-                if syst["fromNominal"]:
+                if syst["fromNominalHistogram"]:
                     forceToNominal = dg.getProcNames()
                 else:
                     # Needed to avoid always reading the variation for the fakes, even for procs not specified

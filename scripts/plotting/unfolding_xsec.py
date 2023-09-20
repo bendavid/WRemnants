@@ -103,7 +103,7 @@ translate = {
     "eff_stat": "$\epsilon^{\mu}_\mathrm{stat}$",
     "eff_syst": "$\epsilon^{\mu}_\mathrm{syst}$",
     "muonPrefire": "L1 prefire",
-    "ecalPrefire": "L1 ecal prefire"
+    "ecalPrefire": "L1 ecal prefire",
     "stat": "Data stat.",
     "luminosity": "Luminosity",
     "theory_ew": "EW",

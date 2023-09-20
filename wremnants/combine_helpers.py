@@ -110,7 +110,7 @@ def setSignalBinsAsNuisances(cardTool,
             outNames=[f"r{base_name}_{bin_name}"],
             mirror=True,
             passToFakes=passToFakes,
-            fromNominal=True,
+            fromNominalHistogram=True,
             actionMap={m.name: lambda h, **info: varyHistByBin(h, **info) for m in base_members},
             actionArgs=index_info,
         )

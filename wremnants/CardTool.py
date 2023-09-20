@@ -247,7 +247,7 @@ class CardTool(object):
                       scale=1, processes=None, group=None, noi=False, noConstraint=False, noProfile=False,
                       action=None, doActionBeforeMirror=False, actionArgs={}, actionMap={},
                       systNameReplace=[], systNamePrepend=None, groupFilter=None, passToFakes=False,
-                      rename=None, splitGroup={}, decorrelateByBin={}, fromNominal=False,
+                      rename=None, splitGroup={}, decorrelateByBin={}, fromNominalHistogram=False,
                       ):
         # note: setting Up=Down seems to be pathological for the moment, it might be due to the interpolation in the fit
         # for now better not to use the options, although it might be useful to keep it implemented
@@ -306,7 +306,7 @@ class CardTool(object):
                 "name" : name,
                 "decorrByBin": decorrelateByBin,
                 "systNamePrepend" : systNamePrepend,
-                "fromNominal": fromNominal, # load nominal histogram for this systematic
+                "fromNominalHistogram": fromNominalHistogram, # load nominal histogram for this systematic
             }
         })
 
@@ -716,7 +716,7 @@ class CardTool(object):
             systMap = self.systematics[syst]
             systName = syst if not systMap["name"] else systMap["name"]
             processes = systMap["processes"]
-            if systMap["fromNominal"]:
+            if systMap["fromNominalHistogram"]:
                 forceToNominal = self.datagroups.getProcNames()
             else:
                 # Needed to avoid always reading the variation for the fakes, even for procs not specified
