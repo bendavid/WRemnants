@@ -458,7 +458,7 @@ def build_graph(df, dataset):
                     args, df, axes, results, cols, cols_gen_smeared,
                     z_non_closure_parametrized_helper, z_non_closure_binned_helper, reco_sel_GF
                 )
-                df = muon_calibration.add_resolution_uncertainty(df, axes, results, nominal_cols, smearing_uncertainty_helper, reco_sel_GF)
+                df = muon_calibration.add_resolution_uncertainty(df, axes, results, cols, smearing_uncertainty_helper, reco_sel_GF)
                 if args.validationHists:
                     df = muon_validation.make_hists_for_muon_scale_var_weights(
                         df, axes, results, cols, cols_gen_smeared
