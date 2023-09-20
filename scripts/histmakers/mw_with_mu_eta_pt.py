@@ -143,7 +143,7 @@ z_non_closure_parametrized_helper, z_non_closure_binned_helper = muon_calibratio
 
 mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = muon_calibration.make_muon_calibration_helpers(args)
 
-smearing_helper = muon_calibration.make_muon_smearing_helpers() if args.smearing else None
+smearing_helper, smearing_uncertainty_helper = (None, None) if args.noSmearing else muon_calibration.make_muon_smearing_helpers()
 
 bias_helper = muon_calibration.make_muon_bias_helpers(args) if args.biasCalibration else None
 
@@ -436,7 +436,7 @@ def build_graph(df, dataset):
             # nuisances from the muon momemtum scale calibration 
             if (args.muonCorrData in ["massfit", "lbl_massfit"]):
                 if diff_weights_helper:
-                    df = df.Define(f'{reco_sel_GF}_dweightdqoprs', diff_weights_helper,
+                    df = df.Define(f'{reco_sel_GF}_response_weight', diff_weights_helper,
                         [
                             f"{reco_sel_GF}_recoPt",
                             f"{reco_sel_GF}_recoEta",
@@ -458,6 +458,7 @@ def build_graph(df, dataset):
                     args, df, axes, results, cols, cols_gen_smeared,
                     z_non_closure_parametrized_helper, z_non_closure_binned_helper, reco_sel_GF
                 )
+                df = muon_calibration.add_resolution_uncertainty(df, axes, results, nominal_cols, smearing_uncertainty_helper, reco_sel_GF)
                 if args.validationHists:
                     df = muon_validation.make_hists_for_muon_scale_var_weights(
                         df, axes, results, cols, cols_gen_smeared

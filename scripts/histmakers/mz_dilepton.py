@@ -122,7 +122,7 @@ z_non_closure_parametrized_helper, z_non_closure_binned_helper = muon_calibratio
 
 mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = muon_calibration.make_muon_calibration_helpers(args)
 
-smearing_helper = muon_calibration.make_muon_smearing_helpers() if args.smearing else None
+smearing_helper, smearing_uncertainty_helper = (None, None) if args.noSmearing else muon_calibration.make_muon_smearing_helpers()
 
 bias_helper = muon_calibration.make_muon_bias_helpers(args) 
 
@@ -302,8 +302,8 @@ def build_graph(df, dataset):
                     f"{reco_sel_GF}_genCharge"
                 ]
                 if diff_weights_helper:
-                    df = df.Define(f'{reco_sel_GF}_dweightdqoprs', diff_weights_helper, [*input_kinematics])
-                    input_kinematics.append(f'{reco_sel_GF}_dweightdqoprs')
+                    df = df.Define(f'{reco_sel_GF}_response_weight', diff_weights_helper, [*input_kinematics])
+                    input_kinematics.append(f'{reco_sel_GF}_response_weight')
 
                 # muon scale variation from stats. uncertainty on the jpsi massfit
                 df = df.Define(
