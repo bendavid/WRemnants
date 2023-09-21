@@ -33,11 +33,13 @@ args = parser.parse_args()
 
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
-if args.theoryAgnostic:
-    # temporary, to ensure running with stat only until systematics are all implemented
-    logger.warning("Running theory agnostic with only nominal and mass weight histograms for now.")
-    parser = common.set_parser_default(parser, "onlyMainHistograms", True)
-    parser = common.set_parser_default(parser, "genVars", ["absYVgenSig", "ptVgenSig", "helicity"])
+if args.theoryAgnostic or args.unfolding:
+    parser = common.set_parser_default(parser, "excludeFlow", True)
+    if args.theoryAgnostic:
+        # temporary, to ensure running with stat only until systematics are all implemented
+        logger.warning("Running theory agnostic with only nominal and mass weight histograms for now.")
+        parser = common.set_parser_default(parser, "onlyMainHistograms", True)
+        parser = common.set_parser_default(parser, "genVars", ["absYVgenSig", "ptVgenSig", "helicity"])
     args = parser.parse_args()
     
 thisAnalysis = ROOT.wrem.AnalysisType.Wmass
@@ -55,11 +57,11 @@ mtw_min = 40
 template_neta = int(args.eta[0])
 template_mineta = args.eta[1]
 template_maxeta = args.eta[2]
-print(f"Eta binning: {template_neta} bins from {template_mineta} to {template_maxeta}")
+logger.info(f"Eta binning: {template_neta} bins from {template_mineta} to {template_maxeta}")
 template_npt = int(args.pt[0])
 template_minpt = args.pt[1]
 template_maxpt = args.pt[2]
-print(f"Pt binning: {template_npt} bins from {template_minpt} to {template_maxpt}")
+logger.info(f"Pt binning: {template_npt} bins from {template_minpt} to {template_maxpt}")
 
 # standard regular axes
 axis_eta = hist.axis.Regular(template_neta, template_mineta, template_maxeta, name = "eta", overflow=False, underflow=False)

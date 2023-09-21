@@ -449,7 +449,7 @@ class TheoryHelper(object):
         self.card_tool.addSystematic(f"{pdfName}alphaS{asRange}", 
             processes=["single_v_samples"],
             mirror=False,
-            group=pdfName,
+            group=f"{pdfName}AlphaS",
             systAxes=["alphasVar"],
             systNameReplace=[("as", "pdfAlphaS")]+[("0116", "Down"), ("0120", "Up")] if asRange == "002" else [("0117", "Down"), ("0119", "Up")],
             scale=0.75, # TODO: this depends on the set, should be provided in theory_tools.py

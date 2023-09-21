@@ -217,37 +217,37 @@ def clipNegativeVals(h, clipValue=0, createNew=False):
     np.clip(newh.values(flow=True), a_min=clipValue, a_max=None, out=newh.values(flow=True))
     return newh
 
-def scaleHist(h, scale, createNew=True):
+def scaleHist(h, scale, createNew=True, flow=True):
     if createNew:
         if h.storage_type == hist.storage.Double:
             hnew = hist.Hist(*h.axes)
         else:
             hnew = hist.Hist(*h.axes, storage=hist.storage.Weight())
-            hnew.variances(flow=True)[...] = scale*scale * h.variances(flow=True)
+            hnew.variances(flow=flow)[...] = scale*scale * h.variances(flow=flow)
 
-        hnew.values(flow=True)[...] = scale * h.values(flow=True)
+        hnew.values(flow=flow)[...] = scale * h.values(flow=flow)
 
         return hnew
     else:
-        h.values(flow=True)[...] *= scale
+        h.values(flow=flow)[...] *= scale
         if h.storage_type == hist.storage.Weight:
-            h.variances(flow=True)[...] *= scale*scale
+            h.variances(flow=flow)[...] *= scale*scale
         return h
     
 def normalize(h, scale=1e6, createNew=True):
     scale = scale/h.sum(flow=True).value
     return scaleHist(h, scale, createNew)
 
-def makeAbsHist(h, axis_name):
+def makeAbsHist(h, axis_name, rename=True):
     ax = h.axes[axis_name]
     axidx = list(h.axes).index(ax)
     if ax.size == 1 and -ax.edges[0] == ax.edges[-1]:
-        abs_ax = hist.axis.Regular(1, 0, ax.edges[-1], underflow=False, name=f"abs{axis_name}")
+        abs_ax = hist.axis.Regular(1, 0, ax.edges[-1], underflow=False, name=f"abs{axis_name}" if rename else axis_name)
         return hist.Hist(*h.axes[:axidx], abs_ax, *h.axes[axidx+1:], storage=h.storage_type(), data=h.view())
 
     if 0 not in ax.edges:
         raise ValueError("Can't mirror around 0 if it isn't a bin boundary")
-    abs_ax = hist.axis.Variable(ax.edges[ax.index(0.):], underflow=False, name=f"abs{axis_name}")
+    abs_ax = hist.axis.Variable(ax.edges[ax.index(0.):], underflow=False, name=f"abs{axis_name}" if rename else axis_name)
     hnew = hist.Hist(*h.axes[:axidx], abs_ax, *h.axes[axidx+1:], storage=h.storage_type())
     
     s = hist.tag.Slicer()

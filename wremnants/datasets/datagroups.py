@@ -69,6 +69,8 @@ class Datagroups(object):
         self.nominalName = "nominal"
         self.globalAction = None
         self.unconstrainedProcesses = []
+        self.fakeName = "Fake"
+        self.dataName = "Data"
 
         if "lowpu" in self.mode:
             from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU as make_datagroups
@@ -204,7 +206,10 @@ class Datagroups(object):
     
     def setGlobalAction(self, action):
         # To be used for applying a selection, rebinning, etc.
-        self.globalAction = action
+        if self.globalAction is None:
+            self.globalAction = action
+        else:
+            self.globalAction = lambda h, old_action=self.globalAction: action(old_action(h))
 
     def setNominalName(self, name):
         self.nominalName = name
@@ -234,8 +239,8 @@ class Datagroups(object):
     ## procName are grouped into datagroups
     ## baseName takes values such as "nominal"
     def setHists(self, baseName, syst, procsToRead=None, label=None, nominalIfMissing=True, 
-                 applySelection=True, forceNonzero=True, preOpMap=None, preOpArgs=None, scaleToNewLumi=1, 
-                 fakerateIntegrationAxes=[], excludeProcs=None, forceToNominal=[], sum_axes=[]):
+                 applySelection=True, fakerateIntegrationAxes=[], forceNonzero=True, preOpMap=None, preOpArgs=None, scaleToNewLumi=1, 
+                 excludeProcs=None, forceToNominal=[], sumFakesPartial=True, sum_axes=[]):
         if not label:
             label = syst if syst else baseName
         # this line is annoying for the theory agnostic, too many processes for signal
@@ -256,11 +261,10 @@ class Datagroups(object):
         # but this would need to assume that fakes effectively had all the single processes in each group as members
         # (usually it will be the case, but it is more difficult to handle in a fully general way and without bugs)
         histForFake = None # to store the data-MC sums used for the fakes, for each syst
-        nameFake = "Fake" # TODO: actual name might/should be configurable
-        if nameFake in procsToRead:
-            procsToReadSort = [x for x in procsToRead if x != nameFake] + [nameFake]
+        if sumFakesPartial and self.fakeName in procsToRead:
+            procsToReadSort = [x for x in procsToRead if x != self.fakeName] + [self.fakeName]
             hasFake = True
-            fakesMembers = [m.name for m in self.groups[nameFake].members]
+            fakesMembers = [m.name for m in self.groups[self.fakeName].members]
             fakesMembersWithSyst = []
             logger.debug(f"Has fake members: {fakesMembers}")
         else:
@@ -284,7 +288,7 @@ class Datagroups(object):
             group.hists[label] = None
 
             for i, member in enumerate(group.members):   
-                if procName == nameFake and member.name in fakesMembersWithSyst:
+                if procName == self.fakeName and member.name in fakesMembersWithSyst:
                     # if we are here this process has been already used to build the fakes when running for other groups
                     continue
                 logger.debug(f"Looking at group member {member.name}")
@@ -292,7 +296,6 @@ class Datagroups(object):
                 if member.name in forceToNominal:
                     read_syst = ""
                     logger.debug(f"Forcing group member {member.name} to read the nominal hist for syst {syst}")
-
                 try:
                     h = self.readHist(baseName, member, procName, read_syst)
                     foundExact = True
@@ -318,6 +321,10 @@ class Datagroups(object):
                     else:
                         logger.debug(f"No operation for member {i}: {member.name}/{procName}")
 
+                if preOpMap and member.name in preOpMap:
+                    logger.debug(f"Applying preOp to {member.name}/{procName} after loading")
+                    h = preOpMap[member.name](h, **preOpArgs)
+
                 if self.gen_axes != None:
                     # integrate over remaining gen axes 
                     logger.debug(f"Integrate over gen axes {self.gen_axes}")
@@ -329,10 +336,6 @@ class Datagroups(object):
                 if h_id == id(h):
                     logger.debug(f"Make explicit copy")
                     h = h.copy()
-
-                if preOpMap and member.name in preOpMap:
-                    logger.debug(f"Applying preOp to {member.name}/{procName} after loading")
-                    h = preOpMap[member.name](h, **preOpArgs)
 
                 if self.globalAction:
                     logger.debug("Applying global action")
@@ -352,33 +355,36 @@ class Datagroups(object):
                     h = hh.scaleHist(h, scale, createNew=False)
 
                 hasPartialSumForFake = False
-                if hasFake and procName != nameFake:
+                if hasFake and procName != self.fakeName:
                     if member.name in fakesMembers:
                         logger.debug("Make partial sums for fakes")
                         if member.name not in fakesMembersWithSyst:
                             fakesMembersWithSyst.append(member.name)
                         hasPartialSumForFake = True
                         # apply the correct scale for fakes
-                        scaleProcForFake = self.groups[nameFake].scale(member)
-                        logger.debug(f"Summing hist {read_syst} for {member.name} to {nameFake} with scale = {scaleProcForFake}")
+                        scaleProcForFake = self.groups[self.fakeName].scale(member)
+                        logger.debug(f"Summing hist {read_syst} for {member.name} to {self.fakeName} with scale = {scaleProcForFake}")
                         hProcForFake = scaleProcForFake * h
                         histForFake = hh.addHists(histForFake, hProcForFake, createNew=False) if histForFake else hProcForFake
                                 
                 # The following must be done when the group is not Fake, or when the previous part for fakes was not done
                 # For fake this essentially happens when the process doesn't have the syst, so that the nominal is used
-                if procName != nameFake or (procName == nameFake and not hasPartialSumForFake):
-                    if procName == nameFake:
-                        logger.debug(f"Summing nominal hist instead of {syst} to {nameFake} for {member.name}")
+                if procName != self.fakeName or (procName == self.fakeName and not hasPartialSumForFake):
+                    if procName == self.fakeName:
+                        logger.debug(f"Summing nominal hist instead of {syst} to {self.fakeName} for {member.name}")
                     else:
                         logger.debug(f"Summing {read_syst} to {procName} for {member.name}")
 
                     group.hists[label] = hh.addHists(group.hists[label], h, createNew=False) if group.hists[label] else h
                     logger.debug("Sum done")
 
+            if not nominalIfMissing and group.hists[label] is None:
+                continue
+
             # now sum to fakes the partial sums which where not already done before
             # (group.hists[label] contains only the contribution from nominal histograms).
             # Then continue with the rest of the code as usual
-            if hasFake and procName == nameFake:
+            if hasFake and procName == self.fakeName:
                 if histForFake is not None:
                     group.hists[label] = hh.addHists(group.hists[label], histForFake, createNew=False) if group.hists[label] else histForFake
 
@@ -392,7 +398,7 @@ class Datagroups(object):
                     logger.warning(f"Selection requested for process {procName} but applySelection=False, thus it will be ignored")
                 elif label in group.hists.keys():
                     logger.debug(f"Apply selection for process {procName}")
-                    if procName == nameFake and "fakerate_integration_axes" not in group.selectOpArgs and len(fakerateIntegrationAxes):
+                    if procName == self.fakeName and "fakerate_integration_axes" not in group.selectOpArgs and len(fakerateIntegrationAxes):
                         opArgs = {**group.selectOpArgs, "fakerate_integration_axes": fakerateIntegrationAxes}
                     else:
                         opArgs = group.selectOpArgs
@@ -400,7 +406,7 @@ class Datagroups(object):
                         group.hists[label] = group.selectOp(group.hists[label], **opArgs)
 
         # Avoid situation where the nominal is read for all processes for this syst
-        if not foundExact:
+        if nominalIfMissing and not foundExact:
             raise ValueError(f"Did not find systematic {syst} for any processes!")
 
     #TODO: Better organize to avoid duplicated code
@@ -441,8 +447,9 @@ class Datagroups(object):
 
     def loadHistsForDatagroups(
         self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="",
-        nominalIfMissing=True, fakerateIntegrationAxes=[], applySelection=True, forceNonzero=True, pseudodata=False,
-        preOpMap={}, preOpArgs={}, scaleToNewLumi=1, forceToNominal=[], sum_axes=[],
+        preOpMap={}, preOpArgs={}, scaleToNewLumi=1, forceToNominal=[], 
+        nominalIfMissing=True, applySelection=True, fakerateIntegrationAxes=[], forceNonzero=True, pseudodata=False,
+        preOpMap={}, preOpArgs={}, scaleToNewLumi=1, forceToNominal=[], sumFakesPartial=True, sum_axes=[],
     ):
         logger.debug("Calling loadHistsForDatagroups()")
         logger.debug(f"The basename and syst is: {baseName}, {syst}")
@@ -455,7 +462,7 @@ class Datagroups(object):
                           scaleToNewLumi=scaleToNewLumi, 
                           excludeProcs=excluded_procs, forceToNominal=forceToNominal,
                           fakerateIntegrationAxes=fakerateIntegrationAxes,
-                          sum_axes=sum_axes)
+                          sum_axes=sum_axes, sumFakesPartial=sumFakesPartial)
 
     def getDatagroups(self):
         return self.groups
@@ -574,6 +581,16 @@ class Datagroups(object):
 
         logger.debug(f"Gen axes are now {self.gen_axes}")
 
+    def getGenBinIndices(self, h):
+        gen_bins = []
+        for gen_axis in self.gen_axes:
+            if gen_axis not in h.axes.name:
+                raise RuntimeError(f"Gen axis '{gen_axis}' not found in histogram axes '{h.axes.name}'!")
+
+            gen_bin_edges = h.axes[gen_axis].edges
+            gen_bins.append(range(len(gen_bin_edges)-1))
+        return gen_bins
+
     def defineSignalBinsUnfolding(self, group_name, new_name=None, member_filter=None):
         if group_name not in self.groups.keys():
             raise RuntimeError(f"Base group {group_name} not found in groups {self.groups.keys()}!")
@@ -584,15 +601,9 @@ class Datagroups(object):
 
         nominal_hist = self.results[base_members[0].name]["output"]["xnorm"].get()
 
-        gen_bins = []
-        for gen_axis in self.gen_axes:
-            if gen_axis not in nominal_hist.axes.name:
-                raise RuntimeError(f"Gen axis '{gen_axis}' not found in histogram axes '{nominal_hist.axes.name}'!")
+        gen_bin_indices = self.getGenBinIndices(nominal_hist)
 
-            gen_bin_edges = nominal_hist.axes[gen_axis].edges
-            gen_bins.append(range(len(gen_bin_edges)-1))
-
-        for indices in itertools.product(*gen_bins):
+        for indices in itertools.product(*gen_bin_indices):
 
             proc_name = group_name if new_name is None else new_name
             for idx, var in zip(indices, self.gen_axes):
@@ -607,6 +618,8 @@ class Datagroups(object):
 
     def select_xnorm_groups(self):
         # only keep members and groups where xnorm is defined 
+        if self.fakeName in self.groups:
+            self.deleteGroup(self.fakeName)
         toDel_groups = []
         for g_name, group in self.groups.items():
             toDel_members = []
@@ -617,13 +630,11 @@ class Datagroups(object):
                 if "xnorm" not in self.results[member.name]["output"].keys():
                     logger.debug(f"Member {member.name} has no xnorm and will be deleted")
                     toDel_members.append(member)
-
             if len(toDel_members) == len(group.members):
                 logger.debug(f"All members of group {g_name} have no xnorm and the group will be deleted")
                 toDel_groups.append(g_name)
             else:
                 group.deleteMembers(toDel_members)
-
         self.deleteGroups(toDel_groups)
 
     def make_yields_df(self, histName, procs, action=lambda x: x, norm_proc=None):

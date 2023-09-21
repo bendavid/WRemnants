@@ -99,7 +99,7 @@ def make_datagroups_lowPU(dg, combine=False, excludeGroups=None, filterGroups=No
 
     if dg.mode == "lowpu_w":
         # add all processes to the fake contributions after filtered and excluded groups
-        dg.addGroup("Fake",
+        dg.addGroup(dg.fakeName,
             members = [member for sublist in [v.members for k, v in dg.groups.items() if k != "QCD"] for member in sublist],
             scale = lambda x: 1. if x.is_data else -1,
             label = "Nonprompt",
