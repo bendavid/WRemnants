@@ -114,8 +114,6 @@ class CardTool(object):
             logger.warning("Failed to set sum_axes!")
             logger.warning(f"Error message was {str(e)}")
 
-        self.setFakerateAxes(fakerate_integration_axes=axes)
-
     def setFakerateAxes(self, fakerate_axes=["pt", "eta", "charge"]):
         self.fakerateAxes = fakerate_axes
         
@@ -263,7 +261,7 @@ class CardTool(object):
                       scale=1, processes=None, group=None, noi=False, noConstraint=False, noProfile=False,
                       action=None, doActionBeforeMirror=False, actionArgs={}, actionMap={},
                       systNameReplace=[], systNamePrepend=None, groupFilter=None, passToFakes=False,
-                      rename=None, splitGroup={}, decorrelateByBin={}, formatWithValue=False, fromNomina=False,
+                      rename=None, splitGroup={}, decorrelateByBin={}, formatWithValue=False, fromNominal=False,
                       ):
         # note: setting Up=Down seems to be pathological for the moment, it might be due to the interpolation in the fit
         # for now better not to use the options, although it might be useful to keep it implemented
@@ -720,8 +718,6 @@ class CardTool(object):
             scaleToNewLumi=self.lumiScale, 
             forceNonzero=forceNonzero,
             sum_axes=self.sum_axes,
-            fakerateIntegrationAxes=self.fakerateIntegrationAxes)
-        if simultaneousABCD and not xnorm:
             sumFakesPartial=not self.ABCD,
             fakerateIntegrationAxes=self.getFakerateIntegrationAxes())
         if self.ABCD and not self.xnorm:

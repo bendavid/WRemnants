@@ -94,14 +94,15 @@ def setup(args, inputFile, fitvar, xnorm=False):
     logger.debug(f"Filtering these groups of processes: {args.filterProcGroups}")
     logger.debug(f"Excluding these groups of processes: {args.excludeProcGroups}")
 
-    datagroups = Datagroups(args.inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm and not args.simultaneousABCD)
+    datagroups = Datagroups(inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm and not args.ABCD)
     wmass = datagroups.mode == "wmass"
     wlike = datagroups.mode == "wmass"
     lowPU = "lowpu" in datagroups.mode
     # Detect lowpu dilepton
     dilepton = "dilepton" in datagroups.mode or any(x in ["ptll", "mll"] for x in args.fitvar)
 
-    cardTool = CardTool.CardTool(xnorm=xnorm)
+    # Start to create the CardTool object, customizing everything
+    cardTool = CardTool.CardTool(xnorm=xnorm, ABCD=wmass and args.ABCD)
     cardTool.setDatagroups(datagroups)
     cardTool.addProcessGroup("single_v_samples", lambda x: x[0] in ["W", "Z"] and x[1] not in ["W","Z"])
     if wmass:
@@ -173,15 +174,12 @@ def setup(args, inputFile, fitvar, xnorm=False):
     if "BkgWmunu" in args.excludeProcGroups:
         datagroups.deleteGroup("Wmunu") # remove out of acceptance signal
 
-    # Start to create the CardTool object, customizing everything
-    cardTool = CardTool.CardTool(xnorm=xnorm, ABCD=wmass and args.ABCD)
     cardTool.setDatagroups(datagroups)
     if args.qcdProcessName:
         cardTool.setFakeName(args.qcdProcessName)
     logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
     if args.absolutePathInCard:
         cardTool.setAbsolutePathShapeInCard()
-    cardTool.setProjectionAxes(fitvar)
     cardTool.setFakerateAxes(args.fakerateAxes)
     if wmass and args.ABCD:
         # In case of ABCD we need to have different fake processes fir e and mu to have uncorrelated uncertainties
@@ -221,7 +219,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     else:
         cardTool.setHistName(args.baseName)
         cardTool.setNominalName(args.baseName)
-        cardTool.setFitAxes(fitvars)
+        cardTool.setFitAxes(fitvar)
         
     # define sumGroups for integrated cross section
     if args.unfolding:
@@ -650,9 +648,9 @@ def outputFolderName(outfolder, card_tool, doStatOnly, postfix):
     return f"{outfolder}/{'_'.join(to_join)}/"
 
 def main(args,xnorm=False):
-    cardTool = setup(args, xnorm)
+    cardTool = setup(args, args.inputFile[0], args.fitvar, xnorm)
     cardTool.setOutput(outputFolderName(args.outfolder, cardTool, args.doStatOnly, args.postfix), analysis_label(cardTool))
-    cardTool.writeOutput(args=args, forceNonzero=not args.unfolding, check_systs=not args.unfolding, simultaneousABCD=args.simultaneousABCD, xnorm=xnorm)
+    cardTool.writeOutput(args=args, forceNonzero=not args.unfolding, check_systs=not args.unfolding, ABCD=args.ABCD, xnorm=xnorm)
     return
 
 if __name__ == "__main__":

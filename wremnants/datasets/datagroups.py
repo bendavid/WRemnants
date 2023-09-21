@@ -447,7 +447,6 @@ class Datagroups(object):
 
     def loadHistsForDatagroups(
         self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="",
-        preOpMap={}, preOpArgs={}, scaleToNewLumi=1, forceToNominal=[], 
         nominalIfMissing=True, applySelection=True, fakerateIntegrationAxes=[], forceNonzero=True, pseudodata=False,
         preOpMap={}, preOpArgs={}, scaleToNewLumi=1, forceToNominal=[], sumFakesPartial=True, sum_axes=[],
     ):
@@ -457,11 +456,12 @@ class Datagroups(object):
         if self.rtfile and self.combine:
             self.setHistsCombine(baseName, syst, channel, procsToRead, excluded_procs, label)
         else:
-            self.setHists(baseName, syst, procsToRead, label, nominalIfMissing, applySelection,
-                          forceNonzero, preOpMap, preOpArgs,
-                          scaleToNewLumi=scaleToNewLumi, 
+            self.setHists(baseName, syst, 
+                          procsToRead=procsToRead, label=label, nominalIfMissing=nominalIfMissing, 
+                          applySelection=applySelection, fakerateIntegrationAxes=fakerateIntegrationAxes, 
+                          forceNonzero=forceNonzero, preOpMap=preOpMap, preOpArgs=preOpArgs, 
+                          scaleToNewLumi=scaleToNewLumi,
                           excludeProcs=excluded_procs, forceToNominal=forceToNominal,
-                          fakerateIntegrationAxes=fakerateIntegrationAxes,
                           sum_axes=sum_axes, sumFakesPartial=sumFakesPartial)
 
     def getDatagroups(self):

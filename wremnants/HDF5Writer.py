@@ -101,7 +101,7 @@ class HDF5Writer(object):
             logger.info(f"Now in channel {chan} masked={masked}")
 
             dg = chanInfo.datagroups
-            axes = chanInfo.project[:]
+            axes = chanInfo.fit_axes[:]
 
             if chanInfo.xnorm:
                 dg.globalAction = None # reset global action in case of rebinning or such
