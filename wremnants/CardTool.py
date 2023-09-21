@@ -243,6 +243,7 @@ class CardTool(object):
                       systNameReplace=[], systNamePrepend=None, groupFilter=None, passToFakes=False,
                       rename=None, splitGroup={}, decorrelateByBin={}, noiGroup=False,
                       sumNominal=False,
+                      scaleHist=None,
                       customizeNuisance={},
                       ):
         # note: setting Up=Down seems to be pathological for the moment, it might be due to the interpolation in the fit
@@ -289,6 +290,7 @@ class CardTool(object):
                 "splitGroup" : splitGroup if len(splitGroup) else {group : ".*"}, # dummy dictionary if splitGroup=None, to allow for uniform treatment
                 "scale" : scale,
                 "sumNominal" : sumNominal,
+                "scaleHist": scaleHist,
                 "customizeNuisance" : customizeNuisance,
                 "mirror" : mirror,
                 "mirrorDownVarEqualToUp" : mirrorDownVarEqualToUp,
@@ -581,6 +583,11 @@ class CardTool(object):
             systInfo = self.systematics[syst]
             procDict = self.datagroups.getDatagroups()
             hnom = procDict[proc].hists[self.nominalName]
+            #logger.debug(f"{proc}: {syst}: {h.axes.name}")
+            if systInfo["scaleHist"] != None:
+                scaleFactor = systInfo["scaleHist"]
+                logger.warning(f"Scaling yields of histogram for syst = {syst} by {scaleFactor}")
+                h = hh.scaleHist(h, scaleFactor, createNew=True)
             if systInfo["sumNominal"]:
                 logger.warning(f"Adding histogram for syst = {syst} to nominal to define actual variation")
                 h = hh.addHists(h, hnom, allowBroadcast=True, createNew=True, scale1=None, scale2=None)

@@ -383,7 +383,7 @@ def build_graph(df, dataset):
 
     ## TODO: next part should be improved, there is quite a lot of duplication of what could happen later in the loop
     ## FIXME: should be isW, to include Wtaunu
-    if isWmunu and args.theoryAgnostic:
+    if isWmunu and args.theoryAgnostic and not hasattr(dataset, "out_of_acceptance")::
         df = theoryAgnostic_tools.define_helicity_weights(df)
         if args.poiAsNoi:
             theoryAgnosticHistName = Datagroups.histName("nominal", syst="yieldsTheoryAgnostic")
@@ -392,9 +392,6 @@ def build_graph(df, dataset):
         else:
             results.append(df.HistoBoost("nominal", axes, [*cols, "nominal_weight_helicity"], tensor_axes=[axis_helicity]))
             setTheoryAgnosticGraph(df, results, dataset, reco_sel_GF, era, axes, cols, args)
-            if hasattr(dataset, "out_of_acceptance"):
-                # Rename dataset to not overwrite the original one
-                dataset.name = "Bkg"+dataset.name
             # End graph here only for standard theory agnostic analysis, otherwise use same loop as traditional analysis
             return results, weightsum
         
