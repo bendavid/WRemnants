@@ -209,7 +209,7 @@ def pdf_info_map(dataset, pdfset):
 
     # Just ignore PDF variations for non W/Z samples
     if not (dataset[0] in ["W", "Z"] and dataset[1] not in ["W", "Z"]) \
-        "horace" in dataset or (pdfset != "nnpdf31" and dataset in only_central_pdf_datasets) \
+        or "horace" in dataset or (pdfset != "nnpdf31" and dataset in only_central_pdf_datasets) \
         or pdfset not in infoMap:
         raise ValueError(f"Skipping PDF {pdfset} for dataset {dataset}")
     return infoMap[pdfset]

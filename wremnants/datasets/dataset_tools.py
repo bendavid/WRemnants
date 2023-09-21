@@ -128,7 +128,7 @@ def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, na
 
     if mode == "gen":
         dataDict.update(genDataDict)     
-    elif "lowpu" in mode:
+    elif mode and "lowpu" in mode:
         dataDict = dataDictLowPU
 
     narf_datasets = []
