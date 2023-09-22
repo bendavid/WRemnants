@@ -250,8 +250,8 @@ jobs:
       - name: lowpu w mu analysis
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_lowPU.py -o $WREMNANTS_OUTDIR -j $NTHREADS --forceDefaultName --noRecoil --unfolding
 
-      - name: lowpu w mu plot ptll
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --hists ptll -p $WEB_DIR -f $PLOT_DIR/lowPU -a mu $HIST_FILE_MU variation --varName nominal_uncorr --varLabel MiNNLO --colors red
+      - name: lowpu w mu plot ptW
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --hists ptW -p $WEB_DIR -f $PLOT_DIR/lowPU -a mu $HIST_FILE_MU variation --varName nominal_uncorr --varLabel MiNNLO --colors red
 
       - name: lowpu w mu plot pt
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --baseName lep_pt --hists pt -a mu -p $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_MU
@@ -266,13 +266,13 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombine.py -i $HIST_FILE_MU --baseName transverseMass --fitvar mt -o $WREMNANTS_OUTDIR
 
       - name: lowpu w mu plot response matrix
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/response_matrix.py --axes ptll-ptVGen --procFilters Wmunu -p mu -o $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_MU
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/response_matrix.py --axes ptW-ptVGen --procFilters Wmunu -p mu -o $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_MU
 
       - name: lowpu w e analysis
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_lowPU.py -o $WREMNANTS_OUTDIR -j $NTHREADS --forceDefaultName --unfolding --noRecoil --flavor e
 
-      - name: lowpu w e plot ptll
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --hists ptll -p $WEB_DIR -f $PLOT_DIR/lowPU -a e $HIST_FILE_E variation --varName nominal_uncorr --varLabel MiNNLO --colors red
+      - name: lowpu w e plot ptW
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --hists ptW -p $WEB_DIR -f $PLOT_DIR/lowPU -a e $HIST_FILE_E variation --varName nominal_uncorr --varLabel MiNNLO --colors red
 
       - name: lowpu w e plot pt
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --baseName lep_pt --hists pt -a e -p $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_E
@@ -287,7 +287,7 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombine.py -i $HIST_FILE_E --baseName transverseMass --fitvar mt -o $WREMNANTS_OUTDIR
 
       - name: lowpu w e plot response matrix
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/response_matrix.py --axes ptll-ptVGen --procFilters Wenu -p e -o $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_E
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/response_matrix.py --axes ptW-ptVGen --procFilters Wenu -p e -o $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_E
 
       - name: aggregate combine inputs
         run: |

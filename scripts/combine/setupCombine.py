@@ -98,7 +98,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     wlike = datagroups.mode == "wmass"
     lowPU = "lowpu" in datagroups.mode
     # Detect lowpu dilepton
-    dilepton = "dilepton" in datagroups.mode or any(x in ["ptll", "mll"] for x in args.fitvar)
+    dilepton = "dilepton" in datagroups.mode or any(x in ["ptll", "mll"] for x in fitvar)
 
     # Start to create the CardTool object, customizing everything
     cardTool = CardTool.CardTool(xnorm=xnorm, ABCD=wmass and args.ABCD)
@@ -637,7 +637,7 @@ def outputFolderName(outfolder, card_tool, doStatOnly, postfix):
     return f"{outfolder}/{'_'.join(to_join)}/"
 
 def main(args,xnorm=False):
-    cardTool = setup(args, args.inputFile[0], args.fitvar, xnorm)
+    cardTool = setup(args, args.inputFile[0], args.fitvar[0].split("-"), xnorm)
     cardTool.setOutput(outputFolderName(args.outfolder, cardTool, args.doStatOnly, args.postfix), analysis_label(cardTool))
     cardTool.writeOutput(args=args, forceNonzero=not args.unfolding, check_systs=not args.unfolding, ABCD=args.ABCD, xnorm=xnorm)
     return
