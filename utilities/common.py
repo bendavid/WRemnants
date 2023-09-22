@@ -5,17 +5,20 @@ import numpy as np
 import os
 from utilities import logging
 from enum import Enum
+import re
 
 wremnants_dir = f"{pathlib.Path(__file__).parent}/../wremnants"
 data_dir =  f"{pathlib.Path(__file__).parent}/../wremnants-data/data/"
 
 wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP", 
-    'WplusToMuNu_horace-lo-photos', 'WplusToMuNu_horace-qed', 'WplusToMuNu_horace-nlo', 
-    'WminusToMuNu_horace-lo-photos', 'WminusToMuNu_horace-qed', 'WminusToMuNu_horace-nlo',
-    'WplusToMuNu_horace-lo', 'WminusToMuNu_horace-lo',
+    'WplusToMuNu_horace-lo-photos', 'WplusToMuNu_horace-nlo', 'WplusToMuNu_horace-lo',
+    'WminusToMuNu_horace-lo-photos', 'WminusToMuNu_horace-nlo', 'WminusToMuNu_horace-lo',
     'WplusToMuNu_winhac-lo-photos', 'WplusToMuNu_winhac-lo', 'WplusToMuNu_winhac-nlo', 
     'WminusToMuNu_winhac-lo-photos', 'WminusToMuNu_winhac-lo', 'WminusToMuNu_winhac-nlo']
-zprocs = ["ZmumuPostVFP", "ZtautauPostVFP", "ZmumuMiNLO", "ZmumuNNLOPS", 'ZToMuMu_horace-lo-photos', 'ZToMuMu_horace-qed', 'ZToMuMu_horace-nlo', 'ZToMuMu_horace-lo']
+zprocs = ["ZmumuPostVFP", "ZtautauPostVFP", "ZmumuMiNLO", "ZmumuNNLOPS", 
+    'ZToMuMu_horace-lo-photos', 'ZToMuMu_horace-nlo', 'ZToMuMu_horace-lo', 'ZToMuMu_horace-new',
+    'ZToMuMu_horace-alpha-fsr-off-isr-off', 'ZToMuMu_horace-alpha-old-fsr-off-isr-off', 'ZToMuMu_horace-alpha-old-fsr-off-isr-pythia'
+    ]
 vprocs = wprocs+zprocs
 zprocs_recoil = ["ZmumuPostVFP"]
 wprocs_recoil = ["WplusmunuPostVFP", "WminusmunuPostVFP"]
@@ -112,7 +115,6 @@ def set_parser_default(parser, argument, newDefault):
     else:
         logger.warning(f" Parser argument {argument} not found!")
     return parser
-
 
 def common_parser(for_reco_highPU=False):
 
@@ -228,6 +230,19 @@ def common_parser(for_reco_highPU=False):
         
     return parser,initargs
 
+
+def natural_sort_key(s):
+    # Sort string in a number aware way by plitting the string into alphabetic and numeric parts
+    parts = re.split(r'(\d+)', s)
+    return [int(part) if part.isdigit() else part.lower() for part in parts]
+
+def natural_sort(strings):
+    return sorted(strings, key=natural_sort_key)
+    
+def natural_sort_dict(dictionary):
+    sorted_keys = natural_sort(dictionary.keys())
+    sorted_dict = {key: dictionary[key] for key in sorted_keys}
+    return sorted_dict
 '''
 INPUT -------------------------------------------------------------------------
 |* (str) string: the string to be converted to list
