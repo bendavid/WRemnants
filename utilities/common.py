@@ -5,17 +5,20 @@ import numpy as np
 import os
 from utilities import logging
 from enum import Enum
+import re
 
 wremnants_dir = f"{pathlib.Path(__file__).parent}/../wremnants"
 data_dir =  f"{pathlib.Path(__file__).parent}/../wremnants-data/data/"
 
 wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP", 
-    'WplusToMuNu_horace-lo-photos', 'WplusToMuNu_horace-qed', 'WplusToMuNu_horace-nlo', 
-    'WminusToMuNu_horace-lo-photos', 'WminusToMuNu_horace-qed', 'WminusToMuNu_horace-nlo',
-    'WplusToMuNu_horace-lo', 'WminusToMuNu_horace-lo',
+    'WplusToMuNu_horace-lo-photos', 'WplusToMuNu_horace-nlo', 'WplusToMuNu_horace-lo',
+    'WminusToMuNu_horace-lo-photos', 'WminusToMuNu_horace-nlo', 'WminusToMuNu_horace-lo',
     'WplusToMuNu_winhac-lo-photos', 'WplusToMuNu_winhac-lo', 'WplusToMuNu_winhac-nlo', 
     'WminusToMuNu_winhac-lo-photos', 'WminusToMuNu_winhac-lo', 'WminusToMuNu_winhac-nlo']
-zprocs = ["ZmumuPostVFP", "ZtautauPostVFP", "ZmumuMiNLO", "ZmumuNNLOPS", 'ZToMuMu_horace-lo-photos', 'ZToMuMu_horace-qed', 'ZToMuMu_horace-nlo', 'ZToMuMu_horace-lo']
+zprocs = ["ZmumuPostVFP", "ZtautauPostVFP", "ZmumuMiNLO", "ZmumuNNLOPS", 
+    'ZToMuMu_horace-lo-photos', 'ZToMuMu_horace-nlo', 'ZToMuMu_horace-lo', 'ZToMuMu_horace-new',
+    'ZToMuMu_horace-alpha-fsr-off-isr-off', 'ZToMuMu_horace-alpha-old-fsr-off-isr-off', 'ZToMuMu_horace-alpha-old-fsr-off-isr-pythia'
+    ]
 vprocs = wprocs+zprocs
 zprocs_recoil = ["ZmumuPostVFP"]
 wprocs_recoil = ["WplusmunuPostVFP", "WminusmunuPostVFP"]
@@ -113,7 +116,6 @@ def set_parser_default(parser, argument, newDefault):
         logger.warning(f" Parser argument {argument} not found!")
     return parser
 
-
 def common_parser(for_reco_highPU=False):
 
     parser = argparse.ArgumentParser()
@@ -192,7 +194,7 @@ def common_parser(for_reco_highPU=False):
         parser.add_argument("--muonCorrEtaBins", default=1, type=int, help="Number of eta bins for dummy muon momentum calibration uncertainty")
         parser.add_argument("--excludeFlow", action='store_true', help="Excludes underflow and overflow bins in main axes")
         parser.add_argument("--biasCalibration", type=str, default=None, choices=["binned","parameterized", "A", "M"], help="Adjust central value by calibration bias hist for simulation")
-        parser.add_argument("--smearing", action='store_true', help="Smear pT such that resolution matches data") #TODO change to --no-smearing once smearing is final
+        parser.add_argument("--noSmearing", action='store_true', help="Disable resolution corrections")
         # options for efficiencies
         parser.add_argument("--trackerMuons", action='store_true', help="Use tracker muons instead of global muons (need appropriate scale factors too). This is obsolete")
         parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers)")
@@ -228,6 +230,19 @@ def common_parser(for_reco_highPU=False):
         
     return parser,initargs
 
+
+def natural_sort_key(s):
+    # Sort string in a number aware way by plitting the string into alphabetic and numeric parts
+    parts = re.split(r'(\d+)', s)
+    return [int(part) if part.isdigit() else part.lower() for part in parts]
+
+def natural_sort(strings):
+    return sorted(strings, key=natural_sort_key)
+    
+def natural_sort_dict(dictionary):
+    sorted_keys = natural_sort(dictionary.keys())
+    sorted_dict = {key: dictionary[key] for key in sorted_keys}
+    return sorted_dict
 '''
 INPUT -------------------------------------------------------------------------
 |* (str) string: the string to be converted to list

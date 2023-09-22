@@ -39,13 +39,16 @@ if args.poiAsNoi and not args.theoryAgnostic:
     message = "Option --poiAsNoi currently requires --theoryAgnostic"
     logger.warning(message)
     raise NotImplementedError(message)
-    
-if args.theoryAgnostic:
-    # temporary, to ensure running with stat only until systematics are all implemented
-    if not args.poiAsNoi:
-        logger.warning("Running theory agnostic with only nominal and mass weight histograms for now.")
-        parser = common.set_parser_default(parser, "onlyMainHistograms", True)
-    parser = common.set_parser_default(parser, "genVars", ["ptVgenSig", "absYVgenSig", "helicity"]) # TODO check sorting
+
+if args.theoryAgnostic or args.unfolding:
+    parser = common.set_parser_default(parser, "excludeFlow", True)
+    if args.theoryAgnostic:
+        parser = common.set_parser_default(parser, "genVars", ["ptVgenSig", "absYVgenSig", "helicity"]) # TODO check sorting
+        # temporary, to ensure running with stat only for original theory agnostic until systematics are all implemented
+        if not args.poiAsNoi:
+            logger.warning("Running theory agnostic with only nominal and mass weight histograms for now.")
+            parser = common.set_parser_default(parser, "onlyMainHistograms", True)
+        
     args = parser.parse_args()
     
 thisAnalysis = ROOT.wrem.AnalysisType.Wmass
@@ -63,11 +66,11 @@ mtw_min = 40
 template_neta = int(args.eta[0])
 template_mineta = args.eta[1]
 template_maxeta = args.eta[2]
-print(f"Eta binning: {template_neta} bins from {template_mineta} to {template_maxeta}")
+logger.info(f"Eta binning: {template_neta} bins from {template_mineta} to {template_maxeta}")
 template_npt = int(args.pt[0])
 template_minpt = args.pt[1]
 template_maxpt = args.pt[2]
-print(f"Pt binning: {template_npt} bins from {template_minpt} to {template_maxpt}")
+logger.info(f"Pt binning: {template_npt} bins from {template_minpt} to {template_maxpt}")
 
 # standard regular axes
 axis_eta = hist.axis.Regular(template_neta, template_mineta, template_maxeta, name = "eta", overflow=False, underflow=False)
@@ -152,7 +155,7 @@ z_non_closure_parametrized_helper, z_non_closure_binned_helper = muon_calibratio
 
 mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = muon_calibration.make_muon_calibration_helpers(args)
 
-smearing_helper = muon_calibration.make_muon_smearing_helpers() if args.smearing else None
+smearing_helper, smearing_uncertainty_helper = (None, None) if args.noSmearing else muon_calibration.make_muon_smearing_helpers()
 
 bias_helper = muon_calibration.make_muon_bias_helpers(args) if args.biasCalibration else None
 
@@ -450,7 +453,7 @@ def build_graph(df, dataset):
             # nuisances from the muon momemtum scale calibration 
             if (args.muonCorrData in ["massfit", "lbl_massfit"]):
                 if diff_weights_helper:
-                    df = df.Define(f'{reco_sel_GF}_dweightdqoprs', diff_weights_helper,
+                    df = df.Define(f'{reco_sel_GF}_response_weight', diff_weights_helper,
                         [
                             f"{reco_sel_GF}_recoPt",
                             f"{reco_sel_GF}_recoEta",
@@ -472,6 +475,7 @@ def build_graph(df, dataset):
                     args, df, axes, results, cols, cols_gen_smeared,
                     z_non_closure_parametrized_helper, z_non_closure_binned_helper, reco_sel_GF
                 )
+                df = muon_calibration.add_resolution_uncertainty(df, axes, results, cols, smearing_uncertainty_helper, reco_sel_GF)
                 if args.validationHists:
                     df = muon_validation.make_hists_for_muon_scale_var_weights(
                         df, axes, results, cols, cols_gen_smeared

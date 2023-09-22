@@ -92,8 +92,8 @@ nominal_axes = [
 nominal_cols = ["lep_pt", "lep_eta", "lep_charge", "ptll", "passIso",  "passMT"]
 
 # mt final cards/fitting
-axis_mT = hist.axis.Variable([0] + list(range(40, 110, 1)) + [110, 112, 114, 116, 118, 120, 125, 130, 140, 160, 180, 200], name = "mt",underflow=False, overflow=True)
-axis_mT = hist.axis.Regular(100, 0, 200, name = "mt", underflow=False)
+axis_mT = hist.axis.Variable([0] + list(range(40, 100, 1)) + [100, 102, 104, 106, 108, 112, 116, 120, 130, 150, 200], name = "mt",underflow=False, overflow=True)
+# axis_mT = hist.axis.Regular(100, 0, 200, name = "mt", underflow=False)
 
 axes_mT = [axis_fakerate_pt, axis_fakerate_eta, axis_charge, axis_mT, axis_passIso]
 cols_mT = ["lep_pt", "lep_eta", "lep_charge", "transverseMass",  "passIso"]
