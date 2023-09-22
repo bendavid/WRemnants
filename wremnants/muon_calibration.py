@@ -11,6 +11,8 @@ import warnings
 from functools import reduce
 import narf.tfliteutils
 import time
+import lz4.frame
+import pickle
 
 logger = logging.child_logger(__name__)
 
@@ -168,23 +170,52 @@ def make_muon_bias_helpers(args):
 
     return helper
 
-def make_muon_smearing_helpers(muonCorrMC="idealMC_lbltruth"):
+def make_muon_smearing_helpers(filename = f"{data_dir}/calibration/smearingrel_smooth.pkl.lz4",
+                               filenamevar = f"{data_dir}/calibration/smearing_variations_smooth.pkl.lz4"):
     # this helper smears muon pT to match the resolution in data
 
-    if muonCorrMC == "idealMC_lbltruth":
-        filename = "smearing_LBL"
-    elif muonCorrMC == "idealMC_massfit":
-        filename = "smearing"
-        logger.warning("You are using an outdated smearing file!")
-    else:
-        raise NotImplementedError(f"Did not find any smearing file for muon momentum scale correction {args.muonCorrMC}!")
+    with lz4.frame.open(filename, "rb") as fin:
+        smearingrel_smooth = pickle.load(fin)
 
-    rfile = ROOT.TFile(f"{data_dir}/calibration/{filename}.root","READ")
-    r2d = rfile.Get("smearing")
+    smearingrel_smooth_boost = narf.hist_to_pyroot_boost(smearingrel_smooth)
 
-    helper = ROOT.wrem.SmearingHelper(ROOT.GetThreadPoolSize(), ROOT.std.move(r2d))
+    helper = ROOT.wrem.SmearingHelper[type(smearingrel_smooth_boost)](ROOT.std.move(smearingrel_smooth_boost))
 
-    return helper
+    with lz4.frame.open(filenamevar, "rb") as fin:
+        smearing_variations = pickle.load(fin)
+
+    neig = smearing_variations.axes[-1].size
+    smearing_variations_boost = narf.hist_to_pyroot_boost(smearing_variations, tensor_rank = 1)
+
+    helper_var = ROOT.wrem.SmearingUncertaintyHelper[type(smearing_variations_boost), neig](ROOT.std.move(smearing_variations_boost))
+
+    helper_var.tensor_axes = [smearing_variations.axes[-1]]
+
+    return helper, helper_var
+
+def add_resolution_uncertainty(df, axes, results, nominal_cols, smearing_uncertainty_helper, reco_sel_GF):
+
+    if smearing_uncertainty_helper is None:
+        return df
+
+    df = df.Define("muonResolutionSyst_weights", smearing_uncertainty_helper,
+        [
+            f"{reco_sel_GF}_recoPt",
+            f"{reco_sel_GF}_recoEta",
+            f"{reco_sel_GF}_response_weight",
+            "nominal_weight"
+        ]
+    )
+
+    muonResolutionSyst_responseWeights = df.HistoBoost(
+            "muonResolutionSyst_responseWeights", axes,
+            [*nominal_cols, "muonResolutionSyst_weights"],
+            tensor_axes = smearing_uncertainty_helper.tensor_axes, storage=hist.storage.Double()
+        )
+    results.append(muonResolutionSyst_responseWeights)
+
+    return df
+
 
 def make_muon_calibration_helper_single(filename=data_dir+"/calibration/correctionResults_v718_idealgeom_gensim.root"):
 
@@ -450,7 +481,7 @@ def define_corrected_muons(df, cvh_helper, jpsi_helper, args, dataset, smearing_
 
     # Muon momentum scale resolution
     if not dataset.is_data and smearing_helper:
-        df = df.Define("Muon_smearedPt", smearing_helper, ["rdfslot_", muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta")])
+        df = df.Define("Muon_smearedPt", smearing_helper, ["run", "luminosityBlock", "event", muon_var_name(muon_pt, "pt"), muon_var_name(muon, "eta")])
         muon_pt = "Muon_smeared"
 
     # Bias corrections from nonclosure
@@ -677,7 +708,7 @@ def add_jpsi_crctn_stats_unc_hists(
                 f"{reco_sel_GF}_genPt",
                 f"{reco_sel_GF}_genEta",
                 f"{reco_sel_GF}_genCharge",
-                f"{reco_sel_GF}_dweightdqoprs",
+                f"{reco_sel_GF}_response_weight",
                 "nominal_weight"
             ]
         )
@@ -752,7 +783,7 @@ def add_jpsi_crctn_Z_non_closure_hists(
             f"{reco_sel_GF}_genPt",
             f"{reco_sel_GF}_genEta",
             f"{reco_sel_GF}_genCharge",
-            f"{reco_sel_GF}_dweightdqoprs"
+            f"{reco_sel_GF}_response_weight"
         ]
         nominal_cols_non_closure = nominal_cols
     else:
