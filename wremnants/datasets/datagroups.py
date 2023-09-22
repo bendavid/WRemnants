@@ -587,8 +587,7 @@ class Datagroups(object):
             if gen_axis not in h.axes.name:
                 raise RuntimeError(f"Gen axis '{gen_axis}' not found in histogram axes '{h.axes.name}'!")
 
-            gen_bin_edges = h.axes[gen_axis].edges
-            gen_bins.append(range(len(gen_bin_edges)-1))
+            gen_bins.append(range(h.axes[gen_axis].size))
         return gen_bins
 
     def defineSignalBinsUnfolding(self, group_name, new_name=None, member_filter=None):

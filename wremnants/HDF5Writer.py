@@ -249,12 +249,10 @@ class HDF5Writer(object):
                     continue
 
                 systName = systKey if not syst["name"] else syst["name"]
-                if syst["fromNominal"]:
-                    forceToNominal = dg.getProcNames()
-                else:
-                    # Needed to avoid always reading the variation for the fakes, even for procs not specified
-                    forceToNominal=[x for x in dg.getProcNames() if x not in 
-                        dg.getProcNames([p for g in procs_syst for p in chanInfo.expandProcesses(g) if p != dg.fakeName])]
+
+                # Needed to avoid always reading the variation for the fakes, even for procs not specified
+                forceToNominal=[x for x in dg.getProcNames() if x not in 
+                    dg.getProcNames([p for g in procs_syst for p in chanInfo.expandProcesses(g) if p != dg.fakeName])]
 
                 dg.loadHistsForDatagroups(
                     chanInfo.nominalName, systName, label="syst",

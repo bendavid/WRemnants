@@ -67,7 +67,6 @@ def make_parser(parser=None):
     parser.add_argument("--pseudoDataProcsRegexp", type=str, default=".*", help="Regular expression for processes taken from pseudodata file (all other processes are automatically got from the nominal file). Data is excluded automatically as usual")
     # unfolding/differential/theory agnostic
     parser.add_argument("--unfolding", action='store_true', help="Prepare datacard for unfolding")
-    parser.add_argument("--POIasNP", action='store_true', help="Treat POIs as nuisance parameters")
     parser.add_argument("--genAxes", type=str, default=None, nargs="+", help="Specify which gen axis should be used in unfolding, if 'None', use all (inferred from metadata).")
     parser.add_argument("--theoryAgnostic", action='store_true', help="Prepare datacard for theory agnostic analysis, similar to unfolding but different axis and possibly other differences")
     # utility options to deal with charge when relevant, mainly for theory agnostic but also unfolding
@@ -153,19 +152,18 @@ def setup(args, inputFile, fitvar, xnorm=False):
     elif args.unfolding:
         constrainMass = False if args.theoryAgnostic else True
         datagroups.setGenAxes(args.genAxes)
-        if not args.POIasNP:
-            if wmass:
-                # gen level bins, split by charge
-                if "minus" in args.recoCharge:
-                    datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen0", member_filter=lambda x: x.name.startswith("Wminus"))
-                if "plus" in args.recoCharge:
-                    datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen1", member_filter=lambda x: x.name.startswith("Wplus"))
-                # out of acceptance contribution
-                datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if not m.name.startswith("Bkg")])
-            else:
-                datagroups.defineSignalBinsUnfolding(base_group, "Z", member_filter=lambda x: x.name.startswith(base_group))
-                # out of acceptance contribution
-                datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if not m.name.startswith("Bkg")])
+        if wmass:
+            # gen level bins, split by charge
+            if "minus" in args.recoCharge:
+                datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen0", member_filter=lambda x: x.name.startswith("Wminus"))
+            if "plus" in args.recoCharge:
+                datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen1", member_filter=lambda x: x.name.startswith("Wplus"))
+            # out of acceptance contribution
+            datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if not m.name.startswith("Bkg")])
+        else:
+            datagroups.defineSignalBinsUnfolding(base_group, "Z", member_filter=lambda x: x.name.startswith(base_group))
+            # out of acceptance contribution
+            datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if not m.name.startswith("Bkg")])
 
  
     if args.noHist and args.noStatUncFakes:
@@ -259,15 +257,6 @@ def setup(args, inputFile, fitvar, xnorm=False):
         if wmass and not xnorm:
             logger.info(f"Single V no signal samples: {cardTool.procGroups['single_v_nonsig_samples']}")
         logger.info(f"Signal samples: {cardTool.procGroups['signal_samples']}")
-
-    if args.unfolding and args.POIasNP:
-        if wmass:
-            if "minus" in args.recoCharge:
-                combine_helpers.setSignalBinsAsNuisances(cardTool, base_group, "W_qGen0", member_filter=lambda x: x.name.startswith("Wminus"), passToFakes=passSystToFakes)
-            if "plus" in args.recoCharge:
-                combine_helpers.setSignalBinsAsNuisances(cardTool, base_group, "W_qGen1", member_filter=lambda x: x.name.startswith("Wplus"), passToFakes=passSystToFakes)
-        else:
-            combine_helpers.setSignalBinsAsNuisances(cardTool, base_group, "Z", member_filter=lambda x: x.name.startswith(base_group), passToFakes=passSystToFakes)
 
     constrainedZ = constrainMass and not wmass
     label = 'W' if wmass else 'Z'

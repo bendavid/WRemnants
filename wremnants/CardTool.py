@@ -20,7 +20,7 @@ def notImplemented(operation="Unknown"):
     raise NotImplementedError(f"Required operation '{operation}' is not implemented!")
 
 class CardTool(object):
-    def __init__(self, outpath="./", xnorm=False, ABCD=False, treatPOIasNP=False):
+    def __init__(self, outpath="./", xnorm=False, ABCD=False):
     
         self.skipHist = False # don't produce/write histograms, file with them already exists
         self.outfile = None
@@ -56,7 +56,6 @@ class CardTool(object):
         self.fakerateAxes = ["pt", "eta", "charge"]
         self.xnorm = xnorm
         self.ABCD = ABCD
-        self.treatPOIasNP = treatPOIasNP
         self.absolutePathShapeFileInCard = False
         self.fakerateIntegrationAxes = []
         self.excludeProcessForChannel = {} # can be used to exclue some POI when runnig a specific name (use case, force gen and reco charges to match)
@@ -261,7 +260,7 @@ class CardTool(object):
                       scale=1, processes=None, group=None, noi=False, noConstraint=False, noProfile=False,
                       action=None, doActionBeforeMirror=False, actionArgs={}, actionMap={},
                       systNameReplace=[], systNamePrepend=None, groupFilter=None, passToFakes=False,
-                      rename=None, splitGroup={}, decorrelateByBin={}, formatWithValue=False, fromNominal=False,
+                      rename=None, splitGroup={}, decorrelateByBin={}, formatWithValue=False, 
                       ):
         # note: setting Up=Down seems to be pathological for the moment, it might be due to the interpolation in the fit
         # for now better not to use the options, although it might be useful to keep it implemented
@@ -321,7 +320,6 @@ class CardTool(object):
                 "decorrByBin": decorrelateByBin,
                 "systNamePrepend" : systNamePrepend,
                 "formatWithValue" : formatWithValue,
-                "fromNominal": fromNominal, # load nominal histogram for this systematic
             }
         })
 
@@ -735,12 +733,9 @@ class CardTool(object):
             systMap = self.systematics[syst]
             systName = syst if not systMap["name"] else systMap["name"]
             processes = systMap["processes"]
-            if systMap["fromNominal"]:
-                forceToNominal = self.datagroups.getProcNames()
-            else:
-                # Needed to avoid always reading the variation for the fakes, even for procs not specified
-                forceToNominal=[x for x in self.datagroups.getProcNames() if x not in 
-                    self.datagroups.getProcNames([p for g in processes for p in self.expandProcesses(g) if p != self.getFakeName()])]
+            # Needed to avoid always reading the variation for the fakes, even for procs not specified
+            forceToNominal=[x for x in self.datagroups.getProcNames() if x not in 
+                self.datagroups.getProcNames([p for g in processes for p in self.expandProcesses(g) if p != self.getFakeName()])]
             self.datagroups.loadHistsForDatagroups(
                 self.nominalName, systName, label="syst",
                 procsToRead=processes, 

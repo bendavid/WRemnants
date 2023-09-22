@@ -149,6 +149,8 @@ def plotImpacts(df, pulls=False, POI='Wmass', normalize=False, oneSidedImpacts=F
                     row=1,col=1,
                 )
         impact_range = np.ceil(df['impact' if not oneSidedImpacts else 'absimpact'].max())
+        if include_ref:
+            impact_range = max(impact_range,np.ceil(df['impact_ref' if not oneSidedImpacts else 'absimpact_ref'].max()))
         impact_spacing = min(impact_range, 2 if pulls else 3)
         if impact_range % impact_spacing:
             impact_range += impact_spacing - (impact_range % impact_spacing)
@@ -230,7 +232,7 @@ def plotImpacts(df, pulls=False, POI='Wmass', normalize=False, oneSidedImpacts=F
 
     return fig
 
-def readFitInfoFromFile(rf,filename, group=False, stat=0.0, POI='Wmass', normalize=False):    
+def readFitInfoFromFile(rf, filename, group=False, stat=0.0, POI='Wmass', normalize=False):    
     # TODO: Make add_total configurable
     add_total = group
     impacts, labels, _ = input_tools.readImpacts(rf, group, add_total=add_total, stat=stat, POI=POI, normalize=normalize)
@@ -285,11 +287,15 @@ def readFitInfoFromFile(rf,filename, group=False, stat=0.0, POI='Wmass', normali
     return df
 
 def parseArgs():
+    sort_choices = ["label", "abspull", "constraint", "absimpact"]
+    sort_choices += [
+        *[f"{c}_diff" for c in sort_choices],  # possibility to sort based on largest difference between inputfile and referencefile
+        *[f"{c}_ref" for c in sort_choices] ]  # possibility to sort based on referencefile
+
     parser = argparse.ArgumentParser()
     parser.add_argument("-f", "--inputFile", type=str, required=True, help="fitresults output ROOT/hdf5 file from combinetf")
     parser.add_argument("-r", "--referenceFile", type=str, help="fitresults output ROOT/hdf5 file from combinetf for reference")
-    parser.add_argument("-s", "--sort", default="absimpact", type=str, help="Sort mode for nuisances",
-        choices=["label", "abspull", "constraint", "absimpact", "abspull_diff", "constraint_diff", "absimpact_diff"])
+    parser.add_argument("-s", "--sort", default="absimpact", type=str, help="Sort mode for nuisances", choices=sort_choices)
     parser.add_argument("--stat", default=0.0, type=float, help="Overwrite stat. uncertainty with this value")
     parser.add_argument("-d", "--sortDescending", dest='ascending', action='store_false', help="Sort mode for nuisances")
     parser.add_argument("-m", "--mode", choices=["group", "ungrouped", "both"], default="both", help="Impact mode")
@@ -327,14 +333,12 @@ def producePlots(fitresult, args, POI='Wmass', normalize=False, fitresult_ref=No
     group = args.mode == "group"
     if not (group and args.output_mode == 'output'):
         df = readFitInfoFromFile(fitresult, args.inputFile, False, stat=args.stat/100., POI=POI, normalize=normalize)
-        if fitresult_ref:
-            df_ref = readFitInfoFromFile(fitresult_ref, args.referenceFile, False, stat=args.stat/100., POI=POI, normalize=normalize)
-            df = df.merge(df_ref, how="left", on="label", suffixes=("","_ref"))
     elif group:
         df = readFitInfoFromFile(fitresult, args.inputFile, True, stat=args.stat/100., POI=POI, normalize=normalize)
-        if fitresult_ref:
-            df_ref = readFitInfoFromFile(fitresult_ref, args.referenceFile, True, stat=args.stat/100., POI=POI, normalize=normalize)
-            df = df.merge(df_ref, how="left", on="label", suffixes=("","_ref"))
+
+    if fitresult_ref:
+        df_ref = readFitInfoFromFile(fitresult_ref, args.referenceFile, group, stat=args.stat/100., POI=POI, normalize=normalize)
+        df = df.merge(df_ref, how="left", on="label", suffixes=("","_ref"))
         
     if args.sort:
         if args.sort.endswith("diff"):
@@ -418,8 +422,13 @@ if __name__ == '__main__':
     logger = logging.setup_logger("pullsAndImpacts", 4 if args.debug else 3)
 
     fitresult = input_tools.getFitresult(args.inputFile)
-    
     fitresult_ref = input_tools.getFitresult(args.referenceFile) if args.referenceFile else None
+
+    if args.noImpacts:
+        # do one pulls plot, ungrouped
+        args.mode = "ungrouped"
+        producePlots(fitresult, args, None, fitresult_ref=fitresult_ref)
+        exit()
 
     POIs = input_tools.getPOInames(fitresult, poi_type=None)
 
