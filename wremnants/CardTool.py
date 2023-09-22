@@ -242,9 +242,9 @@ class CardTool(object):
                       action=None, doActionBeforeMirror=False, actionArgs={}, actionMap={},
                       systNameReplace=[], systNamePrepend=None, groupFilter=None, passToFakes=False,
                       rename=None, splitGroup={}, decorrelateByBin={}, noiGroup=False,
-                      sumNominal=False,
-                      scaleHist=None,
-                      customizeNuisance={},
+                      sumNominalToHist=False,
+                      scalePrefitHistYields=None,
+                      customizeNuisanceAttributes={},
                       ):
         # note: setting Up=Down seems to be pathological for the moment, it might be due to the interpolation in the fit
         # for now better not to use the options, although it might be useful to keep it implemented
@@ -289,9 +289,9 @@ class CardTool(object):
                 "groupFilter" : groupFilter,
                 "splitGroup" : splitGroup if len(splitGroup) else {group : ".*"}, # dummy dictionary if splitGroup=None, to allow for uniform treatment
                 "scale" : scale,
-                "sumNominal" : sumNominal,
-                "scaleHist": scaleHist,
-                "customizeNuisance" : customizeNuisance,
+                "sumNominalToHist" : sumNominalToHist,
+                "scalePrefitHistYields": scalePrefitHistYields,
+                "customizeNuisanceAttributes" : customizeNuisanceAttributes,
                 "mirror" : mirror,
                 "mirrorDownVarEqualToUp" : mirrorDownVarEqualToUp,
                 "mirrorDownVarEqualToNomi" : mirrorDownVarEqualToNomi,
@@ -584,11 +584,11 @@ class CardTool(object):
             procDict = self.datagroups.getDatagroups()
             hnom = procDict[proc].hists[self.nominalName]
             #logger.debug(f"{proc}: {syst}: {h.axes.name}")
-            if systInfo["scaleHist"] != None:
-                scaleFactor = systInfo["scaleHist"]
+            if systInfo["scalePrefitHistYields"] != None:
+                scaleFactor = systInfo["scalePrefitHistYields"]
                 logger.warning(f"Scaling yields of histogram for syst = {syst} by {scaleFactor}")
                 h = hh.scaleHist(h, scaleFactor, createNew=True)
-            if systInfo["sumNominal"]:
+            if systInfo["sumNominalToHist"]:
                 logger.warning(f"Adding histogram for syst = {syst} to nominal to define actual variation")
                 h = hh.addHists(h, hnom, allowBroadcast=True, createNew=True, scale1=None, scale2=None)
             if systInfo["doActionBeforeMirror"] and systInfo["action"]:
@@ -874,16 +874,14 @@ class CardTool(object):
             for systname in systNamesChan:
                 systShape = shape
                 include_line = include_chan[chan]
-                # some customization based on nuisance
-                if systInfo["customizeNuisance"]:
-                    for regexpCustom in systInfo["customizeNuisance"]:
+                if systInfo["customizeNuisanceAttributes"]:
+                    for regexpCustom in systInfo["customizeNuisanceAttributes"]:
                         if re.match(regexpCustom, systname):
-                            keys = list(systInfo["customizeNuisance"][regexpCustom].keys())
+                            keys = list(systInfo["customizeNuisanceAttributes"][regexpCustom].keys())
                             if "scale" in keys:
-                                include_line = [(str(systInfo["customizeNuisance"][regexpCustom]["scale"]) if x in procs else "-").ljust(self.procColumnsSpacing) for x in nondata_chan[chan]]
-                            if "shape" in keys:
-                                systShape = systInfo["customizeNuisance"][regexpCustom]["shape"]
-                ## end of customization
+                                include_line = [(str(systInfo["customizeNuisanceAttributes"][regexpCustom]["scale"]) if x in procs else "-").ljust(self.procColumnsSpacing) for x in nondata_chan[chan]]
+                            if "shapeType" in keys:
+                                systShape = systInfo["customizeNuisanceAttributes"][regexpCustom]["shapeType"]
                 self.cardContent[chan] += f"{systname.ljust(self.spacing)} {systShape.ljust(self.systTypeSpacing)} {''.join(include_line)}\n"
             # unlike for LnN systs, here it is simpler to act on the list of these systs to form groups, rather than doing it syst by syst 
             if group:

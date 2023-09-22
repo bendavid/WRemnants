@@ -277,19 +277,18 @@ def setup(args,xnorm=False):
                            passToFakes=passSystToFakes,
     )
 
-    # TODO: move this after the doStatOnly
+    # this appears within doStatOnly because technically these nuisances should be part of it
     if args.theoryAgnostic and args.poiAsNoi:
         cardTool.addSystematic("yieldsTheoryAgnostic",
                                processes=["signal_samples"],
                                group=f"normXsec{label}",
                                mirror=True,
                                baseName=f"norm{label}CHANNEL_",
-                               #scaleAndSumNominal=args.priorNormXsec, # multiply yields of input hist by 0.5 and then sum the nominal
                                scale=1 if args.priorNormXsec < 0 else args.priorNormXsec, # histogram represents an (args.priorNormXsec*100)% prior
-                               #noiGroup=args.priorNormXsec < 0, # should not be needed
-                               sumNominal=True,
+                               sumNominalToHist=True,
+                               # scalePrefitHistYields=2, # multiply yields of input hist by 2, should be equivalent to scaling the prior using "scale=2"
                                noConstraint=True if args.priorNormXsec < 0 else False,
-                               #customizeNuisance={".*AngCoeff4" : {"scale" : 1, "shape": "shapeNoConstraint"}},
+                               #customizeNuisanceAttributes={".*AngCoeff4" : {"scale" : 1, "shapeType": "shapeNoConstraint"}},
                                systAxes=["ptVgenSig", "absYVgenSig", "helicity"],
                                labelsByAxis=["PtVBin", "YVBin", "AngCoeff"],
                                passToFakes=passSystToFakes,

@@ -116,7 +116,7 @@ mTStudyForFakes_axes = [axis_eta, axis_pt, axis_charge, axis_mt_fakes, axis_pass
 axis_eta_utilityHist = hist.axis.Regular(24, -2.4, 2.4, name = "eta", overflow=False, underflow=False)
 axis_pt_utilityHist = hist.axis.Regular(6, 26, 56, name = "pt", overflow=False, underflow=False)
 
-axis_met = hist.axis.Regular(150, 0., 150., name = "met", underflow=False, overflow=True)
+axis_met = hist.axis.Regular(2, 0., 200., name = "met", underflow=False, overflow=True)
 
 # define helpers
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
@@ -381,9 +381,8 @@ def build_graph(df, dataset):
         results.append(df.HistoBoost("MET", [axis_met, axis_eta_utilityHist, axis_pt_utilityHist, axis_charge, axis_passIso, axis_passMT], ["MET_corr_rec_pt", "goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"]))
         results.append(df.HistoBoost("transverseMass", [axis_mt_fakes, axis_eta_utilityHist, axis_pt_utilityHist, axis_charge, axis_passIso], ["transverseMass", "goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "nominal_weight"]))
 
-    ## TODO: next part should be improved, there is quite a lot of duplication of what could happen later in the loop
-    ## FIXME: should be isW, to include Wtaunu
-    if isWmunu and args.theoryAgnostic and not hasattr(dataset, "out_of_acceptance")::
+    ## FIXME: should be isW, to include Wtaunu, but for now we only split Wmunu
+    if isWmunu and args.theoryAgnostic and not hasattr(dataset, "out_of_acceptance"):
         df = theoryAgnostic_tools.define_helicity_weights(df)
         if args.poiAsNoi:
             theoryAgnosticHistName = Datagroups.histName("nominal", syst="yieldsTheoryAgnostic")

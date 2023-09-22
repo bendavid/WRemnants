@@ -536,8 +536,7 @@ class Datagroups(object):
         else:
             # infer gen axes from metadata
             args = self.getMetaInfo()["args"]
-            ## TODO: this should be addHelicityHisto->theoryAgnostic since the option changed name, BUT this breaks the poiAsNoi case
-            if args.get("unfolding", False) is False and (args.get("theoryAgnostic", False) is False or args.get("poiAsNoi", False) is True):
+            if not args.get("unfolding", False) and (not args.get("theoryAgnostic", False) or args.get("poiAsNoi", False)):
                 self.gen_axes = None
                 return
 
