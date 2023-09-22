@@ -84,7 +84,7 @@ Make histograms (only nominal and mass variations for now, systematics are being
 
 Prepare datacards and root files with TH2 (stat-only for now)
 ```
-/usr/bin/time -v python scripts/combine/setupCombineWMass.py -i outputFolder/mw_with_mu_eta_pt_scetlib_dyturboCorr.hdf5  -o outputFolder/  --absolutePathInCard --theoryAgnostic
+/usr/bin/time -v python scripts/combine/setupCombine.py -i outputFolder/mw_with_mu_eta_pt_scetlib_dyturboCorr.hdf5  -o outputFolder/  --absolutePathInCard --theoryAgnostic
 ```
 To remove the backgrounds and run signal only one can add __--excludeProcGroups Top Diboson Fake Zmumu DYlowMass Ztautau Wtaunu BkgWmunu__
 
@@ -101,7 +101,7 @@ Make histograms (this has all systematics too unlike the standard theory agnosti
 
 Prepare datacards and root files with TH2
 ```
-/usr/bin/time -v python scripts/combine/setupCombineWMass.py -i outputFolder/mw_with_mu_eta_pt_scetlib_dyturboCorr.hdf5  -o outputFolder/ --absolutePathInCard --theoryAgnostic --poiAsNoi --priorNormXsec 0.5
+/usr/bin/time -v python scripts/combine/setupCombine.py -i outputFolder/mw_with_mu_eta_pt_scetlib_dyturboCorr.hdf5  -o outputFolder/ --absolutePathInCard --theoryAgnostic --poiAsNoi --priorNormXsec 0.5
 ```
 To remove the backgrounds and run signal only one can add __--filterProcGroups Wmunu__
 
@@ -120,7 +120,7 @@ More options are loaded from **WRemnants/utilities/common.py**
 
 Make the datacards for single charges and prepare the TH2 histograms for combinetf.
 ```
-python WRemnants/scripts/combine/setupCombineWMass.py -i outputFolder/mw_with_mu_eta_pt_scetlib_dyturboCorr.hdf5 -o outputFolder/
+python WRemnants/scripts/combine/setupCombine.py -i outputFolder/mw_with_mu_eta_pt_scetlib_dyturboCorr.hdf5 -o outputFolder/
 ```
 The input file is the output of the previous step.
 The default path specified with __-o__ is the local folder. A subfolder with name identifying the specific analysis (e.g. WMass_pt_eta/) is automatically created inside it. Some options may add tags to the folder name: for example, using --doStatOnly will  call the folder WMass_pt_eta_statOnly/. Can use --absolutePathInCard to write absolute path for files in the datacard, so to allow one to run the fit from any location.
@@ -147,7 +147,7 @@ Plot Wmass histograms from hdf5 file (from Wmass histmaker) in the 4 iso-MT regi
 python scripts/analysisTools/tests/testShapesIsoMtRegions.py mw_with_mu_eta_pt_scetlib_dyturboCorr.hdf5 outputFolder/ [--isoMtRegion 0 1 2 3]
 ```
     
-Plot prefit shapes (requires root file from setupCombineWmass.py as input)
+Plot prefit shapes (requires root file from setupCombine.py as input)
 ```
 python scripts/analysisTools/w_mass_13TeV/plotPrefitTemplatesWRemnants.py WMassCombineInput.root outputFolder/ [-l 16.8] [--pseudodata <pseudodataHistName>] [--wlike]
 ```

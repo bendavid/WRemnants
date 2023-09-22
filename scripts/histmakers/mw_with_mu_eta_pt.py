@@ -43,7 +43,7 @@ if args.poiAsNoi and not args.theoryAgnostic:
 if args.theoryAgnostic or args.unfolding:
     parser = common.set_parser_default(parser, "excludeFlow", True)
     if args.theoryAgnostic:
-        parser = common.set_parser_default(parser, "genVars", ["ptVgenSig", "absYVgenSig", "helicity"]) # TODO check sorting
+        parser = common.set_parser_default(parser, "genVars", ["ptVgenSig", "absYVgenSig", "helicitySig"]) # TODO check sorting
         # temporary, to ensure running with stat only for original theory agnostic until systematics are all implemented
         if not args.poiAsNoi:
             logger.warning("Running theory agnostic with only nominal and mass weight histograms for now.")
@@ -119,7 +119,7 @@ mTStudyForFakes_axes = [axis_eta, axis_pt, axis_charge, axis_mt_fakes, axis_pass
 axis_eta_utilityHist = hist.axis.Regular(24, -2.4, 2.4, name = "eta", overflow=False, underflow=False)
 axis_pt_utilityHist = hist.axis.Regular(6, 26, 56, name = "pt", overflow=False, underflow=False)
 
-axis_met = hist.axis.Regular(2, 0., 200., name = "met", underflow=False, overflow=True)
+axis_met = hist.axis.Regular(100, 0., 200., name = "met", underflow=False, overflow=True)
 
 # define helpers
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)

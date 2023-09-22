@@ -24,7 +24,7 @@ def make_parser(parser=None):
     parser.add_argument("--absolutePathInCard", action="store_true", help="In the datacard, set Absolute path for the root file where shapes are stored")
     parser.add_argument("-n", "--baseName", type=str, help="Histogram name in the file (e.g., 'nominal')", default="nominal")
     parser.add_argument("--noHist", action='store_true', help="Skip the making of 2D histograms (root file is left untouched if existing)")
-    parser.add_argument("--qcdProcessName" , type=str, default=None, help="Name for QCD process")
+    parser.add_argument("--qcdProcessName" , type=str, default="Fake", help="Name for QCD process (must be consistent with what is used in datagroups2016.py")
     # setting on the fit behaviour
     parser.add_argument("--fitvar", nargs="+", help="Variable to fit", default=["eta-pt-charge"])
     parser.add_argument("--rebin", type=int, nargs='*', default=[], help="Rebin axis by this value (default, 1, does nothing)")
@@ -172,7 +172,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     cardTool.setProjectionAxes(fitvar)
     cardTool.setFakerateAxes(args.fakerateAxes)
     if wmass and args.ABCD:
-        # In case of ABCD we need to have different fake processes fir e and mu to have uncorrelated uncertainties
+        # In case of ABCD we need to have different fake processes for e and mu to have uncorrelated uncertainties
         cardTool.setFakeName(datagroups.fakeName + (datagroups.flavor if datagroups.flavor else "")) 
         cardTool.unroll=True
     if args.sumChannels or xnorm or dilepton or (wmass and args.ABCD):
@@ -313,7 +313,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                # scalePrefitHistYields=2, # multiply yields of input hist by 2, should be equivalent to scaling the prior using "scale=2"
                                noConstraint=True if args.priorNormXsec < 0 else False,
                                #customizeNuisanceAttributes={".*AngCoeff4" : {"scale" : 1, "shapeType": "shapeNoConstraint"}},
-                               systAxes=["ptVgenSig", "absYVgenSig", "helicity"],
+                               systAxes=["ptVgenSig", "absYVgenSig", "helicitySig"],
                                labelsByAxis=["PtVBin", "YVBin", "AngCoeff"],
                                passToFakes=passSystToFakes,
                                )
@@ -651,7 +651,7 @@ if __name__ == "__main__":
         args.unfolding = True
         logger.warning("For now setting --theoryAgnostic activates --unfolding, they should do the same things")
         if args.genAxes is None:
-            args.genAxes = ["ptVgenSig", "absYVgenSig", "helicity"]
+            args.genAxes = ["ptVgenSig", "absYVgenSig", "helicitySig"]
             logger.warning("Automatically setting '--genAxes ptVgenSig absYVgenSig helicity' for theory agnostic analysis")
             if args.poiAsNoi:
                 logger.warning("This is only needed to properly get the systematic axes")
