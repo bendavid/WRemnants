@@ -56,7 +56,7 @@ jobs:
         run: echo PLOT_DIR=PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }')/$(date +%Y_%m_%d)/unfolding >> $GITHUB_ENV
 
       - name: setup scheduled build
-        if: github.event.schedule == '0 3 * * 1,3,5'
+        if: github.event.schedule == '0 1 * * 1,3,5'
         run: |
           echo PLOT_DIR=ScheduledBuilds_unfolding/$(date +%Y_%m_%d)_$(git rev-parse --short "$GITHUB_SHA")/unfolding >> $GITHUB_ENV
 
@@ -463,7 +463,7 @@ jobs:
           rm -r $WREMNANTS_OUTDIR/$LOCAL_WEB_DIR
           
       - name: save analysis files
-        if: github.event_name != 'pull_request' && github.event.schedule == '0 3 * * 1,3,5'
+        if: github.event_name != 'pull_request' && github.event.schedule == '0 1 * * 1,3,5'
         run: |
           echo "xrdcp --parallel 4 -R -f $WREMNANTS_OUTDIR root://eosuser.cern.ch//$EOS_DIR/ScheduledBuilds_unfolding/"
           xrdcp --parallel 4 -R -f $WREMNANTS_OUTDIR root://eosuser.cern.ch//$EOS_DIR/ScheduledBuilds_unfolding/
