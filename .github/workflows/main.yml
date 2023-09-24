@@ -8,7 +8,7 @@ on:
   pull_request:
     branches: [ main ]
   schedule:
-    - cron: '0 3 * * 2,4,6' # Run on Tuesday, Thursday, and Saturday morning at 3h00 UTC
+    - cron: '0 1 * * 2,4,6' # Run on Tuesday, Thursday, and Saturday morning at 1h00 UTC
     - cron: '30 5 * * 1-5' # Run on weekdays
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -648,10 +648,8 @@ jobs:
     steps:
       - env:
           WREMNANTS_OUTDIR: ${{ needs.setenv.outputs.WREMNANTS_OUTDIR }}
-          PLOT_DIR: ${{ needs.setenv.outputs.PLOT_DIR }}
         run: |
           echo "WREMNANTS_OUTDIR=${WREMNANTS_OUTDIR}" >> $GITHUB_ENV
-          echo "PLOT_DIR=${PLOT_DIR}" >> $GITHUB_ENV
 
       - name: copy clean plots
         run: |
@@ -663,8 +661,8 @@ jobs:
       - name: save analysis files
         if: github.event_name != 'pull_request' && github.event.schedule == '0 3 * * 2,4,6'
         run: |
-          echo "xrdcp --parallel 4 -R -f $WREMNANTS_OUTDIR root://eosuser.cern.ch//$EOS_DIR/$PLOT_DIR/"
-          xrdcp --parallel 4 -R -f $WREMNANTS_OUTDIR root://eosuser.cern.ch//$EOS_DIR/$PLOT_DIR/
+          echo "xrdcp --parallel 4 -R -f $WREMNANTS_OUTDIR root://eosuser.cern.ch//$EOS_DIR/ScheduledBuilds/"
+          xrdcp --parallel 4 -R -f $WREMNANTS_OUTDIR root://eosuser.cern.ch//$EOS_DIR/ScheduledBuilds/
 
       - name: clean
         run: |
