@@ -262,7 +262,8 @@ def build_graph(df, dataset):
                 )
                 results.append(muonScaleSyst_responseWeights)
 
-                df = muon_calibration.add_resolution_uncertainty(df, axes, results, cols, smearing_uncertainty_helper, reco_sel_GF)
+                if args.smearingUnc:
+                    df = muon_calibration.add_resolution_uncertainty(df, axes, results, cols, smearing_uncertainty_helper, reco_sel_GF)
 
                 # add the ad-hoc Z non-closure nuisances from the jpsi massfit to muon scale unc
                 df = df.DefinePerSample("AFlag", "0x01")
