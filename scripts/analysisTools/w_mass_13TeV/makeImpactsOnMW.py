@@ -36,6 +36,10 @@ def getBetterLabel(k, isWlike):
         label = "MC_stat" if isWlike else "MCandFakes_stat"
     elif k == "stat":
         label = "data_stat"
+    # elif k == "muon_eff_stat":
+    #     label = "Total eff_stat"
+    # elif k == "muon_eff_syst":
+    #     label = "Total eff_syst"
     else:
         label = k
     return label
@@ -75,8 +79,9 @@ def readNuisances(args, infile=None, logger=None):
     if impMat == None:
         error_msg = f"Cannot find the impact TH2 named {th2name} in input file. Maybe you didn't run --doImpacts?"
         raise IOError(error_msg)
-        
-    matchKeep = re.compile(args.keepNuisgroups)
+
+    if args.keepNuisgroups != None:
+        matchKeep = re.compile(args.keepNuisgroups)
     if args.excludeNuisgroups:
         matchExclude = re.compile(args.excludeNuisgroups)
     
@@ -84,10 +89,10 @@ def readNuisances(args, infile=None, logger=None):
     nuisGroup_nameVal = {}
     for iy in range(1,impMat.GetNbinsY()+1):
         label = impMat.GetYaxis().GetBinLabel(iy)
-        if args.excludeNuisgroups and matchExclude.match(label):
-            continue
-        if matchKeep.match(label):
+        if args.keepNuisgroups and matchKeep.match(label):
             nuisGroup_nameVal[label] = impMat.GetBinContent(1,iy)
+        elif args.excludeNuisgroups and matchExclude.match(label):
+            continue
     return totalUncertainty,nuisGroup_nameVal
 
 
@@ -99,7 +104,7 @@ if __name__ == "__main__":
     parser.add_argument("rootfile", type=str, nargs=1)
     parser.add_argument('-o','--outdir',     default='./makeImpactsOnMW/',   type=str, help='output directory to save the plot (not needed with --justPrint)')    
     parser.add_argument(     '--nuisgroups', default='ALL',   type=str, help='nuis groups for which you want to show the impacts (can pass comma-separated list to make all of them one after the other). Use full name, no regular expressions. By default, all are made')
-    parser.add_argument(     '--keepNuisgroups', default='.*',   type=str, help='nuis groups for which you want to show the impacts, using regular expressions')
+    parser.add_argument('-k',  '--keepNuisgroups', default=None,   type=str, help='nuis groups for which you want to show the impacts, using regular expressions')
     parser.add_argument('-x', '--excludeNuisgroups', default=None,   type=str, help='Regular expression for nuisances to be excluded (note that it wins against --keepNuisgroups since evaluated before it')
     parser.add_argument(     '--setStat',   default=-1.0, type=float, help='If positive, use this value for stat (this is before scaling to MeV) until combinetf is fixed')
     parser.add_argument(     '--postfix',     default='',   type=str, help='postfix for the output name')
@@ -196,6 +201,7 @@ if __name__ == "__main__":
     h1.GetYaxis().SetTitleOffset(1.05)
     h1.GetYaxis().SetTitleSize(0.045)
     h1.GetYaxis().SetLabelSize(0.04)
+    h1.GetYaxis().SetNdivisions(505)
     #h1.GetYaxis().SetTitle("")
     for ik,k in enumerate(sortedGroups):
         bincontent = nuisGroup_nameVal[k] if not args.scaleToMeV else nuisGroup_nameVal[k] * args.prefitUncertainty
