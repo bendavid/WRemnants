@@ -604,7 +604,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
             labelsByAxis=["unc_ieta", "unc_ipt", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
             passToFakes=passSystToFakes
         )
-    if input_tools.args_from_metadata(cardTool, "smearingUnc"):
+    if not input_tools.args_from_metadata(cardTool, "noSmearing"):
         cardTool.addSystematic("muonResolutionSyst_responseWeights", 
             mirror = True,
             processes=['single_v_samples'],
