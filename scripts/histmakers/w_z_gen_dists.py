@@ -114,7 +114,7 @@ def build_graph(df, dataset):
         else:
             df = df.Define('ptPrefsrLep', 'genlanti.pt()')
             df = df.Define('etaPrefsrLep', 'genlanti.eta()')
-        results.append(df.HistoBoost("nominal_genlep", lep_axes, [*lep_cols, "nominal_weight"], storage=hist.storage.Double()))
+        results.append(df.HistoBoost("nominal_genlep", lep_axes, [*lep_cols, "nominal_weight"], storage=hist.storage.Weight()))
 
     if not args.skipEWHists and (isW or isZ):
         if isZ:

@@ -107,6 +107,16 @@ pdfMapExtended.update({
         # 66-71 - are LHAPDF ID 27500 = 27506, 27501 is 0.0116 and 27504 is 0.0120
         "alphasRange" : "002", 
     },
+    "msht20an3lo" : {
+        "name" : "pdfMSHT20an3lo",
+        "branch" : "LHEPdfWeightAltSet24",
+        "combine" : "asymHessian",
+        "entries" : 105,
+        "alphas" : ["LHEPdfWeightAltSet24[108]", "LHEPdfWeightAltSet24[111]"],
+        # 105-111 - are the alphas small range vars: 
+        # mem = 0 => default fit alpha_S(M_Z) = 0.118; mem=1-6 => alpha_S(M_Z) = 0.114, 0.115, 0.116, 0.117, 0.119, 0.120
+        "alphasRange" : "002", 
+    },
     "ct18z" : {
         # This has CT18 + CT18Z in it :-/
         "name" : "pdfCT18Z",
@@ -234,6 +244,9 @@ def define_pdf_columns(df, dataset_name, pdfs, noAltUnc):
         tensorASName = f"{pdfName}ASWeights_tensor"
         entries = 1 if i != 0 and noAltUnc else pdfInfo["entries"]
         start = 0 if "first_entry" not in pdfInfo else pdfInfo["first_entry"]
+
+        if pdfBranch not in df.GetColumnNames():
+            return df
 
         df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, {entries}>({pdfBranch}, {start}), theory_weight_truncate); res = nominal_weight/central_pdf_weight*res; return res;")
 

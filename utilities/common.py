@@ -140,7 +140,7 @@ def common_parser(for_reco_highPU=False):
 
     parser.add_argument("--pdfs", type=str, nargs="*", default=["msht20"], choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for")
     parser.add_argument("--altPdfOnlyCentral", action='store_true', help="Only store central value for alternate PDF sets")
-    parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
+    parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=None)
     parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by group name or (subset) of name", default=[])
     parser.add_argument("--excludeProcs", type=str, nargs="*", help="Exclude processes matched by group name or (subset) of name", default=[])  # no need to exclude QCD MC here, histograms can always be made, they are fast and light, so they are always available for tests
     parser.add_argument("--v8", action='store_true', help="Use NanoAODv8. Default is v9")

@@ -639,7 +639,7 @@ def outputFolderName(outfolder, card_tool, doStatOnly, postfix):
 def main(args,xnorm=False):
     cardTool = setup(args, args.inputFile[0], args.fitvar[0].split("-"), xnorm)
     cardTool.setOutput(outputFolderName(args.outfolder, cardTool, args.doStatOnly, args.postfix), analysis_label(cardTool))
-    cardTool.writeOutput(args=args, forceNonzero=not args.unfolding, check_systs=not args.unfolding, ABCD=args.ABCD, xnorm=xnorm)
+    cardTool.writeOutput(args=args, forceNonzero=not args.unfolding, check_systs=not args.unfolding)
     return
 
 if __name__ == "__main__":

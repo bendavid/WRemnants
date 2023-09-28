@@ -13,6 +13,15 @@ from wremnants.datasets.datasetDict_lowPU import dataDictLowPU
 
 logger = logging.child_logger(__name__)
 
+default_nfiles = {
+    'WminusmunuPostVFP' : 1700,
+    'WplusmunuPostVFP' : 2000,
+    'WminustaunuPostVFP' : 400,
+    'WplustaunuPostVFP' : 500,
+    'ZmumuPostVFP' : 900,
+    'ZtautauPostVFP' : 1200,
+}
+
 def buildXrdFileList(path, xrd):
     xrdpath = path[path.find('/store'):]
     logger.debug(f"Looking for path {xrdpath}")
@@ -26,7 +35,10 @@ def buildXrdFileList(path, xrd):
 #TODO add the rest of the samples!
 def makeFilelist(paths, maxFiles=-1, format_args={}, is_data=False, oneMCfileEveryN=None):
     filelist = []
+    nfiles = 0
     for path in paths:
+        if maxFiles > 0 and nfiles >= maxFiles:
+            break
         if format_args:
             path = path.format(**format_args)
             logger.debug(f"Reading files from path {path}")
@@ -34,6 +46,7 @@ def makeFilelist(paths, maxFiles=-1, format_args={}, is_data=False, oneMCfileEve
         if len(files) == 0:
             logger.warning(f"Did not find any files matching path {path}!")
         filelist.extend(files)
+        nfiles += len(files)
 
     if oneMCfileEveryN != None and not is_data:
         tmplist = []
@@ -111,9 +124,12 @@ def getDataPath(mode=None):
 
     return base_path
 
-def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, nanoVersion="v9", 
+def getDatasets(maxFiles=default_nfiles, filt=None, excl=None, mode=None, base_path=None, nanoVersion="v9", 
                 data_tag="TrackFitV722_NanoProdv2", mc_tag="TrackFitV718_NanoProdv1", 
                 oneMCfileEveryN=None, checkFileForZombie=False):
+    if maxFiles is None:
+        maxFiles=default_nfiles
+
     if not base_path:
         base_path = getDataPath(mode)
     logger.info(f"Loading samples from {base_path}.")
@@ -139,7 +155,10 @@ def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, na
         is_data = info.get("group","") == "Data"
 
         prod_tag = data_tag if is_data else mc_tag
-        paths = makeFilelist(info["filepaths"], maxFiles, format_args=dict(BASE_PATH=base_path, NANO_PROD_TAG=prod_tag), is_data=is_data, oneMCfileEveryN=oneMCfileEveryN)
+        nfiles = maxFiles 
+        if type(maxFiles) == dict:
+            nfiles = maxFiles[sample] if sample in maxFiles else -1
+        paths = makeFilelist(info["filepaths"], nfiles, format_args=dict(BASE_PATH=base_path, NANO_PROD_TAG=prod_tag), is_data=is_data, oneMCfileEveryN=oneMCfileEveryN)
             
         if checkFileForZombie:
             paths = [p for p in paths if not is_zombie(p)]
@@ -178,3 +197,16 @@ def getDatasets(maxFiles=-1, filt=None, excl=None, mode=None, base_path=None, na
             logger.warning(f"Failed to find any files for sample {sample.name}!")
 
     return narf_datasets
+
+def is_zombie(file_path):
+    # Try opening the ROOT file and check if it's a zombie file
+    try:
+        file = ROOT.TFile.Open(file_path)
+        if not file or file.IsZombie():
+            logger.warning(f"Found zombie file: {file_path}")
+            return True
+        file.Close()
+        return False
+    except:
+        logger.warning(f"Found zombie file: {file_path}")
+        return True

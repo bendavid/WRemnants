@@ -87,7 +87,7 @@ def write_analysis_output(results, outfile, args, update_name=True):
         to_append.append(args.theoryCorr[0]+"Corr")
     if hasattr(args, "uncertainty_hist") and args.uncertainty_hist != "nominal":
         to_append.append(args.uncertainty_hist)
-    if args.maxFiles > 0:
+    if args.maxFiles is not None:
         to_append.append(f"maxFiles{args.maxFiles}")
 
     if to_append and update_name:
@@ -105,6 +105,7 @@ def write_analysis_output(results, outfile, args, update_name=True):
     time0 = time.time()
     with h5py.File(outfile, 'w') as f:
         narf.ioutils.pickle_dump_h5py("results", results, f)
+
     logger.info(f"Writing output: {time.time()-time0}")
     logger.info(f"Output saved in {outfile}")
 

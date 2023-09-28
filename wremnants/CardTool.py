@@ -707,8 +707,7 @@ class CardTool(object):
         self.cardName = (f"{self.outfolder}/{basename}_{{chan}}{suffix}.txt")
         self.setOutfile(os.path.abspath(f"{self.outfolder}/{basename}CombineInput{suffix}.root"))
             
-    def writeOutput(self, args=None, xnorm=False, forceNonzero=True, check_systs=True, simultaneousABCD=False):
-        self.xnorm = xnorm
+    def writeOutput(self, args=None, forceNonzero=True, check_systs=True):
         self.datagroups.loadHistsForDatagroups(
             baseName=self.nominalName, syst=self.nominalName,
             procsToRead=self.datagroups.groups.keys(),
