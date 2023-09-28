@@ -1649,6 +1649,8 @@ def drawNTH1(hists=[],
                 #h1.SetMarkerSize(2)
         else:
             h.SetLineWidth(lineWidth)
+            h.SetFillStyle(0)
+
     #ymax = max(ymax, max(h1.GetBinContent(i)+h1.GetBinError(i) for i in range(1,h1.GetNbinsX()+1)))
     # if min and max were not set, set them based on histogram content
     if ymin == ymax == 0.0:
