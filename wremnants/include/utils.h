@@ -32,6 +32,18 @@ constexpr double muon_mass = 0.1056583745;
     //     std::cout << var << std::endl;
     //     return 1;
     // }
+
+float pt_2(float pt1, float phi1, float pt2, float phi2) {
+
+    TVector2 p1 = TVector2();
+    p1.SetMagPhi(pt1, phi1);
+
+    TVector2 sum = TVector2();
+    sum.SetMagPhi(pt2, phi2);
+    sum = p1 + sum;
+
+    return sum.Mod();
+}
     
 float mt_2(float pt1, float phi1, float pt2, float phi2) {
     return std::sqrt(2*pt1*pt2*(1-std::cos(phi1-phi2)));

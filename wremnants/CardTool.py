@@ -35,7 +35,7 @@ class CardTool(object):
         self.nominalTemplate = f"{pathlib.Path(__file__).parent}/../scripts/combine/Templates/datacard.txt"
         self.spacing = 28
         self.systTypeSpacing = 16
-        self.procColumnsSpacing = 30
+        self.procColumnsSpacing = 20
         self.nominalName = "nominal"
         self.datagroups = None
         self.pseudodata_datagroups = None
@@ -862,6 +862,8 @@ class CardTool(object):
         include_chan = {}
         for chan in nondata_chan.keys():
             include_chan[chan] = [(str(scale) if x in procs else "-").ljust(self.procColumnsSpacing) for x in nondata_chan[chan]]
+            # remove unnecessary trailing spaces after the last element
+            include_chan[chan][-1] = include_chan[chan][-1].rstrip()
                 
         shape = "shapeNoConstraint" if systInfo["noConstraint"] else "shape"
             
@@ -888,6 +890,7 @@ class CardTool(object):
                             keys = list(systInfo["customizeNuisanceAttributes"][regexpCustom].keys())
                             if "scale" in keys:
                                 include_line = [(str(systInfo["customizeNuisanceAttributes"][regexpCustom]["scale"]) if x in procs else "-").ljust(self.procColumnsSpacing) for x in nondata_chan[chan]]
+                                include_line[-1] = include_line[-1].rstrip()
                             if "shapeType" in keys:
                                 systShape = systInfo["customizeNuisanceAttributes"][regexpCustom]["shapeType"]
                 self.cardContent[chan] += f"{systname.ljust(self.spacing)} {systShape.ljust(self.systTypeSpacing)} {''.join(include_line)}\n"

@@ -70,7 +70,8 @@ def make_parser(parser=None):
     parser.add_argument("--genAxes", type=str, default=None, nargs="+", help="Specify which gen axis should be used in unfolding, if 'None', use all (inferred from metadata).")
     parser.add_argument("--theoryAgnostic", action='store_true', help="Prepare datacard for theory agnostic analysis, similar to unfolding but different axis and possibly other differences")
     parser.add_argument("--poiAsNoi", action='store_true', help="Experimental option only with --theoryAgnostic, to treat POIs ad NOIs, with a single signal histogram")
-    parser.add_argument("--priorNormXsec", type=float, default=1.0, help="Prior for shape uncertainties on cross sections for theory agnostic analysis with POIs as NOIs (1 means 100\%). If negative, it will use shapeNoConstraint in the fit")
+    parser.add_argument("--priorNormXsec", type=float, default=1, help="Prior for shape uncertainties on cross sections for theory agnostic analysis with POIs as NOIs (1 means 100\%). If negative, it will use shapeNoConstraint in the fit")
+    parser.add_argument("--scaleNormXsecHistYields", type=float, default=None, help="Scale yields of histogram with cross sections variations for theory agnostic analysis with POIs as NOIs. Can be used together with --priorNormXsec")
     # utility options to deal with charge when relevant, mainly for theory agnostic but also unfolding
     parser.add_argument("--recoCharge", type=str, default=["plus", "minus"], nargs="+", choices=["plus", "minus"], help="Specify reco charge to use, default uses both. This is a workaround for unfolding/theory-agnostic fit when running a single reco charge, as gen bins with opposite gen charge have to be filtered out")
     parser.add_argument("--forceRecoChargeAsGen", action="store_true", help="Force gen charge to match reco charge in CardTool, this only works when the reco charge is used to define the channel")
@@ -154,12 +155,34 @@ def setup(args, inputFile, fitvar, xnorm=False):
             datagroups.defineSignalBinsUnfolding(base_group, "Z", member_filter=lambda x: x.name.startswith(base_group))
             # out of acceptance contribution
             datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if not m.name.startswith("Bkg")])
-
+    # FIXME: temporary customization of signal and out-of-acceptance process names for theory agnostic with POI as NOI
+    # There might be a better way to do it more homogeneously with the rest.
+    if args.theoryAgnostic and args.poiAsNoi:
+        # Important: don't set the gen axes with datagroups.setGenAxes(args.genAxes) when doing poiAsNoi 
+        constrainMass = False
+        hasSeparateOutOfAcceptanceSignal = False
+        # check if the out-of-acceptance signal process exists as an independent process
+        if any(m.name.startswith("Bkg") for m in datagroups.groups[base_group].members):
+            hasSeparateOutOfAcceptanceSignal = True
+            if wmass:
+                # out of acceptance contribution
+                datagroups.copyGroup(base_group, f"BkgWmunu", member_filter=lambda x: x.name.startswith("Bkg"))
+                datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if m.name.startswith("Bkg")])
+            else:
+                # out of acceptance contribution
+                datagroups.copyGroup(base_group, f"BkgZmumu", member_filter=lambda x: x.name.startswith("Bkg"))
+                datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if m.name.startswith("Bkg")])
+            
     if args.noHist and args.noStatUncFakes:
         raise ValueError("Option --noHist would override --noStatUncFakes. Please select only one of them")
 
-    if "BkgWmunu" in args.excludeProcGroups:
-        datagroups.deleteGroup("Wmunu") # remove out of acceptance signal
+    if args.theoryAgnostic and args.poiAsNoi:
+        # FIXME: at some point we should decide what name to use
+        if any(x in args.excludeProcGroups for x in ["BkgWmunu", "outAccWmunu"]) and hasSeparateOutOfAcceptanceSignal:
+            datagroups.deleteGroup("BkgWmunu") # remove out of acceptance signal
+    else:
+        if "BkgWmunu" in args.excludeProcGroups:
+            datagroups.deleteGroup("Wmunu") # remove out of acceptance signal
 
     # Start to create the CardTool object, customizing everything
     cardTool = CardTool.CardTool(xnorm=xnorm, ABCD=wmass and args.ABCD)
@@ -242,15 +265,18 @@ def setup(args, inputFile, fitvar, xnorm=False):
         
     passSystToFakes = wmass and not args.skipSignalSystOnFakes and args.qcdProcessName not in excludeGroup and (filterGroup == None or args.qcdProcessName in filterGroup) and not xnorm
 
-    cardTool.addProcessGroup("single_v_samples", lambda x: x[0] in ["W", "Z"] and x[1] not in ["W","Z"])
+    # FIXME: try to reuse some lambda functions to avoid mistakes, or maybe define some general functions?
+    cardTool.addProcessGroup("single_v_samples", lambda x: any(x.startswith(init) for init in ["W", "Z", "BkgW", "BkgZ"]) and x[1] not in ["W","Z"])
     if wmass:
-        cardTool.addProcessGroup("w_samples", lambda x: x[0] == "W" and x[1] not in ["W","Z"])
+        cardTool.addProcessGroup("w_samples", lambda x: any(x.startswith(init) for init in ["W", "BkgW"]) and x[1] not in ["W","Z"])
         if not xnorm:
             cardTool.addProcessGroup("single_v_nonsig_samples", lambda x: x[0] == "Z" and x[1] not in ["W","Z"])
 
-    cardTool.addProcessGroup("single_vmu_samples", lambda x: x[0] in ["W", "Z"] and x[1] not in ["W","Z"] and "tau" not in x)
-    cardTool.addProcessGroup("signal_samples", lambda x: ((x[0] == "W" and wmass) or (x[0] == "Z" and not wmass)) and x[1] not in ["W","Z"] and "tau" not in x)
-    cardTool.addProcessGroup("signal_samples_inctau", lambda x: ((x[0] == "W" and wmass) or (x[0] == "Z" and not wmass)) and x[1] not in ["W","Z"])
+    cardTool.addProcessGroup("single_vmu_samples", lambda x: any(x.startswith(init) for init in ["W", "Z", "BkgW", "BkgZ"]) and x[1] not in ["W","Z"] and "tau" not in x)
+    cardTool.addProcessGroup("signal_samples", lambda x: ((wmass and any(x.startswith(init) for init in ["W", "BkgW"])) or (any(x.startswith(init) for init in ["Z", "BkgZ"]) and not wmass)) and x[1] not in ["W","Z"] and "tau" not in x)
+    cardTool.addProcessGroup("signal_samples_inctau", lambda x: ((wmass and any(x.startswith(init) for init in ["W", "BkgW"])) or (any(x.startswith(init) for init in ["Z", "BkgZ"]) and not wmass)) and x[1] not in ["W","Z"])
+    cardTool.addProcessGroup("signal_samples_noOutAcc", lambda x: ((x[0] == "W" and wmass) or (x[0] == "Z" and not wmass)) and x[1] not in ["W","Z"] and "tau" not in x)
+    cardTool.addProcessGroup("signal_samples_inctau_noOutAcc", lambda x: ((x[0] == "W" and wmass) or (x[0] == "Z" and not wmass)) and x[1] not in ["W","Z"])
     cardTool.addProcessGroup("MCnoQCD", lambda x: x not in ["QCD", "Data"])
 
     if not (args.theoryAgnostic or args.unfolding) :
@@ -304,13 +330,13 @@ def setup(args, inputFile, fitvar, xnorm=False):
     # this appears within doStatOnly because technically these nuisances should be part of it
     if args.theoryAgnostic and args.poiAsNoi:
         cardTool.addSystematic("yieldsTheoryAgnostic",
-                               processes=["signal_samples"],
+                               processes=["signal_samples_noOutAcc"], # currently not on out-of-acceptance signal template (to implement)
                                group=f"normXsec{label}",
                                mirror=True,
                                baseName=f"norm{label}CHANNEL_",
                                scale=1 if args.priorNormXsec < 0 else args.priorNormXsec, # histogram represents an (args.priorNormXsec*100)% prior
+                               scalePrefitHistYields=args.scaleNormXsecHistYields, # 2 would multiply yields of input hist by 2, should be equivalent to scaling the prior using "scale=2" (but with scale=1)
                                sumNominalToHist=True,
-                               # scalePrefitHistYields=2, # multiply yields of input hist by 2, should be equivalent to scaling the prior using "scale=2"
                                noConstraint=True if args.priorNormXsec < 0 else False,
                                #customizeNuisanceAttributes={".*AngCoeff4" : {"scale" : 1, "shapeType": "shapeNoConstraint"}},
                                systAxes=["ptVgenSig", "absYVgenSig", "helicitySig"],
@@ -652,7 +678,7 @@ if __name__ == "__main__":
         logger.warning("For now setting --theoryAgnostic activates --unfolding, they should do the same things")
         if args.genAxes is None:
             args.genAxes = ["ptVgenSig", "absYVgenSig", "helicitySig"]
-            logger.warning("Automatically setting '--genAxes ptVgenSig absYVgenSig helicity' for theory agnostic analysis")
+            logger.warning("Automatically setting '--genAxes ptVgenSig absYVgenSig helicitySig' for theory agnostic analysis")
             if args.poiAsNoi:
                 logger.warning("This is only needed to properly get the systematic axes")
                 
