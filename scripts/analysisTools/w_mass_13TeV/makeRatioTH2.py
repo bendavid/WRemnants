@@ -84,6 +84,8 @@ if __name__ == "__main__":
     parser.add_argument(      '--binning-file-to-roll', dest="binFileToRoll", default="", help="File with binning to roll 1D into 2D (the reco binning is used)")
     parser.add_argument(      '--drawOption',  default='colz0', type=str, help='Draw option for TH2')
     parser.add_argument(      '--set-ratio-unc', dest="setRatioUnc", default="num", choices=["num", "den", "both"], help="Set how to compute uncertainty for the ratio (num or den simply use the one of those component, neglecting the other, both propagates both) ")
+    parser.add_argument(      '--integrate1D', action="store_true",  help="In addition to other plots, integrate the shapes in 1D and plot them as TH1 with ratio panel")
+    parser.add_argument(      '--legendEntries1D',  default=("Numerator","Denominator"), type=str, nargs=2, help='Entries for legend when integrating in 1D')
     args = parser.parse_args()
     
     f1 = args.file1[0]
@@ -148,10 +150,6 @@ if __name__ == "__main__":
         # this is needed only for muons, for electrons I save directly the smoothed FR (PR)
         neta = hist1.GetNbinsX()
         etabins = [hist1.GetXaxis().GetBinLowEdge(i) for i in range(1,2+neta)]
-        #etamin = hist1.GetXaxis().GetBinLowEdge(1)
-        #etamax = hist1.GetXaxis().GetBinLowEdge(1+neta)
-        #hFR1 = ROOT.TH2D(hist1.GetName()+"_FRorPR","",195,26,65,neta,etamin,etamax)
-        #hFR2 = ROOT.TH2D(hist2.GetName()+"_FRorPR","",195,26,65,neta,etamin,etamax)
         hFR1 = ROOT.TH2D(hist1.GetName()+"_FRorPR","",195,26,65,neta,array('d',etabins))
         hFR2 = ROOT.TH2D(hist2.GetName()+"_FRorPR","",195,26,65,neta,array('d',etabins))
         for ix in range (1,1+hFR1.GetNbinsX()):
@@ -181,12 +179,15 @@ if __name__ == "__main__":
     yMin = args.yRange[0]
     yMax = args.yRange[1]
 
-    hratio = hinput1.Clone(args.outhistname)
+    h1for1Dproj = copy.deepcopy(hinput1.Clone("h1for1Dproj"))
+    h2for1Dproj = copy.deepcopy(hinput2.Clone("h2for1Dproj"))
+    
+    hratio = copy.deepcopy(hinput1.Clone(args.outhistname))
     hratio.SetTitle(args.histTitle)                
                 
     hsum = None
     if args.makeAsymmetry:
-        hsum = hinput1.Clone("diff")
+        hsum = copy.deepcopy(hinput1.Clone("diff"))
         hsum.Add(hinput2)
         hratio.Add(hinput2, -1.)
         #hratio.Divide(hsum) # do this below
@@ -359,7 +360,27 @@ if __name__ == "__main__":
                      fillStyleSecondHistogram=1001, fillColorSecondHistogram=ROOT.kGray,
                      colorVec=colorUnrollHists)
 
-    
+    if args.integrate1D:
+        canvas1D = ROOT.TCanvas("canvas1D","",800,900)
+        hinput1_projX = h1for1Dproj.ProjectionX(f"{h1for1Dproj.GetName()}_x", 1, h1for1Dproj.GetNbinsY(), "e")
+        hinput1_projY = h1for1Dproj.ProjectionY(f"{h1for1Dproj.GetName()}_y", 1, h1for1Dproj.GetNbinsX(), "e")
+        hinput2_projX = h2for1Dproj.ProjectionX(f"{h2for1Dproj.GetName()}_x", 1, h2for1Dproj.GetNbinsY(), "e")
+        hinput2_projY = h2for1Dproj.ProjectionY(f"{h2for1Dproj.GetName()}_y", 1, h2for1Dproj.GetNbinsX(), "e")
+        hinput1_projX.SetFillStyle(0)
+        hinput1_projY.SetFillStyle(0)
+        hinput2_projX.SetFillStyle(0)
+        hinput2_projY.SetFillStyle(0)
+        drawNTH1([hinput1_projX, hinput2_projX], [args.legendEntries1D[0], args.legendEntries1D[1]], xAxisTitle, "Events", f"{args.outhistname}_projX", outname,
+                 topMargin=0.1, leftMargin=0.16, rightMargin=0.05, labelRatioTmp="Ratio::0.99,1.02",
+                 legendCoords="0.16,0.95,0.8,0.9;1", lowerPanelHeight=0.4, skipLumi=True, passCanvas=canvas1D,
+                 transparentLegend=True, onlyLineColor=True, noErrorRatioDen=False,
+                 useLineFirstHistogram=True, setOnlyLineRatio=False, lineWidth=2)
+        drawNTH1([hinput1_projY, hinput2_projY], [args.legendEntries1D[0], args.legendEntries1D[1]], yAxisTitle, "Events", f"{args.outhistname}_projY", outname,
+                 topMargin=0.1, leftMargin=0.16, rightMargin=0.05, labelRatioTmp="Ratio::0.99,1.02",
+                 legendCoords="0.16,0.95,0.8,0.9;1", lowerPanelHeight=0.4, skipLumi=True, passCanvas=canvas1D,
+                 transparentLegend=True, onlyLineColor=True, noErrorRatioDen=False,
+                 useLineFirstHistogram=True, setOnlyLineRatio=False, lineWidth=2)
+
     # making distribution of pulls
     if args.makePulls:
         hpull = ROOT.TH1D("pulls","Distribution of pulls",100,-5,5)

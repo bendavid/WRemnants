@@ -364,8 +364,9 @@ if __name__ == "__main__":
             print("Not running drawNTH1() function to draw curves, there are too many lines ({})".format(len(systList[p])))
         else:
             drawNTH1(systList[p], systLeg[p], "Unrolled eta-p_{T} bin", "Events", f"nominalAndSyst_{p}{systPostfix}", outdir,
-                     leftMargin=0.06, rightMargin=0.01, labelRatioTmp="syst/nomi",
-                     legendCoords="0.06,0.99,0.82,0.98;4", lowerPanelHeight=0.5, skipLumi=True, passCanvas=canvas_unroll,
+                     topMargin=0.2, leftMargin=0.06, rightMargin=0.01, labelRatioTmp="syst/nomi",
+                     legendCoords="0.06,0.99,0.84,0.99;4", lowerPanelHeight=0.5, skipLumi=True, passCanvas=canvas_unroll,
+                     yAxisExtendConstant=1.4, ytextOffsetFromTop=0.22,
                      drawVertLines="{a},{b}".format(a=nominals[p].GetNbinsY(),b=nominals[p].GetNbinsX()),
                      textForLines=ptBinRanges, transparentLegend=False,
                      onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True, setOnlyLineRatio=True, lineWidth=1)
@@ -385,8 +386,9 @@ if __name__ == "__main__":
                 histFakesOnSignal = [systList[p][0]] + [x for x in systList_FakeOnSignal]
                 drawNTH1(histFakesOnSignal, systLeg[p], "Unrolled eta-p_{T} bin", "Events",
                          f"nominalAndSyst_{p}{systPostfix}_FakeOnSignal", outdir,
-                         leftMargin=0.06, rightMargin=0.01, labelRatioTmp="syst/nomi",
-                         legendCoords="0.06,0.99,0.82,0.98;4", lowerPanelHeight=0.5, skipLumi=True, passCanvas=canvas_unroll,
+                         topMargin=0.2, leftMargin=0.06, rightMargin=0.01, labelRatioTmp="syst/nomi",
+                         legendCoords="0.06,0.99,0.84,0.99;4", lowerPanelHeight=0.5, skipLumi=True, passCanvas=canvas_unroll,
+                         yAxisExtendConstant=1.4, ytextOffsetFromTop=0.22,
                          drawVertLines="{a},{b}".format(a=nominals[p].GetNbinsY(),b=nominals[p].GetNbinsX()),
                          textForLines=ptBinRanges, transparentLegend=False,
                          onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True,
@@ -434,8 +436,9 @@ if __name__ == "__main__":
             
         drawNTH1(systList_WmunuAndFake, systLeg_WmunuAndFake, "Unrolled eta-p_{T} bin", "Events",
                  f"nominalAndSyst_{systPostfix}_WmunuAndFake", outdir,
-                 leftMargin=0.06, rightMargin=0.01, labelRatioTmp="syst/nomi",
-                 legendCoords="0.06,0.99,0.82,0.98;4", lowerPanelHeight=0.5, skipLumi=True, passCanvas=canvas_unroll,
+                 topMargin=0.2, leftMargin=0.06, rightMargin=0.01, labelRatioTmp="syst/nomi",
+                 legendCoords="0.06,0.99,0.84,0.99;4", lowerPanelHeight=0.5, skipLumi=True, passCanvas=canvas_unroll,
+                 yAxisExtendConstant=1.4, ytextOffsetFromTop=0.22,
                  drawVertLines="{a},{b}".format(a=nominals[p].GetNbinsY(),b=nominals[p].GetNbinsX()),
                  textForLines=ptBinRanges, transparentLegend=False,
                  onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True,

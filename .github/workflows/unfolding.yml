@@ -8,7 +8,7 @@ on:
   pull_request:
     branches: [ main ]
   schedule:
-    - cron: '0 3 * * 1,3,5' # Run on Monday, Wednesday, and Friday morning at 3h00 UTC
+    - cron: '0 1 * * 1,3,5' # Run on Monday, Wednesday, and Friday morning at 1h00 UTC
     - cron: '30 5 * * 1-5' # Run on weekdays
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -56,7 +56,7 @@ jobs:
         run: echo PLOT_DIR=PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }')/$(date +%Y_%m_%d)/unfolding >> $GITHUB_ENV
 
       - name: setup scheduled build
-        if: github.event.schedule == '0 3 * * 1,3,5'
+        if: github.event.schedule == '0 1 * * 1,3,5'
         run: |
           echo PLOT_DIR=ScheduledBuilds_unfolding/$(date +%Y_%m_%d)_$(git rev-parse --short "$GITHUB_SHA")/unfolding >> $GITHUB_ENV
 
@@ -463,10 +463,10 @@ jobs:
           rm -r $WREMNANTS_OUTDIR/$LOCAL_WEB_DIR
           
       - name: save analysis files
-        if: github.event_name != 'pull_request' && github.event.schedule == '0 3 * * 1,3,5'
+        if: github.event_name != 'pull_request' && github.event.schedule == '0 1 * * 1,3,5'
         run: |
-          echo "xrdcp --parallel 4 -R -f $WREMNANTS_OUTDIR root://eosuser.cern.ch//$EOS_DIR/$PLOT_DIR/"
-          xrdcp --parallel 4 -R -f $WREMNANTS_OUTDIR root://eosuser.cern.ch//$EOS_DIR/$PLOT_DIR/
+          echo "xrdcp --parallel 4 -R -f $WREMNANTS_OUTDIR root://eosuser.cern.ch//$EOS_DIR/ScheduledBuilds_unfolding/"
+          xrdcp --parallel 4 -R -f $WREMNANTS_OUTDIR root://eosuser.cern.ch//$EOS_DIR/ScheduledBuilds_unfolding/
 
       - name: clean
         run: |
