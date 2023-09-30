@@ -834,10 +834,11 @@ class CardTool(object):
             group = info["group"]
             groupFilter = info["groupFilter"]
             for chan in self.channels:
+                nameChan = name.replace("CHANNEL",chan)
                 include = [(str(info["size"]) if x in info["processes"] else "-").ljust(self.procColumnsSpacing) for x in nondata_chan[chan]]
-                self.cardContent[chan] += f'{name.ljust(self.spacing)} lnN{" "*(self.systTypeSpacing-2)} {"".join(include)}\n'
-                if group and len(list(filter(groupFilter, [name]))):
-                    self.addSystToGroup(group, chan, name)
+                self.cardContent[chan] += f'{nameChan.ljust(self.spacing)} lnN{" "*(self.systTypeSpacing-2)} {"".join(include)}\n'
+                if group and len(list(filter(groupFilter, [nameChan]))):
+                    self.addSystToGroup(group, chan, nameChan)
 
     def fillCardWithSyst(self, syst):
         # note: this function doesn't act on all systematics all at once
