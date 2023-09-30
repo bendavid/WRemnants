@@ -72,6 +72,7 @@ def make_parser(parser=None):
     parser.add_argument("--poiAsNoi", action='store_true', help="Experimental option only with --theoryAgnostic, to treat POIs ad NOIs, with a single signal histogram")
     parser.add_argument("--priorNormXsec", type=float, default=1, help="Prior for shape uncertainties on cross sections for theory agnostic analysis with POIs as NOIs (1 means 100\%). If negative, it will use shapeNoConstraint in the fit")
     parser.add_argument("--scaleNormXsecHistYields", type=float, default=None, help="Scale yields of histogram with cross sections variations for theory agnostic analysis with POIs as NOIs. Can be used together with --priorNormXsec")
+    parser.add_argument("--addNormToOOA", type=float, default=None, help="Add normalization uncertainty on out-of-acceptance template (when it exists). Currently only with --poiAsNoi, and practically adds a LnN uncertainty")
     # utility options to deal with charge when relevant, mainly for theory agnostic but also unfolding
     parser.add_argument("--recoCharge", type=str, default=["plus", "minus"], nargs="+", choices=["plus", "minus"], help="Specify reco charge to use, default uses both. This is a workaround for unfolding/theory-agnostic fit when running a single reco charge, as gen bins with opposite gen charge have to be filtered out")
     parser.add_argument("--forceRecoChargeAsGen", action="store_true", help="Force gen charge to match reco charge in CardTool, this only works when the reco charge is used to define the channel")
@@ -172,7 +173,9 @@ def setup(args, inputFile, fitvar, xnorm=False):
                 # out of acceptance contribution
                 datagroups.copyGroup(base_group, f"BkgZmumu", member_filter=lambda x: x.name.startswith("Bkg"))
                 datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if m.name.startswith("Bkg")])
-            
+        if args.addNormToOOA and not hasSeparateOutOfAcceptanceSignal:
+            raise ValueError(f"Option --addNormToOOA {args.addNormToOOA} was called, but out-of-acceptance doesn't exist as a separate process. Remove this option or make sure the process exists.")
+
     if args.noHist and args.noStatUncFakes:
         raise ValueError("Option --noHist would override --noStatUncFakes. Please select only one of them")
 
@@ -419,6 +422,8 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                 systAxes=["downUpVar"],
                                 labelsByAxis=["downUpVar"],
                                 passToFakes=passSystToFakes)
+        if args.theoryAgnostic and args.poiAsNoi and args.addNormToOOA != None and hasSeparateOutOfAcceptanceSignal:
+            cardTool.addLnNSystematic(f"norm{label}CHANNEL_outOfAccept", processes=["BkgWmunu"], size=args.addNormToOOA, group=f"normXsec{label}")
     else:
         cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15, group="CMS_background")
         cardTool.addLnNSystematic("luminosity", processes=['MCnoQCD'], size=1.017 if lowPU else 1.012, group="luminosity")
