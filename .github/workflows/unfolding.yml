@@ -8,7 +8,7 @@ on:
   pull_request:
     branches: [ main ]
   schedule:
-    - cron: '0 1 * * 1,3,5' # Run on Monday, Wednesday, and Friday morning at 1h00 UTC
+    - cron: '0 1 * * 5' # Run on Friday morning at 1h00 UTC
     - cron: '30 5 * * 1-5' # Run on weekdays
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -56,9 +56,9 @@ jobs:
         run: echo PLOT_DIR=PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }')/$(date +%Y_%m_%d)/unfolding >> $GITHUB_ENV
 
       - name: setup scheduled build
-        if: github.event.schedule == '0 1 * * 1,3,5'
+        if: github.event.schedule == '0 1 * * 5'
         run: |
-          echo PLOT_DIR=ScheduledBuilds_unfolding/$(date +%Y_%m_%d)_$(git rev-parse --short "$GITHUB_SHA")/unfolding >> $GITHUB_ENV
+          echo PLOT_DIR=ScheduledBuilds_unfolding/$(date +%Y_%m_%d)_$(git rev-parse --short "$GITHUB_SHA") >> $GITHUB_ENV
 
       - name: setup reference run
         if: github.event.schedule == '30 5 * * 1-5'
@@ -148,10 +148,12 @@ jobs:
           WREMNANTS_OUTDIR: ${{ needs.setenv.outputs.WREMNANTS_OUTDIR }}
           WEB_DIR: ${{ needs.setenv.outputs.WEB_DIR }}
           PLOT_DIR: ${{ needs.setenv.outputs.PLOT_DIR }}
+          LUMI_SCALE: ${{ needs.setenv.outputs.LUMI_SCALE }}
         run: |
           echo "WREMNANTS_OUTDIR=${WREMNANTS_OUTDIR}" >> $GITHUB_ENV
           echo "WEB_DIR=${WEB_DIR}" >> $GITHUB_ENV
           echo "PLOT_DIR=${PLOT_DIR}" >> $GITHUB_ENV
+          echo "LUMI_SCALE=${LUMI_SCALE}" >> $GITHUB_ENV
           echo "HIST_FILE=${WREMNANTS_OUTDIR}/${OUTFILE_WMASS}" >> $GITHUB_ENV
       - uses: actions/checkout@v3
         with:
@@ -395,10 +397,12 @@ jobs:
           WREMNANTS_OUTDIR: ${{ needs.setenv.outputs.WREMNANTS_OUTDIR }}
           WEB_DIR: ${{ needs.setenv.outputs.WEB_DIR }}
           PLOT_DIR: ${{ needs.setenv.outputs.PLOT_DIR }}
+          LUMI_SCALE: ${{ needs.setenv.outputs.LUMI_SCALE }}
         run: |
           echo "WREMNANTS_OUTDIR=${WREMNANTS_OUTDIR}" >> $GITHUB_ENV
           echo "WEB_DIR=${WEB_DIR}" >> $GITHUB_ENV
           echo "PLOT_DIR=${PLOT_DIR}" >> $GITHUB_ENV
+          echo "LUMI_SCALE=${LUMI_SCALE}" >> $GITHUB_ENV
           echo "HIST_FILE=${WREMNANTS_OUTDIR}/${OUTFILE_DILEPTON}" >> $GITHUB_ENV
 
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -416,31 +420,40 @@ jobs:
           --axes ptll-ptVGen --procFilters Zmumu -p mz -o $WEB_DIR -f $PLOT_DIR $HIST_FILE
 
       - name: dilepton combine ptll unfolding setup
+        # run with a reduced binning
+        if: github.event_name == 'pull_request' || github.event.schedule == '30 5 * * 1-5'
         run: >-
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombine.py 
-          -i $HIST_FILE --fitvar ptll --lumiScale $LUMI_SCALE --unfolding --hdf5 --sparse -o $WREMNANTS_OUTDIR/ZMassDilepton_ptll_unfolding
+          -i $HIST_FILE --fitvar ptll --lumiScale $LUMI_SCALE --unfolding --hdf5 --sparse -o $WREMNANTS_OUTDIR/ZMassDilepton_unfolding
+
+      - name: dilepton combine ptll unfolding setup
+        # run with full binning
+        if: github.event_name != 'pull_request' && github.event.schedule != '30 5 * * 1-5'
+        run: >-
+          scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombine.py 
+          -i $HIST_FILE --fitvar ptll-yll --lumiScale $LUMI_SCALE --unfolding --hdf5 --sparse -o $WREMNANTS_OUTDIR/ZMassDilepton_unfolding
 
       - name: dilepton combine ptll unfolding fit
         run: >- 
           cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ 
-          unfolding $WREMNANTS_OUTDIR/ZMassDilepton_ptll_unfolding/ card_sparse.hdf5
+          unfolding $WREMNANTS_OUTDIR/ZMassDilepton_unfolding/ card_sparse.hdf5
 
       - name: dilepton combine unfolding plot prefit 
         run: >-
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_plots.py 
-          $WREMNANTS_OUTDIR/ZMassDilepton_ptll_unfolding/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR --debug 
+          $WREMNANTS_OUTDIR/ZMassDilepton_unfolding/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR --debug 
           --rrange 0.9 1.1 --channels all --lumi=$LUMI_SCALE
 
       - name: dilepton combine unfolding plot pulls 
         run: >-
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/pullsAndImpacts.py 
-          -f $WREMNANTS_OUTDIR/ZMassDilepton_ptll_unfolding/fitresults_123456789.hdf5 -m ungrouped --sortDescending -s constraint 
+          -f $WREMNANTS_OUTDIR/ZMassDilepton_unfolding/fitresults_123456789.hdf5 -m ungrouped --sortDescending -s constraint 
           --debug output --outFolder $WEB_DIR/$PLOT_DIR -o pulls_unfolding_ptll.html -n 50 --otherExtensions png pdf
 
       - name: dilepton combine unfolding plot xsec 
         run: >- 
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py $HIST_FILE 
-          --fitresult $WREMNANTS_OUTDIR/ZMassDilepton_ptll_unfolding/fitresults_123456789.hdf5 -o $WEB_DIR -f $PLOT_DIR --debug --rrange 0.9 1.1 --logy
+          --fitresult $WREMNANTS_OUTDIR/ZMassDilepton_unfolding/fitresults_123456789.hdf5 -o $WEB_DIR -f $PLOT_DIR --debug --rrange 0.9 1.1 --logy
 
 
   copy-clean:
@@ -463,7 +476,7 @@ jobs:
           rm -r $WREMNANTS_OUTDIR/$LOCAL_WEB_DIR
           
       - name: save analysis files
-        if: github.event_name != 'pull_request' && github.event.schedule == '0 1 * * 1,3,5'
+        if: github.event_name != 'pull_request' && github.event.schedule == '0 1 * * 5'
         run: |
           echo "xrdcp --parallel 4 -R -f $WREMNANTS_OUTDIR root://eosuser.cern.ch//$EOS_DIR/ScheduledBuilds_unfolding/"
           xrdcp --parallel 4 -R -f $WREMNANTS_OUTDIR root://eosuser.cern.ch//$EOS_DIR/ScheduledBuilds_unfolding/
