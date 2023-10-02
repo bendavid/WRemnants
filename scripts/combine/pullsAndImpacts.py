@@ -244,7 +244,7 @@ def readFitInfoFromFile(rf, filename, group=False, stat=0.0, POI='Wmass', normal
         for impact,label in zip(impacts,labels):
             if label in pois:
                 continue
-            if grouping and label not in grouping:
+            if group and grouping and label not in grouping:
                 continue
             if args.filters and not any(re.match(f, label) for f in args.filters):
                 continue

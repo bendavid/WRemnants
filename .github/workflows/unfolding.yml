@@ -179,8 +179,9 @@ jobs:
         run: >-
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/pullsAndImpacts.py 
           -f $WREMNANTS_OUTDIR/WMass_eta_pt_charge_unfolding/fitresults_123456789.hdf5 -m ungrouped --sortDescending -s constraint 
-          --debug output --outFolder $WEB_DIR/$PLOT_DIR -o pulls_unfolding_mw.html -n 50 --otherExtensions png pdf
-          --grouping max -t utilities/styles/nuisance_translate.json 
+          --debug --grouping max -t utilities/styles/nuisance_translate.json 
+          output --outFolder $WEB_DIR/$PLOT_DIR -o pulls_unfolding_mw.html -n 50 --otherExtensions png pdf
+          
 
       - name: wmass combine unfolding plot xsec 
         run: >-
@@ -450,8 +451,8 @@ jobs:
       - name: dilepton combine unfolding plot pulls 
         run: >-
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/pullsAndImpacts.py 
-          -f $WREMNANTS_OUTDIR/ZMassDilepton_unfolding/fitresults_123456789.hdf5 -m ungrouped --sortDescending -s constraint 
-          --debug output --outFolder $WEB_DIR/$PLOT_DIR -o pulls_unfolding_ptll.html -n 50 --otherExtensions png pdf
+          -f $WREMNANTS_OUTDIR/ZMassDilepton_unfolding/fitresults_123456789.hdf5 -m ungrouped --sortDescending -s constraint --debug 
+          output --outFolder $WEB_DIR/$PLOT_DIR -o pulls_unfolding_ptll.html -n 50 --otherExtensions png pdf
 
       - name: dilepton combine unfolding plot xsec 
         run: >- 

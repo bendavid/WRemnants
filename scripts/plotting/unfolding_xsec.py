@@ -554,38 +554,5 @@ for axes in gen_axes_permutations:
             # plot_uncertainties_unfolded(data_c, channel=channel, scale=scale, normalize=args.normalize, relative_uncertainty=True, process_label = process_label)
             plot_uncertainties_unfolded(data_c, edges=edges, channel=channel, scale=scale, normalize=args.normalize, relative_uncertainty=True, logy=args.logy, process_label = process_label, axes=channel_axes)
 
-
-        # if not args.normalize:
-        #     if set(gen_axes) != set(axes):
-        #         continue
-
-        #     # write out 1D distributions
-        #     logger.info(f"Save measured differential cross secction distribution")
-        #     hist_xsec = hist.Hist(
-        #         hist.axis.Regular(bins=len(data_c), start=0.5, stop=len(data_c)+0.5, underflow=False, overflow=False), storage=hist.storage.Weight())
-        #     hist_xsec.view(flow=False)[...] = np.stack([data_c["value"].values, (data_c["err_total"].values)**2], axis=-1)
-
-        #     # write out covariance as 2D hist
-        #     hist_cov = load_poi_matrix(rfile, poi_type[0], base_process=base_process, axes=channel_axes, keys=channel_keys)
-            
-        #     histname = f"data_{base_process}"
-        #     covname = f"covariance_matrix_{base_process}"
-        #     if channel != "all":
-        #         histname += f"_{channel}_"
-        #         covname += f"_{channel}_"
-
-        #     histname += "_".join(axes)
-        #     covname += "_".join(axes)
-
-        #     outfile.create_dataset(histname, data=hist_xsec)
-        #     outfile.create_dataset(covname, data=hist_cov)
-
-        # if "correlation" in args.plots:
-        #     plot_matrix_poi(f"correlation_matrix_channel{poi_type}", base_process=base_process, axes=channel_axes, keys=channel_keys)
-        # if "covariance" in args.plots:
-        #     plot_matrix_poi(f"covariance_matrix_channel{poi_type}", base_process=base_process, axes=channel_axes, keys=channel_keys)
-
-# outfile.close()
-
 if output_tools.is_eosuser_path(args.outpath) and args.eoscp:
     output_tools.copy_to_eos(args.outpath, args.outfolder)
