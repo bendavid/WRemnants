@@ -54,6 +54,7 @@ if __name__ == "__main__":
                         help='Choose what charge to plot')
     parser.add_argument("--isoMtRegion", type=int, nargs='+', default=[0,1,2,3], choices=[0,1,2,3], help="Integer index for iso-Mt regions to plot (conversion is index = passIso * 1 + passMT * 2 as in common.getIsoMtRegionFromID)");
     parser.add_argument(     '--useQCDMC', action='store_true',   help='Use QCD MC instead of Fakes for MC stack')
+    parser.add_argument(     '--noFake', action='store_true',   help='Do not use Fakes for MC stack')
     args = parser.parse_args()
 
     logger = logging.setup_logger(os.path.basename(__file__), args.verbose)
@@ -103,6 +104,8 @@ if __name__ == "__main__":
         groups = Datagroups(fname)
         datasets = groups.getNames()
         logger.warning(datasets)
+        if args.noFake:
+            datasets = list(filter(lambda x: x != "Fake", datasets))
         if args.processes is not None and len(args.processes):
             datasets = list(filter(lambda x: x in args.processes, datasets))
         logger.info(f"Will plot datasets {datasets}")
@@ -167,7 +170,7 @@ if __name__ == "__main__":
     logger.info(f"Writing some shapes in {rootfile.GetName()}")
     rootfile.Close()
 
-    if (args.processes == None or "Fake" in args.processes):
+    if ((args.processes == None or "Fake" in args.processes) and not args.noFake):
         ptBinRanges = []
         XlabelUnroll = ""
         k = list(histForFRF.keys())[0]

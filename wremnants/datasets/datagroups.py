@@ -257,7 +257,6 @@ class Datagroups(object):
             hasFake = False
             procsToReadSort = [x for x in procsToRead]
         # Note: if 'hasFake' is kept as False (but Fake exists), the original behaviour for which Fake reads everything again is restored
-            
         for procName in procsToReadSort:
             logger.debug(f"Reading group {procName}")
             
@@ -359,7 +358,6 @@ class Datagroups(object):
                         logger.debug(f"Summing {read_syst} to {procName} for {member.name}")
 
                     group.hists[label] = hh.addHists(group.hists[label], h, createNew=False) if group.hists[label] else h
-                    logger.debug("Sum done")
 
             if not nominalIfMissing and group.hists[label] is None:
                 continue
@@ -542,7 +540,7 @@ class Datagroups(object):
         else:
             # infer gen axes from metadata
             args = self.getMetaInfo()["args"]
-            if args.get("unfolding", False) is False and args.get("addHelicityHistos", False) is False:
+            if not args.get("unfolding", False) and (not args.get("theoryAgnostic", False) or args.get("poiAsNoi", False)):
                 self.gen_axes = None
                 return
 
@@ -634,7 +632,6 @@ class Datagroups(object):
 
         h = output[histname]
         if isinstance(h, narf.ioutils.H5PickleProxy):
-            logger.debug(f"Get narf hist")
             h = h.get()
 
         return h

@@ -247,6 +247,9 @@ class CardTool(object):
                       action=None, doActionBeforeMirror=False, actionArgs={}, actionMap={},
                       systNameReplace=[], systNamePrepend=None, groupFilter=None, passToFakes=False,
                       rename=None, splitGroup={}, decorrelateByBin={},
+                      sumNominalToHist=False,
+                      scalePrefitHistYields=None,
+                      customizeNuisanceAttributes={},
                       ):
         # note: setting Up=Down seems to be pathological for the moment, it might be due to the interpolation in the fit
         # for now better not to use the options, although it might be useful to keep it implemented
@@ -297,6 +300,9 @@ class CardTool(object):
                 "groupFilter" : groupFilter,
                 "splitGroup" : splitGroupDict, 
                 "scale" : scale,
+                "sumNominalToHist" : sumNominalToHist,
+                "scalePrefitHistYields": scalePrefitHistYields,
+                "customizeNuisanceAttributes" : customizeNuisanceAttributes,
                 "mirror" : mirror,
                 "mirrorDownVarEqualToUp" : mirrorDownVarEqualToUp,
                 "mirrorDownVarEqualToNomi" : mirrorDownVarEqualToNomi,
@@ -592,7 +598,17 @@ class CardTool(object):
             systInfo = self.systematics[syst]
             procDict = self.datagroups.getDatagroups()
             hnom = procDict[proc].hists[self.nominalName]
+            #logger.debug(f"{proc}: {syst}: {h.axes.name}")
+            if systInfo["scalePrefitHistYields"] != None:
+                scaleFactor = systInfo["scalePrefitHistYields"]
+                logger.warning(f"Scaling yields of histogram for syst = {syst} by {scaleFactor}")
+                h = hh.scaleHist(h, scaleFactor, createNew=True)
+            if systInfo["sumNominalToHist"]:
+                logger.warning(f"Adding histogram for syst = {syst} to nominal to define actual variation")
+                h = hh.addHists(h, hnom, allowBroadcast=True, createNew=True, scale1=None, scale2=None)
             if systInfo["doActionBeforeMirror"] and systInfo["action"]:
+                logger.debug("Applying action before mirroring:")
+                logger.debug(f"action={systInfo['action']}     actionArgs={systInfo['actionArgs']}")
                 h = systInfo["action"](h, **systInfo["actionArgs"])
                 self.outfile.cd() # needed to restore the current directory in case the action opens a new root file
             if systInfo["mirror"]:
@@ -849,13 +865,13 @@ class CardTool(object):
         if all(x not in procs for x in nondata):
             return 0
         
-        #include = [(str(scale) if x in procs else "-").ljust(self.procColumnsSpacing) for x in nondata]
         include_chan = {}
         for chan in nondata_chan.keys():
             include_chan[chan] = [(str(scale) if x in procs else "-").ljust(self.procColumnsSpacing) for x in nondata_chan[chan]]
-
+                
+        shape = "shapeNoConstraint" if systInfo["noConstraint"] else "shape"
+            
         splitGroupDict = systInfo["splitGroup"]
-        shape = "shape" if not systInfo["noConstraint"] else "shapeNoConstraint"
 
         # Deduplicate while keeping order
         systNames = list(dict.fromkeys(names))
@@ -868,13 +884,22 @@ class CardTool(object):
         systnamesPruned = [s for s in systNames if not self.isExcludedNuisance(s)]
         systNames = systnamesPruned[:]
         for chan in self.channels:
-            for systname in systNames:
-                shape = "shape" if not systInfo["noConstraint"] else "shapeNoConstraint"
-                # do not write systs which should only apply to other charge, to simplify card
-                self.cardContent[chan] += f"{systname.ljust(self.spacing)} {shape.ljust(self.systTypeSpacing)} {''.join(include_chan[chan])}\n"
+            systNamesChan = [x.replace("CHANNEL",chan) for x in systNames]
+            for systname in systNamesChan:
+                systShape = shape
+                include_line = include_chan[chan]
+                if systInfo["customizeNuisanceAttributes"]:
+                    for regexpCustom in systInfo["customizeNuisanceAttributes"]:
+                        if re.match(regexpCustom, systname):
+                            keys = list(systInfo["customizeNuisanceAttributes"][regexpCustom].keys())
+                            if "scale" in keys:
+                                include_line = [(str(systInfo["customizeNuisanceAttributes"][regexpCustom]["scale"]) if x in procs else "-").ljust(self.procColumnsSpacing) for x in nondata_chan[chan]]
+                            if "shapeType" in keys:
+                                systShape = systInfo["customizeNuisanceAttributes"][regexpCustom]["shapeType"]
+                self.cardContent[chan] += f"{systname.ljust(self.spacing)} {systShape.ljust(self.systTypeSpacing)} {''.join(include_line)}\n"
             # unlike for LnN systs, here it is simpler to act on the list of these systs to form groups, rather than doing it syst by syst 
             if group:
-                systNamesForGroupPruned = systNames[:]
+                systNamesForGroupPruned = systNamesChan[:]
                 systNamesForGroup = list(systNamesForGroupPruned if not groupFilter else filter(groupFilter, systNamesForGroupPruned))
                 if len(systNamesForGroup):
                     for subgroup, matchre in splitGroupDict.items():
@@ -919,11 +944,11 @@ class CardTool(object):
             self.cardContent[chan] = output_tools.readTemplate(self.nominalTemplate, args)
             self.cardGroups[chan] = ""
             
-    def writeHistByCharge(self, h, name, decorrCharge=False):
+    def writeHistByCharge(self, h, name):
         for charge in self.channels:
             q = self.chargeIdDict[charge]["val"]
             hout = narf.hist_to_root(self.getBoostHistByCharge(h, q))
-            hout.SetName(name+f"_{charge}")
+            hout.SetName(name.replace("CHANNEL",charge)+f"_{charge}")
             hout.Write()
         
     def writeHistWithCharges(self, h, name):
