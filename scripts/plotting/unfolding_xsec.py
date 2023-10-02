@@ -11,10 +11,10 @@ import matplotlib as mpl
 import pandas as pd
 import hist
 import h5py
-from wremnants import histselections as sel
+import json
 
 from utilities import boostHistHelpers as hh, logging, input_tools, common, differential, output_tools
-from wremnants import plot_tools
+from wremnants import plot_tools, histselections as sel
 from wremnants.datasets.datagroups import Datagroups
 from wremnants.unfolding_tools import get_bin, getProcessBins, get_results, load_poi_matrix
 
@@ -42,11 +42,17 @@ parser.add_argument("--normalize", action='store_true', help="Plot normalized di
 parser.add_argument("--lumi", type=float, default=16.8, help="Luminosity used in the fit, needed to get the absolute cross section")
 parser.add_argument("--plotSumPOIs", action='store_true', help="Plot xsecs from sum POI groups")
 parser.add_argument("--scaleXsec", type=float, default=1.0, help="Scale xsec predictions with this number")
+parser.add_argument("-t","--translate", type=str, default=None, help="Specify .json file to translate labels")
 parser.add_argument("--eoscp", action='store_true', help="Override use of xrdcp and use the mount instead")
 
 args = parser.parse_args()
 
 logger = logging.setup_logger("unfolding_xsec", 4 if args.debug else 3)
+
+translate_label = {}
+if args.translate:
+    with open(args.translate) as f:
+        translate_label = json.load(f)    
 
 cms_decor = "Preliminary"
 
@@ -71,43 +77,6 @@ groups.setNominalName(args.baseName)
 groups.loadHistsForDatagroups(args.baseName, syst="", procsToRead=[process])
 
 input_subdir = args.fitresult.split("/")[-2]
-
-translate = {
-    "QCDscalePtChargeMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
-    "QCDscaleZPtChargeMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
-    "QCDscaleWPtChargeMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
-    "QCDscaleZPtHelicityMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
-    "QCDscaleWPtHelicityMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
-    "QCDscaleZPtChargeHelicityMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
-    "QCDscaleWPtChargeHelicityMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
-    "binByBinStat": "Bin-by-bin stat.",
-    "CMS_recoil": "recoil",
-    "CMS_background": "Bkg.",
-    "FakeHighMT": "FakeHighMT",
-    "FakeLowMT": "FakeLowMT",
-    "rFake": "fakerate",
-    "rFakemu": "fakerate",
-    "rFakee": "fakerate",
-    "FakemuHighMT": "FakeHighMT",
-    "FakemuLowMT": "FakeLowMT",
-    "FakeeHighMT": "FakeHighMT",
-    "FakeeLowMT": "FakeLowMT",
-    "massShiftZ": "Z mass",
-    "massShiftW": "W mass",
-    "pdfMSHT20": "PDF",
-    "pdfMSHT20AlphaS": r"PDF $\alpha_\mathrm{S}$",
-    "resumTNP": "Non purt. trans.",
-    "resumNonpert": "Non pert.",
-    "pdfMSHT20": "PDF",
-    "pdfMSHT20": "PDF",
-    "eff_stat": "$\epsilon^{\mu}_\mathrm{stat}$",
-    "eff_syst": "$\epsilon^{\mu}_\mathrm{syst}$",
-    "muonPrefire": "L1 prefire",
-    "ecalPrefire": "L1 ecal prefire",
-    "stat": "Data stat.",
-    "luminosity": "Luminosity",
-    "theory_ew": "EW",
-}
 
 xlabels = {
     "ptGen" : r"$p_{T}^{\ell}$ [GeV]",
@@ -359,12 +328,15 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normaliz
         zorder=2,
     )
     uncertainties = make_yields_df([hist_xsec], ["Total"], per_bin=True, yield_only=True, percentage=percentage)
-    # fakerate = ["err_FakemuHighMT", "err_FakemuLowMT", "err_rFakemu"]
+    # remove partial nuisance groups
+    remove = ["muonPrefire", "ecalPrefire", 
+        "resumTransition", "resumTNP", "resumNonpert", "resumScale", 
+        "pdfMSHT20", # "pdfMSHT20NoAlphaS", "pdfMSHT20AlphaS",
+        "QCDscaleZPtChargeMiNNLO", "QCDscaleZPtHelicityMiNNLO", "QCDscaleZPtChargeHelicityMiNNLO",
+        "QCDscaleWPtChargeMiNNLO", "QCDscaleWPtHelicityMiNNLO", "QCDscaleWPtChargeHelicityMiNNLO", ]
     sources =["err_stat"]
-    # sources += fakerate
-    remove = []#["massShiftZ", "ecalPrefire", "QCDscaleZPtChargeMiNNLO", "QCDscaleZPtHelicityMiNNLO", "QCDscaleZPtChargeHelicityMiNNLO", ]
     sources += list(sorted([s for s in filter(lambda x: x.startswith("err"), df.keys()) 
-        if s.replace("err_","") not in ["stat", "total", "FakeHighMT", "FakeLowMT", "rFake", "resumTNP", *remove] 
+        if s.replace("err_","") not in ["stat", "total", "FakeHighMT", "FakeLowMT", "rFake", *remove] 
             and "eff_stat_" not in s and "eff_syst_" not in s]))    # only take eff grouped stat and syst
 
     NUM_COLORS = len(sources)-1
@@ -373,9 +345,9 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normaliz
     i=0
     for source in sources:
 
-        name = source.replace("err_","").replace("muon_","")
+        name = source.replace("err_","")
 
-        name = translate.get(name,name)
+        name = translate_label.get(name,name)
 
         if source =="err_stat":
             color = "grey"

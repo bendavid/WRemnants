@@ -278,7 +278,13 @@ class CardTool(object):
 
         if name == self.nominalName:
             logger.debug(f"Defining syst {rename} from nominal histogram")
-            
+        
+        # precompile splitGroup expressions for better performance
+        splitGroupDict = {g: re.compile(v) for g, v in splitGroup.items()}
+        # add the group with everything if not there already
+        if group not in splitGroupDict:
+            splitGroupDict[group] = re.compile(".*")
+
         self.systematics.update({
             name if not rename else rename : {
                 "outNames" : [] if not outNames else outNames,
@@ -289,7 +295,7 @@ class CardTool(object):
                 "group" : group,
                 "noi": noi,
                 "groupFilter" : groupFilter,
-                "splitGroup" : splitGroup if len(splitGroup) else {group : ".*"}, # dummy dictionary if splitGroup=None, to allow for uniform treatment
+                "splitGroup" : splitGroupDict, 
                 "scale" : scale,
                 "mirror" : mirror,
                 "mirrorDownVarEqualToUp" : mirrorDownVarEqualToUp,
@@ -871,8 +877,7 @@ class CardTool(object):
                 systNamesForGroupPruned = systNames[:]
                 systNamesForGroup = list(systNamesForGroupPruned if not groupFilter else filter(groupFilter, systNamesForGroupPruned))
                 if len(systNamesForGroup):
-                    for subgroup in splitGroupDict.keys():
-                        matchre = re.compile(splitGroupDict[subgroup])
+                    for subgroup, matchre in splitGroupDict.items():
                         systNamesForSubgroup = list(filter(lambda x: matchre.match(x),systNamesForGroup))
                         if len(systNamesForSubgroup):
                             members = " ".join(systNamesForSubgroup)

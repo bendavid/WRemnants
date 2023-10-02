@@ -415,7 +415,6 @@ def setup(args, inputFile, fitvar, xnorm=False):
                     mirrorDownVarEqualToNomi=False
                     groupName = "muon_eff_syst"
                     splitGroupDict = {f"{groupName}_{x}" : f".*effSyst.*{x}" for x in list(effTypesNoIso + ["iso"])}
-                    splitGroupDict[groupName] = ".*effSyst.*" # add also the group with everything
                     # decorrDictEff = {                        
                     #     "x" : {
                     #         "label" : "eta",
@@ -436,7 +435,6 @@ def setup(args, inputFile, fitvar, xnorm=False):
                     scale = 1.0
                     groupName = "muon_eff_stat"
                     splitGroupDict = {f"{groupName}_{x}" : f".*effStat.*{x}" for x in effStatTypes}
-                    splitGroupDict[groupName] = ".*effStat.*" # add also the group with everything
                 if args.effStatLumiScale and "Syst" not in name:
                     scale /= math.sqrt(args.effStatLumiScale)
 
@@ -543,6 +541,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     cardTool.addSystematic("muonL1PrefireSyst", 
         processes=['MCnoQCD'],
         group="muonPrefire",
+        splitGroup = {f"prefire" : f".*"},
         baseName="CMS_prefire_syst_m",
         systAxes=["downUpVar"],
         labelsByAxis=["downUpVar"],
@@ -551,6 +550,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     cardTool.addSystematic("muonL1PrefireStat", 
         processes=['MCnoQCD'],
         group="muonPrefire",
+        splitGroup = {f"prefire" : f".*"},
         baseName="CMS_prefire_stat_m_",
         systAxes=["downUpVar", "etaPhiRegion"],
         labelsByAxis=["downUpVar", "etaPhiReg"],
@@ -559,6 +559,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     cardTool.addSystematic("ecalL1Prefire", 
         processes=['MCnoQCD'],
         group="ecalPrefire",
+        splitGroup = {f"prefire" : f".*"},
         baseName="CMS_prefire_ecal",
         systAxes=["downUpVar"],
         labelsByAxis=["downUpVar"],
