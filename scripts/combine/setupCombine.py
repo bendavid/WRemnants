@@ -48,7 +48,6 @@ def make_parser(parser=None):
     parser.add_argument("--pdfUncFromCorr", action='store_true', help="Take PDF uncertainty from correction hist (Requires having run that correction)")
     parser.add_argument("--ewUnc", type=str, nargs="*", default=["horacenloew"], choices=["horacenloew", "winhacnloew"], help="Include EW uncertainty")
     parser.add_argument("--widthUnc", action='store_true', help="Include uncertainty on W and Z width")
-    parser.add_argument("--noStatUncFakes" , action="store_true",   help="Set bin error for QCD background templates to 0, to check MC stat uncertainties for signal only")
     parser.add_argument("--skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
     parser.add_argument("--noQCDscaleFakes", action="store_true",   help="Do not apply QCd scale uncertainties on fakes, mainly for debugging")
     parser.add_argument("--addQCDMC", action="store_true", help="Include QCD MC when making datacards (otherwise by default it will always be excluded)")
@@ -168,9 +167,6 @@ def setup(args, inputFile, fitvar, xnorm=False):
             # out of acceptance contribution
             datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if not m.name.startswith("Bkg")])
 
-    if args.noHist and args.noStatUncFakes:
-        raise ValueError("Option --noHist would override --noStatUncFakes. Please select only one of them")
-
     if "BkgWmunu" in args.excludeProcGroups:
         datagroups.deleteGroup("Wmunu") # remove out of acceptance signal
 
@@ -235,8 +231,6 @@ def setup(args, inputFile, fitvar, xnorm=False):
     if args.noHist:
         cardTool.skipHistograms()
     cardTool.setSpacing(28)
-    if args.noStatUncFakes:
-        cardTool.setProcsNoStatUnc(procs=args.qcdProcessName, resetList=False)
     cardTool.setCustomSystForCard(args.excludeNuisances, args.keepNuisances)
     if args.pseudoData:
         cardTool.setPseudodata(args.pseudoData, args.pseudoDataIdx, args.pseudoDataProcsRegexp)
@@ -281,12 +275,9 @@ def setup(args, inputFile, fitvar, xnorm=False):
     if args.theoryAgnostic and not args.poiAsNoi:
         logger.error("Temporarily not using mass weights for Wtaunu. Please update when possible")
         signal_samples_forMass = ["signal_samples"]
+
     if constrainMass and args.doStatOnly:
         logger.info("Using option --doStatOnly: the card was created without nuisance parameters")
-        return cardTool
-
-    if args.doStatOnly and constrainMass:
-        # no mass weight uncertainty for stat only fits if mass weight is a nuisance (e.g. unfolding, xsec, ...)
         return cardTool
 
     cardTool.addSystematic(f"massWeight{label}",

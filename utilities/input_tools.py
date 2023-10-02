@@ -498,7 +498,6 @@ def get_metadata(infile):
         with open(infile, "rb") as f:
             results = pickle.load(f)
     elif infile.endswith(".hdf5"):
-        import narf
         h5file = h5py.File(infile, "r")
         meta = h5file.get("results", h5file.get("meta", None))
         results = ioutils.pickle_load_h5py(meta) if meta else None
