@@ -178,11 +178,13 @@ jobs:
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/pullsAndImpacts.py 
           -f $WREMNANTS_OUTDIR/WMass_eta_pt_charge_unfolding/fitresults_123456789.hdf5 -m ungrouped --sortDescending -s constraint 
           --debug output --outFolder $WEB_DIR/$PLOT_DIR -o pulls_unfolding_mw.html -n 50 --otherExtensions png pdf
+          --grouping max -t utilities/styles/nuisance_translate.json 
 
       - name: wmass combine unfolding plot xsec 
         run: >-
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py $HIST_FILE 
           --fitresult $WREMNANTS_OUTDIR/WMass_eta_pt_charge_unfolding/fitresults_123456789.hdf5 -o $WEB_DIR -f $PLOT_DIR --debug --rrange 0.9 1.1 --logy
+          -t 'utilities/styles/nuisance_translate.json' --grouping max
 
   w-theoryfit:
     # The type of runner that the job will run on
@@ -305,6 +307,7 @@ jobs:
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py 
           $HIST_FILE --fitresult $WREMNANTS_OUTDIR/ZMassWLike_eta_pt_charge_unfolding/fitresults_123456789.hdf5 
           -o $WEB_DIR -f $PLOT_DIR --debug --rrange 0.9 1.1
+          -t 'utilities/styles/nuisance_translate.json' --grouping min
 
 
   wlike-theoryfit:
@@ -441,6 +444,7 @@ jobs:
         run: >- 
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py $HIST_FILE 
           --fitresult $WREMNANTS_OUTDIR/ZMassDilepton_ptll_unfolding/fitresults_123456789.hdf5 -o $WEB_DIR -f $PLOT_DIR --debug --rrange 0.9 1.1 --logy
+          -t 'utilities/styles/nuisance_translate.json' --grouping max
 
 
   copy-clean:

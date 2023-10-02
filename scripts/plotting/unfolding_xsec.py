@@ -14,6 +14,7 @@ import h5py
 import json
 
 from utilities import boostHistHelpers as hh, logging, input_tools, common, differential, output_tools
+from utilities.styles.styles import nuisance_groupings as groupings
 from wremnants import plot_tools, histselections as sel
 from wremnants.datasets.datagroups import Datagroups
 from wremnants.unfolding_tools import get_bin, getProcessBins, get_results, load_poi_matrix
@@ -42,12 +43,15 @@ parser.add_argument("--normalize", action='store_true', help="Plot normalized di
 parser.add_argument("--lumi", type=float, default=16.8, help="Luminosity used in the fit, needed to get the absolute cross section")
 parser.add_argument("--plotSumPOIs", action='store_true', help="Plot xsecs from sum POI groups")
 parser.add_argument("--scaleXsec", type=float, default=1.0, help="Scale xsec predictions with this number")
+parser.add_argument("--grouping", type=str, default=None, help="Select nuisances by a predefined grouping", choices=groupings.keys())
 parser.add_argument("-t","--translate", type=str, default=None, help="Specify .json file to translate labels")
 parser.add_argument("--eoscp", action='store_true', help="Override use of xrdcp and use the mount instead")
 
 args = parser.parse_args()
 
 logger = logging.setup_logger("unfolding_xsec", 4 if args.debug else 3)
+
+grouping = groupings[args.grouping] if args.grouping else None
 
 translate_label = {}
 if args.translate:
@@ -328,16 +332,13 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normaliz
         zorder=2,
     )
     uncertainties = make_yields_df([hist_xsec], ["Total"], per_bin=True, yield_only=True, percentage=percentage)
-    # remove partial nuisance groups
-    remove = ["muonPrefire", "ecalPrefire", 
-        "resumTransition", "resumTNP", "resumNonpert", "resumScale", 
-        "pdfMSHT20", # "pdfMSHT20NoAlphaS", "pdfMSHT20AlphaS",
-        "QCDscaleZPtChargeMiNNLO", "QCDscaleZPtHelicityMiNNLO", "QCDscaleZPtChargeHelicityMiNNLO",
-        "QCDscaleWPtChargeMiNNLO", "QCDscaleWPtHelicityMiNNLO", "QCDscaleWPtChargeHelicityMiNNLO", ]
-    sources =["err_stat"]
-    sources += list(sorted([s for s in filter(lambda x: x.startswith("err"), df.keys()) 
-        if s.replace("err_","") not in ["stat", "total", "FakeHighMT", "FakeLowMT", "rFake", *remove] 
-            and "eff_stat_" not in s and "eff_syst_" not in s]))    # only take eff grouped stat and syst
+    
+    if grouping:
+        sources = ["err_"+g for g in grouping]
+    else:
+        sources =["err_stat"]
+        sources += list(sorted([s for s in filter(lambda x: x.startswith("err"), df.keys()) 
+            if s.replace("err_","") not in ["stat", "total"] ])) # total and stat are added first
 
     NUM_COLORS = len(sources)-1
     cm = mpl.colormaps["gist_rainbow"]

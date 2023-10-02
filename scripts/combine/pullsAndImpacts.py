@@ -15,6 +15,8 @@ import os
 import re
 import json
 
+from utilities.styles.styles import nuisance_groupings as groupings
+
 def writeOutput(fig, outfile, extensions=[], postfix=None, args=None, meta_info=None):
     name, ext = os.path.splitext(outfile)
     if ext not in extensions:
@@ -236,11 +238,13 @@ def readFitInfoFromFile(rf, filename, group=False, stat=0.0, POI='Wmass', normal
     # skip POIs in case of unfolding, want only nuisances
     pois = input_tools.getPOInames(rf) if POI is None else []
 
-    if args.filters or len(pois) > 0:
+    if (group and grouping) or args.filters or len(pois) > 0:
         filtimpacts = []
         filtlabels = []
         for impact,label in zip(impacts,labels):
             if label in pois:
+                continue
+            if grouping and label not in grouping:
                 continue
             if args.filters and not any(re.match(f, label) for f in args.filters):
                 continue
@@ -294,6 +298,7 @@ def parseArgs():
     parser.add_argument("--debug", action='store_true', help="Print debug output")
     parser.add_argument("--oneSidedImpacts", action='store_true', help="Make impacts one-sided")
     parser.add_argument("--filters", nargs="*", type=str, help="Filter regexes to select nuisances by name")
+    parser.add_argument("--grouping", type=str, default=None, help="Select nuisances by a predefined grouping", choices=groupings.keys())
     parser.add_argument("-t","--translate", type=str, default=None, help="Specify .json file to translate labels")
     parsers = parser.add_subparsers(dest='output_mode')
     interactive = parsers.add_parser("interactive", help="Launch and interactive dash session")
@@ -412,6 +417,8 @@ if __name__ == '__main__':
     args = parseArgs()
 
     logger = logging.setup_logger("pullsAndImpacts", 4 if args.debug else 3)
+
+    grouping = groupings[args.grouping] if args.grouping else None
 
     translate_label = {}
     if args.translate:
