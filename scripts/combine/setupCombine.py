@@ -96,7 +96,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
 
     datagroups = Datagroups(inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm and not args.ABCD)
     wmass = datagroups.mode == "wmass"
-    wlike = datagroups.mode == "wmass"
+    wlike = datagroups.mode == "wlike"
     lowPU = "lowpu" in datagroups.mode
     # Detect lowpu dilepton
     dilepton = "dilepton" in datagroups.mode or any(x in ["ptll", "mll"] for x in fitvar)
@@ -104,14 +104,6 @@ def setup(args, inputFile, fitvar, xnorm=False):
     # Start to create the CardTool object, customizing everything
     cardTool = CardTool.CardTool(xnorm=xnorm, ABCD=wmass and args.ABCD)
     cardTool.setDatagroups(datagroups)
-    cardTool.addProcessGroup("single_v_samples", lambda x: x[0] in ["W", "Z"] and x[1] not in ["W","Z"])
-    if wmass:
-        cardTool.addProcessGroup("single_v_nonsig_samples", lambda x: x[0] == "Z" and x[1] not in ["W","Z"])
-
-    cardTool.addProcessGroup("single_vmu_samples", lambda x: x[0] in ["W", "Z"] and x[1] not in ["W","Z"] and "tau" not in x)
-    cardTool.addProcessGroup("signal_samples", lambda x: ((x[0] == "W" and wmass) or (x[0] == "Z" and not wmass)) and x[1] not in ["W","Z"] and "tau" not in x)
-    cardTool.addProcessGroup("signal_samples_inctau", lambda x: ((x[0] == "W" and wmass) or (x[0] == "Z" and not wmass)) and x[1] not in ["W","Z"])
-    cardTool.addProcessGroup("MCnoQCD", lambda x: x not in ["QCD", "Data"])
 
     if not xnorm and (args.axlim or args.rebin or args.absval):
         if len(args.axlim) % 2 or len(args.axlim)/2 > len(fitvar) or len(args.rebin) > len(fitvar):
@@ -170,7 +162,15 @@ def setup(args, inputFile, fitvar, xnorm=False):
     if "BkgWmunu" in args.excludeProcGroups:
         datagroups.deleteGroup("Wmunu") # remove out of acceptance signal
 
-    cardTool.setDatagroups(datagroups)
+    cardTool.addProcessGroup("single_v_samples", lambda x: x[0] in ["W", "Z"] and x[1] not in ["W","Z"])
+    if wmass:
+        cardTool.addProcessGroup("single_v_nonsig_samples", lambda x: x[0] == "Z" and x[1] not in ["W","Z"])
+
+    cardTool.addProcessGroup("single_vmu_samples", lambda x: x[0] in ["W", "Z"] and x[1] not in ["W","Z"] and "tau" not in x)
+    cardTool.addProcessGroup("signal_samples", lambda x: ((x[0] == "W" and wmass) or (x[0] == "Z" and not wmass)) and x[1] not in ["W","Z"] and "tau" not in x)
+    cardTool.addProcessGroup("signal_samples_inctau", lambda x: ((x[0] == "W" and wmass) or (x[0] == "Z" and not wmass)) and x[1] not in ["W","Z"])
+    cardTool.addProcessGroup("MCnoQCD", lambda x: x not in ["QCD", "Data"])
+
     if args.qcdProcessName:
         cardTool.setFakeName(args.qcdProcessName)
     logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
@@ -640,7 +640,7 @@ def outputFolderName(outfolder, card_tool, doStatOnly, postfix):
     if doStatOnly:
         to_join.append("statOnly")
     if card_tool.datagroups.flavor:
-        tag.append(card_tool.datagroups.flavor)
+        to_join.append(card_tool.datagroups.flavor)
     if postfix is not None:
         to_join.append(postfix)
 

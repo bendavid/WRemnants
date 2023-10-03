@@ -39,11 +39,9 @@ def fakeHistIsoRegion(h, scale=1.):
     return h[{"iso" : 4}]*scale
 
 def fakeHistIsoRegionIntGen(h, scale=1.):
-    print([ax.name for ax in h.axes])
     if not "qTgen" in [ax.name for ax in h.axes]:
         return h[{"iso" : 4}]*scale
     s = hist.tag.Slicer()
-    print("Slicing")
     return h[{"iso" : 0, "qTgen" : s[::hist.sum]}]
 
 def signalHistWmass(h, thresholdMT=40.0, charge=None, passIso=common.passIso, passMT=True, axis_name_mt="mt", integrateLowMT=True, integrateHighMT=False, genBin=None):

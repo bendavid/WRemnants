@@ -10,6 +10,7 @@ from wremnants.datasets.datasetDict_v9 import dataDictV9
 from wremnants.datasets.datasetDict_v8 import dataDictV8
 from wremnants.datasets.datasetDict_gen import genDataDict
 from wremnants.datasets.datasetDict_lowPU import dataDictLowPU
+import ROOT
 
 logger = logging.child_logger(__name__)
 
@@ -124,6 +125,15 @@ def getDataPath(mode=None):
 
     return base_path
 
+def is_zombie(file_path):
+    # Try opening the ROOT file and check if it's a zombie file
+    file = ROOT.TFile.Open(file_path)
+    if not file or file.IsZombie():
+        logger.warning(f"Found zombie file: {file_path}")
+        return True
+    file.Close()
+    return False
+
 def getDatasets(maxFiles=default_nfiles, filt=None, excl=None, mode=None, base_path=None, nanoVersion="v9", 
                 data_tag="TrackFitV722_NanoProdv2", mc_tag="TrackFitV718_NanoProdv1", 
                 oneMCfileEveryN=None, checkFileForZombie=False):
@@ -197,16 +207,3 @@ def getDatasets(maxFiles=default_nfiles, filt=None, excl=None, mode=None, base_p
             logger.warning(f"Failed to find any files for sample {sample.name}!")
 
     return narf_datasets
-
-def is_zombie(file_path):
-    # Try opening the ROOT file and check if it's a zombie file
-    try:
-        file = ROOT.TFile.Open(file_path)
-        if not file or file.IsZombie():
-            logger.warning(f"Found zombie file: {file_path}")
-            return True
-        file.Close()
-        return False
-    except:
-        logger.warning(f"Found zombie file: {file_path}")
-        return True

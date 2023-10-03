@@ -88,7 +88,7 @@ class TheoryHelper(object):
             
         self.resumUnc = resumUnc
         
-    def add_resum_unc(self, magnitude=1, mirror=False, scale=1, minnloUnc='byHelicityPt'):
+    def add_resum_unc(self, magnitude=1, mirror=False, scale=1):
         if not self.resumUnc:
             logger.warning("No resummation uncertainty will be applied!")
 
@@ -98,15 +98,15 @@ class TheoryHelper(object):
         if self.minnlo_unc and self.minnlo_unc not in ["none", None]:
             for sample_group in ["signal_samples_inctau", "single_v_nonsig_samples"]:
                 if self.card_tool.procGroups.get(sample_group, None):
-                    self.add_minnlo_scale_uncertainty(minnloUnc, sample_group, rebin_pt=common.ptV_binning)
+                    self.add_minnlo_scale_uncertainty(sample_group, rebin_pt=common.ptV_binning)
 
-    def add_minnlo_scale_uncertainty(self, scale_type, sample_group, use_hel_hist=False, rebin_pt=None):
+    def add_minnlo_scale_uncertainty(self, sample_group, use_hel_hist=False, rebin_pt=None):
         if not sample_group:
-            logger.warning(f"Skipping QCD scale syst '{scale_type}', no process to apply it to")
+            logger.warning(f"Skipping QCD scale syst '{self.minnlo_unc}', no process to apply it to")
             return
             
-        helicity = "Helicity" in scale_type
-        pt_binned = "Pt" in scale_type
+        helicity = "Helicity" in self.minnlo_unc
+        pt_binned = "Pt" in self.minnlo_unc
         scale_hist = "qcdScale" if not (helicity or use_hel_hist) else "qcdScaleByHelicity"
         if "helicity" in scale_hist.lower():
             use_hel_hist = True
@@ -153,11 +153,11 @@ class TheoryHelper(object):
 
         action_map = {proc : func for proc in expanded_samples}
             
-        # Determine if it should be summed over based on scale_type passed in. If not,
+        # Determine if it should be summed over based on minnlo_unc. If not,
         # Remove it from the sum list and set names appropriately
         def set_sum_over_axis(identifier, ax_name):
             nonlocal sum_axes,group_name,syst_axes,syst_ax_labels
-            if identifier in scale_type:
+            if identifier in self.minnlo_unc:
                 sum_axes.remove(ax_name)
                 group_name += identifier
             elif ax_name in syst_axes:

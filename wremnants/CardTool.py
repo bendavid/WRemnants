@@ -110,8 +110,7 @@ class CardTool(object):
             self.sum_axes = [ax for ax in hnom.axes.name if ax not in self.fit_axes]
             logger.debug(f"Will sum over the axes {self.sum_axes}")
         except ValueError as e:
-            logger.warning("Failed to set sum_axes!")
-            logger.warning(f"Error message was {str(e)}")
+            logger.info("Failed to set sum_axes, will not reduce the histogram")
 
     def setFakerateAxes(self, fakerate_axes=["pt", "eta", "charge"]):
         self.fakerateAxes = fakerate_axes
@@ -975,9 +974,6 @@ class CardTool(object):
             return
         if self.fit_axes:
             axes = self.fit_axes[:]
-            # TODO: SHould probably not auto set this anymore
-            if self.charge_ax in h.axes.name and not self.xnorm and self.charge_ax not in axes:
-                axes.append("charge")
             if self.ABCD and not self.xnorm:
                 if self.nameMT not in axes:
                     axes.append(self.nameMT)
@@ -989,7 +985,7 @@ class CardTool(object):
                 raise ValueError(f"Histogram has {h.axes.name} but requested axes for projection are {axes}")
             if len(axes) < len(h.axes.name):
                 logger.debug(f"Projecting {h.axes.name} into {axes}")
-                h = h.fit_axes(*axes)
+                h = h.project(*axes)
 
         if self.unroll:
             logger.debug(f"Unrolling histogram")
