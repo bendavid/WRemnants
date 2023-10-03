@@ -208,7 +208,7 @@ def add_resolution_uncertainty(df, axes, results, nominal_cols, smearing_uncerta
     )
 
     muonResolutionSyst_responseWeights = df.HistoBoost(
-            "muonResolutionSyst_responseWeights", axes,
+            "nominal_muonResolutionSyst_responseWeights", axes,
             [*nominal_cols, "muonResolutionSyst_weights"],
             tensor_axes = smearing_uncertainty_helper.tensor_axes, storage=hist.storage.Double()
         )
