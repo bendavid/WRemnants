@@ -259,7 +259,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
             cardTool.setPseudodataDatagroups(make_datagroup(args.pseudoDataFile,
                                                                   excludeGroups=excludeGroup,
                                                                   filterGroups=filterGroup,
-                                                                  applySelection= not xnorm)
+                                                                  applySelection= not xnorm and not args.ABCD) # ensure consistency with the main datagroups
             )
     cardTool.setLumiScale(args.lumiScale)
 
@@ -683,7 +683,7 @@ if __name__ == "__main__":
         logger.warning("For now setting --theoryAgnostic activates --unfolding, they should do the same things")
         if args.genAxes is None:
             args.genAxes = ["ptVgenSig", "absYVgenSig", "helicitySig"]
-            logger.warning("Automatically setting '--genAxes ptVgenSig absYVgenSig helicitySig' for theory agnostic analysis")
+            logger.warning(f"Automatically setting '--genAxes {' '.join(args.genAxes)}' for theory agnostic analysis")
             if args.poiAsNoi:
                 logger.warning("This is only needed to properly get the systematic axes")
                 
