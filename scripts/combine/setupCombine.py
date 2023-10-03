@@ -627,7 +627,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
         cardTool.addSystematic("muonResolutionSyst_responseWeights", 
             mirror = True,
             processes=['single_v_samples'],
-            group="resolutionCrctn" if args.sepImpactForNC else "muonCalibration",
+            group="resolutionCrctn" if args.sepImpactForReso else "muonCalibration",
             baseName="Resolution_correction_",
             systAxes=["smearing_variation"],
             passToFakes=passSystToFakes
