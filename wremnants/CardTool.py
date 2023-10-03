@@ -363,7 +363,7 @@ class CardTool(object):
 
     def skipEntryDictToArray(self, h, skipEntry, syst):
         nsyst = len(self.systematics[syst]["systAxes"])
-        if self.systematics[syst]["mirror"]:
+        if "mirror" in h.axes.name:
             nsyst += 1
 
         if type(skipEntry) == dict:
@@ -377,6 +377,9 @@ class CardTool(object):
             raise ValueError(f"Unexpected format for skipEntry. Must be either dict or sequence. found {type(skipEntry)}")
         else:
             skipEntryArr = skipEntry
+
+        if self.systematics[syst]["mirror"] and "mirror" not in h.axes.name and skipEntryArr[-1] == -1:
+            skipEntryArr = skipEntryArr[:-1]
 
         if len(skipEntryArr) != nsyst:
             raise ValueError("skipEntry tuple must have the same dimensions as the number of syst axes. " \

@@ -178,7 +178,11 @@ class HDF5Writer(object):
                         norm_proc = norm_proc_hist.values(flow=False).flatten().astype(self.dtype)
                         sumw2_proc = norm_proc_hist.variances(flow=False).flatten().astype(self.dtype)
                 else:
+                    if norm_proc_hist.axes != axes:
+                        norm_proc_hist = norm_proc_hist.project(*axes)
+
                     norm_proc = norm_proc_hist.values(flow=False).flatten().astype(self.dtype)
+
                     if norm_proc.shape[0] != nbinschan:
                         raise Exception(f"Mismatch between number of bins in channel {chan} for expected ({nbinschan}) and template ({norm_proc.shape[0]})")
 
