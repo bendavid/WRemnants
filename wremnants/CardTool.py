@@ -109,7 +109,7 @@ class CardTool(object):
             hnom = self.getNominalHistForSignal()
             self.sum_axes = [ax for ax in hnom.axes.name if ax not in self.fit_axes]
             logger.debug(f"Will sum over the axes {self.sum_axes}")
-        except ValueError as e:
+        except (ValueError,RuntimeError) as e:
             logger.info("Failed to set sum_axes, will not reduce the histogram")
 
     def setFakerateAxes(self, fakerate_axes=["pt", "eta", "charge"]):

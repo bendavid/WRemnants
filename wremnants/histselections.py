@@ -98,8 +98,16 @@ def get_mt_selection(h, thresholdMT=40.0, axis_name_mt="mt", integrateLowMT=True
 
     return nameMT, failMT, passMT
 
-def unrolledHist(h, obs=["pt", "eta"]):
+def unrolledHist(h, obs=["pt", "eta"], binwnorm=None):
     hproj = h.project(*obs)
+
+    if binwnorm:
+        if len(hproj.axes) != 2:
+            raise NotImplementedError(f"binwnorm != None only implemented for two axes. Found {hproj.axes.name}")
+        inv_widths = [1./(ax.edges[1:]-ax.edges[:-1]) for ax in hproj.axes]
+        corr = np.outer(*inv_widths)*binwnorm
+        hproj = hproj*corr
+
     bins = np.product(hproj.axes.size)
     newh = hist.Hist(hist.axis.Integer(0, bins), storage=hproj._storage_type())
     newh[...] = np.ravel(hproj)

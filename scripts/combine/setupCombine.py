@@ -104,7 +104,6 @@ def setup(args, inputFile, fitvar, xnorm=False):
 
     # Start to create the CardTool object, customizing everything
     cardTool = CardTool.CardTool(xnorm=xnorm, ABCD=wmass and args.ABCD)
-    cardTool.setDatagroups(datagroups)
 
     if not xnorm and (args.axlim or args.rebin or args.absval):
         if len(args.axlim) % 2 or len(args.axlim)/2 > len(fitvar) or len(args.rebin) > len(fitvar):
@@ -132,7 +131,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                 fitvar[i] = f"abs{var}"
 
 
-    constrainMass = (dilepton and not "mll" in fitvar) or args.fitXsec or analysis_label(cardTool) == "ZGen"
+    constrainMass = (dilepton and not "mll" in fitvar) or args.fitXsec 
 
     if wmass:
         base_group = "Wenu" if datagroups.flavor == "e" else "Wmunu"
@@ -155,6 +154,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                 datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen1", member_filter=lambda x: x.name.startswith("Wplus"))
             # out of acceptance contribution
             datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if not m.name.startswith("Bkg")])
+            datagroups.deleteGroup(base_group) 
         else:
             datagroups.defineSignalBinsUnfolding(base_group, "Z", member_filter=lambda x: x.name.startswith(base_group))
             # out of acceptance contribution
@@ -163,6 +163,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     if "BkgWmunu" in args.excludeProcGroups:
         datagroups.deleteGroup("Wmunu") # remove out of acceptance signal
 
+    cardTool.setDatagroups(datagroups)
     cardTool.addProcessGroup("single_v_samples", lambda x: x[0] in ["W", "Z"] and x[1] not in ["W","Z"])
     if wmass:
         cardTool.addProcessGroup("single_v_nonsig_samples", lambda x: x[0] == "Z" and x[1] not in ["W","Z"])
@@ -255,7 +256,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
             logger.info(f"Single V no signal samples: {cardTool.procGroups['single_v_nonsig_samples']}")
         logger.info(f"Signal samples: {cardTool.procGroups['signal_samples']}")
 
-    constrainedZ = constrainMass and not wmass
+    constrainedZ = (constrainMass and not wmass) or analysis_label(cardTool) == "ZGen"
     label = 'W' if wmass else 'Z'
     massSkip = [(f"^massShift[W|Z]{i}MeV.*",) for i in range(0, 110 if constrainedZ else 100, 10)]
     if wmass and not xnorm and not args.doStatOnly:
@@ -367,7 +368,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
         scale_pdf_unc=args.scalePdf,
         minnlo_unc=args.minnloScaleUnc,
     )
-    theory_helper.add_all_theory_unc()
+    theory_helper.add_all_theory_unc(nonsig=not xnorm)
 
     if xnorm or datagroups.mode == "vgen":
         return cardTool
@@ -630,7 +631,6 @@ def setup(args, inputFile, fitvar, xnorm=False):
     return cardTool
 
 def analysis_label(card_tool):
-    print(card_tool)
     analysis_name_map = {
         "wmass" : "WMass",
         "vgen" : "ZGen" if card_tool.getProcesses()[0][0] == "Z" else "WGen",

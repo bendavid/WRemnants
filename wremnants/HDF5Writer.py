@@ -135,7 +135,7 @@ class HDF5Writer(object):
                         if common.passIsoName not in axes:
                             axes.append(common.passIsoName)
 
-                    if chanInfo.ABCD and set(chanInfo.fakerateAxes) != set(chanInfo.project):
+                    if chanInfo.ABCD and set(chanInfo.fakerateAxes) != set(chanInfo.fit_axes):
                         data_obs = projectABCD(chanInfo, data_obs_hist)
                     else:
                         if data_obs_hist.axes.name != axes:
@@ -166,7 +166,7 @@ class HDF5Writer(object):
                     if norm_proc_hist.storage_type != hist.storage.Weight:
                         raise RuntimeError(f"Sumw2 not filled for {proc} but needed for binByBin uncertainties")
 
-                    if chanInfo.ABCD and set(chanInfo.fakerateAxes) != set(chanInfo.project):
+                    if chanInfo.ABCD and set(chanInfo.fakerateAxes) != set(chanInfo.fit_axes):
                         norm_proc, sumw2_proc = projectABCD(chanInfo, norm_proc_hist, return_variances=True)
                     else:
                         if norm_proc_hist.axes != axes:
@@ -289,7 +289,7 @@ class HDF5Writer(object):
                         def get_logk(histname, var_type=""):
                             _hist = var_map[histname+var_type]
 
-                            if not masked and chanInfo.ABCD and set(chanInfo.fakerateAxes) != set(chanInfo.project):
+                            if not masked and chanInfo.ABCD and set(chanInfo.fakerateAxes) != set(chanInfo.fit_axes):
                                 _syst = projectABCD(chanInfo, _hist)
                             else:
                                 if _hist.axes != axes:

@@ -487,6 +487,8 @@ class Datagroups(object):
         if not to_expand:
             to_expand = self.groups.keys()
         for group_name in to_expand:
+            if group_name not in self.groups:
+                raise ValueError(f"Trying to expand unknown group {group_name}. Valid groups are {list(self.groups.keys())}")
             if group_name not in exclude_group:
                 for member in self.groups[group_name].members:
                     # protection against duplicates in the output list, they may arise from fakes

@@ -55,8 +55,10 @@ class TheoryHelper(object):
         self.pdf_action = pdf_action
         self.scale_pdf_unc = scale_pdf_unc
         self.minnlo_unc = minnlo_unc
+        self.samples = []
 
-    def add_all_theory_unc(self):
+    def add_all_theory_unc(self, nonsig=True):
+        self.samples = ["signal_samples_inctau", "single_v_nonsig_samples"] if nonsig else ["signal_samples"]
         self.add_nonpert_unc(model=self.np_model)
         self.add_resum_unc(magnitude=self.tnp_magnitude, mirror=self.mirror_tnp, scale=self.tnp_scale)
         self.add_pdf_uncertainty(from_corr=self.pdf_from_corr, action=self.pdf_action, scale=self.scale_pdf_unc)
@@ -96,13 +98,13 @@ class TheoryHelper(object):
             self.add_resum_tnp_unc(magnitude, mirror, scale)
 
         if self.minnlo_unc and self.minnlo_unc not in ["none", None]:
-            for sample_group in ["signal_samples_inctau", "single_v_nonsig_samples"]:
+            for sample_group in self.samples:
                 if self.card_tool.procGroups.get(sample_group, None):
                     self.add_minnlo_scale_uncertainty(sample_group, rebin_pt=common.ptV_binning)
 
     def add_minnlo_scale_uncertainty(self, sample_group, use_hel_hist=False, rebin_pt=None):
-        if not sample_group:
-            logger.warning(f"Skipping QCD scale syst '{self.minnlo_unc}', no process to apply it to")
+        if not sample_group or sample_group not in self.card_tool.procGroups:
+            logger.warning(f"Skipping QCD scale syst '{self.minnlo_unc}' for group '{sample_group}.' No process to apply it to")
             return
             
         helicity = "Helicity" in self.minnlo_unc
@@ -381,7 +383,7 @@ class TheoryHelper(object):
                 else:
                     raise ValueError(f"Failed to find all vars {vals} for var {label} in hist {self.np_hist_name}")
 
-        for sample_group in ["signal_samples_inctau", "single_v_nonsig_samples"]:
+        for sample_group in self.samples:
             if not self.card_tool.procGroups.get(sample_group, None):
                 continue
             label = self.sample_label(sample_group)
@@ -459,14 +461,14 @@ class TheoryHelper(object):
     def add_resum_transition_uncertainty(self):
         obs = self.card_tool.fit_axes[:]
 
-        for sample_group in ["single_v_nonsig_samples", "signal_samples_inctau"]:
+        for sample_group in self.samples:
             if self.card_tool.procGroups.get(sample_group, None):
                 continue
             expanded_samples = self.card_tool.getProcNames([sample_group])
             name_append = self.sample_label(sample_group)
 
             self.card_tool.addSystematic(name=self.corr_hist_name,
-                processes=["single_v_samples"],
+                processes=[sample_group],
                 group="resumTransition",
                 systAxes=["downUpVar"],
                 passToFakes=to_fakes,
