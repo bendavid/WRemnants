@@ -643,7 +643,7 @@ class CardTool(object):
             logger.warning(f"These processes are taken from nominal datagroups: {processesFromNomi}")
             datagroupsFromNomi = self.datagroups
             datagroupsFromNomi.loadHistsForDatagroups(
-                baseName=self.pseudoData, syst=self.nominalName, label=self.pseudoData,
+                baseName=self.pseudoData, syst=self.nominalName, label=self.pseudoData, # CHECK: shouldn't it be syst=self.pseudoData?
                 procsToRead=processesFromNomi,
                 scaleToNewLumi=self.lumiScale,
                 fakerateIntegrationAxes=self.getFakerateIntegrationAxes())
@@ -657,6 +657,7 @@ class CardTool(object):
                 hdata = hdata[{systAxName : self.pseudoDataIdx }] 
 
         self.writeHist(hdata, self.getDataName(), self.pseudoData+"_sum")
+        self.writeHist(procDict[self.getFakeName()].hists[self.pseudoData], self.getFakeName(), self.pseudoData+"_sum")
 
     def writeForProcesses(self, syst, processes, label, check_systs=True):
         logger.info("-"*50)
