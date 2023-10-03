@@ -553,7 +553,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
 
     # cardTool.addSystematic(msv_config['hist_name'], 
     #     processes=['single_v_samples' if wmass else 'single_vmu_samples'],
-    #     group="muonScale",
+    #     group="muonCalibration",
     #     baseName="CMS_scale_m_",
     #     systAxes=msv_config['syst_axes'],
     #     labelsByAxis=msv_config['syst_axes_labels'],
@@ -590,7 +590,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     if non_closure_scheme in ["A-M-separated", "A-only"]:
         cardTool.addSystematic("Z_non_closure_parametrized_A", 
             processes=['single_v_samples'],
-            group="nonClosure" if args.sepImpactForNC else "muonScale",
+            group="nonClosure" if args.sepImpactForNC else "muonCalibration",
             baseName="Z_nonClosure_parametrized_A_",
             systAxes=["unc", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
             labelsByAxis=["unc", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
@@ -599,7 +599,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     if non_closure_scheme in ["A-M-separated", "M-only", "binned-plus-M"]:
         cardTool.addSystematic("Z_non_closure_parametrized_M", 
             processes=['single_v_samples'],
-            group="nonClosure" if args.sepImpactForNC else "muonScale",
+            group="nonClosure" if args.sepImpactForNC else "muonCalibration",
             baseName="Z_nonClosure_parametrized_M_",
             systAxes=["unc", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
             labelsByAxis=["unc", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
@@ -608,7 +608,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     if non_closure_scheme == "A-M-combined":
         cardTool.addSystematic("Z_non_closure_parametrized", 
             processes=['single_v_samples'],
-            group="nonClosure" if args.sepImpactForNC else "muonScale",
+            group="nonClosure" if args.sepImpactForNC else "muonCalibration",
             baseName="Z_nonClosure_parametrized_",
             systAxes=["unc", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
             labelsByAxis=["unc", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
@@ -617,7 +617,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     if non_closure_scheme in ["binned", "binned-plus-M"]:
         cardTool.addSystematic("Z_non_closure_binned", 
             processes=['single_v_samples'],
-            group="nonClosure" if args.sepImpactForNC else "muonScale",
+            group="nonClosure" if args.sepImpactForNC else "muonCalibration",
             baseName="Z_nonClosure_binned_",
             systAxes=["unc_ieta", "unc_ipt", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
             labelsByAxis=["unc_ieta", "unc_ipt", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
@@ -627,7 +627,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
         cardTool.addSystematic("muonResolutionSyst_responseWeights", 
             mirror = True,
             processes=['single_v_samples'],
-            group="resolutionCrctn" if args.sepImpactForNC else "muonScale",
+            group="resolutionCrctn" if args.sepImpactForNC else "muonCalibration",
             baseName="Resolution_correction_",
             systAxes=["smearing_variation"],
             passToFakes=passSystToFakes
