@@ -657,7 +657,8 @@ class CardTool(object):
                 hdata = hdata[{systAxName : self.pseudoDataIdx }] 
 
         self.writeHist(hdata, self.getDataName(), self.pseudoData+"_sum")
-        self.writeHist(procDict[self.getFakeName()].hists[self.pseudoData], self.getFakeName(), self.pseudoData+"_sum")
+        if self.getFakeName() in procDict:
+            self.writeHist(procDict[self.getFakeName()].hists[self.pseudoData], self.getFakeName(), self.pseudoData+"_sum")
 
     def writeForProcesses(self, syst, processes, label, check_systs=True):
         logger.info("-"*50)
