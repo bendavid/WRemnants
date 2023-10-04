@@ -56,7 +56,7 @@ meta_info = input_tools.get_metadata(args.fitresult)
 
 groups = Datagroups(args.infile)
 
-if groups.wmass:
+if groups.mode in ["wmass", "lowpu_w"]:
     process = "Wenu" if groups.flavor == "e" else "Wmunu"
 else:
     process = "Zee" if groups.flavor == "ee" else "Zmumu"

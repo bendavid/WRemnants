@@ -247,7 +247,7 @@ def getTheoryFitData(fitresult, axes=None, base_processes = "W", poi_type="pmask
     logger.info(f"Prepare theory fit: load measured differential cross secction distribution and covariance matrix")
 
     if fitresult.endswith(".root"):
-        if project is None:
+        if axes is None:
             raise RuntimeError("When fitresult is provided as root file the axes need to be specified")
         
         rfile = uproot.open(fitresult)

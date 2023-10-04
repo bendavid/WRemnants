@@ -454,7 +454,7 @@ class TheoryHelper(object):
             group=f"{pdfName}AlphaS",
             systAxes=["alphasVar"],
             systNameReplace=[("as", "pdfAlphaS")]+[("0116", "Down"), ("0120", "Up")] if asRange == "002" else [("0117", "Down"), ("0119", "Up")],
-            scale=0.75, # TODO: this depends on the set, should be provided in theory_tools.py
+            scale=0.75 if asRange == "002" else 1.5,
             passToFakes=self.propagate_to_fakes,
         )
 

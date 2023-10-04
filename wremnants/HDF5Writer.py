@@ -49,7 +49,7 @@ class HDF5Writer(object):
     def set_fitresult(self, fitresult):
         # for theory fit, currently not supported for sumPOI groups
         self.theoryFit = True
-        base_processes = ["W" if c.datagroups.wmass else "Z" for c in self.get_channels().values()]
+        base_processes = ["W" if c.datagroups.mode == "wmass" else "Z" for c in self.get_channels().values()]
         data, self.theoryFitDataCov = getTheoryFitData(fitresult, base_processes=base_processes)
         # theoryfit data for each channel
         self.theoryFitData = {c: d for c, d in zip(self.get_channels().keys(), data)}

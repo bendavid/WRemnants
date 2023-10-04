@@ -340,6 +340,7 @@ def makePlotWithRatioToRef(
         yerr=yerr,
         binwnorm=binwnorm,
         alpha=alpha,
+        flow='none',
     )
 
     if len(hists) > 1:

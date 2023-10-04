@@ -96,7 +96,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     logger.debug(f"Excluding these groups of processes: {args.excludeProcGroups}")
 
     datagroups = Datagroups(inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm and not args.ABCD)
-    wmass = datagroups.mode == "wmass"
+    wmass = datagroups.mode in ["wmass", "lowpu_w"]
     wlike = datagroups.mode == "wlike"
     lowPU = "lowpu" in datagroups.mode
     # Detect lowpu dilepton
@@ -185,7 +185,6 @@ def setup(args, inputFile, fitvar, xnorm=False):
         cardTool.setFakeName(datagroups.fakeName + (datagroups.flavor if datagroups.flavor else "")) 
         cardTool.unroll=True
     if args.sumChannels or xnorm or dilepton or (wmass and args.ABCD) or "charge" not in fitvar:
-        cardTool.setChannels(["inclusive"])
         cardTool.setWriteByCharge(False)
     else:
         cardTool.setChannels(args.recoCharge)
@@ -212,8 +211,9 @@ def setup(args, inputFile, fitvar, xnorm=False):
             cardTool.unroll = True
             # remove projection axes from gen axes, otherwise they will be integrated before
             
+            cardTool.setFitAxes(fitvar)
             if datagroups.gen_axes != cardTool.fit_axes:
-                raise NotImplementedError(f"The gen axes of the model {datagroups.gen_axes} do not agree with the ones requested {cardTool.project}")
+                raise NotImplementedError(f"The gen axes of the model {datagroups.gen_axes} do not agree with the ones requested {cardTool.fit_axes}")
             datagroups.setGenAxes([]) # [a for a in datagroups.gen_axes if a not in cardTool.project])
     else:
         cardTool.setHistName(args.baseName)

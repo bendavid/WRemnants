@@ -28,7 +28,7 @@ class CardTool(object):
         self.lnNSystematics = {}
         self.predictedProcs = []
         self.fakeEstimate = None
-        self.channels = ["plus", "minus"]
+        self.channels = ["inclusive"]
         self.cardContent = {}
         self.cardGroups = {}
         self.cardSumGroups = {} # POI sum groups
@@ -963,7 +963,7 @@ class CardTool(object):
         
     def writeHistWithCharges(self, h, name):
         hout = narf.hist_to_root(h)
-        hout.SetName(f"{name}_{self.channels[0]}")
+        hout.SetName(f"{name}_{self.channels[0]}" if self.channels else name)
         hout.Write()
     
     def writeHist(self, h, proc, syst, setZeroStatUnc=False, decorrByBin={}, hnomi=None):

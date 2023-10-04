@@ -296,7 +296,7 @@ jobs:
           cp -p $WREMNANTS_OUTDIR/WMass_lowPU_mt_e/* $COMBINED_DIR
 
       - name: lowpu combine mt fit 
-        run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ mass $COMBINED_DIR WMass_lowPU_minus_mu.txt WMass_lowPU_plus_mu.txt WMass_lowPU_minus_e.txt WMass_lowPU_plus_e.txt 
+        run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ mass $COMBINED_DIR WMass_lowPU_inclusive_mu.txt WMass_lowPU_inclusive_e.txt 
 
       - name: wmass combine impacts
         run: scripts/ci/run_with_singularity.sh scripts/ci/show_impacts.sh $COMBINED_DIR/fitresults_123456789.root $WEB_DIR/$PLOT_DIR/lowPU impactsW.html
@@ -387,7 +387,7 @@ jobs:
           lfs: 'true'
 
       - name: lowpu z mumu combine unfolding setup
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombine.py -i $HIST_FILE_MU $HIST_FILE_E $HIST_FILE_MUMU $HIST_FILE_EE --fitvar ptll-charge ptll-charge ptll ptll -o $COMBINED_DIR --unfolding --hdf5 --sparse --ewUnc 
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombine.py -i $HIST_FILE_MU $HIST_FILE_E $HIST_FILE_MUMU $HIST_FILE_EE --fitvar ptW-charge ptW-charge ptll ptll -o $COMBINED_DIR --unfolding --hdf5 --sparse --ewUnc 
 
       - name: lowpu combine unfolding fit 
         run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ unfolding $COMBINED_DIR card_sparse.hdf5 
