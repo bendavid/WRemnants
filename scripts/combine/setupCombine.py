@@ -184,7 +184,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
         # In case of ABCD we need to have different fake processes for e and mu to have uncorrelated uncertainties
         cardTool.setFakeName(datagroups.fakeName + (datagroups.flavor if datagroups.flavor else "")) 
         cardTool.unroll=True
-    if args.sumChannels or xnorm or dilepton or (wmass and args.ABCD) or "charge" not in args.fitvar:
+    if args.sumChannels or xnorm or dilepton or (wmass and args.ABCD) or "charge" not in fitvar:
         cardTool.setChannels(["inclusive"])
         cardTool.setWriteByCharge(False)
     else:
