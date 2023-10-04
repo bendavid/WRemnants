@@ -154,7 +154,6 @@ def setup(args, inputFile, fitvar, xnorm=False):
                 datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen1", member_filter=lambda x: x.name.startswith("Wplus"))
             # out of acceptance contribution
             datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if not m.name.startswith("Bkg")])
-            datagroups.deleteGroup(base_group) 
         else:
             datagroups.defineSignalBinsUnfolding(base_group, "Z", member_filter=lambda x: x.name.startswith(base_group))
             # out of acceptance contribution
@@ -170,6 +169,8 @@ def setup(args, inputFile, fitvar, xnorm=False):
 
     cardTool.addProcessGroup("single_vmu_samples", lambda x: x[0] in ["W", "Z"] and x[1] not in ["W","Z"] and "tau" not in x)
     cardTool.addProcessGroup("signal_samples", lambda x: ((x[0] == "W" and wmass) or (x[0] == "Z" and not wmass)) and x[1] not in ["W","Z"] and "tau" not in x)
+    if args.unfolding and not (args.theoryAgnostic and args.poiAsNoi):
+        cardTool.procGroups["signal_samples"].remove(base_group)
     cardTool.addProcessGroup("signal_samples_inctau", lambda x: ((x[0] == "W" and wmass) or (x[0] == "Z" and not wmass)) and x[1] not in ["W","Z"])
     cardTool.addProcessGroup("MCnoQCD", lambda x: x not in ["QCD", "Data"])
 
@@ -183,7 +184,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
         # In case of ABCD we need to have different fake processes for e and mu to have uncorrelated uncertainties
         cardTool.setFakeName(datagroups.fakeName + (datagroups.flavor if datagroups.flavor else "")) 
         cardTool.unroll=True
-    if args.sumChannels or xnorm or dilepton or (wmass and args.ABCD):
+    if args.sumChannels or xnorm or dilepton or (wmass and args.ABCD) or "charge" not in args.fitvar:
         cardTool.setChannels(["inclusive"])
         cardTool.setWriteByCharge(False)
     else:

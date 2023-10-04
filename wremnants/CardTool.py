@@ -100,14 +100,11 @@ class CardTool(object):
             
     def setFitAxes(self, axes):
         self.fit_axes = axes[:]
-        if self.writeByCharge and self.charge_ax not in self.fit_axes:
-            logger.info(f"Adding charge axis {self.charge_ax} to fit axes")
-            self.fit_axes.append(self.charge_ax)
 
         self.sum_axes = []
         try:
             hnom = self.getNominalHistForSignal()
-            self.sum_axes = [ax for ax in hnom.axes.name if ax not in self.fit_axes]
+            self.sum_axes = [ax for ax in hnom.axes.name if ax not in self.fit_axes and ax != self.charge_ax]
             logger.debug(f"Will sum over the axes {self.sum_axes}")
         except (ValueError,RuntimeError) as e:
             logger.info("Failed to set sum_axes, will not reduce the histogram")
