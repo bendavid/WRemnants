@@ -33,10 +33,17 @@ def makehelicityWeightHelper(is_w_like = False, filename=None):
         out = narf.ioutils.pickle_load_h5py(ff["results"])
 
     corrh = out["Z"] if is_w_like else out["W"]
+    if 'muRfact' in corrh.axes.name:
+        corrh = corrh[{'muRfact' : 1.j,}]
+    if 'muFfact' in corrh.axes.name:
+        corrh = corrh[{'muFfact' : 1.j,}]
+    missing = set(["y", "ptVgen", "chargeVgen", "helicity", "massVgen"]).difference(set(corrh.axes.name))
+    if missing != set():
+        raise ValueError (f"Axes {missing} are not present in the coeff histogram")
+    
     corrh = corrh.project('massVgen','y','ptVgen','chargeVgen', 'helicity')
     if np.count_nonzero(corrh[{"helicity" : -1.j}] == 0):
         logger.warning("Zeros in sigma UL for the angular coefficients will give undefined behaviour!")
-
     # histogram has to be without errors to load the tensor directly
     corrh_noerrs = hist.Hist(*corrh.axes, storage=hist.storage.Double())
     corrh_noerrs.values(flow=True)[...] = corrh.values(flow=True)
