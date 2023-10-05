@@ -408,14 +408,14 @@ def replace_by_neighbors(vals, replace):
     return vals[tuple(indices)]
 
 def moments_to_angular_coeffs(hist_moments_scales, cutoff=1e-5, sumW2=False):
-    sumW2 = sumW2 and hist_moments_scales._storage_type == hist.storage.Weight
+    hasSumW2 = sumW2 or hist_moments_scales._storage_type == hist.storage.Weight
 
     if hist_moments_scales.empty():
        raise ValueError("Cannot make coefficients from empty hist")
     # broadcasting happens right to left, so move to rightmost then move back
     hel_ax = hist_moments_scales.axes["helicity"]
     hel_idx = hist_moments_scales.axes.name.index("helicity")
-    vals = np.moveaxis(scale_angular_moments(hist_moments_scales, sumW2).view(flow=True), hel_idx, -1) 
+    vals = np.moveaxis(scale_angular_moments(hist_moments_scales, hasSumW2).view(flow=True), hel_idx, -1)
     values = vals.value if hasattr(vals,"value") else vals
     
     # select constant term, leaving dummy axis for broadcasting
@@ -429,10 +429,10 @@ def moments_to_angular_coeffs(hist_moments_scales, cutoff=1e-5, sumW2=False):
     coeffs = vals / norm_vals + offsets
 
     # replace values in zero-xsec regions (otherwise A0 is spuriously set to 4.0 from offset)
-    coeffs = np.where(np.abs(values) < cutoff, np.full_like(vals, hist.accumulators.WeightedSum(0,0) if sumW2 else 0), coeffs)
+    coeffs = np.where(np.abs(values) < cutoff, np.full_like(vals, hist.accumulators.WeightedSum(0,0) if hasSumW2 else 0), coeffs)
     coeffs = np.moveaxis(coeffs, -1, hel_idx)
 
-    hist_coeffs_scales = hist.Hist(*hist_moments_scales.axes, storage = hist.storage.Weight() if sumW2 else hist.storage.Double(), 
+    hist_coeffs_scales = hist.Hist(*hist_moments_scales.axes, storage = hist.storage.Weight() if hasSumW2 else hist.storage.Double(),
         name = "hist_coeffs_scales", data = coeffs
     )
 

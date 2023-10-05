@@ -250,10 +250,10 @@ if not args.skipAngularCoeffs:
     if z_moments:
         z_moments = hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning)
         z_moments = hh.rebinHist(z_moments, axis_massZgen.name, axis_massZgen.edges[::2])
-        coeffs["Z"] = wremnants.moments_to_angular_coeffs(z_moments, sumW2=True) # sumW2=True depends on how histograms are defined before, must be consistent
+        coeffs["Z"] = wremnants.moments_to_angular_coeffs(z_moments, sumW2=False) # sumW2 is not set to True internally when the input histogram has weights, in fact it could be removed
     if w_moments:
         w_moments = hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning)
-        coeffs["W"] = wremnants.moments_to_angular_coeffs(w_moments, sumW2=True) # sumW2=True depends on how histograms are defined before, must be consistent
+        coeffs["W"] = wremnants.moments_to_angular_coeffs(w_moments, sumW2=False) # ditto
     if coeffs:
         outfname = "w_z_coeffs_absY.hdf5" if args.absY else "w_z_coeffs.hdf5"
         output_tools.write_analysis_output(coeffs, outfname, args, update_name=not args.forceDefaultName)
