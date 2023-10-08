@@ -232,7 +232,7 @@ def define_pdf_columns(df, dataset_name, pdfs, noAltUnc):
         logger.warning(f"Did not find PDF weights for sample {dataset_name}! Using nominal PDF in sample")
         return df
 
-    for i, pdf in enumerate((pdfs[0], *set([x for x in pdfs[1:] if x != pdfs[0]]))):
+    for i, pdf in enumerate(pdfs):
         try:
             pdfInfo = pdf_info_map(dataset_name, pdf)
         except ValueError as e:

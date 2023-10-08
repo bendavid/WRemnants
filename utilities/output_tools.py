@@ -160,7 +160,7 @@ def split_eos_path(path):
 
     path = os.path.realpath(path)
     if not is_eosuser_path(path):
-        raise ValueError(f"Expected an path on /eos/user, found {outpath}!")
+        raise ValueError(f"Expected a path on /eos/user, found {path}!")
         
     splitpath = [x for x in path.split("/") if x]
     # Can be /eos/user/<letter>/<username> or <letter-username>

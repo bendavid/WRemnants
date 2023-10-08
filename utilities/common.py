@@ -140,7 +140,14 @@ def common_parser(for_reco_highPU=False):
     import wremnants
     from wremnants import theory_corrections,theory_tools
 
-    parser.add_argument("--pdfs", type=str, nargs="*", default=["msht20"], choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for")
+    class FilterAction(argparse.Action):
+        def __call__(self, parser, namespace, values, option_string=None):
+            # Filter unique values, but keep first item in its position
+            unique_values = [values[0], *set([x for x in values[1:]])]
+            setattr(namespace, self.dest, unique_values)
+
+    parser.add_argument("--pdfs", type=str, nargs="+", default=["msht20"], 
+        choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for", action=FilterAction)
     parser.add_argument("--altPdfOnlyCentral", action='store_true', help="Only store central value for alternate PDF sets")
     parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=None)
     parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by group name or (subset) of name", default=[])
