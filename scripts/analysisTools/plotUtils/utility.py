@@ -395,11 +395,11 @@ def fillTH2fromTH3zbin(h2, h3, zbin=1):
 
 #########################################################################
 
-def prepareLegend(x1, y1, x2, y2, textSize=0.035, nColumns=3):
+def prepareLegend(x1, y1, x2, y2, textSize=0.035, nColumns=3, fillColorAlpha=0.6):
     leg = ROOT.TLegend(x1,y1,x2,y2)
     leg.SetNColumns(nColumns)
     leg.SetFillColor(0)
-    leg.SetFillColorAlpha(0,0.6)
+    leg.SetFillColorAlpha(0, fillColorAlpha)
     leg.SetShadowColor(0)
     leg.SetLineColor(0)
     leg.SetBorderSize(0)
