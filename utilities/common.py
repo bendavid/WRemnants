@@ -213,6 +213,7 @@ def common_parser(for_reco_highPU=False):
         parser.add_argument("--isoEfficiencySmoothing", action='store_true', help="If isolation SF was derived from smooth efficiencies instead of direct smoothing") 
         parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency (legacy option for tests)")
         parser.add_argument("--isolationDefinition", choices=["iso04vtxAgn", "iso04"], default="iso04vtxAgn",  help="Isolation type (and corresponding scale factors)")
+        parser.add_argument("--dataYear", default=2016, type=int, help="year for which the analysis is performed")
 
     commonargs,_ = parser.parse_known_args()
 

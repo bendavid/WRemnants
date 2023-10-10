@@ -70,7 +70,8 @@ thisAnalysis = ROOT.wrem.AnalysisType.Wmass
 datasets = getDatasets(maxFiles=args.maxFiles,
                        filt=args.filterProcs,
                        excl=args.excludeProcs, 
-                       nanoVersion="v9", base_path=args.dataPath, oneMCfileEveryN=args.oneMCfileEveryN)
+                       nanoVersion="v8" if args.v8 else "v9", base_path=args.dataPath, oneMCfileEveryN=args.oneMCfileEveryN,
+                       dataYear=args.dataYear)
 
 era = args.era
 
@@ -157,8 +158,9 @@ else:
 
 logger.info(f"SF file: {args.sfFile}")
 
-pileup_helper = wremnants.make_pileup_helper(era = era)
-vertex_helper = wremnants.make_vertex_helper(era = era)
+##Fixme later..PU helper is now default for 2018
+pileup_helper = wremnants.make_pileup_helper(era = era) if args.dataYear == 2016 else wremnants.make_pileup_helperRun2()
+vertex_helper = wremnants.make_vertex_helper(era = era) if args.dataYear == 2016 else wremnants.make_vertex_helper(str(args.dataYear), filename=common.data_dir+ f"/vertex/vertexPileupWeights_{args.dataYear}.root")
 
 calib_filepaths = common.calib_filepaths
 closure_filepaths = common.closure_filepaths
@@ -270,7 +272,8 @@ def build_graph(df, dataset):
 
     if not args.makeMCefficiency:
         # remove trigger, it will be part of the efficiency selection for passing trigger
-        df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
+        hltString="HLT_IsoTkMu24 || HLT_IsoMu24" if args.dataYear == 2016 else "HLT_IsoMu24"
+        df = df.Filter(hltString)
 
     if args.halfStat:
         df = df.Filter("event % 2 == 1") # test with odd/even events

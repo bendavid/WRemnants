@@ -13,6 +13,7 @@ from wremnants.datasets.datasetDict_gen import genDataDict
 from wremnants.datasets.datasetDict_lowPU import dataDictLowPU
 import ROOT
 import XRootD.client
+from wremnants.datasets.datasetDict2018_v9 import dataDictV9_2018
 
 logger = logging.child_logger(__name__)
 
@@ -204,7 +205,7 @@ def is_zombie(file_path):
 
 def getDatasets(maxFiles=default_nfiles, filt=None, excl=None, mode=None, base_path=None, nanoVersion="v9",
                 data_tags=["TrackFitV722_NanoProdv3", "TrackFitV722_NanoProdv2"],
-                mc_tags=["TrackFitV722_NanoProdv3", "TrackFitV718_NanoProdv1"], oneMCfileEveryN=None, checkFileForZombie=False):
+                mc_tags=["TrackFitV722_NanoProdv3", "TrackFitV718_NanoProdv1"], oneMCfileEveryN=None, checkFileForZombie=False, dataYear=2016):
     if maxFiles is None or (isinstance(maxFiles, int) and maxFiles < -1):
         maxFiles=default_nfiles
 

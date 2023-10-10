@@ -71,3 +71,52 @@ def make_pileup_helper(era = None, cropHighWeight = 5.,
     helper = ROOT.wrem.pileup_helper(puweights)
 
     return helper
+
+def make_pileup_helperRun2(year = 2018, cropHighWeight = 5., filename_data=None, filename_mc=None):
+
+    if filename_data is None:
+        filename_data = data_dir + f"/pileupProfiles/pileupHistogram-customJSON-UL2018-69200ub-99bins.root"
+        
+    if filename_mc is None:
+        filename_mc = data_dir + f"/pileupProfiles/MC2018PU.root"
+    dataname = "pileup"
+    mcname = "pileup"
+
+    logger.debug(f"PU histo: will read {dataname} from file {filename_data}")
+    logger.debug(f"PU histo: will read {mcname} from file {filename_mc}")
+
+    fdata = ROOT.TFile.Open(filename_data)
+    datahist = fdata.Get(dataname)
+    datahist.SetDirectory(0)
+    fdata.Close()
+
+    # TODO get these numbers directly from the MC config instead
+    fmc = ROOT.TFile.Open(filename_mc)
+    mchist = fmc.Get(mcname)
+    mchist.SetDirectory(0)
+    fmc.Close()
+
+    # normalize the histograms
+    datahist.Scale(1./datahist.Integral(0, datahist.GetNbinsX() + 1))
+    mchist.Scale(1./mchist.Integral(0, mchist.GetNbinsX() + 1))
+
+    puweights = datahist/mchist
+
+    for i in range(puweights.GetNbinsX() + 2):
+        if mchist.GetBinContent(i) == 0.:
+            puweights.SetBinContent(i, 1.)
+        puweights.SetBinContent(i, min(puweights.GetBinContent(i), cropHighWeight))
+
+    puweights.SetName(f"pileup_weights_{year}")
+    puweights.SetTitle("")
+    logger.debug("")
+    logger.debug(f"PU weights for era {year}")
+    print([puweights.GetBinContent(i) for i in range(1,puweights.GetNbinsX()+1)])
+    logger.debug([puweights.GetBinContent(i) for i in range(1,puweights.GetNbinsX()+1)])
+    print([puweights.GetBinContent(i) for i in range(1,puweights.GetNbinsX()+1)])
+    logger.debug("")
+    logger.debug("")
+    
+    helper = ROOT.wrem.pileup_helper(puweights)
+
+    return helper
