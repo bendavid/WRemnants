@@ -56,6 +56,7 @@ translate_label = {
     "abs(eta)" : "$\mathrm{Reco}\ |\eta|$",
     "absEtaGen" : "$\mathrm{Gen}\ |\eta|$",
     "ptll" : "$\mathrm{Reco}\ p_\mathrm{T}(V)\ [\mathrm{GeV}]$",
+    "ptW" :  "$\mathrm{Reco}\ p_\mathrm{T}(W)\ [\mathrm{GeV}]$",
     "ptVGen" : "$\mathrm{Gen}\ p_\mathrm{T}(V)\ [\mathrm{GeV}]$",
     "abs(yll)" : "$\mathrm{Reco}\ |Y(\mathrm{V})|$",
     "absYVGen" : "$\mathrm{Gen}\ |Y(\mathrm{V})|$",

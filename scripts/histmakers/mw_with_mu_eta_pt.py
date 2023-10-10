@@ -25,6 +25,7 @@ parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for lumin
 parser.add_argument("--noGenMatchMC", action='store_true', help="Don't use gen match filter for prompt muons with MC samples (note: QCD MC never has it anyway)")
 parser.add_argument("--theoryAgnostic", action='store_true', help="Add V qT,Y axes and helicity axes for W samples")
 parser.add_argument("--poiAsNoi", action='store_true', help="Experimental option only with --theoryAgnostic, it will make the histogram to do the POIs and NOIs trick (some postprocessing will happen later in CardTool.py)")
+parser.add_argument("--separateOOAfromSignal", action='store_true', help="Experimental option only with --theoryAgnostic --poiAsNoi, it will produce the real signal with only in-acceptance bins, and out-of-acceptance as a separate process (this is already the default for the standard theory agnostic without --poiAsNoi)")
 parser.add_argument("--halfStat", action='store_true', help="Test half data and MC stat, selecting odd events, just for tests")
 parser.add_argument("--makeMCefficiency", action="store_true", help="Save yields vs eta-pt-ut-passMT-passIso-passTrigger to derive 3D efficiencies for MC isolation and trigger (can run also with --onlyMainHistograms)")
 parser.add_argument("--onlyTheorySyst", action="store_true", help="Keep only theory systematic variations, mainly for tests")
@@ -104,7 +105,7 @@ elif args.theoryAgnostic:
     theoryAgnostic_axes, theoryAgnostic_cols = differential.get_theoryAgnostic_axes()
     axis_helicity = helicity_utils.axis_helicity_multidim
     # the following just prepares the existence of the group for out-of-acceptance signal, but doesn't create or define the histogram yet
-    if not args.poiAsNoi:
+    if args.separateOOAfromSignal or not args.poiAsNoi:
         datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wmunu")
         groups_to_aggregate.append("BkgWmunu")
 
@@ -120,6 +121,7 @@ axis_eta_utilityHist = hist.axis.Regular(24, -2.4, 2.4, name = "eta", overflow=F
 axis_pt_utilityHist = hist.axis.Regular(6, 26, 56, name = "pt", overflow=False, underflow=False)
 
 axis_met = hist.axis.Regular(100, 0., 200., name = "met", underflow=False, overflow=True)
+axis_recoWpt = hist.axis.Regular(40, 0., 80., name = "recoWpt", underflow=False, overflow=True)
 
 # define helpers
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
@@ -242,8 +244,10 @@ def build_graph(df, dataset):
             logger.debug("Reject events in fiducial phase space")
             df = theoryAgnostic_tools.select_fiducial_space(df, theoryAgnostic_axes[0].edges[-1], theoryAgnostic_axes[1].edges[-1], accept=False)
         else:
-            logger.debug("Select events in fiducial phase space for theory agnostic analysis")
-            df = theoryAgnostic_tools.select_fiducial_space(df, theoryAgnostic_axes[0].edges[-1], theoryAgnostic_axes[1].edges[-1], accept=True)
+            # the in-acceptance selection must usually not be used to filter signal events when doing POIs as NOIs
+            if args.separateOOAfromSignal or not args.poiAsNoi:
+                logger.debug("Select events in fiducial phase space for theory agnostic analysis")
+                df = theoryAgnostic_tools.select_fiducial_space(df, theoryAgnostic_axes[0].edges[-1], theoryAgnostic_axes[1].edges[-1], accept=True)
             if args.poiAsNoi:
                 nominal_axes_theoryAgnostic = [*nominal_axes, *theoryAgnostic_axes]
                 nominal_cols_theoryAgnostic = [*nominal_cols, *theoryAgnostic_cols]
@@ -362,6 +366,7 @@ def build_graph(df, dataset):
         df = df.Alias("MET_corr_rec_pt", "MET_pt")
         df = df.Alias("MET_corr_rec_phi", "MET_phi")
 
+    df = df.Define("ptW", "wrem::pt_2(goodMuons_pt0, goodMuons_phi0, MET_corr_rec_pt, MET_corr_rec_phi)")
     df = df.Define("transverseMass", "wrem::mt_2(goodMuons_pt0, goodMuons_phi0, MET_corr_rec_pt, MET_corr_rec_phi)")
     df = df.Define("hasCleanJet", "Sum(goodCleanJetsNoPt && Jet_pt > 30) >= 1")
 
@@ -383,6 +388,7 @@ def build_graph(df, dataset):
         # utility plot, mt and met, to plot them later (need eta-pt to make fakes)
         results.append(df.HistoBoost("MET", [axis_met, axis_eta_utilityHist, axis_pt_utilityHist, axis_charge, axis_passIso, axis_passMT], ["MET_corr_rec_pt", "goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"]))
         results.append(df.HistoBoost("transverseMass", [axis_mt_fakes, axis_eta_utilityHist, axis_pt_utilityHist, axis_charge, axis_passIso], ["transverseMass", "goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "nominal_weight"]))
+        results.append(df.HistoBoost("ptW", [axis_recoWpt, axis_eta_utilityHist, axis_pt_utilityHist, axis_charge, axis_passIso, axis_passMT], ["ptW", "goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"]))
 
     ## FIXME: should be isW, to include Wtaunu, but for now we only split Wmunu
     if isWmunu and args.theoryAgnostic and not hasattr(dataset, "out_of_acceptance"):
