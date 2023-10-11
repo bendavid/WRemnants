@@ -419,7 +419,7 @@ def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo
     if "vars" in hfo.axes.name and hfo.axes["vars"].size != hfo_sing.axes["vars"].size:
         if hfo.axes["vars"].size == 1:
             hfo = hfo[{"vars" : 0}]
-    hnonsing = hh.addHists(-1*hfo_sing, hfo, flow=False)
+    hnonsing = hh.addHists(-1*hfo_sing, hfo, flow=False, by_ax_name=False)
     if fix_nons_bin0:
         # The 2 is for the WeightedSum
         res = np.zeros((*hnonsing[{"qT" : 0}].shape, 2))
@@ -434,7 +434,7 @@ def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo
             logger.warning(f"Did not find variation {var} for nonsingular! Assuming nominal")
             htmp_nonsing = hnonsing[{"vars" : var if var in hnonsing.axes["vars"] else 0}]
         hnonsing = htmp_nonsing
-    return hh.addHists(hsing, hnonsing)
+    return hh.addHists(hsing, hnonsing, by_ax_name=False)
 
 def read_json(fIn):
 
@@ -543,3 +543,51 @@ def read_infile(input):
     meta = result["meta_info"] if "meta_info" in result else result["meta_data"]
 
     return result, [meta], [infiles]
+
+def read_dyturbo_angular_coeffs(dyturbof, boson=None, rebin=None, add_axes=[]):
+    def rebin_hist(h, rebin):
+        for name, binning in rebin.items():
+            h = hh.rebinHist(h, name, binning)
+        return h
+
+    if add_axes and not all(ax.size == 1 for ax in add_axes):
+        raise ValueError("Can only add axes of size 1!")
+
+    if not boson:
+        boson = "Wp" if "wp" in dyturbof else ("Wm" if "wm" in dyturbof else "Z")
+
+    if type(dyturbof) == str:
+        dyturbof = uproot.open(dyturbof)
+
+    sigma_ul = dyturbof["s_qt_vs_y"].to_hist()
+    for ax,name in zip(sigma_ul.axes, ["qT", "y"]):
+        ax._ax.metadata["name"] = name
+
+    if rebin:
+        sigma_ul = rebin_hist(sigma_ul, rebin)
+
+    charge_range = (2, -2, 2) if "w" in boson.lower() else (1, -1, 1)
+    charge = 0 if boson.lower() == "z" else (-1 if "wm" in boson.lower() else 1)
+    charge_ax = hist.axis.Regular(*charge_range, name='charge', flow=False)
+    h = hist.Hist(*add_axes, *reversed(sigma_ul.axes), charge_ax, hist.axis.Regular(8, 0, 8, flow=False, name="helicity"), storage=sigma_ul.storage_type())
+    for i in range(8):
+        sigma_i = dyturbof[f"wgt_a{i}_y_qt"].to_hist()
+        for ax,name in zip(sigma_i.axes, ["qT", "y"]):
+            ax._ax.metadata["name"] = name
+        if rebin:
+            sigma_i = rebin_hist(sigma_i, rebin)
+        entry = (*[0]*len(add_axes), Ellipsis, charge_ax.index(charge), i)
+        # qT, y order in DY turbo is reversed wrt MiNNLO
+        h[entry] = hh.divideHists(sigma_i, sigma_ul).view().T
+
+    return h
+
+def read_mu_hist_combine_tau(minnlof, mu_sample, hist_name):
+    hmu = read_and_scale(minnlof, mu_sample, hist_name, apply_xsec=False)
+    sumw = read_sumw(minnlof, mu_sample)
+    xsec = read_xsec(minnlof, mu_sample)
+    
+    tau_sample = mu_sample.replace("mu", "tau")
+    htau = read_and_scale(minnlof, tau_sample, hist_name, apply_xsec=False)
+    sumw += read_sumw(minnlof, tau_sample)
+    return (hmu + htau)*xsec/sumw

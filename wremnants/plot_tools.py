@@ -215,7 +215,7 @@ def makeStackPlotWithRatio(
     
     if "Data" in histInfo and ratio_to_data:
         hep.histplot(
-            hh.divideHists(sum(stack), data_hist, cutoff=0.01, move_axes=False),
+            hh.divideHists(sum(stack), data_hist, cutoff=0.01, by_ax_name=False),
             histtype="step",
             color=histInfo[stackedProcs[-1]].color,
             label=histInfo[stackedProcs[-1]].label,
@@ -240,7 +240,7 @@ def makeStackPlotWithRatio(
         ratio_ref = data_hist if ratio_to_data else sum(stack) 
         if baseline:
             hep.histplot(
-                hh.divideHists(ratio_ref, ratio_ref, cutoff=1e-8, rel_unc=True, flow=False, move_axes=False),
+                hh.divideHists(ratio_ref, ratio_ref, cutoff=1e-8, rel_unc=True, flow=False, by_ax_name=False),
                 histtype="step",
                 color="grey",
                 alpha=0.5,
@@ -270,7 +270,7 @@ def makeStackPlotWithRatio(
                 flow='none',
             )
             hep.histplot(
-                hh.divideHists(unstack, ratio_ref, cutoff=0.01, rel_unc=True, flow=False, move_axes=False),
+                hh.divideHists(unstack, ratio_ref, cutoff=0.01, rel_unc=True, flow=False, by_ax_name=False),
                 histtype="errorbar" if style == "None" else "step",
                 color=histInfo[proc].color,
                 label=histInfo[proc].label,
@@ -289,8 +289,8 @@ def makeStackPlotWithRatio(
             for up,down in zip(fill_procs[:fill_between:2], fill_procs[1:fill_between:2]):
                 unstack_up = action(histInfo[up].hists[histName])
                 unstack_down = action(histInfo[down].hists[histName])
-                unstack_upr = hh.divideHists(unstack_up, ratio_ref, 1e-6, flow=False, move_axes=False)
-                unstack_downr = hh.divideHists(unstack_down, ratio_ref, 1e-6, flow=False, move_axes=False)
+                unstack_upr = hh.divideHists(unstack_up, ratio_ref, 1e-6, flow=False, by_ax_name=False)
+                unstack_downr = hh.divideHists(unstack_down, ratio_ref, 1e-6, flow=False, by_ax_name=False)
                 ax2.fill_between(unstack_upr.axes[0].edges[:-1], 
                         unstack_upr.values(), unstack_downr.values(),
                         # FIXME: Not sure if this is needed, currently not working correctly
@@ -319,7 +319,7 @@ def makePlotWithRatioToRef(
     if len(hists) != len(labels) or len(hists) != len(colors):
         raise ValueError(f"Number of hists ({len(hists)}), colors ({len(colors)}), and labels ({len(labels)}) must agree!")
     # nominal is always at first, data is always at last, if included
-    ratio_hists = [hh.divideHists(h, hists[0], cutoff=1e-6, flow=False, move_axes=False) for h in hists[not baseline:]]
+    ratio_hists = [hh.divideHists(h, hists[0], cutoff=1e-6, flow=False, by_ax_name=False) for h in hists[not baseline:]]
     fig, ax1, ax2 = figureWithRatio(
         hists[0], xlabel, ylabel, ylim, rlabel, rrange, xlim=xlim, 
         grid_on_ratio_plot = grid, plot_title = plot_title, title_padding=title_padding,
@@ -344,11 +344,11 @@ def makePlotWithRatioToRef(
     )
 
     if len(hists) > 1:
-        ratio_hists = [hh.divideHists(h, hists[0], cutoff=0.00001, flow=False, move_axes=False) for h in hists[not baseline:]]
+        ratio_hists = [hh.divideHists(h, hists[0], cutoff=0.00001, flow=False, by_ax_name=False) for h in hists[not baseline:]]
         if fill_between:
             for up,down,color in zip(hists[1::2], hists[2::2], colors[1::2]):
-                upr = hh.divideHists(up, hists[0], 1e-6, flow=False, move_axes=False)
-                downr = hh.divideHists(down, hists[0], 1e-6,flow=False, move_axes=False)
+                upr = hh.divideHists(up, hists[0], 1e-6, flow=False, by_ax_name=False)
+                downr = hh.divideHists(down, hists[0], 1e-6,flow=False, by_ax_name=False)
                 ax2.fill_between(upr.axes[0].edges, 
                         np.append(upr.values(), upr.values()[-1]), 
                         np.append(downr.values(), downr.values()[-1]),
@@ -379,7 +379,7 @@ def makePlotWithRatioToRef(
             flow='none',
         )
         hep.histplot(
-            hh.divideHists(data, hists[0], cutoff=1.e-8, flow=False, move_axes=False),
+            hh.divideHists(data, hists[0], cutoff=1.e-8, flow=False, by_ax_name=False),
             histtype="errorbar",
             color=colors[-1],
             xerr=False,
