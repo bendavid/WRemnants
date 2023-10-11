@@ -218,6 +218,9 @@ jobs:
       - name: wmass plot MET
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --rebin 2 --yscale 1.5 --baseName MET --hists met -p $WEB_DIR -f $PLOT_DIR $HIST_FILE
 
+      - name: wmass plot Wpt
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --rebin 1 --yscale 1.5 --baseName ptW --hists recoWpt -p $WEB_DIR -f $PLOT_DIR $HIST_FILE
+
       - name: wmass plot massShift
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py -a massVariation --yscale 1.4 --hist pt --baseName nominal -r 0.98 1.02 -p $WEB_DIR -f $PLOT_DIR $HIST_FILE variation --varName massWeightW --selectEntries massShiftW100MeVUp massShiftW100MeVDown --varLabel massShift100MeVUp massShift100MeVDown --selectAxis massShift --color grey grey
 
@@ -250,8 +253,8 @@ jobs:
       - name: lowpu w mu analysis
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_lowPU.py -o $WREMNANTS_OUTDIR -j $NTHREADS --forceDefaultName --noRecoil --unfolding
 
-      - name: lowpu w mu plot ptll
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --hists ptll -p $WEB_DIR -f $PLOT_DIR/lowPU -a mu $HIST_FILE_MU variation --varName nominal_uncorr --varLabel MiNNLO --colors red
+      - name: lowpu w mu plot ptW
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --hists ptW -p $WEB_DIR -f $PLOT_DIR/lowPU -a mu $HIST_FILE_MU variation --varName nominal_uncorr --varLabel MiNNLO --colors red
 
       - name: lowpu w mu plot pt
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --baseName lep_pt --hists pt -a mu -p $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_MU
@@ -266,13 +269,13 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombine.py -i $HIST_FILE_MU --baseName transverseMass --fitvar mt -o $WREMNANTS_OUTDIR
 
       - name: lowpu w mu plot response matrix
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/response_matrix.py --axes ptll-ptVGen --procFilters Wmunu -p mu -o $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_MU
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/response_matrix.py --axes ptW-ptVGen --procFilters Wmunu -p mu -o $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_MU
 
       - name: lowpu w e analysis
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_lowPU.py -o $WREMNANTS_OUTDIR -j $NTHREADS --forceDefaultName --unfolding --noRecoil --flavor e
 
-      - name: lowpu w e plot ptll
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --hists ptll -p $WEB_DIR -f $PLOT_DIR/lowPU -a e $HIST_FILE_E variation --varName nominal_uncorr --varLabel MiNNLO --colors red
+      - name: lowpu w e plot ptW
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --hists ptW -p $WEB_DIR -f $PLOT_DIR/lowPU -a e $HIST_FILE_E variation --varName nominal_uncorr --varLabel MiNNLO --colors red
 
       - name: lowpu w e plot pt
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --baseName lep_pt --hists pt -a e -p $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_E
@@ -287,7 +290,7 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombine.py -i $HIST_FILE_E --baseName transverseMass --fitvar mt -o $WREMNANTS_OUTDIR
 
       - name: lowpu w e plot response matrix
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/response_matrix.py --axes ptll-ptVGen --procFilters Wenu -p e -o $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_E
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/response_matrix.py --axes ptW-ptVGen --procFilters Wenu -p e -o $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_E
 
       - name: aggregate combine inputs
         run: |
@@ -302,10 +305,10 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/show_impacts.sh $COMBINED_DIR/fitresults_123456789.root $WEB_DIR/$PLOT_DIR/lowPU impactsW.html
 
       # - name: lowpu w e combine unfolding fit 
-      #   run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ unfolding $WREMNANTS_OUTDIR/WMass_lowPU_ptll/ WMass_lowPU_plus.txt WMass_lowPU_minus.txt xnorm=WMass_lowPU_inclusive_xnorm.txt
+      #   run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ unfolding $WREMNANTS_OUTDIR/WMass_lowPU_ptW/ WMass_lowPU_plus.txt WMass_lowPU_minus.txt xnorm=WMass_lowPU_inclusive_xnorm.txt
 
       # - name: lowpu w combine unfolding plot xsec 
-      #   run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py $HIST_FILE_E --fitresult $WREMNANTS_OUTDIR/WMass_lowPU_ptll/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR/lowPU --debug --rrange 0.0 2.0 --lumi=0.200181002
+      #   run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py $HIST_FILE_E --fitresult $WREMNANTS_OUTDIR/WMass_lowPU_ptW/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR/lowPU --debug --rrange 0.0 2.0 --lumi=0.200181002
 
   lowpu-z:
     # The type of runner that the job will run on
@@ -387,7 +390,7 @@ jobs:
           lfs: 'true'
 
       - name: lowpu z mumu combine unfolding setup
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombine.py -i $HIST_FILE_MU $HIST_FILE_E $HIST_FILE_MUMU $HIST_FILE_EE --fitvar ptll-charge ptll-charge ptll ptll -o $COMBINED_DIR --unfolding --hdf5 --sparse --ewUnc 
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombine.py -i $HIST_FILE_MU $HIST_FILE_E $HIST_FILE_MUMU $HIST_FILE_EE --fitvar ptW-charge ptW-charge ptll ptll -o $COMBINED_DIR --unfolding --hdf5 --sparse --ewUnc 
 
       - name: lowpu combine unfolding fit 
         run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ unfolding $COMBINED_DIR card_sparse.hdf5 

@@ -85,11 +85,11 @@ if args.unfolding:
 # axes for final cards/fitting
 nominal_axes = [
     axis_fakerate_pt, axis_fakerate_eta, axis_charge, 
-    hist.axis.Variable([0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 25, 30, 40, 50, 60, 75, 90, 150], name = "ptll", underflow=False, overflow=True),    
+    hist.axis.Variable([0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 25, 30, 40, 50, 60, 75, 90, 150], name = "ptW", underflow=False, overflow=True),    
     axis_passIso, axis_passMT]
 
 # corresponding columns
-nominal_cols = ["lep_pt", "lep_eta", "lep_charge", "ptll", "passIso",  "passMT"]
+nominal_cols = ["lep_pt", "lep_eta", "lep_charge", "ptW", "passIso",  "passMT"]
 
 # mt final cards/fitting
 axis_mT = hist.axis.Variable([0] + list(range(40, 100, 1)) + [100, 102, 104, 106, 108, 112, 116, 120, 130, 150, 200], name = "mt",underflow=False, overflow=True)
@@ -275,9 +275,7 @@ def build_graph(df, dataset):
    
     # results.append(df.HistoBoost("qcd_space", [axis_pt, axis_eta, axis_iso, axis_charge, axis_mT], ["lep_pt", "lep_eta", "lep_iso", "lep_charge", "transverseMass", "nominal_weight"]))  
 
-    df = df.Define("pxll", "lep_pt * std::cos(lep_phi) + MET_corr_rec_pt * std::cos(MET_corr_rec_phi)")
-    df = df.Define("pyll", "lep_pt * std::sin(lep_phi) + MET_corr_rec_pt * std::sin(MET_corr_rec_phi)")
-    df = df.Define("ptll", "std::sqrt(pxll*pxll + pyll*pyll)")
+    df = df.Define("ptW", "wrem::pt_2(lep_pt, lep_phi, MET_corr_rec_pt, MET_corr_rec_phi)")
 
     results.append(df.HistoBoost("nominal", axes, [*cols, "nominal_weight"]))
     results.append(df.HistoBoost("transverseMass", axes_mT, [*cols_mT, "nominal_weight"]))
