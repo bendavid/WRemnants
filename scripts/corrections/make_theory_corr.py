@@ -19,11 +19,10 @@ parser.add_argument("-g", "--generator", type=str, choices=["dyturbo", "scetlib"
 parser.add_argument("--outpath", type=str, default=f"{common.data_dir}/TheoryCorrections", help="Output path")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
 parser.add_argument("--proc", type=str, required=True, choices=["z", "w", ], help="Process")
-parser.add_argument("--minnloh", default="nominal_gen", type=str, help="Reference hist in MiNNLO sample")
+parser.add_argument("--minnloh", default="nominal_gen_qcdScale", type=str, help="Reference hist in MiNNLO sample")
 parser.add_argument("--axes", nargs="*", type=str, default=None, help="Use only specified axes in hist")
 parser.add_argument("--debug", action='store_true', help="Print debug output")
 parser.add_argument("--noColorLogger", action="store_true", default=False, help="Do not use logging with colors")
-parser.add_argument("--notaus", dest="addtaus", action='store_false', help="Add in tau samples")
 parser.add_argument("-o", "--plotdir", type=str, help="Output directory for plots")
 parser.add_argument("--eoscp", action="store_true", help="Copy folder to eos with xrdcp rather than using the mount")
 
@@ -96,25 +95,7 @@ elif args.proc == "w":
     filesByProc = { "WplusmunuPostVFP" : wpfiles,
         "WminusmunuPostVFP" : wmfiles}
 
-minnloh = None
-for proc in filesByProc.keys():
-    htmp = input_tools.read_and_scale(args.minnlo_file, proc, args.minnloh, apply_xsec=False)
-    sumw = input_tools.read_sumw(args.minnlo_file, proc)
-    # Get more stats in the correction
-    if args.addtaus:
-        logger.info(f"Combining muon and tau decay samples for increased stats for process {proc}")
-        taus = proc.replace("mu", "tau")
-        taush = input_tools.read_and_scale(args.minnlo_file, taus, args.minnloh, apply_xsec=False)
-        htmp += taush
-        sumw += input_tools.read_sumw(args.minnlo_file, taus)
-
-    xsec = input_tools.read_xsec(args.minnlo_file, proc)
-    htmp *= xsec/sumw
-
-    if not minnloh:
-        minnloh = htmp
-    else:
-        minnloh += htmp
+minnloh = hh.sumHists([input_tools.read_mu_hist_combine_tau(args.minnlo_file, proc, args.minnloh) for proc in filesByProc.keys()])
 
 if "y" in minnloh.axes.name:
     minnloh = hh.makeAbsHist(minnloh, "y")
