@@ -12,6 +12,7 @@ import os
 
 
 parser.add_argument("--skipAngularCoeffs", action='store_true', help="Skip the conversion of helicity moments to angular coeff fractions")
+parser.add_argument("--addHelicityToPDFs", action='store_true', help="Add helicity tensor for PDFs")
 parser.add_argument("--singleLeptonHists", action='store_true', help="Also store single lepton kinematics")
 parser.add_argument("--photonHists", action='store_true', help="Also store photon kinematics")
 parser.add_argument("--skipEWHists", action='store_true', help="Also store histograms for EW reweighting. Use with --filter horace")
@@ -198,7 +199,10 @@ def build_graph(df, dataset):
             results.append(helicity_moments_scale)
 
         if "LHEPdfWeight" in df.GetColumnNames():
-            syst_tools.add_pdf_hists(results, df, dataset.name, nominal_axes, nominal_cols, args.pdfs, "nominal_gen")
+            if args.addHelicityToPDFs:
+                weightsByHelicity_helper = wremnants.makehelicityWeightHelper()
+                df = df.Define("helWeight_tensor", weightsByHelicity_helper, ["massVgen", "yVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "nominal_weight"])
+            syst_tools.add_pdf_hists(results, df, dataset.name, nominal_axes, nominal_cols, args.pdfs, "nominal_gen", addhelicity=args.addHelicityToPDFs)
 
     if args.theoryCorr and dataset.name in corr_helpers:
         results.extend(theory_tools.make_theory_corr_hists(df, "nominal_gen", nominal_axes, nominal_cols,
@@ -247,7 +251,7 @@ if not args.skipAngularCoeffs:
     if z_moments:
         z_moments = hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning[::2])
         z_moments = hh.rebinHist(z_moments, axis_massZgen.name, axis_massZgen.edges[::2])
-        coeffs["Z"] = wremnants.moments_to_angular_coeffs(z_moments)
+        coeffs["Z"] = wremnants.moments_to_angular_coeffs(z_moments) 
     if w_moments:
         w_moments = hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning[::2])
         coeffs["W"] = wremnants.moments_to_angular_coeffs(w_moments)
