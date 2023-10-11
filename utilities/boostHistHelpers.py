@@ -10,7 +10,7 @@ def valsAndVariances(h1, h2, flow=True):
     return h1.values(flow=flow),h2.values(flow=flow),h1.variances(flow=flow),h2.variances(flow=flow)
 
 # Broadcast h1 to match the shape of h2
-def broadcastSystHist(h1, h2, flow=True, move_axes=True):
+def broadcastSystHist(h1, h2, flow=True, by_ax_name=True):
     if h1.ndim > h2.ndim or h1.shape == h2.shape:
         return h1
 
@@ -18,37 +18,41 @@ def broadcastSystHist(h1, h2, flow=True, move_axes=True):
     s2 = h2.values(flow=flow).shape
 
     # the additional axes have to be broadcasted as leading
-    if move_axes:
+    # Either do this by name, or by broadcasting from the right (numpy default broadcasts from left)
+    if by_ax_name:
         moves = {i: e for i, (e, n2) in enumerate(zip(s2, h2.axes.name)) if n2 not in h1.axes.name}
-        broadcast_shape = list(moves.values()) + list(s1)
     else:
-        moves = None
-        broadcast_shape = h2.shape
+        moves = {h2.ndim-1-i: h2.values(flow=flow).shape[h2.ndim-1-i] for i in range(h2.ndim-h1.ndim)}
+
+    broadcast_shape = list(moves.values()) + list(s1)
 
     try:
         new_vals = np.broadcast_to(h1.values(flow=flow), broadcast_shape)
     except ValueError as e:
         raise ValueError("Cannot broadcast hists with incompatible axes!\n" 
+                         f"    h1.shape {h1.shape}; h2.shape: {h2.shape}\n"
                          f"    h1.axes: {h1.axes}\n"
                          f"    h2.axes: {h2.axes}")
 
-    if moves is not None:
-        # move back to original order
-        new_vals = np.moveaxis(new_vals, np.arange(len(moves)), list(moves.keys()))
+    # move back to original order
+    new_vals = np.moveaxis(new_vals, np.arange(len(moves)), list(moves.keys()))
+
+    if new_vals.shape != h2.values(flow=flow).shape:
+        raise ValueError(f"Broadcast shape {new_vals.shape} (from h1.shape={h1.view(flow=flow).shape}) " \
+                            "does not match desired shape {h2.view(flow=flow).shape}")
+
     if h1.storage_type == hist.storage.Weight:
         new_vars = np.broadcast_to(h1.variances(flow=flow), broadcast_shape)
         new_vars = np.moveaxis(new_vars, np.arange(len(moves)), list(moves.keys()))
         new_vals = np.stack((new_vals, new_vars), axis=-1)
-    if new_vals.shape != h2.view(flow=flow).shape:
-        raise ValueError(f"Broadcast shape {new_vals.shape} does not match desired shape {h2.view(flow=flow).shape}")
 
     return hist.Hist(*h2.axes, data=new_vals, storage=h1.storage_type())
 
 # returns h1/h2
-def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False, cutoff_val=1., flow=True, createNew=True, move_axes=True):
+def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False, cutoff_val=1., flow=True, createNew=True, by_ax_name=True):
     if allowBroadcast:
-        h1 = broadcastSystHist(h1, h2, flow, move_axes)
-        h2 = broadcastSystHist(h2, h1, flow, move_axes)
+        h1 = broadcastSystHist(h1, h2, flow, by_ax_name)
+        h2 = broadcastSystHist(h2, h1, flow, by_ax_name)
 
     storage = h1.storage_type() if h1.storage_type == h2.storage_type else hist.storage.Double()
     outh = hist.Hist(*h1.axes, storage=storage) if createNew else h1
@@ -144,10 +148,10 @@ def multiplyHists(h1, h2, allowBroadcast=True, createNew=True):
 
     return outh
 
-def addHists(h1, h2, allowBroadcast=True, createNew=True, scale1=None, scale2=None, flow=True):
+def addHists(h1, h2, allowBroadcast=True, createNew=True, scale1=None, scale2=None, flow=True, by_ax_name=True):
     if allowBroadcast:
-        h1 = broadcastSystHist(h1, h2, flow=flow)
-        h2 = broadcastSystHist(h2, h1, flow=flow)
+        h1 = broadcastSystHist(h1, h2, flow=flow, by_ax_name=by_ax_name)
+        h2 = broadcastSystHist(h2, h1, flow=flow, by_ax_name=by_ax_name)
 
     h1vals,h2vals,h1vars,h2vars = valsAndVariances(h1, h2, flow=flow)
     hasWeights = h1._storage_type() == hist.storage.Weight() and h2._storage_type() == hist.storage.Weight()
@@ -268,6 +272,7 @@ def compatibleBins(edges1, edges2):
 
 def rebinHist(h, axis_name, edges):
     if type(edges) == int:
+        print("Edges are", edges)
         return h[{axis_name : hist.rebin(edges)}]
 
     ax = h.axes[axis_name]
