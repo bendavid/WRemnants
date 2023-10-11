@@ -176,7 +176,7 @@ class TheoryHelper(object):
                 actionArgs=action_args,
                 processes=[sample_group],
                 group=group_name,
-                splitGroup={"QCDScale": ".*"},
+                splitGroup={"QCDscale": ".*"},
                 systAxes=syst_axes,
                 labelsByAxis=syst_ax_labels,
                 # Exclude all combinations where muR = muF = 1 (nominal) or where
@@ -400,7 +400,7 @@ class TheoryHelper(object):
             processes=["single_v_samples"],
             mirror=True if symHessian else False,
             group=pdfName,
-            splitGroup={f"{pdfName}NoAlphaS": '(?!.*alphaS)'},
+            splitGroup={f"{pdfName}NoAlphaS": '.*'},
             passToFakes=self.propagate_to_fakes,
             actionMap=action,
             scale=pdfInfo.get("scale", 1)*scale,
@@ -422,8 +422,8 @@ class TheoryHelper(object):
         self.card_tool.addSystematic(f"{pdfName}alphaS{asRange}", 
             processes=["single_v_samples"],
             mirror=False,
-            group=f"{pdfName}",
-            splitGroup={f"{pdfName}AlphaS": ".*alphaS"},
+            group=pdfName,
+            splitGroup={f"{pdfName}AlphaS": '.*'},
             systAxes=["alphasVar"],
             systNameReplace=[("as", "pdfAlphaS")]+[("0116", "Down"), ("0120", "Up")] if asRange == "002" else [("0117", "Down"), ("0119", "Up")],
             scale=0.75, # TODO: this depends on the set, should be provided in theory_tools.py

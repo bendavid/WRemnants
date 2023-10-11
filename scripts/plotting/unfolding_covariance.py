@@ -11,29 +11,31 @@ import hist
 import pdb
 from utilities import logging, input_tools, output_tools
 from wremnants import plot_tools
-from wremnants.unfolding_tools import load_fitresult, load_poi_matrix
+from utilities.input_tools_combinetf import get_fitresult, load_covariance_pois, select_covariance_poi
 
 hep.style.use(hep.style.ROOT)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("infile", help="Combine fitresult .root or .hdf5 file")
 parser.add_argument("-o", "--outpath", type=str, default=os.path.expanduser("~/www/WMassAnalysis"), help="Base path for output")
-parser.add_argument("-f", "--outfolder", type=str, default="./", help="Subfolder for output")
+parser.add_argument("-f", "--outfolder", type=str, default="./test", help="Subfolder for output")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name")
+parser.add_argument("--cmsDecor", default="Preliminary", type=str, choices=[None,"Preliminary", "Work in progress", "Internal"], help="Name to append to file name")
+parser.add_argument("--lumi", type=float, default=16.8, help="Luminosity used in the fit, needed to get the absolute cross section")
 parser.add_argument("--debug", action='store_true', help="Print debug output")
+parser.add_argument("--flow", action='store_true', help="Show overflow/underflow pois")
 parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend text")
 parser.add_argument("--plots", type=str, nargs="+", default=["covariance"], choices=["correlation", "covariance"], help="Define which plots to make")
-parser.add_argument("--lumi", type=float, default=16.8, help="Luminosity used in the fit, needed to get the absolute cross section")
 parser.add_argument("-c", "--channels", type=str, nargs="+", choices=["plus", "minus", "all"], default=["plus", "minus", "all"], help="Select channel to plot")
 parser.add_argument("--eoscp", action='store_true', help="Override use of xrdcp and use the mount instead")
 
 args = parser.parse_args()
 
-logger = logging.setup_logger("plotFitresult", 4 if args.debug else 3, False)
+logger = logging.setup_logger("unfolding_covariance", 4 if args.debug else 3, False)
 
 outdir = output_tools.make_plot_dir(args.outpath, args.outfolder)
 
-fitresult = load_fitresult(args.infile)
+fitresult = get_fitresult(args.infile)
 meta_info = input_tools.get_metadata(args.infile)
 
 label_dict = {
@@ -51,11 +53,11 @@ selection_dict = {
     "W_qGen1": r"$\mathrm{W}^+\rightarrow\mu\nu$",
 }
 
-def plot_matrix_poi(poi_type="mu", base_process=None, axes=None, keys=None, covariance=False, 
-    xlabel=None, ylabel=None, cms_decor="Preliminary"
+def plot_matrix_poi(h2d, names, poi_type="mu", gen_axes=None, base_processes=[], selections=None, covariance=False, 
+    xlabel=None, ylabel=None, cms_decor="Preliminary", flow=False
     ):
-    hist_cov = load_poi_matrix(fitresult, poi_type, base_process=base_process, axes=axes, keys=keys)
 
+    hist_cov = select_covariance_pois(h2d, names, gen_axes=gen_axes, base_processes=base_processes, selections=selections, flow=flow)
     if not covariance:
         std_devs = np.sqrt(np.diag(hist_cov.values()))
 
@@ -63,8 +65,8 @@ def plot_matrix_poi(poi_type="mu", base_process=None, axes=None, keys=None, cova
         hist_cov[...] = hist_cov.values() / np.outer(std_devs, std_devs)
 
     if xlabel is None:
-        if axes is not None:
-            xlabel = "gen "+ "-".join([label_dict.get(a, a) for a in axes])+" bin"
+        if gen_axes is not None:
+            xlabel = "gen "+ "-".join([label_dict.get(a, a) for a in gen_axes if a not in selections.keys()])+" bin"
         else:
             xlabel = "POI bin"
     if ylabel is None:
@@ -90,21 +92,17 @@ def plot_matrix_poi(poi_type="mu", base_process=None, axes=None, keys=None, cova
     plt.text(0.2, 0.9, round(cond), horizontalalignment='right', verticalalignment='top', transform=ax.transAxes)
 
     key = base_process
-    if keys is not None:
-        charge_selection = [k for k in keys if "qGen" in k]
-        if charge_selection:
-            key += f"_{charge_selection[0]}"
+    for k,v in selections.items():
+        key += f"_{k}{v}"
 
     ax.text(1.0, 1.003, selection_dict.get(key, key), transform=ax.transAxes, fontsize=30,
             verticalalignment='bottom', horizontalalignment="right")
 
     outfile = "covariance" if covariance else "correlation"
     if base_process is not None:
-        outfile += f"_{base_process}"
-    if keys is not None:
-        outfile += "_" + "_".join(keys)
-    if axes is not None:
-        outfile += "_" + "_".join(axes)
+        outfile += f"_{key}"
+    if gen_axes is not None:
+        outfile += "_" + "_".join([a for a in gen_axes if a not in selections.keys()])
     outfile += (f"_{args.postfix}_" if args.postfix else "_") + poi_type.split("_")[-1].replace("channel","")
 
     plot_tools.save_pdf_and_png(outdir, outfile)
@@ -125,22 +123,22 @@ for plot_type in args.plots:
         "sumpois", 
         "sumpoisnorm",
         ):
+        hist_cov, names = load_covariance_pois(fitresult, poi_type)
 
         for i, base_process in enumerate(map(lambda x: "W" if x.split("/")[-1].startswith("mw") else "Z", meta_info["args"]["inputFile"])):
             logger.debug(f"Now at {i}, base process {base_process}")
 
-            axes_combinations=(None, )
             # TODO, get axis information from meta data
             if base_process == "W":
-                selections=("qGen0", "qGen1")
+                selections=({"qGen":0}, {"qGen":1})
 
                 if poi_type.startswith("sum"):
-                    axes_combinations = ("absEtaGen", "ptGen")
+                    axes_combinations = (("qGen","absEtaGen"), ("qGen","ptGen"))
                 else:
                     axes_combinations = (("qGen","ptGen","absEtaGen"),)
 
             elif base_process == "Z":
-                selections = (None, )
+                selections = ({}, )
                 if poi_type.startswith("sum"):
                     axes_combinations = ("ptVGen", "absYVGen")
                 else:
@@ -150,9 +148,8 @@ for plot_type in args.plots:
                 if isinstance(axes, str):
                     axes = [axes]
                 for selection in selections:
-                    if isinstance(selection, str):
-                        selection = [selection]
-                    plot_matrix_poi(poi_type, axes=axes, keys=selection, base_process=base_process, covariance=covariance)
+                    plot_matrix_poi(hist_cov, names, poi_type, cms_decor=args.cmsDecor, 
+                        gen_axes=axes, selections=selection, base_processes=[base_process,], covariance=covariance, flow=args.flow)
 
 
 if output_tools.is_eosuser_path(args.outpath) and args.eoscp:

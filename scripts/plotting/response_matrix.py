@@ -16,8 +16,9 @@ parser.add_argument("infile", help="Output file of the analysis stage, containin
 parser.add_argument("--debug", action='store_true', help="Print debug output")
 parser.add_argument("-o", "--outpath", type=str, default=os.path.expanduser("~/www/WMassAnalysis"), help="Base path for output")
 parser.add_argument("-f", "--outfolder", type=str, default="test", help="Subfolder for output")
-parser.add_argument("--procFilters", type=str, nargs="*", default="Zmumu", help="Filter to plot (default no filter, only specify if you want a subset")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name")
+parser.add_argument("--cmsDecor", default="Preliminary", type=str, help="Name to append to file name")
+parser.add_argument("--procFilters", type=str, nargs="*", default="Zmumu", help="Filter to plot (default no filter, only specify if you want a subset")
 parser.add_argument("--axes", type=str, nargs="+", default=["pt-ptGen","abs(eta)-absEtaGen"], help="Define for which axes the response matrix to be plotted")
 parser.add_argument("-c", "--channels", type=str, nargs="+", choices=["plus", "minus", "all"], default=["all"], help="Select channel to plot")
 
@@ -30,8 +31,6 @@ outdir = output_tools.make_plot_dir(args.outpath, args.outfolder)
 groups = Datagroups(args.infile, filterGroups=args.procFilters, excludeGroups=None if args.procFilters else ['QCD'])
 
 groups.setGenAxes([]) # set gen axes empty to not integrate over when loading
-
-cms_decor = "Preliminary"
 
 if "Wmunu" in groups.groups:
     groups.copyGroup("Wmunu", "Wmunu_qGen0", member_filter=lambda x: x.name.startswith("Wminus"))

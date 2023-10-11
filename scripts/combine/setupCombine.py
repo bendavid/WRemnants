@@ -72,6 +72,7 @@ def make_parser(parser=None):
     parser.add_argument("--priorNormXsec", type=float, default=1, help="Prior for shape uncertainties on cross sections for theory agnostic analysis with POIs as NOIs (1 means 100\%). If negative, it will use shapeNoConstraint in the fit")
     parser.add_argument("--scaleNormXsecHistYields", type=float, default=None, help="Scale yields of histogram with cross sections variations for theory agnostic analysis with POIs as NOIs. Can be used together with --priorNormXsec")
     parser.add_argument("--addNormToOOA", type=float, default=None, help="Add normalization uncertainty on out-of-acceptance template (when it exists). Currently only with --poiAsNoi, and practically adds a LnN uncertainty")
+    parser.add_argument("--addTauToSignal", action='store_true', help="Events from the same process but from tau final states are added to the signal")
     # utility options to deal with charge when relevant, mainly for theory agnostic but also unfolding
     parser.add_argument("--recoCharge", type=str, default=["plus", "minus"], nargs="+", choices=["plus", "minus"], help="Specify reco charge to use, default uses both. This is a workaround for unfolding/theory-agnostic fit when running a single reco charge, as gen bins with opposite gen charge have to be filtered out")
     parser.add_argument("--forceRecoChargeAsGen", action="store_true", help="Force gen charge to match reco charge in CardTool, this only works when the reco charge is used to define the channel")
@@ -134,6 +135,11 @@ def setup(args, inputFile, fitvar, xnorm=False):
         base_group = "Wenu" if datagroups.flavor == "e" else "Wmunu"
     else:
         base_group = "Zee" if datagroups.flavor == "ee" else "Zmumu"
+
+    if args.addTauToSignal:
+        # add tau signal processes to signal group
+        datagroups.groups[base_group].addMembers(datagroups.groups[base_group.replace("mu","tau")].members)
+        datagroups.deleteGroup(base_group.replace("mu","tau"))
 
     if args.unfolding and args.fitXsec:
         raise ValueError("Options --unfolding and --fitXsec are incompatible. Please choose one or the other")
@@ -212,7 +218,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
         histName = "xnorm"
         cardTool.setHistName(histName)
         cardTool.setNominalName(histName)
-        datagroups.select_xnorm_groups()
+        datagroups.select_xnorm_groups(base_group)
         if args.unfolding:
             cardTool.setProjectionAxes(["count"])
         else:
@@ -318,10 +324,6 @@ def setup(args, inputFile, fitvar, xnorm=False):
         signal_samples_forMass = ["signal_samples"]
     if constrainMass and args.doStatOnly:
         logger.info("Using option --doStatOnly: the card was created without nuisance parameters")
-        return cardTool
-
-    if args.doStatOnly and constrainMass:
-        # no mass weight uncertainty for stat only fits if mass weight is a nuisance (e.g. unfolding, xsec, ...)
         return cardTool
 
     cardTool.addSystematic(f"massWeight{label}",

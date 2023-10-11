@@ -1,23 +1,20 @@
 import mplhep as hep
+import matplotlib as mpl
 import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
 
 import itertools
-import uproot
 import argparse
 import os
 import numpy as np
-import matplotlib as mpl
 import pandas as pd
 import hist
-import h5py
 import json
 
-from utilities import boostHistHelpers as hh, logging, input_tools, common, differential, output_tools
+from utilities import boostHistHelpers as hh, logging, input_tools, output_tools
 from utilities.styles.styles import nuisance_groupings as groupings
 from wremnants import plot_tools, histselections as sel
 from wremnants.datasets.datagroups import Datagroups
-from wremnants.unfolding_tools import get_bin, getProcessBins, get_results, load_poi_matrix
+from utilities.input_tools_combinetf import get_fitresult, read_impacts_pois, select_pois
 
 import pdb
 
@@ -28,19 +25,23 @@ parser.add_argument("infile", type=str, help="Output file of the analysis stage,
 parser.add_argument("--fitresult",  type=str, help="Combine fitresult root file")
 parser.add_argument("--asimov",  type=str, default=None, help="Optional combine fitresult root file from an asimov fit for comparison")
 parser.add_argument("-o", "--outpath", type=str, default=os.path.expanduser("~/www/WMassAnalysis"), help="Base path for output")
-parser.add_argument("-f", "--outfolder", type=str, default="./", help="Subfolder for output")
-parser.add_argument("-r", "--rrange", type=float, nargs=2, default=None, help="y range for ratio plot")
+parser.add_argument("-f", "--outfolder", type=str, default="./test", help="Subfolder for output")
+parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name")
+parser.add_argument("--cmsDecor", default="Preliminary", type=str, choices=[None,"Preliminary", "Work in progress", "Internal"], help="Name to append to file name")
+parser.add_argument("--lumi", type=float, default=16.8, help="Luminosity used in the fit, needed to get the absolute cross section")
+parser.add_argument("-r", "--rrange", type=float, nargs=2, default=[0.9,1.1], help="y range for ratio plot")
 parser.add_argument("--ylim", type=float, nargs=2, help="Min and max values for y axis (if not specified, range set automatically)")
 parser.add_argument("--logy", action='store_true', help="Make the yscale logarithmic")
 parser.add_argument("--yscale", type=float, help="Scale the upper y axis by this factor (useful when auto scaling cuts off legend)")
-parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name")
 parser.add_argument("--debug", action='store_true', help="Print debug output")
 parser.add_argument("--noData", action='store_true', help="Don't plot data")
 parser.add_argument("-n", "--baseName", type=str, help="Histogram name in the file (e.g., 'nominal')", default="nominal")
 parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend text")
 parser.add_argument("--plots", type=str, nargs="+", default=["xsec", "uncertainties"], choices=["xsec", "uncertainties"], help="Define which plots to make")
+parser.add_argument("--genFlow", action='store_true', help="Show overflow/underflow pois")
+parser.add_argument("--poi", action='store_true', help="Plot signal strength parameters (mu)")
 parser.add_argument("--normalize", action='store_true', help="Plot normalized distributions")
-parser.add_argument("--lumi", type=float, default=16.8, help="Luminosity used in the fit, needed to get the absolute cross section")
+parser.add_argument("--absolute", action='store_true', help="Plot absolute uncertainties, otherwise relative")
 parser.add_argument("--plotSumPOIs", action='store_true', help="Plot xsecs from sum POI groups")
 parser.add_argument("--scaleXsec", type=float, default=1.0, help="Scale xsec predictions with this number")
 parser.add_argument("--grouping", type=str, default=None, help="Select nuisances by a predefined grouping", choices=groupings.keys())
@@ -58,8 +59,6 @@ if args.translate:
     with open(args.translate) as f:
         translate_label = json.load(f)    
 
-cms_decor = "Preliminary"
-
 outdir = output_tools.make_plot_dir(args.outpath, args.outfolder)
 
 meta_info = input_tools.get_metadata(args.fitresult)
@@ -74,8 +73,6 @@ else:
 base_process = process[0]
 
 gen_axes = groups.gen_axes
-if base_process == "W":
-    gen_axes.append("qGen")
 
 groups.setNominalName(args.baseName)
 groups.loadHistsForDatagroups(args.baseName, syst="", procsToRead=[process])
@@ -160,10 +157,7 @@ def plot_xsec_unfolded(df, edges, df_asimov=None, bin_widths=None, channel=None,
     else:
         ylim = args.ylim
 
-    if args.rrange is None:
-        rrange = [0.9,1.1]
-    else:
-        rrange = args.rrange
+    rrange = args.rrange
 
     xlabel = "-".join([get_xlabel(a, process_label) for a in axes])
     if len(axes) >= 2:
@@ -183,6 +177,13 @@ def plot_xsec_unfolded(df, edges, df_asimov=None, bin_widths=None, channel=None,
         zorder=2,
     )    
 
+    if args.genFlow:
+        ax1.fill([0,18.5, 18.5, 0,0], [ylim[0],*ylim,ylim[1],ylim[0]], color="grey", alpha=0.3)
+        ax1.fill([len(edges)-17.5, len(edges)+0.5, len(edges)+0.5, len(edges)-17.5, len(edges)-17.5], [ylim[0],*ylim,ylim[1],ylim[0]], color="grey", alpha=0.3)
+
+        ax2.fill([0,18.5, 18.5, 0,0], [rrange[0],*rrange,rrange[1],rrange[0]], color="grey", alpha=0.3)
+        ax2.fill([len(edges)-17.5, len(edges)+0.5, len(edges)+0.5, len(edges)-17.5, len(edges)-17.5], [rrange[0],*rrange,rrange[1],rrange[0]], color="grey", alpha=0.3)
+
     centers = hist_xsec.axes.centers[0]
 
     ax2.bar(centers, height=2*unc_ratio, bottom=1-unc_ratio, width=edges[1:] - edges[:-1], color="silver", label="Total")
@@ -194,7 +195,7 @@ def plot_xsec_unfolded(df, edges, df_asimov=None, bin_widths=None, channel=None,
     for h, l, c in zip(hist_others, label_others, color_others):
         h_flat = hist.Hist(
             hist.axis.Variable(edges, underflow=False, overflow=False), storage=hist.storage.Weight())
-        h_flat.view(flow=False)[...] = np.stack([h.values().flatten()/bin_widths, h.variances().flatten()/bin_widths**2], axis=-1)
+        h_flat.view(flow=False)[...] = np.stack([h.values(flow=args.genFlow).flatten()/bin_widths, h.variances(flow=args.genFlow).flatten()/bin_widths**2], axis=-1)
 
         hep.histplot(
             h_flat,
@@ -243,7 +244,7 @@ def plot_xsec_unfolded(df, edges, df_asimov=None, bin_widths=None, channel=None,
 
     scale = max(1, np.divide(*ax1.get_figure().get_size_inches())*0.3)
     hep.cms.label(ax=ax1, lumi=float(f"{args.lumi:.3g}"), fontsize=20*args.scaleleg*scale, 
-        label=cms_decor, data=not args.noData)
+        label=args.cmsDecor, data=not args.noData)
 
     outfile = f"{input_subdir}_unfolded_xsec"
 
@@ -268,16 +269,18 @@ def plot_xsec_unfolded(df, edges, df_asimov=None, bin_widths=None, channel=None,
     )
     plt.close()
 
-def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normalize=False, 
+def plot_uncertainties_unfolded(df, poi_type, channel=None, edges=None, scale=1., normalize=False, 
     logy=False, process_label="", axes=None, relative_uncertainty=False, percentage=True,
-    error_threshold=0.01,   # only uncertainties are shown with a max error larger than this threshold
+    error_threshold=0.001,   # only uncertainties are shown with a max error larger than this threshold
 ):
     logger.info(f"Make "+("normalized " if normalize else "")+"unfoled xsec plot"+(f" in channel {channel}" if channel else ""))
 
     # read nominal values and uncertainties from fit result and fill histograms
     logger.debug(f"Produce histograms")
 
-    if normalize:
+    if poi_type == "mu":
+        yLabel="$\mu\ ("+process_label+")$"
+    elif normalize:
         yLabel="1/$\sigma$ d$\sigma("+process_label+")$"
     else:
         yLabel="d$\sigma ("+process_label+")$ [pb]"
@@ -289,9 +292,12 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normaliz
             yLabel += " [%]"
     else:
         yLabel = "$\Delta$ "+ yLabel
-
-    #central values
-    bin_widths = edges[1:] - edges[:-1]
+    
+    if poi_type == "mu":
+        bin_widths = 1.0
+    else:
+        # central values
+        bin_widths = edges[1:] - edges[:-1]
 
     values = df["value"].values/bin_widths
 
@@ -333,6 +339,10 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normaliz
     )
     uncertainties = make_yields_df([hist_xsec], ["Total"], per_bin=True, yield_only=True, percentage=percentage)
     
+    if args.genFlow:
+        ax1.fill([0,18.5, 18.5, 0,0], [ylim[0],*ylim,ylim[1],ylim[0]], color="grey", alpha=0.3)
+        ax1.fill([len(values)-17.5, len(values)+0.5, len(values)+0.5, len(values)-17.5, len(values)-17.5], [ylim[0],*ylim,ylim[1],ylim[0]], color="grey", alpha=0.3)
+
     if grouping:
         sources = ["err_"+g for g in grouping]
     else:
@@ -370,14 +380,17 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normaliz
             continue
 
         errors = df[source].values/bin_widths
-
-        if max(errors) < error_threshold:
-            continue
-
         if relative_uncertainty:
             errors /= values
-            if percentage:
-                errors *= 100
+
+        if max(errors) < error_threshold:
+            logger.debug(f"Source {source} smaller than threshold of {error_threshold}")
+            continue
+
+        logger.debug(f"Plot source {source}")
+
+        if percentage:
+            errors *= 100
         
         hist_unc.view(flow=False)[...] = errors
 
@@ -409,10 +422,12 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normaliz
     plot_tools.redo_axis_ticks(ax1, "x", no_labels=len(axes) >= 2)
 
     hep.cms.label(ax=ax1, lumi=float(f"{args.lumi:.3g}"), fontsize=20*args.scaleleg*scale, 
-        label=cms_decor, data=not args.noData)
+        label=args.cmsDecor, data=not args.noData)
 
     outfile = f"{input_subdir}_unfolded_uncertainties"
 
+    if poi_type == "mu":
+        outfile += "_mu"
     if relative_uncertainty:
         outfile += "_relative"   
     if normalize:
@@ -434,125 +449,109 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normaliz
 
     plt.close()
 
-# store unfolded data
-# outfile = h5py.File(f'{outdir}/fitresult.hdf5', 'w')
+if args.poi:
+    poi_types = ["mu",]
+    scale = 1
+else:
+    poi_types = ["pmaskedexpnorm",] if args.normalize else ["pmaskedexp",]
+    if args.plotSumPOIs:
+        poi_types += ["sumpoisnorm",] if args.normalize else ["sumpois",]
+    scale = 1 if args.normalize else args.lumi * 1000
 
-scale = 1 if args.normalize else args.lumi * 1000
+fitresult = get_fitresult(args.fitresult)
+if args.asimov:
+    fitresult_asimov = get_fitresult(args.asimov)
+    
+for poi_type in poi_types:
 
-poi_type = ["pmaskedexpnorm",] if args.normalize else ["pmaskedexp",]
-if args.plotSumPOIs:
-    poi_type += ["sumpoisnorm",] if args.normalize else ["sumpois",]
+    data = read_impacts_pois(fitresult, poi_type=poi_type, scale=scale)
+    data_asimov = read_impacts_pois(fitresult_asimov, poi_type=poi_type, scale=scale) if args.asimov else None
 
-data = get_results(args.fitresult, poi_type=poi_type, scale=scale)
-data_asimov = get_results(args.asimov, poi_type=poi_type, scale=scale)
-
-# make all possible gen axes 
-gen_axes_permutations = [gen_axes]
-if args.plotSumPOIs:
-    # Include all combinations of axes
-    for n in range(1, len(gen_axes)):
-        gen_axes_permutations += [k for k in itertools.combinations(gen_axes, n)]
-
-all_axes = ["qGen", "ptGen",  "absEtaGen",  "ptVGen",  "absYVGen"]
-
-for axes in gen_axes_permutations:
-    data_group = data.loc[(sum([data[ax] != -1 for ax in axes]) == len(axes)) 
-        & (np.product([data[ax] == -1 for ax in data.keys() if ax in all_axes and ax not in axes], axis=0))
-        & (data["Name"].apply(lambda x: x[0] == base_process))]
-
-    if len(data_group) == 0:
-        logger.debug(f"No entries found with gen axes {axes}, next one!")
-        continue
-
-    if data_asimov:
-        data_group_asimov = data_asimov.loc[(sum([data_asimov[ax] != -1 for ax in axes]) == len(axes)) 
-            & (np.product([data_asimov[ax] == -1 for ax in data_asimov.keys() if ax in all_axes and ax not in axes], axis=0))
-            & (data["Name"].apply(lambda x: x[0] == base_process))]
-
-    if len(set(data_group["qGen"].values)) == 1 or (len(axes) == 1 and axes[0] == "qGen"):
-        channels = ["all"]
+    if poi_type.startswith("sum"):
+        # make all possible lower dimensional gen axes combinations; wmass only combinations including qGen
+        gen_axes_permutations = [list(k) for n in range(1, len(gen_axes)) for k in itertools.combinations(gen_axes, n)]
     else:
-        channels = ["plus", "minus"]
+        # gen_axes = ["ptGen", ]
+        gen_axes_permutations = [gen_axes[:],]
 
-    logger.info(f"Make plots for process {base_process} and gen axes {axes}")
+    for axes in gen_axes_permutations:
+        logger.info(f"Make plots for process {base_process} and gen axes {axes}")
 
-    for channel in channels:
-        logger.info(f"Now at channel {channel}")
+        if groups.wmass:
+            axes.append("qGen")
 
-        if channel == "minus":
-            data_channel = data_group.loc[data_group["qGen"]==0]
-            channel_keys = {"qGen":-1}
-            channel_axes = [a for a in axes if a != "qGen"]
-            data_channel_asimov = data_group_asimov.loc[data_group_asimov["qGen"]==0] if data_asimov else None
-            process_label = r"\mathrm{W}^{-}" if base_process == "W" else r"\mathrm{Z}"
-        elif channel == "plus":
-            data_channel = data_group.loc[data_group["qGen"]==1]
-            channel_keys = {"qGen":1}
-            channel_axes = [a for a in axes if a != "qGen"]
-            data_channel_asimov = data_group_asimov.loc[data_group_asimov["qGen"]==1] if data_asimov else None
-            process_label = r"\mathrm{W}^{+}" if base_process == "W" else r"\mathrm{Z}"
-        else:
-            process_label = r"\mathrm{W}" if base_process == "W" else r"\mathrm{Z}"
-            channel_keys = None
-            channel_axes = [*axes]
-            data_channel = data_group
-            data_channel_asimov = data_group_asimov if data_asimov else None
+        channels = ["plus", "minus"] if "qGen" in axes else ["all"]
 
-        if len(data_channel) == 0:
-            logger.info(f"No entries found for channel {channel}, skip!")
-            continue
-        
-        # find bin widths
-        def get_histo(name):
-            h = sum([groups.results[m.name]["output"][name].get() for m in groups.groups[process].members 
-                if not m.name.startswith("Bkg") and (base_process=="Z" or channel=="all" or channel in m.name)])
-            h = h.project(*channel_axes)
-            # for wlike the sample is randomly split in two based on reco charge
-            this_scale = 2*scale if channel in ["plus", "minus"] and base_process=="Z" else scale
-            if "xnorm" in name:
-                this_scale /= args.scaleXsec
-            h = hh.scaleHist(h, 1./this_scale)
-            return h
-
-        histo = get_histo(args.baseName)
-        hxnorm = get_histo("xnorm")
-        hMiNNLO = get_histo("xnorm_uncorr")
-     
-        bins = np.product(histo.axes.size)
-
-        binwidths = None
-        if len(channel_axes) == 1:
-            if channel_axes[0] == "qGen":
-                edges = np.array([-2,0,2])
+        for channel in channels:
+            logger.info(f"Now at channel {channel}")
+            if channel == "minus":
+                channel_sel = {"qGen":0}
+                channel_axes = [a for a in axes if a != "qGen"]
+                process_label = r"\mathrm{W}^{-}" if base_process == "W" else r"\mathrm{Z}"
+            elif channel == "plus":
+                channel_sel = {"qGen":1}
+                channel_axes = [a for a in axes if a != "qGen"]
+                process_label = r"\mathrm{W}^{+}" if base_process == "W" else r"\mathrm{Z}"
             else:
-                edges = np.array(histo.axes.edges[0])
-        elif len(channel_axes) == 2:
-            xbins, ybins = histo.axes.edges
-            xbinwidths = np.diff(xbins.flatten())
-            ybinwidths = np.diff(ybins.flatten())
-            binwidths = np.outer(xbinwidths, ybinwidths).flatten()
-            edges = np.arange(0.5, len(binwidths)+1.5, 1.0)
-        else:
-            bins = np.product(histo.axes.size)
-            edges = np.arange(0.5, bins+1.5, 1.0)
+                channel_sel = {}
+                process_label = r"\mathrm{W}" if base_process == "W" else r"\mathrm{Z}"
+                channel_axes = axes[:]
 
-        # sort values
-        data_c = data_channel.sort_values(by=channel_axes)
-        data_c_asimov = data_channel_asimov.sort_values(by=channel_axes) if data_asimov else None
+            data_c = select_pois(data, axes, selections=channel_sel, base_processes=base_process, flow=args.genFlow)
+            data_c_asimov = select_pois(data_group_asimov, axes, selections=channel_sel, base_processes=base_process, flow=args.genFlow) if data_asimov else None
 
-        if "xsec" in args.plots:
-            plot_xsec_unfolded(data_c, edges, data_c_asimov, bin_widths=binwidths, channel=channel, scale=scale, normalize=args.normalize, process_label = process_label, axes=channel_axes,
-                hist_others=[hxnorm, hMiNNLO], label_others=[r"MiNNLO $\times$ SCETlib+DYTurbo", "MiNNLO"], color_others=["blue", "red"]
-            )
-
-        if "uncertainties" in args.plots:
-            # absolute uncertainty
-            # plot_uncertainties_unfolded(data_c, channel=channel, scale=scale, normalize=args.normalize, process_label = process_label)
-            # plot_uncertainties_unfolded(data_c, channel=channel, scale=scale, normalize=args.normalize, logy=True, process_label = process_label)            
+            if len(data_c) == 0:
+                logger.info(f"No entries found for axes {axes} in channel {channel}, skip!")
+                continue
             
-            # relative uncertainty
-            # plot_uncertainties_unfolded(data_c, channel=channel, scale=scale, normalize=args.normalize, relative_uncertainty=True, process_label = process_label)
-            plot_uncertainties_unfolded(data_c, edges=edges, channel=channel, scale=scale, normalize=args.normalize, relative_uncertainty=True, logy=args.logy, process_label = process_label, axes=channel_axes)
+            # find bin widths
+            def get_histo(name):
+                h = sum([groups.results[m.name]["output"][name].get() for m in groups.groups[process].members 
+                    if not m.name.startswith("Bkg") and (base_process=="Z" or channel=="all" or channel in m.name)])
+                h = h.project(*channel_axes)
+                # for wlike the sample is randomly split in two based on reco charge
+                this_scale = 2*scale if groups.wlike else scale
+                if "xnorm" in name:
+                    this_scale /= args.scaleXsec
+                h = hh.scaleHist(h, 1./this_scale)
+                return h
+
+            histo = get_histo(args.baseName)
+            hxnorm = get_histo("xnorm")
+            hMiNNLO = get_histo("xnorm_uncorr")
+
+            if args.genFlow:
+                edges = plot_tools.extendEdgesByFlow(histo)
+            else:
+                edges = histo.axes.edges
+
+            binwidths = None
+            if len(channel_axes) == 1:
+                if channel_axes[0] == "qGen":
+                    edges = np.array([-2,0,2])
+                else:
+                    edges = np.array(edges[0])
+            elif len(channel_axes) == 2:
+                xbins, ybins = edges
+                xbinwidths = np.diff(xbins.flatten())
+                ybinwidths = np.diff(ybins.flatten())
+                binwidths = np.outer(xbinwidths, ybinwidths).flatten()
+                edges = np.arange(0.5, len(binwidths)+1.5, 1.0)
+            else:
+                bins = np.product([len(e) for e in edges])
+                edges = np.arange(0.5, bins+1.5, 1.0)
+
+            if poi_type == "poi":
+                binwidths = None
+
+            if "xsec" in args.plots:
+                plot_xsec_unfolded(data_c, edges, data_c_asimov, bin_widths=binwidths, channel=channel, scale=scale, normalize=args.normalize, axes=channel_axes, 
+                    process_label=process_label, hist_others=[hxnorm, hMiNNLO], label_others=[r"MiNNLO $\times$ SCETlib+DYTurbo", "MiNNLO"], color_others=["blue", "red"]
+                )
+
+            if "uncertainties" in args.plots:
+                plot_uncertainties_unfolded(data_c, poi_type, edges=edges, channel=channel, scale=scale, 
+                    normalize=args.normalize, relative_uncertainty=not args.absolute, logy=args.logy, process_label = process_label, axes=channel_axes)
 
 if output_tools.is_eosuser_path(args.outpath) and args.eoscp:
     output_tools.copy_to_eos(args.outpath, args.outfolder)

@@ -12,10 +12,13 @@ def get_pt_eta_axes(n_bins_pt, min_pt, max_pt, n_bins_eta=0):
         axis_absEtaGen = hist.axis.Regular(n_bins_eta, 0, 2.4, underflow=False, overflow=False, name = "absEtaGen")
     else:
         axis_absEtaGen = hist.axis.Variable(eta_binning, underflow=False, overflow=False, name = "absEtaGen")
-    axis_ptGen = hist.axis.Regular(n_bins_pt, min_pt, max_pt, underflow=False, overflow=False, name = "ptGen")    
+    axis_ptGen = hist.axis.Regular(n_bins_pt, min_pt, max_pt, underflow=True, overflow=True, name = "ptGen")    
 
     axes = [axis_ptGen, axis_absEtaGen]
     cols = ["ptGen", "absEtaGen"]
+
+    logger.debug(f"Gen bins pT: {axis_ptGen.edges}")
+    logger.debug(f"Gen bins |eta|: {axis_absEtaGen.edges}")
 
     return axes, cols
 
