@@ -62,7 +62,7 @@ translate_label = {
 }
 
 
-def get_purity(matrix, xbins, ybins, flow=False):
+def get_purity(matrix, xbins, ybins):
 
     centers = xbins[:-1] + (xbins[1:] - xbins[:-1])/2    
     edges = ybins
@@ -70,8 +70,8 @@ def get_purity(matrix, xbins, ybins, flow=False):
     values = []
     for iBin, center in enumerate(centers):
         # find out in which gen bin(s) we are
-        ilow = np.where(edges == edges[center > edges][-1])[0][0] + int(flow)
-        ihigh = np.where(edges == edges[center < edges][0])[0][0] + int(flow)
+        ilow = np.where(edges == edges[center > edges][-1])[0][0]
+        ihigh = np.where(edges == edges[center < edges][0])[0][0]
 
         # sum corresponding diagonal element(s)
         diag = matrix[iBin, ilow:ihigh].sum()
@@ -83,9 +83,9 @@ def get_purity(matrix, xbins, ybins, flow=False):
 
     return np.array(values)
 
-def get_stability(matrix, xbins, ybins, flow=False):
+def get_stability(matrix, xbins, ybins):
     # stability is same computation as purity with inverted axes
-    return get_purity(matrix.T, ybins, xbins, flow=flow)
+    return get_purity(matrix.T, ybins, xbins)
 
 
 
@@ -98,18 +98,25 @@ for g_name, group in datagroups.items():
         for axes_string in args.axes:
             axes = axes_string.split("-")
 
+            if (groups.wmass or groups.wlike) and axes[0] == "pt":
+                genFlow=True
+            else:
+                genFlow=False
+
             if axes[0].startswith("abs("):
                 # mirror axis at half
-                hist2d = hh.projectNoFlow(hist[select], [axes[0][4:-1], *axes[1:]])
+                hist2d = hist[select].project(axes[0][4:-1], *axes[1:])
                 nbins = len(hist2d.axes.edges[0])-1
-                values = hist2d.values()[:int(nbins/2)][::-1] + hist2d.values()[int(nbins/2):]
+                values = hist2d.values(flow=genFlow)[:int(nbins/2)][::-1] + hist2d.values(flow=genFlow)[int(nbins/2):]
                 xbins = hist2d.axes[0].edges[int(nbins/2):]
             else:
-                hist2d = hh.projectNoFlow(hist[select], axes)
-                values = hist2d.values()
+                hist2d = hist[select].project(*axes)
+                values = hist2d.values(flow=genFlow)
                 xbins = hist2d.axes[0].edges
 
             ybins = hist2d.axes[1].edges
+            if genFlow:
+                ybins = np.array([ybins[0]-(ybins[1]-ybins[0]), *ybins, ybins[-1]+(ybins[-1]-ybins[-2])])
 
             outname = g_name+"_"+"_".join([a.replace("(","").replace(")","") for a in axes])
 
@@ -130,7 +137,7 @@ for g_name, group in datagroups.items():
             ax.set_xlim([min(xbins), max(xbins)])
             ax.set_ylim([min_y, max_y])
 
-            hep.cms.label(ax=ax, fontsize=20, label=cms_decor, data=False)
+            hep.cms.label(ax=ax, fontsize=20, label=args.cmsDecor, data=False)
 
             outfile = "purity_"+outname
             plot_tools.save_pdf_and_png(outdir, outfile)
@@ -154,7 +161,7 @@ for g_name, group in datagroups.items():
             ax.set_xlim([min(ybins), max(ybins)])
             ax.set_ylim([min_y, max_y])
 
-            hep.cms.label(ax=ax, fontsize=20, label=cms_decor, data=False)
+            hep.cms.label(ax=ax, fontsize=20, label=args.cmsDecor, data=False)
 
             outfile = "stability_"+outname
             plot_tools.save_pdf_and_png(outdir, outfile)
@@ -179,7 +186,7 @@ for g_name, group in datagroups.items():
             # ax.set_xticklabels(xlabels, rotation = 90)
             # ax.set_yticklabels(xlabels)
 
-            hep.cms.label(ax=ax, fontsize=20, label=cms_decor, data=False)
+            hep.cms.label(ax=ax, fontsize=20, label=args.cmsDecor, data=False)
 
             outfile = "responce_matrix_"+outname
 
@@ -189,6 +196,6 @@ for g_name, group in datagroups.items():
 
             plot_tools.write_index_and_log(outdir, outfile, 
             #     yield_tables={"Values" : cov_mat}, nround=2 if "correlation" in matrix else 10,
-                analysis_meta_info={args.infile : datagroups.getMetaInfo()},
+                analysis_meta_info={args.infile : groups.getMetaInfo()},
                 args=args,
             )

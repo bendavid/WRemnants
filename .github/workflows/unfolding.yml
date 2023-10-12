@@ -128,7 +128,7 @@ jobs:
         run: >-
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_with_mu_eta_pt.py 
           -j $((NTHREADS)) --maxFiles $((MAX_FILES)) --forceDefaultName -o $WREMNANTS_OUTDIR --postfix unfolding --unfolding 
-          --pt 6 26 56 --eta 6 -2.4 2.4 --genBins 2 3
+          --pt 6 26 58 --eta 6 -2.4 2.4 --genBins 4 3
 
       - name: wmass analysis
         # run with full binning
@@ -229,7 +229,7 @@ jobs:
       - name: wmass theoryfit plot prepostfit
         run: >-
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_plots.py 
-          $HIST_FILE --fitresult $WREMNANTS_OUTDIR/ZMassDilepton_unfolding/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR 
+          $HIST_FILE --fitresult $WREMNANTS_OUTDIR/WMass_eta_pt_charge_theoryfit/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR 
           -n xnorm --plots prefit postfit --addTauToSignal --debug --rrange 0.9 1.1 --lumi=$LUMI_SCALE
 
 
@@ -264,7 +264,7 @@ jobs:
         run: >-
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_wlike_with_mu_eta_pt.py 
           -j $((NTHREADS)) --maxFiles $((MAX_FILES)) --forceDefaultName -o $WREMNANTS_OUTDIR --postfix unfolding --unfolding 
-          --pt 10 26 56 --eta 24 -2.4 2.4 --genBins 2 3
+          --pt 10 26 58 --eta 24 -2.4 2.4 --genBins 4 3
 
       - name: wlike analysis
         # run with full binning

@@ -98,29 +98,36 @@ def plotImpacts(df, pulls=False, poi='Wmass', normalize=False, oneSidedImpacts=F
     include_ref = "impact_ref" in df.keys() or "constraint_ref" in df.keys()
     impact_str = 'impact' if not oneSidedImpacts else 'absimpact'
 
-    # append numerical values of impacts on nuisance name; fill up empty room with spaces to align numbers
-    frmt = "{:0"+str(int(np.log10(max(df[impact_str])))+2)+".2f}"
-    nval = df[impact_str].apply(lambda x,frmt=frmt: frmt.format(x)) #.astype(str)
-    nspace = nval.apply(lambda x, n=nval.apply(len).max(): " "*(n - len(x))) 
-    if include_ref:
-        frmt_ref = "{:0"+str(int(np.log10(max(df[f"{impact_str}_ref"])))+2)+".2f}"
-        nval_ref = df[f'{impact_str}_ref'].apply(lambda x,frmt=frmt_ref: " ("+frmt.format(x)+")") #.round(2).astype(str)
-        nspace_ref = nval_ref.apply(lambda x, n=nval_ref.apply(len).max(): " "*(n - len(x))) 
-        nval = nval+nspace_ref+nval_ref 
-    labels = df["label"]+"  "+nspace+nval
+    if impacts and include_ref:
+        # append numerical values of impacts on nuisance name; fill up empty room with spaces to align numbers
+        frmt = "{:0"+str(int(np.log10(max(df[impact_str])))+2)+".2f}"
+        nval = df[impact_str].apply(lambda x,frmt=frmt: frmt.format(x)) #.astype(str)
+        nspace = nval.apply(lambda x, n=nval.apply(len).max(): " "*(n - len(x))) 
+        if include_ref:
+            frmt_ref = "{:0"+str(int(np.log10(max(df[f"{impact_str}_ref"])))+2)+".2f}"
+            nval_ref = df[f'{impact_str}_ref'].apply(lambda x,frmt=frmt_ref: " ("+frmt.format(x)+")") #.round(2).astype(str)
+            nspace_ref = nval_ref.apply(lambda x, n=nval_ref.apply(len).max(): " "*(n - len(x))) 
+            nval = nval+nspace_ref+nval_ref 
+        labels = df["label"]+"  "+nspace+nval
+        textargs = dict()
+    else:
+        labels = df["label"]
+        textargs = dict(
+            texttemplate="%{x:0.2f}",
+            textposition="outside",
+            textfont_size=12,
+            textangle=0,
+        )
 
     if impacts:
         fig.add_trace(
             go.Bar(
                 x=df[impact_str],
                 y=labels,
-                width=0.2,
+                width=0.2 if include_ref else 1,
                 orientation='h',
                 **get_marker(filled=True, color=df['impact_color'] if oneSidedImpacts else '#377eb8'),
-                # texttemplate="%{x:0.2f}",
-                # textposition="outside",
-                # textfont_size=12,
-                # textangle=0,
+                **textargs,
                 name="impacts_down",
             ),
             row=1,col=1,
@@ -141,7 +148,7 @@ def plotImpacts(df, pulls=False, poi='Wmass', normalize=False, oneSidedImpacts=F
                 go.Bar(
                     x=-1*df['impact'],
                     y=labels,
-                    width=0.2,
+                    width=0.2 if include_ref else 1,
                     orientation='h',
                     **get_marker(filled=True, color='#e41a1c'),
                     name="impacts_up",

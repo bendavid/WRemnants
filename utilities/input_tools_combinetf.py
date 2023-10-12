@@ -247,13 +247,10 @@ def read_impacts_pois_h5(h5file, poi_type, group=True, uncertainties=None):
 
     return names, centrals, totals, uncertainties
 
-def read_impacts_pois_root(rtfile, poi_type, group=True, uncertainties=None):
-    rtfile = rtfile["fitresults"]
-
+def read_impacts_pois_root(rtfile, poi_type, group=True, uncertainties=None):   
     histname = f"nuisance_group_impact_{poi_type}" if group else f"nuisance_impact_{poi_type}"
-
     if f"{histname};1" not in rtfile.keys():
-        logger.debug(f"Histogram {histname};1 not found in fitresult file")
+        raise RuntimeError(f"Histogram {histname};1 not found in fitresult file")
         return None
     impacts = rtfile[histname].to_hist()
 
@@ -268,10 +265,11 @@ def read_impacts_pois_root(rtfile, poi_type, group=True, uncertainties=None):
         uncertainties = {f"err_{k}": impacts.values()[:,i] for i, k in enumerate(impacts.axes[1]) if k in uncertainties}
 
     # measured central value
-    centrals = [rtfile[n].array()[0] for n in names]
+    fitresults = rtfile["fitresults;1"]
+    centrals = [fitresults[n].array()[0] for n in names]
 
     # total uncertainties
-    totals = [rtfile[n+"_err"].array()[0] for n in names]
+    totals = [fitresults[n+"_err"].array()[0] for n in names]
 
     return names, centrals, totals, uncertainties
 

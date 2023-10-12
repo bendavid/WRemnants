@@ -57,8 +57,8 @@ def define_gen_level(df, gen_level, dataset_name, mode="wmass"):
 
     elif gen_level == "postFSR":
 
-        df = df.Define("postFSRleps", "GenPart_status == 1 && (GenPart_statusFlags&1 || GenPart_statusFlags&(1<<3)) && (GenPart_pdgId >= 11 && GenPart_pdgId <= 14)")
-        df = df.Define("postFSRantileps", "GenPart_status == 1 && (GenPart_statusFlags&1 || GenPart_statusFlags&(1<<3)) && (GenPart_pdgId <= -11 && GenPart_pdgId >= -14)")
+        df = df.Define("postFSRleps", "GenPart_status == 1 && (GenPart_statusFlags&1 || GenPart_statusFlags&(1<<5)) && (GenPart_pdgId >= 11 && GenPart_pdgId <= 14)")
+        df = df.Define("postFSRantileps", "GenPart_status == 1 && (GenPart_statusFlags&1 || GenPart_statusFlags&(1<<5)) && (GenPart_pdgId <= -11 && GenPart_pdgId >= -14)")
         df = df.Define("postFSRlepIdx", "ROOT::VecOps::ArgMax(GenPart_pt[postFSRleps])")
         df = df.Define("postFSRantilepIdx", "ROOT::VecOps::ArgMax(GenPart_pt[postFSRantileps])")
 
