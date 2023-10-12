@@ -117,20 +117,17 @@ def build_graph(df, dataset):
     cols = nominal_cols
 
     if args.unfolding and dataset.name in sigProcs:
-        print("Here we are in", dataset.name)
         df = unfolding_tools.define_gen_level(df, args.genLevel, dataset.name, mode="wlike")
 
         if hasattr(dataset, "out_of_acceptance"):
             logger.debug("Reject events in fiducial phase space")
             df = unfolding_tools.select_fiducial_space(df, mode="wlike", pt_min=args.pt[1], pt_max=args.pt[2], 
                 mass_min=mass_min, mass_max=mass_max, selections=unfolding_selections, accept=False)
-            print("It'e out of acceptance")
         else:
             logger.debug("Select events in fiducial phase space")
             df = unfolding_tools.select_fiducial_space(df, mode="wlike", pt_min=args.pt[1], pt_max=args.pt[2], 
                 mass_min=mass_min, mass_max=mass_max, selections=unfolding_selections, accept=True)
 
-            print("GOING TO ADD XNORM for proc", dataset.name)
             unfolding_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols)
             axes = [*axes, *unfolding_axes] 
             cols = [*cols, *unfolding_cols]
