@@ -264,7 +264,7 @@ def plot_xsec_unfolded(df, edges, df_asimov=None, bin_widths=None, channel=None,
     data_yields = make_yields_df([hist_xsec], ["Data"], per_bin=True)
     plot_tools.write_index_and_log(outdir, outfile, nround=4 if normalize else 2,
         yield_tables={"Data" : data_yields, "Model": asimov_yields} if df_asimov else {"Data" : data_yields},
-        analysis_meta_info={"AnalysisOutput" : meta_info},
+        analysis_meta_info={args.infile : groups.getMetaInfo(), args.fitresult: meta_info},
         args=args,
     )
     plt.close()
@@ -443,7 +443,7 @@ def plot_uncertainties_unfolded(df, poi_type, channel=None, edges=None, scale=1.
 
     plot_tools.write_index_and_log(outdir, outfile, nround=4 if normalize else 2,
         yield_tables={"Unfolded data uncertainty [%]": uncertainties},
-        analysis_meta_info={"AnalysisOutput" : meta_info},
+        analysis_meta_info={"AnalysisOutput" : groups.getMetaInfo(), 'CardmakerOutput': meta_info},
         args=args,
     )
 

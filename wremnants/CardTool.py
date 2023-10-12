@@ -793,7 +793,7 @@ class CardTool(object):
         for n in range(2, len(self.datagroups.gen_axes)):
             axes_combinations += [k for k in itertools.combinations(self.datagroups.gen_axes, n)]
         for axes in axes_combinations:
-            logger.debug(f"Add sum group for {axes}")
+            logger.debug(f"Add sum group for {axes}"+("" if genCharge is None else f" with {genCharge}"))
 
             if isinstance(axes, str):
                 axes = [axes]

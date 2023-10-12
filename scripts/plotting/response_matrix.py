@@ -187,8 +187,8 @@ for g_name, group in datagroups.items():
 
             plot_tools.save_pdf_and_png(outdir, outfile)
 
-            # plot_tools.write_index_and_log(outdir, outfile, 
+            plot_tools.write_index_and_log(outdir, outfile, 
             #     yield_tables={"Values" : cov_mat}, nround=2 if "correlation" in matrix else 10,
-            #     analysis_meta_info=None,
-            #     args=args,
-            # )
+                analysis_meta_info={args.infile : datagroups.getMetaInfo()},
+                args=args,
+            )

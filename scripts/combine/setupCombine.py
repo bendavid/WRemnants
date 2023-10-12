@@ -141,6 +141,9 @@ def setup(args, inputFile, fitvar, xnorm=False):
         datagroups.groups[base_group].addMembers(datagroups.groups[base_group.replace("mu","tau")].members)
         datagroups.deleteGroup(base_group.replace("mu","tau"))
 
+    if xnorm:
+        datagroups.select_xnorm_groups(base_group)
+
     if args.unfolding and args.fitXsec:
         raise ValueError("Options --unfolding and --fitXsec are incompatible. Please choose one or the other")
     elif args.fitXsec:
@@ -155,12 +158,16 @@ def setup(args, inputFile, fitvar, xnorm=False):
                 datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen0", member_filter=lambda x: x.name.startswith("Wminus"))
             if "plus" in args.recoCharge:
                 datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen1", member_filter=lambda x: x.name.startswith("Wplus"))
-            # out of acceptance contribution
-            datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if not m.name.startswith("Bkg")])
         else:
             datagroups.defineSignalBinsUnfolding(base_group, "Z", member_filter=lambda x: x.name.startswith(base_group))
-            # out of acceptance contribution
-            datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if not m.name.startswith("Bkg")])
+        
+        # out of acceptance contribution
+        to_del = [m for m in datagroups.groups[base_group].members if not m.name.startswith("Bkg")]
+        if len(datagroups.groups[base_group].members) == len(to_del):
+            datagroups.deleteGroup(base_group)
+        else:
+            datagroups.groups[base_group].deleteMembers(to_del)
+
     # FIXME: temporary customization of signal and out-of-acceptance process names for theory agnostic with POI as NOI
     # There might be a better way to do it more homogeneously with the rest.
     if args.theoryAgnostic and args.poiAsNoi:
@@ -218,7 +225,6 @@ def setup(args, inputFile, fitvar, xnorm=False):
         histName = "xnorm"
         cardTool.setHistName(histName)
         cardTool.setNominalName(histName)
-        datagroups.select_xnorm_groups(base_group)
         if args.unfolding:
             cardTool.setProjectionAxes(["count"])
         else:
@@ -273,11 +279,11 @@ def setup(args, inputFile, fitvar, xnorm=False):
         
     passSystToFakes = wmass and not args.skipSignalSystOnFakes and args.qcdProcessName not in excludeGroup and (filterGroup == None or args.qcdProcessName in filterGroup) and not xnorm
 
-    # TODO: move to a common place if it is  useful, also use regular expressions for better flexibility? In that case "name".startswith("n") is simply re.match("^n", "name")
+    # TODO: move to a common place if it is  useful
     def assertSample(name, startsWith=["W", "Z"], excludeMatch=[]):
         return any(name.startswith(init) for init in startsWith) and all(excl not in name for excl in excludeMatch)
 
-    dibosonMatch = ["WW", "WZ", "ZZ"] # CHECK: is ZW needed?
+    dibosonMatch = ["WW", "WZ", "ZZ"] 
     WMatch = ["W", "BkgW"] # TODO: the name of out-of-acceptance might be changed at some point, maybe to WmunuOutAcc, so W will match it as well (and can exclude it using "OutAcc" if needed)
     ZMatch = ["Z", "BkgZ"]
     signalMatch = WMatch if wmass else ZMatch

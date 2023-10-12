@@ -108,7 +108,7 @@ def plot_matrix_poi(h2d, names, poi_type="mu", gen_axes=None, base_processes=[],
     plot_tools.save_pdf_and_png(outdir, outfile)
     plot_tools.write_index_and_log(outdir, outfile, 
         yield_tables={"Values" : hist_cov.values()}, nround=10 if covariance else 2,
-        analysis_meta_info=None,
+        analysis_meta_info={args.infile : datagroups.getMetaInfo()},
         args=args,
     )
 

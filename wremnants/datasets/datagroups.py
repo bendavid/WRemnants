@@ -597,13 +597,12 @@ class Datagroups(object):
             self.unconstrainedProcesses.append(proc_name)
 
     def select_xnorm_groups(self, select_groups=None):
-        # only keep members and groups where xnorm is defined 
+        # only keep members and groups where xnorm is defined
+        logger.info("Select xnorm groups"+(f" {select_groups}" if select_groups else ""))
         if select_groups is not None:
             if isinstance(select_groups, str):
                 select_groups = [select_groups]
-            for g_name in self.groups.keys():
-                if g_name not in select_groups:
-                    self.deleteGroup(g_name)
+            self.deleteGroups([g for g in self.groups.keys() if g not in select_groups])
         elif self.fakeName in self.groups:
             self.deleteGroup(self.fakeName)
         toDel_groups = []

@@ -74,7 +74,7 @@ class TheoryHelper(object):
             self.tnp_nuisances = self.card_tool.match_str_axis_entries(self.corr_hist.axes[self.syst_ax], 
                                     ["^gamma_.*[+|-]\d+", "^b_.*[+|-]\d+", "^s[+|-]\d+", "^h_.*\d+"])
             if not self.tnp_nuisances:
-                raise ValueError("Did not find TNP uncertainties in hist {self.corr_hist_name}")
+                raise ValueError(f"Did not find TNP uncertainties in hist {self.corr_hist_name}")
 
             self.tnp_names = set([x.split("+")[0].split("-")[0] for x in self.tnp_nuisances])
             

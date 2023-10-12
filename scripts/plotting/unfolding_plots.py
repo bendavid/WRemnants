@@ -46,7 +46,6 @@ outdir = output_tools.make_plot_dir(args.outpath, args.outfolder, eoscp=args.eos
 
 fitresult = input_tools_combinetf.get_fitresult(args.fitresult)
 
-meta_info = input_tools.get_metadata(args.infile)
 datagroups = Datagroups(args.infile)
 
 if datagroups.wmass:
@@ -54,10 +53,10 @@ if datagroups.wmass:
 else:
     base_group = "Zee" if datagroups.flavor == "ee" else "Zmumu"
 
-if args.addTauToSignal:
-    # add tau processes to signal
-    datagroups.groups[base_group].addMembers(datagroups.groups[base_group.replace("mu","tau")].members)
-    datagroups.deleteGroup(base_group.replace("mu","tau"))
+# if args.addTauToSignal:
+#     # add tau processes to signal
+#     datagroups.groups[base_group].addMembers(datagroups.groups[base_group.replace("mu","tau")].members)
+#     datagroups.deleteGroup(base_group.replace("mu","tau"))
 
 def plot(fittype, channel=None, data=True, stack=True, density=False, ratio=True, backgrounds=True):
     logger.info(f"Make {fittype} plot"+(f" in channel {channel}" if channel else ""))
@@ -70,6 +69,8 @@ def plot(fittype, channel=None, data=True, stack=True, density=False, ratio=True
     ref_hists = []
     colors = []
     labels = []
+    if args.addTauToSignal:
+        names = [n.replace("mu", "tau") for n in names] + names
     for g_name in names:
         group = datagroups.groups[g_name]
         for member in group.members:
@@ -242,6 +243,8 @@ def plot(fittype, channel=None, data=True, stack=True, density=False, ratio=True
     hep.cms.label(ax=ax1, lumi=float(f"{args.lumi:.3g}"), fontsize=20*args.scaleleg*scale, 
         label=args.cmsDecor, data=not args.noData)
 
+    plot_tools.addLegend(ax1, ncols=2, text_size=20*args.scaleleg)
+
     outfile = f"{fittype}"
     outfile += (f"_{args.postfix}" if args.postfix else "") 
     outfile += (f"_{channel}" if channel else "")
@@ -261,7 +264,7 @@ def plot(fittype, channel=None, data=True, stack=True, density=False, ratio=True
 
     plot_tools.write_index_and_log(outdir, outfile, 
         # yield_tables={"Processes" : processes_yields, "Summed processes": summed_yields},#, "Unstacked processes" : unstacked_yields},
-        analysis_meta_info=None,
+        analysis_meta_info={args.infile : datagroups.getMetaInfo()},
         args=args,
     )
 
