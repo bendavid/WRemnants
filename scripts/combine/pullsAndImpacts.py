@@ -66,14 +66,15 @@ def get_marker(filled=True, color='#377eb8', opacity=1.0):
 def plotImpacts(df, pulls=False, poi='Wmass', normalize=False, oneSidedImpacts=False):
     poi_type = poi.split("_")[-1] if poi else None
 
-    if poi_type == "WMass":
+    if poi == "Wmass":
         impact_title = "Impact on mass (MeV)"
-    elif poi_type.startswith("WmassDiffCharge"):
+    elif poi.startswith("massDiffCharge"):
         impact_title = "Impact on mass diff. (charge) (MeV)"
-    elif poi_type.startswith("WmassDiffEta"):
+    elif poi.startswith("massDiffEta"):
         impact_title = "Impact on mass diff. ($\\eta$) (MeV)"
+    else:
+        raise ValueError(f"Unknown poi {poi}")
 
-    impact_title = title_dict.get(poi_type, None)
     pulls = pulls 
     impacts = bool(df['impact'].sum()) and not args.noImpacts
     ncols = pulls+impacts

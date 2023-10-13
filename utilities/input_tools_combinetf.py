@@ -45,9 +45,11 @@ def get_poi_names_h5(h5file, poi_type="mu"):
     if poi_type is not None and poi_type in outnames:
         names = h5file[f"{poi_type}_names"][...].astype(str)
 
-    if 'nois' in outnames:
-        names = np.append(names, 'Wmass')
-
+    for noi in h5file["nois_names"][...].astype(str):
+        if noi.startswith("massShift"):
+            names = np.append(names, 'Wmass')
+        else:
+            names = np.append(names, noi)
     return names
 
 def get_poi_names_root(rtfile, poi_type="mu"):
@@ -58,7 +60,12 @@ def get_poi_names_root(rtfile, poi_type="mu"):
 
     if 'nuisance_impact_nois' in [k.replace(";1","") for k in rtfile.keys()]:
         impacts = rtfile['nuisance_impact_nois'].to_hist()
-        names.append('Wmass')
+        for i in range(impacts.axes[0].size):
+            noi = impacts.axes[0].value(i)
+            if noi.startswith("massShift"):
+                names = np.append(names, 'Wmass')
+            else:
+                names = np.append(names, noi)
 
     return np.array(names)
 
@@ -93,12 +100,11 @@ def read_impacts_poi_h5(h5file, group, poi='Wmass', skip_systNoConstraint=True):
     if poi is None:
         poi_type=None
     else:
-        poi_type = poi.split("_")[-1] if poi else None
+        poi_type = poi.split("_")[-1]
         poi_names = get_poi_names(h5file, poi_type)
-        if poi=='Wmass':
-            impact_hist_total = "nuisance_impact_nois"
-            impact_hist = "nuisance_group_impact_nois" if group else "nuisance_impact_nois"
-        elif poi in poi_names:
+        if poi in poi_names:      
+            if poi_type in ["noi", "Wmass"]:
+                poi_type = 'nois'
             impact_hist_total = f"nuisance_impact_{poi_type}"
             impact_hist = f"nuisance_group_impact_{poi_type}" if group else f"nuisance_impact_{poi_type}"
         else:
@@ -115,9 +121,11 @@ def read_impacts_poi_h5(h5file, group, poi='Wmass', skip_systNoConstraint=True):
         total = 0.
         norm = 0.
     else:
-        ipoi = 0 if poi=='Wmass' else poi_names.index(poi)
+        ipoi = np.where(poi_names == poi)[0][0]
+        all_labels = h5file["hsysts"][...].astype(str)
+        isys = np.where([l.startswith("massShift") for l in all_labels])[0][0] if poi=="Wmass" else np.where(all_labels == poi.replace('_noi',''))[0][0]
         impacts = h5file[impact_hist][...][ipoi]
-        total = h5file[impact_hist_total][...][ipoi,ipoi]
+        total = h5file[impact_hist_total][...][ipoi,isys]
         norm = h5file["x"][...][ipoi]
 
     if len(labels)+1 == len(impacts): 
@@ -133,9 +141,10 @@ def read_impacts_poi_h5(h5file, group, poi='Wmass', skip_systNoConstraint=True):
 def read_impacts_poi_root(rtfile, group, poi='Wmass'):
     poi_type = poi.split("_")[-1] if poi else None
     poi_names = get_poi_names(rtfile, poi_type)
-    if poi=='Wmass':
-        impact_hist = "nuisance_group_impact_nois" if group else "nuisance_impact_nois"
-    elif poi in poi_names:
+
+    if poi_type == "noi":
+        poi_type += 's'
+    if poi in poi_names:
         impact_hist = f"nuisance_group_impact_{poi_type}" if group else f"nuisance_impact_{poi_type}"
     else:
         raise ValueError(f"Invalid POI: {poi}")
@@ -153,7 +162,7 @@ def read_impacts_poi_root(rtfile, group, poi='Wmass'):
         return np.zeros_like(labels), labels, 1., 1.
     else:
         impacts = rtfile[impact_hist].to_hist()
-        ipoi = 0 if poi=='Wmass' else poi_names.index(poi)
+        ipoi = np.where(poi_names == poi)[0][0]
         total = rtfile["fitresults"][impacts.axes[0].value(ipoi)+"_err"].array()[0]
         norm = rtfile["fitresults"][impacts.axes[0].value(ipoi)].array()[0]
         impacts = impacts.values()[ipoi,:]
