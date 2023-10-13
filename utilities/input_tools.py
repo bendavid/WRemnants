@@ -262,15 +262,16 @@ def getPOInames(fitresult_file, poi_type="mu"):
     return names
 
 def getPOInamesH5(h5file, poi_type="mu"):
-    outnames = h5file[
-        "outnames"][...].astype(str)
+    outnames = h5file["outnames"][...].astype(str)
     names = np.array([])
     if poi_type is not None and poi_type in outnames:
         names = h5file[f"{poi_type}_names"][...].astype(str)
 
-    if 'nois' in outnames:
-        names = np.append(names, 'Wmass')
-
+    for noi in h5file["nois_names"][...].astype(str):
+        if noi.startswith("massShift"):
+            names = np.append(names, 'Wmass')
+        else:
+            names = np.append(names, noi)
     return names
 
 def getPOInamesRoot(rtfile, poi_type="mu"):
@@ -281,7 +282,12 @@ def getPOInamesRoot(rtfile, poi_type="mu"):
 
     if 'nuisance_impact_nois' in [k.replace(";1","") for k in rtfile.keys()]:
         impacts = rtfile['nuisance_impact_nois'].to_hist()
-        names.append('Wmass')
+        for i in range(impacts.axes[0].size):
+            noi = impacts.axes[0].value(i)
+            if noi.startswith("massShift"):
+                names = np.append(names, 'Wmass')
+            else:
+                names = np.append(names, noi)
 
     return np.array(names)
 
@@ -316,7 +322,7 @@ def readImpactsH5(h5file, group, POI='Wmass', skip_systNoConstraint=True):
     else:
         poi_type = POI.split("_")[-1] if POI else None
         poi_names = getPOInames(h5file, poi_type)
-        if POI=='Wmass':
+        if POI=='Wmass' or poi_type=="noi":
             impact_hist_total = "nuisance_impact_nois"
             impact_hist = "nuisance_group_impact_nois" if group else "nuisance_impact_nois"
         elif POI in poi_names:
@@ -336,7 +342,7 @@ def readImpactsH5(h5file, group, POI='Wmass', skip_systNoConstraint=True):
         total = 0.
         norm = 0.
     else:
-        iPOI = 0 if POI=='Wmass' else poi_names.index(POI)
+        iPOI = 0 if POI=='Wmass' else np.where(poi_names == POI)[0][0]
         impacts = h5file[impact_hist][...][iPOI]
         total = h5file[impact_hist_total][...][iPOI,iPOI]
         norm = h5file["x"][...][iPOI]

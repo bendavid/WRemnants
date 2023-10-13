@@ -66,15 +66,14 @@ def get_marker(filled=True, color='#377eb8', opacity=1.0):
 def plotImpacts(df, pulls=False, POI='Wmass', normalize=False, oneSidedImpacts=False):
     poi_type = POI.split("_")[-1] if POI else None
 
-    if poi_type == "Wmass":
-        impact_title="Impact on mass (MeV)"
-    elif poi_type == "mu":
-        impact_title=r"$\Delta \mu$"
-    elif poi_type == "pmaskedexp":
-        impact_title=r"$\delta N$" if normalize else r"$\Delta N$"
-    elif poi_type == "pmaskedexpnorm":
-        impact_title=r"$\delta (\mathrm{d} \sigma / \sigma)$" if normalize else r"$\Delta(\mathrm{d} \sigma / \sigma)$"
+    if poi_type == "WMass":
+        impact_title = "Impact on mass (MeV)"
+    elif poi_type.startswith("WmassDiffCharge"):
+        impact_title = "Impact on mass diff. (charge) (MeV)"
+    elif poi_type.startswith("WmassDiffEta"):
+        impact_title = "Impact on mass diff. ($\\eta$) (MeV)"
 
+    impact_title = title_dict.get(poi_type, None)
     pulls = pulls 
     impacts = bool(df['impact'].sum()) and not args.noImpacts
     ncols = pulls+impacts
@@ -386,7 +385,7 @@ def producePlots(fitresult, args, POI='Wmass', normalize=False, fitresult_ref=No
 
         app.run_server(debug=True, port=3389, host=args.interface)
     elif args.output_mode == 'output':
-        postfix = POI if POI and "mass" not in POI else None
+        postfix = POI
         meta = input_tools.get_metadata(args.inputFile)
         outdir = output_tools.make_plot_dir(args.outFolder, "", eoscp=args.eoscp)
         if outdir and not os.path.isdir(outdir):
@@ -446,12 +445,3 @@ if __name__ == '__main__':
             outfile = os.path.splitext(args.outputFile)
             args.outputFile = "".join([outfile[0]+"_group", outfile[1]])
             producePlots(fitresult, args, POI, fitresult_ref=fitresult_ref)
-    
-    if POIs[0] and not (POIs[0]=="Wmass" and len(POIs) == 1):
-        # masked channel
-        for POI in input_tools.getPOInames(fitresult, poi_type="pmaskedexp"):
-            producePlots(fitresult, args, POI, normalize=not args.absolute, fitresult_ref=fitresult_ref)
-
-        # masked channel normalized
-        for POI in input_tools.getPOInames(fitresult, poi_type="pmaskedexpnorm"):
-            producePlots(fitresult, args, POI, normalize=not args.absolute, fitresult_ref=fitresult_ref)

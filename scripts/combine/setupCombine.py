@@ -367,7 +367,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                 skipEntries=massSkip,
                                 mirror=False,
                                 actionMap={m.name: (lambda h, flip=hh.flip_histogram_bins, s=hist.tag.Slicer(): 
-                                        flip(h, "massShift", "massShiftW10MeVUp", "massShiftW10MeVDown", "eta", s[0:complex(0,0):])) 
+                                        flip(h, "massShift", f"massShift{label}100MeVUp", f"massShift{label}100MeVDown", "eta", s[0:complex(0,0):])) 
                                     for g in cardTool.procGroups[signal_samples_forMass[0]] for m in cardTool.datagroups.groups[g].members},
                                 noConstraint=not constrainMass,
                                 systAxes=["massShift"],
