@@ -481,3 +481,39 @@ def set_flow(h, val="nearest"):
             nearest_vals = np.take(h.values(flow=True), -2, i) 
             np.take(h.values(flow=True), -1, i)[...] = nearest_vals if val == "nearest" else np.full_like(nearest_vals, val)
     return h
+
+def flip_histogram_bins(histo, axis1, axis1_bin1, axis1_bin2, axis2=None, axis2_slize=None, flow=False):
+    # flix content from axis1: axis1_bin1 with axis1: axis1_bin2 
+    # optionally for a subset of the histogram defined by axis2: axis2_slize
+    if axis2 is not None and axis2_slize is None:
+        raise ValueError(f"Requested to flip bins for axis {axis2} but the corresponding slizes 'axis2_slize' are not set")
+    if isinstance(axis2_slize, slice):
+        # for some reason complex slicing didn't work, convert to bin number
+        tmp_slice = []
+        for x in ("start", "stop", "step"):
+            s = getattr(axis2_slize,x)
+            if isinstance(s, complex):
+                tmp_slice.append(histo.axes[axis2].index(s.real))
+            else:
+                tmp_slice.append(s)
+        axis2_slize = slice(*tmp_slice)
+
+    slizes1 = []
+    slizes2 = []
+    for a in histo.axes.name:
+        if a == axis1:
+            slizes1.append(histo.axes[a].index(axis1_bin1))
+            slizes2.append(histo.axes[a].index(axis1_bin2))
+        elif axis2 is not None and a == axis2:                  
+            slizes1.append(axis2_slize)
+            slizes2.append(axis2_slize)
+        else:
+            slizes1.append(slice(None))
+            slizes2.append(slice(None))
+
+    # flip bins in specified slizes
+    data = histo.view(flow=flow)
+    new_histo = histo.copy()
+    new_histo.view(flow=flow)[*slizes2] = data[*slizes1]
+    new_histo.view(flow=flow)[*slizes1] = data[*slizes2]
+    return new_histo
