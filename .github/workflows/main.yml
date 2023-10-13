@@ -263,7 +263,7 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.5 --baseName lep_eta --hists eta -a mu -p $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_MU
 
       - name: lowpu w mu plot mt
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --rebin 2 --baseName transverseMass --hists mt-charge -a mu -p $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_MU
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --rebin 2 --baseName transverseMass --hists mt -a mu -p $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_MU
 
       - name: lowpu w mu combine mt setup
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombine.py -i $HIST_FILE_MU --baseName transverseMass --fitvar mt-charge -o $WREMNANTS_OUTDIR
@@ -287,7 +287,7 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --rebin 2 --baseName transverseMass --hists mt -a e -p $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_E
 
       - name: lowpu w e combine mt setup
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombine.py -i $HIST_FILE_E --baseName transverseMass --fitvar mt -o $WREMNANTS_OUTDIR
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombine.py -i $HIST_FILE_E --baseName transverseMass --fitvar mt-charge -o $WREMNANTS_OUTDIR
 
       - name: lowpu w e plot response matrix
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/response_matrix.py --axes ptW-ptVGen --procFilters Wenu -p e -o $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_E
