@@ -45,11 +45,12 @@ def get_poi_names_h5(h5file, poi_type="mu"):
     if poi_type is not None and poi_type in outnames:
         names = h5file[f"{poi_type}_names"][...].astype(str)
 
-    for noi in h5file["nois_names"][...].astype(str):
-        if noi.startswith("massShift"):
-            names = np.append(names, 'Wmass')
-        else:
-            names = np.append(names, noi)
+    if "nois_names" in h5file.keys():
+        for noi in h5file["nois_names"][...].astype(str):
+            if noi.startswith("massShift"):
+                names = np.append(names, 'Wmass')
+            else:
+                names = np.append(names, noi)
     return names
 
 def get_poi_names_root(rtfile, poi_type="mu"):
@@ -142,8 +143,8 @@ def read_impacts_poi_root(rtfile, group, poi='Wmass'):
     poi_type = poi.split("_")[-1] if poi else None
     poi_names = get_poi_names(rtfile, poi_type)
 
-    if poi_type == "noi":
-        poi_type += 's'
+    if poi_type in ["noi", "Wmass"]:
+        poi_type = 'nois'
     if poi in poi_names:
         impact_hist = f"nuisance_group_impact_{poi_type}" if group else f"nuisance_impact_{poi_type}"
     else:

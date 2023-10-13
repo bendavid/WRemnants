@@ -68,12 +68,10 @@ def plotImpacts(df, pulls=False, poi='Wmass', normalize=False, oneSidedImpacts=F
 
     if poi == "Wmass":
         impact_title = "Impact on mass (MeV)"
-    elif poi.startswith("massDiffCharge"):
+    elif poi and poi.startswith("massDiffCharge"):
         impact_title = "Impact on mass diff. (charge) (MeV)"
-    elif poi.startswith("massDiffEta"):
-        impact_title = "Impact on mass diff. ($\\eta$) (MeV)"
-    else:
-        raise ValueError(f"Unknown poi {poi}")
+    elif poi and poi.startswith("massDiffEta"):
+        impact_title = "$\\mathrm{Impact\\ on\\ mass\\ diff. }(\\eta)\\ (\\mathrm{MeV})$"
 
     pulls = pulls 
     impacts = bool(df['impact'].sum()) and not args.noImpacts
