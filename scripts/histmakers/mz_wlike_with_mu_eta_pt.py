@@ -23,6 +23,10 @@ parser = common.set_parser_default(parser, "aggregateGroups", ["Diboson", "Top",
 args = parser.parse_args()
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
+if args.unfolding:
+    parser = common.set_parser_default(parser, "pt", [36,26.,62.])
+    args = parser.parse_args()
+
 thisAnalysis = ROOT.wrem.AnalysisType.Wlike
 datasets = getDatasets(maxFiles=args.maxFiles,
                         filt=args.filterProcs,
@@ -60,7 +64,11 @@ nominal_axes = [axis_eta, axis_pt, axis_charge]
 nominal_cols = ["trigMuons_eta0", "trigMuons_pt0", "trigMuons_charge0"]
 
 if args.unfolding:
-    unfolding_axes, unfolding_cols = differential.get_pt_eta_charge_axes(args.genBins[0], template_minpt, template_maxpt, args.genBins[1])
+    template_wpt = (template_maxpt-template_minpt)/args.genBins[0]
+    min_pt_unfolding = template_minpt+template_wpt
+    max_pt_unfolding = template_maxpt-template_wpt
+    npt_unfolding = args.genBins[0]-2
+    unfolding_axes, unfolding_cols = differential.get_pt_eta_charge_axes(npt_unfolding, min_pt_unfolding, max_pt_unfolding, args.genBins[1])
     datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Zmumu")
 
 # axes for mT measurement

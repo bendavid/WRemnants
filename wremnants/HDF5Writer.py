@@ -1,5 +1,5 @@
-from wremnants.combine_helpers import getTheoryFitData, setSimultaneousABCD, projectABCD
-from utilities import common, logging, output_tools
+from wremnants.combine_helpers import setSimultaneousABCD, projectABCD
+from utilities import common, logging, output_tools, input_tools_combinetf
 import time
 import numpy as np
 import hist
@@ -49,11 +49,16 @@ class HDF5Writer(object):
             self.clipSig = np.abs(np.log(clipSystVariationsSignal))
 
 
-    def set_fitresult(self, fitresult):
-        # for theory fit, currently not supported for sumPOI groups
+    def set_fitresult(self, fitresult_filename, poi_type="pmaskedexp", gen_flow=False):
+        if poi_type != "pmaskedexp":
+            raise NotImplementedError("Theoryfit currently only supported for poi_type='pmaskedexp'")
+        if len(self.get_channels()) > 1:
+            logger.warning("Theoryfit for more than one channels is currently experimental")
         self.theoryFit = True
         base_processes = ["W" if c.datagroups.wmass else "Z" for c in self.get_channels().values()]
-        data, self.theoryFitDataCov = getTheoryFitData(fitresult, base_processes=base_processes)
+        axes = [c.project for c in self.get_channels().values()]
+        fitresult = input_tools_combinetf.get_fitresult(fitresult_filename)
+        data, self.theoryFitDataCov = input_tools_combinetf.get_theoryfit_data(fitresult, axes=axes, base_processes=base_processes, poi_type=poi_type, flow=gen_flow)
         # theoryfit data for each channel
         self.theoryFitData = {c: d for c, d in zip(self.get_channels().keys(), data)}
 
@@ -178,7 +183,11 @@ class HDF5Writer(object):
                         norm_proc = norm_proc_hist.values(flow=False).flatten().astype(self.dtype)
                         sumw2_proc = norm_proc_hist.variances(flow=False).flatten().astype(self.dtype)
                 else:
+                    if norm_proc_hist.axes != axes:
+                        norm_proc_hist = norm_proc_hist.project(*axes)
+
                     norm_proc = norm_proc_hist.values(flow=False).flatten().astype(self.dtype)
+
                     if norm_proc.shape[0] != nbinschan:
                         raise Exception(f"Mismatch between number of bins in channel {chan} for expected ({nbinschan}) and template ({norm_proc.shape[0]})")
 

@@ -9,7 +9,7 @@ from dash import dcc
 import dash_daq as daq
 from dash import html
 from dash.dependencies import Input, Output
-from utilities import input_tools, output_tools, logging
+from utilities import input_tools, input_tools_combinetf, output_tools, logging
 from wremnants import plot_tools
 import os
 import re
@@ -63,8 +63,8 @@ def get_marker(filled=True, color='#377eb8', opacity=1.0):
         }
     return marker
 
-def plotImpacts(df, pulls=False, POI='Wmass', normalize=False, oneSidedImpacts=False):
-    poi_type = POI.split("_")[-1] if POI else None
+def plotImpacts(df, pulls=False, poi='Wmass', normalize=False, oneSidedImpacts=False):
+    poi_type = poi.split("_")[-1] if poi else None
 
     if poi_type == "WMass":
         impact_title = "Impact on mass (MeV)"
@@ -95,29 +95,50 @@ def plotImpacts(df, pulls=False, POI='Wmass', normalize=False, oneSidedImpacts=F
     )
 
     include_ref = "impact_ref" in df.keys() or "constraint_ref" in df.keys()
+    impact_str = 'impact' if not oneSidedImpacts else 'absimpact'
+
+    if impacts and include_ref:
+        # append numerical values of impacts on nuisance name; fill up empty room with spaces to align numbers
+        frmt = "{:0"+str(int(np.log10(max(df[impact_str])))+2)+".2f}"
+        nval = df[impact_str].apply(lambda x,frmt=frmt: frmt.format(x)) #.astype(str)
+        nspace = nval.apply(lambda x, n=nval.apply(len).max(): " "*(n - len(x))) 
+        if include_ref:
+            frmt_ref = "{:0"+str(int(np.log10(max(df[f"{impact_str}_ref"])))+2)+".2f}"
+            nval_ref = df[f'{impact_str}_ref'].apply(lambda x,frmt=frmt_ref: " ("+frmt.format(x)+")") #.round(2).astype(str)
+            nspace_ref = nval_ref.apply(lambda x, n=nval_ref.apply(len).max(): " "*(n - len(x))) 
+            nval = nval+nspace_ref+nval_ref 
+        labels = df["label"]+"  "+nspace+nval
+        textargs = dict()
+    else:
+        labels = df["label"]
+        textargs = dict(
+            texttemplate="%{x:0.2f}",
+            textposition="outside",
+            textfont_size=12,
+            textangle=0,
+        )
 
     if impacts:
         fig.add_trace(
             go.Bar(
-                x=df['impact' if not oneSidedImpacts else 'absimpact'],
-                y=df['label'],
+                x=df[impact_str],
+                y=labels,
+                width=0.2 if include_ref else 1,
                 orientation='h',
-                **get_marker(filled=True, color=df['impact_color'] if oneSidedImpacts else '#377eb8', opacity=0.5 if include_ref else 1.0),
-                texttemplate="%{x:0.2f}",
-                textposition="outside",
-                textfont_size=12,
-                textangle=0,
+                **get_marker(filled=True, color=df['impact_color'] if oneSidedImpacts else '#377eb8'),
+                **textargs,
                 name="impacts_down",
             ),
             row=1,col=1,
+
         )
         if include_ref:
             fig.add_trace(
                 go.Bar(
-                    x=df['impact_ref' if not oneSidedImpacts else 'absimpact_ref'],
-                    y=df['label'],
+                    x=df[f'{impact_str}_ref'],
+                    y=labels,
                     orientation='h',
-                    **get_marker(filled=False, color=df['impact_color'] if oneSidedImpacts else '#377eb8'),
+                    **get_marker(filled=True, color=df['impact_color'] if oneSidedImpacts else '#377eb8', opacity=0.5),
                 ),
                 row=1,col=1,
             )
@@ -125,9 +146,10 @@ def plotImpacts(df, pulls=False, POI='Wmass', normalize=False, oneSidedImpacts=F
             fig.add_trace(
                 go.Bar(
                     x=-1*df['impact'],
-                    y=df['label'],
+                    y=labels,
+                    width=0.2 if include_ref else 1,
                     orientation='h',
-                    **get_marker(filled=True, color='#e41a1c', opacity=0.5 if include_ref else 1.0),
+                    **get_marker(filled=True, color='#e41a1c'),
                     name="impacts_up",
                 ),
                 row=1,col=1,
@@ -136,15 +158,15 @@ def plotImpacts(df, pulls=False, POI='Wmass', normalize=False, oneSidedImpacts=F
                 fig.add_trace(
                     go.Bar(
                         x=-1*df['impact_ref'],
-                        y=df['label'],
+                        y=labels,
                         orientation='h',
-                        **get_marker(filled=False, color='#e41a1c'),
+                        **get_marker(filled=True, color='#e41a1c', opacity=0.5),
                     ),
                     row=1,col=1,
                 )
-        impact_range = np.ceil(df['impact' if not oneSidedImpacts else 'absimpact'].max())
+        impact_range = np.ceil(df[impact_str].max())
         if include_ref:
-            impact_range = max(impact_range,np.ceil(df['impact_ref' if not oneSidedImpacts else 'absimpact_ref'].max()))
+            impact_range = max(impact_range,np.ceil(df[f'{impact_str}_ref'].max()))
         impact_spacing = min(impact_range, 2 if pulls else 3)
         if impact_range % impact_spacing:
             impact_range += impact_spacing - (impact_range % impact_spacing)
@@ -153,8 +175,8 @@ def plotImpacts(df, pulls=False, POI='Wmass', normalize=False, oneSidedImpacts=F
             tick_spacing /= 2.
         fig.update_layout(barmode='overlay')
         fig.update_layout(
-            xaxis=dict(range=[-impact_range if not oneSidedImpacts else -impact_range/20, impact_range*1.1],
-                    showgrid=True, gridwidth=1,gridcolor='Gray', griddash='dash',
+            xaxis=dict(range=[-impact_range if not oneSidedImpacts else -impact_range/20, impact_range],
+                    showgrid=True, gridwidth=1, gridcolor='Gray', griddash='dash',
                     zeroline=True, zerolinewidth=2, zerolinecolor='Gray',
                     tickmode='linear',
                     tickangle=0,
@@ -168,7 +190,7 @@ def plotImpacts(df, pulls=False, POI='Wmass', normalize=False, oneSidedImpacts=F
         fig.add_trace(
             go.Scatter(
                 x=df['pull'],
-                y=df['label'],
+                y=labels,
                 mode="markers",
                 marker=dict(color='black', size=8,),
                 error_x=dict(
@@ -185,9 +207,9 @@ def plotImpacts(df, pulls=False, POI='Wmass', normalize=False, oneSidedImpacts=F
             fig.add_trace(
                 go.Bar(
                     x=df['constraint_ref'],
-                    y=df['label'],
+                    y=labels,
                     orientation='h',
-                    **get_marker(filled=False, color='black'),
+                    **get_marker(filled=True, color='grey', opacity=0.5),
                     name="constraint_ref",
                 ),
                 row=1,col=ncols,
@@ -195,9 +217,9 @@ def plotImpacts(df, pulls=False, POI='Wmass', normalize=False, oneSidedImpacts=F
             fig.add_trace(
                 go.Bar(
                     x=-1*df['constraint_ref'],
-                    y=df['label'],
+                    y=labels,
                     orientation='h',
-                    **get_marker(filled=False, color='black'),
+                    **get_marker(filled=True, color='grey', opacity=0.5),
                     name="constraint_ref",
                 ),
                 row=1,col=ncols,
@@ -226,16 +248,16 @@ def plotImpacts(df, pulls=False, POI='Wmass', normalize=False, oneSidedImpacts=F
 
     return fig
 
-def readFitInfoFromFile(rf, filename, group=False, stat=0.0, POI='Wmass', normalize=False):    
+def readFitInfoFromFile(rf, filename, group=False, stat=0.0, poi='Wmass', normalize=False):    
     # TODO: Make add_total configurable
     add_total = group
-    impacts, labels, _ = input_tools.readImpacts(rf, group, add_total=add_total, stat=stat, POI=POI, normalize=normalize)
+    impacts, labels, _ = input_tools_combinetf.read_impacts_poi(rf, group, add_total=add_total, stat=stat, poi=poi, normalize=normalize)
     # TODO: Make configurable
     if True:
         impacts = impacts*100
 
     # skip POIs in case of unfolding, want only nuisances
-    pois = input_tools.getPOInames(rf) if POI is None else []
+    pois = input_tools_combinetf.get_poi_names(rf) if poi is None else []
 
     if (group and grouping) or args.filters or len(pois) > 0:
         filtimpacts = []
@@ -324,16 +346,15 @@ app = dash.Dash(__name__)
     [Input("groups", "on")],
 )
 
-def producePlots(fitresult, args, POI='Wmass', normalize=False, fitresult_ref=None):
+def producePlots(fitresult, args, poi='Wmass', group=False, normalize=False, fitresult_ref=None):
 
-    group = args.mode == "group"
     if not (group and args.output_mode == 'output'):
-        df = readFitInfoFromFile(fitresult, args.inputFile, False, stat=args.stat/100., POI=POI, normalize=normalize)
+        df = readFitInfoFromFile(fitresult, args.inputFile, False, stat=args.stat/100., poi=poi, normalize=normalize)
     elif group:
-        df = readFitInfoFromFile(fitresult, args.inputFile, True, stat=args.stat/100., POI=POI, normalize=normalize)
+        df = readFitInfoFromFile(fitresult, args.inputFile, True, stat=args.stat/100., poi=poi, normalize=normalize)
 
     if fitresult_ref:
-        df_ref = readFitInfoFromFile(fitresult_ref, args.referenceFile, group, stat=args.stat/100., POI=POI, normalize=normalize)
+        df_ref = readFitInfoFromFile(fitresult_ref, args.referenceFile, group, stat=args.stat/100., poi=poi, normalize=normalize)
         df = df.merge(df_ref, how="left", on="label", suffixes=("","_ref"))
         
     if args.sort:
@@ -385,26 +406,31 @@ def producePlots(fitresult, args, POI='Wmass', normalize=False, fitresult_ref=No
 
         app.run_server(debug=True, port=3389, host=args.interface)
     elif args.output_mode == 'output':
-        postfix = POI
+        postfix = poi
         meta = input_tools.get_metadata(args.inputFile)
         outdir = output_tools.make_plot_dir(args.outFolder, "", eoscp=args.eoscp)
         if outdir and not os.path.isdir(outdir):
             os.path.makedirs(outdir)
-        outfile = os.path.join(outdir, args.outputFile)
+        if group:
+            outfile = os.path.splitext(args.outputFile)
+            outfile = "".join([outfile[0]+"_group", outfile[1]])
+        else:
+            outfile = args.outputFile
+        outfile = os.path.join(outdir, outfile)
         extensions = [outfile.split(".")[-1], *args.otherExtensions]
 
         df = df.sort_values(by=args.sort, ascending=args.ascending)
         if args.num and args.num < df.size:
             # in case multiple extensions are given including html, don't do the skimming on html but all other formats
             if "html" in extensions and len(extensions)>1:
-                fig = plotImpacts(df, pulls=not args.noPulls and not group, POI=POI, normalize=not args.absolute, oneSidedImpacts=args.oneSidedImpacts)
+                fig = plotImpacts(df, pulls=not args.noPulls and not group, poi=poi, normalize=not args.absolute, oneSidedImpacts=args.oneSidedImpacts)
                 outfile_html = outfile.replace(outfile.split(".")[-1], "html")
                 writeOutput(fig, outfile_html, postfix=postfix)
                 extensions = [e for e in extensions if e != "html"]
                 outfile = outfile.replace(outfile.split(".")[-1], extensions[0])
             df = df[-args.num:]
 
-        fig = plotImpacts(df, pulls=not args.noPulls and not group, POI=POI, normalize=not args.absolute, oneSidedImpacts=args.oneSidedImpacts)
+        fig = plotImpacts(df, pulls=not args.noPulls and not group, poi=poi, normalize=not args.absolute, oneSidedImpacts=args.oneSidedImpacts)
         writeOutput(fig, outfile, extensions[0:], postfix=postfix, args=args, meta_info=meta)      
         if args.eoscp and output_tools.is_eosuser_path(args.outFolder):
             output_tools.copy_to_eos(args.outFolder, "")
@@ -424,24 +450,17 @@ if __name__ == '__main__':
         with open(args.translate) as f:
             translate_label = json.load(f)
 
-    fitresult = input_tools.getFitresult(args.inputFile)
-    fitresult_ref = input_tools.getFitresult(args.referenceFile) if args.referenceFile else None
+    fitresult = input_tools_combinetf.get_fitresult(args.inputFile)
+    fitresult_ref = input_tools_combinetf.get_fitresult(args.referenceFile) if args.referenceFile else None
 
     if args.noImpacts:
         # do one pulls plot, ungrouped
-        args.mode = "ungrouped"
         producePlots(fitresult, args, None, fitresult_ref=fitresult_ref)
         exit()
 
-    POIs = input_tools.getPOInames(fitresult, poi_type=None)
-
-    for POI in POIs:
-        do_both = args.mode == "both"
-        if args.mode == "both":
-            args.mode = "ungrouped"
-        producePlots(fitresult, args, POI, fitresult_ref=fitresult_ref)
-        if do_both:
-            args.mode = "group"
-            outfile = os.path.splitext(args.outputFile)
-            args.outputFile = "".join([outfile[0]+"_group", outfile[1]])
-            producePlots(fitresult, args, POI, fitresult_ref=fitresult_ref)
+    pois = input_tools_combinetf.get_poi_names(fitresult, poi_type=None)
+    for poi in pois:
+        if args.mode in ["both", "ungrouped"]:
+            producePlots(fitresult, args, poi, fitresult_ref=fitresult_ref)
+        if args.mode in ["both", "group"]:
+            producePlots(fitresult, args, poi, group=True, fitresult_ref=fitresult_ref)

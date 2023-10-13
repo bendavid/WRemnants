@@ -243,46 +243,4 @@ def projectABCD(cardTool, h, return_variances=False, dtype="float64"):
 
     return flat, flat_variances
 
-def getTheoryFitData(fitresult, axes=None, base_processes = "W", poi_type="pmaskedexp"):
-    logger.info(f"Prepare theory fit: load measured differential cross secction distribution and covariance matrix")
 
-    if fitresult.endswith(".root"):
-        if project is None:
-            raise RuntimeError("When fitresult is provided as root file the axes need to be specified")
-        
-        rfile = uproot.open(fitresult)
-        df = unfolding_tools.get_results(rfile, poi_type)
-
-        # write out unfolded data as 1D hist
-        hist_xsec = hist.Hist(
-            hist.axis.Regular(bins=len(df), start=0.5, stop=len(df)+0.5, underflow=False, overflow=False), storage=hist.storage.Weight())
-        hist_xsec.view(flow=False)[...] = np.stack([df["value"].values, (df["err_total"].values)**2], axis=-1)
-
-        data = hist_xsec.values(flow=False).flatten()
-
-        # write out covariance as 2D hist
-        cov = unfolding_tools.matrix_poi(rfile, poi_type, base_process=base_processes[0], axes=axes).values(flow=False)
-    elif fitresult.endswith(".hdf5"):
-        hfile = h5py.File(fitresult, mode='r')
-
-        outvals = hfile[f"{poi_type}_outvals"][...]
-        npoi = len(outvals)
-        # make matrix between POIs only; assume POIs come first (which should be the case in combinetf)
-        outcov = hfile[f"{poi_type}_outcov"][:npoi,:npoi]
-
-        # select POIs for each base process, assume correct order
-        all_indices = np.zeros(npoi, dtype=bool)
-        data = []
-        for p in base_processes:
-            indices = np.array([s.startswith(p) for s in hfile[f"{poi_type}_names"][...].astype(str)], dtype=bool)
-
-            data.append(outvals[indices])
-
-            all_indices = all_indices | indices
-        #select rows and columns
-        cov = outcov[all_indices][:, all_indices]
-
-    else:
-        raise NotImplementedError(f"Unkown data type for fitresult {fitresult}")
-    
-    return data, cov
