@@ -123,9 +123,11 @@ class TheoryHelper(object):
 
         syst_axes = sum_axes + ["muRfact", "muFfact"]
         syst_ax_labels = ["PtV", "genQ", "muR", "muF"]
+        format_with_values = ["low", "center", "center", "center"]
         if use_hel_hist:
             syst_axes.insert(2, "helicity")
             syst_ax_labels.insert(2, "AngCoeff")
+            format_with_values.insert(2, "low")
 
         group_name = f"QCDscale{self.sample_label(sample_group)}"
         # Exclude all combinations where muR = muF = 1 (nominal) or where
@@ -166,6 +168,7 @@ class TheoryHelper(object):
                 idx = syst_axes.index(ax_name)
                 syst_axes.pop(idx)
                 syst_ax_labels.pop(idx)
+                format_with_values.pop(idx)
 
         for ax,name in zip(sum_axes[:], ["Pt", "Charge", "Helicity"]):
             set_sum_over_axis(name, ax)
@@ -216,7 +219,7 @@ class TheoryHelper(object):
                 skipEntries=skip_entries,
                 systNameReplace=name_replace,
                 baseName=group_name+"_",
-                formatWithValue=True,
+                formatWithValue=format_with_values,
                 passToFakes=self.propagate_to_fakes,
                 rename=group_name, # Needed to allow it to be called multiple times
             )

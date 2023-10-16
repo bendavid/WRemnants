@@ -256,7 +256,7 @@ class CardTool(object):
                       scale=1, processes=None, group=None, noi=False, noConstraint=False, noProfile=False,
                       action=None, doActionBeforeMirror=False, actionArgs={}, actionMap={},
                       systNameReplace=[], systNamePrepend=None, groupFilter=None, passToFakes=False,
-                      rename=None, splitGroup={}, decorrelateByBin={}, formatWithValue=False,
+                      rename=None, splitGroup={}, decorrelateByBin={}, formatWithValue=None,
                       sumNominalToHist=False,
                       scalePrefitHistYields=None,
                       customizeNuisanceAttributes={},
@@ -350,7 +350,7 @@ class CardTool(object):
     def setMirrorForSyst(self, syst, mirror=True):
         self.systematics[syst]["mirror"] = mirror
 
-    def systLabelForAxis(self, axLabel, entry, axis, formatWithValue=False):
+    def systLabelForAxis(self, axLabel, entry, axis, formatWithValue=None):
         if type(axis) == hist.axis.StrCategory:
             if entry in axis:
                 return entry
@@ -363,7 +363,16 @@ class CardTool(object):
         if "{i}" in axLabel:
             return axLabel.format(i=entry)
         if formatWithValue:
-            entry = axis.centers[entry]
+            if formatWithValue == "center":
+                edges = axis.centers
+            elif formatWithValue == "low":
+                edges = axis.edges[:-1]
+            elif formatWithValue == "high":
+                edges = axis.edges[1:]
+            else:
+                raise ValueError(f"Invalid formatWithValue choice {formatWithValue}.")
+
+            entry = edges[entry]
 
         if type(entry) in [float, np.float64]:
             entry = f"{entry:0.1f}".replace(".", "p") if not entry.is_integer() else str(int(entry))
@@ -466,7 +475,8 @@ class CardTool(object):
                     systInfo["outNames"].append("")
                 else:
                     name = systInfo["baseName"]
-                    name += "".join([self.systLabelForAxis(al, entry[i], ax, systInfo["formatWithValue"]) for i,(al,ax) in enumerate(zip(axLabels,axes))])
+                    fwv = systInfo["formatWithValue"]
+                    name += "".join([self.systLabelForAxis(al, entry[i], ax, fwv[i] if fwv else fwv) for i,(al,ax) in enumerate(zip(axLabels,axes))])
                     if "systNameReplace" in systInfo and systInfo["systNameReplace"]:
                         for rep in systInfo["systNameReplace"]:
                             name = name.replace(*rep)
