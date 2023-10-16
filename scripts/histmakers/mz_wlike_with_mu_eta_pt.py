@@ -15,6 +15,9 @@ import time
 import os
 import numpy as np
 
+# TODO: move this to common, but first has to implement it for all histmakers to avoid unexpected behaviours
+parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency (legacy option for tests)")
+
 parser = common.set_parser_default(parser, "genVars", ["qGen", "ptGen", "absEtaGen"])
 parser = common.set_parser_default(parser, "genBins", [17, 0])
 parser = common.set_parser_default(parser, "pt", [34, 26, 60])
@@ -83,6 +86,7 @@ else:
 logger.info(f"SF file: {args.sfFile}")
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
+vertex_helper = wremnants.make_vertex_helper(era = era)
 
 calib_filepaths = common.calib_filepaths
 closure_filepaths = common.closure_filepaths
@@ -158,8 +162,16 @@ def build_graph(df, dataset):
 
     df = muon_selections.apply_triggermatching_muon(df, dataset, "trigMuons_eta0", "trigMuons_phi0")
 
-    if not dataset.is_data:
+    if dataset.is_data:
+        df = df.DefinePerSample("nominal_weight", "1.0")
+    else
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
+        df = df.Define("weight_vtx", vertex_helper, ["GenVtx_z", "Pileup_nTrueInt"])
+        df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId"])
+
+        weight_expr = "weight_pu*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom"
+        if not args.noVertexWeight:
+            weight_expr += "*weight_vtx"            
 
         columnsForSF = ["trigMuons_pt0", "trigMuons_eta0", "trigMuons_SApt0", "trigMuons_SAeta0", "trigMuons_uT0", "trigMuons_charge0",
                         "nonTrigMuons_pt0", "nonTrigMuons_eta0", "nonTrigMuons_SApt0", "nonTrigMuons_SAeta0", "nonTrigMuons_uT0", "nonTrigMuons_charge0"]
@@ -169,13 +181,12 @@ def build_graph(df, dataset):
             columnsForSF.remove("trigMuons_uT0")
             columnsForSF.remove("nonTrigMuons_uT0")
         
-        df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, columnsForSF)
-        df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId"])
-
-        df = df.Define("exp_weight", "weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom")
+        if not args.noScaleFactors:
+            df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, columnsForSF)
+            weight_expr += "*weight_fullMuonSF_withTrackingReco"
+           
+        df = df.Define("exp_weight", weight_expr)
         df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
-    else:
-        df = df.DefinePerSample("nominal_weight", "1.0")
 
     results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"], storage=hist.storage.Double()))
 
