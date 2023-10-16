@@ -88,7 +88,8 @@ using base_t = TensorCorrectionsHelper<T>;
 
 using tensor_t = typename T::storage_type::value_type::tensor_t;
 static constexpr auto sizes = narf::tensor_traits<tensor_t>::sizes;
-static constexpr auto nhelicity = sizes[0];
+// static constexpr auto nhelicity = sizes[0];
+static constexpr auto nhelicity = 10; // Placeholder 
 static constexpr auto nmur = sizes[1];
 static constexpr auto nmuf = sizes[2];
 
@@ -136,6 +137,7 @@ static constexpr auto sizes = narf::tensor_traits<tensor_t>::sizes;
 static constexpr auto nhelicity = sizes[0];
 static constexpr auto ncorrs = sizes[1];
 static constexpr auto nvars = sizes[2];
+const size_t NHELICITY = 10;
 
 // TODO: Can presumably get the double type from the template param
 typedef Eigen::TensorFixedSize<double, Eigen::Sizes<nvars>> var_tensor_t;
