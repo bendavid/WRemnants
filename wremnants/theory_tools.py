@@ -2,6 +2,7 @@ import ROOT
 import hist
 import numpy as np
 import copy
+from math import pi
 from utilities import boostHistHelpers as hh,common,logging
 from wremnants import theory_corrections
 from scipy import ndimage
@@ -12,7 +13,7 @@ narf.clingutils.Declare('#include "theoryTools.h"')
 
 # integer axis for -1 through 7
 axis_helicity = hist.axis.Integer(
-    -1, 8, name="helicity", overflow=False, underflow=False
+    -1, 9, name="helicity", overflow=False, underflow=False
 )
 
 # this puts the bin centers at 0.5, 1.0, 2.0
@@ -408,9 +409,9 @@ def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_cen
     return res
 
 def scale_angular_moments(hist_moments_scales, sumW2=False, createNew=False):
-    # e.g. from arxiv:1708.00008 eq. 2.13, note A_0 is NOT the const term!
-    scales = np.array([1., -10., 5., 10., 4., 4., 5., 5., 4.])
-
+    # using definition from arxiv:1606.00689 to align with ATLAS
+    scales = np.array([1.,20./3.,5.,20.,4.,4.,5.,5.,4.,1.])
+    
     hel_idx = hist_moments_scales.axes.name.index("helicity")
     scaled_vals = np.moveaxis(hist_moments_scales.view(flow=True), hel_idx, -1)*scales
     if createNew:
@@ -443,12 +444,12 @@ def moments_to_angular_coeffs(hist_moments_scales, cutoff=1e-5, sumW2=False):
     norm_vals = values[...,unpol_idx:unpol_idx+1]
     norm_vals = np.where(np.abs(norm_vals) < cutoff, np.ones_like(norm_vals), norm_vals)
 
-    # e.g. from arxiv:1708.00008 eq. 2.13, note A_0 is NOT the const term!
-    offsets = np.array([0., 4., 0., 0., 0., 0., 0., 0., 0.])
+    # using definition from arxiv:1606.00689 to align with ATLAS
+    offsets = np.array([0.,2./3,0.,0.,0.,0., 0.,0.,0.,0.])
 
     coeffs = vals / norm_vals + offsets
 
-    # replace values in zero-xsec regions (otherwise A0 is spuriously set to 4.0 from offset)
+    # replace values in zero-xsec regions (otherwise A0 is spuriously set from offset)
     coeffs = np.where(np.abs(values) < cutoff, np.full_like(vals, hist.accumulators.WeightedSum(0,0) if hasSumW2 else 0), coeffs)
     coeffs = np.moveaxis(coeffs, -1, hel_idx)
 

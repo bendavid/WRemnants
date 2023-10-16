@@ -80,6 +80,35 @@ Eigen::TensorFixedSize<int, Eigen::Sizes<2>> prefsrLeptons(const ROOT::VecOps::R
 
 }
 
+const size_t NHELICITY = 10;
+  typedef Eigen::TensorFixedSize<double, Eigen::Sizes<NHELICITY>> helicity_tensor;
+
+  helicity_tensor csAngularFactors(const CSVars &csvars)
+  {
+    const double sinThetaCS = csvars.sintheta;
+    const double cosThetaCS = csvars.costheta;
+    const double sinPhiCS = csvars.sinphi;
+    const double cosPhiCS = csvars.cosphi;
+
+    const double sin2ThetaCS = 2. * sinThetaCS * cosThetaCS;
+    const double sin2PhiCS = 2. * sinPhiCS * cosPhiCS;
+    const double cos2ThetaCS = 1. - 2. * sinThetaCS * sinThetaCS;
+    const double cos2PhiCS = 1. - 2. * sinPhiCS * sinPhiCS;
+    helicity_tensor angular;
+    angular(0) = 1.;
+    angular(1) = 0.5 * (1. - 3. * cosThetaCS * cosThetaCS);
+    angular(2) = sin2ThetaCS * cosPhiCS;
+    angular(3) = 0.5 * sinThetaCS * sinThetaCS * cos2PhiCS;
+    angular(4) = sinThetaCS * cosPhiCS;
+    angular(5) = cosThetaCS;
+    angular(6) = sinThetaCS * sinThetaCS * sin2PhiCS;
+    angular(7) = sin2ThetaCS * sinPhiCS;
+    angular(8) = sinThetaCS * sinPhiCS;
+    angular(9) = 1. + cosThetaCS * cosThetaCS;
+    return angular;
+  }
+
+
 using scale_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<3, 3>>;
 
 scale_tensor_t makeScaleTensor(const Vec_f &scale_weights, double thres) {
@@ -103,94 +132,49 @@ scale_tensor_t makeScaleTensor(const Vec_f &scale_weights, double thres) {
   return res;
 }
 
-using helicity_scale_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<9, 3, 3>>;
+using helicity_scale_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<NHELICITY, 3, 3>>;
 
-helicity_scale_tensor_t makeHelicityMomentScaleTensor(const CSVars &csvars, const scale_tensor_t &scale_tensor, double original_weight = 1.0) {
-
-  constexpr Eigen::Index nhelicity = 9;
-  constexpr Eigen::Index nmur = 3;
-  constexpr Eigen::Index nmuf = 3;
-
-  const double sinThetaCS = csvars.sintheta;
-  const double cosThetaCS = csvars.costheta;
-  const double sinPhiCS = csvars.sinphi;
-  const double cosPhiCS = csvars.cosphi;
-
-  const double sin2ThetaCS = 2.*sinThetaCS*cosThetaCS;
-  const double sin2PhiCS = 2.*sinPhiCS*cosPhiCS;
-  const double cos2ThetaCS = 1. - 2.*sinThetaCS*sinThetaCS;
-  const double cos2PhiCS= 1. - 2.*sinPhiCS*sinPhiCS;
-
-  // computing moments e.g. as used in arxiv:1708.00008 eq. 2.13
-  Eigen::TensorFixedSize<double, Eigen::Sizes<nhelicity, 1, 1>> moments;
-  moments(0, 0, 0) = 1.;
-  moments(1, 0, 0) = cosThetaCS*cosThetaCS;
-  moments(2, 0, 0) = sin2ThetaCS*cosPhiCS;
-  moments(3, 0, 0) = sinThetaCS*sinThetaCS*cos2PhiCS;
-  moments(4, 0, 0) = sinThetaCS*cosPhiCS;
-  moments(5, 0, 0) = cosThetaCS;
-  moments(6, 0, 0) = sinThetaCS*sinThetaCS*sin2PhiCS;
-  moments(7, 0, 0) = sin2ThetaCS*sinPhiCS;
-  moments(8, 0, 0) = sinThetaCS*sinPhiCS;
-
-  constexpr std::array<Eigen::Index, 3> broadcastscales = { 1, nmur, nmuf };
-  constexpr std::array<Eigen::Index, 3> broadcasthelicities = { nhelicity, 1, 1 };
-  constexpr std::array<Eigen::Index, 3> reshapescale = { 1, nmur, nmuf };
-
-  return original_weight*scale_tensor.reshape(reshapescale).broadcast(broadcasthelicities)*moments.broadcast(broadcastscales);
-
-
-}
-
-template <Eigen::Index Npdfs>
-class makeHelicityMomentPdfTensor
-{
-public:
-  makeHelicityMomentPdfTensor() {}
-
-  using helicity_pdf_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<9, Npdfs>>;
-  using pdf_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<Npdfs>>;
-
-  auto operator()(const CSVars &csvars, const pdf_tensor_t &pdf_tensor, double original_weight = 1.0)
+  helicity_scale_tensor_t makeHelicityMomentScaleTensor(const CSVars &csvars, const scale_tensor_t &scale_tensor, double original_weight = 1.0)
   {
 
-    constexpr Eigen::Index nhelicity = 9;
+    constexpr Eigen::Index nhelicity = NHELICITY;
+    constexpr Eigen::Index nmur = 3;
+    constexpr Eigen::Index nmuf = 3;
 
-    const double sinThetaCS = csvars.sintheta;
-    const double cosThetaCS = csvars.costheta;
-    const double sinPhiCS = csvars.sinphi;
-    const double cosPhiCS = csvars.cosphi;
+    constexpr std::array<Eigen::Index, 3> broadcastscales = {1, nmur, nmuf};
+    constexpr std::array<Eigen::Index, 3> broadcasthelicities = {nhelicity, 1, 1};
+    constexpr std::array<Eigen::Index, 3> reshapescale = {1, nmur, nmuf};
 
-    const double sin2ThetaCS = 2. * sinThetaCS * cosThetaCS;
-    const double sin2PhiCS = 2. * sinPhiCS * cosPhiCS;
-    const double cos2ThetaCS = 1. - 2. * sinThetaCS * sinThetaCS;
-    const double cos2PhiCS = 1. - 2. * sinPhiCS * sinPhiCS;
+    Eigen::TensorFixedSize<double, Eigen::Sizes<nhelicity, 1, 1>> angular = csAngularFactors(csvars).reshape(broadcasthelicities);
 
-    // computing moments e.g. as used in arxiv:1708.00008 eq. 2.13
-    Eigen::TensorFixedSize<double, Eigen::Sizes<nhelicity, 1>> moments;
-    moments(0, 0) = 1.;
-    moments(1, 0) = cosThetaCS * cosThetaCS;
-    moments(2, 0) = sin2ThetaCS * cosPhiCS;
-    moments(3, 0) = sinThetaCS * sinThetaCS * cos2PhiCS;
-    moments(4, 0) = sinThetaCS * cosPhiCS;
-    moments(5, 0) = cosThetaCS;
-    moments(6, 0) = sinThetaCS * sinThetaCS * sin2PhiCS;
-    moments(7, 0) = sin2ThetaCS * sinPhiCS;
-    moments(8, 0) = sinThetaCS * sinPhiCS;
-
-    constexpr std::array<Eigen::Index, 2> broadcastscales = {1, Npdfs};
-    constexpr std::array<Eigen::Index, 2> broadcasthelicities = {nhelicity, 1};
-
-    helicity_pdf_tensor_t helicity_pdf_tensor;
-    helicity_pdf_tensor = moments.reshape(broadcasthelicities).broadcast(broadcastscales) * pdf_tensor.reshape(broadcastscales).broadcast(broadcasthelicities);
-
-    // std::cout << "-----------------------" << std::endl;
-    // std::cout << helicity_pdf_tensor << std::endl;
-    // std::cout << "-----------------------" << std::endl;
-
-    return helicity_pdf_tensor;
+    return original_weight * scale_tensor.reshape(reshapescale).broadcast(broadcasthelicities) * angular.broadcast(broadcastscales);
+    //return original_weight * angular.broadcast(broadcastscales) * scale_tensor.reshape(broadcastscales).broadcast(broadcasthelicities);
   }
-};
+
+  template <Eigen::Index Npdfs>
+  class makeHelicityMomentPdfTensor
+  {
+  public:
+    makeHelicityMomentPdfTensor() {}
+
+    using helicity_pdf_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<NHELICITY, Npdfs>>;
+    using pdf_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<Npdfs>>;
+
+    auto operator()(const CSVars &csvars, const pdf_tensor_t &pdf_tensor, double original_weight = 1.0)
+    {
+
+      constexpr Eigen::Index nhelicity = NHELICITY;
+
+      constexpr std::array<Eigen::Index, 2> broadcastscales = {1, Npdfs};
+      constexpr std::array<Eigen::Index, 2> broadcasthelicities = {nhelicity, 1};
+      const auto angular = csAngularFactors(csvars).reshape(broadcasthelicities);
+
+      helicity_pdf_tensor_t helicity_pdf_tensor;
+      helicity_pdf_tensor = original_weight * angular.broadcast(broadcastscales) * pdf_tensor.reshape(broadcastscales).broadcast(broadcasthelicities);
+
+      return helicity_pdf_tensor;
+    }
+  };
 
 ROOT::VecOps::RVec<ROOT::Math::PxPyPzEVector> ewLeptons(
   const ROOT::VecOps::RVec<int>& status,
@@ -305,4 +289,3 @@ ROOT::Math::PxPyPzEVector ewGenVPhos(const ROOT::VecOps::RVec<PxPyPzEVector>& le
 } 
 
 #endif
-
