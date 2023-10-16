@@ -13,9 +13,9 @@ def parseArgs():
     return parser.parse_args()
 
 
-def printImpacts(args,fitresult,poi='Wmass'):
+def printImpacts(args, fitresult, poi):
     impacts,labels,_ = input_tools_combinetf.read_impacts_poi(fitresult, not args.ungroup, sort=args.sort, poi=poi, normalize = False)
-    unit = 'MeV' if poi=='Wmass' else 'n.u. %'
+    unit = 'MeV' if poi.startswith('mass') else 'n.u. %'
     if args.nuisance:
         if args.nuisance not in labels:
             raise ValueError(f"Invalid nuisance {args.nuisance}. Options are {labels}")

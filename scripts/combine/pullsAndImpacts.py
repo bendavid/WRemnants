@@ -35,10 +35,12 @@ def writeOutput(fig, outfile, extensions=[], postfix=None, args=None, meta_info=
         else:
             fig.write_image(output)
         
-        output = outfile.rsplit("/", 1)
+        output = name.rsplit("/", 1)
         output[1] = os.path.splitext(output[1])[0]
         if len(output) == 1:
             output = (None, *output)
+    if args is None and meta_info is None:
+        return
     plot_tools.write_index_and_log(*output, 
         args=args,
         analysis_meta_info={"AnalysisOutput" : meta_info},
@@ -63,26 +65,21 @@ def get_marker(filled=True, color='#377eb8', opacity=1.0):
         }
     return marker
 
-def plotImpacts(df, pulls=False, poi='Wmass', normalize=False, oneSidedImpacts=False):
+def plotImpacts(df, poi, pulls=False, normalize=False, oneSidedImpacts=False):
     poi_type = poi.split("_")[-1] if poi else None
 
-    if poi == "Wmass":
+    if poi and poi.startswith("massShift"):
         impact_title = "Impact on mass (MeV)"
     elif poi and poi.startswith("massDiffCharge"):
         impact_title = "Impact on mass diff. (charge) (MeV)"
     elif poi and poi.startswith("massDiffEta"):
         impact_title = "$\\mathrm{Impact\\ on\\ mass\\ diff. }(\\eta)\\ (\\mathrm{MeV})$"
 
-    pulls = pulls 
     impacts = bool(df['impact'].sum()) and not args.noImpacts
     ncols = pulls+impacts
     fig = make_subplots(rows=1,cols=ncols,
             horizontal_spacing=0.1, shared_yaxes=True)#ncols > 1)
-
-    max_pull = np.max(df["abspull"])
-    # Round up to nearest 0.25, add 1.1 for display
-    pullrange = .5*np.ceil(max_pull/0.5)+1.1
-    
+   
     ndisplay = len(df)
     fig.update_layout(paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
@@ -223,6 +220,9 @@ def plotImpacts(df, pulls=False, poi='Wmass', normalize=False, oneSidedImpacts=F
                 ),
                 row=1,col=ncols,
             )
+        max_pull = np.max(df["abspull"])
+        # Round up to nearest 0.25, add 1.1 for display
+        pullrange = .5*np.ceil(max_pull/0.5)+1.1
         # Keep it a factor of 0.25, but no bigger than 1
         spacing = min(1, np.ceil(pullrange)/4.)
         info = dict(
@@ -247,23 +247,13 @@ def plotImpacts(df, pulls=False, poi='Wmass', normalize=False, oneSidedImpacts=F
 
     return fig
 
-def readFitInfoFromFile(rf, filename, group=False, stat=0.0, poi='Wmass', normalize=False):    
-    # TODO: Make add_total configurable
-    add_total = group
-    impacts, labels, _ = input_tools_combinetf.read_impacts_poi(rf, group, add_total=add_total, stat=stat, poi=poi, normalize=normalize)
-    # TODO: Make configurable
-    if True:
-        impacts = impacts*100
+def readFitInfoFromFile(rf, filename, poi, group=False, stat=0.0, normalize=False, scale=100):    
+    impacts, labels, _ = input_tools_combinetf.read_impacts_poi(rf, group, add_total=group, stat=stat, poi=poi, normalize=normalize)
 
-    # skip POIs in case of unfolding, want only nuisances
-    pois = input_tools_combinetf.get_poi_names(rf) if poi is None else []
-
-    if (group and grouping) or args.filters or len(pois) > 0:
+    if (group and grouping) or args.filters:
         filtimpacts = []
         filtlabels = []
         for impact,label in zip(impacts,labels):
-            if label in pois:
-                continue
             if group and grouping and label not in grouping:
                 continue
             if args.filters and not any(re.match(f, label) for f in args.filters):
@@ -273,27 +263,14 @@ def readFitInfoFromFile(rf, filename, group=False, stat=0.0, poi='Wmass', normal
         impacts = filtimpacts
         labels = filtlabels
 
-    pulls = np.zeros_like(labels, dtype=float)
-    constraints = np.zeros_like(labels, dtype=float)
-    if not group:
-        import ROOT
-        fitresult = ROOT.TFile.Open(filename.replace(".hdf5",".root"))
-        rtree = fitresult.Get("fitresults")
-        rtree.GetEntry(0)
-        for i, label in enumerate(labels):
-            if not hasattr(rtree, label):
-                logger.warning(f"Failed to find syst {label} in tree")
-                continue
-                
-            pulls[i] = getattr(rtree, label)
-            constraints[i] = getattr(rtree, label+"_err")
-    
-    df = pd.DataFrame(np.array((pulls, impacts, constraints), dtype=np.float64).T, columns=["pull", "impact", "constraint"])
+    df = pd.DataFrame(np.array(impacts, dtype=np.float64).T*scale, columns=["impact"])
     df['label'] = [translate_label.get(l, l) for l in labels]
     df['absimpact'] = np.abs(df['impact'])
-    df['abspull'] = np.abs(df['pull'])
     if not group:
-        df.drop(df.loc[df['label'].str.contains('massShift.*100MeV', regex=True)].index, inplace=True)
+        df["pull"], df["constraint"] = input_tools_combinetf.get_pulls_and_constraints(filename, labels)
+        df['abspull'] = np.abs(df['pull'])
+        if poi:
+            df.drop(df.loc[df['label'].str.contains(poi.replace("_noi",""), regex=True)].index, inplace=True)
     colors = np.full(len(df), '#377eb8')
     if not group:
         colors[df['impact'] > 0.] = '#e41a1c'
@@ -345,15 +322,15 @@ app = dash.Dash(__name__)
     [Input("groups", "on")],
 )
 
-def producePlots(fitresult, args, poi='Wmass', group=False, normalize=False, fitresult_ref=None):
+def producePlots(fitresult, args, poi, group=False, normalize=False, fitresult_ref=None):
 
     if not (group and args.output_mode == 'output'):
-        df = readFitInfoFromFile(fitresult, args.inputFile, False, stat=args.stat/100., poi=poi, normalize=normalize)
+        df = readFitInfoFromFile(fitresult, args.inputFile, poi, False, stat=args.stat/100., normalize=normalize)
     elif group:
-        df = readFitInfoFromFile(fitresult, args.inputFile, True, stat=args.stat/100., poi=poi, normalize=normalize)
+        df = readFitInfoFromFile(fitresult, args.inputFile, poi, True, stat=args.stat/100., normalize=normalize)
 
     if fitresult_ref:
-        df_ref = readFitInfoFromFile(fitresult_ref, args.referenceFile, group, stat=args.stat/100., poi=poi, normalize=normalize)
+        df_ref = readFitInfoFromFile(fitresult_ref, args.referenceFile, poi, group, stat=args.stat/100., normalize=normalize)
         df = df.merge(df_ref, how="left", on="label", suffixes=("","_ref"))
         
     if args.sort:

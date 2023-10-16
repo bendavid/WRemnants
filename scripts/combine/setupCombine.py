@@ -33,7 +33,7 @@ def make_parser(parser=None):
     parser.add_argument("--lumiScale", type=float, default=1.0, help="Rescale equivalent luminosity by this value (e.g. 10 means ten times more data and MC)")
     parser.add_argument("--sumChannels", action='store_true', help="Only use one channel")
     parser.add_argument("--fitXsec", action='store_true', help="Fit signal inclusive cross section")
-    parser.add_argument("--fitMassDiff", type=str, default=None, choices=["charge", "eta"], help="Fit an additional POI for the difference in the boson mass")
+    parser.add_argument("--fitMassDiff", type=str, default=None, choices=["charge", "eta-sign", "eta-range"], help="Fit an additional POI for the difference in the boson mass")
     parser.add_argument("--fitresult", type=str, default=None ,help="Use data and covariance matrix from fitresult (for making a theory fit)")
     parser.add_argument("--fakerateAxes", nargs="+", help="Axes for the fakerate binning", default=["eta","pt","charge"])
     parser.add_argument("--ABCD", action="store_true", help="Produce datacard for simultaneous fit of ABCD regions")
@@ -345,41 +345,41 @@ def setup(args, inputFile, fitvar, xnorm=False):
     )
 
     if args.fitMassDiff:
+        suffix = "".join([a.capitalize() for a in args.fitMassDiff.split("-")])
+        mass_diff_args = dict(
+            name=f"massWeight{label}",
+            processes=signal_samples_forMass,
+            rename=f"massDiff{suffix}{label}",
+            group=f"massDiff{label}",
+            systNameReplace=[("Shift",f"Diff{suffix}")],
+            skipEntries=[(m[0].replace("50MeV", "100MeV"),) for m in massSkip],
+            noi=not constrainMass,
+            noConstraint=not constrainMass,
+            mirror=False,
+            systAxes=["massShift"],
+            passToFakes=passSystToFakes,
+        )
         if args.fitMassDiff == "charge":
-            cardTool.addSystematic(f"massWeight{label}",
-                                rename=f"massDiffCharge{label}",
-                                processes=signal_samples_forMass,
-                                systNameReplace=[("Shift","DiffCharge")],
-                                group=f"massDiff{label}",
-                                noi=not constrainMass,
-                                skipEntries=massSkip,
-                                mirror=False,
+            cardTool.addSystematic(**mass_diff_args,                               
                                 # # on gen level based on the sample, only possible for mW
-                                # actionMap={m.name: (lambda h, swap=swap_bins: swap(h, "massShift", "massShiftW100MeVUp", "massShiftW100MeVDown")) 
+                                # actionMap={m.name: (lambda h, swap=swap_bins: swap(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown")) 
                                 #     for g in cardTool.procGroups[signal_samples_forMass[0]] for m in cardTool.datagroups.groups[g].members if "minus" in m.name},
                                 # on reco level based on reco charge
                                 actionMap={m.name: (lambda h, swap=hh.swap_histogram_bins: 
-                                        swap(h, "massShift", f"massShift{label}100MeVUp", f"massShift{label}100MeVDown", "charge", 0)) 
+                                        swap(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown", "charge", 0)) 
                                     for g in cardTool.procGroups[signal_samples_forMass[0]] for m in cardTool.datagroups.groups[g].members},
-                                noConstraint=not constrainMass,
-                                systAxes=["massShift"],
-                                passToFakes=passSystToFakes,
             )
-        elif args.fitMassDiff == "eta":
-            cardTool.addSystematic(f"massWeight{label}",
-                                rename=f"massDiffEta{label}",
-                                processes=signal_samples_forMass,
-                                systNameReplace=[("Shift","DiffEta")],
-                                group=f"massDiff{label}",
-                                noi=not constrainMass,
-                                skipEntries=massSkip,
-                                mirror=False,
+        elif args.fitMassDiff == "eta-sign":
+            cardTool.addSystematic(**mass_diff_args, 
                                 actionMap={m.name: (lambda h, swap=hh.swap_histogram_bins, s=hist.tag.Slicer(): 
-                                        swap(h, "massShift", f"massShift{label}100MeVUp", f"massShift{label}100MeVDown", "eta", s[0:complex(0,0):])) #s[complex(0,-0.9):complex(0,0.9):]))# 
+                                        swap(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown", "eta", s[0:complex(0,0):]))
                                     for g in cardTool.procGroups[signal_samples_forMass[0]] for m in cardTool.datagroups.groups[g].members},
-                                noConstraint=not constrainMass,
-                                systAxes=["massShift"],
-                                passToFakes=passSystToFakes,
+            )
+        elif args.fitMassDiff == "eta-range":
+            cardTool.addSystematic(**mass_diff_args, 
+                                actionMap={m.name: (lambda h, swap=hh.swap_histogram_bins, s=hist.tag.Slicer(): 
+                                        swap(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown", "eta", s[complex(0,-0.9):complex(0,0.9):]))
+                                    for g in cardTool.procGroups[signal_samples_forMass[0]] for m in cardTool.datagroups.groups[g].members},
             )
 
     # this appears within doStatOnly because technically these nuisances should be part of it
