@@ -19,8 +19,6 @@ parser.add_argument("--csVarsHist", action='store_true', help="Add CS variables 
 parser.add_argument("--axes", type=str, nargs="*", default=["mll", "ptll"], help="")
 parser.add_argument("--finePtBinning", action='store_true', help="Use fine binning for ptll")
 parser.add_argument("--noAuxiliaryHistograms", action="store_true", help="Remove auxiliary histograms to save memory (removed by default with --unfolding or --theoryAgnostic)")
-# TODO: move this to common, but first has to implement it for all histmakers to avoid unexpected behaviours
-parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency (legacy option for tests)")
 
 parser = common.set_parser_default(parser, "genVars", ["ptVGen", "absYVGen"])
 parser = common.set_parser_default(parser, "pt", [34,26.,60.])

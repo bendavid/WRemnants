@@ -15,9 +15,6 @@ import time
 import os
 import numpy as np
 
-# TODO: move this to common, but first has to implement it for all histmakers to avoid unexpected behaviours
-parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency (legacy option for tests)")
-
 parser = common.set_parser_default(parser, "genVars", ["qGen", "ptGen", "absEtaGen"])
 parser = common.set_parser_default(parser, "genBins", [17, 0])
 parser = common.set_parser_default(parser, "pt", [34, 26, 60])
