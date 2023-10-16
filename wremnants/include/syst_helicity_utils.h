@@ -103,7 +103,7 @@ class WeightByHelicityHelper : public TensorCorrectionsHelper<T> {
      const auto coeffs = base_t::get_tensor(mV, yV, ptV, qV);
      helweight_tensor_t helWeights;
      double sum = coeffs(0) * moments(9); // 1.*cos^2(theta)
-     helWeights(0) = coeffs(0) * moments(9)
+     helWeights(0) = coeffs(0) * moments(9);
      for(unsigned int i = 1; i < NHELICITY;i++) {
        if(i<6) helWeights(i) = coeffs(i) * moments(i);//save only upto 6 for further use
        sum += coeffs(i) * moments(i);//full sum of all components
