@@ -424,7 +424,7 @@ if __name__ == "__main__":
             yobs  = array('d',[hist_fit_s.GetBinContent(i) for i in range(1, 1+hist_fit_s.GetNbinsX()) ])
             eyobs  = array('d',[hist_fit_s.GetBinError(i) for i in range(1, 1+hist_fit_s.GetNbinsX()) ])
 
-            maxPull = max(list(yobs))
+            maxPull = max(list([abs(y) for y in yobs]))
             maxz = max(4, math.ceil(maxPull))
 
             lat = ROOT.TLatex(); lat.SetNDC()

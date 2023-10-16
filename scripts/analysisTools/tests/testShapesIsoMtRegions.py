@@ -45,9 +45,9 @@ if __name__ == "__main__":
     parser.add_argument("outdir",   type=str, nargs=1, help="Output folder")
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4], help="Set verbosity level with logging, the larger the more verbose");
     parser.add_argument("-n", "--baseName", type=str, help="Histogram name in the file (e.g., 'nominal')", default="nominal")
-    parser.add_argument(     '--nContours', dest='nContours',    default=51, type=int, help='Number of contours in palette. Default is 51')
-    parser.add_argument(     '--palette'  , dest='palette',      default=87, type=int, help='Set palette: default is a built-in one, 55 is kRainbow')
-    parser.add_argument(     '--invertPalette', dest='invertePalette', action='store_true',   help='Inverte color ordering in palette')
+    parser.add_argument(     '--nContours', default=51, type=int, help='Number of contours in palette. Default is 51')
+    parser.add_argument(     '--palette'  , default=87, type=int, help='Set palette: default is a built-in one, 55 is kRainbow')
+    parser.add_argument(     '--invertPalette', action='store_true',   help='Inverte color ordering in palette')
     parser.add_argument('-p','--processes', default=None, nargs='*', type=str,
                         help='Choose what processes to plot, otherwise all are done')
     parser.add_argument('-c','--charges', default="both", choices=["plus", "minus", "both"], type=str,
@@ -146,7 +146,7 @@ if __name__ == "__main__":
                                         f"{h.GetName()}", plotLabel="ForceTitle", outdir=outdir,
                                         smoothPlot=False, drawProfileX=False, scaleToUnitArea=False,
                                         draw_both0_noLog1_onlyLog2=1, passCanvas=canvas,
-                                        nContours=args.nContours, palette=args.palette, invertePalette=args.invertePalette)
+                                        nContours=args.nContours, palette=args.palette, invertePalette=args.invertPalette)
                 hist2D[charge][f"{d}_{charge}"] = h
         print()
 

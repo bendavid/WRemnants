@@ -181,7 +181,7 @@ python w_mass_13TeV/makeImpactsOnMW.py fitresults_123456789.root --scaleToMeV --
 
 Make W MC efficiencies for trigger and isolation (needed for anti-iso and anti-trigger SF)
 ```
-/usr/bin/time -v python scripts/histmakers/mw_with_mu_eta_pt.py -o outputFolder/ --makeMCefficiency --onlyMainHistograms --noAuxiliaryHistograms
+/usr/bin/time -v python scripts/histmakers/mw_with_mu_eta_pt.py -o outputFolder/ --makeMCefficiency --onlyMainHistograms --noAuxiliaryHistograms --noScaleFactors --muonCorrMC none -p WmunuMCeffi_noSF_muonCorrMCnone --filterProcs Wmunu
 python scripts/analysisTools/w_mass_13TeV/makeWMCefficiency3D.py /path/to/file.hdf5 /path/for/plots/makeWMCefficiency3D/ [--rebinUt 2]
 ```
 

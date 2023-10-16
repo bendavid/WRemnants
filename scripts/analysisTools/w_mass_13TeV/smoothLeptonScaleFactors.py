@@ -23,9 +23,11 @@ import hist
 import boost_histogram as bh
 import narf
 import narf.fitutils
-import subprocess
+import pickle
+import lz4.frame
 
 from functools import partial
+from scipy.interpolate import RegularGridInterpolator
 
 import utilitiesCMG
 utilities = utilitiesCMG.util()
@@ -1582,7 +1584,62 @@ if __name__ == "__main__":
                                       addCurve=antiisoTMP,
                                       addCurveLegEntry=f"SF from pol{args.fitPolDegreeEfficiency} iso effi"
             )
-            
+
+
+    # prepare antiiso or antitrigger SF using direct SF smoothing and W MC truth efficiencies
+    if args.step in ["iso", "isoplus", "isominus", "trigger", "triggerplus", "triggerminus"]:
+        # TODO copy new eff file to wremnants-data
+        effSmoothFile = "/eos/user/m/mciprian/www/WMassAnalysis/test2Dsmoothing/makeWMCefficiency3D/noMuonCorr_noSF_allProc_noDphiCut_rebinUt2_addEffi2D/efficiencies3D_rebinUt2.pkl.lz4"
+        with lz4.frame.open(effSmoothFile) as fileEff:
+            allMCeff = pickle.load(fileEff)
+            eff_boost = allMCeff[f"Wmunu_MC_eff_{args.step}_etapt"]
+        logger.info(f"Preparing W MC smooth eta-pt efficiencies for {args.step}")
+        axis_eta = hist.axis.Variable(etabins, name = "eta", overflow = False, underflow = False) # as for previous histograms, in case eta is not uniform
+        axis_pt  = hist.axis.Regular(nFinePtBins, minPtHisto, maxPtHisto,   name = "pt",  overflow = False, underflow = False)
+        histEffi2D_etapt_boost = hist.Hist(axis_eta, axis_pt,
+                                           name = f"smoothEffi2D_{args.step}_etapt_boost",
+                                           storage = hist.storage.Weight())
+        # smooth efficiency vs pt in each eta bin using a spline, then fill the histogram with fine pt binning
+        for ieta in range(len(etabins)-1):
+            etaLow = round(etabins[ieta], 1)
+            etaHigh = round(etabins[ieta+1], 1)
+            etaRange = f"{etaLow} < #eta < {etaHigh}"
+            etaCenter = 0.5 * (etaHigh + etaLow)
+            eta_index = eff_boost.axes[0].index(etaCenter)
+            eff_boost_pt = eff_boost[{0 : eta_index}] # from 2D (eta-pt) to 1D (pt)
+            xvals = [tf.constant(center, dtype=dtype) for center in eff_boost_pt.axes.centers]
+            ptvals = np.reshape(xvals[0], [-1])
+            yvals = eff_boost_pt.values()
+            yvals[np.isnan(yvals)] = 0 # protection against bins where no events were selected (extreme ut for instance), set efficiency to 0 instead of 1
+            eff_boost_pt.values()[...] = yvals
+            # the grid interpolator will be created up to the extreme bin centers, so need bounds_error=False to allow the extrapolation to extend outside until the bin edges
+            # and then we can set its extrapolation value to fill_value ('None' uses the extrapolation from the curve inside accpetance)
+            interp = RegularGridInterpolator(ptvals, yvals, method='cubic', bounds_error=False, fill_value=None)
+            xvalsFine = [tf.constant(center, dtype=dtype) for center in histEffi2D_etapt_boost.axes.centers]
+            ptvalsFine = np.reshape(xvalsFine[1], [-1])
+            pts = np.array(ptvalsFine)
+            #print(pts)
+            smoothVals = interp(pts)
+            #print(smoothVals)
+            histEffi2D_etapt_boost.values()[eta_index :] = smoothVals
+            histEffi2D.variances()[...] = np.zeros_like(histEffi2D.variances())
+        logger.info("Done with efficiencies")
+        histEffi2D_etapt_root = narf.hist_to_root(histEffi2D_etapt_boost)
+        histEffi2D_etapt_root.SetName(f"smoothEffi2D_{args.step}_etapt_boost")
+        # now compute anti-X SF using X SF and W MC efficiencies
+        hist_postfix_anti = f"_{args.era}_anti{args.step}_{args.charge}"
+        hanti_SF_nomiAndAlt_etapt = copy.deepcopy(hist_SF_nomiAndAlt_etapt.Clone(f"SF_nomiAndAlt_{hist_postfix_anti}"))
+        # do (1 - SF * eff) / (1 - eff)
+        hanti_unity = copy.deepcopy(hanti_SF_nomiAndAlt_etapt.Clone(f"unity_{hist_postfix_anti}"))
+        ROOT.wrem.initializeRootHistogram(hanti_unity, 1.0)
+        histEffi3D_etaptVar_root = copy.deepcopy(hanti_SF_nomiAndAlt_etapt.Clone(f"histEffi3D_etaptVar_{hist_postfix_anti}"))
+        ROOT.wrem.broadCastTH2intoTH3(histEffi3D_etaptVar_root, histEffi2D_etapt_root)
+        hanti_den = copy.deepcopy(hanti_unity.Clone(f"hanti_den_{hist_postfix_anti}"))
+        hanti_num = copy.deepcopy(hanti_unity.Clone(f"hanti_num_{hist_postfix_anti}"))
+        hanti_den.Add(histEffi3D_etaptVar_root, -1.0)
+        hanti_num.Add(histEffi3D_etaptVar_root.Multiply(hist_SF_nomiAndAlt_etapt), -1.0)        
+    #####
+    ##### END OF EXPERIMENTAL PART    
         
     ###########################
     # Now save things
