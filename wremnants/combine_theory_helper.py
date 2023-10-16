@@ -100,7 +100,7 @@ class TheoryHelper(object):
         if self.minnlo_unc and self.minnlo_unc not in ["none", None]:
             for sample_group in self.samples:
                 if self.card_tool.procGroups.get(sample_group, None):
-                    self.add_minnlo_scale_uncertainty(sample_group, rebin_pt=common.ptV_binning)
+                    self.add_minnlo_scale_uncertainty(sample_group, rebin_pt=common.ptV_binning[::2])
 
     def add_minnlo_scale_uncertainty(self, sample_group, use_hel_hist=False, rebin_pt=None):
         if not sample_group or sample_group not in self.card_tool.procGroups:
