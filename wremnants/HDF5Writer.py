@@ -733,7 +733,7 @@ class HDF5Writer(object):
         systs = self.get_systs()
         groups = []
         idxs = []
-        for group, members in group_dict.items():
+        for group, members in common.natural_sort_dict(group_dict).items():
             groups.append(group)
             idx = []
             for syst in members:
@@ -746,7 +746,7 @@ class HDF5Writer(object):
         systs = self.get_systs()
         groups = []
         idxs = []
-        for group, members in self.dict_noigroups.items():
+        for group, members in common.natural_sort_dict(self.dict_noigroups).items():
             groups.append(group)
             for syst in members:
                 idxs.append(systs.index(syst))

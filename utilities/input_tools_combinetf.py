@@ -297,8 +297,8 @@ def select_covariance_pois(cov, names, gen_axes=[], selections={}, base_processe
 
     # make matrix between selected POIs only
     new_cov = hist.Hist(
-        hist.axis.Regular(bins=len(indices), start=0.5, stop=len(indices)+0.5, underflow=False, overflow=False), 
-        hist.axis.Regular(bins=len(indices), start=0.5, stop=len(indices)+0.5, underflow=False, overflow=False), 
+        hist.axis.Integer(start=0, stop=len(indices), underflow=False, overflow=False), 
+        hist.axis.Integer(start=0, stop=len(indices), underflow=False, overflow=False), 
         storage=hist.storage.Double())
     new_cov.view(flow=False)[...] = cov.view(flow=False)[indices, :][:, indices]
 
@@ -313,8 +313,8 @@ def load_covariance_pois(fitresult, poi_type="mu"):
         raise IOError(f"Unknown fitresult format for object {fitresult}")
 
     cov = hist.Hist(
-        hist.axis.Regular(bins=len(names), start=0.5, stop=len(names)+0.5, underflow=False, overflow=False), 
-        hist.axis.Regular(bins=len(names), start=0.5, stop=len(names)+0.5, underflow=False, overflow=False), 
+        hist.axis.Integer(start=0, stop=len(names), underflow=False, overflow=False), 
+        hist.axis.Integer(start=0, stop=len(names), underflow=False, overflow=False), 
         storage=hist.storage.Double())
     cov.view(flow=False)[...] = values
     return cov, names

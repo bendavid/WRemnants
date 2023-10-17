@@ -11,7 +11,7 @@ import hist
 import pdb
 from utilities import logging, input_tools, output_tools
 from wremnants import plot_tools
-from utilities.input_tools_combinetf import get_fitresult, load_covariance_pois, select_covariance_poi
+from utilities.input_tools_combinetf import get_fitresult, load_covariance_pois, select_covariance_pois
 
 hep.style.use(hep.style.ROOT)
 
@@ -26,12 +26,13 @@ parser.add_argument("--debug", action='store_true', help="Print debug output")
 parser.add_argument("--flow", action='store_true', help="Show overflow/underflow pois")
 parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend text")
 parser.add_argument("--plots", type=str, nargs="+", default=["covariance"], choices=["correlation", "covariance"], help="Define which plots to make")
+parser.add_argument("--poiType", type=str, default="mu", choices=["nois", "mu", "pmaskedexp", "pmaskedexpnorm", "sumpois", "sumpoisnorm",], help="Parameter type to make the covariance matrix")
 parser.add_argument("-c", "--channels", type=str, nargs="+", choices=["plus", "minus", "all"], default=["plus", "minus", "all"], help="Select channel to plot")
 parser.add_argument("--eoscp", action='store_true', help="Override use of xrdcp and use the mount instead")
 
 args = parser.parse_args()
 
-logger = logging.setup_logger("unfolding_covariance", 4 if args.debug else 3, False)
+logger = logging.setup_logger("covariance", 4 if args.debug else 3, False)
 
 outdir = output_tools.make_plot_dir(args.outpath, args.outfolder)
 
@@ -53,11 +54,12 @@ selection_dict = {
     "W_qGen1": r"$\mathrm{W}^+\rightarrow\mu\nu$",
 }
 
-def plot_matrix_poi(h2d, names, poi_type="mu", gen_axes=None, base_processes=[], selections=None, covariance=False, 
-    xlabel=None, ylabel=None, cms_decor="Preliminary", flow=False
+def plot_matrix_poi(hist_cov, names, poi_type="mu", gen_axes=None, base_processes=[], selections={}, covariance=False, add_values_text=False,
+    xlabel=None, ylabel=None, cms_decor="Preliminary", flow=False, clean_triangle=False, condition_number=False,
     ):
+    if gen_axes is not None: 
+        hist_cov = select_covariance_pois(hist_cov, names, gen_axes=gen_axes, base_processes=base_processes, selections=selections, flow=flow)
 
-    hist_cov = select_covariance_pois(h2d, names, gen_axes=gen_axes, base_processes=base_processes, selections=selections, flow=flow)
     if not covariance:
         std_devs = np.sqrt(np.diag(hist_cov.values()))
 
@@ -67,6 +69,8 @@ def plot_matrix_poi(h2d, names, poi_type="mu", gen_axes=None, base_processes=[],
     if xlabel is None:
         if gen_axes is not None:
             xlabel = "gen "+ "-".join([label_dict.get(a, a) for a in gen_axes if a not in selections.keys()])+" bin"
+        elif poi_type == "nois":
+            xlabel = "NOI"
         else:
             xlabel = "POI bin"
     if ylabel is None:
@@ -80,16 +84,26 @@ def plot_matrix_poi(h2d, names, poi_type="mu", gen_axes=None, base_processes=[],
         cmin, cmax = -1.0, 1.0
 
     # Create a mask to None out the upper triangle
-    values = hist_cov.values().copy()
-    mask = np.tril(np.ones_like(values, dtype=bool))
-    values[~mask] = None
+    if clean_triangle:
+        values = hist_cov.values().copy()
+        mask = np.tril(np.ones_like(values, dtype=bool))
+        values[~mask] = None
+    else:
+        values = hist_cov.values()
 
     hep.hist2dplot(values, ax=ax)#, cmap=cm.RdBu)#, clim=(cmin, cmax))#, labels=(xlabels,ylabels))
 
+    # Loop through each cell in the matrix and add the value as text
+    if add_values_text:
+        for i in range(len(values)):
+            for j in range(len(values[0])):
+                plt.text(j + 0.5, i + 0.5, f'{values[i, j]:.5f}', ha='center', va='center', color='w')
+
     # calculate condition number
-    cond = np.linalg.cond(hist_cov.values())
-    logger.info(f"Condition number: {cond}")
-    plt.text(0.2, 0.9, round(cond), horizontalalignment='right', verticalalignment='top', transform=ax.transAxes)
+    if condition_number:
+        cond = np.linalg.cond(hist_cov.values())
+        logger.info(f"Condition number: {cond}")
+        plt.text(0.2, 0.9, round(cond), horizontalalignment='right', verticalalignment='top', transform=ax.transAxes)
 
     key = base_process
     for k,v in selections.items():
@@ -108,7 +122,7 @@ def plot_matrix_poi(h2d, names, poi_type="mu", gen_axes=None, base_processes=[],
     plot_tools.save_pdf_and_png(outdir, outfile)
     plot_tools.write_index_and_log(outdir, outfile, 
         yield_tables={"Values" : hist_cov.values()}, nround=10 if covariance else 2,
-        analysis_meta_info={args.infile : datagroups.getMetaInfo()},
+        analysis_meta_info={args.infile : meta_info},
         args=args,
     )
 
@@ -116,41 +130,39 @@ for plot_type in args.plots:
     
     covariance = False if plot_type == "correlation" else True
 
-    for poi_type in (
-        # "mu", 
-        # "pmaskedexp", 
-        # "pmaskedexpnorm", 
-        "sumpois", 
-        "sumpoisnorm",
-        ):
-        hist_cov, names = load_covariance_pois(fitresult, poi_type)
+    hist_cov, names = load_covariance_pois(fitresult, args.poiType)
 
-        for i, base_process in enumerate(map(lambda x: "W" if x.split("/")[-1].startswith("mw") else "Z", meta_info["args"]["inputFile"])):
-            logger.debug(f"Now at {i}, base process {base_process}")
+    for i, base_process in enumerate(map(lambda x: "W" if x.split("/")[-1].startswith("mw") else "Z", meta_info["args"]["inputFile"])):
+        logger.debug(f"Now at {i}, base process {base_process}")
 
-            # TODO, get axis information from meta data
-            if base_process == "W":
-                selections=({"qGen":0}, {"qGen":1})
+        # nois
+        if args.poiType == "nois":
+            plot_matrix_poi(hist_cov, names, args.poiType, cms_decor=args.cmsDecor, add_values_text=True,
+                covariance=covariance, base_processes=[base_process,], flow=args.flow)
+            continue
 
-                if poi_type.startswith("sum"):
-                    axes_combinations = (("qGen","absEtaGen"), ("qGen","ptGen"))
-                else:
-                    axes_combinations = (("qGen","ptGen","absEtaGen"),)
+        # TODO, get axis information from meta data
+        if base_process == "W":
+            selections=({"qGen":0}, {"qGen":1})
 
-            elif base_process == "Z":
-                selections = ({}, )
-                if poi_type.startswith("sum"):
-                    axes_combinations = ("ptVGen", "absYVGen")
-                else:
-                    axes_combinations = (("ptVGen", "absYVGen"),)
+            if args.poiType.startswith("sum"):
+                axes_combinations = (("qGen","absEtaGen"), ("qGen","ptGen"))
+            else:
+                axes_combinations = (("qGen","ptGen","absEtaGen"),)
 
-            for axes in axes_combinations:
-                if isinstance(axes, str):
-                    axes = [axes]
-                for selection in selections:
-                    plot_matrix_poi(hist_cov, names, poi_type, cms_decor=args.cmsDecor, 
-                        gen_axes=axes, selections=selection, base_processes=[base_process,], covariance=covariance, flow=args.flow)
+        elif base_process == "Z":
+            selections = ({}, )
+            if args.poiType.startswith("sum"):
+                axes_combinations = ("ptVGen", "absYVGen")
+            else:
+                axes_combinations = (("ptVGen", "absYVGen"),)
 
+        for axes in axes_combinations:
+            if isinstance(axes, str):
+                axes = [axes]
+            for selection in selections:
+                plot_matrix_poi(hist_cov, names, args.poiType, cms_decor=args.cmsDecor, clean_triangle = True, condition_number=covariance,
+                    gen_axes=axes, selections=selection, base_processes=[base_process,], covariance=covariance, flow=args.flow)
 
 if output_tools.is_eosuser_path(args.outpath) and args.eoscp:
     output_tools.copy_to_eos(args.outpath, args.outfolder)

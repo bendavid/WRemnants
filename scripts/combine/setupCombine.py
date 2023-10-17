@@ -360,7 +360,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
             passToFakes=passSystToFakes,
         )
         if args.fitMassDiff == "charge":
-            cardTool.addSystematic(**mass_diff_args,                               
+            cardTool.addSystematic(**mass_diff_args,
                                 # # on gen level based on the sample, only possible for mW
                                 # actionMap={m.name: (lambda h, swap=swap_bins: swap(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown")) 
                                 #     for g in cardTool.procGroups[signal_samples_forMass[0]] for m in cardTool.datagroups.groups[g].members if "minus" in m.name},
