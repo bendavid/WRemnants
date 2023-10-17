@@ -12,6 +12,7 @@ import os
 
 
 parser.add_argument("--skipAngularCoeffs", action='store_true', help="Skip the conversion of helicity moments to angular coeff fractions")
+parser.add_argument("--addHelicityToPDFs", action='store_true', help="Add helicity tensor for PDFs")
 parser.add_argument("--singleLeptonHists", action='store_true', help="Also store single lepton kinematics")
 parser.add_argument("--photonHists", action='store_true', help="Also store photon kinematics")
 parser.add_argument("--skipEWHists", action='store_true', help="Also store histograms for EW reweighting. Use with --filter horace")
@@ -113,7 +114,7 @@ def build_graph(df, dataset):
         else:
             df = df.Define('ptPrefsrLep', 'genlanti.pt()')
             df = df.Define('etaPrefsrLep', 'genlanti.eta()')
-        results.append(df.HistoBoost("nominal_genlep", lep_axes, [*lep_cols, "nominal_weight"], storage=hist.storage.Double()))
+        results.append(df.HistoBoost("nominal_genlep", lep_axes, [*lep_cols, "nominal_weight"], storage=hist.storage.Weight()))
 
     if not args.skipEWHists and (isW or isZ):
         if isZ:
@@ -185,7 +186,7 @@ def build_graph(df, dataset):
                 results.append(df.HistoBoost("nominal_sublPhoton", [axis_photonPt, axis_photonEta], ["sublPhotonPt", "sublPhotonEta", "nominal_weight"], storage=hist.storage.Weight()))
                 results.append(df.HistoBoost("nominal_trailPhoton", [axis_photonPt, axis_photonEta], ["trailPhotonPt", "trailPhotonEta", "nominal_weight"], storage=hist.storage.Weight()))
 
-    nominal_gen = df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols, "nominal_weight"], storage=hist.storage.Double())
+    nominal_gen = df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols, "nominal_weight"], storage=hist.storage.Weight())
 
     results.append(nominal_gen)
     if not 'horace' in dataset.name and not 'winhac' in dataset.name:
@@ -193,11 +194,14 @@ def build_graph(df, dataset):
             df = theory_tools.define_scale_tensor(df)
             syst_tools.add_qcdScale_hist(results, df, nominal_axes, nominal_cols, "nominal_gen")
             df = df.Define("helicity_moments_scale_tensor", "wrem::makeHelicityMomentScaleTensor(csSineCosThetaPhi, scaleWeights_tensor, nominal_weight)")
-            helicity_moments_scale = df.HistoBoost("helicity_moments_scale", nominal_axes, [*nominal_cols, "helicity_moments_scale_tensor"], tensor_axes = [wremnants.axis_helicity, *wremnants.scale_tensor_axes], storage=hist.storage.Double())
+            helicity_moments_scale = df.HistoBoost("helicity_moments_scale", nominal_axes, [*nominal_cols, "helicity_moments_scale_tensor"], tensor_axes = [wremnants.axis_helicity, *wremnants.scale_tensor_axes], storage=hist.storage.Weight())
             results.append(helicity_moments_scale)
 
         if "LHEPdfWeight" in df.GetColumnNames():
-            syst_tools.add_pdf_hists(results, df, dataset.name, nominal_axes, nominal_cols, args.pdfs, "nominal_gen")
+            if args.addHelicityToPDFs:
+                weightsByHelicity_helper = wremnants.makehelicityWeightHelper()
+                df = df.Define("helWeight_tensor", weightsByHelicity_helper, ["massVgen", "yVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "nominal_weight"])
+            syst_tools.add_pdf_hists(results, df, dataset.name, nominal_axes, nominal_cols, args.pdfs, "nominal_gen", addhelicity=args.addHelicityToPDFs)
 
     if args.theoryCorr and dataset.name in corr_helpers:
         results.extend(theory_tools.make_theory_corr_hists(df, "nominal_gen", nominal_axes, nominal_cols,
@@ -246,10 +250,10 @@ if not args.skipAngularCoeffs:
     if z_moments:
         z_moments = hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning)
         z_moments = hh.rebinHist(z_moments, axis_massZgen.name, axis_massZgen.edges[::2])
-        coeffs["Z"] = wremnants.moments_to_angular_coeffs(z_moments)
+        coeffs["Z"] = wremnants.moments_to_angular_coeffs(z_moments, sumW2=False) # sumW2 is not set to True internally when the input histogram has weights, in fact it could be removed
     if w_moments:
         w_moments = hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning)
-        coeffs["W"] = wremnants.moments_to_angular_coeffs(w_moments)
+        coeffs["W"] = wremnants.moments_to_angular_coeffs(w_moments, sumW2=False) # ditto
     if coeffs:
         outfname = "w_z_coeffs_absY.hdf5" if args.absY else "w_z_coeffs.hdf5"
         output_tools.write_analysis_output(coeffs, outfname, args, update_name=not args.forceDefaultName)

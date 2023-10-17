@@ -93,6 +93,7 @@ def readNuisances(args, infile=None, logger=None):
             nuisGroup_nameVal[label] = impMat.GetBinContent(1,iy)
         elif args.excludeNuisgroups and matchExclude.match(label):
             continue
+        nuisGroup_nameVal[label] = impMat.GetBinContent(1,iy)
     return totalUncertainty,nuisGroup_nameVal
 
 

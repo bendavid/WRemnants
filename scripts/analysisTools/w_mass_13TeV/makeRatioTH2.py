@@ -78,6 +78,7 @@ if __name__ == "__main__":
     parser.add_argument('-a', '--make-asymmetry', dest="makeAsymmetry", action="store_true", help="Make ratio of difference over the sum. For this to make sense, the binning of the two inputs must be consistent")
     parser.add_argument('-p', '--make-pulls', dest="makePulls", action="store_true", help="Make pulls of input histograms, i.e. (h1-h2)/error, where error is taken as the quadrature sum of the errors of the input")
     parser.add_argument(       '--pull-error-ScaleFactor', dest='pullErrorScaleFactor', default='1.', type=float, help='Inflate the error by this factor when making the pulls (because it is assumed the inputs are uncorrelated, so the error might need a correction)')
+    parser.add_argument('--pullErrorSource', default='both', type=str, choices=["both", "num", "den"], help='When doing pulls, choose where to pick the error to normalize (both is the quadrature sum of num and den)')
     parser.add_argument('-u', '--unroll', action="store_true",  help="Make plot of unrolled 1D histogram from the 2D ratio (along x)")
     parser.add_argument(      '--unrolly', action="store_true",  help="Unroll along y instead of along x")
     parser.add_argument(      '--roll1Dto2D', action="store_true",  help="Input histograms are 1D distributions to be unrolled into 2D. Need binning from option --binning-file-to-roll")
@@ -86,6 +87,7 @@ if __name__ == "__main__":
     parser.add_argument(      '--set-ratio-unc', dest="setRatioUnc", default="num", choices=["num", "den", "both"], help="Set how to compute uncertainty for the ratio (num or den simply use the one of those component, neglecting the other, both propagates both) ")
     parser.add_argument(      '--integrate1D', action="store_true",  help="In addition to other plots, integrate the shapes in 1D and plot them as TH1 with ratio panel")
     parser.add_argument(      '--legendEntries1D',  default=("Numerator","Denominator"), type=str, nargs=2, help='Entries for legend when integrating in 1D')
+    parser.add_argument(      '--drawOriginal', action="store_true",  help="Draw original TH2, for debugging")
     args = parser.parse_args()
     
     f1 = args.file1[0]
@@ -278,6 +280,15 @@ if __name__ == "__main__":
     drawCorrelationPlot(hratio,xAxisTitle,yAxisTitle,zAxisTitle,
                         args.outhistname,"ForceTitle",outname,0,0,False,False,False,1,
                         palette=args.palette,passCanvas=canvas2D,drawOption=args.drawOption)
+
+    if args.drawOriginal:
+        drawCorrelationPlot(hinput1,xAxisTitle,yAxisTitle,"Numerator",
+                            f"num_{args.outhistname}","ForceTitle",outname,0,0,False,False,False,1,
+                            palette=args.palette,passCanvas=canvas2D,drawOption=args.drawOption)
+        drawCorrelationPlot(hinput2,xAxisTitle,yAxisTitle,"Denominator",
+                            f"den_{args.outhistname}","ForceTitle",outname,0,0,False,False,False,1,
+                            palette=args.palette,passCanvas=canvas2D,drawOption=args.drawOption)
+
     
     canvas = ROOT.TCanvas("canvas","",800,700)
     if not args.skip1DPlot:
@@ -399,10 +410,17 @@ if __name__ == "__main__":
                 yval = hinput1.GetYaxis().GetBinCenter(iy)
                 if yMin < yMax:
                     if yval < yMin or yval > yMax: continue
-                err = math.sqrt(pow(hinput1.GetBinError(ix,iy),2) + pow(hinput2.GetBinError(ix,iy),2))
+                if args.pullErrorSource == "both":
+                    err = math.sqrt(pow(hinput1.GetBinError(ix,iy),2) + pow(hinput2.GetBinError(ix,iy),2))
+                    #if err == 0:
+                    #    print(f"ix/iy: err1/err2 --> {ix}/{iy}: {hinput1.GetBinError(ix,iy)}/{hinput2.GetBinError(ix,iy)} ")
+                elif args.pullErrorSource == "num":
+                    err = hinput1.GetBinError(ix,iy)
+                else:
+                    err = hinput2.GetBinError(ix,iy)
                 err *= args.pullErrorScaleFactor
                 pull = hinput1.GetBinContent(ix,iy) - hinput2.GetBinContent(ix,iy)
-                pull = pull/err
+                pull = (pull/err) if err != 0 else 10
                 hpull2D.SetBinContent(ix, iy, pull)
                 hpull.Fill(pull)
 
