@@ -25,8 +25,6 @@ class Datagroup(object):
         self.hists = {}                     # list of histograms processed from narf datasets
 
     def copy(self, new_name, member_filter=None):
-        logger.debug(f"Make a copy of group {self.name}, named {new_name}!")
-
         x = deepcopy(self)
         x.name = new_name
 
@@ -34,6 +32,7 @@ class Datagroup(object):
             # Invert the member filter and exclude those members
             x.deleteMembers([m for m in filter(lambda x,f=member_filter: not f(x), x.members)])
 
+        logger.debug(f"Make a copy of group {self.name}, named {new_name} with members {[m.name for m in x.members]}")
         return x
 
     def addMembers(self, members, member_operations=None):

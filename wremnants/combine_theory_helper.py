@@ -74,7 +74,7 @@ class TheoryHelper(object):
             self.tnp_nuisances = self.card_tool.match_str_axis_entries(self.corr_hist.axes[self.syst_ax], 
                                     ["^gamma_.*[+|-]\d+", "^b_.*[+|-]\d+", "^s[+|-]\d+", "^h_.*\d+"])
             if not self.tnp_nuisances:
-                raise ValueError("Did not find TNP uncertainties in hist {self.corr_hist_name}")
+                raise ValueError(f"Did not find TNP uncertainties in hist {self.corr_hist_name}")
 
             self.tnp_names = set([x.split("+")[0].split("-")[0] for x in self.tnp_nuisances])
             
@@ -176,7 +176,7 @@ class TheoryHelper(object):
                 actionArgs=action_args,
                 processes=[sample_group],
                 group=group_name,
-                splitGroup={"QCDScale": ".*"},
+                splitGroup={"QCDscale": ".*"},
                 systAxes=syst_axes,
                 labelsByAxis=syst_ax_labels,
                 # Exclude all combinations where muR = muF = 1 (nominal) or where
@@ -400,7 +400,7 @@ class TheoryHelper(object):
             processes=["single_v_samples"],
             mirror=True if symHessian else False,
             group=pdfName,
-            splitGroup={f"{pdfName}NoAlphaS": '(?!.*alphaS)'},
+            splitGroup={f"{pdfName}NoAlphaS": '.*'},
             passToFakes=self.propagate_to_fakes,
             actionMap=action,
             scale=pdfInfo.get("scale", 1)*scale,
@@ -422,8 +422,8 @@ class TheoryHelper(object):
         self.card_tool.addSystematic(f"{pdfName}alphaS{asRange}", 
             processes=["single_v_samples"],
             mirror=False,
-            group=f"{pdfName}",
-            splitGroup={f"{pdfName}AlphaS": ".*alphaS"},
+            group=pdfName,
+            splitGroup={f"{pdfName}AlphaS": '.*'},
             systAxes=["alphasVar"],
             systNameReplace=[("as", "pdfAlphaS")]+[("0116", "Down"), ("0120", "Up")] if asRange == "002" else [("0117", "Down"), ("0119", "Up")],
             scale=0.75, # TODO: this depends on the set, should be provided in theory_tools.py
