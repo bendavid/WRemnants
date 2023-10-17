@@ -1,6 +1,8 @@
 import narf
 from utilities import logging
 import subprocess
+import sys
+import os
 import glob
 import random
 import pathlib
@@ -23,31 +25,79 @@ default_nfiles = {
     'ZtautauPostVFP' : 1200,
 }
 
-def buildXrdFileList(path, xrd):
-    xrdpath = path[path.find('/store'):]
-    logger.debug(f"Looking for path {xrdpath}")
-    # xrdfs doesn't like wildcards, just use the mount if they are included
-    if "*" not in path:
-        f = subprocess.check_output(['xrdfs', f'root://{xrd}', 'ls', xrdpath]).decode(sys.stdout.encoding)
-        return filter(lambda x: "root" in x[-4:], f.split())
-    else:
-        return [f"root://{xrd}/{f}" for f in glob.glob(path)]
+def buildFileListPosix(path):
+    # roots, dirs, fnamess = os.walk(path)
+
+    outfiles = []
+    for root, dirs, fnames in os.walk(path):
+        for fname in fnames:
+            if fname.endswith(".root"):
+                # print(root, fname)
+                outfiles.append(f"{root}/{fname}")
+
+    # print(path, outfiles)
+
+    return outfiles
+
+def buildFileListXrd(path, num_clients = 16):
+    xrdprefix = "root://"
+    if not path.startswith(xrdprefix):
+        raise ValueError(f"Invalid xrootd path {path}")
+
+    path = path[len(xrdprefix):]
+    sepidx = path.find("/")
+    xrd = path[:sepidx]
+    xrdpath = path[sepidx:]
+
+
+    res = subprocess.run(["xrdfs", f"{xrdprefix}{xrd}", "ls", "-R", xrdpath], capture_output=True)
+    xrdfiles = res.stdout.decode(sys.stdout.encoding).split()
+
+    outfiles = []
+    for xrdfile in xrdfiles:
+        if not xrdfile.endswith(".root"):
+            continue
+
+        # construct client string if necessary to force multiple xrootd connections
+        # (needed for good performance when a single or small number of xrootd servers is used)
+        if num_clients > 1:
+            client = f"user_{random.randrange(num_clients)}@"
+        else:
+            client = ""
+
+        outfiles.append(f"{xrdprefix}{client}{xrd}/{xrdfile}")
+
+    return outfiles
+
+def buildFileList(path):
+    xrdprefix = "root://"
+    return buildFileListXrd(path) if path.startswith(xrdprefix) else buildFileListPosix(path)
 
 #TODO add the rest of the samples!
-def makeFilelist(paths, maxFiles=-1, format_args={}, is_data=False, oneMCfileEveryN=None):
+def makeFilelist(paths, maxFiles=-1, base_path=None, nano_prod_tags=None, is_data=False, oneMCfileEveryN=None):
     filelist = []
-    nfiles = 0
-    for path in paths:
-        if maxFiles > 0 and nfiles >= maxFiles:
+    for orig_path in paths:
+        if maxFiles > 0 and len(filelist) >= maxFiles:
             break
-        if format_args:
-            path = path.format(**format_args)
+        # try each tag in order until files are found
+        fallback = False
+        for prod_tag in nano_prod_tags:
+            format_args=dict(BASE_PATH=base_path, NANO_PROD_TAG=prod_tag)
+
+            path = orig_path.format(**format_args)
             logger.debug(f"Reading files from path {path}")
-        files = glob.glob(path) if path[:4] != "/eos" else buildXrdFileList(path, "eoscms.cern.ch")
-        if len(files) == 0:
-            logger.warning(f"Did not find any files matching path {path}!")
+
+            files = buildFileList(path)
+
+            if len(files) == 0:
+                fallback = True
+                logger.warning(f"Did not find any files for tag {prod_tag} matching path {path}!")
+            else:
+                if fallback:
+                    logger.warning(f"Falling back to tag {prod_tag} with path {path}")
+                break
+
         filelist.extend(files)
-        nfiles += len(files)
 
     if oneMCfileEveryN != None and not is_data:
         tmplist = []
@@ -115,7 +165,8 @@ def getDataPath(mode=None):
     if hostname == "cmswmass2.cern.ch":
         base_path = "/data/shared/NanoAOD"
     elif "mit.edu" in hostname:
-        base_path = "/scratch/submit/cms/wmass/NanoAOD"
+        base_path = "root://submit30.mit.edu//cms/wmass/NanoAOD"
+        # base_path = "/scratch/submit/cms/wmass/NanoAOD"
     elif hostname == "cmsanalysis.pi.infn.it":
         base_path = "/scratchnvme/wmass/NANOV9/postVFP"
 
@@ -134,9 +185,9 @@ def is_zombie(file_path):
     file.Close()
     return False
 
-def getDatasets(maxFiles=default_nfiles, filt=None, excl=None, mode=None, base_path=None, nanoVersion="v9", 
-                data_tag="TrackFitV722_NanoProdv2", mc_tag="TrackFitV718_NanoProdv1", 
-                oneMCfileEveryN=None, checkFileForZombie=False):
+def getDatasets(maxFiles=default_nfiles, filt=None, excl=None, mode=None, base_path=None, nanoVersion="v9",
+                data_tags=["TrackFitV722_NanoProdv2"],
+                mc_tags=["TrackFitV722_NanoProdv3", "TrackFitV722_NanoProdv2", "TrackFitV718_NanoProdv1", "0"], oneMCfileEveryN=None, checkFileForZombie=False):
     if maxFiles is None:
         maxFiles=default_nfiles
 
@@ -164,11 +215,11 @@ def getDatasets(maxFiles=default_nfiles, filt=None, excl=None, mode=None, base_p
 
         is_data = info.get("group","") == "Data"
 
-        prod_tag = data_tag if is_data else mc_tag
-        nfiles = maxFiles 
+        prod_tags = data_tags if is_data else mc_tags
+        nfiles = maxFiles
         if type(maxFiles) == dict:
             nfiles = maxFiles[sample] if sample in maxFiles else -1
-        paths = makeFilelist(info["filepaths"], nfiles, format_args=dict(BASE_PATH=base_path, NANO_PROD_TAG=prod_tag), is_data=is_data, oneMCfileEveryN=oneMCfileEveryN)
+        paths = makeFilelist(info["filepaths"], nfiles, base_path=base_path, nano_prod_tags=prod_tags, is_data=is_data, oneMCfileEveryN=oneMCfileEveryN)
             
         if checkFileForZombie:
             paths = [p for p in paths if not is_zombie(p)]
