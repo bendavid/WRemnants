@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from wremnants import CardTool,combine_helpers,combine_theory_helper, HDF5Writer
+from wremnants.syst_tools import massWeightNames
 from wremnants.datasets.datagroups import Datagroups
 from utilities import common, logging, input_tools, boostHistHelpers as hh
 import itertools
@@ -308,36 +309,17 @@ def setup(args, inputFile, fitvar, xnorm=False):
             logger.info(f"Single V no signal samples: {cardTool.procGroups['single_v_nonsig_samples']}")
         logger.info(f"Signal samples: {cardTool.procGroups['signal_samples']}")
 
-    constrainedZ = constrainMass and not wmass
-    label = 'W' if wmass else 'Z'
-    massSkip = [(f"^massShift[W|Z]{i}MeV.*",) for i in range(0, 110 if constrainedZ else 100, 10)]
-    if wmass and not xnorm and not args.doStatOnly:
-        cardTool.addSystematic(f"massWeightZ",
-                                processes=['single_v_nonsig_samples'],
-                                group=f"massShiftZ",
-                                skipEntries=massSkip[:]+[("^massShiftZ100MeV.*",)],
-                                mirror=False,
-                                noConstraint=False,
-                                systAxes=["massShift"],
-                                passToFakes=passSystToFakes,
-        )
-
-    if not (constrainMass or wmass):
-        massSkip.append(("^massShift.*2p1MeV.*",))
-
     signal_samples_forMass = ["signal_samples_inctau"]
     if args.theoryAgnostic and not args.poiAsNoi:
         logger.error("Temporarily not using mass weights for Wtaunu. Please update when possible")
         signal_samples_forMass = ["signal_samples"]
-    if constrainMass and args.doStatOnly:
-        logger.info("Using option --doStatOnly: the card was created without nuisance parameters")
-        return cardTool
 
+    label = 'W' if wmass else 'Z'
     cardTool.addSystematic(f"massWeight{label}",
                            processes=signal_samples_forMass,
                            group=f"massShift{label}",
                            noi=not constrainMass,
-                           skipEntries=massSkip,
+                           skipEntries=massWeightNames(proc=label, exclude=100),
                            mirror=False,
                            noConstraint=not constrainMass,
                            systAxes=["massShift"],
@@ -352,7 +334,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
             rename=f"massDiff{suffix}{label}",
             group=f"massDiff{label}",
             systNameReplace=[("Shift",f"Diff{suffix}")],
-            skipEntries=[(m[0].replace("50MeV", "100MeV"),) for m in massSkip],
+            skipEntries=massWeightNames(proc=label, exclude=50),
             noi=not constrainMass,
             noConstraint=not constrainMass,
             mirror=False,
@@ -403,7 +385,18 @@ def setup(args, inputFile, fitvar, xnorm=False):
         # print a card with only mass weights
         logger.info("Using option --doStatOnly: the card was created with only mass nuisance parameter")
         return cardTool
-    
+
+    if wmass and not xnorm:
+        cardTool.addSystematic(f"massWeightZ",
+                                processes=['single_v_nonsig_samples'],
+                                group=f"massShiftZ",
+                                skipEntries=massWeightNames(proc="Z", exclude=2.1),
+                                mirror=False,
+                                noConstraint=False,
+                                systAxes=["massShift"],
+                                passToFakes=passSystToFakes,
+        )
+
     if args.widthUnc:
         widthSkipZ = [("widthZ2p49333GeV",), ("widthZ2p49493GeV",), ("widthZ2p4952GeV",)] 
         widthSkipW = [("widthW2p09053GeV",), ("widthW2p09173GeV",), ("widthW2p085GeV",)]

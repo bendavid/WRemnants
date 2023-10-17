@@ -482,46 +482,46 @@ def set_flow(h, val="nearest"):
             np.take(h.values(flow=True), -1, i)[...] = nearest_vals if val == "nearest" else np.full_like(nearest_vals, val)
     return h
 
-def swap_histogram_bins(histo, axis1, axis1_bin1, axis1_bin2, axis2=None, axis2_slize=None, flow=False, axis1_replace=None):
+def swap_histogram_bins(histo, axis1, axis1_bin1, axis1_bin2, axis2=None, axis2_slice=None, flow=False, axis1_replace=None):
     # swap content from axis1: axis1_bin1 with axis1: axis1_bin2 
-    # optionally for a subset of the histogram defined by axis2: axis2_slize
+    # optionally for a subset of the histogram defined by axis2: axis2_slice
     # optionally the selected bin content can be replaced by axis1_replace (example use case: setting up and down variations to nominal)
-    if axis2 is not None and axis2_slize is None:
-        raise ValueError(f"Requested to flip bins for axis {axis2} but the corresponding slizes 'axis2_slize' are not set")
-    if isinstance(axis2_slize, slice):
+    if axis2 is not None and axis2_slice is None:
+        raise ValueError(f"Requested to flip bins for axis {axis2} but the corresponding slices 'axis2_slice' are not set")
+    if isinstance(axis2_slice, slice):
         # for some reason complex slicing didn't work, convert to bin number
         tmp_slice = []
         for x in ("start", "stop", "step"):
-            s = getattr(axis2_slize,x)
+            s = getattr(axis2_slice,x)
             if isinstance(s, complex):
                 tmp_slice.append(histo.axes[axis2].index(s.imag))
             else:
                 tmp_slice.append(s)
-        axis2_slize = slice(*tmp_slice)
+        axis2_slice = slice(*tmp_slice)
 
-    slizes1 = []
-    slizes2 = []
-    slizesR = []
+    slices1 = []
+    slices2 = []
+    slicesR = []
     for a in histo.axes.name:
         if a == axis1:
-            slizes1.append(histo.axes[a].index(axis1_bin1))
-            slizes2.append(histo.axes[a].index(axis1_bin2))
+            slices1.append(histo.axes[a].index(axis1_bin1))
+            slices2.append(histo.axes[a].index(axis1_bin2))
             if axis1_replace:
-                slizesR.append(histo.axes[a].index(axis1_replace))
+                slicesR.append(histo.axes[a].index(axis1_replace))
         elif axis2 is not None and a == axis2:                  
-            slizes1.append(axis2_slize)
-            slizes2.append(axis2_slize)
+            slices1.append(axis2_slice)
+            slices2.append(axis2_slice)
             if axis1_replace:
-                slizesR.append(axis2_slize)
+                slicesR.append(axis2_slice)
         else:
-            slizes1.append(slice(None))
-            slizes2.append(slice(None))
+            slices1.append(slice(None))
+            slices2.append(slice(None))
             if axis1_replace:
-                slizesR.append(slice(None))
+                slicesR.append(slice(None))
 
-    # swap bins in specified slizes
+    # swap bins in specified slices
     data = histo.view(flow=flow)
     new_histo = histo.copy()
-    new_histo.view(flow=flow)[*slizes2] = data[*slizes1] if axis1_replace is None else data[*slizesR]
-    new_histo.view(flow=flow)[*slizes1] = data[*slizes2] if axis1_replace is None else data[*slizesR]
+    new_histo.view(flow=flow)[*slices2] = data[*slices1] if axis1_replace is None else data[*slicesR]
+    new_histo.view(flow=flow)[*slices1] = data[*slices2] if axis1_replace is None else data[*slicesR]
     return new_histo
