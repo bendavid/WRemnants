@@ -101,14 +101,6 @@ class CardTool(object):
     def setFitAxes(self, axes):
         self.fit_axes = axes[:]
 
-        self.sum_axes = []
-        try:
-            hnom = self.getNominalHistForSignal()
-            self.sum_axes = [ax for ax in hnom.axes.name if ax not in self.fit_axes and ax != self.charge_ax]
-            logger.debug(f"Will sum over the axes {self.sum_axes}")
-        except (ValueError,RuntimeError) as e:
-            logger.info("Failed to set sum_axes, will not reduce the histogram")
-
     def setFakerateAxes(self, fakerate_axes=["pt", "eta", "charge"]):
         self.fakerateAxes = fakerate_axes
         
@@ -339,7 +331,6 @@ class CardTool(object):
             baseName=self.nominalName, syst=syst, label="syst",
             procsToRead=[proc],
             scaleToNewLumi=self.lumiScale, 
-            sum_axes=self.sum_axes,
             fakerateIntegrationAxes=self.getFakerateIntegrationAxes())
         return self.datagroups.getDatagroups()[proc].hists["syst"]
 
@@ -675,7 +666,6 @@ class CardTool(object):
         datagroups.loadHistsForDatagroups(
             baseName=self.nominalName, syst=self.pseudoData, label=self.pseudoData,
             procsToRead=processes,
-            sum_axes=self.sum_axes,
             scaleToNewLumi=self.lumiScale, 
             fakerateIntegrationAxes=self.getFakerateIntegrationAxes())
         procDict = datagroups.getDatagroups()
@@ -689,7 +679,6 @@ class CardTool(object):
                 baseName=self.pseudoData, syst=self.nominalName, label=self.pseudoData, # CHECK: shouldn't it be syst=self.pseudoData?
                 procsToRead=processesFromNomi,
                 scaleToNewLumi=self.lumiScale,
-                sum_axes=self.sum_axes,
                 fakerateIntegrationAxes=self.getFakerateIntegrationAxes())
             procDictFromNomi = datagroupsFromNomi.getDatagroups()
             hists.extend([procDictFromNomi[proc].hists[self.pseudoData] for proc in processesFromNomi])
@@ -744,7 +733,6 @@ class CardTool(object):
             label=self.nominalName, 
             scaleToNewLumi=self.lumiScale, 
             forceNonzero=forceNonzero,
-            sum_axes=self.sum_axes,
             sumFakesPartial=not self.ABCD,
             fakerateIntegrationAxes=self.getFakerateIntegrationAxes())
         if self.ABCD and not self.xnorm:
@@ -772,7 +760,6 @@ class CardTool(object):
                 preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"],
                 forceToNominal=forceToNominal,
                 scaleToNewLumi=self.lumiScale,
-                sum_axes=self.sum_axes,
                 fakerateIntegrationAxes=self.getFakerateIntegrationAxes(),
             )
             self.writeForProcesses(syst, label="syst", processes=processes, check_systs=check_systs)

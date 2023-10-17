@@ -96,14 +96,6 @@ def setup(args, inputFile, fitvar, xnorm=False):
     logger.debug(f"Excluding these groups of processes: {args.excludeProcGroups}")
 
     datagroups = Datagroups(inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm and not args.ABCD)
-    wmass = datagroups.mode in ["wmass", "lowpu_w"]
-    wlike = datagroups.mode == "wlike"
-    lowPU = "lowpu" in datagroups.mode
-    # Detect lowpu dilepton
-    dilepton = "dilepton" in datagroups.mode or any(x in ["ptll", "mll"] for x in fitvar)
-
-    # Start to create the CardTool object, customizing everything
-    cardTool = CardTool.CardTool(xnorm=xnorm, ABCD=wmass and args.ABCD)
 
     if not xnorm and (args.axlim or args.rebin or args.absval):
         if len(args.axlim) % 2 or len(args.axlim)/2 > len(fitvar) or len(args.rebin) > len(fitvar):
@@ -130,6 +122,11 @@ def setup(args, inputFile, fitvar, xnorm=False):
                 datagroups.setGlobalAction(lambda h, ax=var: hh.makeAbsHist(h, ax))
                 fitvar[i] = f"abs{var}"
 
+    wmass = datagroups.mode in ["wmass", "lowpu_w"]
+    wlike = datagroups.mode == "wlike"
+    lowPU = "lowpu" in datagroups.mode
+    # Detect lowpu dilepton
+    dilepton = "dilepton" in datagroups.mode or any(x in ["ptll", "mll"] for x in fitvar)
 
     constrainMass = (dilepton and not "mll" in fitvar) or args.fitXsec 
 
@@ -188,28 +185,9 @@ def setup(args, inputFile, fitvar, xnorm=False):
     elif "BkgWmunu" in args.excludeProcGroups:
             datagroups.deleteGroup("Wmunu") # remove out of acceptance signal
 
+    # Start to create the CardTool object, customizing everything
+    cardTool = CardTool.CardTool(xnorm=xnorm, ABCD=wmass and args.ABCD)
     cardTool.setDatagroups(datagroups)
-    # TODO: move to a common place if it is  useful, also use regular expressions for better flexibility? In that case "name".startswith("n") is simply re.match("^n", "name")
-    def assertSample(name, startsWith=["W", "Z"], excludeMatch=[]):
-        return any(name.startswith(init) for init in startsWith) and all(excl not in name for excl in excludeMatch)
-
-    dibosonMatch = ["WW", "WZ", "ZZ"] # CHECK: is ZW needed?
-    WMatch = ["W", "BkgW"] # TODO: the name of out-of-acceptance might be changed at some point, maybe to WmunuOutAcc, so W will match it as well (and can exclude it using "OutAcc" if needed)
-    ZMatch = ["Z", "BkgZ"]
-    signalMatch = WMatch if wmass else ZMatch
-
-    cardTool.addProcessGroup("single_v_samples", lambda x: assertSample(x, startsWith=[*WMatch, *ZMatch], excludeMatch=dibosonMatch))
-    if wmass:
-        cardTool.addProcessGroup("w_samples", lambda x: assertSample(x, startsWith=WMatch, excludeMatch=dibosonMatch))
-        if not xnorm:
-            cardTool.addProcessGroup("single_v_nonsig_samples", lambda x: assertSample(x, startsWith=ZMatch, excludeMatch=dibosonMatch))
-    cardTool.addProcessGroup("single_vmu_samples",    lambda x: assertSample(x, startsWith=[*WMatch, *ZMatch], excludeMatch=[*dibosonMatch, "tau"]))
-    cardTool.addProcessGroup("signal_samples",        lambda x: assertSample(x, startsWith=signalMatch,        excludeMatch=[*dibosonMatch, "tau"]))
-    cardTool.addProcessGroup("signal_samples_inctau", lambda x: assertSample(x, startsWith=signalMatch,        excludeMatch=[*dibosonMatch]))
-    cardTool.addProcessGroup("signal_samples_noOutAcc",        lambda x: assertSample(x, startsWith=["W" if wmass else "Z"], excludeMatch=[*dibosonMatch, "tau"]))
-    cardTool.addProcessGroup("signal_samples_inctau_noOutAcc", lambda x: assertSample(x, startsWith=["W" if wmass else "Z"], excludeMatch=[*dibosonMatch]))
-    cardTool.addProcessGroup("MCnoQCD", lambda x: x not in ["QCD", "Data"])
-
     if args.qcdProcessName:
         cardTool.setFakeName(args.qcdProcessName)
     logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
@@ -285,6 +263,27 @@ def setup(args, inputFile, fitvar, xnorm=False):
         logger.info(f"cardTool.allMCProcesses(): {cardTool.allMCProcesses()}")
         
     passSystToFakes = wmass and not args.skipSignalSystOnFakes and args.qcdProcessName not in excludeGroup and (filterGroup == None or args.qcdProcessName in filterGroup) and not xnorm
+
+    # TODO: move to a common place if it is  useful, also use regular expressions for better flexibility? In that case "name".startswith("n") is simply re.match("^n", "name")
+    def assertSample(name, startsWith=["W", "Z"], excludeMatch=[]):
+        return any(name.startswith(init) for init in startsWith) and all(excl not in name for excl in excludeMatch)
+
+    dibosonMatch = ["WW", "WZ", "ZZ"] # CHECK: is ZW needed?
+    WMatch = ["W", "BkgW"] # TODO: the name of out-of-acceptance might be changed at some point, maybe to WmunuOutAcc, so W will match it as well (and can exclude it using "OutAcc" if needed)
+    ZMatch = ["Z", "BkgZ"]
+    signalMatch = WMatch if wmass else ZMatch
+
+    cardTool.addProcessGroup("single_v_samples", lambda x: assertSample(x, startsWith=[*WMatch, *ZMatch], excludeMatch=dibosonMatch))
+    if wmass:
+        cardTool.addProcessGroup("w_samples", lambda x: assertSample(x, startsWith=WMatch, excludeMatch=dibosonMatch))
+        if not xnorm:
+            cardTool.addProcessGroup("single_v_nonsig_samples", lambda x: assertSample(x, startsWith=ZMatch, excludeMatch=dibosonMatch))
+    cardTool.addProcessGroup("single_vmu_samples",    lambda x: assertSample(x, startsWith=[*WMatch, *ZMatch], excludeMatch=[*dibosonMatch, "tau"]))
+    cardTool.addProcessGroup("signal_samples",        lambda x: assertSample(x, startsWith=signalMatch,        excludeMatch=[*dibosonMatch, "tau"]))
+    cardTool.addProcessGroup("signal_samples_inctau", lambda x: assertSample(x, startsWith=signalMatch,        excludeMatch=[*dibosonMatch]))
+    cardTool.addProcessGroup("signal_samples_noOutAcc",        lambda x: assertSample(x, startsWith=["W" if wmass else "Z"], excludeMatch=[*dibosonMatch, "tau"]))
+    cardTool.addProcessGroup("signal_samples_inctau_noOutAcc", lambda x: assertSample(x, startsWith=["W" if wmass else "Z"], excludeMatch=[*dibosonMatch]))
+    cardTool.addProcessGroup("MCnoQCD", lambda x: x not in ["QCD", "Data"])
 
     if not (args.theoryAgnostic or args.unfolding) :
         logger.info(f"All MC processes {cardTool.procGroups['MCnoQCD']}")

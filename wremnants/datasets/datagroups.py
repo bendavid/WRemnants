@@ -240,7 +240,7 @@ class Datagroups(object):
     ## baseName takes values such as "nominal"
     def setHists(self, baseName, syst, procsToRead=None, label=None, nominalIfMissing=True, 
                  applySelection=True, fakerateIntegrationAxes=[], forceNonzero=True, preOpMap=None, preOpArgs=None, scaleToNewLumi=1, 
-                 excludeProcs=None, forceToNominal=[], sumFakesPartial=True, sum_axes=[]):
+                 excludeProcs=None, forceToNominal=[], sumFakesPartial=True):
         if not label:
             label = syst if syst else baseName
         # this line is annoying for the theory agnostic, too many processes for signal
@@ -305,9 +305,6 @@ class Datagroups(object):
                     else:
                         logger.warning(str(e))
                         continue
-
-                if sum_axes:
-                    h = h[{ax : hist.sum for ax in sum_axes if ax in h.axes.name}]
 
                 h_id = id(h)
 
@@ -446,7 +443,7 @@ class Datagroups(object):
     def loadHistsForDatagroups(
         self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="",
         nominalIfMissing=True, applySelection=True, fakerateIntegrationAxes=[], forceNonzero=True, pseudodata=False,
-        preOpMap={}, preOpArgs={}, scaleToNewLumi=1, forceToNominal=[], sumFakesPartial=True, sum_axes=[],
+        preOpMap={}, preOpArgs={}, scaleToNewLumi=1, forceToNominal=[], sumFakesPartial=True
     ):
         logger.debug("Calling loadHistsForDatagroups()")
         logger.debug(f"The basename and syst is: {baseName}, {syst}")
@@ -460,7 +457,7 @@ class Datagroups(object):
                           forceNonzero=forceNonzero, preOpMap=preOpMap, preOpArgs=preOpArgs, 
                           scaleToNewLumi=scaleToNewLumi,
                           excludeProcs=excluded_procs, forceToNominal=forceToNominal,
-                          sum_axes=sum_axes, sumFakesPartial=sumFakesPartial)
+                          sumFakesPartial=sumFakesPartial)
 
     def getDatagroups(self):
         return self.groups
