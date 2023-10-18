@@ -1,7 +1,8 @@
 from collections import OrderedDict
 from wremnants import histselections as sel
 from wremnants.combine_helpers import setSimultaneousABCD
-from utilities import boostHistHelpers as hh, common, output_tools, logging
+from utilities import boostHistHelpers as hh, common, logging
+from utilities.io_tools import output_tools
 import narf
 import ROOT
 import uproot
@@ -807,7 +808,7 @@ class CardTool(object):
         for n in range(2, len(self.datagroups.gen_axes)):
             axes_combinations += [k for k in itertools.combinations(self.datagroups.gen_axes, n)]
         for axes in axes_combinations:
-            logger.debug(f"Add sum group for {axes}"+("" if genCharge is None else f" with {genCharge}"))
+            logger.debug(f"Add sum group for {axes}{' with ' + genCharge if genCharge else ''}")
 
             if isinstance(axes, str):
                 axes = [axes]

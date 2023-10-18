@@ -1,4 +1,5 @@
-from utilities import boostHistHelpers as hh, common, logging, input_tools
+from utilities import boostHistHelpers as hh, common, logging
+from utilities.io_tools import input_tools
 from wremnants import syst_tools,theory_tools,recoil_tools, unfolding_tools
 
 from wremnants import histselections as sel

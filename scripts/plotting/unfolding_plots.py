@@ -10,7 +10,8 @@ import boost_histogram as bh
 import hist
 import pdb
 
-from utilities import boostHistHelpers as hh, logging, input_tools, input_tools_combinetf, common, output_tools
+from utilities import boostHistHelpers as hh, logging, common
+from utilities.io_tools import input_tools, combinetf_input, output_tools
 from wremnants import plot_tools
 from wremnants import histselections as sel
 from wremnants.datasets.datagroups import Datagroups
@@ -24,7 +25,7 @@ parser.add_argument("-o", "--outpath", type=str, default=os.path.expanduser("~/w
 parser.add_argument("-f", "--outfolder", type=str, default="./test", help="Subfolder for output")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name")
 parser.add_argument("-r", "--rrange", type=float, nargs=2, default=None, help="y range for ratio plot")
-parser.add_argument("--cmsDecor", default="Preliminary", type=str, choices=[None,"Preliminary", "Work in progress", "Internal"], help="Name to append to file name")
+parser.add_argument("--cmsDecor", default="Preliminary", type=str, choices=[None,"Preliminary", "Work in progress", "Internal"], help="CMS label")
 parser.add_argument("--lumi", type=float, default=16.8, help="Luminosity used in the fit, needed to get the absolute cross section")
 parser.add_argument("--ylim", type=float, nargs=2, help="Min and max values for y axis (if not specified, range set automatically)")
 parser.add_argument("--yscale", type=float, help="Scale the upper y axis by this factor (useful when auto scaling cuts off legend)")
@@ -44,11 +45,11 @@ logger = logging.setup_logger("unfolding_plots", 4 if args.debug else 3)
 
 outdir = output_tools.make_plot_dir(args.outpath, args.outfolder, eoscp=args.eoscp)
 
-fitresult = input_tools_combinetf.get_fitresult(args.fitresult)
+fitresult = combinetf_input.get_fitresult(args.fitresult)
 
 datagroups = Datagroups(args.infile)
 
-if datagroups.wmass:
+if datagroups.mode in ["wmass", "lowpu_w"]:
     base_group = "Wenu" if datagroups.flavor == "e" else "Wmunu"
 else:
     base_group = "Zee" if datagroups.flavor == "ee" else "Zmumu"
@@ -74,7 +75,7 @@ def plot(fittype, channel=None, data=True, stack=True, density=False, ratio=True
     for g_name in names:
         group = datagroups.groups[g_name]
         for member in group.members:
-            if datagroups.wmass and (
+            if datagroups.mode in ["wmass", "lowpu_w"] and (
                 (channel =="plus" and member.name.startswith("Wminus")) 
                 or (channel =="minus" and member.name.startswith("Wplus"))
             ):
@@ -84,7 +85,7 @@ def plot(fittype, channel=None, data=True, stack=True, density=False, ratio=True
                 logger.debug(f"Load datagroups member {member.name}")
                 histo = datagroups.results[member.name]["output"][args.baseName].get()
                 histo = histo.project(*args.axes)
-                if not datagroups.wmass:
+                if not datagroups.mode in ["wmass", "lowpu_w"]:
                     histo = histo[selections]
 
                 scale = datagroups.processScaleFactor(member)
