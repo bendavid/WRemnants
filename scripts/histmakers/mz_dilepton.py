@@ -8,12 +8,12 @@ import wremnants
 from wremnants import theory_tools,syst_tools,theory_corrections, muon_validation, muon_calibration, muon_selections, unfolding_tools
 from wremnants.histmaker_tools import scale_to_data, aggregate_groups
 from wremnants.datasets.dataset_tools import getDatasets
+from wremnants.datasets.datagroups import Datagroups
 import hist
 import lz4.frame
 import math
 import time
 import os
-
 
 parser.add_argument("--csVarsHist", action='store_true', help="Add CS variables to dilepton hist")
 parser.add_argument("--axes", type=str, nargs="*", default=["mll", "ptll"], help="")
@@ -80,13 +80,14 @@ if args.csVarsHist:
 nominal_axes = [all_axes[a] for a in nominal_cols] 
 
 gen_axes = {
-    "ptVGen": hist.axis.Variable(common.ptV_binning if not args.finePtBinning else range(60), name = "ptVGen", underflow=False, overflow=False),
-    "absYVGen": hist.axis.Regular(10, 0, 2.5, name = "absYVGen", underflow=False, overflow=False),  
+    "ptVGen": hist.axis.Variable(common.ptV_binning if not args.finePtBinning else range(60), name = "ptVGen", underflow=False, overflow=args.poiAsNoi),
+    "absYVGen": hist.axis.Regular(10, 0, 2.5, name = "absYVGen", underflow=False, overflow=args.poiAsNoi),  
 }
 
 if args.unfolding:
-    unfolding_axes, unfolding_cols, unfolding_selections = differential.get_dilepton_axes(args.genVars, gen_axes)
-    datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Zmumu")
+    unfolding_axes, unfolding_cols, unfolding_selections = differential.get_dilepton_axes(args.genVars, gen_axes, add_out_of_acceptance_axis=args.poiAsNoi)
+    if not args.poiAsNoi:
+        datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Zmumu")
 
 
 # define helpers
@@ -158,11 +159,11 @@ def build_graph(df, dataset):
         else:
             logger.debug("Select events in fiducial phase space")
             df = unfolding_tools.select_fiducial_space(df, mode="dilepton", pt_min=args.pt[1], pt_max=args.pt[2], 
-                mass_min=mass_min, mass_max=mass_max, selections=unfolding_selections, accept=True)
-
+                mass_min=mass_min, mass_max=mass_max, selections=unfolding_selections, select=not args.poiAsNoi, accept=True)
             unfolding_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols)
-            axes = [*nominal_axes, *unfolding_axes] 
-            cols = [*nominal_cols, *unfolding_cols]
+            if not args.poiAsNoi:
+                axes = [*nominal_axes, *unfolding_axes] 
+                cols = [*nominal_cols, *unfolding_cols]
 
     if not args.noAuxiliaryHistograms and isZ:
         # gen level variables before selection
@@ -244,6 +245,11 @@ def build_graph(df, dataset):
 
         results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"], storage=hist.storage.Double()))
         results.append(df.HistoBoost("nominal", axes, [*cols, "nominal_weight"]))
+
+    if args.unfolding and args.poiAsNoi and dataset.name == "ZmumuPostVFP":
+        unfoldingHistName = Datagroups.histName("nominal", syst="unfolding")
+        logger.debug(f"Creating special histogram '{unfoldingHistName}' for unfolding to treat POIs as NOIs")
+        results.append(df.HistoBoost(unfoldingHistName, [*nominal_axes, *unfolding_axes], [*nominal_cols, *unfolding_cols, "nominal_weight"]))       
 
     for obs in ["ptll", "mll", "yll", "etaPlus", "etaMinus", "ptPlus", "ptMinus"]:
         if dataset.is_data:

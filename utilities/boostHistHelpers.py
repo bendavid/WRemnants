@@ -144,7 +144,7 @@ def addHists(h1, h2, allowBroadcast=True, createNew=True, scale1=None, scale2=No
         h2vals = scale2 * h2vals
         if hasWeights:
             h2vars = (scale2*scale2) * h2vars
-    outh = h1
+    outh = h1    
     if createNew:
         if not hasWeights:
             return hist.Hist(*outh.axes, data=h1vals+h2vals)

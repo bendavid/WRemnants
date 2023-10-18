@@ -149,7 +149,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
         raise ValueError("Options --unfolding and --fitXsec are incompatible. Please choose one or the other")
     elif args.fitXsec:
         datagroups.unconstrainedProcesses.append(base_group)
-    elif args.unfolding and not (args.theoryAgnostic and args.poiAsNoi):
+    elif args.unfolding and not args.poiAsNoi:
         constrainMass = False if args.theoryAgnostic else True
         datagroups.setGenAxes(args.genAxes)
 
@@ -168,6 +168,10 @@ def setup(args, inputFile, fitvar, xnorm=False):
             datagroups.deleteGroup(base_group)
         else:
             datagroups.groups[base_group].deleteMembers(to_del)
+    elif args.unfolding and args.poiAsNoi:
+        constrainMass = True
+        # remove specified gen axes from set of gen axes in datagroups so that those are integrated over
+        datagroups.setGenAxes([a for a in datagroups.gen_axes if a not in args.genAxes])
 
     # FIXME: temporary customization of signal and out-of-acceptance process names for theory agnostic with POI as NOI
     # There might be a better way to do it more homogeneously with the rest.
@@ -189,9 +193,6 @@ def setup(args, inputFile, fitvar, xnorm=False):
         if args.addNormToOOA and not hasSeparateOutOfAcceptanceSignal:
             raise ValueError(f"Option --addNormToOOA {args.addNormToOOA} was called, but out-of-acceptance doesn't exist as a separate process. Remove this option or make sure the process exists.")
 
-    if args.noHist and args.noStatUncFakes:
-        raise ValueError("Option --noHist would override --noStatUncFakes. Please select only one of them")
-
     if args.theoryAgnostic and args.poiAsNoi:
         # FIXME: at some point we should decide what name to use
         if any(x in args.excludeProcGroups for x in ["BkgWmunu", "outAccWmunu"]) and hasSeparateOutOfAcceptanceSignal:
@@ -199,6 +200,9 @@ def setup(args, inputFile, fitvar, xnorm=False):
     else:
         if "BkgWmunu" in args.excludeProcGroups:
             datagroups.deleteGroup("Wmunu") # remove out of acceptance signal
+
+    if args.noHist and args.noStatUncFakes:
+        raise ValueError("Option --noHist would override --noStatUncFakes. Please select only one of them")
 
     # Start to create the CardTool object, customizing everything
     cardTool = CardTool.CardTool(xnorm=xnorm, ABCD=wmass and args.ABCD)
@@ -249,7 +253,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
         cardTool.setNominalName(args.baseName)
         
     # define sumGroups for integrated cross section
-    if args.unfolding and not (args.theoryAgnostic and args.poiAsNoi):
+    if args.unfolding and not args.poiAsNoi:
         # TODO: make this less hardcoded to filter the charge (if the charge is not present this will duplicate things)
         if wmass:
             if "plus" in args.recoCharge:
@@ -329,20 +333,18 @@ def setup(args, inputFile, fitvar, xnorm=False):
     if args.theoryAgnostic and not args.poiAsNoi:
         logger.error("Temporarily not using mass weights for Wtaunu. Please update when possible")
         signal_samples_forMass = ["signal_samples"]
-    if constrainMass and args.doStatOnly:
-        logger.info("Using option --doStatOnly: the card was created without nuisance parameters")
-        return cardTool
 
-    cardTool.addSystematic(f"massWeight{label}",
-                           processes=signal_samples_forMass,
-                           group=f"massShift{label}",
-                           noi=not constrainMass,
-                           skipEntries=massSkip,
-                           mirror=False,
-                           noConstraint=not constrainMass,
-                           systAxes=["massShift"],
-                           passToFakes=passSystToFakes,
-    )
+    if not (constrainMass and args.doStatOnly):
+        cardTool.addSystematic(f"massWeight{label}",
+                            processes=signal_samples_forMass,
+                            group=f"massShift{label}",
+                            noi=not constrainMass,
+                            skipEntries=massSkip,
+                            mirror=False,
+                            noConstraint=not constrainMass,
+                            systAxes=["massShift"],
+                            passToFakes=passSystToFakes,
+        )
 
     if args.fitMassDiff:
         suffix = "".join([a.capitalize() for a in args.fitMassDiff.split("-")])
@@ -383,7 +385,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
             )
 
     # this appears within doStatOnly because technically these nuisances should be part of it
-    if args.theoryAgnostic and args.poiAsNoi:
+    if args.poiAsNoi and args.theoryAgnostic:
         cardTool.addSystematic("yieldsTheoryAgnostic",
                                processes=["signal_samples_noOutAcc"], # currently not on out-of-acceptance signal template (to implement)
                                group=f"normXsec{label}",
@@ -398,7 +400,24 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                labelsByAxis=["PtVBin", "YVBin", "AngCoeff"],
                                passToFakes=passSystToFakes,
                                )
-        
+    elif args.poiAsNoi and args.unfolding:
+        cardTool.addSystematic("unfolding",
+                               processes=["signal_samples"],
+                               group=f"normXsec{label}",
+                               mirror=True,
+                               baseName=f"{label}_",
+                               actionMap={m.name: (lambda h: h[{"acceptance":True}])
+                                    for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
+                               scale=1, 
+                               scalePrefitHistYields=args.scaleNormXsecHistYields,
+                               sumNominalToHist=True,
+                               noConstraint=True,
+                               noi=True,
+                               systAxes=args.genAxes,
+                               labelsByAxis=args.genAxes,
+                               passToFakes=passSystToFakes,
+                               )
+
     if args.doStatOnly:
         # print a card with only mass weights
         logger.info("Using option --doStatOnly: the card was created with only mass nuisance parameter")
@@ -741,8 +760,8 @@ if __name__ == "__main__":
     
     logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
-    if args.poiAsNoi and not args.theoryAgnostic:
-        message = "Option --poiAsNoi currently requires --theoryAgnostic"
+    if args.poiAsNoi and not (args.theoryAgnostic or args.unfolding):
+        message = "Option --poiAsNoi currently requires --theoryAgnostic or --unfolding"
         logger.warning(message)
         raise NotImplementedError(message)    
     
@@ -768,7 +787,7 @@ if __name__ == "__main__":
             fitvar = args.fitvar[i].split("-")
             cardTool = setup(args, ifile, fitvar, xnorm=args.fitresult is not None)
             writer.add_channel(cardTool)
-            if args.unfolding:
+            if args.unfolding and not args.poiAsNoi:
                 cardTool = setup(args, ifile, fitvar, xnorm=True)
                 writer.add_channel(cardTool)
         if args.fitresult:
@@ -779,7 +798,7 @@ if __name__ == "__main__":
             raise IOError(f"Multiple input files only supported within --hdf5 mode")
 
         main(args)
-        if args.unfolding and not (args.theoryAgnostic and args.poiAsNoi):
+        if args.unfolding and not args.poiAsNoi:
             logger.warning("Now running with xnorm = True")
             # in case of unfolding and hdf5, the xnorm histograms are directly written into the hdf5
             main(args, xnorm=True)

@@ -179,6 +179,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--genLevel", type=str, default='postFSR', choices=["preFSR", "postFSR"], help="Generator level definition for unfolding")
     parser.add_argument("--genVars", type=str, nargs="+", default=["ptGen", "absEtaGen"], choices=["qGen", "ptGen", "absEtaGen", "ptVGen", "absYVGen"], help="Generator level variable")
     parser.add_argument("--genBins", type=int, nargs="+", default=[16, 0], help="Number of generator level bins")
+    parser.add_argument("--poiAsNoi", action='store_true', help="Experimental option only with --theoryAgnostic, it will make the histogram to do the POIs and NOIs trick (some postprocessing will happen later in CardTool.py)")
 
     if for_reco_highPU:
         # additional arguments specific for histmaker of reconstructed objects at high pileup (mw, mz_wlike, and mz_dilepton)
