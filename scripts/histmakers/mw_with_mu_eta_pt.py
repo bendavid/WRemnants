@@ -416,7 +416,6 @@ def build_graph(df, dataset):
             results.append(df.HistoBoost(theoryAgnosticHistName, nominal_axes_theoryAgnostic, [*nominal_cols_theoryAgnostic, "nominal_weight_helicity"], tensor_axes=[axis_helicity]))
         else:
             results.append(df.HistoBoost("nominal", axes, [*cols, "nominal_weight_helicity"], tensor_axes=[axis_helicity]))
-            results.append(df.HistoBoost("nominal_int", nominal_axes, [*nominal_cols, "nominal_weight"]))
             setTheoryAgnosticGraph(df, results, dataset, reco_sel_GF, era, axes, cols, args)
             # End graph here only for standard theory agnostic analysis, otherwise use same loop as traditional analysis
             return results, weightsum
