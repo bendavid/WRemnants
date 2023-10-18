@@ -243,7 +243,7 @@ def massWeightNames(matches=None, proc="", exclude=[]):
         exclude = [exclude, ]
     central=10
     nweights=21
-    names = [f"massShift{proc[0] if len(proc) else proc}{int(abs(central-i)*10)}MeV{'' if i == central else ('Down' if i < central else 'Up')}" for i in range(nweights) if i not in exclude]
+    names = [f"massShift{proc[0] if len(proc) else proc}{int(abs(central-i)*10)}MeV{'' if i == central else ('Down' if i < central else 'Up')}" for i in range(nweights) if int(abs(central-i)*10) not in exclude]
     if proc and (proc in common.zprocs_all or proc=="Z") and 2.1 not in exclude:
         # This is the PDG uncertainty (turned off for now since it doesn't seem to have been read into the nano)
         names.extend(["massShiftZ2p1MeVDown", "massShiftZ2p1MeVUp"])

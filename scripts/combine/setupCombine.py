@@ -347,20 +347,20 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                 # actionMap={m.name: (lambda h, swap=swap_bins: swap(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown")) 
                                 #     for g in cardTool.procGroups[signal_samples_forMass[0]] for m in cardTool.datagroups.groups[g].members if "minus" in m.name},
                                 # on reco level based on reco charge
-                                actionMap={m.name: (lambda h, swap=hh.swap_histogram_bins: 
-                                        swap(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown", "charge", 0)) 
+                                actionMap={m.name: (lambda h: 
+                                        hh.swap_histogram_bins(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown", "charge", 0)) 
                                     for g in cardTool.procGroups[signal_samples_forMass[0]] for m in cardTool.datagroups.groups[g].members},
             )
         elif args.fitMassDiff == "eta-sign":
             cardTool.addSystematic(**mass_diff_args, 
-                                actionMap={m.name: (lambda h, swap=hh.swap_histogram_bins, s=hist.tag.Slicer(): 
-                                        swap(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown", "eta", s[0:complex(0,0):]))
+                                actionMap={m.name: (lambda h: 
+                                        hh.swap_histogram_bins(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown", "eta", hist.tag.Slicer()[0:complex(0,0):]))
                                     for g in cardTool.procGroups[signal_samples_forMass[0]] for m in cardTool.datagroups.groups[g].members},
             )
         elif args.fitMassDiff == "eta-range":
             cardTool.addSystematic(**mass_diff_args, 
-                                actionMap={m.name: (lambda h, swap=hh.swap_histogram_bins, s=hist.tag.Slicer(): 
-                                        swap(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown", "eta", s[complex(0,-0.9):complex(0,0.9):]))
+                                actionMap={m.name: (lambda h: 
+                                        hh.swap_histogram_bins(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown", "eta", hist.tag.Slicer()[complex(0,-0.9):complex(0,0.9):]))
                                     for g in cardTool.procGroups[signal_samples_forMass[0]] for m in cardTool.datagroups.groups[g].members},
             )
 
