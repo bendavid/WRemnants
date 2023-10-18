@@ -2,7 +2,6 @@ import ROOT
 import hist
 import numpy as np
 from utilities import boostHistHelpers as hh, common, logging
-import wremnants
 from wremnants import theory_tools
 from wremnants.datasets.datagroups import Datagroups
 from wremnants.helicity_utils import *
