@@ -462,7 +462,7 @@ def plot_uncertainties_ratio(df, df_ref, poi_type, poi_type_ref, channel=None, e
     # read nominal values and uncertainties from fit result and fill histograms
     logger.debug(f"Produce histograms")
 
-    yLabel = f"ref.({poi_type_ref}) / nom.({poi_type})"
+    yLabel = f"ref.({poi_type_ref}) / nom.({poi_type}) -1"
 
     if poi_type in ["mu", "nois"]:
         bin_widths = 1.0
@@ -478,7 +478,7 @@ def plot_uncertainties_ratio(df, df_ref, poi_type, poi_type_ref, channel=None, e
         errors /= values
         errors_ref /= values_ref
 
-    xx = errors_ref/errors
+    xx = errors_ref/errors -1
 
     hist_ratio = hist.Hist(hist.axis.Variable(edges, underflow=False, overflow=False))
     hist_ratio.view(flow=False)[...] = xx
@@ -502,7 +502,7 @@ def plot_uncertainties_ratio(df, df_ref, poi_type, poi_type_ref, channel=None, e
 
     fig, ax1 = plot_tools.figure(hist_ratio, xlabel, yLabel, ylim, logy=logy, width_scale=2)
 
-    ax1.plot([min(edges), max(edges)], [1,1], color="black", linestyle="-")
+    ax1.plot([min(edges), max(edges)], [0.,0.], color="black", linestyle="-")
 
     hep.histplot(
         hist_ratio,
@@ -566,7 +566,7 @@ def plot_uncertainties_ratio(df, df_ref, poi_type, poi_type_ref, channel=None, e
         logger.debug(f"Plot source {source}")
 
         
-        hist_unc.view(flow=False)[...] = errors_ref/errors
+        hist_unc.view(flow=False)[...] = errors_ref/errors-1
 
         hep.histplot(
             hist_unc,
@@ -623,10 +623,16 @@ def plot_uncertainties_ratio(df, df_ref, poi_type, poi_type_ref, channel=None, e
 
     plt.close()
 
-def get_poi_types(poi, noi):
+fitresult = get_fitresult(args.fitresult)
+meta_info_ref=None
+if args.reference:
+    meta_info_ref = input_tools.get_metadata(args.reference)
+    fitresult_reference = get_fitresult(args.reference)
+
+def get_poi_types(poi, noi, meta):
     if poi or noi:
         poi_types = ["mu",] if poi else ["nois",]
-        scale = 1000 if noi else 1
+        scale = 1./meta["args"]["scaleNormXsecHistYields"] if noi else 1
         # todo: use meta_info["scaleNormXsecHistYields"] 
     else:
         poi_types = ["pmaskedexpnorm",] if args.normalize else ["pmaskedexp",]
@@ -635,12 +641,10 @@ def get_poi_types(poi, noi):
         scale = 1 if args.normalize else args.lumi * 1000
     return poi_types, scale
 
-poi_types, scale = get_poi_types(args.poi, args.noi)
-poi_types_ref, scale_ref = get_poi_types(args.poiRef, args.noiRef)
+poi_types, scale = get_poi_types(args.poi, args.noi, meta_info)
+poi_types_ref, scale_ref = get_poi_types(args.poiRef, args.noiRef, meta_info_ref)
 
-fitresult = get_fitresult(args.fitresult)
-if args.reference:
-    fitresult_reference = get_fitresult(args.reference)
+
     
 for poi_type, poi_type_ref in zip(poi_types, poi_types_ref):
     data = read_impacts_pois(fitresult, poi_type=poi_type, scale=scale)

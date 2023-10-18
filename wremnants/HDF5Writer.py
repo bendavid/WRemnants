@@ -1,4 +1,5 @@
 from wremnants.combine_helpers import setSimultaneousABCD, projectABCD
+from utilities import boostHistHelpers as hh
 from utilities import common, logging, output_tools, input_tools_combinetf
 import time
 import numpy as np
@@ -191,9 +192,6 @@ class HDF5Writer(object):
                     if norm_proc.shape[0] != nbinschan:
                         raise Exception(f"Mismatch between number of bins in channel {chan} for expected ({nbinschan}) and template ({norm_proc.shape[0]})")
 
-                # free memory
-                dg.groups[proc].hists[chanInfo.nominalName] = None
-
                 if not allowNegativeExpectation:
                     norm_proc = np.maximum(norm_proc, 0.)
 
@@ -281,7 +279,15 @@ class HDF5Writer(object):
                     logger.debug(f"Now at proc {proc}!")
 
                     hvar = dg.groups[proc].hists["syst"]
-
+                    
+                    if syst["scalePrefitHistYields"] != None:
+                        scaleFactor = syst["scalePrefitHistYields"]
+                        logger.info(f"Scaling yields of histogram for syst = {systName} by {scaleFactor}")
+                        hvar = hh.scaleHist(hvar, scaleFactor, createNew=True)
+                    if syst["sumNominalToHist"]:
+                        logger.info(f"Adding histogram for syst = {syst} to nominal to define actual variation")
+                        hnom = dg.groups[proc].hists[chanInfo.nominalName]
+                        hvar = hh.addHists(hvar, hnom, allowBroadcast=True, createNew=True, scale1=None, scale2=None)
                     if syst["doActionBeforeMirror"] and syst["action"]:
                         logger.debug(f"Do action before mirror")
                         hvar = syst["action"](hvar, **syst["actionArgs"])
