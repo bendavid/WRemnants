@@ -207,9 +207,6 @@ def build_graph(df, dataset):
             results.append(helicity_moments_scale)
 
         if "LHEPdfWeight" in df.GetColumnNames():
-            if args.addHelicityToPDFs:
-                weightsByHelicity_helper = wremnants.makehelicityWeightHelper()
-                df = df.Define("helWeight_tensor", weightsByHelicity_helper, ["massVgen", "yVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "nominal_weight"])
             syst_tools.add_pdf_hists(results, df, dataset.name, nominal_axes, nominal_cols, args.pdfs, "nominal_gen", propagateToHelicity=args.propagatePDFstoHelicity)
 
     if args.theoryCorr and dataset.name in corr_helpers:
