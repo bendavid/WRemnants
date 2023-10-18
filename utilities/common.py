@@ -67,12 +67,12 @@ axis_mt_lowpu = hist.axis.Variable([0, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 9
 # standard regular axes
 axis_eta = hist.axis.Regular(48, -2.4, 2.4, name = "eta")
 axis_pt = hist.axis.Regular(29, 26., 55., name = "pt")
-#ptV_binning = [0, 2, 3, 4, 4.75, 5.5, 6.5, 8, 9, 10, 12, 14, 16, 18, 20, 23, 27, 32, 40, 55, 100]
-ptV_binning = [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 23, 27, 32, 40, 55, 100]
 ## 5% quantiles from aMC@NLO used in SMP-18-012
-#ptV_10quantiles_binning = [0.0, 1.971, 2.949, 3.838, 4.733, 5.674, 6.684, 7.781, 8.979, 10.303, 11.777, 13.435, 15.332, 17.525, 20.115, 23.245, 27.173, 32.414, 40.151, 53.858, 13000.0]
+#ptV_5quantiles_binning = [0.0, 1.971, 2.949, 3.838, 4.733, 5.674, 6.684, 7.781, 8.979, 10.303, 11.777, 13.435, 15.332, 17.525, 20.115, 23.245, 27.173, 32.414, 40.151, 53.858, 13000.0]
 ## 10% quantiles from aMC@NLO used in SMP-18-012 with some rounding <== This one worked fine with toys
-ptV_10quantiles_binning = [0.0, 2.95, 4.73, 6.68, 8.98, 11.78, 15.33, 20.11, 27.17, 40.15, np.inf]
+ptV_10quantiles_binning = [0.0, 2.95, 4.73, 6.68, 8.98, 11.78, 15.33, 20.11, 27.17, 40.15, 13000.]
+# Integer rounded version of the 5% quantiles h[::hist.rebin(2)] for 10% quantiles
+ptV_binning = [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 20, 23, 27, 32, 40, 54, 13000]
 absYV_binning = [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4]
 
 # categorical axes in python bindings always have an overflow bin, so use a regular
@@ -140,9 +140,16 @@ def common_parser(for_reco_highPU=False):
     import wremnants
     from wremnants import theory_corrections,theory_tools
 
-    parser.add_argument("--pdfs", type=str, nargs="*", default=["msht20"], choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for")
+    class FilterAction(argparse.Action):
+        def __call__(self, parser, namespace, values, option_string=None):
+            # Filter unique values, but keep first item in its position
+            unique_values = [values[0], *set([x for x in values[1:]])]
+            setattr(namespace, self.dest, unique_values)
+
+    parser.add_argument("--pdfs", type=str, nargs="+", default=["msht20"], 
+        choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for", action=FilterAction)
     parser.add_argument("--altPdfOnlyCentral", action='store_true', help="Only store central value for alternate PDF sets")
-    parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=-1)
+    parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=None)
     parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by group name or (subset) of name", default=[])
     parser.add_argument("--excludeProcs", type=str, nargs="*", help="Exclude processes matched by group name or (subset) of name", default=[])  # no need to exclude QCD MC here, histograms can always be made, they are fast and light, so they are always available for tests
     parser.add_argument("--v8", action='store_true', help="Use NanoAODv8. Default is v9")

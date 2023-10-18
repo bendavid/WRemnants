@@ -54,8 +54,8 @@ translate_label = {
     "ptGen" : "$\mathrm{Gen}\ p_\mathrm{T}\ [\mathrm{GeV}]$",
     "abs(eta)" : "$\mathrm{Reco}\ |\eta|$",
     "absEtaGen" : "$\mathrm{Gen}\ |\eta|$",
-    "ptll" : "$\mathrm{Reco}\ p_\mathrm{T}(V)\ [\mathrm{GeV}]$",
-    "ptW" :  "$\mathrm{Reco}\ p_\mathrm{T}(W)\ [\mathrm{GeV}]$",
+    "ptll" : r"$\mathrm{Reco}\ p_\mathrm{T}(\ell\ell)\ [\mathrm{GeV}]$",
+    "ptW" : r"$\mathrm{Reco}\ p_\mathrm{T}(\ell\nu)\ [\mathrm{GeV}]$",
     "ptVGen" : "$\mathrm{Gen}\ p_\mathrm{T}(V)\ [\mathrm{GeV}]$",
     "abs(yll)" : "$\mathrm{Reco}\ |Y(\mathrm{V})|$",
     "absYVGen" : "$\mathrm{Gen}\ |Y(\mathrm{V})|$",
@@ -98,7 +98,7 @@ for g_name, group in datagroups.items():
         for axes_string in args.axes:
             axes = axes_string.split("-")
 
-            if (groups.wmass or groups.wlike) and axes[0] == "pt":
+            if groups.mode in ["wmass", "wlike"] and axes[0] == "pt":
                 genFlow=True
             else:
                 genFlow=False

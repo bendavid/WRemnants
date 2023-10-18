@@ -97,7 +97,7 @@ def setSimultaneousABCD(cardTool,
     hFRF = hh.divideHists(hist_failMT_failIso, hist_failMT_failIso+hist_failMT_passIso)
     
     # axes other than fakerate axes
-    other_axes = [n for n in cardTool.project if n not in fakerate_axes]
+    other_axes = [n for n in cardTool.fit_axes if n not in fakerate_axes]
     other_bin_sizes = [ax.size for ax in hist_fake.axes if ax.name in other_axes]
 
     # all axes (except passIso and passMT if passMT is boolean)
