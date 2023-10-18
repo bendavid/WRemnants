@@ -1,4 +1,3 @@
-import wremnants
 from wremnants import plot_tools,theory_tools,histselections as sel
 from utilities import boostHistHelpers as hh
 from utilities.io_tools import input_tools, output_tools
