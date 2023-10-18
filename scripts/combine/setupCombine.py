@@ -40,7 +40,7 @@ def make_parser(parser=None):
     parser.add_argument("--ABCD", action="store_true", help="Produce datacard for simultaneous fit of ABCD regions")
     # settings on the nuisances itself
     parser.add_argument("--doStatOnly", action="store_true", default=False, help="Set up fit to get stat-only uncertainty (currently combinetf with -S 0 doesn't work)")
-    parser.add_argument("--minnloScaleUnc", choices=["byHelicityPt", "byHelicityPtCharge", "byHelicityCharge", "byPtCharge", "byPt", "byCharge", "integrated",], default="byHelicityPt",
+    parser.add_argument("--minnloScaleUnc", choices=["byHelicityPt", "byHelicityPtCharge", "byHelicityCharge", "byPtCharge", "byPt", "byCharge", "integrated", "none"], default="byHelicityPt",
             help="Decorrelation for QCDscale")
     parser.add_argument("--resumUnc", default="tnp", type=str, choices=["scale", "tnp", "none"], help="Include SCETlib uncertainties")
     parser.add_argument("--npUnc", default="Delta_Lambda", type=str, choices=combine_theory_helper.TheoryHelper.valid_np_models, help="Nonperturbative uncertainty model")
@@ -50,7 +50,6 @@ def make_parser(parser=None):
     parser.add_argument("--pdfUncFromCorr", action='store_true', help="Take PDF uncertainty from correction hist (Requires having run that correction)")
     parser.add_argument("--ewUnc", type=str, nargs="*", default=["horacenloew"], choices=["horacenloew", "winhacnloew"], help="Include EW uncertainty")
     parser.add_argument("--widthUnc", action='store_true', help="Include uncertainty on W and Z width")
-    parser.add_argument("--noStatUncFakes" , action="store_true",   help="Set bin error for QCD background templates to 0, to check MC stat uncertainties for signal only")
     parser.add_argument("--skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
     parser.add_argument("--noQCDscaleFakes", action="store_true",   help="Do not apply QCd scale uncertainties on fakes, mainly for debugging")
     parser.add_argument("--addQCDMC", action="store_true", help="Include QCD MC when making datacards (otherwise by default it will always be excluded)")
@@ -126,12 +125,13 @@ def setup(args, inputFile, fitvar, xnorm=False):
                 datagroups.setGlobalAction(lambda h, ax=var: hh.makeAbsHist(h, ax))
                 fitvar[i] = f"abs{var}"
 
-    wmass = datagroups.wmass
-    wlike = datagroups.wlike
-    lowPU = datagroups.lowPU
-    dilepton = datagroups.dilepton
+    wmass = datagroups.mode in ["wmass", "lowpu_w"]
+    wlike = datagroups.mode == "wlike"
+    lowPU = "lowpu" in datagroups.mode
+    # Detect lowpu dilepton
+    dilepton = "dilepton" in datagroups.mode or any(x in ["ptll", "mll"] for x in fitvar)
 
-    constrainMass = (dilepton and not "mll" in fitvar) or args.fitXsec
+    constrainMass = (dilepton and not "mll" in fitvar) or args.fitXsec 
 
     if wmass:
         base_group = "Wenu" if datagroups.flavor == "e" else "Wmunu"
@@ -197,8 +197,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
         # FIXME: at some point we should decide what name to use
         if any(x in args.excludeProcGroups for x in ["BkgWmunu", "outAccWmunu"]) and hasSeparateOutOfAcceptanceSignal:
             datagroups.deleteGroup("BkgWmunu") # remove out of acceptance signal
-    else:
-        if "BkgWmunu" in args.excludeProcGroups:
+    elif "BkgWmunu" in args.excludeProcGroups:
             datagroups.deleteGroup("Wmunu") # remove out of acceptance signal
 
     # Start to create the CardTool object, customizing everything
@@ -209,14 +208,12 @@ def setup(args, inputFile, fitvar, xnorm=False):
     logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
     if args.absolutePathInCard:
         cardTool.setAbsolutePathShapeInCard()
-    cardTool.setProjectionAxes(fitvar)
     cardTool.setFakerateAxes(args.fakerateAxes)
     if wmass and args.ABCD:
         # In case of ABCD we need to have different fake processes for e and mu to have uncorrelated uncertainties
         cardTool.setFakeName(datagroups.fakeName + (datagroups.flavor if datagroups.flavor else "")) 
         cardTool.unroll=True
-    if args.sumChannels or xnorm or dilepton or (wmass and args.ABCD):
-        cardTool.setChannels(["inclusive"])
+    if args.sumChannels or xnorm or dilepton or (wmass and args.ABCD) or "charge" not in fitvar:
         cardTool.setWriteByCharge(False)
     else:
         cardTool.setChannels(args.recoCharge)
@@ -228,7 +225,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
         cardTool.setHistName(histName)
         cardTool.setNominalName(histName)
         if args.unfolding:
-            cardTool.setProjectionAxes(["count"])
+            cardTool.setFitAxes(["count"])
         else:
             if wmass:
                 # add gen charge as additional axis
@@ -242,12 +239,14 @@ def setup(args, inputFile, fitvar, xnorm=False):
             cardTool.unroll = True
             # remove projection axes from gen axes, otherwise they will be integrated before
             
-            if datagroups.gen_axes != cardTool.project:
-                raise NotImplementedError(f"The gen axes of the model {datagroups.gen_axes} do not agree with the ones requested {cardTool.project}")
+            cardTool.setFitAxes(fitvar)
+            if datagroups.gen_axes != cardTool.fit_axes:
+                raise NotImplementedError(f"The gen axes of the model {datagroups.gen_axes} do not agree with the ones requested {cardTool.fit_axes}")
             datagroups.setGenAxes([]) # [a for a in datagroups.gen_axes if a not in cardTool.project])
     else:
         cardTool.setHistName(args.baseName)
         cardTool.setNominalName(args.baseName)
+        cardTool.setFitAxes(fitvar)
         
     # define sumGroups for integrated cross section
     if args.unfolding and not (args.theoryAgnostic and args.poiAsNoi):
@@ -263,8 +262,6 @@ def setup(args, inputFile, fitvar, xnorm=False):
     if args.noHist:
         cardTool.skipHistograms()
     cardTool.setSpacing(28)
-    if args.noStatUncFakes:
-        cardTool.setProcsNoStatUnc(procs=args.qcdProcessName, resetList=False)
     cardTool.setCustomSystForCard(args.excludeNuisances, args.keepNuisances)
     if args.pseudoData:
         cardTool.setPseudodata(args.pseudoData, args.pseudoDataIdx, args.pseudoDataProcsRegexp)
@@ -447,11 +444,11 @@ def setup(args, inputFile, fitvar, xnorm=False):
         mirror_tnp=True,
         pdf_from_corr=args.pdfUncFromCorr,
         scale_pdf_unc=args.scalePdf,
-        minnloScaleUnc=args.minnloScaleUnc,
+        minnlo_unc=args.minnloScaleUnc,
     )
-    theory_helper.add_all_theory_unc()
+    theory_helper.add_all_theory_unc(nonsig=not xnorm)
 
-    if xnorm:
+    if xnorm or datagroups.mode == "vgen":
         return cardTool
 
     # Below: experimental uncertainties
@@ -719,12 +716,36 @@ def setup(args, inputFile, fitvar, xnorm=False):
 
     return cardTool
 
-def main(args, xnorm=False):
-    fitvar = args.fitvar[0].split("-")
-    cardTool = setup(args, inputFile=args.inputFile[0], fitvar=fitvar, xnorm=xnorm)
+def analysis_label(card_tool):
+    analysis_name_map = {
+        "wmass" : "WMass",
+        "vgen" : "ZGen" if card_tool.getProcesses()[0][0] == "Z" else "WGen",
+        "wlike" : "ZMassWLike", 
+        "dilepton" : "ZMassDilepton",
+        "lowpu_w" : "WMass_lowPU",
+        "lowpu_z" : "ZMass_lowPU",
+    }
 
-    cardTool.setOutput(args.outfolder, fitvars=fitvar, doStatOnly=args.doStatOnly, postfix=args.postfix)
+    if card_tool.datagroups.mode not in analysis_name_map:
+        raise ValueError(f"Invalid datagroups mode {datagroups.mode}")
 
+    return analysis_name_map[card_tool.datagroups.mode]
+
+def outputFolderName(outfolder, card_tool, doStatOnly, postfix):
+    to_join = [analysis_label(card_tool)]+card_tool.fit_axes
+
+    if doStatOnly:
+        to_join.append("statOnly")
+    if card_tool.datagroups.flavor:
+        to_join.append(card_tool.datagroups.flavor)
+    if postfix is not None:
+        to_join.append(postfix)
+
+    return f"{outfolder}/{'_'.join(to_join)}/"
+
+def main(args,xnorm=False):
+    cardTool = setup(args, args.inputFile[0], args.fitvar[0].split("-"), xnorm)
+    cardTool.setOutput(outputFolderName(args.outfolder, cardTool, args.doStatOnly, args.postfix), analysis_label(cardTool))
     cardTool.writeOutput(args=args, forceNonzero=not args.unfolding, check_systs=not args.unfolding)
     return
 

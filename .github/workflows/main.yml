@@ -266,7 +266,7 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --rebin 2 --baseName transverseMass --hists mt -a mu -p $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_MU
 
       - name: lowpu w mu combine mt setup
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombine.py -i $HIST_FILE_MU --baseName transverseMass --fitvar mt -o $WREMNANTS_OUTDIR
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombine.py -i $HIST_FILE_MU --baseName transverseMass --fitvar mt-charge -o $WREMNANTS_OUTDIR
 
       - name: lowpu w mu plot response matrix
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/response_matrix.py --axes ptW-ptVGen --procFilters Wmunu -p mu -o $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_MU
@@ -287,7 +287,7 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --rebin 2 --baseName transverseMass --hists mt -a e -p $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_E
 
       - name: lowpu w e combine mt setup
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombine.py -i $HIST_FILE_E --baseName transverseMass --fitvar mt -o $WREMNANTS_OUTDIR
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombine.py -i $HIST_FILE_E --baseName transverseMass --fitvar mt-charge -o $WREMNANTS_OUTDIR
 
       - name: lowpu w e plot response matrix
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/response_matrix.py --axes ptW-ptVGen --procFilters Wenu -p e -o $WEB_DIR -f $PLOT_DIR/lowPU $HIST_FILE_E
@@ -295,8 +295,8 @@ jobs:
       - name: aggregate combine inputs
         run: |
           mkdir -p $COMBINED_DIR
-          cp -p $WREMNANTS_OUTDIR/WMass_lowPU_mt_mu/* $COMBINED_DIR
-          cp -p $WREMNANTS_OUTDIR/WMass_lowPU_mt_e/* $COMBINED_DIR
+          cp -p $WREMNANTS_OUTDIR/WMass_lowPU_mt_charge_mu/* $COMBINED_DIR
+          cp -p $WREMNANTS_OUTDIR/WMass_lowPU_mt_charge_e/* $COMBINED_DIR
 
       - name: lowpu combine mt fit 
         run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ mass $COMBINED_DIR WMass_lowPU_minus_mu.txt WMass_lowPU_plus_mu.txt WMass_lowPU_minus_e.txt WMass_lowPU_plus_e.txt 

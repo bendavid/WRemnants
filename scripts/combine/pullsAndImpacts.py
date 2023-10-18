@@ -75,7 +75,7 @@ def plotImpacts(df, poi, pulls=False, normalize=False, oneSidedImpacts=False):
     elif poi and poi.startswith("massDiffEta"):
         impact_title = "$\\mathrm{Impact\\ on\\ mass\\ diff. }(\\eta)\\ (\\mathrm{MeV})$"
 
-    impacts = bool(df['impact'].sum()) and not args.noImpacts
+    impacts = bool(np.count_nonzero(df['absimpact'])) and not args.noImpacts
     ncols = pulls+impacts
     fig = make_subplots(rows=1,cols=ncols,
             horizontal_spacing=0.1, shared_yaxes=True)#ncols > 1)
