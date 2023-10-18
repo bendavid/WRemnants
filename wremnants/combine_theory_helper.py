@@ -1,4 +1,5 @@
-from utilities import input_tools,logging,common, boostHistHelpers as hh
+from utilities import logging,common, boostHistHelpers as hh
+from utilities.io_tools import input_tools
 from wremnants import syst_tools,theory_tools
 import numpy as np
 import re

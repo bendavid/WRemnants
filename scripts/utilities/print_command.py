@@ -3,7 +3,8 @@ import pickle
 import argparse
 import os
 import pathlib
-from utilities import input_tools, logging
+from utilities import logging
+from utilities.io_tools import input_tools
 from wremnants.datasets.datagroups import Datagroups
 
 parser = argparse.ArgumentParser()

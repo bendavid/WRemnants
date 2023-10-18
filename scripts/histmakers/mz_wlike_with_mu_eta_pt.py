@@ -1,4 +1,5 @@
-from utilities import boostHistHelpers as hh, common, output_tools, logging, differential
+from utilities import boostHistHelpers as hh, common, logging, differential
+from utilities.io_tools import output_tools
 
 parser,initargs = common.common_parser(True)
 

@@ -1,6 +1,6 @@
 import hist
 import numpy as np
-from utilities.input_tools import safeOpenRootFile, safeGetRootObject
+from utilities.io_tools.input_tools import safeOpenRootFile, safeGetRootObject
 from utilities import boostHistHelpers as hh
 from utilities import common, logging
 import narf

@@ -1,5 +1,7 @@
 from wremnants.combine_helpers import setSimultaneousABCD, projectABCD
-from utilities import common, logging, output_tools, input_tools_combinetf
+from utilities import common, logging
+from utilities.io_tools import output_tools, combinetf_input
+
 import time
 import numpy as np
 import hist
@@ -11,8 +13,6 @@ import os
 import narf
 import re
 from collections import defaultdict
-
-import pdb
 
 logger = logging.child_logger(__name__)
 
@@ -57,8 +57,8 @@ class HDF5Writer(object):
         self.theoryFit = True
         base_processes = ["W" if c.datagroups.mode == "wmass" else "Z" for c in self.get_channels().values()]
         axes = [c.fit_axes for c in self.get_channels().values()]
-        fitresult = input_tools_combinetf.get_fitresult(fitresult_filename)
-        data, self.theoryFitDataCov = input_tools_combinetf.get_theoryfit_data(fitresult, axes=axes, base_processes=base_processes, poi_type=poi_type, flow=gen_flow)
+        fitresult = combinetf_input.get_fitresult(fitresult_filename)
+        data, self.theoryFitDataCov = combinetf_input.get_theoryfit_data(fitresult, axes=axes, base_processes=base_processes, poi_type=poi_type, flow=gen_flow)
         # theoryfit data for each channel
         self.theoryFitData = {c: d for c, d in zip(self.get_channels().keys(), data)}
 

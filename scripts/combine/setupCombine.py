@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 from wremnants import CardTool,combine_helpers,combine_theory_helper, HDF5Writer
 from wremnants.datasets.datagroups import Datagroups
-from utilities import common, logging, input_tools, boostHistHelpers as hh
+from utilities import common, logging, boostHistHelpers as hh
+from utilities.io_tools import input_tools
 import itertools
 import argparse
 import hist

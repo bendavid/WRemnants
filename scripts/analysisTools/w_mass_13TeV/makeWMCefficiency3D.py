@@ -7,7 +7,8 @@ from wremnants.datasets.datagroups2016 import make_datagroups_2016
 from wremnants import histselections as sel
 #from wremnants import plot_tools,theory_tools,syst_tools
 from utilities import boostHistHelpers as hh
-from utilities import common, logging, output_tools, input_tools
+from utilities import common, logging
+from utilities.io_tools import input_tools, output_tools
 
 import narf
 import wremnants

@@ -9,7 +9,8 @@ from dash import dcc
 import dash_daq as daq
 from dash import html
 from dash.dependencies import Input, Output
-from utilities import input_tools, input_tools_combinetf, output_tools, logging
+from utilities import logging
+from utilities.io_tools import input_tools, output_tools, combinetf_input
 from wremnants import plot_tools
 import os
 import re
@@ -252,13 +253,13 @@ def plotImpacts(df, pulls=False, poi='Wmass', normalize=False, oneSidedImpacts=F
 def readFitInfoFromFile(rf, filename, group=False, stat=0.0, poi='Wmass', normalize=False):    
     # TODO: Make add_total configurable
     add_total = group
-    impacts, labels, _ = input_tools_combinetf.read_impacts_poi(rf, group, add_total=add_total, stat=stat, poi=poi, normalize=normalize)
+    impacts, labels, _ = combinetf_input.read_impacts_poi(rf, group, add_total=add_total, stat=stat, poi=poi, normalize=normalize)
     # TODO: Make configurable
     if True:
         impacts = impacts*100
 
     # skip POIs in case of unfolding, want only nuisances
-    pois = input_tools_combinetf.get_poi_names(rf) if poi is None else []
+    pois = combinetf_input.get_poi_names(rf) if poi is None else []
 
     if (group and grouping) or args.filters or len(pois) > 0:
         filtimpacts = []
@@ -451,15 +452,15 @@ if __name__ == '__main__':
         with open(args.translate) as f:
             translate_label = json.load(f)
 
-    fitresult = input_tools_combinetf.get_fitresult(args.inputFile)
-    fitresult_ref = input_tools_combinetf.get_fitresult(args.referenceFile) if args.referenceFile else None
+    fitresult = combinetf_input.get_fitresult(args.inputFile)
+    fitresult_ref = combinetf_input.get_fitresult(args.referenceFile) if args.referenceFile else None
 
     if args.noImpacts:
         # do one pulls plot, ungrouped
         producePlots(fitresult, args, None, fitresult_ref=fitresult_ref)
         exit()
 
-    pois = input_tools_combinetf.get_poi_names(fitresult, poi_type=None)
+    pois = combinetf_input.get_poi_names(fitresult, poi_type=None)
 
     for poi in pois:
         if args.mode in ["both", "ungrouped"]:
@@ -469,9 +470,9 @@ if __name__ == '__main__':
     
     if pois[0] and not (pois[0]=="Wmass" and len(pois) == 1):
         # masked channel
-        for poi in input_tools_combinetf.get_poi_names(fitresult, poi_type="pmaskedexp"):
+        for poi in combinetf_input.get_poi_names(fitresult, poi_type="pmaskedexp"):
             producePlots(fitresult, args, poi, normalize=not args.absolute, fitresult_ref=fitresult_ref)
 
         # masked channel normalized
-        for poi in input_tools_combinetf.get_poi_names(fitresult, poi_type="pmaskedexpnorm"):
+        for poi in combinetf_input.get_poi_names(fitresult, poi_type="pmaskedexpnorm"):
             producePlots(fitresult, args, poi, normalize=not args.absolute, fitresult_ref=fitresult_ref)

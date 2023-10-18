@@ -11,7 +11,7 @@ from wremnants import theory_tools,syst_tools,theory_corrections
 import hist
 
 import numpy as np
-from utilities import input_tools
+from utilities.io_tools import input_tools
 
 import lz4.frame
 
