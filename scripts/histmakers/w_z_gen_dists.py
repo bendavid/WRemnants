@@ -41,8 +41,8 @@ axis_massWgen = hist.axis.Variable([5., 13000.], name="massVgen", underflow=True
 axis_massZgen = hist.axis.Regular(12, 60., 120., name="massVgen")
 
 axis_absYVgen = hist.axis.Variable(
-    [0., 0.25, 0.5, 0.75, 1., 1.25, 1.5, 1.75, 2., 2.25, 2.5, 2.75, 3., 3.25, 3.5, 4., 5.], # this is the same binning as hists from theory corrections
-    # [0., 0.4, 0.8, 1.2, 1.6, 2.0, 2.4], #same axis as theory agnostic norms
+    # [0., 0.25, 0.5, 0.75, 1., 1.25, 1.5, 1.75, 2., 2.25, 2.5, 2.75, 3., 3.25, 3.5, 4., 5.], # this is the same binning as hists from theory corrections
+    [0., 0.4, 0.8, 1.2, 1.6, 2.0, 2.4, 10.], #same axis as theory agnostic norms
     name = "absYVgen", underflow=False
 )
 
@@ -51,8 +51,8 @@ axis_rapidity = axis_absYVgen if args.absY else axis_ygen
 col_rapidity =  "absYVgen" if args.absY else "yVgen"
 
 axis_ptVgen = hist.axis.Variable(
-     list(range(0,151))+[160., 190.0, 220.0, 250.0, 300.0, 400.0, 500.0, 800.0, 13000.0], 
-    # [0., 3., 6., 9.62315204,12.36966732,16.01207711,21.35210602,29.50001253,60.], #same axis as theory agnostic norms
+    # list(range(0,151))+[160., 190.0, 220.0, 250.0, 300.0, 400.0, 500.0, 800.0, 13000.0],
+    [0., 3., 6., 9.62315204,12.36966732,16.01207711,21.35210602,29.50001253,60.,100.], #same axis as theory agnostic norms
     name = "ptVgen", underflow=False,
 )
 
@@ -250,12 +250,12 @@ if not args.skipAngularCoeffs:
     coeffs={}
     # Common.ptV_binning is the approximate 5% quantiles, rounded to integers. Rebin for approx 10% quantiles
     if z_moments:
-        z_moments = hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning[::2])
-        z_moments = hh.rebinHist(z_moments, axis_massZgen.name, axis_massZgen.edges[::2])
-        coeffs["Z"] = wremnants.moments_to_angular_coeffs(z_moments) 
+        # z_moments = hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning[::2])
+        # z_moments = hh.rebinHist(z_moments, axis_massZgen.name, axis_massZgen.edges[::2])
+        coeffs["Z"] = wremnants.moments_to_angular_coeffs(z_moments, sumW2=False) # sumW2 is not set to True internally when the input histogram has weights, in fact it could be removed
     if w_moments:
         w_moments = hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning[::2])
-        coeffs["W"] = wremnants.moments_to_angular_coeffs(w_moments)
+        coeffs["W"] = wremnants.moments_to_angular_coeffs(w_moments, sumW2=False) # ditto
     if coeffs:
         outfname = "w_z_coeffs_absY.hdf5" if args.absY else "w_z_coeffs.hdf5"
         output_tools.write_analysis_output(coeffs, outfname, args, update_name=not args.forceDefaultName)

@@ -66,14 +66,13 @@ names = [[pdfName+" $\pm1\sigma$", "", ""] for pdfName in pdfNames]
 cmap = cm.get_cmap("tab10")
 colors = [[cmap(i)]*3 for i in range(len(args.pdfs))]
 
-
 if "unrolled_gen_hel" in args.obs:
     moments = input_tools.read_all_and_scale(args.infile, args.datasets, ["helicity_moments_scale"])
-    coeffs =  theory_tools.scale_angular_moments(moments[0].project('helicity','absYVgen','ptVgen','muRfact','muFfact'))
+    coeffs =  theory_tools.moments_to_angular_coeffs(moments[0].project('helicity','absYVgen','ptVgen','muRfact','muFfact'))
     moments_pdf = input_tools.read_all_and_scale(args.infile, args.datasets, [f"helicity_{args.baseName}_{pdfName}" for pdfName in pdfNames])
     coeffs_pdf = []
     for moments in moments_pdf:
-        coeffs_pdf.append(theory_tools.scale_angular_moments(moments.project('helicity','absYVgen','ptVgen',axis_label)))
+        coeffs_pdf.append(theory_tools.moments_to_angular_coeffs(moments.project('helicity','absYVgen','ptVgen',axis_label)))
     uncHists = [[h[{axis_label : 0}], *theory_tools.hessianPdfUnc(h, axis_label, unc, scale)] for h,unc,scale in zip(coeffs_pdf, uncType, uncScale)]
 
     # add alphaS
@@ -87,18 +86,18 @@ if "unrolled_gen_hel" in args.obs:
         alphaHists = input_tools.read_all_and_scale(args.infile, args.datasets, alphaNames)
         alphaHists_hel = []
         for alphaHist in alphaHists:
-            alphaHists_hel.append(theory_tools.scale_angular_moments(alphaHist.project('helicity','absYVgen','ptVgen',axis_label)))
+            alphaHists_hel.append(theory_tools.moments_to_angular_coeffs(alphaHist.project('helicity','absYVgen','ptVgen',axis_label)))
         uncHists[ipdf].extend([alphaHists_hel[ipdf][...,0],alphaHists_hel[ipdf][...,1]])
         names[ipdf].extend([pdfNames[ipdf]+"alpha $\pm1\sigma$",""])
         colors[ipdf].extend([[cmap(i)]*2 for i in range(len(args.pdfs),2*len(args.pdfs))][0])
     
     # add QCD scales
-    uncHists.append([coeffs[{"muRfact" : 2.j, "muFfact" : 2.j}],coeffs[{"muRfact" : 0.5j, "muFfact" : 0.5j}],coeffs[{"muRfact" : 2.j, "muFfact" : 1.j}], coeffs[{"muRfact" : 0.5j, "muFfact" : 1.j}],coeffs[{"muRfact" : 1.j, "muFfact" : 2.j}],coeffs[{"muRfact" : 1.j, "muFfact" : 0.5j}]])
-    names.append(["QCDscale_muRmuFUp","QCDscale_muRmuFDown","QCDscale_muRUp","QCDscale_muRDown","QCDscale_muFUp","QCDscale_muFDown"])
-    colors.append([[cmap(i)]*6 for i in range(1)][0])
-    # uncHists.append([coeffs[{"muRfact" : 1.j, "muFfact" : 1.j}]])
-    # names.append(["QCDscale_central"])
-    # colors.append([[cmap(i)]*1 for i in range(2*len(args.pdfs),2*len(args.pdfs)+1)][0])
+    # uncHists.append([coeffs[{"muRfact" : 2.j, "muFfact" : 2.j}],coeffs[{"muRfact" : 0.5j, "muFfact" : 0.5j}],coeffs[{"muRfact" : 2.j, "muFfact" : 1.j}], coeffs[{"muRfact" : 0.5j, "muFfact" : 1.j}],coeffs[{"muRfact" : 1.j, "muFfact" : 2.j}],coeffs[{"muRfact" : 1.j, "muFfact" : 0.5j}]])
+    # names.append(["QCDscale_muRmuFUp","QCDscale_muRmuFDown","QCDscale_muRUp","QCDscale_muRDown","QCDscale_muFUp","QCDscale_muFDown"])
+    # colors.append([[cmap(i)]*6 for i in range(1)][0])
+    uncHists.append([coeffs[{'muRfact':1.j,'muFfact':1.j}]])
+    names.append(["QCDscale_central"])
+    colors.append([[cmap(i)]*1 for i in range(2*len(args.pdfs),2*len(args.pdfs)+1)][0])
 
 # TODO
 #if args.together:
@@ -122,23 +121,24 @@ for obs in args.obs:
             if not "hel" in obs:
                 hists1D = [action(x,obs2unroll,binwnorm=True) for x in hists]
             else:
-                hists1D = [action(x[{'helicity': 3.j}],obs2unroll,binwnorm=True) for x in hists]
+                hists1D = [action(x[{'helicity': 6.j}],obs2unroll) for x in hists]
 
         all_hists.extend(hists1D)
         all_colors.extend(color)
         all_names.extend(labels)
     
     # Add the nominal for reference
-    if len(uncHists) > 1:
-        hists1D = [all_hists[0], *all_hists]
-        plot_cols = [colors[0][0], *all_colors]
-        plot_labels = ["", *all_names]
-        print(all_names)
-        fig = plot_tools.makePlotWithRatioToRef(hists1D, colors=plot_cols, labels=plot_labels, alpha=0.7,
-            rrange=args.rrange, ylabel="$\sigma$/bin", xlabel=xlabels[obs], rlabel=f"x/{args.pdfs[0].upper()}", binwnorm=None, nlegcols=1)
-        outfile = f"{name}Hist_{obs}_{args.channel}_sigma3"
-        ax1, ax2 = fig.axes
-        ax1.fill_between(hists1D[0].axes[0].centers,np.minimum.reduce([h.values() for h in hists1D]),np.maximum.reduce([h.values() for h in hists1D]),color="grey",alpha=0.5, label="theory agnostic variation")
-        ax2.fill_between(hists1D[0].axes[0].centers,np.minimum.reduce([h.values() for h in hists1D])/hists1D[0].values(),np.maximum.reduce([h.values() for h in hists1D])/hists1D[0].values(),color="grey",alpha=0.5, label="theory agnostic variation")
-        plot_tools.save_pdf_and_png(outdir, outfile)
-        plot_tools.write_index_and_log(outdir, outfile)
+    
+    
+    hists1D = [all_hists[0], *all_hists]
+    plot_cols = [colors[0][0], *all_colors]
+    plot_labels = ["", *all_names]
+    print([h.values() for h in hists1D])
+    fig = plot_tools.makePlotWithRatioToRef(hists1D, colors=plot_cols, labels=plot_labels, alpha=0.7,
+        rrange=args.rrange, ylabel="$\sigma$/bin", xlabel=xlabels[obs], rlabel=f"x/{args.pdfs[0].upper()}", binwnorm=None, nlegcols=1)
+    outfile = f"{name}Hist_{obs}_{args.channel}_sigma6"
+    ax1, ax2 = fig.axes
+    ax1.fill_between(hists1D[0].axes[0].centers,np.minimum.reduce([h.values() for h in hists1D]),np.maximum.reduce([h.values() for h in hists1D]),color="grey",alpha=0.5, label="theory agnostic variation")
+    ax2.fill_between(hists1D[0].axes[0].centers,np.minimum.reduce([h.values() for h in hists1D])/hists1D[0].values(),np.maximum.reduce([h.values() for h in hists1D])/hists1D[0].values(),color="grey",alpha=0.5, label="theory agnostic variation")
+    plot_tools.save_pdf_and_png(outdir, outfile)
+    plot_tools.write_index_and_log(outdir, outfile)
