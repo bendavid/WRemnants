@@ -1,7 +1,8 @@
 from wremnants.datasets.datagroups import Datagroups
 from wremnants import histselections as sel
 from wremnants import plot_tools,theory_tools,syst_tools
-from utilities import boostHistHelpers as hh,common,output_tools
+from utilities import boostHistHelpers as hh,common
+from utilities.io_tools import output_tools
 import matplotlib.pyplot as plt
 from matplotlib import colormaps
 import argparse
@@ -62,10 +63,12 @@ parser.add_argument("-p", "--outpath", type=str, default=os.path.expanduser("~/w
 parser.add_argument("-f", "--outfolder", type=str, default="test", help="Subfolder for output")
 parser.add_argument("-r", "--rrange", type=float, nargs=2, default=[0.9, 1.1], help="y range for ratio plot")
 parser.add_argument("--rebin", type=int, default=1, help="Rebin (for now must be an int)")
+parser.add_argument("--logy", action='store_true', help="Enable log scale for y axis")
 parser.add_argument("--ylim", type=float, nargs=2, help="Min and max values for y axis (if not specified, range set automatically)")
 parser.add_argument("--yscale", type=float, help="Scale the upper y axis by this factor (useful when auto scaling cuts off legend)")
 parser.add_argument("--xlim", type=float, nargs=2, help="min and max for x axis")
 parser.add_argument("-a", "--name_append", default="", type=str, help="Name to append to file name")
+parser.add_argument("--cmsDecor", default="Preliminary", type=str, help="CMS label")
 parser.add_argument("--debug", action='store_true', help="Print debug output")
 parser.add_argument("--procFilters", type=str, nargs="*", help="Filter to plot (default no filter, only specify if you want a subset")
 parser.add_argument("--noData", action='store_true', help="Don't plot data")
@@ -140,10 +143,11 @@ if len(args.presel):
     groups.setGlobalAction(lambda h: h[presel])
 
 if args.selection:
-    for selection in args.selection.split(","):
-        axis, value = selection.split("=")
-        select[axis] = int(value)
     applySelection=False
+    if args.selection != "none":
+        for selection in args.selection.split(","):
+            axis, value = selection.split("=")
+            select[axis] = int(value)
 else:
     applySelection=True
 
@@ -232,13 +236,13 @@ for h in args.hists:
         action = lambda x: sel.unrolledHist(collapseSyst(x[select]), obs=h.split("-"))
     else:
         action = lambda x: hh.projectNoFlow(collapseSyst(x[select]), h, overflow_ax)
-    fig = plot_tools.makeStackPlotWithRatio(histInfo, prednames, histName=args.baseName, ylim=args.ylim, yscale=args.yscale,
+    fig = plot_tools.makeStackPlotWithRatio(histInfo, prednames, histName=args.baseName, ylim=args.ylim, yscale=args.yscale, logy=args.logy,
             fill_between=args.fillBetween if hasattr(args, "fillBetween") else None, 
             action=action, unstacked=unstack, 
             fitresult=args.fitresult, prefit=args.prefit,
             xlabel=xlabels.get(h,h), ylabel="Events/bin", rrange=args.rrange, binwnorm=1.0, lumi=groups.lumi,
             ratio_to_data=args.ratioToData, rlabel="Pred./Data" if args.ratioToData else "Data/Pred.",
-            xlim=args.xlim, no_fill=args.noFill, cms_decor="Preliminary",
+            xlim=args.xlim, no_fill=args.noFill, cms_decor=args.cmsDecor,
             legtext_size=20*args.scaleleg, unstacked_linestyles=args.linestyle if hasattr(args, "linestyle") else [],
             ratio_error=args.ratioError)
 

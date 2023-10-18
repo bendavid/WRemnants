@@ -4,7 +4,8 @@ import matplotlib.pyplot as plt
 from matplotlib import ticker
 from matplotlib import patches
 from matplotlib.ticker import StrMethodFormatter # for setting number of decimal places on tick labels
-from utilities import boostHistHelpers as hh,common,output_tools,logging
+from utilities import boostHistHelpers as hh,common,logging
+from utilities.io_tools import output_tools
 from wremnants import histselections as sel
 import hist
 import math
@@ -123,7 +124,7 @@ def makeStackPlotWithRatio(
     fitresult=None, prefit=False,
     xlabel="", ylabel="Events/bin", rlabel = "Data/Pred.", rrange=[0.9, 1.1], ylim=None, xlim=None, nlegcols=2,
     binwnorm=None, select={},  action = (lambda x: x), extra_text=None, extra_text_loc=(0.8, 0.7), grid = False, 
-    plot_title = None, title_padding = 0, yscale=None,
+    plot_title = None, title_padding = 0, yscale=None, logy=False, logx=False, 
     fill_between=False, ratio_to_data=False, baseline=True, legtext_size=20, cms_decor="Preliminary", lumi=16.8,
     no_fill=False, bin_density=300, unstacked_linestyles=[],
     ratio_error=True,
@@ -157,7 +158,7 @@ def makeStackPlotWithRatio(
         else:
             data_hist = h
 
-    fig, ax1, ax2 = figureWithRatio(stack[0], xlabel, ylabel, ylim, rlabel, rrange, xlim=xlim, 
+    fig, ax1, ax2 = figureWithRatio(stack[0], xlabel, ylabel, ylim, rlabel, rrange, xlim=xlim, logy=logy, logx=logx, 
         grid_on_ratio_plot = grid, plot_title = plot_title, title_padding = title_padding, bin_density = bin_density)
 
     if fitresult:
@@ -299,7 +300,7 @@ def makeStackPlotWithRatio(
                     step='post', color=histInfo[up].color, alpha=0.5)
 
     addLegend(ax1, nlegcols, extra_text=extra_text, extra_text_loc=extra_text_loc, text_size=legtext_size)
-    fix_axes(ax1, ax2, yscale=yscale)
+    fix_axes(ax1, ax2, yscale=yscale, logy=logy)
 
     if cms_decor:
         scale = max(1, np.divide(*ax1.get_figure().get_size_inches())*0.3)

@@ -19,7 +19,7 @@ jobs:
           newest_folders=($(echo "$all_folders" | head -n 6))
           for folder in $all_folders; do
             if ! [[ " ${newest_folders[@]} " =~ " $folder " ]]; then
-              xrdfs root://eosuser.cern.ch// rmdir "$EOS_DIR/ScheduledBuilds/$folder"
+              xrdfs root://eosuser.cern.ch// rmdir "$folder"
             fi
           done
       - name: Cleanup unfolding
@@ -28,6 +28,6 @@ jobs:
           newest_folders=($(echo "$all_folders" | head -n 6))
           for folder in $all_folders; do
             if ! [[ " ${newest_folders[@]} " =~ " $folder " ]]; then
-              xrdfs root://eosuser.cern.ch// rmdir "$EOS_DIR/ScheduledBuilds_unfolding/$folder"
+              xrdfs root://eosuser.cern.ch// rmdir "$folder"
             fi
           done

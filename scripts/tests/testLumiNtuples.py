@@ -1,5 +1,6 @@
 import argparse
-from utilities import output_tools,common
+from utilities import common
+from utilities.io_tools import output_tools
 
 parser,initargs = common.common_parser()
 

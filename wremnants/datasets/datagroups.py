@@ -584,7 +584,12 @@ class Datagroups(object):
             if gen_axis not in h.axes.name:
                 raise RuntimeError(f"Gen axis '{gen_axis}' not found in histogram axes '{h.axes.name}'!")
 
-            gen_bins.append(range(h.axes[gen_axis].size))
+            gen_bin_list = [i for i in range(h.axes[gen_axis].size)]
+            if h.axes[gen_axis].traits.underflow:
+                gen_bin_list.append(hist.underflow)
+            if h.axes[gen_axis].traits.overflow:
+                gen_bin_list.append(hist.overflow)
+            gen_bins.append(gen_bin_list)
         return gen_bins
 
     def defineSignalBinsUnfolding(self, group_name, new_name=None, member_filter=None, histToReadAxes="xnorm", axesToRead=[]):
@@ -605,7 +610,13 @@ class Datagroups(object):
 
             proc_name = group_name if new_name is None else new_name
             for idx, var in zip(indices, self.gen_axes):
-                proc_name += f"_{var}{idx}"
+                if idx == hist.underflow:
+                    idx_str = "U"
+                elif idx == hist.overflow:
+                    idx_str = "O"
+                else:
+                    idx_str = str(idx)
+                proc_name += f"_{var}{idx_str}"
 
             self.copyGroup(group_name, proc_name, member_filter=member_filter)
 
@@ -614,9 +625,14 @@ class Datagroups(object):
 
             self.unconstrainedProcesses.append(proc_name)
 
-    def select_xnorm_groups(self):
-        # only keep members and groups where xnorm is defined 
-        if self.fakeName in self.groups:
+    def select_xnorm_groups(self, select_groups=None):
+        # only keep members and groups where xnorm is defined
+        logger.info("Select xnorm groups"+(f" {select_groups}" if select_groups else ""))
+        if select_groups is not None:
+            if isinstance(select_groups, str):
+                select_groups = [select_groups]
+            self.deleteGroups([g for g in self.groups.keys() if g not in select_groups])
+        elif self.fakeName in self.groups:
             self.deleteGroup(self.fakeName)
         toDel_groups = []
         for g_name, group in self.groups.items():
@@ -624,12 +640,11 @@ class Datagroups(object):
             for member in group.members:
                 if member.name not in self.results.keys():
                     raise RuntimeError(f"The member {member.name} of group {g_name} was not found in the results!")
-
                 if "xnorm" not in self.results[member.name]["output"].keys():
                     logger.debug(f"Member {member.name} has no xnorm and will be deleted")
                     toDel_members.append(member)
             if len(toDel_members) == len(group.members):
-                logger.debug(f"All members of group {g_name} have no xnorm and the group will be deleted")
+                logger.warning(f"All members of group {g_name} have no xnorm and the group will be deleted")
                 toDel_groups.append(g_name)
             else:
                 group.deleteMembers(toDel_members)

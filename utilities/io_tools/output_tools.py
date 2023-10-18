@@ -117,7 +117,7 @@ def make_plot_dir(outpath, outfolder=None, eoscp=False):
     if eoscp and is_eosuser_path(outpath):
         outpath = os.path.join("temp", split_eos_path(outpath)[1])
         if not os.path.isdir(outpath):
-            logger.info("Making temporary directory {outpath}")
+            logger.info(f"Making temporary directory {outpath}")
             os.makedirs(outpath)
 
     full_outpath = outpath

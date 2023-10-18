@@ -72,7 +72,7 @@ axis_pt = hist.axis.Regular(29, 26., 55., name = "pt")
 ## 10% quantiles from aMC@NLO used in SMP-18-012 with some rounding <== This one worked fine with toys
 ptV_10quantiles_binning = [0.0, 2.95, 4.73, 6.68, 8.98, 11.78, 15.33, 20.11, 27.17, 40.15, 13000.]
 # Integer rounded version of the 5% quantiles h[::hist.rebin(2)] for 10% quantiles
-ptV_binning = [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 15, 18, 20, 23, 27, 32, 40, 54, 13000]
+ptV_binning = [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 20, 23, 27, 32, 40, 54, 13000]
 absYV_binning = [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4]
 
 # categorical axes in python bindings always have an overflow bin, so use a regular
@@ -180,12 +180,12 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--dummyNonClosureM", action="store_true", help="use a dummy value for the alignment part of the Z non-closure")
     parser.add_argument("--dummyNonClosureMMag", default=0., type=float, help="magnitude of the dummy value for the alignment part of the Z non-closure")
     parser.add_argument("--noScaleToData", action="store_true", help="Do not scale the MC histograms with xsec*lumi/sum(gen weights) in the postprocessing step")
-    parser.add_argument("--aggregateGroups", type=str, nargs="*", default=["Diboson", "Top", "Wtaunu"], help="Sum up histograms from members of given groups in the postprocessing step")
+    parser.add_argument("--aggregateGroups", type=str, nargs="*", default=["Diboson", "Top"], help="Sum up histograms from members of given groups in the postprocessing step")
     # options for unfolding/differential
     parser.add_argument("--unfolding", action='store_true', help="Add information needed for unfolding")
     parser.add_argument("--genLevel", type=str, default='postFSR', choices=["preFSR", "postFSR"], help="Generator level definition for unfolding")
     parser.add_argument("--genVars", type=str, nargs="+", default=["ptGen", "absEtaGen"], choices=["qGen", "ptGen", "absEtaGen", "ptVGen", "absYVGen"], help="Generator level variable")
-    parser.add_argument("--genBins", type=int, nargs="+", default=[15, 0], help="Number of generator level bins")
+    parser.add_argument("--genBins", type=int, nargs="+", default=[16, 0], help="Number of generator level bins")
 
     if for_reco_highPU:
         # additional arguments specific for histmaker of reconstructed objects at high pileup (mw, mz_wlike, and mz_dilepton)

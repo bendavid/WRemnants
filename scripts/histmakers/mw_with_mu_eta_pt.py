@@ -1,5 +1,6 @@
 import argparse
-from utilities import output_tools, common, rdf_tools, logging, differential
+from utilities import common, rdf_tools, logging, differential
+from utilities.io_tools import output_tools
 from wremnants.datasets.datagroups import Datagroups
 
 parser,initargs = common.common_parser(True)
@@ -48,7 +49,9 @@ if args.theoryAgnostic or args.unfolding:
         if not args.poiAsNoi:
             logger.warning("Running theory agnostic with only nominal and mass weight histograms for now.")
             parser = common.set_parser_default(parser, "onlyMainHistograms", True)
-        
+    if args.unfolding:
+        parser = common.set_parser_default(parser, "pt", [32,26.,58.])
+
     args = parser.parse_args()
     
 thisAnalysis = ROOT.wrem.AnalysisType.Wmass
@@ -94,10 +97,16 @@ axes_WeffMC = [axis_eta, axis_pt_eff, axis_ut, axis_charge, axis_passIso, axis_p
 groups_to_aggregate = args.aggregateGroups
 
 if args.unfolding:
-
-    unfolding_axes, unfolding_cols = differential.get_pt_eta_axes(args.genBins[0], template_minpt, template_maxpt, args.genBins[1])
+    # first and last pT bins are merged into under and overflow
+    template_wpt = (template_maxpt-template_minpt)/args.genBins[0]
+    min_pt_unfolding = template_minpt+template_wpt
+    max_pt_unfolding = template_maxpt-template_wpt
+    npt_unfolding = args.genBins[0]-2
+    unfolding_axes, unfolding_cols = differential.get_pt_eta_axes(npt_unfolding, min_pt_unfolding, max_pt_unfolding, args.genBins[1])
     datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wmunu")
+    datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wtaunu")
     groups_to_aggregate.append("BkgWmunu")
+    groups_to_aggregate.append("BkgWtaunu")
 
 elif args.theoryAgnostic:
 
@@ -224,14 +233,14 @@ def build_graph(df, dataset):
     axes = nominal_axes
     cols = nominal_cols
 
-    if args.unfolding and isWmunu:
+    if args.unfolding and isW:
         df = unfolding_tools.define_gen_level(df, args.genLevel, dataset.name, mode="wmass")
         if hasattr(dataset, "out_of_acceptance"):
             logger.debug("Reject events in fiducial phase space")
-            df = unfolding_tools.select_fiducial_space(df, mode="wmass", pt_min=args.pt[1], pt_max=args.pt[2], accept=False)
+            df = unfolding_tools.select_fiducial_space(df, mode="wmass", accept=False)
         else:
             logger.debug("Select events in fiducial phase space")
-            df = unfolding_tools.select_fiducial_space(df, mode="wmass", pt_min=args.pt[1], pt_max=args.pt[2], accept=True)
+            df = unfolding_tools.select_fiducial_space(df, mode="wmass", accept=True)
 
             unfolding_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols)
             axes = [*nominal_axes, *unfolding_axes] 

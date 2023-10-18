@@ -9,7 +9,7 @@ import json
 import os
 import array
 from utilities import common as common
-from utilities import input_tools
+from utilities.io_tools import input_tools
 
 
 

@@ -1,5 +1,5 @@
 from wremnants import plot_tools,theory_tools,histselections as sel
-from utilities import input_tools
+from utilities.io_tools import input_tools
 import matplotlib.pyplot as plt
 from matplotlib import cm
 import argparse

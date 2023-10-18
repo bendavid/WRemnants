@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 from wremnants import CardTool,combine_helpers,combine_theory_helper, HDF5Writer
 from wremnants.datasets.datagroups import Datagroups
-from utilities import common, logging, input_tools, boostHistHelpers as hh
+from utilities import common, logging, boostHistHelpers as hh
+from utilities.io_tools import input_tools
 import itertools
 import argparse
 import hist
@@ -71,6 +72,7 @@ def make_parser(parser=None):
     parser.add_argument("--priorNormXsec", type=float, default=1, help="Prior for shape uncertainties on cross sections for theory agnostic analysis with POIs as NOIs (1 means 100\%). If negative, it will use shapeNoConstraint in the fit")
     parser.add_argument("--scaleNormXsecHistYields", type=float, default=None, help="Scale yields of histogram with cross sections variations for theory agnostic analysis with POIs as NOIs. Can be used together with --priorNormXsec")
     parser.add_argument("--addNormToOOA", type=float, default=None, help="Add normalization uncertainty on out-of-acceptance template (when it exists). Currently only with --poiAsNoi, and practically adds a LnN uncertainty")
+    parser.add_argument("--addTauToSignal", action='store_true', help="Events from the same process but from tau final states are added to the signal")
     # utility options to deal with charge when relevant, mainly for theory agnostic but also unfolding
     parser.add_argument("--recoCharge", type=str, default=["plus", "minus"], nargs="+", choices=["plus", "minus"], help="Specify reco charge to use, default uses both. This is a workaround for unfolding/theory-agnostic fit when running a single reco charge, as gen bins with opposite gen charge have to be filtered out")
     parser.add_argument("--forceRecoChargeAsGen", action="store_true", help="Force gen charge to match reco charge in CardTool, this only works when the reco charge is used to define the channel")
@@ -135,6 +137,14 @@ def setup(args, inputFile, fitvar, xnorm=False):
     else:
         base_group = "Zee" if datagroups.flavor == "ee" else "Zmumu"
 
+    if args.addTauToSignal:
+        # add tau signal processes to signal group
+        datagroups.groups[base_group].addMembers(datagroups.groups[base_group.replace("mu","tau")].members)
+        datagroups.deleteGroup(base_group.replace("mu","tau"))
+
+    if xnorm:
+        datagroups.select_xnorm_groups(base_group)
+
     if args.unfolding and args.fitXsec:
         raise ValueError("Options --unfolding and --fitXsec are incompatible. Please choose one or the other")
     elif args.fitXsec:
@@ -149,12 +159,16 @@ def setup(args, inputFile, fitvar, xnorm=False):
                 datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen0", member_filter=lambda x: x.name.startswith("Wminus"))
             if "plus" in args.recoCharge:
                 datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen1", member_filter=lambda x: x.name.startswith("Wplus"))
-            # out of acceptance contribution
-            datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if not m.name.startswith("Bkg")])
         else:
             datagroups.defineSignalBinsUnfolding(base_group, "Z", member_filter=lambda x: x.name.startswith(base_group))
-            # out of acceptance contribution
-            datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if not m.name.startswith("Bkg")])
+        
+        # out of acceptance contribution
+        to_del = [m for m in datagroups.groups[base_group].members if not m.name.startswith("Bkg")]
+        if len(datagroups.groups[base_group].members) == len(to_del):
+            datagroups.deleteGroup(base_group)
+        else:
+            datagroups.groups[base_group].deleteMembers(to_del)
+
     # FIXME: temporary customization of signal and out-of-acceptance process names for theory agnostic with POI as NOI
     # There might be a better way to do it more homogeneously with the rest.
     if args.theoryAgnostic and args.poiAsNoi:
@@ -209,7 +223,6 @@ def setup(args, inputFile, fitvar, xnorm=False):
         histName = "xnorm"
         cardTool.setHistName(histName)
         cardTool.setNominalName(histName)
-        datagroups.select_xnorm_groups()
         if args.unfolding:
             cardTool.setFitAxes(["count"])
         else:
@@ -264,11 +277,11 @@ def setup(args, inputFile, fitvar, xnorm=False):
         
     passSystToFakes = wmass and not args.skipSignalSystOnFakes and args.qcdProcessName not in excludeGroup and (filterGroup == None or args.qcdProcessName in filterGroup) and not xnorm
 
-    # TODO: move to a common place if it is  useful, also use regular expressions for better flexibility? In that case "name".startswith("n") is simply re.match("^n", "name")
+    # TODO: move to a common place if it is  useful
     def assertSample(name, startsWith=["W", "Z"], excludeMatch=[]):
         return any(name.startswith(init) for init in startsWith) and all(excl not in name for excl in excludeMatch)
 
-    dibosonMatch = ["WW", "WZ", "ZZ"] # CHECK: is ZW needed?
+    dibosonMatch = ["WW", "WZ", "ZZ"] 
     WMatch = ["W", "BkgW"] # TODO: the name of out-of-acceptance might be changed at some point, maybe to WmunuOutAcc, so W will match it as well (and can exclude it using "OutAcc" if needed)
     ZMatch = ["Z", "BkgZ"]
     signalMatch = WMatch if wmass else ZMatch
