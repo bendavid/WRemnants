@@ -60,7 +60,7 @@ def get_theoryAgnostic_axes():
     # Note that the helicity axis is defined elsewhere, and must not be added to the list of axes returned here
     axis_ptVgen = hist.axis.Variable(
         #[0., 5., 10., 15., 20., 25., 30., 35., 40., 45., 50.],
-        [0., 3., 6., 9.62315204,12.36966732,16.01207711,21.35210602,29.50001253,60.],
+        [0., 3., 6., 9.7,12.4,16.,21.4,29.5,60.],
         #[0., 2.5, 5., 7.5, 10., 12.5, 15., 17.5, 20., 25., 30., 35., 40., 45., 50.],
         #[0., 1000.],
         name = "ptVgenSig", underflow=False, overflow=False
