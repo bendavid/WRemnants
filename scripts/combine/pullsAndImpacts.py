@@ -76,7 +76,7 @@ def plotImpacts(df, pulls=False, poi='Wmass', normalize=False, oneSidedImpacts=F
         impact_title=r"$\delta (\mathrm{d} \sigma / \sigma)$" if normalize else r"$\Delta(\mathrm{d} \sigma / \sigma)$"
 
     pulls = pulls 
-    impacts = bool(df['impact'].sum()) and not args.noImpacts
+    impacts = bool(np.count_nonzero(df['absimpact'])) and not args.noImpacts
     ncols = pulls+impacts
     fig = make_subplots(rows=1,cols=ncols,
             horizontal_spacing=0.1, shared_yaxes=True)#ncols > 1)

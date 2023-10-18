@@ -107,6 +107,16 @@ pdfMapExtended.update({
         # 66-71 - are LHAPDF ID 27500 = 27506, 27501 is 0.0116 and 27504 is 0.0120
         "alphasRange" : "002", 
     },
+    "msht20an3lo" : {
+        "name" : "pdfMSHT20an3lo",
+        "branch" : "LHEPdfWeightAltSet24",
+        "combine" : "asymHessian",
+        "entries" : 105,
+        "alphas" : ["LHEPdfWeightAltSet24[108]", "LHEPdfWeightAltSet24[111]"],
+        # 105-111 - are the alphas small range vars: 
+        # mem = 0 => default fit alpha_S(M_Z) = 0.118; mem=1-6 => alpha_S(M_Z) = 0.114, 0.115, 0.116, 0.117, 0.119, 0.120
+        "alphasRange" : "002", 
+    },
     "ct18z" : {
         # This has CT18 + CT18Z in it :-/
         "name" : "pdfCT18Z",
@@ -207,7 +217,10 @@ def make_ew_binning(mass = 91.1535, width = 2.4932, initialStep = 0.1, bin_edges
 def pdf_info_map(dataset, pdfset):
     infoMap = pdfMap if dataset not in extended_pdf_datasets else pdfMapExtended
 
-    if "horace" in dataset or (pdfset != "nnpdf31" and dataset in only_central_pdf_datasets) or pdfset not in infoMap:
+    # Just ignore PDF variations for non W/Z samples
+    if not (dataset[0] in ["W", "Z"] and dataset[1] not in ["W", "Z"]) \
+        or "horace" in dataset or (pdfset != "nnpdf31" and dataset in only_central_pdf_datasets) \
+        or pdfset not in infoMap:
         raise ValueError(f"Skipping PDF {pdfset} for dataset {dataset}")
     return infoMap[pdfset]
 
@@ -231,6 +244,9 @@ def define_pdf_columns(df, dataset_name, pdfs, noAltUnc):
         tensorASName = f"{pdfName}ASWeights_tensor"
         entries = 1 if i != 0 and noAltUnc else pdfInfo["entries"]
         start = 0 if "first_entry" not in pdfInfo else pdfInfo["first_entry"]
+
+        if pdfBranch not in df.GetColumnNames():
+            return df
 
         df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, {entries}>({pdfBranch}, {start}), theory_weight_truncate); res = nominal_weight/central_pdf_weight*res; return res;")
 
@@ -480,11 +496,10 @@ def pdfSymmetricShifts(hdiff, axis_name):
 def pdfAsymmetricShifts(hdiff, axis_name):
     # Assuming that the last axis is the syst axis
     # TODO: add some check to verify this
-    def shiftHist(vals, varis, hdiff, axis_name):
-        hnew = hdiff.copy()[{axis_name : 0}]
-        vals, varis = hh.multiplyWithVariance(vals, vals, varis, varis)
-        ss = np.stack((np.sum(vals, axis=-1), np.sum(varis, axis=-1)), axis=-1)
-        hnew[...] = ss
+    def shiftHist(vals, hdiff, axis_name):
+        hnew = hdiff[{axis_name : 0}]
+        vals = vals*vals
+        hnew[...] = np.sum(vals, axis=-1)
         return hh.sqrtHist(hnew)
 
     ax = hdiff.axes[axis_name] 
@@ -494,21 +509,17 @@ def pdfAsymmetricShifts(hdiff, axis_name):
         # Remove the overflow from the categorical axis
         end = int((ax.size-1)/2)
         upvals = hdiff[{axis_name : [x for x in ax if "Up" in x]}].values(flow=True)[...,:end]
-        upvars = hdiff[{axis_name : [x for x in ax if "Up" in x]}].variances(flow=True)[...,:end]
         downvals = hdiff[{axis_name : [x for x in ax if "Down" in x]}].values(flow=True)[...,:end]
-        downvars = hdiff[{axis_name : [x for x in ax if "Down" in x]}].variances(flow=True)[...,:end]
         if upvals.shape != downvals.shape:
             raise ValueError("Malformed PDF uncertainty hist! Expect equal number of up and down vars")
     else:
         end = ax.size+underflow
         upvals = hdiff.values(flow=True)[...,1+underflow:end:2]
-        upvars = hdiff.variances(flow=True)[...,1+underflow:end:2]
         downvals = hdiff.values(flow=True)[...,2+underflow:end:2]
-        downvars = hdiff.variances(flow=True)[...,2+underflow:end:2]
 
     # The error sets are ordered up,down,up,down...
-    upshift = shiftHist(upvals, upvars, hdiff, axis_name)
-    downshift = shiftHist(downvals, downvars, hdiff, axis_name)
+    upshift = shiftHist(upvals, hdiff, axis_name)
+    downshift = shiftHist(downvals, hdiff, axis_name)
     return upshift, downshift 
 
 def hessianPdfUnc(h, axis_name="pdfVar", uncType="symHessian", scale=1.):
