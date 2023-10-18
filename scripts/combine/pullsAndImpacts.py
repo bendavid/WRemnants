@@ -119,7 +119,7 @@ def plotImpacts(df, poi, pulls=False, normalize=False, oneSidedImpacts=False):
             go.Bar(
                 x=df[impact_str],
                 y=labels,
-                width=0.2 if include_ref else 1,
+                width=0.2 if include_ref else None,
                 orientation='h',
                 **get_marker(filled=True, color=df['impact_color'] if oneSidedImpacts else '#377eb8'),
                 **textargs,
@@ -143,7 +143,7 @@ def plotImpacts(df, poi, pulls=False, normalize=False, oneSidedImpacts=False):
                 go.Bar(
                     x=-1*df['impact'],
                     y=labels,
-                    width=0.2 if include_ref else 1,
+                    width=0.2 if include_ref else None,
                     orientation='h',
                     **get_marker(filled=True, color='#e41a1c'),
                     name="impacts_up",
@@ -171,7 +171,7 @@ def plotImpacts(df, poi, pulls=False, normalize=False, oneSidedImpacts=False):
             tick_spacing /= 2.
         fig.update_layout(barmode='overlay')
         fig.update_layout(
-            xaxis=dict(range=[-impact_range if not oneSidedImpacts else -impact_range/20, impact_range],
+            xaxis=dict(range=[-impact_range*1.1 if not oneSidedImpacts else -impact_range/20, impact_range*1.1],
                     showgrid=True, gridwidth=1, gridcolor='Gray', griddash='dash',
                     zeroline=True, zerolinewidth=2, zerolinecolor='Gray',
                     tickmode='linear',

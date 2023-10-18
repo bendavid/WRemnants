@@ -399,8 +399,10 @@ class CardTool(object):
                     raise ValueError(f"Invalid skip entry! Axis {k} was found in position {idx+nother_ax} of {h.ndim} axes, but {nsyst} syst axes were expected")
                 skipEntryArr[idx] = v
             logger.debug(f"Expanded skipEntry for syst {syst} is {skipEntryArr}. Syst axes are {h.axes.name[-nsyst:]}")
+        elif isinstance(skipEntry, (bool, int, float, str)):
+            skipEntryArr = (skipEntry,)
         elif type(skipEntry) not in (np.array, list, tuple):
-            raise ValueError(f"Unexpected format for skipEntry. Must be either dict or sequence. found {type(skipEntry)}")
+            raise ValueError(f"Unexpected format for skipEntry. Must be either dict, sequence, or scalar type. found {type(skipEntry)}")
         else:
             skipEntryArr = skipEntry
 

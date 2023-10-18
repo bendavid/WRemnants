@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from wremnants import CardTool,combine_helpers,combine_theory_helper, HDF5Writer
+from wremnants.syst_tools import massWeightNames
 from wremnants.datasets.datagroups import Datagroups
 from utilities import common, logging, input_tools, boostHistHelpers as hh
 import itertools
@@ -309,39 +310,22 @@ def setup(args, inputFile, fitvar, xnorm=False):
             logger.info(f"Single V no signal samples: {cardTool.procGroups['single_v_nonsig_samples']}")
         logger.info(f"Signal samples: {cardTool.procGroups['signal_samples']}")
 
-    constrainedZ = (constrainMass and not wmass) or analysis_label(cardTool) == "ZGen"
-    label = 'W' if wmass else 'Z'
-    massSkip = [(f"^massShift[W|Z]{i}MeV.*",) for i in range(0, 110 if constrainedZ else 100, 10)]
-    if wmass and not xnorm and not args.doStatOnly:
-        cardTool.addSystematic(f"massWeightZ",
-                                processes=['single_v_nonsig_samples'],
-                                group=f"massShiftZ",
-                                skipEntries=massSkip[:]+[("^massShiftZ100MeV.*",)],
-                                mirror=False,
-                                noConstraint=False,
-                                systAxes=["massShift"],
-                                passToFakes=passSystToFakes,
-        )
-
-    if not (constrainMass or wmass):
-        massSkip.append(("^massShift.*2p1MeV.*",))
-
     signal_samples_forMass = ["signal_samples_inctau"]
     if args.theoryAgnostic and not args.poiAsNoi:
         logger.error("Temporarily not using mass weights for Wtaunu. Please update when possible")
         signal_samples_forMass = ["signal_samples"]
 
-    if not (constrainMass and args.doStatOnly):
-        cardTool.addSystematic(f"massWeight{label}",
-                            processes=signal_samples_forMass,
-                            group=f"massShift{label}",
-                            noi=not constrainMass,
-                            skipEntries=massSkip,
-                            mirror=False,
-                            noConstraint=not constrainMass,
-                            systAxes=["massShift"],
-                            passToFakes=passSystToFakes,
-        )
+    label = 'W' if wmass else 'Z'
+    cardTool.addSystematic(f"massWeight{label}",
+                           processes=signal_samples_forMass,
+                           group=f"massShift{label}",
+                           noi=not constrainMass,
+                           skipEntries=massWeightNames(proc=label, exclude=100),
+                           mirror=False,
+                           noConstraint=not constrainMass,
+                           systAxes=["massShift"],
+                           passToFakes=passSystToFakes,
+    )
 
     if args.fitMassDiff:
         suffix = "".join([a.capitalize() for a in args.fitMassDiff.split("-")])
@@ -351,7 +335,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
             rename=f"massDiff{suffix}{label}",
             group=f"massDiff{label}",
             systNameReplace=[("Shift",f"Diff{suffix}")],
-            skipEntries=[(m[0].replace("50MeV", "100MeV"),) for m in massSkip],
+            skipEntries=massWeightNames(proc=label, exclude=50),
             noi=not constrainMass,
             noConstraint=not constrainMass,
             mirror=False,
@@ -364,20 +348,20 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                 # actionMap={m.name: (lambda h, swap=swap_bins: swap(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown")) 
                                 #     for g in cardTool.procGroups[signal_samples_forMass[0]] for m in cardTool.datagroups.groups[g].members if "minus" in m.name},
                                 # on reco level based on reco charge
-                                actionMap={m.name: (lambda h, swap=hh.swap_histogram_bins: 
-                                        swap(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown", "charge", 0)) 
+                                actionMap={m.name: (lambda h: 
+                                        hh.swap_histogram_bins(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown", "charge", 0)) 
                                     for g in cardTool.procGroups[signal_samples_forMass[0]] for m in cardTool.datagroups.groups[g].members},
             )
         elif args.fitMassDiff == "eta-sign":
             cardTool.addSystematic(**mass_diff_args, 
-                                actionMap={m.name: (lambda h, swap=hh.swap_histogram_bins, s=hist.tag.Slicer(): 
-                                        swap(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown", "eta", s[0:complex(0,0):]))
+                                actionMap={m.name: (lambda h: 
+                                        hh.swap_histogram_bins(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown", "eta", hist.tag.Slicer()[0:complex(0,0):]))
                                     for g in cardTool.procGroups[signal_samples_forMass[0]] for m in cardTool.datagroups.groups[g].members},
             )
         elif args.fitMassDiff == "eta-range":
             cardTool.addSystematic(**mass_diff_args, 
-                                actionMap={m.name: (lambda h, swap=hh.swap_histogram_bins, s=hist.tag.Slicer(): 
-                                        swap(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown", "eta", s[complex(0,-0.9):complex(0,0.9):]))
+                                actionMap={m.name: (lambda h: 
+                                        hh.swap_histogram_bins(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown", "eta", hist.tag.Slicer()[complex(0,-0.9):complex(0,0.9):]))
                                     for g in cardTool.procGroups[signal_samples_forMass[0]] for m in cardTool.datagroups.groups[g].members},
             )
 
@@ -419,7 +403,18 @@ def setup(args, inputFile, fitvar, xnorm=False):
         # print a card with only mass weights
         logger.info("Using option --doStatOnly: the card was created with only mass nuisance parameter")
         return cardTool
-    
+
+    if wmass and not xnorm:
+        cardTool.addSystematic(f"massWeightZ",
+                                processes=['single_v_nonsig_samples'],
+                                group=f"massShiftZ",
+                                skipEntries=massWeightNames(proc="Z", exclude=2.1),
+                                mirror=False,
+                                noConstraint=False,
+                                systAxes=["massShift"],
+                                passToFakes=passSystToFakes,
+        )
+
     if args.widthUnc:
         widthSkipZ = [("widthZ2p49333GeV",), ("widthZ2p49493GeV",), ("widthZ2p4952GeV",)] 
         widthSkipW = [("widthW2p09053GeV",), ("widthW2p09173GeV",), ("widthW2p085GeV",)]
