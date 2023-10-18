@@ -26,18 +26,34 @@ def read_hist_names(fname, proc):
             raise ValueError(f"Invalid process {proc}! No output found in file {fname}")
         return results[proc]["output"].keys()
 
-def read_and_scale(fname, proc, histname, calculate_lumi=False, scale=1):
+def read_keys(fname):
+    with h5py.File(fname, "r") as h5file:
+        results = ioutils.pickle_load_h5py(h5file["results"])
+        return results.keys()
+
+def read_xsec(fname, proc):
+    with h5py.File(fname, "r") as h5file:
+        results = ioutils.pickle_load_h5py(h5file["results"])
+        return results[proc]["dataset"]["xsec"]
+
+def read_sumw(fname, proc):
+    with h5py.File(fname, "r") as h5file:
+        results = ioutils.pickle_load_h5py(h5file["results"])
+        return results[proc]["weight_sum"]
+
+def read_and_scale(fname, proc, histname, calculate_lumi=False, scale=1, apply_xsec=True):
     with h5py.File(fname, "r") as h5file:
         results = ioutils.pickle_load_h5py(h5file["results"])
             
-        return load_and_scale(results, proc, histname, calculate_lumi, scale)
+        return load_and_scale(results, proc, histname, calculate_lumi, scale, apply_xsec)
 
-def load_and_scale(res_dict, proc, histname, calculate_lumi=False, scale=1.):
+def load_and_scale(res_dict, proc, histname, calculate_lumi=False, scale=1., apply_xsec=True):
     h = res_dict[proc]["output"][histname]
     if isinstance(h, ioutils.H5PickleProxy):
         h = h.get()
     if not res_dict[proc]["dataset"]["is_data"]:
-        scale = res_dict[proc]["dataset"]["xsec"]/res_dict[proc]["weight_sum"]*scale
+        if apply_xsec:
+            scale = res_dict[proc]["dataset"]["xsec"]/res_dict[proc]["weight_sum"]*scale
         if calculate_lumi:
             data_keys = [p for p in res_dict.keys() if "dataset" in res_dict[p] and res_dict[p]["dataset"]["is_data"]]
             lumi = sum([res_dict[p]["lumi"] for p in data_keys])*1000
@@ -142,7 +158,7 @@ def read_dyturbo_hist(filenames, path="", axes=("y", "pt"), charge=None, coeff=N
 
     h = hh.sumHists(hists)
 
-    if charge is not None:
+    if charge is not None and "charge" not in h.axes.name:
         charge_args = (2, -2., 2.) if charge != 0 else (1, 0, 1) 
         charge_axis = hist.axis.Regular(*charge_args, flow=False, name = "charge")
         hnew = hist.Hist(*h.axes, charge_axis, storage=h._storage_type())
@@ -483,7 +499,7 @@ def get_metadata(infile):
             results = pickle.load(f)
     elif infile.endswith(".hdf5"):
         h5file = h5py.File(infile, "r")
-        meta = h5file.get("result", h5file.get("meta", None))
+        meta = h5file.get("results", h5file.get("meta", None))
         results = ioutils.pickle_load_h5py(meta) if meta else None
 
     if results is None:
@@ -491,6 +507,14 @@ def get_metadata(infile):
         return None
 
     return results["meta_info"] if "meta_info" in results else results["meta_data"]
+
+def get_scetlib_config(infile):
+    if infile.endswith(".pkl"):
+        with open(infile, "rb") as f:
+            results = pickle.load(f)
+        return results["config"]
+    else:
+        raise ValueError("Expected scetlib output in pkl format")
 
 def read_infile(input):
     # read histogramer input file(s)

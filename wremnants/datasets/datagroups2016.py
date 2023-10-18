@@ -7,7 +7,7 @@ def make_datagroups_2016(dg, combine=False, pseudodata_pdfset = None, applySelec
     # reset datagroups
     dg.groups = {}
 
-    if dg.wmass and applySelection:
+    if dg.mode == "wmass" and applySelection:
         sigOp = sel.signalHistWmass
         fakeOp = sel.fakeHistABCD
     else:
@@ -22,8 +22,8 @@ def make_datagroups_2016(dg, combine=False, pseudodata_pdfset = None, applySelec
     )
     dg.addGroup("Zmumu",
         members = list(filter(lambda y: y.group == "Zmumu", dg.datasets.values())),
-        #label = r"Z$\to\mu\mu$ (N$^{3}LL+NNLO)$",
         label = r"Z$\to\mu\mu$",
+        #label = r"Z$\to\mu\mu\times 1.03$" #scale factor to normalize to data,
         color = "lightblue",
         selectOp = sigOp,
     ) 
@@ -39,7 +39,7 @@ def make_datagroups_2016(dg, combine=False, pseudodata_pdfset = None, applySelec
             label = f"pdf{pseudodata_pdfset.upper()}",
             color = "dimgray"
         )
-    if dg.wmass:
+    if dg.mode in ["vgen", "wmass"]:
         dg.addGroup("Wmunu",
             members = list(filter(lambda y: y.group == "Wmunu", dg.datasets.values())),
             label = r"W$^{\pm}\to\mu\nu$",
@@ -86,7 +86,7 @@ def make_datagroups_2016(dg, combine=False, pseudodata_pdfset = None, applySelec
     dg.filterGroups(filterGroups)
     dg.excludeGroups(excludeGroups)
 
-    if dg.wmass:
+    if dg.mode == "wmass":
         # add all processes to the fake contributions after filtered and excluded groups
         dg.addGroup("Fake",
             members = [member for sublist in [v.members for k, v in dg.groups.items() if k != "QCD"] for member in sublist],

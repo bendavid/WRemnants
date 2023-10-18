@@ -7,6 +7,7 @@ from wremnants.datasets.datagroups import Datagroups
 from wremnants.helicity_utils import *
 import re
 import collections.abc
+import copy
 
 logger = logging.child_logger(__name__)
 
@@ -92,11 +93,13 @@ def syst_transform_map(base_hist, hist_name):
                     do_min=True)},
        "resumNPUp" : {
             "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", 
-                 [x for x in h.axes["vars"] if "Omega" in x or "cnu" in x or "omega" in x],
+                 ["c_nu-0.1-omega_nu0.5", "omega_nu0.5", "Lambda2-0.25", "Lambda20.25", "Lambda4.01", 
+                     "Lambda4.16","Delta_Lambda2-0.02", "Delta_Lambda20.02",],
                  no_flow=["ptVgen"], do_min=False) if "vars" in h.axes.name else h},
         "resumNPDown" : {
             "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", 
-                 [x for x in h.axes["vars"] if "omega" in x or "cnu" in x or "omega" in x],
+                 ["c_nu-0.1-omega_nu0.5", "omega_nu0.5", "Lambda2-0.25", "Lambda20.25", "Lambda4.01", 
+                     "Lambda4.16","Delta_Lambda2-0.02", "Delta_Lambda20.02",],
                  no_flow=["ptVgen"], do_min=True) if "vars" in h.axes.name else h},
        "resumNPOmegaUp" : {
             "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", 
@@ -127,13 +130,21 @@ def syst_transform_map(base_hist, hist_name):
         "resumScaleMin" : {
             "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", range(9,44), no_flow=["ptVgen"], do_min=True)},
     })
-    #for k,v in transforms.items():
-    #    if any([x in k for x in ["QCDscale", "resum", "pdf"]]):
-    #        #v["procs"] = common.vprocs 
+    for k in ['gamma_cusp+5', 'gamma_mu_q+5', 'gamma_nu+5', 's+5', 'b_qqV+5', 'b_qqbarV+5', 'b_qqS+5', 'b_qqDS+5', 'b_qg+5']:
+        transforms[k.replace("+5", "-5")] = {"action" : lambda h,v=k: h if "vars" not in h.axes.name else hh.mirrorHist(h[{"vars" : v}], h[{"vars" : "pdf0"}])}
+    transforms['h_qqV+2.0'] = {"action" : lambda h: h if "vars" not in h.axes.name else hh.mirrorHist(h[{"vars" : 'h_qqV-2.0'}], h[{"vars" : 'pdf0'}])}
+    for k in ['gamma_cusp+1', 'gamma_mu_q+1', 'gamma_nu+1', 's+1', 'b_qqV+1', 'b_qqbarV+1', 'b_qqS+1', 'b_qqDS+1', 'b_qg+1']:
+        transforms[k.replace("+1", "-1")] = {"action" : lambda h,v=k: h if "vars" not in h.axes.name else hh.mirrorHist(h[{"vars" : v}], h[{"vars" : "pdf0"}])}
+    transforms['h_qqV+0.5'] = {"action" : lambda h: h if "vars" not in h.axes.name else hh.mirrorHist(h[{"vars" : 'h_qqV-0.5'}], h[{"vars" : 'pdf0'}])}
 
     return transforms
+def gen_scale_helicity_hist_to_variations(scale_hist, gen_obs, sum_axes=[], pt_ax="ptVgen", gen_axes=["ptVgen", "chargeVgen", "helicity"], rebinPtV=None):
+    for obs in gen_obs:
+        scale_hist = expand_hist_by_duplicate_axis(scale_hist, obs, obs+"Alt", swap_axes=True)
 
-def scale_helicity_hist_to_variations(scale_hist, sum_axes=[], rebinPtV=None):
+    return scale_helicity_hist_to_variations(scale_hist, sum_axes, pt_ax, gen_axes, rebinPtV)
+
+def scale_helicity_hist_to_variations(scale_hist, sum_axes=[], pt_ax="ptVgen", gen_axes=["ptVgen", "chargeVgen", "helicity"], rebinPtV=None):
     s = hist.tag.Slicer()
     axisNames = scale_hist.axes.name
 
@@ -144,27 +155,26 @@ def scale_helicity_hist_to_variations(scale_hist, sum_axes=[], rebinPtV=None):
     # select nominal QCD scales, but keep the sliced axis at size 1 for broadcasting
     nom_scale_hist = scale_hist[{"muRfact" : s[1.j:1.j+1], "muFfact" : s[1.j:1.j+1]}]
     # select nominal QCD scales and project down to nominal axes
-    genAxes = ["ptVgen", "chargeVgen", "helicity"]
     nom_sel = {"muRfact" : s[1.j], "muFfact" : s[1.j] }
-    nom_sel.update({genAxis : s[::hist.sum] for genAxis in genAxes if genAxis in axisNames})
+    nom_sel.update({genAxis : s[::hist.sum] for genAxis in gen_axes if genAxis in axisNames})
     nom_hist = nom_scale_hist[nom_sel]
     
     hasHelicityAxis = "helicity" in axisNames
-    hasPtAxis = "ptVgen" in axisNames
+    hasPtAxis = pt_ax in axisNames
 
-    if rebinPtV and hasPtAxis:
+    if rebinPtV is not None and hasPtAxis:
         # Treat single bin array as a float
-        array_rebin = isinstance(rebinPtV, collections.abc.Sequence)
+        array_rebin = isinstance(rebinPtV, collections.abc.Sequence) or type(rebinPtV) == np.ndarray
         if array_rebin and len(rebinPtV) == 1:
             rebinPtV = rebinPtV[0]
             array_rebin = False
 
         if array_rebin:
-            scale_hist = hh.rebinHist(scale_hist, "ptVgen", rebinPtV)
-            nom_scale_hist = hh.rebinHist(nom_scale_hist, "ptVgen", rebinPtV)
+            scale_hist = hh.rebinHist(scale_hist, pt_ax, rebinPtV)
+            nom_scale_hist = hh.rebinHist(nom_scale_hist, pt_ax, rebinPtV)
         else:
-            scale_hist = scale_hist[{"ptVgen" : s[::hist.rebin(rebinPtV)]}]
-            nom_scale_hist = nom_scale_hist[{"ptVgen" : s[::hist.rebin(rebinPtV)]}]
+            scale_hist = scale_hist[{pt_ax : s[::hist.rebin(rebinPtV)]}]
+            nom_scale_hist = nom_scale_hist[{pt_ax : s[::hist.rebin(rebinPtV)]}]
 
     # difference between a given scale and the nominal, plus the sum
     # this emulates the "weight if idx else nominal" logic and corresponds to the decorrelated
@@ -174,6 +184,12 @@ def scale_helicity_hist_to_variations(scale_hist, sum_axes=[], rebinPtV=None):
     else:
         out_name = scale_hist.name + "_variations"
 
+    nom_axes = nom_hist.axes
+    if nom_axes != scale_hist.axes[:len(nom_axes)]:
+        raise ValueError("Cannot convert to variations histogram becuase the assumption that the order of the gen axes " \
+                "and reco-like axes is respected does not hold! Gen axes must be trailing! "\
+                f" Found nominal (reco-like) axes {nom_axes.name}, full axes {scale_hist.axes.name}")
+
     expd = scale_hist.ndim - nom_hist.ndim
     expandnom = np.expand_dims(nom_hist.values(flow=True), [-expd+i for i in range(expd)])
     systhist = scale_hist.values(flow=True) - nom_scale_hist.values(flow=True) + expandnom
@@ -182,6 +198,30 @@ def scale_helicity_hist_to_variations(scale_hist, sum_axes=[], rebinPtV=None):
                                      name = out_name, data = systhist)
 
     return scale_variation_hist 
+
+# For converting the helicity scale hist to variations, keeping the gen axis to be fit
+# If swap_axes = True, the new axis takes the place of the old gen axis in the ordering
+def expand_hist_by_duplicate_axis(href, ref_ax_name, new_ax_name, swap_axes=False):
+    if ref_ax_name not in href.axes.name:
+        raise ValueError(f"Did not find axis {ref_ax_name} in hist!")
+
+    axes = href.axes
+
+    ref_ax_idx = axes.name.index(ref_ax_name)
+    ref_ax = axes[ref_ax_name]
+    new_ax = copy.deepcopy(ref_ax)
+    new_ax._ax.metadata["name"] = new_ax_name
+
+    data = np.moveaxis(href.view(flow=True), ref_ax_idx, 0)
+    # Copy data from other axis along the diagnoal, off-diagonals will be zero
+    exp_data = data*np.reshape(np.identity(data.shape[0]), (data.shape[0], data.shape[0], *(1 for i in data.shape[1:])))
+
+    new_axes = [new_ax, *href.axes]
+    if swap_axes:
+        new_axes[0], new_axes[ref_ax_idx+1] = new_axes[ref_ax_idx+1], new_axes[0]
+
+    hnew = hist.Hist(*new_axes, data=np.moveaxis(exp_data, 1, ref_ax_idx+1))
+    return hnew
 
 def hist_to_variations(hist_in):
 
@@ -283,6 +323,7 @@ def widthWeightNames(matches=None, proc=""):
     return [x if not matches or any(y in x for y in matches) else "" for x in names]
 
 def add_pdf_hists(results, df, dataset, axes, cols, pdfs, base_name="nominal", addhelicity=False):
+    # Remove duplicates but preserve the order of the first set
     for pdf in pdfs:
         try:
             pdfInfo = theory_tools.pdf_info_map(dataset, pdf)
@@ -513,7 +554,7 @@ def add_theory_hists(results, df, args, dataset_name, corr_helpers, qcdScaleByHe
     logger.debug(f"Make theory histograms for {dataset_name} dataset, histogram {base_name}")
     axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
     axis_ptVgen = hist.axis.Variable(
-        common.ptV_10quantiles_binning, 
+        common.ptV_binning, 
         name = "ptVgen", underflow=False
     )
     #for hel analysis, ptVgen is part of axes/col

@@ -85,9 +85,7 @@ def write_analysis_output(results, outfile, args, update_name=True):
     to_append = []
     if args.theoryCorr and not args.theoryCorrAltOnly:
         to_append.append(args.theoryCorr[0]+"Corr")
-    if hasattr(args, "uncertainty_hist") and args.uncertainty_hist != "nominal":
-        to_append.append(args.uncertainty_hist)
-    if args.maxFiles > 0:
+    if args.maxFiles is not None:
         to_append.append(f"maxFiles{args.maxFiles}")
 
     if to_append and update_name:
@@ -105,6 +103,7 @@ def write_analysis_output(results, outfile, args, update_name=True):
     time0 = time.time()
     with h5py.File(outfile, 'w') as f:
         narf.ioutils.pickle_dump_h5py("results", results, f)
+
     logger.info(f"Writing output: {time.time()-time0}")
     logger.info(f"Output saved in {outfile}")
 
@@ -114,14 +113,16 @@ def is_eosuser_path(path):
     path = os.path.realpath(path)
     return path.startswith("/eos/user") or path.startswith("/eos/home-")
 
-def make_plot_dir(outpath, outfolder, eoscp=False):
+def make_plot_dir(outpath, outfolder=None, eoscp=False):
     if eoscp and is_eosuser_path(outpath):
         outpath = os.path.join("temp", split_eos_path(outpath)[1])
         if not os.path.isdir(outpath):
             logger.info("Making temporary directory {outpath}")
             os.makedirs(outpath)
 
-    full_outpath = os.path.join(outpath, outfolder)
+    full_outpath = outpath
+    if outfolder:
+        full_outpath = os.path.join(outpath, outfolder)
     if outpath and not os.path.isdir(outpath):
         raise IOError(f"The path {outpath} doesn't not exist. You should create it (and possibly link it to your web area)")
         
@@ -135,11 +136,13 @@ def make_plot_dir(outpath, outfolder, eoscp=False):
 
     return full_outpath
 
-def copy_to_eos(outpath, outfolder):
+def copy_to_eos(outpath, outfolder=None):
     eospath, outpath = split_eos_path(outpath)
-    logger.info(f"Copying {outpath}/{outfolder} to {eospath}")
+    fullpath = outpath
+    if outfolder:
+        fullpath = os.path.join(outpath, outfolder)
+        logger.info(f"Copying {outpath} to {eospath}")
 
-    fullpath = os.path.join(outpath, outfolder)
     tmppath = os.path.join("temp", fullpath)
 
     for f in glob.glob(tmppath+"/*"):
@@ -149,7 +152,7 @@ def copy_to_eos(outpath, outfolder):
             logger.debug(f"Executing {' '.join(command)}")
             if subprocess.call(command):
                 raise IOError("Failed to copy the files to eos! Perhaps you are missing a kerberos ticket and need to run kinit <user>@CERN.CH?"
-                    " from lxplus you can run with --skipEoscp and take your luck with the mount.")
+                    " from lxplus you can run without eoscp and take your luck with the mount.")
 
     shutil.rmtree(tmppath) 
 
@@ -157,7 +160,7 @@ def split_eos_path(path):
 
     path = os.path.realpath(path)
     if not is_eosuser_path(path):
-        raise ValueError(f"Expected an path on /eos/user, found {outpath}!")
+        raise ValueError(f"Expected a path on /eos/user, found {path}!")
         
     splitpath = [x for x in path.split("/") if x]
     # Can be /eos/user/<letter>/<username> or <letter-username>

@@ -28,7 +28,7 @@ class CardTool(object):
         self.lnNSystematics = {}
         self.predictedProcs = []
         self.fakeEstimate = None
-        self.channels = ["plus", "minus"]
+        self.channels = ["inclusive"]
         self.cardContent = {}
         self.cardGroups = {}
         self.cardSumGroups = {} # POI sum groups
@@ -52,18 +52,18 @@ class CardTool(object):
         self.unroll = False # unroll final histogram before writing to root
         self.keepSyst = None # to override previous one with exceptions for special cases
         self.lumiScale = 1.
-        self.project = None
+        self.fit_axes = None
         self.fakerateAxes = ["pt", "eta", "charge"]
         self.xnorm = xnorm
         self.ABCD = ABCD
         self.absolutePathShapeFileInCard = False
+        self.fakerateIntegrationAxes = []
         self.excludeProcessForChannel = {} # can be used to exclue some POI when runnig a specific name (use case, force gen and reco charges to match)
-        self.signalProcesses = []
-        self.singleVBackground = []
         self.chargeIdDict = {"minus" : {"val" : -1, "id" : "q0", "badId" : "q1"},
                              "plus"  : {"val" : 1., "id" : "q1", "badId" : "q0"},
                              "inclusive" : {"val" : "sum", "id" : "none", "badId" : None},
                              }
+        self.charge_ax = "charge"
         self.procGroups = {}
 
     def getProcNames(self, grouped_procs):
@@ -98,14 +98,14 @@ class CardTool(object):
         if canUpdate or channel not in self.excludeProcessForChannel.keys():
             self.excludeProcessForChannel[channel] = re.compile(POIregexp)
             
-    def setProjectionAxes(self, project):
-        self.project = project
+    def setFitAxes(self, axes):
+        self.fit_axes = axes[:]
 
     def setFakerateAxes(self, fakerate_axes=["pt", "eta", "charge"]):
         self.fakerateAxes = fakerate_axes
         
     def getFakerateIntegrationAxes(self):
-        return [x for x in self.project if x not in self.fakerateAxes]
+        return [x for x in self.fit_axes if x not in self.fakerateAxes]
 
     def setProcsNoStatUnc(self, procs, resetList=True):
         if self.skipHist:
@@ -174,6 +174,8 @@ class CardTool(object):
         self.unconstrainedProcesses = datagroups.unconstrainedProcesses
         if self.nominalName:
             self.datagroups.setNominalName(self.nominalName)
+        if datagroups.mode == "vgen":
+            self.charge_ax = "chargeVgen"
         
     def setPseudodataDatagroups(self, datagroups):
         self.pseudodata_datagroups = datagroups 
@@ -246,7 +248,7 @@ class CardTool(object):
                       scale=1, processes=None, group=None, noi=False, noConstraint=False, noProfile=False,
                       action=None, doActionBeforeMirror=False, actionArgs={}, actionMap={},
                       systNameReplace=[], systNamePrepend=None, groupFilter=None, passToFakes=False,
-                      rename=None, splitGroup={}, decorrelateByBin={},
+                      rename=None, splitGroup={}, decorrelateByBin={}, formatWithValue=None,
                       sumNominalToHist=False,
                       scalePrefitHistYields=None,
                       customizeNuisanceAttributes={},
@@ -317,6 +319,7 @@ class CardTool(object):
                 "name" : name,
                 "decorrByBin": decorrelateByBin,
                 "systNamePrepend" : systNamePrepend,
+                "formatWithValue" : formatWithValue,
             }
         })
 
@@ -330,11 +333,15 @@ class CardTool(object):
             scaleToNewLumi=self.lumiScale, 
             fakerateIntegrationAxes=self.getFakerateIntegrationAxes())
         return self.datagroups.getDatagroups()[proc].hists["syst"]
+
+    def getNominalHistForSignal(self):
+        signal_samples = self.procGroups['signal_samples']
+        return self.getHistsForProcAndSyst(signal_samples[0], self.nominalName)
         
     def setMirrorForSyst(self, syst, mirror=True):
         self.systematics[syst]["mirror"] = mirror
 
-    def systLabelForAxis(self, axLabel, entry, axis):
+    def systLabelForAxis(self, axLabel, entry, axis, formatWithValue=None):
         if type(axis) == hist.axis.StrCategory:
             if entry in axis:
                 return entry
@@ -346,7 +353,22 @@ class CardTool(object):
             return 'Up' if entry else 'Down'
         if "{i}" in axLabel:
             return axLabel.format(i=entry)
-        return axLabel+str(entry)
+        if formatWithValue:
+            if formatWithValue == "center":
+                edges = axis.centers
+            elif formatWithValue == "low":
+                edges = axis.edges[:-1]
+            elif formatWithValue == "high":
+                edges = axis.edges[1:]
+            else:
+                raise ValueError(f"Invalid formatWithValue choice {formatWithValue}.")
+
+            entry = edges[entry]
+
+        if type(entry) in [float, np.float64]:
+            entry = f"{entry:0.1f}".replace(".", "p") if not entry.is_integer() else str(int(entry))
+
+        return f"{axLabel}{entry}"
 
     # TODO: Really would be better to use the axis names, not just indices
     def excludeSystEntry(self, entry, entries_to_skip):
@@ -370,7 +392,11 @@ class CardTool(object):
             skipEntryArr = np.full(nsyst, -1, dtype=object)
             nother_ax = h.ndim-nsyst
             for k,v in skipEntry.items():
+                if k not in h.axes.name:
+                    raise ValueError(f"Invalid skipEntry expression {k} : {v}. Axis {k} is not in hist!")
                 idx = h.axes.name.index(k)-nother_ax # Offset by the number of other axes, require that syst axes are the trailing ones
+                if idx < 0:
+                    raise ValueError(f"Invalid skip entry! Axis {k} was found in position {idx+nother_ax} of {h.ndim} axes, but {nsyst} syst axes were expected")
                 skipEntryArr[idx] = v
             logger.debug(f"Expanded skipEntry for syst {syst} is {skipEntryArr}. Syst axes are {h.axes.name[-nsyst:]}")
         elif type(skipEntry) not in (np.array, list, tuple):
@@ -440,7 +466,8 @@ class CardTool(object):
                     systInfo["outNames"].append("")
                 else:
                     name = systInfo["baseName"]
-                    name += "".join([self.systLabelForAxis(al, entry[i], ax) for i,(al,ax) in enumerate(zip(axLabels,axes))])
+                    fwv = systInfo["formatWithValue"]
+                    name += "".join([self.systLabelForAxis(al, entry[i], ax, fwv[i] if fwv else fwv) for i,(al,ax) in enumerate(zip(axLabels,axes))])
                     if "systNameReplace" in systInfo and systInfo["systNameReplace"]:
                         for rep in systInfo["systNameReplace"]:
                             name = name.replace(*rep)
@@ -471,7 +498,7 @@ class CardTool(object):
             return f"{self.histName}_{proc}_{name}"
 
     def getBoostHistByCharge(self, h, q):
-        return h[{"charge" : h.axes["charge"].index(q) if q != "sum" else hist.sum}]
+        return h[{self.charge_ax : h.axes[self.charge_ax].index(q) if q != "sum" else hist.sum}]
 
     def checkSysts(self, var_map, proc, thresh=0.25, skipSameSide=False, skipOneAsNomi=False):
         #if self.check_variations:
@@ -688,32 +715,17 @@ class CardTool(object):
             self.outfile = outfile
             self.outfile.cd()
 
-    def setOutput(self, outfolder, fitvars=[], doStatOnly=False, postfix=None):
-        if self.datagroups.wmass:
-            prefix = "WMass"
-        elif self.datagroups.wlike:
-            prefix = "ZMassWLike"
-        else:
-            prefix = "ZMassDilepton"
-        if self.datagroups.lowPU:
-            prefix += "_lowPU"
-        tag = prefix+"_"+"_".join(fitvars)
-        if doStatOnly:
-            tag += "_statOnly"
-        if self.datagroups.flavor:
-            tag += f"_{self.datagroups.flavor}"
-        if postfix is not None:
-            tag += f"_{postfix}"
-        self.outfolder = f"{outfolder}/{tag}/"
+    def setOutput(self, outfolder, basename):
+        self.outfolder = outfolder
         if not os.path.isdir(self.outfolder):
             os.makedirs(self.outfolder)
         suffix = f"_{self.datagroups.flavor}" if self.datagroups.flavor else ""
         if self.xnorm:
             suffix += '_xnorm'
 
-        self.cardName = (f"{self.outfolder}/{prefix}_{{chan}}{suffix}.txt")
-        self.setOutfile(os.path.abspath(f"{self.outfolder}/{prefix}CombineInput{suffix}.root"))
-
+        self.cardName = (f"{self.outfolder}/{basename}_{{chan}}{suffix}.txt")
+        self.setOutfile(os.path.abspath(f"{self.outfolder}/{basename}CombineInput{suffix}.root"))
+            
     def writeOutput(self, args=None, forceNonzero=True, check_systs=True):
         self.datagroups.loadHistsForDatagroups(
             baseName=self.nominalName, syst=self.nominalName,
@@ -959,16 +971,14 @@ class CardTool(object):
         
     def writeHistWithCharges(self, h, name):
         hout = narf.hist_to_root(h)
-        hout.SetName(f"{name}_{self.channels[0]}")
+        hout.SetName(f"{name}_{self.channels[0]}" if self.channels else name)
         hout.Write()
     
     def writeHist(self, h, proc, syst, setZeroStatUnc=False, decorrByBin={}, hnomi=None):
         if self.skipHist:
             return
-        if self.project:
-            axes = self.project[:]
-            if "charge" in h.axes.name and "charge" not in axes and not self.xnorm :
-                axes.append("charge")
+        if self.fit_axes:
+            axes = self.fit_axes[:]
             if self.ABCD and not self.xnorm:
                 if self.nameMT not in axes:
                     axes.append(self.nameMT)
@@ -989,7 +999,7 @@ class CardTool(object):
         if not self.nominalDim:
             self.nominalDim = h.ndim
             if self.nominalDim-self.writeByCharge > 3:
-                raise ValueError("Cannot write hists with > 3 dimensions as combinetf does not accept THn")
+                raise ValueError(f"Cannot write hists with > 3 dimensions as combinetf does not accept THn. Axes are {h.axes.name}")
 
         if h.ndim != self.nominalDim:
             raise ValueError(f"Histogram {proc}/{syst} does not have the correct dimensions. Found {h.ndim}, expected {self.nominalDim}")

@@ -33,7 +33,7 @@ mass_max = 120
 datasets = getDatasets(maxFiles=args.maxFiles,
                         filt=args.filterProcs,
                         excl=list(set(args.excludeProcs + ["singlemuon"] if flavor=="ee" else ["singleelectron"])),
-                        mode="lowPU"
+                        mode="lowpu"
                         )
 
 
