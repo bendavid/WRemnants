@@ -56,7 +56,7 @@ class HDF5Writer(object):
             logger.warning("Theoryfit for more than one channels is currently experimental")
         self.theoryFit = True
         base_processes = ["W" if c.datagroups.mode == "wmass" else "Z" for c in self.get_channels().values()]
-        axes = [c.project for c in self.get_channels().values()]
+        axes = [c.fit_axes for c in self.get_channels().values()]
         fitresult = input_tools_combinetf.get_fitresult(fitresult_filename)
         data, self.theoryFitDataCov = input_tools_combinetf.get_theoryfit_data(fitresult, axes=axes, base_processes=base_processes, poi_type=poi_type, flow=gen_flow)
         # theoryfit data for each channel

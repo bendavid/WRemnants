@@ -98,7 +98,7 @@ for g_name, group in datagroups.items():
         for axes_string in args.axes:
             axes = axes_string.split("-")
 
-            if (groups.wmass or groups.wlike) and axes[0] == "pt":
+            if groups.mode in ["wmass", "wlike"] and axes[0] == "pt":
                 genFlow=True
             else:
                 genFlow=False

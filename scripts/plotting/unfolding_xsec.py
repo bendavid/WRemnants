@@ -477,7 +477,7 @@ for poi_type in poi_types:
     for axes in gen_axes_permutations:
         logger.info(f"Make plots for process {base_process} and gen axes {axes}")
 
-        if groups.wmass:
+        if groups.mode in ["wmass", "lowpu_w"]:
             axes.append("qGen")
 
         channels = ["plus", "minus"] if "qGen" in axes else ["all"]
@@ -510,7 +510,7 @@ for poi_type in poi_types:
                     if not m.name.startswith("Bkg") and (base_process=="Z" or channel=="all" or channel in m.name)])
                 h = h.project(*channel_axes)
                 # for wlike the sample is randomly split in two based on reco charge
-                this_scale = 2*scale if groups.wlike else scale
+                this_scale = 2*scale if groups.mode == "wlike" else scale
                 if "xnorm" in name:
                     this_scale /= args.scaleXsec
                 h = hh.scaleHist(h, 1./this_scale)

@@ -48,7 +48,7 @@ fitresult = input_tools_combinetf.get_fitresult(args.fitresult)
 
 datagroups = Datagroups(args.infile)
 
-if datagroups.wmass:
+if datagroups.mode in ["wmass", "lowpu_w"]:
     base_group = "Wenu" if datagroups.flavor == "e" else "Wmunu"
 else:
     base_group = "Zee" if datagroups.flavor == "ee" else "Zmumu"
@@ -74,7 +74,7 @@ def plot(fittype, channel=None, data=True, stack=True, density=False, ratio=True
     for g_name in names:
         group = datagroups.groups[g_name]
         for member in group.members:
-            if datagroups.wmass and (
+            if datagroups.mode in ["wmass", "lowpu_w"] and (
                 (channel =="plus" and member.name.startswith("Wminus")) 
                 or (channel =="minus" and member.name.startswith("Wplus"))
             ):
@@ -84,7 +84,7 @@ def plot(fittype, channel=None, data=True, stack=True, density=False, ratio=True
                 logger.debug(f"Load datagroups member {member.name}")
                 histo = datagroups.results[member.name]["output"][args.baseName].get()
                 histo = histo.project(*args.axes)
-                if not datagroups.wmass:
+                if not datagroups.mode in ["wmass", "lowpu_w"]:
                     histo = histo[selections]
 
                 scale = datagroups.processScaleFactor(member)
