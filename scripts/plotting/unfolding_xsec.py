@@ -10,11 +10,12 @@ import pandas as pd
 import hist
 import json
 
-from utilities import boostHistHelpers as hh, logging, input_tools, output_tools
+from utilities import boostHistHelpers as hh, logging
 from utilities.styles.styles import nuisance_groupings as groupings
 from wremnants import plot_tools, histselections as sel
 from wremnants.datasets.datagroups import Datagroups
-from utilities.input_tools_combinetf import get_fitresult, read_impacts_pois, select_pois
+from utilities.io_tools import input_tools, output_tools
+from utilities.io_tools.combinetf_input import get_fitresult, read_impacts_pois, select_pois
 
 import pdb
 
@@ -27,7 +28,7 @@ parser.add_argument("--reference",  type=str, default=None, help="Optional combi
 parser.add_argument("-o", "--outpath", type=str, default=os.path.expanduser("~/www/WMassAnalysis"), help="Base path for output")
 parser.add_argument("-f", "--outfolder", type=str, default="./test", help="Subfolder for output")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name")
-parser.add_argument("--cmsDecor", default="Preliminary", type=str, choices=[None,"Preliminary", "Work in progress", "Internal"], help="Name to append to file name")
+parser.add_argument("--cmsDecor", default="Preliminary", type=str, choices=[None,"Preliminary", "Work in progress", "Internal"], help="CMS label")
 parser.add_argument("--lumi", type=float, default=16.8, help="Luminosity used in the fit, needed to get the absolute cross section")
 parser.add_argument("-r", "--rrange", type=float, nargs=2, default=[0.9,1.1], help="y range for ratio plot")
 parser.add_argument("--ylim", type=float, nargs=2, help="Min and max values for y axis (if not specified, range set automatically)")

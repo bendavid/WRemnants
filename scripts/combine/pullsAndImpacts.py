@@ -9,7 +9,8 @@ from dash import dcc
 import dash_daq as daq
 from dash import html
 from dash.dependencies import Input, Output
-from utilities import input_tools, input_tools_combinetf, output_tools, logging
+from utilities import logging
+from utilities.io_tools import input_tools, output_tools, combinetf_input
 from wremnants import plot_tools
 import os
 import re
@@ -248,7 +249,7 @@ def plotImpacts(df, poi, pulls=False, normalize=False, oneSidedImpacts=False):
     return fig
 
 def readFitInfoFromFile(rf, filename, poi, group=False, stat=0.0, normalize=False, scale=100):    
-    impacts, labels, _ = input_tools_combinetf.read_impacts_poi(rf, group, add_total=group, stat=stat, poi=poi, normalize=normalize)
+    impacts, labels, _ = combinetf_input.read_impacts_poi(rf, group, add_total=group, stat=stat, poi=poi, normalize=normalize)
 
     if (group and grouping) or args.filters:
         filtimpacts = []
@@ -267,7 +268,7 @@ def readFitInfoFromFile(rf, filename, poi, group=False, stat=0.0, normalize=Fals
     df['label'] = [translate_label.get(l, l) for l in labels]
     df['absimpact'] = np.abs(df['impact'])
     if not group:
-        df["pull"], df["constraint"] = input_tools_combinetf.get_pulls_and_constraints(filename, labels)
+        df["pull"], df["constraint"] = combinetf_input.get_pulls_and_constraints(filename, labels)
         df['abspull'] = np.abs(df['pull'])
         if poi:
             df.drop(df.loc[df['label'].str.contains(poi.replace("_noi",""), regex=True)].index, inplace=True)
@@ -426,15 +427,15 @@ if __name__ == '__main__':
         with open(args.translate) as f:
             translate_label = json.load(f)
 
-    fitresult = input_tools_combinetf.get_fitresult(args.inputFile)
-    fitresult_ref = input_tools_combinetf.get_fitresult(args.referenceFile) if args.referenceFile else None
+    fitresult = combinetf_input.get_fitresult(args.inputFile)
+    fitresult_ref = combinetf_input.get_fitresult(args.referenceFile) if args.referenceFile else None
 
     if args.noImpacts:
         # do one pulls plot, ungrouped
         producePlots(fitresult, args, None, fitresult_ref=fitresult_ref)
         exit()
 
-    pois = input_tools_combinetf.get_poi_names(fitresult, poi_type=None)
+    pois = combinetf_input.get_poi_names(fitresult, poi_type=None)
     for poi in pois:
         if args.mode in ["both", "ungrouped"]:
             producePlots(fitresult, args, poi, fitresult_ref=fitresult_ref)

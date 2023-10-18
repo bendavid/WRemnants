@@ -1,6 +1,6 @@
 import uproot
 import argparse
-from utilities import input_tools_combinetf
+from utilities.io_tools import combinetf_input
 
 def parseArgs():
     parser = argparse.ArgumentParser()
@@ -13,8 +13,8 @@ def parseArgs():
     return parser.parse_args()
 
 
-def printImpacts(args, fitresult, poi):
-    impacts,labels,_ = input_tools_combinetf.read_impacts_poi(fitresult, not args.ungroup, sort=args.sort, poi=poi, normalize = False)
+def printImpacts(args,fitresult,poi='Wmass'):
+    impacts,labels,_ = combinetf_input.read_impacts_poi(fitresult, not args.ungroup, sort=args.sort, poi=poi, normalize = False)
     unit = 'MeV' if poi.startswith('mass') else 'n.u. %'
     if args.nuisance:
         if args.nuisance not in labels:
@@ -27,6 +27,6 @@ def printImpacts(args, fitresult, poi):
 
 if __name__ == '__main__':
     args = parseArgs()
-    fitresult = input_tools_combinetf.get_fitresult(args.inputFile)
-    for poi in input_tools_combinetf.get_poi_names(fitresult):
+    fitresult = combinetf_input.get_fitresult(args.inputFile)
+    for poi in combinetf_input.get_poi_names(fitresult):
         printImpacts(args,fitresult,poi)

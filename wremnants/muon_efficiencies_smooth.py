@@ -11,7 +11,8 @@ import copy
 import os.path
 
 from utilities import boostHistHelpers as hh
-from utilities import common, logging, input_tools
+from utilities import common, logging
+from utilities.io_tools import input_tools
 logger = logging.child_logger(__name__)
 
 narf.clingutils.Declare('#include "muon_efficiencies_smooth.h"')

@@ -449,12 +449,6 @@ jobs:
           cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ 
           unfolding $WREMNANTS_OUTDIR/ZMassDilepton_unfolding/ card_sparse.hdf5
 
-      # - name: dilepton combine unfolding plot prefit 
-      #   run: >-
-      #     scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_plots.py 
-      #     $WREMNANTS_OUTDIR/ZMassDilepton_unfolding/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR --debug 
-      #     --rrange 0.9 1.1 --channels all --lumi=$LUMI_SCALE
-
       - name: dilepton combine unfolding plot pulls 
         run: >-
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/pullsAndImpacts.py 

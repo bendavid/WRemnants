@@ -1,4 +1,5 @@
-from utilities import boostHistHelpers as hh, common, output_tools, logging, differential
+from utilities import boostHistHelpers as hh, common, logging, differential
+from utilities.io_tools import output_tools
 
 parser,initargs = common.common_parser(True)
 
@@ -42,13 +43,13 @@ mass_min = 60
 mass_max = 120
 
 ewMassBins = theory_tools.make_ew_binning(mass = 91.1535, width = 2.4932, initialStep=0.010)
-ptV_binning = [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 20, 23, 27, 32, 40, 54, 100] if not args.finePtBinning else range(60)
+dilepton_ptV_binning = [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 20, 23, 27, 32, 40, 54, 100] if not args.finePtBinning else range(60)
 # available axes for dilepton validation plots
 all_axes = {
     "mll": hist.axis.Regular(60, 60., 120., name = "mll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
     "yll": hist.axis.Regular(20, -2.5, 2.5, name = "yll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
     "absYll": hist.axis.Regular(10, 0., 2.5, name = "absYll", underflow=False, overflow=not args.excludeFlow),
-    "ptll": hist.axis.Variable(ptV_binning, name = "ptll", underflow=False, overflow=not args.excludeFlow),
+    "ptll": hist.axis.Variable(dilepton_ptV_binning, name = "ptll", underflow=False, overflow=not args.excludeFlow),
     "etaPlus": hist.axis.Regular(int(args.eta[0]), args.eta[1], args.eta[2], name = "etaPlus"),
     "etaMinus": hist.axis.Regular(int(args.eta[0]), args.eta[1], args.eta[2], name = "etaMinus"),
     "etaSum": hist.axis.Regular(12, -4.8, 4.8, name = "etaSum"),
@@ -80,7 +81,7 @@ if args.csVarsHist:
 nominal_axes = [all_axes[a] for a in nominal_cols] 
 
 gen_axes = {
-    "ptVGen": hist.axis.Variable(ptV_binning, name = "ptVGen", underflow=False),
+    "ptVGen": hist.axis.Variable(dilepton_ptV_binning, name = "ptVGen", underflow=False),
     "absYVGen": hist.axis.Regular(10, 0, 2.5, name = "absYVGen", underflow=False),  
 }
 

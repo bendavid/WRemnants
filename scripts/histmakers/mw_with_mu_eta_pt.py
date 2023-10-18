@@ -1,5 +1,6 @@
 import argparse
-from utilities import output_tools, common, rdf_tools, logging, differential
+from utilities import common, rdf_tools, logging, differential
+from utilities.io_tools import output_tools
 from wremnants.datasets.datagroups import Datagroups
 
 parser,initargs = common.common_parser(True)
