@@ -1,7 +1,8 @@
 from collections import OrderedDict
 from wremnants import histselections as sel
 from wremnants.combine_helpers import setSimultaneousABCD
-from utilities import boostHistHelpers as hh, common, output_tools, logging
+from utilities import boostHistHelpers as hh, common, logging
+from utilities.io_tools import output_tools
 import narf
 import ROOT
 import uproot
@@ -385,7 +386,7 @@ class CardTool(object):
 
     def skipEntryDictToArray(self, h, skipEntry, syst):
         nsyst = len(self.systematics[syst]["systAxes"])
-        if self.systematics[syst]["mirror"]:
+        if "mirror" in h.axes.name:
             nsyst += 1
 
         if type(skipEntry) == dict:
@@ -399,10 +400,15 @@ class CardTool(object):
                     raise ValueError(f"Invalid skip entry! Axis {k} was found in position {idx+nother_ax} of {h.ndim} axes, but {nsyst} syst axes were expected")
                 skipEntryArr[idx] = v
             logger.debug(f"Expanded skipEntry for syst {syst} is {skipEntryArr}. Syst axes are {h.axes.name[-nsyst:]}")
+        elif isinstance(skipEntry, (bool, int, float, str)):
+            skipEntryArr = (skipEntry,)
         elif type(skipEntry) not in (np.array, list, tuple):
-            raise ValueError(f"Unexpected format for skipEntry. Must be either dict or sequence. found {type(skipEntry)}")
+            raise ValueError(f"Unexpected format for skipEntry. Must be either dict, sequence, or scalar type. found {type(skipEntry)}")
         else:
             skipEntryArr = skipEntry
+
+        if self.systematics[syst]["mirror"] and "mirror" not in h.axes.name and skipEntryArr[-1] == -1:
+            skipEntryArr = skipEntryArr[:-1]
 
         if len(skipEntryArr) != nsyst:
             raise ValueError("skipEntry tuple must have the same dimensions as the number of syst axes. " \
@@ -802,7 +808,7 @@ class CardTool(object):
         for n in range(2, len(self.datagroups.gen_axes)):
             axes_combinations += [k for k in itertools.combinations(self.datagroups.gen_axes, n)]
         for axes in axes_combinations:
-            logger.debug(f"Add sum group for {axes}")
+            logger.debug(f"Add sum group for {axes}{' with ' + genCharge if genCharge else ''}")
 
             if isinstance(axes, str):
                 axes = [axes]

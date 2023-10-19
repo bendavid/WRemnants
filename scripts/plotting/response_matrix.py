@@ -7,17 +7,17 @@ import numpy as np
 from wremnants import logging
 from wremnants import plot_tools
 from wremnants.datasets.datagroups import Datagroups
-from utilities import boostHistHelpers as hh, output_tools
-
-import pdb
+from utilities import boostHistHelpers as hh
+from utilities.io_tools import output_tools
 
 parser = argparse.ArgumentParser()
 parser.add_argument("infile", help="Output file of the analysis stage, containing ND boost histogrdams")
 parser.add_argument("--debug", action='store_true', help="Print debug output")
 parser.add_argument("-o", "--outpath", type=str, default=os.path.expanduser("~/www/WMassAnalysis"), help="Base path for output")
 parser.add_argument("-f", "--outfolder", type=str, default="test", help="Subfolder for output")
-parser.add_argument("--procFilters", type=str, nargs="*", default="Zmumu", help="Filter to plot (default no filter, only specify if you want a subset")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name")
+parser.add_argument("--cmsDecor", default="Preliminary", type=str, help="CMS label")
+parser.add_argument("--procFilters", type=str, nargs="*", default="Zmumu", help="Filter to plot (default no filter, only specify if you want a subset")
 parser.add_argument("--axes", type=str, nargs="+", default=["pt-ptGen","abs(eta)-absEtaGen"], help="Define for which axes the response matrix to be plotted")
 parser.add_argument("-c", "--channels", type=str, nargs="+", choices=["plus", "minus", "all"], default=["all"], help="Select channel to plot")
 
@@ -30,8 +30,6 @@ outdir = output_tools.make_plot_dir(args.outpath, args.outfolder)
 groups = Datagroups(args.infile, filterGroups=args.procFilters, excludeGroups=None if args.procFilters else ['QCD'])
 
 groups.setGenAxes([]) # set gen axes empty to not integrate over when loading
-
-cms_decor = "Preliminary"
 
 if "Wmunu" in groups.groups:
     groups.copyGroup("Wmunu", "Wmunu_qGen0", member_filter=lambda x: x.name.startswith("Wminus"))
@@ -63,7 +61,7 @@ translate_label = {
 }
 
 
-def get_purity(matrix, xbins, ybins, flow=False):
+def get_purity(matrix, xbins, ybins):
 
     centers = xbins[:-1] + (xbins[1:] - xbins[:-1])/2    
     edges = ybins
@@ -71,8 +69,8 @@ def get_purity(matrix, xbins, ybins, flow=False):
     values = []
     for iBin, center in enumerate(centers):
         # find out in which gen bin(s) we are
-        ilow = np.where(edges == edges[center > edges][-1])[0][0] + int(flow)
-        ihigh = np.where(edges == edges[center < edges][0])[0][0] + int(flow)
+        ilow = np.where(edges == edges[center > edges][-1])[0][0]
+        ihigh = np.where(edges == edges[center < edges][0])[0][0]
 
         # sum corresponding diagonal element(s)
         diag = matrix[iBin, ilow:ihigh].sum()
@@ -84,9 +82,9 @@ def get_purity(matrix, xbins, ybins, flow=False):
 
     return np.array(values)
 
-def get_stability(matrix, xbins, ybins, flow=False):
+def get_stability(matrix, xbins, ybins):
     # stability is same computation as purity with inverted axes
-    return get_purity(matrix.T, ybins, xbins, flow=flow)
+    return get_purity(matrix.T, ybins, xbins)
 
 
 
@@ -99,18 +97,25 @@ for g_name, group in datagroups.items():
         for axes_string in args.axes:
             axes = axes_string.split("-")
 
+            if groups.mode in ["wmass", "wlike"] and axes[0] == "pt":
+                genFlow=True
+            else:
+                genFlow=False
+
             if axes[0].startswith("abs("):
                 # mirror axis at half
-                hist2d = hh.projectNoFlow(hist[select], [axes[0][4:-1], *axes[1:]])
+                hist2d = hist[select].project(axes[0][4:-1], *axes[1:])
                 nbins = len(hist2d.axes.edges[0])-1
-                values = hist2d.values()[:int(nbins/2)][::-1] + hist2d.values()[int(nbins/2):]
+                values = hist2d.values(flow=genFlow)[:int(nbins/2)][::-1] + hist2d.values(flow=genFlow)[int(nbins/2):]
                 xbins = hist2d.axes[0].edges[int(nbins/2):]
             else:
-                hist2d = hh.projectNoFlow(hist[select], axes)
-                values = hist2d.values()
+                hist2d = hist[select].project(*axes)
+                values = hist2d.values(flow=genFlow)
                 xbins = hist2d.axes[0].edges
 
             ybins = hist2d.axes[1].edges
+            if genFlow:
+                ybins = np.array([ybins[0]-(ybins[1]-ybins[0]), *ybins, ybins[-1]+(ybins[-1]-ybins[-2])])
 
             outname = g_name+"_"+"_".join([a.replace("(","").replace(")","") for a in axes])
 
@@ -131,7 +136,7 @@ for g_name, group in datagroups.items():
             ax.set_xlim([min(xbins), max(xbins)])
             ax.set_ylim([min_y, max_y])
 
-            hep.cms.label(ax=ax, fontsize=20, label=cms_decor, data=False)
+            hep.cms.label(ax=ax, fontsize=20, label=args.cmsDecor, data=False)
 
             outfile = "purity_"+outname
             plot_tools.save_pdf_and_png(outdir, outfile)
@@ -155,7 +160,7 @@ for g_name, group in datagroups.items():
             ax.set_xlim([min(ybins), max(ybins)])
             ax.set_ylim([min_y, max_y])
 
-            hep.cms.label(ax=ax, fontsize=20, label=cms_decor, data=False)
+            hep.cms.label(ax=ax, fontsize=20, label=args.cmsDecor, data=False)
 
             outfile = "stability_"+outname
             plot_tools.save_pdf_and_png(outdir, outfile)
@@ -180,7 +185,7 @@ for g_name, group in datagroups.items():
             # ax.set_xticklabels(xlabels, rotation = 90)
             # ax.set_yticklabels(xlabels)
 
-            hep.cms.label(ax=ax, fontsize=20, label=cms_decor, data=False)
+            hep.cms.label(ax=ax, fontsize=20, label=args.cmsDecor, data=False)
 
             outfile = "responce_matrix_"+outname
 
@@ -188,8 +193,8 @@ for g_name, group in datagroups.items():
 
             plot_tools.save_pdf_and_png(outdir, outfile)
 
-            # plot_tools.write_index_and_log(outdir, outfile, 
+            plot_tools.write_index_and_log(outdir, outfile, 
             #     yield_tables={"Values" : cov_mat}, nround=2 if "correlation" in matrix else 10,
-            #     analysis_meta_info=None,
-            #     args=args,
-            # )
+                analysis_meta_info={args.infile : groups.getMetaInfo()},
+                args=args,
+            )
