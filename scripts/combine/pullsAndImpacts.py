@@ -13,15 +13,9 @@ from utilities import input_tools, output_tools, logging
 from wremnants import plot_tools
 import os
 import re
+import json
 
-translate_label = {
-    # "stat": "Unfolding",
-    "resumNonpert": "Non perturbative QCD",
-    "pdfMSHT20": "pdf",
-    "pdfMSHT20AlphaS": r"$\mathrm{pdf}\ \alpha_\mathrm{S}$",
-    "QCDscaleWPtHelicityMiNNLO": "Perturbative QCD",
-    "theory_ew": "EW",
-}
+from utilities.styles.styles import nuisance_groupings as groupings
 
 def writeOutput(fig, outfile, extensions=[], postfix=None, args=None, meta_info=None):
     name, ext = os.path.splitext(outfile)
@@ -34,11 +28,12 @@ def writeOutput(fig, outfile, extensions=[], postfix=None, args=None, meta_info=
     for ext in extensions:
         if ext[0] != ".":
             ext = "."+ext
-        func = "write_html" if ext == ".html" else "write_image"
         output = name+ext
         logger.debug(f"Write output file {output}")
-
-        getattr(fig, func)(output)
+        if ext == ".html":
+            fig.write_html(output, include_mathjax='cdn')
+        else:
+            fig.write_image(output)
         
         output = outfile.rsplit("/", 1)
         output[1] = os.path.splitext(output[1])[0]
@@ -228,7 +223,7 @@ def plotImpacts(df, pulls=False, POI='Wmass', normalize=False, oneSidedImpacts=F
             for k in info.keys():
                 new_info[k.replace("axis", "axis2")] = info[k]
             info = new_info
-        fig.update_layout(barmode='overlay',**info)
+        fig.update_layout(barmode='overlay', **info)
 
     return fig
 
@@ -243,11 +238,13 @@ def readFitInfoFromFile(rf, filename, group=False, stat=0.0, POI='Wmass', normal
     # skip POIs in case of unfolding, want only nuisances
     pois = input_tools.getPOInames(rf) if POI is None else []
 
-    if args.filters or len(pois) > 0:
+    if (group and grouping) or args.filters or len(pois) > 0:
         filtimpacts = []
         filtlabels = []
         for impact,label in zip(impacts,labels):
             if label in pois:
+                continue
+            if group and grouping and label not in grouping:
                 continue
             if args.filters and not any(re.match(f, label) for f in args.filters):
                 continue
@@ -271,10 +268,8 @@ def readFitInfoFromFile(rf, filename, group=False, stat=0.0, POI='Wmass', normal
             pulls[i] = getattr(rtree, label)
             constraints[i] = getattr(rtree, label+"_err")
     
-    labels = [translate_label.get(l, l) for l in labels]
-
     df = pd.DataFrame(np.array((pulls, impacts, constraints), dtype=np.float64).T, columns=["pull", "impact", "constraint"])
-    df['label'] = labels
+    df['label'] = [translate_label.get(l, l) for l in labels]
     df['absimpact'] = np.abs(df['impact'])
     df['abspull'] = np.abs(df['pull'])
     if not group:
@@ -303,6 +298,8 @@ def parseArgs():
     parser.add_argument("--debug", action='store_true', help="Print debug output")
     parser.add_argument("--oneSidedImpacts", action='store_true', help="Make impacts one-sided")
     parser.add_argument("--filters", nargs="*", type=str, help="Filter regexes to select nuisances by name")
+    parser.add_argument("--grouping", type=str, default=None, help="Select nuisances by a predefined grouping", choices=groupings.keys())
+    parser.add_argument("-t","--translate", type=str, default=None, help="Specify .json file to translate labels")
     parsers = parser.add_subparsers(dest='output_mode')
     interactive = parsers.add_parser("interactive", help="Launch and interactive dash session")
     interactive.add_argument("-i", "--interface", default="localhost", help="The network interface to bind to.")
@@ -420,6 +417,13 @@ if __name__ == '__main__':
     args = parseArgs()
 
     logger = logging.setup_logger("pullsAndImpacts", 4 if args.debug else 3)
+
+    grouping = groupings[args.grouping] if args.grouping else None
+
+    translate_label = {}
+    if args.translate:
+        with open(args.translate) as f:
+            translate_label = json.load(f)
 
     fitresult = input_tools.getFitresult(args.inputFile)
     fitresult_ref = input_tools.getFitresult(args.referenceFile) if args.referenceFile else None

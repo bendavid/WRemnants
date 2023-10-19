@@ -11,10 +11,11 @@ import matplotlib as mpl
 import pandas as pd
 import hist
 import h5py
-from wremnants import histselections as sel
+import json
 
 from utilities import boostHistHelpers as hh, logging, input_tools, common, differential, output_tools
-from wremnants import plot_tools
+from utilities.styles.styles import nuisance_groupings as groupings
+from wremnants import plot_tools, histselections as sel
 from wremnants.datasets.datagroups import Datagroups
 from wremnants.unfolding_tools import get_bin, getProcessBins, get_results, load_poi_matrix
 
@@ -42,11 +43,20 @@ parser.add_argument("--normalize", action='store_true', help="Plot normalized di
 parser.add_argument("--lumi", type=float, default=16.8, help="Luminosity used in the fit, needed to get the absolute cross section")
 parser.add_argument("--plotSumPOIs", action='store_true', help="Plot xsecs from sum POI groups")
 parser.add_argument("--scaleXsec", type=float, default=1.0, help="Scale xsec predictions with this number")
+parser.add_argument("--grouping", type=str, default=None, help="Select nuisances by a predefined grouping", choices=groupings.keys())
+parser.add_argument("-t","--translate", type=str, default=None, help="Specify .json file to translate labels")
 parser.add_argument("--eoscp", action='store_true', help="Override use of xrdcp and use the mount instead")
 
 args = parser.parse_args()
 
 logger = logging.setup_logger("unfolding_xsec", 4 if args.debug else 3)
+
+grouping = groupings[args.grouping] if args.grouping else None
+
+translate_label = {}
+if args.translate:
+    with open(args.translate) as f:
+        translate_label = json.load(f)    
 
 cms_decor = "Preliminary"
 
@@ -71,43 +81,6 @@ groups.setNominalName(args.baseName)
 groups.loadHistsForDatagroups(args.baseName, syst="", procsToRead=[process])
 
 input_subdir = args.fitresult.split("/")[-2]
-
-translate = {
-    "QCDscalePtChargeMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
-    "QCDscaleZPtChargeMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
-    "QCDscaleWPtChargeMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
-    "QCDscaleZPtHelicityMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
-    "QCDscaleWPtHelicityMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
-    "QCDscaleZPtChargeHelicityMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
-    "QCDscaleWPtChargeHelicityMiNNLO": r"$\mu_\mathrm{R} \mu_\mathrm{F}$ scale",
-    "binByBinStat": "Bin-by-bin stat.",
-    "CMS_recoil": "recoil",
-    "CMS_background": "Bkg.",
-    "FakeHighMT": "FakeHighMT",
-    "FakeLowMT": "FakeLowMT",
-    "rFake": "fakerate",
-    "rFakemu": "fakerate",
-    "rFakee": "fakerate",
-    "FakemuHighMT": "FakeHighMT",
-    "FakemuLowMT": "FakeLowMT",
-    "FakeeHighMT": "FakeHighMT",
-    "FakeeLowMT": "FakeLowMT",
-    "massShiftZ": "Z mass",
-    "massShiftW": "W mass",
-    "pdfMSHT20": "PDF",
-    "pdfMSHT20AlphaS": r"PDF $\alpha_\mathrm{S}$",
-    "resumTNP": "Non purt. trans.",
-    "resumNonpert": "Non pert.",
-    "pdfMSHT20": "PDF",
-    "pdfMSHT20": "PDF",
-    "eff_stat": "$\epsilon^{\mu}_\mathrm{stat}$",
-    "eff_syst": "$\epsilon^{\mu}_\mathrm{syst}$",
-    "muonPrefire": "L1 prefire",
-    "ecalPrefire": "L1 ecal prefire",
-    "stat": "Data stat.",
-    "luminosity": "Luminosity",
-    "theory_ew": "EW",
-}
 
 xlabels = {
     "ptGen" : r"$p_{T}^{\ell}$ [GeV]",
@@ -359,13 +332,13 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normaliz
         zorder=2,
     )
     uncertainties = make_yields_df([hist_xsec], ["Total"], per_bin=True, yield_only=True, percentage=percentage)
-    # fakerate = ["err_FakemuHighMT", "err_FakemuLowMT", "err_rFakemu"]
-    sources =["err_stat"]
-    # sources += fakerate
-    remove = []#["massShiftZ", "ecalPrefire", "QCDscaleZPtChargeMiNNLO", "QCDscaleZPtHelicityMiNNLO", "QCDscaleZPtChargeHelicityMiNNLO", ]
-    sources += list(sorted([s for s in filter(lambda x: x.startswith("err"), df.keys()) 
-        if s.replace("err_","") not in ["stat", "total", "FakeHighMT", "FakeLowMT", "rFake", "resumTNP", *remove] 
-            and "eff_stat_" not in s and "eff_syst_" not in s]))    # only take eff grouped stat and syst
+    
+    if grouping:
+        sources = ["err_"+g for g in grouping]
+    else:
+        sources =["err_stat"]
+        sources += list(sorted([s for s in filter(lambda x: x.startswith("err"), df.keys()) 
+            if s.replace("err_","") not in ["stat", "total"] ])) # total and stat are added first
 
     NUM_COLORS = len(sources)-1
     cm = mpl.colormaps["gist_rainbow"]
@@ -373,9 +346,9 @@ def plot_uncertainties_unfolded(df, channel=None, edges=None, scale=1., normaliz
     i=0
     for source in sources:
 
-        name = source.replace("err_","").replace("muon_","")
+        name = source.replace("err_","")
 
-        name = translate.get(name,name)
+        name = translate_label.get(name,name)
 
         if source =="err_stat":
             color = "grey"
@@ -580,39 +553,6 @@ for axes in gen_axes_permutations:
             # relative uncertainty
             # plot_uncertainties_unfolded(data_c, channel=channel, scale=scale, normalize=args.normalize, relative_uncertainty=True, process_label = process_label)
             plot_uncertainties_unfolded(data_c, edges=edges, channel=channel, scale=scale, normalize=args.normalize, relative_uncertainty=True, logy=args.logy, process_label = process_label, axes=channel_axes)
-
-
-        # if not args.normalize:
-        #     if set(gen_axes) != set(axes):
-        #         continue
-
-        #     # write out 1D distributions
-        #     logger.info(f"Save measured differential cross secction distribution")
-        #     hist_xsec = hist.Hist(
-        #         hist.axis.Regular(bins=len(data_c), start=0.5, stop=len(data_c)+0.5, underflow=False, overflow=False), storage=hist.storage.Weight())
-        #     hist_xsec.view(flow=False)[...] = np.stack([data_c["value"].values, (data_c["err_total"].values)**2], axis=-1)
-
-        #     # write out covariance as 2D hist
-        #     hist_cov = load_poi_matrix(rfile, poi_type[0], base_process=base_process, axes=channel_axes, keys=channel_keys)
-            
-        #     histname = f"data_{base_process}"
-        #     covname = f"covariance_matrix_{base_process}"
-        #     if channel != "all":
-        #         histname += f"_{channel}_"
-        #         covname += f"_{channel}_"
-
-        #     histname += "_".join(axes)
-        #     covname += "_".join(axes)
-
-        #     outfile.create_dataset(histname, data=hist_xsec)
-        #     outfile.create_dataset(covname, data=hist_cov)
-
-        # if "correlation" in args.plots:
-        #     plot_matrix_poi(f"correlation_matrix_channel{poi_type}", base_process=base_process, axes=channel_axes, keys=channel_keys)
-        # if "covariance" in args.plots:
-        #     plot_matrix_poi(f"covariance_matrix_channel{poi_type}", base_process=base_process, axes=channel_axes, keys=channel_keys)
-
-# outfile.close()
 
 if output_tools.is_eosuser_path(args.outpath) and args.eoscp:
     output_tools.copy_to_eos(args.outpath, args.outfolder)

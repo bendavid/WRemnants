@@ -100,7 +100,7 @@ class TheoryHelper(object):
         if self.minnlo_unc and self.minnlo_unc not in ["none", None]:
             for sample_group in self.samples:
                 if self.card_tool.procGroups.get(sample_group, None):
-                    self.add_minnlo_scale_uncertainty(sample_group, rebin_pt=common.ptV_binning)
+                    self.add_minnlo_scale_uncertainty(sample_group, rebin_pt=common.ptV_binning[::2])
 
     def add_minnlo_scale_uncertainty(self, sample_group, use_hel_hist=False, rebin_pt=None):
         if not sample_group or sample_group not in self.card_tool.procGroups:
@@ -123,9 +123,11 @@ class TheoryHelper(object):
 
         syst_axes = sum_axes + ["muRfact", "muFfact"]
         syst_ax_labels = ["PtV", "genQ", "muR", "muF"]
+        format_with_values = ["low", "center", "center", "center"]
         if use_hel_hist:
             syst_axes.insert(2, "helicity")
             syst_ax_labels.insert(2, "AngCoeff")
+            format_with_values.insert(2, "low")
 
         group_name = f"QCDscale{self.sample_label(sample_group)}"
         # Exclude all combinations where muR = muF = 1 (nominal) or where
@@ -166,6 +168,7 @@ class TheoryHelper(object):
                 idx = syst_axes.index(ax_name)
                 syst_axes.pop(idx)
                 syst_ax_labels.pop(idx)
+                format_with_values.pop(idx)
 
         for ax,name in zip(sum_axes[:], ["Pt", "Charge", "Helicity"]):
             set_sum_over_axis(name, ax)
@@ -208,6 +211,7 @@ class TheoryHelper(object):
                 actionArgs=action_args,
                 processes=[sample_group],
                 group=group_name,
+                splitGroup={"QCDScale": ".*"},
                 systAxes=syst_axes,
                 labelsByAxis=syst_ax_labels,
                 # Exclude all combinations where muR = muF = 1 (nominal) or where
@@ -215,7 +219,7 @@ class TheoryHelper(object):
                 skipEntries=skip_entries,
                 systNameReplace=name_replace,
                 baseName=group_name+"_",
-                formatWithValue=True,
+                formatWithValue=format_with_values,
                 passToFakes=self.propagate_to_fakes,
                 rename=group_name, # Needed to allow it to be called multiple times
             )
@@ -257,6 +261,7 @@ class TheoryHelper(object):
         self.card_tool.addSystematic(name=self.corr_hist_name,
             processes=['single_v_samples'],
             group="resumTNP",
+            splitGroup={"resum": ".*"},
             systAxes=["vars"],
             passToFakes=self.propagate_to_fakes,
             systNameReplace=name_replace,
@@ -320,6 +325,7 @@ class TheoryHelper(object):
             action=lambda h: h[{self.syst_ax : gamma_vals}],
             outNames=[f"{nuisance_name}Down", f"{nuisance_name}Up"],
             group="resumNonpert",
+            splitGroup={"resum": ".*"},
             rename=nuisance_name,
         )
 
@@ -337,6 +343,7 @@ class TheoryHelper(object):
         card_tool.addSystematic(name=theory_hist,
             processes=samples,
             group="resumScale",
+            splitGroup={"resum": ".*"},
             passToFakes=to_fakes,
             skipEntries=[{syst_ax : x} for x in both_exclude+tnp_nuisances],
             systAxes=["downUpVar"], # Is added by the actionMap
@@ -349,6 +356,7 @@ class TheoryHelper(object):
         card_tool.addSystematic(name=theory_hist,
             processes=samples,
             group="resumScale",
+            splitGroup={"resum": ".*"},
             passToFakes=to_fakes,
             systAxes=["vars"],
             actionMap={s : lambda h: h[{"vars" : ["kappaFO0.5-kappaf2.", "kappaFO2.-kappaf0.5", "mufdown", "mufup",]}] for s in expanded_samples},
@@ -398,6 +406,7 @@ class TheoryHelper(object):
                 self.card_tool.addSystematic(name=self.np_hist_name,
                     processes=[sample_group],
                     group="resumNonpert",
+                    splitGroup={"resum": ".*"},
                     systAxes=[self.syst_ax] if not binned else ["absYVgenNP", "chargeVgenNP", "vars"],
                     passToFakes=self.propagate_to_fakes,
                     action=action,
@@ -430,6 +439,7 @@ class TheoryHelper(object):
             processes=["single_v_samples"],
             mirror=True if symHessian else False,
             group=pdfName,
+            splitGroup={f"{pdfName}NoAlphaS": '(?!.*alphaS)'},
             passToFakes=self.propagate_to_fakes,
             actionMap=action,
             scale=pdfInfo.get("scale", 1)*scale,
@@ -451,7 +461,8 @@ class TheoryHelper(object):
         self.card_tool.addSystematic(f"{pdfName}alphaS{asRange}", 
             processes=["single_v_samples"],
             mirror=False,
-            group=f"{pdfName}AlphaS",
+            group=f"{pdfName}",
+            splitGroup={f"{pdfName}AlphaS": ".*alphaS"},
             systAxes=["alphasVar"],
             systNameReplace=[("as", "pdfAlphaS")]+[("0116", "Down"), ("0120", "Up")] if asRange == "002" else [("0117", "Down"), ("0119", "Up")],
             scale=0.75 if asRange == "002" else 1.5,
@@ -470,6 +481,7 @@ class TheoryHelper(object):
             self.card_tool.addSystematic(name=self.corr_hist_name,
                 processes=[sample_group],
                 group="resumTransition",
+                splitGroup={"resum": ".*"},
                 systAxes=["downUpVar"],
                 passToFakes=to_fakes,
                 # NOTE: I don't actually remember why this used no_flow=ptVgen previously, I don't think there's any harm in not using it...

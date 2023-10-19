@@ -113,6 +113,7 @@ else:
 logger.info(f"SF file: {args.sfFile}")
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
+vertex_helper = wremnants.make_vertex_helper(era = era)
 
 calib_filepaths = common.calib_filepaths
 closure_filepaths = common.closure_filepaths
@@ -218,6 +219,13 @@ def build_graph(df, dataset):
         results.append(df.HistoBoost("nominal", axes, cols))
     else:
         df = df.Define("weight_pu", pileup_helper, ["Pileup_nTrueInt"])
+        df = df.Define("weight_vtx", vertex_helper, ["GenVtx_z", "Pileup_nTrueInt"])
+        df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId"])
+
+        weight_expr = "weight_pu*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom"
+        if not args.noVertexWeight:
+            weight_expr += "*weight_vtx"            
+
         columnsForSF = ["trigMuons_pt0", "trigMuons_eta0", "trigMuons_SApt0", "trigMuons_SAeta0", "trigMuons_uT0", "trigMuons_charge0", "trigMuons_passTrigger0",
                         "nonTrigMuons_pt0", "nonTrigMuons_eta0", "nonTrigMuons_SApt0", "nonTrigMuons_SAeta0", "nonTrigMuons_uT0", "nonTrigMuons_charge0", "nonTrigMuons_passTrigger0"]
         df = muon_selections.define_muon_uT_variable(df, isWorZ, smooth3dsf=args.smooth3dsf, colNamePrefix="trigMuons")
@@ -226,11 +234,12 @@ def build_graph(df, dataset):
             columnsForSF.remove("trigMuons_uT0")
             columnsForSF.remove("nonTrigMuons_uT0")
 
-        # FIXME: add flags for pass_trigger for both leptons
-        df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, columnsForSF)
-        df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId"])
+        if not args.noScaleFactors:
+            # FIXME: add flags for pass_trigger for both leptons
+            df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, columnsForSF)
+            weight_expr += "*weight_fullMuonSF_withTrackingReco"
 
-        df = df.Define("exp_weight", "weight_pu*weight_fullMuonSF_withTrackingReco*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom")
+        df = df.Define("exp_weight", weight_expr)
         df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
 
         results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"], storage=hist.storage.Double()))

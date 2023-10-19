@@ -240,7 +240,7 @@ class Datagroups(object):
     ## baseName takes values such as "nominal"
     def setHists(self, baseName, syst, procsToRead=None, label=None, nominalIfMissing=True, 
                  applySelection=True, fakerateIntegrationAxes=[], forceNonzero=True, preOpMap=None, preOpArgs=None, scaleToNewLumi=1, 
-                 excludeProcs=None, forceToNominal=[], sumFakesPartial=True, sum_axes=[]):
+                 excludeProcs=None, forceToNominal=[], sumFakesPartial=True):
         if not label:
             label = syst if syst else baseName
         # this line is annoying for the theory agnostic, too many processes for signal
@@ -305,9 +305,6 @@ class Datagroups(object):
                     else:
                         logger.warning(str(e))
                         continue
-
-                if sum_axes:
-                    h = h[{ax : hist.sum for ax in sum_axes if ax in h.axes.name}]
 
                 h_id = id(h)
 
@@ -446,7 +443,7 @@ class Datagroups(object):
     def loadHistsForDatagroups(
         self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="",
         nominalIfMissing=True, applySelection=True, fakerateIntegrationAxes=[], forceNonzero=True, pseudodata=False,
-        preOpMap={}, preOpArgs={}, scaleToNewLumi=1, forceToNominal=[], sumFakesPartial=True, sum_axes=[],
+        preOpMap={}, preOpArgs={}, scaleToNewLumi=1, forceToNominal=[], sumFakesPartial=True
     ):
         logger.debug("Calling loadHistsForDatagroups()")
         logger.debug(f"The basename and syst is: {baseName}, {syst}")
@@ -460,7 +457,7 @@ class Datagroups(object):
                           forceNonzero=forceNonzero, preOpMap=preOpMap, preOpArgs=preOpArgs, 
                           scaleToNewLumi=scaleToNewLumi,
                           excludeProcs=excluded_procs, forceToNominal=forceToNominal,
-                          sum_axes=sum_axes, sumFakesPartial=sumFakesPartial)
+                          sumFakesPartial=sumFakesPartial)
 
     def getDatagroups(self):
         return self.groups
@@ -581,16 +578,16 @@ class Datagroups(object):
 
         logger.debug(f"Gen axes are now {self.gen_axes}")
 
-    def getGenBinIndices(self, h):
+    def getGenBinIndices(self, h, axesToRead=[]):
         gen_bins = []
-        for gen_axis in self.gen_axes:
+        for gen_axis in (axesToRead if len(axesToRead) else self.gen_axes):
             if gen_axis not in h.axes.name:
                 raise RuntimeError(f"Gen axis '{gen_axis}' not found in histogram axes '{h.axes.name}'!")
 
             gen_bins.append(range(h.axes[gen_axis].size))
         return gen_bins
 
-    def defineSignalBinsUnfolding(self, group_name, new_name=None, member_filter=None):
+    def defineSignalBinsUnfolding(self, group_name, new_name=None, member_filter=None, histToReadAxes="xnorm", axesToRead=[]):
         if group_name not in self.groups.keys():
             raise RuntimeError(f"Base group {group_name} not found in groups {self.groups.keys()}!")
 
@@ -600,9 +597,9 @@ class Datagroups(object):
 
         if "xnorm" not in self.results[base_members[0].name]["output"]:
             raise ValueError(f"Results for member {base_members[0].name} does not include xnorm. Found {self.results[base_members[0].name]['output'].keys()}")
-        nominal_hist = self.results[base_members[0].name]["output"]["xnorm"].get()
+        nominal_hist = self.results[base_members[0].name]["output"][histToReadAxes].get()
 
-        gen_bin_indices = self.getGenBinIndices(nominal_hist)
+        gen_bin_indices = self.getGenBinIndices(nominal_hist, axesToRead=axesToRead)
 
         for indices in itertools.product(*gen_bin_indices):
 

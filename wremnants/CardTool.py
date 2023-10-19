@@ -35,7 +35,7 @@ class CardTool(object):
         self.nominalTemplate = f"{pathlib.Path(__file__).parent}/../scripts/combine/Templates/datacard.txt"
         self.spacing = 28
         self.systTypeSpacing = 16
-        self.procColumnsSpacing = 30
+        self.procColumnsSpacing = 20
         self.nominalName = "nominal"
         self.datagroups = None
         self.pseudodata_datagroups = None
@@ -100,14 +100,6 @@ class CardTool(object):
             
     def setFitAxes(self, axes):
         self.fit_axes = axes[:]
-
-        self.sum_axes = []
-        try:
-            hnom = self.getNominalHistForSignal()
-            self.sum_axes = [ax for ax in hnom.axes.name if ax not in self.fit_axes and ax != self.charge_ax]
-            logger.debug(f"Will sum over the axes {self.sum_axes}")
-        except (ValueError,RuntimeError) as e:
-            logger.info("Failed to set sum_axes, will not reduce the histogram")
 
     def setFakerateAxes(self, fakerate_axes=["pt", "eta", "charge"]):
         self.fakerateAxes = fakerate_axes
@@ -256,7 +248,7 @@ class CardTool(object):
                       scale=1, processes=None, group=None, noi=False, noConstraint=False, noProfile=False,
                       action=None, doActionBeforeMirror=False, actionArgs={}, actionMap={},
                       systNameReplace=[], systNamePrepend=None, groupFilter=None, passToFakes=False,
-                      rename=None, splitGroup={}, decorrelateByBin={}, formatWithValue=False,
+                      rename=None, splitGroup={}, decorrelateByBin={}, formatWithValue=None,
                       sumNominalToHist=False,
                       scalePrefitHistYields=None,
                       customizeNuisanceAttributes={},
@@ -291,7 +283,13 @@ class CardTool(object):
 
         if name == self.nominalName:
             logger.debug(f"Defining syst {rename} from nominal histogram")
-            
+        
+        # precompile splitGroup expressions for better performance
+        splitGroupDict = {g: re.compile(v) for g, v in splitGroup.items()}
+        # add the group with everything if not there already
+        if group not in splitGroupDict:
+            splitGroupDict[group] = re.compile(".*")
+
         self.systematics.update({
             name if not rename else rename : {
                 "outNames" : [] if not outNames else outNames,
@@ -302,7 +300,7 @@ class CardTool(object):
                 "group" : group,
                 "noi": noi,
                 "groupFilter" : groupFilter,
-                "splitGroup" : splitGroup if len(splitGroup) else {group : ".*"}, # dummy dictionary if splitGroup=None, to allow for uniform treatment
+                "splitGroup" : splitGroupDict, 
                 "scale" : scale,
                 "sumNominalToHist" : sumNominalToHist,
                 "scalePrefitHistYields": scalePrefitHistYields,
@@ -333,7 +331,6 @@ class CardTool(object):
             baseName=self.nominalName, syst=syst, label="syst",
             procsToRead=[proc],
             scaleToNewLumi=self.lumiScale, 
-            sum_axes=self.sum_axes,
             fakerateIntegrationAxes=self.getFakerateIntegrationAxes())
         return self.datagroups.getDatagroups()[proc].hists["syst"]
 
@@ -344,7 +341,7 @@ class CardTool(object):
     def setMirrorForSyst(self, syst, mirror=True):
         self.systematics[syst]["mirror"] = mirror
 
-    def systLabelForAxis(self, axLabel, entry, axis, formatWithValue=False):
+    def systLabelForAxis(self, axLabel, entry, axis, formatWithValue=None):
         if type(axis) == hist.axis.StrCategory:
             if entry in axis:
                 return entry
@@ -357,7 +354,16 @@ class CardTool(object):
         if "{i}" in axLabel:
             return axLabel.format(i=entry)
         if formatWithValue:
-            entry = axis.centers[entry]
+            if formatWithValue == "center":
+                edges = axis.centers
+            elif formatWithValue == "low":
+                edges = axis.edges[:-1]
+            elif formatWithValue == "high":
+                edges = axis.edges[1:]
+            else:
+                raise ValueError(f"Invalid formatWithValue choice {formatWithValue}.")
+
+            entry = edges[entry]
 
         if type(entry) in [float, np.float64]:
             entry = f"{entry:0.1f}".replace(".", "p") if not entry.is_integer() else str(int(entry))
@@ -460,7 +466,8 @@ class CardTool(object):
                     systInfo["outNames"].append("")
                 else:
                     name = systInfo["baseName"]
-                    name += "".join([self.systLabelForAxis(al, entry[i], ax, systInfo["formatWithValue"]) for i,(al,ax) in enumerate(zip(axLabels,axes))])
+                    fwv = systInfo["formatWithValue"]
+                    name += "".join([self.systLabelForAxis(al, entry[i], ax, fwv[i] if fwv else fwv) for i,(al,ax) in enumerate(zip(axLabels,axes))])
                     if "systNameReplace" in systInfo and systInfo["systNameReplace"]:
                         for rep in systInfo["systNameReplace"]:
                             name = name.replace(*rep)
@@ -659,7 +666,6 @@ class CardTool(object):
         datagroups.loadHistsForDatagroups(
             baseName=self.nominalName, syst=self.pseudoData, label=self.pseudoData,
             procsToRead=processes,
-            sum_axes=self.sum_axes,
             scaleToNewLumi=self.lumiScale, 
             fakerateIntegrationAxes=self.getFakerateIntegrationAxes())
         procDict = datagroups.getDatagroups()
@@ -670,10 +676,9 @@ class CardTool(object):
             logger.warning(f"These processes are taken from nominal datagroups: {processesFromNomi}")
             datagroupsFromNomi = self.datagroups
             datagroupsFromNomi.loadHistsForDatagroups(
-                baseName=self.pseudoData, syst=self.nominalName, label=self.pseudoData,
+                baseName=self.pseudoData, syst=self.nominalName, label=self.pseudoData, # CHECK: shouldn't it be syst=self.pseudoData?
                 procsToRead=processesFromNomi,
                 scaleToNewLumi=self.lumiScale,
-                sum_axes=self.sum_axes,
                 fakerateIntegrationAxes=self.getFakerateIntegrationAxes())
             procDictFromNomi = datagroupsFromNomi.getDatagroups()
             hists.extend([procDictFromNomi[proc].hists[self.pseudoData] for proc in processesFromNomi])
@@ -685,6 +690,8 @@ class CardTool(object):
                 hdata = hdata[{systAxName : self.pseudoDataIdx }] 
 
         self.writeHist(hdata, self.getDataName(), self.pseudoData+"_sum")
+        if self.getFakeName() in procDict:
+            self.writeHist(procDict[self.getFakeName()].hists[self.pseudoData], self.getFakeName(), self.pseudoData+"_sum")
 
     def writeForProcesses(self, syst, processes, label, check_systs=True):
         logger.info("-"*50)
@@ -726,7 +733,6 @@ class CardTool(object):
             label=self.nominalName, 
             scaleToNewLumi=self.lumiScale, 
             forceNonzero=forceNonzero,
-            sum_axes=self.sum_axes,
             sumFakesPartial=not self.ABCD,
             fakerateIntegrationAxes=self.getFakerateIntegrationAxes())
         if self.ABCD and not self.xnorm:
@@ -754,7 +760,6 @@ class CardTool(object):
                 preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"],
                 forceToNominal=forceToNominal,
                 scaleToNewLumi=self.lumiScale,
-                sum_axes=self.sum_axes,
                 fakerateIntegrationAxes=self.getFakerateIntegrationAxes(),
             )
             self.writeForProcesses(syst, label="syst", processes=processes, check_systs=check_systs)
@@ -849,10 +854,11 @@ class CardTool(object):
             group = info["group"]
             groupFilter = info["groupFilter"]
             for chan in self.channels:
+                nameChan = name.replace("CHANNEL",chan)
                 include = [(str(info["size"]) if x in info["processes"] else "-").ljust(self.procColumnsSpacing) for x in nondata_chan[chan]]
-                self.cardContent[chan] += f'{name.ljust(self.spacing)} lnN{" "*(self.systTypeSpacing-2)} {"".join(include)}\n'
-                if group and len(list(filter(groupFilter, [name]))):
-                    self.addSystToGroup(group, chan, name)
+                self.cardContent[chan] += f'{nameChan.ljust(self.spacing)} lnN{" "*(self.systTypeSpacing-2)} {"".join(include)}\n'
+                if group and len(list(filter(groupFilter, [nameChan]))):
+                    self.addSystToGroup(group, chan, nameChan)
 
     def fillCardWithSyst(self, syst):
         # note: this function doesn't act on all systematics all at once
@@ -877,6 +883,8 @@ class CardTool(object):
         include_chan = {}
         for chan in nondata_chan.keys():
             include_chan[chan] = [(str(scale) if x in procs else "-").ljust(self.procColumnsSpacing) for x in nondata_chan[chan]]
+            # remove unnecessary trailing spaces after the last element
+            include_chan[chan][-1] = include_chan[chan][-1].rstrip()
                 
         shape = "shapeNoConstraint" if systInfo["noConstraint"] else "shape"
             
@@ -903,6 +911,7 @@ class CardTool(object):
                             keys = list(systInfo["customizeNuisanceAttributes"][regexpCustom].keys())
                             if "scale" in keys:
                                 include_line = [(str(systInfo["customizeNuisanceAttributes"][regexpCustom]["scale"]) if x in procs else "-").ljust(self.procColumnsSpacing) for x in nondata_chan[chan]]
+                                include_line[-1] = include_line[-1].rstrip()
                             if "shapeType" in keys:
                                 systShape = systInfo["customizeNuisanceAttributes"][regexpCustom]["shapeType"]
                 self.cardContent[chan] += f"{systname.ljust(self.spacing)} {systShape.ljust(self.systTypeSpacing)} {''.join(include_line)}\n"
@@ -911,8 +920,7 @@ class CardTool(object):
                 systNamesForGroupPruned = systNamesChan[:]
                 systNamesForGroup = list(systNamesForGroupPruned if not groupFilter else filter(groupFilter, systNamesForGroupPruned))
                 if len(systNamesForGroup):
-                    for subgroup in splitGroupDict.keys():
-                        matchre = re.compile(splitGroupDict[subgroup])
+                    for subgroup, matchre in splitGroupDict.items():
                         systNamesForSubgroup = list(filter(lambda x: matchre.match(x),systNamesForGroup))
                         if len(systNamesForSubgroup):
                             members = " ".join(systNamesForSubgroup)

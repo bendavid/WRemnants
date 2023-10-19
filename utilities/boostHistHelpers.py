@@ -38,7 +38,8 @@ def broadcastSystHist(h1, h2, flow=True, by_ax_name=True):
     new_vals = np.moveaxis(new_vals, np.arange(len(moves)), list(moves.keys()))
 
     if new_vals.shape != h2.values(flow=flow).shape:
-        raise ValueError(f"Broadcast shape {new_vals.shape} does not match desired shape {h2.view(flow=flow).shape}")
+        raise ValueError(f"Broadcast shape {new_vals.shape} (from h1.shape={h1.view(flow=flow).shape}) " \
+                            "does not match desired shape {h2.view(flow=flow).shape}")
 
     if h1.storage_type == hist.storage.Weight:
         new_vars = np.broadcast_to(h1.variances(flow=flow), broadcast_shape)

@@ -275,9 +275,7 @@ def build_graph(df, dataset):
    
     # results.append(df.HistoBoost("qcd_space", [axis_pt, axis_eta, axis_iso, axis_charge, axis_mT], ["lep_pt", "lep_eta", "lep_iso", "lep_charge", "transverseMass", "nominal_weight"]))  
 
-    df = df.Define("pxW", "lep_pt * std::cos(lep_phi) + MET_corr_rec_pt * std::cos(MET_corr_rec_phi)")
-    df = df.Define("pyW", "lep_pt * std::sin(lep_phi) + MET_corr_rec_pt * std::sin(MET_corr_rec_phi)")
-    df = df.Define("ptW", "std::sqrt(pxW*pxW + pyW*pyW)")
+    df = df.Define("ptW", "wrem::pt_2(lep_pt, lep_phi, MET_corr_rec_pt, MET_corr_rec_phi)")
 
     results.append(df.HistoBoost("nominal", axes, [*cols, "nominal_weight"]))
     results.append(df.HistoBoost("transverseMass", axes_mT, [*cols_mT, "nominal_weight"]))

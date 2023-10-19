@@ -9,6 +9,9 @@ import math
 import pandas as pd
 import os
 import narf
+import re
+from collections import defaultdict
+
 import pdb
 
 logger = logging.child_logger(__name__)
@@ -28,8 +31,8 @@ class HDF5Writer(object):
         self.theoryFitDataCov = None
         self.theoryFitMCStat = True # Whether or not to include the MC stat uncertainty in the thoery fit (in the covariance matrix)
 
-        self.dict_noigroups = {}
-        self.dict_systgroups = {}
+        self.dict_noigroups = defaultdict(lambda: set())
+        self.dict_systgroups = defaultdict(lambda: set())
 
         self.systsstandard = set()
         self.systsnoconstraint = set()
@@ -676,6 +679,7 @@ class HDF5Writer(object):
         return outfilename
 
     def book_systematic(self, syst, name):
+        logger.debug(f"book systematic {name}")
         if syst.get('noProfile', False):
             self.systsnoprofile.add(name)
         elif syst.get("noConstraint", False) or syst.get("noi", False):
@@ -688,16 +692,14 @@ class HDF5Writer(object):
             return 
             #TODO: adding a group with the name of the member instead?
             # group = name 
-        if syst.get("noi", False):
-            if group not in self.dict_noigroups:
-                self.dict_noigroups[group] = set([name])
-            else:
-                self.dict_noigroups[group].add(name)
-        else:
-            if group not in self.dict_systgroups:
-                self.dict_systgroups[group] = set([name])
-            else:
-                self.dict_systgroups[group].add(name)
+
+        split_groups = syst.get("splitGroup", {group: re.compile(".*")})
+        matched_groups = [grp for grp, matchre in split_groups.items() if matchre.match(name)]
+
+        target_dict = self.dict_noigroups if syst.get("noi", False) else self.dict_systgroups
+
+        for matched_group in matched_groups:
+            target_dict[matched_group].add(name)
 
     def get_systsstandard(self):
         return list(common.natural_sort(self.systsstandard))
