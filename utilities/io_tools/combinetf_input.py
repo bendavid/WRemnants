@@ -45,9 +45,9 @@ def get_poi_names_h5(h5file, poi_type="mu"):
     if poi_type is not None and poi_type in outnames:
         names = h5file[f"{poi_type}_names"][...].astype(str)
 
-    if 'nois' in outnames:
-        names = np.append(names, 'Wmass')
-
+    if "nois_names" in h5file.keys():
+        for noi in h5file["nois_names"][...].astype(str):
+            names = np.append(names, noi)
     return names
 
 def get_poi_names_root(rtfile, poi_type="mu"):
@@ -58,11 +58,28 @@ def get_poi_names_root(rtfile, poi_type="mu"):
 
     if 'nuisance_impact_nois' in [k.replace(";1","") for k in rtfile.keys()]:
         impacts = rtfile['nuisance_impact_nois'].to_hist()
-        names.append('Wmass')
+        for i in range(impacts.axes[0].size):
+            noi = impacts.axes[0].value(i)
+            names = np.append(names, noi)
 
     return np.array(names)
 
-def read_impacts_poi(fileobject, group, sort=True, add_total=True, stat=0.0, poi='Wmass', normalize=True):
+def get_pulls_and_constraints(fitresult_filename, labels):
+    fitresult = ROOT.TFile.Open(fitresult_filename.replace(".hdf5",".root"))
+    rtree = fitresult.Get("fitresults")
+    rtree.GetEntry(0)
+    pulls = np.zeros_like(labels, dtype=float)
+    constraints = np.zeros_like(labels, dtype=float)
+    for i, label in enumerate(labels):
+        if not hasattr(rtree, label):
+            logger.warning(f"Failed to find syst {label} in tree")
+            continue
+            
+        pulls[i] = getattr(rtree, label)
+        constraints[i] = getattr(rtree, label+"_err")
+    return pulls, constraints
+
+def read_impacts_poi(fileobject, group, poi, sort=True, add_total=True, stat=0.0, normalize=True):
     # read impacts of a single POI
     if is_h5_file(fileobject):
         impacts, labels, norm, total = read_impacts_poi_h5(fileobject, group, poi=poi)
@@ -89,16 +106,15 @@ def read_impacts_poi(fileobject, group, sort=True, add_total=True, stat=0.0, poi
 
     return impacts, labels, norm
 
-def read_impacts_poi_h5(h5file, group, poi='Wmass', skip_systNoConstraint=True):
+def read_impacts_poi_h5(h5file, group, poi, skip_systNoConstraint=False):
     if poi is None:
         poi_type=None
     else:
-        poi_type = poi.split("_")[-1] if poi else None
+        poi_type = poi.split("_")[-1]
         poi_names = get_poi_names(h5file, poi_type)
-        if poi=='Wmass':
-            impact_hist_total = "nuisance_impact_nois"
-            impact_hist = "nuisance_group_impact_nois" if group else "nuisance_impact_nois"
-        elif poi in poi_names:
+        if poi in poi_names:      
+            if poi_type == "noi":
+                poi_type = 'nois'
             impact_hist_total = f"nuisance_impact_{poi_type}"
             impact_hist = f"nuisance_group_impact_{poi_type}" if group else f"nuisance_impact_{poi_type}"
         else:
@@ -115,9 +131,11 @@ def read_impacts_poi_h5(h5file, group, poi='Wmass', skip_systNoConstraint=True):
         total = 0.
         norm = 0.
     else:
-        ipoi = 0 if poi=='Wmass' else poi_names.index(poi)
+        ipoi = np.where(poi_names == poi)[0][0]
+        all_labels = h5file["hsysts"][...].astype(str)
+        isys = np.where(all_labels == poi.replace('_noi',''))[0][0]
         impacts = h5file[impact_hist][...][ipoi]
-        total = h5file[impact_hist_total][...][ipoi,ipoi]
+        total = h5file[impact_hist_total][...][ipoi,isys]
         norm = h5file["x"][...][ipoi]
 
     if len(labels)+1 == len(impacts): 
@@ -130,12 +148,13 @@ def read_impacts_poi_h5(h5file, group, poi='Wmass', skip_systNoConstraint=True):
 
     return impacts, labels, norm, total
 
-def read_impacts_poi_root(rtfile, group, poi='Wmass'):
+def read_impacts_poi_root(rtfile, group, poi):
     poi_type = poi.split("_")[-1] if poi else None
     poi_names = get_poi_names(rtfile, poi_type)
-    if poi=='Wmass':
-        impact_hist = "nuisance_group_impact_nois" if group else "nuisance_impact_nois"
-    elif poi in poi_names:
+
+    if poi_type == "noi":
+        poi_type = 'nois'
+    if poi in poi_names:
         impact_hist = f"nuisance_group_impact_{poi_type}" if group else f"nuisance_impact_{poi_type}"
     else:
         raise ValueError(f"Invalid POI: {poi}")
@@ -153,7 +172,7 @@ def read_impacts_poi_root(rtfile, group, poi='Wmass'):
         return np.zeros_like(labels), labels, 1., 1.
     else:
         impacts = rtfile[impact_hist].to_hist()
-        ipoi = 0 if poi=='Wmass' else poi_names.index(poi)
+        ipoi = np.where(poi_names == poi)[0][0]
         total = rtfile["fitresults"][impacts.axes[0].value(ipoi)+"_err"].array()[0]
         norm = rtfile["fitresults"][impacts.axes[0].value(ipoi)].array()[0]
         impacts = impacts.values()[ipoi,:]
@@ -278,8 +297,8 @@ def select_covariance_pois(cov, names, gen_axes=[], selections={}, base_processe
 
     # make matrix between selected POIs only
     new_cov = hist.Hist(
-        hist.axis.Regular(bins=len(indices), start=0.5, stop=len(indices)+0.5, underflow=False, overflow=False), 
-        hist.axis.Regular(bins=len(indices), start=0.5, stop=len(indices)+0.5, underflow=False, overflow=False), 
+        hist.axis.Integer(start=0, stop=len(indices), underflow=False, overflow=False), 
+        hist.axis.Integer(start=0, stop=len(indices), underflow=False, overflow=False), 
         storage=hist.storage.Double())
     new_cov.view(flow=False)[...] = cov.view(flow=False)[indices, :][:, indices]
 
@@ -294,8 +313,8 @@ def load_covariance_pois(fitresult, poi_type="mu"):
         raise IOError(f"Unknown fitresult format for object {fitresult}")
 
     cov = hist.Hist(
-        hist.axis.Regular(bins=len(names), start=0.5, stop=len(names)+0.5, underflow=False, overflow=False), 
-        hist.axis.Regular(bins=len(names), start=0.5, stop=len(names)+0.5, underflow=False, overflow=False), 
+        hist.axis.Integer(start=0, stop=len(names), underflow=False, overflow=False), 
+        hist.axis.Integer(start=0, stop=len(names), underflow=False, overflow=False), 
         storage=hist.storage.Double())
     cov.view(flow=False)[...] = values
     return cov, names
