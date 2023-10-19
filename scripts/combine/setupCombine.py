@@ -172,8 +172,9 @@ def setup(args, inputFile, fitvar, xnorm=False):
             datagroups.groups[base_group].deleteMembers(to_del)
     elif args.unfolding and args.poiAsNoi:
         constrainMass = True
+        poi_axes = datagroups.gen_axes if args.genAxes is None else args.genAxes
         # remove specified gen axes from set of gen axes in datagroups so that those are integrated over
-        datagroups.setGenAxes([a for a in datagroups.gen_axes if a not in args.genAxes])
+        datagroups.setGenAxes([a for a in datagroups.gen_axes if a not in poi_axes])
 
     # FIXME: temporary customization of signal and out-of-acceptance process names for theory agnostic with POI as NOI
     # There might be a better way to do it more homogeneously with the rest.
@@ -395,8 +396,8 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                sumNominalToHist=True,
                                noConstraint=True,
                                noi=True,
-                               systAxes=args.genAxes,
-                               labelsByAxis=args.genAxes,
+                               systAxes=poi_axes,
+                               labelsByAxis=poi_axes,
                                passToFakes=passSystToFakes,
                                )
 

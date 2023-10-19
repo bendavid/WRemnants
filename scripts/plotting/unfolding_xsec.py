@@ -25,6 +25,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("infile", type=str, help="Output file of the analysis stage, containing ND boost histogrdams")
 parser.add_argument("--fitresult",  type=str, help="Combine fitresult root file")
 parser.add_argument("--reference",  type=str, default=None, help="Optional combine fitresult root file from an reference fit for comparison")
+parser.add_argument("--refName",  type=str, default="Reference model", help="Name for reference source")
 parser.add_argument("-o", "--outpath", type=str, default=os.path.expanduser("~/www/WMassAnalysis"), help="Base path for output")
 parser.add_argument("-f", "--outfolder", type=str, default="./test", help="Subfolder for output")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name")
@@ -126,12 +127,16 @@ def make_yields_df(hists, procs, signal=None, per_bin=False, yield_only=False, p
 
     return pd.DataFrame(entries, columns=columns)
 
-def plot_xsec_unfolded(df, edges, df_reference=None, bin_widths=None, channel=None, scale=1., normalize=False, process_label="V", axes=None,
+def plot_xsec_unfolded(df, edges, poi_type, df_reference=None, bin_widths=None, channel=None, scale=1., normalize=False, process_label="V", axes=None,
     hist_others=[], label_others=[], color_others=[]
 ):
     logger.info(f"Make "+("normalized " if normalize else "")+"unfoled xsec plot"+(f" in channel {channel}" if channel else ""))
 
-    if normalize:
+    if poi_type == "mu":
+        yLabel="$\mu\ ("+process_label+")$"
+    elif poi_type == "nois":
+        yLabel="$\mathrm{NOI} + 1\ ("+process_label+")$"
+    elif normalize:
         yLabel="1/$\sigma$ d$\sigma("+process_label+")$"
     else:
         yLabel="d$\sigma ("+process_label+")$ [pb]"
@@ -152,7 +157,7 @@ def plot_xsec_unfolded(df, edges, df_reference=None, bin_widths=None, channel=No
         hist_xsec_stat.view(flow=False)[...] = np.stack([df["value"].values/bin_widths, (df["err_stat"].values/bin_widths)**2], axis=-1)
         unc_ratio_stat = np.sqrt(hist_xsec_stat.variances()) /hist_xsec.values() 
 
-    if data_reference is not None:
+    if df_reference is not None:
         ha_xsec = hist.Hist(hist.axis.Variable(edges, underflow=False, overflow=False))
         ha_xsec.view(flow=False)[...] = df_reference["value"].values/bin_widths
 
@@ -222,13 +227,13 @@ def plot_xsec_unfolded(df, edges, df_reference=None, bin_widths=None, channel=No
             zorder=2,
         )            
 
-    if data_reference is not None:
+    if df_reference is not None:
         hep.histplot(
             ha_xsec,
             yerr=False,
             histtype="step",
             color="blue",
-            label="Prefit model",
+            label=args.refName,
             ax=ax1,
             alpha=1.,
             zorder=2,
@@ -263,7 +268,7 @@ def plot_xsec_unfolded(df, edges, df_reference=None, bin_widths=None, channel=No
     outfile += (f"_{args.postfix}" if args.postfix else "")
     plot_tools.save_pdf_and_png(outdir, outfile)
 
-    if data_reference is not None:
+    if df_reference is not None:
         reference_yields = make_yields_df([ha_xsec], ["Model"], per_bin=True)
         reference_yields["Uncertainty"] *= 0 # artificially set uncertainty on model hard coded to 0
     data_yields = make_yields_df([hist_xsec], ["Data"], per_bin=True)
@@ -286,7 +291,7 @@ def plot_uncertainties_unfolded(df, poi_type, channel=None, edges=None, scale=1.
     if poi_type == "mu":
         yLabel="$\mu\ ("+process_label+")$"
     elif poi_type == "nois":
-        yLabel="$\mathrm{noi}\ ("+process_label+")$"
+        yLabel="$\mathrm{NOI}\ ("+process_label+")$"
     elif normalize:
         yLabel="1/$\sigma$ d$\sigma("+process_label+")$"
     else:
@@ -730,12 +735,13 @@ for poi_type, poi_type_ref in zip(poi_types, poi_types_ref):
                 bins = np.product([len(e) for e in edges])
                 edges = np.arange(0.5, bins+1.5, 1.0)
 
-            if poi_type in ["poi", "nois"]:
+            if poi_type in ["mu", "nois"]:
                 binwidths = None
 
             if "xsec" in args.plots:
-                plot_xsec_unfolded(data_c, edges, data_c_ref, bin_widths=binwidths, channel=channel, scale=scale, normalize=args.normalize, axes=channel_axes, 
-                    process_label=process_label, hist_others=[hxnorm, hMiNNLO], label_others=[r"MiNNLO $\times$ SCETlib+DYTurbo", "MiNNLO"], color_others=["blue", "red"]
+                plot_xsec_unfolded(data_c, edges, poi_type, data_c_ref, bin_widths=binwidths, channel=channel, scale=scale, normalize=args.normalize, axes=channel_axes, 
+                    process_label=process_label, 
+                    #hist_others=[hxnorm, hMiNNLO], label_others=[r"MiNNLO $\times$ SCETlib+DYTurbo", "MiNNLO"], color_others=["blue", "red"]
                 )
 
             if "uncertainties" in args.plots:
