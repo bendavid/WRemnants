@@ -10,7 +10,6 @@ import collections.abc
 import copy
 
 logger = logging.child_logger(__name__)
-narf.clingutils.Declare('#include "theoryTools.h"')
 
 def syst_transform_map(base_hist, hist_name):
     pdfInfo = theory_tools.pdfMap
