@@ -346,16 +346,16 @@ def add_pdf_hists(results, df, dataset, axes, cols, pdfs, base_name="nominal", a
 
         if pdfInfo["alphasRange"] == "001":
             alphaSHistName = Datagroups.histName(base_name, syst=f"{pdfName}alphaS001")
-            as_ax = hist.axis.StrCategory(["as0117", "as0119"], name="alphasVar")
+            as_ax = hist.axis.StrCategory(["as0118", "as0117", "as0119"], name="alphasVar")
         else:
             alphaSHistName = Datagroups.histName(base_name, syst=f"{pdfName}alphaS002")
-            as_ax = hist.axis.StrCategory(["as0116", "as0120"], name="alphasVar")
+            as_ax = hist.axis.StrCategory(["as0118", "as0116", "as0120"], name="alphasVar")
 
         if addhelicity:
             pdfHeltensor, pdfHeltensor_axes =  make_pdfweight_helper_helicity(npdf, pdf_ax)
             df = df.Define(f'{tensorName}_helicity', pdfHeltensor, [tensorName, "helWeight_tensor"])
             pdfHist = df.HistoBoost(pdfHistName, axes, [*cols, f'{tensorName}_helicity'], tensor_axes=pdfHeltensor_axes, storage=hist.storage.Double())
-            alphaSHeltensor, alphaSHeltensor_axes =  make_pdfweight_helper_helicity(2, as_ax)
+            alphaSHeltensor, alphaSHeltensor_axes =  make_pdfweight_helper_helicity(3, as_ax)
             df = df.Define(f'{tensorASName}_helicity', alphaSHeltensor, [tensorASName, "helWeight_tensor"])
             alphaSHist = df.HistoBoost(alphaSHistName, axes, [*cols, f'{tensorASName}_helicity'], tensor_axes=alphaSHeltensor_axes, storage=hist.storage.Double())
         else:

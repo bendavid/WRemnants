@@ -45,7 +45,7 @@ pdfMap = {
         "branch" : "LHEPdfWeight",
         "combine" : "symHessian",
         "entries" : 101,
-        "alphas" : ["LHEPdfWeight[101]", "LHEPdfWeight[102]"],
+        "alphas" : ["LHEPdfWeight[0]", "LHEPdfWeight[101]", "LHEPdfWeight[102]"],
         "alphasRange" : "001", # TODO: Check this
     },
     "ct18" : {
@@ -54,7 +54,7 @@ pdfMap = {
         "branch" : "LHEPdfWeightAltSet18",
         "combine" : "asymHessian",
         "entries" : 59,
-        "alphas" : ["LHEPdfWeightAltSet18[59]", "LHEPdfWeightAltSet18[60]"],
+        "alphas" : ["LHEPdfWeightAltSet18[0]", "LHEPdfWeightAltSet18[59]", "LHEPdfWeightAltSet18[60]"],
         "alphasRange" : "002",
         "scale" : 1/1.645 # Convert from 90% CL to 68%
     },
@@ -63,7 +63,7 @@ pdfMap = {
         "branch" : "LHEPdfWeightAltSet19",
         "combine" : "asymHessian",
         "entries" : 51,
-        "alphas" : ["LHEPdfWeightAltSet20[1]", "LHEPdfWeightAltSet20[2]"],
+        "alphas" : ["LHEPdfWeightAltSet20[0]", "LHEPdfWeightAltSet20[1]", "LHEPdfWeightAltSet20[2]"],
         "alphasRange" : "001",
     },
     "nnpdf30" : {
@@ -71,7 +71,7 @@ pdfMap = {
         "branch" : "LHEPdfWeightAltSet13",
         "combine" : "symHessian",
         "entries" : 101,
-        "alphas" : ["LHEPdfWeightAltSet15[0]", "LHEPdfWeightAltSet16[0]"],
+        "alphas" : ["LHEPdfWeightAltSet13[0]", "LHEPdfWeightAltSet15[0]", "LHEPdfWeightAltSet16[0]"],
         "alphasRange" : "001",
     },
 }
@@ -80,14 +80,14 @@ pdfMapExtended = copy.deepcopy(pdfMap)
 pdfMapExtended["ct18"]["branch"] = "LHEPdfWeightAltSet11"
 pdfMapExtended["ct18"]["alphas"] = ["LHEPdfWeightAltSet11[59]", "LHEPdfWeightAltSet11[62]"]
 pdfMapExtended["mmht"]["branch"] = "LHEPdfWeightAltSet13"
-pdfMapExtended["mmht"]["alphas"] = ["LHEPdfWeightAltSet13[1]", "LHEPdfWeightAltSet13[2]"]
+pdfMapExtended["mmht"]["alphas"] = ["LHEPdfWeightAltSet13[0]", "LHEPdfWeightAltSet13[1]", "LHEPdfWeightAltSet13[2]"]
 pdfMapExtended.update({
     "nnpdf40" : {
         "name" : "pdfNNPDF40",
         "branch" : "LHEPdfWeightAltSet3",
         "combine" : "symHessian",
         "entries" : 53,
-        "alphas" : ["LHEPdfWeightAltSet3[51]", "LHEPdfWeightAltSet3[52]"],
+        "alphas" : ["LHEPdfWeightAltSet3[0]", "LHEPdfWeightAltSet3[51]", "LHEPdfWeightAltSet3[52]"],
         "alphasRange" : "002", # TODO: IS that true?
     },
     "pdf4lhc21" : {
@@ -95,7 +95,7 @@ pdfMapExtended.update({
         "branch" : "LHEPdfWeightAltSet10",
         "combine" : "symHessian",
         "entries" : 41,
-        "alphas" : ["LHEPdfWeightAltSet10[41]", "LHEPdfWeightAltSet10[42]"],
+        "alphas" : ["LHEPdfWeightAltSet10[0]", "LHEPdfWeightAltSet10[41]", "LHEPdfWeightAltSet10[42]"],
         "alphasRange" : "002", # TODO: IS that true?
     },
     "msht20" : {
@@ -103,7 +103,7 @@ pdfMapExtended.update({
         "branch" : "LHEPdfWeightAltSet12",
         "combine" : "asymHessian",
         "entries" : 65,
-        "alphas" : ["LHEPdfWeightAltSet12[67]", "LHEPdfWeightAltSet12[70]"],
+        "alphas" : ["LHEPdfWeightAltSet12[0]", "LHEPdfWeightAltSet12[67]", "LHEPdfWeightAltSet12[70]"],
         # 66-71 - are LHAPDF ID 27500 = 27506, 27501 is 0.0116 and 27504 is 0.0120
         "alphasRange" : "002", 
     },
@@ -112,7 +112,7 @@ pdfMapExtended.update({
         "branch" : "LHEPdfWeightAltSet24",
         "combine" : "asymHessian",
         "entries" : 105,
-        "alphas" : ["LHEPdfWeightAltSet24[108]", "LHEPdfWeightAltSet24[111]"],
+        "alphas" : ["LHEPdfWeightAltSet24[0]", "LHEPdfWeightAltSet24[108]", "LHEPdfWeightAltSet24[111]"],
         # 105-111 - are the alphas small range vars: 
         # mem = 0 => default fit alpha_S(M_Z) = 0.118; mem=1-6 => alpha_S(M_Z) = 0.114, 0.115, 0.116, 0.117, 0.119, 0.120
         "alphasRange" : "002", 
@@ -124,7 +124,7 @@ pdfMapExtended.update({
         "combine" : "asymHessian",
         "entries" : 59,
         "first_entry" : 63,
-        "alphas" : ["LHEPdfWeightAltSet18[122]", "LHEPdfWeightAltSet18[123]"],
+        "alphas" : ["LHEPdfWeightAltSet18[63]", "LHEPdfWeightAltSet18[122]", "LHEPdfWeightAltSet18[123]"],
         "alphasRange" : "002",
         "scale" : 1/1.645 # Convert from 90% CL to 68%
     },
@@ -133,7 +133,7 @@ pdfMapExtended.update({
         "branch" : "LHEPdfWeightAltSet19",
         "combine" : "asymHessian",
         "entries" : 33,
-        "alphas" : ["LHEPdfWeight[41]", "LHEPdfWeight[42]"],
+        "alphas" : ["LHEPdfWeight[0]", "LHEPdfWeight[41]", "LHEPdfWeight[42]"],
         "alphasRange" : "002", # TODO: IS that true?
     },
 
@@ -256,9 +256,8 @@ def define_pdf_columns(df, dataset_name, pdfs, noAltUnc):
         if pdfName == "pdfMSHT20":
             df = pdfBugfixMSHT20(df, tensorName)
 
-        df = df.Define(tensorASName, "Eigen::TensorFixedSize<double, Eigen::Sizes<2>> res; "
-                f"res(0) = nominal_weight/central_pdf_weight*{pdfInfo['alphas'][0]}; "
-                f"res(1) = nominal_weight/central_pdf_weight*{pdfInfo['alphas'][1]}; "
+        df = df.Define(tensorASName, f"Eigen::TensorFixedSize<double, Eigen::Sizes<{len(pdfInfo['alphas'])}>> res; " + \
+                " ".join([f"res({i}) = nominal_weight/central_pdf_weight*{p};" for i,p in enumerate(pdfInfo['alphas'])]) + \
                 "return wrem::clip_tensor(res, theory_weight_truncate)")
 
     return df

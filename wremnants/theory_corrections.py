@@ -9,7 +9,8 @@ import pickle
 import re
 import glob
 from .correctionsTensor_helper import makeCorrectionsTensor
-from utilities import boostHistHelpers as hh, common, logging, input_tools
+from utilities import boostHistHelpers as hh, common, logging
+from utilities.io_tools import input_tools
 from wremnants import theory_tools
 
 logger = logging.child_logger(__name__)
@@ -127,7 +128,9 @@ def set_corr_ratio_flow(corrh):
     return corrh
 
 def make_corr_from_ratio(denom_hist, num_hist, rebin=False):
-    denom_hist, num_hist = rebin_corr_hists([denom_hist, num_hist], use_predefined_bins=rebin)
+
+    denom_hist, num_hist = rebin_corr_hists([denom_hist, num_hist], binning=rebin)
+
 
     corrh = hh.divideHists(num_hist, denom_hist, flow=False, by_ax_name=False)
     return set_corr_ratio_flow(corrh), denom_hist, num_hist
