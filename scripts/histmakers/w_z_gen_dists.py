@@ -40,7 +40,6 @@ axis_massWgen = hist.axis.Variable([5., 13000.], name="massVgen", underflow=True
 axis_massZgen = hist.axis.Regular(12, 60., 120., name="massVgen")
 
 axis_absYVgen = hist.axis.Variable(
-    # [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4, 4.25, 4.5, 4.75, 5, 10], 
     [0., 0.25, 0.5, 0.75, 1., 1.25, 1.5, 1.75, 2., 2.25, 2.5, 2.75, 3., 3.25, 3.5, 4., 5.], # this is the same binning as hists from theory corrections
     name = "absYVgen", underflow=False
 )
