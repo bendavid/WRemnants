@@ -38,12 +38,11 @@ def makehelicityWeightHelper(is_w_like = False, filename=None):
         corrh = corrh[{'muRfact' : 1.j,}]
     if 'muFfact' in corrh.axes.name:
         corrh = corrh[{'muFfact' : 1.j,}]
-    missing = set(["absYVgen", "ptVgen", "chargeVgen", "helicity", "massVgen"]).difference(set(corrh.axes.name))
-    if missing != set():
-        raise ValueError (f"Axes {missing} are not present in the coeff histogram")
     
-    corrh = corrh.project('massVgen','absYVgen','ptVgen','chargeVgen', 'helicity')
-
+    axes_names = ['massVgen','absYVgen','ptVgen','chargeVgen', 'helicity']
+    if not list(corrh.axes.name) == axes_names:
+        raise ValueError (f"Axes [{corrh.axes.name}] are not the ones this functions expects ({axes_names})")
+    
     if np.count_nonzero(corrh[{"helicity" : -1.j}] == 0):
         logger.warning("Zeros in sigma UL for the angular coefficients will give undefined behaviour!")
     # histogram has to be without errors to load the tensor directly
