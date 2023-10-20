@@ -121,7 +121,7 @@ public:
         Eigen::TensorFixedSize<double, Eigen::Sizes<1, nmur, nmuf>> denominator;
 
         for(unsigned int imur = 0; imur < 3;imur++) {
-            for(unsigned int imuf = 1; imuf < 3;imuf++) {
+            for(unsigned int imuf = 0; imuf < 3;imuf++) {
                 angular_with_coeffs(0,imur,imuf) = coeffs(0,imur,imuf)*angular(9); // 1.0 times 1+cos^2theta for all scales
                 denominator(0,imur,imuf) = coeffs(0,imur,imuf)*angular(9);
                 for(unsigned int ihel = 1; ihel < NHELICITY-1;ihel++) {
