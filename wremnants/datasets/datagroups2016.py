@@ -58,26 +58,6 @@ def make_datagroups_2016(dg, combine=False, pseudodata_pdfset = None, applySelec
             color = "deepskyblue",
             selectOp = sigOp,
         )
-        ### experimental for veto
-        # dg.addGroup("ZllVeto",
-        #     members = list(filter(lambda y: y.group == "ZllVeto", dg.datasets.values())),
-        #     label = r"Z$\to\ell\ell$ veto",
-        #     color = "deepskyblue",
-        #     selectOp = sigOp,
-        # )
-        # dg.addGroup("ZmumuVeto",
-        #     members = dg.getSafeListFromDataset(["ZmumuVetoPostVFP"]),
-        #     label = r"Z$\to\mu\mu$ veto",
-        #     color = "deepskyblue",
-        #     selectOp = sigOp,
-        # )
-        # dg.addGroup("ZtautauVeto",
-        #     members = dg.getSafeListFromDataset(["ZtautauVetoPostVFP"]),
-        #     label = r"Z$\to\tau\tau$ veto",
-        #     color = "deepskyblue",
-        #     selectOp = sigOp,
-        # )
-        ###
         dg.addGroup("Top",
             members = list(filter(lambda y: y.group == "Top", dg.datasets.values())),
             label = "Top",

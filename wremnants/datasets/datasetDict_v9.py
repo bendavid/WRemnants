@@ -42,21 +42,6 @@ dataDictV9 = {
                    'xsec' : xsec_ZmmPostVFP*Z_TAU_TO_LEP_RATIO,
                    'group': "Ztautau",
     },
-    ### experimental for veto
-    # 'ZmumuVetoPostVFP' : { 
-    #                'filepaths' :
-    #                 ["{BASE_PATH}/DYJetsToMuMu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}/*/*/*.root"],
-    #                'xsec' : xsec_ZmmPostVFP,
-    #                'group': "ZllVeto",
-    # },
-    # 'ZtautauVetoPostVFP' : {
-    #                'filepaths' : 
-    #                ["{BASE_PATH}/DYJetsToTauTau_M-50_AtLeastOneEorMuDecay_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}/*/*/*.root"],
-    #                # At least one tau->e or mu decay, so everything that's not all other decays
-    #                'xsec' : xsec_ZmmPostVFP*Z_TAU_TO_LEP_RATIO,
-    #                'group': "ZllVeto",
-    # },
-    ###
     'WplusmunuPostVFP' : { 
                       'filepaths' : 
                       ["{BASE_PATH}/WplusJetsToMuNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}/*/*/*.root",
