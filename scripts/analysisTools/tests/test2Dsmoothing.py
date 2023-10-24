@@ -34,6 +34,32 @@ from scripts.analysisTools.plotUtils.utility import *
 import wremnants
 logger = logging.setup_logger(__file__, 3, False)
 
+# TODO: might move this function to a common efficiency_util.py script
+def makeAntiSFfromSFandEffi(hsf, heff, stepName):
+    num = hsf.copy()
+    den = hsf.copy()
+    num.values()[...] = np.ones_like(hsf.values()) # num = 1
+    den = num.copy() # now den is filled with all 1
+    num = hh.addHists(num, hh.multiplyHists(hsf, heff, createNew=True), createNew=False, scale2=-1.0) # 1 - SF*effMC
+    den = hh.addHists(den, heff, scale2=-1.0, createNew=False) # 1 - effMC
+    antiSF = hh.divideHists(num, den, createNew=True)
+    antiSF.name = f"smoothSF3D_anti{stepName}"
+    # make sure the numerator is not negative, i.e. SF*effMC < 1 or equivalently 1 - SF*effMC > 0
+    denVals = den.values()
+    numVals = num.values()
+    # note, efficiencies are already capped to be in [0,1], but could also be exactly 0 or exactly 1
+    # set antiSF=1 if eff == 1 (i.e. den=0, or num < 0, or (num < 0.5% and eff > 99.5% (i.e. den < 0.5%))
+    antiSF_values = antiSF.values()
+    cellsToChange = (denVals <= 0.0) | (numVals < 0) | ((numVals < 0.005) & (denVals < 0.005))
+    nChangedCells = np.count_nonzero(cellsToChange)
+    if nChangedCells > 0:
+        frac = nChangedCells/np.product(cellsToChange.shape)
+        logger.warning(f"Setting antiSF = 1.0 in {nChangedCells}/{np.product(cellsToChange.shape)} cells for step {stepName} ({frac:.1%})")
+        antiSF_values[cellsToChange] = 1.0
+        antiSF.values()[...] = antiSF_values
+    return antiSF
+
+
 def polN_2d(xvals, parms,
             xLowVal = 0.0, xFitRange = 1.0, degreeX=2,
             yLowVal = 0.0, yFitRange = 1.0, degreeY=3):
@@ -80,7 +106,6 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
     canvas.SetRightMargin(rightMargin)
     canvas.cd()                                   
         
-    dtype = tf.float64
     sfhistname = histname #"SF3D_nominal_isolation" # uT - eta - pt
     tfile = safeOpenFile(inputfile)
     hsf =   safeGetObject(tfile, sfhistname)
@@ -182,7 +207,7 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
             eff_boost_ptut = eff_boost_ptut.project(1, 0) # project second axis (uT) as x and first axis (pT) as y
             #logger.warning(eff_boost_ptut.axes)
             #logger.warning("")
-            xvals = [tf.constant(center, dtype=dtype) for center in eff_boost_ptut.axes.centers]
+            xvals = [tf.constant(center, dtype=tf.float64) for center in eff_boost_ptut.axes.centers]
             utvals = np.reshape(xvals[0], [-1])
             ptvals = np.reshape(xvals[1], [-1])
             yvals = eff_boost_ptut.values()
@@ -199,7 +224,7 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
             # the grid interpolator will be created up to the extreme bin centers, so need bounds_error=False to allow the extrapolation to extend outside until the bin edges
             # and then we can set its extrapolation value to fill_value ('None' uses the extrapolation from the curve inside accpetance)
             interp = RegularGridInterpolator((utvals, ptvals), yvals, method='cubic', bounds_error=False, fill_value=None)
-            xvalsFine = [tf.constant(center, dtype=dtype) for center in histEffi2D_ptut.axes.centers]
+            xvalsFine = [tf.constant(center, dtype=tf.float64) for center in histEffi2D_ptut.axes.centers]
             utvalsFine = np.reshape(xvalsFine[0], [-1])
             ptvalsFine = np.reshape(xvalsFine[1], [-1])
             points = list(itertools.product(*[utvalsFine,ptvalsFine]))
@@ -310,7 +335,7 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
         # diagonalize and get eigenvalues and eigenvectors
         logger.info("Diagonalizing covariance matrix ...")
         e, v = np.linalg.eigh(res_polN_2d["cov"])
-        postfit_params_alt = np.array([np.zeros(npar, dtype=np.dtype('d'))] * (npar * 2), dtype=np.dtype('d'))
+        postfit_params_alt = np.array([np.zeros(npar, dtype=np.float64)] * (npar * 2), dtype=np.float64)
         for ivar in range(npar):
             shift = np.sqrt(e[ivar]) * v[:, ivar]
             postfit_params_alt[ivar]      = postfit_params + shift
@@ -321,7 +346,7 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
                                       name = f"htmp_fit2D_ieta{ieta}",
                                       storage = hist.storage.Weight())
 
-        xvals = [tf.constant(center, dtype=dtype) for center in boost_hist_smooth.axes.centers]
+        xvals = [tf.constant(center, dtype=tf.float64) for center in boost_hist_smooth.axes.centers]
         boost_hist_smooth.values()[...] = polN_2d_scaled(xvals, postfit_params)
         # copy into final histograms with 3D smoothed SF
         # first swap pt and ut axes from uT-pT to pT-uT by projecting onto itself with reshuffled axes
@@ -357,26 +382,26 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
         logger.info("-"*30)
             
     if not len(args.eta):
-    outdir_pull = outdirNew + f"/pulls_etapt_utBins/"
-    createPlotDirAndCopyPhp(outdir_pull)
-    for iut in range(1, 1 + hpull_utEtaPt.GetNbinsX()):
-        hpull_utEtaPt.GetXaxis().SetRange(iut, iut)
-        hpulletapt = hpull_utEtaPt.Project3D("zye")
-        hpulletapt.SetName(f"hpull_etapt_ut{iut}")
-        utBinLow = hpull_utEtaPt.GetXaxis().GetBinLowEdge(iut)
-        utBinHigh = hpull_utEtaPt.GetXaxis().GetBinLowEdge(iut+1)
-        hpulletapt.SetTitle(f"{utBinLow} < u_{{T}} < {utBinHigh}")
-        drawCorrelationPlot(hpulletapt, "Muon #eta", "Muon p_{T} (GeV)", "Pull: (fit - meas)/meas_unc::-5,5",
-                            hpulletapt.GetName(), "ForceTitle", outdir_pull,
-                            palette=87, nContours=20, passCanvas=canvas)
-    drawSingleTH1(hpullSummary_eta_mean, "Muon #eta", "Mean of pulls in u_{T}-p_{T} plane::-1, 1",
-                  hpullSummary_eta_mean.GetName(), outdir_pull, legendCoords=None,
-                  lowerPanelHeight=0.0, drawLineTopPanel=0.0,
-                  passCanvas=canvas, skipLumi=True)
-    drawSingleTH1(hpullSummary_eta_sigma, "Muon #eta", "Width of pulls in u_{T}-p_{T} plane::0, 2",
-                  hpullSummary_eta_sigma.GetName(), outdir_pull, legendCoords=None,
-                  lowerPanelHeight=0.0, drawLineTopPanel=1.0,
-                  passCanvas=canvas, skipLumi=True)
+        outdir_pull = outdirNew + f"/pulls_etapt_utBins/"
+        createPlotDirAndCopyPhp(outdir_pull)
+        for iut in range(1, 1 + hpull_utEtaPt.GetNbinsX()):
+            hpull_utEtaPt.GetXaxis().SetRange(iut, iut)
+            hpulletapt = hpull_utEtaPt.Project3D("zye")
+            hpulletapt.SetName(f"hpull_etapt_ut{iut}")
+            utBinLow = hpull_utEtaPt.GetXaxis().GetBinLowEdge(iut)
+            utBinHigh = hpull_utEtaPt.GetXaxis().GetBinLowEdge(iut+1)
+            hpulletapt.SetTitle(f"{utBinLow} < u_{{T}} < {utBinHigh}")
+            drawCorrelationPlot(hpulletapt, "Muon #eta", "Muon p_{T} (GeV)", "Pull: (fit - meas)/meas_unc::-5,5",
+                                hpulletapt.GetName(), "ForceTitle", outdir_pull,
+                                palette=87, nContours=20, passCanvas=canvas)
+        drawSingleTH1(hpullSummary_eta_mean, "Muon #eta", "Mean of pulls in u_{T}-p_{T} plane::-1, 1",
+                      hpullSummary_eta_mean.GetName(), outdir_pull, legendCoords=None,
+                      lowerPanelHeight=0.0, drawLineTopPanel=0.0,
+                      passCanvas=canvas, skipLumi=True)
+        drawSingleTH1(hpullSummary_eta_sigma, "Muon #eta", "Width of pulls in u_{T}-p_{T} plane::0, 2",
+                      hpullSummary_eta_sigma.GetName(), outdir_pull, legendCoords=None,
+                      lowerPanelHeight=0.0, drawLineTopPanel=1.0,
+                      passCanvas=canvas, skipLumi=True)
 
     # should the following be done for each eta bin as above? At least one could plot things vs pt-ut more easily
     if effHist != None and step in ["iso", "triggerplus", "triggerminus"]:
@@ -387,28 +412,7 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
         #logger.warning("Resizing ut axis for efficiency to match SF histogram")
         #logger.warning(f"{histEffi3D_asSF.axes}")
         # remember that histSF3D_withStatVars has 4 axes, 4th is the stat variation
-        num = histSF3D_withStatVars.copy()
-        den = histSF3D_withStatVars.copy()
-        num.values()[...] = np.ones_like(histSF3D_withStatVars.values()) # num = 1
-        den = num.copy() # now den is filled with all 1
-        num = hh.addHists(num, hh.multiplyHists(histSF3D_withStatVars, histEffi3D_asSF, createNew=True), createNew=False, scale2=-1.0) # 1 - SF*effMC
-        den = hh.addHists(den, histEffi3D_asSF, scale2=-1.0, createNew=False) # 1 - effMC
-        antiSF = hh.divideHists(num, den, createNew=True)
-        antiSF.name = f"smoothSF3D_anti{step}"
-        # make sure the numerator is not negative, i.e. SF*effMC < 1 or equivalently 1 - SF*effMC > 0
-        denVals = den.values()
-        numVals = num.values()
-        # note, efficiencies are already capped to be in [0,1], but could also be exactly 0 or exactly 1
-        # set antiSF=1 if eff == 1 (i.e. den=0, or num < 0, or (num < 0.5% and eff > 99.5% (i.e. den < 0.5%))
-        antiSF_values = antiSF.values()
-        cellsToChange = (denVals <= 0.0) | (numVals < 0) | ((numVals < 0.005) & (denVals < 0.005))
-        nChangedCells = np.count_nonzero(cellsToChange)
-        if nChangedCells > 0:
-            frac = nChangedCells/np.product(cellsToChange.shape)
-            logger.warning(f"Setting antiSF = 1.0 in {nChangedCells}/{np.product(cellsToChange.shape)} cells for step {step} ({frac:.1%})")
-            antiSF_values[cellsToChange] = 1.0
-            antiSF.values()[...] = antiSF_values
-        #
+        antiSF = makeAntiSFfromSFandEffi(histSF3D_withStatVars.values, histEffi3D_asSF, step)
     else:
         antiSF = None
         

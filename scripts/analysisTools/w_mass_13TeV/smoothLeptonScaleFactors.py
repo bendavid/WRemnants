@@ -44,6 +44,8 @@ ROOT.PyConfig.IgnoreCommandLineOptions = True
 #sys.path.append(os.getcwd() + "/plotUtils/")
 #from utility import *
 from scripts.analysisTools.plotUtils.utility import *
+## TODO: move this script to scripts/analysisTools/w_mass_13TeV/
+from scripts.analysisTools.tests.test2Dsmoothing import makeAntiSFfromSFandEffi
 
 import wremnants
 
@@ -171,8 +173,6 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
                 step=None,
                 fitRange=None,
                 hist_reducedChi2=None,
-                #hist_FuncParam_vs_eta=None,
-                #hist_FuncCovMatrix_vs_eta=None,  # TH3, eta on x and cov matrix in yz
                 charge = "both",
                 etabins = [],
                 widthPtSmooth=0.2,
@@ -295,7 +295,7 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
             params = np.array([1.0, 0.0, 0.0])
             res_tf1_pol2 = narf.fitutils.fit_hist(boost_hist, pol2_tf_scaled, params)
             tf1_pol2 = ROOT.TF1("tf1_pol2", pol2_tf_scaled, minFitRange, maxFitRange, len(params))
-            tf1_pol2.SetParameters( np.array( res_tf1_pol2["x"], dtype=np.dtype('d') ) )
+            tf1_pol2.SetParameters( np.array( res_tf1_pol2["x"], dtype=np.float64 ) )
             tf1_pol2.SetLineWidth(3)
             tf1_pol2.SetLineColor(ROOT.kRed+2)
 
@@ -312,7 +312,7 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
                 params = np.array([1.0, 0.0, 0.0])
                 res_tf1_pol2_alt = narf.fitutils.fit_hist(boost_hist_alt, pol2_tf_scaled, params)
                 tf1_pol2_alt = ROOT.TF1("tf1_pol2_alt", pol2_tf_scaled, minFitRange, maxFitRange, len(params))
-                tf1_pol2_alt.SetParameters( np.array( res_tf1_pol2_alt["x"], dtype=np.dtype('d') ) )
+                tf1_pol2_alt.SetParameters( np.array( res_tf1_pol2_alt["x"], dtype=np.float64 ) )
                 tf1_pol2_alt.SetLineWidth(2)
                 tf1_pol2_alt.SetLineColor(ROOT.kAzure+2)
                 fitres_TF["pol2_alt_tf"] = res_tf1_pol2_alt
@@ -327,12 +327,12 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
             params = np.array([1.0, 0.0, 0.0, 0.0])
             res_tf1_pol3 = narf.fitutils.fit_hist(boost_hist, pol3_tf_scaled, params)
             tf1_pol3 = ROOT.TF1("tf1_pol3", pol3_tf_scaled, minFitRange, maxFitRange, len(params))
-            tf1_pol3.SetParameters( np.array( res_tf1_pol3["x"], dtype=np.dtype('d') ) )
+            tf1_pol3.SetParameters( np.array( res_tf1_pol3["x"], dtype=np.float64 ) )
             tf1_pol3.SetLineWidth(3)
             tf1_pol3.SetLineColor(ROOT.kRed+2)
 
             # tf1_pol3_test = ROOT.TF1("tf1_pol3_test", pol3_tf_scaled, minFitRange, maxFitRange, len(params))
-            # tf1_pol3_test.SetParameters( np.array( res_tf1_pol3["x"], dtype=np.dtype('d') ) )
+            # tf1_pol3_test.SetParameters( np.array( res_tf1_pol3["x"], dtype=np.float64 ) )
             # tf1_pol3_test.SetLineStyle(ROOT.kDashed)
             # tf1_pol3_test.SetLineWidth(5)
             # tf1_pol3_test.SetLineColor(ROOT.kBlue)
@@ -352,7 +352,7 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
                 params = np.array([1.0, 0.0, 0.0, 0.0])
                 res_tf1_pol3_alt = narf.fitutils.fit_hist(boost_hist_alt, pol3_tf_scaled, params)
                 tf1_pol3_alt = ROOT.TF1("tf1_pol3_alt", pol3_tf_scaled, minFitRange, maxFitRange, len(params))
-                tf1_pol3_alt.SetParameters( np.array( res_tf1_pol3_alt["x"], dtype=np.dtype('d') ) )
+                tf1_pol3_alt.SetParameters( np.array( res_tf1_pol3_alt["x"], dtype=np.float64 ) )
                 tf1_pol3_alt.SetLineWidth(2)
                 tf1_pol3_alt.SetLineColor(ROOT.kAzure+2)
                 fitres_TF["pol3_alt_tf"] = res_tf1_pol3_alt
@@ -372,7 +372,7 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
         else:
             tf1_erf = ROOT.TF1("tf1_erf","[0] * (1.0 + TMath::Erf((x-[1])/[2]))", minFitRange, maxFitRange)
             res_tf1_erf = narf.fitutils.fit_hist(boost_hist, erf_tf, np.array([1.0, 35.0, 3.0]))
-        tf1_erf.SetParameters( np.array( res_tf1_erf["x"], dtype=np.dtype('d') ) )
+        tf1_erf.SetParameters( np.array( res_tf1_erf["x"], dtype=np.float64 ) )
         tf1_erf.SetLineWidth(2)
         tf1_erf.SetLineStyle(ROOT.kDashed)
         tf1_erf.SetLineColor(ROOT.kBlue)
@@ -390,7 +390,7 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
             params = np.array([1.0] + [0.0 for i in range(efficiencyFitPolDegree)])
             res_tf1_polN = narf.fitutils.fit_hist(boost_hist, polN_tf_scaled, params)
             tf1_polN = ROOT.TF1(f"tf1_pol{efficiencyFitPolDegree}", polN_tf_scaled, minFitRange, maxFitRange, len(params))
-            tf1_polN.SetParameters( np.array( res_tf1_polN["x"], dtype=np.dtype('d') ) )
+            tf1_polN.SetParameters( np.array( res_tf1_polN["x"], dtype=np.float64 ) )
             tf1_polN.SetLineWidth(3)
             tf1_polN.SetLineColor(ROOT.kRed+2)
         #
@@ -424,7 +424,7 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
                 params = np.array([1.0] + [0.0 for i in range(efficiencyFitPolDegree)])
                 res_tf1_polN_alt = narf.fitutils.fit_hist(boost_hist_alt, polN_tf_scaled, params)
                 tf1_polN_alt = ROOT.TF1("tf1_polN_alt", polN_tf_scaled, minFitRange, maxFitRange, len(params))
-                tf1_polN_alt.SetParameters( np.array( res_tf1_polN_alt["x"], dtype=np.dtype('d') ) )
+                tf1_polN_alt.SetParameters( np.array( res_tf1_polN_alt["x"], dtype=np.float64 ) )
                 tf1_polN_alt.SetLineWidth(2)
                 tf1_polN_alt.SetLineColor(ROOT.kAzure+2)
             fitres_TF["polN_alt_tf"] = res_tf1_polN_alt
@@ -493,7 +493,7 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
 
     
     # store all variations for faster access below
-    altParameters = np.array([np.zeros(npar, dtype=np.dtype('d'))] * (npar * 2), dtype=np.dtype('d'))
+    altParameters = np.array([np.zeros(npar, dtype=np.float64)] * (npar * 2), dtype=np.float64)
     if not doSpline:
         # diagonalize and get eigenvalues and eigenvectors
         e, v = np.linalg.eigh(fitres_TF[defaultFunc]["cov"])
@@ -934,6 +934,7 @@ minmaxSF = {"trigger"      : "0.65,1.15",
             "recominus"    : "0.94,1.02",
 }
 
+stepsWithAntiSF = ["iso", "isoplus", "isominus", "trigger", "triggerplus", "triggerminus"]
 
 def mergeFiles(args):
 
@@ -979,10 +980,9 @@ def runFiles(args):
             
         cmd = f"python w_mass_13TeV/smoothLeptonScaleFactors.py {inputFile} {args.outdir[0]} -c {charge} -s {step}"
         cmd += f" --input-hist-names '{args.inputHistNames}' --input-hist-names-alt '{args.inputHistNamesAlt}'"
-        if step not in ["iso", "isonotrig", "antiiso", "antiisonotrig"]:
-            cmd += " --skip-eff"
-        else:
-            cmd += f" --fit-pol-degree-efficiency {args.fitPolDegreeEfficiency}"
+        ## now we no longer smooth efficiencies, but keep commented in case we need it again
+        # if step in ["iso", "isonotrig", "antiiso", "antiisonotrig"]:
+        #     cmd += f" --no-skip-eff --fit-pol-degree-efficiency {args.fitPolDegreeEfficiency}"
         print()
         safeSystem(cmd, args.dryRun)
         print()
@@ -1006,7 +1006,7 @@ if __name__ == "__main__":
     parser.add_argument(    '--input-hist-names-alt', dest='inputHistNamesAlt', default='EffDataAltSig2D,SF2D_dataAltSig', type=str, help='Pass comma separated list of 2  names for alternate variations, for eff(data),SF, to be used instead of the default names')
     parser.add_argument(     '--palette'  , dest='palette',      default=87, type=int, help='Set palette: default is a built-in one, 55 is kRainbow')
     parser.add_argument(     '--fit-pol-degree-efficiency'  , dest='fitPolDegreeEfficiency', default=4, type=int, help='Degree for polynomial used in the fits to efficiencies (-1 will use a spline)')
-    parser.add_argument(     '--skip-eff', dest='skipEff', action="store_true", default=False, help='Skip efficiencies and do only SF (to save time and if one only wants to smooth SF directly)')
+    parser.add_argument(     '--no-skip-eff', dest='skipEff', action="store_false", help='Do not skip efficiency smoothing (default is to do only SF to save time and if one only wants to smooth SF directly)')
     # utility option to print commands to do all files
     parser.add_argument('-d',  '--dryRun', action='store_true', help='Do not execute commands, just print them')
     parser.add_argument(     '--run-all', dest='runAll', action="store_true", default=False, help='Make and run commands to run all steps specified in --merge-steps')
@@ -1071,15 +1071,9 @@ if __name__ == "__main__":
     tfile = safeOpenFile(args.inputfile[0])
     hsf =   safeGetObject(tfile, sfhistname)
     hsfAlt = safeGetObject(tfile, sfhistnameAlt)
-    if args.skipEff:
-        hdata = copy.deepcopy(hsf.Clone("data_dummy"))
-        hdata.Reset("ICESM")
-        hmc = copy.deepcopy(hdata.Clone("mc_dummy"))
-        hdataAlt = copy.deepcopy(hdata.Clone("dataAlt_dummy"))
-    else:
-        hdata = safeGetObject(tfile, datahistname)
-        hmc =   safeGetObject(tfile, mchistname)
-        hdataAlt = safeGetObject(tfile, datahistnameAlt)        
+    hdata = safeGetObject(tfile, datahistname)
+    hmc =   safeGetObject(tfile, mchistname)
+    hdataAlt = safeGetObject(tfile, datahistnameAlt)        
     tfile.Close()
         
     etabins = [round(hdata.GetXaxis().GetBinLowEdge(i), 1) for i in range(1, 2 + hdata.GetNbinsX())]
@@ -1143,8 +1137,9 @@ if __name__ == "__main__":
                                       len(ptbins)-1, array('d',ptbins)
     )
 
-    copyHisto(pullData, hdata)
-    copyHisto(pullMC, hmc)
+    if not args.skipEff:
+        copyHisto(pullData, hdata)
+        copyHisto(pullMC, hmc)
     copyHisto(pullSF, hsf)
     copyHisto(pullSFfromSmoothEffi, hsf)
     errData = copy.deepcopy(hdata.Clone("errData"))
@@ -1192,7 +1187,7 @@ if __name__ == "__main__":
                                               nFinePtBins, minPtHisto, maxPtHisto,
                                               nBinsEff,0.5,0.5+nBinsEff)
     # TODO: avoid magic numbers, use option as for efficiencies
-    nBinsSF = 8 if args.step == "tracking" else 10 # fits are done with pol2 for tracking (3 parameters) and pol3 otherwise (4 parameters), then this is 1 + 2 * nBinsSF + 1
+    nBinsSF = 8 if args.step == "tracking" else 10 # fits are done with pol2 for tracking (3 parameters) and pol3 otherwise (4 parameters), then this is 1 + 2 * statVarsUp + 1
     hist_SF_nomiAndAlt_etapt = ROOT.TH3D("hist_SF_nomiAndAlt_etapt",
                                          "Smooth nominal and alternate scale factor",
                                          48,-2.40,2.40,
@@ -1222,8 +1217,6 @@ if __name__ == "__main__":
                                       step=args.step,
                                       fitRange=args.ptFitRange,
                                       hist_reducedChi2=hist_reducedChi2_MC,
-                                      #hist_FuncParam_vs_eta=hist_FuncParam_vs_eta_mc,
-                                      #hist_FuncCovMatrix_vs_eta=hist_FuncCovMatrix_vs_eta_mc,
                                       charge=args.charge,
                                       etabins=etabins,
                                       widthPtSmooth=args.widthPt,
@@ -1248,8 +1241,6 @@ if __name__ == "__main__":
                                       step=args.step,
                                       fitRange=args.ptFitRange,
                                       hist_reducedChi2=hist_reducedChi2_data,
-                                      #hist_FuncParam_vs_eta=hist_FuncParam_vs_eta_data,
-                                      #hist_FuncCovMatrix_vs_eta=hist_FuncCovMatrix_vs_eta_data,
                                       charge=args.charge,
                                       etabins=etabins,
                                       widthPtSmooth=args.widthPt,
@@ -1284,8 +1275,6 @@ if __name__ == "__main__":
                                   step=args.step,
                                   fitRange=args.ptFitRange,
                                   hist_reducedChi2=hist_reducedChi2_sf,
-                                  #hist_FuncParam_vs_eta=hist_FuncParam_vs_eta_sf,
-                                  #hist_FuncCovMatrix_vs_eta=hist_FuncCovMatrix_vs_eta_sf,
                                   charge=args.charge,
                                   etabins=etabins,
                                   widthPtSmooth=args.widthPt,
@@ -1419,12 +1408,14 @@ if __name__ == "__main__":
     drawCorrelationPlot(ratioSF,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),"scale factor ratio (original/smooth)::0.99,1.01",
                         "scaleFactorRatio","ForceTitle",outname,palette=args.palette,passCanvas=canvas)
 
-    pullData.Add(hdataSmoothCheck_origBinPt, -1.0)
-    pullData.Divide(errData)
-    pullMC.Add(hmcSmoothCheck_origBinPt, -1.0)
-    pullMC.Divide(errMC)
+    if not args.skipEff:
+        pullData.Add(hdataSmoothCheck_origBinPt, -1.0)
+        pullData.Divide(errData)
+        pullMC.Add(hmcSmoothCheck_origBinPt, -1.0)
+        pullMC.Divide(errMC)
     pullSF.Add(hsfSmoothCheck_origBinPt, -1.0)
     pullSF.Divide(errSF)
+    
     drawCorrelationPlot(pullData,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),"Data eff. pull (original-smooth)/err::-5.0,5.0",
                         "dataEfficiencyPull","ForceTitle",outname,nContours=10,palette=args.palette,passCanvas=canvas)
     drawCorrelationPlot(pullMC,"{lep} #eta".format(lep=lepton),"{lep} p_{{T}} [GeV]".format(lep=lepton),"MC eff. pull (original-smooth)/err::-5.0,5.0",
@@ -1492,12 +1483,50 @@ if __name__ == "__main__":
     drawReducedChi2(c, hist_reducedChi2_data, hist_reducedChi2_MC, hist_reducedChi2_sf)
 
     hist_postfix = f"_{args.era}_{args.step}_{args.charge}"
+
+    if args.step in stepsWithAntiSF:
+        # for completeness make also original antiiso efficiencies and scale factors
+        hist_postfix_anti = f"_{args.era}_anti{args.step}_{args.charge}"
+        hanti_effData_original = copy.deepcopy(hdata.Clone("effData_original" + hist_postfix_anti))
+        ROOT.wrem.initializeRootHistogram(hanti_effData_original, 1.0)
+        hanti_effData_original.SetTitle(f"Anti{args.step} data efficiency")
+        hanti_effMC_original = copy.deepcopy(hanti_effData_original.Clone("effMC_original" + hist_postfix_anti))
+        hanti_effMC_original.SetTitle(f"Anti{args.step} MC efficiency")
+        hanti_effData_original.Add(hdata, -1.0)
+        hanti_effMC_original.Add(hmc, -1.0)
+        hanti_SF_original = copy.deepcopy(hanti_effData_original.Clone("SF_original" + hist_postfix_anti))
+        hanti_SF_original.SetTitle(f"Anti{args.step} scale factors")
+        hanti_SF_original.Divide(hanti_effMC_original)
+        # now the original dataAltSig for SF
+        hanti_SF_originalDataAltSig = copy.deepcopy(hanti_effData_original.Clone("SF_originalDataAltSig" + hist_postfix_anti))
+        ROOT.wrem.initializeRootHistogram(hanti_SF_originalDataAltSig, 1.0)
+        hanti_SF_originalDataAltSig.Add(hdataAlt, -1.0)
+        hanti_SF_originalDataAltSig.Divide(hanti_effMC_original)
+        # prepare some 1D hists to run plots of antiSF 
+        label_anti = "anti" + label
+        hsfpt_anti = make1Dhist("hsfpt_anti", hanti_SF_original, ptbins, label_anti)
+        hsfptAlt_anti = make1Dhist("hsfptAlt_anti", hanti_SF_originalDataAltSig, ptbins, label_anti)
+        drawCorrelationPlot(hanti_SF_original, "{lep} #eta".format(lep=lepton), "{lep} p_{{T}} [GeV]".format(lep=lepton),
+                            f"Anti{args.step} scale factors",
+                            hanti_SF_original.GetName(), "ForceTitle", outname,
+                            palette=args.palette, passCanvas=canvas)
+        drawCorrelationPlot(hanti_effData_original, "{lep} #eta".format(lep=lepton), "{lep} p_{{T}} [GeV]".format(lep=lepton),
+                            f"Anti{args.step} data efficiency",
+                            hanti_effData_original.GetName(), "ForceTitle", outname,
+                            palette=args.palette, passCanvas=canvas)
+        drawCorrelationPlot(hanti_effMC_original, "{lep} #eta".format(lep=lepton), "{lep} p_{{T}} [GeV]".format(lep=lepton),
+                            f"Anti{args.step} MC efficiency",
+                            hanti_effMC_original.GetName(), "ForceTitle", outname,
+                            palette=args.palette, passCanvas=canvas)
+        
     # now get SF dividing efficiencies, but for the variations use either nominal data or nominal MC, will end up with two SF histograms
     # cannot get scale factors variations from ratio of corresponding efficiencies, because data and MC variations are totally independent
     # once this is done, make antiisolation histograms
-    hasSpecialHistForIsolation = False
-    if args.step in ["iso", "isonotrig"] and not args.skipEff:
-        hasSpecialHistForIsolation = True
+    ##
+    ## this following part is a bit obsolete, because we no longer smooth efficiencies to get antiSF
+    hasSFhistFromEfficiencySmoothing = False
+    if args.step in stepsWithAntiSF and not args.skipEff:
+        hasSFhistFromEfficiencySmoothing = True
         # broadcast nominal MC efficiency from TH2 into TH3
         h3_effMC_nominal = copy.deepcopy(hist_effMC_nomiAndAlt_etapt.Clone("effMC_broadcast"))
         ROOT.wrem.broadCastTH2intoTH3(h3_effMC_nominal, hmcSmoothCheck)
@@ -1514,7 +1543,6 @@ if __name__ == "__main__":
         #
         # now antiisolation
         #
-        hist_postfix_anti = f"_{args.era}_anti{args.step}_{args.charge}"
         # clone histogram for effData and initialize to 1 before subtraction
         hanti_effData = copy.deepcopy(hist_effData_nomiAndAlt_etapt.Clone("effData_nomiAndAlt" + hist_postfix_anti))
         hanti_effData.Reset("ICESM")
@@ -1540,14 +1568,6 @@ if __name__ == "__main__":
         hanti_SF_nomiAndAlt_onlyMCVar_etapt.SetTitle("Smooth nominal and alternate SF (only MC eff variations)")
         ROOT.wrem.broadCastTH2intoTH3(hanti_SF_nomiAndAlt_onlyMCVar_etapt, ROOT.wrem.projectTH2FromTH3(hanti_effData, "hanti_effData_nomi_2D", 1))
         hanti_SF_nomiAndAlt_onlyMCVar_etapt.Divide(hanti_effMC)
-        # for completeness make also original antiiso efficiencies and scale factors
-        hanti_effData_original = copy.deepcopy(hdata.Clone("effData_original" + hist_postfix_anti))
-        ROOT.wrem.initializeRootHistogram(hanti_effData_original, 1.0)
-        hanti_effMC_original = copy.deepcopy(hanti_effData_original.Clone("effMC_original" + hist_postfix_anti))
-        hanti_effData_original.Add(hdata, -1.0)
-        hanti_effMC_original.Add(hmc, -1.0)
-        hanti_SF_original = copy.deepcopy(hanti_effData_original.Clone("SF_original" + hist_postfix_anti))
-        hanti_SF_original.Divide(hanti_effMC_original)
         # as the last thing, make smoothed antiiso efficiencies and scale factors with the original pt binning (uncertainties from original binned things)
         hanti_hdataSmoothCheck_origBinPt = copy.deepcopy(hdataSmoothCheck_origBinPt.Clone("effData_smoothWithOriginalPtBins" + hist_postfix_anti))
         ROOT.wrem.initializeRootHistogram(hanti_hdataSmoothCheck_origBinPt, 1.0)
@@ -1557,16 +1577,8 @@ if __name__ == "__main__":
         # for the SF have to divide the smooth efficiencies, cannot trivially invert the isolation sf
         hanti_hsfSmoothCheck_origBinPt = copy.deepcopy(hanti_hdataSmoothCheck_origBinPt.Clone("SF_smoothWithOriginalPtBins" + hist_postfix_anti))
         hanti_hsfSmoothCheck_origBinPt.Divide(hanti_hmcSmoothCheck_origBinPt)
-        # now the original dataAltSig for SF
-        hanti_SF_originalDataAltSig = copy.deepcopy(hanti_effData_original.Clone("SF_originalDataAltSig" + hist_postfix_anti))
-        ROOT.wrem.initializeRootHistogram(hanti_SF_originalDataAltSig, 1.0)
-        hanti_SF_originalDataAltSig.Add(hdataAlt, -1.0)
-        hanti_SF_originalDataAltSig.Divide(hanti_effMC_original)
 
         ### now do some antiiso SF direct smoothing, and compared with outcome of iso efficiency smoothing
-        label_anti = "anti" + label
-        hsfpt_anti = make1Dhist("hsfpt_anti", hanti_SF_original, ptbins, label_anti)
-        hsfptAlt_anti = make1Dhist("hsfptAlt_anti", hanti_SF_originalDataAltSig, ptbins, label_anti)
         # get antiiso SF from smooth iso efficiencies, with fine pt bins
         nomiAntiisoSFfromSmoothIsoEffi = getTH2fromTH3(hanti_SF_nomiAndAlt_onlyMCVar_etapt, "nomiAntiisoSFfromSmoothIsoEffi", 1, 1)
         # ###########################
@@ -1574,7 +1586,7 @@ if __name__ == "__main__":
         # ###########################
         for key in hsfpt_anti:
             antiisoTMP = nomiAntiisoSFfromSmoothIsoEffi.ProjectionY(f"antiisoTMP_{key}", key+1, key+1, "e")
-            bestFitFunc = fitTurnOnTF(hsfpt_anti[key],key, outname+f"/anti{args.step}_test", "SF", 
+            bestFitFunc = fitTurnOnTF(hsfpt_anti[key],key, outname+f"/anti{args.step}_fromSmoothEffi", "SF", 
                                       step="anti"+args.step,
                                       fitRange=args.ptFitRange,
                                       charge=args.charge,
@@ -1582,13 +1594,17 @@ if __name__ == "__main__":
                                       widthPtSmooth=args.widthPt,
                                       histAlt=hsfptAlt_anti[key],
                                       addCurve=antiisoTMP,
-                                      addCurveLegEntry=f"SF from pol{args.fitPolDegreeEfficiency} iso effi"
+                                      addCurveLegEntry=f"SF from pol{args.fitPolDegreeEfficiency} {args.step} effi"
             )
 
 
     # prepare antiiso or antitrigger SF using direct SF smoothing and W MC truth efficiencies
-    if args.step in ["iso", "isoplus", "isominus", "trigger", "triggerplus", "triggerminus"]:
+    hasAntiSFfromSFandEffi = False
+    if args.step in stepsWithAntiSF:
+        hasAntiSFfromSFandEffi = True
+        ###
         # TODO copy new eff file to wremnants-data
+        ###
         effSmoothFile = "/eos/user/m/mciprian/www/WMassAnalysis/test2Dsmoothing/makeWMCefficiency3D/noMuonCorr_noSF_allProc_noDphiCut_rebinUt2_addEffi2D/efficiencies3D_rebinUt2.pkl.lz4"
         with lz4.frame.open(effSmoothFile) as fileEff:
             allMCeff = pickle.load(fileEff)
@@ -1607,40 +1623,87 @@ if __name__ == "__main__":
             etaCenter = 0.5 * (etaHigh + etaLow)
             eta_index = eff_boost.axes[0].index(etaCenter)
             eff_boost_pt = eff_boost[{0 : eta_index}] # from 2D (eta-pt) to 1D (pt)
-            xvals = [tf.constant(center, dtype=dtype) for center in eff_boost_pt.axes.centers]
+            xvals = [tf.constant(center, dtype=tf.float64) for center in eff_boost_pt.axes.centers]
             ptvals = np.reshape(xvals[0], [-1])
             yvals = eff_boost_pt.values()
             yvals[np.isnan(yvals)] = 0 # protection against bins where no events were selected (extreme ut for instance), set efficiency to 0 instead of 1
+            # logger.warning(etaRange)
+            # logger.warning(f"ptvals = {ptvals}")
+            # logger.warning(f"yvals = {yvals}")
             eff_boost_pt.values()[...] = yvals
             # the grid interpolator will be created up to the extreme bin centers, so need bounds_error=False to allow the extrapolation to extend outside until the bin edges
             # and then we can set its extrapolation value to fill_value ('None' uses the extrapolation from the curve inside accpetance)
-            interp = RegularGridInterpolator(ptvals, yvals, method='cubic', bounds_error=False, fill_value=None)
-            xvalsFine = [tf.constant(center, dtype=dtype) for center in histEffi2D_etapt_boost.axes.centers]
+            interp = RegularGridInterpolator((ptvals,), yvals, method='cubic', bounds_error=False, fill_value=None)
+            xvalsFine = [tf.constant(center, dtype=tf.float64) for center in histEffi2D_etapt_boost.axes.centers]
             ptvalsFine = np.reshape(xvalsFine[1], [-1])
             pts = np.array(ptvalsFine)
             #print(pts)
             smoothVals = interp(pts)
             #print(smoothVals)
             histEffi2D_etapt_boost.values()[eta_index :] = smoothVals
-            histEffi2D.variances()[...] = np.zeros_like(histEffi2D.variances())
-        logger.info("Done with efficiencies")
+        histEffi2D_etapt_boost.variances()[...] = np.zeros_like(histEffi2D_etapt_boost.variances())
         histEffi2D_etapt_root = narf.hist_to_root(histEffi2D_etapt_boost)
-        histEffi2D_etapt_root.SetName(f"smoothEffi2D_{args.step}_etapt_boost")
-        # now compute anti-X SF using X SF and W MC efficiencies
+        histEffi2D_etapt_root.SetName(f"smoothEffi2D_{args.step}_etapt_root")
+        # plot W MC efficiencies after spline interpolation as a check
+        drawCorrelationPlot(histEffi2D_etapt_root, "{lep} #eta".format(lep=lepton), "{lep} p_{{T}} [GeV]".format(lep=lepton),
+                            "W MC efficiency (spline interp.)",
+                            histEffi2D_etapt_root.GetName(), "ForceTitle", outname,
+                            palette=args.palette, passCanvas=canvas)
+
+        logger.info("Done with efficiencies")
+
+        hist_SF_nomiAndAlt_etapt_boost = narf.root_to_hist(hist_SF_nomiAndAlt_etapt, axis_names = ["SF eta", "SF pt", "nomi-statUpDown-syst"])
+        # convert SF and effi to antiSF
+        # broadcast effi in 2D to match 3D dimensionality of SF histogram (with 3rd axis containing nomi-stat-syst)
+        # TODO: can surely do all in boost without converting to root and having to use root based methods
         hist_postfix_anti = f"_{args.era}_anti{args.step}_{args.charge}"
-        hanti_SF_nomiAndAlt_etapt = copy.deepcopy(hist_SF_nomiAndAlt_etapt.Clone(f"SF_nomiAndAlt_{hist_postfix_anti}"))
-        # do (1 - SF * eff) / (1 - eff)
-        hanti_unity = copy.deepcopy(hanti_SF_nomiAndAlt_etapt.Clone(f"unity_{hist_postfix_anti}"))
-        ROOT.wrem.initializeRootHistogram(hanti_unity, 1.0)
-        histEffi3D_etaptVar_root = copy.deepcopy(hanti_SF_nomiAndAlt_etapt.Clone(f"histEffi3D_etaptVar_{hist_postfix_anti}"))
-        ROOT.wrem.broadCastTH2intoTH3(histEffi3D_etaptVar_root, histEffi2D_etapt_root)
-        hanti_den = copy.deepcopy(hanti_unity.Clone(f"hanti_den_{hist_postfix_anti}"))
-        hanti_num = copy.deepcopy(hanti_unity.Clone(f"hanti_num_{hist_postfix_anti}"))
-        hanti_den.Add(histEffi3D_etaptVar_root, -1.0)
-        hanti_num.Add(histEffi3D_etaptVar_root.Multiply(hist_SF_nomiAndAlt_etapt), -1.0)        
-    #####
-    ##### END OF EXPERIMENTAL PART    
+        histEffi2D_etapt_root_broadcast3D = copy.deepcopy(hist_SF_nomiAndAlt_etapt.Clone(f"histEffi2D_etapt_root_broadcast3D_{hist_postfix_anti}"))
+        histEffi2D_etapt_root_broadcast3D.Reset("ICESM")
+        ROOT.wrem.broadCastTH2intoTH3(histEffi2D_etapt_root_broadcast3D, histEffi2D_etapt_root)
+        histEffi2D_etapt_boost_broadcast3D = narf.root_to_hist(histEffi2D_etapt_root_broadcast3D, axis_names = ["effi eta", "effi pt", "nomi-statUpDown-syst"])
+        hanti_SF_nomiAndAlt_etapt_boost = makeAntiSFfromSFandEffi(hist_SF_nomiAndAlt_etapt_boost, histEffi2D_etapt_boost_broadcast3D, args.step)
+        # convert back to root and set name
+        hanti_SF_nomiAndAlt_etapt = narf.hist_to_root(hanti_SF_nomiAndAlt_etapt_boost)
+        hanti_SF_nomiAndAlt_etapt.SetName(f"SF_nomiAndAlt_{hist_postfix_anti}")
+        hanti_SF_nomiAndAlt_etapt.SetTitle(f"SF_nomiAndAlt_{hist_postfix_anti}")
+        ##
+        ## some plots of nominal antiSF from SF smoothing with W MC efficiencies (comparing to direct antiSF smoothing)
+        # get antiiso SF from smooth antiSF, with fine pt bins
+        nomiAntiSFfromSFandEffi = getTH2fromTH3(hanti_SF_nomiAndAlt_etapt, f"nomiAnti{args.step}SFfromSFandEffi", 1, 1)
+        nomiAntiSFfromSFandEffi.SetTitle("From smooth SF and W MC effi")
+        # set uncertainty properly from variations stored in the 3rd axis
+        # TODO: avoid python loop
+        nVarsUp = int((nBinsSF - 2) / 2)
+        for ix in range(1, 1 + nomiAntiSFfromSFandEffi.GetNbinsX()):
+            for iy in range(1, 1 + nomiAntiSFfromSFandEffi.GetNbinsY()):
+                unc = 0
+                # read stat vars from bin 2 to 1+nVarsUp
+                for iz in range(2, 2 + nVarsUp):
+                    diff = hanti_SF_nomiAndAlt_etapt.GetBinContent(ix, iy, iz) - hanti_SF_nomiAndAlt_etapt.GetBinContent(ix, iy, 1)
+                    unc += diff * diff
+                nomiAntiSFfromSFandEffi.SetBinError(ix, iy, math.sqrt(unc))
+        #
+        drawCorrelationPlot(nomiAntiSFfromSFandEffi, "{lep} #eta".format(lep=lepton), "{lep} p_{{T}} [GeV]".format(lep=lepton),
+                            f"Anti{args.step} smooth SF",
+                            nomiAntiSFfromSFandEffi.GetName(), "ForceTitle", outname,
+                            palette=args.palette, passCanvas=canvas)
         
+        # ###########################
+        # # now SF
+        # ###########################
+        for key in hsfpt_anti:
+            antiisoTMP = nomiAntiSFfromSFandEffi.ProjectionY(f"antiisoTMP2_{key}", key+1, key+1, "e")
+            bestFitFunc = fitTurnOnTF(hsfpt_anti[key],key, outname+f"/anti{args.step}_fromSFandEffi", "SF", 
+                                      step="anti"+args.step,
+                                      fitRange=args.ptFitRange,
+                                      charge=args.charge,
+                                      etabins=etabins,
+                                      widthPtSmooth=args.widthPt,
+                                      histAlt=hsfptAlt_anti[key],
+                                      addCurve=antiisoTMP,
+                                      addCurveLegEntry=f"From {args.step} SF and W MC effi"
+            )
+
     ###########################
     # Now save things
     ###########################
@@ -1659,15 +1722,13 @@ if __name__ == "__main__":
         hist_effData_nomiAndAlt_etapt.Write("effData_nomiAndAlt" + hist_postfix)
         hist_effMC_nomiAndAlt_etapt.Write("effMC_nomiAndAlt" + hist_postfix)
     hist_SF_nomiAndAlt_etapt.Write("SF_nomiAndAlt" + hist_postfix)
-    if hasSpecialHistForIsolation:
+    if hasSFhistFromEfficiencySmoothing:
         hist_SF_nomiAndAlt_onlyDataVar_etapt.Write()
         hist_SF_nomiAndAlt_onlyMCVar_etapt.Write()
-        #hist_SF_nomiAndAlt_dataMCVar_etapt.Write()
         hanti_effData.Write()
         hanti_effMC.Write()
         hanti_SF_nomiAndAlt_onlyDataVar_etapt.Write()
         hanti_SF_nomiAndAlt_onlyMCVar_etapt.Write()
-        #hanti_SF_nomiAndAlt_dataMCVar_etapt.Write()
         hanti_hdataSmoothCheck_origBinPt.Write()
         hanti_hmcSmoothCheck_origBinPt.Write()
         hanti_hsfSmoothCheck_origBinPt.Write() # equivalent of scaleFactor histogram from ratio of smooth efficiencies (smoothing SF directly for antiiso doesn't make sense)
@@ -1675,6 +1736,8 @@ if __name__ == "__main__":
         hanti_effMC_original.Write()
         hanti_SF_original.Write()
         hanti_SF_originalDataAltSig.Write()
+    if hasAntiSFfromSFandEffi:
+        hanti_SF_nomiAndAlt_etapt.Write()
     tfile.Close()
     print()
     print(f"Created file {outname+outfilename}")
