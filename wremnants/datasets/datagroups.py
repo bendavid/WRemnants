@@ -20,7 +20,7 @@ logger = logging.child_logger(__name__)
 
 class Datagroups(object):
 
-    def __init__(self, infile, combine=False, datasets=None, **kwargs):
+    def __init__(self, infile, combine=False, filter_datasets=True, mode=None, **kwargs):
         self.combine = combine
         self.h5file = None
         self.rtfile = None
@@ -34,19 +34,34 @@ class Datagroups(object):
             self.rtfile = ROOT.TFile.Open(infile)
             self.results = None
         else:
-            raise ValueError("Unsupported file type")
+            raise ValueError(f"{infile} has unsupported file type")
 
-        self.wmass = os.path.basename(self.getScriptCommand().split()[0]).startswith("mw")
-        self.wlike = os.path.basename(self.getScriptCommand().split()[0]).startswith("mz_wlike")
-        self.dilepton = os.path.basename(self.getScriptCommand().split()[0]).startswith("mz_dilepton")
-
-        self.lowPU = "lowPU" in os.path.basename(self.getScriptCommand().split()[0])
+        mode_map = {
+            "w_z_gen_dists.py" : "vgen",
+            "mz_dilepton.py" : "dilepton",
+            "mz_wlike_with_mu_eta_pt.py" : "wlike",
+            "mw_with_mu_eta_pt.py" : "wmass",
+            "mw_lowPU.py" : "lowpu_w",
+            "mz_lowPU.py" : "lowpu_z",
+        }
+        if mode == None:
+            analysis_script = os.path.basename(self.getScriptCommand().split()[0])
+            if analysis_script not in mode_map:
+                raise ValueError(f"Unrecognized analysis script {analysis_script}! Expected one of {mode_map.keys()}")
+            self.mode = mode_map[analysis_script]
+        else:
+            if mode not in mode_map.values():
+                raise ValueError(f"Unrecognized mode '{mode}.' Must be one of {set(mode_map.values())}")
+            self.mode = mode
 
         self.lumi = 1
 
         if self.results:
-            args = self.getMetaInfo()["args"]
-            self.flavor = args.get("flavor", None)
+            try:
+                args = self.getMetaInfo()["args"]
+                self.flavor = args.get("flavor", None)
+            except ValueError as e:
+                self.flavor = None
         else:
             self.flavor = None
 
@@ -57,17 +72,14 @@ class Datagroups(object):
         self.fakeName = "Fake"
         self.dataName = "Data"
 
-        if self.lowPU:
+        if "lowpu" in self.mode:
             from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU as make_datagroups
-            mode="lowPU"
         else:
             from wremnants.datasets.datagroups2016 import make_datagroups_2016 as make_datagroups
-            mode=None
 
-        if datasets is None:
-            datasets = getDatasets(mode=mode)
+        datasets = getDatasets(mode=self.mode)
 
-        self.setDatasets(datasets)
+        self.setDatasets(datasets, filter_datasets)
         self.setGenAxes()
                     
         make_datagroups(self, **kwargs)
@@ -78,10 +90,10 @@ class Datagroups(object):
         if self.rtfile:
             self.rtfile.Close()
 
-    def setDatasets(self, datasets):
+    def setDatasets(self, datasets, filter_datasets=True):
         if self.results:
             # only keep datasets that are found in input file
-            self.datasets = {x.name : x for x in datasets if x.name in self.results.keys()}
+            self.datasets = {x.name : x for x in datasets if not filter_datasets or x.name in self.results.keys() }
             
             # dictionary that maps dataset names to groups 
             dataset_to_group = {d_key: d.group for d_key, d in self.datasets.items()}
@@ -90,7 +102,7 @@ class Datagroups(object):
                 # if additional datasets are specified in results (for example aggregated groups or re-named datasets), get them
                 if d_name in self.datasets.keys():
                     continue
-                if d_name in ["meta_info",]:
+                if d_name in ["meta_info",] or d_name.startswith("hist"):
                     continue
                 
                 g_name = d_name.replace("Bkg","") if d_name.startswith("Bkg") else d_name
@@ -209,6 +221,8 @@ class Datagroups(object):
 
     def getMetaInfo(self):
         if self.results:
+            if "meta_info" not in self.results and "meta_data" not in self.results:
+                raise ValueError("Did not find meta data in results file")
             return self.results["meta_info"] if "meta_info" in self.results else self.results["meta_data"]
         raise NotImplementedError("Currently can't access meta data as dict for ROOT file")
 
@@ -216,7 +230,7 @@ class Datagroups(object):
         if self.rtfile:
             return self.rtfile.Get("meta_info/command").GetTitle()
         else:
-            meta_info = self.results["meta_info"] if "meta_info" in self.results else self.results["meta_data"]
+            meta_info = self.getMetaInfo()
             return meta_info["command"]
         
     # for reading pickle files
@@ -383,7 +397,8 @@ class Datagroups(object):
                         opArgs = {**group.selectOpArgs, "fakerate_integration_axes": fakerateIntegrationAxes}
                     else:
                         opArgs = group.selectOpArgs
-                    group.hists[label] = group.selectOp(group.hists[label], **opArgs)
+                    if group.hists[label]:
+                        group.hists[label] = group.selectOp(group.hists[label], **opArgs)
 
         # Avoid situation where the nominal is read for all processes for this syst
         if nominalIfMissing and not foundExact:
@@ -436,10 +451,13 @@ class Datagroups(object):
         if self.rtfile and self.combine:
             self.setHistsCombine(baseName, syst, channel, procsToRead, excluded_procs, label)
         else:
-            self.setHists(baseName, syst, procsToRead, label, nominalIfMissing, applySelection, fakerateIntegrationAxes,
-                          forceNonzero, preOpMap, preOpArgs,
-                          scaleToNewLumi=scaleToNewLumi, 
-                          excludeProcs=excluded_procs, forceToNominal=forceToNominal, sumFakesPartial=sumFakesPartial)
+            self.setHists(baseName, syst, 
+                          procsToRead=procsToRead, label=label, nominalIfMissing=nominalIfMissing, 
+                          applySelection=applySelection, fakerateIntegrationAxes=fakerateIntegrationAxes, 
+                          forceNonzero=forceNonzero, preOpMap=preOpMap, preOpArgs=preOpArgs, 
+                          scaleToNewLumi=scaleToNewLumi,
+                          excludeProcs=excluded_procs, forceToNominal=forceToNominal,
+                          sumFakesPartial=sumFakesPartial)
 
     def getDatagroups(self):
         return self.groups
@@ -466,6 +484,8 @@ class Datagroups(object):
         if not to_expand:
             to_expand = self.groups.keys()
         for group_name in to_expand:
+            if group_name not in self.groups:
+                raise ValueError(f"Trying to expand unknown group {group_name}. Valid groups are {list(self.groups.keys())}")
             if group_name not in exclude_group:
                 for member in self.groups[group_name].members:
                     # protection against duplicates in the output list, they may arise from fakes
@@ -494,10 +514,12 @@ class Datagroups(object):
         return self.results
 
     def addSummedProc(self, refname, name, label, color="red", exclude=["Data"], relabel=None, 
-            procsToRead=None, reload=False, rename=None, action=None, preOpMap={}, preOpArgs={}, forceNonzero=True):
+            procsToRead=None, reload=False, rename=None, action=None, preOpMap={}, preOpArgs={}, 
+            fakerateIntegrationAxes=[], forceNonzero=True):
         if reload:
             self.loadHistsForDatagroups(refname, syst=name, excluded_procs=exclude,
-                procsToRead=procsToRead, preOpMap=preOpMap, preOpArgs=preOpArgs, forceNonzero=forceNonzero)
+                procsToRead=procsToRead, preOpMap=preOpMap, preOpArgs=preOpArgs, 
+                fakerateIntegrationAxes=fakerateIntegrationAxes, forceNonzero=forceNonzero)
 
         if not rename:
             rename = name
@@ -535,13 +557,18 @@ class Datagroups(object):
         if isinstance(gen_axes, str):
             gen_axes = [gen_axes]
 
+        self.gen_axes = None
+
         if gen_axes != None:
             self.gen_axes = list(gen_axes)
         else:
             # infer gen axes from metadata
-            args = self.getMetaInfo()["args"]
-            if not args.get("unfolding", False) and (not args.get("theoryAgnostic", False) or args.get("poiAsNoi", False)):
-                self.gen_axes = None
+            try:
+                args = self.getMetaInfo()["args"]
+            except ValueError as e:
+                logger.warning("No meta data found so no gen axes could be auto set")
+                return
+            if args.get("unfolding", False) is False and args.get("addHelicityHistos", False) is False:
                 return
 
             if len(args.get("genVars", [])) > 0:
@@ -557,7 +584,12 @@ class Datagroups(object):
             if gen_axis not in h.axes.name:
                 raise RuntimeError(f"Gen axis '{gen_axis}' not found in histogram axes '{h.axes.name}'!")
 
-            gen_bins.append(range(h.axes[gen_axis].size))
+            gen_bin_list = [i for i in range(h.axes[gen_axis].size)]
+            if h.axes[gen_axis].traits.underflow:
+                gen_bin_list.append(hist.underflow)
+            if h.axes[gen_axis].traits.overflow:
+                gen_bin_list.append(hist.overflow)
+            gen_bins.append(gen_bin_list)
         return gen_bins
 
     def defineSignalBinsUnfolding(self, group_name, new_name=None, member_filter=None, histToReadAxes="xnorm", axesToRead=[]):
@@ -568,6 +600,8 @@ class Datagroups(object):
         if member_filter is not None:
             base_members = [m for m in filter(lambda x, f=member_filter: f(x), base_members)]            
 
+        if "xnorm" not in self.results[base_members[0].name]["output"]:
+            raise ValueError(f"Results for member {base_members[0].name} does not include xnorm. Found {self.results[base_members[0].name]['output'].keys()}")
         nominal_hist = self.results[base_members[0].name]["output"][histToReadAxes].get()
 
         gen_bin_indices = self.getGenBinIndices(nominal_hist, axesToRead=axesToRead)
@@ -576,7 +610,13 @@ class Datagroups(object):
 
             proc_name = group_name if new_name is None else new_name
             for idx, var in zip(indices, self.gen_axes):
-                proc_name += f"_{var}{idx}"
+                if idx == hist.underflow:
+                    idx_str = "U"
+                elif idx == hist.overflow:
+                    idx_str = "O"
+                else:
+                    idx_str = str(idx)
+                proc_name += f"_{var}{idx_str}"
 
             self.copyGroup(group_name, proc_name, member_filter=member_filter)
 
@@ -585,9 +625,14 @@ class Datagroups(object):
 
             self.unconstrainedProcesses.append(proc_name)
 
-    def select_xnorm_groups(self):
-        # only keep members and groups where xnorm is defined 
-        if self.fakeName in self.groups:
+    def select_xnorm_groups(self, select_groups=None):
+        # only keep members and groups where xnorm is defined
+        logger.info("Select xnorm groups"+(f" {select_groups}" if select_groups else ""))
+        if select_groups is not None:
+            if isinstance(select_groups, str):
+                select_groups = [select_groups]
+            self.deleteGroups([g for g in self.groups.keys() if g not in select_groups])
+        elif self.fakeName in self.groups:
             self.deleteGroup(self.fakeName)
         toDel_groups = []
         for g_name, group in self.groups.items():
@@ -595,12 +640,11 @@ class Datagroups(object):
             for member in group.members:
                 if member.name not in self.results.keys():
                     raise RuntimeError(f"The member {member.name} of group {g_name} was not found in the results!")
-
                 if "xnorm" not in self.results[member.name]["output"].keys():
                     logger.debug(f"Member {member.name} has no xnorm and will be deleted")
                     toDel_members.append(member)
             if len(toDel_members) == len(group.members):
-                logger.debug(f"All members of group {g_name} have no xnorm and the group will be deleted")
+                logger.warning(f"All members of group {g_name} have no xnorm and the group will be deleted")
                 toDel_groups.append(g_name)
             else:
                 group.deleteMembers(toDel_members)

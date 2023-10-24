@@ -2,7 +2,8 @@ import uproot
 import hist
 import argparse
 from wremnants import plot_tools,theory_tools
-from utilities import boostHistHelpers as hh,input_tools
+from utilities import boostHistHelpers as hh
+from utilities.io_tools import input_tools
 import pickle
 import lz4.frame
 import os

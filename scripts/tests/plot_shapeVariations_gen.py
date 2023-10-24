@@ -1,4 +1,5 @@
-from utilities import logging, input_tools
+from utilities import logging
+from utilities.io_tools import input_tools
 import argparse 
 import lz4.frame
 import pickle

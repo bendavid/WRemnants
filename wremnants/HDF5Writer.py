@@ -1,5 +1,7 @@
-from wremnants.combine_helpers import getTheoryFitData, setSimultaneousABCD, projectABCD
-from utilities import common, logging, output_tools
+from wremnants.combine_helpers import setSimultaneousABCD, projectABCD
+from utilities import common, logging
+from utilities.io_tools import output_tools, combinetf_input
+
 import time
 import numpy as np
 import hist
@@ -11,8 +13,6 @@ import os
 import narf
 import re
 from collections import defaultdict
-
-import pdb
 
 logger = logging.child_logger(__name__)
 
@@ -49,11 +49,16 @@ class HDF5Writer(object):
             self.clipSig = np.abs(np.log(clipSystVariationsSignal))
 
 
-    def set_fitresult(self, fitresult):
-        # for theory fit, currently not supported for sumPOI groups
+    def set_fitresult(self, fitresult_filename, poi_type="pmaskedexp", gen_flow=False):
+        if poi_type != "pmaskedexp":
+            raise NotImplementedError("Theoryfit currently only supported for poi_type='pmaskedexp'")
+        if len(self.get_channels()) > 1:
+            logger.warning("Theoryfit for more than one channels is currently experimental")
         self.theoryFit = True
-        base_processes = ["W" if c.datagroups.wmass else "Z" for c in self.get_channels().values()]
-        data, self.theoryFitDataCov = getTheoryFitData(fitresult, base_processes=base_processes)
+        base_processes = ["W" if c.datagroups.mode == "wmass" else "Z" for c in self.get_channels().values()]
+        axes = [c.fit_axes for c in self.get_channels().values()]
+        fitresult = combinetf_input.get_fitresult(fitresult_filename)
+        data, self.theoryFitDataCov = combinetf_input.get_theoryfit_data(fitresult, axes=axes, base_processes=base_processes, poi_type=poi_type, flow=gen_flow)
         # theoryfit data for each channel
         self.theoryFitData = {c: d for c, d in zip(self.get_channels().keys(), data)}
 
@@ -104,7 +109,7 @@ class HDF5Writer(object):
             logger.info(f"Now in channel {chan} masked={masked}")
 
             dg = chanInfo.datagroups
-            axes = chanInfo.project[:]
+            axes = chanInfo.fit_axes[:]
 
             if chanInfo.xnorm:
                 dg.globalAction = None # reset global action in case of rebinning or such
@@ -138,7 +143,7 @@ class HDF5Writer(object):
                         if common.passIsoName not in axes:
                             axes.append(common.passIsoName)
 
-                    if chanInfo.ABCD and set(chanInfo.fakerateAxes) != set(chanInfo.project):
+                    if chanInfo.ABCD and set(chanInfo.fakerateAxes) != set(chanInfo.fit_axes):
                         data_obs = projectABCD(chanInfo, data_obs_hist)
                     else:
                         if data_obs_hist.axes.name != axes:
@@ -169,7 +174,7 @@ class HDF5Writer(object):
                     if norm_proc_hist.storage_type != hist.storage.Weight:
                         raise RuntimeError(f"Sumw2 not filled for {proc} but needed for binByBin uncertainties")
 
-                    if chanInfo.ABCD and set(chanInfo.fakerateAxes) != set(chanInfo.project):
+                    if chanInfo.ABCD and set(chanInfo.fakerateAxes) != set(chanInfo.fit_axes):
                         norm_proc, sumw2_proc = projectABCD(chanInfo, norm_proc_hist, return_variances=True)
                     else:
                         if norm_proc_hist.axes != axes:
@@ -178,7 +183,11 @@ class HDF5Writer(object):
                         norm_proc = norm_proc_hist.values(flow=False).flatten().astype(self.dtype)
                         sumw2_proc = norm_proc_hist.variances(flow=False).flatten().astype(self.dtype)
                 else:
+                    if norm_proc_hist.axes != axes:
+                        norm_proc_hist = norm_proc_hist.project(*axes)
+
                     norm_proc = norm_proc_hist.values(flow=False).flatten().astype(self.dtype)
+
                     if norm_proc.shape[0] != nbinschan:
                         raise Exception(f"Mismatch between number of bins in channel {chan} for expected ({nbinschan}) and template ({norm_proc.shape[0]})")
 
@@ -292,7 +301,7 @@ class HDF5Writer(object):
                         def get_logk(histname, var_type=""):
                             _hist = var_map[histname+var_type]
 
-                            if not masked and chanInfo.ABCD and set(chanInfo.fakerateAxes) != set(chanInfo.project):
+                            if not masked and chanInfo.ABCD and set(chanInfo.fakerateAxes) != set(chanInfo.fit_axes):
                                 _syst = projectABCD(chanInfo, _hist)
                             else:
                                 if _hist.axes != axes:
@@ -724,7 +733,7 @@ class HDF5Writer(object):
         systs = self.get_systs()
         groups = []
         idxs = []
-        for group, members in group_dict.items():
+        for group, members in common.natural_sort_dict(group_dict).items():
             groups.append(group)
             idx = []
             for syst in members:
@@ -737,7 +746,7 @@ class HDF5Writer(object):
         systs = self.get_systs()
         groups = []
         idxs = []
-        for group, members in self.dict_noigroups.items():
+        for group, members in common.natural_sort_dict(self.dict_noigroups).items():
             groups.append(group)
             for syst in members:
                 idxs.append(systs.index(syst))

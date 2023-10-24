@@ -1,6 +1,6 @@
 import hist
 import numpy as np
-from utilities.input_tools import safeOpenRootFile, safeGetRootObject
+from utilities.io_tools.input_tools import safeOpenRootFile, safeGetRootObject
 from utilities import boostHistHelpers as hh
 from utilities import common, logging
 import narf
@@ -39,11 +39,9 @@ def fakeHistIsoRegion(h, scale=1.):
     return h[{"iso" : 4}]*scale
 
 def fakeHistIsoRegionIntGen(h, scale=1.):
-    print([ax.name for ax in h.axes])
     if not "qTgen" in [ax.name for ax in h.axes]:
         return h[{"iso" : 4}]*scale
     s = hist.tag.Slicer()
-    print("Slicing")
     return h[{"iso" : 0, "qTgen" : s[::hist.sum]}]
 
 def signalHistWmass(h, thresholdMT=40.0, charge=None, passIso=common.passIso, passMT=True, axis_name_mt="mt", integrateLowMT=True, integrateHighMT=False, genBin=None):
@@ -100,8 +98,16 @@ def get_mt_selection(h, thresholdMT=40.0, axis_name_mt="mt", integrateLowMT=True
 
     return nameMT, failMT, passMT
 
-def unrolledHist(h, obs=["pt", "eta"]):
+def unrolledHist(h, obs=["pt", "eta"], binwnorm=None):
     hproj = h.project(*obs)
+
+    if binwnorm:
+        if len(hproj.axes) != 2:
+            raise NotImplementedError(f"binwnorm != None only implemented for two axes. Found {hproj.axes.name}")
+        inv_widths = [1./(ax.edges[1:]-ax.edges[:-1]) for ax in hproj.axes]
+        corr = np.outer(*inv_widths)*binwnorm
+        hproj = hproj*corr
+
     bins = np.product(hproj.axes.size)
     newh = hist.Hist(hist.axis.Integer(0, bins), storage=hproj._storage_type())
     newh[...] = np.ravel(hproj)

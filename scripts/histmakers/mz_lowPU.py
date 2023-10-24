@@ -1,6 +1,6 @@
 import argparse
-from utilities import output_tools, differential
-from utilities import common, logging
+from utilities import common, logging, differential
+from utilities.io_tools import output_tools
 
 parser,initargs = common.common_parser()
 parser.add_argument("--flavor", type=str, choices=["ee", "mumu"], help="Flavor (ee or mumu)", default="mumu")
@@ -33,7 +33,7 @@ mass_max = 120
 datasets = getDatasets(maxFiles=args.maxFiles,
                         filt=args.filterProcs,
                         excl=list(set(args.excludeProcs + ["singlemuon"] if flavor=="ee" else ["singleelectron"])),
-                        mode="lowPU"
+                        mode="lowpu"
                         )
 
 
