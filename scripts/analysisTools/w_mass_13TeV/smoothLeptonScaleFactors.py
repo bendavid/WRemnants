@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 
+# run a single step (e.g. iso)
+# python w_mass_13TeV/smoothLeptonScaleFactors.py /path/to/tnp/efficiencies_GtoH/mu_iso_both/allEfficiencies_2D.root /path/to/tnp/smoothLeptonScaleFactors/test/ -s iso
+
 # run all pieces (and merge)
-# python w_mass_13TeV/smoothLeptonScaleFactors.py /path/to/tnp/efficiencies_ERA/mu_STEP_CHARGE/allEfficiencies_2D.root /path/to/tnp/smoothLeptonScaleFactors/ --run-all [--do-merge] [--do-steps isonotrig iso isoplus isominus triggerplus triggerminus idip idipplus idipminus tracking trackingplus trackingminus reco recoplus recominus]
+# python w_mass_13TeV/smoothLeptonScaleFactors.py /path/to/tnp/efficiencies_ERA/mu_STEP_CHARGE/allEfficiencies_2D.root /path/to/tnp/smoothLeptonScaleFactors/ --run-all [--do-merge] [--do-steps isonotrig iso triggerplus triggerminus idipplus idipminus trackingplus trackingminus recoplus recominus]
 
 #
 # TIPS:
@@ -45,7 +48,7 @@ ROOT.PyConfig.IgnoreCommandLineOptions = True
 #from utility import *
 from scripts.analysisTools.plotUtils.utility import *
 ## TODO: move this script to scripts/analysisTools/w_mass_13TeV/
-from scripts.analysisTools.tests.test2Dsmoothing import makeAntiSFfromSFandEffi
+from scripts.analysisTools.w_mass_13TeV.test2Dsmoothing import makeAntiSFfromSFandEffi
 
 import wremnants
 
@@ -976,7 +979,7 @@ def runFiles(args):
         elif "minus" in step:
             charge = "minus"
             step = step.replace(charge, "")
-        inputFile = args.inputfile[0].replace("_ERA", f"_{args.era}").replace("_STEP", f"_{step}").replace("_CHARGE", f"_{charge}")
+        inputFile = args.inputfile[0].replace("_ERA", f"_{era}").replace("_STEP", f"_{step}").replace("_CHARGE", f"_{charge}")
             
         cmd = f"python w_mass_13TeV/smoothLeptonScaleFactors.py {inputFile} {args.outdir[0]} -c {charge} -s {step}"
         cmd += f" --input-hist-names '{args.inputHistNames}' --input-hist-names-alt '{args.inputHistNamesAlt}'"
@@ -1009,10 +1012,10 @@ if __name__ == "__main__":
     parser.add_argument(     '--no-skip-eff', dest='skipEff', action="store_false", help='Do not skip efficiency smoothing (default is to do only SF to save time and if one only wants to smooth SF directly)')
     # utility option to print commands to do all files
     parser.add_argument('-d',  '--dryRun', action='store_true', help='Do not execute commands, just print them')
-    parser.add_argument(     '--run-all', dest='runAll', action="store_true", default=False, help='Make and run commands to run all steps specified in --merge-steps')
-    parser.add_argument(     '--do-steps', dest='doSteps', nargs='+', default=["isonotrig", "iso", "triggerplus", "triggerminus", "idip", "tracking", "reco"], choices=list(minmaxSF.keys()), help='Working points to smooth when running --run-all or --do-merge')
+    parser.add_argument(     '--run-all', dest='runAll', action="store_true", help='Make and run commands to run all steps specified in --merge-steps')
+    parser.add_argument(     '--do-steps', dest='doSteps', nargs='+', default=["isonotrig" "iso" "triggerplus" "triggerminus" "idipplus" "idipminus" "trackingplus" "trackingminus" "recoplus" "recominus"], choices=list(minmaxSF.keys()), help='Working points to smooth when running --run-all or --do-merge')
     # option to merge files once they exist
-    parser.add_argument(     '--do-merge', dest='doMerge', action="store_true", default=False, help='Merge efficiency files if they all exist')
+    parser.add_argument(     '--do-merge', dest='doMerge', action="store_true", help='Merge efficiency files if they all exist')
     
     args = parser.parse_args()
     logger = logging.setup_logger(os.path.basename(__file__), 3, True)
