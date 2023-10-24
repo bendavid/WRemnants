@@ -96,13 +96,6 @@ axes_WeffMC = [axis_eta, axis_pt_eff, axis_ut, axis_charge, axis_passIso, axis_p
 # sum those groups up in post processing
 groups_to_aggregate = args.aggregateGroups
 
-# for veto studies
-# inAcc currently refers only to gen |eta| < 2.4
-axis_nPostFSRmuons = hist.axis.Regular(5, -0.5, 4.5, overflow=True, underflow=False, name = "axis_nPostFSRmuons")
-axis_nPostFSRmuonsInAcc = hist.axis.Regular(3, -1.5, 4.5, overflow=True, underflow=False, name = "axis_nPostFSRmuonsInAcc")
-axis_leadPostFSRmuonPtInAcc = hist.axis.Regular(26, 0, 65, overflow=True, underflow=False, name = "axis_leadPostFSRmuonPtInAcc")
-axis_trailPostFSRmuonPtInAcc = hist.axis.Regular(26, 0, 65, overflow=True, underflow=False, name = "axis_trailPostFSRmuonPtInAcc")
-
 if args.unfolding:
     # first and last pT bins are merged into under and overflow
     template_wpt = (template_maxpt-template_minpt)/args.genBins[0]
@@ -217,7 +210,6 @@ def build_graph(df, dataset):
     isW = dataset.name in common.wprocs
     isWmunu = dataset.name in ["WplusmunuPostVFP", "WminusmunuPostVFP"]
     isZ = dataset.name in common.zprocs
-    isZllVeto = dataset.group == "ZllVeto" # dataset.name in common.zvetoprocs
     isWorZ = isW or isZ
     isTop = dataset.group == "Top"
     isQCDMC = dataset.group == "QCD"
@@ -309,11 +301,6 @@ def build_graph(df, dataset):
         df = df.Define("postFSRmuons", postFSRmuonDef)
         df = df.Define("nPostFSRmuons", "Sum(postFSRmuons)")
         df = df.Filter("wrem::hasMatchDR2(goodMuons_eta0,goodMuons_phi0,GenPart_eta[postFSRmuons],GenPart_phi[postFSRmuons],0.09)")
-    if isZllVeto:
-        # check that the postFSR gen muons are both in acceptance
-        df = df.Define("postFSRmuonsInAcc", f"{postFSRmuonDef} && abs(GenPart_eta) < 2.4")
-        df = df.Define("nPostFSRmuonsInAcc", "Sum(postFSRmuonsInAcc)")
-        df = df.Filter(f"nPostFSRmuonsInAcc >= 2")
 
     if isWorZ:
         df = muon_validation.define_cvh_reco_muon_kinematics(df)
@@ -412,11 +399,6 @@ def build_graph(df, dataset):
         results.append(df.HistoBoost("MET", [axis_met, axis_eta_utilityHist, axis_pt_utilityHist, axis_charge, axis_passIso, axis_passMT], ["MET_corr_rec_pt", "goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"]))
         results.append(df.HistoBoost("transverseMass", [axis_mt_fakes, axis_eta_utilityHist, axis_pt_utilityHist, axis_charge, axis_passIso], ["transverseMass", "goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "nominal_weight"]))
         results.append(df.HistoBoost("ptW", [axis_recoWpt, axis_eta_utilityHist, axis_pt_utilityHist, axis_charge, axis_passIso, axis_passMT], ["ptW", "goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"]))
-
-    if isZllVeto:
-        df = df.Define("leadPostFSRmuonPtInAcc", "GenPart_pt[postFSRmuonsInAcc][0]")
-        df = df.Define("trailPostFSRmuonPtInAcc", "GenPart_pt[postFSRmuonsInAcc][1]")
-        results.append(df.HistoBoost("ZvetoStudy", [*axes, axis_nPostFSRmuonsInAcc, axis_leadPostFSRmuonPtInAcc, axis_trailPostFSRmuonPtInAcc], [*cols, "nPostFSRmuonsInAcc", "leadPostFSRmuonPtInAcc", "trailPostFSRmuonPtInAcc", "nominal_weight"]))
 
     ## FIXME: should be isW, to include Wtaunu, but for now we only split Wmunu
     if isWmunu and args.theoryAgnostic and not hasattr(dataset, "out_of_acceptance"):

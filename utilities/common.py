@@ -18,10 +18,7 @@ wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "Wplust
 zprocs = ["ZmumuPostVFP", "ZtautauPostVFP", "ZmumuMiNLO", "ZmumuNNLOPS", 
     'ZToMuMu_horace-lo-photos', 'ZToMuMu_horace-nlo', 'ZToMuMu_horace-lo', 'ZToMuMu_horace-new',
     'ZToMuMu_horace-alpha-fsr-off-isr-off', 'ZToMuMu_horace-alpha-old-fsr-off-isr-off', 'ZToMuMu_horace-alpha-old-fsr-off-isr-pythia',
-    'ZmumuVetoPostVFP', 'ZtautauVetoPostVFP'
     ]
-
-zvetoprocs = ['ZmumuVetoPostVFP', 'ZtautauVetoPostVFP'] 
 
 vprocs = wprocs+zprocs
 zprocs_recoil = ["ZmumuPostVFP"]
