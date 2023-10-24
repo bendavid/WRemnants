@@ -299,7 +299,6 @@ def build_graph(df, dataset):
     postFSRmuonDef = "GenPart_status == 1 && (GenPart_statusFlags & 1 || GenPart_statusFlags & (5<<1)) && abs(GenPart_pdgId) == 13"
     if not dataset.is_data and not isQCDMC and not args.noGenMatchMC:
         df = df.Define("postFSRmuons", postFSRmuonDef)
-        df = df.Define("nPostFSRmuons", "Sum(postFSRmuons)")
         df = df.Filter("wrem::hasMatchDR2(goodMuons_eta0,goodMuons_phi0,GenPart_eta[postFSRmuons],GenPart_phi[postFSRmuons],0.09)")
 
     if isWorZ:
