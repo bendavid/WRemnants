@@ -51,20 +51,12 @@ pdfMap = {
     "ct18" : {
         # This has CT18 + CT18Z in it :-/
         "name" : "pdfCT18",
-        "branch" : "LHEPdfWeightAltSet18",
+        "branch" : "LHEPdfWeightAltSet11",
         "combine" : "asymHessian",
         "entries" : 59,
-        "alphas" : ["LHEPdfWeightAltSet18[0]", "LHEPdfWeightAltSet18[59]", "LHEPdfWeightAltSet18[60]"],
+        "alphas" : ["LHEPdfWeightAltSet11[0]", "LHEPdfWeightAltSet11[59]", "LHEPdfWeightAltSet18[62]"],
         "alphasRange" : "002",
         "scale" : 1/1.645 # Convert from 90% CL to 68%
-    },
-    "mmht" : {
-        "name" : "pdfMMHT",
-        "branch" : "LHEPdfWeightAltSet19",
-        "combine" : "asymHessian",
-        "entries" : 51,
-        "alphas" : ["LHEPdfWeightAltSet20[0]", "LHEPdfWeightAltSet20[1]", "LHEPdfWeightAltSet20[2]"],
-        "alphasRange" : "001",
     },
     "nnpdf30" : {
         "name" : "pdfNNPDF30",
@@ -74,14 +66,6 @@ pdfMap = {
         "alphas" : ["LHEPdfWeightAltSet13[0]", "LHEPdfWeightAltSet15[0]", "LHEPdfWeightAltSet16[0]"],
         "alphasRange" : "001",
     },
-}
-
-pdfMapExtended = copy.deepcopy(pdfMap)
-pdfMapExtended["ct18"]["branch"] = "LHEPdfWeightAltSet11"
-pdfMapExtended["ct18"]["alphas"] = ["LHEPdfWeightAltSet11[59]", "LHEPdfWeightAltSet11[62]"]
-pdfMapExtended["mmht"]["branch"] = "LHEPdfWeightAltSet13"
-pdfMapExtended["mmht"]["alphas"] = ["LHEPdfWeightAltSet13[0]", "LHEPdfWeightAltSet13[1]", "LHEPdfWeightAltSet13[2]"]
-pdfMapExtended.update({
     "nnpdf40" : {
         "name" : "pdfNNPDF40",
         "branch" : "LHEPdfWeightAltSet3",
@@ -136,9 +120,7 @@ pdfMapExtended.update({
         "alphas" : ["LHEPdfWeight[0]", "LHEPdfWeight[41]", "LHEPdfWeight[42]"],
         "alphasRange" : "002", # TODO: IS that true?
     },
-
-
-})
+}
 
 only_central_pdf_datasets = [
     "Wplusmunu_bugfix",
@@ -148,6 +130,10 @@ only_central_pdf_datasets = [
 ]
 
 extended_pdf_datasets = [x for x in common.vprocs_all if not any(y in x for y in ["NNLOPS", "MiNLO"])]
+
+theory_corr_weight_map = {
+        "scetlib_dyturboMSHT20an3lo_pdfas" : pdfMap["msht20an3lo"]["alphas"]
+}
 
 def define_prefsr_vars(df):
     if "prefsrLeps" in df.GetColumnNames():
@@ -215,7 +201,7 @@ def make_ew_binning(mass = 91.1535, width = 2.4932, initialStep = 0.1, bin_edges
     return bins
 
 def pdf_info_map(dataset, pdfset):
-    infoMap = pdfMap if dataset not in extended_pdf_datasets else pdfMapExtended
+    infoMap = pdfMap 
 
     # Just ignore PDF variations for non W/Z samples
     if not (dataset[0] in ["W", "Z"] and dataset[1] not in ["W", "Z"]) \
@@ -348,10 +334,22 @@ def define_theory_corr(df, dataset_name, helpers, generators, modify_central_wei
                 df = df.Alias(f"ew_{generator}corr_weight", "nominal_weight_uncorr")
             df = df.Define(f"{generator}Weight_tensor", helper, [*helper.hist.axes.name[:-2], "chargeVgen", f"ew_{generator}corr_weight"]) # multiplying with nominal QCD weight
         else:
-            df = df.Define(f"{generator}Weight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "nominal_weight_uncorr"])
+            df = define_theory_corr_weight_column(df, generator)
+            df = df.Define(f"{generator}Weight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", f"{generator}_corr_weight"])
 
         if i == 0 and modify_central_weight:
             df = df.Define("theory_corr_weight", f"nominal_weight_uncorr == 0 ? 0 : {generator}Weight_tensor(0)/nominal_weight_uncorr")
+
+    return df
+
+def define_theory_corr_weight_column(df, generator):
+    if generator in theory_corr_weight_map:
+        values = theory_corr_weight_map[generator]
+        df = df.Define(f"{generator}_corr_weight", f"Eigen::TensorFixedSize<double, Eigen::Sizes<{len(values)}>> res; " + \
+            "; ".join([f"res({i}) = {entry}" for i,entry in enumerate(values)]) + \
+            "; return res;")
+    else:
+        df = df.Alias(f"{generator}_corr_weight", "nominal_weight_uncorr")
 
     return df
 
