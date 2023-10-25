@@ -165,8 +165,7 @@ def getDataPath(mode=None):
     if hostname == "cmswmass2.cern.ch":
         base_path = "/data/shared/NanoAOD"
     elif "mit.edu" in hostname:
-        base_path = "root://submit30.mit.edu//cms/wmass/NanoAOD"
-        # base_path = "/scratch/submit/cms/wmass/NanoAOD"
+        base_path = "/scratch/submit/cms/wmass/NanoAOD"
     elif hostname == "cmsanalysis.pi.infn.it":
         base_path = "/scratchnvme/wmass/NANOV9/postVFP"
 
@@ -186,8 +185,8 @@ def is_zombie(file_path):
     return False
 
 def getDatasets(maxFiles=default_nfiles, filt=None, excl=None, mode=None, base_path=None, nanoVersion="v9",
-                data_tags=["TrackFitV722_NanoProdv2"],
-                mc_tags=["TrackFitV722_NanoProdv3", "TrackFitV722_NanoProdv2", "TrackFitV718_NanoProdv1", "0"], oneMCfileEveryN=None, checkFileForZombie=False):
+                data_tags=["TrackFitV722_NanoProdv3", "TrackFitV722_NanoProdv2"],
+                mc_tags=["TrackFitV722_NanoProdv3", "TrackFitV718_NanoProdv1"], oneMCfileEveryN=None, checkFileForZombie=False):
     if maxFiles is None:
         maxFiles=default_nfiles
 
