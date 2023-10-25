@@ -9,7 +9,6 @@ import pathlib
 import socket
 #set the debug level for logging incase of full printout 
 from wremnants.datasets.datasetDict_v9 import dataDictV9
-from wremnants.datasets.datasetDict_v8 import dataDictV8
 from wremnants.datasets.datasetDict_gen import genDataDict
 from wremnants.datasets.datasetDict_lowPU import dataDictLowPU
 import ROOT
@@ -217,13 +216,10 @@ def getDatasets(maxFiles=default_nfiles, filt=None, excl=None, mode=None, base_p
         base_path = getDataPath(mode)
     logger.info(f"Loading samples from {base_path}.")
 
-    if nanoVersion == "v8":
-        dataDict = dataDictV8
-        logger.info('Using NanoAOD V8')
-    elif nanoVersion == "v9":
+    if nanoVersion == "v9":
         dataDict = dataDictV9
     else:
-        raise ValueError("Only NanoAODv8 and NanoAODv9 are supported")
+        raise ValueError("Only NanoAODv9 is supported")
 
     if mode == "gen":
         dataDict.update(genDataDict)     
