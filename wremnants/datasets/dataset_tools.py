@@ -135,7 +135,7 @@ def is_zombie(file_path):
     return False
 
 def getDatasets(maxFiles=default_nfiles, filt=None, excl=None, mode=None, base_path=None, nanoVersion="v9", 
-                data_tag="TrackFitV722_NanoProdv2", mc_tag="TrackFitV718_NanoProdv1", 
+                data_tag="TrackFitV722_NanoProdv3", mc_tag="TrackFitV722_NanoProdv3", 
                 oneMCfileEveryN=None, checkFileForZombie=False):
     if maxFiles is None:
         maxFiles=default_nfiles

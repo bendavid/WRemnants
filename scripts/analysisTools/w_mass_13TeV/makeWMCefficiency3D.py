@@ -81,7 +81,7 @@ if __name__ == "__main__":
     parser.add_argument(     '--palette'  , default=87, type=int, help='Set palette: default is a built-in one, 55 is kRainbow')
     parser.add_argument(     '--invertPalette', action='store_true',   help='Inverte color ordering in palette')
     parser.add_argument(     '--passMt', action='store_true',   help='Measure efficiencies only for events passing mT, otherwise stay inclusive')
-    parser.add_argument('-p','--processes', default=["Wmunu"], nargs='+', type=str,
+    parser.add_argument('-p','--processes', default=["Wmunu"], nargs='*', type=str,
                         help='Choose what processes to plot, otherwise all are done')
     parser.add_argument(     '--rebinUt', default=-1, type=int, help='If positive, rebin yields versus uT by this number before deriving efficiencies in 3D')
     args = parser.parse_args()
