@@ -26,16 +26,11 @@ default_nfiles = {
 }
 
 def buildFileListPosix(path):
-    # roots, dirs, fnamess = os.walk(path)
-
     outfiles = []
     for root, dirs, fnames in os.walk(path):
         for fname in fnames:
             if fname.lower().endswith(".root"):
-                # print(root, fname)
                 outfiles.append(f"{root}/{fname}")
-
-    # print(path, outfiles)
 
     return outfiles
 
