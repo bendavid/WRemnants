@@ -13,6 +13,7 @@ from wremnants.datasets.datasetDict_v8 import dataDictV8
 from wremnants.datasets.datasetDict_gen import genDataDict
 from wremnants.datasets.datasetDict_lowPU import dataDictLowPU
 import ROOT
+import XRootD.client
 
 logger = logging.child_logger(__name__)
 
@@ -31,7 +32,7 @@ def buildFileListPosix(path):
     outfiles = []
     for root, dirs, fnames in os.walk(path):
         for fname in fnames:
-            if fname.endswith(".root"):
+            if fname.lower().endswith(".root"):
                 # print(root, fname)
                 outfiles.append(f"{root}/{fname}")
 
@@ -39,33 +40,55 @@ def buildFileListPosix(path):
 
     return outfiles
 
+def appendFilesXrd(filelist, xrdfs, path, suffixes = [".root"], recurse = False, num_clients = 16):
+    status, dirlist = xrdfs.dirlist(path, flags = XRootD.client.flags.DirListFlags.STAT)
+
+    if not status.ok:
+        if status.code == 400 and status.errno == 3011:
+            logger.warning(f"XRootD directory not found: {path}")
+        else:
+            raise RuntimeError(f"Error in XRootD.client.FileSystem.dirlist: {status.message}, {status.code}, {status.errno}")
+
+        return
+
+    for diritem in dirlist:
+        is_dir = diritem.statinfo.flags & XRootD.client.flags.StatInfoFlags.IS_DIR
+        is_other = diritem.statinfo.flags & XRootD.client.flags.StatInfoFlags.OTHER
+        is_file = not (is_dir or is_other)
+
+        if is_dir and recurse:
+            childpath = f"{path}/{diritem.name}"
+            appendFilesXrd(filelist, xrdfs, childpath, suffixes=suffixes, recurse=recurse, num_clients=num_clients)
+        elif is_file:
+            lowername = diritem.name.lower()
+            matchsuffix = False
+            for suffix in suffixes:
+                if lowername.endswith(suffix):
+                    matchsuffix = True
+                    break
+
+            if matchsuffix:
+                if num_clients > 0:
+                    # construct client string if necessary to force multiple xrootd connections
+                    # (needed for good performance when a single or small number of xrootd servers is used)
+                    client = f"user_{random.randrange(num_clients)}"
+                    outname = f"{xrdfs.url.protocol}://{client}@{xrdfs.url.hostname}:{xrdfs.url.port}/{path}/{diritem.name}"
+                else:
+                    outname = f"{xrdfs.url.protocol}://{xrdfs.url.hostid}/{path}/{diritem.name}"
+
+                filelist.append(outname)
+
 def buildFileListXrd(path, num_clients = 16):
-    xrdprefix = "root://"
-    if not path.startswith(xrdprefix):
+    xrdurl =  XRootD.client.URL(path)
+
+    if not xrdurl.is_valid():
         raise ValueError(f"Invalid xrootd path {path}")
 
-    path = path[len(xrdprefix):]
-    sepidx = path.find("/")
-    xrd = path[:sepidx]
-    xrdpath = path[sepidx:]
-
-
-    res = subprocess.run(["xrdfs", f"{xrdprefix}{xrd}", "ls", "-R", xrdpath], capture_output=True)
-    xrdfiles = res.stdout.decode(sys.stdout.encoding).split()
+    xrdfs = XRootD.client.FileSystem(xrdurl.hostid)
+    xrdpath = xrdurl.path
 
     outfiles = []
-    for xrdfile in xrdfiles:
-        if not xrdfile.endswith(".root"):
-            continue
-
-        # construct client string if necessary to force multiple xrootd connections
-        # (needed for good performance when a single or small number of xrootd servers is used)
-        if num_clients > 1:
-            client = f"user_{random.randrange(num_clients)}@"
-        else:
-            client = ""
-
-        outfiles.append(f"{xrdprefix}{client}{xrd}/{xrdfile}")
+    appendFilesXrd(outfiles, xrdfs, xrdpath, recurse=True, num_clients=num_clients)
 
     return outfiles
 
