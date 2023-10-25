@@ -32,7 +32,8 @@ def load_corr_helpers(procs, generators):
             helper_func = make_corr_helper if "Helicity" not in generator else make_corr_by_helicity_helper
             # Hack for now
             corr_hist_name = get_corr_name(generator)
-            corr_helpers[proc][generator] = helper_func(fname, proc[0], corr_hist_name)
+            weighted_corr = generator in theory_tools.theory_corr_weight_map
+            corr_helpers[proc][generator] = helper_func(fname, proc[0], corr_hist_name, weighted_corr)
     for generator in generators:
         if not any([generator in corr_helpers[proc] for proc in procs]):
             raise ValueError(f"Did not find correction for generator {generator} for any processes!")
@@ -76,11 +77,11 @@ def load_corr_hist(filename, proc, histname):
         corrh = corr[proc][histname]
     return corrh
 
-def make_corr_helper(filename, proc, histname):
+def make_corr_helper(filename, proc, histname, weighted_corr):
     corrh = load_corr_hist(filename, proc, histname)
-    return makeCorrectionsTensor(corrh)
+    return makeCorrectionsTensor(corrh, weighted_corr=weighted_corr)
 
-def make_corr_by_helicity_helper(filename, proc, histname):
+def make_corr_by_helicity_helper(filename, proc, histname, weighted_corr):
     corrh = load_corr_hist(filename, proc, histname)
     return makeCorrectionsTensor(corrh, ROOT.wrem.CentralCorrByHelicityHelper, tensor_rank=3)
 
