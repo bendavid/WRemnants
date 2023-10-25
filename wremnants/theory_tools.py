@@ -341,8 +341,6 @@ def define_theory_corr(df, dataset_name, helpers, generators, modify_central_wei
         if "Helicity" in generator:
             df = df.Define(f"{generator}Weight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "nominal_weight_uncorr"])
         elif 'ew' in generator:
-            # Used as a placeholder to match the helper dimensionality 
-            df = df.DefinePerSample(f"{generator}Dummy", "0.")
             if i != 0 and modify_central_weight:
                 df = df.Define(f"ew_{generator}corr_weight", build_weight_expr(df))
             else:

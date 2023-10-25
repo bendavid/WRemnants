@@ -19,7 +19,7 @@ def valid_theory_corrections():
     matches = [re.match("(^.*)Corr[W|Z]\.pkl\.lz4", os.path.basename(c)) for c in corr_files]
     return [m[1] for m in matches if m]
 
-def load_corr_helpers(procs, generators):
+def load_corr_helpers(procs, generators, make_tensor=True):
     corr_helpers = {}
     for proc in procs:
         corr_helpers[proc] = {}
@@ -28,15 +28,18 @@ def load_corr_helpers(procs, generators):
             if not os.path.isfile(fname):
                 logger.warning(f"Did not find correction file for process {proc}, generator {generator}. No correction will be applied for this process!")
                 continue
-            helper_func = make_corr_helper if "Helicity" not in generator else make_corr_by_helicity_helper
-            # Hack for now
-            corr_hist_name = get_corr_name(generator)
-            corr_helpers[proc][generator] = helper_func(fname, proc[0], corr_hist_name)
+            logger.debug(f"Make theory correction helper for file: {fname}")
+            corrh = load_corr_hist(fname, proc[0], get_corr_name(generator))
+            if not make_tensor:
+                corr_helpers[proc][generator] = corrh
+            elif "Helicity" in generator:
+                corr_helpers[proc][generator] = makeCorrectionsTensor(corrh, ROOT.wrem.CentralCorrByHelicityHelper, tensor_rank=3)
+            else:
+                corr_helpers[proc][generator] = makeCorrectionsTensor(corrh)
     for generator in generators:
         if not any([generator in corr_helpers[proc] for proc in procs]):
             raise ValueError(f"Did not find correction for generator {generator} for any processes!")
     return corr_helpers
-
 
 def make_corr_helper_fromnp(filename=f"{common.data_dir}/N3LLCorrections/inclusive_{{process}}_pT.npz", isW=True):
     if isW:
@@ -74,14 +77,6 @@ def load_corr_hist(filename, proc, histname):
         corr = pickle.load(f)
         corrh = corr[proc][histname]
     return corrh
-
-def make_corr_helper(filename, proc, histname):
-    corrh = load_corr_hist(filename, proc, histname)
-    return makeCorrectionsTensor(corrh)
-
-def make_corr_by_helicity_helper(filename, proc, histname):
-    corrh = load_corr_hist(filename, proc, histname)
-    return makeCorrectionsTensor(corrh, ROOT.wrem.CentralCorrByHelicityHelper, tensor_rank=3)
 
 def get_corr_name(generator):
     # Hack for now

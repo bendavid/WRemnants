@@ -4,7 +4,6 @@ import ROOT
 narf.clingutils.Declare('#include "theory_corrections.h"')
 
 def makeCorrectionsTensor(corrh, tensor=None, tensor_rank=1):
-
     if tensor is not None:
         pass
     elif len(corrh.axes)-tensor_rank == 2:

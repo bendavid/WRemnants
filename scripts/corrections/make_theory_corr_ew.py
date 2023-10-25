@@ -4,8 +4,6 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.colors import LogNorm
 from matplotlib import cm, ticker
-import lz4.frame
-import pickle
 from wremnants import plot_tools, theory_corrections, theory_tools
 from utilities import boostHistHelpers as hh
 from utilities import common, logging
@@ -43,12 +41,6 @@ procs_dict = {
     "ZToMuMu": "ZmumuPostVFP",
     "WminusToMuNu": "WminusmunuPostVFP",
     "WplusToMuNu": "WplusmunuPostVFP",
-}
-
-text_dict = {
-    "ZToMuMu": r"$\mathrm{Z}\rightarrow\mu\mu$",
-    "WplusToMuNu": r"$\mathrm{W}^+\rightarrow\mu\nu$",
-    "WminusToMuNu": r"$\mathrm{W}^-\rightarrow\mu\nu$"
 }
 
 project = args.project
@@ -186,10 +178,11 @@ def make_plot_1d(hists, name, proc, axis, ratio=False, normalize=False, xmin=Non
     outname = ""
     for i, h1d in enumerate(h1ds):
         y = h1d.values(flow=flow)
-        err = np.sqrt(h1d.variances(flow=flow))
 
         ax.stairs(y, xedges, color=colors(i), label=name[i].split("_div_")[0])
-        ax.bar(x=xedges[:-1], height=2*err, bottom=y - err, width=np.diff(xedges), align='edge', linewidth=0, alpha=0.3, color=colors(i), zorder=-1)
+
+        # err = np.sqrt(h1d.variances(flow=flow))
+        # ax.bar(x=xedges[:-1], height=2*err, bottom=y - err, width=np.diff(xedges), align='edge', linewidth=0, alpha=0.3, color=colors(i), zorder=-1)
 
     ax.text(1.0, 1.003, text_dict[proc], transform=ax.transAxes, fontsize=30,
             verticalalignment='bottom', horizontalalignment="right")
@@ -347,29 +340,12 @@ for proc in procs:
 
 for num, corrh in corrhs.items():
     outname = num.replace('-', '')
-    if args.postfix is not None:
-        outname += f"_{args.postfix}"
     if 'ZToMuMu' in corrh:
-        outfile = f"{args.outpath}/{outname}CorrZ.pkl.lz4"
-        logger.info(f"Write correction file {outfile}")
-        with lz4.frame.open(outfile, "wb") as f:
-            pickle.dump({
-                    'Z' : {
-                        f"{outname}_minnlo_ratio" : corrh['ZToMuMu'],
-                    },
-                    "meta_data" : output_tools.metaInfoDict(args=args),
-                }, f, protocol = pickle.HIGHEST_PROTOCOL)
+        outfile = f"{args.outpath}/{outname}"
+        output_tools.write_theory_corr_hist(outfile, 'Z', {f"{outname}_minnlo_ratio" : corrh['ZToMuMu']}, args)
 
     if 'WplusToMuNu' in corrh and "WminusToMuNu" in corrh:
         corrh['W'] = corrh['WplusToMuNu']+corrh['WminusToMuNu']
-        outfile = f"{args.outpath}/{outname}CorrW.pkl.lz4"
-        logger.info(f"Write correction file {outfile}")
-        with lz4.frame.open(outfile, "wb") as f:
-            pickle.dump({
-                    'W' : {
-                        f"{outname}_minnlo_ratio" : corrh['W'],
-                    },
-                    "meta_data" : output_tools.metaInfoDict(args=args),
-                }, f, protocol = pickle.HIGHEST_PROTOCOL)
+        outfile = f"{args.outpath}/{outname}"
+        output_tools.write_theory_corr_hist(outfile, 'Z', {f"{outname}_minnlo_ratio" : corrh['ZToMuMu']}, args)
 
-# logger.info(corrh['ZToMuMu'])

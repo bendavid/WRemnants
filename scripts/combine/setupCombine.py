@@ -49,7 +49,7 @@ def make_parser(parser=None):
     parser.add_argument("--scaleTNP", default=5, type=float, help="Scale the TNP uncertainties by this factor")
     parser.add_argument("--scalePdf", default=1, type=float, help="Scale the PDF hessian uncertainties by this factor")
     parser.add_argument("--pdfUncFromCorr", action='store_true', help="Take PDF uncertainty from correction hist (Requires having run that correction)")
-    parser.add_argument("--ewUnc", type=str, nargs="*", default=["horacenloew"], choices=["horacenloew", "winhacnloew"], help="Include EW uncertainty")
+    parser.add_argument("--ewUnc", type=str, nargs="*", default=["horacenloew"], choices=["horacenloew", "winhacnloew", "virtual_ew"], help="Include EW uncertainty")
     parser.add_argument("--widthUnc", action='store_true', help="Include uncertainty on W and Z width")
     parser.add_argument("--skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
     parser.add_argument("--noQCDscaleFakes", action="store_true",   help="Do not apply QCd scale uncertainties on fakes, mainly for debugging")
@@ -420,8 +420,14 @@ def setup(args, inputFile, fitvar, xnorm=False):
 
 
     for ewUnc in args.ewUnc:
-        if ewUnc=="winhacnloew" and (not wmass or datagroups.flavor == "e"):
+        if datagroups.flavor == "e":
+            logger.warning("EW uncertainties are not implemented for electrons, proceed w/o EW uncertainty")
+            continue
+        if ewUnc=="winhacnloew" and not wmass:
             logger.warning("Winhac is not implemented for any other process than W, proceed w/o winhac EW uncertainty")
+            continue
+        elif ewUnc=="winhacnloew" and wmass:
+            logger.warning("Virtual corrections are not implemented for any other process than Z, proceed w/o virtual EW uncertainty")
             continue
 
         cardTool.addSystematic(f"{ewUnc}Corr", 
@@ -430,7 +436,8 @@ def setup(args, inputFile, fitvar, xnorm=False):
             group="theory_ew",
             systAxes=["systIdx"],
             labelsByAxis=[f"{ewUnc}Corr"],
-            skipEntries=[(0, -1), (1, -1)],
+            scale=2,
+            skipEntries=[1, 2] if ewUnc=="virtual_ew" else [0, 2],
             passToFakes=passSystToFakes,
         )
 
