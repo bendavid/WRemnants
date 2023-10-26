@@ -244,7 +244,7 @@ class CardTool(object):
     # action takes place after mirroring
     # use doActionBeforeMirror to do something before it instead (so the mirroring will act on the modified histogram)
     # decorrelateByBin is to customize eta-pt decorrelation: pass dictionary with {axisName: [bin edges]}
-    def addSystematic(self, name, systAxes=[], outNames=None, skipEntries=None, labelsByAxis=None, 
+    def addSystematic(self, name, systAxes=[], systAxesFlow=[], outNames=None, skipEntries=None, labelsByAxis=None, 
                       baseName="", mirror=False, mirrorDownVarEqualToUp=False, mirrorDownVarEqualToNomi=False,
                       scale=1, processes=None, group=None, noi=False, noConstraint=False, noProfile=False,
                       action=None, doActionBeforeMirror=False, actionArgs={}, actionMap={},
@@ -297,6 +297,7 @@ class CardTool(object):
                 "baseName" : baseName,
                 "processes" : procs_to_add,
                 "systAxes" : systAxes,
+                "systAxesFlow" : systAxesFlow,
                 "labelsByAxis" : systAxes if not labelsByAxis else labelsByAxis,
                 "group" : group,
                 "noi": noi,
@@ -342,6 +343,17 @@ class CardTool(object):
     def setMirrorForSyst(self, syst, mirror=True):
         self.systematics[syst]["mirror"] = mirror
 
+    def systIndexForAxis(self, axis, flow=False):
+        if type(axis) == hist.axis.StrCategory:
+            bins = [x for x in axis] 
+        else:
+            bins = [a for a in range(axis.size)]
+        if flow and axis.traits.underflow:
+            bins = [hist.underflow, *bins]
+        if flow and axis.traits.overflow:
+            bins = [*bins, hist.overflow]
+        return bins
+
     def systLabelForAxis(self, axLabel, entry, axis, formatWithValue=None):
         if type(axis) == hist.axis.StrCategory:
             if entry in axis:
@@ -368,6 +380,10 @@ class CardTool(object):
 
         if type(entry) in [float, np.float64]:
             entry = f"{entry:0.1f}".replace(".", "p") if not entry.is_integer() else str(int(entry))
+        elif entry == hist.underflow:
+            entry = "U"
+        elif entry == hist.overflow:
+            entry = "O"
 
         return f"{axLabel}{entry}"
 
@@ -460,10 +476,8 @@ class CardTool(object):
             raise ValueError(f"Failed to find axis names {str(axNames)} in hist for syst {syst}. " \
                 f"Axes in hist are {str(hvar.axes.name)}")
 
-        axes = [hvar.axes[ax] for ax in axNames]
-
         # Converting to a list becasue otherwise if you print it for debugging you loose it
-        entries = list(itertools.product(*[[x for x in ax] if type(ax) == hist.axis.StrCategory else range(ax.size) for ax in axes]))
+        entries = list(itertools.product(*[self.systIndexForAxis(hvar.axes[ax], flow=ax in systInfo["systAxesFlow"]) for ax in axNames]))
 
         if len(systInfo["outNames"]) == 0:
             skipEntries = None if "skipEntries" not in systInfo else self.expandSkipEntries(hvar, syst, systInfo["skipEntries"])
@@ -473,7 +487,7 @@ class CardTool(object):
                 else:
                     name = systInfo["baseName"]
                     fwv = systInfo["formatWithValue"]
-                    name += "".join([self.systLabelForAxis(al, entry[i], ax, fwv[i] if fwv else fwv) for i,(al,ax) in enumerate(zip(axLabels,axes))])
+                    name += "".join([self.systLabelForAxis(al, entry[i], hvar.axes[ax], fwv[i] if fwv else fwv) for i,(al,ax) in enumerate(zip(axLabels,axNames))])
                     if "systNameReplace" in systInfo and systInfo["systNameReplace"]:
                         for rep in systInfo["systNameReplace"]:
                             name = name.replace(*rep)

@@ -202,7 +202,7 @@ def filter_poi_bins(names, gen_axes, selections={}, base_processes=[], flow=Fals
             df[axis] = df[axis].apply(lambda x, iu=max_bin: -1 if x[0]=="U" else iu+1 if x[0]=="O" else int(x) if x is not None else None)
         else:
             # set underflow and overflow to None
-            df[axis] = df[axis].apply(lambda x: None if x in ["U","O",None] else int(x))
+            df[axis] = df[axis].apply(lambda x: None if x is None or x[0] in ["U","O"] else int(x))
 
     # filter out rows with NaNs
     mask = ~df.isna().any(axis=1)

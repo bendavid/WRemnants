@@ -9,9 +9,9 @@ def get_pt_eta_axes(n_bins_pt, min_pt, max_pt, n_bins_eta=0, flow_pt=True, flow_
 
     # gen axes for differential measurement
     if n_bins_eta > 0:
-        axis_absEtaGen = hist.axis.Regular(n_bins_eta, 0, 2.4, underflow=flow_eta, overflow=flow_eta, name = "absEtaGen")
+        axis_absEtaGen = hist.axis.Regular(n_bins_eta, 0, 2.4, underflow=False, overflow=flow_eta, name = "absEtaGen")
     else:
-        axis_absEtaGen = hist.axis.Variable(eta_binning, underflow=flow_eta, overflow=flow_eta, name = "absEtaGen")
+        axis_absEtaGen = hist.axis.Variable(eta_binning, underflow=False, overflow=flow_eta, name = "absEtaGen")
     axis_ptGen = hist.axis.Regular(n_bins_pt, min_pt, max_pt, underflow=flow_pt, overflow=flow_pt, name = "ptGen")    
 
     axes = [axis_ptGen, axis_absEtaGen]

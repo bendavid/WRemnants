@@ -100,7 +100,7 @@ if args.unfolding:
     min_pt_unfolding = template_minpt+template_wpt
     max_pt_unfolding = template_maxpt-template_wpt
     npt_unfolding = args.genBins[0]-2
-    unfolding_axes, unfolding_cols = differential.get_pt_eta_axes(npt_unfolding, min_pt_unfolding, max_pt_unfolding, args.genBins[1])
+    unfolding_axes, unfolding_cols = differential.get_pt_eta_axes(npt_unfolding, min_pt_unfolding, max_pt_unfolding, args.genBins[1], flow_eta=args.poiAsNoi)
     if not args.poiAsNoi:
         datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wmunu")
         datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wtaunu")
@@ -108,7 +108,6 @@ if args.unfolding:
         groups_to_aggregate.append("BkgWtaunu")
 
 elif args.theoryAgnostic:
-
     theoryAgnostic_axes, theoryAgnostic_cols = differential.get_theoryAgnostic_axes()
     axis_helicity = helicity_utils.axis_helicity_multidim
     # the following just prepares the existence of the group for out-of-acceptance signal, but doesn't create or define the histogram yet
@@ -241,10 +240,6 @@ def build_graph(df, dataset):
             if not args.poiAsNoi:
                 logger.debug("Select events in fiducial phase space")
                 df = unfolding_tools.select_fiducial_space(df, mode="wmass", accept=True)
-            if args.poiAsNoi:
-                axes_poiAsNoi = [*nominal_axes, *unfolding_axes] 
-                cols_poiAsNoi = [*nominal_cols, *unfolding_cols]
-            else:
                 axes = [*nominal_axes, *unfolding_axes] 
                 cols = [*nominal_cols, *unfolding_cols]
             
@@ -401,6 +396,11 @@ def build_graph(df, dataset):
         results.append(df.HistoBoost("MET", [axis_met, axis_eta_utilityHist, axis_pt_utilityHist, axis_charge, axis_passIso, axis_passMT], ["MET_corr_rec_pt", "goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"]))
         results.append(df.HistoBoost("transverseMass", [axis_mt_fakes, axis_eta_utilityHist, axis_pt_utilityHist, axis_charge, axis_passIso], ["transverseMass", "goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "nominal_weight"]))
         results.append(df.HistoBoost("ptW", [axis_recoWpt, axis_eta_utilityHist, axis_pt_utilityHist, axis_charge, axis_passIso, axis_passMT], ["ptW", "goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"]))
+
+    if args.unfolding and args.poiAsNoi and isW:
+        noiHistName = Datagroups.histName("nominal", syst="noi")
+        logger.debug(f"Creating special histogram '{noiHistName}' for unfolding to treat POIs as NOIs")
+        results.append(df.HistoBoost(noiHistName, [*nominal_axes, *unfolding_axes], [*nominal_cols, *unfolding_cols, "nominal_weight"]))       
 
     ## FIXME: should be isW, to include Wtaunu, but for now we only split Wmunu
     if isWmunu and args.theoryAgnostic and not hasattr(dataset, "out_of_acceptance"):

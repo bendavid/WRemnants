@@ -273,7 +273,7 @@ def plot_xsec_unfolded(df, edges, poi_type, df_reference=None, bin_widths=None, 
         reference_yields["Uncertainty"] *= 0 # artificially set uncertainty on model hard coded to 0
     data_yields = make_yields_df([hist_xsec], ["Data"], per_bin=True)
     plot_tools.write_index_and_log(outdir, outfile, nround=4 if normalize else 2,
-        yield_tables={"Data" : data_yields, "Model": reference_yields} if df_reference else {"Data" : data_yields},
+        yield_tables={"Data" : data_yields, "Model": reference_yields} if df_reference is not None else {"Data" : data_yields},
         analysis_meta_info={args.infile : groups.getMetaInfo(), args.fitresult: meta_info},
         args=args,
     )
@@ -638,8 +638,7 @@ if args.reference:
 def get_poi_types(poi, noi, meta):
     if poi or noi:
         poi_types = ["mu",] if poi else ["nois",]
-        scale = 1./meta["args"]["scaleNormXsecHistYields"] if noi else 1
-        # todo: use meta_info["scaleNormXsecHistYields"] 
+        scale = 1./(meta["args"]["scaleNormXsecHistYields"]*meta["args"]["priorNormXsec"]) if noi else 1
     else:
         poi_types = ["pmaskedexpnorm",] if args.normalize else ["pmaskedexp",]
         if args.plotSumPOIs:

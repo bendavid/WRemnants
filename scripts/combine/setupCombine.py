@@ -175,6 +175,10 @@ def setup(args, inputFile, fitvar, xnorm=False):
         poi_axes = datagroups.gen_axes if args.genAxes is None else args.genAxes
         # remove specified gen axes from set of gen axes in datagroups so that those are integrated over
         datagroups.setGenAxes([a for a in datagroups.gen_axes if a not in poi_axes])
+        if wmass:
+            datagroups.copyGroup(base_group, f"W_qGen0", member_filter=lambda x: x.name.startswith("Wminus"))
+            datagroups.copyGroup(base_group, f"W_qGen1", member_filter=lambda x: x.name.startswith("Wplus"))
+            datagroups.deleteGroup(base_group)
 
     # FIXME: temporary customization of signal and out-of-acceptance process names for theory agnostic with POI as NOI
     # There might be a better way to do it more homogeneously with the rest.
@@ -384,22 +388,39 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                passToFakes=passSystToFakes,
                                )
     elif args.poiAsNoi and args.unfolding:
-        cardTool.addSystematic("unfolding",
-                               processes=["signal_samples"],
-                               group=f"normXsec{label}",
-                               mirror=True,
-                               baseName=f"{label}_",
-                               actionMap={m.name: (lambda h: h[{"acceptance":True}])
-                                    for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
-                               scale=1, 
-                               scalePrefitHistYields=args.scaleNormXsecHistYields,
-                               sumNominalToHist=True,
-                               noConstraint=True,
-                               noi=True,
-                               systAxes=poi_axes,
-                               labelsByAxis=poi_axes,
-                               passToFakes=passSystToFakes,
-                               )
+        noi_args = dict(
+            name=f"noi",
+            group=f"normXsec{label}",
+            mirror=True,
+            scale=1 if args.priorNormXsec < 0 else args.priorNormXsec,
+            scalePrefitHistYields=args.scaleNormXsecHistYields,
+            sumNominalToHist=True,
+            noConstraint=True,
+            noi=True,
+            systAxes=poi_axes,
+            systAxesFlow=[a for a in poi_axes if a in ["ptGen"]], # use underflow/overflow bins for ptGen
+            labelsByAxis=poi_axes,
+            passToFakes=passSystToFakes,
+        )
+        if wmass:
+            # split charge by sample
+            cardTool.addSystematic(**noi_args,
+                processes=[g for g in cardTool.procGroups["signal_samples"] if "qGen0" in g],
+                rename=f"noiW_qGen0",
+                baseName=f"W_qGen0",
+            )
+            cardTool.addSystematic(**noi_args,
+                processes=[g for g in cardTool.procGroups["signal_samples"] if "qGen1" in g],
+                rename=f"noiW_qGen1",
+                baseName=f"W_qGen1",
+            )
+        else:
+            cardTool.addSystematic(**noi_args,
+                processes=["signal_samples"],
+                baseName=f"{label}_",
+                actionMap={m.name: (lambda h: h[{"acceptance":True}])
+                    for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
+            )
 
     if args.doStatOnly:
         # print a card with only mass weights
