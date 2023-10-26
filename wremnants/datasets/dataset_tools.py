@@ -1,16 +1,18 @@
 import narf
 from utilities import logging
 import subprocess
+import sys
+import os
 import glob
 import random
 import pathlib
 import socket
 #set the debug level for logging incase of full printout 
 from wremnants.datasets.datasetDict_v9 import dataDictV9
-from wremnants.datasets.datasetDict_v8 import dataDictV8
 from wremnants.datasets.datasetDict_gen import genDataDict
 from wremnants.datasets.datasetDict_lowPU import dataDictLowPU
 import ROOT
+import XRootD.client
 
 logger = logging.child_logger(__name__)
 
@@ -23,31 +25,96 @@ default_nfiles = {
     'ZtautauPostVFP' : 1200,
 }
 
-def buildXrdFileList(path, xrd):
-    xrdpath = path[path.find('/store'):]
-    logger.debug(f"Looking for path {xrdpath}")
-    # xrdfs doesn't like wildcards, just use the mount if they are included
-    if "*" not in path:
-        f = subprocess.check_output(['xrdfs', f'root://{xrd}', 'ls', xrdpath]).decode(sys.stdout.encoding)
-        return filter(lambda x: "root" in x[-4:], f.split())
-    else:
-        return [f"root://{xrd}/{f}" for f in glob.glob(path)]
+def buildFileListPosix(path):
+    outfiles = []
+    for root, dirs, fnames in os.walk(path):
+        for fname in fnames:
+            if fname.lower().endswith(".root"):
+                outfiles.append(f"{root}/{fname}")
+
+    return outfiles
+
+def appendFilesXrd(filelist, xrdfs, path, suffixes = [".root"], recurse = False, num_clients = 16):
+    status, dirlist = xrdfs.dirlist(path, flags = XRootD.client.flags.DirListFlags.STAT)
+
+    if not status.ok:
+        if status.code == 400 and status.errno == 3011:
+            logger.warning(f"XRootD directory not found: {path}")
+        else:
+            raise RuntimeError(f"Error in XRootD.client.FileSystem.dirlist: {status.message}, {status.code}, {status.errno}")
+
+        return
+
+    for diritem in dirlist:
+        is_dir = diritem.statinfo.flags & XRootD.client.flags.StatInfoFlags.IS_DIR
+        is_other = diritem.statinfo.flags & XRootD.client.flags.StatInfoFlags.OTHER
+        is_file = not (is_dir or is_other)
+
+        if is_dir and recurse:
+            childpath = f"{path}/{diritem.name}"
+            appendFilesXrd(filelist, xrdfs, childpath, suffixes=suffixes, recurse=recurse, num_clients=num_clients)
+        elif is_file:
+            lowername = diritem.name.lower()
+            matchsuffix = False
+            for suffix in suffixes:
+                if lowername.endswith(suffix):
+                    matchsuffix = True
+                    break
+
+            if matchsuffix:
+                if num_clients > 0:
+                    # construct client string if necessary to force multiple xrootd connections
+                    # (needed for good performance when a single or small number of xrootd servers is used)
+                    client = f"user_{random.randrange(num_clients)}"
+                    outname = f"{xrdfs.url.protocol}://{client}@{xrdfs.url.hostname}:{xrdfs.url.port}/{path}/{diritem.name}"
+                else:
+                    outname = f"{xrdfs.url.protocol}://{xrdfs.url.hostid}/{path}/{diritem.name}"
+
+                filelist.append(outname)
+
+def buildFileListXrd(path, num_clients = 16):
+    xrdurl =  XRootD.client.URL(path)
+
+    if not xrdurl.is_valid():
+        raise ValueError(f"Invalid xrootd path {path}")
+
+    xrdfs = XRootD.client.FileSystem(xrdurl.hostid)
+    xrdpath = xrdurl.path
+
+    outfiles = []
+    appendFilesXrd(outfiles, xrdfs, xrdpath, recurse=True, num_clients=num_clients)
+
+    return outfiles
+
+def buildFileList(path):
+    xrdprefix = "root://"
+    return buildFileListXrd(path) if path.startswith(xrdprefix) else buildFileListPosix(path)
 
 #TODO add the rest of the samples!
-def makeFilelist(paths, maxFiles=-1, format_args={}, is_data=False, oneMCfileEveryN=None):
+def makeFilelist(paths, maxFiles=-1, base_path=None, nano_prod_tags=None, is_data=False, oneMCfileEveryN=None):
     filelist = []
-    nfiles = 0
-    for path in paths:
-        if maxFiles > 0 and nfiles >= maxFiles:
+    for orig_path in paths:
+        if maxFiles > 0 and len(filelist) >= maxFiles:
             break
-        if format_args:
-            path = path.format(**format_args)
+        # try each tag in order until files are found
+        fallback = False
+        for prod_tag in nano_prod_tags:
+            format_args=dict(BASE_PATH=base_path, NANO_PROD_TAG=prod_tag)
+
+            path = orig_path.format(**format_args)
             logger.debug(f"Reading files from path {path}")
-        files = glob.glob(path) if path[:4] != "/eos" else buildXrdFileList(path, "eoscms.cern.ch")
-        if len(files) == 0:
-            logger.warning(f"Did not find any files matching path {path}!")
+
+            files = buildFileList(path)
+
+            if len(files) == 0:
+                fallback = True
+                logger.warning(f"Did not find any files for tag {prod_tag} matching path {path}!")
+            else:
+                if fallback:
+                    logger.warning(f"Falling back to tag {prod_tag} with path {path}")
+                break
+
         filelist.extend(files)
-        nfiles += len(files)
 
     if oneMCfileEveryN != None and not is_data:
         tmplist = []
@@ -134,9 +201,9 @@ def is_zombie(file_path):
     file.Close()
     return False
 
-def getDatasets(maxFiles=default_nfiles, filt=None, excl=None, mode=None, base_path=None, nanoVersion="v9", 
-                data_tag="TrackFitV722_NanoProdv2", mc_tag="TrackFitV718_NanoProdv1", 
-                oneMCfileEveryN=None, checkFileForZombie=False):
+def getDatasets(maxFiles=default_nfiles, filt=None, excl=None, mode=None, base_path=None, nanoVersion="v9",
+                data_tags=["TrackFitV722_NanoProdv3", "TrackFitV722_NanoProdv2"],
+                mc_tags=["TrackFitV722_NanoProdv3", "TrackFitV718_NanoProdv1"], oneMCfileEveryN=None, checkFileForZombie=False):
     if maxFiles is None:
         maxFiles=default_nfiles
 
@@ -144,13 +211,10 @@ def getDatasets(maxFiles=default_nfiles, filt=None, excl=None, mode=None, base_p
         base_path = getDataPath(mode)
     logger.info(f"Loading samples from {base_path}.")
 
-    if nanoVersion == "v8":
-        dataDict = dataDictV8
-        logger.info('Using NanoAOD V8')
-    elif nanoVersion == "v9":
+    if nanoVersion == "v9":
         dataDict = dataDictV9
     else:
-        raise ValueError("Only NanoAODv8 and NanoAODv9 are supported")
+        raise ValueError("Only NanoAODv9 is supported")
 
     if mode == "gen":
         dataDict.update(genDataDict)     
@@ -164,11 +228,11 @@ def getDatasets(maxFiles=default_nfiles, filt=None, excl=None, mode=None, base_p
 
         is_data = info.get("group","") == "Data"
 
-        prod_tag = data_tag if is_data else mc_tag
-        nfiles = maxFiles 
+        prod_tags = data_tags if is_data else mc_tags
+        nfiles = maxFiles
         if type(maxFiles) == dict:
             nfiles = maxFiles[sample] if sample in maxFiles else -1
-        paths = makeFilelist(info["filepaths"], nfiles, format_args=dict(BASE_PATH=base_path, NANO_PROD_TAG=prod_tag), is_data=is_data, oneMCfileEveryN=oneMCfileEveryN)
+        paths = makeFilelist(info["filepaths"], nfiles, base_path=base_path, nano_prod_tags=prod_tags, is_data=is_data, oneMCfileEveryN=oneMCfileEveryN)
             
         if checkFileForZombie:
             paths = [p for p in paths if not is_zombie(p)]

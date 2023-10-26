@@ -152,7 +152,6 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=None)
     parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by group name or (subset) of name", default=[])
     parser.add_argument("--excludeProcs", type=str, nargs="*", help="Exclude processes matched by group name or (subset) of name", default=[])  # no need to exclude QCD MC here, histograms can always be made, they are fast and light, so they are always available for tests
-    parser.add_argument("--v8", action='store_true', help="Use NanoAODv8. Default is v9")
     parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
     parser.add_argument("--forceDefaultName", help="Don't modify the name", action='store_true')
     parser.add_argument("--theoryCorr", nargs="*", default=["scetlib_dyturbo", "horacenloew"], choices=theory_corrections.valid_theory_corrections(),
