@@ -250,8 +250,6 @@ class CardTool(object):
                       action=None, doActionBeforeMirror=False, actionArgs={}, actionMap={},
                       systNameReplace=[], systNamePrepend=None, groupFilter=None, passToFakes=False,
                       rename=None, splitGroup={}, decorrelateByBin={}, formatWithValue=None,
-                      sumNominalToHist=False,
-                      scalePrefitHistYields=None,
                       customizeNuisanceAttributes={},
                       ):
         # note: setting Up=Down seems to be pathological for the moment, it might be due to the interpolation in the fit
@@ -304,8 +302,6 @@ class CardTool(object):
                 "groupFilter" : groupFilter,
                 "splitGroup" : splitGroupDict, 
                 "scale" : scale,
-                "sumNominalToHist" : sumNominalToHist,
-                "scalePrefitHistYields": scalePrefitHistYields,
                 "customizeNuisanceAttributes" : customizeNuisanceAttributes,
                 "mirror" : mirror,
                 "mirrorDownVarEqualToUp" : mirrorDownVarEqualToUp,
@@ -646,13 +642,6 @@ class CardTool(object):
             procDict = self.datagroups.getDatagroups()
             hnom = procDict[proc].hists[self.nominalName]
             #logger.debug(f"{proc}: {syst}: {h.axes.name}")
-            if systInfo["scalePrefitHistYields"] != None:
-                scaleFactor = systInfo["scalePrefitHistYields"]
-                logger.warning(f"Scaling yields of histogram for syst = {syst} by {scaleFactor}")
-                h = hh.scaleHist(h, scaleFactor, createNew=True)
-            if systInfo["sumNominalToHist"]:
-                logger.warning(f"Adding histogram for syst = {syst} to nominal to define actual variation")
-                h = hh.addHists(h, hnom, allowBroadcast=True, createNew=True, scale1=None, scale2=None)
             if systInfo["doActionBeforeMirror"] and systInfo["action"]:
                 logger.debug("Applying action before mirroring:")
                 logger.debug(f"action={systInfo['action']}     actionArgs={systInfo['actionArgs']}")

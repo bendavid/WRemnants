@@ -279,14 +279,6 @@ class HDF5Writer(object):
 
                     hvar = dg.groups[proc].hists["syst"]
                     
-                    if syst["scalePrefitHistYields"] != None:
-                        scaleFactor = syst["scalePrefitHistYields"]
-                        logger.info(f"Scaling yields of histogram for syst = {systName} by {scaleFactor}")
-                        hvar = hh.scaleHist(hvar, scaleFactor, createNew=True)
-                    if syst["sumNominalToHist"]:
-                        logger.info(f"Adding histogram for syst = {syst} to nominal to define actual variation")
-                        hnom = dg.groups[proc].hists[chanInfo.nominalName]
-                        hvar = hh.addHists(hvar, hnom, allowBroadcast=True, createNew=True, scale1=None, scale2=None)
                     if syst["doActionBeforeMirror"] and syst["action"]:
                         logger.debug(f"Do action before mirror")
                         hvar = syst["action"](hvar, **syst["actionArgs"])

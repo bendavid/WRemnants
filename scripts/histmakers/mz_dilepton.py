@@ -46,12 +46,15 @@ ewMassBins = theory_tools.make_ew_binning(mass = 91.1535, width = 2.4932, initia
 dilepton_ptV_binning = [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 20, 23, 27, 32, 40, 54, 100] if not args.finePtBinning else range(60)
 # available axes for dilepton validation plots
 all_axes = {
-    "mll": hist.axis.Regular(60, 60., 120., name = "mll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
+    # "mll": hist.axis.Regular(60, 60., 120., name = "mll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
+    "mll": hist.axis.Variable([60,70,75,78,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,100,102,105,110,120], name = "mll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
     "yll": hist.axis.Regular(20, -2.5, 2.5, name = "yll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
     "absYll": hist.axis.Regular(10, 0., 2.5, name = "absYll", underflow=False, overflow=not args.excludeFlow),
     "ptll": hist.axis.Variable(dilepton_ptV_binning, name = "ptll", underflow=False, overflow=not args.excludeFlow),
-    "etaPlus": hist.axis.Regular(int(args.eta[0]), args.eta[1], args.eta[2], name = "etaPlus"),
-    "etaMinus": hist.axis.Regular(int(args.eta[0]), args.eta[1], args.eta[2], name = "etaMinus"),
+    "etaPlus": hist.axis.Variable([-2.4,-1.2,-0.3,0.3,1.2,2.4], name = "etaPlus"),
+    "etaMinus": hist.axis.Variable([-2.4,-1.2,-0.3,0.3,1.2,2.4], name = "etaMinus"),
+    "absEtaPlus": hist.axis.Regular(8, 0, 2.4, name = "absEtaPlus"),
+    "absEtaMinus": hist.axis.Regular(8, 0, 2.4, name = "absEtaMinus"),
     "etaSum": hist.axis.Regular(12, -4.8, 4.8, name = "etaSum"),
     "etaDiff": hist.axis.Variable([-4.8, -1.0, -0.6, -0.2, 0.2, 0.6, 1.0, 4.8], name = "etaDiff"),
     "ptPlus": hist.axis.Regular(int(args.pt[0]), args.pt[1], args.pt[2], name = "ptPlus"),
@@ -86,7 +89,7 @@ gen_axes = {
 }
 
 if args.unfolding:
-    unfolding_axes, unfolding_cols, unfolding_selections = differential.get_dilepton_axes(args.genVars, gen_axes, add_out_of_acceptance_axis=args.poiAsNoi)
+    differential_axes, differential_cols, unfolding_selections = differential.get_dilepton_axes(args.genVars, gen_axes, add_out_of_acceptance_axis=args.poiAsNoi)
     if not args.poiAsNoi:
         datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Zmumu")
 
@@ -161,10 +164,10 @@ def build_graph(df, dataset):
             logger.debug("Select events in fiducial phase space")
             df = unfolding_tools.select_fiducial_space(df, mode="dilepton", pt_min=args.pt[1], pt_max=args.pt[2], 
                 mass_min=mass_min, mass_max=mass_max, selections=unfolding_selections, select=not args.poiAsNoi, accept=True)
-            unfolding_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols)
+            unfolding_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, differential_axes, differential_cols)
             if not args.poiAsNoi:
-                axes = [*nominal_axes, *unfolding_axes] 
-                cols = [*nominal_cols, *unfolding_cols]
+                axes = [*nominal_axes, *differential_axes] 
+                cols = [*nominal_cols, *differential_cols]
 
     if not args.noAuxiliaryHistograms and isZ:
         # gen level variables before selection
@@ -203,6 +206,8 @@ def build_graph(df, dataset):
     # "renaming" to write out corresponding axis
     df = df.Define("etaPlus", "trigMuons_eta0")
     df = df.Define("etaMinus", "nonTrigMuons_eta0")
+    df = df.Define("absEtaPlus", "std::fabs(trigMuons_eta0)")
+    df = df.Define("absEtaMinus", "std::fabs(nonTrigMuons_eta0)")
     df = df.Define("ptPlus", "trigMuons_pt0")
     df = df.Define("ptMinus", "nonTrigMuons_pt0")
 
@@ -248,9 +253,9 @@ def build_graph(df, dataset):
         results.append(df.HistoBoost("nominal", axes, [*cols, "nominal_weight"]))
 
     if args.unfolding and args.poiAsNoi and dataset.name == "ZmumuPostVFP":
-        unfoldingHistName = Datagroups.histName("nominal", syst="unfolding")
-        logger.debug(f"Creating special histogram '{unfoldingHistName}' for unfolding to treat POIs as NOIs")
-        results.append(df.HistoBoost(unfoldingHistName, [*nominal_axes, *unfolding_axes], [*nominal_cols, *unfolding_cols, "nominal_weight"]))       
+        noiAsPoiHistName = Datagroups.histName("nominal", syst="poiAsNoi")
+        logger.debug(f"Creating special histogram '{noiAsPoiHistName}' for unfolding to treat POIs as NOIs")
+        results.append(df.HistoBoost(noiAsPoiHistName, [*nominal_axes, *differential_axes], [*nominal_cols, *differential_cols, "nominal_weight"]))       
 
     for obs in ["ptll", "mll", "yll", "etaPlus", "etaMinus", "ptPlus", "ptMinus"]:
         if dataset.is_data:
