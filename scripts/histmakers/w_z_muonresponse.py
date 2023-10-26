@@ -41,8 +41,8 @@ axis_qopr = hist.axis.Regular(1001, 0., 2.0, name = "qopr")
 
 response_axes = [axis_genPt, axis_genEta, axis_genCharge, axis_qopr]
 
-pileup_helper = wremnants.make_pileup_helper(era = era)
-vertex_helper = wremnants.make_vertex_helper(era = era)
+pileup_helper = wremnants.make_pileup_helper(era = era, dataYear = args.dataYear)
+vertex_helper = wremnants.make_vertex_helper(era = era, dataYear = args.dataYear)
 
 calib_filepaths = common.calib_filepaths
 mc_jpsi_crctn_helper, data_jpsi_crctn_helper, jpsi_crctn_MC_unc_helper, jpsi_crctn_data_unc_helper = muon_calibration.make_jpsi_crctn_helpers(args, calib_filepaths, make_uncertainty_helper=True)

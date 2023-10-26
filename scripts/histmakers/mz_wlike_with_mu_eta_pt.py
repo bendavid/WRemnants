@@ -34,7 +34,8 @@ thisAnalysis = ROOT.wrem.AnalysisType.Wlike
 datasets = getDatasets(maxFiles=args.maxFiles,
                         filt=args.filterProcs,
                         excl=args.excludeProcs, 
-                        nanoVersion="v9", base_path=args.dataPath)
+                        nanoVersion="v9", base_path=args.dataPath,
+                        dataYear=args.dataYear)
 
 era = args.era
 
@@ -94,8 +95,8 @@ else:
     muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile, era = era, what_analysis = thisAnalysis, max_pt = axis_pt.edges[-1], isoEfficiencySmoothing = args.isoEfficiencySmoothing, smooth3D=args.smooth3dsf, isoDefinition=args.isolationDefinition)
 logger.info(f"SF file: {args.sfFile}")
 
-pileup_helper = wremnants.make_pileup_helper(era = era)
-vertex_helper = wremnants.make_vertex_helper(era = era)
+pileup_helper = wremnants.make_pileup_helper(era = era, dataYear = args.dataYear)
+vertex_helper = wremnants.make_vertex_helper(era = era, dataYear = args.dataYear)
 
 calib_filepaths = common.calib_filepaths
 closure_filepaths = common.closure_filepaths
@@ -151,7 +152,8 @@ def build_graph(df, dataset):
             axes = [*nominal_axes, *unfolding_axes] 
             cols = [*nominal_cols, *unfolding_cols]
 
-    df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
+    hltString="HLT_IsoTkMu24 || HLT_IsoMu24" if args.dataYear == 2016 else "HLT_IsoMu24"
+    df = df.Filter(hltString)
 
     df = muon_selections.veto_electrons(df)
     df = muon_selections.apply_met_filters(df)

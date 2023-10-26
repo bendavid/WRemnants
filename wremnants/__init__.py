@@ -19,7 +19,7 @@ from .muon_efficiencies_binned_vqt import make_muon_efficiency_helpers_binned_vq
 from .muon_efficiencies_binned_vqt_integrated import make_muon_efficiency_helpers_binned_vqt_integrated
 from .muon_efficiencies_binned_vqt_real import make_muon_efficiency_helpers_binned_vqt_real
 from .qcdScaleByHelicity_helper import makeQCDScaleByHelicityHelper
-from .pileup import make_pileup_helper, make_pileup_helperRun2
+from .pileup import make_pileup_helper
 from .vertex import make_vertex_helper
 from .syst_tools import scale_helicity_hist_to_variations
 from .theory_tools import axis_helicity, scale_tensor_axes, define_prefsr_vars, moments_to_angular_coeffs
