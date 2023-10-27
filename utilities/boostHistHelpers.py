@@ -38,8 +38,8 @@ def broadcastSystHist(h1, h2, flow=True, by_ax_name=True):
     new_vals = np.moveaxis(new_vals, np.arange(len(moves)), list(moves.keys()))
 
     if new_vals.shape != h2.values(flow=flow).shape:
-        raise ValueError(f"Broadcast shape {new_vals.shape} (from h1.shape={h1.view(flow=flow).shape}) " \
-                            "does not match desired shape {h2.view(flow=flow).shape}")
+        raise ValueError(f"Broadcast shape {new_vals.shape} (from h1.shape={h1.values(flow=flow).shape}, axes={h1.axes.name}) " \
+                            f"does not match desired shape {h2.view(flow=flow).shape} (axes={h2.axes.name})")
 
     if h1.storage_type == hist.storage.Weight:
         new_vars = np.broadcast_to(h1.variances(flow=flow), broadcast_shape)
@@ -269,6 +269,15 @@ def makeAbsHist(h, axis_name, rename=True):
 def compatibleBins(edges1, edges2):
     comparef = np.vectorize(lambda x: np.isclose(x, edges1).any())
     return np.all(comparef(edges2))
+
+def rebinHistMultiAx(h, axis_map):
+    for ax, binning in axis_map.items():
+        if ax not in h.axes.name:
+            logger.debug(f"Did not find axis {ax} in hist. Skipping rebin.")
+            continue
+        h = rebinHist(h, ax, binning)
+
+    return h
 
 def rebinHist(h, axis_name, edges):
     if type(edges) == int:
