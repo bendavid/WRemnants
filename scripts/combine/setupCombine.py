@@ -136,7 +136,9 @@ def setup(args, inputFile, fitvar, xnorm=False):
             else:
                 xnorm_axes = datagroups.gen_axes[:]
             datagroups.setGenAxes([a for a in xnorm_axes if a not in fitvar])
-    elif args.poiAsNoi:
+    
+    if args.poiAsNoi:
+        constrainMass = False if args.theoryAgnostic else True
         poi_axes = datagroups.gen_axes if args.genAxes is None else args.genAxes
         # remove specified gen axes from set of gen axes in datagroups so that those are integrated over
         datagroups.setGenAxes([a for a in datagroups.gen_axes if a not in poi_axes])

@@ -464,7 +464,7 @@ class Datagroups(object):
             procsToRead=None, reload=False, rename=None, action=None, preOpMap={}, preOpArgs={}, 
             fakerateIntegrationAxes=[], forceNonzero=True):
         if reload:
-            self.loadHistsForDatagroups(refname, syst=name, excludedProcs=exclude,
+            self.loadHistsForDatagroups(refname, syst=name, excludeProcs=exclude,
                 procsToRead=procsToRead, preOpMap=preOpMap, preOpArgs=preOpArgs, 
                 fakerateIntegrationAxes=fakerateIntegrationAxes, forceNonzero=forceNonzero)
 
