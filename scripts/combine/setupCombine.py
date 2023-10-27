@@ -102,29 +102,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     datagroups = Datagroups(inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm and not args.ABCD)
 
     if not xnorm and (args.axlim or args.rebin or args.absval):
-        if len(args.axlim) % 2 or len(args.axlim)/2 > len(fitvar) or len(args.rebin) > len(fitvar):
-            raise ValueError("Inconsistent rebin or axlim arguments. axlim must be at most two entries per axis, and rebin at most one")
-
-        sel = {}
-        for var,low,high,rebin in itertools.zip_longest(fitvar, args.axlim[::2], args.axlim[1::2], args.rebin):
-            s = hist.tag.Slicer()
-            if low is not None and high is not None:
-                logger.info(f"Restricting the axis '{var}' to range [{low}, {high}]")
-                sel[var] = s[complex(0, low):complex(0, high):hist.rebin(rebin) if rebin else None]
-            elif rebin:
-                sel[var] = s[hist.rebin(rebin)]
-            if rebin:
-                logger.info(f"Rebinning the axis '{var}' by [{rebin}]")
-
-        if len(sel) > 0:
-            logger.info(f"Will apply the global selection {sel}")
-            datagroups.setGlobalAction(lambda h: h[sel])
-
-        for i, (var, absval) in enumerate(itertools.zip_longest(fitvar, args.absval)):
-            if absval:
-                logger.info(f"Taking the absolute value of axis '{var}'")
-                datagroups.setGlobalAction(lambda h, ax=var: hh.makeAbsHist(h, ax))
-                fitvar[i] = f"abs{var}"
+        datagroups.set_rebin_action(fitvar, args.axlim, args.rebin, args.absval)
 
     wmass = datagroups.mode in ["wmass", "lowpu_w"]
     wlike = datagroups.mode == "wlike"
@@ -196,15 +174,15 @@ def setup(args, inputFile, fitvar, xnorm=False):
         if args.addNormToOOA and not hasSeparateOutOfAcceptanceSignal:
             raise ValueError(f"Option --addNormToOOA {args.addNormToOOA} was called, but out-of-acceptance doesn't exist as a separate process. Remove this option or make sure the process exists.")
 
+    if args.noHist and args.noStatUncFakes:
+        raise ValueError("Option --noHist would override --noStatUncFakes. Please select only one of them")
+
     if args.theoryAgnostic and args.poiAsNoi:
         # FIXME: at some point we should decide what name to use
         if any(x in args.excludeProcGroups for x in ["BkgWmunu", "outAccWmunu"]) and hasSeparateOutOfAcceptanceSignal:
             datagroups.deleteGroup("BkgWmunu") # remove out of acceptance signal
     elif "BkgWmunu" in args.excludeProcGroups:
             datagroups.deleteGroup("Wmunu") # remove out of acceptance signal
-
-    if args.noHist and args.noStatUncFakes:
-        raise ValueError("Option --noHist would override --noStatUncFakes. Please select only one of them")
 
     # Start to create the CardTool object, customizing everything
     cardTool = CardTool.CardTool(xnorm=xnorm, ABCD=wmass and args.ABCD)
@@ -369,7 +347,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                 )
 
     # this appears within doStatOnly because technically these nuisances should be part of it
-    if args.poiAsNoi and args.theoryAgnostic:
+    if args.theoryAgnostic and args.poiAsNoi:
         cardTool.addSystematic("poiAsNoi",
                                processes=["signal_samples_noOutAcc"], # currently not on out-of-acceptance signal template (to implement)
                                group=f"normXsec{label}",
@@ -387,9 +365,10 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                         hh.scaleHist(h, scale)))
                                     for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
                                )
+
     elif args.poiAsNoi and args.unfolding:
         noi_args = dict(
-            name=f"noi",
+            name=f"poiAsNoi",
             processes=["signal_samples"],
             group=f"normXsec{label}",
             mirror=True,
@@ -805,8 +784,8 @@ if __name__ == "__main__":
     
     logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
-    if args.poiAsNoi and not (args.theoryAgnostic or args.unfolding):
-        message = "Option --poiAsNoi currently requires --theoryAgnostic or --unfolding"
+    if args.poiAsNoi and args.theoryAgnostic == args.unfolding:
+        message = "Option --poiAsNoi requires either --theoryAgnostic or --unfolding but not both"
         logger.warning(message)
         raise NotImplementedError(message)    
     
