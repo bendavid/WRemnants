@@ -60,7 +60,6 @@ def read_corr(procName, generator, corr_files):
                 raise ValueError("scetlib_dyturbo correction requires one DYTurbo file (fixed order contribution)")
 
             numh = input_tools.read_matched_scetlib_dyturbo_hist(resumf, nnlo_singf, dyturbo_files[0], args.axes, charge=charge)
-            print("Num now is", numh.axes.name)
         else:
             nons = "auto"
             if not os.path.isfile(corr_file.replace(".", "_nons.")):
@@ -120,7 +119,6 @@ if numh.ndim-1 < minnloh.ndim:
         if ax.name in numh.axes.name:
             axes.append(numh.axes[ax.name])
         elif not (ax.name in ax_map and ax_map[ax.name] in numh.axes.name):
-            print("Adding ax", ax.name)
             # TODO: Should be a little careful because this won't include overflow, as long as the
             # axis range is large enough, it shouldn't matter much
             axes.append(hist.axis.Regular(1, ax.edges[0], ax.edges[-1], 
