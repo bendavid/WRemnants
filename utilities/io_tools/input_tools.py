@@ -413,11 +413,11 @@ def read_dyturbo_angular_coeffs(dyturbof, boson=None, rebin=None, absy=True, add
     if add_axes and not all(ax.size == 1 for ax in add_axes):
         raise ValueError("Can only add axes of size 1!")
 
-    if not boson:
-        boson = "Wp" if "wp" in dyturbof else ("Wm" if "wm" in dyturbof else "Z")
-
     if type(dyturbof) == str:
         dyturbof = uproot.open(dyturbof)
+
+    if not boson:
+        boson = "Wp" if "wp" in dyturbof.file_path else ("Wm" if "wm" in dyturbof else "Z")
 
     sigma_ul = dyturbof["s_qt_vs_y"].to_hist()
     for ax,name in zip(sigma_ul.axes, ["qT", "Y"]):

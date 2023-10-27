@@ -31,10 +31,9 @@ if all(getattr(args, x) is None for x in ["corr_ul", "corr_a4", "other_coeffs"])
 
 processes = ["ZmumuPostVFP"] if args.proc == "z" else ["WplusmunuPostVFP", "WminusmunuPostVFP"]
 
-ptV_binning = common.ptV_binning[:-4]+list(range(30,110,10))
-binning = {"qT" : ptV_binning, "absY" : [0+.5*i for i in range(9)]+[5.]}
+binning = {"qT" : common.ptV_corr_binning, "absY" : [0+.5*i for i in range(9)]+[5.]}
 binning["absy"] = binning["absY"]
-binning["ptVgen"] = ptV_binning
+binning["ptVgen"] = binning["qT"]
 
 minnloh = hh.sumHists([input_tools.read_mu_hist_combine_tau(args.minnlo_file, proc, "nominal_gen_helicity_moments_scale") for proc in processes])
 minnloh = hh.makeAbsHist(minnloh, "y")
