@@ -34,7 +34,7 @@ thisAnalysis = ROOT.wrem.AnalysisType.Dilepton
 datasets = getDatasets(maxFiles=args.maxFiles,
                         filt=args.filterProcs,
                         excl=args.excludeProcs, 
-                        nanoVersion="v8" if args.v8 else "v9", base_path=args.dataPath)
+                        nanoVersion="v9", base_path=args.dataPath)
 
 era = args.era
 
