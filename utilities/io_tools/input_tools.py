@@ -127,11 +127,16 @@ def read_scetlib_hist(path, nonsing="none", flip_y_sign=False, charge=None):
         logger.warning("Will not include nonsingular contribution!")
     
     if flip_y_sign:
-        mid = scetlibh.axes["Y"].index(0)
-        s = hist.tag.Slicer()
-        scetlibh[{"Y" : s[mid:]}] = scetlibh[{"Y" : s[mid:]}].view()*-1
+        scetlibh = flip_hist_y_sign(scetlibh)
 
     return scetlibh 
+
+def flip_hist_y_sign(h, yaxis="Y"):
+    centers = h.axes[yaxis].centers
+    scale = np.ones_like(centers)
+    scale[centers < 0] *= -1
+    h.values()[...] = h.values()*scale[(None if ax.name != yaxis else slice(0, ax.size) for ax in h.axes)]
+    return h 
 
 def read_dyturbo_pdf_hist(base_name, pdf_members, axes, charge=None):
     pdf_ax = hist.axis.StrCategory([f"pdf{i}" for i in range(pdf_members)], name="vars")
@@ -260,6 +265,7 @@ def add_charge_axis(h, charge):
 def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo, axes=None, charge=None, fix_nons_bin0=True, coeff=None):
     hsing = read_scetlib_hist(scetlib_resum, charge=charge, flip_y_sign=coeff=="a4")
     hfo_sing = read_scetlib_hist(scetlib_fo_sing, charge=charge, flip_y_sign=coeff=="a4")
+
     if axes:
         newaxes = [*axes, "vars"]
         if charge is not None:
@@ -403,12 +409,7 @@ def read_infile(input):
 
     return result, [meta], [infiles]
 
-def read_dyturbo_angular_coeffs(dyturbof, boson=None, rebin=None, add_axes=[]):
-    def rebin_hist(h, rebin):
-        for name, binning in rebin.items():
-            h = hh.rebinHist(h, name, binning)
-        return h
-
+def read_dyturbo_angular_coeffs(dyturbof, boson=None, rebin=None, absy=True, add_axes=[]):
     if add_axes and not all(ax.size == 1 for ax in add_axes):
         raise ValueError("Can only add axes of size 1!")
 
@@ -419,11 +420,13 @@ def read_dyturbo_angular_coeffs(dyturbof, boson=None, rebin=None, add_axes=[]):
         dyturbof = uproot.open(dyturbof)
 
     sigma_ul = dyturbof["s_qt_vs_y"].to_hist()
-    for ax,name in zip(sigma_ul.axes, ["qT", "y"]):
+    for ax,name in zip(sigma_ul.axes, ["qT", "Y"]):
         ax._ax.metadata["name"] = name
 
     if rebin:
-        sigma_ul = rebin_hist(sigma_ul, rebin)
+        sigma_ul = hh.rebinHistMultiAx(sigma_ul, rebin)
+    if absy:
+        sigma_ul = hh.makeAbsHist(sigma_ul, "Y")
 
     charge_range = (2, -2, 2) if "w" in boson.lower() else (1, -1, 1)
     charge = 0 if boson.lower() == "z" else (-1 if "wm" in boson.lower() else 1)
@@ -431,10 +434,12 @@ def read_dyturbo_angular_coeffs(dyturbof, boson=None, rebin=None, add_axes=[]):
     h = hist.Hist(*add_axes, *reversed(sigma_ul.axes), charge_ax, hist.axis.Regular(8, 0, 8, flow=False, name="helicity"), storage=sigma_ul.storage_type())
     for i in range(8):
         sigma_i = dyturbof[f"wgt_a{i}_y_qt"].to_hist()
-        for ax,name in zip(sigma_i.axes, ["qT", "y"]):
+        for ax,name in zip(sigma_i.axes, ["qT", "Y"]):
             ax._ax.metadata["name"] = name
         if rebin:
-            sigma_i = rebin_hist(sigma_i, rebin)
+            sigma_i = hh.rebinHistMultiAx(sigma_i, rebin)
+        if absy:
+            sigma_i = hh.makeAbsHist(sigma_i, "Y")
         entry = (*[0]*len(add_axes), Ellipsis, charge_ax.index(charge), i)
         # qT, y order in DY turbo is reversed wrt MiNNLO
         h[entry] = hh.divideHists(sigma_i, sigma_ul).view().T

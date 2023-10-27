@@ -61,6 +61,7 @@ class Datagroups(object):
                 args = self.getMetaInfo()["args"]
                 self.flavor = args.get("flavor", None)
             except ValueError as e:
+                logger.warning(e)
                 self.flavor = None
         else:
             self.flavor = None

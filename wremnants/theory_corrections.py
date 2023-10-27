@@ -95,8 +95,7 @@ def rebin_corr_hists(hists, ndim=-1, binning=None):
     ndims = min([x.ndim for x in hists]) if ndim < 0 else ndim
     if binning:
         try:
-            for ax, edges in binning.items():
-                hists = [h if not h or ax not in h.axes.name else hh.rebinHist(h, ax, edges) for h in hists]
+            hists = [h if not h else hh.rebinHistMultiAx(h, binning) for h in hists]
         except ValueError as e:
             logger.warning("Can't rebin axes to predefined binning")
         return hists
@@ -140,11 +139,13 @@ def make_corr_by_helicity(ref_helicity_hist, target_sigmaul, target_sigma4, coef
     ref_helicity_hist, target_sigmaul, target_sigma4 = rebin_corr_hists([ref_helicity_hist, target_sigmaul, target_sigma4], ndim, binning)
 
     apply_coeff_corr = coeff_hist is not None and coeffs_from_hist
-    
-    ref_coeffs = theory_tools.moments_to_angular_coeffs(ref_helicity_hist)
 
-    sigmaUL_ratio = hh.divideHists(target_sigmaul, ref_helicity_hist[{"helicity" : -1.j}], by_ax_name=False).values() \
-                        if target_sigmaul else np.ones_like(ref_helicity_hist)[...,np.newaxis]
+    # broadcast back mass and helicity axes (or vars axis)
+    sigmaUL_ratio = hh.divideHists(target_sigmaul, ref_helicity_hist[{"massVgen" : 0, "helicity" : -1.j}], 
+                                   flow=False, by_ax_name=False).values()[np.newaxis,...,np.newaxis,:] \
+                            if target_sigmaul else np.ones_like(ref_helicity_hist)[...,np.newaxis]
+
+    ref_coeffs = theory_tools.moments_to_angular_coeffs(ref_helicity_hist)
 
     corr_ax = hist.axis.Boolean(name="corr")
     vars_ax = target_sigmaul.axes["vars"] if target_sigmaul else hist.axis.Regular(1 ,0, 1, name="vars")
@@ -164,8 +165,8 @@ def make_corr_by_helicity(ref_helicity_hist, target_sigmaul, target_sigma4, coef
             scale = -1 if coeff in [1, 4] else 1
             idx = complex(0, coeff)
             corr_coeffs[...,idx,True,:] = coeff_hist[{"helicity" : idx}].values()[...,np.newaxis]*scale
-    # Scale by the sigmaUL correction
-    corr_coeffs[{"corr" : True}].values()[...] *= sigmaUL_ratio
+    # Scale by the sigmaUL correction, 
+    corr_coeffs.values()[...,corr_coeffs.axes["corr"].index(True),:] *= sigmaUL_ratio
 
     corr_coeffs = set_corr_ratio_flow(corr_coeffs)
     return corr_coeffs
@@ -173,3 +174,61 @@ def make_corr_by_helicity(ref_helicity_hist, target_sigmaul, target_sigma4, coef
 def make_angular_coeff(sigmai_hist, ul_hist):
     return hh.divideHists(sigmai_hist, ul_hist, cutoff=0.0001)
 
+def read_combined_corrs(procNames, generator, corr_files, axes=[], absy=True, rebin={}):
+    h = None
+    if not corr_files:
+        return h
+
+    for procName in procNames:
+        if procName[0] == "W":
+            proc_files = list(filter(lambda x: procName[:2].lower() in x.lower(), corr_files))
+            charge = 1 if procName[:2] == "Wp" else -1
+        else:
+            charge = 0
+            proc_files = corr_files
+        hproc = read_corr(generator, proc_files, charge, axes)
+        h = hproc if not h else h+hproc
+
+    if absy and "Y" in axes:
+        h = hh.makeAbsHist(h, "Y")
+
+    if rebin:
+        h = hh.rebinHistMultiAx(h, rebin)
+
+    return h
+
+def read_corr(generator, corr_files, charge, axes=[]):
+    if "scetlib" in generator:
+        coeff=None
+        if any("A4" in c for c in corr_files):
+            coeff = "a4"
+        if "dyturbo" in generator:
+            scetlib_files = [x for x in corr_files if pathlib.Path(x).suffix == ".pkl"]
+            if len(scetlib_files) != 2:
+                raise ValueError(f"scetlib_dyturbo correction requires two SCETlib files (resummed and FO singular). Found {len(scetlib_files)}")
+            if not any("nnlo_sing" in x for x in scetlib_files):
+                raise ValueError("Must pass in a fixed order singular file")
+            nnlo_sing_idx = 0 if "nnlo_sing" in scetlib_files[0] else 1
+            resumf = scetlib_files[~nnlo_sing_idx]
+            nnlo_singf = scetlib_files[nnlo_sing_idx]
+
+            dyturbo_files = [x for x in corr_files if pathlib.Path(x).suffix == ".txt"]
+            if len(dyturbo_files) != 1:
+                raise ValueError("scetlib_dyturbo correction requires one DYTurbo file (fixed order contribution)")
+
+            corrh = input_tools.read_matched_scetlib_dyturbo_hist(resumf, nnlo_singf, dyturbo_files[0], axes, charge=charge, coeff=coeff)
+        else:
+            corrh = input_tools.read_scetlib_hist(corr_files[0], charge=charge, nonsing=nons, flip_y_sign=coeff=="a4")
+    else:
+        if generator == "matrix_radish":
+            h = input_tools.read_matrixRadish_hist(corr_file[0], axes[0])
+        elif generator == "dyturbo":
+            h = input_tools.read_dyturbo_hist(corr_files, axes=axes, charge=charge)
+
+        vars_ax = h.axes["vars"] if "vars" in h.axes.name else hist.axis.StrCategory(["central"], name="vars") 
+        hnD = hist.Hist(*h.axes, vars_ax)
+        # Leave off the overflow, we won't use it anyway
+        hnD[...] = np.reshape(h.values(), hnD.shape)
+        corrh = hnD
+
+    return corrh
