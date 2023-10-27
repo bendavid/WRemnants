@@ -4,7 +4,6 @@ from wremnants.syst_tools import massWeightNames
 from wremnants.datasets.datagroups import Datagroups
 from utilities import common, logging, boostHistHelpers as hh
 from utilities.io_tools import input_tools
-import itertools
 import argparse
 import hist
 import math
@@ -88,10 +87,9 @@ def setup(args, inputFile, fitvar, xnorm=False):
     #       processes which are defined in the original process dictionary but are not supposed to be (always) run on
     if args.addQCDMC or "QCD" in args.filterProcGroups:
         logger.warning("Adding QCD MC to list of processes for the fit setup")
-    else:
-        if "QCD" not in args.excludeProcGroups:
-            logger.warning("Automatic removal of QCD MC from list of processes. Use --filterProcGroups 'QCD' or --addQCDMC to keep it")
-            args.excludeProcGroups.append("QCD")
+    elif "QCD" not in args.excludeProcGroups:
+        logger.warning("Automatic removal of QCD MC from list of processes. Use --filterProcGroups 'QCD' or --addQCDMC to keep it")
+        args.excludeProcGroups.append("QCD")
     filterGroup = args.filterProcGroups if args.filterProcGroups else None
     excludeGroup = args.excludeProcGroups if args.excludeProcGroups else None
     if args.ABCD and (excludeGroup is None or "Fake" not in excludeGroup):
@@ -122,14 +120,50 @@ def setup(args, inputFile, fitvar, xnorm=False):
         datagroups.groups[base_group].addMembers(datagroups.groups[base_group.replace("mu","tau")].members)
         datagroups.deleteGroup(base_group.replace("mu","tau"))
 
+    if args.fitXsec:
+        datagroups.unconstrainedProcesses.append(base_group)
+
     if xnorm:
         datagroups.select_xnorm_groups(base_group)
+        if not args.unfolding:
+            # creating the xnorm model (e.g. for the theory fit)
+            if wmass:
+                # add gen charge as additional axis
+                datagroups.groups[base_group].add_member_axis("qGen", datagroups.results, 
+                    member_filters={-1: lambda x: x.name.startswith("Wminus"), 1: lambda x: x.name.startswith("Wplus")}, 
+                    hist_filter=lambda x: x.startswith("xnorm"))
+                xnorm_axes = ["qGen", *datagroups.gen_axes]
+            else:
+                xnorm_axes = datagroups.gen_axes[:]
+            datagroups.setGenAxes([a for a in xnorm_axes if a not in fitvar])
+    elif args.poiAsNoi:
+        poi_axes = datagroups.gen_axes if args.genAxes is None else args.genAxes
+        # remove specified gen axes from set of gen axes in datagroups so that those are integrated over
+        datagroups.setGenAxes([a for a in datagroups.gen_axes if a not in poi_axes])
 
-    if args.unfolding and args.fitXsec:
-        raise ValueError("Options --unfolding and --fitXsec are incompatible. Please choose one or the other")
-    elif args.fitXsec:
-        datagroups.unconstrainedProcesses.append(base_group)
-    elif args.unfolding and not args.poiAsNoi:
+        # FIXME: temporary customization of signal and out-of-acceptance process names for theory agnostic with POI as NOI
+        # There might be a better way to do it more homogeneously with the rest.
+        if args.theoryAgnostic:
+            # Important: don't set the gen axes with datagroups.setGenAxes(args.genAxes) when doing poiAsNoi 
+            constrainMass = False
+            hasSeparateOutOfAcceptanceSignal = False
+            # check if the out-of-acceptance signal process exists as an independent process
+            if any(m.name.startswith("Bkg") for m in datagroups.groups[base_group].members):
+                hasSeparateOutOfAcceptanceSignal = True
+                if wmass:
+                    # out of acceptance contribution
+                    datagroups.copyGroup(base_group, f"BkgWmunu", member_filter=lambda x: x.name.startswith("Bkg"))
+                    datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if m.name.startswith("Bkg")])
+                else:
+                    # out of acceptance contribution
+                    datagroups.copyGroup(base_group, f"BkgZmumu", member_filter=lambda x: x.name.startswith("Bkg"))
+                    datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if m.name.startswith("Bkg")])
+            if args.addNormToOOA and not hasSeparateOutOfAcceptanceSignal:
+                raise ValueError(f"Option --addNormToOOA {args.addNormToOOA} was called, but out-of-acceptance doesn't exist as a separate process. Remove this option or make sure the process exists.")
+            # FIXME: at some point we should decide what name to use
+            if any(x in args.excludeProcGroups for x in ["BkgWmunu", "outAccWmunu"]) and hasSeparateOutOfAcceptanceSignal:
+                datagroups.deleteGroup("BkgWmunu") # remove out of acceptance signal
+    elif args.unfolding or args.theoryAgnostic:
         constrainMass = False if args.theoryAgnostic else True
         datagroups.setGenAxes(args.genAxes)
 
@@ -147,42 +181,8 @@ def setup(args, inputFile, fitvar, xnorm=False):
         if len(datagroups.groups[base_group].members) == len(to_del):
             datagroups.deleteGroup(base_group)
         else:
-            datagroups.groups[base_group].deleteMembers(to_del)
-    elif args.unfolding and args.poiAsNoi:
-        constrainMass = True
-        poi_axes = datagroups.gen_axes if args.genAxes is None else args.genAxes
-        # remove specified gen axes from set of gen axes in datagroups so that those are integrated over
-        datagroups.setGenAxes([a for a in datagroups.gen_axes if a not in poi_axes])
+            datagroups.groups[base_group].deleteMembers(to_del)    
 
-    # FIXME: temporary customization of signal and out-of-acceptance process names for theory agnostic with POI as NOI
-    # There might be a better way to do it more homogeneously with the rest.
-    if args.theoryAgnostic and args.poiAsNoi:
-        # Important: don't set the gen axes with datagroups.setGenAxes(args.genAxes) when doing poiAsNoi 
-        constrainMass = False
-        hasSeparateOutOfAcceptanceSignal = False
-        # check if the out-of-acceptance signal process exists as an independent process
-        if any(m.name.startswith("Bkg") for m in datagroups.groups[base_group].members):
-            hasSeparateOutOfAcceptanceSignal = True
-            if wmass:
-                # out of acceptance contribution
-                datagroups.copyGroup(base_group, f"BkgWmunu", member_filter=lambda x: x.name.startswith("Bkg"))
-                datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if m.name.startswith("Bkg")])
-            else:
-                # out of acceptance contribution
-                datagroups.copyGroup(base_group, f"BkgZmumu", member_filter=lambda x: x.name.startswith("Bkg"))
-                datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if m.name.startswith("Bkg")])
-        if args.addNormToOOA and not hasSeparateOutOfAcceptanceSignal:
-            raise ValueError(f"Option --addNormToOOA {args.addNormToOOA} was called, but out-of-acceptance doesn't exist as a separate process. Remove this option or make sure the process exists.")
-
-    if args.noHist and args.noStatUncFakes:
-        raise ValueError("Option --noHist would override --noStatUncFakes. Please select only one of them")
-
-    if args.theoryAgnostic and args.poiAsNoi:
-        # FIXME: at some point we should decide what name to use
-        if any(x in args.excludeProcGroups for x in ["BkgWmunu", "outAccWmunu"]) and hasSeparateOutOfAcceptanceSignal:
-            datagroups.deleteGroup("BkgWmunu") # remove out of acceptance signal
-    elif "BkgWmunu" in args.excludeProcGroups:
-            datagroups.deleteGroup("Wmunu") # remove out of acceptance signal
 
     # Start to create the CardTool object, customizing everything
     cardTool = CardTool.CardTool(xnorm=xnorm, ABCD=wmass and args.ABCD)
@@ -192,11 +192,13 @@ def setup(args, inputFile, fitvar, xnorm=False):
     logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
     if args.absolutePathInCard:
         cardTool.setAbsolutePathShapeInCard()
+    cardTool.setFitAxes(fitvar)
     cardTool.setFakerateAxes(args.fakerateAxes)
     if wmass and args.ABCD:
         # In case of ABCD we need to have different fake processes for e and mu to have uncorrelated uncertainties
         cardTool.setFakeName(datagroups.fakeName + (datagroups.flavor if datagroups.flavor else "")) 
         cardTool.unroll=True
+    
     if args.sumChannels or xnorm or dilepton or (wmass and args.ABCD) or "charge" not in fitvar:
         cardTool.setWriteByCharge(False)
     else:
@@ -204,33 +206,14 @@ def setup(args, inputFile, fitvar, xnorm=False):
         if args.forceRecoChargeAsGen:
             cardTool.setExcludeProcessForChannel("plus", ".*qGen0")
             cardTool.setExcludeProcessForChannel("minus", ".*qGen1")
+    
     if xnorm:
         histName = "xnorm"
         cardTool.setHistName(histName)
         cardTool.setNominalName(histName)
-        if args.unfolding:
-            cardTool.setFitAxes(["count"])
-        else:
-            if wmass:
-                # add gen charge as additional axis
-                datagroups.groups[base_group].add_member_axis("qGen", datagroups.results, 
-                    member_filters={-1: lambda x: x.name.startswith("Wminus"), 1: lambda x: x.name.startswith("Wplus")}, 
-                    hist_filter=lambda x: x.startswith("xnorm"))
-                datagroups.gen_axes = ["qGen", *datagroups.gen_axes]
-            else:
-                datagroups.gen_axes = datagroups.gen_axes[:]
-
-            cardTool.unroll = True
-            # remove projection axes from gen axes, otherwise they will be integrated before
-            
-            cardTool.setFitAxes(fitvar)
-            if datagroups.gen_axes != cardTool.fit_axes:
-                raise NotImplementedError(f"The gen axes of the model {datagroups.gen_axes} do not agree with the ones requested {cardTool.fit_axes}")
-            datagroups.setGenAxes([]) # [a for a in datagroups.gen_axes if a not in cardTool.project])
     else:
         cardTool.setHistName(args.baseName)
         cardTool.setNominalName(args.baseName)
-        cardTool.setFitAxes(fitvar)
         
     # define sumGroups for integrated cross section
     if args.unfolding and not args.poiAsNoi:
@@ -347,65 +330,63 @@ def setup(args, inputFile, fitvar, xnorm=False):
                 )
 
     # this appears within doStatOnly because technically these nuisances should be part of it
-    if args.theoryAgnostic and args.poiAsNoi:
-        cardTool.addSystematic("poiAsNoi",
-                               processes=["signal_samples_noOutAcc"], # currently not on out-of-acceptance signal template (to implement)
-                               group=f"normXsec{label}",
-                               mirror=True,
-                               baseName=f"norm{label}CHANNEL_",
-                               scale=1 if args.priorNormXsec < 0 else args.priorNormXsec, # histogram represents an (args.priorNormXsec*100)% prior
-                               noConstraint=True if args.priorNormXsec < 0 else False,
-                               #customizeNuisanceAttributes={".*AngCoeff4" : {"scale" : 1, "shapeType": "shapeNoConstraint"}},
-                               systAxes=["ptVgenSig", "absYVgenSig", "helicitySig"],
-                               labelsByAxis=["PtVBin", "YVBin", "AngCoeff"],
-                               passToFakes=passSystToFakes,
-                               actionMap={
-                                    m.name: (lambda h, scale: hh.addHists(
-                                        h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], 
-                                        hh.scaleHist(h, scale)))
-                                    for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
-                               )
-
-    elif args.poiAsNoi and args.unfolding:
+    if args.poiAsNoi:
         noi_args = dict(
-            name=f"poiAsNoi",
-            processes=["signal_samples"],
             group=f"normXsec{label}",
+            scale=1 if args.priorNormXsec < 0 else args.priorNormXsec, # histogram represents an (args.priorNormXsec*100)% prior
+            systAxes=poi_axes, 
             mirror=True,
-            scale=1 if args.priorNormXsec < 0 else args.priorNormXsec,
-            noConstraint=True,
-            noi=True,
-            systAxes=poi_axes,
-            systAxesFlow=[a for a in poi_axes if a in ["ptGen"]], # use underflow/overflow bins for ptGen
-            labelsByAxis=poi_axes,
             passToFakes=passSystToFakes,
         )
-        if wmass:
-            # add two sets of systematics, one for each charge
-            cardTool.addSystematic(**noi_args,
-                rename=f"noiWminus",
-                baseName=f"W_qGen0",
+        if args.theoryAgnostic:
+            cardTool.addSystematic("yieldsUnfolding", 
+                **noi_args,
+                processes=["signal_samples_noOutAcc"], # currently not on out-of-acceptance signal template (to implement)
+                baseName=f"norm{label}CHANNEL_",
+                noConstraint=True if args.priorNormXsec < 0 else False,
+                #customizeNuisanceAttributes={".*AngCoeff4" : {"scale" : 1, "shapeType": "shapeNoConstraint"}},
+                labelsByAxis=["PtVBin", "YVBin", "AngCoeff"],
                 actionMap={
-                    m.name: (lambda h: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], h, scale2=args.scaleNormXsecHistYields))
-                        if "minus" in m.name else (lambda h: h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}])
-                    for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
+                        m.name: (lambda h, scale: hh.addHists(
+                            h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], 
+                            hh.scaleHist(h, scale)))
+                        for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
             )
-            cardTool.addSystematic(**noi_args,
-                rename=f"noiWplus",
-                baseName=f"W_qGen1",
-                actionMap={
-                    m.name: (lambda h: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], h, scale2=args.scaleNormXsecHistYields))
-                        if "plus" in m.name else (lambda h: h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}])
-                    for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
-            )
-        else:
-            cardTool.addSystematic(**noi_args,
-                baseName=f"{label}_",
-                actionMap={
-                    m.name: (lambda h: hh.addHists(
-                        h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], h[{"acceptance":True}], scale2=args.scaleNormXsecHistYields))
-                    for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
-            )
+        elif args.unfolding:
+            noi_args.update(dict(
+                name=f"yieldsUnfolding",
+                processes=["signal_samples"],
+                noConstraint=True,
+                noi=True,
+                systAxesFlow=[a for a in poi_axes if a in ["ptGen"]], # use underflow/overflow bins for ptGen
+                labelsByAxis=poi_axes,
+            ))
+            if wmass:
+                # add two sets of systematics, one for each charge
+                cardTool.addSystematic(**noi_args,
+                    rename=f"noiWminus",
+                    baseName=f"W_qGen0",
+                    actionMap={
+                        m.name: (lambda h: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], h, scale2=args.scaleNormXsecHistYields))
+                            if "minus" in m.name else (lambda h: h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}])
+                        for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
+                )
+                cardTool.addSystematic(**noi_args,
+                    rename=f"noiWplus",
+                    baseName=f"W_qGen1",
+                    actionMap={
+                        m.name: (lambda h: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], h, scale2=args.scaleNormXsecHistYields))
+                            if "plus" in m.name else (lambda h: h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}])
+                        for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
+                )
+            else:
+                cardTool.addSystematic(**noi_args,
+                    baseName=f"{label}_",
+                    actionMap={
+                        m.name: (lambda h: hh.addHists(
+                            h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], h[{"acceptance":True}], scale2=args.scaleNormXsecHistYields))
+                        for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
+                )
 
     if args.doStatOnly:
         # print a card with only mass weights
@@ -426,7 +407,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     if args.widthUnc:
         widthSkipZ = [("widthZ2p49333GeV",), ("widthZ2p49493GeV",), ("widthZ2p4952GeV",)] 
         widthSkipW = [("widthW2p09053GeV",), ("widthW2p09173GeV",), ("widthW2p085GeV",)]
-        if wmass:
+        if wmass and not xnorm:
             cardTool.addSystematic(f"widthWeightZ",
                                     processes=["single_v_nonsig_samples"],
                                     group=f"widthZ",
@@ -772,8 +753,9 @@ def outputFolderName(outfolder, card_tool, doStatOnly, postfix):
 
     return f"{outfolder}/{'_'.join(to_join)}/"
 
-def main(args,xnorm=False):
-    cardTool = setup(args, args.inputFile[0], args.fitvar[0].split("-"), xnorm)
+def main(args, xnorm=False):
+    fitvar = args.fitvar[0].split("-") if not xnorm else ["count"]
+    cardTool = setup(args, args.inputFile[0], fitvar, xnorm)
     cardTool.setOutput(outputFolderName(args.outfolder, cardTool, args.doStatOnly, args.postfix), analysis_label(cardTool))
     cardTool.writeOutput(args=args, forceNonzero=not args.unfolding, check_systs=not args.unfolding)
     return
@@ -785,13 +767,13 @@ if __name__ == "__main__":
     logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
     if args.poiAsNoi and args.theoryAgnostic == args.unfolding:
-        message = "Option --poiAsNoi requires either --theoryAgnostic or --unfolding but not both"
-        logger.warning(message)
-        raise NotImplementedError(message)    
-    
+        raise ValueError("Option --poiAsNoi requires either --theoryAgnostic or --unfolding but not both")    
+    if args.noHist and args.noStatUncFakes:
+        raise ValueError("Option --noHist would override --noStatUncFakes. Please select only one of them")
+    if args.unfolding and args.fitXsec:
+        raise ValueError("Options --unfolding and --fitXsec are incompatible. Please choose one or the other")
+
     if args.theoryAgnostic:
-        args.unfolding = True
-        logger.warning("For now setting --theoryAgnostic activates --unfolding, they should do the same things")
         if args.genAxes is None:
             args.genAxes = ["ptVgenSig", "absYVgenSig", "helicitySig"]
             logger.warning(f"Automatically setting '--genAxes {' '.join(args.genAxes)}' for theory agnostic analysis")
@@ -812,7 +794,7 @@ if __name__ == "__main__":
             cardTool = setup(args, ifile, fitvar, xnorm=args.fitresult is not None)
             writer.add_channel(cardTool)
             if args.unfolding and not args.poiAsNoi:
-                cardTool = setup(args, ifile, fitvar, xnorm=True)
+                cardTool = setup(args, ifile, ["count"], xnorm=True)
                 writer.add_channel(cardTool)
         if args.fitresult:
             writer.set_fitresult(args.fitresult)

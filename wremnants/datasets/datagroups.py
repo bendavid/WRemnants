@@ -614,7 +614,7 @@ class Datagroups(object):
             
         return df
 
-    def set_rebin_action(self, axes, ax_lim=[], ax_rebin=[], ax_absval=[])
+    def set_rebin_action(self, axes, ax_lim=[], ax_rebin=[], ax_absval=[]):
         if len(ax_lim) % 2 or len(ax_lim)/2 > len(fitvar) or len(ax_rebin) > len(fitvar):
             raise ValueError("Inconsistent rebin or axlim arguments. axlim must be at most two entries per axis, and rebin at most one")
 

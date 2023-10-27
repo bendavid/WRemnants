@@ -100,7 +100,7 @@ if args.unfolding:
     min_pt_unfolding = template_minpt+template_wpt
     max_pt_unfolding = template_maxpt-template_wpt
     npt_unfolding = args.genBins[0]-2
-    differential_axes, differential_cols = differential.get_pt_eta_axes(npt_unfolding, min_pt_unfolding, max_pt_unfolding, args.genBins[1], flow_eta=args.poiAsNoi)
+    unfolding_axes, unfolding_cols = differential.get_pt_eta_axes(npt_unfolding, min_pt_unfolding, max_pt_unfolding, args.genBins[1], flow_eta=args.poiAsNoi)
     if not args.poiAsNoi:
         datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wmunu")
         datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wtaunu")
@@ -108,7 +108,7 @@ if args.unfolding:
         groups_to_aggregate.append("BkgWtaunu")
 
 elif args.theoryAgnostic:
-    differential_axes, differential_cols = differential.get_differential_axes()
+    theoryAgnostic_axes, theoryAgnostic_cols = differential.get_differential_axes()
     axis_helicity = helicity_utils.axis_helicity_multidim
     # the following just prepares the existence of the group for out-of-acceptance signal, but doesn't create or define the histogram yet
     if not args.poiAsNoi:
@@ -240,26 +240,26 @@ def build_graph(df, dataset):
             if not args.poiAsNoi:
                 logger.debug("Select events in fiducial phase space")
                 df = unfolding_tools.select_fiducial_space(df, mode="wmass", accept=True)
-                axes = [*nominal_axes, *differential_axes] 
-                cols = [*nominal_cols, *differential_cols]
+                axes = [*nominal_axes, *unfolding_axes] 
+                cols = [*nominal_cols, *unfolding_cols]
             
-            unfolding_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, differential_axes, differential_cols)
+            unfolding_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols)
 
     if args.theoryAgnostic and isWmunu: # should be isW to do also Wtaunu
         df = theory_tools.define_prefsr_vars(df)
         if hasattr(dataset, "out_of_acceptance"):
             logger.debug("Reject events in fiducial phase space")
-            df = theoryAgnostic_tools.select_fiducial_space(df, differential_axes[0].edges[-1], differential_axes[1].edges[-1], accept=False)
+            df = theoryAgnostic_tools.select_fiducial_space(df, theoryAgnostic_axes[0].edges[-1], theoryAgnostic_axes[1].edges[-1], accept=False)
         else:
             # the in-acceptance selection must usually not be used to filter signal events when doing POIs as NOIs
             if not args.poiAsNoi:
                 logger.debug("Select events in fiducial phase space for theory agnostic analysis")
-                df = theoryAgnostic_tools.select_fiducial_space(df, differential_axes[0].edges[-1], differential_axes[1].edges[-1], accept=True)
+                df = theoryAgnostic_tools.select_fiducial_space(df, theoryAgnostic_axes[0].edges[-1], theoryAgnostic_axes[1].edges[-1], accept=True)
                 # helicity axis is special, defined through a tensor later, theoryAgnostic_ only includes W rapidity and pt for now
-                axes = [*nominal_axes, *differential_axes]
-                cols = [*nominal_cols, *differential_cols]
+                axes = [*nominal_axes, *theoryAgnostic_axes]
+                cols = [*nominal_cols, *theoryAgnostic_cols]
 
-                theoryAgnostic_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, differential_axes, differential_cols)
+                theoryAgnostic_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, theoryAgnostic_axes, theoryAgnostic_cols)
 
     if not args.makeMCefficiency:
         # remove trigger, it will be part of the efficiency selection for passing trigger
@@ -398,12 +398,14 @@ def build_graph(df, dataset):
         results.append(df.HistoBoost("ptW", [axis_recoWpt, axis_eta_utilityHist, axis_pt_utilityHist, axis_charge, axis_passIso, axis_passMT], ["ptW", "goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"]))
 
     if args.poiAsNoi and isW:
-        noiAsPoiHistName = Datagroups.histName("nominal", syst="poiAsNoi")
-        logger.debug(f"Creating special histogram '{noiAsPoiHistName}' for {'unfolding' if args.unfolding else 'theory agnostic'} to treat POIs as NOIs")
         if args.theoryAgnostic:
-            results.append(df.HistoBoost(noiAsPoiHistName, [*nominal_axes, *differential_axes], [*nominal_cols, *differential_cols, "nominal_weight_helicity"], tensor_axes=[axis_helicity]))
-        else:
-            results.append(df.HistoBoost(noiAsPoiHistName, [*nominal_axes, *differential_axes], [*nominal_cols, *differential_cols, "nominal_weight"]))       
+            noiAsPoiHistName = Datagroups.histName("nominal", syst="yieldsTheoryAgnostic")
+            logger.debug(f"Creating special histogram '{noiAsPoiHistName}' for theory agnostic to treat POIs as NOIs")
+            results.append(df.HistoBoost(noiAsPoiHistName, [*nominal_axes, *theoryAgnostic_axes], [*nominal_cols, *theoryAgnostic_cols, "nominal_weight_helicity"], tensor_axes=[axis_helicity]))
+        if args.unfolding:
+            noiAsPoiHistName = Datagroups.histName("nominal", syst="yieldsUnfolding")
+            logger.debug(f"Creating special histogram '{noiAsPoiHistName}' for unfolding to treat POIs as NOIs")
+            results.append(df.HistoBoost(noiAsPoiHistName, [*nominal_axes, *unfolding_axes], [*nominal_cols, *unfolding_cols, "nominal_weight"]))       
 
     ## FIXME: should be isW, to include Wtaunu, but for now we only split Wmunu
     elif isWmunu and args.theoryAgnostic and not hasattr(dataset, "out_of_acceptance"):
