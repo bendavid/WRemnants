@@ -12,7 +12,7 @@ import copy
 logger = logging.child_logger(__name__)
 
 def syst_transform_map(base_hist, hist_name):
-    pdfInfo = theory_tools.pdfMapExtended 
+    pdfInfo = theory_tools.pdfMap
     pdfNames = [pdfInfo[k]["name"] for k in pdfInfo.keys()]
 
     def pdfUnc(h, pdfName, axis_name="pdfVar"):

@@ -465,6 +465,7 @@ class TheoryHelper(object):
             group=pdfName,
             splitGroup={f"{pdfName}AlphaS": '.*'},
             systAxes=["alphasVar"],
+            skipEntries=[{"alphasVar" : "pdfAlphaS0118"}],
             systNameReplace=[("as", "pdfAlphaS")]+[("0116", "Down"), ("0120", "Up")] if asRange == "002" else [("0117", "Down"), ("0119", "Up")],
             scale=0.75 if asRange == "002" else 1.5,
             passToFakes=self.propagate_to_fakes,
