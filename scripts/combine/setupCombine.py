@@ -386,7 +386,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                     baseName=f"{label}_",
                     actionMap={
                         m.name: (lambda h: hh.addHists(
-                            h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], h[{"acceptance":True}], scale2=args.scaleNormXsecHistYields))
+                            h[{**{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}, "acceptance": hist.tag.Slicer()[::hist.sum]}], h[{"acceptance":True}], scale2=args.scaleNormXsecHistYields))
                         for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
                 )
 
