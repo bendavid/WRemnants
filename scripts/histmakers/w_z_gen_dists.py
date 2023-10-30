@@ -40,11 +40,16 @@ axis_massWgen = hist.axis.Variable([5., 13000.], name="massVgen", underflow=True
 
 axis_massZgen = hist.axis.Regular(12, 60., 120., name="massVgen")
 
-axis_absYVgen = hist.axis.Variable(
-    # [0., 0.25, 0.5, 0.75, 1., 1.25, 1.5, 1.75, 2., 2.25, 2.5, 2.75, 3., 3.25, 3.5, 4., 5.], # this is the same binning as hists from theory corrections
-    [0., 0.4, 0.8, 1.2, 1.6, 2.0, 2.4, 10.], #same axis as theory agnostic norms
-    name = "absYVgen", underflow=False
-)
+if not args.useTheoryAgnosticBinning:
+    axis_absYVgen = hist.axis.Variable(
+        [0., 0.25, 0.5, 0.75, 1., 1.25, 1.5, 1.75, 2., 2.25, 2.5, 2.75, 3., 3.25, 3.5, 4., 5.], # this is the same binning as hists from theory corrections
+        name = "absYVgen", underflow=False
+    )
+else:
+    axis_absYVgen = hist.axis.Variable(
+        [0., 0.4, 0.8, 1.2, 1.6, 2.0, 2.4, 10.], #same axis as theory agnostic norms
+        name = "absYVgen", underflow=False
+    )
 
 axis_ygen = hist.axis.Regular(10, -5., 5., name="y")
 axis_rapidity = axis_absYVgen if args.absY else axis_ygen
