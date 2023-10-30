@@ -75,10 +75,10 @@ def make_plot_2d(h, name, proc, axes, corr=None, plot_error=False, cmin=None, cm
         cmax = h2d.values(flow=flow).max() if cmax is None else cmax
         colormesh = ax.pcolormesh(xedges, yedges, h2d.values(flow=flow).T, norm=LogNorm(vmin=cmin, vmax=cmax), cmap=cm.RdBu)
     else:
-        cmin = h2d.values(flow=flow).min() if cmin is None else cmin
-        cmax = h2d.values(flow=flow).max() if cmax is None else cmax
+        cmin = max(0.95,h2d.values(flow=flow).min()) if cmin is None else cmin
+        cmax = min(1.05,h2d.values(flow=flow).max()) if cmax is None else cmax
         crange = max((cmax-1), (1-cmin))
-        colormesh = ax.pcolormesh(xedges, yedges, h2d.values(flow=flow).T, cmap=cm.RdBu, vmin=max(0,1-crange), vmax=min(2,1+crange))
+        colormesh = ax.pcolormesh(xedges, yedges, h2d.values(flow=flow).T, cmap=cm.RdBu, vmin=max(0.95,1-crange), vmax=min(1.05,1+crange))
 
     cbar = fig.colorbar(colormesh, ax=ax)
 
