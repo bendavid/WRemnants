@@ -23,6 +23,7 @@ jobs:
               for subfolder in $all_subfolders; do
                 xrdfs root://eosuser.cern.ch// rm $subfolder/*
                 xrdfs root://eosuser.cern.ch// rmdir $subfolder
+              done
               xrdfs root://eosuser.cern.ch// rm $folder/*
               xrdfs root://eosuser.cern.ch// rmdir $folder
             fi
@@ -37,6 +38,7 @@ jobs:
               for subfolder in $all_subfolders; do
                 xrdfs root://eosuser.cern.ch// rm $subfolder/*
                 xrdfs root://eosuser.cern.ch// rmdir $subfolder
+              done
               xrdfs root://eosuser.cern.ch// rm $folder/*
               xrdfs root://eosuser.cern.ch// rmdir $folder
             fi
