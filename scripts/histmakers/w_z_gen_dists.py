@@ -18,7 +18,7 @@ parser.add_argument("--useTheoryAgnosticBinning", action='store_true', help="Use
 parser.add_argument("--singleLeptonHists", action='store_true', help="Also store single lepton kinematics")
 parser.add_argument("--photonHists", action='store_true', help="Also store photon kinematics")
 parser.add_argument("--skipEWHists", action='store_true', help="Also store histograms for EW reweighting. Use with --filter horace")
-parser.add_argument("--absY", action='store_true', help="use absolute |Y|")
+parser.add_argument("--signedY", action='store_true', help="use signed Y")
 parser.add_argument("--applySelection", action='store_true', help="Apply selection on leptons")
 parser.add_argument("--auxiliaryHistograms", action="store_true", help="Safe auxiliary histograms (mainly for ew analysis)")
 
@@ -52,8 +52,8 @@ else:
     )
 
 axis_ygen = hist.axis.Regular(10, -5., 5., name="y")
-axis_rapidity = axis_absYVgen if args.absY else axis_ygen
-col_rapidity =  "absYVgen" if args.absY else "yVgen"
+axis_rapidity = axis_ygen if args.signedY else axis_absYVgen
+col_rapidity =  "yVgen" if args.signedY else "absYVgen"
 
 if not args.useTheoryAgnosticBinning:
     axis_ptVgen = hist.axis.Variable(
@@ -268,5 +268,5 @@ if not args.skipAngularCoeffs:
             w_moments = hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning[::2])
         coeffs["W"] = wremnants.moments_to_angular_coeffs(w_moments)
     if coeffs:
-        outfname = "w_z_coeffs_absY.hdf5" if args.absY else "w_z_coeffs.hdf5"
+        outfname = "w_z_coeffs_signedY.hdf5" if args.signedY else "w_z_coeffs.hdf5"
         output_tools.write_analysis_output(coeffs, outfname, args, update_name=not args.forceDefaultName)
