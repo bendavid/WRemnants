@@ -128,7 +128,7 @@ if __name__ == "__main__":
     #########
     # hardcoded eta-pt reco binning for now
     etabins = [round(-2.4 + (0.1 * i), 1) for i in range(0,49)]
-    ptbins = [round(26.0 + (1.0 * i), 1) for i in range(0,31)]
+    ptbins = [round(26.0 + (1.0 * i), 1) for i in range(0, 35 if args.isWlike else 31)]
     recoBins = templateBinning(etabins, ptbins)
     logger.warning("-"*30)
     logger.warning("USING THIS BINNING: PLEASE CHECK IF IT IS OK")
