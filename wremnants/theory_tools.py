@@ -131,8 +131,15 @@ only_central_pdf_datasets = [
 
 extended_pdf_datasets = [x for x in common.vprocs_all if not any(y in x for y in ["NNLOPS", "MiNLO"])]
 
+def expand_pdf_entries(pdf):
+    info = pdfMap[pdf]
+    first_entry = info.get("first_entry", 0)
+    last_entry = first_entry+info["entries"]
+    return [info["branch"]+f"[{i}]" for i in range(first_entry, last_entry)]
+
 theory_corr_weight_map = {
-        "scetlib_dyturboMSHT20an3lo_pdfas" : pdfMap["msht20an3lo"]["alphas"]
+        "scetlib_dyturboMSHT20an3lo_pdfas" : pdfMap["msht20an3lo"]["alphas"],
+        "scetlib_dyturboMSHT20an3lo" : expand_pdf_entries("msht20an3lo"),
 }
 
 def define_prefsr_vars(df):
