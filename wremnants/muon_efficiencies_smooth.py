@@ -31,7 +31,7 @@ def cloneAxis(ax, overflow=False, underflow=False, newName=None):
     return newax
 
 # TODO: change is_w_like for a python enum AnalysisType (see include/defines.h)
-def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSmooth_GtoH.root",
+def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSmooth_GtoHout.root",
                                         era = None,
                                         what_analysis = ROOT.wrem.AnalysisType.Wmass,
                                         max_pt = np.inf,
@@ -83,7 +83,9 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
 
     dict_SF3D = None
     if len(eff_types_3D):
-        fileSF3D = f"{data_dir}/testMuonSF/smoothSF3D_uTm30to100.pkl.lz4"
+        #fileSF3D = f"{data_dir}/testMuonSF/smoothSF3D_uTm30to100.pkl.lz4"
+        fileSF3D = f"{data_dir}/testMuonSF/smoothSF3D_uTm30to100_vtxAgnIso.pkl.lz4"
+        #fileSF3D = "/eos/user/m/mciprian/www/WMassAnalysis/test2Dsmoothing/withEfficiency/utFit_m30to100_vtxAgnIso/smoothSF3D.pkl.lz4" # TEST
         if not os.path.isfile(fileSF3D):
             raise IOError(f"Couldn't read 3D SF file {fileSF3D}, make sure you have it.")
         logger.info(f"3D SF read from {fileSF3D}")
