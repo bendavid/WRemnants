@@ -243,6 +243,9 @@ class Datagroups(object):
         applySelection=True, fakerateIntegrationAxes=[], forceNonzero=True, preOpMap=None, preOpArgs=None, scaleToNewLumi=1, 
         excludeProcs=None, forceToNominal=[], sumFakesPartial=True
     ):
+        logger.debug("Calling loadHistsForDatagroups()")
+        logger.debug(f"The basename and syst is: {baseName}, {syst}")
+        logger.debug(f"The procsToRead and excludedProcs are: {procsToRead}, {excludeProcs}")
         if not label:
             label = syst if syst else baseName
         # this line is annoying for the theory agnostic, too many processes for signal

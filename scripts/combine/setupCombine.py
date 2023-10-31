@@ -349,9 +349,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                 #customizeNuisanceAttributes={".*AngCoeff4" : {"scale" : 1, "shapeType": "shapeNoConstraint"}},
                 labelsByAxis=["PtVBin", "YVBin", "AngCoeff"],
                 actionMap={
-                        m.name: (lambda h, scale: hh.addHists(
-                            h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], 
-                            hh.scaleHist(h, scale)))
+                        m.name: (lambda h: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], h, scale2=args.scaleNormXsecHistYields))
                         for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
             )
         elif args.unfolding:
