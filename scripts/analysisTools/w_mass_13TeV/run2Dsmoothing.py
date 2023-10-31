@@ -445,15 +445,15 @@ if __name__ == "__main__":
     #
     #sfFolder = data_dir + "/testMuonSF/"
     #effSmoothFile = f"{sfFolder}efficiencies3D_rebinUt2.pkl.lz4"
-    sfFolderTrig = data_dir + "/testMuonSF/"
-    sfFolder = "/home/m/mciprian/SF_vtxAgnostic_10oct2023/"
-    effSmoothFile = "/eos/user/m/mciprian/www/WMassAnalysis/test2Dsmoothing/makeWMCefficiency3D/noMuonCorr_noSF_allProc_noDphiCut_rebinUt2_vtxAgnPfRelIso04_all/efficiencies3D_rebinUt2.pkl.lz4"
+    sfFolder = data_dir + "/testMuonSF/"
+    sfFolderVtxAgn = data_dir + "/testMuonSF/SF_vtxAgnostic/"
+    effSmoothFile = sfFolderVtxAgn + "efficiencies3D_rebinUt2_vtxAgnPfRelIso04.pkl.lz4"
     #
-    inputRootFile = {"iso"          : f"{sfFolder}iso3DSFVQTsingularity.root",
-                     "isonotrig"    : f"{sfFolder}isonotrig3DSFVQTsingularity.root",
-                     "isoantitrig"  : f"{sfFolder}isofailtrig3DSFVQTsingularity.root",
-                     "triggerplus"  : f"{sfFolderTrig}triggerplus3DSFVQTextended.root",
-                     "triggerminus" : f"{sfFolderTrig}triggerminus3DSFVQTextended.root",
+    inputRootFile = {"iso"          : f"{sfFolderVtxAgn}iso3DSFVQTsingularity.root",
+                     "isonotrig"    : f"{sfFolderVtxAgn}isonotrig3DSFVQTsingularity.root",
+                     "isoantitrig"  : f"{sfFolderVtxAgn}isofailtrig3DSFVQTsingularity.root",
+                     "triggerplus"  : f"{sfFolder}triggerplus3DSFVQTextended.root",
+                     "triggerminus" : f"{sfFolder}triggerminus3DSFVQTextended.root",
                      }
 
     parser = argparse.ArgumentParser()
@@ -467,8 +467,19 @@ if __name__ == "__main__":
     parser.add_argument('--utHigh', type=float, default=None, help='Choose maximum uT at which the fit must be run (default uses full range except very last bin which is up to infinity)')
     parser.add_argument('--ptFitRange', type=float, nargs=2, default=[-1, -1], help='Choose pt range for the fit (fit result will be extrapolated to the nominal histogram range for consistency). Specify min and max value, if an edge is -1 (default) the corresponding histogram boundary is used')
     parser.add_argument('--debugPlots', action="store_true", help='Run additional plots for debugging (might become default eventually)')
+    parser.add_argument("--isolationDefinition", choices=["iso04vtxAgn", "iso04"], default="iso04vtxAgn",  help="Isolation type (and corresponding scale factors)")
     args = parser.parse_args()
 
+    if args.isolationDefinition == "iso04":
+        effSmoothFile = sfFolder + "efficiencies3D_rebinUt2.pkl.lz4"
+        #
+        inputRootFile = {"iso"          : f"{sfFolder}iso3DSFVQTextended.root",
+                         "isonotrig"    : f"{sfFolder}isonotrigger3DSFVQTextended.root",
+                         "isoantitrig"  : f"{sfFolder}isofailtrigger3DSFVQTextended.root",
+                         "triggerplus"  : f"{sfFolder}triggerplus3DSFVQTextended.root",
+                         "triggerminus" : f"{sfFolder}triggerminus3DSFVQTextended.root",
+                         }
+    
     ROOT.TH1.SetDefaultSumw2()
 
     if not args.outfilename.endswith(".pkl.lz4"):

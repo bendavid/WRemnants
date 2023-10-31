@@ -31,12 +31,13 @@ def cloneAxis(ax, overflow=False, underflow=False, newName=None):
     return newax
 
 # TODO: change is_w_like for a python enum AnalysisType (see include/defines.h)
-def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSmooth_GtoHout.root",
+def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSmooth_GtoHout_vtxAgnIso.root",
                                         era = None,
                                         what_analysis = ROOT.wrem.AnalysisType.Wmass,
                                         max_pt = np.inf,
                                         isoEfficiencySmoothing = False,
-                                        smooth3D=False):
+                                        smooth3D=False,
+                                        isoDefinition="iso04vtxAgn"):
     
     logger.debug(f"Make efficiency helper smooth")
 
@@ -83,9 +84,13 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
 
     dict_SF3D = None
     if len(eff_types_3D):
-        #fileSF3D = f"{data_dir}/testMuonSF/smoothSF3D_uTm30to100.pkl.lz4"
-        fileSF3D = f"{data_dir}/testMuonSF/smoothSF3D_uTm30to100_vtxAgnIso.pkl.lz4"
-        #fileSF3D = "/eos/user/m/mciprian/www/WMassAnalysis/test2Dsmoothing/withEfficiency/utFit_m30to100_vtxAgnIso/smoothSF3D.pkl.lz4" # TEST
+        if isoDefinition == "iso04vtxAgn":
+            fileSF3D = f"{data_dir}/testMuonSF/smoothSF3D_uTm30to100.pkl.lz4"
+        elif isoDefinition == "iso04vtxAgn":
+            fileSF3D = f"{data_dir}/testMuonSF/smoothSF3D_uTm30to100_vtxAgnIso.pkl.lz4"
+        else:
+            raise NotImplementedError(f"Isolation definition {isoDefinition} not implemented")
+
         if not os.path.isfile(fileSF3D):
             raise IOError(f"Couldn't read 3D SF file {fileSF3D}, make sure you have it.")
         logger.info(f"3D SF read from {fileSF3D}")
