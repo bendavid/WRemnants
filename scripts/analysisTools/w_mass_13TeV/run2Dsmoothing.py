@@ -36,9 +36,10 @@ import wremnants
 logger = logging.setup_logger(__file__, 3, False)
 
 # TODO: might move this function to a common efficiency_util.py script
-def makeAntiSFfromSFandEffi(hsf, heff, stepName):
+def makeAntiSFfromSFandEffi(hsf, heffi, stepName):
     num = hsf.copy()
     den = hsf.copy()
+    heff = heffi.copy()
     num.values()[...] = np.ones_like(hsf.values()) # num = 1
     den = num.copy() # now den is filled with all 1
     num = hh.addHists(num, hh.multiplyHists(hsf, heff, createNew=True), createNew=False, scale2=-1.0) # 1 - SF*effMC
@@ -163,12 +164,30 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
     nEtaBins = hsf.GetNbinsY()
     etaBinsToRun = args.eta if len(args.eta) else range(1, 1 + nEtaBins)
     
+    iptFitLow = 1
+    iptFitHigh = hsf.GetNbinsZ()
+    ptFitRangeLow = args.ptFitRange[0]
+    ptFitRangeHigh = args.ptFitRange[1]
+    ## TODO: be less hardcoded here
+    if step == "isoantitrig":
+        ptFitRangeLow = 26.0
+    
+    if ptFitRangeLow > 0:
+        iptFitLow = sorted((1, hsf.GetZaxis().FindFixBin(ptFitRangeLow + 0.0001), hsf.GetNbinsZ()))[1] # must ensure to pick the bin above the given edge
+    if ptFitRangeHigh > 0:
+        iptFitHigh = sorted((1, hsf.GetZaxis().FindFixBin(ptFitRangeHigh - 0.0001), hsf.GetNbinsZ()))[1] # must ensure to pick the bin below the given edge
+    ptFitEdges = [x for x in ptEdges if x >= hsf.GetZaxis().GetBinLowEdge(iptFitLow) and x <= hsf.GetZaxis().GetBinLowEdge(1+iptFitHigh)]
+    if ptFitRangeLow > 0 or ptFitRangeHigh > 0:
+        logger.warning(f"Step {step}F: fitting this pT range {ptFitEdges}")
+
     # to store the pull versus eta-pt for bins of uT, for some plots
+    # if the fit range is restricted, use the narrower pt range here, consistently with the actually fitted histogram define later on
     hpull_utEtaPt = ROOT.TH3D("hpull_utEtaPt", "",
                               len(utEdges)-1, array('d', utEdges),
                               len(etaEdges)-1, array('d', etaEdges),
-                              len(ptEdges)-1, array('d', ptEdges))
+                              len(ptFitEdges)-1, array('d', ptFitEdges))
 
+    #logger.warning(f"uT binning: {utNbins} bins from {utEdgeLow} to {utEdgeHigh}")
     # extend uT range for plotting purpose, even if eventually the final histogram will be stored in a narrower range
     extendedRange_ut = [min(-50.0, utEdgeLow), max(50.0, utEdgeHigh)]
     extendedRange_ut_nBins = int((extendedRange_ut[1] - extendedRange_ut[0] + 0.001) / utBinWidth)
@@ -259,6 +278,7 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
     for ieta in etaBinsToRun:
     # for ieta in range(1, 2):
         hsf.GetYaxis().SetRange(ieta, ieta)
+        hsf.GetZaxis().SetRange(iptFitLow, iptFitHigh)
         h = hsf.Project3D("zxe")
         h.SetName(f"{hsf.GetName()}_eta{ieta}")
         etaLow = round(hsf.GetYaxis().GetBinLowEdge(ieta), 1)
@@ -404,50 +424,48 @@ def runSmoothing(inputfile, histname, outdir, step, args, effHist=None):
                       lowerPanelHeight=0.0, drawLineTopPanel=1.0,
                       passCanvas=canvas, skipLumi=True)
 
-    # should the following be done for each eta bin as above? At least one could plot things vs pt-ut more easily
     if effHist != None and step in ["iso", "triggerplus", "triggerminus"]:
         # compute antiiso_SF = (1-SF*effMC)/ (1-effMC)
         # first make uT axis consistent
         s = bh.tag.Slicer()
-        histEffi3D_asSF = histEffi3D[{"ut" : s[complex(0,axis_ut.edges[0]):complex(0,axis_ut.edges[-1])]}]
+        histEffi3D_asSF = histEffi3D[{"ut" : s[complex(0,axis_ut.edges[0]):complex(0,0.001+axis_ut.edges[-1])]}]
+        #logger.warning(f"{axis_ut.edges[-1]}    {histEffi3D_asSF.axes[2]}")
         #logger.warning("Resizing ut axis for efficiency to match SF histogram")
         #logger.warning(f"{histEffi3D_asSF.axes}")
         # remember that histSF3D_withStatVars has 4 axes, 4th is the stat variation
-        antiSF = makeAntiSFfromSFandEffi(histSF3D_withStatVars.values, histEffi3D_asSF, step)
+        antiSF = makeAntiSFfromSFandEffi(histSF3D_withStatVars, histEffi3D_asSF, step)
+        return [histSF3D_withStatVars, histEffi3D_asSF, antiSF]
     else:
-        antiSF = None
-        
-    return [histSF3D_withStatVars, histEffi3D if effHist != None else None, antiSF]
+        return [histSF3D_withStatVars,  None, None]
 
 
 if __name__ == "__main__":
 
-    sfFolder = data_dir + "/testMuonSF/"
     # efficiencies made with scripts/analysisTools/w_mass_13TeV/makeWMCefficiency3D.py
     #
-    #effSmoothFile = "/eos/user/m/mciprian/www/WMassAnalysis/test2Dsmoothing/makeWMCefficiency3D/noMuonCorr_noSF_allProc_noDphiCut/efficiencies3D.pkl.lz4"
-    effSmoothFile = f"{sfFolder}efficiencies3D.pkl.lz4"
+    #sfFolder = data_dir + "/testMuonSF/"
+    #effSmoothFile = f"{sfFolder}efficiencies3D_rebinUt2.pkl.lz4"
+    sfFolderTrig = data_dir + "/testMuonSF/"
+    sfFolder = "/home/m/mciprian/SF_vtxAgnostic_10oct2023/"
+    effSmoothFile = "/eos/user/m/mciprian/www/WMassAnalysis/test2Dsmoothing/makeWMCefficiency3D/noMuonCorr_noSF_allProc_noDphiCut_rebinUt2_vtxAgnPfRelIso04_all/efficiencies3D_rebinUt2.pkl.lz4"
     #
-    inputRootFile = {"iso"          : f"{sfFolder}isolation3DSFUT.root",
-                     "isonotrig"    : f"{sfFolder}isonotrigger3DSFVQT.root",
-                     "isoantitrig"  : f"{sfFolder}isofailtrigger3DSFVQT.root",
-                     "triggerplus"  : f"{sfFolder}triggerplus3DSFUT.root",
-                     "triggerminus" : f"{sfFolder}triggerminus3DSFUT.root",
+    inputRootFile = {"iso"          : f"{sfFolder}iso3DSFVQTsingularity.root",
+                     "isonotrig"    : f"{sfFolder}isonotrig3DSFVQTsingularity.root",
+                     "isoantitrig"  : f"{sfFolder}isofailtrig3DSFVQTsingularity.root",
+                     "triggerplus"  : f"{sfFolderTrig}triggerplus3DSFVQTextended.root",
+                     "triggerminus" : f"{sfFolderTrig}triggerminus3DSFVQTextended.root",
                      }
-    
+
     parser = argparse.ArgumentParser()
-    #parser.add_argument('inputfile',  type=str, nargs=1, help='input root file with histogram')
-    #parser.add_argument('histname',  type=str, nargs=1, help='Histogram name to read from the file')
     parser.add_argument('outdir', type=str, nargs=1, help='output directory to save things')
-    #parser.add_argument('step', type=str, nargs=1, help='Step, also to name output histogram (should be parsed from input file though)')
     parser.add_argument('-n', '--outfilename', type=str, default='smoothSF3D.pkl.lz4', help='Output file name, extension must be pkl.lz4, which is automatically added if no extension is given')
     parser.add_argument('--eta', type=int, nargs="*", default=[], help='Select some eta bins (ID goes from 1 to Neta')
     parser.add_argument('--polDegree', type=int, nargs=2, default=[2, 3], help='Select degree of polynomial for 2D smoothing (uT-pT)')
     parser.add_argument('--plotEigenVar', action="store_true", help='Plot eigen variations (it actually produces histogram ratios alt/nomi)')
     parser.add_argument('-p', '--postfix', type=str, default="", help='Postfix for plot names (can be the step name)')
     parser.add_argument('-s', '--step', type=str, nargs="*", default=[], choices=list(inputRootFile.keys()), help='Do only these steps (default uses all)')
-    parser.add_argument('--extended', action="store_true", help='Use SF with uT range extended above +30 GeV')
     parser.add_argument('--utHigh', type=float, default=None, help='Choose maximum uT at which the fit must be run (default uses full range except very last bin which is up to infinity)')
+    parser.add_argument('--ptFitRange', type=float, nargs=2, default=[-1, -1], help='Choose pt range for the fit (fit result will be extrapolated to the nominal histogram range for consistency). Specify min and max value, if an edge is -1 (default) the corresponding histogram boundary is used')
     parser.add_argument('--debugPlots', action="store_true", help='Run additional plots for debugging (might become default eventually)')
     args = parser.parse_args()
 
@@ -461,29 +479,17 @@ if __name__ == "__main__":
             logger.info(f"Adding pkl.lz4 extension for output file name {args.outfilename}")
             args.outfilename += ".pkl.lz4"
 
-    if args.extended:
-        #effSmoothFile = "/eos/user/m/mciprian/www/WMassAnalysis/test2Dsmoothing/makeWMCefficiency3D/noMuonCorr_noSF_allProc_noDphiCut_rebinUt2/efficiencies3D_rebinUt2.pkl.lz4"
-        effSmoothFile = f"{sfFolder}efficiencies3D_rebinUt2.pkl.lz4"
-        #
-        args.outfilename = args.outfilename.replace(".pkl.lz4", "_extended.pkl.lz4")
-        inputRootFile = {"iso"          : f"{sfFolder}iso3DSFVQTextended.root",
-                         "isonotrig"    : f"{sfFolder}isonotrigger3DSFVQTextended.root",
-                         "isoantitrig"  : f"{sfFolder}isofailtrigger3DSFVQTextended.root",
-                         "triggerplus"  : f"{sfFolder}triggerplus3DSFVQTextended.root",
-                         "triggerminus" : f"{sfFolder}triggerminus3DSFVQTextended.root",
-                         }
-        
     with lz4.frame.open(effSmoothFile) as fileEff:
         allMCeff = pickle.load(fileEff)
 
     effHist = {}
-    for step in ["iso", "isonotrig", "isoantitrig", "triggerplus", "triggerminus"]:
+    for step in ["iso", "triggerplus", "triggerminus"]:
         effHist[step] = allMCeff[f"Wmunu_MC_eff_{step}_etaptut"]    
-        
+
     work = []
-    work.append([inputRootFile["iso"],          "SF3D_nominal_iso" if args.extended else "SF3D_nominal_isolation",     "iso", effHist["iso"]])
-    work.append([inputRootFile["isonotrig"],    "SF3D_nominal_isonotrigger",  "isonotrig", None]) # , effHist["isonotrig"]])
-    work.append([inputRootFile["isoantitrig"],  "SF3D_nominal_isofailtrigger",  "isoantitrig", None]) # , effHist["isoantitrig"]])
+    work.append([inputRootFile["iso"],          "SF3D_nominal_iso",     "iso", effHist["iso"]])
+    work.append([inputRootFile["isonotrig"],    "SF3D_nominal_isonotrig",  "isonotrig", None]) # , effHist["isonotrig"]])
+    work.append([inputRootFile["isoantitrig"],  "SF3D_nominal_isofailtrig",  "isoantitrig", None]) # , effHist["isoantitrig"]])
     work.append([inputRootFile["triggerplus"],  "SF3D_nominal_trigger_plus",  "triggerplus", effHist["triggerplus"]])
     work.append([inputRootFile["triggerminus"], "SF3D_nominal_trigger_minus", "triggerminus", effHist["triggerminus"]])
 

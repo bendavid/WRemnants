@@ -48,7 +48,7 @@ ROOT.PyConfig.IgnoreCommandLineOptions = True
 #from utility import *
 from scripts.analysisTools.plotUtils.utility import *
 ## TODO: move this script to scripts/analysisTools/w_mass_13TeV/
-from scripts.analysisTools.w_mass_13TeV.test2Dsmoothing import makeAntiSFfromSFandEffi
+from scripts.analysisTools.w_mass_13TeV.run2Dsmoothing import makeAntiSFfromSFandEffi
 
 import wremnants
 
@@ -172,7 +172,7 @@ def getCoordinateNDC(x, canvas, vert=False):
         return (x - canvas.GetX1()) / (canvas.GetX2() - canvas.GetX1())
 
 
-def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit=True, 
+def fitTurnOnTF(histo, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit=True,
                 step=None,
                 fitRange=None,
                 hist_reducedChi2=None,
@@ -180,7 +180,7 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
                 etabins = [],
                 widthPtSmooth=0.2,
                 hist_nomiAndAlt_etapt=None,
-                histAlt = None,
+                histoAlt = None,
                 efficiencyFitPolDegree=4,
                 addCurve=None,
                 addCurveLegEntry=""
@@ -193,7 +193,7 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
     if charge == "plus": chargeText = "positive"
     if charge == "minus": chargeText = "negative"
     
-    originalMaxPt = hist.GetXaxis().GetBinLowEdge(1+hist.GetNbinsX())
+    originalMaxPt = histo.GetXaxis().GetBinLowEdge(1+histo.GetNbinsX())
 
     outdir = "{out}{mc}/".format(out=outname,mc=mc)
     createPlotDirAndCopyPhp(outdir)
@@ -222,50 +222,52 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
     pad2.SetGridy(1)
     pad2.SetFillStyle(0)
     
-    hist.SetLineColor(ROOT.kBlack)
-    hist.SetMarkerColor(ROOT.kBlack)
-    hist.SetMarkerStyle(20)
-    hist.SetMarkerSize(1)
+    histo.SetLineColor(ROOT.kBlack)
+    histo.SetMarkerColor(ROOT.kBlack)
+    histo.SetMarkerStyle(20)
+    histo.SetMarkerSize(1)
     
-    hist.GetXaxis().SetLabelSize(0)
-    hist.GetXaxis().SetTitle("")
-    # hist.GetXaxis().SetTitle(f"{chargeText} muon p_{{T}} (GeV)")
-    # hist.GetXaxis().SetTitleOffset(1.1)
-    # hist.GetXaxis().SetTitleSize(0.05)
-    # hist.GetXaxis().SetLabelSize(0.04)
+    histo.GetXaxis().SetLabelSize(0)
+    histo.GetXaxis().SetTitle("")
 
-    maxFitRange = hist.GetXaxis().GetBinLowEdge(1+hist.GetNbinsX())
-    minFitRange = hist.GetXaxis().GetBinLowEdge(1)
+    maxFitRange = histo.GetXaxis().GetBinLowEdge(1+histo.GetNbinsX())
+    minFitRange = histo.GetXaxis().GetBinLowEdge(1)
+    originalMaxFitRange = maxFitRange
+    originalMinFitRange = minFitRange
+    hasNarrowerFitRange = False
+    nHistPointsForChi2 = histo.GetNbinsX()
     if fitRange != None:
+        hasNarrowerFitRange = True
         if fitRange[1] > 0:
             maxFitRange = fitRange[1]
         if fitRange[0] > 0:
             minFitRange = fitRange[0]
-    hist.GetXaxis().SetRangeUser(minFitRange, maxFitRange)
+        nHistPointsForChi2 = 1 + histo.GetXaxis().FindFixBin(maxFitRange-0.001) - histo.GetXaxis().FindFixBin(minFitRange+0.001)
+    #histo.GetXaxis().SetRangeUser(minFitRange, maxFitRange)
 
     if mc == "SF":
-        hist.GetYaxis().SetTitle("Data/MC scale factor")
+        histo.GetYaxis().SetTitle("Data/MC scale factor")
     else:
-        hist.GetYaxis().SetTitle("{mc} efficiency".format(mc=mc))
-    hist.GetYaxis().SetTitleOffset(1.45)
-    hist.GetYaxis().SetTitleSize(0.05)
-    hist.GetYaxis().SetLabelSize(0.04)
-    if histAlt:
-        histAlt.SetStats(0)
-        histAlt.SetLineColor(ROOT.kGray+2)
-        histAlt.SetMarkerColor(ROOT.kGray+2)
-        histAlt.SetMarkerStyle(ROOT.kOpenCircle)
-        histAlt.SetMarkerSize(1)
-        miny,maxy = getMinMaxMultiHisto([hist, histAlt], sumError=True)
+        histo.GetYaxis().SetTitle("{mc} efficiency".format(mc=mc))
+    histo.GetYaxis().SetTitleOffset(1.45)
+    histo.GetYaxis().SetTitleSize(0.05)
+    histo.GetYaxis().SetLabelSize(0.04)
+    if histoAlt:
+        histoAlt.SetStats(0)
+        histoAlt.SetLineColor(ROOT.kGray+2)
+        histoAlt.SetMarkerColor(ROOT.kGray+2)
+        histoAlt.SetMarkerStyle(ROOT.kOpenCircle)
+        histoAlt.SetMarkerSize(1)
+        miny,maxy = getMinMaxMultiHisto([histo, histoAlt], sumError=True)
     else:
-        miny,maxy = getMinMaxHisto(hist, sumError=True)
+        miny,maxy = getMinMaxHisto(histo, sumError=True)
     offset = 0.1 * (maxy - miny)
     upOffset = offset * (3.5 if doingSF else 3.5)
     miny -= offset
     maxy += upOffset
-    hist.GetYaxis().SetRangeUser(miny, maxy)
-    hist.SetStats(0)
-    hist.Draw("EP")
+    histo.GetYaxis().SetRangeUser(miny, maxy)
+    histo.SetStats(0)
+    histo.Draw("EP")
     ##
     ## TODO
     ## Unlike root, tensorflow fits use the bin centers to run the actual fit, and there is no concept of fit range
@@ -275,9 +277,14 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
     ###################
     # fits
     ####################
-    boost_hist = narf.root_to_hist(hist)
-    if histAlt:
-        boost_hist_alt = narf.root_to_hist(histAlt)
+    boost_hist = narf.root_to_hist(histo)
+    s = hist.tag.Slicer()
+    if hasNarrowerFitRange:
+        boost_hist = boost_hist[{0 : s[complex(0,minFitRange):complex(0,maxFitRange+0.001)]}]
+    if histoAlt:
+        boost_hist_alt = narf.root_to_hist(histoAlt)
+        if hasNarrowerFitRange:
+            boost_hist_alt = boost_hist_alt[{0 : s[complex(0,minFitRange):complex(0,maxFitRange+0.001)]}]
 
     ###############################################################
     fitFunction = None
@@ -297,6 +304,7 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
                 pol2_tf_scaled = partial(pol2_root, xLowVal=minFitRange, xFitRange=xFitRange)
             params = np.array([1.0, 0.0, 0.0])
             res_tf1_pol2 = narf.fitutils.fit_hist(boost_hist, pol2_tf_scaled, params)
+            # for plotting purpose define the TF1 in the original range
             tf1_pol2 = ROOT.TF1("tf1_pol2", pol2_tf_scaled, minFitRange, maxFitRange, len(params))
             tf1_pol2.SetParameters( np.array( res_tf1_pol2["x"], dtype=np.float64 ) )
             tf1_pol2.SetLineWidth(3)
@@ -307,11 +315,11 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
                 "pol2_tf" : {
                     "func" : tf1_pol2,
                     "leg"  : "Pol2",
-                    "hist": hist,
+                    "hist": histo,
                 }
             }
             defaultFunc = "pol2_tf"
-            if histAlt:
+            if histoAlt:
                 params = np.array([1.0, 0.0, 0.0])
                 res_tf1_pol2_alt = narf.fitutils.fit_hist(boost_hist_alt, pol2_tf_scaled, params)
                 tf1_pol2_alt = ROOT.TF1("tf1_pol2_alt", pol2_tf_scaled, minFitRange, maxFitRange, len(params))
@@ -321,7 +329,7 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
                 fitres_TF["pol2_alt_tf"] = res_tf1_pol2_alt
                 fitFunction["pol2_alt_tf"] = {"func" : tf1_pol2_alt,
                                               "leg" : "dataAltSig",
-                                              "hist": histAlt,
+                                              "hist": histoAlt,
                 }
         else:
             global pol3_tf_scaled
@@ -340,18 +348,18 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
             # tf1_pol3_test.SetLineWidth(5)
             # tf1_pol3_test.SetLineColor(ROOT.kBlue)
             # fitopt = "FMBRQS+" # add FM if using Minuit   
-            # hist.Fit(tf1_pol3_test, fitopt)
+            # histo.Fit(tf1_pol3_test, fitopt)
 
             fitres_TF = {"pol3_tf" : res_tf1_pol3}
             fitFunction = {
                 "pol3_tf" : {
                     "func" : tf1_pol3,
                     "leg"  : "Pol3",
-                    "hist": hist,
+                    "hist": histo,
                 }
             }
             defaultFunc = "pol3_tf"
-            if histAlt:
+            if histoAlt:
                 params = np.array([1.0, 0.0, 0.0, 0.0])
                 res_tf1_pol3_alt = narf.fitutils.fit_hist(boost_hist_alt, pol3_tf_scaled, params)
                 tf1_pol3_alt = ROOT.TF1("tf1_pol3_alt", pol3_tf_scaled, minFitRange, maxFitRange, len(params))
@@ -361,7 +369,7 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
                 fitres_TF["pol3_alt_tf"] = res_tf1_pol3_alt
                 fitFunction["pol3_alt_tf"] = {"func" : tf1_pol3_alt,
                                               "leg" : "dataAltSig",
-                                              "hist": histAlt,
+                                              "hist": histoAlt,
                 }
                 
         ###
@@ -381,7 +389,7 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
         tf1_erf.SetLineColor(ROOT.kBlue)
             
         if doSpline:
-            tf1_polN = ROOT.TSpline3(hist, "b1e1")
+            tf1_polN = ROOT.TSpline3(histo, "b1e1")
             tf1_polN.SetLineWidth(3)
             tf1_polN.SetLineColor(ROOT.kRed+2)
             # tf1_polN.Draw("pclsame")
@@ -405,20 +413,20 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
             "polN_tf" : {
                 "func" : tf1_polN,
                 "leg"  : "Spline" if doSpline else f"Pol{efficiencyFitPolDegree}",
-                "hist": hist,
+                "hist": histo,
 
             },
             "erf" : {
                 "func" : tf1_erf,
                 "leg"  : "1-Erf" if step == "antiiso" else "Erf",
-                "hist": hist,
+                "hist": histo,
                 
             },
         }
         defaultFunc = "polN_tf"
-        if histAlt:
+        if histoAlt:
             if doSpline:
-                tf1_polN_alt = ROOT.TSpline3(hist, "b1e1")
+                tf1_polN_alt = ROOT.TSpline3(histo, "b1e1")
                 tf1_polN_alt.SetLineWidth(2)
                 tf1_polN_alt.SetLineColor(ROOT.kAzure+2)
                 # tf1_polN.Draw("pclsame")
@@ -433,7 +441,7 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
             fitres_TF["polN_alt_tf"] = res_tf1_polN_alt
             fitFunction["polN_alt_tf"] = {"func" : tf1_polN_alt,
                                           "leg" : "dataAltSig",
-                                          "hist": histAlt,
+                                          "hist": histoAlt,
             }
 
         if mc == "MC":
@@ -464,15 +472,18 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
         h = fitFunction[fr]["hist"]
         for ib in range(1, 1+h.GetNbinsX()):
             pt = h.GetXaxis().GetBinCenter(ib)
+            # if the fit range was narrower than the histogram original range, don't use points outside the range
+            if pt < minFitRange or pt > maxFitRange:
+                continue
             item = (h.GetBinContent(ib) - fitFunction[fr]["func"].Eval(pt))/h.GetBinError(ib)
             manualChi2 += item * item
         fitChi2 = fitres_TF[fr]["loss_val"]
         if abs(manualChi2 - fitChi2) > 0.01:
-            print(f"   ====> {fr}: manual/fit chi2  = {manualChi2}/{fitChi2}")
+            print(f"-----> {fr}: manual/fit chi2  = {manualChi2}/{fitChi2}")
             
     npar = 0 if doSpline else fitFunction[defaultFunc]["func"].GetNpar()
     
-    hband = ROOT.TH1D("hband", "", int(math.ceil((maxFitRange-minFitRange))/widthPtSmooth), minFitRange, maxFitRange)
+    hband = ROOT.TH1D("hband", "", int(math.ceil((originalMaxFitRange-originalMinFitRange))/widthPtSmooth), originalMinFitRange, originalMaxFitRange)
     if hist_nomiAndAlt_etapt is not None and hband.GetNbinsX() != hist_nomiAndAlt_etapt.GetNbinsY():
         print("ERROR: hband and hist_nomiAndAlt_etapt have a different number of pt bins ({hband.GetNbinsX()} and {hist_nomiAndAlt_etapt.GetNbinsY()}), please check!")
         quit()
@@ -536,7 +547,7 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
         hband.SetBinError(ib, err)
         if hist_nomiAndAlt_etapt is not None:
             hist_nomiAndAlt_etapt.SetBinError(key+1, ib, 1, err)
-            if histAlt:
+            if histoAlt:
                 for f in fitFunction.keys():
                     if "_alt_tf" in f:
                         funcVal = max(0.001, fitFunction[f]["func"].Eval(pt))
@@ -558,12 +569,12 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
         #addCurve.Draw("C SAME")
         #addCurve.Draw("HISTSAME")
         chi2curve = 0.0
-        for ib in range(1, 1+hist.GetNbinsX()):
-            item = (hist.GetBinContent(ib) - addCurve.GetBinContent(addCurve.GetXaxis().FindFixBin(hist.GetBinCenter(ib))))/hist.GetBinError(ib)
+        for ib in range(1, 1+histo.GetNbinsX()):
+            item = (histo.GetBinContent(ib) - addCurve.GetBinContent(addCurve.GetXaxis().FindFixBin(histo.GetBinCenter(ib))))/histo.GetBinError(ib)
             chi2curve += item * item
-    hist.Draw("EPSAME")
-    if histAlt:
-        histAlt.Draw("EPSAME")
+    histo.Draw("EPSAME")
+    if histoAlt:
+        histoAlt.Draw("EPSAME")
 
     ## draw curves if needed on top of the band
     # colors_alt = [ROOT.kBlue, ROOT.kMagenta, ROOT.kCyan+1, ROOT.kOrange+2, ROOT.kGreen+2, ROOT.kViolet, ROOT.kSpring+9, ROOT.kPink]
@@ -607,7 +618,7 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
             ndof = 1
         else:
             chi2 = fitres_TF[f]["loss_val"]
-            ndof = int(hist.GetNbinsX() - fitFunction[f]["func"].GetNpar())
+            ndof = int(nHistPointsForChi2 - fitFunction[f]["func"].GetNpar())
             legEntry += f"   #chi^{{2}} = {round(chi2,1)} / {ndof}"
             chi2prob = ROOT.TMath.Prob(chi2, ndof)
             if chi2prob < 0.05:
@@ -618,15 +629,15 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
                     sign = "<"
                 legEntry += " (prob {} {}%)".format(sign, round(perc_chi2prob,1))
         if f == defaultFunc:
-            hNomiForLegend.SetMarkerColor(hist.GetMarkerColor())
-            hNomiForLegend.SetMarkerStyle(hist.GetMarkerStyle())
+            hNomiForLegend.SetMarkerColor(histo.GetMarkerColor())
+            hNomiForLegend.SetMarkerStyle(histo.GetMarkerStyle())
             hNomiForLegend.SetFillColor(hband.GetFillColor())
             hNomiForLegend.SetLineColor(fitFunction[f]["func"].GetLineColor())
             leg.AddEntry(hNomiForLegend, legEntry, 'EPLF')  
             reducedChi2 = chi2/ndof
         elif "_alt_tf" in f:
-            hAltForLegend.SetMarkerColor(histAlt.GetMarkerColor())
-            hAltForLegend.SetMarkerStyle(histAlt.GetMarkerStyle())
+            hAltForLegend.SetMarkerColor(histoAlt.GetMarkerColor())
+            hAltForLegend.SetMarkerStyle(histoAlt.GetMarkerStyle())
             hAltForLegend.SetLineColor(fitFunction[f]["func"].GetLineColor())            
             leg.AddEntry(hAltForLegend, legEntry, 'EPL')
         else:
@@ -660,17 +671,17 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
     # lat.DrawLatex(xmin, yhi-0.05, lineChi2);
 
     ### Draw band to highlight acceptance
-    hAcceptBand = copy.deepcopy(hist.Clone("hAcceptBand"))
-    yMaxBand = downLeg * (canvas.GetY2() - canvas.GetY1()) + canvas.GetY1()
-    for i in range(1, 1 + hAcceptBand.GetNbinsX()):
-        if hAcceptBand.GetBinCenter(i) > 26.0 and hAcceptBand.GetBinCenter(i) < 55.0:
-            hAcceptBand.SetBinContent(i, 0.0)
-            hAcceptBand.SetBinError(i, 0.0)
-        else:
-            hAcceptBand.SetBinContent(i, yMaxBand)
-            hAcceptBand.SetBinError(i, 0.0)
-    hAcceptBand.SetFillColorAlpha(ROOT.kYellow+1, 0.5)
+    hAcceptBand = copy.deepcopy(histo.Clone("hAcceptBand"))
     if step != "tracking":
+        yMaxBand = downLeg * (canvas.GetY2() - canvas.GetY1()) + canvas.GetY1()
+        for i in range(1, 1 + hAcceptBand.GetNbinsX()):
+            if hAcceptBand.GetBinCenter(i) > 26.0 and hAcceptBand.GetBinCenter(i) < 55.0:
+                hAcceptBand.SetBinContent(i, 0.0)
+                hAcceptBand.SetBinError(i, 0.0)
+            else:
+                hAcceptBand.SetBinContent(i, yMaxBand)
+                hAcceptBand.SetBinError(i, 0.0)
+        hAcceptBand.SetFillColorAlpha(ROOT.kYellow+1, 0.5)
         hAcceptBand.Draw("HIST SAME")
     ########################################
     
@@ -678,7 +689,7 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
     pad2.Draw()
     pad2.cd()
 
-    frame = hist.Clone("frame")
+    frame = histo.Clone("frame")
     frame.SetTitle("")
     frame.GetXaxis().SetTitleOffset(1.2)
     frame.GetXaxis().SetTitleSize(0.05)
@@ -733,7 +744,7 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
             ratioCurve.SetBinContent(ib, addCurve.GetBinContent(addCurve.GetXaxis().FindFixBin(xval))/ den_noerr.GetBinContent(ib))
         
     # now data which is less granular
-    dataRatio = copy.deepcopy(hist.Clone("dataRatio"))
+    dataRatio = copy.deepcopy(histo.Clone("dataRatio"))
     for ib in range(1, 1 + dataRatio.GetNbinsX()):
         ibinDen = hband.GetXaxis().FindFixBin(dataRatio.GetBinCenter(ib))
         denVal = hband.GetBinContent(ibinDen)
@@ -777,18 +788,18 @@ def fitTurnOnTF(hist, key, outname, mc, channel="el", hist_chosenFunc=0, drawFit
     # ###########
 
     ### Draw band to highlight acceptance
-    hAcceptBandRatio = copy.deepcopy(hist.Clone("hAcceptBandRatio"))
-    hAcceptBandRatio.Reset("ICESM")
-    yMaxBand = maxy
-    for i in range(1, 1 + hAcceptBandRatio.GetNbinsX()):
-        if hAcceptBandRatio.GetBinCenter(i) > 26.0 and hAcceptBandRatio.GetBinCenter(i) < 55.0:
-            hAcceptBandRatio.SetBinContent(i, 0.0)
-            hAcceptBandRatio.SetBinError(i, 0.0)
-        else:
-            hAcceptBandRatio.SetBinContent(i, yMaxBand)
-            hAcceptBandRatio.SetBinError(i, 0.0)
-    hAcceptBandRatio.SetFillColorAlpha(ROOT.kYellow+1, 0.5)
+    hAcceptBandRatio = copy.deepcopy(histo.Clone("hAcceptBandRatio"))
     if step != "tracking":
+        hAcceptBandRatio.Reset("ICESM")
+        yMaxBand = maxy
+        for i in range(1, 1 + hAcceptBandRatio.GetNbinsX()):
+            if hAcceptBandRatio.GetBinCenter(i) > 26.0 and hAcceptBandRatio.GetBinCenter(i) < 55.0:
+                hAcceptBandRatio.SetBinContent(i, 0.0)
+                hAcceptBandRatio.SetBinError(i, 0.0)
+            else:
+                hAcceptBandRatio.SetBinContent(i, yMaxBand)
+                hAcceptBandRatio.SetBinError(i, 0.0)
+        hAcceptBandRatio.SetFillColorAlpha(ROOT.kYellow+1, 0.5)
         hAcceptBandRatio.Draw("HIST SAME")
     ########################################
     
@@ -925,6 +936,7 @@ minmaxSF = {"trigger"      : "0.65,1.15",
             "isoplus"      : "0.975,1.025",
             "isominus"     : "0.975,1.025",
             "isonotrig"    : "0.97,1.03",
+            "isoantitrig"  : "0.80,1.3",
             # usually one doesn't smooth antiiso efficiencies, they come directly from the iso ones after smoothing
             "antiiso"      : "0.6,1.25",
             "antiisonotrig": "0.6,1.25",
@@ -1013,7 +1025,7 @@ if __name__ == "__main__":
     # utility option to print commands to do all files
     parser.add_argument('-d',  '--dryRun', action='store_true', help='Do not execute commands, just print them')
     parser.add_argument(     '--run-all', dest='runAll', action="store_true", help='Make and run commands to run all steps specified in --merge-steps')
-    parser.add_argument(     '--do-steps', dest='doSteps', nargs='+', default=["isonotrig" "iso" "triggerplus" "triggerminus" "idipplus" "idipminus" "trackingplus" "trackingminus" "recoplus" "recominus"], choices=list(minmaxSF.keys()), help='Working points to smooth when running --run-all or --do-merge')
+    parser.add_argument(     '--do-steps', dest='doSteps', nargs='+', default=["isoantitrig", "isonotrig" "iso" "triggerplus" "triggerminus" "idipplus" "idipminus" "trackingplus" "trackingminus" "recoplus" "recominus"], choices=list(minmaxSF.keys()), help='Working points to smooth when running --run-all or --do-merge')
     # option to merge files once they exist
     parser.add_argument(     '--do-merge', dest='doMerge', action="store_true", help='Merge efficiency files if they all exist')
     
@@ -1031,14 +1043,6 @@ if __name__ == "__main__":
 
     if args.doMerge:
         mergeFiles(args)
-        quit()
-
-    ### TODO:
-    ### options to set fit range and some histogram definition in the fit function are not always consistent.
-    ### also, one should slice the boost histogram used for the fit, but it is not implemented yet
-    ### If one uses the full range everything is fine, otherwise it should be checked
-    if any(x > 0 for x in args.ptFitRange):
-        print("WARNING: using a restricted fit range is currently not implemented.")
         quit()
 
     if any(x in args.step for x in ["plus", "minus"]):
@@ -1248,7 +1252,7 @@ if __name__ == "__main__":
                                       etabins=etabins,
                                       widthPtSmooth=args.widthPt,
                                       hist_nomiAndAlt_etapt=hist_effData_nomiAndAlt_etapt,
-                                      histAlt=hdataptAlt[key],
+                                      histoAlt=hdataptAlt[key],
                                       efficiencyFitPolDegree=args.fitPolDegreeEfficiency
 
             )
@@ -1282,7 +1286,7 @@ if __name__ == "__main__":
                                   etabins=etabins,
                                   widthPtSmooth=args.widthPt,
                                   hist_nomiAndAlt_etapt=hist_SF_nomiAndAlt_etapt,
-                                  histAlt=hsfptAlt[key],
+                                  histoAlt=hsfptAlt[key],
                                   addCurve=smoothSFfromEffiTMP,
                                   addCurveLegEntry=f"SF from pol{args.fitPolDegreeEfficiency} effi"
         )
@@ -1595,7 +1599,7 @@ if __name__ == "__main__":
                                       charge=args.charge,
                                       etabins=etabins,
                                       widthPtSmooth=args.widthPt,
-                                      histAlt=hsfptAlt_anti[key],
+                                      histoAlt=hsfptAlt_anti[key],
                                       addCurve=antiisoTMP,
                                       addCurveLegEntry=f"SF from pol{args.fitPolDegreeEfficiency} {args.step} effi"
             )
@@ -1660,15 +1664,15 @@ if __name__ == "__main__":
         # broadcast effi in 2D to match 3D dimensionality of SF histogram (with 3rd axis containing nomi-stat-syst)
         # TODO: can surely do all in boost without converting to root and having to use root based methods
         hist_postfix_anti = f"_{args.era}_anti{args.step}_{args.charge}"
-        histEffi2D_etapt_root_broadcast3D = copy.deepcopy(hist_SF_nomiAndAlt_etapt.Clone(f"histEffi2D_etapt_root_broadcast3D_{hist_postfix_anti}"))
+        histEffi2D_etapt_root_broadcast3D = copy.deepcopy(hist_SF_nomiAndAlt_etapt.Clone(f"histEffi2D_etapt_root_broadcast3D{hist_postfix_anti}"))
         histEffi2D_etapt_root_broadcast3D.Reset("ICESM")
         ROOT.wrem.broadCastTH2intoTH3(histEffi2D_etapt_root_broadcast3D, histEffi2D_etapt_root)
         histEffi2D_etapt_boost_broadcast3D = narf.root_to_hist(histEffi2D_etapt_root_broadcast3D, axis_names = ["effi eta", "effi pt", "nomi-statUpDown-syst"])
         hanti_SF_nomiAndAlt_etapt_boost = makeAntiSFfromSFandEffi(hist_SF_nomiAndAlt_etapt_boost, histEffi2D_etapt_boost_broadcast3D, args.step)
         # convert back to root and set name
         hanti_SF_nomiAndAlt_etapt = narf.hist_to_root(hanti_SF_nomiAndAlt_etapt_boost)
-        hanti_SF_nomiAndAlt_etapt.SetName(f"SF_nomiAndAlt_{hist_postfix_anti}")
-        hanti_SF_nomiAndAlt_etapt.SetTitle(f"SF_nomiAndAlt_{hist_postfix_anti}")
+        hanti_SF_nomiAndAlt_etapt.SetName(f"SF_nomiAndAlt{hist_postfix_anti}")
+        hanti_SF_nomiAndAlt_etapt.SetTitle(f"SF_nomiAndAlt{hist_postfix_anti}")
         ##
         ## some plots of nominal antiSF from SF smoothing with W MC efficiencies (comparing to direct antiSF smoothing)
         # get antiiso SF from smooth antiSF, with fine pt bins
@@ -1702,7 +1706,7 @@ if __name__ == "__main__":
                                       charge=args.charge,
                                       etabins=etabins,
                                       widthPtSmooth=args.widthPt,
-                                      histAlt=hsfptAlt_anti[key],
+                                      histoAlt=hsfptAlt_anti[key],
                                       addCurve=antiisoTMP,
                                       addCurveLegEntry=f"From {args.step} SF and W MC effi"
             )
