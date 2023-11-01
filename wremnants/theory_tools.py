@@ -13,7 +13,7 @@ narf.clingutils.Declare('#include "theoryTools.h"')
 
 # integer axis for -1 through 7
 axis_helicity = hist.axis.Integer(
-    -1, 9, name="helicity", overflow=False, underflow=False
+    -1, 8, name="helicity", overflow=False, underflow=False
 )
 
 # this puts the bin centers at 0.5, 1.0, 2.0
@@ -408,19 +408,6 @@ def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_cen
 
     return res
 
-def scale_angular_moments(hist_moments_scales, sumW2=False, createNew=False):
-    # using definition from arxiv:1606.00689 to align with ATLAS
-    scales = np.array([1.,20./3.,5.,20.,4.,4.,5.,5.,4.,1.])
-    
-    hel_idx = hist_moments_scales.axes.name.index("helicity")
-    scaled_vals = np.moveaxis(hist_moments_scales.view(flow=True), hel_idx, -1)*scales
-    if createNew:
-        hnew = hist.Hist(*hist_moments_scales.axes, storage = hist.storage.Weight() if sumW2 else hist.storage.Double())
-    else:
-        hnew = hist_moments_scales
-    hnew.view(flow=True)[...] = np.moveaxis(scaled_vals, -1, hel_idx) 
-    return hnew
-
 def replace_by_neighbors(vals, replace):
     if np.count_nonzero(replace) == vals.size:
         raise ValueError("Cannot replace all values with nearest non-zero neighbour")
@@ -428,15 +415,13 @@ def replace_by_neighbors(vals, replace):
     indices = ndimage.distance_transform_edt(replace, return_distances=False, return_indices=True)
     return vals[tuple(indices)]
 
-def moments_to_angular_coeffs(hist_moments_scales, cutoff=1e-5, sumW2=False):
-    hasSumW2 = sumW2 or hist_moments_scales._storage_type == hist.storage.Weight
-
+def moments_to_angular_coeffs(hist_moments_scales, cutoff=1e-5):
     if hist_moments_scales.empty():
        raise ValueError("Cannot make coefficients from empty hist")
     # broadcasting happens right to left, so move to rightmost then move back
     hel_ax = hist_moments_scales.axes["helicity"]
     hel_idx = hist_moments_scales.axes.name.index("helicity")
-    vals = np.moveaxis(scale_angular_moments(hist_moments_scales, hasSumW2).view(flow=True), hel_idx, -1)
+    vals = np.moveaxis(hist_moments_scales.view(flow=True), hel_idx, -1)
     values = vals.value if hasattr(vals,"value") else vals
     
     # select constant term, leaving dummy axis for broadcasting
@@ -444,16 +429,11 @@ def moments_to_angular_coeffs(hist_moments_scales, cutoff=1e-5, sumW2=False):
     norm_vals = values[...,unpol_idx:unpol_idx+1]
     norm_vals = np.where(np.abs(norm_vals) < cutoff, np.ones_like(norm_vals), norm_vals)
 
-    # using definition from arxiv:1606.00689 to align with ATLAS
-    offsets = np.array([0.,2./3,0.,0.,0.,0., 0.,0.,0.,0.])
+    coeffs = vals / norm_vals
 
-    coeffs = vals / norm_vals + offsets
-
-    # replace values in zero-xsec regions (otherwise A0 is spuriously set from offset)
-    coeffs = np.where(np.abs(values) < cutoff, np.full_like(vals, hist.accumulators.WeightedSum(0,0) if hasSumW2 else 0), coeffs)
     coeffs = np.moveaxis(coeffs, -1, hel_idx)
 
-    hist_coeffs_scales = hist.Hist(*hist_moments_scales.axes, storage = hist.storage.Weight() if hasSumW2 else hist.storage.Double(),
+    hist_coeffs_scales = hist.Hist(*hist_moments_scales.axes, storage = hist_moments_scales._storage_type(),
         name = "hist_coeffs_scales", data = coeffs
     )
 
