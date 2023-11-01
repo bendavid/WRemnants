@@ -31,7 +31,7 @@ def cloneAxis(ax, overflow=False, underflow=False, newName=None):
     return newax
 
 # TODO: change is_w_like for a python enum AnalysisType (see include/defines.h)
-def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSmooth_GtoHout_vtxAgnIso.root",
+def make_muon_efficiency_helpers_smooth(filename = data_dir + "/muonSF/allSmooth_GtoHout_vtxAgnIso.root",
                                         era = None,
                                         what_analysis = ROOT.wrem.AnalysisType.Wmass,
                                         max_pt = np.inf,
@@ -85,9 +85,9 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSm
     dict_SF3D = None
     if len(eff_types_3D):
         if isoDefinition == "iso04vtxAgn":
-            fileSF3D = f"{data_dir}/testMuonSF/smoothSF3D_uTm30to100.pkl.lz4"
+            fileSF3D = f"{data_dir}/muonSF/smoothSF3D_uTm30to100.pkl.lz4"
         elif isoDefinition == "iso04vtxAgn":
-            fileSF3D = f"{data_dir}/testMuonSF/smoothSF3D_uTm30to100_vtxAgnIso.pkl.lz4"
+            fileSF3D = f"{data_dir}/muonSF/smoothSF3D_uTm30to100_vtxAgnIso.pkl.lz4"
         else:
             raise NotImplementedError(f"Isolation definition {isoDefinition} not implemented")
 

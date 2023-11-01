@@ -443,10 +443,10 @@ if __name__ == "__main__":
 
     # efficiencies made with scripts/analysisTools/w_mass_13TeV/makeWMCefficiency3D.py
     #
-    #sfFolder = data_dir + "/testMuonSF/"
+    #sfFolder = data_dir + "/muonSF/"
     #effSmoothFile = f"{sfFolder}efficiencies3D_rebinUt2.pkl.lz4"
-    sfFolder = data_dir + "/testMuonSF/"
-    sfFolderVtxAgn = data_dir + "/testMuonSF/SF_vtxAgnostic/"
+    sfFolder = data_dir + "/muonSF/"
+    sfFolderVtxAgn = data_dir + "/muonSF/intermediate_vtxAgnosticIso/"
     effSmoothFile = sfFolderVtxAgn + "efficiencies3D_rebinUt2_vtxAgnPfRelIso04.pkl.lz4"
     #
     inputRootFile = {"iso"          : f"{sfFolderVtxAgn}iso3DSFVQTsingularity.root",
