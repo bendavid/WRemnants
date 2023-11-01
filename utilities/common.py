@@ -224,7 +224,7 @@ def common_parser(for_reco_highPU=False):
             # However, even when using the 3D SF one still needs the 2D ones to read the syst/nomi ratio,
             # since the dataAltSig tag-and-probe fits were not run in 3D (it is assumed for simplicity that the syst/nomi ratio is independent from uT)
             #
-            # 2D SF without ut-dependence
+            # 2D SF without ut-dependence, still needed to compute systematics when uing 3D SF
             sfFile = "allSmooth_GtoHout.root" if commonargs.isolationDefinition == "iso04" else "allSmooth_GtoHout_vtxAgnIso.root"
                 
         sfFile = f"{data_dir}/muonSF/{sfFile}"
