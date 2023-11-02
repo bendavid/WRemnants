@@ -268,5 +268,10 @@ if not args.skipAngularCoeffs:
             w_moments = hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning[::2])
         coeffs["W"] = wremnants.moments_to_angular_coeffs(w_moments)
     if coeffs:
-        outfname = "w_z_coeffs_signedY.hdf5" if args.signedY else "w_z_coeffs.hdf5"
+        outfname = "w_z_coeffs"
+        if args.signedY:
+            outfname += "_signedY"
+        if args.useTheoryAgnosticBinning:
+            outfname += "_theoryAgnosticBinning"
+        outfname += ".hdf5"
         output_tools.write_analysis_output(coeffs, outfname, args, update_name=not args.forceDefaultName)
