@@ -227,10 +227,10 @@ if __name__ == "__main__":
             quit()
 
     if "ZMassWLike_" in args.inputdir and not args.isWlike:
-        print(f"Warning: ZMassWLike found in input path {args.inputdir}, but option --wlike not specified, please check")
+        print("Warning: ZMassWLike found in input path {}, but option --wlike not specified, please check".format(args.inputdir))
         quit()
     if "ZMassDilepton_" in args.inputdir and not args.isDilepton:
-        print(f"Warning: ZMassDilepton found in input path {args.inputdir}, but option --dilepton not specified, please check")
+        print("Warning: ZMassDilepton found in input path {}, but option --dilepton not specified, please check".format(args.inputdir))
         quit()
 
     if not args.inputdir.endswith("/"):

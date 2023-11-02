@@ -32,6 +32,8 @@ import lz4.frame
 from functools import partial
 from scipy.interpolate import RegularGridInterpolator
 
+from utilities import common
+
 import utilitiesCMG
 utilities = utilitiesCMG.util()
 
@@ -1028,7 +1030,9 @@ if __name__ == "__main__":
     parser.add_argument(     '--do-steps', dest='doSteps', nargs='+', default=["isoantitrig", "isonotrig" "iso" "triggerplus" "triggerminus" "idipplus" "idipminus" "trackingplus" "trackingminus" "recoplus" "recominus"], choices=list(minmaxSF.keys()), help='Working points to smooth when running --run-all or --do-merge')
     # option to merge files once they exist
     parser.add_argument(     '--do-merge', dest='doMerge', action="store_true", help='Merge efficiency files if they all exist')
-    
+    # option to select definition of isolation, to use correct MC truth efficiencies (mainly relevant for antiiso SF, for antitrigger it shouldn't matter
+    parser.add_argument("--isolationDefinition", choices=["iso04vtxAgn", "iso04"], default="iso04vtxAgn",  help="Isolation type (and corresponding scale factors)")
+
     args = parser.parse_args()
     logger = logging.setup_logger(os.path.basename(__file__), 3, True)
     
@@ -1491,8 +1495,89 @@ if __name__ == "__main__":
 
     hist_postfix = f"_{args.era}_{args.step}_{args.charge}"
 
+    hasAntiSFfromSFandEffi = False
     if args.step in stepsWithAntiSF:
+        hasAntiSFfromSFandEffi = True
+        if args.isolationDefinition == "iso04vtxAgn":
+            effSmoothFile = f"{common.data_dir}/muonSF/intermediate_vtxAgnosticIso/efficiencies3D_rebinUt2_vtxAgnPfRelIso04.pkl.lz4"
+        elif args.isolationDefinition == "iso04":
+            # effSmoothFile = "/eos/user/m/mciprian/www/WMassAnalysis/test2Dsmoothing/makeWMCefficiency3D/noMuonCorr_noSF_allProc_noDphiCut_rebinUt2_addEffi2D/efficiencies3D_rebinUt2.pkl.lz4"
+            effSmoothFile = f"{common.data_dir}/muonSF/efficiencies3D_rebinUt2.pkl.lz4" # this might miss the 2D efficiencies, must be updated
+        else:
+            raise NotImplementedError(f"Isolation definition {args.isolationDefinition} not implemented")            
+        with lz4.frame.open(effSmoothFile) as fileEff:
+            allMCeff = pickle.load(fileEff)
+            effType = args.step
+            if args.charge != "both":
+                effType += args.charge
+            eff_boost = allMCeff[f"Wmunu_MC_eff_{effType}_etapt"]
+        stepChargeTitle = f"{args.step}" + ("" if args.charge == "both" else args.charge)
+        # plot ratio of W MC truth efficiencies and TnP one, before smoothing
+        histMCtruthEffi2DorigBin_etapt_root = narf.hist_to_root(eff_boost)
+        histMCtruthEffi2DorigBin_etapt_root.SetName(f"histMCtruthEffi2DorigBin_{args.step}_etapt_root")
+        ratio_MCtruthEffiOverTnP_etapt_root = copy.deepcopy(histMCtruthEffi2DorigBin_etapt_root.Clone(f"ratio_MCtruthEffiOverTnP_{args.step}_etapt_root"))
+        ratio_MCtruthEffiOverTnP_etapt_root.SetTitle("W MC-truth / Z tag-and-probe")
+        ratio_MCtruthEffiOverTnP_etapt_root.Divide(hmc)
+        drawCorrelationPlot(ratio_MCtruthEffiOverTnP_etapt_root, "{lep} #eta".format(lep=lepton), "{lep} p_{{T}} [GeV]".format(lep=lepton),
+                            f"{stepChargeTitle} MC efficiency ratio",
+                            ratio_MCtruthEffiOverTnP_etapt_root.GetName(), "ForceTitle", outname,
+                            palette=args.palette, passCanvas=canvas)
+        productSFandMCtruthEffi = copy.deepcopy(histMCtruthEffi2DorigBin_etapt_root.Clone(f"productSFandMCtruthEffi_{args.step}_etapt"))
+        productSFandMCtruthEffi.SetTitle(stepChargeTitle)
+        productSFandMCtruthEffi.Multiply(hsf)
+        drawCorrelationPlot(productSFandMCtruthEffi, "{lep} #eta".format(lep=lepton), "{lep} p_{{T}} [GeV]".format(lep=lepton),
+                            f"Product of SF and W MC truth efficiency",
+                            productSFandMCtruthEffi.GetName(), "ForceTitle", outname,
+                            palette=args.palette, passCanvas=canvas)
+        
+        logger.info(f"Preparing W MC smooth eta-pt efficiencies for {stepChargeTitle}")
+        axis_eta = hist.axis.Variable(etabins, name = "eta", overflow = False, underflow = False) # as for previous histograms, in case eta is not uniform
+        axis_pt  = hist.axis.Regular(nFinePtBins, minPtHisto, maxPtHisto,   name = "pt",  overflow = False, underflow = False)
+        histEffi2D_etapt_boost = hist.Hist(axis_eta, axis_pt,
+                                           name = f"smoothEffi2D_{args.step}_etapt_boost",
+                                           storage = hist.storage.Weight())
+        # smooth efficiency vs pt in each eta bin using a spline, then fill the histogram with fine pt binning
+        for ieta in range(len(etabins)-1):
+            etaLow = round(etabins[ieta], 1)
+            etaHigh = round(etabins[ieta+1], 1)
+            etaRange = f"{etaLow} < #eta < {etaHigh}"
+            etaCenter = 0.5 * (etaHigh + etaLow)
+            eta_index = eff_boost.axes[0].index(etaCenter)
+            eff_boost_pt = eff_boost[{0 : eta_index}] # from 2D (eta-pt) to 1D (pt)
+            xvals = [tf.constant(center, dtype=tf.float64) for center in eff_boost_pt.axes.centers]
+            ptvals = np.reshape(xvals[0], [-1])
+            yvals = eff_boost_pt.values()
+            yvals[np.isnan(yvals)] = 0 # protection against bins where no events were selected (extreme ut for instance), set efficiency to 0 instead of 1
+            # logger.warning(etaRange)
+            # logger.warning(f"ptvals = {ptvals}")
+            # logger.warning(f"yvals = {yvals}")
+            eff_boost_pt.values()[...] = yvals
+            # the grid interpolator will be created up to the extreme bin centers, so need bounds_error=False to allow the extrapolation to extend outside until the bin edges
+            # and then we can set its extrapolation value to fill_value ('None' uses the extrapolation from the curve inside accpetance)
+            interp = RegularGridInterpolator((ptvals,), yvals, method='cubic', bounds_error=False, fill_value=None)
+            xvalsFine = [tf.constant(center, dtype=tf.float64) for center in histEffi2D_etapt_boost.axes.centers]
+            ptvalsFine = np.reshape(xvalsFine[1], [-1])
+            pts = np.array(ptvalsFine)
+            #print(pts)
+            smoothVals = interp(pts)
+            #print(smoothVals)
+            histEffi2D_etapt_boost.values()[eta_index :] = smoothVals
+        histEffi2D_etapt_boost.variances()[...] = np.zeros_like(histEffi2D_etapt_boost.variances())
+        histEffi2D_etapt_root = narf.hist_to_root(histEffi2D_etapt_boost)
+        histEffi2D_etapt_root.SetName(f"smoothEffi2D_{args.step}_etapt_root")
+        histEffi2D_etapt_root.SetTitle(stepChargeTitle)
+        # plot W MC efficiencies after spline interpolation as a check
+        drawCorrelationPlot(histEffi2D_etapt_root, "{lep} #eta".format(lep=lepton), "{lep} p_{{T}} [GeV]".format(lep=lepton),
+                            "W MC efficiency (spline interp.)",
+                            histEffi2D_etapt_root.GetName(), "ForceTitle", outname,
+                            palette=args.palette, passCanvas=canvas)
+        
+        logger.info("Done with efficiencies")
+        
         # for completeness make also original antiiso efficiencies and scale factors
+        # they also must be defined using the formula antiSF = (1 - SF * eff) / (1 - eff),
+        # where eff must be the MC truth one (on W or Z, it should hopefully not matter too much, although the uT dependence is not modeled here)
+        # however, here we use antiSF = (1 - effData) / (1 - effMC) using TnP efficiencies, to illustrate the difference in plots
         hist_postfix_anti = f"_{args.era}_anti{args.step}_{args.charge}"
         hanti_effData_original = copy.deepcopy(hdata.Clone("effData_original" + hist_postfix_anti))
         ROOT.wrem.initializeRootHistogram(hanti_effData_original, 1.0)
@@ -1604,61 +1689,8 @@ if __name__ == "__main__":
                                       addCurveLegEntry=f"SF from pol{args.fitPolDegreeEfficiency} {args.step} effi"
             )
 
-
     # prepare antiiso or antitrigger SF using direct SF smoothing and W MC truth efficiencies
-    hasAntiSFfromSFandEffi = False
-    if args.step in stepsWithAntiSF:
-        hasAntiSFfromSFandEffi = True
-        ###
-        # TODO copy new eff file to wremnants-data
-        ###
-        effSmoothFile = "/eos/user/m/mciprian/www/WMassAnalysis/test2Dsmoothing/makeWMCefficiency3D/noMuonCorr_noSF_allProc_noDphiCut_rebinUt2_addEffi2D/efficiencies3D_rebinUt2.pkl.lz4"
-        with lz4.frame.open(effSmoothFile) as fileEff:
-            allMCeff = pickle.load(fileEff)
-            eff_boost = allMCeff[f"Wmunu_MC_eff_{args.step}_etapt"]
-        logger.info(f"Preparing W MC smooth eta-pt efficiencies for {args.step}")
-        axis_eta = hist.axis.Variable(etabins, name = "eta", overflow = False, underflow = False) # as for previous histograms, in case eta is not uniform
-        axis_pt  = hist.axis.Regular(nFinePtBins, minPtHisto, maxPtHisto,   name = "pt",  overflow = False, underflow = False)
-        histEffi2D_etapt_boost = hist.Hist(axis_eta, axis_pt,
-                                           name = f"smoothEffi2D_{args.step}_etapt_boost",
-                                           storage = hist.storage.Weight())
-        # smooth efficiency vs pt in each eta bin using a spline, then fill the histogram with fine pt binning
-        for ieta in range(len(etabins)-1):
-            etaLow = round(etabins[ieta], 1)
-            etaHigh = round(etabins[ieta+1], 1)
-            etaRange = f"{etaLow} < #eta < {etaHigh}"
-            etaCenter = 0.5 * (etaHigh + etaLow)
-            eta_index = eff_boost.axes[0].index(etaCenter)
-            eff_boost_pt = eff_boost[{0 : eta_index}] # from 2D (eta-pt) to 1D (pt)
-            xvals = [tf.constant(center, dtype=tf.float64) for center in eff_boost_pt.axes.centers]
-            ptvals = np.reshape(xvals[0], [-1])
-            yvals = eff_boost_pt.values()
-            yvals[np.isnan(yvals)] = 0 # protection against bins where no events were selected (extreme ut for instance), set efficiency to 0 instead of 1
-            # logger.warning(etaRange)
-            # logger.warning(f"ptvals = {ptvals}")
-            # logger.warning(f"yvals = {yvals}")
-            eff_boost_pt.values()[...] = yvals
-            # the grid interpolator will be created up to the extreme bin centers, so need bounds_error=False to allow the extrapolation to extend outside until the bin edges
-            # and then we can set its extrapolation value to fill_value ('None' uses the extrapolation from the curve inside accpetance)
-            interp = RegularGridInterpolator((ptvals,), yvals, method='cubic', bounds_error=False, fill_value=None)
-            xvalsFine = [tf.constant(center, dtype=tf.float64) for center in histEffi2D_etapt_boost.axes.centers]
-            ptvalsFine = np.reshape(xvalsFine[1], [-1])
-            pts = np.array(ptvalsFine)
-            #print(pts)
-            smoothVals = interp(pts)
-            #print(smoothVals)
-            histEffi2D_etapt_boost.values()[eta_index :] = smoothVals
-        histEffi2D_etapt_boost.variances()[...] = np.zeros_like(histEffi2D_etapt_boost.variances())
-        histEffi2D_etapt_root = narf.hist_to_root(histEffi2D_etapt_boost)
-        histEffi2D_etapt_root.SetName(f"smoothEffi2D_{args.step}_etapt_root")
-        # plot W MC efficiencies after spline interpolation as a check
-        drawCorrelationPlot(histEffi2D_etapt_root, "{lep} #eta".format(lep=lepton), "{lep} p_{{T}} [GeV]".format(lep=lepton),
-                            "W MC efficiency (spline interp.)",
-                            histEffi2D_etapt_root.GetName(), "ForceTitle", outname,
-                            palette=args.palette, passCanvas=canvas)
-
-        logger.info("Done with efficiencies")
-
+    if hasAntiSFfromSFandEffi:
         hist_SF_nomiAndAlt_etapt_boost = narf.root_to_hist(hist_SF_nomiAndAlt_etapt, axis_names = ["SF eta", "SF pt", "nomi-statUpDown-syst"])
         # convert SF and effi to antiSF
         # broadcast effi in 2D to match 3D dimensionality of SF histogram (with 3rd axis containing nomi-stat-syst)

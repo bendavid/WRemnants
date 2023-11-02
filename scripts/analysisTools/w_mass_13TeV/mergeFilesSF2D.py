@@ -5,7 +5,7 @@
 # a copy of the original file is created, with the new histograms
 
 # example
-# python scripts/analysisTools/w_mass_13TeV/mergeFilesSF2D.py wremnants-data/data/muonSF/allSmooth_GtoHout.root wremnants-data/data/muonSF/allSmooth_GtoHout_vtxAgnIso.root /eos/user/m/mciprian/www/WMassAnalysis/TnP/egm_tnp_analysis/filesFromDavide/SF_vtxAgnostic_10oct2023/GtoH/mu_isonotrig_both/smoothedSFandEffi_isonotrig_GtoH_both.root /eos/user/m/mciprian/www/WMassAnalysis/TnP/egm_tnp_analysis/filesFromDavide/SF_vtxAgnostic_10oct2023/GtoH/mu_iso_both/smoothedSFandEffi_iso_GtoH_both.root /eos/user/m/mciprian/www/WMassAnalysis/TnP/egm_tnp_analysis/filesFromDavide/SF_vtxAgnostic_10oct2023/GtoH/mu_isoantitrig_both/smoothedSFandEffi_isoantitrig_GtoH_both.root
+# python scripts/analysisTools/w_mass_13TeV/mergeFilesSF2D.py wremnants-data/data/muonSF/allSmooth_GtoHout.root allSmooth_GtoHout_vtxAgnIso.root /eos/user/m/mciprian/www/WMassAnalysis/TnP/egm_tnp_analysis/filesFromDavide/SF_vtxAgnostic_10oct2023/GtoH/mu_isonotrig_both/smoothedSFandEffi_isonotrig_GtoH_both.root /eos/user/m/mciprian/www/WMassAnalysis/TnP/egm_tnp_analysis/filesFromDavide/SF_vtxAgnostic_10oct2023/GtoH/mu_iso_both/smoothedSFandEffi_iso_GtoH_both.root /eos/user/m/mciprian/www/WMassAnalysis/TnP/egm_tnp_analysis/filesFromDavide/SF_vtxAgnostic_10oct2023/GtoH/mu_isoantitrig_both/smoothedSFandEffi_isoantitrig_GtoH_both.root /eos/user/m/mciprian/www/WMassAnalysis/TnP/egm_tnp_analysis/filesFromDavide/SF_vtxAgnostic_10oct2023/GtoH/mu_trigger_plus/smoothedSFandEffi_trigger_GtoH_plus.root /eos/user/m/mciprian/www/WMassAnalysis/TnP/egm_tnp_analysis/filesFromDavide/SF_vtxAgnostic_10oct2023/GtoH/mu_trigger_minus/smoothedSFandEffi_trigger_GtoH_minus.root
 
 import os, re, array, math
 import argparse
@@ -79,6 +79,7 @@ if __name__ == "__main__":
     infile.Close()
 
     for mf in args.mergefiles:
+        logger.info(f"Opening file {mf}")
         infile = safeOpenFile(mf)
         for k in infile.GetListOfKeys():
             name = k.GetName()
@@ -87,10 +88,13 @@ if __name__ == "__main__":
             else:
                 h = safeGetObject(infile, name)
                 outfile.cd()
-                h.Write(name, ROOT.TObject.kOverwrite)
                 if name in inputHistnames:
                     logger.warning(f"Overwriting {h.ClassName()} {name}")
+                    h.Write(name, ROOT.TObject.kOverwrite)
                 else:
                     logger.info(f"Copying {h.ClassName()} {name}")
-
+                    h.Write(name)
+        infile.Close()
+                    
+    logger.info(f"Done, closing file {args.outputfile[0]}")
     outfile.Close()
