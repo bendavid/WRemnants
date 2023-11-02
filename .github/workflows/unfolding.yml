@@ -68,7 +68,7 @@ jobs:
       - name: setup full events
         if: github.event_name != 'pull_request' && github.event.schedule != '30 5 * * 1-5'
         run: |
-          echo "NTHREADS=64" >> $GITHUB_ENV
+          echo "NTHREADS=256" >> $GITHUB_ENV
           echo "MAX_FILES=-1" >> $GITHUB_ENV
           echo "LUMI_SCALE=1" >> $GITHUB_ENV
 
@@ -236,7 +236,7 @@ jobs:
   wlike-analysis:
     # The type of runner that the job will run on
     runs-on: [self-hosted, linux, x64]
-    needs: setenv
+    needs: [setenv, w-analysis]
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -257,6 +257,11 @@ jobs:
         with:
           submodules: 'recursive'
           lfs: 'true'
+
+      - name: setup full events
+        if: github.event_name != 'pull_request' && github.event.schedule != '30 5 * * 1-5'
+        run: |
+          echo "NTHREADS=128" >> $GITHUB_ENV
 
       - name: wlike analysis
         # run with a reduced binning
@@ -360,7 +365,7 @@ jobs:
   dilepton:
     # The type of runner that the job will run on
     runs-on: [self-hosted, linux, x64]
-    needs: setenv
+    needs: [setenv, w-analysis]
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -381,6 +386,11 @@ jobs:
         with:
           submodules: 'recursive'
           lfs: 'true'
+
+      - name: setup full events
+        if: github.event_name != 'pull_request' && github.event.schedule != '30 5 * * 1-5'
+        run: |
+          echo "NTHREADS=128" >> $GITHUB_ENV
 
       - name: dilepton analysis
         # run with a reduced binning
