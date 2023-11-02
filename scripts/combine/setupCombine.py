@@ -267,11 +267,9 @@ def setup(args, inputFile, fitvar, xnorm=False):
     if args.pseudoData:
         cardTool.setPseudodata(args.pseudoData, args.pseudoDataIdx, args.pseudoDataProcsRegexp)
         if args.pseudoDataFile:
-            cardTool.setPseudodataDatagroups(make_datagroup(args.pseudoDataFile,
-                                                                  excludeGroups=excludeGroup,
-                                                                  filterGroups=filterGroup,
-                                                                  applySelection= not xnorm and not args.ABCD) # ensure consistency with the main datagroups
-            )
+            # FIXME: should make sure to apply the same customizations as for the nominal datagroups so far
+            pseudodataGroups = Datagroups(args.pseudoDataFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm and not args.ABCD)
+            cardTool.setPseudodataDatagroups(pseudodataGroups)
     cardTool.setLumiScale(args.lumiScale)
 
     if not args.theoryAgnostic:
