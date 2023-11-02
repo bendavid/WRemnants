@@ -86,7 +86,7 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/muonSF/allSmooth
     if len(eff_types_3D):
         if isoDefinition == "iso04vtxAgn":
             fileSF3D = f"{data_dir}/muonSF/smoothSF3D_uTm30to100_vtxAgnIso.pkl.lz4"
-        elif isoDefinition == "iso04vtxAgn":
+        elif isoDefinition == "iso04":
             fileSF3D = f"{data_dir}/muonSF/smoothSF3D_uTm30to100.pkl.lz4"
         else:
             raise NotImplementedError(f"Isolation definition {isoDefinition} not implemented")
@@ -110,15 +110,16 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/muonSF/allSmooth
             nameTag = "nomiAndAlt_onlyDataVar" if (isoEfficiencySmoothing and any(x in eff_type for x in ["iso", "antiiso"])) else "nomiAndAlt"
             chargeTag = charge_tag if eff_type in chargeDependentSteps else "both"
             hist_name = f"SF_{nameTag}_{eratag}_{eff_type}_{chargeTag}"
-            ## temporary patch for missing histograms
-            if eff_type == "antitrigger":
-                hist_name = hist_name.replace("antitrigger", "trigger")
-                if templateAnalysisArg == "wrem::AnalysisType::Dilepton":
-                    logger.warning(f"Substituting temporarily missing 2D histogram for 'antitrigger' with 'trigger'")
-            elif eff_type == "isoantitrig":
-                hist_name = hist_name.replace("isoantitrig", "isonotrig")
-                if templateAnalysisArg == "wrem::AnalysisType::Dilepton":
-                    logger.warning(f"Substituting temporarily missing 2D histogram for 'isoantitrig' with 'isonotrig'")
+            ## temporary patch for some missing SF histograms relevant only for dilepton (no warning needed otherwise)
+            if isoDefinition != "iso04vtxAgn":
+                if eff_type == "antitrigger":
+                    hist_name = hist_name.replace("antitrigger", "trigger")
+                    if templateAnalysisArg == "wrem::AnalysisType::Dilepton":
+                        logger.warning(f"Substituting temporarily missing 2D histogram for 'antitrigger' with 'trigger'")
+                elif eff_type == "isoantitrig":
+                    hist_name = hist_name.replace("isoantitrig", "isonotrig")
+                    if templateAnalysisArg == "wrem::AnalysisType::Dilepton":
+                        logger.warning(f"Substituting temporarily missing 2D histogram for 'isoantitrig' with 'isonotrig'")
             hist_root = input_tools.safeGetRootObject(fin, hist_name)
             #logger.debug(f"syst: {eff_type} -> {hist_name}")
 
@@ -133,7 +134,7 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/muonSF/allSmooth
                     logger.debug(f"Storing 2D eta-pt syst for {key} SF to propagate to 3D version")
                     # histogram is saved, now skip the rest
                 continue
-            
+
             if sf_syst_2D is None:
                 axis_eta_eff = hist_hist.axes[0]
                 axis_pt_eff = hist_hist.axes[1]
@@ -340,14 +341,20 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/muonSF/allSmooth
                     elif "effMC" in effStatKey:
                         nameTag += "_onlyMCVar"
                     hist_name = f"SF_{nameTag}_{eratag}_{eff_type}_{chargeTag}"
-                    if eff_type == "antitrigger":
-                        hist_name = hist_name.replace("antitrigger", "trigger")
-                        logger.warning(f"Substituting temporarily missing 2D histogram for 'antitrigger' with 'trigger'")
-                    elif eff_type == "isoantitrig":
-                        hist_name = hist_name.replace("isoantitrig", "isonotrig")
-                        logger.warning(f"Substituting temporarily missing 2D histogram for 'isoantitrig' with 'isonotrig'")
 
+                    # temporary patch for some missing SF histograms in 2D (for the 3D case we have everything)
+                    # only relevant for dilepton (no warning needed otherwise)
+                    if isoDefinition != "iso04vtxAgn":
+                        if eff_type == "antitrigger":
+                            hist_name = hist_name.replace("antitrigger", "trigger")
+                            if templateAnalysisArg == "wrem::AnalysisType::Dilepton":
+                                logger.warning(f"Substituting temporarily missing 2D histogram for 'antitrigger' with 'trigger'")
+                        elif eff_type == "isoantitrig":
+                            hist_name = hist_name.replace("isoantitrig", "isonotrig")
+                            if templateAnalysisArg == "wrem::AnalysisType::Dilepton":
+                                logger.warning(f"Substituting temporarily missing 2D histogram for 'isoantitrig' with 'isonotrig'")
                     hist_root = input_tools.safeGetRootObject(fin, hist_name)
+
                     # logger.info(f"stat: {effStatKey}|{eff_type} -> {hist_name}")
                     # logger.info(ROOT.AddressOf(hist_root))
                     if hist_root is None:

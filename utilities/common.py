@@ -226,7 +226,7 @@ def common_parser(for_reco_highPU=False):
             #
             # 2D SF without ut-dependence, still needed to compute systematics when uing 3D SF
             sfFile = "allSmooth_GtoHout.root" if commonargs.isolationDefinition == "iso04" else "allSmooth_GtoHout_vtxAgnIso.root"
-                
+
         sfFile = f"{data_dir}/muonSF/{sfFile}"
     else:
         sfFile = ""
