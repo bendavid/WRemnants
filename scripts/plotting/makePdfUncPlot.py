@@ -23,7 +23,7 @@ xlabels = {
 
 parser = argparse.ArgumentParser()
 parser.add_argument("infile", help="Output file of the analysis stage, containing ND boost histograms")
-parser.add_argument("--pdfs", type=str, nargs='+', help="List of histograms to plot", choices=theory_tools.pdfMapExtended.keys(), required=True)
+parser.add_argument("--pdfs", type=str, nargs='+', help="List of histograms to plot", choices=theory_tools.pdfMap.keys(), required=True)
 parser.add_argument("-c", "--channel", type=str, choices=["plus", "minus", "all"], default="all", help="Select channel to plot")
 parser.add_argument("-p", "--outpath", type=str, default=os.path.expanduser("~/www/WMassAnalysis"), help="Base path for output")
 parser.add_argument("-f", "--outfolder", type=str, default="test", help="Subfolder for output")
@@ -36,14 +36,14 @@ parser.add_argument("--ymax", type=float, help="Max value for y axis (if not spe
 args = parser.parse_args()
 
 for pdf in args.pdfs:
-    if pdf not in theory_tools.pdfMapExtended:
-        raise ValueError(f"pdf {pdf} is not a valid hist (not defined in theory_tools.pdfMapExtended)")
+    if pdf not in theory_tools.pdfMap:
+        raise ValueError(f"pdf {pdf} is not a valid hist (not defined in theory_tools.pdfMap)")
 
 if "Z" in args.datasets[0][0]:
     xlabels["ptVgen"] = xlabels["ptVgen"].replace("Z", "W")
     xlabels["absYVgen"] = xlabels["absYVgen"].replace("Z", "W")
 
-pdfInfo = theory_tools.pdfMapExtended 
+pdfInfo = theory_tools.pdfMap 
 pdfNames = [pdfInfo[pdf]["name"] for pdf in args.pdfs]
 histNames = pdfNames if not args.baseName or "nominal" in args.baseName else [f"{args.baseName}_{pdfName}" for pdfName in pdfNames]
 pdfHists = input_tools.read_all_and_scale(args.infile, args.datasets, histNames)

@@ -16,18 +16,30 @@ jobs:
       - name: Cleanup main
         run: |
           all_folders=$(xrdfs root://eosuser.cern.ch// ls -l $EOS_DIR/ScheduledBuilds/ | grep '^d' | sort -k 5 -r | awk '{print $7}')
-          newest_folders=($(echo "$all_folders" | head -n 6))
+          newest_folders=$(echo "$all_folders" | head -n 6)
           for folder in $all_folders; do
             if ! [[ " ${newest_folders[@]} " =~ " $folder " ]]; then
-              xrdfs root://eosuser.cern.ch// rmdir "$folder"
+              all_subfolders=$(xrdfs root://eosuser.cern.ch// ls $folder)
+              for subfolder in $all_subfolders; do
+                xrdfs root://eosuser.cern.ch// rm $subfolder/*
+                xrdfs root://eosuser.cern.ch// rmdir $subfolder
+              done
+              xrdfs root://eosuser.cern.ch// rm $folder/*
+              xrdfs root://eosuser.cern.ch// rmdir $folder
             fi
           done
       - name: Cleanup unfolding
         run: |
           all_folders=$(xrdfs root://eosuser.cern.ch// ls -l $EOS_DIR/ScheduledBuilds_unfolding/ | grep '^d' | sort -k 5 -r | awk '{print $7}')
-          newest_folders=($(echo "$all_folders" | head -n 6))
+          newest_folders=$(echo "$all_folders" | head -n 6)
           for folder in $all_folders; do
             if ! [[ " ${newest_folders[@]} " =~ " $folder " ]]; then
-              xrdfs root://eosuser.cern.ch// rmdir "$folder"
+              all_subfolders=$(xrdfs root://eosuser.cern.ch// ls $folder)
+              for subfolder in $all_subfolders; do
+                xrdfs root://eosuser.cern.ch// rm $subfolder/*
+                xrdfs root://eosuser.cern.ch// rmdir $subfolder
+              done
+              xrdfs root://eosuser.cern.ch// rm $folder/*
+              xrdfs root://eosuser.cern.ch// rmdir $folder
             fi
           done

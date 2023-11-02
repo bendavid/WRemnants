@@ -73,6 +73,7 @@ axis_pt = hist.axis.Regular(29, 26., 55., name = "pt")
 ptV_10quantiles_binning = [0.0, 2.95, 4.73, 6.68, 8.98, 11.78, 15.33, 20.11, 27.17, 40.15, 13000.]
 # Integer rounded version of the 5% quantiles h[::hist.rebin(2)] for 10% quantiles
 ptV_binning = [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 20, 23, 27, 32, 40, 54, 13000]
+ptV_corr_binning = ptV_binning[:-4]+list(range(30,110,10))
 absYV_binning = [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4]
 
 # categorical axes in python bindings always have an overflow bin, so use a regular
@@ -147,7 +148,7 @@ def common_parser(for_reco_highPU=False):
             setattr(namespace, self.dest, unique_values)
 
     parser.add_argument("--pdfs", type=str, nargs="+", default=["msht20"], 
-        choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for", action=FilterAction)
+        choices=theory_tools.pdfMap.keys(), help="PDF sets to produce error hists for", action=FilterAction)
     parser.add_argument("--altPdfOnlyCentral", action='store_true', help="Only store central value for alternate PDF sets")
     parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=None)
     parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by group name or (subset) of name", default=[])

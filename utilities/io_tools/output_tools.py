@@ -44,7 +44,7 @@ def metaInfoDict(exclude_diff='notebooks', args=None):
     meta_data = {
         "time" : str(datetime.datetime.now()), 
         "command" : script_command_to_str(sys.argv, args),
-        "args": {a: getattr(args,a) for a in vars(args)}
+        "args": {a: getattr(args,a) for a in vars(args)} if args else {}
     }
     if subprocess.call(["git", "branch"], stderr=subprocess.STDOUT, stdout=open(os.devnull, 'w')) != 0:
         meta_data["git_info"] = {"hash" : "Not a git repository!",
