@@ -236,7 +236,8 @@ if __name__ == "__main__":
     parser.add_argument("--pd", "--pseudodata", dest="pseudodata", type=str, default=None, help="Name for pseudodata histogram, to be used instead of x_Data (with no charge postfix, it is added in this script)")
     
     commonargs,_ = parser.parse_known_args()
-    defaultProcs = ["Zmumu", "Ztautau", "Other"] if commonargs.isWlike else ["Wmunu", "Wtaunu", "Zmumu", "Ztautau", "Fake", "Top", "Diboson"]
+    # TODO: get the process from the list of folders in the input file
+    defaultProcs = ["Zmumu", "Ztautau", "Other"] if commonargs.isWlike else ["Wmunu", "Wtaunu", "Zmumu", "DYlowMass", "Ztautau", "Fake", "Top", "Diboson"]
 
     parser.add_argument("--pp", "--predicted-processes", dest="predictedProcesses", type=str, nargs="*", help="Use these names for predicted processes to make plots", default=defaultProcs)
     parser.add_argument("--xpp", "--exclude-predicted-processes", dest="excludePredictedProcesses", type=str, nargs="*", help="Use these names to exclude predicted processes to make plots", default=[])
@@ -274,7 +275,7 @@ if __name__ == "__main__":
         for proc in processes:
             nomihists[proc] = safeGetObject(infile, f"{proc}/nominal_{proc}_{charge}", detach=True) # process name as subfolder
         if args.pseudodata:
-            nomihists["Data"] = safeGetObject(infile, f"{args.pseudodata}_{charge}", detach=True)
+            nomihists["Data"] = safeGetObject(infile, f"Data/{args.pseudodata}_{charge}", detach=True)
         infile.Close()
 
         hdata2D = nomihists["Data"]

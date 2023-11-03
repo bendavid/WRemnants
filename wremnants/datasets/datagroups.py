@@ -274,7 +274,7 @@ class Datagroups(object):
         # Note: if 'hasFake' is kept as False (but Fake exists), the original behaviour for which Fake reads everything again is restored
         for procName in procsToReadSort:
             logger.debug(f"Reading group {procName}")
-            
+
             if procName not in self.groups.keys():
                 raise RuntimeError(f"Group {procName} not known. Defined groups are {list(self.groups.keys())}.")
             group = self.groups[procName]
@@ -287,7 +287,7 @@ class Datagroups(object):
                 continue
             group.hists[label] = None
 
-            for i, member in enumerate(group.members):   
+            for i, member in enumerate(group.members):
                 if procName == self.fakeName and member.name in fakesMembersWithSyst:
                     # if we are here this process has been already used to build the fakes when running for other groups
                     continue

@@ -1,6 +1,7 @@
 import argparse
 from utilities import common, rdf_tools, logging, differential
 from utilities.io_tools import output_tools
+from utilities.common import background_MCprocs as bkgMCprocs
 from wremnants.datasets.datagroups import Datagroups
 
 parser,initargs = common.common_parser(True)
@@ -52,7 +53,15 @@ if args.theoryAgnostic or args.unfolding:
     if args.unfolding:
         parser = common.set_parser_default(parser, "pt", [32,26.,58.])
 
-    args = parser.parse_args()
+# axes for W MC efficiencies with uT dependence for iso and trigger
+axis_pt_eff_list = [24.,26.,28.,30.,32.,34.,36.,38.,40., 42., 44., 47., 50., 55., 60., 65.]
+axis_pt_eff = hist.axis.Variable(axis_pt_eff_list, name = "pt", overflow=not args.excludeFlow, underflow=not args.excludeFlow)
+if args.makeMCefficiency:
+    # override the pt cuts (the binning is irrelevant since a different pt axis is used)
+    nbinsPtEff = axis_pt_eff_list[-1] - axis_pt_eff_list[0]
+    parser = common.set_parser_default(parser, "pt", [nbinsPtEff, axis_pt_eff_list[0], axis_pt_eff_list[-1]])
+
+args = parser.parse_args()
     
 thisAnalysis = ROOT.wrem.AnalysisType.Wmass
 datasets = getDatasets(maxFiles=args.maxFiles,
@@ -88,9 +97,6 @@ nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
 
 nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
 
-# axes for W MC efficiencies with uT dependence for iso and trigger
-axis_pt_eff_list = [24.,26.,28.,30.,32.,34.,36.,38.,40., 42., 44., 47., 50., 55., 60., 65.]
-axis_pt_eff = hist.axis.Variable(axis_pt_eff_list, name = "pt", overflow=not args.excludeFlow, underflow=not args.excludeFlow)
 axis_ut = hist.axis.Regular(40, -100, 100, overflow=not args.excludeFlow, underflow=not args.excludeFlow, name = "ut")
 axes_WeffMC = [axis_eta, axis_pt_eff, axis_ut, axis_charge, axis_passIso, axis_passMT, axis_passTrigger]
 # sum those groups up in post processing
@@ -141,13 +147,10 @@ if args.noScaleFactors:
 elif args.binnedScaleFactors:
     logger.info("Using binned scale factors and uncertainties")
     # add usePseudoSmoothing=True for tests with Asimov
-    muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_binned(filename = data_dir + "/testMuonSF/allSmooth_GtoH3D.root", era = era, max_pt = axis_pt.edges[-1], usePseudoSmoothing=True)
+    muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_binned(filename = data_dir + "/muonSF/allSmooth_GtoH3D.root", era = era, max_pt = axis_pt.edges[-1], usePseudoSmoothing=True)
 else:
     logger.info("Using smoothed scale factors and uncertainties")
-    muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile, era = era, what_analysis = thisAnalysis, max_pt = axis_pt.edges[-1], isoEfficiencySmoothing = args.isoEfficiencySmoothing, smooth3D=args.smooth3dsf)
-    ## this is needed to define the syst on SF from 2D ut-integrated and original no-ut-dependent SF  
-    if not args.smooth3dsf and not args.sf2DnoUt:
-        muon_efficiency_helper2d, muon_efficiency_helper_syst2d, muon_efficiency_helper_stat2d = wremnants.make_muon_efficiency_helpers_smooth(filename = data_dir + "/testMuonSF/allSmooth_GtoHout.root", era = era, max_pt = axis_pt.edges[-1], isoEfficiencySmoothing = args.isoEfficiencySmoothing, smooth3D=args.smooth3dsf)
+    muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile, era = era, what_analysis = thisAnalysis, max_pt = axis_pt.edges[-1], isoEfficiencySmoothing = args.isoEfficiencySmoothing, smooth3D=args.smooth3dsf, isoDefinition=args.isolationDefinition)
 
 logger.info(f"SF file: {args.sfFile}")
 
@@ -275,7 +278,7 @@ def build_graph(df, dataset):
     df = muon_calibration.define_corrected_muons(df, cvh_helper, jpsi_helper, args, dataset, smearing_helper, bias_helper)
 
     df = muon_selections.select_veto_muons(df, nMuons=1)
-    df = muon_selections.select_good_muons(df, template_minpt, template_maxpt, nMuons=1, use_trackerMuons=args.trackerMuons, use_isolation=False)
+    df = muon_selections.select_good_muons(df, template_minpt, template_maxpt, dataset.group, nMuons=1, use_trackerMuons=args.trackerMuons, use_isolation=False)
 
     # the corrected RECO muon kinematics, which is intended to be used as the nominal
     df = muon_calibration.define_corrected_reco_muon_kinematics(df)
@@ -296,10 +299,11 @@ def build_graph(df, dataset):
 
     # gen match to bare muons to select only prompt muons from MC processes, but also including tau decays
     # status flags in NanoAOD: https://cms-nanoaod-integration.web.cern.ch/autoDoc/NanoAODv9/2016ULpostVFP/doc_TTToSemiLeptonic_TuneCP5_13TeV-powheg-pythia8_RunIISummer20UL16NanoAODv9-106X_mcRun2_asymptotic_v17-v1.html
+    postFSRmuonDef = "GenPart_status == 1 && (GenPart_statusFlags & 1 || GenPart_statusFlags & (5<<1)) && abs(GenPart_pdgId) == 13"
     if not dataset.is_data and not isQCDMC and not args.noGenMatchMC:
-        df = df.Define("postFSRmuons", "GenPart_status == 1 && (GenPart_statusFlags & 1 || GenPart_statusFlags & (5<<1)) && abs(GenPart_pdgId) == 13")
+        df = df.Define("postFSRmuons", postFSRmuonDef)
         df = df.Filter("wrem::hasMatchDR2(goodMuons_eta0,goodMuons_phi0,GenPart_eta[postFSRmuons],GenPart_phi[postFSRmuons],0.09)")
-        
+
     if isWorZ:
         df = muon_validation.define_cvh_reco_muon_kinematics(df)
         reco_sel = "vetoMuonsPre"
@@ -332,7 +336,12 @@ def build_graph(df, dataset):
             for reco_type in ['crctd', 'cvh', 'uncrct', 'gen_smeared']:
                 df = muon_validation.define_reco_over_gen_cols(df, reco_type)
 
-    df = df.Define("goodMuons_pfRelIso04_all0", "Muon_pfRelIso04_all[goodMuons][0]")
+    if args.isolationDefinition == "iso04" or dataset.group in bkgMCprocs:
+        df = df.Define("goodMuons_pfRelIso04_all0", "Muon_pfRelIso04_all[goodMuons][0]")
+    elif args.isolationDefinition == "iso04vtxAgn":
+        df = df.Define("goodMuons_pfRelIso04_all0", "Muon_vtxAgnPfRelIso04_all[goodMuons][0]")
+    else:
+        raise NotImplementedError(f"Isolation definition {args.isolationDefinition} not implemented")
 
     # Jet collection actually has a pt threshold of 15 GeV in MiniAOD 
     df = df.Define("goodCleanJetsNoPt", "Jet_jetId >= 6 && (Jet_pt > 50 || Jet_puId >= 4) && abs(Jet_eta) < 2.4 && wrem::cleanJetsFromLeptons(Jet_eta,Jet_phi,Muon_correctedEta[vetoMuons],Muon_correctedPhi[vetoMuons],Electron_eta[vetoElectrons],Electron_phi[vetoElectrons])")
@@ -385,7 +394,7 @@ def build_graph(df, dataset):
         mTStudyForFakes = df.HistoBoost("mTStudyForFakes", mTStudyForFakes_axes, ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "transverseMass", "passIso", "hasCleanJet", "deltaPhiMuonMet", "nominal_weight"])
         results.append(mTStudyForFakes)
 
-    # add filter of deltaPhi(muon,met) before other histograms (but before the previous histogram for test with fakes)
+    # add filter of deltaPhi(muon,met) before other histograms (but after histogram mTStudyForFakes)
     if not args.makeMCefficiency:
         dphiMuonMetCut = args.dphiMuonMetCut * np.pi
         df = df.Filter(f"deltaPhiMuonMet > {dphiMuonMetCut}") # pi/4 was found to be a good threshold for signal with mT > 40 GeV
@@ -428,7 +437,6 @@ def build_graph(df, dataset):
                            "passIso", "passMT", "passTrigger"]
             yieldsForWeffMC = df.HistoBoost("yieldsForWeffMC", axes_WeffMC, [*cols_WeffMC, "nominal_weight"])
             results.append(yieldsForWeffMC)
-        # df = df.Filter(f"wrem::printVar(nominal_weight)")
             
         if not args.noRecoil and args.recoilUnc:
             df = recoilHelper.add_recoil_unc_W(df, results, dataset, cols, axes, "nominal")
@@ -499,13 +507,6 @@ def build_graph(df, dataset):
 
             df = df.Define("Muon_cvhMomCov", "wrem::splitNestedRVec(Muon_cvhMomCov_Vals, Muon_cvhMomCov_Counts)")
 
-        if not args.binnedScaleFactors and not args.smooth3dsf and not args.sf2DnoUt:
-            df = df.Define("weight2dsfup", muon_efficiency_helper2d, ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_SApt0", "goodMuons_SAeta0", "goodMuons_pt0", "goodMuons_charge0", "passIso"])
-            # be EXTREMELY CAREFUL about the histogram files (this assumes that you have another file with the old trigger and histo SFs which also contains the same SFs for all the other steps as the central one)
-            df = df.Define("nominal_weight_2dsf", "nominal_weight/weight_fullMuonSF_withTrackingReco*weight2dsfup")
-            sf2d = df.HistoBoost("nominal_sf2d", nominal_axes, [*nominal_cols, "nominal_weight_2dsf"])
-            results.append(sf2d)
-               
     if hasattr(dataset, "out_of_acceptance"):
         # Rename dataset to not overwrite the original one
         if len(smearing_weights_procs) > 0 and smearing_weights_procs[-1] == dataset.name:

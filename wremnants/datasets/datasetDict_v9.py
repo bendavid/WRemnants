@@ -38,7 +38,7 @@ dataDictV9 = {
                    'xsec' : xsec_ZmmMass10to50PostVFP,
                    'group': "DYlowMass",
     },
-    'ZtautauPostVFP' : { 
+    'ZtautauPostVFP' : {
                    'filepaths' : 
                    [
                        "{BASE_PATH}/DYJetsToTauTau_M-50_AtLeastOneEorMuDecay_H2ErratumFix_PDF_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}",
@@ -48,7 +48,6 @@ dataDictV9 = {
                    'xsec' : xsec_ZmmPostVFP*Z_TAU_TO_LEP_RATIO,
                    'group': "Ztautau",
     },
-
     'WplusmunuPostVFP' : { 
                       'filepaths' :
                       ["{BASE_PATH}/WplusJetsToMuNu_H2ErratumFix_PDFExt_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}",
