@@ -177,11 +177,9 @@ def getDataPath(mode=None):
     import socket
     hostname = socket.gethostname()
 
-    if hostname == "lxplus8s10.cern.ch":
-        base_path = "/scratch/shared/NanoAOD"
-    if hostname == "cmswmass2.cern.ch":
-        base_path = "/data/shared/NanoAOD"
-    elif "mit.edu" in hostname:
+    if hostname.endswith(".cern.ch"):
+        base_path = "root://eoscms.cern.ch//store/cmst3/group/wmass/w-mass-13TeV/NanoAOD"
+    elif hostname.endswith(".mit.edu"):
         base_path = "/scratch/submit/cms/wmass/NanoAOD"
     elif hostname == "cmsanalysis.pi.infn.it":
         base_path = "/scratchnvme/wmass/NANOV9/postVFP"
