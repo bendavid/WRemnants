@@ -19,6 +19,7 @@ env:
   NTHREADS: 16
   LOCAL_WEB_DIR: www/WMassAnalysis/PRValidation
   EOS_DIR: /eos/user/c/cmsmwbot
+  EOS_DATA_DIR: /store/cmst3/group/wmass/w-mass-13TeV/NanoAOD
   OUTFILE_WMASS: "mw_with_mu_eta_pt.hdf5"
   OUTFILE_DILEPTON: "mz_dilepton.hdf5"
   OUTFILE_WLIKE: "mz_wlike_with_mu_eta_pt.hdf5"
@@ -78,6 +79,14 @@ jobs:
           klist
           echo "xrdfs root://eosuser.cern.ch// ls $EOS_DIR"
           xrdfs root://eosuser.cern.ch// ls $EOS_DIR
+
+      - name: setup kerberos within singularity image
+        run: |
+          scripts/ci/run_with_singularity.sh kinit -kt ~/private/.keytab cmsmwbot
+          scripts/ci/run_with_singularity.sh klist -k -t -e ~/private/.keytab
+          scripts/ci/run_with_singularity.sh klist
+          echo "xrdfs root://eoscms.cern.ch// ls $EOS_DATA_DIR"
+          scripts/ci/run_with_singularity.sh xrdfs root://eoscms.cern.ch// ls $EOS_DATA_DIR
 
       - name: setup unscheduled
         if: github.event_name != 'schedule'
