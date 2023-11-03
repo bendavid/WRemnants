@@ -178,12 +178,12 @@ def getDataPath(mode=None):
     hostname = socket.gethostname()
 
     if hostname.endswith(".cern.ch"):
-        if "lowpu" in mode:
+        if mode and "lowpu" in mode:
             base_path = "root://eoscms.cern.ch//store/cmst3/group/wmass/LowPU"
         else:
             base_path = "root://eoscms.cern.ch//store/cmst3/group/wmass/w-mass-13TeV/NanoAOD"
     elif hostname.endswith(".mit.edu"):
-        if "lowpu" in mode:
+        if mode and "lowpu" in mode:
             base_path = "/scratch/submit/cms/wmass/NanoAOD/LowPU"
         else:
             base_path = "/scratch/submit/cms/wmass/NanoAOD"
