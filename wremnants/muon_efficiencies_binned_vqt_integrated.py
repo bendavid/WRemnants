@@ -15,7 +15,7 @@ narf.clingutils.Declare('#include "muon_efficiencies_binned_vqt_integrated.h"')
 
 data_dir = common.data_dir
 
-def make_muon_efficiency_helpers_binned_vqt_integrated(filename = data_dir + "/testMuonSF/allSmooth_GtoH.root", filenamevqt = data_dir + "/testMuonSF/allSmooth_GtoH.root", filenamevqttriggerplus = "/gpfs/ddn/cms/user/bruschin/newfit3/egm_tnp_analysis/plots/triggerefficiencies17012023/efficiencies_GtoH/mu_trigger_plus/allEfficiencies_2D.root", filenamevqttriggerminus = "/gpfs/ddn/cms/user/bruschin/newfit3/egm_tnp_analysis/plots/triggerefficiencies17012023/efficiencies_GtoH/mu_trigger_minus/allEfficiencies_2D.root",
+def make_muon_efficiency_helpers_binned_vqt_integrated(filename = data_dir + "/muonSF/allSmooth_GtoH.root", filenamevqt = data_dir + "/muonSF/allSmooth_GtoH.root", filenamevqttriggerplus = "/gpfs/ddn/cms/user/bruschin/newfit3/egm_tnp_analysis/plots/triggerefficiencies17012023/efficiencies_GtoH/mu_trigger_plus/allEfficiencies_2D.root", filenamevqttriggerminus = "/gpfs/ddn/cms/user/bruschin/newfit3/egm_tnp_analysis/plots/triggerefficiencies17012023/efficiencies_GtoH/mu_trigger_minus/allEfficiencies_2D.root",
                                                        era = None, is_w_like = False, max_pt = np.inf,
                                                        usePseudoSmoothing=False,
                                                        includeTrigger = False):

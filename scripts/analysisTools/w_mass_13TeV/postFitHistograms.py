@@ -15,6 +15,9 @@ sys.argv = args
 ROOT.gROOT.SetBatch(True)
 ROOT.PyConfig.IgnoreCommandLineOptions = True
 
+from copy import *
+import wremnants
+
 import utilitiesCMG
 utilities = utilitiesCMG.util()
 from utilities import logging
@@ -94,7 +97,7 @@ if __name__ == "__main__":
     parser.add_argument("rootfile", type=str, nargs=1, help="Input file with histograms")
     parser.add_argument('-o','--outdir', dest='outdir', default='.', type=str, help='output directory to save the plots')
     parser.add_argument('-m','--n-mask-chan', dest='nMaskedChannel', default=0, type=int, help='Number of masked channels in the fit for each charge (0 if not using masked channels because no signal POIs is used in the fit)')
-    parser.add_argument('-c','--charges', dest='charges', choices=['plus', 'minus', 'plus,minus'], default='plus,minus', type=str, help='Charges to process')
+    parser.add_argument('-c','--charges', dest='charges', choices=['plus', 'minus', 'both'], default='both', type=str, help='Charges to process')
     parser.add_argument(     '--no2Dplot', dest="no2Dplot", action='store_true', help="Do not plot 2D templates")
     parser.add_argument(     '--wlike', dest="isWlike", action='store_true', help="Analysis is wlike")
     parser.add_argument('-n','--norm-width', dest="normWidth", action='store_true', help="Normalize histograms by bin area (mainly if non uniform binning is used)")
@@ -113,7 +116,7 @@ if __name__ == "__main__":
     adjustSettings_CMS_lumi()
     setTDRStyle()
 
-    charges = args.charges.split(",")
+    charges = ["plus", "minus"] if args.charges == "both" else [args.charges]
     nCharges = len(charges) 
     nMaskedChanPerCharge = args.nMaskedChannel # check if we actually have masked channels, we may not, default should be 0
     lep = "Muon"
@@ -125,7 +128,7 @@ if __name__ == "__main__":
     #########
     # hardcoded eta-pt reco binning for now
     etabins = [round(-2.4 + (0.1 * i), 1) for i in range(0,49)]
-    ptbins = [round(26.0 + (1.0 * i), 1) for i in range(0,30)]    
+    ptbins = [round(26.0 + (1.0 * i), 1) for i in range(0, 35 if args.isWlike else 31)]
     recoBins = templateBinning(etabins, ptbins)
     logger.warning("-"*30)
     logger.warning("USING THIS BINNING: PLEASE CHECK IF IT IS OK")
@@ -146,34 +149,23 @@ if __name__ == "__main__":
     infile = safeOpenFile(args.rootfile[0], mode="READ")
     h1d = safeGetObject(infile, "expfull_postfit")
     shifts = chargeUnrolledBinShifts(h1d, nCharges, nMaskedChanPerCharge)
-
+    # get process names:
+    predictedProcessNames = []
+    for k in infile.GetListOfKeys():
+        name = k.GetName()
+        if "expproc" in name and "prefit" in name:
+            #e.g. expproc_Wmunu_prefit, but might have a strange name as expproc_AAA_BBB_CCC_prefit
+            predictedProcessNames.append("_".join(name.split("_")[1:-1]))
+    logger.info(f"Found these predicted processes: {predictedProcessNames}")
+            
     postfix = ""
     if args.postfix:
         postfix = f"_{args.postfix}"
     full_outfileName = f"{outname}/plots{postfix}.root"
     outfile = ROOT.TFile(full_outfileName, "recreate")
     print(f"Will save 2D templates in file --> {full_outfileName}")
-
-    process_features = {'Wmunu'       : {"color" : ROOT.kRed+2,    "title" : "W#rightarrow#mu#nu"},
-                        'Top'         : {"color" : ROOT.kGreen+2,  "title" : "top"},
-                        'Diboson'     : {"color" : ROOT.kViolet+2, "title" : "dibosons"},
-                        #'Wtau'        : {"color" : ROOT.kSpring+9, "title" : "W#rightarrow#tau#nu"},
-                        'Wtaunu'        : {"color" : ROOT.kSpring+9, "title" : "W#rightarrow#tau#nu"},
-                        'Zmumu'       : {"color" : ROOT.kAzure+2,  "title" : "Z#rightarrow#mu#mu"},
-                        'Ztautau'     : {"color" : ROOT.kCyan,     "title" : "Z#rightarrow#tau#tau"},
-                        'Fake'        : {"color" : ROOT.kGray,     "title" : "QCD multijet"}
-    }
-    if args.isWlike:
-        process_features = {'Wmunu'       : {"color" : ROOT.kRed+2,    "title" : "W#rightarrow#mu#nu"},
-                            'Top'         : {"color" : ROOT.kGreen+2,  "title" : "top"},
-                            'Diboson'     : {"color" : ROOT.kViolet+2, "title" : "dibosons"},
-                            #'Wtau'        : {"color" : ROOT.kSpring+9, "title" : "W#rightarrow#tau#nu"},
-                            'Wtaunu'        : {"color" : ROOT.kSpring+9, "title" : "W#rightarrow#tau#nu"},
-                            'Zmumu'       : {"color" : ROOT.kAzure+2,  "title" : "Z#rightarrow#mu#mu"},
-                            'Ztautau'     : {"color" : ROOT.kCyan,     "title" : "Z#rightarrow#tau#tau"},
-                            'Other'       : {"color" : ROOT.kMagenta,  "title" : "Other"}
-        }
-
+    
+    process_features = {p: {"color": colors_plots_[p], "title": legEntries_plots_[p]} for p in predictedProcessNames}
 
     canvas2D = ROOT.TCanvas("canvas2D","",800,700)
 
@@ -228,6 +220,7 @@ if __name__ == "__main__":
                     pname = f"{p}_{prepost}"
                     hname = f"expproc_{p}_{prepost}"
                 keyplot = f"{chfl}_{pname}"
+                logger.debug(f"Hist {hname}")
                 h1_1 = safeGetObject(infile, hname)
                 h2_backrolled = dressed2DfromFit(h1_1, binning, pname, titles[i], binshift, nMaskedCha=nMaskedChanPerCharge,
                                                    nRecoBins=nRecoBins)
@@ -380,7 +373,7 @@ if __name__ == "__main__":
             htot_unrolled.Sumw2()
             htot_unrolled.SetDirectory(0)
             stack_unrolled = ROOT.THStack(f"stack_unrolled_{prepost}_{charge}", "")
-            leg_unrolled = prepareLegend(0.1, 0.81, 0.9, 0.90, textSize=0.045, nColumns=8)
+            leg_unrolled = prepareLegend(0.08, 0.81, 0.95, 0.90, textSize=0.045, nColumns=min(9, len(predictedProcessNames)+1))
             listOfProj = []
             for key in sortedKeys:
                 histo = all_procs[key]

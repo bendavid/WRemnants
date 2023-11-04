@@ -18,10 +18,10 @@ def select_veto_muons(df, nMuons=1):
 
     return df
 
-def select_good_muons(df, ptLow, ptHigh, nMuons=1, use_trackerMuons=False, use_isolation=False):
+def select_good_muons(df, ptLow, ptHigh, datasetGroup, nMuons=1, use_trackerMuons=False, use_isolation=False, isoDefinition="iso04", isoThreshold=0.15):
 
     if use_trackerMuons:
-        if dataset.group in bkgMCprocs:
+        if datasetGroup in bkgMCprocs:
             df = df.Define("Muon_category", "Muon_isTracker && Muon_highPurity")
         else:
             df = df.Define("Muon_category", "Muon_isTracker && Muon_innerTrackOriginalAlgo != 13 && Muon_innerTrackOriginalAlgo != 14 && Muon_highPurity")
@@ -31,7 +31,13 @@ def select_good_muons(df, ptLow, ptHigh, nMuons=1, use_trackerMuons=False, use_i
     goodMuonsSelection = f"Muon_correctedPt > {ptLow} && Muon_correctedPt < {ptHigh} && vetoMuons && Muon_mediumId && Muon_category"
     if use_isolation:
         # for w like we directly require isolated muons, for w we need non-isolated for qcd estimation
-        goodMuonsSelection += " && Muon_pfRelIso04_all < 0.15"
+        if isoDefinition == "iso04" or datasetGroup in bkgMCprocs: ## FIXME: at some point backgrounds may have all variables
+            isoBranch = "Muon_pfRelIso04_all"
+        elif isoDefinition == "iso04vtxAgn":
+            isoBranch = "Muon_vtxAgnPfRelIso04_all"
+        else:
+            raise NotImplementedError(f"Isolation definition {isoDefinition} not implemented")
+        goodMuonsSelection += f" && {isoBranch} < {isoThreshold}"
 
     df = df.Define("goodMuons", goodMuonsSelection) 
     df = df.Filter(f"Sum(goodMuons) == {nMuons}")

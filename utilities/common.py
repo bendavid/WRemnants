@@ -17,8 +17,9 @@ wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "Wplust
     'WminusToMuNu_winhac-lo-photos', 'WminusToMuNu_winhac-lo', 'WminusToMuNu_winhac-nlo']
 zprocs = ["ZmumuPostVFP", "ZtautauPostVFP", "ZmumuMiNLO", "ZmumuNNLOPS", 
     'ZToMuMu_horace-lo-photos', 'ZToMuMu_horace-nlo', 'ZToMuMu_horace-lo', 'ZToMuMu_horace-new',
-    'ZToMuMu_horace-alpha-fsr-off-isr-off', 'ZToMuMu_horace-alpha-old-fsr-off-isr-off', 'ZToMuMu_horace-alpha-old-fsr-off-isr-pythia'
+    'ZToMuMu_horace-alpha-fsr-off-isr-off', 'ZToMuMu_horace-alpha-old-fsr-off-isr-off', 'ZToMuMu_horace-alpha-old-fsr-off-isr-pythia',
     ]
+
 vprocs = wprocs+zprocs
 zprocs_recoil = ["ZmumuPostVFP"]
 wprocs_recoil = ["WplusmunuPostVFP", "WminusmunuPostVFP"]
@@ -166,7 +167,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--recoilHists", action='store_true', help="Save all recoil related histograms for calibration and validation")
     parser.add_argument("--recoilUnc", action='store_true', help="Run the recoil calibration with uncertainties (slower)")
     parser.add_argument("--highptscales", action='store_true', help="Apply highptscales option in MiNNLO for better description of data at high pT")
-    parser.add_argument("--dataPath", type=str, default=None, help="Access samples from eos")
+    parser.add_argument("--dataPath", type=str, default=None, help="Access samples from this path (default reads from local machine), for eos use 'root://eoscms.cern.ch//store/cmst3/group/wmass/w-mass-13TeV/NanoAOD/'")
     parser.add_argument("--noVertexWeight", action='store_true', help="Do not apply reweighting of vertex z distribution in MC to match data")
     parser.add_argument("--validationHists", action='store_true', help="make histograms used only for validations")
     parser.add_argument("--onlyMainHistograms", action='store_true', help="Only produce some histograms, skipping (most) systematics to run faster when those are not needed")
@@ -208,31 +209,26 @@ def common_parser(for_reco_highPU=False):
         # options for efficiencies
         parser.add_argument("--trackerMuons", action='store_true', help="Use tracker muons instead of global muons (need appropriate scale factors too). This is obsolete")
         parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers)")
-        parser.add_argument("--noSmooth3dsf", dest="smooth3dsf", action='store_false', help="If true (defaul) use smooth 3D scale factors instead of the original 2D ones (but eff. systs are still obtained from 2D version)")
-        parser.add_argument("--sf2DnoUt", action='store_true', help="Use older smooth 2D scale factors with no ut dependence")
+        parser.add_argument("--noSmooth3dsf", dest="smooth3dsf", action='store_false', help="If true (default) use smooth 3D scale factors instead of the original 2D ones (but eff. systs are still obtained from 2D version)")
         parser.add_argument("--isoEfficiencySmoothing", action='store_true', help="If isolation SF was derived from smooth efficiencies instead of direct smoothing") 
         parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency (legacy option for tests)")
+        parser.add_argument("--isolationDefinition", choices=["iso04vtxAgn", "iso04"], default="iso04vtxAgn",  help="Isolation type (and corresponding scale factors)")
+
     commonargs,_ = parser.parse_known_args()
 
     if for_reco_highPU:
-        if commonargs.sf2DnoUt and commonargs.smooth3dsf:
-            parser = set_parser_default(parser, "smooth3dsf", False)
-            common_logger.warning(f"Option --sf2DnoUt was called without --noSmooth3dsf, it will also activate --noSmooth3dsf.")
         if commonargs.trackerMuons:
             common_logger.warning("Using tracker muons, but keep in mind that scale factors are obsolete and not recommended.")
             sfFile = "scaleFactorProduct_16Oct2022_TrackerMuonsHighPurity_vertexWeight_OSchargeExceptTracking.root"
         else:
-            # note: any of the following file is fine for reco, tracking, and IDIP.
-            # Instead, for trigger and isolation one would actually use 3D SF vs eta-pt-ut.
+            # note: for trigger and isolation one would actually use 3D SF vs eta-pt-ut.
             # However, even when using the 3D SF one still needs the 2D ones to read the syst/nomi ratio,
             # since the dataAltSig tag-and-probe fits were not run in 3D (it is assumed for simplicity that the syst/nomi ratio is independent from uT)
-            # the syst variations are the same in both files also for trigger/isolation (since they had been copied over)
-            if commonargs.sf2DnoUt:
-                sfFile = "allSmooth_GtoHout.root" # 2D SF without ut integration
-            else:
-                sfFile = "allSmooth_GtoH3Dout.root" # 2D SF from 3D with ut-integration
+            #
+            # 2D SF without ut-dependence, still needed to compute systematics when uing 3D SF
+            sfFile = "allSmooth_GtoHout.root" if commonargs.isolationDefinition == "iso04" else "allSmooth_GtoHout_vtxAgnIso.root"
 
-        sfFile = f"{data_dir}/testMuonSF/{sfFile}"
+        sfFile = f"{data_dir}/muonSF/{sfFile}"
     else:
         sfFile = ""
 
