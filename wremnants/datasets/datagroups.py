@@ -551,7 +551,7 @@ class Datagroups(object):
         if member_filter is not None:
             base_members = [m for m in filter(lambda x, f=member_filter: f(x), base_members)]            
 
-        if "xnorm" not in self.results[base_members[0].name]["output"]:
+        if histToReadAxes not in self.results[base_members[0].name]["output"]:
             raise ValueError(f"Results for member {base_members[0].name} does not include xnorm. Found {self.results[base_members[0].name]['output'].keys()}")
         nominal_hist = self.results[base_members[0].name]["output"][histToReadAxes].get()
 
