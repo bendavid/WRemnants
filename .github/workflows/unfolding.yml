@@ -69,7 +69,7 @@ jobs:
         if: github.event_name != 'pull_request' && github.event.schedule != '30 5 * * 1-5'
         run: |
           echo "NTHREADS=256" >> $GITHUB_ENV
-          echo "MAX_FILES=-1" >> $GITHUB_ENV
+          echo "MAX_FILES=-2" >> $GITHUB_ENV
           echo "LUMI_SCALE=1" >> $GITHUB_ENV
 
       - name: setup outdir
