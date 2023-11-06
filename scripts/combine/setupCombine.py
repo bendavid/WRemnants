@@ -36,6 +36,7 @@ def make_parser(parser=None):
     parser.add_argument("--fitXsec", action='store_true', help="Fit signal inclusive cross section")
     parser.add_argument("--fitMassDiff", type=str, default=None, choices=["charge", "eta-sign", "eta-range"], help="Fit an additional POI for the difference in the boson mass")
     parser.add_argument("--fitresult", type=str, default=None ,help="Use data and covariance matrix from fitresult (for making a theory fit)")
+    parser.add_argument("--noMCStat", action='store_true', help="Do not include MC stat uncertainty in covariance for theory fit (only when using --fitresult)")
     parser.add_argument("--fakerateAxes", nargs="+", help="Axes for the fakerate binning", default=["eta","pt","charge"])
     parser.add_argument("--ABCD", action="store_true", help="Produce datacard for simultaneous fit of ABCD regions")
     # settings on the nuisances itself
@@ -282,7 +283,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     if not (args.doStatOnly and constrainMass):
         cardTool.addSystematic(f"massWeight{label}",
                             processes=signal_samples_forMass,
-                            group=f"massShift{label}",
+                            group=f"massShift",
                             noi=not constrainMass,
                             skipEntries=massWeightNames(proc=label, exclude=100),
                             mirror=False,
@@ -394,7 +395,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     if wmass and not xnorm:
         cardTool.addSystematic(f"massWeightZ",
                                 processes=['single_v_nonsig_samples'],
-                                group=f"massShiftZ",
+                                group=f"massShift",
                                 skipEntries=massWeightNames(proc="Z", exclude=2.1),
                                 mirror=False,
                                 noConstraint=False,
@@ -795,7 +796,7 @@ if __name__ == "__main__":
                 cardTool = setup(args, ifile, ["count"], xnorm=True)
                 writer.add_channel(cardTool)
         if args.fitresult:
-            writer.set_fitresult(args.fitresult)
+            writer.set_fitresult(args.fitresult, mc_stat=not args.noMCStat)
         writer.write(args)
     else:
         if len(args.inputFile) > 1:

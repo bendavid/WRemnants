@@ -619,11 +619,11 @@ class Datagroups(object):
         return df
 
     def set_rebin_action(self, axes, ax_lim=[], ax_rebin=[], ax_absval=[]):
-        if len(ax_lim) % 2 or len(ax_lim)/2 > len(fitvar) or len(ax_rebin) > len(fitvar):
+        if len(ax_lim) % 2 or len(ax_lim)/2 > len(axes) or len(ax_rebin) > len(axes):
             raise ValueError("Inconsistent rebin or axlim arguments. axlim must be at most two entries per axis, and rebin at most one")
 
         sel = {}
-        for var,low,high,rebin in itertools.zip_longest(fitvar, ax_lim[::2], ax_lim[1::2], ax_rebin):
+        for var,low,high,rebin in itertools.zip_longest(axes, ax_lim[::2], ax_lim[1::2], ax_rebin):
             s = hist.tag.Slicer()
             if low is not None and high is not None:
                 logger.info(f"Restricting the axis '{var}' to range [{low}, {high}]")
@@ -637,11 +637,11 @@ class Datagroups(object):
             logger.info(f"Will apply the global selection {sel}")
             self.setGlobalAction(lambda h: h[sel])
 
-        for i, (var, absval) in enumerate(itertools.zip_longest(fitvar, ax_absval)):
+        for i, (var, absval) in enumerate(itertools.zip_longest(axes, ax_absval)):
             if absval:
                 logger.info(f"Taking the absolute value of axis '{var}'")
                 self.setGlobalAction(lambda h, ax=var: hh.makeAbsHist(h, ax))
-                fitvar[i] = f"abs{var}"
+                axes[i] = f"abs{var}"
 
     def readHist(self, baseName, proc, group, syst):
         output = self.results[proc.name]["output"]

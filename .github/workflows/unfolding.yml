@@ -336,11 +336,14 @@ jobs:
           WREMNANTS_OUTDIR: ${{ needs.setenv.outputs.WREMNANTS_OUTDIR }}
           WEB_DIR: ${{ needs.setenv.outputs.WEB_DIR }}
           PLOT_DIR: ${{ needs.setenv.outputs.PLOT_DIR }}
+          LUMI_SCALE: ${{ needs.setenv.outputs.LUMI_SCALE }}
         run: |
           echo "WREMNANTS_OUTDIR=${WREMNANTS_OUTDIR}" >> $GITHUB_ENV
           echo "WEB_DIR=${WEB_DIR}" >> $GITHUB_ENV
           echo "PLOT_DIR=${PLOT_DIR}" >> $GITHUB_ENV
           echo "HIST_FILE=${WREMNANTS_OUTDIR}/${OUTFILE_WLIKE}" >> $GITHUB_ENV
+          echo "LUMI_SCALE=$LUMI_SCALE" >> $GITHUB_ENV
+
       - uses: actions/checkout@v3
         with:
           submodules: 'recursive'
@@ -361,6 +364,12 @@ jobs:
         run: >-
           scripts/ci/run_with_singularity.sh scripts/ci/show_impacts.sh 
           $WREMNANTS_OUTDIR/ZMassWLike_eta_pt_charge_theoryfit/fitresults_123456789.hdf5 $WEB_DIR/$PLOT_DIR impactsWlike.html
+
+      - name: wlike theoryfit plot prepostfit
+        run: >-
+          scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_plots.py 
+          $HIST_FILE --fitresult $WREMNANTS_OUTDIR/ZMassWLike_eta_pt_charge_theoryfit/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR 
+          -n xnorm --plots prefit postfit --debug --rrange 0.9 1.1 --lumi=$LUMI_SCALE
 
   dilepton:
     # The type of runner that the job will run on

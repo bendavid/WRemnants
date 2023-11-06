@@ -30,6 +30,7 @@ parser.add_argument("--makeMCefficiency", action="store_true", help="Save yields
 parser.add_argument("--onlyTheorySyst", action="store_true", help="Keep only theory systematic variations, mainly for tests")
 parser.add_argument("--oneMCfileEveryN", type=int, default=None, help="Use 1 MC file every N, where N is given by this option. Mainly for tests")
 parser.add_argument("--noAuxiliaryHistograms", action="store_true", help="Remove auxiliary histograms to save memory (removed by default with --unfolding or --theoryAgnostic)")
+parser.add_argument("--mtCut", type=int, default=40, help="Value for the transverse mass cut in the event selection")
 
 args = parser.parse_args()
 
@@ -70,7 +71,7 @@ datasets = getDatasets(maxFiles=args.maxFiles,
 era = args.era
 
 # transverse boson mass cut
-mtw_min = 40
+mtw_min = args.mtCut
 
 # custom template binning
 template_neta = int(args.eta[0])
