@@ -248,8 +248,11 @@ def read_impacts_pois_h5(h5file, poi_type, group=True, uncertainties=None):
     totals = np.sqrt(np.diagonal(h5file[f"{poi_type}_outcov"][:npoi,:npoi]))
 
     impact_hist = f"nuisance_group_impact_{poi_type}" if group else f"nuisance_impact_{poi_type}"
-
-    impacts = h5file[impact_hist][...]
+    if impact_hist in h5file.keys():
+        impacts = h5file[impact_hist][...]
+    else:
+        logger.warning("No impacts found, return empty impacts dict")
+        return names, centrals, totals, dict()
 
     if group:
         labels = h5file["hsystgroups"][...].astype(str)
