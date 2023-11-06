@@ -111,9 +111,9 @@ class HDF5Writer(object):
 
             dg = chanInfo.datagroups
             if masked:
+                self.masked_channels.append(chan)
                 axes = ["count"]
                 nbinschan = 1
-                self.masked_channels.append(chan)
             else:
                 axes = chanInfo.fit_axes[:]
                 nbinschan = None
@@ -160,6 +160,7 @@ class HDF5Writer(object):
 
                 if nbinschan is None:
                     nbinschan = norm_proc.shape[0]
+                    nbins += nbinschan
                 elif nbinschan != norm_proc.shape[0]:
                     raise Exception(f"Mismatch between number of bins in channel {chan} and process {proc} for expected ({nbinschan}) and ({norm_proc.shape[0]})")
              
@@ -174,7 +175,6 @@ class HDF5Writer(object):
             dict_logkavg[chan] = {p : {} for p in procs_chan}
             dict_logkhalfdiff[chan] = {p : {} for p in procs_chan}
 
-            nbins += nbinschan
             ibins.append(nbinschan)
 
             if not masked:                

@@ -45,11 +45,19 @@ jobs:
 
       - name: setup kerberos
         run: |
-          kinit -kt ~/private/.keytab cmsmwbot
+          kinit -kt ~/private/.keytab cmsmwbot@CERN.CH
           klist -k -t -e ~/private/.keytab
           klist
           echo "xrdfs root://eosuser.cern.ch// ls $EOS_DIR"
           xrdfs root://eosuser.cern.ch// ls $EOS_DIR
+
+      - name: setup kerberos within singularity image
+        run: |
+          scripts/ci/run_with_singularity.sh kinit -kt ~/private/.keytab cmsmwbot@CERN.CH
+          scripts/ci/run_with_singularity.sh klist -k -t -e ~/private/.keytab
+          scripts/ci/run_with_singularity.sh klist
+          echo "xrdfs root://eoscms.cern.ch// ls $EOS_DATA_DIR"
+          scripts/ci/run_with_singularity.sh xrdfs root://eoscms.cern.ch// ls $EOS_DATA_DIR
 
       - name: setup unscheduled
         if: github.event_name != 'schedule'
