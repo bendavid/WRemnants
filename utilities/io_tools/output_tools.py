@@ -12,6 +12,7 @@ import re
 from utilities import logging
 import glob
 import shutil
+import pathlib
 
 logger = logging.child_logger(__name__)
 
@@ -46,15 +47,16 @@ def metaInfoDict(exclude_diff='notebooks', args=None):
         "command" : script_command_to_str(sys.argv, args),
         "args": {a: getattr(args,a) for a in vars(args)} if args else {}
     }
-    if subprocess.call(["git", "branch"], stderr=subprocess.STDOUT, stdout=open(os.devnull, 'w')) != 0:
+    wd = pathlib.Path(__file__).parent
+    if subprocess.call(["git", "branch"], cwd=wd, stderr=subprocess.STDOUT, stdout=open(os.devnull, 'w')) != 0:
         meta_data["git_info"] = {"hash" : "Not a git repository!",
                 "diff" : "Not a git repository"}
     else:
-        meta_data["git_hash"] = subprocess.check_output(['git', 'log', '-1', '--format="%H"'], encoding='UTF-8')
+        meta_data["git_hash"] = subprocess.check_output(['git', 'log', '-1', '--format="%H"'], cwd=wd, encoding='UTF-8')
         diff_comm = ['git', 'diff']
         if exclude_diff:
             diff_comm.extend(['--', f":!{exclude_diff}"])
-        meta_data["git_diff"] = subprocess.check_output(diff_comm, encoding='UTF-8')
+        meta_data["git_diff"] = subprocess.check_output(diff_comm, encoding='UTF-8', cwd=wd)
 
     return meta_data
 
@@ -85,7 +87,7 @@ def write_analysis_output(results, outfile, args, update_name=True):
     to_append = []
     if args.theoryCorr and not args.theoryCorrAltOnly:
         to_append.append(args.theoryCorr[0]+"Corr")
-    if args.maxFiles is not None:
+    if args.maxFiles is not None and args.maxFiles > 0:
         to_append.append(f"maxFiles{args.maxFiles}")
 
     if to_append and update_name:

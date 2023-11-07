@@ -146,7 +146,7 @@ def read_dyturbo_pdf_hist(base_name, pdf_members, axes, charge=None):
         h = read_dyturbo_hist([base_name.format(i=i)], axes=axes, charge=charge)
         if not pdf_hist:
             pdf_hist = hist.Hist(*h.axes, pdf_ax, storage=h._storage_type())
-        pdf_hist[...,i] = h.view(flow=True)
+        pdf_hist[...,i] = h.view()
         
     return pdf_hist
 

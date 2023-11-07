@@ -290,14 +290,12 @@ def makeStackPlotWithRatio(
             for up,down in zip(fill_procs[:fill_between:2], fill_procs[1:fill_between:2]):
                 unstack_up = action(histInfo[up].hists[histName])
                 unstack_down = action(histInfo[down].hists[histName])
-                unstack_upr = hh.divideHists(unstack_up, ratio_ref, 1e-6, flow=False, by_ax_name=False)
-                unstack_downr = hh.divideHists(unstack_down, ratio_ref, 1e-6, flow=False, by_ax_name=False)
-                ax2.fill_between(unstack_upr.axes[0].edges[:-1], 
-                        unstack_upr.values(), unstack_downr.values(),
-                        # FIXME: Not sure if this is needed, currently not working correctly
-                        #np.append(unstack_upr.values(), unstack_upr.values()[-1]), 
-                        #np.append(unstack_down.values(), unstack_downr.values()[-1]),
-                    step='post', color=histInfo[up].color, alpha=0.5)
+                unstack_upr = hh.divideHists(unstack_up, ratio_ref, 1e-6, flow=False, by_ax_name=False).values()
+                unstack_downr = hh.divideHists(unstack_down, ratio_ref, 1e-6, flow=False, by_ax_name=False).values()
+                ax2.fill_between(unstack_up.axes[0].edges, 
+                    np.insert(unstack_upr, 0, unstack_upr[0]),
+                    np.insert(unstack_downr, 0, unstack_downr[0]),
+                    step='pre', color=histInfo[up].color, alpha=0.5)
 
     addLegend(ax1, nlegcols, extra_text=extra_text, extra_text_loc=extra_text_loc, text_size=legtext_size)
     fix_axes(ax1, ax2, yscale=yscale, logy=logy)

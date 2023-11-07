@@ -285,6 +285,10 @@ def rebinHist(h, axis_name, edges):
 
     ax = h.axes[axis_name]
     ax_idx = [a.name for a in h.axes].index(axis_name)
+
+    if edges.shape == ax.edges.shape and np.isclose(edges, ax.edges).all():
+        return h
+
     if not compatibleBins(ax.edges, edges):
         raise ValueError(f"Cannot rebin histogram due to incompatible edges for axis '{ax.name}'\n"
                             f"Edges of histogram are {ax.edges}, requested rebinning to {edges}")
@@ -300,10 +304,7 @@ def rebinHist(h, axis_name, edges):
     hnew = hist.Hist(*axes, name=h.name, storage=h.storage_type())
 
     if type(ax) == hist.axis.StrCategory:
-        if type(edges) == str:
-            edge_idx = ax.index(edges)
-        else:
-            edge_idx = np.array(edges, dtype=int)
+        edge_idx = np.array(edges, dtype=int)
     else:
         # Offset from bin edge to avoid numeric issues
         offset = 0.5*np.min(ax.edges[1:]-ax.edges[:-1])

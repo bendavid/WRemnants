@@ -138,8 +138,10 @@ def expand_pdf_entries(pdf):
     return [info["branch"]+f"[{i}]" for i in range(first_entry, last_entry)]
 
 theory_corr_weight_map = {
+        "scetlib_dyturboMSHT20_pdfas" : pdfMap["msht20"]["alphas"],
+        "scetlib_dyturboMSHT20Vars" : expand_pdf_entries("msht20"),
         "scetlib_dyturboMSHT20an3lo_pdfas" : pdfMap["msht20an3lo"]["alphas"],
-        "scetlib_dyturboMSHT20an3lo" : expand_pdf_entries("msht20an3lo"),
+        "scetlib_dyturboMSHT20an3loVars" : expand_pdf_entries("msht20an3lo"),
 }
 
 def define_prefsr_vars(df):
@@ -353,7 +355,7 @@ def define_theory_corr_weight_column(df, generator):
     if generator in theory_corr_weight_map:
         values = theory_corr_weight_map[generator]
         df = df.Define(f"{generator}_corr_weight", f"Eigen::TensorFixedSize<double, Eigen::Sizes<{len(values)}>> res; " + \
-            "; ".join([f"res({i}) = {entry}" for i,entry in enumerate(values)]) + \
+            "; ".join([f"res({i}) = {entry}*nominal_weight_uncorr/central_pdf_weight" for i,entry in enumerate(values)]) + \
             "; return res;")
     else:
         df = df.Alias(f"{generator}_corr_weight", "nominal_weight_uncorr")

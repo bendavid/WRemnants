@@ -105,6 +105,8 @@ def makeFilelist(paths, maxFiles=-1, base_path=None, nano_prod_tags=None, is_dat
             logger.debug(f"Reading files from path {path}")
 
             files = buildFileList(path)
+            if maxFiles > 0 and len(files) >= maxFiles:
+                break
 
             if len(files) == 0:
                 fallback = True
@@ -124,7 +126,9 @@ def makeFilelist(paths, maxFiles=-1, base_path=None, nano_prod_tags=None, is_dat
         logger.warning(f"Using {len(tmplist)} files instead of {len(filelist)}")
         filelist = tmplist
 
-    return filelist if maxFiles < 0 or len(filelist) < maxFiles else random.Random(1).sample(filelist, maxFiles)
+    toreturn = filelist if maxFiles < 0 or len(filelist) < maxFiles else random.Random(1).sample(filelist, maxFiles)
+    logger.debug(f"Length of list is {len(toreturn)} for paths {paths}")
+    return toreturn
 
 def selectProc(selection, datasets):
     if any(selection == x.group for x in datasets):
@@ -237,10 +241,13 @@ def getDatasets(maxFiles=default_nfiles, filt=None, excl=None, mode=None, base_p
         if checkFileForZombie:
             paths = [p for p in paths if not is_zombie(p)]
 
+        #paths = list(filter(lambda x: not ("WminusJetsToMuNu" in x and os.path.basename(x) in ["NanoV9MCPostVFP_4316.root","NanoV9MCPostVFP_4372.root","NanoV9MCPostVFP_4310.root","NanoV9MCPostVFP_4377.root","NanoV9MCPostVFP_4306.root"]), paths))
+
         if not paths:
             logger.warning(f"Failed to find any files for dataset {sample}. Looking at {info['filepaths']}. Skipping!")
             continue
 
+        
         narf_info = dict(
             name=sample,
             filepaths=paths,
