@@ -21,7 +21,7 @@ def select_fiducial_space(df, ptVgenMax, absYVgenMax, accept=True):
 def define_helicity_weights(df):
     # define the helicity tensor, here nominal_weight will only have theory weights, no experimental pieces, it is defined in theory_tools.define_theory_weights_and_corrs
     weightsByHelicity_helper = wremnants.makehelicityWeightHelper()
-    df = df.Define("helWeight_tensor", weightsByHelicity_helper, ["massVgen", "yVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "nominal_weight"])
+    df = df.Define("helWeight_tensor", weightsByHelicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "nominal_weight"])
     df = df.Define("nominal_weight_helicity", "wrem::scalarmultiplyHelWeightTensor(nominal_weight,helWeight_tensor)")
     return df
 
