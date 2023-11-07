@@ -126,6 +126,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
 
     if xnorm:
         datagroups.select_xnorm_groups(base_group)
+        datagroups.globalAction = None # reset global action in case of rebinning or such
         if not args.unfolding:
             # creating the xnorm model (e.g. for the theory fit)
             if wmass:

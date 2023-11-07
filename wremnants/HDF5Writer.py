@@ -118,12 +118,6 @@ class HDF5Writer(object):
                 axes = chanInfo.fit_axes[:]
                 nbinschan = None
 
-            if chanInfo.xnorm:
-                dg.globalAction = None # reset global action in case of rebinning or such
-                dg.select_xnorm_groups() # only keep processes where xnorm is defined
-                if dg.fakeName in dg.groups.keys():
-                    dg.deleteGroup(dg.fakeName)
-
             # load data and nominal ans syst histograms
             dg.loadHistsForDatagroups(
                 baseName=chanInfo.nominalName, syst=chanInfo.nominalName,
@@ -132,6 +126,17 @@ class HDF5Writer(object):
                 scaleToNewLumi=chanInfo.lumiScale, 
                 forceNonzero=forceNonzero)
 
+            if not masked and chanInfo.ABCD:
+                setSimultaneousABCD(chanInfo)
+
+                if dg.fakeName not in bkgs:
+                    bkgs.append(dg.fakeName)
+                if chanInfo.nameMT not in axes:
+                    axes.append(chanInfo.nameMT)
+                if common.passIsoName not in axes:
+                    axes.append(common.passIsoName)
+
+            # nominal predictions
             procs_chan = chanInfo.predictedProcesses()
             for proc in procs_chan:
                 logger.debug(f"Now  in channel {chan} at process {proc}")
@@ -177,6 +182,7 @@ class HDF5Writer(object):
 
             ibins.append(nbinschan)
 
+            # data and pseudodata
             if not masked:                
                 if self.theoryFit:
                     if self.theoryFitData is None or self.theoryFitDataCov is None:
@@ -184,16 +190,6 @@ class HDF5Writer(object):
                     data_obs = self.theoryFitData[chan]
                 elif dg.dataName in dg.groups:
                     data_obs_hist = dg.groups[dg.dataName].hists[chanInfo.nominalName]
-
-                    if chanInfo.ABCD:
-                        setSimultaneousABCD(chanInfo)
-                        if dg.fakeName not in bkgs:
-                            bkgs.append(dg.fakeName)
-
-                        if chanInfo.nameMT not in axes:
-                            axes.append(chanInfo.nameMT)
-                        if common.passIsoName not in axes:
-                            axes.append(common.passIsoName)
 
                     if chanInfo.ABCD and set(chanInfo.fakerateAxes) != set(chanInfo.fit_axes):
                         data_obs = projectABCD(chanInfo, data_obs_hist)
