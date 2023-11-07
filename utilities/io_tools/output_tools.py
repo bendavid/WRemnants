@@ -86,7 +86,7 @@ def write_analysis_output(results, outfile, args, update_name=True):
     if args.theoryCorr and not args.theoryCorrAltOnly:
         to_append.append(args.theoryCorr[0]+"Corr")
     if args.maxFiles is not None:
-        to_append.append(f"maxFiles{args.maxFiles}")
+        to_append.append(f"maxFiles_{args.maxFiles}".replace("-","m"))
 
     if to_append and update_name:
         outfile = outfile.replace(".hdf5", f"_{'_'.join(to_append)}.hdf5")

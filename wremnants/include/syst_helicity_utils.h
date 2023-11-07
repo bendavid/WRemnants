@@ -6,6 +6,7 @@
 #include "theory_corrections.h"
 
 namespace wrem {
+
   //class to expand the muon eff stat var tensor with helcitity weights
 template <std::size_t nEta, std::size_t nPt, std::size_t ch, std::size_t nhelicity>
 class muon_eff_helper_stat_helicity {  
@@ -79,34 +80,32 @@ class tensorRank2_helper_helicity {
   }
 }; 
 
-
-Eigen::TensorFixedSize<double, Eigen::Sizes<6>> scalarmultiplyHelWeightTensor(double wt, Eigen::TensorFixedSize<double, Eigen::Sizes<6>>& helTensor) {
+Eigen::TensorFixedSize<double, Eigen::Sizes<NHELICITY>> scalarmultiplyHelWeightTensor(double wt, Eigen::TensorFixedSize<double, Eigen::Sizes<NHELICITY>>& helTensor) {
   return wt*helTensor;
 }
 
- template <typename T>
+template <typename T>
 class WeightByHelicityHelper : public TensorCorrectionsHelper<T> {
    using base_t = TensorCorrectionsHelper<T>;
    using tensor_t = typename T::storage_type::value_type::tensor_t;
    static constexpr auto sizes = narf::tensor_traits<tensor_t>::sizes;
-   //static constexpr auto nhelicity = NHELICITY;
-   static constexpr auto NHELICITY_WEIGHTS = 6;
+   static constexpr auto NHELICITY_WEIGHTS = NHELICITY;
    // TODO: Can presumably get the double type from the template param
-   typedef Eigen::TensorFixedSize<double, Eigen::Sizes<NHELICITY_WEIGHTS>> helweight_tensor_t;
-   
+   using helweight_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<NHELICITY_WEIGHTS>>;
+
  public:
    using base_t::base_t;
-   
+
    helweight_tensor_t operator() (double mV, double yV, double ptV, int qV, const CSVars &csvars, double nominal_weight) {
      //static_assert(nhelicity == NHELICITY);
      const auto moments = csAngularFactors(csvars);
      const auto coeffs = base_t::get_tensor(mV, yV, ptV, qV);
      helweight_tensor_t helWeights;
      double sum = 0.;
-     for(unsigned int i = 0; i < NHELICITY;i++) {
-       if(i<6) helWeights(i) = coeffs(i) * moments(i);//save only upto 6 for further use
+     for(unsigned int i = 0; i < NHELICITY; i++) {
+       if (i<NHELICITY_WEIGHTS) helWeights(i) = coeffs(i) * moments(i);
        sum += coeffs(i) * moments(i);//full sum of all components
-     }       
+     }
      double factor = 1./sum;
      helweight_tensor_t helWeights_tensor = factor*helWeights;
      return helWeights_tensor;
