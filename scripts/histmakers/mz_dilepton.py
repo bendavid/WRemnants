@@ -269,7 +269,7 @@ def build_graph(df, dataset):
             df = syst_tools.add_theory_hists(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, [all_axes[obs]], [obs], base_name=f"nominal_{obs}", for_wmass=False)
 
     # test plots
-    if args.validationHists:
+    if args.validationHists and args.useDileptonTriggerSelection:
         df_plusTrig = df.Filter("trigMuons_passTrigger0")
         df_minusTrig = df.Filter("nonTrigMuons_passTrigger0")
         df_bothTrig = df.Filter("trigMuons_passTrigger0 && nonTrigMuons_passTrigger0")
