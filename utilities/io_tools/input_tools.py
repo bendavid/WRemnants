@@ -10,8 +10,11 @@ import h5py
 from narf import ioutils
 import ROOT
 import uproot
+import re
 
 logger = logging.child_logger(__name__)
+
+scetlib_tnp_match_expr = ["^gamma_.*[+|-]\d+", "^b_.*[+|-]\d+", "^s[+|-]\d+", "^h_.*\d+"]
 
 def read_and_scale_pkllz4(fname, proc, histname, calculate_lumi=False, scale=1):
     with lz4.frame.open(fname) as f:
@@ -271,6 +274,11 @@ def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo
         if charge is not None:
             newaxes.insert(-1, "charge")
         hfo_sing = hfo_sing.project(*newaxes)
+        tnp_axes = [x for x in hfo_sing.axes["vars"] if any(re.match(e, x) for e in scetlib_tnp_match_expr)]
+        # TNP variations aren't defined for nonsingular. Set to the nominal
+        if tnp_axes:
+            indices = tuple(hfo_sing.axes["vars"].index(tnp_axes))
+            hfo_sing.view()[...,indices] = hfo_sing[...,0].view()[...,np.newaxis]
         hsing = hsing.project(*newaxes)
     if all("pdf" in x for x in hsing.axes["vars"]) and hsing.axes["vars"].size > 1:
         logger.info("Reading PDF variations for DYTurbo")

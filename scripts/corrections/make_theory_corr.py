@@ -19,7 +19,7 @@ parser.add_argument("-g", "--generator", type=str, choices=["dyturbo", "scetlib"
 parser.add_argument("--outpath", type=str, default=f"{common.data_dir}/TheoryCorrections", help="Output path")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
 parser.add_argument("--proc", type=str, required=True, choices=["z", "w", ], help="Process")
-parser.add_argument("--minnloh", default="nominal_gen_qcdScale", type=str, help="Reference hist in MiNNLO sample")
+parser.add_argument("--minnloh", default="nominal_gen", type=str, help="Reference hist in MiNNLO sample")
 parser.add_argument("--axes", nargs="*", type=str, default=None, help="Use only specified axes in hist")
 parser.add_argument("--debug", action='store_true', help="Print debug output")
 parser.add_argument("--selectVars", type=str, nargs="*", help="Select variations from corr hist")

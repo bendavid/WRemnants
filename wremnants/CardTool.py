@@ -47,6 +47,7 @@ class CardTool(object):
         self.nominalDim = None
         self.pseudoData = None
         self.pseudoDataIdx = None
+        self.pseudoDataSystAx = None
         self.pseudoDataProcsRegexp = None
         self.excludeSyst = None
         self.writeByCharge = True
@@ -690,11 +691,15 @@ class CardTool(object):
             hists.extend([procDictFromNomi[proc].hists[self.pseudoData] for proc in processesFromNomi])
         # done, now sum all histograms
         hdata = hh.sumHists(hists)
-        # Kind of hacky, but in case the alt hist has uncertainties
-        for systAxName in ["systIdx", "tensor_axis_0", "vars"]:
-            if systAxName in [ax.name for ax in hdata.axes]:
-                hdata = hdata[{systAxName : self.pseudoDataIdx }] 
+        if not self.pseudoDataSystAx:
+            extra_ax = [ax for ax in hdata.axes.name if ax not in self.fit_axes]
+            if extra_ax:
+                self.pseudoDataSystAx = extra_ax[0]
+                logger.info(f"Setting pseudoDataSystAx to {self.pseudoDataSystAx}")
 
+        if self.pseudoDataIdx and self.pseudoDataSystAx:
+            hdata = [{self.pseudoDataSystAx : self.pseudoDataIdx}]
+            
         self.writeHist(hdata, self.getDataName(), self.pseudoData+"_sum")
         if self.getFakeName() in procDict:
             self.writeHist(procDict[self.getFakeName()].hists[self.pseudoData], self.getFakeName(), self.pseudoData+"_sum")
