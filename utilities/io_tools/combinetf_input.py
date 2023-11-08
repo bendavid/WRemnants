@@ -9,6 +9,7 @@ from narf import ioutils
 import ROOT
 import uproot
 import pandas as pd
+import re
 
 logger = logging.child_logger(__name__)
 
@@ -184,7 +185,8 @@ def decode_poi_bin(name, var):
     if len(name_split) == 1:
         return None
     else:
-        return name_split[-1].split("_")[0]
+        # capture one or more consecutive digits; filter out empty strings
+        return next(filter(None, re.split(r'(\d+)', name_split[-1])))
 
 def filter_poi_bins(names, gen_axes, selections={}, base_processes=[], flow=False):       
     if isinstance(gen_axes, str):
@@ -197,10 +199,10 @@ def filter_poi_bins(names, gen_axes, selections={}, base_processes=[], flow=Fals
         if flow:
             # set underflow to -1, overflow to max bin number+1
             max_bin = pd.to_numeric(df[axis],errors='coerce').max()
-            df[axis] = df[axis].apply(lambda x, iu=max_bin: -1 if x=="U" else iu+1 if x=="O" else int(x) if x is not None else None)
+            df[axis] = df[axis].apply(lambda x, iu=max_bin: -1 if x[0]=="U" else iu+1 if x[0]=="O" else int(x) if x is not None else None)
         else:
             # set underflow and overflow to None
-            df[axis] = df[axis].apply(lambda x: None if x in ["U","O",None] else int(x))
+            df[axis] = df[axis].apply(lambda x: None if x is None or x[0] in ["U","O"] else int(x))
 
     # filter out rows with NaNs
     mask = ~df.isna().any(axis=1)
@@ -246,8 +248,11 @@ def read_impacts_pois_h5(h5file, poi_type, group=True, uncertainties=None):
     totals = np.sqrt(np.diagonal(h5file[f"{poi_type}_outcov"][:npoi,:npoi]))
 
     impact_hist = f"nuisance_group_impact_{poi_type}" if group else f"nuisance_impact_{poi_type}"
-
-    impacts = h5file[impact_hist][...]
+    if impact_hist in h5file.keys():
+        impacts = h5file[impact_hist][...]
+    else:
+        logger.warning("No impacts found, return empty impacts dict")
+        return names, centrals, totals, dict()
 
     if group:
         labels = h5file["hsystgroups"][...].astype(str)

@@ -1,5 +1,5 @@
 from wremnants.combine_helpers import setSimultaneousABCD, projectABCD
-from utilities import common, logging
+from utilities import boostHistHelpers as hh, common, logging
 from utilities.io_tools import output_tools, combinetf_input
 
 import time
@@ -49,12 +49,13 @@ class HDF5Writer(object):
             self.clipSig = np.abs(np.log(clipSystVariationsSignal))
 
 
-    def set_fitresult(self, fitresult_filename, poi_type="pmaskedexp", gen_flow=False):
+    def set_fitresult(self, fitresult_filename, poi_type="pmaskedexp", gen_flow=False, mc_stat=True):
         if poi_type != "pmaskedexp":
             raise NotImplementedError("Theoryfit currently only supported for poi_type='pmaskedexp'")
         if len(self.get_channels()) > 1:
             logger.warning("Theoryfit for more than one channels is currently experimental")
         self.theoryFit = True
+        self.theoryFitMCStat = mc_stat
         base_processes = ["W" if c.datagroups.mode == "wmass" else "Z" for c in self.get_channels().values()]
         axes = [c.fit_axes for c in self.get_channels().values()]
         fitresult = combinetf_input.get_fitresult(fitresult_filename)
@@ -109,13 +110,13 @@ class HDF5Writer(object):
             logger.info(f"Now in channel {chan} masked={masked}")
 
             dg = chanInfo.datagroups
-            axes = chanInfo.fit_axes[:]
-
-            if chanInfo.xnorm:
-                dg.globalAction = None # reset global action in case of rebinning or such
-                dg.select_xnorm_groups() # only keep processes where xnorm is defined
-                if dg.fakeName in dg.groups.keys():
-                    dg.deleteGroup(dg.fakeName)
+            if masked:
+                self.masked_channels.append(chan)
+                axes = ["count"]
+                nbinschan = 1
+            else:
+                axes = chanInfo.fit_axes[:]
+                nbinschan = None
 
             # load data and nominal ans syst histograms
             dg.loadHistsForDatagroups(
@@ -125,43 +126,17 @@ class HDF5Writer(object):
                 scaleToNewLumi=chanInfo.lumiScale, 
                 forceNonzero=forceNonzero)
 
-            if not masked:                
-                if self.theoryFit:
-                    if self.theoryFitData is None or self.theoryFitDataCov is None:
-                        raise RuntimeError("No data or covariance found to perform theory fit")
-                    data_obs = self.theoryFitData[chan]
-                else:
-                    data_obs_hist = dg.groups[dg.dataName].hists[chanInfo.nominalName]
+            if not masked and chanInfo.ABCD:
+                setSimultaneousABCD(chanInfo)
 
-                    if chanInfo.ABCD:
-                        setSimultaneousABCD(chanInfo)
-                        if dg.fakeName not in bkgs:
-                            bkgs.append(dg.fakeName)
+                if dg.fakeName not in bkgs:
+                    bkgs.append(dg.fakeName)
+                if chanInfo.nameMT not in axes:
+                    axes.append(chanInfo.nameMT)
+                if common.passIsoName not in axes:
+                    axes.append(common.passIsoName)
 
-                        if chanInfo.nameMT not in axes:
-                            axes.append(chanInfo.nameMT)
-                        if common.passIsoName not in axes:
-                            axes.append(common.passIsoName)
-
-                    if chanInfo.ABCD and set(chanInfo.fakerateAxes) != set(chanInfo.fit_axes):
-                        data_obs = projectABCD(chanInfo, data_obs_hist)
-                    else:
-                        if data_obs_hist.axes.name != axes:
-                            data_obs_hist = data_obs_hist.project(*axes)
-
-                        data_obs = data_obs_hist.values(flow=False).flatten().astype(self.dtype)
-
-                dict_data_obs[chan] = data_obs
-                nbinschan = len(data_obs)
-                nbins += nbinschan
-
-            else:
-                self.masked_channels.append(chan)
-                axes = ["count"]
-                nbinschan = 1
-
-            ibins.append(nbinschan)
-
+            # nominal predictions
             procs_chan = chanInfo.predictedProcesses()
             for proc in procs_chan:
                 logger.debug(f"Now  in channel {chan} at process {proc}")
@@ -188,12 +163,12 @@ class HDF5Writer(object):
 
                     norm_proc = norm_proc_hist.values(flow=False).flatten().astype(self.dtype)
 
-                    if norm_proc.shape[0] != nbinschan:
-                        raise Exception(f"Mismatch between number of bins in channel {chan} for expected ({nbinschan}) and template ({norm_proc.shape[0]})")
-
-                # free memory
-                dg.groups[proc].hists[chanInfo.nominalName] = None
-
+                if nbinschan is None:
+                    nbinschan = norm_proc.shape[0]
+                    nbins += nbinschan
+                elif nbinschan != norm_proc.shape[0]:
+                    raise Exception(f"Mismatch between number of bins in channel {chan} and process {proc} for expected ({nbinschan}) and ({norm_proc.shape[0]})")
+             
                 if not allowNegativeExpectation:
                     norm_proc = np.maximum(norm_proc, 0.)
 
@@ -204,6 +179,30 @@ class HDF5Writer(object):
 
             dict_logkavg[chan] = {p : {} for p in procs_chan}
             dict_logkhalfdiff[chan] = {p : {} for p in procs_chan}
+
+            ibins.append(nbinschan)
+
+            # data and pseudodata
+            if not masked:                
+                if self.theoryFit:
+                    if self.theoryFitData is None or self.theoryFitDataCov is None:
+                        raise RuntimeError("No data or covariance found to perform theory fit")
+                    data_obs = self.theoryFitData[chan]
+                elif dg.dataName in dg.groups:
+                    data_obs_hist = dg.groups[dg.dataName].hists[chanInfo.nominalName]
+
+                    if chanInfo.ABCD and set(chanInfo.fakerateAxes) != set(chanInfo.fit_axes):
+                        data_obs = projectABCD(chanInfo, data_obs_hist)
+                    else:
+                        if data_obs_hist.axes.name != axes:
+                            data_obs_hist = data_obs_hist.project(*axes)
+
+                        data_obs = data_obs_hist.values(flow=False).flatten().astype(self.dtype)
+                else:
+                    logger.warning("Writing combinetf hdf5 input without data, use pseudodata from sum of processes.")
+                    data_obs = sum(dict_norm[chan].values())
+
+                dict_data_obs[chan] = data_obs
 
             # lnN systematics
             for name, syst in chanInfo.lnNSystematics.items():
@@ -281,7 +280,7 @@ class HDF5Writer(object):
                     logger.debug(f"Now at proc {proc}!")
 
                     hvar = dg.groups[proc].hists["syst"]
-
+                    
                     if syst["doActionBeforeMirror"] and syst["action"]:
                         logger.debug(f"Do action before mirror")
                         hvar = syst["action"](hvar, **syst["actionArgs"])
