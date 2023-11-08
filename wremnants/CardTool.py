@@ -21,7 +21,7 @@ def notImplemented(operation="Unknown"):
     raise NotImplementedError(f"Required operation '{operation}' is not implemented!")
 
 class CardTool(object):
-    def __init__(self, outpath="./", xnorm=False, ABCD=False):
+    def __init__(self, outpath="./", xnorm=False, ABCD=False, real_data=False):
     
         self.skipHist = False # don't produce/write histograms, file with them already exists
         self.outfile = None
@@ -46,7 +46,8 @@ class CardTool(object):
         self.histName = "x"
         self.nominalDim = None
         self.pseudoData = None
-        self.pseudoDataIdx = None
+        self.pseudoDataAxis = None
+        self.pseudoDataIdxs = None
         self.pseudoDataProcsRegexp = None
         self.excludeSyst = None
         self.writeByCharge = True
@@ -57,6 +58,7 @@ class CardTool(object):
         self.fakerateAxes = ["pt", "eta", "charge"]
         self.xnorm = xnorm
         self.ABCD = ABCD
+        self.real_data = real_data
         self.absolutePathShapeFileInCard = False
         self.fakerateIntegrationAxes = []
         self.excludeProcessForChannel = {} # can be used to exclue some POI when runnig a specific name (use case, force gen and reco charges to match)
@@ -158,9 +160,10 @@ class CardTool(object):
     def getDataName(self):
         return self.datagroups.dataName
 
-    def setPseudodata(self, pseudodata, idx = 0, pseudoDataProcsRegexp=".*"):
+    def setPseudodata(self, pseudodata, pseudodata_axis, idxs = [0], pseudoDataProcsRegexp=".*"):
         self.pseudoData = pseudodata
-        self.pseudoDataIdx = idx if not idx.isdigit() else int(idx)
+        self.pseudoDataAxis = pseudodata_axis
+        self.pseudoDataIdxs = [idx if not idx.isdigit() else int(idx) for idx in idxs]
         self.pseudoDataProcsRegexp = re.compile(pseudoDataProcsRegexp)
         
     # Needs to be increased from default for long proc names
@@ -693,14 +696,15 @@ class CardTool(object):
             hists.extend([procDictFromNomi[proc].hists[self.pseudoData] for proc in processesFromNomi])
         # done, now sum all histograms
         hdata = hh.sumHists(hists)
+        if self.pseudoDataAxis not in hdata.axes.name:
+            raise RuntimeError(f"Pseudodata axis {self.pseudoDataAxis} not found in {hdata.axes.name}.")
         return hdata
 
     def addPseudodata(self, processes, processesFromNomi=[]):
         hdata = loadPseudodata(processes, processesFromNomi)
-        # Kind of hacky, but in case the alt hist has uncertainties
-        for systAxName in ["systIdx", "tensor_axis_0", "vars"]:
-            if systAxName in [ax.name for ax in hdata.axes]:
-                hdata = hdata[{systAxName : self.pseudoDataIdx }] 
+        if len(self.pseudoDataIdxs) > 1:
+            raise RuntimeError(f"Mutliple pseudo data sets from different indices is not supported in the root writer.")
+        hdata = hdata[{self.pseudoDataAxis : self.pseudoDataIdxs[0] }] 
         self.writeHist(hdata, self.getDataName(), self.pseudoData+"_sum")
         if self.getFakeName() in procDict:
             self.writeHist(procDict[self.getFakeName()].hists[self.pseudoData], self.getFakeName(), self.pseudoData+"_sum")
@@ -709,7 +713,11 @@ class CardTool(object):
         logger.info("-"*50)
         logger.info(f"Preparing to write systematic {syst}")
         for process in processes:
-            hvar = self.datagroups.groups[process].hists[label]
+            if process == self.getDataName() and not self.real_data:
+                logger.warning("Writing combinetf root input without data, use sum of processes.")
+                hvar = sum([self.datagroups.groups[p].hists[label] for p in processes if p != self.getDataName()])
+            else:
+                hvar = self.datagroups.groups[process].hists[label]
             if not hvar:
                 raise RuntimeError(f"Failed to load hist for process {process}, systematic {syst}")
             self.writeForProcess(hvar, process, syst, check_systs=check_systs)

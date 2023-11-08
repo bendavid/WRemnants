@@ -85,6 +85,23 @@ class HDF5Writer(object):
             bkgs.update([p for p in chanInfo.predictedProcesses() if p not in chanInfo.unconstrainedProcesses])      
         return list(common.natural_sort(bkgs))
 
+    def get_flat_values(self, h, chanInfo, axes, return_variances=True):
+        # check if variances are available
+        if return_variances and (h.storage_type != hist.storage.Weight):
+            raise RuntimeError(f"Sumw2 not filled for {h} but needed for binByBin uncertainties")
+
+        if chanInfo.ABCD and set(chanInfo.fakerateAxes) != set(chanInfo.fit_axes):
+            h = projectABCD(chanInfo, h, return_variances=return_variances)
+        elif h.axes.name != axes:
+            h = h.project(*axes)
+
+        if return_variances:
+            val = h.values(flow=False).flatten().astype(self.dtype)
+            var = h.variances(flow=False).flatten().astype(self.dtype)
+            return val, var
+        else:
+            return h.values(flow=False).flatten().astype(self.dtype)
+
     def write(self, 
         args,
         forceNonzero=True, 
@@ -105,7 +122,10 @@ class HDF5Writer(object):
         #keep track of bins per channel
         ibins = []
         nbins = 0
-        
+        npseudodata = 0
+        pseudoDataIdxs = []
+        pseudoDataSystIdxs = []
+
         for chan, chanInfo in self.get_channels().items():
             masked = chanInfo.xnorm and not self.theoryFit
             logger.info(f"Now in channel {chan} masked={masked}")
@@ -146,23 +166,9 @@ class HDF5Writer(object):
                 norm_proc_hist = dg.groups[proc].hists[chanInfo.nominalName]
 
                 if not masked:                
-                    # check if variances are available
-                    if norm_proc_hist.storage_type != hist.storage.Weight:
-                        raise RuntimeError(f"Sumw2 not filled for {proc} but needed for binByBin uncertainties")
-
-                    if chanInfo.ABCD and set(chanInfo.fakerateAxes) != set(chanInfo.fit_axes):
-                        norm_proc, sumw2_proc = projectABCD(chanInfo, norm_proc_hist, return_variances=True)
-                    else:
-                        if norm_proc_hist.axes != axes:
-                            norm_proc_hist = norm_proc_hist.project(*axes)
-
-                        norm_proc = norm_proc_hist.values(flow=False).flatten().astype(self.dtype)
-                        sumw2_proc = norm_proc_hist.variances(flow=False).flatten().astype(self.dtype)
+                    norm_proc, sumw2_proc = self.get_flat_values(norm_proc_hist, chanInfo, axes)
                 else:
-                    if norm_proc_hist.axes != axes:
-                        norm_proc_hist = norm_proc_hist.project(*axes)
-
-                    norm_proc = norm_proc_hist.values(flow=False).flatten().astype(self.dtype)
+                    norm_proc = self.get_flat_values(norm_proc_hist, chanInfo, axes, return_variances=False)
 
                 if nbinschan is None:
                     nbinschan = norm_proc.shape[0]
@@ -183,41 +189,37 @@ class HDF5Writer(object):
 
             ibins.append(nbinschan)
 
-
             if not masked:                
                 # pseudodata
-                if chanInfo.pseudoData and not chanInfo.xnorm:
+                if chanInfo.pseudoData:
 
-                    pseudodata = self.loadPseudodata([x for x in dg.groups.keys() if x != cardInfo.getDataName()],
-                        [x for x in dg.groups.keys() if x != cardInfo.getDataName() and not cardInfo.pseudoDataProcsRegexp.match(x)])
+                    data_pseudo_hist = chanInfo.loadPseudodata([x for x in dg.groups.keys() if x != chanInfo.getDataName()],
+                        [x for x in dg.groups.keys() if x != chanInfo.getDataName() and not chanInfo.pseudoDataProcsRegexp.match(x)])
 
-                    # Kind of hacky, but in case the alt hist has uncertainties
-                    for systAxName in ["systIdx", "tensor_axis_0", "vars"]:
-                        if systAxName in [ax.name for ax in hdata.axes]:
-                            for idx in chanInfo.pseudoDataIndices:
-                                pseudodata = pseudodata[{systAxName : idx}] 
-                                dict_pseudodata[chan].append(pseudodata)
-                                npseudodata
-                    if npseudodata is None:
+                    idxs = []
+                    systIdxs = []
+                    for idx, syst_idx in enumerate(chanInfo.pseudoDataIdxs):
+                        pseudo_hist = data_pseudo_hist[{chanInfo.pseudoDataAxis : syst_idx}] 
+                        data_pseudo = self.get_flat_values(pseudo_hist, chanInfo, axes, return_variances=False)
+                        dict_pseudodata[chan].append(data_pseudo)
+                        idxs.append(idx)
+                        systIdxs.append(data_pseudo_hist.axes[chanInfo.pseudoDataAxis].bin(syst_idx) if type(syst_idx) == int else syst_idx)
+
+                    if npseudodata == 0:
                         npseudodata = len(dict_pseudodata[chan])
-                    elif npseudodata != len(dict_pseudodata[chan]):
-                        raise RuntimeError("Different number of pseudodata for different channels!")
+                        pseudoDataIdxs = idxs
+                        pseudoDataSystIdxs = systIdxs
+                    elif npseudodata != len(dict_pseudodata[chan]) or pseudoDataIdxs != idxs or pseudoDataSystIdxs != systIdxs:
+                        raise RuntimeError("Different pseudodata settings for different channels not supported!")
 
                 # data
                 if self.theoryFit:
                     if self.theoryFitData is None or self.theoryFitDataCov is None:
                         raise RuntimeError("No data or covariance found to perform theory fit")
                     data_obs = self.theoryFitData[chan]
-                elif dg.dataName in dg.groups:
+                elif chanInfo.real_data and dg.dataName in dg.groups:
                     data_obs_hist = dg.groups[dg.dataName].hists[chanInfo.nominalName]
-
-                    if chanInfo.ABCD and set(chanInfo.fakerateAxes) != set(chanInfo.fit_axes):
-                        data_obs = projectABCD(chanInfo, data_obs_hist)
-                    else:
-                        if data_obs_hist.axes.name != axes:
-                            data_obs_hist = data_obs_hist.project(*axes)
-
-                        data_obs = data_obs_hist.values(flow=False).flatten().astype(self.dtype)
+                    data_obs = self.get_flat_values(data_obs_hist, chanInfo, axes, return_variances=False)
                 else:
                     logger.warning("Writing combinetf hdf5 input without data, use sum of processes.")
                     data_obs = sum(dict_norm[chan].values())
@@ -320,12 +322,7 @@ class HDF5Writer(object):
                         def get_logk(histname, var_type=""):
                             _hist = var_map[histname+var_type]
 
-                            if not masked and chanInfo.ABCD and set(chanInfo.fakerateAxes) != set(chanInfo.fit_axes):
-                                _syst = projectABCD(chanInfo, _hist)
-                            else:
-                                if _hist.axes != axes:
-                                    _hist = _hist.project(*axes)
-                                _syst = _hist.values(flow=False).flatten().astype(self.dtype)
+                            _syst = self.get_flat_values(_hist, chanInfo, axes, return_variances=False)
                             
                             # check if there is a sign flip between systematic and nominal
                             _logk = kfac*np.log(_syst/norm_proc)
@@ -383,7 +380,7 @@ class HDF5Writer(object):
             data_obs[ibin:ibin+nbinschan] = dict_data_obs[chan]
 
             for idx, hpseudo in enumerate(dict_pseudodata[chan]):
-                pseudodata[ibin:ibin+nbinschan, idx] = hpseudo[idx]
+                pseudodata[ibin:ibin+nbinschan, idx] = hpseudo
 
             for iproc, proc in enumerate(procs):
                 if proc not in dict_norm[chan]:
@@ -656,6 +653,8 @@ class HDF5Writer(object):
         create_dataset("noigroups", noigroups)
         create_dataset("noigroupidxs", noigroupidxs, dtype='int32')
         create_dataset("maskedchans", self.masked_channels)
+        create_dataset("pseudodatasystidxs", pseudoDataSystIdxs)
+        create_dataset("pseudodataidxs", pseudoDataIdxs, dtype='int32')
 
         #create h5py datasets with optimized chunk shapes
         nbytes = 0
@@ -666,8 +665,6 @@ class HDF5Writer(object):
 
         nbytes += writeFlatInChunks(data_obs, f, "hdata_obs", maxChunkBytes = self.chunkSize)
         data_obs = None
-
-        for idx, pdata in pseudodata.items():
 
         nbytes += writeFlatInChunks(pseudodata, f, "hpseudodata", maxChunkBytes = self.chunkSize)
         pseudodata = None
