@@ -35,7 +35,7 @@ parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend te
 parser.add_argument("--plots", type=str, nargs="+", default=["postfit"], choices=["prefit", "postfit"], help="Define which plots to make")
 parser.add_argument("-c", "--channels", type=str, nargs="+", choices=["plus", "minus"], default=["plus", "minus"], help="Select channel to plot")
 parser.add_argument("-n", "--baseName", type=str, help="Histogram name in the file (e.g., 'nominal', 'xnorm')", default="nominal")
-parser.add_argument("--axes", type=str, nargs="+", choices=["ptGen", "absEtaGen"], default=["ptGen", "absEtaGen"], help="Specify axes to construct reference histogram from infile")
+parser.add_argument("--axes", type=str, nargs="+", choices=["ptGen", "absEtaGen", "qGen"], default=["ptGen", "absEtaGen"], help="Specify axes to construct reference histogram from infile")
 parser.add_argument("--addTauToSignal", action='store_true', help="Events from the same process but from tau final states are added to the signal")
 parser.add_argument("--eoscp", action='store_true', help="Override use of xrdcp and use the mount instead")
 
@@ -85,8 +85,10 @@ def plot(fittype, channel=None, data=True, stack=True, density=False, ratio=True
                 logger.debug(f"Load datagroups member {member.name}")
                 histo = datagroups.results[member.name]["output"][args.baseName].get()
                 histo = histo.project(*args.axes)
-                if not datagroups.mode in ["wmass", "lowpu_w"]:
-                    histo = histo[selections]
+
+                if not datagroups.mode in ["wmass", "lowpu_w"] and "qGen" in args.axes:
+                    index_charge = 0 if channel == "minus" else 1
+                    histo = histo[{"qGen": index_charge}]
 
                 scale = datagroups.processScaleFactor(member)
                 if group.scale:
@@ -111,7 +113,7 @@ def plot(fittype, channel=None, data=True, stack=True, density=False, ratio=True
         binwidths = np.outer(xbinwidths, ybinwidths).flatten()
         edges = np.arange(0.5, len(binwidths)+1.5, 1.0)
     else:
-        bins = np.product([len(e) for e in edges])
+        bins = np.product([len(e.flatten())-1 for e in edges])
         edges = np.arange(0.5, bins+1.5, 1.0)
         binwidths = edges[1:] - edges[:-1]
 
@@ -159,7 +161,14 @@ def plot(fittype, channel=None, data=True, stack=True, density=False, ratio=True
     if density:
         ylabel = "a.u."    
     else:
-        ylabel = "Events/bin"
+        if datagroups.mode in ["wmass", "lowpu_w"]:
+            process_label = "W"
+        else:
+            process_label = "Z"
+
+        yLabel="d$\sigma ("+process_label+")$ [pb]"
+        if "ptGen" in args.axes:
+            ylabel = yLabel.replace("[pb]","[pb/GeV]")
 
     if ratio:
         fig, ax1, ax2 = plot_tools.figureWithRatio(hist_data, "Bin number", ylabel, ylim, "Data/Pred.", rrange)

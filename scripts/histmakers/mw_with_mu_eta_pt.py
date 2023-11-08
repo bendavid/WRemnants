@@ -25,20 +25,19 @@ data_dir = common.data_dir
 parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for luminosity in excess to 1 (e.g. 1.012 means 1.2\%)", default=1.012)
 parser.add_argument("--noGenMatchMC", action='store_true', help="Don't use gen match filter for prompt muons with MC samples (note: QCD MC never has it anyway)")
 parser.add_argument("--theoryAgnostic", action='store_true', help="Add V qT,Y axes and helicity axes for W samples")
-parser.add_argument("--poiAsNoi", action='store_true', help="Experimental option only with --theoryAgnostic, it will make the histogram to do the POIs and NOIs trick (some postprocessing will happen later in CardTool.py)")
-parser.add_argument("--separateOOAfromSignal", action='store_true', help="Experimental option only with --theoryAgnostic --poiAsNoi, it will produce the real signal with only in-acceptance bins, and out-of-acceptance as a separate process (this is already the default for the standard theory agnostic without --poiAsNoi)")
 parser.add_argument("--halfStat", action='store_true', help="Test half data and MC stat, selecting odd events, just for tests")
 parser.add_argument("--makeMCefficiency", action="store_true", help="Save yields vs eta-pt-ut-passMT-passIso-passTrigger to derive 3D efficiencies for MC isolation and trigger (can run also with --onlyMainHistograms)")
 parser.add_argument("--onlyTheorySyst", action="store_true", help="Keep only theory systematic variations, mainly for tests")
 parser.add_argument("--oneMCfileEveryN", type=int, default=None, help="Use 1 MC file every N, where N is given by this option. Mainly for tests")
 parser.add_argument("--noAuxiliaryHistograms", action="store_true", help="Remove auxiliary histograms to save memory (removed by default with --unfolding or --theoryAgnostic)")
+parser.add_argument("--mtCut", type=int, default=40, help="Value for the transverse mass cut in the event selection")
 
 args = parser.parse_args()
 
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
-if args.poiAsNoi and not args.theoryAgnostic:
-    message = "Option --poiAsNoi currently requires --theoryAgnostic"
+if args.poiAsNoi and not (args.theoryAgnostic or args.unfolding):
+    message = "Option --poiAsNoi currently requires --theoryAgnostic or --unfolding"
     logger.warning(message)
     raise NotImplementedError(message)
 
@@ -72,7 +71,7 @@ datasets = getDatasets(maxFiles=args.maxFiles,
 era = args.era
 
 # transverse boson mass cut
-mtw_min = 40
+mtw_min = args.mtCut
 
 # custom template binning
 template_neta = int(args.eta[0])
@@ -108,18 +107,18 @@ if args.unfolding:
     min_pt_unfolding = template_minpt+template_wpt
     max_pt_unfolding = template_maxpt-template_wpt
     npt_unfolding = args.genBins[0]-2
-    unfolding_axes, unfolding_cols = differential.get_pt_eta_axes(npt_unfolding, min_pt_unfolding, max_pt_unfolding, args.genBins[1])
-    datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wmunu")
-    datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wtaunu")
-    groups_to_aggregate.append("BkgWmunu")
-    groups_to_aggregate.append("BkgWtaunu")
+    unfolding_axes, unfolding_cols = differential.get_pt_eta_axes(npt_unfolding, min_pt_unfolding, max_pt_unfolding, args.genBins[1], flow_eta=args.poiAsNoi)
+    if not args.poiAsNoi:
+        datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wmunu")
+        datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wtaunu")
+        groups_to_aggregate.append("BkgWmunu")
+        groups_to_aggregate.append("BkgWtaunu")
 
 elif args.theoryAgnostic:
-
-    theoryAgnostic_axes, theoryAgnostic_cols = differential.get_theoryAgnostic_axes()
+    theoryAgnostic_axes, theoryAgnostic_cols = differential.get_differential_axes()
     axis_helicity = helicity_utils.axis_helicity_multidim
     # the following just prepares the existence of the group for out-of-acceptance signal, but doesn't create or define the histogram yet
-    if args.separateOOAfromSignal or not args.poiAsNoi:
+    if not args.poiAsNoi:
         datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wmunu")
         groups_to_aggregate.append("BkgWmunu")
 
@@ -242,12 +241,13 @@ def build_graph(df, dataset):
             logger.debug("Reject events in fiducial phase space")
             df = unfolding_tools.select_fiducial_space(df, mode="wmass", accept=False)
         else:
-            logger.debug("Select events in fiducial phase space")
-            df = unfolding_tools.select_fiducial_space(df, mode="wmass", accept=True)
-
+            if not args.poiAsNoi:
+                logger.debug("Select events in fiducial phase space")
+                df = unfolding_tools.select_fiducial_space(df, mode="wmass", accept=True)
+                axes = [*nominal_axes, *unfolding_axes] 
+                cols = [*nominal_cols, *unfolding_cols]
+            
             unfolding_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, unfolding_axes, unfolding_cols)
-            axes = [*nominal_axes, *unfolding_axes] 
-            cols = [*nominal_cols, *unfolding_cols]
 
     if args.theoryAgnostic and isWmunu: # should be isW to do also Wtaunu
         df = theory_tools.define_prefsr_vars(df)
@@ -256,17 +256,14 @@ def build_graph(df, dataset):
             df = theoryAgnostic_tools.select_fiducial_space(df, theoryAgnostic_axes[0].edges[-1], theoryAgnostic_axes[1].edges[-1], accept=False)
         else:
             # the in-acceptance selection must usually not be used to filter signal events when doing POIs as NOIs
-            if args.separateOOAfromSignal or not args.poiAsNoi:
+            if not args.poiAsNoi:
                 logger.debug("Select events in fiducial phase space for theory agnostic analysis")
                 df = theoryAgnostic_tools.select_fiducial_space(df, theoryAgnostic_axes[0].edges[-1], theoryAgnostic_axes[1].edges[-1], accept=True)
-            if args.poiAsNoi:
-                nominal_axes_theoryAgnostic = [*nominal_axes, *theoryAgnostic_axes]
-                nominal_cols_theoryAgnostic = [*nominal_cols, *theoryAgnostic_cols]
-            else:
-                theoryAgnostic_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, theoryAgnostic_axes, theoryAgnostic_cols)
                 # helicity axis is special, defined through a tensor later, theoryAgnostic_ only includes W rapidity and pt for now
                 axes = [*nominal_axes, *theoryAgnostic_axes]
                 cols = [*nominal_cols, *theoryAgnostic_cols]
+
+                theoryAgnostic_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, theoryAgnostic_axes, theoryAgnostic_cols)
 
     if not args.makeMCefficiency:
         # remove trigger, it will be part of the efficiency selection for passing trigger
@@ -374,6 +371,9 @@ def build_graph(df, dataset):
         df = df.Define("exp_weight", weight_expr)
         df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
 
+        if isWmunu and args.theoryAgnostic and not hasattr(dataset, "out_of_acceptance"):
+            df = theoryAgnostic_tools.define_helicity_weights(df)
+
     ########################################################################
     
     if not args.noRecoil:
@@ -407,18 +407,22 @@ def build_graph(df, dataset):
         results.append(df.HistoBoost("transverseMass", [axis_mt_fakes, axis_eta_utilityHist, axis_pt_utilityHist, axis_charge, axis_passIso], ["transverseMass", "goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "nominal_weight"]))
         results.append(df.HistoBoost("ptW", [axis_recoWpt, axis_eta_utilityHist, axis_pt_utilityHist, axis_charge, axis_passIso, axis_passMT], ["ptW", "goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"]))
 
+    if args.poiAsNoi and isW:
+        if args.theoryAgnostic:
+            noiAsPoiHistName = Datagroups.histName("nominal", syst="yieldsTheoryAgnostic")
+            logger.debug(f"Creating special histogram '{noiAsPoiHistName}' for theory agnostic to treat POIs as NOIs")
+            results.append(df.HistoBoost(noiAsPoiHistName, [*nominal_axes, *theoryAgnostic_axes], [*nominal_cols, *theoryAgnostic_cols, "nominal_weight_helicity"], tensor_axes=[axis_helicity]))
+        if args.unfolding:
+            noiAsPoiHistName = Datagroups.histName("nominal", syst="yieldsUnfolding")
+            logger.debug(f"Creating special histogram '{noiAsPoiHistName}' for unfolding to treat POIs as NOIs")
+            results.append(df.HistoBoost(noiAsPoiHistName, [*nominal_axes, *unfolding_axes], [*nominal_cols, *unfolding_cols, "nominal_weight"]))       
+
     ## FIXME: should be isW, to include Wtaunu, but for now we only split Wmunu
-    if isWmunu and args.theoryAgnostic and not hasattr(dataset, "out_of_acceptance"):
-        df = theoryAgnostic_tools.define_helicity_weights(df)
-        if args.poiAsNoi:
-            theoryAgnosticHistName = Datagroups.histName("nominal", syst="yieldsTheoryAgnostic")
-            logger.debug(f"Creating special histogram '{theoryAgnosticHistName}' for theory agnostic to treat POIs as NOIs")
-            results.append(df.HistoBoost(theoryAgnosticHistName, nominal_axes_theoryAgnostic, [*nominal_cols_theoryAgnostic, "nominal_weight_helicity"], tensor_axes=[axis_helicity]))
-        else:
-            results.append(df.HistoBoost("nominal", axes, [*cols, "nominal_weight_helicity"], tensor_axes=[axis_helicity]))
-            setTheoryAgnosticGraph(df, results, dataset, reco_sel_GF, era, axes, cols, args)
-            # End graph here only for standard theory agnostic analysis, otherwise use same loop as traditional analysis
-            return results, weightsum
+    elif isWmunu and args.theoryAgnostic and not hasattr(dataset, "out_of_acceptance"):
+        results.append(df.HistoBoost("nominal", axes, [*cols, "nominal_weight_helicity"], tensor_axes=[axis_helicity]))
+        setTheoryAgnosticGraph(df, results, dataset, reco_sel_GF, era, axes, cols, args)
+        # End graph here only for standard theory agnostic analysis, otherwise use same loop as traditional analysis
+        return results, weightsum
         
     if not args.onlyMainHistograms:
         syst_tools.add_QCDbkg_jetPt_hist(results, df, axes, cols, jet_pt=30)

@@ -28,7 +28,7 @@ if [[ $4 == *.hdf5 ]]; then
 	elif [ "$mode" == "unfolding" ]; then
 		combinetf.py --doImpacts --binByBinStat -t -1 "$outfile" --correlateXsecStat --saveHists --computeHistErrors
 	elif [ "$mode" == "theoryfit" ]; then
-		combinetf.py --doImpacts -t -1 "$outfile" --chisqFit --externalCovariance --saveHists --computeHistErrors
+		combinetf.py --doImpacts "$outfile" --chisqFit --externalCovariance --saveHists --computeHistErrors
 	fi
 
 else

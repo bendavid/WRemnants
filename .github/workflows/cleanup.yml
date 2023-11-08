@@ -1,5 +1,4 @@
 name: EOS Cleanup
-
 on:
   schedule:
     - cron: '0 3 * * 0' # Run on Sunday morning at 3h00 UTC
@@ -12,34 +11,12 @@ jobs:
   cleanup:
     runs-on: [self-hosted, linux, x64]
 
+    # delete old folders, keep the 5 newest ones
     steps:
-      - name: Cleanup main
-        run: |
-          all_folders=$(xrdfs root://eosuser.cern.ch// ls -l $EOS_DIR/ScheduledBuilds/ | grep '^d' | sort -k 5 -r | awk '{print $7}')
-          newest_folders=$(echo "$all_folders" | head -n 6)
-          for folder in $all_folders; do
-            if ! [[ " ${newest_folders[@]} " =~ " $folder " ]]; then
-              all_subfolders=$(xrdfs root://eosuser.cern.ch// ls $folder)
-              for subfolder in $all_subfolders; do
-                xrdfs root://eosuser.cern.ch// rm $subfolder/*
-                xrdfs root://eosuser.cern.ch// rmdir $subfolder
-              done
-              xrdfs root://eosuser.cern.ch// rm $folder/*
-              xrdfs root://eosuser.cern.ch// rmdir $folder
-            fi
-          done
-      - name: Cleanup unfolding
-        run: |
-          all_folders=$(xrdfs root://eosuser.cern.ch// ls -l $EOS_DIR/ScheduledBuilds_unfolding/ | grep '^d' | sort -k 5 -r | awk '{print $7}')
-          newest_folders=$(echo "$all_folders" | head -n 6)
-          for folder in $all_folders; do
-            if ! [[ " ${newest_folders[@]} " =~ " $folder " ]]; then
-              all_subfolders=$(xrdfs root://eosuser.cern.ch// ls $folder)
-              for subfolder in $all_subfolders; do
-                xrdfs root://eosuser.cern.ch// rm $subfolder/*
-                xrdfs root://eosuser.cern.ch// rmdir $subfolder
-              done
-              xrdfs root://eosuser.cern.ch// rm $folder/*
-              xrdfs root://eosuser.cern.ch// rmdir $folder
-            fi
-          done
+      - name: cleanup main
+        run: scripts/ci/cleanup_directory.sh $EOS_DIR/ScheduledBuilds/ 5
+
+      - name: cleanup main
+        run: scripts/ci/cleanup_directory.sh $EOS_DIR/ScheduledBuilds_unfolding/ 5
+
+          
