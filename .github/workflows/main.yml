@@ -385,7 +385,7 @@ jobs:
           echo "WREMNANTS_OUTDIR=${WREMNANTS_OUTDIR}" >> $GITHUB_ENV
           echo "WEB_DIR=${WEB_DIR}" >> $GITHUB_ENV
           echo "PLOT_DIR=${PLOT_DIR}" >> $GITHUB_ENV
-          echo "COMBINED_DIR=${WREMNANTS_OUTDIR}/LowPU_ptll" >> $GITHUB_ENV
+          echo "COMBINED_DIR=${WREMNANTS_OUTDIR}" >> $GITHUB_ENV
           echo "HIST_FILE_MU=${WREMNANTS_OUTDIR}/${OUTFILE_LOWPU_MU}" >> $GITHUB_ENV
           echo "HIST_FILE_E=${WREMNANTS_OUTDIR}/${OUTFILE_LOWPU_E}" >> $GITHUB_ENV
           echo "HIST_FILE_MUMU=${WREMNANTS_OUTDIR}/${OUTFILE_LOWPU_MUMU}" >> $GITHUB_ENV
@@ -396,17 +396,17 @@ jobs:
           submodules: 'recursive'
           lfs: 'true'
 
-      - name: lowpu z mumu combine unfolding setup
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombine.py -i $HIST_FILE_MU $HIST_FILE_E $HIST_FILE_MUMU $HIST_FILE_EE --fitvar ptW-charge ptW-charge ptll ptll -o $COMBINED_DIR --unfolding --hdf5 --sparse --ewUnc 
+      - name: lowpu combine unfolding setup
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombine.py -i $HIST_FILE_MU $HIST_FILE_E $HIST_FILE_MUMU $HIST_FILE_EE --fitvar ptW-charge ptW-charge ptll ptll -o $COMBINED_DIR --postfix LowPU_ptll --unfolding --hdf5 --sparse --ewUnc 
 
       - name: lowpu combine unfolding fit 
-        run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ unfolding $COMBINED_DIR card_sparse.hdf5 
+        run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ unfolding $COMBINED_DIR/Combination_LowPU_ptll Combination.hdf5
 
       - name: lowpu combine unfolding plot xsec 
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py $HIST_FILE_MU --fitresult $COMBINED_DIR/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR/lowPU --debug --rrange 0.0 2.0 --lumi=0.200181002 --scaleXsec 2
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py $HIST_FILE_MU --fitresult $COMBINED_DIR/Combination_LowPU_ptll/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR/lowPU --debug --rrange 0.0 2.0 --lumi=0.200181002 --scaleXsec 2
 
       - name: lowpu combine unfolding plot xsec 
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py $HIST_FILE_MUMU --fitresult $COMBINED_DIR/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR/lowPU --debug --rrange 0.0 2.0 --lumi=0.200181002 --scaleXsec 2
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py $HIST_FILE_MUMU --fitresult $COMBINED_DIR/Combination_LowPU_ptll/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR/lowPU --debug --rrange 0.0 2.0 --lumi=0.200181002 --scaleXsec 2
 
   wlike:
     # The type of runner that the job will run on

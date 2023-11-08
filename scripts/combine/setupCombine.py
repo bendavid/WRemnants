@@ -191,7 +191,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
 
 
     # Start to create the CardTool object, customizing everything
-    cardTool = CardTool.CardTool(xnorm=xnorm, ABCD=wmass and args.ABCD, real_data=args.realData)
+    cardTool = CardTool.CardTool(xnorm=xnorm, ABCD=wmass and args.ABCD and not xnorm, real_data=args.realData)
     cardTool.setDatagroups(datagroups)
     if args.qcdProcessName:
         cardTool.setFakeName(args.qcdProcessName)
@@ -791,16 +791,24 @@ if __name__ == "__main__":
         writer = HDF5Writer.HDF5Writer()
 
         # loop over all files
+        outnames = []
         for i, ifile in enumerate(args.inputFile):
             fitvar = args.fitvar[i].split("-")
             cardTool = setup(args, ifile, fitvar, xnorm=args.fitresult is not None)
+            outnames.append( (outputFolderName(args.outfolder, cardTool, args.doStatOnly, args.postfix), analysis_label(cardTool)) )
+
             writer.add_channel(cardTool)
             if args.unfolding and not args.poiAsNoi:
                 cardTool = setup(args, ifile, ["count"], xnorm=True)
                 writer.add_channel(cardTool)
         if args.fitresult:
             writer.set_fitresult(args.fitresult, mc_stat=not args.noMCStat)
-        writer.write(args)
+
+        if len(outnames) == 1:
+            outfile, outfolder = outnames[0]
+        else:
+            outfile, outfolder = f"{args.outfolder}/Combination{'_statOnly' if args.doStatOnly else ''}_{args.postfix}/", "Combination"
+        writer.write(args, outfile, outfolder)
     else:
         if len(args.inputFile) > 1:
             raise IOError(f"Multiple input files only supported within --hdf5 mode")

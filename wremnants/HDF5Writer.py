@@ -104,6 +104,8 @@ class HDF5Writer(object):
 
     def write(self, 
         args,
+        outfolder,
+        outfilename,
         forceNonzero=True, 
         check_systs=False, 
         allowNegativeExpectation=False,
@@ -588,9 +590,11 @@ class HDF5Writer(object):
             self.chunkSize = amax
 
         #create HDF5 file (chunk cache set to the chunk size since we can guarantee fully aligned writes
-        outfilename = self.get_output_filename(sparse=args.sparse, outfolder=args.outfolder, postfix=args.postfix, doStatOnly=args.doStatOnly)
-        logger.info(f"Write output file {outfilename}")
-        f = h5py.File(outfilename, rdcc_nbytes=self.chunkSize, mode='w')
+        if not os.path.isdir(outfolder):
+            os.makedirs(outfolder)
+        outpath = f"{outfolder}/{outfilename}.hdf5"
+        logger.info(f"Write output file {outpath}")
+        f = h5py.File(outpath, rdcc_nbytes=self.chunkSize, mode='w')
 
         # propagate meta info into result file
         meta = {"meta_info" : output_tools.metaInfoDict(args=args)}
@@ -699,22 +703,6 @@ class HDF5Writer(object):
 
         logger.info(f"Total raw bytes in arrays = {nbytes}")
         
-    def get_output_filename(self, outfolder, sparse=False, postfix=None, doStatOnly=False):
-
-        if not os.path.isdir(outfolder):
-            os.makedirs(outfolder)
-        outfilename = f"{outfolder}/{self.cardName}"
-
-        if doStatOnly:
-            outfilename += "_statOnly"
-        if postfix is not None:
-            outfilename += f"_{postfix}"
-        if sparse:
-            outfilename += "_sparse"
-
-        outfilename += ".hdf5"
-        return outfilename
-
     def book_systematic(self, syst, name):
         logger.debug(f"book systematic {name}")
         if syst.get('noProfile', False):
