@@ -8,7 +8,7 @@ narf.clingutils.Declare('#include "muon_prefiring.h"')
 
 data_dir = common.data_dir
 
-def make_muon_prefiring_helpers(filename = data_dir + "/testMuonSF/L1MuonPrefiringParametriations_histograms.root", era = None):
+def make_muon_prefiring_helpers(filename = data_dir + "/muonSF/L1MuonPrefiringParametriations_histograms.root", era = None):
 
     fin = ROOT.TFile.Open(filename);
 

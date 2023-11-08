@@ -14,6 +14,7 @@ sys.argv = args
 ROOT.gROOT.SetBatch(True)
 ROOT.PyConfig.IgnoreCommandLineOptions = True
 
+from utilities import common
 #sys.path.append(os.getcwd() + "/plotUtils/")
 #from utility import *
 from scripts.analysisTools.plotUtils.utility import *
@@ -21,11 +22,12 @@ from scripts.analysisTools.plotUtils.utility import *
 ROOT.gStyle.SetOptStat(0)
 ROOT.TH1.SetDefaultSumw2()
 
+data_dir = common.data_dir
 pileupBins = [5*i for i in range(1,10)] # PU 5 to 45 (0-5 and 45-50 probably had too small statistics)
 inclusiveRange = [0, 50] # there is an additional histogram for PU from 0 to 50
 inputfiles = ["ratios/ratio_2016postVFP_69200ub.root",
               "ratios/ratio_2016preVFP_69200ub.root"]
-outputfile = "testMuonSF/vertexPileupWeights.root"
+outputfile = data_dir + "/vertex/vertexPileupWeights.root"
 plotFolder = "plots/testNanoAOD/testvertexPileupWeights/"
 
 if __name__ == "__main__":

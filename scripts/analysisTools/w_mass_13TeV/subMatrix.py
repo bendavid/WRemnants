@@ -75,7 +75,7 @@ def niceName(name):
     elif re.match(".*QCDscale.*",name):
         # expect something like QCDscalePtChargeHelicity_PtVBin1genQ0AngCoeff0muF or less 
         # TODO: distinguish W and Z        
-        boson = "" # "W"
+        boson = "W" if "QCDscaleW" in name else "Z" if "QCDscaleZ" in name else ""
         ptnum = re.findall(r'PtVBin\d+', name)
         chargenum = re.findall(r'genQ\d+', name)
         coeffnum = re.findall(r'AngCoeff\d+', name)
@@ -89,7 +89,7 @@ def niceName(name):
             chargeText = "-" if "genQ0" in chargenum else "+" if "genQ1" in chargenum else "" # in case Z has a different convention
         if len(coeffnum):
             ncoeff = int(coeffnum[0].split("AngCoeff")[1]) - 1
-            coeffText = f"A_{{{ncoeff}}}"
+            coeffText = f"A_{{{ncoeff}}}" if ncoeff >= 0 else "unpol"
         scale = "#mu_{R}#mu_{F}" if "muRmuF" in name else "#mu_{R}" if "muR" in name else "#mu_{F}"
         return f"{boson}{chargeText} {coeffText} {ptText} {scale}"
     elif "CMS_" in name:

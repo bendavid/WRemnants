@@ -7,7 +7,7 @@
 
 # python w-mass-13TeV/diffNuisances.py --infile /scratch/mciprian/CombineStudies/WMass/10Sept2022_qcdBkgVar/qcdScale_byHelicityPt/nominal/fit/hessian/fitresults_123456789_Asimov_bbb1_cxs0.root --outdir plots/fromMyWremnants/Wmass_fit/10Sept2022_qcdBkgVar/qcdScale_byHelicityPt/diffNuisances/  -a --format html --type hessian  --suffix Asimov --pois '.*QCDscale_Coeff0.*genVplus' --uniqueString 'QCDscales_Coeff0_chargePlus' --y-setting -1.0 -0.5 0 0.5 1.0; python w-mass-13TeV/diffNuisances.py --infile /scratch/mciprian/CombineStudies/WMass/10Sept2022_qcdBkgVar/qcdScale_byHelicityPt/nominal/fit/hessian/fitresults_123456789_Asimov_bbb1_cxs0.root --outdir plots/fromMyWremnants/Wmass_fit/10Sept2022_qcdBkgVar/qcdScale_byHelicityPt/diffNuisances/  -a --format html --type hessian  --suffix Asimov --pois '.*QCDscale_Coeff1.*genVplus' --uniqueString 'QCDscales_A0_chargePlus' --y-setting -1.0 -0.5 0 0.5 1.0; python w-mass-13TeV/diffNuisances.py --infile /scratch/mciprian/CombineStudies/WMass/10Sept2022_qcdBkgVar/qcdScale_byHelicityPt/nominal/fit/hessian/fitresults_123456789_Asimov_bbb1_cxs0.root --outdir plots/fromMyWremnants/Wmass_fit/10Sept2022_qcdBkgVar/qcdScale_byHelicityPt/diffNuisances/  -a --format html --type hessian  --suffix Asimov --pois '.*QCDscale_Coeff5.*genVplus' --uniqueString 'QCDscales_A4_chargePlus' --y-setting -1.0 -0.5 0 0.5 1.0
 
-import re, os
+import re, os, math
 import datetime
 from optparse import OptionParser
 
@@ -127,16 +127,19 @@ if __name__ == "__main__":
         
     print(f"Looking for regexp match {pois_regexps}")    
     valuesAndErrors = {}
-    valuesErrors = {}
+    valuesAndErrors_exp = {}
     valuesPrefit = {}
 
-    for ppatt in pois_regexps:            
+    for ppatt in pois_regexps:
+        regexp_ppatt = re.compile(ppatt)
         for (k,v) in valuesAndErrorsAll.items():
-            if re.match(ppatt,k):
+            if regexp_ppatt.match(k):
                 if k.endswith('_gen'):
                     valuesPrefit   [k]  = v #dict((k,v) for k,v in valuesPrefit.items() if re.match(ppatt.replace('$','_gen'),k))
                 else:
                     valuesAndErrors[k]  = v #dict((k,v) for k,v in valuesAndErrors.items() if re.match(ppatt,k) and not k.endswith('_gen'))
+                    if plotObsWithExp:
+                        valuesAndErrors_exp[k] = valuesAndErrorsAll_exp[k]
 
     params = valuesAndErrors.keys()
 
@@ -160,12 +163,8 @@ if __name__ == "__main__":
     nuis_p_i=0
     title = "#theta"
 
-    hist_fit_s    = ROOT.TH1F("fit_s"   ,'',len(params),0,len(params))
-    pmin, pmax = -3., 3.
-    hist_fit_1d   = ROOT.TH1F("fit_1d " ,'',20,pmin,pmax)
-    hist_fit_1d_e = ROOT.TH1F("fit_1d_e",'',59,pmin,pmax)
-    hist_fit_1d   .SetLineColor(ROOT.kBlack); hist_fit_1d  .SetLineWidth(2)
-    hist_fit_1d_e .SetLineColor(ROOT.kRed  ); hist_fit_1d_e.SetLineWidth(2)
+    hist_fit_s    = ROOT.TH1F("fit_s"   , '',len(params),0,len(params))
+    hist_expfit_s = ROOT.TH1F("expfit_s", '',len(params),0,len(params))
 
     isFlagged = {}
 
@@ -187,7 +186,11 @@ if __name__ == "__main__":
             #print(f"Exception caught: name = {name}")
             continue
         val_f,err_f = (valuesAndErrors[name][0],abs(valuesAndErrors[name][0]-valuesAndErrors[name][1]))
-
+        if plotObsWithExp:
+            expval_f,experr_f = (valuesAndErrors_exp[name][0],abs(valuesAndErrors_exp[name][0]-valuesAndErrors_exp[name][1]))
+        else:
+            expval_f,experr_f = val_f,err_f
+        
         if args.absolute_values:
             valShift = val_f
             sigShift = err_f
@@ -204,12 +207,13 @@ if __name__ == "__main__":
 
         if args.outdir: 
             nuis_p_i+=1
-            hist_fit_s.SetBinContent(nuis_p_i,val_f)
+            hist_fit_s.SetBinContent(nuis_p_i, val_f)
             hist_fit_s.SetBinError(nuis_p_i,err_f)
+            hist_expfit_s.SetBinContent(nuis_p_i, expval_f)
+            hist_expfit_s.SetBinError(nuis_p_i, experr_f)
             thisname = niceNameHEPDATA(name) if args.useHepdataLabels else niceName(name)
             hist_fit_s.GetXaxis().SetBinLabel(nuis_p_i, thisname)
-            hist_fit_1d  .Fill(max(pmin,min(pmax-0.01,val_f)))
-            hist_fit_1d_e.Fill(max(pmin,min(pmax-0.01,err_f-1.)))
+            hist_expfit_s.GetXaxis().SetBinLabel(nuis_p_i, thisname)
 
         row += [" %+4.4f, %4.4f" % (valShift, sigShift)]
 
@@ -340,10 +344,12 @@ if __name__ == "__main__":
         # need to shrink histogram, as some bins might have been removed when ranking. 
         # Also, use same sorting as table
         hist_fit_s_ranked = None
+        hist_expfit_s_ranked = None
         nbins = len(params) # default
         if args.rankNuisancesBy:
             nbins = min(args.showN, len(names)) if args.showN > 0 else len(names)
-            hist_fit_s_ranked    = ROOT.TH1F("fit_s_ranked"   ,'',nbins,0,nbins)
+            hist_fit_s_ranked    = ROOT.TH1D("fit_s_ranked"   ,'',nbins,0,nbins)
+            hist_expfit_s_ranked    = ROOT.TH1D("expfit_s_ranked"   ,'',nbins,0,nbins)
             index_name = 1
             for n in names:
                 if args.showN > 0 and index_name > args.showN:
@@ -359,6 +365,14 @@ if __name__ == "__main__":
                     hist_fit_s_ranked.SetBinContent(index_name,val)
                     hist_fit_s_ranked.SetBinError(index_name,err)
                     hist_fit_s_ranked.GetXaxis().SetBinLabel(index_name,n)
+                    hist_fit_s = hist_fit_s_ranked
+
+                    expval = hist_expfit_s.GetBinContent(binNumber)
+                    experr = hist_expfit_s.GetBinError(binNumber)
+                    hist_expfit_s_ranked.SetBinContent(index_name,expval)
+                    hist_expfit_s_ranked.SetBinError(index_name,experr)
+                    hist_expfit_s_ranked.GetXaxis().SetBinLabel(index_name,n)
+                    hist_expfit_s = hist_expfit_s_ranked
                     index_name += 1
 
         # customize canvas width a bit
@@ -372,12 +386,6 @@ if __name__ == "__main__":
             cw = int(args.canvasSize.split(',')[0])
             ch = int(args.canvasSize.split(',')[1])
         canvas_nuis = ROOT.TCanvas("nuisances", "nuisances", cw, ch)
-        ## some style stuff
-        #ymin,yhalfd,ycen,yhalfu,ymax = args.ysetting
-        #ymin,yhalfd,ycen,yhalfu,ymax = map(float, list(args.ysetting.split(",")))
-        ymin,yhalfd,ycen,yhalfu,ymax = args.ysetting
-        if hist_fit_s_ranked != None:
-            hist_fit_s = hist_fit_s_ranked
 
         clm = 0.1 if nbins < 100 else 0.05
         crm = 0.05 if nbins < 100 else 0.02
@@ -386,16 +394,10 @@ if __name__ == "__main__":
 
         canvas_nuis.SetTickx(1)
         canvas_nuis.SetTicky(1)
-        hist_fit_s.GetYaxis().SetRangeUser(ymin-args.yoffset[0],ymax+args.yoffset[1])
-        hist_fit_s.SetLineColor  (39)
-        hist_fit_s.SetMarkerColor(ROOT.kGray+3)
-        hist_fit_s.SetMarkerStyle(20)
-        hist_fit_s.SetMarkerSize(1.0)
-        hist_fit_s.SetLineWidth(2)
-        hist_fit_s.Draw("PE1")
-        hist_fit_s.GetYaxis().SetTitle(args.ytitle)
-        hist_fit_s.GetYaxis().SetTitleSize(0.05)
-        hist_fit_s.GetYaxis().SetTitleOffset(0.90)
+        canvas_nuis.SetLeftMargin(clm)
+        canvas_nuis.SetRightMargin(crm)
+        canvas_nuis.SetBottomMargin(cbm)
+        canvas_nuis.SetTopMargin(ctm)
 
         xLabelSize = 0.045 if nbins < 20 else 0.035
         if nbins > 180:
@@ -405,42 +407,150 @@ if __name__ == "__main__":
             hist_fit_s.SetTitle(args.uniqueString)
         elif nbins > 120:
             xLabelSize = 0.025
-        hist_fit_s.GetXaxis().SetLabelSize(xLabelSize)
-        hist_fit_s.GetXaxis().LabelsOption("v")
+            
+        if plotObsWithExp:            
 
-        canvas_nuis.SetLeftMargin(clm)
-        canvas_nuis.SetRightMargin(crm)
-        canvas_nuis.SetBottomMargin(cbm)
-        canvas_nuis.SetTopMargin(ctm)
+            # to plot observed (could be pseudodata) and expected, but also to compare two different fits (need to modify central value)
+            x = array('d',[float(i+1) for i in range(nbins)])
 
-        #lat.DrawLatex(0.10, 0.92, '#bf{CMS} #it{Preliminary}')
-        #lat.DrawLatex(0.71 +(0.1-crm), 0.92, '16.8 fb^{-1} (13 TeV)')
-        line.DrawLine(0., ycen, nbins, ycen)
-        line.DrawLine(0., ymax, nbins, ymax)
-        line.DrawLine(0., ymin, nbins, ymin)
-        line.SetLineStyle(2);
-        line.SetLineColor(ROOT.kRed)
-        line.DrawLine(0., yhalfu, nbins, yhalfu)
-        line.DrawLine(0., yhalfd, nbins, yhalfd)
-        line.SetLineStyle(3)
-        line.DrawLine(0., 1., nbins, 1.)
-        line.DrawLine(0.,-1., nbins,-1.)
-        hist_fit_s.Draw("PE1 same") ## draw again over the lines
+            zero   = array('d',[0.0 for i in range(nbins)])
+            one    = array('d',[1.0 for i in range(nbins)])
+            exone  = array('d', [0.4 for i in range(nbins)])
 
-        canvas_nuis.SetGridx()
-        canvas_nuis.RedrawAxis()
-        canvas_nuis.RedrawAxis('g')
-        # leg=ROOT.TLegend(0.6,0.7,0.89,0.89)
-        # leg.SetFillColor(0)
-        # leg.SetTextFont(42)
-        # leg.AddEntry(hist_fit_s,"S+B fit"   ,"EPL")
-        # leg.Draw()
-        #fout.WriteTObject(canvas_nuis)
-        hist_fit_s.Write()
-        fout.Close()
+            # yexp  = array('d',[hist_expfit_s.GetBinContent(i) for i in range(1, 1+hist_expfit_s.GetNbinsX()) ])
+            eyexp  = array('d',[hist_expfit_s.GetBinError(i) for i in range(1, 1+hist_expfit_s.GetNbinsX()) ])
+            exexp  = array('d', [0.25 for i in range(nbins)])
 
-        for ext in ['png', 'pdf']:
-            canvas_nuis.SaveAs("{noext}.{ext}".format(noext=outnameNoExt, ext=ext))
+            yobs  = array('d',[hist_fit_s.GetBinContent(i) for i in range(1, 1+hist_fit_s.GetNbinsX()) ])
+            eyobs  = array('d',[hist_fit_s.GetBinError(i) for i in range(1, 1+hist_fit_s.GetNbinsX()) ])
 
-   
+            maxPull = max(list([abs(y) for y in yobs]))
+            maxz = max(4, math.ceil(maxPull))
+
+            lat = ROOT.TLatex(); lat.SetNDC()
+            lat.SetTextFont(42)
+            lat.SetTextSize(0.05)
+            
+            #leg = ROOT.TLegend(clm, 0.02, 1.0 - crm, 0.08)
+            leg = ROOT.TLegend(clm, 0.92, 1.0 - crm, 0.98)
+            leg.SetNColumns(3)
+            leg.SetColumnSeparation(0.1)
+            #leg.SetFillStyle(0)
+            leg.SetFillColor(0)
+            leg.SetBorderSize(0)
+
+            ROOT.gStyle.SetOptStat(0)
+            dummyh = ROOT.TH1D('dummyh','', nbins, x[0]-0.5, x[-1]+0.5)
+            dummyh.GetYaxis().SetRangeUser(-maxz,maxz)
+            dummyh.GetXaxis().SetRangeUser(-1.5, nbins+1.5)
+            #dummyh.GetXaxis().LabelsOption('v') # gives warning: TAxis::Sort:0: RuntimeWarning: Cannot sort. No labels
+            dummyh.GetYaxis().SetTitle('Fit #theta - #theta^{0}')
+            dummyh.GetYaxis().CenterTitle()
+            dummyh.GetXaxis().SetLabelSize(xLabelSize)
+            dummyh.GetXaxis().SetTitleFont(42)
+            dummyh.GetXaxis().SetTitleSize(0.05)
+            dummyh.GetXaxis().SetLabelFont(42)
+            dummyh.GetYaxis().SetTitleFont(42)
+            dummyh.GetYaxis().SetTitleSize(0.06)
+            dummyh.GetYaxis().SetTitleOffset(0.6)
+            dummyh.GetYaxis().SetLabelFont(42)
+            for i in range(nbins):
+                dummyh.GetXaxis().SetBinLabel(i+1, hist_fit_s.GetXaxis().GetBinLabel(i+1))
+            dummyh.GetXaxis().LabelsOption("v")
+            dummyh.Draw()
+
+            # prefit (trivial, all 1)
+            gr_prefit = ROOT.TGraphErrors(nbins,x,zero,exone,one)
+            gr_prefit.SetTitle('')
+            gr_prefit.SetFillColor(ROOT.kAzure+6)
+            gr_prefit.SetMarkerColor(ROOT.kAzure+6)
+            gr_prefit.Draw('P2')
+            leg.AddEntry(gr_prefit,'Prefit','f')
+
+            gr_prefit.GetXaxis().SetNdivisions(nbins+1, ROOT.kFALSE)
+            gr_prefit.GetYaxis().SetNdivisions(2*int(maxz))
+
+            # expected 
+            gr_expected = ROOT.TGraphErrors(nbins,x,zero,exexp,eyexp)
+            gr_expected.GetYaxis().SetRangeUser(-maxz,maxz)
+            gr_expected.GetXaxis().SetRangeUser(-0.5,nbins+0.5)
+            gr_expected.SetFillColor(ROOT.kOrange+7)
+            gr_expected.SetMarkerColor(ROOT.kOrange+7)
+            gr_expected.Draw('P2')
+            leg.AddEntry(gr_expected,'Postfit expected','f')
+
+            # observed
+            gr_observed = ROOT.TGraphErrors(nbins,x,yobs,zero,eyobs)
+            gr_observed.GetYaxis().SetRangeUser(-maxz,maxz)
+            gr_observed.GetXaxis().SetRangeUser(-0.5,nbins+0.5)
+            gr_observed.SetMarkerStyle(ROOT.kFullCircle)
+            gr_observed.SetMarkerSize(1)
+            gr_observed.Draw('P EZ')
+            leg.AddEntry(gr_observed,'Postfit observed')
+
+            #lat.DrawLatex(clm, 0.95, '#bf{CMS} #it{Preliminary}')
+            #lat.DrawLatex(0.80, 0.95, '16.8 fb^{-1} (13 TeV)')
+
+            leg.Draw('same')
+
+            line = ROOT.TLine()
+            for z in range(-int(maxz),int(maxz)):
+                line.DrawLine(x[0]-1.5, z, nbins+1.5, z)
+                line.SetLineStyle(3)
+                line.SetLineColor(ROOT.kBlack)
+
+            for ext in ['png', 'pdf']:
+                canvas_nuis.SaveAs("{noext}_compareObsAndExp.{ext}".format(noext=outnameNoExt, ext=ext))
+                
+        else:
+
+            # to plot from a single file
+            ymin,yhalfd,ycen,yhalfu,ymax = args.ysetting
+            hist_fit_s.GetYaxis().SetRangeUser(ymin-args.yoffset[0],ymax+args.yoffset[1])
+            hist_fit_s.SetLineColor  (39)
+            hist_fit_s.SetMarkerColor(ROOT.kGray+3)
+            hist_fit_s.SetMarkerStyle(20)
+            hist_fit_s.SetMarkerSize(1.0)
+            hist_fit_s.SetLineWidth(2)
+            hist_fit_s.Draw("PE1")
+            hist_fit_s.GetYaxis().SetTitle(args.ytitle)
+            hist_fit_s.GetYaxis().SetTitleSize(0.05)
+            hist_fit_s.GetYaxis().SetTitleOffset(0.90)
+
+            if nbins > 180:
+                hist_fit_s.GetYaxis().SetTitleOffset(0.40)
+                hist_fit_s.SetTitle(args.uniqueString)
+            hist_fit_s.GetXaxis().SetLabelSize(xLabelSize)
+            hist_fit_s.GetXaxis().LabelsOption("v")
+
+            #lat.DrawLatex(0.10, 0.92, '#bf{CMS} #it{Preliminary}')
+            #lat.DrawLatex(0.71 +(0.1-crm), 0.92, '16.8 fb^{-1} (13 TeV)')
+            line.DrawLine(0., ycen, nbins, ycen)
+            line.DrawLine(0., ymax, nbins, ymax)
+            line.DrawLine(0., ymin, nbins, ymin)
+            line.SetLineStyle(2);
+            line.SetLineColor(ROOT.kRed)
+            line.DrawLine(0., yhalfu, nbins, yhalfu)
+            line.DrawLine(0., yhalfd, nbins, yhalfd)
+            line.SetLineStyle(3)
+            line.DrawLine(0., 1., nbins, 1.)
+            line.DrawLine(0.,-1., nbins,-1.)
+            hist_fit_s.Draw("PE1 same") ## draw again over the lines
+
+            canvas_nuis.SetGridx()
+            canvas_nuis.RedrawAxis()
+            canvas_nuis.RedrawAxis('g')
+            # leg=ROOT.TLegend(0.6,0.7,0.89,0.89)
+            # leg.SetFillColor(0)
+            # leg.SetTextFont(42)
+            # leg.AddEntry(hist_fit_s,"S+B fit"   ,"EPL")
+            # leg.Draw()
+            #fout.WriteTObject(canvas_nuis)
+            hist_fit_s.Write()
+            fout.Close()
+
+            for ext in ['png', 'pdf']:
+                canvas_nuis.SaveAs("{noext}.{ext}".format(noext=outnameNoExt, ext=ext))
+
+        
 

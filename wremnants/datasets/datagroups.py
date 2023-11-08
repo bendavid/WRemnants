@@ -61,6 +61,7 @@ class Datagroups(object):
                 args = self.getMetaInfo()["args"]
                 self.flavor = args.get("flavor", None)
             except ValueError as e:
+                logger.warning(e)
                 self.flavor = None
         else:
             self.flavor = None
@@ -238,13 +239,18 @@ class Datagroups(object):
     # pickle[procName]["output"][baseName] where
     ## procName are grouped into datagroups
     ## baseName takes values such as "nominal"
-    def setHists(self, baseName, syst, procsToRead=None, label=None, nominalIfMissing=True, 
-                 applySelection=True, fakerateIntegrationAxes=[], forceNonzero=True, preOpMap=None, preOpArgs=None, scaleToNewLumi=1, 
-                 excludeProcs=None, forceToNominal=[], sumFakesPartial=True):
+    def loadHistsForDatagroups(self, 
+        baseName, syst, procsToRead=None, label=None, nominalIfMissing=True, 
+        applySelection=True, fakerateIntegrationAxes=[], forceNonzero=True, preOpMap=None, preOpArgs=None, scaleToNewLumi=1, 
+        excludeProcs=None, forceToNominal=[], sumFakesPartial=True
+    ):
+        logger.debug("Calling loadHistsForDatagroups()")
+        logger.debug(f"The basename and syst is: {baseName}, {syst}")
+        logger.debug(f"The procsToRead and excludedProcs are: {procsToRead}, {excludeProcs}")
         if not label:
             label = syst if syst else baseName
         # this line is annoying for the theory agnostic, too many processes for signal
-        logger.debug(f"In setHists(): for hist {syst} procsToRead = {procsToRead}")
+        logger.debug(f"In loadHistsForDatagroups(): for hist {syst} procsToRead = {procsToRead}")
 
         if not procsToRead:
             if excludeProcs:
@@ -273,7 +279,7 @@ class Datagroups(object):
         # Note: if 'hasFake' is kept as False (but Fake exists), the original behaviour for which Fake reads everything again is restored
         for procName in procsToReadSort:
             logger.debug(f"Reading group {procName}")
-            
+
             if procName not in self.groups.keys():
                 raise RuntimeError(f"Group {procName} not known. Defined groups are {list(self.groups.keys())}.")
             group = self.groups[procName]
@@ -286,7 +292,7 @@ class Datagroups(object):
                 continue
             group.hists[label] = None
 
-            for i, member in enumerate(group.members):   
+            for i, member in enumerate(group.members):
                 if procName == self.fakeName and member.name in fakesMembersWithSyst:
                     # if we are here this process has been already used to build the fakes when running for other groups
                     continue
@@ -404,61 +410,6 @@ class Datagroups(object):
         if nominalIfMissing and not foundExact:
             raise ValueError(f"Did not find systematic {syst} for any processes!")
 
-    #TODO: Better organize to avoid duplicated code
-    def setHistsCombine(self, baseName, syst, channel, procsToRead=None, excludeProcs=[], label=None):
-        logger.debug(f"setHistsCombine()")
-        if type(excludeProcs) == str: excludeProcs = excludeProcs.split(",")
-        #TODO Set axis names properly
-        if baseName == "x":
-            axisNames=["eta", "pt"]
-
-        if not label:
-            label = syst
-        if not procsToRead:
-            if excludeProcs:
-                procsToRead = list(filter(lambda x: x not in excludeProcs, self.groups.keys()))
-            else:
-                procsToRead = list(self.groups.keys())
-
-        for procName in procsToRead:
-            group = self.groups[procName] if procName in self.groups else {}
-            group.hists[label] = None
-            if type(channel) == str: channel = channel.split(",")
-            narf_hist = None
-            for chn in channel:
-                name = self.histNameCombine(procName, baseName, syst, chn)
-                rthist = self.rtfile.Get(name)
-                if not rthist:
-                    raise RuntimeError(f"Failed to load hist {name} from file")
-                if not narf_hist:
-                    narf_hist = narf.root_to_hist(rthist, axis_names=axisNames)
-                else:
-                    narf_hist = hh.addHists(narf_hist, narf.root_to_hist(rthist, axis_names=axisNames))
-
-            if self.globalAction:
-                narf_hist = self.globalAction(narf_hist)
-
-            group.hists[label] = narf_hist
-
-    def loadHistsForDatagroups(
-        self, baseName, syst, procsToRead=None, excluded_procs=None, channel="", label="",
-        nominalIfMissing=True, applySelection=True, fakerateIntegrationAxes=[], forceNonzero=True, pseudodata=False,
-        preOpMap={}, preOpArgs={}, scaleToNewLumi=1, forceToNominal=[], sumFakesPartial=True
-    ):
-        logger.debug("Calling loadHistsForDatagroups()")
-        logger.debug(f"The basename and syst is: {baseName}, {syst}")
-        logger.debug(f"The procsToRead and excludedProcs are: {procsToRead}, {excluded_procs}")
-        if self.rtfile and self.combine:
-            self.setHistsCombine(baseName, syst, channel, procsToRead, excluded_procs, label)
-        else:
-            self.setHists(baseName, syst, 
-                          procsToRead=procsToRead, label=label, nominalIfMissing=nominalIfMissing, 
-                          applySelection=applySelection, fakerateIntegrationAxes=fakerateIntegrationAxes, 
-                          forceNonzero=forceNonzero, preOpMap=preOpMap, preOpArgs=preOpArgs, 
-                          scaleToNewLumi=scaleToNewLumi,
-                          excludeProcs=excluded_procs, forceToNominal=forceToNominal,
-                          sumFakesPartial=sumFakesPartial)
-
     def getDatagroups(self):
         return self.groups
 
@@ -517,7 +468,7 @@ class Datagroups(object):
             procsToRead=None, reload=False, rename=None, action=None, preOpMap={}, preOpArgs={}, 
             fakerateIntegrationAxes=[], forceNonzero=True):
         if reload:
-            self.loadHistsForDatagroups(refname, syst=name, excluded_procs=exclude,
+            self.loadHistsForDatagroups(refname, syst=name, excludeProcs=exclude,
                 procsToRead=procsToRead, preOpMap=preOpMap, preOpArgs=preOpArgs, 
                 fakerateIntegrationAxes=fakerateIntegrationAxes, forceNonzero=forceNonzero)
 
@@ -600,7 +551,7 @@ class Datagroups(object):
         if member_filter is not None:
             base_members = [m for m in filter(lambda x, f=member_filter: f(x), base_members)]            
 
-        if "xnorm" not in self.results[base_members[0].name]["output"]:
+        if histToReadAxes not in self.results[base_members[0].name]["output"]:
             raise ValueError(f"Results for member {base_members[0].name} does not include xnorm. Found {self.results[base_members[0].name]['output'].keys()}")
         nominal_hist = self.results[base_members[0].name]["output"][histToReadAxes].get()
 
@@ -666,6 +617,31 @@ class Datagroups(object):
             df[f"Ratio to {norm_proc} (%)"] = df["Yield"]/denom*100
             
         return df
+
+    def set_rebin_action(self, axes, ax_lim=[], ax_rebin=[], ax_absval=[]):
+        if len(ax_lim) % 2 or len(ax_lim)/2 > len(axes) or len(ax_rebin) > len(axes):
+            raise ValueError("Inconsistent rebin or axlim arguments. axlim must be at most two entries per axis, and rebin at most one")
+
+        sel = {}
+        for var,low,high,rebin in itertools.zip_longest(axes, ax_lim[::2], ax_lim[1::2], ax_rebin):
+            s = hist.tag.Slicer()
+            if low is not None and high is not None:
+                logger.info(f"Restricting the axis '{var}' to range [{low}, {high}]")
+                sel[var] = s[complex(0, low):complex(0, high):hist.rebin(rebin) if rebin else None]
+            elif rebin:
+                sel[var] = s[hist.rebin(rebin)]
+            if rebin:
+                logger.info(f"Rebinning the axis '{var}' by [{rebin}]")
+
+        if len(sel) > 0:
+            logger.info(f"Will apply the global selection {sel}")
+            self.setGlobalAction(lambda h: h[sel])
+
+        for i, (var, absval) in enumerate(itertools.zip_longest(axes, ax_absval)):
+            if absval:
+                logger.info(f"Taking the absolute value of axis '{var}'")
+                self.setGlobalAction(lambda h, ax=var: hh.makeAbsHist(h, ax))
+                axes[i] = f"abs{var}"
 
     def readHist(self, baseName, proc, group, syst):
         output = self.results[proc.name]["output"]

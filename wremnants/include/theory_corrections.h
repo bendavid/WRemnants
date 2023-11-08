@@ -10,32 +10,6 @@
 
 namespace wrem {
 
-const size_t NHELICITY = 9;
-typedef Eigen::TensorFixedSize<double, Eigen::Sizes<NHELICITY>> helicity_tensor;
-
-helicity_tensor csAngularFactors(const CSVars& csvars) {
-    const double sinThetaCS = csvars.sintheta;
-    const double cosThetaCS = csvars.costheta;
-    const double sinPhiCS = csvars.sinphi;
-    const double cosPhiCS = csvars.cosphi;
-
-    const double sin2ThetaCS = 2.*sinThetaCS*cosThetaCS;
-    const double sin2PhiCS = 2.*sinPhiCS*cosPhiCS;
-    const double cos2ThetaCS = 1. - 2.*sinThetaCS*sinThetaCS;
-    const double cos2PhiCS= 1. - 2.*sinPhiCS*sinPhiCS;
-    helicity_tensor angular;
-    angular(0) = 1.+cosThetaCS*cosThetaCS;
-    angular(1) = 0.5*(1. - 3.*cosThetaCS*cosThetaCS);
-    angular(2) = sin2ThetaCS*cosPhiCS;
-    angular(3) = 0.5*sinThetaCS*sinThetaCS*cos2PhiCS;
-    angular(4) = sinThetaCS*cosPhiCS;
-    angular(5) = cosThetaCS;
-    angular(6) = sinThetaCS*sinThetaCS*sin2PhiCS;
-    angular(7) = sin2ThetaCS*sinPhiCS;
-    angular(8) = sinThetaCS*sinPhiCS;
-    return angular;
-}
-
 template <typename T>
 class TensorCorrectionsHelper {
 
@@ -47,19 +21,11 @@ public:
     TensorCorrectionsHelper(T&& corrections) :
         correctionHist_(std::make_shared<const T>(std::move(corrections))) {}
 
-    // helper for bin lookup which implements the compile-time loop over axes
-    template<typename... Xs, std::size_t... Idxs>
-    const tensor_t &get_tensor_impl(std::index_sequence<Idxs...>, const Xs&... xs) {
-      return correctionHist_->at(correctionHist_->template axis<Idxs>().index(xs)...).data();
-    }
-
-    // variadic templated bin lookup
     template<typename... Xs>
     const tensor_t &get_tensor(const Xs&... xs) {
-        return get_tensor_impl(std::index_sequence_for<Xs...>{}, xs...);
+        return narf::get_value(*correctionHist_, xs...).data();
     }
     tensor_t operator() (double x1, double x2, double x3, int x4, double nominal_weight) {
-        //std::cout << "Args are mass " << x1 << " pt " << x2 << " y " << x3 << " charge " << x4 << std::endl;
         return nominal_weight*get_tensor(x1, x2, x3, x4);
     }
 
@@ -96,6 +62,22 @@ public:
 
     tensor_t operator() (double x1, double x2, int charge, double nominal_weight) {
         return nominal_weight*base_t::get_tensor(x1, x2, charge);
+    }
+};
+
+template <typename T>
+class TensorCorrectionsHelperWeighted4D : public TensorCorrectionsHelper<T> {
+
+using base_t = TensorCorrectionsHelper<T>;
+using tensor_t = typename T::storage_type::value_type::tensor_t;
+
+public:
+
+    //inherit constructor
+    using base_t::base_t;
+
+    tensor_t operator() (double x1, double x2, double x3, int charge, tensor_t nominal_weights) {
+        return nominal_weights*base_t::get_tensor(x1, x2, x3, charge);
     }
 };
 

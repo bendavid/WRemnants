@@ -17,11 +17,11 @@ parser.add_argument("-g", "--generator", type=str, choices=["dyturbo", "scetlib"
 parser.add_argument("--outpath", type=str, default=f"{common.data_dir}/TheoryCorrections", help="Output path")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
 parser.add_argument("--proc", type=str, required=True, choices=["z", "w", ], help="Process")
-parser.add_argument("--minnloh", default="nominal_gen", type=str, help="Reference hist in MiNNLO sample")
+parser.add_argument("--minnloh", default="nominal_gen_qcdScale", type=str, help="Reference hist in MiNNLO sample")
 parser.add_argument("--axes", nargs="*", type=str, default=None, help="Use only specified axes in hist")
 parser.add_argument("--debug", action='store_true', help="Print debug output")
+parser.add_argument("--selectVars", type=str, nargs="*", help="Select variations from corr hist")
 parser.add_argument("--noColorLogger", action="store_true", default=False, help="Do not use logging with colors")
-parser.add_argument("--notaus", dest="addtaus", action='store_false', help="Add in tau samples")
 parser.add_argument("-o", "--plotdir", type=str, help="Output directory for plots")
 parser.add_argument("--eoscp", action="store_true", help="Copy folder to eos with xrdcp rather than using the mount")
 
@@ -36,6 +36,7 @@ ax_map = {
     "massVgen" : "Q",
     "chargeVgen" : "charge",
     "pdfVar" : "vars",
+    "alphasVar" : "vars",
 }
 
 def read_corr(procName, generator, corr_files):
@@ -94,25 +95,7 @@ elif args.proc == "w":
     filesByProc = { "WplusmunuPostVFP" : wpfiles,
         "WminusmunuPostVFP" : wmfiles}
 
-minnloh = None
-for proc in filesByProc.keys():
-    htmp = input_tools.read_and_scale(args.minnlo_file, proc, args.minnloh, apply_xsec=False)
-    sumw = input_tools.read_sumw(args.minnlo_file, proc)
-    # Get more stats in the correction
-    if args.addtaus:
-        logger.info(f"Combining muon and tau decay samples for increased stats for process {proc}")
-        taus = proc.replace("mu", "tau")
-        taush = input_tools.read_and_scale(args.minnlo_file, taus, args.minnloh, apply_xsec=False)
-        htmp += taush
-        sumw += input_tools.read_sumw(args.minnlo_file, taus)
-
-    xsec = input_tools.read_xsec(args.minnlo_file, proc)
-    htmp *= xsec/sumw
-
-    if not minnloh:
-        minnloh = htmp
-    else:
-        minnloh += htmp
+minnloh = hh.sumHists([input_tools.read_mu_hist_combine_tau(args.minnlo_file, proc, args.minnloh) for proc in filesByProc.keys()])
 
 if "y" in minnloh.axes.name:
     minnloh = hh.makeAbsHist(minnloh, "y")
@@ -123,6 +106,8 @@ for ax in minnloh.axes:
         ax._ax.metadata["name"] = ax_map[ax.name]
 
 numh = hh.sumHists([read_corr(procName, args.generator, corr_file) for procName, corr_file in filesByProc.items()])
+if args.selectVars:
+    numh = numh[{"vars" : args.selectVars}]
 
 if numh.ndim-1 < minnloh.ndim:
     axes = []
@@ -131,7 +116,7 @@ if numh.ndim-1 < minnloh.ndim:
     for i, ax in enumerate(minnloh.axes):
         if ax.name in numh.axes.name:
             axes.append(numh.axes[ax.name])
-        else:
+        elif not (ax.name in ax_map and ax_map[ax.name] in numh.axes.name):
             # TODO: Should be a little careful because this won't include overflow, as long as the
             # axis range is large enough, it shouldn't matter much
             axes.append(hist.axis.Regular(1, ax.edges[0], ax.edges[-1], 
@@ -145,7 +130,8 @@ if numh.ndim-1 < minnloh.ndim:
 
 corrh_unc, minnloh, numh  = theory_corrections.make_corr_from_ratio(minnloh, numh)
 
-logger.info(f"Minnlo norm in corr region is {minnloh.sum()}, corrh norm is {numh[...,0].sum()}")
+nom_sum = lambda x: x.sum() if "vars" not in x.axes.name else x[{"vars" : 0}].sum()
+logger.info(f"Minnlo norm in corr region is {nom_sum(minnloh)}, corrh norm is {nom_sum(numh)}")
 
 corrh = hist.Hist(*corrh_unc.axes, name=corrh_unc.name, storage=hist.storage.Double(), data=corrh_unc.values(flow=True))
 

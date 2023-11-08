@@ -87,6 +87,7 @@ if __name__ == "__main__":
     parser.add_argument(      '--set-ratio-unc', dest="setRatioUnc", default="num", choices=["num", "den", "both"], help="Set how to compute uncertainty for the ratio (num or den simply use the one of those component, neglecting the other, both propagates both) ")
     parser.add_argument(      '--integrate1D', action="store_true",  help="In addition to other plots, integrate the shapes in 1D and plot them as TH1 with ratio panel")
     parser.add_argument(      '--legendEntries1D',  default=("Numerator","Denominator"), type=str, nargs=2, help='Entries for legend when integrating in 1D')
+    parser.add_argument(      '--ratioRange1D',  default=(0, -1),type=float, nargs=2, help="Min and max for the ratio in the 1D projection plot")
     parser.add_argument(      '--drawOriginal', action="store_true",  help="Draw original TH2, for debugging")
     args = parser.parse_args()
     
@@ -381,13 +382,17 @@ if __name__ == "__main__":
         hinput1_projY.SetFillStyle(0)
         hinput2_projX.SetFillStyle(0)
         hinput2_projY.SetFillStyle(0)
+        if args.ratioRange1D[0] > args.ratioRange1D[1]:
+            ratioRange1D = ""
+        else:
+            ratioRange1D = "::" + str(args.ratioRange1D[0]) + "," + str(args.ratioRange1D[1])
         drawNTH1([hinput1_projX, hinput2_projX], [args.legendEntries1D[0], args.legendEntries1D[1]], xAxisTitle, "Events", f"{args.outhistname}_projX", outname,
-                 topMargin=0.1, leftMargin=0.16, rightMargin=0.05, labelRatioTmp="Ratio::0.99,1.02",
+                 topMargin=0.1, leftMargin=0.16, rightMargin=0.05, labelRatioTmp=f"Ratio{ratioRange1D}",
                  legendCoords="0.16,0.95,0.8,0.9;1", lowerPanelHeight=0.4, skipLumi=True, passCanvas=canvas1D,
                  transparentLegend=True, onlyLineColor=True, noErrorRatioDen=False,
                  useLineFirstHistogram=True, setOnlyLineRatio=False, lineWidth=2)
         drawNTH1([hinput1_projY, hinput2_projY], [args.legendEntries1D[0], args.legendEntries1D[1]], yAxisTitle, "Events", f"{args.outhistname}_projY", outname,
-                 topMargin=0.1, leftMargin=0.16, rightMargin=0.05, labelRatioTmp="Ratio::0.99,1.02",
+                 topMargin=0.1, leftMargin=0.16, rightMargin=0.05, labelRatioTmp=f"Ratio{ratioRange1D}",
                  legendCoords="0.16,0.95,0.8,0.9;1", lowerPanelHeight=0.4, skipLumi=True, passCanvas=canvas1D,
                  transparentLegend=True, onlyLineColor=True, noErrorRatioDen=False,
                  useLineFirstHistogram=True, setOnlyLineRatio=False, lineWidth=2)

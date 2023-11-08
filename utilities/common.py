@@ -17,8 +17,9 @@ wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "Wplust
     'WminusToMuNu_winhac-lo-photos', 'WminusToMuNu_winhac-lo', 'WminusToMuNu_winhac-nlo']
 zprocs = ["ZmumuPostVFP", "ZtautauPostVFP", "ZmumuMiNLO", "ZmumuNNLOPS", 
     'ZToMuMu_horace-lo-photos', 'ZToMuMu_horace-nlo', 'ZToMuMu_horace-lo', 'ZToMuMu_horace-new',
-    'ZToMuMu_horace-alpha-fsr-off-isr-off', 'ZToMuMu_horace-alpha-old-fsr-off-isr-off', 'ZToMuMu_horace-alpha-old-fsr-off-isr-pythia'
+    'ZToMuMu_horace-alpha-fsr-off-isr-off', 'ZToMuMu_horace-alpha-old-fsr-off-isr-off', 'ZToMuMu_horace-alpha-old-fsr-off-isr-pythia',
     ]
+
 vprocs = wprocs+zprocs
 zprocs_recoil = ["ZmumuPostVFP"]
 wprocs_recoil = ["WplusmunuPostVFP", "WminusmunuPostVFP"]
@@ -73,6 +74,7 @@ axis_pt = hist.axis.Regular(29, 26., 55., name = "pt")
 ptV_10quantiles_binning = [0.0, 2.95, 4.73, 6.68, 8.98, 11.78, 15.33, 20.11, 27.17, 40.15, 13000.]
 # Integer rounded version of the 5% quantiles h[::hist.rebin(2)] for 10% quantiles
 ptV_binning = [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 20, 23, 27, 32, 40, 54, 13000]
+ptV_corr_binning = ptV_binning[:-4]+list(range(30,110,10))
 absYV_binning = [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4]
 
 # categorical axes in python bindings always have an overflow bin, so use a regular
@@ -147,12 +149,11 @@ def common_parser(for_reco_highPU=False):
             setattr(namespace, self.dest, unique_values)
 
     parser.add_argument("--pdfs", type=str, nargs="+", default=["msht20"], 
-        choices=theory_tools.pdfMapExtended.keys(), help="PDF sets to produce error hists for", action=FilterAction)
+        choices=theory_tools.pdfMap.keys(), help="PDF sets to produce error hists for", action=FilterAction)
     parser.add_argument("--altPdfOnlyCentral", action='store_true', help="Only store central value for alternate PDF sets")
     parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=None)
     parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by group name or (subset) of name", default=[])
     parser.add_argument("--excludeProcs", type=str, nargs="*", help="Exclude processes matched by group name or (subset) of name", default=[])  # no need to exclude QCD MC here, histograms can always be made, they are fast and light, so they are always available for tests
-    parser.add_argument("--v8", action='store_true', help="Use NanoAODv8. Default is v9")
     parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
     parser.add_argument("--forceDefaultName", help="Don't modify the name", action='store_true')
     parser.add_argument("--theoryCorr", nargs="*", default=["scetlib_dyturbo", "horacenloew"], choices=theory_corrections.valid_theory_corrections(),
@@ -166,7 +167,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--recoilHists", action='store_true', help="Save all recoil related histograms for calibration and validation")
     parser.add_argument("--recoilUnc", action='store_true', help="Run the recoil calibration with uncertainties (slower)")
     parser.add_argument("--highptscales", action='store_true', help="Apply highptscales option in MiNNLO for better description of data at high pT")
-    parser.add_argument("--dataPath", type=str, default=None, help="Access samples from eos")
+    parser.add_argument("--dataPath", type=str, default=None, help="Access samples from this path (default reads from local machine), for eos use 'root://eoscms.cern.ch//store/cmst3/group/wmass/w-mass-13TeV/NanoAOD/'")
     parser.add_argument("--noVertexWeight", action='store_true', help="Do not apply reweighting of vertex z distribution in MC to match data")
     parser.add_argument("--validationHists", action='store_true', help="make histograms used only for validations")
     parser.add_argument("--onlyMainHistograms", action='store_true', help="Only produce some histograms, skipping (most) systematics to run faster when those are not needed")
@@ -186,6 +187,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--genLevel", type=str, default='postFSR', choices=["preFSR", "postFSR"], help="Generator level definition for unfolding")
     parser.add_argument("--genVars", type=str, nargs="+", default=["ptGen", "absEtaGen"], choices=["qGen", "ptGen", "absEtaGen", "ptVGen", "absYVGen"], help="Generator level variable")
     parser.add_argument("--genBins", type=int, nargs="+", default=[16, 0], help="Number of generator level bins")
+    parser.add_argument("--poiAsNoi", action='store_true', help="Experimental option only with --theoryAgnostic or --unfolding, it will make the histogram to do the POIs as NOIs trick (some postprocessing will happen later in CardTool.py)")
 
     if for_reco_highPU:
         # additional arguments specific for histmaker of reconstructed objects at high pileup (mw, mz_wlike, and mz_dilepton)
@@ -207,31 +209,26 @@ def common_parser(for_reco_highPU=False):
         # options for efficiencies
         parser.add_argument("--trackerMuons", action='store_true', help="Use tracker muons instead of global muons (need appropriate scale factors too). This is obsolete")
         parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers)")
-        parser.add_argument("--noSmooth3dsf", dest="smooth3dsf", action='store_false', help="If true (defaul) use smooth 3D scale factors instead of the original 2D ones (but eff. systs are still obtained from 2D version)")
-        parser.add_argument("--sf2DnoUt", action='store_true', help="Use older smooth 2D scale factors with no ut dependence")
+        parser.add_argument("--noSmooth3dsf", dest="smooth3dsf", action='store_false', help="If true (default) use smooth 3D scale factors instead of the original 2D ones (but eff. systs are still obtained from 2D version)")
         parser.add_argument("--isoEfficiencySmoothing", action='store_true', help="If isolation SF was derived from smooth efficiencies instead of direct smoothing") 
         parser.add_argument("--noScaleFactors", action="store_true", help="Don't use scale factors for efficiency (legacy option for tests)")
+        parser.add_argument("--isolationDefinition", choices=["iso04vtxAgn", "iso04"], default="iso04vtxAgn",  help="Isolation type (and corresponding scale factors)")
+
     commonargs,_ = parser.parse_known_args()
 
     if for_reco_highPU:
-        if commonargs.sf2DnoUt and commonargs.smooth3dsf:
-            parser = set_parser_default(parser, "smooth3dsf", False)
-            common_logger.warning(f"Option --sf2DnoUt was called without --noSmooth3dsf, it will also activate --noSmooth3dsf.")
         if commonargs.trackerMuons:
             common_logger.warning("Using tracker muons, but keep in mind that scale factors are obsolete and not recommended.")
             sfFile = "scaleFactorProduct_16Oct2022_TrackerMuonsHighPurity_vertexWeight_OSchargeExceptTracking.root"
         else:
-            # note: any of the following file is fine for reco, tracking, and IDIP.
-            # Instead, for trigger and isolation one would actually use 3D SF vs eta-pt-ut.
+            # note: for trigger and isolation one would actually use 3D SF vs eta-pt-ut.
             # However, even when using the 3D SF one still needs the 2D ones to read the syst/nomi ratio,
             # since the dataAltSig tag-and-probe fits were not run in 3D (it is assumed for simplicity that the syst/nomi ratio is independent from uT)
-            # the syst variations are the same in both files also for trigger/isolation (since they had been copied over)
-            if commonargs.sf2DnoUt:
-                sfFile = "allSmooth_GtoHout.root" # 2D SF without ut integration
-            else:
-                sfFile = "allSmooth_GtoH3Dout.root" # 2D SF from 3D with ut-integration
+            #
+            # 2D SF without ut-dependence, still needed to compute systematics when uing 3D SF
+            sfFile = "allSmooth_GtoHout.root" if commonargs.isolationDefinition == "iso04" else "allSmooth_GtoHout_vtxAgnIso.root"
 
-        sfFile = f"{data_dir}/testMuonSF/{sfFile}"
+        sfFile = f"{data_dir}/muonSF/{sfFile}"
     else:
         sfFile = ""
 

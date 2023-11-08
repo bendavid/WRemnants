@@ -46,9 +46,8 @@ def metaInfoDict(exclude_diff='notebooks', args=None):
     meta_data = {
         "time" : str(datetime.datetime.now()), 
         "command" : script_command_to_str(sys.argv, args),
+        "args": {a: getattr(args,a) for a in vars(args)} if args else {}
     }
-    if args is not None:
-        meta_data["args"] = {a: getattr(args,a) for a in vars(args)}
 
     if subprocess.call(["git", "branch"], stderr=subprocess.STDOUT, stdout=open(os.devnull, 'w')) != 0:
         meta_data["git_info"] = {"hash" : "Not a git repository!",
@@ -90,7 +89,7 @@ def write_analysis_output(results, outfile, args, update_name=True):
     if args.theoryCorr and not args.theoryCorrAltOnly:
         to_append.append(args.theoryCorr[0]+"Corr")
     if args.maxFiles is not None:
-        to_append.append(f"maxFiles{args.maxFiles}")
+        to_append.append(f"maxFiles_{args.maxFiles}".replace("-","m"))
 
     if to_append and update_name:
         outfile = outfile.replace(".hdf5", f"_{'_'.join(to_append)}.hdf5")
