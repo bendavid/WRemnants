@@ -46,7 +46,7 @@ class CardTool(object):
         self.histName = "x"
         self.nominalDim = None
         self.pseudoData = None
-        self.pseudoDataAxis = None
+        self.pseudoDataAxes = None
         self.pseudoDataIdxs = None
         self.pseudoDataProcsRegexp = None
         self.excludeSyst = None
@@ -160,12 +160,27 @@ class CardTool(object):
     def getDataName(self):
         return self.datagroups.dataName
 
-    def setPseudodata(self, pseudodata, pseudodata_axis, idxs = [0], pseudoDataProcsRegexp=".*"):
-        self.pseudoData = pseudodata
-        self.pseudoDataAxis = pseudodata_axis
-        self.pseudoDataIdxs = [idx if not idx.isdigit() else int(idx) for idx in idxs]
+    def setPseudodata(self, pseudodata, pseudodata_axes, idxs = [0], pseudoDataProcsRegexp=".*"):
+        self.pseudoData = pseudodata[:]
+        self.pseudoDataAxes = pseudodata_axes[:]
         self.pseudoDataProcsRegexp = re.compile(pseudoDataProcsRegexp)
-        
+        if len(pseudodata) != len(pseudodata_axes):
+            if len(pseudodata_axes) == 1:
+                self.pseudoDataAxes = pseudodata_axes*len(pseudodata)
+            else:
+                raise RuntimeError(f"Found {len(pseudodata)} histograms for pseudodata but {len(pseudodata_axes)} corresponding axes, need either the same number or exactly 1 axis to be specified.")
+        idxs = [int(idx) if idx.isdigit() else idx for idx in idxs]
+        if len(pseudodata) == 1:
+            self.pseudoDataIdxs = [idxs]
+        elif len(pseudodata) > 1:
+            if len(idxs) == 1:
+                self.pseudoDataIdxs = [ [idxs[0]]*len(pseudodata) ]
+            elif len(pseudodata) == len(idxs):
+                self.pseudoDataIdxs = [ [idxs[i]] for i in range(len(idxs))]
+            else:
+                raise RuntimeError(f"""Found {len(pseudodata)} histograms for pseudodata but {len(idxs)} corresponding indices, 
+                    need either 1 histogram or exactly 1 index or the same number of histograms and indices to be specified.""")
+
     # Needs to be increased from default for long proc names
     def setSpacing(self, spacing):
         self.spacing = spacing
@@ -672,39 +687,45 @@ class CardTool(object):
                 self.writeHist(var, proc, name, setZeroStatUnc=setZeroStatUnc,
                                decorrByBin=decorrelateByBin, hnomi=hnom)
 
-    def loadPseudodata(self, processes, processesFromNomi=[]):
+    def loadPseudodata(self):
         datagroups = self.datagroups if not self.pseudodata_datagroups else self.pseudodata_datagroups
+        processes = [x for x in datagroups.groups.keys() if x != self.getDataName()]
         processes = self.expandProcesses(processes)
-        datagroups.loadHistsForDatagroups(
-            baseName=self.nominalName, syst=self.pseudoData, label=self.pseudoData,
-            procsToRead=processes,
-            scaleToNewLumi=self.lumiScale, 
-            fakerateIntegrationAxes=self.getFakerateIntegrationAxes())
-        procDict = datagroups.getDatagroups()
-        hists = [procDict[proc].hists[self.pseudoData] for proc in processes if proc not in processesFromNomi]
-        # now add possible processes from nominal
-        logger.warning(f"Making pseudodata summing these processes: {processes}")
-        if len(processesFromNomi):
-            logger.warning(f"These processes are taken from nominal datagroups: {processesFromNomi}")
-            datagroupsFromNomi = self.datagroups
-            datagroupsFromNomi.loadHistsForDatagroups(
-                baseName=self.pseudoData, syst=self.nominalName, label=self.pseudoData, # CHECK: shouldn't it be syst=self.pseudoData?
-                procsToRead=processesFromNomi,
-                scaleToNewLumi=self.lumiScale,
-                fakerateIntegrationAxes=self.getFakerateIntegrationAxes())
-            procDictFromNomi = datagroupsFromNomi.getDatagroups()
-            hists.extend([procDictFromNomi[proc].hists[self.pseudoData] for proc in processesFromNomi])
-        # done, now sum all histograms
-        hdata = hh.sumHists(hists)
-        if self.pseudoDataAxis not in hdata.axes.name:
-            raise RuntimeError(f"Pseudodata axis {self.pseudoDataAxis} not found in {hdata.axes.name}.")
-        return hdata
+        processesFromNomi = [x for x in datagroups.groups.keys() if x != self.getDataName() and not self.pseudoDataProcsRegexp.match(x)]
 
-    def addPseudodata(self, processes, processesFromNomi=[]):
-        hdata = loadPseudodata(processes, processesFromNomi)
-        if len(self.pseudoDataIdxs) > 1:
-            raise RuntimeError(f"Mutliple pseudo data sets from different indices is not supported in the root writer.")
-        hdata = hdata[{self.pseudoDataAxis : self.pseudoDataIdxs[0] }] 
+        hdatas = []
+        for idx, pseudoData in enumerate(self.pseudoData):
+            datagroups.loadHistsForDatagroups(
+                baseName=self.nominalName, syst=pseudoData, label=pseudoData,
+                procsToRead=processes,
+                scaleToNewLumi=self.lumiScale, 
+                fakerateIntegrationAxes=self.getFakerateIntegrationAxes())
+            procDict = datagroups.getDatagroups()
+            hists = [procDict[proc].hists[pseudoData] for proc in processes if proc not in processesFromNomi]
+            # now add possible processes from nominal
+            logger.warning(f"Making pseudodata summing these processes: {processes}")
+            if len(processesFromNomi):
+                logger.warning(f"These processes are taken from nominal datagroups: {processesFromNomi}")
+                datagroupsFromNomi = self.datagroups
+                datagroupsFromNomi.loadHistsForDatagroups(
+                    baseName=pseudoData, syst=self.nominalName, label=pseudoData, # CHECK: shouldn't it be syst=pseudoData?
+                    procsToRead=processesFromNomi,
+                    scaleToNewLumi=self.lumiScale,
+                    fakerateIntegrationAxes=self.getFakerateIntegrationAxes())
+                procDictFromNomi = datagroupsFromNomi.getDatagroups()
+                hists.extend([procDictFromNomi[proc].hists[pseudoData] for proc in processesFromNomi])
+            # done, now sum all histograms
+            hdata = hh.sumHists(hists)
+            if self.pseudoDataAxes[idx] not in hdata.axes.name:
+                raise RuntimeError(f"Pseudodata axis {self.pseudoDataAxes[idx]} not found in {hdata.axes.name}.")
+            hdatas.append(hdata)
+        return hdatas
+
+    def addPseudodata(self):
+        if len(self.pseudoData) > 1 or len(self.pseudoDataIdxs) > 1:
+            raise RuntimeError(f"Mutliple pseudo data sets from different histograms or indices is not supported in the root writer.")
+        hdata = loadPseudodata()[0]
+        hdata = hdata[{self.pseudoDataAxes[0] : self.pseudoDataIdxs[0] }] 
         self.writeHist(hdata, self.getDataName(), self.pseudoData+"_sum")
         if self.getFakeName() in procDict:
             self.writeHist(procDict[self.getFakeName()].hists[self.pseudoData], self.getFakeName(), self.pseudoData+"_sum")
@@ -761,8 +782,7 @@ class CardTool(object):
         self.writeForProcesses(self.nominalName, processes=self.datagroups.groups.keys(), label=self.nominalName, check_systs=check_systs)
         self.loadNominalCard()
         if self.pseudoData and not self.xnorm:
-            self.addPseudodata([x for x in self.datagroups.groups.keys() if x != self.getDataName()],
-                               [x for x in self.datagroups.groups.keys() if x != self.getDataName() and not self.pseudoDataProcsRegexp.match(x)])
+            self.addPseudodata()
 
         self.writeLnNSystematics()
         for syst in self.systematics.keys():

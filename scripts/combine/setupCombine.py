@@ -63,9 +63,9 @@ def make_parser(parser=None):
     parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers and nuisances)")
     parser.add_argument("--isoEfficiencySmoothing", action='store_true', help="If isolation SF was derived from smooth efficiencies instead of direct smoothing")
     # pseudodata
-    parser.add_argument("--pseudoData", type=str, help="Hist to use as pseudodata")
-    parser.add_argument("--pseudoDataAxis", type=str, default="systIdx", help="Variation axis to use as pseudodata")
-    parser.add_argument("--pseudoDataIdxs", type=str, nargs="+", default=["0"], help="Variation indices to use as pseudodata")
+    parser.add_argument("--pseudoData", type=str, nargs="+", help="Histograms to use as pseudodata")
+    parser.add_argument("--pseudoDataAxes", type=str, nargs="+", default="systIdx", help="Variation axes to use as pseudodata for each of the histograms")
+    parser.add_argument("--pseudoDataIdxs", type=str, nargs="+", default=["0"], help="Variation indices to use as pseudodata for each of the histograms")
     parser.add_argument("--pseudoDataFile", type=str, help="Input file for pseudodata (if it should be read from a different file)", default=None)
     parser.add_argument("--pseudoDataProcsRegexp", type=str, default=".*", help="Regular expression for processes taken from pseudodata file (all other processes are automatically got from the nominal file). Data is excluded automatically as usual")
     # unfolding/differential/theory agnostic
@@ -237,7 +237,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     cardTool.setSpacing(28)
     cardTool.setCustomSystForCard(args.excludeNuisances, args.keepNuisances)
     if args.pseudoData:
-        cardTool.setPseudodata(args.pseudoData, args.pseudoDataAxis, args.pseudoDataIdxs, args.pseudoDataProcsRegexp)
+        cardTool.setPseudodata(args.pseudoData, args.pseudoDataAxes, args.pseudoDataIdxs, args.pseudoDataProcsRegexp)
         if args.pseudoDataFile:
             # FIXME: should make sure to apply the same customizations as for the nominal datagroups so far
             pseudodataGroups = Datagroups(args.pseudoDataFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm and not args.ABCD)
