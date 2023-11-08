@@ -96,7 +96,6 @@ class HDF5Writer(object):
 
         dict_data_obs = {}
         dict_data_obs_cov = {}
-        dict_pseudodata = {c : [] for c in self.get_channels()}
         dict_sumw2 = {c : {} for c in self.get_channels()}
         dict_norm = {c : {} for c in self.get_channels()}
         dict_logkavg = {c : {} for c in self.get_channels()}
@@ -183,27 +182,8 @@ class HDF5Writer(object):
 
             ibins.append(nbinschan)
 
-
+            # data and pseudodata
             if not masked:                
-                # pseudodata
-                if chanInfo.pseudoData and not chanInfo.xnorm:
-
-                    pseudodata = self.loadPseudodata([x for x in dg.groups.keys() if x != cardInfo.getDataName()],
-                        [x for x in dg.groups.keys() if x != cardInfo.getDataName() and not cardInfo.pseudoDataProcsRegexp.match(x)])
-
-                    # Kind of hacky, but in case the alt hist has uncertainties
-                    for systAxName in ["systIdx", "tensor_axis_0", "vars"]:
-                        if systAxName in [ax.name for ax in hdata.axes]:
-                            for idx in chanInfo.pseudoDataIndices:
-                                pseudodata = pseudodata[{systAxName : idx}] 
-                                dict_pseudodata[chan].append(pseudodata)
-                                npseudodata
-                    if npseudodata is None:
-                        npseudodata = len(dict_pseudodata[chan])
-                    elif npseudodata != len(dict_pseudodata[chan]):
-                        raise RuntimeError("Different number of pseudodata for different channels!")
-
-                # data
                 if self.theoryFit:
                     if self.theoryFitData is None or self.theoryFitDataCov is None:
                         raise RuntimeError("No data or covariance found to perform theory fit")
@@ -219,7 +199,7 @@ class HDF5Writer(object):
 
                         data_obs = data_obs_hist.values(flow=False).flatten().astype(self.dtype)
                 else:
-                    logger.warning("Writing combinetf hdf5 input without data, use sum of processes.")
+                    logger.warning("Writing combinetf hdf5 input without data, use pseudodata from sum of processes.")
                     data_obs = sum(dict_norm[chan].values())
 
                 dict_data_obs[chan] = data_obs
@@ -374,16 +354,12 @@ class HDF5Writer(object):
         sumw = np.zeros([nbins], self.dtype)
         sumw2 = np.zeros([nbins], self.dtype)
         data_obs = np.zeros([nbins], self.dtype)
-        pseudodata = np.zeros([nbins, npseudodata], self.dtype)
         ibin = 0
         for nbinschan, (chan, chanInfo) in zip(ibins, self.get_channels().items()):
             masked = chanInfo.xnorm and not self.theoryFit
             if masked:
                 continue
             data_obs[ibin:ibin+nbinschan] = dict_data_obs[chan]
-
-            for idx, hpseudo in enumerate(dict_pseudodata[chan]):
-                pseudodata[ibin:ibin+nbinschan, idx] = hpseudo[idx]
 
             for iproc, proc in enumerate(procs):
                 if proc not in dict_norm[chan]:
@@ -666,11 +642,6 @@ class HDF5Writer(object):
 
         nbytes += writeFlatInChunks(data_obs, f, "hdata_obs", maxChunkBytes = self.chunkSize)
         data_obs = None
-
-        for idx, pdata in pseudodata.items():
-
-        nbytes += writeFlatInChunks(pseudodata, f, "hpseudodata", maxChunkBytes = self.chunkSize)
-        pseudodata = None
 
         if self.theoryFit:
             data_cov = self.theoryFitDataCov

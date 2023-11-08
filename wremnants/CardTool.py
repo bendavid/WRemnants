@@ -669,7 +669,7 @@ class CardTool(object):
                 self.writeHist(var, proc, name, setZeroStatUnc=setZeroStatUnc,
                                decorrByBin=decorrelateByBin, hnomi=hnom)
 
-    def loadPseudodata(self, processes, processesFromNomi=[]):
+    def addPseudodata(self, processes, processesFromNomi=[]):
         datagroups = self.datagroups if not self.pseudodata_datagroups else self.pseudodata_datagroups
         processes = self.expandProcesses(processes)
         datagroups.loadHistsForDatagroups(
@@ -693,14 +693,11 @@ class CardTool(object):
             hists.extend([procDictFromNomi[proc].hists[self.pseudoData] for proc in processesFromNomi])
         # done, now sum all histograms
         hdata = hh.sumHists(hists)
-        return hdata
-
-    def addPseudodata(self, processes, processesFromNomi=[]):
-        hdata = loadPseudodata(processes, processesFromNomi)
         # Kind of hacky, but in case the alt hist has uncertainties
         for systAxName in ["systIdx", "tensor_axis_0", "vars"]:
             if systAxName in [ax.name for ax in hdata.axes]:
                 hdata = hdata[{systAxName : self.pseudoDataIdx }] 
+
         self.writeHist(hdata, self.getDataName(), self.pseudoData+"_sum")
         if self.getFakeName() in procDict:
             self.writeHist(procDict[self.getFakeName()].hists[self.pseudoData], self.getFakeName(), self.pseudoData+"_sum")
