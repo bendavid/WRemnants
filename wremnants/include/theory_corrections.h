@@ -10,32 +10,6 @@
 
 namespace wrem {
 
-const size_t NHELICITY = 9;
-typedef Eigen::TensorFixedSize<double, Eigen::Sizes<NHELICITY>> helicity_tensor;
-
-helicity_tensor csAngularFactors(const CSVars& csvars) {
-    const double sinThetaCS = csvars.sintheta;
-    const double cosThetaCS = csvars.costheta;
-    const double sinPhiCS = csvars.sinphi;
-    const double cosPhiCS = csvars.cosphi;
-
-    const double sin2ThetaCS = 2.*sinThetaCS*cosThetaCS;
-    const double sin2PhiCS = 2.*sinPhiCS*cosPhiCS;
-    const double cos2ThetaCS = 1. - 2.*sinThetaCS*sinThetaCS;
-    const double cos2PhiCS= 1. - 2.*sinPhiCS*sinPhiCS;
-    helicity_tensor angular;
-    angular(0) = 1.+cosThetaCS*cosThetaCS;
-    angular(1) = 0.5*(1. - 3.*cosThetaCS*cosThetaCS);
-    angular(2) = sin2ThetaCS*cosPhiCS;
-    angular(3) = 0.5*sinThetaCS*sinThetaCS*cos2PhiCS;
-    angular(4) = sinThetaCS*cosPhiCS;
-    angular(5) = cosThetaCS;
-    angular(6) = sinThetaCS*sinThetaCS*sin2PhiCS;
-    angular(7) = sin2ThetaCS*sinPhiCS;
-    angular(8) = sinThetaCS*sinPhiCS;
-    return angular;
-}
-
 template <typename T>
 class TensorCorrectionsHelper {
 

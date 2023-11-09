@@ -153,11 +153,14 @@ for plot_type in args.plots:
                 axes_combinations = (("qGen","ptGen","absEtaGen"),)
 
         elif base_process == "Z":
-            selections = ({}, )
+            # selections = ({}, )
+            selections=({"qGen":0}, {"qGen":1})
             if args.poiType.startswith("sum"):
-                axes_combinations = ("ptVGen", "absYVGen")
+                # axes_combinations = ("ptVGen", "absYVGen")
+                axes_combinations = (("qGen","absEtaGen"), ("qGen","ptGen"))
             else:
-                axes_combinations = (("ptVGen", "absYVGen"),)
+                # axes_combinations = (("ptVGen", "absYVGen"),)
+                axes_combinations = (("qGen","ptGen","absEtaGen"),)
 
         for axes in axes_combinations:
             if isinstance(axes, str):

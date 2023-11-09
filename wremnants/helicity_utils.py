@@ -23,25 +23,26 @@ narf.clingutils.Declare('#include "syst_helicity_utils.h"')
 data_dir = f"{pathlib.Path(__file__).parent}/data/"
 
 #UL, A0...A4
-axis_helicity_multidim = hist.axis.Integer(-1, 5, name="helicitySig", overflow=False, underflow=False)
+axis_helicity_multidim = hist.axis.Integer(-1, 8, name="helicitySig", overflow=False, underflow=False)
 
 #creates the helicity weight tensor
 def makehelicityWeightHelper(is_w_like = False, filename=None):
     if filename is None:
-        filename = f"{common.data_dir}/angularCoefficients/w_z_coeffs_scetlib_dyturboCorr.hdf5" 
+        filename = f"{common.data_dir}/angularCoefficients/w_z_coeffs_theoryAgnosticBinning.hdf5"
     with h5py.File(filename, "r") as ff:
         out = narf.ioutils.pickle_load_h5py(ff["results"])
 
     corrh = out["Z"] if is_w_like else out["W"]
+
     if 'muRfact' in corrh.axes.name:
         corrh = corrh[{'muRfact' : 1.j,}]
     if 'muFfact' in corrh.axes.name:
         corrh = corrh[{'muFfact' : 1.j,}]
-    missing = set(["y", "ptVgen", "chargeVgen", "helicity", "massVgen"]).difference(set(corrh.axes.name))
-    if missing != set():
-        raise ValueError (f"Axes {missing} are not present in the coeff histogram")
     
-    corrh = corrh.project('massVgen','y','ptVgen','chargeVgen', 'helicity')
+    axes_names = ['massVgen','absYVgen','ptVgen','chargeVgen', 'helicity']
+    if not list(corrh.axes.name) == axes_names:
+        raise ValueError (f"Axes [{corrh.axes.name}] are not the ones this functions expects ({axes_names})")
+    
     if np.count_nonzero(corrh[{"helicity" : -1.j}] == 0):
         logger.warning("Zeros in sigma UL for the angular coefficients will give undefined behaviour!")
     # histogram has to be without errors to load the tensor directly
@@ -71,7 +72,7 @@ def make_muon_eff_syst_helper_helicity(helper_syst, nhelicity=6):
     return helper_syst_helicity, tensor_axes
 
 #mass weights
-def make_massweight_helper_helicity(mass_axis, nhelicity=6):
+def make_massweight_helper_helicity(mass_axis, nhelicity=9):
     tensor_axes=[axis_helicity_multidim, mass_axis]
     helper = ROOT.wrem.tensor1D_helper_helicity[mass_axis.size, nhelicity]()
     return helper, tensor_axes

@@ -176,4 +176,17 @@ Print impacts without plotting (no need to specify output folder)
 ```
 python w_mass_13TeV/makeImpactsOnMW.py fitresults_123456789.root --scaleToMeV --showTotal --justPrint
 ```
+
+### Tools for scale factors
+
+Make W MC efficiencies for trigger and isolation (needed for anti-iso and anti-trigger SF)
+```
+/usr/bin/time -v python scripts/histmakers/mw_with_mu_eta_pt.py -o outputFolder/ --makeMCefficiency --onlyMainHistograms --noAuxiliaryHistograms --noScaleFactors --muonCorrMC none -p WmunuMCeffi_noSF_muonCorrMCnone --filterProcs Wmunu --dataPath root://eoscms.cern.ch//store/cmst3/group/wmass/w-mass-13TeV/NanoAOD/ -v 4 --maxFiles -1
     
+python scripts/analysisTools/w_mass_13TeV/makeWMCefficiency3D.py /path/to/file.hdf5 /path/for/plots/makeWMCefficiency3D/ --rebinUt 2
+```
+
+Then, run 2D smoothing (has to manually edit the default input files inside for now, see other options inside too). Option __--extended__ was used to select SF computed in a larger ut range, but now this might become the default (to be updated)
+```
+python scripts/analysisTools/w_mass_13TeV/run2Dsmoothing.py /path/for/plots/test2Dsmoothing/
+```
