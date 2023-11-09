@@ -70,8 +70,8 @@ def make_parser(parser=None):
     parser.add_argument("--unfolding", action='store_true', help="Prepare datacard for unfolding")
     parser.add_argument("--genAxes", type=str, default=None, nargs="+", help="Specify which gen axis should be used in unfolding, if 'None', use all (inferred from metadata).")
     parser.add_argument("--theoryAgnostic", action='store_true', help="Prepare datacard for theory agnostic analysis, similar to unfolding but different axis and possibly other differences")
-    parser.add_argument("--poiAsNoi", action='store_true', help="Experimental option only with --theoryAgnostic, to treat POIs ad NOIs, with a single signal histogram")
-    parser.add_argument("--priorNormXsec", type=float, default=1, help="Prior for shape uncertainties on cross sections for theory agnostic analysis with POIs as NOIs (1 means 100\%). If negative, it will use shapeNoConstraint in the fit")
+    parser.add_argument("--poiAsNoi", action='store_true', help="Experimental option only with --theoryAgnostic or --unfolding, to treat POIs ad NOIs, with a single signal histogram")
+    parser.add_argument("--priorNormXsec", type=float, default=1, help="Prior for shape uncertainties on cross sections for theory agnostic or unfolding analysis with POIs as NOIs (1 means 100\%). If negative, it will use shapeNoConstraint in the fit")
     parser.add_argument("--scaleNormXsecHistYields", type=float, default=None, help="Scale yields of histogram with cross sections variations for theory agnostic analysis with POIs as NOIs. Can be used together with --priorNormXsec")
     parser.add_argument("--addNormToOOA", type=float, default=None, help="Add normalization uncertainty on out-of-acceptance template (when it exists). Currently only with --poiAsNoi, and practically adds a LnN uncertainty")
     parser.add_argument("--addTauToSignal", action='store_true', help="Events from the same process but from tau final states are added to the signal")
@@ -148,7 +148,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
         # FIXME: temporary customization of signal and out-of-acceptance process names for theory agnostic with POI as NOI
         # There might be a better way to do it more homogeneously with the rest.
         if args.theoryAgnostic:
-            # Important: don't set the gen axes with datagroups.setGenAxes(args.genAxes) when doing poiAsNoi 
+            # Important: don't set the gen axes with datagroups.setGenAxes(args.genAxes) when doing poiAsNoi (to be checked, it is currently done few lines above) 
             constrainMass = False
             hasSeparateOutOfAcceptanceSignal = False
             # check if the out-of-acceptance signal process exists as an independent process
@@ -341,13 +341,14 @@ def setup(args, inputFile, fitvar, xnorm=False):
             passToFakes=passSystToFakes,
         )
         if args.theoryAgnostic:
-            cardTool.addSystematic("yieldsUnfolding", 
+            cardTool.addSystematic("yieldsTheoryAgnostic", 
                 **noi_args,
                 processes=["signal_samples_noOutAcc"], # currently not on out-of-acceptance signal template (to implement)
                 baseName=f"norm{label}CHANNEL_",
                 noConstraint=True if args.priorNormXsec < 0 else False,
                 #customizeNuisanceAttributes={".*AngCoeff4" : {"scale" : 1, "shapeType": "shapeNoConstraint"}},
                 labelsByAxis=["PtVBin", "YVBin", "AngCoeff"],
+                systAxesFlow=[a for a in poi_axes], # use underflow/overflow bins for ptGen
                 actionMap={
                         m.name: (lambda h: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], h, scale2=args.scaleNormXsecHistYields))
                         for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},

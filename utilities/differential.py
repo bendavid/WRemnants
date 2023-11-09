@@ -57,28 +57,24 @@ def get_dilepton_axes(gen_vars, gen_axes, add_out_of_acceptance_axis=False):
 
     return axes, cols, selections
 
-def get_theoryAgnostic_axes():
+def get_theoryAgnostic_axes(ptV_bins=[], absYV_bins=[], ptV_flow=False, absYV_flow=False):
 
-    # TODO, make it easier to customize from external inputs
+    ptV_bins_init = [0., 3., 6., 9.7, 12.4, 16., 21.4, 29.5, 60.] if not len(ptV_bins) else ptV_bins
+    absYV_bins_init = [0., 0.4, 0.8, 1.2, 1.6, 2.0, 2.4] if not len(absYV_bins) else absYV_bins
 
     # Note that the helicity axis is defined elsewhere, and must not be added to the list of axes returned here
     axis_ptVgen = hist.axis.Variable(
-        #[0., 5., 10., 15., 20., 25., 30., 35., 40., 45., 50.],
-        [0., 3., 6., 9.7,12.4,16.,21.4,29.5,60.],
-        #[0., 2.5, 5., 7.5, 10., 12.5, 15., 17.5, 20., 25., 30., 35., 40., 45., 50.],
-        #[0., 1000.],
-        name = "ptVgenSig", underflow=False, overflow=False
+        ptV_bins_init,
+        name = "ptVgenSig", underflow=False, overflow=ptV_flow
     )
+
     axis_absYVgen = hist.axis.Variable(
-        #[0, 0.5, 1., 1.5, 2.0, 2.5],
-        [0., 0.4, 0.8, 1.2, 1.6, 2.0, 2.4],
-        #[0.25*i for i in range(11)],
-        #[0, 5.0],
-        name = "absYVgenSig", underflow=False, overflow=False
+        absYV_bins_init,
+        name = "absYVgenSig", underflow=False, overflow=absYV_flow
     )
-    
+
     axes = [axis_ptVgen, axis_absYVgen]
     cols = ["ptVgen", "absYVgen"] # name of the branch, not of the axis
-    
+
     return axes, cols
         

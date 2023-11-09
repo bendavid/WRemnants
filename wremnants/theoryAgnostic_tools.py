@@ -6,13 +6,19 @@ import hist
 
 logger = logging.child_logger(__name__)
 
-def select_fiducial_space(df, ptVgenMax, absYVgenMax, accept=True):
-    # might need to account for some Ai which we neglect, we may have an out-of-acceptance per helicity state
+def select_fiducial_space(df, ptVgenMax, absYVgenMax, accept=True, select=True):
+    # accept defines the selection for in-acceptance (IA) or out-of-acceptance (OOA)
+    # select is needed to actually apply the selection. For --poiAsNoi one integrates over the gen bins to build the nominal histogram in setupCombine/CardTool.py,
+    # so all bins must be kept including overflows, and thus the explicit cut must be removed, although this is only for IA, since OOA is usually built as an independent histogram)
+    # In the future the OOA might be build from the overflow bins directly (it might be possible to define multiple pieces too)
     selection = f"ptVgen < {ptVgenMax} && absYVgen < {absYVgenMax}"
     df = df.Define("fiducial", selection)
     if accept:
-        df = df.Filter("fiducial")
-        logger.debug(f"Theory agnostic fiducial cut: {selection}")
+        if select:
+            df = df.Filter("fiducial")
+            logger.debug(f"Theory agnostic fiducial cut: {selection}")
+        else:
+            logger.debug(f"Theory agnostic fiducial cut not explicitly applied to fill overflow bins, it was: {selection}")
     else:
         df = df.Filter("fiducial == 0")
         logger.debug(f"Theory agnostic fiducial cut (out-of-acceptance): not ({selection})")
