@@ -69,10 +69,6 @@ class CardTool(object):
         self.charge_ax = "charge"
         self.procGroups = {}
 
-        if not real_data:
-            # If real data is not explicitly requested, use pseudodata instead (but still store read data in root writer)
-            self.setPseudodata([self.nominalName])
-
     def getProcNames(self, grouped_procs):
         expanded_procs = []
         for group in grouped_procs:
@@ -788,6 +784,10 @@ class CardTool(object):
         
         self.writeForProcesses(self.nominalName, processes=self.datagroups.groups.keys(), label=self.nominalName, check_systs=check_systs)
         self.loadNominalCard()
+
+        if not self.real_data and not self.xnorm:
+            # If real data is not explicitly requested, use pseudodata instead (but still store read data in root writer)
+            self.setPseudodata([self.nominalName])
         if self.pseudoData and not self.xnorm:
             self.addPseudodata()
 
