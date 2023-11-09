@@ -425,7 +425,7 @@ def read_dyturbo_angular_coeffs(dyturbof, boson=None, rebin=None, absy=True, add
         dyturbof = uproot.open(dyturbof)
 
     if not boson:
-        boson = "Wp" if "wp" in dyturbof.file_path else ("Wm" if "wm" in dyturbof else "Z")
+        boson = "Wp" if "wp" in dyturbof.file_path else ("Wm" if "wm" in dyturbof.file_path else "Z")
 
     sigma_ul = dyturbof["s_qt_vs_y"].to_hist()
     for ax,name in zip(sigma_ul.axes, ["qT", "Y"]):
