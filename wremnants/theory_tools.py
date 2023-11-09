@@ -161,6 +161,12 @@ def define_prefsr_vars(df):
     df = df.Define("absYVgen", "std::fabs(yVgen)")
     df = df.Define("chargeVgen", "GenPart_pdgId[prefsrLeps[0]] + GenPart_pdgId[prefsrLeps[1]]")
     df = df.Define("csSineCosThetaPhi", "wrem::csSineCosThetaPhi(genlanti, genl)")
+
+    # define gen lepton in wlike case for ew corrections
+    df = df.Define("ptgen", "event % 2 == 0 ? genl.pt() : genlanti.pt()")
+    df = df.Define("etagen", "event % 2 == 0 ? genlanti.eta() : genl.eta()")
+    df = df.Define("qgen", "event % 2 == 0 ? -1 : 1")
+
     return df
 
 def define_scale_tensor(df):

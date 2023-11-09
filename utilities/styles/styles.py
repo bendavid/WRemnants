@@ -56,3 +56,5 @@ syst_labels = {
         "1": r"NLOEW + HOEW, PS, ($G_\mu, m_\mathrm{Z}, \mathrm{sin}^2\Theta_\mathrm{eff}$) scheme", 
         "2": r"NLOEW + HOEW, CMS, ($\alpha(m_\mathrm{Z}),m _\mathrm{Z}, \mathrm{sin}^2\Theta_\mathrm{eff}$) scheme", }
 }
+
+syst_labels["virtual_ew_wlike"] = syst_labels["virtual_ew"]

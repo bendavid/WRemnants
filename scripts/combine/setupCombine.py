@@ -49,7 +49,7 @@ def make_parser(parser=None):
     parser.add_argument("--scaleTNP", default=5, type=float, help="Scale the TNP uncertainties by this factor")
     parser.add_argument("--scalePdf", default=1, type=float, help="Scale the PDF hessian uncertainties by this factor")
     parser.add_argument("--pdfUncFromCorr", action='store_true', help="Take PDF uncertainty from correction hist (Requires having run that correction)")
-    parser.add_argument("--ewUnc", type=str, nargs="*", default=["horacenloew"], choices=["horacenloew", "winhacnloew", "virtual_ew"], help="Include EW uncertainty")
+    parser.add_argument("--ewUnc", type=str, nargs="*", default=["horacenloew"], choices=["horacenloew", "winhacnloew", "virtual_ew", "virtual_ew_wlike"], help="Include EW uncertainty")
     parser.add_argument("--widthUnc", action='store_true', help="Include uncertainty on W and Z width")
     parser.add_argument("--skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
     parser.add_argument("--noQCDscaleFakes", action="store_true",   help="Do not apply QCd scale uncertainties on fakes, mainly for debugging")

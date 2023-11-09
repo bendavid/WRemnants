@@ -10,6 +10,7 @@ from utilities.io_tools import output_tools
 parser = argparse.ArgumentParser()
 parser.add_argument("-i", "--input", nargs="+", type=str, default=[f"{common.data_dir}/EWCorrections/dsig_dmll_dpTll_Zsel_ful.csv"], help="Input csv file with virtual corrections")
 parser.add_argument("--debug", action='store_true', help="Print debug output")
+parser.add_argument("--axes", type=str, nargs="+",default=["pTll", "mll"], choices=["pTll", "mll", "pTl", "etal"], help="Axes for the EW corrections")
 parser.add_argument("--outpath", type=str, default=f"{common.data_dir}/TheoryCorrections", help="Output path")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for plots and correction files")
 parser.add_argument("--outname", type=str, default="", help="Output file name")
@@ -23,7 +24,9 @@ charge_dict = {'ZToMuMu': 0, 'WplusToMuNu': 1, 'WminusToMuNu': 0}
 # translate to preFSR column names
 preFSR_dict = {
     "pTll": "ptVgen",
-    "mll": "massVgen"
+    "mll": "massVgen",
+    "pTl": "ptgen",
+    "etal": "etagen"
 }
 
 def read_ew_corrections_from_csv(filename, proc):
@@ -42,9 +45,10 @@ def read_ew_corrections_from_csv(filename, proc):
             axis = hist.axis.Variable(edges, name=axis_name, underflow=False)
         return axis
 
+    ew_axes = [ew_df_to_axis(df, a) for a in args.axes]
+
     hratio = hist.Hist(
-        ew_df_to_axis(df, "mll"),
-        ew_df_to_axis(df, "pTll"),
+        *ew_axes,
         storage=hist.storage.Double()
         )
 
@@ -53,6 +57,7 @@ def read_ew_corrections_from_csv(filename, proc):
         axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "charge")
     elif proc[0] == 'Z':
         axis_charge = hist.axis.Regular(1, -1., 1., underflow=False, overflow=False, name = "charge")
+
     charge_idx = charge_dict[proc]
 
     # syst axis
