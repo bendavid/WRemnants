@@ -27,6 +27,7 @@ def make_parser(parser=None):
     parser.add_argument("--noHist", action='store_true', help="Skip the making of 2D histograms (root file is left untouched if existing)")
     parser.add_argument("--qcdProcessName" , type=str, default="Fake", help="Name for QCD process (must be consistent with what is used in datagroups2016.py")
     # setting on the fit behaviour
+    parser.add_argument("--realData", action='store_true', help="Store real data in datacards")
     parser.add_argument("--fitvar", nargs="+", help="Variable to fit", default=["eta-pt-charge"])
     parser.add_argument("--rebin", type=int, nargs='*', default=[], help="Rebin axis by this value (default, 1, does nothing)")
     parser.add_argument("--absval", type=int, nargs='*', default=[], help="Take absolute value of axis if 1 (default, 0, does nothing)")
@@ -62,8 +63,9 @@ def make_parser(parser=None):
     parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers and nuisances)")
     parser.add_argument("--isoEfficiencySmoothing", action='store_true', help="If isolation SF was derived from smooth efficiencies instead of direct smoothing")
     # pseudodata
-    parser.add_argument("--pseudoData", type=str, help="Hist to use as pseudodata")
-    parser.add_argument("--pseudoDataIdx", type=str, default="0", help="Variation index to use as pseudodata")
+    parser.add_argument("--pseudoData", type=str, nargs="+", help="Histograms to use as pseudodata")
+    parser.add_argument("--pseudoDataAxes", type=str, nargs="+", default=[None], help="Variation axes to use as pseudodata for each of the histograms")
+    parser.add_argument("--pseudoDataIdxs", type=str, nargs="+", default=["0"], help="Variation indices to use as pseudodata for each of the histograms")
     parser.add_argument("--pseudoDataFile", type=str, help="Input file for pseudodata (if it should be read from a different file)", default=None)
     parser.add_argument("--pseudoDataProcsRegexp", type=str, default=".*", help="Regular expression for processes taken from pseudodata file (all other processes are automatically got from the nominal file). Data is excluded automatically as usual")
     # unfolding/differential/theory agnostic
@@ -189,7 +191,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
 
 
     # Start to create the CardTool object, customizing everything
-    cardTool = CardTool.CardTool(xnorm=xnorm, ABCD=wmass and args.ABCD)
+    cardTool = CardTool.CardTool(xnorm=xnorm, ABCD=wmass and args.ABCD and not xnorm, real_data=args.realData)
     cardTool.setDatagroups(datagroups)
     if args.qcdProcessName:
         cardTool.setFakeName(args.qcdProcessName)
@@ -235,7 +237,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     cardTool.setSpacing(28)
     cardTool.setCustomSystForCard(args.excludeNuisances, args.keepNuisances)
     if args.pseudoData:
-        cardTool.setPseudodata(args.pseudoData, args.pseudoDataIdx, args.pseudoDataProcsRegexp)
+        cardTool.setPseudodata(args.pseudoData, args.pseudoDataAxes, args.pseudoDataIdxs, args.pseudoDataProcsRegexp)
         if args.pseudoDataFile:
             # FIXME: should make sure to apply the same customizations as for the nominal datagroups so far
             pseudodataGroups = Datagroups(args.pseudoDataFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm and not args.ABCD)
@@ -789,16 +791,24 @@ if __name__ == "__main__":
         writer = HDF5Writer.HDF5Writer()
 
         # loop over all files
+        outnames = []
         for i, ifile in enumerate(args.inputFile):
             fitvar = args.fitvar[i].split("-")
             cardTool = setup(args, ifile, fitvar, xnorm=args.fitresult is not None)
+            outnames.append( (outputFolderName(args.outfolder, cardTool, args.doStatOnly, args.postfix), analysis_label(cardTool)) )
+
             writer.add_channel(cardTool)
             if args.unfolding and not args.poiAsNoi:
                 cardTool = setup(args, ifile, ["count"], xnorm=True)
                 writer.add_channel(cardTool)
         if args.fitresult:
             writer.set_fitresult(args.fitresult, mc_stat=not args.noMCStat)
-        writer.write(args)
+
+        if len(outnames) == 1:
+            outfile, outfolder = outnames[0]
+        else:
+            outfile, outfolder = f"{args.outfolder}/Combination{'_statOnly' if args.doStatOnly else ''}_{args.postfix}/", "Combination"
+        writer.write(args, outfile, outfolder)
     else:
         if len(args.inputFile) > 1:
             raise IOError(f"Multiple input files only supported within --hdf5 mode")

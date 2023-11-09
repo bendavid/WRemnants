@@ -218,8 +218,8 @@ def projectABCD(cardTool, h, return_variances=False, dtype="float64"):
     fakerate_axes = [n for n in h.axes.name if n in cardTool.fakerateAxes]
 
     lowMT_axes = [n for n in h.axes.name if n in fakerate_axes]
-    highMT_failIso_axes = [n for n in h.axes.name if n in [*fakerate_axes, *cardTool.project]]
-    highMT_passIso_axes = [n for n in h.axes.name if n in cardTool.project]
+    highMT_failIso_axes = [n for n in h.axes.name if n in [*fakerate_axes, *cardTool.fit_axes]]
+    highMT_passIso_axes = [n for n in h.axes.name if n in cardTool.fit_axes]
 
     hist_lowMT = h[{cardTool.nameMT : cardTool.failMT}].project(*[*lowMT_axes, common.passIsoName])
     hist_highMT_failIso = h[{cardTool.nameMT : cardTool.passMT, **common.failIso}].project(*[*highMT_failIso_axes])
