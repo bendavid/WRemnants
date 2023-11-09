@@ -61,7 +61,7 @@ def prepareChargeFit(options, charges=["plus"]):
         
     datacards=[]; 
     channels=[]
-    binname = "ZMassWLike" if options.isWlike else "WMass"
+    binname = "ZMassWLike" if options.isWlike else "ZMassDilepton" if options.isDilepton else "WMass"
 
     for charge in charges:
         datacards.append(os.path.abspath(options.inputdir)+"/{b}_{ch}.txt".format(b=binname,ch=charge))
@@ -193,7 +193,8 @@ if __name__ == "__main__":
     parser.add_argument(     '--comb'   , dest='combineCharges' , default=False, action='store_true', help='Combine W+ and W-, if single cards are done')
     parser.add_argument(      '--fit-single-charge', dest='fitSingleCharge', default=False, action='store_true', help='Prepare datacard for single-charge fit. For each charge, a postfix is appended to option --postfix, so no need to add the charge explicitly')
     parser.add_argument(     '--postfix',    dest='postfix', type=str, default="", help="Postfix for .hdf5 file created with text2hdf5.py");
-    parser.add_argument('--wlike', dest='isWlike', action="store_true", default=False, help="Make cards for the W-like analysis. Default is Wmass");
+    parser.add_argument('--wlike', dest='isWlike', action="store_true", default=False, help="Make cards for the Z W-like analysis. Default is Wmass");
+    parser.add_argument('--dilepton', dest='isDilepton', action="store_true", default=False, help="Make cards for the Z dilepton analysis. Default is Wmass");
     # options for card maker and fit
     parser.add_argument(       "--clipSystVariations", type=float, default=-1.,  help="Clipping of syst variations, passed to text2hdf5.py")
     parser.add_argument(       "--clipSystVariationsSignal", type=float, default=-1.,  help="Clipping of signal syst variations, passed to text2hdf5.py")
@@ -225,9 +226,16 @@ if __name__ == "__main__":
             print("\n")
             quit()
 
+    if "ZMassWLike_" in args.inputdir and not args.isWlike:
+        print("Warning: ZMassWLike found in input path {}, but option --wlike not specified, please check".format(args.inputdir))
+        quit()
+    if "ZMassDilepton_" in args.inputdir and not args.isDilepton:
+        print("Warning: ZMassDilepton found in input path {}, but option --dilepton not specified, please check".format(args.inputdir))
+        quit()
+
     if not args.inputdir.endswith("/"):
         args.inputdir += "/"
-            
+
     if args.cardFolder:
         if not args.cardFolder.endswith("/"):
             args.cardFolder += "/"
@@ -238,6 +246,13 @@ if __name__ == "__main__":
         fcmd.close()
 
     fitCharges = ["plus", "minus"] if args.charge == "both" else [args.charge]
+    if args.isDilepton:
+        #fitCharges = ["inclusive"]
+        prepareChargeFit(args, charges=["inclusive"])
+        print('-'*30)
+        print("Done with dilepton 'inclusive'")
+        print('-'*30)
+        quit()
 
     if not args.combineCharges and not args.fitSingleCharge:
         print("Warning: must pass one option between --fit-single-charge and --comb to fit single charge or combination.")

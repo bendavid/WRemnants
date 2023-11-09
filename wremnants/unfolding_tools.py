@@ -93,8 +93,8 @@ def define_gen_level(df, gen_level, dataset_name, mode="wmass"):
 
     return df
 
-def select_fiducial_space(df, accept=True, mode="wmass", pt_min=None, pt_max=None, mass_min=60, mass_max=120, mtw_min=0, selections=[]):
-    # Define a fiducial phase space and either select events inside/outside
+def select_fiducial_space(df, select=True, accept=True, mode="wmass", pt_min=None, pt_max=None, mass_min=60, mass_max=120, mtw_min=0, selections=[]):
+    # Define a fiducial phase space and if select=True, either select events inside/outside
     # accept = True: select events in fiducial phase space 
     # accept = False: reject events in fiducial pahse space
     
@@ -123,12 +123,12 @@ def select_fiducial_space(df, accept=True, mode="wmass", pt_min=None, pt_max=Non
         logger.debug(f"Add selection {sel} for fiducial phase space")
         selection += f" && ({sel})"
 
-    df = df.Define("fiducial", selection)
+    df = df.Define("acceptance", selection)
 
-    if accept:
-        df = df.Filter("fiducial")
-    else:
-        df = df.Filter("fiducial == 0")
+    if select and accept:
+        df = df.Filter("acceptance")
+    elif select :
+        df = df.Filter("acceptance == 0")
 
     return df
 

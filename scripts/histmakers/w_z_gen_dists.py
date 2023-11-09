@@ -13,11 +13,12 @@ import os
 
 
 parser.add_argument("--skipAngularCoeffs", action='store_true', help="Skip the conversion of helicity moments to angular coeff fractions")
-parser.add_argument("--addHelicityToPDFs", action='store_true', help="Add helicity tensor for PDFs")
+parser.add_argument("--propagatePDFstoHelicity", action='store_true', help="Propagate PDF uncertainties to helicity moments")
+parser.add_argument("--useTheoryAgnosticBinning", action='store_true', help="Use theory agnostic binning (coarser) to produce the gen results")
 parser.add_argument("--singleLeptonHists", action='store_true', help="Also store single lepton kinematics")
 parser.add_argument("--photonHists", action='store_true', help="Also store photon kinematics")
 parser.add_argument("--skipEWHists", action='store_true', help="Also store histograms for EW reweighting. Use with --filter horace")
-parser.add_argument("--absY", action='store_true', help="use absolute |Y|")
+parser.add_argument("--signedY", action='store_true', help="use signed Y")
 parser.add_argument("--applySelection", action='store_true', help="Apply selection on leptons")
 parser.add_argument("--auxiliaryHistograms", action="store_true", help="Safe auxiliary histograms (mainly for ew analysis)")
 
@@ -39,18 +40,30 @@ axis_massWgen = hist.axis.Variable([5., 13000.], name="massVgen", underflow=True
 
 axis_massZgen = hist.axis.Regular(12, 60., 120., name="massVgen")
 
-axis_absYVgen = hist.axis.Variable(
-    [0., 0.25, 0.5, 0.75, 1., 1.25, 1.5, 1.75, 2., 2.25, 2.5, 2.75, 3., 3.25, 3.5, 4., 5.], # this is the same binning as hists from theory corrections
-    name = "absYVgen", underflow=False
-)
+if not args.useTheoryAgnosticBinning:
+    axis_absYVgen = hist.axis.Variable(
+        [0., 0.25, 0.5, 0.75, 1., 1.25, 1.5, 1.75, 2., 2.25, 2.5, 2.75, 3., 3.25, 3.5, 4., 5.], # this is the same binning as hists from theory corrections
+        name = "absYVgen", underflow=False
+    )
+else:
+    axis_absYVgen = hist.axis.Variable(
+        [0., 0.4, 0.8, 1.2, 1.6, 2.0, 2.4, 10.], #same axis as theory agnostic norms
+        name = "absYVgen", underflow=False
+    )
 
-axis_ygen = hist.axis.Regular(200, -5., 5., name="y")
-axis_rapidity = axis_absYVgen if args.absY else axis_ygen
-col_rapidity =  "absYVgen" if args.absY else "yVgen"
+axis_ygen = hist.axis.Regular(10, -5., 5., name="y")
+axis_rapidity = axis_ygen if args.signedY else axis_absYVgen
+col_rapidity =  "yVgen" if args.signedY else "absYVgen"
 
-axis_ptVgen = hist.axis.Variable(
+if not args.useTheoryAgnosticBinning:
+    axis_ptVgen = hist.axis.Variable(
      list(range(0,151))+[160., 190.0, 220.0, 250.0, 300.0, 400.0, 500.0, 800.0, 13000.0], 
-    #list(range(0,101)), # this is the same binning as hists from theory corrections
+    #common.ptV_binning,
+    name = "ptVgen", underflow=False,
+)
+else:
+    axis_ptVgen = hist.axis.Variable(
+     [0., 3., 6., 9.62315204,12.36966732,16.01207711,21.35210602,29.50001253,60.,100.], #same axis as theory agnostic norms, 
     #common.ptV_binning,
     name = "ptVgen", underflow=False,
 )
@@ -199,10 +212,7 @@ def build_graph(df, dataset):
             results.append(helicity_moments_scale)
 
         if "LHEPdfWeight" in df.GetColumnNames():
-            if args.addHelicityToPDFs:
-                weightsByHelicity_helper = wremnants.makehelicityWeightHelper()
-                df = df.Define("helWeight_tensor", weightsByHelicity_helper, ["massVgen", "yVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "nominal_weight"])
-            syst_tools.add_pdf_hists(results, df, dataset.name, nominal_axes, nominal_cols, args.pdfs, "nominal_gen", addhelicity=args.addHelicityToPDFs)
+            syst_tools.add_pdf_hists(results, df, dataset.name, nominal_axes, nominal_cols, args.pdfs, "nominal_gen", propagateToHelicity=args.propagatePDFstoHelicity)
 
     if args.theoryCorr and dataset.name in corr_helpers:
         results.extend(theory_tools.make_theory_corr_hists(df, "nominal_gen", nominal_axes, nominal_cols,
@@ -249,12 +259,19 @@ if not args.skipAngularCoeffs:
     coeffs={}
     # Common.ptV_binning is the approximate 5% quantiles, rounded to integers. Rebin for approx 10% quantiles
     if z_moments:
-        z_moments = hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning[::2])
-        z_moments = hh.rebinHist(z_moments, axis_massZgen.name, axis_massZgen.edges[::2])
+        if not args.useTheoryAgnosticBinning:
+            z_moments = hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning[::2])
+            z_moments = hh.rebinHist(z_moments, axis_massZgen.name, axis_massZgen.edges[::2])
         coeffs["Z"] = wremnants.moments_to_angular_coeffs(z_moments) 
     if w_moments:
-        w_moments = hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning[::2])
+        if not args.useTheoryAgnosticBinning:
+            w_moments = hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning[::2])
         coeffs["W"] = wremnants.moments_to_angular_coeffs(w_moments)
     if coeffs:
-        outfname = "w_z_coeffs_absY.hdf5" if args.absY else "w_z_coeffs.hdf5"
+        outfname = "w_z_coeffs"
+        if args.signedY:
+            outfname += "_signedY"
+        if args.useTheoryAgnosticBinning:
+            outfname += "_theoryAgnosticBinning"
+        outfname += ".hdf5"
         output_tools.write_analysis_output(coeffs, outfname, args, update_name=not args.forceDefaultName)

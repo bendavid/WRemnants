@@ -44,13 +44,13 @@ def fakeHistIsoRegionIntGen(h, scale=1.):
     s = hist.tag.Slicer()
     return h[{"iso" : 0, "qTgen" : s[::hist.sum]}]
 
-def signalHistWmass(h, thresholdMT=40.0, charge=None, passIso=common.passIso, passMT=True, axis_name_mt="mt", integrateLowMT=True, integrateHighMT=False, genBin=None):
+def signalHistWmass(h, thresholdMT=40.0, charge=None, passIso=True, passMT=True, axis_name_mt="mt", integrateLowMT=True, integrateHighMT=False, genBin=None):
     if genBin != None:
         h = h[{"recoil_gen" : genBin}]
 
-    nameMT, failMT, passMT = get_mt_selection(h, thresholdMT, axis_name_mt, integrateLowMT, integrateHighMT)
+    nameMT, fMT, pMT = get_mt_selection(h, thresholdMT, axis_name_mt, integrateLowMT, integrateHighMT)
 
-    sel = {**passIso, nameMT: passMT}
+    sel = {common.passIsoName:passIso, nameMT: pMT if passMT else fMT}
     if charge in [-1, 1]:
         sel.update({"charge" : -1j if charge < 0 else 1j})
 
@@ -63,16 +63,16 @@ def signalHistWmass(h, thresholdMT=40.0, charge=None, passIso=common.passIso, pa
 
 # the following are utility wrapper functions for signalHistWmass with proper region selection
 def histWmass_failMT_passIso(h, thresholdMT=40.0, charge=None):
-    return signalHistWmass(h, thresholdMT, charge, common.passIso, common.failMT)
+    return signalHistWmass(h, thresholdMT, charge, True, False)
 
 def histWmass_failMT_failIso(h, thresholdMT=40.0, charge=None):
-    return signalHistWmass(h, thresholdMT, charge, common.failIso, common.failMT)
+    return signalHistWmass(h, thresholdMT, charge, False, False)
 
 def histWmass_passMT_failIso(h, thresholdMT=40.0, charge=None):
-    return signalHistWmass(h, thresholdMT, charge, common.failIso, common.passMT)
+    return signalHistWmass(h, thresholdMT, charge, False, True)
 
 def histWmass_passMT_passIso(h, thresholdMT=40.0, charge=None):
-    return signalHistWmass(h, thresholdMT, charge, common.passIso, common.passMT)
+    return signalHistWmass(h, thresholdMT, charge, True, True)
 
 # TODO: Not all hists are made with these axes
 def signalHistLowPileupW(h):
