@@ -139,7 +139,7 @@ axis_recoWpt = hist.axis.Regular(40, 0., 80., name = "recoWpt", underflow=False,
 # define helpers
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 
-qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper()
+qcdScaleByHelicity_helper = wremnants.theory_corrections.make_qcd_uncertainty_helper_by_helicity()
 
 if args.noScaleFactors:
     logger.info("Running with no scale factors")
