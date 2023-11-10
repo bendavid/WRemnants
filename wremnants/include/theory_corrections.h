@@ -152,13 +152,14 @@ public:
         const auto coeffs = base_t::get_tensor(mV, yV, ptV, qV);
 
         constexpr std::array<Eigen::Index, 3> reshapedims = {nhelicity, 1, 1};
+        constexpr std::array<Eigen::Index, 3> broadcastdims = {1, ncorrs, nvars};
         constexpr std::array<Eigen::Index, 1> reduceddims = {0};
 
-        const auto coeffs_with_angular = coeffs*angular.reshape(reshapedims).broadcast(sizes);
-        auto uncorr_hel = coeffs_with_angular.chip(0, 1);
-        auto corr_hel = coeffs_with_angular.chip(1, 1);
+        const auto coeffs_with_angular = coeffs*angular.reshape(reshapedims).broadcast(broadcastdims);
+        const auto uncorr_hel = coeffs_with_angular.chip(0, 1);
+        const auto corr_hel = coeffs_with_angular.chip(1, 1);
 
-        var_tensor_t corr_weight_vars = corr_hel.sum(reduceddims)/uncorr_hel.sum(reduceddims)*nominal_weight;
+        const var_tensor_t corr_weight_vars = corr_hel.sum(reduceddims)/uncorr_hel.sum(reduceddims)*nominal_weight;
 
         return corr_weight_vars;
     }
