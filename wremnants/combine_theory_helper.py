@@ -264,12 +264,8 @@ class TheoryHelper(object):
             raise ValueError(f"Model choice {model} is not a supported model. Valid choices are {TheoryHelper.valid_np_models}")
     
         signal_samples = self.card_tool.procGroups['signal_samples']
-        if model == "binned_Omega":
-            self.np_hist_name = self.corr_hist_name.replace("Corr", "Omega")
-            self.np_hist = self.card_tool.getHistsForProcAndSyst(signal_samples[0], self.np_hist_name)
-        else:
-            self.np_hist_name = self.corr_hist_name
-            self.np_hist = self.corr_hist if self.corr_hist else self.card_tool.getHistsForProcAndSyst(signal_samples[0], self.corr_hist_name)
+        self.np_hist_name = self.corr_hist_name.replace("Corr", "FlavDepNP")
+        self.np_hist = self.card_tool.getHistsForProcAndSyst(signal_samples[0], self.np_hist_name)
 
         var_name = model.replace("binned_", "")
 
@@ -285,18 +281,29 @@ class TheoryHelper(object):
 
         if len(gamma_vals) != 2:
             raise ValueError(f"Failed to find consistent variation for gamma NP in hist {self.corr_hist_name}")
+
+        gamma_nuisance_name = "scetlibNPgamma"
+
+        var_vals = gamma_vals
+        var_names = [f"{gamma_nuisance_name}Down", f"{gamma_nuisance_name}Up"]
+
+        if "Lambda" in self.np_model:
+            Lambda4_nuisance_name = "scetlibNPLambda4"
+            var_vals.extend(["Lambda4.01", "Lambda4.16"])
+            var_names.extend([f"{Lambda4_nuisance_name}Down", f"{Lambda4_nuisance_name}Up"])
+
         logger.debug(f"Adding gamma uncertainties from syst entries {gamma_vals}")
 
-        nuisance_name = f"scetlibNPgamma"
+
         self.card_tool.addSystematic(name=self.corr_hist_name,
             processes=["single_v_samples"],
             passToFakes=self.propagate_to_fakes,
             systAxes=[self.syst_ax],
-            action=lambda h: h[{self.syst_ax : gamma_vals}],
-            outNames=[f"{nuisance_name}Down", f"{nuisance_name}Up"],
+            action=lambda h: h[{self.syst_ax : var_vals}],
+            outNames=var_names,
             group="resumNonpert",
             splitGroup={"resum": ".*"},
-            rename=nuisance_name,
+            rename="scetlibNP",
         )
 
     def add_resum_scale_uncertainty():
@@ -338,14 +345,13 @@ class TheoryHelper(object):
     def add_uncorrelated_np_uncertainties(self):
         np_map = {
             "Lambda2" : ["-0.25", "0.25",],
-            "Lambda4" : [".01", ".16",],
             "Delta_Lambda2" : ["-0.02", "0.02",]
         } if "Lambda" in self.np_model else {
             "Omega" : ["0.", "0.8"],
             "Delta_Omega" : ["-0.02", "0.02"],
         }
 
-        if "Delta" not in self.resumUnc:
+        if "Delta" not in self.np_model:
             to_remove = list(filter(lambda x: "Delta" in x, np_map.keys()))
             for k in to_remove:
                 np_map.pop(k)
@@ -368,19 +374,21 @@ class TheoryHelper(object):
             for nuisance,vals in np_map.items():
                 entries = [nuisance+v for v in vals]
                 binned = "binned" in self.np_model
-                if binned:
-                    action=lambda h,e=entries: syst_tools.hist_to_variations(h[{self.syst_ax : [central_var, *e]}])
-                else:
-                    action=lambda h,e=entries: h[{self.syst_ax : e}]
+
+                gen_axes = ["absYVgenNP", "chargeVgenNP"]
+                sum_axes = [] if binned else ["absYVgenNP"]
+
+                action=lambda h,e=entries: syst_tools.hist_to_variations(h[{self.syst_ax : [central_var, *e]}], gen_axes=gen_axes, sum_axes=sum_axes)
+
                 rename = f"scetlibNP{label}{nuisance}"
                 self.card_tool.addSystematic(name=self.np_hist_name,
                     processes=[sample_group],
                     group="resumNonpert",
                     splitGroup={"resum": ".*"},
-                    systAxes=[self.syst_ax] if not binned else ["absYVgenNP", "chargeVgenNP", self.syst_ax],
+                    systAxes=["chargeVgenNP", self.syst_ax] if not binned else ["absYVgenNP", "chargeVgenNP", self.syst_ax],
                     passToFakes=self.propagate_to_fakes,
                     action=action,
-                    outNames=[f"{rename}Down", f"{rename}Up"] if not binned else None,
+                    # outNames=[f"{rename}Down", f"{rename}Up"] if not binned else None,
                     systNameReplace=[(entries[1], f"{rename}Up"), (entries[0], f"{rename}Down"), ],
                     skipEntries=[{self.syst_ax : central_var}],
                     rename=rename,
