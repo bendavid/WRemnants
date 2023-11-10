@@ -73,7 +73,7 @@ def make_parser(parser=None):
     parser.add_argument("--poiAsNoi", action='store_true', help="Experimental option only with --theoryAgnostic or --unfolding, to treat POIs ad NOIs, with a single signal histogram")
     parser.add_argument("--priorNormXsec", type=float, default=1, help="Prior for shape uncertainties on cross sections for theory agnostic or unfolding analysis with POIs as NOIs (1 means 100\%). If negative, it will use shapeNoConstraint in the fit")
     parser.add_argument("--scaleNormXsecHistYields", type=float, default=None, help="Scale yields of histogram with cross sections variations for theory agnostic analysis with POIs as NOIs. Can be used together with --priorNormXsec")
-    parser.add_argument("--addNormNuisanceOOA", action='store_true', help="Add normalization uncertainty on out-of-acceptance template bins. Currently only with --poiAsNoi")
+    parser.add_argument("--noNormNuisanceOOA", action='store_true', help="Remove normalization uncertainty on out-of-acceptance template bins. Currently only with --poiAsNoi")
     parser.add_argument("--addTauToSignal", action='store_true', help="Events from the same process but from tau final states are added to the signal")
     # utility options to deal with charge when relevant, mainly for theory agnostic but also unfolding
     parser.add_argument("--recoCharge", type=str, default=["plus", "minus"], nargs="+", choices=["plus", "minus"], help="Specify reco charge to use, default uses both. This is a workaround for unfolding/theory-agnostic fit when running a single reco charge, as gen bins with opposite gen charge have to be filtered out")
@@ -346,7 +346,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                 noConstraint=True if args.priorNormXsec < 0 else False,
                 #customizeNuisanceAttributes={".*AngCoeff4" : {"scale" : 1, "shapeType": "shapeNoConstraint"}},
                 labelsByAxis=["PtVBin", "YVBin", "AngCoeff"],
-                systAxesFlow=[a for a in poi_axes] if args.addNormNuisanceOOA else [], # this can activate nuisances on overflow bins, mainly just ptV and yV since the helicity axis has no overflow bins
+                systAxesFlow=[] if args.noNormNuisanceOOA else [a for a in poi_axes], # this can activate nuisances on overflow bins, mainly just ptV and yV since the helicity axis has no overflow bins
                 skipEntries=[{"helicitySig" : [6,7,8]}], # removing last three indices corresponding to A5,6,7
                 actionMap={
                         m.name: (lambda h: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], h, scale2=args.scaleNormXsecHistYields))
