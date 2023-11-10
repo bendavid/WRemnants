@@ -223,7 +223,10 @@ def expand_hist_by_duplicate_axis(href, ref_ax_name, new_ax_name, swap_axes=Fals
     hnew = hist.Hist(*new_axes, data=np.moveaxis(exp_data, 1, ref_ax_idx+1))
     return hnew
 
-def hist_to_variations(hist_in):
+def hist_to_variations(hist_in, gen_axes = [], sum_axes = []):
+    print("hist_to_variations")
+    print("gen_axes", gen_axes)
+    print("sum_axes", sum_axes)
 
     if hist_in.name is None:
         out_name = "hist_variations"
@@ -232,12 +235,26 @@ def hist_to_variations(hist_in):
 
     s = hist.tag.Slicer()
 
-    genAxes = ["absYVgenNP", "chargeVgenNP"]
+    axisNames = hist_in.axes.name
+    sum_expr = {axis : s[::hist.sum] for axis in sum_axes if axis in axisNames}
+    print("sum_expr first", sum_expr)
+    hist_in = hist_in[sum_expr]
+    axisNames = hist_in.axes.name
+
+    gen_sum_expr = {genAxis : s[::hist.sum] for genAxis in gen_axes if genAxis in axisNames}
+    print("sum_expr second", sum_expr)
+    if len(gen_sum_expr) == 0:
+        # all the axes have already been projected out, nothing else to do
+        return hist_in
 
     nom_hist = hist_in[{"vars" : 0}]
-    nom_hist_sum = nom_hist[{genAxis : s[::hist.sum] for genAxis in genAxes}]
+    nom_hist_sum = nom_hist[gen_sum_expr]
 
-    variation_data = hist_in.view(flow=True) - nom_hist.view(flow=True)[...,None] + nom_hist_sum.view(flow=True)[..., None, None, None]
+    print("hist_in", hist_in.values(flow=True).shape)
+    print("nom_hist", nom_hist.values(flow=True).shape)
+    print("nom_hist_sum", nom_hist_sum.values(flow=True).shape)
+
+    variation_data = hist_in.view(flow=True) - nom_hist.view(flow=True)[..., None] + nom_hist_sum.view(flow=True)[..., *len(gen_sum_expr)*[None], None]
 
     variation_hist = hist.Hist(*hist_in.axes, storage = hist_in._storage_type(),
                                      name = out_name, data = variation_data)
