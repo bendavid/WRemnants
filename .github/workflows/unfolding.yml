@@ -452,7 +452,7 @@ jobs:
       - name: test
         run: echo "The web dir is $WEB_DIR plot dir is ${PLOT_DIR}"
 
-      - name: wmass plot response matrix
+      - name: dilepton plot response matrix
         run: >-
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/response_matrix.py 
           --axes ptll-ptVGen --procFilters Zmumu -p mz -o $WEB_DIR -f $PLOT_DIR $HIST_FILE
@@ -462,7 +462,7 @@ jobs:
         if: github.event_name == 'pull_request' || github.event.schedule == '30 5 * * 1-5'
         run: >-
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombine.py 
-          -i $HIST_FILE --fitvar ptll --lumiScale $LUMI_SCALE --unfolding --hdf5 --sparse -o $WREMNANTS_OUTDIR --postfix unfolding
+          -i $HIST_FILE --fitvar ptll-yll --lumiScale $LUMI_SCALE --unfolding --hdf5 --sparse -o $WREMNANTS_OUTDIR --postfix unfolding
 
       - name: dilepton combine ptll unfolding setup
         # run with full binning

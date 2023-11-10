@@ -194,6 +194,8 @@ class CardTool(object):
 
     def setDatagroups(self, datagroups, resetGroups=False):
         self.datagroups = datagroups
+        if self.pseudodata_datagroups is None:
+            self.pseudodata_datagroups = datagroups
         self.unconstrainedProcesses = datagroups.unconstrainedProcesses
         if self.nominalName:
             self.datagroups.setNominalName(self.nominalName)
@@ -692,7 +694,7 @@ class CardTool(object):
                                decorrByBin=decorrelateByBin, hnomi=hnom)
 
     def loadPseudodata(self):
-        datagroups = self.datagroups if not self.pseudodata_datagroups else self.pseudodata_datagroups
+        datagroups = self.pseudodata_datagroups
         processes = [x for x in datagroups.groups.keys() if x != self.getDataName()]
         processes = self.expandProcesses(processes)
         processesFromNomi = [x for x in datagroups.groups.keys() if x != self.getDataName() and not self.pseudoDataProcsRegexp.match(x)]
@@ -733,21 +735,22 @@ class CardTool(object):
     def addPseudodata(self):
         if len(self.pseudoData) > 1 or len(self.pseudoDataIdxs) > 1:
             raise RuntimeError(f"Mutliple pseudo data sets from different histograms or indices is not supported in the root writer.")
-        hdata = loadPseudodata()[0]
-        hdata = hdata[{self.pseudoDataAxes[0] : self.pseudoDataIdxs[0] if self.pseudoDataIdxs[0] is not None else 0}] 
-        self.writeHist(hdata, self.getDataName(), self.pseudoData+"_sum")
+        hdata = self.loadPseudodata()[0]
+        pseudoData = self.pseudoData[0]
+        pseudoDataAxis = self.pseudoDataAxes[0]
+        pseudoDataIdx = self.pseudoDataIdxs[0] if self.pseudoDataIdxs[0] is not None else 0
+        if pseudoDataAxis is not None:
+            hdata = hdata[{pseudoDataAxis : pseudoDataIdx }] 
+        self.writeHist(hdata, self.getDataName(), pseudoData+"_sum")
+        procDict = self.pseudodata_datagroups.getDatagroups()
         if self.getFakeName() in procDict:
-            self.writeHist(procDict[self.getFakeName()].hists[self.pseudoData], self.getFakeName(), self.pseudoData+"_sum")
+            self.writeHist(procDict[self.getFakeName()].hists[pseudoData], self.getFakeName(), pseudoData+"_sum")
 
     def writeForProcesses(self, syst, processes, label, check_systs=True):
         logger.info("-"*50)
         logger.info(f"Preparing to write systematic {syst}")
         for process in processes:
-            if process == self.getDataName() and not self.real_data:
-                logger.warning("Writing combinetf root input without data, use sum of processes.")
-                hvar = sum([self.datagroups.groups[p].hists[label] for p in processes if p != self.getDataName()])
-            else:
-                hvar = self.datagroups.groups[process].hists[label]
+            hvar = self.datagroups.groups[process].hists[label]
             if not hvar:
                 raise RuntimeError(f"Failed to load hist for process {process}, systematic {syst}")
             self.writeForProcess(hvar, process, syst, check_systs=check_systs)
@@ -790,6 +793,10 @@ class CardTool(object):
         
         self.writeForProcesses(self.nominalName, processes=self.datagroups.groups.keys(), label=self.nominalName, check_systs=check_systs)
         self.loadNominalCard()
+
+        if not self.real_data and not self.xnorm:
+            # If real data is not explicitly requested, use pseudodata instead (but still store read data in root writer)
+            self.setPseudodata([self.nominalName])
         if self.pseudoData and not self.xnorm:
             self.addPseudodata()
 
@@ -1002,7 +1009,7 @@ class CardTool(object):
                 "inputfile" : self.outfile if type(self.outfile) == str  else self.outfile.GetName(),
                 "dataName" : self.getDataName(),
                 "histName" : self.histName,
-                "pseudodataHist" : f"{self.histName}_{self.getDataName()}_{self.pseudoData}_sum" if self.pseudoData else f"{self.histName}_{self.getDataName()}"
+                "pseudodataHist" : f"{self.histName}_{self.getDataName()}_{self.pseudoData[0]}_sum" if self.pseudoData else f"{self.histName}_{self.getDataName()}"
             }
             if not self.absolutePathShapeFileInCard:
                 # use the relative path because absolute paths are slow in text2hdf5.py conversion
