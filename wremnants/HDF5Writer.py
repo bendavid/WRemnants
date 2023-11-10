@@ -195,22 +195,25 @@ class HDF5Writer(object):
                 if chanInfo.pseudoData:
                     systIdxs = []
                     data_pseudo_hists = chanInfo.loadPseudodata()
-                    for data_pseudo_hist, pseudo_hist_name, pseudo_axis_name, pseudo_idxs in zip(data_pseudo_hists, chanInfo.pseudoData, chanInfo.pseudoDataAxes, chanInfo.pseudoDataIdxs):
+                    for data_pseudo_hist, pseudo_data_name, pseudo_hist_name, pseudo_axis_name, pseudo_idxs in zip(data_pseudo_hists, chanInfo.pseudoDataName, chanInfo.pseudoData, chanInfo.pseudoDataAxes, chanInfo.pseudoDataIdxs):
                         pseudo_axis = data_pseudo_hist.axes[pseudo_axis_name]
 
-                        if len(pseudo_idxs) == 1 and int(pseudo_idxs[0]) == -1:
+                        if len(pseudo_idxs) == 1 and pseudo_idxs[0] is not None and int(pseudo_idxs[0]) == -1:
                             pseudo_idxs = pseudo_axis
 
                         for syst_idx in pseudo_idxs:
-                            pseudo_hist = data_pseudo_hist[{pseudo_axis_name : syst_idx}] 
+                            idx = 0 if syst_idx is None else syst_idx
+                            pseudo_hist = data_pseudo_hist[{pseudo_axis_name : idx}] 
                             data_pseudo = self.get_flat_values(pseudo_hist, chanInfo, axes, return_variances=False)
                             dict_pseudodata[chan].append(data_pseudo)
                             if type(pseudo_axis) == hist.axis.StrCategory:
-                                syst_bin = pseudo_axis.bin(syst_idx) if type(syst_idx) == int else str(syst_idx)
+                                syst_bin = pseudo_axis.bin(idx) if type(idx) == int else str(idx)
                             else:
-                                syst_bin = str(pseudo_axis.index(syst_idx)) if type(syst_idx) == int else str(syst_idx)
-
-                            systIdxs.append( (pseudo_hist_name, pseudo_axis_name, syst_bin) )
+                                syst_bin = str(pseudo_axis.index(idx)) if type(idx) == int else str(idx)
+                            key = f"{pseudo_data_name}{f'_{syst_bin}' if syst_idx is not None else ''}"
+                            logger.info(f"Write pseudodata {key}")
+                            systIdxs.append( key )
+                                
 
                     if npseudodata == 0:
                         npseudodata = len(dict_pseudodata[chan])
@@ -661,7 +664,7 @@ class HDF5Writer(object):
         create_dataset("noigroups", noigroups)
         create_dataset("noigroupidxs", noigroupidxs, dtype='int32')
         create_dataset("maskedchans", self.masked_channels)
-        create_dataset("pseudodatasystidxs", pseudoDataSystIdxs, 3)
+        create_dataset("pseudodatasystidxs", pseudoDataSystIdxs)
 
         #create h5py datasets with optimized chunk shapes
         nbytes = 0

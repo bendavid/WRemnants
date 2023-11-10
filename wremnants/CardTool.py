@@ -48,6 +48,7 @@ class CardTool(object):
         self.pseudoData = None
         self.pseudoDataAxes = None
         self.pseudoDataIdxs = None
+        self.pseudoDataName = None
         self.pseudoDataProcsRegexp = None
         self.excludeSyst = None
         self.writeByCharge = True
@@ -160,16 +161,16 @@ class CardTool(object):
     def getDataName(self):
         return self.datagroups.dataName
 
-    def setPseudodata(self, pseudodata, pseudodata_axes, idxs = [0], pseudoDataProcsRegexp=".*"):
+    def setPseudodata(self, pseudodata, pseudodata_axes=[None], idxs = [None], pseudoDataProcsRegexp=".*"):
         self.pseudoData = pseudodata[:]
-        self.pseudoDataAxes = pseudodata_axes[:]
+        self.pseudoDataAxes = pseudodata_axes[:]        
         self.pseudoDataProcsRegexp = re.compile(pseudoDataProcsRegexp)
         if len(pseudodata) != len(pseudodata_axes):
             if len(pseudodata_axes) == 1:
                 self.pseudoDataAxes = pseudodata_axes*len(pseudodata)
             else:
                 raise RuntimeError(f"Found {len(pseudodata)} histograms for pseudodata but {len(pseudodata_axes)} corresponding axes, need either the same number or exactly 1 axis to be specified.")
-        idxs = [int(idx) if idx.isdigit() else idx for idx in idxs]
+        idxs = [int(idx) if idx is not None and idx.isdigit() else idx for idx in idxs]
         if len(pseudodata) == 1:
             self.pseudoDataIdxs = [idxs]
         elif len(pseudodata) > 1:
@@ -180,6 +181,9 @@ class CardTool(object):
             else:
                 raise RuntimeError(f"""Found {len(pseudodata)} histograms for pseudodata but {len(idxs)} corresponding indices, 
                     need either 1 histogram or exactly 1 index or the same number of histograms and indices to be specified.""")
+        # name for the pseudodata set to be written into the output file
+        self.pseudoDataName = [ f"{n}{f'_{a}' if a is not None else ''}" for n, a in zip(self.pseudoData, self.pseudoDataAxes)]
+
 
     # Needs to be increased from default for long proc names
     def setSpacing(self, spacing):
@@ -716,6 +720,11 @@ class CardTool(object):
                 hists.extend([procDictFromNomi[proc].hists[pseudoData] for proc in processesFromNomi])
             # done, now sum all histograms
             hdata = hh.sumHists(hists)
+            if self.pseudoDataAxes[idx] is None:
+                extra_ax = [ax for ax in hdata.axes.name if ax not in self.fit_axes]
+                if len(extra_ax) == 1:
+                    self.pseudoDataAxes[idx] = extra_ax[0]
+                    logger.info(f"Setting pseudoDataSystAx[{idx}] to {extra_ax[0]}")
             if self.pseudoDataAxes[idx] not in hdata.axes.name:
                 raise RuntimeError(f"Pseudodata axis {self.pseudoDataAxes[idx]} not found in {hdata.axes.name}.")
             hdatas.append(hdata)
@@ -725,7 +734,7 @@ class CardTool(object):
         if len(self.pseudoData) > 1 or len(self.pseudoDataIdxs) > 1:
             raise RuntimeError(f"Mutliple pseudo data sets from different histograms or indices is not supported in the root writer.")
         hdata = loadPseudodata()[0]
-        hdata = hdata[{self.pseudoDataAxes[0] : self.pseudoDataIdxs[0] }] 
+        hdata = hdata[{self.pseudoDataAxes[0] : self.pseudoDataIdxs[0] if self.pseudoDataIdxs[0] is not None else 0}] 
         self.writeHist(hdata, self.getDataName(), self.pseudoData+"_sum")
         if self.getFakeName() in procDict:
             self.writeHist(procDict[self.getFakeName()].hists[self.pseudoData], self.getFakeName(), self.pseudoData+"_sum")
