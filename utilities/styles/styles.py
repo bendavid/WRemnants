@@ -9,7 +9,7 @@ process_colors = {
     "Wtaunu": "orange",
     "DYlowMass": "deepskyblue",
     "Top": "green",
-    "Diboson": "pint",
+    "Diboson": "pink",
     "QCD": "grey",
     "Other": "grey",
     "Fake": "grey",
