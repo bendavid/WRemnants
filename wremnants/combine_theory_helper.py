@@ -168,10 +168,11 @@ class TheoryHelper(object):
                     # Drop the uncertainties for low pt since this is covered by the resummation uncertainties
                     skip_entries.extend([{pt_ax : complex(0, x)} for x in binning[:pt_idx]])
 
-            func = hh.rebinHist
+            func = syst_tools.hist_to_variations
             action_map = {proc : func for proc in expanded_samples}
-            action_args["axis_name"] = pt_ax
-            action_args["edges"] = binning
+            action_args["gen_axes"] = [pt_ax]
+            action_args["rebin_axes"] = [pt_ax]
+            action_args["rebin_edges"] = [binning]
 
         # Skip MiNNLO unc. 
         if self.resumUnc and not (pt_binned or helicity):
