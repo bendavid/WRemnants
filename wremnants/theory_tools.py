@@ -379,8 +379,6 @@ def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_cen
 
         var_axis = helpers[generator].tensor_axes[-1]
 
-        print("var_axis", var_axis)
-
         def is_flavor_dependent_np(var_label):
             return var_label.startswith("Omega") \
                     or var_label.startswith("Delta_Omega") \
