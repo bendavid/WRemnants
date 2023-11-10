@@ -101,9 +101,12 @@ class TheoryHelper(object):
         if self.minnlo_unc and self.minnlo_unc not in ["none", None]:
             for sample_group in self.samples:
                 if self.card_tool.procGroups.get(sample_group, None):
-                    self.add_minnlo_scale_uncertainty(sample_group, rebin_pt=common.ptV_binning[::2])
+                    # two sets of nuisances, one binned in ~10% quantiles, and one inclusive in pt
+                    # to avoid underestimating the correlated part of the uncertainty
+                    self.add_minnlo_scale_uncertainty(sample_group, extra_name = "fine", rebin_pt=common.ptV_binning[::2])
+                    self.add_minnlo_scale_uncertainty(sample_group, extra_name = "inclusive", rebin_pt=[common.ptV_binning[0], common.ptV_binning[-1]])
 
-    def add_minnlo_scale_uncertainty(self, sample_group, use_hel_hist=False, rebin_pt=None):
+    def add_minnlo_scale_uncertainty(self, sample_group, extra_name="", use_hel_hist=True, rebin_pt=None):
         if not sample_group or sample_group not in self.card_tool.procGroups:
             logger.warning(f"Skipping QCD scale syst '{self.minnlo_unc}' for group '{sample_group}.' No process to apply it to")
             return
@@ -119,27 +122,15 @@ class TheoryHelper(object):
         # assuming the name is unchanged
         obs = self.card_tool.fit_axes
         pt_ax = "ptVgen" if "ptVgen" not in obs else "ptVgenAlt"
-        charge_ax = "chargeVgen" if "chargeVgen" not in obs else "chargeVgenAlt"
-        sum_axes = [pt_ax, charge_ax]
 
-        syst_axes = sum_axes + ["muRfact", "muFfact"]
-        syst_ax_labels = ["PtV", "genQ", "muR", "muF"]
-        format_with_values = ["low", "center", "center", "center"]
-        if use_hel_hist:
-            syst_axes.insert(2, "helicity")
-            syst_ax_labels.insert(2, "AngCoeff")
-            format_with_values.insert(2, "low")
+        syst_axes = [pt_ax, "vars"]
+        syst_ax_labels = ["PtV", "var"]
+        format_with_values = ["edges", "center"]
 
         group_name = f"QCDscale{self.sample_label(sample_group)}"
-        # Exclude all combinations where muR = muF = 1 (nominal) or where
-        # they are extreme values (ratio = 4 or 1/4)
-        skip_entries = [{"muRfact" : 1.j, "muFfact" :  1.j}, {"muRfact" : 0.5j, "muFfact" : 2.j}, 
-                        {"muRfact" : 2.j, "muFfact" : 0.5j}]
-        # In order to make prettier names than the automated ones.
-        # No harm in leaving extra replaces that won't be triggered
-        name_replace = [("muR2muF2", "muRmuFUp"), ("muR0p5muF0p5", "muRmuFDown"), ("muR2muF1", "muRUp"), 
-                            ("muR0p5muF1", "muRDown"), ("muR1muF0p5", "muFDown"), ("muR1muF2", "muFUp"),
-        ]
+        base_name = f"{group_name}{extra_name}"
+
+        skip_entries = []
         action_map = {}
 
         # NOTE: The map needs to be keyed on the base procs not the group names, which is
@@ -147,32 +138,9 @@ class TheoryHelper(object):
         expanded_samples = self.card_tool.getProcNames([sample_group])
         logger.debug(f"using {scale_hist} histogram for QCD scale systematics")
         logger.debug(f"expanded_samples: {expanded_samples}")
-        func = syst_tools.scale_helicity_hist_to_variations 
-        action_args = {"sum_axes" : sum_axes}
-        if self.card_tool.datagroups.mode == "vgen":
-            func = syst_tools.gen_scale_helicity_hist_to_variations
-            action_args["gen_obs"] = obs
-            action_args["sum_axes"].extend(["y", "massVgen"])
-            action_args["pt_ax"] = pt_ax
-            action_args["gen_axes"] = syst_axes[:-2] #TODO: Might want to incorporate support for yVgen also
 
-        action_map = {proc : func for proc in expanded_samples}
-            
-        # Determine if it should be summed over based on minnlo_unc. If not,
-        # Remove it from the sum list and set names appropriately
-        def set_sum_over_axis(identifier, ax_name):
-            nonlocal sum_axes,group_name,syst_axes,syst_ax_labels
-            if identifier in self.minnlo_unc:
-                sum_axes.remove(ax_name)
-                group_name += identifier
-            elif ax_name in syst_axes:
-                idx = syst_axes.index(ax_name)
-                syst_axes.pop(idx)
-                syst_ax_labels.pop(idx)
-                format_with_values.pop(idx)
-
-        for ax,name in zip(sum_axes[:], ["Pt", "Charge", "Helicity"]):
-            set_sum_over_axis(name, ax)
+        action_map = {}
+        action_args = {}
 
         if pt_binned:
             signal_samples = self.card_tool.procGroups['signal_samples']
@@ -186,20 +154,24 @@ class TheoryHelper(object):
                 binning = orig_binning
 
             if self.resumUnc:
-                pt30_idx = np.argmax(binning > 30)
+            # if False:
+                pt_idx = np.argmax(binning > 25.)
 
                 if helicity:
-                    # Drop the uncertainties for < 30 for sigma_-1
-                    skip_entries.extend([{"helicity" : -1.j, pt_ax : complex(0, x)} for x in binning[:pt30_idx-1]])
+                    # Drop the uncertainties for low pt for sigma_-1 since this is covered by the resummation uncertainties
+                    # FIXME can't currently mix strings and complex numbers
+                    # skip_entries.extend([{"vars" : "helicity_-1_Down", pt_ax : complex(0, x)} for x in binning[:pt_idx]])
+                    # skip_entries.extend([{"vars" : "helicity_-1_Up", pt_ax : complex(0, x)} for x in binning[:pt_idx]])
+                    skip_entries.extend([{"vars" : "helicity_-1_Down", pt_ax : ibin} for ibin in range(pt_idx)])
+                    skip_entries.extend([{"vars" : "helicity_-1_Up", pt_ax : ibin} for ibin in range(pt_idx)])
                 else:
-                    # Drop the uncertainties for < 30
-                    skip_entries.extend([{pt_ax : complex(0, x)} for x in binning[:pt30_idx-1]])
+                    # Drop the uncertainties for low pt since this is covered by the resummation uncertainties
+                    skip_entries.extend([{pt_ax : complex(0, x)} for x in binning[:pt_idx]])
 
-            action_args["rebinPtV"] = binning
-
-        if helicity:
-            # Drop the uncertainty of A5,A6,A7
-            skip_entries.extend([{"helicity" : complex(0, i)} for i in (5,6,7)])
+            func = hh.rebinHist
+            action_map = {proc : func for proc in expanded_samples}
+            action_args["axis_name"] = pt_ax
+            action_args["edges"] = binning
 
         # Skip MiNNLO unc. 
         if self.resumUnc and not (pt_binned or helicity):
@@ -215,14 +187,11 @@ class TheoryHelper(object):
                 splitGroup={"QCDscale": ".*"},
                 systAxes=syst_axes,
                 labelsByAxis=syst_ax_labels,
-                # Exclude all combinations where muR = muF = 1 (nominal) or where
-                # they are extreme values (ratio = 4 or 1/4)
                 skipEntries=skip_entries,
-                systNameReplace=name_replace,
-                baseName=group_name+"_",
+                baseName=base_name+"_",
                 formatWithValue=format_with_values,
                 passToFakes=self.propagate_to_fakes,
-                rename=group_name, # Needed to allow it to be called multiple times
+                rename=base_name, # Needed to allow it to be called multiple times
             )
 
     def set_propagate_to_fakes(self, to_fakes):
@@ -408,7 +377,7 @@ class TheoryHelper(object):
                     processes=[sample_group],
                     group="resumNonpert",
                     splitGroup={"resum": ".*"},
-                    systAxes=[self.syst_ax] if not binned else ["absYVgenNP", "chargeVgenNP", "vars"],
+                    systAxes=[self.syst_ax] if not binned else ["absYVgenNP", "chargeVgenNP", self.syst_ax],
                     passToFakes=self.propagate_to_fakes,
                     action=action,
                     outNames=[f"{rename}Down", f"{rename}Up"] if not binned else None,

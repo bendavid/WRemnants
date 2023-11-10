@@ -110,7 +110,7 @@ Eigen::TensorFixedSize<int, Eigen::Sizes<2>> prefsrLeptons(const ROOT::VecOps::R
   helicity_tensor csAngularMoments(const CSVars &csvars) {
     const helicity_tensor &angular = csAngularFactors(csvars);
 
-    // using definition from arxiv:1606.00689 to align with ATLAS
+    // using definition from arxiv:1606.00689 Eq. 1 and 5 to align with ATLAS
     helicity_tensor scales;
     scales.setValues({ 0., 20./3., 5., 20., 4., 4., 5., 5., 4. });
 
