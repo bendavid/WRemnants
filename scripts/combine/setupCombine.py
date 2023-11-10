@@ -348,7 +348,8 @@ def setup(args, inputFile, fitvar, xnorm=False):
                 noConstraint=True if args.priorNormXsec < 0 else False,
                 #customizeNuisanceAttributes={".*AngCoeff4" : {"scale" : 1, "shapeType": "shapeNoConstraint"}},
                 labelsByAxis=["PtVBin", "YVBin", "AngCoeff"],
-                systAxesFlow=[a for a in poi_axes], # use underflow/overflow bins for ptGen
+                                   systAxesFlow=[], # [a for a in poi_axes], # this can activate nuisances on overflow bins, mainly just ptV and yV since the helicity axis has no overflow bins
+                skipEntries=[{"helicitySig" : [6,7,8]}], # removing last three indices corresponding to A5,6,7
                 actionMap={
                         m.name: (lambda h: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], h, scale2=args.scaleNormXsecHistYields))
                         for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
