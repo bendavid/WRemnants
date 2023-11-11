@@ -727,7 +727,7 @@ class CardTool(object):
                 if len(extra_ax) == 1:
                     self.pseudoDataAxes[idx] = extra_ax[0]
                     logger.info(f"Setting pseudoDataSystAx[{idx}] to {extra_ax[0]}")
-            if self.pseudoDataAxes[idx] not in hdata.axes.name:
+            elif self.pseudoDataAxes[idx] not in hdata.axes.name:
                 raise RuntimeError(f"Pseudodata axis {self.pseudoDataAxes[idx]} not found in {hdata.axes.name}.")
             hdatas.append(hdata)
         return hdatas
