@@ -128,7 +128,7 @@ class HDF5Writer(object):
         ibins = []
         nbins = 0
         npseudodata = 0
-        pseudoDataSystIdxs = []
+        pseudoDataNames = []
 
         for chan, chanInfo in self.get_channels().items():
             masked = chanInfo.xnorm and not self.theoryFit
@@ -201,32 +201,39 @@ class HDF5Writer(object):
             if not masked:                
                 # pseudodata
                 if chanInfo.pseudoData:
-                    systIdxs = []
+                    pseudoDataNameList = []
                     data_pseudo_hists = chanInfo.loadPseudodata()
                     for data_pseudo_hist, pseudo_data_name, pseudo_hist_name, pseudo_axis_name, pseudo_idxs in zip(data_pseudo_hists, chanInfo.pseudoDataName, chanInfo.pseudoData, chanInfo.pseudoDataAxes, chanInfo.pseudoDataIdxs):
-                        pseudo_axis = data_pseudo_hist.axes[pseudo_axis_name]
+                        
+                        if pseudo_axis_name is not None:
+                            pseudo_axis = data_pseudo_hist.axes[pseudo_axis_name]
 
-                        if len(pseudo_idxs) == 1 and pseudo_idxs[0] is not None and int(pseudo_idxs[0]) == -1:
-                            pseudo_idxs = pseudo_axis
+                            if len(pseudo_idxs) == 1 and pseudo_idxs[0] is not None and int(pseudo_idxs[0]) == -1:
+                                pseudo_idxs = pseudo_axis
 
-                        for syst_idx in pseudo_idxs:
-                            idx = 0 if syst_idx is None else syst_idx
-                            pseudo_hist = data_pseudo_hist[{pseudo_axis_name : idx}] 
-                            data_pseudo = self.get_flat_values(pseudo_hist, chanInfo, axes, return_variances=False)
+                            for syst_idx in pseudo_idxs:
+                                idx = 0 if syst_idx is None else syst_idx
+                                pseudo_hist = data_pseudo_hist[{pseudo_axis_name : idx}] 
+                                data_pseudo = self.get_flat_values(pseudo_hist, chanInfo, axes, return_variances=False)
+                                dict_pseudodata[chan].append(data_pseudo)
+                                if type(pseudo_axis) == hist.axis.StrCategory:
+                                    syst_bin = pseudo_axis.bin(idx) if type(idx) == int else str(idx)
+                                else:
+                                    syst_bin = str(pseudo_axis.index(idx)) if type(idx) == int else str(idx)
+                                key = f"{pseudo_data_name}{f'_{syst_bin}' if syst_idx is not None else ''}"
+                                logger.info(f"Write pseudodata {key}")
+                                pseudoDataNameList.append(key)
+                        else:
+                            # pseudodata from alternative histogram that has no syst axis
+                            data_pseudo = self.get_flat_values(data_pseudo_hist, chanInfo, axes, return_variances=False)
                             dict_pseudodata[chan].append(data_pseudo)
-                            if type(pseudo_axis) == hist.axis.StrCategory:
-                                syst_bin = pseudo_axis.bin(idx) if type(idx) == int else str(idx)
-                            else:
-                                syst_bin = str(pseudo_axis.index(idx)) if type(idx) == int else str(idx)
-                            key = f"{pseudo_data_name}{f'_{syst_bin}' if syst_idx is not None else ''}"
-                            logger.info(f"Write pseudodata {key}")
-                            systIdxs.append( key )
+                            logger.info(f"Write pseudodata {pseudo_data_name}")
+                            pseudoDataNameList.append(pseudo_data_name)
                                 
-
                     if npseudodata == 0:
                         npseudodata = len(dict_pseudodata[chan])
-                        pseudoDataSystIdxs = systIdxs
-                    elif npseudodata != len(dict_pseudodata[chan]) or pseudoDataSystIdxs != systIdxs:
+                        pseudoDataNames = pseudoDataNameList
+                    elif npseudodata != len(dict_pseudodata[chan]) or pseudoDataNames != pseudoDataNameList:
                         raise RuntimeError("Different pseudodata settings for different channels not supported!")
 
                 # data
@@ -238,8 +245,13 @@ class HDF5Writer(object):
                     data_obs_hist = dg.groups[dg.dataName].hists[chanInfo.nominalName]
                     data_obs = self.get_flat_values(data_obs_hist, chanInfo, axes, return_variances=False)
                 else:
-                    logger.warning("Writing combinetf hdf5 input without data, use sum of processes.")
-                    data_obs = sum(dict_norm[chan].values())
+                    # in case pseudodata is given, write first pseudodata into data hist, otherwise write sum of expected processes
+                    if chanInfo.pseudoData:
+                        logger.warning("Writing combinetf hdf5 input without data, use first pseudodata.")
+                        data_obs = dict_pseudodata[chan][0]
+                    else:
+                        logger.warning("Writing combinetf hdf5 input without data, use sum of processes.")
+                        data_obs = sum(dict_norm[chan].values())
 
                 dict_data_obs[chan] = data_obs
 
@@ -676,7 +688,7 @@ class HDF5Writer(object):
         create_dataset("noigroups", noigroups)
         create_dataset("noigroupidxs", noigroupidxs, dtype='int32')
         create_dataset("maskedchans", self.masked_channels)
-        create_dataset("pseudodatasystidxs", pseudoDataSystIdxs)
+        create_dataset("pseudodatanames", pseudoDataNames)
 
         #create h5py datasets with optimized chunk shapes
         nbytes = 0
