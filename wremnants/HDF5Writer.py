@@ -204,7 +204,7 @@ class HDF5Writer(object):
                     pseudoDataNameList = []
                     data_pseudo_hists = chanInfo.loadPseudodata()
                     for data_pseudo_hist, pseudo_data_name, pseudo_hist_name, pseudo_axis_name, pseudo_idxs in zip(data_pseudo_hists, chanInfo.pseudoDataName, chanInfo.pseudoData, chanInfo.pseudoDataAxes, chanInfo.pseudoDataIdxs):
-
+                        
                         if pseudo_axis_name is not None:
                             pseudo_axis = data_pseudo_hist.axes[pseudo_axis_name]
 
@@ -229,7 +229,7 @@ class HDF5Writer(object):
                             dict_pseudodata[chan].append(data_pseudo)
                             logger.info(f"Write pseudodata {pseudo_data_name}")
                             pseudoDataNameList.append(pseudo_data_name)
-
+                                
                     if npseudodata == 0:
                         npseudodata = len(dict_pseudodata[chan])
                         pseudoDataNames = pseudoDataNameList
