@@ -9,7 +9,7 @@ import argparse
 
 from utilities import logging, boostHistHelpers as hh
 from utilities.styles import styles
-from wremnants import plot_tools
+from wremnants import plot_tools, histselections as sel
 from utilities.io_tools import output_tools, combinetf2_input
 
 import pdb
@@ -47,15 +47,11 @@ data = not args.noData
 fitresult = combinetf2_input.get_fitresult(args.infile)
 
 meta = fitresult["meta"].get()
-axes = meta["axes"]
 procs = meta["procs"].astype(str)
 
 labels = [styles.process_labels.get(p, p) for p in procs]
 colors = [styles.process_colors.get(p, "grey") for p in procs]
 
-hists_data_obs = combinetf2_input.load_histograms(fitresult, "hist_data_obs", axes)
-hists_stack = combinetf2_input.load_histograms(fitresult, f"hist_{fittype}", axes)
-hists_inclusive = combinetf2_input.load_histograms(fitresult, f"hist_{fittype}_inclusive", axes)
 
 translate_selection = {
     "charge": {
@@ -64,12 +60,12 @@ translate_selection = {
     }
 }
 
-def make_plot(h_data, h_inclusive, h_stack, axis_name, suffix):
+def make_plot(h_data, h_inclusive, h_stack, axis_name, suffix=""):
 
     if ratio:
-        fig, ax1, ax2 = plot_tools.figureWithRatio(h_data, styles.xlabels.get(axis_name, "Bin number"), "Entries/bin", args.ylim, "Data/Pred.", args.rrange)
+        fig, ax1, ax2 = plot_tools.figureWithRatio(h_data, styles.xlabels.get(axis_name.replace("_","-"), "Bin number"), "Entries/bin", args.ylim, "Data/Pred.", args.rrange)
     else:
-        fig, ax1 = plot_tools.figure(h_data, styles.xlabels.get(axis_name, "Bin number"), "Entries/bin", args.ylim)
+        fig, ax1 = plot_tools.figure(h_data, styles.xlabels.get(axis_name.replace("_","-"), "Bin number"), "Entries/bin", args.ylim)
 
     hep.histplot(
         h_stack,
@@ -105,7 +101,7 @@ def make_plot(h_data, h_inclusive, h_stack, axis_name, suffix):
             histtype="step",
             color="grey",
             alpha=0.5,
-            yerr=True,
+            yerr=False,
             ax=ax2,
             linewidth=2,
             flow='none',
@@ -164,33 +160,34 @@ def make_plot(h_data, h_inclusive, h_stack, axis_name, suffix):
     )
 
 
-# loop over channels (channels here correspond to the different histograms e.g. wmass & dilepton combined fit)
-nchannels=len(hists_data_obs)
-for i, (hist_data, hist_inclusive, hist_stack) in enumerate(zip(hists_data_obs, hists_inclusive, hists_stack)):
-    logger.info(f"Now at channel {i}")
-    suffix = f"channel{i}"  if nchannels>1 else ""
+for channel, axes in meta["channel_axes"].items():
 
-    axes_names = [a.name for a in axes[i]]
+    hist_data = fitresult["hist_data_obs"][channel].get()
+    hist_inclusive = fitresult[f"hist_{fittype}_inclusive"][channel].get()
+    hist_stack = fitresult[f"hist_{fittype}"][channel].get()
+    hist_stack = [hist_stack[{"processes" : p}] for p in procs]
 
-    # loop over all axes, make a plot for each axis
-    for axis in [n for n in axes_names if n not in args.selectionAxes]:
+    # make unrolled 1D histograms
+    if len(axes) > 1:
+        hist_data = sel.unrolledHist(hist_data, obs=None)
+        hist_inclusive = sel.unrolledHist(hist_inclusive, obs=None)
+        hist_stack = [sel.unrolledHist(h, obs=None) for h in hist_stack]
 
-        # make inclusive plot
-        h_data = hist_data.project(axis)
-        h_inclusive = hist_inclusive.project(axis)
-        h_stack = [h.project(axis) for h in hist_stack]
+        axis_name = "_".join([a.name for a in axes])
+    else:
+        axis_name = axes[0].name
 
-        make_plot(h_data, h_inclusive, h_stack, axis, suffix=f"{suffix}")
+    make_plot(hist_data, hist_inclusive, hist_stack, axis_name, suffix=f"{channel}")
 
-        # loop over selections, make a plot for each bin
-        for sa in [a for a in axes[i] if a.name in args.selectionAxes]:
-            for idx in range(len(sa)):
-                sel = translate_selection[sa.name][idx]
-                logger.info(f"Make plot for axis {axis}, selection {sel}")
+    # loop over selections, make a plot for each bin
+    for sa in [a for a in axes if a.name in args.selectionAxes]:
+        for idx in range(len(sa)):
+            sel = translate_selection[sa.name][idx]
+            logger.info(f"Make plot for axes {axis_name}, selection {sel}")
 
-                h_data = hist_data[{sa.name: idx}].project(axis)
-                h_inclusive = hist_inclusive[{sa.name: idx}].project(axis)
-                h_stack = [h[{sa.name: idx}].project(axis) for h in hist_stack]
+            h_data = hist_data[{sa.name: idx}]
+            h_inclusive = hist_inclusive[{sa.name: idx}]
+            h_stack = [h[{sa.name: idx}] for h in hist_stack]
 
-                make_plot(h_data, h_inclusive, h_stack, axis, suffix=f"{suffix}{sel}")
+            make_plot(h_data, h_inclusive, h_stack, axis_name, suffix=f"{channel}_{sel}")
         

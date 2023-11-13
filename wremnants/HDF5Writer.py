@@ -122,7 +122,7 @@ class HDF5Writer(object):
         dict_logkhalfdiff = {c : {} for c in self.get_channels()}
 
         # store list of axes for each channel
-        hist_axes = []
+        hist_axes = {}
 
         #keep track of bins per channel
         ibins = []
@@ -165,7 +165,7 @@ class HDF5Writer(object):
 
             # get nominal histograms of any of the processes to keep track of the list of axes
             hist_nominal = dg.groups[procs_chan[0]].hists[chanInfo.nominalName] 
-            hist_axes.append([hist_nominal.axes[a] for a in axes])
+            hist_axes[chan] = [hist_nominal.axes[a] for a in axes]
 
             # nominal predictions
             for proc in procs_chan:
@@ -204,7 +204,7 @@ class HDF5Writer(object):
                     pseudoDataNameList = []
                     data_pseudo_hists = chanInfo.loadPseudodata()
                     for data_pseudo_hist, pseudo_data_name, pseudo_hist_name, pseudo_axis_name, pseudo_idxs in zip(data_pseudo_hists, chanInfo.pseudoDataName, chanInfo.pseudoData, chanInfo.pseudoDataAxes, chanInfo.pseudoDataIdxs):
-                        
+
                         if pseudo_axis_name is not None:
                             pseudo_axis = data_pseudo_hist.axes[pseudo_axis_name]
 
@@ -229,7 +229,7 @@ class HDF5Writer(object):
                             dict_pseudodata[chan].append(data_pseudo)
                             logger.info(f"Write pseudodata {pseudo_data_name}")
                             pseudoDataNameList.append(pseudo_data_name)
-                                
+
                     if npseudodata == 0:
                         npseudodata = len(dict_pseudodata[chan])
                         pseudoDataNames = pseudoDataNameList
@@ -622,7 +622,7 @@ class HDF5Writer(object):
         # propagate meta info into result file
         meta = {
             "meta_info" : output_tools.metaInfoDict(args=args),
-            "axes": hist_axes
+            "channel_axes": hist_axes
         }
 
         narf.ioutils.pickle_dump_h5py("meta", meta, f)
