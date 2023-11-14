@@ -6,7 +6,7 @@ from utilities import common, logging, boostHistHelpers as hh
 from utilities.io_tools import input_tools
 import argparse
 import hist
-import math
+import math, copy
 
 def make_parser(parser=None):
     parser = argparse.ArgumentParser()
@@ -262,9 +262,10 @@ def setup(args, inputFile, fitvar, xnorm=False):
     cardTool.addProcessGroup("single_vmu_samples",    lambda x: assertSample(x, startsWith=[*WMatch, *ZMatch], excludeMatch=[*dibosonMatch, "tau"]))
     cardTool.addProcessGroup("signal_samples",        lambda x: assertSample(x, startsWith=signalMatch,        excludeMatch=[*dibosonMatch, "tau"]))
     cardTool.addProcessGroup("signal_samples_inctau", lambda x: assertSample(x, startsWith=signalMatch,        excludeMatch=[*dibosonMatch]))
+    cardTool.addProcessGroup("MCnoQCD", lambda x: x not in ["QCD", "Data"])
+    # FIXME/FOLLOWUP: the following groups may actually not exclude the OOA when it is not defined as an independent process with specific name
     cardTool.addProcessGroup("signal_samples_noOutAcc",        lambda x: assertSample(x, startsWith=["W" if wmass else "Z"], excludeMatch=[*dibosonMatch, "tau"]))
     cardTool.addProcessGroup("signal_samples_inctau_noOutAcc", lambda x: assertSample(x, startsWith=["W" if wmass else "Z"], excludeMatch=[*dibosonMatch]))
-    cardTool.addProcessGroup("MCnoQCD", lambda x: x not in ["QCD", "Data"])
 
     if not (args.theoryAgnostic or args.unfolding) :
         logger.info(f"All MC processes {cardTool.procGroups['MCnoQCD']}")
@@ -334,27 +335,92 @@ def setup(args, inputFile, fitvar, xnorm=False):
         noi_args = dict(
             group=f"normXsec{label}",
             scale=1 if args.priorNormXsec < 0 else args.priorNormXsec, # histogram represents an (args.priorNormXsec*100)% prior
-            systAxes=poi_axes, 
             mirror=True,
             passToFakes=passSystToFakes,
         )
         if args.theoryAgnostic:
-            cardTool.addSystematic("yieldsTheoryAgnostic", 
-                **noi_args,
-                processes=["signal_samples_noOutAcc"], # currently not on out-of-acceptance signal template (to implement)
-                baseName=f"norm{label}CHANNEL_",
-                noConstraint=True if args.priorNormXsec < 0 else False,
-                #customizeNuisanceAttributes={".*AngCoeff4" : {"scale" : 1, "shapeType": "shapeNoConstraint"}},
-                labelsByAxis=["PtVBin", "YVBin", "AngCoeff"],
-                systAxesFlow=[] if args.noNormNuisanceOOA else [a for a in poi_axes], # this can activate nuisances on overflow bins, mainly just ptV and yV since the helicity axis has no overflow bins
-                skipEntries=[{"helicitySig" : [6,7,8]}], # removing last three indices corresponding to A5,6,7
-                actionMap={
-                        m.name: (lambda h: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], h, scale2=args.scaleNormXsecHistYields))
-                        for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
-            )
+            nuisanceBaseName = f"norm{label}CHANNEL_"
+            # First do in acceptance bins, then OOA later (for OOA we need to group bins into macro regions)
+            cardTool.addSystematic("yieldsTheoryAgnostic",
+                                   **noi_args,
+                                   systAxes=poi_axes, 
+                                   processes=["signal_samples"],
+                                   baseName=nuisanceBaseName,
+                                   noConstraint=True if args.priorNormXsec < 0 else False,
+                                   #customizeNuisanceAttributes={".*AngCoeff4" : {"scale" : 1, "shapeType": "shapeNoConstraint"}},
+                                   labelsByAxis=["PtVBin", "YVBin", "AngCoeff"],
+                                   systAxesFlow=[], # only bins in acceptance in this call
+                                   skipEntries=[{"helicitySig" : [6,7,8]}], # removing last three indices out of 9 (0,1,...,7,8) corresponding to A5,6,7
+                                   actionMap={
+                                       m.name: (lambda h: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], h, scale2=args.scaleNormXsecHistYields))
+                                       for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
+                                   )
+            # now OOA
+            nuisanceBaseNameOOA = f"{nuisanceBaseName}OOA_"
+            # TODO: implement a loop to generalize it
+            #
+            # ptV OOA, yV in acceptance, integrate helicities 
+            cardTool.addSystematic("yieldsTheoryAgnostic",
+                                   rename=f"yieldsTheoryAgnostic_OOA_ptV",
+                                   **noi_args,
+                                   processes=["signal_samples"],
+                                   baseName=nuisanceBaseNameOOA,
+                                   noConstraint=True if args.priorNormXsec < 0 else False,
+                                   systAxes=["ptVgenSig"],
+                                   labelsByAxis=["PtVBin"],
+                                   systAxesFlow=["ptVgenSig"], # this can activate nuisances on overflow bins, mainly just ptV and yV since the helicity axis has no overflow bins
+                                   actionMap={
+                                       m.name: (lambda h: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}],
+                                                                      h[{"ptVgenSig": hist.tag.Slicer()[hist.overflow:],
+                                                                         "absYVgenSig": hist.tag.Slicer()[0:h.axes["absYVgenSig"].size:hist.sum],
+                                                                         "helicitySig": hist.tag.Slicer()[::hist.sum]}],
+                                                                      scale2=args.scaleNormXsecHistYields)
+                                                ) for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members
+                                   },
+                                   )
+            # ptV in acceptance, yV OOA, integrate helicities
+            cardTool.addSystematic("yieldsTheoryAgnostic",
+                                   rename=f"yieldsTheoryAgnostic_OOA_yV",
+                                   **noi_args,
+                                   processes=["signal_samples"],
+                                   baseName=nuisanceBaseNameOOA,
+                                   noConstraint=True if args.priorNormXsec < 0 else False,
+                                   systAxes=["absYVgenSig"],
+                                   labelsByAxis=["YVBin"],
+                                   systAxesFlow=["absYVgenSig"], # this can activate nuisances on overflow bins, mainly just ptV and yV since the helicity axis has no overflow bins
+                                   actionMap={
+                                       m.name: (lambda h: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}],
+                                                                      h[{"ptVgenSig": hist.tag.Slicer()[0:h.axes["ptVgenSig"].size:hist.sum],
+                                                                         "absYVgenSig": hist.tag.Slicer()[hist.overflow:],
+                                                                         "helicitySig": hist.tag.Slicer()[::hist.sum]}],
+                                                                      scale2=args.scaleNormXsecHistYields)
+                                                ) for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members
+                                   },
+                                   )
+            # ptV OOA and yV OOA, integrate helicities
+            cardTool.addSystematic("yieldsTheoryAgnostic",
+                                   rename=f"yieldsTheoryAgnostic_OOA_ptVyV",
+                                   **noi_args,
+                                   processes=["signal_samples"],
+                                   baseName=nuisanceBaseNameOOA,
+                                   noConstraint=True if args.priorNormXsec < 0 else False,
+                                   systAxes=["ptVgenSig", "absYVgenSig"],
+                                   labelsByAxis=["PtVBin", "YVBin"],
+                                   systAxesFlow=["ptVgenSig", "absYVgenSig"], # this can activate nuisances on overflow bins, mainly just ptV and yV since the helicity axis has no overflow bins
+                                   actionMap={
+                                       m.name: (lambda h: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}],
+                                                                      h[{"ptVgenSig": hist.tag.Slicer()[hist.overflow:],
+                                                                         "absYVgenSig": hist.tag.Slicer()[hist.overflow:],
+                                                                         "helicitySig": hist.tag.Slicer()[::hist.sum]}],
+                                                                      scale2=args.scaleNormXsecHistYields)
+                                                ) for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members
+                                   },
+                                   )
+
         elif args.unfolding:
             noi_args.update(dict(
                 name=f"yieldsUnfolding",
+                systAxes=poi_axes,
                 processes=["signal_samples"],
                 noConstraint=True,
                 noi=True,
