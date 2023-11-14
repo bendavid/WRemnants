@@ -28,11 +28,13 @@ axis_helicity_multidim = hist.axis.Integer(-1, 8, name="helicitySig", overflow=F
 #creates the helicity weight tensor
 def makehelicityWeightHelper(is_w_like = False, filename=None):
     if filename is None:
-        filename = f"{common.data_dir}/angularCoefficients/w_z_coeffs_theoryAgnosticBinning.hdf5"
+        filename = f"{common.data_dir}/angularCoefficients/w_z_moments_theoryAgnosticBinning.hdf5"
     with h5py.File(filename, "r") as ff:
         out = narf.ioutils.pickle_load_h5py(ff["results"])
 
-    corrh = out["Z"] if is_w_like else out["W"]
+    moments = out["Z"] if is_w_like else out["W"]
+
+    corrh = moments_to_angular_coeffs(moments)
 
     if 'muRfact' in corrh.axes.name:
         corrh = corrh[{'muRfact' : 1.j,}]

@@ -8,6 +8,7 @@ import lz4.frame
 import pickle
 import re
 import glob
+import h5py
 from .correctionsTensor_helper import makeCorrectionsTensor
 from utilities import boostHistHelpers as hh, common, logging
 from utilities.io_tools import input_tools
@@ -164,6 +165,102 @@ def make_corr_by_helicity(ref_helicity_hist, target_sigmaul, target_sigma4, coef
 
     corr_coeffs = set_corr_ratio_flow(corr_coeffs)
     return corr_coeffs
+
+def make_qcd_uncertainty_helper_by_helicity(is_w_like = False, filename=None):
+    if filename is None:
+        filename = f"{common.data_dir}/angularCoefficients/w_z_moments.hdf5"
+
+    # load moments from file
+    with h5py.File(filename, "r") as h5file:
+        results = narf.ioutils.pickle_load_h5py(h5file["results"])
+        moments = results["Z"] if is_w_like else results["W"]
+
+    moments_nom = moments[{"muRfact" : 1.j, "muFfact" : 1.j}].values()
+
+    # set disallowed combinations of mur/muf equal to nominal
+    moments.values()[..., 0, 2] = moments_nom
+    moments.values()[..., 2, 0] = moments_nom
+
+    # flatten scale variations and compute envelope
+    moments_flat = np.reshape(moments.values(), (*moments.values().shape[:-2], -1))
+    moments_min = np.min(moments_flat, axis=-1)
+    moments_max = np.max(moments_flat, axis=-1)
+
+    # build variation histogram in the format expected by the corrector
+    corr_ax = hist.axis.Boolean(name="corr")
+
+    def get_names(ihel):
+        base_name = f"helicity_{ihel}"
+        return f"{base_name}_Down", f"{base_name}_Up"
+
+    var_names = []
+    for ihel in range(-1, 8):
+        var_names.extend(get_names(ihel))
+
+    vars_ax = hist.axis.StrCategory(var_names, name="vars")
+
+    axes_no_scale = moments.axes[:-2]
+    corr_coeffs = hist.Hist(*axes_no_scale, corr_ax, vars_ax)
+
+    # set all moments equal to nominal
+    corr_coeffs.values()[...] = moments_nom[..., None, None]
+
+    # set envelope variations
+    for ihel in range(-1, 8):
+        downvar, upvar = get_names(ihel)
+
+        corr_coeffs.values()[..., ihel+1, 1, var_names.index(downvar)] = moments_min[..., ihel+1]
+        corr_coeffs.values()[..., ihel+1, 1, var_names.index(upvar)] = moments_max[..., ihel+1]
+
+    helper = makeCorrectionsTensor(corr_coeffs, ROOT.wrem.CentralCorrByHelicityHelper, tensor_rank=3)
+
+    # override tensor_axes since the output is different here
+    helper.tensor_axes = [vars_ax]
+
+    return helper
+
+def make_helicity_test_corrector(is_w_like = False, filename = None):
+
+    # load moments from file
+    with h5py.File(filename, "r") as h5file:
+        results = narf.ioutils.pickle_load_h5py(h5file["results"])
+        moments = results["Z"] if is_w_like else results["W"]
+
+    coeffs = theory_tools.moments_to_angular_coeffs(moments)
+
+    coeffs_nom = coeffs[{"muRfact" : 1.j, "muFfact" : 1.j}].values()
+
+    corr_ax = hist.axis.Boolean(name="corr")
+    vars_ax = hist.axis.StrCategory(["test_ai", "test_sigmaUL","test_all"], name="vars")
+
+    axes_no_scale = coeffs.axes[:-2]
+    corr_coeffs = hist.Hist(*axes_no_scale, corr_ax, vars_ax)
+
+    corr_coeffs.values()[...] = coeffs_nom[..., None, None]
+
+    # set synthetic test variation
+    corr_coeffs.values()[..., 1, 1, 0] *= 1.1
+
+    corr_coeffs.values()[..., :, 1, 1] *= 1.1
+
+    corr_coeffs.values()[..., :, 1, 2] *= 1.1
+    corr_coeffs.values()[..., 1, 1, 2] *= 1.2
+    corr_coeffs.values()[..., 2, 1, 2] *= 1.3
+    corr_coeffs.values()[..., 3, 1, 2] *= 1.4
+    corr_coeffs.values()[..., 4, 1, 2] *= 1.5
+    corr_coeffs.values()[..., 5, 1, 2] *= 1.6
+    corr_coeffs.values()[..., 6, 1, 2] *= 1.7
+    corr_coeffs.values()[..., 7, 1, 2] *= 1.8
+    corr_coeffs.values()[..., 8, 1, 2] *= 1.9
+
+    print("corr_coeffs", corr_coeffs)
+
+    helper = makeCorrectionsTensor(corr_coeffs, ROOT.wrem.CentralCorrByHelicityHelper, tensor_rank=3)
+
+    # override tensor_axes since the output is different here
+    helper.tensor_axes = [vars_ax]
+
+    return helper
 
 def make_angular_coeff(sigmai_hist, ul_hist):
     return hh.divideHists(sigmai_hist, ul_hist, cutoff=0.0001)
