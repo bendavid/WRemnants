@@ -223,7 +223,7 @@ def expand_hist_by_duplicate_axis(href, ref_ax_name, new_ax_name, swap_axes=Fals
     hnew = hist.Hist(*new_axes, data=np.moveaxis(exp_data, 1, ref_ax_idx+1))
     return hnew
 
-def hist_to_variations(hist_in):
+def hist_to_variations(hist_in, gen_axes = [], sum_axes = [], rebin_axes=[], rebin_edges=[]):
 
     if hist_in.name is None:
         out_name = "hist_variations"
@@ -232,12 +232,24 @@ def hist_to_variations(hist_in):
 
     s = hist.tag.Slicer()
 
-    genAxes = ["absYVgenNP", "chargeVgenNP"]
+    #do rebinning
+    for rebin_axis, edges in zip(rebin_axes, rebin_edges):
+        hist_in = hh.rebinHist(hist_in, rebin_axis, edges)
+
+    axisNames = hist_in.axes.name
+    sum_expr = {axis : s[::hist.sum] for axis in sum_axes if axis in axisNames}
+    hist_in = hist_in[sum_expr]
+    axisNames = hist_in.axes.name
+
+    gen_sum_expr = {genAxis : s[::hist.sum] for genAxis in gen_axes if genAxis in axisNames}
+    if len(gen_sum_expr) == 0:
+        # all the axes have already been projected out, nothing else to do
+        return hist_in
 
     nom_hist = hist_in[{"vars" : 0}]
-    nom_hist_sum = nom_hist[{genAxis : s[::hist.sum] for genAxis in genAxes}]
+    nom_hist_sum = nom_hist[gen_sum_expr]
 
-    variation_data = hist_in.view(flow=True) - nom_hist.view(flow=True)[...,None] + nom_hist_sum.view(flow=True)[..., None, None, None]
+    variation_data = hist_in.view(flow=True) - nom_hist.view(flow=True)[..., None] + nom_hist_sum.view(flow=True)[..., *len(gen_sum_expr)*[None], None]
 
     variation_hist = hist.Hist(*hist_in.axes, storage = hist_in._storage_type(),
                                      name = out_name, data = variation_data)
@@ -388,7 +400,7 @@ def add_qcdScale_hist(results, df, axes, cols, base_name="nominal", addhelicity=
 def add_qcdScaleByHelicityUnc_hist(results, df, helper, axes, cols, base_name="nominal", addhelicity=False):
     name = Datagroups.histName(base_name, syst="qcdScaleByHelicity")
     if "helicityWeight_tensor" not in df.GetColumnNames():
-        df = df.Define("helicityWeight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "scaleWeights_tensor", "nominal_weight"])
+        df = df.Define("helicityWeight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "nominal_weight"])
     if addhelicity:
         qcdbyHelicity, qcdbyHelicity_axes = make_qcdscale_helper_helicity(helper.tensor_axes)
         df = df.Define('scaleWeights_tensor_wnom_helicity', qcdbyHelicity, ['helicityWeight_tensor', 'helWeight_tensor'])
@@ -575,8 +587,8 @@ def add_theory_hists(results, df, args, dataset_name, corr_helpers, qcdScaleByHe
     ## here should probably not force using the same ptVgen axis when addhelicity=True
     #scale_axes = [*axes, axis_chargeVgen] if addhelicity else [*axes, axis_ptVgen, axis_chargeVgen]
     #scale_cols = [*cols, "chargeVgen"] if addhelicity else [*cols, "ptVgen", "chargeVgen"]
-    scale_axes = [*axes, axis_ptVgen, axis_chargeVgen]
-    scale_cols = [*cols, "ptVgen", "chargeVgen"]
+    scale_axes = [*axes, axis_ptVgen]
+    scale_cols = [*cols, "ptVgen"]
 
     df = theory_tools.define_scale_tensor(df)
     df = define_mass_weights(df, dataset_name)
