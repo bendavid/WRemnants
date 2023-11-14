@@ -2,6 +2,7 @@ from wremnants.datasets.datagroups import Datagroups
 from wremnants import histselections as sel
 from wremnants import plot_tools,theory_tools,syst_tools
 from utilities import boostHistHelpers as hh,common
+from utilities.styles import styles
 from utilities.io_tools import output_tools
 import matplotlib.pyplot as plt
 from matplotlib import colormaps
@@ -13,44 +14,6 @@ import pathlib
 import hist
 import re
 import numpy as np
-
-xlabels = {
-    "pt" : r"p$_{T}^{\ell}$ (GeV)",
-    "ptW" : r"p$_{T}^{\ell+p_{\mathrm{T}}^{miss}}$ (GeV)",
-    "eta" : r"$\eta^{\ell}$",
-    "ptll" : r"p$_{\mathrm{T}}^{\ell\ell}$ (GeV)",
-    "yll" : r"y$^{\ell\ell}$",
-    "mll" : r"m$_{\ell\ell}$ (GeV)",
-    "ewMll" : r"m$^{\mathrm{EW}}_{\ell\ell}$ (GeV)",
-    "costhetastarll" : r"$\cos{\phi^{\star}_{\ell\ell}}$",
-    "phistarll" : r"$\phi^{\star}_{\ell\ell}$",
-    "MET_pt" : r"p$_{\mathrm{T}}^{miss}$ (GeV)",
-    "MET" : r"p$_{\mathrm{T}}^{miss}$ (GeV)",
-    "met" : r"p$_{\mathrm{T}}^{miss}$ (GeV)",
-    "mt" : r"m$_{T}^{\ell\nu}$ (GeV)",
-    "etaPlus" : r"$\eta^{\ell(+)}$",
-    "etaMinus" : r"$\eta^{\ell(-)}$",
-    "ptPlus" : r"p$_{\mathrm{T}}^{\ell(+)}$ (GeV)",
-    "ptMinus" : r"p$_{\mathrm{T}}^{\ell(-)}$ (GeV)",
-    "etaSum":r"$\eta^{\ell(+)} + \eta^{\ell(-)}$",
-    "etaDiff":r"$\eta^{\ell(+)} - \eta^{\ell(-)}$",
-    "massVgen": "massVgen",
-    "ewMll": "ewMll",
-    "ewMlly": "ewMlly",
-    "ewLogDeltaM": "ewLogDeltaM",
-    # add 2d unrolled plots 
-    "pt-eta" : r"(p$_{T}^{\ell}$, $\eta^{\ell}$) bin",
-    "ptll-yll":r"p$_{\mathrm{T}}^{\ell\ell}$, y$^{\ell\ell}$ bin",
-    "mll-yll":r"m$_{\ell\ell}$, y$^{\ell\ell}$ bin",
-    "mll-ptll":r"m$_{\ell\ell}$, p$_{\mathrm{T}}^{\ell\ell}$ bin",
-    "mll-etaPlus":r"m$_{\ell\ell}$, $\eta^{\ell(+)}$ bin",
-    "mll-etaMinus":r"m$_{\ell\ell}$, $\eta^{\ell(-)}$ bin",
-    "etaPlus-etaMinus":r"$\eta^{\ell(+)}$, $\eta^{\ell(-)}$ bin",
-    "etaSum-etaDiff":r"$\eta^{\ell(+)} + \eta^{\ell(-)}$, $\eta^{\ell(+)} - \eta^{\ell(-)}$ bin",
-    # add 3d unrolled plots 
-    "mll-etaPlus-etaMinus":r"m$_{\ell\ell}$, $\eta^{\ell(+)}$, $\eta^{\ell(-)}$ bin",
-    "mll-etaSum-etaDiff":r"m$_{\ell\ell}$, $\eta^{\ell(+)} + \eta^{\ell(-)}$, $\eta^{\ell(+)} - \eta^{\ell(-)}$ bin",
-}
 
 parser = argparse.ArgumentParser()
 parser.add_argument("infile", help="Output file of the analysis stage, containing ND boost histogrdams")
@@ -240,7 +203,7 @@ for h in args.hists:
             fill_between=args.fillBetween if hasattr(args, "fillBetween") else None, 
             action=action, unstacked=unstack, 
             fitresult=args.fitresult, prefit=args.prefit,
-            xlabel=xlabels.get(h,h), ylabel="Events/bin", rrange=args.rrange, binwnorm=1.0, lumi=groups.lumi,
+            xlabel=styles.xlabels.get(h,h), ylabel="Events/bin", rrange=args.rrange, binwnorm=1.0, lumi=groups.lumi,
             ratio_to_data=args.ratioToData, rlabel="Pred./Data" if args.ratioToData else "Data/Pred.",
             xlim=args.xlim, no_fill=args.noFill, cms_decor=args.cmsDecor,
             legtext_size=20*args.scaleleg, unstacked_linestyles=args.linestyle if hasattr(args, "linestyle") else [],

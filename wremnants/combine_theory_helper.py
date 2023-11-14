@@ -101,9 +101,12 @@ class TheoryHelper(object):
         if self.minnlo_unc and self.minnlo_unc not in ["none", None]:
             for sample_group in self.samples:
                 if self.card_tool.procGroups.get(sample_group, None):
-                    self.add_minnlo_scale_uncertainty(sample_group, rebin_pt=common.ptV_binning[::2])
+                    # two sets of nuisances, one binned in ~10% quantiles, and one inclusive in pt
+                    # to avoid underestimating the correlated part of the uncertainty
+                    self.add_minnlo_scale_uncertainty(sample_group, extra_name = "fine", rebin_pt=common.ptV_binning[::2])
+                    self.add_minnlo_scale_uncertainty(sample_group, extra_name = "inclusive", rebin_pt=[common.ptV_binning[0], common.ptV_binning[-1]])
 
-    def add_minnlo_scale_uncertainty(self, sample_group, use_hel_hist=False, rebin_pt=None):
+    def add_minnlo_scale_uncertainty(self, sample_group, extra_name="", use_hel_hist=True, rebin_pt=None):
         if not sample_group or sample_group not in self.card_tool.procGroups:
             logger.warning(f"Skipping QCD scale syst '{self.minnlo_unc}' for group '{sample_group}.' No process to apply it to")
             return
@@ -119,27 +122,15 @@ class TheoryHelper(object):
         # assuming the name is unchanged
         obs = self.card_tool.fit_axes
         pt_ax = "ptVgen" if "ptVgen" not in obs else "ptVgenAlt"
-        charge_ax = "chargeVgen" if "chargeVgen" not in obs else "chargeVgenAlt"
-        sum_axes = [pt_ax, charge_ax]
 
-        syst_axes = sum_axes + ["muRfact", "muFfact"]
-        syst_ax_labels = ["PtV", "genQ", "muR", "muF"]
-        format_with_values = ["low", "center", "center", "center"]
-        if use_hel_hist:
-            syst_axes.insert(2, "helicity")
-            syst_ax_labels.insert(2, "AngCoeff")
-            format_with_values.insert(2, "low")
+        syst_axes = [pt_ax, "vars"]
+        syst_ax_labels = ["PtV", "var"]
+        format_with_values = ["edges", "center"]
 
         group_name = f"QCDscale{self.sample_label(sample_group)}"
-        # Exclude all combinations where muR = muF = 1 (nominal) or where
-        # they are extreme values (ratio = 4 or 1/4)
-        skip_entries = [{"muRfact" : 1.j, "muFfact" :  1.j}, {"muRfact" : 0.5j, "muFfact" : 2.j}, 
-                        {"muRfact" : 2.j, "muFfact" : 0.5j}]
-        # In order to make prettier names than the automated ones.
-        # No harm in leaving extra replaces that won't be triggered
-        name_replace = [("muR2muF2", "muRmuFUp"), ("muR0p5muF0p5", "muRmuFDown"), ("muR2muF1", "muRUp"), 
-                            ("muR0p5muF1", "muRDown"), ("muR1muF0p5", "muFDown"), ("muR1muF2", "muFUp"),
-        ]
+        base_name = f"{group_name}{extra_name}"
+
+        skip_entries = []
         action_map = {}
 
         # NOTE: The map needs to be keyed on the base procs not the group names, which is
@@ -147,32 +138,9 @@ class TheoryHelper(object):
         expanded_samples = self.card_tool.getProcNames([sample_group])
         logger.debug(f"using {scale_hist} histogram for QCD scale systematics")
         logger.debug(f"expanded_samples: {expanded_samples}")
-        func = syst_tools.scale_helicity_hist_to_variations 
-        action_args = {"sum_axes" : sum_axes}
-        if self.card_tool.datagroups.mode == "vgen":
-            func = syst_tools.gen_scale_helicity_hist_to_variations
-            action_args["gen_obs"] = obs
-            action_args["sum_axes"].extend(["y", "massVgen"])
-            action_args["pt_ax"] = pt_ax
-            action_args["gen_axes"] = syst_axes[:-2] #TODO: Might want to incorporate support for yVgen also
 
-        action_map = {proc : func for proc in expanded_samples}
-            
-        # Determine if it should be summed over based on minnlo_unc. If not,
-        # Remove it from the sum list and set names appropriately
-        def set_sum_over_axis(identifier, ax_name):
-            nonlocal sum_axes,group_name,syst_axes,syst_ax_labels
-            if identifier in self.minnlo_unc:
-                sum_axes.remove(ax_name)
-                group_name += identifier
-            elif ax_name in syst_axes:
-                idx = syst_axes.index(ax_name)
-                syst_axes.pop(idx)
-                syst_ax_labels.pop(idx)
-                format_with_values.pop(idx)
-
-        for ax,name in zip(sum_axes[:], ["Pt", "Charge", "Helicity"]):
-            set_sum_over_axis(name, ax)
+        action_map = {}
+        action_args = {}
 
         if pt_binned:
             signal_samples = self.card_tool.procGroups['signal_samples']
@@ -186,20 +154,25 @@ class TheoryHelper(object):
                 binning = orig_binning
 
             if self.resumUnc:
-                pt30_idx = np.argmax(binning > 30)
+            # if False:
+                pt_idx = np.argmax(binning > 25.)
 
                 if helicity:
-                    # Drop the uncertainties for < 30 for sigma_-1
-                    skip_entries.extend([{"helicity" : -1.j, pt_ax : complex(0, x)} for x in binning[:pt30_idx-1]])
+                    # Drop the uncertainties for low pt for sigma_-1 since this is covered by the resummation uncertainties
+                    # FIXME can't currently mix strings and complex numbers
+                    # skip_entries.extend([{"vars" : "helicity_-1_Down", pt_ax : complex(0, x)} for x in binning[:pt_idx]])
+                    # skip_entries.extend([{"vars" : "helicity_-1_Up", pt_ax : complex(0, x)} for x in binning[:pt_idx]])
+                    skip_entries.extend([{"vars" : "helicity_-1_Down", pt_ax : ibin} for ibin in range(pt_idx)])
+                    skip_entries.extend([{"vars" : "helicity_-1_Up", pt_ax : ibin} for ibin in range(pt_idx)])
                 else:
-                    # Drop the uncertainties for < 30
-                    skip_entries.extend([{pt_ax : complex(0, x)} for x in binning[:pt30_idx-1]])
+                    # Drop the uncertainties for low pt since this is covered by the resummation uncertainties
+                    skip_entries.extend([{pt_ax : complex(0, x)} for x in binning[:pt_idx]])
 
-            action_args["rebinPtV"] = binning
-
-        if helicity:
-            # Drop the uncertainty of A5,A6,A7
-            skip_entries.extend([{"helicity" : complex(0, i)} for i in (5,6,7)])
+            func = syst_tools.hist_to_variations
+            action_map = {proc : func for proc in expanded_samples}
+            action_args["gen_axes"] = [pt_ax]
+            action_args["rebin_axes"] = [pt_ax]
+            action_args["rebin_edges"] = [binning]
 
         # Skip MiNNLO unc. 
         if self.resumUnc and not (pt_binned or helicity):
@@ -215,14 +188,11 @@ class TheoryHelper(object):
                 splitGroup={"QCDscale": ".*"},
                 systAxes=syst_axes,
                 labelsByAxis=syst_ax_labels,
-                # Exclude all combinations where muR = muF = 1 (nominal) or where
-                # they are extreme values (ratio = 4 or 1/4)
                 skipEntries=skip_entries,
-                systNameReplace=name_replace,
-                baseName=group_name+"_",
+                baseName=base_name+"_",
                 formatWithValue=format_with_values,
                 passToFakes=self.propagate_to_fakes,
-                rename=group_name, # Needed to allow it to be called multiple times
+                rename=base_name, # Needed to allow it to be called multiple times
             )
 
     def set_propagate_to_fakes(self, to_fakes):
@@ -295,12 +265,8 @@ class TheoryHelper(object):
             raise ValueError(f"Model choice {model} is not a supported model. Valid choices are {TheoryHelper.valid_np_models}")
     
         signal_samples = self.card_tool.procGroups['signal_samples']
-        if model == "binned_Omega":
-            self.np_hist_name = self.corr_hist_name.replace("Corr", "Omega")
-            self.np_hist = self.card_tool.getHistsForProcAndSyst(signal_samples[0], self.np_hist_name)
-        else:
-            self.np_hist_name = self.corr_hist_name
-            self.np_hist = self.corr_hist if self.corr_hist else self.card_tool.getHistsForProcAndSyst(signal_samples[0], self.corr_hist_name)
+        self.np_hist_name = self.corr_hist_name.replace("Corr", "FlavDepNP")
+        self.np_hist = self.card_tool.getHistsForProcAndSyst(signal_samples[0], self.np_hist_name)
 
         var_name = model.replace("binned_", "")
 
@@ -316,18 +282,29 @@ class TheoryHelper(object):
 
         if len(gamma_vals) != 2:
             raise ValueError(f"Failed to find consistent variation for gamma NP in hist {self.corr_hist_name}")
+
+        gamma_nuisance_name = "scetlibNPgamma"
+
+        var_vals = gamma_vals
+        var_names = [f"{gamma_nuisance_name}Down", f"{gamma_nuisance_name}Up"]
+
+        if "Lambda" in self.np_model:
+            Lambda4_nuisance_name = "scetlibNPLambda4"
+            var_vals.extend(["Lambda4.01", "Lambda4.16"])
+            var_names.extend([f"{Lambda4_nuisance_name}Down", f"{Lambda4_nuisance_name}Up"])
+
         logger.debug(f"Adding gamma uncertainties from syst entries {gamma_vals}")
 
-        nuisance_name = f"scetlibNPgamma"
+
         self.card_tool.addSystematic(name=self.corr_hist_name,
             processes=["single_v_samples"],
             passToFakes=self.propagate_to_fakes,
             systAxes=[self.syst_ax],
-            action=lambda h: h[{self.syst_ax : gamma_vals}],
-            outNames=[f"{nuisance_name}Down", f"{nuisance_name}Up"],
+            action=lambda h: h[{self.syst_ax : var_vals}],
+            outNames=var_names,
             group="resumNonpert",
             splitGroup={"resum": ".*"},
-            rename=nuisance_name,
+            rename="scetlibNP",
         )
 
     def add_resum_scale_uncertainty():
@@ -369,14 +346,13 @@ class TheoryHelper(object):
     def add_uncorrelated_np_uncertainties(self):
         np_map = {
             "Lambda2" : ["-0.25", "0.25",],
-            "Lambda4" : [".01", ".16",],
             "Delta_Lambda2" : ["-0.02", "0.02",]
         } if "Lambda" in self.np_model else {
             "Omega" : ["0.", "0.8"],
             "Delta_Omega" : ["-0.02", "0.02"],
         }
 
-        if "Delta" not in self.resumUnc:
+        if "Delta" not in self.np_model:
             to_remove = list(filter(lambda x: "Delta" in x, np_map.keys()))
             for k in to_remove:
                 np_map.pop(k)
@@ -399,19 +375,21 @@ class TheoryHelper(object):
             for nuisance,vals in np_map.items():
                 entries = [nuisance+v for v in vals]
                 binned = "binned" in self.np_model
-                if binned:
-                    action=lambda h,e=entries: syst_tools.hist_to_variations(h[{self.syst_ax : [central_var, *e]}])
-                else:
-                    action=lambda h,e=entries: h[{self.syst_ax : e}]
+
+                gen_axes = ["absYVgenNP", "chargeVgenNP"]
+                sum_axes = [] if binned else ["absYVgenNP"]
+
+                action=lambda h,e=entries: syst_tools.hist_to_variations(h[{self.syst_ax : [central_var, *e]}], gen_axes=gen_axes, sum_axes=sum_axes)
+
                 rename = f"scetlibNP{label}{nuisance}"
                 self.card_tool.addSystematic(name=self.np_hist_name,
                     processes=[sample_group],
                     group="resumNonpert",
                     splitGroup={"resum": ".*"},
-                    systAxes=[self.syst_ax] if not binned else ["absYVgenNP", "chargeVgenNP", "vars"],
+                    systAxes=["chargeVgenNP", self.syst_ax] if not binned else ["absYVgenNP", "chargeVgenNP", self.syst_ax],
                     passToFakes=self.propagate_to_fakes,
                     action=action,
-                    outNames=[f"{rename}Down", f"{rename}Up"] if not binned else None,
+                    # outNames=[f"{rename}Down", f"{rename}Up"] if not binned else None,
                     systNameReplace=[(entries[1], f"{rename}Up"), (entries[0], f"{rename}Down"), ],
                     skipEntries=[{self.syst_ax : central_var}],
                     rename=rename,
