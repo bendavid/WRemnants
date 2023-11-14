@@ -66,6 +66,8 @@ class HDF5Writer(object):
     def add_channel(self, cardTool, name=None):
         if name is None:
             name = f"ch{len(self.channels)+1}"
+        if cardTool.xnorm and not self.theoryFit:
+            name += "_masked"
         self.channels[name] = cardTool
 
     def get_channels(self):
@@ -121,6 +123,9 @@ class HDF5Writer(object):
         dict_logkavg = {c : {} for c in self.get_channels()}
         dict_logkhalfdiff = {c : {} for c in self.get_channels()}
 
+        # store list of axes for each channel
+        hist_axes = {}
+
         #keep track of bins per channel
         ibins = []
         nbins = 0
@@ -158,8 +163,13 @@ class HDF5Writer(object):
                 if common.passIsoName not in axes:
                     axes.append(common.passIsoName)
 
-            # nominal predictions
             procs_chan = chanInfo.predictedProcesses()
+
+            # get nominal histograms of any of the processes to keep track of the list of axes
+            hist_nominal = dg.groups[procs_chan[0]].hists[chanInfo.nominalName] 
+            hist_axes[chan] = [hist_nominal.axes[a] for a in axes]
+
+            # nominal predictions
             for proc in procs_chan:
                 logger.debug(f"Now  in channel {chan} at process {proc}")
                 
@@ -612,7 +622,11 @@ class HDF5Writer(object):
         f = h5py.File(outpath, rdcc_nbytes=self.chunkSize, mode='w')
 
         # propagate meta info into result file
-        meta = {"meta_info" : output_tools.metaInfoDict(args=args)}
+        meta = {
+            "meta_info" : output_tools.metaInfoDict(args=args),
+            "channel_axes": hist_axes
+        }
+
         narf.ioutils.pickle_dump_h5py("meta", meta, f)
 
         systsnoprofile = self.get_systsnoprofile()
