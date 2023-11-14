@@ -3,6 +3,7 @@ import hist
 from narf.ioutils import H5PickleProxy
 import numpy as np
 from utilities import logging
+from utilities.styles import styles
 
 logger = logging.child_logger(__name__)
 
@@ -11,8 +12,8 @@ class Datagroup(object):
     def __init__(self, name, members=[], scale=None, selectOp=None, selectOpArgs={}, memberOp=None, rebinOp=None, label=None, color=None):
         self.name = name
         self.scale = scale
-        self.label = label
-        self.color = color
+        self.label = styles.process_labels.get(name, name) if label is None else label
+        self.color = styles.process_colors.get(name, "grey") if color is None else color
 
         self.members = members              # list of narf datasets
 
