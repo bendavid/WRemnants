@@ -4,8 +4,10 @@ import numpy as np
 import pandas as pd
 import os
 
-from utilities import common, logging
+from utilities import common, logging, boostHistHelpers as hh
 from utilities.io_tools import output_tools
+
+import pdb
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-i", "--input", nargs="+", type=str, default=[f"{common.data_dir}/EWCorrections/dsig_dmll_dpTll_Zsel_ful.csv"], help="Input csv file with virtual corrections")
@@ -29,6 +31,10 @@ preFSR_dict = {
     "etal": "etagen"
 }
 
+# axes where overflow/underflow should be added
+overflow_axes = ["pTll", "pTl","etal"]
+underflow_axes = ["pTl","etal"]
+
 def read_ew_corrections_from_csv(filename, proc):
     if not os.path.exists(filename):
         logger.warning(f"File {filename} not found")
@@ -39,10 +45,11 @@ def read_ew_corrections_from_csv(filename, proc):
     def ew_df_to_axis(df, name):
         axis_name = preFSR_dict[name]
         edges = np.array(sorted(set(np.append(df[f"{name}_min"], df[f"{name}_max"]))))
+        opts = dict(name=axis_name, overflow=name in overflow_axes, underflow=name in underflow_axes)
         if len(edges) == max(df[f"{name}_max"])+1-min(df[f"{name}_min"]) and all(edges == np.arange(min(edges), max(edges)+1)):
-            axis = hist.axis.Regular(len(edges)-1, int(min(edges)), int(max(edges)), name=axis_name, underflow=False)
+            axis = hist.axis.Regular(len(edges)-1, int(min(edges)), int(max(edges)), **opts)
         else:
-            axis = hist.axis.Variable(edges, name=axis_name, underflow=False)
+            axis = hist.axis.Variable(edges, **opts)
         return axis
 
     ew_axes = [ew_df_to_axis(df, a) for a in args.axes]
@@ -64,11 +71,14 @@ def read_ew_corrections_from_csv(filename, proc):
     axis_syst = hist.axis.Regular(3, 0, 3, underflow=False, overflow=False, name="systIdx")
 
     # fill final histogram
-    hsyst = hist.Hist(*hratio.axes, axis_charge, axis_syst, storage=hratio._storage_type())
+    hsyst = hist.Hist(*hratio.axes, axis_charge, axis_syst, storage=hratio.storage_type())
     hsyst.values(flow=True)[...] = np.ones(hsyst.axes.extent) # set all bins including flow to 1
     hsyst.values(flow=False)[...,charge_idx,0] = df["WEAK1/NOM"].values.reshape(hratio.axes.size)
     hsyst.values(flow=False)[...,charge_idx,1] = df["WEAK2/NOM"].values.reshape(hratio.axes.size)
     hsyst.values(flow=False)[...,charge_idx,2] = df["WEAK3/NOM"].values.reshape(hratio.axes.size)
+
+    # set underflow and overflow bins to closest bin values
+    hsyst = hh.set_flow(hsyst, val="nearest")
 
     return hsyst
 

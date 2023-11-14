@@ -446,7 +446,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
             systAxes=["systIdx"],
             labelsByAxis=[f"{ewUnc}Corr"],
             scale=2,
-            skipEntries=[1, 2] if ewUnc=="virtual_ew" else [0, 2],
+            skipEntries=[1, 2] if ewUnc in ["virtual_ew", "virtual_ew_wlike"] else [0, 2],
             passToFakes=passSystToFakes,
         )
 
