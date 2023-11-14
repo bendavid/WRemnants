@@ -12,7 +12,7 @@ import pdb
 parser = argparse.ArgumentParser()
 parser.add_argument("-i", "--input", nargs="+", type=str, default=[f"{common.data_dir}/EWCorrections/dsig_dmll_dpTll_Zsel_ful.csv"], help="Input csv file with virtual corrections")
 parser.add_argument("--debug", action='store_true', help="Print debug output")
-parser.add_argument("--axes", type=str, nargs="+",default=["pTll", "mll"], choices=["pTll", "mll", "pTl", "etal"], help="Axes for the EW corrections")
+parser.add_argument("--axes", type=str, nargs="+",default=["mll", "pTll"], choices=["pTll", "mll", "pTl", "etal"], help="Axes for the EW corrections")
 parser.add_argument("--outpath", type=str, default=f"{common.data_dir}/TheoryCorrections", help="Output path")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for plots and correction files")
 parser.add_argument("--outname", type=str, default="", help="Output file name")
@@ -32,7 +32,7 @@ preFSR_dict = {
 }
 
 # axes where overflow/underflow should be added
-overflow_axes = ["pTll", "pTl","etal"]
+overflow_axes = ["mll", "pTll", "pTl","etal"]
 underflow_axes = ["pTl","etal"]
 
 def read_ew_corrections_from_csv(filename, proc):

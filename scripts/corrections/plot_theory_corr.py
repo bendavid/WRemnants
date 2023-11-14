@@ -26,6 +26,7 @@ parser.add_argument("--flow", action='store_true', help="Show underlfow and over
 parser.add_argument("--axes", type=str, nargs="*", default=None, help="Which axes to plot, if not specified plot all axes")
 parser.add_argument("--xlim", type=float, nargs=2, default=[None,None], help="Min and max values for x axis (if not specified, range set automatically)")
 parser.add_argument("--ylim", type=float, nargs=2, default=[None,None], help="Min and max values for y axis (if not specified, range set automatically)")
+parser.add_argument("--clim", type=float, nargs=2, default=[None,None], help="Min and max values for color in 2d plot (if not specified, range set automatically)")
 parser.add_argument("--plots", type=str, nargs="+", default=["1d", "2d"], choices=["1d", "2d"], help="Define which plots to make")
 
 
@@ -38,7 +39,7 @@ colors = mpl.colormaps["tab10"]
 
 corr_dict = theory_corrections.load_corr_helpers(args.datasets, args.theoryCorr, make_tensor=False)
 
-def make_plot_2d(h, name, proc, axes, corr=None, plot_error=False, cmin=None, cmax=None, flow=True, density=False, log=False):
+def make_plot_2d(h, name, proc, axes, corr=None, plot_error=False, clim=None, flow=True, density=False, log=False):
 
     logger.info(f"Make plot {name} with axes {h.axes.name}")
     # average over bins
@@ -70,15 +71,23 @@ def make_plot_2d(h, name, proc, axes, corr=None, plot_error=False, cmin=None, cm
 
     fig, ax = plot_tools.figure(h2d, xlabel=xlabel, ylabel=ylabel, cms_label=args.cmsDecor, automatic_scale=False, width_scale=1.2, xlim=xlim, ylim=ylim)
 
-    if log:
-        cmin = min(h2d.values(flow=flow)[h2d.values(flow=flow)>0]) if cmin is None else cmin # smallest value that is not 0
-        cmax = h2d.values(flow=flow).max() if cmax is None else cmax
-        colormesh = ax.pcolormesh(xedges, yedges, h2d.values(flow=flow).T, norm=LogNorm(vmin=cmin, vmax=cmax), cmap=cm.RdBu)
-    else:
-        cmin = max(0.95,h2d.values(flow=flow).min()) if cmin is None else cmin
-        cmax = min(1.05,h2d.values(flow=flow).max()) if cmax is None else cmax
+    if clim is None:
+        if log:
+            cmin = min(h2d.values(flow=flow)[h2d.values(flow=flow)>0]) # smallest value that is not 0
+            cmax = h2d.values(flow=flow).max()
+        else:
+            cmin = max(0.95,h2d.values(flow=flow).min())
+            cmax = min(1.05,h2d.values(flow=flow).max())
+        # make symmetric range
         crange = max((cmax-1), (1-cmin))
-        colormesh = ax.pcolormesh(xedges, yedges, h2d.values(flow=flow).T, cmap=cm.RdBu, vmin=max(0.95,1-crange), vmax=min(1.05,1+crange))
+        clim = [max(0.95,1-crange), min(1.05,1+crange)]
+    else:
+        colormesh = ax.pcolormesh(xedges, yedges, h2d.values(flow=flow).T, norm=LogNorm(vmin=clim[0], vmax=clim[1]), cmap=cm.RdBu)
+
+    if log:
+        colormesh = ax.pcolormesh(xedges, yedges, h2d.values(flow=flow).T, cmap=cm.RdBu, norm=LogNorm(vmin=clim[0], vmax=clim[1]))
+    else:
+        colormesh = ax.pcolormesh(xedges, yedges, h2d.values(flow=flow).T, cmap=cm.RdBu, vmin=clim[0], vmax=clim[1])
 
     cbar = fig.colorbar(colormesh, ax=ax)
 
@@ -203,7 +212,7 @@ for dataset, corr_hists in corr_dict.items():
             
             if len(axes) == 2 and "2d" in args.plots:
                 for n, h in corrh_systs.items():
-                    make_plot_2d(h, n, dataset.replace("PostVFP",""), axes, corr=corr, flow=args.flow)                
+                    make_plot_2d(h, n, dataset.replace("PostVFP",""), axes, corr=corr, flow=args.flow, clim=args.clim)                
 
             if "1d" not in args.plots:
                 continue

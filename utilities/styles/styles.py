@@ -41,6 +41,8 @@ text_dict = {
 axis_labels = {
     "ewPTll": r"$\mathrm{Post\ FSR}\ p_\mathrm{T}^{\ell\ell}$",
     "ewMll": r"$\mathrm{Post\ FSR}\ m^{\ell\ell}$", 
+    "ptgen": r"$\mathrm{Pre\ FSR}\ p_\mathrm{T}^{\ell}$",
+    "etagen": r"$\mathrm{Pre\ FSR}\ \eta^{\ell}$", 
     "ptVgen": r"$\mathrm{Pre\ FSR}\ p_\mathrm{T}^{\ell\ell}$",
     "massVgen": r"$\mathrm{Pre\ FSR}\ m^{\ell\ell}$", 
     "qT" : r"$\mathrm{Pre\ FSR}\ p_\mathrm{T}^{\ell\ell}$",
