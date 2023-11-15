@@ -210,10 +210,9 @@ def build_graph(df, dataset):
     results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"], storage=hist.storage.Double()))
 
     if not args.noRecoil:
-        df = df.Define("yZ", "ll_mom4.Rapidity()")
-        lep_cols = ["Muon_pt[goodMuons]", "Muon_phi[goodMuons]", "Muon_pt[goodMuons]"]
-        trg_cols = ["trigMuons_pt0", "trigMuons_phi0", "nonTrigMuons_pt0", "nonTrigMuons_phi0"]
-        df = recoilHelper.recoil_Z(df, results, dataset, common.zprocs_recoil, lep_cols, trg_cols) # produces corrected MET as MET_corr_rec_pt/phi
+        leps_uncorr = ["Muon_pt[goodMuons][0]", "Muon_eta[goodMuons][0]", "Muon_phi[goodMuons][0]", "Muon_charge[goodMuons][0]", "Muon_pt[goodMuons][1]", "Muon_eta[goodMuons][1]", "Muon_phi[goodMuons][1]", "Muon_charge[goodMuons][1]"]
+        leps_corr = ["trigMuons_pt0", "trigMuons_eta0", "trigMuons_phi0", "trigMuons_charge0", "nonTrigMuons_pt0", "nonTrigMuons_eta0", "nonTrigMuons_phi0", "nonTrigMuons_charge0"]
+        df = recoilHelper.recoil_Z(df, results, dataset, common.zprocs_recoil, leps_uncorr, leps_corr)  # produces corrected MET as MET_corr_rec_pt/phi
     else:
         df = df.Alias("MET_corr_rec_pt", "MET_pt")
         df = df.Alias("MET_corr_rec_phi", "MET_phi")

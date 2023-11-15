@@ -1,44 +1,50 @@
 
-import sys,array,math,os
-import numpy as np
+import sys,argparse
 import pickle
 import wremnants.datasets.datagroups as datagroups
 
+import functions
 
 def readProc(groups, hName, procs):
     groups.setNominalName(hName)
-    groups.loadHistsForDatagroups(hName, syst="")
+    groups.loadHistsForDatagroups(hName, syst="", procsToRead=procs)
     return sum([groups.groups[p].hists[hName] for p in procs])
-    #return groups.groups[procs[0]].hists[hName]
 
 
 if __name__ == "__main__":
 
-    met = "DeepMETReso"
-    flavor = "mumu"
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-i", "--input", type=str, help="Input hdf5 file")
+    args = parser.parse_args()
 
-    #groups = datagroups.Datagroups(f"mz_wlike_with_mu_eta_pt_{met}.hdf5")
-    groups = datagroups.Datagroups(f"mz_wlike_with_mu_eta_pt_DeepMETReso_nnpdf31_noPTcut.hdf5")
-    groups = datagroups.Datagroups(f"mz_wlike_with_mu_eta_pt_DeepMETReso_nnpdf31.hdf5")
-    
-    
-
-    zmumu_para = readProc(groups, "recoil_corr_xy_para_qTbinned", ["Zmumu"])
-    zmumu_perp = readProc(groups, "recoil_corr_xy_perp_qTbinned", ["Zmumu"])
-
-    bkg_para = readProc(groups, "recoil_corr_xy_para_qTbinned", ["Ztautau", "Other"])
-    bkg_perp = readProc(groups, "recoil_corr_xy_perp_qTbinned", ["Ztautau", "Other"])
-
-    singlemuon_para = readProc(groups, "recoil_corr_xy_para_qTbinned", ["Data"])
-    singlemuon_perp = readProc(groups, "recoil_corr_xy_perp_qTbinned", ["Data"])
+    groups = datagroups.Datagroups(args.input)
+    flavor = groups.flavor
+    met = groups.getMetaInfo()["args"].get("met", None)
+    analysis = "lowPU" if "lowpu" in groups.mode else "highPU"
 
     savedict = {}
-    savedict['zmumu_para'] = zmumu_para
-    savedict['zmumu_perp'] = zmumu_perp
-    savedict['bkg_para'] = bkg_para
-    savedict['bkg_perp'] = bkg_perp
-    savedict['singlemuon_para'] = singlemuon_para
-    savedict['singlemuon_perp'] = singlemuon_perp
+    savedict['lumi_header'] = functions.getLumiLabel(groups)
+    if flavor == "mumu" or flavor == "ee":
 
-    with open(f"recoil_mz_wlike_with_mu_eta_pt_{met}.pkl", "wb") as f:
+        savedict['z_para'] = readProc(groups, "recoil_corr_xy_para_v_pt", ['Zmumu' if flavor=='mumu' else 'Zee'])
+        savedict['z_perp'] = readProc(groups, "recoil_corr_xy_perp_v_pt", ['Zmumu' if flavor=='mumu' else 'Zee'])
+
+        savedict['z_para_gen'] = readProc(groups, "recoil_corr_xy_para_gen_v_gen_pt", ['Zmumu' if flavor=='mumu' else 'Zee'])
+        savedict['z_perp_gen'] = readProc(groups, "recoil_corr_xy_perp_gen_v_gen_pt", ['Zmumu' if flavor=='mumu' else 'Zee'])
+
+        savedict['bkg_para'] = readProc(groups, "recoil_corr_xy_para_v_pt", ['Ztautau', 'Other'])
+        savedict['bkg_perp'] = readProc(groups, "recoil_corr_xy_perp_v_pt", ['Ztautau', 'Other'])
+
+        savedict['data_para'] = readProc(groups, "recoil_corr_xy_para_v_pt", ['Data'])
+        savedict['data_perp'] = readProc(groups, "recoil_corr_xy_perp_v_pt", ['Data'])
+
+    else:
+
+        savedict['w_para_gen'] = readProc(groups, "recoil_corr_xy_para_gen_v_gen_pt", ['Wmunu' if flavor=='mu' else 'Wenu'])
+        savedict['w_perp_gen'] = readProc(groups, "recoil_corr_xy_perp_gen_v_gen_pt", ['Wmunu' if flavor=='mu' else 'Wenu'])
+
+        savedict['z_para_gen'] = readProc(groups, "recoil_corr_xy_para_gen_v_gen_pt", ['Zmumu' if flavor=='mu' else 'Zee'])
+        savedict['z_perp_gen'] = readProc(groups, "recoil_corr_xy_perp_gen_v_gen_pt", ['Zmumu' if flavor=='mu' else 'Zee'])
+
+    with open(f"recoil/{analysis}_{met}/input_{flavor}.pkl", "wb") as f:
         pickle.dump(savedict, f)

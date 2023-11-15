@@ -37,14 +37,10 @@ def parseBoostHist(groups, histCfg, procName, rebin=1):
  
 
 def prepareDir(outDir, remove=True):
-
     if os.path.exists(outDir) and os.path.isdir(outDir) and remove: shutil.rmtree(outDir)
     os.system("mkdir -p %s" % outDir)
-    #os.system("cp /eos/user/j/jaeyserm/www/wmass/index.php %s" % outDir)
 
-    
 def doOverlow(h):
-
     n = h.GetNbinsX()
     h.SetBinContent(1, h.GetBinContent(0) + h.GetBinContent(1))
     h.SetBinContent(n, h.GetBinContent(n+1) + h.GetBinContent(n))
@@ -54,8 +50,7 @@ def doOverlow(h):
     h.SetBinContent(n+1, 0)
     h.SetBinContent(0, 0)
     h.SetBinContent(n+1, 0)
-    
-    return h    
+    return h
 
 def parseProc(groups, histCfg, procName, syst="", rebin=1):
 
@@ -79,11 +74,8 @@ def parseProc(groups, histCfg, procName, syst="", rebin=1):
 
     print("Get histogram %s, yield=%d" % (label, rhist.Integral()))
     return rhist
-    
-    
 
-def Rebin(h, newbins, binWidth=True):
-
+def rebin(h, newbins, binWidth=True):
     if isinstance(newbins, int):
         h.Rebin(newbins)
         if binWidth: h.Scale(1, "width")
@@ -100,19 +92,52 @@ def drange(x, y, jump):
         yield float(x)
         #x += decimal.Decimal(jump)
         x += jump
-        
-        
-def readBoostHistProc(groups, hName, procs, charge=None):
 
-    groups.setNominalName(hName)
-    groups.loadHistsForDatagroups(hName, syst="")
+def readBoostHist(groups, hName, procs, charge="combined", boost=False, integrateAxes=[]): # readBoostHistProc
+
+    groups.setNominalName(hName) # fakerateIntegrationAxes
+    groups.loadHistsForDatagroups(hName, syst="", procsToRead=procs, fakerateIntegrationAxes=["eta", "pt"])
+    hists = groups.getDatagroups()
     bhist = sum([groups.groups[p].hists[hName] for p in procs])
 
+    s = hist.tag.Slicer()
     axes = [ax.name for ax in bhist.axes]
-    if "charge" in axes:
-        s = hist.tag.Slicer()
+    if "eta" in axes and "pt" in axes:
+        bhist = bhist[{"eta" : s[::hist.sum], "pt" : s[::hist.sum]}]
+    
+    for iAx in integrateAxes:
+        bhist = bhist[{iAx : s[::hist.sum]}]
+
+    if "passMT" in bhist.axes.name:
+        bhist = bhist[{"passMT": True}]
+
+    if "charge" in bhist.axes.name:
         if charge and charge == "combined": bhist = bhist[{"charge" : s[::hist.sum]}]
         elif charge and charge == "plus": bhist = bhist[{"charge" : bhist.axes["charge"].index(+1)}]
         elif charge and charge == "minus": bhist = bhist[{"charge" : bhist.axes["charge"].index(-1)}]
 
-    return bhist 
+    if boost:
+        return bhist
+    rhist = narf.hist_to_root(bhist)
+    rhist.SetName(f"{hName}")
+    return rhist
+
+
+def getLumiLabel(groups):
+    if groups.lumi < 1:
+        return "{:.1f} pb^{{#minus1}} (13 TeV)".format(1000.*groups.lumi)
+    else:
+        return "{:.1f} fb^{{#minus1}} (13 TeV)".format(groups.lumi)
+
+def getMinMaxRange(h, xMin, xMax):
+    yMin, yMax = 1e9, -1e9
+    for i in range(0, h.GetNbinsX()+1):
+        x_ = h.GetBinLowEdge(i)
+        if x_ < xMin or x_ > xMax:
+            continue
+        c = h.GetBinContent(i)
+        if c < yMin:
+            yMin = c
+        if c > yMax:
+            yMax = c
+    return yMin, yMax
