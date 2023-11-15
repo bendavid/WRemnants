@@ -457,7 +457,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
             systAxes=["systIdx"],
             labelsByAxis=[f"{ewUnc}Corr"],
             scale=2,
-            skipEntries=[(1, -1), (2, -1)] if ewUnc.startswith("virtual_ew") else [(0, -1), (2, -1)],
+            skipEntries=[(1, -1), (2, -1)] if ewUnc.startswith("virtual_ew") else [(0, -1), (1, -1)],
             passToFakes=passSystToFakes,
         )
 
