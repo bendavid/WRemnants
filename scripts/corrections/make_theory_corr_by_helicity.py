@@ -1,6 +1,4 @@
 import numpy as np
-import lz4.frame
-import pickle
 from wremnants import plot_tools, theory_corrections, theory_tools
 from utilities import boostHistHelpers as hh
 from utilities import common, logging
@@ -53,8 +51,8 @@ if args.other_coeff_files and args.other_coeffs:
 # Workaround for the different axis names
 corrh = theory_corrections.make_corr_by_helicity(minnloh, sigma_ulh, sigma4h, coeff_hist=dyturbo_coeffs, coeffs_from_hist=args.other_coeffs, binning=binning)
 
-if args.postfix:
-    args.generator += args.postfix
+outName = "Z" if args.proc == "z" else "W"
+outfile = f"{args.outpath}/{args.generator}Helicity"
 
 out_dict = {
     f"{args.generator}_minnlo_coeffs" : corrh,
@@ -64,14 +62,7 @@ out_dict = {
     f"other_coeffs" : dyturbo_coeffs,
 }
 
-
-outName = "Z" if args.proc == "z" else "W"
-outfile = f"{args.outpath}/{args.generator}HelicityCorr{outName}.pkl.lz4"
-
-with lz4.frame.open(outfile, "wb") as f:
-    pickle.dump({ outName : out_dict,
-            "meta_data" : output_tools.metaInfoDict(args=args),
-        }, f, protocol = pickle.HIGHEST_PROTOCOL)
+output_tools.write_theory_corr_hist(outfile, outName, out_dict, args)
 
 logger.info("Correction binning is")
 for ax in corrh.axes:

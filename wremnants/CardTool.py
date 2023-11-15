@@ -452,7 +452,7 @@ class CardTool(object):
 
         if len(skipEntryArr) != nsyst:
             raise ValueError("skipEntry tuple must have the same dimensions as the number of syst axes. " \
-                f"found {nsyst} systematics and len(skipEntry) = {len(skipEntry)}.") 
+                f"found {nsyst} systematics and len(skipEntry) = {len(skipEntryArr)}.") 
 
         return skipEntryArr
 
