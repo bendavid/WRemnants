@@ -515,15 +515,13 @@ def smoothTowardsOne(h):
     return hnew
 
 def set_flow(h, val="nearest"):
-    raise NotImplementedError("This function doesn't actually work :(")
-    for i, ax in enumerate(h.axes):
-        if ax.traits.underflow:
-            nearest_vals = np.take(h.values(flow=True), 1, i) 
-            # FIXME Take+assign doesn't work :(
-            np.take(h.values(flow=True), 0, i)[...] = nearest_vals if val == "nearest" else np.full_like(nearest_vals, val)
-        if ax.traits.overflow:
-            nearest_vals = np.take(h.values(flow=True), -2, i) 
-            np.take(h.values(flow=True), -1, i)[...] = nearest_vals if val == "nearest" else np.full_like(nearest_vals, val)
+    # sets the values of the underflow and overflow bins to given value; if val='nearest' the values of the nearest bins are taken
+    for axis in [a.name for a in h.axes if a.traits.overflow]:
+        slices = [slice(None) if a!=axis else -1 for a in h.axes.name]
+        h.view(flow=True)[*slices] = h[{axis: -1}].view(flow=True) if val=="nearest" else val
+    for axis in [a.name for a in h.axes if a.traits.underflow]:
+        slices = [slice(None) if a!=axis else 0 for a in h.axes.name]
+        h.view(flow=True)[*slices] = h[{axis: 0}].view(flow=True) if val=="nearest" else val
     return h
 
 def swap_histogram_bins(histo, axis1, axis1_bin1, axis1_bin2, axis2=None, axis2_slice=None, flow=False, axis1_replace=None):

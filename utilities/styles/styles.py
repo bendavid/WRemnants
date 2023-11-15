@@ -105,3 +105,35 @@ nuisance_groupings = {
         "nonClosure", "resolutionCrctn",
     ]
 }
+
+
+text_dict = {
+    "Zmumu": r"$\mathrm{Z}\rightarrow\mu\mu$",
+    "ZToMuMu": r"$\mathrm{Z}\rightarrow\mu\mu$",
+    "WplusToMuNu": r"$\mathrm{W}^+\rightarrow\mu\nu$",
+    "WminusToMuNu": r"$\mathrm{W}^-\rightarrow\mu\nu$"
+}
+
+axis_labels = {
+    "ewPTll": r"$\mathrm{Post\ FSR}\ p_\mathrm{T}^{\ell\ell}$",
+    "ewMll": r"$\mathrm{Post\ FSR}\ m^{\ell\ell}$", 
+    "ptgen": r"$\mathrm{Pre\ FSR}\ p_\mathrm{T}^{\ell}$",
+    "etagen": r"$\mathrm{Pre\ FSR}\ \eta^{\ell}$", 
+    "ptVgen": r"$\mathrm{Pre\ FSR}\ p_\mathrm{T}^{\ell\ell}$",
+    "massVgen": r"$\mathrm{Pre\ FSR}\ m^{\ell\ell}$", 
+    "qT" : r"$\mathrm{Pre\ FSR}\ p_\mathrm{T}^{\ell\ell}$",
+    "Q" : r"$\mathrm{Pre\ FSR}\ m^{\ell\ell}$", 
+    "absY" : r"$\mathrm{Pre\ FSR}\ Y^{\ell\ell}$",
+    "charge" : r"$\mathrm{Pre\ FSR\ charge}$", 
+}
+
+syst_labels = {
+    "horacenloew" : {0: "nominal", 1: "horace EW NLO/LO", 2: "horace EW NLO/LO doubled", },
+    "matrix_radish" : "MATRIX+RadISH",
+    "virtual_ew" : {
+        0: r"NLOEW + HOEW, CMS, ($G_\mu, m_\mathrm{Z}, \mathrm{sin}^2\Theta_\mathrm{eff}$) scheme",
+        1: r"NLOEW + HOEW, PS, ($G_\mu, m_\mathrm{Z}, \mathrm{sin}^2\Theta_\mathrm{eff}$) scheme", 
+        2: r"NLOEW + HOEW, CMS, ($\alpha(m_\mathrm{Z}),m _\mathrm{Z}, \mathrm{sin}^2\Theta_\mathrm{eff}$) scheme", }
+}
+
+syst_labels["virtual_ew_wlike"] = syst_labels["virtual_ew"]

@@ -510,7 +510,7 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_dilepton.py -o $WREMNANTS_OUTDIR -j $NTHREADS --maxFiles $MAX_FILES --axes mll --forceDefaultName --postfix mll
 
       - name: dilepton plotting mll
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal --nominalRef nominal --hists mll -p $WEB_DIR -f $PLOT_DIR -a z $HIST_FILE variation --varName 'horacenloewCorr' --selectEntries 2 --varLabel Horace --selectAxis systIdx --color blue
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal --nominalRef nominal --hists mll -p $WEB_DIR -f $PLOT_DIR -a z $HIST_FILE variation --varName 'virtual_ewCorr' --selectEntries 2 --varLabel 'EW(virtual)' --selectAxis systIdx --color blue
 
       - name: dilepton combine mll setup
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombine.py -i $HIST_FILE --fitvar mll --lumiScale $LUMI_SCALE -o $WREMNANTS_OUTDIR

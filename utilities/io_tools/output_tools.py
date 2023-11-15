@@ -12,6 +12,8 @@ import re
 from utilities import logging
 import glob
 import shutil
+import lz4.frame
+import pickle
 
 logger = logging.child_logger(__name__)
 
@@ -46,6 +48,7 @@ def metaInfoDict(exclude_diff='notebooks', args=None):
         "command" : script_command_to_str(sys.argv, args),
         "args": {a: getattr(args,a) for a in vars(args)} if args else {}
     }
+
     if subprocess.call(["git", "branch"], stderr=subprocess.STDOUT, stdout=open(os.devnull, 'w')) != 0:
         meta_data["git_info"] = {"hash" : "Not a git repository!",
                 "diff" : "Not a git repository"}
@@ -155,6 +158,18 @@ def copy_to_eos(outpath, outfolder=None):
                     " from lxplus you can run without eoscp and take your luck with the mount.")
 
     shutil.rmtree(tmppath) 
+
+def write_theory_corr_hist(output_name, process, output_dict, args=None, file_meta_data=None): 
+    outname = output_name
+    if args is not None and args.postfix is not None:
+        outname += f"_{args.postfix}"
+    output_filename = f"{outname}Corr{process}.pkl.lz4"
+    logger.info(f"Write correction file {output_filename}")
+    result_dict = {process : output_dict, "meta_data" : metaInfoDict(args)}
+    if file_meta_data is not None:
+        result_dict["file_meta_data"] = file_meta_data
+    with lz4.frame.open(output_filename, "wb") as f:
+        pickle.dump(result_dict, f, protocol = pickle.HIGHEST_PROTOCOL)
 
 def split_eos_path(path):
 
