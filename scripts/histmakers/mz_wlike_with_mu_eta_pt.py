@@ -31,13 +31,13 @@ if args.unfolding:
     args = parser.parse_args()
 
 thisAnalysis = ROOT.wrem.AnalysisType.Wlike
+era = args.era
+
 datasets = getDatasets(maxFiles=args.maxFiles,
                         filt=args.filterProcs,
                         excl=args.excludeProcs, 
                         nanoVersion="v9", base_path=args.dataPath,
-                        dataYear=args.dataYear)
-
-era = args.era
+                        era=era)
 
 # dilepton invariant mass cuts
 mass_min = 60
@@ -95,8 +95,8 @@ else:
     muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile, era = era, what_analysis = thisAnalysis, max_pt = axis_pt.edges[-1], isoEfficiencySmoothing = args.isoEfficiencySmoothing, smooth3D=args.smooth3dsf, isoDefinition=args.isolationDefinition)
 logger.info(f"SF file: {args.sfFile}")
 
-pileup_helper = wremnants.make_pileup_helper(era = era, dataYear = args.dataYear)
-vertex_helper = wremnants.make_vertex_helper(era = era, dataYear = args.dataYear)
+pileup_helper = wremnants.make_pileup_helper(era = era)
+vertex_helper = wremnants.make_vertex_helper(era = era)
 
 calib_filepaths = common.calib_filepaths
 closure_filepaths = common.closure_filepaths
@@ -152,7 +152,7 @@ def build_graph(df, dataset):
             axes = [*nominal_axes, *unfolding_axes] 
             cols = [*nominal_cols, *unfolding_cols]
 
-    hltString="HLT_IsoTkMu24 || HLT_IsoMu24" if args.dataYear == 2016 else "HLT_IsoMu24"
+    hltString="HLT_IsoTkMu24 || HLT_IsoMu24" if era == "2016PostVFP" else "HLT_IsoMu24"
     df = df.Filter(hltString)
 
     df = muon_selections.veto_electrons(df)
@@ -182,7 +182,11 @@ def build_graph(df, dataset):
         df = df.Define("weight_vtx", vertex_helper, ["GenVtx_z", "Pileup_nTrueInt"])
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId"])
 
-        weight_expr = "weight_pu*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom"
+        if era == "2016PostVFP":
+            weight_expr = "weight_pu*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom"
+        else:
+            weight_expr = "weight_pu*L1PreFiringWeight_Muon_Nom*L1PreFiringWeight_ECAL_Nom"
+
         if not args.noVertexWeight:
             weight_expr += "*weight_vtx"            
 
@@ -197,7 +201,8 @@ def build_graph(df, dataset):
         if not args.noScaleFactors:
             df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, columnsForSF)
             weight_expr += "*weight_fullMuonSF_withTrackingReco"
-           
+
+        logger.debug(f"Exp weight defined: {weight_expr}")
         df = df.Define("exp_weight", weight_expr)
         df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
 
