@@ -519,7 +519,7 @@ class Datagroups(object):
             except ValueError as e:
                 logger.warning("No meta data found so no gen axes could be auto set")
                 return
-            if args.get("unfolding", False) is False and args.get("addHelicityHistos", False) is False:
+            if args.get("unfolding", False) is False and args.get("theoryAgnostic", False) is False:
                 return
 
             if len(args.get("genVars", [])) > 0:

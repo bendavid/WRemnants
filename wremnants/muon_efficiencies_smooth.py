@@ -30,7 +30,6 @@ def cloneAxis(ax, overflow=False, underflow=False, newName=None):
         quit()
     return newax
 
-# TODO: change is_w_like for a python enum AnalysisType (see include/defines.h)
 def make_muon_efficiency_helpers_smooth(filename = data_dir + "/muonSF/allSmooth_GtoHout_vtxAgnIso.root",
                                         era = None,
                                         what_analysis = ROOT.wrem.AnalysisType.Wmass,

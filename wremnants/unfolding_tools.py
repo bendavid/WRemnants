@@ -9,14 +9,17 @@ import uproot
 
 logger = logging.child_logger(__name__)
 
-def add_out_of_acceptance(datasets, group):
+def add_out_of_acceptance(datasets, group, newGroupName=None):
     # Copy datasets from specified group to make out of acceptance contribution
     datasets_ooa = []
     for dataset in datasets:
         if dataset.group == group:
             ds = deepcopy(dataset)
 
-            ds.group = "Bkg"+ds.group
+            if newGroupName is None:
+                ds.group = "Bkg"+ds.group
+            else:
+                ds.group = newGroupName
             ds.out_of_acceptance = True
 
             datasets_ooa.append(ds)

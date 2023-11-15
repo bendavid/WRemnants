@@ -6,13 +6,19 @@ import hist
 
 logger = logging.child_logger(__name__)
 
-def select_fiducial_space(df, ptVgenMax, absYVgenMax, accept=True):
-    # might need to account for some Ai which we neglect, we may have an out-of-acceptance per helicity state
+def select_fiducial_space(df, ptVgenMax, absYVgenMax, accept=True, select=True):
+    # accept defines the selection for in-acceptance (IA) or out-of-acceptance (OOA)
+    # select is needed to actually apply the selection. For --poiAsNoi one integrates over the gen bins to build the nominal histogram in setupCombine/CardTool.py,
+    # so all bins must be kept including overflows, and thus the explicit cut must be removed, although this is only for IA, since OOA is usually built as an independent histogram)
+    # In the future the OOA might be build from the overflow bins directly (it might be possible to define multiple pieces too)
     selection = f"ptVgen < {ptVgenMax} && absYVgen < {absYVgenMax}"
     df = df.Define("fiducial", selection)
     if accept:
-        df = df.Filter("fiducial")
-        logger.debug(f"Theory agnostic fiducial cut: {selection}")
+        if select:
+            df = df.Filter("fiducial")
+            logger.debug(f"Theory agnostic fiducial cut: {selection}")
+        else:
+            logger.debug(f"Theory agnostic fiducial cut not explicitly applied to fill overflow bins, it was: {selection}")
     else:
         df = df.Filter("fiducial == 0")
         logger.debug(f"Theory agnostic fiducial cut (out-of-acceptance): not ({selection})")
@@ -22,7 +28,7 @@ def define_helicity_weights(df):
     # define the helicity tensor, here nominal_weight will only have theory weights, no experimental pieces, it is defined in theory_tools.define_theory_weights_and_corrs
     weightsByHelicity_helper = wremnants.makehelicityWeightHelper()
     df = df.Define("helWeight_tensor", weightsByHelicity_helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "nominal_weight"])
-    df = df.Define("nominal_weight_helicity", "wrem::scalarmultiplyHelWeightTensor(nominal_weight,helWeight_tensor)")
+    df = df.Define("nominal_weight_helicity", "wrem::scalarmultiplyHelWeightTensor(nominal_weight, helWeight_tensor)")
     return df
 
 def add_xnorm_histograms(results, df, args, dataset_name, corr_helpers, qcdScaleByHelicity_helper, theoryAgnostic_axes, theoryAgnostic_cols):
