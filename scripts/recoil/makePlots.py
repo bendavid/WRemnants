@@ -22,9 +22,7 @@ if __name__ == "__main__":
     suffix = "" if args.suffix == "" else f"_{args.suffix}"
 
     groups = datagroups.Datagroups(args.input)
-    flavor = groups.flavor
-    met = groups.getMetaInfo()["args"].get("met", None)
-    analysis = "lowPU" if "lowpu" in groups.mode else "highPU"
+    met, analysis, flavor = functions.get_meta(groups)
     outDir = f"/home/submit/jaeyserm/public_html/recoil/{analysis}_{met}/plots_{flavor}/"
     functions.prepareDir(outDir, remove=False)
     print(groups.flavor)

@@ -60,8 +60,6 @@ class Datagroups(object):
             try:
                 args = self.getMetaInfo()["args"]
                 self.flavor = args.get("flavor", None)
-                if self.flavor == None:
-                    self.flavor = "mu" if self.mode=="wmass" else "mumu"
             except ValueError as e:
                 logger.warning(e)
                 self.flavor = None

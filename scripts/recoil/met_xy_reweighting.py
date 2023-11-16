@@ -276,9 +276,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     groups = datagroups.Datagroups(args.input)
-    flavor = groups.flavor
-    met = groups.getMetaInfo()["args"].get("met", None)
-    analysis = "lowPU" if "lowpu" in groups.mode else "highPU"
+    met, analysis, flavor = functions.get_meta(groups)
     fOut = f"wremnants-data/data/recoil/{analysis}_{met}/met_xy_{flavor}.json"
     outDir = f"/home/submit/jaeyserm/public_html/recoil/{analysis}_{met}/met_xy_{flavor}/"
     functions.prepareDir(outDir, True)

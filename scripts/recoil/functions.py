@@ -141,3 +141,12 @@ def getMinMaxRange(h, xMin, xMax):
         if c > yMax:
             yMax = c
     return yMin, yMax
+
+
+def get_meta(groups):
+    met = groups.getMetaInfo()["args"].get("met", None)
+    analysis = "lowPU" if "lowpu" in groups.mode else "highPU"
+    flavor = groups.flavor
+    if flavor == None:
+        flavor = "mu" if groups.mode=="wmass" else "mumu"
+    return met, analysis, flavor

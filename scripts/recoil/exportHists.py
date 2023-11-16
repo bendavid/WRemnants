@@ -18,9 +18,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     groups = datagroups.Datagroups(args.input)
-    flavor = groups.flavor
-    met = groups.getMetaInfo()["args"].get("met", None)
-    analysis = "lowPU" if "lowpu" in groups.mode else "highPU"
+    met, analysis, flavor = functions.get_meta(groups)
 
     savedict = {}
     savedict['lumi_header'] = functions.getLumiLabel(groups)
