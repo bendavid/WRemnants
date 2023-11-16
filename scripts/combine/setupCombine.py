@@ -888,6 +888,7 @@ if __name__ == "__main__":
             outfile, outfolder = outnames[0]
         else:
             outfile, outfolder = f"{args.outfolder}/Combination{'_statOnly' if args.doStatOnly else ''}_{args.postfix}/", "Combination"
+        logger.info(f"Writing HDF5 output to {outfile}")
         writer.write(args, outfile, outfolder)
     else:
         if len(args.inputFile) > 1:
