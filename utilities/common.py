@@ -10,6 +10,14 @@ import re
 wremnants_dir = f"{pathlib.Path(__file__).parent}/../wremnants"
 data_dir =  f"{pathlib.Path(__file__).parent}/../wremnants-data/data/"
 
+BR_TAUToMU = 0.1739
+BR_TAUToE = 0.1782
+xsec_ZmmPostVFP = 2001.9
+xsec_WpmunuPostVFP = 11765.9
+xsec_WmmunuPostVFP = 8703.87
+xsec_ZmmMass10to50PostVFP = 6997.0
+Z_TAU_TO_LEP_RATIO = (1.-(1. - BR_TAUToMU - BR_TAUToE)**2)
+
 wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP", 
     'WplusToMuNu_horace-lo-photos', 'WplusToMuNu_horace-nlo', 'WplusToMuNu_horace-lo',
     'WminusToMuNu_horace-lo-photos', 'WminusToMuNu_horace-nlo', 'WminusToMuNu_horace-lo',
@@ -173,7 +181,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--onlyMainHistograms", action='store_true', help="Only produce some histograms, skipping (most) systematics to run faster when those are not needed")
     parser.add_argument("--met", type=str, choices=["DeepMETReso", "RawPFMET"], help="MET (DeepMETReso or RawPFMET)", default="DeepMETReso")
     parser.add_argument("-o", "--outfolder", type=str, default="", help="Output folder")
-    parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP"], help="Data set to process", default="2016PostVFP")
+    parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP", "2017", "2018"], help="Data set to process", default="2016PostVFP")
     parser.add_argument("--nonClosureScheme", type=str, default = "A-only", choices=["none", "A-M-separated", "A-M-combined", "binned", "binned-plus-M", "A-only", "M-only"], help = "source of the Z non-closure nuisances")
     parser.add_argument("--correlatedNonClosureNP", action="store_false", help="disable the de-correlation of Z non-closure nuisance parameters after the jpsi massfit")
     parser.add_argument("--dummyNonClosureA", action="store_false", help="read values for the magnetic part of the Z non-closure from a file")
