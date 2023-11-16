@@ -256,22 +256,22 @@ if not args.skipAngularCoeffs:
                 new_moments = moments
                 w_moments = hh.addHists(w_moments, new_moments, createNew=False)
 
-    coeffs={}
+    moments_out={}
     # Common.ptV_binning is the approximate 5% quantiles, rounded to integers. Rebin for approx 10% quantiles
     if z_moments:
         if not args.useTheoryAgnosticBinning:
             z_moments = hh.rebinHist(z_moments, axis_ptVgen.name, common.ptV_binning[::2])
             z_moments = hh.rebinHist(z_moments, axis_massZgen.name, axis_massZgen.edges[::2])
-        coeffs["Z"] = wremnants.moments_to_angular_coeffs(z_moments) 
+        moments_out["Z"] = z_moments
     if w_moments:
         if not args.useTheoryAgnosticBinning:
             w_moments = hh.rebinHist(w_moments, axis_ptVgen.name, common.ptV_binning[::2])
-        coeffs["W"] = wremnants.moments_to_angular_coeffs(w_moments)
-    if coeffs:
-        outfname = "w_z_coeffs"
+        moments_out["W"] = w_moments
+    if moments_out:
+        outfname = "w_z_moments"
         if args.signedY:
             outfname += "_signedY"
         if args.useTheoryAgnosticBinning:
             outfname += "_theoryAgnosticBinning"
         outfname += ".hdf5"
-        output_tools.write_analysis_output(coeffs, outfname, args, update_name=not args.forceDefaultName)
+        output_tools.write_analysis_output(moments_out, outfname, args, update_name=not args.forceDefaultName)

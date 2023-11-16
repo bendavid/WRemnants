@@ -13,6 +13,8 @@ from utilities import logging
 import glob
 import shutil
 import pathlib
+import lz4.frame
+import pickle
 
 logger = logging.child_logger(__name__)
 
@@ -157,6 +159,18 @@ def copy_to_eos(outpath, outfolder=None):
                     " from lxplus you can run without eoscp and take your luck with the mount.")
 
     shutil.rmtree(tmppath) 
+
+def write_theory_corr_hist(output_name, process, output_dict, args=None, file_meta_data=None): 
+    outname = output_name
+    if args is not None and args.postfix is not None:
+        outname += f"_{args.postfix}"
+    output_filename = f"{outname}Corr{process}.pkl.lz4"
+    logger.info(f"Write correction file {output_filename}")
+    result_dict = {process : output_dict, "meta_data" : metaInfoDict(args)}
+    if file_meta_data is not None:
+        result_dict["file_meta_data"] = file_meta_data
+    with lz4.frame.open(output_filename, "wb") as f:
+        pickle.dump(result_dict, f, protocol = pickle.HIGHEST_PROTOCOL)
 
 def split_eos_path(path):
 

@@ -163,6 +163,12 @@ def define_prefsr_vars(df):
     df = df.Define("absYVgen", "std::fabs(yVgen)")
     df = df.Define("chargeVgen", "GenPart_pdgId[prefsrLeps[0]] + GenPart_pdgId[prefsrLeps[1]]")
     df = df.Define("csSineCosThetaPhi", "wrem::csSineCosThetaPhi(genlanti, genl)")
+
+    # define gen lepton in wlike case for ew corrections
+    df = df.Define("ptgen", "event % 2 == 0 ? genl.pt() : genlanti.pt()")
+    df = df.Define("etagen", "event % 2 == 0 ? genlanti.eta() : genl.eta()")
+    df = df.Define("qgen", "event % 2 == 0 ? -1 : 1")
+
     return df
 
 def define_scale_tensor(df):
@@ -336,8 +342,6 @@ def define_theory_corr(df, dataset_name, helpers, generators, modify_central_wei
         if "Helicity" in generator:
             df = df.Define(f"{generator}Weight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "nominal_weight_uncorr"])
         elif 'ew' in generator:
-            # Used as a placeholder to match the helper dimensionality 
-            df = df.DefinePerSample(f"{generator}Dummy", "0.")
             if i != 0 and modify_central_weight:
                 df = df.Define(f"ew_{generator}corr_weight", build_weight_expr(df))
             else:
@@ -381,15 +385,21 @@ def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_cen
 
         var_axis = helpers[generator].tensor_axes[-1]
 
-        # special treatment for Omega since it needs to be decorrelated in charge and rapidity
-        if isinstance(var_axis, hist.axis.StrCategory) and any(var_label.startswith("Omega") for var_label in var_axis):
-            omegaidxs = [var_axis.index(var_label) for var_label in var_axis if var_label.startswith("Omega")]
+        def is_flavor_dependent_np(var_label):
+            return var_label.startswith("Omega") \
+                    or var_label.startswith("Delta_Omega") \
+                    or var_label.startswith("Lambda2") \
+                    or var_label.startswith("Delta_Lambda2")
+
+        # special treatment for Lambda2/Omega since they need to be decorrelated in charge and possibly rapidity
+        if isinstance(var_axis, hist.axis.StrCategory) and any(is_flavor_dependent_np(var_label) for var_label in var_axis):
+            omegaidxs = [var_axis.index(var_label) for var_label in var_axis if is_flavor_dependent_np(var_label)]
 
             # include nominal as well
             omegaidxs = [0] + omegaidxs
 
             if f"{generator}Omega" not in df.GetColumnNames():
-                df = df.Define(f"{generator}Omega",
+                df = df.Define(f"{generator}FlavDepNP",
                                 f"""
                                 constexpr std::array<std::ptrdiff_t, {len(omegaidxs)}> idxs = {{{",".join([str(idx) for idx in omegaidxs])}}};
                                 Eigen::TensorFixedSize<double, Eigen::Sizes<{len(omegaidxs)}>> res;
@@ -399,14 +409,14 @@ def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_cen
                                 return res;
                                 """)
 
-            axis_Omega = hist.axis.StrCategory([var_axis[idx] for idx in omegaidxs], name = var_axis.name)
+            axis_FlavDepNP = hist.axis.StrCategory([var_axis[idx] for idx in omegaidxs], name = var_axis.name)
 
-            hist_name_Omega = f"{name}_{generator}Omega"
+            hist_name_FlavDepNP = f"{name}_{generator}FlavDepNP"
             axis_chargegen = axis_chargeWgen if isW else axis_chargeZgen
-            axes_Omega = axes + [axis_absYVgen, axis_chargegen]
-            cols_Omega = cols + ["absYVgen", "chargeVgen", f"{generator}Omega"]
-            unc_Omega = df.HistoBoost(hist_name_Omega, axes_Omega, cols_Omega, tensor_axes = [axis_Omega])
-            res.append(unc_Omega)
+            axes_FlavDepNP = axes + [axis_absYVgen, axis_chargegen]
+            cols_FlavDepNP = cols + ["absYVgen", "chargeVgen", f"{generator}FlavDepNP"]
+            unc_FlavDepNP = df.HistoBoost(hist_name_FlavDepNP, axes_FlavDepNP, cols_FlavDepNP, tensor_axes = [axis_FlavDepNP])
+            res.append(unc_FlavDepNP)
 
     return res
 

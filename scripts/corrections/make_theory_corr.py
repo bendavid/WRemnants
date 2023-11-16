@@ -1,6 +1,4 @@
 import numpy as np
-import lz4.frame
-import pickle
 from wremnants import plot_tools, theory_corrections, theory_tools
 from utilities import boostHistHelpers as hh
 from utilities import common, logging
@@ -139,7 +137,7 @@ corrh = hist.Hist(*corrh_unc.axes, name=corrh_unc.name, storage=hist.storage.Dou
 
 if args.postfix:
     args.generator += args.postfix
-outfile = f"{args.outpath}/{args.generator}Corr{args.proc.upper()}.pkl.lz4"
+outfile = f"{args.outpath}/{args.generator}"
 
 meta_dict = {}
 for f in [args.minnlo_file]+args.corr_files:
@@ -153,16 +151,13 @@ for f in [args.minnlo_file]+args.corr_files:
         logger.warning(f"No meta data found for file {f}")
         pass
 
-with lz4.frame.open(outfile, "wb") as f:
-    pickle.dump({
-            args.proc.upper() : {
-                f"{args.generator}_minnlo_ratio" : corrh,
-                f"{args.generator}_hist" : numh,
-                "minnlo_ref_hist" : minnloh,
-            },
-            "meta_data" : output_tools.metaInfoDict(args=args),
-            "file_meta_data" : meta_dict,
-        }, f, protocol = pickle.HIGHEST_PROTOCOL)
+output_dict = {
+    f"{args.generator}_minnlo_ratio" : corrh,
+    f"{args.generator}_hist" : numh,
+    "minnlo_ref_hist" : minnloh,
+}
+
+output_tools.write_theory_corr_hist(outfile, args.proc.upper(), output_dict, args, meta_dict)
 
 logger.info("Correction binning is")
 for ax in corrh.axes:

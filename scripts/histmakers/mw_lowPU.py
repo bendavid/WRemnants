@@ -67,7 +67,7 @@ axis_lin = hist.axis.Regular(5, 0, 5, name = "lin")
 
 
 
-qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper()
+qcdScaleByHelicity_helper = wremnants.theory_corrections.make_qcd_uncertainty_helper_by_helicity()
 axis_ptVgen = qcdScaleByHelicity_helper.hist.axes["ptVgen"]
 axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
 

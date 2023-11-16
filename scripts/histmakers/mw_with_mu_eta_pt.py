@@ -25,6 +25,8 @@ data_dir = common.data_dir
 parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for luminosity in excess to 1 (e.g. 1.012 means 1.2\%)", default=1.012)
 parser.add_argument("--noGenMatchMC", action='store_true', help="Don't use gen match filter for prompt muons with MC samples (note: QCD MC never has it anyway)")
 parser.add_argument("--theoryAgnostic", action='store_true', help="Add V qT,Y axes and helicity axes for W samples")
+parser.add_argument("--genPtVbinEdges", type=float, nargs="*", default=[], help="Bin edges of gen ptV axis for theory agnostic")
+parser.add_argument("--genAbsYVbinEdges", type=float, nargs="*", default=[], help="Bin edges of gen |yV| axis for theory agnostic")
 parser.add_argument("--halfStat", action='store_true', help="Test half data and MC stat, selecting odd events, just for tests")
 parser.add_argument("--makeMCefficiency", action="store_true", help="Save yields vs eta-pt-ut-passMT-passIso-passTrigger to derive 3D efficiencies for MC isolation and trigger (can run also with --onlyMainHistograms)")
 parser.add_argument("--onlyTheorySyst", action="store_true", help="Keep only theory systematic variations, mainly for tests")
@@ -44,7 +46,9 @@ if args.poiAsNoi and not (args.theoryAgnostic or args.unfolding):
 if args.theoryAgnostic or args.unfolding:
     parser = common.set_parser_default(parser, "excludeFlow", True)
     if args.theoryAgnostic:
-        parser = common.set_parser_default(parser, "genVars", ["ptVgenSig", "absYVgenSig", "helicitySig"]) # TODO check sorting
+        if args.genAbsYVbinEdges and any(x < 0.0 for x in args.genAbsYVbinEdges):
+            raise ValueError("Option --genAbsYVbinEdges requires all positive values. Please check")
+        parser = common.set_parser_default(parser, "genVars", ["ptVgenSig", "absYVgenSig", "helicitySig"])
         # temporary, to ensure running with stat only for original theory agnostic until systematics are all implemented
         if not args.poiAsNoi:
             logger.warning("Running theory agnostic with only nominal and mass weight histograms for now.")
@@ -63,12 +67,13 @@ if args.makeMCefficiency:
 args = parser.parse_args()
     
 thisAnalysis = ROOT.wrem.AnalysisType.Wmass
+
+era = args.era
 datasets = getDatasets(maxFiles=args.maxFiles,
                        filt=args.filterProcs,
                        excl=args.excludeProcs, 
-                       nanoVersion="v9", base_path=args.dataPath, oneMCfileEveryN=args.oneMCfileEveryN)
-
-era = args.era
+                       nanoVersion="v9", base_path=args.dataPath, oneMCfileEveryN=args.oneMCfileEveryN,
+                       era=era)
 
 # transverse boson mass cut
 mtw_min = args.mtCut
@@ -96,7 +101,7 @@ nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
 
 nominal_cols = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT"]
 
-axis_ut = hist.axis.Regular(40, -100, 100, overflow=not args.excludeFlow, underflow=not args.excludeFlow, name = "ut")
+axis_ut = hist.axis.Regular(40, -100, 100, overflow=True, underflow=True, name = "ut")
 axes_WeffMC = [axis_eta, axis_pt_eff, axis_ut, axis_charge, axis_passIso, axis_passMT, axis_passTrigger]
 # sum those groups up in post processing
 groups_to_aggregate = args.aggregateGroups
@@ -115,7 +120,7 @@ if args.unfolding:
         groups_to_aggregate.append("BkgWtaunu")
 
 elif args.theoryAgnostic:
-    theoryAgnostic_axes, theoryAgnostic_cols = differential.get_differential_axes()
+    theoryAgnostic_axes, theoryAgnostic_cols = differential.get_theoryAgnostic_axes(ptV_bins=args.genPtVbinEdges, absYV_bins=args.genAbsYVbinEdges, ptV_flow=args.poiAsNoi, absYV_flow=args.poiAsNoi)
     axis_helicity = helicity_utils.axis_helicity_multidim
     # the following just prepares the existence of the group for out-of-acceptance signal, but doesn't create or define the histogram yet
     if not args.poiAsNoi:
@@ -139,7 +144,7 @@ axis_recoWpt = hist.axis.Regular(40, 0., 80., name = "recoWpt", underflow=False,
 # define helpers
 muon_prefiring_helper, muon_prefiring_helper_stat, muon_prefiring_helper_syst = wremnants.make_muon_prefiring_helpers(era = era)
 
-qcdScaleByHelicity_helper = wremnants.makeQCDScaleByHelicityHelper()
+qcdScaleByHelicity_helper = wremnants.theory_corrections.make_qcd_uncertainty_helper_by_helicity()
 
 if args.noScaleFactors:
     logger.info("Running with no scale factors")
@@ -253,21 +258,21 @@ def build_graph(df, dataset):
         df = theory_tools.define_prefsr_vars(df)
         if hasattr(dataset, "out_of_acceptance"):
             logger.debug("Reject events in fiducial phase space")
-            df = theoryAgnostic_tools.select_fiducial_space(df, theoryAgnostic_axes[0].edges[-1], theoryAgnostic_axes[1].edges[-1], accept=False)
+            df = theoryAgnostic_tools.select_fiducial_space(df, theoryAgnostic_axes[0].edges[-1], theoryAgnostic_axes[1].edges[-1], accept=False, select=True)
         else:
             # the in-acceptance selection must usually not be used to filter signal events when doing POIs as NOIs
             if not args.poiAsNoi:
                 logger.debug("Select events in fiducial phase space for theory agnostic analysis")
                 df = theoryAgnostic_tools.select_fiducial_space(df, theoryAgnostic_axes[0].edges[-1], theoryAgnostic_axes[1].edges[-1], accept=True)
-                # helicity axis is special, defined through a tensor later, theoryAgnostic_ only includes W rapidity and pt for now
+                # helicity axis is special, defined through a tensor later, theoryAgnostic_ only includes W pt and rapidity for now
                 axes = [*nominal_axes, *theoryAgnostic_axes]
                 cols = [*nominal_cols, *theoryAgnostic_cols]
-
                 theoryAgnostic_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, theoryAgnostic_axes, theoryAgnostic_cols)
 
     if not args.makeMCefficiency:
         # remove trigger, it will be part of the efficiency selection for passing trigger
-        df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
+        hltString="HLT_IsoTkMu24 || HLT_IsoMu24" if era == "2016PostVFP" else "HLT_IsoMu24"
+        df = df.Filter(hltString)
 
     if args.halfStat:
         df = df.Filter("event % 2 == 1") # test with odd/even events
@@ -353,7 +358,11 @@ def build_graph(df, dataset):
         df = df.Define("weight_vtx", vertex_helper, ["GenVtx_z", "Pileup_nTrueInt"])
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId"])
 
-        weight_expr = "weight_pu*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom"
+        if era == "2016PostVFP":
+            weight_expr = "weight_pu*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom"
+        else:
+            weight_expr = "weight_pu*L1PreFiringWeight_Muon_Nom*L1PreFiringWeight_ECAL_Nom"
+            
         if not args.noVertexWeight:
             weight_expr += "*weight_vtx"
 
@@ -367,7 +376,8 @@ def build_graph(df, dataset):
         if not args.noScaleFactors:
             df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, columnsForSF)
             weight_expr += "*weight_fullMuonSF_withTrackingReco"
-        
+
+        logger.debug(f"Exp weight defined: {weight_expr}")
         df = df.Define("exp_weight", weight_expr)
         df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
 
@@ -408,7 +418,7 @@ def build_graph(df, dataset):
         results.append(df.HistoBoost("ptW", [axis_recoWpt, axis_eta_utilityHist, axis_pt_utilityHist, axis_charge, axis_passIso, axis_passMT], ["ptW", "goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "passIso", "passMT", "nominal_weight"]))
 
     if args.poiAsNoi and isW:
-        if args.theoryAgnostic:
+        if args.theoryAgnostic and isWmunu: # TODO: might add Wtaunu at some point, not yet
             noiAsPoiHistName = Datagroups.histName("nominal", syst="yieldsTheoryAgnostic")
             logger.debug(f"Creating special histogram '{noiAsPoiHistName}' for theory agnostic to treat POIs as NOIs")
             results.append(df.HistoBoost(noiAsPoiHistName, [*nominal_axes, *theoryAgnostic_axes], [*nominal_cols, *theoryAgnostic_cols, "nominal_weight_helicity"], tensor_axes=[axis_helicity]))
@@ -423,7 +433,7 @@ def build_graph(df, dataset):
         setTheoryAgnosticGraph(df, results, dataset, reco_sel_GF, era, axes, cols, args)
         # End graph here only for standard theory agnostic analysis, otherwise use same loop as traditional analysis
         return results, weightsum
-        
+
     if not args.onlyMainHistograms:
         syst_tools.add_QCDbkg_jetPt_hist(results, df, axes, cols, jet_pt=30)
 
@@ -435,13 +445,13 @@ def build_graph(df, dataset):
         nominal = df.HistoBoost("nominal", axes, [*cols, "nominal_weight"])
         results.append(nominal)
         results.append(df.HistoBoost("nominal_weight", [hist.axis.Regular(200, -4, 4)], ["nominal_weight"], storage=hist.storage.Double()))
-        
+
         if args.makeMCefficiency:
             cols_WeffMC = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_uT0", "goodMuons_charge0",
                            "passIso", "passMT", "passTrigger"]
             yieldsForWeffMC = df.HistoBoost("yieldsForWeffMC", axes_WeffMC, [*cols_WeffMC, "nominal_weight"])
             results.append(yieldsForWeffMC)
-            
+
         if not args.noRecoil and args.recoilUnc:
             df = recoilHelper.add_recoil_unc_W(df, results, dataset, cols, axes, "nominal")
         if apply_theory_corr:
@@ -461,10 +471,10 @@ def build_graph(df, dataset):
             df = syst_tools.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, axes, cols)
             # luminosity, as shape variation despite being a flat scaling to facilitate propagation to fakes
             df = syst_tools.add_luminosity_unc_hists(results, df, args, axes, cols)
-                
+
         # n.b. this is the W analysis so mass weights shouldn't be propagated
         # on the Z samples (but can still use it for dummy muon scale)
-        
+
         if isWorZ:
 
             df = syst_tools.add_theory_hists(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, axes, cols, for_wmass=True)
@@ -520,7 +530,7 @@ def build_graph(df, dataset):
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)
-if not args.onlyMainHistograms and args.muonScaleVariation == 'smearingWeightsGaus' and not args.theoryAgnostic:
+if not args.onlyMainHistograms and args.muonScaleVariation == 'smearingWeightsGaus' and not (args.theoryAgnostic and not args.poiAsNoi):
     logger.debug("Apply smearingWeights")
     muon_calibration.transport_smearing_weights_to_reco(
         resultdict,

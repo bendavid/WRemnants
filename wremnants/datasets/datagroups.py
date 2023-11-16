@@ -464,7 +464,7 @@ class Datagroups(object):
     def resultsDict(self):
         return self.results
 
-    def addSummedProc(self, refname, name, label, color="red", exclude=["Data"], relabel=None, 
+    def addSummedProc(self, refname, name, label=None, color=None, exclude=["Data"], relabel=None, 
             procsToRead=None, reload=False, rename=None, action=None, preOpMap={}, preOpArgs={}, 
             fakerateIntegrationAxes=[], forceNonzero=True):
         if reload:
@@ -519,7 +519,7 @@ class Datagroups(object):
             except ValueError as e:
                 logger.warning("No meta data found so no gen axes could be auto set")
                 return
-            if args.get("unfolding", False) is False and args.get("addHelicityHistos", False) is False:
+            if args.get("unfolding", False) is False and args.get("theoryAgnostic", False) is False:
                 return
 
             if len(args.get("genVars", [])) > 0:
