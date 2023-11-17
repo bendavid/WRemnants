@@ -9,7 +9,7 @@ logger = logging.child_logger(__name__)
 class TheoryHelper(object):
     valid_np_models = ["Lambda", "Omega", "Delta_Lambda", "Delta_Omega", "binned_Omega", "none"]
     def __init__(self, card_tool):
-        for group in ['signal_samples', 'signal_samples_inctau', 'single_v_samples']:
+        for group in ['signal_samples', 'signal_samples_inctau', 'single_v_samples', 'single_v_nonsig_samples']:
             if group not in card_tool.procGroups:
                 raise ValueError(f"Must define '{group}' procGroup in CardTool for theory uncertainties")
         
@@ -25,6 +25,7 @@ class TheoryHelper(object):
         self.tnp_magnitude = 1.
         self.mirror_tnp = True
         self.minnlo_unc = 'byHelicityPt'
+        self.skipFromSignal = False
 
     def sample_label(self, sample_group):
         if sample_group not in self.card_tool.procGroups:
@@ -57,9 +58,11 @@ class TheoryHelper(object):
         self.scale_pdf_unc = scale_pdf_unc
         self.minnlo_unc = minnlo_unc
         self.samples = []
+        self.skipFromSignal = False
 
-    def add_all_theory_unc(self, nonsig=True):
-        self.samples = ["signal_samples_inctau", "single_v_nonsig_samples"] if nonsig else ["signal_samples"]
+    def add_all_theory_unc(self, samples, skipFromSignal=False):
+        self.samples = samples
+        self.skipFromSignal = skipFromSignal
         self.add_nonpert_unc(model=self.np_model)
         self.add_resum_unc(magnitude=self.tnp_magnitude, mirror=self.mirror_tnp, scale=self.tnp_scale)
         self.add_pdf_uncertainty(from_corr=self.pdf_from_corr, action=self.pdf_action, scale=self.scale_pdf_unc)
@@ -230,7 +233,7 @@ class TheoryHelper(object):
         logger.debug(f"Selected TNP nuisances: {selected_tnp_nuisances}")
 
         self.card_tool.addSystematic(name=self.corr_hist_name,
-            processes=['single_v_samples'],
+            processes=['single_v_nonsig_samples'] if self.skipFromSignal else ['single_v_samples'],
             group="resumTNP",
             splitGroup={"resum": ".*"},
             systAxes=["vars"],
@@ -297,7 +300,7 @@ class TheoryHelper(object):
 
 
         self.card_tool.addSystematic(name=self.corr_hist_name,
-            processes=["single_v_samples"],
+            processes=['single_v_nonsig_samples'] if self.skipFromSignal else ['single_v_samples'],
             passToFakes=self.propagate_to_fakes,
             systAxes=[self.syst_ax],
             action=lambda h: h[{self.syst_ax : var_vals}],
@@ -311,15 +314,15 @@ class TheoryHelper(object):
         obs = self.card_tool.fit_axes[:]
         if not obs:
             raise ValueError("Failed to find the observable names for the resummation uncertainties")
-        
-        theory_hist = self.card_tool.getHistsForProcAndSyst(samples[0], theory_hist_name)
+
+        theory_hist = self.card_tool.getHistsForProcAndSyst(self.samples[0], theory_hist_name)
         resumscale_nuisances = match_str_axis_entries(h.axes[syst_ax], ["^nuB.*", "nuS.*", "^muB.*", "^muS.*",])
 
-        expanded_samples = card_tool.datagroups.getProcNames(samples)
+        expanded_samples = card_tool.datagroups.getProcNames(self.samples)
         syst_ax = "vars"
 
         card_tool.addSystematic(name=theory_hist,
-            processes=samples,
+            processes=self.samples,
             group="resumScale",
             splitGroup={"resum": ".*"},
             passToFakes=to_fakes,
@@ -332,7 +335,7 @@ class TheoryHelper(object):
         )
         #TODO: check if this is actually the proper treatment of these uncertainties
         card_tool.addSystematic(name=theory_hist,
-            processes=samples,
+            processes=self.samples,
             group="resumScale",
             splitGroup={"resum": ".*"},
             passToFakes=to_fakes,
@@ -415,7 +418,7 @@ class TheoryHelper(object):
         pdf_ax = self.syst_ax if from_corr else "pdfVar"
         symHessian = pdfInfo["combine"] == "symHessian"
         pdf_args = dict(
-            processes=["single_v_samples"],
+            processes=['single_v_nonsig_samples'] if self.skipFromSignal else ['single_v_samples'],
             mirror=True if symHessian else False,
             group=pdfName,
             splitGroup={f"{pdfName}NoAlphaS": '.*'},
@@ -438,7 +441,7 @@ class TheoryHelper(object):
         # TODO: For now only MiNNLO alpha_s is supported
         asRange = pdfInfo['alphasRange']
         self.card_tool.addSystematic(f"{pdfName}alphaS{asRange}", 
-            processes=["single_v_samples"],
+            processes=['single_v_nonsig_samples'] if self.skipFromSignal else ['single_v_samples'],
             mirror=False,
             group=pdfName,
             splitGroup={f"{pdfName}AlphaS": '.*'},
