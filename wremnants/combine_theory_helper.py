@@ -8,9 +8,9 @@ logger = logging.child_logger(__name__)
 
 class TheoryHelper(object):
     valid_np_models = ["Lambda", "Omega", "Delta_Lambda", "Delta_Omega", "binned_Omega", "none"]
-    def __init__(self, card_tool, wmass=False):
+    def __init__(self, card_tool, hasNonsigSamples=False):
         toCheck = ['signal_samples', 'signal_samples_inctau', 'single_v_samples']
-        if wmass:
+        if hasNonsigSamples:
             toCheck.extend(['single_v_nonsig_samples', 'single_v_nonsig_samples_inctau'])
         for group in toCheck:
             if group not in card_tool.procGroups:

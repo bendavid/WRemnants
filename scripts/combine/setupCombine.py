@@ -538,7 +538,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
 
     to_fakes = passSystToFakes and not args.noQCDscaleFakes and not xnorm
     
-    theory_helper = combine_theory_helper.TheoryHelper(cardTool, wmass)
+    theory_helper = combine_theory_helper.TheoryHelper(cardTool, hasNonsigSamples=(wmass and not xnorm))
     theory_helper.configure(resumUnc=args.resumUnc, 
         propagate_to_fakes=to_fakes,
         np_model=args.npUnc,
