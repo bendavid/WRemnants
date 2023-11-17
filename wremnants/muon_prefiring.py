@@ -16,7 +16,9 @@ def make_muon_prefiring_helpers(filename = data_dir + "/muonSF/L1MuonPrefiringPa
                #"2016PreVFP", "2016preVFP",
                # BG should be like preVFP, but more data was used to derive corrections
                "2016PreVFP" : "2016BG"  ,
-               "2016PostVFP" : "2016postVFP"
+               "2016PostVFP" : "2016postVFP",
+               "2017" : "2016postVFP", #this is just for creating the helper for 17/18. Need a better solution later.
+               "2018" : "2016postVFP",
                }
 
     eratag = eradict[era]

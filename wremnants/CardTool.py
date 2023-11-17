@@ -822,6 +822,7 @@ class CardTool(object):
         output_tools.writeMetaInfoToRootFile(self.outfile, exclude_diff='notebooks', args=args)
         if self.skipHist:
             logger.info("Histograms will not be written because 'skipHist' flag is set to True")
+        logger.info(f"Writing text/root cards to {self.outfile}")
         self.writeCard()
         
     def match_str_axis_entries(self, str_axis, match_re):

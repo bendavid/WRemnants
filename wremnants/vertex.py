@@ -5,18 +5,31 @@ import narf
 import numpy as np
 import boost_histogram as bh
 from utilities import common
+from utilities import common, logging
 
 narf.clingutils.Declare('#include "vertex.h"')
 
+logger = logging.child_logger(__name__)
+
 data_dir = common.data_dir
 
-def make_vertex_helper(era = None,
-                       filename = data_dir + "/vertex/vertexPileupWeights.root"):
+def make_vertex_helper(era = None, filename = None):
 
     eradict = { "2016PreVFP" :  "BtoF",
                 "2016PostVFP" : "GtoH",
+                "2017" : "2017",
+                "2018" : "2018"
     }
-    
+    filedict = {
+        "2016PostVFP" : "/vertex/vertexPileupWeights.root",
+        "2017" : "/vertex/vertexPileupWeights_2017.root",
+        "2018" : "/vertex/vertexPileupWeights_2018.root"
+    }
+
+    if filename is None:
+        filename = data_dir + filedict[era]
+        print("Vertex weight fname:", filename)
+    logger.debug(f"vertex.py: will read weight_vertexZ_pileup_{eradict[era]} from {filename}")
     fmc = ROOT.TFile.Open(filename)
     mchist = fmc.Get(f"weight_vertexZ_pileup_{eradict[era]}")
     mchist.SetDirectory(0)

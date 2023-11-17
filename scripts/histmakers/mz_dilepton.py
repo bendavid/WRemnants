@@ -32,13 +32,14 @@ args = parser.parse_args()
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
 thisAnalysis = ROOT.wrem.AnalysisType.Dilepton if args.useDileptonTriggerSelection else ROOT.wrem.AnalysisType.Wlike
+era = args.era
 
 datasets = getDatasets(maxFiles=args.maxFiles,
                         filt=args.filterProcs,
                         excl=args.excludeProcs, 
-                        nanoVersion="v9", base_path=args.dataPath)
-
-era = args.era
+                        nanoVersion="v9",
+                        base_path=args.dataPath,
+                        era = era)
 
 # dilepton invariant mass cuts
 mass_min = 60
@@ -181,8 +182,8 @@ def build_graph(df, dataset):
 
             results.append(df_gen.HistoBoost(f"gen_{obs}", [all_axes[obs]], [obs, "nominal_weight"]))
             df_gen = syst_tools.add_theory_hists(results, df_gen, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, [all_axes[obs]], [obs], base_name=f"gen_{obs}", for_wmass=False)
-
-    df = df.Filter("HLT_IsoTkMu24 || HLT_IsoMu24")
+    hltString="HLT_IsoTkMu24 || HLT_IsoMu24" if era == "2016PostVFP" else "HLT_IsoMu24"
+    df = df.Filter(hltString)
 
     df = muon_selections.veto_electrons(df)
     df = muon_selections.apply_met_filters(df)
@@ -234,7 +235,12 @@ def build_graph(df, dataset):
         df = df.Define("weight_vtx", vertex_helper, ["GenVtx_z", "Pileup_nTrueInt"])
         df = df.Define("weight_newMuonPrefiringSF", muon_prefiring_helper, ["Muon_correctedEta", "Muon_correctedPt", "Muon_correctedPhi", "Muon_correctedCharge", "Muon_looseId"])
 
-        weight_expr = "weight_pu*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom"
+        if era == "2016PostVFP":
+            weight_expr = "weight_pu*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom"
+        else:
+            weight_expr = "weight_pu*L1PreFiringWeight_Muon_Nom*L1PreFiringWeight_ECAL_Nom"
+
+
         if not args.noVertexWeight:
             weight_expr += "*weight_vtx"            
 
@@ -255,6 +261,7 @@ def build_graph(df, dataset):
             df = df.Define("weight_fullMuonSF_withTrackingReco", muon_efficiency_helper, columnsForSF)
             weight_expr += "*weight_fullMuonSF_withTrackingReco"
 
+        logger.debug(f"Experimental weight defined: {weight_expr}")
         df = df.Define("exp_weight", weight_expr)
         df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
 

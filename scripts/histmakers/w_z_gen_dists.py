@@ -94,6 +94,7 @@ def build_graph(df, dataset):
 
     weight_expr = "std::copysign(1.0, genWeight)"
     df = df.Define("weight", weight_expr)
+    df = df.DefinePerSample("unity","1.")
     # This sum should happen before any change of the weight
     weightsum = df.SumAndCount("weight")
 

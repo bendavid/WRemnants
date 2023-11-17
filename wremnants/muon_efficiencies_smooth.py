@@ -53,7 +53,9 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/muonSF/allSmooth
     logger.debug(f"Running {templateAnalysisArg.split('::')[-1]} analysis")
         
     eradict = { "2016PreVFP" : "BtoF",
-                "2016PostVFP" : "GtoH" }
+                "2016PostVFP" : "GtoH",
+                "2017" : "GtoH", #FIXME: update later when SF for 2018 is available
+                "2018" : "GtoH" }
     eratag = eradict[era]
 
     axis_eta_eff = None
