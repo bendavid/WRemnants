@@ -7,6 +7,8 @@ from utilities.io_tools import input_tools
 import argparse
 import hist
 import math, copy
+import h5py
+import narf.ioutils
 
 def make_parser(parser=None):
     parser = argparse.ArgumentParser()
@@ -346,10 +348,14 @@ def setup(args, inputFile, fitvar, xnorm=False):
         noi_args = dict(
             group=f"normXsec{label}",
             scale=1 if args.priorNormXsec < 0 else args.priorNormXsec, # histogram represents an (args.priorNormXsec*100)% prior
-            mirror=True,
+            mirror=False,
             passToFakes=passSystToFakes,
         )
         if args.theoryAgnostic:
+            # open file with theory bands
+            with h5py.File("theoryband_variations.hdf5", "r") as ff:
+                scale_hists = narf.ioutils.pickle_load_h5py(ff["theorybands"])
+            print(scale_hists)
             nuisanceBaseName = f"norm{label}CHANNEL_"
             # First do in acceptance bins, then OOA later (for OOA we need to group bins into macro regions)
             cardTool.addSystematic("yieldsTheoryAgnostic",
@@ -363,8 +369,8 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                    systAxesFlow=[], # only bins in acceptance in this call
                                    skipEntries=[{"helicitySig" : [6,7,8]}], # removing last three indices out of 9 (0,1,...,7,8) corresponding to A5,6,7
                                    actionMap={
-                                       m.name: (lambda h: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], h, scale2=args.scaleNormXsecHistYields))
-                                       for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
+                                    #    m.name: (lambda h, scale_hist=scale_hists[m.name]: print(h,scale_hist)) for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
+                                       m.name: (lambda h, scale_hist=scale_hists[m.name]: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], hh.multiplyHists(h, scale_hist,allowBroadcast=False,flow=False), scale2=args.scaleNormXsecHistYields)) for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
                                    )
             # now OOA
             nuisanceBaseNameOOA = f"{nuisanceBaseName}OOA_"

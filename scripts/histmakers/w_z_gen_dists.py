@@ -10,6 +10,7 @@ from wremnants.datasets.dataset_tools import getDatasets
 import hist
 import math
 import os
+from utilities.differential import get_theoryAgnostic_axes
 
 
 parser.add_argument("--skipAngularCoeffs", action='store_true', help="Skip the conversion of helicity moments to angular coeff fractions")
@@ -40,6 +41,10 @@ axis_massWgen = hist.axis.Variable([5., 13000.], name="massVgen", underflow=True
 
 axis_massZgen = hist.axis.Regular(12, 60., 120., name="massVgen")
 
+theoryAgnostic_axes, _ = get_theoryAgnostic_axes()
+axis_ptV_thag = theoryAgnostic_axes[0]
+axis_yV_thag = theoryAgnostic_axes[1]
+
 if not args.useTheoryAgnosticBinning:
     axis_absYVgen = hist.axis.Variable(
         [0., 0.25, 0.5, 0.75, 1., 1.25, 1.5, 1.75, 2., 2.25, 2.5, 2.75, 3., 3.25, 3.5, 4., 5.], # this is the same binning as hists from theory corrections
@@ -47,7 +52,7 @@ if not args.useTheoryAgnosticBinning:
     )
 else:
     axis_absYVgen = hist.axis.Variable(
-        [0., 0.4, 0.8, 1.2, 1.6, 2.0, 2.4, 10.], #same axis as theory agnostic norms
+        axis_yV_thag.edges, #same axis as theory agnostic norms
         name = "absYVgen", underflow=False
     )
 
@@ -63,7 +68,7 @@ if not args.useTheoryAgnosticBinning:
 )
 else:
     axis_ptVgen = hist.axis.Variable(
-     [0., 3., 6., 9.62315204,12.36966732,16.01207711,21.35210602,29.50001253,60.,100.], #same axis as theory agnostic norms, 
+    axis_ptV_thag.edges, #same axis as theory agnostic norms, 
     #common.ptV_binning,
     name = "ptVgen", underflow=False,
 )

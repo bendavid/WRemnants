@@ -126,25 +126,25 @@ def multiplyWithVariance(vals1, vals2, vars1=None, vars2=None):
         
     return outvals, outvars
 
-def multiplyHists(h1, h2, allowBroadcast=True, createNew=True):
+def multiplyHists(h1, h2, allowBroadcast=True, createNew=True, flow=True):
     if allowBroadcast:
-        h1 = broadcastSystHist(h1, h2)
-        h2 = broadcastSystHist(h2, h1)
+        h1 = broadcastSystHist(h1, h2, flow=flow)
+        h2 = broadcastSystHist(h2, h1, flow=flow)
 
     if h1.storage_type == hist.storage.Double and h2.storage_type == hist.storage.Double:
         return h1*h2 
 
     with_variance = h1.storage_type == hist.storage.Weight and h2.storage_type == hist.storage.Weight
     outh = h1
-    vals, varis = multiplyWithVariance(h1.values(flow=True), h2.values(flow=True), 
-                        h1.variances(flow=True) if with_variance else None, h2.variances(flow=True) if with_variance else None)
+    vals, varis = multiplyWithVariance(h1.values(flow=flow), h2.values(flow=flow), 
+                        h1.variances(flow=flow) if with_variance else None, h2.variances(flow=flow) if with_variance else None)
 
     if createNew:
         outh = hist.Hist(*outh.axes, storage=outh.storage_type())
 
-    outh.values(flow=True)[...] = vals
+    outh.values(flow=flow)[...] = vals
     if varis is not None:
-        outh.variances(flow=True)[...] = varis
+        outh.variances(flow=flow)[...] = varis
 
     return outh
 
