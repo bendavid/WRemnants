@@ -161,6 +161,12 @@ def define_prefsr_vars(df):
     df = df.Define("absYVgen", "std::fabs(yVgen)")
     df = df.Define("chargeVgen", "GenPart_pdgId[prefsrLeps[0]] + GenPart_pdgId[prefsrLeps[1]]")
     df = df.Define("csSineCosThetaPhi", "wrem::csSineCosThetaPhi(genlanti, genl)")
+
+    # define gen lepton in wlike case for ew corrections
+    df = df.Define("ptgen", "event % 2 == 0 ? genl.pt() : genlanti.pt()")
+    df = df.Define("etagen", "event % 2 == 0 ? genlanti.eta() : genl.eta()")
+    df = df.Define("qgen", "event % 2 == 0 ? -1 : 1")
+
     return df
 
 def define_scale_tensor(df):
@@ -334,8 +340,6 @@ def define_theory_corr(df, dataset_name, helpers, generators, modify_central_wei
         if "Helicity" in generator:
             df = df.Define(f"{generator}Weight_tensor", helper, ["massVgen", "absYVgen", "ptVgen", "chargeVgen", "csSineCosThetaPhi", "nominal_weight_uncorr"])
         elif 'ew' in generator:
-            # Used as a placeholder to match the helper dimensionality 
-            df = df.DefinePerSample(f"{generator}Dummy", "0.")
             if i != 0 and modify_central_weight:
                 df = df.Define(f"ew_{generator}corr_weight", build_weight_expr(df))
             else:

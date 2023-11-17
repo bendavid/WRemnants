@@ -4,14 +4,6 @@ from utilities import common
 lumicsv = f"{common.data_dir}/bylsoutput.csv"
 lumijson = f"{common.data_dir}/Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.txt"
 
-BR_TAUToMU = 0.1739
-BR_TAUToE = 0.1782
-xsec_ZmmPostVFP = 2001.9
-xsec_WpmunuPostVFP = 11765.9
-xsec_WmmunuPostVFP = 8703.87
-xsec_ZmmMass10to50PostVFP = 6997.0
-Z_TAU_TO_LEP_RATIO = (1.-(1. - BR_TAUToMU - BR_TAUToE)**2)
-
 dataDictV9 = {
     'dataPostVFP' : { 
                       'filepaths' : ["{BASE_PATH}/SingleMuon/NanoV9Run2016FDataPostVFP_{NANO_PROD_TAG}",
@@ -28,14 +20,14 @@ dataDictV9 = {
                         "{BASE_PATH}/DYJetsToMuMu_H2ErratumFix_PDFExt_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}",
                         "{BASE_PATH}/DYJetsToMuMu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}",
                     ],
-                   'xsec' : xsec_ZmmPostVFP,
+                   'xsec' : common.xsec_ZmmPostVFP,
                    'group': "Zmumu",
     },
     'DYJetsToMuMuMass10to50PostVFP' : {
                    'filepaths' :
                     ["{BASE_PATH}/BKGV9/DYJetsToMuMu_M-10to50_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos",
                      "{BASE_PATH}/BKGV9/DYJetsToMuMu_M-10to50_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos_ext1"],
-                   'xsec' : xsec_ZmmMass10to50PostVFP,
+                   'xsec' : common.xsec_ZmmMass10to50PostVFP,
                    'group': "DYlowMass",
     },
     'ZtautauPostVFP' : {
@@ -45,7 +37,7 @@ dataDictV9 = {
                        "{BASE_PATH}/DYJetsToTauTau_M-50_AtLeastOneEorMuDecay_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}"
                     ],
                    # At least one tau->e or mu decay, so everything that's not all other decays
-                   'xsec' : xsec_ZmmPostVFP*Z_TAU_TO_LEP_RATIO,
+                   'xsec' : common.xsec_ZmmPostVFP*common.Z_TAU_TO_LEP_RATIO,
                    'group': "Ztautau",
     },
     'WplusmunuPostVFP' : { 
@@ -53,7 +45,7 @@ dataDictV9 = {
                       ["{BASE_PATH}/WplusJetsToMuNu_H2ErratumFix_PDFExt_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}",
                        "{BASE_PATH}/WplusJetsToMuNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}",
                       ],
-                      'xsec' : xsec_WpmunuPostVFP,
+                      'xsec' : common.xsec_WpmunuPostVFP,
                       'group': "Wmunu",
     },
     'WminusmunuPostVFP' : { 
@@ -61,7 +53,7 @@ dataDictV9 = {
                       ["{BASE_PATH}/WminusJetsToMuNu_H2ErratumFix_PDFExt_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}",
                        "{BASE_PATH}/WminusJetsToMuNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}",
                       ],
-                      'xsec' : xsec_WmmunuPostVFP,
+                      'xsec' : common.xsec_WmmunuPostVFP,
                       'group': "Wmunu",
     },
 
@@ -70,7 +62,7 @@ dataDictV9 = {
                          ["{BASE_PATH}/WplusJetsToTauNu_TauToMu_H2ErratumFix_PDFExt_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}",
                           "{BASE_PATH}/WplusJetsToTauNu_TauToMu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}",
                          ],
-                         'xsec' : BR_TAUToMU*xsec_WpmunuPostVFP,
+                         'xsec' : common.BR_TAUToMU*common.xsec_WpmunuPostVFP,
                          'group': "Wtaunu",
     },
     
@@ -79,7 +71,7 @@ dataDictV9 = {
                          ["{BASE_PATH}/WminusJetsToTauNu_TauToMu_H2ErratumFix_PDFExt_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}",
                           "{BASE_PATH}/WminusJetsToTauNu_TauToMu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}",
                          ],
-                         'xsec' : BR_TAUToMU*xsec_WmmunuPostVFP,
+                         'xsec' : common.BR_TAUToMU*common.xsec_WmmunuPostVFP,
                          'group': "Wtaunu",
     },
     'TTLeptonicPostVFP' : { 
