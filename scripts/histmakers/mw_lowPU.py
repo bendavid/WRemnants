@@ -18,7 +18,7 @@ from wremnants.datasets.dataset_tools import getDatasets
 import math
 import hist
 import ROOT
-import scripts.lowPU.config as lowPUcfg
+import wremnants.lowpu as lowpu
 
 
 ###################################
@@ -41,14 +41,7 @@ for d in datasets: logger.info(f"Dataset {d.name}")
 
 mtw_min=40 # for Wmass (roughly half the boson mass)
 
-# load lowPU specific libs
-#ROOT.gInterpreter.AddIncludePath(f"{pathlib.Path(__file__).parent}/include/")
-ROOT.gInterpreter.Declare('#include "lowpu_utils.h"')
-ROOT.gInterpreter.Declare('#include "lowpu_efficiencies.h"')
-ROOT.gInterpreter.Declare('#include "lowpu_prefire.h"')
-ROOT.gInterpreter.Declare('#include "lowpu_rochester.h"')
-ROOT.gInterpreter.Declare('#include "lowpu_recoil.h"')
-ROOT.gInterpreter.Declare('#include "electron_selections.h"')
+
 
 # axes used in fakerate calculation
 axis_fakerate_pt = hist.axis.Variable([26., 27., 28., 29., 30., 32., 34., 37., 40., 44., 49., 56.], name = "pt", underflow=False)
@@ -113,6 +106,7 @@ axis_cutFlow = hist.axis.Regular(1, 0, 1, name = "cutFlow")
 corr_helpers = theory_corrections.load_corr_helpers([d.name for d in datasets if d.name in common.vprocs_lowpu], args.theoryCorr)
 
 # recoil initialization
+args.noRecoil = True
 if not args.noRecoil:
     from wremnants import recoil_tools
     recoilHelper = recoil_tools.Recoil("lowPU", args, flavor)
@@ -297,16 +291,16 @@ def build_graph(df, dataset):
 
             # lepton efficiencies
             if flavor == "mu":
-                df = lowPUcfg.lepSF_systs(df, results, "muSF_HLT_DATA_stat", 120, "wrem::lepSF_HLT_var_mu(1, Lep_pt, Lep_eta, Lep_charge)", n, a, c)
-                df = lowPUcfg.lepSF_systs(df, results, "muSF_HLT_DATA_syst", 120, "wrem::lepSF_HLT_var_mu(2, Lep_pt, Lep_eta, Lep_charge)", n, a, c)
-                df = lowPUcfg.lepSF_systs(df, results, "muSF_HLT_MC_stat",   120, "wrem::lepSF_HLT_var_mu(-1, Lep_pt, Lep_eta, Lep_charge)", n, a, c)
-                df = lowPUcfg.lepSF_systs(df, results, "muSF_HLT_MC_syst",   120, "wrem::lepSF_HLT_var_mu(-2, Lep_pt, Lep_eta, Lep_charge)", n, a, c)
-                df = lowPUcfg.lepSF_systs(df, results, "muSF_ISO_stat",      36,  "wrem::lepSF_ISO_var_mu(1, Lep_pt, Lep_eta, Lep_charge)", n, a, c)
-                df = lowPUcfg.lepSF_systs(df, results, "muSF_ISO_DATA_syst", 36,  "wrem::lepSF_ISO_var_mu(2, Lep_pt, Lep_eta, Lep_charge)", n, a, c)
-                df = lowPUcfg.lepSF_systs(df, results, "muSF_ISO_MC_syst",   36,  "wrem::lepSF_ISO_var_mu(-2, Lep_pt, Lep_eta, Lep_charge)", n, a, c)
-                df = lowPUcfg.lepSF_systs(df, results, "muSF_IDIP_stat",     36,  "wrem::lepSF_IDIP_var_mu(1, Lep_pt, Lep_eta, Lep_charge)", n, a, c)
-                df = lowPUcfg.lepSF_systs(df, results, "muSF_IDIP_DATA_syst",36,  "wrem::lepSF_IDIP_var_mu(2, Lep_pt, Lep_eta, Lep_charge)", n, a, c)
-                df = lowPUcfg.lepSF_systs(df, results, "muSF_IDIP_MC_syst",  36,  "wrem::lepSF_IDIP_var_mu(-2, Lep_pt, Lep_eta, Lep_charge)", n, a, c)
+                df = lowpu.lepSF_systs(df, results, "muSF_HLT_DATA_stat", 120, "wrem::lepSF_HLT_var_mu(1, Lep_pt, Lep_eta, Lep_charge)", n, a, c)
+                df = lowpu.lepSF_systs(df, results, "muSF_HLT_DATA_syst", 120, "wrem::lepSF_HLT_var_mu(2, Lep_pt, Lep_eta, Lep_charge)", n, a, c)
+                df = lowpu.lepSF_systs(df, results, "muSF_HLT_MC_stat",   120, "wrem::lepSF_HLT_var_mu(-1, Lep_pt, Lep_eta, Lep_charge)", n, a, c)
+                df = lowpu.lepSF_systs(df, results, "muSF_HLT_MC_syst",   120, "wrem::lepSF_HLT_var_mu(-2, Lep_pt, Lep_eta, Lep_charge)", n, a, c)
+                df = lowpu.lepSF_systs(df, results, "muSF_ISO_stat",      36,  "wrem::lepSF_ISO_var_mu(1, Lep_pt, Lep_eta, Lep_charge)", n, a, c)
+                df = lowpu.lepSF_systs(df, results, "muSF_ISO_DATA_syst", 36,  "wrem::lepSF_ISO_var_mu(2, Lep_pt, Lep_eta, Lep_charge)", n, a, c)
+                df = lowpu.lepSF_systs(df, results, "muSF_ISO_MC_syst",   36,  "wrem::lepSF_ISO_var_mu(-2, Lep_pt, Lep_eta, Lep_charge)", n, a, c)
+                df = lowpu.lepSF_systs(df, results, "muSF_IDIP_stat",     36,  "wrem::lepSF_IDIP_var_mu(1, Lep_pt, Lep_eta, Lep_charge)", n, a, c)
+                df = lowpu.lepSF_systs(df, results, "muSF_IDIP_DATA_syst",36,  "wrem::lepSF_IDIP_var_mu(2, Lep_pt, Lep_eta, Lep_charge)", n, a, c)
+                df = lowpu.lepSF_systs(df, results, "muSF_IDIP_MC_syst",  36,  "wrem::lepSF_IDIP_var_mu(-2, Lep_pt, Lep_eta, Lep_charge)", n, a, c)
             # electron efficiency uncertainties currently don't work
             # else:
             #     df = lowPUcfg.lepSF_systs(df, results, "elSF_HLT_syst",      120, "wrem::lepSF_el_HLT_syst(Lep_pt, Lep_eta, Lep_charge)", n, a, c)

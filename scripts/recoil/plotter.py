@@ -10,14 +10,20 @@ ROOT.gStyle.SetOptTitle(0)
 
 
 def translate(word):
-
-    #if "MET" in word: return word.replace("MET", "E_{T}^{miss}")
-    if "MT" in word: return word.replace("MT", "m_{T}")
-    if "PT" in word: return word.replace("PT", "p_{T}")
-    if "HT" in word: return word.replace("HT", "H_{T}")
+    if "METPT" in word: return word.replace("METPT", "p_{T}^{miss} (GeV)")
+    if "METPHI" in word: return word.replace("METPHI", "#phi^{miss} (GeV)")
+    if "METX" in word: return word.replace("METX", "p_{T,x}^{miss} (GeV)")
+    if "METY" in word: return word.replace("METY", "p_{T,y}^{miss} (GeV)")
+    if "UPARAQT" in word: return word.replace("UPARAQT", "U_{#parallel} #minus q_{T} (GeV)")
+    if "UPARA" in word: return word.replace("UPARA", "U_{#parallel} (GeV)")
+    if "UPERP" in word: return word.replace("UPERP", "U_{#perp}   (GeV)")
+    if "UMAGN" in word: return word.replace("UMAGN", "|U| (GeV)")
+    if "MT" in word: return word.replace("MT", "m_{T} (GeV)")
+    if "PT" in word: return word.replace("PT", "p_{T} (GeV)")
+    if "QT" in word: return word.replace("QT", "q_{T} (GeV)")
+    if "HT" in word: return word.replace("HT", "H_{T} (GeV)")
     if "ETA" in word: return word.replace("ETA", "#eta")
     return word
-    
 
 def dummy(nbins = 1):
 
@@ -35,7 +41,6 @@ def dummy(nbins = 1):
         ymin = float(cfg['ymin'])
         ymax = float(cfg['ymax'])
 
-    
     # dummy
     dummy = ROOT.TH1D("h", "h", nbins, xmin, xmax)
     for i in range(0, nbins+1): dummy.SetBinContent(i, -1e9)
@@ -163,7 +168,7 @@ def dummyRatio(nbins = 1, line=1):
     for i in range(0, nbins+1): dummyB.SetBinContent(i, -1e9)
 
     # x-axis
-    dummyB.GetXaxis().SetTitle(cfg['xtitle'])
+    dummyB.GetXaxis().SetTitle(translate(cfg['xtitle']))
 
     dummyT.GetXaxis().SetRangeUser(xmin, xmax)
     dummyB.GetXaxis().SetRangeUser(xmin, xmax)
@@ -175,7 +180,7 @@ def dummyRatio(nbins = 1, line=1):
 
     dummyT.GetXaxis().SetTitleOffset(1.2*dummyT.GetXaxis().GetTitleOffset())
     dummyT.GetXaxis().SetLabelOffset(1.2*dummyT.GetXaxis().GetLabelOffset())
-    
+
     dummyB.GetXaxis().SetTitleFont(43)
     dummyB.GetXaxis().SetTitleSize(35)
     dummyB.GetXaxis().SetLabelFont(43)
@@ -191,7 +196,7 @@ def dummyRatio(nbins = 1, line=1):
     dummyT.GetYaxis().SetRangeUser(ymin, ymax)
     dummyT.SetMaximum(ymax)
     dummyT.SetMinimum(ymin)
-    
+
     dummyB.GetYaxis().SetRangeUser(cfg['yminR'], cfg['yminR'])
     dummyB.SetMaximum(cfg['ymaxR'])
     dummyB.SetMinimum(cfg['yminR'])
@@ -218,7 +223,7 @@ def dummyRatio(nbins = 1, line=1):
     line.SetLineWidth(2)
 
     return dummyT, dummyB, line
-    
+
 def canvasRatio():
 
     

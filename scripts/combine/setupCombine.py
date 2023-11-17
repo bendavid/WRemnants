@@ -671,11 +671,11 @@ def setup(args, inputFile, fitvar, xnorm=False):
                     labelsByAxis = [""], 
                 )
 
-    # if (wmass or wlike) and not input_tools.args_from_metadata(cardTool, "noRecoil"):
-    #     combine_helpers.add_recoil_uncertainty(cardTool, ["signal_samples"], 
-    #         passSystToFakes=passSystToFakes, 
-    #         flavor=datagroups.flavor if datagroups.flavor else "mu",
-    #         pu_type="lowPU" if lowPU else "highPU")
+    if (wmass or wlike) and input_tools.args_from_metadata(cardTool, "recoilUnc"):
+        combine_helpers.add_recoil_uncertainty(cardTool, ["signal_samples"],
+            passSystToFakes=passSystToFakes,
+            flavor=datagroups.flavor if datagroups.flavor else "mu",
+            pu_type="lowPU" if lowPU else "highPU")
 
     if lowPU:
         if datagroups.flavor in ["e", "ee"]:
