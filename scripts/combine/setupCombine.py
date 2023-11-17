@@ -269,6 +269,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
         cardTool.addProcessGroup("w_samples", lambda x: assertSample(x, startsWith=WMatch, excludeMatch=dibosonMatch))
         if not xnorm:
             cardTool.addProcessGroup("single_v_nonsig_samples", lambda x: assertSample(x, startsWith=ZMatch, excludeMatch=dibosonMatch))
+            cardTool.addProcessGroup("single_v_nonsig_samples_inctau", lambda x: assertSample(x, startsWith=[*ZMatch, "Wtaunu"], excludeMatch=dibosonMatch))
     cardTool.addProcessGroup("single_vmu_samples",    lambda x: assertSample(x, startsWith=[*WMatch, *ZMatch], excludeMatch=[*dibosonMatch, "tau"]))
     cardTool.addProcessGroup("signal_samples",        lambda x: assertSample(x, startsWith=signalMatch,        excludeMatch=[*dibosonMatch, "tau"]))
     cardTool.addProcessGroup("signal_samples_inctau", lambda x: assertSample(x, startsWith=signalMatch,        excludeMatch=[*dibosonMatch]))
@@ -537,7 +538,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
 
     to_fakes = passSystToFakes and not args.noQCDscaleFakes and not xnorm
     
-    theory_helper = combine_theory_helper.TheoryHelper(cardTool)
+    theory_helper = combine_theory_helper.TheoryHelper(cardTool, wmass)
     theory_helper.configure(resumUnc=args.resumUnc, 
         propagate_to_fakes=to_fakes,
         np_model=args.npUnc,
@@ -553,7 +554,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     if xnorm:
         theorySystSamples = ["signal_samples"]
     if args.noPDFandQCDtheorySystOnSignal:
-        theorySystSamples = "single_v_nonsig_samples"
+        theorySystSamples = "single_v_nonsig_samples_inctau"
 
     theory_helper.add_all_theory_unc(theorySystSamples, skipFromSignal=args.noPDFandQCDtheorySystOnSignal)
 

@@ -8,8 +8,11 @@ logger = logging.child_logger(__name__)
 
 class TheoryHelper(object):
     valid_np_models = ["Lambda", "Omega", "Delta_Lambda", "Delta_Omega", "binned_Omega", "none"]
-    def __init__(self, card_tool):
-        for group in ['signal_samples', 'signal_samples_inctau', 'single_v_samples', 'single_v_nonsig_samples']:
+    def __init__(self, card_tool, wmass=False):
+        toCheck = ['signal_samples', 'signal_samples_inctau', 'single_v_samples']
+        if wmass:
+            toCheck.extend(['single_v_nonsig_samples', 'single_v_nonsig_samples_inctau'])
+        for group in toCheck:
             if group not in card_tool.procGroups:
                 raise ValueError(f"Must define '{group}' procGroup in CardTool for theory uncertainties")
         
@@ -233,7 +236,7 @@ class TheoryHelper(object):
         logger.debug(f"Selected TNP nuisances: {selected_tnp_nuisances}")
 
         self.card_tool.addSystematic(name=self.corr_hist_name,
-            processes=['single_v_nonsig_samples'] if self.skipFromSignal else ['single_v_samples'],
+            processes=['single_v_nonsig_samples_inctau'] if self.skipFromSignal else ['single_v_samples'],
             group="resumTNP",
             splitGroup={"resum": ".*"},
             systAxes=["vars"],
@@ -300,7 +303,7 @@ class TheoryHelper(object):
 
 
         self.card_tool.addSystematic(name=self.corr_hist_name,
-            processes=['single_v_nonsig_samples'] if self.skipFromSignal else ['single_v_samples'],
+            processes=['single_v_nonsig_samples_inctau'] if self.skipFromSignal else ['single_v_samples'],
             passToFakes=self.propagate_to_fakes,
             systAxes=[self.syst_ax],
             action=lambda h: h[{self.syst_ax : var_vals}],
@@ -418,7 +421,7 @@ class TheoryHelper(object):
         pdf_ax = self.syst_ax if from_corr else "pdfVar"
         symHessian = pdfInfo["combine"] == "symHessian"
         pdf_args = dict(
-            processes=['single_v_nonsig_samples'] if self.skipFromSignal else ['single_v_samples'],
+            processes=['single_v_nonsig_samples_inctau'] if self.skipFromSignal else ['single_v_samples'],
             mirror=True if symHessian else False,
             group=pdfName,
             splitGroup={f"{pdfName}NoAlphaS": '.*'},
@@ -441,7 +444,7 @@ class TheoryHelper(object):
         # TODO: For now only MiNNLO alpha_s is supported
         asRange = pdfInfo['alphasRange']
         self.card_tool.addSystematic(f"{pdfName}alphaS{asRange}", 
-            processes=['single_v_nonsig_samples'] if self.skipFromSignal else ['single_v_samples'],
+            processes=['single_v_nonsig_samples_inctau'] if self.skipFromSignal else ['single_v_samples'],
             mirror=False,
             group=pdfName,
             splitGroup={f"{pdfName}AlphaS": '.*'},
