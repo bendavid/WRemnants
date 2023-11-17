@@ -267,9 +267,9 @@ def setup(args, inputFile, fitvar, xnorm=False):
     cardTool.addProcessGroup("single_v_samples", lambda x: assertSample(x, startsWith=[*WMatch, *ZMatch], excludeMatch=dibosonMatch))
     if wmass:
         cardTool.addProcessGroup("w_samples", lambda x: assertSample(x, startsWith=WMatch, excludeMatch=dibosonMatch))
+        cardTool.addProcessGroup("wtau_samples", lambda x: assertSample(x, startsWith=["Wtaunu"]))
         if not xnorm:
             cardTool.addProcessGroup("single_v_nonsig_samples", lambda x: assertSample(x, startsWith=ZMatch, excludeMatch=dibosonMatch))
-            cardTool.addProcessGroup("single_v_nonsig_samples_inctau", lambda x: assertSample(x, startsWith=[*ZMatch, "Wtaunu"], excludeMatch=dibosonMatch))
     cardTool.addProcessGroup("single_vmu_samples",    lambda x: assertSample(x, startsWith=[*WMatch, *ZMatch], excludeMatch=[*dibosonMatch, "tau"]))
     cardTool.addProcessGroup("signal_samples",        lambda x: assertSample(x, startsWith=signalMatch,        excludeMatch=[*dibosonMatch, "tau"]))
     cardTool.addProcessGroup("signal_samples_inctau", lambda x: assertSample(x, startsWith=signalMatch,        excludeMatch=[*dibosonMatch]))
@@ -554,7 +554,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     if xnorm:
         theorySystSamples = ["signal_samples"]
     if args.noPDFandQCDtheorySystOnSignal:
-        theorySystSamples = "single_v_nonsig_samples_inctau"
+        theorySystSamples = ["wtau_samples", "single_v_nonsig_samples"]
 
     theory_helper.add_all_theory_unc(theorySystSamples, skipFromSignal=args.noPDFandQCDtheorySystOnSignal)
 
