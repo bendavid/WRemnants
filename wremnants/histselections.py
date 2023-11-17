@@ -104,16 +104,15 @@ def unrolledHist(h, obs=["pt", "eta"], binwnorm=None):
     else:
         hproj = h
 
-    if binwnorm:
-        if len(hproj.axes) != 2:
-            raise NotImplementedError(f"binwnorm != None only implemented for two axes. Found {hproj.axes.name}")
-        inv_widths = [1./(ax.edges[1:]-ax.edges[:-1]) for ax in hproj.axes]
-        corr = np.outer(*inv_widths)*binwnorm
-        hproj = hproj*corr
+    if binwnorm:        
+        binwidths = np.outer(*[np.diff(e.squeeze()) for e in hproj.axes.edges]).flatten()
+        scale = binwnorm/binwidths
+    else:
+        scale = 1
 
     bins = np.product(hproj.axes.size)
     newh = hist.Hist(hist.axis.Integer(0, bins), storage=hproj._storage_type())
-    newh[...] = np.ravel(hproj)
+    newh[...] = np.ravel(hproj)*scale
     return newh
 
 def applyCorrection(h, scale=1.0, offsetCorr=0.0, corrFile=None, corrHist=None, createNew=False):
