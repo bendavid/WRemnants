@@ -17,6 +17,7 @@ import logging
 import shutil
 import copy
 from utilities.differential import get_theoryAgnostic_axes
+from wremnants.helicity_utils import axis_helicity_multidim
 
 xlabels = {
     "pt" : r"p$_{T}^{\ell}$ (GeV)",
@@ -113,10 +114,7 @@ for dataset in args.datasets:
     axis_ptV = theoryAgnostic_axes[0]
     axis_yV = theoryAgnostic_axes[1]
 
-    hvariations = hist.Hist(axis_ptV,axis_yV,uncHists[0][0].axes["helicity"],utilities.common.down_up_axis, name=f"theorybands_{dataset}")
-
-    print(hvariations)
-
+    variations = []
     for ihel in coeffs.axes["helicity"].edges[:-1]:
         for obs in args.obs:
             all_hists = []
@@ -155,14 +153,16 @@ for dataset in args.datasets:
             plot_tools.write_index_and_log(outdir, outfile)
 
             if ihel == -1:
-                variations = np.stack([0.5*np.ones_like(np.minimum.reduce([h.values() for h in hists1D])/hists1D[0].values()),0.5*np.ones_like(np.maximum.reduce([h.values() for h in hists1D])/hists1D[0].values())],axis=-1).reshape(len(uncHists[0][0].axes["ptVgen"]),len(uncHists[0][0].axes["absYVgen"]),2)
+                variations.append(np.stack([0.5*np.ones_like(np.minimum.reduce([h.values() for h in hists1D])/hists1D[0].values()),1.5*np.ones_like(np.maximum.reduce([h.values() for h in hists1D])/hists1D[0].values())],axis=-1).reshape(len(uncHists[0][0].axes["ptVgen"]),len(uncHists[0][0].axes["absYVgen"]),2))
             else:
-                variations = np.stack([np.minimum.reduce([h.values() for h in hists1D])/hists1D[0].values(),np.maximum.reduce([h.values() for h in hists1D])/hists1D[0].values()],axis=-1).reshape(len(uncHists[0][0].axes["ptVgen"]),len(uncHists[0][0].axes["absYVgen"]),2)
+                variations.append(np.stack([np.minimum.reduce([h.values() for h in hists1D])/hists1D[0].values(),np.maximum.reduce([h.values() for h in hists1D])/hists1D[0].values()],axis=-1).reshape(len(uncHists[0][0].axes["ptVgen"]),len(uncHists[0][0].axes["absYVgen"]),2))
 
-            hvariations[{'helicity': ihel*1.j}][...] = variations
+    variations_all = np.stack(variations,axis=-2)
+    print(variations_all.shape)
 
-        
+    hvariations = hist.Hist(axis_ptV,axis_yV,axis_helicity_multidim,utilities.common.down_up_axis, name=f"theorybands_{dataset}",data=variations_all)
     band_hists[dataset] = hvariations
+
 outfile = "theoryband_variations.hdf5"
 with h5py.File(outfile, 'w') as f:
     narf.ioutils.pickle_dump_h5py("theorybands", band_hists, f)

@@ -141,7 +141,6 @@ def multiplyHists(h1, h2, allowBroadcast=True, createNew=True, flow=True):
 
     if createNew:
         outh = hist.Hist(*outh.axes, storage=outh.storage_type())
-
     outh.values(flow=flow)[...] = vals
     if varis is not None:
         outh.variances(flow=flow)[...] = varis
@@ -216,6 +215,22 @@ def addSystAxis(h, size=1, offset=0):
         hnew[...] = newvals
     else:
         hnew = hist.Hist(*h.axes,hist.axis.Regular(size,offset,size+offset, name="systIdx"), storage=hist.storage.Weight())
+        # Broadcast to new shape
+        newvals = hnew.values()+h.values()[...,np.newaxis]
+        newvars = hnew.variances()+h.variances()[...,np.newaxis]
+        hnew[...] = np.stack((newvals, newvars), axis=-1)
+
+    return hnew
+
+def addGenericAxis(h, axis):
+
+    if h.storage_type == hist.storage.Double:
+        hnew = hist.Hist(*h.axes,axis)
+        # Broadcast to new shape
+        newvals = hnew.values()+h.values()[...,np.newaxis]
+        hnew[...] = newvals
+    else:
+        hnew = hist.Hist(*h.axes,axis, storage=hist.storage.Weight())
         # Broadcast to new shape
         newvals = hnew.values()+h.values()[...,np.newaxis]
         newvars = hnew.variances()+h.variances()[...,np.newaxis]
