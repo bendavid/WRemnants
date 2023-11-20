@@ -219,7 +219,9 @@ if combinetf2:
 
                 make_plot(h_data, h_inclusive, h_stack, axis_name, colors=colors, labels=labels, suffix=f"{channel}_{sel}", chi2=chi2, meta=meta)
 else:
-    # combinetf1    
+    # combinetf1
+    import ROOT
+
     procs = [k.replace("expproc_","").replace(f"_{fittype};1", "") for k in fitresult.keys() if fittype in k and k.startswith("expproc_") and "hybrid" not in k]
 
     labels = [styles.process_labels.get(p, p) for p in procs]
@@ -274,4 +276,12 @@ else:
     else:
         axis_name = axes[0].name
 
-    make_plot(hist_data, hist_inclusive, hist_stack, axis_name, labels=labels, colors=colors)
+    if not args.prefit:
+        rfile = ROOT.TFile.Open(args.infile)
+        ttree = rfile.Get("fitresults")
+        ttree.GetEntry(0)
+        chi2 = [2*(ttree.nllvalfull - ttree.satnllvalfull), np.product([len(a) for a in axes]) - ttree.ndofpartial]
+    else:
+        chi2 = None
+
+    make_plot(hist_data, hist_inclusive, hist_stack, axis_name, labels=labels, colors=colors, chi2=chi2)
