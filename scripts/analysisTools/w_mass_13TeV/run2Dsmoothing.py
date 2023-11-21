@@ -516,7 +516,7 @@ if __name__ == "__main__":
             if ret != None:
                 resultDict[ret.name] = ret
                 
-    resultDict.update({"meta_info" : output_tools.metaInfoDict(args=args)})
+    resultDict.update({"meta_info" : narf.ioutils.make_meta_info_dict(args=args)})
     
     outfile = outdir + args.outfilename
     logger.info(f"Going to store histograms in file {outfile}")

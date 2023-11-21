@@ -260,7 +260,7 @@ if __name__ == "__main__":
     if len(postfix):
         postfix = "_" + postfix
 
-    resultDict.update({"meta_info" : output_tools.metaInfoDict(args=args)})    
+    resultDict.update({"meta_info" : narf.ioutils.make_meta_info_dict(args=args)})    
 
     outfile = outdir + f"efficiencies3D{postfix}.pkl.lz4"
     logger.info(f"Going to store 3D histograms {resultDict.keys()} in file {outfile}")
