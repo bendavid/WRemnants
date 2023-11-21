@@ -600,7 +600,7 @@ class HDF5Writer(object):
                         logk[ibin:ibin+nbinschan,iproc,1,isyst] = dict_logkhalfdiff_proc[syst]
                         
                 ibin += nbinschan
-            
+
         #compute poisson parameter for Barlow-Beeston bin-by-bin statistical uncertainties
         kstat = np.square(sumw)/sumw2
         #numerical protection to avoid poorly defined constraint
@@ -623,7 +623,7 @@ class HDF5Writer(object):
 
         # propagate meta info into result file
         meta = {
-            "meta_info" : output_tools.metaInfoDict(args=args),
+            "meta_info" : narf.ioutils.make_meta_info_dict(args=args),
             "channel_axes": hist_axes
         }
 

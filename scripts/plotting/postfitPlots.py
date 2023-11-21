@@ -166,7 +166,10 @@ def make_plot(h_data, h_inclusive, h_stack, axis_name, colors=None, labels=None,
     stack_yields = None
     unstacked_yields = None
     if meta is not None:
-        kwargs=dict(analysis_meta_info={"AnalysisOutput" : meta["meta_info"]})
+        kwargs=dict(
+            analysis_meta_info={"AnalysisOutput" : meta["meta_info"]},
+            combinetf2_meta_info={"Combinetf2Output" : meta["meta_info_combinetf2"]},
+            )
     else:
         kwargs=dict()
 

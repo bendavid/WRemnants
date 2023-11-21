@@ -2,13 +2,11 @@ import string
 import os
 import sys 
 import subprocess
-import datetime
 import time
 import hdf5plugin
 import h5py
 import narf
 import numpy as np
-import re
 from utilities import logging
 import glob
 import shutil
@@ -31,36 +29,6 @@ def fillTemplatedFile(templateFile, outFile, templateDict, append=False):
     with open(outFile, "w" if not append else "a") as outFile:
         outFile.write(result)
 
-def script_command_to_str(argv, parser_args):
-    call_args = np.array(argv[1:], dtype=object)
-    match_expr = "|".join(["^-+([a-z]+[1-9]*-*)+"]+([] if not parser_args else [f"^-*{x.replace('_', '.')}" for x in vars(parser_args).keys()]))
-    if call_args.size != 0:
-        flags = np.vectorize(lambda x: bool(re.match(match_expr, x)))(call_args)
-        special_chars = np.vectorize(lambda x: not x.isalnum())(call_args)
-        select = ~flags & special_chars
-        if np.count_nonzero(select):
-            call_args[select] = np.vectorize(lambda x: f"'{x}'")(call_args[select])
-    return " ".join([argv[0], *call_args])
-
-def metaInfoDict(exclude_diff='notebooks', args=None):
-    meta_data = {
-        "time" : str(datetime.datetime.now()), 
-        "command" : script_command_to_str(sys.argv, args),
-        "args": {a: getattr(args,a) for a in vars(args)} if args else {}
-    }
-
-    if subprocess.call(["git", "branch"], stderr=subprocess.STDOUT, stdout=open(os.devnull, 'w')) != 0:
-        meta_data["git_info"] = {"hash" : "Not a git repository!",
-                "diff" : "Not a git repository"}
-    else:
-        meta_data["git_hash"] = subprocess.check_output(['git', 'log', '-1', '--format="%H"'], encoding='UTF-8')
-        diff_comm = ['git', 'diff']
-        if exclude_diff:
-            diff_comm.extend(['--', f":!{exclude_diff}"])
-        meta_data["git_diff"] = subprocess.check_output(diff_comm, encoding='UTF-8')
-
-    return meta_data
-
 def analysis_debug_output(results):
     logger.debug("")
     logger.debug("Unweighted (Weighted) events, before cut")
@@ -73,7 +41,7 @@ def analysis_debug_output(results):
 
 def writeMetaInfoToRootFile(rtfile, exclude_diff='notebooks', args=None):
     import ROOT
-    meta_dict = metaInfoDict(exclude_diff, args=args)
+    meta_dict = narf.ioutils.make_meta_info_dict(exclude_diff, args=args)
     d = rtfile.mkdir("meta_info")
     d.cd()
     
@@ -83,7 +51,7 @@ def writeMetaInfoToRootFile(rtfile, exclude_diff='notebooks', args=None):
 
 def write_analysis_output(results, outfile, args, update_name=True):
     analysis_debug_output(results)
-    results.update({"meta_info" : metaInfoDict(args=args)})
+    results.update({"meta_info" : narf.ioutils.make_meta_info_dict(args=args)})
 
     to_append = []
     if args.theoryCorr and not args.theoryCorrAltOnly:
@@ -165,7 +133,7 @@ def write_theory_corr_hist(output_name, process, output_dict, args=None, file_me
         outname += f"_{args.postfix}"
     output_filename = f"{outname}Corr{process}.pkl.lz4"
     logger.info(f"Write correction file {output_filename}")
-    result_dict = {process : output_dict, "meta_data" : metaInfoDict(args)}
+    result_dict = {process : output_dict, "meta_data" : narf.ioutils.make_meta_info_dict(args)}
     if file_meta_data is not None:
         result_dict["file_meta_data"] = file_meta_data
     with lz4.frame.open(output_filename, "wb") as f:
