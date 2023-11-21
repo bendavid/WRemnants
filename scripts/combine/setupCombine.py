@@ -75,8 +75,9 @@ def make_parser(parser=None):
     parser.add_argument("--genAxes", type=str, default=None, nargs="+", help="Specify which gen axis should be used in unfolding, if 'None', use all (inferred from metadata).")
     parser.add_argument("--theoryAgnostic", action='store_true', help="Prepare datacard for theory agnostic analysis, similar to unfolding but different axis and possibly other differences")
     parser.add_argument("--poiAsNoi", action='store_true', help="Experimental option only with --theoryAgnostic or --unfolding, to treat POIs ad NOIs, with a single signal histogram")
-    parser.add_argument("--priorNormXsec", type=float, default=1, help="Multiplier theory-guided bands for shape uncertainties on cross sections for theory agnostic or unfolding analysis with POIs as NOIs. If negative, it will use shapeNoConstraint in the fit")
+    parser.add_argument("--priorNormXsec", type=float, default=1, help="Prior for shape uncertainties on cross sections for theory agnostic or unfolding analysis with POIs as NOIs (1 means 100\%). If negative, it will use shapeNoConstraint in the fit")
     parser.add_argument("--scaleNormXsecHistYields", type=float, default=None, help="Scale yields of histogram with cross sections variations for theory agnostic analysis with POIs as NOIs. Can be used together with --priorNormXsec")
+    parser.add_argument("--theoryAgnosticBandSize", type=float, default=1., help="Multiplier for theory-motivated band in theory agnostic analysis with POIs as NOIs.")
     parser.add_argument("--addTauToSignal", action='store_true', help="Events from the same process but from tau final states are added to the signal")
     # utility options to deal with charge when relevant, mainly for theory agnostic but also unfolding
     parser.add_argument("--recoCharge", type=str, default=["plus", "minus"], nargs="+", choices=["plus", "minus"], help="Specify reco charge to use, default uses both. This is a workaround for unfolding/theory-agnostic fit when running a single reco charge, as gen bins with opposite gen charge have to be filtered out")
@@ -363,14 +364,14 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                    processes=["signal_samples"],
                                    baseName=f"normWplus_",
                                    noConstraint=True if args.priorNormXsec < 0 else False,
-                                   scale=1 if args.priorNormXsec < 0 else args.priorNormXsec, # histogram represents an (args.priorNormXsec*100)% prior
+                                   scale=1,
                                    formatWithValue=[None,None,"low",None],
                                    #customizeNuisanceAttributes={".*AngCoeff4" : {"scale" : 1, "shapeType": "shapeNoConstraint"}},
-                                   labelsByAxis=["PtVBin", "YVBin", "AngCoeff","downUpVar"],
+                                   labelsByAxis=["PtV", "YVBin", "Helicity","downUpVar"],
                                    systAxesFlow=[], # only bins in acceptance in this call
                                    skipEntries=[{"helicitySig" : [6,7,8]}], # removing last three indices out of 9 (0,1,...,7,8) corresponding to A5,6,7
                                    actionMap={
-                                    m.name: (lambda h, scale_hist=scale_hists[m.name]: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], hh.multiplyHists(hh.addGenericAxis(h,common.down_up_axis), scale_hist,flow=False), scale2=args.scaleNormXsecHistYields)) if "plus" in m.name else (lambda h: h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}]) for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
+                                    m.name: (lambda h, scale_hist=scale_hists[m.name]: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], hh.multiplyHists(hh.addGenericAxis(h,common.down_up_axis), hh.rescaleBandVariation(scale_hist,args.theoryAgnosticBandSize),flow=False), scale2=args.scaleNormXsecHistYields)) if "plus" in m.name else (lambda h: h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}]) for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
                                    )
             cardTool.addSystematic("yieldsTheoryAgnostic",
                                    rename=f"normWminus",
@@ -380,14 +381,14 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                    processes=["signal_samples"],
                                    baseName=f"normWminus_",
                                    noConstraint=True if args.priorNormXsec < 0 else False,
-                                   scale=1 if args.priorNormXsec < 0 else args.priorNormXsec, # histogram represents an (args.priorNormXsec*100)% prior
+                                   scale=1,
                                    formatWithValue=[None,None,"low",None],
                                    #customizeNuisanceAttributes={".*AngCoeff4" : {"scale" : 1, "shapeType": "shapeNoConstraint"}},
-                                   labelsByAxis=["PtVBin", "YVBin", "AngCoeff", "downUpVar"],
+                                   labelsByAxis=["PtVBin", "YVBin", "Helicity", "downUpVar"],
                                    systAxesFlow=[], # only bins in acceptance in this call
                                    skipEntries=[{"helicitySig" : [6,7,8]}], # removing last three indices out of 9 (0,1,...,7,8) corresponding to A5,6,7
                                    actionMap={
-                                    m.name: (lambda h, scale_hist=scale_hists[m.name]: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], hh.multiplyHists(hh.addGenericAxis(h,common.down_up_axis), scale_hist,flow=False), scale2=args.scaleNormXsecHistYields)) if "minus" in m.name else (lambda h: h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}]) for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
+                                    m.name: (lambda h, scale_hist=scale_hists[m.name]: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], hh.multiplyHists(hh.addGenericAxis(h,common.down_up_axis), hh.rescaleBandVariation(scale_hist,args.theoryAgnosticBandSize),flow=False), scale2=args.scaleNormXsecHistYields)) if "minus" in m.name else (lambda h: h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}]) for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
                                    )
             # now OOA
             nuisanceBaseNameOOA = f"{nuisanceBaseName}OOA_"

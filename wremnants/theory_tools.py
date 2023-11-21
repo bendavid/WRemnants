@@ -122,6 +122,14 @@ pdfMap = {
         "alphas" : ["LHEPdfWeight[0]", "LHEPdfWeight[41]", "LHEPdfWeight[42]"],
         "alphasRange" : "002", # TODO: IS that true?
     },
+    "herapdf20" : {
+        "name" : "pdfHERAPDF20",
+        "branch" : "LHEPdfWeightAltSet20",
+        "combine" : "asymHessian",
+        "entries" : 29,
+        "alphas" : ["LHEPdfWeightAltSet20[0]", "LHEPdfWeightAltSet22[0]", "LHEPdfWeightAltSet23[0]"], # alphas 116-120
+        "alphasRange" : "002",
+    },
 }
 
 only_central_pdf_datasets = [

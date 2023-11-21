@@ -582,3 +582,23 @@ def swap_histogram_bins(histo, axis1, axis1_bin1, axis1_bin2, axis2=None, axis2_
     new_histo.view(flow=flow)[*slices2] = data[*slices1] if axis1_replace is None else data[*slicesR]
     new_histo.view(flow=flow)[*slices1] = data[*slices2] if axis1_replace is None else data[*slicesR]
     return new_histo
+
+def rescaleBandVariation(histo, factor):
+
+    if factor==1.:
+        return histo
+    else:
+        upper_env = histo.values()[...,1]
+        lower_env = histo.values()[...,0]
+
+        var = np.abs(upper_env-lower_env)/2
+        centr = (upper_env+lower_env)/2
+        new_upper = factor*var+centr
+        new_lower = -factor*var+centr
+
+        # leave sigmaUL variation to 50%
+        new_upper[...,0] = 1.5*np.ones((new_upper.shape[0],new_upper.shape[1]))
+        new_lower[...,0] = 0.5*np.ones((new_lower.shape[0],new_lower.shape[1]))
+
+        histo[...]= np.stack([new_lower,new_upper],axis=-1)
+        return histo
