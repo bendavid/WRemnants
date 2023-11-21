@@ -73,6 +73,7 @@ datasets = getDatasets(maxFiles=args.maxFiles,
                        filt=args.filterProcs,
                        excl=args.excludeProcs, 
                        nanoVersion="v9", base_path=args.dataPath, oneMCfileEveryN=args.oneMCfileEveryN,
+                       extended = "msht20an3lo" not in args.pdfs,
                        era=era)
 
 # transverse boson mass cut

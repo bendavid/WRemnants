@@ -39,6 +39,7 @@ datasets = getDatasets(maxFiles=args.maxFiles,
                         excl=args.excludeProcs, 
                         nanoVersion="v9",
                         base_path=args.dataPath,
+                        extended = "msht20an3lo" not in args.pdfs,
                         era = era)
 
 # dilepton invariant mass cuts
