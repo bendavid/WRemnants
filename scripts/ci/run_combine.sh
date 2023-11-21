@@ -25,8 +25,10 @@ if [[ $4 == *.hdf5 ]]; then
 
 	if [ "$mode" == "mass" ]; then
 		combinetf.py --doImpacts --binByBinStat -t -1 "$outfile"
+	elif [ "$mode" == "dilepton" ]; then
+		combinetf.py --doImpacts --binByBinStat -t -1 "$outfile" --saveHists --computeHistErrors
 	elif [ "$mode" == "unfolding" ]; then
-		combinetf.py --doImpacts --binByBinStat -t -1 "$outfile" --correlateXsecStat --saveHists --computeHistErrors
+		combinetf.py --doImpacts --binByBinStat -t -1 "$outfile" --saveHists --computeHistErrors --correlateXsecStat
 	elif [ "$mode" == "theoryfit" ]; then
 		combinetf.py --doImpacts "$outfile" --chisqFit --externalCovariance --saveHists --computeHistErrors
 	fi
