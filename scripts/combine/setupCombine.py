@@ -75,11 +75,19 @@ def make_parser(parser=None):
     parser.add_argument("--poiAsNoi", action='store_true', help="Experimental option only with --theoryAgnostic or --unfolding, to treat POIs ad NOIs, with a single signal histogram")
     parser.add_argument("--priorNormXsec", type=float, default=1, help="Prior for shape uncertainties on cross sections for theory agnostic or unfolding analysis with POIs as NOIs (1 means 100\%). If negative, it will use shapeNoConstraint in the fit")
     parser.add_argument("--scaleNormXsecHistYields", type=float, default=None, help="Scale yields of histogram with cross sections variations for theory agnostic analysis with POIs as NOIs. Can be used together with --priorNormXsec")
-    parser.add_argument("--noNormNuisanceOOA", action='store_true', help="Remove normalization uncertainty on out-of-acceptance template bins. Currently only with --poiAsNoi")
     parser.add_argument("--addTauToSignal", action='store_true', help="Events from the same process but from tau final states are added to the signal")
     # utility options to deal with charge when relevant, mainly for theory agnostic but also unfolding
     parser.add_argument("--recoCharge", type=str, default=["plus", "minus"], nargs="+", choices=["plus", "minus"], help="Specify reco charge to use, default uses both. This is a workaround for unfolding/theory-agnostic fit when running a single reco charge, as gen bins with opposite gen charge have to be filtered out")
     parser.add_argument("--forceRecoChargeAsGen", action="store_true", help="Force gen charge to match reco charge in CardTool, this only works when the reco charge is used to define the channel")
+    # TODO: some options that should exist only for a specific case, can implement a subparser to substitute --unfolding and --theoryAgnostic
+    # some options are actually in common between them, so an intermediate subparser might be used
+    ##parsers = parser.add_subparsers(dest='analysisFitSetup')
+    ##theoryAgnosticParser = parsers.add_parser("unfolding", help="Activate unfolding analysis")
+    ##theoryAgnosticParser = parsers.add_parser("theoryAgnostic", help="Activate theory agnostic analysis")
+    ##theoryAgnosticParser.add_argument("--noPDFandQCDtheorySystOnSignal", action='store_true', help="Removes PDF and theory uncertainties on signal processes with norm uncertainties when using --poiAsNoi")
+    #
+    # WIP parser.add_argument("--noNormNuisanceOOA", action='store_true', help="Remove normalization uncertainty on out-of-acceptance template bins. Only implemented with --poiAsNoi")
+    parser.add_argument("--noPDFandQCDtheorySystOnSignal", action='store_true', help="Removes PDF and theory uncertainties on signal processes with norm uncertainties when using --poiAsNoi")
 
     return parser
 
@@ -259,6 +267,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     cardTool.addProcessGroup("single_v_samples", lambda x: assertSample(x, startsWith=[*WMatch, *ZMatch], excludeMatch=dibosonMatch))
     if wmass:
         cardTool.addProcessGroup("w_samples", lambda x: assertSample(x, startsWith=WMatch, excludeMatch=dibosonMatch))
+        cardTool.addProcessGroup("wtau_samples", lambda x: assertSample(x, startsWith=["Wtaunu"]))
         if not xnorm:
             cardTool.addProcessGroup("single_v_nonsig_samples", lambda x: assertSample(x, startsWith=ZMatch, excludeMatch=dibosonMatch))
     cardTool.addProcessGroup("single_vmu_samples",    lambda x: assertSample(x, startsWith=[*WMatch, *ZMatch], excludeMatch=[*dibosonMatch, "tau"]))
@@ -529,7 +538,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
 
     to_fakes = passSystToFakes and not args.noQCDscaleFakes and not xnorm
     
-    theory_helper = combine_theory_helper.TheoryHelper(cardTool)
+    theory_helper = combine_theory_helper.TheoryHelper(cardTool, hasNonsigSamples=(wmass and not xnorm))
     theory_helper.configure(resumUnc=args.resumUnc, 
         propagate_to_fakes=to_fakes,
         np_model=args.npUnc,
@@ -540,7 +549,14 @@ def setup(args, inputFile, fitvar, xnorm=False):
         scale_pdf_unc=args.scalePdf,
         minnlo_unc=args.minnloScaleUnc,
     )
-    theory_helper.add_all_theory_unc(nonsig=not xnorm)
+
+    theorySystSamples = ["signal_samples_inctau", "single_v_nonsig_samples"]
+    if xnorm:
+        theorySystSamples = ["signal_samples"]
+    if args.noPDFandQCDtheorySystOnSignal:
+        theorySystSamples = ["wtau_samples", "single_v_nonsig_samples"]
+
+    theory_helper.add_all_theory_unc(theorySystSamples, skipFromSignal=args.noPDFandQCDtheorySystOnSignal)
 
     if xnorm or datagroups.mode == "vgen":
         return cardTool
@@ -565,21 +581,6 @@ def setup(args, inputFile, fitvar, xnorm=False):
     if not args.noEfficiencyUnc:
 
         if not lowPU:
-
-            ## this is only needed when using 2D SF from 3D with ut-integration, let's comment for now
-            # if wmass:
-            #     cardTool.addSystematic("sf2d", 
-            #         processes=['MCnoQCD'],
-            #         outNames=["sf2dDown","sf2dUp"],
-            #         group="SF3Dvs2D",
-            #         scale = 1.0,
-            #         mirror = True,
-            #         mirrorDownVarEqualToNomi=False, # keep False, True is pathological
-            #         noConstraint=False,
-            #         systAxes=[],
-            #         #labelsByAxis=["downUpVar"],
-            #         passToFakes=passSystToFakes,
-            #     )
 
             chargeDependentSteps = common.muonEfficiency_chargeDependentSteps
             effTypesNoIso = ["reco", "tracking", "idip", "trigger"]
@@ -671,11 +672,11 @@ def setup(args, inputFile, fitvar, xnorm=False):
                     labelsByAxis = [""], 
                 )
 
-    # if (wmass or wlike) and not input_tools.args_from_metadata(cardTool, "noRecoil"):
-    #     combine_helpers.add_recoil_uncertainty(cardTool, ["signal_samples"], 
-    #         passSystToFakes=passSystToFakes, 
-    #         flavor=datagroups.flavor if datagroups.flavor else "mu",
-    #         pu_type="lowPU" if lowPU else "highPU")
+    if (wmass or wlike) and input_tools.args_from_metadata(cardTool, "recoilUnc"):
+        combine_helpers.add_recoil_uncertainty(cardTool, ["signal_samples"],
+            passSystToFakes=passSystToFakes,
+            flavor=datagroups.flavor if datagroups.flavor else "mu",
+            pu_type="lowPU" if lowPU else "highPU")
 
     if lowPU:
         if datagroups.flavor in ["e", "ee"]:
@@ -888,6 +889,7 @@ if __name__ == "__main__":
             outfile, outfolder = outnames[0]
         else:
             outfile, outfolder = f"{args.outfolder}/Combination{'_statOnly' if args.doStatOnly else ''}_{args.postfix}/", "Combination"
+        logger.info(f"Writing HDF5 output to {outfile}")
         writer.write(args, outfile, outfolder)
     else:
         if len(args.inputFile) > 1:

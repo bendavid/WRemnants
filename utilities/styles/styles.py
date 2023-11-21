@@ -82,6 +82,7 @@ common_groups = [
     "CMS_recoil",
     "CMS_background",
     "theory_ew",
+    "normXsecW"
 ]
 nuisance_groupings = {
     "max": common_groups + [

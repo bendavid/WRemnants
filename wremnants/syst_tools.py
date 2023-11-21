@@ -375,13 +375,14 @@ def add_pdf_hists(results, df, dataset, axes, cols, pdfs, base_name="nominal", a
             alphaSHist = df.HistoBoost(alphaSHistName, axes, [*cols, tensorASName], tensor_axes=[as_ax], storage=hist.storage.Double())
 
             if propagateToHelicity:
-                df=df.Define("unity","1.")
+
                 pdfhelper = ROOT.wrem.makeHelicityMomentPdfTensor[npdf]()
                 df = df.Define(f"helicity_moments_{tensorName}_tensor", pdfhelper, ["csSineCosThetaPhi", f"{tensorName}", "unity"])
-                alphahelper = ROOT.wrem.makeHelicityMomentPdfTensor[2]()
+                alphahelper = ROOT.wrem.makeHelicityMomentPdfTensor[3]()
                 df = df.Define(f"helicity_moments_{tensorASName}_tensor", alphahelper, ["csSineCosThetaPhi", f"{tensorASName}", "unity"])
-                pdfHist_hel = df.HistoBoost(f"helicity_{pdfHistName}", axes, [*cols, f"helicity_moments_{tensorName}_tensor"], tensor_axes=[wremnants.axis_helicity,pdf_ax], storage=hist.storage.Double())
-                alphaSHist_hel = df.HistoBoost(f"helicity_{alphaSHistName}", axes, [*cols, f"helicity_moments_{tensorASName}_tensor"], tensor_axes=[wremnants.axis_helicity,as_ax], storage=hist.storage.Double())
+                pdfHist_hel = df.HistoBoost(f"helicity_{pdfHistName}", axes, [*cols, f"helicity_moments_{tensorName}_tensor"], tensor_axes=[axis_helicity,pdf_ax], storage=hist.storage.Double())
+                print(df.GetColumnType(f"helicity_moments_{tensorASName}_tensor"))
+                alphaSHist_hel = df.HistoBoost(f"helicity_{alphaSHistName}", axes, [*cols, f"helicity_moments_{tensorASName}_tensor"], tensor_axes=[axis_helicity,as_ax], storage=hist.storage.Double())
                 results.extend([pdfHist_hel, alphaSHist_hel])
 
         results.extend([pdfHist, alphaSHist])

@@ -150,8 +150,9 @@ jobs:
           submodules: 'recursive'
           lfs: 'true'
 
+      # run this with --theoryAgnostic --poiAsNoi since it only adds one histogram without changing anything else
       - name: wmass analysis
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_with_mu_eta_pt.py -j $((NTHREADS)) --maxFiles $((MAX_FILES)) --forceDefaultName -o $WREMNANTS_OUTDIR
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mw_with_mu_eta_pt.py -j $((NTHREADS)) --maxFiles $((MAX_FILES)) --forceDefaultName -o $WREMNANTS_OUTDIR --theoryAgnostic --poiAsNoi
 
   w-fit:
     # The type of runner that the job will run on
@@ -191,6 +192,16 @@ jobs:
 
       - name: wmass combine impacts
         run: scripts/ci/run_with_singularity.sh scripts/ci/show_impacts.sh $WREMNANTS_OUTDIR/WMass_eta_pt_charge/fitresults_123456789.root $WEB_DIR/$PLOT_DIR impactsW.html
+
+      # theory agnostic with POI as NOI
+      - name: wmass theory agnostic combine setup
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombine.py -i $HIST_FILE --lumiScale $LUMI_SCALE -o ${WREMNANTS_OUTDIR}/theoryAgnostic_poisAsNoi/ --theoryAgnostic --poiAsNoi
+
+      - name: wmass theory agnostic combine fit
+        run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ mass ${WREMNANTS_OUTDIR}/theoryAgnostic_poisAsNoi/WMass_eta_pt_charge WMass_plus.txt WMass_minus.txt 
+
+      - name: wmass combine impacts
+        run: scripts/ci/run_with_singularity.sh scripts/ci/show_impacts.sh ${WREMNANTS_OUTDIR}/theoryAgnostic_poisAsNoi/WMass_eta_pt_charge/fitresults_123456789.root $WEB_DIR/$PLOT_DIR impactsW_theoryAgnostic.html
 
   w-plotting:
     # The type of runner that the job will run on

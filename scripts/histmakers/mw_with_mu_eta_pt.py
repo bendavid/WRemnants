@@ -280,7 +280,7 @@ def build_graph(df, dataset):
     df = muon_calibration.define_corrected_muons(df, cvh_helper, jpsi_helper, args, dataset, smearing_helper, bias_helper)
 
     df = muon_selections.select_veto_muons(df, nMuons=1)
-    df = muon_selections.select_good_muons(df, template_minpt, template_maxpt, dataset.group, nMuons=1, use_trackerMuons=args.trackerMuons, use_isolation=False)
+    df = muon_selections.select_good_muons(df, 24, 100, dataset.group, nMuons=1, use_trackerMuons=args.trackerMuons, use_isolation=False)
 
     # the corrected RECO muon kinematics, which is intended to be used as the nominal
     df = muon_calibration.define_corrected_reco_muon_kinematics(df)
@@ -387,8 +387,9 @@ def build_graph(df, dataset):
     ########################################################################
     
     if not args.noRecoil:
-        lep_cols = ["goodMuons_pt0", "goodMuons_phi0", "goodMuons_charge0", "Muon_pt[goodMuons][0]"]
-        df = recoilHelper.recoil_W(df, results, dataset, common.vprocs, lep_cols, cols_fakerate=nominal_cols, axes_fakerate=nominal_cols, mtw_min=mtw_min) # produces corrected MET as MET_corr_rec_pt/phi
+        leps_uncorr = ["Muon_pt[goodMuons][0]", "Muon_eta[goodMuons][0]", "Muon_phi[goodMuons][0]", "Muon_charge[goodMuons][0]"]
+        leps_corr = ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_phi0", "goodMuons_charge0"]
+        df = recoilHelper.recoil_W(df, results, dataset, common.vprocs, leps_uncorr, leps_corr, cols_fakerate=nominal_cols, axes_fakerate=nominal_axes, mtw_min=mtw_min) # produces corrected MET as MET_corr_rec_pt/phi
     else:
         df = df.Alias("MET_corr_rec_pt", "MET_pt")
         df = df.Alias("MET_corr_rec_phi", "MET_phi")
