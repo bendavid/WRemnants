@@ -54,9 +54,12 @@ else
 	if [ "$mode" == "mass" ]; then
 		text2hdf5.py --X-allow-no-signal "$card_name"
 		combinetf.py --doImpacts --binByBinStat -t -1 "$outfile"
+	elif [ "$mode" == "dilepton" ]; then
+		text2hdf5.py --X-allow-no-signal "$card_name"
+		combinetf.py --doImpacts --binByBinStat -t -1 "$outfile" --saveHists --computeHistErrors
 	elif [ "$mode" == "unfolding" ]; then
 		text2hdf5.py --X-allow-no-background "${maskedChannels[@]}" "$card_name"
-		combinetf.py --doImpacts --binByBinStat -t -1 "$outfile" --correlateXsecStat --saveHists --computeHistErrors
+		combinetf.py --doImpacts --binByBinStat -t -1 "$outfile" --saveHists --computeHistErrors --correlateXsecStat
 	fi
 fi
 
