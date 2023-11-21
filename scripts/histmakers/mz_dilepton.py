@@ -39,6 +39,7 @@ datasets = getDatasets(maxFiles=args.maxFiles,
                         excl=args.excludeProcs, 
                         nanoVersion="v9",
                         base_path=args.dataPath,
+                        extended = "msht20an3lo" not in args.pdfs,
                         era = era)
 
 # dilepton invariant mass cuts
@@ -396,6 +397,7 @@ def build_graph(df, dataset):
     
     return results, weightsum
 
+logger.debug(f"Datasets are {[d.name for d in datasets]}")
 resultdict = narf.build_and_run(datasets, build_graph)
 
 if not args.noScaleToData:

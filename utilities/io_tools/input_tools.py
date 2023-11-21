@@ -10,8 +10,11 @@ import h5py
 from narf import ioutils
 import ROOT
 import uproot
+import re
 
 logger = logging.child_logger(__name__)
+
+scetlib_tnp_match_expr = ["^gamma_.*[+|-]\d+", "^b_.*[+|-]\d+", "^s[+|-]\d+", "^h_.*\d+"]
 
 def read_and_scale_pkllz4(fname, proc, histname, calculate_lumi=False, scale=1):
     with lz4.frame.open(fname) as f:
@@ -146,7 +149,7 @@ def read_dyturbo_pdf_hist(base_name, pdf_members, axes, charge=None):
         h = read_dyturbo_hist([base_name.format(i=i)], axes=axes, charge=charge)
         if not pdf_hist:
             pdf_hist = hist.Hist(*h.axes, pdf_ax, storage=h._storage_type())
-        pdf_hist[...,i] = h.view(flow=True)
+        pdf_hist[...,i] = h.view()
         
     return pdf_hist
 
@@ -271,6 +274,11 @@ def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo
         if charge is not None:
             newaxes.insert(-1, "charge")
         hfo_sing = hfo_sing.project(*newaxes)
+        tnp_axes = [x for x in hfo_sing.axes["vars"] if any(re.match(e, x) for e in scetlib_tnp_match_expr)]
+        # TNP variations aren't defined for nonsingular. Set to the nominal
+        if tnp_axes:
+            indices = tuple(hfo_sing.axes["vars"].index(tnp_axes))
+            hfo_sing.view()[...,indices] = hfo_sing[...,0].view()[...,np.newaxis]
         hsing = hsing.project(*newaxes)
     if all("pdf" in x for x in hsing.axes["vars"]) and hsing.axes["vars"].size > 1:
         logger.info("Reading PDF variations for DYTurbo")
@@ -417,7 +425,7 @@ def read_dyturbo_angular_coeffs(dyturbof, boson=None, rebin=None, absy=True, add
         dyturbof = uproot.open(dyturbof)
 
     if not boson:
-        boson = "Wp" if "wp" in dyturbof.file_path else ("Wm" if "wm" in dyturbof else "Z")
+        boson = "Wp" if "wp" in dyturbof.file_path else ("Wm" if "wm" in dyturbof.file_path else "Z")
 
     sigma_ul = dyturbof["s_qt_vs_y"].to_hist()
     for ax,name in zip(sigma_ul.axes, ["qT", "Y"]):

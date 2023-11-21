@@ -29,6 +29,7 @@ logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 datasets = getDatasets(maxFiles=args.maxFiles,
                         filt=args.filterProcs,
                         excl=args.excludeProcs,
+                        extended = "msht20an3lo" not in args.pdfs,
                         nanoVersion="v9", base_path=args.dataPath)
 
 era = args.era
