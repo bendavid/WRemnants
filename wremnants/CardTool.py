@@ -726,6 +726,11 @@ class CardTool(object):
                 hists.extend([procDictFromNomi[proc].hists[pseudoData] for proc in processesFromNomi])
             # done, now sum all histograms
             hdata = hh.sumHists(hists)
+            if self.pseudoDataAxes[idx] is None:
+                extra_ax = [ax for ax in hdata.axes.name if ax not in self.fit_axes]
+                if len(extra_ax) == 1:
+                    self.pseudoDataAxes[idx] = extra_ax[0]
+                    logger.info(f"Setting pseudoDataSystAx[{idx}] to {extra_ax[0]}")
             if self.pseudoDataAxes[idx] is not None and self.pseudoDataAxes[idx] not in hdata.axes.name:
                 raise RuntimeError(f"Pseudodata axis {self.pseudoDataAxes[idx]} not found in {hdata.axes.name}.")
             hdatas.append(hdata)

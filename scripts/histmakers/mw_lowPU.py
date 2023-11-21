@@ -33,6 +33,7 @@ else:
 datasets = getDatasets(maxFiles=args.maxFiles,
                         filt=args.filterProcs,
                         excl=list(set(args.excludeProcs + ["singlemuon"] if flavor=="e" else ["singleelectron"])),
+                        extended = "msht20an3lo" not in args.pdfs,
                         mode="lowpu")
 
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)

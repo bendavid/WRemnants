@@ -12,6 +12,7 @@ import re
 from utilities import logging
 import glob
 import shutil
+import pathlib
 import lz4.frame
 import pickle
 
@@ -48,16 +49,16 @@ def metaInfoDict(exclude_diff='notebooks', args=None):
         "command" : script_command_to_str(sys.argv, args),
         "args": {a: getattr(args,a) for a in vars(args)} if args else {}
     }
-
-    if subprocess.call(["git", "branch"], stderr=subprocess.STDOUT, stdout=open(os.devnull, 'w')) != 0:
+    wd = pathlib.Path(__file__).parent
+    if subprocess.call(["git", "branch"], cwd=wd, stderr=subprocess.STDOUT, stdout=open(os.devnull, 'w')) != 0:
         meta_data["git_info"] = {"hash" : "Not a git repository!",
                 "diff" : "Not a git repository"}
     else:
-        meta_data["git_hash"] = subprocess.check_output(['git', 'log', '-1', '--format="%H"'], encoding='UTF-8')
+        meta_data["git_hash"] = subprocess.check_output(['git', 'log', '-1', '--format="%H"'], cwd=wd, encoding='UTF-8')
         diff_comm = ['git', 'diff']
         if exclude_diff:
             diff_comm.extend(['--', f":!{exclude_diff}"])
-        meta_data["git_diff"] = subprocess.check_output(diff_comm, encoding='UTF-8')
+        meta_data["git_diff"] = subprocess.check_output(diff_comm, encoding='UTF-8', cwd=wd)
 
     return meta_data
 
