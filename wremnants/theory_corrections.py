@@ -194,6 +194,7 @@ def make_qcd_uncertainty_helper_by_helicity(is_w_like = False, filename=None):
         return f"{base_name}_Down", f"{base_name}_Up"
 
     var_names = []
+    var_names.append("nominal")
     for ihel in range(-1, 8):
         var_names.extend(get_names(ihel))
 
