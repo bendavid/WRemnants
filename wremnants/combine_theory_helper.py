@@ -142,6 +142,9 @@ class TheoryHelper(object):
         skip_entries = []
         action_map = {}
 
+        # skip nominal
+        skip_entries.append({"vars" : "nominal"})
+
         # NOTE: The map needs to be keyed on the base procs not the group names, which is
         # admittedly a bit nasty
         expanded_samples = self.card_tool.getProcNames([sample_group])
