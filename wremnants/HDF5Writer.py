@@ -623,7 +623,7 @@ class HDF5Writer(object):
 
         # propagate meta info into result file
         meta = {
-            "meta_info" : narf.ioutils.make_meta_info_dict(args=args),
+            "meta_info" : narf.ioutils.make_meta_info_dict(args=args, wd=common.base_dir),
             "channel_axes": hist_axes
         }
 

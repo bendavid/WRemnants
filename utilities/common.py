@@ -7,6 +7,7 @@ from utilities import logging
 from enum import Enum
 import re
 
+base_dir = f"{pathlib.Path(__file__).parent}/../"
 wremnants_dir = f"{pathlib.Path(__file__).parent}/../wremnants"
 data_dir =  f"{pathlib.Path(__file__).parent}/../wremnants-data/data/"
 

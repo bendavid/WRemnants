@@ -7,7 +7,7 @@ import hdf5plugin
 import h5py
 import narf
 import numpy as np
-from utilities import logging
+from utilities import common, logging
 import glob
 import shutil
 import lz4.frame
@@ -41,7 +41,7 @@ def analysis_debug_output(results):
 
 def writeMetaInfoToRootFile(rtfile, exclude_diff='notebooks', args=None):
     import ROOT
-    meta_dict = narf.ioutils.make_meta_info_dict(exclude_diff, args=args)
+    meta_dict = narf.ioutils.make_meta_info_dict(exclude_diff, args=args, wd=common.base_dir)
     d = rtfile.mkdir("meta_info")
     d.cd()
     
@@ -51,7 +51,7 @@ def writeMetaInfoToRootFile(rtfile, exclude_diff='notebooks', args=None):
 
 def write_analysis_output(results, outfile, args, update_name=True):
     analysis_debug_output(results)
-    results.update({"meta_info" : narf.ioutils.make_meta_info_dict(args=args)})
+    results.update({"meta_info" : narf.ioutils.make_meta_info_dict(args=args, wd=common.base_dir)})
 
     to_append = []
     if args.theoryCorr and not args.theoryCorrAltOnly:
@@ -133,7 +133,7 @@ def write_theory_corr_hist(output_name, process, output_dict, args=None, file_me
         outname += f"_{args.postfix}"
     output_filename = f"{outname}Corr{process}.pkl.lz4"
     logger.info(f"Write correction file {output_filename}")
-    result_dict = {process : output_dict, "meta_data" : narf.ioutils.make_meta_info_dict(args)}
+    result_dict = {process : output_dict, "meta_data" : narf.ioutils.make_meta_info_dict(args, wd=common.base_dir)}
     if file_meta_data is not None:
         result_dict["file_meta_data"] = file_meta_data
     with lz4.frame.open(output_filename, "wb") as f:
