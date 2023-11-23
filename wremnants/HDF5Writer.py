@@ -354,6 +354,9 @@ class HDF5Writer(object):
                             _hist = var_map[histname+var_type]
 
                             _syst = self.get_flat_values(_hist, chanInfo, axes, return_variances=False)
+
+                            if not np.all(np.isfinite(_syst)):
+                                raise RuntimeError(f"{len(_syst)-sum(np.isfinite(_syst))} NaN or Inf values encountered in systematic {var_name}!")
                             
                             # check if there is a sign flip between systematic and nominal
                             _logk = kfac*np.log(_syst/norm_proc)
