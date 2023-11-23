@@ -8,7 +8,7 @@ import numpy as np
 import argparse
 import pandas as pd
 
-from utilities import logging, boostHistHelpers as hh
+from utilities import common, logging, boostHistHelpers as hh
 from utilities.styles import styles
 from wremnants import plot_tools, histselections as sel
 from utilities.io_tools import output_tools, combinetf_input, combinetf2_input
@@ -62,12 +62,21 @@ translate_selection = {
     }
 }
 
-def make_plot(h_data, h_inclusive, h_stack, axis_name, colors=None, labels=None, suffix="", chi2=None, meta=None):
+def make_plot(h_data, h_inclusive, h_stack, axes, colors=None, labels=None, suffix="", chi2=None, meta=None, saturated_chi2=False):
+    axes_names = [a.name for a in axes]
+    axis_name = "_".join([a for a in axes_names])
+    if len(h_data.axes) > 1:
+        # make unrolled 1D histograms
+        if "eta" in axes_names: # convention is to plot eta-pt 
+            axes_names = axes_names[::-1]
+        h_data = sel.unrolledHist(h_data, binwnorm=1, obs=axes_names)
+        h_inclusive = sel.unrolledHist(h_inclusive, binwnorm=1, obs=axes_names)
+        h_stack = [sel.unrolledHist(h, binwnorm=1, obs=axes_names) for h in h_stack]
 
     if ratio:
-        fig, ax1, ax2 = plot_tools.figureWithRatio(h_data, styles.xlabels.get(axis_name.replace("_","-"), "Bin number"), "Entries/bin", args.ylim, "Data/Pred.", args.rrange)
+        fig, ax1, ax2 = plot_tools.figureWithRatio(h_data, styles.xlabels.get(axis_name, "Bin number"), "Entries/bin", args.ylim, "Data/Pred.", args.rrange)
     else:
-        fig, ax1 = plot_tools.figure(h_data, styles.xlabels.get(axis_name.replace("_","-"), "Bin number"), "Entries/bin", args.ylim)
+        fig, ax1 = plot_tools.figure(h_data, styles.xlabels.get(axis_name, "Bin number"), "Entries/bin", args.ylim)
 
     hep.histplot(
         h_stack,
@@ -146,7 +155,11 @@ def make_plot(h_data, h_inclusive, h_stack, axis_name, colors=None, labels=None,
     scale = max(1, np.divide(*ax1.get_figure().get_size_inches())*0.3)
 
     if chi2 is not None:
-        plt.text(0.05, 0.94, f"$\chi^2/ndf = {round(chi2[0],1)}/{chi2[1]}$", horizontalalignment='left', verticalalignment='top', transform=ax1.transAxes,
+        if saturated_chi2:
+            chi2_name = "\chi_{\mathrm{sat.}}^2/ndf"
+        else:
+            chi2_name = "\chi^2/ndf"
+        plt.text(0.05, 0.94, f"${chi2_name} = {round(chi2[0],1)}/{chi2[1]}$", horizontalalignment='left', verticalalignment='top', transform=ax1.transAxes,
             fontsize=20*args.scaleleg*scale)
 
     plot_tools.redo_axis_ticks(ax1, "x")
@@ -166,7 +179,11 @@ def make_plot(h_data, h_inclusive, h_stack, axis_name, colors=None, labels=None,
     stack_yields = None
     unstacked_yields = None
     if meta is not None:
-        kwargs=dict(analysis_meta_info={"AnalysisOutput" : meta["meta_info"]})
+        kwargs=dict(
+            analysis_meta_info={
+                "AnalysisOutput" : meta["meta_info"],
+                "Combinetf2Output" : meta["meta_info_combinetf2"]},
+            )
     else:
         kwargs=dict()
 
@@ -176,6 +193,26 @@ def make_plot(h_data, h_inclusive, h_stack, axis_name, colors=None, labels=None,
             "Unstacked processes" : pd.DataFrame([(k, sum(h.values()), sum(h.variances())**0.5) for k,h in zip(["Data", "Inclusive"], [h_data, h_inclusive])], columns=["Process", "Yield", "Uncertainty"])},
         args=args, **kwargs
     )
+
+
+def make_plots(hist_data, hist_inclusive, hist_stack, axes, channel="", *opts, **kwopts):
+    # make plots in slices (e.g. for charge plus an minus separately)
+    selection_axes = [a for a in axes if a.name in args.selectionAxes]
+    if len(selection_axes) > 0:
+        for axis in selection_axes:
+            for idx in range(len(axis)):
+                other_axes = [a for a in axes if a != axis]
+
+                h_data = hist_data[{axis.name: idx}]
+                h_inclusive = hist_inclusive[{axis.name: idx}]
+                h_stack = [h[{axis.name: idx}] for h in hist_stack]
+
+                idx_name = translate_selection[axis.name][idx]
+                suffix = f"{channel}_{idx_name}" if channel else idx_name
+                logger.info(f"Make plot for axes {[a.name for a in other_axes]}, in {axis.name} bin {idx_name}")
+                make_plot(h_data, h_inclusive, h_stack, other_axes, suffix=suffix, *opts, **kwopts)
+    else:
+        make_plot(hist_data, hist_inclusive, hist_stack, axes, suffix=channel, *opts, **kwopts)
 
 if combinetf2:
     meta = fitresult["meta"].get()
@@ -195,31 +232,11 @@ if combinetf2:
         hist_stack = fitresult[f"hist_{fittype}"][channel].get()
         hist_stack = [hist_stack[{"processes" : p}] for p in procs]
 
-        # make unrolled 1D histograms
-        if len(axes) > 1:
-            hist_data = sel.unrolledHist(hist_data, binwnorm=1, obs=None)
-            hist_inclusive = sel.unrolledHist(hist_inclusive, binwnorm=1, obs=None)
-            hist_stack = [sel.unrolledHist(h, binwnorm=1, obs=None) for h in hist_stack]
-
-            axis_name = "_".join([a.name for a in axes])
-        else:
-            axis_name = axes[0].name
-
-        make_plot(hist_data, hist_inclusive, hist_stack, axis_name, colors=colors, labels=labels, suffix=f"{channel}", chi2=chi2, meta=meta)
-
-        # loop over selections, make a plot for each bin
-        for sa in [a for a in axes if a.name in args.selectionAxes]:
-            for idx in range(len(sa)):
-                sel = translate_selection[sa.name][idx]
-                logger.info(f"Make plot for axes {axis_name}, selection {sel}")
-
-                h_data = hist_data[{sa.name: idx}]
-                h_inclusive = hist_inclusive[{sa.name: idx}]
-                h_stack = [h[{sa.name: idx}] for h in hist_stack]
-
-                make_plot(h_data, h_inclusive, h_stack, axis_name, colors=colors, labels=labels, suffix=f"{channel}_{sel}", chi2=chi2, meta=meta)
+        make_plots(hist_data, hist_inclusive, hist_stack, axes, channel=channel, colors=colors, labels=labels, chi2=chi2, meta=meta)
 else:
-    # combinetf1    
+    # combinetf1
+    import ROOT
+
     procs = [k.replace("expproc_","").replace(f"_{fittype};1", "") for k in fitresult.keys() if fittype in k and k.startswith("expproc_") and "hybrid" not in k]
 
     labels = [styles.process_labels.get(p, p) for p in procs]
@@ -240,13 +257,13 @@ else:
         }
     elif analysis=="ZMassWLike":
         all_axes = {
-            "pt": hist.axis.Regular(30, 26, 56, name = "pt", overflow=False, underflow=False),
+            "pt": hist.axis.Regular(34, 26, 60, name = "pt", overflow=False, underflow=False),
             "eta": hist.axis.Regular(48, -2.4, 2.4, name = "eta", overflow=False, underflow=False),
             "charge": common.axis_charge
         }
     elif analysis=="WMass":
         all_axes = {
-            "pt": hist.axis.Regular(34, 26, 60, name = "pt", overflow=False, underflow=False),
+            "pt": hist.axis.Regular(30, 26, 56, name = "pt", overflow=False, underflow=False),
             "eta": hist.axis.Regular(48, -2.4, 2.4, name = "eta", overflow=False, underflow=False),
             "charge": common.axis_charge
         }
@@ -264,14 +281,12 @@ else:
     hist_stack = [hist.Hist(*axes, storage=hist.storage.Weight(), 
         data=np.stack((np.reshape(h.values(), shape), np.reshape(h.variances(), shape)), axis=-1)) for h in hist_stack]
 
-    if len(axes) > 1:
-        # make unrolled 1D histograms
-        hist_data = sel.unrolledHist(hist_data, binwnorm=1, obs=None)
-        hist_inclusive = sel.unrolledHist(hist_inclusive, binwnorm=1, obs=None)
-        hist_stack = [sel.unrolledHist(h, binwnorm=1, obs=None) for h in hist_stack]
-
-        axis_name = "_".join([a.name for a in axes])
+    if not args.prefit:
+        rfile = ROOT.TFile.Open(args.infile)
+        ttree = rfile.Get("fitresults")
+        ttree.GetEntry(0)
+        chi2 = [2*(ttree.nllvalfull - ttree.satnllvalfull), np.product([len(a) for a in axes]) - ttree.ndofpartial]
     else:
-        axis_name = axes[0].name
+        chi2 = None
 
-    make_plot(hist_data, hist_inclusive, hist_stack, axis_name, labels=labels, colors=colors)
+    make_plots(hist_data, hist_inclusive, hist_stack, axes, colors=colors, labels=labels, chi2=chi2, saturated_chi2=True)

@@ -25,8 +25,10 @@ if [[ $4 == *.hdf5 ]]; then
 
 	if [ "$mode" == "mass" ]; then
 		combinetf.py --doImpacts --binByBinStat -t -1 "$outfile"
+	elif [ "$mode" == "dilepton" ]; then
+		combinetf.py --doImpacts --binByBinStat -t -1 "$outfile" --saveHists --computeHistErrors
 	elif [ "$mode" == "unfolding" ]; then
-		combinetf.py --doImpacts --binByBinStat -t -1 "$outfile" --correlateXsecStat --saveHists --computeHistErrors
+		combinetf.py --doImpacts --binByBinStat -t -1 "$outfile" --saveHists --computeHistErrors --correlateXsecStat
 	elif [ "$mode" == "theoryfit" ]; then
 		combinetf.py --doImpacts "$outfile" --chisqFit --externalCovariance --saveHists --computeHistErrors
 	fi
@@ -52,9 +54,12 @@ else
 	if [ "$mode" == "mass" ]; then
 		text2hdf5.py --X-allow-no-signal "$card_name"
 		combinetf.py --doImpacts --binByBinStat -t -1 "$outfile"
+	elif [ "$mode" == "dilepton" ]; then
+		text2hdf5.py --X-allow-no-signal "$card_name"
+		combinetf.py --doImpacts --binByBinStat -t -1 "$outfile" --saveHists --computeHistErrors
 	elif [ "$mode" == "unfolding" ]; then
 		text2hdf5.py --X-allow-no-background "${maskedChannels[@]}" "$card_name"
-		combinetf.py --doImpacts --binByBinStat -t -1 "$outfile" --correlateXsecStat --saveHists --computeHistErrors
+		combinetf.py --doImpacts --binByBinStat -t -1 "$outfile" --saveHists --computeHistErrors --correlateXsecStat
 	fi
 fi
 
