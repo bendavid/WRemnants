@@ -452,7 +452,9 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/histmakers/mz_wlike_with_mu_eta_pt.py -o $WREMNANTS_OUTDIR -j $NTHREADS --maxFiles $MAX_FILES --forceDefaultName
 
       - name: wlike combine setup
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombine.py -i $HIST_FILE --lumiScale $LUMI_SCALE -o $WREMNANTS_OUTDIR --hdf5 -pseudoData uncorr
+        run: >-
+          scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombine.py 
+          -i $HIST_FILE --lumiScale $LUMI_SCALE -o $WREMNANTS_OUTDIR --hdf5 --pseudoData uncorr
 
       - name: wlike combine fit 
         run: >-
@@ -464,12 +466,22 @@ jobs:
           cmssw-cc7 --command-to-run scripts/ci/setup_and_run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ $WREMNANTS_OUTDIR/ZMassWLike_eta_pt_charge 
           ZMassWLike.hdf5 -p uncorr --binByBinStat --doImpacts --saveHists --computeHistErrors --postfix uncorr
 
+      - name: wlike prefit plot
+        run: >-
+          scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/postfitPlots.py
+          $WREMNANTS_OUTDIR/ZMassWLike_eta_pt_charge/fitresults_123456789_uncorr.root -o $WEB_DIR -f $PLOT_DIR --yscale 1.2 --prefit
+
+      - name: wlike postfit plot
+        run: >- 
+          scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/postfitPlots.py
+          $WREMNANTS_OUTDIR/ZMassWLike_eta_pt_charge/fitresults_123456789_uncorr.root -o $WEB_DIR -f $PLOT_DIR --yscale 1.2 --rrange 1.03 0.97
+
       - name: wlike combine impacts
         run: >-
-          scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/pullsAndImpacts.py 
+          scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/pullsAndImpacts.py
           -r $WREMNANTS_OUTDIR/ZMassWLike_eta_pt_charge/fitresults_123456789.hdf5 -f $WREMNANTS_OUTDIR/ZMassWLike_eta_pt_charge/fitresults_123456789_uncorr.hdf5
-          --oneSidedImpacts--grouping max -t utilities/styles/nuisance_translate.json output 
-          --outFolder $WEB_DIR/$PLOT_DIR -o mpactsWlike.html --otherExtensions pdf png -n 50 
+          --oneSidedImpacts --grouping max -t utilities/styles/nuisance_translate.json output
+          --outFolder $WEB_DIR/$PLOT_DIR -o mpactsWlike.html --otherExtensions pdf png -n 50
 
 
   wlike-plotting:
