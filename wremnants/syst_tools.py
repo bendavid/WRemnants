@@ -381,7 +381,6 @@ def add_pdf_hists(results, df, dataset, axes, cols, pdfs, base_name="nominal", a
                 alphahelper = ROOT.wrem.makeHelicityMomentPdfTensor[3]()
                 df = df.Define(f"helicity_moments_{tensorASName}_tensor", alphahelper, ["csSineCosThetaPhi", f"{tensorASName}", "unity"])
                 pdfHist_hel = df.HistoBoost(f"helicity_{pdfHistName}", axes, [*cols, f"helicity_moments_{tensorName}_tensor"], tensor_axes=[axis_helicity,pdf_ax], storage=hist.storage.Double())
-                print(df.GetColumnType(f"helicity_moments_{tensorASName}_tensor"))
                 alphaSHist_hel = df.HistoBoost(f"helicity_{alphaSHistName}", axes, [*cols, f"helicity_moments_{tensorASName}_tensor"], tensor_axes=[axis_helicity,as_ax], storage=hist.storage.Double())
                 results.extend([pdfHist_hel, alphaSHist_hel])
 
