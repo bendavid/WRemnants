@@ -10,7 +10,7 @@ import pandas as pd
 import hist
 import json
 
-from utilities import boostHistHelpers as hh, logging
+from utilities import boostHistHelpers as hh, common, logging
 from utilities.styles.styles import nuisance_groupings as groupings
 from wremnants import plot_tools, histselections as sel
 from wremnants.datasets.datagroups import Datagroups
@@ -21,24 +21,17 @@ import pdb
 
 hep.style.use(hep.style.ROOT)
 
-parser = argparse.ArgumentParser()
+parser = common.plot_parser()
 parser.add_argument("infile", type=str, help="Output file of the analysis stage, containing ND boost histogrdams")
 parser.add_argument("--fitresult",  type=str, help="Combine fitresult root file")
 parser.add_argument("--reference",  type=str, default=None, help="Optional combine fitresult root file from an reference fit for comparison")
 parser.add_argument("--refName",  type=str, default="Reference model", help="Name for reference source")
-parser.add_argument("-o", "--outpath", type=str, default=os.path.expanduser("~/www/WMassAnalysis"), help="Base path for output")
-parser.add_argument("-f", "--outfolder", type=str, default="./test", help="Subfolder for output")
-parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name")
-parser.add_argument("--cmsDecor", default="Preliminary", type=str, choices=[None,"Preliminary", "Work in progress", "Internal"], help="CMS label")
-parser.add_argument("--lumi", type=float, default=16.8, help="Luminosity used in the fit, needed to get the absolute cross section")
 parser.add_argument("-r", "--rrange", type=float, nargs=2, default=[0.9,1.1], help="y range for ratio plot")
 parser.add_argument("--ylim", type=float, nargs=2, help="Min and max values for y axis (if not specified, range set automatically)")
 parser.add_argument("--logy", action='store_true', help="Make the yscale logarithmic")
 parser.add_argument("--yscale", type=float, help="Scale the upper y axis by this factor (useful when auto scaling cuts off legend)")
-parser.add_argument("--debug", action='store_true', help="Print debug output")
 parser.add_argument("--noData", action='store_true', help="Don't plot data")
 parser.add_argument("-n", "--baseName", type=str, help="Histogram name in the file (e.g., 'nominal')", default="nominal")
-parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend text")
 parser.add_argument("--plots", type=str, nargs="+", default=["xsec", "uncertainties"], choices=["xsec", "uncertainties", "ratio"], help="Define which plots to make")
 parser.add_argument("--genFlow", action='store_true', help="Show overflow/underflow pois")
 parser.add_argument("--poi", action='store_true', help="Plot signal strength parameters (mu)")
@@ -52,11 +45,10 @@ parser.add_argument("--scaleXsec", type=float, default=1.0, help="Scale xsec pre
 parser.add_argument("--grouping", type=str, default=None, help="Select nuisances by a predefined grouping", choices=groupings.keys())
 parser.add_argument("--genAxes", type=str, nargs="+", default=None, help="Gen axes used in unfolding")
 parser.add_argument("-t","--translate", type=str, default=None, help="Specify .json file to translate labels")
-parser.add_argument("--eoscp", action='store_true', help="Override use of xrdcp and use the mount instead")
 
 args = parser.parse_args()
 
-logger = logging.setup_logger("unfolding_xsec", 4 if args.debug else 3)
+logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
 grouping = groupings[args.grouping] if args.grouping else None
 

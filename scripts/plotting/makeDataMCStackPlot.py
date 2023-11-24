@@ -9,37 +9,30 @@ from matplotlib import colormaps
 import argparse
 import os
 import shutil
-from wremnants import logging
+from wremnants import logging, common
 import pathlib
 import hist
 import re
 import numpy as np
 
-parser = argparse.ArgumentParser()
+parser = common.plot_parser()
 parser.add_argument("infile", help="Output file of the analysis stage, containing ND boost histogrdams")
 parser.add_argument("--ratioToData", action='store_true', help="Use data as denominator in ratio")
 parser.add_argument("-n", "--baseName", type=str, help="Histogram name in the file (e.g., 'nominal')", default="nominal")
 parser.add_argument("--nominalRef", type=str, help="Specify the nominal his if baseName is a variation hist (for plotting alt hists)")
 parser.add_argument("--hists", type=str, nargs='+', required=True, help="List of histograms to plot")
 parser.add_argument("-c", "--channel", type=str, choices=["plus", "minus", "all"], default="all", help="Select channel to plot")
-parser.add_argument("-p", "--outpath", type=str, default=os.path.expanduser("~/www/WMassAnalysis"), help="Base path for output")
-parser.add_argument("-f", "--outfolder", type=str, default="test", help="Subfolder for output")
 parser.add_argument("-r", "--rrange", type=float, nargs=2, default=[0.9, 1.1], help="y range for ratio plot")
 parser.add_argument("--rebin", type=int, default=1, help="Rebin (for now must be an int)")
 parser.add_argument("--logy", action='store_true', help="Enable log scale for y axis")
 parser.add_argument("--ylim", type=float, nargs=2, help="Min and max values for y axis (if not specified, range set automatically)")
 parser.add_argument("--yscale", type=float, help="Scale the upper y axis by this factor (useful when auto scaling cuts off legend)")
 parser.add_argument("--xlim", type=float, nargs=2, help="min and max for x axis")
-parser.add_argument("-a", "--name_append", default="", type=str, help="Name to append to file name")
-parser.add_argument("--cmsDecor", default="Preliminary", type=str, help="CMS label")
-parser.add_argument("--debug", action='store_true', help="Print debug output")
 parser.add_argument("--procFilters", type=str, nargs="*", help="Filter to plot (default no filter, only specify if you want a subset")
 parser.add_argument("--noData", action='store_true', help="Don't plot data")
 parser.add_argument("--noFill", action='store_true', help="Don't fill stack")
-parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend text")
 parser.add_argument("--fitresult", type=str, help="Specify a fitresult root file to draw the postfit distributions with uncertainty bands")
 parser.add_argument("--prefit", action='store_true', help="Use the prefit uncertainty from the fitresult root file, instead of the postfit. (--fitresult has to be given)")
-parser.add_argument("--eoscp", action='store_true', help="Use of xrdcp for eos output rather than the mount")
 parser.add_argument("--noRatioErr", action='store_false', dest="ratioError", help="Don't show stat unc in ratio")
 parser.add_argument("--selection", type=str, help="Specify custom selections as comma seperated list (e.g. '--selection passIso=0,passMT=1' )")
 parser.add_argument("--presel", type=str, nargs="*", default=[], help="Specify custom selections on input histograms to integrate some axes, giving axis name and min,max (e.g. '--presel pt=ptmin,ptmax' ) or just axis name for bool axes")
@@ -196,7 +189,7 @@ def collapseSyst(h):
 overflow_ax = ["ptll", "chargeVgen", "massVgen", "ptVgen", "absEtaGen", "ptGen", "ptVGen", "absYVGen"]
 for h in args.hists:
     if len(h.split("-")) > 1:
-        action = lambda x: sel.unrolledHist(collapseSyst(x[select]), obs=h.split("-"))
+        action = lambda x: sel.unrolledHist(collapseSyst(x[select]), binwnorm=1, obs=h.split("-"))
     else:
         action = lambda x: hh.projectNoFlow(collapseSyst(x[select]), h, overflow_ax)
     fig = plot_tools.makeStackPlotWithRatio(histInfo, prednames, histName=args.baseName, ylim=args.ylim, yscale=args.yscale, logy=args.logy,
@@ -217,7 +210,7 @@ for h in args.hists:
         var_arg = args.varName[0]
         if "selectEntries" in args and args.selectEntries:
             var_arg = args.selectEntries[0] if not args.selectEntries[0].isdigit() else (var_arg+args.selectEntries[0])
-    to_join = [f"{h.replace('-','_')}"]+[var_arg]+[fitresultstring, args.name_append]+[args.channel.replace("all", "")]
+    to_join = [f"{h.replace('-','_')}"]+[var_arg]+[fitresultstring, args.postfix]+[args.channel.replace("all", "")]
     outfile = "_".join(filter(lambda x: x, to_join))
 
     plot_tools.save_pdf_and_png(outdir, outfile)

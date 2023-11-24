@@ -200,6 +200,20 @@ def plotImpacts(df, poi, pulls=False, normalize=False, oneSidedImpacts=False):
             ),
             row=1,col=ncols,
         )
+        fig.add_trace(
+            go.Scatter(
+                x=df['newpull'],
+                y=labels,
+                mode="markers",
+                marker=dict(color='blue', symbol="x", size=8, 
+                    line=dict(
+                        width=1  # Adjust the thickness of the marker lines
+                )),
+                name="newpulls",
+            ),
+            row=1,col=ncols,
+        )
+
         if include_ref:
             fig.add_trace(
                 go.Bar(
@@ -235,7 +249,7 @@ def plotImpacts(df, poi, pulls=False, normalize=False, oneSidedImpacts=False):
                     dtick=spacing,
                     side='top',
                 ),
-            xaxis_title="pull+constraint",
+            xaxis_title=r'$\Theta - \Theta_0 \ \color{blue}{(\Theta - \Theta_0) / \sqrt{\sigma^2 -\sigma_0^2}}$',#"$\Theta - \Theta_0$",#
             yaxis=dict(range=[-1, ndisplay]),
             yaxis_visible=not impacts,
         )
@@ -268,8 +282,11 @@ def readFitInfoFromFile(rf, filename, poi, group=False, stat=0.0, normalize=Fals
     df['label'] = [translate_label.get(l, l) for l in labels]
     df['absimpact'] = np.abs(df['impact'])
     if not group:
-        df["pull"], df["constraint"] = combinetf_input.get_pulls_and_constraints(filename, labels)
+        df["pull"], df["constraint"], df["pull_prefit"] = combinetf_input.get_pulls_and_constraints(filename, labels)
+        df["pull"] = df['pull'] - df["pull_prefit"]
         df['abspull'] = np.abs(df['pull'])
+        df['newpull'] = df['pull'] / (1-df["constraint"]**2)**0.5
+        df['newpull'].replace([np.inf, -np.inf, np.nan], 999, inplace=True)
         if poi:
             df.drop(df.loc[df['label'].str.contains(poi.replace("_noi",""), regex=True)].index, inplace=True)
     colors = np.full(len(df), '#377eb8')
