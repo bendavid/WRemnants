@@ -511,6 +511,9 @@ class CardTool(object):
                 else:
                     name = systInfo["baseName"]
                     fwv = systInfo["formatWithValue"]
+                    if fwv:
+                        if "mirror" in axLabels:
+                            fwv.append(None)
                     name += "".join([self.systLabelForAxis(al, entry[i], hvar.axes[ax], fwv[i] if fwv else fwv) for i,(al,ax) in enumerate(zip(axLabels,axNames))])
                     if "systNameReplace" in systInfo and systInfo["systNameReplace"]:
                         for rep in systInfo["systNameReplace"]:
