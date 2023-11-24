@@ -20,6 +20,17 @@ logger = logging.child_logger(__name__)
 def notImplemented(operation="Unknown"):
     raise NotImplementedError(f"Required operation '{operation}' is not implemented!")
 
+def checkFiniteBinValues(h, hname, flow=True, throw=True):
+    # one could use this function without raising error to count how many occurrences there are
+    if np.all(np.isfinite(h.values(flow=flow))):
+        return 0
+    else:
+        errMsg = f"One or more NAN or Inf values encountered in {hname} histogram"
+        logger.error(errMsg)
+        if throw:
+            raise RuntimeError(errMsg)
+        return 1
+
 class CardTool(object):
     def __init__(self, outpath="./", xnorm=False, ABCD=False, real_data=False):
     
@@ -562,6 +573,10 @@ class CardTool(object):
             up = var_map[name+"Up"]
             down = var_map[name+"Down"]
             nCellsWithoutOverflows = np.product(hnom.shape)
+
+            checkFiniteBinValues(up, name+"Up")
+            checkFiniteBinValues(down, name+"Down")
+
             if not skipSameSide:
                 try:
                     up_relsign = np.sign(up.values(flow=False)-hnom.values(flow=False))
@@ -579,8 +594,7 @@ class CardTool(object):
             # it evaluates absolute(a - b) <= (atol + rtol * absolute(b))
             up_nBinsSystSameAsNomi = np.count_nonzero(np.isclose(up.values(flow=False), hnom.values(flow=False), rtol=1e-07, atol=1e-08))/nCellsWithoutOverflows
             down_nBinsSystSameAsNomi = np.count_nonzero(np.isclose(down.values(flow=False), hnom.values(flow=False), rtol=1e-06, atol=1e-08))/nCellsWithoutOverflows
-            # varEqNomiThreshold = 1.0 - 5./CellsWithoutOverflows # at least 5 bins different, but sensible choice depends on how many cells we have,
-            # perhaps just better to check against 100%, the tolerances in np.isclose should already catch bad cases with 1.0 != 1.0 because of numerical imprecisions
+            # check against 100% bins equal to nominal, the tolerances in np.isclose should already catch bad cases with 1.0 != 1.0 because of numerical imprecisions
             varEqNomiThreshold = 1.0
             if up_nBinsSystSameAsNomi >= varEqNomiThreshold or down_nBinsSystSameAsNomi >= varEqNomiThreshold:
                 if not skipOneAsNomi or (up_nBinsSystSameAsNomi >= varEqNomiThreshold and down_nBinsSystSameAsNomi >= varEqNomiThreshold):
