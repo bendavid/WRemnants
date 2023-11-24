@@ -559,6 +559,12 @@ class CardTool(object):
             up = var_map[name+"Up"]
             down = var_map[name+"Down"]
             nCellsWithoutOverflows = np.product(hnom.shape)
+
+            if not np.all(np.isfinite(up.values(flow=True))):
+                raise RuntimeError(f"One or more NAN or Inf values encountered in {name}Up histogram for {proc}")
+            if not np.all(np.isfinite(down.values(flow=True))):
+                raise RuntimeError(f"One or more NAN or Inf values encountered in {name}Down histogram for {proc}")
+
             if not skipSameSide:
                 try:
                     up_relsign = np.sign(up.values(flow=False)-hnom.values(flow=False))
