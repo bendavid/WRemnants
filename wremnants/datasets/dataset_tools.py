@@ -119,15 +119,16 @@ def makeFilelist(paths, maxFiles=-1, base_path=None, nano_prod_tags=None, is_dat
 
         filelist.extend(files)
 
+    toreturn = filelist if maxFiles < 0 or len(filelist) < maxFiles else random.Random(1).sample(filelist, maxFiles)
+
     if oneMCfileEveryN != None and not is_data:
         tmplist = []
-        for i,f in enumerate(filelist):
+        for i,f in enumerate(toreturn):
             if i % oneMCfileEveryN == 0:
                 tmplist.append(f)
-        logger.warning(f"Using {len(tmplist)} files instead of {len(filelist)}")
-        filelist = tmplist
-
-    toreturn = filelist if maxFiles < 0 or len(filelist) < maxFiles else random.Random(1).sample(filelist, maxFiles)
+        logger.warning(f"Using {len(tmplist)} files instead of {len(toreturn)}")
+        toreturn = tmplist
+    
     logger.debug(f"Length of list is {len(toreturn)} for paths {paths}")
     return toreturn
 
