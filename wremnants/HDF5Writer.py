@@ -354,6 +354,9 @@ class HDF5Writer(object):
                             _hist = var_map[histname+var_type]
 
                             _syst = self.get_flat_values(_hist, chanInfo, axes, return_variances=False)
+
+                            if not np.all(np.isfinite(_syst)):
+                                raise RuntimeError(f"{len(_syst)-sum(np.isfinite(_syst))} NaN or Inf values encountered in systematic {var_name}!")
                             
                             # check if there is a sign flip between systematic and nominal
                             _logk = kfac*np.log(_syst/norm_proc)
@@ -600,7 +603,7 @@ class HDF5Writer(object):
                         logk[ibin:ibin+nbinschan,iproc,1,isyst] = dict_logkhalfdiff_proc[syst]
                         
                 ibin += nbinschan
-            
+
         #compute poisson parameter for Barlow-Beeston bin-by-bin statistical uncertainties
         kstat = np.square(sumw)/sumw2
         #numerical protection to avoid poorly defined constraint
@@ -623,7 +626,7 @@ class HDF5Writer(object):
 
         # propagate meta info into result file
         meta = {
-            "meta_info" : output_tools.metaInfoDict(args=args),
+            "meta_info" : narf.ioutils.make_meta_info_dict(args=args, wd=common.base_dir),
             "channel_axes": hist_axes
         }
 

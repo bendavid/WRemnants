@@ -19,6 +19,9 @@ class TheoryHelper(object):
         self.card_tool = card_tool
         corr_hists = input_tools.args_from_metadata(self.card_tool, "theoryCorr")
         self.corr_hist_name = (corr_hists[0]+"Corr") if corr_hists else None
+        # Workaround for now, in case PDF vars and scale vars are split
+        if "scetlib_dyturbo" in self.corr_hist_name and "scetlib_dyturbo" in corr_hists:
+            self.corr_hist_name = "scetlib_dyturboCorr"
         self.syst_ax = "vars"
         self.corr_hist = None
         self.resumUnc = None
@@ -138,6 +141,9 @@ class TheoryHelper(object):
 
         skip_entries = []
         action_map = {}
+
+        # skip nominal
+        skip_entries.append({"vars" : "nominal"})
 
         # NOTE: The map needs to be keyed on the base procs not the group names, which is
         # admittedly a bit nasty
@@ -411,7 +417,8 @@ class TheoryHelper(object):
             theory_unc = input_tools.args_from_metadata(self.card_tool, "theoryCorr")
             if not theory_unc:
                 logger.error("Can not add resummation uncertainties. No theory correction was applied!")
-            pdf_hist = f"scetlib_dyturbo{pdf.upper()}Vars" 
+            #pdf_hist = f"scetlib_dyturbo{pdf.upper().replace('AN3LO', 'an3lo')}OnlyUL" 
+            pdf_hist = f"scetlib_dyturbo{pdf.upper().replace('AN3LO', 'an3lo')}Vars" 
             if pdf_hist not in theory_unc:
                 logger.error(f"Did not find {pdf_hist} correction in file! Cannot use SCETlib+DYTurbo PDF uncertainties")
             pdf_hist += "Corr"
@@ -432,7 +439,7 @@ class TheoryHelper(object):
         )
         if from_corr:
             self.card_tool.addSystematic(pdf_hist, 
-                outNames=[""]+theory_tools.pdfNamesAsymHessian(pdfInfo['entries'], pdfset=pdf.upper())[1:],
+                outNames=[""]+theory_tools.pdfNamesAsymHessian(pdfInfo['entries'], pdfset=pdfName)[1:],
                 **pdf_args
             )
         else:
@@ -441,19 +448,25 @@ class TheoryHelper(object):
                 **pdf_args
             )
 
-        # TODO: For now only MiNNLO alpha_s is supported
         asRange = pdfInfo['alphasRange']
-        self.card_tool.addSystematic(f"{pdfName}alphaS{asRange}", 
+        asname = f"{pdfName}alphaS{asRange}" if not from_corr else pdf_hist.replace("Vars", "_pdfas")
+        as_replace = [("as", "pdfAlphaS")]+[("0116", "Down"), ("0120", "Up")] if asRange == "002" else [("0117", "Down"), ("0119", "Up")]
+        as_args = dict(name=asname,
             processes=['wtau_samples', 'single_v_nonsig_samples'] if self.skipFromSignal else ['single_v_samples'],
             mirror=False,
             group=pdfName,
             splitGroup={f"{pdfName}AlphaS": '.*'},
-            systAxes=["alphasVar"],
-            skipEntries=[{"alphasVar" : "as0118"}],
-            systNameReplace=[("as", "pdfAlphaS")]+[("0116", "Down"), ("0120", "Up")] if asRange == "002" else [("0117", "Down"), ("0119", "Up")],
+            systAxes=["vars" if from_corr else "alphasVar"],
             scale=0.75 if asRange == "002" else 1.5,
             passToFakes=self.propagate_to_fakes,
         )
+        if from_corr:
+            as_args["outNames"] = ['', "pdfAlphaSDown", "pdfAlphaSUp"]
+        else:
+            as_args["systNameReplace"] = as_replace
+            as_args['skipEntries'] = [{"alphasVar" : "as0118"}]
+            
+        self.card_tool.addSystematic(**as_args)
 
     def add_resum_transition_uncertainty(self):
         obs = self.card_tool.fit_axes[:]

@@ -7,6 +7,7 @@ from utilities import boostHistHelpers as hh,common,logging
 from wremnants import theory_corrections
 from scipy import ndimage
 import narf.clingutils
+from math import sqrt
 
 logger = logging.child_logger(__name__)
 narf.clingutils.Declare('#include "theoryTools.h"')
@@ -121,6 +122,14 @@ pdfMap = {
         "alphas" : ["LHEPdfWeight[0]", "LHEPdfWeight[41]", "LHEPdfWeight[42]"],
         "alphasRange" : "002", # TODO: IS that true?
     },
+    "herapdf20" : {
+        "name" : "pdfHERAPDF20",
+        "branch" : "LHEPdfWeightAltSet20",
+        "combine" : "asymHessian",
+        "entries" : 29,
+        "alphas" : ["LHEPdfWeightAltSet20[0]", "LHEPdfWeightAltSet22[0]", "LHEPdfWeightAltSet23[0]"], # alphas 116-120
+        "alphasRange" : "002",
+    },
 }
 
 only_central_pdf_datasets = [
@@ -139,8 +148,10 @@ def expand_pdf_entries(pdf):
     return [info["branch"]+f"[{i}]" for i in range(first_entry, last_entry)]
 
 theory_corr_weight_map = {
+        "scetlib_dyturboMSHT20_pdfas" : pdfMap["msht20"]["alphas"],
+        "scetlib_dyturboMSHT20Vars" : expand_pdf_entries("msht20"),
         "scetlib_dyturboMSHT20an3lo_pdfas" : pdfMap["msht20an3lo"]["alphas"],
-        "scetlib_dyturboMSHT20an3lo" : expand_pdf_entries("msht20an3lo"),
+        "scetlib_dyturboMSHT20an3loVars" : expand_pdf_entries("msht20an3lo"),
 }
 
 def define_prefsr_vars(df):
@@ -358,7 +369,7 @@ def define_theory_corr_weight_column(df, generator):
     if generator in theory_corr_weight_map:
         values = theory_corr_weight_map[generator]
         df = df.Define(f"{generator}_corr_weight", f"Eigen::TensorFixedSize<double, Eigen::Sizes<{len(values)}>> res; " + \
-            "; ".join([f"res({i}) = {entry}" for i,entry in enumerate(values)]) + \
+            "; ".join([f"res({i}) = {entry}*nominal_weight_uncorr/central_pdf_weight" for i,entry in enumerate(values)]) + \
             "; return res;")
     else:
         df = df.Alias(f"{generator}_corr_weight", "nominal_weight_uncorr")
@@ -448,6 +459,16 @@ def moments_to_angular_coeffs(hist_moments_scales, cutoff=1e-5):
     )
 
     return hist_coeffs_scales
+
+def moments_to_helicities(hist_moments_scales):
+    factors = np.array([1., 1./2., 1./(2.*sqrt(2.)), 1./4, 1./(4.*sqrt(2.)),1./2.,1./2.,1./(2.*sqrt(2.)),1./(4.*sqrt(2.))])
+    
+    hfactors = hist.Hist(hist_moments_scales.axes["helicity"],
+        data = factors
+            )
+    hist_moments_scales_new = hh.multiplyHists(hfactors,hist_moments_scales)
+
+    return hist_moments_scales_new
 
 def qcdByHelicityLabels():
     coeffs = ["const"]+[f"a{i}" for i in range(8)]

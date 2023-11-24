@@ -19,7 +19,7 @@ logger = logging.child_logger(__name__)
 def valid_theory_corrections():
     corr_files = glob.glob(common.data_dir+"TheoryCorrections/*Corr*.pkl.lz4")
     matches = [re.match("(^.*)Corr[W|Z]\.pkl\.lz4", os.path.basename(c)) for c in corr_files]
-    return [m[1] for m in matches if m]
+    return [m[1] for m in matches if m]+["none"]
 
 def load_corr_helpers(procs, generators, make_tensor=True):
     corr_helpers = {}
@@ -194,6 +194,7 @@ def make_qcd_uncertainty_helper_by_helicity(is_w_like = False, filename=None):
         return f"{base_name}_Down", f"{base_name}_Up"
 
     var_names = []
+    var_names.append("nominal")
     for ihel in range(-1, 8):
         var_names.extend(get_names(ihel))
 
@@ -201,6 +202,9 @@ def make_qcd_uncertainty_helper_by_helicity(is_w_like = False, filename=None):
 
     axes_no_scale = moments.axes[:-2]
     corr_coeffs = hist.Hist(*axes_no_scale, corr_ax, vars_ax)
+
+    # set all moments, including overflow/underflow to default safe value (leads to weight of 1.0 by construction)
+    corr_coeffs.values(flow=True)[...] = 1.
 
     # set all moments equal to nominal
     corr_coeffs.values()[...] = moments_nom[..., None, None]

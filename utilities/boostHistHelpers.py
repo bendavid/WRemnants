@@ -126,25 +126,24 @@ def multiplyWithVariance(vals1, vals2, vars1=None, vars2=None):
         
     return outvals, outvars
 
-def multiplyHists(h1, h2, allowBroadcast=True, createNew=True):
+def multiplyHists(h1, h2, allowBroadcast=True, createNew=True, flow=True):
     if allowBroadcast:
-        h1 = broadcastSystHist(h1, h2)
-        h2 = broadcastSystHist(h2, h1)
+        h1 = broadcastSystHist(h1, h2, flow=flow)
+        h2 = broadcastSystHist(h2, h1, flow=flow)
 
     if h1.storage_type == hist.storage.Double and h2.storage_type == hist.storage.Double:
         return h1*h2 
 
     with_variance = h1.storage_type == hist.storage.Weight and h2.storage_type == hist.storage.Weight
     outh = h1
-    vals, varis = multiplyWithVariance(h1.values(flow=True), h2.values(flow=True), 
-                        h1.variances(flow=True) if with_variance else None, h2.variances(flow=True) if with_variance else None)
+    vals, varis = multiplyWithVariance(h1.values(flow=flow), h2.values(flow=flow), 
+                        h1.variances(flow=flow) if with_variance else None, h2.variances(flow=flow) if with_variance else None)
 
     if createNew:
         outh = hist.Hist(*outh.axes, storage=outh.storage_type())
-
-    outh.values(flow=True)[...] = vals
+    outh.values(flow=flow)[...] = vals
     if varis is not None:
-        outh.variances(flow=True)[...] = varis
+        outh.variances(flow=flow)[...] = varis
 
     return outh
 
@@ -223,6 +222,22 @@ def addSystAxis(h, size=1, offset=0):
 
     return hnew
 
+def addGenericAxis(h, axis):
+
+    if h.storage_type == hist.storage.Double:
+        hnew = hist.Hist(*h.axes,axis)
+        # Broadcast to new shape
+        newvals = hnew.values()+h.values()[...,np.newaxis]
+        hnew[...] = newvals
+    else:
+        hnew = hist.Hist(*h.axes,axis, storage=hist.storage.Weight())
+        # Broadcast to new shape
+        newvals = hnew.values()+h.values()[...,np.newaxis]
+        newvars = hnew.variances()+h.variances()[...,np.newaxis]
+        hnew[...] = np.stack((newvals, newvars), axis=-1)
+
+    return hnew
+
 def clipNegativeVals(h, clipValue=0, createNew=False):
     newh = h.copy() if createNew else h
     np.clip(newh.values(flow=True), a_min=clipValue, a_max=None, out=newh.values(flow=True))
@@ -285,6 +300,14 @@ def rebinHist(h, axis_name, edges):
 
     ax = h.axes[axis_name]
     ax_idx = [a.name for a in h.axes].index(axis_name)
+
+    if type(edges) == list:
+        if all(x == y for x,y in zip(edges, ax.edges)):
+            return h
+    elif type(edges) == np.array:
+        if edges.shape == ax.edges.shape and np.isclose(edges, ax.edges).all():
+            return h
+
     if not compatibleBins(ax.edges, edges):
         raise ValueError(f"Cannot rebin histogram due to incompatible edges for axis '{ax.name}'\n"
                             f"Edges of histogram are {ax.edges}, requested rebinning to {edges}")
@@ -300,10 +323,7 @@ def rebinHist(h, axis_name, edges):
     hnew = hist.Hist(*axes, name=h.name, storage=h.storage_type())
 
     if type(ax) == hist.axis.StrCategory:
-        if type(edges) == str:
-            edge_idx = ax.index(edges)
-        else:
-            edge_idx = np.array(edges, dtype=int)
+        edge_idx = np.array(edges, dtype=int)
     else:
         # Offset from bin edge to avoid numeric issues
         offset = 0.5*np.min(ax.edges[1:]-ax.edges[:-1])
@@ -567,3 +587,23 @@ def swap_histogram_bins(histo, axis1, axis1_bin1, axis1_bin2, axis2=None, axis2_
     new_histo.view(flow=flow)[*slices2] = data[*slices1] if axis1_replace is None else data[*slicesR]
     new_histo.view(flow=flow)[*slices1] = data[*slices2] if axis1_replace is None else data[*slicesR]
     return new_histo
+
+def rescaleBandVariation(histo, factor):
+
+    if factor==1.:
+        return histo
+    else:
+        upper_env = histo.values()[...,1]
+        lower_env = histo.values()[...,0]
+
+        var = np.abs(upper_env-lower_env)/2
+        centr = (upper_env+lower_env)/2
+        new_upper = factor*var+centr
+        new_lower = -factor*var+centr
+
+        # leave sigmaUL variation to 50%
+        new_upper[...,0] = 1.5*np.ones((new_upper.shape[0],new_upper.shape[1]))
+        new_lower[...,0] = 0.5*np.ones((new_lower.shape[0],new_lower.shape[1]))
+
+        histo[...]= np.stack([new_lower,new_upper],axis=-1)
+        return histo
