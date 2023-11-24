@@ -65,6 +65,9 @@ def sortParameters(params):
     elif any(re.match('.*Z_nonClosure.*',x) for x in params):
         params = sorted(params, key = lambda x: utilities.getNFromString(x,chooseIndex=0))
         params = sorted(params, key = lambda x: 0 if "_A_" in x else 1)
+    elif any(re.match('.*polVar.*',x) for x in params):
+        #params = sorted(params, key = lambda x: (-1,utilities.getNFromString(x,chooseIndex=0)) if "_UL_" else (utilities.getNFromString(x,chooseIndex=0), utilities.getNFromString(x,chooseIndex=1)))
+        pass
     return params
 
 if __name__ == "__main__":
@@ -504,9 +507,17 @@ if __name__ == "__main__":
                 
         else:
 
+
             # to plot from a single file
             ymin,yhalfd,ycen,yhalfu,ymax = args.ysetting
-            hist_fit_s.GetYaxis().SetRangeUser(ymin-args.yoffset[0],ymax+args.yoffset[1])
+
+            # deal with extreme cases with POIs
+            maxPull = max(list([(hist_fit_s.GetBinContent(i)+hist_fit_s.GetBinError(i)) for i in range(1, 1+hist_fit_s.GetNbinsX())]))
+            maxz = max(4, math.ceil(maxPull))
+            minz = min(-maxz, ymin-args.yoffset[0])
+            maxz = max(maxz, ymax+args.yoffset[1])
+            #hist_fit_s.GetYaxis().SetRangeUser(ymin-args.yoffset[0],ymax+args.yoffset[1])
+            hist_fit_s.GetYaxis().SetRangeUser(-maxz, maxz)
             hist_fit_s.SetLineColor  (39)
             hist_fit_s.SetMarkerColor(ROOT.kGray+3)
             hist_fit_s.SetMarkerStyle(20)
