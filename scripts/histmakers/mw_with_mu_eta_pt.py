@@ -33,7 +33,10 @@ parser.add_argument("--onlyTheorySyst", action="store_true", help="Keep only the
 parser.add_argument("--oneMCfileEveryN", type=int, default=None, help="Use 1 MC file every N, where N is given by this option. Mainly for tests")
 parser.add_argument("--noAuxiliaryHistograms", action="store_true", help="Remove auxiliary histograms to save memory (removed by default with --unfolding or --theoryAgnostic)")
 parser.add_argument("--mtCut", type=int, default=40, help="Value for the transverse mass cut in the event selection")
-
+#
+# TEST
+parser.add_argument("--theoryAgnosticPolVar", action='store_true', help="Prepare variations from polynomials (EDIT THIS MESSAGE)")
+parser.add_argument("--theoryAgnosticFileTag", type=str, default="x0p40_y3p50_add", choices=["x0p40_y3p50_add", "x0p30_y3p00_V2"], help="Tag for input files")
 args = parser.parse_args()
 
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
@@ -177,6 +180,9 @@ smearing_helper, smearing_uncertainty_helper = (None, None) if args.noSmearing e
 bias_helper = muon_calibration.make_muon_bias_helpers(args) if args.biasCalibration else None
 
 corr_helpers = theory_corrections.load_corr_helpers([d.name for d in datasets if d.name in common.vprocs], args.theoryCorr)
+
+theoryAgnostic_helpers_minus = wremnants.makehelicityWeightHelper_devel(-1, args.theoryAgnosticFileTag)
+theoryAgnostic_helpers_plus = wremnants.makehelicityWeightHelper_devel(1, args.theoryAgnosticFileTag)
 
 # recoil initialization
 if not args.noRecoil:
@@ -422,6 +428,19 @@ def build_graph(df, dataset):
             noiAsPoiHistName = Datagroups.histName("nominal", syst="yieldsTheoryAgnostic")
             logger.debug(f"Creating special histogram '{noiAsPoiHistName}' for theory agnostic to treat POIs as NOIs")
             results.append(df.HistoBoost(noiAsPoiHistName, [*nominal_axes, *theoryAgnostic_axes], [*nominal_cols, *theoryAgnostic_cols, "nominal_weight_helicity"], tensor_axes=[axis_helicity]))
+            # TEST
+            if args.theoryAgnosticPolVar:
+                df = df.Define("qtOverQ", "ptVgen/massVgen") # FIXME: should there be a protection against mass=0 and what value to use?
+                theoryAgnostic_helpers_cols = ["qtOverQ", "absYVgen", "chargeVgen", "csSineCosThetaPhi", "nominal_weight"]
+                # assume to have same coeffs for plus and minus (no reason for it not to be the case)
+                for genVcharge in ["minus", "plus"]:
+                    for coeffKey in theoryAgnostic_helpers_minus.keys():
+                        logger.debug(f"Creating theory agnostic histograms with polynomial variations for {coeffKey} and {genVcharge} gen W charge")
+                        helperQ = theoryAgnostic_helpers_minus[coeffKey] if genVcharge == "minus" else theoryAgnostic_helpers_plus[coeffKey]
+                        df = df.Define(f"theoryAgnostic_{coeffKey}_{genVcharge}_tensor", helperQ, theoryAgnostic_helpers_cols)
+                        noiAsPoiWithPolHistName = Datagroups.histName("nominal", syst=f"theoryAgnosticWithPol_{coeffKey}_{genVcharge}")
+                        results.append(df.HistoBoost(noiAsPoiWithPolHistName, nominal_axes, [*nominal_cols, f"theoryAgnostic_{coeffKey}_{genVcharge}_tensor"], tensor_axes=helperQ.tensor_axes, storage=hist.storage.Double()))
+
         if args.unfolding:
             noiAsPoiHistName = Datagroups.histName("nominal", syst="yieldsUnfolding")
             logger.debug(f"Creating special histogram '{noiAsPoiHistName}' for unfolding to treat POIs as NOIs")
