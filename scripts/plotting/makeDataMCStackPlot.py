@@ -50,7 +50,7 @@ variation.add_argument("--fillBetween", type=int, help="Fill between first n var
 
 args = parser.parse_args()
 
-logger = logging.setup_logger("makeDataMCStackPlot", 4 if args.debug else 3)
+logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
 def padArray(ref, matchLength):
     return ref+ref[-1:]*(len(matchLength)-len(ref))

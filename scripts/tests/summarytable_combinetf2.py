@@ -49,14 +49,18 @@ df = pd.DataFrame(args.inputs, columns=["path"])
 df[["chi2_prefit", "chi2_postfit", "p_prefit", "p_postfit", "ndf"]] = df["path"].apply(read_fitresult).apply(pd.Series)
 
 df["name_parts"] = df["path"].apply(lambda x: [y for y in filter(lambda z: z, x.split("/"))])
-df["axes"] = df["name_parts"].apply(lambda x: x[-2].split("_")[1:])
+
 df["channel"] = df["name_parts"].apply(lambda x: x[-2].split("_")[0])
+
+df["name_parts"] = df["name_parts"].apply(lambda x: [y.replace(".hdf5","") for y in x[-1].split("_")[2:]])
+
+df["axes"] = df["name_parts"].apply(lambda x: [y for y in x if y in ["ptll", "yll", "pt", "eta", "charge"]])
+df["dataset"] = df["name_parts"].apply(lambda x: "_".join([y for y in x if y not in ["ptll", "yll", "pt", "eta", "charge"]]))
+df["dataset"] = df["dataset"].apply(lambda x: translate.get(x.replace("Corr",""), x.replace("Corr","")))
+
 df["column_name"] = df["axes"].apply(lambda x: "-".join(x)) 
 df["column_name_ndf"] = df["column_name"] + df["ndf"].apply(lambda x: f" ({x})")
 
-df["dataset"] = df["name_parts"].apply(lambda x: "_".join(x[-1].split("_")[2:]).replace(".hdf5",""))
-
-df["dataset"] = df["dataset"].apply(lambda x: translate.get(x.replace("Corr",""), x.replace("Corr","")))
 
 for channel, df_c in df.groupby("channel"):
     tex_tools.make_latex_table(df_c, output_dir=outdir, output_name=f"table_combinetf2_prefit_{channel}", 

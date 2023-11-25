@@ -326,7 +326,7 @@ jobs:
       #   run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ unfolding $WREMNANTS_OUTDIR/WMass_lowPU_ptW/ WMass_lowPU_plus.txt WMass_lowPU_minus.txt xnorm=WMass_lowPU_inclusive_xnorm.txt
 
       # - name: lowpu w combine unfolding plot xsec 
-      #   run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py $HIST_FILE_E --fitresult $WREMNANTS_OUTDIR/WMass_lowPU_ptW/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR/lowPU --debug --rrange 0.0 2.0 --lumi=0.200181002
+      #   run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py $HIST_FILE_E --fitresult $WREMNANTS_OUTDIR/WMass_lowPU_ptW/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR/lowPU -v 4 --rrange 0.0 2.0 --lumi=0.200181002
 
   lowpu-z:
     # The type of runner that the job will run on
@@ -381,7 +381,7 @@ jobs:
       #   run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ unfolding $WREMNANTS_OUTDIR/ZMassDilepton_lowPU_ptll/ ZMassDilepton_lowPU_inclusive.txt xnorm=ZMassDilepton_lowPU_inclusive_xnorm.txt
 
       # - name: lowpu z combine unfolding plot xsec 
-      #   run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py $HIST_FILE_EE --fitresult $WREMNANTS_OUTDIR/ZMassDilepton_lowPU_ptll/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR/lowPU --debug --rrange 0.0 2.0 --lumi=0.200181002
+      #   run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py $HIST_FILE_EE --fitresult $WREMNANTS_OUTDIR/ZMassDilepton_lowPU_ptll/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR/lowPU -v 4 --rrange 0.0 2.0 --lumi=0.200181002
 
 
   lowpu-combined-unfolding:
@@ -414,10 +414,10 @@ jobs:
         run: cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ unfolding $COMBINED_DIR/Combination_LowPU_ptll Combination.hdf5
 
       - name: lowpu combine unfolding plot xsec 
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py $HIST_FILE_MU --fitresult $COMBINED_DIR/Combination_LowPU_ptll/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR/lowPU --debug --rrange 0.0 2.0 --lumi=0.200181002 --scaleXsec 2
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py $HIST_FILE_MU --fitresult $COMBINED_DIR/Combination_LowPU_ptll/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR/lowPU -v 4 --rrange 0.0 2.0 --lumi=0.200181002 --scaleXsec 2
 
       - name: lowpu combine unfolding plot xsec 
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py $HIST_FILE_MUMU --fitresult $COMBINED_DIR/Combination_LowPU_ptll/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR/lowPU --debug --rrange 0.0 2.0 --lumi=0.200181002 --scaleXsec 2
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py $HIST_FILE_MUMU --fitresult $COMBINED_DIR/Combination_LowPU_ptll/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR/lowPU -v 4 --rrange 0.0 2.0 --lumi=0.200181002 --scaleXsec 2
 
   wlike:
     # The type of runner that the job will run on

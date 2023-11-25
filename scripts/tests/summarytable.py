@@ -67,7 +67,6 @@ df["column_name"] = df["axes"].apply(lambda x: "-".join(x))
 df["column_name_ndf"] = df["column_name"] + df["ndf"].apply(lambda x: f" ({x})")
 
 df["dataset"] = df["name_parts"].apply(lambda x: "_".join(x[-1].split("_")[2:]).replace(".root",""))
-
 df["dataset"] = df["dataset"].apply(lambda x: translate.get(x.replace("Corr",""), x.replace("Corr","")))
 
 for channel, df_c in df.groupby("channel"):

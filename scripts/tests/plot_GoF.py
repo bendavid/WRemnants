@@ -12,7 +12,6 @@ from scipy.stats import chi2
 from utilities import common, logging
 from utilities.io_tools import output_tools
 from wremnants import plot_tools
-from scipy.stats import chi2
 
 
 import pdb
