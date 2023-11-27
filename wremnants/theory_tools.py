@@ -62,7 +62,7 @@ pdfMap = {
     },
     "nnpdf30" : {
         "name" : "pdfNNPDF30",
-        "branch" : "LHEPdfWeightAltSet13",
+        "branch" : "LHEPdfWeightAltSet7",
         "combine" : "symHessian",
         "entries" : 101,
         "alphas" : ["LHEPdfWeightAltSet13[0]", "LHEPdfWeightAltSet15[0]", "LHEPdfWeightAltSet16[0]"],
@@ -167,6 +167,7 @@ def define_prefsr_vars(df):
     df = df.Define("genV", "ROOT::Math::PxPyPzEVector(genl)+ROOT::Math::PxPyPzEVector(genlanti)")
     df = df.Define("ptVgen", "genV.pt()")
     df = df.Define("massVgen", "genV.mass()")
+    df = df.Define("ptqVgen", "genV.pt()/genV.mass()")
     df = df.Define("yVgen", "genV.Rapidity()")
     df = df.Define("phiVgen", "genV.Phi()")
     df = df.Define("absYVgen", "std::fabs(yVgen)")
