@@ -20,13 +20,13 @@ xsec_ZmmMass10to50PostVFP = 6997.0
 Z_TAU_TO_LEP_RATIO = (1.-(1. - BR_TAUToMU - BR_TAUToE)**2)
 
 wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP", 
-    'WplusToMuNu_horace-lo-photos', 'WplusToMuNu_horace-nlo', 'WplusToMuNu_horace-lo',
-    'WminusToMuNu_horace-lo-photos', 'WminusToMuNu_horace-nlo', 'WminusToMuNu_horace-lo',
-    'WplusToMuNu_winhac-lo-photos', 'WplusToMuNu_winhac-lo', 'WplusToMuNu_winhac-nlo', 
-    'WminusToMuNu_winhac-lo-photos', 'WminusToMuNu_winhac-lo', 'WminusToMuNu_winhac-nlo']
+    'Wplusmunu_horace-lo-photos', 'Wplusmunu_horace-nlo', 'Wplusmunu_horace-lo',
+    'Wminusmunu_horace-lo-photos', 'Wminusmunu_horace-nlo', 'Wminusmunu_horace-lo',
+    'Wplusmunu_winhac-lo-photos', 'Wplusmunu_winhac-lo', 'Wplusmunu_winhac-nlo', 
+    'Wminusmunu_winhac-lo-photos', 'Wminusmunu_winhac-lo', 'Wminusmunu_winhac-nlo']
 zprocs = ["ZmumuPostVFP", "ZtautauPostVFP", "ZmumuMiNLO", "ZmumuNNLOPS", 
-    'ZToMuMu_horace-lo-photos', 'ZToMuMu_horace-nlo', 'ZToMuMu_horace-lo', 'ZToMuMu_horace-new',
-    'ZToMuMu_horace-alpha-fsr-off-isr-off', 'ZToMuMu_horace-alpha-old-fsr-off-isr-off', 'ZToMuMu_horace-alpha-old-fsr-off-isr-pythia',
+    'Zmumu_horace-lo-photos', 'Zmumu_horace-nlo', 'Zmumu_horace-lo', 'Zmumu_horace-new',
+    'Zmumu_horace-alpha-fsr-off-isr-off', 'Zmumu_horace-alpha-old-fsr-off-isr-off', 'Zmumu_horace-alpha-old-fsr-off-isr-pythia',
     ]
 
 vprocs = wprocs+zprocs

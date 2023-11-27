@@ -74,7 +74,7 @@ groups_to_aggregate = args.aggregateGroups
 if args.unfolding:
     unfolding_axes, unfolding_cols, unfolding_selections = differential.get_dilepton_axes(args.genVars, gen_axes)
     datasets = unfolding_tools.add_out_of_acceptance(datasets, group = base_group)
-    groups_to_aggregate.append(f"Bkg{base_group}")
+    groups_to_aggregate.append(f"{base_group}OOA")
 
 # axes for final cards/fitting
 nominal_axes = [
@@ -326,7 +326,7 @@ def build_graph(df, dataset):
 
     if hasattr(dataset, "out_of_acceptance"):
         # Rename dataset to not overwrite the original one
-        dataset.name = "Bkg"+dataset.name
+        dataset.name = dataset.name+"OOA"
      
     return results, weightsum
 

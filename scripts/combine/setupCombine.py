@@ -144,7 +144,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
             # creating the xnorm model (e.g. for the theory fit)
             if wmass:
                 # add gen charge as additional axis
-                datagroups.groups[base_group].add_member_axis("qGen", datagroups.results, 
+                datagroups.groups[base_group].add_member_axis("qGen",
                     member_filters={-1: lambda x: x.name.startswith("Wminus"), 1: lambda x: x.name.startswith("Wplus")}, 
                     hist_filter=lambda x: x.startswith("xnorm"))
                 xnorm_axes = ["qGen", *datagroups.gen_axes]
@@ -169,15 +169,15 @@ def setup(args, inputFile, fitvar, xnorm=False):
                 hasSeparateOutOfAcceptanceSignal = True
                 if wmass:
                     # out of acceptance contribution
-                    datagroups.copyGroup(base_group, f"BkgWmunu", member_filter=lambda x: x.name.startswith("Bkg"))
-                    datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if m.name.startswith("Bkg")])
+                    datagroups.copyGroup(base_group, f"{base_group}OOA", member_filter=lambda x: x.name.endswith("OOA"))
+                    datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if m.name.endswith("OOA")])
                 else:
                     # out of acceptance contribution
-                    datagroups.copyGroup(base_group, f"BkgZmumu", member_filter=lambda x: x.name.startswith("Bkg"))
-                    datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if m.name.startswith("Bkg")])
+                    datagroups.copyGroup(base_group, f"{base_group}OOA", member_filter=lambda x: x.name.endswith("OOA"))
+                    datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if m.name.endswith("OOA")])
             # FIXME: at some point we should decide what name to use
-            if any(x in args.excludeProcGroups for x in ["BkgWmunu", "outAccWmunu"]) and hasSeparateOutOfAcceptanceSignal:
-                datagroups.deleteGroup("BkgWmunu") # remove out of acceptance signal
+            if any(x.endswith("OOA") for x in args.excludeProcGroups) and hasSeparateOutOfAcceptanceSignal:
+                datagroups.deleteGroup(f"{base_group}OOA") # remove out of acceptance signal
     elif args.unfolding or args.theoryAgnostic:
         constrainMass = False if args.theoryAgnostic else True
         datagroups.setGenAxes(args.genAxes)
@@ -185,14 +185,14 @@ def setup(args, inputFile, fitvar, xnorm=False):
         if wmass:
             # gen level bins, split by charge
             if "minus" in args.recoCharge:
-                datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen0", member_filter=lambda x: x.name.startswith("Wminus"))
+                datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen0", member_filter=lambda x: x.name.startswith("Wminus") and not x.name.endswith("OOA"))
             if "plus" in args.recoCharge:
-                datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen1", member_filter=lambda x: x.name.startswith("Wplus"))
+                datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen1", member_filter=lambda x: x.name.startswith("Wplus") and not x.name.endswith("OOA"))
         else:
-            datagroups.defineSignalBinsUnfolding(base_group, "Z", member_filter=lambda x: x.name.startswith(base_group))
+            datagroups.defineSignalBinsUnfolding(base_group, "Z", member_filter=lambda x: x.name.startswith(base_group) and not x.name.endswith("OOA"))
         
         # out of acceptance contribution
-        to_del = [m for m in datagroups.groups[base_group].members if not m.name.startswith("Bkg")]
+        to_del = [m for m in datagroups.groups[base_group].members if not m.name.endswith("OOA")]
         if len(datagroups.groups[base_group].members) == len(to_del):
             datagroups.deleteGroup(base_group)
         else:
