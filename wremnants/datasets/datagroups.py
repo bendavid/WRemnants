@@ -27,6 +27,7 @@ class Datagroups(object):
             with lz4.frame.open(infile) as f:
                 self.results = pickle.load(f)
         elif infile.endswith(".hdf5"):
+            logger.info("Load input file")
             self.h5file = h5py.File(infile, "r")
             self.results = narf.ioutils.pickle_load_h5py(self.h5file["results"])
         else:
@@ -49,7 +50,7 @@ class Datagroups(object):
             if mode not in mode_map.values():
                 raise ValueError(f"Unrecognized mode '{mode}.' Must be one of {set(mode_map.values())}")
             self.mode = mode
-
+        logger.info(f"Set mode to {self.mode}")
 
         try:
             args = self.getMetaInfo()["args"]
@@ -73,7 +74,6 @@ class Datagroups(object):
 
         make_datagroups(self, **kwargs)
 
-        
         if "Data" in self.groups:
             self.lumi = sum([m.lumi for m in self.groups["Data"].members if m.is_data])
             logger.info(f"Integrated luminosity from data: {self.lumi}/fb")
