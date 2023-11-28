@@ -15,7 +15,7 @@ git lfs install
 Get the code (after forking from the central WMass repository)
 ```bash
 MY_GIT_USER=$(git config user.github)
-git clone --recurse-submodules git@github.com:$MY_GIT_USER/WRemnants.git
+git clone --recurse-submodules git@github.com:erc-asymow/WRemnants.git
 cd WRemnants/
 git remote add upstream git@github.com:WMass/WRemnants.git
 ```
