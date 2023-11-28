@@ -43,7 +43,7 @@ def make_datagroups_2016(dg, combine=False, pseudodata_pdfset = None, applySelec
             selectOp = sigOp,
         )
         dg.addGroup("DYlowMass",
-            members = dg.get_members_from_results(startswith=["DYlowMass"]),
+            members = dg.get_members_from_results(startswith=["DYlowMass", "DYJetsToMuMuMass10to50"]),
             selectOp = sigOp,
         )
         dg.addGroup("Top",

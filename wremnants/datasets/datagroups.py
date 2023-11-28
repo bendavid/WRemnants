@@ -50,7 +50,6 @@ class Datagroups(object):
                 raise ValueError(f"Unrecognized mode '{mode}.' Must be one of {set(mode_map.values())}")
             self.mode = mode
 
-        self.lumi = 1
 
         try:
             args = self.getMetaInfo()["args"]
@@ -74,11 +73,13 @@ class Datagroups(object):
 
         make_datagroups(self, **kwargs)
 
-        self.lumi = sum([m.lumi for m in self.groups["Data"].members if m.is_data])
-        if self.lumi:
+        
+        if "Data" in self.groups:
+            self.lumi = sum([m.lumi for m in self.groups["Data"].members if m.is_data])
             logger.info(f"Integrated luminosity from data: {self.lumi}/fb")
         else:
-            logger.warning("No data process was selected, normalizing MC to 1/fb")
+            self.lumi = 1
+            logger.warning(f"No data process was selected, normalizing MC to {self.lumi }/fb")
 
     def get_members_from_results(self, startswith=[], not_startswith=[], is_data=False):
         dsets = {k: v for k, v in self.results.items() if type(v) == dict and "dataset" in v}

@@ -24,10 +24,10 @@ import wremnants.lowpu as lowpu
 ###################################
 flavor = args.flavor # mu, e
 if flavor == "mu":
-    sigProcs = ["WminusJetsToMuNu", "WplusJetsToMuNu"]
+    sigProcs = ["Wminusmunu", "Wplusmunu"]
     base_group = "Wmunu"
 else:
-    sigProcs = ["WminusJetsToENu", "WplusJetsToENu"]
+    sigProcs = ["Wminusenu", "Wplusenu"]
     base_group = "Wenu"
 
 datasets = getDatasets(maxFiles=args.maxFiles,
