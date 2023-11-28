@@ -125,21 +125,12 @@ def build_graph(df, dataset):
     df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
 
     if isZ:
-        if(args.ptqVgen):
-            nominal_axes = [axis_massZgen, axis_rapidity, axis_ptqVgen, axis_chargeZgen]
-        else:
-            nominal_axes = [axis_massZgen, axis_rapidity, axis_ptVgen, axis_chargeZgen]
+        nominal_axes = [axis_massZgen, axis_rapidity, axis_ptqVgen if args.ptqVgen else axis_ptVgen, axis_chargeZgen]
         lep_axes = [axis_l_eta_gen, axis_l_pt_gen, axis_chargeZgen]
     else:
-        if(args.ptqVgen):
-            nominal_axes = [axis_massWgen, axis_rapidity, axis_ptqVgen, axis_chargeWgen]
-        else:
-            nominal_axes = [axis_massWgen, axis_rapidity, axis_ptVgen, axis_chargeWgen]
+        nominal_axes = [axis_massWgen, axis_rapidity, axis_ptqVgen if args.ptqVgen else axis_ptVgen, axis_chargeWgen]
         lep_axes = [axis_l_eta_gen, axis_l_pt_gen, axis_chargeWgen]
-    if(args.ptqVgen):
-        nominal_cols = ["massVgen", col_rapidity, "ptqVgen", "chargeVgen"]
-    else:
-        nominal_cols = ["massVgen", col_rapidity, "ptVgen", "chargeVgen"]
+    nominal_cols = ["massVgen", col_rapidity, "ptqVgen" if args.ptqVgen else "ptVgen", "chargeVgen"]
     lep_cols = ["etaPrefsrLep", "ptPrefsrLep", "chargeVgen"]
 
     if args.singleLeptonHists and (isW or isZ):
