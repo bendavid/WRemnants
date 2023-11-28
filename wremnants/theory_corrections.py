@@ -37,7 +37,7 @@ def load_corr_helpers(procs, generators, make_tensor=True):
             elif "Helicity" in generator:
                 corr_helpers[proc][generator] = makeCorrectionsTensor(corrh, ROOT.wrem.CentralCorrByHelicityHelper, tensor_rank=3)
             else:
-                corr_helpers[proc][generator] = makeCorrectionsTensor(corrh)
+                corr_helpers[proc][generator] = makeCorrectionsTensor(corrh, weighted_corr=generator in theory_tools.theory_corr_weight_map)
     for generator in generators:
         if not any([generator in corr_helpers[proc] for proc in procs]):
             raise ValueError(f"Did not find correction for generator {generator} for any processes!")
