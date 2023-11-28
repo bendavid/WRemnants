@@ -692,7 +692,7 @@ for poi_type, poi_type_ref in zip(poi_types, poi_types_ref):
             # find bin widths
             def get_histo(name):
                 h = sum([groups.results[m.name]["output"][name].get() for m in groups.groups[process].members 
-                    if not m.name.startswith("Bkg") and (base_process=="Z" or channel=="all" or channel in m.name)])
+                    if not m.name.endswith("OOA") and (base_process=="Z" or channel=="all" or channel in m.name)])
                 h = h.project(*channel_axes)
                 # for wlike the sample is randomly split in two based on reco charge
                 this_scale = 2*scale if groups.mode == "wlike" else scale
