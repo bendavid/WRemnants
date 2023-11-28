@@ -251,10 +251,7 @@ def build_graph(df, dataset):
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)
-if(args.ptqVgen):
-    output_tools.write_analysis_output(resultdict, f"{os.path.basename(__file__).replace('.py', f'_pdf_{args.pdfs[0]}_vars_qtbyQ.hdf5')}", args, update_name=not args.forceDefaultName)
-else:
-    output_tools.write_analysis_output(resultdict, f"{os.path.basename(__file__).replace('py', 'hdf5')}", args, update_name=not args.forceDefaultName)
+output_tools.write_analysis_output(resultdict, f"{os.path.basename(__file__).replace('py', 'hdf5')}", args, update_name=not args.forceDefaultName)
 
 logger.info("computing angular coefficients")
 z_moments = None

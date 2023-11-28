@@ -58,6 +58,10 @@ def write_analysis_output(results, outfile, args, update_name=True):
         to_append.append(args.theoryCorr[0]+"Corr")
     if args.maxFiles is not None:
         to_append.append(f"maxFiles_{args.maxFiles}".replace("-","m"))
+    if args.pdfs and args.pdfs != ["msht20"]:
+        to_append.append(args.pdfs[0])
+    if args.ptqVgen:
+        to_append.append("vars_qtbyQ")
 
     if to_append and update_name:
         outfile = outfile.replace(".hdf5", f"_{'_'.join(to_append)}.hdf5")
