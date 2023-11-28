@@ -117,8 +117,6 @@ if args.unfolding:
     if not args.poiAsNoi:
         datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wmunu")
         datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wtaunu")
-        groups_to_aggregate.append("WmunuOOA")
-        groups_to_aggregate.append("WtaunuOOA")
 
 elif args.theoryAgnostic:
     theoryAgnostic_axes, theoryAgnostic_cols = differential.get_theoryAgnostic_axes(ptV_bins=args.genPtVbinEdges, absYV_bins=args.genAbsYVbinEdges, ptV_flow=args.poiAsNoi, absYV_flow=args.poiAsNoi)

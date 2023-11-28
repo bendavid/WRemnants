@@ -265,12 +265,22 @@ class CardTool(object):
     def allMCProcesses(self):
         return self.filteredProcesses(lambda x: self.isMC(x))
 
-    def addLnNSystematic(self, name, size, processes, group=None, groupFilter=None):
+    def precompile_splitGroupDict(self, group, splitGroup):
+        # precompile splitGroup expressions for better performance
+        splitGroupDict = {g: re.compile(v) for g, v in splitGroup.items()}
+        # add the group with everything if not there already
+        if group not in splitGroupDict:
+            splitGroupDict[group] = re.compile(".*")
+        return splitGroupDict
+
+    def addLnNSystematic(self, name, size, processes, group=None, groupFilter=None, splitGroup={}):
         if not self.isExcludedNuisance(name):
             self.lnNSystematics.update({name : {"size" : size,
                                                 "processes" : self.expandProcesses(processes),
                                                 "group" : group,
-                                                "groupFilter" : groupFilter}
+                                                "groupFilter" : groupFilter,
+                                                "splitGroup" : self.precompile_splitGroupDict(group, splitGroup) 
+                                                }
             })
 
     # action will be applied to the sum of all the individual samples contributing, actionMap should be used
@@ -318,12 +328,6 @@ class CardTool(object):
         if name == self.nominalName:
             logger.debug(f"Defining syst {rename} from nominal histogram")
         
-        # precompile splitGroup expressions for better performance
-        splitGroupDict = {g: re.compile(v) for g, v in splitGroup.items()}
-        # add the group with everything if not there already
-        if group not in splitGroupDict:
-            splitGroupDict[group] = re.compile(".*")
-
         self.systematics.update({
             name if not rename else rename : {
                 "outNames" : [] if not outNames else outNames,
@@ -335,7 +339,7 @@ class CardTool(object):
                 "group" : group,
                 "noi": noi,
                 "groupFilter" : groupFilter,
-                "splitGroup" : splitGroupDict, 
+                "splitGroup" : self.precompile_splitGroupDict(group, splitGroup), 
                 "scale" : scale,
                 "customizeNuisanceAttributes" : customizeNuisanceAttributes,
                 "mirror" : mirror,

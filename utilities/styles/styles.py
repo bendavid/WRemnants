@@ -104,6 +104,15 @@ nuisance_groupings = {
         "muon_eff_syst_reco", "muon_eff_syst_trigger", "muon_eff_syst_iso", "muon_eff_syst_idip",
         "muonPrefire", "ecalPrefire",
         "nonClosure", "resolutionCrctn",
+    ],
+    "unfolding": [
+        "Total",
+        "experimental"
+        "massShift",
+        "QCDscale", 
+        "pdfMSHT20",
+        "resum",
+        "theory_ew",
     ]
 }
 

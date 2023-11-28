@@ -33,11 +33,11 @@ vprocs = wprocs+zprocs
 zprocs_recoil = ["ZmumuPostVFP"]
 wprocs_recoil = ["WplusmunuPostVFP", "WminusmunuPostVFP"]
 
-wprocs_lowpu = ["WminusJetsToMuNu", "WminusJetsToENu", "WminusJetsToTauNu", "WplusJetsToMuNu", "WplusJetsToENu", "WplusJetsToTauNu"]
+wprocs_lowpu = ["Wminusmunu", "Wminusenu", "Wminustaunu", "Wplusmunu", "Wplusenu", "Wplustaunu"]
 zprocs_lowpu = ["Zmumu", "Zee", "Ztautau"]
 vprocs_lowpu = wprocs_lowpu+zprocs_lowpu
 zprocs_recoil_lowpu = ["Zmumu", "Zee"]
-wprocs_recoil_lowpu = ["WminusJetsToMuNu", "WminusJetsToENu", "WplusJetsToMuNu", "WplusJetsToENu"]
+wprocs_recoil_lowpu = ["Wminusmunu", "Wminusenu", "Wplusmunu", "Wplusenu"]
 
 background_MCprocs = ["Top", "Diboson", "QCD", "DYlowMass"]
 zprocs_all = zprocs_lowpu+zprocs
