@@ -6,7 +6,6 @@ narf.clingutils.Declare('#include "theory_corrections.h"')
 def makeCorrectionsTensor(corrh, tensor=None, tensor_rank=1, weighted_corr=False):
     hist_dims = len(corrh.axes)-tensor_rank 
 
-
     if tensor is not None:
         pass
     elif weighted_corr:
