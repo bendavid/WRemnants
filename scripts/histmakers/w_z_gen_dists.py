@@ -23,7 +23,6 @@ parser.add_argument("--skipEWHists", action='store_true', help="Also store histo
 parser.add_argument("--signedY", action='store_true', help="use signed Y")
 parser.add_argument("--applySelection", action='store_true', help="Apply selection on leptons")
 parser.add_argument("--auxiliaryHistograms", action="store_true", help="Safe auxiliary histograms (mainly for ew analysis)")
-parser.add_argument("--ptqVgen", action='store_true', help="To store qt by Q variable instead of ptVgen")
 
 parser = common.set_parser_default(parser, "filterProcs", common.vprocs)
 parser = common.set_parser_default(parser, "theoryCorr", [])
