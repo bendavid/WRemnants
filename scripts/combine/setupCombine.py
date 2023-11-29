@@ -813,6 +813,15 @@ def setup(args, inputFile, fitvar, xnorm=False):
             labelsByAxis=["unc_ieta", "unc_ipt", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
             passToFakes=passSystToFakes
         )
+
+    cardTool.addSystematic("muonScaleSyst_responseWeights",
+        processes=['single_v_samples'],
+        group="scaleCrctn",
+        splitGroup={f"muonCalibration" : f".*"},
+        baseName="Scale_correction_",
+        systAxes=["unc", "downUpVar"],
+        passToFakes=passSystToFakes
+    )
     if not input_tools.args_from_metadata(cardTool, "noSmearing"):
         cardTool.addSystematic("muonResolutionSyst_responseWeights", 
             mirror = True,
