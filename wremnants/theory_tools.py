@@ -127,10 +127,13 @@ pdfMap = {
         "branch" : "LHEPdfWeightAltSet20",
         "combine" : "asymHessian",
         "entries" : 29,
+        "branchExt" : "LHEPdfWeightAltSet21",
+        "entriesExt": 13*2,
         "alphas" : ["LHEPdfWeightAltSet20[0]", "LHEPdfWeightAltSet22[0]", "LHEPdfWeightAltSet23[0]"], # alphas 116-120
         "alphasRange" : "002",
     },
 }
+
 
 only_central_pdf_datasets = [
     "Wplusmunu_bugfix",
@@ -266,6 +269,9 @@ def define_pdf_columns(df, dataset_name, pdfs, noAltUnc):
 
         if pdfName == "pdfMSHT20":
             df = pdfBugfixMSHT20(df, tensorName)
+
+        if pdfName == "pdfHERAPDF20":
+            df = pdfHERAPDF20(df, tensorName, entries, pdfInfo["branchExt"], pdfInfo["entriesExt"])
 
         df = df.Define(tensorASName, f"Eigen::TensorFixedSize<double, Eigen::Sizes<{len(pdfInfo['alphas'])}>> res; " + \
                 " ".join([f"res({i}) = nominal_weight/central_pdf_weight*{p};" for i,p in enumerate(pdfInfo['alphas'])]) + \
@@ -558,4 +564,24 @@ def pdfBugfixMSHT20(df , tensorPDFName):
         f"auto& res = {tensorPDFName};"
         f"res(15) = {tensorPDFName}(0) - ({tensorPDFName}(15) - {tensorPDFName}(0));"
         "return res")
-        
+
+def pdfHERAPDF20(df , tensorPDFName, entriesMain, branchExt, entriesExt):
+    # extend HERA pdfs with extra variations which should be symmetrized
+    # remove the first from the VAR branch, equal to the nominal
+    start = 0
+    entries_branch = 14 # total entries in the nano branch
+    df = df.Define(f"{tensorPDFName}_ext", f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, {entries_branch}>({branchExt}, {start}), theory_weight_truncate); res = nominal_weight/central_pdf_weight*res; return res;")
+    df = df.Define(
+        f"{tensorPDFName}_ext_sym",
+        (f"Eigen::TensorFixedSize<double, Eigen::Sizes<{entriesMain+entriesExt}>> res;"
+        "for(int i=0; i<res.size(); i++) {"
+        f"   if(i < {entriesMain}) res(i) = {tensorPDFName}(i);"
+        "    else {"
+        f"      int k = i-{entriesMain}; res(i) = (k%2 == 0) ? {tensorPDFName}_ext(k/2+1) : ({tensorPDFName}(0) - ({tensorPDFName}_ext((k-1)/2+1) - {tensorPDFName}(0)));" # +1 to remove the first index
+        "    }"
+        "}"
+        "return res"
+        )
+    )
+    return df.Redefine(tensorPDFName, f"{tensorPDFName}_ext_sym")
+
