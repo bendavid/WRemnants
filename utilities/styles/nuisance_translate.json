@@ -1,5 +1,7 @@
 {
     "QCDscale": "$\\mu_\\mathrm{R} \\mu_\\mathrm{F} \\ \\mathrm{scale}$",
+    "QCDscaleZMiNNLO": "$\\mu_\\mathrm{R} \\mu_\\mathrm{F} \\ \\mathrm{scale (Z)}$",
+    "QCDscaleWMiNNLO": "$\\mu_\\mathrm{R} \\mu_\\mathrm{F} \\ \\mathrm{scale (W)}$",
     "QCDscalePtChargeMiNNLO": "$\\mu_\\mathrm{R} \\mu_\\mathrm{F} \\ \\mathrm{scale}$",
     "QCDscaleZPtChargeMiNNLO": "$\\mu_\\mathrm{R} \\mu_\\mathrm{F} \\ \\mathrm{scale (Z)}$",
     "QCDscaleWPtChargeMiNNLO": "$\\mu_\\mathrm{R} \\mu_\\mathrm{F} \\ \\mathrm{scale (W)}$",
@@ -25,7 +27,7 @@
     "pdfMSHT20NoAlphaS": "PDF",
     "pdfMSHT20AlphaS": "$\\alpha_\\mathrm{S} \\ \\mathrm{PDF}$",
     "resum": "$p_{\\mathrm{T}}^{\\mathrm{V}} \\ \\mathrm{modelling}$",
-    "resumTNP": "Non purt. trans.",
+    "resumTNP": "Non pert. trans.",
     "resumNonpert": "Non pert.",
     "muonCalibration": "muon momentum calibration",
     "muonScale": "muon momentum scale",

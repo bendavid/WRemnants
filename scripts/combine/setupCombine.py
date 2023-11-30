@@ -52,6 +52,7 @@ def make_parser(parser=None):
     parser.add_argument("--scaleTNP", default=5, type=float, help="Scale the TNP uncertainties by this factor")
     parser.add_argument("--scalePdf", default=1, type=float, help="Scale the PDF hessian uncertainties by this factor")
     parser.add_argument("--pdfUncFromCorr", action='store_true', help="Take PDF uncertainty from correction hist (Requires having run that correction)")
+    parser.add_argument("--massVariation", type=float, default=100, help="Variation of boson mass")
     parser.add_argument("--ewUnc", type=str, nargs="*", default=["default"], choices=["default","horacenloew", "winhacnloew", "virtual_ew", "virtual_ew_wlike"], help="Include EW uncertainty")
     parser.add_argument("--widthUnc", action='store_true', help="Include uncertainty on W and Z width")
     parser.add_argument("--skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
@@ -295,16 +296,17 @@ def setup(args, inputFile, fitvar, xnorm=False):
 
     label = 'W' if wmass else 'Z'
     if not (args.doStatOnly and constrainMass):
-        cardTool.addSystematic(f"massWeight{label}",
-                            processes=signal_samples_forMass,
-                            group=f"massShift",
-                            noi=not constrainMass,
-                            skipEntries=massWeightNames(proc=label, exclude=100),
-                            mirror=False,
-                            noConstraint=not constrainMass,
-                            systAxes=["massShift"],
-                            passToFakes=passSystToFakes,
-        )
+        if args.massVariation != 0:
+            cardTool.addSystematic(f"massWeight{label}",
+                                processes=signal_samples_forMass,
+                                group=f"massShift",
+                                noi=not constrainMass,
+                                skipEntries=massWeightNames(proc=label, exclude=args.massVariation),
+                                mirror=False,
+                                noConstraint=not constrainMass,
+                                systAxes=["massShift"],
+                                passToFakes=passSystToFakes,
+            )
 
         if args.fitMassDiff:
             suffix = "".join([a.capitalize() for a in args.fitMassDiff.split("-")])
@@ -585,19 +587,18 @@ def setup(args, inputFile, fitvar, xnorm=False):
 
     if wmass:
         #cardTool.addLnNSystematic("CMS_Fakes", processes=[args.qcdProcessName], size=1.05, group="MultijetBkg")
-        cardTool.addLnNSystematic("CMS_Top", processes=["Top"], size=1.06, group="CMS_background", splitGroup={"experimental": f".*"})
-        cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16, group="CMS_background", splitGroup={"experimental": f".*"})
+        cardTool.addLnNSystematic("CMS_Top", processes=["Top"], size=1.06, group="CMS_background")
+        cardTool.addLnNSystematic("CMS_VV", processes=["Diboson"], size=1.16, group="CMS_background")
         cardTool.addSystematic("luminosity",
                                 processes=['MCnoQCD'],
                                 outNames=["lumiDown", "lumiUp"],
                                 group="luminosity", 
-                                splitGroup={"experimental": f".*"},
                                 systAxes=["downUpVar"],
                                 labelsByAxis=["downUpVar"],
                                 passToFakes=passSystToFakes)
     else:
-        cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15, group="CMS_background", splitGroup={"experimental": f".*"})
-        cardTool.addLnNSystematic("luminosity", processes=['MCnoQCD'], size=1.017 if lowPU else 1.012, group="luminosity", splitGroup={"experimental": f".*"})
+        cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15, group="CMS_background")
+        cardTool.addLnNSystematic("luminosity", processes=['MCnoQCD'], size=1.017 if lowPU else 1.012, group="luminosity")
 
     if not args.noEfficiencyUnc:
 
@@ -620,7 +621,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                     mirror = True
                     mirrorDownVarEqualToNomi=False
                     groupName = "muon_eff_syst"
-                    splitGroupDict = {**{f"{groupName}_{x}" : f".*effSyst.*{x}" for x in list(effTypesNoIso + ["iso"])}, "experimental": f".*"}
+                    splitGroupDict = {f"{groupName}_{x}" : f".*effSyst.*{x}" for x in list(effTypesNoIso + ["iso"])}
                     # decorrDictEff = {                        
                     #     "x" : {
                     #         "label" : "eta",
@@ -640,7 +641,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                     nameReplace = nameReplace + [("effStatTnP_sf_", "effStat_")]           
                     scale = 1.0
                     groupName = "muon_eff_stat"
-                    splitGroupDict = {**{f"{groupName}_{x}" : f".*effStat.*{x}" for x in effStatTypes}, "experimental": f".*"}
+                    splitGroupDict = {f"{groupName}_{x}" : f".*effStat.*{x}" for x in effStatTypes}
                 if args.effStatLumiScale and "Syst" not in name:
                     scale /= math.sqrt(args.effStatLumiScale)
 
@@ -688,7 +689,6 @@ def setup(args, inputFile, fitvar, xnorm=False):
                     processes=cardTool.allMCProcesses(),
                     mirror = True,
                     group="CMS_lepton_eff", 
-                    splitGroup={"experimental": f".*"},
                     baseName=lepEff,
                     systAxes = ["tensor_axis_0"],
                     labelsByAxis = [""], 
@@ -707,7 +707,6 @@ def setup(args, inputFile, fitvar, xnorm=False):
                 processes=cardTool.allMCProcesses(),
                 mirror = False,
                 group="CMS_prefire17",
-                splitGroup={"experimental": f".*"},
                 baseName="CMS_prefire17",
                 systAxes = ["downUpVar"],
                 labelsByAxis = ["downUpVar"], 
@@ -740,7 +739,6 @@ def setup(args, inputFile, fitvar, xnorm=False):
     # cardTool.addSystematic(msv_config['hist_name'], 
     #     processes=['single_v_samples' if wmass else 'single_vmu_samples'],
     #     group="muonCalibration",
-    #     splitGroup={"experimental": f".*", "experimental": f".*"},
     #     baseName="CMS_scale_m_",
     #     systAxes=msv_config['syst_axes'],
     #     labelsByAxis=msv_config['syst_axes_labels'],
@@ -750,7 +748,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     cardTool.addSystematic("muonL1PrefireSyst", 
         processes=['MCnoQCD'],
         group="muonPrefire",
-        splitGroup = {f"prefire" : f".*", "experimental": f".*"},
+        splitGroup = {f"prefire" : f".*"},
         baseName="CMS_prefire_syst_m",
         systAxes=["downUpVar"],
         labelsByAxis=["downUpVar"],
@@ -759,7 +757,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     cardTool.addSystematic("muonL1PrefireStat", 
         processes=['MCnoQCD'],
         group="muonPrefire",
-        splitGroup = {f"prefire" : f".*", "experimental": f".*"},
+        splitGroup = {f"prefire" : f".*"},
         baseName="CMS_prefire_stat_m_",
         systAxes=["downUpVar", "etaPhiRegion"],
         labelsByAxis=["downUpVar", "etaPhiReg"],
@@ -768,7 +766,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     cardTool.addSystematic("ecalL1Prefire", 
         processes=['MCnoQCD'],
         group="ecalPrefire",
-        splitGroup = {f"prefire" : f".*", "experimental": f".*"},
+        splitGroup = {f"prefire" : f".*"},
         baseName="CMS_prefire_ecal",
         systAxes=["downUpVar"],
         labelsByAxis=["downUpVar"],
@@ -781,7 +779,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
         cardTool.addSystematic("Z_non_closure_parametrized_A", 
             processes=['single_v_samples'],
             group="nonClosure",
-            splitGroup={f"muonCalibration" : f".*", "experimental": f".*"},
+            splitGroup={f"muonCalibration" : f".*"},
             baseName="Z_nonClosure_parametrized_A_",
             systAxes=["unc", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
             labelsByAxis=["unc", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
@@ -791,7 +789,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
         cardTool.addSystematic("Z_non_closure_parametrized_M", 
             processes=['single_v_samples'],
             group="nonClosure",
-            splitGroup={f"muonCalibration" : f".*", "experimental": f".*"},
+            splitGroup={f"muonCalibration" : f".*"},
             baseName="Z_nonClosure_parametrized_M_",
             systAxes=["unc", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
             labelsByAxis=["unc", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
@@ -801,7 +799,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
         cardTool.addSystematic("Z_non_closure_parametrized", 
             processes=['single_v_samples'],
             group="nonClosure",
-            splitGroup={f"muonCalibration" : f".*", "experimental": f".*"},
+            splitGroup={f"muonCalibration" : f".*"},
             baseName="Z_nonClosure_parametrized_",
             systAxes=["unc", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
             labelsByAxis=["unc", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
@@ -811,7 +809,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
         cardTool.addSystematic("Z_non_closure_binned", 
             processes=['single_v_samples'],
             group="nonClosure",
-            splitGroup={f"muonCalibration" : f".*", "experimental": f".*"},
+            splitGroup={f"muonCalibration" : f".*"},
             baseName="Z_nonClosure_binned_",
             systAxes=["unc_ieta", "unc_ipt", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
             labelsByAxis=["unc_ieta", "unc_ipt", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
@@ -822,7 +820,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
             mirror = True,
             processes=['single_v_samples'],
             group="resolutionCrctn",
-            splitGroup={f"muonCalibration" : f".*", "experimental": f".*"},
+            splitGroup={f"muonCalibration" : f".*"},
             baseName="Resolution_correction_",
             systAxes=["smearing_variation"],
             passToFakes=passSystToFakes

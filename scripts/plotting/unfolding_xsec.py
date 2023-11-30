@@ -413,7 +413,7 @@ def plot_uncertainties_unfolded(df, poi_type, channel=None, edges=None, scale=1.
 
     scale = max(1, np.divide(*ax1.get_figure().get_size_inches())*0.3)
 
-    plot_tools.addLegend(ax1, ncols=4, text_size=15*args.scaleleg*scale)
+    plot_tools.addLegend(ax1, ncols=4, text_size=15*args.scaleleg*scale, loc="upper left")
 
     if args.yscale:
         ymin, ymax = ax1.get_ylim()

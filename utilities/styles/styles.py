@@ -105,13 +105,19 @@ nuisance_groupings = {
         "muonPrefire", "ecalPrefire",
         "nonClosure", "resolutionCrctn",
     ],
-    "unfolding": [
+    "unfolding_max": [
         "Total",
-        "experimental"
-        "massShift",
         "QCDscale", 
         "pdfMSHT20",
         "resum",
+        "theory_ew",
+    ],
+    "unfolding_min": [
+        "Total",
+        "QCDscalePtChargeMiNNLO", "QCDscaleZPtChargeMiNNLO", "QCDscaleWPtChargeMiNNLO", "QCDscaleZPtHelicityMiNNLO", "QCDscaleWPtHelicityMiNNLO", "QCDscaleZPtChargeHelicityMiNNLO", "QCDscaleWPtChargeHelicityMiNNLO",
+        "QCDscaleZMiNNLO", "QCDscaleWMiNNLO",
+        "pdfMSHT20NoAlphaS", "pdfMSHT20AlphaS",
+        "resumTNP", "resumNonpert", "resumTransition", "resumScale",
         "theory_ew",
     ]
 }
