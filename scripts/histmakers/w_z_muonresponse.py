@@ -60,7 +60,7 @@ nreps = 100
 smearing_helper_simple_multi = ROOT.wrem.SmearingHelperSimpleMulti[nreps](sigmarel)
 
 if args.testHelpers:
-    response_helper = ROOT.wrem.SplinesDifferentialWeightsHelper(f"{wremnants.data_dir}/calibration/muon_response.tflite")
+    response_helper = ROOT.wrem.SplinesDifferentialWeightsHelper(f"{wremnants.data_dir}/calibration/muon_response")
 
     smearing_helper_simple = ROOT.wrem.SmearingHelperSimple(sigmarel, ROOT.ROOT.GetThreadPoolSize())
     smearing_helper_simple_weights = ROOT.wrem.SmearingHelperSimpleWeight(sigmarel)

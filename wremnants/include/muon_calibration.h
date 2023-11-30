@@ -12,6 +12,7 @@
 #include <algorithm>
 #include "defines.h"
 #include "tfliteutils.h"
+#include "tfccutils.h"
 
 namespace wrem {
 
@@ -1400,7 +1401,7 @@ public:
 
     SplinesDifferentialWeightsHelper(const std::string &filename) : 
         helper_(
-            std::make_shared<narf::tflite_helper>(
+            std::make_shared<narf::tf_helper>(
                 filename, "serving_default", ROOT::GetThreadPoolSize()
             )
         ) {}
@@ -1463,7 +1464,7 @@ public:
     }
 
 private:
-    std::shared_ptr<narf::tflite_helper> helper_;
+    std::shared_ptr<narf::tf_helper> helper_;
 };
 
 class SmearingHelperSimpleWeight {

@@ -58,7 +58,8 @@ calib_filepaths = {
     },
     'mc_resofile': f"{calib_dir}/sigmaMC_LBL_JYZ.root",
     'data_resofile': f"{calib_dir}/sigmaDATA_LBL_JYZ.root",
-    'tflite_file': f"{calib_dir}/muon_response.tflite"
+    # 'tflite_file': f"{calib_dir}/muon_response.tflite"
+    'tflite_file': f"{calib_dir}/muon_response"
 }
 closure_filepaths = {
     'parametrized': f"{closure_dir}/calibrationAlignmentZ_after_LBL_v721.root",
@@ -190,7 +191,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--met", type=str, choices=["DeepMETReso", "RawPFMET"], help="MET (DeepMETReso or RawPFMET)", default="DeepMETReso")
     parser.add_argument("-o", "--outfolder", type=str, default="", help="Output folder")
     parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP", "2017", "2018"], help="Data set to process", default="2016PostVFP")
-    parser.add_argument("--nonClosureScheme", type=str, default = "A-only", choices=["none", "A-M-separated", "A-M-combined", "binned", "binned-plus-M", "A-only", "M-only"], help = "source of the Z non-closure nuisances")
+    parser.add_argument("--nonClosureScheme", type=str, default = "none", choices=["none", "A-M-separated", "A-M-combined", "binned", "binned-plus-M", "A-only", "M-only"], help = "source of the Z non-closure nuisances")
     parser.add_argument("--correlatedNonClosureNP", action="store_false", help="disable the de-correlation of Z non-closure nuisance parameters after the jpsi massfit")
     parser.add_argument("--dummyNonClosureA", action="store_false", help="read values for the magnetic part of the Z non-closure from a file")
     parser.add_argument("--dummyNonClosureAMag", default=7.5e-5, type=float, help="magnitude of the dummy value for the magnetic part of the Z non-closure")

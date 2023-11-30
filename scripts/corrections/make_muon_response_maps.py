@@ -199,6 +199,9 @@ output_filename = "muon_response.tflite"
 with open(output_filename, 'wb') as f:
     f.write(tflite_model)
 
+
+narf.tfutils.function_to_saved_model(interp_dweight, input_signature, "muon_response")
+
 #this is just for plotting
 def func_pdf(h):
     dtype = tf.float64
