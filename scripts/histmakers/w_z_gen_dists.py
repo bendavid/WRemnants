@@ -10,6 +10,7 @@ from wremnants.datasets.dataset_tools import getDatasets
 import hist
 import math
 import os
+import numpy as np
 from utilities.differential import get_theoryAgnostic_axes
 
 
@@ -22,6 +23,7 @@ parser.add_argument("--skipEWHists", action='store_true', help="Also store histo
 parser.add_argument("--signedY", action='store_true', help="use signed Y")
 parser.add_argument("--applySelection", action='store_true', help="Apply selection on leptons")
 parser.add_argument("--auxiliaryHistograms", action="store_true", help="Safe auxiliary histograms (mainly for ew analysis)")
+parser.add_argument("--ptqVgen", action='store_true', help="To store qt by Q variable instead of ptVgen, GEN only ", default=None)
 
 parser = common.set_parser_default(parser, "filterProcs", common.vprocs)
 parser = common.set_parser_default(parser, "theoryCorr", [])
@@ -74,6 +76,10 @@ else:
     name = "ptVgen", underflow=False,
 )
 
+axis_ptqVgen = hist.axis.Variable(
+    [round(x, 4) for x in list(np.arange(0, 0.1 + 0.0125, 0.0125))]+[round(x, 4) for x in list(np.arange(0.1+0.025, 0.5 + 0.025, 0.025))], name = "ptqVgen", underflow=False
+)
+
 axis_chargeWgen = hist.axis.Regular(
     2, -2, 2, name="chargeVgen", underflow=False, overflow=False
 )
@@ -119,13 +125,12 @@ def build_graph(df, dataset):
     df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
 
     if isZ:
-        nominal_axes = [axis_massZgen, axis_rapidity, axis_ptVgen, axis_chargeZgen]
+        nominal_axes = [axis_massZgen, axis_rapidity, axis_ptqVgen if args.ptqVgen else axis_ptVgen, axis_chargeZgen]
         lep_axes = [axis_l_eta_gen, axis_l_pt_gen, axis_chargeZgen]
     else:
-        nominal_axes = [axis_massWgen, axis_rapidity, axis_ptVgen, axis_chargeWgen]
+        nominal_axes = [axis_massWgen, axis_rapidity, axis_ptqVgen if args.ptqVgen else axis_ptVgen, axis_chargeWgen]
         lep_axes = [axis_l_eta_gen, axis_l_pt_gen, axis_chargeWgen]
-
-    nominal_cols = ["massVgen", col_rapidity, "ptVgen", "chargeVgen"]
+    nominal_cols = ["massVgen", col_rapidity, "ptqVgen" if args.ptqVgen else "ptVgen", "chargeVgen"]
     lep_cols = ["etaPrefsrLep", "ptPrefsrLep", "chargeVgen"]
 
     if args.singleLeptonHists and (isW or isZ):
