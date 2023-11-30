@@ -104,7 +104,7 @@ def plotImpacts(df, poi, pulls=False, normalize=False, oneSidedImpacts=False):
             nval_ref = df[f'{impact_str}_ref'].apply(lambda x,frmt=frmt_ref: " ("+frmt.format(x)+")") #.round(2).astype(str)
             nspace_ref = nval_ref.apply(lambda x, n=nval_ref.apply(len).max(): "\\ "*(n - len(x))) 
             nval = nval+nspace_ref+nval_ref 
-        labels = df["label"].apply(lambda x: x[:-1] if x.startswith("$") else r"$\mathrm{"+x+"}")
+        labels = df["label"].apply(lambda x: x[:-1] if x.startswith("$") else r"$\text{"+x+"}")
         labels = labels+r"\ \ "+nspace+nval+"$"
         textargs = dict()
     else:
