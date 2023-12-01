@@ -3843,7 +3843,14 @@ def drawGraphCMS(grList,
     etabin.SetTextFont(42)
     etabin.SetTextColor(ROOT.kBlack)
     if etabinText:
-        etabin.DrawLatex(0.15,0.15,etabinText)
+        etabinText_x = 0.15
+        etabinText_y = 0.15
+        if "::" in etabinText:
+            etabinText_x,etabinText_y = etabinText.split("::")[1].split(",")
+            etabinText_text = etabinText.split("::")[0]
+        else:
+            etabinText_text = etabinText
+        etabin.DrawLatex(float(etabinText_x), float(etabinText_y), etabinText_text)
 
     canvas.RedrawAxis("sameaxis")
     leg.Draw("same")
