@@ -174,6 +174,8 @@ def postprocess_corr_hist(corrh):
 def get_corr_name(generator):
     # Hack for now
     label = generator.replace("1D", "")
+    if "dataPtll" in generator:
+        return "MC_data_ratio"
     return f"{label}_minnlo_ratio" if "Helicity" not in generator else f"{label.replace('Helicity', '')}_minnlo_coeffs"
 
 def rebin_corr_hists(hists, ndim=-1, binning=None):
