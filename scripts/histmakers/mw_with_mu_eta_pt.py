@@ -36,7 +36,7 @@ parser.add_argument("--mtCut", type=int, default=40, help="Value for the transve
 #
 # TEST
 parser.add_argument("--theoryAgnosticPolVar", action='store_true', help="Prepare variations from polynomials (EDIT THIS MESSAGE)")
-parser.add_argument("--theoryAgnosticFileTag", type=str, default="x0p40_y3p50_add", choices=["x0p40_y3p50_add", "x0p30_y3p00_V2"], help="Tag for input files")
+parser.add_argument("--theoryAgnosticFileTag", type=str, default="x0p40_y3p50_add", choices=["x0p40_y3p50_add", "x0p30_y3p00_V2", "x0p30_y3p00_V3"], help="Tag for input files")
 args = parser.parse_args()
 
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
@@ -77,7 +77,8 @@ datasets = getDatasets(maxFiles=args.maxFiles,
                        excl=args.excludeProcs, 
                        nanoVersion="v9", base_path=args.dataPath, oneMCfileEveryN=args.oneMCfileEveryN,
                        extended = "msht20an3lo" not in args.pdfs,
-                       era=era)
+                       era=era,
+                       bkgPathTag=args.bkgSampleSubPath)
 
 # transverse boson mass cut
 mtw_min = args.mtCut
@@ -182,8 +183,8 @@ bias_helper = muon_calibration.make_muon_bias_helpers(args) if args.biasCalibrat
 
 corr_helpers = theory_corrections.load_corr_helpers([d.name for d in datasets if d.name in common.vprocs], args.theoryCorr)
 
-theoryAgnostic_helpers_minus = wremnants.makehelicityWeightHelper_devel(-1, args.theoryAgnosticFileTag)
-theoryAgnostic_helpers_plus = wremnants.makehelicityWeightHelper_devel(1, args.theoryAgnosticFileTag)
+theoryAgnostic_helpers_minus = wremnants.makehelicityWeightHelper_devel(genVcharge=-1, fileTag=args.theoryAgnosticFileTag)
+theoryAgnostic_helpers_plus  = wremnants.makehelicityWeightHelper_devel(genVcharge=1,  fileTag=args.theoryAgnosticFileTag)
 
 # recoil initialization
 if not args.noRecoil:
