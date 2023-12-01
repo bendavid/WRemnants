@@ -154,6 +154,8 @@ def common_parser(for_reco_highPU=False):
     class PDFFilterAction(argparse.Action):
         def __call__(self, parser, namespace, values, option_string=None):
             # Filter unique values, but keep first item in its position
+            if "herapdf20" in values:
+                values.append("herapdf20ext")
             unique_values = [values[0], *set([x for x in values[1:]])]
             setattr(namespace, self.dest, unique_values)
 
