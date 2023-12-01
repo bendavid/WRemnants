@@ -343,7 +343,7 @@ def build_graph(df, dataset):
 
     if hasattr(dataset, "out_of_acceptance"):
         # Rename dataset to not overwrite the original one
-        dataset.name = "Bkg"+dataset.name
+        dataset.name = dataset.name+"OOA"
 
     return results, weightsum
 

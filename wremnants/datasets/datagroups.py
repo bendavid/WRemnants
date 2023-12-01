@@ -20,19 +20,16 @@ logger = logging.child_logger(__name__)
 
 class Datagroups(object):
 
-    def __init__(self, infile, combine=False, filter_datasets=True, mode=None, **kwargs):
-        self.combine = combine
+    def __init__(self, infile, mode=None, **kwargs):
         self.h5file = None
         self.rtfile = None
         if infile.endswith(".pkl.lz4"):
             with lz4.frame.open(infile) as f:
                 self.results = pickle.load(f)
         elif infile.endswith(".hdf5"):
+            logger.info("Load input file")
             self.h5file = h5py.File(infile, "r")
             self.results = narf.ioutils.pickle_load_h5py(self.h5file["results"])
-        elif infile.endswith(".root"):
-            self.rtfile = ROOT.TFile.Open(infile)
-            self.results = None
         else:
             raise ValueError(f"{infile} has unsupported file type")
 
@@ -53,17 +50,13 @@ class Datagroups(object):
             if mode not in mode_map.values():
                 raise ValueError(f"Unrecognized mode '{mode}.' Must be one of {set(mode_map.values())}")
             self.mode = mode
+        logger.info(f"Set mode to {self.mode}")
 
-        self.lumi = 1
-
-        if self.results:
-            try:
-                args = self.getMetaInfo()["args"]
-                self.flavor = args.get("flavor", None)
-            except ValueError as e:
-                logger.warning(e)
-                self.flavor = None
-        else:
+        try:
+            args = self.getMetaInfo()["args"]
+            self.flavor = args.get("flavor", None)
+        except ValueError as e:
+            logger.warning(e)
             self.flavor = None
 
         self.groups = {}
@@ -72,63 +65,43 @@ class Datagroups(object):
         self.unconstrainedProcesses = []
         self.fakeName = "Fake"
         self.dataName = "Data"
+        self.setGenAxes()
 
         if "lowpu" in self.mode:
             from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU as make_datagroups
         else:
             from wremnants.datasets.datagroups2016 import make_datagroups_2016 as make_datagroups
 
-        datasets = getDatasets(mode=self.mode)
-
-        self.setDatasets(datasets, filter_datasets)
-        self.setGenAxes()
-                    
         make_datagroups(self, **kwargs)
+
+        if "Data" in self.groups:
+            self.lumi = sum([m.lumi for m in self.groups["Data"].members if m.is_data])
+            logger.info(f"Integrated luminosity from data: {self.lumi}/fb")
+        else:
+            self.lumi = 1
+            logger.warning(f"No data process was selected, normalizing MC to {self.lumi }/fb")
+
+    def get_members_from_results(self, startswith=[], not_startswith=[], is_data=False):
+        dsets = {k: v for k, v in self.results.items() if type(v) == dict and "dataset" in v}
+        if is_data:
+            dsets = {k: v for k, v in dsets.items() if v["dataset"].get("is_data", False)}
+        else:
+            dsets = {k: v for k, v in dsets.items() if not v["dataset"].get("is_data", False)}
+        if type(startswith) == str:
+            startswith = [startswith]
+        if len(startswith) > 0:
+            dsets = {k: v for k, v in dsets.items() if any([v["dataset"]["name"].startswith(x) for x in startswith])}
+        if type(not_startswith) == str:
+            not_startswith = [not_startswith]
+        if len(not_startswith) > 0:
+            dsets = {k: v for k, v in dsets.items() if not any([v["dataset"]["name"].startswith(x) for x in not_startswith])}
+        return dsets
 
     def __del__(self):
         if self.h5file:
             self.h5file.close()
         if self.rtfile:
             self.rtfile.Close()
-
-    def setDatasets(self, datasets, filter_datasets=True):
-        if self.results:
-            # only keep datasets that are found in input file
-            self.datasets = {x.name : x for x in datasets if not filter_datasets or x.name in self.results.keys() }
-            
-            # dictionary that maps dataset names to groups 
-            dataset_to_group = {d_key: d.group for d_key, d in self.datasets.items()}
-
-            for d_name, dataset in self.results.items():
-                # if additional datasets are specified in results (for example aggregated groups or re-named datasets), get them
-                if d_name in self.datasets.keys():
-                    continue
-                if d_name in ["meta_info",] or d_name.startswith("hist"):
-                    continue
-                
-                g_name = d_name.replace("Bkg","") if d_name.startswith("Bkg") else d_name
-                if g_name not in dataset_to_group.values():
-                    g_name = dataset_to_group.get(g_name, g_name)
-                
-                logger.debug(f"Add dataset {d_name}")
-                self.datasets[d_name] = narf.Dataset(**{
-                    "name": d_name,
-                    "group": g_name,
-                    "filepaths": dataset["dataset"]["filepaths"],
-                    "xsec": dataset["dataset"].get("xsec", None)
-                    })
-
-            self.data = [x for x in self.datasets.values() if x.is_data]
-            if self.data:
-                self.lumi = sum([self.results[x.name]["lumi"] for x in self.data if x.name in self.results])
-                logger.info(f"Integrated luminosity from data: {self.lumi}/fb")
-            else:
-                logger.warning("No data process was selected, normalizing MC to 1/fb")
-
-        else:
-            self.datasets = {x.name : x for x in datasets}
-
-        logger.debug(f"Getting these datasets: {self.datasets.keys()}")
 
     def addGroup(self, name, **kwargs):
         group = Datagroup(name, **kwargs)
@@ -184,7 +157,6 @@ class Datagroups(object):
             excludes = [excludes]
 
         if isinstance(excludes, list):
-            # remove selected datasets
             new_groupnames = list(filter(lambda x: x not in self.selectGroups(excludes), self.groups))
         else:
             new_groupnames = list(filter(excludes, self.groups.keys()))
@@ -197,13 +169,6 @@ class Datagroups(object):
         
         if len(self.groups) == 0:
             logger.warning(f"Excluded all groups using '{excludes}'. Continue without any group.")
-
-    def getSafeListFromDataset(self, procs):
-        # return list of valid samples which belongs to the dataset or where not excluded elsewhere
-        if isinstance(procs, str):
-            return [self.datasets[procs]] if procs in self.datasets.keys() else []
-        else:
-            return list(self.datasets[x] for x in procs if x in self.datasets.keys())
     
     def setGlobalAction(self, action):
         # To be used for applying a selection, rebinning, etc.
@@ -218,7 +183,7 @@ class Datagroups(object):
     def processScaleFactor(self, proc):
         if proc.is_data or proc.xsec is None:
             return 1
-        return self.lumi*1000*proc.xsec/self.results[proc.name]["weight_sum"]
+        return self.lumi*1000*proc.xsec/proc.weight_sum
 
     def getMetaInfo(self):
         if self.results:
@@ -421,10 +386,6 @@ class Datagroups(object):
         else:
             # matches uses regular expressions with search (and can be inverted when exclude is true),
             # thus a string will match if the process name contains that string anywhere inside it
-            ##########
-            # FIXME ? : allow for usage of simple 'string in name' syntax, with no regular expressions? Or exact names?
-            #           Note that datasets2016.getDatasets currently accepts only exact names, so one should stay consistent
-            ##########
             if exclude:
                 return list(filter(lambda x: all([re.search(expr, x) is None for expr in matches]), listOfNames))
             else:
@@ -659,12 +620,8 @@ class Datagroups(object):
     def histName(self, baseName, procName="", syst=""):
         return Datagroups.histName(baseName, procName, syst, nominalName=self.nominalName)
 
-    def histNameCombine(self, procName, baseName, syst, channel):
-        return Datagroups.histNameCombine(procName, baseName, syst, channel)
-
     @staticmethod
     def histName(baseName, procName="", syst=""):
-        # This is kind of hacky to deal with the different naming from combine
         if baseName != "x" and (syst == ""):
             return baseName
         if baseName in ["", "x"] and syst:
@@ -673,14 +630,4 @@ class Datagroups(object):
             return syst
         return "_".join([baseName,syst])
     
-    @staticmethod
-    def histNameCombine(procName, baseName, syst, channel):
-        name = f"{baseName}_{procName}"
-        if syst != "nominal":
-            name += "_"+syst
-        if channel:
-            name += "_"+channel
-        if re.search("^pdf.*_sum", procName): # for pseudodata from alternative pdfset
-            return("_".join([procName, channel])) 
-        return name
 

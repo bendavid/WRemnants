@@ -20,24 +20,24 @@ xsec_ZmmMass10to50PostVFP = 6997.0
 Z_TAU_TO_LEP_RATIO = (1.-(1. - BR_TAUToMU - BR_TAUToE)**2)
 
 wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP", 
-    'WplusToMuNu_horace-lo-photos', 'WplusToMuNu_horace-nlo', 'WplusToMuNu_horace-lo',
-    'WminusToMuNu_horace-lo-photos', 'WminusToMuNu_horace-nlo', 'WminusToMuNu_horace-lo',
-    'WplusToMuNu_winhac-lo-photos', 'WplusToMuNu_winhac-lo', 'WplusToMuNu_winhac-nlo', 
-    'WminusToMuNu_winhac-lo-photos', 'WminusToMuNu_winhac-lo', 'WminusToMuNu_winhac-nlo']
+    'Wplusmunu_horace-lo-photos', 'Wplusmunu_horace-nlo', 'Wplusmunu_horace-lo',
+    'Wminusmunu_horace-lo-photos', 'Wminusmunu_horace-nlo', 'Wminusmunu_horace-lo',
+    'Wplusmunu_winhac-lo-photos', 'Wplusmunu_winhac-lo', 'Wplusmunu_winhac-nlo', 
+    'Wminusmunu_winhac-lo-photos', 'Wminusmunu_winhac-lo', 'Wminusmunu_winhac-nlo']
 zprocs = ["ZmumuPostVFP", "ZtautauPostVFP", "ZmumuMiNLO", "ZmumuNNLOPS", 
-    'ZToMuMu_horace-lo-photos', 'ZToMuMu_horace-nlo', 'ZToMuMu_horace-lo', 'ZToMuMu_horace-new',
-    'ZToMuMu_horace-alpha-fsr-off-isr-off', 'ZToMuMu_horace-alpha-old-fsr-off-isr-off', 'ZToMuMu_horace-alpha-old-fsr-off-isr-pythia',
+    'Zmumu_horace-lo-photos', 'Zmumu_horace-nlo', 'Zmumu_horace-lo', 'Zmumu_horace-new',
+    'Zmumu_horace-alpha-fsr-off-isr-off', 'Zmumu_horace-alpha-old-fsr-off-isr-off', 'Zmumu_horace-alpha-old-fsr-off-isr-pythia',
     ]
 
 vprocs = wprocs+zprocs
 zprocs_recoil = ["ZmumuPostVFP"]
 wprocs_recoil = ["WplusmunuPostVFP", "WminusmunuPostVFP"]
 
-wprocs_lowpu = ["WminusJetsToMuNu", "WminusJetsToENu", "WminusJetsToTauNu", "WplusJetsToMuNu", "WplusJetsToENu", "WplusJetsToTauNu"]
+wprocs_lowpu = ["Wminusmunu", "Wminusenu", "Wminustaunu", "Wplusmunu", "Wplusenu", "Wplustaunu"]
 zprocs_lowpu = ["Zmumu", "Zee", "Ztautau"]
 vprocs_lowpu = wprocs_lowpu+zprocs_lowpu
 zprocs_recoil_lowpu = ["Zmumu", "Zee"]
-wprocs_recoil_lowpu = ["WminusJetsToMuNu", "WminusJetsToENu", "WplusJetsToMuNu", "WplusJetsToENu"]
+wprocs_recoil_lowpu = ["Wminusmunu", "Wminusenu", "Wplusmunu", "Wplusenu"]
 
 background_MCprocs = ["Top", "Diboson", "QCD", "DYlowMass"]
 zprocs_all = zprocs_lowpu+zprocs
@@ -252,6 +252,20 @@ def common_parser(for_reco_highPU=False):
         
     return parser,initargs
 
+def plot_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
+                        help="Set verbosity level with logging, the larger the more verbose")
+    parser.add_argument("--noColorLogger", action="store_true", help="Do not use logging with colors")
+    parser.add_argument("-o", "--outpath", type=str, default=os.path.expanduser("~/www/WMassAnalysis"), help="Base path for output")
+    parser.add_argument("-f", "--outfolder", type=str, default="./test", help="Subfolder for output")
+    parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name")
+    parser.add_argument("--cmsDecor", default="Preliminary", type=str, choices=[None,"Preliminary", "Work in progress", "Internal"], help="CMS label")
+    parser.add_argument("--lumi", type=float, default=16.8, help="Luminosity used in the fit, needed to get the absolute cross section")
+    parser.add_argument("--eoscp", action='store_true', help="Override use of xrdcp and use the mount instead")
+    parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend text")
+
+    return parser
 
 def natural_sort_key(s):
     # Sort string in a number aware way by plitting the string into alphabetic and numeric parts

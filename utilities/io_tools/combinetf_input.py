@@ -71,6 +71,7 @@ def get_pulls_and_constraints(fitresult_filename, labels):
     rtree.GetEntry(0)
     pulls = np.zeros_like(labels, dtype=float)
     constraints = np.zeros_like(labels, dtype=float)
+    pulls_prefit = np.zeros_like(labels, dtype=float)
     for i, label in enumerate(labels):
         if not hasattr(rtree, label):
             logger.warning(f"Failed to find syst {label} in tree")
@@ -78,7 +79,8 @@ def get_pulls_and_constraints(fitresult_filename, labels):
             
         pulls[i] = getattr(rtree, label)
         constraints[i] = getattr(rtree, label+"_err")
-    return pulls, constraints
+        pulls_prefit[i] = getattr(rtree, label+"_In")
+    return pulls, constraints, pulls_prefit
 
 def read_impacts_poi(fileobject, group, poi, sort=True, add_total=True, stat=0.0, normalize=True):
     # read impacts of a single POI

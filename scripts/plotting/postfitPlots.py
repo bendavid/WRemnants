@@ -17,28 +17,20 @@ import pdb
 
 hep.style.use(hep.style.ROOT)
 
-parser = argparse.ArgumentParser()
+parser = common.plot_parser()
 parser.add_argument("infile", type=str, help="hdf5 file from combinetf2 or root file from combinetf1")
-parser.add_argument("-o", "--outpath", type=str, default=os.path.expanduser("~/www/WMassAnalysis"), help="Base path for output")
-parser.add_argument("-f", "--outfolder", type=str, default="./test", help="Subfolder for output")
-parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name")
-parser.add_argument("--cmsDecor", default="Preliminary", type=str, choices=[None,"Preliminary", "Work in progress", "Internal"], help="CMS label")
-parser.add_argument("--lumi", type=float, default=16.8, help="Luminosity used in the fit, needed to get the absolute cross section")
 parser.add_argument("-r", "--rrange", type=float, nargs=2, default=[0.9,1.1], help="y range for ratio plot")
 parser.add_argument("--ylim", type=float, nargs=2, help="Min and max values for y axis (if not specified, range set automatically)")
 parser.add_argument("--logy", action='store_true', help="Make the yscale logarithmic")
 parser.add_argument("--yscale", type=float, help="Scale the upper y axis by this factor (useful when auto scaling cuts off legend)")
-parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend text")
 parser.add_argument("--noRatio", action='store_true', help="Don't make the ratio in the plot")
 parser.add_argument("--noData", action='store_true', help="Don't plot the data")
 parser.add_argument("--prefit", action='store_true', help="Make prefit plot, else postfit")
 parser.add_argument("--selectionAxes", type=str, default=["charge"], help="List of axes where for each bin a seperate plot is created")
-parser.add_argument("--debug", action='store_true', help="Print debug output")
-parser.add_argument("--eoscp", action='store_true', help="Override use of xrdcp and use the mount instead")
 
 args = parser.parse_args()
 
-logger = logging.setup_logger(__file__, 4 if args.debug else 3)
+logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
 outdir = output_tools.make_plot_dir(args.outpath, args.outfolder, eoscp=args.eoscp)
 
@@ -244,11 +236,10 @@ else:
 
     logger.info(f"Found processes {procs} in fitresult")
 
-    axes_names = [part for part in args.infile.split("/")[-2].split("_") if part in ["pt", "eta", "charge", "ptll", "yll", "mll"]]
-    axis_name = "_".join(axes_names)
 
     # get axes from the directory name
-    analysis = args.infile.split("/")[-2].split("_")[0]
+    filename_parts = [x for x in filter(lambda x: x, args.infile.split("/"))]
+    analysis = filename_parts[-2].split("_")[0]
     if analysis=="ZMassDilepton":
         all_axes = {
             "mll": hist.axis.Regular(60, 60., 120., name = "mll", overflow=False, underflow=False),
@@ -267,6 +258,7 @@ else:
             "eta": hist.axis.Regular(48, -2.4, 2.4, name = "eta", overflow=False, underflow=False),
             "charge": common.axis_charge
         }
+    axes_names = [part for part in filename_parts[-2].split("_") if part in ["pt", "eta", "charge", "ptll", "yll", "mll"]]
     axes = [all_axes[a] for a in axes_names]
     shape = [len(a) for a in axes]
 

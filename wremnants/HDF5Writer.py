@@ -222,7 +222,7 @@ class HDF5Writer(object):
                                     syst_bin = pseudo_axis.bin(idx) if type(idx) == int else str(idx)
                                 else:
                                     syst_bin = str(pseudo_axis.index(idx)) if type(idx) == int else str(idx)
-                                key = f"{pseudo_data_name}{f'_{syst_bin}' if syst_idx is not None else ''}"
+                                key = f"{pseudo_data_name}{f'_{syst_bin}' if syst_idx not in [None, 0] else ''}"
                                 logger.info(f"Write pseudodata {key}")
                                 pseudoDataNameList.append(key)
                         else:

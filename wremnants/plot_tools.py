@@ -97,7 +97,7 @@ def figureWithRatio(href, xlabel, ylabel, ylim, rlabel, rrange, xlim=None,
     if plot_title: ax1.set_title(plot_title, pad = title_padding)
     return fig,ax1,ax2
 
-def addLegend(ax, ncols=2, extra_text=None, extra_text_loc=(0.8, 0.7), text_size=20):
+def addLegend(ax, ncols=2, extra_text=None, extra_text_loc=(0.8, 0.7), text_size=20, loc='upper right'):
     handles, labels = ax.get_legend_handles_labels()
     
     shape = np.divide(*ax.get_figure().get_size_inches())
@@ -108,7 +108,7 @@ def addLegend(ax, ncols=2, extra_text=None, extra_text_loc=(0.8, 0.7), text_size
         handles.insert(math.floor(len(handles)/2), patches.Patch(color='none', label = ' '))
         labels.insert(math.floor(len(labels)/2), ' ')
     text_size = text_size*(0.7 if shape == 1 else 1.3)
-    leg = ax.legend(handles=handles, labels=labels, prop={'size' : text_size}, ncol=ncols, loc='upper right')
+    leg = ax.legend(handles=handles, labels=labels, prop={'size' : text_size}, ncol=ncols, loc=loc)
 
     if extra_text:
         p = leg.get_frame()
