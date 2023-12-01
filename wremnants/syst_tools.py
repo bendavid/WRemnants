@@ -350,7 +350,7 @@ def add_pdf_hists(results, df, dataset, axes, cols, pdfs, base_name="nominal", a
         tensorASName = f"{pdfName}ASWeights_tensor"
         npdf=pdfInfo["entries"]
         pdfHistName = Datagroups.histName(base_name, syst=pdfName)
-        names = getattr(theory_tools, f"pdfNames{'Sym' if pdfInfo['combine'] == 'symHessian' else 'Asym'}Hessian")(pdfInfo["entries"]+(pdfInfo["entriesExt"] if "entriesExt" in pdfInfo else 0), pdfName)
+        names = getattr(theory_tools, f"pdfNames{'Sym' if pdfInfo['combine'] == 'symHessian' else 'Asym'}Hessian")(pdfInfo["entries"], pdfName)
         pdf_ax = hist.axis.StrCategory(names, name="pdfVar")
         if tensorName not in df.GetColumnNames():
             logger.warning(f"PDF {pdf} was not found for sample {dataset}. Skipping uncertainty hist!")

@@ -447,6 +447,18 @@ class TheoryHelper(object):
                 skipEntries=[{pdf_ax : "^pdf0[a-z]*"}],
                 **pdf_args
             )
+            if pdfName == 'pdfHERAPDF20':
+                self.card_tool.addSystematic(pdf_hist+'ext',
+                    skipEntries=[{pdf_ax : "^pdf0[a-z]*"}],
+                    processes=['wtau_samples', 'single_v_nonsig_samples'] if self.skipFromSignal else ['single_v_samples'],
+                    mirror=True,
+                    group=pdfName,
+                    splitGroup={f"{pdfName}NoAlphaS": '.*'},
+                    passToFakes=self.propagate_to_fakes,
+                    actionMap=action,
+                    scale=pdfInfo.get("scale", 1)*scale,
+                    systAxes=[pdf_ax],
+                )
 
         asRange = pdfInfo['alphasRange']
         asname = f"{pdfName}alphaS{asRange}" if not from_corr else pdf_hist.replace("Vars", "_pdfas")
