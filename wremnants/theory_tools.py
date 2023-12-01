@@ -130,7 +130,16 @@ pdfMap = {
         "alphas" : ["LHEPdfWeightAltSet20[0]", "LHEPdfWeightAltSet22[0]", "LHEPdfWeightAltSet23[0]"], # alphas 116-120
         "alphasRange" : "002",
     },
+    "herapdf20ext" : {
+        "name" : "pdfHERAPDF20ext",
+        "branch" : "LHEPdfWeightAltSet21",
+        "combine" : "symHessian",
+        "entries" : 14,
+        "alphas" : ["LHEPdfWeightAltSet20[0]", "LHEPdfWeightAltSet22[0]", "LHEPdfWeightAltSet23[0]"], # dummy AS
+        "alphasRange" : "002",
+    },
 }
+
 
 only_central_pdf_datasets = [
     "Wplusmunu_bugfix",
@@ -559,4 +568,3 @@ def pdfBugfixMSHT20(df , tensorPDFName):
         f"auto& res = {tensorPDFName};"
         f"res(15) = {tensorPDFName}(0) - ({tensorPDFName}(15) - {tensorPDFName}(0));"
         "return res")
-        
