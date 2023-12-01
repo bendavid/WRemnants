@@ -268,6 +268,9 @@ def build_graph(df, dataset):
                 cols = [*nominal_cols, *theoryAgnostic_cols]
                 theoryAgnostic_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, theoryAgnostic_axes, theoryAgnostic_cols)
 
+    if args.xnormOnly:
+        return results, weightsum
+
     if not args.makeMCefficiency:
         # remove trigger, it will be part of the efficiency selection for passing trigger
         hltString="HLT_IsoTkMu24 || HLT_IsoMu24" if era == "2016PostVFP" else "HLT_IsoMu24"
@@ -530,7 +533,7 @@ def build_graph(df, dataset):
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)
-if not args.onlyMainHistograms and args.muonScaleVariation == 'smearingWeightsGaus' and not (args.theoryAgnostic and not args.poiAsNoi):
+if not args.xnormOnly and not args.onlyMainHistograms and args.muonScaleVariation == 'smearingWeightsGaus' and not (args.theoryAgnostic and not args.poiAsNoi):
     logger.debug("Apply smearingWeights")
     muon_calibration.transport_smearing_weights_to_reco(
         resultdict,
@@ -540,7 +543,7 @@ if not args.onlyMainHistograms and args.muonScaleVariation == 'smearingWeightsGa
 if args.validationHists:
     muon_validation.muon_scale_variation_from_manual_shift(resultdict)
 
-if not args.noScaleToData:
+if not args.xnormOnly and not args.noScaleToData:
     scale_to_data(resultdict)
     aggregate_groups(datasets, resultdict, groups_to_aggregate)
 

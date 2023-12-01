@@ -98,14 +98,14 @@ def plotImpacts(df, poi, pulls=False, normalize=False, oneSidedImpacts=False):
         # append numerical values of impacts on nuisance name; fill up empty room with spaces to align numbers
         frmt = "{:0"+str(int(np.log10(max(df[impact_str])))+2)+".2f}"
         nval = df[impact_str].apply(lambda x,frmt=frmt: frmt.format(x)) #.astype(str)
-        nspace = nval.apply(lambda x, n=nval.apply(len).max(): "\\ "*(n - len(x))) 
+        nspace = nval.apply(lambda x, n=nval.apply(len).max(): " "*(n - len(x))) 
         if include_ref:
             frmt_ref = "{:0"+str(int(np.log10(max(df[f"{impact_str}_ref"])))+2)+".2f}"
             nval_ref = df[f'{impact_str}_ref'].apply(lambda x,frmt=frmt_ref: " ("+frmt.format(x)+")") #.round(2).astype(str)
-            nspace_ref = nval_ref.apply(lambda x, n=nval_ref.apply(len).max(): "\\ "*(n - len(x))) 
+            nspace_ref = nval_ref.apply(lambda x, n=nval_ref.apply(len).max(): " "*(n - len(x))) 
             nval = nval+nspace_ref+nval_ref 
-        labels = df["label"].apply(lambda x: x[:-1] if x.startswith("$") else r"$\text{"+x+"}")
-        labels = labels+r"\ \ "+nspace+nval+"$"
+        labels = df["label"].apply(lambda x: x[:-1] if x.endswith("$") else r"$\text{"+x+"}")
+        labels = labels+r"\ \ \text{"+nspace+nval+"}$"
         textargs = dict()
     else:
         labels = df["label"]
