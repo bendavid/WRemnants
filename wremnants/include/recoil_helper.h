@@ -149,8 +149,8 @@ public:
         Eigen::TensorFixedSize<double, Eigen::Sizes<>> ut_para_tensor;
         Eigen::TensorFixedSize<double, Eigen::Sizes<>> ut_perp_tensor;
         pt_tensor(0) = pt;
-        ut_para_tensor(0) = ut_para;
-        ut_perp_tensor(0) = ut_perp;
+        ut_para_tensor(0) = std::isfinite(ut_para) ? ut_para : 13000.0;
+        ut_perp_tensor(0) = std::isfinite(ut_perp) ? ut_perp : 13000.0;
 
         out_t ret;
         auto const inputs = std::tie(pt_tensor, ut_para_tensor, ut_perp_tensor);
