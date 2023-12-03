@@ -107,6 +107,9 @@ class TheoryHelper(object):
         if self.resumUnc == "tnp":
             self.add_resum_tnp_unc(magnitude, mirror, scale)
 
+        if self.resumUnc and self.resumUnc != "none":
+            self.add_resum_transition_uncertainty()
+
         if self.minnlo_unc and self.minnlo_unc not in ["none", None]:
             for sample_group in self.samples:
                 if self.card_tool.procGroups.get(sample_group, None):
@@ -484,20 +487,23 @@ class TheoryHelper(object):
         obs = self.card_tool.fit_axes[:]
 
         for sample_group in self.samples:
-            if self.card_tool.procGroups.get(sample_group, None):
+            if not self.card_tool.procGroups.get(sample_group, None):
                 continue
-            expanded_samples = self.card_tool.getProcNames([sample_group])
+
             name_append = self.sample_label(sample_group)
+
+            transition_vars = ["transition_points0.4_0.75_1.1", "transition_points0.2_0.45_0.7", "transition_points0.4_0.55_0.7", "transition_points0.2_0.65_1.1"]
 
             self.card_tool.addSystematic(name=self.corr_hist_name,
                 processes=[sample_group],
                 group="resumTransition",
                 splitGroup={"resum": ".*"},
-                systAxes=["downUpVar"],
-                passToFakes=to_fakes,
+                systAxes=["vars"],
+                passToFakes=self.propagate_to_fakes,
                 # NOTE: I don't actually remember why this used no_flow=ptVgen previously, I don't think there's any harm in not using it...
-                actionMap={s : lambda h: hh.syst_min_and_max_env_hist(h, obs, self.syst_ax, 
-                    [x for x in h.axes["vars"] if "transition_point" in x]) for s in expanded_samples},
-                outNames=[f"resumTransition{name_append}Up", f"resumTransition{name_append}Down"],
+                # actionMap={s : lambda h: hh.syst_min_and_max_env_hist(h, obs, self.syst_ax,
+                    # [x for x in h.axes["vars"] if "transition_point" in x]) for s in expanded_samples},
+                action = lambda h: h[{"vars" : transition_vars}],
+                outNames=[f"resumTransitionSym{name_append}Up", f"resumTransitionSym{name_append}Down", f"resumTransitionAsym{name_append}Up", f"resumTransitionAsym{name_append}Down"],
                 rename=f"scetlibResumTransition{name_append}",
             )
